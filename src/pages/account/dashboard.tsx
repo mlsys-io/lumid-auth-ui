@@ -13,6 +13,7 @@ import {
 	ExternalLink,
 	BrainCircuit,
 	Shield,
+	User as UserIcon,
 } from 'lucide-react';
 
 // Post-login landing. Adopts the QuantArena visual language so
@@ -111,6 +112,20 @@ export default function Dashboard() {
 						Your lum.id account
 					</h2>
 					<div className="grid gap-3 sm:grid-cols-2">
+						<Card
+							className="cursor-pointer hover:shadow-lg transition-shadow border-0 shadow-md bg-white/80 backdrop-blur-sm"
+							onClick={() => navigate('/account/profile')}
+						>
+							<CardHeader>
+								<CardTitle className="flex items-center gap-2 text-base">
+									<UserIcon className="w-4 h-4 text-indigo-600" />
+									Profile
+								</CardTitle>
+								<CardDescription>
+									Display name, avatar, and password — all in one place.
+								</CardDescription>
+							</CardHeader>
+						</Card>
 						<Card
 							className="cursor-pointer hover:shadow-lg transition-shadow border-0 shadow-md bg-white/80 backdrop-blur-sm"
 							onClick={() => navigate('/account/tokens')}

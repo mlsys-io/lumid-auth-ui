@@ -80,6 +80,14 @@ export default function App() {
             }
           />
           <Route
+            path="/account/profile"
+            element={
+              <AuthGuard requireAuth={true}>
+                <Profile />
+              </AuthGuard>
+            }
+          />
+          <Route
             path="/account/tokens"
             element={
               <AuthGuard requireAuth={true}>
