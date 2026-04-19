@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { AuthGuard } from "./components/auth-guard";
+import { AdminGuard } from "./components/admin-guard";
 
 // Lazy-load so first paint on /login doesn't fetch /account/tokens code.
 const Login = lazy(() => import("./pages/login/login").then((m) => ({ default: m.Login })));
@@ -10,6 +11,7 @@ const Callback = lazy(() => import("./pages/auth/callback").then((m) => ({ defau
 const Tokens = lazy(() => import("./pages/account/tokens"));
 const Connect = lazy(() => import("./pages/account/connect"));
 const Dashboard = lazy(() => import("./pages/account/dashboard"));
+const AdminInvitations = lazy(() => import("./pages/account/admin-invitations"));
 
 // Tiny wrapper — the copied login.tsx takes the same onLogin signature
 // the lumid.market LoginPage uses, so we adapt here instead of
@@ -90,6 +92,14 @@ export default function App() {
               <AuthGuard requireAuth={true}>
                 <Connect />
               </AuthGuard>
+            }
+          />
+          <Route
+            path="/account/admin/invitations"
+            element={
+              <AdminGuard>
+                <AdminInvitations />
+              </AdminGuard>
             }
           />
 

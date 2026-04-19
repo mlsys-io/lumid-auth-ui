@@ -19,11 +19,15 @@ export interface ErrorResponse {
 
 // User types
 export interface UserInfo {
-	id: number;
+	id: number | string;
 	username: string;
 	email: string;
 	avatar?: string;
 	invitation_code?: string;
+	// Lum.id adds `role` (user|admin) and `status` — AdminGuard reads
+	// role to gate /account/admin/*.
+	role?: string;
+	status?: string;
 }
 
 export interface UserResponse extends UserInfo {
