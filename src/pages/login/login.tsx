@@ -6,7 +6,7 @@ import { Label } from '../../components/ui/label';
 import { Card, CardContent, CardHeader } from '../../components/ui/card';
 import { Separator } from '../../components/ui/separator';
 import { toast } from 'sonner';
-import { Eye, EyeOff, Mail, Lock, AlertCircle, RefreshCw, Trophy } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, AlertCircle, RefreshCw } from 'lucide-react';
 import { login as apiLogin, ApiError } from '../../api';
 import type { LoginResponse } from '../../api';
 import { GOOGLE_CLIENT_ID } from '../../config/env';
@@ -275,15 +275,6 @@ export function Login({ onLogin }: LoginProps) {
 					</div>
 				</div>
 
-				<Button
-					type="button"
-					variant="outline"
-					className="w-full cursor-pointer"
-					onClick={() => navigate('/public/ranking')}
-				>
-					<Trophy className="w-4 h-4 mr-2" />
-					View Backtesting Ranking
-				</Button>
 			</form>
 		</div>
 	);
