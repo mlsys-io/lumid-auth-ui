@@ -45,6 +45,61 @@ const client = axios.create({
 	timeout: 30000,
 });
 
+// The lm_session cookie is HttpOnly + on `.lum.id`, so the browser
+// won't let JS read it and won't forward it to runmesh.ai anyway.
+// Instead, fetch the JWT once via /api/v1/session-bearer (a same-
+// origin authenticated endpoint) and attach it as Authorization
+// Bearer on every Runmesh call. Runmesh's LumidSsoBridgeFilter
+// introspects it and maps to a local sys_user admin row.
+//
+// Cached per-page-load; refreshes on 401.
+let cachedBearer: { token: string; expires_at: number } | null = null;
+let bearerInFlight: Promise<string | null> | null = null;
+
+async function fetchBearer(): Promise<string | null> {
+	try {
+		const r = await axios.get<{ data: { token: string; expires_at: number } }>(
+			'/api/v1/session-bearer',
+			{ withCredentials: true },
+		);
+		const d = r.data?.data;
+		if (d?.token) {
+			cachedBearer = { token: d.token, expires_at: d.expires_at };
+			return d.token;
+		}
+	} catch {
+		// fall through — request will go without bearer, Runmesh will 401,
+		// page surfaces an "unauthorized" state.
+	}
+	return null;
+}
+
+async function getBearer(forceRefresh = false): Promise<string | null> {
+	const now = Math.floor(Date.now() / 1000);
+	if (
+		!forceRefresh &&
+		cachedBearer &&
+		cachedBearer.expires_at - 60 > now
+	) {
+		return cachedBearer.token;
+	}
+	if (!bearerInFlight) {
+		bearerInFlight = fetchBearer().finally(() => {
+			bearerInFlight = null;
+		});
+	}
+	return bearerInFlight;
+}
+
+client.interceptors.request.use(async (config) => {
+	const token = await getBearer();
+	if (token) {
+		config.headers = config.headers ?? {};
+		(config.headers as Record<string, string>).Authorization = `Bearer ${token}`;
+	}
+	return config;
+});
+
 // Unwrap the standard {code, data, msg} envelope Runmesh returns.
 // Non-zero code → reject so the caller's try/catch fires like a
 // regular HTTP error. `code === 200` is what Runmesh's success path
