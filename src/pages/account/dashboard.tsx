@@ -22,46 +22,54 @@ import {
 interface App {
 	name: string;
 	tagline: string;
-	url: string;
+	url: string;               // points to the authenticated landing of each app
 	icon: React.ComponentType<{ className?: string }>;
 	external: boolean;
+	sso: 'live' | 'pending';   // 'live' = round-trips through lum.id today
 }
 
 const ECOSYSTEM: App[] = [
 	{
+		name: 'Analytics',
+		tagline: 'Umami — traffic dashboards for lumid.market',
+		// Goes through oauth2-proxy → lum.id; lands directly in the
+		// Umami dashboard with your identity attached.
+		url: 'https://analytics.lumid.market/dashboard',
+		icon: BarChart3,
+		external: true,
+		sso: 'live',
+	},
+	{
 		name: 'QuantArena',
 		tagline: 'Strategies, backtesting, live competitions',
-		url: 'https://lumid.market',
+		url: 'https://lumid.market/strategy',
 		icon: TrendingUp,
 		external: true,
+		sso: 'pending',
 	},
 	{
 		name: 'Runmesh',
 		tagline: 'Workflow orchestration at GPU scale',
-		url: 'https://runmesh.ai',
+		url: 'https://runmesh.ai/',
 		icon: Workflow,
 		external: true,
-	},
-	{
-		name: 'Analytics',
-		tagline: 'Traffic dashboards (Umami, SSO-gated)',
-		url: 'https://analytics.lumid.market',
-		icon: BarChart3,
-		external: true,
+		sso: 'pending',
 	},
 	{
 		name: 'FlowMesh',
-		tagline: 'Distributed task execution',
-		url: 'https://kv.run',
+		tagline: 'Distributed task execution (API-only today)',
+		url: 'https://kv.run/',
 		icon: LineChart,
 		external: true,
+		sso: 'pending',
 	},
 	{
 		name: 'Lumilake',
 		tagline: 'Pipeline optimizer (HALO)',
-		url: 'https://lumilake.ai',
+		url: 'https://lumilake.ai/',
 		icon: Database,
 		external: true,
+		sso: 'pending',
 	},
 ];
 
@@ -117,12 +125,21 @@ export default function Dashboard() {
 				</section>
 
 				<section>
-					<h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-4">
-						Apps
-					</h2>
+					<div className="flex items-baseline justify-between mb-4">
+						<h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+							Apps
+						</h2>
+						<p className="text-xs text-muted-foreground">
+							<span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5 align-middle" />
+							SSO live
+							<span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5 ml-3 align-middle" />
+							Separate login (flip pending)
+						</p>
+					</div>
 					<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
 						{ECOSYSTEM.map((app) => {
 							const Icon = app.icon;
+							const dotClass = app.sso === 'live' ? 'bg-emerald-500' : 'bg-amber-500';
 							return (
 								<a
 									key={app.name}
@@ -136,6 +153,7 @@ export default function Dashboard() {
 											<Icon className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" />
 											<div className="flex-1 min-w-0">
 												<div className="flex items-center gap-1.5">
+													<span className={`inline-block w-1.5 h-1.5 rounded-full ${dotClass}`} />
 													<span className="font-medium text-sm">{app.name}</span>
 													{app.external && <ExternalLink className="w-3 h-3 text-muted-foreground" />}
 												</div>
@@ -147,6 +165,9 @@ export default function Dashboard() {
 							);
 						})}
 					</div>
+					<p className="text-xs text-muted-foreground mt-4">
+						Click a green-dot app to see the lum.id session carry you straight into the app's authenticated view. Amber apps still have their own login today — when the AUTH_MODE cutover lands they turn green without any code change here.
+					</p>
 				</section>
 			</div>
 		</div>
