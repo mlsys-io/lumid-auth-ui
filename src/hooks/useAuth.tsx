@@ -1,0 +1,74 @@
+import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { getUserInfo, logout as logoutApi } from "../api";
+import type { UserInfo } from "../api";
+
+// The identity backend sets an HttpOnly `lm_session` cookie on
+// .lum.id after /login. We never touch it from JS — instead, every
+// app call either succeeds (cookie present + valid) or 401s. Auth
+// state is therefore derived from `getUserInfo()`, not from any
+// localStorage slot.
+
+interface AuthContextType {
+  user: UserInfo | null;
+  isLoading: boolean;
+  /** Called from the login page after the backend has set the cookie.
+   *  `token` kept for source-compat with the ported lumid.market
+   *  component — we ignore it. */
+  login: (token: string, userData: UserInfo) => void;
+  logout: () => Promise<void>;
+  isAuthenticated: boolean;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<UserInfo | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const info = await getUserInfo();
+        setUser(info);
+      } catch {
+        setUser(null);
+      } finally {
+        setIsLoading(false);
+      }
+    })();
+  }, []);
+
+  const login = (_token: string, userData: UserInfo) => {
+    setUser(userData);
+  };
+
+  const logout = async () => {
+    try {
+      await logoutApi();
+    } catch {
+      /* best-effort */
+    } finally {
+      setUser(null);
+    }
+  };
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        isLoading,
+        login,
+        logout,
+        isAuthenticated: !!user,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
+  return ctx;
+}
