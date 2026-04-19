@@ -47,31 +47,35 @@ export function AuthCallback() {
 			// Clear stored state
 			sessionStorage.removeItem('oauth_state');
 
-			// Call backend API to exchange code for JWT token
-			const response = await googleLogin({
-				code: code,
-				state: state,
-			});
+			// Exchange code for session. The backend sets lm_session
+			// as an HttpOnly cookie on .lum.id; the returned user_info
+			// is what the AuthProvider caches in React state.
+			const response = await googleLogin({ code, state });
 
-			// Check if invitation code is required (first-time Google login)
-			if (!response.user_info.invitation_code) {
-				setShowInvitationDialog(true);
-				setPendingUserInfo(response.user_info);
-				localStorage.setItem('access_token', response.token);
-				setStatus('loading'); // Keep loading state while waiting for invitation code
-				return;
+			// Defensive — the backend may return either {user_info}
+			// (lumid.market shape) or {user} (simpler shape). Accept
+			// both so future cleanup doesn't break the UI.
+			const u =
+				(response as unknown as { user_info?: UserInfo }).user_info ||
+				(response as unknown as { user?: UserInfo }).user;
+			if (!u) {
+				throw new Error('Missing user in Google login response');
 			}
 
-			// Store token and user info using the auth hook
-			login(response.token, response.user_info);
-
+			login(response.token, u);
 			setStatus('success');
-			toast.success('Successfully logged in with Google!');
+			toast.success('Signed in with Google');
 
-			// Redirect to dashboard after a short delay
+			// Honor ?return_to for SSO bounces; otherwise land on the
+			// dashboard.
+			const returnTo = urlParams.get('return_to');
 			setTimeout(() => {
-				navigate('/strategy');
-			}, 1000);
+				if (returnTo && returnTo.startsWith('http')) {
+					window.location.replace(returnTo);
+				} else {
+					navigate(returnTo || '/account');
+				}
+			}, 500);
 		} catch (err) {
 			console.error('OAuth callback error:', err);
 
@@ -88,24 +92,15 @@ export function AuthCallback() {
 		}
 	}
 
-	const handleInvitationCodeSuccess = (token: string) => {
-		// Complete the login process with the updated user info
-		if (pendingUserInfo) {
-			login(token, pendingUserInfo);
-
-			setStatus('success');
-			toast.success('Successfully logged in with Google!');
-
-			// Redirect to dashboard after a short delay
-			setTimeout(() => {
-				navigate('/strategy');
-			}, 1000);
-		} else {
-			setStatus('error');
-			setErrorMessage('Failed to get user info');
-			toast.error('Failed to get user info');
-		}
+	// Invitation-code dialog was a QuantArena concern; lum.id lets any
+	// Google-authed user through. Leaving the handler as a no-op for
+	// back-compat with the dialog component's onSuccess prop.
+	const handleInvitationCodeSuccess = (_token: string) => {
+		setShowInvitationDialog(false);
 	};
+	// Silence unused-var warnings from the transitional state.
+	void pendingUserInfo;
+	void setPendingUserInfo;
 
 	const renderContent = () => {
 		switch (status) {
