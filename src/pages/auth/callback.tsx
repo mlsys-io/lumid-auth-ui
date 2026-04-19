@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -17,7 +17,16 @@ export function AuthCallback() {
 	const [showInvitationDialog, setShowInvitationDialog] = useState(false);
 	const [pendingUserInfo, setPendingUserInfo] = useState<UserInfo | null>(null);
 
+	// Guard against double-invocation. React StrictMode in dev mounts
+	// effects twice and a `code` param can only be exchanged once
+	// (Google invalidates it after first use); without this guard the
+	// second run tears through a now-empty sessionStorage and throws
+	// "Invalid state — possible CSRF attack" even on a legit login.
+	const ranRef = useRef(false);
+
 	useEffect(() => {
+		if (ranRef.current) return;
+		ranRef.current = true;
 		handleOAuthCallback();
 	}, []);
 
@@ -38,19 +47,22 @@ export function AuthCallback() {
 				throw new Error('Missing code or state parameter');
 			}
 
-			// Verify state matches (CSRF protection)
+			// Verify state matches (CSRF protection). We DON'T clear the
+			// stored state until the backend exchange succeeds — if the
+			// exchange fails, a legit retry (user clicks "back to login"
+			// → Google again) still has the value for the next round.
 			const storedState = sessionStorage.getItem('oauth_state');
 			if (state !== storedState) {
 				throw new Error('Invalid state parameter - possible CSRF attack');
 			}
 
-			// Clear stored state
-			sessionStorage.removeItem('oauth_state');
-
 			// Exchange code for session. The backend sets lm_session
 			// as an HttpOnly cookie on .lum.id; the returned user_info
 			// is what the AuthProvider caches in React state.
 			const response = await googleLogin({ code, state });
+
+			// Clear state after the exchange succeeded.
+			sessionStorage.removeItem('oauth_state');
 
 			// Defensive — the backend may return either {user_info}
 			// (lumid.market shape) or {user} (simpler shape). Accept
