@@ -1,5 +1,5 @@
-@custom-variant dark (&:is(.dark *));
-
+/* @custom-variant is Tailwind 4 syntax; stripped for the TW3 build.
+ * The raw CSS variables below are plain CSS and work on any version. */
 :root {
 	--font-size: 16px;
 	--background: #ffffff;

@@ -10,30 +10,30 @@ import {
 	BarChart3,
 	Workflow,
 	Database,
-	LineChart,
 	ExternalLink,
+	BrainCircuit,
 } from 'lucide-react';
 
-// Post-login landing. Intentionally minimal — lum.id is the identity
-// authority, product UX lives on the service-specific subdomains.
-// This page exists so users see something useful instead of the PAT
-// admin screen as their first impression.
+// Post-login landing. Adopts the QuantArena visual language so
+// returning users feel continuity between lum.id and market.lum.id:
+//   * gradient wash (blue-50 / indigo-50 / purple-50) — same as the
+//     login screen
+//   * indigo→purple brand chip around the BrainCircuit icon
+//   * white/80 backdrop-blur cards
 
 interface App {
 	name: string;
 	tagline: string;
-	url: string;               // points to the authenticated landing of each app
+	url: string;
 	icon: React.ComponentType<{ className?: string }>;
 	external: boolean;
-	sso: 'live' | 'pending';   // 'live' = round-trips through lum.id today
+	sso: 'live' | 'pending';
 }
 
 const ECOSYSTEM: App[] = [
 	{
 		name: 'Analytics',
-		tagline: 'Umami — traffic dashboards for lumid.market',
-		// Goes through oauth2-proxy → lum.id; lands directly in the
-		// Umami dashboard with your identity attached.
+		tagline: 'Umami — traffic dashboards',
 		url: 'https://analytics.lumid.market/dashboard',
 		icon: BarChart3,
 		external: true,
@@ -56,14 +56,6 @@ const ECOSYSTEM: App[] = [
 		sso: 'pending',
 	},
 	{
-		name: 'FlowMesh',
-		tagline: 'Distributed task execution (API-only today)',
-		url: 'https://kv.run/',
-		icon: LineChart,
-		external: true,
-		sso: 'pending',
-	},
-	{
 		name: 'Lumilake',
 		tagline: 'Pipeline optimizer (HALO)',
 		url: 'https://lumilake.ai/',
@@ -78,16 +70,24 @@ export default function Dashboard() {
 	const { user, logout } = useAuth();
 
 	return (
-		<div className="min-h-screen bg-background">
+		<div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
 			<div className="max-w-5xl mx-auto px-4 py-10">
 				<header className="flex items-center justify-between mb-10">
-					<div>
-						<h1 className="text-2xl font-semibold">Welcome back, {user?.username || user?.email || 'there'}</h1>
-						<p className="text-sm text-muted-foreground mt-1">{user?.email}</p>
+					<div className="flex items-center gap-3">
+						<div className="relative p-2 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg shadow-md">
+							<BrainCircuit className="w-7 h-7 text-white" />
+						</div>
+						<div>
+							<h1 className="text-xl font-semibold leading-tight">
+								Welcome back, {user?.username || user?.email?.split('@')[0] || 'there'}
+							</h1>
+							<p className="text-sm text-muted-foreground">{user?.email}</p>
+						</div>
 					</div>
 					<Button
 						variant="outline"
 						size="sm"
+						className="bg-white/60 backdrop-blur-sm"
 						onClick={async () => {
 							await logout();
 							navigate('/login');
@@ -103,32 +103,40 @@ export default function Dashboard() {
 						Your lum.id account
 					</h2>
 					<div className="grid gap-3 sm:grid-cols-2">
-						<Card className="cursor-pointer hover:border-primary/50 transition-colors" onClick={() => navigate('/account/tokens')}>
+						<Card
+							className="cursor-pointer hover:shadow-lg transition-shadow border-0 shadow-md bg-white/80 backdrop-blur-sm"
+							onClick={() => navigate('/account/tokens')}
+						>
 							<CardHeader>
 								<CardTitle className="flex items-center gap-2 text-base">
-									<Key className="w-4 h-4" />
+									<Key className="w-4 h-4 text-indigo-600" />
 									Access Tokens
 								</CardTitle>
-								<CardDescription>Mint and revoke Personal Access Tokens for CLI, bots, and integrations.</CardDescription>
+								<CardDescription>
+									Mint and revoke Personal Access Tokens for CLI, bots, and integrations.
+								</CardDescription>
 							</CardHeader>
 						</Card>
-						<Card className="cursor-pointer hover:border-primary/50 transition-colors" onClick={() => navigate('/account/connect')}>
+						<Card
+							className="cursor-pointer hover:shadow-lg transition-shadow border-0 shadow-md bg-white/80 backdrop-blur-sm"
+							onClick={() => navigate('/account/connect')}
+						>
 							<CardHeader>
 								<CardTitle className="flex items-center gap-2 text-base">
-									<Terminal className="w-4 h-4" />
+									<Terminal className="w-4 h-4 text-indigo-600" />
 									Install LumidOS
 								</CardTitle>
-								<CardDescription>Provision the LumidOS CLI + MCP server on any machine with one command.</CardDescription>
+								<CardDescription>
+									Provision the LumidOS CLI + MCP server on any machine with one command.
+								</CardDescription>
 							</CardHeader>
 						</Card>
 					</div>
 				</section>
 
 				<section>
-					<div className="flex items-baseline justify-between mb-4">
-						<h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-							Apps
-						</h2>
+					<div className="flex items-baseline justify-between mb-4 flex-wrap gap-y-2">
+						<h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Apps</h2>
 						<p className="text-xs text-muted-foreground">
 							<span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5 align-middle" />
 							SSO live
@@ -136,7 +144,7 @@ export default function Dashboard() {
 							Separate login (flip pending)
 						</p>
 					</div>
-					<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+					<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-2">
 						{ECOSYSTEM.map((app) => {
 							const Icon = app.icon;
 							const dotClass = app.sso === 'live' ? 'bg-emerald-500' : 'bg-amber-500';
@@ -148,9 +156,11 @@ export default function Dashboard() {
 									rel={app.external ? 'noopener noreferrer' : undefined}
 									className="block"
 								>
-									<Card className="h-full cursor-pointer hover:border-primary/50 transition-colors">
+									<Card className="h-full cursor-pointer hover:shadow-lg transition-shadow border-0 shadow-md bg-white/80 backdrop-blur-sm">
 										<CardContent className="p-4 flex items-start gap-3">
-											<Icon className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" />
+											<div className="p-2 bg-gradient-to-br from-indigo-500/10 to-purple-600/10 rounded-lg flex-shrink-0">
+												<Icon className="w-5 h-5 text-indigo-600" />
+											</div>
 											<div className="flex-1 min-w-0">
 												<div className="flex items-center gap-1.5">
 													<span className={`inline-block w-1.5 h-1.5 rounded-full ${dotClass}`} />
@@ -166,7 +176,9 @@ export default function Dashboard() {
 						})}
 					</div>
 					<p className="text-xs text-muted-foreground mt-4">
-						Click a green-dot app to see the lum.id session carry you straight into the app's authenticated view. Amber apps still have their own login today — when the AUTH_MODE cutover lands they turn green without any code change here.
+						Green-dot apps round-trip through lum.id for auth — no second login. Amber apps still have
+						their own login today; they turn green the moment the AUTH_MODE cutover lands and nothing else
+						changes on this page.
 					</p>
 				</section>
 			</div>
