@@ -15,6 +15,26 @@ const Connect = lazy(() => import("./pages/account/connect"));
 const Dashboard = lazy(() => import("./pages/account/dashboard"));
 const AdminInvitations = lazy(() => import("./pages/account/admin-invitations"));
 const AdminHub = lazy(() => import("./pages/account/admin-hub"));
+const RunmeshAdminLayout = lazy(() => import("./pages/account/admin/runmesh-layout"));
+const RunmeshAdminDashboard = lazy(() =>
+  import("./runmesh/pages/AdminDashboard").then((m) => ({ default: m.AdminDashboard })),
+);
+const RunmeshUsers = lazy(() =>
+  import("./runmesh/pages/UserManagement").then((m) => ({ default: m.UserManagement })),
+);
+const RunmeshNodes = lazy(() =>
+  import("./runmesh/pages/NodeManagement").then((m) => ({ default: m.NodeManagement })),
+);
+const RunmeshSuppliers = lazy(() =>
+  import("./runmesh/pages/SupplierManagement").then((m) => ({ default: m.SupplierManagement })),
+);
+const RunmeshSupplierNodes = lazy(() =>
+  import("./runmesh/pages/SupplierNodeConfig").then((m) => ({ default: m.SupplierNodeConfig })),
+);
+const RunmeshBilling = lazy(() =>
+  import("./runmesh/pages/BillingManagement").then((m) => ({ default: m.BillingManagement })),
+);
+const RunmeshWorkflowReview = lazy(() => import("./runmesh/pages/WorkflowReview"));
 
 // Tiny wrapper — the copied login.tsx takes the same onLogin signature
 // the lumid.market LoginPage uses, so we adapt here instead of
@@ -123,6 +143,23 @@ export default function App() {
               </AdminGuard>
             }
           />
+          <Route
+            path="/account/admin/runmesh"
+            element={
+              <AdminGuard>
+                <RunmeshAdminLayout />
+              </AdminGuard>
+            }
+          >
+            <Route index element={<Navigate to="dashboard" replace />} />
+            <Route path="dashboard" element={<RunmeshAdminDashboard />} />
+            <Route path="users" element={<RunmeshUsers />} />
+            <Route path="nodes" element={<RunmeshNodes />} />
+            <Route path="suppliers" element={<RunmeshSuppliers />} />
+            <Route path="supplier-nodes" element={<RunmeshSupplierNodes />} />
+            <Route path="billing" element={<RunmeshBilling />} />
+            <Route path="workflow-review" element={<RunmeshWorkflowReview />} />
+          </Route>
 
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
