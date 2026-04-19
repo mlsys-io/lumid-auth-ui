@@ -8,6 +8,8 @@ import { AdminGuard } from "./components/admin-guard";
 const Login = lazy(() => import("./pages/login/login").then((m) => ({ default: m.Login })));
 const Register = lazy(() => import("./pages/login/register").then((m) => ({ default: m.Register })));
 const Callback = lazy(() => import("./pages/auth/callback").then((m) => ({ default: m.AuthCallback })));
+const ForgotPassword = lazy(() => import("./pages/auth/forgot-password"));
+const ResetPassword = lazy(() => import("./pages/auth/reset-password"));
 const Tokens = lazy(() => import("./pages/account/tokens"));
 const Connect = lazy(() => import("./pages/account/connect"));
 const Dashboard = lazy(() => import("./pages/account/dashboard"));
@@ -69,6 +71,8 @@ export default function App() {
             }
           />
           <Route path="/callback" element={<Callback />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
 
           {/* Authed-only /account routes */}
           <Route

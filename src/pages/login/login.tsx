@@ -246,6 +246,19 @@ export function Login({ onLogin }: LoginProps) {
 							{passwordError}
 						</p>
 					)}
+					<div className="text-right">
+						<Button
+							type="button"
+							variant="link"
+							size="sm"
+							className="p-0 h-auto text-xs text-muted-foreground hover:text-indigo-600"
+							onClick={() => navigate('/forgot-password')}
+							disabled={loading}
+							tabIndex={-1}
+						>
+							Forgot password?
+						</Button>
+					</div>
 				</div>
 
 				<Button type="submit" className="w-full h-12 cursor-pointer" disabled={loading || !email || !password}>
