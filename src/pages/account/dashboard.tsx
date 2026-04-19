@@ -42,10 +42,13 @@ const ECOSYSTEM: App[] = [
 	{
 		name: 'QuantArena',
 		tagline: 'Strategies, backtesting, live competitions',
-		url: 'https://lumid.market/strategy',
+		// Bounces through lum.id/oauth/authorize for SSO and lands on
+		// /strategy without a second login. LQA's backend handles the
+		// code exchange + upserts the tbl_user row by email.
+		url: 'https://lumid.market/backend/api/v1/auth/lumid-sso/start?return_to=/strategy',
 		icon: TrendingUp,
 		external: true,
-		sso: 'pending',
+		sso: 'live',
 	},
 	{
 		name: 'Runmesh',
