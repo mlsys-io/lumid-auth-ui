@@ -9,6 +9,7 @@ const Register = lazy(() => import("./pages/login/register").then((m) => ({ defa
 const Callback = lazy(() => import("./pages/auth/callback").then((m) => ({ default: m.AuthCallback })));
 const Tokens = lazy(() => import("./pages/account/tokens"));
 const Connect = lazy(() => import("./pages/account/connect"));
+const Dashboard = lazy(() => import("./pages/account/dashboard"));
 
 // Tiny wrapper — the copied login.tsx takes the same onLogin signature
 // the lumid.market LoginPage uses, so we adapt here instead of
@@ -67,6 +68,14 @@ export default function App() {
           <Route path="/callback" element={<Callback />} />
 
           {/* Authed-only /account routes */}
+          <Route
+            path="/account"
+            element={
+              <AuthGuard requireAuth={true}>
+                <Dashboard />
+              </AuthGuard>
+            }
+          />
           <Route
             path="/account/tokens"
             element={
