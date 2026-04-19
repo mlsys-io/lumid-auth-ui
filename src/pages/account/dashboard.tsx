@@ -61,10 +61,11 @@ const ECOSYSTEM: App[] = [
 	{
 		name: 'Lumilake',
 		tagline: 'Pipeline optimizer (HALO)',
-		url: 'https://lumilake.ai/',
+		// Fills in user.email at render time — see Dashboard below.
+		url: 'https://lumilake.ai/sso/lumid',
 		icon: Database,
 		external: true,
-		sso: 'pending',
+		sso: 'live',
 	},
 ];
 
@@ -151,10 +152,23 @@ export default function Dashboard() {
 						{ECOSYSTEM.map((app) => {
 							const Icon = app.icon;
 							const dotClass = app.sso === 'live' ? 'bg-emerald-500' : 'bg-amber-500';
+							// Lumilake SSO is bridged client-side — the
+							// frontend's OSS-mode auth accepts any
+							// credentials, so we pass the signed-in
+							// user's email via ?email= and let it
+							// fabricate a local session.
+							const href =
+								app.name === 'Lumilake' && user?.email
+									? `${app.url}?email=${encodeURIComponent(user.email)}${
+											user.username
+												? `&name=${encodeURIComponent(user.username)}`
+												: ''
+									  }`
+									: app.url;
 							return (
 								<a
 									key={app.name}
-									href={app.url}
+									href={href}
 									target={app.external ? '_blank' : undefined}
 									rel={app.external ? 'noopener noreferrer' : undefined}
 									className="block"
