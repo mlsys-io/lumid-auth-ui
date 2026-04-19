@@ -12,6 +12,7 @@ const Tokens = lazy(() => import("./pages/account/tokens"));
 const Connect = lazy(() => import("./pages/account/connect"));
 const Dashboard = lazy(() => import("./pages/account/dashboard"));
 const AdminInvitations = lazy(() => import("./pages/account/admin-invitations"));
+const AdminHub = lazy(() => import("./pages/account/admin-hub"));
 
 // Tiny wrapper — the copied login.tsx takes the same onLogin signature
 // the lumid.market LoginPage uses, so we adapt here instead of
@@ -92,6 +93,14 @@ export default function App() {
               <AuthGuard requireAuth={true}>
                 <Connect />
               </AuthGuard>
+            }
+          />
+          <Route
+            path="/account/admin"
+            element={
+              <AdminGuard>
+                <AdminHub />
+              </AdminGuard>
             }
           />
           <Route

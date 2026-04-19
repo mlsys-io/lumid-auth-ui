@@ -142,18 +142,18 @@ export default function Dashboard() {
 						{user?.role === 'admin' && (
 							<Card
 								className="cursor-pointer hover:shadow-lg transition-shadow border-0 shadow-md bg-white/80 backdrop-blur-sm sm:col-span-2"
-								onClick={() => navigate('/account/admin/invitations')}
+								onClick={() => navigate('/account/admin')}
 							>
 								<CardHeader>
 									<CardTitle className="flex items-center gap-2 text-base">
 										<Shield className="w-4 h-4 text-indigo-600" />
-										Invitation codes
+										Admin hub
 										<span className="text-[10px] uppercase tracking-wide bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full ml-1">
 											admin
 										</span>
 									</CardTitle>
 									<CardDescription>
-										Mint, list, and revoke invitation codes across the Lumid ecosystem.
+										Invitation codes (native) + links to Runmesh + QuantArena + Lumilake admin surfaces.
 									</CardDescription>
 								</CardHeader>
 							</Card>
