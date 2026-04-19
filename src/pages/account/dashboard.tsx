@@ -53,10 +53,13 @@ const ECOSYSTEM: App[] = [
 	{
 		name: 'Runmesh',
 		tagline: 'Workflow orchestration at GPU scale',
+		// Runmesh's backend LumidIdentityController already
+		// introspects rm_pat_* / rmk_* via lum.id (Phase 4). Browser-
+		// side the landing page is public, so clicking lands cleanly.
 		url: 'https://runmesh.ai/',
 		icon: Workflow,
 		external: true,
-		sso: 'pending',
+		sso: 'live',
 	},
 	{
 		name: 'Lumilake',
