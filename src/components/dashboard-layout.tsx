@@ -63,7 +63,7 @@ const ADMIN_NAV: NavItem[] = [
 // belongs next to the other admin surfaces rather than in the
 // public Apps launcher.
 const ADMIN_EXTERNAL: { name: string; url: string; icon: React.ComponentType<{ className?: string }> }[] = [
-	{ name: 'Analytics', url: 'https://analytics.lumid.market/dashboard', icon: BarChart3 },
+	{ name: 'Analytics', url: 'https://analytics.lum.id/dashboard', icon: BarChart3 },
 ];
 
 const RUNMESH_ADMIN_NAV: NavItem[] = [
