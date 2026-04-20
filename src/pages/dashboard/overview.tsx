@@ -89,22 +89,20 @@ function QuickLink({
 	adminAccent?: boolean;
 }) {
 	const base =
-		'group rounded-lg p-3 border hover:shadow-md transition-all flex items-start gap-3 bg-white';
+		'group rounded-lg p-3 border hover:border-indigo-300 hover:shadow-sm transition-all flex items-center gap-3 bg-white';
 	const accent = adminAccent
-		? 'border-l-[3px] border-l-indigo-500 border-slate-200/60'
-		: 'border-slate-200/60';
+		? 'border-l-[3px] border-l-indigo-500 border-slate-200'
+		: 'border-slate-200';
 	return (
 		<Link to={to} className={`${base} ${accent}`}>
-			<div className="p-2 rounded-md bg-indigo-50 text-indigo-600 group-hover:bg-indigo-100">
+			<div className={`p-2 rounded-md shrink-0 ${adminAccent ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-50 text-slate-600 group-hover:bg-indigo-50 group-hover:text-indigo-600'}`}>
 				<Icon className="w-4 h-4" />
 			</div>
 			<div className="flex-1 min-w-0">
-				<div className="flex items-center gap-1.5 text-sm font-medium">
-					{label}
-					<ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-				</div>
-				<p className="text-xs text-muted-foreground truncate">{desc}</p>
+				<div className="text-sm font-medium">{label}</div>
+				<p className="text-xs text-slate-500 truncate">{desc}</p>
 			</div>
+			<ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-indigo-500 shrink-0 transition-colors" />
 		</Link>
 	);
 }

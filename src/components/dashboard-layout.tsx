@@ -88,37 +88,51 @@ function SidebarItem({ to, label, icon: Icon, end, onClick }: NavItem & { onClic
 			end={end}
 			onClick={onClick}
 			className={({ isActive }) =>
-				`flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${
+				`flex items-center gap-2.5 px-2.5 py-1.5 text-[13px] rounded-md transition-colors ${
 					isActive
 						? 'bg-indigo-100 text-indigo-700 font-medium'
-						: 'text-muted-foreground hover:bg-indigo-50 hover:text-indigo-700'
+						: 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
 				}`
 			}
 		>
-			<Icon className="w-4 h-4" />
-			<span>{label}</span>
+			<Icon className="w-4 h-4 shrink-0" />
+			<span className="truncate">{label}</span>
 		</NavLink>
 	);
 }
+
+function SectionLabel({ icon: Icon, label, accent }: { icon?: React.ComponentType<{ className?: string }>; label: string; accent?: boolean }) {
+	return (
+		<div className="mt-4 mb-1 px-2.5 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide">
+			{Icon && <Icon className={`w-3 h-3 ${accent ? 'text-indigo-600' : 'text-slate-400'}`} />}
+			<span className={accent ? 'text-indigo-700' : 'text-slate-500'}>{label}</span>
+			<div className={`flex-1 h-px ml-1.5 ${accent ? 'bg-indigo-200/70' : 'bg-slate-200'}`} />
+		</div>
+	);
+}
+
+const TITLE_CASE = (s: string) =>
+	s.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
 function Breadcrumb({ pathname }: { pathname: string }) {
 	// Only render for admin routes. Parts = segments after /dashboard/admin.
 	if (!pathname.startsWith('/dashboard/admin')) return null;
 	const segments = pathname.replace(/^\/dashboard\/admin\/?/, '').split('/').filter(Boolean);
 	if (segments.length === 0) return null;
-	const labels = segments.map((s) => s.replace(/-/g, ' '));
 	return (
-		<div className="text-xs text-muted-foreground mb-3 flex items-center gap-1.5">
+		<nav className="text-xs text-slate-500 mb-4 flex items-center gap-1.5 flex-wrap" aria-label="Breadcrumb">
 			<span>Dashboard</span>
-			<ChevronRight className="w-3 h-3" />
+			<ChevronRight className="w-3 h-3 opacity-60" />
 			<span className="text-indigo-700 font-medium">Admin</span>
-			{labels.map((label, i) => (
+			{segments.map((seg, i) => (
 				<span key={i} className="flex items-center gap-1.5">
-					<ChevronRight className="w-3 h-3" />
-					<span className="capitalize">{label}</span>
+					<ChevronRight className="w-3 h-3 opacity-60" />
+					<span className={i === segments.length - 1 ? 'text-slate-900 font-medium' : ''}>
+						{TITLE_CASE(seg)}
+					</span>
 				</span>
 			))}
-		</div>
+		</nav>
 	);
 }
 
@@ -145,20 +159,28 @@ export default function DashboardLayout() {
 	const close = () => setMobileOpen(false);
 
 	const sidebar = (
-		<aside className="w-64 shrink-0 flex flex-col bg-white/80 backdrop-blur-sm border-r border-slate-200/60">
-			{/* Brand */}
-			<div className="p-4 border-b border-slate-200/60">
-				<div className="flex items-center gap-2">
-					<div className="p-1.5 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-md shadow-sm">
-						<BrainCircuit className="w-5 h-5 text-white" />
-					</div>
-					<span className="font-semibold text-sm">lum.id</span>
+		<aside className="w-60 shrink-0 flex flex-col bg-white/90 backdrop-blur-sm border-r border-slate-200/60 h-full">
+			{/* Brand + mobile close */}
+			<div className="px-3 py-3 border-b border-slate-200/60 flex items-center gap-2">
+				<div className="p-1.5 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-md shadow-sm">
+					<BrainCircuit className="w-4 h-4 text-white" />
 				</div>
+				<span className="font-semibold text-sm flex-1">lum.id</span>
+				<Button
+					variant="ghost"
+					size="sm"
+					className="md:hidden -mr-2 px-2"
+					onClick={close}
+					aria-label="Close menu"
+				>
+					<X className="w-4 h-4" />
+				</Button>
 			</div>
 
 			{/* Nav */}
-			<nav className="flex-1 overflow-y-auto py-4 px-2 space-y-1">
-				<div className="space-y-0.5">
+			<nav className="flex-1 overflow-y-auto px-2 pt-2 pb-4">
+				<SectionLabel label="Account" />
+				<div className="space-y-px">
 					{ACCOUNT_NAV.map((item) => (
 						<SidebarItem key={item.to} {...item} onClick={close} />
 					))}
@@ -166,23 +188,14 @@ export default function DashboardLayout() {
 
 				{isAdmin && (
 					<>
-						<div className="pt-4 pb-1 px-3 flex items-center gap-1.5">
-							<Shield className="w-3 h-3 text-indigo-600" />
-							<span className="text-[10px] font-semibold uppercase tracking-wide text-indigo-700">
-								Administration
-							</span>
-						</div>
-						<div className="space-y-0.5">
+						<SectionLabel icon={Shield} label="Administration" accent />
+						<div className="space-y-px">
 							{ADMIN_NAV.map((item) => (
 								<SidebarItem key={item.to} {...item} onClick={close} />
 							))}
 						</div>
-						<div className="pt-3 pb-1 px-3">
-							<span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-								Runmesh
-							</span>
-						</div>
-						<div className="space-y-0.5">
+						<SectionLabel label="Runmesh" />
+						<div className="space-y-px">
 							{RUNMESH_ADMIN_NAV.map((item) => (
 								<SidebarItem key={item.to} {...item} onClick={close} />
 							))}
@@ -190,12 +203,8 @@ export default function DashboardLayout() {
 					</>
 				)}
 
-				<div className="pt-4 pb-1 px-3">
-					<span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-						Apps
-					</span>
-				</div>
-				<div className="space-y-0.5">
+				<SectionLabel label="Apps" />
+				<div className="space-y-px">
 					{APPS.map((app) => {
 						const Icon = app.icon;
 						const href =
@@ -210,11 +219,11 @@ export default function DashboardLayout() {
 								href={href}
 								target="_blank"
 								rel="noopener noreferrer"
-								className="flex items-center gap-2 px-3 py-2 text-sm rounded-md text-muted-foreground hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
+								className="flex items-center gap-2.5 px-2.5 py-1.5 text-[13px] rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
 							>
-								<Icon className="w-4 h-4" />
-								<span className="flex-1">{app.name}</span>
-								<ExternalLink className="w-3 h-3 opacity-60" />
+								<Icon className="w-4 h-4 shrink-0" />
+								<span className="truncate flex-1">{app.name}</span>
+								<ExternalLink className="w-3 h-3 opacity-50" />
 							</a>
 						);
 					})}
@@ -222,43 +231,49 @@ export default function DashboardLayout() {
 			</nav>
 
 			{/* User footer */}
-			<div className="p-3 border-t border-slate-200/60">
-				<div className="flex items-center gap-2 px-2 py-2 mb-2">
+			<div className="p-2.5 border-t border-slate-200/60">
+				<div className="px-2 pt-1 pb-2 flex items-center gap-1.5 min-w-0">
 					<div className="flex-1 min-w-0">
 						<div className="flex items-center gap-1.5">
-							<span className="text-sm font-medium truncate">
+							<span className="text-[13px] font-medium truncate">
 								{user?.username || user?.email?.split('@')[0] || 'there'}
 							</span>
 							{roleChip}
 						</div>
-						<p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+						<p className="text-[11px] text-slate-500 truncate">{user?.email}</p>
 					</div>
 				</div>
 				<Button
-					variant="ghost"
+					variant="outline"
 					size="sm"
-					className="w-full justify-start"
+					className="w-full justify-start text-[13px] bg-white/60"
 					onClick={async () => {
 						await logout();
 						navigate('/auth/login');
 					}}
 				>
-					<LogOut className="w-4 h-4 mr-2" />
+					<LogOut className="w-3.5 h-3.5 mr-2" />
 					Sign out
 				</Button>
 			</div>
 		</aside>
 	);
 
+	// Runmesh admin pages bring their own Card + filter UI; stacking
+	// our outer-card padding on top creates visible card-in-card
+	// nesting. Drop the inner padding for Runmesh routes but keep
+	// the indigo left-accent so the admin-mode cue stays.
+	const isRunmeshRoute = location.pathname.startsWith('/dashboard/admin/runmesh');
+
 	return (
 		<LanguageProvider>
-			<div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+			<div className="min-h-screen bg-slate-50">
 				{/* Mobile top bar */}
-				<header className="md:hidden bg-white/80 backdrop-blur-sm border-b border-slate-200/60 flex items-center gap-2 px-4 py-2 sticky top-0 z-30">
-					<Button variant="ghost" size="sm" onClick={() => setMobileOpen(true)}>
+				<header className="md:hidden bg-white/95 backdrop-blur-sm border-b border-slate-200 flex items-center gap-2 px-3 py-2 sticky top-0 z-30">
+					<Button variant="ghost" size="sm" onClick={() => setMobileOpen(true)} aria-label="Open menu">
 						<Menu className="w-4 h-4" />
 					</Button>
-					<div className="flex items-center gap-2">
+					<div className="flex items-center gap-1.5">
 						<BrainCircuit className="w-4 h-4 text-indigo-600" />
 						<span className="font-semibold text-sm">lum.id</span>
 					</div>
@@ -267,19 +282,14 @@ export default function DashboardLayout() {
 
 				{/* Mobile drawer */}
 				{mobileOpen && (
-					<div className="md:hidden fixed inset-0 z-40 flex" onClick={close}>
-						<div className="absolute inset-0 bg-black/30" />
-						<div className="relative z-10 flex" onClick={(e) => e.stopPropagation()}>
-							{sidebar}
-							<Button
-								variant="ghost"
-								size="sm"
-								className="absolute top-3 right-[-40px] text-white"
-								onClick={close}
-							>
-								<X className="w-5 h-5" />
-							</Button>
-						</div>
+					<div className="md:hidden fixed inset-0 z-40 flex" role="dialog" aria-modal="true">
+						<button
+							type="button"
+							className="absolute inset-0 bg-slate-900/40"
+							aria-label="Close menu"
+							onClick={close}
+						/>
+						<div className="relative z-10 w-60">{sidebar}</div>
 					</div>
 				)}
 
@@ -287,14 +297,16 @@ export default function DashboardLayout() {
 					<div className="hidden md:flex sticky top-0 h-screen">{sidebar}</div>
 
 					<main className="flex-1 min-w-0">
-						<div className="max-w-6xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
+						<div className="max-w-6xl mx-auto px-4 py-5 sm:px-6 sm:py-6">
 							<Breadcrumb pathname={location.pathname} />
 							<div
-								className={
+								className={[
+									'rounded-lg bg-white shadow-sm border-slate-200',
 									isAdminRoute
-										? 'rounded-lg bg-white/80 backdrop-blur-sm border-l-[3px] border-l-indigo-500 border-t border-r border-b border-slate-200/60 shadow-sm p-4 sm:p-6'
-										: 'rounded-lg bg-white/80 backdrop-blur-sm border border-slate-200/60 shadow-sm p-4 sm:p-6'
-								}
+										? 'border-l-[3px] border-l-indigo-500 border-y border-r'
+										: 'border',
+									isRunmeshRoute ? 'p-0 overflow-hidden' : 'p-4 sm:p-6',
+								].join(' ')}
 							>
 								<Outlet />
 							</div>
