@@ -397,7 +397,7 @@ function Footnote() {
 			</div>
 			<div>
 				Manage or revoke tokens at{' '}
-				<Link to="/account/tokens" className="text-indigo-500 hover:underline">
+				<Link to="/dashboard/tokens" className="text-indigo-500 hover:underline">
 					/account/tokens
 				</Link>
 				. Every authenticated request is logged per-token.

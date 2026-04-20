@@ -19,7 +19,7 @@ export function AdminGuard({ children }: { children: ReactNode }) {
 		return <Navigate to={`/login?return_to=${encodeURIComponent(here)}`} replace />;
 	}
 	if (user?.role !== 'admin') {
-		return <Navigate to="/account" replace />;
+		return <Navigate to="/dashboard" replace />;
 	}
 	return <>{children}</>;
 }

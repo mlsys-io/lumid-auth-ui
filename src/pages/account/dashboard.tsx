@@ -14,14 +14,37 @@ import {
 	BrainCircuit,
 	Shield,
 	User as UserIcon,
+	Ticket,
+	Users,
+	Server,
+	Receipt,
+	ClipboardCheck,
+	LayoutDashboard,
+	GitBranch,
 } from 'lucide-react';
 
-// Post-login landing. Adopts the QuantArena visual language so
-// returning users feel continuity between lum.id and market.lum.id:
-//   * gradient wash (blue-50 / indigo-50 / purple-50) — same as the
-//     login screen
-//   * indigo→purple brand chip around the BrainCircuit icon
-//   * white/80 backdrop-blur cards
+// Unified /dashboard — one landing for every user-visible surface:
+// account essentials (profile, tokens, CLI install), admin section
+// (only visible when role=admin), and the ecosystem app launcher.
+// The old /account/admin hub was folded into this page; an admin
+// signed in at lum.id now sees everything they can operate in one
+// place with no second click.
+
+interface AccountCard {
+	title: string;
+	desc: string;
+	path: string;
+	icon: React.ComponentType<{ className?: string }>;
+}
+
+interface AdminSurface {
+	title: string;
+	desc: string;
+	url: string;
+	icon: React.ComponentType<{ className?: string }>;
+	internal?: boolean;
+	owner: 'Lumid' | 'Runmesh' | 'QuantArena';
+}
 
 interface App {
 	name: string;
@@ -31,6 +54,86 @@ interface App {
 	external: boolean;
 	sso: 'live' | 'pending';
 }
+
+const ACCOUNT: AccountCard[] = [
+	{ title: 'Profile', desc: 'Display name, avatar, and password — all in one place.', path: '/dashboard/profile', icon: UserIcon },
+	{ title: 'Access Tokens', desc: 'Mint and revoke Personal Access Tokens for CLI, bots, and integrations.', path: '/dashboard/tokens', icon: Key },
+	{ title: 'Install LumidOS', desc: 'Provision the LumidOS CLI + MCP server on any machine with one command.', path: '/dashboard/connect', icon: Terminal },
+];
+
+const ADMIN_SURFACES: AdminSurface[] = [
+	{
+		title: 'Invitation codes',
+		desc: 'Mint, list, revoke invitation codes for the whole ecosystem.',
+		url: '/dashboard/admin/invitations',
+		icon: Ticket,
+		internal: true,
+		owner: 'Lumid',
+	},
+	{
+		title: 'Runmesh — dashboard',
+		desc: 'Ecosystem-wide activity, users, GPU utilisation.',
+		url: '/dashboard/admin/runmesh/dashboard',
+		icon: LayoutDashboard,
+		internal: true,
+		owner: 'Runmesh',
+	},
+	{
+		title: 'Runmesh — users',
+		desc: 'Accounts, roles, quotas.',
+		url: '/dashboard/admin/runmesh/users',
+		icon: Users,
+		internal: true,
+		owner: 'Runmesh',
+	},
+	{
+		title: 'Runmesh — nodes',
+		desc: 'GPU node inventory, status, allocation.',
+		url: '/dashboard/admin/runmesh/nodes',
+		icon: Server,
+		internal: true,
+		owner: 'Runmesh',
+	},
+	{
+		title: 'Runmesh — suppliers',
+		desc: 'GPU suppliers, pricing, contractual terms.',
+		url: '/dashboard/admin/runmesh/suppliers',
+		icon: Server,
+		internal: true,
+		owner: 'Runmesh',
+	},
+	{
+		title: 'Runmesh — supplier nodes',
+		desc: 'Per-supplier node configuration.',
+		url: '/dashboard/admin/runmesh/supplier-nodes',
+		icon: Server,
+		internal: true,
+		owner: 'Runmesh',
+	},
+	{
+		title: 'Runmesh — billing',
+		desc: 'User + supplier billing, refunds, reconciliation.',
+		url: '/dashboard/admin/runmesh/billing',
+		icon: Receipt,
+		internal: true,
+		owner: 'Runmesh',
+	},
+	{
+		title: 'Runmesh — workflow review',
+		desc: 'Moderation queue for submitted workflows.',
+		url: '/dashboard/admin/runmesh/workflow-review',
+		icon: ClipboardCheck,
+		internal: true,
+		owner: 'Runmesh',
+	},
+	{
+		title: 'QuantArena — management',
+		desc: 'Competitions, users, leaderboards, strategy moderation.',
+		url: 'https://lumid.market/admin/',
+		icon: GitBranch,
+		owner: 'QuantArena',
+	},
+];
 
 const ECOSYSTEM: App[] = [
 	{
@@ -55,9 +158,6 @@ const ECOSYSTEM: App[] = [
 	{
 		name: 'Runmesh',
 		tagline: 'Workflow orchestration at GPU scale',
-		// Runmesh's backend LumidIdentityController already
-		// introspects rm_pat_* / rmk_* via lum.id (Phase 4). Browser-
-		// side the landing page is public, so clicking lands cleanly.
 		url: 'https://runmesh.ai/',
 		icon: Workflow,
 		external: true,
@@ -66,7 +166,6 @@ const ECOSYSTEM: App[] = [
 	{
 		name: 'Lumilake',
 		tagline: 'Pipeline optimizer (HALO)',
-		// Fills in user.email at render time — see Dashboard below.
 		url: 'https://lumilake.ai/sso/lumid',
 		icon: Database,
 		external: true,
@@ -77,6 +176,12 @@ const ECOSYSTEM: App[] = [
 export default function Dashboard() {
 	const navigate = useNavigate();
 	const { user, logout } = useAuth();
+
+	const isAdmin = user?.role === 'admin';
+	const adminByOwner = ADMIN_SURFACES.reduce<Record<string, AdminSurface[]>>((acc, s) => {
+		(acc[s.owner] ||= []).push(s);
+		return acc;
+	}, {});
 
 	return (
 		<div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
@@ -111,70 +216,71 @@ export default function Dashboard() {
 					<h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-4">
 						Your lum.id account
 					</h2>
-					<div className="grid gap-3 sm:grid-cols-2">
-						<Card
-							className="cursor-pointer hover:shadow-lg transition-shadow border-0 shadow-md bg-white/80 backdrop-blur-sm"
-							onClick={() => navigate('/account/profile')}
-						>
-							<CardHeader>
-								<CardTitle className="flex items-center gap-2 text-base">
-									<UserIcon className="w-4 h-4 text-indigo-600" />
-									Profile
-								</CardTitle>
-								<CardDescription>
-									Display name, avatar, and password — all in one place.
-								</CardDescription>
-							</CardHeader>
-						</Card>
-						<Card
-							className="cursor-pointer hover:shadow-lg transition-shadow border-0 shadow-md bg-white/80 backdrop-blur-sm"
-							onClick={() => navigate('/account/tokens')}
-						>
-							<CardHeader>
-								<CardTitle className="flex items-center gap-2 text-base">
-									<Key className="w-4 h-4 text-indigo-600" />
-									Access Tokens
-								</CardTitle>
-								<CardDescription>
-									Mint and revoke Personal Access Tokens for CLI, bots, and integrations.
-								</CardDescription>
-							</CardHeader>
-						</Card>
-						<Card
-							className="cursor-pointer hover:shadow-lg transition-shadow border-0 shadow-md bg-white/80 backdrop-blur-sm"
-							onClick={() => navigate('/account/connect')}
-						>
-							<CardHeader>
-								<CardTitle className="flex items-center gap-2 text-base">
-									<Terminal className="w-4 h-4 text-indigo-600" />
-									Install LumidOS
-								</CardTitle>
-								<CardDescription>
-									Provision the LumidOS CLI + MCP server on any machine with one command.
-								</CardDescription>
-							</CardHeader>
-						</Card>
-						{user?.role === 'admin' && (
+					<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+						{ACCOUNT.map(({ title, desc, path, icon: Icon }) => (
 							<Card
-								className="cursor-pointer hover:shadow-lg transition-shadow border-0 shadow-md bg-white/80 backdrop-blur-sm sm:col-span-2"
-								onClick={() => navigate('/account/admin')}
+								key={path}
+								className="cursor-pointer hover:shadow-lg transition-shadow border-0 shadow-md bg-white/80 backdrop-blur-sm"
+								onClick={() => navigate(path)}
 							>
 								<CardHeader>
 									<CardTitle className="flex items-center gap-2 text-base">
-										<Shield className="w-4 h-4 text-indigo-600" />
-										Admin hub
-										<span className="text-[10px] uppercase tracking-wide bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full ml-1">
-											admin
-										</span>
+										<Icon className="w-4 h-4 text-indigo-600" />
+										{title}
 									</CardTitle>
-									<CardDescription>
-										Invitation codes (native) + links to Runmesh + QuantArena + Lumilake admin surfaces.
-									</CardDescription>
+									<CardDescription>{desc}</CardDescription>
 								</CardHeader>
 							</Card>
-						)}
+						))}
 					</div>
 				</section>
+
+				{isAdmin && (
+					<section className="mb-10">
+						<div className="flex items-center gap-2 mb-4">
+							<Shield className="w-4 h-4 text-indigo-600" />
+							<h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+								Admin
+							</h2>
+							<span className="text-[10px] uppercase tracking-wide bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
+								admin
+							</span>
+						</div>
+						{Object.entries(adminByOwner).map(([owner, items]) => (
+							<div key={owner} className="mb-6">
+								<h3 className="text-xs font-medium text-muted-foreground mb-2">{owner}</h3>
+								<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+									{items.map((s) => {
+										const Icon = s.icon;
+										const body = (
+											<Card className="h-full cursor-pointer hover:shadow-lg transition-shadow border-0 shadow-md bg-white/80 backdrop-blur-sm">
+												<CardHeader>
+													<CardTitle className="flex items-center gap-2 text-base">
+														<Icon className="w-4 h-4 text-indigo-600" />
+														{s.title}
+														{!s.internal && (
+															<ExternalLink className="w-3 h-3 text-muted-foreground ml-1" />
+														)}
+													</CardTitle>
+													<CardDescription>{s.desc}</CardDescription>
+												</CardHeader>
+											</Card>
+										);
+										return s.internal ? (
+											<div key={s.title} onClick={() => navigate(s.url)}>
+												{body}
+											</div>
+										) : (
+											<a key={s.title} href={s.url} target="_blank" rel="noopener noreferrer">
+												{body}
+											</a>
+										);
+									})}
+								</div>
+							</div>
+						))}
+					</section>
+				)}
 
 				<section>
 					<div className="flex items-baseline justify-between mb-4 flex-wrap gap-y-2">
@@ -190,10 +296,9 @@ export default function Dashboard() {
 						{ECOSYSTEM.map((app) => {
 							const Icon = app.icon;
 							const dotClass = app.sso === 'live' ? 'bg-emerald-500' : 'bg-amber-500';
-							// Lumilake SSO is bridged client-side — the
-							// frontend's OSS-mode auth accepts any
-							// credentials, so we pass the signed-in
-							// user's email via ?email= and let it
+							// Lumilake SSO is bridged client-side — the OSS-mode
+							// frontend accepts any credentials, so we pass the
+							// signed-in user's email via ?email= and let it
 							// fabricate a local session.
 							const href =
 								app.name === 'Lumilake' && user?.email

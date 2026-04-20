@@ -85,7 +85,7 @@ export function AuthCallback() {
 				if (returnTo && returnTo.startsWith('http')) {
 					window.location.replace(returnTo);
 				} else {
-					navigate(returnTo || '/account');
+					navigate(returnTo || '/dashboard');
 				}
 			}, 500);
 		} catch (err) {

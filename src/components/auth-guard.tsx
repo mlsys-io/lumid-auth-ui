@@ -40,7 +40,7 @@ export function AuthGuard({ children, requireAuth = true }: AuthGuardProps) {
 			}
 			return <Navigate to={returnTo} replace />;
 		}
-		return <Navigate to="/account" replace />;
+		return <Navigate to="/dashboard" replace />;
 	}
 
 	return <>{children}</>;

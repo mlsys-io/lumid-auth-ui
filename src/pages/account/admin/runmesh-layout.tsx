@@ -30,7 +30,7 @@ export default function RunmeshAdminLayout() {
 			<div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
 				<header className="bg-white/60 backdrop-blur-sm border-b">
 					<div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3">
-						<Button variant="ghost" size="sm" onClick={() => navigate('/account/admin')}>
+						<Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/admin')}>
 							<ArrowLeft className="w-4 h-4 mr-1" />
 							Admin hub
 						</Button>

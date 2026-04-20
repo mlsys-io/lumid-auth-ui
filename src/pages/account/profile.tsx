@@ -104,7 +104,7 @@ export default function Profile() {
 		<div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
 			<div className="max-w-3xl mx-auto px-4 py-10">
 				<header className="flex items-center justify-between mb-8">
-					<Button variant="ghost" size="sm" onClick={() => navigate('/account')}>
+					<Button variant="ghost" size="sm" onClick={() => navigate('/dashboard')}>
 						<ArrowLeft className="w-4 h-4 mr-1" />
 						Account
 					</Button>
