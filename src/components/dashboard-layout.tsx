@@ -58,6 +58,14 @@ const ADMIN_NAV: NavItem[] = [
 	{ to: '/dashboard/admin/invitations', label: 'Invitation codes', icon: Ticket },
 ];
 
+// Admin-only external links — Umami's analytics dashboard is a
+// per-site operator tool, not an end-user ecosystem app, so it
+// belongs next to the other admin surfaces rather than in the
+// public Apps launcher.
+const ADMIN_EXTERNAL: { name: string; url: string; icon: React.ComponentType<{ className?: string }> }[] = [
+	{ name: 'Analytics', url: 'https://analytics.lumid.market/dashboard', icon: BarChart3 },
+];
+
 const RUNMESH_ADMIN_NAV: NavItem[] = [
 	{ to: '/dashboard/admin/runmesh/dashboard', label: 'Dashboard', icon: LayoutDashboard },
 	{ to: '/dashboard/admin/runmesh/users', label: 'Users', icon: Users },
@@ -75,7 +83,6 @@ interface AppEntry {
 }
 
 const APPS: AppEntry[] = [
-	{ name: 'Analytics', url: 'https://analytics.lumid.market/dashboard', icon: BarChart3 },
 	{ name: 'QuantArena', url: 'https://lumid.market/backend/api/v1/auth/lumid-sso/start?return_to=/strategy', icon: TrendingUp },
 	{ name: 'Runmesh', url: 'https://runmesh.ai/', icon: Workflow },
 	{ name: 'Lumilake', url: 'https://lumilake.ai/sso/lumid', icon: Database },
@@ -193,6 +200,22 @@ export default function DashboardLayout() {
 							{ADMIN_NAV.map((item) => (
 								<SidebarItem key={item.to} {...item} onClick={close} />
 							))}
+							{ADMIN_EXTERNAL.map((app) => {
+								const Icon = app.icon;
+								return (
+									<a
+										key={app.name}
+										href={app.url}
+										target="_blank"
+										rel="noopener noreferrer"
+										className="flex items-center gap-2.5 px-2.5 py-1.5 text-[13px] rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+									>
+										<Icon className="w-4 h-4 shrink-0" />
+										<span className="truncate flex-1">{app.name}</span>
+										<ExternalLink className="w-3 h-3 opacity-50" />
+									</a>
+								);
+							})}
 						</div>
 						<SectionLabel label="Runmesh" />
 						<div className="space-y-px">
