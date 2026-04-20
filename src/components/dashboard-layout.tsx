@@ -316,11 +316,16 @@ export default function DashboardLayout() {
 					</div>
 				)}
 
-				<div className="flex">
+				{/* Canvas: sidebar + content travel together, capped at
+				    max-w-7xl (1280px) and centered. On ultra-wide
+				    screens the page has symmetric breathing room on
+				    both sides instead of the sidebar stuck to the far
+				    left edge with dead space on the right. */}
+				<div className="max-w-7xl mx-auto flex">
 					<div className="hidden md:flex sticky top-0 h-screen">{sidebar}</div>
 
 					<main className="flex-1 min-w-0">
-						<div className="max-w-6xl mx-auto px-4 py-5 sm:px-6 sm:py-6">
+						<div className="px-4 py-5 sm:px-6 sm:py-6">
 							<Breadcrumb pathname={location.pathname} />
 							<div
 								className={[
