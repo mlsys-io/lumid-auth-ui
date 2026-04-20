@@ -7,7 +7,7 @@ import "./index.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <BrowserRouter basename="/auth">
+    <BrowserRouter>
       <App />
       <Toaster richColors position="top-right" />
     </BrowserRouter>

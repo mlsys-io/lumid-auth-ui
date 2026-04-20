@@ -46,7 +46,7 @@ export default function ResetPassword() {
 			toast.success('Password updated');
 			// Redirect after a short dwell so the user reads the
 			// confirmation before the page flips.
-			setTimeout(() => navigate('/login'), 2000);
+			setTimeout(() => navigate('/auth/login'), 2000);
 		} catch (e) {
 			const msg = e instanceof ApiError ? e.message : 'Reset failed';
 			setErr(msg);
@@ -81,7 +81,7 @@ export default function ResetPassword() {
 						<div className="flex flex-col items-center gap-4 py-4">
 							<CheckCircle2 className="w-12 h-12 text-emerald-500" />
 							<Link
-								to="/login"
+								to="/auth/login"
 								className="text-sm font-medium text-indigo-600 hover:underline"
 							>
 								Go to sign in now
@@ -157,7 +157,7 @@ export default function ResetPassword() {
 
 					<div className="mt-6 text-center">
 						<Link
-							to="/login"
+							to="/auth/login"
 							className="text-sm text-muted-foreground hover:text-indigo-600"
 						>
 							Back to sign in

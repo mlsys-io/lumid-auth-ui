@@ -20,7 +20,7 @@ export function AuthGuard({ children, requireAuth = true }: AuthGuardProps) {
 		// Preserve the original destination so /auth/login can send the
 		// user back after sign-in via ?return_to=<current>.
 		const here = location.pathname + location.search;
-		return <Navigate to={`/login?return_to=${encodeURIComponent(here)}`} replace />;
+		return <Navigate to={`/auth/login?return_to=${encodeURIComponent(here)}`} replace />;
 	}
 
 	if (!requireAuth && isAuthenticated) {

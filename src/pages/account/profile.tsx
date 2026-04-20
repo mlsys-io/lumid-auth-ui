@@ -1,7 +1,6 @@
 import { useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ArrowLeft, User as UserIcon, Lock, Camera, Save, X } from 'lucide-react';
+import { User as UserIcon, Lock, Camera, Save, X } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { Button } from '../../components/ui/button';
 import {
@@ -23,8 +22,7 @@ import { updateProfile, changePassword } from '../../api/profile';
 // inline; we can swap to multipart + MinIO once that's wired.
 
 export default function Profile() {
-	const navigate = useNavigate();
-	const { user, logout } = useAuth();
+	const { user } = useAuth();
 
 	const [editing, setEditing] = useState(false);
 	const [username, setUsername] = useState(user?.username ?? '');
@@ -101,26 +99,14 @@ export default function Profile() {
 	}
 
 	return (
-		<div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-			<div className="max-w-3xl mx-auto px-4 py-10">
-				<header className="flex items-center justify-between mb-8">
-					<Button variant="ghost" size="sm" onClick={() => navigate('/dashboard')}>
-						<ArrowLeft className="w-4 h-4 mr-1" />
-						Account
-					</Button>
-					<Button
-						variant="outline"
-						size="sm"
-						onClick={async () => {
-							await logout();
-							navigate('/login');
-						}}
-					>
-						Sign out
-					</Button>
-				</header>
-
-				<section className="grid gap-6 md:grid-cols-2">
+		<>
+			<header className="mb-6">
+				<h1 className="text-2xl font-semibold">Profile</h1>
+				<p className="text-sm text-muted-foreground mt-1">
+					Your display name and avatar across every Lumid app — plus a password change.
+				</p>
+			</header>
+			<section className="grid gap-6 md:grid-cols-2">
 					<Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm">
 						<CardHeader>
 							<CardTitle className="flex items-center gap-2 text-base">
@@ -266,7 +252,6 @@ export default function Profile() {
 						</CardContent>
 					</Card>
 				</section>
-			</div>
-		</div>
+		</>
 	);
 }

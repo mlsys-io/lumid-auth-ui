@@ -252,7 +252,7 @@ export function Login({ onLogin }: LoginProps) {
 							variant="link"
 							size="sm"
 							className="p-0 h-auto text-xs text-muted-foreground hover:text-indigo-600"
-							onClick={() => navigate('/forgot-password')}
+							onClick={() => navigate('/auth/forgot-password')}
 							disabled={loading}
 							tabIndex={-1}
 						>
@@ -272,7 +272,7 @@ export function Login({ onLogin }: LoginProps) {
 						type="button"
 						variant="link"
 						className="p-0 h-auto font-semibold cursor-pointer"
-						onClick={() => navigate('/register')}
+						onClick={() => navigate('/auth/register')}
 						disabled={loading}
 					>
 						Sign Up

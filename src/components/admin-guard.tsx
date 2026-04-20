@@ -4,9 +4,10 @@ import { useAuth } from '../hooks/useAuth';
 import { Loading } from './ui/loading';
 
 /**
- * Routes under /account/admin/* — visible only to users whose lum.id
- * role is "admin". Falls back to /account for signed-in non-admins;
- * unauth users get a return_to back to the page they wanted.
+ * Routes under /dashboard/admin/* — visible only to users whose
+ * lum.id role is "admin". Falls back to /dashboard for signed-in
+ * non-admins; unauth users get a return_to back to the page they
+ * wanted.
  */
 export function AdminGuard({ children }: { children: ReactNode }) {
 	const { user, isLoading, isAuthenticated } = useAuth();
@@ -16,7 +17,7 @@ export function AdminGuard({ children }: { children: ReactNode }) {
 
 	if (!isAuthenticated) {
 		const here = location.pathname + location.search;
-		return <Navigate to={`/login?return_to=${encodeURIComponent(here)}`} replace />;
+		return <Navigate to={`/auth/login?return_to=${encodeURIComponent(here)}`} replace />;
 	}
 	if (user?.role !== 'admin') {
 		return <Navigate to="/dashboard" replace />;

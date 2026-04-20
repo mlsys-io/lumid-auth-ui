@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ArrowLeft, Copy, Trash, Plus, Shield } from 'lucide-react';
+import { Copy, Trash, Plus, Shield } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -23,7 +22,6 @@ import {
 type Status = 'active' | 'revoked' | 'exhausted' | 'all';
 
 export default function AdminInvitations() {
-	const navigate = useNavigate();
 	const [codes, setCodes] = useState<InvitationCode[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [status, setStatus] = useState<Status>('active');
@@ -90,20 +88,11 @@ export default function AdminInvitations() {
 	}
 
 	return (
-		<div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-			<div className="max-w-4xl mx-auto px-4 py-10">
-				<header className="flex items-center justify-between mb-8">
-					<div className="flex items-center gap-3">
-						<Button variant="ghost" size="sm" onClick={() => navigate('/dashboard')}>
-							<ArrowLeft className="w-4 h-4 mr-1" />
-							Account
-						</Button>
-						<div className="flex items-center gap-2">
-							<Shield className="w-5 h-5 text-indigo-600" />
-							<h1 className="text-xl font-semibold">Invitation codes</h1>
-						</div>
-					</div>
-				</header>
+		<>
+			<header className="flex items-center gap-2 mb-6">
+				<Shield className="w-5 h-5 text-indigo-600" />
+				<h1 className="text-2xl font-semibold">Invitation codes</h1>
+			</header>
 
 				<Card className="mb-6 border-0 shadow-md bg-white/80 backdrop-blur-sm">
 					<CardHeader>
@@ -230,7 +219,6 @@ export default function AdminInvitations() {
 						)}
 					</CardContent>
 				</Card>
-			</div>
-		</div>
+		</>
 	);
 }

@@ -1,21 +1,23 @@
 import { lazy, Suspense } from "react";
-import { Navigate, Route, Routes, useNavigate, useParams } from "react-router-dom";
+import { Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { AuthGuard } from "./components/auth-guard";
 import { AdminGuard } from "./components/admin-guard";
 
-// Lazy-load so first paint on /login doesn't fetch /account/tokens code.
+// Lazy-load so first paint on /auth/login doesn't fetch the dashboard code.
 const Login = lazy(() => import("./pages/login/login").then((m) => ({ default: m.Login })));
 const Register = lazy(() => import("./pages/login/register").then((m) => ({ default: m.Register })));
 const Callback = lazy(() => import("./pages/auth/callback").then((m) => ({ default: m.AuthCallback })));
 const ForgotPassword = lazy(() => import("./pages/auth/forgot-password"));
 const ResetPassword = lazy(() => import("./pages/auth/reset-password"));
+
+// The unified shell + content pages render under /dashboard/*
+const DashboardLayout = lazy(() => import("./components/dashboard-layout"));
+const Overview = lazy(() => import("./pages/dashboard/overview"));
+const Profile = lazy(() => import("./pages/account/profile"));
 const Tokens = lazy(() => import("./pages/account/tokens"));
 const Connect = lazy(() => import("./pages/account/connect"));
-const Dashboard = lazy(() => import("./pages/account/dashboard"));
-const Profile = lazy(() => import("./pages/account/profile"));
 const AdminInvitations = lazy(() => import("./pages/account/admin-invitations"));
-const RunmeshAdminLayout = lazy(() => import("./pages/account/admin/runmesh-layout"));
 const RunmeshAdminDashboard = lazy(() =>
   import("./runmesh/pages/AdminDashboard").then((m) => ({ default: m.AdminDashboard })),
 );
@@ -36,16 +38,12 @@ const RunmeshBilling = lazy(() =>
 );
 const RunmeshWorkflowReview = lazy(() => import("./runmesh/pages/WorkflowReview"));
 
-// Tiny wrapper — the copied login.tsx takes the same onLogin signature
-// the lumid.market LoginPage uses, so we adapt here instead of
-// modifying the page component.
 function LoginPage() {
   const { login } = useAuth();
   return (
     <Login
       onLogin={(token, user) => {
         login(token, user);
-        // AuthProvider handles the redirect via AuthGuard
       }}
     />
   );
@@ -55,18 +53,18 @@ function RegisterPage() {
   const navigate = useNavigate();
   return (
     <Register
-      onSwitchToLogin={() => navigate("/login")}
-      onRegisterSuccess={() => navigate("/login")}
+      onSwitchToLogin={() => navigate("/auth/login")}
+      onRegisterSuccess={() => navigate("/auth/login")}
     />
   );
 }
 
-// Any /account/<tail> bookmark lands at the matching /dashboard/<tail>.
-// Used as the catch-all for `/account/*` so /account/admin/runmesh/users,
-// /account/profile, etc. all keep working after the rename.
-function LegacyAccountRedirect() {
+// /auth/account/<tail> and /auth/dashboard/<tail> both rewrite to
+// /dashboard/<tail> so every stale bookmark keeps working.
+function LegacyDashboardRedirect() {
   const { "*": tail = "" } = useParams();
-  const dest = tail ? `/dashboard/${tail}` : "/dashboard";
+  const loc = useLocation();
+  const dest = tail ? `/dashboard/${tail}${loc.search}` : `/dashboard${loc.search}`;
   return <Navigate to={dest} replace />;
 }
 
@@ -83,8 +81,9 @@ export default function App() {
     <AuthProvider>
       <Suspense fallback={<Spinner />}>
         <Routes>
+          {/* Auth flows — unchanged under /auth/*. */}
           <Route
-            path="/login"
+            path="/auth/login"
             element={
               <AuthGuard requireAuth={false}>
                 <LoginPage />
@@ -92,88 +91,81 @@ export default function App() {
             }
           />
           <Route
-            path="/register"
+            path="/auth/register"
             element={
               <AuthGuard requireAuth={false}>
                 <RegisterPage />
               </AuthGuard>
             }
           />
-          <Route path="/callback" element={<Callback />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/auth/callback" element={<Callback />} />
+          <Route path="/auth/forgot-password" element={<ForgotPassword />} />
+          <Route path="/auth/reset-password" element={<ResetPassword />} />
 
-          {/* Unified /dashboard — landing + account + admin live here. */}
+          {/* Unified /dashboard shell. All authenticated routes nest
+              under this so the sidebar is always present. */}
           <Route
             path="/dashboard"
             element={
               <AuthGuard requireAuth={true}>
-                <Dashboard />
+                <DashboardLayout />
               </AuthGuard>
-            }
-          />
-          <Route
-            path="/dashboard/profile"
-            element={
-              <AuthGuard requireAuth={true}>
-                <Profile />
-              </AuthGuard>
-            }
-          />
-          <Route
-            path="/dashboard/tokens"
-            element={
-              <AuthGuard requireAuth={true}>
-                <Tokens />
-              </AuthGuard>
-            }
-          />
-          <Route
-            path="/dashboard/connect"
-            element={
-              <AuthGuard requireAuth={true}>
-                <Connect />
-              </AuthGuard>
-            }
-          />
-          <Route
-            path="/dashboard/admin/invitations"
-            element={
-              <AdminGuard>
-                <AdminInvitations />
-              </AdminGuard>
-            }
-          />
-          <Route
-            path="/dashboard/admin/runmesh"
-            element={
-              <AdminGuard>
-                <RunmeshAdminLayout />
-              </AdminGuard>
             }
           >
-            <Route index element={<Navigate to="dashboard" replace />} />
-            <Route path="dashboard" element={<RunmeshAdminDashboard />} />
-            <Route path="users" element={<RunmeshUsers />} />
-            <Route path="nodes" element={<RunmeshNodes />} />
-            <Route path="suppliers" element={<RunmeshSuppliers />} />
-            <Route path="supplier-nodes" element={<RunmeshSupplierNodes />} />
-            <Route path="billing" element={<RunmeshBilling />} />
-            <Route path="workflow-review" element={<RunmeshWorkflowReview />} />
+            <Route index element={<Overview />} />
+            <Route path="profile" element={<Profile />} />
+            <Route path="tokens" element={<Tokens />} />
+            <Route path="connect" element={<Connect />} />
+            <Route
+              path="admin/invitations"
+              element={
+                <AdminGuard>
+                  <AdminInvitations />
+                </AdminGuard>
+              }
+            />
+            <Route
+              path="admin/runmesh"
+              element={
+                <AdminGuard>
+                  <Outlet />
+                </AdminGuard>
+              }
+            >
+              <Route index element={<Navigate to="dashboard" replace />} />
+              <Route path="dashboard" element={<RunmeshAdminDashboard />} />
+              <Route path="users" element={<RunmeshUsers />} />
+              <Route path="nodes" element={<RunmeshNodes />} />
+              <Route path="suppliers" element={<RunmeshSuppliers />} />
+              <Route path="supplier-nodes" element={<RunmeshSupplierNodes />} />
+              <Route path="billing" element={<RunmeshBilling />} />
+              <Route path="workflow-review" element={<RunmeshWorkflowReview />} />
+            </Route>
           </Route>
 
-          {/* Legacy /account/* bookmarks — permanent redirect to the
-              matching /dashboard/* path. The splat transfers the tail
-              path + any sub-routes (including the old admin-hub at
-              /account/admin which now lands on the merged dashboard). */}
+          {/* Legacy paths — one-hop redirect to /dashboard/*. */}
+          <Route path="/auth/dashboard" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/auth/dashboard/*" element={<LegacyDashboardRedirect />} />
+          <Route path="/auth/account" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/auth/account/admin" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/auth/account/*" element={<LegacyDashboardRedirect />} />
           <Route path="/account" element={<Navigate to="/dashboard" replace />} />
           <Route path="/account/admin" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/account/*" element={<LegacyAccountRedirect />} />
+          <Route path="/account/*" element={<LegacyDashboardRedirect />} />
 
-          <Route path="/" element={<Navigate to="/login" replace />} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
+          {/* Roots → login if unauth, dashboard if auth (AuthGuard decides). */}
+          <Route
+            path="/"
+            element={
+              <AuthGuard requireAuth={false}>
+                <Navigate to="/auth/login" replace />
+              </AuthGuard>
+            }
+          />
+          <Route path="*" element={<Navigate to="/auth/login" replace />} />
         </Routes>
       </Suspense>
     </AuthProvider>
   );
 }
+

@@ -157,7 +157,7 @@ export function AuthCallback() {
 						<div>
 							<h2 className="text-2xl font-bold mb-2">Authentication Error</h2>
 							<p className="text-destructive mb-4">{errorMessage}</p>
-							<Button onClick={() => navigate('/login')}>Back to Login</Button>
+							<Button onClick={() => navigate('/auth/login')}>Back to Login</Button>
 						</div>
 					</div>
 				);
