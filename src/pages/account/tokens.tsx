@@ -131,15 +131,19 @@ function TokenRow({
 				? 'bg-gray-50 text-gray-500 border-gray-200'
 				: 'bg-amber-50 text-amber-700 border-amber-200';
 	return (
-		<div className={`px-4 py-3 flex items-center gap-3 ${isLast ? '' : 'border-b border-gray-100'}`}>
+		<div
+			className={`px-4 py-3 flex flex-wrap items-center gap-x-3 gap-y-2 ${
+				isLast ? '' : 'border-b border-gray-100'
+			}`}
+		>
 			<div className="min-w-0 flex-1">
-				<div className="flex items-center gap-2">
+				<div className="flex items-center gap-2 flex-wrap">
 					<span className="font-medium truncate">{token.name}</span>
 					<span className={`text-[10px] font-medium border rounded-full px-2 py-0.5 ${statusColor}`}>
 						{token.status}
 					</span>
 				</div>
-				<div className="text-xs text-gray-500 mt-0.5 flex items-center gap-3">
+				<div className="text-xs text-gray-500 mt-0.5 flex items-center gap-3 flex-wrap">
 					<code className="font-mono">{token.token_prefix}…</code>
 					<span className="flex items-center gap-1">
 						<Shield className="w-3 h-3" />
@@ -152,19 +156,21 @@ function TokenRow({
 					)}
 				</div>
 			</div>
-			<Button variant="outline" size="sm" onClick={onAudit} disabled={token.status === 'revoked'}>
-				Audit
-			</Button>
-			{token.status === 'active' && (
-				<Button
-					variant="outline"
-					size="sm"
-					onClick={onRevoke}
-					className="text-rose-600 border-rose-200 hover:bg-rose-50"
-				>
-					<Trash2 className="w-3.5 h-3.5 mr-1" /> Revoke
+			<div className="flex items-center gap-2 shrink-0 ml-auto">
+				<Button variant="outline" size="sm" onClick={onAudit} disabled={token.status === 'revoked'}>
+					Audit
 				</Button>
-			)}
+				{token.status === 'active' && (
+					<Button
+						variant="outline"
+						size="sm"
+						onClick={onRevoke}
+						className="text-rose-600 border-rose-200 hover:bg-rose-50"
+					>
+						<Trash2 className="w-3.5 h-3.5 mr-1" /> Revoke
+					</Button>
+				)}
+			</div>
 		</div>
 	);
 }
@@ -251,11 +257,19 @@ function MintDialog({
 							<Label>Scope</Label>
 							<Select value={preset} onValueChange={setPreset}>
 								<SelectTrigger>
-									<SelectValue />
+									{/*
+									  SelectValue normally reflects the active SelectItem's
+									  children — if those children are a flex-column, the
+									  closed trigger grows to 2 lines and clobbers the
+									  Grants row below. Render just the label here.
+									*/}
+									<SelectValue>
+										{SCOPE_PRESETS.find((p) => p.id === preset)?.label ?? 'Select a scope'}
+									</SelectValue>
 								</SelectTrigger>
 								<SelectContent>
 									{SCOPE_PRESETS.map((p) => (
-										<SelectItem key={p.id} value={p.id}>
+										<SelectItem key={p.id} value={p.id} textValue={p.label}>
 											<div className="flex flex-col">
 												<span className="font-medium">{p.label}</span>
 												<span className="text-xs text-muted-foreground">{p.description}</span>
@@ -264,8 +278,11 @@ function MintDialog({
 									))}
 								</SelectContent>
 							</Select>
-							<div className="mt-2 text-xs text-gray-500">
-								Grants: <code className="bg-gray-100 rounded px-1.5 py-0.5">{scopes.join(' · ')}</code>
+							<div className="mt-2 text-xs text-gray-700">
+								<span className="text-gray-600 mr-1">Grants:</span>
+								<code className="bg-gray-100 border border-gray-200 rounded px-1.5 py-0.5 font-mono">
+									{scopes.join(' · ')}
+								</code>
 							</div>
 						</div>
 						<div>
@@ -330,13 +347,24 @@ function MintResult({
 
 			<div>
 				<Label>One-liner install</Label>
-				<pre className="mt-1 bg-gray-50 border border-gray-200 rounded-md p-2 text-xs font-mono whitespace-pre-wrap break-all">
-					curl -sSL https://lumid.market/install.sh | bash -s -- {minted.token}
-				</pre>
-				<p className="mt-1 text-xs text-gray-500">
+				<div className="mt-1 space-y-2">
+					<div>
+						<div className="text-[11px] uppercase tracking-wide text-gray-500 mb-0.5">Linux / macOS</div>
+						<pre className="bg-gray-50 border border-gray-200 rounded-md p-2 text-xs font-mono whitespace-pre-wrap break-all">
+							curl -sSL https://lum.id/start | bash -s -- {minted.token}
+						</pre>
+					</div>
+					<div>
+						<div className="text-[11px] uppercase tracking-wide text-gray-500 mb-0.5">Windows (PowerShell)</div>
+						<pre className="bg-gray-50 border border-gray-200 rounded-md p-2 text-xs font-mono whitespace-pre-wrap break-all">
+							{`$env:LUMID_PAT='${minted.token}'; iwr https://lum.id/install.ps1 -useb | iex`}
+						</pre>
+					</div>
+				</div>
+				<p className="mt-2 text-xs text-gray-500">
 					Runs on your own machine. See{' '}
-					<a href="/connect" className="text-indigo-500 hover:underline">
-						/connect
+					<a href="/dashboard/connect" className="text-indigo-500 hover:underline">
+						Connect
 					</a>{' '}
 					for the full walkthrough.
 				</p>
