@@ -13,6 +13,7 @@ const ResetPassword = lazy(() => import("./pages/auth/reset-password"));
 const Tokens = lazy(() => import("./pages/account/tokens"));
 const Connect = lazy(() => import("./pages/account/connect"));
 const Dashboard = lazy(() => import("./pages/account/dashboard"));
+const Profile = lazy(() => import("./pages/account/profile"));
 const AdminInvitations = lazy(() => import("./pages/account/admin-invitations"));
 const AdminHub = lazy(() => import("./pages/account/admin-hub"));
 const RunmeshAdminLayout = lazy(() => import("./pages/account/admin/runmesh-layout"));
