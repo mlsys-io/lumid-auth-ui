@@ -1,0 +1,1 @@
+export { DataLabelPage } from './DataLabel';

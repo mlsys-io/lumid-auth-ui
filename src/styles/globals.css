@@ -533,3 +533,58 @@ html {
 .animate-new-item {
 	animation: slideInDown 0.4s ease-out, fadeHighlight 2s ease-out;
 }
+
+/* =======================================================================
+ * Ported-page layout normalization
+ * -----------------------------------------------------------------------
+ * The ported Runmesh + Lumilake pages ship their own chrome (cards,
+ * headers, filter bars). They were designed against a 4-column dense
+ * admin layout and use Tailwind default sizes (text-3xl h1s, text-lg
+ * buttons). Next to lum.id's compact 13px sidebar, that's jarring.
+ *
+ * Strategy: when a ported page renders inside lum.id's shell, scope a
+ * single typography downshift so headings stop towering over the nav
+ * and paragraph text lines up with the sidebar. Non-ported lum.id
+ * pages (under /dashboard/*) still use Tailwind defaults because
+ * dashboard-layout.tsx wraps them in a Card with its own baseline.
+ *
+ * The .app-main scope matches the <main> in app-layout.tsx; dashboard
+ * pages keep their existing styling untouched.
+ * ===================================================================== */
+.app-main h1 {
+	font-size: 1.25rem;       /* 20px — was 30px */
+	line-height: 1.6rem;
+	font-weight: 600;
+}
+.app-main h2 {
+	font-size: 1.05rem;       /* 17px — was 24px */
+	line-height: 1.4rem;
+	font-weight: 600;
+}
+.app-main h3 {
+	font-size: 0.95rem;       /* 15px */
+	font-weight: 600;
+}
+.app-main .text-4xl { font-size: 1.5rem !important; line-height: 1.75rem !important; }
+.app-main .text-3xl { font-size: 1.25rem !important; line-height: 1.6rem !important; }
+.app-main .text-2xl { font-size: 1.05rem !important; line-height: 1.4rem !important; }
+.app-main .text-xl  { font-size: 0.95rem !important; line-height: 1.25rem !important; }
+.app-main .text-lg  { font-size: 0.875rem !important; line-height: 1.25rem !important; }
+/* Body text in ported pages defaults to text-base (16px). Nudge to
+ * 13–14px to line up with the sidebar's 13px rows without making the
+ * long-form Markdown walls unreadable. */
+.app-main p,
+.app-main .text-base { font-size: 0.875rem; line-height: 1.35rem; }
+/* Buttons inside ported pages: tighten to sidebar-ish 13px. */
+.app-main button:not(.enterprise-button-ignore) {
+	font-size: 0.8125rem;
+}
+/* The ported pages use bg-gray-50 or bg-white as full-height root;
+ * both land next to our bg-slate-50 outer. Unify so the seams
+ * disappear. */
+.app-main .bg-gray-50 { background-color: rgb(248 250 252) !important; }  /* slate-50 */
+/* Don't let pages assume a full viewport height — they live inside
+ * the scrollable main column, so "min-h-screen" would create a double
+ * scrollbar with the outer shell. */
+.app-main .min-h-screen,
+.app-main .h-screen { min-height: 100%; height: auto; }

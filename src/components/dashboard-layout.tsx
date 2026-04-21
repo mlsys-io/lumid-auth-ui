@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
 	BrainCircuit,
 	LayoutDashboard,
@@ -6,24 +6,20 @@ import {
 	Key,
 	Terminal,
 	Shield,
-	Ticket,
-	Users,
-	Server,
-	Receipt,
-	ClipboardCheck,
 	ExternalLink,
 	LogOut,
 	BarChart3,
+	Blocks,
 	TrendingUp,
 	Workflow,
 	Database,
-	ChevronRight,
 	Menu,
 	X,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { LanguageProvider } from '../runmesh/i18n';
+import { EnterpriseTipProvider } from '../runmesh/components/EnterpriseTip';
 import { Button } from './ui/button';
 
 // Unified sidebar + content shell for every authenticated surface.
@@ -52,28 +48,6 @@ const ACCOUNT_NAV: NavItem[] = [
 	{ to: '/dashboard/profile', label: 'Profile', icon: UserIcon },
 	{ to: '/dashboard/tokens', label: 'Access Tokens', icon: Key },
 	{ to: '/dashboard/connect', label: 'Install LumidOS', icon: Terminal },
-];
-
-const ADMIN_NAV: NavItem[] = [
-	{ to: '/dashboard/admin/invitations', label: 'Invitation codes', icon: Ticket },
-];
-
-// Admin-only external links — Umami's analytics dashboard is a
-// per-site operator tool, not an end-user ecosystem app, so it
-// belongs next to the other admin surfaces rather than in the
-// public Apps launcher.
-const ADMIN_EXTERNAL: { name: string; url: string; icon: React.ComponentType<{ className?: string }> }[] = [
-	{ name: 'Analytics', url: 'https://analytics.lum.id/dashboard', icon: BarChart3 },
-];
-
-const RUNMESH_ADMIN_NAV: NavItem[] = [
-	{ to: '/dashboard/admin/runmesh/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-	{ to: '/dashboard/admin/runmesh/users', label: 'Users', icon: Users },
-	{ to: '/dashboard/admin/runmesh/nodes', label: 'Nodes', icon: Server },
-	{ to: '/dashboard/admin/runmesh/suppliers', label: 'Suppliers', icon: Server },
-	{ to: '/dashboard/admin/runmesh/supplier-nodes', label: 'Supplier nodes', icon: Server },
-	{ to: '/dashboard/admin/runmesh/billing', label: 'Billing', icon: Receipt },
-	{ to: '/dashboard/admin/runmesh/workflow-review', label: 'Reviews', icon: ClipboardCheck },
 ];
 
 interface AppEntry {
@@ -118,39 +92,12 @@ function SectionLabel({ icon: Icon, label, accent }: { icon?: React.ComponentTyp
 	);
 }
 
-const TITLE_CASE = (s: string) =>
-	s.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-
-function Breadcrumb({ pathname }: { pathname: string }) {
-	// Only render for admin routes. Parts = segments after /dashboard/admin.
-	if (!pathname.startsWith('/dashboard/admin')) return null;
-	const segments = pathname.replace(/^\/dashboard\/admin\/?/, '').split('/').filter(Boolean);
-	if (segments.length === 0) return null;
-	return (
-		<nav className="text-xs text-slate-500 mb-4 flex items-center gap-1.5 flex-wrap" aria-label="Breadcrumb">
-			<span>Dashboard</span>
-			<ChevronRight className="w-3 h-3 opacity-60" />
-			<span className="text-indigo-700 font-medium">Admin</span>
-			{segments.map((seg, i) => (
-				<span key={i} className="flex items-center gap-1.5">
-					<ChevronRight className="w-3 h-3 opacity-60" />
-					<span className={i === segments.length - 1 ? 'text-slate-900 font-medium' : ''}>
-						{TITLE_CASE(seg)}
-					</span>
-				</span>
-			))}
-		</nav>
-	);
-}
-
 export default function DashboardLayout() {
 	const { user, logout } = useAuth();
 	const navigate = useNavigate();
-	const location = useLocation();
 	const [mobileOpen, setMobileOpen] = useState(false);
 
 	const isAdmin = user?.role === 'admin';
-	const isAdminRoute = location.pathname.startsWith('/dashboard/admin');
 
 	const roleChip = isAdmin ? (
 		<span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wide bg-indigo-100 text-indigo-700">
@@ -184,7 +131,7 @@ export default function DashboardLayout() {
 				</Button>
 			</div>
 
-			{/* Nav */}
+			{/* Nav — identity pages only now. Product + admin live at /app/*. */}
 			<nav className="flex-1 overflow-y-auto px-2 pt-2 pb-4">
 				<SectionLabel label="Account" />
 				<div className="space-y-px">
@@ -193,40 +140,20 @@ export default function DashboardLayout() {
 					))}
 				</div>
 
-				{isAdmin && (
-					<>
-						<SectionLabel icon={Shield} label="Administration" accent />
-						<div className="space-y-px">
-							{ADMIN_NAV.map((item) => (
-								<SidebarItem key={item.to} {...item} onClick={close} />
-							))}
-							{ADMIN_EXTERNAL.map((app) => {
-								const Icon = app.icon;
-								return (
-									<a
-										key={app.name}
-										href={app.url}
-										target="_blank"
-										rel="noopener noreferrer"
-										className="flex items-center gap-2.5 px-2.5 py-1.5 text-[13px] rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
-									>
-										<Icon className="w-4 h-4 shrink-0" />
-										<span className="truncate flex-1">{app.name}</span>
-										<ExternalLink className="w-3 h-3 opacity-50" />
-									</a>
-								);
-							})}
-						</div>
-						<SectionLabel label="Runmesh" />
-						<div className="space-y-px">
-							{RUNMESH_ADMIN_NAV.map((item) => (
-								<SidebarItem key={item.to} {...item} onClick={close} />
-							))}
-						</div>
-					</>
-				)}
+				<SectionLabel label="Go to" />
+				<div className="space-y-px">
+					<NavLink
+						to="/app"
+						onClick={close}
+						className="flex items-center gap-2.5 px-2.5 py-1.5 text-[13px] rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+					>
+						<Blocks className="w-4 h-4 shrink-0" />
+						<span className="truncate flex-1">Product{isAdmin ? ' + admin' : ''}</span>
+						<ExternalLink className="w-3 h-3 opacity-50" />
+					</NavLink>
+				</div>
 
-				<SectionLabel label="Apps" />
+				<SectionLabel label="External" />
 				<div className="space-y-px">
 					{APPS.map((app) => {
 						const Icon = app.icon;
@@ -250,6 +177,18 @@ export default function DashboardLayout() {
 							</a>
 						);
 					})}
+					{isAdmin && (
+						<a
+							href="https://analytics.lum.id/dashboard"
+							target="_blank"
+							rel="noopener noreferrer"
+							className="flex items-center gap-2.5 px-2.5 py-1.5 text-[13px] rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+						>
+							<BarChart3 className="w-4 h-4 shrink-0" />
+							<span className="truncate flex-1">Analytics</span>
+							<ExternalLink className="w-3 h-3 opacity-50" />
+						</a>
+					)}
 				</div>
 			</nav>
 
@@ -290,6 +229,7 @@ export default function DashboardLayout() {
 
 	return (
 		<LanguageProvider>
+			<EnterpriseTipProvider>
 			<div className="min-h-screen bg-slate-50">
 				{/* Mobile top bar */}
 				<header className="md:hidden bg-white/95 backdrop-blur-sm border-b border-slate-200 flex items-center gap-2 px-3 py-2 sticky top-0 z-30">
@@ -326,22 +266,14 @@ export default function DashboardLayout() {
 
 					<main className="flex-1 min-w-0">
 						<div className="px-4 py-5 sm:px-6 sm:py-6">
-							<Breadcrumb pathname={location.pathname} />
-							<div
-								className={[
-									'rounded-lg bg-white shadow-sm border-slate-200',
-									isAdminRoute
-										? 'border-l-[3px] border-l-indigo-500 border-y border-r'
-										: 'border',
-									isRunmeshRoute ? 'p-0 overflow-hidden' : 'p-4 sm:p-6',
-								].join(' ')}
-							>
+							<div className="rounded-lg bg-white shadow-sm border border-slate-200 p-4 sm:p-6">
 								<Outlet />
 							</div>
 						</div>
 					</main>
 				</div>
 			</div>
+			</EnterpriseTipProvider>
 		</LanguageProvider>
 	);
 }
