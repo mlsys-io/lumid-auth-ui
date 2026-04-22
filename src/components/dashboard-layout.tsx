@@ -113,7 +113,7 @@ export default function DashboardLayout() {
 	const close = () => setMobileOpen(false);
 
 	const sidebar = (
-		<aside className="w-60 shrink-0 flex flex-col bg-white/90 backdrop-blur-sm border-r border-slate-200/60 h-full">
+		<aside className="w-60 shrink-0 flex flex-col bg-white border-r border-slate-200/60 h-full">
 			{/* Brand + mobile close */}
 			<div className="px-3 py-3 border-b border-slate-200/60 flex items-center gap-2">
 				<div className="p-1.5 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-md shadow-sm">
