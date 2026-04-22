@@ -278,12 +278,10 @@ function MintDialog({
 									))}
 								</SelectContent>
 							</Select>
-							<div className="mt-2 text-xs text-gray-700">
-								<span className="text-gray-600 mr-1">Grants:</span>
-								<code className="bg-gray-100 border border-gray-200 rounded px-1.5 py-0.5 font-mono">
-									{scopes.join(' · ')}
-								</code>
-							</div>
+							<p className="mt-2 text-xs text-slate-500">
+								Grants{' '}
+								<span className="font-mono text-slate-700">{scopes.join(' · ')}</span>
+							</p>
 						</div>
 						<div>
 							<Label>Expiration</Label>
