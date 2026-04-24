@@ -2,8 +2,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
 	BrainCircuit,
 	Workflow,
-	ListChecks,
-	Calendar,
+	Send,
 	User as UserIcon,
 	LogOut,
 	Menu,
@@ -43,24 +42,23 @@ interface NavItem {
 	end?: boolean;
 }
 
-// 2026-04-24 deep reshape. Mental model:
-//   - A workflow is ONE thing (an n8n DAG). Where it executes is a
-//     per-workflow target property, not a separate sidebar entry.
-//   - Tasks + Schedules are FlowMesh runtime views.
-//   - The legacy Runmesh WorkflowMarket at /dashboard/workflows is
-//     hidden from the sidebar. Future: reconnect to xp.io marketplace.
+// 2026-04-24 build / submit / run split:
+//   - Workflow Builder  = design surface (n8n canvas)
+//   - Runmesh Submit    = pick + submit to FlowMesh, or manage cron
+//   - Lumilake Submit   = submit to Lumilake analytics
+//   - Running jobs      = unified runtime list, both backends
 const PRODUCT_NAV: NavItem[] = [
-	{ to: '/dashboard', label: 'Workflows', icon: Workflow, end: true },
-	{ to: '/dashboard/tasks', label: 'Tasks', icon: ListChecks },
-	{ to: '/dashboard/schedules', label: 'Schedules', icon: Calendar },
+	{ to: '/dashboard/n8n', label: 'Workflow Builder', icon: Workflow },
+	{ to: '/dashboard/runmesh/submit', label: 'Runmesh Submit', icon: Send },
+	{ to: '/dashboard/lumilake-submit', label: 'Lumilake Submit', icon: Send },
+	{ to: '/dashboard/jobs/runmesh', label: 'Running jobs', icon: PlayCircle },
 	{ to: '/dashboard/gpu-rentals', label: 'GPU rentals', icon: Server },
 ];
 
-// Lumilake-specific surfaces. Low-code was the Lumilake-side n8n
-// builder; it redirects to the unified /dashboard Workflows entry now.
+// Lumilake-only surface — just the lakehouse browser. The Lumilake
+// submit + jobs views are promoted under AI Compute above.
 const LUMILAKE_NAV: NavItem[] = [
 	{ to: '/dashboard/lumilake/data', label: 'Data browsing', icon: Database },
-	{ to: '/dashboard/lumilake/jobs', label: 'Running jobs', icon: PlayCircle },
 ];
 
 // Consolidated admin nav: 17 flat items collapsed to 5. Each section

@@ -64,9 +64,9 @@ const AppLumilakeDashboard = lazy(() => import("./pages/app/lumilake/dashboard")
 const AppLumilakeData = lazy(() => import("./pages/app/lumilake/data"));
 const AppLumilakeSQL = lazy(() => import("./pages/app/lumilake/sql"));
 const AppLumilakePython = lazy(() => import("./pages/app/lumilake/python"));
-// AppLumilakeLowCode retired 2026-04-24 — its /dashboard/lumilake/low-code
-// URL redirects to /dashboard (the unified n8n Workflows page). Page file
-// kept on disk at pages/app/lumilake/low-code.tsx for reference.
+// Reinstated 2026-04-24 — Lumilake Submit sidebar entry mounts the
+// existing LowCode page as the Lumilake-side submit surface.
+const AppLumilakeLowCode = lazy(() => import("./pages/app/lumilake/low-code"));
 const AppLumilakeJobs = lazy(() => import("./pages/app/lumilake/jobs"));
 // Lumilake workers page retired 2026-04-24 — /app/admin/lumilake-workers
 // redirects to /app/admin/cluster-workers?role=lumilake. The unified
@@ -170,34 +170,68 @@ export default function App() {
               </AuthGuard>
             }
           >
-            <Route index element={<AppApps />} />
-            {/* Executions — Workflows / Tasks / Schedules are peer
-                surfaces of one run-lifecycle concept, wrapped in a tab
-                shell to collapse 3 sidebar items into 1. Tab shell is
-                the same <AdminSectionLayout> used by the admin
-                consolidation (filename kept for convenience — the
-                component isn't actually admin-specific). Detail views
-                (workflows/:id, builder, n8n, api-docs) stay OUTSIDE
-                the tab shell since they're drill-downs, not peers. */}
-            {/* 2026-04-24 reshape: the 'n8n builder is one surface;
-                where it executes is a property of the workflow' model.
-                   /dashboard        → Workflows (n8n builder / UserDashboard)
-                   /dashboard/tasks  → task runtime list (standalone)
-                   /dashboard/schedules → recurring runs (standalone)
-                   /dashboard/workflows → legacy WorkflowMarket — route
-                     preserved so existing bookmarks don't 404 but
-                     removed from the sidebar (future: reconnect to
-                     xp.io marketplace).
-                   /dashboard/lumilake/low-code → redirects to the
-                     unified builder at /dashboard. */}
-            <Route path="workflows" element={<AppWorkflows />} />
-            <Route path="tasks" element={<AppTasks />} />
-            <Route path="schedules" element={<AppSchedules />} />
-            <Route path="workflows/:id" element={<AppWorkflowDetail />} />
-            <Route path="workflow" element={<AppWorkflowBuilder />} />
-            <Route path="workflow/:id" element={<AppWorkflowBuilder />} />
+            {/* 2026-04-24 reshape — split build from submit from run:
+                  Workflow Builder   = n8n canvas (design the DAG)
+                  Runmesh Submit     = pick + submit to FlowMesh
+                                        (tab 1) or manage schedules
+                                        (tab 2)
+                  Lumilake Submit    = submit to Lumilake
+                  Running jobs       = unified runtime list
+                                        (tab 1: FlowMesh, tab 2: Lumilake)
+                Root redirects to Runmesh Submit since that's the
+                primary action. */}
+            <Route index element={<Navigate to="/dashboard/runmesh/submit" replace />} />
+
+            {/* Workflow Builder — design surface (n8n iframe). */}
             <Route path="n8n" element={<AppN8n />} />
             <Route path="n8n/:id" element={<AppN8n />} />
+            <Route path="workflow" element={<AppWorkflowBuilder />} />
+            <Route path="workflow/:id" element={<AppWorkflowBuilder />} />
+            <Route path="workflows/:id" element={<AppWorkflowDetail />} />
+
+            {/* Runmesh Submit — pick + submit to FlowMesh, plus
+                schedules management. Tab shell. */}
+            <Route
+              element={
+                <AdminSectionLayout
+                  title="Runmesh Submit"
+                  subtitle="Pick a workflow to submit to FlowMesh, or manage recurring schedules."
+                  tabs={[
+                    { to: "/dashboard/runmesh/submit", label: "Submit", end: true },
+                    { to: "/dashboard/runmesh/schedules", label: "Schedules" },
+                  ]}
+                />
+              }
+            >
+              <Route path="runmesh/submit" element={<AppApps />} />
+              <Route path="runmesh/schedules" element={<AppSchedules />} />
+            </Route>
+
+            {/* Lumilake Submit — single page, reuses the Lumilake n8n
+                surface (was Low-code). */}
+            <Route path="lumilake-submit" element={<AppLumilakeLowCode />} />
+
+            {/* Running jobs — merged runtime view. Tab shell. */}
+            <Route
+              element={
+                <AdminSectionLayout
+                  title="Running jobs"
+                  subtitle="All workflow runs — FlowMesh compute tasks and Lumilake analytics jobs, side by side."
+                  tabs={[
+                    { to: "/dashboard/jobs/runmesh", label: "FlowMesh", end: true },
+                    { to: "/dashboard/jobs/lumilake", label: "Lumilake" },
+                  ]}
+                />
+              }
+            >
+              <Route path="jobs/runmesh" element={<AppTasks />} />
+              <Route path="jobs/lumilake" element={<AppLumilakeJobs />} />
+            </Route>
+
+            {/* Legacy-URL redirects (every old URL still resolves). */}
+            <Route path="tasks" element={<Navigate to="/dashboard/jobs/runmesh" replace />} />
+            <Route path="schedules" element={<Navigate to="/dashboard/runmesh/schedules" replace />} />
+            <Route path="workflows" element={<AppWorkflows />} />   {/* legacy WorkflowMarket — still resolves, not in sidebar */}
 
             {/* Account — Profile + Tokens tabbed together. Billing
                 was a tab in the earlier iteration but is now a
@@ -242,11 +276,14 @@ export default function App() {
                   two entry points don't diverge; the Workflows page's
                   output-target toggle (FlowMesh vs Lumilake) picks
                   backend — a future refactor. */}
+              {/* Both Lumilake-specific URLs now redirect into the
+                  unified /dashboard surface: low-code → lumilake-submit,
+                  jobs → the FlowMesh+Lumilake merged runtime tab. */}
               <Route
                 path="low-code"
-                element={<Navigate to="/dashboard" replace />}
+                element={<Navigate to="/dashboard/lumilake-submit" replace />}
               />
-              <Route path="jobs" element={<AppLumilakeJobs />} />
+              <Route path="jobs" element={<Navigate to="/dashboard/jobs/lumilake" replace />} />
             </Route>
 
             {/* Admin section — same shell, gated by role. Consolidated
