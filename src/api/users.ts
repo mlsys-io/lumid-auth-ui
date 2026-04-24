@@ -12,7 +12,7 @@ export interface AdminUserRow {
 	email_verified: boolean;
 	name?: string;
 	avatar_url?: string;
-	role: "user" | "admin";
+	role: "user" | "admin" | "super_admin";
 	status: "active" | "suspended" | "pending";
 	invitation_code_used?: string;
 	created_at: string;
@@ -23,7 +23,7 @@ export interface AdminUserRow {
 
 export interface ListUsersParams {
 	status?: "active" | "suspended" | "pending" | "all";
-	role?: "user" | "admin" | "all";
+	role?: "user" | "admin" | "super_admin" | "all";
 	q?: string;
 	page?: number;
 	page_size?: number;
@@ -97,6 +97,29 @@ export async function getUserAccess(id: string): Promise<AccessRow[]> {
 		DataResponse<{ user_id: string; access: AccessRow[] }>
 	>(`/api/v1/admin/users/${encodeURIComponent(id)}/access`);
 	return r.data.data.access;
+}
+
+// Admin-applied per-service override. Takes effect on the next
+// matrix read; the grant row lives in user_access_grants on
+// lumid_identity. Level "none" explicitly revokes the default read.
+export async function grantAccess(
+	userId: string,
+	service: AccessService,
+	level: AccessLevel,
+): Promise<void> {
+	await apiClient.put(
+		`/api/v1/admin/users/${encodeURIComponent(userId)}/access/${encodeURIComponent(service)}`,
+		{ level },
+	);
+}
+
+export async function revokeAccessGrant(
+	userId: string,
+	service: AccessService,
+): Promise<void> {
+	await apiClient.delete(
+		`/api/v1/admin/users/${encodeURIComponent(userId)}/access/${encodeURIComponent(service)}`,
+	);
 }
 
 export interface AuditEntry {

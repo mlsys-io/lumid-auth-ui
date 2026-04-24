@@ -15,10 +15,13 @@ import { cn } from "@/lib/utils";
 import {
 	ACCESS_SERVICES,
 	getUserAccess,
+	grantAccess,
 	listUsers,
 	patchUser,
+	revokeAccessGrant,
 	type AccessLevel,
 	type AccessRow,
+	type AccessService,
 	type AdminUserRow,
 } from "@/api/users";
 import { isSessionExpired } from "@/api/client";
@@ -73,9 +76,30 @@ export default function UsersMatrix() {
 		}
 	}
 
+	async function onCellChange(
+		userId: string,
+		service: AccessService,
+		next: AccessLevel | "reset",
+	) {
+		setSavingId(userId);
+		try {
+			if (next === "reset") {
+				await revokeAccessGrant(userId, service);
+			} else {
+				await grantAccess(userId, service, next);
+			}
+			await refreshAccess(userId);
+		} catch (e: unknown) {
+			if (isSessionExpired(e)) return;
+			toast.error((e as Error)?.message || "Access change failed");
+		} finally {
+			setSavingId(null);
+		}
+	}
+
 	async function onRoleChange(
 		userId: string,
-		next: "user" | "admin",
+		next: "user" | "admin" | "super_admin",
 	) {
 		setSavingId(userId);
 		try {
@@ -148,11 +172,12 @@ export default function UsersMatrix() {
 									: `${Math.min(total, MATRIX_LIMIT)} of ${total} users`}
 							</CardTitle>
 							<CardDescription>
-								Rows: most recent {MATRIX_LIMIT} users. Role is editable
-								in-place — flipping to <code>admin</code> grants{" "}
-								<code>admin</code> on every service; cells below are
-								derived. For finer-grained scope grants, open the user
-								detail and have them mint a PAT.
+								Role + per-service levels are both editable in-place.
+								Admin/super_admin rows are pinned at <code>admin</code>{" "}
+								everywhere. For regular users, each cell picks from{" "}
+								<code>none | read | write | admin</code> (source:{" "}
+								<code>grant</code>), or "reset" to drop the explicit grant
+								and fall back to role + PAT.
 							</CardDescription>
 						</div>
 						<Button
@@ -210,15 +235,19 @@ export default function UsersMatrix() {
 														savingId === user.id || user.id === me?.id
 													}
 													onValueChange={(v) =>
-														onRoleChange(user.id, v as "user" | "admin")
+														onRoleChange(
+															user.id,
+															v as "user" | "admin" | "super_admin",
+														)
 													}
 												>
-													<SelectTrigger className="h-7 w-[88px] text-xs">
+													<SelectTrigger className="h-7 w-[110px] text-xs">
 														<SelectValue />
 													</SelectTrigger>
 													<SelectContent>
 														<SelectItem value="user">user</SelectItem>
 														<SelectItem value="admin">admin</SelectItem>
+														<SelectItem value="super_admin">super_admin</SelectItem>
 													</SelectContent>
 												</Select>
 											</td>
@@ -226,17 +255,62 @@ export default function UsersMatrix() {
 												const row =
 													access?.find((r) => r.service === svc) || null;
 												const lvl: AccessLevel = row?.level || "none";
+												// Cells are read-only for admin/super_admin
+												// (role already pins admin everywhere) and for
+												// suspended users. Otherwise the admin can pick
+												// none/read/write/admin or "reset" (drop the
+												// explicit grant + fall back to role+PAT).
+												const roleLocked =
+													user.role === "admin" ||
+													user.role === "super_admin" ||
+													user.status !== "active";
 												return (
 													<td
 														key={svc}
 														className={cn(
-															"py-1.5 px-1 text-center text-xs font-medium",
+															"py-1.5 px-0.5 text-center text-xs font-medium",
 															levelBg(lvl),
 															levelFg(lvl),
 														)}
 														title={row?.source || "—"}
 													>
-														{access ? lvl : "…"}
+														{!access ? (
+															"…"
+														) : roleLocked ? (
+															lvl
+														) : (
+															<Select
+																value={
+																	row?.source === "grant" ? lvl : ""
+																}
+																disabled={savingId === user.id}
+																onValueChange={(v) =>
+																	onCellChange(
+																		user.id,
+																		svc,
+																		v as AccessLevel | "reset",
+																	)
+																}
+															>
+																<SelectTrigger
+																	className={cn(
+																		"h-6 w-[74px] mx-auto border-0 bg-transparent focus:ring-0 px-1 text-xs justify-center",
+																		levelFg(lvl),
+																	)}
+																>
+																	<SelectValue placeholder={lvl} />
+																</SelectTrigger>
+																<SelectContent>
+																	<SelectItem value="reset">
+																		(reset)
+																	</SelectItem>
+																	<SelectItem value="none">none</SelectItem>
+																	<SelectItem value="read">read</SelectItem>
+																	<SelectItem value="write">write</SelectItem>
+																	<SelectItem value="admin">admin</SelectItem>
+																</SelectContent>
+															</Select>
+														)}
 													</td>
 												);
 											})}
