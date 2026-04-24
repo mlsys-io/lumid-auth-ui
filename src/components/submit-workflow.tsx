@@ -64,10 +64,26 @@ export function SubmitWorkflow({ target, title, onSuccessPath }: Props) {
 	const [outputJson, setOutputJson] = useState('{"type": "db"}');
 	const [busy, setBusy] = useState(false);
 
+	const [loadErr, setLoadErr] = useState<string>('');
 	useEffect(() => {
-		getWorkflowList({ pageNum: 1, pageSize: 100 })
-			.then((p) => setWorkflows((p?.rows as WorkflowItem[]) || []))
-			.catch(() => setWorkflows([]));
+		// Match UserDashboard's default filter: user's own workflows only.
+		// Mirrors /runmesh/workflows/list?onlyMine=1 — the exact call the
+		// Workflow Builder page already uses, so whatever shows up there
+		// will show up here.
+		getWorkflowList({ pageNum: 1, pageSize: 100, onlyMine: true })
+			.then((p) => {
+				// Response is `{ rows, total }` after unwrap; some Runmesh
+				// endpoints also come back as `{ list }` — accept either.
+				const rows = (p as { rows?: WorkflowItem[]; list?: WorkflowItem[] } | null | undefined);
+				setWorkflows(rows?.rows || rows?.list || []);
+			})
+			.catch((e: unknown) => {
+				const msg = e instanceof Error ? e.message : String(e);
+				// eslint-disable-next-line no-console
+				console.error('[SubmitWorkflow] getWorkflowList failed:', e);
+				setLoadErr(msg || 'failed to load workflows');
+				setWorkflows([]);
+			});
 	}, []);
 
 	useEffect(() => {
@@ -168,6 +184,19 @@ export function SubmitWorkflow({ target, title, onSuccessPath }: Props) {
 				</div>
 				{workflows === null ? (
 					<div className="py-10 text-center text-sm text-slate-400">loading…</div>
+				) : loadErr ? (
+					<Card>
+						<CardContent className="py-8 text-center">
+							<div className="text-sm text-red-600 mb-3">
+								Couldn't load workflows: {loadErr}
+							</div>
+							<div className="text-xs text-slate-500">
+								Reload the page or check the browser console for details.
+								If this persists, the bearer to runmesh.ai may not have
+								refreshed — try signing out and back in.
+							</div>
+						</CardContent>
+					</Card>
 				) : workflows.length === 0 ? (
 					<Card>
 						<CardContent className="py-8 text-center text-sm text-slate-500">
