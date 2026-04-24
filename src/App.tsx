@@ -55,11 +55,9 @@ const AppGpuRentalDetail = lazy(() => import("./pages/app/gpu-rental-detail"));
 // Lumilake-origin pages (grouped under /app/lumilake/*)
 const AppLumilakeDashboard = lazy(() => import("./pages/app/lumilake/dashboard"));
 const AppLumilakeData = lazy(() => import("./pages/app/lumilake/data"));
-const AppLumilakeDataLabel = lazy(() => import("./pages/app/lumilake/data-label"));
 const AppLumilakeSQL = lazy(() => import("./pages/app/lumilake/sql"));
 const AppLumilakePython = lazy(() => import("./pages/app/lumilake/python"));
 const AppLumilakeLowCode = lazy(() => import("./pages/app/lumilake/low-code"));
-const AppLumilakeModelling = lazy(() => import("./pages/app/lumilake/modelling"));
 const AppLumilakeJobs = lazy(() => import("./pages/app/lumilake/jobs"));
 // Lumilake admin pages stay under /app/admin/*
 const AppAdminLumilakeWorkers = lazy(() => import("./pages/app/admin-workers"));
@@ -198,15 +196,16 @@ export default function App() {
             <Route path="gpu-rentals" element={<AppGpuRentals />} />
             <Route path="gpu-rentals/:id" element={<AppGpuRentalDetail />} />
 
-            {/* Lumilake-origin pages grouped under /app/lumilake/*. */}
+            {/* Lumilake-origin pages grouped under /app/lumilake/*.
+                data-label + modelling hidden 2026-04-24 — not
+                implemented yet; page files kept on disk for future
+                reinstatement. */}
             <Route path="lumilake">
               <Route index element={<AppLumilakeDashboard />} />
               <Route path="data" element={<AppLumilakeData />} />
-              <Route path="data-label" element={<AppLumilakeDataLabel />} />
               <Route path="sql" element={<AppLumilakeSQL />} />
               <Route path="python" element={<AppLumilakePython />} />
               <Route path="low-code" element={<AppLumilakeLowCode />} />
-              <Route path="modelling" element={<AppLumilakeModelling />} />
               <Route path="jobs" element={<AppLumilakeJobs />} />
             </Route>
 

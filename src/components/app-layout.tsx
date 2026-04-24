@@ -21,8 +21,6 @@ import {
 	Ticket,
 	Database,
 	Code,
-	Sparkles,
-	Tag,
 	PlayCircle,
 	SquareTerminal,
 	Trophy,
@@ -72,12 +70,12 @@ const PRODUCT_NAV: NavItem[] = [
 
 const LUMILAKE_NAV: NavItem[] = [
 	{ to: '/app/lumilake/data', label: 'Data browsing', icon: Database },
-	{ to: '/app/lumilake/data-label', label: 'Data label', icon: Tag },
 	// SQL + Python workbenches removed from the sidebar 2026-04-24 —
-	// underused relative to Low-code / Modelling; the routes still
-	// resolve for deep links but the nav is trimmed.
+	// underused relative to Low-code; the routes still resolve for
+	// deep links but the nav is trimmed.
+	// Data label + Modelling hidden 2026-04-24 — feature not implemented
+	// yet; restore once the pages ship.
 	{ to: '/app/lumilake/low-code', label: 'Low-code', icon: Workflow },
-	{ to: '/app/lumilake/modelling', label: 'Modelling', icon: Sparkles },
 	{ to: '/app/lumilake/jobs', label: 'Running jobs', icon: PlayCircle },
 ];
 
