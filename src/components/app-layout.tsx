@@ -73,7 +73,6 @@ const ADMIN_NAV: NavItem[] = [
 	{ to: '/dashboard/admin', label: 'Overview', icon: LayoutDashboard, end: true },
 	{ to: '/dashboard/admin/users', label: 'People & access', icon: Users },
 	{ to: '/dashboard/admin/clusters', label: 'Infrastructure', icon: Layers },
-	{ to: '/dashboard/admin/suppliers', label: 'Runmesh ops', icon: Receipt },
 	{ to: '/dashboard/admin/competitions', label: 'QuantArena', icon: Trophy },
 ];
 

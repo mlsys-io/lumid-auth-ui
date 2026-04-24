@@ -306,10 +306,11 @@ export default function App() {
             </Route>
 
             {/* Admin section — same shell, gated by role. Consolidated
-                into 4 tabbed areas + Overview (2026-04-24):
+                into 3 tabbed areas + Overview (Runmesh ops merged into
+                Infrastructure on 2026-04-24 now that the supplier-node
+                auto-mirror makes them one conceptual surface):
                   • People & access  → users, access matrix, invitations, audit, setup
-                  • Infrastructure    → clusters, workers, lumilake workers
-                  • Runmesh ops       → suppliers, supplier nodes, billing, reviews
+                  • Infrastructure    → clusters, workers, suppliers, billing, reviews
                   • QuantArena        → competitions, portfolios, templates, flowmesh jobs
                 Each area renders the child route inside an
                 <AdminSectionLayout> that draws a tab strip at the top.
