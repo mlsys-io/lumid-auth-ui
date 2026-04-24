@@ -5,6 +5,7 @@ import { Button } from '../../components/ui/button';
 import { RefreshCw, AlertCircle, CheckCircle } from 'lucide-react';
 import { googleLogin, ApiError } from '../../api';
 import { useAuth } from '../../hooks/useAuth';
+import { isSafeReturnTo } from '../../components/auth-guard';
 import { toast } from 'sonner';
 import InvitationCodeDialog from './invitation-code-dialog';
 import type { UserInfo } from '../../api';
@@ -78,15 +79,13 @@ export function AuthCallback() {
 			setStatus('success');
 			toast.success('Signed in with Google');
 
-			// Honor ?return_to for SSO bounces; otherwise land on the
-			// dashboard.
+			// Honor ?return_to for SSO bounces, but only if it points
+			// back at a safe lum.id path — see isSafeReturnTo in
+			// auth-guard.tsx. External URLs fall through to /dashboard
+			// so the OAuth callback can't be used as an open redirect.
 			const returnTo = urlParams.get('return_to');
 			setTimeout(() => {
-				if (returnTo && returnTo.startsWith('http')) {
-					window.location.replace(returnTo);
-				} else {
-					navigate(returnTo || '/dashboard');
-				}
+				navigate(isSafeReturnTo(returnTo) ? returnTo : '/dashboard');
 			}, 500);
 		} catch (err) {
 			console.error('OAuth callback error:', err);

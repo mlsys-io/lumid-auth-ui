@@ -38,6 +38,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })();
   }, []);
 
+  // Central session-expired handler. api/client.ts emits this event
+  // exactly once per expiry (even if N requests 401 at the same time),
+  // so we don't race multiple redirects or stack toasts. We clear the
+  // React user so AuthGuards re-render into the login redirect naturally
+  // — no `window.location.replace` needed on the happy path.
+  useEffect(() => {
+    function onExpired() {
+      setUser(null);
+      // Guarded pages immediately Navigate to /auth/login with a
+      // return_to pointing at the current URL. Unguarded pages
+      // (/auth/*) do nothing, which is correct.
+    }
+    window.addEventListener("lumid:session-expired", onExpired);
+    return () => window.removeEventListener("lumid:session-expired", onExpired);
+  }, []);
+
   const login = (_token: string, userData: UserInfo) => {
     setUser(userData);
   };

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { mintPAT, listPATs, SCOPE_PRESETS, type PATInfo, type Scope, type MintPATResponse } from '../../api/identity';
+import { isSessionExpired } from '../../api/client';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
@@ -43,7 +44,10 @@ export default function ConnectPage() {
 	const refresh = () =>
 		listPATs()
 			.then(setTokens)
-			.catch(() => {})
+			.catch((e) => {
+				if (isSessionExpired(e)) return;
+				toast.error((e as Error)?.message || 'Failed to load tokens');
+			})
 			.finally(() => setLoading(false));
 
 	useEffect(() => {

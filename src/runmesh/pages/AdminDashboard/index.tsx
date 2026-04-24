@@ -422,14 +422,18 @@ export const AdminDashboard: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeRange, t]);
   return (
-    <div className="flex flex-col h-full max-h-full bg-slate-50 overflow-auto min-w-0">
+    // Lives inside AppLayout's scrollable <main>, so no own h-full /
+    // overflow-auto / bg-slate-50 here — that produced a double
+    // scroll pane and sticky-header bugs. Header is just a normal
+    // flex row now.
+    <div className="flex flex-col min-w-0">
       {/* Page Header */}
-      <header className="px-4 sm:px-8 py-4 sm:py-6 bg-white border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sticky top-0 z-10 flex-shrink-0">
+      <header className="mb-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-800">
+          <h1 className="text-2xl font-semibold text-slate-900">
             {t('adminDashboard.title')}
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">{t('adminDashboard.subtitle')}</p>
+          <p className="mt-1 text-sm text-slate-600">{t('adminDashboard.subtitle')}</p>
         </div>
         <div className="flex items-center space-x-3 flex-shrink-0">
           <select
@@ -447,7 +451,7 @@ export const AdminDashboard: React.FC = () => {
         </div>
       </header>
 
-      <div className="flex-1 flex flex-col p-2 sm:p-4 mx-auto w-full gap-6 sm:gap-8 min-w-0 min-h-0">
+      <div className="flex flex-col w-full gap-6 min-w-0">
         {/* Top Level Metrics */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 flex-shrink-0">
           {/* Metric Card 1 */}

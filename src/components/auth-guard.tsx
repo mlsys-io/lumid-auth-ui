@@ -8,6 +8,48 @@ interface AuthGuardProps {
 	requireAuth?: boolean;
 }
 
+/** Whitelist for ?return_to=... values.
+ *
+ * We previously allowed any `http(s)://` URL, which is an open-redirect
+ * vector: an attacker can craft `/auth/login?return_to=https://evil/`
+ * and use it in a phishing link. Only same-origin *paths* under our
+ * known product surfaces are honored; external URLs and
+ * protocol-relative (`//evil.com`) URLs are rejected.
+ *
+ * Kept loose enough for legitimate cross-domain bounces via
+ * `window.location.replace` back to lum.id's own subpaths — but not to
+ * any arbitrary host. Export so `pages/auth/callback.tsx` can share
+ * the exact same check.
+ */
+export function isSafeReturnTo(raw: string | null | undefined): raw is string {
+	if (!raw) return false;
+	// Reject protocol-relative URLs that browsers treat as absolute.
+	if (raw.startsWith('//')) return false;
+	// Reject fully-qualified URLs to any origin other than our own.
+	if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) {
+		try {
+			const u = new URL(raw);
+			if (u.origin !== window.location.origin) return false;
+			// Same-origin absolute — collapse to path for Navigate.
+			return (
+				u.pathname.startsWith('/app') ||
+				u.pathname.startsWith('/dashboard') ||
+				u.pathname.startsWith('/account') ||
+				u.pathname === '/'
+			);
+		} catch {
+			return false;
+		}
+	}
+	// Plain paths — must start with a known safe prefix.
+	return (
+		raw.startsWith('/app') ||
+		raw.startsWith('/dashboard') ||
+		raw.startsWith('/account') ||
+		raw === '/'
+	);
+}
+
 export function AuthGuard({ children, requireAuth = true }: AuthGuardProps) {
 	const { isLoading, isAuthenticated } = useAuth();
 	const location = useLocation();
@@ -24,20 +66,11 @@ export function AuthGuard({ children, requireAuth = true }: AuthGuardProps) {
 	}
 
 	if (!requireAuth && isAuthenticated) {
-		// Post-login landing. If the user arrived via ?return_to=... or
-		// ?return_to=/absolute/URL (e.g. an OIDC authorize bounce), honor
-		// that. Otherwise drop them in the account hub. We intentionally
-		// don't default to `/strategy` — that page lives on
-		// market.lum.id, not on the auth UI.
+		// Post-login landing. Only honor `return_to` if it's a safe
+		// same-origin path; otherwise fall through to /dashboard so
+		// phishy external URLs can't use /auth/login as a bounce.
 		const returnTo = new URLSearchParams(location.search).get('return_to');
-		if (returnTo) {
-			// Path-starting return_to goes through React Router; anything
-			// absolute (http[s]://) triggers a hard nav so we escape the
-			// /auth basename.
-			if (returnTo.startsWith('http')) {
-				window.location.replace(returnTo);
-				return <Loading fullScreen />;
-			}
+		if (isSafeReturnTo(returnTo)) {
 			return <Navigate to={returnTo} replace />;
 		}
 		return <Navigate to="/dashboard" replace />;
