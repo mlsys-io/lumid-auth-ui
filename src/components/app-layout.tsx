@@ -162,7 +162,7 @@ export default function AppLayout() {
 
 			{/* Nav */}
 			<nav className="flex-1 overflow-y-auto px-2 pt-2 pb-4">
-				<SectionLabel label="Product" />
+				<SectionLabel label="AI Compute" />
 				<div className="space-y-px">
 					{PRODUCT_NAV.map((item) => (
 						<SidebarItem key={item.to} {...item} onClick={close} />
