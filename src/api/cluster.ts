@@ -16,7 +16,7 @@ export interface Cluster {
 	tags?: Record<string, unknown> | string[] | null;
 	status: ClusterStatus;
 	owner_user_id: string;
-	billing_vendor_id?: number | null;
+	billing_vendor_id?: string | null;
 	created_at: string;
 	updated_at: string;
 }
@@ -105,7 +105,7 @@ export interface CreateClusterRequest {
 	name: string;
 	region?: string;
 	tags?: Record<string, unknown> | string[];
-	billing_vendor_id?: number | null;
+	billing_vendor_id?: string | null;
 }
 export async function createCluster(
 	req: CreateClusterRequest,
@@ -122,7 +122,7 @@ export interface PatchClusterRequest {
 	region?: string;
 	status?: ClusterStatus;
 	tags?: Record<string, unknown> | string[];
-	billing_vendor_id?: number | null;
+	billing_vendor_id?: string | null;
 }
 export async function patchCluster(
 	id: string,
@@ -247,6 +247,18 @@ export async function mintBootstrapToken(
 	const r = await apiClient.post<DataResponse<MintBootstrapResponse>>(
 		"/api/v1/cluster/nodes/bootstrap-token",
 		req,
+	);
+	return r.data.data;
+}
+
+// Force a re-push of every node in the cluster to Runmesh's supplier
+// tables. No-op if the Runmesh bridge isn't configured server-side;
+// the response .nodes count tells the caller how many were queued.
+export async function remirrorCluster(
+	id: string,
+): Promise<{ nodes: number }> {
+	const r = await apiClient.post<DataResponse<{ nodes: number }>>(
+		`/api/v1/cluster/clusters/${encodeURIComponent(id)}/remirror`,
 	);
 	return r.data.data;
 }

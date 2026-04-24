@@ -26,7 +26,6 @@ export default function ClusterWizard() {
 
 	const [name, setName] = useState("");
 	const [region, setRegion] = useState("");
-	const [billingVendorId, setBillingVendorId] = useState<string>("");
 	const [fmHost, setFmHost] = useState("");
 	const [llHost, setLlHost] = useState("");
 	const [tags, setTags] = useState(""); // comma-separated; parsed to array
@@ -46,12 +45,10 @@ export default function ClusterWizard() {
 				.split(",")
 				.map((s) => s.trim())
 				.filter(Boolean);
-			const billing = billingVendorId.trim();
 			const cluster = await createCluster({
 				name: trimName,
 				region: region.trim() || undefined,
 				tags: parsedTags.length ? parsedTags : undefined,
-				billing_vendor_id: billing ? Number(billing) : undefined,
 			});
 
 			// Wire up any servers the operator provided. Each call is
@@ -133,17 +130,13 @@ export default function ClusterWizard() {
 								/>
 							</div>
 							<div className="space-y-1">
-								<Label htmlFor="billing">Billing vendor (Runmesh, optional)</Label>
-								<Input
-									id="billing"
-									type="number"
-									placeholder="runmesh_gpu_vendor.id"
-									value={billingVendorId}
-									onChange={(e) => setBillingVendorId(e.target.value)}
-								/>
+								<Label className="text-muted-foreground">
+									Billing vendor (Runmesh)
+								</Label>
 								<p className="text-xs text-muted-foreground">
-									Link to a Runmesh billing vendor so GPU-hour rollups attribute to it.
-									Leave blank for self-owned clusters.
+									Auto-linked on first node registration — the cluster's
+									supplier row is created in Runmesh behind the scenes.
+									Override later by editing the cluster if needed.
 								</p>
 							</div>
 						</CardContent>

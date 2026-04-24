@@ -55,6 +55,7 @@ import {
 	listServers,
 	listWorkers,
 	patchCluster,
+	remirrorCluster,
 	type Cluster,
 	type ClusterStatus,
 	type Node,
@@ -66,6 +67,7 @@ import { useNavigate } from "react-router-dom";
 import ServersTab from "./servers-tab";
 import NodesTab from "./nodes-tab";
 import WorkersTab from "./workers-tab";
+import SetupTab from "./setup-tab";
 
 function statusBadge(status: Cluster["status"]): string {
 	switch (status) {
@@ -105,8 +107,8 @@ export default function ClusterDetail() {
 			]);
 			setCluster(c);
 			setServers(s);
-			setNodes(n.nodes || []);
-			setWorkers(w.workers || []);
+			setNodes(n?.nodes || []);
+			setWorkers(w?.workers || []);
 		} catch (e: unknown) {
 			if (isSessionExpired(e)) return;
 			toast.error((e as Error)?.message || "Failed to load cluster");
@@ -232,11 +234,12 @@ export default function ClusterDetail() {
 						<TabsTrigger value="workers">
 							Workers ({workers.length})
 						</TabsTrigger>
+						<TabsTrigger value="setup">Setup guide</TabsTrigger>
 					</TabsList>
 
 					<TabsContent value="overview" className="mt-4">
-						<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-							<Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm lg:col-span-1">
+						<div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
+							<Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm">
 								<CardHeader>
 									<CardTitle className="text-base">Identity</CardTitle>
 									<CardDescription>
@@ -271,7 +274,7 @@ export default function ClusterDetail() {
 								</CardContent>
 							</Card>
 
-							<Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm lg:col-span-1">
+							<Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm">
 								<CardHeader>
 									<CardTitle className="text-base">Lifecycle</CardTitle>
 									<CardDescription>
@@ -304,7 +307,7 @@ export default function ClusterDetail() {
 								</CardContent>
 							</Card>
 
-							<Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm lg:col-span-1">
+							<Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm">
 								<CardHeader>
 									<CardTitle className="text-base flex items-center gap-2">
 										<Server className="w-4 h-4 text-indigo-600" />
@@ -325,6 +328,12 @@ export default function ClusterDetail() {
 									</div>
 								</CardContent>
 							</Card>
+
+							<RunmeshMirrorCard
+								clusterId={id}
+								billingVendorId={cluster.billing_vendor_id ?? null}
+								nodeCount={nodes.length}
+							/>
 						</div>
 					</TabsContent>
 
@@ -350,6 +359,10 @@ export default function ClusterDetail() {
 							nodes={nodes}
 							onChange={refresh}
 						/>
+					</TabsContent>
+
+					<TabsContent value="setup" className="mt-4">
+						<SetupTab clusterId={id} clusterName={cluster.name} />
 					</TabsContent>
 				</Tabs>
 			)}
@@ -439,11 +452,13 @@ function EditClusterDialog({
 		const billingTrim = billing.trim();
 		setSaving(true);
 		try {
+			// billing_vendor_id is auto-set by the supplier-node mirror;
+			// the edit form no longer sends it to avoid clobbering the
+			// server-managed value.
 			const updated = await patchCluster(cluster.id, {
 				name: trimmed,
 				region: region.trim(),
 				tags: parsedTags,
-				billing_vendor_id: billingTrim ? Number(billingTrim) : null,
 			});
 			toast.success("Saved");
 			onSaved(updated);
@@ -495,11 +510,14 @@ function EditClusterDialog({
 						<Label htmlFor="edit-billing">Billing vendor ID (Runmesh)</Label>
 						<Input
 							id="edit-billing"
-							type="number"
-							value={billing}
-							onChange={(e) => setBilling(e.target.value)}
-							placeholder="optional — runmesh_gpu_vendor.id"
+							value={billing || "— will auto-set on first node registration"}
+							readOnly
+							className="bg-muted text-muted-foreground"
 						/>
+						<p className="text-xs text-muted-foreground">
+							Auto-linked via the supplier-node mirror. Clear by unlinking
+							the cluster from its Runmesh vendor row directly.
+						</p>
 					</div>
 					<DialogFooter>
 						<Button
@@ -536,5 +554,74 @@ function Stat({ label, value }: { label: string; value: string }) {
 			<div className="text-xs text-muted-foreground">{label}</div>
 			<div className="text-lg font-semibold">{value}</div>
 		</div>
+	);
+}
+
+// RunmeshMirrorCard — shows whether the Runmesh supplier-node bridge is
+// live and offers a "re-push everything" action for nodes that
+// pre-date the auto-mirror (or to recover from a Runmesh outage).
+function RunmeshMirrorCard({
+	clusterId,
+	billingVendorId,
+	nodeCount,
+}: {
+	clusterId: string;
+	billingVendorId: string | null;
+	nodeCount: number;
+}) {
+	const [syncing, setSyncing] = useState(false);
+	const linked = !!billingVendorId;
+	async function onRemirror() {
+		setSyncing(true);
+		try {
+			const r = await remirrorCluster(clusterId);
+			toast.success(`Re-mirrored ${r.nodes} node${r.nodes === 1 ? "" : "s"}`);
+		} catch (e: unknown) {
+			if (isSessionExpired(e)) return;
+			toast.error((e as Error)?.message || "Re-mirror failed");
+		} finally {
+			setSyncing(false);
+		}
+	}
+	return (
+		<Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm">
+			<CardHeader>
+				<CardTitle className="text-base">Runmesh mirror</CardTitle>
+				<CardDescription>
+					Supplier metadata auto-synced on node register/patch/delete.
+					Runmesh remains the billing source of truth.
+				</CardDescription>
+			</CardHeader>
+			<CardContent className="space-y-3 text-sm">
+				<div>
+					<div className="text-xs text-muted-foreground">Vendor</div>
+					{linked ? (
+						<div className="mt-0.5 break-all">
+							<code className="text-xs">{billingVendorId}</code>
+						</div>
+					) : (
+						<div className="mt-0.5 text-muted-foreground">
+							Not linked — auto-set on first node registration.
+						</div>
+					)}
+				</div>
+				<div className="pt-1">
+					<Button
+						variant="outline"
+						size="sm"
+						onClick={onRemirror}
+						disabled={syncing || nodeCount === 0}
+						className="w-full"
+					>
+						{syncing && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+						Re-sync {nodeCount} node{nodeCount === 1 ? "" : "s"} to Runmesh
+					</Button>
+				</div>
+				<p className="text-xs text-muted-foreground">
+					Fires upserts in the background — safe to re-run. No-op if the
+					server-side bridge secret isn't configured.
+				</p>
+			</CardContent>
+		</Card>
 	);
 }

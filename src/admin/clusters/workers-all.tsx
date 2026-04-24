@@ -88,8 +88,10 @@ export default function WorkersAll() {
 					page_size: 500,
 				}),
 			]);
-			setClusters(cs.clusters || []);
-			setWorkers(ws.workers || []);
+			// Defensive against cluster/worker APIs not being wired up
+			// (some envs return the SPA index as fallback → undefined).
+			setClusters(cs?.clusters || []);
+			setWorkers(ws?.workers || []);
 		} catch (e: unknown) {
 			if (isSessionExpired(e)) return;
 			toast.error((e as Error)?.message || "Failed to load workers");

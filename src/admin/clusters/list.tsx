@@ -81,8 +81,11 @@ export default function ClustersList() {
 					page_size: PAGE_SIZE,
 				});
 				if (ctrl.signal.aborted) return;
-				setClusters(r.clusters || []);
-				setTotal(r.total || 0);
+				// Defensive: the cluster API isn't wired up in every env
+				// (legacy nginx can return the SPA index as a fallback),
+				// so r can be undefined/HTML. Treat that as "no clusters".
+				setClusters(r?.clusters || []);
+				setTotal(r?.total || 0);
 			} catch (e: unknown) {
 				if (ctrl.signal.aborted || isSessionExpired(e)) return;
 				toast.error((e as Error)?.message || "Failed to load clusters");
