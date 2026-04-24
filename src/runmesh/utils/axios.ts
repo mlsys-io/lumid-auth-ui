@@ -141,7 +141,21 @@ function createRunmeshHttp(scope: RunmeshScope): ScopedHttp {
 			}
 			return res;
 		},
-		(err: AxiosError) => {
+		async (err: AxiosError) => {
+			// 401 from Runmesh almost always means the 10-min scoped
+			// session-bearer expired. Force-refresh it and retry the
+			// original request ONCE. Second failure is a real auth
+			// problem (session cookie gone too) — surface to the user.
+			const cfg = err.config as (typeof err.config & { _retriedAfter401?: boolean }) | undefined;
+			if (err.response?.status === 401 && cfg && !cfg._retriedAfter401) {
+				cfg._retriedAfter401 = true;
+				const fresh = await getBearer(true);
+				if (fresh) {
+					cfg.headers = cfg.headers ?? {};
+					(cfg.headers as Record<string, string>).Authorization = `Bearer ${fresh}`;
+					return client.request(cfg);
+				}
+			}
 			if (err.response?.status === 401) {
 				return Promise.reject(new Error('Unauthorized — please sign in again at lum.id'));
 			}

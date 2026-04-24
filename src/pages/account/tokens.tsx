@@ -17,6 +17,7 @@ import {
 	type PATAccessLogEntry,
 	type MintPATResponse,
 } from '../../api/identity';
+import { isSessionExpired } from '../../api/client';
 
 /**
  * /account/tokens — mint, list, revoke, audit Personal Access Tokens.
@@ -430,7 +431,12 @@ function AuditDialog({ token, onClose }: { token: PATInfo | null; onClose: () =>
 		setLoading(true);
 		getPATAccessLog(token.id)
 			.then(setEntries)
-			.catch(() => {})
+			.catch((e) => {
+				// Session expiry is handled centrally by AuthProvider's
+				// lumid:session-expired listener — don't double-surface.
+				if (isSessionExpired(e)) return;
+				toast.error((e as Error)?.message || "Failed to load audit log");
+			})
 			.finally(() => setLoading(false));
 	}, [token]);
 	if (!token) return null;
