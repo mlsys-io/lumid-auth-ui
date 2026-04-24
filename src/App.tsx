@@ -57,13 +57,16 @@ const AppN8n = lazy(() => import("./pages/app/n8n"));
 const AppSchedules = lazy(() => import("./pages/app/schedules"));
 const AppApiDocs = lazy(() => import("./pages/app/api-docs"));
 const AppGpuRentals = lazy(() => import("./pages/app/gpu-rentals"));
+const AppGpuRentalsNew = lazy(() => import("./pages/app/gpu-rentals-new"));
 const AppGpuRentalDetail = lazy(() => import("./pages/app/gpu-rental-detail"));
 // Lumilake-origin pages (grouped under /app/lumilake/*)
 const AppLumilakeDashboard = lazy(() => import("./pages/app/lumilake/dashboard"));
 const AppLumilakeData = lazy(() => import("./pages/app/lumilake/data"));
 const AppLumilakeSQL = lazy(() => import("./pages/app/lumilake/sql"));
 const AppLumilakePython = lazy(() => import("./pages/app/lumilake/python"));
-const AppLumilakeLowCode = lazy(() => import("./pages/app/lumilake/low-code"));
+// AppLumilakeLowCode retired 2026-04-24 — its /dashboard/lumilake/low-code
+// URL redirects to /dashboard (the unified n8n Workflows page). Page file
+// kept on disk at pages/app/lumilake/low-code.tsx for reference.
 const AppLumilakeJobs = lazy(() => import("./pages/app/lumilake/jobs"));
 // Lumilake workers page retired 2026-04-24 — /app/admin/lumilake-workers
 // redirects to /app/admin/cluster-workers?role=lumilake. The unified
@@ -176,23 +179,20 @@ export default function App() {
                 component isn't actually admin-specific). Detail views
                 (workflows/:id, builder, n8n, api-docs) stay OUTSIDE
                 the tab shell since they're drill-downs, not peers. */}
-            <Route
-              element={
-                <AdminSectionLayout
-                  title="Executions"
-                  subtitle="Designed workflows, in-flight task runs, and recurring schedules."
-                  tabs={[
-                    { to: "/dashboard/workflows", label: "Workflows", end: true },
-                    { to: "/dashboard/tasks", label: "Tasks" },
-                    { to: "/dashboard/schedules", label: "Schedules" },
-                  ]}
-                />
-              }
-            >
-              <Route path="workflows" element={<AppWorkflows />} />
-              <Route path="tasks" element={<AppTasks />} />
-              <Route path="schedules" element={<AppSchedules />} />
-            </Route>
+            {/* 2026-04-24 reshape: the 'n8n builder is one surface;
+                where it executes is a property of the workflow' model.
+                   /dashboard        → Workflows (n8n builder / UserDashboard)
+                   /dashboard/tasks  → task runtime list (standalone)
+                   /dashboard/schedules → recurring runs (standalone)
+                   /dashboard/workflows → legacy WorkflowMarket — route
+                     preserved so existing bookmarks don't 404 but
+                     removed from the sidebar (future: reconnect to
+                     xp.io marketplace).
+                   /dashboard/lumilake/low-code → redirects to the
+                     unified builder at /dashboard. */}
+            <Route path="workflows" element={<AppWorkflows />} />
+            <Route path="tasks" element={<AppTasks />} />
+            <Route path="schedules" element={<AppSchedules />} />
             <Route path="workflows/:id" element={<AppWorkflowDetail />} />
             <Route path="workflow" element={<AppWorkflowBuilder />} />
             <Route path="workflow/:id" element={<AppWorkflowBuilder />} />
@@ -225,6 +225,7 @@ export default function App() {
 
             <Route path="api-docs" element={<AppApiDocs />} />
             <Route path="gpu-rentals" element={<AppGpuRentals />} />
+            <Route path="gpu-rentals/new" element={<AppGpuRentalsNew />} />
             <Route path="gpu-rentals/:id" element={<AppGpuRentalDetail />} />
 
             {/* Lumilake-origin pages grouped under /app/lumilake/*.
@@ -236,7 +237,15 @@ export default function App() {
               <Route path="data" element={<AppLumilakeData />} />
               <Route path="sql" element={<AppLumilakeSQL />} />
               <Route path="python" element={<AppLumilakePython />} />
-              <Route path="low-code" element={<AppLumilakeLowCode />} />
+              {/* Low-code (Lumilake n8n builder) is the same n8n as
+                  the Workflows page at /dashboard. Redirect so the
+                  two entry points don't diverge; the Workflows page's
+                  output-target toggle (FlowMesh vs Lumilake) picks
+                  backend — a future refactor. */}
+              <Route
+                path="low-code"
+                element={<Navigate to="/dashboard" replace />}
+              />
               <Route path="jobs" element={<AppLumilakeJobs />} />
             </Route>
 

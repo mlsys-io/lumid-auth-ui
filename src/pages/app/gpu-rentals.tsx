@@ -1,2 +1,4 @@
-import { GpuRentalList } from '@/runmesh/pages/user/GpuRentalList';
-export default function AppGpuRentals() { return <GpuRentalList />; }
+import GpuRentalsList from "./gpu-rentals/list";
+export default function AppGpuRentals() {
+	return <GpuRentalsList />;
+}
