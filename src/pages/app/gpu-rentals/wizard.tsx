@@ -437,17 +437,17 @@ export default function GpuRentalWizard() {
 										{
 											v: "proxy" as const,
 											label: "proxy (default)",
-											hint: "Client connects through FlowMesh Host via WebSocket. Works behind NAT.",
+											hint: "Works behind NAT. Connect needs flowmesh CLI or websocat — not pure OpenSSH.",
 										},
 										{
 											v: "direct" as const,
 											label: "direct",
-											hint: "Client hits the worker's exposed port directly. LAN/VPN only.",
+											hint: "LAN/VPN only. Pure `ssh -p port user@host` — no extra tools.",
 										},
 										{
 											v: "forward" as const,
 											label: "forward",
-											hint: "Host allocates a public TCP port that tunnels to the worker.",
+											hint: "Public TCP port via the Host. Pure `ssh` works from anywhere.",
 										},
 									].map(({ v, label, hint }) => (
 										<label

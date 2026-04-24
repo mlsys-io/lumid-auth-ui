@@ -313,11 +313,23 @@ function yq(v: string): string {
 }
 
 // ---- connect snippet rendering ----
+//
+// Direct + forward modes resolve to plain `ssh` — no extra tooling on
+// the user's machine. Proxy mode needs a WebSocket⇄stdio bridge as a
+// ProxyCommand; we offer two variants so users can pick based on what
+// they already have installed:
+//   * flowmesh CLI (batteries included — `flowmesh ssh connect`)
+//   * websocat     (pure-SSH path — single 2MB static binary)
+
+export interface ConnectVariant {
+	label: string;
+	command: string;
+	needs?: string; // one-line prerequisite hint
+}
 
 export interface ConnectSnippet {
 	mode: SshInfo["mode"];
-	primary: string;
-	fallback?: string;
+	variants: ConnectVariant[];
 	hint: string;
 }
 
@@ -332,21 +344,56 @@ export function buildConnectSnippet(
 		case "direct":
 			return {
 				mode: "direct",
-				primary: `ssh -p ${ssh.port} ${user}@${ssh.host}`,
+				variants: [
+					{
+						label: "OpenSSH",
+						command: `ssh -p ${ssh.port} ${user}@${ssh.host}`,
+					},
+				],
 				hint: "Direct TCP to the worker. Your machine needs network reachability to the worker host.",
 			};
 		case "forward":
 			return {
 				mode: "forward",
-				primary: `ssh -p ${ssh.port} ${user}@${ssh.host}`,
+				variants: [
+					{
+						label: "OpenSSH",
+						command: `ssh -p ${ssh.port} ${user}@${ssh.host}`,
+					},
+				],
 				hint: "Host-managed forward port. Works over public internet; no worker-direct access needed.",
 			};
-		case "proxy":
+		case "proxy": {
+			// Browser can't reach kv.run's Host directly with Authorization
+			// headers under `ws://`, so the CLI/websocat connect straight
+			// to the upstream. The bearer is pulled from the user's
+			// ~/.flowmesh-key (or any flm-* / lm_pat_live_* bearer).
+			const wsUrl = `wss://kv.run:8000/flowmesh/api/v1/ssh/tasks/${taskId}/proxy`;
 			return {
 				mode: "proxy",
-				primary: `flowmesh ssh connect ${taskId}`,
-				fallback: `ssh ${user}@${ssh.host} -o ProxyCommand='flowmesh ssh proxy ${taskId}'`,
-				hint: "Proxied via the FlowMesh Host. Needs the flowmesh CLI installed and authenticated (flm-* or lm_pat_live_* bearer).",
+				variants: [
+					{
+						label: "flowmesh CLI",
+						command: `flowmesh ssh connect ${taskId}`,
+						needs:
+							"flowmesh CLI (`pip install flowmesh-cli`) + a bearer in ~/.flowmesh-key or FLOWMESH_API_KEY",
+					},
+					{
+						label: "OpenSSH + websocat",
+						command:
+							`ssh ${user}@${ssh.host} -o ProxyCommand='` +
+							`websocat --binary ${wsUrl} ` +
+							`-H "Authorization: Bearer $FLOWMESH_API_KEY"'`,
+						needs:
+							"websocat (`brew install websocat` / `cargo install websocat`) + FLOWMESH_API_KEY exported",
+					},
+				],
+				hint:
+					"Proxy mode routes bytes through the FlowMesh Host over WebSocket. " +
+					"OpenSSH alone can't speak WS — pick either the flowmesh CLI (handles " +
+					"auth from ~/.flowmesh-key) or websocat (plumbs auth via env). " +
+					"For zero-tooling SSH, create a rental in direct or forward mode instead.",
 			};
+		}
 	}
 }

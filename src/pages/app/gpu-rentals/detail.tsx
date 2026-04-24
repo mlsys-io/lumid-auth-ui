@@ -299,42 +299,37 @@ export default function GpuRentalDetail() {
 						<CardContent>
 							{snippet ? (
 								<div className="space-y-3">
-									<div>
-										<div className="text-xs text-muted-foreground mb-1">
-											Primary
-										</div>
-										<div className="flex items-start gap-2">
-											<pre className="flex-1 bg-slate-900 text-slate-100 text-xs p-3 rounded-md overflow-x-auto whitespace-pre-wrap break-all font-mono">
-												{snippet.primary}
-											</pre>
-											<Button
-												size="sm"
-												variant="outline"
-												onClick={() => copy(snippet.primary)}
-											>
-												<Copy className="w-3 h-3" />
-											</Button>
-										</div>
-									</div>
-									{snippet.fallback && (
-										<div>
-											<div className="text-xs text-muted-foreground mb-1">
-												OpenSSH-only fallback
+									{snippet.variants.map((v, i) => (
+										<div key={i}>
+											<div className="text-xs text-muted-foreground mb-1 flex items-center justify-between">
+												<span>{v.label}</span>
+												{v.needs && (
+													<span className="text-[11px] text-slate-400">
+														needs: {v.needs}
+													</span>
+												)}
 											</div>
 											<div className="flex items-start gap-2">
-												<pre className="flex-1 bg-slate-50 border border-slate-200 text-slate-800 text-xs p-3 rounded-md overflow-x-auto whitespace-pre-wrap break-all font-mono">
-													{snippet.fallback}
+												<pre
+													className={cn(
+														"flex-1 text-xs p-3 rounded-md overflow-x-auto whitespace-pre-wrap break-all font-mono",
+														i === 0
+															? "bg-slate-900 text-slate-100"
+															: "bg-slate-50 border border-slate-200 text-slate-800",
+													)}
+												>
+													{v.command}
 												</pre>
 												<Button
 													size="sm"
 													variant="outline"
-													onClick={() => copy(snippet.fallback!)}
+													onClick={() => copy(v.command)}
 												>
 													<Copy className="w-3 h-3" />
 												</Button>
 											</div>
 										</div>
-									)}
+									))}
 									<p className="text-xs text-muted-foreground">{snippet.hint}</p>
 								</div>
 							) : (
