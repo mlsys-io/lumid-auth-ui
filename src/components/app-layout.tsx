@@ -1,8 +1,9 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
 	BrainCircuit,
-	Blocks,
 	Workflow,
+	ListChecks,
+	Calendar,
 	User as UserIcon,
 	LogOut,
 	Menu,
@@ -42,25 +43,23 @@ interface NavItem {
 	end?: boolean;
 }
 
+// 2026-04-24 deep reshape. Mental model:
+//   - A workflow is ONE thing (an n8n DAG). Where it executes is a
+//     per-workflow target property, not a separate sidebar entry.
+//   - Tasks + Schedules are FlowMesh runtime views.
+//   - The legacy Runmesh WorkflowMarket at /dashboard/workflows is
+//     hidden from the sidebar. Future: reconnect to xp.io marketplace.
 const PRODUCT_NAV: NavItem[] = [
-	{ to: '/dashboard', label: 'Apps', icon: Blocks, end: true },
-	// Executions collapses Workflows + Tasks + Schedules into one
-	// tabbed shell (2026-04-24). Sidebar link lands on the default tab;
-	// the other two show as tabs inside the page.
-	{ to: '/dashboard/workflows', label: 'Executions', icon: Workflow },
+	{ to: '/dashboard', label: 'Workflows', icon: Workflow, end: true },
+	{ to: '/dashboard/tasks', label: 'Tasks', icon: ListChecks },
+	{ to: '/dashboard/schedules', label: 'Schedules', icon: Calendar },
 	{ to: '/dashboard/gpu-rentals', label: 'GPU rentals', icon: Server },
-	// Billing moved to the Account group; route still at /app/billing.
-	// API docs route still resolves for deep links; removed from sidebar.
 ];
 
+// Lumilake-specific surfaces. Low-code was the Lumilake-side n8n
+// builder; it redirects to the unified /dashboard Workflows entry now.
 const LUMILAKE_NAV: NavItem[] = [
 	{ to: '/dashboard/lumilake/data', label: 'Data browsing', icon: Database },
-	// SQL + Python workbenches removed from the sidebar 2026-04-24 —
-	// underused relative to Low-code; the routes still resolve for
-	// deep links but the nav is trimmed.
-	// Data label + Modelling hidden 2026-04-24 — feature not implemented
-	// yet; restore once the pages ship.
-	{ to: '/dashboard/lumilake/low-code', label: 'Low-code', icon: Workflow },
 	{ to: '/dashboard/lumilake/jobs', label: 'Running jobs', icon: PlayCircle },
 ];
 
