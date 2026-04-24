@@ -24,9 +24,19 @@ export interface PageResult<T> {
 }
 
 /**
- * 获取所有工作流类型（兼容旧“标签”接口）
+ * 获取所有工作流类型（兼容旧”标签”接口）。系统标签，不可删除。
  */
 export const getAllTags = () => http.get<TagItem[]>('/runmesh/workflow-types/list');
+
+/**
+ * 获取用户自定义标签 — runmesh_workflow_tag, 可删除 / 改名。
+ * Returns a PageResult envelope even though the caller just wants a
+ * flat list; the backend's MyBatisPlus convention wraps everything.
+ */
+export const getUserTagList = () =>
+  http.get<PageResult<TagItem>>('/runmesh/tags/list', {
+    params: { pageNum: 1, pageSize: 500 },
+  });
 
 /**
  * 创建标签

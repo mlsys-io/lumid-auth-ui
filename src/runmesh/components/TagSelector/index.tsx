@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icons } from '@/runmesh/components/Icons';
 import { useToast } from '@/runmesh/components/Toast';
-import { createTag, deleteTag, getAllTags, TagItem, updateTag } from '@/runmesh/api/user/tags';
+import { createTag, deleteTag, getAllTags, getUserTagList, TagItem, updateTag } from '@/runmesh/api/user/tags';
 import { useLanguage } from '@/runmesh/i18n';
 
 export interface Tag {
@@ -125,8 +125,30 @@ export const TagSelector: React.FC<TagSelectorProps> = ({
         setAllTags(tags.map((t) => ({ ...t, name: translateTagName(t.name) })));
       }
 
-      const apiTags = await getAllTags();
-      const normalized = normalizeTags(apiTags);
+      // Two backend sources: workflow-types (system, read-only) +
+      // runmesh_workflow_tag (user-editable). Merge them so the
+      // Manage-tags flow covers both — system entries render with no
+      // edit/delete buttons (tag.system === true), user entries stay
+      // fully editable. Fetch in parallel; a user-tag fetch failure
+      // should not kill the system list.
+      const [systemRes, userRes] = await Promise.allSettled([
+        getAllTags(),
+        getUserTagList(),
+      ]);
+      const systemTags =
+        systemRes.status === 'fulfilled' ? systemRes.value : [];
+      const userTagsRaw =
+        userRes.status === 'fulfilled' ? userRes.value?.rows || [] : [];
+      // De-dupe by normalized lowercase name so a workflow-type and a
+      // user tag with the same label don't render twice. User rows win
+      // (they're writable).
+      const seen = new Set<string>();
+      const userNorm = normalizeTags(userTagsRaw);
+      userNorm.forEach((t) => seen.add(t.name.toLowerCase()));
+      const systemNorm = normalizeTags(systemTags).filter(
+        (t) => !seen.has(t.name.toLowerCase()),
+      );
+      const normalized = [...userNorm, ...systemNorm];
       setAllTags(normalized);
       cacheTags(normalized);
     } catch (error) {
