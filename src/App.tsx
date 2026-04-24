@@ -382,19 +382,21 @@ export default function App() {
               <Route path="clusters/new" element={<AppAdminClustersNew />} />
               <Route path="clusters/:id" element={<AppAdminClustersDetail />} />
 
-              {/* Runmesh ops — 3 tabs (supplier lifecycle + reviews).
-                  Billing moved to /app/billing (user-facing Account
-                  section) on 2026-04-24 since it's a per-user surface,
-                  not an admin-only concern. Legacy /app/admin/billing
-                  redirects below. */}
+              {/* Runmesh ops — 4 tabs. Billing is the platform-wide
+                  view (all users' spend / suppliers / reconciliation);
+                  distinct from the per-user /dashboard/billing surface
+                  which reads only the caller's sys_user.amount + their
+                  transactions. Restored to the admin sidebar now that
+                  GPU rentals actually debit. */}
               <Route
                 element={
                   <AdminSectionLayout
                     title="Runmesh ops"
-                    subtitle="GPU supplier lifecycle and workflow review."
+                    subtitle="GPU supplier lifecycle, platform-wide billing, and workflow review."
                     tabs={[
                       { to: "/dashboard/admin/suppliers", label: "Suppliers", end: true },
                       { to: "/dashboard/admin/supplier-nodes", label: "Supplier nodes" },
+                      { to: "/dashboard/admin/billing", label: "Billing" },
                       { to: "/dashboard/admin/workflow-review", label: "Reviews" },
                     ]}
                   />
@@ -402,12 +404,9 @@ export default function App() {
               >
                 <Route path="suppliers" element={<RunmeshSuppliers />} />
                 <Route path="supplier-nodes" element={<RunmeshSupplierNodes />} />
+                <Route path="billing" element={<RunmeshBilling />} />
                 <Route path="workflow-review" element={<RunmeshWorkflowReview />} />
               </Route>
-              <Route
-                path="billing"
-                element={<Navigate to="/dashboard/billing" replace />}
-              />
 
               {/* QuantArena — 4 tabs */}
               <Route
