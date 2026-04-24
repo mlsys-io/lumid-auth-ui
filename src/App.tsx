@@ -375,7 +375,7 @@ export default function App() {
                       { to: "/dashboard/admin/suppliers", label: "Suppliers" },
                       { to: "/dashboard/admin/billing", label: "Billing" },
                       { to: "/dashboard/admin/workflow-review", label: "Reviews" },
-                      { to: "/dashboard/admin/setup", label: "Setup guide" },
+                      { to: "/dashboard/admin/infra-setup", label: "Setup guide" },
                     ]}
                   />
                 }
@@ -386,7 +386,7 @@ export default function App() {
                 <Route path="supplier-nodes" element={<RunmeshSupplierNodes />} />
                 <Route path="billing" element={<RunmeshBilling />} />
                 <Route path="workflow-review" element={<RunmeshWorkflowReview />} />
-                <Route path="setup" element={<AppAdminInfrastructureSetup />} />
+                <Route path="infra-setup" element={<AppAdminInfrastructureSetup />} />
               </Route>
               <Route
                 path="lumilake-workers"
