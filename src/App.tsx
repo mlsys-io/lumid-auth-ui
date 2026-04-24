@@ -80,6 +80,7 @@ const AppAdminCompetitions = lazy(() => import("./pages/app/admin-competitions")
 const AppAdminMarkets = lazy(() => import("./pages/app/admin-markets"));
 const AppAdminTemplates = lazy(() => import("./pages/app/admin-templates"));
 const AppAdminFlowMeshJobs = lazy(() => import("./pages/app/admin-flowmesh-jobs"));
+const AdminSectionLayout = lazy(() => import("./pages/app/admin-section-layout"));
 
 function LoginPage() {
   const { login } = useAuth();
@@ -209,7 +210,18 @@ export default function App() {
               <Route path="jobs" element={<AppLumilakeJobs />} />
             </Route>
 
-            {/* Admin section — same shell, gated by role. */}
+            {/* Admin section — same shell, gated by role. Consolidated
+                into 4 tabbed areas + Overview (2026-04-24):
+                  • People & access  → users, access matrix, invitations, audit, setup
+                  • Infrastructure    → clusters, workers, lumilake workers
+                  • Runmesh ops       → suppliers, supplier nodes, billing, reviews
+                  • QuantArena        → competitions, portfolios, templates, flowmesh jobs
+                Each area renders the child route inside an
+                <AdminSectionLayout> that draws a tab strip at the top.
+                Existing deep links (e.g. /app/admin/users/matrix) still
+                resolve — the tab router is URL-based. Detail views
+                (users/:id, clusters/:id, clusters/new) render OUTSIDE
+                the tab shell since they aren't siblings of the tabs. */}
             <Route
               path="admin"
               element={
@@ -220,45 +232,97 @@ export default function App() {
             >
               <Route index element={<RunmeshAdminDashboard />} />
 
-              {/* lumid_cluster — unified infra registry for FM + LL.
-                  /app/admin/nodes is retired: the old Runmesh node page
-                  used `sys_user`-scoped sys_gpu_node rows; those stay
-                  as Runmesh billing linkage but infra management now
-                  lives under the cluster detail. */}
-              <Route path="clusters" element={<AppAdminClusters />} />
+              {/* People & access — 5 tabs */}
+              <Route
+                element={
+                  <AdminSectionLayout
+                    title="People & access"
+                    subtitle="Users, roles, invitations, and the audit trail."
+                    tabs={[
+                      { to: "/app/admin/users", label: "Users", end: true },
+                      { to: "/app/admin/users/matrix", label: "Access matrix" },
+                      { to: "/app/admin/invitations", label: "Invitations" },
+                      { to: "/app/admin/audit", label: "Audit log" },
+                      { to: "/app/admin/setup", label: "Setup" },
+                    ]}
+                  />
+                }
+              >
+                <Route path="users" element={<AppAdminUsers />} />
+                <Route path="users/matrix" element={<AppAdminUsersMatrix />} />
+                <Route path="invitations" element={<AdminInvitations />} />
+                <Route path="audit" element={<AppAdminAudit />} />
+                <Route path="setup" element={<AppAdminSetup />} />
+              </Route>
+              {/* User detail lives outside the tab layout — it's drill-down, not peer. */}
+              <Route path="users/:id" element={<AppAdminUserDetail />} />
+
+              {/* Infrastructure — 3 tabs */}
+              <Route
+                element={
+                  <AdminSectionLayout
+                    title="Infrastructure"
+                    subtitle="Clusters, worker fleet, and Lumilake compute."
+                    tabs={[
+                      { to: "/app/admin/clusters", label: "Clusters", end: true },
+                      { to: "/app/admin/cluster-workers", label: "Workers" },
+                      { to: "/app/admin/lumilake-workers", label: "Lumilake workers" },
+                    ]}
+                  />
+                }
+              >
+                <Route path="clusters" element={<AppAdminClusters />} />
+                <Route path="cluster-workers" element={<AppAdminClusterWorkers />} />
+                <Route path="lumilake-workers" element={<AppAdminLumilakeWorkers />} />
+              </Route>
               <Route path="clusters/new" element={<AppAdminClustersNew />} />
               <Route path="clusters/:id" element={<AppAdminClustersDetail />} />
-              <Route path="cluster-workers" element={<AppAdminClusterWorkers />} />
-              <Route
-                path="nodes"
-                element={<Navigate to="/app/admin/clusters" replace />}
-              />
 
-              <Route path="suppliers" element={<RunmeshSuppliers />} />
-              <Route path="supplier-nodes" element={<RunmeshSupplierNodes />} />
-              <Route path="billing" element={<RunmeshBilling />} />
-              <Route path="workflow-review" element={<RunmeshWorkflowReview />} />
-              <Route path="invitations" element={<AdminInvitations />} />
-              <Route path="lumilake-workers" element={<AppAdminLumilakeWorkers />} />
-              {/* User admin is centralized under /app/admin/users (lum.id).
-                  Runmesh sys_user and Lumilake principals are now
-                  implementation-detail mirrors of lumid_identity.users
-                  and no longer have their own admin pages. Any lingering
-                  links to /app/admin/{users,lumilake-users} 301 into
-                  the canonical page via the redirect below. */}
-              <Route path="users" element={<AppAdminUsers />} />
-              <Route path="users/matrix" element={<AppAdminUsersMatrix />} />
-              <Route path="users/:id" element={<AppAdminUserDetail />} />
-              <Route path="audit" element={<AppAdminAudit />} />
-              <Route path="setup" element={<AppAdminSetup />} />
+              {/* Runmesh ops — 4 tabs (supplier lifecycle + billing) */}
               <Route
-                path="lumilake-users"
-                element={<Navigate to="/app/admin/users" replace />}
-              />
-              <Route path="competitions" element={<AppAdminCompetitions />} />
-              <Route path="markets" element={<AppAdminMarkets />} />
-              <Route path="templates" element={<AppAdminTemplates />} />
-              <Route path="flowmesh-jobs" element={<AppAdminFlowMeshJobs />} />
+                element={
+                  <AdminSectionLayout
+                    title="Runmesh ops"
+                    subtitle="GPU supplier lifecycle, billing, and workflow review."
+                    tabs={[
+                      { to: "/app/admin/suppliers", label: "Suppliers", end: true },
+                      { to: "/app/admin/supplier-nodes", label: "Supplier nodes" },
+                      { to: "/app/admin/billing", label: "Billing" },
+                      { to: "/app/admin/workflow-review", label: "Reviews" },
+                    ]}
+                  />
+                }
+              >
+                <Route path="suppliers" element={<RunmeshSuppliers />} />
+                <Route path="supplier-nodes" element={<RunmeshSupplierNodes />} />
+                <Route path="billing" element={<RunmeshBilling />} />
+                <Route path="workflow-review" element={<RunmeshWorkflowReview />} />
+              </Route>
+
+              {/* QuantArena — 4 tabs */}
+              <Route
+                element={
+                  <AdminSectionLayout
+                    title="QuantArena"
+                    subtitle="Trading platform admin — competitions, markets, templates, jobs."
+                    tabs={[
+                      { to: "/app/admin/competitions", label: "Competitions", end: true },
+                      { to: "/app/admin/markets", label: "Portfolios" },
+                      { to: "/app/admin/templates", label: "Backtest templates" },
+                      { to: "/app/admin/flowmesh-jobs", label: "FlowMesh jobs" },
+                    ]}
+                  />
+                }
+              >
+                <Route path="competitions" element={<AppAdminCompetitions />} />
+                <Route path="markets" element={<AppAdminMarkets />} />
+                <Route path="templates" element={<AppAdminTemplates />} />
+                <Route path="flowmesh-jobs" element={<AppAdminFlowMeshJobs />} />
+              </Route>
+
+              {/* Retired surface — legacy deep-link redirects */}
+              <Route path="nodes" element={<Navigate to="/app/admin/clusters" replace />} />
+              <Route path="lumilake-users" element={<Navigate to="/app/admin/users" replace />} />
             </Route>
           </Route>
 
