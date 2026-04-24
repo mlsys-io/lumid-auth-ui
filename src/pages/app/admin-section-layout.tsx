@@ -8,8 +8,9 @@ type Props = {
 	/** One-line description under the title. Optional. */
 	subtitle?: string;
 	/** Ordered tab list — first entry usually has `end: true` so the
-	 *  index route doesn't stay highlighted when a child is open. */
-	tabs: Tab[];
+	 *  index route doesn't stay highlighted when a child is open.
+	 *  Omit for a header-only wrapper (title + subtitle, no tab strip). */
+	tabs?: Tab[];
 };
 
 /**
@@ -27,6 +28,7 @@ export default function AdminSectionLayout({ title, subtitle, tabs }: Props) {
 					<p className="mt-1 text-sm text-slate-600">{subtitle}</p>
 				)}
 			</header>
+			{tabs && tabs.length > 0 && (
 			<div className="mb-6 border-b border-slate-200 flex gap-5 overflow-x-auto">
 				{tabs.map((t) => (
 					<NavLink
@@ -45,6 +47,7 @@ export default function AdminSectionLayout({ title, subtitle, tabs }: Props) {
 					</NavLink>
 				))}
 			</div>
+			)}
 			<Outlet />
 		</div>
 	);

@@ -213,8 +213,19 @@ export default function App() {
               <Route path="runmesh/schedules" element={<AppSchedules />} />
             </Route>
 
-            {/* Lumilake Submit — pick + configure + submit to Lumilake. */}
-            <Route path="lumilake-submit" element={<AppLumilakeSubmit />} />
+            {/* Lumilake Submit — pick + configure + submit to Lumilake.
+                Wrapped in a header-only section layout for title +
+                narrative parity with Runmesh Submit. */}
+            <Route
+              element={
+                <AdminSectionLayout
+                  title="Lumilake Submit"
+                  subtitle="Pick a workflow and run it as a Lumilake analytics job — inputs in, results to your chosen lakehouse location."
+                />
+              }
+            >
+              <Route path="lumilake-submit" element={<AppLumilakeSubmit />} />
+            </Route>
 
             {/* Running jobs — merged runtime view. Tab shell. */}
             <Route
