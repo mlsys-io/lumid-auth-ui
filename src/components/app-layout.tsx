@@ -78,33 +78,65 @@ const LUMILAKE_NAV: NavItem[] = [
 	{ to: '/app/lumilake/jobs', label: 'Running jobs', icon: PlayCircle },
 ];
 
-const ADMIN_NAV: NavItem[] = [
-	{ to: '/app/admin', label: 'Overview', icon: LayoutDashboard, end: true },
-	// People + access — one surface. The per-service user admins
-	// (Runmesh sys_user, Lumilake principals) were retired 2026-04-24:
-	// service-specific capabilities now surface through the access
-	// matrix under each user row.
-	{ to: '/app/admin/users', label: 'Users', icon: Users },
-	{ to: '/app/admin/users/matrix', label: 'Access matrix', icon: Shield },
-	{ to: '/app/admin/invitations', label: 'Invitations', icon: Ticket },
-	{ to: '/app/admin/audit', label: 'Audit log', icon: ClipboardCheck },
-	{ to: '/app/admin/setup', label: 'Setup', icon: LayoutDashboard },
-	// Infra — unified cluster management for FlowMesh + Lumilake.
-	// Replaces the old /app/admin/nodes (Runmesh sys_gpu_node editor).
-	{ to: '/app/admin/clusters', label: 'Clusters', icon: Layers },
-	{ to: '/app/admin/cluster-workers', label: 'Workers', icon: Server },
-	// Runmesh billing surface — stays as the billing unit for GPU vendors
-	// (vast.ai, autoDL, self). Cost attribution to clusters happens via
-	// clusters.billing_vendor_id. Not replaced by lumid_cluster.
-	{ to: '/app/admin/suppliers', label: 'Suppliers', icon: Server },
-	{ to: '/app/admin/supplier-nodes', label: 'Supplier nodes', icon: Server },
-	{ to: '/app/admin/billing', label: 'Billing', icon: Receipt },
-	{ to: '/app/admin/workflow-review', label: 'Reviews', icon: ClipboardCheck },
-	{ to: '/app/admin/competitions', label: 'Competitions', icon: Trophy },
-	{ to: '/app/admin/markets', label: 'Portfolios', icon: LineChart },
-	{ to: '/app/admin/templates', label: 'Backtest templates', icon: FileCode },
-	{ to: '/app/admin/flowmesh-jobs', label: 'FlowMesh jobs', icon: Workflow },
-	{ to: '/app/admin/lumilake-workers', label: 'Lumilake workers', icon: Server },
+// Admin nav split into topical groups so 17 flat items don't read as
+// one long scrollable list. Each group maps to a clear "what am I
+// doing" intent:
+//   - People & access — who can do what (users + audit)
+//   - Infrastructure — compute fleet (clusters, workers)
+//   - Runmesh ops — billing + supplier lifecycle
+//   - QuantArena — trading platform admin
+// Groups render with a small uppercase header between them (reuses the
+// existing SectionLabel pattern for Product / Lumilake / Account).
+type NavGroup = { label: string; items: NavItem[] };
+
+const ADMIN_OVERVIEW: NavItem = {
+	to: '/app/admin', label: 'Overview', icon: LayoutDashboard, end: true,
+};
+
+const ADMIN_GROUPS: NavGroup[] = [
+	{
+		label: 'People & access',
+		// Per-service user admins (Runmesh sys_user, Lumilake principals)
+		// were retired 2026-04-24 — capabilities now surface through the
+		// access matrix under each user row.
+		items: [
+			{ to: '/app/admin/users', label: 'Users', icon: Users },
+			{ to: '/app/admin/users/matrix', label: 'Access matrix', icon: Shield },
+			{ to: '/app/admin/invitations', label: 'Invitations', icon: Ticket },
+			{ to: '/app/admin/audit', label: 'Audit log', icon: ClipboardCheck },
+			{ to: '/app/admin/setup', label: 'Setup', icon: LayoutDashboard },
+		],
+	},
+	{
+		label: 'Infrastructure',
+		// Unified cluster management for FlowMesh + Lumilake. Replaces
+		// the old /app/admin/nodes (Runmesh sys_gpu_node editor).
+		items: [
+			{ to: '/app/admin/clusters', label: 'Clusters', icon: Layers },
+			{ to: '/app/admin/cluster-workers', label: 'Workers', icon: Server },
+			{ to: '/app/admin/lumilake-workers', label: 'Lumilake workers', icon: Server },
+		],
+	},
+	{
+		label: 'Runmesh ops',
+		// Billing unit for GPU vendors (vast.ai, autoDL, self-hosted).
+		// Cost attribution to clusters happens via clusters.billing_vendor_id.
+		items: [
+			{ to: '/app/admin/suppliers', label: 'Suppliers', icon: Server },
+			{ to: '/app/admin/supplier-nodes', label: 'Supplier nodes', icon: Server },
+			{ to: '/app/admin/billing', label: 'Billing', icon: Receipt },
+			{ to: '/app/admin/workflow-review', label: 'Reviews', icon: ClipboardCheck },
+		],
+	},
+	{
+		label: 'QuantArena',
+		items: [
+			{ to: '/app/admin/competitions', label: 'Competitions', icon: Trophy },
+			{ to: '/app/admin/markets', label: 'Portfolios', icon: LineChart },
+			{ to: '/app/admin/templates', label: 'Backtest templates', icon: FileCode },
+			{ to: '/app/admin/flowmesh-jobs', label: 'FlowMesh jobs', icon: Workflow },
+		],
+	},
 ];
 
 function SidebarItem({ to, label, icon: Icon, end, onClick }: NavItem & { onClick?: () => void }) {
@@ -215,10 +247,20 @@ export default function AppLayout() {
 							<div className="flex-1 h-px ml-1.5 bg-indigo-200/70" />
 						</div>
 						<div className="space-y-px">
-							{ADMIN_NAV.map((item) => (
-								<SidebarItem key={item.to} {...item} onClick={close} />
-							))}
+							<SidebarItem {...ADMIN_OVERVIEW} onClick={close} />
 						</div>
+						{ADMIN_GROUPS.map((group) => (
+							<div key={group.label}>
+								<div className="mt-3 mb-1 px-2.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">
+									{group.label}
+								</div>
+								<div className="space-y-px">
+									{group.items.map((item) => (
+										<SidebarItem key={item.to} {...item} onClick={close} />
+									))}
+								</div>
+							</div>
+						))}
 					</>
 				)}
 
