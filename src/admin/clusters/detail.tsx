@@ -67,7 +67,6 @@ import { useNavigate } from "react-router-dom";
 import ServersTab from "./servers-tab";
 import NodesTab from "./nodes-tab";
 import WorkersTab from "./workers-tab";
-import SetupTab from "./setup-tab";
 import CommercialTab from "./commercial-tab";
 
 function statusBadge(status: Cluster["status"]): string {
@@ -236,7 +235,6 @@ export default function ClusterDetail() {
 							Workers ({workers.length})
 						</TabsTrigger>
 						<TabsTrigger value="commercial">Commercial</TabsTrigger>
-						<TabsTrigger value="setup">Setup guide</TabsTrigger>
 					</TabsList>
 
 					<TabsContent value="overview" className="mt-4">
@@ -365,10 +363,6 @@ export default function ClusterDetail() {
 
 					<TabsContent value="commercial" className="mt-4">
 						<CommercialTab clusterId={id} />
-					</TabsContent>
-
-					<TabsContent value="setup" className="mt-4">
-						<SetupTab clusterId={id} clusterName={cluster.name} />
 					</TabsContent>
 				</Tabs>
 			)}

@@ -87,6 +87,7 @@ const AppAdminClusters = lazy(() => import("./pages/app/admin-clusters"));
 const AppAdminClustersNew = lazy(() => import("./pages/app/admin-clusters-new"));
 const AppAdminClustersDetail = lazy(() => import("./pages/app/admin-clusters-detail"));
 const AppAdminClusterWorkers = lazy(() => import("./pages/app/admin-cluster-workers"));
+const AppAdminInfrastructureSetup = lazy(() => import("./pages/app/admin/infrastructure-setup"));
 // QuantArena admin pages — bridged via /api/v1/qa-admin/* nginx proxy
 const AppAdminCompetitions = lazy(() => import("./pages/app/admin-competitions"));
 const AppAdminMarkets = lazy(() => import("./pages/app/admin-markets"));
@@ -374,6 +375,7 @@ export default function App() {
                       { to: "/dashboard/admin/suppliers", label: "Suppliers" },
                       { to: "/dashboard/admin/billing", label: "Billing" },
                       { to: "/dashboard/admin/workflow-review", label: "Reviews" },
+                      { to: "/dashboard/admin/setup", label: "Setup guide" },
                     ]}
                   />
                 }
@@ -384,6 +386,7 @@ export default function App() {
                 <Route path="supplier-nodes" element={<RunmeshSupplierNodes />} />
                 <Route path="billing" element={<RunmeshBilling />} />
                 <Route path="workflow-review" element={<RunmeshWorkflowReview />} />
+                <Route path="setup" element={<AppAdminInfrastructureSetup />} />
               </Route>
               <Route
                 path="lumilake-workers"
