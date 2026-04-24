@@ -167,7 +167,7 @@ export default function AppLayout() {
 					))}
 				</div>
 
-				<SectionLabel label="Lumilake" />
+				<SectionLabel label="Datasets" />
 				<div className="space-y-px">
 					{LUMILAKE_NAV.map((item) => (
 						<SidebarItem key={item.to} {...item} onClick={close} />
