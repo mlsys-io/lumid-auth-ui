@@ -1,6 +1,14 @@
 import { NavLink, Outlet } from "react-router-dom";
+import { useAuth } from "../../hooks/useAuth";
 
-type Tab = { to: string; label: string; end?: boolean };
+type Tab = {
+	to: string;
+	label: string;
+	end?: boolean;
+	/** Hide this tab unless the caller is a super_admin. Billing +
+	 *  accounting tabs use this to stay invisible to regular admins. */
+	requireSuperAdmin?: boolean;
+};
 
 type Props = {
 	/** Title shown at the top of the section. */
@@ -20,6 +28,9 @@ type Props = {
  * route, so deep links into individual admin pages still work.
  */
 export default function AdminSectionLayout({ title, subtitle, tabs }: Props) {
+	const { user } = useAuth();
+	const isSuperAdmin = user?.role === "super_admin";
+	const visible = tabs?.filter((t) => !t.requireSuperAdmin || isSuperAdmin);
 	return (
 		<div>
 			<header className="mb-5">
@@ -28,9 +39,9 @@ export default function AdminSectionLayout({ title, subtitle, tabs }: Props) {
 					<p className="mt-1 text-sm text-slate-600">{subtitle}</p>
 				)}
 			</header>
-			{tabs && tabs.length > 0 && (
+			{visible && visible.length > 0 && (
 			<div className="mb-6 border-b border-slate-200 flex gap-5 overflow-x-auto">
-				{tabs.map((t) => (
+				{visible.map((t) => (
 					<NavLink
 						key={t.to}
 						to={t.to}

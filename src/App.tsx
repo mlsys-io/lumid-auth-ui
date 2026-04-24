@@ -3,6 +3,7 @@ import { Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams } 
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { AuthGuard } from "./components/auth-guard";
 import { AdminGuard } from "./components/admin-guard";
+import { SuperAdminGuard } from "./components/super-admin-guard";
 
 // Lazy-load so first paint on /auth/login doesn't fetch the dashboard code.
 const Login = lazy(() => import("./pages/login/login").then((m) => ({ default: m.Login })));
@@ -359,7 +360,10 @@ export default function App() {
                       { to: "/dashboard/admin/clusters", label: "Clusters", end: true },
                       { to: "/dashboard/admin/cluster-workers", label: "Workers" },
                       { to: "/dashboard/admin/suppliers", label: "Suppliers" },
-                      { to: "/dashboard/admin/billing", label: "Billing" },
+                      // Billing + platform-wide accounting are
+                      // super_admin-only. Regular admins manage users
+                      // / clusters / workflows but don't touch money.
+                      { to: "/dashboard/admin/billing", label: "Billing", requireSuperAdmin: true },
                       { to: "/dashboard/admin/workflow-review", label: "Reviews" },
                       { to: "/dashboard/admin/infra-setup", label: "Setup guide" },
                     ]}
@@ -370,7 +374,14 @@ export default function App() {
                 <Route path="cluster-workers" element={<AppAdminClusterWorkers />} />
                 <Route path="suppliers" element={<RunmeshSuppliers />} />
                 <Route path="supplier-nodes" element={<RunmeshSupplierNodes />} />
-                <Route path="billing" element={<RunmeshBilling />} />
+                <Route
+                  path="billing"
+                  element={
+                    <SuperAdminGuard>
+                      <RunmeshBilling />
+                    </SuperAdminGuard>
+                  }
+                />
                 <Route path="workflow-review" element={<RunmeshWorkflowReview />} />
                 <Route path="infra-setup" element={<AppAdminInfrastructureSetup />} />
               </Route>
