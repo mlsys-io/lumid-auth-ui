@@ -79,19 +79,26 @@ const LUMILAKE_NAV: NavItem[] = [
 
 const ADMIN_NAV: NavItem[] = [
 	{ to: '/app/admin', label: 'Overview', icon: LayoutDashboard, end: true },
+	// People + access — one surface. The per-service user admins
+	// (Runmesh sys_user, Lumilake principals) were retired 2026-04-24:
+	// service-specific capabilities now surface through the access
+	// matrix under each user row.
 	{ to: '/app/admin/users', label: 'Users', icon: Users },
+	{ to: '/app/admin/users/matrix', label: 'Access matrix', icon: Shield },
+	{ to: '/app/admin/invitations', label: 'Invitations', icon: Ticket },
+	{ to: '/app/admin/audit', label: 'Audit log', icon: ClipboardCheck },
+	{ to: '/app/admin/setup', label: 'Setup', icon: LayoutDashboard },
+	// Service-specific admin (not user-centric).
 	{ to: '/app/admin/nodes', label: 'Nodes', icon: Server },
 	{ to: '/app/admin/suppliers', label: 'Suppliers', icon: Server },
 	{ to: '/app/admin/supplier-nodes', label: 'Supplier nodes', icon: Server },
 	{ to: '/app/admin/billing', label: 'Billing', icon: Receipt },
 	{ to: '/app/admin/workflow-review', label: 'Reviews', icon: ClipboardCheck },
-	{ to: '/app/admin/invitations', label: 'Invitations', icon: Ticket },
 	{ to: '/app/admin/competitions', label: 'Competitions', icon: Trophy },
 	{ to: '/app/admin/markets', label: 'Portfolios', icon: LineChart },
 	{ to: '/app/admin/templates', label: 'Backtest templates', icon: FileCode },
 	{ to: '/app/admin/flowmesh-jobs', label: 'FlowMesh jobs', icon: Workflow },
 	{ to: '/app/admin/lumilake-workers', label: 'Lumilake workers', icon: Server },
-	{ to: '/app/admin/lumilake-users', label: 'Lumilake users', icon: Users },
 ];
 
 function SidebarItem({ to, label, icon: Icon, end, onClick }: NavItem & { onClick?: () => void }) {

@@ -21,9 +21,9 @@ const AdminInvitations = lazy(() => import("./pages/account/admin-invitations"))
 const RunmeshAdminDashboard = lazy(() =>
   import("./runmesh/pages/AdminDashboard").then((m) => ({ default: m.AdminDashboard })),
 );
-const RunmeshUsers = lazy(() =>
-  import("./runmesh/pages/UserManagement").then((m) => ({ default: m.UserManagement })),
-);
+// RunmeshUsers removed 2026-04-24 — canonical user admin now at
+// /app/admin/users (backed by lumid_identity.users). sys_user stays as
+// a lazy mirror for FK integrity but is no longer separately editable.
 const RunmeshNodes = lazy(() =>
   import("./runmesh/pages/NodeManagement").then((m) => ({ default: m.NodeManagement })),
 );
@@ -63,7 +63,13 @@ const AppLumilakeModelling = lazy(() => import("./pages/app/lumilake/modelling")
 const AppLumilakeJobs = lazy(() => import("./pages/app/lumilake/jobs"));
 // Lumilake admin pages stay under /app/admin/*
 const AppAdminLumilakeWorkers = lazy(() => import("./pages/app/admin-workers"));
-const AppAdminLumilakeUsers = lazy(() => import("./pages/app/admin-lumilake-users"));
+// Canonical user admin at lum.id/app/admin/users — the one user store.
+// Replaces /app/admin/users (Runmesh sys_user) and /app/admin/lumilake-users.
+const AppAdminUsers = lazy(() => import("./pages/app/admin-users"));
+const AppAdminUserDetail = lazy(() => import("./pages/app/admin-user-detail"));
+const AppAdminUsersMatrix = lazy(() => import("./pages/app/admin-users-matrix"));
+const AppAdminAudit = lazy(() => import("./pages/app/admin-audit"));
+const AppAdminSetup = lazy(() => import("./pages/app/admin-setup"));
 // QuantArena admin pages — bridged via /api/v1/qa-admin/* nginx proxy
 const AppAdminCompetitions = lazy(() => import("./pages/app/admin-competitions"));
 const AppAdminMarkets = lazy(() => import("./pages/app/admin-markets"));
@@ -208,7 +214,6 @@ export default function App() {
               }
             >
               <Route index element={<RunmeshAdminDashboard />} />
-              <Route path="users" element={<RunmeshUsers />} />
               <Route path="nodes" element={<RunmeshNodes />} />
               <Route path="suppliers" element={<RunmeshSuppliers />} />
               <Route path="supplier-nodes" element={<RunmeshSupplierNodes />} />
@@ -216,7 +221,21 @@ export default function App() {
               <Route path="workflow-review" element={<RunmeshWorkflowReview />} />
               <Route path="invitations" element={<AdminInvitations />} />
               <Route path="lumilake-workers" element={<AppAdminLumilakeWorkers />} />
-              <Route path="lumilake-users" element={<AppAdminLumilakeUsers />} />
+              {/* User admin is centralized under /app/admin/users (lum.id).
+                  Runmesh sys_user and Lumilake principals are now
+                  implementation-detail mirrors of lumid_identity.users
+                  and no longer have their own admin pages. Any lingering
+                  links to /app/admin/{users,lumilake-users} 301 into
+                  the canonical page via the redirect below. */}
+              <Route path="users" element={<AppAdminUsers />} />
+              <Route path="users/matrix" element={<AppAdminUsersMatrix />} />
+              <Route path="users/:id" element={<AppAdminUserDetail />} />
+              <Route path="audit" element={<AppAdminAudit />} />
+              <Route path="setup" element={<AppAdminSetup />} />
+              <Route
+                path="lumilake-users"
+                element={<Navigate to="/app/admin/users" replace />}
+              />
               <Route path="competitions" element={<AppAdminCompetitions />} />
               <Route path="markets" element={<AppAdminMarkets />} />
               <Route path="templates" element={<AppAdminTemplates />} />
