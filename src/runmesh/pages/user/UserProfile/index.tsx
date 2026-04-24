@@ -1,16 +1,8 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState, useRef } from 'react';
 import { Icons } from '@/runmesh/components/Icons';
 import { useAuthStore } from '@/runmesh/stores/useAuthStore';
 import { fetchCurrentUser } from '@/runmesh/api/user/auth';
 import { updateUserProfile, updatePassword, uploadAvatar, SysUserBo } from '@/runmesh/api/user/user';
-import {
-  listApiTokens,
-  generateApiToken,
-  revokeApiToken,
-  regenerateApiToken,
-  ApiTokenVo,
-} from '@/runmesh/api/user/apiToken';
 import { useToast } from '@/runmesh/components/Toast';
 import { useLanguage } from '@/runmesh/i18n';
 
@@ -252,7 +244,6 @@ export const UserProfile: React.FC = () => {
   const { user: authUser, setUser } = useAuthStore();
   const { showToast, toastContainer } = useToast();
   const { t } = useLanguage();
-  const navigate = useNavigate();
   const [fetching, setFetching] = useState(true);
   const [userData, setUserData] = useState<any>(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -263,81 +254,6 @@ export const UserProfile: React.FC = () => {
   const [flowmeshKey, setFlowmeshKey] = useState('');
   const [flowmeshKeyVisible, setFlowmeshKeyVisible] = useState(false);
   const [flowmeshSaving, setFlowmeshSaving] = useState(false);
-
-  // API Token state
-  const [apiTokens, setApiTokens] = useState<ApiTokenVo[]>([]);
-  const [tokensLoading, setTokensLoading] = useState(false);
-  const [showNewTokenModal, setShowNewTokenModal] = useState(false);
-  const [newTokenName, setNewTokenName] = useState('');
-  const [generatingToken, setGeneratingToken] = useState(false);
-  const [newlyCreatedToken, setNewlyCreatedToken] = useState<string | null>(null);
-  const [tokenCopied, setTokenCopied] = useState(false);
-
-  const loadApiTokens = useCallback(async () => {
-    try {
-      setTokensLoading(true);
-      const tokens = await listApiTokens();
-      setApiTokens(Array.isArray(tokens) ? tokens : []);
-    } catch {
-      // Silently fail — tokens list is not critical
-    } finally {
-      setTokensLoading(false);
-    }
-  }, []);
-
-  const handleGenerateToken = async () => {
-    if (!newTokenName.trim()) return;
-    try {
-      setGeneratingToken(true);
-      const result = await generateApiToken({ tokenName: newTokenName.trim() });
-      setNewlyCreatedToken(result.tokenValue);
-      setNewTokenName('');
-      await loadApiTokens();
-    } catch (error: any) {
-      showToast({ type: 'error', message: error.msg || t('userProfile.apiTokens.generateFailed') });
-    } finally {
-      setGeneratingToken(false);
-    }
-  };
-
-  const handleRevokeToken = async (tokenId: number) => {
-    try {
-      await revokeApiToken(tokenId);
-      showToast({ type: 'success', message: t('userProfile.apiTokens.revoked') });
-      await loadApiTokens();
-    } catch (error: any) {
-      showToast({ type: 'error', message: error.msg || t('userProfile.apiTokens.revokeFailed') });
-    }
-  };
-
-  const handleRegenerateToken = async (tokenId: number) => {
-    try {
-      setGeneratingToken(true);
-      const result = await regenerateApiToken(tokenId);
-      setNewlyCreatedToken(result.tokenValue);
-      setShowNewTokenModal(true);
-      await loadApiTokens();
-    } catch (error: any) {
-      showToast({
-        type: 'error',
-        message: error.msg || t('userProfile.apiTokens.regenerateFailed'),
-      });
-    } finally {
-      setGeneratingToken(false);
-    }
-  };
-
-  const handleCopyToken = () => {
-    if (newlyCreatedToken) {
-      navigator.clipboard
-        .writeText(newlyCreatedToken)
-        .then(() => {
-          setTokenCopied(true);
-          setTimeout(() => setTokenCopied(false), 2000);
-        })
-        .catch(() => {});
-    }
-  };
 
   const loadUserInfo = async (silent = false) => {
     try {
@@ -410,8 +326,7 @@ export const UserProfile: React.FC = () => {
 
   useEffect(() => {
     loadUserInfo();
-    loadApiTokens();
-  }, [loadApiTokens]);
+  }, []);
 
   useEffect(() => {
     if (userData?.tokenKey) {
@@ -661,175 +576,7 @@ export const UserProfile: React.FC = () => {
           </div>
         </div>
 
-        {/* API Tokens Card */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-            <h2 className="text-lg font-bold text-slate-800 flex items-center space-x-2">
-              <Icons.Key className="w-5 h-5 text-brand-500" />
-              <span>{t('userProfile.apiTokens.title')}</span>
-            </h2>
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => navigate('/app/api-docs')}
-                className="px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"
-              >
-                {t('userProfile.apiTokens.viewDocs')}
-              </button>
-              <button
-                onClick={() => {
-                  setShowNewTokenModal(true);
-                  setNewlyCreatedToken(null);
-                  setNewTokenName('');
-                }}
-                className="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors"
-              >
-                {t('userProfile.apiTokens.generate')}
-              </button>
-            </div>
-          </div>
-          <div className="p-6">
-            <p className="text-xs text-slate-400 mb-4">{t('userProfile.apiTokens.description')}</p>
-
-            {tokensLoading ? (
-              <div className="flex justify-center py-8">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-600"></div>
-              </div>
-            ) : apiTokens.length === 0 ? (
-              <div className="text-center py-8 text-sm text-slate-400">
-                {t('userProfile.apiTokens.empty')}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {apiTokens.map((token) => (
-                  <div
-                    key={token.id}
-                    className="flex items-center justify-between p-3 rounded-lg border border-slate-100 hover:border-slate-200 transition-colors"
-                  >
-                    <div className="flex items-center space-x-3 min-w-0">
-                      <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center flex-shrink-0">
-                        <Icons.Key className="w-4 h-4 text-slate-400" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-slate-700 truncate">
-                          {token.tokenName}
-                        </p>
-                        <p className="text-xs text-slate-400 font-mono">{token.tokenPrefix}...</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-4 flex-shrink-0">
-                      {token.lastUsedAt && (
-                        <span className="text-xs text-slate-400">
-                          {t('userProfile.apiTokens.lastUsed')}:{' '}
-                          {new Date(token.lastUsedAt).toLocaleDateString()}
-                        </span>
-                      )}
-                      <button
-                        onClick={() => handleRegenerateToken(token.id)}
-                        className="text-xs text-brand-600 hover:text-brand-700 font-medium"
-                        title={t('userProfile.apiTokens.regenerate')}
-                      >
-                        <Icons.RefreshCw className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleRevokeToken(token.id)}
-                        className="text-xs text-red-500 hover:text-red-600 font-medium"
-                        title={t('userProfile.apiTokens.revoke')}
-                      >
-                        <Icons.Trash className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
       </div>
-
-      {/* New Token Modal */}
-      {showNewTokenModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <h2 className="text-lg font-bold text-slate-800">
-                {newlyCreatedToken
-                  ? t('userProfile.apiTokens.tokenCreated')
-                  : t('userProfile.apiTokens.generateTitle')}
-              </h2>
-              <button
-                onClick={() => {
-                  setShowNewTokenModal(false);
-                  setNewlyCreatedToken(null);
-                }}
-                className="text-slate-400 hover:text-slate-600 transition-colors"
-              >
-                <Icons.X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6">
-              {newlyCreatedToken ? (
-                <div className="space-y-4">
-                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                    <p className="text-xs font-medium text-amber-800">
-                      {t('userProfile.apiTokens.copyWarning')}
-                    </p>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="text"
-                      readOnly
-                      value={newlyCreatedToken}
-                      className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono bg-slate-50 select-all"
-                    />
-                    <button
-                      onClick={handleCopyToken}
-                      className="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors whitespace-nowrap"
-                    >
-                      {tokenCopied
-                        ? t('userProfile.apiTokens.copied')
-                        : t('userProfile.apiTokens.copy')}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-500">
-                      {t('userProfile.apiTokens.nameLabel')}
-                    </label>
-                    <input
-                      type="text"
-                      value={newTokenName}
-                      onChange={(e) => setNewTokenName(e.target.value)}
-                      placeholder={t('userProfile.apiTokens.namePlaceholder')}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
-                      maxLength={128}
-                    />
-                  </div>
-                  <div className="flex justify-end space-x-3 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowNewTokenModal(false)}
-                      className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50"
-                    >
-                      {t('dialog.cancel')}
-                    </button>
-                    <button
-                      onClick={handleGenerateToken}
-                      disabled={generatingToken || !newTokenName.trim()}
-                      className="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50"
-                    >
-                      {generatingToken
-                        ? t('userProfile.apiTokens.generating')
-                        : t('userProfile.apiTokens.generate')}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       <ProfileEditModal
         isOpen={isProfileOpen}
