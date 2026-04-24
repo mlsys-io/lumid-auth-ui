@@ -1,0 +1,375 @@
+import { useEffect, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { toast } from "sonner";
+import {
+	ArrowLeft,
+	Layers,
+	RefreshCw,
+	Server,
+	Trash2,
+} from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import {
+	Card,
+	CardContent,
+	CardDescription,
+	CardHeader,
+	CardTitle,
+} from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn, formatDateTime } from "@/lib/utils";
+import {
+	deleteCluster,
+	getCluster,
+	listNodes,
+	listServers,
+	listWorkers,
+	patchCluster,
+	type Cluster,
+	type ClusterStatus,
+	type Node,
+	type Worker,
+	type ClusterServer,
+} from "@/api/cluster";
+import { isSessionExpired } from "@/api/client";
+import { useNavigate } from "react-router-dom";
+import ServersTab from "./servers-tab";
+import NodesTab from "./nodes-tab";
+import WorkersTab from "./workers-tab";
+
+function statusBadge(status: Cluster["status"]): string {
+	switch (status) {
+		case "active":
+			return "bg-green-100 text-green-800 border-green-200";
+		case "disabled":
+			return "bg-red-100 text-red-800 border-red-200";
+		case "pending":
+			return "bg-amber-100 text-amber-800 border-amber-200";
+		default:
+			return "bg-gray-100 text-gray-800 border-gray-200";
+	}
+}
+
+export default function ClusterDetail() {
+	const { id: rawId } = useParams<{ id: string }>();
+	const id = rawId || "";
+	const navigate = useNavigate();
+
+	const [cluster, setCluster] = useState<Cluster | null>(null);
+	const [servers, setServers] = useState<ClusterServer[]>([]);
+	const [nodes, setNodes] = useState<Node[]>([]);
+	const [workers, setWorkers] = useState<Worker[]>([]);
+	const [loading, setLoading] = useState(true);
+	const [saving, setSaving] = useState(false);
+	const [deleteOpen, setDeleteOpen] = useState(false);
+
+	async function refresh() {
+		setLoading(true);
+		try {
+			const [c, s, n, w] = await Promise.all([
+				getCluster(id),
+				listServers(id),
+				listNodes({ cluster_id: id, page_size: 200 }),
+				listWorkers({ cluster_id: id, page_size: 500 }),
+			]);
+			setCluster(c);
+			setServers(s);
+			setNodes(n.nodes || []);
+			setWorkers(w.workers || []);
+		} catch (e: unknown) {
+			if (isSessionExpired(e)) return;
+			toast.error((e as Error)?.message || "Failed to load cluster");
+		} finally {
+			setLoading(false);
+		}
+	}
+
+	useEffect(() => {
+		if (id) refresh();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [id]);
+
+	async function onStatusChange(status: ClusterStatus) {
+		if (!cluster) return;
+		setSaving(true);
+		try {
+			const updated = await patchCluster(id, { status });
+			setCluster(updated);
+			toast.success(`Status set to ${status}`);
+		} catch (e: unknown) {
+			if (isSessionExpired(e)) return;
+			toast.error((e as Error)?.message || "Update failed");
+		} finally {
+			setSaving(false);
+		}
+	}
+
+	async function onDelete() {
+		setSaving(true);
+		try {
+			await deleteCluster(id);
+			toast.success("Cluster deleted");
+			navigate("/app/admin/clusters");
+		} catch (e: unknown) {
+			if (isSessionExpired(e)) return;
+			toast.error((e as Error)?.message || "Delete failed");
+			setSaving(false);
+			setDeleteOpen(false);
+		}
+	}
+
+	const cpuWorkers = workers.filter((w) => w.type === "cpu").length;
+	const gpuWorkers = workers.filter((w) => w.type === "gpu").length;
+	const fmServer = servers.find((s) => s.role === "flowmesh");
+	const llServer = servers.find((s) => s.role === "lumilake");
+
+	return (
+		<>
+			<header className="flex items-center gap-3 mb-6 flex-wrap">
+				<Link to="/app/admin/clusters">
+					<Button variant="ghost" size="sm">
+						<ArrowLeft className="w-4 h-4 mr-1" />
+						Clusters
+					</Button>
+				</Link>
+				<Layers className="w-5 h-5 text-indigo-600" />
+				<h1 className="text-2xl font-semibold">
+					{cluster ? cluster.name : loading ? "Loading…" : "Not found"}
+				</h1>
+				{cluster && (
+					<span
+						className={cn(
+							"inline-flex items-center rounded-full px-2 py-0.5 text-xs border",
+							statusBadge(cluster.status),
+						)}
+					>
+						{cluster.status}
+					</span>
+				)}
+				<div className="ml-auto flex items-center gap-2">
+					<Button
+						variant="outline"
+						size="sm"
+						onClick={refresh}
+						disabled={loading}
+					>
+						<RefreshCw
+							className={cn("w-4 h-4 mr-1", loading && "animate-spin")}
+						/>
+						Refresh
+					</Button>
+					{cluster && (
+						<Button
+							variant="outline"
+							size="sm"
+							className="text-red-600 hover:bg-red-50"
+							onClick={() => setDeleteOpen(true)}
+							disabled={saving}
+						>
+							<Trash2 className="w-4 h-4 mr-1" />
+							Delete
+						</Button>
+					)}
+				</div>
+			</header>
+
+			{!cluster && !loading && (
+				<Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm">
+					<CardContent className="py-12 text-center text-sm text-muted-foreground">
+						No cluster with id <code>{id}</code>.
+					</CardContent>
+				</Card>
+			)}
+
+			{cluster && (
+				<Tabs defaultValue="overview">
+					<TabsList>
+						<TabsTrigger value="overview">Overview</TabsTrigger>
+						<TabsTrigger value="servers">Servers</TabsTrigger>
+						<TabsTrigger value="nodes">Nodes ({nodes.length})</TabsTrigger>
+						<TabsTrigger value="workers">
+							Workers ({workers.length})
+						</TabsTrigger>
+					</TabsList>
+
+					<TabsContent value="overview" className="mt-4">
+						<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+							<Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm lg:col-span-1">
+								<CardHeader>
+									<CardTitle className="text-base">Identity</CardTitle>
+									<CardDescription>
+										Cluster metadata. Billing vendor links to Runmesh for cost attribution.
+									</CardDescription>
+								</CardHeader>
+								<CardContent className="space-y-4">
+									<Field label="Name" value={cluster.name} />
+									<Field
+										label="ID"
+										value={<code className="text-xs">{cluster.id}</code>}
+									/>
+									<Field label="Region" value={cluster.region || "—"} />
+									<Field
+										label="Owner"
+										value={<code className="text-xs">{cluster.owner_user_id}</code>}
+									/>
+									<Field
+										label="Billing vendor"
+										value={
+											cluster.billing_vendor_id
+												? `#${cluster.billing_vendor_id}`
+												: "— (self-owned)"
+										}
+									/>
+									<Field
+										label="Created"
+										value={formatDateTime(
+											new Date(cluster.created_at).getTime() / 1000,
+										)}
+									/>
+								</CardContent>
+							</Card>
+
+							<Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm lg:col-span-1">
+								<CardHeader>
+									<CardTitle className="text-base">Lifecycle</CardTitle>
+									<CardDescription>
+										Status flips to <code>active</code> automatically once both FM + LL servers are wired.
+									</CardDescription>
+								</CardHeader>
+								<CardContent className="space-y-4">
+									<div className="space-y-1">
+										<Label>Status</Label>
+										<Select
+											value={cluster.status}
+											disabled={saving}
+											onValueChange={(v) =>
+												onStatusChange(v as ClusterStatus)
+											}
+										>
+											<SelectTrigger>
+												<SelectValue />
+											</SelectTrigger>
+											<SelectContent>
+												<SelectItem value="active">active</SelectItem>
+												<SelectItem value="pending">pending</SelectItem>
+												<SelectItem value="disabled">disabled</SelectItem>
+											</SelectContent>
+										</Select>
+										<p className="text-xs text-muted-foreground mt-1">
+											Disabled stops new worker enrollments. Existing workers continue until reaped.
+										</p>
+									</div>
+								</CardContent>
+							</Card>
+
+							<Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm lg:col-span-1">
+								<CardHeader>
+									<CardTitle className="text-base flex items-center gap-2">
+										<Server className="w-4 h-4 text-indigo-600" />
+										Summary
+									</CardTitle>
+									<CardDescription>
+										Live counts against the cluster's nodes + workers.
+									</CardDescription>
+								</CardHeader>
+								<CardContent>
+									<div className="grid grid-cols-2 gap-3 text-sm">
+										<Stat label="FlowMesh server" value={fmServer ? "wired" : "—"} />
+										<Stat label="Lumilake server" value={llServer ? "wired" : "—"} />
+										<Stat label="Nodes" value={String(nodes.length)} />
+										<Stat label="Workers" value={String(workers.length)} />
+										<Stat label="CPU workers" value={String(cpuWorkers)} />
+										<Stat label="GPU workers" value={String(gpuWorkers)} />
+									</div>
+								</CardContent>
+							</Card>
+						</div>
+					</TabsContent>
+
+					<TabsContent value="servers" className="mt-4">
+						<ServersTab
+							clusterId={id}
+							servers={servers}
+							onChange={refresh}
+						/>
+					</TabsContent>
+
+					<TabsContent value="nodes" className="mt-4">
+						<NodesTab
+							clusterId={id}
+							nodes={nodes}
+							onChange={refresh}
+						/>
+					</TabsContent>
+
+					<TabsContent value="workers" className="mt-4">
+						<WorkersTab
+							workers={workers}
+							nodes={nodes}
+							onChange={refresh}
+						/>
+					</TabsContent>
+				</Tabs>
+			)}
+
+			<AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>Delete cluster {cluster?.name}?</AlertDialogTitle>
+						<AlertDialogDescription>
+							This removes the cluster record plus every server, node, and worker
+							association. Enrolled agents on remote nodes will start failing
+							heartbeats. Irreversible — consider <code>disabled</code> first.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>Cancel</AlertDialogCancel>
+						<AlertDialogAction
+							onClick={onDelete}
+							className="bg-destructive text-white hover:bg-destructive/90"
+						>
+							Delete
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
+		</>
+	);
+}
+
+function Field({ label, value }: { label: string; value: React.ReactNode }) {
+	return (
+		<div>
+			<div className="text-xs text-muted-foreground">{label}</div>
+			<div className="text-sm mt-0.5 break-all">{value}</div>
+		</div>
+	);
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+	return (
+		<div className="rounded-md border bg-white/50 p-3">
+			<div className="text-xs text-muted-foreground">{label}</div>
+			<div className="text-lg font-semibold">{value}</div>
+		</div>
+	);
+}

@@ -24,9 +24,9 @@ const RunmeshAdminDashboard = lazy(() =>
 // RunmeshUsers removed 2026-04-24 — canonical user admin now at
 // /app/admin/users (backed by lumid_identity.users). sys_user stays as
 // a lazy mirror for FK integrity but is no longer separately editable.
-const RunmeshNodes = lazy(() =>
-  import("./runmesh/pages/NodeManagement").then((m) => ({ default: m.NodeManagement })),
-);
+// RunmeshNodes retired 2026-04-24 — replaced by /app/admin/clusters.
+// The Runmesh sys_gpu_node table still mirrors node rows for billing,
+// but it's no longer edited through this UI.
 const RunmeshSuppliers = lazy(() =>
   import("./runmesh/pages/SupplierManagement").then((m) => ({ default: m.SupplierManagement })),
 );
@@ -70,6 +70,11 @@ const AppAdminUserDetail = lazy(() => import("./pages/app/admin-user-detail"));
 const AppAdminUsersMatrix = lazy(() => import("./pages/app/admin-users-matrix"));
 const AppAdminAudit = lazy(() => import("./pages/app/admin-audit"));
 const AppAdminSetup = lazy(() => import("./pages/app/admin-setup"));
+// lumid_cluster admin — /app/admin/clusters/*
+const AppAdminClusters = lazy(() => import("./pages/app/admin-clusters"));
+const AppAdminClustersNew = lazy(() => import("./pages/app/admin-clusters-new"));
+const AppAdminClustersDetail = lazy(() => import("./pages/app/admin-clusters-detail"));
+const AppAdminClusterWorkers = lazy(() => import("./pages/app/admin-cluster-workers"));
 // QuantArena admin pages — bridged via /api/v1/qa-admin/* nginx proxy
 const AppAdminCompetitions = lazy(() => import("./pages/app/admin-competitions"));
 const AppAdminMarkets = lazy(() => import("./pages/app/admin-markets"));
@@ -214,7 +219,21 @@ export default function App() {
               }
             >
               <Route index element={<RunmeshAdminDashboard />} />
-              <Route path="nodes" element={<RunmeshNodes />} />
+
+              {/* lumid_cluster — unified infra registry for FM + LL.
+                  /app/admin/nodes is retired: the old Runmesh node page
+                  used `sys_user`-scoped sys_gpu_node rows; those stay
+                  as Runmesh billing linkage but infra management now
+                  lives under the cluster detail. */}
+              <Route path="clusters" element={<AppAdminClusters />} />
+              <Route path="clusters/new" element={<AppAdminClustersNew />} />
+              <Route path="clusters/:id" element={<AppAdminClustersDetail />} />
+              <Route path="cluster-workers" element={<AppAdminClusterWorkers />} />
+              <Route
+                path="nodes"
+                element={<Navigate to="/app/admin/clusters" replace />}
+              />
+
               <Route path="suppliers" element={<RunmeshSuppliers />} />
               <Route path="supplier-nodes" element={<RunmeshSupplierNodes />} />
               <Route path="billing" element={<RunmeshBilling />} />

@@ -27,6 +27,7 @@ import {
 	SquareTerminal,
 	Trophy,
 	LineChart,
+	Layers,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
@@ -88,8 +89,13 @@ const ADMIN_NAV: NavItem[] = [
 	{ to: '/app/admin/invitations', label: 'Invitations', icon: Ticket },
 	{ to: '/app/admin/audit', label: 'Audit log', icon: ClipboardCheck },
 	{ to: '/app/admin/setup', label: 'Setup', icon: LayoutDashboard },
-	// Service-specific admin (not user-centric).
-	{ to: '/app/admin/nodes', label: 'Nodes', icon: Server },
+	// Infra — unified cluster management for FlowMesh + Lumilake.
+	// Replaces the old /app/admin/nodes (Runmesh sys_gpu_node editor).
+	{ to: '/app/admin/clusters', label: 'Clusters', icon: Layers },
+	{ to: '/app/admin/cluster-workers', label: 'Workers', icon: Server },
+	// Runmesh billing surface — stays as the billing unit for GPU vendors
+	// (vast.ai, autoDL, self). Cost attribution to clusters happens via
+	// clusters.billing_vendor_id. Not replaced by lumid_cluster.
 	{ to: '/app/admin/suppliers', label: 'Suppliers', icon: Server },
 	{ to: '/app/admin/supplier-nodes', label: 'Supplier nodes', icon: Server },
 	{ to: '/app/admin/billing', label: 'Billing', icon: Receipt },
