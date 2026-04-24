@@ -64,9 +64,10 @@ const PRODUCT_NAV: NavItem[] = [
 	{ to: '/app/tasks', label: 'Tasks', icon: ListChecks },
 	{ to: '/app/schedules', label: 'Schedules', icon: Calendar },
 	{ to: '/app/gpu-rentals', label: 'GPU rentals', icon: Server },
-	{ to: '/app/billing', label: 'Billing', icon: CreditCard },
-	// API docs route still resolves for deep links; just removed from
-	// the sidebar on 2026-04-24 to cut clutter.
+	// Billing moved to the Account sidebar group (2026-04-24) — it's a
+	// per-user concern, not a product action. Route still at /app/billing.
+	// API docs route still resolves for deep links; removed from the
+	// sidebar on 2026-04-24 to cut clutter.
 ];
 
 const LUMILAKE_NAV: NavItem[] = [
