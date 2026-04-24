@@ -22,7 +22,7 @@ import {
 import { cn, formatDateTime } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import {
-	cancelTask,
+	cancelRental,
 	getTask,
 	type Task,
 	type TaskStatus,
@@ -70,56 +70,63 @@ export default function GpuRentalsList() {
 	const [loading, setLoading] = useState(true);
 	const [tick, setTick] = useState(0);
 
-	// Load from localStorage on mount + on user change.
-	useEffect(() => {
-		if (!user?.id) return;
-		const rentals = getLocalRentals(String(user.id));
-		setRows(rentals.map((r) => ({ rental: r, task: null })));
-		setLoading(false);
-	}, [user?.id]);
-
-	// Poll each rental's task record; stagger start by index so a
-	// fleet of rentals doesn't slam the Host all at once.
+	// Single effect drives both initial load and every poll — always
+	// reading the latest localStorage snapshot so rentals added /
+	// removed between ticks are picked up without needing the effect
+	// to re-mount. Fixes a stale-closure bug in the previous version.
 	useEffect(() => {
 		if (!user?.id) return;
 		let alive = true;
-		const refreshOne = async (idx: number) => {
-			const current = rows[idx];
-			if (!current) return;
-			try {
-				const t = await getTask(current.rental.task_id);
-				if (!alive) return;
-				setRows((old) =>
-					old.map((r, i) =>
-						i === idx ? { ...r, task: t, error: undefined } : r,
-					),
-				);
-			} catch (e) {
-				if (!alive) return;
-				setRows((old) =>
-					old.map((r, i) =>
-						i === idx
-							? { ...r, error: (e as Error)?.message ?? "fetch failed" }
-							: r,
-					),
-				);
-			}
+		const uid = String(user.id);
+
+		const refreshAll = async () => {
+			const rentals = getLocalRentals(uid);
+			// Prime rows synchronously so newly-saved rentals show up
+			// immediately, even if their first task fetch is still in flight.
+			setRows((old) =>
+				rentals.map((r) => {
+					const prev = old.find((o) => o.rental.task_id === r.task_id);
+					return prev ? { ...prev, rental: r } : { rental: r, task: null };
+				}),
+			);
+			setLoading(false);
+			await Promise.all(
+				rentals.map(async (r) => {
+					try {
+						const t = await getTask(r.task_id);
+						if (!alive) return;
+						setRows((old) =>
+							old.map((o) =>
+								o.rental.task_id === r.task_id
+									? { ...o, task: t, error: undefined }
+									: o,
+							),
+						);
+					} catch (e) {
+						if (!alive) return;
+						setRows((old) =>
+							old.map((o) =>
+								o.rental.task_id === r.task_id
+									? { ...o, error: (e as Error)?.message ?? "fetch failed" }
+									: o,
+							),
+						);
+					}
+				}),
+			);
 		};
-		// Initial batch.
-		rows.forEach((_, i) => void refreshOne(i));
-		const iv = setInterval(() => {
-			rows.forEach((_, i) => void refreshOne(i));
-		}, POLL_MS);
+
+		void refreshAll();
+		const iv = setInterval(() => void refreshAll(), POLL_MS);
 		return () => {
 			alive = false;
 			clearInterval(iv);
 		};
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [user?.id, tick, rows.length]);
+	}, [user?.id, tick]);
 
 	async function onCancel(row: Row) {
 		try {
-			await cancelTask(row.rental.workflow_id);
+			await cancelRental(row.rental.task_id, row.rental.workflow_id);
 			toast.success("Cancellation requested");
 			setTick((t) => t + 1);
 		} catch (e) {

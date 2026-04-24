@@ -32,7 +32,7 @@ import {
 import { cn, formatDateTime } from "@/lib/utils";
 import {
 	buildConnectSnippet,
-	cancelTask,
+	cancelRental,
 	getTask,
 	streamTaskLogs,
 	type LogLine,
@@ -135,8 +135,9 @@ export default function GpuRentalDetail() {
 	async function onCancel() {
 		setCancelling(true);
 		try {
-			const wfId = localRental?.workflow_id || id;
-			await cancelTask(wfId);
+			// cancelRental looks up the workflow_id from the task record
+			// when we don't have one in localStorage (cross-device case).
+			await cancelRental(id, localRental?.workflow_id);
 			toast.success("Cancellation requested");
 			setCancelOpen(false);
 		} catch (e) {

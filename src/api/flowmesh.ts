@@ -91,6 +91,27 @@ function makeClient(): AxiosInstance {
 
 const fm = makeClient();
 
+// Surface the FastAPI `{detail: "..."}` body in thrown errors so the
+// UI can tell the user why the submit failed (e.g. "taskType invalid",
+// "authorizedKeys required"). Without this the caller sees a bare
+// "Request failed with status code 400" which is useless.
+fm.interceptors.response.use(
+	(r) => r,
+	(err: AxiosError<{ detail?: string | unknown }>) => {
+		if (err.response?.data) {
+			const d = err.response.data;
+			const detail =
+				typeof d === "object" && d !== null && "detail" in d
+					? (d as { detail: unknown }).detail
+					: d;
+			const text =
+				typeof detail === "string" ? detail : JSON.stringify(detail);
+			err.message = `${err.response.status}: ${text}`;
+		}
+		return Promise.reject(err);
+	},
+);
+
 // ---- types ----
 
 export type TaskStatus =
@@ -113,6 +134,7 @@ export interface SshInfo {
 
 export interface Task {
 	task_id: string;
+	workflow_id?: string; // FM returns this on GET /tasks/:id
 	status: TaskStatus;
 	assigned_worker: string | null;
 	topic?: string;
@@ -149,19 +171,27 @@ export async function getTask(taskId: string): Promise<Task> {
 	return r.data;
 }
 
-export async function cancelTask(taskId: string): Promise<void> {
-	// FlowMesh exposes workflow-level cancel (not per-task). When a
-	// rental is a single-task workflow, cancelling the workflow drops
-	// the container — same effect the UI wants.
-	await fm.post(
-		`/api/v1/workflows/${encodeURIComponent(taskId)}/cancel`,
-	);
-}
-
-export async function cancelWorkflow(workflowId: string): Promise<void> {
-	await fm.post(
-		`/api/v1/workflows/${encodeURIComponent(workflowId)}/cancel`,
-	);
+/**
+ * Cancel a rental. FlowMesh only exposes workflow-level cancel today,
+ * so we accept a task id + optional workflow id. If workflowId is
+ * missing (e.g. user opened the page on a fresh device with no
+ * localStorage hit) we look it up from the task record first.
+ */
+export async function cancelRental(
+	taskId: string,
+	workflowId?: string,
+): Promise<void> {
+	let wf = workflowId;
+	if (!wf) {
+		const t = await getTask(taskId);
+		wf = t.workflow_id;
+		if (!wf) {
+			throw new Error(
+				"workflow_id not found on task — can't cancel this rental",
+			);
+		}
+	}
+	await fm.post(`/api/v1/workflows/${encodeURIComponent(wf)}/cancel`);
 }
 
 // ---- log streaming ----
