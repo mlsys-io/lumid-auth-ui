@@ -46,13 +46,34 @@ function statusBadge(status: Worker["status"]): string {
 }
 
 export default function WorkersAll() {
+	// Initial filter state honours URL query params so links like
+	// /app/admin/cluster-workers?role=lumilake (the redirect from the
+	// retired Lumilake workers tab) land pre-filtered.
+	const [params, setParams] = useSearchParams();
+	const initFromUrl = (key: string, allowed: string[]) => {
+		const v = params.get(key);
+		return v && allowed.includes(v) ? v : "all";
+	};
 	const [workers, setWorkers] = useState<Worker[]>([]);
 	const [clusters, setClusters] = useState<Cluster[]>([]);
-	const [clusterId, setClusterId] = useState<string>("all");
-	const [role, setRole] = useState<string>("all");
-	const [type, setType] = useState<string>("all");
-	const [status, setStatus] = useState<string>("all");
+	const [clusterId, setClusterId] = useState<string>(() => params.get("cluster_id") || "all");
+	const [role, setRole] = useState<string>(() => initFromUrl("role", ["flowmesh", "lumilake"]));
+	const [type, setType] = useState<string>(() => initFromUrl("type", ["cpu", "gpu"]));
+	const [status, setStatus] = useState<string>(() =>
+		initFromUrl("status", ["idle", "busy", "starting", "stopping", "stopped", "lost"]),
+	);
 	const [loading, setLoading] = useState(true);
+
+	// Keep the URL in sync with the filters so refreshes + browser back
+	// preserve the selection, and so the Infrastructure tabs can deep-link.
+	useEffect(() => {
+		const next = new URLSearchParams();
+		if (clusterId !== "all") next.set("cluster_id", clusterId);
+		if (role !== "all") next.set("role", role);
+		if (type !== "all") next.set("type", type);
+		if (status !== "all") next.set("status", status);
+		setParams(next, { replace: true });
+	}, [clusterId, role, type, status, setParams]);
 
 	async function refresh() {
 		setLoading(true);
