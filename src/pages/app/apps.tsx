@@ -1,11 +1,77 @@
+import { Link } from 'react-router-dom';
+import { FileCode2, Sparkles } from 'lucide-react';
+
 import { UserDashboard } from '@/runmesh/pages/user/UserDashboard';
 
+/**
+ * Workflow Builder page at /dashboard.
+ *
+ * Two authoring modes:
+ *   1. n8n canvas — visual DAG editor at /dashboard/n8n (N8nIntegration)
+ *   2. YAML       — paste-or-upload at /dashboard/workflow/yaml
+ *
+ * Below the mode picker is the existing Runmesh UserDashboard — the
+ * list of workflows the user has already built. Clicking any row opens
+ * the n8n editor on that workflow.
+ */
 export default function AppApps() {
-	return <UserDashboard />;
+	return (
+		<div>
+			<header className="mb-5">
+				<h1 className="text-2xl font-semibold text-slate-900">Workflow Builder</h1>
+				<p className="mt-1 text-sm text-slate-600">
+					Design and edit workflows. Build visually in n8n or paste a
+					YAML / JSON definition. Submit any workflow to FlowMesh or
+					Lumilake from the Submit pages on the left.
+				</p>
+			</header>
+
+			<div className="mb-6 grid md:grid-cols-2 gap-3">
+				<Link
+					to="/dashboard/n8n"
+					className="rounded-xl border border-slate-200 bg-white hover:border-indigo-400 hover:shadow-md transition-all p-4 flex items-start gap-3"
+				>
+					<div className="w-10 h-10 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0">
+						<Sparkles className="w-5 h-5 text-indigo-600" />
+					</div>
+					<div className="min-w-0">
+						<div className="text-sm font-semibold text-slate-900">New workflow · n8n</div>
+						<div className="mt-0.5 text-xs text-slate-600">
+							Visual DAG editor. Drag nodes, wire them, hit save.
+						</div>
+					</div>
+				</Link>
+				<Link
+					to="/dashboard/workflow/yaml"
+					className="rounded-xl border border-slate-200 bg-white hover:border-indigo-400 hover:shadow-md transition-all p-4 flex items-start gap-3"
+				>
+					<div className="w-10 h-10 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center shrink-0">
+						<FileCode2 className="w-5 h-5 text-amber-600" />
+					</div>
+					<div className="min-w-0">
+						<div className="text-sm font-semibold text-slate-900">New workflow · YAML</div>
+						<div className="mt-0.5 text-xs text-slate-600">
+							Paste or upload a text definition. For when you prefer
+							code to clicks.
+						</div>
+					</div>
+				</Link>
+			</div>
+
+			{/* Existing workflow list — UserDashboard owns its internal
+			    filters + grid + actions. Negative margins pull it out of
+			    the main shell's horizontal padding so the list breathes
+			    across the full width; UserDashboard's own p-6 handles
+			    inner padding. */}
+			<div className="-mx-4 md:-mx-8">
+				<UserDashboard />
+			</div>
+		</div>
+	);
 }
 
-// Stub helper kept so tasks.tsx / billing.tsx imports don't break during
-// phased rollout — will disappear once every page has its real port.
+// Kept so older imports from tasks.tsx / billing.tsx don't break during
+// the porting phase. Deprecated; don't use.
 export function StubPage({ title, icon, description, cliHint }: {
 	title: string;
 	icon: React.ReactNode;

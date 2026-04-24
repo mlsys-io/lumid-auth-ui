@@ -50,6 +50,7 @@ const AppTasks = lazy(() => import("./pages/app/tasks"));
 const AppBilling = lazy(() => import("./pages/app/billing"));
 const AppWorkflowBuilder = lazy(() => import("./pages/app/workflow-builder"));
 const AppWorkflowDetail = lazy(() => import("./pages/app/workflow-detail"));
+const AppWorkflowYaml = lazy(() => import("./pages/app/workflow-yaml"));
 const AppN8n = lazy(() => import("./pages/app/n8n"));
 // AppProfile (Runmesh user profile) retired 2026-04-24 — the canonical
 // Profile tab at /dashboard/profile renders the identity-side Profile
@@ -183,9 +184,10 @@ export default function App() {
                                         (tab 1: FlowMesh, tab 2: Lumilake)
                 Root redirects to Runmesh Submit since that's the
                 primary action. */}
-            {/* /dashboard root = Workflow Builder (UserDashboard — list
-                + edit + open n8n on a workflow). Sidebar entry
-                'Workflow Builder' lands here. */}
+            {/* /dashboard root = Workflow Builder. AppApps embeds its
+                own header + narrative inline (UserDashboard owns the
+                inner full-height scroll layout, so a route-level
+                wrapper would produce awkward double chrome). */}
             <Route index element={<AppApps />} />
 
             {/* Workflow Builder — design surface (n8n iframe). */}
@@ -193,6 +195,7 @@ export default function App() {
             <Route path="n8n/:id" element={<AppN8n />} />
             <Route path="workflow" element={<AppWorkflowBuilder />} />
             <Route path="workflow/:id" element={<AppWorkflowBuilder />} />
+            <Route path="workflow/yaml" element={<AppWorkflowYaml />} />
             <Route path="workflows/:id" element={<AppWorkflowDetail />} />
 
             {/* Runmesh Submit — pick + submit to FlowMesh, plus
