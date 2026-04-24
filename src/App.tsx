@@ -352,26 +352,37 @@ export default function App() {
               {/* User detail lives outside the tab layout — it's drill-down, not peer. */}
               <Route path="users/:id" element={<AppAdminUserDetail />} />
 
-              {/* Infrastructure — 2 tabs. "Lumilake workers" tab retired
-                  2026-04-24: the unified Workers page already shows FM + LL
-                  from the lumid_cluster registry (filter by role). The old
-                  legacy page hit the Lumilake service directly — pre-cluster
-                  architecture. /app/admin/lumilake-workers redirects to the
-                  unified view (with role=lumilake pre-filtered). */}
+              {/* Infrastructure — unified GPU/compute admin surface
+                  (consolidated from the old Infrastructure + Runmesh ops
+                  split on 2026-04-24). Clusters is the primary view —
+                  nodes, workers, and commercial/vendor metadata all roll
+                  up there via the supplier-node auto-mirror. Suppliers
+                  keeps a cross-cluster vendor list for legacy rows;
+                  Billing is the platform-wide ledger (per-user view is
+                  /dashboard/billing); Reviews gates workflow execution.
+                  Legacy /admin/lumilake-workers redirects into the
+                  unified Workers page. */}
               <Route
                 element={
                   <AdminSectionLayout
                     title="Infrastructure"
-                    subtitle="Clusters and the FlowMesh + Lumilake worker fleet."
+                    subtitle="Clusters, workers, suppliers, billing, and workflow review — one admin surface for the compute layer."
                     tabs={[
                       { to: "/dashboard/admin/clusters", label: "Clusters", end: true },
                       { to: "/dashboard/admin/cluster-workers", label: "Workers" },
+                      { to: "/dashboard/admin/suppliers", label: "Suppliers" },
+                      { to: "/dashboard/admin/billing", label: "Billing" },
+                      { to: "/dashboard/admin/workflow-review", label: "Reviews" },
                     ]}
                   />
                 }
               >
                 <Route path="clusters" element={<AppAdminClusters />} />
                 <Route path="cluster-workers" element={<AppAdminClusterWorkers />} />
+                <Route path="suppliers" element={<RunmeshSuppliers />} />
+                <Route path="supplier-nodes" element={<RunmeshSupplierNodes />} />
+                <Route path="billing" element={<RunmeshBilling />} />
+                <Route path="workflow-review" element={<RunmeshWorkflowReview />} />
               </Route>
               <Route
                 path="lumilake-workers"
@@ -381,35 +392,6 @@ export default function App() {
               />
               <Route path="clusters/new" element={<AppAdminClustersNew />} />
               <Route path="clusters/:id" element={<AppAdminClustersDetail />} />
-
-              {/* Runmesh ops — 4 tabs. Billing is the platform-wide
-                  view (all users' spend / suppliers / reconciliation);
-                  distinct from the per-user /dashboard/billing surface
-                  which reads only the caller's sys_user.amount + their
-                  transactions. Restored to the admin sidebar now that
-                  GPU rentals actually debit. */}
-              <Route
-                element={
-                  <AdminSectionLayout
-                    title="Runmesh ops"
-                    subtitle="GPU supplier lifecycle, platform-wide billing, and workflow review."
-                    tabs={[
-                      { to: "/dashboard/admin/suppliers", label: "Suppliers", end: true },
-                      // Supplier-nodes page retired — per-cluster node views
-                      // live at /app/admin/clusters/:id/nodes with commercial
-                      // metadata on the Commercial tab. Route kept below as
-                      // a deep-link fallback but no longer in the sidebar.
-                      { to: "/dashboard/admin/billing", label: "Billing" },
-                      { to: "/dashboard/admin/workflow-review", label: "Reviews" },
-                    ]}
-                  />
-                }
-              >
-                <Route path="suppliers" element={<RunmeshSuppliers />} />
-                <Route path="supplier-nodes" element={<RunmeshSupplierNodes />} />
-                <Route path="billing" element={<RunmeshBilling />} />
-                <Route path="workflow-review" element={<RunmeshWorkflowReview />} />
-              </Route>
 
               {/* QuantArena — 4 tabs */}
               <Route

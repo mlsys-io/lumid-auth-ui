@@ -53,11 +53,21 @@ export default function SetupTab({ clusterId, clusterName }: Props) {
 	return (
 		<div className="space-y-6">
 			<Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm border-l-4 border-l-indigo-500">
-				<CardContent className="pt-4 text-sm text-muted-foreground">
-					Nodes register → cluster tracks them → <b>Runmesh supplier
-					listings auto-mirror</b>. No separate Runmesh step; the
-					"Billing vendor" field on the Overview tab populates on the
-					first node registration.
+				<CardContent className="pt-4 text-sm text-muted-foreground space-y-2">
+					<p>
+						<b>One admin surface.</b> Register a cluster → add nodes
+						→ enroll workers. The Runmesh supplier row is auto-created
+						and kept in sync; edit its commercial metadata on the{" "}
+						<b>Commercial</b> tab on this page. The old{" "}
+						<code>/admin/supplier-nodes</code> view is retired — nodes
+						live here now.
+					</p>
+					<p className="text-xs">
+						Future note: the <code>role</code> + <code>type</code> fields
+						in the worker-enroll payload (step 3) will evolve alongside
+						the FlowMesh / Lumilake runtime revamp. Today's values are
+						reference, not contract.
+					</p>
 				</CardContent>
 			</Card>
 
@@ -185,10 +195,7 @@ export default function SetupTab({ clusterId, clusterName }: Props) {
 						brokers registration with the cluster service using its node
 						bearer, so the caller doesn't need any cluster credentials —
 						just membership in the <code>lumid-agent</code> group for
-						socket access. The shape of <code>role</code> /{" "}
-						<code>type</code> will evolve alongside the FlowMesh /
-						Lumilake runtime revamp; treat the example as reference, not
-						a fixed contract.
+						socket access.
 					</CardDescription>
 				</CardHeader>
 				<CardContent className="space-y-3 text-sm">
