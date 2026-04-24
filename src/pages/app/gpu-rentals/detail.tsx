@@ -36,6 +36,7 @@ import {
 	getTask,
 	streamTaskLogs,
 	type LogLine,
+	type LogStreamState,
 	type Task,
 	type TaskStatus,
 } from "@/api/flowmesh";
@@ -90,6 +91,7 @@ export default function GpuRentalDetail() {
 	const [cancelOpen, setCancelOpen] = useState(false);
 	const [cancelling, setCancelling] = useState(false);
 	const [logs, setLogs] = useState<LogLine[]>([]);
+	const [logState, setLogState] = useState<LogStreamState>("connecting");
 	const [followTail, setFollowTail] = useState(true);
 	const logContainerRef = useRef<HTMLDivElement>(null);
 
@@ -132,13 +134,18 @@ export default function GpuRentalDetail() {
 		if (!task) return;
 		if (["DONE", "FAILED", "CANCELLED"].includes(task.status)) return;
 		let unsub: (() => void) | null = null;
+		setLogState("connecting");
 		(async () => {
-			unsub = await streamTaskLogs(id, (line) => {
-				setLogs((old) => {
-					const next = [...old, line];
-					return next.length > 500 ? next.slice(-500) : next;
-				});
-			});
+			unsub = await streamTaskLogs(
+				id,
+				(line) => {
+					setLogs((old) => {
+						const next = [...old, line];
+						return next.length > 500 ? next.slice(-500) : next;
+					});
+				},
+				(s) => setLogState(s),
+			);
 		})();
 		return () => {
 			if (unsub) unsub();
@@ -210,7 +217,7 @@ export default function GpuRentalDetail() {
 							statusBadge(task.status),
 						)}
 					>
-						{task.status.toLowerCase()}
+						{statusLabel(task.status)}
 					</span>
 				)}
 				<div className="ml-auto flex items-center gap-2">
@@ -265,12 +272,16 @@ export default function GpuRentalDetail() {
 					{/* Status card */}
 					<Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm lg:col-span-1">
 						<CardHeader>
-							<CardTitle className="text-base">Status</CardTitle>
+							<CardTitle className="text-base">
+								Status: {statusLabel(task.status)}
+							</CardTitle>
 							<CardDescription>
 								{task.status === "PENDING"
-									? "Waiting for a worker with matching hardware."
+									? "Queued — waiting for a worker with matching hardware."
 									: task.status === "DISPATCHED"
-										? "Running on a worker. SSH info appears once sshd is ready."
+										? task.latest_update?.ssh
+											? "Running on a worker. Use the Connect card to ssh in."
+											: "Running on a worker — sshd is still coming up."
 										: "Terminal state."}
 							</CardDescription>
 						</CardHeader>
@@ -389,7 +400,15 @@ export default function GpuRentalDetail() {
 							>
 								{logs.length === 0 ? (
 									<p className="text-slate-400">
-										{isTerminal ? "(no logs)" : "waiting for log lines…"}
+										{isTerminal
+											? "(no logs — task is in a terminal state)"
+											: logState === "ended"
+												? "No task-level logs for this rental. Interactive SSH containers run sshd silently — ssh in with the Connect card above; stdout is in your shell, not here."
+												: logState === "error"
+													? "Log stream error — refresh the page to retry."
+													: logState === "connecting"
+														? "Connecting to log stream…"
+														: "waiting for log lines…"}
 									</p>
 								) : (
 									logs.map((l, i) => (

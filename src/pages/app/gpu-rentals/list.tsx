@@ -57,6 +57,23 @@ function statusBadge(s: TaskStatus | "LOST" | "UNKNOWN"): string {
 	}
 }
 
+function statusLabel(s: TaskStatus | "LOST" | "UNKNOWN"): string {
+	switch (s) {
+		case "PENDING":
+			return "queued";
+		case "DISPATCHED":
+			return "running";
+		case "DONE":
+			return "finished";
+		case "FAILED":
+			return "failed";
+		case "CANCELLED":
+			return "cancelled";
+		default:
+			return s.toLowerCase();
+	}
+}
+
 interface Row {
 	rental: LocalRental;
 	task: Task | null;
@@ -273,7 +290,7 @@ function RentalRow({
 							statusBadge(s),
 						)}
 					>
-						{s.toLowerCase()}
+						{statusLabel(s)}
 					</span>
 				)}
 			</td>

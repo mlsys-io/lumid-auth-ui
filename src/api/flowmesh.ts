@@ -207,20 +207,29 @@ export interface LogLine {
  * Subscribe to /api/v1/tasks/:id/logs/stream via EventSource. Returns
  * an `unsubscribe` function; caller must invoke it on unmount.
  *
- * Browser EventSource doesn't expose a way to set headers, so we
- * append the scoped bearer as a `?token=` query param (FM Host accepts
- * either). Cache miss on expiry just breaks the stream — caller can
- * re-subscribe.
+ * `onState` fires on lifecycle transitions so the UI can distinguish
+ * "connecting" / "open, no lines yet" / "ended" / "error". Interactive
+ * SSH tasks emit no task-level logs (sshd runs silently), so FM sends
+ * `event: eos` immediately and the pane would otherwise look stuck.
  */
+export type LogStreamState =
+	| "connecting"
+	| "open"
+	| "ended"
+	| "error";
+
 export async function streamTaskLogs(
 	taskId: string,
 	onLine: (l: LogLine) => void,
+	onState?: (s: LogStreamState) => void,
 ): Promise<() => void> {
 	const token = await getBearer();
 	const url =
 		`${FM_BASE}/api/v1/tasks/${encodeURIComponent(taskId)}/logs/stream` +
 		(token ? `?token=${encodeURIComponent(token)}` : "");
 	const es = new EventSource(url);
+	onState?.("connecting");
+	es.onopen = () => onState?.("open");
 	es.addEventListener("log", (ev) => {
 		try {
 			const parsed = JSON.parse((ev as MessageEvent).data);
@@ -234,10 +243,19 @@ export async function streamTaskLogs(
 			onLine({ message: (ev as MessageEvent).data });
 		}
 	});
-	es.addEventListener("eos", () => es.close());
+	es.addEventListener("eos", () => {
+		onState?.("ended");
+		es.close();
+	});
 	es.onerror = () => {
-		// Leave the caller's onLine quiet; they observe the stream ending
-		// via EventSource's readyState if they care.
+		// Browsers fire onerror on graceful stream close too; only flip to
+		// the "error" state when readyState says it's actually closed from
+		// an unexpected condition (not after our own eos handler ran).
+		if (es.readyState === EventSource.CLOSED) {
+			onState?.("ended");
+		} else {
+			onState?.("error");
+		}
 	};
 	return () => es.close();
 }
