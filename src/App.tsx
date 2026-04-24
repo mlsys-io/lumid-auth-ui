@@ -17,7 +17,10 @@ const ResetPassword = lazy(() => import("./pages/auth/reset-password"));
 // the Apps landing.
 const Profile = lazy(() => import("./pages/account/profile"));
 const Tokens = lazy(() => import("./pages/account/tokens"));
-const Connect = lazy(() => import("./pages/account/connect"));
+// Connect (OAuth account linking) dropped from the sidebar 2026-04-24;
+// page file kept on disk at /pages/account/connect.tsx but no longer
+// routed. Re-add import + route + tab entry if/when OAuth linking is
+// needed again.
 const AdminInvitations = lazy(() => import("./pages/account/admin-invitations"));
 const RunmeshAdminDashboard = lazy(() =>
   import("./runmesh/pages/AdminDashboard").then((m) => ({ default: m.AdminDashboard })),
@@ -196,29 +199,29 @@ export default function App() {
             <Route path="n8n" element={<AppN8n />} />
             <Route path="n8n/:id" element={<AppN8n />} />
 
-            {/* Account — Profile + Billing + Tokens + Connect tabbed
-                together after the /dashboard + /app merge (2026-04-24).
-                Identity & tokens is no longer a cross-link — Tokens is
-                just another tab in the same shell now. */}
+            {/* Account — Profile + Tokens tabbed together. Billing
+                was a tab in the earlier iteration but is now a
+                standalone sidebar entry (/dashboard/billing still
+                lives in this shell, just outside the Account tab
+                group). Connect (OAuth linking) dropped 2026-04-24. */}
             <Route
               element={
                 <AdminSectionLayout
                   title="Account"
-                  subtitle="Profile, billing, personal access tokens, and OAuth links — one user, one place."
+                  subtitle="Profile and personal access tokens."
                   tabs={[
                     { to: "/dashboard/profile", label: "Profile", end: true },
-                    { to: "/dashboard/billing", label: "Billing" },
                     { to: "/dashboard/tokens", label: "Tokens" },
-                    { to: "/dashboard/connect", label: "Connect" },
                   ]}
                 />
               }
             >
               <Route path="profile" element={<Profile />} />
-              <Route path="billing" element={<AppBilling />} />
               <Route path="tokens" element={<Tokens />} />
-              <Route path="connect" element={<Connect />} />
             </Route>
+            {/* Billing is a first-class sidebar entry, not a tab. Kept
+                at /dashboard/billing for stable URL. */}
+            <Route path="billing" element={<AppBilling />} />
 
             <Route path="api-docs" element={<AppApiDocs />} />
             <Route path="gpu-rentals" element={<AppGpuRentals />} />

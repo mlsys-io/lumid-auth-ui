@@ -371,13 +371,13 @@ function MintDialog({
 						{mode === 'preset' ? (
 							<div>
 								<Select value={preset} onValueChange={setPreset}>
-									<SelectTrigger>
+									<SelectTrigger className="bg-white">
 										<SelectValue>
 											{SCOPE_PRESETS.find((p) => p.id === preset)?.label ??
 												'Select a scope'}
 										</SelectValue>
 									</SelectTrigger>
-									<SelectContent>
+									<SelectContent className="z-[200] bg-white border border-slate-200 shadow-xl">
 										{activePresets.map((p) => {
 											const disabled = 'grantable' in p && p.grantable === false;
 											return (
@@ -426,10 +426,10 @@ function MintDialog({
 						<div>
 							<Label>Expiration</Label>
 							<Select value={ttlDays} onValueChange={setTtlDays}>
-								<SelectTrigger>
+								<SelectTrigger className="bg-white">
 									<SelectValue />
 								</SelectTrigger>
-								<SelectContent>
+								<SelectContent className="z-[200] bg-white border border-slate-200 shadow-xl">
 									<SelectItem value="0">Never expires</SelectItem>
 									<SelectItem value="7">7 days</SelectItem>
 									<SelectItem value="30">30 days</SelectItem>

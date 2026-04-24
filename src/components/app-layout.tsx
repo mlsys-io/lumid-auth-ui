@@ -192,15 +192,14 @@ export default function AppLayout() {
 					</>
 				)}
 
-				{/* Account surface — single entry that opens the tabbed
-				    page: Profile / Billing / Tokens / Connect. Previously
-				    Tokens + Connect lived at /dashboard/* in a separate
-				    shell with an ExternalLink cross-nav; after the
-				    2026-04-24 merge they're all in the same shell so the
-				    ExternalLink is gone. */}
+				{/* Account surface — Account (Profile + Tokens tabs) plus
+				    Billing as a standalone entry. Connect (OAuth linking)
+				    was dropped 2026-04-24 and Billing was promoted out of
+				    the tab strip per product feedback. */}
 				<SectionLabel label="Account" />
 				<div className="space-y-px">
 					<SidebarItem to="/dashboard/profile" label="Account" icon={UserIcon} onClick={close} />
+					<SidebarItem to="/dashboard/billing" label="Billing" icon={Receipt} onClick={close} />
 				</div>
 			</nav>
 
