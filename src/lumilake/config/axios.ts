@@ -31,12 +31,13 @@ api.interceptors.response.use(
     return response;
   },
   (error: AxiosError<ApiError>) => {
-    if (error.response?.status === 401) {
-      // On Lumilake-side 401, route back to lum.id auth — the session
-      // the user needs is the lum.id session, not Lumilake's own.
-      localStorage.removeItem('authToken');
-      window.location.href = '/auth/login';
-    }
+    // Lumilake has its own auth realm (bearer token). A 401 there is
+    // NOT equivalent to a lum.id session expiry — it just means the
+    // Lumilake credential isn't configured yet (OSS dev has no token;
+    // cloud needs a key the user hasn't wired up). Bouncing to
+    // /auth/login on every Lumilake 401 made /dashboard/lumilake/*
+    // unusable. Let the caller decide: service layer already swallows
+    // errors and renders empty states.
     return Promise.reject(error);
   }
 );

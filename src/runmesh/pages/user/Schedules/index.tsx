@@ -14,6 +14,15 @@ import {
   ScheduleExecutionVo,
   ScheduleStatus,
 } from '@/runmesh/api/user/scheduleApi';
+import { getWorkflowList } from '@/runmesh/api/user/workflow';
+
+type WorkflowPick = {
+  id?: number | string;
+  workflowId?: number | string;
+  name?: string;
+  workflowName?: string;
+  description?: string;
+};
 
 const STATUS_COLORS: Record<ScheduleStatus, string> = {
   CREATED: 'bg-slate-100 text-slate-600',
@@ -73,6 +82,10 @@ export const Schedules: React.FC = () => {
 
   // Create form state
   const [formWorkflowId, setFormWorkflowId] = useState('');
+  const [workflows, setWorkflows] = useState<WorkflowPick[]>([]);
+  const [workflowsLoading, setWorkflowsLoading] = useState(false);
+  const [workflowsErr, setWorkflowsErr] = useState('');
+  const [workflowQuery, setWorkflowQuery] = useState('');
   const [formName, setFormName] = useState('');
   const [formInterval, setFormInterval] = useState(3600);
   const [formMaxDuration, setFormMaxDuration] = useState(86400);
@@ -105,6 +118,27 @@ export const Schedules: React.FC = () => {
     // them) triggered an infinite re-render loop at lum.id mount time.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Load the user's workflows whenever the create modal opens so the
+  // picker always reflects the current set (Workflow Builder might
+  // have added one a moment ago). Cheap — same call the Workflow
+  // Builder page already makes; onlyMine matches its default filter.
+  useEffect(() => {
+    if (!showCreate) return;
+    setWorkflowsLoading(true);
+    setWorkflowsErr('');
+    getWorkflowList({ pageNum: 1, pageSize: 100, onlyMine: true })
+      .then((p) => {
+        const rows = p as { rows?: WorkflowPick[]; list?: WorkflowPick[] } | null | undefined;
+        setWorkflows(rows?.rows || rows?.list || []);
+      })
+      .catch((e: unknown) => {
+        const msg = e instanceof Error ? e.message : String(e);
+        setWorkflowsErr(msg || 'failed to load workflows');
+        setWorkflows([]);
+      })
+      .finally(() => setWorkflowsLoading(false));
+  }, [showCreate]);
 
   const handleCreate = async () => {
     if (!formWorkflowId.trim()) {
@@ -378,18 +412,81 @@ export const Schedules: React.FC = () => {
               </button>
             </div>
             <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-              {/* Workflow ID */}
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-slate-500">
-                  {t('schedules.form.workflowId')}
-                </label>
-                <input
-                  type="text"
-                  value={formWorkflowId}
-                  onChange={(e) => setFormWorkflowId(e.target.value)}
-                  placeholder={t('schedules.form.workflowIdPlaceholder')}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
-                />
+              {/* Workflow picker — the old free-text ID input is gone;
+                  users shouldn't have to know internal IDs. Shows the
+                  same list as Workflow Builder (onlyMine=true). */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-slate-500">
+                    {t('schedules.form.workflowId')}
+                  </label>
+                  {workflows.length > 5 && (
+                    <input
+                      type="text"
+                      value={workflowQuery}
+                      onChange={(e) => setWorkflowQuery(e.target.value)}
+                      placeholder="Filter…"
+                      className="px-2 py-1 border border-slate-200 rounded-md text-xs w-32 focus:ring-2 focus:ring-brand-500 outline-none"
+                    />
+                  )}
+                </div>
+                <div className="border border-slate-200 rounded-lg max-h-56 overflow-y-auto divide-y divide-slate-100 bg-white">
+                  {workflowsLoading && (
+                    <div className="p-3 text-xs text-slate-500">Loading workflows…</div>
+                  )}
+                  {!workflowsLoading && workflowsErr && (
+                    <div className="p-3 text-xs text-rose-600">{workflowsErr}</div>
+                  )}
+                  {!workflowsLoading && !workflowsErr && workflows.length === 0 && (
+                    <div className="p-3 text-xs text-slate-500">
+                      No workflows yet. Create one in Workflow Builder first.
+                    </div>
+                  )}
+                  {!workflowsLoading &&
+                    !workflowsErr &&
+                    workflows
+                      .filter((w) => {
+                        const q = workflowQuery.trim().toLowerCase();
+                        if (!q) return true;
+                        const label = `${w.workflowName || w.name || ''} ${w.description || ''}`.toLowerCase();
+                        return label.includes(q);
+                      })
+                      .map((w) => {
+                        const id = String(w.workflowId ?? w.id ?? '');
+                        const selected = id === formWorkflowId;
+                        return (
+                          <button
+                            key={id}
+                            type="button"
+                            onClick={() => setFormWorkflowId(id)}
+                            className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-slate-50 transition-colors ${
+                              selected ? 'bg-brand-50' : ''
+                            }`}
+                          >
+                            <Icons.Workflow
+                              className={`w-4 h-4 shrink-0 ${
+                                selected ? 'text-brand-600' : 'text-slate-400'
+                              }`}
+                            />
+                            <span className="flex-1 min-w-0 truncate">
+                              <span
+                                className={
+                                  selected ? 'text-brand-700 font-medium' : 'text-slate-700'
+                                }
+                              >
+                                {w.workflowName || w.name || `#${id}`}
+                              </span>
+                              {w.description && (
+                                <span className="text-slate-400 text-xs ml-2">
+                                  {w.description}
+                                </span>
+                              )}
+                            </span>
+                            {selected && <Icons.Check className="w-4 h-4 text-brand-600 shrink-0" />}
+                          </button>
+                        );
+                      })}
+                </div>
               </div>
 
               {/* Schedule Name */}

@@ -395,7 +395,10 @@ export default function App() {
                     subtitle="GPU supplier lifecycle, platform-wide billing, and workflow review."
                     tabs={[
                       { to: "/dashboard/admin/suppliers", label: "Suppliers", end: true },
-                      { to: "/dashboard/admin/supplier-nodes", label: "Supplier nodes" },
+                      // Supplier-nodes page retired — per-cluster node views
+                      // live at /app/admin/clusters/:id/nodes with commercial
+                      // metadata on the Commercial tab. Route kept below as
+                      // a deep-link fallback but no longer in the sidebar.
                       { to: "/dashboard/admin/billing", label: "Billing" },
                       { to: "/dashboard/admin/workflow-review", label: "Reviews" },
                     ]}

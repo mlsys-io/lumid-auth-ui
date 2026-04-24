@@ -12,7 +12,13 @@ const emptyEnvelope = <T>(): T =>
 
 const handle404AsEmpty = <T>(err: AxiosError, mockResponse?: any): T => {
   if (mockResponse) return mockResponse as T;
-  if (err?.response?.status === 404) return emptyEnvelope<T>();
+  const status = err?.response?.status;
+  // 404 → endpoint not in OSS. 401 → OSS auth is on but no JWT key
+  // wired up yet (the shared-secret path in Lumilake OSS fails with
+  // 500 when JWT_SECRET_KEY is empty, so any bearer is useless until
+  // that's configured). Both should surface as "nothing here yet" in
+  // the UI rather than as red-alert errors.
+  if (status === 404 || status === 401) return emptyEnvelope<T>();
   throw new Error(`API request failed with status error`);
 };
 

@@ -57,9 +57,29 @@ export const TagSelector: React.FC<TagSelectorProps> = ({
     setPending(value || []);
   }, [value]);
 
+  // TagSelector is also used as the workflow-types filter. The backend
+  // ships a handful of its type names in zh-CN even when the app is in
+  // en-US. Map the well-known ones so the dropdown reads in English.
+  // Unknown tag names (user-created) pass through unchanged.
+  const translateTagName = (name: string): string => {
+    const map: Record<string, string> = {
+      全部: 'All',
+      工作流: 'Workflow',
+      对话流: 'Chatflow',
+      智能体: 'Agent',
+      文本生成: 'Text generator',
+      图像生成: 'Image generator',
+      语音: 'Voice',
+      问答: 'Q&A',
+      聊天机器人: 'Chatbot',
+    };
+    return map[name] || name;
+  };
+
   const normalizeTags = (list: TagItem[]) =>
     list.map((tag: TagItem, idx: number) => {
-      const name = tag.name || tag.typeName || tag.typeCode || t('tagSelector.unnamed');
+      const rawName = tag.name || tag.typeName || tag.typeCode || t('tagSelector.unnamed');
+      const name = translateTagName(rawName);
       const code = tag.typeCode || tag.typeName || tag.tagId?.toString();
       const id =
         tag.tagId?.toString() ||
@@ -88,8 +108,11 @@ export const TagSelector: React.FC<TagSelectorProps> = ({
       setLoading(true);
       const cached = localStorage.getItem(STORAGE_KEY);
       if (cached) {
+        // Translate cached names too — the cache may predate the
+        // zh→en mapping and would otherwise flash Chinese for a beat
+        // before the fresh API response overwrites it.
         const tags: Tag[] = JSON.parse(cached);
-        setAllTags(tags);
+        setAllTags(tags.map((t) => ({ ...t, name: translateTagName(t.name) })));
       }
 
       const apiTags = await getAllTags();
@@ -101,11 +124,14 @@ export const TagSelector: React.FC<TagSelectorProps> = ({
       const cached = localStorage.getItem(STORAGE_KEY);
       if (cached) {
         const tags: Tag[] = JSON.parse(cached);
-        setAllTags(tags);
+        setAllTags(tags.map((t) => ({ ...t, name: translateTagName(t.name) })));
       }
     } finally {
       setLoading(false);
     }
+    // translateTagName closes over `t` but is stable enough for our needs;
+    // re-declaring as a dep would re-fetch on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

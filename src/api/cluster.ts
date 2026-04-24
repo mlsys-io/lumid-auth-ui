@@ -263,6 +263,54 @@ export async function remirrorCluster(
 	return r.data.data;
 }
 
+// Runmesh vendor view for the Commercial tab. `linked=false` means no
+// node has ever registered for this cluster, so no vendor row exists yet.
+export interface VendorView {
+	linked: boolean;
+	vendorId?: string;
+	vendorName?: string;
+	shortName?: string;
+	brand?: string;
+	country?: string;
+	contactPerson?: string;
+	contactPhone?: string;
+	contactEmail?: string;
+	supportLevel?: string;
+	website?: string;
+	address?: string;
+	remark?: string;
+	status?: string;
+}
+
+export async function getClusterVendor(id: string): Promise<VendorView> {
+	const r = await apiClient.get<DataResponse<{ vendor: VendorView }>>(
+		`/api/v1/cluster/clusters/${encodeURIComponent(id)}/vendor`,
+	);
+	return r.data.data.vendor;
+}
+
+// Commercial-fields patch. Identity fields (id, short_name, vendor_type)
+// are bridge-managed and not exposed here.
+export interface VendorPatchRequest {
+	contact_person?: string;
+	contact_phone?: string;
+	contact_email?: string;
+	support_level?: string;
+	website?: string;
+	address?: string;
+	remark?: string;
+}
+
+export async function patchClusterVendor(
+	id: string,
+	req: VendorPatchRequest,
+): Promise<void> {
+	await apiClient.patch(
+		`/api/v1/cluster/clusters/${encodeURIComponent(id)}/vendor`,
+		req,
+	);
+}
+
 // ---- workers ----
 
 export interface ListWorkersParams {

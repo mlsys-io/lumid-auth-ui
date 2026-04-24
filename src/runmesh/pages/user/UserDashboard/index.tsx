@@ -288,17 +288,19 @@ const AppCard: React.FC<AppCardProps> = ({
             <h3 className="font-bold text-slate-800 text-base mb-1 line-clamp-1 group-hover:text-brand-600 transition-colors">
               {app.name}
             </h3>
-            <p className="text-xs text-slate-400 flex items-center">
-              <span className="mr-1.5">v{app.version || 0}</span>
-              <span className="text-slate-300"></span>
-              <span className="ml-1.5">
-                {formatTime(app.updateTime || app.createTime, language, t)}
-              </span>
-              {/* 状态标签 - 只显示一个 */}
+            {/* Version + timestamp on their own row — no mid-string
+                wrapping from neighbouring badges. whitespace-nowrap
+                keeps "04/24/2026, 09:15 PM" on one line. */}
+            <div className="text-xs text-slate-400 whitespace-nowrap truncate">
+              <span>v{app.version || 0}</span>
+              <span className="mx-1.5 text-slate-300">·</span>
+              <span>{formatTime(app.updateTime || app.createTime, language, t)}</span>
+            </div>
+            {/* Badges on their own row so they don't stagger the date. */}
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
               {renderBadge(getStatusBadgeMap(t)[app.status || ''])}
-              {/* 发布状态 - 只显示一个 */}
               {renderBadge(getPublishBadgeMap(t)[app.publishStatus || ''])}
-            </p>
+            </div>
           </div>
 
           <p className="text-xs text-slate-500 line-clamp-2 mb-4 leading-relaxed">
