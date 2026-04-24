@@ -64,9 +64,12 @@ const AppLumilakeDashboard = lazy(() => import("./pages/app/lumilake/dashboard")
 const AppLumilakeData = lazy(() => import("./pages/app/lumilake/data"));
 const AppLumilakeSQL = lazy(() => import("./pages/app/lumilake/sql"));
 const AppLumilakePython = lazy(() => import("./pages/app/lumilake/python"));
-// Reinstated 2026-04-24 — Lumilake Submit sidebar entry mounts the
-// existing LowCode page as the Lumilake-side submit surface.
-const AppLumilakeLowCode = lazy(() => import("./pages/app/lumilake/low-code"));
+// Replaced 2026-04-24 — Runmesh Submit + Lumilake Submit are now real
+// "pick an existing workflow + configure params + submit" pages, not
+// reuses of the list/management view. The old AppApps (UserDashboard)
+// reverts to being the Workflow Builder at /dashboard.
+const AppRunmeshSubmit = lazy(() => import("./pages/app/runmesh-submit"));
+const AppLumilakeSubmit = lazy(() => import("./pages/app/lumilake-submit"));
 const AppLumilakeJobs = lazy(() => import("./pages/app/lumilake/jobs"));
 // Lumilake workers page retired 2026-04-24 — /app/admin/lumilake-workers
 // redirects to /app/admin/cluster-workers?role=lumilake. The unified
@@ -180,7 +183,10 @@ export default function App() {
                                         (tab 1: FlowMesh, tab 2: Lumilake)
                 Root redirects to Runmesh Submit since that's the
                 primary action. */}
-            <Route index element={<Navigate to="/dashboard/runmesh/submit" replace />} />
+            {/* /dashboard root = Workflow Builder (UserDashboard — list
+                + edit + open n8n on a workflow). Sidebar entry
+                'Workflow Builder' lands here. */}
+            <Route index element={<AppApps />} />
 
             {/* Workflow Builder — design surface (n8n iframe). */}
             <Route path="n8n" element={<AppN8n />} />
@@ -203,13 +209,12 @@ export default function App() {
                 />
               }
             >
-              <Route path="runmesh/submit" element={<AppApps />} />
+              <Route path="runmesh/submit" element={<AppRunmeshSubmit />} />
               <Route path="runmesh/schedules" element={<AppSchedules />} />
             </Route>
 
-            {/* Lumilake Submit — single page, reuses the Lumilake n8n
-                surface (was Low-code). */}
-            <Route path="lumilake-submit" element={<AppLumilakeLowCode />} />
+            {/* Lumilake Submit — pick + configure + submit to Lumilake. */}
+            <Route path="lumilake-submit" element={<AppLumilakeSubmit />} />
 
             {/* Running jobs — merged runtime view. Tab shell. */}
             <Route

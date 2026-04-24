@@ -48,7 +48,7 @@ interface NavItem {
 //   - Lumilake Submit   = submit to Lumilake analytics
 //   - Running jobs      = unified runtime list, both backends
 const PRODUCT_NAV: NavItem[] = [
-	{ to: '/dashboard/n8n', label: 'Workflow Builder', icon: Workflow },
+	{ to: '/dashboard', label: 'Workflow Builder', icon: Workflow, end: true },
 	{ to: '/dashboard/runmesh/submit', label: 'Runmesh Submit', icon: Send },
 	{ to: '/dashboard/lumilake-submit', label: 'Lumilake Submit', icon: Send },
 	{ to: '/dashboard/jobs/runmesh', label: 'Running jobs', icon: PlayCircle },
