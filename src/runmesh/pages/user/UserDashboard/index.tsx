@@ -941,16 +941,19 @@ export const UserDashboard: React.FC = () => {
   );
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 overflow-hidden">
-      {/* Main Workspace Content */}
-      <div className="flex-1 overflow-auto p-6">
+    <div className="flex flex-col bg-transparent">
+      {/* Embedded inside AppLayout's scrollable main, so no h-full /
+          overflow-hidden / own bg / own p-6 — those double-up against
+          the outer shell and create padding mismatch + an inner scroll
+          pane on top of the outer one. */}
+      <div className="flex-1">
         {/* Type-filter tab strip (All / 工作流 / Chatflow / Chatbot /
             Agent / Text Generator) removed 2026-04-24 per product
             feedback — it distracts from the workflow list and leaks
             the Runmesh i18n into the otherwise-English Workflow
             Builder surface. The underlying `activeTab` state still
             defaults to ALL_TYPE_KEY so the list shows every kind. */}
-        <div className="flex flex-col md:flex-row justify-end items-start md:items-center mb-6 space-y-4 md:space-y-0">
+        <div className="flex flex-col md:flex-row justify-start items-start md:items-center mb-6 space-y-4 md:space-y-0">
           <div className="flex items-center space-x-4 flex-wrap md:flex-nowrap">
             <label className="flex items-center space-x-2 text-xs font-medium text-slate-600 cursor-pointer whitespace-nowrap">
               <input
@@ -1025,37 +1028,44 @@ export const UserDashboard: React.FC = () => {
             create-a-new-workflow affordances without duplicating a
             card inside the grid. */}
         {!loading && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {/* App Cards */}
+          <div className="flex flex-wrap gap-4">
+            {/* App Cards — flex-wrap with a fixed width per card means
+                a sparse list (1–2 apps) just sits left-aligned with no
+                phantom empty grid cells. Dense lists still flow into
+                natural rows. */}
             {apps.map((app) => (
-              <AppCard
+              <div
                 key={`${app.workflowId}-${listRefreshKey}`}
-                app={app}
-                onClick={() => handleAppClick(app)}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                onPublish={handlePublish}
-                onCancelPublish={handleCancelPublish}
-                onStatusChange={handleStatusChange}
-                onTagsUpdate={handleTagsUpdate}
-                isTagSelectorOpen={tagSelectorApp?.workflowId === app.workflowId}
-                tagSelectorContent={
-                  <div
-                    className="bg-white border border-slate-200 rounded-lg shadow-lg p-3"
-                    onClick={(e) => e.stopPropagation()} // 防止下拉点击触发卡片事件
-                  >
-                    <TagSelector
-                      value={tagSelected}
-                      onChange={handleTagsChange}
-                      onSubmit={handleTagsSubmit}
-                      onRequestClose={() => setTagSelectorApp(null)}
-                      placeholder={t('userDashboard.tag.searchOrCreate')}
-                      maxTags={10}
-                      mode="multiple"
-                    />
-                  </div>
-                }
-              />
+                className="w-full sm:w-[calc(50%-0.5rem)] lg:w-[20rem]"
+              >
+                <AppCard
+                  app={app}
+                  onClick={() => handleAppClick(app)}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  onPublish={handlePublish}
+                  onCancelPublish={handleCancelPublish}
+                  onStatusChange={handleStatusChange}
+                  onTagsUpdate={handleTagsUpdate}
+                  isTagSelectorOpen={tagSelectorApp?.workflowId === app.workflowId}
+                  tagSelectorContent={
+                    <div
+                      className="bg-white border border-slate-200 rounded-lg shadow-lg p-3"
+                      onClick={(e) => e.stopPropagation()} // 防止下拉点击触发卡片事件
+                    >
+                      <TagSelector
+                        value={tagSelected}
+                        onChange={handleTagsChange}
+                        onSubmit={handleTagsSubmit}
+                        onRequestClose={() => setTagSelectorApp(null)}
+                        placeholder={t('userDashboard.tag.searchOrCreate')}
+                        maxTags={10}
+                        mode="multiple"
+                      />
+                    </div>
+                  }
+                />
+              </div>
             ))}
           </div>
         )}

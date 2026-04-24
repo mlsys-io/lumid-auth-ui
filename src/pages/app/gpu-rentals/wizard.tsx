@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Key, Loader2, Plus, Server } from "lucide-react";
+import { ArrowLeft, CreditCard, Key, Loader2, Plus, Server } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -28,6 +28,12 @@ import {
 	uploadSshKey,
 	type SshKey,
 } from "@/api/ssh-keys";
+import {
+	estimateRentalCost,
+	getUserBalance,
+	RATE_CARD,
+	type UserBalance,
+} from "@/api/billing";
 import { saveLocalRental } from "./storage";
 
 const IMAGE_PRESETS: { id: string; label: string; value: string | undefined; desc: string }[] = [
@@ -83,6 +89,9 @@ export default function GpuRentalWizard() {
 
 	const [submitting, setSubmitting] = useState(false);
 
+	const [balance, setBalance] = useState<UserBalance | null>(null);
+	const [balanceLoading, setBalanceLoading] = useState(true);
+
 	useEffect(() => {
 		listSshKeys()
 			.then((ks) => {
@@ -94,7 +103,30 @@ export default function GpuRentalWizard() {
 				toast.error(`Load SSH keys: ${(e as Error)?.message ?? e}`);
 			})
 			.finally(() => setKeysLoading(false));
+
+		getUserBalance()
+			.then((b) => setBalance(b))
+			.catch(() => {
+				// Silent — billing is best-effort in the UI; the server-side
+				// gate is what actually enforces. Show "—" balance.
+				setBalance(null);
+			})
+			.finally(() => setBalanceLoading(false));
 	}, []);
+
+	const cost = useMemo(
+		() =>
+			estimateRentalCost(
+				Number(gpu) || 0,
+				Number(cpu) || 0,
+				(Number(ttlMinutes) || 0) * 60,
+			),
+		[gpu, cpu, ttlMinutes],
+	);
+
+	const balanceNum = balance ? Number(balance.amount) : 0;
+	const insufficientBalance =
+		!balanceLoading && balance !== null && balanceNum <= 0;
 
 	const selectedKey = useMemo(
 		() => keys.find((k) => String(k.id) === selectedKeyId),
@@ -503,6 +535,82 @@ export default function GpuRentalWizard() {
 					</Card>
 				</div>
 
+				{/* Cost + balance — sits above the footer so the user sees
+				    what they're about to spend right before submit. */}
+				<Card className="mt-6 border-0 shadow-md bg-white/80 backdrop-blur-sm">
+					<CardHeader className="pb-3">
+						<CardTitle className="text-base flex items-center gap-2">
+							<CreditCard className="w-4 h-4 text-indigo-600" />
+							Cost estimate
+						</CardTitle>
+						<CardDescription>
+							Flat-rate estimate before a worker is assigned. Actual cost is
+							measured per-second against the worker's published rate; any
+							difference settles into the ledger at teardown.
+						</CardDescription>
+					</CardHeader>
+					<CardContent>
+						<div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+							<div className="rounded-md border bg-white/50 p-3">
+								<div className="text-xs text-muted-foreground">
+									Rate (GPU)
+								</div>
+								<div className="font-semibold">
+									${RATE_CARD.gpuPerHourUsd.toFixed(2)}/hr each
+								</div>
+							</div>
+							<div className="rounded-md border bg-white/50 p-3">
+								<div className="text-xs text-muted-foreground">
+									Rate (CPU)
+								</div>
+								<div className="font-semibold">
+									${RATE_CARD.cpuPerHourUsd.toFixed(2)}/hr each
+								</div>
+							</div>
+							<div className="rounded-md border bg-white/50 p-3">
+								<div className="text-xs text-muted-foreground">
+									This rental
+								</div>
+								<div className="font-semibold">
+									${cost.totalPerHour.toFixed(2)}/hr · ~$
+									{cost.estimateForTtl.toFixed(2)} for {ttlMinutes} min
+								</div>
+							</div>
+							<div
+								className={`rounded-md border p-3 ${
+									insufficientBalance
+										? "border-red-200 bg-red-50"
+										: "bg-white/50"
+								}`}
+							>
+								<div className="text-xs text-muted-foreground">
+									Your balance
+								</div>
+								<div className="font-semibold">
+									{balanceLoading
+										? "…"
+										: balance === null
+											? "—"
+											: `$${Number(balance.amount).toFixed(2)}`}
+								</div>
+							</div>
+						</div>
+						{insufficientBalance && (
+							<p className="text-sm text-red-700 mt-3">
+								Balance is ${balanceNum.toFixed(2)} — FlowMesh will reject
+								submissions below $0.01.{" "}
+								<Link
+									to="/dashboard/billing"
+									className="underline font-medium"
+								>
+									Top up
+								</Link>{" "}
+								first.
+							</p>
+						)}
+					</CardContent>
+				</Card>
+
 				<div className="mt-6 flex items-center gap-2 justify-end">
 					<Link to="/app/gpu-rentals">
 						<Button type="button" variant="outline" disabled={submitting}>
@@ -511,7 +619,12 @@ export default function GpuRentalWizard() {
 					</Link>
 					<Button
 						type="submit"
-						disabled={submitting || !name.trim() || !selectedKey}
+						disabled={
+							submitting ||
+							!name.trim() ||
+							!selectedKey ||
+							insufficientBalance
+						}
 					>
 						{submitting && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
 						Create rental

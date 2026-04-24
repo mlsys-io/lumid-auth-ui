@@ -22,6 +22,34 @@ const defaultPayload = JSON.stringify(
   2,
 );
 
+// Silent login into n8n's auth realm so the iframe's /n8n/rest/* calls
+// succeed. We log in once as the shared owner account; the response
+// sets an auth cookie on lum.id, which is the same origin as the
+// iframe requests (they're path-proxied through nginx, not on a
+// subdomain). Single-flight + module-scoped so repeated mounts don't
+// re-login. The fork's autoSetupOwnerIfNeeded creates admin@qq.com /
+// admin_N8n on first boot; overridable via VITE_N8N_OWNER_{EMAIL,PASSWORD}.
+let n8nSessionPromise: Promise<void> | null = null;
+const ensureN8nSession = (): Promise<void> => {
+  if (n8nSessionPromise) return n8nSessionPromise;
+  const email = import.meta.env.VITE_N8N_OWNER_EMAIL || 'admin@qq.com';
+  const password = import.meta.env.VITE_N8N_OWNER_PASSWORD || 'admin_N8n';
+  n8nSessionPromise = fetch('/n8n/rest/login', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ emailOrLdapLoginId: email, password }),
+  })
+    .then((r) => {
+      if (!r.ok) throw new Error(`n8n login ${r.status}`);
+    })
+    .catch((err) => {
+      n8nSessionPromise = null;
+      throw err;
+    });
+  return n8nSessionPromise;
+};
+
 export const N8nIntegration: React.FC<{
   workflowIdOverride?: string;
   isVisible?: boolean;
@@ -161,19 +189,25 @@ export const N8nIntegration: React.FC<{
     setCanLoadEditor(false);
     setN8nUrl(nextUrl);
 
-    if (!workflowId) {
-      setCanLoadEditor(true);
-      return;
-    }
+    const bootstrap = async () => {
+      try {
+        await ensureN8nSession();
+      } catch (err) {
+        console.warn('n8n silent login failed, iframe may require sign-in:', err);
+      }
 
-    const workflowIdNum = Number(workflowId);
-    if (Number.isNaN(workflowIdNum)) {
-      setError(t('n8nIntegration.error.invalidWorkflowId', { id: workflowId }));
-      setCanLoadEditor(true);
-      return;
-    }
+      if (!workflowId) {
+        setCanLoadEditor(true);
+        return;
+      }
 
-    const loadWorkflowData = async () => {
+      const workflowIdNum = Number(workflowId);
+      if (Number.isNaN(workflowIdNum)) {
+        setError(t('n8nIntegration.error.invalidWorkflowId', { id: workflowId }));
+        setCanLoadEditor(true);
+        return;
+      }
+
       try {
         await getWorkflowDetail(workflowIdNum);
         setStatus(t('n8nIntegration.status.workflowLoaded'));
@@ -189,7 +223,7 @@ export const N8nIntegration: React.FC<{
       }
     };
 
-    loadWorkflowData();
+    bootstrap();
   }, [workflowId, buildWorkflowUrl, t]);
 
   // 拉取待传递的 definitionJson（从工作流市场存入的临时 store），本地缓存后清空 store

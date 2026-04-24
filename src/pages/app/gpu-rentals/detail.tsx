@@ -40,6 +40,11 @@ import {
 	type Task,
 	type TaskStatus,
 } from "@/api/flowmesh";
+import {
+	estimateRentalCost,
+	getUserBalance,
+	type UserBalance,
+} from "@/api/billing";
 import { useAuth } from "@/hooks/useAuth";
 import { getLocalRentals, removeLocalRental } from "./storage";
 
@@ -94,6 +99,32 @@ export default function GpuRentalDetail() {
 	const [logState, setLogState] = useState<LogStreamState>("connecting");
 	const [followTail, setFollowTail] = useState(true);
 	const logContainerRef = useRef<HTMLDivElement>(null);
+
+	// Billing: user's balance + running-total cost ticker (elapsed seconds
+	// × rate). Refreshed every ~5s so the user sees the bill accrue.
+	const [balance, setBalance] = useState<UserBalance | null>(null);
+	const [, setNowTick] = useState(0);
+	useEffect(() => {
+		const iv = setInterval(() => setNowTick((t) => t + 1), 1000);
+		return () => clearInterval(iv);
+	}, []);
+	useEffect(() => {
+		let alive = true;
+		const refresh = async () => {
+			try {
+				const b = await getUserBalance();
+				if (alive) setBalance(b);
+			} catch {
+				if (alive) setBalance(null);
+			}
+		};
+		void refresh();
+		const iv = setInterval(refresh, 15_000);
+		return () => {
+			alive = false;
+			clearInterval(iv);
+		};
+	}, []);
 
 	const localRental = useMemo(() => {
 		if (!user?.id) return null;
@@ -196,6 +227,34 @@ export default function GpuRentalDetail() {
 	const secsLeft =
 		ttlExpiryMs != null ? Math.max(0, Math.floor((ttlExpiryMs - Date.now()) / 1000)) : null;
 	const isTerminal = task ? ["DONE", "FAILED", "CANCELLED"].includes(task.status) : false;
+
+	// Running cost — elapsed seconds since rental creation × the wizard's
+	// flat rate. Actual billing comes from the worker's published rate
+	// (settles into the ledger at teardown); this is just a live
+	// indicator. Stops ticking once the task is terminal.
+	const elapsedSec =
+		localRental && !isTerminal
+			? Math.max(0, Math.floor(Date.now() / 1000) - localRental.created_at)
+			: 0;
+	const runningCost = localRental
+		? estimateRentalCost(
+				localRental.spec_summary.gpu,
+				localRental.spec_summary.cpu ?? 0,
+				elapsedSec,
+			).estimateForTtl
+		: 0;
+	const balanceNum = balance ? Number(balance.amount) : 0;
+	const balanceWarning =
+		balance !== null &&
+		!isTerminal &&
+		secsLeft !== null &&
+		localRental !== null &&
+		balanceNum <
+			estimateRentalCost(
+				localRental.spec_summary.gpu,
+				localRental.spec_summary.cpu ?? 0,
+				secsLeft,
+			).estimateForTtl;
 
 	return (
 		<>
@@ -311,6 +370,39 @@ export default function GpuRentalDetail() {
 									label="Session"
 									value={<code className="text-xs">{ssh.session_id}</code>}
 								/>
+							)}
+							{localRental && (
+								<Field
+									label="Elapsed cost (est.)"
+									value={
+										<span>
+											${runningCost.toFixed(4)}{" "}
+											<span className="text-xs text-muted-foreground">
+												· {fmtCountdown(elapsedSec)} elapsed
+											</span>
+										</span>
+									}
+								/>
+							)}
+							<Field
+								label="Balance"
+								value={
+									balance === null
+										? "—"
+										: `$${Number(balance.amount).toFixed(2)}`
+								}
+							/>
+							{balanceWarning && (
+								<p className="text-xs text-red-700">
+									Balance won't cover the remaining TTL at this rate.{" "}
+									<Link
+										to="/dashboard/billing"
+										className="underline font-medium"
+									>
+										Top up
+									</Link>{" "}
+									to avoid overdraft.
+								</p>
 							)}
 						</CardContent>
 					</Card>

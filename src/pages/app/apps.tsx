@@ -16,7 +16,10 @@ import { UserDashboard } from '@/runmesh/pages/user/UserDashboard';
  */
 export default function AppApps() {
 	return (
-		<div>
+		// max-w-6xl (72rem ≈ 1152px) caps content so a 1-card grid
+		// doesn't float inside a 2000px void on wide monitors. Density
+		// matches Vercel / HF dashboards.
+		<div className="max-w-6xl">
 			<header className="mb-5">
 				<h1 className="text-2xl font-semibold text-slate-900">Workflow Builder</h1>
 				<p className="mt-1 text-sm text-slate-600">
@@ -47,13 +50,9 @@ export default function AppApps() {
 			</div>
 
 			{/* Existing workflow list — UserDashboard owns its internal
-			    filters + grid + actions. Negative margins pull it out of
-			    the main shell's horizontal padding so the list breathes
-			    across the full width; UserDashboard's own p-6 handles
-			    inner padding. */}
-			<div className="-mx-4 md:-mx-8">
-				<UserDashboard />
-			</div>
+			    filters + grid + actions. It now renders inside the shell's
+			    padding so cards align with the header above them. */}
+			<UserDashboard />
 		</div>
 	);
 }
