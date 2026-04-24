@@ -59,8 +59,9 @@ const AppLumilakeSQL = lazy(() => import("./pages/app/lumilake/sql"));
 const AppLumilakePython = lazy(() => import("./pages/app/lumilake/python"));
 const AppLumilakeLowCode = lazy(() => import("./pages/app/lumilake/low-code"));
 const AppLumilakeJobs = lazy(() => import("./pages/app/lumilake/jobs"));
-// Lumilake admin pages stay under /app/admin/*
-const AppAdminLumilakeWorkers = lazy(() => import("./pages/app/admin-workers"));
+// Lumilake workers page retired 2026-04-24 — /app/admin/lumilake-workers
+// redirects to /app/admin/cluster-workers?role=lumilake. The unified
+// Workers page pulls from the lumid_cluster registry (both roles).
 // Canonical user admin at lum.id/app/admin/users — the one user store.
 // Replaces /app/admin/users (Runmesh sys_user) and /app/admin/lumilake-users.
 const AppAdminUsers = lazy(() => import("./pages/app/admin-users"));
@@ -182,16 +183,56 @@ export default function App() {
             }
           >
             <Route index element={<AppApps />} />
-            <Route path="workflows" element={<AppWorkflows />} />
+            {/* Executions — Workflows / Tasks / Schedules are peer
+                surfaces of one run-lifecycle concept, wrapped in a tab
+                shell to collapse 3 sidebar items into 1. Tab shell is
+                the same <AdminSectionLayout> used by the admin
+                consolidation (filename kept for convenience — the
+                component isn't actually admin-specific). Detail views
+                (workflows/:id, builder, n8n, api-docs) stay OUTSIDE
+                the tab shell since they're drill-downs, not peers. */}
+            <Route
+              element={
+                <AdminSectionLayout
+                  title="Executions"
+                  subtitle="Designed workflows, in-flight task runs, and recurring schedules."
+                  tabs={[
+                    { to: "/app/workflows", label: "Workflows", end: true },
+                    { to: "/app/tasks", label: "Tasks" },
+                    { to: "/app/schedules", label: "Schedules" },
+                  ]}
+                />
+              }
+            >
+              <Route path="workflows" element={<AppWorkflows />} />
+              <Route path="tasks" element={<AppTasks />} />
+              <Route path="schedules" element={<AppSchedules />} />
+            </Route>
             <Route path="workflows/:id" element={<AppWorkflowDetail />} />
             <Route path="workflow" element={<AppWorkflowBuilder />} />
             <Route path="workflow/:id" element={<AppWorkflowBuilder />} />
             <Route path="n8n" element={<AppN8n />} />
             <Route path="n8n/:id" element={<AppN8n />} />
-            <Route path="tasks" element={<AppTasks />} />
-            <Route path="billing" element={<AppBilling />} />
-            <Route path="profile" element={<AppProfile />} />
-            <Route path="schedules" element={<AppSchedules />} />
+
+            {/* Account — Profile + Billing tabbed together; the
+                Identity & tokens cross-link lives at /dashboard/* so
+                it stays out of this group. */}
+            <Route
+              element={
+                <AdminSectionLayout
+                  title="Account"
+                  subtitle="Your profile and billing — same user, two views."
+                  tabs={[
+                    { to: "/app/profile", label: "Profile", end: true },
+                    { to: "/app/billing", label: "Billing" },
+                  ]}
+                />
+              }
+            >
+              <Route path="profile" element={<AppProfile />} />
+              <Route path="billing" element={<AppBilling />} />
+            </Route>
+
             <Route path="api-docs" element={<AppApiDocs />} />
             <Route path="gpu-rentals" element={<AppGpuRentals />} />
             <Route path="gpu-rentals/:id" element={<AppGpuRentalDetail />} />
@@ -256,24 +297,33 @@ export default function App() {
               {/* User detail lives outside the tab layout — it's drill-down, not peer. */}
               <Route path="users/:id" element={<AppAdminUserDetail />} />
 
-              {/* Infrastructure — 3 tabs */}
+              {/* Infrastructure — 2 tabs. "Lumilake workers" tab retired
+                  2026-04-24: the unified Workers page already shows FM + LL
+                  from the lumid_cluster registry (filter by role). The old
+                  legacy page hit the Lumilake service directly — pre-cluster
+                  architecture. /app/admin/lumilake-workers redirects to the
+                  unified view (with role=lumilake pre-filtered). */}
               <Route
                 element={
                   <AdminSectionLayout
                     title="Infrastructure"
-                    subtitle="Clusters, worker fleet, and Lumilake compute."
+                    subtitle="Clusters and the FlowMesh + Lumilake worker fleet."
                     tabs={[
                       { to: "/app/admin/clusters", label: "Clusters", end: true },
                       { to: "/app/admin/cluster-workers", label: "Workers" },
-                      { to: "/app/admin/lumilake-workers", label: "Lumilake workers" },
                     ]}
                   />
                 }
               >
                 <Route path="clusters" element={<AppAdminClusters />} />
                 <Route path="cluster-workers" element={<AppAdminClusterWorkers />} />
-                <Route path="lumilake-workers" element={<AppAdminLumilakeWorkers />} />
               </Route>
+              <Route
+                path="lumilake-workers"
+                element={
+                  <Navigate to="/app/admin/cluster-workers?role=lumilake" replace />
+                }
+              />
               <Route path="clusters/new" element={<AppAdminClustersNew />} />
               <Route path="clusters/:id" element={<AppAdminClustersDetail />} />
 

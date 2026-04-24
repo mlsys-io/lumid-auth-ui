@@ -3,28 +3,19 @@ import {
 	BrainCircuit,
 	Blocks,
 	Workflow,
-	ListChecks,
-	CreditCard,
 	User as UserIcon,
 	LogOut,
 	Menu,
 	X,
 	ExternalLink,
-	Calendar,
-	FileCode,
 	Server,
 	Shield,
 	LayoutDashboard,
 	Users,
 	Receipt,
-	ClipboardCheck,
-	Ticket,
 	Database,
-	Code,
 	PlayCircle,
-	SquareTerminal,
 	Trophy,
-	LineChart,
 	Layers,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -58,14 +49,13 @@ interface NavItem {
 
 const PRODUCT_NAV: NavItem[] = [
 	{ to: '/app', label: 'Apps', icon: Blocks, end: true },
-	{ to: '/app/workflows', label: 'Workflows', icon: Workflow },
-	{ to: '/app/tasks', label: 'Tasks', icon: ListChecks },
-	{ to: '/app/schedules', label: 'Schedules', icon: Calendar },
+	// Executions collapses Workflows + Tasks + Schedules into one
+	// tabbed shell (2026-04-24). Sidebar link lands on the default tab;
+	// the other two show as tabs inside the page.
+	{ to: '/app/workflows', label: 'Executions', icon: Workflow },
 	{ to: '/app/gpu-rentals', label: 'GPU rentals', icon: Server },
-	// Billing moved to the Account sidebar group (2026-04-24) — it's a
-	// per-user concern, not a product action. Route still at /app/billing.
-	// API docs route still resolves for deep links; removed from the
-	// sidebar on 2026-04-24 to cut clutter.
+	// Billing moved to the Account group; route still at /app/billing.
+	// API docs route still resolves for deep links; removed from sidebar.
 ];
 
 const LUMILAKE_NAV: NavItem[] = [
@@ -207,14 +197,12 @@ export default function AppLayout() {
 					</>
 				)}
 
-				{/* Account surface — product profile + billing + identity cross-nav */}
+				{/* Account surface — tabbed Profile + Billing + identity cross-nav.
+				    Single 'Account' entry lands on /app/profile; Billing surfaces
+				    as a tab inside the same page shell (2026-04-24). */}
 				<SectionLabel label="Account" />
 				<div className="space-y-px">
-					<SidebarItem to="/app/profile" label="Profile" icon={UserIcon} onClick={close} />
-					{/* Billing lives with the user now (was under Runmesh ops admin).
-					    Route unchanged — same RunmeshBilling page, shown from a
-					    non-admin context. */}
-					<SidebarItem to="/app/billing" label="Billing" icon={Receipt} onClick={close} />
+					<SidebarItem to="/app/profile" label="Account" icon={UserIcon} onClick={close} />
 					<NavLink
 						to="/dashboard/profile"
 						onClick={close}
