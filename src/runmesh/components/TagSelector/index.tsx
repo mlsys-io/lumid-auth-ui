@@ -138,7 +138,7 @@ export const TagSelector: React.FC<TagSelectorProps> = ({
       const systemTags =
         systemRes.status === 'fulfilled' ? systemRes.value : [];
       const userTagsRaw =
-        userRes.status === 'fulfilled' ? userRes.value?.rows || [] : [];
+        userRes.status === 'fulfilled' ? userRes.value || [] : [];
       // De-dupe by normalized lowercase name so a workflow-type and a
       // user tag with the same label don't render twice. User rows win
       // (they're writable).

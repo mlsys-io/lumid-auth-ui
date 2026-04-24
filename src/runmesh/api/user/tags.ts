@@ -29,14 +29,11 @@ export interface PageResult<T> {
 export const getAllTags = () => http.get<TagItem[]>('/runmesh/workflow-types/list');
 
 /**
- * 获取用户自定义标签 — runmesh_workflow_tag, 可删除 / 改名。
- * Returns a PageResult envelope even though the caller just wants a
- * flat list; the backend's MyBatisPlus convention wraps everything.
+ * 获取用户自定义标签 — runmesh_workflow_tag, 可删除 / 改名. Backend
+ * returns a plain flat list (not PageResult), inside the standard R<T>
+ * envelope that the axios interceptor already unwraps.
  */
-export const getUserTagList = () =>
-  http.get<PageResult<TagItem>>('/runmesh/tags/list', {
-    params: { pageNum: 1, pageSize: 500 },
-  });
+export const getUserTagList = () => http.get<TagItem[]>('/runmesh/tags/list');
 
 /**
  * 创建标签
