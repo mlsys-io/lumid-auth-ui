@@ -10,6 +10,11 @@ export interface Tag {
   code?: string;
   color?: string;
   count?: number;
+  // True when the row came from the read-only workflow-types list
+  // (runmesh_workflow_type) rather than the user-editable tags table
+  // (runmesh_workflow_tag). Write ops (rename/delete) only work for
+  // the latter, so the UI hides those controls when system=true.
+  system?: boolean;
 }
 
 interface TagSelectorProps {
@@ -87,11 +92,16 @@ export const TagSelector: React.FC<TagSelectorProps> = ({
         tag.typeCode ||
         tag.typeName ||
         `type-${idx}`;
+      // tagId comes from runmesh_workflow_tag (user-editable); absence
+      // of tagId means this row is a workflow-type alias, which the
+      // delete/update endpoints can't touch.
+      const system = tag.tagId == null;
       return {
         id,
         name,
         code,
         count: tag.count || 0,
+        system,
       };
     });
 
@@ -497,23 +507,27 @@ export const TagSelector: React.FC<TagSelectorProps> = ({
                         ) : (
                           <>
                             <span className="text-sm text-slate-700">{tag.name}</span>
-                            <button
-                              onClick={() =>
-                                setEditingMap((prev) => ({ ...prev, [tag.id]: tag.name }))
-                              }
-                              className="text-slate-400 hover:text-brand-600 transition-colors"
-                              title={t('tagSelector.action.edit')}
-                            >
-                              <Icons.Edit className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteTag(tag.id)}
-                              disabled={deletingId === tag.id}
-                              className="text-slate-400 hover:text-red-600 transition-colors disabled:opacity-50"
-                              title={t('tagSelector.action.delete')}
-                            >
-                              <Icons.Trash className="w-4 h-4" />
-                            </button>
+                            {!tag.system && (
+                              <>
+                                <button
+                                  onClick={() =>
+                                    setEditingMap((prev) => ({ ...prev, [tag.id]: tag.name }))
+                                  }
+                                  className="text-slate-400 hover:text-brand-600 transition-colors"
+                                  title={t('tagSelector.action.edit')}
+                                >
+                                  <Icons.Edit className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteTag(tag.id)}
+                                  disabled={deletingId === tag.id}
+                                  className="text-slate-400 hover:text-red-600 transition-colors disabled:opacity-50"
+                                  title={t('tagSelector.action.delete')}
+                                >
+                                  <Icons.Trash className="w-4 h-4" />
+                                </button>
+                              </>
+                            )}
                           </>
                         )}
                       </div>

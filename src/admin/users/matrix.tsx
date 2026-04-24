@@ -107,7 +107,8 @@ export default function UsersMatrix() {
 							</CardTitle>
 							<CardDescription>
 								Rows: most recent {MATRIX_LIMIT} users. Columns: services.
-								Cells: effective access. Click a row to edit that user.
+								Cells: effective access (derived from role + PAT scopes —
+								view-only here). Click a row to open the user's detail.
 							</CardDescription>
 						</div>
 						<Button

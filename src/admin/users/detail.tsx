@@ -347,10 +347,13 @@ export default function UserDetail() {
 								</table>
 							)}
 							<p className="text-xs text-muted-foreground mt-4">
-								To grant a scope (e.g. <code>runmesh:admin</code>), mint a PAT
-								with that scope on the user's behalf from the Connect page. Role
-								bumps short-circuit the matrix — admins get <code>admin</code>{" "}
-								everywhere.
+								Matrix is derived — there's no direct edit here. To grant a
+								scope (e.g. <code>runmesh:admin</code>), ask the user to mint
+								a PAT with that scope from their own{" "}
+								<code>/dashboard/tokens</code> page (matrix-gated — admins can
+								grant any scope; regular users can only mint scopes their
+								role already allows). Role bumps above short-circuit the
+								matrix — admins get <code>admin</code> everywhere.
 							</p>
 						</CardContent>
 					</Card>
