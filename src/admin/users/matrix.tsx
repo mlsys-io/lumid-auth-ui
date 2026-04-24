@@ -16,11 +16,20 @@ import {
 	ACCESS_SERVICES,
 	getUserAccess,
 	listUsers,
+	patchUser,
 	type AccessLevel,
 	type AccessRow,
 	type AdminUserRow,
 } from "@/api/users";
 import { isSessionExpired } from "@/api/client";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
+import { useAuth } from "@/hooks/useAuth";
 
 function levelBg(level: AccessLevel): string {
 	switch (level) {
@@ -45,11 +54,44 @@ function levelFg(level: AccessLevel): string {
 const MATRIX_LIMIT = 50;
 
 export default function UsersMatrix() {
+	const { user: me } = useAuth();
 	const [rows, setRows] = useState<
 		Array<{ user: AdminUserRow; access: AccessRow[] | null }>
 	>([]);
 	const [total, setTotal] = useState(0);
 	const [loading, setLoading] = useState(true);
+	const [savingId, setSavingId] = useState<string | null>(null);
+
+	async function refreshAccess(userId: string) {
+		try {
+			const a = await getUserAccess(userId);
+			setRows((prev) =>
+				prev.map((r) => (r.user.id === userId ? { ...r, access: a } : r)),
+			);
+		} catch (e: unknown) {
+			if (isSessionExpired(e)) return;
+		}
+	}
+
+	async function onRoleChange(
+		userId: string,
+		next: "user" | "admin",
+	) {
+		setSavingId(userId);
+		try {
+			const updated = await patchUser(userId, { role: next });
+			setRows((prev) =>
+				prev.map((r) => (r.user.id === userId ? { ...r, user: updated } : r)),
+			);
+			toast.success(`Role → ${next}`);
+			await refreshAccess(userId);
+		} catch (e: unknown) {
+			if (isSessionExpired(e)) return;
+			toast.error((e as Error)?.message || "Role change failed");
+		} finally {
+			setSavingId(null);
+		}
+	}
 
 	async function load() {
 		setLoading(true);
@@ -106,9 +148,11 @@ export default function UsersMatrix() {
 									: `${Math.min(total, MATRIX_LIMIT)} of ${total} users`}
 							</CardTitle>
 							<CardDescription>
-								Rows: most recent {MATRIX_LIMIT} users. Columns: services.
-								Cells: effective access (derived from role + PAT scopes —
-								view-only here). Click a row to open the user's detail.
+								Rows: most recent {MATRIX_LIMIT} users. Role is editable
+								in-place — flipping to <code>admin</code> grants{" "}
+								<code>admin</code> on every service; cells below are
+								derived. For finer-grained scope grants, open the user
+								detail and have them mint a PAT.
 							</CardDescription>
 						</div>
 						<Button
@@ -159,7 +203,25 @@ export default function UsersMatrix() {
 													</span>
 												)}
 											</td>
-											<td className="py-1.5 pr-3 text-muted-foreground">{user.role}</td>
+											<td className="py-1.5 pr-3">
+												<Select
+													value={user.role}
+													disabled={
+														savingId === user.id || user.id === me?.id
+													}
+													onValueChange={(v) =>
+														onRoleChange(user.id, v as "user" | "admin")
+													}
+												>
+													<SelectTrigger className="h-7 w-[88px] text-xs">
+														<SelectValue />
+													</SelectTrigger>
+													<SelectContent>
+														<SelectItem value="user">user</SelectItem>
+														<SelectItem value="admin">admin</SelectItem>
+													</SelectContent>
+												</Select>
+											</td>
 											{ACCESS_SERVICES.map((svc) => {
 												const row =
 													access?.find((r) => r.service === svc) || null;
