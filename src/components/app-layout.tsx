@@ -153,7 +153,10 @@ export default function AppLayout() {
 	const navigate = useNavigate();
 	const [mobileOpen, setMobileOpen] = useState(false);
 	const close = () => setMobileOpen(false);
-	const isAdmin = user?.role === 'admin';
+	// super_admin inherits every admin capability; treat both as admin
+	// for sidebar + nav gating. Distinct gates (billing/accounting) can
+	// check === 'super_admin' explicitly where needed.
+	const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
 	const setRunmeshUser = useAuthStore((s) => s.setUser);
 
 	// Bridge lum.id → Runmesh auth store. The ported Runmesh pages

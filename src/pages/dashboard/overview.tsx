@@ -1,6 +1,15 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { Shield, Key, Terminal, User as UserIcon, Ticket, ArrowRight } from 'lucide-react';
+import {
+	Shield,
+	Key,
+	User as UserIcon,
+	Ticket,
+	ArrowRight,
+	Layers,
+	Users,
+	Trophy,
+} from 'lucide-react';
 
 // /dashboard landing — a welcome + compact status page. Not a hub;
 // the sidebar is the nav. Shows role prominently so the user knows
@@ -8,7 +17,8 @@ import { Shield, Key, Terminal, User as UserIcon, Ticket, ArrowRight } from 'luc
 
 export default function Overview() {
 	const { user } = useAuth();
-	const isAdmin = user?.role === 'admin';
+	const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+	const isSuperAdmin = user?.role === 'super_admin';
 
 	return (
 		<div className="space-y-6">
@@ -27,7 +37,9 @@ export default function Overview() {
 					}
 				>
 					{isAdmin && <Shield className="w-3.5 h-3.5" />}
-					<span className="uppercase tracking-wide">{isAdmin ? 'admin' : 'user'}</span>
+					<span className="uppercase tracking-wide">
+						{isSuperAdmin ? 'super_admin' : isAdmin ? 'admin' : 'user'}
+					</span>
 				</div>
 			</header>
 
@@ -35,10 +47,9 @@ export default function Overview() {
 				<h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
 					Quick actions
 				</h2>
-				<div className="grid gap-2 sm:grid-cols-3">
+				<div className="grid gap-2 sm:grid-cols-2">
 					<QuickLink to="/dashboard/profile" icon={UserIcon} label="Update profile" desc="Name, avatar, password" />
 					<QuickLink to="/dashboard/tokens" icon={Key} label="Mint a token" desc="PATs for CLI + bots" />
-					<QuickLink to="/dashboard/connect" icon={Terminal} label="Install LumidOS" desc="One-line installer" />
 				</div>
 			</section>
 
@@ -48,19 +59,33 @@ export default function Overview() {
 						<Shield className="w-3 h-3" />
 						Administration
 					</h2>
-					<div className="grid gap-2 sm:grid-cols-3">
+					<div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
 						<QuickLink
-							to="/dashboard/admin/invitations"
-							icon={Ticket}
-							label="Invitation codes"
-							desc="Mint, list, revoke"
+							to="/dashboard/admin/users"
+							icon={Users}
+							label="People & access"
+							desc="Users, access matrix, invitations"
 							adminAccent
 						/>
 						<QuickLink
-							to="/dashboard/admin/runmesh/dashboard"
-							icon={Shield}
-							label="Runmesh admin"
-							desc="Users, nodes, billing"
+							to="/dashboard/admin/clusters"
+							icon={Layers}
+							label="Infrastructure"
+							desc="Clusters, workers, suppliers, billing"
+							adminAccent
+						/>
+						<QuickLink
+							to="/dashboard/admin/competitions"
+							icon={Trophy}
+							label="QuantArena"
+							desc="Competitions, markets, templates"
+							adminAccent
+						/>
+						<QuickLink
+							to="/dashboard/admin/invitations"
+							icon={Ticket}
+							label="Invitations"
+							desc="Mint, list, revoke"
 							adminAccent
 						/>
 					</div>

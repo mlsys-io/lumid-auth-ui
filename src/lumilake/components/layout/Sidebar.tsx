@@ -59,7 +59,7 @@ const Sidebar = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
   const { endpoints, activeUrl, setActiveUrl } = useEndpointStore();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = user?.role === "admin" || user?.role === "super_admin";
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 

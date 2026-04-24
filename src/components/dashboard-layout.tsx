@@ -97,7 +97,7 @@ export default function DashboardLayout() {
 	const navigate = useNavigate();
 	const [mobileOpen, setMobileOpen] = useState(false);
 
-	const isAdmin = user?.role === 'admin';
+	const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
 
 	const roleChip = isAdmin ? (
 		<span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wide bg-indigo-100 text-indigo-700">
