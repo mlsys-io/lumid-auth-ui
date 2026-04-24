@@ -253,28 +253,14 @@ export default function App() {
             <Route path="schedules" element={<Navigate to="/dashboard/runmesh/schedules" replace />} />
             <Route path="workflows" element={<AppWorkflows />} />   {/* legacy WorkflowMarket — still resolves, not in sidebar */}
 
-            {/* Account — Profile + Tokens tabbed together. Billing
-                was a tab in the earlier iteration but is now a
-                standalone sidebar entry (/dashboard/billing still
-                lives in this shell, just outside the Account tab
-                group). Connect (OAuth linking) dropped 2026-04-24. */}
-            <Route
-              element={
-                <AdminSectionLayout
-                  title="Account"
-                  subtitle="Profile and personal access tokens."
-                  tabs={[
-                    { to: "/dashboard/profile", label: "Profile", end: true },
-                    { to: "/dashboard/tokens", label: "Tokens" },
-                  ]}
-                />
-              }
-            >
-              <Route path="profile" element={<Profile />} />
-              <Route path="tokens" element={<Tokens />} />
-            </Route>
-            {/* Billing is a first-class sidebar entry, not a tab. Kept
-                at /dashboard/billing for stable URL. */}
+            {/* Account — Profile only now. Tokens was tabbed here
+                previously; hoisted out to the sidebar on 2026-04-24
+                because users treat PATs as a top-level concern
+                (CLI/SDK onboarding) rather than a profile sub-page.
+                Connect (OAuth linking) dropped 2026-04-24. Billing
+                stays as its own sidebar entry. */}
+            <Route path="profile" element={<Profile />} />
+            <Route path="tokens" element={<Tokens />} />
             <Route path="billing" element={<AppBilling />} />
 
             <Route path="api-docs" element={<AppApiDocs />} />

@@ -19,6 +19,7 @@ import {
 	PlayCircle,
 	Trophy,
 	Layers,
+	KeyRound,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
@@ -233,15 +234,18 @@ export default function AppLayout() {
 					</>
 				)}
 
-				{/* Account surface — Account (Profile + Tokens tabs) plus
-				    Billing as a standalone entry. Billing is hidden for
-				    admins since they already manage payment flows via
-				    the Admin tree; regular users need the direct
-				    sidebar link. /dashboard/billing stays routable for
-				    both so direct links never break. */}
+				{/* Account surface — Profile / Tokens / Billing as
+				    three standalone sidebar entries. Tokens was
+				    previously tabbed under Account; hoisted out
+				    2026-04-24 since PATs are a top-level CLI/SDK
+				    onboarding concern, not a profile sub-page.
+				    Billing is hidden for admins (they manage payment
+				    flows via the Admin tree) but the /dashboard/billing
+				    route stays reachable so direct links never break. */}
 				<SectionLabel label="Account" />
 				<div className="space-y-px">
 					<SidebarItem to="/dashboard/profile" label="Account" icon={UserIcon} onClick={close} />
+					<SidebarItem to="/dashboard/tokens" label="Tokens" icon={KeyRound} onClick={close} />
 					{!isAdmin && (
 						<SidebarItem to="/dashboard/billing" label="Billing" icon={Receipt} onClick={close} />
 					)}
