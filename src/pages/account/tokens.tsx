@@ -11,9 +11,16 @@ import {
 	mintPAT,
 	revokePAT,
 	getPATAccessLog,
+	getGrantableScopes,
+	canGrantPreset,
+	levelSatisfies,
 	SCOPE_PRESETS,
+	SCOPE_SERVICES,
 	type PATInfo,
 	type Scope,
+	type ScopeLevel,
+	type ScopeService,
+	type GrantableScopes,
 	type PATAccessLogEntry,
 	type MintPATResponse,
 } from '../../api/identity';
@@ -176,6 +183,16 @@ function TokenRow({
 	);
 }
 
+// ---- Mint dialog ----
+//
+// Scope picker is matrix-aware: we fetch the caller's grantable-scopes
+// row on open and use it to (a) disable presets the caller can't mint
+// and (b) grey out level radios above their current access in Custom
+// mode. Backend gates the same thing, so the UI is informational — but
+// the point is to never let the user pick something that will 403.
+
+const LEVELS: ScopeLevel[] = ['none', 'read', 'write', 'admin'];
+
 function MintDialog({
 	open,
 	onOpenChange,
@@ -188,28 +205,95 @@ function MintDialog({
 	onMinted: (r: MintPATResponse) => void;
 }) {
 	const [name, setName] = useState('');
-	const [preset, setPreset] = useState<string>('trading_bot');
-	const [expiry, setExpiry] = useState<string>('0');
+	const [mode, setMode] = useState<'preset' | 'custom'>('preset');
+	const [preset, setPreset] = useState<string>('readonly');
+	const [ttlDays, setTtlDays] = useState<string>('0');
 	const [submitting, setSubmitting] = useState(false);
 	const [copied, setCopied] = useState(false);
+	const [grantable, setGrantable] = useState<GrantableScopes | null>(null);
+
+	// Per-service level selection for custom mode. `none` means "don't
+	// include this service" so the final scope list is the (service, lvl)
+	// rows with lvl != 'none'. Initialised to 'none' everywhere.
+	const [custom, setCustom] = useState<Record<ScopeService, ScopeLevel>>(() =>
+		Object.fromEntries(SCOPE_SERVICES.map((s) => [s, 'none'])) as Record<
+			ScopeService,
+			ScopeLevel
+		>,
+	);
+	const [customWildcard, setCustomWildcard] = useState(false);
 
 	useEffect(() => {
-		if (open) {
-			setName('');
-			setPreset('trading_bot');
-			setExpiry('0');
-			setCopied(false);
-		}
+		if (!open) return;
+		setName('');
+		setMode('preset');
+		setPreset('readonly');
+		setTtlDays('0');
+		setCopied(false);
+		setCustom(
+			Object.fromEntries(SCOPE_SERVICES.map((s) => [s, 'none'])) as Record<
+				ScopeService,
+				ScopeLevel
+			>,
+		);
+		setCustomWildcard(false);
+		setGrantable(null);
+		getGrantableScopes()
+			.then(setGrantable)
+			.catch((e: unknown) => {
+				if (isSessionExpired(e)) return;
+				toast.error(`Load scopes: ${(e as Error)?.message ?? e}`);
+			});
 	}, [open]);
 
-	const scopes = useMemo<Scope[]>(
-		() => SCOPE_PRESETS.find((p) => p.id === preset)?.scopes ?? ['read'],
-		[preset],
-	);
+	const activePresets = useMemo(() => {
+		if (!grantable) return SCOPE_PRESETS;
+		return SCOPE_PRESETS.map((p) => ({
+			...p,
+			grantable: canGrantPreset(p, grantable),
+		}));
+	}, [grantable]);
+
+	// Auto-pick the first preset the user can actually grant once
+	// grantable loads (so admins land on 'readonly' same as before,
+	// but users default to something that won't 403 on submit).
+	useEffect(() => {
+		if (!grantable) return;
+		const current = activePresets.find((p) => p.id === preset);
+		if (current && !('grantable' in current && current.grantable === false)) {
+			return;
+		}
+		const first = activePresets.find(
+			(p) => 'grantable' in p && p.grantable,
+		);
+		if (first) setPreset(first.id);
+	}, [grantable, activePresets, preset]);
+
+	const scopes = useMemo<Scope[]>(() => {
+		if (mode === 'preset') {
+			return SCOPE_PRESETS.find((p) => p.id === preset)?.scopes ?? [];
+		}
+		const out: Scope[] = [];
+		if (customWildcard) out.push('*');
+		for (const svc of SCOPE_SERVICES) {
+			const lvl = custom[svc];
+			if (lvl !== 'none') out.push(`${svc}:${lvl}`);
+		}
+		return out;
+	}, [mode, preset, custom, customWildcard]);
+
+	const canMint =
+		name.trim().length > 0 &&
+		scopes.length > 0 &&
+		(grantable
+			? mode === 'preset'
+				? !!activePresets.find((p) => p.id === preset && 'grantable' in p && p.grantable)
+				: true
+			: true);
 
 	const submit = async () => {
-		if (!name.trim()) {
-			toast.error('Name is required');
+		if (!canMint) {
+			toast.error(scopes.length === 0 ? 'Pick at least one scope' : 'Name is required');
 			return;
 		}
 		setSubmitting(true);
@@ -217,7 +301,7 @@ function MintDialog({
 			const r = await mintPAT({
 				name: name.trim(),
 				scopes,
-				expires_in_seconds: Number(expiry) || 0,
+				ttl_days: Number(ttlDays) || 0,
 			});
 			onMinted(r);
 		} catch (e: any) {
@@ -236,9 +320,11 @@ function MintDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-xl">
+			<DialogContent className="max-w-2xl">
 				<DialogHeader>
-					<DialogTitle>{minted ? 'Save your new token' : 'New Personal Access Token'}</DialogTitle>
+					<DialogTitle>
+						{minted ? 'Save your new token' : 'New Personal Access Token'}
+					</DialogTitle>
 					<DialogDescription>
 						{minted
 							? 'This is the only time the token will be shown. Copy it now.'
@@ -252,58 +338,112 @@ function MintDialog({
 					<div className="space-y-4">
 						<div>
 							<Label>Name</Label>
-							<Input value={name} onChange={(e) => setName(e.target.value)} placeholder="my laptop" />
+							<Input
+								value={name}
+								onChange={(e) => setName(e.target.value)}
+								placeholder="my laptop"
+							/>
 						</div>
+
+						{/* Scope mode switcher */}
 						<div>
 							<Label>Scope</Label>
-							<Select value={preset} onValueChange={setPreset}>
-								<SelectTrigger>
-									{/*
-									  SelectValue normally reflects the active SelectItem's
-									  children — if those children are a flex-column, the
-									  closed trigger grows to 2 lines and clobbers the
-									  Grants row below. Render just the label here.
-									*/}
-									<SelectValue>
-										{SCOPE_PRESETS.find((p) => p.id === preset)?.label ?? 'Select a scope'}
-									</SelectValue>
-								</SelectTrigger>
-								<SelectContent>
-									{SCOPE_PRESETS.map((p) => (
-										<SelectItem key={p.id} value={p.id} textValue={p.label}>
-											<div className="flex flex-col">
-												<span className="font-medium">{p.label}</span>
-												<span className="text-xs text-muted-foreground">{p.description}</span>
-											</div>
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-							<p className="mt-2 text-xs text-slate-500">
-								Grants{' '}
-								<span className="font-mono text-slate-700">{scopes.join(' · ')}</span>
-							</p>
+							<div className="mt-1 flex items-center gap-3 text-sm">
+								<label className="inline-flex items-center gap-1.5 cursor-pointer">
+									<input
+										type="radio"
+										checked={mode === 'preset'}
+										onChange={() => setMode('preset')}
+									/>
+									<span>Preset</span>
+								</label>
+								<label className="inline-flex items-center gap-1.5 cursor-pointer">
+									<input
+										type="radio"
+										checked={mode === 'custom'}
+										onChange={() => setMode('custom')}
+									/>
+									<span>Custom (per service)</span>
+								</label>
+							</div>
 						</div>
+
+						{mode === 'preset' ? (
+							<div>
+								<Select value={preset} onValueChange={setPreset}>
+									<SelectTrigger>
+										<SelectValue>
+											{SCOPE_PRESETS.find((p) => p.id === preset)?.label ??
+												'Select a scope'}
+										</SelectValue>
+									</SelectTrigger>
+									<SelectContent>
+										{activePresets.map((p) => {
+											const disabled = 'grantable' in p && p.grantable === false;
+											return (
+												<SelectItem
+													key={p.id}
+													value={p.id}
+													disabled={disabled}
+													textValue={p.label}
+												>
+													<div className="flex flex-col">
+														<span className="font-medium">
+															{p.label}
+															{disabled && (
+																<span className="ml-2 text-xs text-slate-400">
+																	(requires higher access)
+																</span>
+															)}
+														</span>
+														<span className="text-xs text-muted-foreground">
+															{p.description}
+														</span>
+													</div>
+												</SelectItem>
+											);
+										})}
+									</SelectContent>
+								</Select>
+								<p className="mt-2 text-xs text-slate-500">
+									Grants{' '}
+									<span className="font-mono text-slate-700">
+										{scopes.length === 0 ? '—' : scopes.join(' · ')}
+									</span>
+								</p>
+							</div>
+						) : (
+							<CustomScopePicker
+								grantable={grantable}
+								custom={custom}
+								setCustom={setCustom}
+								wildcard={customWildcard}
+								setWildcard={setCustomWildcard}
+								resultingScopes={scopes}
+							/>
+						)}
+
 						<div>
 							<Label>Expiration</Label>
-							<Select value={expiry} onValueChange={setExpiry}>
+							<Select value={ttlDays} onValueChange={setTtlDays}>
 								<SelectTrigger>
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
 									<SelectItem value="0">Never expires</SelectItem>
-									<SelectItem value={String(7 * 86400)}>7 days</SelectItem>
-									<SelectItem value={String(30 * 86400)}>30 days</SelectItem>
-									<SelectItem value={String(90 * 86400)}>90 days</SelectItem>
-									<SelectItem value={String(365 * 86400)}>1 year</SelectItem>
+									<SelectItem value="7">7 days</SelectItem>
+									<SelectItem value="30">30 days</SelectItem>
+									<SelectItem value="90">90 days</SelectItem>
+									<SelectItem value="365">1 year</SelectItem>
 								</SelectContent>
 							</Select>
 						</div>
+
 						<DialogFooter>
 							<Button variant="outline" onClick={() => onOpenChange(false)}>
 								Cancel
 							</Button>
-							<Button onClick={submit} disabled={submitting || !name.trim()}>
+							<Button onClick={submit} disabled={submitting || !canMint}>
 								{submitting ? 'Minting…' : 'Mint token'}
 							</Button>
 						</DialogFooter>
@@ -311,6 +451,107 @@ function MintDialog({
 				)}
 			</DialogContent>
 		</Dialog>
+	);
+}
+
+// ---- Custom scope picker ----
+
+function CustomScopePicker({
+	grantable,
+	custom,
+	setCustom,
+	wildcard,
+	setWildcard,
+	resultingScopes,
+}: {
+	grantable: GrantableScopes | null;
+	custom: Record<ScopeService, ScopeLevel>;
+	setCustom: (
+		v:
+			| Record<ScopeService, ScopeLevel>
+			| ((old: Record<ScopeService, ScopeLevel>) => Record<ScopeService, ScopeLevel>),
+	) => void;
+	wildcard: boolean;
+	setWildcard: (v: boolean) => void;
+	resultingScopes: Scope[];
+}) {
+	return (
+		<div className="space-y-3">
+			<div className="rounded-lg border border-slate-200 overflow-hidden">
+				<table className="w-full text-sm">
+					<thead className="bg-slate-50 text-xs text-slate-500 uppercase tracking-wide">
+						<tr>
+							<th className="text-left py-2 px-3">Service</th>
+							{LEVELS.map((l) => (
+								<th key={l} className="text-center py-2 px-3 font-medium">
+									{l}
+								</th>
+							))}
+						</tr>
+					</thead>
+					<tbody>
+						{SCOPE_SERVICES.map((svc) => {
+							const have = grantable?.matrix[svc] ?? 'none';
+							return (
+								<tr key={svc} className="border-t border-slate-100">
+									<td className="py-2 px-3">
+										<div className="font-medium">{svc}</div>
+										<div className="text-[11px] text-slate-400">
+											you have: <span className="font-mono">{have}</span>
+										</div>
+									</td>
+									{LEVELS.map((l) => {
+										const disabled =
+											l !== 'none' && grantable !== null && !levelSatisfies(have, l);
+										const checked = custom[svc] === l;
+										return (
+											<td key={l} className="text-center py-2 px-3">
+												<input
+													type="radio"
+													name={`scope-${svc}`}
+													disabled={disabled}
+													checked={checked}
+													onChange={() =>
+														setCustom((old) => ({ ...old, [svc]: l }))
+													}
+												/>
+											</td>
+										);
+									})}
+								</tr>
+							);
+						})}
+					</tbody>
+				</table>
+			</div>
+
+			{/* Global wildcard — admin only */}
+			<label
+				className={`inline-flex items-center gap-2 text-sm ${
+					grantable?.can_wildcard ? 'cursor-pointer' : 'opacity-50'
+				}`}
+			>
+				<input
+					type="checkbox"
+					disabled={!grantable?.can_wildcard}
+					checked={wildcard}
+					onChange={(e) => setWildcard(e.target.checked)}
+				/>
+				<span>
+					Global admin (<span className="font-mono">*</span>) — overrides per-service
+				</span>
+				{!grantable?.can_wildcard && (
+					<span className="text-xs text-slate-400">admin role only</span>
+				)}
+			</label>
+
+			<p className="text-xs text-slate-500">
+				Grants{' '}
+				<span className="font-mono text-slate-700">
+					{resultingScopes.length === 0 ? '—' : resultingScopes.join(' · ')}
+				</span>
+			</p>
+		</div>
 	);
 }
 
