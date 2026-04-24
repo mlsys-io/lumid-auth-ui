@@ -26,35 +26,23 @@ export default function AppApps() {
 				</p>
 			</header>
 
-			<div className="mb-6 grid md:grid-cols-2 gap-3">
+			{/* New-workflow row — primary CTA (n8n) with a subtle
+			    'or paste YAML' alternative beside it. Replaces the
+			    two-card picker which was visually heavy. */}
+			<div className="mb-6 flex items-center gap-4 flex-wrap">
 				<Link
 					to="/dashboard/n8n"
-					className="rounded-xl border border-slate-200 bg-white hover:border-indigo-400 hover:shadow-md transition-all p-4 flex items-start gap-3"
+					className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm"
 				>
-					<div className="w-10 h-10 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0">
-						<Sparkles className="w-5 h-5 text-indigo-600" />
-					</div>
-					<div className="min-w-0">
-						<div className="text-sm font-semibold text-slate-900">New workflow · n8n</div>
-						<div className="mt-0.5 text-xs text-slate-600">
-							Visual DAG editor. Drag nodes, wire them, hit save.
-						</div>
-					</div>
+					<Sparkles className="w-4 h-4" />
+					New workflow
 				</Link>
 				<Link
 					to="/dashboard/workflow/yaml"
-					className="rounded-xl border border-slate-200 bg-white hover:border-indigo-400 hover:shadow-md transition-all p-4 flex items-start gap-3"
+					className="inline-flex items-center gap-1.5 text-sm text-slate-600 hover:text-indigo-600 transition-colors"
 				>
-					<div className="w-10 h-10 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center shrink-0">
-						<FileCode2 className="w-5 h-5 text-amber-600" />
-					</div>
-					<div className="min-w-0">
-						<div className="text-sm font-semibold text-slate-900">New workflow · YAML</div>
-						<div className="mt-0.5 text-xs text-slate-600">
-							Paste or upload a text definition. For when you prefer
-							code to clicks.
-						</div>
-					</div>
+					<FileCode2 className="w-4 h-4" />
+					or paste YAML
 				</Link>
 			</div>
 

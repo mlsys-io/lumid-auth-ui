@@ -944,33 +944,13 @@ export const UserDashboard: React.FC = () => {
     <div className="flex flex-col h-full bg-slate-50 overflow-hidden">
       {/* Main Workspace Content */}
       <div className="flex-1 overflow-auto p-6">
-        {/* Filter Toolbar */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 space-y-4 md:space-y-0">
-          <div className="w-full overflow-x-auto [scrollbar-width:thin] [scrollbar-color:rgb(203_213_225)_transparent] [&::-webkit-scrollbar]:h-[6px] [&::-webkit-scrollbar]:w-[6px] [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
-            <div className="inline-flex space-x-1 bg-slate-100 p-1 rounded-lg min-w-max">
-              {typeOptions.map((opt) => (
-                <button
-                  key={getOptionId(opt)}
-                  onClick={() => handleTabChange(getOptionId(opt))}
-                  className={
-                    'px-3 py-1.5 text-xs font-medium rounded-md transition-all ' +
-                    (activeTab === getOptionId(opt)
-                      ? 'bg-white text-slate-800 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50')
-                  }
-                >
-                  {getOptionId(opt) === ALL_TYPE_KEY && (
-                    <Icons.Grid className="w-3.5 h-3.5 inline mr-1.5" />
-                  )}
-                  {getOptionId(opt) !== ALL_TYPE_KEY && (
-                    <Icons.Workflow className="w-3.5 h-3.5 inline mr-1.5" />
-                  )}
-                  {getOptionLabel(opt, t)}
-                </button>
-              ))}
-            </div>
-          </div>
-
+        {/* Type-filter tab strip (All / 工作流 / Chatflow / Chatbot /
+            Agent / Text Generator) removed 2026-04-24 per product
+            feedback — it distracts from the workflow list and leaks
+            the Runmesh i18n into the otherwise-English Workflow
+            Builder surface. The underlying `activeTab` state still
+            defaults to ALL_TYPE_KEY so the list shows every kind. */}
+        <div className="flex flex-col md:flex-row justify-end items-start md:items-center mb-6 space-y-4 md:space-y-0">
           <div className="flex items-center space-x-4 flex-wrap md:flex-nowrap">
             <label className="flex items-center space-x-2 text-xs font-medium text-slate-600 cursor-pointer whitespace-nowrap">
               <input
