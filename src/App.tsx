@@ -11,9 +11,10 @@ const Callback = lazy(() => import("./pages/auth/callback").then((m) => ({ defau
 const ForgotPassword = lazy(() => import("./pages/auth/forgot-password"));
 const ResetPassword = lazy(() => import("./pages/auth/reset-password"));
 
-// The unified shell + content pages render under /dashboard/*
-const DashboardLayout = lazy(() => import("./components/dashboard-layout"));
-const Overview = lazy(() => import("./pages/dashboard/overview"));
+// The unified shell for /dashboard/* (absorbed the old /app/* tree in
+// the 2026-04-24 merge). DashboardLayout + Overview are deprecated —
+// AppLayout is the single shell now and /dashboard's index route shows
+// the Apps landing.
 const Profile = lazy(() => import("./pages/account/profile"));
 const Tokens = lazy(() => import("./pages/account/tokens"));
 const Connect = lazy(() => import("./pages/account/connect"));
@@ -47,7 +48,9 @@ const AppBilling = lazy(() => import("./pages/app/billing"));
 const AppWorkflowBuilder = lazy(() => import("./pages/app/workflow-builder"));
 const AppWorkflowDetail = lazy(() => import("./pages/app/workflow-detail"));
 const AppN8n = lazy(() => import("./pages/app/n8n"));
-const AppProfile = lazy(() => import("./pages/app/profile"));
+// AppProfile (Runmesh user profile) retired 2026-04-24 — the canonical
+// Profile tab at /dashboard/profile renders the identity-side Profile
+// component from /pages/account/profile.tsx.
 const AppSchedules = lazy(() => import("./pages/app/schedules"));
 const AppApiDocs = lazy(() => import("./pages/app/api-docs"));
 const AppGpuRentals = lazy(() => import("./pages/app/gpu-rentals"));
@@ -102,8 +105,9 @@ function RegisterPage() {
   );
 }
 
-// /auth/account/<tail> and /auth/dashboard/<tail> both rewrite to
-// /dashboard/<tail> so every stale bookmark keeps working.
+// /auth/account/<tail>, /auth/dashboard/<tail>, /account/<tail>, and
+// /app/<tail> all rewrite to /dashboard/<tail> so every stale bookmark
+// keeps working after the 2026-04-24 merge.
 function LegacyDashboardRedirect() {
   const { "*": tail = "" } = useParams();
   const loc = useLocation();
@@ -147,35 +151,13 @@ export default function App() {
 
           {/* Unified /dashboard shell. All authenticated routes nest
               under this so the sidebar is always present. */}
-          {/* Identity shell — /dashboard/* holds profile + tokens + installer. */}
+          {/* Merged shell at /dashboard/*. Previously /dashboard held
+              identity (Profile / Tokens / Connect) and /app held the
+              product (Apps, Workflows, GPU rentals, Lumilake, Admin).
+              2026-04-24 consolidation: one AppLayout renders all of it
+              at /dashboard/*. Legacy /app/* URLs redirect further down. */}
           <Route
             path="/dashboard"
-            element={
-              <AuthGuard requireAuth={true}>
-                <DashboardLayout />
-              </AuthGuard>
-            }
-          >
-            <Route index element={<Overview />} />
-            <Route path="profile" element={<Profile />} />
-            <Route path="tokens" element={<Tokens />} />
-            <Route path="connect" element={<Connect />} />
-            {/* Admin routes moved under /app/admin/* — redirect old bookmarks. */}
-            <Route path="admin" element={<Navigate to="/app/admin" replace />} />
-            <Route path="admin/invitations" element={<Navigate to="/app/admin/invitations" replace />} />
-            <Route path="admin/runmesh" element={<Navigate to="/app/admin" replace />} />
-            <Route path="admin/runmesh/dashboard" element={<Navigate to="/app/admin" replace />} />
-            <Route path="admin/runmesh/users" element={<Navigate to="/app/admin/users" replace />} />
-            <Route path="admin/runmesh/nodes" element={<Navigate to="/app/admin/nodes" replace />} />
-            <Route path="admin/runmesh/suppliers" element={<Navigate to="/app/admin/suppliers" replace />} />
-            <Route path="admin/runmesh/supplier-nodes" element={<Navigate to="/app/admin/supplier-nodes" replace />} />
-            <Route path="admin/runmesh/billing" element={<Navigate to="/app/admin/billing" replace />} />
-            <Route path="admin/runmesh/workflow-review" element={<Navigate to="/app/admin/workflow-review" replace />} />
-          </Route>
-
-          {/* Product + admin at /app/*. One shell, sidebar gates admin by role. */}
-          <Route
-            path="/app"
             element={
               <AuthGuard requireAuth={true}>
                 <AppLayout />
@@ -197,9 +179,9 @@ export default function App() {
                   title="Executions"
                   subtitle="Designed workflows, in-flight task runs, and recurring schedules."
                   tabs={[
-                    { to: "/app/workflows", label: "Workflows", end: true },
-                    { to: "/app/tasks", label: "Tasks" },
-                    { to: "/app/schedules", label: "Schedules" },
+                    { to: "/dashboard/workflows", label: "Workflows", end: true },
+                    { to: "/dashboard/tasks", label: "Tasks" },
+                    { to: "/dashboard/schedules", label: "Schedules" },
                   ]}
                 />
               }
@@ -214,23 +196,28 @@ export default function App() {
             <Route path="n8n" element={<AppN8n />} />
             <Route path="n8n/:id" element={<AppN8n />} />
 
-            {/* Account — Profile + Billing tabbed together; the
-                Identity & tokens cross-link lives at /dashboard/* so
-                it stays out of this group. */}
+            {/* Account — Profile + Billing + Tokens + Connect tabbed
+                together after the /dashboard + /app merge (2026-04-24).
+                Identity & tokens is no longer a cross-link — Tokens is
+                just another tab in the same shell now. */}
             <Route
               element={
                 <AdminSectionLayout
                   title="Account"
-                  subtitle="Your profile and billing — same user, two views."
+                  subtitle="Profile, billing, personal access tokens, and OAuth links — one user, one place."
                   tabs={[
-                    { to: "/app/profile", label: "Profile", end: true },
-                    { to: "/app/billing", label: "Billing" },
+                    { to: "/dashboard/profile", label: "Profile", end: true },
+                    { to: "/dashboard/billing", label: "Billing" },
+                    { to: "/dashboard/tokens", label: "Tokens" },
+                    { to: "/dashboard/connect", label: "Connect" },
                   ]}
                 />
               }
             >
-              <Route path="profile" element={<AppProfile />} />
+              <Route path="profile" element={<Profile />} />
               <Route path="billing" element={<AppBilling />} />
+              <Route path="tokens" element={<Tokens />} />
+              <Route path="connect" element={<Connect />} />
             </Route>
 
             <Route path="api-docs" element={<AppApiDocs />} />
@@ -279,11 +266,11 @@ export default function App() {
                     title="People & access"
                     subtitle="Users, roles, invitations, and the audit trail."
                     tabs={[
-                      { to: "/app/admin/users", label: "Users", end: true },
-                      { to: "/app/admin/users/matrix", label: "Access matrix" },
-                      { to: "/app/admin/invitations", label: "Invitations" },
-                      { to: "/app/admin/audit", label: "Audit log" },
-                      { to: "/app/admin/setup", label: "Setup" },
+                      { to: "/dashboard/admin/users", label: "Users", end: true },
+                      { to: "/dashboard/admin/users/matrix", label: "Access matrix" },
+                      { to: "/dashboard/admin/invitations", label: "Invitations" },
+                      { to: "/dashboard/admin/audit", label: "Audit log" },
+                      { to: "/dashboard/admin/setup", label: "Setup" },
                     ]}
                   />
                 }
@@ -309,8 +296,8 @@ export default function App() {
                     title="Infrastructure"
                     subtitle="Clusters and the FlowMesh + Lumilake worker fleet."
                     tabs={[
-                      { to: "/app/admin/clusters", label: "Clusters", end: true },
-                      { to: "/app/admin/cluster-workers", label: "Workers" },
+                      { to: "/dashboard/admin/clusters", label: "Clusters", end: true },
+                      { to: "/dashboard/admin/cluster-workers", label: "Workers" },
                     ]}
                   />
                 }
@@ -321,7 +308,7 @@ export default function App() {
               <Route
                 path="lumilake-workers"
                 element={
-                  <Navigate to="/app/admin/cluster-workers?role=lumilake" replace />
+                  <Navigate to="/dashboard/admin/cluster-workers?role=lumilake" replace />
                 }
               />
               <Route path="clusters/new" element={<AppAdminClustersNew />} />
@@ -338,9 +325,9 @@ export default function App() {
                     title="Runmesh ops"
                     subtitle="GPU supplier lifecycle and workflow review."
                     tabs={[
-                      { to: "/app/admin/suppliers", label: "Suppliers", end: true },
-                      { to: "/app/admin/supplier-nodes", label: "Supplier nodes" },
-                      { to: "/app/admin/workflow-review", label: "Reviews" },
+                      { to: "/dashboard/admin/suppliers", label: "Suppliers", end: true },
+                      { to: "/dashboard/admin/supplier-nodes", label: "Supplier nodes" },
+                      { to: "/dashboard/admin/workflow-review", label: "Reviews" },
                     ]}
                   />
                 }
@@ -351,7 +338,7 @@ export default function App() {
               </Route>
               <Route
                 path="billing"
-                element={<Navigate to="/app/billing" replace />}
+                element={<Navigate to="/dashboard/billing" replace />}
               />
 
               {/* QuantArena — 4 tabs */}
@@ -361,10 +348,10 @@ export default function App() {
                     title="QuantArena"
                     subtitle="Trading platform admin — competitions, markets, templates, jobs."
                     tabs={[
-                      { to: "/app/admin/competitions", label: "Competitions", end: true },
-                      { to: "/app/admin/markets", label: "Portfolios" },
-                      { to: "/app/admin/templates", label: "Backtest templates" },
-                      { to: "/app/admin/flowmesh-jobs", label: "FlowMesh jobs" },
+                      { to: "/dashboard/admin/competitions", label: "Competitions", end: true },
+                      { to: "/dashboard/admin/markets", label: "Portfolios" },
+                      { to: "/dashboard/admin/templates", label: "Backtest templates" },
+                      { to: "/dashboard/admin/flowmesh-jobs", label: "FlowMesh jobs" },
                     ]}
                   />
                 }
@@ -376,8 +363,8 @@ export default function App() {
               </Route>
 
               {/* Retired surface — legacy deep-link redirects */}
-              <Route path="nodes" element={<Navigate to="/app/admin/clusters" replace />} />
-              <Route path="lumilake-users" element={<Navigate to="/app/admin/users" replace />} />
+              <Route path="nodes" element={<Navigate to="/dashboard/admin/clusters" replace />} />
+              <Route path="lumilake-users" element={<Navigate to="/dashboard/admin/users" replace />} />
             </Route>
           </Route>
 
@@ -390,6 +377,12 @@ export default function App() {
           <Route path="/account" element={<Navigate to="/dashboard" replace />} />
           <Route path="/account/admin" element={<Navigate to="/dashboard" replace />} />
           <Route path="/account/*" element={<LegacyDashboardRedirect />} />
+          {/* 2026-04-24 merge: /app/* was the product shell; now its
+              entire tree lives under /dashboard/*. Catchall redirect
+              preserves every deep link (sidebar history, Runmesh CLI
+              output, docs, bookmarks). */}
+          <Route path="/app" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/app/*" element={<LegacyDashboardRedirect />} />
 
           {/* Roots → login if unauth, dashboard if auth (AuthGuard decides). */}
           <Route

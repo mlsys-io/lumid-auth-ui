@@ -7,7 +7,6 @@ import {
 	LogOut,
 	Menu,
 	X,
-	ExternalLink,
 	Server,
 	Shield,
 	LayoutDashboard,
@@ -27,15 +26,11 @@ import { httpUser } from '../runmesh/utils/axios';
 import { useEffect } from 'react';
 import { Button } from './ui/button';
 
-// Product-surface shell. Every /app/* route renders here. Sibling of
-// DashboardLayout — same container, same AuthGuard, different sidebar
-// and purpose. DashboardLayout is identity (profile, tokens, admin);
-// AppLayout is product (apps, workflows, tasks, billing).
-//
-// Keeping them separate means:
-//   * users see a clean product nav at /app/* without admin clutter
-//   * admins still reach all admin tools under /dashboard/admin/*
-//   * no breadcrumb noise — product pages are a flat four-nav surface
+// Unified shell for every authenticated route. Post-2026-04-24 merge,
+// this single component serves both the old /app/* product tree and
+// the old /dashboard/* identity tree — both now live under /dashboard/*.
+// The sidebar covers four groups (Product, Lumilake, Administration,
+// Account); admin is role-gated.
 //
 // LanguageProvider wraps the tree because the ported Runmesh pages'
 // useLanguage/t() helpers require it; non-Runmesh pages ignore it.
@@ -48,25 +43,25 @@ interface NavItem {
 }
 
 const PRODUCT_NAV: NavItem[] = [
-	{ to: '/app', label: 'Apps', icon: Blocks, end: true },
+	{ to: '/dashboard', label: 'Apps', icon: Blocks, end: true },
 	// Executions collapses Workflows + Tasks + Schedules into one
 	// tabbed shell (2026-04-24). Sidebar link lands on the default tab;
 	// the other two show as tabs inside the page.
-	{ to: '/app/workflows', label: 'Executions', icon: Workflow },
-	{ to: '/app/gpu-rentals', label: 'GPU rentals', icon: Server },
+	{ to: '/dashboard/workflows', label: 'Executions', icon: Workflow },
+	{ to: '/dashboard/gpu-rentals', label: 'GPU rentals', icon: Server },
 	// Billing moved to the Account group; route still at /app/billing.
 	// API docs route still resolves for deep links; removed from sidebar.
 ];
 
 const LUMILAKE_NAV: NavItem[] = [
-	{ to: '/app/lumilake/data', label: 'Data browsing', icon: Database },
+	{ to: '/dashboard/lumilake/data', label: 'Data browsing', icon: Database },
 	// SQL + Python workbenches removed from the sidebar 2026-04-24 —
 	// underused relative to Low-code; the routes still resolve for
 	// deep links but the nav is trimmed.
 	// Data label + Modelling hidden 2026-04-24 — feature not implemented
 	// yet; restore once the pages ship.
-	{ to: '/app/lumilake/low-code', label: 'Low-code', icon: Workflow },
-	{ to: '/app/lumilake/jobs', label: 'Running jobs', icon: PlayCircle },
+	{ to: '/dashboard/lumilake/low-code', label: 'Low-code', icon: Workflow },
+	{ to: '/dashboard/lumilake/jobs', label: 'Running jobs', icon: PlayCircle },
 ];
 
 // Consolidated admin nav: 17 flat items collapsed to 5. Each section
@@ -75,11 +70,11 @@ const LUMILAKE_NAV: NavItem[] = [
 // links like /app/admin/users/matrix still resolve because the tab
 // navigation is URL-based.
 const ADMIN_NAV: NavItem[] = [
-	{ to: '/app/admin', label: 'Overview', icon: LayoutDashboard, end: true },
-	{ to: '/app/admin/users', label: 'People & access', icon: Users },
-	{ to: '/app/admin/clusters', label: 'Infrastructure', icon: Layers },
-	{ to: '/app/admin/suppliers', label: 'Runmesh ops', icon: Receipt },
-	{ to: '/app/admin/competitions', label: 'QuantArena', icon: Trophy },
+	{ to: '/dashboard/admin', label: 'Overview', icon: LayoutDashboard, end: true },
+	{ to: '/dashboard/admin/users', label: 'People & access', icon: Users },
+	{ to: '/dashboard/admin/clusters', label: 'Infrastructure', icon: Layers },
+	{ to: '/dashboard/admin/suppliers', label: 'Runmesh ops', icon: Receipt },
+	{ to: '/dashboard/admin/competitions', label: 'QuantArena', icon: Trophy },
 ];
 
 function SidebarItem({ to, label, icon: Icon, end, onClick }: NavItem & { onClick?: () => void }) {
@@ -197,21 +192,15 @@ export default function AppLayout() {
 					</>
 				)}
 
-				{/* Account surface — tabbed Profile + Billing + identity cross-nav.
-				    Single 'Account' entry lands on /app/profile; Billing surfaces
-				    as a tab inside the same page shell (2026-04-24). */}
+				{/* Account surface — single entry that opens the tabbed
+				    page: Profile / Billing / Tokens / Connect. Previously
+				    Tokens + Connect lived at /dashboard/* in a separate
+				    shell with an ExternalLink cross-nav; after the
+				    2026-04-24 merge they're all in the same shell so the
+				    ExternalLink is gone. */}
 				<SectionLabel label="Account" />
 				<div className="space-y-px">
-					<SidebarItem to="/app/profile" label="Account" icon={UserIcon} onClick={close} />
-					<NavLink
-						to="/dashboard/profile"
-						onClick={close}
-						className="flex items-center gap-2.5 px-2.5 py-1.5 text-[13px] rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
-					>
-						<UserIcon className="w-4 h-4 shrink-0" />
-						<span className="truncate flex-1">Identity & tokens</span>
-						<ExternalLink className="w-3 h-3 opacity-50" />
-					</NavLink>
+					<SidebarItem to="/dashboard/profile" label="Account" icon={UserIcon} onClick={close} />
 				</div>
 			</nav>
 
