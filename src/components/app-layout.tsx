@@ -3,6 +3,9 @@ import {
 	BrainCircuit,
 	Workflow,
 	Send,
+	Github,
+	MessageCircle,
+	MessagesSquare,
 	User as UserIcon,
 	LogOut,
 	Menu,
@@ -91,6 +94,48 @@ function SidebarItem({ to, label, icon: Icon, end, onClick }: NavItem & { onClic
 			<Icon className="w-4 h-4 shrink-0" />
 			<span className="truncate">{label}</span>
 		</NavLink>
+	);
+}
+
+// Shown beneath every page inside the AppLayout shell (post-2026-04-24
+// consolidation). Used to live inside UserDashboard only — now global.
+function CommunityFooter() {
+	return (
+		<footer className="mt-12 border-t border-slate-200 pt-6 pb-2">
+			<h3 className="text-sm font-semibold text-slate-800 mb-1">
+				Join the Community
+			</h3>
+			<p className="text-xs text-slate-500 mb-3">
+				Connect with team members, contributors, and developers across channels.
+			</p>
+			<div className="flex items-center gap-3">
+				<a
+					href="https://github.com/mlsys-io"
+					target="_blank"
+					rel="noopener noreferrer"
+					className="text-slate-500 hover:text-slate-900 transition-colors"
+					aria-label="GitHub"
+				>
+					<Github className="w-4 h-4" />
+				</a>
+				<a
+					href="https://discord.gg/lumid"
+					target="_blank"
+					rel="noopener noreferrer"
+					className="text-slate-500 hover:text-slate-900 transition-colors"
+					aria-label="Discord"
+				>
+					<MessagesSquare className="w-4 h-4" />
+				</a>
+				<a
+					href="mailto:hello@lum.id"
+					className="text-slate-500 hover:text-slate-900 transition-colors"
+					aria-label="Contact"
+				>
+					<MessageCircle className="w-4 h-4" />
+				</a>
+			</div>
+		</footer>
 	);
 }
 
@@ -273,7 +318,7 @@ export default function AppLayout() {
 				<div className="max-w-7xl mx-auto flex">
 					<div className="hidden md:flex sticky top-0 h-screen">{sidebar}</div>
 
-					<main className="app-main flex-1 min-w-0 bg-slate-50 px-4 md:px-8 py-6">
+					<main className="app-main flex-1 min-w-0 bg-slate-50 px-4 md:px-8 py-6 flex flex-col">
 						{/* Ported Runmesh + Lumilake pages bring their own
 						    Card/header chrome. Wrapping them in an outer
 						    Card created a card-in-card nesting with
@@ -281,7 +326,10 @@ export default function AppLayout() {
 						    Outlet directly; the .app-main class scopes
 						    CSS overrides that normalize typography +
 						    background next to the sidebar. */}
-						<Outlet />
+						<div className="flex-1">
+							<Outlet />
+						</div>
+						<CommunityFooter />
 					</main>
 				</div>
 			</div>

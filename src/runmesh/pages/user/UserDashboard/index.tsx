@@ -1017,58 +1017,15 @@ export const UserDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* App Grid */}
+        {/* App Grid.
+            'Create App' card (Create blank / Create from template /
+            Import JSON / API Documentation) retired 2026-04-24 — the
+            /dashboard page's primary CTA ('New workflow' button + 'or
+            paste YAML' link) + sidebar entries already cover the
+            create-a-new-workflow affordances without duplicating a
+            card inside the grid. */}
         {!loading && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {/* Create New Card */}
-            <div className="bg-white border border-slate-200 rounded-xl p-5 flex flex-col justify-between h-64">
-              <div>
-                <h3 className="font-bold text-slate-800 mb-4">{t('userDashboard.create.title')}</h3>
-                <div className="space-y-3">
-                  <button
-                    onClick={handleCreateBlank}
-                    className="w-full flex items-center space-x-3 text-slate-600 hover:text-brand-600 group transition-colors"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center group-hover:bg-brand-50 group-hover:border-brand-100">
-                      <Icons.FilePlus className="w-4 h-4" />
-                    </div>
-                    <span className="text-sm font-medium">{t('userDashboard.create.blank')}</span>
-                  </button>
-                  <button
-                    onClick={() => navigate('/app/market')}
-                    className="w-full flex items-center space-x-3 text-slate-600 hover:text-brand-600 group transition-colors"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center group-hover:bg-brand-50 group-hover:border-brand-100">
-                      <Icons.LayoutTemplate className="w-4 h-4" />
-                    </div>
-                    <span className="text-sm font-medium">
-                      {t('userDashboard.create.fromTemplate')}
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => setShowImportModal(true)}
-                    className="w-full flex items-center space-x-3 text-slate-600 hover:text-brand-600 group transition-colors"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center group-hover:bg-brand-50 group-hover:border-brand-100">
-                      <Icons.FileUp className="w-4 h-4" />
-                    </div>
-                    <span className="text-sm font-medium">
-                      {t('userDashboard.create.importJson')}
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => navigate('/app/api-docs')}
-                    className="w-full flex items-center space-x-3 text-slate-600 hover:text-brand-600 group transition-colors"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center group-hover:bg-brand-50 group-hover:border-brand-100">
-                      <Icons.Book className="w-4 h-4" />
-                    </div>
-                    <span className="text-sm font-medium">{t('userDashboard.create.apiDocs')}</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-
             {/* App Cards */}
             {apps.map((app) => (
               <AppCard
@@ -1116,33 +1073,8 @@ export const UserDashboard: React.FC = () => {
           <div className="mt-6 text-xs text-slate-400">{t('userDashboard.total', { total })}</div>
         )}
 
-        {/* Community Footer */}
-        <div className="mt-12 mb-6">
-          <h3 className="text-lg font-bold text-brand-600 mb-2">
-            {t('userDashboard.community.title')}
-          </h3>
-          <p className="text-sm text-slate-500 mb-4">{t('userDashboard.community.desc')}</p>
-          <div className="flex items-center space-x-4">
-            <a
-              href="#"
-              className="flex items-center space-x-2 text-slate-600 hover:text-brand-600 transition-colors"
-            >
-              <Icons.Github className="w-5 h-5" />
-            </a>
-            <a
-              href="#"
-              className="flex items-center space-x-2 text-slate-600 hover:text-brand-600 transition-colors"
-            >
-              <Icons.Discord className="w-5 h-5" />
-            </a>
-            <a
-              href="#"
-              className="flex items-center space-x-2 text-slate-600 hover:text-brand-600 transition-colors"
-            >
-              <Icons.MessageSquare className="w-5 h-5" />
-            </a>
-          </div>
-        </div>
+        {/* Community Footer moved to AppLayout on 2026-04-24 so it
+            appears on every page, not only the Workflow Builder. */}
       </div>
 
       {/* Import JSON Modal */}

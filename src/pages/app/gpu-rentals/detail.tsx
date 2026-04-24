@@ -58,6 +58,26 @@ function statusBadge(s: TaskStatus | "UNKNOWN"): string {
 	}
 }
 
+// FlowMesh's task statuses are useful internally but confusing as UI
+// labels ("DISPATCHED" doesn't read as "running" to most users). Map
+// the wire-level status to the word the user actually wants to see.
+function statusLabel(s: TaskStatus | "UNKNOWN"): string {
+	switch (s) {
+		case "PENDING":
+			return "queued";
+		case "DISPATCHED":
+			return "running";
+		case "DONE":
+			return "finished";
+		case "FAILED":
+			return "failed";
+		case "CANCELLED":
+			return "cancelled";
+		default:
+			return s.toLowerCase();
+	}
+}
+
 export default function GpuRentalDetail() {
 	const { id: rawId } = useParams<{ id: string }>();
 	const id = rawId || "";
