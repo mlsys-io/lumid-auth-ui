@@ -25,6 +25,8 @@ import {
 	Tag,
 	PlayCircle,
 	SquareTerminal,
+	Trophy,
+	LineChart,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
@@ -84,6 +86,10 @@ const ADMIN_NAV: NavItem[] = [
 	{ to: '/app/admin/billing', label: 'Billing', icon: Receipt },
 	{ to: '/app/admin/workflow-review', label: 'Reviews', icon: ClipboardCheck },
 	{ to: '/app/admin/invitations', label: 'Invitations', icon: Ticket },
+	{ to: '/app/admin/competitions', label: 'Competitions', icon: Trophy },
+	{ to: '/app/admin/markets', label: 'Portfolios', icon: LineChart },
+	{ to: '/app/admin/templates', label: 'Backtest templates', icon: FileCode },
+	{ to: '/app/admin/flowmesh-jobs', label: 'FlowMesh jobs', icon: Workflow },
 	{ to: '/app/admin/lumilake-workers', label: 'Lumilake workers', icon: Server },
 	{ to: '/app/admin/lumilake-users', label: 'Lumilake users', icon: Users },
 ];

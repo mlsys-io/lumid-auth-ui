@@ -64,6 +64,11 @@ const AppLumilakeJobs = lazy(() => import("./pages/app/lumilake/jobs"));
 // Lumilake admin pages stay under /app/admin/*
 const AppAdminLumilakeWorkers = lazy(() => import("./pages/app/admin-workers"));
 const AppAdminLumilakeUsers = lazy(() => import("./pages/app/admin-lumilake-users"));
+// QuantArena admin pages — bridged via /api/v1/qa-admin/* nginx proxy
+const AppAdminCompetitions = lazy(() => import("./pages/app/admin-competitions"));
+const AppAdminMarkets = lazy(() => import("./pages/app/admin-markets"));
+const AppAdminTemplates = lazy(() => import("./pages/app/admin-templates"));
+const AppAdminFlowMeshJobs = lazy(() => import("./pages/app/admin-flowmesh-jobs"));
 
 function LoginPage() {
   const { login } = useAuth();
@@ -212,6 +217,10 @@ export default function App() {
               <Route path="invitations" element={<AdminInvitations />} />
               <Route path="lumilake-workers" element={<AppAdminLumilakeWorkers />} />
               <Route path="lumilake-users" element={<AppAdminLumilakeUsers />} />
+              <Route path="competitions" element={<AppAdminCompetitions />} />
+              <Route path="markets" element={<AppAdminMarkets />} />
+              <Route path="templates" element={<AppAdminTemplates />} />
+              <Route path="flowmesh-jobs" element={<AppAdminFlowMeshJobs />} />
             </Route>
           </Route>
 
