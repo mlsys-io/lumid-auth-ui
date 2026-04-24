@@ -4,12 +4,23 @@ import { toast } from "sonner";
 import {
 	ArrowLeft,
 	Layers,
+	Loader2,
+	Pencil,
 	RefreshCw,
 	Server,
 	Trash2,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
 import {
 	Card,
 	CardContent,
@@ -81,6 +92,7 @@ export default function ClusterDetail() {
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 	const [deleteOpen, setDeleteOpen] = useState(false);
+	const [editOpen, setEditOpen] = useState(false);
 
 	async function refresh() {
 		setLoading(true);
@@ -177,6 +189,17 @@ export default function ClusterDetail() {
 						/>
 						Refresh
 					</Button>
+					{cluster && (
+						<Button
+							variant="outline"
+							size="sm"
+							onClick={() => setEditOpen(true)}
+							disabled={saving}
+						>
+							<Pencil className="w-4 h-4 mr-1" />
+							Edit
+						</Button>
+					)}
 					{cluster && (
 						<Button
 							variant="outline"
@@ -352,7 +375,149 @@ export default function ClusterDetail() {
 					</AlertDialogFooter>
 				</AlertDialogContent>
 			</AlertDialog>
+
+			{cluster && (
+				<EditClusterDialog
+					open={editOpen}
+					onOpenChange={setEditOpen}
+					cluster={cluster}
+					onSaved={(updated) => {
+						setCluster(updated);
+						setEditOpen(false);
+					}}
+				/>
+			)}
 		</>
+	);
+}
+
+function EditClusterDialog({
+	open,
+	onOpenChange,
+	cluster,
+	onSaved,
+}: {
+	open: boolean;
+	onOpenChange: (v: boolean) => void;
+	cluster: Cluster;
+	onSaved: (c: Cluster) => void;
+}) {
+	const [name, setName] = useState(cluster.name);
+	const [region, setRegion] = useState(cluster.region || "");
+	const [tags, setTags] = useState(() =>
+		Array.isArray(cluster.tags) ? cluster.tags.join(", ") : "",
+	);
+	const [billing, setBilling] = useState(
+		cluster.billing_vendor_id != null ? String(cluster.billing_vendor_id) : "",
+	);
+	const [saving, setSaving] = useState(false);
+
+	useEffect(() => {
+		if (open) {
+			setName(cluster.name);
+			setRegion(cluster.region || "");
+			setTags(Array.isArray(cluster.tags) ? cluster.tags.join(", ") : "");
+			setBilling(
+				cluster.billing_vendor_id != null
+					? String(cluster.billing_vendor_id)
+					: "",
+			);
+		}
+	}, [open, cluster]);
+
+	async function onSave(e: React.FormEvent) {
+		e.preventDefault();
+		const trimmed = name.trim();
+		if (!trimmed) {
+			toast.error("Name required");
+			return;
+		}
+		const parsedTags = tags
+			.split(",")
+			.map((s) => s.trim())
+			.filter(Boolean);
+		const billingTrim = billing.trim();
+		setSaving(true);
+		try {
+			const updated = await patchCluster(cluster.id, {
+				name: trimmed,
+				region: region.trim(),
+				tags: parsedTags,
+				billing_vendor_id: billingTrim ? Number(billingTrim) : null,
+			});
+			toast.success("Saved");
+			onSaved(updated);
+		} catch (e: unknown) {
+			toast.error((e as Error)?.message || "Save failed");
+		} finally {
+			setSaving(false);
+		}
+	}
+
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent className="max-w-md">
+				<DialogHeader>
+					<DialogTitle>Edit cluster</DialogTitle>
+					<DialogDescription>
+						Status is edited on the Overview card; delete from the top bar.
+					</DialogDescription>
+				</DialogHeader>
+				<form onSubmit={onSave} className="space-y-4">
+					<div className="space-y-1">
+						<Label htmlFor="edit-name">Name</Label>
+						<Input
+							id="edit-name"
+							value={name}
+							onChange={(e) => setName(e.target.value)}
+							required
+						/>
+					</div>
+					<div className="space-y-1">
+						<Label htmlFor="edit-region">Region</Label>
+						<Input
+							id="edit-region"
+							value={region}
+							onChange={(e) => setRegion(e.target.value)}
+							placeholder="sg | us-east | …"
+						/>
+					</div>
+					<div className="space-y-1">
+						<Label htmlFor="edit-tags">Tags</Label>
+						<Input
+							id="edit-tags"
+							value={tags}
+							onChange={(e) => setTags(e.target.value)}
+							placeholder="comma-separated"
+						/>
+					</div>
+					<div className="space-y-1">
+						<Label htmlFor="edit-billing">Billing vendor ID (Runmesh)</Label>
+						<Input
+							id="edit-billing"
+							type="number"
+							value={billing}
+							onChange={(e) => setBilling(e.target.value)}
+							placeholder="optional — runmesh_gpu_vendor.id"
+						/>
+					</div>
+					<DialogFooter>
+						<Button
+							type="button"
+							variant="outline"
+							onClick={() => onOpenChange(false)}
+							disabled={saving}
+						>
+							Cancel
+						</Button>
+						<Button type="submit" disabled={saving || !name.trim()}>
+							{saving && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+							Save changes
+						</Button>
+					</DialogFooter>
+				</form>
+			</DialogContent>
+		</Dialog>
 	);
 }
 
