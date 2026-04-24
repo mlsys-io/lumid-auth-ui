@@ -278,16 +278,19 @@ export default function App() {
               <Route path="clusters/new" element={<AppAdminClustersNew />} />
               <Route path="clusters/:id" element={<AppAdminClustersDetail />} />
 
-              {/* Runmesh ops — 4 tabs (supplier lifecycle + billing) */}
+              {/* Runmesh ops — 3 tabs (supplier lifecycle + reviews).
+                  Billing moved to /app/billing (user-facing Account
+                  section) on 2026-04-24 since it's a per-user surface,
+                  not an admin-only concern. Legacy /app/admin/billing
+                  redirects below. */}
               <Route
                 element={
                   <AdminSectionLayout
                     title="Runmesh ops"
-                    subtitle="GPU supplier lifecycle, billing, and workflow review."
+                    subtitle="GPU supplier lifecycle and workflow review."
                     tabs={[
                       { to: "/app/admin/suppliers", label: "Suppliers", end: true },
                       { to: "/app/admin/supplier-nodes", label: "Supplier nodes" },
-                      { to: "/app/admin/billing", label: "Billing" },
                       { to: "/app/admin/workflow-review", label: "Reviews" },
                     ]}
                   />
@@ -295,9 +298,12 @@ export default function App() {
               >
                 <Route path="suppliers" element={<RunmeshSuppliers />} />
                 <Route path="supplier-nodes" element={<RunmeshSupplierNodes />} />
-                <Route path="billing" element={<RunmeshBilling />} />
                 <Route path="workflow-review" element={<RunmeshWorkflowReview />} />
               </Route>
+              <Route
+                path="billing"
+                element={<Navigate to="/app/billing" replace />}
+              />
 
               {/* QuantArena — 4 tabs */}
               <Route

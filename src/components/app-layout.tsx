@@ -65,7 +65,8 @@ const PRODUCT_NAV: NavItem[] = [
 	{ to: '/app/schedules', label: 'Schedules', icon: Calendar },
 	{ to: '/app/gpu-rentals', label: 'GPU rentals', icon: Server },
 	{ to: '/app/billing', label: 'Billing', icon: CreditCard },
-	{ to: '/app/api-docs', label: 'API docs', icon: FileCode },
+	// API docs route still resolves for deep links; just removed from
+	// the sidebar on 2026-04-24 to cut clutter.
 ];
 
 const LUMILAKE_NAV: NavItem[] = [
@@ -207,10 +208,14 @@ export default function AppLayout() {
 					</>
 				)}
 
-				{/* Account surface — product profile + identity cross-nav */}
+				{/* Account surface — product profile + billing + identity cross-nav */}
 				<SectionLabel label="Account" />
 				<div className="space-y-px">
 					<SidebarItem to="/app/profile" label="Profile" icon={UserIcon} onClick={close} />
+					{/* Billing lives with the user now (was under Runmesh ops admin).
+					    Route unchanged — same RunmeshBilling page, shown from a
+					    non-admin context. */}
+					<SidebarItem to="/app/billing" label="Billing" icon={Receipt} onClick={close} />
 					<NavLink
 						to="/dashboard/profile"
 						onClick={close}
@@ -292,7 +297,7 @@ export default function AppLayout() {
 				<div className="max-w-7xl mx-auto flex">
 					<div className="hidden md:flex sticky top-0 h-screen">{sidebar}</div>
 
-					<main className="app-main flex-1 min-w-0 bg-slate-50">
+					<main className="app-main flex-1 min-w-0 bg-slate-50 px-4 md:px-8 py-6">
 						{/* Ported Runmesh + Lumilake pages bring their own
 						    Card/header chrome. Wrapping them in an outer
 						    Card created a card-in-card nesting with
