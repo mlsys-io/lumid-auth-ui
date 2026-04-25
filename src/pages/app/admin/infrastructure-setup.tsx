@@ -101,9 +101,10 @@ export default function InfrastructureSetup() {
 					<p>
 						<b>One admin surface for the compute layer.</b> Register a
 						cluster → add nodes → enroll workers. Runmesh supplier rows
-						are auto-created on first node registration; billing
-						attribution flows automatically from worker tasks to the
-						cluster's vendor row.
+						are auto-created on first node registration and retire when
+						the last node leaves; billing attribution flows automatically
+						from worker tasks to the cluster's vendor row. A background
+						sweeper retires stale workers — no manual cleanup.
 					</p>
 					<p className="text-xs">
 						Worker-enroll field shapes (<code>role</code> /{" "}
@@ -293,7 +294,11 @@ newgrp lumid-agent     # or log out/in for the group to apply`}
 						<p>
 							<b>Lifecycle:</b> <code>starting</code> (no heartbeat yet)
 							→ <code>idle</code> (alive, no task) → <code>busy</code>{" "}
-							(executing) → <code>stopped</code> / <code>lost</code>.
+							(executing) → <code>stopped</code> / <code>lost</code>. A
+							background sweeper auto-flips abandoned <code>starting</code>{" "}
+							rows older than 1h and{" "}
+							<code>idle/busy</code> rows whose last heartbeat is older
+							than 5min to <code>lost</code> — no manual cleanup needed.
 						</p>
 					</div>
 				</CardContent>
@@ -330,6 +335,11 @@ newgrp lumid-agent     # or log out/in for the group to apply`}
 							Re-push state manually from the cluster's <b>Overview</b>{" "}
 							→ Runmesh mirror card (useful after a Runmesh outage or
 							for pre-wire nodes).
+						</li>
+						<li>
+							When the last node leaves a cluster, the linked vendor
+							row retires automatically + <code>billing_vendor_id</code>{" "}
+							clears. The next registration recreates it.
 						</li>
 					</ul>
 					<div className="flex gap-2">
@@ -375,6 +385,14 @@ newgrp lumid-agent     # or log out/in for the group to apply`}
 							<code>X-Bridge-Secret</code> header
 							(<code>FLOWMESH_BRIDGE_SECRET</code> env var on both
 							sides).
+						</li>
+						<li>
+							The platform-wide Billing page below + every{" "}
+							<code>/runmesh/finance/**</code>,{" "}
+							<code>/runmesh/pay/refund/**</code>,{" "}
+							<code>/runmesh/billing/transaction/**</code> route is
+							gated to <b>super_admin</b>. Regular admins see all the
+							operational tabs but not money.
 						</li>
 					</ul>
 					<div className="flex gap-2">
