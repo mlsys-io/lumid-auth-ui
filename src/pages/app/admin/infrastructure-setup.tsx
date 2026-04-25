@@ -312,12 +312,15 @@ cd ~/flowmeshctl && .venv/bin/python flowmeshctl.py guardian deploy <idx>`}
 							idle/busy rows whose heartbeat is stale &gt; 5min.
 						</p>
 						<p>
-							<b>Drift to know:</b> FM workers heartbeat to FM Host (their
-							job source), not to lumid_cluster. The cluster-agent's
-							own heartbeat thread updates <code>last_heartbeat</code>{" "}
-							but doesn't currently send a <code>status</code> field, so
-							workers can stall in <code>starting</code> if the agent
-							restarted after enrollment. Patch in flight.
+							<b>Two parallel sources of truth.</b> The registry (this
+							UI) tracks what the cluster-agent enrolled. FM Host
+							tracks what's actually picking up jobs. The agent
+							persists enrolled workers to{" "}
+							<code>/etc/lumid/workers.json</code> across restarts and
+							sends <code>{`{"status":"idle"}`}</code> in heartbeat — so
+							a registry stuck at <code>starting</code> while FM shows
+							<code> IDLE</code> means the agent hasn't been bounced
+							since the persist patch (≥ 2026-04-25). Restart it.
 						</p>
 					</div>
 				</CardContent>
@@ -392,6 +395,14 @@ cd ~/flowmeshctl && .venv/bin/python flowmeshctl.py guardian deploy <idx>`}
 							<code>/runmesh/pay/refund/**</code>,
 							<code>/runmesh/billing/transaction/**</code>) are gated on{" "}
 							<b>super_admin</b>.
+						</li>
+						<li>
+							<b>Per-worker rates</b> live on the cluster's Workers
+							tab — <code>cost_per_hour</code> (what we pay the GPU
+							owner) and <code>selling_price_per_hour</code> (what
+							we charge). Profit shows inline. Currently registry
+							metadata; FM Host's own rate model still drives actual
+							ledger entries.
 						</li>
 					</ul>
 				</CardContent>
