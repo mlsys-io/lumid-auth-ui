@@ -1,125 +1,34 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth';
 import {
 	Activity,
-	ArrowRight,
 	Cpu,
-	Key,
 	Layers,
 	Loader2,
 	Server,
-	Shield,
-	Ticket,
-	Trophy,
-	User as UserIcon,
 	Users,
 	Zap,
 } from 'lucide-react';
-import { listClusters, listNodes, listWorkers, type Cluster, type Node, type Worker } from '@/api/cluster';
-import { listUsers, listAudit, type AdminUserRow, type AuditEntry } from '@/api/users';
+import {
+	listClusters,
+	listNodes,
+	listWorkers,
+	type Cluster,
+	type Node,
+	type Worker,
+} from '@/api/cluster';
+import {
+	listUsers,
+	listAudit,
+	type AdminUserRow,
+	type AuditEntry,
+} from '@/api/users';
 import { isSessionExpired } from '@/api/client';
 
-// /dashboard landing — welcome + live operational snapshot for admins.
-// Non-admin sees a slim profile/token shortcut. Admin gets stat tiles
-// pulled in parallel + a recent-activity feed so they don't have to
-// dig through three pages to know "is anything on fire?"
-
-export default function Overview() {
-	const { user } = useAuth();
-	const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
-	const isSuperAdmin = user?.role === 'super_admin';
-
-	return (
-		<div className="space-y-6">
-			<header className="flex items-start justify-between gap-4 flex-wrap">
-				<div>
-					<h1 className="text-2xl font-semibold">
-						Welcome back, {user?.username || user?.email?.split('@')[0] || 'there'}
-					</h1>
-					<p className="text-sm text-muted-foreground mt-1">{user?.email}</p>
-				</div>
-				<div
-					className={
-						isAdmin
-							? 'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700 border border-indigo-200'
-							: 'flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200'
-					}
-				>
-					{isAdmin && <Shield className="w-3.5 h-3.5" />}
-					<span className="uppercase tracking-wide">
-						{isSuperAdmin ? 'super_admin' : isAdmin ? 'admin' : 'user'}
-					</span>
-				</div>
-			</header>
-
-			<section>
-				<h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
-					Quick actions
-				</h2>
-				<div className="grid gap-2 sm:grid-cols-2">
-					<QuickLink to="/dashboard/profile" icon={UserIcon} label="Update profile" desc="Name, avatar, password" />
-					<QuickLink to="/dashboard/tokens" icon={Key} label="Mint a token" desc="PATs for CLI + bots" />
-				</div>
-			</section>
-
-			{isAdmin && <AdminSnapshot />}
-
-			{isAdmin && (
-				<section>
-					<h2 className="text-xs font-semibold uppercase tracking-wide text-indigo-700 mb-3 flex items-center gap-1.5">
-						<Shield className="w-3 h-3" />
-						Jump to
-					</h2>
-					<div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-						<QuickLink
-							to="/dashboard/admin/users"
-							icon={Users}
-							label="People & access"
-							desc="Users, access matrix, invitations"
-							adminAccent
-						/>
-						<QuickLink
-							to="/dashboard/admin/clusters"
-							icon={Layers}
-							label="Infrastructure"
-							desc="Clusters, workers, suppliers, billing"
-							adminAccent
-						/>
-						<QuickLink
-							to="/dashboard/admin/competitions"
-							icon={Trophy}
-							label="QuantArena"
-							desc="Competitions, markets, templates"
-							adminAccent
-						/>
-						<QuickLink
-							to="/dashboard/admin/invitations"
-							icon={Ticket}
-							label="Invitations"
-							desc="Mint, list, revoke"
-							adminAccent
-						/>
-					</div>
-				</section>
-			)}
-
-			<footer className="text-xs text-muted-foreground pt-4 border-t border-slate-200/60">
-				Signed in via lum.id · session cookie is HttpOnly, scoped to{' '}
-				<code className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded">.lum.id</code>
-			</footer>
-		</div>
-	);
-}
-
-// ─────────────────────────────────────────────────────────────────────
-// AdminSnapshot — four stat tiles + a recent-activity feed. All four
-// fetches run in parallel. A tile-level error doesn't tank the page;
-// it just shows an em-dash. Stale-worker count comes from the registry
-// last_heartbeat field; anything older than 5min counts as stale even
-// if the row still claims idle/busy (stops the operator getting a
-// false-green).
-// ─────────────────────────────────────────────────────────────────────
+// /dashboard/admin/ landing — operational snapshot for cluster owners.
+// AppLayout already supplies the welcome chrome + sidebar nav, so this
+// page is content-only: 4 headline tiles, a per-cluster breakdown,
+// the GPU inventory roll-up, and the recent admin activity feed.
 
 interface Snapshot {
 	clusters: Cluster[] | null;
@@ -129,7 +38,7 @@ interface Snapshot {
 	audit: AuditEntry[] | null;
 }
 
-function AdminSnapshot() {
+export default function AdminOverview() {
 	const [snap, setSnap] = useState<Snapshot>({
 		clusters: null,
 		nodes: null,
@@ -147,10 +56,9 @@ function AdminSnapshot() {
 				listNodes({ page_size: 500 }),
 				listWorkers({ page_size: 1000 }),
 				listUsers({ page_size: 200 }),
-				listAudit({ page_size: 8 }),
+				listAudit({ page_size: 12 }),
 			]);
 			if (cancelled) return;
-			// Bail silently on session-expired (the AuthGuard will redirect)
 			for (const r of [cR, nR, wR, uR, aR]) {
 				if (r.status === 'rejected' && isSessionExpired(r.reason)) return;
 			}
@@ -172,22 +80,44 @@ function AdminSnapshot() {
 	}, []);
 
 	return (
-		<section>
-			<div className="flex items-center justify-between mb-3">
-				<h2 className="text-xs font-semibold uppercase tracking-wide text-indigo-700 flex items-center gap-1.5">
+		<div className="space-y-6">
+			<div className="flex items-center justify-between">
+				<div>
+					<h1 className="text-xl font-semibold">Overview</h1>
+					<p className="text-xs text-muted-foreground mt-0.5">
+						Live snapshot from cluster registry · refreshed on page load
+					</p>
+				</div>
+				{loading && (
+					<Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+				)}
+			</div>
+
+			<section>
+				<h2 className="text-xs font-semibold uppercase tracking-wide text-indigo-700 mb-3 flex items-center gap-1.5">
 					<Activity className="w-3 h-3" />
-					Operational snapshot
+					Headline metrics
 				</h2>
-				{loading && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
+				<div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+					<ClusterStat data={snap.clusters} />
+					<NodeStat data={snap.nodes} />
+					<WorkerStat data={snap.workers} />
+					<UserStat data={snap.users} />
+				</div>
+			</section>
+
+			<div className="grid gap-6 lg:grid-cols-2">
+				<ClusterBreakdown
+					clusters={snap.clusters}
+					nodes={snap.nodes}
+					workers={snap.workers}
+					loading={loading}
+				/>
+				<GpuInventory workers={snap.workers} loading={loading} />
 			</div>
-			<div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
-				<ClusterStat data={snap.clusters} />
-				<NodeStat data={snap.nodes} />
-				<WorkerStat data={snap.workers} />
-				<UserStat data={snap.users} />
-			</div>
+
 			<RecentActivity entries={snap.audit} loading={loading} />
-		</section>
+		</div>
 	);
 }
 
@@ -223,33 +153,21 @@ function StatTile({
 			to={to}
 			className={`group block rounded-lg border border-slate-200 border-l-[3px] ${toneCls} bg-white p-3 hover:shadow-sm hover:border-indigo-300 transition-all`}
 		>
-			<div className="flex items-center justify-between mb-1">
-				<div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-					<Icon className="w-3.5 h-3.5" />
-					{label}
-				</div>
-				<ArrowRight className="w-3 h-3 text-slate-300 group-hover:text-indigo-500 transition-colors" />
+			<div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+				<Icon className="w-3.5 h-3.5" />
+				{label}
 			</div>
 			<div className="text-2xl font-semibold leading-tight">{primary}</div>
-			{primaryHint && <div className="text-[10px] text-muted-foreground mt-0.5">{primaryHint}</div>}
+			{primaryHint && (
+				<div className="text-[10px] text-muted-foreground mt-0.5">{primaryHint}</div>
+			)}
 			<div className="text-xs text-muted-foreground mt-1.5 line-clamp-2">{secondary}</div>
 		</Link>
 	);
 }
 
 function ClusterStat({ data }: { data: Cluster[] | null }) {
-	if (data === null) {
-		return (
-			<StatTile
-				icon={Layers}
-				label="Clusters"
-				to="/dashboard/admin/clusters"
-				primary={<span className="text-muted-foreground">—</span>}
-				secondary="Couldn't load"
-				tone="default"
-			/>
-		);
-	}
+	if (data === null) return <ErrorTile icon={Layers} label="Clusters" to="/dashboard/admin/clusters" />;
 	const active = data.filter((c) => c.status === 'active').length;
 	const pending = data.filter((c) => c.status === 'pending').length;
 	const disabled = data.filter((c) => c.status === 'disabled').length;
@@ -264,7 +182,12 @@ function ClusterStat({ data }: { data: Cluster[] | null }) {
 			secondary={
 				pending + disabled === 0
 					? 'All active'
-					: `${pending ? `${pending} pending` : ''}${pending && disabled ? ' · ' : ''}${disabled ? `${disabled} disabled` : ''}`
+					: [
+							pending ? `${pending} pending` : '',
+							disabled ? `${disabled} disabled` : '',
+						]
+							.filter(Boolean)
+							.join(' · ')
 			}
 			tone={tone}
 		/>
@@ -272,24 +195,19 @@ function ClusterStat({ data }: { data: Cluster[] | null }) {
 }
 
 function NodeStat({ data }: { data: Node[] | null }) {
-	if (data === null) {
-		return (
-			<StatTile
-				icon={Server}
-				label="Nodes"
-				to="/dashboard/admin/clusters"
-				primary={<span className="text-muted-foreground">—</span>}
-				secondary="Couldn't load"
-				tone="default"
-			/>
-		);
-	}
+	if (data === null) return <ErrorTile icon={Server} label="Nodes" to="/dashboard/admin/clusters" />;
 	const active = data.filter((n) => n.status === 'active').length;
 	const draining = data.filter((n) => n.status === 'draining').length;
 	const offline = data.filter((n) => n.status === 'offline').length;
 	const stale = data.filter((n) => isStale(n.last_seen, 300)).length;
 	const tone =
-		data.length === 0 ? 'default' : offline > 0 || stale > active / 2 ? 'bad' : draining > 0 || stale > 0 ? 'warn' : 'good';
+		data.length === 0
+			? 'default'
+			: offline > 0 || stale > active / 2
+				? 'bad'
+				: draining > 0 || stale > 0
+					? 'warn'
+					: 'good';
 	return (
 		<StatTile
 			icon={Server}
@@ -314,25 +232,16 @@ function NodeStat({ data }: { data: Node[] | null }) {
 }
 
 function WorkerStat({ data }: { data: Worker[] | null }) {
-	if (data === null) {
-		return (
-			<StatTile
-				icon={Cpu}
-				label="Workers"
-				to="/dashboard/admin/clusters"
-				primary={<span className="text-muted-foreground">—</span>}
-				secondary="Couldn't load"
-				tone="default"
-			/>
-		);
-	}
+	if (data === null) return <ErrorTile icon={Cpu} label="Workers" to="/dashboard/admin/clusters" />;
 	const idle = data.filter((w) => w.status === 'idle').length;
 	const busy = data.filter((w) => w.status === 'busy').length;
 	const starting = data.filter((w) => w.status === 'starting').length;
 	const lost = data.filter((w) => w.status === 'lost').length;
 	const stopped = data.filter((w) => w.status === 'stopped').length;
 	const live = idle + busy;
-	const stale = data.filter((w) => (w.status === 'idle' || w.status === 'busy') && isStale(w.last_heartbeat, 300)).length;
+	const stale = data.filter(
+		(w) => (w.status === 'idle' || w.status === 'busy') && isStale(w.last_heartbeat, 300),
+	).length;
 	const gpu = data.filter((w) => w.type === 'gpu').length;
 	const tone =
 		data.length === 0
@@ -371,26 +280,16 @@ function WorkerStat({ data }: { data: Worker[] | null }) {
 	);
 }
 
-function UserStat({ data }: { data: { rows: AdminUserRow[]; total: number } | null }) {
-	if (data === null) {
-		return (
-			<StatTile
-				icon={Users}
-				label="Users"
-				to="/dashboard/admin/users"
-				primary={<span className="text-muted-foreground">—</span>}
-				secondary="Couldn't load"
-				tone="default"
-			/>
-		);
-	}
-	// Privileged rows are bounded; if we got fewer than `total`, the
-	// admin/super_admin counts are still right because the page is sorted
-	// active-first and admins are typically a tiny fraction. We surface a
-	// dash when the page hasn't covered the long tail.
+function UserStat({
+	data,
+}: {
+	data: { rows: AdminUserRow[]; total: number } | null;
+}) {
+	if (data === null) return <ErrorTile icon={Users} label="Users" to="/dashboard/admin/users" />;
 	const admins = data.rows.filter((u) => u.role === 'admin').length;
 	const superAdmins = data.rows.filter((u) => u.role === 'super_admin').length;
 	const suspended = data.rows.filter((u) => u.status === 'suspended').length;
+	const pending = data.rows.filter((u) => u.status === 'pending').length;
 	const tone = suspended > 0 ? 'warn' : 'default';
 	return (
 		<StatTile
@@ -400,85 +299,327 @@ function UserStat({ data }: { data: { rows: AdminUserRow[]; total: number } | nu
 			primary={data.total}
 			primaryHint={`${admins} admin · ${superAdmins} super_admin`}
 			secondary={
-				suspended === 0
-					? data.rows.filter((u) => u.status === 'pending').length > 0
-						? `${data.rows.filter((u) => u.status === 'pending').length} pending verification`
+				suspended > 0
+					? `${suspended} suspended${pending ? ` · ${pending} pending` : ''}`
+					: pending > 0
+						? `${pending} pending verification`
 						: 'No suspended accounts'
-					: `${suspended} suspended`
 			}
 			tone={tone}
 		/>
 	);
 }
 
-function RecentActivity({ entries, loading }: { entries: AuditEntry[] | null; loading: boolean }) {
-	if (loading) {
-		return (
-			<div className="mt-4 rounded-lg border border-slate-200 bg-white p-4 text-xs text-muted-foreground flex items-center gap-2">
-				<Loader2 className="w-3 h-3 animate-spin" />
-				Loading recent activity…
-			</div>
-		);
-	}
-	if (!entries) {
-		return (
-			<div className="mt-4 rounded-lg border border-slate-200 bg-white p-4 text-xs text-muted-foreground">
-				Couldn't load recent activity.
-			</div>
-		);
-	}
-	if (entries.length === 0) {
-		return (
-			<div className="mt-4 rounded-lg border border-slate-200 bg-white p-4 text-xs text-muted-foreground">
-				No recent admin activity.
-			</div>
-		);
-	}
+function ErrorTile({
+	icon: Icon,
+	label,
+	to,
+}: {
+	icon: React.ComponentType<{ className?: string }>;
+	label: string;
+	to: string;
+}) {
 	return (
-		<div className="mt-4 rounded-lg border border-slate-200 bg-white">
-			<div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between">
-				<div className="text-xs font-medium text-slate-700 flex items-center gap-1.5">
-					<Zap className="w-3 h-3 text-indigo-500" />
-					Recent activity
-				</div>
+		<StatTile
+			icon={Icon}
+			label={label}
+			to={to}
+			primary={<span className="text-muted-foreground">—</span>}
+			secondary="Couldn't load"
+			tone="default"
+		/>
+	);
+}
+
+// ─── Per-cluster breakdown ────────────────────────────────────────────
+
+function ClusterBreakdown({
+	clusters,
+	nodes,
+	workers,
+	loading,
+}: {
+	clusters: Cluster[] | null;
+	nodes: Node[] | null;
+	workers: Worker[] | null;
+	loading: boolean;
+}) {
+	const rows = useMemo(() => {
+		if (!clusters || !nodes || !workers) return [];
+		return clusters.map((c) => {
+			const cNodes = nodes.filter((n) => n.cluster_id === c.id);
+			const cWorkers = workers.filter((w) => w.cluster_id === c.id);
+			const live = cWorkers.filter((w) => w.status === 'idle' || w.status === 'busy').length;
+			const lost = cWorkers.filter((w) => w.status === 'lost').length;
+			const gpus = cWorkers.filter((w) => w.type === 'gpu').length;
+			return { cluster: c, nodes: cNodes, workers: cWorkers, live, lost, gpus };
+		});
+	}, [clusters, nodes, workers]);
+
+	return (
+		<Panel
+			title="Clusters"
+			icon={Layers}
+			loading={loading && (clusters === null || nodes === null || workers === null)}
+			loadFailed={!loading && (clusters === null || nodes === null || workers === null)}
+			empty={!loading && rows.length === 0 ? 'No clusters yet.' : undefined}
+		>
+			<table className="w-full text-xs">
+				<thead className="text-[10px] uppercase text-muted-foreground">
+					<tr className="border-b border-slate-100">
+						<th className="text-left font-medium py-1.5 px-2">Name</th>
+						<th className="text-left font-medium py-1.5 px-2">Status</th>
+						<th className="text-right font-medium py-1.5 px-2">Nodes</th>
+						<th className="text-right font-medium py-1.5 px-2">Workers</th>
+						<th className="text-right font-medium py-1.5 px-2">GPU</th>
+					</tr>
+				</thead>
+				<tbody>
+					{rows.map((r) => (
+						<tr key={r.cluster.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50">
+							<td className="py-1.5 px-2">
+								<Link
+									to={`/dashboard/admin/clusters/${r.cluster.id}`}
+									className="font-medium hover:text-indigo-600"
+								>
+									{r.cluster.name}
+								</Link>
+								{r.cluster.region && (
+									<span className="text-[10px] text-muted-foreground ml-1.5">{r.cluster.region}</span>
+								)}
+							</td>
+							<td className="py-1.5 px-2">
+								<StatusPill status={r.cluster.status} />
+							</td>
+							<td className="py-1.5 px-2 text-right tabular-nums">
+								{r.nodes.filter((n) => n.status === 'active').length}
+								<span className="text-muted-foreground">/{r.nodes.length}</span>
+							</td>
+							<td className="py-1.5 px-2 text-right tabular-nums">
+								{r.live}
+								<span className="text-muted-foreground">/{r.workers.length}</span>
+								{r.lost > 0 && (
+									<span className="ml-1 text-red-600 text-[10px]">+{r.lost} lost</span>
+								)}
+							</td>
+							<td className="py-1.5 px-2 text-right tabular-nums">{r.gpus}</td>
+						</tr>
+					))}
+				</tbody>
+			</table>
+		</Panel>
+	);
+}
+
+function StatusPill({ status }: { status: string }) {
+	const cls =
+		status === 'active'
+			? 'bg-green-100 text-green-700 border-green-200'
+			: status === 'pending'
+				? 'bg-amber-100 text-amber-700 border-amber-200'
+				: 'bg-slate-100 text-slate-600 border-slate-200';
+	return (
+		<span
+			className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] border ${cls}`}
+		>
+			{status}
+		</span>
+	);
+}
+
+// ─── GPU inventory roll-up ────────────────────────────────────────────
+
+function GpuInventory({
+	workers,
+	loading,
+}: {
+	workers: Worker[] | null;
+	loading: boolean;
+}) {
+	const rows = useMemo(() => {
+		if (!workers) return [];
+		const m = new Map<string, { live: number; total: number }>();
+		for (const w of workers) {
+			if (w.type !== 'gpu') continue;
+			const key = String(w.gpu_index != null ? `gpu#${w.gpu_index}` : 'gpu');
+			void key;
+			// We don't have model on Worker — group by gpu+role instead.
+			const k = `${w.role} GPU`;
+			const prev = m.get(k) || { live: 0, total: 0 };
+			prev.total += 1;
+			if (w.status === 'idle' || w.status === 'busy') prev.live += 1;
+			m.set(k, prev);
+		}
+		return Array.from(m.entries()).sort((a, b) => b[1].total - a[1].total);
+	}, [workers]);
+
+	const cpuLive = useMemo(() => {
+		if (!workers) return { live: 0, total: 0 };
+		const cpu = workers.filter((w) => w.type === 'cpu');
+		return {
+			live: cpu.filter((w) => w.status === 'idle' || w.status === 'busy').length,
+			total: cpu.length,
+		};
+	}, [workers]);
+
+	return (
+		<Panel
+			title="Compute mix"
+			icon={Cpu}
+			loading={loading && workers === null}
+			loadFailed={!loading && workers === null}
+			empty={!loading && workers !== null && workers.length === 0 ? 'No workers enrolled.' : undefined}
+		>
+			<table className="w-full text-xs">
+				<thead className="text-[10px] uppercase text-muted-foreground">
+					<tr className="border-b border-slate-100">
+						<th className="text-left font-medium py-1.5 px-2">Pool</th>
+						<th className="text-right font-medium py-1.5 px-2">Live</th>
+						<th className="text-right font-medium py-1.5 px-2">Total</th>
+					</tr>
+				</thead>
+				<tbody>
+					{cpuLive.total > 0 && (
+						<tr className="border-b border-slate-50 hover:bg-slate-50/50">
+							<td className="py-1.5 px-2">CPU</td>
+							<td className="py-1.5 px-2 text-right tabular-nums">{cpuLive.live}</td>
+							<td className="py-1.5 px-2 text-right tabular-nums text-muted-foreground">
+								{cpuLive.total}
+							</td>
+						</tr>
+					)}
+					{rows.map(([k, v]) => (
+						<tr key={k} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50">
+							<td className="py-1.5 px-2 capitalize">{k}</td>
+							<td className="py-1.5 px-2 text-right tabular-nums">{v.live}</td>
+							<td className="py-1.5 px-2 text-right tabular-nums text-muted-foreground">
+								{v.total}
+							</td>
+						</tr>
+					))}
+				</tbody>
+			</table>
+		</Panel>
+	);
+}
+
+// ─── Recent admin activity ────────────────────────────────────────────
+
+function RecentActivity({
+	entries,
+	loading,
+}: {
+	entries: AuditEntry[] | null;
+	loading: boolean;
+}) {
+	return (
+		<Panel
+			title="Recent activity"
+			icon={Zap}
+			loading={loading && entries === null}
+			loadFailed={!loading && entries === null}
+			empty={
+				!loading && entries !== null && entries.length === 0
+					? 'No recent admin activity.'
+					: undefined
+			}
+			rightAction={
 				<Link
 					to="/dashboard/admin/audit"
 					className="text-[10px] text-muted-foreground hover:text-indigo-600"
 				>
 					View all →
 				</Link>
-			</div>
+			}
+		>
 			<ul className="divide-y divide-slate-100">
-				{entries.map((e) => (
+				{entries?.map((e) => (
 					<ActivityRow key={e.id} entry={e} />
 				))}
 			</ul>
-		</div>
+		</Panel>
 	);
 }
 
 function ActivityRow({ entry }: { entry: AuditEntry }) {
 	const ok = !entry.status || (entry.status >= 200 && entry.status < 400);
-	const dotCls = ok ? 'bg-green-400' : entry.status && entry.status >= 500 ? 'bg-red-500' : 'bg-amber-500';
+	const dotCls = ok
+		? 'bg-green-400'
+		: entry.status && entry.status >= 500
+			? 'bg-red-500'
+			: 'bg-amber-500';
 	const ago = relativeTime(entry.created_at);
 	return (
 		<li className="px-3 py-2 text-xs flex items-center gap-2.5 hover:bg-slate-50/60">
 			<span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotCls}`} />
-			<span className="font-mono text-[10px] text-muted-foreground w-12 shrink-0">{entry.method || '—'}</span>
-			<span className="font-mono text-[11px] truncate flex-1">{entry.path || entry.event}</span>
+			<span className="font-mono text-[10px] text-muted-foreground w-12 shrink-0">
+				{entry.method || '—'}
+			</span>
+			<span className="font-mono text-[11px] truncate flex-1">
+				{entry.path || entry.event}
+			</span>
 			{entry.status != null && (
-				<span className={`text-[10px] font-mono shrink-0 ${ok ? 'text-slate-500' : 'text-red-600'}`}>
+				<span
+					className={`text-[10px] font-mono shrink-0 ${ok ? 'text-slate-500' : 'text-red-600'}`}
+				>
 					{entry.status}
 				</span>
 			)}
-			<span className="text-[10px] text-muted-foreground w-14 text-right shrink-0" title={entry.created_at}>
+			<span
+				className="text-[10px] text-muted-foreground w-10 text-right shrink-0"
+				title={entry.created_at}
+			>
 				{ago}
 			</span>
 		</li>
 	);
 }
 
-// ─── helpers ─────────────────────────────────────────────────────────
+// ─── Panel + helpers ──────────────────────────────────────────────────
+
+function Panel({
+	title,
+	icon: Icon,
+	children,
+	loading,
+	loadFailed,
+	empty,
+	rightAction,
+}: {
+	title: string;
+	icon: React.ComponentType<{ className?: string }>;
+	children: React.ReactNode;
+	loading?: boolean;
+	loadFailed?: boolean;
+	empty?: string;
+	rightAction?: React.ReactNode;
+}) {
+	return (
+		<div className="rounded-lg border border-slate-200 bg-white">
+			<div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between">
+				<div className="text-xs font-medium text-slate-700 flex items-center gap-1.5">
+					<Icon className="w-3 h-3 text-indigo-500" />
+					{title}
+				</div>
+				{rightAction}
+			</div>
+			{loading ? (
+				<div className="px-3 py-6 text-xs text-muted-foreground flex items-center justify-center gap-2">
+					<Loader2 className="w-3 h-3 animate-spin" />
+					Loading…
+				</div>
+			) : loadFailed ? (
+				<div className="px-3 py-6 text-xs text-muted-foreground text-center">
+					Couldn't load.
+				</div>
+			) : empty ? (
+				<div className="px-3 py-6 text-xs text-muted-foreground text-center">{empty}</div>
+			) : (
+				children
+			)}
+		</div>
+	);
+}
 
 function isStale(ts: string | undefined | null, thresholdSec: number): boolean {
 	if (!ts) return true;
@@ -495,38 +636,4 @@ function relativeTime(ts: string): string {
 	if (ageS < 3600) return `${Math.floor(ageS / 60)}m`;
 	if (ageS < 86400) return `${Math.floor(ageS / 3600)}h`;
 	return `${Math.floor(ageS / 86400)}d`;
-}
-
-// ─────────────────────────────────────────────────────────────────────
-
-function QuickLink({
-	to,
-	icon: Icon,
-	label,
-	desc,
-	adminAccent = false,
-}: {
-	to: string;
-	icon: React.ComponentType<{ className?: string }>;
-	label: string;
-	desc: string;
-	adminAccent?: boolean;
-}) {
-	const base =
-		'group rounded-lg p-3 border hover:border-indigo-300 hover:shadow-sm transition-all flex items-center gap-3 bg-white';
-	const accent = adminAccent
-		? 'border-l-[3px] border-l-indigo-500 border-slate-200'
-		: 'border-slate-200';
-	return (
-		<Link to={to} className={`${base} ${accent}`}>
-			<div className={`p-2 rounded-md shrink-0 ${adminAccent ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-50 text-slate-600 group-hover:bg-indigo-50 group-hover:text-indigo-600'}`}>
-				<Icon className="w-4 h-4" />
-			</div>
-			<div className="flex-1 min-w-0">
-				<div className="text-sm font-medium">{label}</div>
-				<p className="text-xs text-slate-500 truncate">{desc}</p>
-			</div>
-			<ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-indigo-500 shrink-0 transition-colors" />
-		</Link>
-	);
 }
