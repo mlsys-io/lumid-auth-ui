@@ -99,12 +99,21 @@ export default function InfrastructureSetup() {
 			<Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm border-l-4 border-l-indigo-500">
 				<CardContent className="pt-4 text-sm text-muted-foreground space-y-2">
 					<p>
-						<b>One admin surface for the compute layer.</b> Register a
-						cluster → add nodes → enroll workers. Runmesh supplier rows
-						are auto-created on first node registration and retire when
-						the last node leaves; billing attribution flows automatically
-						from worker tasks to the cluster's vendor row. A background
-						sweeper retires stale workers — no manual cleanup.
+						<b>Two layers, one admin surface.</b>{" "}
+						<i>(1)</i> the cluster <b>registry</b> (this UI, lumid_cluster
+						service) tracks inventory: clusters, nodes, workers, vendor
+						mirror to Runmesh.{" "}
+						<i>(2)</i> the FlowMesh <b>execution</b> stack (host on .181 +
+						guardians per box, deployed via <code>flowmeshctl</code>) is
+						what actually accepts and runs jobs. Steps 1–3 set up (1);
+						step 4 sets up (2). The two are loosely coupled today — see
+						the heads-up in step 4.
+					</p>
+					<p>
+						Suppliers auto-mirror from the cluster on first node
+						registration (no manual onboarding); billing attribution
+						flows from worker task termination to the cluster's vendor
+						row. A background sweeper retires stale registry workers.
 					</p>
 					<p className="text-xs">
 						Worker-enroll field shapes (<code>role</code> /{" "}
@@ -232,13 +241,25 @@ export default function InfrastructureSetup() {
 					<div className="pt-2 text-xs text-muted-foreground space-y-1">
 						<p>
 							<b>Prereqs:</b> Linux + systemd + curl + sudo, outbound HTTPS
-							to <code>lum.id</code>.
+							to <code>lum.id</code>. For boxes that will host{" "}
+							<b>FlowMesh GPU workers</b> (next section), you also need
+							docker + nvidia-container-toolkit + the nvidia docker runtime
+							registered (<code>nvidia-ctk runtime configure</code>) +
+							flowmesh user in the docker group.
 						</p>
 						<p>
 							<b>Installs:</b>{" "}
 							<code>/usr/local/bin/lumid-cluster-agent</code>, systemd unit,{" "}
 							<code>lumid-agent</code> group on the{" "}
 							<code>/run/lumid-cluster-agent.sock</code> control socket.
+						</p>
+						<p>
+							<b>Disk:</b> the FM GPU worker image is{" "}
+							<code>~45&nbsp;GB</code> + ~6&nbsp;GB for the HF model
+							pre-download. Boxes with the default Ubuntu 100&nbsp;GB LV
+							need <code>lvextend -l +100%FREE</code> on
+							<code>ubuntu-vg/ubuntu-lv</code> + <code>resize2fs</code>{" "}
+							first.
 						</p>
 					</div>
 				</CardContent>
@@ -304,12 +325,92 @@ newgrp lumid-agent     # or log out/in for the group to apply`}
 				</CardContent>
 			</Card>
 
-			{/* Section 4 — suppliers */}
+			{/* Section 4 — FM Host + guardians (the real job-execution layer) */}
+			<Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm">
+				<CardHeader>
+					<CardTitle className="text-base flex items-center gap-2">
+						<Terminal className="w-4 h-4 text-indigo-600" />
+						4. FlowMesh Host + Guardians (job execution)
+					</CardTitle>
+					<CardDescription>
+						Step 3 enrolled the box in the cluster <i>registry</i> (inventory).
+						This step makes it actually take jobs. <b>One FM Host per
+						cluster</b> + <b>one Guardian per box</b> + N workers (one CPU
+						optional, one GPU per device). Driven by{" "}
+						<code>flowmeshctl</code> on the host box.
+					</CardDescription>
+				</CardHeader>
+				<CardContent className="space-y-3 text-sm">
+					<p className="text-xs text-muted-foreground">
+						On the host box (e.g. luyaomini, .181), the deployment toolkit
+						lives at <code>~/flowmeshctl/</code> with{" "}
+						<code>flowmesh_config.yaml</code> declaring host + guardians.
+					</p>
+					<CodeBlock
+						code={`# 1. Add a remote box as a guardian — append to flowmesh_config.yaml
+guardians:
+  - node: "192.168.6.<X>"
+    guardian_api_key: "flm-<minted via /api/v1/auth/keys>"
+    env_guardian_file: "envs/.env.guardian.<hostname>"
+    worker_config: "configs/cpu_worker_config.yaml"  # or gpu_only_worker_config.yaml
+    workers:
+      images: ["cpu", "gpu"]   # ["gpu"] for GPU-only boxes (e.g. mini boxes)
+      auto: "per_gpu"
+
+# 2. Mint the operator API key on the host's auth API
+curl -X POST http://<host>:8010/api/v1/auth/keys \\
+  -H 'Authorization: Bearer <admin-api-key>' \\
+  -d '{"key_type":"operator","alias":"<box>-guardian","principal_id":"<admin>"}'
+
+# 3. Generate the env file (template: envs/.env.guardian.1)
+#    Replace GUARDIAN_CLUSTER, GUARDIAN_ALIAS, GUARDIAN_TOKEN (32B random),
+#    FLOWMESH_API_KEY (the minted key from step 2).
+
+# 4. Pre-distribute the GPU image (45 GB) via LAN — avoids per-host pull
+#    On a host that already has it (e.g. luyao2):
+ssh flowmesh@<source> "docker save \\
+  kaiitunnz/flowmesh_worker:latest-gpu \\
+  kaiitunnz/flowmesh_worker:latest-cpu \\
+  kaiitunnz/flowmesh_guardian:latest -o /tmp/fm_imgs.tar"
+ssh flowmesh@<source> "cat /tmp/fm_imgs.tar" | \\
+  ssh flowmesh@<target> "docker load"
+
+# 5. Deploy
+cd ~/flowmeshctl && .venv/bin/python flowmeshctl.py guardian deploy <idx>
+# Or all of them: flowmeshctl.py guardian deploy   (no args = sequential)
+# Parallel: launch flowmeshctl.py guardian deploy <i> & per index`}
+					/>
+
+					<div className="pt-2 text-xs text-muted-foreground space-y-1">
+						<p>
+							<b>FM Host endpoints (port 8010 on host box):</b>{" "}
+							<code>/api/v1/guardians</code>,{" "}
+							<code>/api/v1/workers</code>,{" "}
+							<code>/api/v1/auth/keys</code>.
+						</p>
+						<p>
+							<b>Heads up:</b> FM workers heartbeat to the FM Host (their
+							job source), not to <code>lumid_cluster</code> — so the
+							cluster registry's worker rows stay in <code>starting</code>{" "}
+							even after a guardian is fully running. Drift fix is
+							planned (cluster-agent → lumid_cluster heartbeat).
+						</p>
+						<p>
+							<b>aarch64 boxes (e.g. NVIDIA GB10):</b>{" "}
+							<code>kaiitunnz/flowmesh_*</code> images are amd64-only
+							today. Those nodes register in the cluster but cannot run
+							a guardian until arm64 worker images exist.
+						</p>
+					</div>
+				</CardContent>
+			</Card>
+
+			{/* Section 5 — suppliers */}
 			<Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm">
 				<CardHeader>
 					<CardTitle className="text-base flex items-center gap-2">
 						<Briefcase className="w-4 h-4 text-indigo-600" />
-						4. Suppliers (auto-mirrored)
+						5. Suppliers (auto-mirrored)
 					</CardTitle>
 					<CardDescription>
 						Every cluster gets a Runmesh vendor row on first node
@@ -357,7 +458,7 @@ newgrp lumid-agent     # or log out/in for the group to apply`}
 				<CardHeader>
 					<CardTitle className="text-base flex items-center gap-2">
 						<DollarSign className="w-4 h-4 text-indigo-600" />
-						5. Billing (automatic)
+						6. Billing (automatic)
 					</CardTitle>
 					<CardDescription>
 						Worker tasks that terminate post a ledger entry into
