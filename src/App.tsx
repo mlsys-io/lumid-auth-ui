@@ -23,9 +23,11 @@ const Tokens = lazy(() => import("./pages/account/tokens"));
 // routed. Re-add import + route + tab entry if/when OAuth linking is
 // needed again.
 const AdminInvitations = lazy(() => import("./pages/account/admin-invitations"));
-const RunmeshAdminDashboard = lazy(() =>
-  import("./runmesh/pages/AdminDashboard").then((m) => ({ default: m.AdminDashboard })),
-);
+// AdminOverview — operational snapshot landing at /dashboard/admin/.
+// Replaces the Runmesh-ported AdminDashboard (revenue/success metrics
+// that are zero in our deployment); pulls live cluster/node/worker/
+// user/audit data instead. Source at pages/dashboard/overview.tsx.
+const AdminOverview = lazy(() => import("./pages/dashboard/overview"));
 // RunmeshUsers removed 2026-04-24 — canonical user admin now at
 // /app/admin/users (backed by lumid_identity.users). sys_user stays as
 // a lazy mirror for FK integrity but is no longer separately editable.
@@ -314,7 +316,7 @@ export default function App() {
                 </AdminGuard>
               }
             >
-              <Route index element={<RunmeshAdminDashboard />} />
+              <Route index element={<AdminOverview />} />
 
               {/* People & access — 5 tabs */}
               <Route
