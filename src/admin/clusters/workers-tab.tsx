@@ -63,7 +63,6 @@ function statusBadge(status: Worker["status"]): string {
 }
 
 export default function WorkersTab({ workers, nodes, onChange }: Props) {
-	const [role, setRole] = useState<string>("all");
 	const [type, setType] = useState<string>("all");
 	const [status, setStatus] = useState<string>("all");
 	const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -76,12 +75,11 @@ export default function WorkersTab({ workers, nodes, onChange }: Props) {
 
 	const filtered = useMemo(() => {
 		return workers.filter((w) => {
-			if (role !== "all" && w.role !== role) return false;
 			if (type !== "all" && w.type !== type) return false;
 			if (status !== "all" && w.status !== status) return false;
 			return true;
 		});
-	}, [workers, role, type, status]);
+	}, [workers, type, status]);
 
 	async function onDeleteConfirmed() {
 		if (!deleteId) return;
@@ -127,16 +125,6 @@ export default function WorkersTab({ workers, nodes, onChange }: Props) {
 							</CardDescription>
 						</div>
 						<div className="flex items-center gap-2 flex-wrap">
-							<Select value={role} onValueChange={setRole}>
-								<SelectTrigger className="w-36">
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="all">All roles</SelectItem>
-									<SelectItem value="flowmesh">FlowMesh</SelectItem>
-									<SelectItem value="lumilake">Lumilake</SelectItem>
-								</SelectContent>
-							</Select>
 							<Select value={type} onValueChange={setType}>
 								<SelectTrigger className="w-32">
 									<SelectValue />
@@ -177,7 +165,6 @@ export default function WorkersTab({ workers, nodes, onChange }: Props) {
 								<thead className="text-xs text-muted-foreground">
 									<tr className="border-b">
 										<th className="text-left py-2 px-2 font-medium">ID</th>
-										<th className="text-left py-2 px-2 font-medium">Role</th>
 										<th className="text-left py-2 px-2 font-medium">Type</th>
 										<th className="text-left py-2 px-2 font-medium">Node</th>
 										<th className="text-left py-2 px-2 font-medium">Status</th>
@@ -199,7 +186,6 @@ export default function WorkersTab({ workers, nodes, onChange }: Props) {
 														<div className="text-xs text-muted-foreground">v{w.version}</div>
 													)}
 												</td>
-												<td className="py-2 px-2 capitalize">{w.role}</td>
 												<td className="py-2 px-2">
 													<span className="inline-flex items-center gap-1">
 														{w.type === "gpu" ? (
