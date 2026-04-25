@@ -218,9 +218,11 @@ export default function WorkersTab({ workers, nodes, onChange }: Props) {
 													{w.cost_per_hour > 0 ? `$${w.cost_per_hour.toFixed(2)}` : "—"}
 												</td>
 												<td className="py-2 px-2 text-muted-foreground whitespace-nowrap">
-													{w.last_heartbeat
-														? formatDateTime(new Date(w.last_heartbeat).getTime() / 1000)
-														: "—"}
+													{w.last_heartbeat ? (
+														<HeartbeatCell ts={w.last_heartbeat} />
+													) : (
+														<span className="text-xs">—</span>
+													)}
 												</td>
 												<td className="py-2 px-2 text-right">
 													<Button
@@ -266,4 +268,22 @@ export default function WorkersTab({ workers, nodes, onChange }: Props) {
 			</AlertDialog>
 		</>
 	);
+}
+
+// HeartbeatCell — surfaces last-heartbeat freshness at a glance.
+// < 60s → green; < 5min → amber; older → red. Saves operators from
+// reading raw timestamps to figure out whether a worker is alive.
+function HeartbeatCell({ ts }: { ts: string }) {
+	const t = new Date(ts).getTime();
+	const ageS = Math.max(0, Math.floor((Date.now() - t) / 1000));
+	const fmt =
+		ageS < 60 ? `${ageS}s ago`
+		: ageS < 3600 ? `${Math.floor(ageS / 60)}m ago`
+		: ageS < 86400 ? `${Math.floor(ageS / 3600)}h ago`
+		: `${Math.floor(ageS / 86400)}d ago`;
+	const cls =
+		ageS < 60 ? "text-green-700"
+		: ageS < 300 ? "text-amber-700"
+		: "text-red-700";
+	return <span className={`text-xs font-medium ${cls}`} title={ts}>{fmt}</span>;
 }
