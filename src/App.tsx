@@ -355,11 +355,17 @@ export default function App() {
                 element={
                   <AdminSectionLayout
                     title="Infrastructure"
-                    subtitle="Clusters, workers, suppliers, billing, and workflow review — one admin surface for the compute layer."
+                    subtitle="Clusters, workers, billing, and workflow review — one admin surface for the compute layer. Suppliers are auto-mirrored from clusters; the standalone Suppliers tab is retired."
                     tabs={[
                       { to: "/dashboard/admin/clusters", label: "Clusters", end: true },
                       { to: "/dashboard/admin/cluster-workers", label: "Workers" },
-                      { to: "/dashboard/admin/suppliers", label: "Suppliers" },
+                      // Suppliers retired from the sidebar 2026-04-25 —
+                      // every cluster auto-creates one vendor row, so
+                      // /admin/suppliers and /admin/clusters showed the
+                      // same physical things from two lenses. Vendor
+                      // metadata now lives on the Commercial tab of each
+                      // cluster. Route stays reachable for the rare
+                      // untied-vendor case.
                       // Billing + platform-wide accounting are
                       // super_admin-only. Regular admins manage users
                       // / clusters / workflows but don't touch money.
