@@ -60,7 +60,10 @@ export interface Worker {
 	type: "cpu" | "gpu";
 	gpu_index?: number | null;
 	memory_limit_gb: number;
+	// Supplier-side rate (what the platform pays the GPU owner).
 	cost_per_hour: number;
+	// User-facing rate (what we charge end users). Profit = sell - cost.
+	selling_price_per_hour: number;
 	status: "starting" | "idle" | "busy" | "stopping" | "stopped" | "lost";
 	version?: string;
 	cached_models?: string[] | Record<string, unknown> | null;
@@ -341,4 +344,21 @@ export async function listWorkers(
 
 export async function deleteWorker(id: string): Promise<void> {
 	await apiClient.delete(`/api/v1/cluster/workers/${encodeURIComponent(id)}`);
+}
+
+export interface PatchWorkerRequest {
+	cost_per_hour?: number;
+	selling_price_per_hour?: number;
+	memory_limit_gb?: number;
+}
+
+export async function patchWorker(
+	id: string,
+	req: PatchWorkerRequest,
+): Promise<Worker> {
+	const r = await apiClient.patch<DataResponse<{ worker: Worker }>>(
+		`/api/v1/cluster/workers/${encodeURIComponent(id)}`,
+		req,
+	);
+	return r.data.data.worker;
 }

@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Cpu, Trash2, Zap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
 	Card,
 	CardContent,
@@ -27,9 +28,10 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { cn, formatDateTime } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import {
 	deleteWorker,
+	patchWorker,
 	type Node,
 	type Worker,
 } from "@/api/cluster";
@@ -91,6 +93,21 @@ export default function WorkersTab({ workers, nodes, onChange }: Props) {
 		} catch (e: unknown) {
 			if (isSessionExpired(e)) return;
 			toast.error((e as Error)?.message || "Delete failed");
+		}
+	}
+
+	async function onPriceSave(
+		id: string,
+		field: "cost_per_hour" | "selling_price_per_hour",
+		value: number,
+	) {
+		try {
+			await patchWorker(id, { [field]: value });
+			toast.success("Saved");
+			onChange();
+		} catch (e: unknown) {
+			if (isSessionExpired(e)) return;
+			toast.error((e as Error)?.message || "Save failed");
 		}
 	}
 
@@ -164,7 +181,9 @@ export default function WorkersTab({ workers, nodes, onChange }: Props) {
 										<th className="text-left py-2 px-2 font-medium">Type</th>
 										<th className="text-left py-2 px-2 font-medium">Node</th>
 										<th className="text-left py-2 px-2 font-medium">Status</th>
-										<th className="text-right py-2 px-2 font-medium">Cost/hr</th>
+										<th className="text-right py-2 px-2 font-medium" title="Supplier-side rate (what we pay)">Cost/hr</th>
+										<th className="text-right py-2 px-2 font-medium" title="User-facing rate (what we charge)">Sell/hr</th>
+										<th className="text-right py-2 px-2 font-medium" title="Profit per hour = sell - cost">Profit</th>
 										<th className="text-left py-2 px-2 font-medium">Last heartbeat</th>
 										<th className="text-right py-2 px-2 font-medium"></th>
 									</tr>
@@ -214,8 +233,28 @@ export default function WorkersTab({ workers, nodes, onChange }: Props) {
 														{w.status}
 													</span>
 												</td>
-												<td className="py-2 px-2 text-right text-muted-foreground">
-													{w.cost_per_hour > 0 ? `$${w.cost_per_hour.toFixed(2)}` : "—"}
+												<td className="py-2 px-2 text-right">
+													<PriceCell
+														value={w.cost_per_hour}
+														onSave={(v) => onPriceSave(w.id, "cost_per_hour", v)}
+													/>
+												</td>
+												<td className="py-2 px-2 text-right">
+													<PriceCell
+														value={w.selling_price_per_hour}
+														onSave={(v) => onPriceSave(w.id, "selling_price_per_hour", v)}
+													/>
+												</td>
+												<td className="py-2 px-2 text-right text-xs">
+													{(() => {
+														const p = (w.selling_price_per_hour || 0) - (w.cost_per_hour || 0);
+														if (p === 0) return <span className="text-muted-foreground">—</span>;
+														return (
+															<span className={p > 0 ? "text-green-700" : "text-red-700"}>
+																{p > 0 ? "+" : ""}${p.toFixed(2)}
+															</span>
+														);
+													})()}
 												</td>
 												<td className="py-2 px-2 text-muted-foreground whitespace-nowrap">
 													{w.last_heartbeat ? (
@@ -267,6 +306,72 @@ export default function WorkersTab({ workers, nodes, onChange }: Props) {
 				</AlertDialogContent>
 			</AlertDialog>
 		</>
+	);
+}
+
+// PriceCell — click-to-edit number cell. Shows "$X.XXXX" (or em-dash for 0)
+// in display mode; on click swaps to an input. Enter or blur commits via
+// onSave; Escape reverts. Save is no-op if the value didn't change.
+function PriceCell({
+	value,
+	onSave,
+}: {
+	value: number;
+	onSave: (v: number) => void | Promise<void>;
+}) {
+	const [editing, setEditing] = useState(false);
+	const [draft, setDraft] = useState(String(value || 0));
+	const inputRef = useRef<HTMLInputElement>(null);
+
+	useEffect(() => {
+		if (!editing) setDraft(String(value || 0));
+	}, [value, editing]);
+
+	useEffect(() => {
+		if (editing) inputRef.current?.select();
+	}, [editing]);
+
+	function commit() {
+		const n = parseFloat(draft);
+		setEditing(false);
+		if (Number.isFinite(n) && n >= 0 && n !== value) {
+			onSave(n);
+		} else {
+			setDraft(String(value || 0));
+		}
+	}
+
+	if (editing) {
+		return (
+			<Input
+				ref={inputRef}
+				type="number"
+				step="0.0001"
+				min="0"
+				value={draft}
+				onChange={(e) => setDraft(e.target.value)}
+				onBlur={commit}
+				onKeyDown={(e) => {
+					if (e.key === "Enter") commit();
+					else if (e.key === "Escape") {
+						setDraft(String(value || 0));
+						setEditing(false);
+					}
+				}}
+				className="h-7 w-20 text-right text-xs ml-auto"
+			/>
+		);
+	}
+
+	return (
+		<button
+			type="button"
+			onClick={() => setEditing(true)}
+			className="text-xs hover:underline hover:text-primary"
+			title="Click to edit"
+		>
+			{value > 0 ? `$${value.toFixed(2)}` : <span className="text-muted-foreground">—</span>}
+		</button>
 	);
 }
 
