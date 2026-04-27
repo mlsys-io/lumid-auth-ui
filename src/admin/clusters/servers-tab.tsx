@@ -58,6 +58,11 @@ export default function ServersTab({ clusterId, servers, onChange }: Props) {
 function defaultStorage(role: "flowmesh" | "lumilake"): Record<string, unknown> {
 	if (role === "flowmesh") {
 		return {
+			// Operator-shape Bearer the cluster proxy injects when
+			// forwarding lum.id-side submit calls to this host. Created
+			// upstream via POST /api/v1/auth/keys on the FlowMesh Host
+			// itself; paste the `flm-…` value here.
+			api_key: "flm-replace-with-operator-key",
 			minio: { endpoint: "http://host:19000", bucket: "flowmesh-results" },
 			redis_control_url: "redis://host:6379/0",
 			redis_telemetry_url: "redis://host:6379/1",
@@ -65,6 +70,10 @@ function defaultStorage(role: "flowmesh" | "lumilake"): Record<string, unknown> 
 		};
 	}
 	return {
+		// Operator-shape Bearer the cluster proxy injects when
+		// forwarding lum.id-side submit calls to this host (Lumilake's
+		// `lmk-…` key).
+		api_key: "lmk-replace-with-operator-key",
 		minio: { endpoint: "http://host:19000", bucket: "lumilake-results" },
 		redis_control_url: "redis://host:6379/0",
 		postgres_dsn_ref: "secret:cluster-xxx-ll-pg",

@@ -180,6 +180,45 @@ export async function deleteServer(
 	);
 }
 
+// ---- per-cluster proxy ----
+//
+// Forward a request to the cluster's registered FlowMesh / Lumilake host.
+// `path` is appended verbatim to the cluster's `host_url`. The lumid-cluster
+// proxy strips our session bearer and injects the operator key from
+// `cluster_servers.storage_json.api_key` before forwarding.
+
+export async function clusterProxyPost<T = unknown>(
+	clusterId: string,
+	path: string,
+	body: BodyInit | string,
+	opts?: { role?: "flowmesh" | "lumilake"; contentType?: string },
+): Promise<T> {
+	const role = opts?.role ?? "flowmesh";
+	const headers: Record<string, string> = {
+		"Content-Type": opts?.contentType || "application/json",
+	};
+	const url =
+		`/api/v1/cluster/clusters/${encodeURIComponent(clusterId)}/proxy${
+			path.startsWith("/") ? path : "/" + path
+		}?role=${role}`;
+	const r = await apiClient.post<T>(url, body, { headers });
+	return r.data;
+}
+
+export async function clusterProxyGet<T = unknown>(
+	clusterId: string,
+	path: string,
+	opts?: { role?: "flowmesh" | "lumilake" },
+): Promise<T> {
+	const role = opts?.role ?? "flowmesh";
+	const url =
+		`/api/v1/cluster/clusters/${encodeURIComponent(clusterId)}/proxy${
+			path.startsWith("/") ? path : "/" + path
+		}?role=${role}`;
+	const r = await apiClient.get<T>(url);
+	return r.data;
+}
+
 // ---- nodes ----
 
 export interface ListNodesParams {

@@ -68,6 +68,7 @@ import ServersTab from "./servers-tab";
 import NodesTab from "./nodes-tab";
 import WorkersTab from "./workers-tab";
 import CommercialTab from "./commercial-tab";
+import SubmitTab from "./submit-tab";
 
 function statusBadge(status: Cluster["status"]): string {
 	switch (status) {
@@ -235,6 +236,7 @@ export default function ClusterDetail() {
 							Workers ({workers.length})
 						</TabsTrigger>
 						<TabsTrigger value="commercial">Commercial</TabsTrigger>
+						<TabsTrigger value="submit">Submit</TabsTrigger>
 					</TabsList>
 
 					<TabsContent value="overview" className="mt-4">
@@ -363,6 +365,10 @@ export default function ClusterDetail() {
 
 					<TabsContent value="commercial" className="mt-4">
 						<CommercialTab clusterId={id} />
+					</TabsContent>
+
+					<TabsContent value="submit" className="mt-4">
+						<SubmitTab clusterId={id} />
 					</TabsContent>
 				</Tabs>
 			)}
