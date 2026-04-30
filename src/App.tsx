@@ -28,6 +28,23 @@ const AdminInvitations = lazy(() => import("./pages/account/admin-invitations"))
 // that are zero in our deployment); pulls live cluster/node/worker/
 // user/audit data instead. Source at pages/dashboard/overview.tsx.
 const AdminOverview = lazy(() => import("./pages/dashboard/overview"));
+const QuantLayout = lazy(() => import("./pages/dashboard/quant-layout"));
+const QuantStrategy = lazy(() => import("./pages/dashboard/quant-strategy"));
+const QuantDatasource = lazy(() => import("./pages/dashboard/quant-datasource"));
+const QuantBacktesting = lazy(() => import("./pages/dashboard/quant-backtesting"));
+const QuantRanking = lazy(() => import("./pages/dashboard/quant-ranking"));
+const QuantTemplate = lazy(() => import("./pages/dashboard/quant-template"));
+const QuantResearch = lazy(() => import("./pages/dashboard/quant-research"));
+const QuantMarketData = lazy(() => import("./pages/dashboard/quant-market-data"));
+const QuantCompetition = lazy(() =>
+  import("./pages/dashboard/quant-competition").then((m) => ({ default: m.QuantCompetitionPage }))
+);
+const QuantCompetitionDetail = lazy(() =>
+  import("./pages/dashboard/quant-competition").then((m) => ({ default: m.QuantCompetitionDetailPage }))
+);
+const QuantCompetitionStrategyDetail = lazy(() =>
+  import("./pages/dashboard/quant-competition").then((m) => ({ default: m.QuantCompetitionStrategyDetailPage }))
+);
 // RunmeshUsers removed 2026-04-24 — canonical user admin now at
 // /app/admin/users (backed by lumid_identity.users). sys_user stays as
 // a lazy mirror for FK integrity but is no longer separately editable.
@@ -49,7 +66,7 @@ const RunmeshWorkflowReview = lazy(() => import("./runmesh/pages/WorkflowReview"
 const AppLayout = lazy(() => import("./components/app-layout"));
 const AppApps = lazy(() => import("./pages/app/apps"));
 const AppWorkflows = lazy(() => import("./pages/app/workflows"));
-const AppTasks = lazy(() => import("./pages/app/tasks"));
+const AppJobs = lazy(() => import("./pages/dashboard/jobs"));
 const AppBilling = lazy(() => import("./pages/app/billing"));
 const AppWorkflowBuilder = lazy(() => import("./pages/app/workflow-builder"));
 const AppWorkflowDetail = lazy(() => import("./pages/app/workflow-detail"));
@@ -89,6 +106,22 @@ const AppAdminSetup = lazy(() => import("./pages/app/admin-setup"));
 const AppAdminClusters = lazy(() => import("./pages/app/admin-clusters"));
 const AppAdminClustersNew = lazy(() => import("./pages/app/admin-clusters-new"));
 const AppAdminClustersDetail = lazy(() => import("./pages/app/admin-clusters-detail"));
+const ClusterDetailOverview = lazy(() => import("./admin/clusters/overview-tab"));
+const ClusterDetailServers = lazy(() =>
+  import("./admin/clusters/detail-routes").then((m) => ({ default: m.ServersRoute })),
+);
+const ClusterDetailNodes = lazy(() =>
+  import("./admin/clusters/detail-routes").then((m) => ({ default: m.NodesRoute })),
+);
+const ClusterDetailWorkers = lazy(() =>
+  import("./admin/clusters/detail-routes").then((m) => ({ default: m.WorkersRoute })),
+);
+const ClusterDetailCommercial = lazy(() =>
+  import("./admin/clusters/detail-routes").then((m) => ({ default: m.CommercialRoute })),
+);
+const ClusterDetailSubmit = lazy(() =>
+  import("./admin/clusters/detail-routes").then((m) => ({ default: m.SubmitRoute })),
+);
 const AppAdminClusterWorkers = lazy(() => import("./pages/app/admin-cluster-workers"));
 const AppAdminInfrastructureSetup = lazy(() => import("./pages/app/admin/infrastructure-setup"));
 // QuantArena admin pages — bridged via /api/v1/qa-admin/* nginx proxy
@@ -234,22 +267,16 @@ export default function App() {
               <Route path="lumilake-submit" element={<AppLumilakeSubmit />} />
             </Route>
 
-            {/* Running jobs — merged runtime view. Tab shell. */}
-            <Route
-              element={
-                <AdminSectionLayout
-                  title="Running jobs"
-                  subtitle="All workflow runs — FlowMesh compute tasks and Lumilake analytics jobs, side by side."
-                  tabs={[
-                    { to: "/dashboard/jobs/runmesh", label: "FlowMesh", end: true },
-                    { to: "/dashboard/jobs/lumilake", label: "Lumilake" },
-                  ]}
-                />
-              }
-            >
-              <Route path="jobs/runmesh" element={<AppTasks />} />
-              <Route path="jobs/lumilake" element={<AppLumilakeJobs />} />
-            </Route>
+            {/* Running jobs — single page, Source dropdown filter
+                (All / Quant / Lumid). Lumilake analytics jobs keep a
+                standalone route for the data-engineer audience but
+                aren't in the dropdown. The old AdminSectionLayout
+                tabs were retired 2026-04-30 along with the Quant
+                Trading-jobs tab in QuantLayout — both folded in here. */}
+            <Route path="jobs" element={<AppJobs />} />
+            <Route path="jobs/lumilake" element={<AppLumilakeJobs />} />
+            <Route path="jobs/runmesh" element={<Navigate to="/dashboard/jobs?source=lumid" replace />} />
+            <Route path="jobs/quant" element={<Navigate to="/dashboard/jobs?source=quant" replace />} />
 
             {/* Legacy-URL redirects (every old URL still resolves). */}
             <Route path="tasks" element={<Navigate to="/dashboard/jobs/runmesh" replace />} />
@@ -270,6 +297,30 @@ export default function App() {
             <Route path="gpu-rentals" element={<AppGpuRentals />} />
             <Route path="gpu-rentals/new" element={<AppGpuRentalsNew />} />
             <Route path="gpu-rentals/:id" element={<AppGpuRentalDetail />} />
+
+            {/* Lumid Market migration — all authed lumid.market pages
+                now live under /dashboard/quant/*. lumid.market itself
+                is reduced to the public contest landing + /public/
+                ranking; everything else (strategy, backtesting,
+                competition, etc.) was ported into lumid_ui on
+                2026-04-30. */}
+            <Route path="quant" element={<QuantLayout />}>
+              <Route index element={<Navigate to="/dashboard/quant/competition" replace />} />
+              <Route path="competition" element={<QuantCompetition />} />
+              <Route path="competition/:competitionId" element={<QuantCompetitionDetail />} />
+              <Route
+                path="competition/:competitionId/strategy/:strategyId"
+                element={<QuantCompetitionStrategyDetail />}
+              />
+              <Route path="strategy" element={<QuantStrategy />} />
+              <Route path="backtesting" element={<QuantBacktesting />} />
+              <Route path="ranking" element={<QuantRanking />} />
+              <Route path="template" element={<QuantTemplate />} />
+              <Route path="datasource" element={<QuantDatasource />} />
+              <Route path="market-data" element={<QuantMarketData />} />
+              <Route path="flowmesh-jobs" element={<Navigate to="/dashboard/jobs?source=quant" replace />} />
+              <Route path="research/:strategyId" element={<QuantResearch />} />
+            </Route>
 
             {/* Lumilake-origin pages grouped under /app/lumilake/*.
                 data-label + modelling hidden 2026-04-24 — not
@@ -400,7 +451,19 @@ export default function App() {
                 }
               />
               <Route path="clusters/new" element={<AppAdminClustersNew />} />
-              <Route path="clusters/:id" element={<AppAdminClustersDetail />} />
+              {/* Cluster detail uses its own tab strip in place of the
+                  Infrastructure section strip — flat one-level nav while
+                  inside a cluster. Old /admin/clusters/:id deep-links
+                  resolve via the index redirect to /overview. */}
+              <Route path="clusters/:id" element={<AppAdminClustersDetail />}>
+                <Route index element={<Navigate to="overview" replace />} />
+                <Route path="overview" element={<ClusterDetailOverview />} />
+                <Route path="servers" element={<ClusterDetailServers />} />
+                <Route path="nodes" element={<ClusterDetailNodes />} />
+                <Route path="workers" element={<ClusterDetailWorkers />} />
+                <Route path="commercial" element={<ClusterDetailCommercial />} />
+                <Route path="submit" element={<ClusterDetailSubmit />} />
+              </Route>
 
               {/* QuantArena — 4 tabs */}
               <Route
