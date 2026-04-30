@@ -52,9 +52,9 @@ function statusBadge(status: string): string {
 }
 
 function roleBadge(role: string): string {
-	return role === "admin"
-		? "bg-indigo-100 text-indigo-800 border-indigo-200"
-		: "bg-gray-100 text-gray-800 border-gray-200";
+	if (role === "super_admin") return "bg-amber-100 text-amber-800 border-amber-200";
+	if (role === "admin") return "bg-indigo-100 text-indigo-800 border-indigo-200";
+	return "bg-gray-100 text-gray-800 border-gray-200";
 }
 
 export default function UsersList() {

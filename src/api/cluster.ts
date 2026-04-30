@@ -60,7 +60,10 @@ export interface Worker {
 	type: "cpu" | "gpu";
 	gpu_index?: number | null;
 	memory_limit_gb: number;
+	// Supplier-side rate (what the platform pays the GPU owner).
 	cost_per_hour: number;
+	// User-facing rate (what we charge end users). Profit = sell - cost.
+	selling_price_per_hour: number;
 	status: "starting" | "idle" | "busy" | "stopping" | "stopped" | "lost";
 	version?: string;
 	cached_models?: string[] | Record<string, unknown> | null;
@@ -175,6 +178,45 @@ export async function deleteServer(
 	await apiClient.delete(
 		`/api/v1/cluster/clusters/${encodeURIComponent(clusterId)}/server/${role}`,
 	);
+}
+
+// ---- per-cluster proxy ----
+//
+// Forward a request to the cluster's registered FlowMesh / Lumilake host.
+// `path` is appended verbatim to the cluster's `host_url`. The lumid-cluster
+// proxy strips our session bearer and injects the operator key from
+// `cluster_servers.storage_json.api_key` before forwarding.
+
+export async function clusterProxyPost<T = unknown>(
+	clusterId: string,
+	path: string,
+	body: BodyInit | string,
+	opts?: { role?: "flowmesh" | "lumilake"; contentType?: string },
+): Promise<T> {
+	const role = opts?.role ?? "flowmesh";
+	const headers: Record<string, string> = {
+		"Content-Type": opts?.contentType || "application/json",
+	};
+	const url =
+		`/api/v1/cluster/clusters/${encodeURIComponent(clusterId)}/proxy${
+			path.startsWith("/") ? path : "/" + path
+		}?role=${role}`;
+	const r = await apiClient.post<T>(url, body, { headers });
+	return r.data;
+}
+
+export async function clusterProxyGet<T = unknown>(
+	clusterId: string,
+	path: string,
+	opts?: { role?: "flowmesh" | "lumilake" },
+): Promise<T> {
+	const role = opts?.role ?? "flowmesh";
+	const url =
+		`/api/v1/cluster/clusters/${encodeURIComponent(clusterId)}/proxy${
+			path.startsWith("/") ? path : "/" + path
+		}?role=${role}`;
+	const r = await apiClient.get<T>(url);
+	return r.data;
 }
 
 // ---- nodes ----
@@ -341,4 +383,21 @@ export async function listWorkers(
 
 export async function deleteWorker(id: string): Promise<void> {
 	await apiClient.delete(`/api/v1/cluster/workers/${encodeURIComponent(id)}`);
+}
+
+export interface PatchWorkerRequest {
+	cost_per_hour?: number;
+	selling_price_per_hour?: number;
+	memory_limit_gb?: number;
+}
+
+export async function patchWorker(
+	id: string,
+	req: PatchWorkerRequest,
+): Promise<Worker> {
+	const r = await apiClient.patch<DataResponse<{ worker: Worker }>>(
+		`/api/v1/cluster/workers/${encodeURIComponent(id)}`,
+		req,
+	);
+	return r.data.data.worker;
 }

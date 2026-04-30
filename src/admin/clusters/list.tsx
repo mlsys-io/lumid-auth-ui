@@ -188,7 +188,7 @@ export default function ClustersList() {
 										<th className="text-left py-2 px-2 font-medium">Name</th>
 										<th className="text-left py-2 px-2 font-medium">Region</th>
 										<th className="text-left py-2 px-2 font-medium">Status</th>
-										<th className="text-left py-2 px-2 font-medium">Billing vendor</th>
+										<th className="text-left py-2 px-2 font-medium" title="Auto-mirrored to a Runmesh runmesh_gpu_vendor row on first node registration">Vendor</th>
 										<th className="text-left py-2 px-2 font-medium">Created</th>
 									</tr>
 								</thead>
@@ -218,7 +218,13 @@ export default function ClustersList() {
 												</span>
 											</td>
 											<td className="py-2 px-2 text-muted-foreground">
-												{c.billing_vendor_id ? `#${c.billing_vendor_id}` : "—"}
+												{c.billing_vendor_id ? (
+													<span title={c.billing_vendor_id} className="text-xs font-mono">
+														✓ mirrored
+													</span>
+												) : (
+													<span className="text-xs">— not linked</span>
+												)}
 											</td>
 											<td className="py-2 px-2 text-muted-foreground whitespace-nowrap">
 												{c.created_at

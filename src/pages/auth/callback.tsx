@@ -75,6 +75,26 @@ export function AuthCallback() {
 				throw new Error('Missing user in Google login response');
 			}
 
+			// Gate first-time Google sign-ins on a valid invitation code,
+			// matching the email/password registration flow. When the
+			// backend created the user fresh from this OAuth exchange,
+			// `invitation_code` is empty — pop the dialog, defer the
+			// React-side `login()` call, and let the dialog's success
+			// callback finish the sign-in once the code is redeemed.
+			//
+			// The session cookie is *already* set on .lum.id by the
+			// backend, so the `PUT /api/v1/user/invitation-code` request
+			// the dialog issues authenticates via cookie. We just
+			// haven't told the AuthProvider about the user yet.
+			if (!u.invitation_code) {
+				setPendingUserInfo(u);
+				setShowInvitationDialog(true);
+				// Stash the token so handleInvitationCodeSuccess can
+				// fall back to it if the backend echoes a different one.
+				sessionStorage.setItem('pending_oauth_token', response.token);
+				return; // keep status=loading until the dialog resolves
+			}
+
 			login(response.token, u);
 			setStatus('success');
 			toast.success('Signed in with Google');
@@ -103,15 +123,43 @@ export function AuthCallback() {
 		}
 	}
 
-	// Invitation-code dialog was a QuantArena concern; lum.id lets any
-	// Google-authed user through. Leaving the handler as a no-op for
-	// back-compat with the dialog component's onSuccess prop.
-	const handleInvitationCodeSuccess = (_token: string) => {
+	const handleInvitationCodeSuccess = (token: string) => {
+		// Dialog hands back the bearer it just authed against (today
+		// the same session cookie value the OAuth exchange returned —
+		// the backend doesn't re-mint on redeem since invitation_code
+		// isn't a JWT claim). Fall back to the sessionStorage stash
+		// if the backend ever stops echoing tokens.
+		const finalToken =
+			token || sessionStorage.getItem('pending_oauth_token') || '';
+		sessionStorage.removeItem('pending_oauth_token');
+
+		if (!pendingUserInfo) {
+			setStatus('error');
+			setErrorMessage('Failed to get user info');
+			toast.error('Failed to get user info');
+			return;
+		}
+
+		// Reflect the just-redeemed code in the cached user_info so
+		// downstream consumers (auth-guard, profile page) see a
+		// fully-onboarded user without an extra /api/v1/user round
+		// trip. The backend's authoritative copy refreshes on the
+		// next CurrentUserHandler call anyway.
+		const refreshed: UserInfo = {
+			...pendingUserInfo,
+			invitation_code: 'redeemed',
+		};
+		login(finalToken, refreshed);
 		setShowInvitationDialog(false);
+		setStatus('success');
+		toast.success('Signed in with Google');
+
+		const params = new URLSearchParams(window.location.search);
+		const returnTo = params.get('return_to');
+		setTimeout(() => {
+			navigate(isSafeReturnTo(returnTo) ? returnTo : '/dashboard');
+		}, 500);
 	};
-	// Silence unused-var warnings from the transitional state.
-	void pendingUserInfo;
-	void setPendingUserInfo;
 
 	const renderContent = () => {
 		switch (status) {

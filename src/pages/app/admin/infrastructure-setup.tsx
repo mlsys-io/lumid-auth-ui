@@ -37,12 +37,11 @@ import {
 } from "@/api/cluster";
 import { isSessionExpired } from "@/api/client";
 
-// InfrastructureSetup — top-level orientation page under the
-// Infrastructure admin section. Covers the entire operational surface
-// (cluster → node → worker → supplier → billing) in one scroll,
-// rather than hiding the reference inside each cluster's detail view.
-// The mint-install-command action picks a cluster from a dropdown so
-// the page can live outside any single cluster's scope.
+// InfrastructureSetup — single-page orientation for the compute layer.
+// 4 sections, one operator flow per section. The previous version
+// split registry vs FM-execution across 6 sections; this one collapses
+// "add node" into one block that walks through every piece an operator
+// has to touch.
 export default function InfrastructureSetup() {
 	const [clusters, setClusters] = useState<Cluster[]>([]);
 	const [loadingClusters, setLoadingClusters] = useState(true);
@@ -96,294 +95,316 @@ export default function InfrastructureSetup() {
 
 	return (
 		<div className="space-y-6">
+			{/* Banner */}
 			<Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm border-l-4 border-l-indigo-500">
 				<CardContent className="pt-4 text-sm text-muted-foreground space-y-2">
 					<p>
-						<b>One admin surface for the compute layer.</b> Register a
-						cluster → add nodes → enroll workers. Runmesh supplier rows
-						are auto-created on first node registration; billing
-						attribution flows automatically from worker tasks to the
-						cluster's vendor row.
+						<b>One pass per node.</b> A node onboarding (step 2) installs
+						both the cluster-registry agent (this UI's source of truth)
+						and the FlowMesh guardian + workers (the runtime that takes
+						jobs). Once running, the rest auto-flows: Runmesh vendor row
+						appears, cluster status flips <code>active</code>, billing
+						attribution lights up.
 					</p>
 					<p className="text-xs">
-						Worker-enroll field shapes (<code>role</code> /{" "}
-						<code>type</code>) will evolve alongside the FlowMesh /
-						Lumilake runtime revamp — treat the example as reference,
-						not a fixed contract.
+						Boxes that don't yet have an arm64 worker image (e.g. NVIDIA
+						GB10) can complete step 2 partially — they enroll in the
+						registry but can't accept jobs until the arm64 image is
+						built.
 					</p>
 				</CardContent>
 			</Card>
 
-			{/* Section 1 — cluster */}
+			{/* 1. Create a cluster + wire servers */}
 			<Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm">
 				<CardHeader>
 					<CardTitle className="text-base flex items-center gap-2">
 						<Plus className="w-4 h-4 text-indigo-600" />
-						1. Register a cluster
+						1. Create a cluster + wire servers
 					</CardTitle>
 					<CardDescription>
-						The outer container — a region + FlowMesh/Lumilake server
-						endpoints. Nodes and workers roll up to it. Status flips from{" "}
-						<code>pending</code> to <code>active</code> once both servers
-						are wired on the cluster's Servers tab.
+						Region + tags + the FlowMesh and Lumilake server URLs. The
+						cluster status flips from <code>pending</code> to{" "}
+						<code>active</code> once both server roles are wired.
 					</CardDescription>
 				</CardHeader>
-				<CardContent className="text-sm">
+				<CardContent className="space-y-3 text-sm">
 					<Link to="/dashboard/admin/clusters">
 						<Button variant="outline" size="sm">
 							<Layers className="w-4 h-4 mr-1" />
-							Go to Clusters → New cluster
+							Clusters → New cluster
 						</Button>
 					</Link>
-				</CardContent>
-			</Card>
-
-			{/* Section 2 — node */}
-			<Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm">
-				<CardHeader>
-					<CardTitle className="text-base flex items-center gap-2">
-						<Terminal className="w-4 h-4 text-indigo-600" />
-						2. Add a node
-					</CardTitle>
-					<CardDescription>
-						One-shot install via a bootstrap token. Installer saves a
-						long-lived node bearer at <code>/etc/lumid/agent.token</code>{" "}
-						and enables a systemd unit; idempotent on re-run.
-					</CardDescription>
-				</CardHeader>
-				<CardContent className="space-y-3 text-sm">
-					<div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-2 items-end">
-						<div className="space-y-1">
-							<Label htmlFor="cluster" className="text-xs">
-								Cluster
-							</Label>
-							{loadingClusters ? (
-								<div className="h-9 flex items-center text-xs text-muted-foreground">
-									<Loader2 className="w-3 h-3 mr-1 animate-spin" />
-									Loading…
-								</div>
-							) : clusters.length === 0 ? (
-								<div className="h-9 flex items-center text-xs text-muted-foreground">
-									No clusters yet — register one first.
-								</div>
-							) : (
-								<Select
-									value={selectedClusterId}
-									onValueChange={setSelectedClusterId}
-								>
-									<SelectTrigger id="cluster">
-										<SelectValue placeholder="Pick a cluster…" />
-									</SelectTrigger>
-									<SelectContent>
-										{clusters.map((c) => (
-											<SelectItem key={c.id} value={c.id}>
-												{c.name}
-												{c.region ? ` — ${c.region}` : ""}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-							)}
-						</div>
-						<div className="space-y-1">
-							<Label htmlFor="ttl" className="text-xs">
-								TTL (min)
-							</Label>
-							<Input
-								id="ttl"
-								type="number"
-								min={1}
-								max={10080}
-								value={ttlMinutes}
-								onChange={(e) => setTtlMinutes(e.target.value)}
-								className="w-24"
-							/>
-						</div>
-						<div className="space-y-1">
-							<Label className="text-xs invisible">_</Label>
-							<Button
-								onClick={onMint}
-								disabled={minting || !selectedClusterId}
-							>
-								{minting && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
-								Mint install command
-							</Button>
-						</div>
-					</div>
-
-					{minted && (
-						<div className="space-y-2">
-							<p className="text-xs text-muted-foreground">
-								For cluster <b>{selectedCluster?.name}</b> · Token ID{" "}
-								<code>{minted.token_id}</code>, expires{" "}
-								{new Date(minted.expires_at).toLocaleString()}.
-							</p>
-							<CodeBlock code={minted.install_cmd} />
-							<p className="text-xs text-muted-foreground">
-								Paste on the target host. The installer downloads the
-								agent binary, registers the node, starts the systemd
-								unit, and mirrors a supplier-node row into Runmesh —
-								all in one shot.
-							</p>
-						</div>
-					)}
-
-					<div className="pt-2 text-xs text-muted-foreground space-y-1">
-						<p>
-							<b>Prereqs:</b> Linux + systemd + curl + sudo, outbound HTTPS
-							to <code>lum.id</code>.
-						</p>
-						<p>
-							<b>Installs:</b>{" "}
-							<code>/usr/local/bin/lumid-cluster-agent</code>, systemd unit,{" "}
-							<code>lumid-agent</code> group on the{" "}
-							<code>/run/lumid-cluster-agent.sock</code> control socket.
-						</p>
-					</div>
-				</CardContent>
-			</Card>
-
-			{/* Section 3 — worker */}
-			<Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm">
-				<CardHeader>
-					<CardTitle className="text-base flex items-center gap-2">
-						<Terminal className="w-4 h-4 text-indigo-600" />
-						3. Enroll a worker
-					</CardTitle>
-					<CardDescription>
-						Worker processes enroll via the local agent socket. Agent
-						brokers registration using its node bearer — the caller only
-						needs <code>lumid-agent</code> group membership for socket
-						access.
-					</CardDescription>
-				</CardHeader>
-				<CardContent className="space-y-3 text-sm">
 					<p className="text-xs text-muted-foreground">
-						One-time per user on the node:
+						Server URLs typically point at the host box's FlowMesh
+						(<code>http://&lt;host&gt;:8000</code>) and Lumilake
+						(<code>http://&lt;host&gt;:9000</code>) services. The host
+						box is where the FM control plane runs (see step 2,
+						"flowmeshctl host setup").
 					</p>
-					<CodeBlock
-						code={`sudo usermod -aG lumid-agent $(whoami)
-newgrp lumid-agent     # or log out/in for the group to apply`}
-					/>
+				</CardContent>
+			</Card>
 
-					<p className="text-xs text-muted-foreground pt-1">
-						GPU worker (FlowMesh) on GPU 0:
-					</p>
-					<CodeBlock
-						code={`curl --unix-socket /run/lumid-cluster-agent.sock \\
-  http://x/enroll -H 'Content-Type: application/json' \\
-  -d '{"role":"flowmesh","type":"gpu","gpu_index":0,"memory_limit_gb":24,"cost_per_hour":2.0}'`}
-					/>
+			{/* 2. Onboard a node — combined registry + FM in one walkthrough */}
+			<Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm">
+				<CardHeader>
+					<CardTitle className="text-base flex items-center gap-2">
+						<Terminal className="w-4 h-4 text-indigo-600" />
+						2. Onboard a node
+					</CardTitle>
+					<CardDescription>
+						Each node gets both layers: the cluster-registry agent
+						(inventory) and a FlowMesh guardian + workers (job runtime).
+					</CardDescription>
+				</CardHeader>
+				<CardContent className="space-y-4 text-sm">
+					{/* 2a — registry-side: mint + install */}
+					<div>
+						<p className="text-sm font-medium mb-1">
+							2a. Cluster-registry agent (one-line install)
+						</p>
+						<div className="flex items-end gap-2 flex-wrap mb-2">
+							<div className="space-y-1">
+								<Label htmlFor="cluster" className="text-xs">
+									Cluster
+								</Label>
+								{loadingClusters ? (
+									<div className="h-9 flex items-center text-xs text-muted-foreground">
+										<Loader2 className="w-3 h-3 mr-1 animate-spin" />
+										Loading…
+									</div>
+								) : clusters.length === 0 ? (
+									<div className="h-9 flex items-center text-xs text-muted-foreground">
+										No clusters — finish step 1 first.
+									</div>
+								) : (
+									<Select
+										value={selectedClusterId}
+										onValueChange={setSelectedClusterId}
+									>
+										<SelectTrigger id="cluster" className="w-[260px]">
+											<SelectValue placeholder="Pick a cluster…" />
+										</SelectTrigger>
+										<SelectContent>
+											{clusters.map((c) => (
+												<SelectItem key={c.id} value={c.id}>
+													{c.name}
+													{c.region ? ` — ${c.region}` : ""}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								)}
+							</div>
+							<div className="space-y-1">
+								<Label htmlFor="ttl" className="text-xs">
+									TTL (min)
+								</Label>
+								<Input
+									id="ttl"
+									type="number"
+									min={1}
+									max={10080}
+									value={ttlMinutes}
+									onChange={(e) => setTtlMinutes(e.target.value)}
+									className="w-24"
+								/>
+							</div>
+							<div className="space-y-1">
+								<Label className="text-xs invisible">_</Label>
+								<Button onClick={onMint} disabled={minting || !selectedClusterId}>
+									{minting && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+									Mint install command
+								</Button>
+							</div>
+						</div>
+						{minted && (
+							<>
+								<p className="text-xs text-muted-foreground mb-1">
+									Cluster <b>{selectedCluster?.name}</b> · expires{" "}
+									{new Date(minted.expires_at).toLocaleString()}
+								</p>
+								<CodeBlock code={minted.install_cmd} />
+								<p className="text-xs text-muted-foreground mt-1">
+									Idempotent on re-run. Saves a long-lived node bearer
+									to <code>/etc/lumid/agent.token</code> and starts a
+									systemd unit. Auto-detects amd64 / arm64.
+								</p>
+							</>
+						)}
+					</div>
 
-					<p className="text-xs text-muted-foreground pt-1">
-						CPU worker (Lumilake):
-					</p>
-					<CodeBlock
-						code={`curl --unix-socket /run/lumid-cluster-agent.sock \\
-  http://x/enroll -H 'Content-Type: application/json' \\
-  -d '{"role":"lumilake","type":"cpu"}'`}
-					/>
+					{/* 2b — prereqs */}
+					<div className="border-t pt-3">
+						<p className="text-sm font-medium mb-1">
+							2b. Docker + GPU prerequisites (skip if already done)
+						</p>
+						<CodeBlock
+							code={`# Install docker + nvidia-container-toolkit + register the runtime,
+# then add flowmesh user to docker group. Idempotent.
+curl -fsSL https://get.docker.com | sudo sh
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \\
+  | sudo gpg --dearmor --batch --yes -o /etc/apt/keyrings/nvidia-container-toolkit.gpg
+curl -fsSL https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \\
+  | sed 's#deb https://#deb [signed-by=/etc/apt/keyrings/nvidia-container-toolkit.gpg] https://#g' \\
+  | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+sudo apt-get update -y && sudo apt-get install -y nvidia-container-toolkit
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
+sudo usermod -aG docker flowmesh
 
-					<div className="pt-2 text-xs text-muted-foreground space-y-1">
+# Tip: boxes with a 100 GB Ubuntu LV need to grow it before the
+# 45 GB FlowMesh GPU image will fit.
+sudo lvextend -l +100%FREE /dev/mapper/ubuntu--vg-ubuntu--lv && sudo resize2fs /dev/mapper/ubuntu--vg-ubuntu--lv`}
+						/>
+					</div>
+
+					{/* 2c — FM guardian via flowmeshctl */}
+					<div className="border-t pt-3">
+						<p className="text-sm font-medium mb-1">
+							2c. FlowMesh guardian + workers (driven from the host box)
+						</p>
+						<p className="text-xs text-muted-foreground mb-2">
+							From <code>~/flowmeshctl/</code> on the host box: append
+							a guardian entry to <code>flowmesh_config.yaml</code>,
+							generate the per-host env file, mint an operator API key,
+							then run <code>guardian deploy</code>. Pre-distribute the
+							45 GB GPU image via LAN to avoid per-node internet pulls.
+						</p>
+						<CodeBlock
+							code={`# 1. Mint an operator key (returns api_key in 'flm-…' shape)
+curl -X POST http://<host>:8010/api/v1/auth/keys \\
+  -H "Authorization: Bearer <admin-api-key>" \\
+  -d '{"key_type":"operator","alias":"<box>-guardian","principal_id":"<admin-principal-id>"}'
+
+# 2. Append to ~/flowmeshctl/configs/flowmesh_config.yaml under guardians:
+#   - node: "192.168.6.<X>"
+#     guardian_api_key: "flm-<above>"
+#     env_guardian_file: "envs/.env.guardian.<box>"
+#     worker_config: "configs/cpu_worker_config.yaml"   # or gpu_only_… for mini boxes
+#     workers:
+#       images: ["cpu", "gpu"]                          # or ["gpu"]
+#       auto: "per_gpu"
+
+# 3. Generate per-host env (template envs/.env.guardian.1):
+#    Replace GUARDIAN_CLUSTER, GUARDIAN_ALIAS, GUARDIAN_TOKEN (32-byte b64),
+#    FLOWMESH_API_KEY (the minted key).
+
+# 4. Pre-distribute the 45 GB GPU image via LAN (one-shot, host → target):
+ssh flowmesh@<source> "docker save \\
+  kaiitunnz/flowmesh_worker:latest-gpu \\
+  kaiitunnz/flowmesh_worker:latest-cpu \\
+  kaiitunnz/flowmesh_guardian:latest -o /tmp/fm_imgs.tar"
+ssh flowmesh@<source> "cat /tmp/fm_imgs.tar" | ssh flowmesh@<target> "docker load"
+
+# 5. Deploy
+cd ~/flowmeshctl && .venv/bin/python flowmeshctl.py guardian deploy <idx>`}
+						/>
+					</div>
+
+					<div className="border-t pt-2 text-xs text-muted-foreground space-y-1">
 						<p>
-							<b>Response</b> contains a <code>worker_token</code> —
-							shown once; the worker process uses it for heartbeat +
-							status.
+							<b>Worker lifecycle (registry):</b>{" "}
+							<code>starting</code> → <code>idle</code> → <code>busy</code>{" "}
+							→ <code>stopped</code> / <code>lost</code>. Background
+							sweeper retires never-heartbeated rows after 1h and
+							idle/busy rows whose heartbeat is stale &gt; 5min.
 						</p>
 						<p>
-							<b>Lifecycle:</b> <code>starting</code> (no heartbeat yet)
-							→ <code>idle</code> (alive, no task) → <code>busy</code>{" "}
-							(executing) → <code>stopped</code> / <code>lost</code>.
+							<b>Two parallel sources of truth.</b> The registry (this
+							UI) tracks what the cluster-agent enrolled. FM Host
+							tracks what's actually picking up jobs. The agent
+							persists enrolled workers to{" "}
+							<code>/etc/lumid/workers.json</code> across restarts and
+							sends <code>{`{"status":"idle"}`}</code> in heartbeat — so
+							a registry stuck at <code>starting</code> while FM shows
+							<code> IDLE</code> means the agent hasn't been bounced
+							since the persist patch (≥ 2026-04-25). Restart it.
 						</p>
 					</div>
 				</CardContent>
 			</Card>
 
-			{/* Section 4 — suppliers */}
+			{/* 3. Suppliers + billing — informational, both auto */}
 			<Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm">
 				<CardHeader>
 					<CardTitle className="text-base flex items-center gap-2">
 						<Briefcase className="w-4 h-4 text-indigo-600" />
-						4. Suppliers (auto-mirrored)
+						3. Suppliers (auto-mirrored)
 					</CardTitle>
 					<CardDescription>
-						Every cluster gets a Runmesh vendor row on first node
-						registration — no separate supplier-onboarding step.
-						Runmesh remains the billing source of truth; lumid_cluster
-						is the operational source of truth. Two tables, one UI.
+						Each cluster auto-creates one Runmesh vendor row on first
+						node registration; cluster ↔ vendor stays linked one-to-one
+						and retires when the cluster's last node leaves. Edit
+						commercial fields (contact, support tier) on the cluster's{" "}
+						<b>Commercial</b> tab.
 					</CardDescription>
 				</CardHeader>
-				<CardContent className="space-y-3 text-sm">
-					<ul className="list-disc pl-5 space-y-1 text-muted-foreground">
+				<CardContent className="text-sm space-y-2">
+					<ul className="list-disc pl-5 space-y-1 text-muted-foreground text-xs">
 						<li>
-							Vendor key: <code>short_name = "lumid-cluster:&lt;cluster_id&gt;"</code>.
+							Vendor key:{" "}
+							<code>
+								short_name = "lumid-cluster:&lt;cluster_id&gt;"
+							</code>
+							.
 						</li>
 						<li>
-							Node key: <code>node_code = "&lt;cluster_id&gt;/&lt;node_id&gt;"</code>{" "}
+							Node key:{" "}
+							<code>
+								node_code = "&lt;cluster_id&gt;/&lt;node_id&gt;"
+							</code>{" "}
 							— globally unique.
 						</li>
 						<li>
-							Edit commercial fields (contact, support tier, notes) on
-							the cluster's <b>Commercial</b> tab.
-						</li>
-						<li>
-							Re-push state manually from the cluster's <b>Overview</b>{" "}
-							→ Runmesh mirror card (useful after a Runmesh outage or
-							for pre-wire nodes).
+							Re-sync drift via the <b>Overview → Runmesh mirror →
+							Re-sync</b> button on the cluster detail page.
 						</li>
 					</ul>
-					<div className="flex gap-2">
-						<Link to="/dashboard/admin/suppliers">
-							<Button variant="outline" size="sm">
-								Cross-cluster supplier list
-							</Button>
-						</Link>
-					</div>
 				</CardContent>
 			</Card>
 
-			{/* Section 5 — billing */}
+			{/* 4. Billing — auto, super_admin gated */}
 			<Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm">
 				<CardHeader>
 					<CardTitle className="text-base flex items-center gap-2">
 						<DollarSign className="w-4 h-4 text-indigo-600" />
-						5. Billing (automatic)
+						4. Billing (auto, super_admin only)
 					</CardTitle>
 					<CardDescription>
-						Worker tasks that terminate post a ledger entry into
-						Runmesh's transaction table and debit the owning user's
-						balance. No manual invoicing.
+						Pre-auth on workflow submit, idempotent ledger entry on task
+						terminal. Both bridges share the{" "}
+						<code>X-Bridge-Secret</code> auth model.
 					</CardDescription>
 				</CardHeader>
-				<CardContent className="space-y-2 text-sm">
-					<ul className="list-disc pl-5 space-y-1 text-muted-foreground">
+				<CardContent className="text-sm">
+					<ul className="list-disc pl-5 space-y-1 text-muted-foreground text-xs">
 						<li>
-							Pre-auth: FlowMesh checks{" "}
-							<code>POST /runmesh/billing/check-balance</code> before
-							accepting a user's workflow. Refuses with 402 if
-							insufficient.
+							<code>POST /runmesh/billing/check-balance</code> —
+							pre-auth, no side effects, 402 on insufficient balance.
 						</li>
 						<li>
-							On terminal: FlowMesh posts{" "}
-							<code>POST /runmesh/billing/flowmesh-entry</code>{" "}
-							(idempotent on task id). Records a{" "}
-							<code>runmesh_user_transaction</code> row and decrements{" "}
-							<code>sys_user.amount</code>.
+							<code>POST /runmesh/billing/flowmesh-entry</code> — on
+							terminal, idempotent on task id, decrements{" "}
+							<code>sys_user.amount</code> + records a transaction.
 						</li>
 						<li>
-							Both bridges authenticate via the shared{" "}
-							<code>X-Bridge-Secret</code> header
-							(<code>FLOWMESH_BRIDGE_SECRET</code> env var on both
-							sides).
+							All money-moving paths (
+							<code>/runmesh/finance/**</code>,
+							<code>/runmesh/pay/refund/**</code>,
+							<code>/runmesh/billing/transaction/**</code>) are gated on{" "}
+							<b>super_admin</b>.
+						</li>
+						<li>
+							<b>Per-worker rates</b> live on the cluster's Workers
+							tab — <code>cost_per_hour</code> (what we pay the GPU
+							owner) and <code>selling_price_per_hour</code> (what
+							we charge). Profit shows inline. Currently registry
+							metadata; FM Host's own rate model still drives actual
+							ledger entries.
 						</li>
 					</ul>
-					<div className="flex gap-2">
-						<Link to="/dashboard/admin/billing">
-							<Button variant="outline" size="sm">
-								Platform-wide billing
-							</Button>
-						</Link>
-					</div>
 				</CardContent>
 			</Card>
 		</div>
