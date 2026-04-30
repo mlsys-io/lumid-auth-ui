@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
 	BrainCircuit,
 	Workflow,
@@ -20,6 +20,9 @@ import {
 	Trophy,
 	Layers,
 	KeyRound,
+	LineChart,
+	ExternalLink,
+	BarChart3,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
@@ -44,6 +47,20 @@ interface NavItem {
 	label: string;
 	icon: React.ComponentType<{ className?: string }>;
 	end?: boolean;
+	// Paths that, when active, should NOT light up this entry. Used by
+	// "Lumid Market" (`/dashboard/quant`) to defer to "Market data"
+	// (`/dashboard/quant/market-data`) since market-data was promoted
+	// out of the Quant section into Datasets.
+	excludeActiveFor?: string[];
+}
+
+// External-destination sidebar item (e.g. Lumid Market lives in its
+// own React app at lumid.market; we render a regular `<a>` instead of
+// a `NavLink` so the click leaves the lum.id shell.
+interface ExternalNavItem {
+	href: string;
+	label: string;
+	icon: React.ComponentType<{ className?: string }>;
 }
 
 // 2026-04-24 build / submit / run split:
@@ -55,14 +72,38 @@ const PRODUCT_NAV: NavItem[] = [
 	{ to: '/dashboard', label: 'Workflow Builder', icon: Workflow, end: true },
 	{ to: '/dashboard/runmesh/submit', label: 'Runmesh Submit', icon: Send },
 	{ to: '/dashboard/lumilake-submit', label: 'Lumilake Submit', icon: Send },
-	{ to: '/dashboard/jobs/runmesh', label: 'Running jobs', icon: PlayCircle },
+	{ to: '/dashboard/jobs', label: 'Running jobs', icon: PlayCircle, end: true },
 	{ to: '/dashboard/gpu-rentals', label: 'GPU rentals', icon: Server },
 ];
 
-// Lumilake-only surface — just the lakehouse browser. The Lumilake
-// submit + jobs views are promoted under AI Compute above.
+// Datasets surface — Lumilake lakehouse browser + Market data (the
+// QA market-data page promoted up from /dashboard/quant/* on
+// 2026-04-30 because it's a dataset-class concern, not a quant-only
+// one — equity / crypto OHLCV is fed to lots of pipelines, not just
+// LQA strategies). Market data still lives at /dashboard/quant/
+// market-data so existing in-app links and the QA tab nav both
+// resolve.
 const LUMILAKE_NAV: NavItem[] = [
 	{ to: '/dashboard/lumilake/data', label: 'Data browsing', icon: Database },
+	{ to: '/dashboard/quant/market-data', label: 'Market data', icon: BarChart3 },
+];
+
+// Lumid Market (LQA) — quant pages migrating in from lumid.market.
+// First slice landed at /dashboard/quant/strategy on 2026-04-30; the
+// remaining pages (competition, ranking, backtesting, …) still live
+// at lumid.market and surface as external sub-nav entries inside the
+// quant layout until ported. The single sidebar entry here is the
+// internal route; the layout page handles the per-slice nav.
+const MARKET_NAV: NavItem[] = [
+	{
+		to: '/dashboard/quant',
+		label: 'Lumid Market',
+		icon: LineChart,
+		// Don't double-highlight when the user is on Market data —
+		// that page sits under /dashboard/quant/market-data for routing
+		// reasons but is owned by the Datasets section in the sidebar.
+		excludeActiveFor: ['/dashboard/quant/market-data'],
+	},
 ];
 
 // Consolidated admin nav: 17 flat items collapsed to 5. Each section
@@ -77,23 +118,51 @@ const ADMIN_NAV: NavItem[] = [
 	{ to: '/dashboard/admin/competitions', label: 'QuantArena', icon: Trophy },
 ];
 
-function SidebarItem({ to, label, icon: Icon, end, onClick }: NavItem & { onClick?: () => void }) {
+function SidebarItem({
+	to,
+	label,
+	icon: Icon,
+	end,
+	excludeActiveFor,
+	onClick,
+}: NavItem & { onClick?: () => void }) {
+	const location = useLocation();
+	const suppressActive =
+		excludeActiveFor?.some(
+			(p) => location.pathname === p || location.pathname.startsWith(p + '/'),
+		) ?? false;
 	return (
 		<NavLink
 			to={to}
 			end={end}
 			onClick={onClick}
-			className={({ isActive }) =>
-				`flex items-center gap-2.5 px-2.5 py-1.5 text-[13px] rounded-md transition-colors ${
-					isActive
+			className={({ isActive }) => {
+				const active = isActive && !suppressActive;
+				return `flex items-center gap-2.5 px-2.5 py-1.5 text-[13px] rounded-md transition-colors ${
+					active
 						? 'bg-indigo-100 text-indigo-700 font-medium'
 						: 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-				}`
-			}
+				}`;
+			}}
 		>
 			<Icon className="w-4 h-4 shrink-0" />
 			<span className="truncate">{label}</span>
 		</NavLink>
+	);
+}
+
+function SidebarExternalItem({ href, label, icon: Icon, onClick }: ExternalNavItem & { onClick?: () => void }) {
+	return (
+		<a
+			href={href}
+			onClick={onClick}
+			className="flex items-center gap-2.5 px-2.5 py-1.5 text-[13px] rounded-md transition-colors text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+			title={`${label} — opens at ${href.replace(/^https?:\/\//, '')}`}
+		>
+			<Icon className="w-4 h-4 shrink-0" />
+			<span className="truncate flex-1">{label}</span>
+			<ExternalLink className="w-3 h-3 shrink-0 text-slate-400" />
+		</a>
 	);
 }
 
@@ -218,6 +287,13 @@ export default function AppLayout() {
 				<SectionLabel label="Datasets" />
 				<div className="space-y-px">
 					{LUMILAKE_NAV.map((item) => (
+						<SidebarItem key={item.to} {...item} onClick={close} />
+					))}
+				</div>
+
+				<SectionLabel label="Quant" />
+				<div className="space-y-px">
+					{MARKET_NAV.map((item) => (
 						<SidebarItem key={item.to} {...item} onClick={close} />
 					))}
 				</div>

@@ -552,6 +552,16 @@ html {
  * The .app-main scope matches the <main> in app-layout.tsx; dashboard
  * pages keep their existing styling untouched.
  * ===================================================================== */
+/* Base inheritance — all unclassed text in ported pages (table cells,
+ * spans, divs, labels) inherits 13px so it lines up with the sidebar's
+ * `text-[13px]` rows. Headings + explicit text-* utilities override
+ * below. Without this rule, anything not tagged with a Tailwind text-*
+ * class falls back to the global 16px and reads visibly bigger than
+ * the chrome around it. */
+.app-main {
+	font-size: 0.8125rem;     /* 13px */
+	line-height: 1.45;
+}
 .app-main h1 {
 	font-size: 1.25rem;       /* 20px — was 30px */
 	line-height: 1.6rem;
