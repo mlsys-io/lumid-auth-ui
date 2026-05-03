@@ -1,28 +1,27 @@
 import { Suspense, lazy, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { BacktestingStrategy } from './backtesting-strategy';
-import SimulationStrategy from './simulation-strategy';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/tabs';
 import { TooltipProvider } from '../../components/ui/tooltip';
 import { Loading } from '../../components/ui/loading';
 
-// Three sub-tabs as of 2026-05-03 — "Results" absorbs the formerly
-// standalone /dashboard/quant/backtesting page. The legacy route
-// redirects to /dashboard/quant/strategy?tab=results so the third
-// tab opens by default for old deep links. The Backtesting view is
-// lazy-loaded so its ~600 LOC don't block first paint of the
-// Backtesting/Forward sub-tabs that most users land on.
+// Two sub-tabs as of 2026-05-03 — Strategy is the backtest engine
+// workflow: build/edit/run (Backtesting) + past run history
+// (Results). The "Forward Testing" tab moved into the Competition
+// shell at /dashboard/quant/competition/my because every simulation
+// strategy is competition-bound (CreateSimulationStrategyRequest
+// requires competition_id). The Backtesting view lazy-loads so its
+// ~600 LOC don't block first paint of the default sub-tab.
 const Backtesting = lazy(() =>
 	import('../backtesting/backtesting').then((m) => ({ default: m.Backtesting })),
 );
 
-const TAB_IDS = ['backtesting', 'forward-testing', 'results'] as const;
+const TAB_IDS = ['backtesting', 'results'] as const;
 type TabId = (typeof TAB_IDS)[number];
 const VALID_TABS: ReadonlySet<string> = new Set(TAB_IDS);
 
 const TAB_LABELS: Record<TabId, string> = {
 	'backtesting': 'Backtesting',
-	'forward-testing': 'Forward Testing',
 	'results': 'Results',
 };
 
@@ -43,7 +42,6 @@ const Strategy = () => {
 	const content = useMemo(
 		() => ({
 			'backtesting': <BacktestingStrategy />,
-			'forward-testing': <SimulationStrategy />,
 			'results': (
 				<Suspense fallback={<Loading />}>
 					<Backtesting />
@@ -58,7 +56,7 @@ const Strategy = () => {
 			<div className="flex items-center justify-between mb-4"></div>
 			<div>
 				<h1 className="text-3xl font-bold">Strategy</h1>
-				<p className="text-muted-foreground">Manage your trading strategies and run backtests</p>
+				<p className="text-muted-foreground">Build, run, and review backtests</p>
 			</div>
 			<Tabs value={active} onValueChange={onTabChange} className="mt-4">
 				<TabsList>

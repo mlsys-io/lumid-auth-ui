@@ -38,8 +38,20 @@ const QuantTemplate = lazy(() => import("./pages/dashboard/quant-template"));
 const QuantResearch = lazy(() => import("./pages/dashboard/quant-research"));
 const QuantMarketData = lazy(() => import("./pages/dashboard/quant-market-data"));
 const DatasetsFindata = lazy(() => import("./pages/dashboard/datasets-findata"));
-const QuantCompetition = lazy(() =>
-  import("./pages/dashboard/quant-competition").then((m) => ({ default: m.QuantCompetitionPage }))
+// Competition shell + routed children — 2026-05-03. CompetitionShell
+// renders the 2-column sidebar layout; Lobby / MyStrategies / Pathways
+// / Detail render inside its <Outlet />.
+const CompetitionShell = lazy(() =>
+  import("./pages/dashboard/quant-competition").then((m) => ({ default: m.QuantCompetitionShell }))
+);
+const CompetitionLobby = lazy(() =>
+  import("./pages/dashboard/quant-competition").then((m) => ({ default: m.QuantCompetitionLobby }))
+);
+const CompetitionMyStrategies = lazy(() =>
+  import("./pages/dashboard/quant-competition").then((m) => ({ default: m.QuantCompetitionMyStrategies }))
+);
+const CompetitionPathways = lazy(() =>
+  import("./pages/dashboard/quant-competition").then((m) => ({ default: m.QuantCompetitionPathways }))
 );
 const QuantCompetitionDetail = lazy(() =>
   import("./pages/dashboard/quant-competition").then((m) => ({ default: m.QuantCompetitionDetailPage }))
@@ -308,12 +320,22 @@ export default function App() {
                 2026-04-30. */}
             <Route path="quant" element={<QuantLayout />}>
               <Route index element={<Navigate to="/dashboard/quant/competition" replace />} />
-              <Route path="competition" element={<QuantCompetition />} />
-              <Route path="competition/:competitionId" element={<QuantCompetitionDetail />} />
-              <Route
-                path="competition/:competitionId/strategy/:strategyId"
-                element={<QuantCompetitionStrategyDetail />}
-              />
+              {/* Competition shell — 2026-05-03. Sidebar (Browse / My contests /
+                  Reference) on the left, routed Outlet on the right. The old
+                  Lobby + Pathways tab strip is replaced by sibling routes under
+                  the shell. Forward Testing (cross-competition simulation
+                  roster, formerly inside Strategy) lands at /competition/my. */}
+              <Route path="competition" element={<CompetitionShell />}>
+                <Route index element={<Navigate to="lobby" replace />} />
+                <Route path="lobby" element={<CompetitionLobby />} />
+                <Route path="my" element={<CompetitionMyStrategies />} />
+                <Route path="pathways" element={<CompetitionPathways />} />
+                <Route path=":competitionId" element={<QuantCompetitionDetail />} />
+                <Route
+                  path=":competitionId/strategy/:strategyId"
+                  element={<QuantCompetitionStrategyDetail />}
+                />
+              </Route>
               <Route path="strategy" element={<QuantStrategy />} />
               {/* Tab consolidation 2026-05-03 — Backtesting moved into Strategy as the
                   "Results" sub-tab; Ranking demoted (deep-link via Competition); Template
