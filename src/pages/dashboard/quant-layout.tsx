@@ -6,20 +6,28 @@ import { NavLink, Outlet } from 'react-router-dom';
 // only contributes the tab bar — no redundant "Lumid Market" hero
 // stack on top of the page header.
 //
-// Two pages were promoted out of this sub-nav on 2026-04-30:
+// 2026-04-30 promotions out of this sub-nav:
 //   - Market data → top-level "Datasets" section (cross-pipeline,
 //     not LQA-only). Route still resolves at /dashboard/quant/
 //     market-data.
 //   - Trading jobs → unified Running-jobs page at /dashboard/jobs
 //     with a Source: All / Quant / Lumid filter. The legacy route
 //     /dashboard/quant/flowmesh-jobs redirects to ?source=quant.
+//
+// 2026-05-03 tab consolidation (6 → 3 visible; Research stays
+// deep-link only, never was in TABS):
+//   - Backtesting absorbed into Strategy as the "Results" sub-tab.
+//     /dashboard/quant/backtesting redirects to ?tab=results.
+//   - Ranking demoted: route redirects to Competition lobby. The
+//     standalone /dashboard/quant/ranking page is retired; deep
+//     links land on the lobby instead.
+//   - Templates demoted to deep-link only: page still resolves at
+//     /dashboard/quant/template for power users who manage system
+//     + custom templates directly, but no longer in the tab strip.
 
 const TABS: { to: string; label: string }[] = [
 	{ to: '/dashboard/quant/competition', label: 'Competition' },
 	{ to: '/dashboard/quant/strategy', label: 'Strategy' },
-	{ to: '/dashboard/quant/backtesting', label: 'Backtesting' },
-	{ to: '/dashboard/quant/ranking', label: 'Ranking' },
-	{ to: '/dashboard/quant/template', label: 'Templates' },
 	{ to: '/dashboard/quant/datasource', label: 'Data sources' },
 ];
 

@@ -31,8 +31,9 @@ const AdminOverview = lazy(() => import("./pages/dashboard/overview"));
 const QuantLayout = lazy(() => import("./pages/dashboard/quant-layout"));
 const QuantStrategy = lazy(() => import("./pages/dashboard/quant-strategy"));
 const QuantDatasource = lazy(() => import("./pages/dashboard/quant-datasource"));
-const QuantBacktesting = lazy(() => import("./pages/dashboard/quant-backtesting"));
-const QuantRanking = lazy(() => import("./pages/dashboard/quant-ranking"));
+// QuantBacktesting + QuantRanking lazy imports retired 2026-05-03 —
+// Backtesting absorbed into Strategy as a "Results" sub-tab; Ranking
+// reachable via Competition deep-link only.
 const QuantTemplate = lazy(() => import("./pages/dashboard/quant-template"));
 const QuantResearch = lazy(() => import("./pages/dashboard/quant-research"));
 const QuantMarketData = lazy(() => import("./pages/dashboard/quant-market-data"));
@@ -314,8 +315,12 @@ export default function App() {
                 element={<QuantCompetitionStrategyDetail />}
               />
               <Route path="strategy" element={<QuantStrategy />} />
-              <Route path="backtesting" element={<QuantBacktesting />} />
-              <Route path="ranking" element={<QuantRanking />} />
+              {/* Tab consolidation 2026-05-03 — Backtesting moved into Strategy as the
+                  "Results" sub-tab; Ranking demoted (deep-link via Competition); Template
+                  demoted (deep-link only). Routes preserved as redirects so old
+                  bookmarks keep working. */}
+              <Route path="backtesting" element={<Navigate to="/dashboard/quant/strategy?tab=results" replace />} />
+              <Route path="ranking" element={<Navigate to="/dashboard/quant/competition" replace />} />
               <Route path="template" element={<QuantTemplate />} />
               <Route path="datasource" element={<QuantDatasource />} />
               <Route path="market-data" element={<QuantMarketData />} />
@@ -479,7 +484,7 @@ export default function App() {
                     subtitle="Trading platform admin — competitions, markets, templates, jobs."
                     tabs={[
                       { to: "/dashboard/admin/competitions", label: "Competitions", end: true },
-                      { to: "/dashboard/admin/markets", label: "Portfolios" },
+                      { to: "/dashboard/admin/markets", label: "Markets" },
                       { to: "/dashboard/admin/templates", label: "Backtest templates" },
                       { to: "/dashboard/admin/flowmesh-jobs", label: "FlowMesh jobs" },
                     ]}
