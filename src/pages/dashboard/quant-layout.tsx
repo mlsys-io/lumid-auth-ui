@@ -1,61 +1,60 @@
-import { NavLink, Outlet } from 'react-router-dom';
+import { useState } from 'react';
+import { Outlet } from 'react-router-dom';
+import { Menu } from 'lucide-react';
+import {
+	Sheet,
+	SheetContent,
+	SheetTrigger,
+	SheetTitle,
+} from '@/quantarena/components/ui/sheet';
+import { Button } from '@/quantarena/components/ui/button';
+import { TooltipProvider } from '@/quantarena/components/ui/tooltip';
+import { LqaSidebar } from '@/quantarena/pages/lqa-sidebar';
 
-// Layout shell for the migrated Lumid-Market pages under
-// /dashboard/quant/*. Each ported page already renders its own h1
-// and tagline (Strategy, Ranking, Backtesting, …), so this layout
-// only contributes the tab bar — no redundant "Lumid Market" hero
-// stack on top of the page header.
+// LQA shell — single sidebar on the left, routed Outlet on the right.
 //
-// 2026-04-30 promotions out of this sub-nav:
-//   - Market data → top-level "Datasets" section (cross-pipeline,
-//     not LQA-only). Route still resolves at /dashboard/quant/
-//     market-data.
-//   - Trading jobs → unified Running-jobs page at /dashboard/jobs
-//     with a Source: All / Quant / Lumid filter. The legacy route
-//     /dashboard/quant/flowmesh-jobs redirects to ?source=quant.
+// History:
+//   2026-04-30: this file was a thin horizontal tab strip
+//   (Competition / Strategy / Backtesting / Ranking / Templates /
+//   Data sources). Then on 2026-05-03 we collapsed that to 3 visible
+//   tabs and introduced an inner CompetitionShell (its own sidebar)
+//   for the Competition section. Two nav surfaces stacked = one too
+//   many; user feedback called it three layers. This rewrite kills
+//   the horizontal strip entirely and folds its remaining items into
+//   one sidebar that hosts everything quant-related (Browse + My
+//   strategies + dynamic My contests + Strategy + Data sources +
+//   Pathways).
 //
-// 2026-05-03 tab consolidation (6 → 3 visible; Research stays
-// deep-link only, never was in TABS):
-//   - Backtesting absorbed into Strategy as the "Results" sub-tab.
-//     /dashboard/quant/backtesting redirects to ?tab=results.
-//   - Ranking demoted: route redirects to Competition lobby. The
-//     standalone /dashboard/quant/ranking page is retired; deep
-//     links land on the lobby instead.
-//   - Templates demoted to deep-link only: page still resolves at
-//     /dashboard/quant/template for power users who manage system
-//     + custom templates directly, but no longer in the tab strip.
-
-const TABS: { to: string; label: string }[] = [
-	{ to: '/dashboard/quant/competition', label: 'Competition' },
-	{ to: '/dashboard/quant/strategy', label: 'Strategy' },
-	{ to: '/dashboard/quant/datasource', label: 'Data sources' },
-];
-
+// URLs are stable: every quant route the codebase emits today still
+// resolves; only the rendering shell consolidates.
 export default function QuantLayout() {
+	const [drawerOpen, setDrawerOpen] = useState(false);
+
 	return (
-		<div className="-mx-4 md:-mx-8 -mt-6">
-			<div className="sticky top-0 md:top-0 z-20 bg-slate-50/95 backdrop-blur border-b border-slate-200 px-4 md:px-8">
-				<nav className="flex gap-5 overflow-x-auto -mb-px">
-					{TABS.map((it) => (
-						<NavLink
-							key={it.to}
-							to={it.to}
-							className={({ isActive }) =>
-								`py-3 text-[13px] border-b-2 transition-colors whitespace-nowrap ${
-									isActive
-										? 'text-indigo-700 border-indigo-500 font-medium'
-										: 'text-slate-500 border-transparent hover:text-slate-800'
-								}`
-							}
-						>
-							{it.label}
-						</NavLink>
-					))}
-				</nav>
+		<TooltipProvider>
+			<div className="-mx-4 md:-mx-8 -mt-6 min-h-[calc(100vh-4rem)]">
+				<div className="grid grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)]">
+					<div className="hidden lg:block border-r border-slate-200 bg-slate-50/50 px-3 sticky top-0 self-start max-h-screen overflow-y-auto">
+						<LqaSidebar />
+					</div>
+					<div className="min-w-0 px-4 md:px-8 py-5">
+						<div className="flex items-center gap-2 mb-3 lg:hidden">
+							<Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+								<SheetTrigger asChild>
+									<Button variant="ghost" size="icon">
+										<Menu className="w-5 h-5" />
+									</Button>
+								</SheetTrigger>
+								<SheetContent side="left" className="w-72 px-3 pt-10">
+									<SheetTitle className="sr-only">Lumid Market navigation</SheetTitle>
+									<LqaSidebar onNavigate={() => setDrawerOpen(false)} />
+								</SheetContent>
+							</Sheet>
+						</div>
+						<Outlet />
+					</div>
+				</div>
 			</div>
-			<div className="px-4 md:px-8 pt-5">
-				<Outlet />
-			</div>
-		</div>
+		</TooltipProvider>
 	);
 }

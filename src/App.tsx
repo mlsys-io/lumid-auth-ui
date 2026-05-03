@@ -38,12 +38,10 @@ const QuantTemplate = lazy(() => import("./pages/dashboard/quant-template"));
 const QuantResearch = lazy(() => import("./pages/dashboard/quant-research"));
 const QuantMarketData = lazy(() => import("./pages/dashboard/quant-market-data"));
 const DatasetsFindata = lazy(() => import("./pages/dashboard/datasets-findata"));
-// Competition shell + routed children — 2026-05-03. CompetitionShell
-// renders the 2-column sidebar layout; Lobby / MyStrategies / Pathways
-// / Detail render inside its <Outlet />.
-const CompetitionShell = lazy(() =>
-  import("./pages/dashboard/quant-competition").then((m) => ({ default: m.QuantCompetitionShell }))
-);
+// Quant competition leaf components — rendered directly inside the
+// LQA shell's <Outlet/> (the shell is QuantLayout). 2026-05-03:
+// removed the inner CompetitionShell wrapper; one shell to rule
+// them all.
 const CompetitionLobby = lazy(() =>
   import("./pages/dashboard/quant-competition").then((m) => ({ default: m.QuantCompetitionLobby }))
 );
@@ -319,23 +317,22 @@ export default function App() {
                 competition, etc.) was ported into lumid_ui on
                 2026-04-30. */}
             <Route path="quant" element={<QuantLayout />}>
-              <Route index element={<Navigate to="/dashboard/quant/competition" replace />} />
-              {/* Competition shell — 2026-05-03. Sidebar (Browse / My contests /
-                  Reference) on the left, routed Outlet on the right. The old
-                  Lobby + Pathways tab strip is replaced by sibling routes under
-                  the shell. Forward Testing (cross-competition simulation
-                  roster, formerly inside Strategy) lands at /competition/my. */}
-              <Route path="competition" element={<CompetitionShell />}>
-                <Route index element={<Navigate to="lobby" replace />} />
-                <Route path="lobby" element={<CompetitionLobby />} />
-                <Route path="my" element={<CompetitionMyStrategies />} />
-                <Route path="pathways" element={<CompetitionPathways />} />
-                <Route path=":competitionId" element={<QuantCompetitionDetail />} />
-                <Route
-                  path=":competitionId/strategy/:strategyId"
-                  element={<QuantCompetitionStrategyDetail />}
-                />
-              </Route>
+              {/* LQA shell — single sidebar at QuantLayout level (left
+                  rail with Browse / My strategies / dynamic My contests /
+                  Strategy / Data sources / Pathways). The horizontal
+                  tab strip + the inner CompetitionShell sidebar were
+                  collapsed into one navigation surface on 2026-05-03 —
+                  three layers down to two. URLs unchanged. */}
+              <Route index element={<Navigate to="/dashboard/quant/competition/lobby" replace />} />
+              <Route path="competition" element={<Navigate to="/dashboard/quant/competition/lobby" replace />} />
+              <Route path="competition/lobby" element={<CompetitionLobby />} />
+              <Route path="competition/my" element={<CompetitionMyStrategies />} />
+              <Route path="competition/pathways" element={<CompetitionPathways />} />
+              <Route path="competition/:competitionId" element={<QuantCompetitionDetail />} />
+              <Route
+                path="competition/:competitionId/strategy/:strategyId"
+                element={<QuantCompetitionStrategyDetail />}
+              />
               <Route path="strategy" element={<QuantStrategy />} />
               {/* Tab consolidation 2026-05-03 — Backtesting moved into Strategy as the
                   "Results" sub-tab; Ranking demoted (deep-link via Competition); Template
