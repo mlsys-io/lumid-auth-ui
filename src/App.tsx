@@ -334,8 +334,8 @@ export default function App() {
                 <Route index element={<Navigate to="lobby" replace />} />
                 <Route path="lobby" element={<CompetitionLobby />} />
                 <Route path="my" element={<CompetitionMyStrategies />} />
+                <Route path="pathways" element={<CompetitionPathways />} />
               </Route>
-              <Route path="competition/pathways" element={<CompetitionPathways />} />
               <Route path="competition/:competitionId" element={<QuantCompetitionDetail />} />
               <Route
                 path="competition/:competitionId/strategy/:strategyId"

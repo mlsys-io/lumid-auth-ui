@@ -26,7 +26,6 @@ import {
 	LayoutGrid,
 	Activity,
 	Code2,
-	BookOpen,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
@@ -262,17 +261,8 @@ function deriveJoined(strategies: SimulationStrategyInfo[]): JoinedContest[] {
 // renamed to "Backtest" to reflect what the page actually IS — the
 // backtest engine workflow.
 const LQA_NAV: NavItem[] = [
-	{
-		to: '/dashboard/quant/competition',
-		label: 'Competitions',
-		icon: LayoutGrid,
-		// Pathways lives under /competition/* but is its own sibling
-		// sidebar entry — don't double-highlight when the user is
-		// reading the API reference.
-		excludeActiveFor: ['/dashboard/quant/competition/pathways'],
-	},
+	{ to: '/dashboard/quant/competition', label: 'Competitions', icon: LayoutGrid },
 	{ to: '/dashboard/quant/strategy', label: 'Backtest', icon: Code2 },
-	{ to: '/dashboard/quant/competition/pathways', label: 'Pathways', icon: BookOpen, end: true },
 ];
 
 function QuantSection({ onItemClick }: { onItemClick?: () => void }) {

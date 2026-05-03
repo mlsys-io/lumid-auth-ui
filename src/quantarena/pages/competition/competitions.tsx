@@ -15,6 +15,7 @@ import { cn } from '../../lib/utils';
 const TABS: { to: string; label: string; end?: boolean }[] = [
 	{ to: 'lobby', label: 'Browse' },
 	{ to: 'my', label: 'My strategies' },
+	{ to: 'pathways', label: 'Pathways' },
 ];
 
 export default function Competitions() {
