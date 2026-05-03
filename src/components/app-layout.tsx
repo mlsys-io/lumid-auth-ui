@@ -23,6 +23,10 @@ import {
 	LineChart,
 	ExternalLink,
 	BarChart3,
+	LayoutGrid,
+	Activity,
+	Code2,
+	BookOpen,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
@@ -32,6 +36,9 @@ import { useAuthStore } from '../runmesh/stores/useAuthStore';
 import { httpUser } from '../runmesh/utils/axios';
 import { useEffect } from 'react';
 import { Button } from './ui/button';
+import { getSimulationStrategies, ApiError } from '../quantarena/api';
+import type { SimulationStrategyInfo } from '../quantarena/api/types';
+import { cn } from '../lib/utils';
 
 // Unified shell for every authenticated route. Post-2026-04-24 merge,
 // this single component serves both the old /app/* product tree and
@@ -91,23 +98,11 @@ const LUMILAKE_NAV: NavItem[] = [
 	{ to: '/dashboard/datasets/findata', label: 'Financial data', icon: LineChart },
 ];
 
-// Lumid Market (LQA) — quant pages migrating in from lumid.market.
-// First slice landed at /dashboard/quant/strategy on 2026-04-30; the
-// remaining pages (competition, ranking, backtesting, …) still live
-// at lumid.market and surface as external sub-nav entries inside the
-// quant layout until ported. The single sidebar entry here is the
-// internal route; the layout page handles the per-slice nav.
-const MARKET_NAV: NavItem[] = [
-	{
-		to: '/dashboard/quant',
-		label: 'Lumid Market',
-		icon: LineChart,
-		// Don't double-highlight when the user is on Market data —
-		// that page sits under /dashboard/quant/market-data for routing
-		// reasons but is owned by the Datasets section in the sidebar.
-		excludeActiveFor: ['/dashboard/quant/market-data'],
-	},
-];
+// Lumid Market (LQA) sidebar entries are rendered by QuantSection
+// below — contextual on /dashboard/quant/* (full LQA nav inline +
+// dynamic My contests) and a single "Lumid Market" link elsewhere.
+// 2026-05-03 collapse: there is exactly one left rail across the
+// whole app; the prior in-page LQA sidebar was deleted.
 
 // Consolidated admin nav: 17 flat items collapsed to 5. Each section
 // lands on its first sub-page, with the remaining pages shown as tabs
@@ -220,6 +215,151 @@ function SectionLabel({ label }: { label: string }) {
 	);
 }
 
+// Quant section — contextual. When the user is outside /dashboard/quant
+// the section shows a single "Lumid Market" entry. When inside, the
+// entry expands inline to the full LQA nav (Browse + My strategies +
+// Strategy + Data sources + Pathways) and a "My contests" subsection
+// derived client-side from getSimulationStrategies. Replaces the old
+// inner LQA sidebar — one left rail across the whole app.
+const ROSTER_INVALIDATE_EVENT = 'competition-roster:invalidate';
+
+type JoinedContest = {
+	competition_id: number;
+	competition_name: string;
+	competing: boolean;
+};
+
+function deriveJoined(strategies: SimulationStrategyInfo[]): JoinedContest[] {
+	const byId = new Map<number, JoinedContest>();
+	for (const s of strategies) {
+		if (!s.competition_id) continue;
+		const existing = byId.get(s.competition_id);
+		const competing = s.status === 'Competing';
+		if (existing) {
+			existing.competing = existing.competing || competing;
+		} else {
+			byId.set(s.competition_id, {
+				competition_id: s.competition_id,
+				competition_name: s.competition_name ?? `Competition ${s.competition_id}`,
+				competing,
+			});
+		}
+	}
+	return Array.from(byId.values()).sort((a, b) => {
+		if (a.competing !== b.competing) return a.competing ? -1 : 1;
+		return a.competition_name.localeCompare(b.competition_name);
+	});
+}
+
+const LQA_NAV: NavItem[] = [
+	{ to: '/dashboard/quant/competition/lobby', label: 'Browse', icon: LayoutGrid },
+	{ to: '/dashboard/quant/competition/my', label: 'My strategies', icon: Activity },
+	{ to: '/dashboard/quant/strategy', label: 'Strategy', icon: Code2 },
+	{ to: '/dashboard/quant/datasource', label: 'Data sources', icon: Database },
+	{ to: '/dashboard/quant/competition/pathways', label: 'Pathways', icon: BookOpen },
+];
+
+function QuantSection({ onItemClick }: { onItemClick?: () => void }) {
+	const location = useLocation();
+	const inLqa = location.pathname.startsWith('/dashboard/quant');
+	const [joined, setJoined] = useState<JoinedContest[]>([]);
+
+	useEffect(() => {
+		// Only fetch when the user is in the LQA tree — saves a request
+		// for visitors who never go near /dashboard/quant.
+		if (!inLqa) return;
+		let cancelled = false;
+		const load = async () => {
+			try {
+				const r = await getSimulationStrategies({ page: 1, page_size: 200 });
+				if (!cancelled) setJoined(deriveJoined(r.data?.strategies ?? []));
+			} catch (e) {
+				if (e instanceof ApiError && e.ret_code === 401) return;
+				// non-fatal — section just shows static items only
+			}
+		};
+		load();
+		const handler = () => load();
+		window.addEventListener(ROSTER_INVALIDATE_EVENT, handler);
+		return () => {
+			cancelled = true;
+			window.removeEventListener(ROSTER_INVALIDATE_EVENT, handler);
+		};
+	}, [inLqa]);
+
+	if (!inLqa) {
+		return (
+			<>
+				<SectionLabel label="Quant" />
+				<div className="space-y-px">
+					<SidebarItem
+						to="/dashboard/quant"
+						label="Lumid Market"
+						icon={LineChart}
+						excludeActiveFor={['/dashboard/quant/market-data']}
+						onClick={onItemClick}
+					/>
+				</div>
+			</>
+		);
+	}
+
+	return (
+		<>
+			<SectionLabel label="Quant" />
+			<div className="space-y-px">
+				{LQA_NAV.map((item) => (
+					<SidebarItem key={item.to} {...item} onClick={onItemClick} />
+				))}
+			</div>
+			{joined.length > 0 && (
+				<>
+					<SectionLabel label="My contests" />
+					<div className="space-y-px">
+						{joined.map((c) => (
+							<ContestSidebarItem key={c.competition_id} contest={c} onClick={onItemClick} />
+						))}
+					</div>
+				</>
+			)}
+		</>
+	);
+}
+
+function ContestSidebarItem({
+	contest,
+	onClick,
+}: {
+	contest: JoinedContest;
+	onClick?: () => void;
+}) {
+	const to = `/dashboard/quant/competition/${contest.competition_id}`;
+	return (
+		<NavLink
+			to={to}
+			end={false}
+			onClick={onClick}
+			className={({ isActive }) =>
+				cn(
+					'flex items-center gap-2.5 px-2.5 py-1.5 text-[13px] rounded-md transition-colors',
+					isActive
+						? 'bg-indigo-50 text-indigo-700 font-medium'
+						: 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+				)
+			}
+		>
+			<span
+				className={cn(
+					'inline-block w-1.5 h-1.5 rounded-full flex-none ml-0.5 mr-1',
+					contest.competing ? 'bg-emerald-500' : 'bg-slate-300',
+				)}
+				aria-hidden
+			/>
+			<span className="truncate">{contest.competition_name}</span>
+		</NavLink>
+	);
+}
+
 export default function AppLayout() {
 	const { user, logout } = useAuth();
 	const navigate = useNavigate();
@@ -294,12 +434,7 @@ export default function AppLayout() {
 					))}
 				</div>
 
-				<SectionLabel label="Quant" />
-				<div className="space-y-px">
-					{MARKET_NAV.map((item) => (
-						<SidebarItem key={item.to} {...item} onClick={close} />
-					))}
-				</div>
+				<QuantSection onItemClick={close} />
 
 				{isAdmin && (
 					<>
