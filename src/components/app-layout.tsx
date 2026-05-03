@@ -82,10 +82,13 @@ const PRODUCT_NAV: NavItem[] = [
 // one — equity / crypto OHLCV is fed to lots of pipelines, not just
 // LQA strategies). Market data still lives at /dashboard/quant/
 // market-data so existing in-app links and the QA tab nav both
-// resolve.
+// resolve. Financial data added 2026-05-02 — the FinData Vue SPA
+// embedded inside lum.id via /findata-embed/ same-origin proxy
+// (lumid.data prerequisite Tier E).
 const LUMILAKE_NAV: NavItem[] = [
 	{ to: '/dashboard/lumilake/data', label: 'Data browsing', icon: Database },
 	{ to: '/dashboard/quant/market-data', label: 'Market data', icon: BarChart3 },
+	{ to: '/dashboard/datasets/findata', label: 'Financial data', icon: LineChart },
 ];
 
 // Lumid Market (LQA) — quant pages migrating in from lumid.market.

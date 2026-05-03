@@ -36,6 +36,7 @@ const QuantRanking = lazy(() => import("./pages/dashboard/quant-ranking"));
 const QuantTemplate = lazy(() => import("./pages/dashboard/quant-template"));
 const QuantResearch = lazy(() => import("./pages/dashboard/quant-research"));
 const QuantMarketData = lazy(() => import("./pages/dashboard/quant-market-data"));
+const DatasetsFindata = lazy(() => import("./pages/dashboard/datasets-findata"));
 const QuantCompetition = lazy(() =>
   import("./pages/dashboard/quant-competition").then((m) => ({ default: m.QuantCompetitionPage }))
 );
@@ -321,6 +322,11 @@ export default function App() {
               <Route path="flowmesh-jobs" element={<Navigate to="/dashboard/jobs?source=quant" replace />} />
               <Route path="research/:strategyId" element={<QuantResearch />} />
             </Route>
+
+            {/* Datasets — FinData embed (Tier E of lumid.data prereq plan).
+                Surfaced under /dashboard/datasets/findata; the iframe loads
+                the FinData Vue SPA via /findata-embed/ same-origin proxy. */}
+            <Route path="datasets/findata" element={<DatasetsFindata />} />
 
             {/* Lumilake-origin pages grouped under /app/lumilake/*.
                 data-label + modelling hidden 2026-04-24 — not
