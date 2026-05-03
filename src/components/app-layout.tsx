@@ -251,12 +251,28 @@ function deriveJoined(strategies: SimulationStrategyInfo[]): JoinedContest[] {
 	});
 }
 
+// 3 LQA entries (down from 5 on 2026-05-03):
+//   Competitions = Browse + My strategies (combined behind a sub-tab strip)
+//   Backtest     = Strategies + Results + Data sources (3 sub-tabs)
+//   Pathways     = REST/MCP reference docs
+//
+// "Browse" and "My strategies" are different views of the same
+// competition list, so they share a page. "Data sources" feed
+// backtests exclusively, so they live inside Backtest. "Strategy"
+// renamed to "Backtest" to reflect what the page actually IS — the
+// backtest engine workflow.
 const LQA_NAV: NavItem[] = [
-	{ to: '/dashboard/quant/competition/lobby', label: 'Browse', icon: LayoutGrid },
-	{ to: '/dashboard/quant/competition/my', label: 'My strategies', icon: Activity },
-	{ to: '/dashboard/quant/strategy', label: 'Strategy', icon: Code2 },
-	{ to: '/dashboard/quant/datasource', label: 'Data sources', icon: Database },
-	{ to: '/dashboard/quant/competition/pathways', label: 'Pathways', icon: BookOpen },
+	{
+		to: '/dashboard/quant/competition',
+		label: 'Competitions',
+		icon: LayoutGrid,
+		// Pathways lives under /competition/* but is its own sibling
+		// sidebar entry — don't double-highlight when the user is
+		// reading the API reference.
+		excludeActiveFor: ['/dashboard/quant/competition/pathways'],
+	},
+	{ to: '/dashboard/quant/strategy', label: 'Backtest', icon: Code2 },
+	{ to: '/dashboard/quant/competition/pathways', label: 'Pathways', icon: BookOpen, end: true },
 ];
 
 function QuantSection({ onItemClick }: { onItemClick?: () => void }) {

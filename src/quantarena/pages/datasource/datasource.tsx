@@ -1,4 +1,3 @@
-import React from 'react';
 import HistoryDatabase from './history-database';
 import Universe from './universe';
 import Bundle from './bundle';
@@ -8,36 +7,41 @@ import { TooltipProvider } from '../../components/ui/tooltip';
 import { useState } from 'react';
 import { AdminManageLink } from '../../components/admin-manage-link';
 
-const tabList = [
-	{
-		id: 'history',
-		label: 'History Database',
-		component: <HistoryDatabase />,
-	},
-	{
-		id: 'universe',
-		label: 'Universe',
-		component: <Universe />,
-	},
-	{
-		id: 'bundle',
-		label: 'Bundle',
-		component: <Bundle />,
-	},
-	{
-		id: 'freqtrade',
-		label: 'FreqTrade Data',
-		component: <FreqTradeDataset />,
-	},
-];
+// 2026-05-03 split: Datasource is a Strategy sub-tab now (data
+// sources are backtest fuel — they don't deserve their own LQA
+// sidebar entry). DatasourceTabs is the inner 4-tab strip
+// (History / Universe / Bundle / FreqTrade Data) with no page
+// header — embedded inside Strategy. Default export Datasource
+// wraps it with h1 + AdminManageLink for the legacy
+// /dashboard/quant/datasource standalone route, which redirects
+// to ?tab=data-sources but stays renderable for direct visitors.
+export function DatasourceTabs() {
+	const [activeTab, setActiveTab] = useState('history');
+	return (
+		<Tabs value={activeTab} onValueChange={setActiveTab}>
+			<TabsList>
+				<TabsTrigger value="history">History Database</TabsTrigger>
+				<TabsTrigger value="universe">Universe</TabsTrigger>
+				<TabsTrigger value="bundle">Bundle</TabsTrigger>
+				<TabsTrigger value="freqtrade">FreqTrade Data</TabsTrigger>
+			</TabsList>
+			<TabsContent value="history">
+				<HistoryDatabase />
+			</TabsContent>
+			<TabsContent value="universe">
+				<Universe />
+			</TabsContent>
+			<TabsContent value="bundle">
+				<Bundle />
+			</TabsContent>
+			<TabsContent value="freqtrade">
+				<FreqTradeDataset />
+			</TabsContent>
+		</Tabs>
+	);
+}
 
 const Datasource = () => {
-	const [activeTab, setActiveTab] = useState('history');
-
-	const handleTabChange = (value: string) => {
-		setActiveTab(value);
-	};
-
 	return (
 		<TooltipProvider>
 			<div className="flex items-center justify-between mb-4">
@@ -49,27 +53,7 @@ const Datasource = () => {
 				</div>
 				<AdminManageLink to="/dashboard/admin/markets" />
 			</div>
-			<Tabs value={activeTab} onValueChange={handleTabChange}>
-				<TabsList>
-					{tabList.map((tab) => (
-						<TabsTrigger key={tab.id} value={tab.id}>
-							{tab.label}
-						</TabsTrigger>
-					))}
-				</TabsList>
-				<TabsContent value="history">
-					<HistoryDatabase />
-				</TabsContent>
-				<TabsContent value="universe">
-					<Universe />
-				</TabsContent>
-				<TabsContent value="bundle">
-					<Bundle />
-				</TabsContent>
-				<TabsContent value="freqtrade">
-					<FreqTradeDataset />
-				</TabsContent>
-			</Tabs>
+			<DatasourceTabs />
 		</TooltipProvider>
 	);
 };

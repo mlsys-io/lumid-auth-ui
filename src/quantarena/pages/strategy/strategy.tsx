@@ -5,46 +5,65 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/ta
 import { TooltipProvider } from '../../components/ui/tooltip';
 import { Loading } from '../../components/ui/loading';
 
-// Two sub-tabs as of 2026-05-03 — Strategy is the backtest engine
-// workflow: build/edit/run (Backtesting) + past run history
-// (Results). The "Forward Testing" tab moved into the Competition
-// shell at /dashboard/quant/competition/my because every simulation
-// strategy is competition-bound (CreateSimulationStrategyRequest
-// requires competition_id). The Backtesting view lazy-loads so its
-// ~600 LOC don't block first paint of the default sub-tab.
+// Three sub-tabs as of 2026-05-03 — the page covers the full
+// backtest engine workflow: edit strategies (Strategies), browse
+// past runs (Results), and manage the data those backtests run on
+// (Data sources, formerly its own /dashboard/quant/datasource page
+// — folded in here since data sources are exclusively backtest
+// fuel). Forward Testing moved out earlier today because simulation
+// strategies are competition-bound.
+//
+// Heavy children (Backtesting list, Datasource tabs) lazy-load so
+// landing on the default Strategies tab paints fast.
 const Backtesting = lazy(() =>
 	import('../backtesting/backtesting').then((m) => ({ default: m.Backtesting })),
 );
+const DatasourceTabs = lazy(() =>
+	import('../datasource/datasource').then((m) => ({ default: m.DatasourceTabs })),
+);
 
-const TAB_IDS = ['backtesting', 'results'] as const;
+const TAB_IDS = ['strategies', 'results', 'data-sources'] as const;
 type TabId = (typeof TAB_IDS)[number];
 const VALID_TABS: ReadonlySet<string> = new Set(TAB_IDS);
 
-const TAB_LABELS: Record<TabId, string> = {
-	'backtesting': 'Backtesting',
-	'results': 'Results',
+// Old `?tab=backtesting` deep-links pre-date the Strategies/Results
+// rename; map them onto the new ID.
+const TAB_ALIASES: Record<string, TabId> = {
+	backtesting: 'strategies',
 };
 
-const Strategy = () => {
+const TAB_LABELS: Record<TabId, string> = {
+	'strategies': 'Strategies',
+	'results': 'Results',
+	'data-sources': 'Data sources',
+};
+
+const Backtest = () => {
 	const [params, setParams] = useSearchParams();
 	const requested = params.get('tab') ?? '';
-	const active: TabId = (VALID_TABS.has(requested) ? requested : 'backtesting') as TabId;
+	const aliased = TAB_ALIASES[requested] ?? requested;
+	const active: TabId = (VALID_TABS.has(aliased) ? aliased : 'strategies') as TabId;
 
 	const onTabChange = (next: string) => {
 		// Two-way sync: clicking a tab updates ?tab=... so the URL is
 		// deep-linkable and refresh-safe. Default tab keeps a clean URL.
 		const nextParams = new URLSearchParams(params);
-		if (next === 'backtesting') nextParams.delete('tab');
+		if (next === 'strategies') nextParams.delete('tab');
 		else nextParams.set('tab', next);
 		setParams(nextParams, { replace: true });
 	};
 
 	const content = useMemo(
 		() => ({
-			'backtesting': <BacktestingStrategy />,
+			'strategies': <BacktestingStrategy />,
 			'results': (
 				<Suspense fallback={<Loading />}>
 					<Backtesting />
+				</Suspense>
+			),
+			'data-sources': (
+				<Suspense fallback={<Loading />}>
+					<DatasourceTabs />
 				</Suspense>
 			),
 		}),
@@ -55,8 +74,10 @@ const Strategy = () => {
 		<TooltipProvider>
 			<div className="flex items-center justify-between mb-4"></div>
 			<div>
-				<h1 className="text-3xl font-bold">Strategy</h1>
-				<p className="text-muted-foreground">Build, run, and review backtests</p>
+				<h1 className="text-3xl font-bold">Backtest</h1>
+				<p className="text-muted-foreground">
+					Build strategies, run backtests, review results, and manage the data they run on.
+				</p>
 			</div>
 			<Tabs value={active} onValueChange={onTabChange} className="mt-4">
 				<TabsList>
@@ -76,4 +97,4 @@ const Strategy = () => {
 	);
 };
 
-export default Strategy;
+export default Backtest;

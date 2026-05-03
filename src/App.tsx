@@ -30,7 +30,8 @@ const AdminInvitations = lazy(() => import("./pages/account/admin-invitations"))
 const AdminOverview = lazy(() => import("./pages/dashboard/overview"));
 const QuantLayout = lazy(() => import("./pages/dashboard/quant-layout"));
 const QuantStrategy = lazy(() => import("./pages/dashboard/quant-strategy"));
-const QuantDatasource = lazy(() => import("./pages/dashboard/quant-datasource"));
+// QuantDatasource lazy import retired 2026-05-03 — folded into
+// Strategy ("Backtest") as a 3rd sub-tab. Old route redirects.
 // QuantBacktesting + QuantRanking lazy imports retired 2026-05-03 —
 // Backtesting absorbed into Strategy as a "Results" sub-tab; Ranking
 // reachable via Competition deep-link only.
@@ -38,10 +39,12 @@ const QuantTemplate = lazy(() => import("./pages/dashboard/quant-template"));
 const QuantResearch = lazy(() => import("./pages/dashboard/quant-research"));
 const QuantMarketData = lazy(() => import("./pages/dashboard/quant-market-data"));
 const DatasetsFindata = lazy(() => import("./pages/dashboard/datasets-findata"));
-// Quant competition leaf components — rendered directly inside the
-// LQA shell's <Outlet/> (the shell is QuantLayout). 2026-05-03:
-// removed the inner CompetitionShell wrapper; one shell to rule
-// them all.
+// Quant competition leaf components — Competitions shell wraps the
+// list-views (Browse + My strategies) with a sub-tab strip. Pathways
+// and detail pages render directly. 2026-05-03 consolidation.
+const Competitions = lazy(() =>
+  import("./pages/dashboard/quant-competition").then((m) => ({ default: m.QuantCompetitions }))
+);
 const CompetitionLobby = lazy(() =>
   import("./pages/dashboard/quant-competition").then((m) => ({ default: m.QuantCompetitionLobby }))
 );
@@ -324,9 +327,14 @@ export default function App() {
                   collapsed into one navigation surface on 2026-05-03 —
                   three layers down to two. URLs unchanged. */}
               <Route index element={<Navigate to="/dashboard/quant/competition/lobby" replace />} />
-              <Route path="competition" element={<Navigate to="/dashboard/quant/competition/lobby" replace />} />
-              <Route path="competition/lobby" element={<CompetitionLobby />} />
-              <Route path="competition/my" element={<CompetitionMyStrategies />} />
+              {/* Competitions shell: Browse + My strategies share a sub-tab strip.
+                  Index redirect handles bare /competition. Pathways and per-id
+                  detail render directly (no list-view tabs). */}
+              <Route path="competition" element={<Competitions />}>
+                <Route index element={<Navigate to="lobby" replace />} />
+                <Route path="lobby" element={<CompetitionLobby />} />
+                <Route path="my" element={<CompetitionMyStrategies />} />
+              </Route>
               <Route path="competition/pathways" element={<CompetitionPathways />} />
               <Route path="competition/:competitionId" element={<QuantCompetitionDetail />} />
               <Route
@@ -341,7 +349,10 @@ export default function App() {
               <Route path="backtesting" element={<Navigate to="/dashboard/quant/strategy?tab=results" replace />} />
               <Route path="ranking" element={<Navigate to="/dashboard/quant/competition" replace />} />
               <Route path="template" element={<QuantTemplate />} />
-              <Route path="datasource" element={<QuantDatasource />} />
+              {/* Datasource folded into Backtest as a 3rd sub-tab on
+                  2026-05-03 — data sources are backtest fuel.
+                  Standalone route redirects so old links work. */}
+              <Route path="datasource" element={<Navigate to="/dashboard/quant/strategy?tab=data-sources" replace />} />
               <Route path="market-data" element={<QuantMarketData />} />
               <Route path="flowmesh-jobs" element={<Navigate to="/dashboard/jobs?source=quant" replace />} />
               <Route path="research/:strategyId" element={<QuantResearch />} />
