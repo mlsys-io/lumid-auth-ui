@@ -26,6 +26,7 @@ import {
 	LayoutGrid,
 	Activity,
 	Code2,
+	Inbox,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
@@ -469,6 +470,7 @@ export default function AppLayout() {
 				<div className="space-y-px">
 					<SidebarItem to="/dashboard/profile" label="Account" icon={UserIcon} onClick={close} />
 					<SidebarItem to="/dashboard/tokens" label="Tokens" icon={KeyRound} onClick={close} />
+					<SidebarItem to="/dashboard/inbox" label="Inbox" icon={Inbox} onClick={close} />
 					{!isAdmin && (
 						<SidebarItem to="/dashboard/billing" label="Billing" icon={Receipt} onClick={close} />
 					)}

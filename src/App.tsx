@@ -18,6 +18,9 @@ const ResetPassword = lazy(() => import("./pages/auth/reset-password"));
 // the Apps landing.
 const Profile = lazy(() => import("./pages/account/profile"));
 const Tokens = lazy(() => import("./pages/account/tokens"));
+const Inbox = lazy(() => import("./pages/account/inbox"));
+const SkillsNew = lazy(() => import("./pages/account/skills/new"));
+const MemoryNew = lazy(() => import("./pages/account/memory/new"));
 // Connect (OAuth account linking) dropped from the sidebar 2026-04-24;
 // page file kept on disk at /pages/account/connect.tsx but no longer
 // routed. Re-add import + route + tab entry if/when OAuth linking is
@@ -307,6 +310,15 @@ export default function App() {
             <Route path="profile" element={<Profile />} />
             <Route path="tokens" element={<Tokens />} />
             <Route path="billing" element={<AppBilling />} />
+
+            {/* Theme A4 / A5 / inbox — Lumid Studio authoring side
+                channel. The AI auto-loop (Theme A1) is the primary
+                surface for skill + memory authoring; these forms
+                handle cold-start + override + the human review of
+                staged drafts. The inbox is the steady-state landing. */}
+            <Route path="inbox" element={<Inbox />} />
+            <Route path="skills/new" element={<SkillsNew />} />
+            <Route path="memory/new" element={<MemoryNew />} />
 
             <Route path="api-docs" element={<AppApiDocs />} />
             <Route path="gpu-rentals" element={<AppGpuRentals />} />
