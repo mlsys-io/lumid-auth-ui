@@ -18,6 +18,9 @@ const ResetPassword = lazy(() => import("./pages/auth/reset-password"));
 // the Apps landing.
 const Profile = lazy(() => import("./pages/account/profile"));
 const Tokens = lazy(() => import("./pages/account/tokens"));
+const Inbox = lazy(() => import("./pages/account/inbox"));
+const SkillsNew = lazy(() => import("./pages/account/skills/new"));
+const MemoryNew = lazy(() => import("./pages/account/memory/new"));
 // Connect (OAuth account linking) dropped from the sidebar 2026-04-24;
 // page file kept on disk at /pages/account/connect.tsx but no longer
 // routed. Re-add import + route + tab entry if/when OAuth linking is
@@ -30,14 +33,29 @@ const AdminInvitations = lazy(() => import("./pages/account/admin-invitations"))
 const AdminOverview = lazy(() => import("./pages/dashboard/overview"));
 const QuantLayout = lazy(() => import("./pages/dashboard/quant-layout"));
 const QuantStrategy = lazy(() => import("./pages/dashboard/quant-strategy"));
-const QuantDatasource = lazy(() => import("./pages/dashboard/quant-datasource"));
-const QuantBacktesting = lazy(() => import("./pages/dashboard/quant-backtesting"));
-const QuantRanking = lazy(() => import("./pages/dashboard/quant-ranking"));
+// QuantDatasource lazy import retired 2026-05-03 — folded into
+// Strategy ("Backtest") as a 3rd sub-tab. Old route redirects.
+// QuantBacktesting + QuantRanking lazy imports retired 2026-05-03 —
+// Backtesting absorbed into Strategy as a "Results" sub-tab; Ranking
+// reachable via Competition deep-link only.
 const QuantTemplate = lazy(() => import("./pages/dashboard/quant-template"));
 const QuantResearch = lazy(() => import("./pages/dashboard/quant-research"));
 const QuantMarketData = lazy(() => import("./pages/dashboard/quant-market-data"));
-const QuantCompetition = lazy(() =>
-  import("./pages/dashboard/quant-competition").then((m) => ({ default: m.QuantCompetitionPage }))
+const DatasetsFindata = lazy(() => import("./pages/dashboard/datasets-findata"));
+// Quant competition leaf components — Competitions shell wraps the
+// list-views (Browse + My strategies) with a sub-tab strip. Pathways
+// and detail pages render directly. 2026-05-03 consolidation.
+const Competitions = lazy(() =>
+  import("./pages/dashboard/quant-competition").then((m) => ({ default: m.QuantCompetitions }))
+);
+const CompetitionLobby = lazy(() =>
+  import("./pages/dashboard/quant-competition").then((m) => ({ default: m.QuantCompetitionLobby }))
+);
+const CompetitionMyStrategies = lazy(() =>
+  import("./pages/dashboard/quant-competition").then((m) => ({ default: m.QuantCompetitionMyStrategies }))
+);
+const CompetitionPathways = lazy(() =>
+  import("./pages/dashboard/quant-competition").then((m) => ({ default: m.QuantCompetitionPathways }))
 );
 const QuantCompetitionDetail = lazy(() =>
   import("./pages/dashboard/quant-competition").then((m) => ({ default: m.QuantCompetitionDetailPage }))
@@ -293,6 +311,15 @@ export default function App() {
             <Route path="tokens" element={<Tokens />} />
             <Route path="billing" element={<AppBilling />} />
 
+            {/* Theme A4 / A5 / inbox — Lumid Studio authoring side
+                channel. The AI auto-loop (Theme A1) is the primary
+                surface for skill + memory authoring; these forms
+                handle cold-start + override + the human review of
+                staged drafts. The inbox is the steady-state landing. */}
+            <Route path="inbox" element={<Inbox />} />
+            <Route path="skills/new" element={<SkillsNew />} />
+            <Route path="memory/new" element={<MemoryNew />} />
+
             <Route path="api-docs" element={<AppApiDocs />} />
             <Route path="gpu-rentals" element={<AppGpuRentals />} />
             <Route path="gpu-rentals/new" element={<AppGpuRentalsNew />} />
@@ -305,22 +332,48 @@ export default function App() {
                 competition, etc.) was ported into lumid_ui on
                 2026-04-30. */}
             <Route path="quant" element={<QuantLayout />}>
-              <Route index element={<Navigate to="/dashboard/quant/competition" replace />} />
-              <Route path="competition" element={<QuantCompetition />} />
+              {/* LQA shell — single sidebar at QuantLayout level (left
+                  rail with Browse / My strategies / dynamic My contests /
+                  Strategy / Data sources / Pathways). The horizontal
+                  tab strip + the inner CompetitionShell sidebar were
+                  collapsed into one navigation surface on 2026-05-03 —
+                  three layers down to two. URLs unchanged. */}
+              <Route index element={<Navigate to="/dashboard/quant/competition/lobby" replace />} />
+              {/* Competitions shell: Browse + My strategies share a sub-tab strip.
+                  Index redirect handles bare /competition. Pathways and per-id
+                  detail render directly (no list-view tabs). */}
+              <Route path="competition" element={<Competitions />}>
+                <Route index element={<Navigate to="lobby" replace />} />
+                <Route path="lobby" element={<CompetitionLobby />} />
+                <Route path="my" element={<CompetitionMyStrategies />} />
+                <Route path="pathways" element={<CompetitionPathways />} />
+              </Route>
               <Route path="competition/:competitionId" element={<QuantCompetitionDetail />} />
               <Route
                 path="competition/:competitionId/strategy/:strategyId"
                 element={<QuantCompetitionStrategyDetail />}
               />
               <Route path="strategy" element={<QuantStrategy />} />
-              <Route path="backtesting" element={<QuantBacktesting />} />
-              <Route path="ranking" element={<QuantRanking />} />
+              {/* Tab consolidation 2026-05-03 — Backtesting moved into Strategy as the
+                  "Results" sub-tab; Ranking demoted (deep-link via Competition); Template
+                  demoted (deep-link only). Routes preserved as redirects so old
+                  bookmarks keep working. */}
+              <Route path="backtesting" element={<Navigate to="/dashboard/quant/strategy?tab=results" replace />} />
+              <Route path="ranking" element={<Navigate to="/dashboard/quant/competition" replace />} />
               <Route path="template" element={<QuantTemplate />} />
-              <Route path="datasource" element={<QuantDatasource />} />
+              {/* Datasource folded into Backtest as a 3rd sub-tab on
+                  2026-05-03 — data sources are backtest fuel.
+                  Standalone route redirects so old links work. */}
+              <Route path="datasource" element={<Navigate to="/dashboard/quant/strategy?tab=data-sources" replace />} />
               <Route path="market-data" element={<QuantMarketData />} />
               <Route path="flowmesh-jobs" element={<Navigate to="/dashboard/jobs?source=quant" replace />} />
               <Route path="research/:strategyId" element={<QuantResearch />} />
             </Route>
+
+            {/* Datasets — FinData embed (Tier E of lumid.data prereq plan).
+                Surfaced under /dashboard/datasets/findata; the iframe loads
+                the FinData Vue SPA via /findata-embed/ same-origin proxy. */}
+            <Route path="datasets/findata" element={<DatasetsFindata />} />
 
             {/* Lumilake-origin pages grouped under /app/lumilake/*.
                 data-label + modelling hidden 2026-04-24 — not
@@ -473,7 +526,7 @@ export default function App() {
                     subtitle="Trading platform admin — competitions, markets, templates, jobs."
                     tabs={[
                       { to: "/dashboard/admin/competitions", label: "Competitions", end: true },
-                      { to: "/dashboard/admin/markets", label: "Portfolios" },
+                      { to: "/dashboard/admin/markets", label: "Markets" },
                       { to: "/dashboard/admin/templates", label: "Backtest templates" },
                       { to: "/dashboard/admin/flowmesh-jobs", label: "FlowMesh jobs" },
                     ]}
