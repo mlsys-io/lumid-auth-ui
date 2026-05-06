@@ -113,7 +113,7 @@ const ADMIN_NAV: NavItem[] = [
 	{ to: '/dashboard/admin', label: 'Overview', icon: LayoutDashboard, end: true },
 	{ to: '/dashboard/admin/users', label: 'People & access', icon: Users },
 	{ to: '/dashboard/admin/clusters', label: 'Infrastructure', icon: Layers },
-	{ to: '/dashboard/admin/competitions', label: 'QuantArena', icon: Trophy },
+	{ to: '/dashboard/admin/competitions', label: 'Lumid Market', icon: Trophy },
 ];
 
 function SidebarItem({
@@ -297,12 +297,12 @@ function QuantSection({ onItemClick }: { onItemClick?: () => void }) {
 	if (!inLqa) {
 		return (
 			<>
-				<SectionLabel label="Quant" />
+				<SectionLabel label="Lumid Market" />
 				<div className="space-y-px">
 					<SidebarItem
 						to="/dashboard/quant"
-						label="Lumid Market"
-						icon={LineChart}
+						label="Competitions"
+						icon={LayoutGrid}
 						excludeActiveFor={['/dashboard/quant/market-data']}
 						onClick={onItemClick}
 					/>
@@ -313,7 +313,7 @@ function QuantSection({ onItemClick }: { onItemClick?: () => void }) {
 
 	return (
 		<>
-			<SectionLabel label="Quant" />
+			<SectionLabel label="Lumid Market" />
 			<div className="space-y-px">
 				{LQA_NAV.map((item) => (
 					<SidebarItem key={item.to} {...item} onClick={onItemClick} />
