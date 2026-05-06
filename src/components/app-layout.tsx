@@ -294,23 +294,13 @@ function QuantSection({ onItemClick }: { onItemClick?: () => void }) {
 		};
 	}, [inLqa]);
 
-	if (!inLqa) {
-		return (
-			<>
-				<SectionLabel label="Lumid Market" />
-				<div className="space-y-px">
-					<SidebarItem
-						to="/dashboard/quant"
-						label="Competitions"
-						icon={LayoutGrid}
-						excludeActiveFor={['/dashboard/quant/market-data']}
-						onClick={onItemClick}
-					/>
-				</div>
-			</>
-		);
-	}
-
+	// Always render the full Lumid Market nav (Competitions + Backtest)
+	// regardless of whether the user is already inside /dashboard/quant.
+	// The previous "collapse to one item outside LQA" behavior caused
+	// surprise: /dashboard showed only Competitions, but clicking into
+	// /dashboard/quant/competition/lobby revealed a second Backtest
+	// entry. Same nav at every depth is the principle of least
+	// astonishment.
 	return (
 		<>
 			<SectionLabel label="Lumid Market" />
@@ -319,7 +309,7 @@ function QuantSection({ onItemClick }: { onItemClick?: () => void }) {
 					<SidebarItem key={item.to} {...item} onClick={onItemClick} />
 				))}
 			</div>
-			{joined.length > 0 && (
+			{inLqa && joined.length > 0 && (
 				<>
 					<SectionLabel label="My contests" />
 					<div className="space-y-px">
