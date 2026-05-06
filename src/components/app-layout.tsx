@@ -99,10 +99,11 @@ const LUMILAKE_NAV: NavItem[] = [
 ];
 
 // Lumid Market (LQA) sidebar entries are rendered by QuantSection
-// below — contextual on /dashboard/quant/* (full LQA nav inline +
-// dynamic My contests) and a single "Lumid Market" link elsewhere.
-// 2026-05-03 collapse: there is exactly one left rail across the
-// whole app; the prior in-page LQA sidebar was deleted.
+// below — full LQA nav (Competitions + Backtest) at every depth,
+// plus a dynamic "My contests" roster that only appears once the
+// user has joined any. 2026-05-03 collapse: there is exactly one
+// left rail across the whole app; the prior in-page LQA sidebar
+// was deleted.
 
 // Consolidated admin nav: 17 flat items collapsed to 5. Each section
 // lands on its first sub-page, with the remaining pages shown as tabs
@@ -267,14 +268,15 @@ const LQA_NAV: NavItem[] = [
 ];
 
 function QuantSection({ onItemClick }: { onItemClick?: () => void }) {
-	const location = useLocation();
-	const inLqa = location.pathname.startsWith('/dashboard/quant');
 	const [joined, setJoined] = useState<JoinedContest[]>([]);
 
 	useEffect(() => {
-		// Only fetch when the user is in the LQA tree — saves a request
-		// for visitors who never go near /dashboard/quant.
-		if (!inLqa) return;
+		// Fetch the user's joined-contest roster on mount regardless of
+		// route. Same nav surface at every depth: if the user has any
+		// joined contests, the quick-jump roster shows up from /dashboard
+		// — not just once they've clicked into /dashboard/quant/*. The
+		// fetch 401s cleanly for unauth visitors so the cost is one HTTP
+		// per page-load for authenticated users.
 		let cancelled = false;
 		const load = async () => {
 			try {
@@ -292,15 +294,12 @@ function QuantSection({ onItemClick }: { onItemClick?: () => void }) {
 			cancelled = true;
 			window.removeEventListener(ROSTER_INVALIDATE_EVENT, handler);
 		};
-	}, [inLqa]);
+	}, []);
 
-	// Always render the full Lumid Market nav (Competitions + Backtest)
-	// regardless of whether the user is already inside /dashboard/quant.
-	// The previous "collapse to one item outside LQA" behavior caused
-	// surprise: /dashboard showed only Competitions, but clicking into
-	// /dashboard/quant/competition/lobby revealed a second Backtest
-	// entry. Same nav at every depth is the principle of least
-	// astonishment.
+	// Same Lumid Market nav at every depth — the previous "collapse to
+	// one item outside LQA / expand inside" behavior caused surprise:
+	// /dashboard showed only Competitions, then /dashboard/quant/...
+	// revealed a second Backtest entry plus the My-contests roster.
 	return (
 		<>
 			<SectionLabel label="Lumid Market" />
@@ -309,7 +308,7 @@ function QuantSection({ onItemClick }: { onItemClick?: () => void }) {
 					<SidebarItem key={item.to} {...item} onClick={onItemClick} />
 				))}
 			</div>
-			{inLqa && joined.length > 0 && (
+			{joined.length > 0 && (
 				<>
 					<SectionLabel label="My contests" />
 					<div className="space-y-px">
