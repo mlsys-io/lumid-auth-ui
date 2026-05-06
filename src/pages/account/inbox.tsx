@@ -1,244 +1,410 @@
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Button } from '../../components/ui/button';
-import { Input } from '../../components/ui/input';
-import { Label } from '../../components/ui/label';
-import { toast } from 'sonner';
-import { Inbox, Sparkles, Brain, Copy, Check, Bot, User, ShieldAlert } from 'lucide-react';
-import { generateInboxCommands } from '../../api/draft-bundle';
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { Button } from "../../components/ui/button";
+import { Input } from "../../components/ui/input";
+import { Label } from "../../components/ui/label";
+import { toast } from "sonner";
+import {
+	Inbox as InboxIcon,
+	Bot,
+	User,
+	Sparkles,
+	Brain,
+	ShieldAlert,
+	CheckCircle2,
+	XCircle,
+	MessageSquare,
+	RefreshCw,
+} from "lucide-react";
+import {
+	listInboxMessages,
+	markSeen,
+	postReply,
+	type InboxMessage,
+} from "../../api/inbox";
 
 /**
- * /account/inbox — A1 + A4/A5 side-channel surface.
+ * /account/inbox — real two-way message store between autoresearch
+ * loops and the human reviewer.
  *
- * The AI auto-research loop (Theme A1) drafts skills + memories every
- * cycle. The approval gate (Theme A2) routes them auto / stage /
- * force. Stage and force land on the user's local machine under
- *   ~/.xp/apps/<app>/.drafts/         (skills)
- *   ~/.xp/kg/agents/<agent>/.drafts/  (memories)
+ * Phase 1 (read-only display):  the loop posts a structured message
+ * via xpcloud's POST /inbox/message after each cycle. This page polls
+ * GET /inbox/messages and shows them.
  *
- * The web UI can't read those paths directly (cross-machine). So the
- * inbox is a **command center**: it explains the loop pattern,
- * generates the right `lumid skill_drafts / memory_drafts` invocations
- * for the user's CLI, and links to the human-led authoring forms
- * (A4/A5) for cold-start or override flows.
+ * Phase 2 (replies flow back):  for `cycle_summary` and `draft_pending`
+ * messages, the user can Approve / Reject each draft inline. For
+ * `question` messages, a textarea lets the user reply with prose.
+ * Replies POST to /inbox/{id}/reply; the local cycle pulls them on
+ * its next entry via _pull_inbox_replies and dispatches accordingly:
+ *   approve → skill_apply / memory_apply
+ *   reject  → discard_skill_draft / discard_memory_draft
+ *   text    → xp_ingest into the role agent
  *
- * In the steady state (auto-loop running), this page's main job is
- * to be the URL the auto-loop emails / pings when there are
- * stage-for-review drafts pending: "open lum.id/dashboard/inbox to
- * review N drafts."
+ * Auth is the lm_session cookie — nginx proxies /inbox-api/* to
+ * xpcloud and forwards the cookie value as a Bearer token, so
+ * xpcloud's resolve_user introspects via lum.id.
  */
 export default function InboxPage() {
-	const [app, setApp] = useState('mbb-ai');
-	const [agent, setAgent] = useState('mbb-ai-analyst');
-	const [copied, setCopied] = useState<string | null>(null);
+	const [appFilter, setAppFilter] = useState("");
+	const [unreadOnly, setUnreadOnly] = useState(false);
+	const [messages, setMessages] = useState<InboxMessage[]>([]);
+	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState<string | null>(null);
+	const [unread, setUnread] = useState(0);
 
-	const cmds = useMemo(() => generateInboxCommands({ app, agent }), [app, agent]);
-
-	const copy = async (key: string, text: string) => {
+	const refresh = async () => {
 		try {
-			await navigator.clipboard.writeText(text);
-			setCopied(key);
-			toast.success('Copied');
-			setTimeout(() => setCopied(null), 2_000);
+			const resp = await listInboxMessages({
+				app: appFilter || undefined,
+				unread_only: unreadOnly,
+				limit: 100,
+			});
+			setMessages(resp.messages);
+			setUnread(resp.unread);
+			setError(null);
+		} catch (e: unknown) {
+			const msg = e instanceof Error ? e.message : String(e);
+			setError(msg);
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	useEffect(() => {
+		setLoading(true);
+		refresh();
+		// Poll every 30s so a cycle that just ran shows up without a manual refresh.
+		const id = setInterval(refresh, 30_000);
+		return () => clearInterval(id);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [appFilter, unreadOnly]);
+
+	const apps = useMemo(
+		() => Array.from(new Set(messages.map((m) => m.app))).sort(),
+		[messages],
+	);
+
+	const onSeen = async (id: string) => {
+		try {
+			await markSeen(id);
+			setMessages((prev) =>
+				prev.map((m) => (m.id === id ? { ...m, seen_at: Date.now() / 1000 } : m)),
+			);
 		} catch (e) {
-			toast.error(`Copy failed: ${String(e)}`);
+			toast.error(`Mark seen failed: ${String(e)}`);
 		}
 	};
 
 	return (
-		<div className="max-w-5xl mx-auto p-6 space-y-6">
-			<div>
-				<h1 className="text-2xl font-bold flex items-center gap-2">
-					<Inbox className="w-5 h-5 text-indigo-500" />
-					Inbox
-				</h1>
-				<p className="text-sm text-muted-foreground mt-1 max-w-3xl">
-					Drafts staged by the AI auto-research loop and waiting for your
-					review. Lumid's design center is "AI is the primary author, you're
-					the side channel" — most drafts auto-apply when the approval gate
-					says they're safe; the rest land here.
+		<div className="max-w-4xl mx-auto p-6">
+			<header className="mb-6">
+				<div className="flex items-center justify-between mb-2">
+					<h1 className="text-2xl font-bold flex items-center gap-2">
+						<InboxIcon className="w-6 h-6" /> Inbox
+						{unread > 0 && (
+							<span className="text-sm font-normal bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full">
+								{unread} unread
+							</span>
+						)}
+					</h1>
+					<Button variant="ghost" size="sm" onClick={refresh}>
+						<RefreshCw className="w-4 h-4 mr-1" /> Refresh
+					</Button>
+				</div>
+				<p className="text-sm text-muted-foreground">
+					Messages from your autoresearch loops. Approve/Reject drafts inline; the next cycle picks up your reply.
 				</p>
-			</div>
+			</header>
 
-			<div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-				<RouteRibbon
-					icon={<Bot className="w-4 h-4 text-violet-500" />}
-					tone="violet"
-					title="Auto-applied"
-					body="Memory ingests with confidence ≥ 0.8 from validated insights. The bandit reinforces / decays them based on cycle outcomes — you don't need to review."
-				/>
-				<RouteRibbon
-					icon={<User className="w-4 h-4 text-amber-500" />}
-					tone="amber"
-					title="Staged for review"
-					body="New skill scaffolds, prompt-body edits, low-confidence memories. View via the CLI commands below; approve / discard with skill_apply / skill_discard."
-				/>
-				<RouteRibbon
-					icon={<ShieldAlert className="w-4 h-4 text-rose-500" />}
-					tone="rose"
-					title="Force review"
-					body="Touches paper-integrity surface (judge prompts, core_principles). Always shown to you regardless of policy — auto-apply not allowed."
-				/>
-			</div>
-
-			<div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
-				<div className="flex items-baseline justify-between">
-					<h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">
-						View staged drafts
-					</h2>
-					<span className="text-[11px] text-muted-foreground">
-						runs locally — drafts live in your <code>~/.xp</code>
-					</span>
-				</div>
-				<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-					<div className="space-y-2">
-						<Label htmlFor="inbox-app">App</Label>
-						<Input
-							id="inbox-app"
-							value={app}
-							onChange={(e) => setApp(e.target.value)}
-							placeholder="mbb-ai"
-						/>
-						<div className="flex items-center justify-between">
-							<span className="text-[11px] text-muted-foreground">
-								Lists skill drafts
-							</span>
-							<Button
-								size="sm"
-								variant="ghost"
-								className="h-7 px-2"
-								onClick={() => copy('skills', cmds.skillsCmd)}
-							>
-								{copied === 'skills' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-							</Button>
-						</div>
-						<pre className="p-3 bg-slate-900 text-slate-100 rounded text-[11px] overflow-x-auto">
-							{cmds.skillsCmd}
-						</pre>
-					</div>
-					<div className="space-y-2">
-						<Label htmlFor="inbox-agent">Agent</Label>
-						<Input
-							id="inbox-agent"
-							value={agent}
-							onChange={(e) => setAgent(e.target.value)}
-							placeholder="mbb-ai-analyst"
-						/>
-						<div className="flex items-center justify-between">
-							<span className="text-[11px] text-muted-foreground">
-								Lists memory drafts
-							</span>
-							<Button
-								size="sm"
-								variant="ghost"
-								className="h-7 px-2"
-								onClick={() => copy('memory', cmds.memoryCmd)}
-							>
-								{copied === 'memory' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-							</Button>
-						</div>
-						<pre className="p-3 bg-slate-900 text-slate-100 rounded text-[11px] overflow-x-auto">
-							{cmds.memoryCmd}
-						</pre>
-					</div>
-				</div>
-			</div>
-
-			<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-				<Link
-					to={`/dashboard/skills/new?app=${encodeURIComponent(app)}`}
-					className="group block p-5 bg-white border border-slate-200 rounded-xl hover:border-violet-300 hover:bg-violet-50/30 transition-colors"
+			<div className="flex items-center gap-3 mb-4 text-sm">
+				<Label htmlFor="app-filter" className="text-muted-foreground">App:</Label>
+				<select
+					id="app-filter"
+					value={appFilter}
+					onChange={(e) => setAppFilter(e.target.value)}
+					className="border rounded px-2 py-1 text-sm"
 				>
-					<div className="flex items-center gap-2 text-slate-700">
-						<Sparkles className="w-4 h-4 text-violet-500" />
-						<span className="font-semibold">New skill draft</span>
-					</div>
-					<p className="text-sm text-muted-foreground mt-1">
-						Cold-start a new analyst / judge skill from scratch, or override
-						an AI-staged draft. Form generates a one-shot CLI command.
-					</p>
-					<span className="text-[12px] text-violet-600 group-hover:underline">
-						Open form →
-					</span>
-				</Link>
-				<Link
-					to={`/dashboard/memory/new?app=${encodeURIComponent(app)}`}
-					className="group block p-5 bg-white border border-slate-200 rounded-xl hover:border-emerald-300 hover:bg-emerald-50/30 transition-colors"
-				>
-					<div className="flex items-center gap-2 text-slate-700">
-						<Brain className="w-4 h-4 text-emerald-500" />
-						<span className="font-semibold">New memory ingest</span>
-					</div>
-					<p className="text-sm text-muted-foreground mt-1">
-						Add a principle / lesson / incident / calibration memory to a
-						role's xp.io bank. Same filesystem-bridge pattern.
-					</p>
-					<span className="text-[12px] text-emerald-600 group-hover:underline">
-						Open form →
-					</span>
-				</Link>
+					<option value="">All apps</option>
+					{apps.map((a) => (
+						<option key={a} value={a}>{a}</option>
+					))}
+				</select>
+				<label className="flex items-center gap-1 text-muted-foreground">
+					<input
+						type="checkbox"
+						checked={unreadOnly}
+						onChange={(e) => setUnreadOnly(e.target.checked)}
+					/>
+					Unread only
+				</label>
 			</div>
 
-			<details className="bg-slate-50 border border-slate-200 rounded-xl">
-				<summary className="cursor-pointer px-4 py-3 text-sm font-medium text-slate-700">
-					How the auto-loop and the inbox compose
-				</summary>
-				<div className="px-4 py-3 text-sm text-slate-600 space-y-2 leading-6">
-					<p>
-						<strong>OBSERVE.</strong> Each cycle reads new validate gaps + per-cycle
-						insights events from your local <code>~/.xp/apps/&lt;app&gt;/data/</code>.
-						An mtime cursor prevents re-observation.
-					</p>
-					<p>
-						<strong>ANALYZE / THINK.</strong> Events classify into{' '}
-						<code>memory_ingest</code> (lesson / principle / incident /
-						calibration) or <code>new_skill_scaffold</code>. Confidence is
-						attached per type.
-					</p>
-					<p>
-						<strong>DECIDE.</strong> The approval gate (Theme A2) routes each
-						draft. <code>auto</code> → applies immediately. <code>stage</code>{' '}
-						→ lands here for your review. <code>force</code> → also lands here,
-						even if your policy says otherwise — used for paper-integrity
-						surfaces (judge prompts, core_principles).
-					</p>
-					<p>
-						<strong>EXECUTE.</strong> Approving a draft via{' '}
-						<code>lumid skill_apply</code> /{' '}
-						<code>lumid memory_apply</code> writes it into the working tree
-						(skills) or the agent bank (memory).
-					</p>
-					<p>
-						<strong>LEARN.</strong> Per-cycle metrics persist to{' '}
-						<code>.skill_authoring_loop_history.jsonl</code>. The bandit reads
-						this to score "did the loop's drafts help over time."
-					</p>
+			{loading && messages.length === 0 && (
+				<div className="text-center py-12 text-muted-foreground">Loading…</div>
+			)}
+
+			{error && (
+				<div className="rounded border border-red-300 bg-red-50 p-4 mb-4 text-sm text-red-900">
+					<div className="flex items-center gap-2 font-semibold mb-1">
+						<ShieldAlert className="w-4 h-4" /> Could not load inbox
+					</div>
+					<div className="text-xs">{error}</div>
+					<div className="text-xs mt-2">
+						If you don&apos;t have any apps with{" "}
+						<code className="bg-red-100 px-1 rounded">inbox_publish.enabled: true</code>{" "}
+						in their xpcloud.yaml yet, the inbox will be empty until a cycle posts here.
+					</div>
 				</div>
-			</details>
+			)}
+
+			{!loading && !error && messages.length === 0 && (
+				<EmptyState />
+			)}
+
+			<div className="space-y-3">
+				{messages.map((m) => (
+					<MessageCard key={m.id} message={m} onSeen={() => onSeen(m.id)} onAction={refresh} />
+				))}
+			</div>
 		</div>
 	);
 }
 
-interface RouteRibbonProps {
-	icon: React.ReactNode;
-	tone: 'violet' | 'amber' | 'rose';
-	title: string;
-	body: string;
-}
-
-function RouteRibbon({ icon, tone, title, body }: RouteRibbonProps) {
-	const toneClasses = {
-		violet: 'bg-violet-50/40 border-violet-200',
-		amber: 'bg-amber-50/40 border-amber-200',
-		rose: 'bg-rose-50/40 border-rose-200',
-	}[tone];
+function EmptyState() {
 	return (
-		<div className={`p-4 border rounded-xl ${toneClasses}`}>
-			<div className="flex items-center gap-2 text-slate-700">
-				{icon}
-				<span className="font-semibold text-sm">{title}</span>
-			</div>
-			<p className="text-[12px] text-slate-600 mt-1 leading-5">{body}</p>
+		<div className="rounded-xl border border-gray-200 bg-white p-8 text-center">
+			<InboxIcon className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+			<p className="font-semibold text-gray-700 mb-1">No messages yet</p>
+			<p className="text-sm text-muted-foreground mb-4">
+				Configure <code className="bg-gray-100 px-1 rounded text-xs">inbox_publish:</code> in your app&apos;s xpcloud.yaml. Each cycle will post a message here.
+			</p>
+			<Link
+				to="/dashboard/skills/new"
+				className="text-sm text-soul-400 hover:underline"
+			>
+				Or hand-author a skill →
+			</Link>
 		</div>
 	);
+}
+
+function MessageCard({
+	message,
+	onSeen,
+	onAction,
+}: {
+	message: InboxMessage;
+	onSeen: () => void;
+	onAction: () => void;
+}) {
+	const isUnread = message.seen_at == null;
+	const ts = new Date(message.posted_at * 1000);
+	const ago = relativeTime(message.posted_at);
+
+	const kindIcon = {
+		cycle_summary: <Bot className="w-4 h-4 text-spirit-400" />,
+		draft_pending: <Sparkles className="w-4 h-4 text-soul-400" />,
+		question: <MessageSquare className="w-4 h-4 text-amber-500" />,
+		flag: <ShieldAlert className="w-4 h-4 text-red-500" />,
+	}[message.kind] || <Brain className="w-4 h-4 text-gray-400" />;
+
+	return (
+		<div
+			className={`rounded-lg border p-4 ${
+				isUnread ? "border-soul-300 bg-white shadow-sm" : "border-gray-200 bg-gray-50"
+			}`}
+		>
+			<div className="flex items-start justify-between mb-2">
+				<div className="flex items-center gap-2 text-sm">
+					{kindIcon}
+					<span className="font-semibold">{message.app}</span>
+					{message.loop && (
+						<span className="text-muted-foreground">/ {message.loop}</span>
+					)}
+					<span className="text-muted-foreground text-xs">· {message.kind}</span>
+				</div>
+				<div className="flex items-center gap-2">
+					<span className="text-xs text-muted-foreground" title={ts.toLocaleString()}>
+						{ago}
+					</span>
+					{isUnread && (
+						<Button variant="ghost" size="sm" onClick={onSeen} className="h-6 px-2 text-xs">
+							Mark seen
+						</Button>
+					)}
+				</div>
+			</div>
+
+			<MessagePayload payload={message.payload} />
+			<DraftActions message={message} onAction={onAction} />
+			<QuestionReply message={message} onAction={onAction} />
+		</div>
+	);
+}
+
+function MessagePayload({ payload }: { payload: Record<string, unknown> }) {
+	const score = payload.score as Record<string, unknown> | undefined;
+	const flags = payload.flags as string[] | undefined;
+	const drafts = payload.drafts_pending as
+		| Array<{ draft_id: string; skill_id?: string; role?: string; kind?: string }>
+		| undefined;
+	const cycleDir = payload.cycle_dir as string | undefined;
+
+	return (
+		<div className="text-sm space-y-2">
+			{score && typeof score === "object" && (
+				<div className="text-xs text-muted-foreground">
+					Score keys: {Object.keys(score).slice(0, 6).join(", ")}
+					{Object.keys(score).length > 6 && "…"}
+				</div>
+			)}
+			{drafts && drafts.length > 0 && (
+				<div>
+					<div className="text-xs font-semibold text-muted-foreground mb-1">
+						{drafts.length} draft{drafts.length === 1 ? "" : "s"} pending review
+					</div>
+					<ul className="text-xs space-y-1">
+						{drafts.slice(0, 5).map((d) => (
+							<li key={d.draft_id} className="flex items-center gap-2">
+								<code className="bg-gray-100 px-1 rounded">{d.draft_id.slice(0, 8)}</code>
+								<span className="text-muted-foreground">
+									{d.role}/{d.kind || "prompt"}
+								</span>
+								{d.skill_id && <span className="font-medium">{d.skill_id}</span>}
+							</li>
+						))}
+						{drafts.length > 5 && (
+							<li className="text-muted-foreground italic">… + {drafts.length - 5} more</li>
+						)}
+					</ul>
+				</div>
+			)}
+			{flags && flags.length > 0 && (
+				<div className="flex items-start gap-2 rounded bg-amber-50 border border-amber-200 px-2 py-1">
+					<ShieldAlert className="w-3 h-3 text-amber-600 mt-0.5" />
+					<ul className="text-xs text-amber-900 space-y-0.5">
+						{flags.map((f) => (
+							<li key={f}>{f}</li>
+						))}
+					</ul>
+				</div>
+			)}
+			{cycleDir && (
+				<div className="text-[10px] text-muted-foreground">
+					<code>{cycleDir}</code>
+				</div>
+			)}
+		</div>
+	);
+}
+
+function DraftActions({
+	message,
+	onAction,
+}: {
+	message: InboxMessage;
+	onAction: () => void;
+}) {
+	const drafts = message.payload.drafts_pending as
+		| Array<{ draft_id: string; skill_id?: string }>
+		| undefined;
+	if (!drafts || drafts.length === 0) return null;
+
+	const handle = async (draftId: string, kind: "approve" | "reject") => {
+		try {
+			await postReply(message.id, kind, { draft_id: draftId });
+			toast.success(
+				`${kind === "approve" ? "Approved" : "Rejected"} — next cycle will apply.`,
+			);
+			onAction();
+		} catch (e) {
+			toast.error(`${kind} failed: ${String(e)}`);
+		}
+	};
+
+	return (
+		<div className="mt-3 space-y-2">
+			{drafts.slice(0, 5).map((d) => (
+				<div key={d.draft_id} className="flex items-center gap-2 text-xs">
+					<span className="text-muted-foreground">
+						<code className="bg-gray-100 px-1 rounded">{d.draft_id.slice(0, 8)}</code>
+						{d.skill_id && <> {d.skill_id}</>}
+					</span>
+					<Button
+						size="sm"
+						variant="default"
+						className="h-7 px-3 text-xs"
+						onClick={() => handle(d.draft_id, "approve")}
+					>
+						<CheckCircle2 className="w-3 h-3 mr-1" /> Approve
+					</Button>
+					<Button
+						size="sm"
+						variant="ghost"
+						className="h-7 px-3 text-xs"
+						onClick={() => handle(d.draft_id, "reject")}
+					>
+						<XCircle className="w-3 h-3 mr-1" /> Reject
+					</Button>
+				</div>
+			))}
+		</div>
+	);
+}
+
+function QuestionReply({
+	message,
+	onAction,
+}: {
+	message: InboxMessage;
+	onAction: () => void;
+}) {
+	const [body, setBody] = useState("");
+	const [submitting, setSubmitting] = useState(false);
+	if (message.kind !== "question") return null;
+
+	const submit = async () => {
+		if (!body.trim()) return;
+		setSubmitting(true);
+		try {
+			await postReply(message.id, "text", { body });
+			toast.success("Reply sent — next cycle will ingest as a memory.");
+			setBody("");
+			onAction();
+		} catch (e) {
+			toast.error(`Reply failed: ${String(e)}`);
+		} finally {
+			setSubmitting(false);
+		}
+	};
+
+	return (
+		<div className="mt-3 space-y-2">
+			<Label className="text-xs">
+				<User className="w-3 h-3 inline mr-1" /> Your answer
+			</Label>
+			<Input
+				value={body}
+				onChange={(e) => setBody(e.target.value)}
+				placeholder="Type a free-form answer; the loop ingests it as a memory in the role agent."
+				className="text-sm"
+				disabled={submitting}
+			/>
+			<Button
+				size="sm"
+				disabled={submitting || !body.trim()}
+				onClick={submit}
+			>
+				Send reply
+			</Button>
+		</div>
+	);
+}
+
+function relativeTime(unixSec: number): string {
+	const diff = Date.now() / 1000 - unixSec;
+	if (diff < 60) return `${Math.floor(diff)}s ago`;
+	if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+	if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+	return `${Math.floor(diff / 86400)}d ago`;
 }
