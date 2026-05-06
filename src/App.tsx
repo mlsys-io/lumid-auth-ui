@@ -11,6 +11,7 @@ const Register = lazy(() => import("./pages/login/register").then((m) => ({ defa
 const Callback = lazy(() => import("./pages/auth/callback").then((m) => ({ default: m.AuthCallback })));
 const ForgotPassword = lazy(() => import("./pages/auth/forgot-password"));
 const ResetPassword = lazy(() => import("./pages/auth/reset-password"));
+const RedeemInvite = lazy(() => import("./pages/auth/redeem-invite"));
 
 // The unified shell for /dashboard/* (absorbed the old /app/* tree in
 // the 2026-04-24 merge). DashboardLayout + Overview are deprecated —
@@ -213,6 +214,17 @@ export default function App() {
           <Route path="/auth/callback" element={<Callback />} />
           <Route path="/auth/forgot-password" element={<ForgotPassword />} />
           <Route path="/auth/reset-password" element={<ResetPassword />} />
+          {/* Authenticated-but-incomplete users (empty invitation_code)
+              get redirected here by AuthGuard. The page itself runs
+              behind AuthGuard so unauth users still bounce to /login. */}
+          <Route
+            path="/auth/redeem-invite"
+            element={
+              <AuthGuard requireAuth={true}>
+                <RedeemInvite />
+              </AuthGuard>
+            }
+          />
 
           {/* Unified /dashboard shell. All authenticated routes nest
               under this so the sidebar is always present. */}

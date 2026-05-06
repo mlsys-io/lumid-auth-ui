@@ -72,10 +72,38 @@ export default function InboxPage() {
 
 	useEffect(() => {
 		setLoading(true);
-		refresh();
-		// Poll every 30s so a cycle that just ran shows up without a manual refresh.
-		const id = setInterval(refresh, 30_000);
-		return () => clearInterval(id);
+		let cancelled = false;
+		let timer: ReturnType<typeof setTimeout> | null = null;
+		// Adaptive poll: 30s on success, exponential backoff up to 5min on
+		// error so a flapping xpcloud doesn't get hammered.
+		let delay = 30_000;
+		const tick = async () => {
+			let ok = true;
+			try {
+				const resp = await listInboxMessages({
+					app: appFilter || undefined,
+					unread_only: unreadOnly,
+					limit: 100,
+				});
+				if (cancelled) return;
+				setMessages(resp.messages);
+				setUnread(resp.unread);
+				setError(null);
+			} catch (e: unknown) {
+				ok = false;
+				if (cancelled) return;
+				setError(e instanceof Error ? e.message : String(e));
+			} finally {
+				if (!cancelled) setLoading(false);
+			}
+			delay = ok ? 30_000 : Math.min(delay * 2, 300_000);
+			if (!cancelled) timer = setTimeout(tick, delay);
+		};
+		tick();
+		return () => {
+			cancelled = true;
+			if (timer) clearTimeout(timer);
+		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [appFilter, unreadOnly]);
 
@@ -308,9 +336,12 @@ function DraftActions({
 	const drafts = message.payload.drafts_pending as
 		| Array<{ draft_id: string; skill_id?: string }>
 		| undefined;
+	const [pending, setPending] = useState<Record<string, "approve" | "reject" | undefined>>({});
 	if (!drafts || drafts.length === 0) return null;
 
 	const handle = async (draftId: string, kind: "approve" | "reject") => {
+		// Optimistic: stamp the row immediately so the user sees feedback.
+		setPending((p) => ({ ...p, [draftId]: kind }));
 		try {
 			await postReply(message.id, kind, { draft_id: draftId });
 			toast.success(
@@ -318,36 +349,49 @@ function DraftActions({
 			);
 			onAction();
 		} catch (e) {
+			setPending((p) => ({ ...p, [draftId]: undefined }));
 			toast.error(`${kind} failed: ${String(e)}`);
 		}
 	};
 
 	return (
 		<div className="mt-3 space-y-2">
-			{drafts.slice(0, 5).map((d) => (
-				<div key={d.draft_id} className="flex items-center gap-2 text-xs">
-					<span className="text-muted-foreground">
-						<code className="bg-gray-100 px-1 rounded">{d.draft_id.slice(0, 8)}</code>
-						{d.skill_id && <> {d.skill_id}</>}
-					</span>
-					<Button
-						size="sm"
-						variant="default"
-						className="h-7 px-3 text-xs"
-						onClick={() => handle(d.draft_id, "approve")}
-					>
-						<CheckCircle2 className="w-3 h-3 mr-1" /> Approve
-					</Button>
-					<Button
-						size="sm"
-						variant="ghost"
-						className="h-7 px-3 text-xs"
-						onClick={() => handle(d.draft_id, "reject")}
-					>
-						<XCircle className="w-3 h-3 mr-1" /> Reject
-					</Button>
-				</div>
-			))}
+			{drafts.slice(0, 5).map((d) => {
+				const stamp = pending[d.draft_id];
+				if (stamp) {
+					return (
+						<div key={d.draft_id} className="flex items-center gap-2 text-xs text-muted-foreground italic">
+							<code className="bg-gray-100 px-1 rounded">{d.draft_id.slice(0, 8)}</code>
+							{d.skill_id && <> {d.skill_id}</>}
+							<span>— {stamp === "approve" ? "✓ approved" : "✗ rejected"}, next cycle</span>
+						</div>
+					);
+				}
+				return (
+					<div key={d.draft_id} className="flex items-center gap-2 text-xs">
+						<span className="text-muted-foreground">
+							<code className="bg-gray-100 px-1 rounded">{d.draft_id.slice(0, 8)}</code>
+							{d.skill_id && <> {d.skill_id}</>}
+						</span>
+						<Button
+							size="sm"
+							variant="default"
+							className="h-7 px-3 text-xs"
+							onClick={() => handle(d.draft_id, "approve")}
+						>
+							<CheckCircle2 className="w-3 h-3 mr-1" /> Approve
+						</Button>
+						<Button
+							size="sm"
+							variant="ghost"
+							className="h-7 px-3 text-xs"
+							onClick={() => handle(d.draft_id, "reject")}
+						>
+							<XCircle className="w-3 h-3 mr-1" /> Reject
+						</Button>
+					</div>
+				);
+			})}
 		</div>
 	);
 }
