@@ -440,6 +440,14 @@ export default function AppLayout() {
 							<div className="flex-1 h-px ml-1.5 bg-indigo-200/70" />
 						</div>
 						<div className="space-y-px">
+							{user?.role === 'super_admin' && (
+								<SidebarItem
+									to="/dashboard/super-admin"
+									label="Super-admin"
+									icon={Shield}
+									onClick={close}
+								/>
+							)}
 							{ADMIN_NAV.map((item) => (
 								<SidebarItem key={item.to} {...item} onClick={close} />
 							))}

@@ -32,6 +32,9 @@ const AdminInvitations = lazy(() => import("./pages/account/admin-invitations"))
 // that are zero in our deployment); pulls live cluster/node/worker/
 // user/audit data instead. Source at pages/dashboard/overview.tsx.
 const AdminOverview = lazy(() => import("./pages/dashboard/overview"));
+// Super-admin single pane of glass — billing/identity/QA/infra/build
+// tiles + embedded Grafana panels. Lives at /dashboard/super-admin.
+const SuperAdminDashboard = lazy(() => import("./pages/dashboard/super-admin"));
 const QuantLayout = lazy(() => import("./pages/dashboard/quant-layout"));
 const QuantStrategy = lazy(() => import("./pages/dashboard/quant-strategy"));
 // QuantDatasource lazy import retired 2026-05-03 — folded into
@@ -424,6 +427,14 @@ export default function App() {
                 resolve — the tab router is URL-based. Detail views
                 (users/:id, clusters/:id, clusters/new) render OUTSIDE
                 the tab shell since they aren't siblings of the tabs. */}
+            <Route
+              path="super-admin"
+              element={
+                <SuperAdminGuard>
+                  <SuperAdminDashboard />
+                </SuperAdminGuard>
+              }
+            />
             <Route
               path="admin"
               element={
