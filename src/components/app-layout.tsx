@@ -451,6 +451,22 @@ export default function AppLayout() {
 							{ADMIN_NAV.map((item) => (
 								<SidebarItem key={item.to} {...item} onClick={close} />
 							))}
+							{/* External Umami self-hosted analytics — sits in
+							    the Administration section because it's an
+							    operator-only surface. Opens in a new tab. */}
+							<SidebarExternalItem
+								href="/analytics/"
+								label="Analytics"
+								icon={BarChart3}
+								onClick={close}
+							/>
+							{/* Grafana ops dashboards — same pattern. */}
+							<SidebarExternalItem
+								href="/grafana/"
+								label="Grafana"
+								icon={LineChart}
+								onClick={close}
+							/>
 						</div>
 					</>
 				)}
