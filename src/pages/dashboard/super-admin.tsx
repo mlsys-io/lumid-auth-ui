@@ -146,12 +146,12 @@ export default function SuperAdminDashboard() {
 				</div>
 				<div className="grid gap-3 lg:grid-cols-2 mt-4">
 					<GrafanaEmbed
-						src="/d-solo/cadvisor/cadvisor?panelId=1"
-						title="Container CPU (Grafana)"
+						src="/d-solo/lumid-ops/lumid-ops?panelId=21"
+						title="Container restart rate (Grafana)"
 					/>
 					<GrafanaEmbed
-						src="/d-solo/node-exporter/node-exporter?panelId=1"
-						title="Host disk (Grafana)"
+						src="/d-solo/lumid-ops/lumid-ops?panelId=30"
+						title="Host disk usage (Grafana)"
 					/>
 				</div>
 			</Section>
