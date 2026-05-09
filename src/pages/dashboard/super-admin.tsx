@@ -18,12 +18,14 @@ import {
 	fetchBackupStatus,
 	fetchBuildStatus,
 	fetchCertExpiry,
+	fetchLoops,
 	fetchOAuthClients,
 	type AuthStats,
 	type BackupStatus,
 	type BuildStatus,
 	type CertExpiry,
 	type BuildService,
+	type LoopsResp,
 	type OAuthClientsResp,
 } from '@/api/super-admin';
 import { listUsers, type AdminUserRow } from '@/api/users';
@@ -50,6 +52,7 @@ interface Snap {
 	builds: BuildStatus | null;
 	oauth: OAuthClientsResp | null;
 	users: { rows: AdminUserRow[]; total: number } | null;
+	loops: LoopsResp | null;
 }
 
 export default function SuperAdminDashboard() {
@@ -60,6 +63,7 @@ export default function SuperAdminDashboard() {
 		builds: null,
 		oauth: null,
 		users: null,
+		loops: null,
 	});
 	const [loading, setLoading] = useState(true);
 
@@ -73,12 +77,13 @@ export default function SuperAdminDashboard() {
 				fetchBuildStatus(),
 				fetchOAuthClients(),
 				listUsers({ page_size: 1, status: 'all' }),
+				fetchLoops(),
 			]);
 			if (cancelled) return;
 			for (const r of results) {
 				if (r.status === 'rejected' && isSessionExpired(r.reason)) return;
 			}
-			const [auth, certs, backups, builds, oauth, users] = results;
+			const [auth, certs, backups, builds, oauth, users, loops] = results;
 			setSnap({
 				auth:    auth.status    === 'fulfilled' ? auth.value    : null,
 				certs:   certs.status   === 'fulfilled' ? certs.value   : null,
@@ -88,6 +93,7 @@ export default function SuperAdminDashboard() {
 				users:   users.status   === 'fulfilled'
 					? { rows: users.value.users, total: users.value.total }
 					: null,
+				loops:   loops.status   === 'fulfilled' ? loops.value   : null,
 			});
 			setLoading(false);
 		})();
@@ -136,6 +142,10 @@ export default function SuperAdminDashboard() {
 						title="Host disk usage (Grafana)"
 					/>
 				</div>
+			</Section>
+
+			<Section icon={Activity} label="Autoresearch loops">
+				<LoopStatusTile loops={snap.loops} />
 			</Section>
 		</div>
 	);
@@ -516,6 +526,100 @@ function Sparkline({ values }: { values: number[] }) {
 					title={`${v}`}
 				/>
 			))}
+		</div>
+	);
+}
+
+// ── LoopStatusTile ─────────────────────────────────────────────────
+//
+// Status visibility for the autoresearch loop layer. Reads from
+// /api/v1/admin/loops which aggregates the lumid-scheduler daemon's
+// state.json with per-app .scheduler.json indices.
+
+function LoopStatusTile({ loops }: { loops: LoopsResp | null }) {
+	if (!loops) return <Tile icon={Activity} label="Loops" primary="—" />;
+	const { summary, scheduler_daemon, loops: rows } = loops;
+	const totalScheduled = summary.ok + summary.failing + summary.stale + summary.never;
+	const allHealthy = summary.failing === 0 && summary.stale === 0;
+	const tone = scheduler_daemon !== 'running'
+		? 'bad'
+		: allHealthy ? 'good' : 'bad';
+
+	const fmtAge = (ts: number) => {
+		if (!ts) return '—';
+		const ageS = Math.max(0, Math.floor(Date.now() / 1000 - ts));
+		if (ageS < 60)        return `${ageS}s ago`;
+		if (ageS < 3600)      return `${Math.floor(ageS / 60)}m ago`;
+		if (ageS < 86400)     return `${Math.floor(ageS / 3600)}h ago`;
+		return `${Math.floor(ageS / 86400)}d ago`;
+	};
+	const statusColor = (s: string) => ({
+		ok:      'text-green-600',
+		never:   'text-gray-400',
+		failing: 'text-red-600 font-medium',
+		stale:   'text-amber-600',
+		manual:  'text-gray-500',
+	}[s] || 'text-gray-500');
+
+	return (
+		<div className={`bg-white border border-gray-200 border-l-4 rounded p-4 ${
+			tone === 'good' ? 'border-l-green-500' : 'border-l-red-500'
+		}`}>
+			<div className="flex items-center justify-between mb-3">
+				<div className="flex items-center gap-1.5 text-xs uppercase tracking-wide text-muted-foreground">
+					<Activity className="w-3 h-3" />
+					Loops · scheduler daemon: {scheduler_daemon === 'running'
+						? <span className="text-green-600 font-medium">running</span>
+						: <span className="text-amber-600 font-medium">not installed</span>}
+				</div>
+				<div className="text-xs text-muted-foreground">
+					{summary.ok}/{totalScheduled} ok ·
+					{' '}{summary.failing} failing ·
+					{' '}{summary.stale} stale ·
+					{' '}{summary.never} never ·
+					{' '}{summary.manual} manual
+				</div>
+			</div>
+			{rows.length === 0 ? (
+				<div className="text-sm text-muted-foreground py-4 text-center">
+					No loops declared on this host. Install an xpio app with{' '}
+					<code className="text-xs">/lumid app install …</code>
+				</div>
+			) : (
+				<div className="overflow-x-auto">
+					<table className="w-full text-xs">
+						<thead className="text-[10px] uppercase tracking-wide text-muted-foreground">
+							<tr className="border-b border-gray-100">
+								<th className="text-left font-medium py-1.5 pr-3">app</th>
+								<th className="text-left font-medium py-1.5 pr-3">loop</th>
+								<th className="text-left font-medium py-1.5 pr-3">schedule</th>
+								<th className="text-left font-medium py-1.5 pr-3">declared in</th>
+								<th className="text-left font-medium py-1.5 pr-3">status</th>
+								<th className="text-left font-medium py-1.5">last run</th>
+							</tr>
+						</thead>
+						<tbody className="font-mono">
+							{rows.map((r) => (
+								<tr key={`${r.app}:${r.loop}`} className="border-b border-gray-50 last:border-0">
+									<td className="py-1.5 pr-3 text-gray-700">{r.app}</td>
+									<td className="py-1.5 pr-3 text-gray-700">{r.loop}</td>
+									<td className="py-1.5 pr-3 text-gray-500">{r.schedule || '—'}</td>
+									<td className="py-1.5 pr-3 text-gray-400">{r.declared_in}</td>
+									<td className={`py-1.5 pr-3 ${statusColor(r.status)}`}>
+										{r.status}
+										{r.consecutive_failures > 0 && (
+											<span className="ml-1 text-[10px] text-red-500">
+												(×{r.consecutive_failures})
+											</span>
+										)}
+									</td>
+									<td className="py-1.5 text-gray-500">{fmtAge(r.last_run_ts)}</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			)}
 		</div>
 	);
 }

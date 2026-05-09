@@ -140,3 +140,30 @@ export async function fetchOAuthClients(): Promise<OAuthClientsResp> {
 	);
 	return r.data.data;
 }
+
+// ── /admin/loops ───────────────────────────────────────────────────
+
+export interface LoopRow {
+	app: string;
+	loop: string;
+	schedule: string;
+	declared_in: string;
+	last_run_ts: number;
+	last_ok?: boolean | null;
+	consecutive_failures: number;
+	last_duration_s: number;
+	status: 'ok' | 'never' | 'failing' | 'stale' | 'manual';
+}
+
+export interface LoopsResp {
+	loops: LoopRow[];
+	summary: { ok: number; never: number; failing: number; stale: number; manual: number };
+	scheduler_daemon: 'running' | 'not_installed';
+	operator_home: string;
+	generated_at: string;
+}
+
+export async function fetchLoops(): Promise<LoopsResp> {
+	const r = await apiClient.get<DataResponse<LoopsResp>>('/api/v1/admin/loops');
+	return r.data.data;
+}
