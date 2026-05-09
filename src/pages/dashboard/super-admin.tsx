@@ -537,8 +537,16 @@ function Sparkline({ values }: { values: number[] }) {
 // state.json with per-app .scheduler.json indices.
 
 function LoopStatusTile({ loops }: { loops: LoopsResp | null }) {
+	const [expanded, setExpanded] = useState<Set<string>>(new Set());
 	if (!loops) return <Tile icon={Activity} label="Loops" primary="—" />;
 	const { summary, scheduler_daemon, loops: rows } = loops;
+	const toggle = (key: string) => {
+		setExpanded((prev) => {
+			const next = new Set(prev);
+			if (next.has(key)) next.delete(key); else next.add(key);
+			return next;
+		});
+	};
 	const totalScheduled = summary.ok + summary.failing + summary.stale + summary.never;
 	const allHealthy = summary.failing === 0 && summary.stale === 0;
 	const tone = scheduler_daemon !== 'running'
@@ -599,27 +607,127 @@ function LoopStatusTile({ loops }: { loops: LoopsResp | null }) {
 							</tr>
 						</thead>
 						<tbody className="font-mono">
-							{rows.map((r) => (
-								<tr key={`${r.app}:${r.loop}`} className="border-b border-gray-50 last:border-0">
-									<td className="py-1.5 pr-3 text-gray-700">{r.app}</td>
-									<td className="py-1.5 pr-3 text-gray-700">{r.loop}</td>
-									<td className="py-1.5 pr-3 text-gray-500">{r.schedule || '—'}</td>
-									<td className="py-1.5 pr-3 text-gray-400">{r.declared_in}</td>
-									<td className={`py-1.5 pr-3 ${statusColor(r.status)}`}>
-										{r.status}
-										{r.consecutive_failures > 0 && (
-											<span className="ml-1 text-[10px] text-red-500">
-												(×{r.consecutive_failures})
-											</span>
-										)}
-									</td>
-									<td className="py-1.5 text-gray-500">{fmtAge(r.last_run_ts)}</td>
-								</tr>
-							))}
+							{rows.map((r) => {
+								const key = `${r.app}:${r.loop}`;
+								const isOpen = expanded.has(key);
+								return (
+									<>
+										<tr
+											key={key}
+											className="border-b border-gray-50 last:border-0 cursor-pointer hover:bg-gray-50"
+											onClick={() => toggle(key)}
+										>
+											<td className="py-1.5 pr-3 text-gray-700">
+												<span className="text-gray-400 mr-1">{isOpen ? '▾' : '▸'}</span>
+												{r.app}
+											</td>
+											<td className="py-1.5 pr-3 text-gray-700">{r.loop}</td>
+											<td className="py-1.5 pr-3 text-gray-500">{r.schedule || '—'}</td>
+											<td className="py-1.5 pr-3 text-gray-400">{r.declared_in}</td>
+											<td className={`py-1.5 pr-3 ${statusColor(r.status)}`}>
+												{r.status}
+												{r.consecutive_failures > 0 && (
+													<span className="ml-1 text-[10px] text-red-500">
+														(×{r.consecutive_failures})
+													</span>
+												)}
+											</td>
+											<td className="py-1.5 text-gray-500">{fmtAge(r.last_run_ts)}</td>
+										</tr>
+										{isOpen && <LoopDetailRow loop={r} />}
+									</>
+								);
+							})}
 						</tbody>
 					</table>
 				</div>
 			)}
 		</div>
+	);
+}
+
+// LoopDetailRow — expanded view inside the loops table. Renders the
+// per-loop detail fields the backend hydrates inline (skills, steps,
+// datasets, knowledge_agent, latest cycle artifact pointer).
+
+function LoopDetailRow({ loop: r }: { loop: import('@/api/super-admin').LoopRow }) {
+	return (
+		<tr className="bg-gray-50 border-b border-gray-100">
+			<td colSpan={6} className="px-3 py-3">
+				<div className="text-[11px] grid gap-2 lg:grid-cols-2">
+					{r.description && (
+						<div className="lg:col-span-2 text-gray-700 whitespace-pre-line">
+							{r.description}
+						</div>
+					)}
+					{r.goal_primary && (
+						<div className="lg:col-span-2 flex flex-wrap items-baseline gap-1.5">
+							<span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+								goal
+							</span>
+							<code className="text-emerald-700">{r.goal_primary}</code>
+							{(r.goal_tracked || []).map((t) => (
+								<span
+									key={t}
+									className="px-1.5 py-0.5 rounded bg-white border border-gray-200 text-[10px] text-gray-600"
+								>
+									{t}
+								</span>
+							))}
+						</div>
+					)}
+					{(r.skills && r.skills.length > 0) && (
+						<div>
+							<div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+								skills ({r.skills.length})
+							</div>
+							<div className="flex flex-wrap gap-1">
+								{r.skills.map((s) => (
+									<code
+										key={s}
+										className="px-1.5 py-0.5 rounded bg-white border border-gray-200 text-[10px] text-gray-700"
+									>
+										{s}
+									</code>
+								))}
+							</div>
+						</div>
+					)}
+					{(r.steps && r.steps.length > 0) && (
+						<div>
+							<div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+								steps (ordered)
+							</div>
+							<ol className="space-y-0.5 list-decimal list-inside text-gray-700">
+								{r.steps.map((st) => (
+									<li key={st.id}>
+										<code className="text-blue-700">{st.skill}</code>
+										{st.knowledge_agent && (
+											<span className="text-gray-400 ml-1">
+												via <code>{st.knowledge_agent}</code>
+											</span>
+										)}
+									</li>
+								))}
+							</ol>
+						</div>
+					)}
+					<div className="lg:col-span-2 grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-1 pt-2 border-t border-gray-200 mt-1">
+						{r.primary_role && <div><span className="text-muted-foreground">role:</span>{' '}<code>{r.primary_role}</code></div>}
+						{r.knowledge_agent && <div><span className="text-muted-foreground">kg agent:</span>{' '}<code>{r.knowledge_agent}</code></div>}
+						{r.mode && <div><span className="text-muted-foreground">mode:</span>{' '}<code>{r.mode}</code></div>}
+						{(r.datasets && r.datasets.length > 0) && (
+							<div><span className="text-muted-foreground">datasets:</span>{' '}<code>{r.datasets.join(', ')}</code></div>
+						)}
+						{r.latest_cycle_dir && (
+							<div className="col-span-2 lg:col-span-4 truncate text-gray-500">
+								<span className="text-muted-foreground">latest cycle:</span>{' '}
+								<code className="text-[10px]">{r.latest_cycle_dir}</code>
+							</div>
+						)}
+					</div>
+				</div>
+			</td>
+		</tr>
 	);
 }

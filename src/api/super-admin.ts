@@ -143,6 +143,12 @@ export async function fetchOAuthClients(): Promise<OAuthClientsResp> {
 
 // ── /admin/loops ───────────────────────────────────────────────────
 
+export interface LoopStep {
+	id: string;
+	skill: string;
+	knowledge_agent?: string;
+}
+
 export interface LoopRow {
 	app: string;
 	loop: string;
@@ -153,6 +159,18 @@ export interface LoopRow {
 	consecutive_failures: number;
 	last_duration_s: number;
 	status: 'ok' | 'never' | 'failing' | 'stale' | 'manual';
+	// Detail fields populated inline so a row expand needs no second fetch:
+	description?: string;
+	primary_role?: string;
+	knowledge_agent?: string;
+	mode?: string;
+	skills?: string[];
+	steps?: LoopStep[];
+	datasets?: string[];
+	goal_primary?: string;
+	goal_tracked?: string[];
+	latest_cycle_dir?: string;
+	latest_cycle_ts?: string;
 }
 
 export interface LoopsResp {
