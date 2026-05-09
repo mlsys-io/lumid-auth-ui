@@ -144,6 +144,7 @@ export default function SuperAdminDashboard() {
 					<BackupStatusTile backups={snap.backups} />
 					<BuildStatusTile builds={snap.builds} />
 				</div>
+				<BuildStatusTable builds={snap.builds} />
 				<div className="grid gap-3 lg:grid-cols-2 mt-4">
 					<GrafanaEmbed
 						src="/d-solo/lumid-ops/lumid-ops?panelId=21"
@@ -406,19 +407,107 @@ function BuildStatusTile({ builds }: { builds: BuildStatus | null }) {
 				icon={Package}
 				label="Builds"
 				primary="—"
-				secondary={builds.note ?? 'no data'}
+				secondary={builds.note ?? 'snapshot pending'}
 			/>
 		);
 	}
-	const pending = builds.services.filter((s) => s.pending_update).length;
+	const total = builds.services.length;
+	const stale = builds.snapshot_age > 60;
+	const tone: TileProps['tone'] = stale ? 'warn' : 'good';
+	const ageStr =
+		builds.snapshot_age < 0
+			? '—'
+			: builds.snapshot_age === 0
+				? 'just now'
+				: `${builds.snapshot_age}m ago`;
 	return (
 		<Tile
 			icon={Package}
 			label="Builds"
-			primary={`${builds.services.length} services`}
-			secondary={pending > 0 ? `${pending} pending update` : 'all current'}
-			tone={pending > 0 ? 'warn' : 'good'}
+			primary={`${total} services`}
+			secondary={`snapshot ${ageStr}`}
+			tone={tone}
 		/>
+	);
+}
+
+// Detail table — shows per-service container + image state.
+function BuildStatusTable({ builds }: { builds: BuildStatus | null }) {
+	if (!builds || builds.services.length === 0) return null;
+	const fmtRelative = (iso: string): string => {
+		if (!iso) return '—';
+		const t = new Date(iso).getTime();
+		if (Number.isNaN(t)) return '—';
+		const m = Math.round((Date.now() - t) / 60000);
+		if (m < 1) return 'just now';
+		if (m < 60) return `${m}m`;
+		const h = Math.round(m / 60);
+		if (h < 48) return `${h}h`;
+		return `${Math.round(h / 24)}d`;
+	};
+	return (
+		<div className="mt-4 bg-white border border-gray-200 rounded">
+			<div className="px-3 py-2 border-b text-xs font-semibold uppercase text-muted-foreground flex items-center gap-1.5">
+				<Package className="w-3 h-3" />
+				Build &amp; deploy state
+				{builds.snapshot_age >= 0 && (
+					<span className="ml-2 text-[10px] font-normal text-gray-400">
+						snapshot {builds.snapshot_age}m ago
+					</span>
+				)}
+			</div>
+			<div className="overflow-x-auto">
+				<table className="w-full text-xs">
+					<thead className="bg-gray-50 text-gray-500">
+						<tr>
+							<th className="text-left px-3 py-1.5 font-medium">Service</th>
+							<th className="text-left px-3 py-1.5 font-medium">Container</th>
+							<th className="text-left px-3 py-1.5 font-medium">Image</th>
+							<th className="text-left px-3 py-1.5 font-medium">Image age</th>
+							<th className="text-left px-3 py-1.5 font-medium">Container age</th>
+							<th className="text-left px-3 py-1.5 font-medium">Last build sha</th>
+							<th className="text-left px-3 py-1.5 font-medium">Cron last fired</th>
+						</tr>
+					</thead>
+					<tbody className="divide-y divide-gray-100">
+						{builds.services.map((s) => {
+							const containerOk =
+								s.container_status &&
+								s.container_status.toLowerCase().startsWith('up');
+							return (
+								<tr key={s.service} className="hover:bg-gray-50">
+									<td className="px-3 py-1.5 font-medium text-gray-700">{s.service}</td>
+									<td className="px-3 py-1.5">
+										<span className={containerOk ? 'text-green-700' : 'text-red-600'}>
+											{containerOk ? '●' : '○'}
+										</span>{' '}
+										<span className="text-gray-500">{s.container_status || '—'}</span>
+									</td>
+									<td className="px-3 py-1.5 font-mono text-[11px] text-gray-700">
+										<span title={s.image_id}>{s.image || '—'}</span>
+										{s.image_size && (
+											<span className="text-gray-400 ml-1">{s.image_size}</span>
+										)}
+									</td>
+									<td className="px-3 py-1.5 text-gray-600" title={s.image_created}>
+										{fmtRelative(s.image_created)}
+									</td>
+									<td className="px-3 py-1.5 text-gray-600" title={s.container_started}>
+										{fmtRelative(s.container_started)}
+									</td>
+									<td className="px-3 py-1.5 font-mono text-[11px] text-gray-600">
+										{s.last_built_sha || '—'}
+									</td>
+									<td className="px-3 py-1.5 text-gray-600" title={s.last_built_at}>
+										{fmtRelative(s.last_built_at)}
+									</td>
+								</tr>
+							);
+						})}
+					</tbody>
+				</table>
+			</div>
+		</div>
 	);
 }
 
