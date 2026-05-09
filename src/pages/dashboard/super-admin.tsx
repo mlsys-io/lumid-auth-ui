@@ -229,8 +229,9 @@ function AuthVolumeTile({ auth }: { auth: AuthStats | null }) {
 		<Tile
 			icon={Activity}
 			label="Logins (24h)"
+			to="/dashboard/admin/audit?event=login"
 			primary={auth.login.total.toLocaleString()}
-			secondary={`${auth.oauth.total} via OAuth`}
+			secondary={`${auth.oauth.total} via OAuth · click for full audit log`}
 		/>
 	);
 }
@@ -243,6 +244,7 @@ function FailedLoginsTile({ auth }: { auth: AuthStats | null }) {
 		<Tile
 			icon={AlertTriangle}
 			label="Failed logins (24h)"
+			to="/dashboard/admin/audit?event=login_failed"
 			primary={failed.toLocaleString()}
 			secondary={<Sparkline values={auth.hourly.map((h) => h.failed)} />}
 			tone={tone}
@@ -269,6 +271,7 @@ function OAuthClientsTile({ oauth }: { oauth: OAuthClientsResp | null }) {
 // ---- Infra tiles ----
 
 function CertExpiryTile({ certs }: { certs: CertExpiry | null }) {
+	const [expanded, setExpanded] = useState<Set<string>>(new Set());
 	if (!certs) return <Tile icon={Key} label="Cert expiry" primary="—" />;
 	const min = certs.certificates.reduce(
 		(m, c) => (m === null || c.days_left < m ? c.days_left : m),
@@ -276,6 +279,9 @@ function CertExpiryTile({ certs }: { certs: CertExpiry | null }) {
 	);
 	const tone: TileProps['tone'] =
 		min === null ? 'default' : min < 14 ? 'bad' : min < 30 ? 'warn' : 'good';
+	const toggle = (k: string) => setExpanded((p) => {
+		const n = new Set(p); if (n.has(k)) n.delete(k); else n.add(k); return n;
+	});
 	return (
 		<div className={`bg-white border border-gray-200 border-l-4 rounded p-4 ${
 			tone === 'good' ? 'border-l-green-500' :
@@ -294,25 +300,67 @@ function CertExpiryTile({ certs }: { certs: CertExpiry | null }) {
 				</span>
 			</div>
 			<div className="space-y-0.5 text-xs">
-				{certs.certificates.slice(0, 5).map((c) => (
-					<div key={c.domain} className="flex justify-between">
-						<span className="font-mono text-gray-700">{c.domain}</span>
-						<span className={
-							c.days_left < 14 ? 'text-red-600 font-medium' :
-							c.days_left < 30 ? 'text-amber-600' :
-							'text-gray-500'
-						}>{c.days_left}d</span>
-					</div>
-				))}
+				{certs.certificates.slice(0, 5).map((c) => {
+					const open = expanded.has(c.domain);
+					return (
+						<div key={c.domain}>
+							<div
+								className="flex justify-between cursor-pointer hover:bg-gray-50 px-1 -mx-1 rounded"
+								onClick={() => toggle(c.domain)}
+							>
+								<span className="font-mono text-gray-700">
+									<span className="text-gray-400 mr-1">{open ? '▾' : '▸'}</span>
+									{c.domain}
+								</span>
+								<span className={
+									c.days_left < 14 ? 'text-red-600 font-medium' :
+									c.days_left < 30 ? 'text-amber-600' :
+									'text-gray-500'
+								}>{c.days_left}d</span>
+							</div>
+							{open && (
+								<div className="px-2 py-1.5 mt-0.5 bg-gray-50 rounded text-[10px] text-gray-600 space-y-0.5 font-mono">
+									<div>expires_at: <span className="text-gray-700">{c.expires_at}</span></div>
+									<div>cert path: <code>/etc/letsencrypt/live/{c.domain}/fullchain.pem</code></div>
+									<div className="pt-1 text-muted-foreground">force renew now:</div>
+									<code className="block bg-white border border-gray-200 px-1.5 py-0.5 rounded text-gray-700">
+										docker run --rm -v /etc/letsencrypt:/etc/letsencrypt -v /var/www/certbot:/var/www/certbot certbot/certbot renew --cert-name {c.domain} --force-renewal
+									</code>
+									<div className="pt-1 text-muted-foreground">reload nginx after renew:</div>
+									<code className="block bg-white border border-gray-200 px-1.5 py-0.5 rounded text-gray-700">
+										/proj/infra/scripts/reload-cert-nginxes.sh
+									</code>
+								</div>
+							)}
+						</div>
+					);
+				})}
 			</div>
 		</div>
 	);
 }
 
 function BackupStatusTile({ backups }: { backups: BackupStatus | null }) {
+	const [expanded, setExpanded] = useState<Set<string>>(new Set());
 	if (!backups) return <Tile icon={Database} label="Backups" primary="—" />;
 	const allHealthy = backups.jobs.every((j) => j.healthy) && backups.verify.healthy;
 	const tone: TileProps['tone'] = allHealthy ? 'good' : 'bad';
+	const toggle = (k: string) => setExpanded((p) => {
+		const n = new Set(p); if (n.has(k)) n.delete(k); else n.add(k); return n;
+	});
+	// Map job → component name for `lumid host restore <component>`. The
+	// six restore-able components are: dbs/secrets/xpio/apps/compose/full.
+	// Some heartbeat job names don't map (auto-build-ghcr, ops, etc. —
+	// those aren't user-restorable; skip the action line for them).
+	const restoreFor = (job: string): string | null => {
+		if (job === 'databases')        return 'dbs';
+		if (job === 'secrets')          return 'secrets';
+		if (job === 'xpio')             return 'xpio';
+		if (job === 'apps')             return 'apps';
+		if (job === 'compose')          return 'compose';
+		if (job === 'full')             return 'full';
+		return null;
+	};
 	return (
 		<div className={`bg-white border border-gray-200 border-l-4 rounded p-4 ${
 			tone === 'good' ? 'border-l-green-500' : 'border-l-red-500'
@@ -335,14 +383,49 @@ function BackupStatusTile({ backups }: { backups: BackupStatus | null }) {
 				)}
 			</div>
 			<div className="space-y-0.5 text-xs">
-				{backups.jobs.map((j) => (
-					<div key={j.job} className="flex justify-between">
-						<span className="font-mono text-gray-700">{j.job}</span>
-						<span className={j.healthy ? 'text-gray-500' : 'text-red-600 font-medium'}>
-							{j.age_hours}h ago
-						</span>
-					</div>
-				))}
+				{backups.jobs.map((j) => {
+					const open = expanded.has(j.job);
+					const component = restoreFor(j.job);
+					return (
+						<div key={j.job}>
+							<div
+								className="flex justify-between cursor-pointer hover:bg-gray-50 px-1 -mx-1 rounded"
+								onClick={() => toggle(j.job)}
+							>
+								<span className="font-mono text-gray-700">
+									<span className="text-gray-400 mr-1">{open ? '▾' : '▸'}</span>
+									{j.job}
+								</span>
+								<span className={j.healthy ? 'text-gray-500' : 'text-red-600 font-medium'}>
+									{j.age_hours}h ago
+								</span>
+							</div>
+							{open && (
+								<div className="px-2 py-1.5 mt-0.5 bg-gray-50 rounded text-[10px] text-gray-600 space-y-0.5 font-mono">
+									<div>last_run: <span className="text-gray-700">{j.last_run}</span></div>
+									<div>NAS path: <code>/nfss/lumid-backups/{j.job}/</code></div>
+									{component && (
+										<>
+											<div className="pt-1 text-muted-foreground">backup now:</div>
+											<code className="block bg-white border border-gray-200 px-1.5 py-0.5 rounded text-gray-700">
+												/lumid host backup {component}
+											</code>
+											<div className="pt-1 text-muted-foreground">restore latest (interactive):</div>
+											<code className="block bg-white border border-gray-200 px-1.5 py-0.5 rounded text-gray-700">
+												/lumid host restore {component} latest
+											</code>
+										</>
+									)}
+									{!component && (
+										<div className="pt-1 text-amber-700">
+											(operational heartbeat — not a user-restorable backup component)
+										</div>
+									)}
+								</div>
+							)}
+						</div>
+					);
+				})}
 				<div className="flex justify-between pt-1 border-t border-gray-100 mt-1">
 					<span className="text-gray-700">verify</span>
 					<span className={backups.verify.healthy ? 'text-green-600' : 'text-red-600 font-medium'}>
@@ -423,6 +506,7 @@ function BuildStatusTable({ builds }: { builds: BuildStatus | null }) {
 							<th className="text-left px-3 py-1.5 font-medium">State</th>
 							<th className="text-left px-3 py-1.5 font-medium">Last build sha</th>
 							<th className="text-left px-3 py-1.5 font-medium">Cron last fired</th>
+							<th className="text-left px-3 py-1.5 font-medium">Actions</th>
 						</tr>
 					</thead>
 					<tbody className="divide-y divide-gray-100">
@@ -431,36 +515,7 @@ function BuildStatusTable({ builds }: { builds: BuildStatus | null }) {
 								s.container_status &&
 								s.container_status.toLowerCase().startsWith('up');
 							return (
-								<tr key={s.service} className="hover:bg-gray-50">
-									<td className="px-3 py-1.5 font-medium text-gray-700">{s.service}</td>
-									<td className="px-3 py-1.5">
-										<span className={containerOk ? 'text-green-700' : 'text-red-600'}>
-											{containerOk ? '●' : '○'}
-										</span>{' '}
-										<span className="text-gray-500">{s.container_status || '—'}</span>
-									</td>
-									<td className="px-3 py-1.5 font-mono text-[11px] text-gray-700">
-										<span title={s.image_id}>{s.image || '—'}</span>
-										{s.image_size && (
-											<span className="text-gray-400 ml-1">{s.image_size}</span>
-										)}
-									</td>
-									<td className="px-3 py-1.5 text-gray-600" title={s.image_created}>
-										{fmtRelative(s.image_created)}
-									</td>
-									<td className="px-3 py-1.5 text-gray-600" title={s.container_started}>
-										{fmtRelative(s.container_started)}
-									</td>
-									<td className="px-3 py-1.5">
-										<StateBadges svc={s} />
-									</td>
-									<td className="px-3 py-1.5 font-mono text-[11px] text-gray-600">
-										{s.last_built_sha || '—'}
-									</td>
-									<td className="px-3 py-1.5 text-gray-600" title={s.last_built_at}>
-										{fmtRelative(s.last_built_at)}
-									</td>
-								</tr>
+								<BuildServiceRow key={s.service} svc={s} containerOk={containerOk} fmtRelative={fmtRelative} />
 							);
 						})}
 					</tbody>
@@ -729,5 +784,84 @@ function LoopDetailRow({ loop: r }: { loop: import('@/api/super-admin').LoopRow 
 				</div>
 			</td>
 		</tr>
+	);
+}
+
+// BuildServiceRow — one row of the build-status table, with the new
+// Actions column expanded inline. Uses two-row pattern: the data row
+// stays compact + a click-toggle reveals rebuild/restart commands.
+
+function BuildServiceRow({
+	svc,
+	containerOk,
+	fmtRelative,
+}: {
+	svc: BuildService;
+	containerOk: boolean;
+	fmtRelative: (iso: string) => string;
+}) {
+	const [open, setOpen] = useState(false);
+	return (
+		<>
+			<tr
+				className="hover:bg-gray-50 cursor-pointer"
+				onClick={() => setOpen((v) => !v)}
+			>
+				<td className="px-3 py-1.5 font-medium text-gray-700">
+					<span className="text-gray-400 mr-1 text-[10px]">{open ? '▾' : '▸'}</span>
+					{svc.service}
+				</td>
+				<td className="px-3 py-1.5">
+					<span className={containerOk ? 'text-green-700' : 'text-red-600'}>
+						{containerOk ? '●' : '○'}
+					</span>{' '}
+					<span className="text-gray-500">{svc.container_status || '—'}</span>
+				</td>
+				<td className="px-3 py-1.5 font-mono text-[11px] text-gray-700">
+					<span title={svc.image_id}>{svc.image || '—'}</span>
+					{svc.image_size && (
+						<span className="text-gray-400 ml-1">{svc.image_size}</span>
+					)}
+				</td>
+				<td className="px-3 py-1.5 text-gray-600" title={svc.image_created}>
+					{fmtRelative(svc.image_created)}
+				</td>
+				<td className="px-3 py-1.5 text-gray-600" title={svc.container_started}>
+					{fmtRelative(svc.container_started)}
+				</td>
+				<td className="px-3 py-1.5">
+					<StateBadges svc={svc} />
+				</td>
+				<td className="px-3 py-1.5 font-mono text-[11px] text-gray-600">
+					{svc.last_built_sha || '—'}
+				</td>
+				<td className="px-3 py-1.5 text-gray-600" title={svc.last_built_at}>
+					{fmtRelative(svc.last_built_at)}
+				</td>
+				<td className="px-3 py-1.5 text-[11px] text-indigo-600">
+					{open ? 'hide' : 'show'}
+				</td>
+			</tr>
+			{open && (
+				<tr className="bg-gray-50">
+					<td colSpan={9} className="px-4 py-2 text-[11px]">
+						<div className="space-y-1 font-mono">
+							<div className="text-muted-foreground text-[10px] uppercase">rebuild + push to GHCR</div>
+							<code className="block bg-white border border-gray-200 px-1.5 py-0.5 rounded text-gray-700">
+								/proj/infra/scripts/build-and-push-ghcr.sh {svc.service}
+							</code>
+							<div className="text-muted-foreground text-[10px] uppercase pt-1">pull latest + restart this container</div>
+							<code className="block bg-white border border-gray-200 px-1.5 py-0.5 rounded text-gray-700">
+								/proj/infra/scripts/docker-pull-cron.sh {svc.service}
+							</code>
+							<div className="text-muted-foreground text-[10px] uppercase pt-1">force a fresh local build (no GHCR)</div>
+							<code className="block bg-white border border-gray-200 px-1.5 py-0.5 rounded text-gray-700">
+								cd /proj/infra/compose/{svc.service.replace(/-/g, '_')} && docker compose up -d --build
+							</code>
+						</div>
+					</td>
+				</tr>
+			)}
+		</>
 	);
 }
