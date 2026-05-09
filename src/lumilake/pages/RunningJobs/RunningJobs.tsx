@@ -75,7 +75,7 @@ const fetchJobs = useCallback(async () => {
     setJobs(sortedItems);
     setTotalPage(res.total_page);
   } catch (error) {
-    console.error("Error fetching jobs:", error);
+    console.debug("Error fetching jobs:", error);
   } finally {
     setIsLoading(false);
   }

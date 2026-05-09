@@ -92,7 +92,7 @@ export const UserManagement: React.FC = () => {
       const data = await UserManagementService.getUsers();
       setUsers(data);
     } catch (error) {
-      console.error("Failed to fetch users", error);
+      console.debug("Failed to fetch users", error);
     }
   };
 

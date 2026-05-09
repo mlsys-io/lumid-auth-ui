@@ -20,7 +20,7 @@ export const WorkerDetail: React.FC<WorkerDetailProps> = ({ workerId, onBack }) 
       const found = data.find(w => w.id === workerId);
       setWorker(found || null);
     } catch (error) {
-      console.error("Error fetching worker detail:", error);
+      console.debug("Error fetching worker detail:", error);
     } finally {
       setIsLoading(false);
     }

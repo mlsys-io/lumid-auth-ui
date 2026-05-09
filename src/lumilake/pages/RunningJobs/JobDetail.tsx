@@ -43,7 +43,7 @@ export const JobDetail: React.FC<JobDetailProps> = ({ jobId, onBack }) => {
         const jobResults = await RunningJobService.getJobResult(jobId);
         setJobResults(jobResults?.data || null);
       } catch (error) {
-        console.error("Error fetching job details:", error);
+        console.debug("Error fetching job details:", error);
       } finally {
         setLoading(false);
       }
