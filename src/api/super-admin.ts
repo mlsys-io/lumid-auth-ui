@@ -99,6 +99,10 @@ export interface BuildService {
 	image_size: string;
 	last_built_sha: string;
 	last_built_at: string;
+	ghcr_digest: string;
+	local_digest: string;
+	update_pending: 'true' | 'false' | 'unknown';
+	restart_pending: boolean;
 }
 
 export interface BuildStatus {

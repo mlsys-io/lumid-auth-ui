@@ -4,15 +4,14 @@ import {
 	Activity,
 	AlertTriangle,
 	CheckCircle2,
-	Clock,
 	Database,
 	Key,
 	Loader2,
 	Lock,
 	Package,
+	RefreshCcw,
 	Server,
 	Shield,
-	TrendingUp,
 } from 'lucide-react';
 import {
 	fetchAuthStats,
@@ -20,15 +19,14 @@ import {
 	fetchBuildStatus,
 	fetchCertExpiry,
 	fetchOAuthClients,
-	fetchQASummary,
 	type AuthStats,
 	type BackupStatus,
 	type BuildStatus,
 	type CertExpiry,
+	type BuildService,
 	type OAuthClientsResp,
-	type QASummary,
 } from '@/api/super-admin';
-import { listAudit, listUsers, type AdminUserRow, type AuditEntry } from '@/api/users';
+import { listUsers, type AdminUserRow } from '@/api/users';
 import { isSessionExpired } from '@/api/client';
 import { GrafanaEmbed } from '@/components/grafana-embed';
 
@@ -47,25 +45,21 @@ import { GrafanaEmbed } from '@/components/grafana-embed';
 
 interface Snap {
 	auth: AuthStats | null;
-	qa: QASummary | null;
 	certs: CertExpiry | null;
 	backups: BackupStatus | null;
 	builds: BuildStatus | null;
 	oauth: OAuthClientsResp | null;
 	users: { rows: AdminUserRow[]; total: number } | null;
-	audit: AuditEntry[] | null;
 }
 
 export default function SuperAdminDashboard() {
 	const [snap, setSnap] = useState<Snap>({
 		auth: null,
-		qa: null,
 		certs: null,
 		backups: null,
 		builds: null,
 		oauth: null,
 		users: null,
-		audit: null,
 	});
 	const [loading, setLoading] = useState(true);
 
@@ -74,22 +68,19 @@ export default function SuperAdminDashboard() {
 		(async () => {
 			const results = await Promise.allSettled([
 				fetchAuthStats(),
-				fetchQASummary(),
 				fetchCertExpiry(),
 				fetchBackupStatus(),
 				fetchBuildStatus(),
 				fetchOAuthClients(),
 				listUsers({ page_size: 1, status: 'all' }),
-				listAudit({ page_size: 12 }),
 			]);
 			if (cancelled) return;
 			for (const r of results) {
 				if (r.status === 'rejected' && isSessionExpired(r.reason)) return;
 			}
-			const [auth, qa, certs, backups, builds, oauth, users, audit] = results;
+			const [auth, certs, backups, builds, oauth, users] = results;
 			setSnap({
 				auth:    auth.status    === 'fulfilled' ? auth.value    : null,
-				qa:      qa.status      === 'fulfilled' ? qa.value      : null,
 				certs:   certs.status   === 'fulfilled' ? certs.value   : null,
 				backups: backups.status === 'fulfilled' ? backups.value : null,
 				builds:  builds.status  === 'fulfilled' ? builds.value  : null,
@@ -97,7 +88,6 @@ export default function SuperAdminDashboard() {
 				users:   users.status   === 'fulfilled'
 					? { rows: users.value.users, total: users.value.total }
 					: null,
-				audit:   audit.status   === 'fulfilled' ? audit.value.entries : null,
 			});
 			setLoading(false);
 		})();
@@ -126,15 +116,6 @@ export default function SuperAdminDashboard() {
 					<AuthVolumeTile auth={snap.auth} />
 					<FailedLoginsTile auth={snap.auth} />
 					<OAuthClientsTile oauth={snap.oauth} />
-				</div>
-				<RecentAudit entries={snap.audit} />
-			</Section>
-
-			<Section icon={TrendingUp} label="QuantArena">
-				<div className="grid gap-3 grid-cols-2 lg:grid-cols-3">
-					<QAStrategiesTile qa={snap.qa} />
-					<QACompetitionsTile qa={snap.qa} />
-					<QATradesTile qa={snap.qa} />
 				</div>
 			</Section>
 
@@ -274,42 +255,6 @@ function OAuthClientsTile({ oauth }: { oauth: OAuthClientsResp | null }) {
 	);
 }
 
-// ---- QA tiles ----
-
-function QAStrategiesTile({ qa }: { qa: QASummary | null }) {
-	if (!qa) return <Tile icon={Activity} label="Strategies" primary="—" />;
-	return (
-		<Tile
-			icon={Activity}
-			label="Strategies"
-			primary={qa.strategies.total.toLocaleString()}
-			secondary={`${qa.strategies.active} active`}
-		/>
-	);
-}
-
-function QACompetitionsTile({ qa }: { qa: QASummary | null }) {
-	if (!qa) return <Tile icon={TrendingUp} label="Competitions" primary="—" />;
-	return (
-		<Tile
-			icon={TrendingUp}
-			label="Competitions"
-			primary={qa.competitions.ongoing.toLocaleString()}
-			secondary={`${qa.competitions.upcoming} upcoming · ${qa.competitions.total} total`}
-		/>
-	);
-}
-
-function QATradesTile({ qa }: { qa: QASummary | null }) {
-	if (!qa) return <Tile icon={TrendingUp} label="Trades (24h)" primary="—" />;
-	return (
-		<Tile
-			icon={TrendingUp}
-			label="Trades (24h)"
-			primary={qa.trades_24h.count.toLocaleString()}
-		/>
-	);
-}
 
 // ---- Infra tiles ----
 
@@ -465,6 +410,7 @@ function BuildStatusTable({ builds }: { builds: BuildStatus | null }) {
 							<th className="text-left px-3 py-1.5 font-medium">Image</th>
 							<th className="text-left px-3 py-1.5 font-medium">Image age</th>
 							<th className="text-left px-3 py-1.5 font-medium">Container age</th>
+							<th className="text-left px-3 py-1.5 font-medium">State</th>
 							<th className="text-left px-3 py-1.5 font-medium">Last build sha</th>
 							<th className="text-left px-3 py-1.5 font-medium">Cron last fired</th>
 						</tr>
@@ -495,6 +441,9 @@ function BuildStatusTable({ builds }: { builds: BuildStatus | null }) {
 									<td className="px-3 py-1.5 text-gray-600" title={s.container_started}>
 										{fmtRelative(s.container_started)}
 									</td>
+									<td className="px-3 py-1.5">
+										<StateBadges svc={s} />
+									</td>
 									<td className="px-3 py-1.5 font-mono text-[11px] text-gray-600">
 										{s.last_built_sha || '—'}
 									</td>
@@ -511,35 +460,44 @@ function BuildStatusTable({ builds }: { builds: BuildStatus | null }) {
 	);
 }
 
-// ---- Recent audit feed ----
+// ---- Per-service status badges ----
 
-function RecentAudit({ entries }: { entries: AuditEntry[] | null }) {
-	if (!entries) return null;
+function StateBadges({ svc }: { svc: BuildService }) {
+	const updateColor =
+		svc.update_pending === 'true'
+			? 'bg-amber-100 text-amber-700 border-amber-200'
+			: svc.update_pending === 'false'
+				? 'bg-green-100 text-green-700 border-green-200'
+				: 'bg-gray-100 text-gray-500 border-gray-200';
+	const updateLabel =
+		svc.update_pending === 'true'
+			? 'update'
+			: svc.update_pending === 'false'
+				? 'current'
+				: 'no GHCR';
 	return (
-		<div className="mt-4 bg-white border border-gray-200 rounded">
-			<div className="px-3 py-2 border-b text-xs font-semibold uppercase text-muted-foreground flex items-center gap-1.5">
-				<Clock className="w-3 h-3" />
-				Recent admin actions
-			</div>
-			<div className="divide-y divide-gray-100">
-				{entries.slice(0, 8).map((e) => (
-					<div key={e.id} className="px-3 py-1.5 text-xs flex items-center gap-2">
-						<span className="font-mono text-gray-500 w-32 shrink-0">
-							{new Date(e.created_at).toLocaleString(undefined, {
-								month: 'short',
-								day: 'numeric',
-								hour: '2-digit',
-								minute: '2-digit',
-							})}
-						</span>
-						<span className="font-medium text-gray-700 w-20 shrink-0">{e.event}</span>
-						<span className="text-gray-600 truncate">{e.method} {e.path}</span>
-						<span className={`ml-auto font-mono text-xs ${
-							(e.status ?? 0) >= 400 ? 'text-red-600' : 'text-gray-400'
-						}`}>{e.status ?? '—'}</span>
-					</div>
-				))}
-			</div>
+		<div className="flex items-center gap-1">
+			<span
+				className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] border ${updateColor}`}
+				title={
+					svc.update_pending === 'true'
+						? `GHCR has a newer image (${svc.ghcr_digest.slice(0, 12)}…) than what's running locally (${svc.local_digest.slice(0, 12)}…)`
+						: svc.update_pending === 'false'
+							? `Local image matches GHCR digest ${svc.ghcr_digest.slice(0, 12)}…`
+							: 'Image not yet on GHCR (or docker not logged in)'
+				}
+			>
+				{updateLabel}
+			</span>
+			{svc.restart_pending && (
+				<span
+					className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] border bg-rose-100 text-rose-700 border-rose-200"
+					title="Image was built/pulled AFTER the running container started — restart needed to pick up the new bits"
+				>
+					<RefreshCcw className="w-2.5 h-2.5" />
+					restart
+				</span>
+			)}
 		</div>
 	);
 }
