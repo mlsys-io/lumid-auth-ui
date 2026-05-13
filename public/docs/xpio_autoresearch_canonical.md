@@ -57,8 +57,19 @@ loops:
   - name: …
 
 # Cross-app shared skills mirrored under ~/.xp/skills/<owner>/<repo>/
+# First-party utility skill repos (owner: a3f48236-ffe9-4fb9-9548-6e044d5cd9c7):
+#   lumid-claude        — LLM calls via installed `claude` binary
+#   lumid-containers    — Docker container lifecycle (build/run/stop/health/stats)
+#   lumid-knowledge     — render_prior_knowledge from a knowledge agent bank
+#   lumid-metrics       — Prometheus/Docker metrics + HTTP probes + log parsing
+#   lumid-prompt-audit  — SHA-256 fingerprint prompts, correlate with score deltas
+#   lumid-annotate      — multi-step labeling pipeline (inbox/emit/trace)
+#   lumid-interview     — human-in-the-loop questions + auditable exchange log
+#   lumid-al-core       — active-learning core (LQA, judge, scoring) for consulting/eval apps
 skill_imports:
-  - {repo: "owner_sub/lumid-al-core", version: "^0.1.0"}
+  - {repo: "a3f48236-ffe9-4fb9-9548-6e044d5cd9c7/lumid-claude",     version: "^0.1.0"}
+  - {repo: "a3f48236-ffe9-4fb9-9548-6e044d5cd9c7/lumid-containers",  version: "^0.1.0"}
+  - {repo: "a3f48236-ffe9-4fb9-9548-6e044d5cd9c7/lumid-knowledge",   version: "^0.1.0"}
 
 # Optional dataset mounts (mbb-ai uses cases_v1)
 datasets:
@@ -311,7 +322,7 @@ All first-party apps (auto-sysresearch, auto-quant, mbb-ai via lumid-al-core) ro
 4. `claude` binary on PATH → **Claude Code CLI** (`claude -p … --output-format json --no-session-persistence`)
 5. Error
 
-For new apps, call `sdk/skills/claude_code_caller.py::call()` (or load it via `importlib.util.spec_from_file_location` to avoid the `sdk/__init__.py` httpx cascade — see below).
+For new apps, declare `lumid-claude` in `skill_imports[]` and load it via `_load_skill_module("lumid-claude", "claude_code_caller.py")`. Do not import `sdk/skills/claude_code_caller.py` directly — the SDK path hack is deprecated. See **Skill resolution** below.
 
 ### Docker containers
 
@@ -331,17 +342,42 @@ The container's `components/base.py` detects `CLAUDE_CODE=1` and calls `claude -
 
 ### `sdk/__init__.py` httpx cascade
 
-`from sdk.skills.<anything> import …` triggers `sdk/__init__.py → from .client import LumilakeClient → import httpx`. Because `httpx` is not installed on the host system Python (`/usr/bin/python3`), this raises `ModuleNotFoundError` silently in skill load paths. **Never use `from sdk.skills.X import …`** in xpio app code. Instead load skill files directly:
+`from sdk.skills.<anything> import …` triggers `sdk/__init__.py → from .client import LumilakeClient → import httpx`. Because `httpx` is not installed on the host system Python (`/usr/bin/python3`), this raises `ModuleNotFoundError` silently in skill load paths. **Never use `from sdk.skills.X import …`** in xpio app code.
+
+**The correct pattern** is to declare the skill in `skill_imports[]` and use `_load_skill_module()`:
 
 ```python
-import importlib.util, os
-for base in ["/proj/LumidOS/LumidOS", os.path.expanduser("~/lumid"), "/opt/lumid"]:
-    p = os.path.join(base, "sdk", "skills", "claude_code_caller.py")
-    if os.path.isfile(p):
-        spec = importlib.util.spec_from_file_location("_cc", p)
-        mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
-        break
+def _load_skill_module(skill_repo: str, skill_file: str):
+    """Load a skill module: installed skill repo first, LumidOS SDK fallback."""
+    import importlib.util as _ilu
+    from pathlib import Path
+    _skills_root = Path.home() / ".xp" / "skills"
+    if _skills_root.is_dir():
+        for owner_dir in _skills_root.iterdir():
+            if not owner_dir.is_dir():
+                continue
+            _p = owner_dir / skill_repo / "skills" / skill_file
+            if _p.is_file():
+                _spec = _ilu.spec_from_file_location(f"_{skill_repo}", str(_p))
+                _m = _ilu.module_from_spec(_spec); _spec.loader.exec_module(_m)
+                return _m
+    for _base in ["/proj/LumidOS/LumidOS", str(Path.home() / "lumid"), "/opt/lumid"]:
+        _p = Path(_base) / "sdk" / "skills" / skill_file
+        if _p.is_file():
+            _spec = _ilu.spec_from_file_location(f"_{skill_file[:-3]}", str(_p))
+            _m = _ilu.module_from_spec(_spec); _spec.loader.exec_module(_m)
+            return _m
+    raise ImportError(
+        f"Skill {skill_repo}/{skill_file} not found. "
+        "Declare it in skill_imports[] and run `/lumid app update <app>`."
+    )
+
+# Usage:
+cc = _load_skill_module("lumid-claude", "claude_code_caller.py")
+text = cc.call("Analyze this pattern: ...", model="haiku", system="You are a data analyst.")
 ```
+
+This tries `~/.xp/skills/<owner>/<repo>/skills/<file>` first (installed from xp.io), then falls back to `/proj/LumidOS/LumidOS/sdk/skills/<file>` (dev mode).
 
 The correct Python environment for manual CLI operations is `/home/webmaster/lumid/.venv/bin/python3` (has `httpx`, `yaml`, `tomli`, etc.). System Python (`/usr/bin/python3`) lacks pip entirely.
 
