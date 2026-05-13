@@ -23,9 +23,18 @@ export interface InboxMessage {
 	app: string;
 	loop: string;
 	kind: "cycle_summary" | "draft_pending" | "question" | "flag" | string;
-	payload: Record<string, unknown>;
+	payload: {
+		step_recap?: StepRecap[];
+		cycle_dir?: string;
+		score?: Record<string, unknown>;
+		flags?: string[];
+		drafts_pending?: Array<{ draft_id: string; skill_id?: string; role?: string; kind?: string }>;
+		[k: string]: unknown;
+	};
 	posted_at: number;
 	seen_at: number | null;
+	/** Number of step instructions queued after user replies (client-side only). */
+	_instructionsQueued?: number;
 }
 
 export interface ListMessagesParams {
@@ -54,7 +63,7 @@ export async function markSeen(messageId: string): Promise<void> {
 	await inboxClient.post(`/${messageId}/seen`);
 }
 
-export type ReplyKind = "approve" | "reject" | "text" | "override";
+export type ReplyKind = "approve" | "reject" | "text" | "override" | "step_instructions";
 
 export interface ReplyPayload {
 	draft_id?: string;
@@ -78,4 +87,37 @@ export async function postReply(
 		payload,
 	});
 	return data;
+}
+
+// ── Step-instructions reply (Theme F.x) ────────────────────────────
+
+export interface StepInstructionsReply {
+	step_id: string;
+	instructions: string;
+	scope: "next_cycle" | "persist";
+	loop?: string;
+	app?: string;
+}
+
+/** POST /api/v1/inbox/{message_id}/reply with kind=step_instructions —
+ *  post a per-step operator instruction for the given message.
+ *  scope="next_cycle" applies once; scope="persist" writes to xpcloud.yaml. */
+export async function postStepInstructions(
+	messageId: string,
+	reply: StepInstructionsReply,
+): Promise<{ reply_id: string; message_id: string; posted_at: number }> {
+	const { data } = await inboxClient.post(`/${messageId}/reply`, {
+		kind: "step_instructions",
+		...reply,
+	});
+	return data;
+}
+
+export interface StepRecap {
+	step_id: string;
+	skill?: string;
+	stage?: string;
+	summary?: string;
+	outcome?: string; // e.g. "ACCEPTED", "BLOCKED", "ok"
+	current_instructions?: string;
 }

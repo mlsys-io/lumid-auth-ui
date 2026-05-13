@@ -12,7 +12,6 @@ import {
 	X,
 	Server,
 	Shield,
-	LayoutDashboard,
 	Users,
 	Receipt,
 	Database,
@@ -94,7 +93,6 @@ const PRODUCT_NAV: NavItem[] = [
 // (lumid.data prerequisite Tier E).
 const LUMILAKE_NAV: NavItem[] = [
 	{ to: '/dashboard/lumilake/data', label: 'Data browsing', icon: Database },
-	{ to: '/dashboard/quant/market-data', label: 'Market data', icon: BarChart3 },
 	{ to: '/dashboard/datasets/findata', label: 'Financial data', icon: LineChart },
 ];
 
@@ -110,8 +108,11 @@ const LUMILAKE_NAV: NavItem[] = [
 // inside the section (see pages/app/admin-section-layout.tsx). Deep
 // links like /app/admin/users/matrix still resolve because the tab
 // navigation is URL-based.
+// Overview was demolished from the sidebar 2026-05-09 — the per-tile
+// landing under /dashboard/super-admin replaced it as the primary
+// operations surface, and the in-page tabs in each section already
+// cover everything Overview was redirecting to.
 const ADMIN_NAV: NavItem[] = [
-	{ to: '/dashboard/admin', label: 'Overview', icon: LayoutDashboard, end: true },
 	{ to: '/dashboard/admin/users', label: 'People & access', icon: Users },
 	{ to: '/dashboard/admin/clusters', label: 'Infrastructure', icon: Layers },
 	{ to: '/dashboard/admin/competitions', label: 'Lumid Market', icon: Trophy },

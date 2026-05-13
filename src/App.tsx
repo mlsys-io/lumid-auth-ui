@@ -5,12 +5,17 @@ import { AuthGuard } from "./components/auth-guard";
 import { AdminGuard } from "./components/admin-guard";
 import { SuperAdminGuard } from "./components/super-admin-guard";
 
+// Auto-quant operator page (/dashboard/auto-quant/*)
+const AutoQuantPage = lazy(() => import("./pages/app/auto-quant/index"));
+const AutoQuantStrategyDetail = lazy(() => import("./pages/app/auto-quant/strategy-detail"));
+
 // Lazy-load so first paint on /auth/login doesn't fetch the dashboard code.
 const Login = lazy(() => import("./pages/login/login").then((m) => ({ default: m.Login })));
 const Register = lazy(() => import("./pages/login/register").then((m) => ({ default: m.Register })));
 const Callback = lazy(() => import("./pages/auth/callback").then((m) => ({ default: m.AuthCallback })));
 const ForgotPassword = lazy(() => import("./pages/auth/forgot-password"));
 const ResetPassword = lazy(() => import("./pages/auth/reset-password"));
+const XpioAutoresearchDoc = lazy(() => import("./pages/docs/xpio-autoresearch"));
 const RedeemInvite = lazy(() => import("./pages/auth/redeem-invite"));
 
 // The unified shell for /dashboard/* (absorbed the old /app/* tree in
@@ -19,6 +24,7 @@ const RedeemInvite = lazy(() => import("./pages/auth/redeem-invite"));
 // the Apps landing.
 const Profile = lazy(() => import("./pages/account/profile"));
 const Tokens = lazy(() => import("./pages/account/tokens"));
+const ConnectGoogle = lazy(() => import("./pages/account/connect-google"));
 const Inbox = lazy(() => import("./pages/account/inbox"));
 const SkillsNew = lazy(() => import("./pages/account/skills/new"));
 const MemoryNew = lazy(() => import("./pages/account/memory/new"));
@@ -217,6 +223,9 @@ export default function App() {
           <Route path="/auth/callback" element={<Callback />} />
           <Route path="/auth/forgot-password" element={<ForgotPassword />} />
           <Route path="/auth/reset-password" element={<ResetPassword />} />
+          {/* Public docs — anyone browsing app repos before forking
+              should be able to read the canonical xpio contract. */}
+          <Route path="/docs/xpio-autoresearch" element={<XpioAutoresearchDoc />} />
           {/* Authenticated-but-incomplete users (empty invitation_code)
               get redirected here by AuthGuard. The page itself runs
               behind AuthGuard so unauth users still bounce to /login. */}
@@ -324,6 +333,7 @@ export default function App() {
                 stays as its own sidebar entry. */}
             <Route path="profile" element={<Profile />} />
             <Route path="tokens" element={<Tokens />} />
+            <Route path="account/connect/google" element={<ConnectGoogle />} />
             <Route path="billing" element={<AppBilling />} />
 
             {/* Theme A4 / A5 / inbox — Lumid Studio authoring side
@@ -413,6 +423,13 @@ export default function App() {
               />
               <Route path="jobs" element={<Navigate to="/dashboard/jobs/lumilake" replace />} />
             </Route>
+
+            {/* Auto-quant operator page — Theme I strategy-grid-first.
+                Gated by regular auth (any logged-in user). The page hits
+                /api/v1/admin/loops which is admin-only, but the page itself
+                has value for any operator who has the app installed. */}
+            <Route path="auto-quant" element={<AutoQuantPage />} />
+            <Route path="auto-quant/strategy/:name" element={<AutoQuantStrategyDetail />} />
 
             {/* Admin section — same shell, gated by role. Consolidated
                 into 3 tabbed areas + Overview (Runmesh ops merged into
