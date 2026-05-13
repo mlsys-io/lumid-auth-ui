@@ -364,7 +364,7 @@ export default function CompetitionManagement() {
 						<AlertDialogTitle>Delete competition?</AlertDialogTitle>
 						<AlertDialogDescription>
 							This removes <strong>{deleteTarget?.name}</strong> along with its participants,
-							trades, and snapshots. Ongoing competitions can't be deleted.
+							trades, and snapshots. This action cannot be undone.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>

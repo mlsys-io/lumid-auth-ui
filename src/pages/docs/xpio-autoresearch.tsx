@@ -1,0 +1,65 @@
+import { useEffect, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import 'github-markdown-css/github-markdown-light.css';
+
+// /docs/xpio-autoresearch — public, no auth required.
+//
+// Renders the canonical xpio autoresearch loop reference fetched from
+// /docs/xpio_autoresearch_canonical.md. The MD asset lives at
+// /proj/lumid_ui/public/docs/xpio_autoresearch_canonical.md and is
+// copied from the source-of-truth at
+// /proj/LumidOS/LumidOS/docs/architecture/xpio_autoresearch_canonical.md
+// via a manual `cp` step (a `make docs-sync` target is the follow-up).
+//
+// Anyone browsing xp.io app repos before forking should land here; the
+// xp_ui frontend has a footer link pointing at this route.
+
+export default function XpioAutoresearchDoc() {
+	const [markdown, setMarkdown] = useState<string>('');
+	const [error, setError] = useState<string>('');
+
+	useEffect(() => {
+		fetch('/docs/xpio_autoresearch_canonical.md')
+			.then((r) => {
+				if (!r.ok) throw new Error(`HTTP ${r.status}`);
+				return r.text();
+			})
+			.then(setMarkdown)
+			.catch((e) => setError(String(e)));
+	}, []);
+
+	if (error) {
+		return (
+			<div className="max-w-4xl mx-auto p-6">
+				<div className="rounded border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+					<div className="font-medium mb-1">Doc unavailable</div>
+					<div className="text-xs">
+						Could not fetch <code>/docs/xpio_autoresearch_canonical.md</code>: {error}.
+						The source-of-truth lives at{' '}
+						<code>/proj/LumidOS/LumidOS/docs/architecture/xpio_autoresearch_canonical.md</code>.
+					</div>
+				</div>
+			</div>
+		);
+	}
+
+	return (
+		<div className="max-w-4xl mx-auto p-6">
+			<div className="text-xs text-muted-foreground mb-4 flex items-center justify-between">
+				<span>
+					xpio · architecture · canonical reference
+				</span>
+				<a
+					href="/docs/xpio_autoresearch_canonical.md"
+					className="text-indigo-600 hover:underline"
+					download
+				>
+					Download .md →
+				</a>
+			</div>
+			<article className="markdown-body" style={{ background: 'transparent' }}>
+				<ReactMarkdown>{markdown}</ReactMarkdown>
+			</article>
+		</div>
+	);
+}

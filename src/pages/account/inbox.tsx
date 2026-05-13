@@ -20,7 +20,9 @@ import {
 	listInboxMessages,
 	markSeen,
 	postReply,
+	postStepInstructions,
 	type InboxMessage,
+	type StepRecap,
 } from "../../api/inbox";
 
 /**
@@ -266,6 +268,7 @@ function MessageCard({
 			<MessagePayload payload={message.payload} />
 			<DraftActions message={message} onAction={onAction} />
 			<QuestionReply message={message} onAction={onAction} />
+			<CycleSummaryStepInstructions message={message} onAction={onAction} />
 		</div>
 	);
 }
@@ -441,6 +444,141 @@ function QuestionReply({
 			>
 				Send reply
 			</Button>
+		</div>
+	);
+}
+
+// ── CycleSummaryStepInstructions (Theme F.x) ───────────────────────
+//
+// For cycle_summary messages that include step_recap[], renders a per-step
+// textarea labeled "Nudge next cycle". On "Send replies", POSTs each
+// non-empty textarea as a step_instructions reply. A persist checkbox
+// promotes the scope to "persist" (xpcloud.yaml).
+function CycleSummaryStepInstructions({
+	message,
+	onAction,
+}: {
+	message: InboxMessage;
+	onAction: () => void;
+}) {
+	const stepRecap = message.payload.step_recap as StepRecap[] | undefined;
+	const [instructions, setInstructions] = useState<Record<string, string>>({});
+	const [persist, setPersist] = useState<Record<string, boolean>>({});
+	const [submitting, setSubmitting] = useState(false);
+	const [queued, setQueued] = useState<number | null>(null);
+
+	if (message.kind !== "cycle_summary") return null;
+	if (!stepRecap || stepRecap.length === 0) return null;
+
+	const anyFilled = Object.values(instructions).some((v) => v.trim().length > 0);
+
+	const submit = async () => {
+		const entries = stepRecap.filter((s) => instructions[s.step_id]?.trim());
+		if (entries.length === 0) return;
+		setSubmitting(true);
+		try {
+			await Promise.all(
+				entries.map((s) =>
+					postStepInstructions(message.id, {
+						step_id: s.step_id,
+						instructions: instructions[s.step_id].trim(),
+						scope: persist[s.step_id] ? "persist" : "next_cycle",
+						loop: message.loop,
+						app: message.app,
+					}),
+				),
+			);
+			setQueued(entries.length);
+			setInstructions({});
+			setPersist({});
+			toast.success(`${entries.length} instruction${entries.length === 1 ? "" : "s"} queued for next cycle.`);
+			onAction();
+		} catch (e) {
+			toast.error(`Failed to send instructions: ${String(e)}`);
+		} finally {
+			setSubmitting(false);
+		}
+	};
+
+	return (
+		<div className="mt-4 pt-3 border-t border-gray-100">
+			<div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+				<Sparkles className="w-3 h-3" />
+				Per-step nudges for next cycle
+				{queued != null && (
+					<span className="ml-1 px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-medium">
+						{queued} queued
+					</span>
+				)}
+			</div>
+			<div className="space-y-3">
+				{stepRecap.map((step) => (
+					<div key={step.step_id} className="rounded border border-gray-100 bg-gray-50/50 p-2.5">
+						<div className="flex items-center gap-2 mb-1.5">
+							<code className="text-[10px] text-indigo-700 font-semibold">{step.step_id}</code>
+							{step.skill && (
+								<span className="text-[10px] text-gray-400">/ {step.skill}</span>
+							)}
+							{step.stage && (
+								<span className="text-[10px] px-1 rounded bg-gray-200 text-gray-600">{step.stage}</span>
+							)}
+							{step.outcome && (
+								<span className={`text-[10px] font-medium ml-auto ${
+									step.outcome === "BLOCKED" ? "text-red-500" :
+									step.outcome === "ACCEPTED" ? "text-green-600" : "text-gray-500"
+								}`}>
+									{step.outcome}
+								</span>
+							)}
+						</div>
+						{step.summary && (
+							<div className="text-[10px] text-gray-600 mb-1.5 italic">{step.summary}</div>
+						)}
+						{step.current_instructions && (
+							<div className="text-[10px] text-blue-700 mb-1.5 border-l-2 border-blue-200 pl-1.5">
+								Current: {step.current_instructions}
+							</div>
+						)}
+						<textarea
+							value={instructions[step.step_id] || ""}
+							onChange={(e) =>
+								setInstructions((prev) => ({ ...prev, [step.step_id]: e.target.value }))
+							}
+							placeholder={`Nudge next cycle (e.g. "be 20% more conservative on drawdown gate")`}
+							className="w-full text-xs rounded border border-gray-200 px-2 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white"
+							rows={2}
+							disabled={submitting}
+						/>
+						<label className="flex items-center gap-1.5 mt-1 text-[10px] text-muted-foreground cursor-pointer">
+							<input
+								type="checkbox"
+								checked={persist[step.step_id] || false}
+								onChange={(e) =>
+									setPersist((prev) => ({ ...prev, [step.step_id]: e.target.checked }))
+								}
+								disabled={submitting}
+								className="w-3 h-3"
+							/>
+							Apply forever (writes to xpcloud.yaml)
+						</label>
+					</div>
+				))}
+			</div>
+			<div className="mt-3 flex items-center gap-2">
+				<Button
+					size="sm"
+					disabled={!anyFilled || submitting}
+					onClick={submit}
+					className="h-7 px-3 text-xs"
+				>
+					{submitting ? "Sending…" : "Send replies"}
+				</Button>
+				{!anyFilled && (
+					<span className="text-[10px] text-muted-foreground">
+						Fill at least one field to enable.
+					</span>
+				)}
+			</div>
 		</div>
 	);
 }

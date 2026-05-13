@@ -5,7 +5,8 @@ import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { toast } from 'sonner';
-import { AlertTriangle, Check, Copy, KeyRound, Plus, Shield, Trash2, Clock, X } from 'lucide-react';
+import { AlertTriangle, Check, Copy, KeyRound, Mail, Plus, Shield, Trash2, Clock, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import {
 	listPATs,
 	mintPAT,
@@ -96,6 +97,24 @@ export default function TokensPage() {
 					))}
 				</div>
 			)}
+
+			{/* OAuth scope grants — live state from /api/v1/identity/google-grants. */}
+			<div className="mt-8">
+				<div className="flex items-start justify-between mb-3">
+					<div>
+						<h2 className="text-lg font-semibold flex items-center gap-2">
+							<Mail className="w-4 h-4 text-indigo-500" />
+							OAuth grants
+						</h2>
+						<p className="text-xs text-muted-foreground mt-0.5">
+							Upstream service tokens scoped to lumid-owned OAuth clients.
+							Stored encrypted server-side; the local CLI mints short-lived
+							access tokens on demand.
+						</p>
+					</div>
+				</div>
+				<GoogleGrantCard onChange={refresh} />
+			</div>
 
 			<MintDialog
 				open={mintOpen}
@@ -749,4 +768,183 @@ function formatRelative(ts: number): string {
 	if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
 	if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
 	return `${Math.floor(diff / 86400)}d ago`;
+}
+
+// ── GoogleGrantCard ───────────────────────────────────────────────
+// Renders /api/v1/identity/google-grants live state — the page tile
+// for "is Gmail + Calendar connected on this account?". Shows scopes
+// + granted_at + last_used_at when connected, plus a Disconnect button
+// that calls DELETE /api/v1/identity/google-token.
+
+interface GoogleGrant {
+	state: 'connected' | 'revoked';
+	scopes: string[];
+	client_id?: string;
+	granted_at: string;
+	last_used_at?: string | null;
+	revoked_at?: string | null;
+}
+
+function GoogleGrantCard({ onChange }: { onChange?: () => void }) {
+	const [grant, setGrant] = useState<GoogleGrant | null | undefined>(undefined);
+	const [busy, setBusy] = useState(false);
+
+	const refresh = () => {
+		fetch('/api/v1/identity/google-grants', { credentials: 'include' })
+			.then((r) => (r.ok ? r.json() : Promise.reject(r)))
+			.then((d) => setGrant((d?.data?.google as GoogleGrant) ?? null))
+			.catch(() => setGrant(null));
+	};
+
+	useEffect(() => { refresh(); }, []);
+
+	async function disconnect() {
+		if (!confirm('Revoke the Google grant? lumid will keep an encrypted copy until you reconnect, but the personal-agent app will lose Gmail + Calendar access until then.')) return;
+		setBusy(true);
+		try {
+			const r = await fetch('/api/v1/identity/google-token', {
+				method: 'DELETE',
+				credentials: 'include',
+			});
+			if (!r.ok) throw new Error(`HTTP ${r.status}`);
+			toast.success('Google grant revoked');
+			refresh();
+			onChange?.();
+		} catch (e) {
+			toast.error((e as Error).message || 'Failed to revoke');
+		} finally {
+			setBusy(false);
+		}
+	}
+
+	if (grant === undefined) {
+		return (
+			<div className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-500">
+				Loading…
+			</div>
+		);
+	}
+
+	if (!grant) {
+		// Not connected — show the Connect call-to-action.
+		return (
+			<Link
+				to="/dashboard/account/connect/google"
+				className="block rounded-xl border border-gray-200 bg-white p-4 hover:border-indigo-300 hover:bg-indigo-50/30 transition-colors"
+			>
+				<div className="flex items-start gap-3">
+					<div className="rounded-lg bg-indigo-50 p-2">
+						<Mail className="w-5 h-5 text-indigo-600" />
+					</div>
+					<div className="flex-1 min-w-0">
+						<div className="font-medium text-sm">Google · Gmail + Calendar</div>
+						<div className="text-xs text-muted-foreground mt-0.5">
+							Not connected. Required by the <code>personal-agent</code> xpio
+							app's morning_brief + hourly_triage loops. Single click, no
+							per-user OAuth-app registration.
+						</div>
+					</div>
+					<div className="text-xs text-indigo-600 self-center">Connect →</div>
+				</div>
+			</Link>
+		);
+	}
+
+	// Connected (or revoked). Render full state.
+	const isRevoked = grant.state === 'revoked';
+	const tone = isRevoked
+		? 'border-amber-200 bg-amber-50/40'
+		: 'border-green-200 bg-green-50/40';
+	const dotTone = isRevoked ? 'bg-amber-500' : 'bg-green-500';
+
+	return (
+		<div className={`rounded-xl border ${tone} p-4`}>
+			<div className="flex items-start gap-3">
+				<div className="rounded-lg bg-white p-2 border border-gray-200">
+					<Mail className="w-5 h-5 text-indigo-600" />
+				</div>
+				<div className="flex-1 min-w-0">
+					<div className="flex items-center gap-2">
+						<div className="font-medium text-sm">Google · Gmail + Calendar</div>
+						<span className="inline-flex items-center gap-1 text-[11px] font-medium">
+							<span className={`w-1.5 h-1.5 rounded-full ${dotTone}`}></span>
+							{isRevoked ? 'revoked' : 'connected'}
+						</span>
+					</div>
+					<div className="text-xs text-muted-foreground mt-1 space-y-0.5">
+						<div>
+							<span className="text-gray-500">Granted </span>
+							<RelativeTime iso={grant.granted_at} />
+							{grant.last_used_at && (
+								<>
+									<span className="text-gray-500"> · last used </span>
+									<RelativeTime iso={grant.last_used_at} />
+								</>
+							)}
+							{grant.revoked_at && (
+								<>
+									<span className="text-gray-500"> · revoked </span>
+									<RelativeTime iso={grant.revoked_at} />
+								</>
+							)}
+						</div>
+						<div className="flex flex-wrap gap-1 mt-1">
+							{(grant.scopes || []).map((s) => (
+								<code
+									key={s}
+									className="px-1.5 py-0.5 rounded bg-white border border-gray-200 text-[10px] text-gray-700"
+								>
+									{shortScope(s)}
+								</code>
+							))}
+						</div>
+					</div>
+				</div>
+				<div className="flex flex-col items-end gap-2">
+					{isRevoked ? (
+						<Link
+							to="/dashboard/account/connect/google"
+							className="text-xs text-indigo-600 hover:underline"
+						>
+							Reconnect →
+						</Link>
+					) : (
+						<>
+							<Link
+								to="/dashboard/account/connect/google"
+								className="text-xs text-gray-500 hover:text-gray-900 hover:underline"
+							>
+								View
+							</Link>
+							<button
+								onClick={disconnect}
+								disabled={busy}
+								className="text-xs text-red-600 hover:underline disabled:opacity-50"
+							>
+								Disconnect
+							</button>
+						</>
+					)}
+				</div>
+			</div>
+		</div>
+	);
+}
+
+function shortScope(s: string): string {
+	// Trim "https://www.googleapis.com/auth/" prefix for compact display
+	const m = s.match(/\/auth\/([^/]+)$/);
+	return m ? m[1] : s;
+}
+
+function RelativeTime({ iso }: { iso: string }) {
+	const t = new Date(iso).getTime();
+	if (Number.isNaN(t)) return <span>—</span>;
+	const diff = (Date.now() - t) / 1000;
+	let label: string;
+	if (diff < 60) label = 'just now';
+	else if (diff < 3600) label = `${Math.floor(diff / 60)}m ago`;
+	else if (diff < 86400) label = `${Math.floor(diff / 3600)}h ago`;
+	else label = `${Math.floor(diff / 86400)}d ago`;
+	return <span title={iso}>{label}</span>;
 }

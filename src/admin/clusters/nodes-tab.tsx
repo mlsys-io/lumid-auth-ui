@@ -42,6 +42,7 @@ import { isSessionExpired } from "@/api/client";
 interface Props {
 	clusterId: string;
 	nodes: Node[];
+	workers?: import("@/api/cluster").Worker[];
 	onChange: () => void;
 }
 
@@ -58,7 +59,7 @@ function statusBadge(status: Node["status"]): string {
 	}
 }
 
-export default function NodesTab({ clusterId, nodes, onChange }: Props) {
+export default function NodesTab({ clusterId, nodes, workers = [], onChange }: Props) {
 	const [mintOpen, setMintOpen] = useState(false);
 	const [ttl, setTtl] = useState("60");
 	const [minting, setMinting] = useState(false);
@@ -157,6 +158,7 @@ export default function NodesTab({ clusterId, nodes, onChange }: Props) {
 										<th className="text-left py-2 px-2 font-medium">Address</th>
 										<th className="text-left py-2 px-2 font-medium">CPU / Mem</th>
 										<th className="text-left py-2 px-2 font-medium">GPUs</th>
+										<th className="text-left py-2 px-2 font-medium">Workers</th>
 										<th className="text-left py-2 px-2 font-medium">Status</th>
 										<th className="text-left py-2 px-2 font-medium">Last seen</th>
 										<th className="text-left py-2 px-2 font-medium">Added</th>
@@ -180,6 +182,26 @@ export default function NodesTab({ clusterId, nodes, onChange }: Props) {
 												{n.gpu_count > 0
 													? `${n.gpu_count}× ${n.gpu_type || "GPU"} ${n.gpu_memory_gb}g`
 													: "—"}
+											</td>
+											<td className="py-2 px-2 text-muted-foreground">
+												{(() => {
+													const nw = workers.filter((w) => w.node_id === n.id);
+													if (nw.length === 0) return "—";
+													const active = nw.filter(
+														(w) =>
+															w.status === "idle" ||
+															w.status === "busy" ||
+															w.status === "starting",
+													).length;
+													return (
+														<span className="text-xs">
+															{nw.length}
+															{active > 0 && active !== nw.length
+																? ` (${active} active)`
+																: ""}
+														</span>
+													);
+												})()}
 											</td>
 											<td className="py-2 px-2">
 												<span

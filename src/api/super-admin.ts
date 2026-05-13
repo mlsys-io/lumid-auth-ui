@@ -149,6 +149,30 @@ export interface LoopStep {
 	knowledge_agent?: string;
 }
 
+export interface LoopProposal {
+	strategy?: string;
+	symbol?: string;
+	direction?: string;
+	size_pct_nav?: number;
+}
+
+export interface LoopOutcome {
+	alpha_pp?: number;
+	benchmark?: string;
+	sharpe?: number;
+	max_dd?: number;
+	insight_head?: string;
+	last_proposal?: LoopProposal;
+}
+
+export interface StrategyState {
+	name: string;
+	lifecycle_stage?: 'smoke_test' | 'explore' | 'paper' | 'semi' | 'live' | 'retired' | string;
+	cycle_count?: number;
+	recent_sharpe?: number;
+	lifetime_pnl?: number;
+}
+
 export interface LoopRow {
 	app: string;
 	loop: string;
@@ -171,14 +195,87 @@ export interface LoopRow {
 	goal_tracked?: string[];
 	latest_cycle_dir?: string;
 	latest_cycle_ts?: string;
+	// Failing-loop diagnostics — only present when last_ok=false. The
+	// dashboard renders these in the expanded row.
+	last_errors?: LoopErrorRow[];
+	last_journal?: string;
+	// Engine pattern (Pattern A or B). Pattern A = runner_steps;
+	// Pattern B = command (engine_module names the verb).
+	engine?: 'runner_steps' | 'command';
+	engine_module?: string;
+	skills_invoked?: string[];
+	// Cycle outcome — hydrated from score.json/insight.md/proposal.json
+	outcome?: LoopOutcome;
+}
+
+export interface LoopErrorRow {
+	step?: string;
+	skill?: string;
+	error: string;
+}
+
+// Per-app git status — one entry per unique app, parallel to loops[].
+// Pivot point for "git status per repo" on the dashboard.
+export interface AppGitStatus {
+	app: string;
+	version?: string;
+	kind?: string;
+	published: boolean;
+	published_slug?: string;
+	local_has_git: boolean;
+	local_dirty_count: number;
+	local_dirty_example?: string;
+	local_ahead_origin?: number;
+	local_behind_origin?: number;
+	local_head?: string;
+	local_branch?: string;
+	remote_head?: string;
+	status: 'in_sync' | 'dirty' | 'ahead' | 'behind' | 'drift' | 'unpublished' | 'no_git';
+	strategies?: StrategyState[];
 }
 
 export interface LoopsResp {
 	loops: LoopRow[];
+	apps?: AppGitStatus[];
 	summary: { ok: number; never: number; failing: number; stale: number; manual: number };
 	scheduler_daemon: 'running' | 'not_installed';
 	operator_home: string;
 	generated_at: string;
+}
+
+// Codebase-repo status — one entry per source-tree git repo under /proj.
+// Distinct from xpio AppGitStatus: those are app *bundles* (dropped into
+// ~/.xp/apps/), this is the platform's own checkouts.
+export interface CodebaseRepo {
+	path: string;
+	name: string;
+	group?: string;
+	branch?: string;
+	head_short_sha?: string;
+	head_subject?: string;
+	head_author?: string;
+	head_date?: string;
+	dirty_count: number;
+	dirty_example?: string;
+	untracked_count: number;
+	ahead_origin?: number;
+	behind_origin?: number;
+	has_upstream: boolean;
+	deprecated?: boolean;
+	status: 'clean' | 'dirty' | 'ahead' | 'behind' | 'diverged' | 'no_upstream' | 'detached' | 'no_git';
+}
+
+export interface CodebaseReposResp {
+	root: string;
+	repos: CodebaseRepo[];
+	summary: Record<string, number>;
+	generated_at: string;
+	warning?: string;
+}
+
+export async function fetchCodebaseRepos(): Promise<CodebaseReposResp> {
+	const r = await apiClient.get<DataResponse<CodebaseReposResp>>('/api/v1/admin/codebase-repos');
+	return r.data.data;
 }
 
 export async function fetchLoops(): Promise<LoopsResp> {
