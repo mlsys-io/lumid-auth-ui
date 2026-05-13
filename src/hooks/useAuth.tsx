@@ -16,6 +16,10 @@ interface AuthContextType {
    *  component — we ignore it. */
   login: (token: string, userData: UserInfo) => void;
   logout: () => Promise<void>;
+  /** Refetch /api/v1/user — used after invitation-code redeem so the
+   *  AuthGuard sees the populated `invitation_code` field without a
+   *  full reload. */
+  refreshUser: () => Promise<void>;
   isAuthenticated: boolean;
 }
 
@@ -68,6 +72,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const refreshUser = async () => {
+    try {
+      const info = await getUserInfo();
+      setUser(info);
+    } catch {
+      setUser(null);
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -75,6 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         login,
         logout,
+        refreshUser,
         isAuthenticated: !!user,
       }}
     >

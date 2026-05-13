@@ -11,6 +11,7 @@ const Register = lazy(() => import("./pages/login/register").then((m) => ({ defa
 const Callback = lazy(() => import("./pages/auth/callback").then((m) => ({ default: m.AuthCallback })));
 const ForgotPassword = lazy(() => import("./pages/auth/forgot-password"));
 const ResetPassword = lazy(() => import("./pages/auth/reset-password"));
+const RedeemInvite = lazy(() => import("./pages/auth/redeem-invite"));
 
 // The unified shell for /dashboard/* (absorbed the old /app/* tree in
 // the 2026-04-24 merge). DashboardLayout + Overview are deprecated —
@@ -31,6 +32,9 @@ const AdminInvitations = lazy(() => import("./pages/account/admin-invitations"))
 // that are zero in our deployment); pulls live cluster/node/worker/
 // user/audit data instead. Source at pages/dashboard/overview.tsx.
 const AdminOverview = lazy(() => import("./pages/dashboard/overview"));
+// Super-admin single pane of glass — billing/identity/QA/infra/build
+// tiles + embedded Grafana panels. Lives at /dashboard/super-admin.
+const SuperAdminDashboard = lazy(() => import("./pages/dashboard/super-admin"));
 const QuantLayout = lazy(() => import("./pages/dashboard/quant-layout"));
 const QuantStrategy = lazy(() => import("./pages/dashboard/quant-strategy"));
 // QuantDatasource lazy import retired 2026-05-03 — folded into
@@ -213,6 +217,17 @@ export default function App() {
           <Route path="/auth/callback" element={<Callback />} />
           <Route path="/auth/forgot-password" element={<ForgotPassword />} />
           <Route path="/auth/reset-password" element={<ResetPassword />} />
+          {/* Authenticated-but-incomplete users (empty invitation_code)
+              get redirected here by AuthGuard. The page itself runs
+              behind AuthGuard so unauth users still bounce to /login. */}
+          <Route
+            path="/auth/redeem-invite"
+            element={
+              <AuthGuard requireAuth={true}>
+                <RedeemInvite />
+              </AuthGuard>
+            }
+          />
 
           {/* Unified /dashboard shell. All authenticated routes nest
               under this so the sidebar is always present. */}
@@ -412,6 +427,14 @@ export default function App() {
                 resolve — the tab router is URL-based. Detail views
                 (users/:id, clusters/:id, clusters/new) render OUTSIDE
                 the tab shell since they aren't siblings of the tabs. */}
+            <Route
+              path="super-admin"
+              element={
+                <SuperAdminGuard>
+                  <SuperAdminDashboard />
+                </SuperAdminGuard>
+              }
+            />
             <Route
               path="admin"
               element={

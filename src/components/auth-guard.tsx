@@ -51,7 +51,7 @@ export function isSafeReturnTo(raw: string | null | undefined): raw is string {
 }
 
 export function AuthGuard({ children, requireAuth = true }: AuthGuardProps) {
-	const { isLoading, isAuthenticated } = useAuth();
+	const { isLoading, isAuthenticated, user } = useAuth();
 	const location = useLocation();
 
 	if (isLoading) {
@@ -63,6 +63,31 @@ export function AuthGuard({ children, requireAuth = true }: AuthGuardProps) {
 		// user back after sign-in via ?return_to=<current>.
 		const here = location.pathname + location.search;
 		return <Navigate to={`/auth/login?return_to=${encodeURIComponent(here)}`} replace />;
+	}
+
+	// Bypass-proof invitation-code gate. The OAuth callback pops a
+	// dialog when `invitation_code` is empty, but the backend has
+	// already set the session cookie — so cancelling the dialog and
+	// going back to lum.id used to slip the user past with no code.
+	// Now any authenticated session with empty `invitation_code` gets
+	// force-redirected to /auth/redeem-invite. Admins are exempt to
+	// avoid bricking the bootstrap admin.
+	if (
+		requireAuth &&
+		isAuthenticated &&
+		user &&
+		!user.invitation_code &&
+		user.role !== 'admin' &&
+		user.role !== 'super_admin' &&
+		location.pathname !== '/auth/redeem-invite'
+	) {
+		const here = location.pathname + location.search;
+		return (
+			<Navigate
+				to={`/auth/redeem-invite?return_to=${encodeURIComponent(here)}`}
+				replace
+			/>
+		);
 	}
 
 	if (!requireAuth && isAuthenticated) {

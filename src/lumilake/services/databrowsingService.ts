@@ -14,7 +14,7 @@ export class DataBrowsingService {
       const res = await apiService.get<ApiResponse<string[]>>("/db/schemas");
       return Array.isArray(res?.data) ? res.data : [];
     } catch (error) {
-      console.error("getSchemas error:", error);
+      console.debug("getSchemas error:", error);
       return [];
     }
   }
@@ -26,7 +26,7 @@ export class DataBrowsingService {
       });
       return Array.isArray(res?.data) ? res.data : [];
     } catch (error) {
-      console.error("getTables error:", error);
+      console.debug("getTables error:", error);
       return [];
     }
   }
@@ -38,7 +38,7 @@ export class DataBrowsingService {
       });
       return Array.isArray(res?.data) ? res.data : [];
     } catch (error) {
-      console.error("getColumns error:", error);
+      console.debug("getColumns error:", error);
       return [];
     }
   }
@@ -54,7 +54,7 @@ export class DataBrowsingService {
       });
       return res?.data ?? null;
     } catch (error) {
-      console.error("getTablePreview error:", error);
+      console.debug("getTablePreview error:", error);
       return null;
     }
   }
@@ -69,7 +69,7 @@ export class DataBrowsingService {
       });
       return res?.data ?? null;
     } catch (error) {
-      console.error("getS3Files error:", error);
+      console.debug("getS3Files error:", error);
       return null;
     }
   }
@@ -81,7 +81,7 @@ export class DataBrowsingService {
       });
       return res?.data ?? null;
     } catch (error) {
-      console.error("getS3Folders error:", error);
+      console.debug("getS3Folders error:", error);
       return null;
     }
   }
@@ -102,7 +102,7 @@ export class DataBrowsingService {
         null
       );
     } catch (error) {
-      console.error("getS3DownloadUrl error:", error);
+      console.debug("getS3DownloadUrl error:", error);
       return null;
     }
   }
