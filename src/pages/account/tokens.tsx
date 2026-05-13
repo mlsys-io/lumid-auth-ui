@@ -622,7 +622,7 @@ function MintResult({
 				</div>
 				<p className="mt-2 text-xs text-gray-500">
 					Runs on your own machine. See{' '}
-					<a href="/dashboard/connect" className="text-indigo-500 hover:underline">
+					<a href="/account/connect/google" className="text-indigo-500 hover:underline">
 						Connect
 					</a>{' '}
 					for the full walkthrough.

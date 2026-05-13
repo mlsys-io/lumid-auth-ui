@@ -210,7 +210,7 @@ function EmptyState() {
 			</p>
 			<Link
 				to="/dashboard/skills/new"
-				className="text-sm text-soul-400 hover:underline"
+				className="text-sm text-indigo-500 hover:underline"
 			>
 				Or hand-author a skill →
 			</Link>
@@ -232,8 +232,8 @@ function MessageCard({
 	const ago = relativeTime(message.posted_at);
 
 	const kindIcon = {
-		cycle_summary: <Bot className="w-4 h-4 text-spirit-400" />,
-		draft_pending: <Sparkles className="w-4 h-4 text-soul-400" />,
+		cycle_summary: <Bot className="w-4 h-4 text-violet-500" />,
+		draft_pending: <Sparkles className="w-4 h-4 text-indigo-400" />,
 		question: <MessageSquare className="w-4 h-4 text-amber-500" />,
 		flag: <ShieldAlert className="w-4 h-4 text-red-500" />,
 	}[message.kind] || <Brain className="w-4 h-4 text-gray-400" />;
@@ -241,7 +241,7 @@ function MessageCard({
 	return (
 		<div
 			className={`rounded-lg border p-4 ${
-				isUnread ? "border-soul-300 bg-white shadow-sm" : "border-gray-200 bg-gray-50"
+				isUnread ? "border-indigo-300 bg-white shadow-sm" : "border-gray-200 bg-gray-50"
 			}`}
 		>
 			<div className="flex items-start justify-between mb-2">

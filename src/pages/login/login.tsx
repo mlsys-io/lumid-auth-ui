@@ -13,7 +13,7 @@ import { GOOGLE_CLIENT_ID } from '../../config/env';
 import { executeRecaptcha, isRecaptchaAvailable } from '../../lib/recaptcha';
 
 interface LoginProps {
-	onLogin: (token: string, userData: { id: number; username: string; email: string; avatar?: string }) => void;
+	onLogin: (token: string, userData: { id: number | string; username: string; email: string; avatar?: string; role?: string; status?: string }) => void;
 }
 
 const OAUTH_REDIRECT_URI = `${window.location.origin}/auth/callback`;
