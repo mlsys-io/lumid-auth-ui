@@ -381,6 +381,75 @@ export async function listWorkers(
 	return r.data.data;
 }
 
+// V2 FlowMesh's wire shape for /api/v1/workers. Lower-cased status is needed
+// to feed back into our Worker.status union; the rest of V2's shape is mapped
+// best-effort into lumid_cluster's Worker type so the admin UI can render
+// both registry-registered (legacy cluster-agent enrolment) and V2-spawned
+// (supervisor-managed) workers from one table.
+interface V2Worker {
+	id: string;
+	alias?: string;
+	namespace?: string;
+	cluster?: string;
+	node_id: string;
+	node_alias?: string;
+	status: string;
+	hardware?: {
+		cpu?: { logical_cores?: number } | null;
+		memory?: { total_bytes?: number } | null;
+		gpu?: { devices?: Array<{ memory_total_bytes?: number }> | null } | null;
+	} | null;
+	cost_per_hour?: number;
+	started_at?: string;
+	last_seen?: string;
+}
+
+function v2ToWorker(v: V2Worker, clusterId: string): Worker {
+	const devs = v.hardware?.gpu?.devices ?? [];
+	const status = (v.status || "").toLowerCase();
+	const validStatus =
+		(["starting", "idle", "busy", "stopping", "stopped", "lost"] as const)
+			.find((s) => s === status) ?? "starting";
+	return {
+		id: v.id,
+		node_id: v.node_id,
+		cluster_id: clusterId,
+		role: "flowmesh",
+		type: devs.length > 0 ? "gpu" : "cpu",
+		gpu_index: devs.length > 0 ? 0 : null,
+		memory_limit_gb: Math.floor(
+			(v.hardware?.memory?.total_bytes ?? 0) / (1024 * 1024 * 1024),
+		),
+		cost_per_hour: v.cost_per_hour ?? 0,
+		selling_price_per_hour: 0,
+		status: validStatus,
+		version: undefined,
+		cached_models: null,
+		last_heartbeat: v.last_seen ?? null,
+		created_at: v.started_at ?? new Date().toISOString(),
+		updated_at: v.last_seen ?? v.started_at ?? new Date().toISOString(),
+	};
+}
+
+// Fetch the live worker list from the cluster's upstream V2 FlowMesh
+// Server via cluster_proxy, then map each row into our Worker shape.
+// Returns [] if the cluster has no flowmesh server configured or the
+// proxy errors out (caller decides whether to surface or swallow).
+export async function listV2WorkersForCluster(
+	clusterId: string,
+): Promise<Worker[]> {
+	try {
+		const raw = await clusterProxyGet<V2Worker[]>(
+			clusterId,
+			"/api/v1/workers",
+		);
+		if (!Array.isArray(raw)) return [];
+		return raw.map((v) => v2ToWorker(v, clusterId));
+	} catch {
+		return [];
+	}
+}
+
 export async function deleteWorker(id: string): Promise<void> {
 	await apiClient.delete(`/api/v1/cluster/workers/${encodeURIComponent(id)}`);
 }

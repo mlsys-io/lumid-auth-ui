@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Save, Trash2 } from "lucide-react";
+import { Activity, Loader2, Save, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
+	clusterProxyGet,
 	deleteServer,
 	upsertServer,
 	type ClusterServer,
@@ -97,6 +98,22 @@ function ServerCard({
 	);
 	const [saving, setSaving] = useState(false);
 	const [deleting, setDeleting] = useState(false);
+	const [testing, setTesting] = useState(false);
+
+	async function onTest() {
+		setTesting(true);
+		try {
+			await clusterProxyGet(clusterId, "/healthz", { role });
+			toast.success(`${role} healthz OK`);
+		} catch (e: unknown) {
+			if (isSessionExpired(e)) return;
+			toast.error(
+				`${role} connection failed: ${(e as Error)?.message || "unknown"}`,
+			);
+		} finally {
+			setTesting(false);
+		}
+	}
 
 	async function onSave(e: React.FormEvent) {
 		e.preventDefault();
@@ -184,18 +201,36 @@ function ServerCard({
 						</p>
 					</div>
 					<div className="flex items-center gap-2 justify-between">
-						<Button
-							type="submit"
-							disabled={saving || !hostUrl.trim()}
-							size="sm"
-						>
-							{saving ? (
-								<Loader2 className="w-4 h-4 mr-1 animate-spin" />
-							) : (
-								<Save className="w-4 h-4 mr-1" />
+						<div className="flex items-center gap-2">
+							<Button
+								type="submit"
+								disabled={saving || !hostUrl.trim()}
+								size="sm"
+							>
+								{saving ? (
+									<Loader2 className="w-4 h-4 mr-1 animate-spin" />
+								) : (
+									<Save className="w-4 h-4 mr-1" />
+								)}
+								{server ? "Save changes" : "Create server"}
+							</Button>
+							{server && (
+								<Button
+									type="button"
+									variant="outline"
+									size="sm"
+									onClick={onTest}
+									disabled={testing}
+								>
+									{testing ? (
+										<Loader2 className="w-4 h-4 mr-1 animate-spin" />
+									) : (
+										<Activity className="w-4 h-4 mr-1" />
+									)}
+									Test
+								</Button>
 							)}
-							{server ? "Save changes" : "Create server"}
-						</Button>
+						</div>
 						{server && (
 							<Button
 								type="button"

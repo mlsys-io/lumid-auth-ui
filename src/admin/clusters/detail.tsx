@@ -53,6 +53,7 @@ import {
 	getCluster,
 	listNodes,
 	listServers,
+	listV2WorkersForCluster,
 	listWorkers,
 	patchCluster,
 	remirrorCluster,
@@ -109,7 +110,21 @@ export default function ClusterDetail() {
 			setCluster(c);
 			setServers(s);
 			setNodes(n?.nodes || []);
-			setWorkers(w?.workers || []);
+
+			// Merge: legacy lumid_cluster.workers registry + live V2 workers
+			// proxied from the cluster's flowmesh upstream. V2 is the source
+			// of truth for office clusters where workers are supervisor-spawned
+			// (never enrolled via the cluster-agent /enroll socket). Both lists
+			// are unioned by `id`, V2 entries winning on duplicates.
+			const registryWorkers = w?.workers || [];
+			let v2Workers: Worker[] = [];
+			if (s.some((srv) => srv.role === "flowmesh")) {
+				v2Workers = await listV2WorkersForCluster(id);
+			}
+			const byId = new Map<string, Worker>();
+			for (const rw of registryWorkers) byId.set(rw.id, rw);
+			for (const vw of v2Workers) byId.set(vw.id, vw);
+			setWorkers(Array.from(byId.values()));
 		} catch (e: unknown) {
 			if (isSessionExpired(e)) return;
 			toast.error((e as Error)?.message || "Failed to load cluster");
@@ -351,6 +366,7 @@ export default function ClusterDetail() {
 						<NodesTab
 							clusterId={id}
 							nodes={nodes}
+							workers={workers}
 							onChange={refresh}
 						/>
 					</TabsContent>
