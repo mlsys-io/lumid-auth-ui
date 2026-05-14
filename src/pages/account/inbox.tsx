@@ -280,53 +280,166 @@ function MessagePayload({ payload }: { payload: Record<string, unknown> }) {
 		| Array<{ draft_id: string; skill_id?: string; role?: string; kind?: string }>
 		| undefined;
 	const cycleDir = payload.cycle_dir as string | undefined;
+	const decisionsToday = payload.decisions_today as number | undefined;
+	const byKind = payload.by_kind as Record<string, number> | undefined;
+	const certExpiring = payload.cert_expiring as Record<string, number> | undefined;
+	const backupStale = payload.backup_stale as Record<string, number> | undefined;
+	const apiProbesFailed = payload.api_probes_failed as string[] | undefined;
+	const decisions = payload.decisions as Array<{ kind: string; reason: string }> | undefined;
+	const suggestions = payload.suggestions as string[] | undefined;
+	const recap = payload.recap as string | undefined;
+	const stepRecap = payload.step_recap as Array<{ step_id: string; recap?: string; summary?: string }> | undefined;
 
-	return (
-		<div className="text-sm space-y-2">
-			{score && typeof score === "object" && (
-				<div className="text-xs text-muted-foreground">
-					Score keys: {Object.keys(score).slice(0, 6).join(", ")}
-					{Object.keys(score).length > 6 && "…"}
+	const lines: React.ReactNode[] = [];
+
+	if (recap) {
+		lines.push(
+			<p key="recap" className="text-sm text-gray-700">{recap}</p>
+		);
+	}
+
+	if (typeof decisionsToday === "number") {
+		lines.push(
+			<div key="dt" className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+				<span>decisions today:</span>
+				<span className={`font-semibold ${decisionsToday > 0 ? "text-amber-600" : "text-emerald-600"}`}>
+					{decisionsToday}
+				</span>
+				{byKind && Object.entries(byKind).map(([k, n]) => (
+					<span key={k} className="bg-gray-100 rounded px-1.5 py-0.5 text-[10px]">
+						{k} ×{n}
+					</span>
+				))}
+			</div>
+		);
+	}
+
+	if (certExpiring && Object.keys(certExpiring).length > 0) {
+		lines.push(
+			<div key="cert" className="flex items-start gap-1.5 rounded bg-amber-50 border border-amber-200 px-2 py-1 text-xs text-amber-900">
+				<ShieldAlert className="w-3 h-3 text-amber-600 mt-0.5 shrink-0" />
+				<span>Certs expiring: {Object.entries(certExpiring).map(([d, n]) => `${d} (${n}d)`).join(", ")}</span>
+			</div>
+		);
+	}
+
+	if (backupStale && Object.keys(backupStale).length > 0) {
+		lines.push(
+			<div key="bk" className="flex items-start gap-1.5 rounded bg-amber-50 border border-amber-200 px-2 py-1 text-xs text-amber-900">
+				<ShieldAlert className="w-3 h-3 text-amber-600 mt-0.5 shrink-0" />
+				<span>Stale backups: {Object.entries(backupStale).map(([j, h]) => `${j} (${Math.round(h)}h)`).join(", ")}</span>
+			</div>
+		);
+	}
+
+	if (apiProbesFailed && apiProbesFailed.length > 0) {
+		lines.push(
+			<div key="api" className="flex items-start gap-1.5 rounded bg-red-50 border border-red-200 px-2 py-1 text-xs text-red-900">
+				<XCircle className="w-3 h-3 text-red-600 mt-0.5 shrink-0" />
+				<span>API probes failed: {apiProbesFailed.join(", ")}</span>
+			</div>
+		);
+	}
+
+	if (decisions && decisions.length > 0) {
+		lines.push(
+			<ul key="dec" className="space-y-0.5">
+				{decisions.slice(0, 5).map((d, i) => (
+					<li key={i} className="flex items-start gap-2 text-xs">
+						<span className="shrink-0 font-medium text-indigo-600">{d.kind}</span>
+						<span className="text-muted-foreground">{d.reason}</span>
+					</li>
+				))}
+			</ul>
+		);
+	}
+
+	if (flags && flags.length > 0) {
+		lines.push(
+			<div key="flags" className="flex items-start gap-2 rounded bg-amber-50 border border-amber-200 px-2 py-1">
+				<ShieldAlert className="w-3 h-3 text-amber-600 mt-0.5" />
+				<ul className="text-xs text-amber-900 space-y-0.5">
+					{flags.map((f) => <li key={f}>{f}</li>)}
+				</ul>
+			</div>
+		);
+	}
+
+	if (drafts && drafts.length > 0) {
+		lines.push(
+			<div key="drafts">
+				<div className="text-xs font-semibold text-muted-foreground mb-1">
+					{drafts.length} draft{drafts.length === 1 ? "" : "s"} pending review
 				</div>
-			)}
-			{drafts && drafts.length > 0 && (
-				<div>
-					<div className="text-xs font-semibold text-muted-foreground mb-1">
-						{drafts.length} draft{drafts.length === 1 ? "" : "s"} pending review
-					</div>
-					<ul className="text-xs space-y-1">
-						{drafts.slice(0, 5).map((d) => (
-							<li key={d.draft_id} className="flex items-center gap-2">
-								<code className="bg-gray-100 px-1 rounded">{d.draft_id.slice(0, 8)}</code>
-								<span className="text-muted-foreground">
-									{d.role}/{d.kind || "prompt"}
-								</span>
-								{d.skill_id && <span className="font-medium">{d.skill_id}</span>}
-							</li>
-						))}
-						{drafts.length > 5 && (
-							<li className="text-muted-foreground italic">… + {drafts.length - 5} more</li>
-						)}
-					</ul>
-				</div>
-			)}
-			{flags && flags.length > 0 && (
-				<div className="flex items-start gap-2 rounded bg-amber-50 border border-amber-200 px-2 py-1">
-					<ShieldAlert className="w-3 h-3 text-amber-600 mt-0.5" />
-					<ul className="text-xs text-amber-900 space-y-0.5">
-						{flags.map((f) => (
-							<li key={f}>{f}</li>
-						))}
-					</ul>
-				</div>
-			)}
-			{cycleDir && (
-				<div className="text-[10px] text-muted-foreground">
-					<code>{cycleDir}</code>
-				</div>
-			)}
-		</div>
-	);
+				<ul className="text-xs space-y-1">
+					{drafts.slice(0, 5).map((d) => (
+						<li key={d.draft_id} className="flex items-center gap-2">
+							<code className="bg-gray-100 px-1 rounded">{d.draft_id.slice(0, 8)}</code>
+							<span className="text-muted-foreground">{d.role}/{d.kind || "prompt"}</span>
+							{d.skill_id && <span className="font-medium">{d.skill_id}</span>}
+						</li>
+					))}
+					{drafts.length > 5 && <li className="text-muted-foreground italic">… + {drafts.length - 5} more</li>}
+				</ul>
+			</div>
+		);
+	}
+
+	if (stepRecap && stepRecap.length > 0) {
+		lines.push(
+			<ul key="sr" className="space-y-0.5">
+				{stepRecap.map((s, i) => (
+					<li key={i} className="text-xs text-muted-foreground">
+						<span className="font-medium text-indigo-700">{s.step_id}</span>
+						{(s.recap || s.summary) && <span> — {s.recap ?? s.summary}</span>}
+					</li>
+				))}
+			</ul>
+		);
+	}
+
+	if (suggestions && suggestions.length > 0) {
+		lines.push(
+			<details key="sug">
+				<summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
+					{suggestions.length} suggestion{suggestions.length !== 1 ? "s" : ""}
+				</summary>
+				<ul className="mt-1 space-y-0.5 pl-3">
+					{suggestions.map((s, i) => <li key={i} className="text-xs text-muted-foreground">→ {s}</li>)}
+				</ul>
+			</details>
+		);
+	}
+
+	if (score && typeof score === "object") {
+		lines.push(
+			<div key="score" className="text-xs text-muted-foreground">
+				Score: {Object.keys(score).slice(0, 6).join(", ")}{Object.keys(score).length > 6 && "…"}
+			</div>
+		);
+	}
+
+	if (cycleDir) {
+		lines.push(
+			<div key="cd" className="text-[10px] text-muted-foreground"><code>{cycleDir}</code></div>
+		);
+	}
+
+	if (lines.length === 0) {
+		const raw = JSON.stringify(payload);
+		const meaningful = raw.replace(/"ts":"[^"]+",?/g, "").replace(/^\{,/, "{").replace(/,\}$/, "}");
+		if (meaningful.length > 2) {
+			lines.push(
+				<p key="raw" className="text-xs text-muted-foreground font-mono">{meaningful.slice(0, 300)}</p>
+			);
+		} else {
+			lines.push(
+				<p key="empty" className="text-xs text-muted-foreground italic">No summary content.</p>
+			);
+		}
+	}
+
+	return <div className="text-sm space-y-2">{lines}</div>;
 }
 
 function DraftActions({
