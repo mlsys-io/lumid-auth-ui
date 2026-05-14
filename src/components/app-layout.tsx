@@ -27,13 +27,15 @@ import {
 	Code2,
 	Inbox,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
 import { useAuth } from '../hooks/useAuth';
 import { LanguageProvider } from '../runmesh/i18n';
 import { EnterpriseTipProvider } from '../runmesh/components/EnterpriseTip';
 import { useAuthStore } from '../runmesh/stores/useAuthStore';
 import { httpUser } from '../runmesh/utils/axios';
-import { useEffect } from 'react';
+
+const inboxPollClient = axios.create({ baseURL: '/inbox-api', timeout: 8000, withCredentials: true });
 import { Button } from './ui/button';
 import { getSimulationStrategies, ApiError } from '../quantarena/api';
 import type { SimulationStrategyInfo } from '../quantarena/api/types';
@@ -58,6 +60,7 @@ interface NavItem {
 	// (`/dashboard/quant/market-data`) since market-data was promoted
 	// out of the Quant section into Datasets.
 	excludeActiveFor?: string[];
+	badge?: number;
 }
 
 // External-destination sidebar item (e.g. Lumid Market lives in its
@@ -124,6 +127,7 @@ function SidebarItem({
 	icon: Icon,
 	end,
 	excludeActiveFor,
+	badge,
 	onClick,
 }: NavItem & { onClick?: () => void }) {
 	const location = useLocation();
@@ -146,7 +150,12 @@ function SidebarItem({
 			}}
 		>
 			<Icon className="w-4 h-4 shrink-0" />
-			<span className="truncate">{label}</span>
+			<span className="truncate flex-1">{label}</span>
+			{badge != null && badge > 0 && (
+				<span className="ml-auto min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-indigo-600 text-white text-[10px] font-semibold px-1">
+					{badge > 99 ? '99+' : badge}
+				</span>
+			)}
 		</NavLink>
 	);
 }
@@ -362,6 +371,19 @@ export default function AppLayout() {
 	const navigate = useNavigate();
 	const [mobileOpen, setMobileOpen] = useState(false);
 	const close = () => setMobileOpen(false);
+	const [inboxUnread, setInboxUnread] = useState(0);
+	const inboxTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+	useEffect(() => {
+		if (!user) return;
+		const fetchUnread = () =>
+			inboxPollClient.get('/messages', { params: { limit: 1, unread_only: true } })
+				.then((r) => setInboxUnread(r.data?.unread ?? 0))
+				.catch(() => {});
+		fetchUnread();
+		inboxTimerRef.current = setInterval(fetchUnread, 60_000);
+		return () => { if (inboxTimerRef.current) clearInterval(inboxTimerRef.current); };
+	}, [user]);
 	// super_admin inherits every admin capability; treat both as admin
 	// for sidebar + nav gating. Distinct gates (billing/accounting) can
 	// check === 'super_admin' explicitly where needed.
@@ -484,7 +506,7 @@ export default function AppLayout() {
 				<div className="space-y-px">
 					<SidebarItem to="/dashboard/profile" label="Account" icon={UserIcon} onClick={close} />
 					<SidebarItem to="/dashboard/tokens" label="Tokens" icon={KeyRound} onClick={close} />
-					<SidebarItem to="/dashboard/inbox" label="Inbox" icon={Inbox} onClick={close} />
+					<SidebarItem to="/dashboard/inbox" label="Inbox" icon={Inbox} badge={inboxUnread} onClick={close} />
 					{!isAdmin && (
 						<SidebarItem to="/dashboard/billing" label="Billing" icon={Receipt} onClick={close} />
 					)}
