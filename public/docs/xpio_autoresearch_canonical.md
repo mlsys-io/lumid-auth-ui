@@ -152,24 +152,54 @@ loops:
       - {id: compose_brief,  skill: "reflect/write_brief", knowledge_agent: "<user>-personal-philosophy"}
 ```
 
-**Step contract** (`_run_explicit_steps()`, `app_runner.py:1136-1310`):
+**Step contract** (`_run_explicit_steps()`, `app_runner.py`):
 - `id` (required): unique within the loop; outputs land in `prev_outputs[id]`.
-- `skill` (required): resolves via `_load_skill_module()` (`app_runner.py:105-170`). Sub-paths (`claude_code/scan_sessions`) translate slashes to dots (`skills.claude_code.scan_sessions`).
+- `skill` (required): resolves via `_load_skill_module()`. Sub-paths (`claude_code/scan_sessions`) translate slashes to dots (`skills.claude_code.scan_sessions`).
 - `knowledge_agent` (optional): falls back to the loop's `knowledge_agent`, then the role's `memory_agent`. Top-k memories from this agent are rendered as `prior_knowledge` and injected into the skill's context.
 - `required: true` (optional): abort the cycle on this step's failure. Default = continue.
-- `args: {}` (optional): static kwargs forwarded into `mod.run(**args)`.
+- `args: {}` (optional): static kwargs forwarded into `mod.run(**args)`. **Static args always override auto-wired values.**
 - `instructions: |` (optional): **per-step operator instructions** — plain-English text that the runner splices into the skill's prompt as an OPERATOR INSTRUCTIONS block. Backwards-compat: when absent, no block is injected and old apps work unchanged. See the Per-step operator instructions section below.
+- `stage` (optional): one of `observe | hypothesize | act | analyze | learn`. Used by the runner for auto-wiring and the no-setup short-circuit.
+- `substage` (optional): `pre-flight` or `risk-gate` within `act`. Routes the output to the correct auto-wired kwarg name.
 
-**Skill `run()` signature.** Every skill exposes:
+**Auto-wiring.** The runner introspects each skill's `run()` signature and populates well-known kwargs from `prev_outputs` before the call — no static `args:` entries required for these. Static `args:` always win over auto-wired values.
+
+| Kwarg | Auto-wired from |
+|---|---|
+| `observations` | Aggregated dict of all `stage: observe` outputs, keyed by canonical name (`account`, `holdings`, `market`, `leaderboard`, …) |
+| `account`, `holdings`, `market`, … | Individual observe-stage outputs, also available as top-level kwargs |
+| `proposal` | `out["proposal"]` from first `stage: hypothesize` step |
+| `symbol`, `direction`, `volume` | Extracted from the proposal |
+| `backtest` | Output of first `stage: act, substage: pre-flight` step |
+| `risk_decision` / `risk` | Output of first `stage: act, substage: risk-gate` step |
+| `fill` | Output of first `stage: act` step with no substage |
+| `loop_name` | The loop's `name` field |
+| `contest_id` | Contest ID from the cycle invocation |
+| `mode` | `loops[].mode` (default `paper`) |
+
+Unknown kwargs the skill doesn't declare are silently dropped, so adding new auto-wired params is backwards-compatible.
+
+**No-setup short-circuit.** After a `stage: hypothesize` step completes successfully, if `out["proposal"]["verdict"]` is not `"propose"` or `"route"`, the runner stops the cycle immediately, sets `summary.outcome = "no_setup"`, and skips all remaining steps. This mirrors the same guard in the legacy (non-steps) cycle path.
+
+**Skill `run()` signatures.** Two patterns both work:
+
 ```python
+# Pattern 1: declare well-known params — runner auto-wires from prev_outputs.
+def run(*, observations: dict, proposal: dict | None = None,
+        risk_decision: dict | None = None, context: dict | None = None) -> dict:
+    market = observations.get("market", {})
+    prior_knowledge = (context or {}).get("prior_knowledge", "")
+    return {"result": ...}
+
+# Pattern 2: read everything from context (original contract, still supported).
 def run(*, context: dict | None = None, **kwargs) -> dict:
-    # context["prev_outputs"][prev_step_id] is your input
-    # context["prior_knowledge"] is the rendered memory block
-    # context["step_instructions"] is the resolved instructions text (str | None)
-    # kwargs["instructions"] is the same value when the step has instructions
-    # return value lands in prev_outputs[this_step_id]
-    return {"records": [...], "errors": 0}
+    observations = context["prev_outputs"].get("observe_market", {})
+    prior_knowledge = context.get("prior_knowledge", "")
+    instructions = context.get("step_instructions")
+    return {"result": ...}
 ```
+
+In both patterns `context["prior_knowledge"]` is the rendered memory block, `context["step_instructions"]` is the resolved instructions text, and `kwargs["instructions"]` carries the same instructions value.
 
 ## Per-step operator instructions (Theme F)
 
