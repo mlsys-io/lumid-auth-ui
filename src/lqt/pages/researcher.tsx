@@ -123,7 +123,7 @@ function SignalIcCard() {
 
   useEffect(() => {
     if (!active) return;
-    const until = Date.now() * 1_000_000;
+    const until = BigInt(Date.now()) * 1_000_000n;
     const since = until - 90n * 24n * 3600n * 1_000_000_000n;
     void getJson<SignalIcBody>('/api/research/signal-ic', {
       signal: active,
