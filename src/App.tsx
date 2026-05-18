@@ -90,6 +90,12 @@ const RunmeshBilling = lazy(() =>
 );
 const RunmeshWorkflowReview = lazy(() => import("./runmesh/pages/WorkflowReview"));
 
+// Research surface (xp.io marketplace plan 2026-05-18)
+const LoopsPage = lazy(() => import("./pages/dashboard/loops"));
+const MarketplacePage = lazy(() => import("./pages/dashboard/marketplace"));
+const KnowledgePage = lazy(() => import("./pages/dashboard/knowledge"));
+const ResultsPage = lazy(() => import("./pages/dashboard/results"));
+
 // Product surface — /app/*. Separate shell from /dashboard/*.
 const AppLayout = lazy(() => import("./components/app-layout"));
 const AppApps = lazy(() => import("./pages/app/apps"));
@@ -271,6 +277,12 @@ export default function App() {
                                         (tab 1: FlowMesh, tab 2: Lumilake)
                 Root redirects to Runmesh Submit since that's the
                 primary action. */}
+            {/* Research Loops — xp.io marketplace plan 2026-05-18 */}
+            <Route path="loops" element={<LoopsPage />} />
+            <Route path="marketplace" element={<MarketplacePage />} />
+            <Route path="knowledge" element={<KnowledgePage />} />
+            <Route path="results" element={<ResultsPage />} />
+
             {/* /dashboard root = Workflow Builder. AppApps embeds its
                 own header + narrative inline (UserDashboard owns the
                 inner full-height scroll layout, so a route-level

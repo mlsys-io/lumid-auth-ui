@@ -26,6 +26,9 @@ import {
 	Activity,
 	Code2,
 	Inbox,
+	RefreshCw,
+	ShoppingBag,
+	Brain,
 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
@@ -77,6 +80,14 @@ interface ExternalNavItem {
 //   - Runmesh Submit    = pick + submit to FlowMesh, or manage cron
 //   - Lumilake Submit   = submit to Lumilake analytics
 //   - Running jobs      = unified runtime list, both backends
+// Research Loops section — new in 2026-05-18 (xp.io marketplace plan)
+const RESEARCH_NAV: NavItem[] = [
+	{ to: '/dashboard/loops', label: 'My Loops', icon: RefreshCw },
+	{ to: '/dashboard/marketplace', label: 'Marketplace', icon: ShoppingBag },
+	{ to: '/dashboard/knowledge', label: 'My Knowledge', icon: Brain },
+	{ to: '/dashboard/results', label: 'My Results', icon: BarChart3 },
+];
+
 const PRODUCT_NAV: NavItem[] = [
 	{ to: '/dashboard', label: 'Workflow Builder', icon: Workflow, end: true },
 	{ to: '/dashboard/runmesh/submit', label: 'Runmesh Submit', icon: Send },
@@ -439,6 +450,13 @@ export default function AppLayout() {
 
 			{/* Nav */}
 			<nav className="flex-1 overflow-y-auto px-2 pt-2 pb-4">
+				<SectionLabel label="Research" />
+				<div className="space-y-px">
+					{RESEARCH_NAV.map((item) => (
+						<SidebarItem key={item.to} {...item} onClick={close} />
+					))}
+				</div>
+
 				<SectionLabel label="AI Compute" />
 				<div className="space-y-px">
 					{PRODUCT_NAV.map((item) => (
