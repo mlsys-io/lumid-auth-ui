@@ -13,10 +13,11 @@ import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover';
 import { cn } from '../../lib/utils';
 import { selectHeaderCss, selectItemCss } from '../strategy/upload-strategy-dialog';
-import { X, ChevronUpIcon, ChevronDownIcon, Check } from 'lucide-react';
+import { X, ChevronUpIcon, ChevronDownIcon, Check, Plus } from 'lucide-react';
 import { Pagination } from '../../components/ui/pagination';
 import { Button } from '../../components/ui/button';
 import { AdminManageLink } from '../../components/admin-manage-link';
+import CreateCompetitionDialog from './create-competition-dialog';
 
 const CompetitionLobby = () => {
 	const [status, setStatus] = useState<string[]>([]);
@@ -27,6 +28,7 @@ const CompetitionLobby = () => {
 	const [refresh, setRefresh] = useState(Date.now());
 	const [popoverOpen, setPopoverOpen] = useState(false);
 	const [showMyCompetitions, setShowMyCompetitions] = useState(false);
+	const [createOpen, setCreateOpen] = useState(false);
 
 	useEffect(() => {
 		fetchCompetitionsList();
@@ -186,6 +188,15 @@ const CompetitionLobby = () => {
 						}}
 					/>
 					<Label>Show My Competitions</Label>
+					<Button
+						size="sm"
+						variant="outline"
+						onClick={() => setCreateOpen(true)}
+						className="gap-1.5"
+					>
+						<Plus className="w-3.5 h-3.5" />
+						Create
+					</Button>
 					<AdminManageLink to="/dashboard/admin/competitions" />
 				</div>
 			</div>
@@ -220,6 +231,11 @@ const CompetitionLobby = () => {
 					/>
 				</div>
 			)}
+			<CreateCompetitionDialog
+				open={createOpen}
+				onClose={() => setCreateOpen(false)}
+				onCreated={() => setRefresh(Date.now())}
+			/>
 			{registerCompetition && (
 				<RegisterCompetitionDialog
 					open={!!registerCompetition}
