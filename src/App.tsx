@@ -118,6 +118,14 @@ const AppLumilakePython = lazy(() => import("./pages/app/lumilake/python"));
 // reuses of the list/management view. The old AppApps (UserDashboard)
 // reverts to being the Workflow Builder at /dashboard.
 const AppRunmeshSubmit = lazy(() => import("./pages/app/runmesh-submit"));
+// T-UI-003 — LQT (Lumid QuantTrading) pages
+const AppLqtTrader = lazy(() => import("@/lqt/pages/trader").then(m => ({ default: m.TraderPage })));
+const AppLqtAuditor = lazy(() => import("@/lqt/pages/auditor").then(m => ({ default: m.AuditorPage })));
+const AppLqtResearcher = lazy(() => import("@/lqt/pages/researcher").then(m => ({ default: m.ResearcherPage })));
+const AppLqtOperator = lazy(() => import("@/lqt/pages/operator").then(m => ({ default: m.OperatorPage })));
+const AppLqtAccountant = lazy(() => import("@/lqt/pages/accountant").then(m => ({ default: m.AccountantPage })));
+const AppLqtAdmin = lazy(() => import("@/lqt/pages/admin").then(m => ({ default: m.AdminPage })));
+
 const AppLumilakeSubmit = lazy(() => import("./pages/app/lumilake-submit"));
 const AppLumilakeJobs = lazy(() => import("./pages/app/lumilake/jobs"));
 // Lumilake workers page retired 2026-04-24 — /app/admin/lumilake-workers
@@ -292,6 +300,13 @@ export default function App() {
               }
             >
               <Route path="runmesh/submit" element={<AppRunmeshSubmit />} />
+              {/* T-UI-003 — LQT (Lumid QuantTrading) personas */}
+              <Route path="lqt/trader" element={<AppLqtTrader />} />
+              <Route path="lqt/auditor" element={<AppLqtAuditor />} />
+              <Route path="lqt/researcher" element={<AppLqtResearcher />} />
+              <Route path="lqt/operator" element={<AppLqtOperator />} />
+              <Route path="lqt/accountant" element={<AppLqtAccountant />} />
+              <Route path="lqt/admin" element={<AppLqtAdmin />} />
               <Route path="runmesh/schedules" element={<AppSchedules />} />
             </Route>
 

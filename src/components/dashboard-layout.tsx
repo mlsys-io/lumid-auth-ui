@@ -15,6 +15,12 @@ import {
 	Database,
 	Menu,
 	X,
+	LineChart,
+	ScrollText,
+	FlaskConical,
+	Activity,
+	Receipt,
+	ShieldCheck,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
@@ -60,6 +66,22 @@ const APPS: AppEntry[] = [
 	{ name: 'QuantArena', url: 'https://lumid.market/backend/api/v1/auth/lumid-sso/start?return_to=/strategy', icon: TrendingUp },
 	{ name: 'Runmesh', url: 'https://runmesh.ai/', icon: Workflow },
 	{ name: 'Lumilake', url: 'https://lumilake.ai/sso/lumid', icon: Database },
+];
+
+interface LqtNavItem {
+	to: string;
+	label: string;
+	icon: React.ComponentType<{ className?: string }>;
+	adminOnly?: boolean;
+}
+
+const LQT_NAV: LqtNavItem[] = [
+	{ to: '/dashboard/lqt/trader',     label: 'Trader',     icon: LineChart },
+	{ to: '/dashboard/lqt/auditor',    label: 'Auditor',    icon: ScrollText },
+	{ to: '/dashboard/lqt/researcher', label: 'Researcher', icon: FlaskConical },
+	{ to: '/dashboard/lqt/operator',   label: 'Operator',   icon: Activity },
+	{ to: '/dashboard/lqt/accountant', label: 'Accountant', icon: Receipt },
+	{ to: '/dashboard/lqt/admin',      label: 'Admin',      icon: ShieldCheck, adminOnly: true },
 ];
 
 function SidebarItem({ to, label, icon: Icon, end, onClick }: NavItem & { onClick?: () => void }) {
@@ -189,6 +211,13 @@ export default function DashboardLayout() {
 							<ExternalLink className="w-3 h-3 opacity-50" />
 						</a>
 					)}
+				</div>
+
+				<SectionLabel label="LQT" />
+				<div className="space-y-px">
+					{LQT_NAV.filter((item) => !item.adminOnly || isAdmin).map((item) => (
+						<SidebarItem key={item.to} to={item.to} label={item.label} icon={item.icon} onClick={close} />
+					))}
 				</div>
 			</nav>
 
