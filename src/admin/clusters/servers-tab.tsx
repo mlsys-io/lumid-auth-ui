@@ -60,10 +60,15 @@ function defaultStorage(role: "flowmesh" | "lumilake"): Record<string, unknown> 
 	if (role === "flowmesh") {
 		return {
 			// Operator-shape Bearer the cluster proxy injects when
-			// forwarding lum.id-side submit calls to this host. Created
-			// upstream via POST /api/v1/auth/keys on the FlowMesh Host
-			// itself; paste the `flm-…` value here.
-			api_key: "flm-replace-with-operator-key",
+			// forwarding lum.id-side submit calls to this host.
+			//
+			// Shape depends on the upstream FlowMesh's auth chain:
+			//   - V2 + lumid_flowmesh_plugin: paste a `lm_pat_live_…` PAT
+			//     (or a long-lived service JWT). The plugin's IdentityProvider
+			//     accepts both; native `flm-*` keys are NOT accepted.
+			//   - V1 / vanilla V2 with native auth: paste a `flm-…` operator
+			//     key created upstream via POST /api/v1/auth/keys.
+			api_key: "lm_pat_live_replace_with_operator_pat",
 			minio: { endpoint: "http://host:19000", bucket: "flowmesh-results" },
 			redis_control_url: "redis://host:6379/0",
 			redis_telemetry_url: "redis://host:6379/1",
@@ -71,9 +76,10 @@ function defaultStorage(role: "flowmesh" | "lumilake"): Record<string, unknown> 
 		};
 	}
 	return {
-		// Operator-shape Bearer the cluster proxy injects when
-		// forwarding lum.id-side submit calls to this host (Lumilake's
-		// `lmk-…` key).
+		// Operator-shape Bearer the cluster proxy injects when forwarding
+		// lum.id-side submit calls to this host. For Lumilake clusters
+		// the canonical key shape is `lmk-…`; with the lumid plugin
+		// loaded, a `lm_pat_live_…` PAT works too.
 		api_key: "lmk-replace-with-operator-key",
 		minio: { endpoint: "http://host:19000", bucket: "lumilake-results" },
 		redis_control_url: "redis://host:6379/0",
@@ -199,6 +205,11 @@ function ServerCard({
 						<p className="text-xs text-muted-foreground">
 							Secrets should be ref-strings (e.g. <code>secret:cluster-xxx-fm-mysql</code>) resolved by the service, not raw values.
 						</p>
+						{role === "flowmesh" && (
+							<p className="text-xs text-muted-foreground">
+								<strong>api_key:</strong> the cluster proxy uses this Bearer to call the upstream FlowMesh. If the upstream runs the <code>lumid_flowmesh_plugin</code>, paste a <code>lm_pat_live_…</code> PAT or service JWT — native <code>flm-*</code> keys are rejected by that plugin's IdentityProvider. Use the <em>Test</em> button below to validate before save.
+							</p>
+						)}
 					</div>
 					<div className="flex items-center gap-2 justify-between">
 						<div className="flex items-center gap-2">

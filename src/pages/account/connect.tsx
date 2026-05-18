@@ -115,7 +115,7 @@ function InstallCard({
 		}
 		setSubmitting(true);
 		try {
-			const r = await mintPAT({ name: name.trim(), scopes, expires_in_seconds: 0 });
+			const r = await mintPAT({ name: name.trim(), scopes });
 			setFreshToken(r);
 			onMinted();
 		} catch (e: any) {

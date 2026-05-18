@@ -128,6 +128,22 @@ export interface RecentTradesResponse {
 }
 
 /**
+ * Reset a strategy's trade history in a competition (own strategy or admin)
+ * POST /api/v1/competitions/{competition_id}/strategies/{strategy_id}/reset
+ */
+export async function resetStrategy(competitionId: number, strategyId: number): Promise<void> {
+	await apiClient.post<void>(`/api/v1/competitions/${competitionId}/strategies/${strategyId}/reset`);
+}
+
+/**
+ * Reset all strategies in a competition (admin only)
+ * POST /api/v1/admin/competitions/{competition_id}/reset
+ */
+export async function bulkResetCompetition(competitionId: number): Promise<void> {
+	await apiClient.post<void>(`/api/v1/admin/competitions/${competitionId}/reset`);
+}
+
+/**
  * GET /api/v1/competitions/{competition_id}/recent-trades
  */
 export async function getCompetitionRecentTrades(

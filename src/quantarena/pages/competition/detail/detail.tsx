@@ -297,7 +297,12 @@ const CompetitionDetail = () => {
 							)}
 						</div>
 						{myStrategiesList.length > 0 && (
-							<MyStrategyList list={myStrategiesList} status={competitionDetail.status} />
+							<MyStrategyList
+								competitionId={Number(competitionId)}
+								list={myStrategiesList}
+								status={competitionDetail.status}
+								onReset={fetchMyStrategies}
+							/>
 						)}
 						<hr className="my-4" />
 						<Tabs defaultValue="leaderboard">
