@@ -96,6 +96,9 @@ const MarketplacePage = lazy(() => import("./pages/dashboard/marketplace"));
 const KnowledgePage = lazy(() => import("./pages/dashboard/knowledge"));
 const ResultsPage = lazy(() => import("./pages/dashboard/results"));
 
+// AppShell — focused Research shell for /app/* routes
+const AppShell = lazy(() => import("./components/AppShell"));
+
 // Product surface — /app/*. Separate shell from /dashboard/*.
 const AppLayout = lazy(() => import("./components/app-layout"));
 const AppApps = lazy(() => import("./pages/app/apps"));
@@ -625,7 +628,17 @@ export default function App() {
               entire tree lives under /dashboard/*. Catchall redirect
               preserves every deep link (sidebar history, Runmesh CLI
               output, docs, bookmarks). */}
-          <Route path="/app" element={<Navigate to="/dashboard" replace />} />
+          {/* /app/* — dedicated Research shell (AppShell). Primary home
+              after login for the xp.io marketplace surface. Legacy deep
+              links that don't match a known sub-path fall through to
+              LegacyDashboardRedirect below. */}
+          <Route path="/app" element={<Navigate to="/app/loops" replace />} />
+          <Route element={<Suspense fallback={<Spinner />}><AppShell /></Suspense>}>
+            <Route path="/app/loops"       element={<Suspense fallback={<Spinner />}><LoopsPage /></Suspense>} />
+            <Route path="/app/marketplace" element={<Suspense fallback={<Spinner />}><MarketplacePage /></Suspense>} />
+            <Route path="/app/knowledge"   element={<Suspense fallback={<Spinner />}><KnowledgePage /></Suspense>} />
+            <Route path="/app/results"     element={<Suspense fallback={<Spinner />}><ResultsPage /></Suspense>} />
+          </Route>
           <Route path="/app/*" element={<LegacyDashboardRedirect />} />
 
           {/* Roots → login if unauth, dashboard if auth (AuthGuard decides). */}
