@@ -1,14 +1,27 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { MyStrategyInfo } from '../../../api/types';
-import { ApiError, getCompetitionLeaderboard } from '../../../api';
+import { ApiError, getCompetitionLeaderboard, resetStrategy, bulkResetCompetition } from '../../../api';
 import { toast } from 'sonner';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '../../../components/ui/avatar';
-import { Eye, ArrowDownUp, ChartBarDecreasing, MoveDown, MoveUp } from 'lucide-react';
+import { Eye, ArrowDownUp, ChartBarDecreasing, MoveDown, MoveUp, RotateCcw } from 'lucide-react';
 import { formatPercentage, getUserInitials, formatCurrency, cn } from '../../../lib/utils';
 import { Loading } from '../../../components/ui/loading';
 import { useNavigate } from 'react-router-dom';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../components/ui/tooltip';
+import { useAuth } from '../../../hooks/useAuth';
+import { Button } from '../../../components/ui/button';
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+	AlertDialogTrigger,
+} from '../../../components/ui/alert-dialog';
 
 type SortField = 'TotalEquity' | 'ReturnRate' | 'MaxDrawdown' | 'SharpeRatio' | 'TradingTimes';
 const DEFAULT_SORT: { sort_by: SortField; order: 'asc' | 'desc' } = {
@@ -31,16 +44,22 @@ const renderSortIcon = (field: SortField, sortInfo: { sort_by: SortField; order:
 const LeaderboardUser = ({
 	competitionId,
 	status,
+	onRefreshMyStrategies,
 }: {
 	competitionId: number;
 	onRefreshMyStrategies: () => void;
 	status?: 'Upcoming' | 'Ongoing' | 'Completed';
 }) => {
 	const navigate = useNavigate();
+	const { user } = useAuth();
+	const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+
 	const [leaderboard, setLeaderboard] = useState<MyStrategyInfo[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [sortInfo, setSortInfo] = useState<{ sort_by: SortField; order: 'asc' | 'desc' }>(DEFAULT_SORT);
 	const [refresh] = useState(Date.now());
+	const [resettingId, setResettingId] = useState<number | null>(null);
+	const [bulkResetting, setBulkResetting] = useState(false);
 	const intervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const isInitialMount = useRef(true);
 
@@ -121,6 +140,36 @@ const LeaderboardUser = ({
 		});
 	};
 
+	const handleResetStrategy = async (strategyId: number) => {
+		setResettingId(strategyId);
+		try {
+			await resetStrategy(competitionId, strategyId);
+			toast.success('Strategy reset successfully.');
+			fetchLeaderboard(false);
+			onRefreshMyStrategies();
+		} catch (error) {
+			const msg = error instanceof ApiError ? error.message : 'Failed to reset strategy';
+			toast.error(msg);
+		} finally {
+			setResettingId(null);
+		}
+	};
+
+	const handleBulkReset = async () => {
+		setBulkResetting(true);
+		try {
+			await bulkResetCompetition(competitionId);
+			toast.success('All strategies have been reset.');
+			fetchLeaderboard(false);
+			onRefreshMyStrategies();
+		} catch (error) {
+			const msg = error instanceof ApiError ? error.message : 'Failed to reset all strategies';
+			toast.error(msg);
+		} finally {
+			setBulkResetting(false);
+		}
+	};
+
 	if (loading && leaderboard.length === 0) {
 		return <Loading text="Loading leaderboard..." />;
 	}
@@ -149,160 +198,223 @@ const LeaderboardUser = ({
 	}
 
 	return (
-		<div className="w-full overflow-x-auto max-h-[284px] overflow-y-auto">
-			<Table>
-				<TableHeader className="sticky top-0 z-10 bg-background">
-					<TableRow>
-						<TableHead className="w-20 text-center bg-background">Rank</TableHead>
-						<TableHead className="text-left bg-background">User</TableHead>
-						<TableHead className="bg-background">Strategy</TableHead>
-						<TableHead className="bg-background w-[40px]">Strategy ID</TableHead>
-						<TableHead className="text-center bg-background">
-							<div className="flex justify-center gap-1 items-center">
-								<div>Total Equity</div>
-								<div className="flex cursor-pointer" onClick={() => handleSortChange('TotalEquity')}>
-									{renderSortIcon('TotalEquity', sortInfo)}
-								</div>
-							</div>
-						</TableHead>
-						<TableHead className="text-center bg-background">
-							<div className="flex gap-1 justify-center items-center">
-								Return Rate
-								<div className="flex cursor-pointer" onClick={() => handleSortChange('ReturnRate')}>
-									{renderSortIcon('ReturnRate', sortInfo)}
-								</div>
-							</div>
-						</TableHead>
-						<TableHead className="text-center bg-background">
-							<div className="flex gap-1 justify-center items-center">
-								Max Drawdown
-								<div className="flex cursor-pointer" onClick={() => handleSortChange('MaxDrawdown')}>
-									{renderSortIcon('MaxDrawdown', sortInfo)}
-								</div>
-							</div>
-						</TableHead>
-						<TableHead className="text-center bg-background">
-							<div className="flex justify-center gap-1 items-center">
-								Sharpe Ratio
-								<div className="flex cursor-pointer" onClick={() => handleSortChange('SharpeRatio')}>
-									{renderSortIcon('SharpeRatio', sortInfo)}
-								</div>
-							</div>
-						</TableHead>
-						<TableHead className="text-center bg-background">
-							<div className="flex justify-center gap-1 items-center">
-								Trading Times
-								<div className="flex cursor-pointer" onClick={() => handleSortChange('TradingTimes')}>
-									{renderSortIcon('TradingTimes', sortInfo)}
-								</div>
-							</div>
-						</TableHead>
-						<TableHead className="text-center bg-background">Action</TableHead>
-					</TableRow>
-				</TableHeader>
-				<TableBody>
-					{leaderboard.map((item) => (
-						<TableRow
-							key={item.id}
-							className="hover:bg-muted/50 cursor-pointer"
-							onClick={() =>
-								navigate(`/dashboard/quant/competition/${competitionId}/strategy/${item.simulation_strategy_id}`)
-							}
-						>
-							<TableCell className="text-center">
-								<div className="flex items-center justify-center">{getRankDisplay(item.rank)}</div>
-							</TableCell>
-							<TableCell className="text-left">
-								<div className="flex gap-1 justify-start items-center">
-									<Avatar className="h-8 w-8">
-										<AvatarImage src={item.user_avatar} alt={item.username} />
-										<AvatarFallback className="text-xs">
-											{getUserInitials(item.username)}
-										</AvatarFallback>
-									</Avatar>
-									<Tooltip>
-										<TooltipTrigger>
-											<span className="font-medium text-ellipsis overflow-hidden whitespace-nowrap max-w-[100px] block">
-												{item.username}
-											</span>
-										</TooltipTrigger>
-										<TooltipContent>
-											<p>{item.username}</p>
-										</TooltipContent>
-									</Tooltip>
-								</div>
-							</TableCell>
-							<TableCell>
-								<div className="w-[150px] break-words whitespace-normal">{item.strategy_name}</div>
-							</TableCell>
-							<TableCell className="text-center w-[40px]">
-								<span className="font-medium">{item.simulation_strategy_id}</span>
-							</TableCell>
-							<TableCell className="text-center">
-								<span className="font-medium">{formatCurrency(item.total_equity)}</span>
-							</TableCell>
-							<TableCell className="text-center">
-								<span
-									className={cn(
-										item.return_rate >= 0 ? 'text-green-600' : 'text-red-600',
-										'font-medium'
-									)}
+		<div>
+			{isAdmin && status === 'Ongoing' && (
+				<div className="flex justify-end mb-2">
+					<AlertDialog>
+						<AlertDialogTrigger asChild>
+							<Button
+								variant="outline"
+								size="sm"
+								className="text-destructive border-destructive/30 hover:bg-destructive/10"
+								disabled={bulkResetting}
+							>
+								<RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+								Reset All
+							</Button>
+						</AlertDialogTrigger>
+						<AlertDialogContent>
+							<AlertDialogHeader>
+								<AlertDialogTitle>Reset All Strategies</AlertDialogTitle>
+								<AlertDialogDescription>
+									This will permanently delete all trade history and positions for every participant
+									in this competition. All portfolios will be restored to the initial funding amount.
+									This action cannot be undone.
+								</AlertDialogDescription>
+							</AlertDialogHeader>
+							<AlertDialogFooter>
+								<AlertDialogCancel>Cancel</AlertDialogCancel>
+								<AlertDialogAction
+									onClick={handleBulkReset}
+									className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
 								>
-									{item.return_rate ? `${formatPercentage(item.return_rate)}` : '-'}
-								</span>
-							</TableCell>
-							<TableCell className="text-center">
-								<span className="font-medium">
-									{item.max_drawdown ? `${formatPercentage(item.max_drawdown)}` : '-'}
-								</span>
-							</TableCell>
-							<TableCell className="text-center">
-								<span className="font-medium">{item.sharpe_ratio ? item.sharpe_ratio : '-'}</span>
-							</TableCell>
-							<TableCell className="text-center">
-								<span className="font-medium">{item.trading_times}</span>
-							</TableCell>
-							<TableCell colSpan={10} className="text-center">
-								{/* <Tooltip>
-									<TooltipTrigger>
-										<BookCopy
-											className={cn(
-												'w-4 h-4 text-blue-500 cursor-pointer',
-												(!canFollow(item.user_id) || item.is_follower_strategy) &&
-													'text-gray-500 cursor-not-allowed'
-											)}
-											onClick={(e) => {
-												e.stopPropagation();
-												canFollow(item.user_id) &&
-													!item.is_follower_strategy &&
-													handleFollow(item.simulation_strategy_id);
-											}}
-										/>
-									</TooltipTrigger>
-									<TooltipContent>
-										<p>Follow this strategy</p>
-									</TooltipContent>
-								</Tooltip> */}
-								<Tooltip>
-									<TooltipTrigger>
-										<Eye
-											className="w-4 h-4 text-indigo-500 cursor-pointer ml-2"
-											onClick={() =>
-												navigate(
-													`/competition/${competitionId}/strategyDetail/${item.simulation_strategy_id}`
-												)
-											}
-										/>
-									</TooltipTrigger>
-									<TooltipContent>
-										<p>View this strategy</p>
-									</TooltipContent>
-								</Tooltip>
-							</TableCell>
+									Reset All
+								</AlertDialogAction>
+							</AlertDialogFooter>
+						</AlertDialogContent>
+					</AlertDialog>
+				</div>
+			)}
+			<div className="w-full overflow-x-auto max-h-[284px] overflow-y-auto">
+				<Table>
+					<TableHeader className="sticky top-0 z-10 bg-background">
+						<TableRow>
+							<TableHead className="w-20 text-center bg-background">Rank</TableHead>
+							<TableHead className="text-left bg-background">User</TableHead>
+							<TableHead className="bg-background">Strategy</TableHead>
+							<TableHead className="bg-background w-[40px]">Strategy ID</TableHead>
+							<TableHead className="text-center bg-background">
+								<div className="flex justify-center gap-1 items-center">
+									<div>Total Equity</div>
+									<div className="flex cursor-pointer" onClick={() => handleSortChange('TotalEquity')}>
+										{renderSortIcon('TotalEquity', sortInfo)}
+									</div>
+								</div>
+							</TableHead>
+							<TableHead className="text-center bg-background">
+								<div className="flex gap-1 justify-center items-center">
+									Return Rate
+									<div className="flex cursor-pointer" onClick={() => handleSortChange('ReturnRate')}>
+										{renderSortIcon('ReturnRate', sortInfo)}
+									</div>
+								</div>
+							</TableHead>
+							<TableHead className="text-center bg-background">
+								<div className="flex gap-1 justify-center items-center">
+									Max Drawdown
+									<div className="flex cursor-pointer" onClick={() => handleSortChange('MaxDrawdown')}>
+										{renderSortIcon('MaxDrawdown', sortInfo)}
+									</div>
+								</div>
+							</TableHead>
+							<TableHead className="text-center bg-background">
+								<div className="flex justify-center gap-1 items-center">
+									Sharpe Ratio
+									<div className="flex cursor-pointer" onClick={() => handleSortChange('SharpeRatio')}>
+										{renderSortIcon('SharpeRatio', sortInfo)}
+									</div>
+								</div>
+							</TableHead>
+							<TableHead className="text-center bg-background">
+								<div className="flex justify-center gap-1 items-center">
+									Trading Times
+									<div className="flex cursor-pointer" onClick={() => handleSortChange('TradingTimes')}>
+										{renderSortIcon('TradingTimes', sortInfo)}
+									</div>
+								</div>
+							</TableHead>
+							<TableHead className="text-center bg-background">Action</TableHead>
 						</TableRow>
-					))}
-				</TableBody>
-			</Table>
+					</TableHeader>
+					<TableBody>
+						{leaderboard.map((item) => (
+							<TableRow
+								key={item.id}
+								className="hover:bg-muted/50 cursor-pointer"
+								onClick={() =>
+									navigate(`/dashboard/quant/competition/${competitionId}/strategy/${item.simulation_strategy_id}`)
+								}
+							>
+								<TableCell className="text-center">
+									<div className="flex items-center justify-center">{getRankDisplay(item.rank)}</div>
+								</TableCell>
+								<TableCell className="text-left">
+									<div className="flex gap-1 justify-start items-center">
+										<Avatar className="h-8 w-8">
+											<AvatarImage src={item.user_avatar} alt={item.username} />
+											<AvatarFallback className="text-xs">
+												{getUserInitials(item.username)}
+											</AvatarFallback>
+										</Avatar>
+										<Tooltip>
+											<TooltipTrigger>
+												<span className="font-medium text-ellipsis overflow-hidden whitespace-nowrap max-w-[100px] block">
+													{item.username}
+												</span>
+											</TooltipTrigger>
+											<TooltipContent>
+												<p>{item.username}</p>
+											</TooltipContent>
+										</Tooltip>
+									</div>
+								</TableCell>
+								<TableCell>
+									<div className="w-[150px] break-words whitespace-normal">{item.strategy_name}</div>
+								</TableCell>
+								<TableCell className="text-center w-[40px]">
+									<span className="font-medium">{item.simulation_strategy_id}</span>
+								</TableCell>
+								<TableCell className="text-center">
+									<span className="font-medium">{formatCurrency(item.total_equity)}</span>
+								</TableCell>
+								<TableCell className="text-center">
+									<span
+										className={cn(
+											item.return_rate >= 0 ? 'text-green-600' : 'text-red-600',
+											'font-medium'
+										)}
+									>
+										{item.return_rate ? `${formatPercentage(item.return_rate)}` : '-'}
+									</span>
+								</TableCell>
+								<TableCell className="text-center">
+									<span className="font-medium">
+										{item.max_drawdown ? `${formatPercentage(item.max_drawdown)}` : '-'}
+									</span>
+								</TableCell>
+								<TableCell className="text-center">
+									<span className="font-medium">{item.sharpe_ratio ? item.sharpe_ratio : '-'}</span>
+								</TableCell>
+								<TableCell className="text-center">
+									<span className="font-medium">{item.trading_times}</span>
+								</TableCell>
+								<TableCell colSpan={10} className="text-center">
+									<div className="flex items-center justify-center gap-2">
+										{isAdmin && status === 'Ongoing' && (
+											<AlertDialog>
+												<AlertDialogTrigger asChild>
+													<Tooltip>
+														<TooltipTrigger asChild>
+															<button
+																className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+																disabled={resettingId === item.simulation_strategy_id}
+																onClick={(e) => e.stopPropagation()}
+															>
+																<RotateCcw className="w-3.5 h-3.5" />
+															</button>
+														</TooltipTrigger>
+														<TooltipContent>
+															<p>Reset this strategy</p>
+														</TooltipContent>
+													</Tooltip>
+												</AlertDialogTrigger>
+												<AlertDialogContent>
+													<AlertDialogHeader>
+														<AlertDialogTitle>Reset Strategy</AlertDialogTitle>
+														<AlertDialogDescription>
+															Reset <strong>{item.strategy_name}</strong>? All trade
+															history and positions will be deleted. Cash will be
+															restored to the initial funding amount. This cannot be
+															undone.
+														</AlertDialogDescription>
+													</AlertDialogHeader>
+													<AlertDialogFooter>
+														<AlertDialogCancel>Cancel</AlertDialogCancel>
+														<AlertDialogAction
+															onClick={(e) => {
+																e.stopPropagation();
+																handleResetStrategy(item.simulation_strategy_id);
+															}}
+															className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+														>
+															Reset
+														</AlertDialogAction>
+													</AlertDialogFooter>
+												</AlertDialogContent>
+											</AlertDialog>
+										)}
+										<Tooltip>
+											<TooltipTrigger>
+												<Eye
+													className="w-4 h-4 text-indigo-500 cursor-pointer ml-2"
+													onClick={() =>
+														navigate(
+															`/competition/${competitionId}/strategyDetail/${item.simulation_strategy_id}`
+														)
+													}
+												/>
+											</TooltipTrigger>
+											<TooltipContent>
+												<p>View this strategy</p>
+											</TooltipContent>
+										</Tooltip>
+									</div>
+								</TableCell>
+							</TableRow>
+						))}
+					</TableBody>
+				</Table>
+			</div>
 		</div>
 	);
 };

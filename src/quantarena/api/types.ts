@@ -554,6 +554,7 @@ export interface MyStrategyInfo {
 	username: string;
 	user_avatar: string;
 	trading_times: number;
+	last_reset_at?: number;
 }
 export interface LeaderboardParams {
 	sort_by?: 'TotalEquity' | 'ReturnRate' | 'MaxDrawdown' | 'SharpeRatio' | 'TradingTimes';
