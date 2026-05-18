@@ -488,7 +488,7 @@ The publish pipeline runs 6 gates against every app bundle. They define the mini
 | App | Pattern | Loops | What it demonstrates |
 |---|---|---|---|
 | **personal-agent** | A | 4 (morning_brief, hourly_triage, cc_watcher, weekly_reflection) | Three-role multi-agent KG (assistant/watcher/philosopher), full privacy contract (watcher omitted from `auto_publish.memories[]`), inbox-question dialog, runner-driven steps[] |
-| **auto-quant** | A (legacy 7-phase) | 4 (momentum, mean-reversion, crypto-autoinsight, crypto-lqa) | Interval scheduling (`*/12h`), live mode with `--confirm-live`, observe → propose → backtest → risk-gate → place_order → journal flow |
+| **auto-quant** | A | 10 (momentum_research, mean_reversion_research, crypto_autoinsight_research, crypto_lqa_research, regime_detector, competitor_observer, gpt_baseline_crypto, sonnet_baseline_crypto, gpt_auto_crypto, sonnet_auto_crypto) | Interval scheduling (`*/12h`), live mode with `--confirm-live`, observe → propose → backtest → risk-gate → place_order → journal flow |
 | **mbb-ai** | B | 2 (case_cycle, regression_sweep) | Parallel fan-out (N-judge), conditional retry (info_release re-prompt), deterministic triangulation columns, ≥3-recurrence learn step closing the loop into bandit retrieval |
 | **eventx** | B | 1 per registered task (e.g. consulting_market_match) | Pipeline DAG with idempotency gating on output table row counts, per-record dynamic skill loading, SQLite-backed cycle metrics |
 | **auto-sysresearch** | B | 1 (benchmark, @trigger) | `benchmarks[]` first-class schema, three-tier variant search space (component + policy + params), Docker container lifecycle via `container_dispatch`, 20-query NL-to-SQL eval with in-process SQLite. Fork by swapping `system/` and updating `benchmarks[]` + `variant_schema`. |
@@ -502,18 +502,40 @@ For Pattern B loops, `steps[]` and `skills_invoked[]` exist for two reasons:
 
 The runner does NOT enforce step ordering on Pattern B — `engine.module` is the truth. Honest declaration matters: list every skill the verb invokes, including the ones not in any loop's `steps[]` ordered list. mbb-ai's `case_cycle` declares 18 `skills_invoked[]` (vs the 7 steps the manifest used to list); eventx's `consulting_market_match` declares 8.
 
+## Running loops manually
+
+```bash
+# Run one loop once (on-demand, bypasses the scheduler)
+lumid research run <loop_name>
+
+# Run N cycles with an interval between each
+lumid research run <loop_name> --cycles 3 --interval 60
+
+# Example: run one cycle of the crypto insight loop
+lumid research run crypto_autoinsight_research
+```
+
+`lumid research run` resolves the loop name to its parent app by scanning
+`~/.xp/apps/*/xpcloud.yaml`, then dispatches `app_runner.cycle(app, loop)` for each
+requested cycle. This is identical to what the scheduler fires on cron trigger —
+`_run_auto_publish()` runs after every cycle, so insights.md and memory banks update
+correctly.
+
 ## Files of record
 
 | Path | What |
 |---|---|
-| `sdk/apps/app_runner.py:78-85` | `load_manifest()` — xpcloud.yaml is runtime |
-| `sdk/apps/app_runner.py:929-1010` | `cycle()` + `_run_command_engine()` |
-| `sdk/apps/app_runner.py:1136-1310` | `_run_explicit_steps()` (Pattern A) |
-| `sdk/apps/app_runner.py:325-414` | `_run_auto_publish()` (privacy contract) |
-| `sdk/apps/app_runner.py:597-916` | `_post_inbox_message()` + `_pull_inbox_replies()` |
+| `sdk/apps/app_runner.py:78` | `load_manifest()` — xpcloud.yaml is runtime |
+| `sdk/apps/app_runner.py:1273` | `cycle()` entry point |
+| `sdk/apps/app_runner.py:1159` | `_run_command_engine()` (Pattern B) |
+| `sdk/apps/app_runner.py:1720` | `_run_explicit_steps()` (Pattern A) |
+| `sdk/apps/app_runner.py:455` | `_run_auto_publish()` (privacy contract) |
+| `sdk/apps/app_runner.py:757` | `_post_inbox_message()` |
+| `sdk/apps/app_runner.py:935` | `_pull_inbox_replies()` |
 | `sdk/apps/app_runner.py:46` | `_VALID_MODES` enum |
-| `sdk/apps/app_runner.py:105-170` | `_load_skill_module()` (skill resolution) |
-| `sdk/scheduling/xpio_scheduler.py:96+` | `discover_loops()` |
+| `sdk/apps/app_runner.py:181` | `_load_skill_module()` (skill resolution) |
+| `sdk/ops/research.py:159` | `_resolve_loop_to_app()` + `run_loop()` CLI dispatcher |
+| `sdk/scheduling/xpio_scheduler.py:103` | `discover_loops()` |
 | `sdk/ops/app_ci.py:442-449` | the 6 publish gates |
 
 ## Out-of-scope future work
