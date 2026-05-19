@@ -2,24 +2,28 @@ import { Suspense, lazy, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ChevronDown } from 'lucide-react';
 
-// One Running-jobs surface, replacing the prior FlowMesh / Lumilake
-// tab split. Source filter values are URL-driven (?source=...) so
-// links and bookmarks survive. Lumilake analytics jobs aren't in the
-// dropdown — they live at /dashboard/jobs/lumilake (and the Lumilake
-// section in Datasets) since they're a different operator audience.
+// Unified Running-jobs surface across all three backends. Source filter
+// values are URL-driven (?source=...) so links and bookmarks survive.
+// Lumilake jobs used to live at /dashboard/jobs/lumilake on a different
+// audience track; folded back in here as a first-class source so the
+// Lumilake submit success-nav and the main Jobs page agree.
 
-type Source = 'all' | 'quant' | 'lumid';
+type Source = 'all' | 'quant' | 'lumid' | 'lumilake';
 
 const SOURCE_LABELS: Record<Source, string> = {
 	all: 'All',
 	quant: 'Quant',
 	lumid: 'Lumid',
+	lumilake: 'Lumilake',
 };
 
 const TaskList = lazy(() =>
 	import('@/runmesh/pages/user/TaskList').then((m) => ({ default: m.TaskList })),
 );
 const QuantJobs = lazy(() => import('@/quantarena/pages/flowmesh-jobs'));
+const LumilakeJobs = lazy(() =>
+	import('@/lumilake/pages/RunningJobs/RunningJobs').then((m) => ({ default: m.RunningJobs })),
+);
 
 function SectionDivider({ label }: { label: string }) {
 	return (
@@ -35,7 +39,7 @@ function SectionDivider({ label }: { label: string }) {
 export default function Jobs() {
 	const [params, setParams] = useSearchParams();
 	const raw = (params.get('source') || 'all').toLowerCase();
-	const source: Source = (['all', 'quant', 'lumid'] as Source[]).includes(raw as Source)
+	const source: Source = (['all', 'quant', 'lumid', 'lumilake'] as Source[]).includes(raw as Source)
 		? (raw as Source)
 		: 'all';
 
@@ -48,6 +52,7 @@ export default function Jobs() {
 
 	const showQuant = useMemo(() => source === 'all' || source === 'quant', [source]);
 	const showLumid = useMemo(() => source === 'all' || source === 'lumid', [source]);
+	const showLumilake = useMemo(() => source === 'all' || source === 'lumilake', [source]);
 
 	return (
 		<div>
@@ -55,8 +60,8 @@ export default function Jobs() {
 				<div>
 					<h1 className="text-2xl font-semibold text-slate-900">Running jobs</h1>
 					<p className="text-sm text-slate-500">
-						Workflow runs across the Lumid platform — FlowMesh tasks and
-						QuantArena trading bots.
+						Workflow runs across the Lumid platform — Lumilake analytics jobs,
+						FlowMesh tasks, and QuantArena trading bots.
 					</p>
 				</div>
 				<label className="inline-flex items-center gap-2 text-sm text-slate-600">
@@ -77,6 +82,15 @@ export default function Jobs() {
 					</div>
 				</label>
 			</header>
+
+			{showLumilake && (
+				<section>
+					{source === 'all' && <SectionDivider label="Lumilake — analytics jobs" />}
+					<Suspense fallback={<div className="text-sm text-slate-400 py-6">Loading Lumilake jobs…</div>}>
+						<LumilakeJobs />
+					</Suspense>
+				</section>
+			)}
 
 			{showQuant && (
 				<section>
