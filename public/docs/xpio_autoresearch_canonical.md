@@ -107,6 +107,19 @@ auto_publish:
   skills:    {enabled: false}
   artifacts: {enabled: false}
 
+# Auto-draft memory writes from cycle outputs (Pattern A only).
+# Each successful step in the loop's steps[] queues a MemoryDraft into
+# the primary_role's memory_agent bank. Drafts stay in
+# ~/.xp/kg/agents/<id>/.drafts/ until the operator approves via the
+# inbox (see inbox_publish). Default disabled.
+auto_draft:
+  enabled: true
+  type: fact                 # ∈ {correction, principle, pattern, fact, anti_pattern}
+  confidence: 0.5
+  max_content_chars: 2000
+  skip_skills: [render_review, transcript_render]
+  skip_stages: []            # e.g. [observe] to draft only act/learn outputs
+
 # Force-review matrix
 approval_policy:
   default: stage
@@ -428,6 +441,35 @@ Earlier sources win — explicit local Python overrides always beat shared looku
 To prove the contract: probe `https://xp.io/api/v1/repos/<owner>/<bank-name>` after a cycle. Listed agents → 200; unlisted → 404. Step 10 of any app's verification run should include this probe.
 
 `auto_publish.skills.enabled` and `.artifacts.enabled` default to `false`; opt in to publish skill drafts or per-cycle artifacts (rare — most apps keep these local because they may carry PII).
+
+## Memory read + write — closing the loop
+
+A cycle has two halves: **read** (inject prior memories into each step's prompt) and **write** (persist new memories from step outputs back into the bank). Both are needed for Level-1 compounding (cycle outputs → bank → next cycle's prompt).
+
+### Read — `render_prior_knowledge` (`sdk/skills/knowledge_inject.py`)
+
+`_run_explicit_steps()` calls `render_prior_knowledge(agent_id, question, k=5)` before each step and assigns the result to `context["prior_knowledge"]`. The agent is resolved in priority order: step's `knowledge_agent` → loop's `knowledge_agent` → role's `memory_agent`. Resolution path: `AgenticKG.get_agent(agent_id)` first, with a filesystem fallback to `KnowledgeAgent.load(~/.xp/kg/agents/<id>/)` for banks that exist on disk but aren't registered in `kg_config.json`. Returns `""` on any retrieval error so cycles never break.
+
+The renderer handles both legacy and current `agent.answer()` return shapes (`{answer: str, sources: list, ...}` from `xp/agent.py:114` is the current shape).
+
+### Write — `auto_draft` (`sdk/apps/app_runner.py:_maybe_draft_memory_from_step`)
+
+Opt-in. When `auto_draft.enabled: true`, after each successful step in `steps[]` the runner queues a `MemoryDraft` via `skill_authoring.draft_memory()` into the primary role's `memory_agent` bank. Drafts land at `~/.xp/kg/agents/<agent>/.drafts/<draft_id>.json` and **do not enter the bank until the operator approves them** through the inbox flow (`_pull_inbox_replies` dispatches `memory_apply` on approve, `discard_memory_draft` on reject).
+
+| Field | Purpose | Default |
+|---|---|---|
+| `enabled` | Master switch | `false` |
+| `type` | Memory type tag — `correction\|principle\|pattern\|fact\|anti_pattern` | `fact` |
+| `confidence` | Initial confidence on the staged draft | `0.5` |
+| `max_content_chars` | Truncates the serialized step output | `2000` |
+| `skip_skills` | Skill ids to exclude (e.g. renderers) | `[]` |
+| `skip_stages` | `observe\|hypothesize\|act\|analyze\|learn` to exclude | `[]` |
+
+Failures (no role, no agent, empty output, draft library unavailable) are non-fatal — they land in `step_log[].memory_draft` for visibility and the cycle continues.
+
+Pattern B (`engine: command`) verbs are NOT auto-hooked here; they should call `draft_memory()` themselves where appropriate.
+
+Interaction with `auto_publish`: drafts that get approved enter the bank → next cycle's `_run_auto_publish` pushes them to xpcloud IF the agent is on the allowlist. So enabling `auto_draft` on a `*-watcher` bank is still safe — drafts stay local forever even after approval, because the agent isn't on `auto_publish.memories[]`.
 
 ## Inbox publish + reply
 
