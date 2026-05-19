@@ -201,7 +201,7 @@ export default function DashboardLayout() {
 					})}
 					{isAdmin && (
 						<a
-							href="https://analytics.lum.id/dashboard"
+							href="/analytics"
 							target="_blank"
 							rel="noopener noreferrer"
 							className="flex items-center gap-2.5 px-2.5 py-1.5 text-[13px] rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
