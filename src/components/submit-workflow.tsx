@@ -26,31 +26,22 @@ import {
 	type WorkflowItem,
 } from '@/runmesh/api/user/workflow';
 import { createSchedule } from '@/runmesh/api/user/scheduleApi';
-import { RunningJobService } from '@/lumilake/services/runningJobService';
 
-type Target = 'runmesh' | 'lumilake';
+type Target = 'runmesh';
 
 interface Props {
 	target: Target;
-	/** The heading shown at the top of the form side. Defaults vary by target. */
 	title?: string;
-	/** On-success destination; defaults to /dashboard/jobs/<target>. */
 	onSuccessPath?: string;
 }
 
 /**
- * Pick-an-existing-workflow + configure-params + submit.
+ * Pick-an-existing-workflow + configure-params + submit to Runmesh.
  *
- * Shared between `/dashboard/runmesh/submit` (the tab-1 of Runmesh Submit)
- * and `/dashboard/lumilake-submit`. The workflow list comes from the
- * Runmesh workflow store (`getWorkflowList`) for both — one DAG, two
- * execution backends.
- *
- * Submission:
- *   - Runmesh  → `createSchedule({ intervalSeconds: 1, maxExecutions: 1 })`
- *                 (fire-once hack; the backend has no direct run-now RPC yet)
- *   - Lumilake → `RunningJobService.submitJob(...)` with the workflow JSON
- *                 as the payload's `workflow` field.
+ * Runmesh has no first-party run-now endpoint, so submission is a
+ * one-shot schedule (maxExecutions=1, intervalSeconds=1) that the
+ * scheduler picks up immediately. The Lumilake target lives in
+ * `submit-lumilake-job.tsx` and consumes the n8n JSON directly.
  */
 export function SubmitWorkflow({ target, title, onSuccessPath }: Props) {
 	const nav = useNavigate();
@@ -61,19 +52,12 @@ export function SubmitWorkflow({ target, title, onSuccessPath }: Props) {
 	const [runName, setRunName] = useState('');
 	const [inputsJson, setInputsJson] = useState('{}');
 	const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
-	const [outputJson, setOutputJson] = useState('{"type": "db"}');
 	const [busy, setBusy] = useState(false);
 
 	const [loadErr, setLoadErr] = useState<string>('');
 	useEffect(() => {
-		// Match UserDashboard's default filter: user's own workflows only.
-		// Mirrors /runmesh/workflows/list?onlyMine=1 — the exact call the
-		// Workflow Builder page already uses, so whatever shows up there
-		// will show up here.
 		getWorkflowList({ pageNum: 1, pageSize: 100, onlyMine: true })
 			.then((p) => {
-				// Response is `{ rows, total }` after unwrap; some Runmesh
-				// endpoints also come back as `{ list }` — accept either.
 				const rows = (p as { rows?: WorkflowItem[]; list?: WorkflowItem[] } | null | undefined);
 				setWorkflows(rows?.rows || rows?.list || []);
 			})
@@ -102,15 +86,6 @@ export function SubmitWorkflow({ target, title, onSuccessPath }: Props) {
 		}
 	}, [inputsJson]);
 
-	const parsedOutput = useMemo(() => {
-		if (!outputJson.trim()) return { type: 'db' };
-		try {
-			return JSON.parse(outputJson);
-		} catch {
-			return null;
-		}
-	}, [outputJson]);
-
 	const onSubmit = async () => {
 		setErr('');
 		if (!selected) {
@@ -121,44 +96,15 @@ export function SubmitWorkflow({ target, title, onSuccessPath }: Props) {
 			setErr('Inputs field is not valid JSON.');
 			return;
 		}
-		if (target === 'lumilake' && parsedOutput === null) {
-			setErr('Output location is not valid JSON.');
-			return;
-		}
 		setBusy(true);
 		try {
-			if (target === 'runmesh') {
-				// No first-party "run now" endpoint in Runmesh backend yet;
-				// a one-shot schedule (maxExecutions=1, intervalSeconds=1)
-				// is the closest equivalent that the scheduler will pick up.
-				await createSchedule({
-					workflowId: String(selected.workflowId || selected.id),
-					scheduleName: runName || undefined,
-					intervalSeconds: 1,
-					maxExecutions: 1,
-					remark: `one-shot submit · priority=${priority}`,
-				});
-			} else {
-				// Lumilake submitJob expects the workflow as a stringified JSON
-				// blob. We pass the workflow name as a lightweight label — the
-				// actual workflow definition is resolved server-side from the
-				// selected workflowId.
-				await RunningJobService.submitJob(
-					{
-						data: [
-							{
-								workflow: String(selected.workflowId || selected.id),
-								inputs: parsedInputs,
-								output_location: parsedOutput,
-								input_batch_size: 1,
-								name: runName,
-							},
-						],
-						priority,
-					},
-					'lumid/v1',
-				);
-			}
+			await createSchedule({
+				workflowId: String(selected.workflowId || selected.id),
+				scheduleName: runName || undefined,
+				intervalSeconds: 1,
+				maxExecutions: 1,
+				remark: `one-shot submit · priority=${priority}`,
+			});
 			nav(onSuccessPath || `/dashboard/jobs/${target}`);
 		} catch (e: unknown) {
 			const msg = e instanceof Error ? e.message : 'submission failed';
@@ -248,16 +194,9 @@ export function SubmitWorkflow({ target, title, onSuccessPath }: Props) {
 			{/* Configure + submit */}
 			<Card>
 				<CardHeader>
-					<CardTitle>
-						{title ||
-							(target === 'runmesh'
-								? 'Submit to FlowMesh'
-								: 'Submit to Lumilake')}
-					</CardTitle>
+					<CardTitle>{title || 'Submit to FlowMesh'}</CardTitle>
 					<CardDescription>
-						{target === 'runmesh'
-							? 'Fires a one-shot run on the FlowMesh compute backend.'
-							: 'Runs the workflow as a Lumilake analytics job.'}
+						Fires a one-shot run on the FlowMesh compute backend.
 					</CardDescription>
 				</CardHeader>
 				<CardContent className="space-y-3">
@@ -280,18 +219,6 @@ export function SubmitWorkflow({ target, title, onSuccessPath }: Props) {
 							className="font-mono text-xs"
 						/>
 					</div>
-					{target === 'lumilake' && (
-						<div>
-							<Label htmlFor="output">Output location (JSON)</Label>
-							<Textarea
-								id="output"
-								rows={2}
-								value={outputJson}
-								onChange={(e) => setOutputJson(e.target.value)}
-								className="font-mono text-xs"
-							/>
-						</div>
-					)}
 					<div>
 						<Label htmlFor="priority">Priority</Label>
 						<Select

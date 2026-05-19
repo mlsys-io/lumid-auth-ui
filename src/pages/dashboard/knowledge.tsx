@@ -10,7 +10,7 @@ interface AgentRecord {
   topics?: string[];
 }
 
-const xpApi = axios.create({ baseURL: '/inbox-api', timeout: 12_000, withCredentials: true });
+const xpApi = axios.create({ baseURL: '/xpcloud-api', timeout: 12_000, withCredentials: true });
 
 export default function KnowledgePage() {
   const [agents, setAgents] = useState<AgentRecord[]>([]);
@@ -19,11 +19,11 @@ export default function KnowledgePage() {
 
   useEffect(() => {
     setLoading(true);
-    xpApi.get('/api/v1/me')
+    xpApi.get('/me')
       .then((r) => {
         const sub: string = r.data?.sub;
         if (!sub) throw new Error('not signed in');
-        return xpApi.get(`/api/v1/agents?owner=${encodeURIComponent(sub)}&limit=50`);
+        return xpApi.get(`/agents?owner=${encodeURIComponent(sub)}&limit=50`);
       })
       .then((r) => setAgents(r.data?.agents || []))
       .catch((e) => setErr(e?.message || 'Failed to load agents'))
