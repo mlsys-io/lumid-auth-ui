@@ -39,6 +39,29 @@ export default {
           800: "#1e293b",
           900: "#0f172a",
         },
+        // Lumilake brand blue — the ported tree uses bare `bg-blue`,
+        // `text-blue`, `border-blue`, `text-blue-0`. The original
+        // Lumilake frontend never defined these tokens either, so
+        // buttons like JobDetail's Download (`bg-blue text-white`)
+        // rendered as white-on-white. Include `DEFAULT` + `0` for the
+        // brand, and re-state the standard Tailwind blue scale (50–900)
+        // so neighbouring code (admin/, lqt/, AIAssistantModal, …)
+        // that uses `bg-blue-100`, `text-blue-800` etc. still resolves
+        // — `extend.colors.blue` replaces, not merges with, defaults.
+        blue: {
+          DEFAULT: "#1e3a8a",
+          0: "#1e3a8a",
+          50: "#eff6ff",
+          100: "#dbeafe",
+          200: "#bfdbfe",
+          300: "#93c5fd",
+          400: "#60a5fa",
+          500: "#3b82f6",
+          600: "#2563eb",
+          700: "#1d4ed8",
+          800: "#1e40af",
+          900: "#1e3a8a",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

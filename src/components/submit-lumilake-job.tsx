@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, Send, Upload } from 'lucide-react';
+import { Loader2, Plus, Send, Upload, X } from 'lucide-react';
 
 import { Button } from './ui/button';
 import {
@@ -41,11 +41,17 @@ export function SubmitLumilakeJob({ title, onSuccessPath }: Props) {
 	const nav = useNavigate();
 	const fileRef = useRef<HTMLInputElement>(null);
 
+	type InputRow = { name: string; queries: string };
+	type OutputType = 's3' | 'db';
+
 	const [workflowJson, setWorkflowJson] = useState('');
 	const [fileName, setFileName] = useState('');
 	const [runName, setRunName] = useState('');
-	const [inputsJson, setInputsJson] = useState('{}');
-	const [outputJson, setOutputJson] = useState('{"type": "db"}');
+	const [inputRows, setInputRows] = useState<InputRow[]>([{ name: '', queries: '' }]);
+	const [outputType, setOutputType] = useState<OutputType>('s3');
+	const [outputPrefix, setOutputPrefix] = useState('');
+	const [outputTable, setOutputTable] = useState('');
+	const [outputColumn, setOutputColumn] = useState('');
 	const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
 	const [busy, setBusy] = useState(false);
 	const [err, setErr] = useState('');
@@ -63,23 +69,51 @@ export function SubmitLumilakeJob({ title, onSuccessPath }: Props) {
 		}
 	}, [workflowJson]);
 
-	const parsedInputs = useMemo(() => {
-		if (!inputsJson.trim()) return {};
-		try {
-			return JSON.parse(inputsJson);
-		} catch {
-			return null;
+	// Build the {name: [queries...]} object that lumilake expects.
+	// Empty-name rows are skipped (so trailing blank rows are harmless).
+	// Comma is the separator; whitespace around each value is trimmed.
+	const builtInputs = useMemo(() => {
+		const obj: Record<string, string[]> = {};
+		let dupName = '';
+		for (const row of inputRows) {
+			const name = row.name.trim();
+			if (!name) continue;
+			if (name in obj) {
+				dupName = name;
+				break;
+			}
+			const values = row.queries
+				.split(',')
+				.map((s) => s.trim())
+				.filter(Boolean);
+			if (values.length === 0) {
+				return { ok: false as const, error: `Input "${name}" has no values.` };
+			}
+			obj[name] = values;
 		}
-	}, [inputsJson]);
+		if (dupName) return { ok: false as const, error: `Duplicate input name "${dupName}".` };
+		return { ok: true as const, value: obj };
+	}, [inputRows]);
 
-	const parsedOutput = useMemo(() => {
-		if (!outputJson.trim()) return { type: 'db' };
-		try {
-			return JSON.parse(outputJson);
-		} catch {
-			return null;
+	const builtOutput = useMemo(() => {
+		if (outputType === 's3') {
+			const prefix = outputPrefix.trim();
+			if (!prefix) return { ok: false as const, error: 'Output prefix is required for s3.' };
+			return { ok: true as const, value: { type: 's3', prefix } };
 		}
-	}, [outputJson]);
+		const table = outputTable.trim();
+		const column = outputColumn.trim();
+		if (!table || !column) {
+			return { ok: false as const, error: 'Output table and column are required for db.' };
+		}
+		return { ok: true as const, value: { type: 'db', table, column } };
+	}, [outputType, outputPrefix, outputTable, outputColumn]);
+
+	const addInputRow = () => setInputRows((rows) => [...rows, { name: '', queries: '' }]);
+	const updateInputRow = (i: number, patch: Partial<InputRow>) =>
+		setInputRows((rows) => rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+	const removeInputRow = (i: number) =>
+		setInputRows((rows) => (rows.length === 1 ? [{ name: '', queries: '' }] : rows.filter((_, idx) => idx !== i)));
 
 	const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0];
@@ -116,12 +150,16 @@ export function SubmitLumilakeJob({ title, onSuccessPath }: Props) {
 			setErr('Run name is required.');
 			return;
 		}
-		if (parsedInputs === null) {
-			setErr('Inputs field is not valid JSON.');
+		if (!builtInputs.ok) {
+			setErr(builtInputs.error);
 			return;
 		}
-		if (parsedOutput === null) {
-			setErr('Output location is not valid JSON.');
+		if (Object.keys(builtInputs.value).length === 0) {
+			setErr('Add at least one input row.');
+			return;
+		}
+		if (!builtOutput.ok) {
+			setErr(builtOutput.error);
 			return;
 		}
 
@@ -132,8 +170,8 @@ export function SubmitLumilakeJob({ title, onSuccessPath }: Props) {
 					data: [
 						{
 							workflow: workflowJson,
-							inputs: parsedInputs,
-							output_location: parsedOutput,
+							inputs: builtInputs.value,
+							output_location: builtOutput.value,
 							input_batch_size: 1,
 							name: runName.trim(),
 						},
@@ -228,26 +266,84 @@ export function SubmitLumilakeJob({ title, onSuccessPath }: Props) {
 						/>
 					</div>
 					<div>
-						<Label htmlFor="inputs">Inputs (JSON)</Label>
-						<Textarea
-							id="inputs"
-							rows={4}
-							value={inputsJson}
-							onChange={(e) => setInputsJson(e.target.value)}
-							placeholder='{"Stock": ["PLTR", "META", "NFLX"]}'
-							className="font-mono text-xs"
-						/>
+						<div className="flex items-center justify-between mb-1">
+							<Label>Inputs</Label>
+							<button
+								type="button"
+								onClick={addInputRow}
+								className="text-xs text-indigo-600 hover:text-indigo-700 inline-flex items-center gap-1"
+							>
+								<Plus className="w-3 h-3" />
+								Add input
+							</button>
+						</div>
+						<div className="space-y-2">
+							{inputRows.map((row, i) => (
+								<div key={i} className="flex items-center gap-2">
+									<Input
+										value={row.name}
+										onChange={(e) => updateInputRow(i, { name: e.target.value })}
+										placeholder="Name (e.g. Stock)"
+										className="w-1/3 text-xs"
+									/>
+									<Input
+										value={row.queries}
+										onChange={(e) => updateInputRow(i, { queries: e.target.value })}
+										placeholder="value1, value2, value3"
+										className="flex-1 text-xs"
+									/>
+									<button
+										type="button"
+										onClick={() => removeInputRow(i)}
+										className="text-slate-400 hover:text-red-600 p-1"
+										aria-label="Remove input row"
+									>
+										<X className="w-4 h-4" />
+									</button>
+								</div>
+							))}
+						</div>
+						<p className="mt-1 text-[11px] text-slate-500">
+							Comma-separated values per input. Matches <code>--input Name=v1,v2</code> on the CLI.
+						</p>
 					</div>
 					<div>
-						<Label htmlFor="output">Output location (JSON)</Label>
-						<Textarea
-							id="output"
-							rows={3}
-							value={outputJson}
-							onChange={(e) => setOutputJson(e.target.value)}
-							placeholder='{"type": "s3", "prefix": "runs/my-output"}'
-							className="font-mono text-xs"
-						/>
+						<Label htmlFor="outputType">Output location</Label>
+						<Select
+							value={outputType}
+							onValueChange={(v: OutputType) => setOutputType(v)}
+						>
+							<SelectTrigger id="outputType">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="s3">s3 (object storage)</SelectItem>
+								<SelectItem value="db">db (lakehouse table)</SelectItem>
+							</SelectContent>
+						</Select>
+						{outputType === 's3' ? (
+							<Input
+								value={outputPrefix}
+								onChange={(e) => setOutputPrefix(e.target.value)}
+								placeholder="e.g. runs/news-pltr-meta-nflx"
+								className="mt-2 text-xs"
+							/>
+						) : (
+							<div className="mt-2 flex gap-2">
+								<Input
+									value={outputTable}
+									onChange={(e) => setOutputTable(e.target.value)}
+									placeholder="table"
+									className="text-xs"
+								/>
+								<Input
+									value={outputColumn}
+									onChange={(e) => setOutputColumn(e.target.value)}
+									placeholder="column"
+									className="text-xs"
+								/>
+							</div>
+						)}
 					</div>
 					<div>
 						<Label htmlFor="priority">Priority</Label>
