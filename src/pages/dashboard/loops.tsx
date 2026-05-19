@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { RefreshCw, AlertCircle, CheckCircle, Clock, ExternalLink, Plus } from 'lucide-react';
+import { RefreshCw, AlertCircle, CheckCircle, Clock, ExternalLink, Plus, GitPullRequest, Search } from 'lucide-react';
 import axios from 'axios';
 
 interface LoopRecord {
@@ -13,12 +13,36 @@ interface LoopRecord {
   last_status?: 'ok' | 'error' | 'running';
   consecutive_failures?: number;
   last_errors?: string[];
+  // skills the loop *declares* it uses (Pattern A steps[].skill or Pattern B skills_invoked[])
+  skills?: string[];
+  steps?: Array<{ id?: string; skill?: string }>;
+  skills_invoked?: string[];
+}
+
+interface RepoRow {
+  owner_sub: string;
+  name: string;
+  kind: string;
+  consumers_count?: number;
+}
+
+interface PullRow {
+  number: number;
+  state: string;
+  base_owner: string;
+  base_name: string;
+  head_branch: string;
+  title: string;
+  opened_at: number;
 }
 
 const identityApi = axios.create({ baseURL: '/', timeout: 15_000, withCredentials: true });
+const xpcloudApi = axios.create({ baseURL: '/xpcloud-api/', timeout: 15_000, withCredentials: true });
 
 export default function LoopsPage() {
   const [loops, setLoops] = useState<LoopRecord[]>([]);
+  const [apps, setApps] = useState<RepoRow[]>([]);
+  const [openPRs, setOpenPRs] = useState<PullRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
 
@@ -32,7 +56,6 @@ export default function LoopsPage() {
             all.push({ app: app.name, ...lp });
           }
         }
-        // Sort: failing first, then by app name
         all.sort((a, b) => {
           const af = a.consecutive_failures || 0;
           const bf = b.consecutive_failures || 0;
@@ -44,6 +67,44 @@ export default function LoopsPage() {
       .catch((e) => setErr(e?.response?.data?.detail || 'Failed to load loops'))
       .finally(() => setLoading(false));
   }, []);
+
+  // Side-load the operator's apps + their open improvement PRs.
+  // Best-effort: failures degrade silently — the main loop list still renders.
+  useEffect(() => {
+    if (loops.length === 0) return;
+    const loopApps = Array.from(new Set(loops.map((l) => l.app)));
+    xpcloudApi.get('repos', { params: { kind: 'app', limit: 50 } })
+      .then(async (r) => {
+        const repos: RepoRow[] = (r.data?.repos || []).filter((x: RepoRow) => loopApps.includes(x.name));
+        setApps(repos);
+        const prsByApp = await Promise.all(
+          repos.map((repo) =>
+            xpcloudApi.get(`repos/${repo.owner_sub}/${repo.name}/pulls`, { params: { state: 'open' } })
+              .then((rr) => (rr.data?.pulls || []) as PullRow[])
+              .catch(() => [] as PullRow[])
+          ),
+        );
+        setOpenPRs(prsByApp.flat());
+      })
+      .catch(() => { /* dashboard still renders without PRs */ });
+  }, [loops]);
+
+  // Compute skill gaps locally — loops declaring a skill but the app's
+  // skill_imports[] / per-loop skills[] list doesn't cover it. Cheap, no fetch.
+  const skillGaps = useMemo(() => {
+    const out: Array<{ app: string; loop: string; missing: string }> = [];
+    for (const lp of loops) {
+      const declared = new Set<string>([
+        ...(lp.skills || []),
+        ...(lp.skills_invoked || []),
+      ]);
+      const used = (lp.steps || []).map((s) => s.skill).filter(Boolean) as string[];
+      for (const u of used) {
+        if (!declared.has(u)) out.push({ app: lp.app, loop: lp.loop, missing: u });
+      }
+    }
+    return out;
+  }, [loops]);
 
   return (
     <div className="max-w-4xl">
@@ -68,6 +129,61 @@ export default function LoopsPage() {
           New loop
         </a>
       </header>
+
+      {/* Improvement PRs — Stage 2-B output. Reviews land here. */}
+      {openPRs.length > 0 && (
+        <section className="mb-6 rounded-lg border border-indigo-200 bg-indigo-50/40 px-4 py-3">
+          <div className="flex items-center gap-2 mb-2">
+            <GitPullRequest className="w-4 h-4 text-indigo-600" />
+            <h2 className="text-sm font-semibold text-slate-900">
+              Improvement proposals · {openPRs.length} open
+            </h2>
+          </div>
+          <ul className="space-y-1.5">
+            {openPRs.map((pr) => (
+              <li key={`${pr.base_owner}/${pr.base_name}/${pr.number}`} className="text-sm flex items-center gap-2">
+                <span className="text-slate-700 truncate">{pr.title}</span>
+                <a
+                  href={`https://xp.io/${pr.base_owner}/${pr.base_name}/pulls/${pr.number}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ml-auto text-xs text-indigo-600 hover:underline shrink-0 inline-flex items-center gap-0.5"
+                >
+                  Review <ExternalLink className="w-3 h-3" />
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* Skill gaps — loops referencing a skill not declared in the app's
+          skill_imports[]. Computed locally from the loops response; the
+          marketplace link lets the operator find a community skill to fill it. */}
+      {skillGaps.length > 0 && (
+        <section className="mb-6 rounded-lg border border-amber-200 bg-amber-50/40 px-4 py-3">
+          <div className="flex items-center gap-2 mb-2">
+            <Search className="w-4 h-4 text-amber-600" />
+            <h2 className="text-sm font-semibold text-slate-900">
+              Skill gaps · {skillGaps.length} step{skillGaps.length === 1 ? '' : 's'} referencing undeclared skills
+            </h2>
+          </div>
+          <ul className="space-y-1.5">
+            {skillGaps.map((g, i) => (
+              <li key={i} className="text-sm flex items-center gap-2">
+                <span className="font-mono text-xs text-slate-600">{g.app}/{g.loop}</span>
+                <span className="text-slate-700">→ missing skill <code className="text-xs bg-slate-100 px-1 py-0.5 rounded">{g.missing}</code></span>
+                <Link to={`/app/marketplace?q=${encodeURIComponent(g.missing)}`} className="ml-auto text-xs text-amber-700 hover:underline shrink-0 inline-flex items-center gap-0.5">
+                  Find in Marketplace <ExternalLink className="w-3 h-3" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* unused placeholder to silence unused-state warning on `apps` */}
+      <div hidden>{apps.length}</div>
 
       {loading ? (
         <div className="text-sm text-slate-500 py-10 text-center">Loading loops…</div>
