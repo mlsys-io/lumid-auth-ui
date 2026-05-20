@@ -563,12 +563,77 @@ export interface KolTweet {
   cashtags: string[] | null;
   hashtags: string[] | null;
   mentioned_users: string[] | null;
+  // Embedded media (added by kv.run 2026-05-20).
+  // `media_urls` = original Twitter CDN URLs (pbs.twimg.com / video.twimg.com etc.).
+  // `media_proxy_urls` = server-pre-resolved local-mirror paths, relative to kv.run
+  // root (e.g. "/kols/media/by-url?u=..."). Prepend BASE to render directly.
+  media_urls: string[] | null;
+  media_proxy_urls: string[] | null;
   retweet_count: number | null;
   reply_count: number | null;
   like_count: number | null;
   quote_count: number | null;
   bookmark_count: number | null;
   view_count: number | null;
+}
+
+// Resolve a kv.run media URL (raw Twitter CDN or `/kols/media/by-url?u=…`
+// proxy entry) to a same-origin URL the browser can load directly.
+//
+// Background: kv.run's `/kols/media/by-url` 302-redirects to a RELATIVE path
+// `/kols/media/img/<bucket>/<file>` where `<bucket>` is the first 2 chars of
+// the filename, lowercased (e.g. `HInXuVwWkAATtza.jpg` → bucket `hi`,
+// `Ny4gfGWqUuUCU66U.jpg` → bucket `ny`). When the browser follows that 302
+// from an <img> tag, the relative Location header resolves against the page
+// origin (lum.id), not kv.run — so the redirect lands on the SPA shell and
+// returns HTML, not the image. We sidestep the redirect by synthesizing the
+// final cached-mirror URL ourselves.
+//
+// Video assets (video.twimg.com, .mp4 / .m3u8) are NOT cached by kv.run —
+// it returns an absolute redirect to the original twimg.com URL. We let
+// those pass through unchanged; callers should filter them out before
+// rendering via <img>.
+export function resolveMediaProxyUrl(input: string): string {
+  if (!input) return "";
+  // Already an absolute URL? Trust it (e.g. a non-Twitter source).
+  if (input.startsWith("http://") || input.startsWith("https://")) {
+    return _twitterToLocalMirror(input);
+  }
+  // `/kols/media/by-url?u=<encoded>` — decode the inner URL and recurse.
+  if (input.includes("/kols/media/by-url")) {
+    const qs = input.split("?")[1] ?? "";
+    const u = new URLSearchParams(qs).get("u");
+    if (u) return _twitterToLocalMirror(u);
+  }
+  // Already a relative kv.run path (e.g. `/kols/media/img/hi/X.jpg`) — proxy as-is.
+  const path = input.startsWith("/") ? input : `/${input}`;
+  return `/findata-cloud${path}`;
+}
+
+// Lowercased extensions kv.run does NOT mirror locally (video / stream).
+const _VIDEO_EXT_RE = /\.(mp4|m3u8|webm|mov|m4v)(\?|$)/i;
+
+export function isVideoMediaUrl(input: string): boolean {
+  if (!input) return false;
+  if (input.includes("video.twimg.com")) return true;
+  return _VIDEO_EXT_RE.test(input);
+}
+
+function _twitterToLocalMirror(rawUrl: string): string {
+  // Videos aren't mirrored — pass through (browser hits twimg.com directly,
+  // but typically we filter these out of <img> rendering upstream).
+  if (isVideoMediaUrl(rawUrl)) return rawUrl;
+  // Match the LAST path segment as the filename (greedy `.+` so deep paths
+  // like ext_tw_video_thumb/<id>/pu/img/<file> still resolve to `<file>`).
+  const m = rawUrl.match(/twimg\.com\/.+\/([^/?#]+)/);
+  if (m && m[1]) {
+    const filename = m[1];
+    const bucket = filename.slice(0, 2).toLowerCase();
+    return `/findata-cloud/kols/media/img/${bucket}/${filename}`;
+  }
+  // Non-twitter raw URL — fall back to loading direct (works for images;
+  // CORS doesn't restrict <img> tags). Future-proof for non-Twitter sources.
+  return rawUrl;
 }
 
 export interface InsiderTx {

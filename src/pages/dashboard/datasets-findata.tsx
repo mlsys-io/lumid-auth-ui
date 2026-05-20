@@ -366,7 +366,7 @@ export default function DatasetsFindataPage() {
         {tab === "reports"    && <ReportsPane    symbol={symbol} />}
         {tab === "ownership"  && <OwnershipPane  symbol={symbol} onSelect={handleSelect} />}
         {tab === "profile"    && <ProfilePane    symbol={symbol} onSelect={handleSelect} />}
-        {tab === "insights"   && <InsightsPane   symbol={symbol} onSelect={handleSelect} />}
+        {tab === "insights"   && <InsightsPane   symbol={symbol} />}
         {tab === "news"       && <NewsPane       symbol={symbol} />}
         {tab === "compare"    && <ComparePane    symbols={watchlist} currentSymbol={symbol} onSelect={handleSelect} />}
         {tab === "screener"   && <ScreenerPane   onSelect={handleSelect} />}

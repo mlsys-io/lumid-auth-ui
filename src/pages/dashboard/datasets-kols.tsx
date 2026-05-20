@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef, type ReactNode } from "react";
+import { useAutoRefresh, fmtAgo, useNowTick } from "@/hooks/useAutoRefresh";
 import { Users, MessageSquare, Search, Hash, ExternalLink, RefreshCw, Heart, Repeat2, Eye, BadgeCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { findata, fmtNumber, daysAgoISO, todayISO, type Kol, type KolArchiveStats, type KolTweet } from "@/api/findata";
+import { findata, fmtNumber, daysAgoISO, todayISO, resolveMediaProxyUrl, isVideoMediaUrl, type Kol, type KolArchiveStats, type KolTweet } from "@/api/findata";
 
 type Tab = "recent" | "symbol" | "search" | "roster";
 
@@ -63,6 +64,64 @@ function renderTweetText(text: string, onCashtagClick: (sym: string) => void) {
 
 // ── Tweet card ──────────────────────────────────────────────────────────────
 
+// ── Media grid ──────────────────────────────────────────────────────────────
+// kv.run pre-resolves Twitter CDN URLs to a local mirror (the only size
+// available is /hi/, the original 960×… pixels). `media_proxy_urls` is a
+// relative URL we map to `/findata-cloud/kols/media/img/hi/<file>` in
+// resolveMediaProxyUrl() — see findata.ts for why we bypass the 302.
+//
+// Sizing strategy (Twitter-web-feed-style):
+//   1 image  → preserve aspect (object-contain), cap at max-h, full width
+//   2+ images → uniform tile height with object-cover, 2-column grid
+
+function MediaGrid({ proxyUrls, rawUrls }: { proxyUrls: string[] | null | undefined; rawUrls: string[] | null | undefined }) {
+  if (!proxyUrls || proxyUrls.length === 0) return null;
+  // kv.run only mirrors still-image assets, not videos. A video tweet
+  // typically ships 3-4 video variants (different resolutions) + 1 still
+  // thumbnail JPG in `media_*_urls`. Filtering out video URLs collapses
+  // each tweet to the thumbnail(s) we can actually render.
+  const imageOnly = proxyUrls
+    .map((p, i) => ({ proxy: p, raw: rawUrls?.[i] }))
+    .filter(({ proxy, raw }) => !isVideoMediaUrl(proxy) && !isVideoMediaUrl(raw ?? ""));
+  if (imageOnly.length === 0) return null;
+
+  const items = imageOnly.slice(0, 4).map(({ proxy, raw }) => ({
+    src: resolveMediaProxyUrl(proxy),
+    href: raw ?? resolveMediaProxyUrl(proxy),
+  }));
+  const remaining = imageOnly.length - 4;
+  const isSingle = items.length === 1;
+
+  const wrapCls = isSingle
+    ? "mt-2 rounded overflow-hidden border border-border bg-muted/30"
+    : "mt-2 grid gap-1 grid-cols-2 rounded overflow-hidden border border-border";
+
+  // Single image: keep natural aspect ratio, modest cap for feed density.
+  // Grid: small uniform tiles — clickable to view full-res in a new tab.
+  const imgCls = isSingle
+    ? "w-full h-auto max-h-[260px] object-contain bg-muted/30 mx-auto block"
+    : "w-full h-24 object-cover bg-muted";
+
+  return (
+    <div className={wrapCls}>
+      {items.map((m, i) => (
+        <a key={i} href={m.href} target="_blank" rel="noopener noreferrer"
+           className="block relative hover:opacity-90 transition-opacity"
+           onClick={(e) => e.stopPropagation()}>
+          <img src={m.src} alt="" loading="lazy" className={imgCls}
+               onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+          {/* "+N more" overlay on the last visible tile when items overflow */}
+          {i === items.length - 1 && remaining > 0 && (
+            <div className="absolute inset-0 bg-black/55 flex items-center justify-center text-white text-sm font-medium pointer-events-none">
+              +{remaining} more
+            </div>
+          )}
+        </a>
+      ))}
+    </div>
+  );
+}
+
 function TweetCard({ t, onCashtagClick, onHandleClick }: {
   t: KolTweet;
   onCashtagClick: (sym: string) => void;
@@ -90,6 +149,7 @@ function TweetCard({ t, onCashtagClick, onHandleClick }: {
           <div className="text-sm text-foreground mt-0.5 whitespace-pre-wrap break-words">
             {renderTweetText(t.text, onCashtagClick)}
           </div>
+          <MediaGrid proxyUrls={t.media_proxy_urls} rawUrls={t.media_urls} />
           {(t.cashtags?.length || t.hashtags?.length) ? (
             <div className="flex flex-wrap gap-1 mt-1.5">
               {t.cashtags?.map((c) => (
@@ -156,26 +216,33 @@ function RecentFeed({ onCashtagClick, onHandleClick }: {
     setLoading(true);
     setErr(null);
     try {
-      // /kols/tweets is "live ticker" — empty on quiet periods. Fall back to
-      // a parallel fan-out across broad finance terms via the FTS archive,
-      // then dedup + sort. Single-character queries are dropped by the FTS
-      // tokenizer, so use real words.
-      let rows = await findata.kolRecentTweets(50);
-      if (rows.length === 0) {
-        const terms = ["market", "stock", "earnings", "rate", "fed", "trade"];
-        const settled = await Promise.allSettled(
-          terms.map((q) => findata.kolSearch(q, { limit: 20 })),
-        );
-        const merged = new Map<string, KolTweet>();
-        for (const s of settled) {
-          if (s.status === "fulfilled") {
-            for (const t of s.value) merged.set(t.tweet_id, t);
+      // Truly-recent strategy: fan out across broad finance/news terms via
+      // /kols/tweets/search and merge. Search results are sorted desc by
+      // created_at server-side, ship the full archive-row shape including
+      // media_urls + media_proxy_urls, and have stable tweet_ids for dedup.
+      //
+      // The "live ticker" /kols/tweets endpoint is NOT used here — it returns
+      // a simpler KOLTweet shape (no media, no tweet_id, different field
+      // names like `handle`/`likes` vs `kol_username`/`like_count`) that
+      // breaks dedup and would suppress media on otherwise-rich rows.
+      const terms = [
+        "market", "stock", "earnings", "trade", "rate",
+        "fed", "crypto", "trump", "tesla", "NVDA",
+      ];
+      const settled = await Promise.allSettled(
+        terms.map((q) => findata.kolSearch(q, { limit: 30 })),
+      );
+      const merged = new Map<string, KolTweet>();
+      for (const r of settled) {
+        if (r.status === "fulfilled") {
+          for (const t of r.value) {
+            if (t.tweet_id) merged.set(t.tweet_id, t);
           }
         }
-        rows = Array.from(merged.values())
-          .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
-          .slice(0, 50);
       }
+      const rows = Array.from(merged.values())
+        .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+        .slice(0, 50);
       setTweets(rows);
     } catch (e) {
       setErr(String((e as Error)?.message ?? e));
@@ -184,14 +251,35 @@ function RecentFeed({ onCashtagClick, onHandleClick }: {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  // Re-fetch when the tab regains focus after >60s hidden; also records
+  // `loadedAt` so the header can show "loaded Nm ago".
+  const { loadedAt, refresh } = useAutoRefresh(load);
+  // Initial load on mount — calls refresh() (not raw load()) so loadedAt
+  // is captured. Subsequent refreshes go through the same wrapper.
+  const didMount = useRef(false);
+  useEffect(() => {
+    if (didMount.current) return;
+    didMount.current = true;
+    refresh();
+  }, [refresh]);
+  // Tick the clock every 30s so "loaded Nm ago" + "newest Nm ago" stay live.
+  useNowTick();
+
+  const newestIso = tweets[0]?.created_at;
 
   return (
     <div>
-      <div className="flex items-center justify-between px-3 py-2 text-xs text-muted-foreground border-b border-border">
+      <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground border-b border-border">
         <span>Latest across the roster</span>
-        <button onClick={load} disabled={loading}
-          className="flex items-center gap-1 px-2 py-0.5 rounded border border-border hover:bg-accent disabled:opacity-50">
+        {newestIso && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded border border-border bg-muted/30 font-mono">
+            newest · {fmtRelTime(newestIso)}
+          </span>
+        )}
+        <span className="text-[10px] opacity-60">{tweets.length} tweets · 10 finance queries merged</span>
+        <span className="text-[10px] opacity-60">loaded {fmtAgo(loadedAt)}</span>
+        <button onClick={refresh} disabled={loading}
+          className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded border border-border hover:bg-accent disabled:opacity-50">
           <RefreshCw className={cn("w-3 h-3", loading && "animate-spin")} />
           Refresh
         </button>

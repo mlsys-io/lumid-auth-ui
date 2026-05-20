@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Newspaper, ExternalLink, RefreshCw, TrendingUp, TrendingDown, MessageCircle, Plus, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAutoRefresh, fmtAgo, useNowTick } from "@/hooks/useAutoRefresh";
 import {
   findata,
   fmtNumber,
@@ -189,7 +190,26 @@ function MergedFeed({ watchlist, current }: { watchlist: string[]; current: stri
     }
   }, [current]);
 
-  useEffect(() => { load(); }, [load]);
+  // Auto-refresh when the tab regains focus after >60s hidden; track
+  // load timestamp for the "loaded Nm ago" hint. Re-render every 30s so
+  // that label stays live without the user clicking anything.
+  const { loadedAt, refresh } = useAutoRefresh(load);
+  useNowTick();
+  const didMount = useRef(false);
+  useEffect(() => {
+    if (didMount.current) return;
+    didMount.current = true;
+    refresh();
+  }, [refresh]);
+  // When the symbol scope (`current`) changes, the loader closure changes
+  // too — re-fire (also through refresh() so loadedAt updates).
+  const prevCurrent = useRef(current);
+  useEffect(() => {
+    if (prevCurrent.current !== current) {
+      prevCurrent.current = current;
+      refresh();
+    }
+  }, [current, refresh]);
 
   const publishers = useMemo(() => {
     const s = new Set<string>();
@@ -227,7 +247,8 @@ function MergedFeed({ watchlist, current }: { watchlist: string[]; current: stri
           {visible.length}{visible.length !== items.length && ` / ${items.length}`} articles ·{" "}
           {current === "all" ? "cross-roster" : current} · last 14 days
         </span>
-        <button onClick={load} disabled={loading}
+        <span className="text-muted-foreground/70 text-[10px]">loaded {fmtAgo(loadedAt)}</span>
+        <button onClick={refresh} disabled={loading}
           className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded border border-border hover:bg-accent disabled:opacity-50">
           <RefreshCw className={cn("w-3 h-3", loading && "animate-spin")} /> Refresh
         </button>
@@ -332,8 +353,20 @@ function SearchFeed({ initialQuery = "" }: { initialQuery?: string }) {
 function NewsStatsBanner() {
   const [stats, setStats] = useState<NewsCategoryStats | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // Tick re-render every 30s so the "newest · Xm" pill keeps ticking up
+  // without the user reloading. Auto-refetch the actual stats every 5 min
+  // — cheap call, and matters when the page is left open for a long time.
+  useNowTick();
   useEffect(() => {
-    findata.newsStats().then(setStats).catch((e) => setErr(String((e as Error)?.message ?? e)));
+    let cancelled = false;
+    const fetchOnce = () => {
+      findata.newsStats()
+        .then((s) => { if (!cancelled) setStats(s); })
+        .catch((e) => { if (!cancelled) setErr(String((e as Error)?.message ?? e)); });
+    };
+    fetchOnce();
+    const id = window.setInterval(fetchOnce, 5 * 60_000);
+    return () => { cancelled = true; window.clearInterval(id); };
   }, []);
   if (err) return null; // silent on error — banner is informational only
   if (!stats?.categories) return null;
@@ -342,8 +375,30 @@ function NewsStatsBanner() {
     .sort((a, b) => (b.rows_last_7d ?? 0) - (a.rows_last_7d ?? 0))
     .slice(0, 5);
   const total7d = stats.categories.reduce((sum, r) => sum + (r.rows_last_7d ?? 0), 0);
+
+  // Freshness — what's the newest article across all categories? Surface this
+  // explicitly so users see at a glance when upstream ingestion has stalled.
+  const newestIso = stats.categories
+    .map((r) => r.latest_in_60d)
+    .filter((s): s is string => !!s)
+    .sort()
+    .pop();
+  let freshLabel = "—";
+  let freshCls = "border-border text-muted-foreground";
+  if (newestIso) {
+    const ageMs = Date.now() - new Date(newestIso).getTime();
+    const ageMin = Math.floor(ageMs / 60_000);
+    if      (ageMin < 60)   { freshLabel = `${ageMin}m old`;             freshCls = "border-green-500/40 bg-green-500/10 text-green-700 dark:text-green-400"; }
+    else if (ageMin < 4*60) { freshLabel = `${Math.floor(ageMin/60)}h old`; freshCls = "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400"; }
+    else                    { freshLabel = `${Math.floor(ageMin/60)}h stale`; freshCls = "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-400"; }
+  }
+
   return (
     <div className="flex items-center gap-3 px-4 py-1.5 border-b border-border bg-muted/10 text-[11px] text-muted-foreground overflow-x-auto">
+      <span className={cn("px-2 py-0.5 rounded-full border font-medium", freshCls)} title={newestIso ?? ""}>
+        newest · {freshLabel}
+      </span>
+      <span className="text-muted-foreground/70">|</span>
       <span>Last 7d:</span>
       <span><span className="font-mono font-semibold text-foreground">{fmtNumber(total7d, { abbreviate: true, decimals: 1 })}</span> total</span>
       {sorted.map((r) => (

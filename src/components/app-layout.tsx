@@ -485,7 +485,7 @@ export default function AppLayout() {
 						<SidebarItem key={item.to} {...item} onClick={close} />
 					))}
 					<SidebarExternalItem
-						href="http://kv.run:5000/docs"
+						href="https://kv.run:5000/"
 						label="FinData Cloud API"
 						icon={ExternalLink}
 						onClick={close}
