@@ -38,8 +38,15 @@ interface CotRow {
   change_oi?: number;
 }
 
-export default function MacroPane({ symbol: initialSymbol }: { symbol?: string }) {
-  const [sub, setSub] = useState<Sub>("indicators");
+export default function MacroPane({ symbol: initialSymbol, initialSub }: { symbol?: string; initialSub?: string }) {
+  // Honor an explicit `initialSub` (deep-link from FinData Explorer's
+  // Catalog → /dashboard/datasets/macro?sub=ipos etc.). Falls back to
+  // "indicators" if the param is missing or doesn't match a known sub.
+  const SUB_IDS = SUBS.map((s) => s.id);
+  const startSub = (initialSub && (SUB_IDS as readonly string[]).includes(initialSub))
+    ? (initialSub as Sub)
+    : "indicators";
+  const [sub, setSub] = useState<Sub>(startSub);
   // COT is the only sub-view that's per-symbol. State lives here, not on
   // the parent page, so the picker only renders when relevant.
   const [cotSymbol, setCotSymbol] = useState(initialSymbol || "ES");
@@ -382,39 +389,146 @@ function CalendarView({ rows }: { rows: Record<string, unknown>[] }) {
   );
 }
 
+// kv.run ships free-form `exchange` (mix of NASDAQ / NASDAQ Capital /
+// NASDAQ Global / NYSE / NYSE MKT) and free-cased `status`
+// (Expected/expected/Priced/priced). Normalize for clean grouping.
+function _exchangeFamily(raw: string | null | undefined): string {
+  const s = (raw || "").toUpperCase();
+  if (!s) return "Unknown";
+  if (s.includes("NASDAQ")) return "NASDAQ";
+  if (s.includes("NYSE"))   return "NYSE";
+  return raw || "Other";
+}
+function _normalizeStatus(raw: string | null | undefined): string {
+  const s = (raw || "").trim();
+  if (!s) return "Unknown";
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
+const _STATUS_COLOUR: Record<string, string> = {
+  Expected: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30",
+  Priced:   "bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30",
+  Filed:    "bg-blue-500/15  text-blue-700  dark:text-blue-400  border-blue-500/30",
+  Withdrawn:"bg-red-500/15   text-red-700   dark:text-red-400   border-red-500/30",
+};
+
 function IpoTable({ rows }: { rows: IpoRow[] }) {
-  const byMonth: Record<string, number> = {};
-  let totalValue = 0;
+  // 1. Dedup by symbol — kv.run sometimes returns the same IPO under
+  //    multiple amended filings (e.g. RIKU 2x, BWGC 2x). Keep the row
+  //    with the most-complete data (prefer Priced > Expected > Filed,
+  //    then non-null price).
+  const STATUS_RANK = { Priced: 3, Expected: 2, Filed: 1, Withdrawn: 0 } as Record<string, number>;
+  const deduped: Record<string, IpoRow & { _count: number }> = {};
   for (const r of rows) {
-    const m = r.ipo_date.slice(0, 7);
-    byMonth[m] = (byMonth[m] ?? 0) + 1;
-    totalValue += r.total_shares_value ?? 0;
+    const sym = r.symbol || "?";
+    const status = _normalizeStatus(r.status);
+    const existing = deduped[sym];
+    if (!existing) {
+      deduped[sym] = { ...r, status, _count: 1 };
+    } else {
+      existing._count += 1;
+      const better =
+        (STATUS_RANK[status] ?? 0) > (STATUS_RANK[_normalizeStatus(existing.status)] ?? 0) ||
+        ((STATUS_RANK[status] ?? 0) === (STATUS_RANK[_normalizeStatus(existing.status)] ?? 0) &&
+          r.price != null && existing.price == null);
+      if (better) deduped[sym] = { ...r, status, _count: existing._count };
+    }
   }
-  const monthly = Object.entries(byMonth).map(([month, count]) => ({ month, count })).sort((a, b) => a.month.localeCompare(b.month));
+  const unique = Object.values(deduped).sort((a, b) =>
+    // newest IPO date first; within same date, by symbol asc for stability
+    (b.ipo_date || "").localeCompare(a.ipo_date || "") || (a.symbol || "").localeCompare(b.symbol || ""),
+  );
+
+  // 2. Aggregations: totals + by-status + by-exchange + by-date.
+  const totalValue = unique.reduce((s, r) => s + (r.total_shares_value ?? 0), 0);
+  const pricedN = unique.filter((r) => _normalizeStatus(r.status) === "Priced").length;
+  const expectedN = unique.filter((r) => _normalizeStatus(r.status) === "Expected").length;
+  const byStatus = Object.entries(unique.reduce((m, r) => {
+    const k = _normalizeStatus(r.status);
+    m[k] = (m[k] ?? 0) + 1;
+    return m;
+  }, {} as Record<string, number>)).map(([status, count]) => ({ status, count }));
+  const byExchange = Object.entries(unique.reduce((m, r) => {
+    const k = _exchangeFamily(r.exchange);
+    m[k] = (m[k] ?? 0) + 1;
+    return m;
+  }, {} as Record<string, number>)).map(([ex, count]) => ({ ex, count })).sort((a, b) => b.count - a.count);
+  const byDate = Object.entries(unique.reduce((m, r) => {
+    const k = r.ipo_date || "?";
+    m[k] = (m[k] ?? 0) + 1;
+    return m;
+  }, {} as Record<string, number>)).map(([date, count]) => ({ date, count })).sort((a, b) => a.date.localeCompare(b.date));
 
   return (
     <>
-    <div className="grid gap-3 md:grid-cols-[1fr_3fr] mb-3">
-      <div className="rounded border border-border p-3 bg-card flex flex-col justify-center text-xs">
-        <div className="text-muted-foreground">{rows.length} IPOs upcoming</div>
-        <div className="text-2xl font-bold font-mono mt-1">${fmtNumber(totalValue, { abbreviate: true, decimals: 1 })}</div>
-        <div className="text-muted-foreground mt-1">total raise</div>
+    {/* Stat strip — total raise + breakdown counts */}
+    <div className="grid gap-3 md:grid-cols-4 mb-3">
+      <div className="rounded border border-border p-3 bg-card text-xs">
+        <div className="text-muted-foreground">Upcoming IPOs</div>
+        <div className="text-2xl font-bold font-mono mt-1">{unique.length}</div>
+        <div className="text-muted-foreground mt-1">unique symbols ({rows.length} filings)</div>
       </div>
+      <div className="rounded border border-border p-3 bg-card text-xs">
+        <div className="text-muted-foreground">Total raise</div>
+        <div className="text-2xl font-bold font-mono mt-1">${fmtNumber(totalValue, { abbreviate: true, decimals: 1 })}</div>
+        <div className="text-muted-foreground mt-1">where reported</div>
+      </div>
+      <div className="rounded border border-border p-3 bg-card text-xs">
+        <div className="text-muted-foreground">Priced</div>
+        <div className="text-2xl font-bold font-mono mt-1 text-green-600 dark:text-green-400">{pricedN}</div>
+        <div className="text-muted-foreground mt-1">already trading</div>
+      </div>
+      <div className="rounded border border-border p-3 bg-card text-xs">
+        <div className="text-muted-foreground">Expected</div>
+        <div className="text-2xl font-bold font-mono mt-1 text-amber-600 dark:text-amber-400">{expectedN}</div>
+        <div className="text-muted-foreground mt-1">filed, awaiting pricing</div>
+      </div>
+    </div>
+
+    {/* Breakdown charts — show date AND exchange so the user gets variety even
+        when the listing window is narrow (e.g. all in one month). */}
+    <div className="grid gap-3 md:grid-cols-2 mb-3">
       <div className="rounded border border-border p-3 bg-card">
-        <div className="text-xs text-muted-foreground mb-2">IPOs per month</div>
+        <div className="text-xs text-muted-foreground mb-2">By IPO date</div>
         <div className="h-32">
           <ResponsiveContainer>
-            <BarChart data={monthly} margin={{ top: 5, right: 8, left: 0, bottom: 0 }}>
+            <BarChart data={byDate} margin={{ top: 5, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-              <XAxis dataKey="month" tick={{ fontSize: 9 }} />
-              <YAxis tick={{ fontSize: 9 }} />
+              <XAxis dataKey="date" tick={{ fontSize: 9 }} />
+              <YAxis tick={{ fontSize: 9 }} allowDecimals={false} />
               <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} />
               <Bar dataKey="count" fill="#6366f1" />
             </BarChart>
           </ResponsiveContainer>
         </div>
       </div>
+      <div className="rounded border border-border p-3 bg-card">
+        <div className="text-xs text-muted-foreground mb-2">By exchange family</div>
+        <div className="h-32">
+          <ResponsiveContainer>
+            <BarChart data={byExchange} layout="vertical" margin={{ top: 5, right: 8, left: 40, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" opacity={0.2} horizontal={false} />
+              <XAxis type="number" tick={{ fontSize: 9 }} allowDecimals={false} />
+              <YAxis type="category" dataKey="ex" tick={{ fontSize: 10 }} width={70} />
+              <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} />
+              <Bar dataKey="count" fill="#0ea5e9" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
     </div>
+
+    {/* Status legend strip — visual key for the table's status badges */}
+    <div className="flex flex-wrap items-center gap-2 mb-2 text-[10px]">
+      {byStatus.sort((a, b) => b.count - a.count).map((s) => (
+        <span key={s.status}
+          className={cn("px-1.5 py-0.5 rounded border font-medium",
+            _STATUS_COLOUR[s.status] ?? "border-border text-muted-foreground")}>
+          {s.status} · {s.count}
+        </span>
+      ))}
+    </div>
+
+    {/* Table — newest IPO date first, deduped rows, normalized status + exchange */}
     <div className="overflow-x-auto rounded border border-border">
       <table className="w-full text-xs border-collapse">
         <thead className="bg-muted/50">
@@ -430,18 +544,33 @@ function IpoTable({ rows }: { rows: IpoRow[] }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((r, i) => (
-            <tr key={i} className="border-t border-border/40 hover:bg-accent/40">
-              <td className="px-2 py-1 font-mono">{r.ipo_date}</td>
-              <td className="px-2 py-1 font-mono font-medium">{r.symbol}</td>
-              <td className="px-2 py-1">{r.name}</td>
-              <td className="px-2 py-1">{r.exchange}</td>
-              <td className="px-2 py-1 font-mono text-right">{r.number_of_shares != null ? fmtNumber(r.number_of_shares, { abbreviate: true, decimals: 1 }) : "—"}</td>
-              <td className="px-2 py-1 font-mono text-right">{r.price != null ? `$${fmtNumber(r.price, { decimals: 2 })}` : "—"}</td>
-              <td className="px-2 py-1 font-mono text-right">{r.total_shares_value != null ? `$${fmtNumber(r.total_shares_value, { abbreviate: true, decimals: 1 })}` : "—"}</td>
-              <td className="px-2 py-1">{r.status}</td>
-            </tr>
-          ))}
+          {unique.map((r) => {
+            const status = _normalizeStatus(r.status);
+            return (
+              <tr key={r.symbol} className="border-t border-border/40 hover:bg-accent/40">
+                <td className="px-2 py-1 font-mono">{r.ipo_date}</td>
+                <td className="px-2 py-1 font-mono font-medium">
+                  {r.symbol}
+                  {r._count > 1 && (
+                    <span className="ml-1 text-[9px] text-muted-foreground" title={`${r._count} filings collapsed (kept the most-complete row)`}>
+                      ⊕{r._count}
+                    </span>
+                  )}
+                </td>
+                <td className="px-2 py-1 truncate max-w-[16rem]" title={r.name}>{r.name}</td>
+                <td className="px-2 py-1">{_exchangeFamily(r.exchange)}</td>
+                <td className="px-2 py-1 font-mono text-right">{r.number_of_shares != null ? fmtNumber(r.number_of_shares, { abbreviate: true, decimals: 1 }) : "—"}</td>
+                <td className="px-2 py-1 font-mono text-right">{r.price != null ? `$${fmtNumber(r.price, { decimals: 2 })}` : "—"}</td>
+                <td className="px-2 py-1 font-mono text-right">{r.total_shares_value != null ? `$${fmtNumber(r.total_shares_value, { abbreviate: true, decimals: 1 })}` : "—"}</td>
+                <td className="px-2 py-1">
+                  <span className={cn("px-1.5 py-0.5 rounded border text-[10px] font-medium",
+                    _STATUS_COLOUR[status] ?? "border-border text-muted-foreground")}>
+                    {status}
+                  </span>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

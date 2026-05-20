@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Activity, RefreshCw } from "lucide-react";
 import MacroPane from "./findata/MacroPane";
 import { findata, type Freshness } from "@/api/findata";
@@ -29,6 +30,10 @@ function FreshnessBadge({ data }: { data: Freshness | null }) {
 
 export default function DatasetsMacroPage() {
   const [freshness, setFreshness] = useState<Freshness | null>(null);
+  // Deep-link target sub-tab from `?sub=ipos|cot|calendar|…` — set by
+  // the FinData Explorer Catalog when a user clicks a Macro-grouped row.
+  const [searchParams] = useSearchParams();
+  const initialSub = searchParams.get("sub") || undefined;
 
   // Refresh the freshness badge whenever the page loads / focuses / cot
   // symbol changes. The actual sub-pane data lives inside MacroPane and
@@ -70,7 +75,7 @@ export default function DatasetsMacroPage() {
           Treasury / COT / IPOs / M&A / FDA / Symbols) and the per-tab
           COT-symbol picker. Page header stays clean. */}
       <div className="flex-1 overflow-auto p-4">
-        <MacroPane />
+        <MacroPane initialSub={initialSub} />
       </div>
     </div>
   );

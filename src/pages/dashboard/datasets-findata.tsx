@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { GitCompareArrows, Filter, ListTree } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { findata, type SymbolSearchResult, type Freshness, type SymbolProfile } from "@/api/findata";
@@ -56,6 +57,22 @@ const CATALOG_LABEL_TO_TAB: Record<string, Tab> = {
   Activity:   "insights",
   News:       "news",
   Screener:   "screener",
+};
+
+// Macro is its own dataset page now (was promoted out of the FinData
+// Explorer tab strip on 2026-05-20). Catalog rows still mark these as
+// `tab: "Macro"`, but the routing target is the dedicated page; this
+// map points each Catalog probe label at the corresponding MacroPane
+// sub-tab so we can deep-link via `/dashboard/datasets/macro?sub=<X>`.
+const MACRO_LABEL_TO_SUB: Record<string, string> = {
+  "Indicators":     "indicators",
+  "Calendar":       "calendar",
+  "Treasury rates": "treasury",
+  "COT":            "cot",
+  "IPOs":           "ipos",
+  "M&A (global)":   "mergers",
+  "FDA calendar":   "fda",
+  "Symbol changes": "symbols",
 };
 
 // ── Security type detection ────────────────────────────────────────────────
@@ -194,6 +211,7 @@ function SymbolSearch({ value, onChange }: { value: string; onChange: (s: string
 // ── Page shell ──────────────────────────────────────────────────────────────
 
 export default function DatasetsFindataPage() {
+  const navigate = useNavigate();
   const [symbol, setSymbol] = useState("AAPL");
   const [tab, setTab] = useState<Tab>("overview");
   const [profile, setProfile] = useState<SymbolProfile | null>(null);
@@ -262,7 +280,20 @@ export default function DatasetsFindataPage() {
     if (tab === "screener") setTab("overview");
   };
 
-  const jumpTab = (label: string) => {
+  // Catalog row click. Two routing modes:
+  //  - In-page: target maps to a sibling tab in this Explorer (Overview /
+  //    Chart / Live / Financials / Reports / Ownership / Profile / Insights /
+  //    News / Screener / Catalog). Use setTab.
+  //  - Cross-page: target tab is "Macro" — promoted to its own dataset
+  //    page on 2026-05-20. Navigate to /dashboard/datasets/macro and pass
+  //    the specific sub-tab via ?sub=<X> so the Macro page lands on the
+  //    right view (IPOs / COT / Calendar / etc.).
+  const jumpTab = (tab: string, label: string) => {
+    if (tab === "Macro") {
+      const sub = MACRO_LABEL_TO_SUB[label];
+      navigate(sub ? `/dashboard/datasets/macro?sub=${sub}` : "/dashboard/datasets/macro");
+      return;
+    }
     const id = CATALOG_LABEL_TO_TAB[label];
     if (id) setTab(id);
   };

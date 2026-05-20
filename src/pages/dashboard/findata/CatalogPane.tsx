@@ -98,7 +98,12 @@ type Status = "loading" | "ok" | "empty" | "error";
 
 interface Result { status: Status; count?: number; latencyMs?: number; error?: string; }
 
-export default function CatalogPane({ symbol, onJumpTab }: { symbol: string; onJumpTab: (label: string) => void }) {
+// Catalog row click — the parent decides how to dispatch. Some `tab`
+// targets (Overview / Chart / Live / Financials / Reports / etc.) are
+// sibling tabs in FinData Explorer; "Macro" is a separate page that
+// also has its own sub-tabs, so we forward the row's label so the
+// parent can route to /dashboard/datasets/macro?sub=<X>.
+export default function CatalogPane({ symbol, onJumpTab }: { symbol: string; onJumpTab: (tab: string, label: string) => void }) {
   const [results, setResults] = useState<Record<string, Result>>({});
   const [filter, setFilter] = useState("");
 
@@ -182,7 +187,7 @@ export default function CatalogPane({ symbol, onJumpTab }: { symbol: string; onJ
               {probes.map((p) => {
                 const r = results[p.endpoint] ?? { status: "loading" as Status };
                 return (
-                  <tr key={p.endpoint} className="border-t border-border/40 hover:bg-accent/40 cursor-pointer" onClick={() => onJumpTab(p.tab)}>
+                  <tr key={p.endpoint} className="border-t border-border/40 hover:bg-accent/40 cursor-pointer" onClick={() => onJumpTab(p.tab, p.label)}>
                     <td className="px-3 py-1.5 w-10"><StatusDot status={r.status} /></td>
                     <td className="px-3 py-1.5 w-48 font-medium">{p.label}</td>
                     <td className="px-3 py-1.5 font-mono text-muted-foreground">{p.endpoint.replace("{sym}", symbol)}</td>
