@@ -65,7 +65,7 @@ function RatingsView({ data }: { data: unknown }) {
                 <PolarAngleAxis dataKey="axis" tick={{ fontSize: 10 }} />
                 <PolarRadiusAxis domain={[0, max]} tick={{ fontSize: 9 }} />
                 <Radar dataKey="value" stroke="#10b981" fill="#10b981" fillOpacity={0.35} />
-                <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: number) => v.toFixed(2)} />
+                <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: any) => v.toFixed(2)} />
               </RadarChart>
             </ResponsiveContainer>
           </div>

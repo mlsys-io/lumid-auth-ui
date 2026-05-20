@@ -92,7 +92,7 @@ export default function ScreenerPane({
                     }}>
                     {sectors.map((d, i) => <Cell key={i} fill={d.fill} cursor="pointer" stroke={d.sector === sectorFilter ? "#000" : undefined} strokeWidth={d.sector === sectorFilter ? 2 : 0} />)}
                   </Pie>
-                  <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: number) => `${v} symbols`} />
+                  <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: any) => `${v} symbols`} />
                   <Legend wrapperStyle={{ fontSize: 8 }} iconSize={7} />
                 </PieChart>
               </ResponsiveContainer>

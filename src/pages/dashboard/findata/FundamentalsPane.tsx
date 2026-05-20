@@ -124,7 +124,7 @@ export default function FundamentalsPane({ symbol }: { symbol: string }) {
                         <Tooltip
                           labelStyle={{ fontSize: 11 }}
                           contentStyle={{ fontSize: 11, padding: 4 }}
-                          formatter={(v: number) => fmtNumber(v, { abbreviate: true, decimals: 2 })}
+                          formatter={(v: any) => fmtNumber(v, { abbreviate: true, decimals: 2 })}
                         />
                         <Legend wrapperStyle={{ fontSize: 10 }} />
                         {chartKeys.map((k, i) => (
@@ -146,7 +146,7 @@ export default function FundamentalsPane({ symbol }: { symbol: string }) {
                           <Tooltip
                             labelStyle={{ fontSize: 11 }}
                             contentStyle={{ fontSize: 11, padding: 4 }}
-                            formatter={(v: number) => v == null ? "—" : `${(v * 100).toFixed(1)}%`}
+                            formatter={(v: any) => v == null ? "—" : `${(v * 100).toFixed(1)}%`}
                           />
                           <Legend wrapperStyle={{ fontSize: 10 }} />
                           {chartKeys.map((k, i) => (

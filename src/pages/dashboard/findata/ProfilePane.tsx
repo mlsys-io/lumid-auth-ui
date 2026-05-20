@@ -91,7 +91,7 @@ function EmployeesView({ symbol }: { symbol: string }) {
               <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
               <XAxis dataKey="date" tick={{ fontSize: 10 }} minTickGap={30} />
               <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => fmtNumber(v, { decimals: 0 })} />
-              <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: number) => fmtNumber(v, { decimals: 0 })} />
+              <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: any) => fmtNumber(v, { decimals: 0 })} />
               <Line dataKey="count" stroke="#6366f1" dot={{ r: 3 }} strokeWidth={1.8} />
             </LineChart>
           </ResponsiveContainer>

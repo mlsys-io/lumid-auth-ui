@@ -65,7 +65,7 @@ export default function HoldersPane({ symbol }: { symbol: string }) {
                 </Pie>
                 <Tooltip
                   contentStyle={{ fontSize: 11, padding: 4 }}
-                  formatter={(v: number) => `$${fmtNumber(v, { abbreviate: true, decimals: 1 })}`}
+                  formatter={(v: any) => `$${fmtNumber(v, { abbreviate: true, decimals: 1 })}`}
                 />
                 <Legend wrapperStyle={{ fontSize: 9 }} iconSize={8} layout="vertical" align="right" verticalAlign="middle" />
               </PieChart>

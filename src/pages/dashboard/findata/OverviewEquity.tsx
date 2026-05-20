@@ -87,7 +87,7 @@ export default function OverviewEquity({ symbol }: { symbol: string }) {
                 <Tooltip
                   labelStyle={{ fontSize: 10 }}
                   contentStyle={{ fontSize: 10, padding: 4 }}
-                  formatter={(v: number) => `$${fmtNumber(v, { decimals: 2 })}`}
+                  formatter={(v: any) => `$${fmtNumber(v, { decimals: 2 })}`}
                 />
                 <Area
                   type="monotone"
@@ -158,7 +158,7 @@ export default function OverviewEquity({ symbol }: { symbol: string }) {
                 <XAxis dataKey="ts" tick={{ fontSize: 9 }} minTickGap={40} />
                 <YAxis tick={{ fontSize: 9 }} tickFormatter={(v) => fmtNumber(v, { abbreviate: true, decimals: 0 })} />
                 <Tooltip labelStyle={{ fontSize: 11 }} contentStyle={{ fontSize: 11, padding: 4 }}
-                  formatter={(v: number) => fmtNumber(v, { abbreviate: true, decimals: 1 })} />
+                  formatter={(v: any) => fmtNumber(v, { abbreviate: true, decimals: 1 })} />
                 <Bar dataKey="volume" fill="#94a3b8" />
               </BarChart>
             </ResponsiveContainer>

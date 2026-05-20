@@ -74,7 +74,7 @@ export default function OverviewETF({ symbol, onSelect }: { symbol: string; onSe
                 </defs>
                 <XAxis dataKey="ts" hide />
                 <YAxis hide domain={["dataMin", "dataMax"]} />
-                <Tooltip contentStyle={{ fontSize: 10, padding: 4 }} formatter={(v: number) => `$${fmtNumber(v, { decimals: 2 })}`} />
+                <Tooltip contentStyle={{ fontSize: 10, padding: 4 }} formatter={(v: any) => `$${fmtNumber(v, { decimals: 2 })}`} />
                 <Area type="monotone" dataKey="close" stroke={ret90d != null && ret90d < 0 ? "#ef4444" : "#06b6d4"} strokeWidth={2} fill="url(#sparkETF)" />
               </AreaChart>
             </ResponsiveContainer>
@@ -117,7 +117,7 @@ export default function OverviewETF({ symbol, onSelect }: { symbol: string; onSe
                     onClick={(d) => onSelect?.((d as { name?: string }).name ?? "")}>
                     {piePoints.map((d, i) => <Cell key={i} fill={d.fill} cursor="pointer" />)}
                   </Pie>
-                  <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: number) => `${v.toFixed(2)}%`} />
+                  <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: any) => `${v.toFixed(2)}%`} />
                   <Legend wrapperStyle={{ fontSize: 9 }} iconSize={8} layout="vertical" align="right" verticalAlign="middle" />
                 </PieChart>
               </ResponsiveContainer>
@@ -131,7 +131,7 @@ export default function OverviewETF({ symbol, onSelect }: { symbol: string; onSe
                   <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
                   <XAxis type="number" tickFormatter={(v) => `${v}%`} tick={{ fontSize: 10 }} />
                   <YAxis dataKey="asset_symbol" type="category" tick={{ fontSize: 10 }} />
-                  <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: number) => `${v.toFixed(2)}%`} />
+                  <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: any) => `${v.toFixed(2)}%`} />
                   <Bar dataKey="weight_pct" fill="#6366f1" onClick={(d) => onSelect?.((d as { asset_symbol?: string }).asset_symbol ?? "")} cursor="pointer" />
                 </BarChart>
               </ResponsiveContainer>
@@ -205,7 +205,7 @@ function WeightsCard({ title, rows, colour }: { title: string; rows: Record<stri
             <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
             <XAxis type="number" tickFormatter={(v) => `${(v as number).toFixed ? (v as number).toFixed(1) : v}%`} tick={{ fontSize: 10 }} />
             <YAxis dataKey={nameKey} type="category" tick={{ fontSize: 10 }} width={100} />
-            <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: number) => `${v.toFixed(2)}%`} />
+            <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: any) => `${v.toFixed(2)}%`} />
             <Bar dataKey={weightKey} fill={colour} />
           </BarChart>
         </ResponsiveContainer>

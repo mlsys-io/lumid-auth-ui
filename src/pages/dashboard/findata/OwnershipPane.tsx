@@ -79,7 +79,7 @@ function ExposureView({ symbol, onSelect }: { symbol: string; onSelect: (s: stri
               <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
               <XAxis type="number" tickFormatter={(v) => `${v}%`} tick={{ fontSize: 10 }} />
               <YAxis dataKey="etf_symbol" type="category" tick={{ fontSize: 10 }} />
-              <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: number) => `${v.toFixed(2)}%`} />
+              <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: any) => `${v.toFixed(2)}%`} />
               <Bar dataKey="weight_pct" fill="#10b981" />
             </BarChart>
           </ResponsiveContainer>

@@ -63,7 +63,7 @@ export default function EarningsHistoryPane({ symbol }: { symbol: string }) {
                 <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
                 <XAxis dataKey="date" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: number) => v == null ? "—" : fmtNumber(v, { decimals: 2 })} />
+                <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: any) => v == null ? "—" : fmtNumber(v, { decimals: 2 })} />
                 <Bar dataKey="estimated" fill="#94a3b8" />
                 <Bar dataKey="actual" fill="#6366f1" />
               </BarChart>
@@ -78,7 +78,7 @@ export default function EarningsHistoryPane({ symbol }: { symbol: string }) {
                 <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
                 <XAxis dataKey="date" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}%`} />
-                <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: number) => v == null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(1)}%`} />
+                <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: any) => v == null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(1)}%`} />
                 <ReferenceLine y={0} stroke="#64748b" />
                 <Bar dataKey="surprise_pct">
                   {chartData.map((d, i) => (

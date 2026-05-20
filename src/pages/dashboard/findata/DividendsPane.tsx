@@ -67,7 +67,7 @@ export default function DividendsPane({ symbol }: { symbol: string }) {
                 <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
                 <XAxis dataKey="date" tick={{ fontSize: 10 }} minTickGap={30} />
                 <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: number) => fmtNumber(v, { decimals: 3 })} />
+                <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: any) => fmtNumber(v, { decimals: 3 })} />
                 <Line dataKey="amount" stroke="#10b981" dot={{ r: 2 }} strokeWidth={1.5} />
               </LineChart>
             </ResponsiveContainer>
@@ -81,7 +81,7 @@ export default function DividendsPane({ symbol }: { symbol: string }) {
                 <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
                 <XAxis dataKey="year" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: number) => `$${fmtNumber(v, { decimals: 2 })}`} />
+                <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: any) => `$${fmtNumber(v, { decimals: 2 })}`} />
                 <Bar dataKey="total" fill="#10b981" />
               </BarChart>
             </ResponsiveContainer>

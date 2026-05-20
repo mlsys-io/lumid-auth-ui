@@ -65,7 +65,7 @@ function MetricsView({ rows }: { rows: KeyMetricsRow[] }) {
     ...Object.fromEntries(METRICS_CHART_KEYS.filter((k) => typeof r[k] === "number").map((k) => [k, r[k]])),
   })), [rows]);
   if (!rows.length) return <p className="text-sm text-muted-foreground">No metrics.</p>;
-  const presentKeys = METRICS_CHART_KEYS.filter((k) => chart.some((d) => typeof d[k] === "number"));
+  const presentKeys = METRICS_CHART_KEYS.filter((k) => chart.some((d: Record<string, unknown>) => typeof d[k] === "number"));
 
   return (
     <div className="flex flex-col gap-3">
@@ -78,7 +78,7 @@ function MetricsView({ rows }: { rows: KeyMetricsRow[] }) {
                 <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
                 <XAxis dataKey="period" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: number) => fmtNumber(v, { decimals: 3 })} />
+                <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: any) => fmtNumber(v, { decimals: 3 })} />
                 <Legend wrapperStyle={{ fontSize: 9 }} />
                 {presentKeys.map((k, i) => (
                   <Line key={k} dataKey={k} stroke={COLOURS[i % COLOURS.length]} dot={false} strokeWidth={1.4} connectNulls />
@@ -112,7 +112,7 @@ function RatiosView({ rows }: { rows: RatiosRow[] }) {
                 <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
                 <XAxis dataKey="period" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: number) => fmtNumber(v, { decimals: 3 })} />
+                <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: any) => fmtNumber(v, { decimals: 3 })} />
                 <Legend wrapperStyle={{ fontSize: 9 }} />
                 {present.map((k, i) => (
                   <Line key={k} dataKey={k} stroke={COLOURS[i % COLOURS.length]} dot={false} strokeWidth={1.2} connectNulls />
@@ -143,7 +143,7 @@ function GrowthView({ rows }: { rows: Record<string, unknown>[] }) {
                 <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
                 <XAxis dataKey="period" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `${(v * 100).toFixed(0)}%`} />
-                <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: number) => v == null ? "—" : `${(v * 100).toFixed(2)}%`} />
+                <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: any) => v == null ? "—" : `${(v * 100).toFixed(2)}%`} />
                 <Legend wrapperStyle={{ fontSize: 9 }} />
                 {numKeys.map((k, i) => (
                   <Line key={k} dataKey={k} stroke={COLOURS[i % COLOURS.length]} dot={false} strokeWidth={1.4} connectNulls />

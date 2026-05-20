@@ -85,7 +85,7 @@ function TreasuryView({ rows }: { rows: Record<string, unknown>[] }) {
               <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
               <XAxis dataKey="tenor" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `${v.toFixed(2)}%`} domain={["auto", "auto"]} />
-              <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: number) => `${v.toFixed(3)}%`} />
+              <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: any) => `${v.toFixed(3)}%`} />
               <Line dataKey="yield" stroke="#6366f1" dot={{ r: 3 }} strokeWidth={1.8} />
             </LineChart>
           </ResponsiveContainer>
@@ -99,7 +99,7 @@ function TreasuryView({ rows }: { rows: Record<string, unknown>[] }) {
               <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
               <XAxis dataKey="date" tick={{ fontSize: 10 }} minTickGap={40} />
               <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `${v.toFixed(1)}%`} />
-              <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: number) => v == null ? "—" : `${v.toFixed(3)}%`} />
+              <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: any) => v == null ? "—" : `${v.toFixed(3)}%`} />
               <Legend wrapperStyle={{ fontSize: 9 }} />
               <Line dataKey="10Y" stroke="#6366f1" dot={false} strokeWidth={1.4} />
               <Line dataKey="2Y"  stroke="#f59e0b" dot={false} strokeWidth={1.4} />
@@ -116,7 +116,7 @@ function TreasuryView({ rows }: { rows: Record<string, unknown>[] }) {
               <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
               <XAxis dataKey="date" tick={{ fontSize: 10 }} minTickGap={40} />
               <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `${(v * 100).toFixed(0)}bps`} />
-              <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: number) => v == null ? "—" : `${(v * 100).toFixed(1)} bps`} />
+              <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: any) => v == null ? "—" : `${(v * 100).toFixed(1)} bps`} />
               <Line dataKey="spread" stroke="#ef4444" dot={false} strokeWidth={1.5} />
             </LineChart>
           </ResponsiveContainer>

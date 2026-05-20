@@ -108,11 +108,13 @@ const PRODUCT_NAV: NavItem[] = [
 // embedded inside lum.id via /findata-embed/ same-origin proxy
 // (lumid.data prerequisite Tier E).
 const LUMILAKE_NAV: NavItem[] = [
-	{ to: '/dashboard/lumilake/data', label: 'Data browsing', icon: Database },
+	// Ordered by expected user-traffic — symbol-centric financial surfaces
+	// first, then macro, then the deeper Lumilake lakehouse browser.
 	{ to: '/dashboard/datasets/findata', label: 'FinData Explorer', icon: LineChart },
-	{ to: '/dashboard/datasets/macro', label: 'Macro', icon: Activity },
-	{ to: '/dashboard/datasets/kols', label: 'KOL Tweets', icon: MessageSquare },
 	{ to: '/dashboard/datasets/news', label: 'News', icon: Newspaper },
+	{ to: '/dashboard/datasets/kols', label: 'KOL Tweets', icon: MessageSquare },
+	{ to: '/dashboard/datasets/macro', label: 'Macro', icon: Activity },
+	{ to: '/dashboard/lumilake/data', label: 'Data browsing', icon: Database },
 ];
 
 // Lumid Market (LQA) sidebar entries are rendered by QuantSection

@@ -73,7 +73,7 @@ export default function InsiderPane({ symbol }: { symbol: string }) {
                     <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
                     <XAxis dataKey="month" tick={{ fontSize: 10 }} />
                     <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => fmtNumber(v, { abbreviate: true, decimals: 0 })} />
-                    <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: number) => `$${fmtNumber(v, { abbreviate: true, decimals: 1 })}`} />
+                    <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: any) => `$${fmtNumber(v, { abbreviate: true, decimals: 1 })}`} />
                     <ReferenceLine y={0} stroke="#64748b" />
                     <Bar dataKey="buys"  stackId="a" fill="#10b981" />
                     <Bar dataKey="sales" stackId="a" fill="#ef4444" />
@@ -89,7 +89,7 @@ export default function InsiderPane({ symbol }: { symbol: string }) {
                     <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
                     <XAxis dataKey="month" tick={{ fontSize: 10 }} />
                     <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => fmtNumber(v, { abbreviate: true, decimals: 0 })} />
-                    <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: number) => `$${fmtNumber(v, { abbreviate: true, decimals: 1 })}`} />
+                    <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: any) => `$${fmtNumber(v, { abbreviate: true, decimals: 1 })}`} />
                     <ReferenceLine y={0} stroke="#64748b" />
                     <Line dataKey="cumulative" stroke="#6366f1" dot={false} strokeWidth={1.8} />
                   </LineChart>

@@ -77,22 +77,28 @@ function WatchlistEditor({
 }) {
   const [draft, setDraft] = useState("");
 
-  const chipCls = (active: boolean) =>
+  const chipCls = (active: boolean, isAll = false) =>
     cn(
-      "text-xs px-2 py-0.5 rounded font-mono border whitespace-nowrap transition-colors group",
+      "inline-flex items-center text-xs rounded border whitespace-nowrap transition-colors",
+      // "All" is wider (no × button), use straight px-2.5; tickers leave
+      // room on the right for the inline × button.
+      isAll ? "px-2.5 py-0.5 font-medium" : "pl-2 pr-0.5 py-0.5 font-mono",
       active ? "border-primary text-primary bg-primary/10" : "border-border text-muted-foreground hover:bg-accent",
     );
 
   return (
     <div className="flex flex-wrap items-center gap-1.5 px-4 py-2 border-b border-border bg-muted/30">
-      <button className={chipCls(current === "all")} onClick={() => onPick("all")}>All</button>
+      <button className={chipCls(current === "all", true)} onClick={() => onPick("all")}>All</button>
       {watchlist.map((s) => (
-        <button key={s} className={chipCls(current === s)} onClick={() => onPick(s)}>
-          {s}
-          <span className="ml-1.5 opacity-40 hover:opacity-100"
+        <span key={s} className={chipCls(current === s)}>
+          <button onClick={() => onPick(s)} className="leading-none">{s}</button>
+          <button
             onClick={(e) => { e.stopPropagation(); onRemove(s); }}
-            title="Remove from watchlist">×</span>
-        </button>
+            title={`Remove ${s} from watchlist`}
+            aria-label={`Remove ${s} from watchlist`}
+            className="ml-1 px-1 leading-none opacity-40 hover:opacity-100 hover:text-red-500"
+          >×</button>
+        </span>
       ))}
       <input
         value={draft}
@@ -103,12 +109,13 @@ function WatchlistEditor({
           }
         }}
         placeholder="+ ticker"
-        className="w-24 ml-1 rounded border border-border bg-background px-2 py-0.5 text-xs font-mono uppercase"
+        size={draft.length > 4 ? draft.length + 2 : 6}
+        className="rounded border border-dashed border-border bg-transparent px-2 py-0.5 text-xs font-mono uppercase placeholder:text-muted-foreground/70 focus:border-primary focus:bg-background focus:outline-none"
       />
       {draft && (
         <button onClick={() => { onAdd(draft.trim()); setDraft(""); }}
-          className="text-xs px-1.5 py-0.5 rounded border border-primary text-primary bg-primary/10 hover:bg-primary/20">
-          <Plus className="w-3 h-3 inline" /> Add
+          className="inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded border border-primary text-primary bg-primary/10 hover:bg-primary/20">
+          <Plus className="w-3 h-3" /> Add
         </button>
       )}
     </div>
@@ -258,7 +265,14 @@ function MergedFeed({ watchlist, current }: { watchlist: string[]; current: stri
         <div className="px-4 py-6 text-center text-sm text-muted-foreground animate-pulse">Loading articles…</div>
       )}
       {!loading && !err && visible.length === 0 && (
-        <div className="px-4 py-6 text-center text-sm text-muted-foreground">No articles match.</div>
+        <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+          <div>No articles for the current filters.</div>
+          <div className="text-xs mt-1 opacity-70">
+            {current === "all"
+              ? "Try a different category or clear the publisher filter."
+              : <>Try <b>All</b> in the watchlist row above, or pick a different ticker.</>}
+          </div>
+        </div>
       )}
       <ul className="divide-y divide-border">
         {visible.map((n, i) => <ArticleRow key={n.url || `${n.symbol ?? ""}-${i}`} n={n} idx={i} />)}
@@ -339,7 +353,10 @@ function SearchFeed({ initialQuery = "" }: { initialQuery?: string }) {
         <div className="px-4 py-6 text-center text-sm text-muted-foreground animate-pulse">Searching…</div>
       )}
       {q && !loading && !err && items.length === 0 && (
-        <div className="px-4 py-6 text-center text-sm text-muted-foreground">No matches for "{q}".</div>
+        <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+          <div>No headlines mention <span className="font-mono">"{q}"</span> in the last 30 days.</div>
+          <div className="text-xs mt-1 opacity-70">Try a broader term, change category, or check the <b>Feed</b> tab for what's flowing now.</div>
+        </div>
       )}
       <ul className="divide-y divide-border">
         {items.map((n, i) => <ArticleRow key={n.url || `${n.symbol ?? ""}-${i}`} n={n} idx={i} />)}
@@ -591,7 +608,10 @@ function SocialSentimentView({ initialSymbol }: { initialSymbol: string }) {
         <div className="py-6 text-center text-sm text-muted-foreground animate-pulse">Loading social mentions…</div>
       )}
       {!loading && !err && rows.length === 0 && (
-        <div className="py-6 text-center text-sm text-muted-foreground">No social-sentiment data for ${symbol}.</div>
+        <div className="py-8 text-center text-sm text-muted-foreground">
+          <div>No social-sentiment data for <span className="font-mono">${symbol}</span> yet.</div>
+          <div className="text-xs mt-1 opacity-70">Social sentiment is only tracked for actively-discussed tickers — try a mega-cap or popular crypto symbol.</div>
+        </div>
       )}
 
       {rows.length > 0 && (

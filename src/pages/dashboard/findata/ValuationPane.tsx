@@ -64,7 +64,7 @@ function EvTable({ rows }: { rows: EvRow[] }) {
               <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
               <XAxis dataKey="period" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => fmtNumber(v, { abbreviate: true, decimals: 0 })} />
-              <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: number) => `$${fmtNumber(Math.abs(v), { abbreviate: true, decimals: 1 })}`} />
+              <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: any) => `$${fmtNumber(Math.abs(v), { abbreviate: true, decimals: 1 })}`} />
               <Legend wrapperStyle={{ fontSize: 10 }} />
               <Area type="monotone" dataKey="market_cap" stackId="1" fill="#6366f1" stroke="#6366f1" />
               <Area type="monotone" dataKey="debt"       stackId="1" fill="#ef4444" stroke="#ef4444" />
@@ -133,7 +133,7 @@ function QualityTable({ rows }: { rows: EarningsQualityRow[] }) {
                 <PolarAngleAxis dataKey="axis" tick={{ fontSize: 11 }} />
                 <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 9 }} />
                 <Radar dataKey="value" stroke="#6366f1" fill="#6366f1" fillOpacity={0.4} />
-                <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: number) => v.toFixed(1)} />
+                <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: any) => v.toFixed(1)} />
               </RadarChart>
             </ResponsiveContainer>
           </div>

@@ -135,7 +135,7 @@ export default function ComparePane({
                 <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => mode === "normalized" ? `${(v as number).toFixed(0)}%` : `$${(v as number).toFixed(0)}`} />
                 <Tooltip
                   contentStyle={{ fontSize: 11, padding: 4 }}
-                  formatter={(v: number | null) =>
+                  formatter={(v: any) =>
                     v == null ? "—"
                     : mode === "normalized" ? `${v > 0 ? "+" : ""}${v.toFixed(2)}%`
                     : `$${v.toFixed(2)}`

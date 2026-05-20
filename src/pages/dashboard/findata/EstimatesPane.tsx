@@ -88,7 +88,7 @@ export default function EstimatesPane({ symbol }: { symbol: string }) {
                     paddingAngle={1}
                   >
                   </Pie>
-                  <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: number) => `${v} analysts (${((v / recTotal) * 100).toFixed(0)}%)`} />
+                  <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: any) => `${v} analysts (${((v / recTotal) * 100).toFixed(0)}%)`} />
                 </PieChart>
               </ResponsiveContainer>
             </div>

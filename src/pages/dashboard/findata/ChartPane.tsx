@@ -138,7 +138,7 @@ export default function ChartPane({ symbol }: { symbol: string }) {
                 <Tooltip
                   labelStyle={{ fontSize: 11 }}
                   contentStyle={{ fontSize: 11, padding: 4 }}
-                  formatter={(v: number, k: string) =>
+                  formatter={(v: any, k: any) =>
                     k === "divAmount" && v
                       ? [`$${fmtNumber(v, { decimals: 3 })}`, "Dividend"]
                       : typeof v === "number"
@@ -174,7 +174,7 @@ export default function ChartPane({ symbol }: { symbol: string }) {
                 <Tooltip
                   labelStyle={{ fontSize: 11 }}
                   contentStyle={{ fontSize: 11, padding: 4 }}
-                  formatter={(v: number) => fmtNumber(v, { abbreviate: true, decimals: 1 })}
+                  formatter={(v: any) => fmtNumber(v, { abbreviate: true, decimals: 1 })}
                 />
                 <Bar dataKey="volume">
                   {data.map((d, i) => (

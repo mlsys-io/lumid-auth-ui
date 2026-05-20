@@ -84,7 +84,7 @@ export default function OverviewSimple({
               </defs>
               <XAxis dataKey="ts" hide />
               <YAxis hide domain={["dataMin", "dataMax"]} />
-              <Tooltip contentStyle={{ fontSize: 10, padding: 4 }} formatter={(v: number) => fmtNumber(v, { decimals: 4 })} />
+              <Tooltip contentStyle={{ fontSize: 10, padding: 4 }} formatter={(v: any) => fmtNumber(v, { decimals: 4 })} />
               <Area type="monotone" dataKey="close" stroke={ret180 != null && ret180 < 0 ? "#ef4444" : accent} strokeWidth={2} fill="url(#sparkSimple)" />
             </AreaChart>
           </ResponsiveContainer>
@@ -121,7 +121,7 @@ export default function OverviewSimple({
                 <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
                 <XAxis dataKey="ts" tick={{ fontSize: 9 }} minTickGap={40} />
                 <YAxis tick={{ fontSize: 9 }} tickFormatter={(v) => fmtNumber(v, { abbreviate: true, decimals: 0 })} />
-                <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: number) => fmtNumber(v, { abbreviate: true, decimals: 1 })} />
+                <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: any) => fmtNumber(v, { abbreviate: true, decimals: 1 })} />
                 <Bar dataKey="volume" fill="#94a3b8" />
               </BarChart>
             </ResponsiveContainer>

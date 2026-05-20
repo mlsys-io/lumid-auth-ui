@@ -85,7 +85,7 @@ function HoldingsView({ symbol, onSelect }: { symbol: string; onSelect?: (s: str
                 <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={50} outerRadius={100} paddingAngle={1}>
                   {pieData.map((d, i) => <Cell key={i} fill={d.fill} />)}
                 </Pie>
-                <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: number) => `${v.toFixed(2)}%`} />
+                <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: any) => `${v.toFixed(2)}%`} />
                 <Legend wrapperStyle={{ fontSize: 9 }} iconSize={8} layout="vertical" align="right" verticalAlign="middle" />
               </PieChart>
             </ResponsiveContainer>
@@ -99,7 +99,7 @@ function HoldingsView({ symbol, onSelect }: { symbol: string; onSelect?: (s: str
                 <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
                 <XAxis type="number" tickFormatter={(v) => `${v}%`} tick={{ fontSize: 10 }} />
                 <YAxis dataKey="asset_symbol" type="category" tick={{ fontSize: 10 }} />
-                <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: number) => `${v.toFixed(2)}%`} />
+                <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: any) => `${v.toFixed(2)}%`} />
                 <Bar dataKey="weight_pct" fill="#6366f1" />
               </BarChart>
             </ResponsiveContainer>
@@ -158,7 +158,7 @@ function ExposureView({ symbol, onSelect }: { symbol: string; onSelect?: (s: str
               <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
               <XAxis type="number" tickFormatter={(v) => `${v}%`} tick={{ fontSize: 10 }} />
               <YAxis dataKey="etf_symbol" type="category" tick={{ fontSize: 10 }} />
-              <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: number) => `${v.toFixed(2)}%`} />
+              <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: any) => `${v.toFixed(2)}%`} />
               <Bar dataKey="weight_pct" fill="#10b981" />
             </BarChart>
           </ResponsiveContainer>
@@ -219,7 +219,7 @@ function WeightsBar({ fn, label }: { fn: () => Promise<unknown[]>; label: string
             <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
             <XAxis type="number" tickFormatter={(v) => `${(v as number).toFixed ? (v as number).toFixed(1) : v}%`} tick={{ fontSize: 10 }} />
             <YAxis dataKey={nameKey} type="category" tick={{ fontSize: 10 }} width={100} />
-            <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: number) => `${v.toFixed(2)}%`} />
+            <Tooltip contentStyle={{ fontSize: 11, padding: 4 }} formatter={(v: any) => `${v.toFixed(2)}%`} />
             <Bar dataKey={weightKey} fill="#6366f1" />
           </BarChart>
         </ResponsiveContainer>

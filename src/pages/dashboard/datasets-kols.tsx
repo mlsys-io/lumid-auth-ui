@@ -286,7 +286,10 @@ function RecentFeed({ onCashtagClick, onHandleClick }: {
       </div>
       {err && <div className="px-3 py-2 text-xs text-red-600">{err}</div>}
       {!err && !loading && tweets.length === 0 && (
-        <div className="px-3 py-6 text-center text-sm text-muted-foreground">No recent tweets. Try Search or By symbol.</div>
+        <div className="px-3 py-8 text-center text-sm text-muted-foreground">
+          <div>Quiet across the roster right now.</div>
+          <div className="text-xs mt-1 opacity-70">Try the <b>Search</b> tab for a specific topic or <b>By symbol</b> for cashtag activity.</div>
+        </div>
       )}
       {tweets.map((t) => (
         <TweetCard key={t.tweet_id} t={t} onCashtagClick={onCashtagClick} onHandleClick={onHandleClick} />
@@ -425,7 +428,10 @@ function SearchView({ onCashtagClick, onHandleClick }: {
       )}
       {loading && <div className="px-3 py-6 text-center text-sm text-muted-foreground">Searching…</div>}
       {q && !loading && !err && tweets.length === 0 && (
-        <div className="px-3 py-6 text-center text-sm text-muted-foreground">No matches for "{q}" in this window.</div>
+        <div className="px-3 py-8 text-center text-sm text-muted-foreground">
+          <div>No tweets mention <span className="font-mono">"{q}"</span> in this window.</div>
+          <div className="text-xs mt-1 opacity-70">Try a broader term, widen the date range, or browse <b>Roster</b> for specific KOLs.</div>
+        </div>
       )}
       {tweets.length > 0 && (
         <div className="px-3 py-1.5 text-[11px] text-muted-foreground bg-muted/10 border-b border-border">
@@ -542,7 +548,7 @@ function RosterView({ onHandleClick }: { onHandleClick: (h: string) => void }) {
               </tr>
             ))}
             {visible.length === 0 && (
-              <tr><td colSpan={5} className="px-3 py-6 text-center text-sm text-muted-foreground">No matches.</td></tr>
+              <tr><td colSpan={5} className="px-3 py-8 text-center text-sm text-muted-foreground">No handles match your filter. Clear it or try a different tier.</td></tr>
             )}
           </tbody>
         </table>
@@ -618,7 +624,10 @@ function HandleDrawer({ handle, onClose, onCashtagClick, onHandleClick }: {
         {err && <div className="px-3 py-2 text-xs text-red-600">{err}</div>}
         {loading && <div className="px-3 py-6 text-center text-sm text-muted-foreground">Loading…</div>}
         {!loading && tweets.length === 0 && !err && (
-          <div className="px-3 py-6 text-center text-sm text-muted-foreground">No tweets found for this handle in either live or archive.</div>
+          <div className="px-3 py-8 text-center text-sm text-muted-foreground">
+            <div>No tweets cached for <span className="font-mono">@{handle}</span>.</div>
+            <div className="text-xs mt-1 opacity-70">The handle may not be in the kv.run archive yet, or the cache is rebuilding.</div>
+          </div>
         )}
         {tweets.map((t) => (
           <TweetCard key={t.tweet_id} t={t} onCashtagClick={onCashtagClick} onHandleClick={onHandleClick} />
