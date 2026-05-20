@@ -52,6 +52,9 @@ const QuantTemplate = lazy(() => import("./pages/dashboard/quant-template"));
 const QuantResearch = lazy(() => import("./pages/dashboard/quant-research"));
 const QuantMarketData = lazy(() => import("./pages/dashboard/quant-market-data"));
 const DatasetsFindata = lazy(() => import("./pages/dashboard/datasets-findata"));
+const DatasetsMacro   = lazy(() => import("./pages/dashboard/datasets-macro"));
+const DatasetsKols    = lazy(() => import("./pages/dashboard/datasets-kols"));
+const DatasetsNews    = lazy(() => import("./pages/dashboard/datasets-news"));
 // Quant competition leaf components — Competitions shell wraps the
 // list-views (Browse + My strategies) with a sub-tab strip. Pathways
 // and detail pages render directly. 2026-05-03 consolidation.
@@ -429,6 +432,9 @@ export default function App() {
                 Surfaced under /dashboard/datasets/findata; the iframe loads
                 the FinData Vue SPA via /findata-embed/ same-origin proxy. */}
             <Route path="datasets/findata" element={<DatasetsFindata />} />
+            <Route path="datasets/macro"   element={<DatasetsMacro />} />
+            <Route path="datasets/kols"    element={<DatasetsKols />} />
+            <Route path="datasets/news"    element={<DatasetsNews />} />
 
             {/* Lumilake-origin pages grouped under /app/lumilake/*.
                 data-label + modelling hidden 2026-04-24 — not

@@ -29,6 +29,8 @@ import {
 	RefreshCw,
 	ShoppingBag,
 	Brain,
+	MessageSquare,
+	Newspaper,
 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
@@ -107,7 +109,10 @@ const PRODUCT_NAV: NavItem[] = [
 // (lumid.data prerequisite Tier E).
 const LUMILAKE_NAV: NavItem[] = [
 	{ to: '/dashboard/lumilake/data', label: 'Data browsing', icon: Database },
-	{ to: '/dashboard/datasets/findata', label: 'Financial data', icon: LineChart },
+	{ to: '/dashboard/datasets/findata', label: 'FinData Explorer', icon: LineChart },
+	{ to: '/dashboard/datasets/macro', label: 'Macro', icon: Activity },
+	{ to: '/dashboard/datasets/kols', label: 'KOL Tweets', icon: MessageSquare },
+	{ to: '/dashboard/datasets/news', label: 'News', icon: Newspaper },
 ];
 
 // Lumid Market (LQA) sidebar entries are rendered by QuantSection
@@ -288,6 +293,15 @@ const LQA_NAV: NavItem[] = [
 	{ to: '/dashboard/quant/strategy', label: 'Backtest', icon: Code2 },
 ];
 
+// LQA's user-facing landing lives at lumid.market (separate React app).
+// Rendered as an external link at the top of the section so it's the
+// obvious gateway out of the lum.id shell into the trading product.
+const LQA_LANDING: ExternalNavItem = {
+	href: 'https://lumid.market/',
+	label: 'Lumid Market home',
+	icon: Trophy,
+};
+
 function QuantSection({ onItemClick }: { onItemClick?: () => void }) {
 	const [joined, setJoined] = useState<JoinedContest[]>([]);
 
@@ -325,6 +339,7 @@ function QuantSection({ onItemClick }: { onItemClick?: () => void }) {
 		<>
 			<SectionLabel label="Lumid Market" />
 			<div className="space-y-px">
+				<SidebarExternalItem {...LQA_LANDING} onClick={onItemClick} />
 				{LQA_NAV.map((item) => (
 					<SidebarItem key={item.to} {...item} onClick={onItemClick} />
 				))}
@@ -469,6 +484,12 @@ export default function AppLayout() {
 					{LUMILAKE_NAV.map((item) => (
 						<SidebarItem key={item.to} {...item} onClick={close} />
 					))}
+					<SidebarExternalItem
+						href="http://kv.run:5000/docs"
+						label="FinData Cloud API"
+						icon={ExternalLink}
+						onClick={close}
+					/>
 				</div>
 
 				<QuantSection onItemClick={close} />
