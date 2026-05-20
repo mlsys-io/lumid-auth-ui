@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Newspaper, ExternalLink, RefreshCw, TrendingUp, TrendingDown, MessageCircle, Plus } from "lucide-react";
+import { Newspaper, ExternalLink, RefreshCw, TrendingUp, TrendingDown, MessageCircle, Plus, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   findata,
   fmtNumber,
   daysAgoISO,
-  type NewsItem,
+  type NewsArticleWithCategory,
+  type NewsCategoryStats,
   type SymbolSentiment,
   type SocialSentimentRow,
 } from "@/api/findata";
 
-type Tab = "feed" | "sentiment" | "social";
+type Tab = "feed" | "search" | "sentiment" | "social";
 
 // ── Watchlist storage ───────────────────────────────────────────────────────
 
@@ -56,9 +57,11 @@ function catCls(c: string | null | undefined): string {
   return CATEGORY_COLOUR[c.toLowerCase()] ?? "bg-muted text-muted-foreground border-border";
 }
 
-interface FeedItem extends NewsItem {
-  symbol: string;
-}
+// kv.run's NewsArticleWithCategory is the unified shape across both
+// /news/latest and /news/search (cross-roster) and /news/{symbol} (per-symbol).
+// The per-symbol variant returns the symbol from the path; latest/search
+// include the field in the row itself.
+type FeedItem = NewsArticleWithCategory & { symbol: string | null };
 
 // ── Watchlist editor ────────────────────────────────────────────────────────
 
@@ -111,72 +114,97 @@ function WatchlistEditor({
   );
 }
 
-// ── Merged feed (fan-out across watchlist) ──────────────────────────────────
+// ── Shared article-row renderer ─────────────────────────────────────────────
+
+function ArticleRow({ n, idx }: { n: FeedItem; idx: number }) {
+  const ts = n.published_at ?? null;
+  const pub = n.publisher ?? "";
+  return (
+    <li key={n.url || `${n.symbol ?? ""}-${idx}`} className="px-4 py-2.5 hover:bg-muted/30 transition-colors">
+      <a href={n.url} target="_blank" rel="noopener noreferrer" className="block group">
+        <div className="flex items-start gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 mb-0.5 flex-wrap text-[11px]">
+              {n.symbol && <span className="font-mono font-semibold text-primary">${n.symbol}</span>}
+              {pub && <span className="text-muted-foreground">{pub}</span>}
+              {n.category && (
+                <span className={cn("px-1.5 py-0.5 rounded border font-medium", catCls(n.category))}>
+                  {n.category}
+                </span>
+              )}
+              {ts && <span className="text-muted-foreground ml-auto" title={ts}>{timeAgo(ts)}</span>}
+            </div>
+            <div className="text-sm font-medium text-foreground leading-snug group-hover:underline">{n.headline}</div>
+            {n.summary && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{n.summary}</p>}
+          </div>
+          <ExternalLink className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 shrink-0 mt-1" />
+        </div>
+      </a>
+    </li>
+  );
+}
+
+// ── Cross-roster feed (kv.run /news/latest) ─────────────────────────────────
+//
+// Was a fan-out across the user's watchlist (one /news/{symbol} call per
+// ticker, then dedup + sort). kv.run added /news/latest 2026-05-20 which
+// returns a single ordered cross-roster stream — drop the fan-out.
+// The watchlist is now only used to scope down via the per-symbol path when
+// the user picks a single ticker.
 
 function MergedFeed({ watchlist, current }: { watchlist: string[]; current: string | "all" }) {
+  void watchlist;
   const [items, setItems] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [publisher, setPublisher] = useState<string>("");
   const [category, setCategory] = useState<string>("");
 
-  const symbols = current === "all" ? watchlist : [current];
-
   const load = useCallback(async () => {
-    if (symbols.length === 0) { setItems([]); return; }
     setLoading(true);
     setErr(null);
     try {
       const since = daysAgoISO(14);
-      const perSym = current === "all" ? Math.max(10, Math.ceil(80 / symbols.length)) : 50;
-      const settled = await Promise.allSettled(
-        symbols.map((s) => findata.news(s, perSym, since).then((rows) => rows.map((r) => ({ ...r, symbol: s })))),
-      );
-      const merged: FeedItem[] = [];
-      const seen = new Set<string>();
-      for (const r of settled) {
-        if (r.status === "fulfilled") {
-          for (const it of r.value) {
-            const k = it.url || `${it.symbol}:${it.headline}`;
-            if (seen.has(k)) continue;
-            seen.add(k);
-            merged.push(it);
-          }
-        }
+      if (current === "all") {
+        // kv.run cross-roster stream — already sorted newest-first server-side.
+        const rows = await findata.newsLatest({ since, limit: 100 });
+        setItems(rows.map((r) => ({ ...r, symbol: r.symbol ?? null })));
+      } else {
+        // Single-symbol drill-down via /news/{symbol}.
+        const rows = await findata.news(current, 50, since);
+        setItems(rows.map((r) => ({
+          published_at: (r.published_at ?? r.ts ?? "") as string,
+          publisher: (r.publisher ?? r.source ?? null) as string | null,
+          headline: r.headline,
+          summary: (r.summary ?? null) as string | null,
+          url: r.url,
+          category: (r.category ?? null) as string | null,
+          symbol: current,
+        })));
       }
-      merged.sort((a, b) => {
-        const ta = a.published_at ?? a.ts ?? "";
-        const tb = b.published_at ?? b.ts ?? "";
-        return ta < tb ? 1 : ta > tb ? -1 : 0;
-      });
-      setItems(merged);
     } catch (e) {
       setErr(String((e as Error)?.message ?? e));
     } finally {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current, watchlist.join(",")]);
+  }, [current]);
 
   useEffect(() => { load(); }, [load]);
 
   const publishers = useMemo(() => {
     const s = new Set<string>();
-    items.forEach((i) => { const p = i.publisher ?? i.source; if (p) s.add(String(p)); });
+    items.forEach((i) => { if (i.publisher) s.add(i.publisher); });
     return Array.from(s).sort();
   }, [items]);
 
   const categories = useMemo(() => {
     const s = new Set<string>();
-    items.forEach((i) => { if (i.category) s.add(String(i.category)); });
+    items.forEach((i) => { if (i.category) s.add(i.category); });
     return Array.from(s).sort();
   }, [items]);
 
   const visible = useMemo(() => items.filter((it) => {
-    if (publisher) {
-      const p = String(it.publisher ?? it.source ?? "");
-      if (p !== publisher) return false;
-    }
+    if (publisher && it.publisher !== publisher) return false;
     if (category && it.category !== category) return false;
     return true;
   }), [items, publisher, category]);
@@ -196,7 +224,8 @@ function MergedFeed({ watchlist, current }: { watchlist: string[]; current: stri
           {categories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
         <span className="text-muted-foreground ml-2">
-          {visible.length}{visible.length !== items.length && ` / ${items.length}`} articles · last 14 days
+          {visible.length}{visible.length !== items.length && ` / ${items.length}`} articles ·{" "}
+          {current === "all" ? "cross-roster" : current} · last 14 days
         </span>
         <button onClick={load} disabled={loading}
           className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded border border-border hover:bg-accent disabled:opacity-50">
@@ -211,34 +240,118 @@ function MergedFeed({ watchlist, current }: { watchlist: string[]; current: stri
         <div className="px-4 py-6 text-center text-sm text-muted-foreground">No articles match.</div>
       )}
       <ul className="divide-y divide-border">
-        {visible.map((n, i) => {
-          const ts = (n.published_at ?? n.ts) as string | undefined;
-          const pub = String(n.publisher ?? n.source ?? "");
-          return (
-            <li key={n.url || `${n.symbol}-${i}`} className="px-4 py-2.5 hover:bg-muted/30 transition-colors">
-              <a href={n.url} target="_blank" rel="noopener noreferrer" className="block group">
-                <div className="flex items-start gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 mb-0.5 flex-wrap text-[11px]">
-                      <span className="font-mono font-semibold text-primary">${n.symbol}</span>
-                      {pub && <span className="text-muted-foreground">{pub}</span>}
-                      {n.category && (
-                        <span className={cn("px-1.5 py-0.5 rounded border font-medium", catCls(String(n.category)))}>
-                          {String(n.category)}
-                        </span>
-                      )}
-                      {ts && <span className="text-muted-foreground ml-auto" title={ts}>{timeAgo(ts)}</span>}
-                    </div>
-                    <div className="text-sm font-medium text-foreground leading-snug group-hover:underline">{n.headline}</div>
-                    {n.summary && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{String(n.summary)}</p>}
-                  </div>
-                  <ExternalLink className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 shrink-0 mt-1" />
-                </div>
-              </a>
-            </li>
-          );
-        })}
+        {visible.map((n, i) => <ArticleRow key={n.url || `${n.symbol ?? ""}-${i}`} n={n} idx={i} />)}
       </ul>
+    </div>
+  );
+}
+
+// ── Full-text search (kv.run /news/search) ──────────────────────────────────
+
+function SearchFeed({ initialQuery = "" }: { initialQuery?: string }) {
+  const [draft, setDraft] = useState(initialQuery);
+  const [q, setQ] = useState(initialQuery);
+  const [category, setCategory] = useState<string>("");
+  const [items, setItems] = useState<FeedItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    if (!q.trim()) { setItems([]); return; }
+    setLoading(true);
+    setErr(null);
+    try {
+      const since = daysAgoISO(30);
+      const rows = await findata.newsSearch(q.trim(), {
+        since,
+        limit: 100,
+        category: category || undefined,
+      });
+      setItems(rows.map((r) => ({ ...r, symbol: r.symbol ?? null })));
+    } catch (e) {
+      setErr(String((e as Error)?.message ?? e));
+    } finally {
+      setLoading(false);
+    }
+  }, [q, category]);
+
+  useEffect(() => { load(); }, [load]);
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-border bg-muted/20 text-xs">
+        <Search className="w-3.5 h-3.5 text-muted-foreground" />
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && setQ(draft.trim())}
+          placeholder="rate cut, NVDA earnings, AI bubble…"
+          className="flex-1 min-w-[200px] rounded border border-border bg-background px-2 py-1 text-sm"
+        />
+        <select value={category} onChange={(e) => setCategory(e.target.value)}
+          className="rounded border border-border bg-background px-2 py-0.5 text-xs">
+          <option value="">All categories</option>
+          <option value="company">company</option>
+          <option value="stock_market">stock_market</option>
+          <option value="press_release">press_release</option>
+          <option value="crypto">crypto</option>
+          <option value="forex">forex</option>
+          <option value="general">general</option>
+        </select>
+        <button onClick={() => setQ(draft.trim())}
+          className="px-3 py-1 rounded border border-primary text-primary bg-primary/10 hover:bg-primary/20">
+          Search
+        </button>
+        {q && (
+          <span className="text-muted-foreground ml-2">
+            {items.length} matches · last 30 days
+          </span>
+        )}
+      </div>
+      {err && <div className="px-4 py-2 text-xs text-red-600">{err}</div>}
+      {!q && (
+        <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+          Enter a query and press Enter. Full-text search across the kv.run news archive.
+        </div>
+      )}
+      {q && loading && items.length === 0 && (
+        <div className="px-4 py-6 text-center text-sm text-muted-foreground animate-pulse">Searching…</div>
+      )}
+      {q && !loading && !err && items.length === 0 && (
+        <div className="px-4 py-6 text-center text-sm text-muted-foreground">No matches for "{q}".</div>
+      )}
+      <ul className="divide-y divide-border">
+        {items.map((n, i) => <ArticleRow key={n.url || `${n.symbol ?? ""}-${i}`} n={n} idx={i} />)}
+      </ul>
+    </div>
+  );
+}
+
+// ── Stats banner (kv.run /news/stats) ───────────────────────────────────────
+
+function NewsStatsBanner() {
+  const [stats, setStats] = useState<NewsCategoryStats | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    findata.newsStats().then(setStats).catch((e) => setErr(String((e as Error)?.message ?? e)));
+  }, []);
+  if (err) return null; // silent on error — banner is informational only
+  if (!stats?.categories) return null;
+  const sorted = [...stats.categories]
+    .filter((r) => r.category)
+    .sort((a, b) => (b.rows_last_7d ?? 0) - (a.rows_last_7d ?? 0))
+    .slice(0, 5);
+  const total7d = stats.categories.reduce((sum, r) => sum + (r.rows_last_7d ?? 0), 0);
+  return (
+    <div className="flex items-center gap-3 px-4 py-1.5 border-b border-border bg-muted/10 text-[11px] text-muted-foreground overflow-x-auto">
+      <span>Last 7d:</span>
+      <span><span className="font-mono font-semibold text-foreground">{fmtNumber(total7d, { abbreviate: true, decimals: 1 })}</span> total</span>
+      {sorted.map((r) => (
+        <span key={r.category ?? "?"} className="whitespace-nowrap">
+          <span className={cn("px-1.5 py-0.5 rounded border", catCls(r.category))}>{r.category}</span>{" "}
+          <span className="font-mono text-foreground">{fmtNumber(r.rows_last_7d, { abbreviate: true, decimals: 1 })}</span>
+        </span>
+      ))}
     </div>
   );
 }
@@ -508,24 +621,32 @@ export default function DatasetsNewsPage() {
         <Newspaper className="w-4 h-4 text-primary" />
         <div className="text-sm font-semibold text-foreground">News Explorer</div>
         <span className="text-[11px] text-muted-foreground ml-2">
-          Headlines · sentiment · social mentions across your watchlist
+          Cross-roster headlines · full-text search · sentiment · social mentions
         </span>
         <div className="ml-auto text-[10px] text-muted-foreground font-mono">kv.run:5000 · /news/*</div>
       </div>
 
-      {/* Watchlist chips */}
-      <WatchlistEditor
-        watchlist={watchlist}
-        current={current}
-        onPick={setCurrent}
-        onAdd={addSym}
-        onRemove={removeSym}
-      />
+      {/* Stats banner (last 7d per-category) — only meaningful on cross-roster surfaces */}
+      {(tab === "feed" || tab === "search") && <NewsStatsBanner />}
+
+      {/* Watchlist chips — only relevant for symbol-scoped tabs */}
+      {tab !== "search" && (
+        <WatchlistEditor
+          watchlist={watchlist}
+          current={current}
+          onPick={setCurrent}
+          onAdd={addSym}
+          onRemove={removeSym}
+        />
+      )}
 
       {/* Tab bar */}
       <div className="flex items-center gap-1 px-4 border-b bg-background shrink-0">
         <button className={tabCls(tab === "feed")} onClick={() => setTab("feed")}>
           <Newspaper className="w-3.5 h-3.5" /> Feed
+        </button>
+        <button className={tabCls(tab === "search")} onClick={() => setTab("search")}>
+          <Search className="w-3.5 h-3.5" /> Search
         </button>
         <button className={tabCls(tab === "sentiment")} onClick={() => setTab("sentiment")}>
           <TrendingUp className="w-3.5 h-3.5" /> Sentiment
@@ -537,8 +658,9 @@ export default function DatasetsNewsPage() {
 
       {/* Content */}
       <div className="flex-1 overflow-auto">
-        {tab === "feed"      && <MergedFeed     watchlist={watchlist} current={current} />}
-        {tab === "sentiment" && <SentimentView  symbols={focused} />}
+        {tab === "feed"      && <MergedFeed         watchlist={watchlist} current={current} />}
+        {tab === "search"    && <SearchFeed />}
+        {tab === "sentiment" && <SentimentView      symbols={focused} />}
         {tab === "social"    && <SocialSentimentView initialSymbol={socialSym} />}
       </div>
     </div>

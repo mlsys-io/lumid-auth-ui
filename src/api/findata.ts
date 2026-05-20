@@ -344,6 +344,25 @@ export const findata = {
   },
   kolStreamUrl: (symbols: string[]) =>
     `${BASE}/kols/tweets/stream${symbols.length ? `?symbols=${symbols.map(encodeURIComponent).join(",")}` : ""}`,
+  kolMediaUrl: (twitterCdnUrl: string) =>
+    `${BASE}/kols/media/by-url?u=${encodeURIComponent(twitterCdnUrl)}`,
+
+  // News — cross-symbol surface (added by kv.run 2026-05-20)
+  newsLatest: (params: { category?: string; since?: string; limit?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.category) qs.set("category", params.category);
+    if (params.since)    qs.set("since",    params.since);
+    qs.set("limit", String(params.limit ?? 50));
+    return call<NewsArticleWithCategory[]>(`/news/latest?${qs}`);
+  },
+  newsSearch: (q: string, params: { category?: string; since?: string; limit?: number } = {}) => {
+    const qs = new URLSearchParams({ q });
+    if (params.category) qs.set("category", params.category);
+    if (params.since)    qs.set("since",    params.since);
+    qs.set("limit", String(params.limit ?? 50));
+    return call<NewsArticleWithCategory[]>(`/news/search?${qs}`);
+  },
+  newsStats: () => call<NewsCategoryStats>("/news/stats"),
 };
 
 // v67 types
@@ -475,6 +494,29 @@ export interface RatiosRow {
   period_end_date: string;
   period_type: string;
   ratios: Record<string, number | null>;
+}
+
+// News — cross-symbol surface (kv.run /news/latest + /news/search + /news/stats)
+export interface NewsArticleWithCategory {
+  published_at: string;
+  publisher: string | null;
+  headline: string;
+  summary: string | null;
+  url: string;
+  category: string | null;
+  symbol: string | null;
+}
+
+export interface NewsCategoryStatRow {
+  category: string | null;
+  rows_last_7d: number;
+  rows_last_30d: number;
+  latest_in_60d: string | null;
+}
+
+export interface NewsCategoryStats {
+  categories: NewsCategoryStatRow[];
+  [key: string]: unknown;
 }
 
 export interface SocialSentimentRow {
