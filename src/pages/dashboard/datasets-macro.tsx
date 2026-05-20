@@ -27,15 +27,7 @@ function FreshnessBadge({ data }: { data: Freshness | null }) {
   );
 }
 
-// Liquid commodity / index futures defaults the user can switch between
-// with one click rather than retyping. Picks span energy, ags, metals,
-// rates, and equity-index futures — the common COT report categories.
-const COT_PRESETS = ["ES", "NQ", "CL", "GC", "SI", "ZB", "ZN", "ZC", "ZS", "BTC"];
-
 export default function DatasetsMacroPage() {
-  // COT is the only sub-view that's per-symbol; the rest are global.
-  const [cotSymbol, setCotSymbol] = useState("ES");
-  const [draft, setDraft] = useState("ES");
   const [freshness, setFreshness] = useState<Freshness | null>(null);
 
   // Refresh the freshness badge whenever the page loads / focuses / cot
@@ -56,13 +48,6 @@ export default function DatasetsMacroPage() {
     refresh();
   }, [refresh]);
 
-  useEffect(() => { setDraft(cotSymbol); }, [cotSymbol]);
-
-  const apply = () => {
-    const clean = draft.trim().toUpperCase();
-    if (clean && clean !== cotSymbol) setCotSymbol(clean);
-  };
-
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)]">
       {/* Header */}
@@ -70,7 +55,7 @@ export default function DatasetsMacroPage() {
         <Activity className="w-4 h-4 text-primary" />
         <div className="text-sm font-semibold text-foreground">Macro</div>
         <FreshnessBadge data={freshness} />
-        <span className="text-xs text-muted-foreground hidden md:inline">
+        <span className="text-xs text-muted-foreground hidden lg:inline">
           Treasury rates · econ calendar · indicators · IPOs · M&A · FDA · symbol changes · COT
         </span>
         <span className="ml-auto text-[10px] text-muted-foreground/70">loaded {fmtAgo(loadedAt)}</span>
@@ -81,34 +66,11 @@ export default function DatasetsMacroPage() {
         <div className="text-[10px] text-muted-foreground font-mono">kv.run:5000 · /macro/*</div>
       </div>
 
-      {/* COT symbol picker — only the COT sub-view uses this; preset chips
-          for the common futures contracts so users don't have to remember
-          the symbol convention. */}
-      <div className="flex flex-wrap items-center gap-1.5 px-4 py-2 border-b border-border bg-muted/30">
-        <span className="text-xs text-muted-foreground mr-1">COT symbol:</span>
-        {COT_PRESETS.map((s) => (
-          <button key={s} onClick={() => setCotSymbol(s)}
-            className={cn(
-              "text-xs px-2 py-0.5 rounded font-mono border transition-colors",
-              s === cotSymbol
-                ? "border-primary text-primary bg-primary/10"
-                : "border-border text-muted-foreground hover:bg-accent",
-            )}>{s}</button>
-        ))}
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value.toUpperCase())}
-          onKeyDown={(e) => e.key === "Enter" && apply()}
-          onBlur={apply}
-          size={6}
-          placeholder="custom"
-          className="rounded border border-dashed border-border bg-transparent px-2 py-0.5 text-xs font-mono uppercase placeholder:text-muted-foreground/70 focus:border-primary focus:bg-background focus:outline-none"
-        />
-      </div>
-
-      {/* Content */}
+      {/* Content — MacroPane owns its own sub-tabs (Indicators / Calendar /
+          Treasury / COT / IPOs / M&A / FDA / Symbols) and the per-tab
+          COT-symbol picker. Page header stays clean. */}
       <div className="flex-1 overflow-auto p-4">
-        <MacroPane symbol={cotSymbol} />
+        <MacroPane />
       </div>
     </div>
   );
