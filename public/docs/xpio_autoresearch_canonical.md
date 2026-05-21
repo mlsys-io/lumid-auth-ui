@@ -155,6 +155,9 @@ loops:
     primary_role: assistant
     knowledge_agent: "<user>-personal-assistant"
     mode: paper                     # ∈ {paper, live, simulate, semi, explore}  app_runner.py:46
+    requires_confirmation: false    # default: true for mode=live, false otherwise
+                                    # honored by sdk/ops/job_deploy.py's AskUserQuestion gate
+                                    # when the loop is dispatched from Claude Code
     skills:                         # set membership; informational
       - calendar/observe
       - email/observe
@@ -562,6 +565,40 @@ lumid research run crypto_autoinsight_research
 requested cycle. This is identical to what the scheduler fires on cron trigger —
 `_run_auto_publish()` runs after every cycle, so insights.md and memory banks update
 correctly.
+
+## Deferred work via `submit_jobs`
+
+The inline cycle is fast enough for live trading, but heavier work (long backtests, GPU inference, daily LLM-driven memos) should be dispatched as a job and either picked up later or fired on a recurring schedule. The opt-in `submit_jobs` skill family lives at `sdk/skills/submit_jobs/`:
+
+| Skill | When | Backend |
+|---|---|---|
+| `submit_jobs.flowmesh` | GPU inference, training fans, deep backtests | `POST kv.run:8000/flowmesh` |
+| `submit_jobs.lumilake` | HALO-optimised DAGs, multi-stage ETL | `POST lum.id/lumilake-api` |
+| `submit_jobs.cron` | Recurring shell command OR recurring `claude -p` prompt | the same `lumid-scheduler` daemon that runs xpio loops |
+| `submit_jobs.get_result(job_id, wait=False)` | Read result back (cross-cycle or in-cycle) | reads `~/.lumilake/jobs.jsonl` ledger |
+
+### `submit_jobs.cron` — two modes, one queue
+
+```python
+# Spec mode — any shell command (lumid verbs, curl, pipelines)
+run(spec='lumid app auto-quant cycle momentum_research',
+    schedule='0 4 * * *', kind='nightly_recompute')
+
+# Prompt mode — recurring `claude -p` without authoring an xpio app
+run(prompt="Summarize today's BTC moves and write a memo",
+    schedule='0 8 * * *', kind='daily_brief',
+    model='claude-sonnet-4-6')
+```
+
+Both modes append to `~/.lumilake/scheduler/cron_jobs.json` AND record a `scheduled` row in `~/.lumilake/jobs.jsonl`. The writer then sends `SIGHUP` to `~/.lumilake/loops.pid` so the daemon picks up the new entry within ~2 s instead of waiting up to 10 min for the next refresh tick.
+
+Fire path (`sdk/scheduling/cron_executor.py:145`): prompt mode invokes `claude -p --model <model> "<prompt>"` (the binary is bind-mounted into the scheduler container at `/usr/local/bin/claude`); spec mode `sh -c "<spec>"`. Stdout is captured (16 KB tail-truncated) and lands in the ledger row AND a persistent file at `~/.lumilake/scheduler/results/<job_id>.txt`. Default per-fire timeout 600 s; override via `entry["timeout_s"]`.
+
+### Daemon lifecycle (matters for fresh users)
+
+The `lumid-scheduler` daemon stays alive at startup even when there are zero xpio loops AND the cron queue is empty — a fresh-install user always hits this. The intent: the user submits later, the daemon should still be there. `SIGHUP` forces an immediate `refresh()` so just-submitted jobs fire without waiting for the next 600 s tick. Submissions still arrive (and get picked up) on the next refresh tick if the daemon is restarting.
+
+The unified ledger at `~/.lumilake/jobs.jsonl` is the single read source for `/dashboard/jobs` and the place to debug from. State transitions: `scheduled → running → succeeded | failed`.
 
 ## Files of record
 
