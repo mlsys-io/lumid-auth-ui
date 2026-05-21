@@ -1,7 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { RefreshCw, AlertCircle, CheckCircle, Clock, ExternalLink, Plus, GitPullRequest, Search } from 'lucide-react';
+import { RefreshCw, AlertCircle, CheckCircle, Clock, ExternalLink, Plus, GitPullRequest, Search, TrendingUp } from 'lucide-react';
 import axios from 'axios';
+
+interface LoopOutcome {
+  alpha_pp?: number;
+  sharpe?: number;
+  max_dd?: number;
+  pnl?: number;
+  trades_count?: number;
+  win_rate?: number;
+  downstream_jobs?: Array<{ job_id: string; source: string; state: string }>;
+}
 
 interface LoopRecord {
   app: string;
@@ -17,6 +27,8 @@ interface LoopRecord {
   skills?: string[];
   steps?: Array<{ id?: string; skill?: string }>;
   skills_invoked?: string[];
+  last_ok?: boolean;
+  outcome?: LoopOutcome;
 }
 
 interface RepoRow {
@@ -106,6 +118,37 @@ export default function LoopsPage() {
     return out;
   }, [loops]);
 
+  // Trading summary across all loops with trading outcomes. Latest-cycle
+  // snapshot per loop — we don't have rolling 7d windows from the API
+  // yet, so this is "current trading state" not "trailing-7d performance".
+  // The plan calls out 7d/aggregate; document the limitation in the UI
+  // sub-label and revisit when /admin/loops gains a history endpoint.
+  const tradingSummary = useMemo(() => {
+    const tradingLoops = loops.filter((lp) => lp.outcome && (lp.outcome.pnl != null || lp.outcome.trades_count != null));
+    if (tradingLoops.length === 0) return null;
+
+    let totalPnl = 0;
+    let totalTrades = 0;
+    let okLoops = 0;
+    let topLoop: { app: string; loop: string; pnl: number } | null = null;
+    for (const lp of tradingLoops) {
+      const pnl = lp.outcome?.pnl ?? 0;
+      totalPnl += pnl;
+      totalTrades += lp.outcome?.trades_count ?? 0;
+      if ((lp.consecutive_failures ?? 0) === 0 && lp.last_status !== 'error') okLoops++;
+      if (topLoop == null || pnl > topLoop.pnl) {
+        topLoop = { app: lp.app, loop: lp.loop, pnl };
+      }
+    }
+    return {
+      loopCount: tradingLoops.length,
+      successRate: tradingLoops.length > 0 ? okLoops / tradingLoops.length : 0,
+      totalPnl,
+      totalTrades,
+      topLoop,
+    };
+  }, [loops]);
+
   return (
     <div className="max-w-4xl">
       <header className="mb-6 flex items-start justify-between">
@@ -129,6 +172,46 @@ export default function LoopsPage() {
           New loop
         </a>
       </header>
+
+      {/* Trading summary — only renders when at least one loop has trading
+          outcomes (auto-quant trading loops + any future trading app). */}
+      {tradingSummary && (
+        <section className="mb-6">
+          <div className="flex items-center gap-2 mb-2">
+            <TrendingUp className="w-4 h-4 text-emerald-600" />
+            <h2 className="text-sm font-semibold text-slate-900">
+              Trading summary · {tradingSummary.loopCount} loop{tradingSummary.loopCount === 1 ? '' : 's'}
+            </h2>
+            <span className="text-xs text-slate-400">(latest cycle per loop)</span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <SummaryCard
+              label="Cycles healthy"
+              value={`${Math.round(tradingSummary.successRate * 100)}%`}
+              hint={`${tradingSummary.loopCount} loops`}
+              tone="emerald"
+            />
+            <SummaryCard
+              label="Trades placed"
+              value={String(tradingSummary.totalTrades)}
+              hint="sum of latest cycles"
+              tone="slate"
+            />
+            <SummaryCard
+              label="Aggregate P&amp;L"
+              value={fmtPnL(tradingSummary.totalPnl)}
+              hint="across all trading loops"
+              tone={tradingSummary.totalPnl >= 0 ? 'emerald' : 'rose'}
+            />
+            <SummaryCard
+              label="Top loop"
+              value={tradingSummary.topLoop?.loop || '—'}
+              hint={tradingSummary.topLoop ? `${tradingSummary.topLoop.app} · ${fmtPnL(tradingSummary.topLoop.pnl)}` : ''}
+              tone="indigo"
+            />
+          </div>
+        </section>
+      )}
 
       {/* Improvement PRs — Stage 2-B output. Reviews land here. */}
       {openPRs.length > 0 && (
@@ -268,4 +351,38 @@ export default function LoopsPage() {
       </div>
     </div>
   );
+}
+
+// Small stat-card matching the super-admin dashboard tile style.
+// Tone drives the value color; the label/hint stays slate.
+function SummaryCard({
+  label, value, hint, tone,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  tone: 'emerald' | 'slate' | 'indigo' | 'rose';
+}) {
+  const toneClass: Record<string, string> = {
+    emerald: 'text-emerald-700',
+    slate:   'text-slate-700',
+    indigo:  'text-indigo-700',
+    rose:    'text-rose-700',
+  };
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
+      <div className="text-xs text-slate-500 uppercase tracking-wide">{label}</div>
+      <div className={`mt-1 text-2xl font-semibold tabular-nums truncate ${toneClass[tone]}`} title={value}>
+        {value}
+      </div>
+      {hint && <div className="mt-0.5 text-xs text-slate-400 truncate">{hint}</div>}
+    </div>
+  );
+}
+
+function fmtPnL(n: number): string {
+  if (Math.abs(n) < 0.01) return '0.00';
+  const sign = n >= 0 ? '+' : '';
+  if (Math.abs(n) >= 1000) return `${sign}${n.toFixed(0)}`;
+  return `${sign}${n.toFixed(2)}`;
 }
