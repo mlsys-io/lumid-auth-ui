@@ -4,6 +4,7 @@ import {
 	Activity,
 	AlertTriangle,
 	CheckCircle2,
+	Cpu,
 	Database,
 	GitBranch,
 	Key,
@@ -34,6 +35,7 @@ import {
 import { listUsers, type AdminUserRow } from '@/api/users';
 import { isSessionExpired } from '@/api/client';
 import { GrafanaEmbed } from '@/components/grafana-embed';
+import { SysResearchTile } from '@/components/dashboard/SysResearchTile';
 
 // /dashboard/super-admin — single-page operational + business pane of
 // glass for super_admin role. AppLayout supplies the sidebar; this
@@ -165,6 +167,13 @@ export default function SuperAdminDashboard() {
 			    per-app git status row at its top). */}
 			<Section icon={Activity} label="Autoresearch loops">
 				<LoopStatusTile loops={snap.loops} />
+			</Section>
+
+			{/* 3b. SysResearch — focused tile for auto-sysresearch's
+			    three loops with the headline metric pulled inline from
+			    each loop's latest score.json / drift.json. */}
+			<Section icon={Cpu} label="SysResearch">
+				<SysResearchTile loops={snap.loops} />
 			</Section>
 
 			{/* 4. Identity — usage + access context, less urgent than health.
