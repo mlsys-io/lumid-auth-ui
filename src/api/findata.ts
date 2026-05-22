@@ -363,7 +363,179 @@ export const findata = {
     return call<NewsArticleWithCategory[]>(`/news/search?${qs}`);
   },
   newsStats: () => call<NewsCategoryStats>("/news/stats"),
+
+  // Prediction markets (Polymarket + Kalshi, /prediction-markets/*)
+  pmEvents: (params: { q?: string; status?: "open" | "closed" | "all"; limit?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.q) qs.set("q", params.q);
+    if (params.status) qs.set("status", params.status);
+    qs.set("limit", String(params.limit ?? 50));
+    return call<PmEventRow[]>(`/prediction-markets/events?${qs}`);
+  },
+  pmSearch: (q: string, params: { venue?: "polymarket" | "kalshi"; status?: "open" | "closed" | "all"; limit?: number } = {}) => {
+    const qs = new URLSearchParams({ q });
+    if (params.venue) qs.set("venue", params.venue);
+    if (params.status) qs.set("status", params.status);
+    qs.set("limit", String(params.limit ?? 50));
+    return call<PmMarketRow[]>(`/prediction-markets/markets/search?${qs}`);
+  },
+  pmLeaderboard: (params: { window?: string; limit?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.window) qs.set("window", params.window);
+    qs.set("limit", String(params.limit ?? 50));
+    return call<PmLeaderboardRow[]>(`/prediction-markets/leaderboard?${qs}`);
+  },
+  // SSE — EventSource opens this directly. /findata-cloud/ proxies to
+  // kv.run:5000 unauthenticated (read-only feed).
+  pmStreamUrl: (params: { assetIds?: string[]; conditionIds?: string[] } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.assetIds?.length) qs.set("asset_ids", params.assetIds.join(","));
+    if (params.conditionIds?.length) qs.set("condition_ids", params.conditionIds.join(","));
+    return `${BASE}/prediction-markets/stream${qs.toString() ? `?${qs}` : ""}`;
+  },
+
+  // Market detail — Polymarket needs condition_id (0x…), Kalshi needs ticker.
+  pmPolymarketDetail: (conditionId: string) =>
+    call<PmPolymarketDetail>(`/prediction-markets/markets/polymarket/${encodeURIComponent(conditionId)}`),
+  pmKalshiDetail: (ticker: string) =>
+    call<PmKalshiDetail>(`/prediction-markets/markets/kalshi/${encodeURIComponent(ticker)}`),
+
+  // OHLCV candle history (per market_id). interval is in seconds.
+  pmCandles: (venue: "polymarket" | "kalshi", marketId: string, params: { interval?: number; limit?: number } = {}) => {
+    const qs = new URLSearchParams();
+    qs.set("interval", String(params.interval ?? 3600));
+    qs.set("limit", String(params.limit ?? 200));
+    return call<PmCandleRow[]>(`/prediction-markets/candles/${venue}/${encodeURIComponent(marketId)}?${qs}`);
+  },
+
+  // Orderbook snapshots. Polymarket is keyed by asset_id (CLOB token id,
+  // one per outcome). Kalshi is keyed by ticker.
+  pmOrderbookPolymarket: (assetId: string, limit = 5) =>
+    call<PmOrderbookSnap[]>(`/prediction-markets/orderbook/polymarket/${encodeURIComponent(assetId)}?limit=${limit}`),
+  pmOrderbookKalshi: (ticker: string, limit = 5) =>
+    call<PmOrderbookSnap[]>(`/prediction-markets/orderbook/kalshi/${encodeURIComponent(ticker)}?limit=${limit}`),
+
+  // Recent fills. For open Polymarket markets this is the most reliable
+  // price source — clob_token_ids on the detail response is currently
+  // null for newly-ingested open markets, so trades carry the only
+  // CLOB asset reference (via row.token_id) plus the price/ts series.
+  pmTradesPolymarket: (conditionId: string, limit = 200) =>
+    call<PmTradeRow[]>(`/prediction-markets/trades/polymarket/${encodeURIComponent(conditionId)}?limit=${limit}`),
+  pmTradesKalshi: (ticker: string, limit = 200) =>
+    call<PmTradeRow[]>(`/prediction-markets/trades/kalshi/${encodeURIComponent(ticker)}?limit=${limit}`),
 };
+
+export interface PmPolymarketDetail {
+  condition_id: string;
+  market_id: string;
+  question: string;
+  slug: string;
+  outcomes: string[];
+  outcome_prices: string[];
+  clob_token_ids: string[];
+  volume: number | null;
+  liquidity: number | null;
+  start_date: string | null;
+  end_date: string | null;
+  closed_time: string | null;
+  active: boolean;
+  closed: boolean;
+  archived: boolean;
+  enable_order_book: boolean;
+}
+
+export interface PmKalshiDetail {
+  ticker: string;
+  title?: string;
+  question?: string;
+  status?: string;
+  yes_bid?: number;
+  yes_ask?: number;
+  no_bid?: number;
+  no_ask?: number;
+  volume?: number;
+  open_interest?: number;
+  open_time?: string;
+  close_time?: string;
+  [k: string]: unknown;
+}
+
+// As returned by /prediction-markets/candles/{venue}/{market_id}.
+// Note: the endpoint aggregates across YES and NO outcomes in the same
+// response — `close` may reflect either side's trade price. Normalize
+// to implied-YES via `close > 0.5 ? close : 1 - close` before plotting.
+// `volume=0` with `trades=null` indicates an OB-midprice-derived bar
+// (no trades in that bucket); `volume>0` is trade-derived.
+export interface PmCandleRow {
+  bucket_ts: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  trades: number | null;
+}
+
+export interface PmOrderbookLevel { price: string; size: string }
+export interface PmOrderbookSnap {
+  asset_id?: string;
+  condition_id?: string | null;
+  ticker?: string;
+  snapshot_ts: string;
+  bids: PmOrderbookLevel[];
+  asks: PmOrderbookLevel[];
+  tick_size?: string;
+  min_order_size?: string;
+}
+
+export interface PmTradeRow {
+  trade_id: string;
+  ts: string;             // ISO
+  price: number;
+  side: "BUY" | "SELL" | string;
+  size: number;
+  token_id?: string;      // Polymarket CLOB token id (per outcome)
+  taker?: string;
+}
+
+// ── Prediction-market types ────────────────────────────────────────────────
+
+export interface PmEventRow {
+  event_id: string;
+  slug: string;
+  title: string;
+  category: string;
+  total_volume: number | null;
+  active: boolean | null;
+  closed: boolean | null;
+  start_date: string | null;
+  end_date: string | null;
+}
+
+export interface PmMarketRow {
+  venue: "polymarket" | "kalshi";
+  market_id: string;
+  title: string;
+  slug: string | null;
+  volume: number | null;
+  start_date: string | null;
+  end_date: string | null;
+  closed: boolean | null;
+}
+
+export interface PmLeaderboardRow {
+  rank: number;
+  wallet: string;
+  total_pnl: number;
+  realized_pnl: number;
+  volume: number;
+  roi: number;
+  trades: number;
+  win_rate: number;
+  primary_style: string;
+  is_whale: boolean;
+  first_trade_at: string;
+}
 
 // v67 types
 

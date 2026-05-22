@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { RefreshCw, AlertCircle, CheckCircle, Clock, ExternalLink, Plus, GitPullRequest, Search, TrendingUp } from 'lucide-react';
 import axios from 'axios';
+import { API_BASE_URL } from '@/config/env';
 
 interface LoopOutcome {
   alpha_pp?: number;
@@ -48,8 +49,9 @@ interface PullRow {
   opened_at: number;
 }
 
-const identityApi = axios.create({ baseURL: '/', timeout: 15_000, withCredentials: true });
-const xpcloudApi = axios.create({ baseURL: '/xpcloud-api/', timeout: 15_000, withCredentials: true });
+// Absolute baseURL for cross-origin compatibility — see results.tsx.
+const identityApi = axios.create({ baseURL: API_BASE_URL, timeout: 15_000, withCredentials: true });
+const xpcloudApi = axios.create({ baseURL: `${API_BASE_URL}/xpcloud-api/`, timeout: 15_000, withCredentials: true });
 
 export default function LoopsPage() {
   const [loops, setLoops] = useState<LoopRecord[]>([]);

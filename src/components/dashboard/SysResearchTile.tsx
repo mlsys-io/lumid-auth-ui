@@ -24,7 +24,8 @@ import type { LoopRow, LoopsResp } from '@/api/super-admin';
 // Same shape as results.tsx — read-only fetch against the identity
 // service; cookie auth via withCredentials. Single shared client to
 // keep keep-alive warm across the K artifact requests this tile fires.
-const api = axios.create({ baseURL: '/', timeout: 15_000, withCredentials: true });
+import { API_BASE_URL } from '@/config/env';
+const api = axios.create({ baseURL: API_BASE_URL, timeout: 15_000, withCredentials: true });
 
 const APP_NAME = 'auto-sysresearch';
 const LOOP_ORDER: { name: string; label: string; metric: string }[] = [

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Brain, ChevronRight, ExternalLink } from 'lucide-react';
 import axios from 'axios';
+import { API_BASE_URL } from '@/config/env';
 
 interface AgentRecord {
   id: string;
@@ -10,7 +11,8 @@ interface AgentRecord {
   topics?: string[];
 }
 
-const xpApi = axios.create({ baseURL: '/xpcloud-api', timeout: 12_000, withCredentials: true });
+// Absolute baseURL — `/xpcloud-api` proxy lives on lum.id nginx.
+const xpApi = axios.create({ baseURL: `${API_BASE_URL}/xpcloud-api`, timeout: 12_000, withCredentials: true });
 
 export default function KnowledgePage() {
   const [agents, setAgents] = useState<AgentRecord[]>([]);

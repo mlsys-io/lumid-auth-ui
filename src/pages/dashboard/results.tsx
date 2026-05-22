@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BarChart3, ExternalLink, X, TrendingUp, TrendingDown, FileText, Activity } from 'lucide-react';
 import axios from 'axios';
+import { API_BASE_URL } from '@/config/env';
 
 // Per-cycle outcome — mirrors lumid_identity/internal/handler/admin_loops.go::loopOutcome.
 // We render the latest cycle per loop (newest first) with rich trading
@@ -46,7 +47,10 @@ interface CycleRow {
 	outcome?: LoopOutcome;
 }
 
-const identityApi = axios.create({ baseURL: '/', timeout: 15_000, withCredentials: true });
+// Use API_BASE_URL so the same bundle works at lum.id (where it's
+// 'https://lum.id' — same-origin same effect) and xp.io/go/* (where
+// requests need to be absolute to reach lum.id cross-origin).
+const identityApi = axios.create({ baseURL: API_BASE_URL, timeout: 15_000, withCredentials: true });
 
 const STATE_BADGE: Record<string, string> = {
 	queued:     'bg-slate-100 text-slate-700',

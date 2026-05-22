@@ -54,7 +54,9 @@ export interface ListJobsParams {
 	state?: JobState;
 }
 
-const api = axios.create({ baseURL: '/', timeout: 15_000, withCredentials: true });
+import { API_BASE_URL } from '@/config/env';
+// Absolute baseURL so the same bundle works at lum.id and xp.io/go/*.
+const api = axios.create({ baseURL: API_BASE_URL, timeout: 15_000, withCredentials: true });
 
 export async function listJobs(params: ListJobsParams = {}): Promise<JobsResponse> {
 	const r = await api.get<JobsResponse>('/api/v1/admin/jobs', { params });

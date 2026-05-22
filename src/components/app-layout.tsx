@@ -31,6 +31,7 @@ import {
 	Brain,
 	MessageSquare,
 	Newspaper,
+	ChartCandlestick,
 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
@@ -40,7 +41,10 @@ import { EnterpriseTipProvider } from '../runmesh/components/EnterpriseTip';
 import { useAuthStore } from '../runmesh/stores/useAuthStore';
 import { httpUser } from '../runmesh/utils/axios';
 
-const inboxPollClient = axios.create({ baseURL: '/inbox-api', timeout: 8000, withCredentials: true });
+import { API_BASE_URL } from '@/config/env';
+// Absolute baseURL — lum.id deploy keeps same-origin behavior;
+// xp.io/go/* needs the absolute path to reach the inbox proxy.
+const inboxPollClient = axios.create({ baseURL: `${API_BASE_URL}/inbox-api`, timeout: 8000, withCredentials: true });
 import { Button } from './ui/button';
 import { getSimulationStrategies, ApiError } from '../quantarena/api';
 import type { SimulationStrategyInfo } from '../quantarena/api/types';
@@ -114,6 +118,7 @@ const LUMILAKE_NAV: NavItem[] = [
 	{ to: '/dashboard/datasets/news', label: 'News', icon: Newspaper },
 	{ to: '/dashboard/datasets/kols', label: 'KOL Tweets', icon: MessageSquare },
 	{ to: '/dashboard/datasets/macro', label: 'Macro', icon: Activity },
+	{ to: '/dashboard/datasets/predmarket', label: 'Prediction markets', icon: ChartCandlestick },
 	{ to: '/dashboard/lumilake/data', label: 'Data browsing', icon: Database },
 ];
 

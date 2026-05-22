@@ -1,9 +1,21 @@
 import { lazy, Suspense } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
-import { AuthGuard } from "./components/auth-guard";
+import { AuthGuard, defaultLandingPath } from "./components/auth-guard";
 import { AdminGuard } from "./components/admin-guard";
 import { SuperAdminGuard } from "./components/super-admin-guard";
+// New web-first revamp shell + pages (2026-05-22). Mounted at /app/*
+// here; physically served at xp.io/go/app/* during P0-P3 via the
+// VITE_ROUTER_BASE_PATH=/go build (see /proj/infra/compose/lumid_ui_go/).
+const UserLayout    = lazy(() => import("./components/user-layout"));
+const AppHome       = lazy(() => import("./pages/app-revamp/home"));
+const AppMarketplace = lazy(() => import("./pages/app-revamp/marketplace"));
+const AppLoops      = lazy(() => import("./pages/app-revamp/loops"));
+const AppResults    = lazy(() => import("./pages/app-revamp/results"));
+const AppKnowledge  = lazy(() => import("./pages/app-revamp/knowledge"));
+const OnboardingWelcome = lazy(() => import("./pages/onboarding/welcome"));
+const OnboardingDomain  = lazy(() => import("./pages/onboarding/domain"));
+const OnboardingReady   = lazy(() => import("./pages/onboarding/ready"));
 
 // Auto-quant operator page (/dashboard/auto-quant/*)
 const AutoQuantPage = lazy(() => import("./pages/app/auto-quant/index"));
@@ -55,6 +67,7 @@ const DatasetsFindata = lazy(() => import("./pages/dashboard/datasets-findata"))
 const DatasetsMacro   = lazy(() => import("./pages/dashboard/datasets-macro"));
 const DatasetsKols    = lazy(() => import("./pages/dashboard/datasets-kols"));
 const DatasetsNews    = lazy(() => import("./pages/dashboard/datasets-news"));
+const DatasetsPredmarket = lazy(() => import("./pages/dashboard/datasets-predmarket"));
 // Quant competition leaf components — Competitions shell wraps the
 // list-views (Browse + My strategies) with a sub-tab strip. Pathways
 // and detail pages render directly. 2026-05-03 consolidation.
@@ -218,6 +231,18 @@ function Spinner() {
   );
 }
 
+// RoleHome — used at "/" and the catch-all "*". Reads auth + role and
+// Navigates to the right surface. Without this, "/" would render
+// <Navigate to="/auth/login">, and the AuthGuard on /auth/login would
+// then bounce already-authed users to /dashboard — landing every
+// regular user on the admin shell even though they wanted /app.
+function RoleHome() {
+  const { isLoading, isAuthenticated, user } = useAuth();
+  if (isLoading) return <Spinner />;
+  if (!isAuthenticated) return <Navigate to="/auth/login" replace />;
+  return <Navigate to={defaultLandingPath(user?.role)} replace />;
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -246,6 +271,52 @@ export default function App() {
           {/* Public docs — anyone browsing app repos before forking
               should be able to read the canonical xpio contract. */}
           <Route path="/docs/xpio-autoresearch" element={<XpioAutoresearchDoc />} />
+
+          {/* === Web-first revamp (2026-05-22) ===========================
+              New user-facing surface mounted under /app/*. Same React
+              bundle is also built with VITE_ROUTER_BASE_PATH=/go for the
+              xp.io/go/* staging deploy — those URLs resolve here too
+              because BrowserRouter basename strips the prefix at runtime.
+              Replaces /dashboard/{marketplace,loops,knowledge,results}
+              for the user persona; admins keep the /dashboard/* shell. */}
+          <Route
+            path="/onboarding/welcome"
+            element={
+              <AuthGuard requireAuth={true}>
+                <OnboardingWelcome />
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/onboarding/domain"
+            element={
+              <AuthGuard requireAuth={true}>
+                <OnboardingDomain />
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/onboarding/ready"
+            element={
+              <AuthGuard requireAuth={true}>
+                <OnboardingReady />
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/app"
+            element={
+              <AuthGuard requireAuth={true}>
+                <UserLayout />
+              </AuthGuard>
+            }
+          >
+            <Route index            element={<AppHome />} />
+            <Route path="marketplace" element={<AppMarketplace />} />
+            <Route path="loops"     element={<AppLoops />} />
+            <Route path="results"   element={<AppResults />} />
+            <Route path="knowledge" element={<AppKnowledge />} />
+          </Route>
           {/* Authenticated-but-incomplete users (empty invitation_code)
               get redirected here by AuthGuard. The page itself runs
               behind AuthGuard so unauth users still bounce to /login. */}
@@ -435,6 +506,7 @@ export default function App() {
             <Route path="datasets/macro"   element={<DatasetsMacro />} />
             <Route path="datasets/kols"    element={<DatasetsKols />} />
             <Route path="datasets/news"    element={<DatasetsNews />} />
+            <Route path="datasets/predmarket" element={<DatasetsPredmarket />} />
 
             {/* Lumilake-origin pages grouped under /app/lumilake/*.
                 data-label + modelling hidden 2026-04-24 — not
@@ -647,16 +719,15 @@ export default function App() {
           </Route>
           <Route path="/app/*" element={<LegacyDashboardRedirect />} />
 
-          {/* Roots → login if unauth, dashboard if auth (AuthGuard decides). */}
-          <Route
-            path="/"
-            element={
-              <AuthGuard requireAuth={false}>
-                <Navigate to="/auth/login" replace />
-              </AuthGuard>
-            }
-          />
-          <Route path="*" element={<Navigate to="/auth/login" replace />} />
+          {/* Root "/" — role-aware landing. AuthGuard(false) handles
+              the unauth case by rendering <RoleHome>, which then reads
+              user.role and Navigates to /app (user) or /dashboard
+              (admin). Unauthed users fall to <RoleHome>'s unauth branch
+              and bounce to /auth/login. This replaces the previous
+              two-hop /→/auth/login→/dashboard which would land regular
+              users on the admin shell. */}
+          <Route path="/" element={<RoleHome />} />
+          <Route path="*" element={<RoleHome />} />
         </Routes>
       </Suspense>
     </AuthProvider>
