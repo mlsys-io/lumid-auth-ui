@@ -2,9 +2,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
 	Hexagon,
 	RefreshCw,
-	ShoppingBag,
-	Brain,
-	BarChart3,
+	Sparkles,
 	Settings,
 	Shield,
 	LogOut,
@@ -24,11 +22,14 @@ interface NavItem {
 	icon: React.ComponentType<{ className?: string }>;
 }
 
+// Phase A5 — sidebar trimmed to the user's actual surfaces.
+// "Your AI" is the single home (loops page with Today / Drafts / What
+// it does). "Browse skills" is an outbound link to xp.io (the composer
+// + marketplace live there now). Marketplace / Knowledge / Results
+// were redundant siblings — their content folds inside Your AI now.
 const MAIN_NAV: NavItem[] = [
-	{ to: '/app/loops',       label: 'My Loops',       icon: RefreshCw   },
-	{ to: '/app/marketplace', label: 'Marketplace',     icon: ShoppingBag },
-	{ to: '/app/knowledge',   label: 'My Knowledge',    icon: Brain       },
-	{ to: '/app/results',     label: 'My Results',      icon: BarChart3   },
+	{ to: '/app/loops',  label: 'Your AI',       icon: RefreshCw },
+	{ to: '/go-composer', label: 'Browse skills', icon: Sparkles },
 ];
 
 function SidebarItem({ to, label, icon: Icon, onClick }: NavItem & { onClick?: () => void }) {

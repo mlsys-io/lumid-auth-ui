@@ -17,6 +17,8 @@ import {
 } from 'lucide-react';
 import {
 	fetchAuthStats,
+	fetchTenants,
+	type TenantsResp,
 	fetchBackupStatus,
 	fetchBuildStatus,
 	fetchCertExpiry,
@@ -81,6 +83,7 @@ interface Snap {
 	users: { rows: AdminUserRow[]; total: number } | null;
 	loops: LoopsResp | null;
 	codebase: CodebaseReposResp | null;
+	tenants: TenantsResp | null;
 }
 
 export default function SuperAdminDashboard() {
@@ -93,6 +96,7 @@ export default function SuperAdminDashboard() {
 		users: null,
 		loops: null,
 		codebase: null,
+		tenants: null,
 	});
 	const [loading, setLoading] = useState(true);
 
@@ -108,12 +112,13 @@ export default function SuperAdminDashboard() {
 				listUsers({ page_size: 1, status: 'all' }),
 				fetchLoops(),
 				fetchCodebaseRepos(),
+				fetchTenants(),
 			]);
 			if (cancelled) return;
 			for (const r of results) {
 				if (r.status === 'rejected' && isSessionExpired(r.reason)) return;
 			}
-			const [auth, certs, backups, builds, oauth, users, loops, codebase] = results;
+			const [auth, certs, backups, builds, oauth, users, loops, codebase, tenants] = results;
 			setSnap({
 				auth:    auth.status    === 'fulfilled' ? auth.value    : null,
 				certs:   certs.status   === 'fulfilled' ? certs.value   : null,
@@ -125,6 +130,7 @@ export default function SuperAdminDashboard() {
 					: null,
 				loops:   loops.status   === 'fulfilled' ? loops.value   : null,
 				codebase: codebase.status === 'fulfilled' ? codebase.value : null,
+				tenants: tenants.status === 'fulfilled' ? tenants.value : null,
 			});
 			setLoading(false);
 		})();
@@ -185,6 +191,7 @@ export default function SuperAdminDashboard() {
 					<FailedLoginsTile auth={snap.auth} />
 					<OAuthClientsTile oauth={snap.oauth} />
 				</div>
+				<TenantsTile tenants={snap.tenants} />
 			</Section>
 
 			{/* 5. Telemetry — stat strip default; timeseries + Loki log
@@ -266,6 +273,89 @@ function UsersTile({ users }: { users: Snap['users'] }) {
 			primary={users.total.toLocaleString()}
 			secondary="active accounts"
 		/>
+	);
+}
+
+// Phase D follow-up — per-tenant operational snapshot. Surfaces who's
+// running what, how much storage they use, and today's cycle / LLM
+// activity. Sorted by cycles_today desc so active tenants float up.
+function TenantsTile({ tenants }: { tenants: TenantsResp | null }) {
+	if (!tenants) return (
+		<div className="rounded-lg border border-slate-200 bg-white p-4 mt-3">
+			<div className="text-sm text-slate-500 italic">Loading tenants…</div>
+		</div>
+	);
+	const rows = [...tenants.tenants].sort(
+		(a, b) => (b.cycles_today || 0) - (a.cycles_today || 0),
+	);
+	const active = rows.filter((t) => t.apps > 0 || t.cycles_today > 0);
+	return (
+		<div className="rounded-lg border border-slate-200 bg-white mt-3 overflow-hidden">
+			<div className="px-4 py-3 border-b border-slate-200/60 flex items-baseline justify-between">
+				<h3 className="text-sm font-semibold">Tenants</h3>
+				<span className="text-xs text-slate-500">
+					{active.length} active · {rows.length} total
+				</span>
+			</div>
+			<div className="overflow-x-auto">
+				<table className="w-full text-sm">
+					<thead className="bg-slate-50 text-left text-xs text-slate-600 uppercase tracking-wide">
+						<tr>
+							<th className="px-3 py-2 font-medium">Email</th>
+							<th className="px-3 py-2 font-medium w-20">Apps</th>
+							<th className="px-3 py-2 font-medium w-24">Storage</th>
+							<th className="px-3 py-2 font-medium w-20">Cycles</th>
+							<th className="px-3 py-2 font-medium w-28">LLM today</th>
+							<th className="px-3 py-2 font-medium w-20">Gmail</th>
+							<th className="px-3 py-2 font-medium">Joined</th>
+						</tr>
+					</thead>
+					<tbody className="divide-y divide-slate-100">
+						{rows.slice(0, 30).map((t) => (
+							<tr key={t.sub} className="hover:bg-slate-50/60">
+								<td className="px-3 py-1.5 font-mono text-xs">
+									{t.email}
+									{t.role !== 'user' && (
+										<span className="ml-2 text-[10px] uppercase tracking-wide text-indigo-700">{t.role}</span>
+									)}
+								</td>
+								<td className="px-3 py-1.5 text-xs">
+									{t.apps}
+									{t.apps > 0 && t.app_names && (
+										<span className="ml-1 text-slate-400" title={t.app_names.join(', ')}>
+											({t.app_names.slice(0, 2).join(', ')}{t.app_names.length > 2 && '…'})
+										</span>
+									)}
+								</td>
+								<td className="px-3 py-1.5 text-xs text-slate-600 tabular-nums">
+									{t.storage_mb.toFixed(1)} MB
+								</td>
+								<td className="px-3 py-1.5 text-xs tabular-nums">
+									{t.cycles_today}/100
+								</td>
+								<td className="px-3 py-1.5 text-xs tabular-nums text-slate-600">
+									{(t.llm_tokens_today / 1000).toFixed(0)}K
+								</td>
+								<td className="px-3 py-1.5 text-xs tabular-nums text-slate-600">
+									{t.gmail_today}
+								</td>
+								<td className="px-3 py-1.5 text-xs text-slate-500">
+									{new Date(t.created_at).toISOString().slice(0, 10)}
+								</td>
+							</tr>
+						))}
+						{rows.length === 0 && (
+							<tr><td colSpan={7} className="px-3 py-6 text-center text-sm text-slate-500 italic">No tenants yet.</td></tr>
+						)}
+					</tbody>
+				</table>
+			</div>
+			{rows.length > 30 && (
+				<div className="px-3 py-2 text-xs text-slate-500 border-t border-slate-200/60">
+					Showing top 30 by cycles_today (of {rows.length})
+				</div>
+			)}
+		</div>
 	);
 }
 

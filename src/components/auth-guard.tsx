@@ -63,9 +63,16 @@ export function isSafeReturnTo(raw: string | null | undefined): raw is string {
  */
 export function defaultLandingPath(role: string | null | undefined): string {
 	const isGoBundle = !!import.meta.env.VITE_ROUTER_BASE_PATH;
-	if (isGoBundle) return '/app';
+	// Phase S5 — Studio is the canonical user surface. Regular users
+	// land on /studio/today (which shows the onboarding nudge for
+	// fresh signups with no apps). Admins still get /dashboard for
+	// now; Phase S4's /studio/admin is a parallel surface, not the
+	// admin home yet. /go bundle stays on the composer (its raison
+	// d'être) — the composer's Start button routes cross-domain to
+	// lum.id/studio anyway.
+	if (isGoBundle) return '/go-composer';
 	if (role === 'admin' || role === 'super_admin') return '/dashboard';
-	return '/app';
+	return '/studio/today';
 }
 
 export function AuthGuard({ children, requireAuth = true }: AuthGuardProps) {

@@ -1,12 +1,14 @@
-// /app — succinct home. One hero, one app list. That's it.
+// /app — succinct, signal-dense home.
 //
-// Removed (too busy): "Conversational shell" eyebrow, "or try:" label,
-// 2 of 4 launcher chips, the entire Explore section (top tab bar
-// already lists them), file paths under app cards, manifest/xpcloud/
-// overrides dev-signal pills, second paragraph in hero.
+// Two earlier complaints:
+//   1. "too busy" — we'd cut the explore section + dev-signal pills
+//   2. "long list but not informative" — the row was just avatar + name +
+//      arrow, repeated 26 times because /me/apps returned every install
+//      including skill libraries (lumid-claude, lumid-knowledge, …)
 //
-// Kept (load-bearing): hero with Ask Lumid + 2 chips + welcome tour
-// link, apps list with name + tiny avatar + arrow.
+// Fix: pull from /me/loops/health instead of /me/apps. The health
+// endpoint returns only kind=app entries (10 instead of 26) AND carries
+// per-app version + sync status, so every row earns its line.
 
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
@@ -14,7 +16,7 @@ import {
   ArrowRight, Sparkles, Command, ListChecks, Lightbulb,
   GraduationCap, ShoppingBag,
 } from "lucide-react";
-import { me, type MeAppCard } from "@/api/me";
+import { me, type MeAppHealth } from "@/api/me";
 import { cn } from "@/lib/utils";
 
 function ask(prompt: string) {
@@ -27,16 +29,17 @@ const CHIPS: { label: string; prompt: string; icon: React.ComponentType<{ classN
 ];
 
 export default function AppHome() {
-  const [apps, setApps] = useState<MeAppCard[] | null>(null);
+  const [apps, setApps] = useState<MeAppHealth[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    me.listApps()
+    me.loopsHealth()
       .then((r) => setApps(r.apps))
       .catch((e) => setError(String(e)));
   }, []);
 
   const empty = apps !== null && apps.length === 0;
+  const visible = apps ?? [];
 
   return (
     <div className="space-y-6">
@@ -101,15 +104,18 @@ export default function AppHome() {
         </section>
       )}
 
-      {apps && apps.length > 0 && (
+      {visible.length > 0 && (
         <section>
-          <h2 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2 px-1">
-            Your apps · {apps.length}
-          </h2>
+          <div className="flex items-baseline justify-between mb-2 px-1">
+            <h2 className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+              Your apps · {visible.length}
+            </h2>
+            <Link to="/app/marketplace" className="text-xs text-indigo-600 hover:underline">
+              + add more
+            </Link>
+          </div>
           <ul className="rounded-xl border border-slate-200 bg-white divide-y divide-slate-100 overflow-hidden">
-            {apps.map((a) => (
-              <AppRow key={a.name} app={a} />
-            ))}
+            {visible.map((a) => <AppRow key={a.app} app={a} />)}
           </ul>
         </section>
       )}
@@ -117,8 +123,10 @@ export default function AppHome() {
   );
 }
 
-function AppRow({ app }: { app: MeAppCard }) {
-  // Tiny avatar — first letter on a deterministic gradient.
+// Each row carries: avatar, name, version, sync state. The four together
+// answer "is this app a real thing that's working?" in a single glance —
+// which is what the old avatar-only row didn't do.
+function AppRow({ app }: { app: MeAppHealth }) {
   const palette = [
     "from-indigo-500 to-blue-500",
     "from-purple-500 to-pink-500",
@@ -128,25 +136,45 @@ function AppRow({ app }: { app: MeAppCard }) {
     "from-cyan-500 to-sky-500",
   ];
   let hash = 0;
-  for (let i = 0; i < app.name.length; i++) hash = (hash * 31 + app.name.charCodeAt(i)) | 0;
+  for (let i = 0; i < app.app.length; i++) hash = (hash * 31 + app.app.charCodeAt(i)) | 0;
   const tint = palette[Math.abs(hash) % palette.length];
+
+  // Status semantics (from /admin/loops handler):
+  //   in_sync     — local repo matches published xp.io HEAD → ready
+  //   unpublished — never pushed to xp.io (local-only or pre-publish)
+  //   behind / ahead / dirty — repo drift
+  const STATUS: Record<string, { dot: string; label: string }> = {
+    in_sync:     { dot: "bg-emerald-500", label: "in sync"     },
+    unpublished: { dot: "bg-slate-300",   label: "local only"  },
+    behind:      { dot: "bg-amber-500",   label: "behind"      },
+    ahead:       { dot: "bg-amber-500",   label: "ahead"       },
+    dirty:       { dot: "bg-amber-500",   label: "dirty"       },
+  };
+  const status = STATUS[app.status] ?? { dot: "bg-slate-300", label: app.status };
 
   return (
     <li>
       <Link
         to="/app/loops"
         className="group flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 transition"
+        title={`${app.app} v${app.version} — ${status.label}`}
       >
         <div className={cn(
           "shrink-0 w-7 h-7 rounded-md bg-gradient-to-br grid place-items-center text-white text-[11px] font-semibold",
           tint,
         )}>
-          {app.name.slice(0, 1).toUpperCase()}
+          {app.app.slice(0, 1).toUpperCase()}
         </div>
         <span className="text-sm text-slate-800 group-hover:text-indigo-700 flex-1 truncate">
-          {app.name}
+          {app.app}
         </span>
-        <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-indigo-500 transition" />
+        <span className="text-[10px] font-mono text-slate-400 shrink-0">
+          v{app.version}
+        </span>
+        <span className="inline-flex items-center gap-1 shrink-0" title={status.label}>
+          <span className={cn("w-1.5 h-1.5 rounded-full", status.dot)} />
+        </span>
+        <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-indigo-500 transition shrink-0" />
       </Link>
     </li>
   );

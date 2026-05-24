@@ -40,12 +40,14 @@ interface TabItem {
   end?: boolean;
 }
 
+// Phase A5 — top-tab variant mirrors the AppShell sidebar. The
+// legacy 5-tab layout (Home / Marketplace / Loops / Results /
+// Knowledge) is replaced by the outcome-focused pair: "Your AI"
+// (the loops surface — Today / Drafts / What it does) and "Browse
+// skills" (the composer at /go-composer).
 const USER_TABS: TabItem[] = [
-  { to: "/app",             label: "Home",         icon: HomeIcon, end: true },
-  { to: "/app/marketplace", label: "Marketplace",  icon: ShoppingBag },
-  { to: "/app/loops",       label: "My Loops",     icon: RefreshCw },
-  { to: "/app/results",     label: "My Results",   icon: BarChart3 },
-  { to: "/app/knowledge",   label: "My Knowledge", icon: Brain },
+  { to: "/app/loops",   label: "Your AI",       icon: RefreshCw, end: true },
+  { to: "/go-composer", label: "Browse skills", icon: ShoppingBag },
 ];
 
 function Tab({ to, label, icon: Icon, end, onClick }: TabItem & { onClick?: () => void }) {

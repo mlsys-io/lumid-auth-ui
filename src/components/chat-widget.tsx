@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { API_BASE_URL } from "@/config/env";
+import { useAuth } from "@/hooks/useAuth";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -110,21 +111,44 @@ function pillLabel(tc: ToolCallSummary): string {
   }
 }
 
-function loadPersisted(): ChatMessage[] {
+// Persisted shape:
+//   { user_sub: string, messages: ChatMessage[] }
+//
+// Tagging with user_sub closes the "same browser tab, different user"
+// leak: if a previous user's chat was persisted but the current caller
+// isn't them, we discard the cache and start fresh. AuthProvider also
+// clears the slot on logout — this guard is belt-and-suspenders for
+// edge cases like cookie expiry / refresh / cross-tab session swap.
+function loadPersisted(currentSub: string | null | undefined): ChatMessage[] {
+  if (!currentSub) return [];
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    // Legacy shape (an unwrapped array) — discard. Predates the guard.
+    if (Array.isArray(parsed)) {
+      sessionStorage.removeItem(STORAGE_KEY);
+      return [];
+    }
+    if (parsed?.user_sub !== currentSub || !Array.isArray(parsed.messages)) {
+      sessionStorage.removeItem(STORAGE_KEY);
+      return [];
+    }
+    return parsed.messages as ChatMessage[];
   } catch {
     return [];
   }
 }
 
 export default function ChatWidget() {
+  const { user } = useAuth();
+  // Identity used to tag persisted chat. `id` is the user_sub on the
+  // UserInfo shape returned by /api/v1/user.
+  const userSub = user?.id ?? null;
+
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>(loadPersisted);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => loadPersisted(userSub));
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [followups, setFollowups] = useState<string[]>([]);
@@ -135,19 +159,35 @@ export default function ChatWidget() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Persist trimmed history. Avoid persisting the empty-assistant
-  // placeholder mid-stream — strip trailing empties on save.
+  // If the auth context flips identity mid-tab (cookie refresh that
+  // returned a different user, or session swap), drop in-memory chat
+  // before it can be rendered/persisted under the new identity.
   useEffect(() => {
+    setMessages((cur) => {
+      if (cur.length === 0) return cur;
+      // Reload from storage under the current sub. loadPersisted returns
+      // [] for any mismatch or missing identity.
+      return loadPersisted(userSub);
+    });
+  }, [userSub]);
+
+  // Persist trimmed history, tagged with the current user_sub. Avoid
+  // persisting the empty-assistant placeholder mid-stream — strip
+  // trailing empties on save. No identity → no persistence (the
+  // anonymous case can't leak anything because there's nothing to
+  // bind it to on next load).
+  useEffect(() => {
+    if (!userSub) return;
     try {
       const trimmed = messages.filter((m, i) =>
         !(i === messages.length - 1 && m.role === "assistant" && !m.content && !(m.tool_calls?.length))
       );
       sessionStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify(trimmed.slice(-MAX_PERSISTED_MESSAGES)),
+        JSON.stringify({ user_sub: userSub, messages: trimmed.slice(-MAX_PERSISTED_MESSAGES) }),
       );
     } catch { /* quota full / disabled — non-fatal */ }
-  }, [messages]);
+  }, [messages, userSub]);
 
   // Auto-scroll to bottom on new content. Could fight the user if
   // they scroll up mid-stream; let it for now — most chats are short.

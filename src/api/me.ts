@@ -69,6 +69,24 @@ export interface MeAppCard {
   has_user_overrides: boolean;
 }
 
+// /me/loops/health row — what /admin/loops surfaces, scoped to the
+// caller's tenant in P2 (today: operator-shared apps for the dogfood
+// phase). Each row is an *app* (kind=app), not a loop — the server
+// already filters skill repos out so this is the right feed for the
+// /app home list.
+export interface MeAppHealth {
+  app: string;
+  kind: string;
+  version: string;
+  published: boolean;
+  published_slug?: string;
+  status: "in_sync" | "unpublished" | "behind" | "ahead" | "dirty" | string;
+  local_has_git?: boolean;
+  local_dirty_count?: number;
+  remote_head?: string;
+  strategies?: { name: string }[];
+}
+
 export interface MeIntentResult {
   intent_id: string;
   status: "pending" | "completed";
@@ -103,7 +121,79 @@ export const me = {
       `/loops/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/run`,
       { args },
     ),
-  loopsHealth: () => call<{ loops: unknown[] }>("GET", "/loops/health"),
+  loopsHealth: () => call<{ apps: MeAppHealth[] }>("GET", "/loops/health"),
+
+  // Today summary — drives the /app/loops "Today" section.
+  // headlines[] is server-authored (quota_paused → drafts → brief →
+  // cycle_failed); cycles[] is the raw per-loop journal slice for
+  // anyone who wants to dig in.
+  today: () =>
+    call<{
+      headlines: Array<{
+        kind: "drafts" | "quota_paused" | "brief" | "cycle_failed" | "cycle_ok";
+        app?: string;
+        loop?: string;
+        ts?: string;
+        summary: string;
+        detail?: string;
+      }>;
+      cycles: Array<{
+        app: string;
+        loop: string;
+        ok: boolean;
+        ts: string;
+        duration_s?: number;
+        skipped?: boolean;
+        skip_reason?: string;
+        last_error?: string;
+      }>;
+      as_of: string;
+    }>("GET", "/today"),
+
+  // Drafts queue
+  listDrafts: (params?: { app?: string; state?: "pending" | "sent" | "dismissed" }) =>
+    call<{
+      drafts: Array<{
+        id: string;
+        app: string;
+        cycle_ts: string;
+        path: string;
+        to?: string;
+        subject?: string;
+        body?: string;
+        confidence?: number;
+        state: "pending" | "sent" | "dismissed";
+        acted_at?: string;
+      }>;
+      count: number;
+    }>(
+      "GET",
+      "/drafts" +
+        (params
+          ? "?" +
+            new URLSearchParams(
+              Object.entries(params).filter(([, v]) => v != null) as [string, string][],
+            ).toString()
+          : ""),
+    ),
+  sendDraft: (id: string, ifState?: string) =>
+    call<{ id: string; state: "sent"; intent_id: string }>(
+      "POST",
+      `/drafts/${encodeURIComponent(id)}/send`,
+      ifState ? { if_state: ifState } : {},
+    ),
+  editDraft: (id: string, body: { subject?: string; body?: string; if_state?: string }) =>
+    call<{ id: string; state: "pending" }>(
+      "POST",
+      `/drafts/${encodeURIComponent(id)}/edit`,
+      body,
+    ),
+  dismissDraft: (id: string, ifState?: string) =>
+    call<{ id: string; state: "dismissed" }>(
+      "POST",
+      `/drafts/${encodeURIComponent(id)}/dismiss`,
+      ifState ? { if_state: ifState } : {},
+    ),
 
   // Secrets — values never come back; only presence.
   listSecrets: (app: string) =>
