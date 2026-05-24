@@ -3,7 +3,6 @@ import Icon from "../../components/ui/Icon";
 import { RunningJobService } from "@/lumilake/services/runningJobService";
 import { JOB_STATUSES, RunningJob, BatchProgressNodes, JobProgressOutputDetails, JobProgressBatchProgressDetails, JobResultData } from "@/lumilake/types/jobs";
 import ConfirmModal from "@/lumilake/components/ui/ConfirmModal.tsx";
-import ScatterPreviewChart from "@/lumilake/components/ui/ScatterPreviewChart";
 
 interface JobDetailProps {
   jobId: string;
@@ -327,9 +326,6 @@ export const JobDetail: React.FC<JobDetailProps> = ({ jobId, onBack }) => {
           </div>
 
           <div className="p-6">
-            <div className="mb-6">
-              <ScatterPreviewChart />
-            </div>
             {newJobResultsWithImage?.result?.outputs ? (
               Object.entries(newJobResultsWithImage.result.outputs).map(([nodeName, nodeData]) => (
                 <div key={nodeName} className="border rounded-lg p-6 mb-6 bg-gray-50">

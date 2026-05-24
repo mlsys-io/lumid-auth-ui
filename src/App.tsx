@@ -1,9 +1,45 @@
 import { lazy, Suspense } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
-import { AuthGuard } from "./components/auth-guard";
+import { AuthGuard, defaultLandingPath } from "./components/auth-guard";
 import { AdminGuard } from "./components/admin-guard";
 import { SuperAdminGuard } from "./components/super-admin-guard";
+// New web-first revamp shell + pages (2026-05-22). Mounted at /app/*
+// here; physically served at xp.io/go/app/* during P0-P3 via the
+// VITE_ROUTER_BASE_PATH=/go build (see /proj/infra/compose/lumid_ui_go/).
+const UserLayout    = lazy(() => import("./components/user-layout"));
+const AppHome       = lazy(() => import("./pages/app-revamp/home"));
+const AppMarketplace = lazy(() => import("./pages/app-revamp/marketplace"));
+const AppLoops      = lazy(() => import("./pages/app-revamp/loops"));
+const AppResults    = lazy(() => import("./pages/app-revamp/results"));
+const AppKnowledge  = lazy(() => import("./pages/app-revamp/knowledge"));
+const OnboardingWelcome = lazy(() => import("./pages/onboarding/welcome"));
+const OnboardingDomain  = lazy(() => import("./pages/onboarding/domain"));
+const OnboardingReady   = lazy(() => import("./pages/onboarding/ready"));
+// /go-composer — Phase A1's xp.io/go composer. Lives in lumid_ui so
+// session cookie auth flows naturally. Reachable at /go-composer from
+// any bundle; the lumid-ui-go bundle (basename=/go) also serves it at
+// "/" (see the Route definition below).
+const Go            = lazy(() => import("./pages/Go"));
+
+// Lumid Studio (Phase S1) — unified workspace shell. Lives at /studio/*
+// alongside existing /app/* and /dashboard/* per the studio-plan.md
+// decision: build alongside, no immediate cutover.
+const StudioShell      = lazy(() => import("./components/StudioShell"));
+const StudioToday      = lazy(() => import("./pages/studio/today"));
+// Phase S5+ — real inbox (no longer a placeholder).
+const StudioInbox      = lazy(() => import("./pages/studio/inbox"));
+// Phase S2 — real composer (no longer a placeholder).
+const StudioSkills     = lazy(() => import("./pages/studio/skills"));
+// Phase S3-C — app editor (lean v1).
+const StudioApps       = lazy(() => import("./pages/studio/apps"));
+// Phase S3-D — knowledge browser.
+const StudioKnowledge  = lazy(() => import("./pages/studio/knowledge"));
+// Phase S1.5 — Settings consolidation; Phase S4 — Admin tabs.
+const StudioSettings   = lazy(() => import("./pages/studio/settings"));
+const StudioAdmin      = lazy(() => import("./pages/studio/admin"));
+// Phase S3-B — cycle inspector.
+const StudioInspector  = lazy(() => import("./pages/studio/inspector"));
 
 // Auto-quant operator page (/dashboard/auto-quant/*)
 const AutoQuantPage = lazy(() => import("./pages/app/auto-quant/index"));
@@ -52,6 +88,10 @@ const QuantTemplate = lazy(() => import("./pages/dashboard/quant-template"));
 const QuantResearch = lazy(() => import("./pages/dashboard/quant-research"));
 const QuantMarketData = lazy(() => import("./pages/dashboard/quant-market-data"));
 const DatasetsFindata = lazy(() => import("./pages/dashboard/datasets-findata"));
+const DatasetsMacro   = lazy(() => import("./pages/dashboard/datasets-macro"));
+const DatasetsKols    = lazy(() => import("./pages/dashboard/datasets-kols"));
+const DatasetsNews    = lazy(() => import("./pages/dashboard/datasets-news"));
+const DatasetsPredmarket = lazy(() => import("./pages/dashboard/datasets-predmarket"));
 // Quant competition leaf components — Competitions shell wraps the
 // list-views (Browse + My strategies) with a sub-tab strip. Pathways
 // and detail pages render directly. 2026-05-03 consolidation.
@@ -89,6 +129,17 @@ const RunmeshBilling = lazy(() =>
   import("./runmesh/pages/BillingManagement").then((m) => ({ default: m.BillingManagement })),
 );
 const RunmeshWorkflowReview = lazy(() => import("./runmesh/pages/WorkflowReview"));
+
+// Research surface (xp.io marketplace plan 2026-05-18)
+const LoopsPage = lazy(() => import("./pages/dashboard/loops"));
+const MarketplacePage = lazy(() => import("./pages/dashboard/marketplace"));
+const KnowledgePage = lazy(() => import("./pages/dashboard/knowledge"));
+const ResultsPage = lazy(() => import("./pages/dashboard/results"));
+
+// AppShell deprecated by Phase S7 cutover — /app/* now redirects to
+// /studio/*; the focused Research shell is gone. Import + module
+// retained on disk in case any deep-import path still references it;
+// safe to delete once tree-shake confirms zero uses.
 
 // Product surface — /app/*. Separate shell from /dashboard/*.
 const AppLayout = lazy(() => import("./components/app-layout"));
@@ -206,6 +257,29 @@ function Spinner() {
   );
 }
 
+// RoleHome — used at "/" and the catch-all "*". Reads auth + role and
+// Navigates to the right surface. Without this, "/" would render
+// <Navigate to="/auth/login">, and the AuthGuard on /auth/login would
+// then bounce already-authed users to /dashboard — landing every
+// regular user on the admin shell even though they wanted /app.
+function RoleHome() {
+  const { isLoading, isAuthenticated, user } = useAuth();
+  if (isLoading) return <Spinner />;
+  if (!isAuthenticated) return <Navigate to="/auth/login" replace />;
+  return <Navigate to={defaultLandingPath(user?.role)} replace />;
+}
+
+// RootEntry — root "/" branches by build-time bundle. The /go bundle
+// (xp.io/go/*) renders the composer directly; lum.id (no basename)
+// keeps the existing role-aware redirect. Inlined env constant so
+// Vite tree-shakes the unused branch from each bundle.
+const IS_GO_BUNDLE =
+  (import.meta.env.VITE_ROUTER_BASE_PATH || "").replace(/\/$/, "") === "/go";
+function RootEntry() {
+  if (IS_GO_BUNDLE) return <Go />;
+  return <RoleHome />;
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -234,6 +308,70 @@ export default function App() {
           {/* Public docs — anyone browsing app repos before forking
               should be able to read the canonical xpio contract. */}
           <Route path="/docs/xpio-autoresearch" element={<XpioAutoresearchDoc />} />
+
+          {/* === Web-first revamp (2026-05-22) ===========================
+              New user-facing surface mounted under /app/*. Same React
+              bundle is also built with VITE_ROUTER_BASE_PATH=/go for the
+              xp.io/go/* staging deploy — those URLs resolve here too
+              because BrowserRouter basename strips the prefix at runtime.
+              Replaces /dashboard/{marketplace,loops,knowledge,results}
+              for the user persona; admins keep the /dashboard/* shell. */}
+          <Route
+            path="/onboarding/welcome"
+            element={
+              <AuthGuard requireAuth={true}>
+                <OnboardingWelcome />
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/onboarding/domain"
+            element={
+              <AuthGuard requireAuth={true}>
+                <OnboardingDomain />
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/onboarding/ready"
+            element={
+              <AuthGuard requireAuth={true}>
+                <OnboardingReady />
+              </AuthGuard>
+            }
+          />
+          {/* /app/* shell removed in Phase S7 cutover — see the
+              <Navigate /> redirects further down. The old UserLayout
+              + AppHome/AppMarketplace/etc. pages are no longer
+              mounted; the Studio shell handles all user surfaces. */}
+
+          {/* Lumid Studio — Phase S1 unified shell. Lives alongside
+              /dashboard (admin) and replaced /app entirely as of S7.
+              The shell renders the left nav + top bar; each child
+              route fills the workspace area. */}
+          <Route
+            path="/studio"
+            element={
+              <AuthGuard requireAuth={true}>
+                <StudioShell />
+              </AuthGuard>
+            }
+          >
+            <Route index             element={<Navigate to="/studio/today" replace />} />
+            <Route path="today"                        element={<StudioToday />} />
+            {/* Phase S3-B — cycle inspector accessed from Today rows. */}
+            <Route path="today/cycle/:app/:loop/:ts"    element={<StudioInspector />} />
+            <Route path="inbox"                        element={<StudioInbox />} />
+            <Route path="skills"                       element={<StudioSkills />} />
+            {/* Phase S3-C — apps list + per-app editor. */}
+            <Route path="apps"                         element={<StudioApps />} />
+            <Route path="apps/:app"                    element={<StudioApps />} />
+            {/* Phase S3-D — knowledge browser; per-agent drill on /:agent. */}
+            <Route path="knowledge"                    element={<StudioKnowledge />} />
+            <Route path="knowledge/:agent"             element={<StudioKnowledge />} />
+            <Route path="settings"                     element={<StudioSettings />} />
+            <Route path="admin"                        element={<StudioAdmin />} />
+          </Route>
           {/* Authenticated-but-incomplete users (empty invitation_code)
               get redirected here by AuthGuard. The page itself runs
               behind AuthGuard so unauth users still bounce to /login. */}
@@ -271,6 +409,12 @@ export default function App() {
                                         (tab 1: FlowMesh, tab 2: Lumilake)
                 Root redirects to Runmesh Submit since that's the
                 primary action. */}
+            {/* Research Loops — xp.io marketplace plan 2026-05-18 */}
+            <Route path="loops" element={<LoopsPage />} />
+            <Route path="marketplace" element={<MarketplacePage />} />
+            <Route path="knowledge" element={<KnowledgePage />} />
+            <Route path="results" element={<ResultsPage />} />
+
             {/* /dashboard root = Workflow Builder. AppApps embeds its
                 own header + narrative inline (UserDashboard owns the
                 inner full-height scroll layout, so a route-level
@@ -414,6 +558,10 @@ export default function App() {
                 Surfaced under /dashboard/datasets/findata; the iframe loads
                 the FinData Vue SPA via /findata-embed/ same-origin proxy. */}
             <Route path="datasets/findata" element={<DatasetsFindata />} />
+            <Route path="datasets/macro"   element={<DatasetsMacro />} />
+            <Route path="datasets/kols"    element={<DatasetsKols />} />
+            <Route path="datasets/news"    element={<DatasetsNews />} />
+            <Route path="datasets/predmarket" element={<DatasetsPredmarket />} />
 
             {/* Lumilake-origin pages grouped under /app/lumilake/*.
                 data-label + modelling hidden 2026-04-24 — not
@@ -613,19 +761,43 @@ export default function App() {
               entire tree lives under /dashboard/*. Catchall redirect
               preserves every deep link (sidebar history, Runmesh CLI
               output, docs, bookmarks). */}
-          <Route path="/app" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/app/*" element={<LegacyDashboardRedirect />} />
+          {/* /app/* — DEPRECATED as of Phase S7 cutover. The Research
+              shell collapsed into Studio. All known /app/* deep links
+              redirect to their Studio equivalent; unknown paths land
+              on /studio/today.
 
-          {/* Roots → login if unauth, dashboard if auth (AuthGuard decides). */}
-          <Route
-            path="/"
-            element={
-              <AuthGuard requireAuth={false}>
-                <Navigate to="/auth/login" replace />
-              </AuthGuard>
-            }
-          />
-          <Route path="*" element={<Navigate to="/auth/login" replace />} />
+              The old LoopsPage / MarketplacePage / KnowledgePage /
+              ResultsPage components remain imported because their
+              contents are mounted under /studio/* (e.g. AppLoops is
+              rendered inside StudioToday). When inactive direct-mount
+              references are pruned, those imports can go too.
+
+              Old bookmarks → Studio mapping:
+                /app             → /studio/today
+                /app/loops       → /studio/today (AppLoops renders inside)
+                /app/marketplace → /studio/skills
+                /app/knowledge   → /studio/knowledge
+                /app/results     → /studio/today */}
+          <Route path="/app"             element={<Navigate to="/studio/today"     replace />} />
+          <Route path="/app/loops"       element={<Navigate to="/studio/today"     replace />} />
+          <Route path="/app/marketplace" element={<Navigate to="/studio/skills"    replace />} />
+          <Route path="/app/knowledge"   element={<Navigate to="/studio/knowledge" replace />} />
+          <Route path="/app/results"     element={<Navigate to="/studio/today"     replace />} />
+          <Route path="/app/*"           element={<Navigate to="/studio/today"     replace />} />
+
+          {/* Root "/" — role-aware landing. AuthGuard(false) handles
+              the unauth case by rendering <RoleHome>, which then reads
+              user.role and Navigates to /app (user) or /dashboard
+              (admin). Unauthed users fall to <RoleHome>'s unauth branch
+              and bounce to /auth/login. This replaces the previous
+              two-hop /→/auth/login→/dashboard which would land regular
+              users on the admin shell. */}
+          {/* /go-composer — also reachable from the lum.id bundle so the
+              landing CTA can deep-link. Same component renders here and
+              at root of the /go bundle (see RootEntry above). */}
+          <Route path="/go-composer" element={<Go />} />
+          <Route path="/" element={<RootEntry />} />
+          <Route path="*" element={<RootEntry />} />
         </Routes>
       </Suspense>
     </AuthProvider>

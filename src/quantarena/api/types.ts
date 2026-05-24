@@ -512,6 +512,8 @@ export interface CompetitionInfo {
 	update_time: number;
 	status: 'Upcoming' | 'Ongoing' | 'Completed';
 	symbols: string[];
+	is_private?: boolean;
+	owner_user_id?: number;
 }
 export interface SymbolTradingHour {
 	symbol: string;

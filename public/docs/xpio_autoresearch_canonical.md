@@ -107,6 +107,19 @@ auto_publish:
   skills:    {enabled: false}
   artifacts: {enabled: false}
 
+# Auto-draft memory writes from cycle outputs (Pattern A only).
+# Each successful step in the loop's steps[] queues a MemoryDraft into
+# the primary_role's memory_agent bank. Drafts stay in
+# ~/.xp/kg/agents/<id>/.drafts/ until the operator approves via the
+# inbox (see inbox_publish). Default disabled.
+auto_draft:
+  enabled: true
+  type: fact                 # ∈ {correction, principle, pattern, fact, anti_pattern}
+  confidence: 0.5
+  max_content_chars: 2000
+  skip_skills: [render_review, transcript_render]
+  skip_stages: []            # e.g. [observe] to draft only act/learn outputs
+
 # Force-review matrix
 approval_policy:
   default: stage
@@ -142,6 +155,9 @@ loops:
     primary_role: assistant
     knowledge_agent: "<user>-personal-assistant"
     mode: paper                     # ∈ {paper, live, simulate, semi, explore}  app_runner.py:46
+    requires_confirmation: false    # default: true for mode=live, false otherwise
+                                    # honored by sdk/ops/job_deploy.py's AskUserQuestion gate
+                                    # when the loop is dispatched from Claude Code
     skills:                         # set membership; informational
       - calendar/observe
       - email/observe
@@ -429,6 +445,35 @@ To prove the contract: probe `https://xp.io/api/v1/repos/<owner>/<bank-name>` af
 
 `auto_publish.skills.enabled` and `.artifacts.enabled` default to `false`; opt in to publish skill drafts or per-cycle artifacts (rare — most apps keep these local because they may carry PII).
 
+## Memory read + write — closing the loop
+
+A cycle has two halves: **read** (inject prior memories into each step's prompt) and **write** (persist new memories from step outputs back into the bank). Both are needed for Level-1 compounding (cycle outputs → bank → next cycle's prompt).
+
+### Read — `render_prior_knowledge` (`sdk/skills/knowledge_inject.py`)
+
+`_run_explicit_steps()` calls `render_prior_knowledge(agent_id, question, k=5)` before each step and assigns the result to `context["prior_knowledge"]`. The agent is resolved in priority order: step's `knowledge_agent` → loop's `knowledge_agent` → role's `memory_agent`. Resolution path: `AgenticKG.get_agent(agent_id)` first, with a filesystem fallback to `KnowledgeAgent.load(~/.xp/kg/agents/<id>/)` for banks that exist on disk but aren't registered in `kg_config.json`. Returns `""` on any retrieval error so cycles never break.
+
+The renderer handles both legacy and current `agent.answer()` return shapes (`{answer: str, sources: list, ...}` from `xp/agent.py:114` is the current shape).
+
+### Write — `auto_draft` (`sdk/apps/app_runner.py:_maybe_draft_memory_from_step`)
+
+Opt-in. When `auto_draft.enabled: true`, after each successful step in `steps[]` the runner queues a `MemoryDraft` via `skill_authoring.draft_memory()` into the primary role's `memory_agent` bank. Drafts land at `~/.xp/kg/agents/<agent>/.drafts/<draft_id>.json` and **do not enter the bank until the operator approves them** through the inbox flow (`_pull_inbox_replies` dispatches `memory_apply` on approve, `discard_memory_draft` on reject).
+
+| Field | Purpose | Default |
+|---|---|---|
+| `enabled` | Master switch | `false` |
+| `type` | Memory type tag — `correction\|principle\|pattern\|fact\|anti_pattern` | `fact` |
+| `confidence` | Initial confidence on the staged draft | `0.5` |
+| `max_content_chars` | Truncates the serialized step output | `2000` |
+| `skip_skills` | Skill ids to exclude (e.g. renderers) | `[]` |
+| `skip_stages` | `observe\|hypothesize\|act\|analyze\|learn` to exclude | `[]` |
+
+Failures (no role, no agent, empty output, draft library unavailable) are non-fatal — they land in `step_log[].memory_draft` for visibility and the cycle continues.
+
+Pattern B (`engine: command`) verbs are NOT auto-hooked here; they should call `draft_memory()` themselves where appropriate.
+
+Interaction with `auto_publish`: drafts that get approved enter the bank → next cycle's `_run_auto_publish` pushes them to xpcloud IF the agent is on the allowlist. So enabling `auto_draft` on a `*-watcher` bank is still safe — drafts stay local forever even after approval, because the agent isn't on `auto_publish.memories[]`.
+
 ## Inbox publish + reply
 
 `_post_inbox_message()` (`app_runner.py:597-729`) posts a `kind: cycle_summary` (or `kind: question`) message to the user's lum.id inbox after every cycle when `inbox_publish.enabled: true`. The summary fields (drafts_pending, flags, questions_pending, etc.) are listed in `include[]`.
@@ -488,7 +533,7 @@ The publish pipeline runs 6 gates against every app bundle. They define the mini
 | App | Pattern | Loops | What it demonstrates |
 |---|---|---|---|
 | **personal-agent** | A | 4 (morning_brief, hourly_triage, cc_watcher, weekly_reflection) | Three-role multi-agent KG (assistant/watcher/philosopher), full privacy contract (watcher omitted from `auto_publish.memories[]`), inbox-question dialog, runner-driven steps[] |
-| **auto-quant** | A (legacy 7-phase) | 4 (momentum, mean-reversion, crypto-autoinsight, crypto-lqa) | Interval scheduling (`*/12h`), live mode with `--confirm-live`, observe → propose → backtest → risk-gate → place_order → journal flow |
+| **auto-quant** | A | 10 (momentum_research, mean_reversion_research, crypto_autoinsight_research, crypto_lqa_research, regime_detector, competitor_observer, gpt_baseline_crypto, sonnet_baseline_crypto, gpt_auto_crypto, sonnet_auto_crypto) | Interval scheduling (`*/12h`), live mode with `--confirm-live`, observe → propose → backtest → risk-gate → place_order → journal flow |
 | **mbb-ai** | B | 2 (case_cycle, regression_sweep) | Parallel fan-out (N-judge), conditional retry (info_release re-prompt), deterministic triangulation columns, ≥3-recurrence learn step closing the loop into bandit retrieval |
 | **eventx** | B | 1 per registered task (e.g. consulting_market_match) | Pipeline DAG with idempotency gating on output table row counts, per-record dynamic skill loading, SQLite-backed cycle metrics |
 | **auto-sysresearch** | B | 1 (benchmark, @trigger) | `benchmarks[]` first-class schema, three-tier variant search space (component + policy + params), Docker container lifecycle via `container_dispatch`, 20-query NL-to-SQL eval with in-process SQLite. Fork by swapping `system/` and updating `benchmarks[]` + `variant_schema`. |
@@ -502,18 +547,74 @@ For Pattern B loops, `steps[]` and `skills_invoked[]` exist for two reasons:
 
 The runner does NOT enforce step ordering on Pattern B — `engine.module` is the truth. Honest declaration matters: list every skill the verb invokes, including the ones not in any loop's `steps[]` ordered list. mbb-ai's `case_cycle` declares 18 `skills_invoked[]` (vs the 7 steps the manifest used to list); eventx's `consulting_market_match` declares 8.
 
+## Running loops manually
+
+```bash
+# Run one loop once (on-demand, bypasses the scheduler)
+lumid research run <loop_name>
+
+# Run N cycles with an interval between each
+lumid research run <loop_name> --cycles 3 --interval 60
+
+# Example: run one cycle of the crypto insight loop
+lumid research run crypto_autoinsight_research
+```
+
+`lumid research run` resolves the loop name to its parent app by scanning
+`~/.xp/apps/*/xpcloud.yaml`, then dispatches `app_runner.cycle(app, loop)` for each
+requested cycle. This is identical to what the scheduler fires on cron trigger —
+`_run_auto_publish()` runs after every cycle, so insights.md and memory banks update
+correctly.
+
+## Deferred work via `submit_jobs`
+
+The inline cycle is fast enough for live trading, but heavier work (long backtests, GPU inference, daily LLM-driven memos) should be dispatched as a job and either picked up later or fired on a recurring schedule. The opt-in `submit_jobs` skill family lives at `sdk/skills/submit_jobs/`:
+
+| Skill | When | Backend |
+|---|---|---|
+| `submit_jobs.flowmesh` | GPU inference, training fans, deep backtests | `POST kv.run:8000/flowmesh` |
+| `submit_jobs.lumilake` | HALO-optimised DAGs, multi-stage ETL | `POST lum.id/lumilake-api` |
+| `submit_jobs.cron` | Recurring shell command OR recurring `claude -p` prompt | the same `lumid-scheduler` daemon that runs xpio loops |
+| `submit_jobs.get_result(job_id, wait=False)` | Read result back (cross-cycle or in-cycle) | reads `~/.lumilake/jobs.jsonl` ledger |
+
+### `submit_jobs.cron` — two modes, one queue
+
+```python
+# Spec mode — any shell command (lumid verbs, curl, pipelines)
+run(spec='lumid app auto-quant cycle momentum_research',
+    schedule='0 4 * * *', kind='nightly_recompute')
+
+# Prompt mode — recurring `claude -p` without authoring an xpio app
+run(prompt="Summarize today's BTC moves and write a memo",
+    schedule='0 8 * * *', kind='daily_brief',
+    model='claude-sonnet-4-6')
+```
+
+Both modes append to `~/.lumilake/scheduler/cron_jobs.json` AND record a `scheduled` row in `~/.lumilake/jobs.jsonl`. The writer then sends `SIGHUP` to `~/.lumilake/loops.pid` so the daemon picks up the new entry within ~2 s instead of waiting up to 10 min for the next refresh tick.
+
+Fire path (`sdk/scheduling/cron_executor.py:145`): prompt mode invokes `claude -p --model <model> "<prompt>"` (the binary is bind-mounted into the scheduler container at `/usr/local/bin/claude`); spec mode `sh -c "<spec>"`. Stdout is captured (16 KB tail-truncated) and lands in the ledger row AND a persistent file at `~/.lumilake/scheduler/results/<job_id>.txt`. Default per-fire timeout 600 s; override via `entry["timeout_s"]`.
+
+### Daemon lifecycle (matters for fresh users)
+
+The `lumid-scheduler` daemon stays alive at startup even when there are zero xpio loops AND the cron queue is empty — a fresh-install user always hits this. The intent: the user submits later, the daemon should still be there. `SIGHUP` forces an immediate `refresh()` so just-submitted jobs fire without waiting for the next 600 s tick. Submissions still arrive (and get picked up) on the next refresh tick if the daemon is restarting.
+
+The unified ledger at `~/.lumilake/jobs.jsonl` is the single read source for `/dashboard/jobs` and the place to debug from. State transitions: `scheduled → running → succeeded | failed`.
+
 ## Files of record
 
 | Path | What |
 |---|---|
-| `sdk/apps/app_runner.py:78-85` | `load_manifest()` — xpcloud.yaml is runtime |
-| `sdk/apps/app_runner.py:929-1010` | `cycle()` + `_run_command_engine()` |
-| `sdk/apps/app_runner.py:1136-1310` | `_run_explicit_steps()` (Pattern A) |
-| `sdk/apps/app_runner.py:325-414` | `_run_auto_publish()` (privacy contract) |
-| `sdk/apps/app_runner.py:597-916` | `_post_inbox_message()` + `_pull_inbox_replies()` |
+| `sdk/apps/app_runner.py:78` | `load_manifest()` — xpcloud.yaml is runtime |
+| `sdk/apps/app_runner.py:1273` | `cycle()` entry point |
+| `sdk/apps/app_runner.py:1159` | `_run_command_engine()` (Pattern B) |
+| `sdk/apps/app_runner.py:1720` | `_run_explicit_steps()` (Pattern A) |
+| `sdk/apps/app_runner.py:455` | `_run_auto_publish()` (privacy contract) |
+| `sdk/apps/app_runner.py:757` | `_post_inbox_message()` |
+| `sdk/apps/app_runner.py:935` | `_pull_inbox_replies()` |
 | `sdk/apps/app_runner.py:46` | `_VALID_MODES` enum |
-| `sdk/apps/app_runner.py:105-170` | `_load_skill_module()` (skill resolution) |
-| `sdk/scheduling/xpio_scheduler.py:96+` | `discover_loops()` |
+| `sdk/apps/app_runner.py:181` | `_load_skill_module()` (skill resolution) |
+| `sdk/ops/research.py:159` | `_resolve_loop_to_app()` + `run_loop()` CLI dispatcher |
+| `sdk/scheduling/xpio_scheduler.py:103` | `discover_loops()` |
 | `sdk/ops/app_ci.py:442-449` | the 6 publish gates |
 
 ## Out-of-scope future work

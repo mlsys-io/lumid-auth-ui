@@ -128,6 +128,21 @@ export interface RecentTradesResponse {
 }
 
 /**
+ * Create a private competition (current user becomes owner; only they can see and join it)
+ * POST /api/v1/competitions
+ */
+export async function createCompetition(req: {
+	name: string;
+	market_id: number;
+	initial_funding: number;
+	trading_fees: number;
+	start_time: number;
+	end_time: number;
+}): Promise<void> {
+	await apiClient.post<void>('/api/v1/competitions', req);
+}
+
+/**
  * Reset a strategy's trade history in a competition (own strategy or admin)
  * POST /api/v1/competitions/{competition_id}/strategies/{strategy_id}/reset
  */

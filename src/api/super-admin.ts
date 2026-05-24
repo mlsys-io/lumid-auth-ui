@@ -282,3 +282,27 @@ export async function fetchLoops(): Promise<LoopsResp> {
 	const r = await apiClient.get<DataResponse<LoopsResp>>('/api/v1/admin/loops');
 	return r.data.data;
 }
+
+// Phase D follow-up — /admin/tenants returns per-user operational snapshot.
+export interface TenantRow {
+	sub: string;
+	email: string;
+	role: string;
+	created_at: string;
+	apps: number;
+	app_names?: string[];
+	storage_mb: number;
+	cycles_today: number;
+	llm_tokens_today: number;
+	gmail_today: number;
+	last_cycle_ts?: string;
+}
+export interface TenantsResp {
+	tenants: TenantRow[];
+	count: number;
+	as_of: string;
+}
+export async function fetchTenants(): Promise<TenantsResp> {
+	const r = await apiClient.get<DataResponse<TenantsResp>>('/api/v1/admin/tenants');
+	return r.data.data;
+}

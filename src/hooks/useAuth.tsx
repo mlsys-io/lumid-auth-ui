@@ -69,6 +69,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       /* best-effort */
     } finally {
       setUser(null);
+      // Wipe any user-owned client state that survives the session
+      // cookie. Chat history (in sessionStorage) is the load-bearing
+      // case: previously, signing out + signing in as someone else on
+      // the same tab leaked the prior user's conversation. Belt-and-
+      // suspenders alongside the user_sub-tagged guard in chat-widget.
+      try {
+        sessionStorage.removeItem("lumid:chat:v1");
+      } catch { /* private mode / quota */ }
     }
   };
 

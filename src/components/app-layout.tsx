@@ -26,6 +26,12 @@ import {
 	Activity,
 	Code2,
 	Inbox,
+	RefreshCw,
+	ShoppingBag,
+	Brain,
+	MessageSquare,
+	Newspaper,
+	ChartCandlestick,
 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
@@ -35,7 +41,10 @@ import { EnterpriseTipProvider } from '../runmesh/components/EnterpriseTip';
 import { useAuthStore } from '../runmesh/stores/useAuthStore';
 import { httpUser } from '../runmesh/utils/axios';
 
-const inboxPollClient = axios.create({ baseURL: '/inbox-api', timeout: 8000, withCredentials: true });
+import { API_BASE_URL } from '@/config/env';
+// Absolute baseURL — lum.id deploy keeps same-origin behavior;
+// xp.io/go/* needs the absolute path to reach the inbox proxy.
+const inboxPollClient = axios.create({ baseURL: `${API_BASE_URL}/inbox-api`, timeout: 8000, withCredentials: true });
 import { Button } from './ui/button';
 import { getSimulationStrategies, ApiError } from '../quantarena/api';
 import type { SimulationStrategyInfo } from '../quantarena/api/types';
@@ -77,6 +86,14 @@ interface ExternalNavItem {
 //   - Runmesh Submit    = pick + submit to FlowMesh, or manage cron
 //   - Lumilake Submit   = submit to Lumilake analytics
 //   - Running jobs      = unified runtime list, both backends
+// Research Loops section — new in 2026-05-18 (xp.io marketplace plan)
+const RESEARCH_NAV: NavItem[] = [
+	{ to: '/dashboard/loops', label: 'My Loops', icon: RefreshCw },
+	{ to: '/dashboard/marketplace', label: 'Marketplace', icon: ShoppingBag },
+	{ to: '/dashboard/knowledge', label: 'My Knowledge', icon: Brain },
+	{ to: '/dashboard/results', label: 'My Results', icon: BarChart3 },
+];
+
 const PRODUCT_NAV: NavItem[] = [
 	{ to: '/dashboard', label: 'Workflow Builder', icon: Workflow, end: true },
 	{ to: '/dashboard/runmesh/submit', label: 'Runmesh Submit', icon: Send },
@@ -95,8 +112,14 @@ const PRODUCT_NAV: NavItem[] = [
 // embedded inside lum.id via /findata-embed/ same-origin proxy
 // (lumid.data prerequisite Tier E).
 const LUMILAKE_NAV: NavItem[] = [
+	// Ordered by expected user-traffic — symbol-centric financial surfaces
+	// first, then macro, then the deeper Lumilake lakehouse browser.
+	{ to: '/dashboard/datasets/findata', label: 'FinData Explorer', icon: LineChart },
+	{ to: '/dashboard/datasets/news', label: 'News', icon: Newspaper },
+	{ to: '/dashboard/datasets/kols', label: 'KOL Tweets', icon: MessageSquare },
+	{ to: '/dashboard/datasets/macro', label: 'Macro', icon: Activity },
+	{ to: '/dashboard/datasets/predmarket', label: 'Prediction markets', icon: ChartCandlestick },
 	{ to: '/dashboard/lumilake/data', label: 'Data browsing', icon: Database },
-	{ to: '/dashboard/datasets/findata', label: 'Financial data', icon: LineChart },
 ];
 
 // Lumid Market (LQA) sidebar entries are rendered by QuantSection
@@ -277,6 +300,15 @@ const LQA_NAV: NavItem[] = [
 	{ to: '/dashboard/quant/strategy', label: 'Backtest', icon: Code2 },
 ];
 
+// LQA's user-facing landing lives at lumid.market (separate React app).
+// Rendered as an external link at the top of the section so it's the
+// obvious gateway out of the lum.id shell into the trading product.
+const LQA_LANDING: ExternalNavItem = {
+	href: 'https://lumid.market/',
+	label: 'Lumid Market home',
+	icon: Trophy,
+};
+
 function QuantSection({ onItemClick }: { onItemClick?: () => void }) {
 	const [joined, setJoined] = useState<JoinedContest[]>([]);
 
@@ -314,6 +346,7 @@ function QuantSection({ onItemClick }: { onItemClick?: () => void }) {
 		<>
 			<SectionLabel label="Lumid Market" />
 			<div className="space-y-px">
+				<SidebarExternalItem {...LQA_LANDING} onClick={onItemClick} />
 				{LQA_NAV.map((item) => (
 					<SidebarItem key={item.to} {...item} onClick={onItemClick} />
 				))}
@@ -439,6 +472,13 @@ export default function AppLayout() {
 
 			{/* Nav */}
 			<nav className="flex-1 overflow-y-auto px-2 pt-2 pb-4">
+				<SectionLabel label="Research" />
+				<div className="space-y-px">
+					{RESEARCH_NAV.map((item) => (
+						<SidebarItem key={item.to} {...item} onClick={close} />
+					))}
+				</div>
+
 				<SectionLabel label="AI Compute" />
 				<div className="space-y-px">
 					{PRODUCT_NAV.map((item) => (
@@ -451,6 +491,12 @@ export default function AppLayout() {
 					{LUMILAKE_NAV.map((item) => (
 						<SidebarItem key={item.to} {...item} onClick={close} />
 					))}
+					<SidebarExternalItem
+						href="https://kv.run:5000/"
+						label="FinData Cloud API"
+						icon={ExternalLink}
+						onClick={close}
+					/>
 				</div>
 
 				<QuantSection onItemClick={close} />

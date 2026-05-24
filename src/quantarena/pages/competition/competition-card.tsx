@@ -82,6 +82,11 @@ const CompetitionCard: React.FC<CompetitionCardProps> = ({ competition, onRegist
 							</TooltipContent>
 						</Tooltip>
 					)}
+					{competition.is_private && (
+						<Badge variant="outline" className="shrink-0 bg-violet-50 text-violet-700 border-violet-200">
+							My Competition
+						</Badge>
+					)}
 					<Badge
 						variant={getStatusBadgeVariant(competition.status)}
 						className={cn('shrink-0', getStatusBadgeColor(competition.status))}

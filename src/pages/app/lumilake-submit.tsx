@@ -1,5 +1,5 @@
-import { SubmitWorkflow } from '@/components/submit-workflow';
+import { SubmitLumilakeJob } from '@/components/submit-lumilake-job';
 
 export default function AppLumilakeSubmit() {
-	return <SubmitWorkflow target="lumilake" />;
+	return <SubmitLumilakeJob />;
 }

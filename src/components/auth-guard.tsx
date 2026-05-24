@@ -46,8 +46,33 @@ export function isSafeReturnTo(raw: string | null | undefined): raw is string {
 		raw.startsWith('/app') ||
 		raw.startsWith('/dashboard') ||
 		raw.startsWith('/account') ||
+		raw.startsWith('/onboarding') ||
 		raw === '/'
 	);
+}
+
+/** Role-aware default landing path.
+ *
+ * The xp.io/go/* staging bundle (VITE_ROUTER_BASE_PATH=/go) is the new
+ * web-first consumer surface. Everyone — including admins — lands on
+ * /app there so the new UX gets dogfooded by the operators too. Admins
+ * can still navigate to /dashboard manually for ops work.
+ *
+ * On the canonical lum.id bundle (no basename), regular users land on
+ * /app and admins on /dashboard until the dedicated /admin/* shell ships.
+ */
+export function defaultLandingPath(role: string | null | undefined): string {
+	const isGoBundle = !!import.meta.env.VITE_ROUTER_BASE_PATH;
+	// Phase S5 — Studio is the canonical user surface. Regular users
+	// land on /studio/today (which shows the onboarding nudge for
+	// fresh signups with no apps). Admins still get /dashboard for
+	// now; Phase S4's /studio/admin is a parallel surface, not the
+	// admin home yet. /go bundle stays on the composer (its raison
+	// d'être) — the composer's Start button routes cross-domain to
+	// lum.id/studio anyway.
+	if (isGoBundle) return '/go-composer';
+	if (role === 'admin' || role === 'super_admin') return '/dashboard';
+	return '/studio/today';
 }
 
 export function AuthGuard({ children, requireAuth = true }: AuthGuardProps) {
@@ -92,13 +117,14 @@ export function AuthGuard({ children, requireAuth = true }: AuthGuardProps) {
 
 	if (!requireAuth && isAuthenticated) {
 		// Post-login landing. Only honor `return_to` if it's a safe
-		// same-origin path; otherwise fall through to /dashboard so
-		// phishy external URLs can't use /auth/login as a bounce.
+		// same-origin path; otherwise fall through to the role-aware
+		// default (`/app` for regular users, `/dashboard` for admins)
+		// so phishy external URLs can't use /auth/login as a bounce.
 		const returnTo = new URLSearchParams(location.search).get('return_to');
 		if (isSafeReturnTo(returnTo)) {
 			return <Navigate to={returnTo} replace />;
 		}
-		return <Navigate to="/dashboard" replace />;
+		return <Navigate to={defaultLandingPath(user?.role)} replace />;
 	}
 
 	return <>{children}</>;
