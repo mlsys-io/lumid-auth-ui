@@ -57,15 +57,25 @@ function NavItemView({ to, label, icon: Icon, end }: NavItem) {
 			end={end}
 			className={({ isActive }) =>
 				cn(
-					'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
+					'group flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all relative',
 					isActive
-						? 'bg-emerald-50 text-emerald-900 font-medium'
-						: 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+						? 'bg-gradient-to-r from-emerald-50 to-emerald-50/30 text-emerald-900 font-medium shadow-sm shadow-emerald-100/50'
+						: 'text-slate-600 hover:bg-slate-50 hover:text-slate-900',
 				)
 			}
 		>
-			<Icon className="w-4 h-4 flex-shrink-0" />
-			<span>{label}</span>
+			{({ isActive }) => (
+				<>
+					{isActive && (
+						<span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r-full bg-emerald-500" />
+					)}
+					<Icon className={cn(
+						'w-4 h-4 flex-shrink-0 transition-colors',
+						isActive ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-700',
+					)} />
+					<span>{label}</span>
+				</>
+			)}
 		</NavLink>
 	);
 }
@@ -91,12 +101,15 @@ export function StudioShell() {
 	};
 
 	return (
-		<div className="min-h-screen bg-slate-50 flex">
+		<div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 flex">
 			{/* Sidebar ─────────────────────────────────────────────── */}
-			<aside className="w-56 flex flex-col h-screen bg-white border-r border-slate-200 sticky top-0">
-				<Link to="/studio" className="px-4 py-3.5 border-b border-slate-200/60 flex items-center gap-2">
-					<Hexagon className="w-5 h-5 text-emerald-600 fill-emerald-50" strokeWidth={1.5} />
-					<span className="font-semibold text-[15px] tracking-tight">Lumid Studio</span>
+			<aside className="w-56 flex flex-col h-screen bg-white/70 backdrop-blur-sm border-r border-slate-200/70 sticky top-0">
+				<Link to="/studio" className="px-4 py-4 border-b border-slate-200/60 flex items-center gap-2.5 hover:bg-slate-50/50 transition-colors">
+					<div className="relative">
+						<div className="absolute inset-0 bg-emerald-400/30 blur-md rounded-full" />
+						<Hexagon className="relative w-5 h-5 text-emerald-600 fill-emerald-50" strokeWidth={1.5} />
+					</div>
+					<span className="font-semibold text-[15px] tracking-tight text-slate-900">Lumid Studio</span>
 				</Link>
 
 				<nav className="flex-1 overflow-y-auto px-2 py-3 space-y-px">
@@ -135,13 +148,13 @@ export function StudioShell() {
 			{/* Main column ─────────────────────────────────────────── */}
 			<div className="flex-1 flex flex-col min-w-0">
 				{/* Top bar */}
-				<header className="h-14 bg-white border-b border-slate-200 sticky top-0 z-10 flex items-center px-6 gap-4">
+				<header className="h-14 bg-white/70 backdrop-blur-md border-b border-slate-200/70 sticky top-0 z-10 flex items-center px-6 gap-4">
 					<div className="flex-1 max-w-md relative">
-						<Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+						<Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
 						<input
 							type="search"
 							placeholder="Search apps, skills, memories…"
-							className="w-full pl-9 pr-3 py-1.5 text-sm rounded-md border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-400"
+							className="w-full pl-10 pr-3 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50/60 focus:bg-white focus:outline-none focus:ring-4 focus:ring-emerald-400/15 focus:border-emerald-400 transition-all placeholder:text-slate-400"
 							// Search wiring is Phase S3; placeholder for now.
 						/>
 					</div>
@@ -149,9 +162,9 @@ export function StudioShell() {
 					<div ref={menuRef} className="relative">
 						<button
 							onClick={() => setMenuOpen((v) => !v)}
-							className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md hover:bg-slate-100 transition-colors"
+							className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl hover:bg-slate-100/70 transition-colors"
 						>
-							<div className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-semibold">
+							<div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center text-xs font-semibold shadow-sm shadow-emerald-100">
 								{(user?.email?.[0] || '?').toUpperCase()}
 							</div>
 							<ChevronDown className="w-4 h-4 text-slate-500" />
