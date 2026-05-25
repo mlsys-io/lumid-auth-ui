@@ -34,6 +34,18 @@ export default function StudioWorkflows() {
 	};
 	useEffect(() => { load(); }, []);
 
+	// Cross-surface entry: any page can route here with `?compose=1` to
+	// pop the composer modal on mount (e.g. inbox-zero "New workflow"
+	// CTA). Strip the param so a back/forward navigation doesn't re-pop.
+	useEffect(() => {
+		const u = new URL(window.location.href);
+		if (u.searchParams.get("compose") === "1") {
+			setComposerOpen(true);
+			u.searchParams.delete("compose");
+			window.history.replaceState({}, "", u.pathname + (u.search || "") + u.hash);
+		}
+	}, []);
+
 	const filtered = useMemo(() => {
 		if (!rows) return [];
 		let out = rows;
@@ -228,6 +240,18 @@ function WorkflowRowView({ row, onChanged }: { row: MeWorkflowRow; onChanged: ()
 					<RunSparkline spec={row.run_spark || ""} />
 				</div>
 
+				{/* Cost MTD — only when non-zero; positioned before trigger so
+				    the eye lands on it before the metadata. Tooltip shows the
+				    full picture. */}
+				{row.cost_cents_mtd && row.cost_cents_mtd > 0 ? (
+					<div
+						className="hidden md:inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-50 text-slate-600 text-[10px] font-mono tabular-nums border border-slate-200/60"
+						title={`Month-to-date cost: ${formatCents(row.cost_cents_mtd)}`}
+					>
+						{formatCents(row.cost_cents_mtd)}
+					</div>
+				) : null}
+
 				{/* Trigger + last run */}
 				<div className="hidden lg:block text-right min-w-[110px]">
 					<div className="font-mono text-[11px] text-slate-600 truncate">{row.trigger || "@trigger"}</div>
@@ -268,6 +292,14 @@ function WorkflowRowView({ row, onChanged }: { row: MeWorkflowRow; onChanged: ()
 			</div>
 		</div>
 	);
+}
+
+// formatCents — int cents → "$0.42" / "$12.30" / "$1,250.00". Always
+// 2dp because the chip is a money quantity; commas for ≥ $1,000.
+function formatCents(cents: number): string {
+	if (cents < 100) return `$${(cents / 100).toFixed(2)}`;
+	const dollars = cents / 100;
+	return `$${dollars.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 // Human-readable "5m ago" / "2h ago" / "Mar 12" relative time. Falls

@@ -20,6 +20,7 @@ import { Link } from 'react-router-dom';
 import {
 	Mail, CheckCircle2, AlertCircle, Send, X, Edit2,
 	Sparkles, Loader2, ChevronRight, RefreshCw, Lock, Inbox as InboxIcon,
+	Plus, Filter as FilterIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { me, MeApiError } from '@/api/me';
@@ -255,9 +256,9 @@ export default function StudioInbox() {
 			)}
 
 			{items !== null && visible.length === 0 && (
-				<div className="text-center text-sm text-slate-500 italic py-12">
-					Nothing matching this filter.
-				</div>
+				items.length === 0
+					? <InboxZeroState />
+					: <FilterEmptyState filter={filter} onReset={() => setFilter('all')} />
 			)}
 
 			<ul className="space-y-2">
@@ -270,6 +271,72 @@ export default function StudioInbox() {
 					</li>
 				))}
 			</ul>
+		</div>
+	);
+}
+
+// ── Empty states ───────────────────────────────────────────────────
+
+// InboxZeroState — the user has *nothing* in their inbox. This is a
+// genuine inbox-zero moment, not a filter quirk. Treat as a calm
+// celebration plus a nudge toward the natural next step (a workflow
+// that produces drafts the user can act on).
+function InboxZeroState() {
+	const openComposer = () => {
+		// /studio/workflows mounts and reads ?compose=1 on entry to pop
+		// the composer modal — no need to keep this page mounted.
+		window.location.href = '/studio/workflows?compose=1';
+	};
+	const askAgent = () => {
+		window.dispatchEvent(new CustomEvent('studio:ask', {
+			detail: { prompt: 'What kind of workflow would fit my day?', autosend: true },
+		}));
+	};
+	return (
+		<div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50/40 to-white py-10 px-6 text-center">
+			<div className="w-14 h-14 mx-auto rounded-2xl bg-emerald-100/60 flex items-center justify-center mb-4 shadow-inner shadow-emerald-50">
+				<CheckCircle2 className="w-7 h-7 text-emerald-600" />
+			</div>
+			<div className="text-base font-semibold text-slate-900">Inbox zero.</div>
+			<p className="text-sm text-slate-600 mt-1.5 max-w-md mx-auto leading-relaxed">
+				When your workflows produce something for you — a draft, a
+				summary, a heads-up — it lands here for review.
+			</p>
+			<div className="flex items-center justify-center gap-2 mt-5">
+				<button
+					onClick={openComposer}
+					className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-colors shadow-sm shadow-emerald-100"
+				>
+					<Plus className="w-3.5 h-3.5" />
+					New workflow
+				</button>
+				<button
+					onClick={askAgent}
+					className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
+				>
+					<Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+					Ask for ideas
+				</button>
+			</div>
+		</div>
+	);
+}
+
+// FilterEmptyState — items exist but none match the current filter.
+// Quieter than InboxZero; the obvious action is to clear the filter.
+function FilterEmptyState({ filter, onReset }: { filter: Filter; onReset: () => void }) {
+	return (
+		<div className="rounded-xl border border-dashed border-slate-200 bg-white/60 py-8 px-6 text-center">
+			<FilterIcon className="w-5 h-5 mx-auto text-slate-400" />
+			<div className="text-sm text-slate-700 mt-2.5">
+				Nothing in <span className="font-medium">{filter}</span> right now.
+			</div>
+			<button
+				onClick={onReset}
+				className="mt-3 text-xs text-emerald-700 hover:text-emerald-800 hover:underline transition-colors"
+			>
+				Show everything
+			</button>
 		</div>
 	);
 }
