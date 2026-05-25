@@ -10,6 +10,7 @@ import { Link } from "react-router-dom";
 import { Brain, ChevronDown, ChevronRight, TrendingUp, TrendingDown, Minus, Sparkles } from "lucide-react";
 import { me, MeApiError, type MeWorkflowRow, type MeMindStats } from "@/api/me";
 import PageHints from "@/components/PageHints";
+import ParallelCoordsPlot from "@/components/ParallelCoordsPlot";
 
 interface ReportCard {
 	slug: string;
@@ -85,11 +86,12 @@ export default function StudioMind() {
 				</div>
 			)}
 
+			<SkillComparison />
+
 			<div className="pt-6 border-t border-slate-200 text-xs text-slate-500 leading-relaxed">
 				<p>
-					Reports are computed from your own run history + draft accept-rate (tenant-isolated).
-					Skill-level comparisons across global attestations land when the marketplace has more data — for now, run the evaluator on a skill
-					from the chat (&quot;trigger an evaluation for tavily-search on personal-agent&quot;).
+					Reports above are computed from your own run history + draft accept-rate (tenant-isolated).
+					Skill-level comparisons below read globally-shared attestations — reproducible across tenants because nothing personal feeds them.
 				</p>
 			</div>
 		</div>
@@ -208,5 +210,66 @@ function EmptyState() {
 			<Link to="/studio/skills" className="text-emerald-700 underline">install one</Link>{" "}
 			and your AI&apos;s progress will show up here.
 		</div>
+	);
+}
+
+// Advanced: cross-skill comparison plot (W&B-inspired parallel
+// coords). Collapsed by default; users find it when they want to
+// dig into "which skill version actually scores better?"
+const COMPARE_SKILLS = [
+	"tavily-search", "brave-search", "gmail-mcp", "github-mcp",
+	"wikipedia-search", "arxiv-search", "slack-mcp", "calendar-mcp",
+];
+
+function SkillComparison() {
+	const [open, setOpen] = useState(false);
+	const [skill, setSkill] = useState<string>(COMPARE_SKILLS[0]);
+	const [data, setData] = useState<{ rows: any[]; count: number } | null>(null);
+	const [loading, setLoading] = useState(false);
+
+	useEffect(() => {
+		if (!open) return;
+		setLoading(true);
+		me.mindSkills(skill)
+			.then((d) => setData({ rows: d.rows, count: d.count }))
+			.catch(() => setData({ rows: [], count: 0 }))
+			.finally(() => setLoading(false));
+	}, [open, skill]);
+
+	return (
+		<section className="rounded-xl border border-slate-200 bg-white">
+			<button
+				onClick={() => setOpen((v) => !v)}
+				className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-50/50 transition-colors"
+			>
+				<div className="flex items-center gap-2">
+					{open ? <ChevronDown className="w-4 h-4 text-slate-500" /> : <ChevronRight className="w-4 h-4 text-slate-500" />}
+					<span className="text-sm font-medium text-slate-800">Skill comparison (advanced)</span>
+				</div>
+				<span className="text-xs text-slate-500">
+					{open ? "How skill versions stack up on shared casebooks." : "open"}
+				</span>
+			</button>
+			{open && (
+				<div className="border-t border-slate-100 p-4 space-y-3">
+					<div className="flex items-center gap-2 text-xs">
+						<span className="text-slate-500">Compare:</span>
+						<select
+							value={skill}
+							onChange={(e) => setSkill(e.target.value)}
+							className="px-2 py-1 rounded border border-slate-200 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400/30"
+						>
+							{COMPARE_SKILLS.map((s) => <option key={s} value={s}>{s}</option>)}
+						</select>
+						{data && <span className="ml-auto text-slate-500">{data.count} evaluations</span>}
+					</div>
+					{loading ? (
+						<div className="text-sm text-slate-500 italic py-4 text-center">Loading…</div>
+					) : data ? (
+						<ParallelCoordsPlot rows={data.rows} />
+					) : null}
+				</div>
+			)}
+		</section>
 	);
 }

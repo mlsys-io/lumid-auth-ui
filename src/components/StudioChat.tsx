@@ -524,6 +524,21 @@ function handleEvent(
 				},
 			],
 		})));
+		// W5 — surface compose_workflow results to the composer modal
+		// so it can switch into "review + install" mode. The chat
+		// already runs the tool; we just relay the result via a
+		// window event for cross-component pickup.
+		if (evt.name === 'compose_workflow' && evt.ok !== false && evt.result) {
+			window.dispatchEvent(new CustomEvent('studio:composed', {
+				detail: {
+					slug: String(evt.result.draft_slug || ''),
+					intent: String(evt.result.intent || ''),
+					skills: Array.isArray(evt.result.skills_picked) ? evt.result.skills_picked : [],
+					skill_summaries: Array.isArray(evt.result.skill_summaries) ? evt.result.skill_summaries : undefined,
+					for_app: String(evt.result.for_app || ''),
+				},
+			}));
+		}
 	} else if (evt.type === 'error' && evt.message) {
 		setMessages((prev) => withLastAssistant(prev, (m) => ({
 			...m,

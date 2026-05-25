@@ -13,7 +13,9 @@
 // nginx.conf for the rules).
 
 import { useEffect, useRef, useState } from "react";
-import { ExternalLink, Info } from "lucide-react";
+import { ExternalLink, Info, ArrowRightCircle, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { me, MeApiError } from "@/api/me";
 
 interface Props {
 	onClose: () => void;
@@ -24,6 +26,8 @@ interface Props {
 export function N8nEditor({ workflowId }: Props) {
 	const iframeRef = useRef<HTMLIFrameElement>(null);
 	const [loaded, setLoaded] = useState(false);
+	const [promoteId, setPromoteId] = useState("");
+	const [promoting, setPromoting] = useState(false);
 	const src = workflowId
 		? `/n8n/workflow/${encodeURIComponent(workflowId)}`
 		: "/n8n/workflow/new";
@@ -32,6 +36,34 @@ export function N8nEditor({ workflowId }: Props) {
 		const t = setTimeout(() => setLoaded(true), 3000);
 		return () => clearTimeout(t);
 	}, []);
+
+	const promoteToScheduled = async () => {
+		const id = promoteId.trim();
+		if (!id) {
+			toast.info("Paste the n8n workflow id (visible in the editor URL) first.");
+			return;
+		}
+		setPromoting(true);
+		try {
+			const r = await fetch("/api/v1/me/workflows/import-from-n8n", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				credentials: "include",
+				body: JSON.stringify({ n8n_id: id }),
+			});
+			if (!r.ok) throw new Error(`status ${r.status}`);
+			const body = await r.json();
+			if (body.ret_code !== 0) throw new Error(body.message || "promote failed");
+			toast.success(`Promoted to draft "${body.data.draft_slug}".`);
+			if (body.data.unsupported_nodes?.length > 0) {
+				toast.info(`${body.data.unsupported_nodes.length} node(s) need manual mapping in the YAML.`);
+			}
+		} catch (e) {
+			toast.error(`Promote failed: ${e instanceof MeApiError ? e.message : String(e)}`);
+		} finally {
+			setPromoting(false);
+		}
+	};
 
 	return (
 		<div className="space-y-3">
@@ -61,8 +93,22 @@ export function N8nEditor({ workflowId }: Props) {
 				/>
 			</div>
 
-			<div className="flex items-center justify-between text-xs text-slate-500">
-				<span>Open in full window to debug auth issues:</span>
+			<div className="flex items-center gap-3 text-xs text-slate-500 border-t border-slate-100 pt-3">
+				<input
+					value={promoteId}
+					onChange={(e) => setPromoteId(e.target.value)}
+					placeholder="paste n8n workflow id to promote"
+					className="flex-1 px-2.5 py-1.5 rounded border border-slate-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-emerald-400/30 font-mono"
+				/>
+				<button
+					onClick={promoteToScheduled}
+					disabled={promoting || !promoteId.trim()}
+					title="Translate this n8n workflow into a scheduled xpio workflow (best-effort)."
+					className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-emerald-700 hover:bg-emerald-50 border border-emerald-200 disabled:opacity-40 transition-colors"
+				>
+					{promoting ? <Loader2 className="w-3 h-3 animate-spin" /> : <ArrowRightCircle className="w-3 h-3" />}
+					Promote to scheduled
+				</button>
 				<a
 					href={src}
 					target="_blank"

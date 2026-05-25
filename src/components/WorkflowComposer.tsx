@@ -9,8 +9,10 @@
 //     opt-in: the user signs into n8n once; the SSO bridge to mint
 //     the n8n session from the lum.id session is a follow-up.
 
-import { useState } from "react";
-import { X, MessageSquare, GitBranch, ExternalLink } from "lucide-react";
+import { useEffect, useState } from "react";
+import { X, MessageSquare, GitBranch, ExternalLink, Check, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { me, MeApiError } from "@/api/me";
 import N8nEditor from "@/components/N8nEditor";
 
 type Mode = "describe" | "visual";
@@ -20,25 +22,112 @@ interface Props {
 	onClose: () => void;
 }
 
+// LocalStorage keys for composer persistence so users don't lose
+// their intent if they accidentally close the modal.
+const LS_INTENT = "studio:composer:intent:v1";
+const LS_DRAFT = "studio:composer:draft:v1";
+
+interface DraftedState {
+	slug: string;
+	intent: string;
+	skills: string[];
+	skill_summaries?: Array<{ name: string; display_name?: string; summary?: string; why?: string }>;
+	for_app?: string;
+}
+
 export function WorkflowComposer({ open, onClose }: Props) {
 	const [mode, setMode] = useState<Mode>("describe");
-	const [intent, setIntent] = useState("");
+	const [intent, setIntent] = useState<string>(() => {
+		try { return localStorage.getItem(LS_INTENT) || ""; } catch { return ""; }
+	});
+	const [drafted, setDrafted] = useState<DraftedState | null>(() => {
+		try {
+			const raw = localStorage.getItem(LS_DRAFT);
+			return raw ? JSON.parse(raw) as DraftedState : null;
+		} catch { return null; }
+	});
+	const [installing, setInstalling] = useState(false);
+
+	// Persist intent + drafted across modal opens.
+	useEffect(() => {
+		try { localStorage.setItem(LS_INTENT, intent); } catch { /* ignore */ }
+	}, [intent]);
+	useEffect(() => {
+		try {
+			if (drafted) localStorage.setItem(LS_DRAFT, JSON.stringify(drafted));
+			else localStorage.removeItem(LS_DRAFT);
+		} catch { /* ignore */ }
+	}, [drafted]);
+
+	// Listen for compose_workflow tool results from the chat agent.
+	// StudioChat fires a 'studio:composed' event after a successful
+	// tool call so the composer can switch into "review" mode.
+	useEffect(() => {
+		const onComposed = (e: Event) => {
+			const ce = e as CustomEvent<DraftedState>;
+			if (!ce.detail || !ce.detail.slug) return;
+			setDrafted(ce.detail);
+		};
+		window.addEventListener("studio:composed", onComposed as EventListener);
+		return () => window.removeEventListener("studio:composed", onComposed as EventListener);
+	}, []);
 
 	if (!open) return null;
 
 	const askChatToCompose = () => {
 		const prompt = intent.trim() || "Build me a workflow that drafts replies to important emails twice a day.";
 		// Dispatch through the existing studio:ask event the chat
-		// sidebar already listens for (W6 pattern). The agent will
-		// invoke compose_workflow, stage the draft, and reply with
-		// a review link.
+		// sidebar already listens for. The agent will invoke
+		// compose_workflow, stage the draft, and (post-W5) fire
+		// 'studio:composed' so we switch to review mode.
 		window.dispatchEvent(new CustomEvent("studio:ask", {
 			detail: {
-				prompt: `Use compose_workflow to draft a workflow for this intent: "${prompt}"`,
+				prompt: `Use compose_workflow to draft a workflow for this intent: "${prompt}". After the tool succeeds, dispatch a window event named "studio:composed" with the draft result so the composer modal can show it.`,
 				autosend: true,
 			},
 		}));
-		onClose();
+		// Don't close — let the user see the chat run + come back
+		// to the composer to install when the draft is ready.
+	};
+
+	const installDraft = async () => {
+		if (!drafted) return;
+		setInstalling(true);
+		try {
+			// The draft was staged at ~/.tenants/<sub>/.xp/apps/<slug>/.
+			// app_install accepts a tenant draft slug to "promote" it
+			// into a normal install. The intent-driven install path
+			// reuses the existing /me/apps endpoint.
+			const r = await me.installApp(drafted.slug, "local");
+			toast.success(`Installing ${drafted.slug}…`);
+			// Poll the intent briefly; if still pending after 8s, just
+			// close — the scheduler will pick it up on the next tick.
+			let i = 0;
+			while (i < 8) {
+				await new Promise((res) => setTimeout(res, 1000));
+				try {
+					const intent = await me.getIntent(r.intent_id);
+					if (intent.status === "completed") {
+						toast.success(`Installed — find it in your Workflows.`);
+						break;
+					}
+				} catch { /* ignore */ }
+				i++;
+			}
+			setDrafted(null);
+			localStorage.removeItem(LS_DRAFT);
+			localStorage.removeItem(LS_INTENT);
+			onClose();
+		} catch (e) {
+			toast.error(`Install failed: ${e instanceof MeApiError ? e.message : String(e)}`);
+		} finally {
+			setInstalling(false);
+		}
+	};
+
+	const discardDraft = () => {
+		setDrafted(null);
+		localStorage.removeItem(LS_DRAFT);
 	};
 
 	return (
@@ -61,12 +150,87 @@ export function WorkflowComposer({ open, onClose }: Props) {
 				</nav>
 
 				<div className="flex-1 overflow-y-auto px-5 py-4">
-					{mode === "describe" ? (
+					{drafted ? (
+						<DraftedReview
+							drafted={drafted}
+							installing={installing}
+							onInstall={installDraft}
+							onDiscard={discardDraft}
+						/>
+					) : mode === "describe" ? (
 						<DescribeForm intent={intent} setIntent={setIntent} onSubmit={askChatToCompose} />
 					) : (
 						<N8nEditor onClose={onClose} />
 					)}
 				</div>
+			</div>
+		</div>
+	);
+}
+
+function DraftedReview({
+	drafted, installing, onInstall, onDiscard,
+}: {
+	drafted: DraftedState;
+	installing: boolean;
+	onInstall: () => void;
+	onDiscard: () => void;
+}) {
+	return (
+		<div className="space-y-4">
+			<div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-900 flex items-start gap-2">
+				<Check className="w-3.5 h-3.5 mt-0.5" />
+				<div>
+					<div className="font-medium">Draft ready</div>
+					<div className="leading-relaxed">
+						Your AI staged a workflow for &ldquo;{drafted.intent}&rdquo;. Review the picked skills below, then install.
+					</div>
+				</div>
+			</div>
+
+			<div className="space-y-1">
+				<div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Slug</div>
+				<div className="font-mono text-sm text-slate-800">{drafted.slug}</div>
+			</div>
+
+			<div className="space-y-2">
+				<div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Skills picked ({drafted.skills.length})</div>
+				<div className="space-y-1.5">
+					{(drafted.skill_summaries || drafted.skills.map((s) => ({ name: s }))).map((s) => (
+						<div key={s.name} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+							<div className="font-medium text-slate-900">{s.display_name || s.name}</div>
+							{s.summary && <div className="text-xs text-slate-600 mt-0.5">{s.summary}</div>}
+							{s.why && <div className="text-xs text-emerald-700 mt-1 italic">&ldquo;{s.why}&rdquo;</div>}
+						</div>
+					))}
+				</div>
+			</div>
+
+			<div className="pt-2 flex justify-between">
+				<button
+					onClick={onDiscard}
+					disabled={installing}
+					className="text-xs text-slate-500 hover:text-rose-600 transition-colors"
+				>
+					Discard draft
+				</button>
+				<button
+					onClick={onInstall}
+					disabled={installing}
+					className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 text-white hover:from-emerald-400 hover:to-emerald-500 active:scale-95 transition-all shadow-sm shadow-emerald-200 disabled:opacity-60"
+				>
+					{installing ? (
+						<>
+							<Loader2 className="w-3.5 h-3.5 animate-spin" />
+							Installing…
+						</>
+					) : (
+						<>
+							<Check className="w-3.5 h-3.5" />
+							Install this workflow
+						</>
+					)}
+				</button>
 			</div>
 		</div>
 	);

@@ -140,8 +140,11 @@ const CATALOG_URL =
     ? "https://xp.io"
     : "");  // empty → same-origin
 
-async function fetchCatalog(forApp: string): Promise<SkillEntry[]> {
-  const url = `${CATALOG_URL}/api/v1/skills/catalog?for_app=${encodeURIComponent(forApp)}`;
+async function fetchCatalog(forApp: string, includeUntrusted = false): Promise<SkillEntry[]> {
+  const params = new URLSearchParams();
+  params.set("for_app", forApp);
+  if (includeUntrusted) params.set("include_untrusted", "1");
+  const url = `${CATALOG_URL}/api/v1/skills/catalog?${params.toString()}`;
   try {
     const r = await fetch(url, { credentials: "omit" });
     if (!r.ok) return [];
@@ -237,6 +240,12 @@ export function Go({ embedded = false }: { embedded?: boolean } = {}) {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [suggesting, setSuggesting] = useState(false);
   const [suggestedFor, setSuggestedFor] = useState("");
+  // D1 — skill trust gate. Default to verified-only; advanced toggle
+  // surfaces the rest. Persists in sessionStorage so the user's
+  // preference survives page navigation.
+  const [includeUntrusted, setIncludeUntrusted] = useState<boolean>(() => {
+    try { return sessionStorage.getItem("studio:composer:include_untrusted") === "1"; } catch { return false; }
+  });
 
   // Rehydrate composition on mount — the user may have round-tripped
   // through /auth/login and we don't want to lose their picks.
@@ -252,19 +261,23 @@ export function Go({ embedded = false }: { embedded?: boolean } = {}) {
     }
   }, []);
 
-  // Pull live catalog (defaults to personal-agent lane).
+  // Pull live catalog (defaults to personal-agent lane). Refetches
+  // when the trust-gate toggle flips.
   useEffect(() => {
     let cancelled = false;
-    fetchCatalog("personal-agent").then((live) => {
+    fetchCatalog("personal-agent", includeUntrusted).then((live) => {
       if (cancelled) return;
       if (live.length > 0) setCatalog(live);
-      // empty result → keep bootstrap, which still gives the funnel
-      // something to render during dogfood bootstrap.
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [includeUntrusted]);
+
+  // Persist the toggle.
+  useEffect(() => {
+    try { sessionStorage.setItem("studio:composer:include_untrusted", includeUntrusted ? "1" : "0"); } catch { /* ignore */ }
+  }, [includeUntrusted]);
 
   useEffect(() => {
     try {
@@ -567,6 +580,16 @@ export function Go({ embedded = false }: { embedded?: boolean } = {}) {
                   {f.label}
                 </button>
               ))}
+              {/* D1 — skill trust gate. Default = verified only. */}
+              <label className="ml-auto text-[11px] inline-flex items-center gap-1.5 text-gray-500 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={includeUntrusted}
+                  onChange={(e) => setIncludeUntrusted(e.target.checked)}
+                  className="rounded border-gray-300 text-emerald-500 focus:ring-emerald-400/30 w-3 h-3"
+                />
+                <span>Show unverified</span>
+              </label>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
