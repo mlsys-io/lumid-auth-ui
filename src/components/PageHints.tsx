@@ -22,10 +22,10 @@ interface Props {
 export function PageHints({ prompts, label }: Props) {
 	if (!prompts || prompts.length === 0) return null;
 	return (
-		<div className="flex flex-wrap items-center gap-2 mb-4 text-xs">
-			<span className="text-slate-500 inline-flex items-center gap-1.5 mr-1">
+		<div className="flex flex-wrap items-center gap-2 mb-5 text-xs">
+			<span className="text-slate-500 inline-flex items-center gap-1.5 mr-0.5">
 				<Sparkles className="w-3.5 h-3.5 text-emerald-500" />
-				{label || 'Try asking:'}
+				<span className="font-medium">{label || 'Try asking'}</span>
 			</span>
 			{prompts.map((p) => (
 				<button
@@ -35,8 +35,9 @@ export function PageHints({ prompts, label }: Props) {
 							detail: { prompt: p, autosend: true },
 						}))
 					}
-					className="px-2.5 py-1 rounded-full border border-emerald-200 bg-emerald-50/50 text-emerald-800 hover:bg-emerald-100 hover:border-emerald-300 transition-colors"
+					className="group px-3 py-1.5 rounded-full border border-emerald-200/70 bg-white hover:bg-gradient-to-r hover:from-emerald-50 hover:to-white text-emerald-800 hover:text-emerald-900 hover:border-emerald-300 hover:shadow-sm hover:shadow-emerald-100 transition-all active:scale-[0.98]"
 				>
+					<span className="opacity-60 group-hover:opacity-100 transition-opacity mr-0.5">›</span>
 					{p}
 				</button>
 			))}

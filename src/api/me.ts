@@ -212,7 +212,148 @@ export const me = {
       "DELETE",
       `/apps/${encodeURIComponent(app)}/secrets/${encodeURIComponent(key)}`,
     ),
+
+  // ── Workflow surface (W1) ───────────────────────────────────────
+  // Workflow = supertype across xpio scheduled loops + n8n visual
+  // DAGs. The kind field disambiguates; the rest of the schema is
+  // shared. Backed by /me/workflows + /me/runs aggregators.
+  listWorkflows: (kind?: "scheduled" | "visual") =>
+    call<{ workflows: MeWorkflowRow[]; count: number; as_of: string }>(
+      "GET",
+      kind ? `/workflows?kind=${kind}` : "/workflows",
+    ),
+  workflowDetail: (slug: string) =>
+    call<MeWorkflowDetail>(
+      "GET",
+      `/workflows/${encodeURIComponent(slug)}`,
+    ),
+
+  listRuns: (params?: {
+    state?: string;
+    workflow?: string;
+    since?: string;
+    until?: string;
+    limit?: number;
+    cursor?: string;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params?.state) qs.set("state", params.state);
+    if (params?.workflow) qs.set("workflow", params.workflow);
+    if (params?.since) qs.set("since", params.since);
+    if (params?.until) qs.set("until", params.until);
+    if (params?.limit !== undefined) qs.set("limit", String(params.limit));
+    if (params?.cursor) qs.set("cursor", params.cursor);
+    const q = qs.toString();
+    return call<{
+      runs: MeRunRow[];
+      count: number;
+      total: number;
+      next_cursor: string;
+      as_of: string;
+    }>("GET", q ? `/runs?${q}` : "/runs");
+  },
+  runDetail: (runId: string) =>
+    call<MeRunDetail>("GET", `/runs/${encodeURIComponent(runId)}`),
 };
+
+// Workflow + run typed shapes (matches lumid_identity/internal/handler).
+export interface MeWorkflowRow {
+  slug: string;
+  kind: "scheduled" | "visual";
+  name: string;
+  app?: string;
+  trigger: string;
+  enabled: boolean;
+  tenant: boolean;
+  last_run_ts?: number;
+  last_run_ok?: boolean;
+  next_run_ts?: number;
+  description?: string;
+  engine?: string;
+  step_count?: number;
+  n8n_id?: string;
+}
+
+export interface MeWorkflowDetail {
+  slug: string;
+  kind: "scheduled" | "visual";
+  app?: string;
+  loop?: string;
+  source?: "tenant" | "operator-shared";
+  definition: Record<string, unknown>;
+}
+
+export interface MeRunRow {
+  run_id: string;
+  workflow_slug: string;
+  kind: "scheduled" | "visual";
+  name: string;
+  app?: string;
+  state: "succeeded" | "failed" | "running" | "skipped" | "canceled";
+  started_at: number;
+  started_iso?: string;
+  duration_s?: number;
+  reason?: string;
+  cost_cents?: number;
+  cycle_dir?: string;
+}
+
+export interface MeRunDetail {
+  run_id: string;
+  kind: "scheduled" | "visual";
+  app?: string;
+  loop?: string;
+  ts?: string;
+  cycle_dir?: string;
+  steps?: unknown;
+  summary?: unknown;
+  step_errors?: unknown;
+  execution?: unknown; // for visual
+}
+
+// SSE helper — opens /me/runs/stream and calls onEvent for each
+// state-transition payload. Returns an unsubscribe closure.
+//
+// Auth is via the lm_session cookie (same-origin EventSource);
+// React StrictMode double-mount safety is the caller's problem.
+export function streamRuns(
+  onEvent: (evt: { type: "started" | "state_changed" | "completed"; run: MeRunRow }) => void,
+  onError?: (err: unknown) => void,
+): () => void {
+  const ctl = new AbortController();
+  (async () => {
+    try {
+      const r = await fetch(`${ME_BASE}/api/v1/me/runs/stream`, {
+        signal: ctl.signal,
+        credentials: "include",
+        headers: { Accept: "text/event-stream" },
+      });
+      if (!r.ok || !r.body) return;
+      const reader = r.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let nl: number;
+        while ((nl = buf.indexOf("\n\n")) >= 0) {
+          const raw = buf.slice(0, nl);
+          buf = buf.slice(nl + 2);
+          for (const line of raw.split("\n")) {
+            if (!line.startsWith("data: ")) continue;
+            try {
+              onEvent(JSON.parse(line.slice(6)));
+            } catch { /* malformed line */ }
+          }
+        }
+      }
+    } catch (e) {
+      onError?.(e);
+    }
+  })();
+  return () => ctl.abort();
+}
 
 // Poll helper — convenience for intent completion.
 export async function waitForIntent(
