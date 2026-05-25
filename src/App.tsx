@@ -40,6 +40,9 @@ const StudioWorkflows    = lazy(() => import("./pages/studio/workflows"));
 const StudioWorkflowDtl  = lazy(() => import("./pages/studio/workflow-detail"));
 const StudioRuns         = lazy(() => import("./pages/studio/runs"));
 const StudioRunDetail    = lazy(() => import("./pages/studio/run-detail"));
+// W4 — Mind surface (Improve verb). Subtle by design; collapsed-by-default
+// in the sidebar with no Today entry-points.
+const StudioMind         = lazy(() => import("./pages/studio/mind"));
 // Phase S3-D — knowledge browser.
 const StudioKnowledge  = lazy(() => import("./pages/studio/knowledge"));
 // Phase S1.5 — Settings consolidation; Phase S4 — Admin tabs.
@@ -382,6 +385,7 @@ export default function App() {
             <Route path="workflows/:slug"              element={<StudioWorkflowDtl />} />
             <Route path="runs"                         element={<StudioRuns />} />
             <Route path="runs/:run_id"                 element={<StudioRunDetail />} />
+            <Route path="mind"                         element={<StudioMind />} />
             {/* Phase S3-D — knowledge browser; per-agent drill on /:agent. */}
             <Route path="knowledge"                    element={<StudioKnowledge />} />
             <Route path="knowledge/:agent"             element={<StudioKnowledge />} />

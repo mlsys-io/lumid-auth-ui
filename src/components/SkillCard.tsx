@@ -14,6 +14,10 @@ export type SkillCardData = {
   display_name?: string;
   summary: string;
   tags?: string[];
+  // W3 — workflow vocabulary. step_count drives the chip ("1 step" /
+  // "5 steps"); kind exists for future filter UI but isn't rendered.
+  step_count?: number;
+  kind?: string;
 };
 
 export function SkillCard({
@@ -26,6 +30,10 @@ export function SkillCard({
   onToggle: () => void;
 }) {
   const title = skill.display_name || skill.name;
+  const stepLabel =
+    skill.step_count && skill.step_count > 1
+      ? `${skill.step_count} steps`
+      : "1 step";
   return (
     <button
       type="button"
@@ -40,8 +48,13 @@ export function SkillCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold text-gray-900 truncate">
-            {title}
+          <div className="flex items-center gap-2">
+            <div className="text-sm font-semibold text-gray-900 truncate">
+              {title}
+            </div>
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium">
+              {stepLabel}
+            </span>
           </div>
           <div className="mt-1 text-xs text-gray-600 leading-relaxed line-clamp-2">
             {skill.summary}

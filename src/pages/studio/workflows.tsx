@@ -12,6 +12,7 @@ import { Workflow as WorkflowIcon, Play, Pause, RefreshCw, Plus, Filter, Externa
 import { toast } from "sonner";
 import { me, MeApiError, type MeWorkflowRow } from "@/api/me";
 import PageHints from "@/components/PageHints";
+import WorkflowComposer from "@/components/WorkflowComposer";
 
 type Lens = "live" | "all" | "available";
 
@@ -20,6 +21,7 @@ export default function StudioWorkflows() {
 	const [err, setErr] = useState<string | null>(null);
 	const [lens, setLens] = useState<Lens>("live");
 	const [kindFilter, setKindFilter] = useState<"all" | "scheduled" | "visual">("all");
+	const [composerOpen, setComposerOpen] = useState(false);
 
 	const load = async () => {
 		try {
@@ -58,12 +60,12 @@ export default function StudioWorkflows() {
 					</p>
 				</div>
 				<div className="flex items-center gap-2">
-					<Link
-						to="/studio/skills"
-						className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-50 transition-colors"
+					<button
+						onClick={() => setComposerOpen(true)}
+						className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 text-white hover:from-emerald-400 hover:to-emerald-500 active:scale-95 shadow-sm shadow-emerald-200 transition-all"
 					>
 						<Plus className="w-3.5 h-3.5" /> New workflow
-					</Link>
+					</button>
 					<button
 						onClick={load}
 						className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded border border-slate-200 hover:bg-slate-50 text-slate-700"
@@ -72,6 +74,8 @@ export default function StudioWorkflows() {
 					</button>
 				</div>
 			</header>
+
+			<WorkflowComposer open={composerOpen} onClose={() => { setComposerOpen(false); load(); }} />
 
 			<PageHints prompts={[
 				"what workflows do I have?",

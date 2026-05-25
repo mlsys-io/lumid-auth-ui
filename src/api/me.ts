@@ -254,7 +254,39 @@ export const me = {
   },
   runDetail: (runId: string) =>
     call<MeRunDetail>("GET", `/runs/${encodeURIComponent(runId)}`),
+
+  // ── Mind / Improve surface (W4) ─────────────────────────────────
+  // Reads existing usage_events + journal + draft state to produce
+  // plain-English deltas for one workflow.
+  mindWorkflow: (slug: string) =>
+    call<{
+      slug: string;
+      app: string;
+      loop: string;
+      this_month: MeMindStats;
+      prev_month: MeMindStats;
+      deltas: Array<{ headline: string; detail?: string; trend: "up" | "down" | "flat" }>;
+      as_of: string;
+    }>("GET", `/mind/workflow/${encodeURIComponent(slug)}`),
+  mindEvaluate: (skill_name: string, for_app: string) =>
+    call<{ queued: boolean; skill: string; for_app: string; note: string }>(
+      "POST",
+      "/mind/evaluate",
+      { skill_name, for_app },
+    ),
 };
+
+export interface MeMindStats {
+  run_count: number;
+  success_count: number;
+  failure_count: number;
+  skipped_count: number;
+  success_rate: number;
+  avg_duration_s: number;
+  drafts_created?: number;
+  drafts_accepted?: number;
+  draft_accept_rate?: number;
+}
 
 // Workflow + run typed shapes (matches lumid_identity/internal/handler).
 export interface MeWorkflowRow {

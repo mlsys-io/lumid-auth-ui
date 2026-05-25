@@ -54,6 +54,9 @@ const PERSONAL_AI_NAV: NavItem[] = [
 	{ to: '/studio/runs',      label: 'Runs',      icon: Activity },
 	{ to: '/studio/skills',    label: 'Skills',    icon: Wrench },
 	{ to: '/studio/knowledge', label: 'Knowledge', icon: Brain },
+	// W4 — Mind surface. Always available; user finds it when they
+	// want to look. The directive: never auto-open / never on Today.
+	{ to: '/studio/mind',      label: 'Mind',      icon: Sparkles },
 ];
 const SECONDARY_NAV: NavItem[] = [
 	{ to: '/studio/settings',  label: 'Settings',  icon: Settings },

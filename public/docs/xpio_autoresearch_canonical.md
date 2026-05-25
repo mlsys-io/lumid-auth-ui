@@ -1,6 +1,43 @@
 # xpio Autoresearch Loop — Canonical Reference
 
-Status: stable (2026-05-09). The canonical contract every xpio app should target. The runtime is `sdk/apps/app_runner.py`. This doc cites file:line for every claim so it stays anchored when the runner evolves.
+Status: stable (2026-05-09). Workflow alias added 2026-05-25 (W1.1). The canonical contract every xpio app should target. The runtime is `sdk/apps/app_runner.py`. This doc cites file:line for every claim so it stays anchored when the runner evolves.
+
+## Workflow as the supertype
+
+As of W1 of the Personal AI plan, **workflow** is the user-facing supertype across the stack. The vocabulary collapses:
+
+| User-facing word | What it points to | Where it lives |
+|---|---|---|
+| **Workflow** (scheduled) | An xpio loop in `xpcloud.yaml::loops[]` (or `workflows[]` — see below) | `~/.xp/apps/<app>/` or `~/.tenants/<sub>/.xp/apps/<app>/` |
+| **Workflow** (visual) | An n8n DAG | n8n's own database, surfaced via `lum.id/n8n/` |
+| **Workflow** (atomic) | A 1-step skill — the marketplace's gmail-mcp, tavily-search, etc. | Community-owned repo at `xpcloud /repos/community/<skill>` |
+| **Workflow** (composed) | A multi-step skill (an app, in old vocabulary) — personal-agent, mbb-ai, etc. | Same xpcloud namespace |
+
+Every kind has the same shape from the user's perspective: a thing you install, configure, run on a trigger, and observe in the runs view. The xpio canonical contract below describes the **scheduled** kind; visual kinds live in n8n's own schema.
+
+### Optional `workflows:` schema alias (W1.1)
+
+`xpcloud.yaml` accepts an optional top-level `workflows:` key as a synonym for `loops:`. Both have identical schema. Apps can use either, both, or omit one. When both are present the runner takes the union; on name collision `loops[]` wins for back-compat (existing apps never regress).
+
+Examples — semantically identical:
+
+```yaml
+# Style A (current canonical)
+loops:
+  - name: morning_brief
+    schedule: "0 8 * * *"
+    skills: [email/observe, calendar/observe, draft/compose]
+```
+
+```yaml
+# Style B (W1.1 alias — vocabulary aligned)
+workflows:
+  - name: morning_brief
+    schedule: "0 8 * * *"
+    skills: [email/observe, calendar/observe, draft/compose]
+```
+
+The runner reads the union from `_coalesce_workflow_entries(manifest)` in `sdk/apps/app_runner.py`; scheduler discovery does the same in `sdk/scheduling/xpio_scheduler.py::_discover_loops_from_root`. Existing apps need no migration. The alias enables marketplace + composer + Studio surfaces to consistently say "workflow" without touching app source.
 
 ## What is an autoresearch loop
 
@@ -158,6 +195,14 @@ loops:
     requires_confirmation: false    # default: true for mode=live, false otherwise
                                     # honored by sdk/ops/job_deploy.py's AskUserQuestion gate
                                     # when the loop is dispatched from Claude Code
+    cloud_runnable: true            # default: true. Set false for loops that must run
+                                    # on the user's own machine (e.g. cc_watcher reads
+                                    # ~/.claude/projects/, which only exists locally).
+                                    # At install time, me_intent_picker writes
+                                    # `.user-overrides.yaml` with `enabled: false` for
+                                    # any cloud_runnable: false loop, so cloud-default
+                                    # tenants don't silently fire local-only loops.
+                                    # CLI users can flip the override back to enabled.
     skills:                         # set membership; informational
       - calendar/observe
       - email/observe
