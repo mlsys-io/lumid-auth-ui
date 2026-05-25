@@ -153,6 +153,10 @@ async function fetchCatalog(forApp: string): Promise<SkillEntry[]> {
       category: string;
       tags?: string[];
       needs_secrets?: string[];
+      // W3 — workflow vocabulary fields. Optional on the wire (older
+      // xpcloud versions don't emit them yet).
+      kind?: string;
+      step_count?: number;
     }>;
     return cards.map((c) => ({
       name: c.name,
@@ -161,6 +165,8 @@ async function fetchCatalog(forApp: string): Promise<SkillEntry[]> {
       tags: c.tags || [],
       category: c.category || "other",
       needs_secrets: c.needs_secrets,
+      kind: c.kind,
+      step_count: c.step_count,
       // Crude default: assistant role unless the category screams "watcher" territory.
       role_hint: "assistant" as const,
     }));
@@ -535,7 +541,7 @@ export function Go({ embedded = false }: { embedded?: boolean } = {}) {
           {/* Right — Marketplace ──────────────────────────────────── */}
           <section className="lg:col-span-3 space-y-4">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
-              Add a skill
+              Add a workflow
             </h2>
 
             <input
