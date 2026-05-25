@@ -31,6 +31,7 @@ const StudioToday      = lazy(() => import("./pages/studio/today"));
 const StudioInbox      = lazy(() => import("./pages/studio/inbox"));
 // Phase S2 — real composer (no longer a placeholder).
 const StudioSkills     = lazy(() => import("./pages/studio/skills"));
+const StudioMarketplace = lazy(() => import("./pages/studio/marketplace"));
 // Phase S3-C — app editor (lean v1).
 const StudioApps         = lazy(() => import("./pages/studio/apps"));
 // W1 workflow surface — replaces /studio/apps as the canonical landing
@@ -372,23 +373,26 @@ export default function App() {
             {/* Phase S3-B — cycle inspector accessed from Today rows. */}
             <Route path="today/cycle/:app/:loop/:ts"    element={<StudioInspector />} />
             <Route path="inbox"                        element={<StudioInbox />} />
-            <Route path="skills"                       element={<StudioSkills />} />
-            {/* Phase S3-C — apps list + per-app editor (DEPRECATED post-W1;
-                workflows.tsx is the canonical replacement). The /apps routes
-                redirect; the StudioApps editor still mounts under /apps/:app
-                for the moment to handle the per-app YAML edit page until W2
-                ships the dedicated workflow editor. */}
+            {/* Sidebar consolidation 2026-05-25: skills + knowledge merged
+                into Marketplace as tabs; runs + mind folded into Workflows.
+                Old paths redirect for back-compat. The StudioApps editor
+                still mounts under /apps/:app to handle per-app YAML edits
+                until the dedicated workflow editor ships. */}
+            <Route path="marketplace"                  element={<StudioMarketplace />} />
+            <Route path="skills"                       element={<Navigate to="/studio/marketplace" replace />} />
+            <Route path="knowledge"                    element={<Navigate to="/studio/marketplace?tab=knowledge" replace />} />
+            <Route path="knowledge/:agent"             element={<StudioKnowledge />} />
             <Route path="apps"                         element={<Navigate to="/studio/workflows" replace />} />
             <Route path="apps/:app"                    element={<StudioApps />} />
-            {/* W1 — workflow surface (Create + Manage). */}
             <Route path="workflows"                    element={<StudioWorkflows />} />
             <Route path="workflows/:slug"              element={<StudioWorkflowDtl />} />
+            {/* Runs + Mind kept reachable for back-compat and direct
+                links from chat tools. Their lens-in-Workflows ports
+                land in a follow-up PR; both still work at their
+                original URLs and are just hidden from the sidebar. */}
             <Route path="runs"                         element={<StudioRuns />} />
             <Route path="runs/:run_id"                 element={<StudioRunDetail />} />
             <Route path="mind"                         element={<StudioMind />} />
-            {/* Phase S3-D — knowledge browser; per-agent drill on /:agent. */}
-            <Route path="knowledge"                    element={<StudioKnowledge />} />
-            <Route path="knowledge/:agent"             element={<StudioKnowledge />} />
             <Route path="settings"                     element={<StudioSettings />} />
             <Route path="admin"                        element={<StudioAdmin />} />
           </Route>

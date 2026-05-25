@@ -76,12 +76,9 @@ function AgentList() {
 
 	return (
 		<div className="space-y-4">
-			<header>
-				<h1 className="text-lg font-semibold">Knowledge</h1>
-				<p className="text-sm text-slate-500 mt-1">
-					What your AI has learned, per agent. Watcher banks stay local by design.
-				</p>
-			</header>
+			{/* Page identity in StudioShell top-bar (or absent when this
+			    component is embedded in Marketplace's Knowledge tab —
+			    that surface owns its own header). */}
 			<PageHints prompts={[
 				'what did you learn about me this week?',
 				'what do you know about my work style?',

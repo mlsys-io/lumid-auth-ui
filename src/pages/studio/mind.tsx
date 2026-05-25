@@ -58,16 +58,7 @@ export default function StudioMind() {
 
 	return (
 		<div className="space-y-4">
-			<header className="space-y-1">
-				<h1 className="text-lg font-semibold flex items-center gap-2">
-					<Brain className="w-5 h-5 text-emerald-600" />
-					Mind
-				</h1>
-				<p className="text-sm text-slate-500">
-					How your AI is changing over time. Read at your own pace; we&apos;ll never push it.
-				</p>
-			</header>
-
+			{/* Page identity in StudioShell top-bar. */}
 			<PageHints prompts={[
 				"how is my morning brief getting better?",
 				"which workflow improved most this month?",

@@ -16,17 +16,18 @@
 // timeline rather than per-source columns.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
 	Mail, CheckCircle2, AlertCircle, Send, X, Edit2,
 	Sparkles, Loader2, ChevronRight, RefreshCw, Lock, Inbox as InboxIcon,
-	Plus, Filter as FilterIcon,
+	Plus, Filter as FilterIcon, Brain,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { me, MeApiError } from '@/api/me';
 import apiClient from '@/api/client';
 import PageHints from '@/components/PageHints';
 import { setStudioSelection } from '@/components/StudioContext';
+import StudioKnowledge from './knowledge';
 
 type Filter = 'all' | 'drafts' | 'activity' | 'audit' | 'notices';
 
@@ -75,12 +76,36 @@ const FILTERS: { id: Filter; label: string; matches: (k: FeedItem['kind']) => bo
 	{ id: 'audit',    label: 'Audit',     matches: (k) => k === 'audit' },
 ];
 
+type InboxTab = 'feed' | 'your-ai';
+
 export default function StudioInbox() {
+	const [searchParams, setSearchParams] = useSearchParams();
+	const tab = (searchParams.get('tab') === 'your-ai' ? 'your-ai' : 'feed') as InboxTab;
+	const setTab = (t: InboxTab) => {
+		setSearchParams((sp) => {
+			const next = new URLSearchParams(sp);
+			if (t === 'feed') next.delete('tab');
+			else next.set('tab', t);
+			return next;
+		}, { replace: true });
+	};
+
 	const [items, setItems] = useState<FeedItem[] | null>(null);
 	const [filter, setFilter] = useState<Filter>('all');
 	const [busy, setBusy] = useState<Record<string, boolean>>({});
+	const [refreshing, setRefreshing] = useState(false);
+	const [lastRefresh, setLastRefresh] = useState<number>(Date.now());
+	const [, setTick] = useState(0);
+
+	// Tick every 5s so the "Updated Xs ago" chip counts up between
+	// auto-refreshes. Cheap; just bumps a state to force render.
+	useEffect(() => {
+		const t = window.setInterval(() => setTick((x) => x + 1), 5_000);
+		return () => window.clearInterval(t);
+	}, []);
 
 	const load = useCallback(async () => {
+		setRefreshing(true);
 		const [drafts, today, audit] = await Promise.allSettled([
 			me.listDrafts({ state: 'pending' }),
 			me.today(),
@@ -153,9 +178,41 @@ export default function StudioInbox() {
 		});
 		unique.sort((a, b) => (b.ts || '').localeCompare(a.ts || ''));
 		setItems(unique);
+		setRefreshing(false);
+		setLastRefresh(Date.now());
 	}, []);
 
 	useEffect(() => { load(); }, [load]);
+
+	// Auto-refresh — every 30s while the tab is visible. Pauses while the
+	// tab is hidden so we don't burn the rate limit on background users.
+	// Refreshes immediately when the user comes back to the tab. The AI
+	// is doing things in the background; the feed should feel alive.
+	useEffect(() => {
+		let timer: number | null = null;
+		const tick = () => { load(); };
+		const start = () => {
+			if (timer != null) return;
+			timer = window.setInterval(tick, 30_000);
+		};
+		const stop = () => {
+			if (timer != null) { window.clearInterval(timer); timer = null; }
+		};
+		const onVisibility = () => {
+			if (document.visibilityState === 'visible') {
+				load();
+				start();
+			} else {
+				stop();
+			}
+		};
+		start();
+		document.addEventListener('visibilitychange', onVisibility);
+		return () => {
+			stop();
+			document.removeEventListener('visibilitychange', onVisibility);
+		};
+	}, [load]);
 
 	const visible = useMemo(() => {
 		if (!items) return [];
@@ -199,24 +256,101 @@ export default function StudioInbox() {
 
 	return (
 		<div className="space-y-4">
-			<header className="flex items-baseline justify-between">
-				<div>
-					<h1 className="text-lg font-semibold flex items-center gap-2">
-						<InboxIcon className="w-5 h-5 text-emerald-600" />
-						Inbox
-					</h1>
-					<p className="text-sm text-slate-500 mt-0.5">
-						Drafts to approve, recent cycles, notices, and the audit trail — in one feed.
-					</p>
+			{/* Tab nav — Inbox feed + the "Your AI" knowledge browser
+			    (merged from the old Marketplace > Knowledge tab so the
+			    "what your AI is doing" + "what your AI knows" surfaces
+			    live together). */}
+			<nav className="flex items-center justify-between gap-2 border-b border-slate-200">
+				<div className="flex items-center gap-1">
+					<TabButton
+						active={tab === 'feed'}
+						icon={InboxIcon}
+						label="Inbox"
+						onClick={() => setTab('feed')}
+					/>
+					<TabButton
+						active={tab === 'your-ai'}
+						icon={Brain}
+						label="Your AI"
+						onClick={() => setTab('your-ai')}
+					/>
 				</div>
-				<button
-					onClick={load}
-					className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded border border-slate-200 hover:bg-slate-50 text-slate-700"
-				>
-					<RefreshCw className="w-3 h-3" /> Refresh
-				</button>
-			</header>
+				{tab === 'feed' && (
+					<div className="flex items-center gap-2 pb-1.5">
+						<span className="hidden md:inline text-[11px] text-slate-400" title={`Last refreshed at ${new Date(lastRefresh).toLocaleTimeString()}`}>
+							{refreshing ? "Updating…" : `Updated ${secondsAgo(lastRefresh)}`}
+						</span>
+						<button
+							onClick={load}
+							disabled={refreshing}
+							className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded border border-slate-200 hover:bg-slate-50 text-slate-700 disabled:opacity-50 transition-colors"
+						>
+							<RefreshCw className={[
+								"w-3 h-3 transition-transform",
+								refreshing ? "animate-spin text-emerald-600" : "",
+							].join(" ")} />
+							Refresh
+						</button>
+					</div>
+				)}
+			</nav>
 
+			{tab === 'your-ai' ? (
+				<StudioKnowledge />
+			) : (
+				<InboxFeedBody
+					items={items}
+					filter={filter}
+					setFilter={setFilter}
+					counts={counts}
+					visible={visible}
+					busy={busy}
+					onDraftAction={onDraftAction}
+				/>
+			)}
+		</div>
+	);
+}
+
+// Tab button matched to the marketplace TabButton style for visual
+// consistency. Could promote to a shared component later.
+function TabButton({
+	active, icon: Icon, label, onClick,
+}: {
+	active: boolean;
+	icon: React.ComponentType<{ className?: string }>;
+	label: string;
+	onClick: () => void;
+}) {
+	return (
+		<button
+			onClick={onClick}
+			className={[
+				'inline-flex items-center gap-1.5 px-3 py-2 text-sm border-b-2 transition-colors -mb-px',
+				active
+					? 'text-slate-900 border-emerald-500 font-medium'
+					: 'text-slate-500 border-transparent hover:text-slate-800',
+			].join(' ')}
+		>
+			<Icon className="w-4 h-4" />
+			{label}
+		</button>
+	);
+}
+
+function InboxFeedBody({
+	items, filter, setFilter, counts, visible, busy, onDraftAction,
+}: {
+	items: FeedItem[] | null;
+	filter: Filter;
+	setFilter: (f: Filter) => void;
+	counts: Record<Filter, number>;
+	visible: FeedItem[];
+	busy: Record<string, boolean>;
+	onDraftAction: (id: string, action: 'send' | 'edit' | 'dismiss', body?: string) => Promise<void>;
+}) {
+	return (
+		<div className="space-y-4">
 			<PageHints prompts={[
 				'show my pending drafts',
 				"send any obvious replies",
@@ -541,6 +675,15 @@ function NoticeCard({ item }: { item: Extract<FeedItem, { kind: 'notice' }> }) {
 
 // Cycle-ts shape is YYYYMMDDTHHMMSS (15 chars, no separators) — convert
 // to ISO for the timeline sorter.
+// secondsAgo — compact relative-time for the auto-refresh chip.
+function secondsAgo(ms: number): string {
+	const s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+	if (s < 5) return 'just now';
+	if (s < 60) return `${s}s ago`;
+	if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+	return `${Math.floor(s / 3600)}h ago`;
+}
+
 function cycleTsToIso(ts: string): string {
 	const m = ts.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})$/);
 	if (!m) return new Date().toISOString();

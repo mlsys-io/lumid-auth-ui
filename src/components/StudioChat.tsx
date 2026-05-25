@@ -8,7 +8,7 @@
 // sessionStorage so navigating between Studio pages keeps context.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { ChevronRight, MessageSquarePlus, Send, Trash2, Loader2, Bot, User, Square } from 'lucide-react';
 import { buildSelectionPreamble } from './StudioContext';
 import { ChatMarkdown } from './ChatMarkdown';
@@ -18,7 +18,7 @@ type Message = {
 	role: Role;
 	content: string;
 	// Pretty-printed tool calls the agent ran on this turn (assistant only).
-	tools?: Array<{ name: string; ok: boolean; summary?: string }>;
+	tools?: Array<{ name: string; ok: boolean; summary?: string; link?: { to: string; label: string } }>;
 };
 
 const STORAGE_KEY = 'studio_chat_transcript_v1';
@@ -30,9 +30,11 @@ const DEFAULT_WIDTH = 400;
 
 export function StudioChat() {
 	const location = useLocation();
-	const [collapsed, setCollapsed] = useState<boolean>(() => {
-		try { return sessionStorage.getItem(COLLAPSE_KEY) === '1'; } catch { return false; }
-	});
+	// Always start expanded on fresh page load — AI is the primary
+	// interface; default-collapsed buried the surface that's supposed
+	// to be the canonical voice channel. Intra-session collapse is
+	// honored via setCollapsed below; reloads reset to expanded.
+	const [collapsed, setCollapsed] = useState<boolean>(false);
 	const [width, setWidth] = useState<number>(() => {
 		try {
 			const raw = localStorage.getItem(WIDTH_KEY);
@@ -61,9 +63,10 @@ export function StudioChat() {
 	useEffect(() => {
 		try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(messages)); } catch { /* ignore */ }
 	}, [messages]);
-	useEffect(() => {
-		try { sessionStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0'); } catch { /* ignore */ }
-	}, [collapsed]);
+	// Note: COLLAPSE_KEY storage retired 2026-05-25 — see useState above.
+	// Keeping the key constant defined for future intra-tab persistence
+	// if we ever want to revisit per-route collapse state.
+	void COLLAPSE_KEY;
 
 	// Auto-scroll on new content
 	useEffect(() => {
@@ -446,15 +449,25 @@ function MessageBubble({ m, streaming }: { m: Message; streaming?: boolean }) {
 				{m.tools && m.tools.length > 0 && (
 					<div className={['mt-2 flex flex-col gap-1', isUser ? 'items-end' : 'items-start'].join(' ')}>
 						{m.tools.map((t, i) => (
-							<div key={i} className={[
-								'text-[11px] inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border',
-								t.ok
-									? 'bg-emerald-50/80 border-emerald-200 text-emerald-800'
-									: 'bg-rose-50/80 border-rose-200 text-rose-800',
-							].join(' ')}>
-								<span className="text-[10px]">{t.ok ? '✓' : '✗'}</span>
-								<span className="font-mono font-medium">{t.name}</span>
-								{t.summary && <span className="opacity-70 truncate max-w-[180px]">· {t.summary}</span>}
+							<div key={i} className="inline-flex items-center gap-1.5">
+								<div className={[
+									'text-[11px] inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border',
+									t.ok
+										? 'bg-emerald-50/80 border-emerald-200 text-emerald-800'
+										: 'bg-rose-50/80 border-rose-200 text-rose-800',
+								].join(' ')}>
+									<span className="text-[10px]">{t.ok ? '✓' : '✗'}</span>
+									<span className="font-mono font-medium">{t.name}</span>
+									{t.summary && <span className="opacity-70 truncate max-w-[180px]">· {t.summary}</span>}
+								</div>
+								{t.link && (
+									<Link
+										to={t.link.to}
+										className="text-[11px] inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50 transition-colors"
+									>
+										{t.link.label} →
+									</Link>
+								)}
 							</div>
 						))}
 					</div>
@@ -513,6 +526,25 @@ function handleEvent(
 			...m, content: (m.content || '') + evt.delta,
 		})));
 	} else if (evt.type === 'tool_call') {
+		// Surface a clickable "Open →" link on the tool chip for any
+		// install/compose that yields a tenant-side app. Other tools
+		// stay plain text. The link is what closes the install loop —
+		// without it, the user has no way back to their new workflow
+		// without leaving the chat.
+		let link: { to: string; label: string } | undefined;
+		if (evt.ok !== false) {
+			const result = (evt.result || {}) as Record<string, unknown>;
+			const appName = String(
+				result.app ||
+				result.installed_as ||
+				result.draft_slug ||
+				result.for_app ||
+				''
+			);
+			if (appName && (evt.name === 'install_app' || evt.name === 'compose_workflow')) {
+				link = { to: `/studio/workflows?selected=${encodeURIComponent(appName)}`, label: 'Open' };
+			}
+		}
 		setMessages((prev) => withLastAssistant(prev, (m) => ({
 			...m,
 			tools: [
@@ -521,6 +553,7 @@ function handleEvent(
 					name: String(evt.name || 'tool'),
 					ok: evt.ok !== false,
 					summary: summarizeToolArgs(evt.args),
+					link,
 				},
 			],
 		})));

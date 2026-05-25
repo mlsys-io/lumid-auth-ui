@@ -62,16 +62,8 @@ export default function StudioRuns() {
 
 	return (
 		<div className="space-y-4">
-			<header className="flex items-baseline justify-between">
-				<div>
-					<h1 className="text-lg font-semibold flex items-center gap-2">
-						<Activity className="w-5 h-5 text-emerald-600" />
-						Runs
-					</h1>
-					<p className="text-sm text-slate-500 mt-0.5">
-						What your AI is doing — across every workflow, every kind.
-					</p>
-				</div>
+			{/* Page identity in StudioShell top-bar. */}
+			<header className="flex items-center justify-end">
 				<button
 					onClick={load}
 					className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded border border-slate-200 hover:bg-slate-50 text-slate-700"

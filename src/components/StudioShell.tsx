@@ -12,16 +12,14 @@ import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
 	Sparkles,
 	Inbox,
-	Wrench,
+	Store,
 	Workflow as WorkflowIcon,
-	Activity,
-	Brain,
 	Settings,
 	Shield,
 	LogOut,
-	Search,
 	ChevronDown,
 	Hexagon,
+	Key,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
@@ -30,6 +28,10 @@ import { cn } from '../lib/utils';
 // for Studio; webforms in the main workspace area become the
 // precision channel beside it.
 import { StudioChat } from './StudioChat';
+// Top-bar status strip — page title + live activity pills (drafts,
+// running, failing). Fills the gap left by removing the redundant
+// "Ask anything" search input.
+import TopStatusStrip from './TopStatusStrip';
 
 interface NavItem {
 	to: string;
@@ -38,25 +40,26 @@ interface NavItem {
 	end?: boolean;
 }
 
-// Sidebar layout (W1 reorg):
+// Sidebar layout (post-consolidation, 2026-05-25):
 //   Today / Inbox         — surfaces the user lives in.
 //   ── Personal AI ──
-//   Workflows / Runs      — the Create + Manage verbs.
-//   Skills                — the marketplace composer (still useful as a stand-alone lens).
-//   Knowledge             — the bank browser.
+//   Workflows             — apps + workflows + runs + mind, unified.
+//                           Lenses: Live · All · Runs · Available. Rows
+//                           group by their parent app (collapsible).
+//   Marketplace           — Browse skills/workflows + Knowledge tab.
 //   ── Settings + Admin ── (pinned bottom)
+//
+// Previously 5 items under Personal AI (Workflows / Runs / Skills /
+// Knowledge / Mind). Runs folded into Workflows as a lens; Mind folded
+// into the workflow detail panel as a tab; Skills + Knowledge merged
+// into Marketplace as tabs. Old paths redirect for back-compat.
 const TOP_NAV: NavItem[] = [
 	{ to: '/studio/today',     label: 'Today',     icon: Sparkles, end: true },
 	{ to: '/studio/inbox',     label: 'Inbox',     icon: Inbox },
 ];
 const PERSONAL_AI_NAV: NavItem[] = [
-	{ to: '/studio/workflows', label: 'Workflows', icon: WorkflowIcon },
-	{ to: '/studio/runs',      label: 'Runs',      icon: Activity },
-	{ to: '/studio/skills',    label: 'Skills',    icon: Wrench },
-	{ to: '/studio/knowledge', label: 'Knowledge', icon: Brain },
-	// W4 — Mind surface. Always available; user finds it when they
-	// want to look. The directive: never auto-open / never on Today.
-	{ to: '/studio/mind',      label: 'Mind',      icon: Sparkles },
+	{ to: '/studio/workflows',  label: 'Workflows',   icon: WorkflowIcon },
+	{ to: '/studio/marketplace', label: 'Marketplace', icon: Store },
 ];
 const SECONDARY_NAV: NavItem[] = [
 	{ to: '/studio/settings',  label: 'Settings',  icon: Settings },
@@ -141,107 +144,81 @@ export function StudioShell() {
 					<div className="my-3 border-t border-slate-200/60" />
 
 					{SECONDARY_NAV.map((item) => <NavItemView key={item.to} {...item} />)}
-					{isAdmin && (
-						<NavItemView to="/studio/admin" label="Admin" icon={Shield} />
-					)}
 				</nav>
 
-				{/* User badge — surfaces who's signed in + a direct
-				    Sign-out button. Previously logout lived only in
-				    the top-bar avatar dropdown and was hard to find. */}
-				<div className="p-3 border-t border-slate-200/60 space-y-1.5">
-					<Link
-						to="/studio/settings"
-						className="px-1.5 py-1 rounded-lg flex items-center gap-2 min-w-0 hover:bg-slate-100/70 transition-colors group"
-						title="Account settings"
+				{/* User menu — pinned bottom-left, opens upward. Holds
+				    everything the top-right avatar dropdown used to
+				    (Settings, API tokens, Admin, Sign out) so account
+				    surfaces live in one place. */}
+				<div ref={menuRef} className="p-3 border-t border-slate-200/60 relative">
+					<button
+						onClick={() => setMenuOpen((v) => !v)}
+						className={[
+							'w-full px-1.5 py-1.5 rounded-lg flex items-center gap-2 min-w-0 transition-colors group',
+							menuOpen ? 'bg-slate-100/70' : 'hover:bg-slate-100/70',
+						].join(' ')}
+						title="Account menu"
 					>
 						<div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center text-xs font-semibold flex-shrink-0 shadow-sm shadow-emerald-100">
 							{(user?.email?.[0] || '?').toUpperCase()}
 						</div>
-						<div className="flex-1 min-w-0">
-							<div className="text-[12px] font-medium truncate text-slate-900 group-hover:text-emerald-800">
+						<div className="flex-1 min-w-0 text-left">
+							<div className="text-[12px] font-medium truncate text-slate-900">
 								{user?.username || user?.email?.split('@')[0] || 'there'}
 							</div>
 							{isAdmin ? (
-								<div className="text-[10px] uppercase tracking-wide text-emerald-700">
-									{user?.role === 'super_admin' ? 'super' : 'admin'}
+								<div className="text-[10px] uppercase tracking-wide text-emerald-700 truncate">
+									{user?.role === 'super_admin' ? 'super admin' : 'admin'}
 								</div>
 							) : (
 								<div className="text-[10px] text-slate-400 truncate">{user?.email}</div>
 							)}
 						</div>
-					</Link>
-					<button
-						onClick={onLogout}
-						className="w-full px-1.5 py-1.5 rounded-lg flex items-center gap-2 text-[12px] text-slate-500 hover:text-rose-700 hover:bg-rose-50/70 transition-colors group"
-						title="Sign out"
-					>
-						<div className="w-7 h-7 rounded-full bg-slate-50 group-hover:bg-rose-100 flex items-center justify-center flex-shrink-0 transition-colors">
-							<LogOut className="w-3.5 h-3.5" />
-						</div>
-						<span className="font-medium">Sign out</span>
+						<ChevronDown className={[
+							'w-3.5 h-3.5 text-slate-400 transition-transform flex-shrink-0',
+							menuOpen ? 'rotate-180' : '',
+						].join(' ')} />
 					</button>
+
+					{menuOpen && (
+						<div className="absolute left-3 right-3 bottom-full mb-1 rounded-lg border border-slate-200 bg-white shadow-lg py-1 z-30">
+							<Link to="/studio/settings"
+								onClick={() => setMenuOpen(false)}
+								className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
+								<Settings className="w-3.5 h-3.5 text-slate-500" />
+								Settings
+							</Link>
+							<Link to="/dashboard/tokens"
+								onClick={() => setMenuOpen(false)}
+								className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
+								<Key className="w-3.5 h-3.5 text-slate-500" />
+								API tokens
+							</Link>
+							{isAdmin && (
+								<Link to="/studio/admin"
+									onClick={() => setMenuOpen(false)}
+									className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
+									<Shield className="w-3.5 h-3.5 text-slate-500" />
+									Admin
+								</Link>
+							)}
+							<button
+								onClick={onLogout}
+								className="w-full flex items-center gap-2 px-3 py-2 text-sm text-rose-700 hover:bg-rose-50 border-t border-slate-100 mt-1 pt-2">
+								<LogOut className="w-3.5 h-3.5" />
+								Sign out
+							</button>
+						</div>
+					)}
 				</div>
 			</aside>
 
 			{/* Main column ─────────────────────────────────────────── */}
 			<div className="flex-1 flex flex-col min-w-0">
-				{/* Top bar */}
-				<header className="h-14 bg-white/70 backdrop-blur-md border-b border-slate-200/70 sticky top-0 z-10 flex items-center px-6 gap-4">
-					<div className="flex-1 max-w-md relative">
-						<Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-						<input
-							type="search"
-							placeholder='Ask anything — try "find email skills"…'
-							onKeyDown={(e) => {
-								if (e.key === "Enter") {
-									const v = (e.target as HTMLInputElement).value.trim();
-									if (!v) return;
-									// Route through the chat agent — it's the right
-									// brain for cross-surface search ("show failing
-									// runs", "find email skills", "open my morning
-									// brief"). Studio chat sidebar picks up the event
-									// and autosends.
-									window.dispatchEvent(new CustomEvent("studio:ask", {
-										detail: { prompt: v, autosend: true },
-									}));
-									(e.target as HTMLInputElement).value = "";
-								}
-							}}
-							className="w-full pl-10 pr-3 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50/60 focus:bg-white focus:outline-none focus:ring-4 focus:ring-emerald-400/15 focus:border-emerald-400 transition-all placeholder:text-slate-400"
-						/>
-					</div>
-
-					<div ref={menuRef} className="relative">
-						<button
-							onClick={() => setMenuOpen((v) => !v)}
-							className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl hover:bg-slate-100/70 transition-colors"
-						>
-							<div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center text-xs font-semibold shadow-sm shadow-emerald-100">
-								{(user?.email?.[0] || '?').toUpperCase()}
-							</div>
-							<ChevronDown className="w-4 h-4 text-slate-500" />
-						</button>
-						{menuOpen && (
-							<div className="absolute right-0 mt-2 w-56 rounded-lg border border-slate-200 bg-white shadow-lg py-1 z-20">
-								<div className="px-3 py-2 border-b border-slate-100">
-									<div className="text-sm font-medium truncate">{user?.email}</div>
-									<div className="text-[11px] text-slate-500 mt-0.5">{user?.role}</div>
-								</div>
-								<Link to="/studio/settings"
-									onClick={() => setMenuOpen(false)}
-									className="block px-3 py-2 text-sm hover:bg-slate-50">Settings</Link>
-								<Link to="/dashboard/tokens"
-									onClick={() => setMenuOpen(false)}
-									className="block px-3 py-2 text-sm hover:bg-slate-50">API tokens</Link>
-								<button
-									onClick={onLogout}
-									className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 text-rose-700 inline-flex items-center gap-2 border-t border-slate-100 mt-1 pt-2">
-									<LogOut className="w-3.5 h-3.5" /> Sign out
-								</button>
-							</div>
-						)}
-					</div>
+				{/* Top bar — page header lives in TopStatusStrip; account
+				    surfaces moved to the sidebar user menu. */}
+				<header className="min-h-[64px] py-2.5 bg-white/70 backdrop-blur-md border-b border-slate-200/70 sticky top-0 z-10 flex items-center px-6 gap-4">
+					<TopStatusStrip />
 				</header>
 
 				{/* Workspace */}

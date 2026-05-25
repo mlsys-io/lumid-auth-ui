@@ -1,30 +1,44 @@
-// /studio/today — Phase S1 home + Phase S5 onboarding nudge.
+// /studio/today — fresh-user onboarding hub + returning-user dashboard.
 //
-// Renders the AppLoops content inside the Studio shell. For brand-
-// new users (no apps installed yet) prepends a welcome card that
-// bridges to the composer — closes the "fresh signup lands on empty
-// page" gap from the audit (finding #7).
+// Fresh users (no tenant apps yet) see a streamlined hero:
+//   - One clear ask: "What should we set up for you?"
+//   - 4 concrete starter chips (Daily brief / Email triage /
+//     Research assistant / Meeting prep) — each dispatches a
+//     studio:ask event so the chat agent handles compose+install
+//   - One quiet escape hatch: "Or browse the marketplace"
+//
+// Returning users see AppLoops (recent cycles + headlines) as before.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Sparkles, ArrowRight } from 'lucide-react';
+import {
+	Sparkles, Sun, Mail, Search, Calendar, ArrowRight, MessagesSquare,
+} from 'lucide-react';
 import AppLoops from '../app-revamp/loops';
 import { me } from '@/api/me';
 import PageHints from '@/components/PageHints';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function StudioToday() {
+	const { user } = useAuth();
 	const [empty, setEmpty] = useState<boolean | null>(null);
+	const name = useMemo(() => {
+		const raw = user?.username || user?.email?.split('@')[0] || '';
+		const first = raw.split(/[\s.]+/)[0];
+		return first ? first.charAt(0).toUpperCase() + first.slice(1) : '';
+	}, [user?.username, user?.email]);
 	useEffect(() => {
 		me.listApps()
-			.then((r) => {
+			.then((r: any) => {
 				const tenantApps = (r.apps || []).filter((a: any) => a.tenant);
 				setEmpty(tenantApps.length === 0);
 			})
 			.catch(() => setEmpty(false));
 	}, []);
+
 	return (
 		<div className="space-y-6">
-			{empty === true && <OnboardingNudge />}
+			{empty === true && <FreshUserHero name={name} />}
 			{empty === false && (
 				<PageHints prompts={[
 					"what's pending right now?",
@@ -37,30 +51,159 @@ export default function StudioToday() {
 	);
 }
 
-function OnboardingNudge() {
+// ── Fresh-user hero ────────────────────────────────────────────────
+
+interface Starter {
+	icon: React.ComponentType<{ className?: string }>;
+	tone: 'amber' | 'rose' | 'sky' | 'violet' | 'indigo';
+	title: string;
+	subtitle: string;
+	prompt: string;
+}
+
+const STARTERS: Starter[] = [
+	{
+		icon: Sun,
+		tone: 'amber',
+		title: 'Daily brief',
+		subtitle: 'Every morning at 7am, summarize what I need to know.',
+		prompt: 'Set up a daily brief — every morning at 7am, summarize my email, calendar, and any pending tasks.',
+	},
+	{
+		icon: Mail,
+		tone: 'rose',
+		title: 'Email triage',
+		subtitle: 'Watch my inbox; draft replies to anything obvious.',
+		prompt: 'Set up email triage — every hour during work hours, scan my inbox and draft replies to anything obvious.',
+	},
+	{
+		icon: Search,
+		tone: 'sky',
+		title: 'Research assistant',
+		subtitle: 'Track a topic; surface what changed today.',
+		prompt: 'Set up a research assistant — pick a topic with me, and every morning surface the latest changes.',
+	},
+	{
+		icon: Calendar,
+		tone: 'violet',
+		title: 'Meeting prep',
+		subtitle: 'Before each meeting, brief me on the attendees + context.',
+		prompt: 'Set up meeting prep — 30 minutes before each meeting, brief me on the attendees, prior threads, and any context I need.',
+	},
+];
+
+function FreshUserHero({ name }: { name: string }) {
+	const dispatch = (prompt: string) => {
+		window.dispatchEvent(new CustomEvent('studio:ask', {
+			detail: { prompt, autosend: true },
+		}));
+	};
+
 	return (
-		<div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-6">
-			<div className="flex items-start gap-4">
-				<div className="w-12 h-12 rounded-xl bg-emerald-500 text-white flex items-center justify-center flex-shrink-0">
-					<Sparkles className="w-6 h-6" />
-				</div>
-				<div className="flex-1 min-w-0">
-					<h2 className="text-lg font-semibold text-slate-900">Welcome to Lumid Studio</h2>
-					<p className="mt-1 text-sm text-slate-700 leading-relaxed">
-						Set up your AI by telling us what you want it to do — we&apos;ll
-						suggest the right skills + knowledge, you&apos;ll connect what&apos;s
-						needed, and it starts working for you.
-					</p>
-					<div className="mt-4">
-						<Link
-							to="/studio/skills"
-							className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-colors"
-						>
-							Set up your AI <ArrowRight className="w-4 h-4" />
-						</Link>
+		<div className="space-y-5">
+			{/* Hero — greeting + single primary ask */}
+			<section className="rounded-2xl border border-slate-200/70 bg-gradient-to-br from-emerald-50 via-white to-sky-50/40 p-6">
+				<div className="flex items-start gap-3">
+					<div className="relative flex-shrink-0">
+						<div className="absolute inset-0 bg-emerald-400/30 blur-md rounded-full" />
+						<div className="relative w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center shadow-sm shadow-emerald-200">
+							<Sparkles className="w-5 h-5" />
+						</div>
+					</div>
+					<div className="flex-1 min-w-0">
+						<h2 className="text-xl font-semibold text-slate-900 tracking-tight">
+							{name ? `Welcome, ${name}.` : 'Welcome.'}
+						</h2>
+						<p className="text-sm text-slate-600 mt-1 leading-relaxed">
+							Lumid runs AI workflows for you in the background — email triage, daily briefs,
+							anything you can describe. Pick a starter below, or just tell us what you want.
+						</p>
 					</div>
 				</div>
+			</section>
+
+			{/* Four concrete starters — one click installs + schedules */}
+			<div>
+				<div className="text-[11px] uppercase tracking-[0.08em] font-semibold text-slate-400 mb-2">
+					Quick starters
+				</div>
+				<div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+					{STARTERS.map((s) => (
+						<StarterCard key={s.title} s={s} onClick={() => dispatch(s.prompt)} />
+					))}
+				</div>
+			</div>
+
+			{/* Custom path — for users who know exactly what they want */}
+			<div className="rounded-xl border border-slate-200 bg-white p-4 flex items-center gap-3">
+				<div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center flex-shrink-0">
+					<MessagesSquare className="w-4 h-4" />
+				</div>
+				<div className="flex-1 min-w-0">
+					<div className="text-sm font-medium text-slate-900">Or just tell us what you want</div>
+					<div className="text-[12px] text-slate-500 mt-0.5">
+						Type into the AI panel on the right — it will compose, install, and schedule for you.
+					</div>
+				</div>
+				<button
+					onClick={() => {
+						window.dispatchEvent(new CustomEvent('studio:ask', {
+							detail: {
+								prompt: 'I want to set up my first workflow. Help me think through what would be most useful for my day.',
+								autosend: true,
+							},
+						}));
+					}}
+					className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-slate-900 text-white hover:bg-slate-800 active:scale-95 transition-all flex-shrink-0"
+				>
+					Start chat <ArrowRight className="w-3.5 h-3.5" />
+				</button>
+			</div>
+
+			{/* Quiet escape hatch — for power users who want to browse */}
+			<div className="text-center pt-1">
+				<Link
+					to="/studio/marketplace"
+					className="inline-flex items-center gap-1 text-[12px] text-slate-400 hover:text-slate-700 transition-colors"
+				>
+					Or browse the marketplace
+					<ArrowRight className="w-3 h-3" />
+				</Link>
 			</div>
 		</div>
+	);
+}
+
+function StarterCard({ s, onClick }: { s: Starter; onClick: () => void }) {
+	const Icon = s.icon;
+	const tones: Record<Starter['tone'], { bg: string; iconBg: string; iconText: string; border: string }> = {
+		amber:  { bg: 'hover:bg-amber-50/60',  iconBg: 'bg-amber-100',  iconText: 'text-amber-700',  border: 'hover:border-amber-200' },
+		rose:   { bg: 'hover:bg-rose-50/60',   iconBg: 'bg-rose-100',   iconText: 'text-rose-700',   border: 'hover:border-rose-200' },
+		sky:    { bg: 'hover:bg-sky-50/60',    iconBg: 'bg-sky-100',    iconText: 'text-sky-700',    border: 'hover:border-sky-200' },
+		violet: { bg: 'hover:bg-violet-50/60', iconBg: 'bg-violet-100', iconText: 'text-violet-700', border: 'hover:border-violet-200' },
+		indigo: { bg: 'hover:bg-indigo-50/60', iconBg: 'bg-indigo-100', iconText: 'text-indigo-700', border: 'hover:border-indigo-200' },
+	};
+	const t = tones[s.tone];
+	return (
+		<button
+			onClick={onClick}
+			className={[
+				'group rounded-xl border border-slate-200 bg-white p-3 text-left transition-all',
+				'flex items-start gap-3 hover:shadow-sm active:scale-[0.98]',
+				t.bg, t.border,
+			].join(' ')}
+		>
+			<div className={[
+				'w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-105',
+				t.iconBg, t.iconText,
+			].join(' ')}>
+				<Icon className="w-4 h-4" />
+			</div>
+			<div className="flex-1 min-w-0">
+				<div className="font-semibold text-slate-900 text-[13px] leading-tight">{s.title}</div>
+				<div className="text-[11px] text-slate-500 mt-0.5 leading-relaxed line-clamp-2">{s.subtitle}</div>
+			</div>
+			<ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-600 transition-colors flex-shrink-0 mt-1" />
+		</button>
 	);
 }
