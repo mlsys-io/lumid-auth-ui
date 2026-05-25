@@ -124,20 +124,35 @@ function ReportCardView({
 		);
 	}
 
+	// Pick the dominant trend for the card's accent color.
+	const dominantTrend = state.deltas[0]?.trend || "flat";
+	const accentClass =
+		dominantTrend === "up" ? "from-emerald-50 to-white border-emerald-200/60" :
+		dominantTrend === "down" ? "from-rose-50 to-white border-rose-200/60" :
+		"from-slate-50/40 to-white border-slate-200/60";
+
 	return (
-		<div className="rounded-xl border border-slate-200 bg-white p-4 hover:border-emerald-200 hover:shadow-sm transition-all">
+		<div className={`rounded-xl border bg-gradient-to-br ${accentClass} p-4 hover:shadow-md hover:shadow-slate-200/50 transition-all`}>
 			<div className="flex items-start justify-between gap-3">
-				<div className="min-w-0">
+				<div className="min-w-0 flex-1">
 					<Link
 						to={`/studio/workflows/${encodeURIComponent(workflow.slug)}`}
 						className="font-semibold text-slate-900 hover:text-emerald-700 transition-colors block truncate"
 					>
 						{workflow.name}
 					</Link>
-					<div className="text-xs text-slate-500 mt-0.5">{workflow.app}</div>
+					<div className="text-xs text-slate-500 mt-0.5 flex items-center gap-2">
+						<span>{workflow.app}</span>
+						<span className="text-slate-300">·</span>
+						<span>{state.this_month.run_count} runs this month</span>
+					</div>
 				</div>
-				<div className="text-[10px] text-slate-400">
-					{state.this_month.run_count} runs this month
+				{/* Big-number primary metric: success rate */}
+				<div className="text-right flex-shrink-0">
+					<div className="text-2xl font-semibold text-slate-900 tabular-nums leading-none">
+						{Math.round(state.this_month.success_rate * 100)}<span className="text-sm text-slate-500">%</span>
+					</div>
+					<div className="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">reliable</div>
 				</div>
 			</div>
 
@@ -149,20 +164,20 @@ function ReportCardView({
 
 			<button
 				onClick={() => setOpen((v) => !v)}
-				className="mt-3 text-[11px] text-slate-500 hover:text-slate-800 inline-flex items-center gap-1"
+				className="mt-3 text-[11px] text-slate-500 hover:text-slate-800 inline-flex items-center gap-1 transition-colors"
 			>
 				{open ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-				Why?
+				{open ? "Hide stats" : "Why?"}
 			</button>
 
 			{open && (
-				<div className="mt-2 rounded-lg bg-slate-50 border border-slate-200/60 px-3 py-2 text-[11px] text-slate-600 grid grid-cols-2 gap-x-3 gap-y-1 font-mono">
-					<MiniStat label="success rate" cur={pct(state.this_month.success_rate)} prev={pct(state.prev_month.success_rate)} />
-					<MiniStat label="avg duration" cur={`${state.this_month.avg_duration_s.toFixed(1)}s`} prev={`${state.prev_month.avg_duration_s.toFixed(1)}s`} />
+				<div className="mt-2 rounded-lg bg-white/80 border border-slate-200/60 px-3 py-2.5 text-[11px] grid grid-cols-2 gap-x-3 gap-y-2">
+					<MiniStat label="success rate" cur={state.this_month.success_rate} prev={state.prev_month.success_rate} format={pct} betterIsHigher />
+					<MiniStat label="avg duration" cur={state.this_month.avg_duration_s} prev={state.prev_month.avg_duration_s} format={(v) => `${v.toFixed(1)}s`} betterIsHigher={false} />
 					{state.this_month.drafts_created ? (
 						<>
-							<MiniStat label="drafts made" cur={String(state.this_month.drafts_created)} prev={String(state.prev_month.drafts_created || 0)} />
-							<MiniStat label="accept rate" cur={pct(state.this_month.draft_accept_rate || 0)} prev={pct(state.prev_month.draft_accept_rate || 0)} />
+							<MiniStat label="drafts made" cur={state.this_month.drafts_created} prev={state.prev_month.drafts_created || 0} format={(v) => String(Math.round(v))} betterIsHigher />
+							<MiniStat label="accept rate" cur={state.this_month.draft_accept_rate || 0} prev={state.prev_month.draft_accept_rate || 0} format={pct} betterIsHigher />
 						</>
 					) : null}
 				</div>
@@ -173,28 +188,46 @@ function ReportCardView({
 
 function DeltaRow({ delta }: { delta: { headline: string; detail?: string; trend: "up" | "down" | "flat" } }) {
 	const Icon = delta.trend === "up" ? TrendingUp : delta.trend === "down" ? TrendingDown : Minus;
-	const color =
-		delta.trend === "up" ? "text-emerald-700" :
-		delta.trend === "down" ? "text-rose-700" :
-		"text-slate-500";
+	const wrapperClass =
+		delta.trend === "up" ? "bg-emerald-50/60 border-emerald-100 text-emerald-900" :
+		delta.trend === "down" ? "bg-rose-50/60 border-rose-100 text-rose-900" :
+		"bg-slate-50/60 border-slate-100 text-slate-700";
+	const iconClass =
+		delta.trend === "up" ? "text-emerald-600" :
+		delta.trend === "down" ? "text-rose-600" :
+		"text-slate-400";
 	return (
-		<div className={["flex items-start gap-1.5 text-xs leading-relaxed", color].join(" ")}>
-			<Icon className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-			<div>
+		<div className={`flex items-start gap-2 text-xs leading-relaxed rounded-lg px-2.5 py-1.5 border ${wrapperClass}`}>
+			<Icon className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${iconClass}`} />
+			<div className="min-w-0 flex-1">
 				<div>{delta.headline}</div>
-				{delta.detail && <div className="text-[11px] text-slate-500 mt-0.5">{delta.detail}</div>}
+				{delta.detail && <div className="text-[11px] opacity-70 mt-0.5">{delta.detail}</div>}
 			</div>
 		</div>
 	);
 }
 
-function MiniStat({ label, cur, prev }: { label: string; cur: string; prev: string }) {
+function MiniStat({
+	label, cur, prev, format, betterIsHigher = true,
+}: {
+	label: string; cur: number; prev: number;
+	format: (v: number) => string;
+	betterIsHigher?: boolean;
+}) {
+	const diff = cur - prev;
+	const sig = Math.abs(diff) > 0.001;
+	const better = sig && (betterIsHigher ? diff > 0 : diff < 0);
+	const worse = sig && (betterIsHigher ? diff < 0 : diff > 0);
+	const trendClass = better ? "text-emerald-700" : worse ? "text-rose-700" : "text-slate-400";
+	const trendSign = better ? "↑" : worse ? "↓" : "•";
 	return (
 		<div>
-			<div className="text-slate-400">{label}</div>
-			<div className="text-slate-700">
-				{cur} <span className="text-slate-400">(was {prev})</span>
+			<div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">{label}</div>
+			<div className="flex items-baseline gap-1.5 mt-0.5">
+				<span className="font-mono text-[13px] text-slate-900 tabular-nums">{format(cur)}</span>
+				<span className={`text-[10px] font-medium ${trendClass}`}>{trendSign} {format(Math.abs(diff))}</span>
 			</div>
+			<div className="text-[10px] text-slate-400">was {format(prev)}</div>
 		</div>
 	);
 }

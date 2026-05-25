@@ -327,6 +327,9 @@ export interface MeWorkflowRow {
   engine?: string;
   step_count?: number;
   n8n_id?: string;
+  // Sparkline char-encoding: "o"=succeeded, "x"=failed, "_"=skipped,
+  // "."=running. Oldest→newest, max 14 chars.
+  run_spark?: string;
 }
 
 export interface MeWorkflowDetail {

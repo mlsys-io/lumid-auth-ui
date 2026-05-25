@@ -8,11 +8,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Workflow as WorkflowIcon, Play, Pause, RefreshCw, Plus, Filter, ExternalLink } from "lucide-react";
+import { Workflow as WorkflowIcon, Play, Pause, RefreshCw, Plus, Filter, ExternalLink, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { me, MeApiError, type MeWorkflowRow } from "@/api/me";
 import PageHints from "@/components/PageHints";
 import WorkflowComposer from "@/components/WorkflowComposer";
+import RunSparkline from "@/components/RunSparkline";
 
 type Lens = "live" | "all" | "available";
 
@@ -107,26 +108,16 @@ export default function StudioWorkflows() {
 			{lens === "available" ? (
 				<AvailableLensRedirect />
 			) : rows === null ? (
-				<div className="text-sm text-slate-500 italic py-4">Loading…</div>
+				<div className="space-y-2">
+					{[0, 1, 2].map((i) => (
+						<div key={i} className="h-16 rounded-xl bg-white border border-slate-200/50 animate-pulse" />
+					))}
+				</div>
 			) : filtered.length === 0 ? (
 				<EmptyState lens={lens} />
 			) : (
-				<div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
-					<table className="min-w-full text-sm">
-						<thead className="bg-slate-50/60 border-b border-slate-200">
-							<tr>
-								<th className="text-left px-4 py-2.5 font-semibold text-slate-700">Workflow</th>
-								<th className="text-left px-3 py-2.5 font-semibold text-slate-700">Kind</th>
-								<th className="text-left px-3 py-2.5 font-semibold text-slate-700">Trigger</th>
-								<th className="text-left px-3 py-2.5 font-semibold text-slate-700">Last run</th>
-								<th className="text-left px-3 py-2.5 font-semibold text-slate-700">Status</th>
-								<th className="text-right px-3 py-2.5 font-semibold text-slate-700">Actions</th>
-							</tr>
-						</thead>
-						<tbody>
-							{filtered.map((w) => <WorkflowRowView key={w.slug} row={w} onChanged={load} />)}
-						</tbody>
-					</table>
+				<div className="space-y-2">
+					{filtered.map((w) => <WorkflowRowView key={w.slug} row={w} onChanged={load} />)}
 				</div>
 			)}
 		</div>
@@ -189,54 +180,67 @@ function WorkflowRowView({ row, onChanged }: { row: MeWorkflowRow; onChanged: ()
 	};
 
 	const lastRun = row.last_run_ts
-		? new Date(row.last_run_ts * 1000).toLocaleString(undefined, {
-			month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
-		})
+		? relativeTime(row.last_run_ts * 1000)
 		: "—";
 
 	return (
-		<tr className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50/40 transition-colors">
-			<td className="px-4 py-2.5">
+		<div className={[
+			"group relative rounded-xl border bg-white px-4 py-3 transition-all",
+			row.enabled
+				? "border-slate-200 hover:border-emerald-200 hover:shadow-sm"
+				: "border-slate-200/60 opacity-70 hover:opacity-100",
+		].join(" ")}>
+			<div className="flex items-center gap-4">
+				{/* State indicator — pulsing emerald dot when last run ok, rose if failed */}
+				<div className="relative flex-shrink-0">
+					<div className={[
+						"w-2 h-2 rounded-full",
+						row.last_run_ok === true ? "bg-emerald-500" :
+						row.last_run_ok === false ? "bg-rose-500" :
+						"bg-slate-300",
+					].join(" ")} />
+					{row.enabled && row.last_run_ok === true && (
+						<div className="absolute inset-0 w-2 h-2 rounded-full bg-emerald-500 animate-ping opacity-75" />
+					)}
+				</div>
+
+				{/* Name + path */}
 				<Link
 					to={`/studio/workflows/${encodeURIComponent(row.slug)}`}
-					className="font-medium text-slate-900 hover:text-emerald-700 transition-colors inline-flex items-center gap-1.5"
+					className="flex-1 min-w-0 group/link"
 				>
-					{row.name}
-					{row.app && (
-						<span className="text-[11px] font-normal text-slate-400">/ {row.app}</span>
+					<div className="flex items-center gap-2">
+						<span className="font-semibold text-slate-900 group-hover/link:text-emerald-700 transition-colors truncate">
+							{row.name}
+						</span>
+						{row.app && (
+							<span className="text-[11px] font-normal text-slate-400 truncate">/ {row.app}</span>
+						)}
+						<KindChip kind={row.kind} />
+					</div>
+					{row.description && (
+						<div className="text-xs text-slate-500 mt-0.5 line-clamp-1">{row.description}</div>
 					)}
 				</Link>
-				{row.description && (
-					<div className="text-xs text-slate-500 mt-0.5 line-clamp-1">{row.description}</div>
-				)}
-			</td>
-			<td className="px-3 py-2.5">
-				<KindChip kind={row.kind} />
-			</td>
-			<td className="px-3 py-2.5 text-xs text-slate-600 font-mono">{row.trigger || "—"}</td>
-			<td className="px-3 py-2.5 text-xs text-slate-600">
-				{lastRun}
-				{row.last_run_ok !== undefined && (
-					<span className={["ml-1.5 text-[10px]", row.last_run_ok ? "text-emerald-600" : "text-rose-600"].join(" ")}>
-						{row.last_run_ok ? "✓" : "✗"}
-					</span>
-				)}
-			</td>
-			<td className="px-3 py-2.5">
-				<span className={[
-					"text-[11px] px-2 py-0.5 rounded-full",
-					row.enabled ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-500",
-				].join(" ")}>
-					{row.enabled ? "Enabled" : "Paused"}
-				</span>
-			</td>
-			<td className="px-3 py-2.5 text-right">
-				<div className="inline-flex items-center gap-1">
+
+				{/* Sparkline — what's been happening lately */}
+				<div className="hidden md:flex items-center" title="Last 14 runs">
+					<RunSparkline spec={row.run_spark || ""} />
+				</div>
+
+				{/* Trigger + last run */}
+				<div className="hidden lg:block text-right min-w-[110px]">
+					<div className="font-mono text-[11px] text-slate-600 truncate">{row.trigger || "@trigger"}</div>
+					<div className="text-[10px] text-slate-400 mt-0.5">{lastRun}</div>
+				</div>
+
+				{/* Actions */}
+				<div className="flex items-center gap-1 flex-shrink-0">
 					<button
 						title="Run now"
 						onClick={runNow}
 						disabled={busy}
-						className="p-1.5 rounded text-emerald-700 hover:bg-emerald-50 transition-colors disabled:opacity-40"
+						className="p-1.5 rounded-lg text-emerald-700 hover:bg-emerald-50 active:scale-95 transition-all disabled:opacity-40"
 					>
 						<Play className="w-3.5 h-3.5" />
 					</button>
@@ -244,14 +248,38 @@ function WorkflowRowView({ row, onChanged }: { row: MeWorkflowRow; onChanged: ()
 						title={row.enabled ? "Pause" : "Resume"}
 						onClick={togglePause}
 						disabled={busy}
-						className="p-1.5 rounded text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-40"
+						className={[
+							"p-1.5 rounded-lg active:scale-95 transition-all disabled:opacity-40",
+							row.enabled
+								? "text-slate-500 hover:bg-slate-100"
+								: "text-amber-700 hover:bg-amber-50",
+						].join(" ")}
 					>
 						<Pause className="w-3.5 h-3.5" />
 					</button>
+					<Link
+						to={`/studio/workflows/${encodeURIComponent(row.slug)}`}
+						title="Open"
+						className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+					>
+						<ChevronRight className="w-3.5 h-3.5" />
+					</Link>
 				</div>
-			</td>
-		</tr>
+			</div>
+		</div>
 	);
+}
+
+// Human-readable "5m ago" / "2h ago" / "Mar 12" relative time. Falls
+// back to absolute date for > 7 days old.
+function relativeTime(ms: number): string {
+	const diff = Date.now() - ms;
+	const sec = Math.floor(diff / 1000);
+	if (sec < 60) return `${sec}s ago`;
+	if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+	if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+	if (sec < 86400 * 7) return `${Math.floor(sec / 86400)}d ago`;
+	return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 function KindChip({ kind }: { kind: "scheduled" | "visual" }) {
@@ -259,7 +287,10 @@ function KindChip({ kind }: { kind: "scheduled" | "visual" }) {
 		? { label: "scheduled", className: "bg-indigo-50 text-indigo-700 border-indigo-200" }
 		: { label: "visual",    className: "bg-violet-50 text-violet-700 border-violet-200" };
 	return (
-		<span className={["text-[10px] px-2 py-0.5 rounded border font-medium", cfg.className].join(" ")}>
+		<span
+			data-testid={`kind-chip-${kind}`}
+			className={["text-[10px] px-2 py-0.5 rounded border font-medium", cfg.className].join(" ")}
+		>
 			{cfg.label}
 		</span>
 	);
