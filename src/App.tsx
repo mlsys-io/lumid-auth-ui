@@ -32,7 +32,14 @@ const StudioInbox      = lazy(() => import("./pages/studio/inbox"));
 // Phase S2 — real composer (no longer a placeholder).
 const StudioSkills     = lazy(() => import("./pages/studio/skills"));
 // Phase S3-C — app editor (lean v1).
-const StudioApps       = lazy(() => import("./pages/studio/apps"));
+const StudioApps         = lazy(() => import("./pages/studio/apps"));
+// W1 workflow surface — replaces /studio/apps as the canonical landing
+// for "Manage" verbs. Adds /workflows list + per-workflow detail +
+// the unified /runs view + per-run drill-down.
+const StudioWorkflows    = lazy(() => import("./pages/studio/workflows"));
+const StudioWorkflowDtl  = lazy(() => import("./pages/studio/workflow-detail"));
+const StudioRuns         = lazy(() => import("./pages/studio/runs"));
+const StudioRunDetail    = lazy(() => import("./pages/studio/run-detail"));
 // Phase S3-D — knowledge browser.
 const StudioKnowledge  = lazy(() => import("./pages/studio/knowledge"));
 // Phase S1.5 — Settings consolidation; Phase S4 — Admin tabs.
@@ -363,9 +370,18 @@ export default function App() {
             <Route path="today/cycle/:app/:loop/:ts"    element={<StudioInspector />} />
             <Route path="inbox"                        element={<StudioInbox />} />
             <Route path="skills"                       element={<StudioSkills />} />
-            {/* Phase S3-C — apps list + per-app editor. */}
-            <Route path="apps"                         element={<StudioApps />} />
+            {/* Phase S3-C — apps list + per-app editor (DEPRECATED post-W1;
+                workflows.tsx is the canonical replacement). The /apps routes
+                redirect; the StudioApps editor still mounts under /apps/:app
+                for the moment to handle the per-app YAML edit page until W2
+                ships the dedicated workflow editor. */}
+            <Route path="apps"                         element={<Navigate to="/studio/workflows" replace />} />
             <Route path="apps/:app"                    element={<StudioApps />} />
+            {/* W1 — workflow surface (Create + Manage). */}
+            <Route path="workflows"                    element={<StudioWorkflows />} />
+            <Route path="workflows/:slug"              element={<StudioWorkflowDtl />} />
+            <Route path="runs"                         element={<StudioRuns />} />
+            <Route path="runs/:run_id"                 element={<StudioRunDetail />} />
             {/* Phase S3-D — knowledge browser; per-agent drill on /:agent. */}
             <Route path="knowledge"                    element={<StudioKnowledge />} />
             <Route path="knowledge/:agent"             element={<StudioKnowledge />} />

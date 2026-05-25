@@ -13,7 +13,8 @@ import {
 	Sparkles,
 	Inbox,
 	Wrench,
-	Layers,
+	Workflow as WorkflowIcon,
+	Activity,
 	Brain,
 	Settings,
 	Shield,
@@ -37,13 +38,21 @@ interface NavItem {
 	end?: boolean;
 }
 
-// Six workspaces. Admin is conditional on role; pinned at the bottom
-// of the nav per the studio plan.
-const PRIMARY_NAV: NavItem[] = [
+// Sidebar layout (W1 reorg):
+//   Today / Inbox         — surfaces the user lives in.
+//   ── Personal AI ──
+//   Workflows / Runs      — the Create + Manage verbs.
+//   Skills                — the marketplace composer (still useful as a stand-alone lens).
+//   Knowledge             — the bank browser.
+//   ── Settings + Admin ── (pinned bottom)
+const TOP_NAV: NavItem[] = [
 	{ to: '/studio/today',     label: 'Today',     icon: Sparkles, end: true },
 	{ to: '/studio/inbox',     label: 'Inbox',     icon: Inbox },
+];
+const PERSONAL_AI_NAV: NavItem[] = [
+	{ to: '/studio/workflows', label: 'Workflows', icon: WorkflowIcon },
+	{ to: '/studio/runs',      label: 'Runs',      icon: Activity },
 	{ to: '/studio/skills',    label: 'Skills',    icon: Wrench },
-	{ to: '/studio/apps',      label: 'Apps',      icon: Layers },
 	{ to: '/studio/knowledge', label: 'Knowledge', icon: Brain },
 ];
 const SECONDARY_NAV: NavItem[] = [
@@ -113,7 +122,18 @@ export function StudioShell() {
 				</Link>
 
 				<nav className="flex-1 overflow-y-auto px-2 py-3 space-y-px">
-					{PRIMARY_NAV.map((item) => <NavItemView key={item.to} {...item} />)}
+					{TOP_NAV.map((item) => <NavItemView key={item.to} {...item} />)}
+
+					{/* Personal AI section — the three verbs (Create + Manage
+					    + Improve) live here. Mind page lands in W4. */}
+					<div className="mt-4 mb-1 px-3 flex items-center gap-2">
+						<div className="flex-1 h-px bg-slate-200/60" />
+						<span className="text-[10px] uppercase tracking-[0.08em] text-slate-400 font-semibold">
+							Personal AI
+						</span>
+						<div className="flex-1 h-px bg-slate-200/60" />
+					</div>
+					{PERSONAL_AI_NAV.map((item) => <NavItemView key={item.to} {...item} />)}
 
 					<div className="my-3 border-t border-slate-200/60" />
 
