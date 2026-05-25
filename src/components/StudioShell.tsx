@@ -192,9 +192,23 @@ export function StudioShell() {
 						<Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
 						<input
 							type="search"
-							placeholder="Search apps, skills, memories…"
+							placeholder='Ask anything — try "find email skills"…'
+							onKeyDown={(e) => {
+								if (e.key === "Enter") {
+									const v = (e.target as HTMLInputElement).value.trim();
+									if (!v) return;
+									// Route through the chat agent — it's the right
+									// brain for cross-surface search ("show failing
+									// runs", "find email skills", "open my morning
+									// brief"). Studio chat sidebar picks up the event
+									// and autosends.
+									window.dispatchEvent(new CustomEvent("studio:ask", {
+										detail: { prompt: v, autosend: true },
+									}));
+									(e.target as HTMLInputElement).value = "";
+								}
+							}}
 							className="w-full pl-10 pr-3 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50/60 focus:bg-white focus:outline-none focus:ring-4 focus:ring-emerald-400/15 focus:border-emerald-400 transition-all placeholder:text-slate-400"
-							// Search wiring is Phase S3; placeholder for now.
 						/>
 					</div>
 
