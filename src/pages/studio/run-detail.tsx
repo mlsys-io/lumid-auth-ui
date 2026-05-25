@@ -144,9 +144,9 @@ function MetaItem({ label, children }: { label: string; children: React.ReactNod
 }
 
 function RunActions({ detail, onChanged }: { detail: MeRunDetail; onChanged: () => void }) {
-	// W1: re-run only for scheduled. Mark succeeded/failed land when the
-	// scheduler grows the synthetic-journal entry shape (W2+).
 	const canRerun = detail.kind === "scheduled" && detail.app && detail.loop;
+	const canMark = detail.kind === "scheduled";
+
 	const handleRerun = async () => {
 		if (!canRerun) return;
 		try {
@@ -157,6 +157,23 @@ function RunActions({ detail, onChanged }: { detail: MeRunDetail; onChanged: () 
 			toast.error(e instanceof MeApiError ? e.message : String(e));
 		}
 	};
+
+	const handleMark = async (state: "succeeded" | "failed") => {
+		if (!canMark) return;
+		// Resolve the run id back from detail. The detail object
+		// carries app/loop/ts in scheduled mode; the run id from the
+		// URL is the canonical key.
+		const url = window.location.pathname.split("/");
+		const runId = decodeURIComponent(url[url.length - 1] || "");
+		try {
+			await me.runMark(runId, state);
+			toast.success(`Marked as ${state}`);
+			setTimeout(onChanged, 800);
+		} catch (e) {
+			toast.error(e instanceof MeApiError ? e.message : String(e));
+		}
+	};
+
 	return (
 		<>
 			<button
@@ -168,16 +185,18 @@ function RunActions({ detail, onChanged }: { detail: MeRunDetail; onChanged: () 
 				<Play className="w-3.5 h-3.5" /> Re-run
 			</button>
 			<button
-				disabled
-				title="Manual state overrides land in W2"
-				className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white text-slate-400 cursor-not-allowed"
+				onClick={() => handleMark("succeeded")}
+				disabled={!canMark}
+				className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-50 disabled:opacity-40 transition-colors"
+				title="Override this run's state to succeeded — writes a manual_mark journal entry"
 			>
 				<Check className="w-3.5 h-3.5" /> Mark succeeded
 			</button>
 			<button
-				disabled
-				title="Manual state overrides land in W2"
-				className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white text-slate-400 cursor-not-allowed"
+				onClick={() => handleMark("failed")}
+				disabled={!canMark}
+				className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-rose-200 bg-white text-rose-700 hover:bg-rose-50 disabled:opacity-40 transition-colors"
+				title="Override this run's state to failed — writes a manual_mark journal entry"
 			>
 				<X className="w-3.5 h-3.5" /> Mark failed
 			</button>

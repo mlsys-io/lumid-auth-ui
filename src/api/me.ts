@@ -254,6 +254,12 @@ export const me = {
   },
   runDetail: (runId: string) =>
     call<MeRunDetail>("GET", `/runs/${encodeURIComponent(runId)}`),
+  runMark: (runId: string, state: "succeeded" | "failed", note?: string) =>
+    call<{ run_id: string; new_state: string; note: string }>(
+      "POST",
+      `/runs/${encodeURIComponent(runId)}/mark`,
+      { state, note },
+    ),
 
   // ── Mind / Improve surface (W4) ─────────────────────────────────
   // Reads existing usage_events + journal + draft state to produce
@@ -274,6 +280,23 @@ export const me = {
       "/mind/evaluate",
       { skill_name, for_app },
     ),
+  mindSkills: (compare: string) =>
+    call<{
+      skill: string;
+      rows: Array<{
+        ts: string;
+        skill: string;
+        version: string;
+        model: string;
+        casebook: string;
+        score: number;
+        latency_s: number;
+        cost_cents: number;
+        sample_size?: number;
+      }>;
+      count: number;
+      as_of: string;
+    }>("GET", `/mind/skills?compare=${encodeURIComponent(compare)}`),
 };
 
 export interface MeMindStats {
