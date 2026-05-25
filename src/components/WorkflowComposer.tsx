@@ -72,6 +72,18 @@ export function WorkflowComposer({ open, onClose }: Props) {
 		return () => window.removeEventListener("studio:composed", onComposed as EventListener);
 	}, []);
 
+	// Esc closes the modal — standard modal affordance the user
+	// expects but wasn't wired. Cancels installing-in-progress is
+	// not graceful, so we ignore Esc while installing.
+	useEffect(() => {
+		if (!open) return;
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === "Escape" && !installing) onClose();
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, [open, installing, onClose]);
+
 	if (!open) return null;
 
 	const askChatToCompose = () => {

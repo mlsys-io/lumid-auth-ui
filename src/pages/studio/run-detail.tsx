@@ -46,8 +46,8 @@ export default function StudioRunDetail() {
 	};
 	useEffect(() => { load(); }, [run_id]);
 
-	if (err) return <div className="space-y-4"><BackLink /><div className="text-rose-700 text-sm">{err}</div></div>;
-	if (!detail) return <div className="space-y-4"><BackLink /><div className="text-sm text-slate-500 italic">Loading…</div></div>;
+	if (err) return <div className="space-y-4"><BackLink detail={null} /><div className="text-rose-700 text-sm">{err}</div></div>;
+	if (!detail) return <div className="space-y-4"><BackLink detail={null} /><div className="text-sm text-slate-500 italic">Loading…</div></div>;
 
 	const steps = normalizeSteps(detail.steps);
 	const summary = detail.summary as Record<string, any> | null;
@@ -55,7 +55,7 @@ export default function StudioRunDetail() {
 
 	return (
 		<div className="space-y-4">
-			<BackLink />
+			<BackLink detail={detail} />
 
 			<header className="flex items-baseline justify-between">
 				<div>
@@ -125,12 +125,31 @@ export default function StudioRunDetail() {
 	);
 }
 
-function BackLink() {
+function BackLink({ detail }: { detail?: MeRunDetail | null }) {
+	// Breadcrumb: if the run belongs to a workflow we can link to,
+	// surface both hops so the user can navigate one level up to
+	// the workflow detail page or two levels up to the runs list.
+	const workflowSlug = detail?.kind === "scheduled" && detail.app && detail.loop
+		? `${detail.app}:${detail.loop}`
+		: undefined;
 	return (
-		<Link to="/studio/runs" className="inline-flex items-center text-sm text-slate-600 hover:text-slate-900 gap-1">
-			<ArrowLeft className="w-3.5 h-3.5" />
-			Runs
-		</Link>
+		<nav className="inline-flex items-center gap-1 text-sm text-slate-600">
+			<Link to="/studio/runs" className="hover:text-slate-900 inline-flex items-center gap-1">
+				<ArrowLeft className="w-3.5 h-3.5" />
+				Runs
+			</Link>
+			{workflowSlug && (
+				<>
+					<span className="text-slate-300">/</span>
+					<Link
+						to={`/studio/workflows/${encodeURIComponent(workflowSlug)}`}
+						className="hover:text-slate-900"
+					>
+						{detail?.loop}
+					</Link>
+				</>
+			)}
+		</nav>
 	);
 }
 
