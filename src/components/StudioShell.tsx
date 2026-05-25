@@ -146,25 +146,41 @@ export function StudioShell() {
 					)}
 				</nav>
 
-				{/* User badge — collapsed; the avatar menu in top-bar
-				    handles full controls. Surfaces here so the user
-				    sees who they're signed in as at a glance. */}
-				<div className="p-3 border-t border-slate-200/60">
-					<div className="px-1 flex items-center gap-2 min-w-0">
-						<div className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-semibold flex-shrink-0">
+				{/* User badge — surfaces who's signed in + a direct
+				    Sign-out button. Previously logout lived only in
+				    the top-bar avatar dropdown and was hard to find. */}
+				<div className="p-3 border-t border-slate-200/60 space-y-1.5">
+					<Link
+						to="/studio/settings"
+						className="px-1.5 py-1 rounded-lg flex items-center gap-2 min-w-0 hover:bg-slate-100/70 transition-colors group"
+						title="Account settings"
+					>
+						<div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center text-xs font-semibold flex-shrink-0 shadow-sm shadow-emerald-100">
 							{(user?.email?.[0] || '?').toUpperCase()}
 						</div>
 						<div className="flex-1 min-w-0">
-							<div className="text-[12px] font-medium truncate">
+							<div className="text-[12px] font-medium truncate text-slate-900 group-hover:text-emerald-800">
 								{user?.username || user?.email?.split('@')[0] || 'there'}
 							</div>
-							{isAdmin && (
+							{isAdmin ? (
 								<div className="text-[10px] uppercase tracking-wide text-emerald-700">
 									{user?.role === 'super_admin' ? 'super' : 'admin'}
 								</div>
+							) : (
+								<div className="text-[10px] text-slate-400 truncate">{user?.email}</div>
 							)}
 						</div>
-					</div>
+					</Link>
+					<button
+						onClick={onLogout}
+						className="w-full px-1.5 py-1.5 rounded-lg flex items-center gap-2 text-[12px] text-slate-500 hover:text-rose-700 hover:bg-rose-50/70 transition-colors group"
+						title="Sign out"
+					>
+						<div className="w-7 h-7 rounded-full bg-slate-50 group-hover:bg-rose-100 flex items-center justify-center flex-shrink-0 transition-colors">
+							<LogOut className="w-3.5 h-3.5" />
+						</div>
+						<span className="font-medium">Sign out</span>
+					</button>
 				</div>
 			</aside>
 
