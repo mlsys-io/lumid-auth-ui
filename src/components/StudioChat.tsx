@@ -30,11 +30,16 @@ const DEFAULT_WIDTH = 400;
 
 export function StudioChat() {
 	const location = useLocation();
-	// Always start expanded on fresh page load — AI is the primary
-	// interface; default-collapsed buried the surface that's supposed
-	// to be the canonical voice channel. Intra-session collapse is
-	// honored via setCollapsed below; reloads reset to expanded.
-	const [collapsed, setCollapsed] = useState<boolean>(false);
+	// Default collapsed to a thin handle so the workspace (Intents,
+	// Knowledge, …) is the focus; the user opens chat on demand. State
+	// persists across reloads in localStorage (COLLAPSE_KEY). A
+	// `studio:ask` event still force-expands so prompt-chips work.
+	const [collapsed, setCollapsed] = useState<boolean>(() => {
+		try {
+			const raw = localStorage.getItem(COLLAPSE_KEY);
+			return raw === null ? true : raw === '1';
+		} catch { return true; }
+	});
 	const [width, setWidth] = useState<number>(() => {
 		try {
 			const raw = localStorage.getItem(WIDTH_KEY);
@@ -63,10 +68,10 @@ export function StudioChat() {
 	useEffect(() => {
 		try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(messages)); } catch { /* ignore */ }
 	}, [messages]);
-	// Note: COLLAPSE_KEY storage retired 2026-05-25 — see useState above.
-	// Keeping the key constant defined for future intra-tab persistence
-	// if we ever want to revisit per-route collapse state.
-	void COLLAPSE_KEY;
+	// Persist collapse state across reloads.
+	useEffect(() => {
+		try { localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0'); } catch { /* ignore */ }
+	}, [collapsed]);
 
 	// Auto-scroll on new content
 	useEffect(() => {
@@ -282,15 +287,21 @@ export function StudioChat() {
 		try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
 	};
 
-	// Collapsed: thin chevron-only rail
+	// Collapsed: a discreet full-height 32px handle with a vertical
+	// "Ask" label + faint green accent. Part of the layout flow (not
+	// fixed/floating), so the workspace naturally reclaims the width.
 	if (collapsed) {
 		return (
 			<button
 				onClick={() => setCollapsed(false)}
 				title="Open AI chat"
-				className="fixed right-0 top-1/2 -translate-y-1/2 z-20 group px-2.5 py-3.5 rounded-l-2xl bg-white border border-r-0 border-slate-200 hover:bg-gradient-to-br hover:from-emerald-50 hover:to-white hover:border-emerald-200 transition-all shadow-md shadow-slate-200/50"
+				aria-label="Open AI chat"
+				className="group w-8 flex-shrink-0 h-screen sticky top-0 flex flex-col items-center justify-center gap-3 border-l border-emerald-100 bg-emerald-50/40 hover:bg-emerald-50 transition-colors"
 			>
 				<MessageSquarePlus className="w-4 h-4 text-emerald-600 group-hover:scale-110 transition-transform" />
+				<span className="text-[11px] font-medium uppercase tracking-[0.12em] text-emerald-700/80 [writing-mode:vertical-rl] rotate-180">
+					Ask
+				</span>
 			</button>
 		);
 	}

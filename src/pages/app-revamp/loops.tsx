@@ -19,6 +19,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { formatRelative } from "@/lib/relative-time";
+import { DEMO_MODE, DEMO_WORKFLOW_APPS } from "@/lib/demo";
 import {
   AlertCircle,
   CheckCircle2,
@@ -244,7 +246,12 @@ function LoopsSection() {
     try {
       const r = await me.loopsHealth();
       const list = (r as unknown as { loops?: LoopRow[] }).loops ?? (r as unknown as LoopRow[]) ?? [];
-      setRows(list);
+      // Demo IA: surface only the two demo apps' loops. Reverts when
+      // VITE_DEMO_MODE=false. See src/lib/demo.ts.
+      const shown = DEMO_MODE
+        ? list.filter((l) => (DEMO_WORKFLOW_APPS as readonly string[]).includes(l.app))
+        : list;
+      setRows(shown);
     } catch (e) {
       setError(e instanceof MeApiError ? e.message : String(e));
     }
@@ -309,7 +316,7 @@ function LoopsSection() {
               <div className="min-w-0 flex-1">
                 <div className="font-medium text-sm">{humanizeLoop(r.loop)}</div>
                 <div className="text-xs text-slate-500 mt-0.5">
-                  {r.last_run_ts ? `Last ran ${formatRelative(r.last_run_ts)}` : "Hasn't run yet"}
+                  {formatRelative(r.last_run_ts) === "—" ? "Hasn't run yet" : `Last ran ${formatRelative(r.last_run_ts)}`}
                   {failing && (
                     <span className="ml-2 text-rose-700">
                       · {r.consecutive_failures} consecutive failure{r.consecutive_failures === 1 ? "" : "s"}
@@ -384,19 +391,6 @@ function humanizeLoop(loop: string): string {
   return loop.charAt(0).toUpperCase() + loop.slice(1).replace(/_/g, " ");
 }
 
-function formatRelative(iso: string): string {
-  const t = new Date(iso).getTime();
-  if (!t) return iso;
-  const diff = Date.now() - t;
-  if (diff < 0) return "scheduled";
-  const min = Math.floor(diff / 60_000);
-  if (min < 1)  return "just now";
-  if (min < 60) return `${min} min ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24)  return `${hr} hour${hr === 1 ? "" : "s"} ago`;
-  const d = Math.floor(hr / 24);
-  return `${d} day${d === 1 ? "" : "s"} ago`;
-}
 
 // ── Page ──────────────────────────────────────────────────────────
 

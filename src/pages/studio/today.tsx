@@ -18,6 +18,35 @@ import AppLoops from '../app-revamp/loops';
 import { me } from '@/api/me';
 import PageHints from '@/components/PageHints';
 import { useAuth } from '@/hooks/useAuth';
+import { IntentRail, type Intent } from '@/components/IntentRail';
+import { OutcomeRow, type Outcome } from '@/components/OutcomeTile';
+import { DecisionsPending } from '@/components/DecisionsPending';
+import { DEMO_MODE } from '@/lib/demo';
+
+// Demo content for the Intents view. Hardcoded here (the parent) per the
+// demo plan; gated behind DEMO_MODE so it vanishes in the real build.
+const DEMO_INTENTS: Intent[] = [
+	{
+		id: 'common-week-2',
+		persona: 'common person · week 2',
+		text: 'Handle my weekly inbox and calendar the way I would',
+		progress: 60,
+		latest: '12 drafts queued, 2 conflicts resolved',
+	},
+	{
+		id: 'scientist-cycle-3',
+		persona: 'scientist · cycle 3',
+		text: 'Find the best NL-to-SQL config under 200ms',
+		progress: 35,
+		latest: '4 variants benchmarked, Pareto updated',
+	},
+];
+
+const DEMO_OUTCOMES: Outcome[] = [
+	{ label: 'Hours reclaimed', value: '4h 12m', delta: '+48m vs last week', deltaTone: 'up' },
+	{ label: 'Agent matches your call', value: '84%', delta: 'up from 78%', deltaTone: 'up' },
+	{ label: 'Decisions delegated', value: '14', delta: 'was 9 last week', deltaTone: 'neutral' },
+];
 
 export default function StudioToday() {
 	const { user } = useAuth();
@@ -45,6 +74,13 @@ export default function StudioToday() {
 					'summarize what my AI did today',
 					'run my morning brief now',
 				]} />
+			)}
+			{empty === false && DEMO_MODE && (
+				<>
+					<IntentRail intents={DEMO_INTENTS} />
+					<OutcomeRow outcomes={DEMO_OUTCOMES} />
+					<DecisionsPending />
+				</>
 			)}
 			<AppLoops />
 		</div>

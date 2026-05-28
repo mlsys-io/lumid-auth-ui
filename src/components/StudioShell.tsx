@@ -14,6 +14,7 @@ import {
 	Inbox,
 	Store,
 	Workflow as WorkflowIcon,
+	Brain,
 	Settings,
 	Shield,
 	LogOut,
@@ -54,12 +55,13 @@ interface NavItem {
 // into the workflow detail panel as a tab; Skills + Knowledge merged
 // into Marketplace as tabs. Old paths redirect for back-compat.
 const TOP_NAV: NavItem[] = [
-	{ to: '/studio/today',     label: 'Today',     icon: Sparkles, end: true },
+	{ to: '/studio/intents',   label: 'Intents',   icon: Sparkles, end: true },
 	{ to: '/studio/inbox',     label: 'Inbox',     icon: Inbox },
 ];
 const PERSONAL_AI_NAV: NavItem[] = [
-	{ to: '/studio/workflows',  label: 'Workflows',   icon: WorkflowIcon },
-	{ to: '/studio/marketplace', label: 'Marketplace', icon: Store },
+	{ to: '/studio/workflows', label: 'Workflows', icon: WorkflowIcon },
+	{ to: '/studio/knowledge', label: 'Knowledge', icon: Brain },
+	{ to: '/studio/library',   label: 'Library',   icon: Store },
 ];
 const SECONDARY_NAV: NavItem[] = [
 	{ to: '/studio/settings',  label: 'Settings',  icon: Settings },

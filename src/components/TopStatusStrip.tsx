@@ -38,10 +38,10 @@ const PAGE_META: Array<{
 	iconTone: string; // text color class for the icon
 }> = [
 	{
-		pattern: /^\/studio\/today/,
+		pattern: /^\/studio\/(intents|today)/,
 		icon: Sparkles,
-		title: "Today",
-		subtitle: "What needs your attention right now.",
+		title: "Intents",
+		subtitle: "Your goals this week. Outcomes graded; judgment encoded.",
 		iconTone: "text-emerald-600",
 	},
 	{
@@ -80,10 +80,10 @@ const PAGE_META: Array<{
 		iconTone: "text-emerald-600",
 	},
 	{
-		pattern: /^\/studio\/marketplace/,
+		pattern: /^\/studio\/(library|marketplace)/,
 		icon: Store,
-		title: "Marketplace",
-		subtitle: "Skills and workflows you can install.",
+		title: "Library",
+		subtitle: "Skills and workflows — pull in, refine, publish back.",
 		iconTone: "text-emerald-600",
 	},
 	{
@@ -104,6 +104,7 @@ const PAGE_META: Array<{
 		pattern: /^\/studio\/knowledge/,
 		icon: Brain,
 		title: "Knowledge",
+		subtitle: "What's been encoded — yours, audited, portable.",
 		iconTone: "text-emerald-600",
 	},
 	{

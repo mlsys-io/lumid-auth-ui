@@ -44,8 +44,10 @@ const StudioRunDetail    = lazy(() => import("./pages/studio/run-detail"));
 // W4 — Mind surface (Improve verb). Subtle by design; collapsed-by-default
 // in the sidebar with no Today entry-points.
 const StudioMind         = lazy(() => import("./pages/studio/mind"));
-// Phase S3-D — knowledge browser.
+// Phase S3-D — per-agent knowledge browser (at /studio/knowledge/:agent).
 const StudioKnowledge  = lazy(() => import("./pages/studio/knowledge"));
+// "You, encoded" ledger at /studio/knowledge (distinct from the per-agent browser).
+const StudioKnowledgeEncoded = lazy(() => import("./pages/studio/knowledge-encoded"));
 // Phase S1.5 — Settings consolidation; Phase S4 — Admin tabs.
 const StudioSettings   = lazy(() => import("./pages/studio/settings"));
 const StudioAdmin      = lazy(() => import("./pages/studio/admin"));
@@ -72,6 +74,8 @@ const RedeemInvite = lazy(() => import("./pages/auth/redeem-invite"));
 const Profile = lazy(() => import("./pages/account/profile"));
 const Tokens = lazy(() => import("./pages/account/tokens"));
 const ConnectGoogle = lazy(() => import("./pages/account/connect-google"));
+const ConnectPowerAutomate = lazy(() => import("./pages/account/connect-power-automate"));
+const ConnectMicrosoft = lazy(() => import("./pages/account/connect-microsoft"));
 const Inbox = lazy(() => import("./pages/account/inbox"));
 const SkillsNew = lazy(() => import("./pages/account/skills/new"));
 const MemoryNew = lazy(() => import("./pages/account/memory/new"));
@@ -368,19 +372,25 @@ export default function App() {
               </AuthGuard>
             }
           >
-            <Route index             element={<Navigate to="/studio/today" replace />} />
-            <Route path="today"                        element={<StudioToday />} />
-            {/* Phase S3-B — cycle inspector accessed from Today rows. */}
+            <Route index             element={<Navigate to="/studio/intents" replace />} />
+            {/* Today → Intents rename (demo IA). Old /today paths redirect. */}
+            <Route path="intents"                       element={<StudioToday />} />
+            <Route path="today"                         element={<Navigate to="/studio/intents" replace />} />
+            {/* Phase S3-B — cycle inspector accessed from Intents rows. */}
+            <Route path="intents/cycle/:app/:loop/:ts"  element={<StudioInspector />} />
             <Route path="today/cycle/:app/:loop/:ts"    element={<StudioInspector />} />
             <Route path="inbox"                        element={<StudioInbox />} />
-            {/* Sidebar consolidation 2026-05-25: skills + knowledge merged
-                into Marketplace as tabs; runs + mind folded into Workflows.
-                Old paths redirect for back-compat. The StudioApps editor
-                still mounts under /apps/:app to handle per-app YAML edits
-                until the dedicated workflow editor ships. */}
-            <Route path="marketplace"                  element={<StudioMarketplace />} />
-            <Route path="skills"                       element={<Navigate to="/studio/marketplace" replace />} />
-            <Route path="knowledge"                    element={<Navigate to="/studio/marketplace?tab=knowledge" replace />} />
+            {/* Sidebar consolidation 2026-05-25: skills merged into the
+                catalog (now "Library"); runs + mind folded into Workflows.
+                Marketplace → Library rename (demo IA); old paths redirect.
+                The StudioApps editor still mounts under /apps/:app to handle
+                per-app YAML edits until the dedicated workflow editor ships. */}
+            <Route path="library"                      element={<StudioMarketplace />} />
+            <Route path="marketplace"                  element={<Navigate to="/studio/library" replace />} />
+            <Route path="skills"                       element={<Navigate to="/studio/library" replace />} />
+            {/* Knowledge is now the "you, encoded" ledger; the per-agent
+                bank browser keeps its deep-link at /knowledge/:agent. */}
+            <Route path="knowledge"                    element={<StudioKnowledgeEncoded />} />
             <Route path="knowledge/:agent"             element={<StudioKnowledge />} />
             <Route path="apps"                         element={<Navigate to="/studio/workflows" replace />} />
             <Route path="apps/:app"                    element={<StudioApps />} />
@@ -517,6 +527,8 @@ export default function App() {
             <Route path="profile" element={<Profile />} />
             <Route path="tokens" element={<Tokens />} />
             <Route path="account/connect/google" element={<ConnectGoogle />} />
+            <Route path="account/connect/power-automate" element={<ConnectPowerAutomate />} />
+            <Route path="account/connect/microsoft" element={<ConnectMicrosoft />} />
             <Route path="billing" element={<AppBilling />} />
 
             {/* Theme A4 / A5 / inbox — Lumid Studio authoring side

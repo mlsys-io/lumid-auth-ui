@@ -570,7 +570,12 @@ function formatCents(cents: number): string {
 
 // Human-readable "5m ago" / "2h ago" / "Mar 12" relative time. Falls
 // back to absolute date for > 7 days old.
+// Guard against null/0/pre-2024 timestamps that otherwise render as
+// "20580d ago" (diff measured from the unix epoch).
+const MIN_VALID_MS = new Date("2024-01-01T00:00:00Z").getTime();
+
 function relativeTime(ms: number): string {
+	if (!ms || Number.isNaN(ms) || ms < MIN_VALID_MS) return "—";
 	const diff = Date.now() - ms;
 	const sec = Math.floor(diff / 1000);
 	if (sec < 60) return `${sec}s ago`;

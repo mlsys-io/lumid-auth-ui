@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 node:20-alpine AS builder
+FROM --platform=linux/amd64 node:22-alpine AS builder
 WORKDIR /app
 # Build args control where the SPA serves from. Defaults match the
 # lum.id deploy (assets under /auth/, no router basename). The xp.io/go
