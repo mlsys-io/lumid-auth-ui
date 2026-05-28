@@ -28,6 +28,8 @@ import apiClient from '@/api/client';
 import PageHints from '@/components/PageHints';
 import { setStudioSelection } from '@/components/StudioContext';
 import StudioKnowledge from './knowledge';
+import { DEMO_MODE } from '@/lib/demo';
+import { loadPendingDecisions, DECISIONS_EVENT } from '@/lib/demo-decisions';
 
 type Filter = 'all' | 'drafts' | 'activity' | 'audit' | 'notices';
 
@@ -91,7 +93,15 @@ export default function StudioInbox() {
 	};
 
 	const [items, setItems] = useState<FeedItem[] | null>(null);
-	const [filter, setFilter] = useState<Filter>('all');
+	// Honor ?filter=drafts (and the other Filter ids) so "See all in Inbox"
+	// on the Intents page lands the user on the right tab. Falls back to
+	// 'all' for unknown values.
+	const initialFilter = (() => {
+		const f = searchParams.get('filter') as Filter | null;
+		return f === 'drafts' || f === 'activity' || f === 'audit' || f === 'notices' || f === 'all'
+			? f : 'all';
+	})();
+	const [filter, setFilter] = useState<Filter>(initialFilter);
 	const [busy, setBusy] = useState<Record<string, boolean>>({});
 	const [refreshing, setRefreshing] = useState(false);
 	const [lastRefresh, setLastRefresh] = useState<number>(Date.now());
@@ -102,6 +112,17 @@ export default function StudioInbox() {
 	useEffect(() => {
 		const t = window.setInterval(() => setTick((x) => x + 1), 5_000);
 		return () => window.clearInterval(t);
+	}, []);
+
+	// Demo decisions store fires DECISIONS_EVENT when something is
+	// approved/rejected on the Intents page; re-load so the feed
+	// reflects the new pending set.
+	useEffect(() => {
+		if (!DEMO_MODE) return;
+		const onChange = () => { load(); };
+		window.addEventListener(DECISIONS_EVENT, onChange);
+		return () => window.removeEventListener(DECISIONS_EVENT, onChange);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
 	const load = useCallback(async () => {
@@ -126,6 +147,24 @@ export default function StudioInbox() {
 					subject: d.subject || '(no subject)',
 					to:      d.to || '',
 					body:    d.body || '',
+				});
+			}
+		}
+
+		// DEMO_MODE: surface the "Pending your call" decisions as draft
+		// items in the unified feed. The shared lib/demo-decisions store
+		// is the single source of truth — rejecting/approving on the
+		// Intents page removes the item from this list automatically.
+		if (DEMO_MODE) {
+			for (const d of loadPendingDecisions()) {
+				next.push({
+					kind:    'draft',
+					id:      `demo-draft:${d.id}`,
+					ts:      new Date().toISOString(),
+					app:     d.app,
+					subject: d.subject,
+					to:      d.tag,
+					body:    d.preview,
 				});
 			}
 		}

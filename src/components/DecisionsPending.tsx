@@ -5,58 +5,48 @@
 // cause→effect the next cycle reflects, and which shows up at the top of
 // the Knowledge view. Matches the LumidOS design spec.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Check, Pencil, X, Mail, FlaskConical, MessageSquareOff, Upload, type LucideIcon } from 'lucide-react';
+import { Check, Pencil, X, Mail, FlaskConical, MessageSquareOff, Upload, ArrowRight, type LucideIcon } from 'lucide-react';
 import { rejectWithReason } from '@/lib/demo-actions';
 import { PublishToLibrary } from '@/components/PublishToLibrary';
+import {
+	loadDecisions, setDecisionStatus, DECISIONS_EVENT,
+	type DemoDecision, type DecisionStatus, type DecisionIconKind,
+} from '@/lib/demo-decisions';
 
-type Status = 'pending' | 'approved' | 'rejected';
+type Status = DecisionStatus;
 
-interface DecisionItem {
-	id: string;
-	icon: LucideIcon;
-	tag: string; // full meta line, e.g. "reply draft · to Aunt Mei · family"
-	preview: string;
-	principleLabel: string; // label used when publishing the encoded principle
-}
-
-const SEED: DecisionItem[] = [
-	{
-		id: 'aunt-mei-reply',
-		icon: Mail,
-		tag: 'reply draft · to Aunt Mei · family',
-		preview:
-			'Dear Aunt Mei, I am writing in response to your kind message regarding the upcoming family gathering. I would be honored to attend and look forward to seeing everyone…',
-		principleLabel: 'Family voice — casual register',
-	},
-	{
-		id: 'nl2sql-next-batch',
-		icon: FlaskConical,
-		tag: 'next-batch proposal · 4 variants · auto-sysresearch',
-		preview:
-			'Higher temperature + larger context window + retrieval re-rank — optimizer expects +1.8 pts accuracy, projected latency 240–280ms.',
-		principleLabel: 'NL-to-SQL optimization preference',
-	},
-];
+// The decision icon is rendered locally from a string kind (the shared
+// store can't ship a React component reference through localStorage).
+const ICON_BY_KIND: Record<DecisionIconKind, LucideIcon> = {
+	mail: Mail,
+	flask: FlaskConical,
+};
 
 export function DecisionsPending() {
-	const [items, setItems] = useState<Record<string, Status>>(
-		Object.fromEntries(SEED.map((i) => [i.id, 'pending'])),
-	);
-	const setStatus = (id: string, s: Status) => setItems((m) => ({ ...m, [id]: s }));
+	const [rows, setRows] = useState<Array<DemoDecision & { status: Status }>>(() => loadDecisions());
+	useEffect(() => {
+		const refresh = () => setRows(loadDecisions());
+		window.addEventListener(DECISIONS_EVENT, refresh);
+		return () => window.removeEventListener(DECISIONS_EVENT, refresh);
+	}, []);
 
 	return (
 		<section>
-			<div className="text-[11px] tracking-[0.06em] text-slate-400 mb-2">Pending your call</div>
+			<div className="flex items-center justify-between gap-3 mb-2">
+				<div className="text-[11px] tracking-[0.06em] text-slate-400">Pending your call</div>
+				<Link
+					to="/studio/inbox?filter=drafts"
+					className="inline-flex items-center gap-1 text-[11px] text-emerald-700 hover:text-emerald-800 hover:underline transition-colors"
+				>
+					See all in Inbox <ArrowRight className="w-3 h-3" />
+				</Link>
+			</div>
 			<ul className="space-y-2">
-				{SEED.map((item) => (
-					<DecisionRow
-						key={item.id}
-						item={item}
-						status={items[item.id]}
-						onStatus={(s) => setStatus(item.id, s)}
-					/>
+				{rows.map((row) => (
+					<DecisionRow key={row.id} item={row} status={row.status} />
 				))}
 			</ul>
 		</section>
@@ -66,11 +56,9 @@ export function DecisionsPending() {
 function DecisionRow({
 	item,
 	status,
-	onStatus,
 }: {
-	item: DecisionItem;
+	item: DemoDecision;
 	status: Status;
-	onStatus: (s: Status) => void;
 }) {
 	const [rejecting, setRejecting] = useState(false);
 	const [reason, setReason] = useState('');
@@ -79,7 +67,10 @@ function DecisionRow({
 	const [busy, setBusy] = useState(false);
 	const [publishOpen, setPublishOpen] = useState(false);
 	const [published, setPublished] = useState(false);
-	const Icon = item.icon;
+	const Icon = ICON_BY_KIND[item.iconKind];
+	// Status changes go through the shared store so the Inbox view + any
+	// other listener (PublishToLibrary callout) stay in sync.
+	const setStatus = (s: Status) => setDecisionStatus(item.id, s);
 
 	const submitReject = async () => {
 		const trimmed = reason.trim();
@@ -90,7 +81,7 @@ function DecisionRow({
 		setBusy(true);
 		try {
 			await rejectWithReason(item.id, trimmed);
-			onStatus('rejected');
+			setStatus('rejected');
 			setRejecting(false);
 			toast.success('Got it. Encoded as a voice principle. Next cycle will reflect this.');
 		} catch {
@@ -153,7 +144,7 @@ function DecisionRow({
 			{!rejected && !approved && !editing && (
 				<div className="mt-2.5 flex items-center gap-2">
 					<button
-						onClick={() => { onStatus('approved'); toast.success('Approved — sending now.'); }}
+						onClick={() => { setStatus('approved'); toast.success('Approved — sending now.'); }}
 						className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700"
 					>
 						<Check className="w-3.5 h-3.5" /> Approve
