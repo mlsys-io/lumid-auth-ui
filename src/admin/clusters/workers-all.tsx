@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Cpu, RefreshCw, Server, Zap } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Cpu, RefreshCw, Server, Zap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -111,6 +111,43 @@ export default function WorkersAll() {
 		return m;
 	}, [clusters]);
 
+	type SortKey = "cluster" | "role" | "type" | "node" | "status" | "last_heartbeat";
+	const [sortKey, setSortKey] = useState<SortKey>("cluster");
+	const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+	function toggleSort(k: SortKey) {
+		if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+		else { setSortKey(k); setSortDir("asc"); }
+	}
+	function SortIcon({ k }: { k: SortKey }) {
+		if (sortKey !== k) return <ArrowUpDown className="w-3 h-3 opacity-30" />;
+		return sortDir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />;
+	}
+
+	const sorted = useMemo(() => {
+		const rows = [...workers];
+		const dir = sortDir === "asc" ? 1 : -1;
+		const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0) * dir;
+		rows.sort((a, b) => {
+			switch (sortKey) {
+				case "cluster":
+					return cmp(clusterMap.get(a.cluster_id)?.name ?? a.cluster_id, clusterMap.get(b.cluster_id)?.name ?? b.cluster_id);
+				case "role":
+					return cmp(a.role, b.role);
+				case "type":
+					return cmp(`${a.type}${a.gpu_index ?? 0}`, `${b.type}${b.gpu_index ?? 0}`);
+				case "node":
+					return cmp(a.node_id, b.node_id);
+				case "status":
+					return cmp(a.status, b.status);
+				case "last_heartbeat":
+					return cmp(a.last_heartbeat ?? "", b.last_heartbeat ?? "");
+				default:
+					return 0;
+			}
+		});
+		return rows;
+	}, [workers, sortKey, sortDir, clusterMap]);
+
 	return (
 		<>
 			<header className="flex items-center gap-2 mb-6">
@@ -207,16 +244,28 @@ export default function WorkersAll() {
 							<table className="w-full text-sm">
 								<thead className="text-xs text-muted-foreground">
 									<tr className="border-b">
-										<th className="text-left py-2 px-2 font-medium">Cluster</th>
-										<th className="text-left py-2 px-2 font-medium">Role</th>
-										<th className="text-left py-2 px-2 font-medium">Type</th>
-										<th className="text-left py-2 px-2 font-medium">Node</th>
-										<th className="text-left py-2 px-2 font-medium">Status</th>
-										<th className="text-left py-2 px-2 font-medium">Last heartbeat</th>
+										<th className="text-left py-2 px-2 font-medium">
+											<button type="button" onClick={() => toggleSort("cluster")} className="inline-flex items-center gap-1 hover:text-foreground">Cluster <SortIcon k="cluster" /></button>
+										</th>
+										<th className="text-left py-2 px-2 font-medium">
+											<button type="button" onClick={() => toggleSort("role")} className="inline-flex items-center gap-1 hover:text-foreground">Role <SortIcon k="role" /></button>
+										</th>
+										<th className="text-left py-2 px-2 font-medium">
+											<button type="button" onClick={() => toggleSort("type")} className="inline-flex items-center gap-1 hover:text-foreground">Type <SortIcon k="type" /></button>
+										</th>
+										<th className="text-left py-2 px-2 font-medium">
+											<button type="button" onClick={() => toggleSort("node")} className="inline-flex items-center gap-1 hover:text-foreground">Node <SortIcon k="node" /></button>
+										</th>
+										<th className="text-left py-2 px-2 font-medium">
+											<button type="button" onClick={() => toggleSort("status")} className="inline-flex items-center gap-1 hover:text-foreground">Status <SortIcon k="status" /></button>
+										</th>
+										<th className="text-left py-2 px-2 font-medium">
+											<button type="button" onClick={() => toggleSort("last_heartbeat")} className="inline-flex items-center gap-1 hover:text-foreground">Last heartbeat <SortIcon k="last_heartbeat" /></button>
+										</th>
 									</tr>
 								</thead>
 								<tbody>
-									{workers.map((w) => {
+									{sorted.map((w) => {
 										const cl = clusterMap.get(w.cluster_id);
 										return (
 											<tr

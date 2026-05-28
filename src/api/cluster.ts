@@ -397,9 +397,14 @@ interface V2Worker {
 	hardware?: {
 		cpu?: { logical_cores?: number } | null;
 		memory?: { total_bytes?: number } | null;
-		gpu?: { devices?: Array<{ memory_total_bytes?: number }> | null } | null;
+		gpu?: { devices?: Array<{ index?: number; memory_total_bytes?: number }> | null } | null;
 	} | null;
 	cost_per_hour?: number;
+	// Set by FM redis side-channel (lumid_cluster/scripts/apply_worker_pricing.sh
+	// writes this into the worker hash; FlowMesh Host v0.1.2 doesn't serialize
+	// it back out yet — pending FM Host patch). When missing, v2ToWorker
+	// falls back to cost * 1.25 (operator default margin).
+	selling_price_per_hour?: number;
 	started_at?: string;
 	last_seen?: string;
 }
@@ -410,18 +415,31 @@ function v2ToWorker(v: V2Worker, clusterId: string): Worker {
 	const validStatus =
 		(["starting", "idle", "busy", "stopping", "stopped", "lost"] as const)
 			.find((s) => s === status) ?? "starting";
+	// Extract GPU index from alias when possible (worker_gpu_0 → 0, worker_gpu_1 → 1).
+	// worker_gpu_all means the worker spans every GPU on the node; treat as 0 for display.
+	// Falls back to hardware.gpu.devices[0].index, else 0 / null for CPU.
+	let gpuIndex: number | null = null;
+	if (devs.length > 0) {
+		const m = v.alias?.match(/^worker_gpu_(\d+)$/);
+		if (m) gpuIndex = Number.parseInt(m[1], 10);
+		else if (typeof devs[0]?.index === "number") gpuIndex = devs[0].index;
+		else gpuIndex = 0;
+	}
 	return {
 		id: v.id,
 		node_id: v.node_id,
 		cluster_id: clusterId,
 		role: "flowmesh",
 		type: devs.length > 0 ? "gpu" : "cpu",
-		gpu_index: devs.length > 0 ? 0 : null,
+		gpu_index: gpuIndex,
 		memory_limit_gb: Math.floor(
 			(v.hardware?.memory?.total_bytes ?? 0) / (1024 * 1024 * 1024),
 		),
 		cost_per_hour: v.cost_per_hour ?? 0,
-		selling_price_per_hour: 0,
+		// Fallback: when FM Host doesn't expose selling_price_per_hour, derive
+		// from cost using the 25% operator-default margin. See V2Worker comment.
+		selling_price_per_hour:
+			v.selling_price_per_hour ?? Math.round((v.cost_per_hour ?? 0) * 1.25 * 1000) / 1000,
 		status: validStatus,
 		version: undefined,
 		cached_models: null,
@@ -431,22 +449,53 @@ function v2ToWorker(v: V2Worker, clusterId: string): Worker {
 	};
 }
 
-// Fetch the live worker list from the cluster's upstream V2 FlowMesh
-// Server via cluster_proxy, then map each row into our Worker shape.
-// Returns [] if the cluster has no flowmesh server configured or the
-// proxy errors out (caller decides whether to surface or swallow).
+interface V2Node {
+	id: string;        // FM node id, e.g. "nde-6"
+	alias?: string;    // hostname, e.g. "luyao0"
+	last_seen?: string;
+}
+
+// Fetch the live worker + node list from the cluster's upstream V2 FlowMesh
+// Server. Returns workers with node_id REMAPPED to the cluster-registry
+// node UUID (via alias↔hostname match), plus a fresh `last_seen` overlay
+// keyed by cluster-registry node id. Without the remap, the dashboard's
+// nodes table can't join workers (V2 node_id is "nde-N", registry id is
+// UUID) — Workers column shows 0 and the Node column in the workers
+// table shows a truncated FM id instead of the hostname.
 export async function listV2WorkersForCluster(
 	clusterId: string,
-): Promise<Worker[]> {
+	clusterNodes: Node[] = [],
+): Promise<{ workers: Worker[]; nodeLastSeenByClusterId: Map<string, string> }> {
+	const fallback = { workers: [], nodeLastSeenByClusterId: new Map<string, string>() };
 	try {
-		const raw = await clusterProxyGet<V2Worker[]>(
-			clusterId,
-			"/api/v1/workers",
-		);
-		if (!Array.isArray(raw)) return [];
-		return raw.map((v) => v2ToWorker(v, clusterId));
+		const [rawWorkers, rawNodes] = await Promise.all([
+			clusterProxyGet<V2Worker[]>(clusterId, "/api/v1/workers"),
+			clusterProxyGet<V2Node[]>(clusterId, "/api/v1/nodes").catch(() => [] as V2Node[]),
+		]);
+		if (!Array.isArray(rawWorkers)) return fallback;
+
+		// FM-id (nde-N) → cluster-registry UUID, via alias↔hostname
+		const aliasToClusterId = new Map<string, string>();
+		clusterNodes.forEach((n) => { if (n.hostname) aliasToClusterId.set(n.hostname, n.id); });
+		const fmIdToClusterId = new Map<string, string>();
+		const nodeLastSeenByClusterId = new Map<string, string>();
+		(rawNodes ?? []).forEach((v) => {
+			const cid = v.alias ? aliasToClusterId.get(v.alias) : undefined;
+			if (cid) {
+				fmIdToClusterId.set(v.id, cid);
+				if (v.last_seen) nodeLastSeenByClusterId.set(cid, v.last_seen);
+			}
+		});
+
+		const workers = rawWorkers.map((v) => {
+			const w = v2ToWorker(v, clusterId);
+			const mapped = fmIdToClusterId.get(v.node_id);
+			if (mapped) w.node_id = mapped;
+			return w;
+		});
+		return { workers, nodeLastSeenByClusterId };
 	} catch {
-		return [];
+		return fallback;
 	}
 }
 

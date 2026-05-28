@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Cpu, Trash2, Zap } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Cpu, Trash2, Zap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,10 +62,23 @@ function statusBadge(status: Worker["status"]): string {
 	}
 }
 
+type SortKey =
+	| "id"
+	| "type"
+	| "node"
+	| "status"
+	| "version"
+	| "cost_per_hour"
+	| "selling_price_per_hour"
+	| "profit"
+	| "last_heartbeat";
+
 export default function WorkersTab({ workers, nodes, onChange }: Props) {
 	const [type, setType] = useState<string>("all");
 	const [status, setStatus] = useState<string>("all");
 	const [deleteId, setDeleteId] = useState<string | null>(null);
+	const [sortKey, setSortKey] = useState<SortKey>("id");
+	const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
 	const nodeMap = useMemo(() => {
 		const m = new Map<string, Node>();
@@ -73,13 +86,63 @@ export default function WorkersTab({ workers, nodes, onChange }: Props) {
 		return m;
 	}, [nodes]);
 
+	function toggleSort(key: SortKey) {
+		if (sortKey === key) {
+			setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+		} else {
+			setSortKey(key);
+			setSortDir("asc");
+		}
+	}
+
 	const filtered = useMemo(() => {
-		return workers.filter((w) => {
+		const rows = workers.filter((w) => {
 			if (type !== "all" && w.type !== type) return false;
 			if (status !== "all" && w.status !== status) return false;
 			return true;
 		});
-	}, [workers, type, status]);
+		const dir = sortDir === "asc" ? 1 : -1;
+		const cmp = (a: number | string, b: number | string) =>
+			a < b ? -1 * dir : a > b ? 1 * dir : 0;
+		rows.sort((a, b) => {
+			switch (sortKey) {
+				case "id":
+					return cmp(a.id, b.id);
+				case "type":
+					return cmp(`${a.type}${a.gpu_index ?? 0}`, `${b.type}${b.gpu_index ?? 0}`);
+				case "node": {
+					const na = nodeMap.get(a.node_id)?.hostname ?? a.node_id;
+					const nb = nodeMap.get(b.node_id)?.hostname ?? b.node_id;
+					return cmp(na, nb);
+				}
+				case "status":
+					return cmp(a.status, b.status);
+				case "version":
+					return cmp(a.version ?? "", b.version ?? "");
+				case "cost_per_hour":
+					return cmp(a.cost_per_hour ?? 0, b.cost_per_hour ?? 0);
+				case "selling_price_per_hour":
+					return cmp(a.selling_price_per_hour ?? 0, b.selling_price_per_hour ?? 0);
+				case "profit":
+					return cmp(
+						(a.selling_price_per_hour ?? 0) - (a.cost_per_hour ?? 0),
+						(b.selling_price_per_hour ?? 0) - (b.cost_per_hour ?? 0),
+					);
+				case "last_heartbeat":
+					return cmp(a.last_heartbeat ?? "", b.last_heartbeat ?? "");
+				default:
+					return 0;
+			}
+		});
+		return rows;
+	}, [workers, type, status, sortKey, sortDir, nodeMap]);
+
+	function SortIcon({ k }: { k: SortKey }) {
+		if (sortKey !== k) return <ArrowUpDown className="w-3 h-3 opacity-30" />;
+		return sortDir === "asc"
+			? <ArrowUp className="w-3 h-3" />
+			: <ArrowDown className="w-3 h-3" />;
+	}
 
 	async function onDeleteConfirmed() {
 		if (!deleteId) return;
@@ -164,15 +227,33 @@ export default function WorkersTab({ workers, nodes, onChange }: Props) {
 							<table className="w-full text-sm">
 								<thead className="text-xs text-muted-foreground">
 									<tr className="border-b">
-										<th className="text-left py-2 px-2 font-medium">ID</th>
-										<th className="text-left py-2 px-2 font-medium">Type</th>
-										<th className="text-left py-2 px-2 font-medium">Node</th>
-										<th className="text-left py-2 px-2 font-medium">Status</th>
-										<th className="text-left py-2 px-2 font-medium" title="FlowMesh / Lumilake worker image version reported on heartbeat">Version</th>
-										<th className="text-right py-2 px-2 font-medium" title="Supplier-side rate (what we pay)">Cost/hr</th>
-										<th className="text-right py-2 px-2 font-medium" title="User-facing rate (what we charge)">Sell/hr</th>
-										<th className="text-right py-2 px-2 font-medium" title="Profit per hour = sell - cost">Profit</th>
-										<th className="text-left py-2 px-2 font-medium">Last heartbeat</th>
+										<th className="text-left py-2 px-2 font-medium">
+											<button type="button" onClick={() => toggleSort("id")} className="inline-flex items-center gap-1 hover:text-foreground">ID <SortIcon k="id" /></button>
+										</th>
+										<th className="text-left py-2 px-2 font-medium">
+											<button type="button" onClick={() => toggleSort("type")} className="inline-flex items-center gap-1 hover:text-foreground">Type <SortIcon k="type" /></button>
+										</th>
+										<th className="text-left py-2 px-2 font-medium">
+											<button type="button" onClick={() => toggleSort("node")} className="inline-flex items-center gap-1 hover:text-foreground">Node <SortIcon k="node" /></button>
+										</th>
+										<th className="text-left py-2 px-2 font-medium">
+											<button type="button" onClick={() => toggleSort("status")} className="inline-flex items-center gap-1 hover:text-foreground">Status <SortIcon k="status" /></button>
+										</th>
+										<th className="text-left py-2 px-2 font-medium" title="FlowMesh / Lumilake worker image version reported on heartbeat">
+											<button type="button" onClick={() => toggleSort("version")} className="inline-flex items-center gap-1 hover:text-foreground">Version <SortIcon k="version" /></button>
+										</th>
+										<th className="text-right py-2 px-2 font-medium" title="Supplier-side rate (what we pay)">
+											<button type="button" onClick={() => toggleSort("cost_per_hour")} className="inline-flex items-center gap-1 hover:text-foreground ml-auto">Cost/hr <SortIcon k="cost_per_hour" /></button>
+										</th>
+										<th className="text-right py-2 px-2 font-medium" title="User-facing rate (what we charge)">
+											<button type="button" onClick={() => toggleSort("selling_price_per_hour")} className="inline-flex items-center gap-1 hover:text-foreground ml-auto">Sell/hr <SortIcon k="selling_price_per_hour" /></button>
+										</th>
+										<th className="text-right py-2 px-2 font-medium" title="Profit per hour = sell - cost">
+											<button type="button" onClick={() => toggleSort("profit")} className="inline-flex items-center gap-1 hover:text-foreground ml-auto">Profit <SortIcon k="profit" /></button>
+										</th>
+										<th className="text-left py-2 px-2 font-medium">
+											<button type="button" onClick={() => toggleSort("last_heartbeat")} className="inline-flex items-center gap-1 hover:text-foreground">Last heartbeat <SortIcon k="last_heartbeat" /></button>
+										</th>
 										<th className="text-right py-2 px-2 font-medium"></th>
 									</tr>
 								</thead>
@@ -181,8 +262,8 @@ export default function WorkersTab({ workers, nodes, onChange }: Props) {
 										const n = nodeMap.get(w.node_id);
 										return (
 											<tr key={w.id} className="border-b last:border-0 hover:bg-accent/40">
-												<td className="py-2 px-2 font-mono text-xs">
-													{w.id.slice(0, 8)}…
+												<td className="py-2 px-2 font-mono text-xs whitespace-nowrap" title={w.id}>
+													{w.id}
 												</td>
 												<td className="py-2 px-2">
 													<span className="inline-flex items-center gap-1">
@@ -201,7 +282,9 @@ export default function WorkersTab({ workers, nodes, onChange }: Props) {
 													{n ? (
 														<>
 															<div className="text-sm">{n.hostname}</div>
-															<div className="text-xs font-mono">{n.address}</div>
+															<div className="text-xs text-muted-foreground/80">
+																{n.gpu_type || n.address || "—"}
+															</div>
 														</>
 													) : (
 														<code className="text-xs">{w.node_id.slice(0, 8)}…</code>

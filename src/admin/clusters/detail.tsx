@@ -109,7 +109,7 @@ export default function ClusterDetail() {
 			]);
 			setCluster(c);
 			setServers(s);
-			setNodes(n?.nodes || []);
+			const clusterNodes = n?.nodes || [];
 
 			// Merge: legacy lumid_cluster.workers registry + live V2 workers
 			// proxied from the cluster's flowmesh upstream. V2 is the source
@@ -118,13 +118,26 @@ export default function ClusterDetail() {
 			// are unioned by `id`, V2 entries winning on duplicates.
 			const registryWorkers = w?.workers || [];
 			let v2Workers: Worker[] = [];
+			let nodeLastSeenByClusterId = new Map<string, string>();
 			if (s.some((srv) => srv.role === "flowmesh")) {
-				v2Workers = await listV2WorkersForCluster(id);
+				const v2 = await listV2WorkersForCluster(id, clusterNodes);
+				v2Workers = v2.workers;
+				nodeLastSeenByClusterId = v2.nodeLastSeenByClusterId;
 			}
 			const byId = new Map<string, Worker>();
 			for (const rw of registryWorkers) byId.set(rw.id, rw);
 			for (const vw of v2Workers) byId.set(vw.id, vw);
 			setWorkers(Array.from(byId.values()));
+
+			// Overlay FM Host's fresh `last_seen` on cluster-registry nodes whose
+			// own last_seen never updates (cluster-agent isn't enrolled). Without
+			// this, the Nodes tab's "Last seen" column shows NULL forever.
+			setNodes(
+				clusterNodes.map((node) => {
+					const fresh = nodeLastSeenByClusterId.get(node.id);
+					return fresh ? { ...node, last_seen: fresh } : node;
+				}),
+			);
 		} catch (e: unknown) {
 			if (isSessionExpired(e)) return;
 			toast.error((e as Error)?.message || "Failed to load cluster");
