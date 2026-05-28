@@ -127,15 +127,10 @@ export function StudioShell() {
 				<nav className="flex-1 overflow-y-auto px-2 py-3 space-y-px">
 					{TOP_NAV.map((item) => <NavItemView key={item.to} {...item} />)}
 
-					{/* Personal AI section — the three verbs (Create + Manage
-					    + Improve) live here. Mind page lands in W4. */}
-					<div className="mt-4 mb-1 px-3 flex items-center gap-2">
-						<div className="flex-1 h-px bg-slate-200/60" />
-						<span className="text-[10px] uppercase tracking-[0.08em] text-slate-400 font-semibold">
-							Personal AI
-						</span>
-						<div className="flex-1 h-px bg-slate-200/60" />
-					</div>
+					{/* Thin divider; the three items below (Workflows /
+					    Knowledge / Library) self-describe — no categorical
+					    label needed in a five-item sidebar. */}
+					<div className="my-3 mx-3 h-px bg-slate-200/60" />
 					{PERSONAL_AI_NAV.map((item) => <NavItemView key={item.to} {...item} />)}
 				</nav>
 
