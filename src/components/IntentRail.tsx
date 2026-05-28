@@ -6,7 +6,7 @@
 // (sentence-case section labels, weights 400/500).
 
 import type { ReactNode } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export interface Intent {
@@ -20,17 +20,45 @@ export interface Intent {
 	href?: string; // if set, the card is a Link to this route (T13)
 }
 
+// Starter prompt fired by "+ New intent" — the chat agent picks up the
+// studio:ask event, opens the sidebar, and auto-sends.
+const NEW_INTENT_PROMPT =
+	'I want to set up a new intent. Walk me through what you want your AI to handle and what "done" looks like — propose the goal in one sentence, pick the skills it needs, and confirm with me before installing.';
+
+function openNewIntentChat() {
+	window.dispatchEvent(new CustomEvent('studio:ask', {
+		detail: { prompt: NEW_INTENT_PROMPT, autosend: true },
+	}));
+}
+
 export function IntentRail({ intents }: { intents: Intent[] }) {
-	if (!intents.length) return null;
 	const cols = intents.length >= 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2';
 	return (
 		<section>
-			<div className="text-[11px] tracking-[0.06em] text-slate-400 mb-2">Active intents</div>
-			<div className={`grid grid-cols-1 ${cols} gap-3`}>
-				{intents.slice(0, 3).map((it) => (
-					<IntentCard key={it.id} intent={it} />
-				))}
+			<div className="flex items-center justify-between gap-3 mb-2">
+				<div className="text-[11px] tracking-[0.06em] text-slate-400">Active intents</div>
+				<button
+					onClick={openNewIntentChat}
+					className="inline-flex items-center gap-1 text-[11px] text-emerald-700 hover:text-emerald-800 hover:underline transition-colors"
+					title="Compose a new intent with the chat agent"
+				>
+					<Plus className="w-3 h-3" /> New intent
+				</button>
 			</div>
+			{intents.length === 0 ? (
+				<button
+					onClick={openNewIntentChat}
+					className="w-full rounded-xl border border-dashed border-slate-200 bg-white px-4 py-6 text-sm text-slate-500 hover:border-emerald-200 hover:text-emerald-700 hover:bg-emerald-50/30 transition-all"
+				>
+					+ Set up your first intent — describe it to the chat on the right.
+				</button>
+			) : (
+				<div className={`grid grid-cols-1 ${cols} gap-3`}>
+					{intents.slice(0, 3).map((it) => (
+						<IntentCard key={it.id} intent={it} />
+					))}
+				</div>
+			)}
 		</section>
 	);
 }
