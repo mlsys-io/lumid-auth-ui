@@ -140,6 +140,10 @@ function deriveCrumbs(pathname: string): Array<{ label: string; to: string }> {
 	if (m2) return [{ label: "Runs", to: "/studio/runs" }];
 	const m3 = pathname.match(/^\/studio\/(?:intents|today)\/cycle\/[^/]+\/[^/]+\/[^/]+/);
 	if (m3) return [{ label: "Intents", to: "/studio/intents" }];
+	// T13 — /studio/intents/:slug shows the autoresearch detail panel.
+	// Match it AFTER the cycle regex so the cycle path isn't shadowed.
+	const m3b = pathname.match(/^\/studio\/intents\/[^/]+/);
+	if (m3b) return [{ label: "Intents", to: "/studio/intents" }];
 	const m4 = pathname.match(/^\/studio\/knowledge\/[^/]+/);
 	if (m4) return [{ label: "Knowledge", to: "/studio/knowledge" }];
 	return [];

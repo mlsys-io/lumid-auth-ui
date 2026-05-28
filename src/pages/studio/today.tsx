@@ -31,6 +31,14 @@ const DEMO_INTENTS: Intent[] = [
 		text: 'Handle my weekly inbox and calendar the way I would',
 		progress: 60,
 		latest: '12 drafts queued, 2 conflicts resolved',
+		chips: [
+			'Gmail reader',
+			'Calendar reconciler',
+			'Voice draft',
+			'Urgency check',
+			'Deadline tracker',
+			'Follow-up scheduler',
+		],
 	},
 	{
 		id: 'scientist-cycle-3',
@@ -38,6 +46,15 @@ const DEMO_INTENTS: Intent[] = [
 		text: 'Find the best NL-to-SQL config under 200ms',
 		progress: 35,
 		latest: '4 variants benchmarked, Pareto updated',
+		chips: [
+			'Variant generator',
+			'FlowMesh dispatch',
+			'Benchmark runner',
+			'Pareto analyzer',
+			'Optimizer',
+		],
+		// T13 — clicking the scientist intent opens the autoresearch panel.
+		href: '/studio/intents/scientist',
 	},
 ];
 

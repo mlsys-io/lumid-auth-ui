@@ -20,9 +20,13 @@ import {
 	Search, ExternalLink, Plus, Check, Loader2,
 	Mail, Calendar, Globe, Code, Beaker, MessagesSquare,
 	Database, FileSpreadsheet, Sparkles as LlmIcon, Layers, Settings,
-	Star, Download, Package, Wrench, ArrowRight,
+	Star, Download, Package, Wrench, ArrowRight, GitFork,
 } from "lucide-react";
 import { me, MeApiError } from "@/api/me";
+import {
+	loadRefinements, lastPublishedAt, REFINEMENTS_EVENT,
+	type Refinement,
+} from "@/lib/refinements";
 
 // ── Apps tab ───────────────────────────────────────────────────────
 
@@ -89,7 +93,7 @@ function openDetail(url: string | undefined) {
 	if (url) window.open(url, "_blank", "noopener,noreferrer");
 }
 
-type Tab = "apps" | "skills" | "datasets";
+type Tab = "apps" | "skills" | "datasets" | "refinements";
 
 // InstallStatus — what each card tracks per-name. The card shows a
 // stateful button: idle → installing → installed (with "Open →" link)
@@ -193,9 +197,10 @@ export default function MarketplaceBrowse() {
 	}
 
 	const tabs: Array<{ id: Tab; label: string; icon: React.ComponentType<{ className?: string }>; count: number | null }> = [
-		{ id: "apps",     label: "Apps",     icon: Package,  count: apps?.length ?? null },
-		{ id: "skills",   label: "Skills",   icon: Wrench,   count: skills?.length ?? null },
-		{ id: "datasets", label: "Datasets", icon: Database, count: datasets?.length ?? null },
+		{ id: "apps",        label: "Apps",             icon: Package,  count: apps?.length ?? null },
+		{ id: "skills",      label: "Skills",           icon: Wrench,   count: skills?.length ?? null },
+		{ id: "datasets",    label: "Datasets",         icon: Database, count: datasets?.length ?? null },
+		{ id: "refinements", label: "Your refinements", icon: GitFork,  count: null },
 	];
 
 	return (
@@ -269,7 +274,93 @@ export default function MarketplaceBrowse() {
 					query={query}
 				/>
 			)}
+			{tab === "refinements" && (
+				<RefinementsView query={query} />
+			)}
 		</div>
+	);
+}
+
+// ── Your refinements view (T14) ────────────────────────────────────
+
+function RefinementsView({ query }: { query: string }) {
+	const [items, setItems] = useState<Refinement[]>(() => loadRefinements());
+	const [recentTs, setRecentTs] = useState<number>(() => lastPublishedAt());
+
+	useEffect(() => {
+		const onChange = () => {
+			setItems(loadRefinements());
+			setRecentTs(lastPublishedAt());
+		};
+		window.addEventListener(REFINEMENTS_EVENT, onChange);
+		// Also re-read on tab focus / nav back from Knowledge.
+		const onFocus = () => onChange();
+		window.addEventListener("focus", onFocus);
+		return () => {
+			window.removeEventListener(REFINEMENTS_EVENT, onChange);
+			window.removeEventListener("focus", onFocus);
+		};
+	}, []);
+
+	const filtered = useMemo(() => {
+		if (!query.trim()) return items;
+		const q = query.trim().toLowerCase();
+		return items.filter((r) =>
+			r.name.toLowerCase().includes(q) ||
+			r.source.toLowerCase().includes(q) ||
+			r.version.toLowerCase().includes(q),
+		);
+	}, [items, query]);
+
+	if (filtered.length === 0) {
+		return (
+			<div className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
+				{query ? <>No refinements match <strong>&ldquo;{query}&rdquo;</strong>.</> : <>No refinements yet — reject a draft or proposal with a reason to encode your first voice principle.</>}
+			</div>
+		);
+	}
+
+	// Items modified within the last ~4s after a publish event get a brief flash.
+	const FRESH_WINDOW_MS = 4000;
+	const isFresh = (r: Refinement) =>
+		r.status === "published" && r.refinedAt === "just now" &&
+		recentTs > 0 && Date.now() - recentTs < FRESH_WINDOW_MS;
+
+	return (
+		<ul className="space-y-2">
+			{filtered.map((r) => {
+				const fresh = isFresh(r);
+				return (
+					<li
+						key={r.id}
+						className={[
+							"rounded-xl border bg-white px-4 py-3 flex items-center gap-3 transition-all",
+							fresh ? "border-emerald-300 bg-emerald-50/60 ring-1 ring-emerald-200" : "border-slate-200",
+						].join(" ")}
+					>
+						<div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center flex-shrink-0">
+							<GitFork className="w-4 h-4" />
+						</div>
+						<div className="flex-1 min-w-0">
+							<div className="font-medium text-slate-900 text-sm truncate">{r.name}</div>
+							<div className="text-[11px] text-slate-400 mt-0.5">
+								{r.version} · refined {r.refinedAt} · {r.source}
+							</div>
+						</div>
+						{r.status === "published" ? (
+							<span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded bg-emerald-50 text-emerald-700 border border-emerald-200/60 flex-shrink-0">
+								<Check className="w-3 h-3" /> Published to {r.publishedTo ?? 1} contact{(r.publishedTo ?? 1) === 1 ? "" : "s"}
+							</span>
+						) : (
+							<span className="text-[11px] text-slate-500 flex-shrink-0">Local only</span>
+						)}
+						<button className="text-[11px] px-2.5 py-1 rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 flex-shrink-0">
+							Manage
+						</button>
+					</li>
+				);
+			})}
+		</ul>
 	);
 }
 

@@ -11,6 +11,7 @@
 import { useState } from 'react';
 import { MessageCircle, Target, ShieldCheck, type LucideIcon } from 'lucide-react';
 import { PublishToLibrary } from '@/components/PublishToLibrary';
+import { publishAllLocal } from '@/lib/refinements';
 
 interface Metric {
 	label: string;
@@ -142,7 +143,14 @@ export default function StudioKnowledgeEncoded() {
 			<PublishToLibrary
 				open={publishOpen}
 				onClose={() => setPublishOpen(false)}
-				onPublished={() => { setPublished(true); setPublishOpen(false); }}
+				onPublished={() => {
+					// T14 — the refined skill(s) now appear as "Published"
+					// in the Library "Your refinements" tab (mock allowlist
+					// size = 3 contacts; matches the callout microcopy).
+					publishAllLocal(3);
+					setPublished(true);
+					setPublishOpen(false);
+				}}
 			/>
 		</div>
 	);
