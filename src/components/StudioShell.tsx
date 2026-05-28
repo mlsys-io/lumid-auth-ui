@@ -41,19 +41,18 @@ interface NavItem {
 	end?: boolean;
 }
 
-// Sidebar layout (post-consolidation, 2026-05-25):
-//   Today / Inbox         — surfaces the user lives in.
+// Sidebar layout (demo IA, 2026-05-28):
+//   Intents / Inbox       — surfaces the user lives in.
 //   ── Personal AI ──
 //   Workflows             — apps + workflows + runs + mind, unified.
-//                           Lenses: Live · All · Runs · Available. Rows
-//                           group by their parent app (collapsible).
-//   Marketplace           — Browse skills/workflows + Knowledge tab.
-//   ── Settings + Admin ── (pinned bottom)
+//                           Lenses: Live · All · Runs · Available.
+//   Knowledge             — "you, encoded" ledger of voice principles,
+//                           heuristics, optimization preferences.
+//   Library               — Browse + install skills, datasets, apps.
 //
-// Previously 5 items under Personal AI (Workflows / Runs / Skills /
-// Knowledge / Mind). Runs folded into Workflows as a lens; Mind folded
-// into the workflow detail panel as a tab; Skills + Knowledge merged
-// into Marketplace as tabs. Old paths redirect for back-compat.
+// Settings + API tokens + Admin + Sign out live in the bottom-left
+// avatar menu — account surfaces in one place, sidebar stays focused
+// on the work-surfaces. Today/Marketplace redirect to Intents/Library.
 const TOP_NAV: NavItem[] = [
 	{ to: '/studio/intents',   label: 'Intents',   icon: Sparkles, end: true },
 	{ to: '/studio/inbox',     label: 'Inbox',     icon: Inbox },
@@ -63,10 +62,6 @@ const PERSONAL_AI_NAV: NavItem[] = [
 	{ to: '/studio/knowledge', label: 'Knowledge', icon: Brain },
 	{ to: '/studio/library',   label: 'Library',   icon: Store },
 ];
-const SECONDARY_NAV: NavItem[] = [
-	{ to: '/studio/settings',  label: 'Settings',  icon: Settings },
-];
-
 function NavItemView({ to, label, icon: Icon, end }: NavItem) {
 	return (
 		<NavLink
@@ -142,10 +137,6 @@ export function StudioShell() {
 						<div className="flex-1 h-px bg-slate-200/60" />
 					</div>
 					{PERSONAL_AI_NAV.map((item) => <NavItemView key={item.to} {...item} />)}
-
-					<div className="my-3 border-t border-slate-200/60" />
-
-					{SECONDARY_NAV.map((item) => <NavItemView key={item.to} {...item} />)}
 				</nav>
 
 				{/* User menu — pinned bottom-left, opens upward. Holds
