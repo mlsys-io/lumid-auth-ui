@@ -168,6 +168,7 @@ export default function WorkersTab({ workers, nodes, onChange }: Props) {
 										<th className="text-left py-2 px-2 font-medium">Type</th>
 										<th className="text-left py-2 px-2 font-medium">Node</th>
 										<th className="text-left py-2 px-2 font-medium">Status</th>
+										<th className="text-left py-2 px-2 font-medium" title="FlowMesh / Lumilake worker image version reported on heartbeat">Version</th>
 										<th className="text-right py-2 px-2 font-medium" title="Supplier-side rate (what we pay)">Cost/hr</th>
 										<th className="text-right py-2 px-2 font-medium" title="User-facing rate (what we charge)">Sell/hr</th>
 										<th className="text-right py-2 px-2 font-medium" title="Profit per hour = sell - cost">Profit</th>
@@ -182,9 +183,6 @@ export default function WorkersTab({ workers, nodes, onChange }: Props) {
 											<tr key={w.id} className="border-b last:border-0 hover:bg-accent/40">
 												<td className="py-2 px-2 font-mono text-xs">
 													{w.id.slice(0, 8)}…
-													{w.version && (
-														<div className="text-xs text-muted-foreground">v{w.version}</div>
-													)}
 												</td>
 												<td className="py-2 px-2">
 													<span className="inline-flex items-center gap-1">
@@ -218,6 +216,9 @@ export default function WorkersTab({ workers, nodes, onChange }: Props) {
 													>
 														{w.status}
 													</span>
+												</td>
+												<td className="py-2 px-2 font-mono text-xs text-muted-foreground">
+													{w.version ? w.version : <span className="text-muted-foreground/50">—</span>}
 												</td>
 												<td className="py-2 px-2 text-right">
 													<PriceCell

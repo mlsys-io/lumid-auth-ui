@@ -267,6 +267,17 @@ function LegacyDashboardRedirect() {
   return <Navigate to={dest} replace />;
 }
 
+// /app/admin/* → /dashboard/admin/<rest>. The old /app shell's admin tree
+// moved to /dashboard/admin (e.g. /dashboard/admin/clusters/<id>); old
+// links like /app/admin/clusters/<id> need to land on the cluster detail
+// page, not the studio catch-all. Preserves path tail + query.
+function AppAdminRedirect() {
+  const { "*": tail = "" } = useParams();
+  const loc = useLocation();
+  const dest = tail ? `/dashboard/admin/${tail}${loc.search}` : `/dashboard/admin${loc.search}`;
+  return <Navigate to={dest} replace />;
+}
+
 function Spinner() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
@@ -819,12 +830,17 @@ export default function App() {
                 /app/marketplace → /studio/skills
                 /app/knowledge   → /studio/knowledge
                 /app/results     → /studio/today */}
-          <Route path="/app"             element={<Navigate to="/studio/today"     replace />} />
-          <Route path="/app/loops"       element={<Navigate to="/studio/today"     replace />} />
-          <Route path="/app/marketplace" element={<Navigate to="/studio/skills"    replace />} />
+          <Route path="/app"             element={<Navigate to="/studio/intents"   replace />} />
+          <Route path="/app/loops"       element={<Navigate to="/studio/intents"   replace />} />
+          <Route path="/app/marketplace" element={<Navigate to="/studio/library"   replace />} />
           <Route path="/app/knowledge"   element={<Navigate to="/studio/knowledge" replace />} />
-          <Route path="/app/results"     element={<Navigate to="/studio/today"     replace />} />
-          <Route path="/app/*"           element={<Navigate to="/studio/today"     replace />} />
+          <Route path="/app/results"     element={<Navigate to="/studio/intents"   replace />} />
+          {/* /app/admin/* belonged to the old /app shell admin tree but
+              everything admin now lives under /dashboard/admin/*. Preserve
+              the rest of the path so deep links like
+              /app/admin/clusters/<id> route through. */}
+          <Route path="/app/admin/*"     element={<AppAdminRedirect />} />
+          <Route path="/app/*"           element={<Navigate to="/studio/intents"   replace />} />
 
           {/* Root "/" — role-aware landing. AuthGuard(false) handles
               the unauth case by rendering <RoleHome>, which then reads
