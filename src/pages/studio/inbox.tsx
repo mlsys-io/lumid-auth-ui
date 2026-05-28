@@ -19,15 +19,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
 	Mail, CheckCircle2, AlertCircle, Send, X, Edit2,
-	Sparkles, Loader2, ChevronRight, RefreshCw, Lock, Inbox as InboxIcon,
-	Plus, Filter as FilterIcon, Brain,
+	Sparkles, Loader2, ChevronRight, RefreshCw, Lock,
+	Plus, Filter as FilterIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { me, MeApiError } from '@/api/me';
 import apiClient from '@/api/client';
 import PageHints from '@/components/PageHints';
 import { setStudioSelection } from '@/components/StudioContext';
-import StudioKnowledge from './knowledge';
 import { DEMO_MODE } from '@/lib/demo';
 import { loadPendingDecisions, DECISIONS_EVENT } from '@/lib/demo-decisions';
 
@@ -78,19 +77,23 @@ const FILTERS: { id: Filter; label: string; matches: (k: FeedItem['kind']) => bo
 	{ id: 'audit',    label: 'Audit',     matches: (k) => k === 'audit' },
 ];
 
-type InboxTab = 'feed' | 'your-ai';
-
 export default function StudioInbox() {
 	const [searchParams, setSearchParams] = useSearchParams();
-	const tab = (searchParams.get('tab') === 'your-ai' ? 'your-ai' : 'feed') as InboxTab;
-	const setTab = (t: InboxTab) => {
-		setSearchParams((sp) => {
-			const next = new URLSearchParams(sp);
-			if (t === 'feed') next.delete('tab');
-			else next.set('tab', t);
-			return next;
-		}, { replace: true });
-	};
+	// "Your AI" tab retired — knowledge has its own nav entry at
+	// /studio/knowledge. If somebody still has a bookmarked ?tab=your-ai
+	// URL, strip the param + send them to /studio/knowledge implicitly
+	// (we just drop the param here; the StudioKnowledge surface lives
+	// at the dedicated route now).
+	useEffect(() => {
+		if (searchParams.has('tab')) {
+			setSearchParams((sp) => {
+				const next = new URLSearchParams(sp);
+				next.delete('tab');
+				return next;
+			}, { replace: true });
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
 
 	const [items, setItems] = useState<FeedItem[] | null>(null);
 	// Honor ?filter=drafts (and the other Filter ids) so "See all in Inbox"
@@ -295,85 +298,35 @@ export default function StudioInbox() {
 
 	return (
 		<div className="space-y-4">
-			{/* Tab nav — Inbox feed + the "Your AI" knowledge browser
-			    (merged from the old Marketplace > Knowledge tab so the
-			    "what your AI is doing" + "what your AI knows" surfaces
-			    live together). */}
-			<nav className="flex items-center justify-between gap-2 border-b border-slate-200">
-				<div className="flex items-center gap-1">
-					<TabButton
-						active={tab === 'feed'}
-						icon={InboxIcon}
-						label="Inbox"
-						onClick={() => setTab('feed')}
-					/>
-					<TabButton
-						active={tab === 'your-ai'}
-						icon={Brain}
-						label="Your AI"
-						onClick={() => setTab('your-ai')}
-					/>
-				</div>
-				{tab === 'feed' && (
-					<div className="flex items-center gap-2 pb-1.5">
-						<span className="hidden md:inline text-[11px] text-slate-400" title={`Last refreshed at ${new Date(lastRefresh).toLocaleTimeString()}`}>
-							{refreshing ? "Updating…" : `Updated ${secondsAgo(lastRefresh)}`}
-						</span>
-						<button
-							onClick={load}
-							disabled={refreshing}
-							className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded border border-slate-200 hover:bg-slate-50 text-slate-700 disabled:opacity-50 transition-colors"
-						>
-							<RefreshCw className={[
-								"w-3 h-3 transition-transform",
-								refreshing ? "animate-spin text-emerald-600" : "",
-							].join(" ")} />
-							Refresh
-						</button>
-					</div>
-				)}
-			</nav>
+			{/* Inbox = a pure feed. The "Your AI" tab was retired — the
+			    Knowledge surface has its own nav entry at /studio/knowledge. */}
+			<div className="flex items-center justify-end gap-2">
+				<span className="hidden md:inline text-[11px] text-slate-400" title={`Last refreshed at ${new Date(lastRefresh).toLocaleTimeString()}`}>
+					{refreshing ? "Updating…" : `Updated ${secondsAgo(lastRefresh)}`}
+				</span>
+				<button
+					onClick={load}
+					disabled={refreshing}
+					className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded border border-slate-200 hover:bg-slate-50 text-slate-700 disabled:opacity-50 transition-colors"
+				>
+					<RefreshCw className={[
+						"w-3 h-3 transition-transform",
+						refreshing ? "animate-spin text-emerald-600" : "",
+					].join(" ")} />
+					Refresh
+				</button>
+			</div>
 
-			{tab === 'your-ai' ? (
-				<StudioKnowledge />
-			) : (
-				<InboxFeedBody
-					items={items}
-					filter={filter}
-					setFilter={setFilter}
-					counts={counts}
-					visible={visible}
-					busy={busy}
-					onDraftAction={onDraftAction}
-				/>
-			)}
+			<InboxFeedBody
+				items={items}
+				filter={filter}
+				setFilter={setFilter}
+				counts={counts}
+				visible={visible}
+				busy={busy}
+				onDraftAction={onDraftAction}
+			/>
 		</div>
-	);
-}
-
-// Tab button matched to the marketplace TabButton style for visual
-// consistency. Could promote to a shared component later.
-function TabButton({
-	active, icon: Icon, label, onClick,
-}: {
-	active: boolean;
-	icon: React.ComponentType<{ className?: string }>;
-	label: string;
-	onClick: () => void;
-}) {
-	return (
-		<button
-			onClick={onClick}
-			className={[
-				'inline-flex items-center gap-1.5 px-3 py-2 text-sm border-b-2 transition-colors -mb-px',
-				active
-					? 'text-slate-900 border-emerald-500 font-medium'
-					: 'text-slate-500 border-transparent hover:text-slate-800',
-			].join(' ')}
-		>
-			<Icon className="w-4 h-4" />
-			{label}
-		</button>
 	);
 }
 
