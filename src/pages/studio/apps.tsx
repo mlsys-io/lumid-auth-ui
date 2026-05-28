@@ -38,7 +38,7 @@ function AppList() {
 					<Layers className="w-7 h-7" />
 				</div>
 				<div>
-					<h2 className="text-xl font-semibold">No apps yet</h2>
+					<h2 className="text-xl font-medium">No apps yet</h2>
 					<p className="mt-2 text-sm text-slate-600">
 						Set up your AI by picking skills — it&apos;ll install as your first app.
 					</p>
@@ -55,7 +55,7 @@ function AppList() {
 	return (
 		<div className="space-y-4">
 			<header>
-				<h1 className="text-lg font-semibold">Apps</h1>
+				<h1 className="text-lg font-medium">Apps</h1>
 				<p className="text-sm text-slate-500 mt-1">Your installed AI apps. Click one to edit.</p>
 			</header>
 			<PageHints prompts={[
@@ -171,7 +171,7 @@ function AppEditor({ appName }: { appName: string }) {
 								</button>
 							</div>
 							<div className="flex items-center gap-2">
-								<label className="text-xs uppercase tracking-wide text-slate-500 w-16 flex-shrink-0">
+								<label className="text-xs tracking-wide text-slate-500 w-16 flex-shrink-0">
 									Schedule
 								</label>
 								<input

@@ -158,11 +158,11 @@ function RunsList({ runs, onClick }: { runs: MeRunRow[]; onClick: (runId: string
 			<table className="min-w-full text-sm">
 				<thead className="bg-slate-50/60 border-b border-slate-200">
 					<tr>
-						<th className="text-left px-4 py-2.5 font-semibold text-slate-700">Workflow</th>
-						<th className="text-left px-3 py-2.5 font-semibold text-slate-700">State</th>
-						<th className="text-left px-3 py-2.5 font-semibold text-slate-700">Started</th>
-						<th className="text-left px-3 py-2.5 font-semibold text-slate-700">Duration</th>
-						<th className="text-left px-3 py-2.5 font-semibold text-slate-700">Detail</th>
+						<th className="text-left px-4 py-2.5 font-medium text-slate-700">Workflow</th>
+						<th className="text-left px-3 py-2.5 font-medium text-slate-700">State</th>
+						<th className="text-left px-3 py-2.5 font-medium text-slate-700">Started</th>
+						<th className="text-left px-3 py-2.5 font-medium text-slate-700">Duration</th>
+						<th className="text-left px-3 py-2.5 font-medium text-slate-700">Detail</th>
 					</tr>
 				</thead>
 				<tbody>

@@ -111,6 +111,7 @@ const PAGE_META: Array<{
 		pattern: /^\/studio\/settings/,
 		icon: Settings,
 		title: "Settings",
+		subtitle: "Account, tokens, connected services, and privacy — all in one place.",
 		iconTone: "text-slate-600",
 	},
 	{
@@ -137,10 +138,10 @@ function deriveCrumbs(pathname: string): Array<{ label: string; to: string }> {
 	if (m1) return [{ label: "Workflows", to: "/studio/workflows" }];
 	const m2 = pathname.match(/^\/studio\/runs\/([^/]+)/);
 	if (m2) return [{ label: "Runs", to: "/studio/runs" }];
-	const m3 = pathname.match(/^\/studio\/today\/cycle\/[^/]+\/[^/]+\/[^/]+/);
-	if (m3) return [{ label: "Today", to: "/studio/today" }];
+	const m3 = pathname.match(/^\/studio\/(?:intents|today)\/cycle\/[^/]+\/[^/]+\/[^/]+/);
+	if (m3) return [{ label: "Intents", to: "/studio/intents" }];
 	const m4 = pathname.match(/^\/studio\/knowledge\/[^/]+/);
-	if (m4) return [{ label: "Knowledge", to: "/studio/marketplace?tab=knowledge" }];
+	if (m4) return [{ label: "Knowledge", to: "/studio/knowledge" }];
 	return [];
 }
 

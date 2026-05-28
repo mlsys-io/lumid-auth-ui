@@ -147,7 +147,7 @@ function FreshUserHero({ name }: { name: string }) {
 						</div>
 					</div>
 					<div className="flex-1 min-w-0">
-						<h2 className="text-xl font-semibold text-slate-900 tracking-tight">
+						<h2 className="text-xl font-medium text-slate-900 tracking-tight">
 							{name ? `Welcome, ${name}.` : 'Welcome.'}
 						</h2>
 						<p className="text-sm text-slate-600 mt-1 leading-relaxed">
@@ -160,7 +160,7 @@ function FreshUserHero({ name }: { name: string }) {
 
 			{/* Four concrete starters — one click installs + schedules */}
 			<div>
-				<div className="text-[11px] uppercase tracking-[0.08em] font-semibold text-slate-400 mb-2">
+				<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400 mb-2">
 					Quick starters
 				</div>
 				<div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -199,7 +199,7 @@ function FreshUserHero({ name }: { name: string }) {
 			{/* Quiet escape hatch — for power users who want to browse */}
 			<div className="text-center pt-1">
 				<Link
-					to="/studio/marketplace"
+					to="/studio/library"
 					className="inline-flex items-center gap-1 text-[12px] text-slate-400 hover:text-slate-700 transition-colors"
 				>
 					Or browse the marketplace
@@ -236,7 +236,7 @@ function StarterCard({ s, onClick }: { s: Starter; onClick: () => void }) {
 				<Icon className="w-4 h-4" />
 			</div>
 			<div className="flex-1 min-w-0">
-				<div className="font-semibold text-slate-900 text-[13px] leading-tight">{s.title}</div>
+				<div className="font-medium text-slate-900 text-[13px] leading-tight">{s.title}</div>
 				<div className="text-[11px] text-slate-500 mt-0.5 leading-relaxed line-clamp-2">{s.subtitle}</div>
 			</div>
 			<ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-600 transition-colors flex-shrink-0 mt-1" />

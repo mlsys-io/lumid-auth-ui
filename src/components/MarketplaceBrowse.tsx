@@ -78,6 +78,17 @@ function catMeta(c: string) {
 	return CATEGORY_META[c] || { icon: Layers, label: c || "Other", accent: "bg-slate-400", bg: "bg-slate-50", text: "text-slate-700" };
 }
 
+// Detail page for a repo-backed card (app or dataset) — the canonical
+// xp.io marketspace page. Opened in a new tab so the user keeps their
+// Studio session. Skills link to their own source_url instead.
+function repoHref(c: { owner_sub: string; name: string }): string {
+	return `https://xp.io/${encodeURIComponent(c.owner_sub)}/${encodeURIComponent(c.name)}`;
+}
+
+function openDetail(url: string | undefined) {
+	if (url) window.open(url, "_blank", "noopener,noreferrer");
+}
+
 type Tab = "apps" | "skills" | "datasets";
 
 // InstallStatus — what each card tracks per-name. The card shows a
@@ -330,7 +341,11 @@ function AppCard({
 	const updated = app.updated_at ? new Date(app.updated_at * 1000) : null;
 
 	return (
-		<article className="group rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-white to-emerald-50/20 hover:border-emerald-300 hover:shadow-md transition-all overflow-hidden flex flex-col">
+		<article
+			onClick={() => openDetail(repoHref(app))}
+			className="group rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-white to-emerald-50/20 hover:border-emerald-300 hover:shadow-md transition-all overflow-hidden flex flex-col cursor-pointer"
+			title={`View ${title} on xp.io`}
+		>
 			<div className="p-4 flex-1 flex flex-col">
 				<div className="flex items-start gap-3">
 					<div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm shadow-emerald-200">
@@ -368,7 +383,10 @@ function AppCard({
 					</div>
 				)}
 
-				<div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+				<div
+					className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between gap-2"
+					onClick={(e) => e.stopPropagation()}
+				>
 					<div className="flex items-center gap-3 text-[11px] text-slate-400 min-w-0">
 						{(app.stars ?? 0) > 0 && (
 							<span className="inline-flex items-center gap-1 flex-shrink-0" title="Stars">
@@ -590,7 +608,14 @@ function SkillCardView({
 	const needsSecret = (card.needs_secrets?.length ?? 0) > 0;
 
 	return (
-		<article className="group rounded-xl border border-slate-200 bg-white hover:border-emerald-200 hover:shadow-md transition-all overflow-hidden flex flex-col">
+		<article
+			onClick={card.source_url ? () => openDetail(card.source_url) : undefined}
+			className={[
+				"group rounded-xl border border-slate-200 bg-white hover:border-emerald-200 hover:shadow-md transition-all overflow-hidden flex flex-col",
+				card.source_url ? "cursor-pointer" : "",
+			].join(" ")}
+			title={card.source_url ? `View ${card.display_name} source` : undefined}
+		>
 			<div className={["h-1", meta.accent].join(" ")} />
 			<div className="p-4 flex-1 flex flex-col">
 				<div className="flex items-start gap-3">
@@ -632,7 +657,10 @@ function SkillCardView({
 					)}
 				</div>
 
-				<div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
+				<div
+					className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between"
+					onClick={(e) => e.stopPropagation()}
+				>
 					{card.source_url ? (
 						<a
 							href={card.source_url}
@@ -691,12 +719,17 @@ function DatasetsView({
 	return (
 		<div className="space-y-2">
 			{filtered.map((d) => (
-				<article key={d.name} className="rounded-xl border border-slate-200 bg-white px-4 py-3 hover:border-emerald-200 hover:shadow-sm transition-all flex items-center gap-3">
+				<article
+					key={d.name}
+					onClick={() => openDetail(repoHref(d))}
+					className="group rounded-xl border border-slate-200 bg-white px-4 py-3 hover:border-emerald-200 hover:shadow-sm transition-all flex items-center gap-3 cursor-pointer"
+					title={`View ${d.display_name || d.name} on xp.io`}
+				>
 					<div className="w-9 h-9 rounded-xl bg-cyan-50 text-cyan-700 flex items-center justify-center flex-shrink-0">
 						<Database className="w-4 h-4" />
 					</div>
 					<div className="flex-1 min-w-0">
-						<div className="font-semibold text-slate-900 text-[14px] truncate">
+						<div className="font-medium text-slate-900 text-[14px] truncate">
 							{d.display_name || d.name}
 						</div>
 						{d.summary && (
@@ -704,6 +737,7 @@ function DatasetsView({
 						)}
 					</div>
 					<span className="text-[11px] text-slate-400 font-mono flex-shrink-0">{d.name}</span>
+					<ExternalLink className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500 flex-shrink-0" />
 				</article>
 			))}
 		</div>
@@ -713,7 +747,10 @@ function DatasetsView({
 // ── Utilities ──────────────────────────────────────────────────────
 
 function relativeDays(d: Date): string {
-	const days = Math.floor((Date.now() - d.getTime()) / 86_400_000);
+	const t = d.getTime();
+	// Guard null/epoch/pre-2024 timestamps (would render "20272d ago").
+	if (Number.isNaN(t) || t < 1_704_067_200_000) return "—";
+	const days = Math.floor((Date.now() - t) / 86_400_000);
 	if (days < 1) return "today";
 	if (days < 2) return "yesterday";
 	if (days < 30) return `${days}d ago`;

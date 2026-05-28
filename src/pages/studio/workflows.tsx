@@ -320,7 +320,7 @@ function AppGroup({
 					open ? "rotate-90" : "",
 				].join(" ")} />
 				<div className="flex-1 min-w-0 flex items-center gap-2">
-					<span className="font-semibold text-slate-900 truncate text-[14px]">{app}</span>
+					<span className="font-medium text-slate-900 truncate text-[14px]">{app}</span>
 					<span className="text-[11px] text-slate-400 font-mono">
 						{workflows.length} workflow{workflows.length === 1 ? "" : "s"}
 					</span>
@@ -481,7 +481,7 @@ function WorkflowRowView({
 				<div className="flex-1 min-w-0">
 					<div className="flex items-center gap-2">
 						<span className={[
-							"font-semibold transition-colors truncate",
+							"font-medium transition-colors truncate",
 							selected ? "text-emerald-800" : "text-slate-900 group-hover:text-emerald-700",
 						].join(" ")}>
 							{row.name}
@@ -606,7 +606,7 @@ function AvailableLensRedirect() {
 				Browse the marketplace to add new workflows.
 			</p>
 			<Link
-				to="/studio/marketplace"
+				to="/studio/library"
 				className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-colors"
 			>
 				Open marketplace <ExternalLink className="w-3.5 h-3.5" />
@@ -625,7 +625,7 @@ function EmptyState({ lens }: { lens: Lens }) {
 				<div className="w-12 h-12 mx-auto rounded-2xl bg-emerald-100/60 flex items-center justify-center mb-3">
 					<Plus className="w-5 h-5 text-emerald-600" />
 				</div>
-				<h3 className="text-base font-semibold text-slate-900">No workflows yet</h3>
+				<h3 className="text-base font-medium text-slate-900">No workflows yet</h3>
 				<p className="text-sm text-slate-600 mt-1.5 max-w-md mx-auto leading-relaxed">
 					Your AI runs workflows for you — daily briefs, email triage, anything
 					you can describe. Start with a template or describe what you want.
@@ -638,7 +638,7 @@ function EmptyState({ lens }: { lens: Lens }) {
 						<Plus className="w-4 h-4" /> New workflow
 					</button>
 					<Link
-						to="/studio/marketplace"
+						to="/studio/library"
 						className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
 					>
 						Browse marketplace <ExternalLink className="w-3.5 h-3.5" />
@@ -650,7 +650,7 @@ function EmptyState({ lens }: { lens: Lens }) {
 	return (
 		<div className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
 			You don&apos;t have any workflows yet.{" "}
-			<Link to="/studio/marketplace" className="text-emerald-700 underline">Install one from the marketplace</Link>.
+			<Link to="/studio/library" className="text-emerald-700 underline">Install one from the marketplace</Link>.
 		</div>
 	);
 }

@@ -32,7 +32,7 @@ export default function StudioAdmin() {
 		<div className="space-y-4">
 			<header className="flex items-baseline justify-between">
 				<div>
-					<h1 className="text-lg font-semibold flex items-center gap-2">
+					<h1 className="text-lg font-medium flex items-center gap-2">
 						<Shield className="w-5 h-5 text-emerald-600" />
 						Admin
 					</h1>
@@ -97,7 +97,7 @@ function TenantsTab() {
 			</div>
 			<div className="rounded-lg border border-slate-200 bg-white overflow-x-auto">
 				<table className="w-full text-sm">
-					<thead className="bg-slate-50 text-left text-xs text-slate-600 uppercase tracking-wide">
+					<thead className="bg-slate-50 text-left text-xs text-slate-600 tracking-wide">
 						<tr>
 							<th className="px-3 py-2 font-medium">Email</th>
 							<th className="px-3 py-2 font-medium w-20">Apps</th>
@@ -114,7 +114,7 @@ function TenantsTab() {
 								<td className="px-3 py-1.5 font-mono text-xs">
 									{t.email}
 									{t.role !== 'user' && (
-										<span className="ml-2 text-[10px] uppercase tracking-wide text-emerald-700">{t.role}</span>
+										<span className="ml-2 text-[10px] tracking-wide text-emerald-700">{t.role}</span>
 									)}
 								</td>
 								<td className="px-3 py-1.5 text-xs">{t.apps}</td>
@@ -157,7 +157,7 @@ function LoopsTab() {
 			</div>
 			<div className="rounded-lg border border-slate-200 bg-white overflow-x-auto">
 				<table className="w-full text-sm">
-					<thead className="bg-slate-50 text-left text-xs text-slate-600 uppercase tracking-wide">
+					<thead className="bg-slate-50 text-left text-xs text-slate-600 tracking-wide">
 						<tr>
 							<th className="px-3 py-2 font-medium">App / Loop</th>
 							<th className="px-3 py-2 font-medium w-32">Schedule</th>
@@ -209,7 +209,7 @@ function BuildTab() {
 			</div>
 			<div className="rounded-lg border border-slate-200 bg-white overflow-x-auto">
 				<table className="w-full text-sm">
-					<thead className="bg-slate-50 text-left text-xs text-slate-600 uppercase tracking-wide">
+					<thead className="bg-slate-50 text-left text-xs text-slate-600 tracking-wide">
 						<tr>
 							<th className="px-3 py-2 font-medium">Service</th>
 							<th className="px-3 py-2 font-medium w-32">Image</th>
@@ -262,8 +262,8 @@ function StatCard({ label, value, hint, tone = 'default' }: {
 	}[tone];
 	return (
 		<div className="rounded-lg border border-slate-200 bg-white p-4">
-			<div className="text-xs uppercase tracking-wide text-slate-500">{label}</div>
-			<div className={['text-2xl font-semibold mt-1', toneCls].join(' ')}>{value}</div>
+			<div className="text-xs tracking-wide text-slate-500">{label}</div>
+			<div className={['text-2xl font-medium mt-1', toneCls].join(' ')}>{value}</div>
 			{hint && <div className="text-xs text-slate-500 mt-1">{hint}</div>}
 		</div>
 	);

@@ -128,7 +128,7 @@ function ReportCardView({
 				<div className="min-w-0 flex-1">
 					<Link
 						to={`/studio/workflows/${encodeURIComponent(workflow.slug)}`}
-						className="font-semibold text-slate-900 hover:text-emerald-700 transition-colors block truncate"
+						className="font-medium text-slate-900 hover:text-emerald-700 transition-colors block truncate"
 					>
 						{workflow.name}
 					</Link>
@@ -140,10 +140,10 @@ function ReportCardView({
 				</div>
 				{/* Big-number primary metric: success rate */}
 				<div className="text-right flex-shrink-0">
-					<div className="text-2xl font-semibold text-slate-900 tabular-nums leading-none">
+					<div className="text-2xl font-medium text-slate-900 tabular-nums leading-none">
 						{Math.round(state.this_month.success_rate * 100)}<span className="text-sm text-slate-500">%</span>
 					</div>
-					<div className="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">reliable</div>
+					<div className="text-[10px] text-slate-500 tracking-wider mt-0.5">reliable</div>
 				</div>
 			</div>
 
@@ -213,7 +213,7 @@ function MiniStat({
 	const trendSign = better ? "↑" : worse ? "↓" : "•";
 	return (
 		<div>
-			<div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">{label}</div>
+			<div className="text-[10px] tracking-wider text-slate-400 font-medium">{label}</div>
 			<div className="flex items-baseline gap-1.5 mt-0.5">
 				<span className="font-mono text-[13px] text-slate-900 tabular-nums">{format(cur)}</span>
 				<span className={`text-[10px] font-medium ${trendClass}`}>{trendSign} {format(Math.abs(diff))}</span>

@@ -431,7 +431,7 @@ function InboxZeroState() {
 			<div className="w-14 h-14 mx-auto rounded-2xl bg-emerald-100/60 flex items-center justify-center mb-4 shadow-inner shadow-emerald-50">
 				<CheckCircle2 className="w-7 h-7 text-emerald-600" />
 			</div>
-			<div className="text-base font-semibold text-slate-900">Inbox zero.</div>
+			<div className="text-base font-medium text-slate-900">Inbox zero.</div>
 			<p className="text-sm text-slate-600 mt-1.5 max-w-md mx-auto leading-relaxed">
 				When your workflows produce something for you — a draft, a
 				summary, a heads-up — it lands here for review.
@@ -637,7 +637,7 @@ function CycleCard({ item }: { item: Extract<FeedItem, { kind: 'cycle' }> }) {
 					<span className="text-xs text-rose-800 font-mono truncate block">{item.lastError.slice(0, 200)}</span>
 				) : undefined
 			}
-			link={{ to: `/studio/today/cycle/${encodeURIComponent(item.app)}/${encodeURIComponent(item.loop)}/${encodeURIComponent(item.ts.replace(/[-:]/g, '').replace('T', 'T').slice(0, 15))}`, label: 'Inspect' }}
+			link={{ to: `/studio/intents/cycle/${encodeURIComponent(item.app)}/${encodeURIComponent(item.loop)}/${encodeURIComponent(item.ts.replace(/[-:]/g, '').replace('T', 'T').slice(0, 15))}`, label: 'Inspect' }}
 		/>
 	);
 }

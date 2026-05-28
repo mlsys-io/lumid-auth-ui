@@ -294,7 +294,7 @@ function LoopsSection() {
     return (
       <SectionFrame title="What it does">
         <div className="text-sm text-slate-500 italic">
-          No loops yet. <Link to="/studio/marketplace" className="text-emerald-700 hover:underline">Browse the marketplace</Link> to add some.
+          No loops yet. <Link to="/studio/library" className="text-emerald-700 hover:underline">Browse the marketplace</Link> to add some.
         </div>
       </SectionFrame>
     );

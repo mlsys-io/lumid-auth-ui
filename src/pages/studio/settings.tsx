@@ -31,13 +31,7 @@ export default function StudioSettings() {
 	const { user } = useAuth();
 	return (
 		<div className="space-y-4">
-			<header>
-				<h1 className="text-lg font-semibold">Settings</h1>
-				<p className="text-sm text-slate-500 mt-1">
-					Account, tokens, connected services, and privacy — all in one place.
-				</p>
-			</header>
-
+			{/* Title + subtitle render in the StudioShell top-bar (TopStatusStrip). */}
 			<ProfileSection email={user?.email ?? ''} role={user?.role ?? ''} />
 			<TokensSection />
 			<OAuthSection />
@@ -58,7 +52,7 @@ function SectionCard({
 						<Icon className="w-4 h-4" />
 					</div>
 					<div className="min-w-0">
-						<h2 className="font-semibold text-sm">{title}</h2>
+						<h2 className="font-medium text-sm">{title}</h2>
 						<p className="text-xs text-slate-500 mt-0.5">{description}</p>
 					</div>
 				</div>
@@ -76,7 +70,7 @@ function ProfileSection({ email, role }: { email: string; role: string }) {
 				<dd className="font-mono text-xs">{email}</dd>
 				<dt className="text-slate-500">Role</dt>
 				<dd>
-					<span className="px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wide bg-slate-100 text-slate-700">
+					<span className="px-2 py-0.5 rounded-full text-[10px] tracking-wide bg-slate-100 text-slate-700">
 						{role || 'user'}
 					</span>
 				</dd>
