@@ -48,8 +48,9 @@ const StudioMind         = lazy(() => import("./pages/studio/mind"));
 const StudioKnowledge  = lazy(() => import("./pages/studio/knowledge"));
 // "You, encoded" ledger at /studio/knowledge (distinct from the per-agent browser).
 const StudioKnowledgeEncoded = lazy(() => import("./pages/studio/knowledge-encoded"));
-// T13 — Autoresearch detail panel at /studio/intents/:intentId.
-const StudioAutoresearch = lazy(() => import("./pages/studio/autoresearch"));
+// T13 — Generic intent-detail panel at /studio/intents/:intentId.
+// Dispatches by intent.detail.body.kind (autoresearch | judgment | …).
+const StudioIntentDetail = lazy(() => import("./pages/studio/intent-detail"));
 // Phase S1.5 — Settings consolidation; Phase S4 — Admin tabs.
 const StudioSettings   = lazy(() => import("./pages/studio/settings"));
 const StudioAdmin      = lazy(() => import("./pages/studio/admin"));
@@ -381,8 +382,8 @@ export default function App() {
             {/* Phase S3-B — cycle inspector accessed from Intents rows. */}
             <Route path="intents/cycle/:app/:loop/:ts"  element={<StudioInspector />} />
             <Route path="today/cycle/:app/:loop/:ts"    element={<StudioInspector />} />
-            {/* T13 — per-intent autoresearch detail panel. */}
-            <Route path="intents/:intentId"             element={<StudioAutoresearch />} />
+            {/* T13 — per-intent detail panel; dispatched by intent.body.kind. */}
+            <Route path="intents/:intentId"             element={<StudioIntentDetail />} />
             <Route path="inbox"                        element={<StudioInbox />} />
             {/* Sidebar consolidation 2026-05-25: skills merged into the
                 catalog (now "Library"); runs + mind folded into Workflows.
