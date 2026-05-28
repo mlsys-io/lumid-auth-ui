@@ -16,7 +16,6 @@ import {
 } from 'lucide-react';
 import AppLoops from '../app-revamp/loops';
 import { me } from '@/api/me';
-import PageHints from '@/components/PageHints';
 import { useAuth } from '@/hooks/useAuth';
 import { IntentRail, type Intent } from '@/components/IntentRail';
 import { OutcomeRow, type Outcome } from '@/components/OutcomeTile';
@@ -68,13 +67,6 @@ export default function StudioToday() {
 	return (
 		<div className="space-y-6">
 			{empty === true && <FreshUserHero name={name} />}
-			{empty === false && (
-				<PageHints prompts={[
-					"what's pending right now?",
-					'summarize what my AI did today',
-					'run my morning brief now',
-				]} />
-			)}
 			{empty === false && DEMO_MODE && (
 				<>
 					<IntentRail intents={DEMO_INTENTS} />
@@ -82,7 +74,12 @@ export default function StudioToday() {
 					<DecisionsPending />
 				</>
 			)}
-			<AppLoops />
+			{/* Workflow list is canonical on /studio/workflows; only fall
+			    back to it here when the demo's three hero sections aren't
+			    rendering (production, no demo content yet). PageHints
+			    chips removed — the chat sidebar is the canonical ask
+			    surface, the chips were instructional noise on the hero. */}
+			{(empty === false && !DEMO_MODE) && <AppLoops />}
 		</div>
 	);
 }
