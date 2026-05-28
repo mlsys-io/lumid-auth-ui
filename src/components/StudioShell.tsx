@@ -29,6 +29,7 @@ import { cn } from '../lib/utils';
 // for Studio; webforms in the main workspace area become the
 // precision channel beside it.
 import { StudioChat } from './StudioChat';
+import { StudioArtifactPanel } from './StudioArtifactPanel';
 // Top-bar status strip — page title + live activity pills (drafts,
 // running, failing). Fills the gap left by removing the redundant
 // "Ask anything" search input.
@@ -214,6 +215,12 @@ export function StudioShell() {
 					<Outlet />
 				</main>
 			</div>
+
+			{/* Artifact panel between the workspace and chat sidebar.
+			    Collapses to a thin rail; auto-opens when the agent
+			    dispatches a `studio:artifact-saved` window event from
+			    a save_artifact tool call. */}
+			<StudioArtifactPanel />
 
 			{/* Phase S6a — AI chat lives here, sticky to the right.
 			    Collapses to a thin rail; the user toggles. Inside,

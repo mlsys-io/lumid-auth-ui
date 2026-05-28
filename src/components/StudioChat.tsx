@@ -9,24 +9,57 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ChevronRight, MessageSquarePlus, Send, Trash2, Loader2, Bot, User, Square } from 'lucide-react';
+import { ChevronRight, MessageSquarePlus, Send, Trash2, Loader2, Bot, User, Square, Globe, Telescope, Brain, ChevronDown, Paperclip, X, FileText, Image as ImageIcon, Plus } from 'lucide-react';
 import { buildSelectionPreamble } from './StudioContext';
 import { ChatMarkdown } from './ChatMarkdown';
 
 type Role = 'user' | 'assistant';
+// A file the user dropped into the input. Lives in pending state
+// until send(). image → base64; text → raw string. PDFs deferred.
+type Attachment =
+	| { kind: 'image'; name: string; mime: string; dataB64: string; sizeBytes: number }
+	| { kind: 'text'; name: string; text: string; sizeBytes: number };
+
+// Wire format for the request body — mirrors the backend chatAttachment.
+type WireAttachment =
+	| { kind: 'image'; name: string; mime: string; data_b64: string }
+	| { kind: 'text'; name: string; text: string };
+
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_TEXT_BYTES = 500 * 1024;
+type ToolCall = {
+	name: string;
+	ok: boolean;
+	summary?: string;
+	resultSummary?: string;
+	// `pending` = received tool_start but no tool_call yet (in-flight).
+	pending?: boolean;
+	link?: { to: string; label: string };
+};
 type Message = {
 	role: Role;
 	content: string;
+	// Live-streamed reasoning from extended thinking. Rendered in a
+	// collapsible block above the main reply.
+	thinking?: string;
+	thinkingDone?: boolean;
 	// Pretty-printed tool calls the agent ran on this turn (assistant only).
-	tools?: Array<{ name: string; ok: boolean; summary?: string; link?: { to: string; label: string } }>;
+	tools?: ToolCall[];
 };
 
 const STORAGE_KEY = 'studio_chat_transcript_v1';
 const COLLAPSE_KEY = 'studio_chat_collapsed_v1';
 const WIDTH_KEY = 'studio_chat_width_v1';
+const MODEL_KEY = 'studio_chat_model_v1';
+const MODE_KEY = 'studio_chat_mode_v1';
+const THINK_KEY = 'studio_chat_think_v1';
 const MIN_WIDTH = 320;
 const MAX_WIDTH = 720;
 const DEFAULT_WIDTH = 400;
+
+type ModelOption = { id: string; display_name: string; default: boolean };
+// Mutually-exclusive tool-forcing modes. '' = let the agent decide.
+type ChatMode = '' | 'search' | 'deep_research';
 
 export function StudioChat() {
 	const location = useLocation();
@@ -58,6 +91,39 @@ export function StudioChat() {
 	});
 	const [input, setInput] = useState('');
 	const [streaming, setStreaming] = useState(false);
+	// LLM model selector. Persists across reloads; populated from
+	// /me/agent/models so backend can add providers without UI changes.
+	const [models, setModels] = useState<ModelOption[]>([]);
+	const [model, setModel] = useState<string>(() => {
+		try {
+			return localStorage.getItem(MODEL_KEY) || '';
+		} catch { return ''; }
+	});
+	// Search / Deep Research toggles. Mutually exclusive; '' = let the
+	// agent decide based on the question. Sticky across turns + reloads
+	// so the user doesn't have to re-arm for follow-up questions.
+	const [mode, setMode] = useState<ChatMode>(() => {
+		try {
+			const v = localStorage.getItem(MODE_KEY);
+			return (v === 'search' || v === 'deep_research') ? v : '';
+		} catch { return ''; }
+	});
+	// Independent Think toggle — combines with mode. When on, Claude
+	// (and any Anthropic-shape provider) gets extended thinking enabled.
+	// kv.run/MiniMax thinks by default; this flag is a no-op there but
+	// keeps the chip visible so the user knows reasoning is on display.
+	const [think, setThink] = useState<boolean>(() => {
+		try { return localStorage.getItem(THINK_KEY) === '1'; }
+		catch { return false; }
+	});
+	// Staged attachments for the next send. Cleared after dispatch.
+	const [attachments, setAttachments] = useState<Attachment[]>([]);
+	const [attachError, setAttachError] = useState<string>('');
+	const fileInputRef = useRef<HTMLInputElement>(null);
+	// Tools popover open/close. Anchored above the [+] button to the
+	// left of the textarea. Click-outside + escape close it.
+	const [toolsOpen, setToolsOpen] = useState(false);
+	const toolsAnchorRef = useRef<HTMLDivElement>(null);
 	const transcriptRef = useRef<HTMLDivElement>(null);
 	// Phase S6 polish — abort handle so the user can cut a runaway
 	// stream short. Reset on every send/queueSend; set just before the
@@ -72,6 +138,124 @@ export function StudioChat() {
 	useEffect(() => {
 		try { localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0'); } catch { /* ignore */ }
 	}, [collapsed]);
+
+	// Persist selected model.
+	useEffect(() => {
+		try {
+			if (model) localStorage.setItem(MODEL_KEY, model);
+		} catch { /* ignore */ }
+	}, [model]);
+
+	// Persist tool-mode toggle.
+	useEffect(() => {
+		try {
+			if (mode) localStorage.setItem(MODE_KEY, mode);
+			else localStorage.removeItem(MODE_KEY);
+		} catch { /* ignore */ }
+	}, [mode]);
+
+	// Persist think toggle.
+	useEffect(() => {
+		try {
+			if (think) localStorage.setItem(THINK_KEY, '1');
+			else localStorage.removeItem(THINK_KEY);
+		} catch { /* ignore */ }
+	}, [think]);
+
+	// File picker handler — turns each selected file into an
+	// Attachment, validates size + kind. Errors surface in a one-line
+	// banner above the input.
+	const onPickFiles = useCallback(async (files: FileList | null) => {
+		if (!files || files.length === 0) return;
+		setAttachError('');
+		const next: Attachment[] = [];
+		for (const f of Array.from(files)) {
+			if (f.type.startsWith('image/')) {
+				if (f.size > MAX_IMAGE_BYTES) {
+					setAttachError(`${f.name}: image > ${Math.round(MAX_IMAGE_BYTES / 1024 / 1024)}MB`);
+					continue;
+				}
+				const buf = await f.arrayBuffer();
+				// base64 encode (atob/btoa would corrupt binary)
+				const bytes = new Uint8Array(buf);
+				let bin = '';
+				for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+				const dataB64 = btoa(bin);
+				next.push({ kind: 'image', name: f.name, mime: f.type, dataB64, sizeBytes: f.size });
+			} else {
+				// Treat as text. Includes .txt/.md/.csv/.json/.log/.tsv plus
+				// anything else with a reasonable mime. PDFs are NOT supported
+				// here yet — they'd need a server-side extraction pass.
+				if (f.type === 'application/pdf') {
+					setAttachError(`${f.name}: PDF upload not supported yet`);
+					continue;
+				}
+				if (f.size > MAX_TEXT_BYTES) {
+					setAttachError(`${f.name}: text > ${Math.round(MAX_TEXT_BYTES / 1024)}KB`);
+					continue;
+				}
+				const text = await f.text();
+				next.push({ kind: 'text', name: f.name, text, sizeBytes: f.size });
+			}
+		}
+		if (next.length > 0) {
+			setAttachments((prev) => [...prev, ...next]);
+		}
+	}, []);
+
+	const removeAttachment = useCallback((i: number) => {
+		setAttachments((prev) => prev.filter((_, idx) => idx !== i));
+	}, []);
+
+	// Count of active per-turn toggles — surfaced as a small badge on
+	// the [+] tools button so the user knows something is on without
+	// opening the popover.
+	const activeToolCount = (mode ? 1 : 0) + (think ? 1 : 0);
+
+	// Click-outside + Escape to close the tools popover.
+	useEffect(() => {
+		if (!toolsOpen) return;
+		const onClick = (e: MouseEvent) => {
+			if (!toolsAnchorRef.current) return;
+			if (!toolsAnchorRef.current.contains(e.target as Node)) {
+				setToolsOpen(false);
+			}
+		};
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === 'Escape') setToolsOpen(false);
+		};
+		document.addEventListener('mousedown', onClick);
+		document.addEventListener('keydown', onKey);
+		return () => {
+			document.removeEventListener('mousedown', onClick);
+			document.removeEventListener('keydown', onKey);
+		};
+	}, [toolsOpen]);
+
+	// Load available LLM providers once. Falls through silently on
+	// failure — server defaults to Claude when the request body omits
+	// `model`, so the chat still works without the dropdown.
+	useEffect(() => {
+		let cancelled = false;
+		(async () => {
+			try {
+				const r = await fetch('/api/v1/me/agent/models', { credentials: 'include' });
+				if (!r.ok) return;
+				const j = await r.json();
+				const list: ModelOption[] = j?.data?.models || j?.models || [];
+				if (cancelled || !Array.isArray(list) || list.length === 0) return;
+				setModels(list);
+				// Adopt the server's default the first time we see this user;
+				// don't overwrite a user-chosen selection on reload.
+				if (!model) {
+					const def = list.find((m) => m.default) || list[0];
+					if (def) setModel(def.id);
+				}
+			} catch { /* ignore */ }
+		})();
+		return () => { cancelled = true; };
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
 
 	// Auto-scroll on new content
 	useEffect(() => {
@@ -154,7 +338,12 @@ export function StudioChat() {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				credentials: 'include',
-				body: JSON.stringify({ messages: wireMessages }),
+				body: JSON.stringify({
+					messages: wireMessages,
+					...(model ? { model } : {}),
+					...(mode ? { mode } : {}),
+					...(think ? { think: true } : {}),
+				}),
 				signal: ctrl.signal,
 			});
 			if (!r.ok || !r.body) {
@@ -201,12 +390,19 @@ export function StudioChat() {
 			setStreaming(false);
 			abortRef.current = null;
 		}
-	}, [messages, streaming, location.pathname]);
+	}, [messages, streaming, location.pathname, model, mode, think]);
 
 	const send = useCallback(async () => {
 		const text = input.trim();
 		if (!text || streaming) return;
 		setInput('');
+
+		// Snapshot + clear staged attachments. Doing it before the
+		// optimistic append means a fast-clicking user can stage new
+		// files for the next turn while this one is still streaming.
+		const stagedAttachments = attachments;
+		setAttachments([]);
+		setAttachError('');
 
 		// Optimistic append of the user's turn + a placeholder assistant turn.
 		const userMsg: Message = { role: 'user', content: text };
@@ -214,9 +410,16 @@ export function StudioChat() {
 		// can answer "what should I do here?" cohesively. Lightweight
 		// page-context prefix — full Phase S6b adds selected-item refs.
 		const pageNote = buildSelectionPreamble(location.pathname);
+		const wireAttachments: WireAttachment[] = stagedAttachments.map((a) =>
+			a.kind === 'image'
+				? { kind: 'image', name: a.name, mime: a.mime, data_b64: a.dataB64 }
+				: { kind: 'text', name: a.name, text: a.text }
+		);
 		const wireMessages = [
 			...messages.map((m) => ({ role: m.role, content: m.content })),
-			{ role: 'user' as const, content: `${pageNote}\n\n${text}` },
+			wireAttachments.length > 0
+				? { role: 'user' as const, content: `${pageNote}\n\n${text}`, attachments: wireAttachments }
+				: { role: 'user' as const, content: `${pageNote}\n\n${text}` },
 		];
 		const assistantMsg: Message = { role: 'assistant', content: '', tools: [] };
 		setMessages((prev) => [...prev, userMsg, assistantMsg]);
@@ -229,7 +432,12 @@ export function StudioChat() {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				credentials: 'include',
-				body: JSON.stringify({ messages: wireMessages }),
+				body: JSON.stringify({
+					messages: wireMessages,
+					...(model ? { model } : {}),
+					...(mode ? { mode } : {}),
+					...(think ? { think: true } : {}),
+				}),
 				signal: ctrl.signal,
 			});
 			if (!r.ok || !r.body) {
@@ -279,7 +487,7 @@ export function StudioChat() {
 			setStreaming(false);
 			abortRef.current = null;
 		}
-	}, [input, messages, streaming, location.pathname]);
+	}, [input, messages, streaming, location.pathname, model, mode, think, attachments]);
 
 	const clear = () => {
 		if (streaming) return;
@@ -329,8 +537,8 @@ export function StudioChat() {
 				].join(' ')}
 				title="Drag to resize"
 			/>
-			<header className="h-14 px-4 border-b border-slate-200/70 flex items-center justify-between flex-shrink-0 bg-white/80 backdrop-blur-sm">
-				<div className="flex items-center gap-2.5 min-w-0">
+			<header className="h-14 px-4 border-b border-slate-200/70 flex items-center justify-between flex-shrink-0 bg-white/80 backdrop-blur-sm gap-2">
+				<div className="flex items-center gap-2.5 min-w-0 flex-1">
 					<div className="relative w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center shadow-sm shadow-emerald-200 flex-shrink-0">
 						<Bot className="w-4 h-4" />
 						{streaming && (
@@ -339,10 +547,28 @@ export function StudioChat() {
 					</div>
 					<div className="min-w-0">
 						<div className="text-sm font-semibold text-slate-900 tracking-tight">Just ask</div>
-						<div className="text-[10.5px] text-slate-500">your AI knows where you are</div>
+						{/* Model picker moved here — set-once choice, paired
+						    with the title so it reads as part of identity
+						    rather than per-turn config. Hidden when only
+						    one provider is available. */}
+						{models.length > 1 ? (
+							<select
+								value={model}
+								onChange={(e) => setModel(e.target.value)}
+								disabled={streaming}
+								className="text-[10.5px] text-slate-500 hover:text-slate-700 bg-transparent border-0 p-0 -ml-0.5 max-w-[160px] truncate focus:outline-none focus:ring-0 cursor-pointer disabled:opacity-50"
+								title="LLM backend used for replies"
+							>
+								{models.map((m) => (
+									<option key={m.id} value={m.id}>{m.display_name}</option>
+								))}
+							</select>
+						) : (
+							<div className="text-[10.5px] text-slate-500">your AI knows where you are</div>
+						)}
 					</div>
 				</div>
-				<div className="flex items-center gap-0.5">
+				<div className="flex items-center gap-0.5 flex-shrink-0">
 					{messages.length > 0 && (
 						<button
 							onClick={clear}
@@ -370,10 +596,135 @@ export function StudioChat() {
 			</div>
 
 			<footer className="border-t border-slate-200/70 p-3 flex-shrink-0 bg-white/60 backdrop-blur-sm">
+				{/* Staged attachments. Stays above the input row so the file
+				    chips never crowd the typing space. Hidden when empty. */}
+				{(attachments.length > 0 || attachError) && (
+					<div className="mb-2 px-0.5 flex flex-wrap gap-1.5 items-center">
+						{attachments.map((a, i) => (
+							<div
+								key={i}
+								className="inline-flex items-center gap-1.5 text-[11px] bg-slate-100 border border-slate-200 rounded-full pl-2 pr-1 py-0.5"
+								title={`${a.name} · ${(a.sizeBytes / 1024).toFixed(1)} KB`}
+							>
+								{a.kind === 'image'
+									? <ImageIcon className="w-3 h-3 text-sky-600" />
+									: <FileText className="w-3 h-3 text-slate-600" />}
+								<span className="font-medium max-w-[120px] truncate">{a.name}</span>
+								<span className="opacity-60">{Math.round(a.sizeBytes / 1024)}KB</span>
+								<button
+									type="button"
+									onClick={() => removeAttachment(i)}
+									className="text-slate-400 hover:text-rose-500 transition-colors"
+									title="Remove"
+								>
+									<X className="w-3 h-3" />
+								</button>
+							</div>
+						))}
+						{attachError && (
+							<span className="text-[11px] text-rose-600">{attachError}</span>
+						)}
+					</div>
+				)}
 				<form
 					onSubmit={(e) => { e.preventDefault(); send(); }}
-					className="flex items-end gap-2"
+					className="flex items-end gap-1.5"
 				>
+					<input
+						ref={fileInputRef}
+						type="file"
+						multiple
+						accept="image/*,text/*,.md,.csv,.json,.tsv,.log,.yml,.yaml,.toml"
+						className="hidden"
+						onChange={(e) => {
+							onPickFiles(e.target.files);
+							if (fileInputRef.current) fileInputRef.current.value = '';
+						}}
+					/>
+					{/* Tools popover anchor. Clicking [+] toggles a small
+					    floating menu with the three per-turn toggles
+					    (Search / Deep research / Think). Active-toggle
+					    count surfaces as a tiny badge on the button. */}
+					<div ref={toolsAnchorRef} className="relative flex-shrink-0">
+						<button
+							type="button"
+							onClick={() => setToolsOpen((v) => !v)}
+							disabled={streaming}
+							title="Tools — Search / Deep research / Think"
+							className={[
+								'relative p-2.5 rounded-xl border transition-all',
+								toolsOpen
+									? 'bg-slate-900 text-white border-slate-900'
+									: activeToolCount > 0
+										? 'bg-white text-emerald-700 border-emerald-300 hover:border-emerald-400'
+										: 'bg-white text-slate-500 border-slate-200 hover:text-slate-700 hover:border-slate-300',
+								streaming ? 'opacity-50 cursor-not-allowed' : '',
+							].join(' ')}
+						>
+							<Plus className={['w-4 h-4 transition-transform', toolsOpen ? 'rotate-45' : ''].join(' ')} />
+							{activeToolCount > 0 && !toolsOpen && (
+								<span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-emerald-500 text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-white">
+									{activeToolCount}
+								</span>
+							)}
+						</button>
+						{toolsOpen && (
+							<div className="absolute bottom-full mb-2 left-0 z-10 min-w-[180px] p-1 rounded-xl border border-slate-200 bg-white shadow-lg shadow-slate-200/40">
+								<button
+									type="button"
+									onClick={() => setMode(mode === 'search' ? '' : 'search')}
+									className={[
+										'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] transition-colors',
+										mode === 'search'
+											? 'bg-sky-50 text-sky-700'
+											: 'text-slate-700 hover:bg-slate-50',
+									].join(' ')}
+								>
+									<Globe className={['w-3.5 h-3.5', mode === 'search' ? 'text-sky-600' : 'text-slate-500'].join(' ')} />
+									<span className="font-medium flex-1 text-left">Search the web</span>
+									{mode === 'search' && <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />}
+								</button>
+								<button
+									type="button"
+									onClick={() => setMode(mode === 'deep_research' ? '' : 'deep_research')}
+									className={[
+										'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] transition-colors',
+										mode === 'deep_research'
+											? 'bg-violet-50 text-violet-700'
+											: 'text-slate-700 hover:bg-slate-50',
+									].join(' ')}
+								>
+									<Telescope className={['w-3.5 h-3.5', mode === 'deep_research' ? 'text-violet-600' : 'text-slate-500'].join(' ')} />
+									<span className="font-medium flex-1 text-left">Deep research</span>
+									{mode === 'deep_research' && <span className="w-1.5 h-1.5 rounded-full bg-violet-500" />}
+								</button>
+								<div className="h-px bg-slate-100 my-1 mx-2" />
+								<button
+									type="button"
+									onClick={() => setThink((v) => !v)}
+									className={[
+										'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] transition-colors',
+										think
+											? 'bg-amber-50 text-amber-700'
+											: 'text-slate-700 hover:bg-slate-50',
+									].join(' ')}
+								>
+									<Brain className={['w-3.5 h-3.5', think ? 'text-amber-600' : 'text-slate-500'].join(' ')} />
+									<span className="font-medium flex-1 text-left">Show thinking</span>
+									{think && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
+								</button>
+								<div className="h-px bg-slate-100 my-1 mx-2" />
+								<button
+									type="button"
+									onClick={() => fileInputRef.current?.click()}
+									className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] text-slate-700 hover:bg-slate-50 transition-colors"
+								>
+									<Paperclip className="w-3.5 h-3.5 text-slate-500" />
+									<span className="font-medium flex-1 text-left">Attach file</span>
+								</button>
+							</div>
+						)}
+					</div>
 					<div className="flex-1 relative group">
 						<textarea
 							value={input}
@@ -433,6 +784,9 @@ function MessageBubble({ m, streaming }: { m: Message; streaming?: boolean }) {
 				{isUser ? <User className="w-3.5 h-3.5" /> : <Bot className="w-3.5 h-3.5" />}
 			</div>
 			<div className={['min-w-0 flex-1', isUser ? 'text-right' : ''].join(' ')}>
+				{!isUser && m.thinking !== undefined && (
+					<ThinkingBlock thinking={m.thinking} done={!!m.thinkingDone} />
+				)}
 				<div className={[
 					'inline-block max-w-full text-[13.5px] rounded-2xl px-3.5 py-2.5 leading-relaxed text-left shadow-sm',
 					isUser
@@ -459,31 +813,101 @@ function MessageBubble({ m, streaming }: { m: Message; streaming?: boolean }) {
 				</div>
 				{m.tools && m.tools.length > 0 && (
 					<div className={['mt-2 flex flex-col gap-1', isUser ? 'items-end' : 'items-start'].join(' ')}>
-						{m.tools.map((t, i) => (
-							<div key={i} className="inline-flex items-center gap-1.5">
-								<div className={[
-									'text-[11px] inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border',
-									t.ok
-										? 'bg-emerald-50/80 border-emerald-200 text-emerald-800'
-										: 'bg-rose-50/80 border-rose-200 text-rose-800',
-								].join(' ')}>
-									<span className="text-[10px]">{t.ok ? '✓' : '✗'}</span>
-									<span className="font-mono font-medium">{t.name}</span>
-									{t.summary && <span className="opacity-70 truncate max-w-[180px]">· {t.summary}</span>}
-								</div>
-								{t.link && (
-									<Link
-										to={t.link.to}
-										className="text-[11px] inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50 transition-colors"
-									>
-										{t.link.label} →
-									</Link>
-								)}
-							</div>
-						))}
+						{m.tools.map((t, i) => <ToolChip key={i} t={t} />)}
 					</div>
 				)}
 			</div>
+		</div>
+	);
+}
+
+// ThinkingBlock — collapsible reasoning panel above the assistant's
+// reply. Auto-expanded while streaming so the user sees the model
+// "think out loud"; auto-collapsed once thinking_stop arrives so the
+// final answer stays the focus.
+function ThinkingBlock({ thinking, done }: { thinking: string; done: boolean }) {
+	const [open, setOpen] = useState<boolean>(!done);
+	// When the stream transitions to done, collapse automatically (only
+	// the first time — the user can re-open it).
+	const wasDone = useRef(done);
+	useEffect(() => {
+		if (done && !wasDone.current) {
+			setOpen(false);
+			wasDone.current = true;
+		}
+	}, [done]);
+	const charCount = thinking.length;
+	const label = done
+		? `Thought (${charCount} chars)`
+		: 'Thinking…';
+	return (
+		<div className="mb-1.5">
+			<button
+				type="button"
+				onClick={() => setOpen((v) => !v)}
+				className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50/80 hover:bg-amber-100/80 border border-amber-200 rounded-full px-2 py-0.5 transition-colors"
+			>
+				<Brain className="w-3 h-3" />
+				<span>{label}</span>
+				<ChevronDown
+					className={['w-3 h-3 transition-transform', open ? 'rotate-180' : ''].join(' ')}
+				/>
+			</button>
+			{open && (
+				<div className="mt-1.5 px-3 py-2 text-[12px] leading-relaxed text-slate-600 bg-amber-50/40 border border-amber-100 rounded-xl whitespace-pre-wrap break-words">
+					{thinking || (
+						<span className="opacity-50 italic">(no content yet)</span>
+					)}
+				</div>
+			)}
+		</div>
+	);
+}
+
+// ToolChip — one row per tool call. Shows the tool name with a
+// matching icon, the arg summary, an inline result summary when
+// available, and an optional follow-up link (e.g. "Open →" for
+// install_app). Pending state shows a spinner instead of ✓/✗ until the
+// tool_call event lands.
+function ToolChip({ t }: { t: ToolCall }) {
+	const Icon =
+		t.name === 'web_search' ? Globe
+		: t.name === 'deep_research' ? Telescope
+		: t.name === 'web_fetch' ? Globe
+		: null;
+	return (
+		<div className="inline-flex flex-col gap-0.5 max-w-full">
+			<div className="inline-flex items-center gap-1.5">
+				<div className={[
+					'text-[11px] inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border max-w-full',
+					t.pending
+						? 'bg-sky-50/80 border-sky-200 text-sky-800'
+						: t.ok
+							? 'bg-emerald-50/80 border-emerald-200 text-emerald-800'
+							: 'bg-rose-50/80 border-rose-200 text-rose-800',
+				].join(' ')}>
+					{t.pending
+						? <Loader2 className="w-3 h-3 animate-spin" />
+						: Icon
+							? <Icon className="w-3 h-3" />
+							: <span className="text-[10px]">{t.ok ? '✓' : '✗'}</span>}
+					<span className="font-mono font-medium">{t.name}</span>
+					{t.summary && <span className="opacity-70 truncate max-w-[180px]">· {t.summary}</span>}
+				</div>
+				{t.link && (
+					<Link
+						to={t.link.to}
+						className="text-[11px] inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50 transition-colors"
+					>
+						{t.link.label} →
+					</Link>
+				)}
+			</div>
+			{t.resultSummary && (
+				<div className="text-[10px] text-slate-500 pl-5 truncate max-w-[280px]">
+					{t.resultSummary}
+				</div>
+			)}
 		</div>
 	);
 }
@@ -536,6 +960,33 @@ function handleEvent(
 		setMessages((prev) => withLastAssistant(prev, (m) => ({
 			...m, content: (m.content || '') + evt.delta,
 		})));
+	} else if (evt.type === 'thinking_start') {
+		// Open an empty thinking block. Deltas append; thinking_stop closes.
+		setMessages((prev) => withLastAssistant(prev, (m) => ({
+			...m,
+			thinking: m.thinking || '',
+			thinkingDone: false,
+		})));
+	} else if (evt.type === 'thinking' && typeof evt.delta === 'string') {
+		setMessages((prev) => withLastAssistant(prev, (m) => ({
+			...m,
+			thinking: (m.thinking || '') + evt.delta,
+		})));
+	} else if (evt.type === 'thinking_stop') {
+		setMessages((prev) => withLastAssistant(prev, (m) => ({
+			...m,
+			thinkingDone: true,
+		})));
+	} else if (evt.type === 'tool_start') {
+		// Agent declared a tool call before args/results stream in. Show a
+		// spinner-style chip so the user sees activity immediately.
+		setMessages((prev) => withLastAssistant(prev, (m) => ({
+			...m,
+			tools: [
+				...(m.tools || []),
+				{ name: String(evt.name || 'tool'), ok: true, pending: true },
+			],
+		})));
 	} else if (evt.type === 'tool_call') {
 		// Surface a clickable "Open →" link on the tool chip for any
 		// install/compose that yields a tenant-side app. Other tools
@@ -556,18 +1007,24 @@ function handleEvent(
 				link = { to: `/studio/workflows?selected=${encodeURIComponent(appName)}`, label: 'Open' };
 			}
 		}
-		setMessages((prev) => withLastAssistant(prev, (m) => ({
-			...m,
-			tools: [
-				...(m.tools || []),
-				{
-					name: String(evt.name || 'tool'),
-					ok: evt.ok !== false,
-					summary: summarizeToolArgs(evt.args),
-					link,
-				},
-			],
-		})));
+		const completed: ToolCall = {
+			name: String(evt.name || 'tool'),
+			ok: evt.ok !== false,
+			summary: summarizeToolArgs(evt.args),
+			resultSummary: summarizeToolResult(evt.name, evt.result),
+			pending: false,
+			link,
+		};
+		setMessages((prev) => withLastAssistant(prev, (m) => {
+			const tools = m.tools ? [...m.tools] : [];
+			// Replace the latest pending entry of the same name; else push.
+			const pendIdx = tools.findLastIndex
+				? tools.findLastIndex((t) => t.pending && t.name === completed.name)
+				: (() => { for (let i = tools.length - 1; i >= 0; i--) if (tools[i].pending && tools[i].name === completed.name) return i; return -1; })();
+			if (pendIdx >= 0) tools[pendIdx] = completed;
+			else tools.push(completed);
+			return { ...m, tools };
+		}));
 		// W5 — surface compose_workflow results to the composer modal
 		// so it can switch into "review + install" mode. The chat
 		// already runs the tool; we just relay the result via a
@@ -581,6 +1038,14 @@ function handleEvent(
 					skill_summaries: Array.isArray(evt.result.skill_summaries) ? evt.result.skill_summaries : undefined,
 					for_app: String(evt.result.for_app || ''),
 				},
+			}));
+		}
+		// Auto-open the artifact panel when the agent saves a new artifact.
+		// StudioArtifactPanel listens for this event, refreshes the list,
+		// and selects the new id.
+		if (evt.name === 'save_artifact' && evt.ok !== false && evt.result && evt.result.id) {
+			window.dispatchEvent(new CustomEvent('studio:artifact-saved', {
+				detail: { id: String(evt.result.id) },
 			}));
 		}
 	} else if (evt.type === 'error' && evt.message) {
@@ -614,6 +1079,32 @@ function summarizeToolArgs(args: unknown): string {
 		return `${k}=${s.slice(0, 30)}${s.length > 30 ? '…' : ''}`;
 	});
 	return pick.join(' · ');
+}
+
+// Short human-readable summary of a tool's result, used for the chip
+// subtitle line. Per-tool because the interesting field is different
+// for each (search → result count; fetch → page title; etc).
+function summarizeToolResult(name: unknown, result: unknown): string | undefined {
+	if (!result || typeof result !== 'object') return undefined;
+	const r = result as Record<string, any>;
+	if (r.error) return String(r.error).slice(0, 80);
+	const n = String(name || '');
+	if (n === 'web_search' || n === 'deep_research') {
+		const count = Array.isArray(r.results) ? r.results.length : 0;
+		const ans = typeof r.answer === 'string' ? r.answer.length : 0;
+		const parts: string[] = [];
+		if (count) parts.push(`${count} result${count === 1 ? '' : 's'}`);
+		if (ans) parts.push('answer ready');
+		return parts.length ? parts.join(' · ') : undefined;
+	}
+	if (n === 'web_fetch') {
+		const title = typeof r.title === 'string' ? r.title : '';
+		const len = typeof r.content === 'string' ? r.content.length : 0;
+		if (title) return `${title.slice(0, 50)} (${len} chars)`;
+		if (len) return `${len} chars`;
+		return undefined;
+	}
+	return undefined;
 }
 
 export default StudioChat;
