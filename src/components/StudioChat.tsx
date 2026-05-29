@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ChevronRight, MessageSquarePlus, Send, Trash2, Loader2, Bot, User, Square, Globe, Telescope, Brain, ChevronDown, Paperclip, X, FileText, Image as ImageIcon, Plus } from 'lucide-react';
+import { ChevronRight, MessageSquarePlus, Send, Trash2, Loader2, Bot, User, Square, Globe, Telescope, Brain, ChevronDown, Paperclip, X, FileText, Image as ImageIcon, Plus, Copy, RotateCcw } from 'lucide-react';
 import { buildSelectionPreamble } from './StudioContext';
 import { ChatMarkdown } from './ChatMarkdown';
 
@@ -18,15 +18,34 @@ type Role = 'user' | 'assistant';
 // until send(). image → base64; text → raw string. PDFs deferred.
 type Attachment =
 	| { kind: 'image'; name: string; mime: string; dataB64: string; sizeBytes: number }
-	| { kind: 'text'; name: string; text: string; sizeBytes: number };
+	| { kind: 'text'; name: string; text: string; sizeBytes: number }
+	| { kind: 'document'; name: string; mime: string; dataB64: string; sizeBytes: number };
 
 // Wire format for the request body — mirrors the backend chatAttachment.
 type WireAttachment =
 	| { kind: 'image'; name: string; mime: string; data_b64: string }
-	| { kind: 'text'; name: string; text: string };
+	| { kind: 'text'; name: string; text: string }
+	| { kind: 'document'; name: string; mime: string; data_b64: string };
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_TEXT_BYTES = 500 * 1024;
+const MAX_DOC_BYTES = 10 * 1024 * 1024;
+
+// Binary document mime types we hand off to the server-side extractor
+// (poppler/pandoc/openpyxl). Match by exact mime OR by filename ext.
+const DOCUMENT_MIMES = new Set([
+	'application/pdf',
+	'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+	'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+	'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+	'application/rtf',
+	'text/rtf',
+	'application/vnd.oasis.opendocument.text',
+	'application/vnd.oasis.opendocument.spreadsheet',
+	'application/vnd.oasis.opendocument.presentation',
+	'application/epub+zip',
+]);
+const DOCUMENT_EXTS = ['.pdf', '.docx', '.xlsx', '.pptx', '.rtf', '.odt', '.ods', '.odp', '.epub'];
 type ToolCall = {
 	name: string;
 	ok: boolean;
@@ -48,6 +67,7 @@ type Message = {
 };
 
 const STORAGE_KEY = 'studio_chat_transcript_v1';
+const CHAT_ID_KEY = 'studio_chat_active_id_v1';
 const COLLAPSE_KEY = 'studio_chat_collapsed_v1';
 const WIDTH_KEY = 'studio_chat_width_v1';
 const MODEL_KEY = 'studio_chat_model_v1';
@@ -116,9 +136,26 @@ export function StudioChat() {
 		try { return localStorage.getItem(THINK_KEY) === '1'; }
 		catch { return false; }
 	});
+	// Active chat thread id. null = unsaved thread; gets a server-minted
+	// id after the first auto-save. Persists across reloads so refreshing
+	// the page keeps you in the same thread.
+	const [chatId, setChatId] = useState<string | null>(() => {
+		try { return localStorage.getItem(CHAT_ID_KEY) || null; }
+		catch { return null; }
+	});
+	// Recent threads for the history dropdown — populated lazily when
+	// the user opens the menu; refreshed after every save.
+	type HistoryRow = { id: string; title: string; updated_at: string; msg_count: number };
+	const [history, setHistory] = useState<HistoryRow[]>([]);
+	const [historyOpen, setHistoryOpen] = useState(false);
+
 	// Staged attachments for the next send. Cleared after dispatch.
 	const [attachments, setAttachments] = useState<Attachment[]>([]);
 	const [attachError, setAttachError] = useState<string>('');
+	// Drag-and-drop state — true while files are being dragged over the
+	// chat panel. Triggers the dashed-overlay on the textarea.
+	const [dragOver, setDragOver] = useState(false);
+	const dragDepthRef = useRef(0);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	// Tools popover open/close. Anchored above the [+] button to the
 	// left of the textarea. Click-outside + escape close it.
@@ -162,6 +199,105 @@ export function StudioChat() {
 		} catch { /* ignore */ }
 	}, [think]);
 
+	// Persist active chat id.
+	useEffect(() => {
+		try {
+			if (chatId) localStorage.setItem(CHAT_ID_KEY, chatId);
+			else localStorage.removeItem(CHAT_ID_KEY);
+		} catch { /* ignore */ }
+	}, [chatId]);
+
+	// Auto-save after each turn settles. Triggers when streaming
+	// transitions false and there's at least one assistant turn with
+	// non-empty content (skips dispatch errors that left an empty
+	// assistant placeholder). Debounced 600ms so a fast follow-up
+	// turn doesn't fire two saves back-to-back.
+	const saveTimerRef = useRef<number | null>(null);
+	const lastSavedSigRef = useRef<string>('');
+	useEffect(() => {
+		if (streaming) return;
+		if (messages.length < 2) return;
+		const last = messages[messages.length - 1];
+		if (last.role !== 'assistant' || !last.content) return;
+		// Cheap signature so we don't re-POST when reordering UI bits.
+		const sig = `${messages.length}:${last.content.length}:${(last.thinking||'').length}`;
+		if (sig === lastSavedSigRef.current) return;
+
+		if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+		saveTimerRef.current = window.setTimeout(async () => {
+			try {
+				const r = await fetch('/api/v1/me/chats', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					credentials: 'include',
+					body: JSON.stringify({
+						...(chatId ? { id: chatId } : {}),
+						messages,
+						model: model || undefined,
+						mode: mode || undefined,
+					}),
+				});
+				if (!r.ok) return;
+				const j = await r.json();
+				const newId: string | undefined = j?.data?.id;
+				if (newId && newId !== chatId) setChatId(newId);
+				lastSavedSigRef.current = sig;
+			} catch { /* ignore */ }
+		}, 600);
+		return () => {
+			if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+		};
+	}, [messages, streaming, chatId, model, mode]);
+
+	// Lazy-load history when the dropdown opens.
+	const loadHistory = useCallback(async () => {
+		try {
+			const r = await fetch('/api/v1/me/chats', { credentials: 'include' });
+			if (!r.ok) return;
+			const j = await r.json();
+			const rows: HistoryRow[] = j?.data?.chats || [];
+			setHistory(rows);
+		} catch { /* ignore */ }
+	}, []);
+
+	// Load one thread into the chat — replaces current messages +
+	// chatId. Active session is overwritten; the previous thread is
+	// already saved on disk, so the user can navigate back to it.
+	const loadThread = useCallback(async (id: string) => {
+		try {
+			const r = await fetch('/api/v1/me/chats/' + encodeURIComponent(id), { credentials: 'include' });
+			if (!r.ok) return;
+			const j = await r.json();
+			const rec = j?.data;
+			if (!rec || !Array.isArray(rec.messages)) return;
+			setMessages(rec.messages);
+			setChatId(rec.id);
+			lastSavedSigRef.current = '';
+			setHistoryOpen(false);
+		} catch { /* ignore */ }
+	}, []);
+
+	const newChat = useCallback(() => {
+		if (streaming) return;
+		setMessages([]);
+		setChatId(null);
+		lastSavedSigRef.current = '';
+		try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+		setHistoryOpen(false);
+	}, [streaming]);
+
+	const deleteThread = useCallback(async (id: string) => {
+		if (!confirm('Delete this conversation?')) return;
+		try {
+			await fetch('/api/v1/me/chats/' + encodeURIComponent(id), {
+				method: 'DELETE',
+				credentials: 'include',
+			});
+			if (id === chatId) newChat();
+			loadHistory();
+		} catch { /* ignore */ }
+	}, [chatId, newChat, loadHistory]);
+
 	// File picker handler — turns each selected file into an
 	// Attachment, validates size + kind. Errors surface in a one-line
 	// banner above the input.
@@ -170,7 +306,13 @@ export function StudioChat() {
 		setAttachError('');
 		const next: Attachment[] = [];
 		for (const f of Array.from(files)) {
-			if (f.type.startsWith('image/')) {
+			const lowerName = f.name.toLowerCase();
+			const isImage = f.type.startsWith('image/');
+			const isDocument =
+				DOCUMENT_MIMES.has(f.type) ||
+				DOCUMENT_EXTS.some((ext) => lowerName.endsWith(ext));
+
+			if (isImage) {
 				if (f.size > MAX_IMAGE_BYTES) {
 					setAttachError(`${f.name}: image > ${Math.round(MAX_IMAGE_BYTES / 1024 / 1024)}MB`);
 					continue;
@@ -182,14 +324,21 @@ export function StudioChat() {
 				for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
 				const dataB64 = btoa(bin);
 				next.push({ kind: 'image', name: f.name, mime: f.type, dataB64, sizeBytes: f.size });
-			} else {
-				// Treat as text. Includes .txt/.md/.csv/.json/.log/.tsv plus
-				// anything else with a reasonable mime. PDFs are NOT supported
-				// here yet — they'd need a server-side extraction pass.
-				if (f.type === 'application/pdf') {
-					setAttachError(`${f.name}: PDF upload not supported yet`);
+			} else if (isDocument) {
+				if (f.size > MAX_DOC_BYTES) {
+					setAttachError(`${f.name}: document > ${Math.round(MAX_DOC_BYTES / 1024 / 1024)}MB`);
 					continue;
 				}
+				const buf = await f.arrayBuffer();
+				const bytes = new Uint8Array(buf);
+				let bin = '';
+				for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+				const dataB64 = btoa(bin);
+				// Best-effort mime fallback when the browser doesn't
+				// label the file (e.g. some old systems for .docx).
+				const mime = f.type || mimeFromExt(lowerName);
+				next.push({ kind: 'document', name: f.name, mime, dataB64, sizeBytes: f.size });
+			} else {
 				if (f.size > MAX_TEXT_BYTES) {
 					setAttachError(`${f.name}: text > ${Math.round(MAX_TEXT_BYTES / 1024)}KB`);
 					continue;
@@ -211,6 +360,24 @@ export function StudioChat() {
 	// the [+] tools button so the user knows something is on without
 	// opening the popover.
 	const activeToolCount = (mode ? 1 : 0) + (think ? 1 : 0);
+
+	// Click-outside to close the history dropdown.
+	useEffect(() => {
+		if (!historyOpen) return;
+		const onClick = () => setHistoryOpen(false);
+		const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setHistoryOpen(false); };
+		// One tick delay so the click that OPENED the menu doesn't
+		// close it immediately.
+		const t = window.setTimeout(() => {
+			document.addEventListener('click', onClick);
+			document.addEventListener('keydown', onKey);
+		}, 0);
+		return () => {
+			window.clearTimeout(t);
+			document.removeEventListener('click', onClick);
+			document.removeEventListener('keydown', onKey);
+		};
+	}, [historyOpen]);
 
 	// Click-outside + Escape to close the tools popover.
 	useEffect(() => {
@@ -319,17 +486,18 @@ export function StudioChat() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
-	const queueSend = useCallback(async (text: string) => {
+	const queueSend = useCallback(async (text: string, baseMessages?: Message[]) => {
 		if (!text || streaming) return;
 		setInput('');
+		const base = baseMessages ?? messages;
 		const userMsg: Message = { role: 'user', content: text };
 		const pageNote = buildSelectionPreamble(location.pathname);
 		const wireMessages = [
-			...messages.map((m) => ({ role: m.role, content: m.content })),
+			...base.map((m) => ({ role: m.role, content: m.content })),
 			{ role: 'user' as const, content: `${pageNote}\n\n${text}` },
 		];
 		const assistantMsg: Message = { role: 'assistant', content: '', tools: [] };
-		setMessages((prev) => [...prev, userMsg, assistantMsg]);
+		setMessages(() => [...base, userMsg, assistantMsg]);
 		setStreaming(true);
 		const ctrl = new AbortController();
 		abortRef.current = ctrl;
@@ -392,6 +560,29 @@ export function StudioChat() {
 		}
 	}, [messages, streaming, location.pathname, model, mode, think]);
 
+	// Re-run a turn — drops the clicked assistant message + the user
+	// message before it, then dispatches the original user text again
+	// with the current model/mode/think settings (which may have
+	// changed since the first run, the point of regen).
+	const regenerate = useCallback((assistantIdx: number) => {
+		if (streaming || assistantIdx < 1) return;
+		const userIdx = assistantIdx - 1;
+		const userMsg = messages[userIdx];
+		if (!userMsg || userMsg.role !== 'user') return;
+		const trimmed = messages.slice(0, userIdx);
+		setMessages(trimmed);
+		void queueSend(userMsg.content, trimmed);
+	}, [messages, streaming, queueSend]);
+
+	// Copy one message's content to the clipboard. Markdown is
+	// preserved verbatim so paste into a doc-style editor keeps
+	// formatting; readers that don't know markdown just see the raw
+	// text. No toast — the assistant turn briefly flashes via title
+	// state in MessageBubble.
+	const copyMessage = useCallback((content: string) => {
+		try { navigator.clipboard.writeText(content); } catch { /* ignore */ }
+	}, []);
+
 	const send = useCallback(async () => {
 		const text = input.trim();
 		if (!text || streaming) return;
@@ -413,7 +604,9 @@ export function StudioChat() {
 		const wireAttachments: WireAttachment[] = stagedAttachments.map((a) =>
 			a.kind === 'image'
 				? { kind: 'image', name: a.name, mime: a.mime, data_b64: a.dataB64 }
-				: { kind: 'text', name: a.name, text: a.text }
+				: a.kind === 'document'
+					? { kind: 'document', name: a.name, mime: a.mime, data_b64: a.dataB64 }
+					: { kind: 'text', name: a.name, text: a.text }
 		);
 		const wireMessages = [
 			...messages.map((m) => ({ role: m.role, content: m.content })),
@@ -523,6 +716,30 @@ export function StudioChat() {
 				'border-l border-slate-200/70 shadow-[inset_1px_0_0_0_rgb(255_255_255/0.8)]',
 				resizing ? 'select-none' : '',
 			].join(' ')}
+			onDragEnter={(e) => {
+				if (!e.dataTransfer?.types?.includes('Files')) return;
+				e.preventDefault();
+				dragDepthRef.current += 1;
+				setDragOver(true);
+			}}
+			onDragOver={(e) => {
+				if (e.dataTransfer?.types?.includes('Files')) {
+					e.preventDefault();
+					e.dataTransfer.dropEffect = 'copy';
+				}
+			}}
+			onDragLeave={(e) => {
+				if (!e.dataTransfer?.types?.includes('Files')) return;
+				dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+				if (dragDepthRef.current === 0) setDragOver(false);
+			}}
+			onDrop={(e) => {
+				if (!e.dataTransfer?.files || e.dataTransfer.files.length === 0) return;
+				e.preventDefault();
+				dragDepthRef.current = 0;
+				setDragOver(false);
+				onPickFiles(e.dataTransfer.files);
+			}}
 		>
 			{/* Drag handle — 8px hit zone with a 1px visible rule that
 			    glows on hover/drag. Lives on the left edge so dragging
@@ -569,10 +786,80 @@ export function StudioChat() {
 					</div>
 				</div>
 				<div className="flex items-center gap-0.5 flex-shrink-0">
+					{/* History dropdown — anchored relative; popover below
+					    shows recent threads + "New chat". Click outside to
+					    close (window click handler below). */}
+					<div className="relative">
+						<button
+							onClick={() => {
+								const next = !historyOpen;
+								setHistoryOpen(next);
+								if (next) loadHistory();
+							}}
+							title="Conversation history"
+							className={[
+								'p-1.5 rounded-md transition-colors',
+								historyOpen ? 'text-emerald-700 bg-emerald-50' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100',
+							].join(' ')}
+						>
+							<MessageSquarePlus className="w-3.5 h-3.5" />
+						</button>
+						{historyOpen && (
+							<div
+								className="absolute right-0 top-full mt-1 z-20 w-72 max-h-96 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg shadow-slate-200/40 p-1"
+								onClick={(e) => e.stopPropagation()}
+							>
+								<button
+									type="button"
+									onClick={newChat}
+									className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 transition-colors"
+								>
+									<Plus className="w-3.5 h-3.5 text-emerald-600" />
+									<span className="font-medium">New chat</span>
+								</button>
+								<div className="h-px bg-slate-100 my-1 mx-2" />
+								{history.length === 0 && (
+									<div className="px-2.5 py-1.5 text-[11px] text-slate-400 italic">
+										No saved threads yet.
+									</div>
+								)}
+								{history.map((h) => (
+									<div
+										key={h.id}
+										className={[
+											'group flex items-center gap-1 px-1 py-0.5 rounded-lg transition-colors',
+											h.id === chatId ? 'bg-emerald-50/60' : 'hover:bg-slate-50',
+										].join(' ')}
+									>
+										<button
+											type="button"
+											onClick={() => loadThread(h.id)}
+											className="flex-1 min-w-0 text-left px-1.5 py-1"
+										>
+											<div className="text-[12.5px] font-medium text-slate-800 truncate">{h.title}</div>
+											<div className="text-[10px] text-slate-500 flex items-center gap-1">
+												<span>{h.msg_count} msg</span>
+												<span>·</span>
+												<span>{relativeTime(h.updated_at)}</span>
+											</div>
+										</button>
+										<button
+											type="button"
+											onClick={() => deleteThread(h.id)}
+											title="Delete"
+											className="p-1 opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-600 transition-all"
+										>
+											<Trash2 className="w-3 h-3" />
+										</button>
+									</div>
+								))}
+							</div>
+						)}
+					</div>
 					{messages.length > 0 && (
 						<button
 							onClick={clear}
-							title="Clear chat"
+							title="Clear (without deleting from history)"
 							className="p-1.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
 						>
 							<Trash2 className="w-3.5 h-3.5" />
@@ -591,7 +878,13 @@ export function StudioChat() {
 			<div ref={transcriptRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3.5 scroll-smooth">
 				{messages.length === 0 && <EmptyHint />}
 				{messages.map((m, i) => (
-					<MessageBubble key={i} m={m} streaming={streaming && i === messages.length - 1 && m.role === 'assistant'} />
+					<MessageBubble
+					key={i}
+					m={m}
+					streaming={streaming && i === messages.length - 1 && m.role === 'assistant'}
+					onCopy={m.role === 'assistant' && m.content ? () => copyMessage(m.content) : undefined}
+					onRegenerate={m.role === 'assistant' && !streaming && i > 0 && messages[i - 1]?.role === 'user' ? () => regenerate(i) : undefined}
+				/>
 				))}
 			</div>
 
@@ -608,7 +901,9 @@ export function StudioChat() {
 							>
 								{a.kind === 'image'
 									? <ImageIcon className="w-3 h-3 text-sky-600" />
-									: <FileText className="w-3 h-3 text-slate-600" />}
+									: a.kind === 'document'
+										? <FileText className="w-3 h-3 text-violet-600" />
+										: <FileText className="w-3 h-3 text-slate-600" />}
 								<span className="font-medium max-w-[120px] truncate">{a.name}</span>
 								<span className="opacity-60">{Math.round(a.sizeBytes / 1024)}KB</span>
 								<button
@@ -628,13 +923,13 @@ export function StudioChat() {
 				)}
 				<form
 					onSubmit={(e) => { e.preventDefault(); send(); }}
-					className="flex items-end gap-1.5"
+					className="flex items-center gap-1.5"
 				>
 					<input
 						ref={fileInputRef}
 						type="file"
 						multiple
-						accept="image/*,text/*,.md,.csv,.json,.tsv,.log,.yml,.yaml,.toml"
+						accept="image/*,text/*,.md,.csv,.json,.tsv,.log,.yml,.yaml,.toml,.pdf,.docx,.xlsx,.pptx,.rtf,.odt,.ods,.odp,.epub"
 						className="hidden"
 						onChange={(e) => {
 							onPickFiles(e.target.files);
@@ -652,7 +947,7 @@ export function StudioChat() {
 							disabled={streaming}
 							title="Tools — Search / Deep research / Think"
 							className={[
-								'relative p-2.5 rounded-xl border transition-all',
+								'relative h-[42px] w-[42px] flex items-center justify-center rounded-xl border transition-all',
 								toolsOpen
 									? 'bg-slate-900 text-white border-slate-900'
 									: activeToolCount > 0
@@ -730,15 +1025,37 @@ export function StudioChat() {
 							value={input}
 							onChange={(e) => setInput(e.target.value)}
 							onKeyDown={(e) => {
+								// Send: Enter (without modifiers) OR Cmd+Enter / Ctrl+Enter
+								// from anywhere. Shift+Enter inserts newline as usual.
 								if (e.key === 'Enter' && !e.shiftKey) {
 									e.preventDefault();
 									send();
+									return;
+								}
+								if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+									e.preventDefault();
+									send();
+									return;
+								}
+								// ↑ on an empty input repopulates the last user
+								// turn so a typo can be fixed without retyping.
+								if (e.key === 'ArrowUp' && input === '') {
+									const lastUser = [...messages].reverse().find((m) => m.role === 'user');
+									if (lastUser) {
+										e.preventDefault();
+										setInput(lastUser.content);
+									}
 								}
 							}}
-							placeholder='Ask anything — "what&apos;s pending?" or "send Alice&apos;s draft"'
+							placeholder={dragOver ? 'Drop to attach' : 'Ask anything…'}
 							rows={1}
 							disabled={streaming}
-							className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-200 bg-white shadow-sm focus:outline-none focus:ring-4 focus:ring-emerald-400/15 focus:border-emerald-400 resize-none max-h-32 transition-all placeholder:text-slate-400"
+							className={[
+								'w-full px-3.5 py-2.5 text-sm rounded-xl border bg-white shadow-sm focus:outline-none focus:ring-4 focus:ring-emerald-400/15 focus:border-emerald-400 resize-none max-h-32 transition-all placeholder:text-slate-400',
+								dragOver
+									? 'border-emerald-400 border-dashed bg-emerald-50/40 placeholder:text-emerald-700'
+									: 'border-slate-200',
+							].join(' ')}
 							style={{ minHeight: '42px' }}
 						/>
 					</div>
@@ -747,7 +1064,7 @@ export function StudioChat() {
 							type="button"
 							onClick={() => abortRef.current?.abort()}
 							title="Stop"
-							className="p-2.5 rounded-xl flex-shrink-0 bg-rose-500 text-white hover:bg-rose-600 active:scale-95 shadow-sm shadow-rose-200 transition-all"
+							className="h-[42px] w-[42px] flex items-center justify-center rounded-xl flex-shrink-0 bg-rose-500 text-white hover:bg-rose-600 active:scale-95 shadow-sm shadow-rose-200 transition-all"
 						>
 							<Square className="w-3.5 h-3.5 fill-current" />
 						</button>
@@ -756,7 +1073,7 @@ export function StudioChat() {
 							type="submit"
 							disabled={!input.trim()}
 							className={[
-								'p-2.5 rounded-xl transition-all flex-shrink-0',
+								'h-[42px] w-[42px] flex items-center justify-center rounded-xl transition-all flex-shrink-0',
 								!input.trim()
 									? 'bg-slate-100 text-slate-300 cursor-not-allowed'
 									: 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white hover:from-emerald-400 hover:to-emerald-500 active:scale-95 shadow-sm shadow-emerald-200',
@@ -771,10 +1088,22 @@ export function StudioChat() {
 	);
 }
 
-function MessageBubble({ m, streaming }: { m: Message; streaming?: boolean }) {
+function MessageBubble({
+	m,
+	streaming,
+	onCopy,
+	onRegenerate,
+}: {
+	m: Message;
+	streaming?: boolean;
+	onCopy?: () => void;
+	onRegenerate?: () => void;
+}) {
 	const isUser = m.role === 'user';
+	const [copied, setCopied] = useState(false);
+	const showActions = !streaming && (onCopy || onRegenerate);
 	return (
-		<div className={['flex gap-2.5 animate-in fade-in slide-in-from-bottom-1 duration-200', isUser ? 'flex-row-reverse' : ''].join(' ')}>
+		<div className={['group flex gap-2.5 animate-in fade-in slide-in-from-bottom-1 duration-200', isUser ? 'flex-row-reverse' : ''].join(' ')}>
 			<div className={[
 				'w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm',
 				isUser
@@ -816,6 +1145,42 @@ function MessageBubble({ m, streaming }: { m: Message; streaming?: boolean }) {
 						{m.tools.map((t, i) => <ToolChip key={i} t={t} />)}
 					</div>
 				)}
+				{showActions && (
+					<div className={[
+						'mt-1 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity',
+						isUser ? 'justify-end' : '',
+					].join(' ')}>
+						{onCopy && (
+							<button
+								type="button"
+								onClick={() => {
+									onCopy();
+									setCopied(true);
+									setTimeout(() => setCopied(false), 1200);
+								}}
+								title={copied ? 'Copied' : 'Copy'}
+								className={[
+									'p-1 rounded text-[10px]',
+									copied
+										? 'text-emerald-700 bg-emerald-50'
+										: 'text-slate-400 hover:text-slate-700 hover:bg-slate-100',
+								].join(' ')}
+							>
+								<Copy className="w-3 h-3" />
+							</button>
+						)}
+						{onRegenerate && (
+							<button
+								type="button"
+								onClick={onRegenerate}
+								title="Regenerate with current model + toggles"
+								className="p-1 rounded text-[10px] text-slate-400 hover:text-emerald-700 hover:bg-emerald-50"
+							>
+								<RotateCcw className="w-3 h-3" />
+							</button>
+						)}
+					</div>
+				)}
 			</div>
 		</div>
 	);
@@ -823,23 +1188,18 @@ function MessageBubble({ m, streaming }: { m: Message; streaming?: boolean }) {
 
 // ThinkingBlock — collapsible reasoning panel above the assistant's
 // reply. Auto-expanded while streaming so the user sees the model
-// "think out loud"; auto-collapsed once thinking_stop arrives so the
-// final answer stays the focus.
+// Collapsed by default — the user clicks to peek at the reasoning. The
+// label updates live ("Thinking… 142 chars" → "Thought (412 chars)")
+// so they still see activity without the panel hijacking attention
+// from the streaming answer.
 function ThinkingBlock({ thinking, done }: { thinking: string; done: boolean }) {
-	const [open, setOpen] = useState<boolean>(!done);
-	// When the stream transitions to done, collapse automatically (only
-	// the first time — the user can re-open it).
-	const wasDone = useRef(done);
-	useEffect(() => {
-		if (done && !wasDone.current) {
-			setOpen(false);
-			wasDone.current = true;
-		}
-	}, [done]);
+	const [open, setOpen] = useState<boolean>(false);
 	const charCount = thinking.length;
 	const label = done
 		? `Thought (${charCount} chars)`
-		: 'Thinking…';
+		: charCount > 0
+			? `Thinking… ${charCount} chars`
+			: 'Thinking…';
 	return (
 		<div className="mb-1.5">
 			<button
@@ -931,8 +1291,7 @@ function EmptyHint() {
 			<div className="space-y-1">
 				<div className="text-sm font-semibold text-slate-900">Hi — I&apos;m your AI.</div>
 				<p className="text-[11.5px] leading-relaxed max-w-[260px] mx-auto">
-					Ask anything in plain English. I can act on what you see in Studio;
-					webforms are still there for precision.
+					Ask in plain English. I&apos;ll act.
 				</p>
 			</div>
 			<div className="pt-3 space-y-1.5 text-left max-w-xs mx-auto">
@@ -1065,6 +1424,36 @@ function withLastAssistant(
 	const last = prev[prev.length - 1];
 	if (last.role !== 'assistant') return prev;
 	return [...prev.slice(0, -1), patch(last)];
+}
+
+// relativeTime — "5m" / "3h" / "2d" relative to now. Used by the
+// history dropdown. Returns "now" for anything under a minute.
+function relativeTime(iso: string): string {
+	try {
+		const d = new Date(iso).getTime();
+		const diff = (Date.now() - d) / 1000;
+		if (diff < 60) return 'now';
+		if (diff < 3600) return `${Math.floor(diff / 60)}m`;
+		if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
+		return `${Math.floor(diff / 86400)}d`;
+	} catch { return iso.slice(0, 10); }
+}
+
+// mimeFromExt — best-effort fallback when the browser/OS doesn't tag
+// the file (rare on modern browsers; happens with .docx on some
+// Linux distros). Maps the lowercase filename to the canonical mime
+// the server-side extractor expects.
+function mimeFromExt(lowerName: string): string {
+	if (lowerName.endsWith('.pdf'))  return 'application/pdf';
+	if (lowerName.endsWith('.docx')) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+	if (lowerName.endsWith('.xlsx')) return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+	if (lowerName.endsWith('.pptx')) return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+	if (lowerName.endsWith('.rtf'))  return 'application/rtf';
+	if (lowerName.endsWith('.odt'))  return 'application/vnd.oasis.opendocument.text';
+	if (lowerName.endsWith('.ods'))  return 'application/vnd.oasis.opendocument.spreadsheet';
+	if (lowerName.endsWith('.odp'))  return 'application/vnd.oasis.opendocument.presentation';
+	if (lowerName.endsWith('.epub')) return 'application/epub+zip';
+	return 'application/octet-stream';
 }
 
 function summarizeToolArgs(args: unknown): string {
