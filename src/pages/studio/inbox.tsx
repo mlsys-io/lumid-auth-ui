@@ -27,6 +27,8 @@ import { me, MeApiError } from '@/api/me';
 import apiClient from '@/api/client';
 import PageHints from '@/components/PageHints';
 import { setStudioSelection } from '@/components/StudioContext';
+import { IntentFeedbackRow } from '@/components/IntentFeedbackRow';
+import { AXIS_META } from '@/lib/demo-intents';
 import { DEMO_MODE } from '@/lib/demo';
 import { loadPendingDecisions, DECISIONS_EVENT } from '@/lib/demo-decisions';
 
@@ -360,8 +362,8 @@ function InboxFeedBody({
 							className={[
 								'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs transition-colors',
 								active
-									? 'bg-gray-900 text-white'
-									: 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50',
+									? 'bg-slate-900 text-white shadow-sm'
+									: 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300',
 							].join(' ')}
 						>
 							{f.label}
@@ -470,7 +472,7 @@ function FilterEmptyState({ filter, onReset }: { filter: Filter; onReset: () => 
 // ── Card primitives ────────────────────────────────────────────────
 
 function FeedRow({
-	icon: Icon, tone, ts, title, sub, body, actions, link,
+	icon: Icon, tone, ts, title, sub, body, actions, link, feedback, pick,
 }: {
 	icon: typeof Mail;
 	tone: 'emerald' | 'slate' | 'amber' | 'rose' | 'indigo';
@@ -480,13 +482,17 @@ function FeedRow({
 	body?: React.ReactNode;
 	actions?: React.ReactNode;
 	link?: { to: string; label: string };
+	/** Optional hover-revealed feedback row (👍/✏️/👎) appearing top-right. */
+	feedback?: React.ReactNode;
+	/** Optional mouse-picker annotations. When provided, the row becomes pickable. */
+	pick?: { kind: string; id: string; label: string; affordances?: string };
 }) {
 	const toneCls = {
-		emerald: 'border-emerald-200 bg-emerald-50/50',
-		slate:   'border-slate-200 bg-white',
-		amber:   'border-amber-200 bg-amber-50/50',
-		rose:    'border-rose-200 bg-rose-50/50',
-		indigo:  'border-indigo-200 bg-indigo-50/30',
+		emerald: 'border-emerald-200 bg-emerald-50/40 hover:border-emerald-300',
+		slate:   'border-slate-200 bg-white hover:border-slate-300',
+		amber:   'border-amber-200 bg-amber-50/40 hover:border-amber-300',
+		rose:    'border-rose-200 bg-rose-50/40 hover:border-rose-300',
+		indigo:  'border-indigo-200 bg-indigo-50/30 hover:border-indigo-300',
 	}[tone];
 	const iconCls = {
 		emerald: 'text-emerald-600',
@@ -495,15 +501,30 @@ function FeedRow({
 		rose:    'text-rose-600',
 		indigo:  'text-indigo-600',
 	}[tone];
+	const pickAttrs = pick
+		? {
+			'data-pick-kind':        pick.kind,
+			'data-pick-id':          pick.id,
+			'data-pick-label':       pick.label,
+			'data-pick-affordances': pick.affordances,
+		}
+		: {};
 	return (
-		<div className={['rounded-lg border px-3 py-2.5', toneCls].join(' ')}>
+		<div className={['group rounded-lg border px-3 py-2.5 transition-colors', toneCls].join(' ')} {...pickAttrs}>
 			<div className="flex items-start gap-3">
 				<Icon className={['w-4 h-4 mt-0.5 flex-shrink-0', iconCls].join(' ')} />
 				<div className="min-w-0 flex-1">
 					<div className="flex items-baseline justify-between gap-3">
 						<div className="text-sm font-medium text-slate-900 truncate">{title}</div>
-						<div className="text-[11px] text-slate-500 tabular-nums flex-shrink-0">
-							{formatRelative(ts)}
+						<div className="flex items-center gap-2 flex-shrink-0">
+							{feedback && (
+								<span className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+									{feedback}
+								</span>
+							)}
+							<div className="text-[11px] text-slate-500 tabular-nums">
+								{formatRelative(ts)}
+							</div>
 						</div>
 					</div>
 					{sub && <div className="text-xs text-slate-500 mt-0.5">{sub}</div>}
@@ -550,12 +571,19 @@ function DraftCard({
 		return () => setStudioSelection(null);
 	}, [editing, item.id, item.to, item.subject]);
 
+	const draftPick = {
+		kind: 'draft',
+		id: `draft:${item.id.slice(6)}`,
+		label: `${item.subject} → ${item.to}`,
+		affordances: 'send_draft,edit_draft,dismiss_draft,explain',
+	};
 	if (editing) {
 		return (
 			<FeedRow
 				icon={Mail}
 				tone="indigo"
 				ts={item.ts}
+				pick={draftPick}
 				title={item.subject}
 				sub={<>To <span className="font-medium text-slate-700">{item.to}</span> · {item.app}</>}
 				body={
@@ -587,6 +615,7 @@ function DraftCard({
 			icon={Mail}
 			tone="indigo"
 			ts={item.ts}
+			pick={draftPick}
 			title={item.subject}
 			sub={<>To <span className="font-medium text-slate-700">{item.to}</span> · {item.app}</>}
 			body={<div className="whitespace-pre-wrap line-clamp-4">{item.body || '(empty)'}</div>}
@@ -615,11 +644,22 @@ function CycleCard({ item }: { item: Extract<FeedItem, { kind: 'cycle' }> }) {
 	const Icon = failing ? AlertCircle : item.skipped ? AlertCircle : CheckCircle2;
 	const tone = failing ? 'rose' : item.skipped ? 'amber' : 'slate';
 	const verb = failing ? 'failed' : item.skipped ? 'skipped' : 'ran';
+	// Cycle ts in the journal is ISO; the existing convention for the
+	// cycle dir name is YYYYMMDDTHHMMSSZ (15 chars). Use the same shape
+	// for /me/cycles/feedback (via IntentFeedbackRow) so the ledger row
+	// can join back to the cycle artifact.
+	const cycleTs = item.ts.replace(/[-:]/g, '').replace('T', 'T').slice(0, 15) + 'Z';
 	return (
 		<FeedRow
 			icon={Icon}
 			tone={tone}
 			ts={item.ts}
+			pick={{
+				kind: 'cycle',
+				id: `cycle:${item.app}:${item.loop}:${cycleTs}`,
+				label: `${humanizeLoop(item.loop)} ${verb} — ${item.app}`,
+				affordances: 'give_feedback,explain,rerun,inspect',
+			}}
 			title={<>{humanizeLoop(item.loop)} {verb}</>}
 			sub={item.app}
 			body={
@@ -629,7 +669,16 @@ function CycleCard({ item }: { item: Extract<FeedItem, { kind: 'cycle' }> }) {
 					<span className="text-xs text-rose-800 font-mono truncate block">{item.lastError.slice(0, 200)}</span>
 				) : undefined
 			}
-			link={{ to: `/studio/intents/cycle/${encodeURIComponent(item.app)}/${encodeURIComponent(item.loop)}/${encodeURIComponent(item.ts.replace(/[-:]/g, '').replace('T', 'T').slice(0, 15))}`, label: 'Inspect' }}
+			// Successful cycles get the 👍/✏️/👎 row so the user can
+			// teach the loop right where the outcome surfaces. Failed/
+			// skipped cycles skip feedback (no output to evaluate; the
+			// user goes to Inspect instead).
+			feedback={
+				item.ok && !item.skipped
+					? <IntentFeedbackRow app={item.app} loop={item.loop} cycleTs={cycleTs} outputId={`cycle:${cycleTs}`} dense />
+					: undefined
+			}
+			link={{ to: `/studio/intents/cycle/${encodeURIComponent(item.app)}/${encodeURIComponent(item.loop)}/${encodeURIComponent(cycleTs)}`, label: 'Inspect' }}
 		/>
 	);
 }
@@ -640,6 +689,12 @@ function AuditCard({ item }: { item: Extract<FeedItem, { kind: 'audit' }> }) {
 			icon={Lock}
 			tone="slate"
 			ts={item.ts}
+			pick={{
+				kind: 'audit',
+				id: `audit:${item.ts}:${item.endpoint}`,
+				label: `API call · ${item.endpoint}${item.model ? ' · ' + item.model : ''}`,
+				affordances: 'explain',
+			}}
 			title={<>API call · <span className="font-mono">{item.endpoint}</span></>}
 			sub={item.model ? `model=${item.model}` : 'external request from your AI'}
 		/>
@@ -651,12 +706,36 @@ function NoticeCard({ item }: { item: Extract<FeedItem, { kind: 'notice' }> }) {
 		: item.noticeKind === 'cycle_failed' ? 'rose'
 		: 'emerald';
 	const Icon = item.noticeKind === 'brief' ? Sparkles : AlertCircle;
+	// Briefs are an Examples-axis output (something the AI produced
+	// for you). Failures are a Standard-axis signal (the AI's own
+	// scorecard registering trouble). The axis chip in the row sub
+	// communicates this in the same language used everywhere else.
+	const axis =
+		item.noticeKind === 'brief'        ? AXIS_META.examples :
+		item.noticeKind === 'cycle_failed' ? AXIS_META.standard :
+		                                     null;
 	return (
 		<FeedRow
 			icon={Icon}
 			tone={tone}
 			ts={item.ts}
+			pick={{
+				kind: 'notice',
+				id: `notice:${item.id}`,
+				label: item.summary,
+				affordances: 'explain,give_feedback,intent_audit',
+			}}
 			title={item.summary}
+			sub={
+				axis ? (
+					<span className="inline-flex items-center gap-1.5">
+						<span className={`inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-medium ${axis.tone}`}>
+							{axis.label}
+						</span>
+						<span className="text-slate-500">{axis.phrase}</span>
+					</span>
+				) : undefined
+			}
 			body={item.detail ? <span className="text-sm text-slate-600">{item.detail}</span> : undefined}
 			link={item.noticeKind === 'quota_paused' ? { to: '/studio/settings#secrets', label: 'Upgrade' } : undefined}
 		/>

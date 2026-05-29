@@ -29,7 +29,14 @@ import { cn } from '../lib/utils';
 // for Studio; webforms in the main workspace area become the
 // precision channel beside it.
 import { StudioChat } from './StudioChat';
-import { StudioArtifactPanel } from './StudioArtifactPanel';
+// Mouse-picker overlay — sits at the document root so it can capture
+// pointer events globally when the user clicks the Crosshair in the
+// chat. Inactive (renders null) until startStudioPicking() is called.
+import StudioPicker from './StudioPicker';
+// StudioArtifactPanel — used to live here as a left-rail drawer.
+// Moved into the chat header right group on 2026-05-29; rendered as
+// a popover anchored to the ArtifactIconButton in StudioChat. The
+// shell no longer mounts it.
 // Top-bar status strip — page title + live activity pills (drafts,
 // running, failing). Fills the gap left by removing the redundant
 // "Ask anything" search input.
@@ -42,27 +49,64 @@ interface NavItem {
 	end?: boolean;
 }
 
-// Sidebar layout (demo IA, 2026-05-28):
-//   Intents / Inbox       — surfaces the user lives in.
-//   ── Personal AI ──
-//   Workflows             — apps + workflows + runs + mind, unified.
-//                           Lenses: Live · All · Runs · Available.
-//   Knowledge             — "you, encoded" ledger of voice principles,
-//                           heuristics, optimization preferences.
-//   Library               — Browse + install skills, datasets, apps.
+// Sidebar layout (post-refactor, 2026-05-29):
+//   Intents          — the one work-surface. Everything the user
+//                      tracks + manages lives inside their standing
+//                      intents.
 //
-// Settings + API tokens + Admin + Sign out live in the bottom-left
-// avatar menu — account surfaces in one place, sidebar stays focused
-// on the work-surfaces. Today/Marketplace redirect to Intents/Library.
+// The four secondary surfaces (Inbox / Workflows / Knowledge /
+// Library) collapsed into a single "More" group. Inbox content now
+// surfaces INSIDE each intent's expanded view (drafts pending,
+// activity timeline). Library + Knowledge + Workflows remain as
+// reachable routes for power users but no longer compete for the
+// primary surface. Settings / Admin / API tokens still live in the
+// bottom avatar menu.
 const TOP_NAV: NavItem[] = [
 	{ to: '/studio/intents',   label: 'Intents',   icon: Sparkles, end: true },
-	{ to: '/studio/inbox',     label: 'Inbox',     icon: Inbox },
 ];
-const PERSONAL_AI_NAV: NavItem[] = [
+const MORE_NAV: NavItem[] = [
+	{ to: '/studio/inbox',     label: 'Inbox',     icon: Inbox },
 	{ to: '/studio/workflows', label: 'Workflows', icon: WorkflowIcon },
 	{ to: '/studio/knowledge', label: 'Knowledge', icon: Brain },
 	{ to: '/studio/library',   label: 'Library',   icon: Store },
 ];
+// MoreSection — collapsible "More" group under the primary nav.
+// The header acts as the toggle and shows the current state. Items
+// inside are normal NavItemViews so active-route highlighting still
+// works. Open state persists in sessionStorage so deep-linking into
+// a secondary route reveals it.
+function MoreSection({ items }: { items: NavItem[] }) {
+	const [open, setOpen] = useState<boolean>(() => {
+		// Default open if the current URL lives in one of the items.
+		const path = window.location.pathname;
+		const here = items.some((i) => path.startsWith(i.to));
+		if (here) return true;
+		try { return sessionStorage.getItem('studio:more-open') === '1'; } catch { return false; }
+	});
+	useEffect(() => {
+		try { sessionStorage.setItem('studio:more-open', open ? '1' : '0'); } catch {}
+	}, [open]);
+	return (
+		<>
+			<div className="my-3 mx-3 h-px bg-slate-200/60" />
+			<button
+				onClick={() => setOpen((v) => !v)}
+				className="w-full flex items-center justify-between px-3 py-1.5 text-[11px] uppercase tracking-[0.14em] text-slate-400 hover:text-slate-600 transition-colors"
+			>
+				<span>More</span>
+				<ChevronDown
+					className={['w-3 h-3 transition-transform', open ? 'rotate-180' : ''].join(' ')}
+				/>
+			</button>
+			{open && (
+				<div className="space-y-px mt-0.5">
+					{items.map((item) => <NavItemView key={item.to} {...item} />)}
+				</div>
+			)}
+		</>
+	);
+}
+
 function NavItemView({ to, label, icon: Icon, end }: NavItem) {
 	return (
 		<NavLink
@@ -116,7 +160,7 @@ export function StudioShell() {
 	return (
 		<div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 flex">
 			{/* Sidebar ─────────────────────────────────────────────── */}
-			<aside className="w-56 flex flex-col h-screen bg-white/70 backdrop-blur-sm border-r border-slate-200/70 sticky top-0">
+			<aside data-studio-picker-chrome="1" className="w-56 flex flex-col h-screen bg-white/70 backdrop-blur-sm border-r border-slate-200/70 sticky top-0">
 				<Link to="/studio" className="px-4 py-4 border-b border-slate-200/60 flex items-center gap-2.5 hover:bg-slate-50/50 transition-colors">
 					<div className="relative">
 						<div className="absolute inset-0 bg-emerald-400/30 blur-md rounded-full" />
@@ -128,11 +172,11 @@ export function StudioShell() {
 				<nav className="flex-1 overflow-y-auto px-2 py-3 space-y-px">
 					{TOP_NAV.map((item) => <NavItemView key={item.to} {...item} />)}
 
-					{/* Thin divider; the three items below (Workflows /
-					    Knowledge / Library) self-describe — no categorical
-					    label needed in a five-item sidebar. */}
-					<div className="my-3 mx-3 h-px bg-slate-200/60" />
-					{PERSONAL_AI_NAV.map((item) => <NavItemView key={item.to} {...item} />)}
+					{/* Secondary surfaces — collapsed under "More" so the
+					    primary nav stays a single item. Power users click
+					    through; common users never touch this. Routes stay
+					    intact for deep links. */}
+					<MoreSection items={MORE_NAV} />
 				</nav>
 
 				{/* User menu — pinned bottom-left, opens upward. Holds
@@ -206,7 +250,7 @@ export function StudioShell() {
 			<div className="flex-1 flex flex-col min-w-0">
 				{/* Top bar — page header lives in TopStatusStrip; account
 				    surfaces moved to the sidebar user menu. */}
-				<header className="min-h-[64px] py-2.5 bg-white/70 backdrop-blur-md border-b border-slate-200/70 sticky top-0 z-10 flex items-center px-6 gap-4">
+				<header data-studio-picker-chrome="1" className="min-h-[64px] py-2.5 bg-white/70 backdrop-blur-md border-b border-slate-200/70 sticky top-0 z-10 flex items-center px-6 gap-4">
 					<TopStatusStrip />
 				</header>
 
@@ -216,17 +260,20 @@ export function StudioShell() {
 				</main>
 			</div>
 
-			{/* Artifact panel between the workspace and chat sidebar.
-			    Collapses to a thin rail; auto-opens when the agent
-			    dispatches a `studio:artifact-saved` window event from
-			    a save_artifact tool call. */}
-			<StudioArtifactPanel />
+			{/* Artifact panel was a left-rail drawer here, but it
+			    moved into the chat header right group on 2026-05-29
+			    (see StudioChat.tsx::ArtifactIconButton). Removed
+			    from the layout so the workspace reclaims the width. */}
 
 			{/* Phase S6a — AI chat lives here, sticky to the right.
 			    Collapses to a thin rail; the user toggles. Inside,
 			    StudioChat uses location to give the agent context
 			    about the page the user is on. */}
 			<StudioChat />
+
+			{/* Mouse-picker overlay (no-op until armed). Mounted here
+			    so it can layer above the workspace + chat. */}
+			<StudioPicker />
 		</div>
 	);
 }

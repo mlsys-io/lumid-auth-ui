@@ -8,9 +8,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Check, Pencil, X, Mail, FlaskConical, MessageSquareOff, Upload, ArrowRight, type LucideIcon } from 'lucide-react';
+import { Check, Pencil, X, Mail, FlaskConical, Upload, ArrowRight, type LucideIcon } from 'lucide-react';
 import { rejectWithReason } from '@/lib/demo-actions';
 import { PublishToLibrary } from '@/components/PublishToLibrary';
+import { AXIS_META } from '@/lib/demo-intents';
 import {
 	loadDecisions, setDecisionStatus, DECISIONS_EVENT,
 	type DemoDecision, type DecisionStatus, type DecisionIconKind,
@@ -83,7 +84,7 @@ function DecisionRow({
 			await rejectWithReason(item.id, trimmed);
 			setStatus('rejected');
 			setRejecting(false);
-			toast.success('Got it. Encoded as a voice principle. Next cycle will reflect this.');
+			toast.success('Got it. Added to your Rules — next cycle will reflect this.');
 		} catch {
 			toast.error('Could not record the rejection — try again.');
 		} finally {
@@ -94,23 +95,35 @@ function DecisionRow({
 	const rejected = status === 'rejected';
 	const approved = status === 'approved';
 
+	const rulesTone    = AXIS_META.rules.tone;
+	const examplesTone = AXIS_META.examples.tone;
 	return (
 		<li
 			className={[
-				'rounded-lg border bg-white px-4 py-3 transition-colors',
-				rejected ? 'border-slate-200 opacity-60' : 'border-slate-200',
+				'rounded-lg border bg-white px-4 py-3 transition-colors hover:border-slate-300',
+				rejected ? 'border-slate-200 opacity-70' : 'border-slate-200',
 			].join(' ')}
+			data-pick-kind="decision"
+			data-pick-id={`decision:${item.id}`}
+			data-pick-label={`Pending: ${item.principleLabel}`}
+			data-pick-affordances="approve,edit,reject,explain,give_feedback"
 		>
-			<div className="flex items-center gap-2">
+			<div className="flex items-center gap-2 flex-wrap">
 				<Icon className="w-4 h-4 text-slate-400 flex-shrink-0" />
 				<span className="text-[11px] text-slate-400">{item.tag}</span>
 				{rejected && (
-					<span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700">
-						<MessageSquareOff className="w-3 h-3" /> rejected with reason
+					// Reject = a Rules-axis improvement ("patterns it figured out").
+					// The chip carries the same vocabulary as everywhere else
+					// the AXIS_META renders.
+					<span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${rulesTone}`}>
+						{AXIS_META.rules.label} · learned
 					</span>
 				)}
 				{approved && (
-					<span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">approved</span>
+					// Approve = an Examples-axis improvement ("what it learns from").
+					<span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${examplesTone}`}>
+						{AXIS_META.examples.label} · accepted
+					</span>
 				)}
 			</div>
 
@@ -191,7 +204,7 @@ function DecisionRow({
 						open={publishOpen}
 						onClose={() => setPublishOpen(false)}
 						onPublished={() => { setPublished(true); setPublishOpen(false); }}
-						title="Publish this voice principle"
+						title="Publish this rule"
 						skills={[{ id: item.id, label: `${item.principleLabel} — encoded principle` }]}
 					/>
 				</div>

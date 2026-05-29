@@ -17,31 +17,9 @@ import {
 import AppLoops from '../app-revamp/loops';
 import { me } from '@/api/me';
 import { useAuth } from '@/hooks/useAuth';
-import { IntentRail, type Intent } from '@/components/IntentRail';
-import { OutcomeRow, type Outcome } from '@/components/OutcomeTile';
-import { DecisionsPending } from '@/components/DecisionsPending';
+import { IntentJournal } from '@/components/IntentJournal';
 import { DEMO_MODE } from '@/lib/demo';
 import { DEMO_INTENTS as INTENT_REGISTRY } from '@/lib/demo-intents';
-
-// Demo content for the Intents view. The rail rows are derived from the
-// shared registry in lib/demo-intents — one source of truth feeds the
-// rail card AND the detail panel at /studio/intents/:id. Each intent
-// becomes a Link when it declares a `detail` body.
-const DEMO_INTENTS: Intent[] = INTENT_REGISTRY.map((i) => ({
-	id: i.id,
-	persona: i.persona,
-	text: i.title,
-	progress: i.progress,
-	latest: i.latest,
-	chips: i.chips,
-	href: i.detail ? `/studio/intents/${i.id}` : undefined,
-}));
-
-const DEMO_OUTCOMES: Outcome[] = [
-	{ label: 'Hours reclaimed', value: '4h 12m', delta: '+48m vs last week', deltaTone: 'up' },
-	{ label: 'Agent matches your call', value: '84%', delta: 'up from 78%', deltaTone: 'up' },
-	{ label: 'Decisions delegated', value: '14', delta: 'was 9 last week', deltaTone: 'neutral' },
-];
 
 export default function StudioToday() {
 	const { user } = useAuth();
@@ -61,22 +39,19 @@ export default function StudioToday() {
 	}, []);
 
 	return (
-		<div className="space-y-6">
-			{empty === true && <FreshUserHero name={name} />}
+		<>
+			{empty === true && <div className="space-y-6"><FreshUserHero name={name} /></div>}
 			{empty === false && DEMO_MODE && (
-				<>
-					<IntentRail intents={DEMO_INTENTS} />
-					<OutcomeRow outcomes={DEMO_OUTCOMES} />
-					<DecisionsPending />
-				</>
+				// The IntentJournal is the entire surface here — show / track /
+				// manage standing intents and nothing else. Outcomes live
+				// inside each intent's headline; pending decisions live inline
+				// inside the spread that produced them. The page-shell padding
+				// is taken back inside IntentJournal so the editorial spread
+				// can paint the warm paper background edge-to-edge.
+				<IntentJournal intents={INTENT_REGISTRY} />
 			)}
-			{/* Workflow list is canonical on /studio/workflows; only fall
-			    back to it here when the demo's three hero sections aren't
-			    rendering (production, no demo content yet). PageHints
-			    chips removed — the chat sidebar is the canonical ask
-			    surface, the chips were instructional noise on the hero. */}
-			{(empty === false && !DEMO_MODE) && <AppLoops />}
-		</div>
+			{(empty === false && !DEMO_MODE) && <div className="space-y-6"><AppLoops /></div>}
+		</>
 	);
 }
 

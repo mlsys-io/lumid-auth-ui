@@ -9,8 +9,15 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ChevronRight, MessageSquarePlus, Send, Trash2, Loader2, Bot, User, Square, Globe, Telescope, Brain, ChevronDown, Paperclip, X, FileText, Image as ImageIcon, Plus, Copy, RotateCcw, Mic, Volume2 } from 'lucide-react';
-import { buildSelectionPreamble } from './StudioContext';
+import { ChevronRight, MessageSquarePlus, Send, Trash2, Loader2, Bot, User, Square, Globe, Telescope, Brain, ChevronDown, Paperclip, X, FileText, FileJson, Image as ImageIcon, Plus, Copy, RotateCcw, Mic, Volume2, Code2, Boxes, Download, ArrowLeft, Crosshair } from 'lucide-react';
+import {
+	buildSelectionPreamble,
+	subscribeStudioPickedTarget,
+	setStudioPickedTarget,
+	getStudioPickedTarget,
+	type StudioPickedTarget,
+} from './StudioContext';
+import { startStudioPicking, stopStudioPicking, isStudioPicking, subscribeStudioPicking } from './StudioPicker';
 import { ChatMarkdown } from './ChatMarkdown';
 
 type Role = 'user' | 'assistant';
@@ -112,6 +119,18 @@ export function StudioChat() {
 		}
 	});
 	const [input, setInput] = useState('');
+	// Queued messages — sends typed while a turn is streaming get
+	// stashed here and dispatched FIFO when streaming completes.
+	// Captures attachments at queue-time so the next message goes
+	// out with the files that were attached when the user pressed
+	// Enter, not whatever's attached when the previous turn finishes.
+	type QueuedMessage = { text: string; attachments: Attachment[] };
+	const [messageQueue, setMessageQueue] = useState<QueuedMessage[]>([]);
+	// Ref mirror so the streaming useEffect can dequeue without
+	// becoming a dependency cycle (it ALSO clears the head when
+	// firing, so depending on state would re-trigger).
+	const messageQueueRef = useRef<QueuedMessage[]>([]);
+	useEffect(() => { messageQueueRef.current = messageQueue; }, [messageQueue]);
 	const [streaming, setStreaming] = useState(false);
 	// LLM model selector. Persists across reloads; populated from
 	// /me/agent/models so backend can add providers without UI changes.
@@ -198,6 +217,16 @@ export function StudioChat() {
 	// start. Shows as a small "auto: claude" pill next to the model
 	// picker when the agent overrode the user's selection.
 	const [lastRoute, setLastRoute] = useState<{ modelUsed: string; autoRouted: boolean } | null>(null);
+
+	// Mouse-picker state — `picking` mirrors the module-level flag in
+	// StudioPicker so the icon button can render "armed"; `pickedTarget`
+	// mirrors the held selection so the chip above the input shows what
+	// the user has pinned. Both come from module subscriptions in
+	// StudioContext / StudioPicker so any page can mutate them.
+	const [picking, setPicking] = useState<boolean>(() => isStudioPicking());
+	const [pickedTarget, setPickedTargetState] = useState<StudioPickedTarget | null>(() => getStudioPickedTarget());
+	useEffect(() => subscribeStudioPicking(setPicking), []);
+	useEffect(() => subscribeStudioPickedTarget(setPickedTargetState), []);
 
 	// Staged attachments for the next send. Cleared after dispatch.
 	const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -797,19 +826,11 @@ export function StudioChat() {
 		try { navigator.clipboard.writeText(content); } catch { /* ignore */ }
 	}, []);
 
-	const send = useCallback(async () => {
-		const text = input.trim();
-		if (!text || streaming) return;
-		setInput('');
-
-		// Snapshot + clear staged attachments. Doing it before the
-		// optimistic append means a fast-clicking user can stage new
-		// files for the next turn while this one is still streaming.
-		const stagedAttachments = attachments;
-		setAttachments([]);
-		setAttachError('');
-
-		// Optimistic append of the user's turn + a placeholder assistant turn.
+	// dispatchTurn — fire one chat turn with the given text + already-
+	// snapshotted attachments. Pure of `input` and `attachments` state
+	// (those reads happen in `send` / queue processor). Returns once
+	// the SSE stream finishes (success or error).
+	const dispatchTurn = useCallback(async (text: string, stagedAttachments: Attachment[]) => {
 		const userMsg: Message = { role: 'user', content: text };
 		// Include a tiny system note about the active page so the agent
 		// can answer "what should I do here?" cohesively. Lightweight
@@ -901,7 +922,43 @@ export function StudioChat() {
 			setStreaming(false);
 			abortRef.current = null;
 		}
-	}, [input, messages, streaming, location.pathname, model, mode, think, attachments, agentId, personaId]);
+	}, [messages, location.pathname, model, mode, think, agentId, personaId]);
+
+	// send() — user-initiated dispatch from the input. Reads input
+	// + attachments state, validates, then either enqueues (if a
+	// turn is in flight) or hands off to dispatchTurn.
+	const send = useCallback(() => {
+		const text = input.trim();
+		if (!text) return;
+		if (streaming) {
+			// Stash for FIFO dispatch after the current turn finishes.
+			setMessageQueue((q) => [...q, { text, attachments: [...attachments] }]);
+			setInput('');
+			setAttachments([]);
+			setAttachError('');
+			return;
+		}
+		const staged = attachments;
+		setInput('');
+		setAttachments([]);
+		setAttachError('');
+		void dispatchTurn(text, staged);
+	}, [input, streaming, attachments, dispatchTurn]);
+
+	// Queue processor — after each streaming turn settles, if the
+	// queue has a head, pop and dispatch. Runs in a microtask so
+	// React's state has fully flushed before the next turn kicks off.
+	useEffect(() => {
+		if (streaming) return;
+		const head = messageQueueRef.current[0];
+		if (!head) return;
+		// Pop the head off the queue, then dispatch.
+		setMessageQueue((q) => q.slice(1));
+		// Microtask so the state update lands first.
+		Promise.resolve().then(() => {
+			void dispatchTurn(head.text, head.attachments);
+		});
+	}, [streaming, dispatchTurn, messageQueue.length]);
 
 	const clear = () => {
 		if (streaming) return;
@@ -930,9 +987,16 @@ export function StudioChat() {
 
 	return (
 		<aside
+			data-studio-picker-chrome="1"
 			style={{ width }}
 			className={[
-				'flex flex-col h-screen sticky top-0 flex-shrink-0 relative',
+				// z-20 lifts the chat aside above the workspace shell header
+				// (which is sticky top-0 z-10). Without this, header
+				// popovers (artifact, history, context) paint UNDER the
+				// shell header when they extend leftward into the
+				// workspace area — the shell header's stacking context
+				// otherwise wins despite later DOM order.
+				'flex flex-col h-screen sticky top-0 flex-shrink-0 relative z-20',
 				'bg-gradient-to-b from-white via-white to-emerald-50/30',
 				'border-l border-slate-200/70 shadow-[inset_1px_0_0_0_rgb(255_255_255/0.8)]',
 				resizing ? 'select-none' : '',
@@ -975,7 +1039,7 @@ export function StudioChat() {
 				].join(' ')}
 				title="Drag to resize"
 			/>
-			<header className="h-14 px-4 border-b border-slate-200/70 flex items-center justify-between flex-shrink-0 bg-white/80 backdrop-blur-sm gap-2">
+			<header className="relative z-30 h-14 px-4 border-b border-slate-200/70 flex items-center justify-between flex-shrink-0 bg-white/80 backdrop-blur-sm gap-2">
 				<div className="flex items-center gap-2.5 min-w-0 flex-1">
 					<div className="relative w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center shadow-sm shadow-emerald-200 flex-shrink-0">
 						<Bot className="w-4 h-4" />
@@ -983,81 +1047,51 @@ export function StudioChat() {
 							<span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-white animate-pulse" />
 						)}
 					</div>
-					<div className="min-w-0 flex-1">
-						<div className="text-sm font-semibold text-slate-900 tracking-tight flex items-center gap-1.5">
-							<span>Just ask</span>
-							{usage && usage.limit > 0 && (
-								<span
-									className={[
-										'text-[10px] font-mono font-normal px-1.5 py-px rounded',
-										usage.used >= usage.limit
-											? 'bg-rose-100 text-rose-700'
-											: usage.used > usage.limit * 0.8
-												? 'bg-amber-100 text-amber-700'
-												: 'bg-slate-100 text-slate-500',
-									].join(' ')}
-									title={`Daily token usage: ${usage.used.toLocaleString()} / ${usage.limit.toLocaleString()} (est. $${estimateCost(usage.used, model).toFixed(2)})`}
-								>
-									{formatTokens(usage.used)}/{formatTokens(usage.limit)}
-								</span>
-							)}
-						</div>
-						{/* Model picker moved here — set-once choice, paired
-						    with the title so it reads as part of identity
-						    rather than per-turn config. Hidden when only
-						    one provider is available. */}
-						<div className="flex items-center gap-1">
-							{models.length > 1 ? (
-								<select
-									value={model}
-									onChange={(e) => setModel(e.target.value)}
-									disabled={streaming}
-									className="text-[10.5px] text-slate-500 hover:text-slate-700 bg-transparent border-0 p-0 -ml-0.5 max-w-[160px] truncate focus:outline-none focus:ring-0 cursor-pointer disabled:opacity-50"
-									title="LLM backend used for replies"
-								>
-									{models.map((m) => (
-										<option key={m.id} value={m.id}>{m.display_name}</option>
-									))}
-								</select>
-							) : (
-								<div className="text-[10.5px] text-slate-500">your AI knows where you are</div>
-							)}
-							{lastRoute?.autoRouted && lastRoute.modelUsed !== model && (
-								<span
-									className="text-[9.5px] px-1 py-px rounded bg-sky-100 text-sky-700 font-medium"
-									title={`This turn was auto-routed to ${lastRoute.modelUsed} because the request needed a capability your selected model doesn't have (e.g. vision for an image attachment).`}
-								>
-									auto: {modelShortLabel(lastRoute.modelUsed)}
-								</span>
-							)}
-							{agentId && (
-								<button
-									type="button"
-									onClick={() => setAgentId('')}
-									className="text-[9.5px] px-1 py-px rounded bg-violet-100 text-violet-700 font-medium hover:bg-violet-200 transition-colors max-w-[120px] truncate"
-									title={`Chat is grounded in the "${agentId}" agent's bank. Click to clear and chat as yourself.`}
-								>
-									@{agentId}
-								</button>
-							)}
-							{personaId && (() => {
-								const p = personas.find((x) => x.id === personaId);
-								if (!p) return null;
-								return (
-									<button
-										type="button"
-										onClick={() => setPersonaId('')}
-										className="text-[9.5px] px-1 py-px rounded bg-fuchsia-100 text-fuchsia-700 font-medium hover:bg-fuchsia-200 transition-colors max-w-[120px] truncate"
-										title={`Persona: ${p.name}. Click to clear and chat with the default LumidOS assistant.`}
-									>
-										{p.icon || '🎭'} {p.name}
-									</button>
-								);
-							})()}
-						</div>
+					<div className="min-w-0 flex-1 flex items-center gap-1.5 flex-wrap">
+						<span className="text-sm font-semibold text-slate-900 tracking-tight">Just ask</span>
+						<ModelChip
+							streaming={streaming}
+							models={models}
+							model={model}
+							setModel={setModel}
+						/>
+						{usage && usage.limit > 0 && (
+							<span
+								className={[
+									'text-[10px] font-mono font-normal px-1.5 py-px rounded',
+									usage.used >= usage.limit
+										? 'bg-rose-100 text-rose-700'
+										: usage.used > usage.limit * 0.8
+											? 'bg-amber-100 text-amber-700'
+											: 'bg-slate-100 text-slate-500',
+								].join(' ')}
+								title={`Daily token usage: ${usage.used.toLocaleString()} / ${usage.limit.toLocaleString()} (est. $${estimateCost(usage.used, model).toFixed(2)})`}
+							>
+								{formatTokens(usage.used)}/{formatTokens(usage.limit)}
+							</span>
+						)}
+						{lastRoute?.autoRouted && lastRoute.modelUsed !== model && (
+							<span
+								className="text-[9.5px] font-normal px-1 py-px rounded bg-sky-100 text-sky-700 font-medium"
+								title={`Auto-routed to ${lastRoute.modelUsed} (needed a capability your selected model lacks).`}
+							>
+								auto: {modelShortLabel(lastRoute.modelUsed)}
+							</span>
+						)}
 					</div>
 				</div>
 				<div className="flex items-center gap-0.5 flex-shrink-0">
+					<ContextIconButton
+						streaming={streaming}
+						agents={agents}
+						agentId={agentId}
+						selectAgent={selectAgent}
+						personas={personas}
+						personaId={personaId}
+						selectPersona={selectPersona}
+					/>
+					<ArtifactIconButton />
+
 					{/* History dropdown — anchored relative; popover below
 					    shows recent threads + "New chat". Click outside to
 					    close (window click handler below). */}
@@ -1078,7 +1112,7 @@ export function StudioChat() {
 						</button>
 						{historyOpen && (
 							<div
-								className="absolute right-0 top-full mt-1 z-20 w-72 max-h-96 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg shadow-slate-200/40 p-1"
+								className="absolute right-0 top-full mt-1 z-50 w-72 max-h-96 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg shadow-slate-200/40 p-1"
 								onClick={(e) => e.stopPropagation()}
 							>
 								<button
@@ -1162,7 +1196,76 @@ export function StudioChat() {
 				))}
 			</div>
 
-			<footer className="border-t border-slate-200/70 p-3 flex-shrink-0 bg-white/60 backdrop-blur-sm">
+			<footer className="relative z-30 border-t border-slate-200/70 p-3 flex-shrink-0 bg-white/60 backdrop-blur-sm">
+				{/* Queued messages. Shows the FIFO list of turns waiting
+				    for the current stream to finish. Each row is
+				    clickable to remove from the queue. Hidden when empty. */}
+				{messageQueue.length > 0 && (
+					<div className="mb-2 px-0.5 flex flex-col gap-1">
+						<div className="text-[10px] uppercase tracking-wider text-amber-700 font-semibold flex items-center gap-1">
+							<span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+							{messageQueue.length} message{messageQueue.length === 1 ? '' : 's'} queued
+						</div>
+						{messageQueue.map((q, i) => (
+							<div
+								key={i}
+								className="flex items-center gap-1.5 text-[11px] bg-amber-50/70 border border-amber-200/60 rounded-lg px-2 py-1"
+							>
+								<span className="flex-1 truncate text-amber-900">{q.text}</span>
+								{q.attachments.length > 0 && (
+									<span className="text-[10px] text-amber-700 font-mono">+{q.attachments.length}</span>
+								)}
+								<button
+									type="button"
+									onClick={() => setMessageQueue((arr) => arr.filter((_, idx) => idx !== i))}
+									className="text-amber-600 hover:text-rose-500 transition-colors"
+									title="Cancel this queued message"
+								>
+									<X className="w-3 h-3" />
+								</button>
+							</div>
+						))}
+					</div>
+				)}
+
+				{/* Picked target chip — shown when the user has used the
+				    Crosshair to pin a UI element. The chat preamble
+				    folds this in at send-time (see buildSelectionPreamble).
+				    Click X to clear; clicking the chip's label re-arms
+				    the picker so the user can swap targets. */}
+				{pickedTarget && (
+					<div className="mb-2 px-0.5">
+						{(() => {
+							// Free-form picks (no declared affordances on the
+							// element) get a sky chip to signal "text snapshot
+							// only". Annotated picks keep the emerald chip.
+							const isFreeform = !pickedTarget.affordances || pickedTarget.affordances.length === 0;
+							const chipCls = isFreeform
+								? 'inline-flex items-center gap-1.5 text-[11px] bg-sky-50 border border-sky-200 rounded-full pl-2 pr-1 py-0.5'
+								: 'inline-flex items-center gap-1.5 text-[11px] bg-emerald-50 border border-emerald-200 rounded-full pl-2 pr-1 py-0.5';
+							const iconCls   = isFreeform ? 'w-3 h-3 text-sky-600 flex-shrink-0'      : 'w-3 h-3 text-emerald-600 flex-shrink-0';
+							const kindCls   = isFreeform ? 'text-sky-700 font-medium'                : 'text-emerald-700 font-medium';
+							const labelCls  = isFreeform ? 'text-sky-800 max-w-[260px] truncate'     : 'text-emerald-800 max-w-[260px] truncate';
+							const closeCls  = isFreeform ? 'text-sky-700/70 hover:text-rose-600 transition-colors flex-shrink-0' : 'text-emerald-700/70 hover:text-rose-600 transition-colors flex-shrink-0';
+							return (
+								<div className={chipCls}>
+									<Crosshair className={iconCls} />
+									<span className={kindCls}>{pickedTarget.kind}</span>
+									<span className={labelCls}>{pickedTarget.label}</span>
+									<button
+										type="button"
+										onClick={() => setStudioPickedTarget(null)}
+										className={closeCls}
+										title="Clear pinned target"
+									>
+										<X className="w-3 h-3" />
+									</button>
+								</div>
+							);
+						})()}
+					</div>
+				)}
+
 				{/* Staged attachments. Stays above the input row so the file
 				    chips never crowd the typing space. Hidden when empty. */}
 				{(attachments.length > 0 || attachError) && (
@@ -1238,7 +1341,7 @@ export function StudioChat() {
 							)}
 						</button>
 						{toolsOpen && (
-							<div className="absolute bottom-full mb-2 left-0 z-10 min-w-[180px] p-1 rounded-xl border border-slate-200 bg-white shadow-lg shadow-slate-200/40">
+							<div className="absolute bottom-full mb-2 left-0 z-50 min-w-[180px] p-1 rounded-xl border border-slate-200 bg-white shadow-lg shadow-slate-200/40">
 								<button
 									type="button"
 									onClick={() => setMode(mode === 'search' ? '' : 'search')}
@@ -1282,81 +1385,10 @@ export function StudioChat() {
 									<span className="font-medium flex-1 text-left">Show thinking</span>
 									{think && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
 								</button>
-								{agents.length > 0 && (
-									<>
-										<div className="h-px bg-slate-100 my-1 mx-2" />
-										<div className="px-2.5 py-1">
-											<div className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Talk to agent</div>
-											<select
-												value={agentId}
-												onChange={(e) => selectAgent(e.target.value)}
-												className="w-full text-[12px] rounded-md border border-slate-200 bg-white px-2 py-1 focus:outline-none focus:ring-2 focus:ring-emerald-400/30 focus:border-emerald-400"
-												title="Ground the chat in this xpio agent's bank + persona. Empty = chat as yourself."
-											>
-												<option value="">— me (default) —</option>
-												{/* Agents with a declared role first, grouped by app */}
-												{(() => {
-													const declared = agents.filter((a) => a.role && a.row_count > 0);
-													const byApp: Record<string, AgentRow[]> = {};
-													declared.forEach((a) => {
-														const k = a.app || '(other)';
-														(byApp[k] = byApp[k] || []).push(a);
-													});
-													const declaredEls = Object.keys(byApp).sort().map((app) => (
-														<optgroup key={app} label={app}>
-															{byApp[app].map((a) => (
-																<option key={a.id} value={a.id}>
-																	{a.role} · {a.row_count} mem
-																</option>
-															))}
-														</optgroup>
-													));
-													// Bank-only (no role declaration), at the bottom.
-													const bare = agents.filter((a) => !a.role && a.row_count > 0);
-													const bareEls = bare.length > 0 ? (
-														<optgroup label="other banks">
-															{bare.map((a) => (
-																<option key={a.id} value={a.id}>
-																	{a.id} · {a.row_count} mem
-																</option>
-															))}
-														</optgroup>
-													) : null;
-													return <>{declaredEls}{bareEls}</>;
-												})()}
-											</select>
-											{agentId && (
-												(() => {
-													const a = agents.find((x) => x.id === agentId);
-													if (!a) return null;
-													return (
-														<div className="mt-1 text-[10.5px] text-slate-500 leading-snug">
-															{a.description || (a.app ? `from ${a.app}` : `bank: ${a.id}`)}
-														</div>
-													);
-												})()
-											)}
-										</div>
-									</>
-								)}
-								{personas.length > 0 && (
-									<div className="px-2.5 py-1">
-										<div className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Persona</div>
-										<select
-											value={personaId}
-											onChange={(e) => selectPersona(e.target.value)}
-											className="w-full text-[12px] rounded-md border border-slate-200 bg-white px-2 py-1 focus:outline-none focus:ring-2 focus:ring-emerald-400/30 focus:border-emerald-400"
-											title="Apply a custom system prompt + tool subset. Mutually exclusive with agent picker."
-										>
-											<option value="">— none —</option>
-											{personas.map((p) => (
-												<option key={p.id} value={p.id}>
-													{p.icon ? p.icon + ' ' : ''}{p.name}
-												</option>
-											))}
-										</select>
-									</div>
-								)}
+								{/* Agent + Persona pickers moved to the header — they're
+								    persistent context (sticky across turns), not per-turn
+								    tool-forcing toggles. See the chip row beside the model
+								    select in the header subtitle. */}
 								<div className="h-px bg-slate-100 my-1 mx-2" />
 								<button
 									type="button"
@@ -1417,9 +1449,14 @@ export function StudioChat() {
 									}
 								}
 							}}
-							placeholder={dragOver ? 'Drop to attach' : 'Ask anything…'}
+							placeholder={
+								dragOver
+									? 'Drop to attach'
+									: streaming
+										? 'Type next message — sends when current turn finishes'
+										: 'Ask anything…'
+							}
 							rows={1}
-							disabled={streaming}
 							className={[
 								'w-full px-3.5 py-2.5 text-sm rounded-xl border bg-white shadow-sm focus:outline-none focus:ring-4 focus:ring-emerald-400/15 focus:border-emerald-400 resize-none max-h-32 transition-all placeholder:text-slate-400',
 								dragOver
@@ -1429,29 +1466,57 @@ export function StudioChat() {
 							style={{ minHeight: '42px' }}
 						/>
 					</div>
-					{streaming ? (
+					{streaming && (
 						<button
 							type="button"
 							onClick={() => abortRef.current?.abort()}
-							title="Stop"
+							title="Stop current turn"
 							className="h-[42px] w-[42px] flex items-center justify-center rounded-xl flex-shrink-0 bg-rose-500 text-white hover:bg-rose-600 active:scale-95 shadow-sm shadow-rose-200 transition-all"
 						>
 							<Square className="w-3.5 h-3.5 fill-current" />
 						</button>
-					) : (
-						<button
-							type="submit"
-							disabled={!input.trim()}
-							className={[
-								'h-[42px] w-[42px] flex items-center justify-center rounded-xl transition-all flex-shrink-0',
-								!input.trim()
-									? 'bg-slate-100 text-slate-300 cursor-not-allowed'
-									: 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white hover:from-emerald-400 hover:to-emerald-500 active:scale-95 shadow-sm shadow-emerald-200',
-							].join(' ')}
-						>
-							<Send className="w-4 h-4" />
-						</button>
 					)}
+					{/* Mouse-picker — arms StudioPicker so the user can
+					    click any [data-pick-id] on the page and pin it
+					    as the chat's referent. Sits left of Send so it
+					    feels like a compose-time action, not a setting. */}
+					<button
+						type="button"
+						onClick={() => (picking ? stopStudioPicking() : startStudioPicking())}
+						title={picking ? 'Picking — click anything · Esc to cancel' : 'Pick a UI element on the page'}
+						className={[
+							'h-[42px] w-[42px] flex items-center justify-center rounded-xl flex-shrink-0 border transition-all active:scale-95',
+							picking
+								? 'border-emerald-300 bg-emerald-50 text-emerald-700 ring-1 ring-emerald-300'
+								: pickedTarget
+									? 'border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50'
+									: 'border-slate-200 bg-white text-slate-500 hover:text-slate-700 hover:bg-slate-50',
+						].join(' ')}
+					>
+						<Crosshair className="w-4 h-4" />
+					</button>
+					<button
+						type="submit"
+						disabled={!input.trim()}
+						title={streaming
+							? `Queue this message (sends when current turn finishes)${messageQueue.length > 0 ? ` — ${messageQueue.length} already queued` : ''}`
+							: 'Send'}
+						className={[
+							'relative h-[42px] w-[42px] flex items-center justify-center rounded-xl transition-all flex-shrink-0',
+							!input.trim()
+								? 'bg-slate-100 text-slate-300 cursor-not-allowed'
+								: streaming
+									? 'bg-gradient-to-br from-sky-500 to-sky-600 text-white hover:from-sky-400 hover:to-sky-500 active:scale-95 shadow-sm shadow-sky-200'
+									: 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white hover:from-emerald-400 hover:to-emerald-500 active:scale-95 shadow-sm shadow-emerald-200',
+						].join(' ')}
+					>
+						<Send className="w-4 h-4" />
+						{messageQueue.length > 0 && (
+							<span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-white">
+								{messageQueue.length}
+							</span>
+						)}
+					</button>
 				</form>
 			</footer>
 		</aside>
@@ -1846,8 +1911,625 @@ function modelShortLabel(id: string): string {
 	return id.length > 10 ? id.slice(0, 10) + '…' : id;
 }
 
-// relativeTime — "5m" / "3h" / "2d" relative to now. Used by the
-// history dropdown. Returns "now" for anything under a minute.
+// ─── Header context chips + icon buttons ──────────────────────────
+//
+//   ModelChip          → inline pill next to "Just ask" in the title.
+//   AgentIconButton    → icon-button in the right group; violet dot
+//                        when active.
+//   PersonaIconButton  → icon-button beside AgentIconButton;
+//                        fuchsia dot when active.
+//   ArtifactIconButton → icon-button beside PersonaIconButton.
+//                        Dispatches `studio:artifact-panel-toggle`
+//                        for the panel drawer to listen.
+//
+// Each manages its own popover open-state + click-outside handler
+// via the shared useClickOutside hook below.
+
+function useClickOutside(open: boolean, close: () => void) {
+	const ref = useRef<HTMLDivElement>(null);
+	useEffect(() => {
+		if (!open) return;
+		const onClick = (e: MouseEvent) => {
+			if (!ref.current || ref.current.contains(e.target as Node)) return;
+			close();
+		};
+		const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+		const t = window.setTimeout(() => {
+			document.addEventListener('mousedown', onClick);
+			document.addEventListener('keydown', onKey);
+		}, 0);
+		return () => {
+			window.clearTimeout(t);
+			document.removeEventListener('mousedown', onClick);
+			document.removeEventListener('keydown', onKey);
+		};
+	}, [open, close]);
+	return ref;
+}
+
+function ModelChip({
+	streaming, models, model, setModel,
+}: {
+	streaming: boolean;
+	models: ModelOption[];
+	model: string;
+	setModel: (id: string) => void;
+}) {
+	const [open, setOpen] = useState(false);
+	const ref = useClickOutside(open, () => setOpen(false));
+	const current = models.find((m) => m.id === model);
+	if (models.length === 0) return null;
+	return (
+		<div ref={ref} className="relative">
+			<button
+				type="button"
+				onClick={() => setOpen((v) => !v)}
+				disabled={streaming}
+				className={[
+					'inline-flex items-center gap-1 px-1.5 py-px rounded-full text-[10.5px] border transition-colors',
+					open
+						? 'bg-slate-100 border-slate-300 text-slate-800'
+						: 'bg-white/60 border-slate-200/80 text-slate-600 hover:bg-slate-50 hover:border-slate-300',
+					streaming ? 'opacity-50 cursor-not-allowed' : '',
+				].join(' ')}
+				title="LLM backend"
+			>
+				<Bot className="w-2.5 h-2.5 flex-shrink-0" />
+				<span className="truncate max-w-[110px]">{current?.display_name || model || 'model'}</span>
+				<ChevronDown className="w-2.5 h-2.5 flex-shrink-0 opacity-60" />
+			</button>
+			{open && (
+				<div className="absolute top-full left-0 mt-1 z-50 min-w-[180px] p-1 rounded-xl border border-slate-200 bg-white shadow-lg shadow-slate-200/40">
+					{models.map((m) => (
+						<button
+							key={m.id}
+							type="button"
+							onClick={() => { setModel(m.id); setOpen(false); }}
+							className={[
+								'w-full text-left flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12px] transition-colors',
+								m.id === model ? 'bg-emerald-50 text-emerald-800' : 'text-slate-700 hover:bg-slate-50',
+							].join(' ')}
+						>
+							<Bot className={['w-3 h-3', m.id === model ? 'text-emerald-600' : 'text-slate-400'].join(' ')} />
+							<span className="font-medium flex-1">{m.display_name}</span>
+							{m.id === model && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+						</button>
+					))}
+				</div>
+			)}
+		</div>
+	);
+}
+
+// ContextIconButton — combined agent + persona picker. Both are
+// mutually-exclusive context overrides (`resolvePromptAndTools` in
+// the server gives persona priority when both are set), so it makes
+// sense to surface them under one button. The popover stacks both
+// sections; picking one auto-clears the other via the selectAgent
+// + selectPersona callbacks that the parent threads in.
+//
+// Active state: violet bg/dot when agent is active, fuchsia when
+// persona is, neutral when neither.
+function ContextIconButton({
+	streaming,
+	agents, agentId, selectAgent,
+	personas, personaId, selectPersona,
+}: {
+	streaming: boolean;
+	agents: Array<{ id: string; scope: 'tenant' | 'shared'; row_count: number; last_memory_ts: number; app?: string; role?: string; description?: string; default_model?: string }>;
+	agentId: string;
+	selectAgent: (id: string) => void;
+	personas: Array<{ id: string; name: string; icon?: string; allowed_tools?: string[]; preferred_model?: string; prompt_len: number; updated_at: string }>;
+	personaId: string;
+	selectPersona: (id: string) => void;
+}) {
+	const [open, setOpen] = useState(false);
+	const ref = useClickOutside(open, () => setOpen(false));
+	const currentAgent   = agents.find((a) => a.id === agentId);
+	const currentPersona = personas.find((p) => p.id === personaId);
+	if (agents.length === 0 && personas.length === 0) return null;
+
+	const agentGroups = (() => {
+		const declared = agents.filter((a) => a.role && a.row_count > 0);
+		const byApp: Record<string, typeof agents> = {};
+		declared.forEach((a) => { const k = a.app || '(other)'; (byApp[k] = byApp[k] || []).push(a); });
+		const bare = agents.filter((a) => !a.role && a.row_count > 0);
+		const out: { label: string; rows: typeof agents }[] = [];
+		Object.keys(byApp).sort().forEach((app) => out.push({ label: app, rows: byApp[app] }));
+		if (bare.length > 0) out.push({ label: 'other banks', rows: bare });
+		return out;
+	})();
+
+	const activeKind: 'agent' | 'persona' | null =
+		agentId   ? 'agent'   :
+		personaId ? 'persona' : null;
+	const activeColors = (() => {
+		switch (activeKind) {
+			case 'agent':   return 'text-violet-700  bg-violet-50  hover:bg-violet-100';
+			case 'persona': return 'text-fuchsia-700 bg-fuchsia-50 hover:bg-fuchsia-100';
+			default:        return open
+				? 'text-slate-800 bg-slate-100'
+				: 'text-slate-400 hover:text-slate-700 hover:bg-slate-100';
+		}
+	})();
+	const activeDot = (() => {
+		switch (activeKind) {
+			case 'agent':   return 'bg-violet-500';
+			case 'persona': return 'bg-fuchsia-500';
+			default:        return null;
+		}
+	})();
+	const titleText = currentAgent
+		? `Talk to ${currentAgent.role || currentAgent.id} (click to change or clear)`
+		: currentPersona
+			? `Persona: ${currentPersona.name} (click to change or clear)`
+			: 'Talk to an agent or apply a persona';
+
+	return (
+		<div ref={ref} className="relative">
+			<button
+				type="button"
+				onClick={() => setOpen((v) => !v)}
+				disabled={streaming}
+				title={titleText}
+				className={[
+					'relative p-1.5 rounded-md transition-colors',
+					activeColors,
+					streaming ? 'opacity-50 cursor-not-allowed' : '',
+				].join(' ')}
+			>
+				<User className="w-3.5 h-3.5" />
+				{activeDot && (
+					<span className={['absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full ring-2 ring-white', activeDot].join(' ')} />
+				)}
+			</button>
+			{open && (
+				<div className="absolute top-full right-0 mt-1 z-50 w-[320px] max-h-[30rem] overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60">
+
+					{/* ── Active strip ── shows current selection +
+					    one-click clear. Always visible (rendered as
+					    neutral when nothing's active). */}
+					<div className={[
+						'flex items-center gap-2 px-3 py-2 border-b',
+						activeKind === 'agent'   ? 'bg-violet-50/70  border-violet-100'  :
+						activeKind === 'persona' ? 'bg-fuchsia-50/70 border-fuchsia-100' :
+						                           'bg-slate-50      border-slate-100',
+					].join(' ')}>
+						<div className={[
+							'w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0',
+							activeKind === 'agent'   ? 'bg-violet-100  text-violet-700'  :
+							activeKind === 'persona' ? 'bg-fuchsia-100 text-fuchsia-700' :
+							                           'bg-white border border-slate-200 text-slate-400',
+						].join(' ')}>
+							{currentPersona?.icon
+								? <span className="text-[14px] leading-none">{currentPersona.icon}</span>
+								: <User className="w-3.5 h-3.5" />}
+						</div>
+						<div className="flex-1 min-w-0">
+							<div className={[
+								'text-[12px] font-semibold truncate',
+								activeKind === 'agent'   ? 'text-violet-900'  :
+								activeKind === 'persona' ? 'text-fuchsia-900' :
+								                           'text-slate-700',
+							].join(' ')}>
+								{currentAgent
+									? (currentAgent.role || currentAgent.id)
+									: currentPersona
+										? currentPersona.name
+										: 'Default — chat as you'}
+							</div>
+							<div className="text-[10.5px] text-slate-500 truncate">
+								{currentAgent
+									? `agent · ${currentAgent.app || 'standalone'} · ${currentAgent.row_count} memories`
+									: currentPersona
+										? `persona · ${currentPersona.allowed_tools && currentPersona.allowed_tools.length > 0 ? `${currentPersona.allowed_tools.length} tool${currentPersona.allowed_tools.length===1?'':'s'}` : 'all tools'}`
+										: 'me-prefs as context'}
+							</div>
+						</div>
+						{(agentId || personaId) && (
+							<button
+								type="button"
+								onClick={() => { selectAgent(''); selectPersona(''); setOpen(false); }}
+								title="Clear context — back to default"
+								className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-white/80 transition-colors"
+							>
+								<X className="w-3.5 h-3.5" />
+							</button>
+						)}
+					</div>
+
+					<div className="p-1">
+
+						{/* ── Agents section ── */}
+						{agents.length > 0 && (
+							<>
+								<div className="flex items-center gap-1.5 px-2.5 pt-2 pb-1">
+									<span className="w-0.5 h-3 rounded-full bg-violet-500" />
+									<span className="text-[10px] uppercase tracking-[0.08em] font-semibold text-violet-700">Talk to agent</span>
+									<span className="text-[10px] text-slate-400">grounds chat in agent's bank</span>
+								</div>
+								{agentGroups.map((g) => (
+									<div key={g.label} className="mb-1">
+										<div className="px-2.5 pt-1 pb-0.5 text-[9.5px] uppercase tracking-wider text-slate-400">
+											{g.label}
+										</div>
+										{g.rows.map((a) => {
+											const selected = a.id === agentId;
+											const initial = (a.role || a.id).slice(0, 1).toUpperCase();
+											return (
+												<button
+													key={a.id}
+													type="button"
+													onClick={() => { selectAgent(a.id); setOpen(false); }}
+													className={[
+														'w-full text-left flex items-start gap-2 px-2 py-1.5 rounded-lg transition-colors',
+														selected ? 'bg-violet-50' : 'hover:bg-slate-50',
+													].join(' ')}
+												>
+													<span className={[
+														'w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5',
+														selected
+															? 'bg-violet-200 text-violet-800'
+															: 'bg-slate-100 text-slate-500',
+													].join(' ')}>{initial}</span>
+													<div className="flex-1 min-w-0">
+														<div className="flex items-center gap-1.5">
+															<span className={[
+																'text-[12px] font-medium truncate',
+																selected ? 'text-violet-900' : 'text-slate-800',
+															].join(' ')}>
+																{a.role || a.id}
+															</span>
+															<span className={[
+																'ml-auto text-[9.5px] font-mono px-1.5 py-px rounded-full flex-shrink-0',
+																selected
+																	? 'bg-violet-100 text-violet-700'
+																	: 'bg-slate-100 text-slate-500',
+															].join(' ')}>{a.row_count}</span>
+														</div>
+														{a.description && (
+															<div className="text-[10.5px] text-slate-500 leading-snug line-clamp-2 mt-0.5">
+																{a.description}
+															</div>
+														)}
+													</div>
+												</button>
+											);
+										})}
+									</div>
+								))}
+							</>
+						)}
+
+						{/* ── Personas section ── */}
+						{personas.length > 0 && (
+							<>
+								{agents.length > 0 && <div className="h-px bg-slate-100 my-1 mx-2" />}
+								<div className="flex items-center gap-1.5 px-2.5 pt-2 pb-1">
+									<span className="w-0.5 h-3 rounded-full bg-fuchsia-500" />
+									<span className="text-[10px] uppercase tracking-[0.08em] font-semibold text-fuchsia-700">Persona</span>
+									<span className="text-[10px] text-slate-400">custom prompt + tool subset</span>
+								</div>
+								{personas.map((p) => {
+									const selected = p.id === personaId;
+									const restricted = p.allowed_tools && p.allowed_tools.length > 0;
+									return (
+										<button
+											key={p.id}
+											type="button"
+											onClick={() => { selectPersona(p.id); setOpen(false); }}
+											className={[
+												'w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors',
+												selected ? 'bg-fuchsia-50' : 'hover:bg-slate-50',
+											].join(' ')}
+										>
+											<span className={[
+												'w-6 h-6 rounded-full flex items-center justify-center text-[14px] leading-none flex-shrink-0',
+												selected
+													? 'bg-fuchsia-200'
+													: 'bg-slate-100',
+											].join(' ')}>{p.icon || '🎭'}</span>
+											<span className={[
+												'text-[12px] font-medium flex-1 truncate',
+												selected ? 'text-fuchsia-900' : 'text-slate-800',
+											].join(' ')}>{p.name}</span>
+											{restricted && (
+												<span
+													className={[
+														'text-[9px] px-1.5 py-px rounded-full flex-shrink-0',
+														selected
+															? 'bg-fuchsia-100 text-fuchsia-700'
+															: 'bg-slate-100 text-slate-500',
+													].join(' ')}
+													title={`Restricted to ${p.allowed_tools!.length} tool${p.allowed_tools!.length===1?'':'s'}`}
+												>{p.allowed_tools!.length}t</span>
+											)}
+										</button>
+									);
+								})}
+							</>
+						)}
+
+						{/* Footer hint when only one section is populated */}
+						{(agents.length === 0 || personas.length === 0) && (
+							<div className="px-2.5 py-2 mt-1 border-t border-slate-100 text-[10.5px] text-slate-400 leading-snug">
+								{agents.length === 0 && personas.length > 0 && (
+									<>No xpio agents installed yet — try <span className="font-mono">app_install</span> a knowledge app.</>
+								)}
+								{personas.length === 0 && agents.length > 0 && (
+									<>No personas yet — create one via <span className="font-mono">POST /me/personas</span>.</>
+								)}
+							</div>
+						)}
+					</div>
+				</div>
+			)}
+		</div>
+	);
+}
+
+// ArtifactIconButton — full artifact panel embedded in a popover
+// anchored to the icon. Replaces the old left-rail StudioArtifactPanel.
+// Shows list + detail-on-click + per-item copy/download/delete in
+// one ~420px wide popover. Auto-opens + selects when the agent
+// dispatches `studio:artifact-saved`.
+type ArtifactRow = {
+	id: string;
+	kind: 'markdown' | 'code' | 'json' | 'text';
+	title: string;
+	language?: string;
+	source_tool?: string;
+	created_at: string;
+	bytes: number;
+};
+type ArtifactFull = ArtifactRow & { content: string };
+
+function ArtifactIconButton() {
+	const [open, setOpen] = useState(false);
+	const ref = useClickOutside(open, () => setOpen(false));
+	const [rows, setRows] = useState<ArtifactRow[]>([]);
+	const [loading, setLoading] = useState(false);
+	const [selectedId, setSelectedId] = useState<string | null>(null);
+	const [selected, setSelected] = useState<ArtifactFull | null>(null);
+	const [selectedLoading, setSelectedLoading] = useState(false);
+	const [copied, setCopied] = useState(false);
+
+	const loadList = useCallback(async () => {
+		setLoading(true);
+		try {
+			const r = await fetch('/api/v1/me/artifacts', { credentials: 'include' });
+			if (!r.ok) return;
+			const j = await r.json();
+			setRows(Array.isArray(j?.data?.artifacts) ? j.data.artifacts : []);
+		} catch { /* ignore */ } finally {
+			setLoading(false);
+		}
+	}, []);
+
+	const loadOne = useCallback(async (id: string) => {
+		setSelectedId(id);
+		setSelectedLoading(true);
+		setSelected(null);
+		try {
+			const r = await fetch('/api/v1/me/artifacts/' + encodeURIComponent(id), { credentials: 'include' });
+			if (!r.ok) return;
+			const j = await r.json();
+			if (j?.data) setSelected(j.data as ArtifactFull);
+		} catch { /* ignore */ } finally {
+			setSelectedLoading(false);
+		}
+	}, []);
+
+	const deleteOne = useCallback(async (id: string) => {
+		if (!confirm('Delete this artifact?')) return;
+		try {
+			await fetch('/api/v1/me/artifacts/' + encodeURIComponent(id), { method: 'DELETE', credentials: 'include' });
+			if (selectedId === id) { setSelected(null); setSelectedId(null); }
+			loadList();
+		} catch { /* ignore */ }
+	}, [loadList, selectedId]);
+
+	const copyContent = useCallback(() => {
+		if (!selected) return;
+		try {
+			navigator.clipboard.writeText(selected.content);
+			setCopied(true);
+			setTimeout(() => setCopied(false), 1200);
+		} catch { /* ignore */ }
+	}, [selected]);
+
+	const downloadOne = useCallback(() => {
+		if (!selected) return;
+		const ext = selected.kind === 'markdown' ? 'md'
+			: selected.kind === 'json' ? 'json'
+			: selected.kind === 'code' ? (selected.language || 'txt')
+			: 'txt';
+		const safeTitle = selected.title.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 60) || selected.id;
+		const blob = new Blob([selected.content], { type: 'text/plain' });
+		const a = document.createElement('a');
+		a.href = URL.createObjectURL(blob);
+		a.download = `${safeTitle}.${ext}`;
+		document.body.appendChild(a);
+		a.click();
+		setTimeout(() => {
+			document.body.removeChild(a);
+			URL.revokeObjectURL(a.href);
+		}, 100);
+	}, [selected]);
+
+	// Open via the chat header icon + auto-open on save event.
+	useEffect(() => {
+		const onSaved = (ev: Event) => {
+			loadList();
+			const ce = ev as CustomEvent<{ id?: string }>;
+			if (ce.detail?.id) { setOpen(true); loadOne(ce.detail.id); }
+		};
+		const onToggle = () => setOpen((v) => !v);
+		window.addEventListener('studio:artifact-saved', onSaved as EventListener);
+		window.addEventListener('studio:artifact-panel-toggle', onToggle);
+		return () => {
+			window.removeEventListener('studio:artifact-saved', onSaved as EventListener);
+			window.removeEventListener('studio:artifact-panel-toggle', onToggle);
+		};
+	}, [loadList, loadOne]);
+
+	// Refresh list when the popover opens.
+	useEffect(() => { if (open) loadList(); }, [open, loadList]);
+
+	const KindIcon = ({ k }: { k: ArtifactRow['kind'] }) => {
+		switch (k) {
+			case 'markdown': return <FileText className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />;
+			case 'code':     return <Code2 className="w-3.5 h-3.5 text-sky-600 flex-shrink-0" />;
+			case 'json':     return <FileJson className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />;
+			default:         return <FileText className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />;
+		}
+	};
+
+	return (
+		<div ref={ref} className="relative">
+			<button
+				type="button"
+				onClick={() => setOpen((v) => !v)}
+				title={rows.length > 0 ? `Artifacts (${rows.length})` : 'Artifacts'}
+				className={[
+					'relative p-1.5 rounded-md transition-colors',
+					open ? 'text-emerald-700 bg-emerald-50' : 'text-slate-400 hover:text-emerald-700 hover:bg-emerald-50',
+				].join(' ')}
+			>
+				<Boxes className="w-3.5 h-3.5" />
+				{rows.length > 0 && (
+					<span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-1 rounded-full bg-emerald-500 text-white text-[8.5px] font-bold flex items-center justify-center ring-2 ring-white leading-none">
+						{rows.length > 99 ? '99+' : rows.length}
+					</span>
+				)}
+			</button>
+			{open && (
+				<div className="absolute top-full right-0 mt-1 z-50 w-[420px] max-h-[32rem] flex flex-col rounded-xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60">
+
+					{/* Header strip */}
+					<div className="flex items-center gap-2 px-3 py-2 border-b border-slate-100">
+						{selected ? (
+							<button
+								type="button"
+								onClick={() => { setSelected(null); setSelectedId(null); }}
+								className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+								title="Back to list"
+							>
+								<ArrowLeft className="w-3.5 h-3.5" />
+							</button>
+						) : (
+							<Boxes className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+						)}
+						<div className="flex-1 min-w-0">
+							<div className="text-[12.5px] font-semibold text-slate-900 truncate">
+								{selected ? selected.title : 'Artifacts'}
+							</div>
+							<div className="text-[10.5px] text-slate-500 truncate">
+								{selected
+									? `${selected.kind}${selected.language ? ' · ' + selected.language : ''} · ${selected.content.length} chars`
+									: `${rows.length} saved`}
+							</div>
+						</div>
+						{selected && (
+							<div className="flex items-center gap-0.5">
+								<button
+									type="button"
+									onClick={copyContent}
+									title={copied ? 'Copied' : 'Copy'}
+									className={[
+										'p-1.5 rounded-md transition-colors',
+										copied ? 'text-emerald-700 bg-emerald-50' : 'text-slate-400 hover:text-slate-800 hover:bg-slate-100',
+									].join(' ')}
+								>
+									<Copy className="w-3.5 h-3.5" />
+								</button>
+								<button
+									type="button"
+									onClick={downloadOne}
+									title="Download"
+									className="p-1.5 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors"
+								>
+									<Download className="w-3.5 h-3.5" />
+								</button>
+								<button
+									type="button"
+									onClick={() => deleteOne(selected.id)}
+									title="Delete"
+									className="p-1.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+								>
+									<Trash2 className="w-3.5 h-3.5" />
+								</button>
+							</div>
+						)}
+					</div>
+
+					{/* Body — list mode or detail mode */}
+					<div className="flex-1 min-h-0 overflow-y-auto">
+						{!selected && (
+							<>
+								{loading && (
+									<div className="px-3 py-3 text-[11px] text-slate-400 flex items-center gap-1.5">
+										<Loader2 className="w-3 h-3 animate-spin" /> Loading…
+									</div>
+								)}
+								{!loading && rows.length === 0 && (
+									<div className="px-3 py-4 text-[11.5px] text-slate-400 italic leading-snug">
+										No artifacts yet. The agent saves long-form output here when you ask — research briefs, code listings, anything worth keeping.
+									</div>
+								)}
+								{rows.map((r) => (
+									<button
+										key={r.id}
+										type="button"
+										onClick={() => loadOne(r.id)}
+										className="w-full text-left px-3 py-1.5 border-b border-slate-50 last:border-b-0 hover:bg-slate-50 transition-colors"
+									>
+										<div className="flex items-center gap-1.5">
+											<KindIcon k={r.kind} />
+											<span className="text-[12.5px] font-medium text-slate-800 truncate flex-1">{r.title}</span>
+											<span className="text-[10px] text-slate-400 font-mono flex-shrink-0">
+												{Math.round(r.bytes / 1024)}KB
+											</span>
+										</div>
+										<div className="flex items-center gap-1 mt-0.5 text-[10px] text-slate-500">
+											<span>{r.kind}</span>
+											{r.language && <span>· {r.language}</span>}
+											{r.source_tool && <span>· {r.source_tool}</span>}
+											<span className="ml-auto">{relativeTime(r.created_at)}</span>
+										</div>
+									</button>
+								))}
+							</>
+						)}
+						{selectedLoading && (
+							<div className="px-3 py-3 text-[11px] text-slate-400 flex items-center gap-1.5">
+								<Loader2 className="w-3 h-3 animate-spin" /> Loading…
+							</div>
+						)}
+						{selected && !selectedLoading && (
+							<div className="px-3 py-2.5 text-[12.5px]">
+								{selected.kind === 'markdown' ? (
+									<ChatMarkdown>{selected.content}</ChatMarkdown>
+								) : selected.kind === 'code' ? (
+									<pre className="bg-slate-50 border border-slate-200 rounded-lg p-2 text-[11.5px] overflow-x-auto">
+										<code>{selected.content}</code>
+									</pre>
+								) : selected.kind === 'json' ? (
+									<pre className="bg-slate-50 border border-slate-200 rounded-lg p-2 text-[11.5px] overflow-x-auto">
+										<code>{(() => { try { return JSON.stringify(JSON.parse(selected.content), null, 2); } catch { return selected.content; } })()}</code>
+									</pre>
+								) : (
+									<div className="whitespace-pre-wrap break-words text-slate-700">{selected.content}</div>
+								)}
+							</div>
+						)}
+					</div>
+				</div>
+			)}
+		</div>
+	);
+}
+
 function relativeTime(iso: string): string {
 	try {
 		const d = new Date(iso).getTime();

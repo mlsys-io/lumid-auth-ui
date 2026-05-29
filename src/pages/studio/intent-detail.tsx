@@ -9,15 +9,39 @@
 // (common person, activity timeline + voice principles applied).
 
 import { useParams, Link } from 'react-router-dom';
-import { ChevronRight, CheckCircle2, Info, Quote } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ChevronRight, CheckCircle2, Info, Quote, ChevronDown } from 'lucide-react';
 import {
 	findIntent, type AutoresearchBody, type JudgmentBody, type IntentBody,
-	type IntentStat,
+	type IntentStat, AXIS_META,
 } from '@/lib/demo-intents';
+import { IntentNarrativeHero } from '@/components/IntentNarrativeHero';
+import { IntentFeedbackRow } from '@/components/IntentFeedbackRow';
+import { setStudioSelection } from '@/components/StudioContext';
+import PageHints from '@/components/PageHints';
 
 export default function StudioIntentDetail() {
 	const { intentId = '' } = useParams<{ intentId: string }>();
 	const intent = findIntent(intentId);
+
+	// Declare this intent as the chat's current selection so "what
+	// changed this week?" / "pause it" / "rerun" disambiguate without
+	// the user re-stating context. Cleared on unmount.
+	useEffect(() => {
+		if (!intent) return;
+		setStudioSelection({
+			kind: 'intent',
+			id: intent.id,
+			label: intent.title,
+			affordances: ['intent_audit', 'pause_intent', 'resume_intent', 'run_loop_now', 'give_feedback'],
+			meta: {
+				persona: intent.persona,
+				progress: intent.progress,
+				latest: intent.latest,
+			},
+		});
+		return () => setStudioSelection(null);
+	}, [intent]);
 
 	if (!intent || !intent.detail) {
 		return (
@@ -27,6 +51,16 @@ export default function StudioIntentDetail() {
 			</div>
 		);
 	}
+
+	// Per-intent prompt suggestions. The chat agent's selection
+	// already carries this intent so "this week" / "Voice score" /
+	// "rerun" disambiguate cleanly.
+	const promptHints = [
+		'what changed about this intent this week?',
+		'why is the Standard going up?',
+		'rerun the latest cycle',
+		'pause this for the weekend',
+	];
 
 	return (
 		<div className="max-w-4xl mx-auto px-1 py-2 space-y-5">
@@ -40,9 +74,24 @@ export default function StudioIntentDetail() {
 				)}
 			</header>
 
+			<PageHints prompts={promptHints} />
+
+
+			{/* "This week your AI…" hero — narrative bullets + the six-
+			    axis chip row. Universal shape, intent-specific copy. */}
+			<IntentNarrativeHero
+				narrative={intent.detail.narrative}
+				movements={intent.axisMovements}
+			/>
+
 			<StatsRow stats={intent.detail.stats} />
 
-			<IntentBodyView body={intent.detail.body} />
+			<IntentBodyView body={intent.detail.body} intentId={intent.id} />
+
+			{/* Audit timeline — collapsed by default. Shows every six-
+			    axis event in window. Populated from /me/intents/:id/
+			    audit in production; demo derives from narrative. */}
+			<AuditTimeline intentId={intent.id} narrative={intent.detail.narrative} />
 
 			<div>
 				<Link to="/studio/intents" className="inline-flex items-center gap-1 text-[12px] text-slate-500 hover:text-slate-800">
@@ -53,6 +102,104 @@ export default function StudioIntentDetail() {
 	);
 }
 
+// ── Audit timeline — collapsed by default ─────────────────────────
+//
+// In production this reads /api/v1/me/intents/:id/audit and renders
+// the full ledger. In demo mode we synthesize timestamps from the
+// narrative bullets so the collapse/expand UX still works end-to-end.
+function AuditTimeline({
+	intentId,
+	narrative,
+}: {
+	intentId: string;
+	narrative?: import('@/lib/demo-intents').NarrativeBullet[];
+}) {
+	const [open, setOpen] = useState(false);
+	type Row = {
+		ts: string;
+		axis: import('@/lib/demo-intents').Axis;
+		verb: string;
+		label: string;
+	};
+	const [rows, setRows] = useState<Row[] | null>(null);
+	useEffect(() => {
+		if (!open) return;
+		// Best-effort production fetch; falls back to demo synthesis.
+		(async () => {
+			try {
+				const res = await fetch(`/api/v1/me/intents/${encodeURIComponent(intentId)}/audit?since=7d`, {
+					credentials: 'include',
+				});
+				if (res.ok) {
+					const j = await res.json();
+					const events: Row[] = (j?.data?.events ?? []).map((e: any) => ({
+						ts: e.ts, axis: e.axis, verb: e.verb, label: e.label,
+					}));
+					if (events.length > 0) { setRows(events); return; }
+				}
+			} catch { /* fall through to demo */ }
+			// Demo fallback — convert narrative bullets to timestamped rows.
+			const now = Date.now();
+			const demo: Row[] = (narrative ?? []).map((n, i) => ({
+				ts: new Date(now - (i + 1) * 86400000 * 0.7).toISOString(),
+				axis: n.axis, verb: 'tuned', label: n.text,
+			}));
+			setRows(demo);
+		})();
+	}, [open, intentId, narrative]);
+
+	const count = rows?.length ?? (narrative?.length ?? 0);
+	return (
+		<section className="rounded-xl border border-slate-200/70 bg-white">
+			<button
+				onClick={() => setOpen((v) => !v)}
+				className="w-full px-4 py-2.5 flex items-center justify-between gap-2 text-left hover:bg-slate-50/50 transition-colors rounded-xl"
+			>
+				<span className="text-[11px] tracking-[0.06em] text-slate-400">
+					Show all changes this week
+					{count > 0 && <span className="ml-2 text-slate-500">· {count}</span>}
+				</span>
+				<ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+			</button>
+			{open && rows && rows.length > 0 && (
+				<ol className="px-4 pb-3 pt-1 space-y-1.5 border-t border-slate-100">
+					{rows.map((r, i) => {
+						const meta = AXIS_META[r.axis];
+						const tone = meta?.tone || 'text-slate-600 bg-slate-50 border-slate-200';
+						return (
+							<li key={i} className="flex items-start gap-3 text-[12px] text-slate-700">
+								<span className="text-[10px] text-slate-400 w-[88px] flex-shrink-0 tabular-nums pt-1">
+									{fmtTs(r.ts)}
+								</span>
+								<span className={`inline-flex items-center px-1.5 py-0.5 rounded-md border text-[10px] font-medium ${tone} flex-shrink-0`}>
+									{meta?.label || r.axis}
+								</span>
+								<span className="text-[10px] text-slate-400 uppercase tracking-wide pt-1 w-[52px] flex-shrink-0">
+									{r.verb}
+								</span>
+								<span className="flex-1 min-w-0 pt-0.5">{r.label}</span>
+							</li>
+						);
+					})}
+				</ol>
+			)}
+			{open && rows && rows.length === 0 && (
+				<div className="px-4 pb-3 pt-1 text-[12px] text-slate-400 border-t border-slate-100">
+					No changes recorded yet — the ledger is empty for this window.
+				</div>
+			)}
+		</section>
+	);
+}
+
+function fmtTs(iso: string): string {
+	try {
+		const d = new Date(iso);
+		return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) +
+			' · ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+	} catch { return iso.slice(0, 16); }
+}
+
 // ── Shared shell pieces ────────────────────────────────────────────
 
 function StatsRow({ stats }: { stats: IntentStat[] }) {
@@ -60,7 +207,14 @@ function StatsRow({ stats }: { stats: IntentStat[] }) {
 	return (
 		<div className={`grid grid-cols-2 ${cols} gap-2.5`}>
 			{stats.map((s) => (
-				<div key={s.label} className="rounded-lg border border-slate-200/70 bg-[#f7f7f5] px-3.5 py-2.5">
+				<div
+					key={s.label}
+					className="rounded-lg border border-slate-200/70 bg-[#f7f7f5] px-3.5 py-2.5"
+					data-pick-kind="metric"
+					data-pick-id={`metric:${s.label}`}
+					data-pick-label={`${s.label}: ${s.value}`}
+					data-pick-affordances="explain,query_my_knowledge,intent_audit"
+				>
 					<div className="text-[10px] text-slate-500">{s.label}</div>
 					<div className="mt-0.5 text-[18px] font-medium text-slate-900 leading-none">{s.value}</div>
 					{s.delta && (
@@ -76,18 +230,20 @@ function StatsRow({ stats }: { stats: IntentStat[] }) {
 
 // ── Body dispatcher ────────────────────────────────────────────────
 
-function IntentBodyView({ body }: { body: IntentBody }) {
+function IntentBodyView({ body, intentId }: { body: IntentBody; intentId: string }) {
 	// Each kind gets a typed body renderer. Adding a new kind = add a
 	// new variant to IntentBody (lib/demo-intents) + a branch here.
+	// intentId is threaded so per-output feedback rows can attribute
+	// the ledger event to the right intent without a context lookup.
 	switch (body.kind) {
-		case 'autoresearch': return <AutoresearchBodyView body={body} />;
-		case 'judgment':     return <JudgmentBodyView body={body} />;
+		case 'autoresearch': return <AutoresearchBodyView body={body} intentId={intentId} />;
+		case 'judgment':     return <JudgmentBodyView    body={body} intentId={intentId} />;
 	}
 }
 
 // ── Body: autoresearch ─────────────────────────────────────────────
 
-function AutoresearchBodyView({ body }: { body: AutoresearchBody }) {
+function AutoresearchBodyView({ body, intentId: _intentId }: { body: AutoresearchBody; intentId: string }) {
 	return (
 		<>
 			<section className="rounded-xl border border-slate-200/70 bg-white px-4 py-3.5">
@@ -188,7 +344,7 @@ function ParetoChart({ chart }: { chart: AutoresearchBody['chart'] }) {
 
 // ── Body: judgment ─────────────────────────────────────────────────
 
-function JudgmentBodyView({ body }: { body: JudgmentBody }) {
+function JudgmentBodyView({ body, intentId }: { body: JudgmentBody; intentId: string }) {
 	return (
 		<>
 			<section>
@@ -201,13 +357,31 @@ function JudgmentBodyView({ body }: { body: JudgmentBody }) {
 							a.tone === 'warn' ? 'text-amber-600'   :
 							                    'text-slate-400';
 						return (
-							<li key={i} className="rounded-lg border border-slate-200/70 bg-white px-4 py-2.5 flex items-start gap-3">
+							<li
+								key={i}
+								className="rounded-lg border border-slate-200/70 bg-white px-4 py-2.5 flex items-start gap-3 group"
+								data-pick-kind="output"
+								data-pick-id={`${intentId}:activity:${i}`}
+								data-pick-label={a.text}
+								data-pick-affordances="give_feedback,explain,rerun,inspect"
+							>
 								<Icon className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${tone}`} />
 								<div className="flex-1 min-w-0">
 									<div className="text-sm text-slate-900">{a.text}</div>
 									{a.detail && <div className="text-[11px] text-slate-400 mt-0.5">{a.detail}</div>}
 								</div>
-								<span className="text-[11px] text-slate-400 flex-shrink-0">{a.when}</span>
+								<span className="text-[11px] text-slate-400 flex-shrink-0 pt-0.5">{a.when}</span>
+								{/* Per-output feedback row — POSTs to /me/feedback
+								    on click. Hover-only on desktop so the
+								    activity timeline stays scannable; always
+								    visible after the first click. */}
+								<div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+									<IntentFeedbackRow
+										app={intentId}
+										outputId={`activity:${i}`}
+										dense
+									/>
+								</div>
 							</li>
 						);
 					})}

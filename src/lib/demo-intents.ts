@@ -4,6 +4,11 @@
 // looks the intent up by id, then dispatches to a body component by
 // `body.kind`. Adding a new intent kind = add a discriminated-union
 // variant + a body renderer; the shell stays untouched.
+//
+// Every intent also carries `axisMovements` — what's recently improved
+// across the six axes (examples/standard/recipe/pieces/memory/rules).
+// The shape mirrors the production /me/intents/:id/audit response so
+// the rail card + detail hero render identically once live data flows.
 
 export interface IntentStat {
 	label: string;
@@ -51,9 +56,32 @@ export interface JudgmentBody {
 
 export type IntentBody = AutoresearchBody | JudgmentBody;
 
+// ── Six-axis improvement model ────────────────────────────────────
+// Mirrors the production schema in /me/intents/:id/audit. The Axis
+// label maps to a user-facing phrase via AXIS_META below — the rail +
+// detail components consume only AxisMovement, never the raw word.
+
+export type Axis = 'examples' | 'standard' | 'recipe' | 'pieces' | 'memory' | 'rules';
+
+export interface AxisMovement {
+	axis: Axis;
+	count: number;           // events in window
+	net?: number;            // optional numeric net delta (e.g. metric pp change)
+	latest?: string;         // most-recent label, shown on hover/click
+}
+
+// ── Narrative bullet (detail hero) ────────────────────────────────
+// One human-readable line of "what your AI did this week" — derived
+// from the audit ledger in production; declared statically in demo.
+export interface NarrativeBullet {
+	axis: Axis;
+	text: string;            // "raised Voice match from 78% → 84%"
+}
+
 export interface IntentDetail {
 	period?: string;       // small top-right meta, e.g. "cycle 3 of 12", "week 2"
 	stats: IntentStat[];
+	narrative?: NarrativeBullet[]; // detail-page hero bullets
 	body: IntentBody;
 }
 
@@ -65,8 +93,28 @@ export interface DemoIntent {
 	latest: string;        // outcome chip on the card
 	chips: string[];       // T12 — skills assembled into this intent's workflow
 	live?: boolean;
+	axisMovements?: AxisMovement[]; // rail mini-row + detail axis chips
 	detail?: IntentDetail; // when set, the rail card becomes clickable
+	// Editorial single-line for the paper-journal Show mode. One
+	// sentence the user reads to know "what your AI did this week."
+	// When omitted, falls back to detail.narrative[0].text.
+	summary?: string;
+	// One headline outcome inside the intent (e.g. "4h 12m reclaimed").
+	// Surfaces inline so the global OutcomeRow can be retired.
+	headline?: { label: string; value: string };
 }
+
+// User-facing labels + tones for each axis. Single source of truth so
+// the card, detail hero, chat tool result, and future docs use the
+// same vocabulary.
+export const AXIS_META: Record<Axis, { label: string; phrase: string; tone: string }> = {
+	standard: { label: 'Standard', phrase: 'how it judges itself',     tone: 'text-violet-700  bg-violet-50  border-violet-100' },
+	examples: { label: 'Examples', phrase: 'what it learns from',       tone: 'text-emerald-700 bg-emerald-50 border-emerald-100' },
+	memory:   { label: 'Memory',   phrase: 'what it remembers about you', tone: 'text-sky-700     bg-sky-50     border-sky-100' },
+	rules:    { label: 'Rules',    phrase: 'patterns it figured out',   tone: 'text-amber-700   bg-amber-50   border-amber-100' },
+	recipe:   { label: 'Recipe',   phrase: 'the steps it takes',        tone: 'text-rose-700    bg-rose-50    border-rose-100' },
+	pieces:   { label: 'Pieces',   phrase: 'how it does each step',     tone: 'text-slate-700   bg-slate-50   border-slate-200' },
+};
 
 export function findIntent(id: string): DemoIntent | undefined {
 	return DEMO_INTENTS.find((i) => i.id === id);
@@ -87,8 +135,22 @@ export const DEMO_INTENTS: DemoIntent[] = [
 			'Deadline tracker',
 			'Follow-up scheduler',
 		],
+		axisMovements: [
+			{ axis: 'standard', count: 2, net: 6, latest: 'voice-match floor raised 78% → 84%' },
+			{ axis: 'examples', count: 4, latest: 'family-register draft endorsed' },
+			{ axis: 'rules',    count: 1, latest: 'never start family replies with "Dear"' },
+			{ axis: 'memory',   count: 3, latest: '3 new contacts added to inner circle' },
+		],
+		summary: 'voice match 78 → 84%, 4 family drafts endorsed, 3 contacts added, the no-"Dear" rule learned from your reject.',
+		headline: { label: 'reclaimed', value: '4h 12m' },
 		detail: {
 			period: 'week 2',
+			narrative: [
+				{ axis: 'standard', text: 'Voice match raised 78% → 84% — you accepted 4 family drafts in a row.' },
+				{ axis: 'rules',    text: 'Learned: never start replies to family with "Dear".' },
+				{ axis: 'memory',   text: 'Added 3 contacts to your inner circle (Aunt Mei, Jamie, Priya).' },
+				{ axis: 'examples', text: '4 of your edits became future-cycle examples.' },
+			],
 			stats: [
 				{ label: 'Drafts queued',       value: '12' },
 				{ label: 'Conflicts resolved',  value: '2 of 2' },
@@ -124,8 +186,21 @@ export const DEMO_INTENTS: DemoIntent[] = [
 			'Pareto analyzer',
 			'Optimizer',
 		],
+		axisMovements: [
+			{ axis: 'standard', count: 1, latest: 'latency floor tightened 250ms → 200ms (your reject)' },
+			{ axis: 'recipe',   count: 2, latest: 'added "reject-if-over-budget" gate' },
+			{ axis: 'pieces',   count: 3, latest: 'tried 3 reranker variants this cycle' },
+			{ axis: 'examples', count: 12, latest: '12 benchmark queries scored' },
+		],
+		summary: 'latency floor tightened 250 → 200ms after your reject, 3 reranker variants tried, lightweight rerank now leads the frontier.',
+		headline: { label: 'on frontier', value: '4 / 12' },
 		detail: {
 			period: 'cycle 3 of 12',
+			narrative: [
+				{ axis: 'standard', text: 'Latency budget tightened 250 → 200ms after you rejected v2c.' },
+				{ axis: 'recipe',   text: 'Added a "reject over-budget" gate so off-frontier variants never reach you.' },
+				{ axis: 'pieces',   text: '3 reranker variants tried — heavy rerank dominated, lightweight wins.' },
+			],
 			stats: [
 				{ label: 'Variants tried',         value: '12' },
 				{ label: 'Above accuracy floor',   value: '7' },

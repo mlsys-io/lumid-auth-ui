@@ -20,12 +20,17 @@ export interface DemoDecision {
 	subject: string;    // short title for the Inbox draft row
 	preview: string;    // full preview / body
 	principleLabel: string; // shown by PublishToLibrary on rejected items
+	// Attribute each decision to a parent intent so the editorial
+	// IntentJournal can render the decision inline under the intent
+	// that produced it (instead of in a separate global section).
+	intentId?: string;
 }
 
 export const SEED: DemoDecision[] = [
 	{
 		id: 'aunt-mei-reply',
 		app: 'personal-agent',
+		intentId: 'common-person-week-2',
 		iconKind: 'mail',
 		tag: 'reply draft · to Aunt Mei · family',
 		subject: 'Reply to Aunt Mei — family gathering',
@@ -36,6 +41,7 @@ export const SEED: DemoDecision[] = [
 	{
 		id: 'nl2sql-next-batch',
 		app: 'auto-sysresearch',
+		intentId: 'scientist-cycle-3',
 		iconKind: 'flask',
 		tag: 'next-batch proposal · 4 variants · auto-sysresearch',
 		subject: 'NL-to-SQL — next variant batch',

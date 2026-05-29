@@ -165,7 +165,7 @@ export function StudioArtifactPanel() {
 	}, [loadList]);
 
 	useEffect(() => {
-		const handler = (ev: Event) => {
+		const onSaved = (ev: Event) => {
 			loadList();
 			const ce = ev as CustomEvent<{ id?: string }>;
 			if (ce.detail?.id) {
@@ -173,8 +173,19 @@ export function StudioArtifactPanel() {
 				loadOne(ce.detail.id);
 			}
 		};
-		window.addEventListener('studio:artifact-saved', handler as EventListener);
-		return () => window.removeEventListener('studio:artifact-saved', handler as EventListener);
+		// Toggle from the chat-header artifact icon — flips collapsed
+		// state on every fire. Lets the panel act as a togglable
+		// right-side drawer triggered by the chat header.
+		const onToggle = () => {
+			setCollapsed((c) => !c);
+			loadList();
+		};
+		window.addEventListener('studio:artifact-saved', onSaved as EventListener);
+		window.addEventListener('studio:artifact-panel-toggle', onToggle);
+		return () => {
+			window.removeEventListener('studio:artifact-saved', onSaved as EventListener);
+			window.removeEventListener('studio:artifact-panel-toggle', onToggle);
+		};
 	}, [loadList, loadOne]);
 
 	if (collapsed) {
