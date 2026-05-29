@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ChevronRight, MessageSquarePlus, Send, Trash2, Loader2, Bot, User, Square, Globe, Telescope, Brain, ChevronDown, Paperclip, X, FileText, Image as ImageIcon, Plus, Copy, RotateCcw } from 'lucide-react';
+import { ChevronRight, MessageSquarePlus, Send, Trash2, Loader2, Bot, User, Square, Globe, Telescope, Brain, ChevronDown, Paperclip, X, FileText, Image as ImageIcon, Plus, Copy, RotateCcw, Mic, Volume2 } from 'lucide-react';
 import { buildSelectionPreamble } from './StudioContext';
 import { ChatMarkdown } from './ChatMarkdown';
 
@@ -148,6 +148,26 @@ export function StudioChat() {
 	type HistoryRow = { id: string; title: string; updated_at: string; msg_count: number };
 	const [history, setHistory] = useState<HistoryRow[]>([]);
 	const [historyOpen, setHistoryOpen] = useState(false);
+
+	// Token / $ meter — updated from the `usage` SSE event after each
+	// turn. budget is the daily cap (50K tokens by default); used is
+	// the rolling 24h consumed. costUsd is a coarse estimate computed
+	// client-side from per-model pricing (server doesn't compute it).
+	const [usage, setUsage] = useState<{ used: number; limit: number } | null>(null);
+	// Voice input — Web Speech API. isListening becomes true while the
+	// browser is actively dictating; recognized text is appended to
+	// the textarea on each result. Null recognitionRef = unsupported.
+	const recognitionRef = useRef<any>(null);
+	const [isListening, setIsListening] = useState(false);
+	const [voiceSupported, setVoiceSupported] = useState(false);
+	// TTS — per-message Speak button uses window.speechSynthesis.
+	// speakingId tracks which message is currently being read so the
+	// button toggles correctly.
+	const [speakingIdx, setSpeakingIdx] = useState<number | null>(null);
+	// Surface auto-routing — set by the `route` SSE event at turn
+	// start. Shows as a small "auto: claude" pill next to the model
+	// picker when the agent overrode the user's selection.
+	const [lastRoute, setLastRoute] = useState<{ modelUsed: string; autoRouted: boolean } | null>(null);
 
 	// Staged attachments for the next send. Cleared after dispatch.
 	const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -356,6 +376,89 @@ export function StudioChat() {
 		setAttachments((prev) => prev.filter((_, idx) => idx !== i));
 	}, []);
 
+	// Voice input — initialise SpeechRecognition once on mount.
+	// Chrome/Edge: webkitSpeechRecognition. Firefox: not supported
+	// (we hide the mic button in that case). Safari: works since 14.
+	useEffect(() => {
+		const SR =
+			(window as any).SpeechRecognition ||
+			(window as any).webkitSpeechRecognition;
+		if (!SR) return;
+		const r = new SR();
+		r.continuous = true;
+		r.interimResults = true;
+		r.lang = (typeof navigator !== 'undefined' && navigator.language) || 'en-US';
+		let baseInput = '';
+		r.onstart = () => {
+			baseInput = ''; // populated when toggleVoice() captures current input
+		};
+		r.onresult = (e: any) => {
+			let interim = '';
+			let final = '';
+			for (let i = e.resultIndex; i < e.results.length; i++) {
+				const res = e.results[i];
+				if (res.isFinal) final += res[0].transcript;
+				else interim += res[0].transcript;
+			}
+			const combined = (baseInput + ' ' + final + ' ' + interim).replace(/\s+/g, ' ').trim();
+			setInput(combined);
+		};
+		r.onend = () => setIsListening(false);
+		r.onerror = () => setIsListening(false);
+		// Stash the baseInput setter so toggleVoice() can write into it.
+		r.__setBase = (s: string) => { baseInput = s; };
+		recognitionRef.current = r;
+		setVoiceSupported(true);
+		return () => {
+			try { r.stop(); } catch { /* ignore */ }
+		};
+	}, []);
+
+	const toggleVoice = useCallback(() => {
+		const r = recognitionRef.current;
+		if (!r) return;
+		if (isListening) {
+			try { r.stop(); } catch { /* ignore */ }
+			setIsListening(false);
+			return;
+		}
+		// Capture current input as the base; new dictation appends.
+		r.__setBase(input);
+		try { r.start(); setIsListening(true); } catch { /* already running */ }
+	}, [isListening, input]);
+
+	// TTS for assistant messages. Speaks via window.speechSynthesis;
+	// click again on the same message to stop. Strips markdown
+	// syntax characters so the engine doesn't read "asterisk
+	// asterisk" etc.
+	const toggleSpeak = useCallback((idx: number, content: string) => {
+		const synth = window.speechSynthesis;
+		if (!synth) return;
+		if (speakingIdx === idx) {
+			synth.cancel();
+			setSpeakingIdx(null);
+			return;
+		}
+		synth.cancel();
+		const plain = content
+			.replace(/```[\s\S]*?```/g, ' code block ')
+			.replace(/`([^`]*)`/g, '$1')
+			.replace(/\*\*([^*]+)\*\*/g, '$1')
+			.replace(/\*([^*]+)\*/g, '$1')
+			.replace(/\[\^?(\d+)\][:]?\s*(\S+)?/g, '') // strip footnote markers + defs
+			.replace(/#+\s*/g, '')
+			.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+			.replace(/\s+/g, ' ')
+			.trim();
+		if (!plain) return;
+		const u = new SpeechSynthesisUtterance(plain);
+		u.rate = 1.05;
+		u.onend = () => setSpeakingIdx(null);
+		u.onerror = () => setSpeakingIdx(null);
+		setSpeakingIdx(idx);
+		synth.speak(u);
+	}, [speakingIdx]);
+
 	// Count of active per-turn toggles — surfaced as a small badge on
 	// the [+] tools button so the user knows something is on without
 	// opening the popover.
@@ -499,6 +602,12 @@ export function StudioChat() {
 		const assistantMsg: Message = { role: 'assistant', content: '', tools: [] };
 		setMessages(() => [...base, userMsg, assistantMsg]);
 		setStreaming(true);
+		setLastRoute(null);
+		// Stop dictation when a send fires so a long recording doesn't
+		// stack with the new turn's input.
+		if (isListening && recognitionRef.current) {
+			try { recognitionRef.current.stop(); } catch { /* ignore */ }
+		}
 		const ctrl = new AbortController();
 		abortRef.current = ctrl;
 		try {
@@ -534,7 +643,26 @@ export function StudioChat() {
 						if (!line.startsWith('data: ')) continue;
 						try {
 							const evt = JSON.parse(line.slice(6));
-							handleEvent(evt, setMessages);
+							if (evt.type === 'route') {
+								setLastRoute({
+									modelUsed: String(evt.model_used || ''),
+									autoRouted: !!evt.auto_routed,
+								});
+							} else if (evt.type === 'usage') {
+								if (typeof evt.budget_used === 'number' && typeof evt.budget_limit === 'number') {
+									setUsage({ used: evt.budget_used, limit: evt.budget_limit });
+								}
+								// usage also carries model_used / auto_routed (in case
+								// the stream caller missed the early route event).
+								if (evt.model_used) {
+									setLastRoute({
+										modelUsed: String(evt.model_used),
+										autoRouted: !!evt.auto_routed,
+									});
+								}
+							} else {
+								handleEvent(evt, setMessages);
+							}
 						} catch { /* skip */ }
 					}
 				}
@@ -617,6 +745,12 @@ export function StudioChat() {
 		const assistantMsg: Message = { role: 'assistant', content: '', tools: [] };
 		setMessages((prev) => [...prev, userMsg, assistantMsg]);
 		setStreaming(true);
+		setLastRoute(null);
+		// Stop dictation when a send fires so a long recording doesn't
+		// stack with the new turn's input.
+		if (isListening && recognitionRef.current) {
+			try { recognitionRef.current.stop(); } catch { /* ignore */ }
+		}
 
 		const ctrl = new AbortController();
 		abortRef.current = ctrl;
@@ -762,27 +896,54 @@ export function StudioChat() {
 							<span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-white animate-pulse" />
 						)}
 					</div>
-					<div className="min-w-0">
-						<div className="text-sm font-semibold text-slate-900 tracking-tight">Just ask</div>
+					<div className="min-w-0 flex-1">
+						<div className="text-sm font-semibold text-slate-900 tracking-tight flex items-center gap-1.5">
+							<span>Just ask</span>
+							{usage && usage.limit > 0 && (
+								<span
+									className={[
+										'text-[10px] font-mono font-normal px-1.5 py-px rounded',
+										usage.used >= usage.limit
+											? 'bg-rose-100 text-rose-700'
+											: usage.used > usage.limit * 0.8
+												? 'bg-amber-100 text-amber-700'
+												: 'bg-slate-100 text-slate-500',
+									].join(' ')}
+									title={`Daily token usage: ${usage.used.toLocaleString()} / ${usage.limit.toLocaleString()} (est. $${estimateCost(usage.used, model).toFixed(2)})`}
+								>
+									{formatTokens(usage.used)}/{formatTokens(usage.limit)}
+								</span>
+							)}
+						</div>
 						{/* Model picker moved here — set-once choice, paired
 						    with the title so it reads as part of identity
 						    rather than per-turn config. Hidden when only
 						    one provider is available. */}
-						{models.length > 1 ? (
-							<select
-								value={model}
-								onChange={(e) => setModel(e.target.value)}
-								disabled={streaming}
-								className="text-[10.5px] text-slate-500 hover:text-slate-700 bg-transparent border-0 p-0 -ml-0.5 max-w-[160px] truncate focus:outline-none focus:ring-0 cursor-pointer disabled:opacity-50"
-								title="LLM backend used for replies"
-							>
-								{models.map((m) => (
-									<option key={m.id} value={m.id}>{m.display_name}</option>
-								))}
-							</select>
-						) : (
-							<div className="text-[10.5px] text-slate-500">your AI knows where you are</div>
-						)}
+						<div className="flex items-center gap-1">
+							{models.length > 1 ? (
+								<select
+									value={model}
+									onChange={(e) => setModel(e.target.value)}
+									disabled={streaming}
+									className="text-[10.5px] text-slate-500 hover:text-slate-700 bg-transparent border-0 p-0 -ml-0.5 max-w-[160px] truncate focus:outline-none focus:ring-0 cursor-pointer disabled:opacity-50"
+									title="LLM backend used for replies"
+								>
+									{models.map((m) => (
+										<option key={m.id} value={m.id}>{m.display_name}</option>
+									))}
+								</select>
+							) : (
+								<div className="text-[10.5px] text-slate-500">your AI knows where you are</div>
+							)}
+							{lastRoute?.autoRouted && lastRoute.modelUsed !== model && (
+								<span
+									className="text-[9.5px] px-1 py-px rounded bg-sky-100 text-sky-700 font-medium"
+									title={`This turn was auto-routed to ${lastRoute.modelUsed} because the request needed a capability your selected model doesn't have (e.g. vision for an image attachment).`}
+								>
+									auto: {modelShortLabel(lastRoute.modelUsed)}
+								</span>
+							)}
+						</div>
 					</div>
 				</div>
 				<div className="flex items-center gap-0.5 flex-shrink-0">
@@ -884,6 +1045,8 @@ export function StudioChat() {
 					streaming={streaming && i === messages.length - 1 && m.role === 'assistant'}
 					onCopy={m.role === 'assistant' && m.content ? () => copyMessage(m.content) : undefined}
 					onRegenerate={m.role === 'assistant' && !streaming && i > 0 && messages[i - 1]?.role === 'user' ? () => regenerate(i) : undefined}
+					onSpeak={m.role === 'assistant' && m.content && typeof window !== 'undefined' && 'speechSynthesis' in window ? () => toggleSpeak(i, m.content) : undefined}
+					isSpeaking={speakingIdx === i}
 				/>
 				))}
 			</div>
@@ -1017,6 +1180,27 @@ export function StudioChat() {
 									<Paperclip className="w-3.5 h-3.5 text-slate-500" />
 									<span className="font-medium flex-1 text-left">Attach file</span>
 								</button>
+								{voiceSupported && (
+									<button
+										type="button"
+										onClick={() => {
+											toggleVoice();
+											setToolsOpen(false);
+										}}
+										className={[
+											'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] transition-colors',
+											isListening
+												? 'bg-rose-50 text-rose-700'
+												: 'text-slate-700 hover:bg-slate-50',
+										].join(' ')}
+									>
+										<Mic className={['w-3.5 h-3.5', isListening ? 'text-rose-600' : 'text-slate-500'].join(' ')} />
+										<span className="font-medium flex-1 text-left">
+											{isListening ? 'Stop dictating' : 'Voice input'}
+										</span>
+										{isListening && <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />}
+									</button>
+								)}
 							</div>
 						)}
 					</div>
@@ -1093,15 +1277,19 @@ function MessageBubble({
 	streaming,
 	onCopy,
 	onRegenerate,
+	onSpeak,
+	isSpeaking,
 }: {
 	m: Message;
 	streaming?: boolean;
 	onCopy?: () => void;
 	onRegenerate?: () => void;
+	onSpeak?: () => void;
+	isSpeaking?: boolean;
 }) {
 	const isUser = m.role === 'user';
 	const [copied, setCopied] = useState(false);
-	const showActions = !streaming && (onCopy || onRegenerate);
+	const showActions = !streaming && (onCopy || onRegenerate || onSpeak);
 	return (
 		<div className={['group flex gap-2.5 animate-in fade-in slide-in-from-bottom-1 duration-200', isUser ? 'flex-row-reverse' : ''].join(' ')}>
 			<div className={[
@@ -1177,6 +1365,21 @@ function MessageBubble({
 								className="p-1 rounded text-[10px] text-slate-400 hover:text-emerald-700 hover:bg-emerald-50"
 							>
 								<RotateCcw className="w-3 h-3" />
+							</button>
+						)}
+						{onSpeak && (
+							<button
+								type="button"
+								onClick={onSpeak}
+								title={isSpeaking ? 'Stop reading' : 'Read aloud'}
+								className={[
+									'p-1 rounded text-[10px]',
+									isSpeaking
+										? 'text-sky-700 bg-sky-50'
+										: 'text-slate-400 hover:text-sky-700 hover:bg-sky-50',
+								].join(' ')}
+							>
+								<Volume2 className="w-3 h-3" />
 							</button>
 						)}
 					</div>
@@ -1424,6 +1627,37 @@ function withLastAssistant(
 	const last = prev[prev.length - 1];
 	if (last.role !== 'assistant') return prev;
 	return [...prev.slice(0, -1), patch(last)];
+}
+
+// formatTokens — compact display: 12345 → "12.3K", 1234567 → "1.2M".
+function formatTokens(n: number): string {
+	if (n < 1000) return String(n);
+	if (n < 1_000_000) return (n / 1000).toFixed(n < 10_000 ? 1 : 0) + 'K';
+	return (n / 1_000_000).toFixed(1) + 'M';
+}
+
+// estimateCost — coarse $ estimate for the daily-budget tooltip.
+// Per-1K-token rates approximated from current public pricing. The
+// budget meter on the server tracks input+output tokens combined,
+// so we use a blended midpoint per model. kv.run/MiniMax runs on
+// owned hardware → marginal cost ≈ 0.
+function estimateCost(tokens: number, modelId: string): number {
+	const blendedPerK = (() => {
+		switch (modelId) {
+			case 'claude-haiku':   return 0.0025; // input $1/M + output $5/M, midpoint
+			case 'kvrun-minimax':  return 0.0;     // owned GPUs — sunk cost
+			default:               return 0.001;   // conservative fallback
+		}
+	})();
+	return (tokens / 1000) * blendedPerK;
+}
+
+// modelShortLabel — pulls a 7-char label from a model id for the
+// "auto: <model>" pill. Avoids the full display name overflowing.
+function modelShortLabel(id: string): string {
+	if (id === 'claude-haiku') return 'Claude';
+	if (id === 'kvrun-minimax') return 'MiniMax';
+	return id.length > 10 ? id.slice(0, 10) + '…' : id;
 }
 
 // relativeTime — "5m" / "3h" / "2d" relative to now. Used by the
