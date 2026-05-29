@@ -423,7 +423,233 @@ export const findata = {
     call<PmTradeRow[]>(`/prediction-markets/trades/polymarket/${encodeURIComponent(conditionId)}?limit=${limit}`),
   pmTradesKalshi: (ticker: string, limit = 200) =>
     call<PmTradeRow[]>(`/prediction-markets/trades/kalshi/${encodeURIComponent(ticker)}?limit=${limit}`),
+
+  // ── kv.run:5000 v0.1.0 upstream sync — 16 new families ─────────────
+  // Added 2026-05-29. The upstream OpenAPI lists 133 endpoints across 72
+  // families; this block covers the 16 families findata.ts was missing.
+  // Tag families that surface in a UI dashboard page get richer types;
+  // niche/raw families default to `unknown` so callers can opt in to
+  // schema authoring without blocking the wire-up.
+
+  // — Stock screener + market movers ————————————————————
+  screener: (q: ScreenerQuery = {}) => {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(q)) {
+      if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
+    }
+    const s = qs.toString();
+    return call<ScreenerRow[]>(`/screener${s ? "?" + s : ""}`);
+  },
+  marketMovers: (kind: "gainer" | "loser" | "most_active" = "gainer", limit = 50) =>
+    call<MarketMoverRow[]>(`/market-movers?kind=${kind}&limit=${limit}`),
+
+  // — Index constituents ————————————————————————————
+  indexConstituents: (indexSymbol: string, asOf?: string) =>
+    call<IndexConstituent[]>(
+      `/index/${encodeURIComponent(indexSymbol)}/constituents${asOf ? "?as_of=" + encodeURIComponent(asOf) : ""}`,
+    ),
+
+  // — Sector / industry snapshots —————————————————————
+  sectorsPE: (exchange?: string) =>
+    call<SectorRow[]>(`/sectors/pe${exchange ? "?exchange=" + encodeURIComponent(exchange) : ""}`),
+  sectorsPerformance: (exchange?: string) =>
+    call<SectorRow[]>(`/sectors/performance${exchange ? "?exchange=" + encodeURIComponent(exchange) : ""}`),
+  industriesPE: (exchange?: string) =>
+    call<IndustryRow[]>(`/industries/pe${exchange ? "?exchange=" + encodeURIComponent(exchange) : ""}`),
+  industriesPerformance: (exchange?: string) =>
+    call<IndustryRow[]>(`/industries/performance${exchange ? "?exchange=" + encodeURIComponent(exchange) : ""}`),
+
+  // — Calendars ————————————————————————————————————
+  dividendsCalendar: (params: { from?: string; to?: string; limit?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.from)  qs.set("from", params.from);
+    if (params.to)    qs.set("to", params.to);
+    if (params.limit) qs.set("limit", String(params.limit));
+    const s = qs.toString();
+    return call<DividendCalendarRow[]>(`/dividends-calendar${s ? "?" + s : ""}`);
+  },
+  splitsCalendar: (params: { from?: string; to?: string; limit?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.from)  qs.set("from", params.from);
+    if (params.to)    qs.set("to", params.to);
+    if (params.limit) qs.set("limit", String(params.limit));
+    const s = qs.toString();
+    return call<SplitCalendarRow[]>(`/splits-calendar${s ? "?" + s : ""}`);
+  },
+  exchangeMarketHours: (exchange?: string) =>
+    call<ExchangeHoursRow[]>(`/exchange-market-hours${exchange ? "?exchange=" + encodeURIComponent(exchange) : ""}`),
+
+  // — Growth series (BS / CF / IS) ——————————————————————
+  balanceSheetGrowth: (sym: string, period: "annual" | "quarter" = "annual", limit = 10) =>
+    call<unknown[]>(
+      `/balance-sheet-growth/${encodeURIComponent(sym)}?period=${period}&limit=${limit}`,
+    ),
+  cashFlowGrowth: (sym: string, period: "annual" | "quarter" = "annual", limit = 10) =>
+    call<unknown[]>(
+      `/cash-flow-growth/${encodeURIComponent(sym)}?period=${period}&limit=${limit}`,
+    ),
+  incomeStatementGrowth: (sym: string, period: "annual" | "quarter" = "annual", limit = 10) =>
+    call<unknown[]>(
+      `/income-statement-growth/${encodeURIComponent(sym)}?period=${period}&limit=${limit}`,
+    ),
+
+  // — Institutional 13-F (5 endpoints) —————————————————
+  institutionalHoldersAnalytics: (
+    sym: string,
+    params: { year?: number; quarter?: number; limit?: number } = {},
+  ) => {
+    const qs = new URLSearchParams();
+    if (params.year)    qs.set("year",    String(params.year));
+    if (params.quarter) qs.set("quarter", String(params.quarter));
+    if (params.limit)   qs.set("limit",   String(params.limit));
+    const s = qs.toString();
+    return call<unknown[]>(
+      `/institutional/${encodeURIComponent(sym)}/holders/analytics${s ? "?" + s : ""}`,
+    );
+  },
+  institutionalHolderPerformance: (cik: string, limit = 25) =>
+    call<unknown[]>(`/institutional/holder/${encodeURIComponent(cik)}/performance?limit=${limit}`),
+  institutionalHolderIndustries: (
+    cik: string,
+    params: { year?: number; quarter?: number; limit?: number } = {},
+  ) => {
+    const qs = new URLSearchParams();
+    if (params.year)    qs.set("year",    String(params.year));
+    if (params.quarter) qs.set("quarter", String(params.quarter));
+    if (params.limit)   qs.set("limit",   String(params.limit));
+    const s = qs.toString();
+    return call<unknown[]>(
+      `/institutional/holder/${encodeURIComponent(cik)}/industries${s ? "?" + s : ""}`,
+    );
+  },
+  institutionalHolderDates: (cik: string, limit = 25) =>
+    call<unknown[]>(`/institutional/holder/${encodeURIComponent(cik)}/dates?limit=${limit}`),
+  institutionalIndustries: (year?: number, quarter?: number) => {
+    const qs = new URLSearchParams();
+    if (year)    qs.set("year",    String(year));
+    if (quarter) qs.set("quarter", String(quarter));
+    const s = qs.toString();
+    return call<unknown[]>(`/institutional/industries${s ? "?" + s : ""}`);
+  },
+
+  // — Technical indicators ————————————————————————————
+  technicalIndicators: (
+    sym: string,
+    params: { indicator?: string; start?: string; end?: string; limit?: number } = {},
+  ) => {
+    const qs = new URLSearchParams();
+    if (params.indicator) qs.set("indicator", params.indicator);
+    if (params.start)     qs.set("start", params.start);
+    if (params.end)       qs.set("end", params.end);
+    if (params.limit)     qs.set("limit", String(params.limit));
+    const s = qs.toString();
+    return call<unknown[]>(`/technical/${encodeURIComponent(sym)}${s ? "?" + s : ""}`);
+  },
+  technicalLatest: (sym: string) =>
+    call<unknown>(`/technical/${encodeURIComponent(sym)}/latest`),
+
+  // — Single-symbol metrics snapshot ——————————————————————
+  metricsSnapshot: (sym: string) =>
+    call<unknown>(`/metrics-snapshot/${encodeURIComponent(sym)}`),
+
+  // — XBRL ————————————————————————————————————————
+  xbrlFilings: (sym: string, limit = 25) =>
+    call<unknown[]>(`/xbrl/${encodeURIComponent(sym)}/filings?limit=${limit}`),
+  xbrlFiling: (sym: string, accession: string) =>
+    call<unknown>(`/xbrl/${encodeURIComponent(sym)}/filing/${encodeURIComponent(accession)}`),
+
+  // — Executive comp benchmark by industry ——————————————————
+  execCompBenchmark: (industry: string) =>
+    call<unknown>(`/exec-comp-benchmark/${encodeURIComponent(industry)}`),
 };
+
+// ── New typed responses for the 2026-05-29 upstream sync ────────────
+
+export interface ScreenerQuery {
+  sector?:         string;
+  industry?:       string;
+  country?:        string;
+  exchange?:       string;
+  is_etf?:         boolean;
+  is_fund?:        boolean;
+  market_cap_min?: number;
+  market_cap_max?: number;
+  symbol_prefix?:  string;
+  limit?:          number;
+  offset?:         number;
+}
+
+export interface ScreenerRow {
+  symbol:        string;
+  name?:         string | null;
+  sector?:       string | null;
+  industry?:     string | null;
+  country?:      string | null;
+  exchange?:     string | null;
+  market_cap?:   number | null;
+  is_etf?:       boolean | null;
+  is_fund?:      boolean | null;
+}
+
+export interface MarketMoverRow {
+  symbol:        string;
+  name?:         string | null;
+  price?:        number | null;
+  change?:       number | null;
+  change_pct?:   number | null;
+  volume?:       number | null;
+  kind?:         "gainer" | "loser" | "most_active" | string;
+}
+
+export interface IndexConstituent {
+  symbol:        string;
+  name?:         string | null;
+  sector?:       string | null;
+  weight?:       number | null;
+  added_on?:     string | null;
+  removed_on?:   string | null;
+}
+
+export interface SectorRow {
+  sector?:       string | null;
+  pe?:           number | null;
+  return_1d?:    number | null;
+  return_1w?:    number | null;
+  exchange?:     string | null;
+}
+
+export interface IndustryRow {
+  industry?:     string | null;
+  sector?:       string | null;
+  pe?:           number | null;
+  return_1d?:    number | null;
+  return_1w?:    number | null;
+  exchange?:     string | null;
+}
+
+export interface DividendCalendarRow {
+  symbol:        string;
+  date:          string;
+  amount?:       number | null;
+  yield?:        number | null;
+  record_date?:  string | null;
+  pay_date?:     string | null;
+}
+
+export interface SplitCalendarRow {
+  symbol:        string;
+  date:          string;
+  numerator?:    number | null;
+  denominator?:  number | null;
+}
+
+export interface ExchangeHoursRow {
+  exchange:      string;
+  open?:         string | null;
+  close?:        string | null;
+  timezone?:     string | null;
+  is_open?:      boolean | null;
+}
 
 export interface PmPolymarketDetail {
   condition_id: string;
