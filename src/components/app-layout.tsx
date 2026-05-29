@@ -32,6 +32,7 @@ import {
 	MessageSquare,
 	Newspaper,
 	ChartCandlestick,
+	TrendingUp,
 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
@@ -119,6 +120,7 @@ const LUMILAKE_NAV: NavItem[] = [
 	{ to: '/dashboard/datasets/kols', label: 'KOL Tweets', icon: MessageSquare },
 	{ to: '/dashboard/datasets/macro', label: 'Macro', icon: Activity },
 	{ to: '/dashboard/datasets/predmarket', label: 'Prediction markets', icon: ChartCandlestick },
+	{ to: '/dashboard/datasets/markets', label: 'Markets', icon: TrendingUp },
 	{ to: '/dashboard/lumilake/data', label: 'Data browsing', icon: Database },
 ];
 

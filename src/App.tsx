@@ -110,6 +110,7 @@ const DatasetsMacro   = lazy(() => import("./pages/dashboard/datasets-macro"));
 const DatasetsKols    = lazy(() => import("./pages/dashboard/datasets-kols"));
 const DatasetsNews    = lazy(() => import("./pages/dashboard/datasets-news"));
 const DatasetsPredmarket = lazy(() => import("./pages/dashboard/datasets-predmarket"));
+const DatasetsMarkets = lazy(() => import("./pages/dashboard/datasets-markets"));
 // Quant competition leaf components — Competitions shell wraps the
 // list-views (Browse + My strategies) with a sub-tab strip. Pathways
 // and detail pages render directly. 2026-05-03 consolidation.
@@ -614,6 +615,7 @@ export default function App() {
             <Route path="datasets/kols"    element={<DatasetsKols />} />
             <Route path="datasets/news"    element={<DatasetsNews />} />
             <Route path="datasets/predmarket" element={<DatasetsPredmarket />} />
+            <Route path="datasets/markets" element={<DatasetsMarkets />} />
 
             {/* Lumilake-origin pages grouped under /app/lumilake/*.
                 data-label + modelling hidden 2026-04-24 — not
