@@ -73,6 +73,8 @@ const WIDTH_KEY = 'studio_chat_width_v1';
 const MODEL_KEY = 'studio_chat_model_v1';
 const MODE_KEY = 'studio_chat_mode_v1';
 const THINK_KEY = 'studio_chat_think_v1';
+const AGENT_KEY = 'studio_chat_agent_v1';
+const PERSONA_KEY = 'studio_chat_persona_v1';
 const MIN_WIDTH = 320;
 const MAX_WIDTH = 720;
 const DEFAULT_WIDTH = 400;
@@ -135,6 +137,34 @@ export function StudioChat() {
 	const [think, setThink] = useState<boolean>(() => {
 		try { return localStorage.getItem(THINK_KEY) === '1'; }
 		catch { return false; }
+	});
+	// Optional xpio agent to chat with (empty = default behavior:
+	// chat grounded in the user's me-prefs). When set, the system
+	// prompt swaps for the agent's bank context.
+	type AgentRow = {
+		id: string;
+		scope: 'tenant' | 'shared';
+		row_count: number;
+		last_memory_ts: number;
+		// Role enrichment from xpcloud.yaml — present when the agent is
+		// declared as a role in an installed xpio app.
+		app?: string;
+		role?: string;
+		description?: string;
+		default_model?: string;
+	};
+	const [agents, setAgents] = useState<AgentRow[]>([]);
+	const [agentId, setAgentId] = useState<string>(() => {
+		try { return localStorage.getItem(AGENT_KEY) || ''; }
+		catch { return ''; }
+	});
+	// Custom personas — user-defined system prompts. Mutually
+	// exclusive with agentId; picking one clears the other.
+	type PersonaRow = { id: string; name: string; icon?: string; allowed_tools?: string[]; preferred_model?: string; prompt_len: number; updated_at: string };
+	const [personas, setPersonas] = useState<PersonaRow[]>([]);
+	const [personaId, setPersonaId] = useState<string>(() => {
+		try { return localStorage.getItem(PERSONA_KEY) || ''; }
+		catch { return ''; }
 	});
 	// Active chat thread id. null = unsaved thread; gets a server-minted
 	// id after the first auto-save. Persists across reloads so refreshing
@@ -226,6 +256,61 @@ export function StudioChat() {
 			else localStorage.removeItem(CHAT_ID_KEY);
 		} catch { /* ignore */ }
 	}, [chatId]);
+
+	// Persist agent picker.
+	useEffect(() => {
+		try {
+			if (agentId) localStorage.setItem(AGENT_KEY, agentId);
+			else localStorage.removeItem(AGENT_KEY);
+		} catch { /* ignore */ }
+	}, [agentId]);
+
+	// Persist persona picker.
+	useEffect(() => {
+		try {
+			if (personaId) localStorage.setItem(PERSONA_KEY, personaId);
+			else localStorage.removeItem(PERSONA_KEY);
+		} catch { /* ignore */ }
+	}, [personaId]);
+
+	// Load installed xpio agents once. Sorted server-side
+	// (newest-memory first); we just consume the array.
+	useEffect(() => {
+		(async () => {
+			try {
+				const r = await fetch('/api/v1/me/agents', { credentials: 'include' });
+				if (!r.ok) return;
+				const j = await r.json();
+				const list: AgentRow[] = j?.data?.agents || [];
+				setAgents(list);
+			} catch { /* ignore */ }
+		})();
+	}, []);
+
+	// Load user personas once. Re-fetched if the user edits them
+	// elsewhere (future UI). Same shape as agents lookup.
+	useEffect(() => {
+		(async () => {
+			try {
+				const r = await fetch('/api/v1/me/personas', { credentials: 'include' });
+				if (!r.ok) return;
+				const j = await r.json();
+				const list: PersonaRow[] = j?.data?.personas || [];
+				setPersonas(list);
+			} catch { /* ignore */ }
+		})();
+	}, []);
+
+	// Mutually-exclusive guards — picking one clears the other so
+	// the chat doesn't get a confused mix.
+	const selectAgent = useCallback((id: string) => {
+		setAgentId(id);
+		if (id) setPersonaId('');
+	}, []);
+	const selectPersona = useCallback((id: string) => {
+		setPersonaId(id);
+		if (id) setAgentId('');
+	}, []);
 
 	// Auto-save after each turn settles. Triggers when streaming
 	// transitions false and there's at least one assistant turn with
@@ -620,6 +705,7 @@ export function StudioChat() {
 					...(model ? { model } : {}),
 					...(mode ? { mode } : {}),
 					...(think ? { think: true } : {}),
+					...(personaId ? { persona_id: personaId } : agentId ? { agent_id: agentId } : {}),
 				}),
 				signal: ctrl.signal,
 			});
@@ -686,7 +772,7 @@ export function StudioChat() {
 			setStreaming(false);
 			abortRef.current = null;
 		}
-	}, [messages, streaming, location.pathname, model, mode, think]);
+	}, [messages, streaming, location.pathname, model, mode, think, agentId, personaId]);
 
 	// Re-run a turn — drops the clicked assistant message + the user
 	// message before it, then dispatches the original user text again
@@ -764,6 +850,7 @@ export function StudioChat() {
 					...(model ? { model } : {}),
 					...(mode ? { mode } : {}),
 					...(think ? { think: true } : {}),
+					...(personaId ? { persona_id: personaId } : agentId ? { agent_id: agentId } : {}),
 				}),
 				signal: ctrl.signal,
 			});
@@ -814,7 +901,7 @@ export function StudioChat() {
 			setStreaming(false);
 			abortRef.current = null;
 		}
-	}, [input, messages, streaming, location.pathname, model, mode, think, attachments]);
+	}, [input, messages, streaming, location.pathname, model, mode, think, attachments, agentId, personaId]);
 
 	const clear = () => {
 		if (streaming) return;
@@ -943,6 +1030,30 @@ export function StudioChat() {
 									auto: {modelShortLabel(lastRoute.modelUsed)}
 								</span>
 							)}
+							{agentId && (
+								<button
+									type="button"
+									onClick={() => setAgentId('')}
+									className="text-[9.5px] px-1 py-px rounded bg-violet-100 text-violet-700 font-medium hover:bg-violet-200 transition-colors max-w-[120px] truncate"
+									title={`Chat is grounded in the "${agentId}" agent's bank. Click to clear and chat as yourself.`}
+								>
+									@{agentId}
+								</button>
+							)}
+							{personaId && (() => {
+								const p = personas.find((x) => x.id === personaId);
+								if (!p) return null;
+								return (
+									<button
+										type="button"
+										onClick={() => setPersonaId('')}
+										className="text-[9.5px] px-1 py-px rounded bg-fuchsia-100 text-fuchsia-700 font-medium hover:bg-fuchsia-200 transition-colors max-w-[120px] truncate"
+										title={`Persona: ${p.name}. Click to clear and chat with the default LumidOS assistant.`}
+									>
+										{p.icon || '🎭'} {p.name}
+									</button>
+								);
+							})()}
 						</div>
 					</div>
 				</div>
@@ -1171,6 +1282,81 @@ export function StudioChat() {
 									<span className="font-medium flex-1 text-left">Show thinking</span>
 									{think && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
 								</button>
+								{agents.length > 0 && (
+									<>
+										<div className="h-px bg-slate-100 my-1 mx-2" />
+										<div className="px-2.5 py-1">
+											<div className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Talk to agent</div>
+											<select
+												value={agentId}
+												onChange={(e) => selectAgent(e.target.value)}
+												className="w-full text-[12px] rounded-md border border-slate-200 bg-white px-2 py-1 focus:outline-none focus:ring-2 focus:ring-emerald-400/30 focus:border-emerald-400"
+												title="Ground the chat in this xpio agent's bank + persona. Empty = chat as yourself."
+											>
+												<option value="">— me (default) —</option>
+												{/* Agents with a declared role first, grouped by app */}
+												{(() => {
+													const declared = agents.filter((a) => a.role && a.row_count > 0);
+													const byApp: Record<string, AgentRow[]> = {};
+													declared.forEach((a) => {
+														const k = a.app || '(other)';
+														(byApp[k] = byApp[k] || []).push(a);
+													});
+													const declaredEls = Object.keys(byApp).sort().map((app) => (
+														<optgroup key={app} label={app}>
+															{byApp[app].map((a) => (
+																<option key={a.id} value={a.id}>
+																	{a.role} · {a.row_count} mem
+																</option>
+															))}
+														</optgroup>
+													));
+													// Bank-only (no role declaration), at the bottom.
+													const bare = agents.filter((a) => !a.role && a.row_count > 0);
+													const bareEls = bare.length > 0 ? (
+														<optgroup label="other banks">
+															{bare.map((a) => (
+																<option key={a.id} value={a.id}>
+																	{a.id} · {a.row_count} mem
+																</option>
+															))}
+														</optgroup>
+													) : null;
+													return <>{declaredEls}{bareEls}</>;
+												})()}
+											</select>
+											{agentId && (
+												(() => {
+													const a = agents.find((x) => x.id === agentId);
+													if (!a) return null;
+													return (
+														<div className="mt-1 text-[10.5px] text-slate-500 leading-snug">
+															{a.description || (a.app ? `from ${a.app}` : `bank: ${a.id}`)}
+														</div>
+													);
+												})()
+											)}
+										</div>
+									</>
+								)}
+								{personas.length > 0 && (
+									<div className="px-2.5 py-1">
+										<div className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Persona</div>
+										<select
+											value={personaId}
+											onChange={(e) => selectPersona(e.target.value)}
+											className="w-full text-[12px] rounded-md border border-slate-200 bg-white px-2 py-1 focus:outline-none focus:ring-2 focus:ring-emerald-400/30 focus:border-emerald-400"
+											title="Apply a custom system prompt + tool subset. Mutually exclusive with agent picker."
+										>
+											<option value="">— none —</option>
+											{personas.map((p) => (
+												<option key={p.id} value={p.id}>
+													{p.icon ? p.icon + ' ' : ''}{p.name}
+												</option>
+											))}
+										</select>
+									</div>
+								)}
 								<div className="h-px bg-slate-100 my-1 mx-2" />
 								<button
 									type="button"
