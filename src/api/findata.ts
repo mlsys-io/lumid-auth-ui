@@ -367,7 +367,9 @@ export const findata = {
   // Prediction markets (Polymarket + Kalshi, /prediction-markets/*)
   pmEvents: (params: { q?: string; status?: "open" | "closed" | "all"; limit?: number } = {}) => {
     const qs = new URLSearchParams();
-    if (params.q) qs.set("q", params.q);
+    // Server bug: ?status=open without q= returns 500. Always send q= so the
+    // server's query builder has the required param. kv.run bug filed 2026-05-30.
+    qs.set("q", params.q ?? "");
     if (params.status) qs.set("status", params.status);
     qs.set("limit", String(params.limit ?? 50));
     return call<PmEventRow[]>(`/prediction-markets/events?${qs}`);
@@ -432,52 +434,71 @@ export const findata = {
   // schema authoring without blocking the wire-up.
 
   // — Stock screener + market movers ————————————————————
-  screener: (q: ScreenerQuery = {}) => {
+  // NOTE: kv.run wraps these in {count, hits:[]} or {count, data:[]} envelopes.
+  // Extract the array here so callers get T[] directly.
+  screener: async (q: ScreenerQuery = {}) => {
     const qs = new URLSearchParams();
     for (const [k, v] of Object.entries(q)) {
       if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
     }
     const s = qs.toString();
-    return call<ScreenerRow[]>(`/screener${s ? "?" + s : ""}`);
+    const r = await call<any>(`/screener${s ? "?" + s : ""}`);
+    return (Array.isArray(r) ? r : (r?.hits ?? r?.data ?? [])) as ScreenerRow[];
   },
-  marketMovers: (kind: "gainer" | "loser" | "most_active" = "gainer", limit = 50) =>
-    call<MarketMoverRow[]>(`/market-movers?kind=${kind}&limit=${limit}`),
+  marketMovers: async (kind: "gainer" | "loser" | "most_active" = "gainer", limit = 50) => {
+    const r = await call<any>(`/market-movers?kind=${kind}&limit=${limit}`);
+    return (Array.isArray(r) ? r : (r?.data ?? r?.movers ?? [])) as MarketMoverRow[];
+  },
 
   // — Index constituents ————————————————————————————
-  indexConstituents: (indexSymbol: string, asOf?: string) =>
-    call<IndexConstituent[]>(
+  indexConstituents: async (indexSymbol: string, asOf?: string) => {
+    const r = await call<any>(
       `/index/${encodeURIComponent(indexSymbol)}/constituents${asOf ? "?as_of=" + encodeURIComponent(asOf) : ""}`,
-    ),
+    );
+    return (Array.isArray(r) ? r : (r?.data ?? r?.constituents ?? [])) as IndexConstituent[];
+  },
 
   // — Sector / industry snapshots —————————————————————
-  sectorsPE: (exchange?: string) =>
-    call<SectorRow[]>(`/sectors/pe${exchange ? "?exchange=" + encodeURIComponent(exchange) : ""}`),
-  sectorsPerformance: (exchange?: string) =>
-    call<SectorRow[]>(`/sectors/performance${exchange ? "?exchange=" + encodeURIComponent(exchange) : ""}`),
-  industriesPE: (exchange?: string) =>
-    call<IndustryRow[]>(`/industries/pe${exchange ? "?exchange=" + encodeURIComponent(exchange) : ""}`),
-  industriesPerformance: (exchange?: string) =>
-    call<IndustryRow[]>(`/industries/performance${exchange ? "?exchange=" + encodeURIComponent(exchange) : ""}`),
+  sectorsPE: async (exchange?: string) => {
+    const r = await call<any>(`/sectors/pe${exchange ? "?exchange=" + encodeURIComponent(exchange) : ""}`);
+    return (Array.isArray(r) ? r : (r?.data ?? [])) as SectorRow[];
+  },
+  sectorsPerformance: async (exchange?: string) => {
+    const r = await call<any>(`/sectors/performance${exchange ? "?exchange=" + encodeURIComponent(exchange) : ""}`);
+    return (Array.isArray(r) ? r : (r?.data ?? [])) as SectorRow[];
+  },
+  industriesPE: async (exchange?: string) => {
+    const r = await call<any>(`/industries/pe${exchange ? "?exchange=" + encodeURIComponent(exchange) : ""}`);
+    return (Array.isArray(r) ? r : (r?.data ?? [])) as IndustryRow[];
+  },
+  industriesPerformance: async (exchange?: string) => {
+    const r = await call<any>(`/industries/performance${exchange ? "?exchange=" + encodeURIComponent(exchange) : ""}`);
+    return (Array.isArray(r) ? r : (r?.data ?? [])) as IndustryRow[];
+  },
 
   // — Calendars ————————————————————————————————————
-  dividendsCalendar: (params: { from?: string; to?: string; limit?: number } = {}) => {
+  dividendsCalendar: async (params: { from?: string; to?: string; limit?: number } = {}) => {
     const qs = new URLSearchParams();
     if (params.from)  qs.set("from", params.from);
     if (params.to)    qs.set("to", params.to);
     if (params.limit) qs.set("limit", String(params.limit));
     const s = qs.toString();
-    return call<DividendCalendarRow[]>(`/dividends-calendar${s ? "?" + s : ""}`);
+    const r = await call<any>(`/dividends-calendar${s ? "?" + s : ""}`);
+    return (Array.isArray(r) ? r : (r?.data ?? [])) as DividendCalendarRow[];
   },
-  splitsCalendar: (params: { from?: string; to?: string; limit?: number } = {}) => {
+  splitsCalendar: async (params: { from?: string; to?: string; limit?: number } = {}) => {
     const qs = new URLSearchParams();
     if (params.from)  qs.set("from", params.from);
     if (params.to)    qs.set("to", params.to);
     if (params.limit) qs.set("limit", String(params.limit));
     const s = qs.toString();
-    return call<SplitCalendarRow[]>(`/splits-calendar${s ? "?" + s : ""}`);
+    const r = await call<any>(`/splits-calendar${s ? "?" + s : ""}`);
+    return (Array.isArray(r) ? r : (r?.data ?? [])) as SplitCalendarRow[];
   },
-  exchangeMarketHours: (exchange?: string) =>
-    call<ExchangeHoursRow[]>(`/exchange-market-hours${exchange ? "?exchange=" + encodeURIComponent(exchange) : ""}`),
+  exchangeMarketHours: async (exchange?: string) => {
+    const r = await call<any>(`/exchange-market-hours${exchange ? "?exchange=" + encodeURIComponent(exchange) : ""}`);
+    return (Array.isArray(r) ? r : (r?.data ?? [])) as ExchangeHoursRow[];
+  },
 
   // — Growth series (BS / CF / IS) ——————————————————————
   balanceSheetGrowth: (sym: string, period: "annual" | "quarter" = "annual", limit = 10) =>
