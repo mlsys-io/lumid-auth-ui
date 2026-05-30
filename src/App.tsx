@@ -56,6 +56,9 @@ const StudioSettings   = lazy(() => import("./pages/studio/settings"));
 const StudioAdmin      = lazy(() => import("./pages/studio/admin"));
 // Phase S3-B — cycle inspector.
 const StudioInspector  = lazy(() => import("./pages/studio/inspector"));
+// "How Lumid works" — walkable 3-stage loop (Assemble → Adapt → Compound)
+// illustrated against the demo intents. Stages 1-2 concrete, 3 open.
+const StudioHow        = lazy(() => import("./pages/studio/demo"));
 
 // Auto-quant operator page (/dashboard/auto-quant/*)
 const AutoQuantPage = lazy(() => import("./pages/app/auto-quant/index"));
@@ -420,6 +423,7 @@ export default function App() {
             <Route path="runs"                         element={<StudioRuns />} />
             <Route path="runs/:run_id"                 element={<StudioRunDetail />} />
             <Route path="mind"                         element={<StudioMind />} />
+            <Route path="how"                          element={<StudioHow />} />
             <Route path="settings"                     element={<StudioSettings />} />
             <Route path="admin"                        element={<StudioAdmin />} />
           </Route>

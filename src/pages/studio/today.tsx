@@ -41,16 +41,22 @@ export default function StudioToday() {
 	return (
 		<>
 			{empty === true && <div className="space-y-6"><FreshUserHero name={name} /></div>}
-			{empty === false && DEMO_MODE && (
-				// The IntentJournal is the entire surface here — show / track /
-				// manage standing intents and nothing else. Outcomes live
-				// inside each intent's headline; pending decisions live inline
-				// inside the spread that produced them. The page-shell padding
-				// is taken back inside IntentJournal so the editorial spread
-				// can paint the warm paper background edge-to-edge.
-				<IntentJournal intents={INTENT_REGISTRY} />
+			{empty === false && (
+				// Stage 1 — "given an intent, assemble a workflow (from the
+				// workspace or AI-generated)" — is the standing, recurring
+				// action, not a first-run-only thing. So the quick starters
+				// STICK here above the user's existing intents/workflows, as a
+				// permanent "start a new intent" launcher.
+				<div className="space-y-6">
+					<QuickStarters heading="Start a new intent" />
+					{DEMO_MODE
+						// IntentJournal reclaims the page-shell padding to paint
+						// its editorial spread edge-to-edge; it sits below the
+						// launcher as the user's standing-intent surface.
+						? <IntentJournal intents={INTENT_REGISTRY} />
+						: <AppLoops />}
+				</div>
 			)}
-			{(empty === false && !DEMO_MODE) && <div className="space-y-6"><AppLoops /></div>}
 		</>
 	);
 }
@@ -97,12 +103,6 @@ const STARTERS: Starter[] = [
 ];
 
 function FreshUserHero({ name }: { name: string }) {
-	const dispatch = (prompt: string) => {
-		window.dispatchEvent(new CustomEvent('studio:ask', {
-			detail: { prompt, autosend: true },
-		}));
-	};
-
 	return (
 		<div className="space-y-5">
 			{/* Hero — greeting + single primary ask */}
@@ -126,43 +126,7 @@ function FreshUserHero({ name }: { name: string }) {
 				</div>
 			</section>
 
-			{/* Four concrete starters — one click installs + schedules */}
-			<div>
-				<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400 mb-2">
-					Quick starters
-				</div>
-				<div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-					{STARTERS.map((s) => (
-						<StarterCard key={s.title} s={s} onClick={() => dispatch(s.prompt)} />
-					))}
-				</div>
-			</div>
-
-			{/* Custom path — for users who know exactly what they want */}
-			<div className="rounded-xl border border-slate-200 bg-white p-4 flex items-center gap-3">
-				<div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center flex-shrink-0">
-					<MessagesSquare className="w-4 h-4" />
-				</div>
-				<div className="flex-1 min-w-0">
-					<div className="text-sm font-medium text-slate-900">Or just tell us what you want</div>
-					<div className="text-[12px] text-slate-500 mt-0.5">
-						Type into the AI panel on the right — it will compose, install, and schedule for you.
-					</div>
-				</div>
-				<button
-					onClick={() => {
-						window.dispatchEvent(new CustomEvent('studio:ask', {
-							detail: {
-								prompt: 'I want to set up my first workflow. Help me think through what would be most useful for my day.',
-								autosend: true,
-							},
-						}));
-					}}
-					className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-slate-900 text-white hover:bg-slate-800 active:scale-95 transition-all flex-shrink-0"
-				>
-					Start chat <ArrowRight className="w-3.5 h-3.5" />
-				</button>
-			</div>
+			<QuickStarters />
 
 			{/* Quiet escape hatch — for power users who want to browse */}
 			<div className="text-center pt-1">
@@ -173,6 +137,49 @@ function FreshUserHero({ name }: { name: string }) {
 					Or browse the marketplace
 					<ArrowRight className="w-3 h-3" />
 				</Link>
+			</div>
+		</div>
+	);
+}
+
+// QuickStarters — the Stage 1 launcher: pick a starter (the AI composes +
+// installs a workflow) or describe a new intent free-form. Rendered in the
+// fresh-user hero AND, permanently, above a returning user's intents — Stage 1
+// ("given an intent, assemble a workflow") is a recurring action, so this
+// surface always sticks.
+function QuickStarters({ heading = 'Quick starters' }: { heading?: string }) {
+	const dispatch = (prompt: string) =>
+		window.dispatchEvent(new CustomEvent('studio:ask', { detail: { prompt, autosend: true } }));
+	return (
+		<div className="space-y-3">
+			<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400">
+				{heading}
+			</div>
+
+			{/* Four concrete starters — one click composes + installs + schedules */}
+			<div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+				{STARTERS.map((s) => (
+					<StarterCard key={s.title} s={s} onClick={() => dispatch(s.prompt)} />
+				))}
+			</div>
+
+			{/* Custom path — describe a new intent free-form; the AI assembles it */}
+			<div className="rounded-xl border border-slate-200 bg-white p-4 flex items-center gap-3">
+				<div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center flex-shrink-0">
+					<MessagesSquare className="w-4 h-4" />
+				</div>
+				<div className="flex-1 min-w-0">
+					<div className="text-sm font-medium text-slate-900">Or describe what you want</div>
+					<div className="text-[12px] text-slate-500 mt-0.5">
+						Tell the AI panel on the right — it composes, installs, and schedules it for you.
+					</div>
+				</div>
+				<button
+					onClick={() => dispatch('I want to set up a new workflow. Help me think through what would be most useful.')}
+					className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-slate-900 text-white hover:bg-slate-800 active:scale-95 transition-all flex-shrink-0"
+				>
+					Start chat <ArrowRight className="w-3.5 h-3.5" />
+				</button>
 			</div>
 		</div>
 	);

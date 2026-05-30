@@ -78,6 +78,29 @@ export interface NarrativeBullet {
 	text: string;            // "raised Voice match from 78% → 84%"
 }
 
+// ── Stage 1 (Assemble) — the workflow pieces, tagged by where they came
+// from: off-the-shelf from the workspace/library, or AI-generated for this
+// specific intent. Drives the "How it works" demo's Assemble panel.
+export interface AssemblyPiece {
+	name: string;
+	source: 'workspace' | 'ai';
+	role?: string;          // one-line of what the piece does
+}
+
+// ── Stage 3 (Compound) — what this intent gave BACK to the shared
+// marketplace/library, closing the loop so the next person assembling a
+// similar intent starts ahead.
+export interface CompoundContribution {
+	kind: 'skill' | 'recipe' | 'standard' | 'example';
+	name: string;
+	detail: string;         // what was learned / promoted
+}
+export interface CompoundResult {
+	contributions: CompoundContribution[];
+	adoption?: string;      // e.g. "now used by 12 other intents"
+	loopBack: string;       // the close-the-loop sentence
+}
+
 export interface IntentDetail {
 	period?: string;       // small top-right meta, e.g. "cycle 3 of 12", "week 2"
 	stats: IntentStat[];
@@ -92,6 +115,8 @@ export interface DemoIntent {
 	progress: number;      // 0-100, drives the rail progress bar
 	latest: string;        // outcome chip on the card
 	chips: string[];       // T12 — skills assembled into this intent's workflow
+	assembly?: AssemblyPiece[];  // Stage 1 — how the workflow was assembled (source-tagged)
+	compound?: CompoundResult;   // Stage 3 — what it will give back (teaser in the demo)
 	live?: boolean;
 	axisMovements?: AxisMovement[]; // rail mini-row + detail axis chips
 	detail?: IntentDetail; // when set, the rail card becomes clickable
@@ -134,6 +159,14 @@ export const DEMO_INTENTS: DemoIntent[] = [
 			'Urgency check',
 			'Deadline tracker',
 			'Follow-up scheduler',
+		],
+		assembly: [
+			{ name: 'Gmail reader',        source: 'workspace', role: 'pulls + threads your inbox' },
+			{ name: 'Calendar reconciler', source: 'workspace', role: 'finds + resolves conflicts' },
+			{ name: 'Voice draft',         source: 'ai',        role: 'composed for you — writes in your register' },
+			{ name: 'Urgency check',       source: 'workspace', role: 'ranks what needs you now' },
+			{ name: 'Deadline tracker',    source: 'workspace', role: 'watches commitments' },
+			{ name: 'Follow-up scheduler', source: 'ai',        role: 'generated — chases replies on your cadence' },
 		],
 		axisMovements: [
 			{ axis: 'standard', count: 2, net: 6, latest: 'voice-match floor raised 78% → 84%' },
@@ -186,6 +219,13 @@ export const DEMO_INTENTS: DemoIntent[] = [
 			'Pareto analyzer',
 			'Optimizer',
 		],
+		assembly: [
+			{ name: 'Variant generator', source: 'ai',        role: 'composed for NL-to-SQL — proposes configs to try' },
+			{ name: 'FlowMesh dispatch', source: 'workspace', role: 'runs each variant on GPU workers' },
+			{ name: 'Benchmark runner',  source: 'workspace', role: 'scores accuracy + p95 latency' },
+			{ name: 'Pareto analyzer',   source: 'workspace', role: 'keeps only frontier configs' },
+			{ name: 'Optimizer',         source: 'workspace', role: 'picks the next configs to explore' },
+		],
 		axisMovements: [
 			{ axis: 'standard', count: 1, latest: 'latency floor tightened 250ms → 200ms (your reject)' },
 			{ axis: 'recipe',   count: 2, latest: 'added "reject-if-over-budget" gate' },
@@ -221,6 +261,62 @@ export const DEMO_INTENTS: DemoIntent[] = [
 					{ id: 'v3b', config: 'small + sparse retrieval + lightweight rerank', accuracy: 90.1, latency: 178, cost: 0.21, status: 'frontier' },
 					{ id: 'v3c', config: 'medium + dense + lightweight rerank',           accuracy: 91.5, latency: 189, cost: 0.34, status: 'dominated' },
 					{ id: 'v3d', config: 'medium + sparse + heavy rerank',                accuracy: 92.3, latency: 244, cost: 0.41, status: 'over' },
+				],
+			},
+		},
+	},
+	{
+		id: 'trader-week-3',
+		persona: 'trader · week 3',
+		title: 'Grow my crypto book — momentum on majors, cut losers fast',
+		progress: 45,
+		latest: '6 trades placed, 2 stopped out, +3.8% on the week',
+		chips: [
+			'Market data feed',
+			'Signal generator',
+			'Risk gate',
+			'Order router',
+			'Regime detector',
+			'P&L tracker',
+		],
+		assembly: [
+			{ name: 'Market data feed', source: 'workspace', role: 'streams majors OHLCV + funding' },
+			{ name: 'Signal generator', source: 'ai',        role: 'composed for your momentum thesis' },
+			{ name: 'Risk gate',        source: 'workspace', role: 'caps size, enforces your stops' },
+			{ name: 'Order router',     source: 'workspace', role: 'places + manages via QuantArena' },
+			{ name: 'Regime detector',  source: 'ai',        role: 'generated — sits out chop, leans into trend' },
+			{ name: 'P&L tracker',      source: 'workspace', role: 'marks the book in real time' },
+		],
+		axisMovements: [
+			{ axis: 'standard', count: 1, net: 2, latest: 'max-drawdown floor tightened -4.3% → -2.1% (your reject)' },
+			{ axis: 'rules',    count: 2, latest: 'cut losers at -2%, let winners run on a trailing stop' },
+			{ axis: 'recipe',   count: 1, latest: 'added a regime gate — no entries in chop' },
+			{ axis: 'examples', count: 6, latest: '6 approved setups became training examples' },
+		],
+		summary: 'drawdown floor tightened to -2.1% after your reject, learned cut-losers-at-2%, added a regime gate, 6 setups endorsed — book up 3.8%.',
+		headline: { label: 'week P&L', value: '+3.8%' },
+		detail: {
+			period: 'week 3',
+			narrative: [
+				{ axis: 'standard', text: 'Max-drawdown budget tightened -4.3% → -2.1% after you flagged a deep dip.' },
+				{ axis: 'rules',    text: 'Learned: cut losers at -2%, let winners run on a trailing stop.' },
+				{ axis: 'recipe',   text: 'Added a regime gate so it sits out chop and only presses in trends.' },
+				{ axis: 'examples', text: '6 of your approved setups became future-cycle examples.' },
+			],
+			stats: [
+				{ label: 'Trades placed', value: '6' },
+				{ label: 'Win rate',      value: '67%',   delta: 'up from 52%',       deltaTone: 'up' },
+				{ label: 'Max drawdown',  value: '-2.1%', delta: 'down from -4.3%',   deltaTone: 'up' },
+				{ label: 'Week P&L',      value: '+3.8%', delta: '+2.4pp vs last wk', deltaTone: 'up' },
+			],
+			body: {
+				kind: 'judgment',
+				activity: [
+					{ when: 'just now',     text: 'Opened BTC long on a momentum break', detail: '1.2% risk · stop at -2%', tone: 'good' },
+					{ when: '40m ago',      text: 'Stopped out of SOL',                  detail: '-2.0% — the rule held',   tone: 'info' },
+					{ when: '2h ago',       text: 'Skipped ETH entry — regime = chop',   detail: 'regime gate fired',       tone: 'info' },
+					{ when: '5h ago',       text: 'Trailed the stop up on a BTC winner',  detail: 'locked +3.1%',            tone: 'good' },
+					{ when: 'this morning', text: 'Scanned 90 symbols for setups',       detail: '3 qualified · 1 taken' },
 				],
 			},
 		},

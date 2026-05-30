@@ -15,6 +15,7 @@ import {
 	Store,
 	Workflow as WorkflowIcon,
 	Brain,
+	Compass,
 	Settings,
 	Shield,
 	LogOut,
@@ -69,6 +70,7 @@ const MORE_NAV: NavItem[] = [
 	{ to: '/studio/workflows', label: 'Workflows', icon: WorkflowIcon },
 	{ to: '/studio/knowledge', label: 'Knowledge', icon: Brain },
 	{ to: '/studio/library',   label: 'Library',   icon: Store },
+	{ to: '/studio/how',       label: 'How it works', icon: Compass },
 ];
 // MoreSection — collapsible "More" group under the primary nav.
 // The header acts as the toggle and shows the current state. Items
@@ -137,10 +139,57 @@ function NavItemView({ to, label, icon: Icon, end }: NavItem) {
 	);
 }
 
+// Drag-resizable sidebar width, persisted to localStorage. Mirrors the
+// StudioChat right-panel pattern (pointer events, clamp, persist on drag-end)
+// so both rails behave identically. (2026-05-30)
+const SIDEBAR_WIDTH_KEY = 'studio_sidebar_width_v1';
+const SIDEBAR_MIN = 200;
+const SIDEBAR_MAX = 400;
+const SIDEBAR_DEFAULT = 224; // == the old w-56
+
+function useSidebarWidth() {
+	const [width, setWidth] = useState<number>(() => {
+		try {
+			const v = parseInt(localStorage.getItem(SIDEBAR_WIDTH_KEY) || '', 10);
+			if (!Number.isNaN(v)) return Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, v));
+		} catch { /* ignore */ }
+		return SIDEBAR_DEFAULT;
+	});
+	const [resizing, setResizing] = useState(false);
+
+	// Persist only when a drag ends — keeps localStorage writes off the hot path.
+	useEffect(() => {
+		if (resizing) return;
+		try { localStorage.setItem(SIDEBAR_WIDTH_KEY, String(width)); } catch { /* ignore */ }
+	}, [resizing]); // eslint-disable-line react-hooks/exhaustive-deps
+
+	const startResize = (e: React.PointerEvent) => {
+		e.preventDefault();
+		const startX = e.clientX;
+		const startW = width;
+		setResizing(true);
+		const onMove = (ev: PointerEvent) => {
+			const next = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, startW + (ev.clientX - startX)));
+			setWidth(next);
+		};
+		const onUp = () => {
+			window.removeEventListener('pointermove', onMove);
+			window.removeEventListener('pointerup', onUp);
+			setResizing(false);
+		};
+		window.addEventListener('pointermove', onMove);
+		window.addEventListener('pointerup', onUp);
+	};
+
+	const reset = () => setWidth(SIDEBAR_DEFAULT);
+	return { width, resizing, startResize, reset };
+}
+
 export function StudioShell() {
 	const { user, logout } = useAuth();
 	const navigate = useNavigate();
 	const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+	const { width: sidebarWidth, resizing, startResize, reset: resetSidebar } = useSidebarWidth();
 
 	const [menuOpen, setMenuOpen] = useState(false);
 	const menuRef = useRef<HTMLDivElement>(null);
@@ -158,9 +207,16 @@ export function StudioShell() {
 	};
 
 	return (
-		<div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 flex">
+		<div className={cn(
+			'min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 flex',
+			resizing && 'select-none cursor-ew-resize',
+		)}>
 			{/* Sidebar ─────────────────────────────────────────────── */}
-			<aside data-studio-picker-chrome="1" className="w-56 flex flex-col h-screen bg-white/70 backdrop-blur-sm border-r border-slate-200/70 sticky top-0">
+			<aside
+				data-studio-picker-chrome="1"
+				style={{ width: sidebarWidth }}
+				className="relative flex flex-col h-screen flex-shrink-0 bg-white/70 backdrop-blur-sm border-r border-slate-200/70 sticky top-0"
+			>
 				<Link to="/studio" className="px-4 py-4 border-b border-slate-200/60 flex items-center gap-2.5 hover:bg-slate-50/50 transition-colors">
 					<div className="relative">
 						<div className="absolute inset-0 bg-emerald-400/30 blur-md rounded-full" />
@@ -243,6 +299,24 @@ export function StudioShell() {
 							</button>
 						</div>
 					)}
+				</div>
+
+				{/* Drag-to-resize handle on the right edge — double-click resets */}
+				<div
+					onPointerDown={startResize}
+					onDoubleClick={resetSidebar}
+					title="Drag to resize · double-click to reset"
+					className={cn(
+						'absolute top-0 right-0 z-30 h-full w-1.5 cursor-ew-resize group/resize',
+						'hover:bg-emerald-200/30 transition-colors',
+						resizing && 'bg-emerald-200/40',
+					)}
+				>
+					<span className={cn(
+						'absolute right-0 top-0 h-full w-px transition-colors',
+						'bg-transparent group-hover/resize:bg-emerald-400',
+						resizing && '!bg-emerald-500',
+					)} />
 				</div>
 			</aside>
 
