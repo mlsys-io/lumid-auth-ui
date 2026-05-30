@@ -54,7 +54,12 @@ const CreateCompetitionDialog: React.FC<Props> = ({ open, onClose, onCreated }) 
 				name: form.name.trim(),
 				market_id: form.market_id,
 				initial_funding: form.initial_funding,
-				trading_fees: form.trading_fees,
+				// Backend stores trading_fees as a fraction (0.001 = 0.1%);
+				// the rest of the UI uses formatPercentage which multiplies
+				// by 100 to display. The form label says "(%)" so the user
+				// enters 0.1 meaning 0.1% — divide by 100 to match the
+				// stored convention.
+				trading_fees: form.trading_fees / 100,
 				start_time: startTs,
 				end_time: endTs,
 			});
@@ -141,17 +146,24 @@ const CreateCompetitionDialog: React.FC<Props> = ({ open, onClose, onCreated }) 
 						</div>
 						<div className="flex flex-col gap-1.5">
 							<Label htmlFor="comp-fees">Trading Fees (%)</Label>
-							<Input
-								id="comp-fees"
-								type="number"
-								min={0}
-								max={100}
-								step={0.01}
-								value={form.trading_fees}
-								onChange={(e) =>
-									setForm((f) => ({ ...f, trading_fees: Number(e.target.value) }))
-								}
-							/>
+							<div className="relative">
+								<Input
+									id="comp-fees"
+									type="number"
+									min={0}
+									max={100}
+									step={0.01}
+									value={form.trading_fees}
+									onChange={(e) =>
+										setForm((f) => ({ ...f, trading_fees: Number(e.target.value) }))
+									}
+									className="pr-7"
+								/>
+								<span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
+							</div>
+							<p className="text-[10px] text-muted-foreground leading-snug">
+								Enter as a percent, e.g. <span className="font-mono">0.1</span> for 0.1%.
+							</p>
 						</div>
 					</div>
 

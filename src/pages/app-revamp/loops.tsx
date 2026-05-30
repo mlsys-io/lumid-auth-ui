@@ -18,7 +18,9 @@
 // what to do; you do it and ask when uncertain."
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { formatRelative } from "@/lib/relative-time";
+import { DEMO_MODE, DEMO_WORKFLOW_APPS } from "@/lib/demo";
 import {
   AlertCircle,
   CheckCircle2,
@@ -26,10 +28,8 @@ import {
   Mail,
   Pause,
   Play,
-  RefreshCw,
   Sparkles,
   X,
-  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { me, MeApiError } from "@/api/me";
@@ -41,7 +41,7 @@ type Headline = Awaited<ReturnType<typeof me.today>>["headlines"][number];
 
 const HEADLINE_STYLE: Record<Headline["kind"], { icon: typeof Sparkles; cls: string }> = {
   quota_paused: { icon: AlertCircle, cls: "border-amber-200 bg-amber-50 text-amber-900" },
-  drafts:       { icon: Mail,        cls: "border-indigo-200 bg-indigo-50 text-indigo-900" },
+  drafts:       { icon: Mail,        cls: "border-emerald-200 bg-emerald-50 text-emerald-900" },
   brief:        { icon: Sparkles,    cls: "border-emerald-200 bg-emerald-50 text-emerald-900" },
   cycle_ok:     { icon: CheckCircle2,cls: "border-slate-200 bg-slate-50 text-slate-800" },
   cycle_failed: { icon: AlertCircle, cls: "border-rose-200 bg-rose-50 text-rose-900" },
@@ -207,7 +207,7 @@ function DraftsSection({ onChange }: { onChange: () => void }) {
                   <button
                     onClick={() => saveEdit(d.id)}
                     disabled={!!busy[d.id]}
-                    className="px-3 py-1 text-xs rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+                    className="px-3 py-1 text-xs rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50 transition-colors"
                   >Save</button>
                 </div>
               </div>
@@ -246,7 +246,12 @@ function LoopsSection() {
     try {
       const r = await me.loopsHealth();
       const list = (r as unknown as { loops?: LoopRow[] }).loops ?? (r as unknown as LoopRow[]) ?? [];
-      setRows(list);
+      // Demo IA: surface only the two demo apps' loops. Reverts when
+      // VITE_DEMO_MODE=false. See src/lib/demo.ts.
+      const shown = DEMO_MODE
+        ? list.filter((l) => (DEMO_WORKFLOW_APPS as readonly string[]).includes(l.app))
+        : list;
+      setRows(shown);
     } catch (e) {
       setError(e instanceof MeApiError ? e.message : String(e));
     }
@@ -289,7 +294,7 @@ function LoopsSection() {
     return (
       <SectionFrame title="What it does">
         <div className="text-sm text-slate-500 italic">
-          No loops yet. <a href="/app/marketplace" className="text-indigo-600 hover:underline">Browse skills</a> to add some.
+          No loops yet. <Link to="/studio/library" className="text-emerald-700 hover:underline">Browse the marketplace</Link> to add some.
         </div>
       </SectionFrame>
     );
@@ -311,7 +316,7 @@ function LoopsSection() {
               <div className="min-w-0 flex-1">
                 <div className="font-medium text-sm">{humanizeLoop(r.loop)}</div>
                 <div className="text-xs text-slate-500 mt-0.5">
-                  {r.last_run_ts ? `Last ran ${formatRelative(r.last_run_ts)}` : "Hasn't run yet"}
+                  {formatRelative(r.last_run_ts) === "—" ? "Hasn't run yet" : `Last ran ${formatRelative(r.last_run_ts)}`}
                   {failing && (
                     <span className="ml-2 text-rose-700">
                       · {r.consecutive_failures} consecutive failure{r.consecutive_failures === 1 ? "" : "s"}
@@ -323,9 +328,9 @@ function LoopsSection() {
                 <button
                   onClick={() => runNow(r)}
                   disabled={!!b}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 active:scale-95 disabled:opacity-50 transition-all shadow-sm shadow-emerald-100"
                 >
-                  {b === "running" ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+                  {b === "running" ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
                   Run now
                 </button>
                 <button
@@ -386,19 +391,6 @@ function humanizeLoop(loop: string): string {
   return loop.charAt(0).toUpperCase() + loop.slice(1).replace(/_/g, " ");
 }
 
-function formatRelative(iso: string): string {
-  const t = new Date(iso).getTime();
-  if (!t) return iso;
-  const diff = Date.now() - t;
-  if (diff < 0) return "scheduled";
-  const min = Math.floor(diff / 60_000);
-  if (min < 1)  return "just now";
-  if (min < 60) return `${min} min ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24)  return `${hr} hour${hr === 1 ? "" : "s"} ago`;
-  const d = Math.floor(hr / 24);
-  return `${d} day${d === 1 ? "" : "s"} ago`;
-}
 
 // ── Page ──────────────────────────────────────────────────────────
 
@@ -422,19 +414,11 @@ export default function AppLoops() {
   const bumpToday = () => setTodayKey((k) => k + 1);
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      <header className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold flex items-center gap-2">
-            <RefreshCw className="w-5 h-5 text-indigo-600" />
-            Your AI
-          </h1>
-        </div>
-      </header>
-
+    <div className="space-y-6">
+      {/* Page identity in StudioShell top-bar — no local H1. */}
       {justInstalled && (
-        <div className="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 flex items-center gap-3">
-          <Sparkles className="w-4 h-4 shrink-0" />
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-3 text-sm text-emerald-900 flex items-center gap-3">
+          <Sparkles className="w-4 h-4 shrink-0 text-emerald-600" />
           <div className="flex-1">Your AI is set up. The next cycle will fire on schedule — or use Run now to try it immediately.</div>
         </div>
       )}

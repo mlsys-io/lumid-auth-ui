@@ -3,3 +3,48 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Smooth collapse for the dashboard's track section. Animates
+   grid-template-rows from 0fr→1fr without measuring DOM. */
+.track-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 280ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.track-collapse > .track-inner { overflow: hidden; }
+.track-collapse.open { grid-template-rows: 1fr; }
+
+/* Live dot — solid emerald with an expanding ring that fades out,
+   like a radar ping. Reads as "alive" without the constant scale-
+   jump of a basic pulse. */
+@keyframes intent-live-ping {
+  0%   { box-shadow: 0 0 0 0    rgba(16, 185, 129, 0.55); }
+  70%  { box-shadow: 0 0 0 7px  rgba(16, 185, 129, 0);    }
+  100% { box-shadow: 0 0 0 0    rgba(16, 185, 129, 0);    }
+}
+.intent-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: #10b981;
+  display: inline-block;
+  animation: intent-live-ping 2.4s ease-in-out infinite;
+}
+
+/* Top-of-card status rail — a 2px gradient bar that glows softly
+   when live. Lives above the card body. */
+.intent-rail-live {
+  background: linear-gradient(90deg,
+    rgba(16, 185, 129, 0.0) 0%,
+    rgba(16, 185, 129, 0.95) 14%,
+    rgba(5, 150, 105, 1.0) 50%,
+    rgba(16, 185, 129, 0.95) 86%,
+    rgba(16, 185, 129, 0.0) 100%);
+  box-shadow: 0 1px 8px rgba(16, 185, 129, 0.28);
+}
+.intent-rail-paused {
+  background: linear-gradient(90deg,
+    rgba(148, 163, 184, 0.0) 0%,
+    rgba(148, 163, 184, 0.55) 50%,
+    rgba(148, 163, 184, 0.0) 100%);
+}

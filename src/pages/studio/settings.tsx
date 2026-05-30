@@ -31,13 +31,7 @@ export default function StudioSettings() {
 	const { user } = useAuth();
 	return (
 		<div className="space-y-4">
-			<header>
-				<h1 className="text-lg font-semibold">Settings</h1>
-				<p className="text-sm text-slate-500 mt-1">
-					Account, tokens, connected services, and privacy — all in one place.
-				</p>
-			</header>
-
+			{/* Title + subtitle render in the StudioShell top-bar (TopStatusStrip). */}
 			<ProfileSection email={user?.email ?? ''} role={user?.role ?? ''} />
 			<TokensSection />
 			<OAuthSection />
@@ -58,7 +52,7 @@ function SectionCard({
 						<Icon className="w-4 h-4" />
 					</div>
 					<div className="min-w-0">
-						<h2 className="font-semibold text-sm">{title}</h2>
+						<h2 className="font-medium text-sm">{title}</h2>
 						<p className="text-xs text-slate-500 mt-0.5">{description}</p>
 					</div>
 				</div>
@@ -76,7 +70,7 @@ function ProfileSection({ email, role }: { email: string; role: string }) {
 				<dd className="font-mono text-xs">{email}</dd>
 				<dt className="text-slate-500">Role</dt>
 				<dd>
-					<span className="px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wide bg-slate-100 text-slate-700">
+					<span className="px-2 py-0.5 rounded-full text-[10px] tracking-wide bg-slate-100 text-slate-700">
 						{role || 'user'}
 					</span>
 				</dd>
@@ -118,30 +112,93 @@ function TokensSection() {
 	);
 }
 
-function OAuthSection() {
-	const [grants, setGrants] = useState<{ state?: string; scopes?: string[] } | null>(null);
-	useEffect(() => {
-		apiClient.get('/api/v1/identity/google-grants')
-			.then((r: any) => setGrants(r.data?.data || null))
-			.catch(() => setGrants(null));
-	}, []);
-	const connected = grants?.state === 'active';
+function ConnectionRow({
+	label,
+	connected,
+	detail,
+	href,
+	manageLabel,
+	connectLabel,
+}: {
+	label: string;
+	connected: boolean;
+	detail: string;
+	href: string;
+	manageLabel: string;
+	connectLabel: string;
+}) {
 	return (
-		<SectionCard {...SECTIONS[2]}>
-			<div className="text-sm flex items-center gap-2">
+		<div className="flex items-center justify-between gap-3 py-2">
+			<div className="text-sm flex items-center gap-2 min-w-0">
 				<span className={[
-					'w-2 h-2 rounded-full inline-block',
+					'w-2 h-2 rounded-full inline-block shrink-0',
 					connected ? 'bg-emerald-500' : 'bg-slate-300',
 				].join(' ')} />
-				<span className="font-medium">Google</span>
-				<span className="text-slate-500">
-					{connected ? `${(grants?.scopes ?? []).length} scope(s) granted` : 'not connected'}
-				</span>
+				<span className="font-medium">{label}</span>
+				<span className="text-slate-500 truncate">{detail}</span>
 			</div>
-			<div className="mt-3 flex items-center gap-3">
-				<Link to="/account/connect/google" className="text-xs text-emerald-700 hover:underline inline-flex items-center gap-1">
-					{connected ? 'Manage Google access' : 'Connect Google'} <ExternalLink className="w-3 h-3" />
-				</Link>
+			<Link to={href} className="text-xs text-emerald-700 hover:underline inline-flex items-center gap-1 shrink-0">
+				{connected ? manageLabel : connectLabel} <ExternalLink className="w-3 h-3" />
+			</Link>
+		</div>
+	);
+}
+
+function OAuthSection() {
+	const [google, setGoogle] = useState<{ state?: string; scopes?: string[] } | null>(null);
+	const [microsoft, setMicrosoft] = useState<{ state?: string; scopes?: string } | null>(null);
+	const [powerAutomate, setPowerAutomate] = useState<{ configured?: boolean } | null>(null);
+	useEffect(() => {
+		apiClient.get('/api/v1/identity/google-grants')
+			.then((r: any) => setGoogle(r.data?.data || null))
+			.catch(() => setGoogle(null));
+		apiClient.get('/api/v1/identity/microsoft-grants')
+			.then((r: any) => setMicrosoft(r.data?.data || null))
+			.catch(() => setMicrosoft(null));
+		apiClient.get('/api/v1/me/power-automate-tokens')
+			.then((r: any) => setPowerAutomate(r.data?.data || null))
+			.catch(() => setPowerAutomate(null));
+	}, []);
+
+	// Note the three backends use distinct "connected" vocabularies:
+	// Google grant state is 'active'; Microsoft grant state is 'connected';
+	// Power Automate has no OAuth grant — it's a minted webhook token, so
+	// `configured` is the liveness flag.
+	const googleConnected = google?.state === 'active';
+	const microsoftConnected = microsoft?.state === 'connected';
+	const paConfigured = powerAutomate?.configured === true;
+
+	return (
+		<SectionCard {...SECTIONS[2]}>
+			<div className="divide-y divide-slate-100">
+				<ConnectionRow
+					label="Google"
+					connected={googleConnected}
+					detail={googleConnected ? `${(google?.scopes ?? []).length} scope(s) granted` : 'not connected'}
+					href="/account/connect/google"
+					manageLabel="Manage Google access"
+					connectLabel="Connect Google"
+				/>
+				<ConnectionRow
+					label="Microsoft"
+					connected={microsoftConnected}
+					detail={
+						microsoftConnected
+							? `Outlook + Graph${microsoft?.scopes ? ` · ${microsoft.scopes.split(' ').length} scope(s)` : ''}`
+							: 'not connected'
+					}
+					href="/account/connect/microsoft"
+					manageLabel="Manage Microsoft access"
+					connectLabel="Connect Microsoft"
+				/>
+				<ConnectionRow
+					label="Power Automate"
+					connected={paConfigured}
+					detail={paConfigured ? 'Outlook bridge configured' : 'not configured (Graph-blocked orgs)'}
+					href="/account/connect/power-automate"
+					manageLabel="Manage Power Automate"
+					connectLabel="Set up Power Automate"
+				/>
 			</div>
 		</SectionCard>
 	);

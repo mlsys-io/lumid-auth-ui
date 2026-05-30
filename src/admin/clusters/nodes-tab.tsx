@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Copy, KeyRound, Loader2, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Copy, KeyRound, Loader2, Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -59,6 +59,16 @@ function statusBadge(status: Node["status"]): string {
 	}
 }
 
+type NodeSortKey =
+	| "hostname"
+	| "address"
+	| "cpu_mem"
+	| "gpus"
+	| "workers"
+	| "status"
+	| "last_seen"
+	| "added";
+
 export default function NodesTab({ clusterId, nodes, workers = [], onChange }: Props) {
 	const [mintOpen, setMintOpen] = useState(false);
 	const [ttl, setTtl] = useState("60");
@@ -66,6 +76,53 @@ export default function NodesTab({ clusterId, nodes, workers = [], onChange }: P
 	const [result, setResult] = useState<MintBootstrapResponse | null>(null);
 
 	const [deleteNodeId, setDeleteNodeId] = useState<string | null>(null);
+
+	const [sortKey, setSortKey] = useState<NodeSortKey>("hostname");
+	const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+	function toggleSort(k: NodeSortKey) {
+		if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+		else { setSortKey(k); setSortDir("asc"); }
+	}
+	function SortIcon({ k }: { k: NodeSortKey }) {
+		if (sortKey !== k) return <ArrowUpDown className="w-3 h-3 opacity-30" />;
+		return sortDir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />;
+	}
+
+	const workerCountByNode = useMemo(() => {
+		const m = new Map<string, number>();
+		workers.forEach((w) => m.set(w.node_id, (m.get(w.node_id) ?? 0) + 1));
+		return m;
+	}, [workers]);
+
+	const sortedNodes = useMemo(() => {
+		const rows = [...nodes];
+		const dir = sortDir === "asc" ? 1 : -1;
+		const cmp = (a: number | string, b: number | string) =>
+			a < b ? -1 * dir : a > b ? 1 * dir : 0;
+		rows.sort((a, b) => {
+			switch (sortKey) {
+				case "hostname":
+					return cmp(a.hostname ?? "", b.hostname ?? "");
+				case "address":
+					return cmp(a.address ?? "", b.address ?? "");
+				case "cpu_mem":
+					return cmp((a.cpu_cores ?? 0) * 10000 + (a.memory_gb ?? 0), (b.cpu_cores ?? 0) * 10000 + (b.memory_gb ?? 0));
+				case "gpus":
+					return cmp(a.gpu_count ?? 0, b.gpu_count ?? 0);
+				case "workers":
+					return cmp(workerCountByNode.get(a.id) ?? 0, workerCountByNode.get(b.id) ?? 0);
+				case "status":
+					return cmp(a.status ?? "", b.status ?? "");
+				case "last_seen":
+					return cmp(a.last_seen ?? "", b.last_seen ?? "");
+				case "added":
+					return cmp(a.created_at ?? "", b.created_at ?? "");
+				default:
+					return 0;
+			}
+		});
+		return rows;
+	}, [nodes, sortKey, sortDir, workerCountByNode]);
 
 	async function onMint() {
 		const ttlNum = Number(ttl);
@@ -154,19 +211,35 @@ export default function NodesTab({ clusterId, nodes, workers = [], onChange }: P
 							<table className="w-full text-sm">
 								<thead className="text-xs text-muted-foreground">
 									<tr className="border-b">
-										<th className="text-left py-2 px-2 font-medium">Hostname</th>
-										<th className="text-left py-2 px-2 font-medium">Address</th>
-										<th className="text-left py-2 px-2 font-medium">CPU / Mem</th>
-										<th className="text-left py-2 px-2 font-medium">GPUs</th>
-										<th className="text-left py-2 px-2 font-medium">Workers</th>
-										<th className="text-left py-2 px-2 font-medium">Status</th>
-										<th className="text-left py-2 px-2 font-medium">Last seen</th>
-										<th className="text-left py-2 px-2 font-medium">Added</th>
+										<th className="text-left py-2 px-2 font-medium">
+											<button type="button" onClick={() => toggleSort("hostname")} className="inline-flex items-center gap-1 hover:text-foreground">Hostname <SortIcon k="hostname" /></button>
+										</th>
+										<th className="text-left py-2 px-2 font-medium">
+											<button type="button" onClick={() => toggleSort("address")} className="inline-flex items-center gap-1 hover:text-foreground">Address <SortIcon k="address" /></button>
+										</th>
+										<th className="text-left py-2 px-2 font-medium">
+											<button type="button" onClick={() => toggleSort("cpu_mem")} className="inline-flex items-center gap-1 hover:text-foreground">CPU / Mem <SortIcon k="cpu_mem" /></button>
+										</th>
+										<th className="text-left py-2 px-2 font-medium">
+											<button type="button" onClick={() => toggleSort("gpus")} className="inline-flex items-center gap-1 hover:text-foreground">GPUs <SortIcon k="gpus" /></button>
+										</th>
+										<th className="text-left py-2 px-2 font-medium">
+											<button type="button" onClick={() => toggleSort("workers")} className="inline-flex items-center gap-1 hover:text-foreground">Workers <SortIcon k="workers" /></button>
+										</th>
+										<th className="text-left py-2 px-2 font-medium">
+											<button type="button" onClick={() => toggleSort("status")} className="inline-flex items-center gap-1 hover:text-foreground">Status <SortIcon k="status" /></button>
+										</th>
+										<th className="text-left py-2 px-2 font-medium">
+											<button type="button" onClick={() => toggleSort("last_seen")} className="inline-flex items-center gap-1 hover:text-foreground">Last seen <SortIcon k="last_seen" /></button>
+										</th>
+										<th className="text-left py-2 px-2 font-medium">
+											<button type="button" onClick={() => toggleSort("added")} className="inline-flex items-center gap-1 hover:text-foreground">Added <SortIcon k="added" /></button>
+										</th>
 										<th className="text-right py-2 px-2 font-medium"></th>
 									</tr>
 								</thead>
 								<tbody>
-									{nodes.map((n) => (
+									{sortedNodes.map((n) => (
 										<tr key={n.id} className="border-b last:border-0 hover:bg-accent/40">
 											<td className="py-2 px-2">
 												<div className="font-medium">{n.hostname || "—"}</div>

@@ -16,16 +16,21 @@
 // timeline rather than per-source columns.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
 	Mail, CheckCircle2, AlertCircle, Send, X, Edit2,
-	Sparkles, Loader2, ChevronRight, RefreshCw, Lock, Inbox as InboxIcon,
+	Sparkles, Loader2, ChevronRight, RefreshCw, Lock,
+	Plus, Filter as FilterIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { me, MeApiError } from '@/api/me';
 import apiClient from '@/api/client';
 import PageHints from '@/components/PageHints';
 import { setStudioSelection } from '@/components/StudioContext';
+import { IntentFeedbackRow } from '@/components/IntentFeedbackRow';
+import { AXIS_META } from '@/lib/demo-intents';
+import { DEMO_MODE } from '@/lib/demo';
+import { loadPendingDecisions, DECISIONS_EVENT } from '@/lib/demo-decisions';
 
 type Filter = 'all' | 'drafts' | 'activity' | 'audit' | 'notices';
 
@@ -75,11 +80,58 @@ const FILTERS: { id: Filter; label: string; matches: (k: FeedItem['kind']) => bo
 ];
 
 export default function StudioInbox() {
+	const [searchParams, setSearchParams] = useSearchParams();
+	// "Your AI" tab retired — knowledge has its own nav entry at
+	// /studio/knowledge. If somebody still has a bookmarked ?tab=your-ai
+	// URL, strip the param + send them to /studio/knowledge implicitly
+	// (we just drop the param here; the StudioKnowledge surface lives
+	// at the dedicated route now).
+	useEffect(() => {
+		if (searchParams.has('tab')) {
+			setSearchParams((sp) => {
+				const next = new URLSearchParams(sp);
+				next.delete('tab');
+				return next;
+			}, { replace: true });
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
+
 	const [items, setItems] = useState<FeedItem[] | null>(null);
-	const [filter, setFilter] = useState<Filter>('all');
+	// Honor ?filter=drafts (and the other Filter ids) so "See all in Inbox"
+	// on the Intents page lands the user on the right tab. Falls back to
+	// 'all' for unknown values.
+	const initialFilter = (() => {
+		const f = searchParams.get('filter') as Filter | null;
+		return f === 'drafts' || f === 'activity' || f === 'audit' || f === 'notices' || f === 'all'
+			? f : 'all';
+	})();
+	const [filter, setFilter] = useState<Filter>(initialFilter);
 	const [busy, setBusy] = useState<Record<string, boolean>>({});
+	const [refreshing, setRefreshing] = useState(false);
+	const [lastRefresh, setLastRefresh] = useState<number>(Date.now());
+	const [, setTick] = useState(0);
+
+	// Tick every 5s so the "Updated Xs ago" chip counts up between
+	// auto-refreshes. Cheap; just bumps a state to force render.
+	useEffect(() => {
+		const t = window.setInterval(() => setTick((x) => x + 1), 5_000);
+		return () => window.clearInterval(t);
+	}, []);
+
+	// Demo decisions store fires DECISIONS_EVENT when something is
+	// approved/rejected on the Intents page; re-load so the feed
+	// reflects the new pending set.
+	useEffect(() => {
+		if (!DEMO_MODE) return;
+		const onChange = () => { load(); };
+		window.addEventListener(DECISIONS_EVENT, onChange);
+		return () => window.removeEventListener(DECISIONS_EVENT, onChange);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
 
 	const load = useCallback(async () => {
+		setRefreshing(true);
 		const [drafts, today, audit] = await Promise.allSettled([
 			me.listDrafts({ state: 'pending' }),
 			me.today(),
@@ -100,6 +152,24 @@ export default function StudioInbox() {
 					subject: d.subject || '(no subject)',
 					to:      d.to || '',
 					body:    d.body || '',
+				});
+			}
+		}
+
+		// DEMO_MODE: surface the "Pending your call" decisions as draft
+		// items in the unified feed. The shared lib/demo-decisions store
+		// is the single source of truth — rejecting/approving on the
+		// Intents page removes the item from this list automatically.
+		if (DEMO_MODE) {
+			for (const d of loadPendingDecisions()) {
+				next.push({
+					kind:    'draft',
+					id:      `demo-draft:${d.id}`,
+					ts:      new Date().toISOString(),
+					app:     d.app,
+					subject: d.subject,
+					to:      d.tag,
+					body:    d.preview,
 				});
 			}
 		}
@@ -152,9 +222,41 @@ export default function StudioInbox() {
 		});
 		unique.sort((a, b) => (b.ts || '').localeCompare(a.ts || ''));
 		setItems(unique);
+		setRefreshing(false);
+		setLastRefresh(Date.now());
 	}, []);
 
 	useEffect(() => { load(); }, [load]);
+
+	// Auto-refresh — every 30s while the tab is visible. Pauses while the
+	// tab is hidden so we don't burn the rate limit on background users.
+	// Refreshes immediately when the user comes back to the tab. The AI
+	// is doing things in the background; the feed should feel alive.
+	useEffect(() => {
+		let timer: number | null = null;
+		const tick = () => { load(); };
+		const start = () => {
+			if (timer != null) return;
+			timer = window.setInterval(tick, 30_000);
+		};
+		const stop = () => {
+			if (timer != null) { window.clearInterval(timer); timer = null; }
+		};
+		const onVisibility = () => {
+			if (document.visibilityState === 'visible') {
+				load();
+				start();
+			} else {
+				stop();
+			}
+		};
+		start();
+		document.addEventListener('visibilitychange', onVisibility);
+		return () => {
+			stop();
+			document.removeEventListener('visibilitychange', onVisibility);
+		};
+	}, [load]);
 
 	const visible = useMemo(() => {
 		if (!items) return [];
@@ -198,24 +300,51 @@ export default function StudioInbox() {
 
 	return (
 		<div className="space-y-4">
-			<header className="flex items-baseline justify-between">
-				<div>
-					<h1 className="text-lg font-semibold flex items-center gap-2">
-						<InboxIcon className="w-5 h-5 text-emerald-600" />
-						Inbox
-					</h1>
-					<p className="text-sm text-slate-500 mt-0.5">
-						Drafts to approve, recent cycles, notices, and the audit trail — in one feed.
-					</p>
-				</div>
+			{/* Inbox = a pure feed. The "Your AI" tab was retired — the
+			    Knowledge surface has its own nav entry at /studio/knowledge. */}
+			<div className="flex items-center justify-end gap-2">
+				<span className="hidden md:inline text-[11px] text-slate-400" title={`Last refreshed at ${new Date(lastRefresh).toLocaleTimeString()}`}>
+					{refreshing ? "Updating…" : `Updated ${secondsAgo(lastRefresh)}`}
+				</span>
 				<button
 					onClick={load}
-					className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded border border-slate-200 hover:bg-slate-50 text-slate-700"
+					disabled={refreshing}
+					className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded border border-slate-200 hover:bg-slate-50 text-slate-700 disabled:opacity-50 transition-colors"
 				>
-					<RefreshCw className="w-3 h-3" /> Refresh
+					<RefreshCw className={[
+						"w-3 h-3 transition-transform",
+						refreshing ? "animate-spin text-emerald-600" : "",
+					].join(" ")} />
+					Refresh
 				</button>
-			</header>
+			</div>
 
+			<InboxFeedBody
+				items={items}
+				filter={filter}
+				setFilter={setFilter}
+				counts={counts}
+				visible={visible}
+				busy={busy}
+				onDraftAction={onDraftAction}
+			/>
+		</div>
+	);
+}
+
+function InboxFeedBody({
+	items, filter, setFilter, counts, visible, busy, onDraftAction,
+}: {
+	items: FeedItem[] | null;
+	filter: Filter;
+	setFilter: (f: Filter) => void;
+	counts: Record<Filter, number>;
+	visible: FeedItem[];
+	busy: Record<string, boolean>;
+	onDraftAction: (id: string, action: 'send' | 'edit' | 'dismiss', body?: string) => Promise<void>;
+}) {
+	return (
+		<div className="space-y-4">
 			<PageHints prompts={[
 				'show my pending drafts',
 				"send any obvious replies",
@@ -233,8 +362,8 @@ export default function StudioInbox() {
 							className={[
 								'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs transition-colors',
 								active
-									? 'bg-gray-900 text-white'
-									: 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50',
+									? 'bg-slate-900 text-white shadow-sm'
+									: 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300',
 							].join(' ')}
 						>
 							{f.label}
@@ -255,9 +384,9 @@ export default function StudioInbox() {
 			)}
 
 			{items !== null && visible.length === 0 && (
-				<div className="text-center text-sm text-slate-500 italic py-12">
-					Nothing matching this filter.
-				</div>
+				items.length === 0
+					? <InboxZeroState />
+					: <FilterEmptyState filter={filter} onReset={() => setFilter('all')} />
 			)}
 
 			<ul className="space-y-2">
@@ -274,10 +403,76 @@ export default function StudioInbox() {
 	);
 }
 
+// ── Empty states ───────────────────────────────────────────────────
+
+// InboxZeroState — the user has *nothing* in their inbox. This is a
+// genuine inbox-zero moment, not a filter quirk. Treat as a calm
+// celebration plus a nudge toward the natural next step (a workflow
+// that produces drafts the user can act on).
+function InboxZeroState() {
+	const openComposer = () => {
+		// /studio/workflows mounts and reads ?compose=1 on entry to pop
+		// the composer modal — no need to keep this page mounted.
+		window.location.href = '/studio/workflows?compose=1';
+	};
+	const askAgent = () => {
+		window.dispatchEvent(new CustomEvent('studio:ask', {
+			detail: { prompt: 'What kind of workflow would fit my day?', autosend: true },
+		}));
+	};
+	return (
+		<div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50/40 to-white py-10 px-6 text-center">
+			<div className="w-14 h-14 mx-auto rounded-2xl bg-emerald-100/60 flex items-center justify-center mb-4 shadow-inner shadow-emerald-50">
+				<CheckCircle2 className="w-7 h-7 text-emerald-600" />
+			</div>
+			<div className="text-base font-medium text-slate-900">Inbox zero.</div>
+			<p className="text-sm text-slate-600 mt-1.5 max-w-md mx-auto leading-relaxed">
+				When your workflows produce something for you — a draft, a
+				summary, a heads-up — it lands here for review.
+			</p>
+			<div className="flex items-center justify-center gap-2 mt-5">
+				<button
+					onClick={openComposer}
+					className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-colors shadow-sm shadow-emerald-100"
+				>
+					<Plus className="w-3.5 h-3.5" />
+					New workflow
+				</button>
+				<button
+					onClick={askAgent}
+					className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
+				>
+					<Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+					Ask for ideas
+				</button>
+			</div>
+		</div>
+	);
+}
+
+// FilterEmptyState — items exist but none match the current filter.
+// Quieter than InboxZero; the obvious action is to clear the filter.
+function FilterEmptyState({ filter, onReset }: { filter: Filter; onReset: () => void }) {
+	return (
+		<div className="rounded-xl border border-dashed border-slate-200 bg-white/60 py-8 px-6 text-center">
+			<FilterIcon className="w-5 h-5 mx-auto text-slate-400" />
+			<div className="text-sm text-slate-700 mt-2.5">
+				Nothing in <span className="font-medium">{filter}</span> right now.
+			</div>
+			<button
+				onClick={onReset}
+				className="mt-3 text-xs text-emerald-700 hover:text-emerald-800 hover:underline transition-colors"
+			>
+				Show everything
+			</button>
+		</div>
+	);
+}
+
 // ── Card primitives ────────────────────────────────────────────────
 
 function FeedRow({
-	icon: Icon, tone, ts, title, sub, body, actions, link,
+	icon: Icon, tone, ts, title, sub, body, actions, link, feedback, pick,
 }: {
 	icon: typeof Mail;
 	tone: 'emerald' | 'slate' | 'amber' | 'rose' | 'indigo';
@@ -287,13 +482,17 @@ function FeedRow({
 	body?: React.ReactNode;
 	actions?: React.ReactNode;
 	link?: { to: string; label: string };
+	/** Optional hover-revealed feedback row (👍/✏️/👎) appearing top-right. */
+	feedback?: React.ReactNode;
+	/** Optional mouse-picker annotations. When provided, the row becomes pickable. */
+	pick?: { kind: string; id: string; label: string; affordances?: string };
 }) {
 	const toneCls = {
-		emerald: 'border-emerald-200 bg-emerald-50/50',
-		slate:   'border-slate-200 bg-white',
-		amber:   'border-amber-200 bg-amber-50/50',
-		rose:    'border-rose-200 bg-rose-50/50',
-		indigo:  'border-indigo-200 bg-indigo-50/30',
+		emerald: 'border-emerald-200 bg-emerald-50/40 hover:border-emerald-300',
+		slate:   'border-slate-200 bg-white hover:border-slate-300',
+		amber:   'border-amber-200 bg-amber-50/40 hover:border-amber-300',
+		rose:    'border-rose-200 bg-rose-50/40 hover:border-rose-300',
+		indigo:  'border-indigo-200 bg-indigo-50/30 hover:border-indigo-300',
 	}[tone];
 	const iconCls = {
 		emerald: 'text-emerald-600',
@@ -302,15 +501,30 @@ function FeedRow({
 		rose:    'text-rose-600',
 		indigo:  'text-indigo-600',
 	}[tone];
+	const pickAttrs = pick
+		? {
+			'data-pick-kind':        pick.kind,
+			'data-pick-id':          pick.id,
+			'data-pick-label':       pick.label,
+			'data-pick-affordances': pick.affordances,
+		}
+		: {};
 	return (
-		<div className={['rounded-lg border px-3 py-2.5', toneCls].join(' ')}>
+		<div className={['group rounded-lg border px-3 py-2.5 transition-colors', toneCls].join(' ')} {...pickAttrs}>
 			<div className="flex items-start gap-3">
 				<Icon className={['w-4 h-4 mt-0.5 flex-shrink-0', iconCls].join(' ')} />
 				<div className="min-w-0 flex-1">
 					<div className="flex items-baseline justify-between gap-3">
 						<div className="text-sm font-medium text-slate-900 truncate">{title}</div>
-						<div className="text-[11px] text-slate-500 tabular-nums flex-shrink-0">
-							{formatRelative(ts)}
+						<div className="flex items-center gap-2 flex-shrink-0">
+							{feedback && (
+								<span className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+									{feedback}
+								</span>
+							)}
+							<div className="text-[11px] text-slate-500 tabular-nums">
+								{formatRelative(ts)}
+							</div>
 						</div>
 					</div>
 					{sub && <div className="text-xs text-slate-500 mt-0.5">{sub}</div>}
@@ -357,12 +571,19 @@ function DraftCard({
 		return () => setStudioSelection(null);
 	}, [editing, item.id, item.to, item.subject]);
 
+	const draftPick = {
+		kind: 'draft',
+		id: `draft:${item.id.slice(6)}`,
+		label: `${item.subject} → ${item.to}`,
+		affordances: 'send_draft,edit_draft,dismiss_draft,explain',
+	};
 	if (editing) {
 		return (
 			<FeedRow
 				icon={Mail}
 				tone="indigo"
 				ts={item.ts}
+				pick={draftPick}
 				title={item.subject}
 				sub={<>To <span className="font-medium text-slate-700">{item.to}</span> · {item.app}</>}
 				body={
@@ -394,6 +615,7 @@ function DraftCard({
 			icon={Mail}
 			tone="indigo"
 			ts={item.ts}
+			pick={draftPick}
 			title={item.subject}
 			sub={<>To <span className="font-medium text-slate-700">{item.to}</span> · {item.app}</>}
 			body={<div className="whitespace-pre-wrap line-clamp-4">{item.body || '(empty)'}</div>}
@@ -422,11 +644,22 @@ function CycleCard({ item }: { item: Extract<FeedItem, { kind: 'cycle' }> }) {
 	const Icon = failing ? AlertCircle : item.skipped ? AlertCircle : CheckCircle2;
 	const tone = failing ? 'rose' : item.skipped ? 'amber' : 'slate';
 	const verb = failing ? 'failed' : item.skipped ? 'skipped' : 'ran';
+	// Cycle ts in the journal is ISO; the existing convention for the
+	// cycle dir name is YYYYMMDDTHHMMSSZ (15 chars). Use the same shape
+	// for /me/cycles/feedback (via IntentFeedbackRow) so the ledger row
+	// can join back to the cycle artifact.
+	const cycleTs = item.ts.replace(/[-:]/g, '').replace('T', 'T').slice(0, 15) + 'Z';
 	return (
 		<FeedRow
 			icon={Icon}
 			tone={tone}
 			ts={item.ts}
+			pick={{
+				kind: 'cycle',
+				id: `cycle:${item.app}:${item.loop}:${cycleTs}`,
+				label: `${humanizeLoop(item.loop)} ${verb} — ${item.app}`,
+				affordances: 'give_feedback,explain,rerun,inspect',
+			}}
 			title={<>{humanizeLoop(item.loop)} {verb}</>}
 			sub={item.app}
 			body={
@@ -436,7 +669,16 @@ function CycleCard({ item }: { item: Extract<FeedItem, { kind: 'cycle' }> }) {
 					<span className="text-xs text-rose-800 font-mono truncate block">{item.lastError.slice(0, 200)}</span>
 				) : undefined
 			}
-			link={{ to: `/studio/today/cycle/${encodeURIComponent(item.app)}/${encodeURIComponent(item.loop)}/${encodeURIComponent(item.ts.replace(/[-:]/g, '').replace('T', 'T').slice(0, 15))}`, label: 'Inspect' }}
+			// Successful cycles get the 👍/✏️/👎 row so the user can
+			// teach the loop right where the outcome surfaces. Failed/
+			// skipped cycles skip feedback (no output to evaluate; the
+			// user goes to Inspect instead).
+			feedback={
+				item.ok && !item.skipped
+					? <IntentFeedbackRow app={item.app} loop={item.loop} cycleTs={cycleTs} outputId={`cycle:${cycleTs}`} dense />
+					: undefined
+			}
+			link={{ to: `/studio/intents/cycle/${encodeURIComponent(item.app)}/${encodeURIComponent(item.loop)}/${encodeURIComponent(cycleTs)}`, label: 'Inspect' }}
 		/>
 	);
 }
@@ -447,6 +689,12 @@ function AuditCard({ item }: { item: Extract<FeedItem, { kind: 'audit' }> }) {
 			icon={Lock}
 			tone="slate"
 			ts={item.ts}
+			pick={{
+				kind: 'audit',
+				id: `audit:${item.ts}:${item.endpoint}`,
+				label: `API call · ${item.endpoint}${item.model ? ' · ' + item.model : ''}`,
+				affordances: 'explain',
+			}}
 			title={<>API call · <span className="font-mono">{item.endpoint}</span></>}
 			sub={item.model ? `model=${item.model}` : 'external request from your AI'}
 		/>
@@ -458,12 +706,36 @@ function NoticeCard({ item }: { item: Extract<FeedItem, { kind: 'notice' }> }) {
 		: item.noticeKind === 'cycle_failed' ? 'rose'
 		: 'emerald';
 	const Icon = item.noticeKind === 'brief' ? Sparkles : AlertCircle;
+	// Briefs are an Examples-axis output (something the AI produced
+	// for you). Failures are a Standard-axis signal (the AI's own
+	// scorecard registering trouble). The axis chip in the row sub
+	// communicates this in the same language used everywhere else.
+	const axis =
+		item.noticeKind === 'brief'        ? AXIS_META.examples :
+		item.noticeKind === 'cycle_failed' ? AXIS_META.standard :
+		                                     null;
 	return (
 		<FeedRow
 			icon={Icon}
 			tone={tone}
 			ts={item.ts}
+			pick={{
+				kind: 'notice',
+				id: `notice:${item.id}`,
+				label: item.summary,
+				affordances: 'explain,give_feedback,intent_audit',
+			}}
 			title={item.summary}
+			sub={
+				axis ? (
+					<span className="inline-flex items-center gap-1.5">
+						<span className={`inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-medium ${axis.tone}`}>
+							{axis.label}
+						</span>
+						<span className="text-slate-500">{axis.phrase}</span>
+					</span>
+				) : undefined
+			}
 			body={item.detail ? <span className="text-sm text-slate-600">{item.detail}</span> : undefined}
 			link={item.noticeKind === 'quota_paused' ? { to: '/studio/settings#secrets', label: 'Upgrade' } : undefined}
 		/>
@@ -474,6 +746,15 @@ function NoticeCard({ item }: { item: Extract<FeedItem, { kind: 'notice' }> }) {
 
 // Cycle-ts shape is YYYYMMDDTHHMMSS (15 chars, no separators) — convert
 // to ISO for the timeline sorter.
+// secondsAgo — compact relative-time for the auto-refresh chip.
+function secondsAgo(ms: number): string {
+	const s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+	if (s < 5) return 'just now';
+	if (s < 60) return `${s}s ago`;
+	if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+	return `${Math.floor(s / 3600)}h ago`;
+}
+
 function cycleTsToIso(ts: string): string {
 	const m = ts.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})$/);
 	if (!m) return new Date().toISOString();

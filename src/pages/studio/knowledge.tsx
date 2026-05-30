@@ -58,7 +58,7 @@ function AgentList() {
 					<Brain className="w-7 h-7" />
 				</div>
 				<div>
-					<h2 className="text-xl font-semibold">Your AI hasn&apos;t learned anything yet</h2>
+					<h2 className="text-xl font-medium">Your AI hasn&apos;t learned anything yet</h2>
 					<p className="mt-2 text-sm text-slate-600 leading-relaxed">
 						Knowledge accumulates as your AI runs. Once you&apos;ve installed an app
 						and it&apos;s done a few cycles, principles and patterns will show up here.
@@ -76,12 +76,9 @@ function AgentList() {
 
 	return (
 		<div className="space-y-4">
-			<header>
-				<h1 className="text-lg font-semibold">Knowledge</h1>
-				<p className="text-sm text-slate-500 mt-1">
-					What your AI has learned, per agent. Watcher banks stay local by design.
-				</p>
-			</header>
+			{/* Page identity in StudioShell top-bar (or absent when this
+			    component is embedded in Marketplace's Knowledge tab —
+			    that surface owns its own header). */}
 			<PageHints prompts={[
 				'what did you learn about me this week?',
 				'what do you know about my work style?',
@@ -181,7 +178,7 @@ function AgentDetail({ agentId }: { agentId: string }) {
 					>
 						<div className="flex items-start gap-3">
 							{m.kind && (
-								<span className={['px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wide border flex-shrink-0', KIND_COLORS[m.kind] || 'bg-slate-50 text-slate-600 border-slate-200'].join(' ')}>
+								<span className={['px-2 py-0.5 rounded-full text-[10px] tracking-wide border flex-shrink-0', KIND_COLORS[m.kind] || 'bg-slate-50 text-slate-600 border-slate-200'].join(' ')}>
 									{m.kind}
 								</span>
 							)}

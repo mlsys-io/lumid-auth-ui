@@ -10,10 +10,52 @@
 //     the n8n session from the lum.id session is a follow-up.
 
 import { useEffect, useState } from "react";
-import { X, MessageSquare, GitBranch, ExternalLink, Check, Loader2 } from "lucide-react";
+import { X, MessageSquare, GitBranch, ExternalLink, Check, Loader2, Mail, Calendar, MessagesSquare, Sun, Search, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { me, MeApiError } from "@/api/me";
 import N8nEditor from "@/components/N8nEditor";
+
+// Templates — the 6 most-common Personal AI intents. Each maps to an
+// intent string the compose_workflow chat tool can run. The icon is
+// for visual scanning; the intent is what gets sent.
+const TEMPLATES: Array<{
+	icon: React.ComponentType<{ className?: string }>;
+	title: string;
+	desc: string;
+	intent: string;
+	tone: string;
+}> = [
+	{
+		icon: Sun, title: "Daily brief", tone: "amber",
+		desc: "Wake-up summary of email + calendar + anything you watch.",
+		intent: "Every morning at 7am, summarize my unread email + today's calendar + any flagged news into a single brief I can scan in 30 seconds.",
+	},
+	{
+		icon: Mail, title: "Email triage", tone: "indigo",
+		desc: "AI reads your inbox hourly and drafts replies to the obvious ones.",
+		intent: "Every hour during work hours, read my Gmail inbox, identify the 3-5 most important threads, and draft replies to anything that has a clear answer. Keep the drafts in my inbox queue for review before sending.",
+	},
+	{
+		icon: Calendar, title: "Meeting prep", tone: "violet",
+		desc: "Briefing notes 30 min before each meeting.",
+		intent: "30 minutes before any meeting on my calendar, prepare a brief: who's attending, recent email/Slack context with each person, and any docs we've shared. Drop it in my inbox.",
+	},
+	{
+		icon: MessagesSquare, title: "Slack summary", tone: "emerald",
+		desc: "Twice a day, recap what was missed across channels.",
+		intent: "Twice a day (lunch and end of day), summarize unread messages across my Slack channels into a one-paragraph digest. Flag anything that asks me a question directly.",
+	},
+	{
+		icon: Search, title: "Web research", tone: "sky",
+		desc: "Track a topic; surface new sources weekly.",
+		intent: "Every Monday morning, search the web + arxiv for new content about: [TOPIC]. Produce a one-page brief with the 5 most relevant new sources, summaries, and why each matters.",
+	},
+	{
+		icon: FileText, title: "Doc synthesis", tone: "rose",
+		desc: "Read a PDF or set of docs; produce structured notes.",
+		intent: "When I drop a PDF in a watched folder, extract the key points, claims with evidence, and open questions. Write notes back to my knowledge bank tagged by source.",
+	},
+];
 
 type Mode = "describe" | "visual";
 
@@ -265,22 +307,72 @@ function TabButton({
 	);
 }
 
+function TemplateCard({ t, onPick }: { t: typeof TEMPLATES[0]; onPick: () => void }) {
+	const Icon = t.icon;
+	const accents: Record<string, { bg: string; iconBg: string; iconText: string }> = {
+		amber:   { bg: "hover:bg-amber-50/60   hover:border-amber-200",   iconBg: "bg-amber-100",   iconText: "text-amber-700" },
+		indigo:  { bg: "hover:bg-indigo-50/60  hover:border-indigo-200",  iconBg: "bg-indigo-100",  iconText: "text-indigo-700" },
+		violet:  { bg: "hover:bg-violet-50/60  hover:border-violet-200",  iconBg: "bg-violet-100",  iconText: "text-violet-700" },
+		emerald: { bg: "hover:bg-emerald-50/60 hover:border-emerald-200", iconBg: "bg-emerald-100", iconText: "text-emerald-700" },
+		sky:     { bg: "hover:bg-sky-50/60     hover:border-sky-200",     iconBg: "bg-sky-100",     iconText: "text-sky-700" },
+		rose:    { bg: "hover:bg-rose-50/60    hover:border-rose-200",    iconBg: "bg-rose-100",    iconText: "text-rose-700" },
+	};
+	const a = accents[t.tone] || accents.emerald;
+	return (
+		<button
+			onClick={onPick}
+			className={[
+				"text-left p-3 rounded-xl border border-slate-200/70 bg-white transition-all active:scale-[0.98]",
+				a.bg,
+			].join(" ")}
+		>
+			<div className={["w-8 h-8 rounded-lg flex items-center justify-center mb-2", a.iconBg, a.iconText].join(" ")}>
+				<Icon className="w-4 h-4" />
+			</div>
+			<div className="text-sm font-semibold text-slate-900">{t.title}</div>
+			<div className="text-[11px] text-slate-500 mt-0.5 leading-relaxed line-clamp-2">{t.desc}</div>
+		</button>
+	);
+}
+
 function DescribeForm({ intent, setIntent, onSubmit }: { intent: string; setIntent: (s: string) => void; onSubmit: () => void }) {
 	const samples = [
 		"Watch my Slack channels every hour and draft replies to anything important.",
-		"Summarize my unread emails into a morning brief at 8am.",
 		"Track Polymarket BTC price-range events and alert me when a position becomes attractive.",
 		"Score consulting case answers I paste in against the MBB framework.",
 	];
+	const pickTemplate = (t: typeof TEMPLATES[0]) => {
+		setIntent(t.intent);
+		// Auto-submit after a short delay so the user sees the textarea
+		// filled in. Avoids the "did anything happen?" moment.
+		setTimeout(onSubmit, 300);
+	};
 	return (
-		<div className="space-y-3">
+		<div className="space-y-4">
+			{/* Templates grid — most users pick from here. Removes the
+			    "blank canvas" problem; one click + you're drafting. */}
+			<div>
+				<div className="text-xs uppercase tracking-wider text-slate-400 font-semibold mb-2">Templates</div>
+				<div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+					{TEMPLATES.map((t) => <TemplateCard key={t.title} t={t} onPick={() => pickTemplate(t)} />)}
+				</div>
+			</div>
+
+			<div className="relative">
+				<div className="absolute inset-0 flex items-center" aria-hidden="true">
+					<div className="w-full border-t border-slate-200" />
+				</div>
+				<div className="relative flex justify-center">
+					<span className="px-3 bg-white text-[10px] uppercase tracking-wider text-slate-400">or describe your own</span>
+				</div>
+			</div>
+
 			<label className="block">
-				<div className="text-sm font-medium text-slate-800 mb-1.5">What should the workflow do?</div>
 				<textarea
 					value={intent}
 					onChange={(e) => setIntent(e.target.value)}
 					placeholder="In plain English. Be specific about when it should run and what it should produce."
-					rows={4}
+					rows={3}
 					className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-4 focus:ring-emerald-400/15 focus:border-emerald-400 resize-y"
 				/>
 			</label>

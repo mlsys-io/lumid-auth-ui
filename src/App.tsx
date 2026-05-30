@@ -31,6 +31,7 @@ const StudioToday      = lazy(() => import("./pages/studio/today"));
 const StudioInbox      = lazy(() => import("./pages/studio/inbox"));
 // Phase S2 — real composer (no longer a placeholder).
 const StudioSkills     = lazy(() => import("./pages/studio/skills"));
+const StudioMarketplace = lazy(() => import("./pages/studio/marketplace"));
 // Phase S3-C — app editor (lean v1).
 const StudioApps         = lazy(() => import("./pages/studio/apps"));
 // W1 workflow surface — replaces /studio/apps as the canonical landing
@@ -43,13 +44,21 @@ const StudioRunDetail    = lazy(() => import("./pages/studio/run-detail"));
 // W4 — Mind surface (Improve verb). Subtle by design; collapsed-by-default
 // in the sidebar with no Today entry-points.
 const StudioMind         = lazy(() => import("./pages/studio/mind"));
-// Phase S3-D — knowledge browser.
+// Phase S3-D — per-agent knowledge browser (at /studio/knowledge/:agent).
 const StudioKnowledge  = lazy(() => import("./pages/studio/knowledge"));
+// "You, encoded" ledger at /studio/knowledge (distinct from the per-agent browser).
+const StudioKnowledgeEncoded = lazy(() => import("./pages/studio/knowledge-encoded"));
+// T13 — Generic intent-detail panel at /studio/intents/:intentId.
+// Dispatches by intent.detail.body.kind (autoresearch | judgment | …).
+const StudioIntentDetail = lazy(() => import("./pages/studio/intent-detail"));
 // Phase S1.5 — Settings consolidation; Phase S4 — Admin tabs.
 const StudioSettings   = lazy(() => import("./pages/studio/settings"));
 const StudioAdmin      = lazy(() => import("./pages/studio/admin"));
 // Phase S3-B — cycle inspector.
 const StudioInspector  = lazy(() => import("./pages/studio/inspector"));
+// "How Lumid works" — walkable 3-stage loop (Assemble → Adapt → Compound)
+// illustrated against the demo intents. Stages 1-2 concrete, 3 open.
+const StudioHow        = lazy(() => import("./pages/studio/demo"));
 
 // Auto-quant operator page (/dashboard/auto-quant/*)
 const AutoQuantPage = lazy(() => import("./pages/app/auto-quant/index"));
@@ -71,6 +80,8 @@ const RedeemInvite = lazy(() => import("./pages/auth/redeem-invite"));
 const Profile = lazy(() => import("./pages/account/profile"));
 const Tokens = lazy(() => import("./pages/account/tokens"));
 const ConnectGoogle = lazy(() => import("./pages/account/connect-google"));
+const ConnectPowerAutomate = lazy(() => import("./pages/account/connect-power-automate"));
+const ConnectMicrosoft = lazy(() => import("./pages/account/connect-microsoft"));
 const Inbox = lazy(() => import("./pages/account/inbox"));
 const SkillsNew = lazy(() => import("./pages/account/skills/new"));
 const MemoryNew = lazy(() => import("./pages/account/memory/new"));
@@ -102,6 +113,7 @@ const DatasetsMacro   = lazy(() => import("./pages/dashboard/datasets-macro"));
 const DatasetsKols    = lazy(() => import("./pages/dashboard/datasets-kols"));
 const DatasetsNews    = lazy(() => import("./pages/dashboard/datasets-news"));
 const DatasetsPredmarket = lazy(() => import("./pages/dashboard/datasets-predmarket"));
+const DatasetsMarkets = lazy(() => import("./pages/dashboard/datasets-markets"));
 // Quant competition leaf components — Competitions shell wraps the
 // list-views (Browse + My strategies) with a sub-tab strip. Pathways
 // and detail pages render directly. 2026-05-03 consolidation.
@@ -259,6 +271,17 @@ function LegacyDashboardRedirect() {
   return <Navigate to={dest} replace />;
 }
 
+// /app/admin/* → /dashboard/admin/<rest>. The old /app shell's admin tree
+// moved to /dashboard/admin (e.g. /dashboard/admin/clusters/<id>); old
+// links like /app/admin/clusters/<id> need to land on the cluster detail
+// page, not the studio catch-all. Preserves path tail + query.
+function AppAdminRedirect() {
+  const { "*": tail = "" } = useParams();
+  const loc = useLocation();
+  const dest = tail ? `/dashboard/admin/${tail}${loc.search}` : `/dashboard/admin${loc.search}`;
+  return <Navigate to={dest} replace />;
+}
+
 function Spinner() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
@@ -367,28 +390,40 @@ export default function App() {
               </AuthGuard>
             }
           >
-            <Route index             element={<Navigate to="/studio/today" replace />} />
-            <Route path="today"                        element={<StudioToday />} />
-            {/* Phase S3-B — cycle inspector accessed from Today rows. */}
+            <Route index             element={<Navigate to="/studio/intents" replace />} />
+            {/* Today → Intents rename (demo IA). Old /today paths redirect. */}
+            <Route path="intents"                       element={<StudioToday />} />
+            <Route path="today"                         element={<Navigate to="/studio/intents" replace />} />
+            {/* Phase S3-B — cycle inspector accessed from Intents rows. */}
+            <Route path="intents/cycle/:app/:loop/:ts"  element={<StudioInspector />} />
             <Route path="today/cycle/:app/:loop/:ts"    element={<StudioInspector />} />
+            {/* T13 — per-intent detail panel; dispatched by intent.body.kind. */}
+            <Route path="intents/:intentId"             element={<StudioIntentDetail />} />
             <Route path="inbox"                        element={<StudioInbox />} />
-            <Route path="skills"                       element={<StudioSkills />} />
-            {/* Phase S3-C — apps list + per-app editor (DEPRECATED post-W1;
-                workflows.tsx is the canonical replacement). The /apps routes
-                redirect; the StudioApps editor still mounts under /apps/:app
-                for the moment to handle the per-app YAML edit page until W2
-                ships the dedicated workflow editor. */}
+            {/* Sidebar consolidation 2026-05-25: skills merged into the
+                catalog (now "Library"); runs + mind folded into Workflows.
+                Marketplace → Library rename (demo IA); old paths redirect.
+                The StudioApps editor still mounts under /apps/:app to handle
+                per-app YAML edits until the dedicated workflow editor ships. */}
+            <Route path="library"                      element={<StudioMarketplace />} />
+            <Route path="marketplace"                  element={<Navigate to="/studio/library" replace />} />
+            <Route path="skills"                       element={<Navigate to="/studio/library" replace />} />
+            {/* Knowledge is now the "you, encoded" ledger; the per-agent
+                bank browser keeps its deep-link at /knowledge/:agent. */}
+            <Route path="knowledge"                    element={<StudioKnowledgeEncoded />} />
+            <Route path="knowledge/:agent"             element={<StudioKnowledge />} />
             <Route path="apps"                         element={<Navigate to="/studio/workflows" replace />} />
             <Route path="apps/:app"                    element={<StudioApps />} />
-            {/* W1 — workflow surface (Create + Manage). */}
             <Route path="workflows"                    element={<StudioWorkflows />} />
             <Route path="workflows/:slug"              element={<StudioWorkflowDtl />} />
+            {/* Runs + Mind kept reachable for back-compat and direct
+                links from chat tools. Their lens-in-Workflows ports
+                land in a follow-up PR; both still work at their
+                original URLs and are just hidden from the sidebar. */}
             <Route path="runs"                         element={<StudioRuns />} />
             <Route path="runs/:run_id"                 element={<StudioRunDetail />} />
             <Route path="mind"                         element={<StudioMind />} />
-            {/* Phase S3-D — knowledge browser; per-agent drill on /:agent. */}
-            <Route path="knowledge"                    element={<StudioKnowledge />} />
-            <Route path="knowledge/:agent"             element={<StudioKnowledge />} />
+            <Route path="how"                          element={<StudioHow />} />
             <Route path="settings"                     element={<StudioSettings />} />
             <Route path="admin"                        element={<StudioAdmin />} />
           </Route>
@@ -513,6 +548,8 @@ export default function App() {
             <Route path="profile" element={<Profile />} />
             <Route path="tokens" element={<Tokens />} />
             <Route path="account/connect/google" element={<ConnectGoogle />} />
+            <Route path="account/connect/power-automate" element={<ConnectPowerAutomate />} />
+            <Route path="account/connect/microsoft" element={<ConnectMicrosoft />} />
             <Route path="billing" element={<AppBilling />} />
 
             {/* Theme A4 / A5 / inbox — Lumid Studio authoring side
@@ -582,6 +619,7 @@ export default function App() {
             <Route path="datasets/kols"    element={<DatasetsKols />} />
             <Route path="datasets/news"    element={<DatasetsNews />} />
             <Route path="datasets/predmarket" element={<DatasetsPredmarket />} />
+            <Route path="datasets/markets" element={<DatasetsMarkets />} />
 
             {/* Lumilake-origin pages grouped under /app/lumilake/*.
                 data-label + modelling hidden 2026-04-24 — not
@@ -798,12 +836,17 @@ export default function App() {
                 /app/marketplace → /studio/skills
                 /app/knowledge   → /studio/knowledge
                 /app/results     → /studio/today */}
-          <Route path="/app"             element={<Navigate to="/studio/today"     replace />} />
-          <Route path="/app/loops"       element={<Navigate to="/studio/today"     replace />} />
-          <Route path="/app/marketplace" element={<Navigate to="/studio/skills"    replace />} />
+          <Route path="/app"             element={<Navigate to="/studio/intents"   replace />} />
+          <Route path="/app/loops"       element={<Navigate to="/studio/intents"   replace />} />
+          <Route path="/app/marketplace" element={<Navigate to="/studio/library"   replace />} />
           <Route path="/app/knowledge"   element={<Navigate to="/studio/knowledge" replace />} />
-          <Route path="/app/results"     element={<Navigate to="/studio/today"     replace />} />
-          <Route path="/app/*"           element={<Navigate to="/studio/today"     replace />} />
+          <Route path="/app/results"     element={<Navigate to="/studio/intents"   replace />} />
+          {/* /app/admin/* belonged to the old /app shell admin tree but
+              everything admin now lives under /dashboard/admin/*. Preserve
+              the rest of the path so deep links like
+              /app/admin/clusters/<id> route through. */}
+          <Route path="/app/admin/*"     element={<AppAdminRedirect />} />
+          <Route path="/app/*"           element={<Navigate to="/studio/intents"   replace />} />
 
           {/* Root "/" — role-aware landing. AuthGuard(false) handles
               the unauth case by rendering <RoleHome>, which then reads

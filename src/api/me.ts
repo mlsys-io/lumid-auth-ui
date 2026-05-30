@@ -330,6 +330,9 @@ export interface MeWorkflowRow {
   // Sparkline char-encoding: "o"=succeeded, "x"=failed, "_"=skipped,
   // "."=running. Oldest→newest, max 14 chars.
   run_spark?: string;
+  // Month-to-date server-funded cost in cents. 0/undefined when the
+  // workflow has logged no usage_events this month.
+  cost_cents_mtd?: number;
 }
 
 export interface MeWorkflowDetail {

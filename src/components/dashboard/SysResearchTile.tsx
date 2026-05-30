@@ -74,7 +74,9 @@ function _statusIcon(tone: 'good' | 'warn' | 'bad' | 'default') {
 }
 
 function _formatTs(unix: number): string {
-	if (!unix) return 'never';
+	// Guard null/0/pre-2024 (1704067200 = 2024-01-01) → never the
+	// "20000d ago" epoch artifact.
+	if (!unix || unix < 1_704_067_200) return 'never';
 	const d = new Date(unix * 1000);
 	const diff = Math.max(0, Date.now() / 1000 - unix);
 	if (diff < 90) return `${Math.round(diff)}s ago`;

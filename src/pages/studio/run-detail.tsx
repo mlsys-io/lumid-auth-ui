@@ -59,7 +59,7 @@ export default function StudioRunDetail() {
 
 			<header className="flex items-baseline justify-between">
 				<div>
-					<h1 className="text-lg font-semibold flex items-center gap-2">
+					<h1 className="text-lg font-medium flex items-center gap-2">
 						<Activity className="w-5 h-5 text-emerald-600" />
 						{detail.app && detail.loop ? `${detail.app} / ${detail.loop}` : run_id}
 					</h1>
@@ -156,7 +156,7 @@ function BackLink({ detail }: { detail?: MeRunDetail | null }) {
 function MetaItem({ label, children }: { label: string; children: React.ReactNode }) {
 	return (
 		<div>
-			<div className="text-[10px] uppercase tracking-wider text-slate-400">{label}</div>
+			<div className="text-[10px] tracking-wider text-slate-400">{label}</div>
 			<div className="text-sm">{children}</div>
 		</div>
 	);
@@ -228,9 +228,9 @@ function StepInspector({ step, onClose }: { step: StepLogEntry; onClose: () => v
 	return (
 		<div className="rounded-xl border border-slate-200 bg-white">
 			<div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5">
-				<div className="text-sm font-semibold">
+				<div className="text-sm font-medium">
 					{step.id || step.name || step.skill || "step"}
-					<span className="ml-2 text-[10px] uppercase tracking-wide text-slate-500">{state}</span>
+					<span className="ml-2 text-[10px] tracking-wide text-slate-500">{state}</span>
 				</div>
 				<button onClick={onClose} className="text-slate-400 hover:text-slate-700 text-xs">close</button>
 			</div>

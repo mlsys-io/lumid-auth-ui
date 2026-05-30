@@ -373,7 +373,7 @@ export function Go({ embedded = false }: { embedded?: boolean } = {}) {
       // route still works (parallel-run during the Studio S1 cutover
       // window) but new flows land in Studio for visual consistency
       // with the composer the user just used.
-      const land = embedded ? "/studio/today" : "/app/loops";
+      const land = embedded ? "/studio/intents" : "/app/loops";
       navigate(`${land}?installed=pa&intent=${intent_id}`);
     } catch (exc: any) {
       const msg =
