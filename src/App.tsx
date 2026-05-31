@@ -26,12 +26,10 @@ const Go            = lazy(() => import("./pages/Go"));
 // alongside existing /app/* and /dashboard/* per the studio-plan.md
 // decision: build alongside, no immediate cutover.
 const StudioShell      = lazy(() => import("./components/StudioShell"));
-const StudioToday      = lazy(() => import("./pages/studio/today"));
+const StudioIntents    = lazy(() => import("./pages/studio/intents"));
 // Phase S5+ — real inbox (no longer a placeholder).
 const StudioInbox      = lazy(() => import("./pages/studio/inbox"));
-// Phase S2 — real composer (no longer a placeholder).
-const StudioSkills     = lazy(() => import("./pages/studio/skills"));
-const StudioMarketplace = lazy(() => import("./pages/studio/marketplace"));
+const StudioLibrary    = lazy(() => import("./pages/studio/library"));
 // Phase S3-C — app editor (lean v1).
 const StudioApps         = lazy(() => import("./pages/studio/apps"));
 // W1 workflow surface — replaces /studio/apps as the canonical landing
@@ -58,7 +56,7 @@ const StudioAdmin      = lazy(() => import("./pages/studio/admin"));
 const StudioInspector  = lazy(() => import("./pages/studio/inspector"));
 // "How Lumid works" — walkable 3-stage loop (Assemble → Adapt → Compound)
 // illustrated against the demo intents. Stages 1-2 concrete, 3 open.
-const StudioHow        = lazy(() => import("./pages/studio/demo"));
+const StudioHow        = lazy(() => import("./pages/studio/how"));
 
 // Auto-quant operator page (/dashboard/auto-quant/*)
 const AutoQuantPage = lazy(() => import("./pages/app/auto-quant/index"));
@@ -392,7 +390,7 @@ export default function App() {
           >
             <Route index             element={<Navigate to="/studio/intents" replace />} />
             {/* Today → Intents rename (demo IA). Old /today paths redirect. */}
-            <Route path="intents"                       element={<StudioToday />} />
+            <Route path="intents"                       element={<StudioIntents />} />
             <Route path="today"                         element={<Navigate to="/studio/intents" replace />} />
             {/* Phase S3-B — cycle inspector accessed from Intents rows. */}
             <Route path="intents/cycle/:app/:loop/:ts"  element={<StudioInspector />} />
@@ -405,7 +403,7 @@ export default function App() {
                 Marketplace → Library rename (demo IA); old paths redirect.
                 The StudioApps editor still mounts under /apps/:app to handle
                 per-app YAML edits until the dedicated workflow editor ships. */}
-            <Route path="library"                      element={<StudioMarketplace />} />
+            <Route path="library"                      element={<StudioLibrary />} />
             <Route path="marketplace"                  element={<Navigate to="/studio/library" replace />} />
             <Route path="skills"                       element={<Navigate to="/studio/library" replace />} />
             {/* Knowledge is now the "you, encoded" ledger; the per-agent
@@ -827,7 +825,7 @@ export default function App() {
               The old LoopsPage / MarketplacePage / KnowledgePage /
               ResultsPage components remain imported because their
               contents are mounted under /studio/* (e.g. AppLoops is
-              rendered inside StudioToday). When inactive direct-mount
+              rendered inside StudioIntents). When inactive direct-mount
               references are pruned, those imports can go too.
 
               Old bookmarks → Studio mapping:

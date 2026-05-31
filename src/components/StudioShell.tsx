@@ -70,7 +70,6 @@ const MORE_NAV: NavItem[] = [
 	{ to: '/studio/workflows', label: 'Workflows', icon: WorkflowIcon },
 	{ to: '/studio/knowledge', label: 'Knowledge', icon: Brain },
 	{ to: '/studio/library',   label: 'Library',   icon: Store },
-	{ to: '/studio/how',       label: 'How it works', icon: Compass },
 ];
 // MoreSection — collapsible "More" group under the primary nav.
 // The header acts as the toggle and shows the current state. Items
@@ -234,6 +233,19 @@ export function StudioShell() {
 					    intact for deep links. */}
 					<MoreSection items={MORE_NAV} />
 				</nav>
+
+				{/* Docs link — kept apart from the functional nav above so
+				    "how it works" reads as reference, not a workspace. */}
+				<NavLink
+					to="/studio/how"
+					className={({ isActive }) => cn(
+						'mx-3 mb-1 flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs transition-colors',
+						isActive ? 'text-emerald-700' : 'text-slate-400 hover:text-slate-600',
+					)}
+				>
+					<Compass className="w-3.5 h-3.5 flex-shrink-0" />
+					<span>How it works</span>
+				</NavLink>
 
 				{/* User menu — pinned bottom-left, opens upward. Holds
 				    everything the top-right avatar dropdown used to

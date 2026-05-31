@@ -1864,10 +1864,28 @@ function handleEvent(
 	} else if (evt.type === 'error' && evt.message) {
 		setMessages((prev) => withLastAssistant(prev, (m) => ({
 			...m,
-			content: (m.content ? m.content + '\n\n' : '') + `⚠️ ${evt.message}`,
+			content: (m.content ? m.content + '\n\n' : '') + friendlyChatError(evt.message),
 		})));
 	}
 	// 'usage' and 'done' events — no UI change needed for now.
+}
+
+// Turn a raw upstream error into something a user can act on. The most
+// common one today is the kv.run LLM gateway being unconfigured
+// (503 "FINDATA_LLM_BACKEND_URL is empty") — surface that as a calm
+// "temporarily offline" line instead of dumping provider JSON.
+function friendlyChatError(raw: string): string {
+	const s = String(raw);
+	if (/503|service unavailable|backend not configured|FINDATA_LLM_BACKEND_URL|no .*provider accepted/i.test(s)) {
+		return '⚠️ The AI model is temporarily offline. Your message wasn’t lost — try again shortly.';
+	}
+	if (/401|sign in|unauthor/i.test(s)) {
+		return '⚠️ Please sign in to use chat.';
+	}
+	if (/429|rate.?limit/i.test(s)) {
+		return '⚠️ Rate limit reached — give it a moment and try again.';
+	}
+	return `⚠️ ${s}`;
 }
 
 function withLastAssistant(
