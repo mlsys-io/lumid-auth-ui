@@ -1,217 +1,416 @@
-// Phase S3-C — app editor (lean v1).
+// /studio/apps — the Studio spine.
 //
-// Lists the user's installed apps; clicking one opens the editor for
-// that fork. The editor surfaces each loop with editable schedule +
-// enabled toggle (writes through /me/loops PATCH which lands in
-// `.user-overrides.yaml`). Full xpcloud.yaml editor (skill swap,
-// prompt editor) is a follow-up — the schedule + enabled controls
-// alone close 80% of "tune my AI" intent.
+//   /studio/apps        → My Apps home: a grid of app cards (live
+//                         progress) above a "start a new intent" launcher.
+//   /studio/apps/:app   → app overview: the app's workflows, each
+//                         expandable to its observability panel
+//                         (status + insights + suggested improvements).
+//                         ?selected=<loop> deep-links an open panel.
+//
+// All data is real, via me.* — no mock. App identity + per-loop schedule
+// come from me.loopsHealth(); per-workflow run health + sparklines from
+// me.listWorkflows(); per-cycle observability from me.cycleDetail (inside
+// the panel).
 
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { Layers, ChevronRight, Pause, Play, Loader2, Save } from 'lucide-react';
-import { toast } from 'sonner';
-import { me, MeApiError } from '@/api/me';
-import PageHints from '@/components/PageHints';
-import { setStudioSelection } from '@/components/StudioContext';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
+import { ChevronDown, ChevronRight, Boxes, Sparkles, FileText, Brain, Activity, AlertTriangle } from "lucide-react";
+import { me, type MeWorkflowRow } from "@/api/me";
+import apiClient from "@/api/client";
+import { setStudioSelection } from "@/components/StudioContext";
+import RunSparkline from "@/components/RunSparkline";
+import { Skeleton, humanizeLoop } from "@/pages/app-revamp/loops";
+import { QuickStarters } from "@/pages/studio/intents";
+import WorkflowComposer from "@/components/WorkflowComposer";
+import AppCard, { appTitle, type AppIdentity } from "@/components/workflow/AppCard";
+import WorkflowObservabilityPanel, { type LoopHealth } from "@/components/workflow/WorkflowObservabilityPanel";
+import LoopOrbit, { type LoopMode, type LoopStageKey } from "@/components/workflow/LoopOrbit";
+import { RUNNING_APPS } from "@/lib/demo";
+import { useCountUp } from "@/lib/use-count-up";
+import { cn } from "@/lib/utils";
 
-type App = { name: string; has_xpcloud: boolean; tenant: boolean };
-type LoopRow = {
-	app: string;
-	loop: string;
-	schedule?: string;
-	enabled?: boolean;
+// Scope the surface to the showcase apps (keeps the demo focused).
+const inScope = (app?: string) => !app || (RUNNING_APPS as readonly string[]).includes(app);
+
+// me.loopsHealth() is typed {apps} in the client, but the handler also
+// returns `loops` (per-loop schedule/status). Read both via this shape.
+type LoopsHealthResp = {
+	apps?: Array<{ app: string; version?: string; kind?: string; published?: boolean; status?: string }>;
+	loops?: LoopHealth[];
 };
 
-function AppList() {
-	const [apps, setApps] = useState<App[] | null>(null);
+function loopOf(w: MeWorkflowRow): string {
+	const app = w.app || "";
+	if (app && w.slug.startsWith(app + ":")) return w.slug.slice(app.length + 1);
+	const i = w.slug.indexOf(":");
+	return i >= 0 ? w.slug.slice(i + 1) : w.slug;
+}
+
+function cycleTsToIso(ts: string): string {
+	const m = ts.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})$/);
+	if (!m) return ts;
+	const [, y, mo, d, h, mi, s] = m;
+	return `${y}-${mo}-${d}T${h}:${mi}:${s}Z`;
+}
+
+type TodayCycle = Awaited<ReturnType<typeof me.today>>["cycles"][number];
+
+// A specific, human summary of a just-completed cycle for the AI-panel note
+// (vs. a vague "insights updated").
+function describeCycle(c: TodayCycle): string {
+	const verb =
+		c.outcome === "ran" ? "ran a full cycle"
+		: c.outcome === "no_change" ? "observed — nothing new to act on"
+		: c.outcome === "awaiting_review" ? "ran — items awaiting your review"
+		: c.outcome === "no_setup" ? "needs setup"
+		: c.ok === false ? "hit an error" : "ran";
+	const bits: string[] = [];
+	if (c.review_count) bits.push(`${c.review_count} to review`);
+	if (c.offers_count) bits.push(`${c.offers_count} new suggestion${c.offers_count > 1 ? "s" : ""}`);
+	if (typeof c.duration_s === "number" && c.duration_s > 0) bits.push(`${c.duration_s.toFixed(0)}s`);
+	const extra = bits.length ? ` (${bits.join(" · ")})` : "";
+	return `✓ ${appTitle(c.app)} · ${humanizeLoop(c.loop)} ${verb}${extra}. Ask me what changed.`;
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  My Apps home
+// ══════════════════════════════════════════════════════════════════
+
+interface Hero { apps: number; workflows: number; runsToday: number; drafts: number; memories: number; failing: number }
+
+function AppsHome() {
+	const [byApp, setByApp] = useState<Map<string, MeWorkflowRow[]> | null>(null);
+	const [identity, setIdentity] = useState<Map<string, AppIdentity>>(new Map());
+	const [hero, setHero] = useState<Hero | null>(null);
+	const [selectedApp, setSelectedApp] = useState<string | null>(null);
+	const [selectedLoop, setSelectedLoop] = useState<string | null>(null);
+	const appsRef = useRef<HTMLDivElement>(null);
+	// Aggregate loop state for the big LoopOrbit banner on the intent page.
+	const [loopMode, setLoopMode] = useState<LoopMode>("idle");
+	const [pulseStage, setPulseStage] = useState<LoopStageKey | null>(null);
+	const [eventApp, setEventApp] = useState<string | null>(null);
+	const prevMaxTsRef = useRef<string>("");
+
+	// Composer host — folded in from the old Intents page. Opens on a
+	// ?compose=1 deep-link and whenever the chat agent finishes a
+	// compose_workflow (studio:composed).
+	const [composerOpen, setComposerOpen] = useState(false);
+	const [searchParams, setSearchParams] = useSearchParams();
 	useEffect(() => {
-		me.listApps()
-			.then((r) => setApps(r.apps.filter((a) => a.tenant)))
-			.catch(() => setApps([]));
+		if (searchParams.get("compose") === "1") {
+			setComposerOpen(true);
+			const sp = new URLSearchParams(searchParams);
+			sp.delete("compose");
+			setSearchParams(sp, { replace: true });
+		}
+	}, [searchParams, setSearchParams]);
+	useEffect(() => {
+		const f = () => setComposerOpen(true);
+		window.addEventListener("studio:composed", f);
+		return () => window.removeEventListener("studio:composed", f);
 	}, []);
-	if (apps === null) return <div className="text-sm text-slate-500 italic">Loading apps…</div>;
-	if (apps.length === 0) {
-		return (
-			<div className="max-w-md mx-auto pt-12 text-center space-y-4">
-				<div className="inline-flex w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 items-center justify-center">
-					<Layers className="w-7 h-7" />
-				</div>
-				<div>
-					<h2 className="text-xl font-medium">No apps yet</h2>
-					<p className="mt-2 text-sm text-slate-600">
-						Set up your AI by picking skills — it&apos;ll install as your first app.
-					</p>
-				</div>
-				<Link
-					to="/studio/skills"
-					className="inline-flex px-4 py-2 text-sm rounded-lg bg-emerald-500 text-white hover:bg-emerald-600"
-				>
-					Open composer
-				</Link>
-			</div>
-		);
+
+	const load = useCallback(async () => {
+			const [wfR, lhR, todayR, draftsR, agentsR] = await Promise.allSettled([
+				me.listWorkflows(),
+				me.loopsHealth(),
+				me.today(),
+				me.listDrafts({ state: "pending" }),
+				apiClient.get("/api/v1/me/knowledge/agents"),
+			]);
+
+			const wfs = wfR.status === "fulfilled" ? (wfR.value.workflows || []).filter((w) => inScope(w.app)) : [];
+			const m = new Map<string, MeWorkflowRow[]>();
+			for (const w of wfs) {
+				const k = w.app || "—";
+				const a = m.get(k);
+				if (a) a.push(w); else m.set(k, [w]);
+			}
+			setByApp(m);
+
+			if (lhR.status === "fulfilled") {
+				const apps = (lhR.value as unknown as LoopsHealthResp).apps || [];
+				const im = new Map<string, AppIdentity>();
+				for (const a of apps) im.set(a.app, { version: a.version, kind: a.kind, published: a.published, status: a.status });
+				setIdentity(im);
+			}
+
+			let runsToday = 0;
+			if (todayR.status === "fulfilled") {
+				const start = new Date(); start.setHours(0, 0, 0, 0);
+				const ms = start.getTime();
+				for (const c of todayR.value.cycles) {
+					const t = Date.parse(cycleTsToIso(c.ts));
+					if (!isNaN(t) && t >= ms) runsToday++;
+				}
+			}
+			const drafts = draftsR.status === "fulfilled" ? draftsR.value.drafts.length : 0;
+			let memories = 0;
+			if (agentsR.status === "fulfilled") {
+				const ags = agentsR.value.data?.data?.agents || [];
+				memories = ags.reduce((n: number, a: { memory_count?: number }) => n + (a.memory_count || 0), 0);
+			}
+			const failing = wfs.filter((w) => w.last_run_ok === false).length;
+			setHero({ apps: m.size, workflows: wfs.length, runsToday, drafts, memories, failing });
+
+			// Loop-event detection → drives the orbit banner. Running if any
+			// cycle is mid-flight; a newer cycle ts than last poll = an event.
+			const anyRunning = wfs.some((w) => (w.run_spark || "").endsWith("."));
+			setLoopMode(anyRunning ? "running" : wfs.some((w) => w.enabled !== false) ? "idle" : "paused");
+			let maxCycleTs = "";
+			let freshCycle: TodayCycle | null = null;
+			if (todayR.status === "fulfilled") {
+				for (const c of todayR.value.cycles) {
+					if (!inScope(c.app)) continue;
+					if ((c.ts || "") > maxCycleTs) { maxCycleTs = c.ts || ""; freshCycle = c; }
+				}
+			}
+			if (prevMaxTsRef.current && maxCycleTs && maxCycleTs !== prevMaxTsRef.current && freshCycle) {
+				setPulseStage("learn");
+				setEventApp(freshCycle.app);
+				window.setTimeout(() => { setPulseStage(null); setEventApp(null); }, 3200);
+				// Specific summary of what just ran (non-disruptive note).
+				window.dispatchEvent(new CustomEvent("studio:notify", { detail: { message: describeCycle(freshCycle) } }));
+			}
+			if (maxCycleTs) prevMaxTsRef.current = maxCycleTs;
+	}, []);
+
+	// Poll so the home moves on its own — sparklines extend, counts tick.
+	useEffect(() => {
+		load();
+		const id = window.setInterval(load, 20_000);
+		return () => window.clearInterval(id);
+	}, [load]);
+
+	if (byApp === null) {
+		return <div className="space-y-6"><div className="h-20 rounded-xl bg-slate-100 animate-pulse" /><Skeleton lines={3} /></div>;
 	}
+
+	const apps = [...byApp.keys()].sort();
+	const fresh = apps.length === 0;
+
 	return (
-		<div className="space-y-4">
-			<header>
-				<h1 className="text-lg font-medium">Apps</h1>
-				<p className="text-sm text-slate-500 mt-1">Your installed AI apps. Click one to edit.</p>
-			</header>
-			<PageHints prompts={[
-				'pause cc_watcher for the weekend',
-				'change my morning brief to 7am',
-				'list everything you can do',
-			]} />
-			<ul className="space-y-2">
-				{apps.map((a) => (
-					<li key={a.name}>
-						<Link
-							to={`/studio/apps/${encodeURIComponent(a.name)}`}
-							className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-3 hover:bg-slate-50 transition-colors"
-						>
-							<div>
-								<div className="font-mono text-sm">{a.name}</div>
-								<div className="text-xs text-slate-500 mt-0.5">Click to edit loops</div>
+		<>
+			<WorkflowComposer open={composerOpen} onClose={() => setComposerOpen(false)} />
+			{fresh ? (
+				// Fresh user — lead with the launcher so they assemble app #1.
+				<div className="space-y-6">
+					<div className="rounded-2xl border border-slate-200/70 bg-gradient-to-br from-emerald-50 via-white to-sky-50/40 p-6">
+						<div className="flex items-center gap-3">
+							<div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center shadow-sm shadow-emerald-200">
+								<Sparkles className="w-5 h-5" />
 							</div>
-							<ChevronRight className="w-4 h-4 text-slate-400" />
-						</Link>
-					</li>
-				))}
-			</ul>
+							<div>
+								<h2 className="text-xl font-medium text-slate-900 tracking-tight">Set up your first app.</h2>
+								<p className="text-sm text-slate-600 mt-1">Pick a starter and your AI assembles, schedules, and runs it — then its progress lives here.</p>
+							</div>
+						</div>
+					</div>
+					<QuickStarters heading="Start with a starter" />
+				</div>
+			) : selectedApp ? (
+				// A selected app takes the whole content area (slides in from
+				// the right); the stat bar + grid + "Start a new intent" yield.
+				<div key={selectedApp} className="space-y-4 panel-in-right overflow-x-hidden">
+					<button
+						onClick={() => { setSelectedApp(null); setSelectedLoop(null); }}
+						className="inline-flex items-center text-sm text-slate-500 hover:text-slate-900 gap-1"
+					>
+						<ChevronRight className="w-4 h-4 rotate-180" /> All apps
+					</button>
+					<AppOverview app={selectedApp} embedded initialLoop={selectedLoop} />
+				</div>
+			) : (
+				<div className="space-y-5 panel-in-left">
+					{/* Numbers consolidated to a compact top bar. */}
+					{hero && <HeroBar h={hero} onApps={() => appsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })} />}
+
+					<div ref={appsRef} className="scroll-mt-4">
+						<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-400 uppercase mb-3">Your apps</div>
+						<div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
+							{apps.map((a, i) => (
+								<AppCard
+									key={a} app={a} workflows={byApp.get(a)!} identity={identity.get(a)} index={i}
+									onOpen={(ap, loop) => {
+										setSelectedApp(ap); setSelectedLoop(loop ?? null);
+										window.scrollTo({ top: 0, behavior: "smooth" });
+									}}
+								/>
+							))}
+						</div>
+					</div>
+
+					{/* Create is also one click here (the sidebar "+ New intent"
+					    is the always-on primary). */}
+					<div className="pt-1 border-t border-slate-200/60">
+						<div className="pt-5"><QuickStarters heading="Start a new intent" /></div>
+					</div>
+				</div>
+			)}
+		</>
+	);
+}
+
+// Compact top stat bar — a single thin row of inline, clickable stats
+// (numbers consolidated to the top), including a failing count.
+function HeroBar({ h, onApps }: { h: Hero; onApps: () => void }) {
+	return (
+		<div className="flex items-center flex-wrap gap-x-1 gap-y-1 -ml-2">
+			<StatChip icon={Boxes} value={h.apps} label="apps" tone="text-emerald-600" onClick={onApps} />
+			<StatChip icon={Activity} value={h.workflows} label="workflows" tone="text-emerald-600" onClick={onApps} />
+			<StatChip icon={Sparkles} value={h.runsToday} label="runs today" tone="text-sky-600" to="/studio/runs" />
+			<StatChip icon={FileText} value={h.drafts} label="drafts" tone="text-amber-600" to="/studio/inbox" />
+			<StatChip icon={Brain} value={h.memories} label="memories" tone="text-indigo-600" to="/studio/knowledge" />
+			{h.failing > 0 && <StatChip icon={AlertTriangle} value={h.failing} label="failing" tone="text-rose-600" onClick={onApps} />}
 		</div>
 	);
 }
 
-function AppEditor({ appName }: { appName: string }) {
-	const [rows, setRows] = useState<LoopRow[] | null>(null);
-	// Per-loop edits stage in memory; Save commits via /me/loops PATCH.
-	const [edits, setEdits] = useState<Record<string, { schedule?: string; enabled?: boolean }>>({});
-	const [saving, setSaving] = useState<Record<string, boolean>>({});
+function StatChip({
+	icon: Icon, value, label, tone, to, onClick,
+}: {
+	icon: React.ComponentType<{ className?: string }>;
+	value: number; label: string; tone: string; to?: string; onClick?: () => void;
+}) {
+	const shown = Math.round(useCountUp(value));
+	const inner = (
+		<>
+			<Icon className={cn("w-3.5 h-3.5", tone)} />
+			<span className="font-semibold text-slate-800 tabular-nums">{shown}</span>
+			<span className="text-slate-400">{label}</span>
+		</>
+	);
+	const cls = "inline-flex items-center gap-1.5 text-[12px] rounded-lg px-2 py-1 hover:bg-slate-100/70 transition-colors";
+	if (onClick) return <button type="button" onClick={onClick} className={cls}>{inner}</button>;
+	if (to) return <Link to={to} className={cls}>{inner}</Link>;
+	return <div className={cls}>{inner}</div>;
+}
 
-	const load = async () => {
-		const r = await me.loopsHealth();
-		const list = (r as unknown as { loops?: LoopRow[] }).loops ?? (r as unknown as LoopRow[]) ?? [];
-		setRows(list.filter((r) => r.app === appName));
-	};
-	useEffect(() => { load(); }, [appName]);
+// ══════════════════════════════════════════════════════════════════
+//  App overview — workflows + expandable observability panels
+// ══════════════════════════════════════════════════════════════════
 
-	// Phase S6b — announce this app as the active selection so the chat
-	// agent knows what "pause it" / "run morning_brief on this" refers to.
-	useEffect(() => {
-		setStudioSelection({
-			kind: 'app',
-			id: appName,
-			label: appName,
-			affordances: ['patch_loop (schedule/enabled)', 'run_loop_now', 'list_loops'],
-		});
-		return () => setStudioSelection(null);
-	}, [appName]);
+interface Row { loop: string; wf: MeWorkflowRow; lh?: LoopHealth }
 
-	const k = (r: LoopRow) => `${r.app}:${r.loop}`;
-	const setEdit = (loop: LoopRow, patch: { schedule?: string; enabled?: boolean }) => {
-		setEdits((m) => ({ ...m, [k(loop)]: { ...m[k(loop)], ...patch } }));
-	};
-	const save = async (loop: LoopRow) => {
-		const patch = edits[k(loop)];
-		if (!patch || (patch.schedule === undefined && patch.enabled === undefined)) return;
-		setSaving((m) => ({ ...m, [k(loop)]: true }));
-		try {
-			await me.patchLoop(loop.app, loop.loop, patch);
-			toast.success(`${loop.loop} updated`);
-			await load();
-			setEdits((m) => { const n = { ...m }; delete n[k(loop)]; return n; });
-		} catch (e) {
-			toast.error(`Save failed: ${e instanceof MeApiError ? e.message : String(e)}`);
-		} finally {
-			setSaving((m) => ({ ...m, [k(loop)]: false }));
+// Stale-while-revalidate caches so re-opening an app renders instantly
+// (no skeleton flash) while a fresh fetch updates in the background.
+const rowsCache = new Map<string, Row[]>();
+const identCache = new Map<string, AppIdentity | undefined>();
+
+function AppOverview({ app, embedded, initialLoop }: { app: string; embedded?: boolean; initialLoop?: string | null }) {
+	const [rows, setRows] = useState<Row[] | null>(() => rowsCache.get(app) ?? null);
+	const [identity, setIdentity] = useState<AppIdentity | undefined>(() => identCache.get(app));
+	const [params, setParams] = useSearchParams();
+	const selected = params.get("selected");
+
+	const load = useCallback(async () => {
+		const [lhR, wfR] = await Promise.allSettled([me.loopsHealth(), me.listWorkflows()]);
+		const lhMap = new Map<string, LoopHealth>();
+		if (lhR.status === "fulfilled") {
+			const resp = lhR.value as unknown as LoopsHealthResp;
+			for (const l of (resp.loops || []).filter((l) => l.app === app)) lhMap.set(l.loop, l);
+			const ident = (resp.apps || []).find((a) => a.app === app);
+			if (ident) { const id = { version: ident.version, kind: ident.kind, published: ident.published, status: ident.status }; identCache.set(app, id); setIdentity(id); }
 		}
+		// Drive from listWorkflows (tenant-correct) so the user's own
+		// workflows always show; enrich with loop health when present.
+		const wfs = wfR.status === "fulfilled" ? (wfR.value.workflows || []).filter((w) => w.app === app) : [];
+		const next = wfs.map((w) => { const loop = loopOf(w); return { loop, wf: w, lh: lhMap.get(loop) }; });
+		rowsCache.set(app, next);
+		setRows(next);
+	}, [app]);
+	useEffect(() => {
+		load();
+		const id = window.setInterval(load, 20_000);
+		return () => window.clearInterval(id);
+	}, [load]);
+
+	// Announce the active app so the chat agent knows what "pause it" means.
+	useEffect(() => {
+		setStudioSelection({ kind: "app", id: app, label: app, affordances: ["patch_loop (schedule/enabled)", "run_loop_now", "list_loops"] });
+		return () => setStudioSelection(null);
+	}, [app]);
+
+	const toggle = (loop: string) => {
+		const sp = new URLSearchParams(params);
+		if (selected === loop) sp.delete("selected"); else sp.set("selected", loop);
+		setParams(sp, { replace: true });
 	};
 
-	const dirty = useMemo(() => new Set(Object.keys(edits)), [edits]);
-
-	if (rows === null) return <div className="text-sm text-slate-500 italic">Loading…</div>;
+	// Auto-expand the freshest workflow so landing on an app shows its
+	// observability immediately (no extra click).
+	const freshestLoop = rows && rows.length
+		? [...rows].sort((a, b) => (b.wf.last_run_ts || 0) - (a.wf.last_run_ts || 0))[0].loop
+		: null;
+	const effSelected = selected ?? initialLoop ?? freshestLoop;
 
 	return (
-		<div className="space-y-4">
-			<Link to="/studio/apps" className="inline-flex items-center text-sm text-slate-600 hover:text-slate-900 gap-1">
-				← Apps
-			</Link>
-			<header>
-				<h1 className="font-mono text-lg font-medium">{appName}</h1>
-				<p className="text-sm text-slate-500 mt-1">
-					Edit each loop&apos;s schedule and on/off. Changes save to
-					<span className="font-mono"> .user-overrides.yaml</span> — the underlying
-					app stays untouched.
-				</p>
+		<div className="space-y-5">
+			{!embedded && (
+				<Link to="/studio/apps" className="inline-flex items-center text-sm text-slate-500 hover:text-slate-900 gap-1">
+					<ChevronRight className="w-4 h-4 rotate-180" /> My Apps
+				</Link>
+			)}
+
+			<header className="flex items-start gap-3">
+				<div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
+					<Boxes className="w-5 h-5" />
+				</div>
+				<div className="min-w-0">
+					<h1 className="text-lg font-semibold text-slate-900">{appTitle(app)}</h1>
+					<div className="text-xs text-slate-400 font-mono mt-0.5">
+						{app}{identity?.version ? ` · v${identity.version}` : ""}{identity?.published ? " · published" : ""}
+					</div>
+				</div>
 			</header>
 
-			<ul className="space-y-2">
-				{rows.map((r) => {
-					const edit = edits[k(r)] || {};
-					const effSched   = edit.schedule  ?? r.schedule ?? '';
-					const effEnabled = edit.enabled   ?? r.enabled ?? true;
-					const isDirty    = dirty.has(k(r));
-					const isSaving   = saving[k(r)];
-					return (
-						<li key={k(r)} className="rounded-lg border border-slate-200 bg-white p-3 space-y-2">
-							<div className="flex items-center justify-between gap-3">
-								<div className="font-medium">{r.loop}</div>
-								<button
-									onClick={() => setEdit(r, { enabled: !effEnabled })}
-									className={[
-										'inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded border',
-										effEnabled
-											? 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-											: 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100',
-									].join(' ')}
+			{rows === null ? (
+				<Skeleton lines={3} />
+			) : rows.length === 0 ? (
+				<div className="rounded-xl border border-dashed border-slate-200 bg-white/60 p-8 text-center text-sm text-slate-500">
+					No workflows discovered for this app yet.
+				</div>
+			) : (
+				<div className="space-y-2.5">
+					<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-400 uppercase">Workflows</div>
+					<ul className="space-y-2">
+						{rows.map(({ loop, wf, lh }, idx) => {
+							const open = effSelected === loop;
+							const dot = wf.last_run_ok === true ? "bg-emerald-500"
+								: wf.last_run_ok === false || (lh?.consecutive_failures ?? 0) > 0 ? "bg-rose-500"
+								: "bg-slate-300";
+							return (
+								<li
+									key={loop}
+									className="rounded-xl border border-slate-200 bg-white overflow-hidden animate-in fade-in slide-in-from-bottom-1 duration-500"
+									style={{ animationDelay: `${idx * 60}ms`, animationFillMode: "both" }}
 								>
-									{effEnabled ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
-									{effEnabled ? 'Paused on save' : 'Enabled on save'}
-								</button>
-							</div>
-							<div className="flex items-center gap-2">
-								<label className="text-xs tracking-wide text-slate-500 w-16 flex-shrink-0">
-									Schedule
-								</label>
-								<input
-									type="text"
-									value={effSched}
-									onChange={(e) => setEdit(r, { schedule: e.target.value })}
-									placeholder="cron e.g. 0 8 * * *"
-									className="flex-1 px-2 py-1 text-sm font-mono rounded border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
-								/>
-								<button
-									onClick={() => save(r)}
-									disabled={!isDirty || isSaving}
-									className={[
-										'inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded',
-										isDirty
-											? 'bg-emerald-500 text-white hover:bg-emerald-600'
-											: 'bg-slate-200 text-slate-400 cursor-not-allowed',
-									].join(' ')}
-								>
-									{isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-									Save
-								</button>
-							</div>
-						</li>
-					);
-				})}
-				{rows.length === 0 && (
-					<li className="text-sm text-slate-500 italic">No loops discovered for this app yet.</li>
-				)}
-			</ul>
-
-			<p className="text-xs text-slate-500 italic">
-				Full editor — swap skills, edit prompts, change role models — is a follow-up.
-				For now use the CLI: <code className="font-mono">~/.tenants/&lt;sub&gt;/.xp/apps/{appName}/xpcloud.yaml</code>
-			</p>
+									<button
+										onClick={() => toggle(loop)}
+										className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-slate-50/70 transition-colors"
+									>
+										{open ? <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />}
+										<span className={cn("w-2 h-2 rounded-full flex-shrink-0", dot)} />
+										<div className="min-w-0 flex-1">
+											<div className="text-sm font-medium text-slate-800 truncate">{wf.name || humanizeLoop(loop)}</div>
+											{wf.enabled === false && <div className="text-[11px] text-slate-400">paused</div>}
+										</div>
+										<RunSparkline spec={wf.run_spark || ""} className="hidden sm:flex" />
+									</button>
+									{open && (
+										<WorkflowObservabilityPanel app={app} loop={loop} wf={wf} loopHealth={lh} onChanged={load} />
+									)}
+								</li>
+							);
+						})}
+					</ul>
+				</div>
+			)}
 		</div>
 	);
 }
 
 export default function StudioApps() {
 	const { app } = useParams<{ app?: string }>();
-	return app ? <AppEditor appName={app} /> : <AppList />;
+	return app ? <AppOverview app={app} /> : <AppsHome />;
 }

@@ -146,9 +146,43 @@ export const me = {
         skipped?: boolean;
         skip_reason?: string;
         last_error?: string;
+        // Workstream C — the cycle's honest outcome + queue counts,
+        // mirrored from summary.* into the journal. All optional so old
+        // cycles render without them.
+        outcome?: "ran" | "no_change" | "awaiting_review" | "no_setup";
+        review_count?: number;
+        offers_count?: number;
       }>;
       as_of: string;
     }>("GET", "/today"),
+
+  // ── Review queue (human checkpoint) ─────────────────────────────
+  // Each held item in summary.review_queue awaits a human decision
+  // before the engine continues. The reply rides the same approve/edit
+  // path the inbox/draft machinery uses; the backend consumes:
+  //   - {decision: "approve"}                  — release the held item
+  //   - {decision: "edit", planned_kwargs}     — release with edits
+  //   - {decision: "revamp", step_instructions}— free-text "adjust the
+  //                                               next run" instruction
+  // Keyed by the item's outbox_ref so the engine can match it back to
+  // the held step. step_id is sent for journaling.
+  replyReview: (
+    app: string,
+    loop: string,
+    ts: string,
+    body: {
+      outbox_ref: string;
+      step_id?: string;
+      decision: "approve" | "edit" | "revamp";
+      planned_kwargs?: Record<string, unknown>;
+      step_instructions?: string;
+    },
+  ) =>
+    call<{ outbox_ref: string; decision: string; state: string }>(
+      "POST",
+      `/cycles/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/${encodeURIComponent(ts)}/review`,
+      body,
+    ),
 
   // Drafts queue
   listDrafts: (params?: { app?: string; state?: "pending" | "sent" | "dismissed" }) =>

@@ -115,8 +115,9 @@ export default function StudioWorkflows() {
 
 			<PageHints prompts={[
 				"what workflows do I have?",
-				"pause cc_watcher",
-				"build me a workflow that watches Slack hourly",
+				"score consulting case answers against the MBB framework",
+				"find the best NL-to-SQL config under 200ms",
+				"turn KOL tweets into a trading strategy",
 			]} />
 
 			<div className="flex items-center gap-2 flex-wrap text-xs">
@@ -605,12 +606,14 @@ function AvailableLensRedirect() {
 			<p className="text-sm text-slate-700">
 				Browse the marketplace to add new workflows.
 			</p>
-			<Link
-				to="/studio/library"
+			<a
+				href="https://xp.io"
+				target="_blank"
+				rel="noreferrer"
 				className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-colors"
 			>
 				Open marketplace <ExternalLink className="w-3.5 h-3.5" />
-			</Link>
+			</a>
 		</div>
 	);
 }
@@ -627,8 +630,11 @@ function EmptyState({ lens }: { lens: Lens }) {
 				</div>
 				<h3 className="text-base font-medium text-slate-900">No workflows yet</h3>
 				<p className="text-sm text-slate-600 mt-1.5 max-w-md mx-auto leading-relaxed">
-					Your AI runs workflows for you — daily briefs, email triage, anything
-					you can describe. Start with a template or describe what you want.
+					Your AI runs workflows for you across every domain — personal
+					(briefs, email triage), consulting (case analysis), systems
+					research (config optimization), and creations you assemble yourself,
+					like turning KOL tweets into trading strategies. Start with a template
+					or describe what you want.
 				</p>
 				<div className="flex items-center justify-center gap-2 mt-4">
 					<button
@@ -637,12 +643,14 @@ function EmptyState({ lens }: { lens: Lens }) {
 					>
 						<Plus className="w-4 h-4" /> New workflow
 					</button>
-					<Link
-						to="/studio/library"
+					<a
+						href="https://xp.io"
+						target="_blank"
+						rel="noreferrer"
 						className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
 					>
 						Browse marketplace <ExternalLink className="w-3.5 h-3.5" />
-					</Link>
+					</a>
 				</div>
 			</div>
 		);
@@ -650,7 +658,7 @@ function EmptyState({ lens }: { lens: Lens }) {
 	return (
 		<div className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
 			You don&apos;t have any workflows yet.{" "}
-			<Link to="/studio/library" className="text-emerald-700 underline">Install one from the marketplace</Link>.
+			<a href="https://xp.io" target="_blank" rel="noreferrer" className="text-emerald-700 underline">Install one from the marketplace</a>.
 		</div>
 	);
 }

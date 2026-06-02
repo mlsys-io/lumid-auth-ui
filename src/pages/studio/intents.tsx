@@ -10,9 +10,11 @@
 // Returning users see AppLoops (recent cycles + headlines) as before.
 
 import { useEffect, useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
+import WorkflowComposer from '@/components/WorkflowComposer';
 import {
 	Sparkles, Sun, Mail, Search, Calendar, ArrowRight, MessagesSquare,
+	TrendingUp,
 } from 'lucide-react';
 import AppLoops from '../app-revamp/loops';
 import { me } from '@/api/me';
@@ -38,8 +40,28 @@ export default function StudioToday() {
 			.catch(() => setEmpty(false));
 	}, []);
 
+	// Compose host — Workflows folded in here, so Intents owns the composer.
+	// Opens on a `?compose=1` deep-link and whenever the chat agent finishes
+	// a compose_workflow (studio:composed) so the draft review pops here.
+	const [composerOpen, setComposerOpen] = useState(false);
+	const [searchParams, setSearchParams] = useSearchParams();
+	useEffect(() => {
+		if (searchParams.get('compose') === '1') {
+			setComposerOpen(true);
+			const sp = new URLSearchParams(searchParams);
+			sp.delete('compose');
+			setSearchParams(sp, { replace: true });
+		}
+	}, [searchParams, setSearchParams]);
+	useEffect(() => {
+		const onComposed = () => setComposerOpen(true);
+		window.addEventListener('studio:composed', onComposed);
+		return () => window.removeEventListener('studio:composed', onComposed);
+	}, []);
+
 	return (
 		<>
+			<WorkflowComposer open={composerOpen} onClose={() => setComposerOpen(false)} />
 			{empty === true && <div className="space-y-6"><FreshUserHero name={name} /></div>}
 			{empty === false && (
 				// Stage 1 — "given an intent, assemble a workflow (from the
@@ -100,6 +122,20 @@ const STARTERS: Starter[] = [
 		subtitle: 'Before each meeting, brief me on the attendees + context.',
 		prompt: 'Set up meeting prep — 30 minutes before each meeting, brief me on the attendees, prior threads, and any context I need.',
 	},
+	{
+		icon: TrendingUp,
+		tone: 'indigo',
+		title: 'Compose: daily web-research brief',
+		subtitle: 'Assemble a brand-new workflow: research a topic and brief me each morning.',
+		// The creation demo (Stage 1, assemble-from-intent): the prompt
+		// explicitly asks the agent to compose_workflow (not install an
+		// existing app), and names catalog-backed capabilities (web search +
+		// scraping) so the token scorer assembles a real, runnable draft →
+		// studio:composed → WorkflowComposer → review + install.
+		// (The trading-flavoured "KOL tweets → strategy" variant is parked
+		// until the FinData-backed catalog skills are published — Path B.)
+		prompt: 'Compose a brand-new daily web-research brief workflow NOW — don\'t ask me questions, use sensible defaults (topic: AI industry news, 8am daily). Call compose_workflow with that intent to draft it from the marketplace catalog (web search + scraping), then show me the draft so I can review, tweak the topic/schedule, and install it.',
+	},
 ];
 
 function FreshUserHero({ name }: { name: string }) {
@@ -130,13 +166,15 @@ function FreshUserHero({ name }: { name: string }) {
 
 			{/* Quiet escape hatch — for power users who want to browse */}
 			<div className="text-center pt-1">
-				<Link
-					to="/studio/library"
+				<a
+					href="https://xp.io"
+					target="_blank"
+					rel="noreferrer"
 					className="inline-flex items-center gap-1 text-[12px] text-slate-400 hover:text-slate-700 transition-colors"
 				>
 					Or browse the marketplace
 					<ArrowRight className="w-3 h-3" />
-				</Link>
+				</a>
 			</div>
 		</div>
 	);
@@ -147,7 +185,7 @@ function FreshUserHero({ name }: { name: string }) {
 // fresh-user hero AND, permanently, above a returning user's intents — Stage 1
 // ("given an intent, assemble a workflow") is a recurring action, so this
 // surface always sticks.
-function QuickStarters({ heading = 'Quick starters' }: { heading?: string }) {
+export function QuickStarters({ heading = 'Quick starters' }: { heading?: string }) {
 	const dispatch = (prompt: string) =>
 		window.dispatchEvent(new CustomEvent('studio:ask', { detail: { prompt, autosend: true } }));
 	return (
@@ -156,32 +194,36 @@ function QuickStarters({ heading = 'Quick starters' }: { heading?: string }) {
 				{heading}
 			</div>
 
-			{/* Four concrete starters — one click composes + installs + schedules */}
+			{/* Tight 2×2: three concrete starters + one free-form "describe". */}
 			<div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-				{STARTERS.map((s) => (
+				{STARTERS.slice(0, 3).map((s) => (
 					<StarterCard key={s.title} s={s} onClick={() => dispatch(s.prompt)} />
 				))}
-			</div>
-
-			{/* Custom path — describe a new intent free-form; the AI assembles it */}
-			<div className="rounded-xl border border-slate-200 bg-white p-4 flex items-center gap-3">
-				<div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center flex-shrink-0">
-					<MessagesSquare className="w-4 h-4" />
-				</div>
-				<div className="flex-1 min-w-0">
-					<div className="text-sm font-medium text-slate-900">Or describe what you want</div>
-					<div className="text-[12px] text-slate-500 mt-0.5">
-						Tell the AI panel on the right — it composes, installs, and schedules it for you.
-					</div>
-				</div>
-				<button
-					onClick={() => dispatch('I want to set up a new workflow. Help me think through what would be most useful.')}
-					className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-slate-900 text-white hover:bg-slate-800 active:scale-95 transition-all flex-shrink-0"
-				>
-					Start chat <ArrowRight className="w-3.5 h-3.5" />
-				</button>
+				<DescribeCard onClick={() => dispatch('I want to set up a new workflow. Help me think through what would be most useful, then compose and install it.')} />
 			</div>
 		</div>
+	);
+}
+
+// Describe-what-you-want — the free-form fourth tile, styled like a
+// StarterCard so the launcher reads as one clean 2×2 grid.
+function DescribeCard({ onClick }: { onClick: () => void }) {
+	return (
+		<button
+			onClick={onClick}
+			className="group rounded-xl border border-dashed border-emerald-300/70 bg-emerald-50/30 p-3 text-left transition-all flex items-start gap-3 hover:shadow-sm hover:bg-emerald-50/60 active:scale-[0.98]"
+		>
+			<div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-105">
+				<MessagesSquare className="w-4 h-4" />
+			</div>
+			<div className="flex-1 min-w-0">
+				<div className="font-medium text-slate-900 text-[13px] leading-tight">Describe what you want</div>
+				<div className="text-[11px] text-slate-500 mt-0.5 leading-relaxed line-clamp-2">
+					Tell the AI in your words — it composes, installs, and schedules it.
+				</div>
+			</div>
+			<ArrowRight className="w-3.5 h-3.5 text-emerald-400 group-hover:text-emerald-600 transition-colors flex-shrink-0 mt-1" />
+		</button>
 	);
 }
 
