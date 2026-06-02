@@ -42,7 +42,10 @@ export interface LoopHealth {
 // Health chip — one honest read of "how's this workflow doing".
 function health(wf: MeWorkflowRow, lh?: LoopHealth): { label: string; cls: string; dot: string } {
 	if (wf.enabled === false) return { label: "Paused", cls: "text-slate-500 bg-slate-50 border-slate-200", dot: "bg-slate-300" };
-	if ((lh?.consecutive_failures ?? 0) > 0 || wf.last_run_ok === false)
+	// Failing = last run failed (fresh journal truth). consecutive_failures
+	// (scheduler-state) can lag a recovered run, so it must not drive red —
+	// keep counts and dots/health on the same single predicate.
+	if (wf.last_run_ok === false)
 		return { label: "Needs attention", cls: "text-rose-700 bg-rose-50 border-rose-200", dot: "bg-rose-500" };
 	if (wf.last_run_ok === true) return { label: "Healthy", cls: "text-emerald-700 bg-emerald-50 border-emerald-200", dot: "bg-emerald-500" };
 	return { label: "Idle", cls: "text-slate-500 bg-slate-50 border-slate-200", dot: "bg-slate-300" };

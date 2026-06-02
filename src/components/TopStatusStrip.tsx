@@ -20,6 +20,12 @@ import {
 	Store, Brain, Settings, Shield, Activity as ActivityIcon, Boxes,
 } from "lucide-react";
 import { me } from "@/api/me";
+import { RUNNING_APPS } from "@/lib/demo";
+
+// Same scope filter as the My Apps page: count only the user's own apps,
+// not operator-shared ones that listWorkflows() also returns — otherwise the
+// header's failing count diverges from the hero/cards (the "3 vs 1" bug).
+const inScope = (app?: string) => !app || (RUNNING_APPS as readonly string[]).includes(app);
 
 // Friendly app titles for the header (kept in sync with AppCard's map).
 const APP_TITLE: Record<string, string> = {
@@ -206,8 +212,8 @@ export default function TopStatusStrip() {
 
 	const load = async () => {
 		try {
-			const [today, drafts] = await Promise.allSettled([
-				me.today(),
+			const [wfR, drafts] = await Promise.allSettled([
+				me.listWorkflows(),
 				me.listDrafts({ state: "pending" }),
 			]);
 			let draftsCount = 0;
@@ -216,15 +222,13 @@ export default function TopStatusStrip() {
 			if (drafts.status === "fulfilled") {
 				draftsCount = drafts.value.drafts.length;
 			}
-			if (today.status === "fulfilled") {
-				const todayStart = new Date();
-				todayStart.setHours(0, 0, 0, 0);
-				const todayStartMs = todayStart.getTime();
-				for (const c of today.value.cycles) {
-					const ts = Date.parse(cycleTsToIso(c.ts));
-					if (isNaN(ts) || ts < todayStartMs) continue;
-					if (c.ok === false && !c.skipped) failingToday++;
-				}
+			if (wfR.status === "fulfilled") {
+				// "failing" = workflows whose LAST run failed (last_run_ok===false)
+				// — the same definition as the red dots on the cards and the My
+				// Apps hero count. Previously this counted failed *cycles today*,
+				// which diverged from the dots (e.g. a workflow red since
+				// yesterday, or a failure not in today's cycle list).
+				failingToday = (wfR.value.workflows || []).filter((w) => inScope(w.app) && w.last_run_ok === false).length;
 			}
 			setCounts({ drafts: draftsCount, running, failingToday });
 			setRefreshedAt(Date.now());
@@ -367,11 +371,4 @@ function StatusPill({
 			<span className="hidden sm:inline">{label}</span>
 		</Link>
 	);
-}
-
-function cycleTsToIso(ts: string): string {
-	const m = ts.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})$/);
-	if (!m) return ts;
-	const [, y, mo, d, h, mi, s] = m;
-	return `${y}-${mo}-${d}T${h}:${mi}:${s}Z`;
 }

@@ -376,8 +376,12 @@ function AppOverview({ app, embedded, initialLoop }: { app: string; embedded?: b
 					<ul className="space-y-2">
 						{rows.map(({ loop, wf, lh }, idx) => {
 							const open = effSelected === loop;
+							// Single failing predicate everywhere: last_run_ok===false (the
+							// fresh journal truth). consecutive_failures (scheduler-state)
+							// can lag behind a recovered run, so it must NOT drive red — that
+							// was the "3 dots vs 1 count" mismatch.
 							const dot = wf.last_run_ok === true ? "bg-emerald-500"
-								: wf.last_run_ok === false || (lh?.consecutive_failures ?? 0) > 0 ? "bg-rose-500"
+								: wf.last_run_ok === false ? "bg-rose-500"
 								: "bg-slate-300";
 							return (
 								<li
