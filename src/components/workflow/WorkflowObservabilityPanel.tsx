@@ -218,8 +218,12 @@ export default function WorkflowObservabilityPanel({
 
 	return (
 		<div className="border-t border-slate-200/70 bg-slate-50/40 px-4 py-4 space-y-4 animate-in fade-in duration-300">
-			{/* What this loop is chasing — the goal + how its metrics move over runs. */}
-			{wf.goal?.primary && <GoalHeader goal={wf.goal} kpis={buildGoalKpis(summary, cycleFiles)} series={metricSeries} events={metricEvents} />}
+			{/* What this loop is chasing + how its metrics move over runs. Shown
+			    whenever there's a goal OR a trajectory — the curve must not depend
+			    on the goal manifest field being present. */}
+			{(wf.goal?.primary || metricSeries.length > 0) && (
+				<GoalHeader goal={wf.goal} kpis={buildGoalKpis(summary, cycleFiles)} series={metricSeries} events={metricEvents} />
+			)}
 			{/* The loop, as the centerpiece — turning while a cycle runs,
 			    rippling the stage when an event (new cycle) fires. */}
 			<LoopOrbit
@@ -379,20 +383,21 @@ function buildGoalKpis(summary: CycleSummary | null, files: Record<string, unkno
 	return out.slice(0, 5);
 }
 
-function GoalHeader({ goal, kpis, series, events }: { goal: { primary: string; tracked?: string[] }; kpis: GoalKpi[]; series: MeMetricSeries[]; events: Record<string, string> }) {
+function GoalHeader({ goal, kpis, series, events }: { goal?: { primary: string; tracked?: string[] }; kpis: GoalKpi[]; series: MeMetricSeries[]; events: Record<string, string> }) {
 	// Best: trajectories (how metrics move over runs). Then latest static
-	// values. Then just the tracked-metric names, terse.
+	// values. Then just the tracked-metric names, terse. The goal line is
+	// optional — the trend curve renders regardless.
 	const hasTrends = series.length > 0;
-	const showNames = !hasTrends && kpis.length === 0 && goal.tracked && goal.tracked.length > 0;
+	const showNames = !hasTrends && kpis.length === 0 && !!goal?.tracked?.length;
 	return (
 		<div className="rounded-xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50/80 to-white p-3">
 			<div className="flex items-start gap-2">
 				<Target className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
 				<div className="min-w-0 flex-1">
-					<div className="text-[10px] uppercase tracking-wide text-emerald-700/70 font-semibold">Goal · how it's trending</div>
-					<div className="text-[13px] text-slate-800 font-medium leading-snug">{humanizeGoal(goal.primary)}</div>
+					<div className="text-[10px] uppercase tracking-wide text-emerald-700/70 font-semibold">{goal?.primary ? "Goal · how it's trending" : "How it's trending"}</div>
+					{goal?.primary && <div className="text-[13px] text-slate-800 font-medium leading-snug">{humanizeGoal(goal.primary)}</div>}
 					{hasTrends ? (
-						<TrendRow series={series} events={events} tracked={goal.tracked} />
+						<TrendRow series={series} events={events} tracked={goal?.tracked} />
 					) : kpis.length > 0 ? (
 						<div className="mt-2 flex flex-wrap gap-3">
 							{kpis.map((k) => (
@@ -404,8 +409,8 @@ function GoalHeader({ goal, kpis, series, events }: { goal: { primary: string; t
 						</div>
 					) : null}
 					{showNames && (
-						<div className="mt-1 text-[10px] text-slate-400 truncate" title={goal.tracked!.join(" · ")}>
-							tracks {goal.tracked!.join(" · ")}
+						<div className="mt-1 text-[10px] text-slate-400 truncate" title={(goal?.tracked || []).join(" · ")}>
+							tracks {(goal?.tracked || []).join(" · ")}
 						</div>
 					)}
 				</div>
