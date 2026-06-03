@@ -1885,6 +1885,13 @@ function handleEvent(
 					skills: Array.isArray(evt.result.skills_picked) ? evt.result.skills_picked : [],
 					skill_summaries: Array.isArray(evt.result.skill_summaries) ? evt.result.skill_summaries : undefined,
 					for_app: String(evt.result.for_app || ''),
+					kind: evt.result.kind ? String(evt.result.kind) : undefined,
+					steps: Array.isArray(evt.result.steps) ? evt.result.steps : undefined,
+					schedule: evt.result.schedule ? String(evt.result.schedule) : undefined,
+					schedule_human: evt.result.schedule_human ? String(evt.result.schedule_human) : undefined,
+					goal: evt.result.goal || undefined,
+					risk_agent: evt.result.risk_agent ? String(evt.result.risk_agent) : undefined,
+					mode: evt.result.mode ? String(evt.result.mode) : undefined,
 				},
 			}));
 		}

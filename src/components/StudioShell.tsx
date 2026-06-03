@@ -193,18 +193,12 @@ export function StudioShell() {
 		navigate('/auth/login');
 	};
 
-	// "+ New intent" — the streamlined create entry. Lands on My Apps
-	// (which hosts the WorkflowComposer) and opens the chat with a
-	// compose prompt; the agent assembles + installs, the draft pops in
-	// the composer modal. Works from any Studio page (chat is global).
+	// "+ New intent" — opens the create-workflow wizard (Describe → live
+	// Assemble → Review → Install). Lands on My Apps (which hosts the modal)
+	// and fires studio:new-workflow so it opens directly.
 	const newIntent = () => {
 		navigate('/studio/apps');
-		window.dispatchEvent(new CustomEvent('studio:ask', {
-			detail: {
-				prompt: 'I want to set up a new workflow. Help me think through what would be most useful, then compose and install it.',
-				autosend: true,
-			},
-		}));
+		setTimeout(() => window.dispatchEvent(new CustomEvent('studio:new-workflow')), 60);
 	};
 
 	return (

@@ -262,6 +262,10 @@ export const me = {
       `/workflows/${encodeURIComponent(slug)}`,
     ),
 
+  // Direct compose for the composer wizard — instant draft spec, no chat LLM.
+  composeWorkflow: (intent: string, name?: string) =>
+    call<Record<string, unknown>>("POST", "/workflows/compose", { intent, name }),
+
   listRuns: (params?: {
     state?: string;
     workflow?: string;
