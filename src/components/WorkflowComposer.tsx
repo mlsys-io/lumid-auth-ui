@@ -32,7 +32,7 @@ interface DraftedState {
 interface Props { open: boolean; onClose: () => void }
 
 const TRADING_INTENT =
-	"Trade crypto on momentum — sense the market every 12h, propose a sized entry with a stop, backtest it, run it past a risk officer, and journal the result. Paper mode.";
+	"Momentum crypto trading bot, paper mode: every 12 hours sense the market, propose a sized entry with a stop, backtest it, run it past a risk officer, and journal the result.";
 
 const SCHEDULES = [
 	{ label: "Every 12 hours", cron: "0 */12 * * *" },
