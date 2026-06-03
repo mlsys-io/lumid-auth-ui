@@ -337,6 +337,13 @@ export const me = {
       "GET",
       `/apps/${encodeURIComponent(app)}/dataset-file?path=${encodeURIComponent(path)}`,
     ),
+
+  // Goal-metric trajectory across cycles (improvement over iterations).
+  loopMetricSeries: (app: string, loop: string) =>
+    call<{ app: string; loop: string; series: MeMetricSeries[] }>(
+      "GET",
+      `/apps/${encodeURIComponent(app)}/loops/${encodeURIComponent(loop)}/metric-series`,
+    ),
   mindSkills: (compare: string) =>
     call<{
       skill: string;
@@ -410,6 +417,9 @@ export interface MeWorkflowRow {
   // Powers the learning-history timeline. App-level, repeated on each loop row.
   memory_agents?: string[];
 }
+
+// Goal-metric trajectory (GET /me/apps/:app/loops/:loop/metric-series).
+export interface MeMetricSeries { label: string; points: Array<{ ts: string; v: number }> }
 
 // Dataset explorer shapes (GET /me/apps/:app/datasets + /dataset-file).
 export interface MeDatasetFileRef { path: string; name: string; bytes: number; kind: string }
