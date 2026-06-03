@@ -142,10 +142,11 @@ export default function AppCard({
 				))}
 				{total > 3 && <div className="text-[10px] text-slate-400 pt-0.5 pl-1.5">+{total - 3} more</div>}
 				{/* How the app's key metrics are trending over iterations — curves +
-				    a one-line insight. Renders null when no loop has a moving metric. */}
+				    insight (to the right). Tries the app's loops; null if none move. */}
 				{(() => {
-					const w = workflows.find((x) => x.app);
-					return w ? <CardMetrics app={w.app!} loop={loopOf(w)} /> : null;
+					const appName = workflows.find((x) => x.app)?.app;
+					const loops = workflows.filter((x) => x.app).map((x) => loopOf(x));
+					return appName && loops.length ? <CardMetrics app={appName} loops={loops} /> : null;
 				})()}
 			</div>
 		</div>
