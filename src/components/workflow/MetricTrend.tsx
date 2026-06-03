@@ -7,9 +7,17 @@
 // metrics (e.g. a plateaued running-max) are de-prioritized — there's nothing
 // to show. Used on the app card (compact, top metric) and the loop panel (row).
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { TrendingUp, TrendingDown, Minus, Sparkles } from "lucide-react";
 import { me, type MeMetricSeries } from "@/api/me";
+
+// Discrete events overlaid on the trajectory.
+export const EVENT_META: Record<string, { color: string; label: string }> = {
+	learn: { color: "#10b981", label: "learned" },
+	fix: { color: "#f59e0b", label: "self-healed" },
+	bug: { color: "#e11d48", label: "error" },
+	analyze: { color: "#6366f1", label: "analysis" },
+};
 
 const lower = (s: string) => s.toLowerCase();
 export function betterDown(label: string): boolean {
@@ -27,6 +35,7 @@ export function fmtMetric(label: string, v: number): string {
 export interface Trend {
 	label: string;
 	values: number[];
+	points: Array<{ ts: string; v: number }>;
 	last: number;
 	first: number;
 	improved: boolean | null; // true=better, false=worse, null=flat
@@ -39,7 +48,7 @@ function toTrend(s: MeMetricSeries): Trend {
 	const min = Math.min(...values), max = Math.max(...values);
 	const delta = last - first;
 	const improved = delta === 0 ? null : betterDown(s.label) ? delta < 0 : delta > 0;
-	return { label: s.label, values, first, last, improved, variance: max - min };
+	return { label: s.label, values, points: s.points, first, last, improved, variance: max - min };
 }
 
 // Order: tracked-metric priority first, then most-moving. Drop flat unless all flat.
@@ -98,16 +107,126 @@ export function MetricTrendCell({ t, n }: { t: Trend; n: number }) {
 	);
 }
 
-// Panel goal-header row: up to N moving metrics as trend cells.
-export function TrendRow({ series, tracked }: { series: MeMetricSeries[]; tracked?: string[] }) {
+function cycleDate(ts: string): string {
+	const m = ts.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
+	if (!m) return ts;
+	return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]))
+		.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+// A width-measuring hook so the curve fills its column crisply (no distortion).
+function useWidth(): [React.RefObject<HTMLDivElement | null>, number] {
+	const ref = useRef<HTMLDivElement>(null);
+	const [w, setW] = useState(0);
+	useEffect(() => {
+		const el = ref.current;
+		if (!el) return;
+		const ro = new ResizeObserver(([e]) => setW(e.contentRect.width));
+		ro.observe(el);
+		setW(el.clientWidth);
+		return () => ro.disconnect();
+	}, []);
+	return [ref, w];
+}
+
+// EventCurve — the good-looking trajectory: area-filled line with discrete
+// event markers (learned / self-healed / error / analysis) at the cycles where
+// they happened, hover for detail, legend below.
+export function EventCurve({ t, events, height = 60 }: { t: Trend; events: Record<string, string>; height?: number }) {
+	const [box, w] = useWidth();
+	const [hover, setHover] = useState<number | null>(null);
+	const H = height, padX = 6, padY = 8;
+	const W = Math.max(w, 80);
+	const vals = t.values, n = vals.length;
+	const min = Math.min(...vals), max = Math.max(...vals), rng = max - min || 1;
+	const x = (i: number) => padX + (n === 1 ? 0 : (i / (n - 1)) * (W - 2 * padX));
+	const y = (v: number) => H - padY - ((v - min) / rng) * (H - 2 * padY);
+	const line = vals.map((v, i) => `${x(i)},${y(v)}`).join(" ");
+	const area = `${padX},${H - padY} ${line} ${x(n - 1)},${H - padY}`;
+	const col = t.improved === null ? COLOR.flat : t.improved ? COLOR.up : COLOR.down;
+	const marks = t.points.map((p, i) => ({ i, kind: events[p.ts], p })).filter((m) => m.kind);
+	const kindsPresent = Array.from(new Set(marks.map((m) => m.kind)));
+	const gid = `cg-${t.label.replace(/\W/g, "")}`;
+
+	return (
+		<div className="w-full">
+			<div ref={box} className="relative w-full" style={{ height: H }}>
+				{w > 0 && (
+					<svg width={W} height={H} className="block">
+						<defs>
+							<linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+								<stop offset="0%" stopColor={col} stopOpacity="0.18" />
+								<stop offset="100%" stopColor={col} stopOpacity="0" />
+							</linearGradient>
+						</defs>
+						<polygon points={area} fill={`url(#${gid})`} />
+						<polyline points={line} fill="none" stroke={col} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+						{marks.map((m) => (
+							<g key={m.i} onMouseEnter={() => setHover(m.i)} onMouseLeave={() => setHover(null)} style={{ cursor: "pointer" }}>
+								<circle cx={x(m.i)} cy={y(m.p.v)} r="6" fill="transparent" />
+								<circle cx={x(m.i)} cy={y(m.p.v)} r="3" fill={EVENT_META[m.kind!]?.color || COLOR.flat} stroke="white" strokeWidth="1.5" />
+							</g>
+						))}
+					</svg>
+				)}
+				{hover !== null && (() => {
+					const m = marks.find((mm) => mm.i === hover);
+					if (!m) return null;
+					const left = Math.min(Math.max(x(m.i), 40), W - 40);
+					return (
+						<div className="absolute z-10 -translate-x-1/2 pointer-events-none rounded-md bg-slate-900 text-white text-[10px] px-2 py-1 shadow-lg whitespace-nowrap"
+							style={{ left, top: Math.max(0, y(m.p.v) - 34) }}>
+							<span className="font-medium" style={{ color: EVENT_META[m.kind!]?.color }}>{EVENT_META[m.kind!]?.label}</span>
+							{" · "}{fmtMetric(t.label, m.p.v)}{" · "}{cycleDate(m.p.ts)}
+						</div>
+					);
+				})()}
+			</div>
+			{kindsPresent.length > 0 && (
+				<div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+					{kindsPresent.map((k) => (
+						<span key={k} className="inline-flex items-center gap-1 text-[9px] text-slate-400">
+							<span className="w-1.5 h-1.5 rounded-full" style={{ background: EVENT_META[k!]?.color }} />{EVENT_META[k!]?.label}
+						</span>
+					))}
+				</div>
+			)}
+		</div>
+	);
+}
+
+// The featured metric: headline value + delta + the annotated EventCurve.
+function FeaturedMetric({ t, events, n }: { t: Trend; events: Record<string, string>; n: number }) {
+	const Icon = t.improved === null ? Minus : t.improved ? TrendingUp : TrendingDown;
+	const col = trendColor(t);
+	const deltaTxt = t.improved === null ? "steady" : `${t.last - t.first > 0 ? "+" : ""}${fmtMetric(t.label, t.last - t.first)}`;
+	return (
+		<div className="w-full">
+			<div className="flex items-baseline gap-2">
+				<span className="text-[20px] font-semibold text-slate-900 tabular-nums leading-none">{fmtMetric(t.label, t.last)}</span>
+				<span className="inline-flex items-center gap-0.5 text-[11px]" style={{ color: col }}><Icon className="w-3.5 h-3.5" />{deltaTxt}</span>
+				<span className="text-[11px] text-slate-400">{t.label} · {n} runs</span>
+			</div>
+			<div className="mt-1.5"><EventCurve t={t} events={events} /></div>
+		</div>
+	);
+}
+
+// Panel goal-header: the primary metric as the big annotated curve, the next
+// few as compact trend cells.
+export function TrendRow({ series, events, tracked }: { series: MeMetricSeries[]; events: Record<string, string>; tracked?: string[] }) {
 	const trends = pickTrends(series, tracked, 4);
 	if (!trends.length) return null;
+	const [primary, ...rest] = trends;
+	const countOf = (t: Trend) => series.find((s) => s.label === t.label)?.points.length ?? t.values.length;
 	return (
-		<div className="mt-2 flex flex-wrap gap-x-5 gap-y-2">
-			{trends.map((t) => {
-				const n = series.find((s) => s.label === t.label)?.points.length ?? t.values.length;
-				return <MetricTrendCell key={t.label} t={t} n={n} />;
-			})}
+		<div className="mt-2 space-y-3">
+			<FeaturedMetric t={primary} events={events} n={countOf(primary)} />
+			{rest.length > 0 && (
+				<div className="flex flex-wrap gap-x-5 gap-y-2">
+					{rest.map((t) => <MetricTrendCell key={t.label} t={t} n={countOf(t)} />)}
+				</div>
+			)}
 		</div>
 	);
 }

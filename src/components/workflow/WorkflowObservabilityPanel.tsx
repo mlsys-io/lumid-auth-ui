@@ -135,6 +135,7 @@ export default function WorkflowObservabilityPanel({
 	const [summary, setSummary] = useState<CycleSummary | null>(cached0?.summary ?? null);
 	const [cycleFiles, setCycleFiles] = useState<Record<string, unknown>>({});
 	const [metricSeries, setMetricSeries] = useState<MeMetricSeries[]>([]);
+	const [metricEvents, setMetricEvents] = useState<Record<string, string>>({});
 	const [lastError, setLastError] = useState<string | null>(null);
 	// Live running/event state — distinct from one-shot load motion.
 	const [optimisticRun, setOptimisticRun] = useState(false);
@@ -196,7 +197,7 @@ export default function WorkflowObservabilityPanel({
 	useEffect(() => {
 		let live = true;
 		me.loopMetricSeries(app, loop)
-			.then((r) => { if (live) setMetricSeries(r.series || []); })
+			.then((r) => { if (live) { setMetricSeries(r.series || []); setMetricEvents(r.events || {}); } })
 			.catch(() => { /* no trends → goal header falls back to latest KPIs */ });
 		return () => { live = false; };
 	}, [app, loop]);
@@ -218,7 +219,7 @@ export default function WorkflowObservabilityPanel({
 	return (
 		<div className="border-t border-slate-200/70 bg-slate-50/40 px-4 py-4 space-y-4 animate-in fade-in duration-300">
 			{/* What this loop is chasing — the goal + how its metrics move over runs. */}
-			{wf.goal?.primary && <GoalHeader goal={wf.goal} kpis={buildGoalKpis(summary, cycleFiles)} series={metricSeries} />}
+			{wf.goal?.primary && <GoalHeader goal={wf.goal} kpis={buildGoalKpis(summary, cycleFiles)} series={metricSeries} events={metricEvents} />}
 			{/* The loop, as the centerpiece — turning while a cycle runs,
 			    rippling the stage when an event (new cycle) fires. */}
 			<LoopOrbit
@@ -378,7 +379,7 @@ function buildGoalKpis(summary: CycleSummary | null, files: Record<string, unkno
 	return out.slice(0, 5);
 }
 
-function GoalHeader({ goal, kpis, series }: { goal: { primary: string; tracked?: string[] }; kpis: GoalKpi[]; series: MeMetricSeries[] }) {
+function GoalHeader({ goal, kpis, series, events }: { goal: { primary: string; tracked?: string[] }; kpis: GoalKpi[]; series: MeMetricSeries[]; events: Record<string, string> }) {
 	// Best: trajectories (how metrics move over runs). Then latest static
 	// values. Then just the tracked-metric names, terse.
 	const hasTrends = series.length > 0;
@@ -391,7 +392,7 @@ function GoalHeader({ goal, kpis, series }: { goal: { primary: string; tracked?:
 					<div className="text-[10px] uppercase tracking-wide text-emerald-700/70 font-semibold">Goal · how it's trending</div>
 					<div className="text-[13px] text-slate-800 font-medium leading-snug">{humanizeGoal(goal.primary)}</div>
 					{hasTrends ? (
-						<TrendRow series={series} tracked={goal.tracked} />
+						<TrendRow series={series} events={events} tracked={goal.tracked} />
 					) : kpis.length > 0 ? (
 						<div className="mt-2 flex flex-wrap gap-3">
 							{kpis.map((k) => (

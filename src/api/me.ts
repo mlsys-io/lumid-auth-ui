@@ -339,8 +339,10 @@ export const me = {
     ),
 
   // Goal-metric trajectory across cycles (improvement over iterations).
+  // `events` maps a cycle dir-id → a discrete event (learn|fix|bug|analyze)
+  // for the curve overlay.
   loopMetricSeries: (app: string, loop: string) =>
-    call<{ app: string; loop: string; series: MeMetricSeries[] }>(
+    call<{ app: string; loop: string; series: MeMetricSeries[]; events: Record<string, string> }>(
       "GET",
       `/apps/${encodeURIComponent(app)}/loops/${encodeURIComponent(loop)}/metric-series`,
     ),
