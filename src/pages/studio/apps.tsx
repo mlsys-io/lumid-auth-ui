@@ -14,7 +14,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { ChevronDown, ChevronRight, Boxes, Sparkles, FileText, Brain, Activity, AlertTriangle } from "lucide-react";
+import { ChevronDown, ChevronRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle } from "lucide-react";
 import { me, type MeWorkflowRow } from "@/api/me";
 import apiClient from "@/api/client";
 import { setStudioSelection } from "@/components/StudioContext";
@@ -76,7 +76,7 @@ function describeCycle(c: TodayCycle): string {
 //  My Apps home
 // ══════════════════════════════════════════════════════════════════
 
-interface Hero { apps: number; workflows: number; runsToday: number; drafts: number; memories: number; failing: number }
+interface Hero { apps: number; workflows: number; runsToday: number; selfHeals: number; memories: number; failing: number }
 
 function AppsHome() {
 	const [byApp, setByApp] = useState<Map<string, MeWorkflowRow[]> | null>(null);
@@ -111,11 +111,10 @@ function AppsHome() {
 	}, []);
 
 	const load = useCallback(async () => {
-			const [wfR, lhR, todayR, draftsR, agentsR] = await Promise.allSettled([
+			const [wfR, lhR, todayR, agentsR] = await Promise.allSettled([
 				me.listWorkflows(),
 				me.loopsHealth(),
 				me.today(),
-				me.listDrafts({ state: "pending" }),
 				apiClient.get("/api/v1/me/knowledge/agents"),
 			]);
 
@@ -144,14 +143,16 @@ function AppsHome() {
 					if (!isNaN(t) && t >= ms) runsToday++;
 				}
 			}
-			const drafts = draftsR.status === "fulfilled" ? draftsR.value.drafts.length : 0;
 			let memories = 0;
 			if (agentsR.status === "fulfilled") {
 				const ags = agentsR.value.data?.data?.agents || [];
 				memories = ags.reduce((n: number, a: { memory_count?: number }) => n + (a.memory_count || 0), 0);
 			}
 			const failing = wfs.filter((w) => w.last_run_ok === false).length;
-			setHero({ apps: m.size, workflows: wfs.length, runsToday, drafts, memories, failing });
+			// Self-heals: amber 'r' dots across recent runs — transient errors the
+			// loops retried/recovered on their own. The "it fixes itself" signal.
+			const selfHeals = wfs.reduce((n, w) => n + (w.run_spark || "").split("").filter((c) => c === "r").length, 0);
+			setHero({ apps: m.size, workflows: wfs.length, runsToday, selfHeals, memories, failing });
 
 			// Loop-event detection → drives the orbit banner. Running if any
 			// cycle is mid-flight; a newer cycle ts than last poll = an event.
@@ -259,7 +260,7 @@ function HeroBar({ h, onApps }: { h: Hero; onApps: () => void }) {
 			<StatChip icon={Boxes} value={h.apps} label="apps" tone="text-emerald-600" onClick={onApps} />
 			<StatChip icon={Activity} value={h.workflows} label="workflows" tone="text-emerald-600" onClick={onApps} />
 			<StatChip icon={Sparkles} value={h.runsToday} label="runs today" tone="text-sky-600" to="/studio/runs" />
-			<StatChip icon={FileText} value={h.drafts} label="drafts" tone="text-amber-600" to="/studio/inbox" />
+			{h.selfHeals > 0 && <StatChip icon={Wrench} value={h.selfHeals} label="self-healed" tone="text-amber-600" onClick={onApps} />}
 			<StatChip icon={Brain} value={h.memories} label="memories" tone="text-indigo-600" to="/studio/knowledge" />
 			{h.failing > 0 && <StatChip icon={AlertTriangle} value={h.failing} label="failing" tone="text-rose-600" onClick={onApps} />}
 		</div>

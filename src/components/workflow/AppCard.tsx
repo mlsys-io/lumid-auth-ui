@@ -120,19 +120,24 @@ export default function AppCard({
 				</div>
 			</button>
 
-			{/* each workflow row → open the app straight to that workflow */}
+			{/* each workflow row → label opens the app; the sparkline's dots are
+			    individually clickable (hover previews / click pins the cycle). */}
 			<div className="px-4 pb-3 space-y-0.5 border-t border-slate-100 pt-2">
 				{workflows.slice(0, 3).map((w) => (
-					<button
+					<div
 						key={w.slug}
-						type="button"
-						onClick={() => open(loopOf(w))}
-						className="flex items-center gap-2 w-full text-left rounded-md px-1.5 -mx-1.5 py-0.5 hover:bg-emerald-50/60 transition-colors"
-						title={`Open ${loopLabel(w.name, w.slug)}`}
+						className="flex items-center gap-2 w-full rounded-md px-1.5 -mx-1.5 py-0.5 hover:bg-emerald-50/60 transition-colors"
 					>
-						<span className="text-[11px] text-slate-600 truncate flex-1">{loopLabel(w.name, w.slug)}</span>
-						<RunSparkline spec={w.run_spark || ""} />
-					</button>
+						<button
+							type="button"
+							onClick={() => open(loopOf(w))}
+							className="text-[11px] text-slate-600 truncate flex-1 text-left"
+							title={`Open ${loopLabel(w.name, w.slug)}`}
+						>
+							{loopLabel(w.name, w.slug)}
+						</button>
+						<RunSparkline spec={w.run_spark || ""} runs={w.runs_recent} app={w.app} loop={loopOf(w)} />
+					</div>
 				))}
 				{total > 3 && <div className="text-[10px] text-slate-400 pt-0.5 pl-1.5">+{total - 3} more</div>}
 			</div>

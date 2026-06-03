@@ -314,6 +314,17 @@ export const me = {
       "/mind/evaluate",
       { skill_name, for_app },
     ),
+
+  // ── Cycle detail (per-dot drill-in) ─────────────────────────────
+  // One cycle's full record: summary (outcome, observe-gate, offers,
+  // review queue) + staged steps. Keyed by the cycle dir-id carried in
+  // MeWorkflowRow.runs_recent[].ts — that's what makes sparkline dots
+  // addressable.
+  cycleDetail: (app: string, loop: string, ts: string) =>
+    call<MeCycleDetail>(
+      "GET",
+      `/cycles/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/${encodeURIComponent(ts)}`,
+    ),
   mindSkills: (compare: string) =>
     call<{
       skill: string;
@@ -374,6 +385,42 @@ export interface MeWorkflowRow {
   // True when the last run succeeded only via a retry/fallback (self-healed).
   // Dashboard shows an amber dot — flaky-but-recovering, not clean green.
   last_run_recovered?: boolean;
+  // Per-dot addressing for the sparkline — one entry per run_spark char,
+  // SAME order (oldest→newest). Lets each dot open its cycle detail. `ts`
+  // is the cycle dir-id ("" if no cycle dir matched, e.g. a skipped run).
+  runs_recent?: SparkRun[];
+}
+
+// One addressable dot in a workflow's run sparkline.
+export interface SparkRun {
+  ts: string; // cycle dir-id (→ me.cycleDetail), "" when unmatched
+  st: string; // state char: o|r|x|_|.  (mirrors run_spark)
+}
+
+// Cycle detail (GET /me/cycles/:app/:loop/:ts) — the per-dot drill-in.
+// summary.* mirrors the cycle/journal contract (also typed locally in
+// inspector.tsx); kept loose here so the CycleCard can read what it needs.
+export interface MeCycleStep {
+  step_id: string;
+  skill?: string;
+  stage?: string;
+  ok: boolean;
+  output_summary?: string;
+  error?: string;
+  duration_s?: number;
+}
+export interface MeCycleDetail {
+  app: string;
+  loop: string;
+  ts: string;
+  summary: {
+    outcome?: "ran" | "no_change" | "awaiting_review" | "no_setup";
+    observe_gate?: { evaluated: boolean; passed: boolean; reason: string };
+    review_queue?: Array<{ step_id: string; kind: string; outbox_ref: string }>;
+    offers?: Array<{ id?: string; kind: string; title: string; detail?: string }>;
+    [k: string]: unknown;
+  };
+  steps: MeCycleStep[];
 }
 
 export interface MeWorkflowDetail {
