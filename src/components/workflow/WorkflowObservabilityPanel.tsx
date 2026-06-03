@@ -132,6 +132,7 @@ export default function WorkflowObservabilityPanel({
 	const cached0 = cycleCache.get(cacheKey);
 	const [cycleTs, setCycleTs] = useState<string | null>(cached0?.ts ?? null);
 	const [summary, setSummary] = useState<CycleSummary | null>(cached0?.summary ?? null);
+	const [cycleFiles, setCycleFiles] = useState<Record<string, unknown>>({});
 	const [lastError, setLastError] = useState<string | null>(null);
 	// Live running/event state — distinct from one-shot load motion.
 	const [optimisticRun, setOptimisticRun] = useState(false);
@@ -170,6 +171,7 @@ export default function WorkflowObservabilityPanel({
 			);
 			const sum = (r.data?.data?.summary ?? {}) as CycleSummary;
 			setSummary(sum);
+			setCycleFiles((r.data?.data?.files ?? {}) as Record<string, unknown>);
 			cycleCache.set(cacheKey, { ts, summary: sum });
 			// #4 — surface "why red": the first failing step's error.
 			const steps = (r.data?.data?.steps ?? []) as Array<{ skill?: string; step_id?: string; error?: string }>;
@@ -199,13 +201,13 @@ export default function WorkflowObservabilityPanel({
 	const loopCaption: React.ReactNode =
 		justRan ? <span className="text-emerald-700 font-medium">✓ New cycle complete — insights updated</span>
 		: mode === "running" ? "Iterating now — moving through the stages (scoring loops can take a few minutes)"
-		: mode === "idle" ? (wf.next_run_ts ? <span>Armed · <NextRunCountdown nextTs={wf.next_run_ts} /></span> : "Armed — waiting for the next run")
+		: mode === "idle" ? (wf.next_run_ts ? <span>Armed · <NextRunCountdown nextTs={wf.next_run_ts} /></span> : "On demand — runs when you click Run now")
 		: "Paused";
 
 	return (
 		<div className="border-t border-slate-200/70 bg-slate-50/40 px-4 py-4 space-y-4 animate-in fade-in duration-300">
-			{/* What this loop is chasing — the declared goal + tracked metrics. */}
-			{wf.goal?.primary && <GoalHeader goal={wf.goal} />}
+			{/* What this loop is chasing — the declared goal + its live KPIs. */}
+			{wf.goal?.primary && <GoalHeader goal={wf.goal} kpis={buildGoalKpis(summary, cycleFiles)} />}
 			{/* The loop, as the centerpiece — turning while a cycle runs,
 			    rippling the stage when an event (new cycle) fires. */}
 			<LoopOrbit
@@ -337,20 +339,57 @@ function humanizeGoal(s: string): string {
 	return t ? t[0].toUpperCase() + t.slice(1) : t;
 }
 
-function GoalHeader({ goal }: { goal: { primary: string; tracked?: string[] } }) {
+type GoalKpi = { label: string; value: string };
+
+// Build the loop's LIVE progress KPIs from the latest cycle — real numbers
+// beat a list of metric names. Pulls numeric metrics from cycle.json and the
+// well-known sysresearch observations (best accuracy, variants tried).
+function buildGoalKpis(summary: CycleSummary | null, files: Record<string, unknown>): GoalKpi[] {
+	/* eslint-disable @typescript-eslint/no-explicit-any */
+	const out: GoalKpi[] = [];
+	const seen = new Set<string>();
+	const push = (label: string, value: string) => { if (!seen.has(label)) { seen.add(label); out.push({ label, value }); } };
+	const num = (v: number) => (Number.isInteger(v) ? String(v) : String(+v.toFixed(4)));
+
+	const obs = files?.observations as any;
+	if (obs && typeof obs === "object") {
+		if (typeof obs.best_accuracy_so_far === "number") push("best accuracy", `${Math.round(obs.best_accuracy_so_far * 100)}%`);
+		if (typeof obs.history_size === "number") push("variants tried", num(obs.history_size));
+	}
+	const m = (summary as any)?.metrics;
+	if (m && typeof m === "object") {
+		for (const [k, v] of Object.entries(m)) {
+			if (typeof v !== "number" || v === 0) continue;
+			if (/^(xpio_ingested|auto_reflect)/.test(k)) continue;
+			push(k.replace(/_/g, " "), num(v as number));
+		}
+	}
+	return out.slice(0, 5);
+}
+
+function GoalHeader({ goal, kpis }: { goal: { primary: string; tracked?: string[] }; kpis: GoalKpi[] }) {
+	// Live values when we have them; otherwise the tracked-metric names, terse.
+	const showNames = kpis.length === 0 && goal.tracked && goal.tracked.length > 0;
 	return (
 		<div className="rounded-xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50/80 to-white p-3">
 			<div className="flex items-start gap-2">
 				<Target className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
-				<div className="min-w-0">
+				<div className="min-w-0 flex-1">
 					<div className="text-[10px] uppercase tracking-wide text-emerald-700/70 font-semibold">Goal</div>
 					<div className="text-[13px] text-slate-800 font-medium leading-snug">{humanizeGoal(goal.primary)}</div>
-					{goal.tracked && goal.tracked.length > 0 && (
-						<div className="mt-1.5 flex flex-wrap gap-1">
-							<span className="text-[10px] text-slate-400">tracks</span>
-							{goal.tracked.map((t, i) => (
-								<span key={i} className="text-[10px] text-slate-600 bg-white border border-slate-200 rounded-full px-1.5 py-0.5" title={t}>{t}</span>
+					{kpis.length > 0 && (
+						<div className="mt-2 flex flex-wrap gap-3">
+							{kpis.map((k) => (
+								<div key={k.label} className="leading-none">
+									<div className="text-[15px] font-semibold text-slate-900 tabular-nums">{k.value}</div>
+									<div className="text-[10px] text-slate-400 mt-0.5">{k.label}</div>
+								</div>
 							))}
+						</div>
+					)}
+					{showNames && (
+						<div className="mt-1 text-[10px] text-slate-400 truncate" title={goal.tracked!.join(" · ")}>
+							tracks {goal.tracked!.join(" · ")}
 						</div>
 					)}
 				</div>
