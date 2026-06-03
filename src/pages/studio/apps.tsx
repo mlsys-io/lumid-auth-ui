@@ -118,7 +118,12 @@ function AppsHome() {
 				apiClient.get("/api/v1/me/knowledge/agents"),
 			]);
 
-			const wfs = wfR.status === "fulfilled" ? (wfR.value.workflows || []).filter((w) => inScope(w.app)) : [];
+			// A failed poll (network blip, token refresh, slow backend) must NOT
+			// blank the panel — keep the last good render and try again next tick.
+			// Only the very first load (byApp still null) falls through to the
+			// skeleton via the early `byApp === null` guard below.
+			if (wfR.status !== "fulfilled") return;
+			const wfs = (wfR.value.workflows || []).filter((w) => inScope(w.app));
 			const m = new Map<string, MeWorkflowRow[]>();
 			for (const w of wfs) {
 				const k = w.app || "—";

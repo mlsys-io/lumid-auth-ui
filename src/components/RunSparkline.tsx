@@ -13,6 +13,7 @@
 // open. Without those props it stays a plain display strip.
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { SparkRun } from "@/api/me";
 import CycleCard from "@/components/workflow/CycleCard";
 
@@ -48,11 +49,35 @@ export function RunSparkline({ spec, className, runs, app, loop }: Props) {
 	const changed = prev.current !== spec;
 	useEffect(() => { prev.current = spec; });
 
-	const [hoverIdx, setHoverIdx] = useState<number | null>(null);
-	const [pinnedIdx, setPinnedIdx] = useState<number | null>(null);
+	// Active dot is tracked with its on-screen rect so the CycleCard can be
+	// rendered in a PORTAL at fixed viewport coords — escaping the app card's
+	// overflow-hidden / grid stacking that would otherwise clip or occlude it.
+	type Hit = { idx: number; rect: DOMRect };
+	const [hover, setHover] = useState<Hit | null>(null);
+	const [pinned, setPinned] = useState<Hit | null>(null);
+	const active = pinned ?? hover;
 
 	const interactive = !!(runs && runs.length && app && loop);
-	const activeIdx = pinnedIdx ?? hoverIdx;
+
+	// Hover-intent: the card lives in a portal (not a DOM child of the dot
+	// strip), so moving the mouse dot→card leaves the strip. Delay the close
+	// so the card can cancel it; otherwise the popover vanishes mid-travel.
+	const closeT = useRef<number | undefined>(undefined);
+	const cancelClose = () => { if (closeT.current) window.clearTimeout(closeT.current); };
+	const scheduleClose = () => { cancelClose(); closeT.current = window.setTimeout(() => setHover(null), 140); };
+
+	// A pinned popover placed at fixed coords goes stale on scroll/resize —
+	// close it rather than let it drift.
+	useEffect(() => {
+		if (!pinned) return;
+		const close = () => setPinned(null);
+		window.addEventListener("scroll", close, true);
+		window.addEventListener("resize", close);
+		return () => {
+			window.removeEventListener("scroll", close, true);
+			window.removeEventListener("resize", close);
+		};
+	}, [pinned]);
 
 	if (!spec) {
 		return <span className={["text-[10px] text-slate-300", className].filter(Boolean).join(" ")}>—</span>;
@@ -73,29 +98,39 @@ export function RunSparkline({ spec, className, runs, app, loop }: Props) {
 		);
 	}
 
-	// Interactive: dots are buttons; a CycleCard floats above the active dot.
-	const active = activeIdx !== null ? runs![activeIdx] : null;
+	// Interactive: dots are buttons; the CycleCard renders in a portal at
+	// fixed coords computed from the active dot's rect.
+	const activeRun = active ? runs![active.idx] : null;
+	const CARD_W = 288; // w-72
+	let cardStyle: React.CSSProperties | null = null;
+	if (active) {
+		const r = active.rect;
+		const gap = 8;
+		const left = Math.max(8, Math.min(window.innerWidth - CARD_W - 8, r.right - CARD_W));
+		// Prefer above the dot; flip below when there isn't room overhead.
+		cardStyle = r.top > 300
+			? { position: "fixed", left, bottom: window.innerHeight - r.top + gap, zIndex: 60 }
+			: { position: "fixed", left, top: r.bottom + gap, zIndex: 60 };
+	}
+
 	return (
 		<div
 			className={["relative inline-flex items-center gap-px", className].filter(Boolean).join(" ")}
-			onMouseLeave={() => setHoverIdx(null)}
+			onMouseLeave={scheduleClose}
 		>
-			{/* click-away catcher while pinned */}
-			{pinnedIdx !== null && (
-				<div className="fixed inset-0 z-40" onClick={() => setPinnedIdx(null)} />
-			)}
 			{chars.map((c, i) => {
-				const isActive = activeIdx === i;
+				const isActive = active?.idx === i;
 				return (
 					<button
 						key={i}
 						type="button"
 						aria-label={`run ${i + 1}: ${STATE_LABEL[c] || c}`}
 						title={STATE_LABEL[c] || c}
-						onMouseEnter={() => setHoverIdx(i)}
+						onMouseEnter={(e) => { cancelClose(); setHover({ idx: i, rect: e.currentTarget.getBoundingClientRect() }); }}
 						onClick={(e) => {
 							e.stopPropagation();
-							setPinnedIdx((p) => (p === i ? null : i));
+							const rect = e.currentTarget.getBoundingClientRect();
+							setPinned((p) => (p?.idx === i ? null : { idx: i, rect }));
 						}}
 						className={[
 							"w-1.5 h-3 rounded-sm transition-transform cursor-pointer hover:scale-150",
@@ -106,16 +141,20 @@ export function RunSparkline({ spec, className, runs, app, loop }: Props) {
 					/>
 				);
 			})}
-			{active && (
-				<div className="absolute bottom-full right-0 mb-2 z-50" onClick={(e) => e.stopPropagation()}>
-					<CycleCard
-						app={app!}
-						loop={loop!}
-						ts={active.ts}
-						st={active.st}
-						onOpenFull={() => setPinnedIdx(null)}
-					/>
-				</div>
+			{activeRun && cardStyle && createPortal(
+				<>
+					{/* click-away catcher while pinned (below the card) */}
+					{pinned && <div className="fixed inset-0" style={{ zIndex: 59 }} onClick={() => setPinned(null)} />}
+					<div
+						style={cardStyle}
+						onClick={(e) => e.stopPropagation()}
+						onMouseEnter={cancelClose}
+						onMouseLeave={scheduleClose}
+					>
+						<CycleCard app={app!} loop={loop!} ts={activeRun.ts} st={activeRun.st} onOpenFull={() => setPinned(null)} />
+					</div>
+				</>,
+				document.body,
 			)}
 		</div>
 	);
