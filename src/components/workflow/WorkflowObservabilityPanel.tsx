@@ -15,11 +15,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-	Activity, Play, Pause, Loader2, Save, Lightbulb, Clock, ArrowRight, AlertCircle,
+	Activity, Play, Pause, Loader2, Save, Lightbulb, Clock, AlertCircle, Target,
+	ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import apiClient from "@/api/client";
-import { me, MeApiError, type MeWorkflowRow } from "@/api/me";
+import { me, MeApiError, type MeWorkflowRow, type MeCycleDetail } from "@/api/me";
 import RunSparkline from "@/components/RunSparkline";
 import WorkflowInsights from "@/components/workflow/WorkflowInsights";
 import LoopOrbit, { type LoopMode, type LoopStageKey } from "@/components/workflow/LoopOrbit";
@@ -198,6 +199,8 @@ export default function WorkflowObservabilityPanel({
 
 	return (
 		<div className="border-t border-slate-200/70 bg-slate-50/40 px-4 py-4 space-y-4 animate-in fade-in duration-300">
+			{/* What this loop is chasing — the declared goal + tracked metrics. */}
+			{wf.goal?.primary && <GoalHeader goal={wf.goal} />}
 			{/* The loop, as the centerpiece — turning while a cycle runs,
 			    rippling the stage when an event (new cycle) fires. */}
 			<LoopOrbit
@@ -209,7 +212,7 @@ export default function WorkflowObservabilityPanel({
 			/>
 			{selectedStage && (
 				<StageDetail
-					app={app} loop={loop} stage={selectedStage} summary={summary}
+					app={app} loop={loop} stage={selectedStage}
 					q={stageQ} setQ={setStageQ} onClose={() => setSelectedStage(null)}
 				/>
 			)}
@@ -295,15 +298,6 @@ export default function WorkflowObservabilityPanel({
 				</Section>
 			)}
 
-			{/* Footer — deep link into the full cycle inspector */}
-			{cycleTs && (
-				<Link
-					to={`/studio/intents/cycle/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/${encodeURIComponent(cycleTs)}`}
-					className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-emerald-700 transition-colors"
-				>
-					Open last cycle <ArrowRight className="w-3 h-3" />
-				</Link>
-			)}
 		</div>
 	);
 }
@@ -332,44 +326,197 @@ const STAGE_INFO: Record<LoopStageKey, { label: string; role: string }> = {
 };
 
 // Stage drill-down + free-text query, opened by clicking an orbit node.
+// snake_case goal slugs ("maximize_paper_realized_alpha") → readable prose.
+function humanizeGoal(s: string): string {
+	const t = s.replace(/_/g, " ").trim();
+	return t ? t[0].toUpperCase() + t.slice(1) : t;
+}
+
+function GoalHeader({ goal }: { goal: { primary: string; tracked?: string[] } }) {
+	return (
+		<div className="rounded-xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50/80 to-white p-3">
+			<div className="flex items-start gap-2">
+				<Target className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
+				<div className="min-w-0">
+					<div className="text-[10px] uppercase tracking-wide text-emerald-700/70 font-semibold">Goal</div>
+					<div className="text-[13px] text-slate-800 font-medium leading-snug">{humanizeGoal(goal.primary)}</div>
+					{goal.tracked && goal.tracked.length > 0 && (
+						<div className="mt-1.5 flex flex-wrap gap-1">
+							<span className="text-[10px] text-slate-400">tracks</span>
+							{goal.tracked.map((t, i) => (
+								<span key={i} className="text-[10px] text-slate-600 bg-white border border-slate-200 rounded-full px-1.5 py-0.5" title={t}>{t}</span>
+							))}
+						</div>
+					)}
+				</div>
+			</div>
+		</div>
+	);
+}
+
+// dir-id "20260603T060039Z" → readable local time
+function cycleDate(ts?: string): string {
+	if (!ts) return "";
+	const m = ts.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
+	if (!m) return ts;
+	return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]))
+		.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function fmtVal(v: unknown): string {
+	if (typeof v === "number") return Number.isInteger(v) ? String(v) : String(+v.toFixed(4));
+	if (typeof v === "boolean") return v ? "yes" : "no";
+	if (Array.isArray(v)) return `${v.length} item${v.length === 1 ? "" : "s"}`;
+	if (v && typeof v === "object") return JSON.stringify(v).slice(0, 80);
+	return String(v).slice(0, 100);
+}
+
+// Compact key:value card for a plain object (one level; nested → JSON snippet).
+function KVCard({ title, obj }: { title: string; obj: unknown }) {
+	if (!obj || typeof obj !== "object" || Array.isArray(obj)) return null;
+	const entries = Object.entries(obj as Record<string, unknown>)
+		.filter(([, v]) => v !== null && v !== "" && !(Array.isArray(v) && v.length === 0))
+		.slice(0, 10);
+	if (!entries.length) return null;
+	return (
+		<div className="rounded-lg bg-white border border-slate-200/70 p-2">
+			<div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1">{title}</div>
+			<div className="space-y-0.5">
+				{entries.map(([k, v]) => (
+					<div key={k} className="flex gap-2 text-[11px]">
+						<span className="text-slate-400 flex-shrink-0">{k.replace(/_/g, " ")}</span>
+						<span className="text-slate-700 font-mono truncate ml-auto text-right" title={typeof v === "object" ? JSON.stringify(v) : String(v)}>{fmtVal(v)}</span>
+					</div>
+				))}
+			</div>
+		</div>
+	);
+}
+
+function StageNote({ tone, children }: { tone: "ok" | "hold"; children: React.ReactNode }) {
+	return <div className={cn("text-[11px] leading-snug", tone === "ok" ? "text-emerald-700" : "text-amber-700")}>{children}</div>;
+}
+
+function StageProse({ label, text }: { label: string; text: string }) {
+	return (
+		<div>
+			<div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-0.5">{label}</div>
+			<div className="text-[11px] text-slate-700 leading-snug whitespace-pre-wrap">{text.slice(0, 600)}</div>
+		</div>
+	);
+}
+
+// StageBody — the real artifact for one stage of one cycle. Pulls from the
+// cycle summary (cycle.json), the sidecar files (observations/proposal/…),
+// and any per-stage steps.
+function StageBody({ stage, detail }: { stage: LoopStageKey; detail: MeCycleDetail }) {
+	/* eslint-disable @typescript-eslint/no-explicit-any */
+	const s: any = detail.summary || {};
+	const files: any = detail.files || {};
+	const steps = (detail.steps || []).filter((st) => st.stage === stage);
+	const blocks: React.ReactNode[] = [];
+
+	switch (stage) {
+		case "observe":
+			if (files.observations) blocks.push(<KVCard key="o" title="What it sensed" obj={files.observations} />);
+			if (s.observe_gate) blocks.push(<StageNote key="g" tone={s.observe_gate.passed ? "ok" : "hold"}>{s.observe_gate.passed ? "Proceeded" : "Held"} — {s.observe_gate.reason || "evaluated the latest signals"}</StageNote>);
+			if (Array.isArray(s.observe_keys) && s.observe_keys.length)
+				blocks.push(<div key="k" className="flex flex-wrap gap-1">{s.observe_keys.slice(0, 12).map((it: unknown, i: number) => <span key={i} className="text-[10px] text-slate-600 bg-white border border-slate-200 rounded-full px-1.5 py-0.5">{String(it)}</span>)}</div>);
+			break;
+		case "hypothesize": {
+			if (files.proposal) {
+				const p = files.proposal;
+				if (p.config) blocks.push(<KVCard key="c" title="Proposed configuration" obj={p.config} />);
+				if (p.reasoning) blocks.push(<StageProse key="r" label="Reasoning" text={String(p.reasoning)} />);
+				if (!p.config && !p.reasoning) blocks.push(<KVCard key="p" title="Proposal" obj={p} />);
+			}
+			const decs: any[] = Array.isArray(s.decisions) ? s.decisions : [];
+			const prop = decs.map((d) => d?.proposal).find((p) => p?.symbol);
+			if (prop) {
+				blocks.push(<KVCard key="d" title="Proposed trade" obj={prop} />);
+				if (prop.reasoning) blocks.push(<StageProse key="dr" label="Reasoning" text={String(prop.reasoning)} />);
+			}
+			break;
+		}
+		case "act": {
+			const rq: any[] = Array.isArray(s.review_queue) ? s.review_queue : [];
+			if (rq.length) blocks.push(<StageNote key="rq" tone="hold">{rq.length} action{rq.length === 1 ? "" : "s"} held for your approval — see Suggested improvements below.</StageNote>);
+			if (files.result || files.results) blocks.push(<KVCard key="res" title="Result" obj={files.result || files.results} />);
+			break;
+		}
+		case "analyze":
+			if (s.metrics) blocks.push(<KVCard key="m" title="Metrics" obj={s.metrics} />);
+			if (files.patterns) blocks.push(<KVCard key="pat" title="Patterns" obj={files.patterns} />);
+			if (files.analysis) blocks.push(<KVCard key="an" title="Analysis" obj={files.analysis} />);
+			break;
+		case "learn": {
+			const offers: any[] = Array.isArray(s.offers) ? s.offers : [];
+			if (offers.length) blocks.push(<div key="of" className="space-y-0.5">{offers.slice(0, 4).map((o, i) => <div key={i} className="text-[11px] text-slate-700 flex gap-1"><span className="text-indigo-400">•</span><span title={o.detail}>{o.title}</span></div>)}</div>);
+			const pushed = s.auto_publish?.memories ? Object.values(s.auto_publish.memories as Record<string, { pushed?: number }>).reduce((n, v) => n + (v?.pushed || 0), 0) : 0;
+			if (pushed > 0) blocks.push(<StageNote key="mp" tone="ok">Compounded {pushed} new memor{pushed === 1 ? "y" : "ies"} into your knowledge graph.</StageNote>);
+			if (files.improvement?.mutations_proposed) blocks.push(<StageNote key="imp" tone="ok">Proposed a self-improvement{Array.isArray(files.improvement.mutates) ? ` to its ${files.improvement.mutates.join(", ")} logic` : ""} — queued as a PR.</StageNote>);
+			if (!offers.length && !pushed && !files.improvement?.mutations_proposed)
+				blocks.push(<div key="lk" className="text-[11px] text-slate-500">Nothing new to bank this cycle. It compounds into your <Link to="/studio/knowledge" className="text-emerald-700 hover:underline">knowledge</Link> as it learns.</div>);
+			break;
+		}
+	}
+
+	if (steps.length) blocks.push(
+		<ul key="steps" className="space-y-1 pt-0.5">
+			{steps.map((st) => (
+				<li key={st.step_id} className="text-[11px] flex items-start gap-1.5">
+					<span className={cn("mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0", st.ok === false ? "bg-rose-500" : "bg-emerald-400")} />
+					<span className="text-slate-600"><span className="font-medium text-slate-700">{st.skill || st.step_id}</span>{st.output_summary ? ` — ${st.output_summary}` : ""}{st.error ? ` · ${st.error.split("\n")[0]}` : ""}</span>
+				</li>
+			))}
+		</ul>,
+	);
+
+	if (!blocks.length) return <div className="text-[11px] text-slate-400 italic">{STAGE_INFO[stage].role} — nothing recorded for this stage in this cycle.</div>;
+	return <div className="space-y-2">{blocks}</div>;
+}
+
 function StageDetail({
-	app, loop, stage, summary, q, setQ, onClose,
+	app, loop, stage, q, setQ, onClose,
 }: {
-	app: string; loop: string; stage: LoopStageKey; summary: CycleSummary | null;
+	app: string; loop: string; stage: LoopStageKey;
 	q: string; setQ: (v: string) => void; onClose: () => void;
 }) {
 	const info = STAGE_INFO[stage];
-	const decisions = Array.isArray((summary as Record<string, unknown> | null)?.["decisions"])
-		? ((summary as Record<string, unknown>)["decisions"] as unknown[]) : [];
-	const reviewQueue = Array.isArray(summary?.review_queue) ? summary!.review_queue! : [];
-	const offers = Array.isArray(summary?.offers) ? summary!.offers! : [];
-	const gate = summary?.observe_gate;
+	const [cycles, setCycles] = useState<Array<{ ts: string }> | null>(null);
+	const [idx, setIdx] = useState(0);
+	const [detail, setDetail] = useState<MeCycleDetail | null>(null);
+	const [loading, setLoading] = useState(false);
 
-	let body: React.ReactNode;
-	switch (stage) {
-		case "observe":
-			body = gate ? `${gate.passed ? "Proceeded" : "Held"} — ${gate.reason || "evaluated the latest signals."}` : "Senses fresh signals at the start of each cycle.";
-			break;
-		case "hypothesize":
-			body = decisions.length ? `${decisions.length} decision(s) formed from what it observed.` : "Forms a plan from what it observed.";
-			break;
-		case "act":
-			body = reviewQueue.length ? `${reviewQueue.length} action(s) awaiting your approval below.` : offers.length ? `${offers.length} suggestion(s) surfaced below.` : "Runs the plan — drafting actions, holding risky ones for you.";
-			break;
-		case "analyze":
-			body = "Reliability + month-over-month deltas are in Insights below.";
-			break;
-		case "learn":
-			body = <>What it banks compounds into your <Link to="/studio/knowledge" className="text-emerald-700 hover:underline">knowledge</Link>.</>;
-			break;
-	}
+	useEffect(() => {
+		let live = true;
+		apiClient.get(`/api/v1/me/cycles?app=${encodeURIComponent(app)}&loop=${encodeURIComponent(loop)}&limit=20`)
+			.then((r) => {
+				const cs = ((r.data?.data?.cycles ?? []) as Array<{ ts: string }>)
+					.filter((c) => c.ts).sort((a, b) => b.ts.localeCompare(a.ts));
+				if (live) { setCycles(cs); setIdx(0); }
+			})
+			.catch(() => { if (live) setCycles([]); });
+		return () => { live = false; };
+	}, [app, loop]);
 
+	const ts = cycles?.[idx]?.ts;
+	useEffect(() => {
+		if (!ts) { setDetail(null); return; }
+		let live = true; setLoading(true);
+		me.cycleDetail(app, loop, ts)
+			.then((d) => { if (live) { setDetail(d); setLoading(false); } })
+			.catch(() => { if (live) setLoading(false); });
+		return () => { live = false; };
+	}, [app, loop, ts]);
+
+	const total = cycles?.length ?? 0;
 	const ask = (e: React.FormEvent) => {
 		e.preventDefault();
 		const t = q.trim();
 		if (!t) return;
 		window.dispatchEvent(new CustomEvent("studio:ask", {
-			detail: { prompt: `On ${app} / ${loop} — the ${info.label} stage: ${t}`, autosend: true },
+			detail: { prompt: `On ${app} / ${loop} — the ${info.label} stage${ts ? ` (run ${cycleDate(ts)})` : ""}: ${t}`, autosend: true },
 		}));
 		setQ("");
 	};
@@ -377,11 +524,34 @@ function StageDetail({
 	return (
 		<div className="rounded-xl border border-emerald-200/70 bg-emerald-50/30 p-3 animate-in fade-in slide-in-from-top-1 duration-300">
 			<div className="flex items-center justify-between gap-2">
-				<div className="text-[13px] font-medium text-emerald-900">{info.label}</div>
-				<button onClick={onClose} className="text-[11px] text-slate-400 hover:text-slate-700">close</button>
+				<div className="min-w-0">
+					<div className="text-[13px] font-medium text-emerald-900">{info.label}</div>
+					<div className="text-[11px] text-slate-500">{info.role}</div>
+				</div>
+				<div className="flex items-center gap-1.5 flex-shrink-0">
+					{total > 0 && (
+						<div className="flex items-center gap-1">
+							<button type="button" disabled={idx >= total - 1} onClick={() => setIdx((i) => Math.min(total - 1, i + 1))}
+								className="p-0.5 rounded disabled:opacity-30 enabled:hover:bg-emerald-100 text-emerald-700" title="older run"><ChevronLeft className="w-3.5 h-3.5" /></button>
+							<span className="text-[10px] text-slate-500 tabular-nums whitespace-nowrap" title={ts}>{cycleDate(ts)} · {idx + 1}/{total}</span>
+							<button type="button" disabled={idx <= 0} onClick={() => setIdx((i) => Math.max(0, i - 1))}
+								className="p-0.5 rounded disabled:opacity-30 enabled:hover:bg-emerald-100 text-emerald-700" title="newer run"><ChevronRight className="w-3.5 h-3.5" /></button>
+						</div>
+					)}
+					<button onClick={onClose} className="text-[11px] text-slate-400 hover:text-slate-700 ml-1">close</button>
+				</div>
 			</div>
-			<div className="text-[11px] text-slate-500">{info.role}</div>
-			<div className="text-xs text-slate-700 mt-1.5">{body}</div>
+
+			<div className="mt-2 min-h-[36px]">
+				{loading && !detail ? (
+					<div className="flex items-center gap-2 text-[11px] text-slate-400 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" />reading the run…</div>
+				) : !detail ? (
+					<div className="text-xs text-slate-400 italic py-1">No run recorded yet for this loop.</div>
+				) : (
+					<StageBody stage={stage} detail={detail} />
+				)}
+			</div>
+
 			<form onSubmit={ask} className="mt-2.5 flex items-center gap-2">
 				<input
 					value={q}
