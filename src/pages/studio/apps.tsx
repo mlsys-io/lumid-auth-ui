@@ -108,7 +108,11 @@ function AppsHome() {
 	useEffect(() => {
 		const f = () => setComposerOpen(true);
 		window.addEventListener("studio:composed", f);
-		return () => window.removeEventListener("studio:composed", f);
+		window.addEventListener("studio:new-workflow", f);
+		return () => {
+			window.removeEventListener("studio:composed", f);
+			window.removeEventListener("studio:new-workflow", f);
+		};
 	}, []);
 
 	const load = useCallback(async () => {
