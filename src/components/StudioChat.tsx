@@ -1610,6 +1610,14 @@ function MessageBubble({
 						{m.tools.map((t, i) => <ToolChip key={i} t={t} />)}
 					</div>
 				)}
+				{!isUser && m.content && !streaming && (
+					<div
+						className="mt-0.5 text-[10px] text-slate-400 tabular-nums"
+						title="estimated output tokens (~4 chars/token)"
+					>
+						{Math.max(1, Math.round(m.content.length / 4))} tokens
+					</div>
+				)}
 				{showActions && (
 					<div className={[
 						'mt-1 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity',
@@ -1669,16 +1677,17 @@ function MessageBubble({
 // ThinkingBlock — collapsible reasoning panel above the assistant's
 // reply. Auto-expanded while streaming so the user sees the model
 // Collapsed by default — the user clicks to peek at the reasoning. The
-// label updates live ("Thinking… 142 chars" → "Thought (412 chars)")
+// label updates live ("Thinking… 142 tokens" → "Thought (412 tokens)")
 // so they still see activity without the panel hijacking attention
-// from the streaming answer.
+// from the streaming answer. Token count is a ~4-chars/token estimate
+// (we don't get a usage count for the streamed thinking deltas).
 function ThinkingBlock({ thinking, done }: { thinking: string; done: boolean }) {
 	const [open, setOpen] = useState<boolean>(false);
-	const charCount = thinking.length;
+	const tokenCount = thinking.length ? Math.max(1, Math.round(thinking.length / 4)) : 0;
 	const label = done
-		? `Thought (${charCount} chars)`
-		: charCount > 0
-			? `Thinking… ${charCount} chars`
+		? `Thought (${tokenCount} tokens)`
+		: tokenCount > 0
+			? `Thinking… ${tokenCount} tokens`
 			: 'Thinking…';
 	return (
 		<div className="mb-1.5">
