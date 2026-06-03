@@ -68,9 +68,7 @@ export default function WorkflowInsights({ slug }: { slug: string }) {
 						{hasRuns ? pctShown : "—"}
 						{hasRuns && <span className="text-base text-slate-400 font-normal">%</span>}
 					</div>
-					<div className="text-[11px] tracking-wide text-slate-400 mt-1">
-						of runs produced a result{hasRuns ? ` · ${ok} of ${tm.run_count}` : ""}
-					</div>
+					<div className="text-[11px] tracking-wide text-slate-400 mt-1">of runs produced output</div>
 				</div>
 				<div className="text-right text-[11px] text-slate-500 leading-tight">
 					<div className="tabular-nums">{tm.run_count} runs this month</div>
