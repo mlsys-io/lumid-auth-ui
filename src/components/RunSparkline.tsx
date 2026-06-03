@@ -119,12 +119,14 @@ export function RunSparkline({ spec, className, runs, app, loop }: Props) {
 			onMouseLeave={scheduleClose}
 		>
 			{chars.map((c, i) => {
-				const isActive = active?.idx === i;
+				const isPinned = pinned?.idx === i;          // the run you're inspecting
+				const isHover = !isPinned && active?.idx === i; // transient preview
 				return (
 					<button
 						key={i}
 						type="button"
-						aria-label={`run ${i + 1}: ${STATE_LABEL[c] || c}`}
+						aria-label={`run ${i + 1}: ${STATE_LABEL[c] || c}${isPinned ? " (selected)" : ""}`}
+						aria-pressed={isPinned}
 						title={STATE_LABEL[c] || c}
 						onMouseEnter={(e) => { cancelClose(); setHover({ idx: i, rect: e.currentTarget.getBoundingClientRect() }); }}
 						onClick={(e) => {
@@ -133,8 +135,11 @@ export function RunSparkline({ spec, className, runs, app, loop }: Props) {
 							setPinned((p) => (p?.idx === i ? null : { idx: i, rect }));
 						}}
 						className={[
-							"w-1.5 h-3 rounded-sm transition-transform cursor-pointer hover:scale-150",
-							isActive ? "scale-150 ring-1 ring-slate-400 ring-offset-1" : "",
+							"rounded-sm transition-all cursor-pointer hover:scale-150",
+							// pinned = clearly selected: taller, emerald ring, lifted above neighbors
+							isPinned ? "w-2 h-4 scale-110 ring-2 ring-emerald-600 ring-offset-1 ring-offset-white relative z-10"
+								: isHover ? "w-1.5 h-3 scale-150 ring-1 ring-slate-400 ring-offset-1"
+								: "w-1.5 h-3",
 							changed && i === chars.length - 1 ? "spark-pop" : "",
 							SQ_CLASS[c] || "bg-slate-200",
 						].join(" ")}
