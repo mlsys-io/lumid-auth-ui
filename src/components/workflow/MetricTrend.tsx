@@ -135,13 +135,17 @@ function cycleDate(ts: string): string {
 // A width-measuring hook so the curve fills its column crisply (no distortion).
 function useWidth(): [React.RefObject<HTMLDivElement | null>, number] {
 	const ref = useRef<HTMLDivElement>(null);
-	const [w, setW] = useState(0);
+	// Default to a sane width so the curve ALWAYS renders on first paint; the
+	// ResizeObserver then snaps it to the real container width. (A 0 default
+	// hid the curve whenever the initial measure raced layout.)
+	const [w, setW] = useState(320);
 	useEffect(() => {
 		const el = ref.current;
 		if (!el) return;
-		const ro = new ResizeObserver(([e]) => setW(e.contentRect.width));
+		const apply = () => { const cw = el.clientWidth; if (cw > 0) setW(cw); };
+		const ro = new ResizeObserver(apply);
 		ro.observe(el);
-		setW(el.clientWidth);
+		apply();
 		return () => ro.disconnect();
 	}, []);
 	return [ref, w];
