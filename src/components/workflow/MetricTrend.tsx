@@ -38,17 +38,35 @@ export interface Trend {
 	points: Array<{ ts: string; v: number }>;
 	last: number;
 	first: number;
-	improved: boolean | null; // true=better, false=worse, null=flat
+	drift: number; // robust trend: last-third avg − first-third avg
+	improved: boolean | null; // true=better, false=worse, null=steady
 	variance: number;
 }
 
+// Direction from a NOISE-ROBUST measure: average of the last third minus the
+// first third (raw first→last flips on a noisy endpoint). "steady" only when
+// that drift is small relative to the metric's own range.
 function toTrend(s: MeMetricSeries): Trend {
 	const values = s.points.map((p) => p.v);
-	const first = values[0], last = values[values.length - 1];
-	const min = Math.min(...values), max = Math.max(...values);
-	const delta = last - first;
-	const improved = delta === 0 ? null : betterDown(s.label) ? delta < 0 : delta > 0;
-	return { label: s.label, values, points: s.points, first, last, improved, variance: max - min };
+	const n = values.length;
+	const first = values[0], last = values[n - 1];
+	const min = Math.min(...values), max = Math.max(...values), range = max - min;
+	const k = Math.max(1, Math.floor(n / 3));
+	const avg = (a: number[]) => a.reduce((x, y) => x + y, 0) / (a.length || 1);
+	const drift = avg(values.slice(n - k)) - avg(values.slice(0, k));
+	const flat = range === 0 || Math.abs(drift) < range * 0.12;
+	const improved = flat ? null : betterDown(s.label) ? drift < 0 : drift > 0;
+	return { label: s.label, values, points: s.points, first, last, drift, improved, variance: range };
+}
+
+// Trend amount as text: "+12%" / "−1.2s" / "steady".
+export function deltaLabel(t: Trend): string {
+	if (t.improved === null) return "steady";
+	return `${t.drift > 0 ? "+" : ""}${fmtMetric(t.label, t.drift)}`;
+}
+// Plain-English verb for an insight sentence.
+function trendVerb(t: Trend): string {
+	return t.improved === null ? "holding steady" : t.improved ? "improving" : "slipping";
 }
 
 // Order: tracked-metric priority first, then most-moving. Drop flat unless all flat.
@@ -89,7 +107,7 @@ function trendColor(t: Trend) { return t.improved === null ? COLOR.flat : t.impr
 export function MetricTrendCell({ t, n }: { t: Trend; n: number }) {
 	const Icon = t.improved === null ? Minus : t.improved ? TrendingUp : TrendingDown;
 	const col = trendColor(t);
-	const deltaTxt = t.improved === null ? "steady" : `${t.last - t.first > 0 ? "+" : ""}${fmtMetric(t.label, t.last - t.first)}`;
+	const deltaTxt = deltaLabel(t);
 	return (
 		<div className="min-w-0">
 			<div className="flex items-baseline gap-1.5">
@@ -199,7 +217,7 @@ export function EventCurve({ t, events, height = 60 }: { t: Trend; events: Recor
 function FeaturedMetric({ t, events, n }: { t: Trend; events: Record<string, string>; n: number }) {
 	const Icon = t.improved === null ? Minus : t.improved ? TrendingUp : TrendingDown;
 	const col = trendColor(t);
-	const deltaTxt = t.improved === null ? "steady" : `${t.last - t.first > 0 ? "+" : ""}${fmtMetric(t.label, t.last - t.first)}`;
+	const deltaTxt = deltaLabel(t);
 	return (
 		<div className="w-full">
 			<div className="flex items-baseline gap-2">
@@ -234,7 +252,7 @@ export function TrendRow({ series, events, tracked }: { series: MeMetricSeries[]
 // Dashboard app-card metrics: the top 2 moving metrics as compact curves with
 // the one-line insight to their RIGHT (saves vertical space). Tries the app's
 // loops and features whichever actually has a moving series; null if none do.
-export function CardMetrics({ app, loops }: { app: string; loops: string[] }) {
+export function CardMetrics({ app, loops, tracked }: { app: string; loops: string[]; tracked?: string[] }) {
 	const [best, setBest] = useState<MeMetricSeries[] | null>(null);
 	useEffect(() => {
 		let live = true;
@@ -246,30 +264,41 @@ export function CardMetrics({ app, loops }: { app: string; loops: string[] }) {
 				let pick: MeMetricSeries[] = [];
 				let score = -1;
 				for (const s of lists) {
-					const moving = pickTrends(s, undefined, 9).length;
+					const moving = pickTrends(s, tracked, 9).length;
 					if (moving > score) { score = moving; pick = s; }
 				}
 				setBest(pick);
 			});
 		return () => { live = false; };
-	}, [app, loops.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+	}, [app, loops.join(","), (tracked || []).join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	if (!best) return null;
-	const trends = pickTrends(best, undefined, 2);
+	const trends = pickTrends(best, tracked, 2);
 	if (!trends.length) return null;
 	const n = best.reduce((m, s) => Math.max(m, s.points.length), 0);
-	const imp = trends.filter((t) => t.improved === true).sort((a, b) => Math.abs(b.last - b.first) - Math.abs(a.last - a.first))[0];
-	const insight = imp ? `${imp.label} improving over ${n} runs` : `${trends[0].label} steady over ${n} runs`;
+	// Insight leads with the primary (tracked-ordered) metric and tells its trend.
+	const lead = trends[0];
+	const insight = `${lead.label} ${trendVerb(lead)} over ${n} runs`;
 	return (
-		<div className="pt-2 mt-1 border-t border-slate-100 flex items-center gap-4">
-			<div className="flex gap-5 flex-shrink-0">
+		<div className="pt-2 mt-1 border-t border-slate-100 flex items-center gap-3">
+			{/* column-aligned metric rows: label · curve · value · delta */}
+			<div className="flex-shrink-0 space-y-1">
 				{trends.map((t) => {
-					const cnt = best.find((s) => s.label === t.label)?.points.length ?? t.values.length;
-					return <MetricTrendCell key={t.label} t={t} n={cnt} />;
+					const col = trendColor(t);
+					const Icon = t.improved === null ? Minus : t.improved ? TrendingUp : TrendingDown;
+					return (
+						<div key={t.label} className="flex items-center gap-2">
+							<span className="text-[10px] text-slate-400 w-[84px] truncate flex-shrink-0 text-right">{t.label}</span>
+							<Sparkline values={t.values} color={col} w={52} h={15} />
+							<span className="text-[12px] font-semibold text-slate-800 tabular-nums w-11 text-right">{fmtMetric(t.label, t.last)}</span>
+							<span className="inline-flex items-center justify-end gap-0.5 text-[10px] w-[52px]" style={{ color: col }}><Icon className="w-3 h-3 flex-shrink-0" />{deltaLabel(t)}</span>
+						</div>
+					);
 				})}
 			</div>
-			<div className="text-[10px] text-emerald-700/80 flex items-center gap-1 min-w-0">
-				<Sparkles className="w-3 h-3 flex-shrink-0" /><span className="truncate">{insight}</span>
+			{/* insight, beside the block, vertically centered */}
+			<div className="text-[10px] text-emerald-700/80 flex items-center gap-1 min-w-0 border-l border-slate-100 pl-3 self-stretch">
+				<Sparkles className="w-3 h-3 flex-shrink-0" /><span className="line-clamp-3">{insight}</span>
 			</div>
 		</div>
 	);

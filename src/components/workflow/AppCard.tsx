@@ -146,7 +146,8 @@ export default function AppCard({
 				{(() => {
 					const appName = workflows.find((x) => x.app)?.app;
 					const loops = workflows.filter((x) => x.app).map((x) => loopOf(x));
-					return appName && loops.length ? <CardMetrics app={appName} loops={loops} /> : null;
+					const tracked = workflows.find((x) => x.goal?.tracked?.length)?.goal?.tracked;
+					return appName && loops.length ? <CardMetrics app={appName} loops={loops} tracked={tracked} /> : null;
 				})()}
 			</div>
 		</div>
