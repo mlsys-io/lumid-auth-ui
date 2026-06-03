@@ -418,6 +418,18 @@ export interface MeCycleDetail {
     observe_gate?: { evaluated: boolean; passed: boolean; reason: string };
     review_queue?: Array<{ step_id: string; kind: string; outbox_ref: string }>;
     offers?: Array<{ id?: string; kind: string; title: string; detail?: string }>;
+    // Substance the CycleCard mines for real insight (shapes vary by app;
+    // read defensively). decisions[] carries trade proposals/verdicts;
+    // metrics is a flat dict of run KPIs; improvement signals a self-mutation;
+    // auto_publish.memories[agent].pushed is the compounding count.
+    decisions?: Array<Record<string, unknown>>;
+    metrics?: Record<string, unknown>;
+    improvement?: { mutations_proposed?: boolean; mutates?: string[]; pr_url?: string | null; branch?: string };
+    auto_publish?: { memories?: Record<string, { pushed?: number }> };
+    step_errors?: unknown[];
+    steps_run?: number;
+    command_engine?: { case_file?: string; case_id?: string };
+    next?: string;
     [k: string]: unknown;
   };
   steps: MeCycleStep[];
