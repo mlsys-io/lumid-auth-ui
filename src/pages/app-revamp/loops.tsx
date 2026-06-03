@@ -441,6 +441,17 @@ export function Skeleton({ lines = 3 }: { lines?: number }) {
   );
 }
 
+// Friendly display overrides for specific loop ids — win over the raw
+// backend name (e.g. "benchmark" → "NL-to-SQL" in auto-sysresearch, which
+// is an NL-to-SQL config optimizer, not a generic benchmark).
+const LOOP_OVERRIDE: Record<string, string> = {
+  benchmark: "NL-to-SQL",
+};
+export function loopLabel(name?: string, fallbackLoop?: string): string {
+  if (name && LOOP_OVERRIDE[name]) return LOOP_OVERRIDE[name];
+  return name || humanizeLoop(fallbackLoop || "");
+}
+
 export function humanizeLoop(loop: string): string {
   const map: Record<string, string> = {
     morning_brief: "Morning brief",

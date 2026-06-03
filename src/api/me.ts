@@ -371,6 +371,9 @@ export interface MeWorkflowRow {
   // than the last completed journal entry). Drives the live "running"
   // indicator so long loops don't look frozen.
   running?: boolean;
+  // True when the last run succeeded only via a retry/fallback (self-healed).
+  // Dashboard shows an amber dot — flaky-but-recovering, not clean green.
+  last_run_recovered?: boolean;
 }
 
 export interface MeWorkflowDetail {

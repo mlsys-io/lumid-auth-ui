@@ -10,7 +10,7 @@ import { useNavigate } from "react-router-dom";
 import { Boxes, ArrowRight, CheckCircle2, AlertTriangle } from "lucide-react";
 import type { MeWorkflowRow } from "@/api/me";
 import RunSparkline from "@/components/RunSparkline";
-import { humanizeLoop } from "@/pages/app-revamp/loops";
+import { humanizeLoop, loopLabel } from "@/pages/app-revamp/loops";
 import { cn } from "@/lib/utils";
 
 export interface AppIdentity {
@@ -128,9 +128,9 @@ export default function AppCard({
 						type="button"
 						onClick={() => open(loopOf(w))}
 						className="flex items-center gap-2 w-full text-left rounded-md px-1.5 -mx-1.5 py-0.5 hover:bg-emerald-50/60 transition-colors"
-						title={`Open ${w.name || humanizeLoop(w.slug)}`}
+						title={`Open ${loopLabel(w.name, w.slug)}`}
 					>
-						<span className="text-[11px] text-slate-600 truncate flex-1">{w.name || humanizeLoop(w.slug)}</span>
+						<span className="text-[11px] text-slate-600 truncate flex-1">{loopLabel(w.name, w.slug)}</span>
 						<RunSparkline spec={w.run_spark || ""} />
 					</button>
 				))}

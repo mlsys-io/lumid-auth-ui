@@ -47,6 +47,8 @@ function health(wf: MeWorkflowRow, lh?: LoopHealth): { label: string; cls: strin
 	// keep counts and dots/health on the same single predicate.
 	if (wf.last_run_ok === false)
 		return { label: "Needs attention", cls: "text-rose-700 bg-rose-50 border-rose-200", dot: "bg-rose-500" };
+	if (wf.last_run_recovered)
+		return { label: "Recovered", cls: "text-amber-700 bg-amber-50 border-amber-200", dot: "bg-amber-500" };
 	if (wf.last_run_ok === true) return { label: "Healthy", cls: "text-emerald-700 bg-emerald-50 border-emerald-200", dot: "bg-emerald-500" };
 	return { label: "Idle", cls: "text-slate-500 bg-slate-50 border-slate-200", dot: "bg-slate-300" };
 }

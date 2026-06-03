@@ -19,7 +19,7 @@ import { me, type MeWorkflowRow } from "@/api/me";
 import apiClient from "@/api/client";
 import { setStudioSelection } from "@/components/StudioContext";
 import RunSparkline from "@/components/RunSparkline";
-import { Skeleton, humanizeLoop } from "@/pages/app-revamp/loops";
+import { Skeleton, humanizeLoop, loopLabel } from "@/pages/app-revamp/loops";
 import { QuickStarters } from "@/pages/studio/intents";
 import WorkflowComposer from "@/components/WorkflowComposer";
 import AppCard, { appTitle, type AppIdentity } from "@/components/workflow/AppCard";
@@ -383,6 +383,7 @@ function AppOverview({ app, embedded, initialLoop }: { app: string; embedded?: b
 							// Running takes visual precedence (live cycle now), then the
 							// last-completed state. Keeps dots/counts on one predicate.
 							const dot = wf.running ? "bg-sky-500 running-pulse"
+								: wf.last_run_recovered ? "bg-amber-500"
 								: wf.last_run_ok === true ? "bg-emerald-500"
 								: wf.last_run_ok === false ? "bg-rose-500"
 								: "bg-slate-300";
@@ -400,7 +401,7 @@ function AppOverview({ app, embedded, initialLoop }: { app: string; embedded?: b
 										<span className={cn("w-2 h-2 rounded-full flex-shrink-0", dot)} />
 										<div className="min-w-0 flex-1">
 											<div className="text-sm font-medium text-slate-800 truncate flex items-center gap-1.5">
-												{wf.name || humanizeLoop(loop)}
+												{loopLabel(wf.name, loop)}
 												{wf.running && <span className="text-[10px] font-medium text-sky-600 inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-sky-500 running-pulse" />running…</span>}
 											</div>
 											{wf.enabled === false && <div className="text-[11px] text-slate-400">paused</div>}

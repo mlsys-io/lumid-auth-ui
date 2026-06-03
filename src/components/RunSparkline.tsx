@@ -16,6 +16,7 @@ interface Props {
 
 const SQ_CLASS: Record<string, string> = {
 	o: "bg-emerald-400",
+	r: "bg-amber-400",   // recovered: succeeded only via retry/fallback (self-healed)
 	x: "bg-rose-500",
 	_: "bg-slate-300",
 	".": "bg-amber-400 animate-pulse",
@@ -23,6 +24,7 @@ const SQ_CLASS: Record<string, string> = {
 
 const STATE_LABEL: Record<string, string> = {
 	o: "succeeded",
+	r: "recovered (self-healed via retry)",
 	x: "failed",
 	_: "skipped",
 	".": "running",
