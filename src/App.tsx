@@ -58,7 +58,6 @@ const StudioIntentDetail = lazy(() => import("./pages/studio/intent-detail"));
 const StudioSettings   = lazy(() => import("./pages/studio/settings"));
 const StudioAdmin      = lazy(() => import("./pages/studio/admin"));
 // Phase S3-B — cycle inspector.
-const StudioInspector  = lazy(() => import("./pages/studio/inspector"));
 // "How Lumid works" — walkable 3-stage loop (Assemble → Adapt → Compound)
 // illustrated against the demo intents. Stages 1-2 concrete, 3 open.
 const StudioHow        = lazy(() => import("./pages/studio/how"));
@@ -285,6 +284,14 @@ function AppAdminRedirect() {
   return <Navigate to={dest} replace />;
 }
 
+// The standalone cycle inspector merged into the app-overview panel
+// (per-stage content + cycle stepper). Old /studio/(intents|today)/cycle/...
+// deep links land on the app's panel with that loop open.
+function CycleRedirect() {
+  const { app = "", loop = "" } = useParams();
+  return <Navigate to={`/studio/apps/${encodeURIComponent(app)}?selected=${encodeURIComponent(loop)}`} replace />;
+}
+
 function Spinner() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
@@ -398,9 +405,10 @@ export default function App() {
                 there; their cycle-inspector + intent-detail sub-routes stay. */}
             <Route path="intents"                       element={<Navigate to="/studio/apps" replace />} />
             <Route path="today"                         element={<Navigate to="/studio/apps" replace />} />
-            {/* Phase S3-B — cycle inspector accessed from Intents rows. */}
-            <Route path="intents/cycle/:app/:loop/:ts"  element={<StudioInspector />} />
-            <Route path="today/cycle/:app/:loop/:ts"    element={<StudioInspector />} />
+            {/* Cycle inspector merged into the app-overview panel (per-stage
+                content + cycle stepper). Old deep links redirect there. */}
+            <Route path="intents/cycle/:app/:loop/:ts"  element={<CycleRedirect />} />
+            <Route path="today/cycle/:app/:loop/:ts"    element={<CycleRedirect />} />
             {/* T13 — per-intent detail panel; dispatched by intent.body.kind. */}
             <Route path="intents/:intentId"             element={<StudioIntentDetail />} />
             <Route path="inbox"                        element={<StudioInbox />} />

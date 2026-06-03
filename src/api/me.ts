@@ -406,6 +406,9 @@ export interface MeWorkflowRow {
   goal?: { primary: string; tracked?: string[] };
   // Dataset ids/refs the loop runs against (xpcloud.yaml loops[].datasets).
   datasets?: string[];
+  // The app's knowledge agents (top-level memory_agents + roles[].memory_agent).
+  // Powers the learning-history timeline. App-level, repeated on each loop row.
+  memory_agents?: string[];
 }
 
 // Dataset explorer shapes (GET /me/apps/:app/datasets + /dataset-file).
@@ -455,6 +458,10 @@ export interface MeCycleDetail {
     [k: string]: unknown;
   };
   steps: MeCycleStep[];
+  // Sidecar artifacts written as standalone files (observations, proposal,
+  // result, patterns, …) — the real per-stage content for apps that don't
+  // inline everything into cycle.json. Keyed by filename (no extension).
+  files?: Record<string, unknown>;
 }
 
 export interface MeWorkflowDetail {

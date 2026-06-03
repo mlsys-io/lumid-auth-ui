@@ -24,6 +24,8 @@ import { QuickStarters } from "@/pages/studio/intents";
 import WorkflowComposer from "@/components/WorkflowComposer";
 import AppCard, { appTitle, type AppIdentity } from "@/components/workflow/AppCard";
 import WorkflowObservabilityPanel, { type LoopHealth } from "@/components/workflow/WorkflowObservabilityPanel";
+import LearningTimeline from "@/components/workflow/LearningTimeline";
+import DatasetExplorer from "@/components/workflow/DatasetExplorer";
 import LoopOrbit, { type LoopMode, type LoopStageKey } from "@/components/workflow/LoopOrbit";
 import { RUNNING_APPS } from "@/lib/demo";
 import { useCountUp } from "@/lib/use-count-up";
@@ -422,6 +424,19 @@ function AppOverview({ app, embedded, initialLoop }: { app: string; embedded?: b
 						})}
 					</ul>
 				</div>
+			)}
+
+			{rows && rows.length > 0 && (
+				<>
+					<div className="space-y-2.5">
+						<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-400 uppercase">What it&apos;s learned</div>
+						<LearningTimeline agents={rows[0].wf.memory_agents || []} />
+					</div>
+					<div className="space-y-2.5">
+						<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-400 uppercase">Data it works on</div>
+						<DatasetExplorer app={app} />
+					</div>
+				</>
 			)}
 		</div>
 	);
