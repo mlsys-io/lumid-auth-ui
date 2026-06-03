@@ -69,9 +69,10 @@ export default function AppCard({
 	const total = workflows.length;
 	const healthy = workflows.filter((w) => w.last_run_ok === true).length;
 	const failing = workflows.filter((w) => w.last_run_ok === false).length;
+	const running = workflows.filter((w) => w.running).length;
 	const lastActivity = workflows.reduce((m, w) => Math.max(m, w.last_run_ts || 0), 0);
 
-	const railTone = failing > 0 ? "bg-rose-400" : healthy > 0 ? "bg-emerald-400" : "bg-slate-300";
+	const railTone = running > 0 ? "bg-sky-400" : failing > 0 ? "bg-rose-400" : healthy > 0 ? "bg-emerald-400" : "bg-slate-300";
 
 	const cls = "group relative block w-full text-left rounded-xl border border-slate-200/80 bg-white overflow-hidden hover:shadow-md hover:shadow-slate-200/60 hover:border-slate-300 transition-all hover:-translate-y-0.5 animate-in fade-in slide-in-from-bottom-2 duration-500";
 	const style = { animationDelay: `${index * 70}ms`, animationFillMode: "both" as const };
@@ -90,9 +91,13 @@ export default function AppCard({
 					<div className="min-w-0 flex-1">
 						<div className="flex items-center gap-2">
 							<h3 className="text-[13px] font-semibold text-slate-900 truncate">{TITLE[app] || app}</h3>
-							{healthy > 0 && failing === 0 && (
-								<span className="w-1.5 h-1.5 rounded-full bg-emerald-500 heartbeat flex-shrink-0" title="active — loops running" />
-							)}
+							{running > 0 ? (
+								<span className="inline-flex items-center gap-1 flex-shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-sky-50 text-sky-700 border border-sky-200" title="a cycle is running now">
+									<span className="w-1.5 h-1.5 rounded-full bg-sky-500 running-pulse" />running
+								</span>
+							) : healthy > 0 && failing === 0 ? (
+								<span className="w-1.5 h-1.5 rounded-full bg-emerald-500 heartbeat flex-shrink-0" title="active — loops healthy" />
+							) : null}
 							{identity?.published && (
 								<span className="text-[9px] uppercase tracking-wide rounded-full px-1.5 py-px border border-emerald-200 bg-emerald-50 text-emerald-700">published</span>
 							)}

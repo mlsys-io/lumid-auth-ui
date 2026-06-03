@@ -367,6 +367,10 @@ export interface MeWorkflowRow {
   // Month-to-date server-funded cost in cents. 0/undefined when the
   // workflow has logged no usage_events this month.
   cost_cents_mtd?: number;
+  // True when a cycle is in-progress right now (newest cycle dir newer
+  // than the last completed journal entry). Drives the live "running"
+  // indicator so long loops don't look frozen.
+  running?: boolean;
 }
 
 export interface MeWorkflowDetail {

@@ -155,7 +155,7 @@ function AppsHome() {
 
 			// Loop-event detection → drives the orbit banner. Running if any
 			// cycle is mid-flight; a newer cycle ts than last poll = an event.
-			const anyRunning = wfs.some((w) => (w.run_spark || "").endsWith("."));
+			const anyRunning = wfs.some((w) => w.running || (w.run_spark || "").endsWith("."));
 			setLoopMode(anyRunning ? "running" : wfs.some((w) => w.enabled !== false) ? "idle" : "paused");
 			let maxCycleTs = "";
 			let freshCycle: TodayCycle | null = null;
@@ -380,7 +380,10 @@ function AppOverview({ app, embedded, initialLoop }: { app: string; embedded?: b
 							// fresh journal truth). consecutive_failures (scheduler-state)
 							// can lag behind a recovered run, so it must NOT drive red — that
 							// was the "3 dots vs 1 count" mismatch.
-							const dot = wf.last_run_ok === true ? "bg-emerald-500"
+							// Running takes visual precedence (live cycle now), then the
+							// last-completed state. Keeps dots/counts on one predicate.
+							const dot = wf.running ? "bg-sky-500 running-pulse"
+								: wf.last_run_ok === true ? "bg-emerald-500"
 								: wf.last_run_ok === false ? "bg-rose-500"
 								: "bg-slate-300";
 							return (
@@ -396,7 +399,10 @@ function AppOverview({ app, embedded, initialLoop }: { app: string; embedded?: b
 										{open ? <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />}
 										<span className={cn("w-2 h-2 rounded-full flex-shrink-0", dot)} />
 										<div className="min-w-0 flex-1">
-											<div className="text-sm font-medium text-slate-800 truncate">{wf.name || humanizeLoop(loop)}</div>
+											<div className="text-sm font-medium text-slate-800 truncate flex items-center gap-1.5">
+												{wf.name || humanizeLoop(loop)}
+												{wf.running && <span className="text-[10px] font-medium text-sky-600 inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-sky-500 running-pulse" />running…</span>}
+											</div>
 											{wf.enabled === false && <div className="text-[11px] text-slate-400">paused</div>}
 										</div>
 										<RunSparkline spec={wf.run_spark || ""} className="hidden sm:flex" />
