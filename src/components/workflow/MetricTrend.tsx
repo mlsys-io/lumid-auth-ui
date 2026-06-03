@@ -8,7 +8,7 @@
 // to show. Used on the app card (compact, top metric) and the loop panel (row).
 
 import { useEffect, useState } from "react";
-import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, Sparkles } from "lucide-react";
 import { me, type MeMetricSeries } from "@/api/me";
 
 const lower = (s: string) => s.toLowerCase();
@@ -108,6 +108,36 @@ export function TrendRow({ series, tracked }: { series: MeMetricSeries[]; tracke
 				const n = series.find((s) => s.label === t.label)?.points.length ?? t.values.length;
 				return <MetricTrendCell key={t.label} t={t} n={n} />;
 			})}
+		</div>
+	);
+}
+
+// Dashboard app-card metrics: the top 2 moving metrics as compact curves +
+// a one-line plain-English insight. Renders null when the loop has no series.
+export function CardMetrics({ app, loop }: { app: string; loop: string }) {
+	const [series, setSeries] = useState<MeMetricSeries[] | null>(null);
+	useEffect(() => {
+		let live = true;
+		me.loopMetricSeries(app, loop)
+			.then((r) => { if (live) setSeries(r.series || []); })
+			.catch(() => { if (live) setSeries([]); });
+		return () => { live = false; };
+	}, [app, loop]);
+	if (!series) return null;
+	const trends = pickTrends(series, undefined, 2);
+	if (!trends.length) return null;
+	const n = series.reduce((m, s) => Math.max(m, s.points.length), 0);
+	const imp = trends.filter((t) => t.improved === true).sort((a, b) => Math.abs(b.last - b.first) - Math.abs(a.last - a.first))[0];
+	const insight = imp ? `${imp.label} improving over ${n} runs` : `${trends[0].label} steady over ${n} runs`;
+	return (
+		<div className="pt-2 mt-1 border-t border-slate-100">
+			<div className="flex gap-5">
+				{trends.map((t) => {
+					const cnt = series.find((s) => s.label === t.label)?.points.length ?? t.values.length;
+					return <MetricTrendCell key={t.label} t={t} n={cnt} />;
+				})}
+			</div>
+			<div className="text-[10px] text-emerald-700/80 mt-1.5 flex items-center gap-1"><Sparkles className="w-3 h-3" />{insight}</div>
 		</div>
 	);
 }

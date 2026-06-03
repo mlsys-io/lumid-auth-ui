@@ -10,7 +10,7 @@ import { useNavigate } from "react-router-dom";
 import { Boxes, ArrowRight, CheckCircle2, AlertTriangle } from "lucide-react";
 import type { MeWorkflowRow } from "@/api/me";
 import RunSparkline from "@/components/RunSparkline";
-import { CardMetricTrend } from "@/components/workflow/MetricTrend";
+import { CardMetrics } from "@/components/workflow/MetricTrend";
 import { humanizeLoop, loopLabel } from "@/pages/app-revamp/loops";
 import { cn } from "@/lib/utils";
 
@@ -141,12 +141,12 @@ export default function AppCard({
 					</div>
 				))}
 				{total > 3 && <div className="text-[10px] text-slate-400 pt-0.5 pl-1.5">+{total - 3} more</div>}
-				{/* How the app's key metric(s) are trending over iterations — the
-				    "it's getting better" signal, surfaced on the card. Each renders
-				    null when its loop has no moving metric. */}
-				{workflows.slice(0, 2).map((w) => (
-					w.app ? <CardMetricTrend key={`t-${w.slug}`} app={w.app} loop={loopOf(w)} /> : null
-				))}
+				{/* How the app's key metrics are trending over iterations — curves +
+				    a one-line insight. Renders null when no loop has a moving metric. */}
+				{(() => {
+					const w = workflows.find((x) => x.app);
+					return w ? <CardMetrics app={w.app!} loop={loopOf(w)} /> : null;
+				})()}
 			</div>
 		</div>
 	);

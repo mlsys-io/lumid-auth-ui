@@ -34,55 +34,58 @@ function rel(ts?: string): string {
 }
 
 export default function LearningTimeline({ agents }: { agents: string[] }) {
-	const [items, setItems] = useState<Memory[] | null>(null);
-	const [total, setTotal] = useState(0);
+	const [data, setData] = useState<{ total: number; kinds: [string, number][]; recent: Memory[] } | null>(null);
 
 	useEffect(() => {
 		let live = true;
-		if (!agents.length) { setItems([]); return; }
+		if (!agents.length) { setData({ total: 0, kinds: [], recent: [] }); return; }
 		Promise.all(
 			agents.map((id) =>
 				apiClient
-					.get(`/api/v1/me/knowledge/agents/${encodeURIComponent(id)}/memories?limit=25`)
+					.get(`/api/v1/me/knowledge/agents/${encodeURIComponent(id)}/memories?limit=40`)
 					.then((r) => ((r.data?.data?.memories ?? []) as Memory[]).map((m) => ({ ...m, agent: id })))
 					.catch(() => [] as Memory[]),
 			),
 		).then((lists) => {
 			if (!live) return;
 			const all = lists.flat();
-			setTotal(all.length);
 			all.sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
-			setItems(all.slice(0, 12));
+			const counts: Record<string, number> = {};
+			for (const m of all) counts[(m.kind || "memory").toLowerCase()] = (counts[(m.kind || "memory").toLowerCase()] || 0) + 1;
+			const kinds = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+			setData({ total: all.length, kinds, recent: all.slice(0, 3) });
 		});
 		return () => { live = false; };
 	}, [agents.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
 
-	if (items === null) return <div className="h-16 rounded-lg bg-slate-100 animate-pulse" />;
-	if (!agents.length) return <div className="text-xs text-slate-400 italic">This app has no knowledge agents configured.</div>;
-	if (items.length === 0) return <div className="text-xs text-slate-400 italic">Nothing banked yet — learnings appear here as the loops run and reflect.</div>;
+	if (data === null) return <div className="h-12 rounded-lg bg-slate-100 animate-pulse" />;
+	if (!agents.length) return <div className="text-xs text-slate-400 italic">No knowledge agents configured for this app.</div>;
+	if (data.total === 0) return <div className="text-xs text-slate-400 italic">Nothing banked yet — learnings appear as the loops run and reflect.</div>;
 
 	return (
-		<div className="space-y-2.5">
-			<div className="text-[11px] text-slate-400">
-				{total}+ learnings across {agents.length} agent{agents.length === 1 ? "" : "s"} ({agents.join(", ")})
+		<div className="space-y-2">
+			{/* Succinct: total + a breakdown by kind, not a wall of entries. */}
+			<div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+				<span className="text-[13px] font-semibold text-slate-800 tabular-nums">{data.total}</span>
+				<span className="text-[11px] text-slate-400">learnings ·</span>
+				{data.kinds.map(([k, n]) => (
+					<span key={k} className={`text-[10px] rounded-full px-1.5 py-px border ${KIND_CLS[k] || "bg-slate-50 text-slate-600 border-slate-200"}`}>
+						{k.replace(/_/g, " ")} <span className="tabular-nums font-semibold">{n}</span>
+					</span>
+				))}
 			</div>
-			<ol className="relative border-l border-slate-200 ml-1.5 space-y-2.5">
-				{items.map((m, i) => (
-					<li key={m.id || i} className="ml-3.5 relative">
-						<span className="absolute -left-[1.18rem] top-1 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-white" />
-						<div className="flex items-center gap-1.5 flex-wrap">
-							{m.kind && (
-								<span className={`text-[9px] uppercase tracking-wide rounded-full px-1.5 py-px border ${KIND_CLS[m.kind.toLowerCase()] || "bg-slate-50 text-slate-600 border-slate-200"}`}>{m.kind}</span>
-							)}
-							<span className="text-[10px] text-slate-400">{m.agent}</span>
-							<span className="text-[10px] text-slate-300 ml-auto">{rel(m.created_at)}</span>
-						</div>
-						<div className="text-[12px] text-slate-700 leading-snug mt-0.5">{m.content}</div>
+			{/* The few freshest, one line each. */}
+			<ul className="space-y-1">
+				{data.recent.map((m, i) => (
+					<li key={m.id || i} className="flex items-start gap-1.5 text-[11px]">
+						<span className={`mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0 ${(m.kind || "").match(/correction|anti/) ? "bg-amber-400" : "bg-emerald-400"}`} />
+						<span className="text-slate-600 truncate" title={m.content}>{m.content}</span>
+						<span className="text-[10px] text-slate-300 ml-auto flex-shrink-0">{rel(m.created_at)}</span>
 					</li>
 				))}
-			</ol>
+			</ul>
 			<Link to="/studio/knowledge" className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-emerald-700 transition-colors">
-				<Brain className="w-3 h-3" /> Explore the full knowledge graph <ArrowRight className="w-3 h-3" />
+				<Brain className="w-3 h-3" /> Explore all <ArrowRight className="w-3 h-3" />
 			</Link>
 		</div>
 	);
