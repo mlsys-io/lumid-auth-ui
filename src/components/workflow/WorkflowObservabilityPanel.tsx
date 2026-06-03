@@ -221,8 +221,16 @@ export default function WorkflowObservabilityPanel({
 			{/* What this loop is chasing + how its metrics move over runs. Shown
 			    whenever there's a goal OR a trajectory — the curve must not depend
 			    on the goal manifest field being present. */}
-			{(wf.goal?.primary || metricSeries.length > 0) && (
+			{(wf.goal?.primary || metricSeries.length > 0) ? (
 				<GoalHeader goal={wf.goal} kpis={buildGoalKpis(summary, cycleFiles)} series={metricSeries} events={metricEvents} />
+			) : (
+				// Honest empty-state: qualitative loops (briefs/triage) emit no
+				// numeric metric, so there's no trajectory to chart — say so
+				// rather than leave a blank that reads as "missing curve".
+				<div className="rounded-xl border border-slate-200/70 bg-slate-50/50 p-3 text-[11px] text-slate-500 flex items-start gap-2">
+					<Target className="w-4 h-4 text-slate-300 mt-px flex-shrink-0" />
+					<span>This loop's work is qualitative — no numeric metric to chart yet. Its cadence and run health are in <span className="font-medium text-slate-600">Status</span>; what each run did is in the stages above.</span>
+				</div>
 			)}
 			{/* The loop, as the centerpiece — turning while a cycle runs,
 			    rippling the stage when an event (new cycle) fires. */}
