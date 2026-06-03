@@ -288,8 +288,9 @@ function AppAdminRedirect() {
 // (per-stage content + cycle stepper). Old /studio/(intents|today)/cycle/...
 // deep links land on the app's panel with that loop open.
 function CycleRedirect() {
-  const { app = "", loop = "" } = useParams();
-  return <Navigate to={`/studio/apps/${encodeURIComponent(app)}?selected=${encodeURIComponent(loop)}`} replace />;
+  const { app = "", loop = "", ts = "" } = useParams();
+  const cyc = ts ? `&cycle=${encodeURIComponent(ts)}` : "";
+  return <Navigate to={`/studio/apps/${encodeURIComponent(app)}?selected=${encodeURIComponent(loop)}${cyc}`} replace />;
 }
 
 function Spinner() {

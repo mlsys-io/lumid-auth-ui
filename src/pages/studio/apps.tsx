@@ -310,6 +310,7 @@ function AppOverview({ app, embedded, initialLoop }: { app: string; embedded?: b
 	const [identity, setIdentity] = useState<AppIdentity | undefined>(() => identCache.get(app));
 	const [params, setParams] = useSearchParams();
 	const selected = params.get("selected");
+	const initialCycle = params.get("cycle"); // deep-link anchor → open that run
 
 	const load = useCallback(async () => {
 		const [lhR, wfR] = await Promise.allSettled([me.loopsHealth(), me.listWorkflows()]);
@@ -417,7 +418,7 @@ function AppOverview({ app, embedded, initialLoop }: { app: string; embedded?: b
 										<RunSparkline spec={wf.run_spark || ""} className="hidden sm:flex" />
 									</button>
 									{open && (
-										<WorkflowObservabilityPanel app={app} loop={loop} wf={wf} loopHealth={lh} onChanged={load} />
+										<WorkflowObservabilityPanel app={app} loop={loop} wf={wf} loopHealth={lh} onChanged={load} initialCycle={open ? initialCycle : null} />
 									)}
 								</li>
 							);
