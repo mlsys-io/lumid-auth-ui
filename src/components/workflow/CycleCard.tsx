@@ -20,6 +20,13 @@ import {
 import { me, type MeCycleDetail } from "@/api/me";
 import { loopLabel } from "@/pages/app-revamp/loops";
 
+// Process-wide cache of fetched cycle details, keyed by app:loop:ts. A cycle
+// is immutable once written, so this never goes stale — re-hovering or
+// re-pinning a dot is instant and fires no request.
+const CYCLE_CACHE = new Map<string, MeCycleDetail>();
+// In-flight de-dupe so two cards racing the same ts share one request.
+const CYCLE_INFLIGHT = new Map<string, Promise<MeCycleDetail>>();
+
 const OUTCOME: Record<string, { label: string; icon: typeof CheckCircle2; cls: string }> = {
 	ran:             { label: "Ran",             icon: CheckCircle2, cls: "border-emerald-200 bg-emerald-50 text-emerald-700" },
 	no_change:       { label: "No change",       icon: MinusCircle,  cls: "border-slate-200 bg-slate-50 text-slate-600" },
@@ -66,18 +73,33 @@ export default function CycleCard({
 	onOpenFull?: () => void;
 }) {
 	const navigate = useNavigate();
-	const [d, setD] = useState<MeCycleDetail | null>(null);
+	const key = `${app}:${loop}:${ts}`;
+	// Seed synchronously from cache so a re-visited dot renders instantly.
+	const [d, setD] = useState<MeCycleDetail | null>(() => CYCLE_CACHE.get(key) || null);
 	const [err, setErr] = useState<string | null>(null);
 
 	useEffect(() => {
 		let live = true;
+		const cached = CYCLE_CACHE.get(key);
+		if (cached) { setD(cached); setErr(null); return; }
 		setD(null); setErr(null);
 		if (!ts) { setErr("No cycle record for this run."); return; }
-		me.cycleDetail(app, loop, ts)
-			.then((r) => { if (live) setD(r); })
-			.catch((e) => { if (live) setErr(e?.message || "Couldn't load this cycle."); });
-		return () => { live = false; };
-	}, [app, loop, ts]);
+		// Debounce: only fetch if the dot stays active ~250ms. Scrubbing
+		// across dots mounts/unmounts each card faster than that, so the
+		// timer is cleared on unmount and no request goes out — only a
+		// lingered-on dot actually fetches. Re-uses any in-flight request.
+		const timer = window.setTimeout(() => {
+			let p = CYCLE_INFLIGHT.get(key);
+			if (!p) {
+				p = me.cycleDetail(app, loop, ts).then((r) => { CYCLE_CACHE.set(key, r); return r; });
+				CYCLE_INFLIGHT.set(key, p);
+				p.finally(() => CYCLE_INFLIGHT.delete(key));
+			}
+			p.then((r) => { if (live) setD(r); })
+			 .catch((e) => { if (live) setErr(e?.message || "Couldn't load this cycle."); });
+		}, 250);
+		return () => { live = false; window.clearTimeout(timer); };
+	}, [app, loop, ts, key]);
 
 	const oc = (d?.summary?.outcome && OUTCOME[d.summary.outcome]) || OUTCOME.ran;
 	const OcIcon = oc.icon;
