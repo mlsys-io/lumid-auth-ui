@@ -13,7 +13,7 @@
 // the panel).
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ChevronDown, ChevronRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle } from "lucide-react";
 import { me, type MeWorkflowRow } from "@/api/me";
 import apiClient from "@/api/client";
@@ -84,8 +84,7 @@ function AppsHome() {
 	const [byApp, setByApp] = useState<Map<string, MeWorkflowRow[]> | null>(null);
 	const [identity, setIdentity] = useState<Map<string, AppIdentity>>(new Map());
 	const [hero, setHero] = useState<Hero | null>(null);
-	const [selectedApp, setSelectedApp] = useState<string | null>(null);
-	const [selectedLoop, setSelectedLoop] = useState<string | null>(null);
+	const navigate = useNavigate();
 	const appsRef = useRef<HTMLDivElement>(null);
 	// Aggregate loop state for the big LoopOrbit banner on the intent page.
 	const [loopMode, setLoopMode] = useState<LoopMode>("idle");
@@ -216,18 +215,6 @@ function AppsHome() {
 					</div>
 					<QuickStarters heading="Start with a starter" />
 				</div>
-			) : selectedApp ? (
-				// A selected app takes the whole content area (slides in from
-				// the right); the stat bar + grid + "Start a new intent" yield.
-				<div key={selectedApp} className="space-y-4 panel-in-right overflow-x-hidden">
-					<button
-						onClick={() => { setSelectedApp(null); setSelectedLoop(null); }}
-						className="inline-flex items-center text-sm text-slate-500 hover:text-slate-900 gap-1"
-					>
-						<ChevronRight className="w-4 h-4 rotate-180" /> All apps
-					</button>
-					<AppOverview app={selectedApp} embedded initialLoop={selectedLoop} />
-				</div>
 			) : (
 				<div className="space-y-5 panel-in-left">
 					{/* Numbers consolidated to a compact top bar. */}
@@ -240,8 +227,9 @@ function AppsHome() {
 								<AppCard
 									key={a} app={a} workflows={byApp.get(a)!} identity={identity.get(a)} index={i}
 									onOpen={(ap, loop) => {
-										setSelectedApp(ap); setSelectedLoop(loop ?? null);
-										window.scrollTo({ top: 0, behavior: "smooth" });
+										// URL-driven so the "My Apps" nav (→ /studio/apps) returns
+										// to this grid; internal state wouldn't reset on a same-path nav.
+										navigate(`/studio/apps/${encodeURIComponent(ap)}${loop ? `?selected=${encodeURIComponent(loop)}` : ""}`);
 									}}
 								/>
 							))}

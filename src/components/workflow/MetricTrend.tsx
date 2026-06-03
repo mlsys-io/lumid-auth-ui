@@ -231,32 +231,46 @@ export function TrendRow({ series, events, tracked }: { series: MeMetricSeries[]
 	);
 }
 
-// Dashboard app-card metrics: the top 2 moving metrics as compact curves +
-// a one-line plain-English insight. Renders null when the loop has no series.
-export function CardMetrics({ app, loop }: { app: string; loop: string }) {
-	const [series, setSeries] = useState<MeMetricSeries[] | null>(null);
+// Dashboard app-card metrics: the top 2 moving metrics as compact curves with
+// the one-line insight to their RIGHT (saves vertical space). Tries the app's
+// loops and features whichever actually has a moving series; null if none do.
+export function CardMetrics({ app, loops }: { app: string; loops: string[] }) {
+	const [best, setBest] = useState<MeMetricSeries[] | null>(null);
 	useEffect(() => {
 		let live = true;
-		me.loopMetricSeries(app, loop)
-			.then((r) => { if (live) setSeries(r.series || []); })
-			.catch(() => { if (live) setSeries([]); });
+		const cands = loops.slice(0, 2);
+		if (!cands.length) { setBest([]); return; }
+		Promise.all(cands.map((lp) => me.loopMetricSeries(app, lp).then((r) => r.series || []).catch(() => [] as MeMetricSeries[])))
+			.then((lists) => {
+				if (!live) return;
+				let pick: MeMetricSeries[] = [];
+				let score = -1;
+				for (const s of lists) {
+					const moving = pickTrends(s, undefined, 9).length;
+					if (moving > score) { score = moving; pick = s; }
+				}
+				setBest(pick);
+			});
 		return () => { live = false; };
-	}, [app, loop]);
-	if (!series) return null;
-	const trends = pickTrends(series, undefined, 2);
+	}, [app, loops.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+
+	if (!best) return null;
+	const trends = pickTrends(best, undefined, 2);
 	if (!trends.length) return null;
-	const n = series.reduce((m, s) => Math.max(m, s.points.length), 0);
+	const n = best.reduce((m, s) => Math.max(m, s.points.length), 0);
 	const imp = trends.filter((t) => t.improved === true).sort((a, b) => Math.abs(b.last - b.first) - Math.abs(a.last - a.first))[0];
 	const insight = imp ? `${imp.label} improving over ${n} runs` : `${trends[0].label} steady over ${n} runs`;
 	return (
-		<div className="pt-2 mt-1 border-t border-slate-100">
-			<div className="flex gap-5">
+		<div className="pt-2 mt-1 border-t border-slate-100 flex items-center gap-4">
+			<div className="flex gap-5 flex-shrink-0">
 				{trends.map((t) => {
-					const cnt = series.find((s) => s.label === t.label)?.points.length ?? t.values.length;
+					const cnt = best.find((s) => s.label === t.label)?.points.length ?? t.values.length;
 					return <MetricTrendCell key={t.label} t={t} n={cnt} />;
 				})}
 			</div>
-			<div className="text-[10px] text-emerald-700/80 mt-1.5 flex items-center gap-1"><Sparkles className="w-3 h-3" />{insight}</div>
+			<div className="text-[10px] text-emerald-700/80 flex items-center gap-1 min-w-0">
+				<Sparkles className="w-3 h-3 flex-shrink-0" /><span className="truncate">{insight}</span>
+			</div>
 		</div>
 	);
 }
