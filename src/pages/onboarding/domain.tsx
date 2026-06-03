@@ -42,8 +42,8 @@ const DOMAINS: DomainCard[] = [
   {
     id: "research",
     icon: FlaskConical,
-    title: "Research",
-    blurb: "Active-learning loop over consulting cases. Sharpens with each cycle.",
+    title: "Consulting & research",
+    blurb: "Active-learning over consulting cases or systems-config research. Sharpens with each cycle.",
     appSlug: "mbb-ai",
     firstLoop: { app: "mbb-ai", loop: "case_cycle" },
   },
@@ -89,7 +89,10 @@ export default function OnboardingDomain() {
       <div className="max-w-3xl mx-auto">
         <div className="text-center mb-10">
           <h1 className="text-2xl font-semibold tracking-tight">What do you want Lumid to do for you?</h1>
-          <p className="text-slate-600 mt-2">Pick a starting point. You can install more later.</p>
+          <p className="text-slate-600 mt-2">
+            Pick a starting point — personal, consulting, or systems research. Or
+            assemble your own creation in your words. You can add more later.
+          </p>
         </div>
 
         {error && (
@@ -151,7 +154,7 @@ export default function OnboardingDomain() {
           >
             tell me what you want done in your own words
           </a>{" "}
-          — I'll set it up via chat. Or <a href="/app" className="text-slate-600 hover:underline">skip and browse the marketplace</a>.
+          — I'll set it up via chat. Or <a href="https://xp.io" target="_blank" rel="noreferrer" className="text-slate-600 hover:underline">skip and browse the marketplace</a>.
         </p>
       </div>
     </div>
