@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { AuthGuard, defaultLandingPath } from "./components/auth-guard";
@@ -26,12 +26,15 @@ const Go            = lazy(() => import("./pages/Go"));
 // alongside existing /app/* and /dashboard/* per the studio-plan.md
 // decision: build alongside, no immediate cutover.
 const StudioShell      = lazy(() => import("./components/StudioShell"));
-const StudioToday      = lazy(() => import("./pages/studio/today"));
+const StudioIntents    = lazy(() => import("./pages/studio/intents"));
 // Phase S5+ — real inbox (no longer a placeholder).
 const StudioInbox      = lazy(() => import("./pages/studio/inbox"));
-// Phase S2 — real composer (no longer a placeholder).
-const StudioSkills     = lazy(() => import("./pages/studio/skills"));
-const StudioMarketplace = lazy(() => import("./pages/studio/marketplace"));
+// Library page removed — the marketplace lives on xp.io. Old in-app
+// paths bounce there via XpioRedirect.
+function XpioRedirect() {
+  useEffect(() => { window.location.replace("https://xp.io"); }, []);
+  return null;
+}
 // Phase S3-C — app editor (lean v1).
 const StudioApps         = lazy(() => import("./pages/studio/apps"));
 // W1 workflow surface — replaces /studio/apps as the canonical landing
@@ -58,7 +61,7 @@ const StudioAdmin      = lazy(() => import("./pages/studio/admin"));
 const StudioInspector  = lazy(() => import("./pages/studio/inspector"));
 // "How Lumid works" — walkable 3-stage loop (Assemble → Adapt → Compound)
 // illustrated against the demo intents. Stages 1-2 concrete, 3 open.
-const StudioHow        = lazy(() => import("./pages/studio/demo"));
+const StudioHow        = lazy(() => import("./pages/studio/how"));
 
 // Auto-quant operator page (/dashboard/auto-quant/*)
 const AutoQuantPage = lazy(() => import("./pages/app/auto-quant/index"));
@@ -390,10 +393,11 @@ export default function App() {
               </AuthGuard>
             }
           >
-            <Route index             element={<Navigate to="/studio/intents" replace />} />
-            {/* Today → Intents rename (demo IA). Old /today paths redirect. */}
-            <Route path="intents"                       element={<StudioToday />} />
-            <Route path="today"                         element={<Navigate to="/studio/intents" replace />} />
+            <Route index             element={<Navigate to="/studio/apps" replace />} />
+            {/* Spine is now My Apps. The old Intents/Today landings redirect
+                there; their cycle-inspector + intent-detail sub-routes stay. */}
+            <Route path="intents"                       element={<Navigate to="/studio/apps" replace />} />
+            <Route path="today"                         element={<Navigate to="/studio/apps" replace />} />
             {/* Phase S3-B — cycle inspector accessed from Intents rows. */}
             <Route path="intents/cycle/:app/:loop/:ts"  element={<StudioInspector />} />
             <Route path="today/cycle/:app/:loop/:ts"    element={<StudioInspector />} />
@@ -405,16 +409,20 @@ export default function App() {
                 Marketplace → Library rename (demo IA); old paths redirect.
                 The StudioApps editor still mounts under /apps/:app to handle
                 per-app YAML edits until the dedicated workflow editor ships. */}
-            <Route path="library"                      element={<StudioMarketplace />} />
-            <Route path="marketplace"                  element={<Navigate to="/studio/library" replace />} />
-            <Route path="skills"                       element={<Navigate to="/studio/library" replace />} />
+            {/* Library page removed → the marketplace lives on xp.io. */}
+            <Route path="library"                      element={<XpioRedirect />} />
+            <Route path="marketplace"                  element={<XpioRedirect />} />
+            <Route path="skills"                       element={<XpioRedirect />} />
             {/* Knowledge is now the "you, encoded" ledger; the per-agent
                 bank browser keeps its deep-link at /knowledge/:agent. */}
             <Route path="knowledge"                    element={<StudioKnowledgeEncoded />} />
             <Route path="knowledge/:agent"             element={<StudioKnowledge />} />
-            <Route path="apps"                         element={<Navigate to="/studio/workflows" replace />} />
+            {/* My Apps is the spine: home (grid) + per-app overview. */}
+            <Route path="apps"                         element={<StudioApps />} />
             <Route path="apps/:app"                    element={<StudioApps />} />
-            <Route path="workflows"                    element={<StudioWorkflows />} />
+            {/* Workflows folded into the per-app overview; list redirects,
+                detail pages stay reachable via deep-link. */}
+            <Route path="workflows"                    element={<Navigate to="/studio/apps" replace />} />
             <Route path="workflows/:slug"              element={<StudioWorkflowDtl />} />
             {/* Runs + Mind kept reachable for back-compat and direct
                 links from chat tools. Their lens-in-Workflows ports
@@ -422,7 +430,8 @@ export default function App() {
                 original URLs and are just hidden from the sidebar. */}
             <Route path="runs"                         element={<StudioRuns />} />
             <Route path="runs/:run_id"                 element={<StudioRunDetail />} />
-            <Route path="mind"                         element={<StudioMind />} />
+            {/* Mind folded into each workflow's Insights panel. */}
+            <Route path="mind"                         element={<Navigate to="/studio/apps" replace />} />
             <Route path="how"                          element={<StudioHow />} />
             <Route path="settings"                     element={<StudioSettings />} />
             <Route path="admin"                        element={<StudioAdmin />} />
@@ -827,7 +836,7 @@ export default function App() {
               The old LoopsPage / MarketplacePage / KnowledgePage /
               ResultsPage components remain imported because their
               contents are mounted under /studio/* (e.g. AppLoops is
-              rendered inside StudioToday). When inactive direct-mount
+              rendered inside StudioIntents). When inactive direct-mount
               references are pruned, those imports can go too.
 
               Old bookmarks → Studio mapping:
@@ -836,17 +845,17 @@ export default function App() {
                 /app/marketplace → /studio/skills
                 /app/knowledge   → /studio/knowledge
                 /app/results     → /studio/today */}
-          <Route path="/app"             element={<Navigate to="/studio/intents"   replace />} />
-          <Route path="/app/loops"       element={<Navigate to="/studio/intents"   replace />} />
-          <Route path="/app/marketplace" element={<Navigate to="/studio/library"   replace />} />
+          <Route path="/app"             element={<Navigate to="/studio/apps"      replace />} />
+          <Route path="/app/loops"       element={<Navigate to="/studio/apps"      replace />} />
+          <Route path="/app/marketplace" element={<XpioRedirect />} />
           <Route path="/app/knowledge"   element={<Navigate to="/studio/knowledge" replace />} />
-          <Route path="/app/results"     element={<Navigate to="/studio/intents"   replace />} />
+          <Route path="/app/results"     element={<Navigate to="/studio/apps"      replace />} />
           {/* /app/admin/* belonged to the old /app shell admin tree but
               everything admin now lives under /dashboard/admin/*. Preserve
               the rest of the path so deep links like
               /app/admin/clusters/<id> route through. */}
           <Route path="/app/admin/*"     element={<AppAdminRedirect />} />
-          <Route path="/app/*"           element={<Navigate to="/studio/intents"   replace />} />
+          <Route path="/app/*"           element={<Navigate to="/studio/apps"      replace />} />
 
           {/* Root "/" — role-aware landing. AuthGuard(false) handles
               the unauth case by rendering <RoleHome>, which then reads

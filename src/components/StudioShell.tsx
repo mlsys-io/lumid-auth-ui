@@ -10,10 +10,11 @@
 
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
-	Sparkles,
+	Boxes,
+	Plus,
 	Inbox,
 	Store,
-	Workflow as WorkflowIcon,
+	ArrowUpRight,
 	Brain,
 	Compass,
 	Settings,
@@ -55,60 +56,23 @@ interface NavItem {
 //                      tracks + manages lives inside their standing
 //                      intents.
 //
-// The four secondary surfaces (Inbox / Workflows / Knowledge /
-// Library) collapsed into a single "More" group. Inbox content now
-// surfaces INSIDE each intent's expanded view (drafts pending,
-// activity timeline). Library + Knowledge + Workflows remain as
-// reachable routes for power users but no longer compete for the
-// primary surface. Settings / Admin / API tokens still live in the
-// bottom avatar menu.
+// Intents is the primary surface; the four secondary surfaces
+// (Inbox / Workflows / Knowledge / Library) are listed directly below
+// it, separated by a divider (no "More" collapse). Settings / Admin /
+// API tokens live in the bottom avatar menu; "How it works" is a quiet
+// footer docs link.
 const TOP_NAV: NavItem[] = [
-	{ to: '/studio/intents',   label: 'Intents',   icon: Sparkles, end: true },
+	{ to: '/studio/apps',   label: 'My Apps',   icon: Boxes },
 ];
-const MORE_NAV: NavItem[] = [
+// Workflows fold into each app's overview; Inbox + Knowledge are the
+// secondary surfaces.
+const SECONDARY_NAV: NavItem[] = [
 	{ to: '/studio/inbox',     label: 'Inbox',     icon: Inbox },
-	{ to: '/studio/workflows', label: 'Workflows', icon: WorkflowIcon },
 	{ to: '/studio/knowledge', label: 'Knowledge', icon: Brain },
-	{ to: '/studio/library',   label: 'Library',   icon: Store },
-	{ to: '/studio/how',       label: 'How it works', icon: Compass },
 ];
-// MoreSection — collapsible "More" group under the primary nav.
-// The header acts as the toggle and shows the current state. Items
-// inside are normal NavItemViews so active-route highlighting still
-// works. Open state persists in sessionStorage so deep-linking into
-// a secondary route reveals it.
-function MoreSection({ items }: { items: NavItem[] }) {
-	const [open, setOpen] = useState<boolean>(() => {
-		// Default open if the current URL lives in one of the items.
-		const path = window.location.pathname;
-		const here = items.some((i) => path.startsWith(i.to));
-		if (here) return true;
-		try { return sessionStorage.getItem('studio:more-open') === '1'; } catch { return false; }
-	});
-	useEffect(() => {
-		try { sessionStorage.setItem('studio:more-open', open ? '1' : '0'); } catch {}
-	}, [open]);
-	return (
-		<>
-			<div className="my-3 mx-3 h-px bg-slate-200/60" />
-			<button
-				onClick={() => setOpen((v) => !v)}
-				className="w-full flex items-center justify-between px-3 py-1.5 text-[11px] uppercase tracking-[0.14em] text-slate-400 hover:text-slate-600 transition-colors"
-			>
-				<span>More</span>
-				<ChevronDown
-					className={['w-3 h-3 transition-transform', open ? 'rotate-180' : ''].join(' ')}
-				/>
-			</button>
-			{open && (
-				<div className="space-y-px mt-0.5">
-					{items.map((item) => <NavItemView key={item.to} {...item} />)}
-				</div>
-			)}
-		</>
-	);
-}
-
+// The marketplace lives on xp.io (the shared catalog) — link out instead
+// of a local Library page.
+const XPIO_URL = 'https://xp.io';
 function NavItemView({ to, label, icon: Icon, end }: NavItem) {
 	return (
 		<NavLink
@@ -206,6 +170,20 @@ export function StudioShell() {
 		navigate('/auth/login');
 	};
 
+	// "+ New intent" — the streamlined create entry. Lands on My Apps
+	// (which hosts the WorkflowComposer) and opens the chat with a
+	// compose prompt; the agent assembles + installs, the draft pops in
+	// the composer modal. Works from any Studio page (chat is global).
+	const newIntent = () => {
+		navigate('/studio/apps');
+		window.dispatchEvent(new CustomEvent('studio:ask', {
+			detail: {
+				prompt: 'I want to set up a new workflow. Help me think through what would be most useful, then compose and install it.',
+				autosend: true,
+			},
+		}));
+	};
+
 	return (
 		<div className={cn(
 			'min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 flex',
@@ -226,14 +204,44 @@ export function StudioShell() {
 				</Link>
 
 				<nav className="flex-1 overflow-y-auto px-2 py-3 space-y-px">
+					{/* Primary create action — always visible, the streamlined
+					    "start a new intent" entry. */}
+					<button
+						onClick={newIntent}
+						className="w-full mb-2 inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-emerald-500 text-white hover:bg-emerald-600 active:scale-[0.98] shadow-sm shadow-emerald-200/70 transition-all"
+					>
+						<Plus className="w-4 h-4" /> New intent
+					</button>
 					{TOP_NAV.map((item) => <NavItemView key={item.to} {...item} />)}
-
-					{/* Secondary surfaces — collapsed under "More" so the
-					    primary nav stays a single item. Power users click
-					    through; common users never touch this. Routes stay
-					    intact for deep links. */}
-					<MoreSection items={MORE_NAV} />
+					{/* Secondary surfaces shown directly (no "More" collapse) —
+					    a thin divider separates them from the primary Intents. */}
+					<div className="my-2 mx-3 h-px bg-slate-200/60" />
+					{SECONDARY_NAV.map((item) => <NavItemView key={item.to} {...item} />)}
+					{/* Marketplace → xp.io (shared catalog), opens in a new tab. */}
+					<a
+						href={XPIO_URL}
+						target="_blank"
+						rel="noreferrer"
+						className="group flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-all"
+					>
+						<Store className="w-4 h-4 flex-shrink-0 text-slate-400 group-hover:text-slate-700" />
+						<span>Marketplace</span>
+						<ArrowUpRight className="w-3 h-3 ml-auto text-slate-300 group-hover:text-slate-500" />
+					</a>
 				</nav>
+
+				{/* Docs link — kept apart from the functional nav above so
+				    "how it works" reads as reference, not a workspace. */}
+				<NavLink
+					to="/studio/how"
+					className={({ isActive }) => cn(
+						'mx-3 mb-1 flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs transition-colors',
+						isActive ? 'text-emerald-700' : 'text-slate-400 hover:text-slate-600',
+					)}
+				>
+					<Compass className="w-3.5 h-3.5 flex-shrink-0" />
+					<span>How it works</span>
+				</NavLink>
 
 				{/* User menu — pinned bottom-left, opens upward. Holds
 				    everything the top-right avatar dropdown used to

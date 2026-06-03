@@ -71,6 +71,10 @@ type Message = {
 	thinkingDone?: boolean;
 	// Pretty-printed tool calls the agent ran on this turn (assistant only).
 	tools?: ToolCall[];
+	// Marks the single consolidated "loop activity" note (studio:notify),
+	// so repeated loop events update one message instead of spamming.
+	notify?: boolean;
+	notifyCount?: number;
 };
 
 const STORAGE_KEY = 'studio_chat_transcript_v1';
@@ -701,6 +705,28 @@ export function StudioChat() {
 		return () => window.removeEventListener('studio:ask', onAsk as EventListener);
 		// queueSend is defined inline below to keep deps stable
 		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
+
+	// `studio:notify` — a page posts a passive note (e.g. a loop event
+	// landed). Appended as an assistant message; does NOT expand or send,
+	// so it's non-disruptive — it's just there when the user looks.
+	useEffect(() => {
+		const onNotify = (e: Event) => {
+			const ce = e as CustomEvent<{ message?: string }>;
+			const m = String(ce.detail?.message || '').trim();
+			if (!m) return;
+			// Consolidate: keep ONE loop-activity note, always at the bottom,
+			// updated to the latest event with a running count — never append
+			// a fresh message per event (that trashed the thread).
+			setMessages((prev) => {
+				const prior = prev.find((x) => x.notify);
+				const count = (prior?.notifyCount || 0) + 1;
+				const content = count > 1 ? `${m}  ·  +${count - 1} more recent` : m;
+				return [...prev.filter((x) => !x.notify), { role: 'assistant', content, notify: true, notifyCount: count }];
+			});
+		};
+		window.addEventListener('studio:notify', onNotify as EventListener);
+		return () => window.removeEventListener('studio:notify', onNotify as EventListener);
 	}, []);
 
 	const queueSend = useCallback(async (text: string, baseMessages?: Message[]) => {
@@ -1864,10 +1890,28 @@ function handleEvent(
 	} else if (evt.type === 'error' && evt.message) {
 		setMessages((prev) => withLastAssistant(prev, (m) => ({
 			...m,
-			content: (m.content ? m.content + '\n\n' : '') + `⚠️ ${evt.message}`,
+			content: (m.content ? m.content + '\n\n' : '') + friendlyChatError(evt.message),
 		})));
 	}
 	// 'usage' and 'done' events — no UI change needed for now.
+}
+
+// Turn a raw upstream error into something a user can act on. The most
+// common one today is the kv.run LLM gateway being unconfigured
+// (503 "FINDATA_LLM_BACKEND_URL is empty") — surface that as a calm
+// "temporarily offline" line instead of dumping provider JSON.
+function friendlyChatError(raw: string): string {
+	const s = String(raw);
+	if (/503|service unavailable|backend not configured|FINDATA_LLM_BACKEND_URL|no .*provider accepted/i.test(s)) {
+		return '⚠️ The AI model is temporarily offline. Your message wasn’t lost — try again shortly.';
+	}
+	if (/401|sign in|unauthor/i.test(s)) {
+		return '⚠️ Please sign in to use chat.';
+	}
+	if (/429|rate.?limit/i.test(s)) {
+		return '⚠️ Rate limit reached — give it a moment and try again.';
+	}
+	return `⚠️ ${s}`;
 }
 
 function withLastAssistant(

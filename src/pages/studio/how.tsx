@@ -1,7 +1,6 @@
 // /studio/how — "How Lumid works": a walkable illustration of the loop
-// every intent runs through. Stages 1 (Assemble) and 2 (Adapt) are concrete
-// and demoed against real demo intents; Stage 3 (Compound) is shown as an
-// open/TBD node — its direction is still being defined.
+// every intent runs through — Stage 1 (Assemble) and Stage 2 (Adapt &
+// improve), demoed against real demo intents.
 //
 // Data comes from lib/demo-intents (the same registry the Intents surface
 // uses), so this page stays in sync with the live demo without duplicating
@@ -10,8 +9,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-	Boxes, Sparkles, Library, ArrowRight, ArrowDown, Wand2, Package,
-	TrendingUp, ChevronRight,
+	Boxes, Sparkles, ArrowRight, ArrowDown, Wand2, Package,
+	TrendingUp, Library, ChevronRight, Lightbulb, Workflow,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -31,12 +30,11 @@ export default function StudioHow() {
 				<h1 className="text-xl font-medium text-slate-900 tracking-tight">How Lumid works</h1>
 				<p className="text-sm text-slate-600 mt-1 leading-relaxed max-w-2xl">
 					Every intent runs the same loop. You say what you want; Lumid <strong>assembles</strong> a
-					workflow, then <strong>adapts</strong> it to you — and what it learns will{' '}
-					<strong>compound</strong> back into the library.
+					workflow, then <strong>adapts &amp; improves</strong> it to you — getting more valuable every cycle.
 				</p>
 			</header>
 
-			{/* Flywheel — three stages, S3 still open */}
+			{/* Flywheel — the stages */}
 			<Flywheel />
 
 			{/* Use-case switcher */}
@@ -73,21 +71,9 @@ export default function StudioHow() {
 			<StepArrow />
 
 			{/* Stage 2 — Adapt */}
-			<StagePanel n={2} label="Adapt" tone="sky" icon={Sparkles}
+			<StagePanel n={2} label="Adapt & improve" tone="sky" icon={Sparkles}
 				caption="Then it adapts to you — autoresearching and aligning to your specific intent so it gets more valuable every cycle.">
 				<AdaptBody intent={intent} />
-			</StagePanel>
-
-			<StepArrow />
-
-			{/* Stage 3 — Compound (open) */}
-			<StagePanel n={3} label="Compound" tone="muted" icon={Library}
-				caption="What it learns will compound back into the shared library — so the next person assembling a similar intent starts ahead. This closes the loop."
-				open>
-				<div className="text-[12px] text-slate-500 leading-relaxed">
-					Direction still being defined — the mechanics of promoting a learned skill / recipe back
-					to the marketplace are open. The loop closes here.
-				</div>
 			</StagePanel>
 		</div>
 	);
@@ -97,9 +83,8 @@ export default function StudioHow() {
 
 function Flywheel() {
 	const nodes = [
-		{ icon: Boxes,    label: 'Assemble', sub: 'workspace + AI',      tone: 'emerald' as const },
-		{ icon: Sparkles, label: 'Adapt',    sub: 'autoresearch · align', tone: 'sky' as const },
-		{ icon: Library,  label: 'Compound', sub: 'back to the library',  tone: 'muted' as const },
+		{ icon: Boxes,    label: 'Assemble',        sub: 'workspace + AI',       tone: 'emerald' as const },
+		{ icon: Sparkles, label: 'Adapt & improve', sub: 'autoresearch · align', tone: 'sky' as const },
 	];
 	return (
 		<div className="rounded-2xl border border-slate-200/70 bg-white p-4">
@@ -110,12 +95,14 @@ function Flywheel() {
 							'flex-1 rounded-xl border px-3 py-3 flex flex-col items-center text-center gap-1.5',
 							nd.tone === 'emerald' && 'border-emerald-200 bg-emerald-50/50',
 							nd.tone === 'sky' && 'border-sky-200 bg-sky-50/50',
+							nd.tone === 'indigo' && 'border-indigo-200 bg-indigo-50/50',
 							nd.tone === 'muted' && 'border-dashed border-slate-200 bg-slate-50/40',
 						)}>
 							<div className={cn(
 								'w-8 h-8 rounded-lg flex items-center justify-center',
 								nd.tone === 'emerald' && 'bg-emerald-100 text-emerald-700',
 								nd.tone === 'sky' && 'bg-sky-100 text-sky-700',
+								nd.tone === 'indigo' && 'bg-indigo-100 text-indigo-700',
 								nd.tone === 'muted' && 'bg-slate-100 text-slate-400',
 							)}>
 								<nd.icon className="w-4 h-4" />
@@ -135,11 +122,6 @@ function Flywheel() {
 					</div>
 				))}
 			</div>
-			{/* loop-back hint */}
-			<div className="mt-2 flex items-center justify-center gap-1.5 text-[10px] text-slate-400">
-				<ChevronRight className="w-3 h-3 rotate-180" />
-				the library feeds Assemble — every adaptation makes the next assembly stronger
-			</div>
 		</div>
 	);
 }
@@ -149,7 +131,7 @@ function Flywheel() {
 function StagePanel({
 	n, label, tone, icon: Icon, caption, children, open,
 }: {
-	n: number; label: string; tone: 'emerald' | 'sky' | 'muted';
+	n: number; label: string; tone: 'emerald' | 'sky' | 'indigo' | 'muted';
 	icon: React.ComponentType<{ className?: string }>;
 	caption: string; children: React.ReactNode; open?: boolean;
 }) {
@@ -163,6 +145,7 @@ function StagePanel({
 					'w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0',
 					tone === 'emerald' && 'bg-emerald-100 text-emerald-700',
 					tone === 'sky' && 'bg-sky-100 text-sky-700',
+					tone === 'indigo' && 'bg-indigo-100 text-indigo-700',
 					tone === 'muted' && 'bg-slate-100 text-slate-400',
 				)}>
 					<Icon className="w-4 h-4" />
@@ -276,4 +259,135 @@ function AdaptBody({ intent }: { intent: DemoIntent }) {
 			)}
 		</div>
 	);
+}
+
+// ── Stage 3 body — the spot-wise Compound offer ────────────────────
+// At a decision spot, accumulated knowledge is recalled and offered as
+// extra knowledge / a skill / a workflow. Binds to the real
+// `summary.offers` shape when present; otherwise renders a sensible
+// illustrative offer derived from the intent being walked.
+
+// Mirrors summary.offers[] from the cycle/journal contract — every
+// field optional so old cycles (no offers) render gracefully.
+interface CompoundOffer {
+	id?: string;
+	trigger?: { kind: 'pattern' | 'principle'; key: string; count: number };
+	kind: 'knowledge' | 'skill' | 'workflow';
+	title: string;
+	detail?: string;
+	action?: { type: string; spec?: unknown; schedule?: string };
+}
+
+const OFFER_KIND_META: Record<CompoundOffer['kind'], { label: string; icon: React.ComponentType<{ className?: string }>; tone: string; iconTone: string }> = {
+	knowledge: { label: 'extra knowledge', icon: Lightbulb, tone: 'border-amber-200 bg-amber-50/40',   iconTone: 'bg-amber-100 text-amber-700' },
+	skill:     { label: 'a skill',         icon: Wand2,     tone: 'border-emerald-200 bg-emerald-50/40', iconTone: 'bg-emerald-100 text-emerald-700' },
+	workflow:  { label: 'a workflow',      icon: Workflow,  tone: 'border-indigo-200 bg-indigo-50/40',   iconTone: 'bg-indigo-100 text-indigo-700' },
+};
+
+function CompoundBody({ intent }: { intent: DemoIntent }) {
+	const offers = illustrativeOffers(intent);
+	return (
+		<div className="space-y-3">
+			<div className="text-[11px] text-slate-500 leading-relaxed">
+				When a similar spot comes up again, Lumid recalls what compounded and
+				offers it inline — <span className="italic">&ldquo;this looks like a prior occurrence — last time this worked — do this.&rdquo;</span>
+			</div>
+
+			<div className="space-y-2">
+				{offers.map((o, i) => {
+					const meta = OFFER_KIND_META[o.kind];
+					const Icon = meta.icon;
+					return (
+						<div key={o.id || i} className={cn('rounded-lg border px-3 py-2.5 flex items-start gap-2.5', meta.tone)}>
+							<div className={cn('w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0', meta.iconTone)}>
+								<Icon className="w-3.5 h-3.5" />
+							</div>
+							<div className="flex-1 min-w-0">
+								<div className="flex items-center gap-1.5 flex-wrap">
+									<span className="text-[13px] font-medium text-slate-900 leading-tight">{o.title}</span>
+									<span className="text-[9px] uppercase tracking-wide rounded-full px-1.5 py-px border border-indigo-100 bg-indigo-50 text-indigo-700">
+										offer · {meta.label}
+									</span>
+								</div>
+								{o.trigger && (
+									<div className="text-[10px] text-slate-500 mt-0.5">
+										recalled from {o.trigger.kind} <span className="font-mono">{o.trigger.key}</span>
+										{o.trigger.count > 1 && <> · seen ×{o.trigger.count}</>}
+									</div>
+								)}
+								{o.detail && <div className="text-[11px] text-slate-600 mt-0.5 leading-snug">{o.detail}</div>}
+								{o.action?.schedule && (
+									<div className="text-[10px] text-indigo-700 mt-1 inline-flex items-center gap-1">
+										<ChevronRight className="w-3 h-3" />
+										one-tap: {o.action.type}
+										<span className="font-mono">· {o.action.schedule}</span>
+									</div>
+								)}
+							</div>
+						</div>
+					);
+				})}
+			</div>
+
+			<a
+				href="https://xp.io"
+				target="_blank"
+				rel="noreferrer"
+				className="inline-flex items-center gap-1 text-[12px] text-indigo-700 hover:text-indigo-800 hover:underline"
+			>
+				Browse what's compounded into the marketplace <ArrowRight className="w-3.5 h-3.5" />
+			</a>
+		</div>
+	);
+}
+
+// Derive an illustrative spot-wise offer from the intent being walked,
+// using its `compound` teaser when present, then its movements. Shaped
+// exactly like the live summary.offers[] so the bind-to-real path is a
+// drop-in once cycle summaries flow through this surface.
+function illustrativeOffers(intent: DemoIntent): CompoundOffer[] {
+	if (intent.compound?.contributions?.length) {
+		const kindMap: Record<string, CompoundOffer['kind']> = {
+			skill: 'skill', recipe: 'workflow', standard: 'knowledge', example: 'knowledge',
+		};
+		return intent.compound.contributions.slice(0, 3).map((c, i) => ({
+			id: `${intent.id}-c${i}`,
+			kind: kindMap[c.kind] ?? 'knowledge',
+			title: c.name,
+			detail: c.detail,
+		}));
+	}
+	// Fallback woven from the intent's recent axis movements.
+	const mv = intent.axisMovements ?? [];
+	const rule = mv.find((m) => m.axis === 'rules');
+	const recipe = mv.find((m) => m.axis === 'recipe');
+	const out: CompoundOffer[] = [];
+	if (rule?.latest) {
+		out.push({
+			id: `${intent.id}-rule`,
+			trigger: { kind: 'principle', key: 'rules', count: rule.count },
+			kind: 'knowledge',
+			title: 'Recall a principle that worked last time',
+			detail: rule.latest,
+		});
+	}
+	if (recipe?.latest) {
+		out.push({
+			id: `${intent.id}-recipe`,
+			trigger: { kind: 'pattern', key: 'recipe', count: recipe.count },
+			kind: 'workflow',
+			title: 'Offer the proven step as a one-tap workflow',
+			detail: recipe.latest,
+			action: { type: 'install_workflow', schedule: '@trigger' },
+		});
+	}
+	if (out.length === 0) {
+		out.push({
+			id: `${intent.id}-default`,
+			kind: 'knowledge',
+			title: 'Recall what worked at this kind of spot',
+			detail: 'As cycles accumulate, proven knowledge, skills, and workflows surface here at the moment they apply.',
+		});
+	}
+	return out;
 }

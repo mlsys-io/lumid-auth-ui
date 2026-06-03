@@ -17,9 +17,23 @@ import { Link, useLocation } from "react-router-dom";
 import {
 	FileText, Activity, AlertTriangle, ChevronRight,
 	Sparkles, Inbox as InboxIcon, Workflow as WorkflowIcon,
-	Store, Brain, Settings, Shield, Activity as ActivityIcon,
+	Store, Brain, Settings, Shield, Activity as ActivityIcon, Boxes,
 } from "lucide-react";
 import { me } from "@/api/me";
+import { RUNNING_APPS } from "@/lib/demo";
+
+// Same scope filter as the My Apps page: count only the user's own apps,
+// not operator-shared ones that listWorkflows() also returns — otherwise the
+// header's failing count diverges from the hero/cards (the "3 vs 1" bug).
+const inScope = (app?: string) => !app || (RUNNING_APPS as readonly string[]).includes(app);
+
+// Friendly app titles for the header (kept in sync with AppCard's map).
+const APP_TITLE: Record<string, string> = {
+	"personal-agent": "Personal agent",
+	"mbb-ai": "Consulting research",
+	"auto-sysresearch": "Systems research",
+	"auto-quant": "Auto-quant trading",
+};
 
 interface Counts {
 	drafts: number;
@@ -37,6 +51,20 @@ const PAGE_META: Array<{
 	subtitle?: string;
 	iconTone: string; // text color class for the icon
 }> = [
+	{
+		pattern: /^\/studio\/apps\/[^/]+/,
+		icon: Boxes,
+		title: "App",
+		subtitle: "Workflows, status, insights, and suggested improvements.",
+		iconTone: "text-emerald-600",
+	},
+	{
+		pattern: /^\/studio\/apps/,
+		icon: Boxes,
+		title: "My Apps",
+		subtitle: "Your apps and their ongoing progress.",
+		iconTone: "text-emerald-600",
+	},
 	{
 		pattern: /^\/studio\/(intents|today)/,
 		icon: Sparkles,
@@ -134,12 +162,15 @@ function deriveMeta(pathname: string) {
 // hop worth surfacing. Two-segment max; the page title (above) carries
 // the leaf identity.
 function deriveCrumbs(pathname: string): Array<{ label: string; to: string }> {
+	const ma = pathname.match(/^\/studio\/apps\/([^/]+)/);
+	if (ma) return [{ label: "My Apps", to: "/studio/apps" }];
 	const m1 = pathname.match(/^\/studio\/workflows\/([^/]+)/);
 	if (m1) return [{ label: "Workflows", to: "/studio/workflows" }];
 	const m2 = pathname.match(/^\/studio\/runs\/([^/]+)/);
 	if (m2) return [{ label: "Runs", to: "/studio/runs" }];
-	const m3 = pathname.match(/^\/studio\/(?:intents|today)\/cycle\/[^/]+\/[^/]+\/[^/]+/);
-	if (m3) return [{ label: "Intents", to: "/studio/intents" }];
+	// Cycle inspector is reached from an app's workflow panel.
+	const m3 = pathname.match(/^\/studio\/(?:intents|today)\/cycle\/([^/]+)\/([^/]+)\/[^/]+/);
+	if (m3) return [{ label: "My Apps", to: "/studio/apps" }, { label: APP_TITLE[decodeURIComponent(m3[1])] || decodeURIComponent(m3[1]), to: `/studio/apps/${m3[1]}?selected=${m3[2]}` }];
 	// T13 — /studio/intents/:slug shows the autoresearch detail panel.
 	// Match it AFTER the cycle regex so the cycle path isn't shadowed.
 	const m3b = pathname.match(/^\/studio\/intents\/[^/]+/);
@@ -153,6 +184,13 @@ export default function TopStatusStrip() {
 	const location = useLocation();
 	const [counts, setCounts] = useState<Counts>(ZERO);
 	const [loaded, setLoaded] = useState(false);
+	const [refreshedAt, setRefreshedAt] = useState(() => Date.now());
+	const [, forceTick] = useState(0);
+	// 1s ticker so the "live · updated Ns ago" stays current.
+	useEffect(() => {
+		const id = window.setInterval(() => forceTick((x) => x + 1), 1000);
+		return () => window.clearInterval(id);
+	}, []);
 
 	const meta = useMemo(() => deriveMeta(location.pathname), [location.pathname]);
 	const crumbs = useMemo(() => deriveCrumbs(location.pathname), [location.pathname]);
@@ -161,6 +199,8 @@ export default function TopStatusStrip() {
 	// and is more specific than the registry's generic "Workflow" /
 	// "Run" title. Surface it so the header reads naturally.
 	const detailLeaf = useMemo(() => {
+		const ma = location.pathname.match(/^\/studio\/apps\/([^/]+)/);
+		if (ma) { const slug = decodeURIComponent(ma[1]); return APP_TITLE[slug] || slug; }
 		const m1 = location.pathname.match(/^\/studio\/workflows\/([^/]+)/);
 		if (m1) return decodeURIComponent(m1[1]);
 		const m2 = location.pathname.match(/^\/studio\/runs\/([^/]+)/);
@@ -172,8 +212,8 @@ export default function TopStatusStrip() {
 
 	const load = async () => {
 		try {
-			const [today, drafts] = await Promise.allSettled([
-				me.today(),
+			const [wfR, drafts] = await Promise.allSettled([
+				me.listWorkflows(),
 				me.listDrafts({ state: "pending" }),
 			]);
 			let draftsCount = 0;
@@ -182,17 +222,16 @@ export default function TopStatusStrip() {
 			if (drafts.status === "fulfilled") {
 				draftsCount = drafts.value.drafts.length;
 			}
-			if (today.status === "fulfilled") {
-				const todayStart = new Date();
-				todayStart.setHours(0, 0, 0, 0);
-				const todayStartMs = todayStart.getTime();
-				for (const c of today.value.cycles) {
-					const ts = Date.parse(cycleTsToIso(c.ts));
-					if (isNaN(ts) || ts < todayStartMs) continue;
-					if (c.ok === false && !c.skipped) failingToday++;
-				}
+			if (wfR.status === "fulfilled") {
+				// "failing" = workflows whose LAST run failed (last_run_ok===false)
+				// — the same definition as the red dots on the cards and the My
+				// Apps hero count. Previously this counted failed *cycles today*,
+				// which diverged from the dots (e.g. a workflow red since
+				// yesterday, or a failure not in today's cycle list).
+				failingToday = (wfR.value.workflows || []).filter((w) => inScope(w.app) && w.last_run_ok === false).length;
 			}
 			setCounts({ drafts: draftsCount, running, failingToday });
+			setRefreshedAt(Date.now());
 			setLoaded(true);
 		} catch {
 			setLoaded(true);
@@ -256,8 +295,13 @@ export default function TopStatusStrip() {
 				</div>
 			</div>
 
-			{/* Right — status pills (rendered only when non-zero) */}
-			<div className="flex items-center gap-1.5 flex-shrink-0">
+			{/* Right — a steady "live" heartbeat (the surface is alive; loops
+			    run in the background) + status pills (only when non-zero). */}
+			<div className="flex items-center gap-2 flex-shrink-0">
+				<span className="inline-flex items-center gap-1.5 text-[11px] text-slate-400" title="Live — your loops run in the background">
+					<span className="w-1.5 h-1.5 rounded-full bg-emerald-500 heartbeat" />
+					<span className="hidden sm:inline">live{(() => { const a = Math.max(0, Math.floor((Date.now() - refreshedAt) / 1000)); return a < 3 ? "" : a < 60 ? ` · ${a}s ago` : ` · ${Math.floor(a / 60)}m ago`; })()}</span>
+				</span>
 				{loaded && counts.drafts > 0 && (
 					<StatusPill
 						to="/studio/inbox"
@@ -269,7 +313,7 @@ export default function TopStatusStrip() {
 				)}
 				{loaded && counts.running > 0 && (
 					<StatusPill
-						to="/studio/workflows"
+						to="/studio/apps"
 						icon={Activity}
 						count={counts.running}
 						label="running"
@@ -327,11 +371,4 @@ function StatusPill({
 			<span className="hidden sm:inline">{label}</span>
 		</Link>
 	);
-}
-
-function cycleTsToIso(ts: string): string {
-	const m = ts.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})$/);
-	if (!m) return ts;
-	const [, y, mo, d, h, mi, s] = m;
-	return `${y}-${mo}-${d}T${h}:${mi}:${s}Z`;
 }

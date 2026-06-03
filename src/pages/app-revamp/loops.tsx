@@ -20,12 +20,23 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { formatRelative } from "@/lib/relative-time";
-import { DEMO_MODE, DEMO_WORKFLOW_APPS } from "@/lib/demo";
+import RunSparkline from "@/components/RunSparkline";
+import { RUNNING_APPS } from "@/lib/demo";
+
+// The showcase apps the Studio surface scopes to. Keeps the demo focused
+// on the Assemble → Adapt → Compound story instead of the operator's full
+// fleet. Ambient (app-less) items always pass.
+const inScope = (app?: string) => !app || (RUNNING_APPS as readonly string[]).includes(app);
 import {
   AlertCircle,
+  ArrowRight,
+  Boxes,
   CheckCircle2,
+  Clock,
+  Lightbulb,
   Loader2,
   Mail,
+  MinusCircle,
   Pause,
   Play,
   Sparkles,
@@ -35,56 +46,109 @@ import { toast } from "sonner";
 import { me, MeApiError } from "@/api/me";
 import { cn } from "@/lib/utils";
 
-// ── Section 1: Today ──────────────────────────────────────────────
+// ── Recent cycles (iteration timeline) ────────────────────────────
+//
+// Each cycle's honest outcome — ran / no_change / awaiting_review /
+// no_setup, plus skips and failures shown as-is. Every row deep-links
+// to the CycleInspector (/studio/intents/:app/:loop/:ts) where the
+// observe gate, review queue (approve / edit / revamp), and compound
+// offers live.
 
-type Headline = Awaited<ReturnType<typeof me.today>>["headlines"][number];
+type CycleRow = Awaited<ReturnType<typeof me.today>>["cycles"][number];
 
-const HEADLINE_STYLE: Record<Headline["kind"], { icon: typeof Sparkles; cls: string }> = {
-  quota_paused: { icon: AlertCircle, cls: "border-amber-200 bg-amber-50 text-amber-900" },
-  drafts:       { icon: Mail,        cls: "border-emerald-200 bg-emerald-50 text-emerald-900" },
-  brief:        { icon: Sparkles,    cls: "border-emerald-200 bg-emerald-50 text-emerald-900" },
-  cycle_ok:     { icon: CheckCircle2,cls: "border-slate-200 bg-slate-50 text-slate-800" },
-  cycle_failed: { icon: AlertCircle, cls: "border-rose-200 bg-rose-50 text-rose-900" },
+const OUTCOME_META: Record<
+  NonNullable<CycleRow["outcome"]>,
+  { label: string; icon: typeof CheckCircle2; cls: string }
+> = {
+  ran:             { label: "Ran",                  icon: CheckCircle2, cls: "text-emerald-700" },
+  no_change:       { label: "Skipped — no change",  icon: MinusCircle,  cls: "text-slate-500" },
+  awaiting_review: { label: "Awaiting your review", icon: Clock,        cls: "text-amber-700" },
+  no_setup:        { label: "Nothing to act on",    icon: MinusCircle,  cls: "text-slate-500" },
 };
 
-function TodaySection() {
-  const [data, setData] = useState<Awaited<ReturnType<typeof me.today>> | null>(null);
+function cycleOutcome(c: CycleRow): { label: string; icon: typeof CheckCircle2; cls: string } {
+  if (c.outcome && OUTCOME_META[c.outcome]) return OUTCOME_META[c.outcome];
+  // Derive an honest outcome from legacy fields when summary.outcome
+  // is absent (old cycles).
+  if (c.skipped) return OUTCOME_META.no_change;
+  if (!c.ok) return { label: "Failed", icon: AlertCircle, cls: "text-rose-700" };
+  return OUTCOME_META.ran;
+}
+
+// Per-workflow run queue — adopts the old Workflows-page visual: each
+// workflow shows a state dot (last run ok/failed) + a RunSparkline strip
+// of its recent success/fail runs (oldest→newest), grouped by app. The
+// row deep-links to the workflow's detail page.
+type WfRow = Awaited<ReturnType<typeof me.listWorkflows>>["workflows"][number];
+
+function CyclesSection() {
+  const [rows, setRows] = useState<WfRow[] | null>(null);
 
   useEffect(() => {
-    me.today().then(setData).catch(() => setData({ headlines: [], cycles: [], as_of: "" }));
+    me.listWorkflows()
+      .then((r) => setRows((r.workflows ?? []).filter((w) => inScope(w.app))))
+      .catch(() => setRows([]));
   }, []);
 
-  if (data === null) return <SectionFrame title="Today"><Skeleton lines={3} /></SectionFrame>;
-
-  if (data.headlines.length === 0) {
+  if (rows === null) return <SectionFrame title="Recent runs"><Skeleton lines={3} /></SectionFrame>;
+  if (rows.length === 0) {
     return (
-      <SectionFrame title="Today">
+      <SectionFrame title="Recent runs">
         <div className="text-sm text-slate-500 italic">
-          Nothing to show yet. Your AI&apos;s next cycle will surface here.
+          No workflows yet — start one above and its runs will queue up here.
         </div>
       </SectionFrame>
     );
   }
 
+  // Group by app so each app's workflows sit together.
+  const byApp = new Map<string, WfRow[]>();
+  for (const w of rows) {
+    const k = w.app || "—";
+    const arr = byApp.get(k);
+    if (arr) arr.push(w); else byApp.set(k, [w]);
+  }
+
   return (
-    <SectionFrame title="Today">
-      <ul className="space-y-2">
-        {data.headlines.map((h, i) => {
-          const { icon: Icon, cls } = HEADLINE_STYLE[h.kind] ?? HEADLINE_STYLE.cycle_ok;
-          return (
-            <li
-              key={`${h.kind}-${i}`}
-              className={cn("rounded-lg border px-3 py-2 flex items-start gap-3", cls)}
-            >
-              <Icon className="w-4 h-4 shrink-0 mt-0.5" />
-              <div className="min-w-0 flex-1 text-sm">
-                <div className="font-medium">{h.summary}</div>
-                {h.detail && <div className="mt-0.5 text-xs opacity-80">{h.detail}</div>}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
+    <SectionFrame title="Recent runs">
+      <div className="space-y-4">
+        {[...byApp.entries()].map(([app, wfs]) => (
+          <div key={app}>
+            <div className="text-[11px] tracking-[0.06em] text-slate-400 mb-1.5">{app}</div>
+            <ul className="space-y-1.5">
+              {wfs.map((w) => {
+                const dot =
+                  w.last_run_ok === true ? "bg-emerald-500"
+                  : w.last_run_ok === false ? "bg-rose-500"
+                  : "bg-slate-300";
+                const dotTitle =
+                  w.last_run_ok === true ? "last run succeeded"
+                  : w.last_run_ok === false ? "last run failed"
+                  : "no runs yet";
+                return (
+                  <li key={w.slug}>
+                    <Link
+                      to={`/studio/workflows/${encodeURIComponent(w.slug)}`}
+                      className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5 hover:bg-slate-50 transition-colors"
+                    >
+                      <span className={cn("w-2 h-2 rounded-full shrink-0", dot)} title={dotTitle} />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium text-slate-800 truncate">
+                          {w.name || humanizeLoop(w.slug)}
+                        </div>
+                        <div className="text-xs text-slate-500 mt-0.5">
+                          {w.last_run_ts ? `ran ${formatRelative(w.last_run_ts * 1000)}` : "no runs yet"}
+                        </div>
+                      </div>
+                      <RunSparkline spec={w.run_spark || ""} className="hidden sm:flex" />
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+      </div>
     </SectionFrame>
   );
 }
@@ -246,12 +310,9 @@ function LoopsSection() {
     try {
       const r = await me.loopsHealth();
       const list = (r as unknown as { loops?: LoopRow[] }).loops ?? (r as unknown as LoopRow[]) ?? [];
-      // Demo IA: surface only the two demo apps' loops. Reverts when
-      // VITE_DEMO_MODE=false. See src/lib/demo.ts.
-      const shown = DEMO_MODE
-        ? list.filter((l) => (DEMO_WORKFLOW_APPS as readonly string[]).includes(l.app))
-        : list;
-      setRows(shown);
+      // Scope to the showcase apps so the demo stays focused on the
+      // three-stage story, not the operator's full fleet. See src/lib/demo.ts.
+      setRows(list.filter((l) => inScope(l.app)));
     } catch (e) {
       setError(e instanceof MeApiError ? e.message : String(e));
     }
@@ -359,7 +420,7 @@ function LoopsSection() {
 
 // ── Shared ─────────────────────────────────────────────────────────
 
-function SectionFrame({ title, children }: { title: string; children: React.ReactNode }) {
+export function SectionFrame({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
       <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2.5">
@@ -370,7 +431,7 @@ function SectionFrame({ title, children }: { title: string; children: React.Reac
   );
 }
 
-function Skeleton({ lines = 3 }: { lines?: number }) {
+export function Skeleton({ lines = 3 }: { lines?: number }) {
   return (
     <div className="space-y-2" aria-hidden="true">
       {Array.from({ length: lines }, (_, i) => (
@@ -380,7 +441,18 @@ function Skeleton({ lines = 3 }: { lines?: number }) {
   );
 }
 
-function humanizeLoop(loop: string): string {
+// Friendly display overrides for specific loop ids — win over the raw
+// backend name (e.g. "benchmark" → "NL-to-SQL" in auto-sysresearch, which
+// is an NL-to-SQL config optimizer, not a generic benchmark).
+const LOOP_OVERRIDE: Record<string, string> = {
+  benchmark: "NL-to-SQL",
+};
+export function loopLabel(name?: string, fallbackLoop?: string): string {
+  if (name && LOOP_OVERRIDE[name]) return LOOP_OVERRIDE[name];
+  return name || humanizeLoop(fallbackLoop || "");
+}
+
+export function humanizeLoop(loop: string): string {
   const map: Record<string, string> = {
     morning_brief: "Morning brief",
     hourly_triage: "Hourly triage",
@@ -424,7 +496,7 @@ export default function AppLoops() {
       )}
 
       <div key={todayKey}>
-        <TodaySection />
+        <CyclesSection />
       </div>
       <DraftsSection onChange={bumpToday} />
       <LoopsSection />
