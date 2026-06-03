@@ -40,6 +40,7 @@ export interface Trend {
 	first: number;
 	drift: number; // robust trend: last-third avg − first-third avg
 	improved: boolean | null; // true=better, false=worse, null=steady
+	improvement: number; // signed, scale-normalized: >0 = improving, ranks curves
 	variance: number;
 }
 
@@ -56,7 +57,10 @@ function toTrend(s: MeMetricSeries): Trend {
 	const drift = avg(values.slice(n - k)) - avg(values.slice(0, k));
 	const flat = range === 0 || Math.abs(drift) < range * 0.12;
 	const improved = flat ? null : betterDown(s.label) ? drift < 0 : drift > 0;
-	return { label: s.label, values, points: s.points, first, last, drift, improved, variance: range };
+	// Scale-normalized signed improvement so metrics of different units rank
+	// together: fraction of the metric's own range moved in the GOOD direction.
+	const improvement = flat ? 0 : ((betterDown(s.label) ? -drift : drift) / (range || 1));
+	return { label: s.label, values, points: s.points, first, last, drift, improved, improvement, variance: range };
 }
 
 // Trend amount as text: "+12%" / "−1.2s" / "steady".
@@ -80,7 +84,10 @@ export function pickTrends(series: MeMetricSeries[], tracked?: string[], max = 4
 	const all = series.map(toTrend);
 	const moving = all.filter((t) => t.variance > 0);
 	const pool = moving.length ? moving : all; // if everything's flat, still show something
+	// Rank by improvement (biggest movers in the good direction first); fall
+	// back to the goal's tracked order, then raw spread, for ties/steady.
 	pool.sort((a, b) => {
+		if (Math.abs(b.improvement - a.improvement) > 1e-6) return b.improvement - a.improvement;
 		const d = trackIdx(a.label) - trackIdx(b.label);
 		return d !== 0 ? d : b.variance - a.variance;
 	});
