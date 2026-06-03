@@ -180,7 +180,9 @@ export default function CycleCard({
 	};
 	const openFull = () => {
 		onOpenFull?.();
-		navigate(`/studio/intents/cycle/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/${encodeURIComponent(ts)}`);
+		// The inspector is merged into the app panel; deep-link straight to the
+		// loop with this cycle anchored (the panel opens a stage on that run).
+		navigate(`/studio/apps/${encodeURIComponent(app)}?selected=${encodeURIComponent(loop)}&cycle=${encodeURIComponent(ts)}`);
 	};
 
 	return (

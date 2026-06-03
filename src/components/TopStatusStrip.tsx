@@ -218,17 +218,21 @@ export default function TopStatusStrip() {
 			]);
 			let draftsCount = 0;
 			let failingToday = 0;
-			const running = 0;
+			let running = 0;
 			if (drafts.status === "fulfilled") {
 				draftsCount = drafts.value.drafts.length;
 			}
 			if (wfR.status === "fulfilled") {
+				const wfs = (wfR.value.workflows || []).filter((w) => inScope(w.app));
 				// "failing" = workflows whose LAST run failed (last_run_ok===false)
 				// — the same definition as the red dots on the cards and the My
 				// Apps hero count. Previously this counted failed *cycles today*,
 				// which diverged from the dots (e.g. a workflow red since
 				// yesterday, or a failure not in today's cycle list).
-				failingToday = (wfR.value.workflows || []).filter((w) => inScope(w.app) && w.last_run_ok === false).length;
+				failingToday = wfs.filter((w) => w.last_run_ok === false).length;
+				// "running" = workflows with a cycle in-flight right now. Was
+				// hardcoded to 0, so the pill never appeared even mid-run.
+				running = wfs.filter((w) => w.running).length;
 			}
 			setCounts({ drafts: draftsCount, running, failingToday });
 			setRefreshedAt(Date.now());
@@ -323,7 +327,7 @@ export default function TopStatusStrip() {
 				)}
 				{loaded && counts.failingToday > 0 && (
 					<StatusPill
-						to="/studio/inbox"
+						to="/studio/apps"
 						icon={AlertTriangle}
 						count={counts.failingToday}
 						label="failing"

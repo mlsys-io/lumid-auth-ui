@@ -67,13 +67,16 @@ function whenLast(ts?: number): string {
 const cycleCache = new Map<string, { ts: string | null; summary: CycleSummary | null }>();
 
 export default function WorkflowObservabilityPanel({
-	app, loop, wf, loopHealth, onChanged,
+	app, loop, wf, loopHealth, onChanged, initialCycle,
 }: {
 	app: string;
 	loop: string;
 	wf: MeWorkflowRow;
 	loopHealth?: LoopHealth;
 	onChanged?: () => void;
+	// Deep-link anchor (?cycle=<ts>) — when set (e.g. CycleCard "Open full
+	// cycle"), auto-open a stage on that run instead of waiting for a click.
+	initialCycle?: string | null;
 }) {
 	const h = health(wf, loopHealth);
 
@@ -134,7 +137,9 @@ export default function WorkflowObservabilityPanel({
 	const [optimisticRun, setOptimisticRun] = useState(false);
 	const [justRan, setJustRan] = useState(false);
 	const [pulseStage, setPulseStage] = useState<LoopStageKey | null>(null);
-	const [selectedStage, setSelectedStage] = useState<LoopStageKey | null>(null);
+	// Arriving with a ?cycle anchor opens the Learn stage (the run's outcome)
+	// on that cycle, so "Open full cycle" lands on real content immediately.
+	const [selectedStage, setSelectedStage] = useState<LoopStageKey | null>(initialCycle ? "learn" : null);
 	const [stageQ, setStageQ] = useState("");
 	const prevTsRef = useRef<string | null>(null);
 
@@ -212,7 +217,7 @@ export default function WorkflowObservabilityPanel({
 			/>
 			{selectedStage && (
 				<StageDetail
-					app={app} loop={loop} stage={selectedStage}
+					app={app} loop={loop} stage={selectedStage} initialTs={initialCycle || undefined}
 					q={stageQ} setQ={setStageQ} onClose={() => setSelectedStage(null)}
 				/>
 			)}
@@ -226,7 +231,7 @@ export default function WorkflowObservabilityPanel({
 					</span>
 					<RunSparkline spec={wf.run_spark || ""} runs={wf.runs_recent} app={app} loop={loop} />
 					<span className="text-xs text-slate-500">{whenLast(wf.last_run_ts)}</span>
-					{(loopHealth?.consecutive_failures ?? 0) > 0 && (
+					{wf.last_run_ok === false && (loopHealth?.consecutive_failures ?? 0) > 0 && (
 						<span className="text-xs text-rose-600">· {loopHealth!.consecutive_failures} consecutive failures</span>
 					)}
 				</div>
@@ -477,10 +482,11 @@ function StageBody({ stage, detail }: { stage: LoopStageKey; detail: MeCycleDeta
 }
 
 function StageDetail({
-	app, loop, stage, q, setQ, onClose,
+	app, loop, stage, q, setQ, onClose, initialTs,
 }: {
 	app: string; loop: string; stage: LoopStageKey;
 	q: string; setQ: (v: string) => void; onClose: () => void;
+	initialTs?: string;
 }) {
 	const info = STAGE_INFO[stage];
 	const [cycles, setCycles] = useState<Array<{ ts: string }> | null>(null);
@@ -494,11 +500,16 @@ function StageDetail({
 			.then((r) => {
 				const cs = ((r.data?.data?.cycles ?? []) as Array<{ ts: string }>)
 					.filter((c) => c.ts).sort((a, b) => b.ts.localeCompare(a.ts));
-				if (live) { setCycles(cs); setIdx(0); }
+				if (live) {
+					setCycles(cs);
+					// Honor a deep-link cycle anchor; else default to newest.
+					const at = initialTs ? cs.findIndex((c) => c.ts === initialTs) : -1;
+					setIdx(at >= 0 ? at : 0);
+				}
 			})
 			.catch(() => { if (live) setCycles([]); });
 		return () => { live = false; };
-	}, [app, loop]);
+	}, [app, loop, initialTs]);
 
 	const ts = cycles?.[idx]?.ts;
 	useEffect(() => {
