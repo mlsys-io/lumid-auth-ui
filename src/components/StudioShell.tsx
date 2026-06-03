@@ -27,6 +27,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
+import { me } from '@/api/me';
 // Phase S6a — persistent chat sidebar. AI is the primary interface
 // for Studio; webforms in the main workspace area become the
 // precision channel beside it.
@@ -49,6 +50,7 @@ interface NavItem {
 	label: string;
 	icon: React.ComponentType<{ className?: string }>;
 	end?: boolean;
+	badge?: number; // count pill on the right (e.g. pending drafts on Inbox)
 }
 
 // Sidebar layout (post-refactor, 2026-05-29):
@@ -73,7 +75,7 @@ const SECONDARY_NAV: NavItem[] = [
 // The marketplace lives on xp.io (the shared catalog) — link out instead
 // of a local Library page.
 const XPIO_URL = 'https://xp.io';
-function NavItemView({ to, label, icon: Icon, end }: NavItem) {
+function NavItemView({ to, label, icon: Icon, end, badge }: NavItem) {
 	return (
 		<NavLink
 			to={to}
@@ -97,6 +99,14 @@ function NavItemView({ to, label, icon: Icon, end }: NavItem) {
 						isActive ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-700',
 					)} />
 					<span>{label}</span>
+					{badge != null && badge > 0 && (
+						<span
+							className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold tabular-nums"
+							title={`${badge} awaiting you`}
+						>
+							{badge}
+						</span>
+					)}
 				</>
 			)}
 		</NavLink>
@@ -157,6 +167,19 @@ export function StudioShell() {
 
 	const [menuOpen, setMenuOpen] = useState(false);
 	const menuRef = useRef<HTMLDivElement>(null);
+
+	// Pending-drafts count → badge on the Inbox nav item. Drafts live in the
+	// Inbox surface (moved off the My Apps hero), so the count belongs here.
+	const [draftCount, setDraftCount] = useState(0);
+	useEffect(() => {
+		let live = true;
+		const tick = () => me.listDrafts({ state: "pending" })
+			.then((r) => { if (live) setDraftCount(r.drafts?.length || 0); })
+			.catch(() => { /* soft-fail; badge just stays hidden */ });
+		tick();
+		const id = window.setInterval(tick, 30_000);
+		return () => { live = false; window.clearInterval(id); };
+	}, []);
 	useEffect(() => {
 		const onClick = (e: MouseEvent) => {
 			if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
@@ -216,7 +239,9 @@ export function StudioShell() {
 					{/* Secondary surfaces shown directly (no "More" collapse) —
 					    a thin divider separates them from the primary Intents. */}
 					<div className="my-2 mx-3 h-px bg-slate-200/60" />
-					{SECONDARY_NAV.map((item) => <NavItemView key={item.to} {...item} />)}
+					{SECONDARY_NAV.map((item) => (
+					<NavItemView key={item.to} {...item} badge={item.to === '/studio/inbox' ? draftCount : undefined} />
+				))}
 					{/* Marketplace → xp.io (shared catalog), opens in a new tab. */}
 					<a
 						href={XPIO_URL}

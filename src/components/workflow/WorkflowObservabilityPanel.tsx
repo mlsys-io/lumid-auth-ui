@@ -221,7 +221,7 @@ export default function WorkflowObservabilityPanel({
 						<span className={cn("w-1.5 h-1.5 rounded-full", h.dot, mode === "running" && "running-glow")} />
 						{h.label}
 					</span>
-					<RunSparkline spec={wf.run_spark || ""} />
+					<RunSparkline spec={wf.run_spark || ""} runs={wf.runs_recent} app={app} loop={loop} />
 					<span className="text-xs text-slate-500">{whenLast(wf.last_run_ts)}</span>
 					{(loopHealth?.consecutive_failures ?? 0) > 0 && (
 						<span className="text-xs text-rose-600">· {loopHealth!.consecutive_failures} consecutive failures</span>
