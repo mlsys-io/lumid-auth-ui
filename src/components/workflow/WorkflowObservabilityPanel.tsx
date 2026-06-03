@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-	Activity, Play, Pause, Loader2, Save, Lightbulb, Clock, ArrowRight, AlertCircle,
+	Activity, Play, Pause, Loader2, Save, Lightbulb, Clock, ArrowRight, AlertCircle, Target,
 } from "lucide-react";
 import { toast } from "sonner";
 import apiClient from "@/api/client";
@@ -198,6 +198,8 @@ export default function WorkflowObservabilityPanel({
 
 	return (
 		<div className="border-t border-slate-200/70 bg-slate-50/40 px-4 py-4 space-y-4 animate-in fade-in duration-300">
+			{/* What this loop is chasing — the declared goal + tracked metrics. */}
+			{wf.goal?.primary && <GoalHeader goal={wf.goal} />}
 			{/* The loop, as the centerpiece — turning while a cycle runs,
 			    rippling the stage when an event (new cycle) fires. */}
 			<LoopOrbit
@@ -332,6 +334,34 @@ const STAGE_INFO: Record<LoopStageKey, { label: string; role: string }> = {
 };
 
 // Stage drill-down + free-text query, opened by clicking an orbit node.
+// snake_case goal slugs ("maximize_paper_realized_alpha") → readable prose.
+function humanizeGoal(s: string): string {
+	const t = s.replace(/_/g, " ").trim();
+	return t ? t[0].toUpperCase() + t.slice(1) : t;
+}
+
+function GoalHeader({ goal }: { goal: { primary: string; tracked?: string[] } }) {
+	return (
+		<div className="rounded-xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50/80 to-white p-3">
+			<div className="flex items-start gap-2">
+				<Target className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
+				<div className="min-w-0">
+					<div className="text-[10px] uppercase tracking-wide text-emerald-700/70 font-semibold">Goal</div>
+					<div className="text-[13px] text-slate-800 font-medium leading-snug">{humanizeGoal(goal.primary)}</div>
+					{goal.tracked && goal.tracked.length > 0 && (
+						<div className="mt-1.5 flex flex-wrap gap-1">
+							<span className="text-[10px] text-slate-400">tracks</span>
+							{goal.tracked.map((t, i) => (
+								<span key={i} className="text-[10px] text-slate-600 bg-white border border-slate-200 rounded-full px-1.5 py-0.5" title={t}>{t}</span>
+							))}
+						</div>
+					)}
+				</div>
+			</div>
+		</div>
+	);
+}
+
 function StageDetail({
 	app, loop, stage, summary, q, setQ, onClose,
 }: {

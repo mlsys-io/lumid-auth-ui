@@ -325,6 +325,18 @@ export const me = {
       "GET",
       `/cycles/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/${encodeURIComponent(ts)}`,
     ),
+
+  // ── Dataset / casebook explorer ─────────────────────────────────
+  appDatasets: (app: string) =>
+    call<{ app: string; datasets: MeDatasetGroup[]; count: number }>(
+      "GET",
+      `/apps/${encodeURIComponent(app)}/datasets`,
+    ),
+  appDatasetFile: (app: string, path: string) =>
+    call<MeDatasetFile>(
+      "GET",
+      `/apps/${encodeURIComponent(app)}/dataset-file?path=${encodeURIComponent(path)}`,
+    ),
   mindSkills: (compare: string) =>
     call<{
       skill: string;
@@ -389,7 +401,17 @@ export interface MeWorkflowRow {
   // SAME order (oldest→newest). Lets each dot open its cycle detail. `ts`
   // is the cycle dir-id ("" if no cycle dir matched, e.g. a skipped run).
   runs_recent?: SparkRun[];
+  // The loop's declared objective (xpcloud.yaml loops[].goal) — what it's
+  // chasing + the metrics it tracks. Drives the app-overview goal header.
+  goal?: { primary: string; tracked?: string[] };
+  // Dataset ids/refs the loop runs against (xpcloud.yaml loops[].datasets).
+  datasets?: string[];
 }
+
+// Dataset explorer shapes (GET /me/apps/:app/datasets + /dataset-file).
+export interface MeDatasetFileRef { path: string; name: string; bytes: number; kind: string }
+export interface MeDatasetGroup { group: string; label: string; files: MeDatasetFileRef[] }
+export interface MeDatasetFile { app: string; path: string; name: string; kind: string; bytes: number; truncated: boolean; content: string }
 
 // One addressable dot in a workflow's run sparkline.
 export interface SparkRun {

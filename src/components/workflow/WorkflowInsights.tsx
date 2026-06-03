@@ -9,7 +9,7 @@
 // drop it in without coupling to the /studio/mind page.
 
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { me, type MeMindStats } from "@/api/me";
 import { useCountUp } from "@/lib/use-count-up";
 
@@ -26,7 +26,6 @@ const mindCache = new Map<string, Report>();
 
 export default function WorkflowInsights({ slug }: { slug: string }) {
 	const [state, setState] = useState<Report | "loading" | "error">(() => mindCache.get(slug) ?? "loading");
-	const [open, setOpen] = useState(false);
 
 	useEffect(() => {
 		let live = true;
@@ -56,6 +55,11 @@ export default function WorkflowInsights({ slug }: { slug: string }) {
 	const tm = state.this_month;
 	const hasRuns = (tm?.run_count ?? 0) > 0;
 
+	// Breakdown that EXPLAINS the headline %: a low rate usually means many
+	// no-op cycles (loop ran fine, nothing to do), NOT failures.
+	const ok = tm.success_count ?? 0;
+	const failed = tm.failure_count ?? 0;
+	const skipped = tm.skipped_count ?? Math.max(0, tm.run_count - ok - failed);
 	return (
 		<div className="space-y-2.5">
 			<div className="flex items-end justify-between gap-3">
@@ -64,13 +68,27 @@ export default function WorkflowInsights({ slug }: { slug: string }) {
 						{hasRuns ? pctShown : "—"}
 						{hasRuns && <span className="text-base text-slate-400 font-normal">%</span>}
 					</div>
-					<div className="text-[11px] tracking-wide text-slate-400 mt-1">reliable this month</div>
+					<div className="text-[11px] tracking-wide text-slate-400 mt-1">
+						of runs produced a result{hasRuns ? ` · ${ok} of ${tm.run_count}` : ""}
+					</div>
 				</div>
 				<div className="text-right text-[11px] text-slate-500 leading-tight">
-					<div className="tabular-nums">{tm.run_count} runs</div>
+					<div className="tabular-nums">{tm.run_count} runs this month</div>
 					{tm.avg_duration_s > 0 && <div className="tabular-nums">{tm.avg_duration_s.toFixed(1)}s avg</div>}
 				</div>
 			</div>
+
+			{/* What the % is made of — makes a low number legible. */}
+			{hasRuns && (
+				<div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+					<span className="inline-flex items-center gap-1 text-emerald-700"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />{ok} produced output</span>
+					{skipped > 0 && <span className="inline-flex items-center gap-1 text-slate-500"><span className="w-1.5 h-1.5 rounded-full bg-slate-300" />{skipped} no-op (nothing to do)</span>}
+					{failed > 0 && <span className="inline-flex items-center gap-1 text-rose-600"><span className="w-1.5 h-1.5 rounded-full bg-rose-500" />{failed} failed</span>}
+					{(tm.drafts_created ?? 0) > 0 && tm.draft_accept_rate != null && (
+						<span className="text-slate-500">· {Math.round((tm.draft_accept_rate || 0) * 100)}% of {tm.drafts_created} drafts accepted</span>
+					)}
+				</div>
+			)}
 
 			{state.deltas.length > 0 ? (
 				<div className="space-y-1.5">
@@ -79,26 +97,6 @@ export default function WorkflowInsights({ slug }: { slug: string }) {
 			) : (
 				<div className="text-xs text-slate-400 italic">
 					Steady — no month-over-month change to report yet.
-				</div>
-			)}
-
-			<button
-				onClick={() => setOpen((v) => !v)}
-				className="text-[11px] text-slate-400 hover:text-slate-700 inline-flex items-center gap-1 transition-colors"
-			>
-				{open ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-				{open ? "Hide stats" : "Why?"}
-			</button>
-			{open && (
-				<div className="rounded-lg bg-slate-50/70 border border-slate-200/60 px-3 py-2.5 grid grid-cols-2 gap-x-3 gap-y-2">
-					<MiniStat label="success rate" cur={tm.success_rate} prev={state.prev_month.success_rate} format={pct} betterIsHigher />
-					<MiniStat label="avg duration" cur={tm.avg_duration_s} prev={state.prev_month.avg_duration_s} format={(v) => `${v.toFixed(1)}s`} betterIsHigher={false} />
-					{tm.drafts_created ? (
-						<>
-							<MiniStat label="drafts made" cur={tm.drafts_created} prev={state.prev_month.drafts_created || 0} format={(v) => String(Math.round(v))} betterIsHigher />
-							<MiniStat label="accept rate" cur={tm.draft_accept_rate || 0} prev={state.prev_month.draft_accept_rate || 0} format={pct} betterIsHigher />
-						</>
-					) : null}
 				</div>
 			)}
 		</div>
