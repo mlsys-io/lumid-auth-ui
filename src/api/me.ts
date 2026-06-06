@@ -101,6 +101,9 @@ export const me = {
     call<{ intent_id: string; status: "pending" }>("POST", "/apps", { slug, runtime, as }),
   uninstallApp: (app: string) =>
     call<{ intent_id: string; status: "pending" }>("DELETE", `/apps/${encodeURIComponent(app)}`),
+  deleteLoop: (app: string, loop: string) =>
+    call<{ app: string; removed_loop: string; remaining: number; note: string }>(
+      "DELETE", `/apps/${encodeURIComponent(app)}/loops/${encodeURIComponent(loop)}`),
   getIntent: (id: string) =>
     call<MeIntentResult>("GET", `/intents/${encodeURIComponent(id)}`),
 
@@ -390,6 +393,7 @@ export interface MeWorkflowRow {
   trigger: string;
   enabled: boolean;
   tenant: boolean;
+  showcase?: boolean;
   last_run_ts?: number;
   last_run_ok?: boolean;
   next_run_ts?: number;

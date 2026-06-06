@@ -161,7 +161,7 @@ function useWidth(): [React.RefObject<HTMLDivElement | null>, number] {
 // EventCurve — the good-looking trajectory: area-filled line with discrete
 // event markers (learned / self-healed / error / analysis) at the cycles where
 // they happened, hover for detail, legend below.
-export function EventCurve({ t, events, height = 60 }: { t: Trend; events: Record<string, string>; height?: number }) {
+export function EventCurve({ t, events, height = 60, app, loop }: { t: Trend; events: Record<string, string>; height?: number; app?: string; loop?: string }) {
 	const [box, w] = useWidth();
 	const [hover, setHover] = useState<number | null>(null);
 	const H = height, padX = 6, padY = 8;
@@ -176,6 +176,30 @@ export function EventCurve({ t, events, height = 60 }: { t: Trend; events: Recor
 	const marks = t.points.map((p, i) => ({ i, kind: events[p.ts], p })).filter((m) => m.kind);
 	const kindsPresent = Array.from(new Set(marks.map((m) => m.kind)));
 	const gid = `cg-${t.label.replace(/\W/g, "")}`;
+
+	// Worst regression on the curve → ONE clickable red dot that kicks an AI
+	// investigation of that exact run. "bad" = a drop for normal metrics, a
+	// rise for better-when-lower ones (cost/latency/drawdown). Only shown when
+	// the drop is non-trivial (>2% of range) and we know which app/loop to ask
+	// about. Click dispatches studio:ask → the chat agent runs run_detail +
+	// memories_learned and explains what happened.
+	const down = betterDown(t.label);
+	let anomaly = -1, worstBad = 0;
+	for (let i = 1; i < vals.length; i++) {
+		const bad = down ? vals[i] - vals[i - 1] : vals[i - 1] - vals[i];
+		if (bad > worstBad) { worstBad = bad; anomaly = i; }
+	}
+	const canInvestigate = anomaly > 0 && !!app && !!loop && worstBad > rng * 0.02;
+	const investigate = () => {
+		if (anomaly < 1) return;
+		const ts = t.points[anomaly].ts;
+		const prev = fmtMetric(t.label, vals[anomaly - 1]);
+		const cur = fmtMetric(t.label, vals[anomaly]);
+		window.dispatchEvent(new CustomEvent("studio:ask", { detail: {
+			prompt: `Investigate ${app} / ${loop} at run ${ts}: "${t.label}" went from ${prev} to ${cur} — the worst regression on its curve. Walk me through what that run did, what it learned, and what went wrong. Use run_detail and the memories it learned, with specifics.`,
+			autosend: true,
+		} }));
+	};
 
 	return (
 		<div className="w-full">
@@ -196,6 +220,17 @@ export function EventCurve({ t, events, height = 60 }: { t: Trend; events: Recor
 								<circle cx={x(m.i)} cy={y(m.p.v)} r="3" fill={EVENT_META[m.kind!]?.color || COLOR.flat} stroke="white" strokeWidth="1.5" />
 							</g>
 						))}
+						{canInvestigate && (
+							<g onClick={investigate} onMouseEnter={() => setHover(anomaly)} onMouseLeave={() => setHover(null)} style={{ cursor: "pointer" }}>
+								<title>Click to let AI investigate this regression</title>
+								{/* Glow ring pulses via CSS opacity (compositor-friendly, smooth)
+								    instead of SMIL animating `r` (which forces per-frame repaints
+								    and stutters under any main-thread work). */}
+								<circle className="animate-pulse" cx={x(anomaly)} cy={y(vals[anomaly])} r="8" fill="#e11d48" opacity="0.18" />
+								<circle cx={x(anomaly)} cy={y(vals[anomaly])} r="9" fill="transparent" />
+								<circle cx={x(anomaly)} cy={y(vals[anomaly])} r="4" fill="#e11d48" stroke="white" strokeWidth="1.5" />
+							</g>
+						)}
 					</svg>
 				)}
 				{hover !== null && (() => {
@@ -225,7 +260,7 @@ export function EventCurve({ t, events, height = 60 }: { t: Trend; events: Recor
 }
 
 // The featured metric: headline value + delta + the annotated EventCurve.
-function FeaturedMetric({ t, events, n }: { t: Trend; events: Record<string, string>; n: number }) {
+function FeaturedMetric({ t, events, n, app, loop }: { t: Trend; events: Record<string, string>; n: number; app?: string; loop?: string }) {
 	const Icon = t.improved === null ? Minus : t.improved ? TrendingUp : TrendingDown;
 	const col = trendColor(t);
 	const deltaTxt = deltaLabel(t);
@@ -236,24 +271,70 @@ function FeaturedMetric({ t, events, n }: { t: Trend; events: Record<string, str
 				<span className="inline-flex items-center gap-0.5 text-[11px]" style={{ color: col }}><Icon className="w-3.5 h-3.5" />{deltaTxt}</span>
 				<span className="text-[11px] text-slate-400">{t.label} · {n} runs</span>
 			</div>
-			<div className="mt-1.5"><EventCurve t={t} events={events} /></div>
+			<div className="mt-1.5"><EventCurve t={t} events={events} app={app} loop={loop} /></div>
 		</div>
 	);
 }
 
 // Panel goal-header: the primary metric as the big annotated curve, the next
 // few as compact trend cells.
-export function TrendRow({ series, events, tracked }: { series: MeMetricSeries[]; events: Record<string, string>; tracked?: string[] }) {
+export function TrendRow({ series, events, tracked, app, loop }: { series: MeMetricSeries[]; events: Record<string, string>; tracked?: string[]; app?: string; loop?: string }) {
+	// Selected metric drives the big curve; click any cell to switch it.
+	// Keyed by label (not index) so the selection survives poll refreshes
+	// even if the improvement-ranking reorders the cells. Hook must run
+	// before the early return (rules of hooks).
+	const [selLabel, setSelLabel] = useState<string | null>(null);
 	const trends = pickTrends(series, tracked, 4);
 	if (!trends.length) return null;
-	const [primary, ...rest] = trends;
+	// Featured = the user's pick, else the curve with the worst REAL regression
+	// (so its red investigate-dot is visible by default — anomalies should grab
+	// the spotlight, not a monotonic count), else the top-ranked trend.
+	const featured = (() => {
+		if (selLabel) {
+			const s = trends.find((t) => t.label === selLabel);
+			if (s) return s;
+		}
+		let best = trends[0], bestBad = 0.1; // require >10% of range to override
+		for (const t of trends) {
+			const vals = t.values;
+			if (vals.length < 2) continue;
+			const rng = (Math.max(...vals) - Math.min(...vals)) || 1;
+			const down = betterDown(t.label);
+			let bad = 0;
+			for (let i = 1; i < vals.length; i++) {
+				const d = down ? vals[i] - vals[i - 1] : vals[i - 1] - vals[i];
+				if (d > bad) bad = d;
+			}
+			if (bad / rng > bestBad) { bestBad = bad / rng; best = t; }
+		}
+		return best;
+	})();
 	const countOf = (t: Trend) => series.find((s) => s.label === t.label)?.points.length ?? t.values.length;
 	return (
 		<div className="mt-2 space-y-3">
-			<FeaturedMetric t={primary} events={events} n={countOf(primary)} />
-			{rest.length > 0 && (
-				<div className="flex flex-wrap gap-x-5 gap-y-2">
-					{rest.map((t) => <MetricTrendCell key={t.label} t={t} n={countOf(t)} />)}
+			<FeaturedMetric t={featured} events={events} n={countOf(featured)} app={app} loop={loop} />
+			{trends.length > 1 && (
+				<div className="flex flex-wrap gap-x-3 gap-y-2">
+					{trends.map((t) => {
+						const active = t.label === featured.label;
+						return (
+							<button
+								key={t.label}
+								type="button"
+								onClick={() => setSelLabel(t.label)}
+								aria-pressed={active}
+								title={`Show ${t.label}`}
+								className={
+									"text-left rounded-lg px-2 py-1 transition-colors " +
+									(active
+										? "bg-emerald-50/70 ring-1 ring-emerald-200"
+										: "hover:bg-slate-50 ring-1 ring-transparent")
+								}
+							>
+								<MetricTrendCell t={t} n={countOf(t)} />
+							</button>
+						);
+					})}
 				</div>
 			)}
 		</div>

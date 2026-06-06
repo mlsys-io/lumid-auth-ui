@@ -25,14 +25,14 @@ const TITLE: Record<string, string> = {
 	"personal-agent": "Personal agent",
 	"mbb-ai": "Consulting research",
 	"auto-sysresearch": "Systems research",
-	"auto-quant": "Auto-quant trading",
+	"auto-quant": "Quant Research",
 };
 
 const BLURB: Record<string, string> = {
 	"personal-agent": "Morning briefs, inbox triage, and reflections over your email + calendar.",
 	"mbb-ai": "Active-learning over consulting cases — sharpens its judgement each cycle.",
 	"auto-sysresearch": "Proposes, benchmarks, and learns better systems configurations.",
-	"auto-quant": "Researches crypto markets and drafts trades on a schedule.",
+	"auto-quant": "Momentum + mean-reversion crypto strategies — proposes, backtests, and risk-gates paper trades, learning each cycle.",
 };
 
 export function appTitle(app: string): string {
@@ -124,7 +124,7 @@ export default function AppCard({
 			{/* each workflow row → label opens the app; the sparkline's dots are
 			    individually clickable (hover previews / click pins the cycle). */}
 			<div className="px-4 pb-3 space-y-0.5 border-t border-slate-100 pt-2">
-				{workflows.slice(0, 3).map((w) => (
+				{workflows.slice(0, 2).map((w) => (
 					<div
 						key={w.slug}
 						className="flex items-center gap-2 w-full rounded-md px-1.5 -mx-1.5 py-0.5 hover:bg-emerald-50/60 transition-colors"
@@ -140,7 +140,7 @@ export default function AppCard({
 						<RunSparkline spec={w.run_spark || ""} runs={w.runs_recent} app={w.app} loop={loopOf(w)} />
 					</div>
 				))}
-				{total > 3 && <div className="text-[10px] text-slate-400 pt-0.5 pl-1.5">+{total - 3} more</div>}
+				{total > 2 && <div className="text-[10px] text-slate-400 pt-0.5 pl-1.5">+{total - 2} more</div>}
 				{/* How the app's key metrics are trending over iterations — curves +
 				    insight (to the right). Tries the app's loops; null if none move. */}
 				{(() => {

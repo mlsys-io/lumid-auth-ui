@@ -14,7 +14,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ChevronDown, ChevronRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle } from "lucide-react";
+import { ChevronDown, ChevronRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { me, type MeWorkflowRow } from "@/api/me";
 import apiClient from "@/api/client";
 import { setStudioSelection } from "@/components/StudioContext";
@@ -33,6 +34,13 @@ import { cn } from "@/lib/utils";
 
 // Scope the surface to the showcase apps (keeps the demo focused).
 const inScope = (app?: string) => !app || (RUNNING_APPS as readonly string[]).includes(app);
+
+// Apps the user just deleted. Uninstall is async (intent queue → picker ~5s),
+// so /me/workflows keeps returning a deleted app for a few seconds; without
+// this the grid shows it until the next poll/refresh. The grid filters these
+// out, and drops an entry once the backend stops returning that app (so
+// re-installing a same-named app later isn't hidden).
+const recentlyDeleted = new Set<string>();
 
 // me.loopsHealth() is typed {apps} in the client, but the handler also
 // returns `loops` (per-loop schedule/status). Read both via this shape.
@@ -92,9 +100,11 @@ function AppsHome() {
 	const [eventApp, setEventApp] = useState<string | null>(null);
 	const prevMaxTsRef = useRef<string>("");
 
-	// Composer host — folded in from the old Intents page. Opens on a
-	// ?compose=1 deep-link and whenever the chat agent finishes a
-	// compose_workflow (studio:composed).
+	// Composer host — the standalone modal still opens on an explicit
+	// ?compose=1 deep-link or the manual "+ New workflow" button
+	// (studio:new-workflow). It NO LONGER auto-opens when the chat agent
+	// finishes compose_workflow — that build now renders inline in the chat
+	// as an AssemblyCard (no popup). See StudioChat compose_workflow handler.
 	const [composerOpen, setComposerOpen] = useState(false);
 	const [searchParams, setSearchParams] = useSearchParams();
 	useEffect(() => {
@@ -107,12 +117,8 @@ function AppsHome() {
 	}, [searchParams, setSearchParams]);
 	useEffect(() => {
 		const f = () => setComposerOpen(true);
-		window.addEventListener("studio:composed", f);
 		window.addEventListener("studio:new-workflow", f);
-		return () => {
-			window.removeEventListener("studio:composed", f);
-			window.removeEventListener("studio:new-workflow", f);
-		};
+		return () => window.removeEventListener("studio:new-workflow", f);
 	}, []);
 
 	const load = useCallback(async () => {
@@ -128,7 +134,20 @@ function AppsHome() {
 			// Only the very first load (byApp still null) falls through to the
 			// skeleton via the early `byApp === null` guard below.
 			if (wfR.status !== "fulfilled") return;
-			const wfs = (wfR.value.workflows || []).filter((w) => inScope(w.app));
+			// Drop just-deleted apps from the recently-deleted set once the
+			// backend stops returning them (uninstall finished) — then they
+			// neither appear nor stay stuck in the hide-set.
+			const fetchedApps = new Set((wfR.value.workflows || []).map((w) => w.app || ""));
+			for (const a of [...recentlyDeleted]) if (!fetchedApps.has(a)) recentlyDeleted.delete(a);
+			// Show the user's OWN apps (tenant:true) always — a freshly-composed
+			// bot gets a fresh slug, so gating it would hide the user's own
+			// creation. Operator-shared apps surface when the BACKEND marks them
+			// showcase (LUMID_SHOWCASE_APPS — curated without a frontend rebuild);
+			// inScope(RUNNING_APPS) stays as a static fallback for older backends.
+			// `recentlyDeleted` hides an app the moment the user deletes it (the
+			// async uninstall keeps returning it for a few seconds otherwise).
+			const wfs = (wfR.value.workflows || []).filter(
+				(w) => (w.tenant || w.showcase || inScope(w.app)) && !recentlyDeleted.has(w.app || ""));
 			const m = new Map<string, MeWorkflowRow[]>();
 			for (const w of wfs) {
 				const k = w.app || "—";
@@ -137,12 +156,28 @@ function AppsHome() {
 			}
 			setByApp(m);
 
+			// Identity (version/kind badges). Seed from each app's workflow rows
+			// first — they carry version for EVERY app incl. tenant ones (the
+			// loops-health/AdminLoops path only reads the operator home, so
+			// tenant apps were version-less). Then overlay loops-health identity
+			// where it has richer data (published/status), without clobbering a
+			// version the rows already provided.
+			const im = new Map<string, AppIdentity>();
+			for (const [app, rows] of m.entries()) {
+				const v = rows.find((r) => r.version)?.version;
+				if (v) im.set(app, { version: v });
+			}
 			if (lhR.status === "fulfilled") {
 				const apps = (lhR.value as unknown as LoopsHealthResp).apps || [];
-				const im = new Map<string, AppIdentity>();
-				for (const a of apps) im.set(a.app, { version: a.version, kind: a.kind, published: a.published, status: a.status });
-				setIdentity(im);
+				for (const a of apps) {
+					const prev = im.get(a.app);
+					im.set(a.app, {
+						version: a.version || prev?.version,
+						kind: a.kind, published: a.published, status: a.status,
+					});
+				}
 			}
+			setIdentity(im);
 
 			let runsToday = 0;
 			if (todayR.status === "fulfilled") {
@@ -300,6 +335,8 @@ const identCache = new Map<string, AppIdentity | undefined>();
 function AppOverview({ app, embedded, initialLoop }: { app: string; embedded?: boolean; initialLoop?: string | null }) {
 	const [rows, setRows] = useState<Row[] | null>(() => rowsCache.get(app) ?? null);
 	const [identity, setIdentity] = useState<AppIdentity | undefined>(() => identCache.get(app));
+	const [deleting, setDeleting] = useState(false);
+	const navigate = useNavigate();
 	const [params, setParams] = useSearchParams();
 	const selected = params.get("selected");
 	const initialCycle = params.get("cycle"); // deep-link anchor → open that run
@@ -338,6 +375,50 @@ function AppOverview({ app, embedded, initialLoop }: { app: string; embedded?: b
 		setParams(sp, { replace: true });
 	};
 
+	// Delete is only offered for the user's OWN (tenant) apps — operator-shared
+	// apps (e.g. auto-quant) aren't in the tenant tree, so uninstall can't
+	// touch them. Async via the uninstall intent; we navigate home optimistically.
+	const isTenantApp = !!rows && rows.some((r) => r.wf.tenant);
+	const del = async () => {
+		if (deleting) return;
+		if (!window.confirm(
+			`Delete "${appTitle(app)}"?\n\nThis uninstalls the app and removes its ` +
+			`workflows + run history from your account. This cannot be undone.`)) return;
+		setDeleting(true);
+		try {
+			await me.uninstallApp(app);
+			toast.success(`Deleting ${appTitle(app)}…`);
+			recentlyDeleted.add(app);   // hide from the grid immediately (async uninstall)
+			rowsCache.delete(app);
+			identCache.delete(app);
+			window.setTimeout(() => navigate("/studio/apps"), 1200);
+		} catch (e) {
+			toast.error(`Delete failed: ${e instanceof Error ? e.message : String(e)}`);
+			setDeleting(false);
+		}
+	};
+
+	// Per-workflow (loop) hard-delete — only for the user's own apps, and never
+	// the last loop (the backend blocks that; we also hide the button then).
+	const [deletingLoop, setDeletingLoop] = useState<string | null>(null);
+	const delLoop = async (loop: string, label: string) => {
+		if (deletingLoop) return;
+		if (!window.confirm(
+			`Delete workflow "${label}" from ${appTitle(app)}?\n\n` +
+			`Removes it and its run history. This cannot be undone.`)) return;
+		setDeletingLoop(loop);
+		try {
+			await me.deleteLoop(app, loop);
+			toast.success(`Removed workflow "${label}"`);
+			rowsCache.delete(app);
+			await load();
+		} catch (e) {
+			toast.error(`Delete failed: ${e instanceof Error ? e.message : String(e)}`);
+		} finally {
+			setDeletingLoop(null);
+		}
+	};
+
 	// Auto-expand the freshest workflow so landing on an app shows its
 	// observability immediately (no extra click).
 	const freshestLoop = rows && rows.length
@@ -363,6 +444,18 @@ function AppOverview({ app, embedded, initialLoop }: { app: string; embedded?: b
 						{app}{identity?.version ? ` · v${identity.version}` : ""}{identity?.published ? " · published" : ""}
 					</div>
 				</div>
+				{isTenantApp && !embedded && (
+					<button
+						type="button"
+						onClick={del}
+						disabled={deleting}
+						title="Delete this app — removes its workflows + run history"
+						className="ml-auto flex-shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-colors disabled:opacity-50"
+					>
+						<Trash2 className="w-3.5 h-3.5" />
+						{deleting ? "Deleting…" : "Delete"}
+					</button>
+				)}
 			</header>
 
 			{rows === null ? (
@@ -394,21 +487,34 @@ function AppOverview({ app, embedded, initialLoop }: { app: string; embedded?: b
 									className="rounded-xl border border-slate-200 bg-white overflow-hidden animate-in fade-in slide-in-from-bottom-1 duration-500"
 									style={{ animationDelay: `${idx * 60}ms`, animationFillMode: "both" }}
 								>
-									<button
-										onClick={() => toggle(loop)}
-										className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-slate-50/70 transition-colors"
-									>
-										{open ? <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />}
-										<span className={cn("w-2 h-2 rounded-full flex-shrink-0", dot)} />
-										<div className="min-w-0 flex-1">
-											<div className="text-sm font-medium text-slate-800 truncate flex items-center gap-1.5">
-												{loopLabel(wf.name, loop)}
-												{wf.running && <span className="text-[10px] font-medium text-sky-600 inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-sky-500 running-pulse" />running…</span>}
+									<div className="flex items-stretch">
+										<button
+											onClick={() => toggle(loop)}
+											className="flex-1 min-w-0 text-left px-4 py-3 flex items-center gap-3 hover:bg-slate-50/70 transition-colors"
+										>
+											{open ? <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />}
+											<span className={cn("w-2 h-2 rounded-full flex-shrink-0", dot)} />
+											<div className="min-w-0 flex-1">
+												<div className="text-sm font-medium text-slate-800 truncate flex items-center gap-1.5">
+													{loopLabel(wf.name, loop)}
+													{wf.running && <span className="text-[10px] font-medium text-sky-600 inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-sky-500 running-pulse" />running…</span>}
+												</div>
+												{wf.enabled === false && <div className="text-[11px] text-slate-400">paused</div>}
 											</div>
-											{wf.enabled === false && <div className="text-[11px] text-slate-400">paused</div>}
-										</div>
-										<RunSparkline spec={wf.run_spark || ""} className="hidden sm:flex" />
-									</button>
+											<RunSparkline spec={wf.run_spark || ""} className="hidden sm:flex" />
+										</button>
+										{isTenantApp && rows.length > 1 && (
+											<button
+												type="button"
+												onClick={() => delLoop(loop, loopLabel(wf.name, loop))}
+												disabled={deletingLoop === loop}
+												title="Delete this workflow"
+												className="flex-shrink-0 px-3 flex items-center text-slate-300 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+											>
+												<Trash2 className="w-3.5 h-3.5" />
+											</button>
+										)}
+									</div>
 									{open && (
 										<WorkflowObservabilityPanel app={app} loop={loop} wf={wf} loopHealth={lh} onChanged={load} initialCycle={open ? initialCycle : null} />
 									)}

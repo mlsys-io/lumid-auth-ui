@@ -118,6 +118,27 @@ const components: Components = {
 	del: ({ children }) => <del className="opacity-60">{children}</del>,
 };
 
+// The agent sometimes emits LaTeX math (e.g. "$\rightarrow$") but the chat
+// renderer has no KaTeX, so it shows the raw source. Convert the common macros
+// to Unicode. Safe around money: only "$word$" (a macro wrapper) is touched —
+// "$0.0033" stays intact (a digit follows the $, not a letter-run + closing $).
+const TEX: Record<string, string> = {
+	rightarrow: "→", to: "→", longrightarrow: "→", Rightarrow: "⇒", implies: "⇒",
+	leftarrow: "←", leftrightarrow: "↔", uparrow: "↑", downarrow: "↓", mapsto: "↦",
+	Delta: "Δ", delta: "δ", times: "×", cdot: "·", approx: "≈", sim: "∼",
+	geq: "≥", ge: "≥", leq: "≤", le: "≤", neq: "≠", ne: "≠", pm: "±",
+	alpha: "α", beta: "β", gamma: "γ", sigma: "σ", mu: "μ", lambda: "λ",
+};
+function sanitizeMath(s: string): string {
+	return s
+		// $\macro$ or $macro$ (inline-math wrapping one macro) → Unicode
+		.replace(/\$\s*\\?([a-zA-Z]+)\s*\$/g, (m, name) => TEX[name] ?? m)
+		// bare \macro anywhere → Unicode (only known macros; \n \t etc. untouched)
+		.replace(/\\([a-zA-Z]+)/g, (m, name) => TEX[name] ?? m)
+		// stray \( \) \[ \] inline/display math delimiters → drop
+		.replace(/\\[()[\]]/g, "");
+}
+
 interface Props {
 	children: string;
 	/** When true, applies the dark-bubble color overrides (used for the user message bubble). */
@@ -125,6 +146,7 @@ interface Props {
 }
 
 export function ChatMarkdown({ children, dark }: Props) {
+	const clean = typeof children === "string" ? sanitizeMath(children) : children;
 	return (
 		<div className={[
 			'chat-md',
@@ -133,7 +155,7 @@ export function ChatMarkdown({ children, dark }: Props) {
 			dark ? '[&_code]:bg-slate-800 [&_code]:text-slate-100 [&_code]:border-slate-700 [&_blockquote]:text-slate-200 [&_blockquote]:border-emerald-400 [&_a]:text-emerald-300 [&_a]:decoration-emerald-500/60 [&_hr]:border-slate-700 [&_table]:border-slate-700 [&_thead]:bg-slate-800 [&_thead]:border-slate-700 [&_tr]:border-slate-800 [&_th]:text-slate-200 [&_td]:text-slate-200' : '',
 		].join(' ')}>
 			<ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-				{children}
+				{clean}
 			</ReactMarkdown>
 		</div>
 	);

@@ -40,9 +40,10 @@ export default function StudioToday() {
 			.catch(() => setEmpty(false));
 	}, []);
 
-	// Compose host — Workflows folded in here, so Intents owns the composer.
-	// Opens on a `?compose=1` deep-link and whenever the chat agent finishes
-	// a compose_workflow (studio:composed) so the draft review pops here.
+	// Compose host — the modal opens only on an explicit `?compose=1`
+	// deep-link now. It no longer auto-opens when the chat agent finishes a
+	// compose_workflow: that build renders inline in the chat (AssemblyCard),
+	// not as a popup. See StudioChat's compose_workflow handler.
 	const [composerOpen, setComposerOpen] = useState(false);
 	const [searchParams, setSearchParams] = useSearchParams();
 	useEffect(() => {
@@ -53,11 +54,6 @@ export default function StudioToday() {
 			setSearchParams(sp, { replace: true });
 		}
 	}, [searchParams, setSearchParams]);
-	useEffect(() => {
-		const onComposed = () => setComposerOpen(true);
-		window.addEventListener('studio:composed', onComposed);
-		return () => window.removeEventListener('studio:composed', onComposed);
-	}, []);
 
 	return (
 		<>

@@ -7,7 +7,7 @@
 // EventSource can't POST). Conversation history persists in
 // sessionStorage so navigating between Studio pages keeps context.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ChevronRight, MessageSquarePlus, Send, Trash2, Loader2, Bot, User, Square, Globe, Telescope, Brain, ChevronDown, Paperclip, X, FileText, FileJson, Image as ImageIcon, Plus, Copy, RotateCcw, Mic, Volume2, Code2, Boxes, Download, ArrowLeft, Crosshair } from 'lucide-react';
 import {
@@ -19,6 +19,7 @@ import {
 } from './StudioContext';
 import { startStudioPicking, stopStudioPicking, isStudioPicking, subscribeStudioPicking } from './StudioPicker';
 import { ChatMarkdown } from './ChatMarkdown';
+import AssemblyCard, { type ComposedDraft } from './workflow/AssemblyCard';
 
 type Role = 'user' | 'assistant';
 // A file the user dropped into the input. Lives in pending state
@@ -75,6 +76,10 @@ type Message = {
 	// so repeated loop events update one message instead of spamming.
 	notify?: boolean;
 	notifyCount?: number;
+	// Rich draft from a compose_workflow tool call. When present, the bubble
+	// renders an inline AssemblyCard (the workflow being assembled, search by
+	// search) instead of popping a modal.
+	composed?: ComposedDraft;
 };
 
 const STORAGE_KEY = 'studio_chat_transcript_v1';
@@ -245,6 +250,11 @@ export function StudioChat() {
 	const [toolsOpen, setToolsOpen] = useState(false);
 	const toolsAnchorRef = useRef<HTMLDivElement>(null);
 	const transcriptRef = useRef<HTMLDivElement>(null);
+	// Stick-to-bottom only when the user is ALREADY near the bottom. Once they
+	// scroll up (e.g. to watch an inline AssemblyCard build itself), we stop
+	// yanking them down on every stream delta. Updated by the transcript's
+	// onScroll; seeded true so the first turn pins as expected.
+	const atBottomRef = useRef(true);
 	// Phase S6 polish — abort handle so the user can cut a runaway
 	// stream short. Reset on every send/queueSend; set just before the
 	// fetch; consumed by the Stop button.
@@ -645,10 +655,14 @@ export function StudioChat() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
-	// Auto-scroll on new content
+	// Auto-scroll on new content — but ONLY if the user is already pinned near
+	// the bottom. If they've scrolled up (to read, or to watch an inline
+	// workflow-assembly card animate), don't drag them back down on every
+	// delta. That repeated yank is what made the assembly "jump".
 	useEffect(() => {
-		if (!transcriptRef.current) return;
-		transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight;
+		const el = transcriptRef.current;
+		if (!el || !atBottomRef.current) return;
+		el.scrollTop = el.scrollHeight;
 	}, [messages, streaming]);
 
 	// Persist width once the user releases the drag (not on every
@@ -1207,7 +1221,16 @@ export function StudioChat() {
 				</div>
 			</header>
 
-			<div ref={transcriptRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3.5 scroll-smooth">
+			<div
+				ref={transcriptRef}
+				onScroll={(e) => {
+					const el = e.currentTarget;
+					// "near bottom" = within 80px of the end. Toggles whether new
+					// content sticks to the bottom or leaves the user where they are.
+					atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+				}}
+				className="flex-1 overflow-y-auto px-4 py-4 space-y-3.5 scroll-smooth"
+			>
 				{messages.length === 0 && <EmptyHint />}
 				{messages.map((m, i) => (
 					<MessageBubble
@@ -1549,7 +1572,7 @@ export function StudioChat() {
 	);
 }
 
-function MessageBubble({
+const MessageBubble = memo(function MessageBubble({
 	m,
 	streaming,
 	onCopy,
@@ -1581,30 +1604,41 @@ function MessageBubble({
 				{!isUser && m.thinking !== undefined && (
 					<ThinkingBlock thinking={m.thinking} done={!!m.thinkingDone} />
 				)}
-				<div className={[
-					'inline-block max-w-full text-[13.5px] rounded-2xl px-3.5 py-2.5 leading-relaxed text-left shadow-sm',
-					isUser
-						? 'bg-slate-900 text-white rounded-tr-md'
-						: 'bg-white text-slate-800 border border-slate-200/70 rounded-tl-md',
-				].join(' ')}>
-					{m.content ? (
-						// User turns are short and rarely markdown-rich;
-						// render plain so URLs / commands they type stay
-						// intact. Assistant turns go through full markdown —
-						// tables, code blocks, lists, links, images.
-						isUser ? (
-							<div className="whitespace-pre-wrap break-words">{m.content}</div>
+				{/* When this turn composed a workflow, the AssemblyCard is the
+				    artifact and renders FIRST — above the text + tool chips.
+				    Anything the agent streams afterwards grows BELOW it, so the
+				    card stays anchored and the reveal doesn't get shoved around
+				    (the "flipping" the user saw when text rendered above it). */}
+				{!isUser && m.composed && <AssemblyCard draft={m.composed} />}
+				{/* Text bubble — skip entirely when there's nothing to show (an
+				    empty bubble under a composed card reads as a stray box). */}
+				{(m.content || (streaming && !m.composed)) && (
+					<div className={[
+						'inline-block max-w-full text-[13.5px] rounded-2xl px-3.5 py-2.5 leading-relaxed text-left shadow-sm',
+						m.composed ? 'mt-2' : '',
+						isUser
+							? 'bg-slate-900 text-white rounded-tr-md'
+							: 'bg-white text-slate-800 border border-slate-200/70 rounded-tl-md',
+					].join(' ')}>
+						{m.content ? (
+							// User turns are short and rarely markdown-rich;
+							// render plain so URLs / commands they type stay
+							// intact. Assistant turns go through full markdown —
+							// tables, code blocks, lists, links, images.
+							isUser ? (
+								<div className="whitespace-pre-wrap break-words">{m.content}</div>
+							) : (
+								<ChatMarkdown>{m.content}</ChatMarkdown>
+							)
 						) : (
-							<ChatMarkdown>{m.content}</ChatMarkdown>
-						)
-					) : streaming ? (
-						<span className="inline-flex gap-1 items-center">
-							<span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
-							<span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
-							<span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" />
-						</span>
-					) : ''}
-				</div>
+							<span className="inline-flex gap-1 items-center">
+								<span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
+								<span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
+								<span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" />
+							</span>
+						)}
+					</div>
+				)}
 				{m.tools && m.tools.length > 0 && (
 					<div className={['mt-2 flex flex-col gap-1', isUser ? 'items-end' : 'items-start'].join(' ')}>
 						{m.tools.map((t, i) => <ToolChip key={i} t={t} />)}
@@ -1672,7 +1706,17 @@ function MessageBubble({
 			</div>
 		</div>
 	);
-}
+}, (a, b) =>
+	// Skip re-render unless the MESSAGE changed. The call site passes fresh
+	// inline callbacks every render, so default memo never holds; compare only
+	// meaningful fields. Stops every keystroke/poll from re-parsing the whole
+	// transcript — the cause of the "fast at first, slower and slower" lag.
+	a.m.role === b.m.role &&
+	a.m.content === b.m.content &&
+	a.m.tools === b.m.tools &&
+	a.m.composed === b.m.composed &&
+	a.streaming === b.streaming &&
+	a.isSpeaking === b.isSpeaking)
 
 // ThinkingBlock — collapsible reasoning panel above the assistant's
 // reply. Auto-expanded while streaming so the user sees the model
@@ -1873,27 +1917,31 @@ function handleEvent(
 			else tools.push(completed);
 			return { ...m, tools };
 		}));
-		// W5 — surface compose_workflow results to the composer modal
-		// so it can switch into "review + install" mode. The chat
-		// already runs the tool; we just relay the result via a
-		// window event for cross-component pickup.
+		// Surface compose_workflow results INLINE — attach the rich draft to
+		// this assistant message so the bubble renders an AssemblyCard (the
+		// workflow assembling itself, search by search). No modal: the build
+		// IS the conversation. (Old behaviour fired a studio:composed window
+		// event that popped a dialog — removed; pages no longer listen.)
 		if (evt.name === 'compose_workflow' && evt.ok !== false && evt.result) {
-			window.dispatchEvent(new CustomEvent('studio:composed', {
-				detail: {
-					slug: String(evt.result.draft_slug || ''),
-					intent: String(evt.result.intent || ''),
-					skills: Array.isArray(evt.result.skills_picked) ? evt.result.skills_picked : [],
-					skill_summaries: Array.isArray(evt.result.skill_summaries) ? evt.result.skill_summaries : undefined,
-					for_app: String(evt.result.for_app || ''),
-					kind: evt.result.kind ? String(evt.result.kind) : undefined,
-					steps: Array.isArray(evt.result.steps) ? evt.result.steps : undefined,
-					schedule: evt.result.schedule ? String(evt.result.schedule) : undefined,
-					schedule_human: evt.result.schedule_human ? String(evt.result.schedule_human) : undefined,
-					goal: evt.result.goal || undefined,
-					risk_agent: evt.result.risk_agent ? String(evt.result.risk_agent) : undefined,
-					mode: evt.result.mode ? String(evt.result.mode) : undefined,
-				},
-			}));
+			const r = evt.result as Record<string, any>;
+			const draft: ComposedDraft = {
+				slug: String(r.draft_slug || ''),
+				intent: String(r.intent || ''),
+				skills: Array.isArray(r.skills_picked) ? r.skills_picked : [],
+				skill_summaries: Array.isArray(r.skill_summaries) ? r.skill_summaries : undefined,
+				for_app: String(r.for_app || ''),
+				kind: r.kind ? String(r.kind) : undefined,
+				steps: Array.isArray(r.steps) ? r.steps : undefined,
+				schedule: r.schedule ? String(r.schedule) : undefined,
+				schedule_human: r.schedule_human ? String(r.schedule_human) : undefined,
+				goal: r.goal || undefined,
+				risk_agent: r.risk_agent ? String(r.risk_agent) : undefined,
+				mode: r.mode ? String(r.mode) : undefined,
+				assembly_trace: r.assembly_trace || undefined,
+			};
+			if (draft.slug) {
+				setMessages((prev) => withLastAssistant(prev, (m) => ({ ...m, composed: draft })));
+			}
 		}
 		// Auto-open the artifact panel when the agent saves a new artifact.
 		// StudioArtifactPanel listens for this event, refreshes the list,

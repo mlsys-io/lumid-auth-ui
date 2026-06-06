@@ -17,6 +17,11 @@ export const RUNNING_APPS = [
 	"personal-agent",
 	"mbb-ai",
 	"auto-sysresearch",
+	// The crypto quant-research showcase — surfaced as the "Quant Research"
+	// card (title in AppCard's TITLE map). Real app with 10 loops + live
+	// cycle history; the card shows its top 2 workflows (momentum +
+	// mean-reversion) and "+8 more".
+	"auto-quant",
 ] as const;
 
 // The workflow apps surfaced in the Intents "What it does" loop list.

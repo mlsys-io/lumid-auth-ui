@@ -222,7 +222,7 @@ export default function WorkflowObservabilityPanel({
 			    whenever there's a goal OR a trajectory — the curve must not depend
 			    on the goal manifest field being present. */}
 			{(wf.goal?.primary || metricSeries.length > 0) ? (
-				<GoalHeader goal={wf.goal} kpis={buildGoalKpis(summary, cycleFiles)} series={metricSeries} events={metricEvents} />
+				<GoalHeader goal={wf.goal} kpis={buildGoalKpis(summary, cycleFiles)} series={metricSeries} events={metricEvents} app={app} loop={loop} />
 			) : (
 				// Honest empty-state: qualitative loops (briefs/triage) emit no
 				// numeric metric, so there's no trajectory to chart — say so
@@ -391,7 +391,7 @@ function buildGoalKpis(summary: CycleSummary | null, files: Record<string, unkno
 	return out.slice(0, 5);
 }
 
-function GoalHeader({ goal, kpis, series, events }: { goal?: { primary: string; tracked?: string[] }; kpis: GoalKpi[]; series: MeMetricSeries[]; events: Record<string, string> }) {
+function GoalHeader({ goal, kpis, series, events, app, loop }: { goal?: { primary: string; tracked?: string[] }; kpis: GoalKpi[]; series: MeMetricSeries[]; events: Record<string, string>; app?: string; loop?: string }) {
 	// Best: trajectories (how metrics move over runs). Then latest static
 	// values. Then just the tracked-metric names, terse. The goal line is
 	// optional — the trend curve renders regardless.
@@ -405,7 +405,7 @@ function GoalHeader({ goal, kpis, series, events }: { goal?: { primary: string; 
 					<div className="text-[10px] uppercase tracking-wide text-emerald-700/70 font-semibold">{goal?.primary ? "Goal · how it's trending" : "How it's trending"}</div>
 					{goal?.primary && <div className="text-[13px] text-slate-800 font-medium leading-snug">{humanizeGoal(goal.primary)}</div>}
 					{hasTrends ? (
-						<TrendRow series={series} events={events} tracked={goal?.tracked} />
+						<TrendRow series={series} events={events} tracked={goal?.tracked} app={app} loop={loop} />
 					) : kpis.length > 0 ? (
 						<div className="mt-2 flex flex-wrap gap-3">
 							{kpis.map((k) => (

@@ -193,12 +193,16 @@ export function StudioShell() {
 		navigate('/auth/login');
 	};
 
-	// "+ New intent" — opens the create-workflow wizard (Describe → live
-	// Assemble → Review → Install). Lands on My Apps (which hosts the modal)
-	// and fires studio:new-workflow so it opens directly.
+	// "+ New intent" — launches the GUIDED CONVERSATIONAL create flow in the
+	// chat: the AI rolls out the procedure step by step (ask what it should do
+	// → compose → present the pipeline clearly → install). Replaces the old
+	// ad-hoc modal that pre-filled a fixed "crypto momentum trader". Lands on
+	// My Apps so the new app surfaces there once installed, then kicks the chat.
 	const newIntent = () => {
 		navigate('/studio/apps');
-		setTimeout(() => window.dispatchEvent(new CustomEvent('studio:new-workflow')), 60);
+		setTimeout(() => window.dispatchEvent(new CustomEvent('studio:ask', {
+			detail: { prompt: 'I want to create a new workflow. Walk me through it step by step.', autosend: true },
+		})), 60);
 	};
 
 	return (
