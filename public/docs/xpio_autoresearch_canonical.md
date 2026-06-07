@@ -470,7 +470,7 @@ text = cc.call("Analyze this pattern: ...", model="haiku", system="You are a dat
 
 This tries `~/.xp/skills/<owner>/<repo>/skills/<file>` first (installed from xp.io), then falls back to `/proj/LumidOS/LumidOS/sdk/skills/<file>` (dev mode).
 
-The correct Python environment for manual CLI operations is `/home/webmaster/lumid/.venv/bin/python3` (has `httpx`, `yaml`, `tomli`, etc.). System Python (`/usr/bin/python3`) lacks pip entirely.
+The correct Python environment for manual CLI operations is the lumid virtualenv's `python3` (has `httpx`, `yaml`, `tomli`, etc.); the system `python3` (`/usr/bin/python3`) lacks pip entirely. The CLI entrypoint is `/proj/LumidOS/LumidOS/bin/lumid` — locate the venv on the current host (the path is host/operator-specific).
 
 ## Skill resolution
 
