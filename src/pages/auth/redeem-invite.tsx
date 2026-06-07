@@ -7,7 +7,7 @@ import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { updateInvitationCode, ApiError } from '../../api';
 import { useAuth } from '../../hooks/useAuth';
-import { isSafeReturnTo } from '../../components/auth-guard';
+import { isSafeReturnTo, defaultLandingPath } from '../../components/auth-guard';
 
 // Standalone page (not a dialog) so users who land here can't bypass
 // it by closing a modal. AuthGuard force-redirects here whenever a
@@ -38,7 +38,7 @@ export default function RedeemInvitePage() {
 			// invitation_code and lets us through.
 			if (refreshUser) await refreshUser();
 			const returnTo = searchParams.get('return_to');
-			navigate(isSafeReturnTo(returnTo) ? returnTo : '/dashboard', { replace: true });
+			navigate(isSafeReturnTo(returnTo) ? returnTo : defaultLandingPath(user?.role), { replace: true });
 		} catch (err) {
 			const msg = err instanceof ApiError ? err.message : 'Invalid invitation code.';
 			setError(msg);

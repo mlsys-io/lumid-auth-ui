@@ -11,6 +11,7 @@ import { login as apiLogin, ApiError } from '../../api';
 import type { LoginResponse } from '../../api';
 import { GOOGLE_CLIENT_ID } from '../../config/env';
 import { executeRecaptcha, isRecaptchaAvailable } from '../../lib/recaptcha';
+import { encodeOAuthState } from '../../components/auth-guard';
 
 interface LoginProps {
 	onLogin: (token: string, userData: { id: number | string; username: string; email: string; avatar?: string; role?: string; status?: string }) => void;
@@ -25,12 +26,18 @@ function generateRandomState(): string {
 	return Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-// Initiate Google OAuth flow
+// Initiate Google OAuth flow. Packs a validated ?return_to into the OAuth
+// `state` (alongside the CSRF nonce) so the post-login destination survives
+// the Google round-trip — see encodeOAuthState/decodeOAuthState.
 function initiateGoogleLogin() {
-	const state = generateRandomState();
+	const nonce = generateRandomState();
 
-	// Store state in sessionStorage for verification
-	sessionStorage.setItem('oauth_state', state);
+	// Store ONLY the nonce in sessionStorage; the callback compares it to the
+	// nonce decoded from the round-tripped state.
+	sessionStorage.setItem('oauth_state', nonce);
+
+	const returnTo = new URLSearchParams(window.location.search).get('return_to');
+	const state = encodeOAuthState(nonce, returnTo);
 
 	const params = new URLSearchParams({
 		client_id: GOOGLE_CLIENT_ID,
