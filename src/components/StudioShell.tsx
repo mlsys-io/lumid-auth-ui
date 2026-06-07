@@ -8,7 +8,7 @@
 // regular page component that just trusts it's inside this shell —
 // no per-page nav reimplementation.
 
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
 	Boxes,
 	Plus,
@@ -28,6 +28,14 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
 import { me } from '@/api/me';
+import { useAppNav, iconFor } from './useAppNav';
+// StudioShell is now the single shell — it also hosts the /dashboard/* pages
+// (admin, quant, lumilake, lqt, product). The ported Runmesh admin pages need
+// these providers + the numeric-id bridge that AppLayout used to supply.
+import { LanguageProvider } from '../runmesh/i18n';
+import { EnterpriseTipProvider } from '../runmesh/components/EnterpriseTip';
+import { useAuthStore } from '../runmesh/stores/useAuthStore';
+import { httpUser } from '../runmesh/utils/axios';
 // Phase S6a — persistent chat sidebar. AI is the primary interface
 // for Studio; webforms in the main workspace area become the
 // precision channel beside it.
@@ -113,6 +121,15 @@ function NavItemView({ to, label, icon: Icon, end, badge }: NavItem) {
 	);
 }
 
+// Uppercase section divider for app-contributed nav groups.
+function SectionLabel({ children }: { children: React.ReactNode }) {
+	return (
+		<div className="mt-3 mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+			{children}
+		</div>
+	);
+}
+
 // Drag-resizable sidebar width, persisted to localStorage. Mirrors the
 // StudioChat right-panel pattern (pointer events, clamp, persist on drag-end)
 // so both rails behave identically. (2026-05-30)
@@ -164,6 +181,38 @@ export function StudioShell() {
 	const navigate = useNavigate();
 	const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
 	const { width: sidebarWidth, resizing, startResize, reset: resetSidebar } = useSidebarWidth();
+	// App-driven nav: installed apps that declare ui.sidebar, grouped by section.
+	const appNav = useAppNav();
+	const location = useLocation();
+	// Hosted /dashboard pages, app surfaces, and management need full width
+	// (admin tables, dataset explorers); core Studio pages stay narrow.
+	const wideMain = location.pathname.startsWith('/dashboard')
+		|| location.pathname.startsWith('/studio/a/')
+		|| location.pathname.startsWith('/studio/manage');
+	// Bridge lum.id → Runmesh auth store (numeric sys_user.user_id) for the
+	// ported Runmesh admin pages now hosted in this shell. Ported from AppLayout.
+	const setRunmeshUser = useAuthStore((s) => s.setUser);
+	useEffect(() => {
+		// Only admins reach the ported Runmesh pages that need the numeric-id
+		// bridge — skip the /runmesh profile fetch for everyone else.
+		if (!user || !isAdmin) return;
+		(async () => {
+			try {
+				const profile = await httpUser.get<{ user?: Record<string, unknown> } & Record<string, unknown>>('/runmesh/system/user/profile');
+				const ru = (profile?.user ?? profile) as Record<string, unknown> | undefined;
+				if (ru?.userId != null) {
+					setRunmeshUser({
+						id: ru.userId,
+						username: (ru.userName as string) || user.username || '',
+						nickname: (ru.nickName as string) || user.username || '',
+						email: (ru.email as string) || user.email || '',
+						role: (user.role as string) || 'user',
+						// eslint-disable-next-line @typescript-eslint/no-explicit-any
+					} as any);
+				}
+			} catch { /* best-effort — pages needing this show their own error */ }
+		})();
+	}, [user, isAdmin, setRunmeshUser]);
 
 	const [menuOpen, setMenuOpen] = useState(false);
 	const menuRef = useRef<HTMLDivElement>(null);
@@ -206,6 +255,8 @@ export function StudioShell() {
 	};
 
 	return (
+		<LanguageProvider>
+		<EnterpriseTipProvider>
 		<div className={cn(
 			'min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 flex',
 			resizing && 'select-none cursor-ew-resize',
@@ -240,6 +291,32 @@ export function StudioShell() {
 					{SECONDARY_NAV.map((item) => (
 					<NavItemView key={item.to} {...item} badge={item.to === '/studio/inbox' ? draftCount : undefined} />
 				))}
+					{/* App-contributed sections — installed xpio apps that declare
+					    ui.sidebar appear here, grouped by section. Data-driven via
+					    useAppNav(); soft-fails to nothing if /me/apps is unreachable. */}
+					{appNav.map((sec) => (
+						<div key={sec.section}>
+							<SectionLabel>{sec.section}</SectionLabel>
+							{sec.items.map((it) => (
+								<NavItemView
+									key={it.app}
+									to={`/studio/a/${encodeURIComponent(it.app)}`}
+									label={it.label}
+									icon={iconFor(it.icon)}
+									badge={it.badge_source === 'drafts' ? draftCount : undefined}
+								/>
+							))}
+						</div>
+					))}
+					{/* Management — role-gated. Lands on the management home inside
+					    Studio; deep admin sections link out from there. */}
+					{isAdmin && (
+						<>
+							<SectionLabel>Management</SectionLabel>
+							<NavItemView to="/studio/manage" label="Management" icon={Shield} />
+						</>
+					)}
+					<div className="my-2 mx-3 h-px bg-slate-200/60" />
 					{/* Marketplace → xp.io (shared catalog), opens in a new tab. */}
 					<a
 						href={XPIO_URL}
@@ -308,18 +385,18 @@ export function StudioShell() {
 								<Settings className="w-3.5 h-3.5 text-slate-500" />
 								Settings
 							</Link>
-							<Link to="/dashboard/tokens"
+							<Link to="/studio/account/tokens"
 								onClick={() => setMenuOpen(false)}
 								className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
 								<Key className="w-3.5 h-3.5 text-slate-500" />
 								API tokens
 							</Link>
 							{isAdmin && (
-								<Link to="/studio/admin"
+								<Link to="/studio/manage"
 									onClick={() => setMenuOpen(false)}
 									className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
 									<Shield className="w-3.5 h-3.5 text-slate-500" />
-									Admin
+									Management
 								</Link>
 							)}
 							<button
@@ -360,7 +437,7 @@ export function StudioShell() {
 				</header>
 
 				{/* Workspace */}
-				<main className="flex-1 px-6 py-6 max-w-5xl w-full">
+				<main className={cn('flex-1 px-6 py-6 w-full', !wideMain && 'max-w-5xl')}>
 					<Outlet />
 				</main>
 			</div>
@@ -380,6 +457,8 @@ export function StudioShell() {
 			    so it can layer above the workspace + chat. */}
 			<StudioPicker />
 		</div>
+		</EnterpriseTipProvider>
+		</LanguageProvider>
 	);
 }
 

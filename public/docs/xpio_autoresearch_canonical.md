@@ -181,6 +181,51 @@ tools:
   - {name: setup,  description: "First-run wizard"}
 ```
 
+## Optional `ui:` block — Studio sidebar entry + app-defined surface
+
+An app may declare an optional top-level `ui:` block so it inserts itself into
+the unified Studio sidebar and defines its own UI **as a runtime-loaded Markdown
+document authored by the app builder**. The Python runner ignores `ui:` (it only
+reads loops/engine/auto_publish/etc.), so this is metadata-only — safe to add to
+any app.
+
+```yaml
+ui:
+  sidebar:                       # omit to keep the app out of the sidebar
+    label: "Auto Quant"          # required — nav text
+    icon: "chart-candlestick"    # optional — lucide icon name (kebab-case); client maps it, default Boxes
+    section: "Trading"           # optional — sidebar group header; default "Apps"
+    order: 10                    # optional — sort within the section
+    badge_source: "running"      # optional — drafts | review | running | none
+  surface:
+    markdown: "ui/home.md"       # bundle-relative path to the surface document
+    # native: "<key>"            # RESERVED: first-party-only registry key; the
+                                 # server echoes it but the SPA resolves it ONLY
+                                 # against its compiled allowlist (never loads
+                                 # arbitrary code). Use for irreducibly-interactive
+                                 # first-party surfaces (e.g. lumid-market).
+```
+
+**Surface rendering.** `GET /api/v1/me/apps/<app>/ui` serves the markdown body.
+The Studio shell renders it with react-markdown plus a small set of **`lumid:*`
+fenced-block directives** that become live, data-bound widgets:
+
+| Directive | Renders | `source` (allowlisted) |
+|---|---|---|
+| ` ```lumid:stat ` | a stat cell | `me://today`, `me://workflows`, … |
+| ` ```lumid:table ` | a sortable table | `me://*` / `/findata-cloud/*` |
+| ` ```lumid:chart ` | a chart | same |
+| ` ```lumid:list ` | a list of cards | same |
+| ` ```lumid:action ` | a button (`open`/`run_loop`/`install_app`) | `me://*` POST |
+| ` ```lumid:iframe ` | a sandboxed iframe | same-origin proxy allowlist only |
+
+Directive `source` may bind **only** to vetted, auth-gated `me://*` endpoints and
+the anon `/findata-cloud/*` proxy — never arbitrary URLs. Unknown `lumid:*` blocks
+degrade gracefully to a labelled code block. Surface markdown is served with a
+path-traversal guard (stays inside the bundle, `.md`-only, ≤256 KB).
+
+See `~/.xp/apps/auto-quant/ui/home.md` for a reference surface.
+
 ## Pattern A — runner-driven loop
 
 The runner walks `steps[]` in order. Each step is one skill call; outputs flow into `prev_outputs` so later steps can reference earlier ones.

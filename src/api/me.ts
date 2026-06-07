@@ -62,11 +62,43 @@ async function call<T>(
 
 // ── Apps ─────────────────────────────────────────────────────────────────
 
+// An app may declare an optional `ui:` block in its xpcloud.yaml to insert
+// itself into the Studio sidebar and define a runtime-loaded UI surface.
+export interface MeAppUiSidebar {
+  label: string;
+  icon?: string;        // lucide icon name (kebab-case); client maps to a component, default Boxes
+  section?: string;     // sidebar group header; default "Apps"
+  order?: number;       // sort within section
+  badge_source?: "drafts" | "review" | "running" | "none" | string;
+}
+export interface MeAppUiSurface {
+  markdown?: string;    // bundle-relative path to the surface doc (served via me.appUI)
+  native?: string;      // reserved first-party registry key (bundle-internal only)
+}
+export interface MeAppUi {
+  sidebar?: MeAppUiSidebar;
+  surface?: MeAppUiSurface;
+}
+
 export interface MeAppCard {
   name: string;
   has_manifest: boolean;
   has_xpcloud: boolean;
   has_user_overrides: boolean;
+  tenant?: boolean;
+  ui?: MeAppUi;
+}
+
+// Surface payload returned by me.appUI — either a markdown body to render,
+// or a `native` registry key the first-party client resolves to a component.
+export interface MeAppSurface {
+  app: string;
+  surface: string;
+  path?: string;
+  markdown?: string;
+  native?: string;
+  bytes?: number;
+  truncated?: boolean;
 }
 
 // /me/loops/health row — what /admin/loops surfaces, scoped to the
@@ -101,6 +133,12 @@ export const me = {
     call<{ intent_id: string; status: "pending" }>("POST", "/apps", { slug, runtime, as }),
   uninstallApp: (app: string) =>
     call<{ intent_id: string; status: "pending" }>("DELETE", `/apps/${encodeURIComponent(app)}`),
+  // App-declared UI surface (markdown body or native registry key).
+  appUI: (app: string, surface?: string) =>
+    call<MeAppSurface>(
+      "GET",
+      `/apps/${encodeURIComponent(app)}/ui${surface ? "/" + encodeURIComponent(surface) : ""}`,
+    ),
   deleteLoop: (app: string, loop: string) =>
     call<{ app: string; removed_loop: string; remaining: number; note: string }>(
       "DELETE", `/apps/${encodeURIComponent(app)}/loops/${encodeURIComponent(loop)}`),

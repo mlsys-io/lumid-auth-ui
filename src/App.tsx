@@ -37,6 +37,8 @@ function XpioRedirect() {
 }
 // Phase S3-C — app editor (lean v1).
 const StudioApps         = lazy(() => import("./pages/studio/apps"));
+// App-defined UI surface (runtime-loaded markdown / native escape-hatch) at /studio/a/:app
+const AppSurface         = lazy(() => import("./components/app-surface/AppSurface"));
 // W1 workflow surface — replaces /studio/apps as the canonical landing
 // for "Manage" verbs. Adds /workflows list + per-workflow detail +
 // the unified /runs view + per-run drill-down.
@@ -110,12 +112,9 @@ const QuantStrategy = lazy(() => import("./pages/dashboard/quant-strategy"));
 const QuantTemplate = lazy(() => import("./pages/dashboard/quant-template"));
 const QuantResearch = lazy(() => import("./pages/dashboard/quant-research"));
 const QuantMarketData = lazy(() => import("./pages/dashboard/quant-market-data"));
-const DatasetsFindata = lazy(() => import("./pages/dashboard/datasets-findata"));
-const DatasetsMacro   = lazy(() => import("./pages/dashboard/datasets-macro"));
-const DatasetsKols    = lazy(() => import("./pages/dashboard/datasets-kols"));
-const DatasetsNews    = lazy(() => import("./pages/dashboard/datasets-news"));
-const DatasetsPredmarket = lazy(() => import("./pages/dashboard/datasets-predmarket"));
-const DatasetsMarkets = lazy(() => import("./pages/dashboard/datasets-markets"));
+// Datasets pages are now the Data Exploration apps — the dashboard routes
+// redirect into /studio/a/lumid-data-*, and the components load via the
+// app-surface native-registry (not these lazy consts). Removed as dead code.
 // Quant competition leaf components — Competitions shell wraps the
 // list-views (Browse + My strategies) with a sub-tab strip. Pathways
 // and detail pages render directly. 2026-05-03 consolidation.
@@ -413,6 +412,21 @@ export default function App() {
             {/* T13 — per-intent detail panel; dispatched by intent.body.kind. */}
             <Route path="intents/:intentId"             element={<StudioIntentDetail />} />
             <Route path="inbox"                        element={<StudioInbox />} />
+            {/* App-defined UI surface — apps declare ui.surface in xpcloud.yaml;
+                served as runtime markdown (or a first-party native key). */}
+            <Route path="a/:app"                        element={<AppSurface />} />
+            <Route path="a/:app/:surface"               element={<AppSurface />} />
+            {/* Account surfaces folded into the one Studio shell. The old
+                /dashboard/{profile,tokens,account/connect/google} routes stay
+                reachable (back-compat) and redirect here. */}
+            <Route path="account/profile"               element={<Profile />} />
+            <Route path="account/tokens"                element={<Tokens />} />
+            <Route path="account/connect/google"        element={<ConnectGoogle />} />
+            {/* Management landing inside Studio — role-gated. Deep admin
+                section trees (users/clusters/competitions) keep their existing
+                /dashboard/admin/* tab-strip routes for now; the overview links
+                into them. (Full re-shell is a follow-up.) */}
+            <Route path="manage" element={<AdminGuard><AdminOverview /></AdminGuard>} />
             {/* Sidebar consolidation 2026-05-25: skills merged into the
                 catalog (now "Library"); runs + mind folded into Workflows.
                 Marketplace → Library rename (demo IA); old paths redirect.
@@ -464,11 +478,16 @@ export default function App() {
               product (Apps, Workflows, GPU rentals, Lumilake, Admin).
               2026-04-24 consolidation: one AppLayout renders all of it
               at /dashboard/*. Legacy /app/* URLs redirect further down. */}
+          {/* One shell: /dashboard/* now renders inside StudioShell too (was
+              AppLayout). URLs/tab-links/redirects unchanged — the pages just
+              host in the unified Studio chrome. Revert to <AppLayout/> here to
+              roll back. AppLayout is retained (referenced by no route now) for
+              that one-line revert + reference. */}
           <Route
             path="/dashboard"
             element={
               <AuthGuard requireAuth={true}>
-                <AppLayout />
+                <StudioShell />
               </AuthGuard>
             }
           >
@@ -563,9 +582,10 @@ export default function App() {
                 (CLI/SDK onboarding) rather than a profile sub-page.
                 Connect (OAuth linking) dropped 2026-04-24. Billing
                 stays as its own sidebar entry. */}
-            <Route path="profile" element={<Profile />} />
-            <Route path="tokens" element={<Tokens />} />
-            <Route path="account/connect/google" element={<ConnectGoogle />} />
+            {/* Account folded into Studio — old /dashboard paths redirect. */}
+            <Route path="profile" element={<Navigate to="/studio/account/profile" replace />} />
+            <Route path="tokens" element={<Navigate to="/studio/account/tokens" replace />} />
+            <Route path="account/connect/google" element={<Navigate to="/studio/account/connect/google" replace />} />
             <Route path="account/connect/power-automate" element={<ConnectPowerAutomate />} />
             <Route path="account/connect/microsoft" element={<ConnectMicrosoft />} />
             <Route path="billing" element={<AppBilling />} />
@@ -632,12 +652,13 @@ export default function App() {
             {/* Datasets — FinData embed (Tier E of lumid.data prereq plan).
                 Surfaced under /dashboard/datasets/findata; the iframe loads
                 the FinData Vue SPA via /findata-embed/ same-origin proxy. */}
-            <Route path="datasets/findata" element={<DatasetsFindata />} />
-            <Route path="datasets/macro"   element={<DatasetsMacro />} />
-            <Route path="datasets/kols"    element={<DatasetsKols />} />
-            <Route path="datasets/news"    element={<DatasetsNews />} />
-            <Route path="datasets/predmarket" element={<DatasetsPredmarket />} />
-            <Route path="datasets/markets" element={<DatasetsMarkets />} />
+            {/* Datasets are now the Data Exploration apps — redirect into Studio. */}
+            <Route path="datasets/findata" element={<Navigate to="/studio/a/lumid-data-findata" replace />} />
+            <Route path="datasets/macro"   element={<Navigate to="/studio/a/lumid-data-macro" replace />} />
+            <Route path="datasets/kols"    element={<Navigate to="/studio/a/lumid-data-kols" replace />} />
+            <Route path="datasets/news"    element={<Navigate to="/studio/a/lumid-data-news" replace />} />
+            <Route path="datasets/predmarket" element={<Navigate to="/studio/a/lumid-data-predmarket" replace />} />
+            <Route path="datasets/markets" element={<Navigate to="/studio/a/lumid-data-markets" replace />} />
 
             {/* Lumilake-origin pages grouped under /app/lumilake/*.
                 data-label + modelling hidden 2026-04-24 — not

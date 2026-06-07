@@ -32,7 +32,8 @@ export function isSafeReturnTo(raw: string | null | undefined): raw is string {
 			if (u.origin !== window.location.origin) return false;
 			// Same-origin absolute — collapse to path for Navigate.
 			return (
-				u.pathname.startsWith('/app') ||
+				u.pathname.startsWith('/studio') ||
+					u.pathname.startsWith('/app') ||
 				u.pathname.startsWith('/dashboard') ||
 				u.pathname.startsWith('/account') ||
 				u.pathname === '/'
@@ -43,6 +44,7 @@ export function isSafeReturnTo(raw: string | null | undefined): raw is string {
 	}
 	// Plain paths — must start with a known safe prefix.
 	return (
+		raw.startsWith('/studio') ||
 		raw.startsWith('/app') ||
 		raw.startsWith('/dashboard') ||
 		raw.startsWith('/account') ||
@@ -71,8 +73,33 @@ export function defaultLandingPath(role: string | null | undefined): string {
 	// d'être) — the composer's Start button routes cross-domain to
 	// lum.id/studio anyway.
 	if (isGoBundle) return '/go-composer';
-	if (role === 'admin' || role === 'super_admin') return '/dashboard';
-	return '/studio/intents';
+	// One entrance: everyone lands in Studio. Admins reach management via the
+	// sidebar Management section / user-menu Admin link (now under /studio).
+	return '/studio';
+}
+
+/**
+ * OAuth `state` carries the CSRF nonce AND a same-origin `return_to` so the
+ * post-login destination survives the Google round-trip — Google only echoes
+ * the opaque `state` param, so anything we want back must ride inside it.
+ * `return_to` is validated (isSafeReturnTo) before being packed; the callback
+ * re-validates on the way out.
+ */
+export function encodeOAuthState(nonce: string, returnTo?: string | null): string {
+	const r = returnTo && isSafeReturnTo(returnTo) ? returnTo : '';
+	const json = JSON.stringify({ n: nonce, r });
+	return btoa(json).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+export function decodeOAuthState(raw: string): { nonce: string; returnTo: string } {
+	try {
+		const b64 = raw.replace(/-/g, '+').replace(/_/g, '/');
+		const j = JSON.parse(atob(b64)) as { n?: string; r?: string };
+		return { nonce: String(j.n || ''), returnTo: typeof j.r === 'string' ? j.r : '' };
+	} catch {
+		// Back-compat: a plain-hex state (pre-return_to) is treated as the nonce.
+		return { nonce: raw, returnTo: '' };
+	}
 }
 
 export function AuthGuard({ children, requireAuth = true }: AuthGuardProps) {

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from '../../components/ui/button';
 import apiClient from '../../api/client';
+import { isSafeReturnTo } from '../../components/auth-guard';
 
 /**
  * /dashboard/account/connect/google — one-click Google scope grant
@@ -27,22 +28,38 @@ import apiClient from '../../api/client';
  */
 export default function ConnectGooglePage() {
 	const [params] = useSearchParams();
+	const navigate = useNavigate();
 	const [busy, setBusy] = useState(false);
 
 	const status = params.get('google_status');
 	const detail = params.get('detail') || '';
+	const returnTo = params.get('return_to');
 
 	const banner = useMemo(() => statusToBanner(status, detail), [status, detail]);
 
 	useEffect(() => {
-		if (status === 'connected') toast.success('Gmail + Calendar connected');
-		else if (status && status !== 'invalid') toast.error(`Google connect: ${status}`);
-	}, [status]);
+		if (status === 'connected') {
+			toast.success('Gmail + Calendar connected');
+			// Bounce back to the launching page (e.g. a Studio surface) after
+			// briefly showing the success banner. return_to was server-validated
+			// before being appended to the callback redirect.
+			if (isSafeReturnTo(returnTo)) {
+				const t = setTimeout(() => navigate(returnTo), 1200);
+				return () => clearTimeout(t);
+			}
+		} else if (status && status !== 'invalid') {
+			toast.error(`Google connect: ${status}`);
+		}
+	}, [status, returnTo, navigate]);
 
 	async function startConnect() {
 		setBusy(true);
 		try {
-			const r = await apiClient.post('/api/v1/oauth/google/connect/init', {});
+			// Carry the page we were launched from (or fall back to Studio) so
+			// the post-consent redirect returns there instead of stranding the
+			// user on this connect page.
+			const rt = isSafeReturnTo(returnTo) ? returnTo : '/studio';
+			const r = await apiClient.post('/api/v1/oauth/google/connect/init', { return_to: rt });
 			const url = (r.data?.data as { authorize_url?: string } | undefined)?.authorize_url;
 			if (!url) throw new Error('No authorize_url returned');
 			window.location.href = url;

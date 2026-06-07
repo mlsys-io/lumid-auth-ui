@@ -1,0 +1,92 @@
+// Data-driven Studio sidebar: installed xpio apps that declare `ui.sidebar`
+// contribute their own nav entries, grouped by section. Mirrors the
+// QuantSection runtime-fetch pattern (fetch on mount + 60s poll + an
+// invalidate event so an install can refresh the rail immediately).
+
+import { useEffect, useState } from "react";
+import {
+  Boxes, Database, LineChart, BarChart3, Newspaper, TrendingUp, Globe,
+  Activity, Coins, Users, CandlestickChart, MessagesSquare, Brain,
+  type LucideIcon,
+} from "lucide-react";
+import { me, type MeAppCard } from "@/api/me";
+
+export const APP_NAV_INVALIDATE = "studio:apps-invalidate";
+const POLL_MS = 60_000;
+
+const ICONS: Record<string, LucideIcon> = {
+  "boxes": Boxes,
+  "database": Database,
+  "line-chart": LineChart,
+  "bar-chart": BarChart3,
+  "bar-chart-3": BarChart3,
+  "newspaper": Newspaper,
+  "trending-up": TrendingUp,
+  "globe": Globe,
+  "activity": Activity,
+  "coins": Coins,
+  "users": Users,
+  "candlestick-chart": CandlestickChart,
+  "chart-candlestick": CandlestickChart,
+  "messages-square": MessagesSquare,
+  "brain": Brain,
+};
+
+export function iconFor(name?: string): LucideIcon {
+  return (name && ICONS[name]) || Boxes;
+}
+
+export interface AppNavItem {
+  app: string;
+  label: string;
+  icon?: string;
+  order: number;
+  badge_source?: string;
+}
+export interface AppNavSection {
+  section: string;
+  items: AppNavItem[];
+}
+
+export function useAppNav(): AppNavSection[] {
+  const [apps, setApps] = useState<MeAppCard[]>([]);
+  useEffect(() => {
+    let live = true;
+    const tick = () =>
+      me.listApps()
+        .then((r) => { if (live) setApps(r.apps || []); })
+        .catch(() => { /* soft-fail; sidebar keeps fixed entries */ });
+    tick();
+    const id = window.setInterval(tick, POLL_MS);
+    const onInvalidate = () => tick();
+    window.addEventListener(APP_NAV_INVALIDATE, onInvalidate);
+    return () => {
+      live = false;
+      window.clearInterval(id);
+      window.removeEventListener(APP_NAV_INVALIDATE, onInvalidate);
+    };
+  }, []);
+
+  const seen = new Set<string>();
+  const bySection = new Map<string, AppNavItem[]>();
+  for (const a of apps) {
+    const sb = a.ui?.sidebar;
+    if (!sb?.label || seen.has(a.name)) continue; // tenant walked first → wins over operator-shared dup
+    seen.add(a.name);
+    const section = sb.section || "Apps";
+    if (!bySection.has(section)) bySection.set(section, []);
+    bySection.get(section)!.push({
+      app: a.name,
+      label: sb.label,
+      icon: sb.icon,
+      order: sb.order ?? 100,
+      badge_source: sb.badge_source,
+    });
+  }
+  return [...bySection.entries()]
+    .map(([section, items]) => ({
+      section,
+      items: items.sort((x, y) => x.order - y.order || x.label.localeCompare(y.label)),
+    }))
+    .sort((a, b) => a.section.localeCompare(b.section));
+}

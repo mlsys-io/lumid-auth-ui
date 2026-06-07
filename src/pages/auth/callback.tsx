@@ -5,7 +5,7 @@ import { Button } from '../../components/ui/button';
 import { RefreshCw, AlertCircle, CheckCircle } from 'lucide-react';
 import { googleLogin, ApiError } from '../../api';
 import { useAuth } from '../../hooks/useAuth';
-import { isSafeReturnTo } from '../../components/auth-guard';
+import { isSafeReturnTo, decodeOAuthState, defaultLandingPath } from '../../components/auth-guard';
 import { toast } from 'sonner';
 import InvitationCodeDialog from './invitation-code-dialog';
 import type { UserInfo } from '../../api';
@@ -24,6 +24,9 @@ export function AuthCallback() {
 	// second run tears through a now-empty sessionStorage and throws
 	// "Invalid state — possible CSRF attack" even on a legit login.
 	const ranRef = useRef(false);
+	// return_to decoded from the OAuth state — survives across the invitation
+	// dialog (the URL still carries state, but we stash the validated value).
+	const returnToRef = useRef<string>('');
 
 	useEffect(() => {
 		if (ranRef.current) return;
@@ -48,12 +51,18 @@ export function AuthCallback() {
 				throw new Error('Missing code or state parameter');
 			}
 
-			// Verify state matches (CSRF protection). We DON'T clear the
+			// The state now carries {nonce, return_to}. Decode it: the nonce
+			// is the CSRF token (compared to sessionStorage), return_to is the
+			// post-login destination that rode through the Google round-trip.
+			const { nonce, returnTo } = decodeOAuthState(state);
+			returnToRef.current = isSafeReturnTo(returnTo) ? returnTo : '';
+
+			// Verify the nonce matches (CSRF protection). We DON'T clear the
 			// stored state until the backend exchange succeeds — if the
 			// exchange fails, a legit retry (user clicks "back to login"
 			// → Google again) still has the value for the next round.
 			const storedState = sessionStorage.getItem('oauth_state');
-			if (state !== storedState) {
+			if (nonce !== storedState) {
 				throw new Error('Invalid state parameter - possible CSRF attack');
 			}
 
@@ -99,13 +108,12 @@ export function AuthCallback() {
 			setStatus('success');
 			toast.success('Signed in with Google');
 
-			// Honor ?return_to for SSO bounces, but only if it points
-			// back at a safe lum.id path — see isSafeReturnTo in
-			// auth-guard.tsx. External URLs fall through to /dashboard
-			// so the OAuth callback can't be used as an open redirect.
-			const returnTo = urlParams.get('return_to');
+			// Honor the return_to carried in the OAuth state (already
+			// validated into returnToRef); otherwise land on the role's
+			// default Studio surface. External URLs were rejected at decode
+			// time so the callback can't be used as an open redirect.
 			setTimeout(() => {
-				navigate(isSafeReturnTo(returnTo) ? returnTo : '/dashboard');
+				navigate(returnToRef.current || defaultLandingPath(u.role));
 			}, 500);
 		} catch (err) {
 			console.error('OAuth callback error:', err);
@@ -154,10 +162,8 @@ export function AuthCallback() {
 		setStatus('success');
 		toast.success('Signed in with Google');
 
-		const params = new URLSearchParams(window.location.search);
-		const returnTo = params.get('return_to');
 		setTimeout(() => {
-			navigate(isSafeReturnTo(returnTo) ? returnTo : '/dashboard');
+			navigate(returnToRef.current || defaultLandingPath(refreshed.role));
 		}, 500);
 	};
 
