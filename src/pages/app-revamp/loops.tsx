@@ -449,7 +449,11 @@ const LOOP_OVERRIDE: Record<string, string> = {
 };
 export function loopLabel(name?: string, fallbackLoop?: string): string {
   if (name && LOOP_OVERRIDE[name]) return LOOP_OVERRIDE[name];
-  return name || humanizeLoop(fallbackLoop || "");
+  if (!name) return humanizeLoop(fallbackLoop || "");
+  // The backend sets name = the loop slug for most loops — a "name" with no
+  // uppercase and no spaces is a slug, not a curated title; humanize it
+  // ("momentum_research" -> "Momentum research"). Real display names pass.
+  return /[A-Z\s]/.test(name) ? name : humanizeLoop(name);
 }
 
 export function humanizeLoop(loop: string): string {

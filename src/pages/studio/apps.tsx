@@ -14,14 +14,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ChevronDown, ChevronRight, ArrowRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2, Inbox, Loader2, RotateCcw, X } from "lucide-react";
+import { ChevronRight, ArrowRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2, Inbox, Loader2, RotateCcw, X } from "lucide-react";
 import { toast } from "sonner";
 import { me, type MeWorkflowRow, type MeAppCard } from "@/api/me";
 import { takePendingCustomize } from "@/lib/just-installed";
 import apiClient from "@/api/client";
 import { iconFor, APP_NAV_INVALIDATE } from "@/components/useAppNav";
 import { setStudioSelection } from "@/components/StudioContext";
-import RunSparkline from "@/components/RunSparkline";
+import WorkflowList from "@/components/workflow/WorkflowList";
 import { Skeleton, humanizeLoop, loopLabel } from "@/pages/app-revamp/loops";
 import { QuickStarters } from "@/pages/studio/intents";
 import WorkflowComposer from "@/components/WorkflowComposer";
@@ -609,10 +609,14 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 		return () => setStudioSelection(null);
 	}, [app]);
 
-	const toggle = (loop: string) => {
+	// Master–detail selection: there is ALWAYS a selected workflow (the
+	// detail column never goes empty), so selecting never deselects.
+	const select = (loop: string) => {
 		const sp = new URLSearchParams(params);
-		if (selected === loop) sp.delete("selected"); else sp.set("selected", loop);
+		sp.set("selected", loop);
 		setParams(sp, { replace: true });
+		// Mobile: the detail renders below the list — bring it into view.
+		window.setTimeout(() => document.getElementById("wf-detail")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
 	};
 
 	// App-level delete is offered for every app: the uninstall intent now
@@ -654,6 +658,11 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 			await me.deleteLoop(app, loop);
 			toast.success(`Removed workflow "${label}"`);
 			rowsCache.delete(app);
+			if (selected === loop) {
+				const sp = new URLSearchParams(params);
+				sp.delete("selected");
+				setParams(sp, { replace: true });
+			}
 			await load();
 		} catch (e) {
 			toast.error(`Delete failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -662,12 +671,16 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 		}
 	};
 
-	// Auto-expand the freshest workflow so landing on an app shows its
-	// observability immediately (no extra click).
+	// There is always a selection: URL param (if it names a real workflow —
+	// some deep links pass the APP name), then the caller's initialLoop,
+	// then the freshest workflow.
 	const freshestLoop = rows && rows.length
 		? [...rows].sort((a, b) => (b.wf.last_run_ts || 0) - (a.wf.last_run_ts || 0))[0].loop
 		: null;
-	const effSelected = selected ?? initialLoop ?? freshestLoop;
+	const validSelected = selected && rows?.some((r) => r.loop === selected) ? selected : null;
+	const validInitial = initialLoop && rows?.some((r) => r.loop === initialLoop) ? initialLoop : null;
+	const effSelected = validSelected ?? validInitial ?? freshestLoop;
+	const selectedRow = rows?.find((r) => r.loop === effSelected) ?? null;
 
 	return (
 		<div className="space-y-5">
@@ -710,61 +723,39 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 			) : (
 				<div className="space-y-2.5">
 					<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-400 uppercase">Workflows</div>
-					<ul className="space-y-2">
-						{rows.map(({ loop, wf, lh }, idx) => {
-							const open = effSelected === loop;
-							// Single failing predicate everywhere: last_run_ok===false (the
-							// fresh journal truth). consecutive_failures (scheduler-state)
-							// can lag behind a recovered run, so it must NOT drive red — that
-							// was the "3 dots vs 1 count" mismatch.
-							// Running takes visual precedence (live cycle now), then the
-							// last-completed state. Keeps dots/counts on one predicate.
-							const dot = wf.running ? "bg-sky-500 running-pulse"
-								: wf.last_run_recovered ? "bg-amber-500"
-								: wf.last_run_ok === true ? "bg-emerald-500"
-								: wf.last_run_ok === false ? "bg-rose-500"
-								: "bg-slate-300";
-							return (
-								<li
-									key={loop}
-									className="rounded-xl border border-slate-200 bg-white overflow-hidden animate-in fade-in slide-in-from-bottom-1 duration-500"
-									style={{ animationDelay: `${idx * 60}ms`, animationFillMode: "both" }}
-								>
-									<div className="flex items-stretch">
-										<button
-											onClick={() => toggle(loop)}
-											className="flex-1 min-w-0 text-left px-4 py-3 flex items-center gap-3 hover:bg-slate-50/70 transition-colors"
-										>
-											{open ? <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />}
-											<span className={cn("w-2 h-2 rounded-full flex-shrink-0", dot)} />
-											<div className="min-w-0 flex-1">
-												<div className="text-sm font-medium text-slate-800 truncate flex items-center gap-1.5">
-													{loopLabel(wf.name, loop)}
-													{wf.running && <span className="text-[10px] font-medium text-sky-600 inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-sky-500 running-pulse" />running…</span>}
-												</div>
-												{wf.enabled === false && <div className="text-[11px] text-slate-400">paused</div>}
-											</div>
-											<RunSparkline spec={wf.run_spark || ""} className="hidden sm:flex" />
-										</button>
-										{isTenantApp && rows.length > 1 && (
-											<button
-												type="button"
-												onClick={() => delLoop(loop, loopLabel(wf.name, loop))}
-												disabled={deletingLoop === loop}
-												title="Delete this workflow"
-												className="flex-shrink-0 px-3 flex items-center text-slate-300 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
-											>
-												<Trash2 className="w-3.5 h-3.5" />
-											</button>
-										)}
-									</div>
-									{open && (
-										<WorkflowObservabilityPanel app={app} loop={loop} wf={wf} loopHealth={lh} onChanged={load} initialCycle={open ? initialCycle : null} />
-									)}
-								</li>
-							);
-						})}
-					</ul>
+					{/* Master–detail: list left, ONE detail card right. A single-
+					    workflow app skips the list entirely. */}
+					{rows.length === 1 ? (
+						selectedRow && (
+							<div id="wf-detail">
+								<WorkflowObservabilityPanel
+									app={app} loop={selectedRow.loop} wf={selectedRow.wf} loopHealth={selectedRow.lh}
+									onChanged={load} initialCycle={initialCycle}
+								/>
+							</div>
+						)
+					) : (
+						<div className="lg:grid lg:grid-cols-[300px_minmax(0,1fr)] lg:gap-5 lg:items-start">
+							<div className="lg:sticky lg:top-4 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto max-h-72 overflow-y-auto mb-4 lg:mb-0 pr-0.5">
+								<WorkflowList
+									rows={rows}
+									selected={effSelected}
+									onSelect={select}
+								/>
+							</div>
+							<div id="wf-detail" className="min-w-0">
+								{selectedRow && (
+									<WorkflowObservabilityPanel
+										app={app} loop={selectedRow.loop} wf={selectedRow.wf} loopHealth={selectedRow.lh}
+										onChanged={load}
+										initialCycle={effSelected === (selected ?? initialLoop) ? initialCycle : null}
+										canDelete={isTenantApp && rows.length > 1}
+										onDelete={() => delLoop(selectedRow.loop, loopLabel(selectedRow.wf.name, selectedRow.loop))}
+									/>
+								)}
+							</div>
+						</div>
+					)}
 				</div>
 			)}
 

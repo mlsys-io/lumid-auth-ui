@@ -11,7 +11,6 @@
 import { useEffect, useState } from "react";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { me, type MeMindStats } from "@/api/me";
-import { useCountUp } from "@/lib/use-count-up";
 
 type Delta = { headline: string; detail?: string; trend: "up" | "down" | "flat" };
 type Report = {
@@ -36,65 +35,42 @@ export default function WorkflowInsights({ slug }: { slug: string }) {
 		return () => { live = false; };
 	}, [slug]);
 
-	// Count the reliability metric up (hook must run before early returns).
-	const report = state !== "loading" && state !== "error" ? state : null;
-	const pctTarget = report && report.this_month.run_count > 0 ? Math.round(report.this_month.success_rate * 100) : 0;
-	const pctShown = Math.round(useCountUp(pctTarget));
-
 	if (state === "loading") {
-		return <div className="h-16 rounded-lg bg-slate-100 animate-pulse" />;
+		return <div className="h-8 rounded-lg bg-slate-100 animate-pulse" />;
 	}
-	if (state === "error") {
-		return (
-			<div className="text-xs text-slate-400 italic">
-				No reliability report yet — it builds up as this workflow runs.
-			</div>
-		);
-	}
+	if (state === "error") return null;
 
 	const tm = state.this_month;
 	const hasRuns = (tm?.run_count ?? 0) > 0;
+	// Nothing to say yet — say nothing (the panel shows its own empty state).
+	if (!hasRuns && state.deltas.length === 0) return null;
 
 	// Breakdown that EXPLAINS the headline %: a low rate usually means many
 	// no-op cycles (loop ran fine, nothing to do), NOT failures.
 	const ok = tm.success_count ?? 0;
 	const failed = tm.failure_count ?? 0;
 	const skipped = tm.skipped_count ?? Math.max(0, tm.run_count - ok - failed);
+	// One scannable sentence instead of a dashboard: the count-up numeral
+	// and dot-breakdown were "hard to extract insights" (operator, 2026-06).
+	const bits: string[] = [];
+	if (hasRuns) {
+		bits.push(`${ok} of ${tm.run_count} run${tm.run_count === 1 ? "" : "s"} produced output this month`);
+		if (tm.avg_duration_s > 0) bits.push(`avg ${tm.avg_duration_s >= 90 ? Math.round(tm.avg_duration_s / 60) + "m" : tm.avg_duration_s.toFixed(0) + "s"}`);
+		if (skipped > 0) bits.push(`${skipped} no-op`);
+		if (failed > 0) bits.push(`${failed} failed`);
+		if ((tm.drafts_created ?? 0) > 0 && tm.draft_accept_rate != null)
+			bits.push(`${Math.round((tm.draft_accept_rate || 0) * 100)}% of ${tm.drafts_created} drafts accepted`);
+	}
 	return (
-		<div className="space-y-2.5">
-			<div className="flex items-end justify-between gap-3">
-				<div>
-					<div className="text-[28px] font-semibold text-slate-900 tabular-nums leading-none">
-						{hasRuns ? pctShown : "—"}
-						{hasRuns && <span className="text-base text-slate-400 font-normal">%</span>}
-					</div>
-					<div className="text-[11px] tracking-wide text-slate-400 mt-1">of runs produced output</div>
-				</div>
-				<div className="text-right text-[11px] text-slate-500 leading-tight">
-					<div className="tabular-nums">{tm.run_count} runs this month</div>
-					{tm.avg_duration_s > 0 && <div className="tabular-nums">{tm.avg_duration_s.toFixed(1)}s avg</div>}
-				</div>
-			</div>
-
-			{/* What the % is made of — makes a low number legible. */}
+		<div className="space-y-2">
 			{hasRuns && (
-				<div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
-					<span className="inline-flex items-center gap-1 text-emerald-700"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />{ok} produced output</span>
-					{skipped > 0 && <span className="inline-flex items-center gap-1 text-slate-500"><span className="w-1.5 h-1.5 rounded-full bg-slate-300" />{skipped} no-op (nothing to do)</span>}
-					{failed > 0 && <span className="inline-flex items-center gap-1 text-rose-600"><span className="w-1.5 h-1.5 rounded-full bg-rose-500" />{failed} failed</span>}
-					{(tm.drafts_created ?? 0) > 0 && tm.draft_accept_rate != null && (
-						<span className="text-slate-500">· {Math.round((tm.draft_accept_rate || 0) * 100)}% of {tm.drafts_created} drafts accepted</span>
-					)}
+				<div className="text-xs text-slate-600">
+					{bits.join(" · ")}
 				</div>
 			)}
-
-			{state.deltas.length > 0 ? (
+			{state.deltas.length > 0 && (
 				<div className="space-y-1.5">
-					{state.deltas.map((d, i) => <DeltaRow key={i} delta={d} index={i} />)}
-				</div>
-			) : (
-				<div className="text-xs text-slate-400 italic">
-					Steady — no month-over-month change to report yet.
+					{state.deltas.slice(0, 3).map((d, i) => <DeltaRow key={i} delta={d} index={i} />)}
 				</div>
 			)}
 		</div>
