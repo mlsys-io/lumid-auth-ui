@@ -46,8 +46,8 @@ export default function StudioIntentDetail() {
 	if (!intent || !intent.detail) {
 		return (
 			<div className="max-w-3xl mx-auto py-12 text-center">
-				<div className="text-sm text-slate-500 mb-3">No detail panel for this intent.</div>
-				<Link to="/studio/intents" className="text-sm text-emerald-700 hover:underline">← Back to Intents</Link>
+				<div className="text-sm text-slate-500 mb-3">No detail panel for this app.</div>
+				<Link to="/studio/intents" className="text-sm text-emerald-700 hover:underline">← Back to Apps</Link>
 			</div>
 		);
 	}
@@ -56,9 +56,9 @@ export default function StudioIntentDetail() {
 	// already carries this intent so "this week" / "Voice score" /
 	// "rerun" disambiguate cleanly.
 	const promptHints = [
-		'what changed about this intent this week?',
+		'what changed about this app this week?',
 		'why is the Standard going up?',
-		'rerun the latest cycle',
+		'run it again now',
 		'pause this for the weekend',
 	];
 
@@ -95,7 +95,7 @@ export default function StudioIntentDetail() {
 
 			<div>
 				<Link to="/studio/intents" className="inline-flex items-center gap-1 text-[12px] text-slate-500 hover:text-slate-800">
-					<ChevronRight className="w-3 h-3 rotate-180" /> Back to Intents
+					<ChevronRight className="w-3 h-3 rotate-180" /> Back to Apps
 				</Link>
 			</div>
 		</div>
@@ -258,7 +258,7 @@ function AutoresearchBodyView({ body, intentId: _intentId }: { body: Autoresearc
 			</section>
 
 			<section>
-				<div className="text-[11px] tracking-[0.06em] text-slate-400 mb-2">This cycle's variants</div>
+				<div className="text-[11px] tracking-[0.06em] text-slate-400 mb-2">This run's variants</div>
 				<div className="rounded-lg border border-slate-200/70 overflow-hidden">
 					<table className="w-full text-[12px]">
 						<thead className="bg-[#f7f7f5]">

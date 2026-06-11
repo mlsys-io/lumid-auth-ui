@@ -68,7 +68,7 @@ const PAGE_META: Array<{
 	{
 		pattern: /^\/studio\/(intents|today)/,
 		icon: Sparkles,
-		title: "Intents",
+		title: "Apps",
 		subtitle: "Your goals this week. Outcomes graded; judgment encoded.",
 		iconTone: "text-emerald-600",
 	},
@@ -76,7 +76,7 @@ const PAGE_META: Array<{
 		pattern: /^\/studio\/inbox/,
 		icon: InboxIcon,
 		title: "Inbox",
-		subtitle: "Drafts, cycles, notices, and the audit trail — in one feed.",
+		subtitle: "Drafts, runs, notices, and the audit trail — in one feed.",
 		iconTone: "text-emerald-600",
 	},
 	{

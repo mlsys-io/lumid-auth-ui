@@ -99,7 +99,7 @@ export default function WorkflowObservabilityPanel({
 			// (or after a safety window if it produced no new cycle dir).
 			setOptimisticRun(true);
 			window.setTimeout(() => setOptimisticRun(false), 120_000);
-			toast.success("Running — the cycle will land here shortly.");
+			toast.success("Running — the results will land here shortly.");
 		} catch (e) {
 			toast.error(`Failed: ${e instanceof MeApiError ? e.message : String(e)}`);
 		} finally { setBusy(null); }
@@ -132,6 +132,8 @@ export default function WorkflowObservabilityPanel({
 	const cacheKey = `${app}:${loop}`;
 	const cached0 = cycleCache.get(cacheKey);
 	const [cycleTs, setCycleTs] = useState<string | null>(cached0?.ts ?? null);
+	const [cycleList, setCycleList] = useState<Array<{ ts: string; ok?: boolean; running?: boolean; duration_s?: number }>>([]);
+	const [anchorTs, setAnchorTs] = useState<string | null>(initialCycle || null);
 	const [summary, setSummary] = useState<CycleSummary | null>(cached0?.summary ?? null);
 	const [cycleFiles, setCycleFiles] = useState<Record<string, unknown>>({});
 	const [metricSeries, setMetricSeries] = useState<MeMetricSeries[]>([]);
@@ -156,8 +158,9 @@ export default function WorkflowObservabilityPanel({
 			const list = await apiClient.get(
 				`/api/v1/me/cycles?app=${encodeURIComponent(app)}&loop=${encodeURIComponent(loop)}&limit=20`,
 			);
-			const cycles = (list.data?.data?.cycles ?? []) as Array<{ ts: string }>;
+			const cycles = (list.data?.data?.cycles ?? []) as Array<{ ts: string; ok?: boolean; running?: boolean; duration_s?: number }>;
 			cycles.sort((a, b) => (b.ts || "").localeCompare(a.ts || ""));
+			setCycleList(cycles.slice(0, 8));
 			const ts = cycles[0]?.ts;
 			if (!ts) { setCycleTs(null); setSummary(null); cycleCache.set(cacheKey, { ts: null, summary: null }); return; }
 			// A newer cycle than last poll → a run just landed: flash it.
@@ -211,13 +214,66 @@ export default function WorkflowObservabilityPanel({
 	const mode: LoopMode = !enabled ? "paused" : (optimisticRun || dataRunning) ? "running" : "idle";
 
 	const loopCaption: React.ReactNode =
-		justRan ? <span className="text-emerald-700 font-medium">✓ New cycle complete — insights updated</span>
-		: mode === "running" ? "Iterating now — moving through the stages (scoring loops can take a few minutes)"
+		justRan ? <span className="text-emerald-700 font-medium">✓ New run complete — insights updated</span>
+		: mode === "running" ? "Iterating now — moving through the stages (scoring runs can take a few minutes)"
 		: mode === "idle" ? (wf.next_run_ts ? <span>Armed · <NextRunCountdown nextTs={wf.next_run_ts} /></span> : "On demand — runs when you click Run now")
 		: "Paused";
 
+	const openRun = (ts: string) => { setAnchorTs(ts); setSelectedStage("learn"); };
+
 	return (
 		<div className="border-t border-slate-200/70 bg-slate-50/40 px-4 py-4 space-y-4 animate-in fade-in duration-300">
+			{/* ── ACTION BAR — health + last-run + the controls, one row ── */}
+			<div className="flex flex-wrap items-center gap-2">
+				<span className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-medium", h.cls, justRan && "value-pop")}>
+					<span className={cn("w-1.5 h-1.5 rounded-full", h.dot, mode === "running" && "running-glow")} />
+					{h.label}
+				</span>
+				<span className="text-xs text-slate-500">{whenLast(wf.last_run_ts)}</span>
+				<div className="flex items-center gap-2 ml-auto">
+					<button onClick={runNow} disabled={!!busy}
+						className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 active:scale-95 disabled:opacity-50 transition-all shadow-sm shadow-emerald-100">
+						{busy === "run" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+						Run now
+					</button>
+					<button onClick={toggle} disabled={!!busy}
+						className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50">
+						{busy === "toggle" ? <Loader2 className="w-3 h-3 animate-spin" /> : enabled ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+						{enabled ? "Pause" : "Resume"}
+					</button>
+				</div>
+			</div>
+			{mode !== "running" && wf.last_run_ok === false && lastError && (
+				<div className="flex items-start gap-1.5 rounded-lg border border-rose-200 bg-rose-50/60 px-2.5 py-1.5 text-[11px] text-rose-800">
+					<AlertCircle className="w-3.5 h-3.5 mt-px flex-shrink-0" />
+					<span className="font-mono break-all">{lastError.slice(0, 220)}</span>
+				</div>
+			)}
+
+			{/* ── RUNS — what happened, newest first; click to inspect ── */}
+			{cycleList.length > 0 && (
+				<Section icon={Clock} title="Runs">
+					<ul className="rounded-xl border border-slate-200 bg-white divide-y divide-slate-100 overflow-hidden">
+						{cycleList.map((c) => {
+							const cdot = c.running ? "bg-sky-500 running-pulse" : c.ok === false ? "bg-rose-500" : "bg-emerald-500";
+							return (
+								<li key={c.ts}>
+									<button type="button" onClick={() => openRun(c.ts)}
+										className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50 transition-colors">
+										<span className={cn("w-2 h-2 rounded-full flex-shrink-0", cdot)} />
+										<span className="text-xs text-slate-700 tabular-nums">{cycleDate(c.ts)}</span>
+										<span className="text-[11px] text-slate-400">
+											{c.running ? "running…" : c.ok === false ? "failed" : "ok"}
+											{typeof c.duration_s === "number" && c.duration_s > 0 ? ` · ${c.duration_s >= 90 ? Math.round(c.duration_s / 60) + "m" : Math.round(c.duration_s) + "s"}` : ""}
+										</span>
+										<ChevronRight className="w-3.5 h-3.5 text-slate-300 ml-auto flex-shrink-0" />
+									</button>
+								</li>
+							);
+						})}
+					</ul>
+				</Section>
+			)}
 			{/* What this loop is chasing + how its metrics move over runs. Shown
 			    whenever there's a goal OR a trajectory — the curve must not depend
 			    on the goal manifest field being present. */}
@@ -243,52 +299,19 @@ export default function WorkflowObservabilityPanel({
 			/>
 			{selectedStage && (
 				<StageDetail
-					app={app} loop={loop} stage={selectedStage} initialTs={initialCycle || undefined}
+					app={app} loop={loop} stage={selectedStage} initialTs={anchorTs || undefined}
 					q={stageQ} setQ={setStageQ} onClose={() => setSelectedStage(null)}
 				/>
 			)}
 
-			{/* ── STATUS ───────────────────────────────────────────── */}
-			<Section icon={Activity} title="Status">
-				<div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-					<span className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-medium", h.cls, justRan && "value-pop")}>
-						<span className={cn("w-1.5 h-1.5 rounded-full", h.dot, mode === "running" && "running-glow")} />
-						{h.label}
-					</span>
+			{/* ── SCHEDULE ─────────────────────────────────────────── */}
+			<Section icon={Activity} title="Schedule">
+				<div className="flex flex-wrap items-center gap-2">
 					<RunSparkline spec={wf.run_spark || ""} runs={wf.runs_recent} app={app} loop={loop} />
-					<span className="text-xs text-slate-500">{whenLast(wf.last_run_ts)}</span>
 					{wf.last_run_ok === false && (loopHealth?.consecutive_failures ?? 0) > 0 && (
-						<span className="text-xs text-rose-600">· {loopHealth!.consecutive_failures} consecutive failures</span>
+						<span className="text-xs text-rose-600">{loopHealth!.consecutive_failures} consecutive failures</span>
 					)}
-				</div>
-
-				{/* #4 — why is it red? Surface the latest failing step inline. */}
-				{mode !== "running" && wf.last_run_ok === false && lastError && (
-					<div className="flex items-start gap-1.5 rounded-lg border border-rose-200 bg-rose-50/60 px-2.5 py-1.5 text-[11px] text-rose-800">
-						<AlertCircle className="w-3.5 h-3.5 mt-px flex-shrink-0" />
-						<span className="font-mono break-all">{lastError.slice(0, 220)}</span>
-					</div>
-				)}
-
-				<div className="flex flex-wrap items-center gap-2 pt-1">
-					<button
-						onClick={runNow}
-						disabled={!!busy}
-						className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 active:scale-95 disabled:opacity-50 transition-all shadow-sm shadow-emerald-100"
-					>
-						{busy === "run" ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
-						Run now
-					</button>
-					<button
-						onClick={toggle}
-						disabled={!!busy}
-						className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"
-					>
-						{busy === "toggle" ? <Loader2 className="w-3 h-3 animate-spin" /> : enabled ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
-						{enabled ? "Pause" : "Resume"}
-					</button>
 					<div className="flex items-center gap-1.5 ml-auto">
-						<label className="text-[11px] text-slate-400">Schedule</label>
 						<input
 							type="text"
 							value={sched}
@@ -349,11 +372,11 @@ function humanizeSchedule(s?: string): string {
 
 // Per-stage one-liners for the clickable orbit drill-down.
 const STAGE_INFO: Record<LoopStageKey, { label: string; role: string }> = {
-	observe: { label: "Observe", role: "what the loop sensed at the start of this cycle" },
+	observe: { label: "Observe", role: "what the workflow sensed at the start of this run" },
 	hypothesize: { label: "Hypothesize", role: "the plan it formed from what it observed" },
 	act: { label: "Act", role: "what it did — and what it held for your approval" },
 	analyze: { label: "Analyze", role: "how it's performing over time" },
-	learn: { label: "Learn", role: "what it banked to do better next cycle" },
+	learn: { label: "Learn", role: "what it banked to do better next run" },
 };
 
 // Stage drill-down + free-text query, opened by clicking an orbit node.
@@ -529,7 +552,7 @@ function StageBody({ stage, detail }: { stage: LoopStageKey; detail: MeCycleDeta
 			if (pushed > 0) blocks.push(<StageNote key="mp" tone="ok">Compounded {pushed} new memor{pushed === 1 ? "y" : "ies"} into your knowledge graph.</StageNote>);
 			if (files.improvement?.mutations_proposed) blocks.push(<StageNote key="imp" tone="ok">Proposed a self-improvement{Array.isArray(files.improvement.mutates) ? ` to its ${files.improvement.mutates.join(", ")} logic` : ""} — queued as a PR.</StageNote>);
 			if (!offers.length && !pushed && !files.improvement?.mutations_proposed)
-				blocks.push(<div key="lk" className="text-[11px] text-slate-500">Nothing new to bank this cycle. It compounds into your <Link to="/studio/knowledge" className="text-emerald-700 hover:underline">knowledge</Link> as it learns.</div>);
+				blocks.push(<div key="lk" className="text-[11px] text-slate-500">Nothing new to bank this run. It compounds into your <Link to="/studio/knowledge" className="text-emerald-700 hover:underline">knowledge</Link> as it learns.</div>);
 			break;
 		}
 	}

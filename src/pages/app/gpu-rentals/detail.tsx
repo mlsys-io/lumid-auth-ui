@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import {
 	ArrowLeft,
@@ -88,6 +88,12 @@ export default function GpuRentalDetail() {
 	const { id: rawId } = useParams<{ id: string }>();
 	const id = rawId || "";
 	const navigate = useNavigate();
+	const location = useLocation();
+	// When embedded in the Studio surface (/studio/a/lumid-gpu-rentals/:id) keep
+	// navigation inside Studio; fall back to the legacy dashboard path elsewhere.
+	const rentalsBase = location.pathname.startsWith("/studio/")
+		? "/studio/a/lumid-gpu-rentals"
+		: "/dashboard/gpu-rentals";
 	const { user } = useAuth();
 
 	const [task, setTask] = useState<Task | null>(null);
@@ -209,7 +215,7 @@ export default function GpuRentalDetail() {
 		if (!user?.id) return;
 		removeLocalRental(String(user.id), id);
 		toast.success("Removed from list");
-		navigate("/app/gpu-rentals");
+		navigate(rentalsBase);
 	}
 
 	async function copy(text: string) {
@@ -259,7 +265,7 @@ export default function GpuRentalDetail() {
 	return (
 		<>
 			<header className="flex items-center gap-3 mb-6 flex-wrap">
-				<Link to="/app/gpu-rentals">
+				<Link to={rentalsBase}>
 					<Button variant="ghost" size="sm">
 						<ArrowLeft className="w-4 h-4 mr-1" />
 						GPU rentals

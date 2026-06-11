@@ -11,7 +11,7 @@
 //   { ret_code: number, message: string, data: any }
 // We unwrap `.data` on success and throw on non-2xx or non-zero ret_code.
 
-const ME_BASE =
+export const ME_BASE =
   // Vite-inlined env. In prod (lum.id deploy) and xp.io/go deploy both
   // call lum.id since that's where lumid-identity lives.
   (import.meta.env.VITE_ME_API_BASE as string | undefined) || "https://lum.id";
@@ -65,6 +65,7 @@ async function call<T>(
 // An app may declare an optional `ui:` block in its xpcloud.yaml to insert
 // itself into the Studio sidebar and define a runtime-loaded UI surface.
 export interface MeAppUiSidebar {
+  show?: boolean;       // explicit on/off; omitted = shown (back-compat), false = hide entry
   label: string;
   icon?: string;        // lucide icon name (kebab-case); client maps to a component, default Boxes
   section?: string;     // sidebar group header; default "Apps"
@@ -77,7 +78,8 @@ export interface MeAppUiSurface {
 }
 export interface MeAppUi {
   sidebar?: MeAppUiSidebar;
-  surface?: MeAppUiSurface;
+  surface?: MeAppUiSurface;            // default ("home") surface
+  surfaces?: Record<string, string>;  // optional named markdowns: name → bundle-relative .md
 }
 
 export interface MeAppCard {
@@ -86,6 +88,8 @@ export interface MeAppCard {
   has_xpcloud: boolean;
   has_user_overrides: boolean;
   tenant?: boolean;
+  status?: "ready" | "installing" | "failed";
+  error?: string;
   ui?: MeAppUi;
 }
 
@@ -99,6 +103,19 @@ export interface MeAppSurface {
   native?: string;
   bytes?: number;
   truncated?: boolean;
+  // Optional surface switcher (from xpcloud ui.nav) — ordered, param-free
+  // surfaces the client renders as a tab bar so any surface is pickable.
+  nav?: { surface: string; label?: string }[];
+  // The app's TOP-LEVEL xpcloud `config:` map (edited via the Config button).
+  // Native widgets take their defaults from here; directive bodies override.
+  config?: Record<string, unknown>;
+  // Structured page surfaces: format="page", `spec` is the raw page.yaml (the
+  // EDITABLE source of truth — `markdown` above is its compiled output).
+  format?: "page";
+  spec?: string;
+  // Optimistic-lock token: pass back as base_sha on PUT; the server 409s if
+  // the file changed since this read (stale-buffer protection).
+  sha?: string;
 }
 
 // /me/loops/health row — what /admin/loops surfaces, scoped to the
@@ -129,21 +146,58 @@ export interface MeIntentResult {
 export const me = {
   // Apps
   listApps: () => call<{ apps: MeAppCard[] }>("GET", "/apps"),
-  installApp: (slug: string, runtime: "local" | "cloud" = "local", as?: string) =>
-    call<{ intent_id: string; status: "pending" }>("POST", "/apps", { slug, runtime, as }),
+  gpuRentals: () => call<{ rentals: Array<Record<string, unknown>>; count: number }>("GET", "/gpu-rentals"),
+  installApp: (slug: string, runtime: "local" | "cloud" = "local", as?: string, opts?: { sidebar_show?: boolean; sidebar_label?: string; sidebar_section?: string }) =>
+    call<{ intent_id: string; status: "pending" }>("POST", "/apps", { slug, runtime, as, ...opts }),
   uninstallApp: (app: string) =>
     call<{ intent_id: string; status: "pending" }>("DELETE", `/apps/${encodeURIComponent(app)}`),
+  // Permanently remove a failed/optimistic install card (deletes the
+  // underlying install intent for this app name — caller-scoped).
+  deleteInstallIntent: (name: string) =>
+    call<{ removed: number }>("DELETE", `/install-intents/${encodeURIComponent(name)}`),
   // App-declared UI surface (markdown body or native registry key).
   appUI: (app: string, surface?: string) =>
     call<MeAppSurface>(
       "GET",
       `/apps/${encodeURIComponent(app)}/ui${surface ? "/" + encodeURIComponent(surface) : ""}`,
     ),
+  // Read the raw xpcloud.yaml for an installed app. `sha` feeds the PUT's
+  // optimistic lock (base_sha) so a stale buffer can't clobber other edits.
+  appConfig: (app: string) =>
+    call<{ app: string; yaml: string; bytes: number; sha?: string }>("GET", `/apps/${encodeURIComponent(app)}/config`),
+  // Write xpcloud.yaml — server validates YAML; 409 (ret_code 1409) when the
+  // file changed since the read that produced baseSha.
+  updateAppConfig: (app: string, yaml: string, baseSha?: string) =>
+    call<{ ok: boolean; bytes: number; sha?: string }>("PUT", `/apps/${encodeURIComponent(app)}/config`, { yaml, base_sha: baseSha }),
+  // Write a surface for an installed app: `markdown` for .md surfaces, `spec`
+  // (raw page.yaml text, compiler-validated server-side) for structured page
+  // surfaces. baseSha = optimistic lock. For @fork_of / @shared paths the
+  // server writes a local override and patches xpcloud.yaml.
+  updateAppUI: (
+    app: string,
+    surface: string | undefined,
+    payload: { markdown?: string; spec?: string; baseSha?: string },
+  ) =>
+    call<{ ok: boolean; path: string; bytes: number; sha?: string; format?: "page" }>(
+      "PUT",
+      `/apps/${encodeURIComponent(app)}/ui${surface ? "/" + encodeURIComponent(surface) : ""}`,
+      { markdown: payload.markdown, spec: payload.spec, base_sha: payload.baseSha, surface },
+    ),
+  generateAppUI: (app: string) =>
+    call<{ markdown: string; path: string }>("POST", `/apps/${encodeURIComponent(app)}/ui/generate`),
   deleteLoop: (app: string, loop: string) =>
     call<{ app: string; removed_loop: string; remaining: number; note: string }>(
       "DELETE", `/apps/${encodeURIComponent(app)}/loops/${encodeURIComponent(loop)}`),
   getIntent: (id: string) =>
     call<MeIntentResult>("GET", `/intents/${encodeURIComponent(id)}`),
+  // Kind-aware marketplace actions — skills are IMPORTED by apps (not
+  // installed standalone); knowledge agents are SUBSCRIBED into the KG.
+  addSkillToApp: (app: string, skillRepo: string, version?: string) =>
+    call<{ intent_id: string; status: "pending" }>(
+      "POST", `/apps/${encodeURIComponent(app)}/skills`, { skill_repo: skillRepo, version }),
+  subscribeBank: (sourceSlug: string, targetAgentId?: string) =>
+    call<{ intent_id: string; status: "pending" }>(
+      "POST", "/knowledge/subscriptions", { source_slug: sourceSlug, target_agent_id: targetAgentId }),
 
   // Loops
   patchLoop: (

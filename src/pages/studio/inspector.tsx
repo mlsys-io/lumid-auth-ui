@@ -105,13 +105,13 @@ export default function CycleInspector() {
 		if (!app || !loop || !ts) return;
 		apiClient.get(`/api/v1/me/cycles/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/${encodeURIComponent(ts)}`)
 			.then((r: { data: { data: { summary: CycleSummary; steps: Step[] } } }) => setData(r.data.data))
-			.catch((e) => setError(e?.message || 'Failed to load cycle'));
+			.catch((e) => setError(e?.message || 'Failed to load run'));
 	}, [app, loop, ts]);
 
 	useEffect(() => { load(); }, [load]);
 
 	if (error) return <div className="text-rose-700 text-sm">{error}</div>;
-	if (!data) return <div className="text-sm text-slate-500 italic">Loading cycle…</div>;
+	if (!data) return <div className="text-sm text-slate-500 italic">Loading run…</div>;
 
 	const summary = data.summary || {};
 	const outcome = summary.outcome;
@@ -185,7 +185,7 @@ export default function CycleInspector() {
 			</header>
 
 			{/* Visual map of the loop this cycle walked. */}
-			<LoopOrbit mode="idle" caption="What this cycle did, stage by stage" />
+			<LoopOrbit mode="idle" caption="What this run did, stage by stage" />
 
 			{/* Stage-grouped narrative */}
 			<div className="space-y-3">
@@ -221,7 +221,7 @@ export default function CycleInspector() {
 				)}
 
 				{data.steps.length === 0 && !gate && reviewQueue.length === 0 && offers.length === 0 && (
-					<div className="text-sm text-slate-500 italic">No artifacts recorded for this cycle.</div>
+					<div className="text-sm text-slate-500 italic">No artifacts recorded for this run.</div>
 				)}
 			</div>
 

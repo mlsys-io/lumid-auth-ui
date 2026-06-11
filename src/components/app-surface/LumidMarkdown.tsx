@@ -8,7 +8,8 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
-import { isLumidDirective, LumidDirective } from "./directives";
+import { Link } from "react-router-dom";
+import { isLumidDirective, LumidDirective, SurfaceParams } from "./directives";
 
 const components: Components = {
   h1: ({ children }) => <h1 className="text-2xl font-semibold mt-6 first:mt-0 mb-3 text-slate-900">{children}</h1>,
@@ -18,9 +19,13 @@ const components: Components = {
   ul: ({ children }) => <ul className="list-disc pl-5 my-3 space-y-1 text-[14px] text-slate-700">{children}</ul>,
   ol: ({ children }) => <ol className="list-decimal pl-5 my-3 space-y-1 text-[14px] text-slate-700">{children}</ol>,
   li: ({ children }) => <li className="leading-relaxed">{children}</li>,
-  a: ({ href, children }) => (
-    <a href={href} className="text-emerald-700 underline decoration-emerald-300 hover:decoration-emerald-600 underline-offset-2">{children}</a>
-  ),
+  a: ({ href, children }) => {
+    const cls = "text-emerald-700 underline decoration-emerald-300 hover:decoration-emerald-600 underline-offset-2";
+    if (href && href.startsWith("/") && !href.startsWith("//")) {
+      return <Link to={href} className={cls}>{children}</Link>;
+    }
+    return <a href={href} target={href?.startsWith("http") ? "_blank" : undefined} rel="noopener noreferrer" className={cls}>{children}</a>;
+  },
   blockquote: ({ children }) => (
     <blockquote className="my-3 pl-3 border-l-2 border-emerald-300 text-slate-600 text-[13px] italic">{children}</blockquote>
   ),
@@ -50,11 +55,34 @@ const components: Components = {
   },
 };
 
-export function LumidMarkdown({ source }: { source: string }) {
+export function LumidMarkdown({
+  source,
+  params,
+  appConfig,
+  wide,
+}: {
+  source: string;
+  /** URL params (e.g. competitionId) injected into directive `{token}`s. */
+  params?: Record<string, string>;
+  /** The app's xpcloud `config:` map — defaults for native widget embeds. */
+  appConfig?: Record<string, unknown>;
+  /** App surfaces render wider than chat/docs to fit tables + charts. */
+  wide?: boolean;
+}) {
+  // Interpolate route params (e.g. {symbol}, {competitionId}) into the raw
+  // markdown — so they resolve in PROSE (headings, links) too, not just inside
+  // directive bodies. Only keys present in params are replaced; per-row tokens
+  // like {url}/{id} aren't params, so they're left intact for the directive's
+  // own per-row interpolation.
+  const rendered = params
+    ? source.replace(/\{([\w.]+)\}/g, (m, k) => (k in params ? params[k] : m))
+    : source;
   return (
-    <div className="lumid-md max-w-3xl">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>{source}</ReactMarkdown>
-    </div>
+    <SurfaceParams params={params ?? {}} appConfig={appConfig}>
+      <div className={wide ? "lumid-md max-w-6xl" : "lumid-md max-w-3xl"}>
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>{rendered}</ReactMarkdown>
+      </div>
+    </SurfaceParams>
   );
 }
 

@@ -189,22 +189,34 @@ document authored by the app builder**. The Python runner ignores `ui:` (it only
 reads loops/engine/auto_publish/etc.), so this is metadata-only — safe to add to
 any app.
 
+Each app declares, in one place, **(1) its UI markdown(s)** and **(2) whether it
+appears in the sidebar** (an explicit on/off toggle):
+
 ```yaml
 ui:
-  sidebar:                       # omit to keep the app out of the sidebar
-    label: "Auto Quant"          # required — nav text
+  sidebar:                       # omit the whole block to keep the app out of the sidebar
+    show: true                   # explicit on/off — omit = shown (back-compat), false = hide
+                                 #   (keeps label/icon config so you can flip it back on)
+    label: "Auto Quant"          # required when shown — nav text
     icon: "chart-candlestick"    # optional — lucide icon name (kebab-case); client maps it, default Boxes
     section: "Trading"           # optional — sidebar group header; default "Apps"
     order: 10                    # optional — sort within the section
     badge_source: "running"      # optional — drafts | review | running | none
-  surface:
+  surface:                       # the default ("home") surface, rendered at /studio/a/<app>
     markdown: "ui/home.md"       # bundle-relative path to the surface document
     # native: "<key>"            # RESERVED: first-party-only registry key; the
                                  # server echoes it but the SPA resolves it ONLY
                                  # against its compiled allowlist (never loads
                                  # arbitrary code). Use for irreducibly-interactive
                                  # first-party surfaces (e.g. lumid-market).
+  surfaces:                      # optional — additional named markdowns, each at
+    home: "ui/home.md"           #   /studio/a/<app>/<name>. "home" is the default.
+    detail: "ui/detail.md"       #   A bundle can ship as many UI markdowns as it likes.
 ```
+
+A surface-only app (a `surface`/`surfaces` but **no** `sidebar` block, or
+`sidebar.show: false`) is reachable from My Apps + by URL, just not pinned to the
+left rail. The Python runner ignores `ui:` entirely.
 
 **Surface rendering.** `GET /api/v1/me/apps/<app>/ui` serves the markdown body.
 The Studio shell renders it with react-markdown plus a small set of **`lumid:*`

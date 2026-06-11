@@ -84,7 +84,7 @@ function DecisionRow({
 			await rejectWithReason(item.id, trimmed);
 			setStatus('rejected');
 			setRejecting(false);
-			toast.success('Got it. Added to your Rules — next cycle will reflect this.');
+			toast.success('Got it. Added to your Rules — the next run will reflect this.');
 		} catch {
 			toast.error('Could not record the rejection — try again.');
 		} finally {

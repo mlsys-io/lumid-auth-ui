@@ -104,7 +104,7 @@ export default function WorkflowDetailPanel({
 		}
 		try {
 			await me.runLoopNow(app, loopName);
-			toast.success("Cycle queued");
+			toast.success("Run queued");
 			// Reload runs after a beat.
 			setTimeout(async () => {
 				try {

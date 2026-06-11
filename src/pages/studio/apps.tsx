@@ -14,10 +14,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ChevronDown, ChevronRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, ArrowRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2, Inbox, Loader2, RotateCcw, X } from "lucide-react";
 import { toast } from "sonner";
-import { me, type MeWorkflowRow } from "@/api/me";
+import { me, type MeWorkflowRow, type MeAppCard } from "@/api/me";
+import { takePendingCustomize } from "@/lib/just-installed";
 import apiClient from "@/api/client";
+import { iconFor, APP_NAV_INVALIDATE } from "@/components/useAppNav";
 import { setStudioSelection } from "@/components/StudioContext";
 import RunSparkline from "@/components/RunSparkline";
 import { Skeleton, humanizeLoop, loopLabel } from "@/pages/app-revamp/loops";
@@ -69,7 +71,7 @@ type TodayCycle = Awaited<ReturnType<typeof me.today>>["cycles"][number];
 // (vs. a vague "insights updated").
 function describeCycle(c: TodayCycle): string {
 	const verb =
-		c.outcome === "ran" ? "ran a full cycle"
+		c.outcome === "ran" ? "completed a run"
 		: c.outcome === "no_change" ? "observed — nothing new to act on"
 		: c.outcome === "awaiting_review" ? "ran — items awaiting your review"
 		: c.outcome === "no_setup" ? "needs setup"
@@ -86,10 +88,120 @@ function describeCycle(c: TodayCycle): string {
 //  My Apps home
 // ══════════════════════════════════════════════════════════════════
 
-interface Hero { apps: number; workflows: number; runsToday: number; selfHeals: number; memories: number; failing: number }
+interface Hero { apps: number; workflows: number; runsToday: number; selfHeals: number; memories: number; failing: number; inbox: number }
+
+// A card for a UI-surface app (no loops/workflows) — Data Exploration,
+// Lumid Market, etc. Opens the app's declared surface; operator-shared
+// apps (tenant:false) are shown read-only (no Remove). Tenant apps get a
+// Remove that fires the uninstall intent.
+function SurfaceAppCard({ app, onOpen, onRemoved }: {
+	app: MeAppCard; onOpen: () => void; onRemoved: () => void;
+}) {
+	const [busy, setBusy] = useState(false);
+	const Icon = iconFor(app.ui?.sidebar?.icon || app.name);
+	const label = app.ui?.sidebar?.label || appTitle(app.name);
+	const section = app.ui?.sidebar?.section;
+	const remove = async (e: React.MouseEvent) => {
+		e.stopPropagation();
+		if (!confirm(`Remove "${label}"? It will be archived (recoverable).`)) return;
+		try {
+			setBusy(true);
+			await me.uninstallApp(app.name);
+			toast.success(`Removing ${label}…`);
+			window.dispatchEvent(new Event(APP_NAV_INVALIDATE)); // refresh the sidebar too
+			onRemoved();
+		} catch (err) {
+			toast.error(String((err as Error)?.message ?? err));
+			setBusy(false);
+		}
+	};
+	// Same card family as AppCard: rounded-xl border, lift-on-hover, 9x9
+	// emerald icon, 14px title + 12px status line, hover-reveal remove. It
+	// just has no status rail / workflow rows (those are AppCard's
+	// differentiator for workflow-bearing apps).
+	return (
+		<button
+			type="button" onClick={onOpen}
+			className="group text-left rounded-xl border border-slate-200/80 bg-white px-4 py-3.5 hover:shadow-md hover:shadow-slate-200/60 hover:border-slate-300 transition-all hover:-translate-y-0.5 flex items-center gap-3"
+		>
+			<div className="w-9 h-9 shrink-0 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+				<Icon className="w-[18px] h-[18px]" />
+			</div>
+			<div className="min-w-0 flex-1">
+				<div className="text-[14px] font-medium text-slate-900 truncate">{label}</div>
+				<div className="text-[12px] text-slate-400 truncate">
+					{section ? `${section} · ` : ""}{app.tenant ? "installed" : "shared"}
+				</div>
+			</div>
+			<ArrowRight className="w-4 h-4 shrink-0 text-slate-300 group-hover:text-emerald-600 transition-colors" />
+			<span
+				role="button" tabIndex={0} onClick={remove}
+				className="shrink-0 p-1.5 rounded-md text-slate-300 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-50 opacity-0 group-hover:opacity-100 transition-opacity"
+				aria-label={`Remove ${label}`} aria-disabled={busy}
+			>
+				<Trash2 className="w-3.5 h-3.5" />
+			</span>
+		</button>
+	);
+}
+
+// PendingAppCard — optimistic card for an install that's still cloning
+// (status "installing") or that failed (status "failed", with Retry/Dismiss).
+// Flips to a real AppCard once the picker materializes the app on disk.
+function PendingAppCard({ app, onRetry, onDismiss }: {
+	app: MeAppCard; onRetry: () => void; onDismiss: () => void;
+}) {
+	const label = appTitle(app.name);
+	const failed = app.status === "failed";
+	return (
+		<div className={cn(
+			"rounded-xl border px-4 py-3.5 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2",
+			failed ? "border-rose-200 bg-rose-50/40" : "border-slate-200/70 bg-white",
+		)}>
+			<div className={cn(
+				"w-9 h-9 shrink-0 rounded-lg border flex items-center justify-center",
+				failed ? "bg-rose-50 border-rose-200 text-rose-500" : "bg-slate-50 border-slate-200 text-emerald-500",
+			)}>
+				{failed ? <AlertTriangle className="w-[18px] h-[18px]" /> : <Loader2 className="w-[18px] h-[18px] animate-spin" />}
+			</div>
+			<div className="min-w-0 flex-1">
+				<div className="text-[14px] font-medium text-slate-900 truncate">{label}</div>
+				<div className={cn("text-[12px] truncate", failed ? "text-rose-600" : "text-slate-400")}>
+					{failed ? (app.error || "install failed") : "Setting up — first run starts automatically (~30s)"}
+				</div>
+			</div>
+			{failed && (
+				<>
+					<button
+						type="button" onClick={onRetry}
+						className="shrink-0 inline-flex items-center gap-1 text-[12px] rounded-md px-2 py-1 text-emerald-700 hover:bg-emerald-50 transition-colors"
+					>
+						<RotateCcw className="w-3.5 h-3.5" /> Retry
+					</button>
+					<button
+						type="button" onClick={onDismiss}
+						className="shrink-0 p-1.5 rounded-md text-slate-300 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+						aria-label={`Dismiss ${label}`}
+					>
+						<X className="w-3.5 h-3.5" />
+					</button>
+				</>
+			)}
+		</div>
+	);
+}
 
 function AppsHome() {
 	const [byApp, setByApp] = useState<Map<string, MeWorkflowRow[]> | null>(null);
+	// UI-surface apps — those declaring a `ui:` block in xpcloud.yaml but no
+	// loops/workflows (e.g. Data Exploration, Lumid Market). They never enter
+	// `byApp` (which is workflow-derived), so we list them alongside as their
+	// own cards. Source: me.listApps().
+	const [uiApps, setUiApps] = useState<MeAppCard[]>([]);
+	// In-flight / failed installs (optimistic cards from the server-side
+	// intent merge). They flip to a real AppCard once the picker materializes
+	// the app on disk.
+	const [pendingApps, setPendingApps] = useState<MeAppCard[]>([]);
 	const [identity, setIdentity] = useState<Map<string, AppIdentity>>(new Map());
 	const [hero, setHero] = useState<Hero | null>(null);
 	const navigate = useNavigate();
@@ -122,11 +234,13 @@ function AppsHome() {
 	}, []);
 
 	const load = useCallback(async () => {
-			const [wfR, lhR, todayR, agentsR] = await Promise.allSettled([
+			const [wfR, lhR, todayR, agentsR, appsR, draftsR] = await Promise.allSettled([
 				me.listWorkflows(),
 				me.loopsHealth(),
 				me.today(),
 				apiClient.get("/api/v1/me/knowledge/agents"),
+				me.listApps(),
+				me.listDrafts({ state: "pending" }),
 			]);
 
 			// A failed poll (network blip, token refresh, slow backend) must NOT
@@ -156,6 +270,56 @@ function AppsHome() {
 			}
 			setByApp(m);
 
+			let uiCount = 0;
+			// UI-surface apps: declare a `ui:` block but aren't already
+			// represented by a workflow card (no loops). These are the
+			// Data Exploration / Market surfaces — show them so "My Apps"
+			// reflects everything installed, not just loop-driven bots.
+			if (appsR.status === "fulfilled") {
+				const seen = new Set(m.keys());
+				const ua = (appsR.value.apps || []).filter(
+					(a) =>
+						!seen.has(a.name) && !recentlyDeleted.has(a.name) &&
+						a.status !== "installing" && a.status !== "failed" &&
+						// Show every installed TENANT app that isn't a loop card — even
+						// without a ui block — so a freshly-installed app never falls
+						// through the cracks (opening it auto-generates a surface).
+						// Operator-shared apps still need a declared ui block to appear.
+						(a.tenant || a.ui?.surface || a.ui?.surfaces || a.ui?.sidebar),
+				);
+				// Dedup by name (an app can surface in both tenant + operator roots).
+				const byName = new Map<string, MeAppCard>();
+				for (const a of ua) if (!byName.has(a.name) || a.tenant) byName.set(a.name, a);
+				uiCount = byName.size;
+				setUiApps([...byName.values()].sort((a, b) => a.name.localeCompare(b.name)));
+
+				// Optimistic install cards: server merges this user's in-flight /
+				// failed install intents into the list with status set. Dedup by
+				// name; honor the session dismiss-set.
+				const pend = new Map<string, MeAppCard>();
+				for (const a of (appsR.value.apps || [])) {
+					if ((a.status === "installing" || a.status === "failed") && !recentlyDeleted.has(a.name)) {
+						pend.set(a.name, a);
+					}
+				}
+				setPendingApps([...pend.values()].sort((a, b) => a.name.localeCompare(b.name)));
+
+				// Note: we deliberately do NOT auto-navigate a just-installed app
+				// into page generation — auto-generation blocked the screen and
+				// surprised users. Generation is opt-in now: open the app and use
+				// "Generate a page" if it has no surface yet. When the install
+				// marker drains (the app just became ready), confirm it with a
+				// toast that offers to open the app.
+				for (const a of (appsR.value.apps || [])) {
+					if (a.status === "ready" && takePendingCustomize(a.name)) {
+						const label = a.ui?.sidebar?.label || appTitle(a.name);
+						toast.success(`✓ ${label} is ready`, {
+							action: { label: "Open", onClick: () => navigate(`/studio/a/${encodeURIComponent(a.name)}`) },
+						});
+					}
+				}
+			}
+
 			// Identity (version/kind badges). Seed from each app's workflow rows
 			// first — they carry version for EVERY app incl. tenant ones (the
 			// loops-health/AdminLoops path only reads the operator home, so
@@ -177,6 +341,21 @@ function AppsHome() {
 					});
 				}
 			}
+			// Overlay each app's own `ui:` config — name/icon come from the SAME
+			// ui.sidebar the sidebar renders, so the card and sidebar can't
+			// disagree; hasSurface routes the card header to the configured UI.
+			if (appsR.status === "fulfilled") {
+				for (const a of (appsR.value.apps || [])) {
+					if (!a.ui) continue;
+					const prev = im.get(a.name) ?? {};
+					im.set(a.name, {
+						...prev,
+						label: a.ui.sidebar?.label || prev.label,
+						icon: a.ui.sidebar?.icon || prev.icon,
+						hasSurface: !!(a.ui.surface || (a.ui.surfaces && Object.keys(a.ui.surfaces).length > 0)),
+					});
+				}
+			}
 			setIdentity(im);
 
 			let runsToday = 0;
@@ -194,10 +373,9 @@ function AppsHome() {
 				memories = ags.reduce((n: number, a: { memory_count?: number }) => n + (a.memory_count || 0), 0);
 			}
 			const failing = wfs.filter((w) => w.last_run_ok === false).length;
-			// Self-heals: amber 'r' dots across recent runs — transient errors the
-			// loops retried/recovered on their own. The "it fixes itself" signal.
 			const selfHeals = wfs.reduce((n, w) => n + (w.run_spark || "").split("").filter((c) => c === "r").length, 0);
-			setHero({ apps: m.size, workflows: wfs.length, runsToday, selfHeals, memories, failing });
+			const inbox = draftsR.status === "fulfilled" ? (draftsR.value.drafts?.length || 0) : 0;
+			setHero({ apps: m.size + uiCount, workflows: wfs.length, runsToday, selfHeals, memories, failing, inbox });
 
 			// Loop-event detection → drives the orbit banner. Running if any
 			// cycle is mid-flight; a newer cycle ts than last poll = an event.
@@ -219,7 +397,7 @@ function AppsHome() {
 				window.dispatchEvent(new CustomEvent("studio:notify", { detail: { message: describeCycle(freshCycle) } }));
 			}
 			if (maxCycleTs) prevMaxTsRef.current = maxCycleTs;
-	}, []);
+	}, [navigate]);
 
 	// Poll so the home moves on its own — sparklines extend, counts tick.
 	useEffect(() => {
@@ -228,12 +406,40 @@ function AppsHome() {
 		return () => window.clearInterval(id);
 	}, [load]);
 
+	// While an install is in flight, poll fast so the optimistic card flips
+	// to a real app within a drain cycle instead of waiting for the 20s tick.
+	const anyInstalling = pendingApps.some((a) => a.status === "installing");
+	useEffect(() => {
+		if (!anyInstalling) return;
+		const id = window.setInterval(load, 4_000);
+		return () => window.clearInterval(id);
+	}, [anyInstalling, load]);
+
+	const retryInstall = useCallback(async (name: string) => {
+		try {
+			await me.installApp(name);
+			setPendingApps((prev) => prev.map((a) => a.name === name ? { ...a, status: "installing", error: undefined } : a));
+			load();
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : String(e);
+			setPendingApps((prev) => prev.map((a) => a.name === name ? { ...a, status: "failed", error: msg } : a));
+		}
+	}, [load]);
+
+	const dismissPending = useCallback(async (name: string) => {
+		recentlyDeleted.add(name);
+		setPendingApps((prev) => prev.filter((a) => a.name !== name));
+		// Permanently delete the underlying install intent so the failed card
+		// doesn't reappear on refresh (session hide alone wasn't enough).
+		try { await me.deleteInstallIntent(name); } catch { /* best-effort */ }
+	}, []);
+
 	if (byApp === null) {
 		return <div className="space-y-6"><div className="h-20 rounded-xl bg-slate-100 animate-pulse" /><Skeleton lines={3} /></div>;
 	}
 
 	const apps = [...byApp.keys()].sort();
-	const fresh = apps.length === 0;
+	const fresh = apps.length === 0 && uiApps.length === 0 && pendingApps.length === 0;
 
 	return (
 		<>
@@ -248,7 +454,7 @@ function AppsHome() {
 							</div>
 							<div>
 								<h2 className="text-xl font-medium text-slate-900 tracking-tight">Set up your first app.</h2>
-								<p className="text-sm text-slate-600 mt-1">Pick a starter and your AI assembles, schedules, and runs it — then its progress lives here.</p>
+								<p className="text-sm text-slate-600 mt-1">Pick a starter and your AI assembles an app — schedules its workflows and runs them for you. Progress lives here.</p>
 							</div>
 						</div>
 					</div>
@@ -262,6 +468,13 @@ function AppsHome() {
 					<div ref={appsRef} className="scroll-mt-4">
 						<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-400 uppercase mb-3">Your apps</div>
 						<div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
+							{pendingApps.map((a) => (
+								<PendingAppCard
+									key={`pending:${a.name}`} app={a}
+									onRetry={() => retryInstall(a.name)}
+									onDismiss={() => dismissPending(a.name)}
+								/>
+							))}
 							{apps.map((a, i) => (
 								<AppCard
 									key={a} app={a} workflows={byApp.get(a)!} identity={identity.get(a)} index={i}
@@ -270,15 +483,32 @@ function AppsHome() {
 										// to this grid; internal state wouldn't reset on a same-path nav.
 										navigate(`/studio/apps/${encodeURIComponent(ap)}${loop ? `?selected=${encodeURIComponent(loop)}` : ""}`);
 									}}
+									onRemoved={() => {
+										// Hide immediately (uninstall is async — see recentlyDeleted).
+										recentlyDeleted.add(a);
+										setByApp((prev) => {
+											if (!prev) return prev;
+											const next = new Map(prev);
+											next.delete(a);
+											return next;
+										});
+									}}
+								/>
+							))}
+							{uiApps.map((a) => (
+								<SurfaceAppCard
+									key={`ui:${a.name}`} app={a}
+									onOpen={() => navigate(`/studio/a/${encodeURIComponent(a.name)}`)}
+									onRemoved={() => { recentlyDeleted.add(a.name); setUiApps((prev) => prev.filter((x) => x.name !== a.name)); }}
 								/>
 							))}
 						</div>
 					</div>
 
-					{/* Create is also one click here (the sidebar "+ New intent"
+					{/* Create is also one click here (the sidebar launcher
 					    is the always-on primary). */}
 					<div className="pt-1 border-t border-slate-200/60">
-						<div className="pt-5"><QuickStarters heading="Start a new intent" /></div>
+						<div className="pt-5"><QuickStarters heading="Start a new app" /></div>
 					</div>
 				</div>
 			)}
@@ -294,18 +524,19 @@ function HeroBar({ h, onApps }: { h: Hero; onApps: () => void }) {
 			<StatChip icon={Boxes} value={h.apps} label="apps" tone="text-emerald-600" onClick={onApps} />
 			<StatChip icon={Activity} value={h.workflows} label="workflows" tone="text-emerald-600" onClick={onApps} />
 			<StatChip icon={Sparkles} value={h.runsToday} label="runs today" tone="text-sky-600" to="/studio/runs" />
-			{h.selfHeals > 0 && <StatChip icon={Wrench} value={h.selfHeals} label="self-healed" tone="text-amber-600" onClick={onApps} />}
-			<StatChip icon={Brain} value={h.memories} label="memories" tone="text-indigo-600" to="/studio/knowledge" />
-			{h.failing > 0 && <StatChip icon={AlertTriangle} value={h.failing} label="failing" tone="text-rose-600" onClick={onApps} />}
+			{h.selfHeals > 0 && <StatChip icon={Wrench} value={h.selfHeals} label="auto-recovered" tone="text-amber-600" title="workflows that recovered from a failed run on their own" onClick={onApps} />}
+			<StatChip icon={Brain} value={h.memories} label="learned" tone="text-indigo-600" title="insights your apps saved from recent runs" to="/studio/knowledge" />
+			{h.failing > 0 && <StatChip icon={AlertTriangle} value={h.failing} label="needs attention" tone="text-rose-600" onClick={onApps} />}
+			<StatChip icon={Inbox} value={h.inbox} label="inbox" tone="text-amber-600" to="/studio/inbox" />
 		</div>
 	);
 }
 
 function StatChip({
-	icon: Icon, value, label, tone, to, onClick,
+	icon: Icon, value, label, tone, title, to, onClick,
 }: {
 	icon: React.ComponentType<{ className?: string }>;
-	value: number; label: string; tone: string; to?: string; onClick?: () => void;
+	value: number; label: string; tone: string; title?: string; to?: string; onClick?: () => void;
 }) {
 	const shown = Math.round(useCountUp(value));
 	const inner = (
@@ -316,9 +547,9 @@ function StatChip({
 		</>
 	);
 	const cls = "inline-flex items-center gap-1.5 text-[12px] rounded-lg px-2 py-1 hover:bg-slate-100/70 transition-colors";
-	if (onClick) return <button type="button" onClick={onClick} className={cls}>{inner}</button>;
-	if (to) return <Link to={to} className={cls}>{inner}</Link>;
-	return <div className={cls}>{inner}</div>;
+	if (onClick) return <button type="button" onClick={onClick} title={title} className={cls}>{inner}</button>;
+	if (to) return <Link to={to} title={title} className={cls}>{inner}</Link>;
+	return <div className={cls} title={title}>{inner}</div>;
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -332,7 +563,7 @@ interface Row { loop: string; wf: MeWorkflowRow; lh?: LoopHealth }
 const rowsCache = new Map<string, Row[]>();
 const identCache = new Map<string, AppIdentity | undefined>();
 
-function AppOverview({ app, embedded, initialLoop }: { app: string; embedded?: boolean; initialLoop?: string | null }) {
+export function AppOverview({ app, embedded, initialLoop }: { app: string; embedded?: boolean; initialLoop?: string | null }) {
 	const [rows, setRows] = useState<Row[] | null>(() => rowsCache.get(app) ?? null);
 	const [identity, setIdentity] = useState<AppIdentity | undefined>(() => identCache.get(app));
 	const [deleting, setDeleting] = useState(false);
@@ -342,13 +573,22 @@ function AppOverview({ app, embedded, initialLoop }: { app: string; embedded?: b
 	const initialCycle = params.get("cycle"); // deep-link anchor → open that run
 
 	const load = useCallback(async () => {
-		const [lhR, wfR] = await Promise.allSettled([me.loopsHealth(), me.listWorkflows()]);
+		const [lhR, wfR, uaR] = await Promise.allSettled([me.loopsHealth(), me.listWorkflows(), me.listApps()]);
 		const lhMap = new Map<string, LoopHealth>();
+		// Configured display name/icon (ui.sidebar) — same source as the sidebar.
+		const uiCfg = uaR.status === "fulfilled" ? (uaR.value.apps || []).find((a) => a.name === app)?.ui : undefined;
 		if (lhR.status === "fulfilled") {
 			const resp = lhR.value as unknown as LoopsHealthResp;
 			for (const l of (resp.loops || []).filter((l) => l.app === app)) lhMap.set(l.loop, l);
 			const ident = (resp.apps || []).find((a) => a.app === app);
-			if (ident) { const id = { version: ident.version, kind: ident.kind, published: ident.published, status: ident.status }; identCache.set(app, id); setIdentity(id); }
+			if (ident || uiCfg) {
+				const id = {
+					version: ident?.version, kind: ident?.kind, published: ident?.published, status: ident?.status,
+					label: uiCfg?.sidebar?.label, icon: uiCfg?.sidebar?.icon,
+					hasSurface: !!(uiCfg?.surface || (uiCfg?.surfaces && Object.keys(uiCfg.surfaces).length > 0)),
+				};
+				identCache.set(app, id); setIdentity(id);
+			}
 		}
 		// Drive from listWorkflows (tenant-correct) so the user's own
 		// workflows always show; enrich with loop health when present.
@@ -375,15 +615,18 @@ function AppOverview({ app, embedded, initialLoop }: { app: string; embedded?: b
 		setParams(sp, { replace: true });
 	};
 
-	// Delete is only offered for the user's OWN (tenant) apps — operator-shared
-	// apps (e.g. auto-quant) aren't in the tenant tree, so uninstall can't
-	// touch them. Async via the uninstall intent; we navigate home optimistically.
+	// App-level delete is offered for every app: the uninstall intent now
+	// archives operator-shared apps (e.g. auto-quant) too — it resolves the
+	// app in the tenant tree OR the operator-shared root and moves it to
+	// .xp/.trash (recoverable). Per-LOOP delete below stays tenant-only.
+	// Async via the uninstall intent; we navigate home optimistically.
 	const isTenantApp = !!rows && rows.some((r) => r.wf.tenant);
 	const del = async () => {
 		if (deleting) return;
 		if (!window.confirm(
-			`Delete "${appTitle(app)}"?\n\nThis uninstalls the app and removes its ` +
-			`workflows + run history from your account. This cannot be undone.`)) return;
+			`Delete "${appTitle(app)}"?\n\nThis uninstalls the app and removes it from ` +
+			`your apps. The bundle (incl. run history) is archived to .xp/.trash and is ` +
+			`recoverable; any scheduled workflows stop running.`)) return;
 		setDeleting(true);
 		try {
 			await me.uninstallApp(app);
@@ -439,17 +682,17 @@ function AppOverview({ app, embedded, initialLoop }: { app: string; embedded?: b
 					<Boxes className="w-5 h-5" />
 				</div>
 				<div className="min-w-0">
-					<h1 className="text-lg font-semibold text-slate-900">{appTitle(app)}</h1>
+					<h1 className="text-lg font-semibold text-slate-900">{identity?.label || appTitle(app)}</h1>
 					<div className="text-xs text-slate-400 font-mono mt-0.5">
 						{app}{identity?.version ? ` · v${identity.version}` : ""}{identity?.published ? " · published" : ""}
 					</div>
 				</div>
-				{isTenantApp && !embedded && (
+				{!embedded && (
 					<button
 						type="button"
 						onClick={del}
 						disabled={deleting}
-						title="Delete this app — removes its workflows + run history"
+						title="Delete this app — archives it (recoverable) and removes it from your apps"
 						className="ml-auto flex-shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-colors disabled:opacity-50"
 					>
 						<Trash2 className="w-3.5 h-3.5" />

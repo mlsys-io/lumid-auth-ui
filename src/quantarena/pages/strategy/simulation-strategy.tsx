@@ -4,7 +4,7 @@ import { SimulationStrategyInfo } from '../../api/types';
 import { Loading } from '../../components/ui/loading';
 import EmptyData from '../../components/empty-data';
 import { Plus, Eye, EyeOff, RefreshCw, Trash, Sparkles, Microscope } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { TableCell, Table, TableHead, TableHeader, TableRow, TableBody, TableFooter } from '../../components/ui/table';
 import { Pagination } from '../../components/ui/pagination';
 import { usePagination } from '../../hooks/usePagination';
@@ -28,6 +28,10 @@ const SimulationStrategy = () => {
 	const [refresh, setRefresh] = useState<number>(Date.now());
 	const [deleteTarget, setDeleteTarget] = useState<SimulationStrategyInfo | null>(null);
 	const navigate = useNavigate();
+	const location = useLocation();
+	const researchBase = location.pathname.startsWith('/studio/')
+		? '/studio/a/lumid-market/strategy/research'
+		: '/dashboard/quant/research';
 
 	useEffect(() => {
 		fetchStrategies();
@@ -196,7 +200,7 @@ const SimulationStrategy = () => {
 													<TooltipTrigger asChild>
 														<Microscope
 															className="h-4 w-4 text-indigo-600 cursor-pointer hover:text-indigo-700"
-															onClick={() => navigate(`/dashboard/quant/research/${strategy.id}`)}
+															onClick={() => navigate(`${researchBase}/${strategy.id}`)}
 														/>
 													</TooltipTrigger>
 													<TooltipContent>Research &amp; runs</TooltipContent>

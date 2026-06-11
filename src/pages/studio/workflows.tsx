@@ -422,7 +422,7 @@ function WorkflowRowView({
 		try {
 			if (row.kind === "scheduled" && row.app) {
 				await me.runLoopNow(row.app, row.name);
-				toast.success("Cycle queued");
+				toast.success("Run queued");
 			} else {
 				toast.info("Run-now for visual workflows: W2.");
 			}

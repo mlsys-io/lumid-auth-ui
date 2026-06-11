@@ -26,7 +26,7 @@ export default function LoopFlow({ mode }: { mode: LoopMode }) {
 	return (
 		<div
 			className="flex items-center gap-1.5 flex-wrap"
-			title={mode === "running" ? "A cycle is running" : mode === "idle" ? "Armed — waiting for the next run" : "Loop paused"}
+			title={mode === "running" ? "A run is in progress" : mode === "idle" ? "Armed — waiting for the next run" : "Workflow paused"}
 		>
 			{STAGES.map((s, i) => (
 				<Fragment key={s}>

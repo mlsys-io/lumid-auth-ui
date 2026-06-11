@@ -8,8 +8,11 @@
 // sessionStorage so navigating between Studio pages keeps context.
 
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { ChevronRight, MessageSquarePlus, Send, Trash2, Loader2, Bot, User, Square, Globe, Telescope, Brain, ChevronDown, Paperclip, X, FileText, FileJson, Image as ImageIcon, Plus, Copy, RotateCcw, Mic, Volume2, Code2, Boxes, Download, ArrowLeft, Crosshair } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
+import { useCapabilities } from '../hooks/useCapabilities';
+import { STARTERS, missingReq, CONNECT_ROUTE } from './studio/starters';
+import { ChevronRight, MessageSquarePlus, Send, Trash2, Loader2, Bot, User, Square, Globe, Telescope, Brain, ChevronDown, Paperclip, X, FileText, FileJson, Image as ImageIcon, Plus, Copy, RotateCcw, Mic, Volume2, Code2, Boxes, Download, ArrowLeft, Crosshair, Lock } from 'lucide-react';
 import {
 	buildSelectionPreamble,
 	subscribeStudioPickedTarget,
@@ -55,12 +58,18 @@ const DOCUMENT_MIMES = new Set([
 ]);
 const DOCUMENT_EXTS = ['.pdf', '.docx', '.xlsx', '.pptx', '.rtf', '.odt', '.ods', '.odp', '.epub'];
 type ToolCall = {
+	id?: string;     // tool_use_id from the LLM, used to correlate tool_start → tool_call
 	name: string;
 	ok: boolean;
+	args?: Record<string, unknown>;      // from tool_call SSE event (already emitted by backend)
+	result?: Record<string, unknown>;    // from tool_call SSE event
 	summary?: string;
 	resultSummary?: string;
 	// `pending` = received tool_start but no tool_call yet (in-flight).
 	pending?: boolean;
+	// `approvalRequired` = backend emitted tool_approval_required; user must Allow/Deny.
+	approvalRequired?: boolean;
+	approvalId?: string;  // the approval_id to send to /tool-approve
 	link?: { to: string; label: string };
 };
 type Message = {
@@ -84,9 +93,62 @@ type Message = {
 
 const STORAGE_KEY = 'studio_chat_transcript_v1';
 const CHAT_ID_KEY = 'studio_chat_active_id_v1';
+
+// Persisted transcript shape: { user_sub: string, messages: Message[] }.
+// Tagging with user_sub closes the "same browser tab, different user"
+// leak — signing out + in as someone else used to render the prior
+// user's conversation. AuthProvider also clears the slot on logout;
+// this guard is belt-and-suspenders for cookie expiry / cross-tab
+// session swaps where logout() never runs. Mirrors chat-widget.tsx.
+function loadTranscript(currentSub: string | null | undefined): Message[] {
+	if (!currentSub) return [];
+	try {
+		const raw = sessionStorage.getItem(STORAGE_KEY);
+		if (!raw) return [];
+		const parsed = JSON.parse(raw);
+		// Legacy shape (an unwrapped array) predates the guard — discard
+		// rather than risk rendering it under the wrong identity.
+		if (Array.isArray(parsed)) {
+			sessionStorage.removeItem(STORAGE_KEY);
+			return [];
+		}
+		if (parsed?.user_sub !== currentSub || !Array.isArray(parsed.messages)) {
+			sessionStorage.removeItem(STORAGE_KEY);
+			return [];
+		}
+		const msgs = parsed.messages as Message[];
+		// Scrub tools left pending from a previous session (hard refresh
+		// mid-stream) — no live stream will ever resolve them.
+		return msgs.map((m) =>
+			m.tools?.some((t) => t.pending)
+				? { ...m, tools: m.tools.map((t) => t.pending ? { ...t, pending: false, ok: false } : t) }
+				: m
+		);
+	} catch {
+		return [];
+	}
+}
 const COLLAPSE_KEY = 'studio_chat_collapsed_v1';
 const WIDTH_KEY = 'studio_chat_width_v1';
 const MODEL_KEY = 'studio_chat_model_v1';
+// Slash command palette — shorthand prompts for common LumidOS operations.
+// Typing "/" at the start of input triggers filtering on this list.
+const SLASH_COMMANDS = [
+	{ label: '/loops',                    template: 'List all scheduled loops.' },
+	{ label: '/xp ask [query]',           template: 'Search my knowledge base: ' },
+	{ label: '/xp status',               template: 'Show knowledge base status.' },
+	{ label: '/app list',                 template: 'List installed xpio apps.' },
+	{ label: '/app push [name]',          template: 'Push app ' },
+	{ label: '/app validate [name]',      template: 'Validate app ' },
+	{ label: '/run loop [name]',          template: 'Run loop ' },
+	{ label: '/loop status [name]',       template: 'Show status for loop ' },
+	{ label: '/loop history [name]',      template: 'Show loop history for ' },
+	{ label: '/read [path]',              template: 'Read file ' },
+	{ label: '/edit [path]',              template: 'Read and edit ' },
+	{ label: '/bash [command]',           template: 'Run: ' },
+	{ label: '/workers',                  template: 'List FlowMesh compute workers.' },
+];
+
 const MODE_KEY = 'studio_chat_mode_v1';
 const THINK_KEY = 'studio_chat_think_v1';
 const AGENT_KEY = 'studio_chat_agent_v1';
@@ -101,6 +163,10 @@ type ChatMode = '' | 'search' | 'deep_research';
 
 export function StudioChat() {
 	const location = useLocation();
+	// `id` is the user_sub on the UserInfo shape from /api/v1/user; used
+	// to tag the persisted transcript so it can't leak across accounts.
+	const { user } = useAuth();
+	const userSub = user?.id ?? null;
 	// Default collapsed to a thin handle so the workspace (Intents,
 	// Knowledge, …) is the focus; the user opens chat on demand. State
 	// persists across reloads in localStorage (COLLAPSE_KEY). A
@@ -119,15 +185,10 @@ export function StudioChat() {
 		} catch { return DEFAULT_WIDTH; }
 	});
 	const [resizing, setResizing] = useState(false);
-	const [messages, setMessages] = useState<Message[]>(() => {
-		try {
-			const raw = sessionStorage.getItem(STORAGE_KEY);
-			return raw ? JSON.parse(raw) : [];
-		} catch {
-			return [];
-		}
-	});
+	const [messages, setMessages] = useState<Message[]>(() => loadTranscript(userSub));
 	const [input, setInput] = useState('');
+	const [slashSuggestions, setSlashSuggestions] = useState<{ label: string; template: string }[]>([]);
+	const [slashIdx, setSlashIdx] = useState(0);
 	// Queued messages — sends typed while a turn is streaming get
 	// stashed here and dispatched FIFO when streaming completes.
 	// Captures attachments at queue-time so the next message goes
@@ -201,6 +262,13 @@ export function StudioChat() {
 		try { return localStorage.getItem(CHAT_ID_KEY) || null; }
 		catch { return null; }
 	});
+	// Claude CLI session backing this thread (claude-code providers).
+	// Captured from the stream's claude_session event, echoed back as
+	// claude_session_id on every turn so the backend resumes the same
+	// CLI session (prior tool results + context carry over), and saved
+	// into the chat record so reloads keep continuity. Ref, not state —
+	// read at fetch time, never rendered.
+	const claudeSessionRef = useRef<string | null>(null);
 	// Recent threads for the history dropdown — populated lazily when
 	// the user opens the menu; refreshed after every save.
 	type HistoryRow = { id: string; title: string; updated_at: string; msg_count: number };
@@ -260,10 +328,21 @@ export function StudioChat() {
 	// fetch; consumed by the Stop button.
 	const abortRef = useRef<AbortController | null>(null);
 
-	// Persist transcript + collapse state
+	// If the auth context flips identity mid-tab (cookie refresh that
+	// returned a different user, or a session swap), drop the in-memory
+	// transcript before it can be rendered/persisted under the new user.
 	useEffect(() => {
-		try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(messages)); } catch { /* ignore */ }
-	}, [messages]);
+		setMessages((cur) => (cur.length === 0 ? cur : loadTranscript(userSub)));
+	}, [userSub]);
+
+	// Persist transcript tagged with the current user_sub. No identity →
+	// no persistence (nothing to bind it to, so nothing can leak).
+	useEffect(() => {
+		if (!userSub) return;
+		try {
+			sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ user_sub: userSub, messages }));
+		} catch { /* ignore */ }
+	}, [messages, userSub]);
 	// Persist collapse state across reloads.
 	useEffect(() => {
 		try { localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0'); } catch { /* ignore */ }
@@ -383,6 +462,7 @@ export function StudioChat() {
 						messages,
 						model: model || undefined,
 						mode: mode || undefined,
+						claude_session_id: claudeSessionRef.current || undefined,
 					}),
 				});
 				if (!r.ok) return;
@@ -420,6 +500,7 @@ export function StudioChat() {
 			if (!rec || !Array.isArray(rec.messages)) return;
 			setMessages(rec.messages);
 			setChatId(rec.id);
+			claudeSessionRef.current = rec.claude_session_id || null;
 			lastSavedSigRef.current = '';
 			setHistoryOpen(false);
 		} catch { /* ignore */ }
@@ -429,6 +510,7 @@ export function StudioChat() {
 		if (streaming) return;
 		setMessages([]);
 		setChatId(null);
+		claudeSessionRef.current = null;
 		lastSavedSigRef.current = '';
 		try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
 		setHistoryOpen(false);
@@ -643,9 +725,8 @@ export function StudioChat() {
 				const list: ModelOption[] = j?.data?.models || j?.models || [];
 				if (cancelled || !Array.isArray(list) || list.length === 0) return;
 				setModels(list);
-				// Adopt the server's default the first time we see this user;
-				// don't overwrite a user-chosen selection on reload.
-				if (!model) {
+				// Adopt the server's default if model is empty or stale (no longer in list).
+				if (!model || !list.find((m) => m.id === model)) {
 					const def = list.find((m) => m.default) || list[0];
 					if (def) setModel(def.id);
 				}
@@ -775,6 +856,7 @@ export function StudioChat() {
 					...(mode ? { mode } : {}),
 					...(think ? { think: true } : {}),
 					...(personaId ? { persona_id: personaId } : agentId ? { agent_id: agentId } : {}),
+					...(claudeSessionRef.current ? { claude_session_id: claudeSessionRef.current } : {}),
 				}),
 				signal: ctrl.signal,
 			});
@@ -798,7 +880,9 @@ export function StudioChat() {
 						if (!line.startsWith('data: ')) continue;
 						try {
 							const evt = JSON.parse(line.slice(6));
-							if (evt.type === 'route') {
+							if (evt.type === 'claude_session') {
+								if (evt.session_id) claudeSessionRef.current = String(evt.session_id);
+							} else if (evt.type === 'route') {
 								setLastRoute({
 									modelUsed: String(evt.model_used || ''),
 									autoRouted: !!evt.auto_routed,
@@ -840,6 +924,12 @@ export function StudioChat() {
 		} finally {
 			setStreaming(false);
 			abortRef.current = null;
+			// Clear any tools that received tool_start but no tool_call (stream
+			// ended or errored before the result landed — leave them as failed).
+			setMessages((prev) => withLastAssistant(prev, (m) => {
+				if (!m.tools?.some((t) => t.pending)) return m;
+				return { ...m, tools: m.tools.map((t) => t.pending ? { ...t, pending: false, ok: false } : t) };
+			}));
 		}
 	}, [messages, streaming, location.pathname, model, mode, think, agentId, personaId]);
 
@@ -864,6 +954,30 @@ export function StudioChat() {
 	// state in MessageBubble.
 	const copyMessage = useCallback((content: string) => {
 		try { navigator.clipboard.writeText(content); } catch { /* ignore */ }
+	}, []);
+
+	const handleToolApprove = useCallback(async (approvalId: string, approved: boolean, always?: boolean, tool?: string) => {
+		// Optimistically clear the approval state in the UI immediately.
+		setMessages((prev) => prev.map((m) => ({
+			...m,
+			tools: m.tools?.map((t) =>
+				t.approvalId === approvalId
+					? { ...t, approvalRequired: false, approvalId: undefined }
+					: t
+			),
+		})));
+		try {
+			await fetch('/api/v1/me/agent/chat/tool-approve', {
+				method: 'POST',
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					approval_id: approvalId,
+					approved,
+					...(always ? { always: true, tool: tool || '' } : {}),
+				}),
+			});
+		} catch { /* stream will receive a timeout denial */ }
 	}, []);
 
 	// dispatchTurn — fire one chat turn with the given text + already-
@@ -902,6 +1016,7 @@ export function StudioChat() {
 		const ctrl = new AbortController();
 		abortRef.current = ctrl;
 		try {
+			console.log('[StudioChat] sending model=', model || '(default)');
 			const r = await fetch('/api/v1/me/agent/chat/stream', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -912,6 +1027,7 @@ export function StudioChat() {
 					...(mode ? { mode } : {}),
 					...(think ? { think: true } : {}),
 					...(personaId ? { persona_id: personaId } : agentId ? { agent_id: agentId } : {}),
+					...(claudeSessionRef.current ? { claude_session_id: claudeSessionRef.current } : {}),
 				}),
 				signal: ctrl.signal,
 			});
@@ -936,7 +1052,11 @@ export function StudioChat() {
 						if (!line.startsWith('data: ')) continue;
 						try {
 							const evt = JSON.parse(line.slice(6));
-							handleEvent(evt, setMessages);
+							if (evt.type === 'claude_session') {
+								if (evt.session_id) claudeSessionRef.current = String(evt.session_id);
+							} else {
+								handleEvent(evt, setMessages);
+							}
 						} catch {
 							/* malformed line; skip */
 						}
@@ -961,6 +1081,11 @@ export function StudioChat() {
 		} finally {
 			setStreaming(false);
 			abortRef.current = null;
+			// Clear any tools that received tool_start but no tool_call.
+			setMessages((prev) => withLastAssistant(prev, (m) => {
+				if (!m.tools?.some((t) => t.pending)) return m;
+				return { ...m, tools: m.tools.map((t) => t.pending ? { ...t, pending: false, ok: false } : t) };
+			}));
 		}
 	}, [messages, location.pathname, model, mode, think, agentId, personaId]);
 
@@ -1110,12 +1235,21 @@ export function StudioChat() {
 								{formatTokens(usage.used)}/{formatTokens(usage.limit)}
 							</span>
 						)}
-						{lastRoute?.autoRouted && lastRoute.modelUsed !== model && (
+						{lastRoute && (
 							<span
-								className="text-[9.5px] font-normal px-1 py-px rounded bg-sky-100 text-sky-700 font-medium"
-								title={`Auto-routed to ${lastRoute.modelUsed} (needed a capability your selected model lacks).`}
+								className={[
+									'text-[9.5px] font-normal px-1 py-px rounded font-medium',
+									lastRoute.autoRouted && lastRoute.modelUsed !== model
+										? 'bg-sky-100 text-sky-700'
+										: 'bg-slate-100 text-slate-500',
+								].join(' ')}
+								title={lastRoute.autoRouted && lastRoute.modelUsed !== model
+									? `Auto-routed to ${lastRoute.modelUsed} (needed a capability your selected model lacks).`
+									: `Last response from: ${lastRoute.modelUsed}`}
 							>
-								auto: {modelShortLabel(lastRoute.modelUsed)}
+								{lastRoute.autoRouted && lastRoute.modelUsed !== model
+									? `auto: ${modelShortLabel(lastRoute.modelUsed)}`
+									: modelShortLabel(lastRoute.modelUsed)}
 							</span>
 						)}
 					</div>
@@ -1241,6 +1375,7 @@ export function StudioChat() {
 					onRegenerate={m.role === 'assistant' && !streaming && i > 0 && messages[i - 1]?.role === 'user' ? () => regenerate(i) : undefined}
 					onSpeak={m.role === 'assistant' && m.content && typeof window !== 'undefined' && 'speechSynthesis' in window ? () => toggleSpeak(i, m.content) : undefined}
 					isSpeaking={speakingIdx === i}
+					onToolApprove={handleToolApprove}
 				/>
 				))}
 			</div>
@@ -1474,8 +1609,43 @@ export function StudioChat() {
 					<div className="flex-1 relative group">
 						<textarea
 							value={input}
-							onChange={(e) => setInput(e.target.value)}
+							onChange={(e) => {
+								const v = e.target.value;
+								setInput(v);
+								if (v.startsWith('/')) {
+									const q = v.toLowerCase();
+									const matches = SLASH_COMMANDS.filter((c) => c.label.toLowerCase().startsWith(q));
+									setSlashSuggestions(matches);
+									setSlashIdx(0);
+								} else {
+									setSlashSuggestions([]);
+								}
+							}}
 							onKeyDown={(e) => {
+								// Slash command palette navigation
+								if (slashSuggestions.length > 0) {
+									if (e.key === 'ArrowDown') {
+										e.preventDefault();
+										setSlashIdx((i) => (i + 1) % slashSuggestions.length);
+										return;
+									}
+									if (e.key === 'ArrowUp') {
+										e.preventDefault();
+										setSlashIdx((i) => (i - 1 + slashSuggestions.length) % slashSuggestions.length);
+										return;
+									}
+									if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
+										e.preventDefault();
+										const chosen = slashSuggestions[slashIdx];
+										setInput(chosen.template);
+										setSlashSuggestions([]);
+										return;
+									}
+									if (e.key === 'Escape') {
+										setSlashSuggestions([]);
+										return;
+									}
+								}
 								// Send: Enter (without modifiers) OR Cmd+Enter / Ctrl+Enter
 								// from anywhere. Shift+Enter inserts newline as usual.
 								if (e.key === 'Enter' && !e.shiftKey) {
@@ -1498,6 +1668,23 @@ export function StudioChat() {
 									}
 								}
 							}}
+							onPaste={(e) => {
+								const items = e.clipboardData?.items;
+								if (!items) return;
+								const imageFiles: File[] = [];
+								for (let i = 0; i < items.length; i++) {
+									if (items[i].type.startsWith('image/')) {
+										const f = items[i].getAsFile();
+										if (f) imageFiles.push(f);
+									}
+								}
+								if (imageFiles.length > 0) {
+									e.preventDefault();
+									const dt = new DataTransfer();
+									imageFiles.forEach((f) => dt.items.add(f));
+									onPickFiles(dt.files);
+								}
+							}}
 							placeholder={
 								dragOver
 									? 'Drop to attach'
@@ -1514,6 +1701,31 @@ export function StudioChat() {
 							].join(' ')}
 							style={{ minHeight: '42px' }}
 						/>
+						{slashSuggestions.length > 0 && (
+							<div className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-slate-200 rounded-xl shadow-lg z-50 max-h-48 overflow-y-auto">
+								{slashSuggestions.map((s, i) => (
+									<button
+										key={i}
+										type="button"
+										className={[
+											'w-full text-left px-3 py-1.5 text-[12px] font-mono hover:bg-slate-50 transition-colors',
+											i === 0 && i === slashSuggestions.length - 1 ? 'rounded-xl' : i === 0 ? 'rounded-t-xl' : i === slashSuggestions.length - 1 ? 'rounded-b-xl' : '',
+											i === slashIdx ? 'bg-emerald-50' : '',
+										].join(' ')}
+										onMouseDown={(e) => {
+											e.preventDefault();
+											setInput(s.template);
+											setSlashSuggestions([]);
+										}}
+									>
+										<span className="text-emerald-700 font-semibold">{s.label}</span>
+										{s.label !== s.template && (
+											<span className="text-slate-400 ml-2 truncate">{s.template.slice(s.label.length)}</span>
+										)}
+									</button>
+								))}
+							</div>
+						)}
 					</div>
 					{streaming && (
 						<button
@@ -1579,6 +1791,7 @@ const MessageBubble = memo(function MessageBubble({
 	onRegenerate,
 	onSpeak,
 	isSpeaking,
+	onToolApprove,
 }: {
 	m: Message;
 	streaming?: boolean;
@@ -1586,6 +1799,7 @@ const MessageBubble = memo(function MessageBubble({
 	onRegenerate?: () => void;
 	onSpeak?: () => void;
 	isSpeaking?: boolean;
+	onToolApprove?: (approvalId: string, approved: boolean, always?: boolean, tool?: string) => void;
 }) {
 	const isUser = m.role === 'user';
 	const [copied, setCopied] = useState(false);
@@ -1639,9 +1853,28 @@ const MessageBubble = memo(function MessageBubble({
 						)}
 					</div>
 				)}
+				{!isUser && !streaming && m.content && connectHintFor(m.content) && (
+					<div className="mt-1.5">
+						<Link
+							to={CONNECT_ROUTE[connectHintFor(m.content)!]}
+							className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 text-[12px] hover:bg-amber-100 transition-colors"
+						>
+							<Lock className="w-3.5 h-3.5" />
+							Connect {connectHintFor(m.content) === 'google' ? 'Google' : 'Microsoft'} to continue
+						</Link>
+					</div>
+				)}
 				{m.tools && m.tools.length > 0 && (
 					<div className={['mt-2 flex flex-col gap-1', isUser ? 'items-end' : 'items-start'].join(' ')}>
-						{m.tools.map((t, i) => <ToolChip key={i} t={t} />)}
+						{m.tools.map((t, i) => (
+							<ToolChip
+								key={i}
+								t={t}
+								onApprove={t.approvalRequired && t.approvalId && onToolApprove
+									? (approved, always) => onToolApprove(t.approvalId!, approved, always, t.name)
+									: undefined}
+							/>
+						))}
 					</div>
 				)}
 				{!isUser && m.content && !streaming && (
@@ -1761,31 +1994,51 @@ function ThinkingBlock({ thinking, done }: { thinking: string; done: boolean }) 
 // matching icon, the arg summary, an inline result summary when
 // available, and an optional follow-up link (e.g. "Open →" for
 // install_app). Pending state shows a spinner instead of ✓/✗ until the
-// tool_call event lands.
-function ToolChip({ t }: { t: ToolCall }) {
+// tool_call event lands. Destructive tools show Allow/Deny buttons when
+// approvalRequired=true.
+function ToolChip({ t, onApprove }: { t: ToolCall; onApprove?: (approved: boolean, always?: boolean) => void }) {
+	const [argsOpen, setArgsOpen] = useState(false);
 	const Icon =
 		t.name === 'web_search' ? Globe
 		: t.name === 'deep_research' ? Telescope
 		: t.name === 'web_fetch' ? Globe
+		: t.name === 'bash_exec' ? Code2
+		: t.name === 'read_file' || t.name === 'write_file' || t.name === 'edit_file' ? FileText
+		: t.name.startsWith('xp_') ? Brain
+		: t.name.startsWith('app_') || t.name === 'list_loops' || t.name === 'run_loop' ? Boxes
 		: null;
+	const hasArgs = t.args && Object.keys(t.args).length > 0;
 	return (
-		<div className="inline-flex flex-col gap-0.5 max-w-full">
-			<div className="inline-flex items-center gap-1.5">
+		<div className="flex flex-col gap-0.5 max-w-full">
+			<div className="inline-flex items-center gap-1.5 flex-wrap">
 				<div className={[
 					'text-[11px] inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border max-w-full',
-					t.pending
-						? 'bg-sky-50/80 border-sky-200 text-sky-800'
-						: t.ok
-							? 'bg-emerald-50/80 border-emerald-200 text-emerald-800'
-							: 'bg-rose-50/80 border-rose-200 text-rose-800',
+					t.approvalRequired
+						? 'bg-amber-50/80 border-amber-300 text-amber-900'
+						: t.pending
+							? 'bg-sky-50/80 border-sky-200 text-sky-800'
+							: t.ok
+								? 'bg-emerald-50/80 border-emerald-200 text-emerald-800'
+								: 'bg-rose-50/80 border-rose-200 text-rose-800',
 				].join(' ')}>
-					{t.pending
-						? <Loader2 className="w-3 h-3 animate-spin" />
-						: Icon
-							? <Icon className="w-3 h-3" />
-							: <span className="text-[10px]">{t.ok ? '✓' : '✗'}</span>}
+					{t.approvalRequired
+						? <span className="text-[10px]">⚠</span>
+						: t.pending
+							? <Loader2 className="w-3 h-3 animate-spin" />
+							: Icon
+								? <Icon className="w-3 h-3" />
+								: <span className="text-[10px]">{t.ok ? '✓' : '✗'}</span>}
 					<span className="font-mono font-medium">{t.name}</span>
 					{t.summary && <span className="opacity-70 truncate max-w-[180px]">· {t.summary}</span>}
+					{hasArgs && !t.approvalRequired && !t.pending && (
+						<button
+							onClick={() => setArgsOpen(!argsOpen)}
+							className="opacity-50 hover:opacity-100 transition-opacity"
+							title="Toggle args"
+						>
+							<ChevronDown className={['w-3 h-3 transition-transform', argsOpen ? 'rotate-180' : ''].join(' ')} />
+						</button>
+					)}
 				</div>
 				{t.link && (
 					<Link
@@ -1795,8 +2048,43 @@ function ToolChip({ t }: { t: ToolCall }) {
 						{t.link.label} →
 					</Link>
 				)}
+				{t.approvalRequired && onApprove && (
+					<>
+						<button
+							onClick={() => onApprove(true)}
+							className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 transition-colors font-medium"
+						>
+							Allow
+						</button>
+						<button
+							onClick={() => onApprove(true, true)}
+							title={`Always allow ${t.name} without asking (revoke later in settings)`}
+							className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-700 hover:bg-emerald-100 transition-colors font-medium"
+						>
+							Always
+						</button>
+						<button
+							onClick={() => onApprove(false)}
+							className="text-[11px] px-2 py-0.5 rounded-full bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors"
+						>
+							Deny
+						</button>
+					</>
+				)}
 			</div>
-			{t.resultSummary && (
+			{/* Args JSON — shown on demand after a completed tool call */}
+			{argsOpen && hasArgs && (
+				<div className="ml-5 mt-0.5 p-2 rounded-md bg-slate-50 border border-slate-200 text-[10px] font-mono whitespace-pre-wrap break-all max-h-40 overflow-y-auto">
+					{JSON.stringify(t.args, null, 2)}
+				</div>
+			)}
+			{/* Args shown inline when approval is required (user needs to see what will run) */}
+			{t.approvalRequired && hasArgs && (
+				<div className="ml-5 mt-0.5 p-2 rounded-md bg-amber-50 border border-amber-200 text-[10px] font-mono whitespace-pre-wrap break-all max-h-40 overflow-y-auto">
+					{JSON.stringify(t.args, null, 2)}
+				</div>
+			)}
+			{t.resultSummary && !t.pending && (
 				<div className="text-[10px] text-slate-500 pl-5 truncate max-w-[280px]">
 					{t.resultSummary}
 				</div>
@@ -1805,14 +2093,31 @@ function ToolChip({ t }: { t: ToolCall }) {
 	);
 }
 
+// connectHintFor scans assistant text for a missing-integration signal and
+// returns which provider to offer a Connect button for, or null. Drives the
+// failed-compose recovery affordance.
+function connectHintFor(text: string): ('google' | 'microsoft') | null {
+	const t = text.toLowerCase();
+	const needsConnect = /\b(not connected|isn['’]?t connected|connect your|need(s)? (you to )?(connect|to connect)|no .* grant|haven['’]?t connected|requires? .* access)\b/.test(t);
+	if (!needsConnect) return null;
+	if (/\b(google|gmail|calendar)\b/.test(t)) return 'google';
+	if (/\b(microsoft|outlook|office\s?365|graph)\b/.test(t)) return 'microsoft';
+	return null;
+}
+
 function EmptyHint() {
+	const caps = useCapabilities();
+	const navigate = useNavigate();
 	const samples = [
 		'what should I do next?',
 		"what's pending in my inbox?",
 		'send any obvious replies',
-		'pause cc_watcher for the weekend',
 		'what did you learn about me this week?',
 	];
+	// Capability-gated launcher starters — reachable from the empty chat on
+	// any Studio page. Locked ones route to the connect page instead of
+	// composing a workflow that would fail.
+	const starters = STARTERS.slice(0, 3);
 	return (
 		<div className="pt-8 text-center text-xs text-slate-500 space-y-3">
 			<div className="relative inline-block">
@@ -1824,10 +2129,33 @@ function EmptyHint() {
 			<div className="space-y-1">
 				<div className="text-sm font-semibold text-slate-900">Hi — I&apos;m your AI.</div>
 				<p className="text-[11.5px] leading-relaxed max-w-[260px] mx-auto">
-					Ask in plain English. I&apos;ll act.
+					Ask in plain English, or start with one of these.
 				</p>
 			</div>
-			<div className="pt-3 space-y-1.5 text-left max-w-xs mx-auto">
+
+			{/* Starters — the launcher, gated by capability */}
+			<div className="pt-2 space-y-1.5 text-left max-w-xs mx-auto">
+				{starters.map((s) => {
+					const missing = missingReq(s, caps);
+					const Icon = missing ? Lock : s.icon;
+					return (
+						<button
+							key={s.title}
+							onClick={() => missing
+								? navigate(CONNECT_ROUTE[missing])
+								: window.dispatchEvent(new CustomEvent('studio:ask', { detail: { prompt: s.prompt, autosend: true } }))}
+							className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/70 border border-slate-200/60 hover:bg-emerald-50 hover:border-emerald-200 transition-colors"
+						>
+							<Icon className={`w-3.5 h-3.5 shrink-0 ${missing ? 'text-slate-400' : 'text-emerald-600'}`} />
+							<span className="flex-1 text-slate-700">{s.title}</span>
+							{missing && <span className="text-[10px] text-amber-600">connect {missing}</span>}
+						</button>
+					);
+				})}
+			</div>
+
+			{/* Generic conversational samples */}
+			<div className="pt-1 space-y-1.5 text-left max-w-xs mx-auto">
 				{samples.map((s) => (
 					<button
 						key={s}
@@ -1876,9 +2204,21 @@ function handleEvent(
 			...m,
 			tools: [
 				...(m.tools || []),
-				{ name: String(evt.name || 'tool'), ok: true, pending: true },
+				{ id: String(evt.id || ''), name: String(evt.name || 'tool'), ok: true, pending: true },
 			],
 		})));
+	} else if (evt.type === 'tool_approval_required') {
+		// Backend paused; update the pending chip to show approval buttons.
+		const approvalId = String(evt.approval_id || '');
+		const toolId = String(evt.id || '');
+		setMessages((prev) => withLastAssistant(prev, (m) => {
+			const tools = (m.tools || []).map((t) =>
+				(toolId && t.id === toolId) || (!toolId && t.pending && t.name === evt.name)
+					? { ...t, approvalRequired: true, approvalId, args: evt.args as Record<string, unknown> }
+					: t
+			);
+			return { ...m, tools };
+		}));
 	} else if (evt.type === 'tool_call') {
 		// Surface a clickable "Open →" link on the tool chip for any
 		// install/compose that yields a tenant-side app. Other tools
@@ -1900,19 +2240,27 @@ function handleEvent(
 			}
 		}
 		const completed: ToolCall = {
+			id: String(evt.id || ''),
 			name: String(evt.name || 'tool'),
 			ok: evt.ok !== false,
+			args: evt.args as Record<string, unknown> | undefined,
+			result: evt.result as Record<string, unknown> | undefined,
 			summary: summarizeToolArgs(evt.args),
 			resultSummary: summarizeToolResult(evt.name, evt.result),
 			pending: false,
+			approvalRequired: false,
 			link,
 		};
 		setMessages((prev) => withLastAssistant(prev, (m) => {
 			const tools = m.tools ? [...m.tools] : [];
-			// Replace the latest pending entry of the same name; else push.
-			const pendIdx = tools.findLastIndex
-				? tools.findLastIndex((t) => t.pending && t.name === completed.name)
-				: (() => { for (let i = tools.length - 1; i >= 0; i--) if (tools[i].pending && tools[i].name === completed.name) return i; return -1; })();
+			// Replace the latest pending entry matching by id or name; else push.
+			const pendIdx = (() => {
+				for (let i = tools.length - 1; i >= 0; i--) {
+					const t = tools[i];
+					if ((completed.id && t.id === completed.id) || (t.pending && t.name === completed.name)) return i;
+				}
+				return -1;
+			})();
 			if (pendIdx >= 0) tools[pendIdx] = completed;
 			else tools.push(completed);
 			return { ...m, tools };
@@ -2014,8 +2362,10 @@ function estimateCost(tokens: number, modelId: string): number {
 // modelShortLabel — pulls a 7-char label from a model id for the
 // "auto: <model>" pill. Avoids the full display name overflowing.
 function modelShortLabel(id: string): string {
-	if (id === 'claude-haiku') return 'Claude';
+	if (id === 'claude-code-opus') return 'Opus';
+	if (id === 'kvrun-gemma4') return 'Gemma4';
 	if (id === 'kvrun-minimax') return 'MiniMax';
+	if (id === 'claude-haiku') return 'Haiku';
 	return id.length > 10 ? id.slice(0, 10) + '…' : id;
 }
 
@@ -2702,6 +3052,18 @@ function summarizeToolResult(name: unknown, result: unknown): string | undefined
 		if (title) return `${title.slice(0, 50)} (${len} chars)`;
 		if (len) return `${len} chars`;
 		return undefined;
+	}
+	if (n === 'bash_exec') {
+		const out = typeof r.output === 'string' ? r.output.trim() : '';
+		const firstLine = out.split('\n')[0] || '';
+		return firstLine ? firstLine.slice(0, 80) : `exit ${r.exit_code ?? '?'}`;
+	}
+	if (n === 'read_file') {
+		const bytes = typeof r.size === 'number' ? r.size : 0;
+		return `${bytes} bytes${r.truncated ? ' (truncated)' : ''}`;
+	}
+	if (n === 'write_file' || n === 'edit_file') {
+		return typeof r.path === 'string' ? r.path.split('/').pop() : undefined;
 	}
 	return undefined;
 }

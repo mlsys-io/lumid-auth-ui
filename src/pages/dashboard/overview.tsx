@@ -8,6 +8,9 @@ import {
 	Server,
 	Users,
 	Zap,
+	LineChart,
+	ShieldCheck,
+	ChevronRight,
 } from 'lucide-react';
 import {
 	listClusters,
@@ -93,6 +96,21 @@ export default function AdminOverview() {
 				)}
 			</div>
 
+			{/* Admin areas — quick links into each section group. Surfaces the
+			    QuantArena / Lumid Market admin (otherwise reachable only by URL
+			    after the shell merge). */}
+			<section>
+				<h2 className="text-xs font-semibold uppercase tracking-wide text-indigo-700 mb-3 flex items-center gap-1.5">
+					<ShieldCheck className="w-3 h-3" />
+					Admin areas
+				</h2>
+				<div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
+					<AreaLink to="/dashboard/admin/users"        icon={Users}     label="People & access" hint="Users, roles, invitations, audit" />
+					<AreaLink to="/dashboard/admin/clusters"     icon={Server}    label="Infrastructure"  hint="Clusters, workers, billing, reviews" />
+					<AreaLink to="/dashboard/admin/competitions" icon={LineChart} label="Lumid Market admin" hint="Competitions, markets, templates, jobs" />
+				</div>
+			</section>
+
 			<section>
 				<h2 className="text-xs font-semibold uppercase tracking-wide text-indigo-700 mb-3 flex items-center gap-1.5">
 					<Activity className="w-3 h-3" />
@@ -118,6 +136,33 @@ export default function AdminOverview() {
 
 			<RecentActivity entries={snap.audit} loading={loading} />
 		</div>
+	);
+}
+
+// ─── Admin-area quick link ────────────────────────────────────────────
+
+function AreaLink({
+	to, icon: Icon, label, hint,
+}: {
+	to: string;
+	icon: React.ComponentType<{ className?: string }>;
+	label: string;
+	hint: string;
+}) {
+	return (
+		<Link
+			to={to}
+			className="group flex items-center gap-3 rounded-lg border bg-card px-4 py-3 hover:border-indigo-300 hover:shadow-sm transition-colors"
+		>
+			<div className="w-9 h-9 shrink-0 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+				<Icon className="w-[18px] h-[18px]" />
+			</div>
+			<div className="min-w-0 flex-1">
+				<div className="text-sm font-medium truncate">{label}</div>
+				<div className="text-xs text-muted-foreground truncate">{hint}</div>
+			</div>
+			<ChevronRight className="w-4 h-4 shrink-0 text-muted-foreground/40 group-hover:text-indigo-500" />
+		</Link>
 	);
 }
 
