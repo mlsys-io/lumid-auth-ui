@@ -10,14 +10,16 @@
 // Returning users see AppLoops (recent cycles + headlines) as before.
 
 import { useEffect, useState, useMemo } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import WorkflowComposer from '@/components/WorkflowComposer';
 import {
-	Sparkles, Sun, Mail, Search, Calendar, ArrowRight, MessagesSquare,
-	TrendingUp,
+	Sparkles, ArrowRight, MessagesSquare, Lock,
 } from 'lucide-react';
 import AppLoops from '../app-revamp/loops';
 import { me } from '@/api/me';
+import { useCapabilities } from '@/hooks/useCapabilities';
+import { STAGGER_CLASS, staggerDelay } from '@/components/studio/stagger';
+import { type Starter, STARTERS, missingReq, CONNECT_ROUTE } from '@/components/studio/starters';
 import { useAuth } from '@/hooks/useAuth';
 import { IntentJournal } from '@/components/IntentJournal';
 import { DEMO_MODE } from '@/lib/demo';
@@ -66,7 +68,7 @@ export default function StudioToday() {
 				// STICK here above the user's existing intents/workflows, as a
 				// permanent "start a new intent" launcher.
 				<div className="space-y-6">
-					<QuickStarters heading="Start a new intent" />
+					<QuickStarters heading="Start a new app" />
 					{DEMO_MODE
 						// IntentJournal reclaims the page-shell padding to paint
 						// its editorial spread edge-to-edge; it sits below the
@@ -80,59 +82,6 @@ export default function StudioToday() {
 }
 
 // ── Fresh-user hero ────────────────────────────────────────────────
-
-interface Starter {
-	icon: React.ComponentType<{ className?: string }>;
-	tone: 'amber' | 'rose' | 'sky' | 'violet' | 'indigo';
-	title: string;
-	subtitle: string;
-	prompt: string;
-}
-
-const STARTERS: Starter[] = [
-	{
-		icon: Sun,
-		tone: 'amber',
-		title: 'Daily brief',
-		subtitle: 'Every morning at 7am, summarize what I need to know.',
-		prompt: 'Set up a daily brief — every morning at 7am, summarize my email, calendar, and any pending tasks.',
-	},
-	{
-		icon: Mail,
-		tone: 'rose',
-		title: 'Email triage',
-		subtitle: 'Watch my inbox; draft replies to anything obvious.',
-		prompt: 'Set up email triage — every hour during work hours, scan my inbox and draft replies to anything obvious.',
-	},
-	{
-		icon: Search,
-		tone: 'sky',
-		title: 'Research assistant',
-		subtitle: 'Track a topic; surface what changed today.',
-		prompt: 'Set up a research assistant — pick a topic with me, and every morning surface the latest changes.',
-	},
-	{
-		icon: Calendar,
-		tone: 'violet',
-		title: 'Meeting prep',
-		subtitle: 'Before each meeting, brief me on the attendees + context.',
-		prompt: 'Set up meeting prep — 30 minutes before each meeting, brief me on the attendees, prior threads, and any context I need.',
-	},
-	{
-		icon: TrendingUp,
-		tone: 'indigo',
-		title: 'Compose: daily web-research brief',
-		subtitle: 'Assemble a brand-new workflow: research a topic and brief me each morning.',
-		// The creation demo (Stage 1, assemble-from-intent): the prompt
-		// explicitly asks the agent to compose_workflow (not install an
-		// existing app), and names catalog-backed capabilities (web search +
-		// scraping) so the token scorer assembles a real, runnable draft →
-		// studio:composed → WorkflowComposer → review + install.
-		// (The trading-flavoured "KOL tweets → strategy" variant is parked
-		// until the FinData-backed catalog skills are published — Path B.)
-		prompt: 'Compose a brand-new daily web-research brief workflow NOW — don\'t ask me questions, use sensible defaults (topic: AI industry news, 8am daily). Call compose_workflow with that intent to draft it from the marketplace catalog (web search + scraping), then show me the draft so I can review, tweak the topic/schedule, and install it.',
-	},
-];
 
 function FreshUserHero({ name }: { name: string }) {
 	return (
@@ -151,8 +100,8 @@ function FreshUserHero({ name }: { name: string }) {
 							{name ? `Welcome, ${name}.` : 'Welcome.'}
 						</h2>
 						<p className="text-sm text-slate-600 mt-1 leading-relaxed">
-							Lumid runs AI workflows for you in the background — email triage, daily briefs,
-							anything you can describe. Pick a starter below, or just tell us what you want.
+							Lumid runs apps for you in the background — a daily brief, email triage,
+							anything you can describe. Pick a starter below, or tell us what you want.
 						</p>
 					</div>
 				</div>
@@ -182,8 +131,18 @@ function FreshUserHero({ name }: { name: string }) {
 // ("given an intent, assemble a workflow") is a recurring action, so this
 // surface always sticks.
 export function QuickStarters({ heading = 'Quick starters' }: { heading?: string }) {
+	const caps = useCapabilities();
+	const navigate = useNavigate();
 	const dispatch = (prompt: string) =>
 		window.dispatchEvent(new CustomEvent('studio:ask', { detail: { prompt, autosend: true } }));
+
+	// Show the three lead starters, runnable ones first so the default view is
+	// immediately actionable; unmet ones render "locked" → connect page.
+	const lead = useMemo(
+		() => [...STARTERS.slice(0, 3)].sort((a, b) => Number(missingReq(a, caps) !== null) - Number(missingReq(b, caps) !== null)),
+		[caps],
+	);
+
 	return (
 		<div className="space-y-3">
 			<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400">
@@ -192,10 +151,16 @@ export function QuickStarters({ heading = 'Quick starters' }: { heading?: string
 
 			{/* Tight 2×2: three concrete starters + one free-form "describe". */}
 			<div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-				{STARTERS.slice(0, 3).map((s) => (
-					<StarterCard key={s.title} s={s} onClick={() => dispatch(s.prompt)} />
-				))}
-				<DescribeCard onClick={() => dispatch('I want to set up a new workflow. Help me think through what would be most useful, then compose and install it.')} />
+				{lead.map((s, i) => {
+					const missing = missingReq(s, caps);
+					return (
+						<StarterCard
+							key={s.title} s={s} index={i} locked={missing}
+							onClick={() => missing ? navigate(CONNECT_ROUTE[missing]) : dispatch(s.prompt)}
+						/>
+					);
+				})}
+				<DescribeCard onClick={() => dispatch('I want to set up a new app. Help me think through what would be most useful, then assemble and install it.')} />
 			</div>
 		</div>
 	);
@@ -223,7 +188,9 @@ function DescribeCard({ onClick }: { onClick: () => void }) {
 	);
 }
 
-function StarterCard({ s, onClick }: { s: Starter; onClick: () => void }) {
+function StarterCard({ s, index = 0, locked = null, onClick }: {
+	s: Starter; index?: number; locked?: ('google' | 'microsoft') | null; onClick: () => void;
+}) {
 	const Icon = s.icon;
 	const tones: Record<Starter['tone'], { bg: string; iconBg: string; iconText: string; border: string }> = {
 		amber:  { bg: 'hover:bg-amber-50/60',  iconBg: 'bg-amber-100',  iconText: 'text-amber-700',  border: 'hover:border-amber-200' },
@@ -233,24 +200,32 @@ function StarterCard({ s, onClick }: { s: Starter; onClick: () => void }) {
 		indigo: { bg: 'hover:bg-indigo-50/60', iconBg: 'bg-indigo-100', iconText: 'text-indigo-700', border: 'hover:border-indigo-200' },
 	};
 	const t = tones[s.tone];
+	const connectLabel = locked === 'google' ? 'Connect Google to unlock' : locked === 'microsoft' ? 'Connect Microsoft to unlock' : '';
 	return (
 		<button
 			onClick={onClick}
+			style={staggerDelay(index)}
 			className={[
-				'group rounded-xl border border-slate-200 bg-white p-3 text-left transition-all',
-				'flex items-start gap-3 hover:shadow-sm active:scale-[0.98]',
-				t.bg, t.border,
+				STAGGER_CLASS,
+				'group rounded-xl border bg-white p-3 text-left transition-all duration-200',
+				'flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 active:scale-[0.98]',
+				locked ? 'border-slate-200/70 opacity-90' : 'border-slate-200',
+				locked ? 'hover:border-slate-300' : t.bg + ' ' + t.border,
 			].join(' ')}
 		>
 			<div className={[
 				'w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-105',
-				t.iconBg, t.iconText,
+				locked ? 'bg-slate-100 text-slate-400' : t.iconBg + ' ' + t.iconText,
 			].join(' ')}>
-				<Icon className="w-4 h-4" />
+				{locked ? <Lock className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
 			</div>
 			<div className="flex-1 min-w-0">
 				<div className="font-medium text-slate-900 text-[13px] leading-tight">{s.title}</div>
-				<div className="text-[11px] text-slate-500 mt-0.5 leading-relaxed line-clamp-2">{s.subtitle}</div>
+				{locked ? (
+					<div className="text-[11px] text-amber-600 mt-0.5 leading-relaxed">{connectLabel}</div>
+				) : (
+					<div className="text-[11px] text-slate-500 mt-0.5 leading-relaxed line-clamp-2">{s.subtitle}</div>
+				)}
 			</div>
 			<ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-600 transition-colors flex-shrink-0 mt-1" />
 		</button>

@@ -217,7 +217,7 @@ export default function GpuRentalWizard() {
 				});
 			}
 			toast.success("Rental submitted");
-			navigate(`/app/gpu-rentals/${encodeURIComponent(task.task_id)}`);
+			navigate(`/dashboard/gpu-rentals/${encodeURIComponent(task.task_id)}`);
 		} catch (e) {
 			toast.error((e as Error)?.message ?? "Submit failed");
 		} finally {
@@ -228,7 +228,7 @@ export default function GpuRentalWizard() {
 	return (
 		<>
 			<header className="flex items-center gap-3 mb-6">
-				<Link to="/app/gpu-rentals">
+				<Link to="/dashboard/gpu-rentals">
 					<Button variant="ghost" size="sm">
 						<ArrowLeft className="w-4 h-4 mr-1" />
 						GPU rentals
@@ -612,7 +612,7 @@ export default function GpuRentalWizard() {
 				</Card>
 
 				<div className="mt-6 flex items-center gap-2 justify-end">
-					<Link to="/app/gpu-rentals">
+					<Link to="/dashboard/gpu-rentals">
 						<Button type="button" variant="outline" disabled={submitting}>
 							Cancel
 						</Button>

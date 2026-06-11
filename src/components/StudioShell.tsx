@@ -14,8 +14,6 @@ import {
 	Plus,
 	Inbox,
 	Store,
-	ArrowUpRight,
-	Brain,
 	Compass,
 	Settings,
 	Shield,
@@ -23,6 +21,7 @@ import {
 	ChevronDown,
 	Hexagon,
 	Key,
+	ListChecks,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
@@ -59,6 +58,7 @@ interface NavItem {
 	icon: React.ComponentType<{ className?: string }>;
 	end?: boolean;
 	badge?: number; // count pill on the right (e.g. pending drafts on Inbox)
+	title?: string; // hover tooltip clarifying the surface
 }
 
 // Sidebar layout (post-refactor, 2026-05-29):
@@ -72,22 +72,19 @@ interface NavItem {
 // API tokens live in the bottom avatar menu; "How it works" is a quiet
 // footer docs link.
 const TOP_NAV: NavItem[] = [
-	{ to: '/studio/apps',   label: 'My Apps',   icon: Boxes },
+	{ to: '/studio/apps',    label: 'My Apps',  icon: Boxes },
+	{ to: '/dashboard/jobs', label: 'My Jobs',  icon: ListChecks, title: 'background runs and compute jobs' },
 ];
-// Workflows fold into each app's overview; Inbox + Knowledge are the
-// secondary surfaces.
-const SECONDARY_NAV: NavItem[] = [
-	{ to: '/studio/inbox',     label: 'Inbox',     icon: Inbox },
-	{ to: '/studio/knowledge', label: 'Knowledge', icon: Brain },
-];
-// The marketplace lives on xp.io (the shared catalog) — link out instead
-// of a local Library page.
-const XPIO_URL = 'https://xp.io';
-function NavItemView({ to, label, icon: Icon, end, badge }: NavItem) {
+// Workflows fold into each app's overview. Inbox + Knowledge both moved
+// into the bottom user menu, leaving My Apps + My Jobs as the top-level
+// surfaces. GPU Rentals is now an xpio app (arrives via useAppNav).
+const SECONDARY_NAV: NavItem[] = [];
+function NavItemView({ to, label, icon: Icon, end, badge, title }: NavItem) {
 	return (
 		<NavLink
 			to={to}
 			end={end}
+			title={title}
 			className={({ isActive }) =>
 				cn(
 					'group flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all relative',
@@ -242,7 +239,7 @@ export function StudioShell() {
 		navigate('/auth/login');
 	};
 
-	// "+ New intent" — launches the GUIDED CONVERSATIONAL create flow in the
+	// "+ New app" — launches the GUIDED CONVERSATIONAL create flow in the
 	// chat: the AI rolls out the procedure step by step (ask what it should do
 	// → compose → present the pipeline clearly → install). Replaces the old
 	// ad-hoc modal that pre-filled a fixed "crypto momentum trader". Lands on
@@ -250,7 +247,7 @@ export function StudioShell() {
 	const newIntent = () => {
 		navigate('/studio/apps');
 		setTimeout(() => window.dispatchEvent(new CustomEvent('studio:ask', {
-			detail: { prompt: 'I want to create a new workflow. Walk me through it step by step.', autosend: true },
+			detail: { prompt: 'I want to set up a new app. Ask me what it should do for me, then assemble it step by step.', autosend: true },
 		})), 60);
 	};
 
@@ -277,19 +274,16 @@ export function StudioShell() {
 
 				<nav className="flex-1 overflow-y-auto px-2 py-3 space-y-px">
 					{/* Primary create action — always visible, the streamlined
-					    "start a new intent" entry. */}
+					    "start a new app" entry. */}
 					<button
 						onClick={newIntent}
 						className="w-full mb-2 inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-emerald-500 text-white hover:bg-emerald-600 active:scale-[0.98] shadow-sm shadow-emerald-200/70 transition-all"
 					>
-						<Plus className="w-4 h-4" /> New intent
+						<Plus className="w-4 h-4" /> New app
 					</button>
 					{TOP_NAV.map((item) => <NavItemView key={item.to} {...item} />)}
-					{/* Secondary surfaces shown directly (no "More" collapse) —
-					    a thin divider separates them from the primary Intents. */}
-					<div className="my-2 mx-3 h-px bg-slate-200/60" />
 					{SECONDARY_NAV.map((item) => (
-					<NavItemView key={item.to} {...item} badge={item.to === '/studio/inbox' ? draftCount : undefined} />
+					<NavItemView key={item.to} {...item} />
 				))}
 					{/* App-contributed sections — installed xpio apps that declare
 					    ui.sidebar appear here, grouped by section. Data-driven via
@@ -308,26 +302,10 @@ export function StudioShell() {
 							))}
 						</div>
 					))}
-					{/* Management — role-gated. Lands on the management home inside
-					    Studio; deep admin sections link out from there. */}
-					{isAdmin && (
-						<>
-							<SectionLabel>Management</SectionLabel>
-							<NavItemView to="/studio/manage" label="Management" icon={Shield} />
-						</>
-					)}
+					{/* Management lives in the bottom user menu (role-gated). */}
 					<div className="my-2 mx-3 h-px bg-slate-200/60" />
-					{/* Marketplace → xp.io (shared catalog), opens in a new tab. */}
-					<a
-						href={XPIO_URL}
-						target="_blank"
-						rel="noreferrer"
-						className="group flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-all"
-					>
-						<Store className="w-4 h-4 flex-shrink-0 text-slate-400 group-hover:text-slate-700" />
-						<span>Marketplace</span>
-						<ArrowUpRight className="w-3 h-3 ml-auto text-slate-300 group-hover:text-slate-500" />
-					</a>
+					{/* Marketplace — in-Studio browse + install (apps/skills/datasets). */}
+					<NavItemView to="/studio/marketplace" label="Marketplace" icon={Store} />
 				</nav>
 
 				{/* Docs link — kept apart from the functional nav above so

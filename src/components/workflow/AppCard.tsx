@@ -6,12 +6,15 @@
 // of each workflow's recent-run sparkline — plus optional identity (version,
 // published) from me.loopsHealth().apps. Clicking opens /studio/apps/:app.
 
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Boxes, ArrowRight, CheckCircle2, AlertTriangle } from "lucide-react";
-import type { MeWorkflowRow } from "@/api/me";
+import { Boxes, ArrowRight, CheckCircle2, AlertTriangle, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { me, type MeWorkflowRow } from "@/api/me";
 import RunSparkline from "@/components/RunSparkline";
 import { CardMetrics } from "@/components/workflow/MetricTrend";
-import { humanizeLoop, loopLabel } from "@/pages/app-revamp/loops";
+import { loopLabel } from "@/pages/app-revamp/loops";
+import { iconFor, APP_NAV_INVALIDATE } from "@/components/useAppNav";
 import { cn } from "@/lib/utils";
 
 export interface AppIdentity {
@@ -19,8 +22,16 @@ export interface AppIdentity {
 	kind?: string;
 	published?: boolean;
 	status?: string;
+	// From the app's own xpcloud `ui:` block — the card is CONFIGURED by the
+	// app, not by hard-coded maps, so My Apps, the sidebar, and the app page
+	// always agree on name/icon. hasSurface routes the header click to the
+	// app's configured UI (/studio/a/<app>) instead of the raw loop overview.
+	label?: string;
+	icon?: string;
+	hasSurface?: boolean;
 }
 
+// Legacy fallbacks for upstream apps that predate ui.sidebar config.
 const TITLE: Record<string, string> = {
 	"personal-agent": "Personal agent",
 	"mbb-ai": "Consulting research",
@@ -30,9 +41,9 @@ const TITLE: Record<string, string> = {
 
 const BLURB: Record<string, string> = {
 	"personal-agent": "Morning briefs, inbox triage, and reflections over your email + calendar.",
-	"mbb-ai": "Active-learning over consulting cases — sharpens its judgement each cycle.",
+	"mbb-ai": "Active-learning over consulting cases — sharpens its judgement with every run.",
 	"auto-sysresearch": "Proposes, benchmarks, and learns better systems configurations.",
-	"auto-quant": "Momentum + mean-reversion crypto strategies — proposes, backtests, and risk-gates paper trades, learning each cycle.",
+	"auto-quant": "Momentum + mean-reversion crypto strategies — proposes, backtests, and risk-gates paper trades, learning from every run.",
 };
 
 export function appTitle(app: string): string {
@@ -49,15 +60,34 @@ function whenLast(ts?: number): string {
 }
 
 export default function AppCard({
-	app, workflows, identity, index = 0, onOpen,
+	app, workflows, identity, index = 0, onOpen, onRemoved,
 }: {
 	app: string;
 	workflows: MeWorkflowRow[];
 	identity?: AppIdentity;
 	index?: number;
 	onOpen?: (app: string, loop?: string) => void;
+	onRemoved?: () => void;
 }) {
 	const navigate = useNavigate();
+	const [removing, setRemoving] = useState(false);
+	const label = identity?.label || TITLE[app] || app;
+	// Same remove behavior as the surface-app cards: confirm → async
+	// uninstall (archived, recoverable) → refresh the sidebar.
+	const remove = async (e: React.MouseEvent) => {
+		e.stopPropagation();
+		if (!confirm(`Remove "${label}"? It will be archived (recoverable).`)) return;
+		try {
+			setRemoving(true);
+			await me.uninstallApp(app);
+			toast.success(`Removing ${label}…`);
+			window.dispatchEvent(new Event(APP_NAV_INVALIDATE)); // refresh the sidebar too
+			onRemoved?.();
+		} catch (err) {
+			toast.error(String((err as Error)?.message ?? err));
+			setRemoving(false);
+		}
+	};
 	const loopOf = (w: MeWorkflowRow) => {
 		if (w.app && w.slug.startsWith(w.app + ":")) return w.slug.slice(w.app.length + 1);
 		const i = w.slug.indexOf(":");
@@ -67,6 +97,14 @@ export default function AppCard({
 		if (onOpen) onOpen(app, loop);
 		else navigate(`/studio/apps/${encodeURIComponent(app)}${loop ? `?selected=${encodeURIComponent(loop)}` : ""}`);
 	};
+	// Header click: the app's CONFIGURED surface when it declares one (the
+	// same page the sidebar opens); per-workflow rows still open the cycle
+	// inspector. Apps without a surface keep the loop overview.
+	const openHeader = () => {
+		if (identity?.hasSurface) navigate(`/studio/a/${encodeURIComponent(app)}`);
+		else open();
+	};
+	const Icon = identity?.icon ? iconFor(identity.icon) : Boxes;
 	const total = workflows.length;
 	const healthy = workflows.filter((w) => w.last_run_ok === true).length;
 	const failing = workflows.filter((w) => w.last_run_ok === false).length;
@@ -83,21 +121,21 @@ export default function AppCard({
 			{/* status rail */}
 			<span className={cn("absolute left-0 top-0 bottom-0 w-1", railTone)} />
 
-			{/* header → open the app (freshest workflow) */}
-			<button type="button" onClick={() => open()} className="block w-full text-left px-3 pl-3.5 pt-2.5 pb-1.5">
-				<div className="flex items-center gap-2.5">
-					<div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
-						<Boxes className="w-3.5 h-3.5" />
+			{/* header → the app's configured UI (or the workflow overview when none) */}
+			<button type="button" onClick={openHeader} className="block w-full text-left px-4 pt-3 pb-2">
+				<div className="flex items-center gap-3">
+					<div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
+						<Icon className="w-[18px] h-[18px]" />
 					</div>
 					<div className="min-w-0 flex-1">
 						<div className="flex items-center gap-2">
-							<h3 className="text-[13px] font-semibold text-slate-900 truncate">{TITLE[app] || app}</h3>
+							<h3 className="text-[14px] font-medium text-slate-900 truncate">{label}</h3>
 							{running > 0 ? (
-								<span className="inline-flex items-center gap-1 flex-shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-sky-50 text-sky-700 border border-sky-200" title="a cycle is running now">
+								<span className="inline-flex items-center gap-1 flex-shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-sky-50 text-sky-700 border border-sky-200" title="a run is in progress">
 									<span className="w-1.5 h-1.5 rounded-full bg-sky-500 running-pulse" />running
 								</span>
 							) : healthy > 0 && failing === 0 ? (
-								<span className="w-1.5 h-1.5 rounded-full bg-emerald-500 heartbeat flex-shrink-0" title="active — loops healthy" />
+								<span className="w-1.5 h-1.5 rounded-full bg-emerald-500 heartbeat flex-shrink-0" title="active — workflows healthy" />
 							) : null}
 							{identity?.published && (
 								<span className="text-[9px] uppercase tracking-wide rounded-full px-1.5 py-px border border-emerald-200 bg-emerald-50 text-emerald-700">published</span>
@@ -112,12 +150,19 @@ export default function AppCard({
 								) : null}
 							</span>
 						</div>
-						<div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-2">
+						<div className="text-[12px] text-slate-400 mt-0.5 flex items-center gap-2">
 							<span className="font-mono truncate">{app}{identity?.version ? ` · v${identity.version}` : ""}</span>
 							<span className="ml-auto flex-shrink-0">{whenLast(lastActivity)}</span>
 						</div>
 					</div>
 					<ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-emerald-600 transition-colors flex-shrink-0" />
+					<span
+						role="button" tabIndex={0} onClick={remove}
+						className="shrink-0 p-1.5 rounded-md text-slate-300 hover:text-rose-600 hover:bg-rose-50 opacity-0 group-hover:opacity-100 transition-opacity"
+						aria-label={`Remove ${label}`} aria-disabled={removing}
+					>
+						<Trash2 className="w-3.5 h-3.5" />
+					</span>
 				</div>
 			</button>
 

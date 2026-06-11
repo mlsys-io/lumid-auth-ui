@@ -1,38 +1,58 @@
-// MarketplaceBrowse — apps-first catalog UI for /studio/marketplace.
+// MarketplaceBrowse — xp.io-aligned catalog for /studio/marketplace.
 //
-// Three tabs (top of page):
-//   Apps      — full xpio app bundles (personal-agent, mbb-ai, etc.)
-//               THIS IS THE DEFAULT. Apps are what users actually
-//               install — bundles of workflows + skill_imports + a
-//               privacy contract. /api/v1/repos?kind=app
-//   Skills    — atomic building blocks (1-step workflows). Used to
-//               compose apps. /api/v1/skills/catalog
-//   Datasets  — reference data sources (FinData, KOLs, etc.).
-//               /api/v1/repos?kind=dataset
-//
-// Search across all kinds; per-tab category rail (skills only — apps
-// don't have a single "category" field today).
+// Visual language mirrors xp.io's marketspace:
+//   - Kind glyphs: ⁂ app  ⌘ skill  ◫ dataset
+//   - Left-border color accent per kind (teal / violet / amber)
+//   - White cards, gray-200 borders, compact metadata footer
+//   - Tag chips + sort selector
+//   - Install button lives inside the detail drawer (click card → drawer)
 
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { bearerHeader } from "@/api/session-bearer";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
 	Search, ExternalLink, Plus, Check, Loader2,
-	Mail, Calendar, Globe, Code, Beaker, MessagesSquare,
-	Database, FileSpreadsheet, Sparkles as LlmIcon, Layers, Settings,
-	Star, Download, Package, Wrench, ArrowRight, GitFork,
+	Star, Download, GitFork, ArrowRight,
+	X, Eye, EyeOff, Tag, PanelLeft,
+	ChevronDown, Sparkles, Puzzle, BookOpen, Database, LineChart,
 } from "lucide-react";
-import { me, MeApiError } from "@/api/me";
+import { AddSkillToAppDialog } from "@/components/studio/AddSkillToAppDialog";
+import { SubscribeAgentDialog } from "@/components/studio/SubscribeAgentDialog";
+import { me } from "@/api/me";
+import { cn } from "@/lib/utils";
+import { GradientIcon } from "@/components/studio/GradientIcon";
+import { AppMetaChips } from "@/components/studio/MetaChips";
+import { StateAwareCTA, type CTAState } from "@/components/studio/StateAwareCTA";
+import { STAGGER_CLASS, staggerDelay } from "@/components/studio/stagger";
+import { markPendingCustomize } from "@/lib/just-installed";
 import {
 	loadRefinements, lastPublishedAt, REFINEMENTS_EVENT,
 	type Refinement,
 } from "@/lib/refinements";
+import { parse as parseYaml } from "yaml";
 
-// ── Apps tab ───────────────────────────────────────────────────────
+// ── Kind metadata (mirrors xp.io kindMeta) ────────────────────────
+
+const KIND_META: Record<string, { glyph: string; border: string; bg: string; text: string; label: string }> = {
+	app:        { glyph: "⁂", border: "border-l-teal-400",    bg: "bg-teal-50",    text: "text-teal-700",    label: "App" },
+	skill:      { glyph: "⌘", border: "border-l-violet-400",  bg: "bg-violet-50",  text: "text-violet-700",  label: "Skill" },
+	dataset:    { glyph: "◫", border: "border-l-amber-400",   bg: "bg-amber-50",   text: "text-amber-700",   label: "Dataset" },
+	agent:      { glyph: "❋", border: "border-l-pink-400",    bg: "bg-pink-50",    text: "text-pink-700",    label: "Agent" },
+	workflow:   { glyph: "▷", border: "border-l-blue-400",    bg: "bg-blue-50",    text: "text-blue-700",    label: "Workflow" },
+	experiment: { glyph: "⬡", border: "border-l-emerald-400", bg: "bg-emerald-50", text: "text-emerald-700", label: "Experiment" },
+	autoresearch:{ glyph: "⬡", border: "border-l-emerald-400", bg: "bg-emerald-50", text: "text-emerald-700", label: "Experiment" },
+	strategy:   { glyph: "◈", border: "border-l-blue-400",    bg: "bg-blue-50",    text: "text-blue-700",    label: "Strategy" },
+};
+const kindMeta = (k?: string) =>
+	KIND_META[k ?? ""] ?? { glyph: "·", border: "border-l-slate-300", bg: "bg-slate-50", text: "text-slate-600", label: k ?? "other" };
+
+// ── Types ──────────────────────────────────────────────────────────
 
 interface RepoCard {
 	owner_sub: string;
 	name: string;
+	kind?: string;
 	display_name?: string;
 	summary?: string;
 	tags?: string[];
@@ -40,12 +60,12 @@ interface RepoCard {
 	stars?: number;
 	downloads?: number;
 	forks?: number;
-	updated_at?: number;
 	consumers_count?: number;
+	updated_at?: number;
+	published_at?: number;
 	visibility?: string;
+	fork_of?: string | null;
 }
-
-// ── Skills tab ─────────────────────────────────────────────────────
 
 interface SkillCard {
 	name: string;
@@ -54,125 +74,120 @@ interface SkillCard {
 	category: string;
 	tags: string[];
 	needs_secrets: string[];
-	knowledge_paths: string[];
 	source_url?: string;
 	kind?: string;
-	step_count?: number;
 }
 
-const CATEGORY_META: Record<string, {
-	icon: React.ComponentType<{ className?: string }>;
-	label: string;
-	accent: string;
-	bg: string;
-	text: string;
-}> = {
-	email:     { icon: Mail,             label: "Email",     accent: "bg-rose-400",    bg: "bg-rose-50",    text: "text-rose-700"    },
-	calendar:  { icon: Calendar,         label: "Calendar",  accent: "bg-amber-400",   bg: "bg-amber-50",   text: "text-amber-700"   },
-	web:       { icon: Globe,            label: "Web",       accent: "bg-sky-400",     bg: "bg-sky-50",     text: "text-sky-700"     },
-	code:      { icon: Code,             label: "Code",      accent: "bg-violet-400",  bg: "bg-violet-50",  text: "text-violet-700"  },
-	research:  { icon: Beaker,           label: "Research",  accent: "bg-emerald-400", bg: "bg-emerald-50", text: "text-emerald-700" },
-	messaging: { icon: MessagesSquare,   label: "Messaging", accent: "bg-indigo-400",  bg: "bg-indigo-50",  text: "text-indigo-700"  },
-	data:      { icon: Database,         label: "Data",      accent: "bg-cyan-400",    bg: "bg-cyan-50",    text: "text-cyan-700"    },
-	sql:       { icon: FileSpreadsheet,  label: "SQL",       accent: "bg-orange-400",  bg: "bg-orange-50",  text: "text-orange-700"  },
-	llm:       { icon: LlmIcon,          label: "LLM",       accent: "bg-purple-400",  bg: "bg-purple-50",  text: "text-purple-700"  },
-};
-
-function catMeta(c: string) {
-	return CATEGORY_META[c] || { icon: Layers, label: c || "Other", accent: "bg-slate-400", bg: "bg-slate-50", text: "text-slate-700" };
-}
-
-// Detail page for a repo-backed card (app or dataset) — the canonical
-// xp.io marketspace page. Opened in a new tab so the user keeps their
-// Studio session. Skills link to their own source_url instead.
-function repoHref(c: { owner_sub: string; name: string }): string {
-	return `https://xp.io/${encodeURIComponent(c.owner_sub)}/${encodeURIComponent(c.name)}`;
-}
-
-function openDetail(url: string | undefined) {
-	if (url) window.open(url, "_blank", "noopener,noreferrer");
-}
-
-type Tab = "apps" | "skills" | "datasets" | "refinements";
-
-// InstallStatus — what each card tracks per-name. The card shows a
-// stateful button: idle → installing → installed (with "Open →" link)
-// or failed (with retry).
 type InstallStatus =
 	| { state: "idle" }
 	| { state: "installing"; intentId?: string }
 	| { state: "installed"; appName: string }
 	| { state: "failed"; error: string };
 
+type Tab = "apps" | "workflows" | "agents" | "strategies" | "skills" | "datasets" | "refinements";
+type SortKey = "updated" | "stars" | "name";
+
+// ── Kind hierarchy — what the primary action IS per kind ──────────────
+//
+// The kinds are hierarchical, not flat: apps INSTALL into My Apps; skills
+// are IMPORTED by apps (skill_imports[]); knowledge agents are SUBSCRIBED
+// into the caller's KG; datasets are MOUNTED by apps (datasets[]); strategy
+// and workflow repos are browse-only. The server enforces the same contract
+// (install endpoint 422s on non-app kinds), this map just keeps the UI from
+// offering the wrong verb in the first place.
+type KindAction = "install" | "add-skill" | "subscribe" | "view";
+function kindAction(kind?: string): KindAction {
+	switch (kind) {
+		case "skill": return "add-skill";
+		case "agent": return "subscribe";
+		case "dataset":
+		case "strategy":
+		case "workflow": return "view";
+		default: return "install"; // app, autoresearch (legacy), unknown
+	}
+}
+
+// The marketplace's secondary-action dialogs (Add to app… / Subscribe).
+type PendingAction =
+	| { type: "add-skill"; slug: string; label: string; version?: string }
+	| { type: "subscribe"; slug: string; label: string };
+
+// ── Root component ─────────────────────────────────────────────────
+
 export default function MarketplaceBrowse() {
 	const navigate = useNavigate();
 	const [tab, setTab] = useState<Tab>("apps");
 	const [query, setQuery] = useState("");
+	const [sort, setSort] = useState<SortKey>("updated");
+	const [activeTag, setActiveTag] = useState<string | null>(null);
 	const [statuses, setStatuses] = useState<Record<string, InstallStatus>>({});
+	const [detail, setDetail] = useState<RepoCard | null>(null);
 
-	const [apps, setApps] = useState<RepoCard[] | null>(null);
-	const [skills, setSkills] = useState<SkillCard[] | null>(null);
-	const [datasets, setDatasets] = useState<RepoCard[] | null>(null);
+	const [apps, setApps]           = useState<RepoCard[] | null>(null);
+	const [workflows, setWorkflows]  = useState<RepoCard[] | null>(null);
+	const [agents, setAgents]        = useState<RepoCard[] | null>(null);
+	const [strategies, setStrategies] = useState<RepoCard[] | null>(null);
+	const [skills, setSkills]        = useState<SkillCard[] | null>(null);
+	const [datasets, setDatasets]    = useState<RepoCard[] | null>(null);
+	// Names of apps already in the caller's account — survives reloads (the
+	// per-session `statuses` map doesn't), so an installed app's card shows
+	// "Open" instead of offering a second install.
+	const [installedNames, setInstalledNames] = useState<Set<string>>(new Set());
+	const [action, setAction] = useState<PendingAction | null>(null);
 	const [err, setErr] = useState<string | null>(null);
 
 	useEffect(() => {
 		(async () => {
 			try {
-				const [a, s, d] = await Promise.all([
-					fetch("/api/v1/repos?kind=app").then((r) => r.ok ? r.json() : Promise.reject(`apps ${r.status}`)),
-					fetch("/api/v1/skills/catalog").then((r) => r.ok ? r.json() : Promise.reject(`skills ${r.status}`)),
-					fetch("/api/v1/repos?kind=dataset").then((r) => r.ok ? r.json() : Promise.reject(`datasets ${r.status}`)),
+				const auth = await bearerHeader();
+				const opts = { credentials: "same-origin" as const, headers: auth };
+				const repo = (kind: string) =>
+					fetch(`/api/v1/repos?kind=${kind}`, opts)
+						.then((r) => r.ok ? r.json().then((d: { repos?: RepoCard[] }) => d.repos || []) : Promise.resolve([]));
+				const [a, wf, ag, st, s, d] = await Promise.all([
+					repo("app"),
+					repo("workflow"),
+					repo("agent"),
+					repo("strategy"),
+					fetch("/api/v1/skills/catalog", opts).then((r) => r.ok ? r.json().then((d: { cards?: SkillCard[] }) => d.cards || []) : Promise.resolve([])),
+					repo("dataset"),
 				]);
-				setApps(a.repos || []);
-				setSkills(s.cards || []);
-				setDatasets(d.repos || []);
+				setApps(a);
+				setWorkflows(wf);
+				setAgents(ag);
+				setStrategies(st);
+				setSkills(s);
+				setDatasets(d);
 			} catch (e) {
 				setErr(e instanceof Error ? e.message : String(e));
 			}
 		})();
+		// Already-installed detection (separate fetch — its failure shouldn't
+		// blank the catalog).
+		me.listApps()
+			.then((r) => setInstalledNames(new Set((r.apps ?? []).filter((a) => (a.status ?? "ready") === "ready").map((a) => a.name))))
+			.catch(() => {});
 	}, []);
 
-	// Direct install — calls /me/apps with the slug, then polls the
-	// returned intent until terminal. On success the card surfaces an
-	// "Open" link that navigates to the new workflow. On failure the
-	// button flips to a retry-with-error state.
-	const install = async (label: string, name: string, ownerSub?: string) => {
-		// xpio slugs are "owner_sub/name" for non-first-party repos; the
-		// /me/apps handler accepts the bare name for first-party apps.
+	// Optimistic + background: fire the install intent and hand off to My Apps,
+	// where the card shows "installing" (from the server-side intent merge) and
+	// flips to ready when the picker finishes. We do NOT block on a poll here —
+	// the drain can lag ~60s, which used to surface successful installs as
+	// false "timed out" errors.
+	const install = async (label: string, name: string, ownerSub?: string, sidebarConfig?: { show: boolean; label: string; section: string }) => {
 		const slug = ownerSub ? `${ownerSub}/${name}` : name;
 		setStatuses((m) => ({ ...m, [name]: { state: "installing" } }));
 		try {
-			const resp = await me.installApp(slug, "local");
+			const resp = await me.installApp(slug, "local", undefined, sidebarConfig ? {
+				sidebar_show: sidebarConfig.show,
+				sidebar_label: sidebarConfig.label,
+				sidebar_section: sidebarConfig.section,
+			} : undefined);
 			setStatuses((m) => ({ ...m, [name]: { state: "installing", intentId: resp.intent_id } }));
-			// Poll the intent every 1.2s; intents typically finish in 5–15s.
-			// The backend signals success/failure inside result.ok; status
-			// is just "pending" → "completed" (no separate failed state).
-			const deadline = Date.now() + 60_000;
-			let installedAs = name;
-			let ok = false;
-			let pollErr: string | null = null;
-			while (Date.now() < deadline) {
-				await new Promise((r) => setTimeout(r, 1200));
-				try {
-					const r = await me.getIntent(resp.intent_id);
-					if (r.status === "completed") {
-						const result = (r.result || {}) as Record<string, unknown>;
-						ok = result.ok !== false;
-						installedAs = (result.app as string | undefined)
-							|| (result.installed_as as string | undefined)
-							|| installedAs;
-						if (!ok) pollErr = String(result.error || "install failed");
-						break;
-					}
-				} catch (e) {
-					if (e instanceof MeApiError && e.code === 1404) continue;
-					throw e;
-				}
-			}
-			if (!ok && pollErr) throw new Error(pollErr);
-			if (!ok) throw new Error("install timed out — check Workflows in a moment");
-			setStatuses((m) => ({ ...m, [name]: { state: "installed", appName: installedAs } }));
-			toast.success(`${label} installed`);
+			// Mark it so My Apps opens the generate+customize step once it lands.
+			markPendingCustomize(name);
+			toast.success(`Installing ${label}… it'll appear in My Apps shortly.`);
+			navigate("/studio/apps");
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : String(e);
 			setStatuses((m) => ({ ...m, [name]: { state: "failed", error: msg } }));
@@ -180,239 +195,245 @@ export default function MarketplaceBrowse() {
 		}
 	};
 
-	const openInstalled = (appName: string) => {
-		// Newly-installed apps surface as scheduled workflows under
-		// /studio/workflows. Drilling to a specific workflow requires
-		// knowing the loop slug; for now we just open the list and let
-		// the user click into the app card.
-		navigate(`/studio/workflows?selected=${encodeURIComponent(appName)}`);
-	};
+	const openInstalled = (appName: string) => navigate(`/studio/a/${encodeURIComponent(appName)}`);
 
-	if (err) {
-		return (
-			<div className="rounded-xl border border-rose-200 bg-rose-50/40 p-6 text-sm text-rose-800">
-				Couldn&apos;t load the catalog: {err}
-			</div>
-		);
-	}
+	if (err) return (
+		<div className="rounded-xl border border-rose-200 bg-rose-50/40 p-6 text-sm text-rose-800">
+			Couldn&apos;t load the catalog: {err}
+		</div>
+	);
 
-	const tabs: Array<{ id: Tab; label: string; icon: React.ComponentType<{ className?: string }>; count: number | null }> = [
-		{ id: "apps",        label: "Apps",             icon: Package,  count: apps?.length ?? null },
-		{ id: "skills",      label: "Skills",           icon: Wrench,   count: skills?.length ?? null },
-		{ id: "datasets",    label: "Datasets",         icon: Database, count: datasets?.length ?? null },
-		{ id: "refinements", label: "Your refinements", icon: GitFork,  count: null },
+	// Top tag counts for the active tab
+	const topTags = useMemo(() => {
+		const sourceMap: Record<Tab, { tags?: string[] }[] | null> = {
+			apps: apps, workflows: workflows, agents: agents,
+			strategies: strategies, datasets: datasets, refinements: null,
+			skills: skills?.map((s) => ({ tags: s.tags })) ?? null,
+		};
+		const source = sourceMap[tab];
+		if (!source) return [];
+		const counts = new Map<string, number>();
+		for (const r of source) for (const t of (r.tags ?? [])) counts.set(t, (counts.get(t) ?? 0) + 1);
+		return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([t]) => t);
+	}, [tab, apps, workflows, agents, strategies, skills, datasets]);
+
+	const tabs: Array<{ id: Tab; label: string; count: number | null }> = [
+		{ id: "apps",        label: "Apps",        count: apps?.length ?? null },
+		{ id: "workflows",   label: "Workflows",   count: workflows?.length ?? null },
+		{ id: "agents",      label: "Agents",      count: agents?.length ?? null },
+		{ id: "strategies",  label: "Strategies",  count: strategies?.length ?? null },
+		{ id: "skills",      label: "Skills",      count: skills?.length ?? null },
+		{ id: "datasets",    label: "Datasets",    count: datasets?.length ?? null },
+		{ id: "refinements", label: "Refinements", count: null },
 	];
 
 	return (
-		<div className="space-y-4">
-			{/* Tabs */}
-			<nav className="flex items-center gap-1 border-b border-slate-200">
-				{tabs.map((t) => {
-					const Icon = t.icon;
-					const active = tab === t.id;
-					return (
+		<div className="space-y-3">
+			{/* Tab + search row */}
+			<div className="flex items-center gap-3 flex-wrap">
+				<nav className="flex items-center gap-0.5">
+					{tabs.map((t) => (
 						<button
 							key={t.id}
-							onClick={() => { setTab(t.id); setQuery(""); }}
+							onClick={() => { setTab(t.id); setQuery(""); setActiveTag(null); }}
 							className={[
-								"inline-flex items-center gap-1.5 px-3 py-2 text-sm border-b-2 transition-colors -mb-px",
-								active
-									? "text-slate-900 border-emerald-500 font-medium"
-									: "text-slate-500 border-transparent hover:text-slate-800",
+								"inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors",
+								tab === t.id
+									? "bg-slate-900 text-white font-medium"
+									: "text-slate-500 hover:text-slate-800 hover:bg-slate-100",
 							].join(" ")}
 						>
-							<Icon className="w-4 h-4" />
 							{t.label}
 							{t.count !== null && (
-								<span className={["text-[10px] font-mono tabular-nums", active ? "text-slate-500" : "text-slate-400"].join(" ")}>
+								<span className={["text-[10px] font-mono tabular-nums", tab === t.id ? "text-white/60" : "text-slate-400"].join(" ")}>
 									{t.count}
 								</span>
 							)}
 						</button>
-					);
-				})}
-			</nav>
+					))}
+				</nav>
 
-			{/* Search */}
-			<div className="relative">
-				<Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-				<input
-					type="search"
-					value={query}
-					onChange={(e) => setQuery(e.target.value)}
-					placeholder={tab === "apps"
-						? "Search apps…"
-						: tab === "skills"
-							? "Search skills by name, tag, or what you want to do…"
-							: "Search datasets…"}
-					className="w-full pl-10 pr-3 py-2.5 text-sm rounded-xl border border-slate-200 bg-white/80 focus:bg-white focus:outline-none focus:ring-4 focus:ring-emerald-400/15 focus:border-emerald-400 transition-all placeholder:text-slate-400"
-				/>
+				<div className="flex-1 relative min-w-[180px]">
+					<Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+					<input
+						type="search"
+						value={query}
+						onChange={(e) => { setQuery(e.target.value); setActiveTag(null); }}
+						placeholder={`Search ${tab}…`}
+						className="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-teal-400/20 focus:border-teal-400 transition-all placeholder:text-slate-400"
+					/>
+				</div>
+
+				{tab !== "refinements" && (
+					<SortDropdown value={sort} onChange={setSort} />
+				)}
 			</div>
 
+			{/* Tag chips */}
+			{topTags.length > 0 && !query && (
+				<div className="flex items-center gap-1.5 flex-wrap">
+					<Tag className="w-3 h-3 text-slate-400 flex-shrink-0" />
+					{activeTag && (
+						<button
+							onClick={() => setActiveTag(null)}
+							className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-slate-900 text-white"
+						>
+							{activeTag} <X className="w-2.5 h-2.5" />
+						</button>
+					)}
+					{topTags.filter((t) => t !== activeTag).map((t) => (
+						<button
+							key={t}
+							onClick={() => setActiveTag(t)}
+							className="px-2 py-0.5 rounded-full text-[11px] border border-slate-200 text-slate-600 hover:border-teal-400 hover:text-teal-700 transition-colors"
+						>
+							{t}
+						</button>
+					))}
+				</div>
+			)}
+
 			{/* Body */}
-			{tab === "apps" && (
-				<AppsView
-					apps={apps}
+			{(tab === "apps" || tab === "workflows" || tab === "agents" || tab === "strategies" || tab === "datasets") && (
+				<RepoGrid
+					repos={tab === "apps" ? apps : tab === "workflows" ? workflows : tab === "agents" ? agents : tab === "strategies" ? strategies : datasets}
 					query={query}
+					sort={sort}
+					activeTag={activeTag}
 					statuses={statuses}
-					onInstall={install}
+					installedNames={installedNames}
+					onSelect={setDetail}
+					onInstall={(r) => install(r.display_name || r.name, r.name, r.owner_sub)}
+					onAction={setAction}
 					onOpen={openInstalled}
 				/>
 			)}
 			{tab === "skills" && (
-				<SkillsView
+				<SkillsGrid
 					skills={skills}
 					query={query}
-					statuses={statuses}
-					onInstall={install}
+					activeTag={activeTag}
+					onAction={setAction}
+				/>
+			)}
+			{tab === "refinements" && <RefinementsView query={query} />}
+
+			{/* Detail + per-kind action drawer */}
+			{detail && (
+				<AppDetailDrawer
+					app={detail}
+					status={statuses[detail.name] || { state: "idle" }}
+					installed={installedNames.has(detail.name)}
+					onInstall={(cfg) => install(detail.display_name || detail.name, detail.name, detail.owner_sub, cfg)}
+					onAction={(a) => { setAction(a); setDetail(null); }}
 					onOpen={openInstalled}
+					onClose={() => setDetail(null)}
 				/>
 			)}
-			{tab === "datasets" && (
-				<DatasetsView
-					datasets={datasets}
-					query={query}
+
+			{/* Kind-action dialogs */}
+			{action?.type === "add-skill" && (
+				<AddSkillToAppDialog
+					skillRepo={action.slug}
+					skillLabel={action.label}
+					version={action.version}
+					open
+					onClose={() => setAction(null)}
 				/>
 			)}
-			{tab === "refinements" && (
-				<RefinementsView query={query} />
+			{action?.type === "subscribe" && (
+				<SubscribeAgentDialog
+					sourceSlug={action.slug}
+					agentLabel={action.label}
+					open
+					onClose={() => setAction(null)}
+				/>
 			)}
 		</div>
 	);
 }
 
-// ── Your refinements view (T14) ────────────────────────────────────
+// ── Sort dropdown ──────────────────────────────────────────────────
 
-function RefinementsView({ query }: { query: string }) {
-	const [items, setItems] = useState<Refinement[]>(() => loadRefinements());
-	const [recentTs, setRecentTs] = useState<number>(() => lastPublishedAt());
-
-	useEffect(() => {
-		const onChange = () => {
-			setItems(loadRefinements());
-			setRecentTs(lastPublishedAt());
-		};
-		window.addEventListener(REFINEMENTS_EVENT, onChange);
-		// Also re-read on tab focus / nav back from Knowledge.
-		const onFocus = () => onChange();
-		window.addEventListener("focus", onFocus);
-		return () => {
-			window.removeEventListener(REFINEMENTS_EVENT, onChange);
-			window.removeEventListener("focus", onFocus);
-		};
-	}, []);
-
-	const filtered = useMemo(() => {
-		if (!query.trim()) return items;
-		const q = query.trim().toLowerCase();
-		return items.filter((r) =>
-			r.name.toLowerCase().includes(q) ||
-			r.source.toLowerCase().includes(q) ||
-			r.version.toLowerCase().includes(q),
-		);
-	}, [items, query]);
-
-	if (filtered.length === 0) {
-		return (
-			<div className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
-				{query ? <>No refinements match <strong>&ldquo;{query}&rdquo;</strong>.</> : <>No refinements yet — reject a draft or proposal with a reason to encode your first voice principle.</>}
-			</div>
-		);
-	}
-
-	// Items modified within the last ~4s after a publish event get a brief flash.
-	const FRESH_WINDOW_MS = 4000;
-	const isFresh = (r: Refinement) =>
-		r.status === "published" && r.refinedAt === "just now" &&
-		recentTs > 0 && Date.now() - recentTs < FRESH_WINDOW_MS;
-
+function SortDropdown({ value, onChange }: { value: SortKey; onChange: (v: SortKey) => void }) {
+	const labels: Record<SortKey, string> = { updated: "Recently updated", stars: "Stars", name: "Name" };
 	return (
-		<ul className="space-y-2">
-			{filtered.map((r) => {
-				const fresh = isFresh(r);
-				return (
-					<li
-						key={r.id}
-						className={[
-							"rounded-xl border bg-white px-4 py-3 flex items-center gap-3 transition-all",
-							fresh ? "border-emerald-300 bg-emerald-50/60 ring-1 ring-emerald-200" : "border-slate-200",
-						].join(" ")}
-					>
-						<div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center flex-shrink-0">
-							<GitFork className="w-4 h-4" />
-						</div>
-						<div className="flex-1 min-w-0">
-							<div className="font-medium text-slate-900 text-sm truncate">{r.name}</div>
-							<div className="text-[11px] text-slate-400 mt-0.5">
-								{r.version} · refined {r.refinedAt} · {r.source}
-							</div>
-						</div>
-						{r.status === "published" ? (
-							<span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded bg-emerald-50 text-emerald-700 border border-emerald-200/60 flex-shrink-0">
-								<Check className="w-3 h-3" /> Published to {r.publishedTo ?? 1} contact{(r.publishedTo ?? 1) === 1 ? "" : "s"}
-							</span>
-						) : (
-							<span className="text-[11px] text-slate-500 flex-shrink-0">Local only</span>
-						)}
-						<button className="text-[11px] px-2.5 py-1 rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 flex-shrink-0">
-							Manage
-						</button>
-					</li>
-				);
-			})}
-		</ul>
+		<div className="relative">
+			<select
+				value={value}
+				onChange={(e) => onChange(e.target.value as SortKey)}
+				className="appearance-none pl-3 pr-7 py-1.5 text-sm rounded-lg border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-400/20 focus:border-teal-400 cursor-pointer"
+			>
+				{(Object.keys(labels) as SortKey[]).map((k) => (
+					<option key={k} value={k}>{labels[k]}</option>
+				))}
+			</select>
+			<ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+		</div>
 	);
 }
 
-// ── Apps view — featured tier ──────────────────────────────────────
+// ── Repo grid (apps + datasets) ─────────────────────────────────────
 
-function AppsView({
-	apps, query, statuses, onInstall, onOpen,
+function sortRepos(repos: RepoCard[], sort: SortKey): RepoCard[] {
+	return [...repos].sort((a, b) => {
+		if (sort === "stars") return (b.stars ?? 0) - (a.stars ?? 0);
+		if (sort === "name") return (a.display_name || a.name).localeCompare(b.display_name || b.name);
+		return (b.updated_at ?? 0) - (a.updated_at ?? 0);
+	});
+}
+
+function RepoGrid({
+	repos, query, sort, activeTag, statuses, installedNames, onSelect, onInstall, onAction, onOpen,
 }: {
-	apps: RepoCard[] | null;
+	repos: RepoCard[] | null;
 	query: string;
+	sort: SortKey;
+	activeTag: string | null;
 	statuses: Record<string, InstallStatus>;
-	onInstall: (label: string, name: string, ownerSub?: string) => void;
-	onOpen: (appName: string) => void;
+	installedNames: Set<string>;
+	onSelect: (r: RepoCard) => void;
+	onInstall: (r: RepoCard) => void;
+	onAction: (a: PendingAction) => void;
+	onOpen: (name: string) => void;
 }) {
 	const filtered = useMemo(() => {
-		if (!apps) return [];
+		if (!repos) return [];
 		const q = query.trim().toLowerCase();
-		if (!q) return apps;
-		return apps.filter((a) =>
-			a.name.toLowerCase().includes(q) ||
-			(a.display_name || "").toLowerCase().includes(q) ||
-			(a.summary || "").toLowerCase().includes(q) ||
-			(a.tags || []).some((t) => t.toLowerCase().includes(q)),
+		let out = repos;
+		if (q) out = out.filter((r) =>
+			r.name.toLowerCase().includes(q) ||
+			(r.display_name ?? "").toLowerCase().includes(q) ||
+			(r.summary ?? "").toLowerCase().includes(q) ||
+			(r.tags ?? []).some((t) => t.toLowerCase().includes(q)),
 		);
-	}, [apps, query]);
+		if (activeTag) out = out.filter((r) => (r.tags ?? []).includes(activeTag));
+		return sortRepos(out, sort);
+	}, [repos, query, sort, activeTag]);
 
-	if (apps === null) {
-		return (
-			<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-				{[0, 1, 2, 3].map((i) => (
-					<div key={i} className="h-44 rounded-2xl bg-white border border-slate-200/60 animate-pulse" />
-				))}
-			</div>
-		);
-	}
-
-	if (filtered.length === 0) {
-		return (
-			<div className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
-				{query ? <>No apps match <strong>&ldquo;{query}&rdquo;</strong>.</> : <>No apps available.</>}
-			</div>
-		);
-	}
+	if (repos === null) return (
+		<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+			{[0,1,2,3,4,5].map((i) => <div key={i} className="h-28 rounded-lg bg-slate-100 animate-pulse" />)}
+		</div>
+	);
+	if (filtered.length === 0) return (
+		<div className="rounded-lg border border-dashed border-slate-200 p-10 text-center text-sm text-slate-500">
+			{query || activeTag ? "No matches. Try a different query or clear the filter." : "No items available."}
+		</div>
+	);
 
 	return (
-		<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-			{filtered.map((a) => (
-				<AppCard
-					key={a.name}
-					app={a}
-					status={statuses[a.name] || { state: "idle" }}
-					onInstall={() => onInstall(a.display_name || a.name, a.name, a.owner_sub)}
+		<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+			{filtered.map((r, i) => (
+				<RepoCardView
+					key={r.name}
+					repo={r}
+					index={i}
+					status={statuses[r.name] || { state: "idle" }}
+					installed={installedNames.has(r.name)}
+					onSelect={() => onSelect(r)}
+					onInstall={() => onInstall(r)}
+					onAction={onAction}
 					onOpen={onOpen}
 				/>
 			))}
@@ -420,418 +441,597 @@ function AppsView({
 	);
 }
 
-function AppCard({
-	app, status, onInstall, onOpen,
+// Per-kind helper copy under the card body — says what the primary action
+// actually DOES, since it differs per kind.
+const KIND_HELPER: Record<KindAction, string> = {
+	"install":   "Installs into My Apps · runs on its schedule · first run is automatic",
+	"add-skill": "Plugs into an app you own — pick which one",
+	"subscribe": "Syncs its knowledge into yours — re-sync anytime",
+	"view":      "", // per-kind line chosen below
+};
+
+function RepoCardView({
+	repo, index, status, installed, onSelect, onInstall, onAction, onOpen,
 }: {
-	app: RepoCard;
+	repo: RepoCard;
+	index: number;
 	status: InstallStatus;
+	installed: boolean;
+	onSelect: () => void;
 	onInstall: () => void;
-	onOpen: (appName: string) => void;
+	onAction: (a: PendingAction) => void;
+	onOpen: (name: string) => void;
 }) {
-	const title = app.display_name || app.name;
-	const updated = app.updated_at ? new Date(app.updated_at * 1000) : null;
+	const title = repo.display_name || repo.name;
+	const updated = repo.updated_at ? relativeDays(new Date(repo.updated_at * 1000)) : null;
+	const act = kindAction(repo.kind);
+	const slug = `${repo.owner_sub}/${repo.name}`;
+	// Server-known installs (survives reload) take precedence over the
+	// per-session optimistic map.
+	const ctaState: CTAState =
+		installed || status.state === "installed" ? "installed" :
+		status.state === "installing" ? "installing" :
+		status.state === "failed" ? "failed" : "idle";
+
+	const helper =
+		act === "view"
+			? repo.kind === "dataset" ? "Used by apps as a data source — see Details"
+			: repo.kind === "strategy" ? "Runs on Lumid Market — see Details"
+			: "A recipe that runs inside apps — see Details"
+			: KIND_HELPER[act];
 
 	return (
 		<article
-			onClick={() => openDetail(repoHref(app))}
-			className="group rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-white to-emerald-50/20 hover:border-emerald-300 hover:shadow-md transition-all overflow-hidden flex flex-col cursor-pointer"
-			title={`View ${title} on xp.io`}
+			className={cn(
+				"group rounded-xl border bg-white p-4 flex flex-col shadow-sm transition-all duration-200",
+				STAGGER_CLASS,
+				ctaState === "installed"
+					? "border-emerald-200 bg-emerald-50/30"
+					: "border-slate-200 hover:border-emerald-300 hover:shadow-md hover:-translate-y-0.5",
+			)}
+			style={staggerDelay(index)}
 		>
-			<div className="p-4 flex-1 flex flex-col">
-				<div className="flex items-start gap-3">
-					<div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm shadow-emerald-200">
-						<Package className="w-5 h-5" />
-					</div>
-					<div className="flex-1 min-w-0">
-						<h3 className="font-semibold text-slate-900 text-[14px] leading-tight">
-							{title}
-						</h3>
-						<p className="text-[11px] text-slate-400 mt-0.5 font-mono truncate">
-							{app.name}{app.version ? ` · v${app.version}` : ""}
-						</p>
-					</div>
-				</div>
-
-				{app.summary && (
-					<p className="text-[13px] text-slate-600 mt-3 leading-relaxed line-clamp-3 min-h-[3.9rem]">
-						{app.summary}
-					</p>
-				)}
-
-				{app.tags && app.tags.length > 0 && (
-					<div className="flex items-center gap-1.5 flex-wrap mt-3">
-						{app.tags.slice(0, 4).map((t) => (
+			{/* Header — gradient avatar + title + Details affordance */}
+			<div className="flex items-start gap-3">
+				<GradientIcon name={repo.name} />
+				<div className="min-w-0 flex-1">
+					<h3 className="font-medium text-sm truncate" title={repo.name}>{title}</h3>
+					<p className="text-[11px] text-slate-500 mt-0.5 truncate">
+						{repo.name}
+						{repo.fork_of && (
 							<span
-								key={t}
-								className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-50 text-slate-600 border border-slate-200/60"
+								className="ml-1.5 px-1.5 py-px rounded-full border border-slate-200 bg-slate-50 text-[10px] text-slate-400"
+								title="a customized copy of another app"
 							>
-								{t}
-							</span>
-						))}
-						{app.tags.length > 4 && (
-							<span className="text-[10px] text-slate-400">+{app.tags.length - 4}</span>
-						)}
-					</div>
-				)}
-
-				<div
-					className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between gap-2"
-					onClick={(e) => e.stopPropagation()}
-				>
-					<div className="flex items-center gap-3 text-[11px] text-slate-400 min-w-0">
-						{(app.stars ?? 0) > 0 && (
-							<span className="inline-flex items-center gap-1 flex-shrink-0" title="Stars">
-								<Star className="w-3 h-3" /> {app.stars}
+								customized
 							</span>
 						)}
-						{(app.downloads ?? 0) > 0 && (
-							<span className="inline-flex items-center gap-1 flex-shrink-0" title="Downloads">
-								<Download className="w-3 h-3" /> {app.downloads}
-							</span>
-						)}
-						{updated && (
-							<span className="truncate" title={updated.toLocaleString()}>
-								{relativeDays(updated)}
-							</span>
-						)}
-					</div>
-					<InstallButton status={status} onInstall={onInstall} onOpen={onOpen} />
+					</p>
 				</div>
+				<button
+					type="button" onClick={onSelect}
+					className="p-1 -mr-1 rounded text-[11px] text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+					title="Details + customize"
+				>
+					Details →
+				</button>
+			</div>
+
+			{/* Summary */}
+			<p className="text-xs text-slate-600 mt-3 flex-1 line-clamp-3 leading-relaxed">
+				{repo.summary || "No description provided."}
+			</p>
+
+			{/* Meta chips */}
+			<AppMetaChips kind={repo.kind} version={repo.version} stars={repo.stars} />
+
+			{/* Helper line — what the primary action does for THIS kind */}
+			{ctaState === "idle" && helper && (
+				<p className="mt-3 text-[10.5px] text-slate-500 leading-snug">
+					<Sparkles className="inline w-2.5 h-2.5 mr-0.5 text-emerald-500" />
+					{helper}
+				</p>
+			)}
+			{updated && ctaState === "idle" && (
+				<p className="mt-1 text-[10.5px] text-slate-400">updated {updated}</p>
+			)}
+
+			{/* Full-width primary CTA — verb depends on the kind */}
+			<div className="mt-3">
+				{act === "install" && (
+					<StateAwareCTA
+						state={ctaState}
+						onAction={() => (ctaState === "installed" ? onOpen(status.state === "installed" ? status.appName : repo.name) : onInstall())}
+					/>
+				)}
+				{act === "add-skill" && (
+					<button
+						onClick={() => onAction({ type: "add-skill", slug, label: title, version: repo.version })}
+						className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px] font-medium bg-violet-600 text-white hover:bg-violet-700 active:scale-[0.98] transition-all"
+					>
+						<Puzzle className="w-3.5 h-3.5" /> Add to app…
+					</button>
+				)}
+				{act === "subscribe" && (
+					<button
+						onClick={() => onAction({ type: "subscribe", slug, label: title })}
+						className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px] font-medium bg-pink-600 text-white hover:bg-pink-700 active:scale-[0.98] transition-all"
+					>
+						<BookOpen className="w-3.5 h-3.5" /> Subscribe
+					</button>
+				)}
+				{act === "view" && (
+					<button
+						onClick={onSelect}
+						className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px] font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all"
+					>
+						{repo.kind === "dataset" ? <Database className="w-3.5 h-3.5" /> : <LineChart className="w-3.5 h-3.5" />} How to use
+					</button>
+				)}
 			</div>
 		</article>
 	);
 }
 
-// InstallButton — single source of truth for the four states. Used by
-// both AppCard and SkillCardView so the visual + behavior stays
-// consistent across surfaces.
-function InstallButton({
-	status, onInstall, onOpen,
-}: {
-	status: InstallStatus;
-	onInstall: () => void;
-	onOpen: (appName: string) => void;
-}) {
-	switch (status.state) {
-		case "idle":
-			return (
-				<button
-					onClick={onInstall}
-					className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg transition-all flex-shrink-0 bg-emerald-500 text-white hover:bg-emerald-600 active:scale-95 shadow-sm shadow-emerald-100"
-				>
-					<Plus className="w-3 h-3" /> Install
-				</button>
-			);
-		case "installing":
-			return (
-				<span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg bg-slate-100 text-slate-600 flex-shrink-0">
-					<Loader2 className="w-3 h-3 animate-spin" /> Installing…
-				</span>
-			);
-		case "installed":
-			return (
-				<button
-					onClick={() => onOpen(status.appName)}
-					className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200/60 hover:bg-emerald-100 transition-all flex-shrink-0"
-					title="Open the new workflow"
-				>
-					<Check className="w-3 h-3" /> Open <ArrowRight className="w-3 h-3" />
-				</button>
-			);
-		case "failed":
-			return (
-				<button
-					onClick={onInstall}
-					className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg bg-rose-50 text-rose-700 border border-rose-200/60 hover:bg-rose-100 transition-all flex-shrink-0"
-					title={status.error}
-				>
-					Retry
-				</button>
-			);
-	}
-}
+// ── Skills grid ────────────────────────────────────────────────────
 
-// ── Skills view — atomic building blocks ───────────────────────────
+const SKILL_CATEGORIES: Record<string, { bg: string; text: string }> = {
+	email:     { bg: "bg-rose-50",    text: "text-rose-700" },
+	calendar:  { bg: "bg-amber-50",   text: "text-amber-700" },
+	web:       { bg: "bg-sky-50",     text: "text-sky-700" },
+	code:      { bg: "bg-violet-50",  text: "text-violet-700" },
+	research:  { bg: "bg-emerald-50", text: "text-emerald-700" },
+	messaging: { bg: "bg-indigo-50",  text: "text-indigo-700" },
+	data:      { bg: "bg-cyan-50",    text: "text-cyan-700" },
+	sql:       { bg: "bg-orange-50",  text: "text-orange-700" },
+	llm:       { bg: "bg-purple-50",  text: "text-purple-700" },
+};
+const skillCat = (c: string) => SKILL_CATEGORIES[c] ?? { bg: "bg-slate-50", text: "text-slate-600" };
 
-function SkillsView({
-	skills, query, statuses, onInstall, onOpen,
+function SkillsGrid({
+	skills, query, activeTag, onAction,
 }: {
 	skills: SkillCard[] | null;
 	query: string;
-	statuses: Record<string, InstallStatus>;
-	onInstall: (label: string, name: string) => void;
-	onOpen: (appName: string) => void;
+	activeTag: string | null;
+	onAction: (a: PendingAction) => void;
 }) {
-	const [activeCategory, setActiveCategory] = useState<string | null>(null);
-
-	const categories = useMemo(() => {
-		if (!skills) return [];
-		const counts = new Map<string, number>();
-		for (const c of skills) counts.set(c.category, (counts.get(c.category) || 0) + 1);
-		return Array.from(counts.entries())
-			.map(([id, n]) => ({ id, n, ...catMeta(id) }))
-			.sort((a, b) => b.n - a.n);
-	}, [skills]);
-
 	const filtered = useMemo(() => {
 		if (!skills) return [];
 		const q = query.trim().toLowerCase();
 		return skills.filter((c) => {
-			if (activeCategory && c.category !== activeCategory) return false;
+			if (activeTag && !c.tags.includes(activeTag)) return false;
 			if (!q) return true;
-			return (
-				c.display_name.toLowerCase().includes(q) ||
+			return c.display_name.toLowerCase().includes(q) ||
 				c.summary.toLowerCase().includes(q) ||
-				c.tags.some((t) => t.toLowerCase().includes(q))
-			);
+				c.tags.some((t) => t.toLowerCase().includes(q));
 		});
-	}, [skills, query, activeCategory]);
+	}, [skills, query, activeTag]);
 
-	if (skills === null) {
-		return (
-			<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-				{[0, 1, 2, 3].map((i) => (
-					<div key={i} className="h-32 rounded-xl bg-white border border-slate-200/60 animate-pulse" />
-				))}
-			</div>
-		);
-	}
-
-	return (
-		<div className="grid grid-cols-1 lg:grid-cols-[200px_minmax(0,1fr)] gap-4 items-start">
-			<aside className="lg:sticky lg:top-24 space-y-1">
-				<CategoryChip
-					active={activeCategory === null}
-					icon={Layers}
-					label="All"
-					count={skills.length}
-					accent="bg-slate-400"
-					onClick={() => setActiveCategory(null)}
-				/>
-				{categories.map((c) => (
-					<CategoryChip
-						key={c.id}
-						active={activeCategory === c.id}
-						icon={c.icon}
-						label={c.label}
-						count={c.n}
-						accent={c.accent}
-						onClick={() => setActiveCategory(c.id === activeCategory ? null : c.id)}
-					/>
-				))}
-			</aside>
-
-			<div className="min-w-0">
-				{filtered.length === 0 ? (
-					<div className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
-						{query
-							? <>No skills match <strong>&ldquo;{query}&rdquo;</strong>.</>
-							: <>No skills in this category.</>}
-					</div>
-				) : (
-					<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-						{filtered.map((c) => (
-							<SkillCardView
-								key={c.name}
-								card={c}
-								hideCategory={activeCategory !== null}
-								status={statuses[c.name] || { state: "idle" }}
-								onInstall={() => onInstall(c.display_name, c.name)}
-								onOpen={onOpen}
-							/>
-						))}
-					</div>
-				)}
-			</div>
+	if (skills === null) return (
+		<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+			{[0,1,2,3].map((i) => <div key={i} className="h-24 rounded-lg bg-slate-100 animate-pulse" />)}
 		</div>
 	);
-}
-
-function CategoryChip({
-	active, icon: Icon, label, count, accent, onClick,
-}: {
-	active: boolean;
-	icon: React.ComponentType<{ className?: string }>;
-	label: string;
-	count: number;
-	accent: string;
-	onClick: () => void;
-}) {
-	return (
-		<button
-			onClick={onClick}
-			className={[
-				"w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all group",
-				active
-					? "bg-slate-900 text-white shadow-sm"
-					: "bg-white/60 hover:bg-white border border-transparent hover:border-slate-200/60 text-slate-700",
-			].join(" ")}
-		>
-			<span className={[
-				"w-1.5 h-6 rounded-full transition-opacity",
-				accent,
-				active ? "opacity-100" : "opacity-50 group-hover:opacity-80",
-			].join(" ")} />
-			<Icon className={[
-				"w-4 h-4 flex-shrink-0",
-				active ? "text-white" : "text-slate-500",
-			].join(" ")} />
-			<span className="flex-1 text-left">{label}</span>
-			<span className={[
-				"text-[10px] font-mono tabular-nums",
-				active ? "text-white/70" : "text-slate-400",
-			].join(" ")}>{count}</span>
-		</button>
+	if (filtered.length === 0) return (
+		<div className="rounded-lg border border-dashed border-slate-200 p-10 text-center text-sm text-slate-500">
+			No skills match.
+		</div>
 	);
-}
-
-function SkillCardView({
-	card, hideCategory, status, onInstall, onOpen,
-}: {
-	card: SkillCard;
-	hideCategory: boolean;
-	status: InstallStatus;
-	onInstall: () => void;
-	onOpen: (appName: string) => void;
-}) {
-	const meta = catMeta(card.category);
-	const Icon = meta.icon;
-	const needsSecret = (card.needs_secrets?.length ?? 0) > 0;
 
 	return (
-		<article
-			onClick={card.source_url ? () => openDetail(card.source_url) : undefined}
-			className={[
-				"group rounded-xl border border-slate-200 bg-white hover:border-emerald-200 hover:shadow-md transition-all overflow-hidden flex flex-col",
-				card.source_url ? "cursor-pointer" : "",
-			].join(" ")}
-			title={card.source_url ? `View ${card.display_name} source` : undefined}
-		>
-			<div className={["h-1", meta.accent].join(" ")} />
-			<div className="p-4 flex-1 flex flex-col">
-				<div className="flex items-start gap-3">
-					<div className={[
-						"w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0",
-						meta.bg, meta.text,
-					].join(" ")}>
-						<Icon className="w-4 h-4" />
-					</div>
-					<div className="flex-1 min-w-0">
-						<h3 className="font-semibold text-slate-900 text-[14px] leading-tight">
-							{card.display_name}
-						</h3>
-						<p className="text-[11px] text-slate-400 mt-0.5 font-mono truncate">{card.name}</p>
-					</div>
-				</div>
-
-				<p className="text-[13px] text-slate-600 mt-2.5 leading-relaxed line-clamp-2 min-h-[2.6rem]">
-					{card.summary}
-				</p>
-
-				<div className="flex items-center gap-1.5 flex-wrap mt-3 min-h-[1.5rem]">
-					{!hideCategory && (
-						<span className={[
-							"inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium",
-							meta.bg, meta.text,
-						].join(" ")}>
-							{meta.label}
-						</span>
-					)}
-					{needsSecret && (
-						<span
-							className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200/60"
-							title={`Needs auth: ${card.needs_secrets.join(", ")}`}
-						>
-							<Settings className="w-2.5 h-2.5" />
-							auth
-						</span>
-					)}
-				</div>
-
-				<div
-					className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between"
-					onClick={(e) => e.stopPropagation()}
-				>
-					{card.source_url ? (
-						<a
-							href={card.source_url}
-							target="_blank"
-							rel="noopener noreferrer"
-							className="text-[11px] text-slate-400 hover:text-slate-700 inline-flex items-center gap-1 transition-colors"
-							title="View source"
-						>
-							source <ExternalLink className="w-2.5 h-2.5" />
-						</a>
-					) : <span />}
-					<InstallButton status={status} onInstall={onInstall} onOpen={onOpen} />
-				</div>
-			</div>
-		</article>
-	);
-}
-
-// ── Datasets view ──────────────────────────────────────────────────
-
-function DatasetsView({
-	datasets, query,
-}: {
-	datasets: RepoCard[] | null;
-	query: string;
-}) {
-	const filtered = useMemo(() => {
-		if (!datasets) return [];
-		const q = query.trim().toLowerCase();
-		if (!q) return datasets;
-		return datasets.filter((d) =>
-			d.name.toLowerCase().includes(q) ||
-			(d.display_name || "").toLowerCase().includes(q) ||
-			(d.summary || "").toLowerCase().includes(q),
-		);
-	}, [datasets, query]);
-
-	if (datasets === null) {
-		return (
-			<div className="space-y-2">
-				{[0, 1, 2].map((i) => (
-					<div key={i} className="h-16 rounded-xl bg-white border border-slate-200/60 animate-pulse" />
-				))}
-			</div>
-		);
-	}
-
-	if (filtered.length === 0) {
-		return (
-			<div className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
-				{query ? <>No datasets match <strong>&ldquo;{query}&rdquo;</strong>.</> : <>No datasets available.</>}
-			</div>
-		);
-	}
-
-	return (
-		<div className="space-y-2">
-			{filtered.map((d) => (
-				<article
-					key={d.name}
-					onClick={() => openDetail(repoHref(d))}
-					className="group rounded-xl border border-slate-200 bg-white px-4 py-3 hover:border-emerald-200 hover:shadow-sm transition-all flex items-center gap-3 cursor-pointer"
-					title={`View ${d.display_name || d.name} on xp.io`}
-				>
-					<div className="w-9 h-9 rounded-xl bg-cyan-50 text-cyan-700 flex items-center justify-center flex-shrink-0">
-						<Database className="w-4 h-4" />
-					</div>
-					<div className="flex-1 min-w-0">
-						<div className="font-medium text-slate-900 text-[14px] truncate">
-							{d.display_name || d.name}
+		<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+			{filtered.map((c) => {
+				const cat = skillCat(c.category);
+				return (
+					<article
+						key={c.name}
+						onClick={c.source_url ? () => window.open(c.source_url, "_blank", "noopener") : undefined}
+						className={`rounded-lg border border-l-4 border-violet-300 border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm transition-all overflow-hidden flex flex-col ${c.source_url ? "cursor-pointer" : ""}`}
+					>
+						<div className="p-3.5 flex-1 flex flex-col">
+							<div className="flex items-start gap-2.5">
+								<div className={`w-8 h-8 rounded-md ${cat.bg} ${cat.text} flex items-center justify-center flex-shrink-0 text-base`}>
+									⌘
+								</div>
+								<div className="flex-1 min-w-0">
+									<h3 className="font-medium text-slate-900 text-[13.5px] leading-tight truncate">{c.display_name}</h3>
+									<p className="text-[11px] text-slate-400 mt-0.5 font-mono">{c.category}</p>
+								</div>
+							</div>
+							<p className="text-[12.5px] text-slate-600 mt-2 leading-relaxed line-clamp-2">{c.summary}</p>
+							<div className="mt-auto pt-2.5 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
+								{c.source_url
+									? <a href={c.source_url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-slate-400 hover:text-slate-700 inline-flex items-center gap-0.5 transition-colors" onClick={(e) => e.stopPropagation()}>source <ExternalLink className="w-2.5 h-2.5" /></a>
+									: <span />
+								}
+								{/* Community skills are xp.io repos under the `community`
+								    owner alias — same import-into-an-app flow as repo skills. */}
+								<button
+									onClick={() => onAction({ type: "add-skill", slug: `community/${c.name}`, label: c.display_name })}
+									className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded-md bg-violet-600 text-white hover:bg-violet-700 active:scale-95 transition-all flex-shrink-0"
+								>
+									<Puzzle className="w-3 h-3" /> Add to app…
+								</button>
+							</div>
 						</div>
-						{d.summary && (
-							<p className="text-[12px] text-slate-500 mt-0.5 line-clamp-1">{d.summary}</p>
-						)}
-					</div>
-					<span className="text-[11px] text-slate-400 font-mono flex-shrink-0">{d.name}</span>
-					<ExternalLink className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500 flex-shrink-0" />
-				</article>
-			))}
+					</article>
+				);
+			})}
 		</div>
+	);
+}
+
+// ── App detail + per-kind action drawer ─────────────────────────────
+
+interface SidebarConfig { show: boolean; label: string; section: string }
+
+// Skill-import entry as it appears in a published xpcloud.yaml.
+type SkillImportEntry = string | { repo?: string; version?: string };
+
+function AppDetailDrawer({
+	app, status, installed, onInstall, onAction, onOpen, onClose,
+}: {
+	app: RepoCard;
+	status: InstallStatus;
+	installed: boolean;
+	onInstall: (cfg: SidebarConfig) => void;
+	onAction: (a: PendingAction) => void;
+	onOpen: (name: string) => void;
+	onClose: () => void;
+}) {
+	const km = kindMeta(app.kind);
+	const title = app.display_name || app.name;
+	const act = kindAction(app.kind);
+	const slug = `${app.owner_sub}/${app.name}`;
+	const [sidebar, setSidebar] = useState<SidebarConfig>({ show: true, label: title, section: "Apps" });
+	const [preview, setPreview] = useState<{ state: "idle" | "loading" | "unavailable"; markdown?: string }>({ state: "idle" });
+	// The repo's parsed xpcloud.yaml — drives the hierarchy panel (what this
+	// app imports / declares) without a second fetch.
+	const [repoDoc, setRepoDoc] = useState<Record<string, unknown> | null>(null);
+	// For kind=skill: the apps that import this skill (xpcloud /consumers).
+	const [consumers, setConsumers] = useState<{ name: string; owner_sub?: string }[] | null>(null);
+	const backdropRef = useRef<HTMLDivElement>(null);
+
+	useEffect(() => {
+		const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+		document.addEventListener("keydown", onKey);
+		return () => document.removeEventListener("keydown", onKey);
+	}, [onClose]);
+
+	// Fetch xpcloud.yaml (hierarchy panel) + markdown preview from xpcloud blobs.
+	useEffect(() => {
+		let live = true;
+		setPreview({ state: "loading" });
+		setRepoDoc(null);
+		(async () => {
+			try {
+				const auth = await bearerHeader();
+				const opts = { credentials: "same-origin" as const, headers: auth };
+				const yamlResp = await fetch(`/api/v1/repos/${encodeURIComponent(app.owner_sub)}/${encodeURIComponent(app.name)}/blob/main/xpcloud.yaml`, opts);
+				if (!yamlResp.ok) throw new Error("no xpcloud.yaml");
+				const yamlData = await yamlResp.json().catch(() => null);
+				const yamlText = yamlData?.content ?? (typeof yamlData === "string" ? yamlData : null);
+				if (!yamlText) throw new Error("no content");
+				const doc = parseYaml(yamlText) as Record<string, unknown> | null;
+				if (live && doc) setRepoDoc(doc);
+				const mdPath = (doc as Record<string, unknown> | null)?.ui &&
+					(((doc as Record<string, unknown>).ui as Record<string, unknown>)?.surface as Record<string, unknown>)?.markdown;
+				if (!mdPath || typeof mdPath !== "string" || mdPath.startsWith("@")) throw new Error("no markdown surface");
+				const mdResp = await fetch(`/api/v1/repos/${encodeURIComponent(app.owner_sub)}/${encodeURIComponent(app.name)}/blob/main/${mdPath}`, opts);
+				if (!mdResp.ok) throw new Error("markdown not found");
+				const mdData = await mdResp.json().catch(() => null);
+				const md = mdData?.content ?? (typeof mdData === "string" ? mdData : null);
+				if (live && md) setPreview({ state: "loaded" as const, markdown: md });
+				else if (live) setPreview({ state: "unavailable" });
+			} catch {
+				if (live) setPreview({ state: "unavailable" });
+			}
+		})();
+		return () => { live = false; };
+	}, [app.owner_sub, app.name]);
+
+	// For skills: who uses this? (the hierarchy, bottom-up)
+	useEffect(() => {
+		if (app.kind !== "skill") { setConsumers(null); return; }
+		let live = true;
+		(async () => {
+			try {
+				const auth = await bearerHeader();
+				const r = await fetch(`/api/v1/repos/${encodeURIComponent(app.owner_sub)}/${encodeURIComponent(app.name)}/consumers`, { credentials: "same-origin", headers: auth });
+				if (!r.ok) throw new Error();
+				const d = await r.json();
+				if (live) setConsumers(Array.isArray(d?.consumers) ? d.consumers : Array.isArray(d) ? d : []);
+			} catch {
+				if (live) setConsumers([]);
+			}
+		})();
+		return () => { live = false; };
+	}, [app.kind, app.owner_sub, app.name]);
+
+	const isInstalling = status.state === "installing";
+	const isInstalled = installed || status.state === "installed";
+	const isFailed = status.state === "failed";
+	const updated = app.updated_at ? relativeDays(new Date(app.updated_at * 1000)) : null;
+
+	// Hierarchy panel data (apps): what this repo imports / declares.
+	const skillImports = (Array.isArray(repoDoc?.skill_imports) ? repoDoc?.skill_imports : []) as SkillImportEntry[];
+	const memoryAgents = (Array.isArray(repoDoc?.memory_agents) ? repoDoc?.memory_agents : []) as unknown[];
+	const datasetDecls = (Array.isArray(repoDoc?.datasets) ? repoDoc?.datasets : []) as { id?: string; repo?: string }[];
+	const importRepoOf = (e: SkillImportEntry) => (typeof e === "string" ? e : e.repo || "");
+	// Friendly display name: strip the `owner/` prefix from a repo slug.
+	const friendlyName = (s: string) => s.replace(/^[^/]+\//, "");
+	const hasHierarchy = act === "install" && (skillImports.length > 0 || memoryAgents.length > 0 || datasetDecls.length > 0 || !!app.fork_of);
+
+	return (
+		<div
+			ref={backdropRef}
+			onClick={(e) => { if (e.target === backdropRef.current) onClose(); }}
+			className="fixed inset-0 z-50 flex items-start justify-end bg-black/15 backdrop-blur-[2px]"
+		>
+			<div className="relative h-full w-full max-w-md bg-white shadow-2xl flex flex-col">
+				{/* Kind accent bar */}
+				<div className={`h-0.5 w-full ${km.bg} opacity-60`} />
+
+				{/* Header */}
+				<div className="flex items-start gap-3 p-5 border-b border-slate-100">
+					<div className={`w-11 h-11 rounded-lg ${km.bg} ${km.text} flex items-center justify-center flex-shrink-0 text-xl`}>
+						{km.glyph}
+					</div>
+					<div className="flex-1 min-w-0">
+						<h2 className="font-semibold text-slate-900 text-[15px] leading-tight">{title}</h2>
+						<p className="text-[11px] text-slate-300 mt-0.5 font-mono">
+							{app.name}{app.version ? ` · v${app.version}` : ""}
+							{app.visibility === "private" ? " · private" : ""}
+							{app.fork_of ? " · customized copy" : ""}
+						</p>
+					</div>
+					<button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+						<X className="w-4 h-4" />
+					</button>
+				</div>
+
+				{/* Body */}
+				<div className="flex-1 overflow-y-auto p-5 space-y-4">
+					{app.summary && <p className="text-[13px] text-slate-600 leading-relaxed">{app.summary}</p>}
+
+					{/* Metrics */}
+					<div className="flex items-center gap-3 text-[11px] text-slate-400">
+						{updated && <span>{updated}</span>}
+						{(app.stars ?? 0) > 0 && <span className="inline-flex items-center gap-0.5"><Star className="w-3 h-3 text-amber-400" /> {app.stars}</span>}
+						{(app.downloads ?? 0) > 0 && <span className="inline-flex items-center gap-0.5"><Download className="w-3 h-3" /> {app.downloads}</span>}
+						{(app.forks ?? 0) > 0 && <span className="inline-flex items-center gap-0.5"><GitFork className="w-3 h-3" /> {app.forks}</span>}
+					</div>
+
+					{/* Tags */}
+					{app.tags && app.tags.length > 0 && (
+						<div className="flex items-center gap-1.5 flex-wrap">
+							{app.tags.map((t) => (
+								<span key={t} className="px-1.5 py-0.5 rounded-full text-[11px] border border-slate-200 text-slate-600">{t}</span>
+							))}
+						</div>
+					)}
+
+					{/* Hierarchy — what this app is built FROM (kinds are not flat) */}
+					{hasHierarchy && (
+						<div className="rounded-lg border border-slate-200 p-3.5 space-y-2">
+							<div className="text-[12px] font-medium text-slate-700">What&apos;s inside</div>
+							{app.fork_of && (
+								<div className="flex items-center gap-1.5 text-[12px] text-slate-600">
+									<GitFork className="w-3 h-3 text-slate-400 flex-shrink-0" />
+									Customized copy of {friendlyName(app.fork_of)}
+								</div>
+							)}
+							{skillImports.length > 0 && (
+								<div className="space-y-1">
+									<div className="text-[11px] text-slate-400 flex items-center gap-1">
+										<Puzzle className="w-3 h-3" /> Uses {skillImports.length} skill{skillImports.length === 1 ? "" : "s"}:
+									</div>
+									{skillImports.map((e, i) => (
+										<div key={i} className="font-mono text-[10.5px] text-violet-700 pl-4 truncate">{friendlyName(importRepoOf(e))}</div>
+									))}
+								</div>
+							)}
+							{memoryAgents.length > 0 && (
+								<div className="text-[11px] text-slate-500 flex items-center gap-1">
+									<BookOpen className="w-3 h-3 text-slate-400" />
+									Learns into its own knowledge ({memoryAgents.length} agent{memoryAgents.length === 1 ? "" : "s"})
+								</div>
+							)}
+							{datasetDecls.length > 0 && (
+								<div className="space-y-1">
+									<div className="text-[11px] text-slate-400 flex items-center gap-1">
+										<Database className="w-3 h-3" /> Mounts {datasetDecls.length} dataset{datasetDecls.length === 1 ? "" : "s"}:
+									</div>
+									{datasetDecls.map((d, i) => (
+										<div key={i} className="font-mono text-[10.5px] text-amber-700 pl-4 truncate">{friendlyName(d.repo || d.id || "")}</div>
+									))}
+								</div>
+							)}
+						</div>
+					)}
+
+					{/* For skills: who uses it (hierarchy, bottom-up) */}
+					{app.kind === "skill" && (
+						<div className="rounded-lg border border-slate-200 p-3.5 space-y-1.5">
+							<div className="text-[12px] font-medium text-slate-700">Apps using this skill</div>
+							{consumers === null ? (
+								<div className="text-[11px] text-slate-400"><Loader2 className="w-3 h-3 animate-spin inline mr-1" />checking…</div>
+							) : consumers.length === 0 ? (
+								<div className="text-[11px] text-slate-400">No public apps use this skill yet.</div>
+							) : (
+								consumers.slice(0, 8).map((cns, i) => (
+									<div key={i} className="font-mono text-[11px] text-teal-700 truncate">{cns.name.replace(/^[^/]+\//, "")}</div>
+								))
+							)}
+						</div>
+					)}
+
+					{/* Per-kind "how to use" — for the kinds that aren't one-click */}
+					{app.kind === "dataset" && (
+						<div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3.5 space-y-1.5">
+							<div className="text-[12px] font-medium text-amber-800">How to use this dataset</div>
+							<p className="text-[11.5px] text-amber-700 leading-relaxed">An app&apos;s owner adds this to the app&apos;s configuration:</p>
+							<pre className="text-[10.5px] bg-white border border-amber-200 rounded p-2 overflow-x-auto text-slate-700">{`datasets:
+  - {id: ${app.name.replace(/[^a-z0-9_]/gi, "_")}, repo: "${slug}",
+     version: "${app.version || "1.0.0"}", mount_at: data/seed}`}</pre>
+						</div>
+					)}
+					{app.kind === "strategy" && (
+						<div className="rounded-lg border border-blue-200 bg-blue-50/50 p-3.5 space-y-1.5">
+							<div className="text-[12px] font-medium text-blue-800">How to use this strategy</div>
+							<p className="text-[11.5px] text-blue-700 leading-relaxed">
+								This is a trading strategy. It runs on Lumid Market (forward-testing competitions), not as an installed app.{" "}
+								<Link to="/studio/a/lumid-market/competition/lobby" onClick={onClose} className="underline">Open Lumid Market →</Link>
+							</p>
+						</div>
+					)}
+					{app.kind === "workflow" && (
+						<div className="rounded-lg border border-blue-200 bg-blue-50/50 p-3.5 space-y-1.5">
+							<div className="text-[12px] font-medium text-blue-800">How to use this workflow</div>
+							<p className="text-[11.5px] text-blue-700 leading-relaxed">This is a recipe that runs inside an app — it isn&apos;t installed on its own. Browse the repo for the spec to adapt into an app you own.</p>
+						</div>
+					)}
+
+					{/* Sidebar config — only meaningful for installable apps */}
+					{act === "install" && !isInstalled && (
+					<div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3.5 space-y-2.5">
+						<div className="flex items-center gap-1.5 text-[12px] font-medium text-slate-700">
+							<PanelLeft className="w-3.5 h-3.5 text-slate-400" /> Sidebar
+						</div>
+						<label className="flex items-center justify-between cursor-pointer">
+							<span className="text-[12px] text-slate-600">Show in sidebar</span>
+							<button
+								type="button"
+								role="switch"
+								aria-checked={sidebar.show}
+								onClick={() => setSidebar((s) => ({ ...s, show: !s.show }))}
+								className={`relative inline-flex h-4.5 w-8 flex-shrink-0 rounded-full border-2 border-transparent transition-colors ${sidebar.show ? "bg-teal-500" : "bg-slate-200"}`}
+							>
+								<span className={`pointer-events-none inline-block h-3.5 w-3.5 mt-px transform rounded-full bg-white shadow transition-transform ${sidebar.show ? "translate-x-3.5" : "translate-x-0"}`} />
+							</button>
+						</label>
+						{sidebar.show && (
+							<>
+								<label className="block">
+									<span className="text-[11px] text-slate-500 block mb-1">Label</span>
+									<input type="text" value={sidebar.label} onChange={(e) => setSidebar((s) => ({ ...s, label: e.target.value }))} className="w-full px-2 py-1 text-[12px] rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-teal-400/20" />
+								</label>
+								<label className="block">
+									<span className="text-[11px] text-slate-500 block mb-1">Section</span>
+									<input type="text" value={sidebar.section} onChange={(e) => setSidebar((s) => ({ ...s, section: e.target.value }))} className="w-full px-2 py-1 text-[12px] rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-teal-400/20" placeholder="e.g. Trading, Research" />
+								</label>
+							</>
+						)}
+						<div className={`text-[11px] px-2 py-1 rounded-md ${sidebar.show ? "bg-teal-50 text-teal-700" : "bg-slate-100 text-slate-500"}`}>
+							{sidebar.show
+								? <><Eye className="w-3 h-3 inline mr-1" />{sidebar.section} → {sidebar.label}</>
+								: <><EyeOff className="w-3 h-3 inline mr-1" />Not in sidebar</>
+							}
+						</div>
+					</div>
+					)}
+
+					{/* Preview */}
+					{preview.state !== "unavailable" && (
+						<details open className="rounded-lg border border-slate-200 overflow-hidden">
+							<summary className="px-3.5 py-2 cursor-pointer text-[12px] font-medium text-slate-600 flex items-center gap-1.5 bg-slate-50 border-b border-slate-100 list-none select-none">
+								<Eye className="w-3.5 h-3.5" /> UI Preview
+								{preview.state === "loading" && <Loader2 className="w-3 h-3 animate-spin text-slate-400 ml-auto" />}
+							</summary>
+							<div className="p-3.5 max-h-52 overflow-y-auto text-[12px] text-slate-500">
+								{preview.state === "loading" && "Loading preview…"}
+								{preview.state === "idle" && ""}
+								{"markdown" in preview && preview.markdown && (
+									<pre className="whitespace-pre-wrap font-mono text-[11px] text-slate-500 leading-relaxed">{preview.markdown.slice(0, 800)}{preview.markdown.length > 800 ? "\n…" : ""}</pre>
+								)}
+							</div>
+						</details>
+					)}
+
+					{isFailed && status.state === "failed" && (
+						<div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-700">{status.error}</div>
+					)}
+				</div>
+
+				{/* Action footer — the verb depends on the kind */}
+				<div className="p-4 border-t border-slate-100 bg-white">
+					{act === "install" && (isInstalled ? (
+						<button onClick={() => { onOpen(app.name); onClose(); }} className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100 text-sm font-medium transition-all">
+							<Check className="w-4 h-4" /> Open {title} <ArrowRight className="w-4 h-4" />
+						</button>
+					) : (
+						<>
+							<button onClick={() => onInstall(sidebar)} disabled={isInstalling} className={`w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${isInstalling ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-slate-900 text-white hover:bg-slate-700 active:scale-[0.98]"}`}>
+								{isInstalling ? <><Loader2 className="w-4 h-4 animate-spin" /> Installing…</> : <><Plus className="w-4 h-4" /> Install {title}</>}
+							</button>
+							<p className="mt-2 text-center text-[11px] text-slate-400">Appears in My Apps — first run starts automatically.</p>
+						</>
+					))}
+					{act === "add-skill" && (
+						<button onClick={() => onAction({ type: "add-skill", slug, label: title, version: app.version })} className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-violet-600 text-white hover:bg-violet-700 active:scale-[0.98] transition-all">
+							<Puzzle className="w-4 h-4" /> Add {title} to an app…
+						</button>
+					)}
+					{act === "subscribe" && (
+						<button onClick={() => onAction({ type: "subscribe", slug, label: title })} className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-pink-600 text-white hover:bg-pink-700 active:scale-[0.98] transition-all">
+							<BookOpen className="w-4 h-4" /> Subscribe to {title}
+						</button>
+					)}
+					{act === "view" && (
+						<button onClick={onClose} className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all">
+							Close
+						</button>
+					)}
+				</div>
+			</div>
+		</div>
+	);
+}
+
+// ── Refinements view ───────────────────────────────────────────────
+
+function RefinementsView({ query }: { query: string }) {
+	const [items, setItems] = useState<Refinement[]>(() => loadRefinements());
+	const [recentTs, setRecentTs] = useState<number>(() => lastPublishedAt());
+
+	useEffect(() => {
+		const onChange = () => { setItems(loadRefinements()); setRecentTs(lastPublishedAt()); };
+		window.addEventListener(REFINEMENTS_EVENT, onChange);
+		window.addEventListener("focus", onChange);
+		return () => { window.removeEventListener(REFINEMENTS_EVENT, onChange); window.removeEventListener("focus", onChange); };
+	}, []);
+
+	const filtered = useMemo(() => {
+		const q = query.trim().toLowerCase();
+		return q ? items.filter((r) => r.name.toLowerCase().includes(q) || r.source.toLowerCase().includes(q)) : items;
+	}, [items, query]);
+
+	if (filtered.length === 0) return (
+		<div className="rounded-lg border border-dashed border-slate-200 p-10 text-center text-sm text-slate-500">
+			{query ? <>No refinements match <strong>&ldquo;{query}&rdquo;</strong>.</> : <>No refinements yet.</>}
+		</div>
+	);
+
+	const FRESH = 4000;
+	const isFresh = (r: Refinement) => r.status === "published" && r.refinedAt === "just now" && recentTs > 0 && Date.now() - recentTs < FRESH;
+
+	return (
+		<ul className="space-y-2">
+			{filtered.map((r) => (
+				<li key={r.id} className={`rounded-lg border bg-white px-4 py-3 flex items-center gap-3 transition-all ${isFresh(r) ? "border-teal-300 bg-teal-50/60" : "border-slate-200"}`}>
+					<GitFork className="w-4 h-4 text-slate-400 flex-shrink-0" />
+					<div className="flex-1 min-w-0">
+						<div className="font-medium text-slate-900 text-sm truncate">{r.name}</div>
+						<div className="text-[11px] text-slate-400 mt-0.5">{r.version} · {r.refinedAt} · {r.source}</div>
+					</div>
+					{r.status === "published"
+						? <span className="text-[11px] px-2 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200 flex-shrink-0"><Check className="w-3 h-3 inline" /> Published</span>
+						: <span className="text-[11px] text-slate-400 flex-shrink-0">Local only</span>
+					}
+				</li>
+			))}
+		</ul>
 	);
 }
 
@@ -839,7 +1039,6 @@ function DatasetsView({
 
 function relativeDays(d: Date): string {
 	const t = d.getTime();
-	// Guard null/epoch/pre-2024 timestamps (would render "20272d ago").
 	if (Number.isNaN(t) || t < 1_704_067_200_000) return "—";
 	const days = Math.floor((Date.now() - t) / 86_400_000);
 	if (days < 1) return "today";

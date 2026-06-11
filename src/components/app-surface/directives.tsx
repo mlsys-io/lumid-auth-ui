@@ -11,69 +11,303 @@
 //
 // SECURITY: `source` may bind ONLY to the allowlisted `me://*` endpoints
 // (already auth-gated + tenant-scoped on the server) and the anon-read
-// `/findata-cloud/*` proxy — never arbitrary URLs. `lumid:iframe` `src` is
-// restricted to same-origin proxy prefixes. Unknown directive types fall
-// back to a labelled code block (graceful degradation).
+// `/findata-cloud/*` proxy — never arbitrary URLs. Unknown directive types
+// fall back to a labelled code block (graceful degradation).
 
-import { useEffect, useState } from "react";
+import { createContext, useContext, useId, useCallback, useMemo, Suspense, useEffect, useState, type ReactNode } from "react";
 import { parse as parseYaml } from "yaml";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { AuthContext } from "@/hooks/useAuth";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
 } from "recharts";
-import { me } from "@/api/me";
+import { me, ME_BASE } from "@/api/me";
+import { cn, formatCurrency, formatPercentage } from "@/lib/utils";
+import { bearerHeader } from "@/api/session-bearer";
+
+// ── URL-param injection ─────────────────────────────────────────────────────
+//
+// A surface mounted at a param route (e.g. /studio/a/lumid-market/competition/
+// :competitionId) gets its URL params injected here. Directive string values
+// (source, row_href, to, submit_qa, field defaults, native config) may contain
+// `{paramName}` tokens — these are replaced with the matched URL param BEFORE
+// the widget runs. Tokens whose key is NOT a known param survive untouched, so
+// a table `row_href` can still use `{rowField}` for per-row substitution.
+
+const SurfaceParamsContext = createContext<Record<string, string>>({});
+// The app's xpcloud `config:` map (returned by the surface API). Native widget
+// embeds merge it UNDER their directive body, so app-level configuration (the
+// Config button) sets defaults and the markdown only overrides when explicit.
+const SurfaceAppConfigContext = createContext<Record<string, unknown>>({});
+
+export function SurfaceParams({
+  params,
+  appConfig,
+  children,
+}: {
+  params: Record<string, string>;
+  appConfig?: Record<string, unknown>;
+  children: React.ReactNode;
+}) {
+  return (
+    <SurfaceParamsContext.Provider value={params}>
+      <SurfaceAppConfigContext.Provider value={appConfig ?? {}}>
+        {children}
+      </SurfaceAppConfigContext.Provider>
+    </SurfaceParamsContext.Provider>
+  );
+}
+
+/** Replace `{k}` with params[k] ONLY for keys present in params; leave others.
+ *  Keys may be dotted — `{config.<key>}` tokens resolve from the app's
+ *  xpcloud `config:` map (flattened into params by AppSurface), so a surface
+ *  spec stays a generic TEMPLATE: per-install values live in Config. */
+function interpolate<T>(value: T, params: Record<string, string>): T {
+  if (typeof value === "string") {
+    return value.replace(/\{([\w.]+)\}/g, (m, k) => (k in params ? params[k] : m)) as unknown as T;
+  }
+  if (Array.isArray(value)) {
+    return value.map((v) => interpolate(v, params)) as unknown as T;
+  }
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const k of Object.keys(value as object)) {
+      out[k] = interpolate((value as Record<string, unknown>)[k], params);
+    }
+    return out as unknown as T;
+  }
+  return value;
+}
 
 // ── source allowlist ──────────────────────────────────────────────────────
 
 const FINDATA_PREFIX = "findata://";
-const IFRAME_ALLOW = ["/findata-cloud/", "/grafana/", "/analytics/"];
+const DATAAPP_PREFIX = "dataapp://";
 
-/** Resolve a directive `source` spec to data. Throws on anything not allowlisted. */
-export async function resolveSource(spec: string): Promise<unknown> {
+// Short-lived cache — deduplicates parallel fetches when multiple directives
+// on the same page share a source (e.g. two tables reading market-movers),
+// and avoids re-fetching on React re-renders. 30s TTL keeps data fresh.
+const _cache = new Map<string, { data: unknown; exp: number }>();
+const CACHE_TTL = 30_000;
+
+/** Resolve a directive `source` spec to data. Throws on anything not allowlisted.
+ *  `force` skips the cache READ (used by polling/refetch for fresh data); the
+ *  result is still written back to the cache so siblings dedupe. */
+export async function resolveSource(spec: string, force = false): Promise<unknown> {
+  if (!force) {
+    const hit = _cache.get(spec);
+    if (hit && hit.exp > Date.now()) return hit.data;
+  }
+  let data: unknown;
   if (spec.startsWith("me://")) {
     const p = spec.slice("me://".length).replace(/^\/+/, "");
-    switch (p) {
-      case "today":             return me.today();
-      case "workflows":         return me.listWorkflows();
-      case "loops/health":
-      case "loops-health":      return me.loopsHealth();
-      case "apps":              return me.listApps();
-      default:                  throw new Error(`source not allowed: ${spec}`);
+    if (p === "today") {
+      data = await me.today();
+    } else if (p === "workflows" || p.startsWith("workflows?")) {
+      // me://workflows?app=<name> — the caller's workflow rows for ONE app
+      // (name, last_run_ok, last_run_ts, running, enabled). Lets any app's
+      // Overview show live run health without a bespoke data service; the
+      // table empty state covers the not-yet-run case.
+      const qs = p.includes("?") ? p.slice(p.indexOf("?") + 1) : "";
+      const appFilter = new URLSearchParams(qs).get("app");
+      const all = await me.listWorkflows();
+      data = appFilter
+        ? { workflows: (all.workflows ?? []).filter((w) => w.app === appFilter) }
+        : all;
+    } else if (p === "loops/health" || p === "loops-health") {
+      data = await me.loopsHealth();
+    } else if (p === "apps") {
+      data = await me.listApps();
+    } else if (p === "gpu-rentals") {
+      data = await me.gpuRentals();
+    } else if (p === "drafts" || p.startsWith("drafts?")) {
+      const qs = p.includes("?") ? p.slice(p.indexOf("?") + 1) : "";
+      const params = Object.fromEntries(new URLSearchParams(qs)) as Parameters<typeof me.listDrafts>[0];
+      data = await me.listDrafts(params);
+    } else {
+      throw new Error(`source not allowed: ${spec}`);
     }
-  }
-  if (spec.startsWith(FINDATA_PREFIX)) {
+  } else if (spec.startsWith(FINDATA_PREFIX)) {
     const path = spec.slice(FINDATA_PREFIX.length).replace(/^\/+/, "");
-    const r = await fetch(`/findata-cloud/${path}`, { credentials: "omit" });
-    if (!r.ok) throw new Error(`findata ${r.status}`);
-    return r.json();
+    const auth = await bearerHeader();
+    const r = await fetch(`/findata-cloud/${path}`, { credentials: "same-origin", headers: auth });
+    // 404 = the warehouse simply has no record for this symbol/endpoint (common
+    // for micro-caps reached from the Movers table). That's "no data", not an
+    // error — return null so stat/chart/table render their empty state instead
+    // of a red error chip. Real failures (401/403/5xx) still surface.
+    if (r.status === 404) { data = null; }
+    else if (!r.ok) throw new Error(`findata ${r.status}`);
+    else data = await r.json();
+  } else if (spec.startsWith(DATAAPP_PREFIX)) {
+    // Generic lumid-data-service app. Spec shape: dataapp://<base-id>/<path>.
+    // The base-id selects an ALLOWLISTED upstream server-side (nginx
+    // /dataapp-proxy/<id>/) — SSRF-safe (no URL travels from the client).
+    // Same passthrough + bearer as findata://; lets one explorer point at
+    // any allowlisted data-app by setting the base-id in the source.
+    const path = spec.slice(DATAAPP_PREFIX.length).replace(/^\/+/, "");
+    const auth = await bearerHeader();
+    const r = await fetch(`/dataapp-proxy/${path}`, { credentials: "same-origin", headers: auth });
+    if (r.status === 404) { data = null; }   // no record for this key — empty, not an error
+    else if (!r.ok) throw new Error(`dataapp ${r.status}`);
+    else data = await r.json();
+  } else if (spec.startsWith("qa://dashboard/")) {
+    // QuantArena public dashboard endpoints — no auth required.
+    const tail = spec.slice("qa://dashboard/".length);
+    const [rawPath, qs] = tail.split("?");
+    const params = Object.fromEntries(new URLSearchParams(qs ?? ""));
+    const { getCompetitions, getLeaderboard, getEquityChart,
+            getDashboardLeaderboardLatest, getDashboardEquityChartLatest } =
+      await import("@/quantarena/api/dashboard");
+
+    if (rawPath === "competitions") {
+      const res = await getCompetitions(params.status ? { status: params.status } : undefined);
+      data = res.competitions ?? [];
+    } else if (rawPath === "leaderboard/latest") {
+      data = await getDashboardLeaderboardLatest(parseInt(params.limit ?? "10"));
+    } else if (/^leaderboard\/\d+$/.test(rawPath)) {
+      const id = parseInt(rawPath.split("/")[1]);
+      const res = await getLeaderboard(id);
+      data = res.participants ?? [];
+    } else if (rawPath === "equity-chart/latest") {
+      data = await getDashboardEquityChartLatest();
+    } else if (/^equity-chart\/\d+$/.test(rawPath)) {
+      const id = parseInt(rawPath.split("/")[1]);
+      const res = await getEquityChart(id);
+      data = (res.charts ?? []).flatMap((s) =>
+        (s.data_points ?? []).map((p) => ({ ts: p.timestamp, equity: p.total_equity, name: s.strategy_name }))
+      );
+    } else {
+      throw new Error(`qa://dashboard/ path not allowed: ${rawPath}`);
+    }
+  } else if (spec === "qa://cluster/pricing") {
+    // lumid-cluster public pricing endpoint — no auth required.
+    // (Checked before the generic qa:// branch so it isn't swallowed.)
+    const r = await fetch("/api/v1/cluster/pricing");
+    if (!r.ok) throw new Error(`cluster pricing ${r.status}`);
+    data = await r.json();
+  } else if (spec.startsWith("qa://")) {
+    // QuantArena auth-required endpoints. These flow through the QA apiClient,
+    // which presents the lum.id session-bearer JWT (cookie-authed, introspected
+    // by QA), so a studio visitor reads their own competition data without a
+    // separate QA login. Param routes interpolate {competitionId}/{strategyId}
+    // into the path before this resolver sees it.
+    const tail = spec.slice("qa://".length).replace(/^\/+/, "");
+    const [rawPath, qs] = tail.split("?");
+    const params = Object.fromEntries(new URLSearchParams(qs ?? ""));
+    const comp = await import("@/quantarena/api/competition");
+    const strat = await import("@/quantarena/api/strategy");
+    const research = await import("@/quantarena/api/research");
+
+    if (rawPath === "competitions") {
+      const res = await comp.getCompetitionsList({
+        status: params.status ? [params.status] : ["Ongoing"],
+        page: 1,
+        page_size: parseInt(params.limit ?? "20"),
+      });
+      data = res.data?.competitions ?? [];
+    } else if (rawPath === "my-strategies") {
+      // Cross-competition roster of the caller's forward-testing strategies.
+      const res = await strat.getSimulationStrategies({ page: 1, page_size: parseInt(params.limit ?? "100") });
+      data = res.data?.strategies ?? [];
+    } else if (/^competition\/\d+$/.test(rawPath)) {
+      const id = parseInt(rawPath.split("/")[1]);
+      const res = await comp.getCompetitionDetail(id);
+      data = res.data ?? null;
+    } else if (/^competition\/\d+\/my-strategies$/.test(rawPath)) {
+      const id = parseInt(rawPath.split("/")[1]);
+      const res = await comp.getMyStrategies(id);
+      data = res.data?.strategies ?? [];
+    } else if (/^competition\/\d+\/leaderboard$/.test(rawPath)) {
+      const id = parseInt(rawPath.split("/")[1]);
+      const res = await comp.getCompetitionLeaderboard(id, {
+        sort_by: (params.sort_by as never) ?? "TotalEquity",
+        order: (params.order as never) ?? "desc",
+      });
+      data = res.data?.participants ?? [];
+    } else if (/^competition\/\d+\/recent-trades$/.test(rawPath)) {
+      const id = parseInt(rawPath.split("/")[1]);
+      const res = await comp.getCompetitionRecentTrades(id, { limit: parseInt(params.limit ?? "50") });
+      data = res.trades ?? [];
+    } else if (/^competition\/\d+\/strategy\/\d+$/.test(rawPath)) {
+      const parts = rawPath.split("/");
+      const res = await comp.getStrategyDetail(parseInt(parts[1]), parseInt(parts[3]));
+      data = res.data ?? null;
+    } else if (/^research\/\d+$/.test(rawPath)) {
+      const id = parseInt(rawPath.split("/")[1]);
+      data = await research.getResearchByStrategy(id);
+    } else if (rawPath === "competitions/latest/leaderboard") {
+      const listRes = await comp.getCompetitionsList({ status: ["Ongoing"], page: 1, page_size: 1 });
+      const comps = listRes.data?.competitions ?? [];
+      if (comps.length > 0) {
+        const lbRes = await comp.getCompetitionLeaderboard(comps[0].id, { sort_by: "ReturnRate", order: "desc" });
+        data = (lbRes?.data?.participants ?? []).slice(0, parseInt(params.limit ?? "10"));
+      } else {
+        data = [];
+      }
+    } else if (/^competitions\/\d+\/leaderboard$/.test(rawPath)) {
+      const id = parseInt(rawPath.split("/")[1]);
+      const lbRes = await comp.getCompetitionLeaderboard(id, {});
+      data = lbRes?.data?.participants ?? [];
+    } else {
+      throw new Error(`qa:// path not allowed: ${rawPath}`);
+    }
+  } else {
+    throw new Error(`source scheme not allowed: ${spec}`);
   }
-  throw new Error(`source scheme not allowed: ${spec}`);
+  _cache.set(spec, { data, exp: Date.now() + CACHE_TTL });
+  return data;
 }
 
-/** Dot-path getter. "" / "." returns the root. */
-function getPath(obj: unknown, path?: string): unknown {
-  if (!path || path === ".") return obj;
+/** Dot-path getter. "" / "." / [] returns the root. */
+function getPath(obj: unknown, path?: unknown): unknown {
+  if (!path || path === "." || typeof path !== "string") return obj;
   return path.split(".").reduce<unknown>(
     (o, k) => (o == null ? o : (o as Record<string, unknown>)[k]),
     obj,
   );
 }
 
-function useSource(spec?: string) {
+// `pollSec > 0` re-fetches the source on that interval (bypassing the cache),
+// pausing while the tab is hidden — this is how a declarative table becomes a
+// live feed (e.g. an Ongoing-competition activity stream / leaderboard) without
+// a bespoke native component. `refetch()` forces an immediate fresh fetch (used
+// after a row action mutates server state).
+// A source spec still containing `{token}` after param interpolation means the
+// surface was opened WITHOUT its route context (e.g. competition-detail at the
+// bare /studio/a/<app>/<surface> URL — reachable via the surface editor's
+// back/save navigation). That's a navigation state, not a data error: report
+// it as `pending` so widgets render a quiet hint instead of a red error chip.
+function unresolvedToken(spec?: string): string | null {
+  if (!spec) return null;
+  const m = spec.match(/\{(\w+)\}/);
+  return m ? m[1] : null;
+}
+
+function useSource(spec?: string, pollSec = 0) {
+  const pending = unresolvedToken(spec);
   const [state, setState] = useState<{ data?: unknown; loading: boolean; error?: string }>(
-    { loading: !!spec },
+    { loading: !!spec && !pending },
   );
+  const [tick, setTick] = useState(0);
+  const refetch = useCallback(() => setTick((t) => t + 1), []);
   useEffect(() => {
-    if (!spec) { setState({ loading: false }); return; }
+    if (!spec || pending) { setState({ loading: false }); return; }
     let live = true;
-    setState({ loading: true });
-    resolveSource(spec)
+    // Only show the loading spinner on the FIRST load — polling/refetch refresh
+    // in place so the table doesn't flicker back to "Loading…" every interval.
+    if (tick === 0) setState((s) => (s.data === undefined ? { loading: true } : s));
+    resolveSource(spec, tick > 0)
       .then((data) => { if (live) setState({ data, loading: false }); })
-      .catch((e) => { if (live) setState({ loading: false, error: String(e?.message ?? e) }); });
+      .catch((e) => { if (live) setState((s) => ({ ...s, loading: false, error: String(e?.message ?? e) })); });
     return () => { live = false; };
-  }, [spec]);
-  return state;
+  }, [spec, tick]);
+  useEffect(() => {
+    if (!spec || pending || pollSec <= 0) return;
+    const id = setInterval(() => { if (!document.hidden) setTick((t) => t + 1); }, pollSec * 1000);
+    return () => clearInterval(id);
+  }, [spec, pending, pollSec]);
+  return { ...state, pending, refetch };
 }
 
 function Shell({ title, children }: { title?: string; children: React.ReactNode }) {
@@ -90,76 +324,403 @@ const Loading = () => <div className="text-[12px] text-slate-400 py-2">Loading�
 const ErrLine = ({ msg }: { msg: string }) => (
   <div className="text-[12px] text-rose-600 py-2">⚠ {msg}</div>
 );
+// Quiet hint for a param surface opened without its route context.
+const PendingLine = ({ token }: { token: string }) => (
+  <div className="text-[12px] text-slate-400 italic py-2">
+    Waiting for a {token} — open this page from its parent list (e.g. a row in the lobby).
+  </div>
+);
 
 // ── widgets ────────────────────────────────────────────────────────────────
 
 type Body = Record<string, unknown>;
 
 function LumidStat({ body }: { body: Body }) {
-  const { data, loading, error } = useSource(body.source as string | undefined);
+  const { data, loading, error, pending } = useSource(body.source as string | undefined);
+  if (pending) return <PendingLine token={pending} />;
   if (loading) return <Loading />;
   if (error) return <ErrLine msg={error} />;
-  const base = getPath(data, body.path as string | undefined);
+  let base = getPath(data, body.path as string | undefined);
+  // row_match: when the base is an ARRAY, select the first row whose `key`
+  // field (stringified) equals `value`, then `body.value` reads from that row.
+  // No match → null (renders "—"). The directive body is interpolated upstream,
+  // so key/value arrive as plain config here.
+  const rowMatch = body.row_match as { key?: unknown; value?: unknown } | undefined;
+  if (rowMatch && typeof rowMatch.key === "string" && Array.isArray(base)) {
+    base =
+      (base as Record<string, unknown>[]).find(
+        (r) => r != null && String(r[rowMatch.key as string]) === String(rowMatch.value),
+      ) ?? null;
+  }
   let value: unknown;
   if (body.value === "count") value = Array.isArray(base) ? base.length : base == null ? 0 : Object.keys(base as object).length;
   else if (body.value) value = getPath(base, body.value as string);
   else value = base;
+  // format (pct = decimal-returns percentage, currency) + optional prefix/
+  // suffix — only when the value is non-null; null still renders "—".
+  let display = "—";
+  if (value != null) {
+    const n = Number(value);
+    if (body.format === "pct" && isFinite(n)) display = formatPercentage(n);
+    else if (body.format === "currency" && isFinite(n)) display = formatCurrency(n);
+    else display = String(value);
+    if (typeof body.prefix === "string") display = body.prefix + display;
+    if (typeof body.suffix === "string") display = display + body.suffix;
+  }
   return (
     <div className="inline-flex flex-col rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 min-w-[120px]">
-      <span className="text-2xl font-semibold text-slate-900 tabular-nums">{String(value ?? "—")}</span>
+      <span className="text-2xl font-semibold text-slate-900 tabular-nums">{display}</span>
       <span className="text-[11px] uppercase tracking-wide text-slate-500 mt-0.5">{String(body.label ?? "")}</span>
     </div>
   );
 }
 
+type ColDef = { key: string; label?: string; type?: string; sortable?: boolean };
+
+const STATUS_COLORS: Record<string, string> = {
+  Ongoing:   "bg-green-100 text-green-800 border-green-200",
+  Upcoming:  "bg-blue-100 text-blue-800 border-blue-200",
+  Completed: "bg-gray-100 text-gray-800 border-gray-200",
+};
+
+function StatusBadge({ value }: { value: string }) {
+  const cls = STATUS_COLORS[value] ?? "bg-slate-100 text-slate-700 border-slate-200";
+  return <span className={cn("inline-flex px-1.5 py-0.5 rounded text-[11px] font-medium border", cls)}>{value}</span>;
+}
+
+function formatCell(value: unknown, type?: string): React.ReactNode {
+  if (value == null || value === "") return "—";
+  const n = Number(value);
+  if (type === "currency") return formatCurrency(isFinite(n) ? n : 0);
+  if (type === "pct") {
+    if (!isFinite(n)) return "—";
+    const pct = formatPercentage(n);
+    const cls = n >= 0 ? "text-green-600" : "text-red-600";
+    return <span className={cls}>{pct}</span>;
+  }
+  if (type === "badge") return <StatusBadge value={String(value)} />;
+  if (type === "datetime") {
+    // Unix seconds or ms → locale string. < 1e12 ⇒ seconds.
+    if (!isFinite(n) || n === 0) return "—";
+    const ms = n < 1e12 ? n * 1000 : n;
+    return new Date(ms).toLocaleString();
+  }
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+// A row_href target may be an INTERNAL route (/studio/...) or an EXTERNAL URL
+// (https://… — e.g. a news article or tweet). External opens a new tab; internal
+// uses client-side navigation.
+function isExternalHref(h: string): boolean { return /^https?:\/\//i.test(h); }
+
+// ── actions (per-row + table-level) ─────────────────────────────────────────
+//
+// An action POSTs (or DELETEs) to a QuantArena endpoint via the shared
+// session-bearer apiClient — the same write path lumid:form uses. `gate`
+// hides the control unless the caller's role qualifies (so admin bulk-reset
+// only shows for admins). This is what lets a leaderboard reset / activity
+// refresh live in declarative config instead of a bespoke native component.
+type ActionDef = {
+  label: string;
+  qa_post?: string;
+  qa_delete?: string;
+  confirm?: string;
+  success?: string;
+  gate?: string;          // "admin" | "super_admin"
+  variant?: string;       // "danger" → destructive styling
+};
+
+function roleAllows(role: string, gate?: string): boolean {
+  if (!gate) return true;
+  if (gate === "super_admin") return role === "super_admin";
+  if (gate === "admin") return role === "admin" || role === "super_admin";
+  return true;
+}
+
+async function runQaAction(a: ActionDef, row?: Record<string, unknown>): Promise<void> {
+  const interp = (p: string) =>
+    row ? p.replace(/\{([^}]+)\}/g, (_, k) => String(row[k] ?? "")) : p;
+  const raw = a.qa_delete ?? a.qa_post ?? "";
+  const path = interp(raw);
+  if (!path || /\{|\}/.test(path)) throw new Error(`unresolved action path: ${path}`);
+  const { default: apiClient } = await import("@/quantarena/api/client");
+  if (a.qa_delete) await apiClient.delete(path);
+  else await apiClient.post(path, {});
+}
+
+function ActionButton({ a, row, onDone, size = "sm" }: {
+  a: ActionDef; row?: Record<string, unknown>; onDone?: () => void; size?: "sm" | "xs";
+}) {
+  const role = useContext(AuthContext)?.user?.role ?? "user";
+  const [busy, setBusy] = useState(false);
+  if (!roleAllows(role, a.gate)) return null;
+  const danger = a.variant === "danger";
+  const run = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (a.confirm && !window.confirm(a.confirm)) return;
+    setBusy(true);
+    try {
+      await runQaAction(a, row);
+      toast.success(a.success ?? "Done.");
+      onDone?.();
+    } catch (err) {
+      toast.error(String((err as Error)?.message ?? err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const pad = size === "xs" ? "px-1.5 py-0.5 text-[11px]" : "px-2.5 py-1 text-[12px]";
+  const tone = danger
+    ? "border-rose-200 text-rose-600 hover:bg-rose-50"
+    : "border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-800";
+  return (
+    <button onClick={run} disabled={busy}
+      className={cn("inline-flex items-center rounded-md border bg-white transition-colors disabled:opacity-50", pad, tone)}>
+      {busy ? "…" : a.label}
+    </button>
+  );
+}
+
 function LumidTable({ body }: { body: Body }) {
-  const { data, loading, error } = useSource(body.source as string | undefined);
+  const pollSec = Number(body.poll) || 0;
+  const { data, loading, error, pending, refetch } = useSource(body.source as string | undefined, pollSec);
+  const navigate = useNavigate();
+  // Click-to-sort state. Header cycle: unsorted → desc → asc → unsorted (so the
+  // first click on a metric shows the leaders, matching the native leaderboard).
+  const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" } | null>(null);
+
+  const rows = getPath(data, body.path as string | undefined);
+  const rowArr = Array.isArray(rows) ? (rows as Record<string, unknown>[]) : [];
+
+  const sortedRows = useMemo(() => {
+    if (!sort) return rowArr;
+    const { key, dir } = sort;
+    const mul = dir === "asc" ? 1 : -1;
+    return [...rowArr].sort((a, b) => {
+      const av = a[key], bv = b[key];
+      const an = Number(av), bn = Number(bv);
+      if (isFinite(an) && isFinite(bn) && av !== "" && bv !== "") return (an - bn) * mul;
+      return String(av ?? "").localeCompare(String(bv ?? "")) * mul;
+    });
+  }, [rowArr, sort]);
+
+  if (pending) return <PendingLine token={pending} />;
   if (loading) return <Loading />;
   if (error) return <ErrLine msg={error} />;
-  const rows = getPath(data, body.path as string | undefined);
-  const cols = (body.columns as { key: string; label?: string }[] | undefined) ?? [];
-  if (!Array.isArray(rows) || rows.length === 0) return <div className="text-[12px] text-slate-400">No rows.</div>;
-  const columns = cols.length ? cols : Object.keys(rows[0] as object).map((k) => ({ key: k, label: k }));
+
+  const cols = (body.columns as ColDef[] | undefined) ?? [];
+  const tableActions = (body.actions as ActionDef[] | undefined)?.filter((a) => a && a.label) ?? [];
+  const rowActions = (body.row_actions as ActionDef[] | undefined)?.filter((a) => a && a.label) ?? [];
+
+  if (rowArr.length === 0) {
+    // Still show table-level actions (e.g. an admin "Reset all") even with no
+    // rows, so the control isn't hidden just because the board is empty.
+    const empty = <div className="text-[12px] text-slate-400">No rows.</div>;
+    if (!tableActions.length) return empty;
+    return (
+      <div className="space-y-2">
+        <ActionBar actions={tableActions} onDone={refetch} />
+        {empty}
+      </div>
+    );
+  }
+
+  const columns: ColDef[] = cols.length ? cols : Object.keys(rowArr[0]).map((k) => ({ key: k, label: k }));
+  const tableSortable = body.sortable === true;
+  const isSortable = (c: ColDef) => tableSortable || c.sortable === true;
+  const toggleSort = (key: string) =>
+    setSort((prev) =>
+      !prev || prev.key !== key ? { key, dir: "desc" } : prev.dir === "desc" ? { key, dir: "asc" } : null);
+
+  const rowHrefTemplate = typeof body.row_href === "string" ? body.row_href : null;
+  const rowHref = rowHrefTemplate
+    ? (row: Record<string, unknown>) => {
+        const h = rowHrefTemplate.replace(/\{([^}]+)\}/g, (_, k) => String(row[k] ?? ""));
+        // Drop hrefs left with empty interpolations (missing field) so we don't
+        // render a dead link to a partial path.
+        return /\{|\}/.test(h) || h.trim() === "" ? "" : h;
+      }
+    : null;
+  // Navigate the WHOLE row (not just the first cell) — matches the native
+  // dashboard pages where clicking anywhere on a row drilled in.
+  const goHref = (href: string) => {
+    if (!href) return;
+    if (isExternalHref(href)) window.open(href, "_blank", "noopener,noreferrer");
+    else navigate(href);
+  };
+  const renderHrefCell = (href: string, content: ReactNode) =>
+    isExternalHref(href)
+      ? <a href={href} target="_blank" rel="noopener noreferrer" className="text-emerald-700 hover:underline" onClick={(e) => e.stopPropagation()}>{content}</a>
+      : <Link to={href} className="text-emerald-700 hover:underline" onClick={(e) => e.stopPropagation()}>{content}</Link>;
+
+  // Card-grid view (no sorting/row-actions — those are table-view affordances)
+  if (body.view === "cards") {
+    const titleCol = columns[0];
+    const badgeCol = columns.find((c) => c.type === "badge");
+    const statCols = columns.filter((c) => c !== titleCol && c !== badgeCol);
+    return (
+      <div className="space-y-2">
+        {tableActions.length > 0 && <ActionBar actions={tableActions} onDone={refetch} />}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {sortedRows.slice(0, 60).map((row, i) => {
+            const href = rowHref ? rowHref(row) : "";
+            const title = String(row[titleCol.key] ?? "");
+            return (
+              <div key={i} onClick={href ? () => goHref(href) : undefined}
+                className={"rounded-lg border border-slate-200 bg-white p-3 hover:border-slate-300 hover:shadow-sm transition-all" + (href ? " cursor-pointer" : "")}>
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="font-medium text-[13px] text-slate-900 leading-snug">
+                    {href ? renderHrefCell(href, title) : title}
+                  </div>
+                  {badgeCol && <StatusBadge value={String(row[badgeCol.key] ?? "")} />}
+                </div>
+                <div className="space-y-1">
+                  {statCols.map((c) => (
+                    <div key={c.key} className="flex justify-between text-[12px]">
+                      <span className="text-slate-500">{c.label ?? c.key}</span>
+                      <span className="font-medium text-slate-700">{formatCell(row[c.key], c.type)}</span>
+                    </div>
+                  ))}
+                </div>
+                {rowActions.length > 0 && (
+                  <div className="flex gap-1.5 mt-2 pt-2 border-t border-slate-100">
+                    {rowActions.map((a, ai) => <ActionButton key={ai} a={a} row={row} onDone={refetch} size="xs" />)}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // Standard table view
+  const sortIcon = (key: string) =>
+    !sort || sort.key !== key ? "↕" : sort.dir === "desc" ? "↓" : "↑";
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200">
-      <table className="min-w-full text-[12px] border-collapse">
-        <thead className="bg-slate-50 border-b border-slate-200">
-          <tr>{columns.map((c) => <th key={c.key} className="px-2.5 py-1.5 text-left font-semibold text-slate-700">{c.label ?? c.key}</th>)}</tr>
-        </thead>
-        <tbody>
-          {(rows as Record<string, unknown>[]).slice(0, 200).map((row, i) => (
-            <tr key={i} className="border-b border-slate-100 last:border-b-0">
-              {columns.map((c) => <td key={c.key} className="px-2.5 py-1.5 text-slate-700 align-top">{String(row[c.key] ?? "")}</td>)}
+    <div className="space-y-2">
+      {(tableActions.length > 0 || pollSec > 0) && (
+        <div className="flex items-center gap-2">
+          {tableActions.length > 0 && <ActionBar actions={tableActions} onDone={refetch} />}
+          {pollSec > 0 && (
+            <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-emerald-600">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live
+            </span>
+          )}
+        </div>
+      )}
+      <div className="overflow-x-auto rounded-lg border border-slate-200">
+        <table className="min-w-full text-[12px] border-collapse">
+          <thead className="bg-slate-50 border-b border-slate-200">
+            <tr>
+              {columns.map((c) => {
+                const sortable = isSortable(c);
+                return (
+                  <th key={c.key}
+                    onClick={sortable ? () => toggleSort(c.key) : undefined}
+                    className={cn("px-2.5 py-1.5 text-left font-semibold text-slate-700", sortable && "cursor-pointer select-none hover:text-slate-900")}>
+                    <span className="inline-flex items-center gap-1">
+                      {c.label ?? c.key}
+                      {sortable && <span className={cn("text-[10px]", sort?.key === c.key ? "text-emerald-600" : "text-slate-400")}>{sortIcon(c.key)}</span>}
+                    </span>
+                  </th>
+                );
+              })}
+              {rowActions.length > 0 && <th className="px-2.5 py-1.5 text-right font-semibold text-slate-700">Actions</th>}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {sortedRows.slice(0, 200).map((row, i) => {
+              const href = rowHref ? rowHref(row) : "";
+              const trCls = "border-b border-slate-100 last:border-b-0" + (href ? " hover:bg-slate-50 cursor-pointer" : "");
+              return (
+                <tr key={i} className={trCls} onClick={href ? () => goHref(href) : undefined}>
+                  {columns.map((c, ci) => {
+                    const cell = <>{
+                      href && ci === 0
+                        ? renderHrefCell(href, formatCell(row[c.key], c.type))
+                        : formatCell(row[c.key], c.type)
+                    }</>;
+                    return <td key={c.key} className="px-2.5 py-1.5 text-slate-700 align-top max-w-[260px] truncate">{cell}</td>;
+                  })}
+                  {rowActions.length > 0 && (
+                    <td className="px-2.5 py-1.5 text-right whitespace-nowrap">
+                      <span className="inline-flex gap-1.5 justify-end" onClick={(e) => e.stopPropagation()}>
+                        {rowActions.map((a, ai) => <ActionButton key={ai} a={a} row={row} onDone={refetch} size="xs" />)}
+                      </span>
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// Table-level action row (e.g. an admin "Reset all"). Buttons self-hide by gate.
+function ActionBar({ actions, onDone }: { actions: ActionDef[]; onDone?: () => void }) {
+  const role = useContext(AuthContext)?.user?.role ?? "user";
+  const visible = actions.filter((a) => roleAllows(role, a.gate));
+  if (!visible.length) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {visible.map((a, i) => <ActionButton key={i} a={a} onDone={onDone} />)}
     </div>
   );
 }
 
 function LumidChart({ body }: { body: Body }) {
-  const { data, loading, error } = useSource(body.source as string | undefined);
+  const { data, loading, error, pending } = useSource(body.source as string | undefined);
+  if (pending) return <PendingLine token={pending} />;
   if (loading) return <Loading />;
   if (error) return <ErrLine msg={error} />;
-  const rows = getPath(data, body.path as string | undefined);
-  if (!Array.isArray(rows) || rows.length === 0) return <div className="text-[12px] text-slate-400">No data.</div>;
-  const x = (body.x as string) ?? "x";
-  const ys = Array.isArray(body.y) ? (body.y as string[]) : [(body.y as string) ?? "y"];
-  const kind = (body.kind as string) ?? "line";
+  const rawRows = getPath(data, body.path as string | undefined);
+  if (!Array.isArray(rawRows) || rawRows.length === 0) return <div className="text-[12px] text-slate-400">No data.</div>;
+  // Support both legacy (x/y) and new (x_key/y_key) names.
+  const xKey = (body.x_key as string) ?? (body.x as string) ?? "x";
+  const yKey = (body.y_key as string) ?? (body.y as string);
+  const seriesKey = body.series_key as string | undefined;
+  const kind = (body.kind as string) ?? (body.type as string) ?? "line";
+  const height = Number(body.height) || 240;
   const palette = ["#059669", "#6366f1", "#f59e0b", "#ef4444", "#0ea5e9"];
+
+  let chartData: object[];
+  let ys: string[];
+
+  if (seriesKey && yKey) {
+    // Pivot flat [{x, yKey, seriesKey}] rows into wide [{x, SeriesA: v, SeriesB: v}] format.
+    const typedRows = rawRows as Record<string, unknown>[];
+    const seriesNames = [...new Set(typedRows.map((r) => String(r[seriesKey] ?? "")))];
+    const byX = new Map<unknown, Record<string, unknown>>();
+    for (const row of typedRows) {
+      const xVal = row[xKey];
+      if (!byX.has(xVal)) byX.set(xVal, { [xKey]: xVal });
+      byX.get(xVal)![String(row[seriesKey] ?? "")] = row[yKey];
+    }
+    chartData = [...byX.values()];
+    ys = seriesNames;
+  } else {
+    chartData = rawRows as object[];
+    ys = Array.isArray(body.y) ? (body.y as string[]) : [yKey ?? "y"];
+  }
+
   return (
-    <ResponsiveContainer width="100%" height={240}>
+    <ResponsiveContainer width="100%" height={height}>
       {kind === "bar" ? (
-        <BarChart data={rows as object[]}>
+        <BarChart data={chartData}>
           <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
-          <XAxis dataKey={x} tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip />
+          <XAxis dataKey={xKey} tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip />
           {ys.map((k, i) => <Bar key={k} dataKey={k} fill={palette[i % palette.length]} />)}
         </BarChart>
       ) : (
-        <LineChart data={rows as object[]}>
+        <LineChart data={chartData}>
           <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
-          <XAxis dataKey={x} tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip />
+          <XAxis dataKey={xKey} tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip />
           {ys.map((k, i) => <Line key={k} type="monotone" dataKey={k} stroke={palette[i % palette.length]} dot={false} />)}
         </LineChart>
       )}
@@ -168,7 +729,8 @@ function LumidChart({ body }: { body: Body }) {
 }
 
 function LumidList({ body }: { body: Body }) {
-  const { data, loading, error } = useSource(body.source as string | undefined);
+  const { data, loading, error, pending } = useSource(body.source as string | undefined);
+  if (pending) return <PendingLine token={pending} />;
   if (loading) return <Loading />;
   if (error) return <ErrLine msg={error} />;
   const items = getPath(data, body.path as string | undefined);
@@ -226,23 +788,370 @@ function LumidAction({ body }: { body: Body }) {
   );
 }
 
-function LumidIframe({ body }: { body: Body }) {
-  const src = String(body.src ?? "");
-  const ok = IFRAME_ALLOW.some((p) => src.startsWith(p));
-  if (!ok) return <ErrLine msg={`iframe src not allowed: ${src || "(empty)"}`} />;
-  const height = typeof body.height === "number" ? body.height : 480;
+// lumid:native — explicitly embed a first-party interactive component by key.
+// The key resolves against native-registry.ts (same allowlist as before).
+// Third-party apps can declare this directive in their markdown, but the key
+// only resolves if it exists in the compiled registry — no code injection.
+//
+//   ```lumid:native
+//   key: lumid-gpu-rentals
+//   title: GPU Rental Manager      # optional — any keys besides `key` are
+//   hide_header: true              # passed to the component as `config`.
+//   ```
+//
+// Everything in the block except `key` is forwarded to the component as a
+// `config` prop, so a single native embed is configurable (titles, defaults,
+// which panels to show) rather than one opaque entry.
+function LumidNative({ body }: { body: Body }) {
+  const key = String(body.key ?? "");
+  // App-level config (xpcloud `config:`, edited via the Config button) provides
+  // the defaults; explicit keys in the directive body override. So an app like
+  // the data explorer is configured in Config, not by editing markdown.
+  const appConfig = useContext(SurfaceAppConfigContext);
+  const config: Record<string, unknown> = { ...appConfig, ...(body as Record<string, unknown>) };
+  delete config.key;
+  // Lazy-load the registry to avoid a circular import cycle at module init.
+  const [Component, setComponent] = useState<React.ComponentType<{ config?: Record<string, unknown> }> | null | "loading">("loading");
+  useEffect(() => {
+    import("./native-registry").then((m) => {
+      setComponent(() => m.resolveNativeSurface(key) ?? null);
+    });
+  }, [key]);
+  if (Component === "loading") return <Loading />;
+  if (!Component) return <ErrLine msg={`Unknown native component: ${key}`} />;
   return (
-    <iframe
-      src={src}
-      title={String(body.title ?? "embed")}
-      style={{ width: "100%", height, border: 0 }}
-      className="rounded-lg border border-slate-200"
-      sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
-    />
+    <Suspense fallback={<Loading />}>
+      <Component config={config} />
+    </Suspense>
+  );
+}
+
+// lumid:tabs — tab container. Each tab has a label and an array of blocks,
+// where each block is any directive config ({type, source, columns, ...}).
+// Tabs themselves don't fetch — they just switch which blocks are rendered.
+//
+//   ```lumid:tabs
+//   tabs:
+//     - label: Gainers
+//       blocks:
+//         - type: chart
+//           source: findata://market-movers?kind=gainer
+//           path: data
+//           x: symbol
+//           y: changes_percentage
+//         - type: table
+//           source: findata://market-movers?kind=gainer
+//           path: data
+//           columns: [{key: symbol, label: Symbol}, ...]
+//     - label: Losers
+//       blocks:
+//         - type: table
+//           source: findata://market-movers?kind=loser
+//           ...
+//   ```
+function LumidTabs({ body }: { body: Body }) {
+  const tabs = (body.tabs as Array<{ label: string; blocks: Body[] }> | undefined) ?? [];
+  const [active, setActive] = useState(0);
+  if (!tabs.length) return <ErrLine msg="lumid:tabs: tabs list is empty" />;
+  const cur = tabs[Math.min(active, tabs.length - 1)];
+  return (
+    <div>
+      <div className="flex items-center gap-0.5 border-b border-slate-200 mb-3 -mx-3 px-3">
+        {tabs.map((t, i) => (
+          <button
+            key={i}
+            onClick={() => setActive(i)}
+            className={[
+              "px-3 py-1.5 text-sm border-b-2 -mb-px transition-colors whitespace-nowrap",
+              active === i
+                ? "border-slate-800 text-slate-900 font-medium"
+                : "border-transparent text-slate-500 hover:text-slate-700",
+            ].join(" ")}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {(cur.blocks ?? []).map((block, i) => {
+        const type = String((block as Body).type ?? "");
+        const Widget = WIDGETS[type];
+        if (!Widget) return <ErrLine key={i} msg={`Unknown block type: ${type}`} />;
+        return <Widget key={i} body={block as Body} />;
+      })}
+    </div>
+  );
+}
+
+// lumid:search-table — a table with an inline search input that drives the
+// source URL. The source_template must contain {query} which is replaced
+// with the (URL-encoded) current search term.
+//
+//   ```lumid:search-table
+//   source_template: "findata://kols/tweets/search?q={query}&limit=50"
+//   default_query: "markets"
+//   placeholder: "Search tweets…"
+//   columns:
+//     - key: kol_username
+//       label: Handle
+//     - key: text
+//       label: Tweet
+//   ```
+function LumidSearchTable({ body }: { body: Body }) {
+  const [query, setQuery] = useState(String(body.default_query ?? ""));
+  const [committed, setCommitted] = useState(query);
+  const template = String(body.source_template ?? "");
+  const source = template.replace("{query}", encodeURIComponent(committed));
+  const onKey = (e: React.KeyboardEvent) => { if (e.key === "Enter") setCommitted(query); };
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={onKey}
+          placeholder={String(body.placeholder ?? "Search…")}
+          className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-teal-400/20 focus:border-teal-400"
+        />
+        <button
+          onClick={() => setCommitted(query)}
+          className="px-3 py-1.5 text-sm rounded-lg bg-slate-900 text-white hover:bg-slate-700 transition-colors"
+        >
+          Search
+        </button>
+      </div>
+      {source && <LumidTable body={{ ...body, source }} />}
+    </div>
   );
 }
 
 // ── dispatcher ───────────────────────────────────────────────────────────
+
+// lumid:form — a parameter form that submits to an ALLOWLISTED backend action.
+// The block names an `action` KEY (validated server-side against the allowlist
+// in me_form_action.go) plus `fields`. It never references a raw URL, so a
+// generated page can only trigger reviewed, scope-checked backend actions.
+//
+//   ```lumid:form
+//   action: gpu_rental.create
+//   submit_label: Create rental
+//   fields:
+//     - { key: gpu, label: GPU count, type: number, default: 1 }
+//     - { key: mode, label: Access mode, type: select, options: [proxy, direct, forward], default: proxy }
+//   ```
+type FormField = {
+  key: string; label?: string; type?: string;
+  options?: string[]; default?: unknown; placeholder?: string; required?: boolean;
+  group?: string;        // optional group heading (clusters related fields)
+  full_width?: boolean;  // span all columns even in a multi-column grid
+};
+
+// One field's input + label — shared by grouped/columned rendering.
+function FormFieldInput({ f, vals, setVals }: {
+  f: FormField; vals: Record<string, unknown>; setVals: React.Dispatch<React.SetStateAction<Record<string, unknown>>>;
+}) {
+  const isWide = f.full_width || f.type === "textarea";
+  // Associate the label with its control (htmlFor/id) so clicking the label
+  // focuses the field and screen readers pair them. useId keeps ids unique
+  // even when two forms on the same surface share a field key.
+  const fid = useId();
+  return (
+    <div className={cn("flex flex-col gap-1", isWide && "sm:col-span-full")}>
+      <label htmlFor={fid} className="text-[12px] font-medium text-slate-700">{f.label ?? f.key}</label>
+      {f.type === "select" && Array.isArray(f.options) ? (
+        <select
+          id={fid}
+          value={String(vals[f.key] ?? "")}
+          onChange={(e) => setVals((v) => ({ ...v, [f.key]: e.target.value }))}
+          className="rounded-md border border-slate-200 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/20 focus:border-emerald-400"
+        >
+          {f.options.map((o) => <option key={o} value={o}>{o}</option>)}
+        </select>
+      ) : f.type === "textarea" ? (
+        <textarea
+          id={fid}
+          value={String(vals[f.key] ?? "")}
+          placeholder={f.placeholder}
+          onChange={(e) => setVals((v) => ({ ...v, [f.key]: e.target.value }))}
+          className="rounded-md border border-slate-200 px-2.5 py-1.5 text-sm font-mono resize-y min-h-[60px] focus:outline-none focus:ring-2 focus:ring-emerald-400/20 focus:border-emerald-400"
+        />
+      ) : (
+        <input
+          id={fid}
+          type={f.type === "number" ? "number" : "text"}
+          value={String(vals[f.key] ?? "")}
+          placeholder={f.placeholder}
+          required={f.required}
+          onChange={(e) => setVals((v) => ({ ...v, [f.key]: e.target.value }))}
+          className="rounded-md border border-slate-200 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/20 focus:border-emerald-400"
+        />
+      )}
+    </div>
+  );
+}
+
+// Coerce a form value to the type its field declares (numbers as numbers so
+// QA endpoints that expect numeric competition_id / quantity don't 400).
+function coerceValues(fields: FormField[], vals: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const f of fields) {
+    const v = vals[f.key];
+    out[f.key] = f.type === "number" && v !== "" && v != null ? Number(v) : v;
+  }
+  return out;
+}
+
+function LumidForm({ body }: { body: Body }) {
+  const action = String(body.action ?? "");
+  // submit_qa: a QuantArena path (e.g. /api/v1/competitions/28/join) the form
+  // POSTs to client-side via the QA apiClient (session-bearer auth). This is
+  // the write counterpart to the qa:// read sources — a generated surface can
+  // trigger a real QA write without a per-app server allowlist entry, because
+  // QA enforces auth + scope + role on its own endpoints.
+  const submitQa = typeof body.submit_qa === "string" ? body.submit_qa : "";
+  const submitMethod = String(body.submit_method ?? "POST").toUpperCase();
+  const navigate = useNavigate();
+  const redirectTo = typeof body.redirect_to === "string" ? body.redirect_to : "";
+  const fields: FormField[] = Array.isArray(body.fields) ? (body.fields as FormField[]) : [];
+  const submitLabel = String(body.submit_label ?? "Submit");
+  const cols = Math.max(1, Math.min(3, Number(body.field_columns) || 1));
+  const gridCls = cols === 3 ? "sm:grid-cols-3" : cols === 2 ? "sm:grid-cols-2" : "grid-cols-1";
+  // Cluster fields into ordered groups (first-seen order; ungrouped = "").
+  const groups: { name: string; fields: FormField[] }[] = [];
+  for (const f of fields) {
+    const g = f.group || "";
+    let bucket = groups.find((x) => x.name === g);
+    if (!bucket) { bucket = { name: g, fields: [] }; groups.push(bucket); }
+    bucket.fields.push(f);
+  }
+  const [vals, setVals] = useState<Record<string, unknown>>(() => {
+    const init: Record<string, unknown> = {};
+    for (const f of fields) if (f && f.key) init[f.key] = f.default ?? "";
+    return init;
+  });
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  if (!action && !submitQa) return <ErrLine msg="lumid:form needs `action` or `submit_qa`" />;
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true); setResult(null);
+    try {
+      if (submitQa) {
+        // A submit path still holding `{token}` means the surface was opened
+        // without its route context — refuse with a hint, not a server 404.
+        const tok = submitQa.match(/\{(\w+)\}/);
+        if (tok) throw new Error(`This form needs a ${tok[1]} — open the page from its parent list first.`);
+        // Client-side QuantArena write via the shared apiClient (session-bearer).
+        const { default: apiClient } = await import("@/quantarena/api/client");
+        const payload = coerceValues(fields, vals);
+        if (submitMethod === "DELETE") await apiClient.delete(submitQa);
+        else await apiClient.post(submitQa, payload);
+        setResult({ ok: true, msg: String(body.success_message ?? "Done.") });
+        if (redirectTo) setTimeout(() => navigate(redirectTo), 600);
+      } else {
+        const auth = await bearerHeader();
+        const r = await fetch(`${ME_BASE}/api/v1/me/form-action`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...auth },
+          credentials: "include",
+          body: JSON.stringify({ action, values: vals }),
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || (j.ret_code !== undefined && j.ret_code !== 0)) {
+          throw new Error(j.message || `HTTP ${r.status}`);
+        }
+        setResult({ ok: true, msg: "Submitted." });
+      }
+    } catch (err) {
+      const m = (err as { message?: string })?.message ?? String(err);
+      setResult({ ok: false, msg: m });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="my-3 rounded-lg border border-slate-200 bg-white p-4 space-y-4">
+      {groups.map((g, gi) => (
+        <div key={gi} className="space-y-2">
+          {g.name && <div className="text-[12px] font-semibold text-slate-800 border-b border-slate-100 pb-1">{g.name}</div>}
+          <div className={cn("grid gap-3", gridCls)}>
+            {g.fields.map((f) => <FormFieldInput key={f.key} f={f} vals={vals} setVals={setVals} />)}
+          </div>
+        </div>
+      ))}
+      {body.cost_estimate ? <CostEstimate cfg={body.cost_estimate as Record<string, unknown>} vals={vals} /> : null}
+      <div className="flex items-center gap-2">
+        <button
+          type="submit" disabled={busy}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm hover:from-emerald-600 hover:to-teal-700 disabled:opacity-60 transition"
+        >
+          {busy ? "Submitting…" : submitLabel}
+        </button>
+        {result && (
+          <span className={cn("text-[12px]", result.ok ? "text-emerald-600" : "text-rose-600")}>{result.msg}</span>
+        )}
+      </div>
+    </form>
+  );
+}
+
+// CostEstimate — a live, flat-rate cost panel for a lumid:form. Rates come
+// from the form's cost_estimate config (not hardcoded in the widget) and the
+// estimate recomputes from the form's own field values. Faithfully reproduces
+// the native wizard's cost card.
+//   cost_estimate: { gpu_field, cpu_field, ttl_field, gpu_rate, cpu_rate }
+function CostEstimate({ cfg, vals }: { cfg: Record<string, unknown>; vals: Record<string, unknown> }) {
+  const num = (v: unknown) => { const n = Number(v); return isFinite(n) ? n : 0; };
+  const gpuRate = num(cfg.gpu_rate);
+  const cpuRate = num(cfg.cpu_rate);
+  const gpu = num(vals[String(cfg.gpu_field ?? "gpu")]);
+  const cpu = num(vals[String(cfg.cpu_field ?? "cpu")]);
+  const ttlMin = num(vals[String(cfg.ttl_field ?? "ttl_minutes")]) || 60;
+  const perHr = gpu * gpuRate + cpu * cpuRate;
+  const forRun = perHr * (ttlMin / 60);
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 text-[12px] text-slate-600 space-y-1">
+      <div className="font-medium text-slate-700">Cost estimate</div>
+      <div className="text-[11px] text-slate-400 leading-snug">
+        Flat-rate estimate before a worker is assigned. Actual cost is measured per-second against the worker's published rate; any difference settles into the ledger at teardown.
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-0.5 pt-1">
+        <span>Rate (GPU): <span className="tabular-nums">${gpuRate.toFixed(2)}/hr each</span></span>
+        <span>Rate (CPU): <span className="tabular-nums">${cpuRate.toFixed(2)}/hr each</span></span>
+      </div>
+      <div className="font-medium text-slate-800 tabular-nums">
+        This rental: ${perHr.toFixed(2)}/hr · ~${forRun.toFixed(2)} for {ttlMin} min
+      </div>
+    </div>
+  );
+}
+
+// lumid:columns — lay child widgets side by side in a responsive N-column grid
+// (1 column on mobile). Each block is a normal widget {type, ...config}.
+//   ```lumid:columns
+//   columns: 2
+//   blocks:
+//     - { type: stat, source: me://gpu-rentals, path: count, label: "Active" }
+//     - { type: table, source: me://gpu-rentals, path: rentals, columns: [...] }
+//   ```
+function LumidColumns({ body }: { body: Body }) {
+  const n = Math.max(1, Math.min(4, Number(body.columns) || 2));
+  const blocks = (body.blocks as Body[] | undefined) ?? [];
+  if (!blocks.length) return <ErrLine msg="lumid:columns: blocks list is empty" />;
+  const gridCls = n === 4 ? "lg:grid-cols-4" : n === 3 ? "lg:grid-cols-3" : "lg:grid-cols-2";
+  return (
+    <div className={cn("grid grid-cols-1 gap-4 my-3 items-start", gridCls)}>
+      {blocks.map((block, i) => {
+        const type = String((block as Body).type ?? "");
+        const Widget = WIDGETS[type];
+        if (!Widget) return <ErrLine key={i} msg={`Unknown block type: ${type}`} />;
+        return <div key={i} className="min-w-0"><Widget body={block as Body} /></div>;
+      })}
+    </div>
+  );
+}
 
 const WIDGETS: Record<string, (p: { body: Body }) => React.ReactElement> = {
   stat: LumidStat,
@@ -250,7 +1159,11 @@ const WIDGETS: Record<string, (p: { body: Body }) => React.ReactElement> = {
   chart: LumidChart,
   list: LumidList,
   action: LumidAction,
-  iframe: LumidIframe,
+  native: LumidNative,
+  tabs: LumidTabs,
+  form: LumidForm,
+  columns: LumidColumns,
+  "search-table": LumidSearchTable,
 };
 
 /** Returns true for fenced-block classNames that are Lumid directives. */
@@ -262,11 +1175,12 @@ export function isLumidDirective(className?: string): boolean {
 export function LumidDirective({ className, raw }: { className?: string; raw: string }) {
   const type = (className ?? "").replace("language-lumid:", "").trim();
   const Widget = WIDGETS[type];
+  const params = useContext(SurfaceParamsContext);
   let body: Body = {};
   let parseErr = "";
   try {
     const parsed = raw.trim() ? parseYaml(raw) : {};
-    body = (parsed && typeof parsed === "object") ? (parsed as Body) : {};
+    body = (parsed && typeof parsed === "object") ? interpolate(parsed as Body, params) : {};
   } catch (e) {
     parseErr = String((e as Error)?.message ?? e);
   }

@@ -80,7 +80,14 @@ interface Row {
 	error?: string;
 }
 
-export default function GpuRentalsList() {
+export default function GpuRentalsList({ config }: { config?: Record<string, unknown> } = {}) {
+	// Config from a `lumid:native` embed: override the header text, or hide it
+	// entirely when the surrounding markdown already supplies a heading.
+	const cfgTitle = typeof config?.title === "string" ? config.title : "GPU rentals";
+	const cfgSubtitle = typeof config?.subtitle === "string"
+		? config.subtitle
+		: "Ephemeral GPU containers via FlowMesh SSH tasks. TTL-bounded, billed per hour.";
+	const hideHeader = config?.hide_header === true || config?.hide_header === "true";
 	const { user } = useAuth();
 	const navigate = useNavigate();
 	const [rows, setRows] = useState<Row[]>([]);
@@ -163,11 +170,11 @@ export default function GpuRentalsList() {
 	return (
 		<>
 			<header className="flex items-center gap-2 mb-6">
-				<Server className="w-5 h-5 text-indigo-600" />
-				<h1 className="text-2xl font-semibold">GPU rentals</h1>
-				<span className="text-sm text-muted-foreground ml-2">
-					Ephemeral GPU containers via FlowMesh SSH tasks. TTL-bounded, billed per hour.
-				</span>
+				{!hideHeader && <Server className="w-5 h-5 text-emerald-600" />}
+				{!hideHeader && <h1 className="text-2xl font-semibold">{cfgTitle}</h1>}
+				{!hideHeader && (
+					<span className="text-sm text-muted-foreground ml-2">{cfgSubtitle}</span>
+				)}
 				<div className="ml-auto flex items-center gap-2">
 					<Button
 						variant="outline"
@@ -178,7 +185,7 @@ export default function GpuRentalsList() {
 					>
 						<RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
 					</Button>
-					<Link to="/app/gpu-rentals/new">
+					<Link to="/dashboard/gpu-rentals/new">
 						<Button size="sm">
 							<Plus className="w-4 h-4 mr-1" />
 							New rental
@@ -203,7 +210,7 @@ export default function GpuRentalsList() {
 				<CardContent>
 					{!hasAny ? (
 						<div className="py-12 text-center">
-							<Button onClick={() => navigate("/app/gpu-rentals/new")}>
+							<Button onClick={() => navigate("/dashboard/gpu-rentals/new")}>
 								<Plus className="w-4 h-4 mr-1" />
 								Create your first rental
 							</Button>
@@ -255,7 +262,7 @@ function RentalRow({
 		<tr className="border-b last:border-0 hover:bg-accent/40">
 			<td className="py-2 px-2">
 				<Link
-					to={`/app/gpu-rentals/${encodeURIComponent(row.rental.task_id)}`}
+					to={`/dashboard/gpu-rentals/${encodeURIComponent(row.rental.task_id)}`}
 					className="text-indigo-600 hover:underline font-medium"
 				>
 					{row.rental.name}
@@ -300,7 +307,7 @@ function RentalRow({
 			<td className="py-2 px-2 text-right">
 				{isLive ? (
 					<div className="inline-flex items-center gap-1">
-						<Link to={`/app/gpu-rentals/${encodeURIComponent(row.rental.task_id)}`}>
+						<Link to={`/dashboard/gpu-rentals/${encodeURIComponent(row.rental.task_id)}`}>
 							<Button size="sm" variant="outline">
 								<Terminal className="w-4 h-4 mr-1" />
 								Connect

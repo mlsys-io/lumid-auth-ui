@@ -102,8 +102,8 @@ function whatHappened(d: MeCycleDetail): string {
 	switch (s.outcome) {
 		case "no_change":       return "Observed its inputs — nothing actionable, so it stood pat.";
 		case "awaiting_review": return `Drafted ${rq} item${rq === 1 ? "" : "s"} and held ${rq === 1 ? "it" : "them"} for your review.`;
-		case "no_setup":        return "Loop isn't fully set up yet — connect its inputs to start.";
-		default:                return n ? `Ran ${n} step${n === 1 ? "" : "s"} end-to-end.` : "Completed a cycle.";
+		case "no_setup":        return "This workflow isn't fully set up yet — connect its inputs to start.";
+		default:                return n ? `Ran ${n} step${n === 1 ? "" : "s"} end-to-end.` : "Completed a run.";
 	}
 }
 
@@ -122,7 +122,7 @@ function whatLearned(d: MeCycleDetail): { headline: string; muted?: boolean; ite
 	if (pushed > 0) return { headline: `Compounded ${pushed} new memor${pushed === 1 ? "y" : "ies"} into the knowledge graph.` };
 	const ing = Number(s.metrics?.xpio_ingested || 0);
 	if (ing > 0) return { headline: `Ingested ${ing} new memor${ing === 1 ? "y" : "ies"}.` };
-	if (s.metrics?.auto_reflect_fired) return { headline: "Reflected on recent cycles and sharpened its judgement." };
+	if (s.metrics?.auto_reflect_fired) return { headline: "Reflected on recent runs and sharpened its judgement." };
 	return { headline: "Nothing new to bank — a routine run.", muted: true };
 }
 
@@ -146,7 +146,7 @@ export default function CycleCard({
 		const cached = CYCLE_CACHE.get(key);
 		if (cached) { setD(cached); setErr(null); return; }
 		setD(null); setErr(null);
-		if (!ts) { setErr("No cycle record for this run."); return; }
+		if (!ts) { setErr("No record for this run."); return; }
 		// Debounce: only fetch if the dot stays active ~250ms. Scrubbing
 		// across dots mounts/unmounts each card faster than that, so the
 		// timer is cleared on unmount and no request goes out — only a
@@ -159,7 +159,7 @@ export default function CycleCard({
 				p.finally(() => CYCLE_INFLIGHT.delete(key));
 			}
 			p.then((r) => { if (live) setD(r); })
-			 .catch((e) => { if (live) setErr(e?.message || "Couldn't load this cycle."); });
+			 .catch((e) => { if (live) setErr(e?.message || "Couldn't load this run."); });
 		}, 250);
 		return () => { live = false; window.clearTimeout(timer); };
 	}, [app, loop, ts, key]);
@@ -208,7 +208,7 @@ export default function CycleCard({
 				{err ? (
 					<div className="text-[11px] text-slate-500 italic py-1">{err}</div>
 				) : !d ? (
-					<div className="flex items-center gap-2 text-[11px] text-slate-400 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" />reading the cycle…</div>
+					<div className="flex items-center gap-2 text-[11px] text-slate-400 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" />reading the run…</div>
 				) : (
 					<>
 						{/* what happened */}
@@ -249,7 +249,7 @@ export default function CycleCard({
 								</div>
 								<div className={`text-[11px] leading-snug ${broke ? "text-rose-700" : "text-amber-700"}`}>
 									{broke
-										? (firstError(d) || "Run failed and hasn't recovered yet — open the full cycle to dig in.")
+										? (firstError(d) || "Run failed and hasn't recovered yet — open the full run to dig in.")
 										: `A transient error${firstError(d) ? ` (${firstError(d)})` : " (timeout / malformed reply)"} was caught and retried — the run completed on its own.`}
 								</div>
 							</div>
@@ -267,7 +267,7 @@ export default function CycleCard({
 				{ts && (
 					<button type="button" onClick={openFull}
 						className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-slate-500 hover:bg-slate-100 transition-colors">
-						Full cycle<ArrowRight className="w-3 h-3" />
+						Full run<ArrowRight className="w-3 h-3" />
 					</button>
 				)}
 			</div>

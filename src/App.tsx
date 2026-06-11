@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
+import { toast } from "sonner";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { AuthGuard, defaultLandingPath } from "./components/auth-guard";
 import { AdminGuard } from "./components/admin-guard";
@@ -39,6 +40,11 @@ function XpioRedirect() {
 const StudioApps         = lazy(() => import("./pages/studio/apps"));
 // App-defined UI surface (runtime-loaded markdown / native escape-hatch) at /studio/a/:app
 const AppSurface         = lazy(() => import("./components/app-surface/AppSurface"));
+// In-Studio markdown editor for an installed app's surface at /studio/a/:app/edit
+const AppSurfaceEditor   = lazy(() => import("./components/app-surface/AppSurfaceEditor"));
+// In-Studio YAML config editor for an installed app at /studio/a/:app/config
+const AppManagePanel    = lazy(() => import("./components/app-surface/AppManagePanel"));
+const AppConfigEditor    = lazy(() => import("./components/app-surface/AppConfigEditor"));
 // W1 workflow surface — replaces /studio/apps as the canonical landing
 // for "Manage" verbs. Adds /workflows list + per-workflow detail +
 // the unified /runs view + per-run drill-down.
@@ -63,6 +69,7 @@ const StudioAdmin      = lazy(() => import("./pages/studio/admin"));
 // "How Lumid works" — walkable 3-stage loop (Assemble → Adapt → Compound)
 // illustrated against the demo intents. Stages 1-2 concrete, 3 open.
 const StudioHow        = lazy(() => import("./pages/studio/how"));
+const StudioMarketplace = lazy(() => import("./pages/studio/library"));
 
 // Auto-quant operator page (/dashboard/auto-quant/*)
 const AutoQuantPage = lazy(() => import("./pages/app/auto-quant/index"));
@@ -110,32 +117,15 @@ const QuantStrategy = lazy(() => import("./pages/dashboard/quant-strategy"));
 // Backtesting absorbed into Strategy as a "Results" sub-tab; Ranking
 // reachable via Competition deep-link only.
 const QuantTemplate = lazy(() => import("./pages/dashboard/quant-template"));
-const QuantResearch = lazy(() => import("./pages/dashboard/quant-research"));
 const QuantMarketData = lazy(() => import("./pages/dashboard/quant-market-data"));
 // Datasets pages are now the Data Exploration apps — the dashboard routes
 // redirect into /studio/a/lumid-data-*, and the components load via the
 // app-surface native-registry (not these lazy consts). Removed as dead code.
-// Quant competition leaf components — Competitions shell wraps the
-// list-views (Browse + My strategies) with a sub-tab strip. Pathways
-// and detail pages render directly. 2026-05-03 consolidation.
-const Competitions = lazy(() =>
-  import("./pages/dashboard/quant-competition").then((m) => ({ default: m.QuantCompetitions }))
-);
-const CompetitionLobby = lazy(() =>
-  import("./pages/dashboard/quant-competition").then((m) => ({ default: m.QuantCompetitionLobby }))
-);
-const CompetitionMyStrategies = lazy(() =>
-  import("./pages/dashboard/quant-competition").then((m) => ({ default: m.QuantCompetitionMyStrategies }))
-);
-const CompetitionPathways = lazy(() =>
-  import("./pages/dashboard/quant-competition").then((m) => ({ default: m.QuantCompetitionPathways }))
-);
-const QuantCompetitionDetail = lazy(() =>
-  import("./pages/dashboard/quant-competition").then((m) => ({ default: m.QuantCompetitionDetailPage }))
-);
-const QuantCompetitionStrategyDetail = lazy(() =>
-  import("./pages/dashboard/quant-competition").then((m) => ({ default: m.QuantCompetitionStrategyDetailPage }))
-);
+// Quant competition leaf components retired 2026-06-09 — the lumid-market
+// competition section is now PURE config surfaces (AppSurface + ui/*.md).
+// The QuantCompetitions/Detail/StrategyDetail/Research pages were removed as
+// route mounts; their irreducibly-interactive parts survive as lumid:native
+// embeds (quantarena/surface-embeds.tsx → native-registry.ts).
 // RunmeshUsers removed 2026-04-24 — canonical user admin now at
 // /app/admin/users (backed by lumid_identity.users). sys_user stays as
 // a lazy mirror for FK integrity but is no longer separately editable.
@@ -179,9 +169,9 @@ const AppN8n = lazy(() => import("./pages/app/n8n"));
 // component from /pages/account/profile.tsx.
 const AppSchedules = lazy(() => import("./pages/app/schedules"));
 const AppApiDocs = lazy(() => import("./pages/app/api-docs"));
-const AppGpuRentals = lazy(() => import("./pages/app/gpu-rentals"));
-const AppGpuRentalsNew = lazy(() => import("./pages/app/gpu-rentals-new"));
-const AppGpuRentalDetail = lazy(() => import("./pages/app/gpu-rental-detail"));
+// lumid-gpu-rentals is now PURE config surfaces (AppSurface + ui/*.md). The
+// list/wizard route mounts were retired; the rental detail (terminal/SSH/logs/
+// billing) survives as a lumid:native embed loaded via native-registry.ts.
 // Lumilake-origin pages (grouped under /app/lumilake/*)
 const AppLumilakeDashboard = lazy(() => import("./pages/app/lumilake/dashboard"));
 const AppLumilakeData = lazy(() => import("./pages/app/lumilake/data"));
@@ -276,6 +266,13 @@ function LegacyDashboardRedirect() {
 // moved to /dashboard/admin (e.g. /dashboard/admin/clusters/<id>); old
 // links like /app/admin/clusters/<id> need to land on the cluster detail
 // page, not the studio catch-all. Preserves path tail + query.
+// Legacy /dashboard/account/connect/google → Studio, PRESERVING the query
+// string. A bare <Navigate to="/studio/..."> would drop ?return_to=/?then=,
+// silently losing the OAuth return address (onboarding + /go both rely on it).
+function ConnectGoogleStudioRedirect() {
+  const loc = useLocation();
+  return <Navigate to={`/studio/account/connect/google${loc.search}`} replace />;
+}
 function AppAdminRedirect() {
   const { "*": tail = "" } = useParams();
   const loc = useLocation();
@@ -290,6 +287,14 @@ function CycleRedirect() {
   const { app = "", loop = "", ts = "" } = useParams();
   const cyc = ts ? `&cycle=${encodeURIComponent(ts)}` : "";
   return <Navigate to={`/studio/apps/${encodeURIComponent(app)}?selected=${encodeURIComponent(loop)}${cyc}`} replace />;
+}
+
+// Redirect dashboard quant/* routes to their Studio equivalents.
+// Pattern may contain :paramName tokens that are replaced with matched params.
+function ParamRedirect({ pattern }: { pattern: string }) {
+  const params = useParams();
+  const to = pattern.replace(/:(\w+)/g, (_, k) => params[k] ?? "");
+  return <Navigate to={to} replace />;
 }
 
 function Spinner() {
@@ -323,7 +328,47 @@ function RootEntry() {
   return <RoleHome />;
 }
 
+// Deploy watcher — a long-lived SPA tab never refetches index.html, so after a
+// UI push the user keeps running the old bundle (and clicking through "fixed"
+// bugs). Poll the shell's ETag (no-cache on index.html makes this exact) every
+// few minutes + on tab focus; when it changes, prompt one reload. Also reload
+// automatically when a lazy route chunk 404s (its hashed file was replaced by
+// the deploy) — Vite signals that via the `vite:preloadError` event.
+function useDeployWatch() {
+  useEffect(() => {
+    let etag: string | null = null;
+    let prompted = false;
+    const check = async () => {
+      try {
+        const r = await fetch("/studio/", { method: "HEAD", cache: "no-store" });
+        const e = r.headers.get("etag");
+        if (!e) return;
+        if (etag === null) { etag = e; return; }
+        if (e !== etag && !prompted) {
+          prompted = true;
+          toast.info("A new version of Lumid is available.", {
+            duration: Infinity,
+            action: { label: "Reload", onClick: () => window.location.reload() },
+          });
+        }
+      } catch { /* offline / transient — ignore */ }
+    };
+    check();
+    const id = setInterval(check, 5 * 60_000);
+    const onVis = () => { if (!document.hidden) check(); };
+    document.addEventListener("visibilitychange", onVis);
+    const onPreloadError = (e: Event) => { e.preventDefault(); window.location.reload(); };
+    window.addEventListener("vite:preloadError", onPreloadError);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("vite:preloadError", onPreloadError);
+    };
+  }, []);
+}
+
 export default function App() {
+  useDeployWatch();
   return (
     <AuthProvider>
       <Suspense fallback={<Spinner />}>
@@ -412,8 +457,47 @@ export default function App() {
             {/* T13 — per-intent detail panel; dispatched by intent.body.kind. */}
             <Route path="intents/:intentId"             element={<StudioIntentDetail />} />
             <Route path="inbox"                        element={<StudioInbox />} />
+            {/* lumid-market competition section — now PURE config surfaces.
+                Each route mounts AppSurface with an explicit named surface
+                (declared in the bundle's xpcloud.yaml ui.surfaces); the page
+                content, links, and clickables are generated from ui/*.md.
+                URL params (competitionId, strategyId) are injected into the
+                directive sources. Static segments beat :competitionId, which
+                beats the generic :app/:surface below. The few irreducibly
+                interactive widgets (sortable leaderboard, live feed, AI wizard,
+                strategy inspector) are lumid:native embeds inside those .md
+                files — see quantarena/surface-embeds.tsx. */}
+            <Route path="a/lumid-market/competition"          element={<AppSurface app="lumid-market" surface="lobby" />} />
+            <Route path="a/lumid-market/competition/lobby"    element={<AppSurface app="lumid-market" surface="lobby" />} />
+            <Route path="a/lumid-market/competition/my"       element={<AppSurface app="lumid-market" surface="my-strategies" />} />
+            <Route path="a/lumid-market/competition/pathways" element={<AppSurface app="lumid-market" surface="pathways" />} />
+            <Route path="a/lumid-market/competition/:competitionId"                        element={<AppSurface app="lumid-market" surface="competition-detail" />} />
+            <Route path="a/lumid-market/competition/:competitionId/strategy/:strategyId"   element={<AppSurface app="lumid-market" surface="strategy-detail" />} />
+            <Route path="a/lumid-market/strategy/research/:strategyId"                     element={<AppSurface app="lumid-market" surface="research" />} />
+            {/* lumid-gpu-rentals — PURE config surfaces (same pattern as
+                lumid-market). home = pricing + your rentals (config);
+                new = create form (config); detail = the irreducibly-interactive
+                terminal/SSH/logs/billing as a lumid:native escape-hatch. The
+                :id param is the FlowMesh task_id, injected into the detail
+                embed. Static /new beats :id beats the generic :app/:surface. */}
+            <Route path="a/lumid-gpu-rentals"     element={<AppSurface app="lumid-gpu-rentals" surface="home" />} />
+            <Route path="a/lumid-gpu-rentals/new" element={<AppSurface app="lumid-gpu-rentals" surface="new" />} />
+            <Route path="a/lumid-gpu-rentals/:id" element={<AppSurface app="lumid-gpu-rentals" surface="detail" />} />
+            {/* lumid-data-findata per-symbol drill-down: a row in Movers/Earnings/
+                IPOs links here; {symbol} is injected into the detail surface
+                (ohlc price chart + fundamentals + news). Beats the generic route. */}
+            <Route path="a/lumid-data-findata/symbol/:symbol" element={<AppSurface app="lumid-data-findata" surface="symbol" />} />
             {/* App-defined UI surface — apps declare ui.surface in xpcloud.yaml;
                 served as runtime markdown (or a first-party native key). */}
+            {/* Editor/config routes must come before the generic :surface param
+                route so React Router v7's static-segment scoring resolves correctly. */}
+            <Route path="a/:app/edit"                   element={<AppSurfaceEditor />} />
+            <Route path="a/:app/edit/:surface"          element={<AppSurfaceEditor />} />
+            <Route path="a/:app/config"                 element={<AppConfigEditor />} />
+            {/* App management — rename (card/sidebar label), workflows
+                (create/run/remove loops), skill imports. Static segment
+                beats the generic :surface below. */}
+            <Route path="a/:app/manage"                 element={<AppManagePanel />} />
             <Route path="a/:app"                        element={<AppSurface />} />
             <Route path="a/:app/:surface"               element={<AppSurface />} />
             {/* Account surfaces folded into the one Studio shell. The old
@@ -433,8 +517,12 @@ export default function App() {
                 The StudioApps editor still mounts under /apps/:app to handle
                 per-app YAML edits until the dedicated workflow editor ships. */}
             {/* Library page removed → the marketplace lives on xp.io. */}
-            <Route path="library"                      element={<XpioRedirect />} />
-            <Route path="marketplace"                  element={<XpioRedirect />} />
+            {/* In-Studio marketplace — browse + install xpio apps/skills/datasets
+                (MarketplaceBrowse). Was redirecting out to xp.io, leaving no
+                in-app install affordance; now mounts the page so install works
+                from the dashboard. */}
+            <Route path="library"                      element={<StudioMarketplace />} />
+            <Route path="marketplace"                  element={<StudioMarketplace />} />
             <Route path="skills"                       element={<XpioRedirect />} />
             {/* Knowledge is now the "you, encoded" ledger; the per-agent
                 bank browser keeps its deep-link at /knowledge/:agent. */}
@@ -585,7 +673,7 @@ export default function App() {
             {/* Account folded into Studio — old /dashboard paths redirect. */}
             <Route path="profile" element={<Navigate to="/studio/account/profile" replace />} />
             <Route path="tokens" element={<Navigate to="/studio/account/tokens" replace />} />
-            <Route path="account/connect/google" element={<Navigate to="/studio/account/connect/google" replace />} />
+            <Route path="account/connect/google" element={<ConnectGoogleStudioRedirect />} />
             <Route path="account/connect/power-automate" element={<ConnectPowerAutomate />} />
             <Route path="account/connect/microsoft" element={<ConnectMicrosoft />} />
             <Route path="billing" element={<AppBilling />} />
@@ -600,9 +688,11 @@ export default function App() {
             <Route path="memory/new" element={<MemoryNew />} />
 
             <Route path="api-docs" element={<AppApiDocs />} />
-            <Route path="gpu-rentals" element={<AppGpuRentals />} />
-            <Route path="gpu-rentals/new" element={<AppGpuRentalsNew />} />
-            <Route path="gpu-rentals/:id" element={<AppGpuRentalDetail />} />
+            {/* Legacy /dashboard/gpu-rentals/* → consolidated into the Studio
+                config surfaces (one entrance, mirrors the quant teardown). */}
+            <Route path="gpu-rentals" element={<Navigate to="/studio/a/lumid-gpu-rentals" replace />} />
+            <Route path="gpu-rentals/new" element={<Navigate to="/studio/a/lumid-gpu-rentals/new" replace />} />
+            <Route path="gpu-rentals/:id" element={<ParamRedirect pattern="/studio/a/lumid-gpu-rentals/:id" />} />
 
             {/* Lumid Market migration — all authed lumid.market pages
                 now live under /dashboard/quant/*. lumid.market itself
@@ -610,43 +700,27 @@ export default function App() {
                 ranking; everything else (strategy, backtesting,
                 competition, etc.) was ported into lumid_ui on
                 2026-04-30. */}
-            <Route path="quant" element={<QuantLayout />}>
-              {/* LQA shell — single sidebar at QuantLayout level (left
-                  rail with Browse / My strategies / dynamic My contests /
-                  Strategy / Data sources / Pathways). The horizontal
-                  tab strip + the inner CompetitionShell sidebar were
-                  collapsed into one navigation surface on 2026-05-03 —
-                  three layers down to two. URLs unchanged. */}
-              <Route index element={<Navigate to="/dashboard/quant/competition/lobby" replace />} />
-              {/* Competitions shell: Browse + My strategies share a sub-tab strip.
-                  Index redirect handles bare /competition. Pathways and per-id
-                  detail render directly (no list-view tabs). */}
-              <Route path="competition" element={<Competitions />}>
-                <Route index element={<Navigate to="lobby" replace />} />
-                <Route path="lobby" element={<CompetitionLobby />} />
-                <Route path="my" element={<CompetitionMyStrategies />} />
-                <Route path="pathways" element={<CompetitionPathways />} />
+            {/* All /dashboard/quant/* routes redirect to Studio equivalents.
+                The QuantLayout shell is no longer rendered here — Studio is
+                the canonical shell for all lumid-market pages. */}
+            <Route path="quant">
+              <Route index element={<Navigate to="/studio/a/lumid-market/competition/lobby" replace />} />
+              <Route path="competition">
+                <Route index element={<Navigate to="/studio/a/lumid-market/competition/lobby" replace />} />
+                <Route path="lobby" element={<Navigate to="/studio/a/lumid-market/competition/lobby" replace />} />
+                <Route path="my" element={<Navigate to="/studio/a/lumid-market/competition/my" replace />} />
+                <Route path="pathways" element={<Navigate to="/studio/a/lumid-market/competition/pathways" replace />} />
               </Route>
-              <Route path="competition/:competitionId" element={<QuantCompetitionDetail />} />
-              <Route
-                path="competition/:competitionId/strategy/:strategyId"
-                element={<QuantCompetitionStrategyDetail />}
-              />
-              <Route path="strategy" element={<QuantStrategy />} />
-              {/* Tab consolidation 2026-05-03 — Backtesting moved into Strategy as the
-                  "Results" sub-tab; Ranking demoted (deep-link via Competition); Template
-                  demoted (deep-link only). Routes preserved as redirects so old
-                  bookmarks keep working. */}
-              <Route path="backtesting" element={<Navigate to="/dashboard/quant/strategy?tab=results" replace />} />
-              <Route path="ranking" element={<Navigate to="/dashboard/quant/competition" replace />} />
-              <Route path="template" element={<QuantTemplate />} />
-              {/* Datasource folded into Backtest as a 3rd sub-tab on
-                  2026-05-03 — data sources are backtest fuel.
-                  Standalone route redirects so old links work. */}
-              <Route path="datasource" element={<Navigate to="/dashboard/quant/strategy?tab=data-sources" replace />} />
-              <Route path="market-data" element={<QuantMarketData />} />
+              <Route path="competition/:competitionId" element={<ParamRedirect pattern="/studio/a/lumid-market/competition/:competitionId" />} />
+              <Route path="competition/:competitionId/strategy/:strategyId" element={<ParamRedirect pattern="/studio/a/lumid-market/competition/:competitionId/strategy/:strategyId" />} />
+              <Route path="strategy" element={<Navigate to="/studio/a/lumid-market/competition/my" replace />} />
+              <Route path="backtesting" element={<Navigate to="/studio/a/lumid-market/competition/my" replace />} />
+              <Route path="ranking" element={<Navigate to="/studio/a/lumid-market/competition/lobby" replace />} />
+              <Route path="template" element={<Navigate to="/studio/a/lumid-market/competition/lobby" replace />} />
+              <Route path="datasource" element={<Navigate to="/studio/a/lumid-market/competition/my" replace />} />
+              <Route path="market-data" element={<Navigate to="/studio/a/lumid-market/competition/lobby" replace />} />
               <Route path="flowmesh-jobs" element={<Navigate to="/dashboard/jobs?source=quant" replace />} />
-              <Route path="research/:strategyId" element={<QuantResearch />} />
+              <Route path="research/:strategyId" element={<ParamRedirect pattern="/studio/a/lumid-market/strategy/research/:strategyId" />} />
             </Route>
 
             {/* Datasets — FinData embed (Tier E of lumid.data prereq plan).

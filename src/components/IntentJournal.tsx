@@ -67,7 +67,7 @@ export function IntentJournal({ intents }: Props) {
 	const openNewIntentChat = () =>
 		window.dispatchEvent(new CustomEvent('studio:ask', {
 			detail: {
-				prompt: 'I want to set up a new intent. Walk me through what you want your AI to handle and what "done" looks like.',
+				prompt: 'I want to set up a new app. Ask me what it should do for me, then assemble it step by step.',
 				autosend: true,
 			},
 		}));
@@ -78,13 +78,13 @@ export function IntentJournal({ intents }: Props) {
 			<div className="flex items-end justify-between gap-3">
 				<div>
 					<div className="flex items-baseline gap-2.5">
-						<h1 className="text-[22px] font-semibold tracking-tight text-slate-900">Intents</h1>
+						<h1 className="text-[22px] font-semibold tracking-tight text-slate-900">Apps</h1>
 						<span className="text-[12px] text-slate-500 tabular-nums">
 							{intents.length} active
 						</span>
 					</div>
 					<p className="text-[13px] text-slate-500 mt-0.5">
-						Standing goals your AI is pursuing. Click a card to track its progress or manage it.
+						Apps working toward your standing goals. Click a card to track its progress or manage it.
 					</p>
 				</div>
 				<button
@@ -92,7 +92,7 @@ export function IntentJournal({ intents }: Props) {
 					className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 active:scale-[0.98] transition-all shadow-sm shadow-emerald-100"
 				>
 					<Plus className="w-3.5 h-3.5" />
-					New intent
+					New app
 				</button>
 			</div>
 
@@ -214,7 +214,7 @@ function IntentCard({
 						<IconQuickAction
 							icon={RotateCw}
 							label="Run now"
-							onClick={() => toast.success('Queued — running this cycle now.')}
+							onClick={() => toast.success('Queued — running now.')}
 						/>
 					</div>
 				</div>
@@ -459,7 +459,7 @@ function DraftEntry({ decision }: { decision: DemoDecision & { status: DecisionS
 			await rejectWithReason(decision.id, r);
 			setStatus('rejected');
 			setRejecting(false);
-			toast.success('Got it. Added to your Rules — next cycle will reflect this.');
+			toast.success('Got it. Added to your Rules — the next run will reflect this.');
 		} catch { toast.error('Could not record the rejection — try again.'); }
 		finally { setBusy(false); }
 	};
@@ -557,16 +557,16 @@ function EmptyDashboard({ onCompose }: { onCompose: () => void }) {
 	return (
 		<div className="rounded-xl border border-dashed border-slate-200 bg-white px-6 py-12 text-center">
 			<Sparkles className="w-6 h-6 text-emerald-500 mx-auto mb-3" />
-			<div className="text-[15px] font-medium text-slate-900">No intents yet.</div>
+			<div className="text-[15px] font-medium text-slate-900">No apps yet.</div>
 			<p className="text-[13px] text-slate-500 mt-1 max-w-md mx-auto leading-relaxed">
-				An intent is a standing goal you hand to your AI — an inbox to triage, a research thread to track, a metric to chase. Describe one and we&rsquo;ll wire it up.
+				An app does work for you toward a standing goal — an inbox to triage, a research thread to track, a metric to chase. Describe one and we&rsquo;ll wire it up.
 			</p>
 			<button
 				onClick={onCompose}
 				className="mt-4 inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-colors"
 			>
 				<Plus className="w-3.5 h-3.5" />
-				Describe your first intent
+				Describe your first app
 			</button>
 		</div>
 	);

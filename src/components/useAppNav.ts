@@ -6,7 +6,7 @@
 import { useEffect, useState } from "react";
 import {
   Boxes, Database, LineChart, BarChart3, Newspaper, TrendingUp, Globe,
-  Activity, Coins, Users, CandlestickChart, MessagesSquare, Brain,
+  Activity, Coins, Users, CandlestickChart, MessagesSquare, Brain, Cpu,
   type LucideIcon,
 } from "lucide-react";
 import { me, type MeAppCard } from "@/api/me";
@@ -30,6 +30,7 @@ const ICONS: Record<string, LucideIcon> = {
   "chart-candlestick": CandlestickChart,
   "messages-square": MessagesSquare,
   "brain": Brain,
+  "cpu": Cpu,
 };
 
 export function iconFor(name?: string): LucideIcon {
@@ -71,7 +72,9 @@ export function useAppNav(): AppNavSection[] {
   const bySection = new Map<string, AppNavItem[]>();
   for (const a of apps) {
     const sb = a.ui?.sidebar;
-    if (!sb?.label || seen.has(a.name)) continue; // tenant walked first → wins over operator-shared dup
+    // Explicit on/off: show when `show` is omitted (back-compat) or true;
+    // skip when the app set `show: false` (keeps its label/icon config).
+    if (!sb?.label || sb.show === false || seen.has(a.name)) continue; // tenant walked first → wins over operator-shared dup
     seen.add(a.name);
     const section = sb.section || "Apps";
     if (!bySection.has(section)) bySection.set(section, []);

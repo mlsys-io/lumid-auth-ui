@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../../../components/ui/avat
 import { Eye, ArrowDownUp, ChartBarDecreasing, MoveDown, MoveUp, RotateCcw } from 'lucide-react';
 import { formatPercentage, getUserInitials, formatCurrency, cn } from '../../../lib/utils';
 import { Loading } from '../../../components/ui/loading';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../components/ui/tooltip';
 import { useAuth } from '../../../hooks/useAuth';
 import { Button } from '../../../components/ui/button';
@@ -51,8 +51,12 @@ const LeaderboardUser = ({
 	status?: 'Upcoming' | 'Ongoing' | 'Completed';
 }) => {
 	const navigate = useNavigate();
+	const location = useLocation();
 	const { user } = useAuth();
 	const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+	const competitionBase = location.pathname.startsWith('/studio/')
+		? `/studio/a/lumid-market/competition`
+		: `/dashboard/quant/competition`;
 
 	const [leaderboard, setLeaderboard] = useState<MyStrategyInfo[]>([]);
 	const [loading, setLoading] = useState(false);
@@ -292,7 +296,7 @@ const LeaderboardUser = ({
 								key={item.id}
 								className="hover:bg-muted/50 cursor-pointer"
 								onClick={() =>
-									navigate(`/dashboard/quant/competition/${competitionId}/strategy/${item.simulation_strategy_id}`)
+									navigate(`${competitionBase}/${competitionId}/strategy/${item.simulation_strategy_id}`)
 								}
 							>
 								<TableCell className="text-center">
@@ -399,7 +403,7 @@ const LeaderboardUser = ({
 													className="w-4 h-4 text-indigo-500 cursor-pointer ml-2"
 													onClick={() =>
 														navigate(
-															`/competition/${competitionId}/strategyDetail/${item.simulation_strategy_id}`
+															`${competitionBase}/${competitionId}/strategy/${item.simulation_strategy_id}`
 														)
 													}
 												/>

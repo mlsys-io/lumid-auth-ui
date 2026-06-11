@@ -9,7 +9,7 @@ import { Calendar, Currency, Percent, TrendingUp, Users, CircleQuestionMark } fr
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover';
 import { useIsMobile } from '../../components/ui/use-mobile';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 interface CompetitionCardProps {
 	competition: CompetitionInfo;
@@ -43,12 +43,16 @@ export const getStatusBadgeVariant = (status: CompetitionInfo['status']) => {
 };
 const CompetitionCard: React.FC<CompetitionCardProps> = ({ competition, onRegister }) => {
 	const navigate = useNavigate();
+	const location = useLocation();
 	const isMobile = useIsMobile();
 	const [namePopoverOpen, setNamePopoverOpen] = useState(false);
 	const [symbolsPopoverOpen, setSymbolsPopoverOpen] = useState(false);
 
 	const handleViewDetails = (competition: CompetitionInfo) => {
-		navigate(`/dashboard/quant/competition/${competition.id}`);
+		const base = location.pathname.startsWith('/studio/')
+			? '/studio/a/lumid-market/competition'
+			: '/dashboard/quant/competition';
+		navigate(`${base}/${competition.id}`);
 	};
 
 	return (

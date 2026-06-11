@@ -29,10 +29,13 @@ export default function StudioHow() {
 			<header>
 				<h1 className="text-xl font-medium text-slate-900 tracking-tight">How Lumid works</h1>
 				<p className="text-sm text-slate-600 mt-1 leading-relaxed max-w-2xl">
-					Every intent runs the same loop. You say what you want; Lumid <strong>assembles</strong> a
-					workflow, then <strong>adapts &amp; improves</strong> it to you — getting more valuable every cycle.
+					Every app runs the same loop: you say what you want; Lumid <strong>assembles</strong> it,
+					then <strong>adapts &amp; improves</strong> it — more valuable every run.
 				</p>
 			</header>
+
+			{/* Glossary — the four words Studio uses everywhere */}
+			<GlossaryStrip />
 
 			{/* Flywheel — the stages */}
 			<Flywheel />
@@ -56,15 +59,15 @@ export default function StudioHow() {
 				))}
 			</div>
 
-			{/* The intent being walked */}
+			{/* The goal being walked */}
 			<div className="rounded-2xl border border-slate-200/70 bg-gradient-to-br from-slate-50 via-white to-slate-50 p-4">
-				<div className="text-[11px] text-slate-400 mb-0.5">the intent</div>
+				<div className="text-[11px] text-slate-400 mb-0.5">the goal</div>
 				<div className="text-[15px] text-slate-900 font-medium leading-snug">“{intent.title}”</div>
 			</div>
 
 			{/* Stage 1 — Assemble */}
 			<StagePanel n={1} label="Assemble" tone="emerald" icon={Boxes}
-				caption="Given your intent, Lumid assembles a workflow — pulling proven pieces from your workspace and generating the rest with AI.">
+				caption="Given your goal, Lumid assembles your app — pulling proven pieces from your workspace and generating the rest with AI.">
 				<AssembleBody assembly={intent.assembly!} />
 			</StagePanel>
 
@@ -72,9 +75,31 @@ export default function StudioHow() {
 
 			{/* Stage 2 — Adapt */}
 			<StagePanel n={2} label="Adapt & improve" tone="sky" icon={Sparkles}
-				caption="Then it adapts to you — autoresearching and aligning to your specific intent so it gets more valuable every cycle.">
+				caption="Then it adapts to you — autoresearching and aligning to your specific goal so it gets more valuable every run.">
 				<AdaptBody intent={intent} />
 			</StagePanel>
+		</div>
+	);
+}
+
+// ── Glossary strip — one row of definition chips ───────────────────
+
+const GLOSSARY: Array<[term: string, def: string]> = [
+	['App', 'what you install or create; it has a page and does work for you'],
+	['Workflow', 'a scheduled job inside an app'],
+	['Run', 'one execution of a workflow'],
+	['Skill', 'a capability apps use (email, market data, …)'],
+];
+
+function GlossaryStrip() {
+	return (
+		<div className="flex flex-wrap gap-2">
+			{GLOSSARY.map(([term, def]) => (
+				<div key={term} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12px] leading-snug">
+					<span className="font-medium text-slate-900">{term}</span>
+					<span className="text-slate-500"> — {def}</span>
+				</div>
+			))}
 		</div>
 	);
 }
@@ -235,6 +260,9 @@ function AdaptBody({ intent }: { intent: DemoIntent }) {
 			)}
 
 			{/* What it learned — narrative bullets tagged by axis */}
+			<div className="text-[11px] text-slate-400 leading-snug">
+				Each improvement is tagged by what it tuned — its axis:
+			</div>
 			<ul className="space-y-1.5">
 				{narrative.map((b, i) => {
 					const meta = AXIS_META[b.axis];
@@ -386,7 +414,7 @@ function illustrativeOffers(intent: DemoIntent): CompoundOffer[] {
 			id: `${intent.id}-default`,
 			kind: 'knowledge',
 			title: 'Recall what worked at this kind of spot',
-			detail: 'As cycles accumulate, proven knowledge, skills, and workflows surface here at the moment they apply.',
+			detail: 'As runs accumulate, proven knowledge, skills, and workflows surface here at the moment they apply.',
 		});
 	}
 	return out;

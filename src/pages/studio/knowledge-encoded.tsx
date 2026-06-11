@@ -157,10 +157,10 @@ export default function StudioKnowledgeEncoded() {
 
 			{/* Recently learned — real */}
 			<section>
-				<div className="text-[11px] tracking-[0.06em] text-slate-400 mb-2">Recently learned — captured from real cycles</div>
+				<div className="text-[11px] tracking-[0.06em] text-slate-400 mb-2">Recently learned — captured from real runs</div>
 				{recent.length === 0 ? (
 					<div className="text-sm text-slate-500 italic">
-						Nothing learned yet — memories land here as your loops run.
+						Nothing learned yet — memories land here as your workflows run.
 					</div>
 				) : (
 					<ul className="space-y-2">

@@ -23,7 +23,10 @@ interface AuthContextType {
   isAuthenticated: boolean;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+// Exported so non-page consumers (e.g. app-surface directives, which may also
+// render on public docs pages OUTSIDE an AuthProvider) can read auth state
+// DEFENSIVELY via useContext without useAuth()'s throw-when-absent contract.
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserInfo | null>(null);
@@ -73,9 +76,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // cookie. Chat history (in sessionStorage) is the load-bearing
       // case: previously, signing out + signing in as someone else on
       // the same tab leaked the prior user's conversation. Belt-and-
-      // suspenders alongside the user_sub-tagged guard in chat-widget.
+      // suspenders alongside the user_sub-tagged guards in chat-widget
+      // and StudioChat.
       try {
         sessionStorage.removeItem("lumid:chat:v1");
+        // StudioChat sidebar — conversation + the per-conversation
+        // identifiers that bind it to a user (transcript, active chat id,
+        // grounding agent, persona). UI prefs (model/mode/think/width/
+        // collapse) are not conversation content, so they can persist.
+        sessionStorage.removeItem("studio_chat_transcript_v1");
+        localStorage.removeItem("studio_chat_active_id_v1");
+        localStorage.removeItem("studio_chat_agent_v1");
+        localStorage.removeItem("studio_chat_persona_v1");
       } catch { /* private mode / quota */ }
     }
   };
