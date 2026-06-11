@@ -54,6 +54,7 @@ export const NATIVE_SURFACES: Record<string, ComponentType<NativeSurfaceProps>> 
   // inspector) embedded as a tab of its configured UI. App comes from the
   // route — any loop-bearing app can declare a `workflows` surface with this.
   "app-workflows": lazy(() => import("./AppWorkflowsSurface")),
+  "app-experiments": lazy(() => import("./AppExperimentsSurface")),
 };
 
 export function resolveNativeSurface(key?: string): ComponentType<NativeSurfaceProps> | undefined {

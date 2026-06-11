@@ -66,7 +66,7 @@ The five-stage decomposition is logical, not enforced by the runner. Pattern A a
 
 Every kind=app bundle MUST have an `xpcloud.yaml` at the bundle root. `app_runner.load_manifest()` reads this file as the runtime source of truth (`app_runner.py:78-85`). `manifest.json` mirrors metadata for static indexing but is NOT read at runtime.
 
-Install-time precedence (2026-06-11): when BOTH files declare a unified field (`skill_imports`, `loops`, `datasets`, `roles`, `benchmarks`, `human_inbox`, `approval_policy`) **or `version`**, `xpcloud.yaml` wins — a stale legacy `manifest.json`/`manifest.yaml` can no longer redirect skill imports or misreport the installed version. Keep both files in sync anyway (`app_push` bumps both); the mirror exists for static indexers only.
+Install-time precedence (2026-06-11): when BOTH files declare a unified field (`skill_imports`, `loops`, `datasets`, `roles`, `benchmarks`, `human_inbox`, `approval_policy`, `experiments`) **or `version`**, `xpcloud.yaml` wins — a stale legacy `manifest.json`/`manifest.yaml` can no longer redirect skill imports or misreport the installed version. Keep both files in sync anyway (`app_push` bumps both); the mirror exists for static indexers only.
 
 List-field tolerance: `skills_invoked[]` and `datasets[]` entries may be bare strings **or** objects (`{skill:|name:|id:, …}`). Consumers must accept both — the reference Go reader (`lumid_identity` `flexStrings`) coerces objects to their `skill`/`name`/`id` field. A strict string-list reader hides the whole loop from the UI while the scheduler happily runs it.
 
@@ -139,6 +139,68 @@ benchmarks:
     score_formula: "accuracy - 0.05 * (cost_per_query_usd / 0.001)"
     # score_formula is a Python expression evaluated with the metrics as locals.
     # Used by the optimizer to rank variants by a single composite number.
+
+# Experiments (optional) — a hypothesis tested by rolling out VARIANTS over a
+# dataset/casebook, measured by a METRIC, attached to a workflow step.
+# The yaml block is a minimal declaration; the RUNTIME LEDGER is the real
+# contract (see below). Three kinds:
+#   regression — current vs previous over a casebook (mbb-ai, the flagship)
+#   explore    — open variant space driven by a proposer (auto-sysresearch)
+#   arms       — fixed comparison, e.g. 4 model arms on one market (auto-quant)
+experiments:
+  - id: casebook_regression            # unique slug within the app
+    hypothesis: "Prompt and skill changes do not regress per-case scores."
+    kind: regression                   # regression | explore | arms
+    dataset_id: casebook_v1            # reuses datasets[] (the casebook)
+    metric: {name: avg_question_score, higher_is_better: true}
+    #   …or reuse a benchmark's primary metric instead of a bare metric:
+    #   benchmark_id: nlsql_bench_v1
+    baseline: previous                 # "previous" | {arm: <id>} | {value: <float>}
+    success_criteria: "delta >= 0 and n >= 3"   # safe expr over aggregates:
+    #   n, best_mean, baseline_mean/baseline_value, delta, delta_pp,
+    #   best_n, baseline_n, mean_<variant_id>. Whitelisted AST only
+    #   (bool/compare/arith); any failure → criteria not met, never an error.
+    min_samples: 3                     # criteria never evaluated below this n
+    status: active                     # active | concluded | archived
+  # explore shape (auto-sysresearch):
+  # - id: nlsql_variant_search
+  #   kind: explore
+  #   variants: {schema: config.variant_schema}
+  #   dataset_id: nlsql_queries
+  #   benchmark_id: nlsql_bench_v1
+  #   baseline: {value: 0.62}
+  # arms shape (auto-quant AI Minds):
+  # - id: ai_minds
+  #   kind: arms
+  #   arms: [{id: gpt_baseline_crypto, label: "GPT baseline",
+  #           match: {strategy_name: "GPT Baseline (crypto)"}}, …]
+  #   metric: {name: return_rate, higher_is_better: true}
+  #   baseline: {arm: gpt_baseline_crypto}
+
+# ATTACHMENT: a loop produces results for an experiment via
+#   steps[].experiment: <id>      (Pattern A — per step)
+#   engine.experiment: <id>       (Pattern B — per verb)
+#
+# RUNTIME LEDGER (the real contract; runtime state, NEVER published):
+#   data/experiments/<id>/results.jsonl — append-only rows:
+#     {ts, cycle_ts, variant_id, variant?, metrics{}, dims?, dataset_version?, n?}
+#     `dims` ({case_id, q_id, …}) powers casebook observability: rows with
+#     dims.case_id group into per-case score histories in Studio.
+#   data/experiments/<id>/state.json — recomputed per cycle by the runner
+#     (sdk/apps/experiments.py::evaluate): per-variant {n, mean, stdev, last},
+#     best_variant, baseline_value, delta/delta_pp, criteria_met, verdict.
+#   Apps record rows via sdk.apps.experiments.record_result(...) — fail-soft,
+#   a ledger problem must never fail a benchmark/regression run.
+#
+# PROMOTION is observe-only: when success_criteria flips true the runner
+# appends ONE offer {kind: "experiment", …} to the cycle's offers (the
+# Suggested-improvements pipe) and stamps verdict_offered_at — no duplicates,
+# nothing auto-applies; a human approves.
+#
+# Per-variant means also stream to xpcloud as metric points
+# (POST /repos/{owner}/{app}/metrics/submit with loop="exp:<id>",
+# metric_name="<metric>.<variant_id>") so the PUBLIC repo card can chart
+# experiment arms. Owner-authed: tenant installs keep their ledger local.
 
 # Privacy contract — explicit allowlist; unlisted agents stay LOCAL
 auto_publish:

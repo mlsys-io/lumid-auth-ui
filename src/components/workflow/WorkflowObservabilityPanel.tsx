@@ -16,7 +16,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
 	Activity, Play, Pause, Loader2, Save, Lightbulb, Clock, AlertCircle, Target,
-	ChevronLeft, ChevronRight, Trash2,
+	ChevronLeft, ChevronRight, Trash2, FlaskConical,
 } from "lucide-react";
 import { toast } from "sonner";
 import apiClient from "@/api/client";
@@ -245,8 +245,15 @@ export default function WorkflowObservabilityPanel({
 							{running ? "Running…" : h.label}
 						</span>
 					</div>
-					<div className="text-[11px] text-slate-400 mt-0.5">
-						{describeSchedule(wf.trigger)}{lastRan ? ` · ${lastRan}` : ""}
+					<div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+						<span>{describeSchedule(wf.trigger)}{lastRan ? ` · ${lastRan}` : ""}</span>
+						{(wf.experiment_ids || []).map((eid) => (
+							<Link key={eid} to={`/studio/a/${encodeURIComponent(app)}/experiments`}
+								title={`feeds experiment ${eid}`}
+								className="inline-flex items-center gap-1 px-1.5 py-px rounded-full border border-violet-200 bg-violet-50 text-violet-700 text-[10px] hover:bg-violet-100 transition-colors">
+								<FlaskConical className="w-2.5 h-2.5" />{eid.replace(/_/g, " ")}
+							</Link>
+						))}
 					</div>
 				</div>
 				<div className="flex items-center gap-2 flex-shrink-0">

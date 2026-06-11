@@ -18,7 +18,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
 	ChevronLeft, CheckCircle2, AlertCircle, ChevronDown, ChevronRight,
-	Loader2, MinusCircle, Clock, Eye, Lightbulb, Wand2, Workflow, Pencil,
+	Loader2, MinusCircle, Clock, Eye, Lightbulb, Wand2, Workflow, Pencil, FlaskConical,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import apiClient from '@/api/client';
@@ -68,7 +68,8 @@ export interface ReviewItem {
 export interface CompoundOffer {
 	id?: string;
 	trigger?: { kind: 'pattern' | 'principle'; key: string; count: number };
-	kind: 'knowledge' | 'skill' | 'workflow';
+	kind: 'knowledge' | 'skill' | 'workflow' | 'experiment';
+	experiment_id?: string;
 	title: string;
 	detail?: string;
 	action?: { type: string; spec?: unknown; schedule?: string };
@@ -469,6 +470,7 @@ const OFFER_KIND_META: Record<CompoundOffer['kind'], { label: string; icon: type
 	knowledge: { label: 'extra knowledge', icon: Lightbulb, tone: 'border-amber-200 bg-amber-50/40',    iconTone: 'bg-amber-100 text-amber-700' },
 	skill:     { label: 'a skill',         icon: Wand2,     tone: 'border-emerald-200 bg-emerald-50/40', iconTone: 'bg-emerald-100 text-emerald-700' },
 	workflow:  { label: 'a workflow',      icon: Workflow,  tone: 'border-indigo-200 bg-indigo-50/40',   iconTone: 'bg-indigo-100 text-indigo-700' },
+	experiment:{ label: 'an experiment verdict', icon: FlaskConical, tone: 'border-violet-200 bg-violet-50/40', iconTone: 'bg-violet-100 text-violet-700' },
 };
 
 export function OffersPanel({ offers }: { offers: CompoundOffer[] }) {
