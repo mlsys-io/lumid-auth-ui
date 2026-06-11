@@ -66,6 +66,10 @@ The five-stage decomposition is logical, not enforced by the runner. Pattern A a
 
 Every kind=app bundle MUST have an `xpcloud.yaml` at the bundle root. `app_runner.load_manifest()` reads this file as the runtime source of truth (`app_runner.py:78-85`). `manifest.json` mirrors metadata for static indexing but is NOT read at runtime.
 
+Install-time precedence (2026-06-11): when BOTH files declare a unified field (`skill_imports`, `loops`, `datasets`, `roles`, `benchmarks`, `human_inbox`, `approval_policy`) **or `version`**, `xpcloud.yaml` wins — a stale legacy `manifest.json`/`manifest.yaml` can no longer redirect skill imports or misreport the installed version. Keep both files in sync anyway (`app_push` bumps both); the mirror exists for static indexers only.
+
+List-field tolerance: `skills_invoked[]` and `datasets[]` entries may be bare strings **or** objects (`{skill:|name:|id:, …}`). Consumers must accept both — the reference Go reader (`lumid_identity` `flexStrings`) coerces objects to their `skill`/`name`/`id` field. A strict string-list reader hides the whole loop from the UI while the scheduler happily runs it.
+
 ```yaml
 # Identity
 name: my-agent
@@ -260,6 +264,13 @@ loops:
                                     # any cloud_runnable: false loop, so cloud-default
                                     # tenants don't silently fire local-only loops.
                                     # CLI users can flip the override back to enabled.
+                                    #
+                                    # `.user-overrides.yaml` is merged AFTER xpcloud.yaml
+                                    # at scheduler discovery (2026-06-11): per-loop
+                                    # `schedule:` replaces the declared cron and
+                                    # `enabled: false` drops the loop from registration.
+                                    # The /me/workflows API surfaces the same effective
+                                    # schedule — what the UI shows is what fires.
     skills:                         # set membership; informational
       - calendar/observe
       - email/observe
