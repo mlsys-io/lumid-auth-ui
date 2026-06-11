@@ -479,10 +479,19 @@ export default function App() {
                 new = create form (config); detail = the irreducibly-interactive
                 terminal/SSH/logs/billing as a lumid:native escape-hatch. The
                 :id param is the FlowMesh task_id, injected into the detail
-                embed. Static /new beats :id beats the generic :app/:surface. */}
-            <Route path="a/lumid-gpu-rentals"     element={<AppSurface app="lumid-gpu-rentals" surface="home" />} />
-            <Route path="a/lumid-gpu-rentals/new" element={<AppSurface app="lumid-gpu-rentals" surface="new" />} />
-            <Route path="a/lumid-gpu-rentals/:id" element={<AppSurface app="lumid-gpu-rentals" surface="detail" />} />
+                embed.
+                ROUTE-RANK TRAP (2026-06-11): `a/lumid-gpu-rentals/:id` scores
+                10+3 — it BEATS the generic `a/:app/:surface` (3+3) and TIES
+                `a/:app/manage` (3+10), so /home and /manage rendered the
+                rental-detail page with id="home"/"manage". Every reserved
+                name needs an explicit static route here (10+10 wins all),
+                and this block is declared BEFORE the editor/manage routes
+                only for the bare + static paths — :id ties resolve in favor
+                of whichever is declared FIRST, so keep `:id` LAST in the
+                whole a/* group (it lives below, after manage/config/edit). */}
+            <Route path="a/lumid-gpu-rentals"           element={<AppSurface app="lumid-gpu-rentals" surface="home" />} />
+            <Route path="a/lumid-gpu-rentals/home"      element={<AppSurface app="lumid-gpu-rentals" surface="home" />} />
+            <Route path="a/lumid-gpu-rentals/new"       element={<AppSurface app="lumid-gpu-rentals" surface="new" />} />
             {/* lumid-data-findata per-symbol drill-down: a row in Movers/Earnings/
                 IPOs links here; {symbol} is injected into the detail surface
                 (ohlc price chart + fundamentals + news). Beats the generic route. */}
@@ -498,6 +507,10 @@ export default function App() {
                 (create/run/remove loops), skill imports. Static segment
                 beats the generic :surface below. */}
             <Route path="a/:app/manage"                 element={<AppManagePanel />} />
+            {/* gpu-rentals rental detail — :id is the FlowMesh task_id. Declared
+                AFTER manage/config/edit so those static names win their rank
+                ties; still beats the generic :app/:surface for real ids. */}
+            <Route path="a/lumid-gpu-rentals/:id"       element={<AppSurface app="lumid-gpu-rentals" surface="detail" />} />
             <Route path="a/:app"                        element={<AppSurface />} />
             <Route path="a/:app/:surface"               element={<AppSurface />} />
             {/* Account surfaces folded into the one Studio shell. The old
