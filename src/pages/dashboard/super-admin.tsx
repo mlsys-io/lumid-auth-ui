@@ -142,12 +142,10 @@ export default function SuperAdminDashboard() {
 	return (
 		<div className="space-y-6">
 			<div className="flex items-center justify-between">
-				<div>
-					<h1 className="text-xl font-semibold">Super-admin overview</h1>
-					<p className="text-xs text-muted-foreground mt-0.5">
-						Single pane of glass · refreshed on page load
-					</p>
-				</div>
+				{/* Page identity lives in the top strip (deriveMeta /dashboard fallback). */}
+				<p className="text-xs text-muted-foreground">
+					Single pane of glass · refreshed on page load
+				</p>
 				{loading && (
 					<Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
 				)}

@@ -27,10 +27,9 @@ import { me, MeApiError } from '@/api/me';
 import apiClient from '@/api/client';
 import PageHints from '@/components/PageHints';
 import { setStudioSelection } from '@/components/StudioContext';
+import { useStudioRefetch } from '@/hooks/useStudioRefetch';
 import { IntentFeedbackRow } from '@/components/IntentFeedbackRow';
 import { AXIS_META } from '@/lib/demo-intents';
-import { DEMO_MODE } from '@/lib/demo';
-import { loadPendingDecisions, DECISIONS_EVENT } from '@/lib/demo-decisions';
 
 type Filter = 'all' | 'drafts' | 'activity' | 'audit' | 'notices';
 
@@ -119,17 +118,6 @@ export default function StudioInbox() {
 		return () => window.clearInterval(t);
 	}, []);
 
-	// Demo decisions store fires DECISIONS_EVENT when something is
-	// approved/rejected on the Intents page; re-load so the feed
-	// reflects the new pending set.
-	useEffect(() => {
-		if (!DEMO_MODE) return;
-		const onChange = () => { load(); };
-		window.addEventListener(DECISIONS_EVENT, onChange);
-		return () => window.removeEventListener(DECISIONS_EVENT, onChange);
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, []);
-
 	const load = useCallback(async () => {
 		setRefreshing(true);
 		const [drafts, today, audit] = await Promise.allSettled([
@@ -156,23 +144,6 @@ export default function StudioInbox() {
 			}
 		}
 
-		// DEMO_MODE: surface the "Pending your call" decisions as draft
-		// items in the unified feed. The shared lib/demo-decisions store
-		// is the single source of truth — rejecting/approving on the
-		// Intents page removes the item from this list automatically.
-		if (DEMO_MODE) {
-			for (const d of loadPendingDecisions()) {
-				next.push({
-					kind:    'draft',
-					id:      `demo-draft:${d.id}`,
-					ts:      new Date().toISOString(),
-					app:     d.app,
-					subject: d.subject,
-					to:      d.tag,
-					body:    d.preview,
-				});
-			}
-		}
 
 		if (today.status === 'fulfilled') {
 			for (const c of today.value.cycles) {
@@ -227,6 +198,8 @@ export default function StudioInbox() {
 	}, []);
 
 	useEffect(() => { load(); }, [load]);
+	// Chat→page bus: draft sends/edits/dismissals from chat reflect immediately.
+	useStudioRefetch(["drafts"], load);
 
 	// Auto-refresh — every 30s while the tab is visible. Pauses while the
 	// tab is hidden so we don't burn the rate limit on background users.

@@ -14,24 +14,26 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ChevronDown, ChevronRight, ArrowRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2, Inbox, Loader2, RotateCcw, X } from "lucide-react";
+import { ChevronRight, ArrowRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2, Inbox, Loader2, RotateCcw, X } from "lucide-react";
 import { toast } from "sonner";
 import { me, type MeWorkflowRow, type MeAppCard } from "@/api/me";
 import { takePendingCustomize } from "@/lib/just-installed";
 import apiClient from "@/api/client";
 import { iconFor, APP_NAV_INVALIDATE } from "@/components/useAppNav";
 import { setStudioSelection } from "@/components/StudioContext";
-import RunSparkline from "@/components/RunSparkline";
+import WorkflowList from "@/components/workflow/WorkflowList";
 import { Skeleton, humanizeLoop, loopLabel } from "@/pages/app-revamp/loops";
-import { QuickStarters } from "@/pages/studio/intents";
+import { QuickStarters } from "@/components/studio/QuickStarters";
 import WorkflowComposer from "@/components/WorkflowComposer";
 import AppCard, { appTitle, type AppIdentity } from "@/components/workflow/AppCard";
 import WorkflowObservabilityPanel, { type LoopHealth } from "@/components/workflow/WorkflowObservabilityPanel";
+import NeedsAttentionRail from "@/components/workflow/NeedsAttentionRail";
 import LearningTimeline from "@/components/workflow/LearningTimeline";
 import DatasetExplorer from "@/components/workflow/DatasetExplorer";
 import LoopOrbit, { type LoopMode, type LoopStageKey } from "@/components/workflow/LoopOrbit";
 import { RUNNING_APPS } from "@/lib/demo";
 import { useCountUp } from "@/lib/use-count-up";
+import { useStudioRefetch } from "@/hooks/useStudioRefetch";
 import { cn } from "@/lib/utils";
 
 // Scope the surface to the showcase apps (keeps the demo focused).
@@ -202,6 +204,8 @@ function AppsHome() {
 	// intent merge). They flip to a real AppCard once the picker materializes
 	// the app on disk.
 	const [pendingApps, setPendingApps] = useState<MeAppCard[]>([]);
+	// Per-loop health rows (status + last_errors) for the attention rail.
+	const [healthLoops, setHealthLoops] = useState<LoopHealth[]>([]);
 	const [identity, setIdentity] = useState<Map<string, AppIdentity>>(new Map());
 	const [hero, setHero] = useState<Hero | null>(null);
 	const navigate = useNavigate();
@@ -341,6 +345,38 @@ function AppsHome() {
 					});
 				}
 			}
+			// NeedsAttentionRail rows come from the TENANT workflow rows (the
+			// same last_run_ok truth as the card dots) — /me/loops/health is
+			// operator-scoped, so filtering it by tenant app names silently
+			// produced an empty rail while the "failing" pill showed 2.
+			{
+				const lhLoops = lhR.status === "fulfilled" ? ((lhR.value as unknown as LoopsHealthResp).loops || []) : [];
+				const opErr = new Map(lhLoops.map((l) => [`${l.app}:${l.loop}`, l] as const));
+				// Newest error text per app:loop from today's cycle feed (the
+				// grid already fetches it; cycles are newest-first).
+				const todayErr = new Map<string, string>();
+				if (todayR.status === "fulfilled") {
+					for (const c of todayR.value.cycles) {
+						const k = `${c.app}:${c.loop}`;
+						if (c.ok === false && c.last_error && !todayErr.has(k)) todayErr.set(k, c.last_error);
+					}
+				}
+				const fails: LoopHealth[] = [];
+				for (const [appName, rows] of m.entries()) {
+					for (const w of rows) {
+						if (w.enabled === false || w.last_run_ok !== false) continue;
+						const loop = loopOf(w);
+						const newestErr = todayErr.get(`${appName}:${loop}`);
+						const op = opErr.get(`${appName}:${loop}`);
+						fails.push({
+							app: appName, loop, status: "failing", enabled: true,
+							consecutive_failures: op?.consecutive_failures,
+							last_errors: newestErr ? [{ error: newestErr }] : op?.last_errors,
+						});
+					}
+				}
+				setHealthLoops(fails);
+			}
 			// Overlay each app's own `ui:` config — name/icon come from the SAME
 			// ui.sidebar the sidebar renders, so the card and sidebar can't
 			// disagree; hasSurface routes the card header to the configured UI.
@@ -406,6 +442,10 @@ function AppsHome() {
 		return () => window.clearInterval(id);
 	}, [load]);
 
+	// Chat→page bus: refetch immediately when a chat tool mutates apps,
+	// workflows, loops, or runs (no waiting out the 20s poll).
+	useStudioRefetch(["apps", "workflows", "loops", "cycles", "runs", "drafts"], load);
+
 	// While an install is in flight, poll fast so the optimistic card flips
 	// to a real app within a drain cycle instead of waiting for the 20s tick.
 	const anyInstalling = pendingApps.some((a) => a.status === "installing");
@@ -465,6 +505,9 @@ function AppsHome() {
 					{/* Numbers consolidated to a compact top bar. */}
 					{hero && <HeroBar h={hero} onApps={() => appsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })} />}
 
+					{/* Failures surface here, triaged + actionable — the one health rail. */}
+					<NeedsAttentionRail loops={healthLoops} />
+
 					<div ref={appsRef} className="scroll-mt-4">
 						<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-400 uppercase mb-3">Your apps</div>
 						<div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
@@ -521,13 +564,14 @@ function AppsHome() {
 function HeroBar({ h, onApps }: { h: Hero; onApps: () => void }) {
 	return (
 		<div className="flex items-center flex-wrap gap-x-1 gap-y-1 -ml-2">
-			<StatChip icon={Boxes} value={h.apps} label="apps" tone="text-emerald-600" onClick={onApps} />
-			<StatChip icon={Activity} value={h.workflows} label="workflows" tone="text-emerald-600" onClick={onApps} />
-			<StatChip icon={Sparkles} value={h.runsToday} label="runs today" tone="text-sky-600" to="/studio/runs" />
-			{h.selfHeals > 0 && <StatChip icon={Wrench} value={h.selfHeals} label="auto-recovered" tone="text-amber-600" title="workflows that recovered from a failed run on their own" onClick={onApps} />}
-			<StatChip icon={Brain} value={h.memories} label="learned" tone="text-indigo-600" title="insights your apps saved from recent runs" to="/studio/knowledge" />
-			{h.failing > 0 && <StatChip icon={AlertTriangle} value={h.failing} label="needs attention" tone="text-rose-600" onClick={onApps} />}
-			<StatChip icon={Inbox} value={h.inbox} label="inbox" tone="text-amber-600" to="/studio/inbox" />
+			<StatChip icon={Boxes} value={h.apps} label="apps" tone="text-slate-400" onClick={onApps} />
+			<StatChip icon={Activity} value={h.workflows} label="workflows" tone="text-slate-400" onClick={onApps} />
+			<StatChip icon={Sparkles} value={h.runsToday} label="runs today" tone="text-slate-400" to="/studio/runs" />
+			{h.selfHeals > 0 && <StatChip icon={Wrench} value={h.selfHeals} label="auto-recovered" tone="text-slate-400" title="workflows that recovered from a failed run on their own" onClick={onApps} />}
+			<StatChip icon={Brain} value={h.memories} label="learned" tone="text-slate-400" title="insights your apps saved from recent runs" to="/studio/knowledge" />
+			{/* failing count intentionally absent — the attention rail below
+			    IS the failure surface (top-strip pill covers other pages). */}
+			<StatChip icon={Inbox} value={h.inbox} label="inbox" tone="text-slate-400" to="/studio/inbox" />
 		</div>
 	);
 }
@@ -602,6 +646,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 		const id = window.setInterval(load, 20_000);
 		return () => window.clearInterval(id);
 	}, [load]);
+	useStudioRefetch(["workflows", "loops", "cycles", "runs"], load);
 
 	// Announce the active app so the chat agent knows what "pause it" means.
 	useEffect(() => {
@@ -609,10 +654,14 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 		return () => setStudioSelection(null);
 	}, [app]);
 
-	const toggle = (loop: string) => {
+	// Master–detail selection: there is ALWAYS a selected workflow (the
+	// detail column never goes empty), so selecting never deselects.
+	const select = (loop: string) => {
 		const sp = new URLSearchParams(params);
-		if (selected === loop) sp.delete("selected"); else sp.set("selected", loop);
+		sp.set("selected", loop);
 		setParams(sp, { replace: true });
+		// Mobile: the detail renders below the list — bring it into view.
+		window.setTimeout(() => document.getElementById("wf-detail")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
 	};
 
 	// App-level delete is offered for every app: the uninstall intent now
@@ -654,6 +703,11 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 			await me.deleteLoop(app, loop);
 			toast.success(`Removed workflow "${label}"`);
 			rowsCache.delete(app);
+			if (selected === loop) {
+				const sp = new URLSearchParams(params);
+				sp.delete("selected");
+				setParams(sp, { replace: true });
+			}
 			await load();
 		} catch (e) {
 			toast.error(`Delete failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -662,12 +716,16 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 		}
 	};
 
-	// Auto-expand the freshest workflow so landing on an app shows its
-	// observability immediately (no extra click).
+	// There is always a selection: URL param (if it names a real workflow —
+	// some deep links pass the APP name), then the caller's initialLoop,
+	// then the freshest workflow.
 	const freshestLoop = rows && rows.length
 		? [...rows].sort((a, b) => (b.wf.last_run_ts || 0) - (a.wf.last_run_ts || 0))[0].loop
 		: null;
-	const effSelected = selected ?? initialLoop ?? freshestLoop;
+	const validSelected = selected && rows?.some((r) => r.loop === selected) ? selected : null;
+	const validInitial = initialLoop && rows?.some((r) => r.loop === initialLoop) ? initialLoop : null;
+	const effSelected = validSelected ?? validInitial ?? freshestLoop;
+	const selectedRow = rows?.find((r) => r.loop === effSelected) ?? null;
 
 	return (
 		<div className="space-y-5">
@@ -710,76 +768,53 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 			) : (
 				<div className="space-y-2.5">
 					<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-400 uppercase">Workflows</div>
-					<ul className="space-y-2">
-						{rows.map(({ loop, wf, lh }, idx) => {
-							const open = effSelected === loop;
-							// Single failing predicate everywhere: last_run_ok===false (the
-							// fresh journal truth). consecutive_failures (scheduler-state)
-							// can lag behind a recovered run, so it must NOT drive red — that
-							// was the "3 dots vs 1 count" mismatch.
-							// Running takes visual precedence (live cycle now), then the
-							// last-completed state. Keeps dots/counts on one predicate.
-							const dot = wf.running ? "bg-sky-500 running-pulse"
-								: wf.last_run_recovered ? "bg-amber-500"
-								: wf.last_run_ok === true ? "bg-emerald-500"
-								: wf.last_run_ok === false ? "bg-rose-500"
-								: "bg-slate-300";
-							return (
-								<li
-									key={loop}
-									className="rounded-xl border border-slate-200 bg-white overflow-hidden animate-in fade-in slide-in-from-bottom-1 duration-500"
-									style={{ animationDelay: `${idx * 60}ms`, animationFillMode: "both" }}
-								>
-									<div className="flex items-stretch">
-										<button
-											onClick={() => toggle(loop)}
-											className="flex-1 min-w-0 text-left px-4 py-3 flex items-center gap-3 hover:bg-slate-50/70 transition-colors"
-										>
-											{open ? <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />}
-											<span className={cn("w-2 h-2 rounded-full flex-shrink-0", dot)} />
-											<div className="min-w-0 flex-1">
-												<div className="text-sm font-medium text-slate-800 truncate flex items-center gap-1.5">
-													{loopLabel(wf.name, loop)}
-													{wf.running && <span className="text-[10px] font-medium text-sky-600 inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-sky-500 running-pulse" />running…</span>}
-												</div>
-												{wf.enabled === false && <div className="text-[11px] text-slate-400">paused</div>}
-											</div>
-											<RunSparkline spec={wf.run_spark || ""} className="hidden sm:flex" />
-										</button>
-										{isTenantApp && rows.length > 1 && (
-											<button
-												type="button"
-												onClick={() => delLoop(loop, loopLabel(wf.name, loop))}
-												disabled={deletingLoop === loop}
-												title="Delete this workflow"
-												className="flex-shrink-0 px-3 flex items-center text-slate-300 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
-											>
-												<Trash2 className="w-3.5 h-3.5" />
-											</button>
-										)}
-									</div>
-									{open && (
-										<WorkflowObservabilityPanel app={app} loop={loop} wf={wf} loopHealth={lh} onChanged={load} initialCycle={open ? initialCycle : null} />
-									)}
-								</li>
-							);
-						})}
-					</ul>
+					{/* Master–detail: list left, ONE detail card right. A single-
+					    workflow app skips the list entirely. */}
+					{rows.length === 1 ? (
+						selectedRow && (
+							<div id="wf-detail">
+								<WorkflowObservabilityPanel
+									app={app} loop={selectedRow.loop} wf={selectedRow.wf} loopHealth={selectedRow.lh}
+									onChanged={load} initialCycle={initialCycle}
+								/>
+							</div>
+						)
+					) : (
+						<div className="lg:grid lg:grid-cols-[300px_minmax(0,1fr)] lg:gap-5 lg:items-start">
+							<div className="lg:sticky lg:top-4 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto mb-4 lg:mb-0 pr-0.5 space-y-5">
+								<WorkflowList
+									rows={rows}
+									selected={effSelected}
+									onSelect={select}
+								/>
+								{/* Learned + data fill the otherwise-dead rail under the
+								    short workflow list (they were full-width sections
+								    below the fold — now visible without scrolling). */}
+								<div className="space-y-2">
+									<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-400 uppercase">What it&apos;s learned</div>
+									<LearningTimeline agents={rows[0].wf.memory_agents || []} />
+								</div>
+								<div className="space-y-2">
+									<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-400 uppercase">Data it works on</div>
+									<DatasetExplorer app={app} />
+								</div>
+							</div>
+							<div id="wf-detail" className="min-w-0">
+								{selectedRow && (
+									<WorkflowObservabilityPanel
+										app={app} loop={selectedRow.loop} wf={selectedRow.wf} loopHealth={selectedRow.lh}
+										onChanged={load}
+										initialCycle={effSelected === (selected ?? initialLoop) ? initialCycle : null}
+										canDelete={isTenantApp && rows.length > 1}
+										onDelete={() => delLoop(selectedRow.loop, loopLabel(selectedRow.wf.name, selectedRow.loop))}
+									/>
+								)}
+							</div>
+						</div>
+					)}
 				</div>
 			)}
 
-			{rows && rows.length > 0 && (
-				<>
-					<div className="space-y-2.5">
-						<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-400 uppercase">What it&apos;s learned</div>
-						<LearningTimeline agents={rows[0].wf.memory_agents || []} />
-					</div>
-					<div className="space-y-2.5">
-						<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-400 uppercase">Data it works on</div>
-						<DatasetExplorer app={app} />
-					</div>
-				</>
-			)}
 		</div>
 	);
 }

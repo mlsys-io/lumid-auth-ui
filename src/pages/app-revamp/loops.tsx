@@ -20,6 +20,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { formatRelative } from "@/lib/relative-time";
+import { humanizeLoop } from "@/lib/workflow-names";
 import RunSparkline from "@/components/RunSparkline";
 import { RUNNING_APPS } from "@/lib/demo";
 
@@ -441,27 +442,9 @@ export function Skeleton({ lines = 3 }: { lines?: number }) {
   );
 }
 
-// Friendly display overrides for specific loop ids — win over the raw
-// backend name (e.g. "benchmark" → "NL-to-SQL" in auto-sysresearch, which
-// is an NL-to-SQL config optimizer, not a generic benchmark).
-const LOOP_OVERRIDE: Record<string, string> = {
-  benchmark: "NL-to-SQL",
-};
-export function loopLabel(name?: string, fallbackLoop?: string): string {
-  if (name && LOOP_OVERRIDE[name]) return LOOP_OVERRIDE[name];
-  return name || humanizeLoop(fallbackLoop || "");
-}
-
-export function humanizeLoop(loop: string): string {
-  const map: Record<string, string> = {
-    morning_brief: "Morning brief",
-    hourly_triage: "Hourly triage",
-    weekly_reflection: "Weekly reflection",
-    cc_watcher: "Claude Code watcher",
-  };
-  if (map[loop]) return map[loop];
-  return loop.charAt(0).toUpperCase() + loop.slice(1).replace(/_/g, " ");
-}
+// Label helpers moved to lib/workflow-names (canonical App/Workflow/Run
+// naming); re-exported here so older imports keep working.
+export { loopLabel, humanizeLoop } from "@/lib/workflow-names";
 
 
 // ── Page ──────────────────────────────────────────────────────────

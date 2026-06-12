@@ -218,6 +218,19 @@ export const me = {
     ),
   loopsHealth: () => call<{ apps: MeAppHealth[] }>("GET", "/loops/health"),
 
+  // Workstream E — skills as a first-class surface.
+  // Workstream F — cross-app experiments aggregate.
+  experimentsAll: () => call<{ experiments: Array<MeExperiment & { app: string }>; count: number }>("GET", "/experiments"),
+  // Offer lifecycle rides the generic cycle-feedback writer.
+  cycleFeedback: (body: { app: string; loop: string; cycle_ts: string; output_id?: string; kind: string; note?: string; label?: string }) =>
+    call<Record<string, unknown>>("POST", "/cycles/feedback", body),
+
+  skills: () => call<{ skills: MeSkillRow[]; count: number }>("GET", "/skills"),
+  skillsDiscover: () => call<{ cards: MeSkillCard[] }>("GET", "/skills/discover"),
+  skillDetail: (owner: string, name: string) =>
+    call<{ repo: string; meta?: Record<string, unknown>; lineage?: Record<string, unknown>; readme?: string }>(
+      "GET", `/skills/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`),
+
   // Today summary — drives the /app/loops "Today" section.
   // headlines[] is server-authored (quota_paused → drafts → brief →
   // cycle_failed); cycles[] is the raw per-loop journal slice for
@@ -440,6 +453,16 @@ export const me = {
   // Goal-metric trajectory across cycles (improvement over iterations).
   // `events` maps a cycle dir-id → a discrete event (learn|fix|bug|analyze)
   // for the curve overlay.
+  // Experiments — hypothesis × variants × dataset/casebook × metric.
+  experiments: (app: string) =>
+    call<{ experiments: MeExperiment[]; count: number }>(
+      "GET", `/apps/${encodeURIComponent(app)}/experiments`),
+  experiment: (app: string, id: string) =>
+    call<MeExperimentDetail>(
+      "GET", `/apps/${encodeURIComponent(app)}/experiments/${encodeURIComponent(id)}`),
+  experimentCase: (app: string, id: string, caseId: string) =>
+    call<{ case_id: string; rows: MeExperimentRow[]; latest_by_question: Record<string, { ts: string; metrics: Record<string, number> }> }>(
+      "GET", `/apps/${encodeURIComponent(app)}/experiments/${encodeURIComponent(id)}/case/${encodeURIComponent(caseId)}`),
   loopMetricSeries: (app: string, loop: string) =>
     call<{ app: string; loop: string; series: MeMetricSeries[]; events: Record<string, string> }>(
       "GET",
@@ -510,6 +533,8 @@ export interface MeWorkflowRow {
   // SAME order (oldest→newest). Lets each dot open its cycle detail. `ts`
   // is the cycle dir-id ("" if no cycle dir matched, e.g. a skipped run).
   runs_recent?: SparkRun[];
+  // experiments this workflow feeds (steps[].experiment / engine.experiment)
+  experiment_ids?: string[];
   // The loop's declared objective (xpcloud.yaml loops[].goal) — what it's
   // chasing + the metrics it tracks. Drives the app-overview goal header.
   goal?: { primary: string; tracked?: string[] };
@@ -522,6 +547,35 @@ export interface MeWorkflowRow {
 
 // Goal-metric trajectory (GET /me/apps/:app/loops/:loop/metric-series).
 export interface MeMetricSeries { label: string; points: Array<{ ts: string; v: number }> }
+
+// ── Experiments (xpio opinion) ──────────────────────────────────────
+export interface MeExperimentVariantAgg { n: number; mean: number; stdev?: number | null; last?: number }
+export interface MeExperiment {
+  id: string; hypothesis: string; kind: "explore" | "arms" | "regression";
+  status: string; dataset_id?: string;
+  metric?: { name: string; higher_is_better?: boolean; source?: string };
+  metric_name?: string; benchmark_id?: string; baseline?: unknown;
+  success_criteria?: string; min_samples?: number; loops?: string[];
+  n_results: number; variants?: Record<string, MeExperimentVariantAgg>;
+  best_variant?: string | null; baseline_value?: number | null;
+  delta?: number | null; delta_pp?: number | null;
+  criteria_met: boolean; criteria_reason?: string; verdict?: string;
+  higher_is_better?: boolean; updated_at?: string;
+}
+export interface MeExperimentRow {
+  ts: string; cycle_ts?: string; variant_id: string;
+  metrics: Record<string, number>; dims?: Record<string, string>; n?: number;
+}
+export interface MeExperimentCase {
+  case_id: string; n: number; latest: number; mean: number;
+  delta_vs_prev?: number; points: Array<{ ts: string; v: number }>;
+}
+export interface MeExperimentDetail extends MeExperiment {
+  state?: Record<string, unknown>;
+  results: MeExperimentRow[];
+  series: Array<{ variant_id: string; points: Array<{ ts: string; v: number }> }>;
+  cases: MeExperimentCase[];
+}
 
 // Dataset explorer shapes (GET /me/apps/:app/datasets + /dataset-file).
 export interface MeDatasetFileRef { path: string; name: string; bytes: number; kind: string }
@@ -543,6 +597,12 @@ export interface MeCycleStep {
   stage?: string;
   ok: boolean;
   output_summary?: string;
+  // Full output dict + prompt audit — the server has always sent these
+  // (me_cycle.go); the type lagged the payload. The canvas step
+  // inspector renders them.
+  output?: Record<string, unknown>;
+  prompt_sha?: string;
+  prompt_preview?: string;
   error?: string;
   duration_s?: number;
 }
@@ -576,13 +636,30 @@ export interface MeCycleDetail {
   files?: Record<string, unknown>;
 }
 
+// The loop declaration verbatim from xpcloud.yaml (rawLoop in
+// admin_loops.go). Pattern A ships steps[]; Pattern B ships engine +
+// skills_invoked[] (documentation-only ordering).
+export interface LoopDefinition {
+  name?: string;
+  schedule?: string;
+  knowledge_agent?: string;
+  description?: string;
+  mode?: string;
+  skills?: string[];
+  skills_invoked?: string[];
+  datasets?: string[];
+  steps?: Array<{ id?: string; skill?: string; knowledge_agent?: string; experiment?: string }>;
+  engine?: { type?: string; module?: string; experiment?: string };
+  goal?: { primary?: string; tracked?: string[] };
+}
+
 export interface MeWorkflowDetail {
   slug: string;
   kind: "scheduled" | "visual";
   app?: string;
   loop?: string;
   source?: "tenant" | "operator-shared";
-  definition: Record<string, unknown>;
+  definition: LoopDefinition & Record<string, unknown>;
 }
 
 export interface MeRunRow {
@@ -672,4 +749,29 @@ export async function waitForIntent(
     }
     await new Promise((res) => setTimeout(res, every));
   }
+}
+
+// Workstream E — skills surface types.
+export interface MeSkillRow {
+  repo: string; // owner/name
+  name: string;
+  summary?: string;
+  tags?: string[];
+  version_installed?: string;
+  version_latest?: string;
+  update_available: boolean;
+  installed_on_disk: boolean;
+  used_by: Array<{ app: string; loops?: string[]; version_pinned?: string }>;
+  health?: { adapter_status?: string; ci_status?: string; ci_last_run?: string };
+}
+export interface MeSkillCard {
+  name: string;
+  display_name?: string;
+  summary?: string;
+  category?: string;
+  tags?: string[];
+  kind?: string;
+  step_count?: number;
+  source_url?: string;
+  needs_secrets?: string[];
 }

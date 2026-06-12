@@ -12,14 +12,18 @@
 // the precision channel.
 
 import { Sparkles } from 'lucide-react';
+import type { ViewingContext } from '@/components/StudioContext';
 
 interface Props {
 	prompts: string[];
 	/** Optional eyebrow text. Defaults to "Try asking:". */
 	label?: string;
+	/** Structured grounding forwarded with every chip (e.g. the page's
+	 *  active filter window or app), merged over the derived context. */
+	context?: Partial<ViewingContext>;
 }
 
-export function PageHints({ prompts, label }: Props) {
+export function PageHints({ prompts, label, context }: Props) {
 	if (!prompts || prompts.length === 0) return null;
 	return (
 		<div className="flex flex-wrap items-center gap-2 mb-5 text-xs">
@@ -32,7 +36,7 @@ export function PageHints({ prompts, label }: Props) {
 					key={p}
 					onClick={() =>
 						window.dispatchEvent(new CustomEvent('studio:ask', {
-							detail: { prompt: p, autosend: true },
+							detail: { prompt: p, autosend: true, context },
 						}))
 					}
 					className="group px-3 py-1.5 rounded-full border border-emerald-200/70 bg-white hover:bg-gradient-to-r hover:from-emerald-50 hover:to-white text-emerald-800 hover:text-emerald-900 hover:border-emerald-300 hover:shadow-sm hover:shadow-emerald-100 transition-all active:scale-[0.98]"

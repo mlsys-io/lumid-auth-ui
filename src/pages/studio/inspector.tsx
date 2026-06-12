@@ -18,7 +18,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
 	ChevronLeft, CheckCircle2, AlertCircle, ChevronDown, ChevronRight,
-	Loader2, MinusCircle, Clock, Eye, Lightbulb, Wand2, Workflow, Pencil,
+	Loader2, MinusCircle, Clock, Eye, Lightbulb, Wand2, Workflow, Pencil, FlaskConical,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import apiClient from '@/api/client';
@@ -68,7 +68,8 @@ export interface ReviewItem {
 export interface CompoundOffer {
 	id?: string;
 	trigger?: { kind: 'pattern' | 'principle'; key: string; count: number };
-	kind: 'knowledge' | 'skill' | 'workflow';
+	kind: 'knowledge' | 'skill' | 'workflow' | 'experiment';
+	experiment_id?: string;
 	title: string;
 	detail?: string;
 	action?: { type: string; spec?: unknown; schedule?: string };
@@ -207,7 +208,7 @@ export default function CycleInspector() {
 							{showReview && app && loop && ts && (
 								<div className="mt-2"><ReviewQueue app={app} loop={loop} ts={ts} items={reviewQueue} onActed={load} /></div>
 							)}
-							{showOffers && <div className="mt-2"><OffersPanel offers={offers} /></div>}
+							{showOffers && <div className="mt-2"><OffersPanel offers={offers} app={app} loop={loop} ts={ts} /></div>}
 						</section>
 					);
 				})}
@@ -469,9 +470,27 @@ const OFFER_KIND_META: Record<CompoundOffer['kind'], { label: string; icon: type
 	knowledge: { label: 'extra knowledge', icon: Lightbulb, tone: 'border-amber-200 bg-amber-50/40',    iconTone: 'bg-amber-100 text-amber-700' },
 	skill:     { label: 'a skill',         icon: Wand2,     tone: 'border-emerald-200 bg-emerald-50/40', iconTone: 'bg-emerald-100 text-emerald-700' },
 	workflow:  { label: 'a workflow',      icon: Workflow,  tone: 'border-indigo-200 bg-indigo-50/40',   iconTone: 'bg-indigo-100 text-indigo-700' },
+	experiment:{ label: 'an experiment verdict', icon: FlaskConical, tone: 'border-violet-200 bg-violet-50/40', iconTone: 'bg-violet-100 text-violet-700' },
 };
 
-export function OffersPanel({ offers }: { offers: CompoundOffer[] }) {
+export function OffersPanel({ offers, app, loop, ts }: {
+	offers: CompoundOffer[];
+	/** When the run context is known, offers gain Adopt / Dismiss —
+	 *  persisted as cycle feedback (kind adopt_offer|dismiss_offer) the
+	 *  engine's feedback rules can consume. */
+	app?: string;
+	loop?: string;
+	ts?: string;
+}) {
+	const [acted, setActed] = useState<Record<string, "adopted" | "dismissed">>({});
+	const act = async (o: CompoundOffer, idx: number, kind: "adopt_offer" | "dismiss_offer") => {
+		if (!app || !loop || !ts) return;
+		const key = o.id || String(idx);
+		try {
+			await me.cycleFeedback({ app, loop, cycle_ts: ts, output_id: o.id || `offer-${idx}`, kind, note: o.title });
+			setActed((m) => ({ ...m, [key]: kind === "adopt_offer" ? "adopted" : "dismissed" }));
+		} catch { /* leave actionable */ }
+	};
 	return (
 		<section className="rounded-lg border border-indigo-200 bg-indigo-50/30 p-3">
 			<div className="flex items-center gap-2 mb-2">
@@ -506,6 +525,26 @@ export function OffersPanel({ offers }: { offers: CompoundOffer[] }) {
 									<div className="text-[10px] text-indigo-700 mt-1 inline-flex items-center gap-1">
 										<ChevronRight className="w-3 h-3" />
 										{o.action.type} <span className="font-mono">· {o.action.schedule}</span>
+									</div>
+								)}
+								{app && loop && ts && (
+									<div className="mt-1.5 flex items-center gap-1.5">
+										{acted[o.id || String(i)] ? (
+											<span className="text-[10px] font-medium text-slate-500">
+												{acted[o.id || String(i)] === "adopted" ? "✓ adopted — feeds the next run's feedback rules" : "dismissed"}
+											</span>
+										) : (
+											<>
+												<button onClick={() => act(o, i, "adopt_offer")}
+													className="px-2 py-0.5 text-[10px] font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors">
+													Adopt
+												</button>
+												<button onClick={() => act(o, i, "dismiss_offer")}
+													className="px-2 py-0.5 text-[10px] font-medium rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors">
+													Dismiss
+												</button>
+											</>
+										)}
 									</div>
 								)}
 							</div>

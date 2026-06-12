@@ -17,6 +17,7 @@
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
+import { Link } from 'react-router-dom';
 
 const components: Components = {
 	// Headings — chat is conversational, so we deflate visual weight
@@ -82,19 +83,22 @@ const components: Components = {
 		</blockquote>
 	),
 
-	// Links — emerald + underline-on-hover + always open in a new tab
-	// since the chat lives alongside the workspace and we don't want
-	// to navigate the user away.
-	a: ({ href, children }) => (
-		<a
-			href={href}
-			target="_blank"
-			rel="noopener noreferrer"
-			className="text-emerald-700 underline decoration-emerald-300 hover:decoration-emerald-600 underline-offset-2 break-words"
-		>
-			{children}
-		</a>
-	),
+	// Links — emerald + underline-on-hover. INTERNAL links (/studio/…,
+	// /dashboard/…) navigate in-app via react-router — the chat lives
+	// alongside the workspace, so "open the run" should move the
+	// workspace pane, not spawn a tab. External links keep new-tab.
+	a: ({ href, children }) => {
+		const h = String(href || "");
+		const cls = "text-emerald-700 underline decoration-emerald-300 hover:decoration-emerald-600 underline-offset-2 break-words";
+		if (h.startsWith("/studio") || h.startsWith("/dashboard")) {
+			return <Link to={h} className={cls}>{children}</Link>;
+		}
+		return (
+			<a href={href} target="_blank" rel="noopener noreferrer" className={cls}>
+				{children}
+			</a>
+		);
+	},
 
 	// Images — let them go full bubble-width but cap height so a tall
 	// chart doesn't flood the panel.

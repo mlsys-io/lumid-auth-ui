@@ -9,6 +9,7 @@
 // can be edited/managed directly from Studio, including apps with no surface yet.
 
 import { useEffect, useState, Suspense } from "react";
+import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { MoreHorizontal, Pencil, Settings, SlidersHorizontal, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -20,8 +21,37 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { me, type MeAppSurface, MeApiError } from "@/api/me";
+import { setStudioSelection } from "@/components/StudioContext";
 import { LumidMarkdown } from "./LumidMarkdown";
 import { resolveNativeSurface } from "./native-registry";
+
+// Pull a leading "# Title" (+ the first plain paragraph as subtitle) out of
+// a surface markdown. When the top-strip slot is available, that header
+// renders up there as the page identity — same place every other Studio
+// page puts it — instead of re-stating it inside the scroll area.
+function splitSurfaceHeader(md: string): { title?: string; subtitle?: string; body: string } {
+  const lines = md.split("\n");
+  let i = 0;
+  while (i < lines.length && !lines[i].trim()) i++;
+  if (!lines[i]?.startsWith("# ")) return { body: md };
+  const title = lines[i].slice(2).trim();
+  i++;
+  while (i < lines.length && !lines[i].trim()) i++;
+  let subtitle: string | undefined;
+  const l = lines[i] ?? "";
+  // Only a plain prose line qualifies as the subtitle — never a heading,
+  // directive fence, list, table, or quote.
+  if (l.trim() && !/^(#|```|[-*]\s|\||>)/.test(l.trim())) {
+    const para: string[] = [];
+    while (i < lines.length && lines[i].trim()) { para.push(lines[i].trim()); i++; }
+    subtitle = para.join(" ");
+  }
+  return { title, subtitle, body: lines.slice(i).join("\n") };
+}
+
+// Last-seen H1 per app — surfaces without their own H1 (native tabs,
+// secondary markdowns) reuse it so the strip identity never blanks out.
+const lastSurfaceTitle = new Map<string, string>();
 
 export function AppSurface({
   app: appProp,
@@ -65,6 +95,20 @@ export function AppSurface({
         }
       });
     return () => { live = false; };
+  }, [app, surface]);
+
+  // Declare the open app surface as the chat's selection — "this app"
+  // resolves to the surface's owner even though the /studio/a/:app route
+  // isn't one of the observability pages.
+  useEffect(() => {
+    if (!app) return;
+    setStudioSelection({
+      kind: "app",
+      id: app,
+      label: surface ? `${app} · ${surface}` : app,
+      affordances: ["app_detail", "run_loop_now", "list_loops", "edit surface"],
+    });
+    return () => setStudioSelection(null);
   }, [app, surface]);
 
   // Thread the CURRENT path through the editors so cancel/save returns here —
@@ -119,8 +163,14 @@ export function AppSurface({
 
   // Slim chrome row: nav tabs left (when the app declares `ui.nav`), a single
   // "⋯" actions menu right. Edit / Manage / Advanced / Remove live in the menu.
-  const actionBar = (hasMd: boolean, nav?: { surface: string; label?: string }[]) => (
-    <div className="flex items-center gap-2 px-6 pt-3 pb-2 border-b border-slate-100 flex-shrink-0">
+  // When the shell's top strip exposes its slot, the whole row portals up
+  // there — the strip sat empty on app surfaces while the tabs burned a row.
+  const [stripSlot, setStripSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    setStripSlot(document.getElementById("topstrip-app-slot"));
+  }, []);
+  const actionBarInner = (hasMd: boolean, nav?: { surface: string; label?: string }[]) => (
+    <>
       {surfaceTabs(nav)}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -164,8 +214,34 @@ export function AppSurface({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-    </div>
+    </>
   );
+  const actionBar = (hasMd: boolean, nav?: { surface: string; label?: string }[], title?: string) =>
+    stripSlot
+      ? createPortal(
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            {title && (
+              <h1 className="text-[15px] font-semibold text-slate-900 truncate leading-tight flex-shrink min-w-0">{title}</h1>
+            )}
+            {actionBarInner(hasMd, nav)}
+          </div>,
+          stripSlot,
+        )
+      : (
+        <div className="flex items-center gap-2 px-6 pt-3 pb-2 border-b border-slate-100 flex-shrink-0">
+          {actionBarInner(hasMd, nav)}
+        </div>
+      );
+
+  // The extracted title is the page identity — remember it per app (other
+  // surfaces of the same app may have no H1) and keep the browser tab in
+  // sync (runs after TopStatusStrip's route effect, so the richer name wins).
+  const extracted = state.data?.markdown ? splitSurfaceHeader(state.data.markdown).title : undefined;
+  if (extracted && app) lastSurfaceTitle.set(app, extracted);
+  const headerTitle = extracted ?? (app ? lastSurfaceTitle.get(app) : undefined) ?? app;
+  useEffect(() => {
+    if (stripSlot && headerTitle) document.title = `${headerTitle} · Lumid`;
+  }, [stripSlot, headerTitle]);
 
   if (state.loading) {
     return <div className="p-8 text-sm text-slate-400">Loading {app}…</div>;
@@ -211,6 +287,10 @@ export function AppSurface({
 
   const { markdown, path, native } = state.data;
 
+  // Header extraction only applies when we can portal it up — without the
+  // slot the markdown renders untouched (embedded mounts).
+  const header = stripSlot && markdown ? splitSurfaceHeader(markdown) : { body: markdown ?? "" };
+
   // Prefer markdown when present (even for apps that also declare a native key).
   // The markdown surface is the public harness showcase; the native component
   // handles the authenticated user UX at sub-paths.
@@ -227,9 +307,9 @@ export function AppSurface({
     }
     return (
       <div className="flex flex-col">
-        {actionBar(!!path, state.data.nav)}
+        {actionBar(!!path, state.data.nav, headerTitle)}
         <div className="px-6 py-2">
-          <LumidMarkdown source={markdown} params={surfaceParams} appConfig={state.data.config} wide />
+          <LumidMarkdown source={header.body} params={surfaceParams} appConfig={state.data.config} wide />
         </div>
       </div>
     );
@@ -241,7 +321,7 @@ export function AppSurface({
     const Native = resolveNativeSurface(native);
     return (
       <div className="flex flex-col">
-        {actionBar(false, state.data.nav)}
+        {actionBar(false, state.data.nav, headerTitle)}
         <div className="px-2 py-2">
           {Native ? (
             <Suspense fallback={<div className="p-8 text-sm text-slate-400">Loading…</div>}>

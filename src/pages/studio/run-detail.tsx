@@ -15,6 +15,8 @@ import { Link, useParams } from "react-router-dom";
 import { Activity, ArrowLeft, Play, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { me, MeApiError, type MeRunDetail } from "@/api/me";
+import { setStudioSelection } from "@/components/StudioContext";
+import AskAbout from "@/components/AskAbout";
 import RunDagCanvas from "@/components/RunDagCanvas";
 
 interface StepLogEntry {
@@ -46,6 +48,20 @@ export default function StudioRunDetail() {
 	};
 	useEffect(() => { load(); }, [run_id]);
 
+	// Declare the open run as the chat's selection so "why did this
+	// fail?" resolves without restating app/loop/ts.
+	useEffect(() => {
+		if (!detail) return;
+		setStudioSelection({
+			kind: "cycle",
+			id: run_id,
+			label: detail.app && detail.loop ? `${detail.app} / ${detail.loop}` : run_id,
+			affordances: ["cycle_detail", "run_loop_now", "review_action"],
+			meta: detail.app && detail.loop ? { app: detail.app, loop: detail.loop } : undefined,
+		});
+		return () => setStudioSelection(null);
+	}, [detail?.app, detail?.loop, run_id]);
+
 	if (err) return <div className="space-y-4"><BackLink detail={null} /><div className="text-rose-700 text-sm">{err}</div></div>;
 	if (!detail) return <div className="space-y-4"><BackLink detail={null} /><div className="text-sm text-slate-500 italic">Loading…</div></div>;
 
@@ -68,6 +84,14 @@ export default function StudioRunDetail() {
 					</p>
 				</div>
 				<div className="flex items-center gap-2">
+					<AskAbout
+						prompt={detail.summary && (detail.summary as any).ok === false
+							? "Why did this run fail, and how do I fix it?"
+							: "Walk me through this run — what it did and what it learned."}
+						context={detail.app && detail.loop
+							? { app: detail.app, loop: detail.loop, run_id, cycle: { app: detail.app, loop: detail.loop, ts: run_id.split(":").pop() || run_id } }
+							: { run_id }}
+					/>
 					<RunActions detail={detail} onChanged={load} />
 				</div>
 			</header>

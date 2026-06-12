@@ -12,7 +12,6 @@ import { Link, NavLink, Outlet, useNavigate, useLocation } from 'react-router-do
 import {
 	Boxes,
 	Plus,
-	Inbox,
 	Store,
 	Compass,
 	Settings,
@@ -23,11 +22,12 @@ import {
 	Key,
 	ListChecks,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
 import { me } from '@/api/me';
 import { useAppNav, iconFor } from './useAppNav';
+import { useStudioRefetch } from '@/hooks/useStudioRefetch';
 // StudioShell is now the single shell — it also hosts the /dashboard/* pages
 // (admin, quant, lumilake, lqt, product). The ported Runmesh admin pages need
 // these providers + the numeric-id bridge that AppLayout used to supply.
@@ -72,13 +72,15 @@ interface NavItem {
 // API tokens live in the bottom avatar menu; "How it works" is a quiet
 // footer docs link.
 const TOP_NAV: NavItem[] = [
-	{ to: '/studio/apps',    label: 'My Apps',  icon: Boxes },
-	{ to: '/dashboard/jobs', label: 'My Jobs',  icon: ListChecks, title: 'background runs and compute jobs' },
+	{ to: '/studio/apps',    label: 'Home',    icon: Boxes, title: 'your apps + anything needing attention' },
+	{ to: '/studio/library', label: 'Library', icon: Store, title: 'marketplace, skills, and experiments' },
 ];
-// Workflows fold into each app's overview. Inbox + Knowledge both moved
-// into the bottom user menu, leaving My Apps + My Jobs as the top-level
-// surfaces. GPU Rentals is now an xpio app (arrives via useAppNav).
-const SECONDARY_NAV: NavItem[] = [];
+// Activity + Inbox folded into Home's status bar (the "runs today" and
+// "inbox" chips link there; the top-strip drafts pill covers other
+// pages). My Jobs is the quieter destination below the fold.
+const SECONDARY_NAV: NavItem[] = [
+	{ to: '/dashboard/jobs', label: 'My Jobs', icon: ListChecks, title: 'background runs and compute jobs' },
+];
 function NavItemView({ to, label, icon: Icon, end, badge, title }: NavItem) {
 	return (
 		<NavLink
@@ -185,7 +187,10 @@ export function StudioShell() {
 	// (admin tables, dataset explorers); core Studio pages stay narrow.
 	const wideMain = location.pathname.startsWith('/dashboard')
 		|| location.pathname.startsWith('/studio/a/')
-		|| location.pathname.startsWith('/studio/manage');
+		|| location.pathname.startsWith('/studio/manage')
+		// App detail hosts the pipeline canvas + master-detail panel —
+		// the narrow column left a dead gutter beside the chat rail.
+		|| /^\/studio\/apps\/[^/]+/.test(location.pathname);
 	// Bridge lum.id → Runmesh auth store (numeric sys_user.user_id) for the
 	// ported Runmesh admin pages now hosted in this shell. Ported from AppLayout.
 	const setRunmeshUser = useAuthStore((s) => s.setUser);
@@ -214,18 +219,22 @@ export function StudioShell() {
 	const [menuOpen, setMenuOpen] = useState(false);
 	const menuRef = useRef<HTMLDivElement>(null);
 
-	// Pending-drafts count → badge on the Inbox nav item. Drafts live in the
+	// Pending-drafts count → app-contributed nav badges (badge_source:
+	// 'drafts'). The Inbox nav entry folded into Home's status bar; the
 	// Inbox surface (moved off the My Apps hero), so the count belongs here.
 	const [draftCount, setDraftCount] = useState(0);
-	useEffect(() => {
-		let live = true;
-		const tick = () => me.listDrafts({ state: "pending" })
-			.then((r) => { if (live) setDraftCount(r.drafts?.length || 0); })
+	const tickDrafts = useCallback(() => {
+		me.listDrafts({ state: "pending" })
+			.then((r) => setDraftCount(r.drafts?.length || 0))
 			.catch(() => { /* soft-fail; badge just stays hidden */ });
-		tick();
-		const id = window.setInterval(tick, 30_000);
-		return () => { live = false; window.clearInterval(id); };
 	}, []);
+	useEffect(() => {
+		tickDrafts();
+		const id = window.setInterval(tickDrafts, 30_000);
+		return () => window.clearInterval(id);
+	}, [tickDrafts]);
+	// Chat→page bus: badge updates the moment chat sends/dismisses a draft.
+	useStudioRefetch(["drafts"], tickDrafts);
 	useEffect(() => {
 		const onClick = (e: MouseEvent) => {
 			if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);

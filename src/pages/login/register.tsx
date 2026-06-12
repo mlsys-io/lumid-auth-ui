@@ -28,6 +28,7 @@ interface RegisterProps {
 }
 
 export const Register = memo(function Register({ onSwitchToLogin, onRegisterSuccess }: RegisterProps) {
+	useEffect(() => { document.title = 'Create account · Lumid'; }, []);
 	const [showPassword, setShowPassword] = useState(false);
 	const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 	const [loading, setLoading] = useState(false);

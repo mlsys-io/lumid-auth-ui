@@ -18,7 +18,7 @@ import {
 	Wrench, MessageCircleQuestion, ArrowRight, Loader2,
 } from "lucide-react";
 import { me, type MeCycleDetail } from "@/api/me";
-import { loopLabel } from "@/pages/app-revamp/loops";
+import { loopLabel } from "@/lib/workflow-names";
 
 // Process-wide cache of fetched cycle details, keyed by app:loop:ts. A cycle
 // is immutable once written, so this never goes stale — re-hovering or
@@ -175,6 +175,9 @@ export default function CycleCard({
 			detail: {
 				prompt: `Walk me through the ${loopLabel(loop, `${app}:${loop}`)} run on ${when} — what it did, what it learned, and anything that went wrong.`,
 				autosend: true,
+				// Structured grounding: the agent calls cycle_detail with
+				// these instead of parsing them back out of the prose.
+				context: { app, loop, cycle: { app, loop, ts } },
 			},
 		}));
 	};

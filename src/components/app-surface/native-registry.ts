@@ -54,6 +54,13 @@ export const NATIVE_SURFACES: Record<string, ComponentType<NativeSurfaceProps>> 
   // inspector) embedded as a tab of its configured UI. App comes from the
   // route — any loop-bearing app can declare a `workflows` surface with this.
   "app-workflows": lazy(() => import("./AppWorkflowsSurface")),
+  "app-experiments": lazy(() => import("./AppExperimentsSurface")),
+
+  // n8n-style pipeline canvas as a standalone native surface. Config:
+  // { loop, cycle: "latest"? } — the lumid:workflow directive is the
+  // markdown-first path; this key serves apps that want the canvas as a
+  // whole declared surface/tab.
+  "workflow-canvas": lazy(() => import("./WorkflowCanvasSurface")),
 };
 
 export function resolveNativeSurface(key?: string): ComponentType<NativeSurfaceProps> | undefined {

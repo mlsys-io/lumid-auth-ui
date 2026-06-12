@@ -310,6 +310,7 @@ const OFFER_KIND_META: Record<CompoundOffer['kind'], { label: string; icon: Reac
 	knowledge: { label: 'extra knowledge', icon: Lightbulb, tone: 'border-amber-200 bg-amber-50/40',   iconTone: 'bg-amber-100 text-amber-700' },
 	skill:     { label: 'a skill',         icon: Wand2,     tone: 'border-emerald-200 bg-emerald-50/40', iconTone: 'bg-emerald-100 text-emerald-700' },
 	workflow:  { label: 'a workflow',      icon: Workflow,  tone: 'border-indigo-200 bg-indigo-50/40',   iconTone: 'bg-indigo-100 text-indigo-700' },
+	experiment: { label: 'an experiment verdict', icon: Lightbulb, tone: 'border-violet-200 bg-violet-50/40', iconTone: 'bg-violet-100 text-violet-700' },
 };
 
 function CompoundBody({ intent }: { intent: DemoIntent }) {

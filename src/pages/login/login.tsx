@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -53,6 +53,8 @@ function initiateGoogleLogin() {
 }
 
 export function Login({ onLogin }: LoginProps) {
+	// index.html ships a neutral title now; auth pages claim their own.
+	useEffect(() => { document.title = 'Sign in · Lumid'; }, []);
 	const navigate = useNavigate();
 	const [showPassword, setShowPassword] = useState(false);
 	const [loading, setLoading] = useState(false);

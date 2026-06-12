@@ -16,13 +16,14 @@
 
 import { createContext, useContext, useId, useCallback, useMemo, Suspense, useEffect, useState, type ReactNode } from "react";
 import { parse as parseYaml } from "yaml";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useParams as useRouteParams } from "react-router-dom";
 import { toast } from "sonner";
 import { AuthContext } from "@/hooks/useAuth";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
 } from "recharts";
 import { me, ME_BASE } from "@/api/me";
+import apiClient from "@/api/client";
 import { cn, formatCurrency, formatPercentage } from "@/lib/utils";
 import { bearerHeader } from "@/api/session-bearer";
 
@@ -310,9 +311,13 @@ function useSource(spec?: string, pollSec = 0) {
   return { ...state, pending, refetch };
 }
 
-function Shell({ title, children }: { title?: string; children: React.ReactNode }) {
+function Shell({ title, children, pickKind, pickId }: { title?: string; children: React.ReactNode; pickKind?: string; pickId?: string }) {
   return (
-    <div className="my-3 rounded-lg border border-slate-200 bg-white overflow-hidden">
+    <div
+      className="my-3 rounded-lg border border-slate-200 bg-white overflow-hidden"
+      data-pick-kind={pickKind}
+      data-pick-id={pickId}
+    >
       {title ? (
         <div className="px-3 py-1.5 border-b border-slate-100 text-[12px] font-medium text-slate-500">{title}</div>
       ) : null}
@@ -943,7 +948,31 @@ type FormField = {
   options?: string[]; default?: unknown; placeholder?: string; required?: boolean;
   group?: string;        // optional group heading (clusters related fields)
   full_width?: boolean;  // span all columns even in a multi-column grid
+  // Dynamic select options from an ALLOWLISTED feed (never a free URL).
+  // "pats://<audience>" (flowmesh | lumilake) — the user's own PATs as
+  // run-as profiles (ids + names only; values are hashed, unrecoverable).
+  options_source?: string;
+  // advanced: true folds the field into a collapsed "Advanced" disclosure
+  // at the end of the form — defaults stay in force when untouched.
+  advanced?: boolean;
 };
+
+type SelectOption = { value: string; label: string };
+
+// Allowlisted dynamic option feeds for lumid:form selects.
+async function loadFieldOptions(source: string): Promise<SelectOption[]> {
+  if (source.startsWith("pats://")) {
+    const r = await apiClient.get("/api/v1/identity/personal-access-tokens?limit=100");
+    const rows = (r.data?.data?.tokens ?? []) as Array<{ id: string; name?: string; prefix?: string; revoked_at?: string | null }>;
+    return [
+      { value: "session", label: "This session — full access, expires in minutes (recommended)" },
+      ...rows
+        .filter((t) => !t.revoked_at)
+        .map((t) => ({ value: t.id, label: `PAT · ${t.name || t.prefix || t.id.slice(0, 8)}` })),
+    ];
+  }
+  return [];
+}
 
 // One field's input + label — shared by grouped/columned rendering.
 function FormFieldInput({ f, vals, setVals }: {
@@ -954,17 +983,33 @@ function FormFieldInput({ f, vals, setVals }: {
   // focuses the field and screen readers pair them. useId keeps ids unique
   // even when two forms on the same surface share a field key.
   const fid = useId();
+  // Dynamic options (options_source) load once; static options render as-is.
+  const [dynOptions, setDynOptions] = useState<SelectOption[] | null>(null);
+  useEffect(() => {
+    if (!f.options_source) return;
+    let live = true;
+    loadFieldOptions(f.options_source)
+      .then((o) => { if (live) setDynOptions(o); })
+      .catch(() => { if (live) setDynOptions([]); });
+    return () => { live = false; };
+  }, [f.options_source]);
+  const selectOptions: SelectOption[] | null =
+    f.type === "select"
+      ? f.options_source
+        ? dynOptions
+        : Array.isArray(f.options) ? f.options.map((o) => ({ value: o, label: o })) : null
+      : null;
   return (
     <div className={cn("flex flex-col gap-1", isWide && "sm:col-span-full")}>
       <label htmlFor={fid} className="text-[12px] font-medium text-slate-700">{f.label ?? f.key}</label>
-      {f.type === "select" && Array.isArray(f.options) ? (
+      {f.type === "select" && (selectOptions || f.options_source) ? (
         <select
           id={fid}
           value={String(vals[f.key] ?? "")}
           onChange={(e) => setVals((v) => ({ ...v, [f.key]: e.target.value }))}
           className="rounded-md border border-slate-200 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/20 focus:border-emerald-400"
         >
-          {f.options.map((o) => <option key={o} value={o}>{o}</option>)}
+          {(selectOptions ?? []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
       ) : f.type === "textarea" ? (
         <textarea
@@ -977,7 +1022,7 @@ function FormFieldInput({ f, vals, setVals }: {
       ) : (
         <input
           id={fid}
-          type={f.type === "number" ? "number" : "text"}
+          type={f.type === "number" ? "number" : f.type === "password" ? "password" : "text"}
           value={String(vals[f.key] ?? "")}
           placeholder={f.placeholder}
           required={f.required}
@@ -1016,8 +1061,11 @@ function LumidForm({ body }: { body: Body }) {
   const cols = Math.max(1, Math.min(3, Number(body.field_columns) || 1));
   const gridCls = cols === 3 ? "sm:grid-cols-3" : cols === 2 ? "sm:grid-cols-2" : "grid-cols-1";
   // Cluster fields into ordered groups (first-seen order; ungrouped = "").
+  // advanced:true fields collect separately into one collapsed disclosure.
   const groups: { name: string; fields: FormField[] }[] = [];
+  const advanced: FormField[] = [];
   for (const f of fields) {
+    if (f.advanced) { advanced.push(f); continue; }
     const g = f.group || "";
     let bucket = groups.find((x) => x.name === g);
     if (!bucket) { bucket = { name: g, fields: [] }; groups.push(bucket); }
@@ -1081,6 +1129,16 @@ function LumidForm({ body }: { body: Body }) {
           </div>
         </div>
       ))}
+      {advanced.length > 0 && (
+        <details className="rounded-lg border border-slate-100 bg-slate-50/40 px-3 py-2">
+          <summary className="text-[12px] font-medium text-slate-500 cursor-pointer select-none hover:text-slate-800 transition-colors">
+            Advanced
+          </summary>
+          <div className={cn("grid gap-3 pt-3", gridCls)}>
+            {advanced.map((f) => <FormFieldInput key={f.key} f={f} vals={vals} setVals={setVals} />)}
+          </div>
+        </details>
+      )}
       {body.cost_estimate ? <CostEstimate cfg={body.cost_estimate as Record<string, unknown>} vals={vals} /> : null}
       <div className="flex items-center gap-2">
         <button
@@ -1153,6 +1211,95 @@ function LumidColumns({ body }: { body: Body }) {
   );
 }
 
+// lumid:workflow — showcase the app's pipeline as a node canvas (D2).
+// Renders the loop's declared structure (read-only, compact); set
+// `cycle: latest` to overlay the most recent run's per-step statuses.
+//
+//   ```lumid:workflow
+//   loop: case_cycle
+//   cycle: latest        # optional; omit for pure structure
+//   app: mbb-ai          # optional; defaults to the surface's app
+//   ```
+function LumidWorkflow({ body }: { body: Body }) {
+  const routeParams = useRouteParams();
+  const app = String(body.app ?? routeParams.app ?? "");
+  const loop = String(body.loop ?? "");
+  const wantLatest = String(body.cycle ?? "") === "latest";
+  const [def, setDef] = useState<import("@/api/me").LoopDefinition | null>(null);
+  const [cycle, setCycle] = useState<import("@/api/me").MeCycleDetail | null>(null);
+  const [Canvas, setCanvas] = useState<React.ComponentType<any> | null>(null);
+  useEffect(() => {
+    // Lazy-load the canvas (xyflow) so app surfaces without the
+    // directive never pay for it.
+    import("@/components/workflow/WorkflowCanvas").then((m) => setCanvas(() => m.default));
+  }, []);
+  useEffect(() => {
+    if (!app || !loop) return;
+    let live = true;
+    import("@/api/me").then(({ me }) => {
+      me.workflowDetail(`${app}:${loop}`)
+        .then((r) => { if (live) setDef((r.definition || null) as any); })
+        .catch(() => { /* hidden below */ });
+      if (wantLatest) {
+        import("@/api/client").then(({ default: apiClient }) => {
+          apiClient.get(`/api/v1/me/cycles?app=${encodeURIComponent(app)}&loop=${encodeURIComponent(loop)}&limit=1`)
+            .then((l: any) => {
+              const ts = l.data?.data?.cycles?.[0]?.ts;
+              if (!ts) return;
+              return apiClient.get(`/api/v1/me/cycles/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/${encodeURIComponent(ts)}`)
+                .then((r: any) => { if (live) setCycle((r.data?.data ?? null) as any); });
+            })
+            .catch(() => { /* structure-only */ });
+        });
+      }
+    });
+    return () => { live = false; };
+  }, [app, loop, wantLatest]);
+  if (!app || !loop) return <ErrLine msg="lumid:workflow needs a `loop:` (and an app context)" />;
+  if (!def || !Canvas) return <Loading />;
+  return <Canvas definition={def} cycle={cycle} mode="showcase" />;
+}
+
+// lumid:ask — prompt chips that route into the Studio chat rail with
+// this app as structured grounding (C5). The visible affordance for
+// "chat is the action surface" on app-authored pages.
+//
+//   ```lumid:ask
+//   prompts:
+//     - How is this app doing this week?
+//     - Run the case_cycle workflow now
+//   loop: case_cycle     # optional grounding refinement
+//   ```
+function LumidAsk({ body }: { body: Body }) {
+  const routeParams = useRouteParams();
+  const app = String(body.app ?? routeParams.app ?? "");
+  const loop = body.loop ? String(body.loop) : undefined;
+  const prompts = Array.isArray(body.prompts) ? body.prompts.map(String) : [];
+  if (prompts.length === 0) return <ErrLine msg="lumid:ask needs prompts: [...]" />;
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-xs">
+      {prompts.map((p) => (
+        <button
+          key={p}
+          onClick={() =>
+            window.dispatchEvent(new CustomEvent("studio:ask", {
+              detail: {
+                prompt: p,
+                autosend: true,
+                context: { page: "app-surface", ...(app ? { app } : {}), ...(loop ? { loop } : {}) },
+              },
+            }))
+          }
+          className="group px-3 py-1.5 rounded-full border border-emerald-200/70 bg-white hover:bg-emerald-50 text-emerald-800 hover:border-emerald-300 transition-all active:scale-[0.98]"
+        >
+          <span className="opacity-60 group-hover:opacity-100 transition-opacity mr-0.5">›</span>
+          {p}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 const WIDGETS: Record<string, (p: { body: Body }) => React.ReactElement> = {
   stat: LumidStat,
   table: LumidTable,
@@ -1164,6 +1311,8 @@ const WIDGETS: Record<string, (p: { body: Body }) => React.ReactElement> = {
   form: LumidForm,
   columns: LumidColumns,
   "search-table": LumidSearchTable,
+  workflow: LumidWorkflow,
+  ask: LumidAsk,
 };
 
 /** Returns true for fenced-block classNames that are Lumid directives. */
@@ -1194,5 +1343,11 @@ export function LumidDirective({ className, raw }: { className?: string; raw: st
     );
   }
   if (parseErr) return <Shell title={`lumid:${type}`}><ErrLine msg={`config parse error: ${parseErr}`} /></Shell>;
-  return <Shell title={title}><Widget body={body} /></Shell>;
+  // Every rendered directive block is pickable by the chat's crosshair —
+  // app-authored surfaces get "point at this widget" for free.
+  return (
+    <Shell title={title} pickKind="surface-block" pickId={`${type}:${title || body.loop || body.source || ""}`}>
+      <Widget body={body} />
+    </Shell>
+  );
 }

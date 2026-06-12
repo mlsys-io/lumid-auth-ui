@@ -1,30 +1,36 @@
-// WorkflowObservabilityPanel — the expandable per-workflow detail.
+// WorkflowObservabilityPanel — the per-workflow DETAIL CARD of the
+// master–detail workflows page (AppOverview renders the list; this is the
+// right-hand card for the selected workflow).
 //
-// Three sections, mapping 1:1 to "status + insights + suggested
-// improvements" — all real, all from me.*:
-//   STATUS       — run-history sparkline, health chip, next-run, schedule,
-//                  Run-now / Pause-Resume / edit-cron controls.
-//   INSIGHTS     — <WorkflowInsights> (reliability + month-over-month
-//                  deltas) + the latest cycle's observe-gate decision.
-//   IMPROVEMENTS — the latest cycle's held review queue (approve / edit /
-//                  revamp, fully wired) + spot-wise compound offers.
+// Reads top-down: header (title + health + Run now / Pause / Delete) →
+// runs (clickable, newest first; click opens the per-run stage inspector)
+// → goal trends → schedule (preset picker, cron only under Advanced) →
+// insights (one sentence + deltas) → suggested improvements.
 //
-// The deepest view (per-step, prompt audit) stays in the cycle inspector;
-// the footer deep-links there.
+// HONESTY RULE: run state comes from the TENANT cycles list only. The
+// wf.last_run_* fields can carry operator-scoped scheduler state for
+// shared apps ("Healthy · ran 2d ago" next to an empty runs list) — when
+// the cycles list is empty this card says "Not run yet", full stop.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
 	Activity, Play, Pause, Loader2, Save, Lightbulb, Clock, AlertCircle, Target,
-	ChevronLeft, ChevronRight,
+	ChevronLeft, ChevronRight, ChevronDown, Trash2, FlaskConical,
 } from "lucide-react";
 import { toast } from "sonner";
 import apiClient from "@/api/client";
-import { me, MeApiError, type MeWorkflowRow, type MeCycleDetail, type MeMetricSeries } from "@/api/me";
+import { me, MeApiError, type MeWorkflowRow, type MeCycleDetail, type MeMetricSeries, type LoopDefinition } from "@/api/me";
+import WorkflowCanvas, { type CanvasStepRef } from "@/components/workflow/WorkflowCanvas";
+import StepInspectorPanel from "@/components/workflow/StepInspectorPanel";
 import { TrendRow } from "@/components/workflow/MetricTrend";
-import RunSparkline from "@/components/RunSparkline";
 import WorkflowInsights from "@/components/workflow/WorkflowInsights";
-import LoopOrbit, { type LoopMode, type LoopStageKey } from "@/components/workflow/LoopOrbit";
+import { type LoopStageKey } from "@/components/workflow/LoopOrbit";
+import SchedulePicker from "@/components/workflow/SchedulePicker";
+import { describeSchedule, parseSchedule } from "@/lib/schedule";
+import { loopLabel } from "@/lib/workflow-names";
+import FailureCard from "@/components/workflow/FailureCard";
+import AskAbout from "@/components/AskAbout";
 import {
 	ObserveGatePanel, ReviewQueue, OffersPanel,
 	type CycleSummary,
@@ -39,11 +45,17 @@ export interface LoopHealth {
 	last_run_ts?: number;
 	consecutive_failures?: number;
 	status?: string; // never | ok | failing | stale | manual
+	// Per-step errors from the last failed run (server sends these in
+	// /me/loops/health already; the type lagged the payload).
+	last_errors?: Array<{ step?: string; skill?: string; error: string }>;
 }
 
-// Health chip — one honest read of "how's this workflow doing".
-function health(wf: MeWorkflowRow, lh?: LoopHealth): { label: string; cls: string; dot: string } {
+// Health chip — one honest read of "how's this workflow doing". hasRuns
+// is the TENANT cycles truth: without any tenant run, operator-scoped
+// wf.last_run_* must not paint a state ("Healthy · ran 2d ago" lie).
+function health(wf: MeWorkflowRow, hasRuns: boolean): { label: string; cls: string; dot: string } {
 	if (wf.enabled === false) return { label: "Paused", cls: "text-slate-500 bg-slate-50 border-slate-200", dot: "bg-slate-300" };
+	if (!hasRuns) return { label: "Not run yet", cls: "text-slate-500 bg-slate-50 border-slate-200", dot: "bg-slate-300" };
 	// Failing = last run failed (fresh journal truth). consecutive_failures
 	// (scheduler-state) can lag a recovered run, so it must not drive red —
 	// keep counts and dots/health on the same single predicate.
@@ -55,9 +67,14 @@ function health(wf: MeWorkflowRow, lh?: LoopHealth): { label: string; cls: strin
 	return { label: "Idle", cls: "text-slate-500 bg-slate-50 border-slate-200", dot: "bg-slate-300" };
 }
 
-function whenLast(ts?: number): string {
-	if (!ts) return "no runs yet";
-	const s = (Date.now() - ts * 1000) / 1000;
+// "ran 5m ago" from the newest tenant cycle DIR id (the single source of
+// run-state truth) — never from operator-scoped wf.last_run_ts.
+function whenLastFromCycle(ts?: string): string {
+	if (!ts) return "";
+	const m = ts.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
+	if (!m) return "";
+	const t = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
+	const s = (Date.now() - t) / 1000;
 	if (s < 60) return "ran just now";
 	if (s < 3600) return `ran ${Math.floor(s / 60)}m ago`;
 	if (s < 86400) return `ran ${Math.floor(s / 3600)}h ago`;
@@ -68,7 +85,7 @@ function whenLast(ts?: number): string {
 const cycleCache = new Map<string, { ts: string | null; summary: CycleSummary | null }>();
 
 export default function WorkflowObservabilityPanel({
-	app, loop, wf, loopHealth, onChanged, initialCycle,
+	app, loop, wf, loopHealth, onChanged, initialCycle, canDelete, onDelete,
 }: {
 	app: string;
 	loop: string;
@@ -78,8 +95,11 @@ export default function WorkflowObservabilityPanel({
 	// Deep-link anchor (?cycle=<ts>) — when set (e.g. CycleCard "Open full
 	// cycle"), auto-open a stage on that run instead of waiting for a click.
 	initialCycle?: string | null;
+	// Per-loop delete (tenant apps, >1 loop) — lives in the card header now
+	// that the master list rows are minimal.
+	canDelete?: boolean;
+	onDelete?: () => void;
 }) {
-	const h = health(wf, loopHealth);
 
 	// ── Controls (run-now / pause-resume / edit cron) ──────────────
 	const [busy, setBusy] = useState<null | "run" | "toggle" | "save">(null);
@@ -132,7 +152,8 @@ export default function WorkflowObservabilityPanel({
 	const cacheKey = `${app}:${loop}`;
 	const cached0 = cycleCache.get(cacheKey);
 	const [cycleTs, setCycleTs] = useState<string | null>(cached0?.ts ?? null);
-	const [cycleList, setCycleList] = useState<Array<{ ts: string; ok?: boolean; running?: boolean; duration_s?: number }>>([]);
+	// null = still loading; [] = confirmed zero tenant runs.
+	const [cycleList, setCycleList] = useState<Array<{ ts: string; ok?: boolean; running?: boolean; duration_s?: number }> | null>(null);
 	const [anchorTs, setAnchorTs] = useState<string | null>(initialCycle || null);
 	const [summary, setSummary] = useState<CycleSummary | null>(cached0?.summary ?? null);
 	const [cycleFiles, setCycleFiles] = useState<Record<string, unknown>>({});
@@ -142,12 +163,17 @@ export default function WorkflowObservabilityPanel({
 	// Live running/event state — distinct from one-shot load motion.
 	const [optimisticRun, setOptimisticRun] = useState(false);
 	const [justRan, setJustRan] = useState(false);
-	const [pulseStage, setPulseStage] = useState<LoopStageKey | null>(null);
 	// Arriving with a ?cycle anchor opens the Learn stage (the run's outcome)
 	// on that cycle, so "Open full cycle" lands on real content immediately.
 	const [selectedStage, setSelectedStage] = useState<LoopStageKey | null>(initialCycle ? "learn" : null);
 	const [stageQ, setStageQ] = useState("");
 	const prevTsRef = useRef<string | null>(null);
+	// Canvas (n8n-style node view): the loop's declared structure +
+	// the selected run's per-step overlay + the click-a-node inspector.
+	const [definition, setDefinition] = useState<LoopDefinition | null>(null);
+	const [canvasCycle, setCanvasCycle] = useState<MeCycleDetail | null>(null);
+	const [canvasStep, setCanvasStep] = useState<CanvasStepRef | null>(null);
+	const [canvasOpen, setCanvasOpen] = useState(true);
 
 	const loadLatestCycle = useCallback(async () => {
 		try {
@@ -167,8 +193,7 @@ export default function WorkflowObservabilityPanel({
 			if (prevTsRef.current !== null && ts !== prevTsRef.current) {
 				setOptimisticRun(false);
 				setJustRan(true);
-				setPulseStage("learn"); // the loop just closed → learned
-				window.setTimeout(() => { setJustRan(false); setPulseStage(null); }, 2600);
+				window.setTimeout(() => setJustRan(false), 2600);
 			}
 			prevTsRef.current = ts;
 			setCycleTs(ts);
@@ -205,56 +230,148 @@ export default function WorkflowObservabilityPanel({
 		return () => { live = false; };
 	}, [app, loop]);
 
+	// Canvas structure — the loop declaration verbatim (steps[] or
+	// engine + skills_invoked[]). One fetch per loop.
+	useEffect(() => {
+		let live = true;
+		setDefinition(null);
+		setCanvasStep(null);
+		me.workflowDetail(`${app}:${loop}`)
+			.then((r) => { if (live) setDefinition((r.definition || null) as LoopDefinition | null); })
+			.catch(() => { /* no declaration → canvas hides itself */ });
+		return () => { live = false; };
+	}, [app, loop]);
+
+	// Canvas overlay — the SELECTED run's per-step data (n8n's replay:
+	// clicking a dot in the runs strip re-paints the graph with that
+	// run's statuses). Falls back to the latest run.
+	const overlayTs = anchorTs || cycleTs;
+	useEffect(() => {
+		let live = true;
+		if (!overlayTs) { setCanvasCycle(null); return; }
+		apiClient.get(`/api/v1/me/cycles/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/${encodeURIComponent(overlayTs)}`)
+			.then((r: any) => { if (live) setCanvasCycle((r.data?.data ?? null) as MeCycleDetail | null); })
+			.catch(() => { if (live) setCanvasCycle(null); });
+		return () => { live = false; };
+	}, [app, loop, overlayTs]);
+
 	const gate = summary?.observe_gate;
 	const reviewQueue = Array.isArray(summary?.review_queue) ? summary!.review_queue! : [];
 	const offers = Array.isArray(summary?.offers) ? summary!.offers! : [];
 
 	const enabled = wf.enabled !== false;
-	const dataRunning = (wf.run_spark || "").endsWith(".");
-	const mode: LoopMode = !enabled ? "paused" : (optimisticRun || dataRunning) ? "running" : "idle";
-
-	const loopCaption: React.ReactNode =
-		justRan ? <span className="text-emerald-700 font-medium">✓ New run complete — insights updated</span>
-		: mode === "running" ? "Iterating now — moving through the stages (scoring runs can take a few minutes)"
-		: mode === "idle" ? (wf.next_run_ts ? <span>Armed · <NextRunCountdown nextTs={wf.next_run_ts} /></span> : "On demand — runs when you click Run now")
-		: "Paused";
+	const cyclesKnown = cycleList !== null;
+	const tenantHasRuns = (cycleList?.length ?? 0) > 0;
+	const liveRunning = (cycleList ?? []).some((c) => c.running);
+	const running = optimisticRun || liveRunning;
+	const h = health(wf, tenantHasRuns || !cyclesKnown);
+	const lastRan = whenLastFromCycle(cycleList?.[0]?.ts);
+	const onDemand = parseSchedule(wf.trigger).kind === "trigger";
 
 	const openRun = (ts: string) => { setAnchorTs(ts); setSelectedStage("learn"); };
 
 	return (
-		<div className="border-t border-slate-200/70 bg-slate-50/40 px-4 py-4 space-y-4 animate-in fade-in duration-300">
-			{/* ── ACTION BAR — health + last-run + the controls, one row ── */}
-			<div className="flex flex-wrap items-center gap-2">
-				<span className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-medium", h.cls, justRan && "value-pop")}>
-					<span className={cn("w-1.5 h-1.5 rounded-full", h.dot, mode === "running" && "running-glow")} />
-					{h.label}
-				</span>
-				<span className="text-xs text-slate-500">{whenLast(wf.last_run_ts)}</span>
-				<div className="flex items-center gap-2 ml-auto">
+		<div className="rounded-xl border border-slate-200 bg-white p-4 space-y-4 animate-in fade-in duration-300">
+			{/* ── HEADER — title + health + schedule + the controls ── */}
+			<div className="flex flex-wrap items-start gap-2">
+				<div className="min-w-0 flex-1">
+					<div className="flex items-center gap-2 flex-wrap">
+						<h3 className="text-sm font-semibold text-slate-900 truncate">{loopLabel(wf.name, loop)}</h3>
+						<span className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-medium", h.cls, justRan && "value-pop")}>
+							<span className={cn("w-1.5 h-1.5 rounded-full", h.dot, running && "running-glow")} />
+							{running ? "Running…" : h.label}
+						</span>
+					</div>
+					<div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+						<span>{describeSchedule(wf.trigger)}{lastRan ? ` · ${lastRan}` : ""}</span>
+						{(wf.experiment_ids || []).map((eid) => (
+							<Link key={eid} to={`/studio/a/${encodeURIComponent(app)}/experiments`}
+								title={`feeds experiment ${eid}`}
+								className="inline-flex items-center gap-1 px-1.5 py-px rounded-full border border-violet-200 bg-violet-50 text-violet-700 text-[10px] hover:bg-violet-100 transition-colors">
+								<FlaskConical className="w-2.5 h-2.5" />{eid.replace(/_/g, " ")}
+							</Link>
+						))}
+					</div>
+				</div>
+				<div className="flex items-center gap-2 flex-shrink-0">
 					<button onClick={runNow} disabled={!!busy}
 						className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 active:scale-95 disabled:opacity-50 transition-all shadow-sm shadow-emerald-100">
 						{busy === "run" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
 						Run now
 					</button>
+					<AskAbout
+						prompt={`Suggest improvements for the ${loop} workflow in ${app} — look at its recent runs and propose concrete changes (schedule, steps, prompts).`}
+						context={{ app, loop }}
+						label="Improve"
+					/>
 					<button onClick={toggle} disabled={!!busy}
 						className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50">
 						{busy === "toggle" ? <Loader2 className="w-3 h-3 animate-spin" /> : enabled ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
 						{enabled ? "Pause" : "Resume"}
 					</button>
+					{canDelete && (
+						<button onClick={onDelete} title="Delete this workflow"
+							className="p-1.5 rounded-lg text-slate-300 hover:text-red-600 hover:bg-red-50 transition-colors">
+							<Trash2 className="w-3.5 h-3.5" />
+						</button>
+					)}
 				</div>
 			</div>
-			{mode !== "running" && wf.last_run_ok === false && lastError && (
-				<div className="flex items-start gap-1.5 rounded-lg border border-rose-200 bg-rose-50/60 px-2.5 py-1.5 text-[11px] text-rose-800">
-					<AlertCircle className="w-3.5 h-3.5 mt-px flex-shrink-0" />
-					<span className="font-mono break-all">{lastError.slice(0, 220)}</span>
+
+			{/* ── NOT RUN YET — the one empty state (replaces every section) ── */}
+			{cyclesKnown && !tenantHasRuns && !running && !definition && (
+				<div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-5 text-center space-y-1">
+					<div className="text-sm text-slate-600">Not run yet.</div>
+					<div className="text-xs text-slate-400">
+						{onDemand ? "It runs when you click Run now." : `It runs ${describeSchedule(wf.trigger).toLowerCase()} — or run it now to try it.`}
+					</div>
 				</div>
 			)}
+			{!running && wf.last_run_ok === false && lastError && tenantHasRuns && (
+				<FailureCard error={lastError} app={app} loop={loop} />
+			)}
+
+			{/* ── PIPELINE — n8n-style node canvas. Structure from the loop's
+			    declaration; statuses from the selected run (dot click = replay). ── */}
+			{definition && (definition.steps?.length || definition.skills_invoked?.length || definition.engine?.type || definition.engine?.module) ? (
+				<div className="space-y-2">
+					<button
+						type="button"
+						onClick={() => setCanvasOpen((v) => !v)}
+						className="inline-flex items-center gap-1 text-[11px] tracking-[0.08em] font-medium text-slate-400 uppercase hover:text-slate-600 transition-colors"
+					>
+						{canvasOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+						Pipeline
+						{overlayTs && tenantHasRuns && <span className="normal-case tracking-normal text-slate-400 font-normal">· showing run {cycleDate(overlayTs)}</span>}
+						{!tenantHasRuns && <span className="normal-case tracking-normal text-slate-400 font-normal">· runs when you click Run now</span>}
+					</button>
+					{canvasOpen && (
+						<>
+							<WorkflowCanvas
+								definition={definition}
+								cycle={canvasCycle}
+								running={running}
+								onStepSelect={(ref) => setCanvasStep(ref)}
+							/>
+							{canvasStep && (
+								<StepInspectorPanel
+									step={canvasStep}
+									app={app}
+									loop={loop}
+									ts={overlayTs || undefined}
+									onClose={() => setCanvasStep(null)}
+								/>
+							)}
+						</>
+					)}
+				</div>
+			) : null}
 
 			{/* ── RUNS — what happened, newest first; click to inspect ── */}
-			{cycleList.length > 0 && (
+			{tenantHasRuns && (
 				<Section icon={Clock} title="Runs">
 					<ul className="rounded-xl border border-slate-200 bg-white divide-y divide-slate-100 overflow-hidden">
-						{cycleList.map((c) => {
+						{(cycleList ?? []).map((c) => {
 							const cdot = c.running ? "bg-sky-500 running-pulse" : c.ok === false ? "bg-rose-500" : "bg-emerald-500";
 							return (
 								<li key={c.ts}>
@@ -274,76 +391,59 @@ export default function WorkflowObservabilityPanel({
 					</ul>
 				</Section>
 			)}
-			{/* What this loop is chasing + how its metrics move over runs. Shown
-			    whenever there's a goal OR a trajectory — the curve must not depend
-			    on the goal manifest field being present. */}
-			{(wf.goal?.primary || metricSeries.length > 0) ? (
-				<GoalHeader goal={wf.goal} kpis={buildGoalKpis(summary, cycleFiles)} series={metricSeries} events={metricEvents} app={app} loop={loop} />
-			) : (
-				// Honest empty-state: qualitative loops (briefs/triage) emit no
-				// numeric metric, so there's no trajectory to chart — say so
-				// rather than leave a blank that reads as "missing curve".
-				<div className="rounded-xl border border-slate-200/70 bg-slate-50/50 p-3 text-[11px] text-slate-500 flex items-start gap-2">
-					<Target className="w-4 h-4 text-slate-300 mt-px flex-shrink-0" />
-					<span>This loop's work is qualitative — no numeric metric to chart yet. Its cadence and run health are in <span className="font-medium text-slate-600">Status</span>; what each run did is in the stages above.</span>
-				</div>
-			)}
-			{/* The loop, as the centerpiece — turning while a cycle runs,
-			    rippling the stage when an event (new cycle) fires. */}
-			<LoopOrbit
-				mode={mode}
-				pulse={pulseStage}
-				caption={loopCaption}
-				onStageClick={(k) => setSelectedStage((s) => (s === k ? null : k))}
-				selected={selectedStage}
-			/>
-			{selectedStage && (
+			{/* Per-run stage inspector — opened by clicking a run above. */}
+			{selectedStage && tenantHasRuns && (
 				<StageDetail
 					app={app} loop={loop} stage={selectedStage} initialTs={anchorTs || undefined}
+					onStageChange={(k) => setSelectedStage(k)}
 					q={stageQ} setQ={setStageQ} onClose={() => setSelectedStage(null)}
 				/>
 			)}
 
-			{/* ── SCHEDULE ─────────────────────────────────────────── */}
+			{/* What this loop is chasing + how its metrics move over runs. */}
+			{tenantHasRuns && (wf.goal?.primary || metricSeries.length > 0) && (
+				<GoalHeader goal={wf.goal} kpis={buildGoalKpis(summary, cycleFiles)} series={metricSeries} events={metricEvents} app={app} loop={loop} />
+			)}
+
+			{/* ── SCHEDULE — presets for humans; cron only under Advanced ── */}
 			<Section icon={Activity} title="Schedule">
-				<div className="flex flex-wrap items-center gap-2">
-					<RunSparkline spec={wf.run_spark || ""} runs={wf.runs_recent} app={app} loop={loop} />
-					{wf.last_run_ok === false && (loopHealth?.consecutive_failures ?? 0) > 0 && (
-						<span className="text-xs text-rose-600">{loopHealth!.consecutive_failures} consecutive failures</span>
+				<div className="flex flex-wrap items-start gap-3">
+					{wf.last_run_ok === false && tenantHasRuns && (loopHealth?.consecutive_failures ?? 0) > 0 && (
+						<span className="text-xs text-rose-600 mt-1">{loopHealth!.consecutive_failures} consecutive failures</span>
 					)}
-					<div className="flex items-center gap-1.5 ml-auto">
-						<input
-							type="text"
+					<div className="flex items-start gap-1.5 ml-auto">
+						<SchedulePicker
 							value={sched}
-							onChange={(e) => { setSched(e.target.value); setSchedDirty(true); }}
-							placeholder="cron e.g. 0 8 * * *"
-							className="w-36 px-2 py-1 text-xs font-mono rounded border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
+							disabled={!!busy}
+							onChange={(c) => { setSched(c); setSchedDirty(true); }}
 						/>
 						<button
 							onClick={saveSchedule}
 							disabled={!schedDirty || !!busy}
 							className={cn(
-								"inline-flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors",
-								schedDirty ? "bg-emerald-500 text-white hover:bg-emerald-600" : "bg-slate-200 text-slate-400 cursor-not-allowed",
+								"inline-flex items-center gap-1 px-2 py-1.5 text-xs rounded-lg transition-colors",
+								schedDirty ? "bg-emerald-500 text-white hover:bg-emerald-600" : "bg-slate-100 text-slate-400 cursor-not-allowed",
 							)}
 						>
 							{busy === "save" ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+							Save
 						</button>
 					</div>
-					<div className="basis-full text-[10px] text-slate-400 text-right -mt-1">{humanizeSchedule(sched)}</div>
 				</div>
 			</Section>
 
-			{/* ── INSIGHTS ─────────────────────────────────────────── */}
-			<Section icon={Lightbulb} title="Insights" delay={120}>
-				<WorkflowInsights slug={wf.slug} />
-				{gate && <div className="mt-2"><ObserveGatePanel gate={gate} /></div>}
-			</Section>
+			{/* ── INSIGHTS — hidden until there are runs to speak about ── */}
+			{tenantHasRuns && (
+				<Section icon={Lightbulb} title="Insights" delay={120}>
+					<WorkflowInsights slug={wf.slug} />
+					{gate && <div className="mt-2"><ObserveGatePanel gate={gate} /></div>}
+				</Section>
+			)}
 
 			{/* ── SUGGESTED IMPROVEMENTS ───────────────────────────── */}
 			{(reviewQueue.length > 0 || offers.length > 0) && (
 				<Section icon={Clock} title="Suggested improvements" delay={240}>
-					{offers.length > 0 && <OffersPanel offers={offers} />}
+					{offers.length > 0 && <OffersPanel offers={offers} app={app} loop={loop} ts={cycleTs ?? undefined} />}
 					{reviewQueue.length > 0 && cycleTs && (
 						<div className={offers.length > 0 ? "mt-2" : ""}>
 							<ReviewQueue app={app} loop={loop} ts={cycleTs} items={reviewQueue} onActed={loadLatestCycle} />
@@ -354,20 +454,6 @@ export default function WorkflowObservabilityPanel({
 
 		</div>
 	);
-}
-
-// Render a cron schedule in plain English (the raw "@trigger" / cron is
-// confusing in the UI).
-function humanizeSchedule(s?: string): string {
-	if (!s || s === "@trigger") return "On demand — runs only when you click Run now";
-	let m: RegExpMatchArray | null;
-	if ((m = s.match(/^0 (\d{1,2}) \* \* \*$/))) return `Daily at ${m[1].padStart(2, "0")}:00`;
-	if ((m = s.match(/^0 \*\/(\d+) \* \* \*$/))) return `Every ${m[1]}h`;
-	if ((m = s.match(/^\*\/(\d+) \* \* \* \*$/))) return `Every ${m[1]} min`;
-	if ((m = s.match(/^\d{1,2} \*\/(\d+) \* \* \*$/))) return `Every ${m[1]}h`;
-	if (/\* \* 1-5$/.test(s)) return "Weekdays on schedule";
-	if (/\* \* 1$/.test(s)) return "Weekly";
-	return `Cron: ${s}`;
 }
 
 // Per-stage one-liners for the clickable orbit drill-down.
@@ -419,13 +505,12 @@ function GoalHeader({ goal, kpis, series, events, app, loop }: { goal?: { primar
 	// values. Then just the tracked-metric names, terse. The goal line is
 	// optional — the trend curve renders regardless.
 	const hasTrends = series.length > 0;
-	const showNames = !hasTrends && kpis.length === 0 && !!goal?.tracked?.length;
 	return (
 		<div className="rounded-xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50/80 to-white p-3">
 			<div className="flex items-start gap-2">
 				<Target className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
 				<div className="min-w-0 flex-1">
-					<div className="text-[10px] uppercase tracking-wide text-emerald-700/70 font-semibold">{goal?.primary ? "Goal · how it's trending" : "How it's trending"}</div>
+					<div className="text-[10px] uppercase tracking-wide text-emerald-700/70 font-semibold" title={(goal?.tracked || []).join(" · ")}>{goal?.primary ? "Goal · how it's trending" : "How it's trending"}</div>
 					{goal?.primary && <div className="text-[13px] text-slate-800 font-medium leading-snug">{humanizeGoal(goal.primary)}</div>}
 					{hasTrends ? (
 						<TrendRow series={series} events={events} tracked={goal?.tracked} app={app} loop={loop} />
@@ -439,11 +524,6 @@ function GoalHeader({ goal, kpis, series, events, app, loop }: { goal?: { primar
 							))}
 						</div>
 					) : null}
-					{showNames && (
-						<div className="mt-1 text-[10px] text-slate-400 truncate" title={(goal?.tracked || []).join(" · ")}>
-							tracks {(goal?.tracked || []).join(" · ")}
-						</div>
-					)}
 				</div>
 			</div>
 		</div>
@@ -572,12 +652,58 @@ function StageBody({ stage, detail }: { stage: LoopStageKey; detail: MeCycleDeta
 	return <div className="space-y-2">{blocks}</div>;
 }
 
+// RunFlow — n8n-style read-only node chain of the run's ACTUAL steps.
+// Each node = one executed step (skill), colored by outcome, connected
+// left-to-right; clicking a node jumps the inspector to that step's stage.
+// Runs without step records (some Pattern-B verbs) fall back to the
+// 5-stage chip switcher rendered by the caller.
+function RunFlow({ steps, active, onPick }: {
+	steps: Array<{ step_id?: string; skill?: string; stage?: string; ok?: boolean; duration_s?: number }>;
+	active: LoopStageKey;
+	onPick?: (k: LoopStageKey) => void;
+}) {
+	if (!steps.length) return null;
+	return (
+		<div className="overflow-x-auto pb-1 -mx-1 px-1">
+			<div className="flex items-center w-max min-w-full py-1.5">
+				{steps.map((st, i) => {
+					const stg = (st.stage || "") as LoopStageKey;
+					const isActive = stg === active;
+					const tone = st.ok === false
+						? "border-rose-300 bg-rose-50 text-rose-700"
+						: "border-emerald-200 bg-white text-slate-700";
+					return (
+						<div key={`${st.step_id || st.skill || i}`} className="flex items-center">
+							{i > 0 && <span className={cn("h-px w-5 flex-shrink-0", st.ok === false ? "bg-rose-200" : "bg-slate-200")} />}
+							<button
+								type="button"
+								onClick={() => stg && onPick?.(stg)}
+								title={`${st.skill || st.step_id}${typeof st.duration_s === "number" ? ` · ${Math.round(st.duration_s)}s` : ""}${st.ok === false ? " · failed" : ""}`}
+								className={cn(
+									"flex-shrink-0 rounded-lg border px-2 py-1 text-[10px] leading-tight max-w-[110px] truncate transition-colors",
+									tone,
+									isActive && "ring-2 ring-emerald-400/60",
+									!stg && "cursor-default",
+								)}
+							>
+								<span className={cn("inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle", st.ok === false ? "bg-rose-500" : "bg-emerald-400")} />
+								{st.skill || st.step_id || `step ${i + 1}`}
+							</button>
+						</div>
+					);
+				})}
+			</div>
+		</div>
+	);
+}
+
 function StageDetail({
-	app, loop, stage, q, setQ, onClose, initialTs,
+	app, loop, stage, q, setQ, onClose, initialTs, onStageChange,
 }: {
 	app: string; loop: string; stage: LoopStageKey;
 	q: string; setQ: (v: string) => void; onClose: () => void;
 	initialTs?: string;
+	onStageChange?: (k: LoopStageKey) => void;
 }) {
 	const info = STAGE_INFO[stage];
 	const [cycles, setCycles] = useState<Array<{ ts: string }> | null>(null);
@@ -618,7 +744,11 @@ function StageDetail({
 		const t = q.trim();
 		if (!t) return;
 		window.dispatchEvent(new CustomEvent("studio:ask", {
-			detail: { prompt: `On ${app} / ${loop} — the ${info.label} stage${ts ? ` (run ${cycleDate(ts)})` : ""}: ${t}`, autosend: true },
+			detail: {
+				prompt: `On ${app} / ${loop} — the ${info.label} stage${ts ? ` (run ${cycleDate(ts)})` : ""}: ${t}`,
+				autosend: true,
+				context: { app, loop, ...(ts ? { cycle: { app, loop, ts } } : {}) },
+			},
 		}));
 		setQ("");
 	};
@@ -644,6 +774,28 @@ function StageDetail({
 				</div>
 			</div>
 
+			{/* The run as a node chain (n8n-style) — real executed steps when
+			    recorded; else a 5-stage chip switcher so stages stay navigable. */}
+			{detail?.steps?.length ? (
+				<div className="mt-1.5">
+					<RunFlow steps={detail.steps} active={stage} onPick={(k) => onStageChange?.(k)} />
+				</div>
+			) : (
+				<div className="mt-1.5 flex flex-wrap gap-1">
+					{(Object.keys(STAGE_INFO) as LoopStageKey[]).map((k) => (
+						<button key={k} type="button" onClick={() => onStageChange?.(k)}
+							className={cn(
+								"px-2 py-0.5 rounded-full text-[10px] border transition-colors",
+								k === stage
+									? "bg-emerald-600 text-white border-emerald-600"
+									: "bg-white text-slate-500 border-slate-200 hover:border-emerald-300 hover:text-emerald-700",
+							)}>
+							{STAGE_INFO[k].label}
+						</button>
+					))}
+				</div>
+			)}
+
 			<div className="mt-2 min-h-[36px]">
 				{loading && !detail ? (
 					<div className="flex items-center gap-2 text-[11px] text-slate-400 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" />reading the run…</div>
@@ -665,22 +817,6 @@ function StageDetail({
 			</form>
 		</div>
 	);
-}
-
-// Live ticking countdown to the loop's next scheduled fire — honest motion
-// for an idle (armed) loop.
-function NextRunCountdown({ nextTs }: { nextTs: number }) {
-	const [now, setNow] = useState(Date.now());
-	useEffect(() => {
-		const id = window.setInterval(() => setNow(Date.now()), 1000);
-		return () => window.clearInterval(id);
-	}, []);
-	const ms = nextTs * 1000 - now;
-	if (ms <= 0) return <span className="text-[11px] text-slate-400">next run due now</span>;
-	const s = Math.floor(ms / 1000);
-	const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
-	const txt = h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${String(sec).padStart(2, "0")}s` : `${sec}s`;
-	return <span className="text-[11px] text-slate-400 tabular-nums">next run in {txt}</span>;
 }
 
 function Section({

@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { me, type MeWorkflowRow } from "@/api/me";
 import RunSparkline from "@/components/RunSparkline";
 import { CardMetrics } from "@/components/workflow/MetricTrend";
-import { loopLabel } from "@/pages/app-revamp/loops";
+import { loopLabel } from "@/lib/workflow-names";
 import { iconFor, APP_NAV_INVALIDATE } from "@/components/useAppNav";
 import { cn } from "@/lib/utils";
 
@@ -111,15 +111,11 @@ export default function AppCard({
 	const running = workflows.filter((w) => w.running).length;
 	const lastActivity = workflows.reduce((m, w) => Math.max(m, w.last_run_ts || 0), 0);
 
-	const railTone = running > 0 ? "bg-sky-400" : failing > 0 ? "bg-rose-400" : healthy > 0 ? "bg-emerald-400" : "bg-slate-300";
-
 	const cls = "group relative block w-full text-left rounded-xl border border-slate-200/80 bg-white overflow-hidden hover:shadow-md hover:shadow-slate-200/60 hover:border-slate-300 transition-all hover:-translate-y-0.5 animate-in fade-in slide-in-from-bottom-2 duration-500";
 	const style = { animationDelay: `${index * 70}ms`, animationFillMode: "both" as const };
 
 	return (
 		<div style={style} className={cls}>
-			{/* status rail */}
-			<span className={cn("absolute left-0 top-0 bottom-0 w-1", railTone)} />
 
 			{/* header → the app's configured UI (or the workflow overview when none) */}
 			<button type="button" onClick={openHeader} className="block w-full text-left px-4 pt-3 pb-2">
@@ -128,32 +124,24 @@ export default function AppCard({
 						<Icon className="w-[18px] h-[18px]" />
 					</div>
 					<div className="min-w-0 flex-1">
-						<div className="flex items-center gap-2">
-							<h3 className="text-[14px] font-medium text-slate-900 truncate">{label}</h3>
+					<div className="flex items-center gap-2">
+						<h3 className="text-[14px] font-medium text-slate-900 truncate">{label}</h3>
+						{/* ONE status signal: running > failing > quiet health ratio.
+						    (The rail, heartbeat dot, wf-count, and mono slug all said the
+						    same thing four ways — scrubbed 2026-06-12.) */}
+						<span className="ml-auto flex items-center text-[11px] flex-shrink-0">
 							{running > 0 ? (
-								<span className="inline-flex items-center gap-1 flex-shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-sky-50 text-sky-700 border border-sky-200" title="a run is in progress">
+								<span className="inline-flex items-center gap-1 text-sky-700" title="a run is in progress">
 									<span className="w-1.5 h-1.5 rounded-full bg-sky-500 running-pulse" />running
 								</span>
-							) : healthy > 0 && failing === 0 ? (
-								<span className="w-1.5 h-1.5 rounded-full bg-emerald-500 heartbeat flex-shrink-0" title="active — workflows healthy" />
+							) : failing > 0 ? (
+								<span className="inline-flex items-center gap-0.5 text-rose-700"><AlertTriangle className="w-3 h-3" />{failing} failing</span>
+							) : total > 0 ? (
+								<span className="text-slate-400">{healthy}/{total} healthy</span>
 							) : null}
-							{identity?.published && (
-								<span className="text-[9px] uppercase tracking-wide rounded-full px-1.5 py-px border border-emerald-200 bg-emerald-50 text-emerald-700">published</span>
-							)}
-							{/* workflow + attention summary, right of the title */}
-							<span className="ml-auto flex items-center gap-2 text-[11px] flex-shrink-0">
-								<span className="text-slate-500"><span className="font-semibold text-slate-700">{total}</span> wf</span>
-								{failing > 0 ? (
-									<span className="inline-flex items-center gap-0.5 text-rose-700"><AlertTriangle className="w-3 h-3" />{failing} need{failing === 1 ? "s" : ""} attention</span>
-								) : healthy > 0 ? (
-									<span className="inline-flex items-center gap-0.5 text-emerald-700"><CheckCircle2 className="w-3 h-3" />{healthy} healthy</span>
-								) : null}
-							</span>
-						</div>
-						<div className="text-[12px] text-slate-400 mt-0.5 flex items-center gap-2">
-							<span className="font-mono truncate">{app}{identity?.version ? ` · v${identity.version}` : ""}</span>
-							<span className="ml-auto flex-shrink-0">{whenLast(lastActivity)}</span>
-						</div>
+						</span>
+					</div>
+					<div className="text-[12px] text-slate-400 mt-0.5 truncate">{whenLast(lastActivity)}</div>
 					</div>
 					<ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-emerald-600 transition-colors flex-shrink-0" />
 					<span
@@ -169,7 +157,7 @@ export default function AppCard({
 			{/* each workflow row → label opens the app; the sparkline's dots are
 			    individually clickable (hover previews / click pins the cycle). */}
 			<div className="px-4 pb-3 space-y-0.5 border-t border-slate-100 pt-2">
-				{workflows.slice(0, 2).map((w) => (
+				{[...workflows].sort((a, b) => Number(!!b.run_spark) - Number(!!a.run_spark)).slice(0, 2).map((w) => (
 					<div
 						key={w.slug}
 						className="flex items-center gap-2 w-full rounded-md px-1.5 -mx-1.5 py-0.5 hover:bg-emerald-50/60 transition-colors"
@@ -182,7 +170,7 @@ export default function AppCard({
 						>
 							{loopLabel(w.name, w.slug)}
 						</button>
-						<RunSparkline spec={w.run_spark || ""} runs={w.runs_recent} app={w.app} loop={loopOf(w)} />
+						{w.run_spark ? <RunSparkline spec={w.run_spark} runs={w.runs_recent} app={w.app} loop={loopOf(w)} /> : null}
 					</div>
 				))}
 				{total > 2 && <div className="text-[10px] text-slate-400 pt-0.5 pl-1.5">+{total - 2} more</div>}
