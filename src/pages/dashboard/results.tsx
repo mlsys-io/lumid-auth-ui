@@ -95,8 +95,8 @@ export default function ResultsPage() {
 	return (
 		<div className="max-w-5xl">
 			<header className="mb-6">
-				<h1 className="text-2xl font-semibold text-slate-900">My Results</h1>
-				<p className="mt-1 text-sm text-slate-600">
+				{/* Page identity lives in the top strip (deriveMeta /dashboard fallback). */}
+				<p className="text-sm text-slate-600">
 					Latest cycle outcome per research loop.{' '}
 					<a href="https://xp.io" target="_blank" rel="noopener noreferrer"
 						className="text-indigo-600 hover:underline inline-flex items-center gap-1">

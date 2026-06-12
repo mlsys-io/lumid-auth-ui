@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
 import { buildSshTaskYaml, submitWorkflow, type RentalSpec } from "@/api/flowmesh";
+import KeyPicker from "./KeyPicker";
 import {
 	listSshKeys,
 	uploadSshKey,
@@ -610,6 +611,13 @@ export default function GpuRentalWizard() {
 						)}
 					</CardContent>
 				</Card>
+
+				{/* Which credential this rental is created with — explicit, not
+				    implicit (the implicit session bearer once lacked workflow
+				    write scope and every create 403'd). */}
+				<div className="mt-4">
+					<KeyPicker />
+				</div>
 
 				<div className="mt-6 flex items-center gap-2 justify-end">
 					<Link to="/dashboard/gpu-rentals">

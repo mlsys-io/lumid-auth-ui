@@ -45,16 +45,16 @@ const AppSurfaceEditor   = lazy(() => import("./components/app-surface/AppSurfac
 // In-Studio YAML config editor for an installed app at /studio/a/:app/config
 const AppManagePanel    = lazy(() => import("./components/app-surface/AppManagePanel"));
 const AppConfigEditor    = lazy(() => import("./components/app-surface/AppConfigEditor"));
-// W1 workflow surface — replaces /studio/apps as the canonical landing
-// for "Manage" verbs. Adds /workflows list + per-workflow detail +
-// the unified /runs view + per-run drill-down.
-const StudioWorkflows    = lazy(() => import("./pages/studio/workflows"));
-const StudioWorkflowDtl  = lazy(() => import("./pages/studio/workflow-detail"));
+// W1 workflow surfaces folded into /studio/apps (per-app observability
+// panel); /workflows and /mind redirect there, /workflows/:slug
+// param-redirects into the owning app's panel. Runs stay as the
+// cross-app run index.
 const StudioRuns         = lazy(() => import("./pages/studio/runs"));
+// Workstream E — skills as a first-class surface (inventory + health + discovery).
+const StudioSkills       = lazy(() => import("./pages/studio/skills"));
+// Workstream F — cross-app experiments aggregate.
+const StudioExperiments  = lazy(() => import("./pages/studio/experiments"));
 const StudioRunDetail    = lazy(() => import("./pages/studio/run-detail"));
-// W4 — Mind surface (Improve verb). Subtle by design; collapsed-by-default
-// in the sidebar with no Today entry-points.
-const StudioMind         = lazy(() => import("./pages/studio/mind"));
 // Phase S3-D — per-agent knowledge browser (at /studio/knowledge/:agent).
 const StudioKnowledge  = lazy(() => import("./pages/studio/knowledge"));
 // "You, encoded" ledger at /studio/knowledge (distinct from the per-agent browser).
@@ -70,6 +70,7 @@ const StudioAdmin      = lazy(() => import("./pages/studio/admin"));
 // illustrated against the demo intents. Stages 1-2 concrete, 3 open.
 const StudioHow        = lazy(() => import("./pages/studio/how"));
 const StudioMarketplace = lazy(() => import("./pages/studio/library"));
+const StudioLibraryTabs = lazy(() => import("./pages/studio/library-tabs"));
 
 // Auto-quant operator page (/dashboard/auto-quant/*)
 const AutoQuantPage = lazy(() => import("./pages/app/auto-quant/index"));
@@ -278,6 +279,23 @@ function AppAdminRedirect() {
   const loc = useLocation();
   const dest = tail ? `/dashboard/admin/${tail}${loc.search}` : `/dashboard/admin${loc.search}`;
   return <Navigate to={dest} replace />;
+}
+
+// /studio/workflows → /studio/apps, PRESERVING the query (?compose=1
+// must reach the apps page's composer host).
+function WorkflowsListRedirect() {
+  const loc = useLocation();
+  return <Navigate to={`/studio/apps${loc.search}`} replace />;
+}
+
+// /studio/workflows/:slug (slug = "<app>:<loop>") folded into the
+// per-app observability panel; deep links land there with the loop open.
+function WorkflowSlugRedirect() {
+  const { slug = "" } = useParams();
+  const i = slug.indexOf(":");
+  const app = i > 0 ? slug.slice(0, i) : slug;
+  const loop = i > 0 ? slug.slice(i + 1) : "";
+  return <Navigate to={`/studio/apps/${app}${loop ? `?selected=${encodeURIComponent(loop)}` : ""}`} replace />;
 }
 
 // The standalone cycle inspector merged into the app-overview panel
@@ -534,9 +552,17 @@ export default function App() {
                 (MarketplaceBrowse). Was redirecting out to xp.io, leaving no
                 in-app install affordance; now mounts the page so install works
                 from the dashboard. */}
-            <Route path="library"                      element={<StudioMarketplace />} />
-            <Route path="marketplace"                  element={<StudioMarketplace />} />
-            <Route path="skills"                       element={<XpioRedirect />} />
+            {/* Library — Marketplace / Skills / Experiments as tabs under
+                one nav entry; the old top-level paths redirect in. */}
+            <Route path="library"                      element={<StudioLibraryTabs />}>
+              <Route index                             element={<Navigate to="marketplace" replace />} />
+              <Route path="marketplace"                element={<StudioMarketplace />} />
+              <Route path="skills"                     element={<StudioSkills />} />
+              <Route path="experiments"                element={<StudioExperiments />} />
+            </Route>
+            <Route path="marketplace"                  element={<Navigate to="/studio/library/marketplace" replace />} />
+            <Route path="skills"                       element={<Navigate to="/studio/library/skills" replace />} />
+            <Route path="experiments"                  element={<Navigate to="/studio/library/experiments" replace />} />
             {/* Knowledge is now the "you, encoded" ledger; the per-agent
                 bank browser keeps its deep-link at /knowledge/:agent. */}
             <Route path="knowledge"                    element={<StudioKnowledgeEncoded />} />
@@ -546,8 +572,8 @@ export default function App() {
             <Route path="apps/:app"                    element={<StudioApps />} />
             {/* Workflows folded into the per-app overview; list redirects,
                 detail pages stay reachable via deep-link. */}
-            <Route path="workflows"                    element={<Navigate to="/studio/apps" replace />} />
-            <Route path="workflows/:slug"              element={<StudioWorkflowDtl />} />
+            <Route path="workflows"                    element={<WorkflowsListRedirect />} />
+            <Route path="workflows/:slug"              element={<WorkflowSlugRedirect />} />
             {/* Runs + Mind kept reachable for back-compat and direct
                 links from chat tools. Their lens-in-Workflows ports
                 land in a follow-up PR; both still work at their

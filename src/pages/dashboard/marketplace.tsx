@@ -11,12 +11,10 @@ export default function MarketplacePage() {
   return (
     <div className="flex flex-col h-full" style={{ minHeight: 'calc(100vh - 120px)' }}>
       <header className="mb-4 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Skill Marketplace</h1>
-          <p className="mt-1 text-sm text-slate-600">
-            Community skills and apps from xp.io — install any skill into your loops.
-          </p>
-        </div>
+        {/* Page identity lives in the top strip (deriveMeta /dashboard fallback). */}
+        <p className="text-sm text-slate-600">
+          Community skills and apps from xp.io — install any skill into your workflows.
+        </p>
         <a
           href="https://xp.io"
           target="_blank"

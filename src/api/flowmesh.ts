@@ -14,6 +14,37 @@ import axios, { AxiosError, AxiosInstance } from "axios";
 
 const FM_BASE = "/api/v1/flowmesh";
 
+// ---- user-selected auth key ----
+//
+// By default every call authenticates with a short-lived session bearer
+// minted from the login cookie. Users who operate with a specific
+// credential (their own PAT, a FlowMesh-native flm- key for a fleet
+// they run) can pin it here instead — stored ONLY in this browser's
+// localStorage, sent only to the FlowMesh bridge. Operator request
+// 2026-06-12: the app must let the user say WHICH key it acts with.
+
+const KEY_STORAGE = "flowmesh_custom_key_v1";
+
+export function getFlowmeshCustomKey(): string | null {
+	try { return localStorage.getItem(KEY_STORAGE); } catch { return null; }
+}
+
+export function setFlowmeshCustomKey(key: string | null): void {
+	try {
+		if (key && key.trim()) localStorage.setItem(KEY_STORAGE, key.trim());
+		else localStorage.removeItem(KEY_STORAGE);
+	} catch { /* private mode — selection just doesn't persist */ }
+	cachedBearer = null; // next call re-resolves
+}
+
+/** Short human label for the active key ("This session" / "lm_pat_…ab12"). */
+export function flowmeshKeyLabel(): string {
+	const k = getFlowmeshCustomKey();
+	if (!k) return "This session";
+	const head = k.slice(0, k.startsWith("lm_pat_") ? 7 : 4);
+	return `${head}…${k.slice(-4)}`;
+}
+
 // ---- session-bearer cache ----
 
 let cachedBearer: { token: string; expires_at: number } | null = null;
@@ -36,6 +67,10 @@ async function fetchBearer(): Promise<string | null> {
 }
 
 async function getBearer(forceRefresh = false): Promise<string | null> {
+	// A pinned custom key wins outright — no mint, no expiry handling
+	// (PATs are long-lived; a bad key surfaces as FlowMesh's own 401/403).
+	const custom = getFlowmeshCustomKey();
+	if (custom) return custom;
 	const now = Math.floor(Date.now() / 1000);
 	if (!forceRefresh && cachedBearer && cachedBearer.expires_at - 60 > now) {
 		return cachedBearer.token;

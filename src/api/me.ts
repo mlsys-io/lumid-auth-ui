@@ -218,6 +218,19 @@ export const me = {
     ),
   loopsHealth: () => call<{ apps: MeAppHealth[] }>("GET", "/loops/health"),
 
+  // Workstream E — skills as a first-class surface.
+  // Workstream F — cross-app experiments aggregate.
+  experimentsAll: () => call<{ experiments: Array<MeExperiment & { app: string }>; count: number }>("GET", "/experiments"),
+  // Offer lifecycle rides the generic cycle-feedback writer.
+  cycleFeedback: (body: { app: string; loop: string; cycle_ts: string; output_id?: string; kind: string; note?: string; label?: string }) =>
+    call<Record<string, unknown>>("POST", "/cycles/feedback", body),
+
+  skills: () => call<{ skills: MeSkillRow[]; count: number }>("GET", "/skills"),
+  skillsDiscover: () => call<{ cards: MeSkillCard[] }>("GET", "/skills/discover"),
+  skillDetail: (owner: string, name: string) =>
+    call<{ repo: string; meta?: Record<string, unknown>; lineage?: Record<string, unknown>; readme?: string }>(
+      "GET", `/skills/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`),
+
   // Today summary — drives the /app/loops "Today" section.
   // headlines[] is server-authored (quota_paused → drafts → brief →
   // cycle_failed); cycles[] is the raw per-loop journal slice for
@@ -584,6 +597,12 @@ export interface MeCycleStep {
   stage?: string;
   ok: boolean;
   output_summary?: string;
+  // Full output dict + prompt audit — the server has always sent these
+  // (me_cycle.go); the type lagged the payload. The canvas step
+  // inspector renders them.
+  output?: Record<string, unknown>;
+  prompt_sha?: string;
+  prompt_preview?: string;
   error?: string;
   duration_s?: number;
 }
@@ -617,13 +636,30 @@ export interface MeCycleDetail {
   files?: Record<string, unknown>;
 }
 
+// The loop declaration verbatim from xpcloud.yaml (rawLoop in
+// admin_loops.go). Pattern A ships steps[]; Pattern B ships engine +
+// skills_invoked[] (documentation-only ordering).
+export interface LoopDefinition {
+  name?: string;
+  schedule?: string;
+  knowledge_agent?: string;
+  description?: string;
+  mode?: string;
+  skills?: string[];
+  skills_invoked?: string[];
+  datasets?: string[];
+  steps?: Array<{ id?: string; skill?: string; knowledge_agent?: string; experiment?: string }>;
+  engine?: { type?: string; module?: string; experiment?: string };
+  goal?: { primary?: string; tracked?: string[] };
+}
+
 export interface MeWorkflowDetail {
   slug: string;
   kind: "scheduled" | "visual";
   app?: string;
   loop?: string;
   source?: "tenant" | "operator-shared";
-  definition: Record<string, unknown>;
+  definition: LoopDefinition & Record<string, unknown>;
 }
 
 export interface MeRunRow {
@@ -713,4 +749,29 @@ export async function waitForIntent(
     }
     await new Promise((res) => setTimeout(res, every));
   }
+}
+
+// Workstream E — skills surface types.
+export interface MeSkillRow {
+  repo: string; // owner/name
+  name: string;
+  summary?: string;
+  tags?: string[];
+  version_installed?: string;
+  version_latest?: string;
+  update_available: boolean;
+  installed_on_disk: boolean;
+  used_by: Array<{ app: string; loops?: string[]; version_pinned?: string }>;
+  health?: { adapter_status?: string; ci_status?: string; ci_last_run?: string };
+}
+export interface MeSkillCard {
+  name: string;
+  display_name?: string;
+  summary?: string;
+  category?: string;
+  tags?: string[];
+  kind?: string;
+  step_count?: number;
+  source_url?: string;
+  needs_secrets?: string[];
 }

@@ -17,13 +17,29 @@ import AirflowGrid, { type GridCell, type GridState } from "@/components/Airflow
 import AirflowGantt from "@/components/AirflowGantt";
 import AirflowCalendar from "@/components/AirflowCalendar";
 import PageHints from "@/components/PageHints";
+import { useStudioRefetch } from "@/hooks/useStudioRefetch";
 
 type View = "list" | "grid" | "gantt" | "calendar";
+
+// Scheduled runs open inside the owning app's observability panel (the
+// one per-app inspector, with the pipeline canvas anchored on that run);
+// visual/n8n runs keep the standalone per-run page.
+function runHref(runID: string): string {
+	const parts = runID.split(":");
+	if (parts[0] === "scheduled" && parts.length >= 4) {
+		const [, app, loop, ts] = parts;
+		return `/studio/apps/${encodeURIComponent(app)}?selected=${encodeURIComponent(loop)}&cycle=${encodeURIComponent(ts)}`;
+	}
+	return `/studio/runs/${encodeURIComponent(runID)}`;
+}
 
 export default function StudioRuns() {
 	const navigate = useNavigate();
 	const [view, setView] = useState<View>("list");
-	const [stateFilter, setStateFilter] = useState<string>("");
+	// Honor ?state=failed deep links (the attention rail's "+N more").
+	const [stateFilter, setStateFilter] = useState<string>(
+		() => new URLSearchParams(window.location.search).get("state") || "",
+	);
 	const [windowDays, setWindowDays] = useState<number>(1);
 	const [runs, setRuns] = useState<MeRunRow[] | null>(null);
 	const [err, setErr] = useState<string | null>(null);
@@ -38,6 +54,8 @@ export default function StudioRuns() {
 		}
 	};
 	useEffect(() => { load(); }, [stateFilter, windowDays]);
+	// Chat→page bus: a run fired from chat shows up before the SSE/poll tick.
+	useStudioRefetch(["runs", "cycles"], load);
 
 	// SSE — live state transitions. Update the local rows array in
 	// place so the user sees workflows light up in real time.
@@ -117,11 +135,11 @@ export default function StudioRuns() {
 			{runs === null ? (
 				<div className="text-sm text-slate-500 italic py-4">Loading…</div>
 			) : view === "list" ? (
-				<RunsList runs={runs} onClick={(id) => navigate(`/studio/runs/${encodeURIComponent(id)}`)} />
+				<RunsList runs={runs} onClick={(id) => navigate(runHref(id))} />
 			) : view === "grid" ? (
-				<RunsCrossGrid runs={runs} onCellClick={(id) => navigate(`/studio/runs/${encodeURIComponent(id)}`)} />
+				<RunsCrossGrid runs={runs} onCellClick={(id) => navigate(runHref(id))} />
 			) : view === "gantt" ? (
-				<AirflowGantt runs={runs} onClick={(id) => navigate(`/studio/runs/${encodeURIComponent(id)}`)} />
+				<AirflowGantt runs={runs} onClick={(id) => navigate(runHref(id))} />
 			) : (
 				<AirflowCalendar runs={runs} days={windowDays > 1 ? windowDays : 14} />
 			)}

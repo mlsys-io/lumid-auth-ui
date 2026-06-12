@@ -16,18 +16,21 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
 	Activity, Play, Pause, Loader2, Save, Lightbulb, Clock, AlertCircle, Target,
-	ChevronLeft, ChevronRight, Trash2, FlaskConical,
+	ChevronLeft, ChevronRight, ChevronDown, Trash2, FlaskConical,
 } from "lucide-react";
 import { toast } from "sonner";
 import apiClient from "@/api/client";
-import { me, MeApiError, type MeWorkflowRow, type MeCycleDetail, type MeMetricSeries } from "@/api/me";
+import { me, MeApiError, type MeWorkflowRow, type MeCycleDetail, type MeMetricSeries, type LoopDefinition } from "@/api/me";
+import WorkflowCanvas, { type CanvasStepRef } from "@/components/workflow/WorkflowCanvas";
+import StepInspectorPanel from "@/components/workflow/StepInspectorPanel";
 import { TrendRow } from "@/components/workflow/MetricTrend";
-import RunSparkline from "@/components/RunSparkline";
 import WorkflowInsights from "@/components/workflow/WorkflowInsights";
 import { type LoopStageKey } from "@/components/workflow/LoopOrbit";
 import SchedulePicker from "@/components/workflow/SchedulePicker";
 import { describeSchedule, parseSchedule } from "@/lib/schedule";
-import { loopLabel } from "@/pages/app-revamp/loops";
+import { loopLabel } from "@/lib/workflow-names";
+import FailureCard from "@/components/workflow/FailureCard";
+import AskAbout from "@/components/AskAbout";
 import {
 	ObserveGatePanel, ReviewQueue, OffersPanel,
 	type CycleSummary,
@@ -42,6 +45,9 @@ export interface LoopHealth {
 	last_run_ts?: number;
 	consecutive_failures?: number;
 	status?: string; // never | ok | failing | stale | manual
+	// Per-step errors from the last failed run (server sends these in
+	// /me/loops/health already; the type lagged the payload).
+	last_errors?: Array<{ step?: string; skill?: string; error: string }>;
 }
 
 // Health chip — one honest read of "how's this workflow doing". hasRuns
@@ -162,6 +168,12 @@ export default function WorkflowObservabilityPanel({
 	const [selectedStage, setSelectedStage] = useState<LoopStageKey | null>(initialCycle ? "learn" : null);
 	const [stageQ, setStageQ] = useState("");
 	const prevTsRef = useRef<string | null>(null);
+	// Canvas (n8n-style node view): the loop's declared structure +
+	// the selected run's per-step overlay + the click-a-node inspector.
+	const [definition, setDefinition] = useState<LoopDefinition | null>(null);
+	const [canvasCycle, setCanvasCycle] = useState<MeCycleDetail | null>(null);
+	const [canvasStep, setCanvasStep] = useState<CanvasStepRef | null>(null);
+	const [canvasOpen, setCanvasOpen] = useState(true);
 
 	const loadLatestCycle = useCallback(async () => {
 		try {
@@ -218,6 +230,31 @@ export default function WorkflowObservabilityPanel({
 		return () => { live = false; };
 	}, [app, loop]);
 
+	// Canvas structure — the loop declaration verbatim (steps[] or
+	// engine + skills_invoked[]). One fetch per loop.
+	useEffect(() => {
+		let live = true;
+		setDefinition(null);
+		setCanvasStep(null);
+		me.workflowDetail(`${app}:${loop}`)
+			.then((r) => { if (live) setDefinition((r.definition || null) as LoopDefinition | null); })
+			.catch(() => { /* no declaration → canvas hides itself */ });
+		return () => { live = false; };
+	}, [app, loop]);
+
+	// Canvas overlay — the SELECTED run's per-step data (n8n's replay:
+	// clicking a dot in the runs strip re-paints the graph with that
+	// run's statuses). Falls back to the latest run.
+	const overlayTs = anchorTs || cycleTs;
+	useEffect(() => {
+		let live = true;
+		if (!overlayTs) { setCanvasCycle(null); return; }
+		apiClient.get(`/api/v1/me/cycles/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/${encodeURIComponent(overlayTs)}`)
+			.then((r: any) => { if (live) setCanvasCycle((r.data?.data ?? null) as MeCycleDetail | null); })
+			.catch(() => { if (live) setCanvasCycle(null); });
+		return () => { live = false; };
+	}, [app, loop, overlayTs]);
+
 	const gate = summary?.observe_gate;
 	const reviewQueue = Array.isArray(summary?.review_queue) ? summary!.review_queue! : [];
 	const offers = Array.isArray(summary?.offers) ? summary!.offers! : [];
@@ -262,6 +299,11 @@ export default function WorkflowObservabilityPanel({
 						{busy === "run" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
 						Run now
 					</button>
+					<AskAbout
+						prompt={`Suggest improvements for the ${loop} workflow in ${app} — look at its recent runs and propose concrete changes (schedule, steps, prompts).`}
+						context={{ app, loop }}
+						label="Improve"
+					/>
 					<button onClick={toggle} disabled={!!busy}
 						className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50">
 						{busy === "toggle" ? <Loader2 className="w-3 h-3 animate-spin" /> : enabled ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
@@ -277,7 +319,7 @@ export default function WorkflowObservabilityPanel({
 			</div>
 
 			{/* ── NOT RUN YET — the one empty state (replaces every section) ── */}
-			{cyclesKnown && !tenantHasRuns && !running && (
+			{cyclesKnown && !tenantHasRuns && !running && !definition && (
 				<div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-5 text-center space-y-1">
 					<div className="text-sm text-slate-600">Not run yet.</div>
 					<div className="text-xs text-slate-400">
@@ -286,11 +328,44 @@ export default function WorkflowObservabilityPanel({
 				</div>
 			)}
 			{!running && wf.last_run_ok === false && lastError && tenantHasRuns && (
-				<div className="flex items-start gap-1.5 rounded-lg border border-rose-200 bg-rose-50/60 px-2.5 py-1.5 text-[11px] text-rose-800">
-					<AlertCircle className="w-3.5 h-3.5 mt-px flex-shrink-0" />
-					<span className="font-mono break-all">{lastError.slice(0, 220)}</span>
-				</div>
+				<FailureCard error={lastError} app={app} loop={loop} />
 			)}
+
+			{/* ── PIPELINE — n8n-style node canvas. Structure from the loop's
+			    declaration; statuses from the selected run (dot click = replay). ── */}
+			{definition && (definition.steps?.length || definition.skills_invoked?.length || definition.engine?.type || definition.engine?.module) ? (
+				<div className="space-y-2">
+					<button
+						type="button"
+						onClick={() => setCanvasOpen((v) => !v)}
+						className="inline-flex items-center gap-1 text-[11px] tracking-[0.08em] font-medium text-slate-400 uppercase hover:text-slate-600 transition-colors"
+					>
+						{canvasOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+						Pipeline
+						{overlayTs && tenantHasRuns && <span className="normal-case tracking-normal text-slate-400 font-normal">· showing run {cycleDate(overlayTs)}</span>}
+						{!tenantHasRuns && <span className="normal-case tracking-normal text-slate-400 font-normal">· runs when you click Run now</span>}
+					</button>
+					{canvasOpen && (
+						<>
+							<WorkflowCanvas
+								definition={definition}
+								cycle={canvasCycle}
+								running={running}
+								onStepSelect={(ref) => setCanvasStep(ref)}
+							/>
+							{canvasStep && (
+								<StepInspectorPanel
+									step={canvasStep}
+									app={app}
+									loop={loop}
+									ts={overlayTs || undefined}
+									onClose={() => setCanvasStep(null)}
+								/>
+							)}
+						</>
+					)}
+				</div>
+			) : null}
 
 			{/* ── RUNS — what happened, newest first; click to inspect ── */}
 			{tenantHasRuns && (
@@ -333,9 +408,6 @@ export default function WorkflowObservabilityPanel({
 			{/* ── SCHEDULE — presets for humans; cron only under Advanced ── */}
 			<Section icon={Activity} title="Schedule">
 				<div className="flex flex-wrap items-start gap-3">
-					{tenantHasRuns && (
-						<RunSparkline spec={wf.run_spark || ""} runs={wf.runs_recent} app={app} loop={loop} />
-					)}
 					{wf.last_run_ok === false && tenantHasRuns && (loopHealth?.consecutive_failures ?? 0) > 0 && (
 						<span className="text-xs text-rose-600 mt-1">{loopHealth!.consecutive_failures} consecutive failures</span>
 					)}
@@ -371,7 +443,7 @@ export default function WorkflowObservabilityPanel({
 			{/* ── SUGGESTED IMPROVEMENTS ───────────────────────────── */}
 			{(reviewQueue.length > 0 || offers.length > 0) && (
 				<Section icon={Clock} title="Suggested improvements" delay={240}>
-					{offers.length > 0 && <OffersPanel offers={offers} />}
+					{offers.length > 0 && <OffersPanel offers={offers} app={app} loop={loop} ts={cycleTs ?? undefined} />}
 					{reviewQueue.length > 0 && cycleTs && (
 						<div className={offers.length > 0 ? "mt-2" : ""}>
 							<ReviewQueue app={app} loop={loop} ts={cycleTs} items={reviewQueue} onActed={loadLatestCycle} />
@@ -672,7 +744,11 @@ function StageDetail({
 		const t = q.trim();
 		if (!t) return;
 		window.dispatchEvent(new CustomEvent("studio:ask", {
-			detail: { prompt: `On ${app} / ${loop} — the ${info.label} stage${ts ? ` (run ${cycleDate(ts)})` : ""}: ${t}`, autosend: true },
+			detail: {
+				prompt: `On ${app} / ${loop} — the ${info.label} stage${ts ? ` (run ${cycleDate(ts)})` : ""}: ${t}`,
+				autosend: true,
+				context: { app, loop, ...(ts ? { cycle: { app, loop, ts } } : {}) },
+			},
 		}));
 		setQ("");
 	};

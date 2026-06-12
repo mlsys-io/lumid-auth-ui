@@ -367,13 +367,11 @@ export function CardMetrics({ app, loops, tracked }: { app: string; loops: strin
 	if (!best) return null;
 	const trends = pickTrends(best, tracked, 2);
 	if (!trends.length) return null;
-	const n = best.reduce((m, s) => Math.max(m, s.points.length), 0);
-	// Insight leads with the primary (tracked-ordered) metric and tells its trend.
-	const lead = trends[0];
-	const insight = `${lead.label} ${trendVerb(lead)} over ${n} runs`;
 	return (
 		<div className="pt-2 mt-1 border-t border-slate-100 flex items-center gap-3">
-			{/* column-aligned metric rows: label · curve · value · delta */}
+			{/* column-aligned metric rows: label · curve · value · delta —
+			    the prose "X improving over N runs" beside them repeated the
+			    delta arrow in words; scrubbed 2026-06-12. */}
 			<div className="flex-shrink-0 space-y-1">
 				{trends.map((t) => {
 					const col = trendColor(t);
@@ -387,10 +385,6 @@ export function CardMetrics({ app, loops, tracked }: { app: string; loops: strin
 						</div>
 					);
 				})}
-			</div>
-			{/* insight, beside the block, vertically centered */}
-			<div className="text-[10px] text-emerald-700/80 flex items-center gap-1 min-w-0 border-l border-slate-100 pl-3 self-stretch">
-				<Sparkles className="w-3 h-3 flex-shrink-0" /><span className="line-clamp-3">{insight}</span>
 			</div>
 		</div>
 	);

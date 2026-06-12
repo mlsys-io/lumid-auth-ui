@@ -23,15 +23,17 @@ import { iconFor, APP_NAV_INVALIDATE } from "@/components/useAppNav";
 import { setStudioSelection } from "@/components/StudioContext";
 import WorkflowList from "@/components/workflow/WorkflowList";
 import { Skeleton, humanizeLoop, loopLabel } from "@/pages/app-revamp/loops";
-import { QuickStarters } from "@/pages/studio/intents";
+import { QuickStarters } from "@/components/studio/QuickStarters";
 import WorkflowComposer from "@/components/WorkflowComposer";
 import AppCard, { appTitle, type AppIdentity } from "@/components/workflow/AppCard";
 import WorkflowObservabilityPanel, { type LoopHealth } from "@/components/workflow/WorkflowObservabilityPanel";
+import NeedsAttentionRail from "@/components/workflow/NeedsAttentionRail";
 import LearningTimeline from "@/components/workflow/LearningTimeline";
 import DatasetExplorer from "@/components/workflow/DatasetExplorer";
 import LoopOrbit, { type LoopMode, type LoopStageKey } from "@/components/workflow/LoopOrbit";
 import { RUNNING_APPS } from "@/lib/demo";
 import { useCountUp } from "@/lib/use-count-up";
+import { useStudioRefetch } from "@/hooks/useStudioRefetch";
 import { cn } from "@/lib/utils";
 
 // Scope the surface to the showcase apps (keeps the demo focused).
@@ -202,6 +204,8 @@ function AppsHome() {
 	// intent merge). They flip to a real AppCard once the picker materializes
 	// the app on disk.
 	const [pendingApps, setPendingApps] = useState<MeAppCard[]>([]);
+	// Per-loop health rows (status + last_errors) for the attention rail.
+	const [healthLoops, setHealthLoops] = useState<LoopHealth[]>([]);
 	const [identity, setIdentity] = useState<Map<string, AppIdentity>>(new Map());
 	const [hero, setHero] = useState<Hero | null>(null);
 	const navigate = useNavigate();
@@ -341,6 +345,38 @@ function AppsHome() {
 					});
 				}
 			}
+			// NeedsAttentionRail rows come from the TENANT workflow rows (the
+			// same last_run_ok truth as the card dots) — /me/loops/health is
+			// operator-scoped, so filtering it by tenant app names silently
+			// produced an empty rail while the "failing" pill showed 2.
+			{
+				const lhLoops = lhR.status === "fulfilled" ? ((lhR.value as unknown as LoopsHealthResp).loops || []) : [];
+				const opErr = new Map(lhLoops.map((l) => [`${l.app}:${l.loop}`, l] as const));
+				// Newest error text per app:loop from today's cycle feed (the
+				// grid already fetches it; cycles are newest-first).
+				const todayErr = new Map<string, string>();
+				if (todayR.status === "fulfilled") {
+					for (const c of todayR.value.cycles) {
+						const k = `${c.app}:${c.loop}`;
+						if (c.ok === false && c.last_error && !todayErr.has(k)) todayErr.set(k, c.last_error);
+					}
+				}
+				const fails: LoopHealth[] = [];
+				for (const [appName, rows] of m.entries()) {
+					for (const w of rows) {
+						if (w.enabled === false || w.last_run_ok !== false) continue;
+						const loop = loopOf(w);
+						const newestErr = todayErr.get(`${appName}:${loop}`);
+						const op = opErr.get(`${appName}:${loop}`);
+						fails.push({
+							app: appName, loop, status: "failing", enabled: true,
+							consecutive_failures: op?.consecutive_failures,
+							last_errors: newestErr ? [{ error: newestErr }] : op?.last_errors,
+						});
+					}
+				}
+				setHealthLoops(fails);
+			}
 			// Overlay each app's own `ui:` config — name/icon come from the SAME
 			// ui.sidebar the sidebar renders, so the card and sidebar can't
 			// disagree; hasSurface routes the card header to the configured UI.
@@ -406,6 +442,10 @@ function AppsHome() {
 		return () => window.clearInterval(id);
 	}, [load]);
 
+	// Chat→page bus: refetch immediately when a chat tool mutates apps,
+	// workflows, loops, or runs (no waiting out the 20s poll).
+	useStudioRefetch(["apps", "workflows", "loops", "cycles", "runs", "drafts"], load);
+
 	// While an install is in flight, poll fast so the optimistic card flips
 	// to a real app within a drain cycle instead of waiting for the 20s tick.
 	const anyInstalling = pendingApps.some((a) => a.status === "installing");
@@ -465,6 +505,9 @@ function AppsHome() {
 					{/* Numbers consolidated to a compact top bar. */}
 					{hero && <HeroBar h={hero} onApps={() => appsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })} />}
 
+					{/* Failures surface here, triaged + actionable — the one health rail. */}
+					<NeedsAttentionRail loops={healthLoops} />
+
 					<div ref={appsRef} className="scroll-mt-4">
 						<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-400 uppercase mb-3">Your apps</div>
 						<div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
@@ -521,13 +564,14 @@ function AppsHome() {
 function HeroBar({ h, onApps }: { h: Hero; onApps: () => void }) {
 	return (
 		<div className="flex items-center flex-wrap gap-x-1 gap-y-1 -ml-2">
-			<StatChip icon={Boxes} value={h.apps} label="apps" tone="text-emerald-600" onClick={onApps} />
-			<StatChip icon={Activity} value={h.workflows} label="workflows" tone="text-emerald-600" onClick={onApps} />
-			<StatChip icon={Sparkles} value={h.runsToday} label="runs today" tone="text-sky-600" to="/studio/runs" />
-			{h.selfHeals > 0 && <StatChip icon={Wrench} value={h.selfHeals} label="auto-recovered" tone="text-amber-600" title="workflows that recovered from a failed run on their own" onClick={onApps} />}
-			<StatChip icon={Brain} value={h.memories} label="learned" tone="text-indigo-600" title="insights your apps saved from recent runs" to="/studio/knowledge" />
-			{h.failing > 0 && <StatChip icon={AlertTriangle} value={h.failing} label="needs attention" tone="text-rose-600" onClick={onApps} />}
-			<StatChip icon={Inbox} value={h.inbox} label="inbox" tone="text-amber-600" to="/studio/inbox" />
+			<StatChip icon={Boxes} value={h.apps} label="apps" tone="text-slate-400" onClick={onApps} />
+			<StatChip icon={Activity} value={h.workflows} label="workflows" tone="text-slate-400" onClick={onApps} />
+			<StatChip icon={Sparkles} value={h.runsToday} label="runs today" tone="text-slate-400" to="/studio/runs" />
+			{h.selfHeals > 0 && <StatChip icon={Wrench} value={h.selfHeals} label="auto-recovered" tone="text-slate-400" title="workflows that recovered from a failed run on their own" onClick={onApps} />}
+			<StatChip icon={Brain} value={h.memories} label="learned" tone="text-slate-400" title="insights your apps saved from recent runs" to="/studio/knowledge" />
+			{/* failing count intentionally absent — the attention rail below
+			    IS the failure surface (top-strip pill covers other pages). */}
+			<StatChip icon={Inbox} value={h.inbox} label="inbox" tone="text-slate-400" to="/studio/inbox" />
 		</div>
 	);
 }
@@ -602,6 +646,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 		const id = window.setInterval(load, 20_000);
 		return () => window.clearInterval(id);
 	}, [load]);
+	useStudioRefetch(["workflows", "loops", "cycles", "runs"], load);
 
 	// Announce the active app so the chat agent knows what "pause it" means.
 	useEffect(() => {
@@ -736,12 +781,23 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 						)
 					) : (
 						<div className="lg:grid lg:grid-cols-[300px_minmax(0,1fr)] lg:gap-5 lg:items-start">
-							<div className="lg:sticky lg:top-4 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto max-h-72 overflow-y-auto mb-4 lg:mb-0 pr-0.5">
+							<div className="lg:sticky lg:top-4 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto mb-4 lg:mb-0 pr-0.5 space-y-5">
 								<WorkflowList
 									rows={rows}
 									selected={effSelected}
 									onSelect={select}
 								/>
+								{/* Learned + data fill the otherwise-dead rail under the
+								    short workflow list (they were full-width sections
+								    below the fold — now visible without scrolling). */}
+								<div className="space-y-2">
+									<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-400 uppercase">What it&apos;s learned</div>
+									<LearningTimeline agents={rows[0].wf.memory_agents || []} />
+								</div>
+								<div className="space-y-2">
+									<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-400 uppercase">Data it works on</div>
+									<DatasetExplorer app={app} />
+								</div>
 							</div>
 							<div id="wf-detail" className="min-w-0">
 								{selectedRow && (
@@ -759,18 +815,6 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 				</div>
 			)}
 
-			{rows && rows.length > 0 && (
-				<>
-					<div className="space-y-2.5">
-						<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-400 uppercase">What it&apos;s learned</div>
-						<LearningTimeline agents={rows[0].wf.memory_agents || []} />
-					</div>
-					<div className="space-y-2.5">
-						<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-400 uppercase">Data it works on</div>
-						<DatasetExplorer app={app} />
-					</div>
-				</>
-			)}
 		</div>
 	);
 }

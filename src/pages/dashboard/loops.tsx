@@ -155,8 +155,8 @@ export default function LoopsPage() {
     <div className="max-w-4xl">
       <header className="mb-6 flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">My Research Loops</h1>
-          <p className="mt-1 text-sm text-slate-600">
+          {/* Page identity lives in the top strip (deriveMeta /dashboard fallback). */}
+          <p className="text-sm text-slate-600">
             Auto-research pipelines scheduled on this machine.{' '}
             <a href="https://xp.io" target="_blank" rel="noopener noreferrer"
               className="text-indigo-600 hover:underline inline-flex items-center gap-1">

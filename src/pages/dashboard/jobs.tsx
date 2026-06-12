@@ -107,14 +107,12 @@ export default function Jobs() {
 
 	return (
 		<div>
-			<header className="flex items-start justify-between gap-4 mb-5 flex-wrap">
-				<div>
-					<h1 className="text-2xl font-semibold text-slate-900">Running jobs</h1>
-					<p className="text-sm text-slate-500 mt-1">
-						Unified view across cron, FlowMesh, Lumilake, and loop cycles.
-						Deploy a new job by asking <code className="px-1.5 py-0.5 rounded bg-slate-100">claude</code>.
-					</p>
-				</div>
+			{/* Page identity lives in the top strip (PAGE_META /dashboard/jobs) —
+			    the local text-2xl h1 read as a different app vs the Studio pages. */}
+			<header className="flex items-center justify-between gap-4 mb-5 flex-wrap">
+				<p className="text-sm text-slate-500">
+					Deploy a new job by asking <code className="px-1.5 py-0.5 rounded bg-slate-100">claude</code>.
+				</p>
 				<div className="flex items-center gap-2">
 					<span className="text-xs text-slate-400">{liveAgo}</span>
 					<button

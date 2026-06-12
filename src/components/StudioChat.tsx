@@ -10,33 +10,23 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { useCapabilities } from '../hooks/useCapabilities';
-import { STARTERS, missingReq, CONNECT_ROUTE } from './studio/starters';
+
+import { CONNECT_ROUTE } from './studio/starters';
 import { ChevronRight, MessageSquarePlus, Send, Trash2, Loader2, Bot, User, Square, Globe, Telescope, Brain, ChevronDown, Paperclip, X, FileText, FileJson, Image as ImageIcon, Plus, Copy, RotateCcw, Mic, Volume2, Code2, Boxes, Download, ArrowLeft, Crosshair, Lock } from 'lucide-react';
 import {
-	buildSelectionPreamble,
+	buildViewingContext,
 	subscribeStudioPickedTarget,
 	setStudioPickedTarget,
 	getStudioPickedTarget,
 	type StudioPickedTarget,
+	type ViewingContext,
 } from './StudioContext';
 import { startStudioPicking, stopStudioPicking, isStudioPicking, subscribeStudioPicking } from './StudioPicker';
 import { ChatMarkdown } from './ChatMarkdown';
-import AssemblyCard, { type ComposedDraft } from './workflow/AssemblyCard';
-
-type Role = 'user' | 'assistant';
-// A file the user dropped into the input. Lives in pending state
-// until send(). image → base64; text → raw string. PDFs deferred.
-type Attachment =
-	| { kind: 'image'; name: string; mime: string; dataB64: string; sizeBytes: number }
-	| { kind: 'text'; name: string; text: string; sizeBytes: number }
-	| { kind: 'document'; name: string; mime: string; dataB64: string; sizeBytes: number };
-
-// Wire format for the request body — mirrors the backend chatAttachment.
-type WireAttachment =
-	| { kind: 'image'; name: string; mime: string; data_b64: string }
-	| { kind: 'text'; name: string; text: string }
-	| { kind: 'document'; name: string; mime: string; data_b64: string };
+import AssemblyCard from './workflow/AssemblyCard';
+import type { Attachment, WireAttachment, Message, ToolCall } from './chat/types';
+import { readChatStream, withLastAssistant } from './chat/protocol';
+import ChatEmptyState from './chat/ChatEmptyState';
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_TEXT_BYTES = 500 * 1024;
@@ -57,39 +47,6 @@ const DOCUMENT_MIMES = new Set([
 	'application/epub+zip',
 ]);
 const DOCUMENT_EXTS = ['.pdf', '.docx', '.xlsx', '.pptx', '.rtf', '.odt', '.ods', '.odp', '.epub'];
-type ToolCall = {
-	id?: string;     // tool_use_id from the LLM, used to correlate tool_start → tool_call
-	name: string;
-	ok: boolean;
-	args?: Record<string, unknown>;      // from tool_call SSE event (already emitted by backend)
-	result?: Record<string, unknown>;    // from tool_call SSE event
-	summary?: string;
-	resultSummary?: string;
-	// `pending` = received tool_start but no tool_call yet (in-flight).
-	pending?: boolean;
-	// `approvalRequired` = backend emitted tool_approval_required; user must Allow/Deny.
-	approvalRequired?: boolean;
-	approvalId?: string;  // the approval_id to send to /tool-approve
-	link?: { to: string; label: string };
-};
-type Message = {
-	role: Role;
-	content: string;
-	// Live-streamed reasoning from extended thinking. Rendered in a
-	// collapsible block above the main reply.
-	thinking?: string;
-	thinkingDone?: boolean;
-	// Pretty-printed tool calls the agent ran on this turn (assistant only).
-	tools?: ToolCall[];
-	// Marks the single consolidated "loop activity" note (studio:notify),
-	// so repeated loop events update one message instead of spamming.
-	notify?: boolean;
-	notifyCount?: number;
-	// Rich draft from a compose_workflow tool call. When present, the bubble
-	// renders an inline AssemblyCard (the workflow being assembled, search by
-	// search) instead of popping a modal.
-	composed?: ComposedDraft;
-};
 
 const STORAGE_KEY = 'studio_chat_transcript_v1';
 const CHAT_ID_KEY = 'studio_chat_active_id_v1';
@@ -776,30 +733,30 @@ export function StudioChat() {
 
 	// Phase S6d — listen for prompt suggestions from workspaces.
 	// Any page can dispatch `window.dispatchEvent(new CustomEvent('studio:ask',
-	// {detail: {prompt: '…', autosend: true}}))` to pre-fill or fire the chat.
+	// {detail: {prompt: '…', autosend: true, context: {...}}}))` to pre-fill
+	// or fire the chat. `context` (optional, Partial<ViewingContext>) lets
+	// the dispatching surface override the derived page context — e.g. an
+	// "ask about this step" button passes the exact cycle + step.
+	//
+	// Dispatches through a ref so the handler always calls the LATEST send
+	// path — the old version captured the first render's closure (empty
+	// deps), so autosent prompts ran against an empty history and wiped
+	// the visible conversation.
 	useEffect(() => {
 		const onAsk = (e: Event) => {
-			const ce = e as CustomEvent<{ prompt?: string; autosend?: boolean }>;
+			const ce = e as CustomEvent<{ prompt?: string; autosend?: boolean; context?: Partial<ViewingContext> }>;
 			const p = String(ce.detail?.prompt || '').trim();
 			if (!p) return;
 			setCollapsed(false);
 			if (ce.detail?.autosend) {
-				// Bypass the input box — drop straight into send().
-				setInput(p);
-				// Defer a tick so input state is committed before send reads it.
-				setTimeout(() => {
-					// `send()` reads `input` from closure; instead re-implement
-					// the minimum to send directly without waiting on state.
-					queueSend(p);
-				}, 10);
+				setInput('');
+				void dispatchTurnRef.current?.(p, [], undefined, ce.detail?.context);
 			} else {
 				setInput(p);
 			}
 		};
 		window.addEventListener('studio:ask', onAsk as EventListener);
 		return () => window.removeEventListener('studio:ask', onAsk as EventListener);
-		// queueSend is defined inline below to keep deps stable
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
 	// `studio:notify` — a page posts a passive note (e.g. a loop event
@@ -824,15 +781,37 @@ export function StudioChat() {
 		return () => window.removeEventListener('studio:notify', onNotify as EventListener);
 	}, []);
 
-	const queueSend = useCallback(async (text: string, baseMessages?: Message[]) => {
+	// dispatchTurn — the ONE send path. Fires a chat turn with the given
+	// text, staged attachments, optional history override (regenerate),
+	// and optional ViewingContext override (studio:ask events). The old
+	// split (queueSend vs dispatchTurn) handled route/usage events on one
+	// path and dropped them on the other; unifying fixes that.
+	const dispatchTurn = useCallback(async (
+		text: string,
+		stagedAttachments: Attachment[] = [],
+		baseMessages?: Message[],
+		ctxOverride?: Partial<ViewingContext>,
+	) => {
 		if (!text || streaming) return;
-		setInput('');
 		const base = baseMessages ?? messages;
 		const userMsg: Message = { role: 'user', content: text };
-		const pageNote = buildSelectionPreamble(location.pathname);
+		// Structured "what the user is looking at" payload — replaces the
+		// old prose preamble (which polluted the stored transcript and
+		// re-sent stale page notes on every history replay). The backend
+		// renders this into a per-request system block.
+		const context = buildViewingContext(location.pathname, location.search, ctxOverride);
+		const wireAttachments: WireAttachment[] = stagedAttachments.map((a) =>
+			a.kind === 'image'
+				? { kind: 'image', name: a.name, mime: a.mime, data_b64: a.dataB64 }
+				: a.kind === 'document'
+					? { kind: 'document', name: a.name, mime: a.mime, data_b64: a.dataB64 }
+					: { kind: 'text', name: a.name, text: a.text }
+		);
 		const wireMessages = [
 			...base.map((m) => ({ role: m.role, content: m.content })),
-			{ role: 'user' as const, content: `${pageNote}\n\n${text}` },
+			wireAttachments.length > 0
+				? { role: 'user' as const, content: text, attachments: wireAttachments }
+				: { role: 'user' as const, content: text },
 		];
 		const assistantMsg: Message = { role: 'assistant', content: '', tools: [] };
 		setMessages(() => [...base, userMsg, assistantMsg]);
@@ -852,6 +831,7 @@ export function StudioChat() {
 				credentials: 'include',
 				body: JSON.stringify({
 					messages: wireMessages,
+					context,
 					...(model ? { model } : {}),
 					...(mode ? { mode } : {}),
 					...(think ? { think: true } : {}),
@@ -865,47 +845,11 @@ export function StudioChat() {
 				setMessages((prev) => withLastAssistant(prev, (m) => ({ ...m, content: errText })));
 				return;
 			}
-			const reader = r.body.getReader();
-			const decoder = new TextDecoder();
-			let buf = '';
-			while (true) {
-				const { done, value } = await reader.read();
-				if (done) break;
-				buf += decoder.decode(value, { stream: true });
-				let nl: number;
-				while ((nl = buf.indexOf('\n\n')) >= 0) {
-					const raw = buf.slice(0, nl);
-					buf = buf.slice(nl + 2);
-					for (const line of raw.split('\n')) {
-						if (!line.startsWith('data: ')) continue;
-						try {
-							const evt = JSON.parse(line.slice(6));
-							if (evt.type === 'claude_session') {
-								if (evt.session_id) claudeSessionRef.current = String(evt.session_id);
-							} else if (evt.type === 'route') {
-								setLastRoute({
-									modelUsed: String(evt.model_used || ''),
-									autoRouted: !!evt.auto_routed,
-								});
-							} else if (evt.type === 'usage') {
-								if (typeof evt.budget_used === 'number' && typeof evt.budget_limit === 'number') {
-									setUsage({ used: evt.budget_used, limit: evt.budget_limit });
-								}
-								// usage also carries model_used / auto_routed (in case
-								// the stream caller missed the early route event).
-								if (evt.model_used) {
-									setLastRoute({
-										modelUsed: String(evt.model_used),
-										autoRouted: !!evt.auto_routed,
-									});
-								}
-							} else {
-								handleEvent(evt, setMessages);
-							}
-						} catch { /* skip */ }
-					}
-				}
-			}
+			await readChatStream(r, setMessages, {
+				onClaudeSession: (id) => { claudeSessionRef.current = id; },
+				onRoute: (modelUsed, autoRouted) => setLastRoute({ modelUsed, autoRouted }),
+				onUsage: (used, limit) => setUsage({ used, limit }),
+			});
 		} catch (e: any) {
 			// User-initiated abort produces a DOMException with name="AbortError" —
 			// don't render that as a scary error; just leave whatever partial
@@ -931,7 +875,11 @@ export function StudioChat() {
 				return { ...m, tools: m.tools.map((t) => t.pending ? { ...t, pending: false, ok: false } : t) };
 			}));
 		}
-	}, [messages, streaming, location.pathname, model, mode, think, agentId, personaId]);
+	}, [messages, streaming, location.pathname, location.search, model, mode, think, agentId, personaId]);
+
+	// Latest-send-path ref for the studio:ask listener (registered once).
+	const dispatchTurnRef = useRef<typeof dispatchTurn | null>(null);
+	useEffect(() => { dispatchTurnRef.current = dispatchTurn; }, [dispatchTurn]);
 
 	// Re-run a turn — drops the clicked assistant message + the user
 	// message before it, then dispatches the original user text again
@@ -944,8 +892,8 @@ export function StudioChat() {
 		if (!userMsg || userMsg.role !== 'user') return;
 		const trimmed = messages.slice(0, userIdx);
 		setMessages(trimmed);
-		void queueSend(userMsg.content, trimmed);
-	}, [messages, streaming, queueSend]);
+		void dispatchTurn(userMsg.content, [], trimmed);
+	}, [messages, streaming, dispatchTurn]);
 
 	// Copy one message's content to the clipboard. Markdown is
 	// preserved verbatim so paste into a doc-style editor keeps
@@ -980,114 +928,6 @@ export function StudioChat() {
 		} catch { /* stream will receive a timeout denial */ }
 	}, []);
 
-	// dispatchTurn — fire one chat turn with the given text + already-
-	// snapshotted attachments. Pure of `input` and `attachments` state
-	// (those reads happen in `send` / queue processor). Returns once
-	// the SSE stream finishes (success or error).
-	const dispatchTurn = useCallback(async (text: string, stagedAttachments: Attachment[]) => {
-		const userMsg: Message = { role: 'user', content: text };
-		// Include a tiny system note about the active page so the agent
-		// can answer "what should I do here?" cohesively. Lightweight
-		// page-context prefix — full Phase S6b adds selected-item refs.
-		const pageNote = buildSelectionPreamble(location.pathname);
-		const wireAttachments: WireAttachment[] = stagedAttachments.map((a) =>
-			a.kind === 'image'
-				? { kind: 'image', name: a.name, mime: a.mime, data_b64: a.dataB64 }
-				: a.kind === 'document'
-					? { kind: 'document', name: a.name, mime: a.mime, data_b64: a.dataB64 }
-					: { kind: 'text', name: a.name, text: a.text }
-		);
-		const wireMessages = [
-			...messages.map((m) => ({ role: m.role, content: m.content })),
-			wireAttachments.length > 0
-				? { role: 'user' as const, content: `${pageNote}\n\n${text}`, attachments: wireAttachments }
-				: { role: 'user' as const, content: `${pageNote}\n\n${text}` },
-		];
-		const assistantMsg: Message = { role: 'assistant', content: '', tools: [] };
-		setMessages((prev) => [...prev, userMsg, assistantMsg]);
-		setStreaming(true);
-		setLastRoute(null);
-		// Stop dictation when a send fires so a long recording doesn't
-		// stack with the new turn's input.
-		if (isListening && recognitionRef.current) {
-			try { recognitionRef.current.stop(); } catch { /* ignore */ }
-		}
-
-		const ctrl = new AbortController();
-		abortRef.current = ctrl;
-		try {
-			console.log('[StudioChat] sending model=', model || '(default)');
-			const r = await fetch('/api/v1/me/agent/chat/stream', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				credentials: 'include',
-				body: JSON.stringify({
-					messages: wireMessages,
-					...(model ? { model } : {}),
-					...(mode ? { mode } : {}),
-					...(think ? { think: true } : {}),
-					...(personaId ? { persona_id: personaId } : agentId ? { agent_id: agentId } : {}),
-					...(claudeSessionRef.current ? { claude_session_id: claudeSessionRef.current } : {}),
-				}),
-				signal: ctrl.signal,
-			});
-			if (!r.ok || !r.body) {
-				const errText = r.status === 401 ? 'Sign in to use chat' : `error ${r.status}`;
-				setMessages((prev) => withLastAssistant(prev, (m) => ({ ...m, content: errText })));
-				return;
-			}
-			const reader = r.body.getReader();
-			const decoder = new TextDecoder();
-			let buf = '';
-			while (true) {
-				const { done, value } = await reader.read();
-				if (done) break;
-				buf += decoder.decode(value, { stream: true });
-				let nl: number;
-				// Each event ends with \n\n; one or more "data: …\n" lines per event.
-				while ((nl = buf.indexOf('\n\n')) >= 0) {
-					const raw = buf.slice(0, nl);
-					buf = buf.slice(nl + 2);
-					for (const line of raw.split('\n')) {
-						if (!line.startsWith('data: ')) continue;
-						try {
-							const evt = JSON.parse(line.slice(6));
-							if (evt.type === 'claude_session') {
-								if (evt.session_id) claudeSessionRef.current = String(evt.session_id);
-							} else {
-								handleEvent(evt, setMessages);
-							}
-						} catch {
-							/* malformed line; skip */
-						}
-					}
-				}
-			}
-		} catch (e: any) {
-			// User-initiated abort produces a DOMException with name="AbortError" —
-			// don't render that as a scary error; just leave whatever partial
-			// content was streamed.
-			if (e?.name === 'AbortError') {
-				setMessages((prev) => withLastAssistant(prev, (m) => ({
-					...m,
-					content: (m.content || '') + (m.content ? '\n\n_— stopped —_' : '_— stopped —_'),
-				})));
-			} else {
-				setMessages((prev) => withLastAssistant(prev, (m) => ({
-					...m,
-					content: m.content || `Couldn't reach the assistant: ${String(e).slice(0, 100)}`,
-				})));
-			}
-		} finally {
-			setStreaming(false);
-			abortRef.current = null;
-			// Clear any tools that received tool_start but no tool_call.
-			setMessages((prev) => withLastAssistant(prev, (m) => {
-				if (!m.tools?.some((t) => t.pending)) return m;
-				return { ...m, tools: m.tools.map((t) => t.pending ? { ...t, pending: false, ok: false } : t) };
-			}));
-		}
-	}, [messages, location.pathname, model, mode, think, agentId, personaId]);
 
 	// send() — user-initiated dispatch from the input. Reads input
 	// + attachments state, validates, then either enqueues (if a
@@ -2105,236 +1945,13 @@ function connectHintFor(text: string): ('google' | 'microsoft') | null {
 	return null;
 }
 
+// EmptyHint — delegates to the context-aware empty state (live digest
+// of failing/running workflows + drafts, page-aware prompt chips,
+// capability-gated starters). See chat/ChatEmptyState.tsx.
 function EmptyHint() {
-	const caps = useCapabilities();
-	const navigate = useNavigate();
-	const samples = [
-		'what should I do next?',
-		"what's pending in my inbox?",
-		'send any obvious replies',
-		'what did you learn about me this week?',
-	];
-	// Capability-gated launcher starters — reachable from the empty chat on
-	// any Studio page. Locked ones route to the connect page instead of
-	// composing a workflow that would fail.
-	const starters = STARTERS.slice(0, 3);
-	return (
-		<div className="pt-8 text-center text-xs text-slate-500 space-y-3">
-			<div className="relative inline-block">
-				<div className="absolute inset-0 bg-emerald-400/20 blur-2xl rounded-full" />
-				<div className="relative w-12 h-12 mx-auto rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center shadow-lg shadow-emerald-200">
-					<Bot className="w-6 h-6" />
-				</div>
-			</div>
-			<div className="space-y-1">
-				<div className="text-sm font-semibold text-slate-900">Hi — I&apos;m your AI.</div>
-				<p className="text-[11.5px] leading-relaxed max-w-[260px] mx-auto">
-					Ask in plain English, or start with one of these.
-				</p>
-			</div>
-
-			{/* Starters — the launcher, gated by capability */}
-			<div className="pt-2 space-y-1.5 text-left max-w-xs mx-auto">
-				{starters.map((s) => {
-					const missing = missingReq(s, caps);
-					const Icon = missing ? Lock : s.icon;
-					return (
-						<button
-							key={s.title}
-							onClick={() => missing
-								? navigate(CONNECT_ROUTE[missing])
-								: window.dispatchEvent(new CustomEvent('studio:ask', { detail: { prompt: s.prompt, autosend: true } }))}
-							className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/70 border border-slate-200/60 hover:bg-emerald-50 hover:border-emerald-200 transition-colors"
-						>
-							<Icon className={`w-3.5 h-3.5 shrink-0 ${missing ? 'text-slate-400' : 'text-emerald-600'}`} />
-							<span className="flex-1 text-slate-700">{s.title}</span>
-							{missing && <span className="text-[10px] text-amber-600">connect {missing}</span>}
-						</button>
-					);
-				})}
-			</div>
-
-			{/* Generic conversational samples */}
-			<div className="pt-1 space-y-1.5 text-left max-w-xs mx-auto">
-				{samples.map((s) => (
-					<button
-						key={s}
-						onClick={() => window.dispatchEvent(new CustomEvent('studio:ask', { detail: { prompt: s, autosend: true } }))}
-						className="w-full text-left px-3 py-1.5 rounded-lg bg-white/60 border border-slate-200/60 text-slate-600 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-900 transition-colors"
-					>
-						{s}
-					</button>
-				))}
-			</div>
-		</div>
-	);
+	return <ChatEmptyState />;
 }
 
-// ── Stream handling helpers ────────────────────────────────────────
-
-function handleEvent(
-	evt: { type: string; [k: string]: any },
-	setMessages: React.Dispatch<React.SetStateAction<Message[]>>,
-) {
-	if (evt.type === 'text' && typeof evt.delta === 'string') {
-		setMessages((prev) => withLastAssistant(prev, (m) => ({
-			...m, content: (m.content || '') + evt.delta,
-		})));
-	} else if (evt.type === 'thinking_start') {
-		// Open an empty thinking block. Deltas append; thinking_stop closes.
-		setMessages((prev) => withLastAssistant(prev, (m) => ({
-			...m,
-			thinking: m.thinking || '',
-			thinkingDone: false,
-		})));
-	} else if (evt.type === 'thinking' && typeof evt.delta === 'string') {
-		setMessages((prev) => withLastAssistant(prev, (m) => ({
-			...m,
-			thinking: (m.thinking || '') + evt.delta,
-		})));
-	} else if (evt.type === 'thinking_stop') {
-		setMessages((prev) => withLastAssistant(prev, (m) => ({
-			...m,
-			thinkingDone: true,
-		})));
-	} else if (evt.type === 'tool_start') {
-		// Agent declared a tool call before args/results stream in. Show a
-		// spinner-style chip so the user sees activity immediately.
-		setMessages((prev) => withLastAssistant(prev, (m) => ({
-			...m,
-			tools: [
-				...(m.tools || []),
-				{ id: String(evt.id || ''), name: String(evt.name || 'tool'), ok: true, pending: true },
-			],
-		})));
-	} else if (evt.type === 'tool_approval_required') {
-		// Backend paused; update the pending chip to show approval buttons.
-		const approvalId = String(evt.approval_id || '');
-		const toolId = String(evt.id || '');
-		setMessages((prev) => withLastAssistant(prev, (m) => {
-			const tools = (m.tools || []).map((t) =>
-				(toolId && t.id === toolId) || (!toolId && t.pending && t.name === evt.name)
-					? { ...t, approvalRequired: true, approvalId, args: evt.args as Record<string, unknown> }
-					: t
-			);
-			return { ...m, tools };
-		}));
-	} else if (evt.type === 'tool_call') {
-		// Surface a clickable "Open →" link on the tool chip for any
-		// install/compose that yields a tenant-side app. Other tools
-		// stay plain text. The link is what closes the install loop —
-		// without it, the user has no way back to their new workflow
-		// without leaving the chat.
-		let link: { to: string; label: string } | undefined;
-		if (evt.ok !== false) {
-			const result = (evt.result || {}) as Record<string, unknown>;
-			const appName = String(
-				result.app ||
-				result.installed_as ||
-				result.draft_slug ||
-				result.for_app ||
-				''
-			);
-			if (appName && (evt.name === 'install_app' || evt.name === 'compose_workflow')) {
-				link = { to: `/studio/workflows?selected=${encodeURIComponent(appName)}`, label: 'Open' };
-			}
-		}
-		const completed: ToolCall = {
-			id: String(evt.id || ''),
-			name: String(evt.name || 'tool'),
-			ok: evt.ok !== false,
-			args: evt.args as Record<string, unknown> | undefined,
-			result: evt.result as Record<string, unknown> | undefined,
-			summary: summarizeToolArgs(evt.args),
-			resultSummary: summarizeToolResult(evt.name, evt.result),
-			pending: false,
-			approvalRequired: false,
-			link,
-		};
-		setMessages((prev) => withLastAssistant(prev, (m) => {
-			const tools = m.tools ? [...m.tools] : [];
-			// Replace the latest pending entry matching by id or name; else push.
-			const pendIdx = (() => {
-				for (let i = tools.length - 1; i >= 0; i--) {
-					const t = tools[i];
-					if ((completed.id && t.id === completed.id) || (t.pending && t.name === completed.name)) return i;
-				}
-				return -1;
-			})();
-			if (pendIdx >= 0) tools[pendIdx] = completed;
-			else tools.push(completed);
-			return { ...m, tools };
-		}));
-		// Surface compose_workflow results INLINE — attach the rich draft to
-		// this assistant message so the bubble renders an AssemblyCard (the
-		// workflow assembling itself, search by search). No modal: the build
-		// IS the conversation. (Old behaviour fired a studio:composed window
-		// event that popped a dialog — removed; pages no longer listen.)
-		if (evt.name === 'compose_workflow' && evt.ok !== false && evt.result) {
-			const r = evt.result as Record<string, any>;
-			const draft: ComposedDraft = {
-				slug: String(r.draft_slug || ''),
-				intent: String(r.intent || ''),
-				skills: Array.isArray(r.skills_picked) ? r.skills_picked : [],
-				skill_summaries: Array.isArray(r.skill_summaries) ? r.skill_summaries : undefined,
-				for_app: String(r.for_app || ''),
-				kind: r.kind ? String(r.kind) : undefined,
-				steps: Array.isArray(r.steps) ? r.steps : undefined,
-				schedule: r.schedule ? String(r.schedule) : undefined,
-				schedule_human: r.schedule_human ? String(r.schedule_human) : undefined,
-				goal: r.goal || undefined,
-				risk_agent: r.risk_agent ? String(r.risk_agent) : undefined,
-				mode: r.mode ? String(r.mode) : undefined,
-				assembly_trace: r.assembly_trace || undefined,
-			};
-			if (draft.slug) {
-				setMessages((prev) => withLastAssistant(prev, (m) => ({ ...m, composed: draft })));
-			}
-		}
-		// Auto-open the artifact panel when the agent saves a new artifact.
-		// StudioArtifactPanel listens for this event, refreshes the list,
-		// and selects the new id.
-		if (evt.name === 'save_artifact' && evt.ok !== false && evt.result && evt.result.id) {
-			window.dispatchEvent(new CustomEvent('studio:artifact-saved', {
-				detail: { id: String(evt.result.id) },
-			}));
-		}
-	} else if (evt.type === 'error' && evt.message) {
-		setMessages((prev) => withLastAssistant(prev, (m) => ({
-			...m,
-			content: (m.content ? m.content + '\n\n' : '') + friendlyChatError(evt.message),
-		})));
-	}
-	// 'usage' and 'done' events — no UI change needed for now.
-}
-
-// Turn a raw upstream error into something a user can act on. The most
-// common one today is the kv.run LLM gateway being unconfigured
-// (503 "FINDATA_LLM_BACKEND_URL is empty") — surface that as a calm
-// "temporarily offline" line instead of dumping provider JSON.
-function friendlyChatError(raw: string): string {
-	const s = String(raw);
-	if (/503|service unavailable|backend not configured|FINDATA_LLM_BACKEND_URL|no .*provider accepted/i.test(s)) {
-		return '⚠️ The AI model is temporarily offline. Your message wasn’t lost — try again shortly.';
-	}
-	if (/401|sign in|unauthor/i.test(s)) {
-		return '⚠️ Please sign in to use chat.';
-	}
-	if (/429|rate.?limit/i.test(s)) {
-		return '⚠️ Rate limit reached — give it a moment and try again.';
-	}
-	return `⚠️ ${s}`;
-}
-
-function withLastAssistant(
-	prev: Message[],
-	patch: (m: Message) => Message,
-): Message[] {
-	if (prev.length === 0) return prev;
-	const last = prev[prev.length - 1];
-	if (last.role !== 'assistant') return prev;
-	return [...prev.slice(0, -1), patch(last)];
-}
 
 // formatTokens — compact display: 12345 → "12.3K", 1234567 → "1.2M".
 function formatTokens(n: number): string {
@@ -3014,58 +2631,6 @@ function mimeFromExt(lowerName: string): string {
 	if (lowerName.endsWith('.odp'))  return 'application/vnd.oasis.opendocument.presentation';
 	if (lowerName.endsWith('.epub')) return 'application/epub+zip';
 	return 'application/octet-stream';
-}
-
-function summarizeToolArgs(args: unknown): string {
-	if (!args || typeof args !== 'object') return '';
-	const a = args as Record<string, unknown>;
-	const keys = Object.keys(a);
-	if (keys.length === 0) return '';
-	// Show 1-2 representative values
-	const pick = keys.slice(0, 2).map((k) => {
-		const v = a[k];
-		const s = typeof v === 'string' ? v : JSON.stringify(v);
-		return `${k}=${s.slice(0, 30)}${s.length > 30 ? '…' : ''}`;
-	});
-	return pick.join(' · ');
-}
-
-// Short human-readable summary of a tool's result, used for the chip
-// subtitle line. Per-tool because the interesting field is different
-// for each (search → result count; fetch → page title; etc).
-function summarizeToolResult(name: unknown, result: unknown): string | undefined {
-	if (!result || typeof result !== 'object') return undefined;
-	const r = result as Record<string, any>;
-	if (r.error) return String(r.error).slice(0, 80);
-	const n = String(name || '');
-	if (n === 'web_search' || n === 'deep_research') {
-		const count = Array.isArray(r.results) ? r.results.length : 0;
-		const ans = typeof r.answer === 'string' ? r.answer.length : 0;
-		const parts: string[] = [];
-		if (count) parts.push(`${count} result${count === 1 ? '' : 's'}`);
-		if (ans) parts.push('answer ready');
-		return parts.length ? parts.join(' · ') : undefined;
-	}
-	if (n === 'web_fetch') {
-		const title = typeof r.title === 'string' ? r.title : '';
-		const len = typeof r.content === 'string' ? r.content.length : 0;
-		if (title) return `${title.slice(0, 50)} (${len} chars)`;
-		if (len) return `${len} chars`;
-		return undefined;
-	}
-	if (n === 'bash_exec') {
-		const out = typeof r.output === 'string' ? r.output.trim() : '';
-		const firstLine = out.split('\n')[0] || '';
-		return firstLine ? firstLine.slice(0, 80) : `exit ${r.exit_code ?? '?'}`;
-	}
-	if (n === 'read_file') {
-		const bytes = typeof r.size === 'number' ? r.size : 0;
-		return `${bytes} bytes${r.truncated ? ' (truncated)' : ''}`;
-	}
-	if (n === 'write_file' || n === 'edit_file') {
-		return typeof r.path === 'string' ? r.path.split('/').pop() : undefined;
-	}
-	return undefined;
 }
 
 export default StudioChat;

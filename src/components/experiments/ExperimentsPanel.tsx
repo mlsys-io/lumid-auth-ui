@@ -157,7 +157,7 @@ function CasesTable({ app, expId, cases }: { app: string; expId: string; cases: 
 	);
 }
 
-function ExperimentCard({ app, e }: { app: string; e: MeExperiment }) {
+export function ExperimentCard({ app, e, showApp = false }: { app: string; e: MeExperiment; showApp?: boolean }) {
 	const [open, setOpen] = useState(false);
 	const [detail, setDetail] = useState<MeExperimentDetail | null>(null);
 	const [loading, setLoading] = useState(false);
@@ -181,6 +181,7 @@ function ExperimentCard({ app, e }: { app: string; e: MeExperiment }) {
 				<div className="flex items-center gap-2 flex-wrap">
 					<FlaskConical className="w-4 h-4 text-violet-500 flex-shrink-0" />
 					<span className="text-sm font-semibold text-slate-900">{e.id.replace(/_/g, " ")}</span>
+					{showApp && <span className="px-1.5 py-0.5 rounded text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200/60">{app}</span>}
 					<span className="px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide bg-slate-100 text-slate-500">{KIND_LABEL[e.kind] || e.kind}</span>
 					<VerdictChip e={e} />
 					<DeltaChip e={e} />

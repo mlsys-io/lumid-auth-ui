@@ -6,18 +6,16 @@
 
 import { type MeWorkflowRow } from "@/api/me";
 import RunSparkline from "@/components/RunSparkline";
-import { loopLabel } from "@/pages/app-revamp/loops";
+import { loopLabel } from "@/lib/workflow-names";
 import { describeSchedule } from "@/lib/schedule";
+import { TONES, workflowTone } from "@/lib/tones";
 import { cn } from "@/lib/utils";
 
 export type WfListRow = { loop: string; wf: MeWorkflowRow };
 
 function dotOf(wf: MeWorkflowRow): string {
-	return wf.running ? "bg-sky-500 running-pulse"
-		: wf.last_run_recovered ? "bg-amber-500"
-		: wf.last_run_ok === true ? "bg-emerald-500"
-		: wf.last_run_ok === false ? "bg-rose-500"
-		: "bg-slate-300";
+	const tone = workflowTone(wf);
+	return cn(TONES[tone].dot, tone === "running" && "running-pulse");
 }
 
 // needs-attention → running → recent first → paused last; stable in groups.

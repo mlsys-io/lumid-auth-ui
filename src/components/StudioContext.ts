@@ -19,7 +19,8 @@ export type StudioSelectionKind =
 	| 'agent'
 	| 'memory'
 	| 'skill'
-	| 'intent';
+	| 'intent'
+	| 'experiment';
 
 export interface StudioSelection {
 	kind: StudioSelectionKind;
@@ -77,40 +78,85 @@ export function subscribeStudioPickedTarget(l: (t: StudioPickedTarget | null) =>
 	return () => { pickedListeners.delete(l); };
 }
 
+// ─── ViewingContext (page→chat spine) ──────────────────────────────
+//
+// The structured "what is the user looking at" payload sent with every
+// chat turn (replaces the old prose preamble that was prepended to the
+// user's message content and polluted the stored transcript). The
+// backend renders it into a per-request system block plus tool
+// grounding hints ("'this run' → cycle_detail app=… loop=… ts=…").
+
+export interface ViewingContext {
+	path: string;
+	/** Page family: apps | app | app-surface | runs | run-detail | inbox |
+	 *  knowledge | knowledge-agent | marketplace | skills | experiments |
+	 *  home | settings | admin | other */
+	page: string;
+	app?: string;
+	loop?: string;
+	run_id?: string;
+	cycle?: { app: string; loop: string; ts: string };
+	selection?: StudioSelection;
+	picked?: StudioPickedTarget;
+}
+
 /**
- * Build the page-context preamble that StudioChat prepends to user
- * turns. Pure function; returns a single line string suitable for the
- * agent's user-content prefix. When a picked target is present it is
- * appended after the page-level selection.
+ * Derive the ViewingContext from the current location. `search` is the
+ * query string (location.search) — ?selected=<loop> and &cycle=<ts>
+ * carry the open observability panel on /studio/apps/:app.
+ * `override` (from a studio:ask event) wins field-by-field.
  */
-export function buildSelectionPreamble(pathname: string): string {
-	const parts: string[] = [`(I'm on ${pathname}.`];
+export function buildViewingContext(
+	pathname: string,
+	search = '',
+	override?: Partial<ViewingContext>,
+): ViewingContext {
+	const q = new URLSearchParams(search);
+	const ctx: ViewingContext = { path: pathname + (search || ''), page: 'other' };
 
-	const sel = current;
-	if (sel) {
-		parts.push(`Selection: ${sel.kind} id=${sel.id}`);
-		if (sel.label) parts.push(`"${sel.label}"`);
-		if (sel.affordances && sel.affordances.length > 0) {
-			parts.push(`· can: ${sel.affordances.join(', ')}`);
-		}
-		if (sel.meta) {
-			const flat = Object.entries(sel.meta)
-				.map(([k, v]) => `${k}=${String(v)}`)
-				.join(' ');
-			if (flat) parts.push(`· ${flat}`);
-		}
+	let m: RegExpMatchArray | null;
+	if ((m = pathname.match(/^\/studio\/apps\/([^/]+)/))) {
+		ctx.page = 'app';
+		ctx.app = decodeURIComponent(m[1]);
+		const sel = q.get('selected');
+		if (sel) ctx.loop = sel;
+		const cy = q.get('cycle');
+		if (cy && ctx.app && sel) ctx.cycle = { app: ctx.app, loop: sel, ts: cy };
+	} else if (pathname.startsWith('/studio/apps')) {
+		ctx.page = 'apps';
+	} else if ((m = pathname.match(/^\/studio\/a\/([^/]+)/))) {
+		ctx.page = 'app-surface';
+		ctx.app = decodeURIComponent(m[1]);
+	} else if ((m = pathname.match(/^\/studio\/runs\/([^/]+)/))) {
+		ctx.page = 'run-detail';
+		ctx.run_id = decodeURIComponent(m[1]);
+	} else if (pathname.startsWith('/studio/runs')) {
+		ctx.page = 'runs';
+	} else if (pathname.startsWith('/studio/inbox')) {
+		ctx.page = 'inbox';
+	} else if ((m = pathname.match(/^\/studio\/knowledge\/([^/]+)/))) {
+		ctx.page = 'knowledge-agent';
+	} else if (pathname.startsWith('/studio/knowledge')) {
+		ctx.page = 'knowledge';
+	} else if (pathname.startsWith('/studio/library/skills') || pathname.startsWith('/studio/skills')) {
+		ctx.page = 'skills';
+	} else if (pathname.startsWith('/studio/library/experiments') || pathname.startsWith('/studio/experiments')) {
+		ctx.page = 'experiments';
+	} else if (pathname.startsWith('/studio/marketplace') || pathname.startsWith('/studio/library')) {
+		ctx.page = 'marketplace';
+	} else if (pathname.startsWith('/studio/intents') || pathname.startsWith('/studio/today')) {
+		ctx.page = 'home';
+	} else if (pathname.startsWith('/studio/settings') || pathname.startsWith('/studio/account')) {
+		ctx.page = 'settings';
+	} else if (pathname.startsWith('/studio/admin')) {
+		ctx.page = 'admin';
 	}
 
-	if (picked) {
-		// User-pinned pick takes precedence — "this is what I'm
-		// pointing at right now." The agent should treat the picked
-		// target as the primary referent over the page selection.
-		parts.push(`· I am pointing at: ${picked.kind} id=${picked.id}`);
-		if (picked.label) parts.push(`"${picked.label}"`);
-		if (picked.affordances && picked.affordances.length > 0) {
-			parts.push(`(can: ${picked.affordances.join(', ')})`);
-		}
-	}
+	// Fold in the page-declared selection + the user-pinned pick. The
+	// pick is the explicit override ("this is what I'm pointing at"),
+	// so it rides alongside, not instead of, the selection.
+	if (current) ctx.selection = current;
+	if (picked) ctx.picked = picked;
 
-	return parts.join(' ') + ')';
+	return override ? { ...ctx, ...override } : ctx;
 }
