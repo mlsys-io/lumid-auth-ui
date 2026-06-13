@@ -134,9 +134,11 @@ export default function ChatEmptyState() {
 	useEffect(load, []);
 	useStudioRefetch(['workflows', 'loops', 'drafts'], load);
 
-	const failing = wfs.filter((w) => w.enabled !== false && w.last_run_ok === false).slice(0, 3);
-	const running = wfs.filter((w) => w.running).slice(0, 2);
-	const hasDigest = failing.length > 0 || running.length > 0 || draftCount > 0;
+	// "Right now" shows at most TWO items, priority failing → running → drafts.
+	const failing = wfs.filter((w) => w.enabled !== false && w.last_run_ok === false).slice(0, 2);
+	const running = wfs.filter((w) => w.running).slice(0, Math.max(0, 2 - failing.length));
+	const showDrafts = draftCount > 0 && failing.length + running.length < 2;
+	const hasDigest = failing.length > 0 || running.length > 0 || showDrafts;
 
 	const ctx = useMemo(
 		() => buildViewingContext(location.pathname, location.search),
@@ -189,7 +191,7 @@ export default function ChatEmptyState() {
 							</button>
 						);
 					})}
-					{draftCount > 0 && (
+					{showDrafts && (
 						<button
 							onClick={() => fire(`I have ${draftCount} pending draft${draftCount === 1 ? '' : 's'} — walk me through them.`)}
 							className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-card border border-border hover:bg-muted transition-colors text-left text-[12.5px]"
