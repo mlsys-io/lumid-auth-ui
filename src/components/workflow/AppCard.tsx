@@ -32,12 +32,24 @@ export interface AppIdentity {
 }
 
 // Legacy fallbacks for upstream apps that predate ui.sidebar config.
+// Static fallback names — ALIGNED to each app's own ui.sidebar.label so the
+// sidebar name wins everywhere even before the runtime registry populates.
+// (The registry below, fed from live ui.sidebar.label, is authoritative.)
 const TITLE: Record<string, string> = {
-	"personal-agent": "Personal agent",
-	"mbb-ai": "Consulting research",
-	"auto-sysresearch": "Systems research",
-	"auto-quant": "Quant Research",
+	"personal-agent": "Personal Agent",
+	"mbb-ai": "MBB Coach",
+	"auto-sysresearch": "Systems Optimizer",
+	"auto-quant": "Auto-Quant",
 };
+
+// Runtime label registry — populated from each installed app's
+// ui.sidebar.label (see useAppNav). This is the canonical source: "sidebar
+// wins", so appTitle() shows the SAME name in chat / breadcrumbs / surface
+// cards as the sidebar nav, for EVERY app (not just the few in TITLE).
+const SIDEBAR_LABELS: Record<string, string> = {};
+export function registerAppLabel(app: string, label: string): void {
+	if (app && label) SIDEBAR_LABELS[app] = label;
+}
 
 const BLURB: Record<string, string> = {
 	"personal-agent": "Morning briefs, inbox triage, and reflections over your email + calendar.",
@@ -49,6 +61,9 @@ const BLURB: Record<string, string> = {
 const ACRONYMS: Record<string, string> = { gpu: "GPU", ai: "AI", lqt: "LQT", sql: "SQL", mbb: "MBB", kol: "KOL", ci: "CI", api: "API" };
 
 export function appTitle(app: string): string {
+	// Sidebar wins: the app's live ui.sidebar.label first, then the (aligned)
+	// static map, then a humanized slug.
+	if (SIDEBAR_LABELS[app]) return SIDEBAR_LABELS[app];
 	if (TITLE[app]) return TITLE[app];
 	// Humanize an unmapped slug: drop a leading "lumid-", split on -/_, title-
 	// case, uppercase known acronyms. "lumid-gpu-rentals" -> "GPU Rentals".

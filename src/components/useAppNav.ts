@@ -10,6 +10,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { me, type MeAppCard } from "@/api/me";
+import { registerAppLabel } from "@/components/workflow/AppCard";
 
 export const APP_NAV_INVALIDATE = "studio:apps-invalidate";
 const POLL_MS = 60_000;
@@ -74,6 +75,9 @@ export function useAppNav(): AppNavSection[] {
     const sb = a.ui?.sidebar;
     // Explicit on/off: show when `show` is omitted (back-compat) or true;
     // skip when the app set `show: false` (keeps its label/icon config).
+    // Register the canonical display label (even for show:false apps) so
+    // appTitle() resolves to the SAME name the sidebar uses, everywhere.
+    if (sb?.label) registerAppLabel(a.name, sb.label);
     if (!sb?.label || sb.show === false || seen.has(a.name)) continue; // tenant walked first → wins over operator-shared dup
     seen.add(a.name);
     const section = sb.section || "Apps";
