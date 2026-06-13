@@ -206,9 +206,11 @@ export default function TopStatusStrip() {
 	const [loaded, setLoaded] = useState(false);
 	const [refreshedAt, setRefreshedAt] = useState(() => Date.now());
 	const [, forceTick] = useState(0);
-	// 1s ticker so the "live · updated Ns ago" stays current.
+	// Ticker so the "live · updated Ns ago" stays current. 10s (was 1s) — a
+	// per-second re-render of the always-mounted header is needless churn;
+	// "Ns ago" granularity to 10s reads the same to a human.
 	useEffect(() => {
-		const id = window.setInterval(() => forceTick((x) => x + 1), 1000);
+		const id = window.setInterval(() => forceTick((x) => x + 1), 10_000);
 		return () => window.clearInterval(id);
 	}, []);
 

@@ -1,3 +1,6 @@
+/* Self-hosted serif display face (claude.ai-style wordmark/greetings). */
+@import "@fontsource-variable/source-serif-4/index.css";
+
 @import "./styles/globals.css";
 
 @tailwind base;

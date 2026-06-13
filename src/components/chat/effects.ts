@@ -38,6 +38,10 @@ export const TOOL_EFFECTS: Record<string, DataScope[]> = {
 	xp_ingest: ['knowledge'],
 	xp_feedback: ['knowledge'],
 	subscribe_to_bank: ['knowledge'],
+	// generic app-ops bridge — a form-action/qa write can touch anything the
+	// app owns, so invalidate the broad scopes the indexes/cards read.
+	app_action: ['apps', 'workflows', 'loops', 'runs', 'cycles', 'drafts'],
+	qa_call: ['apps', 'workflows', 'runs'],
 };
 
 export interface StudioDataDetail {
@@ -93,6 +97,12 @@ export function toolLink(name: string, result?: Record<string, unknown>): { to: 
 		}
 		case 'app_detail':
 			return appName ? { to: `/studio/apps/${encodeURIComponent(appName)}`, label: 'Open' } : undefined;
+		case 'app_action': {
+			// GPU rental create returns a task_id → link to the live rental.
+			const taskID = String(result.task_id || '');
+			if (taskID) return { to: `/studio/a/lumid-gpu-rentals/${encodeURIComponent(taskID)}`, label: 'Open' };
+			return appName ? { to: `/studio/a/${encodeURIComponent(appName)}?full=1`, label: 'Open' } : undefined;
+		}
 		default:
 			return undefined;
 	}

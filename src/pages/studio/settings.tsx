@@ -8,9 +8,10 @@
 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { User, Key, Lock, Shield, ExternalLink, Loader2 } from 'lucide-react';
+import { User, Key, Lock, Shield, ExternalLink, Loader2, MessageSquare } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import apiClient from '@/api/client';
+import { useLandingPref } from '@/lib/landing-pref';
 
 type Section = {
 	id: string;
@@ -25,6 +26,7 @@ const SECTIONS: Section[] = [
 	{ id: 'oauth',     icon: Lock,   title: 'Connected services', description: 'Google, Slack, GitHub, and other OAuth grants.' },
 	{ id: 'secrets',   icon: Lock,   title: 'App secrets',      description: 'API keys your installed apps need (per app, per key).' },
 	{ id: 'privacy',   icon: Shield, title: 'Privacy & sharing', description: 'Per-agent auto-publish toggles and data exports.' },
+	{ id: 'chat',      icon: MessageSquare, title: 'Chat & navigation', description: 'How opening something from a list behaves.' },
 ];
 
 export default function StudioSettings() {
@@ -37,7 +39,48 @@ export default function StudioSettings() {
 			<OAuthSection />
 			<SecretsSection />
 			<PrivacySection />
+			<ChatNavSection />
 		</div>
+	);
+}
+
+// ChatNavSection — the configurable landing behavior. Every Studio index
+// (Apps, Library, Jobs) terminates in the chat; this picks whether opening a
+// row asks the AI right away or just lands you in the chat ready to type.
+function ChatNavSection() {
+	const [pref, setPref] = useLandingPref();
+	const options: Array<{ v: 'ask' | 'type'; title: string; desc: string }> = [
+		{ v: 'type', title: 'Just open the chat (default)', desc: 'Lands in the chat with the question pre-filled — you hit send when ready.' },
+		{ v: 'ask',  title: 'Ask the AI right away',        desc: 'Opening something fires the question immediately, so the answer streams in.' },
+	];
+	return (
+		<SectionCard {...SECTIONS[5]}>
+			<div className="space-y-2">
+				<div className="text-xs text-slate-500 mb-1">When I open something from a list:</div>
+				{options.map((o) => (
+					<button
+						key={o.v}
+						type="button"
+						onClick={() => setPref(o.v)}
+						className={[
+							'w-full text-left flex items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors',
+							pref === o.v ? 'border-emerald-300 bg-emerald-50/60' : 'border-slate-200 hover:bg-slate-50',
+						].join(' ')}
+					>
+						<span className={[
+							'mt-0.5 w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center',
+							pref === o.v ? 'border-emerald-500' : 'border-slate-300',
+						].join(' ')}>
+							{pref === o.v && <span className="w-2 h-2 rounded-full bg-emerald-500" />}
+						</span>
+						<span className="min-w-0">
+							<span className="block text-sm font-medium text-slate-800">{o.title}</span>
+							<span className="block text-xs text-slate-500 mt-0.5">{o.desc}</span>
+						</span>
+					</button>
+				))}
+			</div>
+		</SectionCard>
 	);
 }
 

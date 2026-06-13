@@ -10,18 +10,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Puzzle, RefreshCw, ArrowUpCircle, Compass, ExternalLink } from "lucide-react";
+import { Puzzle, RefreshCw, ArrowUpCircle, Compass, ExternalLink, ChevronLeft } from "lucide-react";
 import { me, type MeSkillRow, type MeSkillCard } from "@/api/me";
 import { LumidMarkdown } from "@/components/app-surface/LumidMarkdown";
 import { StatusDot } from "@/components/ui/status-badge";
-import { EmptyState } from "@/components/ui/empty-state";
 import { PageSection } from "@/components/ui/page-section";
-import PageHints from "@/components/PageHints";
 import { setStudioSelection } from "@/components/StudioContext";
+import IndexList, { type IndexRow } from "@/components/studio/IndexList";
+import { askSkill } from "@/lib/grounded-asks";
+import { type ToneKey } from "@/lib/tones";
 import { loopLabel } from "@/lib/workflow-names";
-import { cn } from "@/lib/utils";
 
-function healthTone(h?: MeSkillRow["health"]): "ok" | "failing" | "attention" | "idle" {
+function healthTone(h?: MeSkillRow["health"]): ToneKey {
 	if (!h) return "idle";
 	if (h.adapter_status === "broken" || h.ci_status === "failing" || h.ci_status === "broken") return "failing";
 	if (h.adapter_status === "flaky" || h.ci_status === "flaky") return "attention";
@@ -32,7 +32,7 @@ function healthTone(h?: MeSkillRow["health"]): "ok" | "failing" | "attention" | 
 export default function StudioSkills() {
 	const [rows, setRows] = useState<MeSkillRow[] | null>(null);
 	const [cards, setCards] = useState<MeSkillCard[] | null>(null);
-	const [params, setParams] = useSearchParams();
+	const [params] = useSearchParams();
 	const selected = params.get("selected");
 
 	useEffect(() => {
@@ -42,121 +42,57 @@ export default function StudioSkills() {
 
 	const sel = useMemo(() => rows?.find((r) => r.repo === selected) || null, [rows, selected]);
 
-	// Declare the open skill for the chat rail.
+	// Declare the open skill for the chat (detail escape-hatch view).
 	useEffect(() => {
 		if (!sel) return;
 		setStudioSelection({ kind: "skill", id: sel.repo, label: sel.name });
 		return () => setStudioSelection(null);
 	}, [sel?.repo]);
 
-	const select = (repo: string) => {
-		const sp = new URLSearchParams(params);
-		sp.set("selected", repo);
-		setParams(sp, { replace: true });
-	};
+	// Escape hatch: ?selected=<repo> shows the full skill detail (readme,
+	// CI health, used-by). Reached via a row's "details →".
+	if (selected && sel) {
+		return (
+			<div className="max-w-[760px] mx-auto w-full px-1 py-2 space-y-3">
+				<Link to="/studio/library/skills" className="inline-flex items-center gap-1 text-[12px] text-muted-foreground hover:text-foreground">
+					<ChevronLeft className="w-3.5 h-3.5" /> All skills
+				</Link>
+				<SkillDetail row={sel} />
+			</div>
+		);
+	}
+
+	// Default: the claude-style index. Installed skills lead; the catalog
+	// "Discover" group lets the AI wire a new skill into an app.
+	const installedRows: IndexRow[] = (rows || []).map((r) => ({
+		id: r.repo,
+		title: r.name,
+		icon: Puzzle,
+		tone: healthTone(r.health),
+		statusLabel: r.update_available ? `v${r.version_latest} ↑` : undefined,
+		meta: [r.version_installed ? `v${r.version_installed}` : "", `used by ${r.used_by.length} app${r.used_by.length === 1 ? "" : "s"}`].filter(Boolean).join(" · "),
+		section: "Installed",
+		ask: askSkill(r.repo, r.name),
+		detailsHref: `/studio/library/skills?selected=${encodeURIComponent(r.repo)}`,
+	} as IndexRow));
+	const discoverRows: IndexRow[] = (cards || []).slice(0, 8).map((c) => ({
+		id: `discover:${c.name}`,
+		title: c.display_name || c.name,
+		icon: Compass,
+		meta: c.summary || c.category || "",
+		section: "Discover",
+		ask: { prompt: `Add the "${c.display_name || c.name}" skill to one of my apps — help me pick which app and wire it in.` },
+	} as IndexRow));
 
 	return (
-		<div className="space-y-5">
-			<PageHints prompts={[
-				"Which of my skills are failing CI?",
-				"What skills does my personal agent use?",
-				"Find a skill for summarizing arXiv papers",
-			]} />
-
-			<div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-5 items-start">
-				{/* ── master column ── */}
-				<div className="space-y-5">
-					<PageSection title={`Installed (${rows?.length ?? "…"})`}>
-						{rows === null ? (
-							<div className="h-24 rounded-xl bg-slate-100 animate-pulse" />
-						) : rows.length === 0 ? (
-							<EmptyState
-								icon={Puzzle}
-								title="No skills yet"
-								body="Skills arrive with apps — each app's skill_imports pull shared capabilities (market data, LLM clients, prompt cards) your workflows call."
-								actionLabel="Browse the marketplace"
-								to="/studio/marketplace"
-							/>
-						) : (
-							<ul className="space-y-1">
-								{rows.map((r) => (
-									<li key={r.repo}>
-										<button
-											type="button"
-											onClick={() => select(r.repo)}
-											className={cn(
-												"w-full text-left rounded-lg border px-2.5 py-2 transition-colors",
-												selected === r.repo
-													? "border-emerald-300 bg-emerald-50/50"
-													: "border-slate-200 bg-white hover:bg-slate-50",
-											)}
-										>
-											<div className="flex items-center gap-2 min-w-0">
-												<StatusDot tone={healthTone(r.health)} />
-												<span className="text-[12.5px] font-medium text-slate-800 truncate flex-1">{r.name}</span>
-												{r.update_available && (
-													<span title={`update available: ${r.version_installed} → ${r.version_latest}`}>
-														<ArrowUpCircle className="w-3.5 h-3.5 text-sky-500 flex-shrink-0" />
-													</span>
-												)}
-											</div>
-											<div className="text-[10.5px] text-slate-400 mt-0.5 pl-4 truncate">
-												{r.version_installed ? `v${r.version_installed} · ` : ""}
-												used by {r.used_by.length} app{r.used_by.length === 1 ? "" : "s"}
-											</div>
-										</button>
-									</li>
-								))}
-							</ul>
-						)}
-					</PageSection>
-
-					<PageSection title="Discover">
-						{cards === null ? (
-							<div className="h-16 rounded-xl bg-slate-100 animate-pulse" />
-						) : cards.length === 0 ? (
-							<div className="text-[11.5px] text-slate-400 italic">Catalog unreachable right now.</div>
-						) : (
-							<ul className="space-y-1">
-								{cards.slice(0, 8).map((c) => (
-									<li key={c.name} className="rounded-lg border border-slate-200 bg-white px-2.5 py-2">
-										<div className="flex items-center gap-2">
-											<Compass className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-											<span className="text-[12.5px] font-medium text-slate-800 truncate flex-1">{c.display_name || c.name}</span>
-											{c.category && <span className="text-[9.5px] text-slate-400 uppercase tracking-wide flex-shrink-0">{c.category}</span>}
-										</div>
-										{c.summary && <p className="text-[10.5px] text-slate-500 mt-0.5 pl-5.5 line-clamp-2">{c.summary}</p>}
-										<div className="pl-5 mt-1">
-											<button
-												onClick={() => window.dispatchEvent(new CustomEvent("studio:ask", {
-													detail: { prompt: `Add the "${c.display_name || c.name}" skill to one of my apps — help me pick which app and wire it in.`, autosend: true },
-												}))}
-												className="text-[10.5px] text-emerald-700 hover:text-emerald-900 font-medium transition-colors"
-											>
-												Add to an app…
-											</button>
-										</div>
-									</li>
-								))}
-							</ul>
-						)}
-					</PageSection>
-				</div>
-
-				{/* ── detail column ── */}
-				<div>
-					{sel ? (
-						<SkillDetail row={sel} />
-					) : (
-						<EmptyState
-							icon={Puzzle}
-							title="Pick a skill"
-							body="Select an installed skill to see its readme, CI health, and which of your apps and workflows depend on it."
-						/>
-					)}
-				</div>
-			</div>
-		</div>
+		<IndexList
+			title="Skills"
+			rows={[...installedRows, ...discoverRows]}
+			search={(installedRows.length + discoverRows.length) > 6}
+			searchPlaceholder="Search skills…"
+			sectionOrder={["Installed", "Discover"]}
+			empty="Skills arrive with apps — each app's skill_imports pull shared capabilities your workflows call."
+		/>
 	);
 }
 

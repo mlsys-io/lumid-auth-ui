@@ -12,21 +12,25 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
 import { CONNECT_ROUTE } from './studio/starters';
-import { ChevronRight, MessageSquarePlus, Send, Trash2, Loader2, Bot, User, Square, Globe, Telescope, Brain, ChevronDown, Paperclip, X, FileText, FileJson, Image as ImageIcon, Plus, Copy, RotateCcw, Mic, Volume2, Code2, Boxes, Download, ArrowLeft, Crosshair, Lock } from 'lucide-react';
+import { ChevronRight, MessageSquarePlus, Send, Trash2, Loader2, Bot, User, Square, Globe, Telescope, Brain, ChevronDown, Paperclip, X, FileText, FileJson, Image as ImageIcon, Plus, Copy, RotateCcw, Mic, Volume2, Code2, Boxes, Download, ArrowLeft, Crosshair, Lock, Cpu } from 'lucide-react';
 import {
 	buildViewingContext,
 	subscribeStudioPickedTarget,
 	setStudioPickedTarget,
 	getStudioPickedTarget,
+	setStudioSelection,
 	type StudioPickedTarget,
 	type ViewingContext,
 } from './StudioContext';
+import { appTitle } from './workflow/AppCard';
 import { startStudioPicking, stopStudioPicking, isStudioPicking, subscribeStudioPicking } from './StudioPicker';
 import { ChatMarkdown } from './ChatMarkdown';
 import AssemblyCard from './workflow/AssemblyCard';
 import type { Attachment, WireAttachment, Message, ToolCall } from './chat/types';
 import { readChatStream, withLastAssistant } from './chat/protocol';
-import ChatEmptyState from './chat/ChatEmptyState';
+import ChatEmptyState, { ChatHero } from './chat/ChatEmptyState';
+import { entityCardFor } from './chat/entityCards';
+import AppSurfaceCard from './chat/AppSurfaceCard';
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_TEXT_BYTES = 500 * 1024;
@@ -824,46 +828,63 @@ export function StudioChat() {
 		}
 		const ctrl = new AbortController();
 		abortRef.current = ctrl;
+		// Retry once on a PRE-STREAM network error (server restart / blip): the
+		// rapid-deploy / identity-restart window otherwise surfaced as a scary
+		// "Couldn't reach the assistant" even though nothing had streamed yet.
+		// `started` guards against retrying mid-stream (which would duplicate).
 		try {
-			const r = await fetch('/api/v1/me/agent/chat/stream', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				credentials: 'include',
-				body: JSON.stringify({
-					messages: wireMessages,
-					context,
-					...(model ? { model } : {}),
-					...(mode ? { mode } : {}),
-					...(think ? { think: true } : {}),
-					...(personaId ? { persona_id: personaId } : agentId ? { agent_id: agentId } : {}),
-					...(claudeSessionRef.current ? { claude_session_id: claudeSessionRef.current } : {}),
-				}),
-				signal: ctrl.signal,
-			});
-			if (!r.ok || !r.body) {
-				const errText = r.status === 401 ? 'Sign in to use chat' : `error ${r.status}`;
-				setMessages((prev) => withLastAssistant(prev, (m) => ({ ...m, content: errText })));
-				return;
+			for (let attempt = 0; ; attempt++) {
+				let started = false;
+				try {
+					const r = await fetch('/api/v1/me/agent/chat/stream', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						credentials: 'include',
+						body: JSON.stringify({
+							messages: wireMessages,
+							context,
+							...(model ? { model } : {}),
+							...(mode ? { mode } : {}),
+							...(think ? { think: true } : {}),
+							...(personaId ? { persona_id: personaId } : agentId ? { agent_id: agentId } : {}),
+							...(claudeSessionRef.current ? { claude_session_id: claudeSessionRef.current } : {}),
+						}),
+						signal: ctrl.signal,
+					});
+					if (!r.ok || !r.body) {
+						const errText = r.status === 401 ? 'Sign in to use chat' : `error ${r.status}`;
+						setMessages((prev) => withLastAssistant(prev, (m) => ({ ...m, content: errText })));
+						return;
+					}
+					started = true;
+					await readChatStream(r, setMessages, {
+						onClaudeSession: (id) => { claudeSessionRef.current = id; },
+						onRoute: (modelUsed, autoRouted) => setLastRoute({ modelUsed, autoRouted }),
+						onUsage: (used, limit) => setUsage({ used, limit }),
+					});
+					break; // success
+				} catch (e: any) {
+					if (e?.name === 'AbortError') throw e; // handled by outer catch
+					const networkish = /network|failed to fetch|load failed/i.test(String(e?.message || e));
+					if (!started && networkish && attempt < 1) {
+						await new Promise((res) => setTimeout(res, 800));
+						continue; // one quiet retry for a connection blip
+					}
+					throw e;
+				}
 			}
-			await readChatStream(r, setMessages, {
-				onClaudeSession: (id) => { claudeSessionRef.current = id; },
-				onRoute: (modelUsed, autoRouted) => setLastRoute({ modelUsed, autoRouted }),
-				onUsage: (used, limit) => setUsage({ used, limit }),
-			});
 		} catch (e: any) {
-			// User-initiated abort produces a DOMException with name="AbortError" —
-			// don't render that as a scary error; just leave whatever partial
-			// content was streamed.
 			if (e?.name === 'AbortError') {
 				setMessages((prev) => withLastAssistant(prev, (m) => ({
 					...m,
 					content: (m.content || '') + (m.content ? '\n\n_— stopped —_' : '_— stopped —_'),
 				})));
 			} else {
-				setMessages((prev) => withLastAssistant(prev, (m) => ({
-					...m,
-					content: m.content || `Couldn't reach the assistant: ${String(e).slice(0, 100)}`,
-				})));
+				const networkish = /network|failed to fetch|load failed/i.test(String(e?.message || e));
+				const msg = networkish
+					? '⚠️ Couldn’t reach the assistant — connection hiccup. Try again in a moment.'
+					: `Couldn't reach the assistant: ${String(e).slice(0, 100)}`;
+				setMessages((prev) => withLastAssistant(prev, (m) => ({ ...m, content: m.content || msg })));
 			}
 		} finally {
 			setStreaming(false);
@@ -880,6 +901,66 @@ export function StudioChat() {
 	// Latest-send-path ref for the studio:ask listener (registered once).
 	const dispatchTurnRef = useRef<typeof dispatchTurn | null>(null);
 	useEffect(() => { dispatchTurnRef.current = dispatchTurn; }, [dispatchTurn]);
+
+	// openAppInChat — bring an app INTO the conversation: append an assistant
+	// message that renders the app's surface inline + ground the chat on it.
+	// No LLM turn (opening an app shouldn't auto-start a conversation).
+	const openAppInChat = useCallback((d: { app: string; surface?: string }) => {
+		if (!d?.app) return;
+		setStudioSelection({ kind: 'app', id: d.app, label: appTitle(d.app), affordances: ['app_action', 'app_read', 'run_loop_now'] });
+		setMessages((prev) => [...prev, {
+			role: 'assistant',
+			content: `Here's **${appTitle(d.app)}** — you can work with it right here. Ask me to do anything, or use the controls below.`,
+			appSurface: { app: d.app, surface: d.surface },
+		}]);
+	}, []);
+
+	// The chat mounts only at /studio now — asks fired elsewhere are
+	// stashed by the shell (studio_pending_ask_v1) before navigating
+	// here; the New-chat row stashes studio_new_chat_v1. Consume both
+	// on mount; also honor live studio:new-chat events while mounted.
+	useEffect(() => {
+		try {
+			if (sessionStorage.getItem('studio_new_chat_v1')) {
+				sessionStorage.removeItem('studio_new_chat_v1');
+				setMessages([]);
+				sessionStorage.removeItem(STORAGE_KEY);
+			}
+			const raw = sessionStorage.getItem('studio_pending_ask_v1');
+			if (raw) {
+				sessionStorage.removeItem('studio_pending_ask_v1');
+				const detail = JSON.parse(raw);
+				if (detail?.prompt) {
+					setTimeout(() => {
+						if (detail.autosend) void dispatchTurnRef.current?.(String(detail.prompt), [], undefined, detail.context);
+						else setInput(String(detail.prompt));
+					}, 50);
+				}
+			}
+			// Open-app intent (stashed by the route redirect when you navigate to
+			// an app): render its surface inline + ground the chat. No LLM turn.
+			const openRaw = sessionStorage.getItem('studio_open_app_v1');
+			if (openRaw) {
+				sessionStorage.removeItem('studio_open_app_v1');
+				openAppInChat(JSON.parse(openRaw));
+			}
+		} catch { /* stale/invalid stash — ignore */ }
+		const onNew = () => {
+			setMessages([]);
+			try { sessionStorage.removeItem(STORAGE_KEY); sessionStorage.removeItem('studio_new_chat_v1'); } catch { /* ignore */ }
+		};
+		const onOpenApp = (e: Event) => {
+			const d = (e as CustomEvent).detail;
+			if (d?.app) openAppInChat(d);
+		};
+		window.addEventListener('studio:new-chat', onNew);
+		window.addEventListener('studio:open-app', onOpenApp as EventListener);
+		return () => {
+			window.removeEventListener('studio:new-chat', onNew);
+			window.removeEventListener('studio:open-app', onOpenApp as EventListener);
+		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
 
 	// Re-run a turn — drops the clicked assistant message + the user
 	// message before it, then dispatches the original user text again
@@ -971,41 +1052,14 @@ export function StudioChat() {
 		try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
 	};
 
-	// Collapsed: a discreet full-height 32px handle with a vertical
-	// "Ask" label + faint green accent. Part of the layout flow (not
-	// fixed/floating), so the workspace naturally reclaims the width.
-	if (collapsed) {
-		return (
-			<button
-				onClick={() => setCollapsed(false)}
-				title="Open AI chat"
-				aria-label="Open AI chat"
-				className="group w-8 flex-shrink-0 h-screen sticky top-0 flex flex-col items-center justify-center gap-3 border-l border-emerald-100 bg-emerald-50/40 hover:bg-emerald-50 transition-colors"
-			>
-				<MessageSquarePlus className="w-4 h-4 text-emerald-600 group-hover:scale-110 transition-transform" />
-				<span className="text-[11px] font-medium uppercase tracking-[0.12em] text-emerald-700/80 [writing-mode:vertical-rl] rotate-180">
-					Ask
-				</span>
-			</button>
-		);
-	}
-
+	// The chat IS the main surface now (claude.ai layout) — mounted as
+	// the /studio route's page content, a centered column that fills the
+	// area under the shell header. The old right-rail collapse/resize
+	// chrome is gone; transcript scrolls internally, composer pins low.
 	return (
-		<aside
+		<div
 			data-studio-picker-chrome="1"
-			style={{ width }}
-			className={[
-				// z-20 lifts the chat aside above the workspace shell header
-				// (which is sticky top-0 z-10). Without this, header
-				// popovers (artifact, history, context) paint UNDER the
-				// shell header when they extend leftward into the
-				// workspace area — the shell header's stacking context
-				// otherwise wins despite later DOM order.
-				'flex flex-col h-screen sticky top-0 flex-shrink-0 relative z-20',
-				'bg-gradient-to-b from-white via-white to-emerald-50/30',
-				'border-l border-slate-200/70 shadow-[inset_1px_0_0_0_rgb(255_255_255/0.8)]',
-				resizing ? 'select-none' : '',
-			].join(' ')}
+			className="relative z-20 flex flex-col flex-1 min-h-0 w-full max-w-[780px] mx-auto"
 			onDragEnter={(e) => {
 				if (!e.dataTransfer?.types?.includes('Files')) return;
 				e.preventDefault();
@@ -1031,35 +1085,13 @@ export function StudioChat() {
 				onPickFiles(e.dataTransfer.files);
 			}}
 		>
-			{/* Drag handle — 8px hit zone with a 1px visible rule that
-			    glows on hover/drag. Lives on the left edge so dragging
-			    left grows the panel. */}
-			<div
-				onPointerDown={startResize}
-				className={[
-					'absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize z-10',
-					'before:absolute before:left-0 before:top-0 before:bottom-0 before:w-px',
-					'before:bg-slate-200 hover:before:bg-emerald-400 before:transition-colors',
-					resizing ? 'before:bg-emerald-500' : '',
-				].join(' ')}
-				title="Drag to resize"
-			/>
-			<header className="relative z-30 h-14 px-4 border-b border-slate-200/70 flex items-center justify-between flex-shrink-0 bg-white/80 backdrop-blur-sm gap-2">
+			<header className="relative z-30 h-12 px-1 border-b border-border flex items-center justify-between flex-shrink-0 gap-2">
 				<div className="flex items-center gap-2.5 min-w-0 flex-1">
-					<div className="relative w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center shadow-sm shadow-emerald-200 flex-shrink-0">
-						<Bot className="w-4 h-4" />
-						{streaming && (
-							<span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-white animate-pulse" />
-						)}
-					</div>
 					<div className="min-w-0 flex-1 flex items-center gap-1.5 flex-wrap">
-						<span className="text-sm font-semibold text-slate-900 tracking-tight">Just ask</span>
-						<ModelChip
-							streaming={streaming}
-							models={models}
-							model={model}
-							setModel={setModel}
-						/>
+						<span className="text-[13px] font-medium text-foreground/70 inline-flex items-center gap-1.5">
+							Chat
+							{streaming && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />}
+						</span>
 						{usage && usage.limit > 0 && (
 							<span
 								className={[
@@ -1185,13 +1217,6 @@ export function StudioChat() {
 							<Trash2 className="w-3.5 h-3.5" />
 						</button>
 					)}
-					<button
-						onClick={() => setCollapsed(true)}
-						title="Collapse panel"
-						className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-					>
-						<ChevronRight className="w-4 h-4" />
-					</button>
 				</div>
 			</header>
 
@@ -1203,24 +1228,36 @@ export function StudioChat() {
 					// content sticks to the bottom or leaves the user where they are.
 					atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
 				}}
-				className="flex-1 overflow-y-auto px-4 py-4 space-y-3.5 scroll-smooth"
+				className="flex-1 overflow-y-auto px-4 py-4 scroll-smooth"
 			>
-				{messages.length === 0 && <EmptyHint />}
-				{messages.map((m, i) => (
-					<MessageBubble
-					key={i}
-					m={m}
-					streaming={streaming && i === messages.length - 1 && m.role === 'assistant'}
-					onCopy={m.role === 'assistant' && m.content ? () => copyMessage(m.content) : undefined}
-					onRegenerate={m.role === 'assistant' && !streaming && i > 0 && messages[i - 1]?.role === 'user' ? () => regenerate(i) : undefined}
-					onSpeak={m.role === 'assistant' && m.content && typeof window !== 'undefined' && 'speechSynthesis' in window ? () => toggleSpeak(i, m.content) : undefined}
-					isSpeaking={speakingIdx === i}
-					onToolApprove={handleToolApprove}
-				/>
-				))}
+				{messages.length === 0 ? (
+					// Empty state — greeting + grounded digest, vertically centered.
+					// The composer stays pinned at the bottom (below); this whole
+					// block scrolls if the digest is tall.
+					<div className="min-h-full flex flex-col justify-center max-w-[640px] mx-auto w-full">
+						<EmptyHint />
+						<div className="mt-6"><ChatEmptyState /></div>
+					</div>
+				) : (
+					<div className="space-y-3.5">
+						{messages.map((m, i) => (
+							<MessageBubble
+							key={i}
+							m={m}
+							streaming={streaming && i === messages.length - 1 && m.role === 'assistant'}
+							onCopy={m.role === 'assistant' && m.content ? () => copyMessage(m.content) : undefined}
+							onRegenerate={m.role === 'assistant' && !streaming && i > 0 && messages[i - 1]?.role === 'user' ? () => regenerate(i) : undefined}
+							onSpeak={m.role === 'assistant' && m.content && typeof window !== 'undefined' && 'speechSynthesis' in window ? () => toggleSpeak(i, m.content) : undefined}
+							isSpeaking={speakingIdx === i}
+							onToolApprove={handleToolApprove}
+						/>
+						))}
+					</div>
+				)}
 			</div>
 
-			<footer className="relative z-30 border-t border-slate-200/70 p-3 flex-shrink-0 bg-white/60 backdrop-blur-sm">
+			<footer className="relative z-30 flex-shrink-0 px-4 pt-1 pb-4">
+				<div className="w-full mx-auto max-w-[640px]">
 				{/* Queued messages. Shows the FIFO list of turns waiting
 				    for the current stream to finish. Each row is
 				    clickable to remove from the queue. Hidden when empty. */}
@@ -1322,9 +1359,16 @@ export function StudioChat() {
 						)}
 					</div>
 				)}
+				{/* The composer card — one rounded white card (claude style):
+				    chromeless textarea on top, then a bottom action row laid
+				    out via flex order: ⊕ tools + ⌖ picker left, model picker
+				    + stop + round black send right. */}
 				<form
 					onSubmit={(e) => { e.preventDefault(); send(); }}
-					className="flex items-center gap-1.5"
+					className={[
+						'flex flex-wrap items-center gap-1 rounded-2xl border bg-card shadow-sm px-2 pt-1.5 pb-1.5 transition-colors',
+						dragOver ? 'border-coral border-dashed' : 'border-border focus-within:border-foreground/25',
+					].join(' ')}
 				>
 					<input
 						ref={fileInputRef}
@@ -1341,19 +1385,19 @@ export function StudioChat() {
 					    floating menu with the three per-turn toggles
 					    (Search / Deep research / Think). Active-toggle
 					    count surfaces as a tiny badge on the button. */}
-					<div ref={toolsAnchorRef} className="relative flex-shrink-0">
+					<div ref={toolsAnchorRef} className="relative flex-shrink-0 order-1">
 						<button
 							type="button"
 							onClick={() => setToolsOpen((v) => !v)}
 							disabled={streaming}
 							title="Tools — Search / Deep research / Think"
 							className={[
-								'relative h-[42px] w-[42px] flex items-center justify-center rounded-xl border transition-all',
+								'relative h-8 w-8 flex items-center justify-center rounded-full transition-all',
 								toolsOpen
-									? 'bg-slate-900 text-white border-slate-900'
+									? 'bg-foreground text-background'
 									: activeToolCount > 0
-										? 'bg-white text-emerald-700 border-emerald-300 hover:border-emerald-400'
-										: 'bg-white text-slate-500 border-slate-200 hover:text-slate-700 hover:border-slate-300',
+										? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
+										: 'text-muted-foreground hover:text-foreground hover:bg-muted',
 								streaming ? 'opacity-50 cursor-not-allowed' : '',
 							].join(' ')}
 						>
@@ -1446,7 +1490,7 @@ export function StudioChat() {
 							</div>
 						)}
 					</div>
-					<div className="flex-1 relative group">
+					<div className="order-first w-full relative group">
 						<textarea
 							value={input}
 							onChange={(e) => {
@@ -1534,12 +1578,10 @@ export function StudioChat() {
 							}
 							rows={1}
 							className={[
-								'w-full px-3.5 py-2.5 text-sm rounded-xl border bg-white shadow-sm focus:outline-none focus:ring-4 focus:ring-emerald-400/15 focus:border-emerald-400 resize-none max-h-32 transition-all placeholder:text-slate-400',
-								dragOver
-									? 'border-emerald-400 border-dashed bg-emerald-50/40 placeholder:text-emerald-700'
-									: 'border-slate-200',
+								'w-full px-2 pt-2 pb-1 text-sm bg-transparent border-0 shadow-none focus:outline-none focus:ring-0 resize-none max-h-40 transition-all',
+								dragOver ? 'placeholder:text-coral' : 'placeholder:text-muted-foreground',
 							].join(' ')}
-							style={{ minHeight: '42px' }}
+							style={{ minHeight: '40px' }}
 						/>
 						{slashSuggestions.length > 0 && (
 							<div className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-slate-200 rounded-xl shadow-lg z-50 max-h-48 overflow-y-auto">
@@ -1572,9 +1614,9 @@ export function StudioChat() {
 							type="button"
 							onClick={() => abortRef.current?.abort()}
 							title="Stop current turn"
-							className="h-[42px] w-[42px] flex items-center justify-center rounded-xl flex-shrink-0 bg-rose-500 text-white hover:bg-rose-600 active:scale-95 shadow-sm shadow-rose-200 transition-all"
+							className="order-5 h-8 w-8 flex items-center justify-center rounded-full flex-shrink-0 bg-rose-500 text-white hover:bg-rose-600 active:scale-95 shadow-sm shadow-rose-200 transition-all"
 						>
-							<Square className="w-3.5 h-3.5 fill-current" />
+							<Square className="w-3 h-3 fill-current" />
 						</button>
 					)}
 					{/* Mouse-picker — arms StudioPicker so the user can
@@ -1586,16 +1628,27 @@ export function StudioChat() {
 						onClick={() => (picking ? stopStudioPicking() : startStudioPicking())}
 						title={picking ? 'Picking — click anything · Esc to cancel' : 'Pick a UI element on the page'}
 						className={[
-							'h-[42px] w-[42px] flex items-center justify-center rounded-xl flex-shrink-0 border transition-all active:scale-95',
+							'order-2 h-8 w-8 flex items-center justify-center rounded-full flex-shrink-0 transition-all active:scale-95',
 							picking
-								? 'border-emerald-300 bg-emerald-50 text-emerald-700 ring-1 ring-emerald-300'
+								? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-300'
 								: pickedTarget
-									? 'border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50'
-									: 'border-slate-200 bg-white text-slate-500 hover:text-slate-700 hover:bg-slate-50',
+									? 'text-emerald-700 hover:bg-emerald-50'
+									: 'text-muted-foreground hover:text-foreground hover:bg-muted',
 						].join(' ')}
 					>
 						<Crosshair className="w-4 h-4" />
 					</button>
+					{/* Right-side group: model picker (moved from the header)
+					    then the round black send. */}
+					<div className="order-3 flex-1 min-w-[8px]" />
+					<div className="order-4 flex-shrink-0">
+						<ModelChip
+							streaming={streaming}
+							models={models}
+							model={model}
+							setModel={setModel}
+						/>
+					</div>
 					<button
 						type="submit"
 						disabled={!input.trim()}
@@ -1603,15 +1656,13 @@ export function StudioChat() {
 							? `Queue this message (sends when current turn finishes)${messageQueue.length > 0 ? ` — ${messageQueue.length} already queued` : ''}`
 							: 'Send'}
 						className={[
-							'relative h-[42px] w-[42px] flex items-center justify-center rounded-xl transition-all flex-shrink-0',
+							'order-6 relative h-8 w-8 flex items-center justify-center rounded-full transition-all flex-shrink-0',
 							!input.trim()
-								? 'bg-slate-100 text-slate-300 cursor-not-allowed'
-								: streaming
-									? 'bg-gradient-to-br from-sky-500 to-sky-600 text-white hover:from-sky-400 hover:to-sky-500 active:scale-95 shadow-sm shadow-sky-200'
-									: 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white hover:from-emerald-400 hover:to-emerald-500 active:scale-95 shadow-sm shadow-emerald-200',
+								? 'bg-muted text-muted-foreground/50 cursor-not-allowed'
+								: 'bg-primary text-primary-foreground hover:bg-primary/85 active:scale-95 shadow-sm',
 						].join(' ')}
 					>
-						<Send className="w-4 h-4" />
+						<Send className="w-3.5 h-3.5" />
 						{messageQueue.length > 0 && (
 							<span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-white">
 								{messageQueue.length}
@@ -1619,8 +1670,9 @@ export function StudioChat() {
 						)}
 					</button>
 				</form>
+				</div>
 			</footer>
-		</aside>
+		</div>
 	);
 }
 
@@ -1664,6 +1716,19 @@ const MessageBubble = memo(function MessageBubble({
 				    card stays anchored and the reveal doesn't get shoved around
 				    (the "flipping" the user saw when text rendered above it). */}
 				{!isUser && m.composed && <AssemblyCard draft={m.composed} />}
+				{/* App surface inline — the app's page (stats/tables/forms) lives
+				    in the conversation. Set by the open-app bridge + show_app_surface. */}
+				{!isUser && m.appSurface && (
+					<div className="mb-2"><AppSurfaceCard app={m.appSurface.app} surface={m.appSurface.surface} /></div>
+				)}
+				{/* Entity cards — observability tool results (apps, workflow
+				    health, runs) render as inline cards with the same state
+				    dots + deep links the old middle pane had, so "how are my
+				    apps doing?" answers visually inside the conversation. */}
+				{!isUser && m.tools && m.tools.map((t, i) => {
+					const card = entityCardFor(t);
+					return card ? <div key={`ec-${t.id || i}`} className="mb-2">{card}</div> : null;
+				})}
 				{/* Text bubble — skip entirely when there's nothing to show (an
 				    empty bubble under a composed card reads as a stray box). */}
 				{(m.content || (streaming && !m.composed)) && (
@@ -1671,8 +1736,8 @@ const MessageBubble = memo(function MessageBubble({
 						'inline-block max-w-full text-[13.5px] rounded-2xl px-3.5 py-2.5 leading-relaxed text-left shadow-sm',
 						m.composed ? 'mt-2' : '',
 						isUser
-							? 'bg-slate-900 text-white rounded-tr-md'
-							: 'bg-white text-slate-800 border border-slate-200/70 rounded-tl-md',
+							? 'bg-primary text-primary-foreground rounded-tr-md'
+							: 'bg-card text-foreground border border-border rounded-tl-md',
 					].join(' ')}>
 						{m.content ? (
 							// User turns are short and rarely markdown-rich;
@@ -1788,6 +1853,7 @@ const MessageBubble = memo(function MessageBubble({
 	a.m.content === b.m.content &&
 	a.m.tools === b.m.tools &&
 	a.m.composed === b.m.composed &&
+	a.m.appSurface === b.m.appSurface &&
 	a.streaming === b.streaming &&
 	a.isSpeaking === b.isSpeaking)
 
@@ -1945,11 +2011,11 @@ function connectHintFor(text: string): ('google' | 'microsoft') | null {
 	return null;
 }
 
-// EmptyHint — delegates to the context-aware empty state (live digest
-// of failing/running workflows + drafts, page-aware prompt chips,
-// capability-gated starters). See chat/ChatEmptyState.tsx.
+// EmptyHint — the greeting block above the composer (claude home).
+// The digest + prompt pills render separately BELOW the composer —
+// see the ChatEmptyState block after the footer.
 function EmptyHint() {
-	return <ChatEmptyState />;
+	return <ChatHero />;
 }
 
 
@@ -1980,6 +2046,7 @@ function estimateCost(tokens: number, modelId: string): number {
 // "auto: <model>" pill. Avoids the full display name overflowing.
 function modelShortLabel(id: string): string {
 	if (id === 'claude-code-opus') return 'Opus';
+	if (id === 'claude-code-sonnet') return 'Sonnet';
 	if (id === 'kvrun-gemma4') return 'Gemma4';
 	if (id === 'kvrun-minimax') return 'MiniMax';
 	if (id === 'claude-haiku') return 'Haiku';
@@ -2041,20 +2108,20 @@ function ModelChip({
 				onClick={() => setOpen((v) => !v)}
 				disabled={streaming}
 				className={[
-					'inline-flex items-center gap-1 px-1.5 py-px rounded-full text-[10.5px] border transition-colors',
+					'inline-flex items-center gap-1 pl-1.5 pr-1 py-0.5 rounded-full border text-[11px] transition-colors',
 					open
-						? 'bg-slate-100 border-slate-300 text-slate-800'
-						: 'bg-white/60 border-slate-200/80 text-slate-600 hover:bg-slate-50 hover:border-slate-300',
+						? 'bg-muted border-foreground/25 text-foreground'
+						: 'bg-card border-border text-foreground/70 hover:text-foreground hover:border-foreground/25',
 					streaming ? 'opacity-50 cursor-not-allowed' : '',
 				].join(' ')}
-				title="LLM backend"
+				title="Choose the AI model"
 			>
-				<Bot className="w-2.5 h-2.5 flex-shrink-0" />
-				<span className="truncate max-w-[110px]">{current?.display_name || model || 'model'}</span>
+				<Cpu className="w-3 h-3 flex-shrink-0 opacity-70" />
+				<span className="truncate max-w-[120px]">{current ? modelShortLabel(current.id) : (model || 'Model')}</span>
 				<ChevronDown className="w-2.5 h-2.5 flex-shrink-0 opacity-60" />
 			</button>
 			{open && (
-				<div className="absolute top-full left-0 mt-1 z-50 min-w-[180px] p-1 rounded-xl border border-slate-200 bg-white shadow-lg shadow-slate-200/40">
+				<div className="absolute bottom-full right-0 mb-1 z-50 min-w-[180px] p-1 rounded-xl border border-border bg-card shadow-lg shadow-slate-200/40">
 					{models.map((m) => (
 						<button
 							key={m.id}

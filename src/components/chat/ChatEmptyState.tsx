@@ -1,22 +1,25 @@
-// ChatEmptyState — what the chat rail shows before the first message.
+// ChatEmptyState — what the chat (the /studio main surface) shows
+// before the first message, claude.ai-home style.
 //
-// The old version was a static greeting + four generic prompts, leaving
-// a tall void. This one earns the space with live, grounded content:
+// Two pieces, because the composer card sits between them in the page:
 //
-//   1. "Right now" — a digest of what's actually happening (failing /
-//      running workflows, pending drafts), each row one click from a
-//      grounded chat action (the prompt ships ViewingContext overrides).
-//   2. Context prompts — "try asking" chips that change with the page
-//      the user is looking at (app page asks about THAT app).
-//   3. Capability-gated starters, compacted at the bottom.
+//   <ChatHero />        — lone coral ✳ + serif "Good evening, Yao" +
+//                         one-line promise. Rendered ABOVE the composer.
+//   <ChatEmptyState />  — the grounded content rendered BELOW it:
+//     1. "Right now" — a digest of what's actually happening (failing /
+//        running workflows, pending drafts), each row one click from a
+//        grounded chat action (the prompt ships ViewingContext overrides).
+//     2. Context prompts — "try asking" pills that change with the page.
+//     3. Capability-gated starter pills.
 //
 // Data comes from the same endpoints the pages poll (listWorkflows +
 // drafts); refreshes on the chat→page bus so a fix reflects here too.
 
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Bot, Lock, AlertTriangle, Activity, FileText } from 'lucide-react';
+import { Lock, AlertTriangle, Activity, FileText } from 'lucide-react';
 import { me, type MeWorkflowRow } from '@/api/me';
+import { useAuth } from '@/hooks/useAuth';
 import { useCapabilities } from '@/hooks/useCapabilities';
 import { useStudioRefetch } from '@/hooks/useStudioRefetch';
 import { STARTERS, missingReq, CONNECT_ROUTE } from '@/components/studio/starters';
@@ -34,9 +37,31 @@ function loopOf(w: MeWorkflowRow): string {
 	return i >= 0 ? w.slug.slice(i + 1) : w.slug;
 }
 
-// Page-aware "try asking" chips. The chat rail persists across pages,
-// so these flip as the user navigates — the visible promise that the
-// AI knows where they are.
+// ChatHero — the greeting block above the composer card.
+export function ChatHero() {
+	const { user } = useAuth();
+	const name = useMemo(() => {
+		const raw = user?.username || user?.email?.split('@')[0] || '';
+		const first = raw.split(/[\s.]+/)[0];
+		return first ? first.charAt(0).toUpperCase() + first.slice(1) : '';
+	}, [user?.username, user?.email]);
+	const h = new Date().getHours();
+	const tod = h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening';
+	return (
+		<div className="text-center select-none">
+			<div aria-hidden className="text-coral text-[26px] leading-none mb-3">✳</div>
+			<h1 className="font-display text-[26px] font-medium tracking-tight text-foreground">
+				Good {tod}{name ? `, ${name}` : ''}
+			</h1>
+			<p className="mt-1.5 text-[13px] text-muted-foreground">
+				I can see this page — ask anything in plain English.
+			</p>
+		</div>
+	);
+}
+
+// Page-aware "try asking" pills. The chat is the main surface, but
+// studio:ask context still flips with the page the user came from.
 function samplesFor(ctx: ViewingContext): Array<{ label: string; prompt: string; context?: Partial<ViewingContext> }> {
 	const appName = ctx.app ? appTitle(ctx.app) : '';
 	switch (ctx.page) {
@@ -88,6 +113,9 @@ function samplesFor(ctx: ViewingContext): Array<{ label: string; prompt: string;
 	}
 }
 
+const PILL =
+	'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-card text-[12px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors';
+
 export default function ChatEmptyState() {
 	const caps = useCapabilities();
 	const navigate = useNavigate();
@@ -104,7 +132,7 @@ export default function ChatEmptyState() {
 			.catch(() => { /* ignore */ });
 	};
 	useEffect(load, []);
-	useStudioRefetch(['workflows', 'loops', 'runs', 'cycles', 'drafts'], load);
+	useStudioRefetch(['workflows', 'loops', 'drafts'], load);
 
 	const failing = wfs.filter((w) => w.enabled !== false && w.last_run_ok === false).slice(0, 3);
 	const running = wfs.filter((w) => w.running).slice(0, 2);
@@ -118,24 +146,11 @@ export default function ChatEmptyState() {
 	const starters = STARTERS.slice(0, 3);
 
 	return (
-		<div className="pt-6 text-center text-xs text-slate-500 space-y-3">
-			<div className="relative inline-block">
-				<div className="absolute inset-0 bg-emerald-400/20 blur-2xl rounded-full" />
-				<div className="relative w-11 h-11 mx-auto rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center shadow-lg shadow-emerald-200">
-					<Bot className="w-5 h-5" />
-				</div>
-			</div>
-			<div className="space-y-1">
-				<div className="text-sm font-semibold text-slate-900">Hi — I&apos;m your AI.</div>
-				<p className="text-[11.5px] leading-relaxed max-w-[260px] mx-auto">
-					I can see this page. Ask in plain English.
-				</p>
-			</div>
-
+		<div className="max-w-[640px] mx-auto w-full space-y-5">
 			{/* ── Right now — the live digest; each row is a grounded action ── */}
 			{hasDigest && (
-				<div className="pt-1 text-left max-w-xs mx-auto space-y-1.5">
-					<div className="text-[10px] tracking-[0.08em] font-semibold text-slate-400 uppercase px-0.5">Right now</div>
+				<div className="space-y-1.5">
+					<div className="text-[10.5px] tracking-[0.08em] font-medium text-foreground/45 uppercase px-0.5">Right now</div>
 					{failing.map((w) => {
 						const loop = loopOf(w);
 						return (
@@ -145,13 +160,13 @@ export default function ChatEmptyState() {
 									`The ${loopLabel(w.name, loop)} workflow in ${w.app} is failing — diagnose it and tell me how to fix it.`,
 									{ app: w.app, loop },
 								)}
-								className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg bg-rose-50/70 border border-rose-200/60 hover:bg-rose-100/70 transition-colors text-left"
+								className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-card border border-border hover:bg-muted transition-colors text-left text-[12.5px]"
 							>
 								<AlertTriangle className="w-3.5 h-3.5 shrink-0 text-rose-600" />
-								<span className="flex-1 min-w-0 truncate text-rose-900">
+								<span className="flex-1 min-w-0 truncate text-foreground">
 									{appTitle(w.app || '')} · {loopLabel(w.name, loop)} failing
 								</span>
-								<span className="text-[10px] font-medium text-rose-700 shrink-0">diagnose</span>
+								<span className="text-[11px] font-medium text-rose-700 shrink-0">diagnose</span>
 							</button>
 						);
 					})}
@@ -164,50 +179,42 @@ export default function ChatEmptyState() {
 									`The ${loopLabel(w.name, loop)} workflow is running right now — what is it doing?`,
 									{ app: w.app, loop },
 								)}
-								className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg bg-sky-50/70 border border-sky-200/60 hover:bg-sky-100/70 transition-colors text-left"
+								className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-card border border-border hover:bg-muted transition-colors text-left text-[12.5px]"
 							>
 								<Activity className="w-3.5 h-3.5 shrink-0 text-sky-600 animate-pulse" />
-								<span className="flex-1 min-w-0 truncate text-sky-900">
+								<span className="flex-1 min-w-0 truncate text-foreground">
 									{appTitle(w.app || '')} · {loopLabel(w.name, loop)} running
 								</span>
-								<span className="text-[10px] font-medium text-sky-700 shrink-0">watch</span>
+								<span className="text-[11px] font-medium text-sky-700 shrink-0">watch</span>
 							</button>
 						);
 					})}
 					{draftCount > 0 && (
 						<button
 							onClick={() => fire(`I have ${draftCount} pending draft${draftCount === 1 ? '' : 's'} — walk me through them.`)}
-							className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-50/70 border border-amber-200/60 hover:bg-amber-100/70 transition-colors text-left"
+							className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-card border border-border hover:bg-muted transition-colors text-left text-[12.5px]"
 						>
 							<FileText className="w-3.5 h-3.5 shrink-0 text-amber-600" />
-							<span className="flex-1 min-w-0 truncate text-amber-900">
+							<span className="flex-1 min-w-0 truncate text-foreground">
 								{draftCount} draft{draftCount === 1 ? '' : 's'} awaiting you
 							</span>
-							<span className="text-[10px] font-medium text-amber-700 shrink-0">review</span>
+							<span className="text-[11px] font-medium text-amber-700 shrink-0">review</span>
 						</button>
 					)}
 				</div>
 			)}
 
-			{/* ── Context prompts — change with the page the user is on ── */}
-			<div className="pt-1 text-left max-w-xs mx-auto space-y-1.5">
-				<div className="text-[10px] tracking-[0.08em] font-semibold text-slate-400 uppercase px-0.5">
-					{ctx.page === 'app' && ctx.app ? `About ${appTitle(ctx.app)}` : 'Try asking'}
-				</div>
+			{/* ── Try-asking pills — change with the page the user came from ── */}
+			<div className="flex flex-wrap justify-center gap-1.5">
 				{samples.map((s) => (
-					<button
-						key={s.label}
-						onClick={() => fire(s.prompt, s.context)}
-						className="w-full text-left px-3 py-1.5 rounded-lg bg-white/60 border border-slate-200/60 text-slate-600 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-900 transition-colors"
-					>
+					<button key={s.label} onClick={() => fire(s.prompt, s.context)} className={PILL}>
 						{s.label}
 					</button>
 				))}
 			</div>
 
-			{/* ── Starters — set something new up (capability-gated) ── */}
-			<div className="pt-1 space-y-1.5 text-left max-w-xs mx-auto">
-				<div className="text-[10px] tracking-[0.08em] font-semibold text-slate-400 uppercase px-0.5">Set up</div>
+			{/* ── Starter pills — set something new up (capability-gated) ── */}
+			<div className="flex flex-wrap justify-center gap-1.5">
 				{starters.map((s) => {
 					const missing = missingReq(s, caps);
 					const Icon = missing ? Lock : s.icon;
@@ -215,10 +222,10 @@ export default function ChatEmptyState() {
 						<button
 							key={s.title}
 							onClick={() => missing ? navigate(CONNECT_ROUTE[missing]) : fire(s.prompt)}
-							className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/70 border border-slate-200/60 hover:bg-emerald-50 hover:border-emerald-200 transition-colors"
+							className={PILL}
 						>
-							<Icon className={`w-3.5 h-3.5 shrink-0 ${missing ? 'text-slate-400' : 'text-emerald-600'}`} />
-							<span className="flex-1 text-slate-700">{s.title}</span>
+							<Icon className={`w-3.5 h-3.5 shrink-0 ${missing ? 'text-muted-foreground/70' : 'text-coral'}`} />
+							<span>{s.title}</span>
 							{missing && <span className="text-[10px] text-amber-600">connect {missing}</span>}
 						</button>
 					);

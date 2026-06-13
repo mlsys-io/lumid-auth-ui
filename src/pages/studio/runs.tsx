@@ -11,15 +11,40 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Activity, Filter, RefreshCw } from "lucide-react";
+import { Filter, RefreshCw, ChevronLeft, BarChart3 } from "lucide-react";
 import { me, streamRuns, MeApiError, type MeRunRow } from "@/api/me";
 import AirflowGrid, { type GridCell, type GridState } from "@/components/AirflowGrid";
 import AirflowGantt from "@/components/AirflowGantt";
 import AirflowCalendar from "@/components/AirflowCalendar";
-import PageHints from "@/components/PageHints";
+import IndexList, { type IndexRow } from "@/components/studio/IndexList";
+import { askRun } from "@/lib/grounded-asks";
+import { appTitle } from "@/components/workflow/AppCard";
+import { loopLabel } from "@/lib/workflow-names";
+import { type ToneKey } from "@/lib/tones";
 import { useStudioRefetch } from "@/hooks/useStudioRefetch";
 
-type View = "list" | "grid" | "gantt" | "calendar";
+// "index" is the default claude-style list (→ chat); the other four are the
+// power "Timeline" views kept as an escape hatch behind the toggle.
+type View = "index" | "list" | "grid" | "gantt" | "calendar";
+
+const RUN_TONE: Record<string, ToneKey> = {
+	succeeded: "ok", failed: "failing", running: "running", skipped: "idle", canceled: "idle",
+};
+
+function loopOfRun(r: MeRunRow): string | undefined {
+	if (r.app && r.workflow_slug?.startsWith(r.app + ":")) return r.workflow_slug.slice(r.app.length + 1);
+	const i = r.workflow_slug?.indexOf(":") ?? -1;
+	return i >= 0 ? r.workflow_slug.slice(i + 1) : r.workflow_slug;
+}
+
+function relSec(tsSec?: number): string {
+	if (!tsSec) return "";
+	const diff = Date.now() / 1000 - tsSec;
+	if (diff < 60) return "just now";
+	if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+	if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+	return `${Math.floor(diff / 86400)}d ago`;
+}
 
 // Scheduled runs open inside the owning app's observability panel (the
 // one per-app inspector, with the pipeline canvas anchored on that run);
@@ -35,7 +60,7 @@ function runHref(runID: string): string {
 
 export default function StudioRuns() {
 	const navigate = useNavigate();
-	const [view, setView] = useState<View>("list");
+	const [view, setView] = useState<View>("index");
 	// Honor ?state=failed deep links (the attention rail's "+N more").
 	const [stateFilter, setStateFilter] = useState<string>(
 		() => new URLSearchParams(window.location.search).get("state") || "",
@@ -78,25 +103,80 @@ export default function StudioRuns() {
 
 	if (err) return <div className="text-rose-700 text-sm">{err}</div>;
 
-	return (
-		<div className="space-y-4">
-			{/* Page identity in StudioShell top-bar. */}
-			<header className="flex items-center justify-end">
-				<button
-					onClick={load}
-					className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded border border-slate-200 hover:bg-slate-50 text-slate-700"
+	// ── Default: the claude-style index. Each run row opens the grounded
+	//    chat (askRun); the old per-run inspector / app cycle panel stays a
+	//    click away via "details →" (runHref). The Timeline button reveals
+	//    the cross-run power views (grid / gantt / calendar / table). ──
+	if (view === "index") {
+		const INDEX_CAP = 50;
+		const shown = (runs || []).slice(0, INDEX_CAP);
+		const rows: IndexRow[] = shown.map((r) => {
+			const loop = loopOfRun(r);
+			return {
+				id: r.run_id,
+				title: loopLabel(r.name, loop || r.workflow_slug),
+				tone: RUN_TONE[r.state] || "idle",
+				statusLabel: r.state,
+				meta: [r.app ? appTitle(r.app) : "", relSec(r.started_at), r.duration_s ? `${r.duration_s.toFixed(1)}s` : ""]
+					.filter(Boolean).join(" · "),
+				ask: askRun({ run_id: r.run_id, app: r.app, loop, name: r.name, workflow_slug: r.workflow_slug }),
+				detailsHref: runHref(r.run_id),
+			} as IndexRow;
+		});
+		const toolbar = (
+			<div className="flex items-center gap-2 text-xs text-muted-foreground">
+				<Filter className="w-3 h-3" />
+				<select
+					value={stateFilter}
+					onChange={(e) => setStateFilter(e.target.value)}
+					className="text-xs bg-transparent border-0 focus:outline-none cursor-pointer text-foreground"
 				>
-					<RefreshCw className="w-3 h-3" /> Refresh
-				</button>
-			</header>
+					<option value="">All states</option>
+					<option value="succeeded">Succeeded</option>
+					<option value="failed">Failed</option>
+					<option value="running">Running</option>
+					<option value="skipped">Skipped</option>
+				</select>
+				<span className="ml-auto inline-flex items-center gap-2">
+					<button onClick={load} className="inline-flex items-center gap-1 hover:text-foreground" title="Refresh">
+						<RefreshCw className="w-3 h-3" /> Refresh
+					</button>
+					<button
+						onClick={() => setView("grid")}
+						className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-border hover:bg-muted text-foreground"
+						title="Cross-run timeline views (grid / gantt / calendar)"
+					>
+						<BarChart3 className="w-3 h-3" /> Timeline
+					</button>
+				</span>
+			</div>
+		);
+		return (
+			<IndexList
+				title="Jobs"
+				rows={rows}
+				search={rows.length > 6}
+				searchPlaceholder="Search runs…"
+				toolbar={toolbar}
+				empty="No runs in the selected window."
+				footer={(runs?.length || 0) > INDEX_CAP
+					? <div className="text-[12px] text-muted-foreground text-center">Showing {INDEX_CAP} of {runs?.length}. Open <button className="underline" onClick={() => setView("grid")}>Timeline</button> for all.</div>
+					: undefined}
+			/>
+		);
+	}
 
-			<PageHints prompts={[
-				"what failed today?",
-				"what's running right now?",
-				"how did my morning brief do this week?",
-			]} />
-
+	// ── Timeline (escape hatch): the original 4 power views. ──
+	return (
+		<div className="max-w-[980px] mx-auto w-full space-y-4 px-1 py-2">
 			<div className="flex items-center gap-2 flex-wrap">
+				<button
+					onClick={() => setView("index")}
+					className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs border border-border hover:bg-muted text-foreground"
+				>
+					<ChevronLeft className="w-3 h-3" /> Back to list
+				</button>
+				<span className="mx-1 h-4 w-px bg-border" />
 				<ViewTab active={view === "list"}     onClick={() => setView("list")}     label="List" />
 				<ViewTab active={view === "grid"}     onClick={() => setView("grid")}     label="Grid" />
 				<ViewTab active={view === "gantt"}    onClick={() => setView("gantt")}    label="Gantt" />

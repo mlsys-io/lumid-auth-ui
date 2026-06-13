@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from "react";
-import { Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { AuthGuard, defaultLandingPath } from "./components/auth-guard";
@@ -27,6 +27,7 @@ const Go            = lazy(() => import("./pages/Go"));
 // alongside existing /app/* and /dashboard/* per the studio-plan.md
 // decision: build alongside, no immediate cutover.
 const StudioShell      = lazy(() => import("./components/StudioShell"));
+const StudioChatHome   = lazy(() => import("./pages/studio/chat"));
 const StudioIntents    = lazy(() => import("./pages/studio/intents"));
 // Phase S5+ — real inbox (no longer a placeholder).
 const StudioInbox      = lazy(() => import("./pages/studio/inbox"));
@@ -281,6 +282,26 @@ function AppAdminRedirect() {
   return <Navigate to={dest} replace />;
 }
 
+// Opening an app (its surface at /studio/a/:app, or its overview at
+// /studio/apps/:app) now drops you INTO the chat with the app rendered inline
+// + the agent grounded on it — the deeper migration into conversation. The
+// dense standalone page survives as the "?full=1" escape hatch. We stash the
+// app synchronously (before <Navigate> fires) so StudioChat consumes it on
+// mount; the full page renders in place when ?full=1.
+function OpenAppRedirect({ overview, app: appProp, surface }: { overview?: boolean; app?: string; surface?: string }) {
+  const { app: paramApp = "" } = useParams();
+  const app = appProp ?? paramApp;
+  const [sp] = useSearchParams();
+  if (sp.get("full") === "1") {
+    if (overview) return <StudioApps />;
+    return appProp ? <AppSurface app={appProp} surface={surface} /> : <AppSurface />;
+  }
+  try {
+    if (app) sessionStorage.setItem("studio_open_app_v1", JSON.stringify({ app, surface }));
+  } catch { /* ignore — chat just won't auto-open the surface */ }
+  return <Navigate to="/studio" replace />;
+}
+
 // /studio/workflows → /studio/apps, PRESERVING the query (?compose=1
 // must reach the apps page's composer host).
 function WorkflowsListRedirect() {
@@ -352,6 +373,19 @@ function RootEntry() {
 // few minutes + on tab focus; when it changes, prompt one reload. Also reload
 // automatically when a lazy route chunk 404s (its hashed file was replaced by
 // the deploy) — Vite signals that via the `vite:preloadError` event.
+// reloadForStaleChunk — hard-reload once to pick up the new bundle when a
+// stale chunk fails to load. Guarded so a genuinely-broken chunk (not just
+// stale) can't spin in a reload loop: at most one reload per 15s.
+function reloadForStaleChunk() {
+  try {
+    const k = "chunk_reload_at";
+    const last = Number(sessionStorage.getItem(k) || 0);
+    if (Date.now() - last < 15_000) return; // already reloaded recently — avoid loop
+    sessionStorage.setItem(k, String(Date.now()));
+  } catch { /* sessionStorage blocked — still try one reload */ }
+  window.location.reload();
+}
+
 function useDeployWatch() {
   useEffect(() => {
     let etag: string | null = null;
@@ -375,12 +409,29 @@ function useDeployWatch() {
     const id = setInterval(check, 5 * 60_000);
     const onVis = () => { if (!document.hidden) check(); };
     document.addEventListener("visibilitychange", onVis);
-    const onPreloadError = (e: Event) => { e.preventDefault(); window.location.reload(); };
+    const onPreloadError = (e: Event) => { e.preventDefault(); reloadForStaleChunk(); };
     window.addEventListener("vite:preloadError", onPreloadError);
+    // A click-time dynamic import() of a stale (post-deploy) chunk rejects as a
+    // plain error React.lazy surfaces — NOT always a vite:preloadError — which
+    // white-screens the route ("library doesn't render"). Catch those globally
+    // and reload once (guarded against reload loops) so the route self-heals.
+    const isChunkErr = (msg: string) =>
+      /failed to fetch dynamically imported module|error loading dynamically imported module|importing a module script failed|module script failed/i.test(msg);
+    const onRejection = (e: PromiseRejectionEvent) => {
+      const msg = String(e?.reason?.message || e?.reason || "");
+      if (isChunkErr(msg)) reloadForStaleChunk();
+    };
+    const onError = (e: ErrorEvent) => {
+      if (isChunkErr(String(e?.message || ""))) reloadForStaleChunk();
+    };
+    window.addEventListener("unhandledrejection", onRejection);
+    window.addEventListener("error", onError);
     return () => {
       clearInterval(id);
       document.removeEventListener("visibilitychange", onVis);
       window.removeEventListener("vite:preloadError", onPreloadError);
+      window.removeEventListener("unhandledrejection", onRejection);
+      window.removeEventListener("error", onError);
     };
   }, []);
 }
@@ -463,7 +514,8 @@ export default function App() {
               </AuthGuard>
             }
           >
-            <Route index             element={<Navigate to="/studio/apps" replace />} />
+            {/* The chat IS the main surface (claude.ai layout, 2026-06-12). */}
+            <Route index             element={<StudioChatHome />} />
             {/* Spine is now My Apps. The old Intents/Today landings redirect
                 there; their cycle-inspector + intent-detail sub-routes stay. */}
             <Route path="intents"                       element={<Navigate to="/studio/apps" replace />} />
@@ -507,8 +559,10 @@ export default function App() {
                 only for the bare + static paths — :id ties resolve in favor
                 of whichever is declared FIRST, so keep `:id` LAST in the
                 whole a/* group (it lives below, after manage/config/edit). */}
-            <Route path="a/lumid-gpu-rentals"           element={<AppSurface app="lumid-gpu-rentals" surface="home" />} />
-            <Route path="a/lumid-gpu-rentals/home"      element={<AppSurface app="lumid-gpu-rentals" surface="home" />} />
+            {/* Home opens in chat (surface card + grounded agent), like every
+                other app. ?full=1 = the standalone page. /new + /:id stay full. */}
+            <Route path="a/lumid-gpu-rentals"           element={<OpenAppRedirect app="lumid-gpu-rentals" surface="home" />} />
+            <Route path="a/lumid-gpu-rentals/home"      element={<OpenAppRedirect app="lumid-gpu-rentals" surface="home" />} />
             <Route path="a/lumid-gpu-rentals/new"       element={<AppSurface app="lumid-gpu-rentals" surface="new" />} />
             {/* lumid-data-findata per-symbol drill-down: a row in Movers/Earnings/
                 IPOs links here; {symbol} is injected into the detail surface
@@ -529,7 +583,9 @@ export default function App() {
                 AFTER manage/config/edit so those static names win their rank
                 ties; still beats the generic :app/:surface for real ids. */}
             <Route path="a/lumid-gpu-rentals/:id"       element={<AppSurface app="lumid-gpu-rentals" surface="detail" />} />
-            <Route path="a/:app"                        element={<AppSurface />} />
+            {/* Bare app surface → open in chat (deeper migration). ?full=1 =
+                the standalone page. Named sub-surfaces stay full-page. */}
+            <Route path="a/:app"                        element={<OpenAppRedirect />} />
             <Route path="a/:app/:surface"               element={<AppSurface />} />
             {/* Account surfaces folded into the one Studio shell. The old
                 /dashboard/{profile,tokens,account/connect/google} routes stay
@@ -569,7 +625,9 @@ export default function App() {
             <Route path="knowledge/:agent"             element={<StudioKnowledge />} />
             {/* My Apps is the spine: home (grid) + per-app overview. */}
             <Route path="apps"                         element={<StudioApps />} />
-            <Route path="apps/:app"                    element={<StudioApps />} />
+            {/* App overview → open in chat (health/runs as cards). ?full=1 =
+                the standalone observability panel (escape hatch). */}
+            <Route path="apps/:app"                    element={<OpenAppRedirect overview />} />
             {/* Workflows folded into the per-app overview; list redirects,
                 detail pages stay reachable via deep-link. */}
             <Route path="workflows"                    element={<WorkflowsListRedirect />} />

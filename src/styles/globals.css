@@ -2,43 +2,45 @@
  * The raw CSS variables below are plain CSS and work on any version. */
 :root {
 	--font-size: 16px;
-	--background: #ffffff;
-	--foreground: oklch(0.145 0 0);
+	--background: #F6FAF5; /* light greenish (platform tone, 2026-06-12) */
+	--foreground: #191B18; /* ink, green-tinted */
 	--card: #ffffff;
-	--card-foreground: oklch(0.145 0 0);
+	--card-foreground: #191B18;
 	--popover: oklch(1 0 0);
 	--popover-foreground: oklch(0.145 0 0);
-	--primary: #030213;
+	--primary: #191B18;
 	--primary-foreground: oklch(1 0 0);
-	--secondary: oklch(0.95 0.0058 264.53);
-	--secondary-foreground: #030213;
-	--muted: #ececf0;
-	--muted-foreground: #717182;
-	--accent: #e9ebef;
-	--accent-foreground: #030213;
+	--secondary: #E9F1E6;
+	--secondary-foreground: #191B18;
+	--muted: #E9F1E6;
+	--muted-foreground: #66705F; /* gray-green */
+	--accent: #E5EFE1;
+	--accent-foreground: #191B18;
 	--destructive: #d4183d;
 	--destructive-foreground: #ffffff;
-	--border: rgba(0, 0, 0, 0.1);
+	--border: #DCE6D7; /* hairline */
 	--input: transparent;
-	--input-background: #f3f3f5;
+	--input-background: #FFFFFF;
 	--switch-background: #cbced4;
 	--font-weight-medium: 500;
 	--font-weight-normal: 400;
-	--ring: oklch(0.708 0 0);
+	--ring: #A7BCA0;
 	--chart-1: oklch(0.585 0.233 277.117);
 	--chart-2: oklch(0.647 0.2 328.363);
 	--chart-3: oklch(0.6 0.118 184.704);
 	--chart-4: oklch(0.795 0.184 86.047);
 	--chart-5: oklch(0.646 0.222 41.116);
-	--radius: 0.625rem;
-	--sidebar: oklch(0.985 0 0);
-	--sidebar-foreground: oklch(0.145 0 0);
-	--sidebar-primary: #030213;
-	--sidebar-primary-foreground: oklch(0.985 0 0);
-	--sidebar-accent: oklch(0.97 0 0);
-	--sidebar-accent-foreground: oklch(0.205 0 0);
-	--sidebar-border: oklch(0.922 0 0);
-	--sidebar-ring: oklch(0.708 0 0);
+	--radius: 0.75rem;
+	--sidebar: #E9F1E6;
+	--sidebar-foreground: #3A3F37;
+	--sidebar-primary: #191B18;
+	--sidebar-primary-foreground: #F6FAF5;
+	--sidebar-accent: rgba(0, 0, 0, 0.06);
+	--sidebar-accent-foreground: #191B18;
+	--sidebar-border: #DCE6D7;
+	--sidebar-ring: #A7BCA0;
+	/* Coral — claude.ai's accent. Flourishes ONLY (the ✳); never fills. */
+	--accent-coral: #D97757;
 }
 
 .dark {

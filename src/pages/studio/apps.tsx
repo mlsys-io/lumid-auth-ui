@@ -28,6 +28,8 @@ import WorkflowComposer from "@/components/WorkflowComposer";
 import AppCard, { appTitle, type AppIdentity } from "@/components/workflow/AppCard";
 import WorkflowObservabilityPanel, { type LoopHealth } from "@/components/workflow/WorkflowObservabilityPanel";
 import NeedsAttentionRail from "@/components/workflow/NeedsAttentionRail";
+import IndexList, { type IndexRow } from "@/components/studio/IndexList";
+import { askApp } from "@/lib/grounded-asks";
 import LearningTimeline from "@/components/workflow/LearningTimeline";
 import DatasetExplorer from "@/components/workflow/DatasetExplorer";
 import LoopOrbit, { type LoopMode, type LoopStageKey } from "@/components/workflow/LoopOrbit";
@@ -58,6 +60,16 @@ function loopOf(w: MeWorkflowRow): string {
 	if (app && w.slug.startsWith(app + ":")) return w.slug.slice(app.length + 1);
 	const i = w.slug.indexOf(":");
 	return i >= 0 ? w.slug.slice(i + 1) : w.slug;
+}
+
+// Relative time from an epoch-seconds timestamp ("5m ago"); "" when 0.
+function relSec(tsSec?: number): string {
+	if (!tsSec) return "";
+	const diff = Date.now() / 1000 - tsSec;
+	if (diff < 60) return "just now";
+	if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+	if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+	return `${Math.floor(diff / 86400)}d ago`;
 }
 
 function cycleTsToIso(ts: string): string {
@@ -207,6 +219,9 @@ function AppsHome() {
 	// Per-loop health rows (status + last_errors) for the attention rail.
 	const [healthLoops, setHealthLoops] = useState<LoopHealth[]>([]);
 	const [identity, setIdentity] = useState<Map<string, AppIdentity>>(new Map());
+	// app slug → ui.sidebar.section, so the index can group apps the same
+	// way the sidebar does (Compute / Research / Trading / …).
+	const [sections, setSections] = useState<Map<string, string>>(new Map());
 	const [hero, setHero] = useState<Hero | null>(null);
 	const navigate = useNavigate();
 	const appsRef = useRef<HTMLDivElement>(null);
@@ -380,8 +395,10 @@ function AppsHome() {
 			// Overlay each app's own `ui:` config — name/icon come from the SAME
 			// ui.sidebar the sidebar renders, so the card and sidebar can't
 			// disagree; hasSurface routes the card header to the configured UI.
+			const sm = new Map<string, string>();
 			if (appsR.status === "fulfilled") {
 				for (const a of (appsR.value.apps || [])) {
+					if (a.ui?.sidebar?.section) sm.set(a.name, a.ui.sidebar.section);
 					if (!a.ui) continue;
 					const prev = im.get(a.name) ?? {};
 					im.set(a.name, {
@@ -393,6 +410,7 @@ function AppsHome() {
 				}
 			}
 			setIdentity(im);
+			setSections(sm);
 
 			let runsToday = 0;
 			if (todayR.status === "fulfilled") {
@@ -436,22 +454,33 @@ function AppsHome() {
 	}, [navigate]);
 
 	// Poll so the home moves on its own — sparklines extend, counts tick.
+	// 40s (was 20s): the chat→page bus already pushes instant updates after a
+	// tool mutates state, so the timer is only a slow safety net — no need to
+	// hammer /me/* six-deep every 20s (that was a chief 429 contributor).
 	useEffect(() => {
 		load();
-		const id = window.setInterval(load, 20_000);
+		const id = window.setInterval(load, 40_000);
 		return () => window.clearInterval(id);
 	}, [load]);
 
-	// Chat→page bus: refetch immediately when a chat tool mutates apps,
-	// workflows, loops, or runs (no waiting out the 20s poll).
-	useStudioRefetch(["apps", "workflows", "loops", "cycles", "runs", "drafts"], load);
+	// Chat→page bus: refetch when a chat tool changes the things THIS page
+	// shows (apps + their workflow health). Narrowed from 6 scopes — runs/
+	// cycles/drafts don't change the app index, so they shouldn't trigger a
+	// full 3-endpoint reload on every such tool call.
+	useStudioRefetch(["apps", "workflows", "loops"], load);
 
-	// While an install is in flight, poll fast so the optimistic card flips
-	// to a real app within a drain cycle instead of waiting for the 20s tick.
+	// While an install is in flight, poll a little faster so the optimistic
+	// card flips to a real app quickly — but 10s (was 4s = 90 req/min!) and
+	// capped at ~2 min so a stuck "installing" card can't hammer /me/* forever.
 	const anyInstalling = pendingApps.some((a) => a.status === "installing");
 	useEffect(() => {
 		if (!anyInstalling) return;
-		const id = window.setInterval(load, 4_000);
+		let elapsed = 0;
+		const id = window.setInterval(() => {
+			elapsed += 10_000;
+			if (elapsed > 120_000) { window.clearInterval(id); return; }
+			load();
+		}, 10_000);
 		return () => window.clearInterval(id);
 	}, [anyInstalling, load]);
 
@@ -481,36 +510,79 @@ function AppsHome() {
 	const apps = [...byApp.keys()].sort();
 	const fresh = apps.length === 0 && uiApps.length === 0 && pendingApps.length === 0;
 
+	// Build the claude-style index rows — one common shape across every app
+	// type (loop apps + UI-surface apps). Failing apps float into a "Needs
+	// attention" group that leads the list; otherwise they group by the same
+	// ui.sidebar.section the left nav uses. Clicking a row opens the grounded
+	// chat (askApp); the old observability panel stays one click away via the
+	// hover-only "details →" link.
+	const SECTION_ORDER = ["Needs attention", "Compute", "Research", "Trading", "Knowledge", "Apps"];
+	const appRows: IndexRow[] = apps.map((a) => {
+		const rows = byApp.get(a) || [];
+		const failing = rows.filter((w) => w.enabled !== false && w.last_run_ok === false).length;
+		const running = rows.some((w) => w.running);
+		const ran = rows.some((w) => w.last_run_ok === true);
+		const lastTs = rows.reduce((mx, w) => Math.max(mx, w.last_run_ts || 0), 0);
+		const tone = failing > 0 ? "failing" : running ? "running" : ran ? "ok" : "idle";
+		const statusLabel = failing > 0 ? `${failing}× failing` : running ? "running" : ran ? "healthy" : "idle";
+		const count = rows.length;
+		const when = relSec(lastTs);
+		const meta = [`${count} workflow${count === 1 ? "" : "s"}`, when].filter(Boolean).join(" · ");
+		return {
+			id: a,
+			title: identity.get(a)?.label || appTitle(a),
+			icon: iconFor(identity.get(a)?.icon || a),
+			tone, statusLabel, meta,
+			section: failing > 0 ? "Needs attention" : (sections.get(a) || "Apps"),
+			ask: askApp(a),
+			detailsHref: `/studio/apps/${encodeURIComponent(a)}?full=1`,
+		} as IndexRow;
+	});
+	// UI-surface apps (Data Exploration, Market, …) — no loops; their home IS
+	// their surface, so the row opens the surface via "details →" while the
+	// click still lets you ask about it.
+	const surfaceRows: IndexRow[] = uiApps.map((a) => ({
+		id: `ui:${a.name}`,
+		title: a.ui?.sidebar?.label || appTitle(a.name),
+		icon: iconFor(a.ui?.sidebar?.icon || a.name),
+		tone: "idle",
+		section: a.ui?.sidebar?.section || "Apps",
+		ask: askApp(a.name),
+		detailsHref: `/studio/a/${encodeURIComponent(a.name)}?full=1`,
+	} as IndexRow));
+	const allRows = [...appRows, ...surfaceRows];
+
+	const launcher = (
+		<div className="border-t border-border pt-5">
+			<QuickStarters heading="Set up a new app" />
+		</div>
+	);
+
 	return (
 		<>
 			<WorkflowComposer open={composerOpen} onClose={() => setComposerOpen(false)} />
 			{fresh ? (
 				// Fresh user — lead with the launcher so they assemble app #1.
-				<div className="space-y-6">
-					<div className="rounded-2xl border border-slate-200/70 bg-gradient-to-br from-emerald-50 via-white to-sky-50/40 p-6">
+				<div className="max-w-[760px] mx-auto w-full space-y-6 px-1 py-2">
+					<div className="rounded-2xl border border-border bg-card p-6">
 						<div className="flex items-center gap-3">
-							<div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center shadow-sm shadow-emerald-200">
+							<div className="w-11 h-11 rounded-xl bg-foreground text-background flex items-center justify-center">
 								<Sparkles className="w-5 h-5" />
 							</div>
 							<div>
-								<h2 className="text-xl font-medium text-slate-900 tracking-tight">Set up your first app.</h2>
-								<p className="text-sm text-slate-600 mt-1">Pick a starter and your AI assembles an app — schedules its workflows and runs them for you. Progress lives here.</p>
+								<h2 className="font-display text-xl font-medium text-foreground tracking-tight">Set up your first app.</h2>
+								<p className="text-sm text-muted-foreground mt-1">Pick a starter and your AI assembles an app — schedules its workflows and runs them for you. Progress lives here.</p>
 							</div>
 						</div>
 					</div>
 					<QuickStarters heading="Start with a starter" />
 				</div>
 			) : (
-				<div className="space-y-5 panel-in-left">
-					{/* Numbers consolidated to a compact top bar. */}
-					{hero && <HeroBar h={hero} onApps={() => appsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })} />}
-
-					{/* Failures surface here, triaged + actionable — the one health rail. */}
-					<NeedsAttentionRail loops={healthLoops} />
-
-					<div ref={appsRef} className="scroll-mt-4">
-						<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-400 uppercase mb-3">Your apps</div>
-						<div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
+				<div className="panel-in-left" ref={appsRef}>
+					{/* In-flight / failed installs stay as action-bearing cards above
+					    the index (retry / dismiss aren't list-row affordances). */}
+					{pendingApps.length > 0 && (
+						<div className="max-w-[760px] mx-auto w-full px-1 mb-3 grid grid-cols-1 gap-2.5">
 							{pendingApps.map((a) => (
 								<PendingAppCard
 									key={`pending:${a.name}`} app={a}
@@ -518,41 +590,16 @@ function AppsHome() {
 									onDismiss={() => dismissPending(a.name)}
 								/>
 							))}
-							{apps.map((a, i) => (
-								<AppCard
-									key={a} app={a} workflows={byApp.get(a)!} identity={identity.get(a)} index={i}
-									onOpen={(ap, loop) => {
-										// URL-driven so the "My Apps" nav (→ /studio/apps) returns
-										// to this grid; internal state wouldn't reset on a same-path nav.
-										navigate(`/studio/apps/${encodeURIComponent(ap)}${loop ? `?selected=${encodeURIComponent(loop)}` : ""}`);
-									}}
-									onRemoved={() => {
-										// Hide immediately (uninstall is async — see recentlyDeleted).
-										recentlyDeleted.add(a);
-										setByApp((prev) => {
-											if (!prev) return prev;
-											const next = new Map(prev);
-											next.delete(a);
-											return next;
-										});
-									}}
-								/>
-							))}
-							{uiApps.map((a) => (
-								<SurfaceAppCard
-									key={`ui:${a.name}`} app={a}
-									onOpen={() => navigate(`/studio/a/${encodeURIComponent(a.name)}`)}
-									onRemoved={() => { recentlyDeleted.add(a.name); setUiApps((prev) => prev.filter((x) => x.name !== a.name)); }}
-								/>
-							))}
 						</div>
-					</div>
-
-					{/* Create is also one click here (the sidebar launcher
-					    is the always-on primary). */}
-					<div className="pt-1 border-t border-slate-200/60">
-						<div className="pt-5"><QuickStarters heading="Start a new app" /></div>
-					</div>
+					)}
+					<IndexList
+						title="Apps"
+						rows={allRows}
+						search={allRows.length > 6}
+						searchPlaceholder="Search apps…"
+						sectionOrder={SECTION_ORDER}
+						footer={launcher}
+					/>
 				</div>
 			)}
 		</>

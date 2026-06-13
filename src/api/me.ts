@@ -27,6 +27,8 @@ export class MeApiError extends Error {
   }
 }
 
+const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
+
 async function call<T>(
   method: string,
   path: string,
@@ -38,26 +40,39 @@ async function call<T>(
     headers["Content-Type"] = "application/json";
     payload = JSON.stringify(body);
   }
-  const r = await fetch(`${ME_BASE}/api/v1/me${path}`, {
-    method,
-    headers,
-    body: payload,
-    credentials: "include", // send lm_session cookie cross-origin
-  });
-  let json: { ret_code?: number; message?: string; data?: T } = {};
-  try {
-    json = await r.json();
-  } catch {
-    /* empty / non-JSON body */
+  // The /me/* rate limiter aborts BEFORE the handler runs, so a 429 means the
+  // request never executed — safe to retry (even for POST/DELETE). Honor
+  // Retry-After when present (capped), else short exponential backoff. Up to
+  // 3 attempts so a transient burst self-heals instead of surfacing an error.
+  let lastErr: MeApiError | null = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const r = await fetch(`${ME_BASE}/api/v1/me${path}`, {
+      method,
+      headers,
+      body: payload,
+      credentials: "include", // send lm_session cookie cross-origin
+    });
+    if (r.status === 429 && attempt < 2) {
+      const ra = parseInt(r.headers.get("Retry-After") || "", 10);
+      const waitMs = Number.isFinite(ra) && ra > 0 ? Math.min(ra * 1000, 4000) : 400 * (attempt + 1);
+      await sleep(waitMs);
+      continue;
+    }
+    let json: { ret_code?: number; message?: string; data?: T } = {};
+    try {
+      json = await r.json();
+    } catch {
+      /* empty / non-JSON body */
+    }
+    if (!r.ok || (json.ret_code !== undefined && json.ret_code !== 0)) {
+      lastErr = new MeApiError(r.status, json.ret_code ?? r.status, json.message ?? r.statusText);
+      // Retry a 429 that slipped through with a body; otherwise fail now.
+      if (r.status === 429 && attempt < 2) { await sleep(400 * (attempt + 1)); continue; }
+      throw lastErr;
+    }
+    return (json.data ?? ({} as T));
   }
-  if (!r.ok || (json.ret_code !== undefined && json.ret_code !== 0)) {
-    throw new MeApiError(
-      r.status,
-      json.ret_code ?? r.status,
-      json.message ?? r.statusText,
-    );
-  }
-  return (json.data ?? ({} as T));
+  throw lastErr ?? new MeApiError(429, 1429, "too many requests");
 }
 
 // ── Apps ─────────────────────────────────────────────────────────────────

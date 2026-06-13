@@ -186,14 +186,20 @@ export function handleEvent(
 // "temporarily offline" line instead of dumping provider JSON.
 export function friendlyChatError(raw: string): string {
 	const s = String(raw);
+	if (/loading model|model.*unavailable|cold|warming/i.test(s)) {
+		return '⚠️ The model is warming up (cold GPU). Give it ~30s and try again — your message wasn’t lost.';
+	}
 	if (/503|service unavailable|backend not configured|FINDATA_LLM_BACKEND_URL|no .*provider accepted/i.test(s)) {
 		return '⚠️ The AI model is temporarily offline. Your message wasn’t lost — try again shortly.';
 	}
 	if (/401|sign in|unauthor/i.test(s)) {
 		return '⚠️ Please sign in to use chat.';
 	}
-	if (/429|rate.?limit/i.test(s)) {
-		return '⚠️ Rate limit reached — give it a moment and try again.';
+	if (/daily.*budget|budget exhausted/i.test(s)) {
+		return '⚠️ You’ve hit today’s chat token budget. It resets in 24h — or ask an admin to raise it.';
+	}
+	if (/429|rate.?limit|too many requests/i.test(s)) {
+		return '⚠️ Going a little fast — give it a few seconds and try again.';
 	}
 	return `⚠️ ${s}`;
 }

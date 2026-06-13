@@ -963,12 +963,15 @@ type SelectOption = { value: string; label: string };
 async function loadFieldOptions(source: string): Promise<SelectOption[]> {
   if (source.startsWith("pats://")) {
     const r = await apiClient.get("/api/v1/identity/personal-access-tokens?limit=100");
-    const rows = (r.data?.data?.tokens ?? []) as Array<{ id: string; name?: string; prefix?: string; revoked_at?: string | null }>;
+    // The identity API returns { id, name, token_prefix, status, revoked_at, … }.
+    // Earlier code read `prefix` (always undefined) so every PAT showed as a
+    // UUID shard; use token_prefix and prefer the explicit `status` flag.
+    const rows = (r.data?.data?.tokens ?? []) as Array<{ id: string; name?: string; token_prefix?: string; status?: string; revoked_at?: number | string | null }>;
     return [
       { value: "session", label: "This session — full access, expires in minutes (recommended)" },
       ...rows
-        .filter((t) => !t.revoked_at)
-        .map((t) => ({ value: t.id, label: `PAT · ${t.name || t.prefix || t.id.slice(0, 8)}` })),
+        .filter((t) => (t.status ? t.status === "active" : !t.revoked_at))
+        .map((t) => ({ value: t.id, label: `PAT · ${t.name || t.token_prefix || t.id.slice(0, 8)}` })),
     ];
   }
   return [];

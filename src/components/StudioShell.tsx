@@ -11,14 +11,13 @@
 import { Link, NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
 	Boxes,
-	Plus,
+	CirclePlus,
 	Store,
 	Compass,
 	Settings,
 	Shield,
 	LogOut,
 	ChevronDown,
-	Hexagon,
 	Key,
 	ListChecks,
 } from 'lucide-react';
@@ -28,6 +27,9 @@ import { cn } from '../lib/utils';
 import { me } from '@/api/me';
 import { useAppNav, iconFor } from './useAppNav';
 import { useStudioRefetch } from '@/hooks/useStudioRefetch';
+import { appTitle } from '@/components/workflow/AppCard';
+import { fireAsk } from '@/components/studio/IndexList';
+import { askApp } from '@/lib/grounded-asks';
 // StudioShell is now the single shell — it also hosts the /dashboard/* pages
 // (admin, quant, lumilake, lqt, product). The ported Runmesh admin pages need
 // these providers + the numeric-id bridge that AppLayout used to supply.
@@ -38,7 +40,6 @@ import { httpUser } from '../runmesh/utils/axios';
 // Phase S6a — persistent chat sidebar. AI is the primary interface
 // for Studio; webforms in the main workspace area become the
 // precision channel beside it.
-import { StudioChat } from './StudioChat';
 // Mouse-picker overlay — sits at the document root so it can capture
 // pointer events globally when the user clicks the Crosshair in the
 // chat. Inactive (renders null) until startStudioPicking() is called.
@@ -72,14 +73,14 @@ interface NavItem {
 // API tokens live in the bottom avatar menu; "How it works" is a quiet
 // footer docs link.
 const TOP_NAV: NavItem[] = [
-	{ to: '/studio/apps',    label: 'Home',    icon: Boxes, title: 'your apps + anything needing attention' },
+	{ to: '/studio/apps',    label: 'Apps',    icon: Boxes, title: 'your apps + anything needing attention' },
 	{ to: '/studio/library', label: 'Library', icon: Store, title: 'marketplace, skills, and experiments' },
 ];
 // Activity + Inbox folded into Home's status bar (the "runs today" and
 // "inbox" chips link there; the top-strip drafts pill covers other
 // pages). My Jobs is the quieter destination below the fold.
 const SECONDARY_NAV: NavItem[] = [
-	{ to: '/dashboard/jobs', label: 'My Jobs', icon: ListChecks, title: 'background runs and compute jobs' },
+	{ to: '/studio/runs', label: 'Jobs', icon: ListChecks, title: 'your recent runs — open any to ask about it' },
 ];
 function NavItemView({ to, label, icon: Icon, end, badge, title }: NavItem) {
 	return (
@@ -89,21 +90,18 @@ function NavItemView({ to, label, icon: Icon, end, badge, title }: NavItem) {
 			title={title}
 			className={({ isActive }) =>
 				cn(
-					'group flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all relative',
+					'group flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors relative',
 					isActive
-						? 'bg-gradient-to-r from-emerald-50 to-emerald-50/30 text-emerald-900 font-medium shadow-sm shadow-emerald-100/50'
-						: 'text-slate-600 hover:bg-slate-50 hover:text-slate-900',
+						? 'bg-black/[0.06] text-foreground font-medium'
+						: 'text-foreground/60 hover:bg-black/[0.04] hover:text-foreground',
 				)
 			}
 		>
 			{({ isActive }) => (
 				<>
-					{isActive && (
-						<span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r-full bg-emerald-500" />
-					)}
 					<Icon className={cn(
 						'w-4 h-4 flex-shrink-0 transition-colors',
-						isActive ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-700',
+						isActive ? 'text-foreground/80' : 'text-foreground/45 group-hover:text-foreground/70',
 					)} />
 					<span>{label}</span>
 					{badge != null && badge > 0 && (
@@ -123,7 +121,7 @@ function NavItemView({ to, label, icon: Icon, end, badge, title }: NavItem) {
 // Uppercase section divider for app-contributed nav groups.
 function SectionLabel({ children }: { children: React.ReactNode }) {
 	return (
-		<div className="mt-3 mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+		<div className="mt-4 mb-1 px-3 text-[11px] font-medium text-foreground/45">
 			{children}
 		</div>
 	);
@@ -185,6 +183,7 @@ export function StudioShell() {
 	const location = useLocation();
 	// Hosted /dashboard pages, app surfaces, and management need full width
 	// (admin tables, dataset explorers); core Studio pages stay narrow.
+	const chatHome = location.pathname === '/studio';
 	const wideMain = location.pathname.startsWith('/dashboard')
 		|| location.pathname.startsWith('/studio/a/')
 		|| location.pathname.startsWith('/studio/manage')
@@ -230,11 +229,38 @@ export function StudioShell() {
 	}, []);
 	useEffect(() => {
 		tickDrafts();
-		const id = window.setInterval(tickDrafts, 30_000);
+		const id = window.setInterval(tickDrafts, 60_000);
 		return () => window.clearInterval(id);
 	}, [tickDrafts]);
 	// Chat→page bus: badge updates the moment chat sends/dismisses a draft.
 	useStudioRefetch(["drafts"], tickDrafts);
+
+	// Recents — claude.ai-style plain-text list of the most recently
+	// active apps (max last_run_ts across each app's workflows).
+	const [recents, setRecents] = useState<Array<{ app: string; label: string }>>([]);
+	const tickRecents = useCallback(() => {
+		me.listWorkflows()
+			.then((r) => {
+				const latest = new Map<string, number>();
+				for (const w of r.workflows || []) {
+					if (!w.app || !(w.tenant || w.showcase)) continue;
+					latest.set(w.app, Math.max(latest.get(w.app) || 0, w.last_run_ts || 0));
+				}
+				const top = [...latest.entries()]
+					.filter(([, ts]) => ts > 0)
+					.sort((a, b) => b[1] - a[1])
+					.slice(0, 5)
+					.map(([app]) => ({ app, label: appTitle(app) }));
+				setRecents(top);
+			})
+			.catch(() => { /* list just stays as-is */ });
+	}, []);
+	useEffect(() => {
+		tickRecents();
+		const id = window.setInterval(tickRecents, 60_000);
+		return () => window.clearInterval(id);
+	}, [tickRecents]);
+	useStudioRefetch(["workflows", "runs", "apps"], tickRecents);
 	useEffect(() => {
 		const onClick = (e: MouseEvent) => {
 			if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
@@ -248,47 +274,57 @@ export function StudioShell() {
 		navigate('/auth/login');
 	};
 
-	// "+ New app" — launches the GUIDED CONVERSATIONAL create flow in the
-	// chat: the AI rolls out the procedure step by step (ask what it should do
-	// → compose → present the pipeline clearly → install). Replaces the old
-	// ad-hoc modal that pre-filled a fixed "crypto momentum trader". Lands on
-	// My Apps so the new app surfaces there once installed, then kicks the chat.
-	const newIntent = () => {
-		navigate('/studio/apps');
-		setTimeout(() => window.dispatchEvent(new CustomEvent('studio:ask', {
-			detail: { prompt: 'I want to set up a new app. Ask me what it should do for me, then assemble it step by step.', autosend: true },
-		})), 60);
+	// "⊕ New chat" — the chat IS the main surface (/studio). Flag a fresh
+	// conversation and land there; StudioChat consumes the flag on mount.
+	const newChat = () => {
+		try { sessionStorage.setItem('studio_new_chat_v1', '1'); } catch { /* ignore */ }
+		if (location.pathname === '/studio') {
+			window.dispatchEvent(new Event('studio:new-chat'));
+		} else {
+			navigate('/studio');
+		}
 	};
+
+	// studio:ask bridge — the chat only mounts at /studio now, so asks
+	// fired from other pages stash their detail and navigate; StudioChat
+	// consumes the stash on mount. When already on /studio, the chat's
+	// own listener handles the event directly.
+	useEffect(() => {
+		const onAsk = (e: Event) => {
+			if (window.location.pathname === '/studio') return;
+			const detail = (e as CustomEvent).detail;
+			if (!detail?.prompt) return;
+			try { sessionStorage.setItem('studio_pending_ask_v1', JSON.stringify(detail)); } catch { /* ignore */ }
+			navigate('/studio');
+		};
+		window.addEventListener('studio:ask', onAsk as EventListener);
+		return () => window.removeEventListener('studio:ask', onAsk as EventListener);
+	}, [navigate]);
 
 	return (
 		<LanguageProvider>
 		<EnterpriseTipProvider>
 		<div className={cn(
-			'min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 flex',
+			'min-h-screen bg-background flex',
 			resizing && 'select-none cursor-ew-resize',
 		)}>
 			{/* Sidebar ─────────────────────────────────────────────── */}
 			<aside
 				data-studio-picker-chrome="1"
 				style={{ width: sidebarWidth }}
-				className="relative flex flex-col h-screen flex-shrink-0 bg-white/70 backdrop-blur-sm border-r border-slate-200/70 sticky top-0"
+				className="relative flex flex-col h-screen flex-shrink-0 bg-sidebar border-r border-sidebar-border sticky top-0"
 			>
-				<Link to="/studio" className="px-4 py-4 border-b border-slate-200/60 flex items-center gap-2.5 hover:bg-slate-50/50 transition-colors">
-					<div className="relative">
-						<div className="absolute inset-0 bg-emerald-400/30 blur-md rounded-full" />
-						<Hexagon className="relative w-5 h-5 text-emerald-600 fill-emerald-50" strokeWidth={1.5} />
-					</div>
-					<span className="font-semibold text-[15px] tracking-tight text-slate-900">Lumid Studio</span>
+				<Link to="/studio" className="px-4 py-4 flex items-baseline">
+					<span className="font-display text-[18px] font-semibold tracking-tight text-foreground">Lumid Studio</span>
 				</Link>
 
 				<nav className="flex-1 overflow-y-auto px-2 py-3 space-y-px">
-					{/* Primary create action — always visible, the streamlined
-					    "start a new app" entry. */}
+					{/* Primary action — a quiet claude-style row, not a button. */}
 					<button
-						onClick={newIntent}
-						className="w-full mb-2 inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-emerald-500 text-white hover:bg-emerald-600 active:scale-[0.98] shadow-sm shadow-emerald-200/70 transition-all"
+						onClick={newChat}
+						className="w-full mb-1 flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-foreground hover:bg-black/[0.04] transition-colors"
 					>
-						<Plus className="w-4 h-4" /> New app
+						<CirclePlus className="w-4 h-4 text-foreground/55" /> New chat
 					</button>
 					{TOP_NAV.map((item) => <NavItemView key={item.to} {...item} />)}
 					{SECONDARY_NAV.map((item) => (
@@ -311,10 +347,24 @@ export function StudioShell() {
 							))}
 						</div>
 					))}
-					{/* Management lives in the bottom user menu (role-gated). */}
-					<div className="my-2 mx-3 h-px bg-slate-200/60" />
-					{/* Marketplace — in-Studio browse + install (apps/skills/datasets). */}
-					<NavItemView to="/studio/marketplace" label="Marketplace" icon={Store} />
+					{recents.length > 0 && (
+						<div>
+							<SectionLabel>Your apps</SectionLabel>
+							{recents.map((r) => (
+								// Recents open the grounded chat (the conversational
+								// interface), honoring the landing preference — not the
+								// dense observability dashboard, which stays a "details →"
+								// click away on the Apps index.
+								<button
+									key={r.app}
+									onClick={() => fireAsk(askApp(r.app))}
+									className="w-full text-left block px-3 py-1.5 rounded-lg text-[13px] text-foreground/60 hover:bg-black/[0.04] hover:text-foreground truncate transition-colors"
+								>
+									{r.label}
+								</button>
+							))}
+						</div>
+					)}
 				</nav>
 
 				{/* Docs link — kept apart from the functional nav above so
@@ -322,8 +372,8 @@ export function StudioShell() {
 				<NavLink
 					to="/studio/how"
 					className={({ isActive }) => cn(
-						'mx-3 mb-1 flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs transition-colors',
-						isActive ? 'text-emerald-700' : 'text-slate-400 hover:text-slate-600',
+						'mx-3 mb-1 flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs transition-colors hover:bg-black/[0.04]',
+						isActive ? 'text-foreground/80' : 'text-foreground/45 hover:text-foreground/70',
 					)}
 				>
 					<Compass className="w-3.5 h-3.5 flex-shrink-0" />
@@ -334,28 +384,28 @@ export function StudioShell() {
 				    everything the top-right avatar dropdown used to
 				    (Settings, API tokens, Admin, Sign out) so account
 				    surfaces live in one place. */}
-				<div ref={menuRef} className="p-3 border-t border-slate-200/60 relative">
+				<div ref={menuRef} className="p-3 border-t border-sidebar-border relative">
 					<button
 						onClick={() => setMenuOpen((v) => !v)}
 						className={[
 							'w-full px-1.5 py-1.5 rounded-lg flex items-center gap-2 min-w-0 transition-colors group',
-							menuOpen ? 'bg-slate-100/70' : 'hover:bg-slate-100/70',
+							menuOpen ? 'bg-black/[0.06]' : 'hover:bg-black/[0.04]',
 						].join(' ')}
 						title="Account menu"
 					>
-						<div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center text-xs font-semibold flex-shrink-0 shadow-sm shadow-emerald-100">
+						<div className="w-7 h-7 rounded-full bg-foreground text-background flex items-center justify-center text-xs font-semibold flex-shrink-0">
 							{(user?.email?.[0] || '?').toUpperCase()}
 						</div>
 						<div className="flex-1 min-w-0 text-left">
-							<div className="text-[12px] font-medium truncate text-slate-900">
+							<div className="text-[12px] font-medium truncate text-foreground">
 								{user?.username || user?.email?.split('@')[0] || 'there'}
 							</div>
 							{isAdmin ? (
-								<div className="text-[10px] uppercase tracking-wide text-emerald-700 truncate">
+								<div className="text-[10px] text-foreground/50 truncate">
 									{user?.role === 'super_admin' ? 'super admin' : 'admin'}
 								</div>
 							) : (
-								<div className="text-[10px] text-slate-400 truncate">{user?.email}</div>
+								<div className="text-[10px] text-foreground/40 truncate">{user?.email}</div>
 							)}
 						</div>
 						<ChevronDown className={[
@@ -365,23 +415,23 @@ export function StudioShell() {
 					</button>
 
 					{menuOpen && (
-						<div className="absolute left-3 right-3 bottom-full mb-1 rounded-lg border border-slate-200 bg-white shadow-lg py-1 z-30">
+						<div className="absolute left-3 right-3 bottom-full mb-1 rounded-xl border border-border bg-card shadow-lg py-1 z-30">
 							<Link to="/studio/settings"
 								onClick={() => setMenuOpen(false)}
-								className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
+								className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-muted">
 								<Settings className="w-3.5 h-3.5 text-slate-500" />
 								Settings
 							</Link>
 							<Link to="/studio/account/tokens"
 								onClick={() => setMenuOpen(false)}
-								className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
+								className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-muted">
 								<Key className="w-3.5 h-3.5 text-slate-500" />
 								API tokens
 							</Link>
 							{isAdmin && (
 								<Link to="/studio/manage"
 									onClick={() => setMenuOpen(false)}
-									className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
+									className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-muted">
 									<Shield className="w-3.5 h-3.5 text-slate-500" />
 									Management
 								</Link>
@@ -403,28 +453,39 @@ export function StudioShell() {
 					title="Drag to resize · double-click to reset"
 					className={cn(
 						'absolute top-0 right-0 z-30 h-full w-1.5 cursor-ew-resize group/resize',
-						'hover:bg-emerald-200/30 transition-colors',
-						resizing && 'bg-emerald-200/40',
+						'hover:bg-black/5 transition-colors',
+						resizing && 'bg-black/10',
 					)}
 				>
 					<span className={cn(
 						'absolute right-0 top-0 h-full w-px transition-colors',
-						'bg-transparent group-hover/resize:bg-emerald-400',
-						resizing && '!bg-emerald-500',
+						'bg-transparent group-hover/resize:bg-foreground/30',
+						resizing && '!bg-foreground/40',
 					)} />
 				</div>
 			</aside>
 
 			{/* Main column ─────────────────────────────────────────── */}
-			<div className="flex-1 flex flex-col min-w-0">
+			{/* On the chat route the column is locked to the viewport height
+			    (overflow-hidden) so the composer pins to the SCREEN bottom and
+			    only the transcript scrolls — never the page. Other routes keep
+			    the natural min-h-screen growth + body scroll. */}
+			<div className={cn('flex-1 flex flex-col min-w-0', chatHome && 'h-screen overflow-hidden')}>
 				{/* Top bar — page header lives in TopStatusStrip; account
 				    surfaces moved to the sidebar user menu. */}
-				<header data-studio-picker-chrome="1" className="min-h-[64px] py-2.5 bg-white/70 backdrop-blur-md border-b border-slate-200/70 sticky top-0 z-10 flex items-center px-6 gap-4">
+				<header data-studio-picker-chrome="1" className="min-h-[64px] py-2.5 bg-background/85 backdrop-blur-md border-b border-border sticky top-0 z-10 flex items-center px-6 gap-4">
 					<TopStatusStrip />
 				</header>
 
-				{/* Workspace */}
-				<main className={cn('flex-1 px-6 py-6 w-full', !wideMain && 'max-w-5xl')}>
+				{/* Workspace. /studio = the chat as the main surface (claude.ai
+				    layout): a flex column pinned to the viewport so the
+				    transcript scrolls internally and the composer stays low. */}
+				<main className={cn(
+					'flex-1 w-full',
+					chatHome
+						? 'flex flex-col min-h-0 px-6 pb-4'
+						: cn('px-6 py-6', !wideMain && 'max-w-5xl'),
+				)}>
 					<Outlet />
 				</main>
 			</div>
@@ -433,12 +494,6 @@ export function StudioShell() {
 			    moved into the chat header right group on 2026-05-29
 			    (see StudioChat.tsx::ArtifactIconButton). Removed
 			    from the layout so the workspace reclaims the width. */}
-
-			{/* Phase S6a — AI chat lives here, sticky to the right.
-			    Collapses to a thin rail; the user toggles. Inside,
-			    StudioChat uses location to give the agent context
-			    about the page the user is on. */}
-			<StudioChat />
 
 			{/* Mouse-picker overlay (no-op until armed). Mounted here
 			    so it can layer above the workspace + chat. */}
