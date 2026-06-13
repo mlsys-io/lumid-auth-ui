@@ -8,6 +8,7 @@
 // sessionStorage so navigating between Studio pages keeps context.
 
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
@@ -1052,6 +1053,11 @@ export function StudioChat() {
 		try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
 	};
 
+	// Chat action icons render INTO the shell top bar (one aligned row with the
+	// status pills) via this slot — so the chat column has no second header bar.
+	const [stripSlot, setStripSlot] = useState<HTMLElement | null>(null);
+	useEffect(() => { setStripSlot(document.getElementById('topstrip-app-slot')); }, []);
+
 	// The chat IS the main surface now (claude.ai layout) — mounted as
 	// the /studio route's page content, a centered column that fills the
 	// area under the shell header. The old right-rail collapse/resize
@@ -1085,53 +1091,11 @@ export function StudioChat() {
 				onPickFiles(e.dataTransfer.files);
 			}}
 		>
-			{/* Borderless, right-aligned action strip — not a second bar. The
-			    "Chat" label + a competing bottom border read as a misaligned
-			    duplicate of the shell top bar, so both are gone; the icons
-			    float quietly top-right. */}
-			<header className="relative z-30 h-9 px-1 flex items-center justify-end flex-shrink-0 gap-2">
-				<div className="flex items-center gap-2.5 min-w-0 flex-1">
-					<div className="min-w-0 flex-1 flex items-center gap-1.5 flex-wrap">
-						{streaming && (
-							<span className="text-[12px] text-foreground/55 inline-flex items-center gap-1.5">
-								<span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> thinking…
-							</span>
-						)}
-						{usage && usage.limit > 0 && (
-							<span
-								className={[
-									'text-[10px] font-mono font-normal px-1.5 py-px rounded',
-									usage.used >= usage.limit
-										? 'bg-rose-100 text-rose-700'
-										: usage.used > usage.limit * 0.8
-											? 'bg-amber-100 text-amber-700'
-											: 'bg-slate-100 text-slate-500',
-								].join(' ')}
-								title={`Daily token usage: ${usage.used.toLocaleString()} / ${usage.limit.toLocaleString()} (est. $${estimateCost(usage.used, model).toFixed(2)})`}
-							>
-								{formatTokens(usage.used)}/{formatTokens(usage.limit)}
-							</span>
-						)}
-						{lastRoute && (
-							<span
-								className={[
-									'text-[9.5px] font-normal px-1 py-px rounded font-medium',
-									lastRoute.autoRouted && lastRoute.modelUsed !== model
-										? 'bg-sky-100 text-sky-700'
-										: 'bg-slate-100 text-slate-500',
-								].join(' ')}
-								title={lastRoute.autoRouted && lastRoute.modelUsed !== model
-									? `Auto-routed to ${lastRoute.modelUsed} (needed a capability your selected model lacks).`
-									: `Last response from: ${lastRoute.modelUsed}`}
-							>
-								{lastRoute.autoRouted && lastRoute.modelUsed !== model
-									? `auto: ${modelShortLabel(lastRoute.modelUsed)}`
-									: modelShortLabel(lastRoute.modelUsed)}
-							</span>
-						)}
-					</div>
-				</div>
-				<div className="flex items-center gap-0.5 flex-shrink-0">
+			{/* Chat actions render in the shell top bar (one aligned row with the
+			    live/status pills) — the chat column has NO header bar of its own,
+			    so there's no second misaligned bar. */}
+			{stripSlot && createPortal(
+				<div data-studio-picker-chrome="1" className="flex items-center gap-0.5 ml-auto">
 					<ContextIconButton
 						streaming={streaming}
 						agents={agents}
@@ -1222,8 +1186,9 @@ export function StudioChat() {
 							<Trash2 className="w-3.5 h-3.5" />
 						</button>
 					)}
-				</div>
-			</header>
+				</div>,
+				stripSlot,
+			)}
 
 			<div
 				ref={transcriptRef}

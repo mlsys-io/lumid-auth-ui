@@ -204,32 +204,15 @@ export default function ChatEmptyState() {
 				</div>
 			)}
 
-			{/* ── Try-asking pills — change with the page the user came from ── */}
+			{/* One quiet row of context-aware suggestions — capped at 3 so the
+			    empty state stays calm (was two rows = six boxes). Setup actions
+			    live on the Apps page's launcher, not here. */}
 			<div className="flex flex-wrap justify-center gap-1.5">
-				{samples.map((s) => (
+				{samples.slice(0, 3).map((s) => (
 					<button key={s.label} onClick={() => fire(s.prompt, s.context)} className={PILL}>
 						{s.label}
 					</button>
 				))}
-			</div>
-
-			{/* ── Starter pills — set something new up (capability-gated) ── */}
-			<div className="flex flex-wrap justify-center gap-1.5">
-				{starters.map((s) => {
-					const missing = missingReq(s, caps);
-					const Icon = missing ? Lock : s.icon;
-					return (
-						<button
-							key={s.title}
-							onClick={() => missing ? navigate(CONNECT_ROUTE[missing]) : fire(s.prompt)}
-							className={PILL}
-						>
-							<Icon className={`w-3.5 h-3.5 shrink-0 ${missing ? 'text-muted-foreground/70' : 'text-coral'}`} />
-							<span>{s.title}</span>
-							{missing && <span className="text-[10px] text-amber-600">connect {missing}</span>}
-						</button>
-					);
-				})}
 			</div>
 		</div>
 	);
