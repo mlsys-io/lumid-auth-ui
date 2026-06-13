@@ -1065,7 +1065,7 @@ export function StudioChat() {
 	return (
 		<div
 			data-studio-picker-chrome="1"
-			className="relative z-20 flex flex-col flex-1 min-h-0 w-full max-w-[780px] mx-auto"
+			className={['relative z-20 flex flex-col flex-1 min-h-0 w-full max-w-[780px] mx-auto', messages.length === 0 ? 'justify-center' : ''].join(' ')}
 			onDragEnter={(e) => {
 				if (!e.dataTransfer?.types?.includes('Files')) return;
 				e.preventDefault();
@@ -1198,13 +1198,15 @@ export function StudioChat() {
 					// content sticks to the bottom or leaves the user where they are.
 					atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
 				}}
-				className="flex-1 overflow-y-auto px-4 py-4 scroll-smooth"
+				className={messages.length === 0
+					? 'flex-none px-4 pb-4'
+					: 'flex-1 overflow-y-auto px-4 py-4 scroll-smooth'}
 			>
 				{messages.length === 0 ? (
-					// Empty state — greeting + grounded digest, vertically centered.
-					// The composer stays pinned at the bottom (below); this whole
-					// block scrolls if the digest is tall.
-					<div className="min-h-full flex flex-col justify-center max-w-[640px] mx-auto w-full">
+					// Empty state — greeting + digest sit DIRECTLY above the composer
+					// as one vertically-centered group (the column is justify-center
+					// when empty), so there's no dead gap between them.
+					<div className="max-w-[640px] mx-auto w-full">
 						<EmptyHint />
 						<div className="mt-6"><ChatEmptyState /></div>
 					</div>

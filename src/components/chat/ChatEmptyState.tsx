@@ -49,7 +49,10 @@ export function ChatHero() {
 	const tod = h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening';
 	return (
 		<div className="text-center select-none">
-			<div aria-hidden className="text-coral text-[26px] leading-none mb-3">✳</div>
+			{/* Gold spiral mark (replaces the ✳ star). */}
+			<svg aria-hidden viewBox="0 0 24 24" width="30" height="30" className="mx-auto mb-3" fill="none" stroke="#C99A2E" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+				<path d="M12 11 a1 1 0 0 1 1 1 a2 2 0 0 1 -2 2 a3 3 0 0 1 -3 -3 a4 4 0 0 1 4 -4 a5 5 0 0 1 5 5 a6 6 0 0 1 -6 6" />
+			</svg>
 			<h1 className="font-display text-[26px] font-medium tracking-tight text-foreground">
 				Good {tod}{name ? `, ${name}` : ''}
 			</h1>
