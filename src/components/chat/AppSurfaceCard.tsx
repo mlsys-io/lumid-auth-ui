@@ -10,7 +10,7 @@ import { Link } from 'react-router-dom';
 import { ArrowUpRight, Loader2 } from 'lucide-react';
 import { me, type MeAppSurface, type MeWorkflowRow, MeApiError } from '@/api/me';
 import { LumidMarkdown } from '@/components/app-surface/LumidMarkdown';
-import { appTitle } from '@/components/workflow/AppCard';
+import { appTitle, appHasSurface } from '@/components/workflow/AppCard';
 import { TONES, workflowTone } from '@/lib/tones';
 import { loopLabel } from '@/lib/workflow-names';
 
@@ -83,6 +83,12 @@ export default function AppSurfaceCard({ app, surface }: { app: string; surface?
 
 	useEffect(() => {
 		let live = true;
+		// Skip the probe entirely for apps we already know declare no surface —
+		// go straight to the overview, avoiding a 404 the browser logs.
+		if (appHasSurface(app) === false) {
+			setState({ loading: false, noSurface: true });
+			return () => { live = false; };
+		}
 		setState({ loading: true });
 		me.appUI(app, surface)
 			.then((data) => { if (live) setState({ data, loading: false }); })

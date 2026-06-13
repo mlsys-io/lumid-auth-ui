@@ -1085,13 +1085,18 @@ export function StudioChat() {
 				onPickFiles(e.dataTransfer.files);
 			}}
 		>
-			<header className="relative z-30 h-12 px-1 border-b border-border flex items-center justify-between flex-shrink-0 gap-2">
+			{/* Borderless, right-aligned action strip — not a second bar. The
+			    "Chat" label + a competing bottom border read as a misaligned
+			    duplicate of the shell top bar, so both are gone; the icons
+			    float quietly top-right. */}
+			<header className="relative z-30 h-9 px-1 flex items-center justify-end flex-shrink-0 gap-2">
 				<div className="flex items-center gap-2.5 min-w-0 flex-1">
 					<div className="min-w-0 flex-1 flex items-center gap-1.5 flex-wrap">
-						<span className="text-[13px] font-medium text-foreground/70 inline-flex items-center gap-1.5">
-							Chat
-							{streaming && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />}
-						</span>
+						{streaming && (
+							<span className="text-[12px] text-foreground/55 inline-flex items-center gap-1.5">
+								<span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> thinking…
+							</span>
+						)}
 						{usage && usage.limit > 0 && (
 							<span
 								className={[
@@ -1366,8 +1371,12 @@ export function StudioChat() {
 				<form
 					onSubmit={(e) => { e.preventDefault(); send(); }}
 					className={[
-						'flex flex-wrap items-center gap-1 rounded-2xl border bg-card shadow-sm px-2 pt-1.5 pb-1.5 transition-colors',
-						dragOver ? 'border-coral border-dashed' : 'border-border focus-within:border-foreground/25',
+						'flex flex-wrap items-center gap-1 rounded-2xl border bg-card px-2.5 pt-2 pb-2 transition-all duration-150',
+						// Elegant focus: a soft sage ring + lift, never a hard black
+						// outline. (Was focus-within:border-foreground/25 — near-black.)
+						dragOver
+							? 'border-coral border-dashed ring-2 ring-coral/20'
+							: 'border-border shadow-sm focus-within:border-ring focus-within:ring-4 focus-within:ring-ring/15 focus-within:shadow-md',
 					].join(' ')}
 				>
 					<input
@@ -1578,10 +1587,10 @@ export function StudioChat() {
 							}
 							rows={1}
 							className={[
-								'w-full px-2 pt-2 pb-1 text-sm bg-transparent border-0 shadow-none focus:outline-none focus:ring-0 resize-none max-h-40 transition-all',
+								'w-full px-2 pt-1.5 pb-1 text-[15px] leading-relaxed bg-transparent border-0 outline-none shadow-none focus:outline-none focus:ring-0 focus-visible:outline-none resize-none max-h-48 transition-all',
 								dragOver ? 'placeholder:text-coral' : 'placeholder:text-muted-foreground',
 							].join(' ')}
-							style={{ minHeight: '40px' }}
+							style={{ minHeight: '64px', outline: 'none', boxShadow: 'none' }}
 						/>
 						{slashSuggestions.length > 0 && (
 							<div className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-slate-200 rounded-xl shadow-lg z-50 max-h-48 overflow-y-auto">

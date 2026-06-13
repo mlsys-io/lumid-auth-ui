@@ -51,6 +51,19 @@ export function registerAppLabel(app: string, label: string): void {
 	if (app && label) SIDEBAR_LABELS[app] = label;
 }
 
+// Surface-presence registry — whether an app declares a UI surface, learned
+// from listApps. Lets AppSurfaceCard skip the me.appUI probe for surfaceless
+// apps (loop bots like lqt-mailbox/yao-agent) and render the overview
+// directly, instead of firing a 404 the browser logs to the console.
+const SURFACE_PRESENCE: Record<string, boolean> = {};
+export function registerAppSurfacePresence(app: string, hasSurface: boolean): void {
+	if (app) SURFACE_PRESENCE[app] = hasSurface;
+}
+/** true / false when known, undefined when not yet loaded. */
+export function appHasSurface(app: string): boolean | undefined {
+	return SURFACE_PRESENCE[app];
+}
+
 const BLURB: Record<string, string> = {
 	"personal-agent": "Morning briefs, inbox triage, and reflections over your email + calendar.",
 	"mbb-ai": "Active-learning over consulting cases — sharpens its judgement with every run.",

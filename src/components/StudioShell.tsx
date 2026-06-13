@@ -195,9 +195,10 @@ export function StudioShell() {
 	// ported Runmesh admin pages now hosted in this shell. Ported from AppLayout.
 	const setRunmeshUser = useAuthStore((s) => s.setUser);
 	useEffect(() => {
-		// Only admins reach the ported Runmesh pages that need the numeric-id
-		// bridge — skip the /runmesh profile fetch for everyone else.
-		if (!user || !isAdmin) return;
+		// Only admins on a /dashboard route reach the ported Runmesh pages that
+		// need the numeric-id bridge. Gating to /dashboard avoids a needless
+		// (and session-only) /runmesh profile fetch on every /studio chat page.
+		if (!user || !isAdmin || !location.pathname.startsWith('/dashboard')) return;
 		(async () => {
 			try {
 				const profile = await httpUser.get<{ user?: Record<string, unknown> } & Record<string, unknown>>('/runmesh/system/user/profile');
@@ -214,7 +215,7 @@ export function StudioShell() {
 				}
 			} catch { /* best-effort — pages needing this show their own error */ }
 		})();
-	}, [user, isAdmin, setRunmeshUser]);
+	}, [user, isAdmin, setRunmeshUser, location.pathname]);
 
 	const [menuOpen, setMenuOpen] = useState(false);
 	const menuRef = useRef<HTMLDivElement>(null);
