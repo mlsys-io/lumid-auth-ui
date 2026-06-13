@@ -9,6 +9,7 @@
 // no per-page nav reimplementation.
 
 import { Link, NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
+import ErrorBoundary from './ErrorBoundary';
 import {
 	Boxes,
 	CirclePlus,
@@ -486,7 +487,9 @@ export function StudioShell() {
 						? 'flex flex-col min-h-0 px-6 pb-4'
 						: cn('px-6 py-6', !wideMain && 'max-w-5xl'),
 				)}>
-					<Outlet />
+					<ErrorBoundary resetKey={location.pathname}>
+						<Outlet />
+					</ErrorBoundary>
 				</main>
 			</div>
 

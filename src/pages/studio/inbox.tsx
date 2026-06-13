@@ -111,10 +111,11 @@ export default function StudioInbox() {
 	const [lastRefresh, setLastRefresh] = useState<number>(Date.now());
 	const [, setTick] = useState(0);
 
-	// Tick every 5s so the "Updated Xs ago" chip counts up between
-	// auto-refreshes. Cheap; just bumps a state to force render.
+	// Tick so the "Updated Xs ago" chip counts up between auto-refreshes.
+	// 15s (was 5s) — re-rendering this view every 5s is needless churn; the
+	// relative-time chip reads the same to a human at 15s granularity.
 	useEffect(() => {
-		const t = window.setInterval(() => setTick((x) => x + 1), 5_000);
+		const t = window.setInterval(() => setTick((x) => x + 1), 15_000);
 		return () => window.clearInterval(t);
 	}, []);
 
