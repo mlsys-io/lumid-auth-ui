@@ -56,7 +56,7 @@ const PAGE_META: Array<{
 	{
 		pattern: /^\/studio\/apps/,
 		icon: Boxes,
-		title: "My Apps",
+		title: "Apps",
 		subtitle: "Your apps and their ongoing progress.",
 		iconTone: "text-emerald-600",
 	},
@@ -84,8 +84,8 @@ const PAGE_META: Array<{
 	{
 		pattern: /^\/studio\/runs/,
 		icon: ActivityIcon,
-		title: "Activity",
-		subtitle: "What your AI has been doing, across every app.",
+		title: "Jobs",
+		subtitle: "Your recent runs — open any to ask about it.",
 		iconTone: "text-emerald-600",
 	},
 	{

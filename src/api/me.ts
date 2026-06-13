@@ -29,7 +29,26 @@ export class MeApiError extends Error {
 
 const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
-async function call<T>(
+// In-flight dedup for GETs — the shell, top-strip, and chat empty-state all
+// poll the same endpoints (listWorkflows / listDrafts) on the same intervals
+// and refetch on the same chat→page events. Sharing one in-flight promise
+// collapses those concurrent duplicates into a single request with ZERO
+// staleness risk (no TTL caching — once it settles, the next call is fresh).
+// This is what lets the /me/* rate ceiling come back down.
+const inflight = new Map<string, Promise<unknown>>();
+
+function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+  if (method === "GET" && body === undefined) {
+    const existing = inflight.get(path);
+    if (existing) return existing as Promise<T>;
+    const p = doCall<T>(method, path, body).finally(() => inflight.delete(path));
+    inflight.set(path, p);
+    return p;
+  }
+  return doCall<T>(method, path, body);
+}
+
+async function doCall<T>(
   method: string,
   path: string,
   body?: unknown,

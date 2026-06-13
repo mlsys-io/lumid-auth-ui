@@ -46,8 +46,19 @@ const BLURB: Record<string, string> = {
 	"auto-quant": "Momentum + mean-reversion crypto strategies — proposes, backtests, and risk-gates paper trades, learning from every run.",
 };
 
+const ACRONYMS: Record<string, string> = { gpu: "GPU", ai: "AI", lqt: "LQT", sql: "SQL", mbb: "MBB", kol: "KOL", ci: "CI", api: "API" };
+
 export function appTitle(app: string): string {
-	return TITLE[app] || app;
+	if (TITLE[app]) return TITLE[app];
+	// Humanize an unmapped slug: drop a leading "lumid-", split on -/_, title-
+	// case, uppercase known acronyms. "lumid-gpu-rentals" -> "GPU Rentals".
+	const humanized = app
+		.replace(/^lumid-/, "")
+		.split(/[-_]/)
+		.filter(Boolean)
+		.map((w) => ACRONYMS[w.toLowerCase()] || w.charAt(0).toUpperCase() + w.slice(1))
+		.join(" ");
+	return humanized || app;
 }
 
 function whenLast(ts?: number): string {
