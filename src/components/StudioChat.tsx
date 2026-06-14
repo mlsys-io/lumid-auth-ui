@@ -340,17 +340,18 @@ export function StudioChat({ docked = false }: { docked?: boolean } = {}) {
 		try { localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0'); } catch { /* ignore */ }
 	}, [collapsed]);
 
-	// Keep the app binding in sync with the workspace URL whenever docked — the
-	// docked chat ONLY renders on an app page, so the path is the source of
-	// truth for which app this session belongs to. Makes app-tagging robust
-	// regardless of the open-app event/stash timing (so saved chats are tagged
-	// and the picker can group/route by app).
-	useEffect(() => {
-		if (!docked) return;
-		const m = location.pathname.match(/^\/studio\/apps\/([^/?]+)/);
-		const app = m && m[1] !== 'all' ? decodeURIComponent(m[1]) : null;
-		if (app) currentAppRef.current = app;
-	}, [docked, location.pathname]);
+	// The workspace URL is the source of truth for which app a DOCKED session
+	// belongs to (the docked chat only renders on an app page). We read it at
+	// SAVE time for tagging — NOT into currentAppRef, because clobbering that
+	// ref pre-empts openAppInChat's app-switch detection (it would see
+	// "already on B" and skip switching the session). Kept fresh each render.
+	const pathnameRef = useRef(location.pathname);
+	pathnameRef.current = location.pathname;
+	const workspaceApp = (): string | null => {
+		if (!docked) return null;
+		const m = pathnameRef.current.match(/^\/studio\/apps\/([^/?]+)/);
+		return m && m[1] !== 'all' ? decodeURIComponent(m[1]) : null;
+	};
 
 	// Persist selected model.
 	useEffect(() => {
@@ -467,7 +468,7 @@ export function StudioChat({ docked = false }: { docked?: boolean } = {}) {
 						model: model || undefined,
 						mode: mode || undefined,
 						claude_session_id: claudeSessionRef.current || undefined,
-						app: currentAppRef.current || undefined,
+						app: (workspaceApp() || currentAppRef.current) || undefined,
 					}),
 				});
 				if (!r.ok) return;
@@ -475,7 +476,8 @@ export function StudioChat({ docked = false }: { docked?: boolean } = {}) {
 				const newId: string | undefined = j?.data?.id;
 				if (newId && newId !== chatId) setChatId(newId);
 				// Remember this as the app's latest session for resume-on-reentry.
-				if (newId && currentAppRef.current) writeAppChat(currentAppRef.current, newId);
+				const tagApp = workspaceApp() || currentAppRef.current;
+				if (newId && tagApp) writeAppChat(tagApp, newId);
 				lastSavedSigRef.current = sig;
 			} catch { /* ignore */ }
 		}, 600);

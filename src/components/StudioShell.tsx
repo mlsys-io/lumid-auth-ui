@@ -290,13 +290,18 @@ export function StudioShell() {
 		}
 	};
 
-	// studio:ask bridge — the chat only mounts at /studio now, so asks
-	// fired from other pages stash their detail and navigate; StudioChat
-	// consumes the stash on mount. When already on /studio, the chat's
-	// own listener handles the event directly.
+	// studio:ask bridge — the chat is mounted on /studio (home) AND on every app
+	// workspace page (the docked right panel). When it's mounted, its OWN
+	// listener handles the ask in place — so we must NOT navigate (doing so on an
+	// app page yanked the user off the workspace, e.g. clicking an opener chip
+	// made the middle panel vanish). Only stash+navigate from pages WITHOUT a
+	// chat (Library, Jobs, …), where StudioChat consumes the stash on mount.
 	useEffect(() => {
+		const chatIsMounted = (path: string) =>
+			path === '/studio' ||
+			(/^\/studio\/apps\/[^/]+/.test(path) && path !== '/studio/apps/all');
 		const onAsk = (e: Event) => {
-			if (window.location.pathname === '/studio') return;
+			if (chatIsMounted(window.location.pathname)) return; // local chat handles it
 			const detail = (e as CustomEvent).detail;
 			if (!detail?.prompt) return;
 			try { sessionStorage.setItem('studio_pending_ask_v1', JSON.stringify(detail)); } catch { /* ignore */ }
