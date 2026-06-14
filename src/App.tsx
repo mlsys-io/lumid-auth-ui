@@ -336,10 +336,15 @@ function ParamRedirect({ pattern }: { pattern: string }) {
   return <Navigate to={to} replace />;
 }
 
+// Cold-load fallback — a calm, on-brand wordmark with a gentle pulse instead of
+// an off-brand spinning ring (the "swirling" motion). No rotation; just a soft
+// breathe so loading reads as intentional, not janky.
 function Spinner() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="w-6 h-6 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin" />
+      <span className="font-display text-[20px] font-semibold tracking-tight text-foreground/70 animate-pulse">
+        Lumid Studio
+      </span>
     </div>
   );
 }

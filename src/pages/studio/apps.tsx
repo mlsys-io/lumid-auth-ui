@@ -856,7 +856,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 				// brings its own chrome + padding) sits flush in the panel.
 				<div className="-mx-5 -my-5">
 					<Suspense fallback={<div className="px-5 py-8"><Skeleton lines={4} /></div>}>
-						<AppSurface app={app} embedded={embedded} />
+						<AppSurface app={app} embedded={embedded} surface={params.get("surface") || undefined} />
 					</Suspense>
 				</div>
 			) : (

@@ -147,10 +147,16 @@ export function AppSurface({
       <div className="flex flex-wrap gap-1 min-w-0">
         {nav.map((n) => {
           const active = n.surface === current;
+          // Embedded in the workspace → switch surfaces WITHIN the middle panel
+          // (?surface=) so the left nav + right chat stay mounted. Standalone →
+          // the dedicated /studio/a/:app/:surface route.
+          const to = embedded
+            ? `/studio/apps/${encodeURIComponent(app)}?surface=${encodeURIComponent(n.surface)}`
+            : `/studio/a/${encodeURIComponent(app)}/${encodeURIComponent(n.surface)}`;
           return (
             <Link
               key={n.surface}
-              to={`/studio/a/${encodeURIComponent(app)}/${encodeURIComponent(n.surface)}`}
+              to={to}
               className={[
                 "px-2.5 py-1 rounded-lg text-[12px] transition-colors",
                 active
