@@ -15,8 +15,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-	Activity, Play, Pause, Loader2, Save, Lightbulb, Clock, AlertCircle, Target,
-	ChevronLeft, ChevronRight, ChevronDown, Trash2, FlaskConical,
+	Play, Pause, Loader2, Save, Lightbulb, Clock, AlertCircle, Target,
+	ChevronLeft, ChevronRight, ChevronDown, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import apiClient from "@/api/client";
@@ -282,18 +282,22 @@ export default function WorkflowObservabilityPanel({
 							{running ? "Running…" : h.label}
 						</span>
 					</div>
-					<div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
-						<span>{describeSchedule(wf.trigger)}{lastRan ? ` · ${lastRan}` : ""}</span>
-						{(wf.experiment_ids || []).map((eid) => (
-							<Link key={eid} to={`/studio/a/${encodeURIComponent(app)}/experiments`}
-								title={`feeds experiment ${eid}`}
-								className="inline-flex items-center gap-1 px-1.5 py-px rounded-full border border-violet-200 bg-violet-50 text-violet-700 text-[10px] hover:bg-violet-100 transition-colors">
-								<FlaskConical className="w-2.5 h-2.5" />{eid.replace(/_/g, " ")}
-							</Link>
-						))}
+					{/* De-noised: just when it last ran (the status badge above already
+					    says failing/healthy; the experiment chip was redundant noise). */}
+					<div className="text-[11px] text-slate-400 mt-0.5">
+						<span>{lastRan ? `ran ${lastRan}` : describeSchedule(wf.trigger)}</span>
 					</div>
 				</div>
-				<div className="flex items-center gap-2 flex-shrink-0">
+				<div className="flex items-center gap-1.5 flex-shrink-0">
+					{/* Schedule as a compact top-right control (like a config selector),
+					    Save appears only when changed. */}
+					<SchedulePicker value={sched} disabled={!!busy} onChange={(c) => { setSched(c); setSchedDirty(true); }} />
+					{schedDirty && (
+						<button onClick={saveSchedule} disabled={!!busy}
+							className="inline-flex items-center gap-1 px-2 py-1.5 text-xs rounded-lg bg-gold-500 text-white hover:bg-gold-600 disabled:opacity-50">
+							{busy === "save" ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />} Save
+						</button>
+					)}
 					<button onClick={runNow} disabled={!!busy}
 						className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-gold-500 text-white hover:bg-gold-600 active:scale-95 disabled:opacity-50 transition-all shadow-sm shadow-gold-100">
 						{busy === "run" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
@@ -317,6 +321,12 @@ export default function WorkflowObservabilityPanel({
 					)}
 				</div>
 			</div>
+
+			{/* ── GOAL — what this loop is chasing + how its metrics trend. Pinned
+			    to the TOP (was buried below runs) so the "why" leads. ── */}
+			{tenantHasRuns && (wf.goal?.primary || metricSeries.length > 0) && (
+				<GoalHeader goal={wf.goal} kpis={buildGoalKpis(summary, cycleFiles)} series={metricSeries} events={metricEvents} app={app} loop={loop} />
+			)}
 
 			{/* ── NOT RUN YET — the one empty state (replaces every section) ── */}
 			{cyclesKnown && !tenantHasRuns && !running && !definition && (
@@ -400,37 +410,7 @@ export default function WorkflowObservabilityPanel({
 				/>
 			)}
 
-			{/* What this loop is chasing + how its metrics move over runs. */}
-			{tenantHasRuns && (wf.goal?.primary || metricSeries.length > 0) && (
-				<GoalHeader goal={wf.goal} kpis={buildGoalKpis(summary, cycleFiles)} series={metricSeries} events={metricEvents} app={app} loop={loop} />
-			)}
-
-			{/* ── SCHEDULE — presets for humans; cron only under Advanced ── */}
-			<Section icon={Activity} title="Schedule">
-				<div className="flex flex-wrap items-start gap-3">
-					{wf.last_run_ok === false && tenantHasRuns && (loopHealth?.consecutive_failures ?? 0) > 0 && (
-						<span className="text-xs text-rose-600 mt-1">{loopHealth!.consecutive_failures} consecutive failures</span>
-					)}
-					<div className="flex items-start gap-1.5 ml-auto">
-						<SchedulePicker
-							value={sched}
-							disabled={!!busy}
-							onChange={(c) => { setSched(c); setSchedDirty(true); }}
-						/>
-						<button
-							onClick={saveSchedule}
-							disabled={!schedDirty || !!busy}
-							className={cn(
-								"inline-flex items-center gap-1 px-2 py-1.5 text-xs rounded-lg transition-colors",
-								schedDirty ? "bg-gold-500 text-white hover:bg-gold-600" : "bg-slate-100 text-slate-400 cursor-not-allowed",
-							)}
-						>
-							{busy === "save" ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-							Save
-						</button>
-					</div>
-				</div>
-			</Section>
+			{/* GOAL moved to the top; SCHEDULE moved into the header control cluster. */}
 
 			{/* ── INSIGHTS — hidden until there are runs to speak about ── */}
 			{tenantHasRuns && (

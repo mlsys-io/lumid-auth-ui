@@ -98,6 +98,9 @@ export interface ViewingContext {
 	cycle?: { app: string; loop: string; ts: string };
 	selection?: StudioSelection;
 	picked?: StudioPickedTarget;
+	/** Compact live-state summary for the agent-led app opener (frontend-
+	 *  prefetched from cached workflows). Override-only — not derived here. */
+	app_state?: { failing?: string[]; running?: string[]; lastRunRel?: string; loopCount?: number };
 }
 
 /**

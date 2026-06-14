@@ -56,4 +56,7 @@ export type Message = {
 	// surface (stats/tables/forms) live inside the conversation. Set by the
 	// open-app bridge (navigating to an app) and by show_app_surface results.
 	appSurface?: { app: string; surface?: string };
+	// Suggested next-step chips rendered under an agent-led app opener. Each
+	// fires a grounded studio:ask turn. Set by openAppInChat; not persisted.
+	chips?: Array<{ label: string; prompt: string; context?: { app: string; loop?: string } }>;
 };

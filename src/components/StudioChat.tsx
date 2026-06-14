@@ -24,6 +24,8 @@ import {
 	type ViewingContext,
 } from './StudioContext';
 import { appTitle, prefetchAppLabels } from './workflow/AppCard';
+import { me, type MeWorkflowRow } from '@/api/me';
+import { summarizeAppState, chipsForApp, openerLine } from './chat/appOpener';
 import { startStudioPicking, stopStudioPicking, isStudioPicking, subscribeStudioPicking } from './StudioPicker';
 import { ChatMarkdown } from './ChatMarkdown';
 import AssemblyCard from './workflow/AssemblyCard';
@@ -911,21 +913,26 @@ export function StudioChat({ docked = false }: { docked?: boolean } = {}) {
 	const dispatchTurnRef = useRef<typeof dispatchTurn | null>(null);
 	useEffect(() => { dispatchTurnRef.current = dispatchTurn; }, [dispatchTurn]);
 
-	// openAppInChat — bring an app INTO the conversation: append an assistant
-	// message that renders the app's surface inline + ground the chat on it.
-	// No LLM turn (opening an app shouldn't auto-start a conversation).
+	// openAppInChat — ground the chat on an app and open with an agent-led,
+	// progressive opener: ONE deterministic live-state line (instant, no LLM
+	// round-trip, no fake user turn) + 2–3 next-step chips. The conversation
+	// goes LLM-driven the moment the user clicks a chip or types. NO surface
+	// dump — the structured details live in the workspace's middle panel.
+	const openedAppRef = useRef<string | null>(null);
 	const openAppInChat = useCallback((d: { app: string; surface?: string }) => {
-		if (!d?.app) return;
-		// Resolve the label BEFORE composing — the greeting text is baked into the
-		// transcript, so a stale slug-name would persist forever. prefetchAppLabels
-		// resolves instantly if labels are already loaded (the common case).
-		void prefetchAppLabels().then(() => {
+		if (!d?.app || openedAppRef.current === d.app) return; // dedupe stash+event
+		openedAppRef.current = d.app;
+		void Promise.all([
+			prefetchAppLabels(),
+			me.listWorkflows('scheduled').then((r) => r.workflows || []).catch(() => [] as MeWorkflowRow[]),
+		]).then(([, rows]) => {
 			const label = appTitle(d.app);
-			setStudioSelection({ kind: 'app', id: d.app, label, affordances: ['app_action', 'app_read', 'run_loop_now'] });
+			setStudioSelection({ kind: 'app', id: d.app, label, affordances: ['app_action', 'app_read', 'run_loop_now', 'list_loops'] });
+			const st = summarizeAppState(d.app, rows);
 			setMessages((prev) => [...prev, {
 				role: 'assistant',
-				content: `Here's **${label}** — you can work with it right here. Ask me to do anything, or use the controls below.`,
-				appSurface: { app: d.app, surface: d.surface },
+				content: openerLine(d.app, st),
+				chips: chipsForApp(d.app, rows),
 			}]);
 		});
 	}, []);
@@ -1764,6 +1771,19 @@ const MessageBubble = memo(function MessageBubble({
 						)}
 					</div>
 				)}
+				{/* Agent-led opener chips — the top of a progressive drill-down.
+				    Each fires a grounded studio:ask turn. */}
+				{!isUser && !streaming && m.chips && m.chips.length > 0 && (
+					<div className="mt-2 flex flex-wrap gap-1.5">
+						{m.chips.map((c) => (
+							<button key={c.label}
+								onClick={() => window.dispatchEvent(new CustomEvent('studio:ask', { detail: { prompt: c.prompt, autosend: true, context: c.context } }))}
+								className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-card text-[12px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+								{c.label}
+							</button>
+						))}
+					</div>
+				)}
 				{!isUser && !streaming && m.content && connectHintFor(m.content) && (
 					<div className="mt-1.5">
 						<Link
@@ -1860,6 +1880,7 @@ const MessageBubble = memo(function MessageBubble({
 	a.m.tools === b.m.tools &&
 	a.m.composed === b.m.composed &&
 	a.m.appSurface === b.m.appSurface &&
+	a.m.chips === b.m.chips &&
 	a.streaming === b.streaming &&
 	a.isSpeaking === b.isSpeaking)
 

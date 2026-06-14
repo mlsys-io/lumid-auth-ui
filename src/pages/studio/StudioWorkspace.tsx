@@ -38,16 +38,17 @@ export default function StudioWorkspace({ front }: { front?: boolean }) {
 		if (!front && !paramApp && app) navigate(`/studio/apps/${encodeURIComponent(app)}`, { replace: true });
 	}, [front, paramApp, app, navigate]);
 
-	// Persist the pick + ground the chat on the featured app (no surface dump —
-	// the agent grounds on the selection; the details live in the middle panel).
+	// Persist the pick + open the app in the docked chat with an agent-led
+	// opener (no surface dump — details live in the middle panel). The stash is
+	// consumed by the chat on (re)mount; the event handles live app switches.
+	// openAppInChat dedupes the two and skips re-opening the same app.
 	useEffect(() => {
-		if (app) {
-			try { localStorage.setItem(FEATURED_KEY, app); } catch { /* ignore */ }
-			setStudioSelection({ kind: "app", id: app, label: app, affordances: ["app_action", "app_read", "run_loop_now", "list_loops"] });
-		} else {
-			setStudioSelection(null);
-		}
-		return () => setStudioSelection(null);
+		if (!app) { setStudioSelection(null); return; }
+		try {
+			localStorage.setItem(FEATURED_KEY, app);
+			sessionStorage.setItem("studio_open_app_v1", JSON.stringify({ app }));
+		} catch { /* ignore */ }
+		window.dispatchEvent(new CustomEvent("studio:open-app", { detail: { app } }));
 	}, [app]);
 
 	const [leftHidden, setLeftHidden] = useState<boolean>(() => { try { return localStorage.getItem(LEFT_KEY) === "1"; } catch { return false; } });
