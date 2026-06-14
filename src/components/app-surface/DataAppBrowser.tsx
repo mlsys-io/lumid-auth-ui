@@ -228,7 +228,7 @@ export default function DataAppBrowser({ config }: { config?: Record<string, unk
                     selected?.path === ep.path ? "bg-violet-100 text-violet-800" : "text-slate-600"].join(" ")}
                   title={ep.path}>
                   {ep.kind !== "rest" && (
-                    <span className="inline-block mr-1 px-1 rounded text-[9px] font-sans font-semibold bg-amber-100 text-amber-700 align-middle">
+                    <span className="inline-block mr-1 px-1 rounded text-[9px] font-sans font-semibold bg-gold-100 text-gold-700 align-middle">
                       {ep.kind.toUpperCase()}
                     </span>
                   )}
@@ -251,18 +251,18 @@ export default function DataAppBrowser({ config }: { config?: Record<string, unk
             {selected.kind !== "rest" ? (
               // Streaming endpoints aren't runnable by a one-shot fetch — show
               // how to consume them instead of a Run that can only 400.
-              <div className="rounded border border-amber-200 bg-amber-50 p-3 text-[12px] text-amber-800 space-y-1.5 max-w-xl">
+              <div className="rounded border border-gold-200 bg-gold-50 p-3 text-[12px] text-gold-800 space-y-1.5 max-w-xl">
                 {selected.kind === "sse" ? (
                   <>
                     <div className="font-medium">Streaming endpoint (Server-Sent Events)</div>
                     <div>Consume it with an EventSource against the same-origin proxy:</div>
-                    <pre className="text-[11px] bg-white border border-amber-200 rounded p-2 overflow-x-auto text-slate-700">{`new EventSource("${proxyBase(dataApp)}${selected.path}")`}</pre>
+                    <pre className="text-[11px] bg-white border border-gold-200 rounded p-2 overflow-x-auto text-slate-700">{`new EventSource("${proxyBase(dataApp)}${selected.path}")`}</pre>
                   </>
                 ) : (
                   <>
                     <div className="font-medium">WebSocket endpoint</div>
                     <div>Browsers can&apos;t open WS through this panel — connect a WS client directly to the data service (bearer auth via header or first message):</div>
-                    <pre className="text-[11px] bg-white border border-amber-200 rounded p-2 overflow-x-auto text-slate-700">{`wss://<data-service-host>${selected.path}`}</pre>
+                    <pre className="text-[11px] bg-white border border-gold-200 rounded p-2 overflow-x-auto text-slate-700">{`wss://<data-service-host>${selected.path}`}</pre>
                   </>
                 )}
               </div>

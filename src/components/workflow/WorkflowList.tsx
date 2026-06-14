@@ -38,14 +38,10 @@ export default function WorkflowList({ rows, selected, onSelect }: {
 	onSelect: (loop: string) => void;
 }) {
 	const sorted = sortWorkflowRows(rows);
-	const failing = rows.filter((r) => r.wf.last_run_ok === false && r.wf.enabled !== false).length;
 	return (
 		<div className="space-y-1.5">
-			{failing > 0 && (
-				<div className="text-[11px] font-medium text-rose-600 px-1">
-					{failing} need{failing === 1 ? "s" : ""} attention
-				</div>
-			)}
+			{/* No "N need attention" header — each failing row already shows a
+			    "failed" badge, so the count was redundant. */}
 			<ul className="space-y-1">
 				{sorted.map(({ loop, wf }) => {
 					const active = selected === loop;
@@ -57,7 +53,7 @@ export default function WorkflowList({ rows, selected, onSelect }: {
 								className={cn(
 									"w-full text-left rounded-lg border px-2.5 py-2 transition-colors",
 									active
-										? "border-emerald-300 bg-emerald-50/50"
+										? "border-gold-300 bg-gold-50/50"
 										: "border-slate-200 bg-white hover:bg-slate-50",
 								)}
 							>

@@ -12,25 +12,42 @@
 // me.listWorkflows(); per-cycle observability from me.cycleDetail (inside
 // the panel).
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ChevronRight, ArrowRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2, Inbox, Loader2, RotateCcw, X } from "lucide-react";
+import { ChevronRight, ChevronDown, Check, ArrowRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2, Inbox, Loader2, RotateCcw, X, Plus } from "lucide-react";
+import { SpiralOverlay } from "@/components/BrandLoader";
 import { toast } from "sonner";
 import { me, type MeWorkflowRow, type MeAppCard } from "@/api/me";
 import { takePendingCustomize } from "@/lib/just-installed";
 import apiClient from "@/api/client";
 import { iconFor, APP_NAV_INVALIDATE } from "@/components/useAppNav";
 import { setStudioSelection } from "@/components/StudioContext";
-import WorkflowList from "@/components/workflow/WorkflowList";
+import { usePortalTarget } from "@/hooks/usePortalTarget";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import RunSparkline from "@/components/RunSparkline";
+import { TONES, workflowTone } from "@/lib/tones";
+import { describeSchedule } from "@/lib/schedule";
 import { Skeleton, humanizeLoop, loopLabel } from "@/pages/app-revamp/loops";
 import { QuickStarters } from "@/components/studio/QuickStarters";
 import WorkflowComposer from "@/components/WorkflowComposer";
 import AppCard, { appTitle, type AppIdentity } from "@/components/workflow/AppCard";
-import WorkflowObservabilityPanel, { type LoopHealth } from "@/components/workflow/WorkflowObservabilityPanel";
+import type { LoopHealth } from "@/components/workflow/WorkflowObservabilityPanel";
 import NeedsAttentionRail from "@/components/workflow/NeedsAttentionRail";
-import LearningTimeline from "@/components/workflow/LearningTimeline";
-import DatasetExplorer from "@/components/workflow/DatasetExplorer";
+import IndexList, { type IndexRow } from "@/components/studio/IndexList";
+import { askApp } from "@/lib/grounded-asks";
 import LoopOrbit, { type LoopMode, type LoopStageKey } from "@/components/workflow/LoopOrbit";
+
+// Heavy, AppOverview-only components — lazy so the /studio/apps INDEX chunk
+// (AppsHome) doesn't statically pull the DAG canvas (@xyflow → vendor-flow) +
+// charts (recharts → vendor-charts) that only the per-app overview renders.
+// They load on demand when an overview actually mounts them.
+const WorkflowObservabilityPanel = lazy(() => import("@/components/workflow/WorkflowObservabilityPanel"));
+// An app with no scheduled workflows is a UI-surface app (GPU Rentals, Lumid
+// Market, …). Rather than a dead-end "no workflows" message, show its actual
+// surface inline — AppSurface renders the page, or its own "generate a page"
+// CTA when the app has none yet.
+const AppSurface = lazy(() => import("@/components/app-surface/AppSurface"));
 import { RUNNING_APPS } from "@/lib/demo";
 import { useCountUp } from "@/lib/use-count-up";
 import { useStudioRefetch } from "@/hooks/useStudioRefetch";
@@ -58,6 +75,16 @@ function loopOf(w: MeWorkflowRow): string {
 	if (app && w.slug.startsWith(app + ":")) return w.slug.slice(app.length + 1);
 	const i = w.slug.indexOf(":");
 	return i >= 0 ? w.slug.slice(i + 1) : w.slug;
+}
+
+// Relative time from an epoch-seconds timestamp ("5m ago"); "" when 0.
+function relSec(tsSec?: number): string {
+	if (!tsSec) return "";
+	const diff = Date.now() / 1000 - tsSec;
+	if (diff < 60) return "just now";
+	if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+	if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+	return `${Math.floor(diff / 86400)}d ago`;
 }
 
 function cycleTsToIso(ts: string): string {
@@ -126,7 +153,7 @@ function SurfaceAppCard({ app, onOpen, onRemoved }: {
 			type="button" onClick={onOpen}
 			className="group text-left rounded-xl border border-slate-200/80 bg-white px-4 py-3.5 hover:shadow-md hover:shadow-slate-200/60 hover:border-slate-300 transition-all hover:-translate-y-0.5 flex items-center gap-3"
 		>
-			<div className="w-9 h-9 shrink-0 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+			<div className="w-9 h-9 shrink-0 rounded-lg bg-gold-50 text-gold-600 flex items-center justify-center">
 				<Icon className="w-[18px] h-[18px]" />
 			</div>
 			<div className="min-w-0 flex-1">
@@ -135,7 +162,7 @@ function SurfaceAppCard({ app, onOpen, onRemoved }: {
 					{section ? `${section} · ` : ""}{app.tenant ? "installed" : "shared"}
 				</div>
 			</div>
-			<ArrowRight className="w-4 h-4 shrink-0 text-slate-300 group-hover:text-emerald-600 transition-colors" />
+			<ArrowRight className="w-4 h-4 shrink-0 text-slate-300 group-hover:text-gold-600 transition-colors" />
 			<span
 				role="button" tabIndex={0} onClick={remove}
 				className="shrink-0 p-1.5 rounded-md text-slate-300 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-50 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -162,7 +189,7 @@ function PendingAppCard({ app, onRetry, onDismiss }: {
 		)}>
 			<div className={cn(
 				"w-9 h-9 shrink-0 rounded-lg border flex items-center justify-center",
-				failed ? "bg-rose-50 border-rose-200 text-rose-500" : "bg-slate-50 border-slate-200 text-emerald-500",
+				failed ? "bg-rose-50 border-rose-200 text-rose-500" : "bg-slate-50 border-slate-200 text-gold-500",
 			)}>
 				{failed ? <AlertTriangle className="w-[18px] h-[18px]" /> : <Loader2 className="w-[18px] h-[18px] animate-spin" />}
 			</div>
@@ -176,7 +203,7 @@ function PendingAppCard({ app, onRetry, onDismiss }: {
 				<>
 					<button
 						type="button" onClick={onRetry}
-						className="shrink-0 inline-flex items-center gap-1 text-[12px] rounded-md px-2 py-1 text-emerald-700 hover:bg-emerald-50 transition-colors"
+						className="shrink-0 inline-flex items-center gap-1 text-[12px] rounded-md px-2 py-1 text-gold-700 hover:bg-gold-50 transition-colors"
 					>
 						<RotateCcw className="w-3.5 h-3.5" /> Retry
 					</button>
@@ -207,6 +234,9 @@ function AppsHome() {
 	// Per-loop health rows (status + last_errors) for the attention rail.
 	const [healthLoops, setHealthLoops] = useState<LoopHealth[]>([]);
 	const [identity, setIdentity] = useState<Map<string, AppIdentity>>(new Map());
+	// app slug → ui.sidebar.section, so the index can group apps the same
+	// way the sidebar does (Compute / Research / Trading / …).
+	const [sections, setSections] = useState<Map<string, string>>(new Map());
 	const [hero, setHero] = useState<Hero | null>(null);
 	const navigate = useNavigate();
 	const appsRef = useRef<HTMLDivElement>(null);
@@ -239,7 +269,9 @@ function AppsHome() {
 
 	const load = useCallback(async () => {
 			const [wfR, lhR, todayR, agentsR, appsR, draftsR] = await Promise.allSettled([
-				me.listWorkflows(),
+				// scheduled-only: app cards group xpio loops by app; n8n visual
+				// rows have no app, so fetching them just adds the n8n round-trip.
+				me.listWorkflows("scheduled"),
 				me.loopsHealth(),
 				me.today(),
 				apiClient.get("/api/v1/me/knowledge/agents"),
@@ -380,8 +412,10 @@ function AppsHome() {
 			// Overlay each app's own `ui:` config — name/icon come from the SAME
 			// ui.sidebar the sidebar renders, so the card and sidebar can't
 			// disagree; hasSurface routes the card header to the configured UI.
+			const sm = new Map<string, string>();
 			if (appsR.status === "fulfilled") {
 				for (const a of (appsR.value.apps || [])) {
+					if (a.ui?.sidebar?.section) sm.set(a.name, a.ui.sidebar.section);
 					if (!a.ui) continue;
 					const prev = im.get(a.name) ?? {};
 					im.set(a.name, {
@@ -393,6 +427,7 @@ function AppsHome() {
 				}
 			}
 			setIdentity(im);
+			setSections(sm);
 
 			let runsToday = 0;
 			if (todayR.status === "fulfilled") {
@@ -436,22 +471,33 @@ function AppsHome() {
 	}, [navigate]);
 
 	// Poll so the home moves on its own — sparklines extend, counts tick.
+	// 40s (was 20s): the chat→page bus already pushes instant updates after a
+	// tool mutates state, so the timer is only a slow safety net — no need to
+	// hammer /me/* six-deep every 20s (that was a chief 429 contributor).
 	useEffect(() => {
 		load();
-		const id = window.setInterval(load, 20_000);
+		const id = window.setInterval(load, 40_000);
 		return () => window.clearInterval(id);
 	}, [load]);
 
-	// Chat→page bus: refetch immediately when a chat tool mutates apps,
-	// workflows, loops, or runs (no waiting out the 20s poll).
-	useStudioRefetch(["apps", "workflows", "loops", "cycles", "runs", "drafts"], load);
+	// Chat→page bus: refetch when a chat tool changes the things THIS page
+	// shows (apps + their workflow health). Narrowed from 6 scopes — runs/
+	// cycles/drafts don't change the app index, so they shouldn't trigger a
+	// full 3-endpoint reload on every such tool call.
+	useStudioRefetch(["apps", "workflows", "loops"], load);
 
-	// While an install is in flight, poll fast so the optimistic card flips
-	// to a real app within a drain cycle instead of waiting for the 20s tick.
+	// While an install is in flight, poll a little faster so the optimistic
+	// card flips to a real app quickly — but 10s (was 4s = 90 req/min!) and
+	// capped at ~2 min so a stuck "installing" card can't hammer /me/* forever.
 	const anyInstalling = pendingApps.some((a) => a.status === "installing");
 	useEffect(() => {
 		if (!anyInstalling) return;
-		const id = window.setInterval(load, 4_000);
+		let elapsed = 0;
+		const id = window.setInterval(() => {
+			elapsed += 10_000;
+			if (elapsed > 120_000) { window.clearInterval(id); return; }
+			load();
+		}, 10_000);
 		return () => window.clearInterval(id);
 	}, [anyInstalling, load]);
 
@@ -475,42 +521,91 @@ function AppsHome() {
 	}, []);
 
 	if (byApp === null) {
-		return <div className="space-y-6"><div className="h-20 rounded-xl bg-slate-100 animate-pulse" /><Skeleton lines={3} /></div>;
+		return (
+			<div className="relative space-y-6">
+				<div className="h-20 rounded-xl bg-slate-100 animate-pulse" />
+				<Skeleton lines={3} />
+				<SpiralOverlay />
+			</div>
+		);
 	}
 
 	const apps = [...byApp.keys()].sort();
 	const fresh = apps.length === 0 && uiApps.length === 0 && pendingApps.length === 0;
+
+	// Build the claude-style index rows — one common shape across every app
+	// type (loop apps + UI-surface apps). Failing apps float into a "Needs
+	// attention" group that leads the list; otherwise they group by the same
+	// ui.sidebar.section the left nav uses. Clicking a row opens the grounded
+	// chat (askApp); the old observability panel stays one click away via the
+	// hover-only "details →" link.
+	const SECTION_ORDER = ["Needs attention", "Compute", "Research", "Trading", "Knowledge", "Apps"];
+	const appRows: IndexRow[] = apps.map((a) => {
+		const rows = byApp.get(a) || [];
+		const failing = rows.filter((w) => w.enabled !== false && w.last_run_ok === false).length;
+		const running = rows.some((w) => w.running);
+		const ran = rows.some((w) => w.last_run_ok === true);
+		const lastTs = rows.reduce((mx, w) => Math.max(mx, w.last_run_ts || 0), 0);
+		const tone = failing > 0 ? "failing" : running ? "running" : ran ? "ok" : "idle";
+		const statusLabel = failing > 0 ? `${failing}× failing` : running ? "running" : ran ? "healthy" : "idle";
+		const count = rows.length;
+		const when = relSec(lastTs);
+		const meta = [`${count} workflow${count === 1 ? "" : "s"}`, when].filter(Boolean).join(" · ");
+		return {
+			id: a,
+			title: identity.get(a)?.label || appTitle(a),
+			icon: iconFor(identity.get(a)?.icon || a),
+			tone, statusLabel, meta,
+			section: failing > 0 ? "Needs attention" : (sections.get(a) || "Apps"),
+			ask: askApp(a),
+			detailsHref: `/studio/apps/${encodeURIComponent(a)}?full=1`,
+		} as IndexRow;
+	});
+	// UI-surface apps (Data Exploration, Market, …) — no loops; their home IS
+	// their surface, so the row opens the surface via "details →" while the
+	// click still lets you ask about it.
+	const surfaceRows: IndexRow[] = uiApps.map((a) => ({
+		id: `ui:${a.name}`,
+		title: a.ui?.sidebar?.label || appTitle(a.name),
+		icon: iconFor(a.ui?.sidebar?.icon || a.name),
+		tone: "idle",
+		section: a.ui?.sidebar?.section || "Apps",
+		ask: askApp(a.name),
+		detailsHref: `/studio/a/${encodeURIComponent(a.name)}?full=1`,
+	} as IndexRow));
+	const allRows = [...appRows, ...surfaceRows];
+
+	const launcher = (
+		<div className="border-t border-border pt-5">
+			<QuickStarters heading="Set up a new app" />
+		</div>
+	);
 
 	return (
 		<>
 			<WorkflowComposer open={composerOpen} onClose={() => setComposerOpen(false)} />
 			{fresh ? (
 				// Fresh user — lead with the launcher so they assemble app #1.
-				<div className="space-y-6">
-					<div className="rounded-2xl border border-slate-200/70 bg-gradient-to-br from-emerald-50 via-white to-sky-50/40 p-6">
+				<div className="max-w-[760px] mx-auto w-full space-y-6 px-1 py-2">
+					<div className="rounded-2xl border border-border bg-card p-6">
 						<div className="flex items-center gap-3">
-							<div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center shadow-sm shadow-emerald-200">
+							<div className="w-11 h-11 rounded-xl bg-foreground text-background flex items-center justify-center">
 								<Sparkles className="w-5 h-5" />
 							</div>
 							<div>
-								<h2 className="text-xl font-medium text-slate-900 tracking-tight">Set up your first app.</h2>
-								<p className="text-sm text-slate-600 mt-1">Pick a starter and your AI assembles an app — schedules its workflows and runs them for you. Progress lives here.</p>
+								<h2 className="font-display text-xl font-medium text-foreground tracking-tight">Set up your first app.</h2>
+								<p className="text-sm text-muted-foreground mt-1">Pick a starter and your AI assembles an app — schedules its workflows and runs them for you. Progress lives here.</p>
 							</div>
 						</div>
 					</div>
 					<QuickStarters heading="Start with a starter" />
 				</div>
 			) : (
-				<div className="space-y-5 panel-in-left">
-					{/* Numbers consolidated to a compact top bar. */}
-					{hero && <HeroBar h={hero} onApps={() => appsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })} />}
-
-					{/* Failures surface here, triaged + actionable — the one health rail. */}
-					<NeedsAttentionRail loops={healthLoops} />
-
-					<div ref={appsRef} className="scroll-mt-4">
-						<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-400 uppercase mb-3">Your apps</div>
-						<div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
+				<div className="panel-in-left" ref={appsRef}>
+					{/* In-flight / failed installs stay as action-bearing cards above
+					    the index (retry / dismiss aren't list-row affordances). */}
+					{pendingApps.length > 0 && (
+						<div className="max-w-[760px] mx-auto w-full px-1 mb-3 grid grid-cols-1 gap-2.5">
 							{pendingApps.map((a) => (
 								<PendingAppCard
 									key={`pending:${a.name}`} app={a}
@@ -518,41 +613,16 @@ function AppsHome() {
 									onDismiss={() => dismissPending(a.name)}
 								/>
 							))}
-							{apps.map((a, i) => (
-								<AppCard
-									key={a} app={a} workflows={byApp.get(a)!} identity={identity.get(a)} index={i}
-									onOpen={(ap, loop) => {
-										// URL-driven so the "My Apps" nav (→ /studio/apps) returns
-										// to this grid; internal state wouldn't reset on a same-path nav.
-										navigate(`/studio/apps/${encodeURIComponent(ap)}${loop ? `?selected=${encodeURIComponent(loop)}` : ""}`);
-									}}
-									onRemoved={() => {
-										// Hide immediately (uninstall is async — see recentlyDeleted).
-										recentlyDeleted.add(a);
-										setByApp((prev) => {
-											if (!prev) return prev;
-											const next = new Map(prev);
-											next.delete(a);
-											return next;
-										});
-									}}
-								/>
-							))}
-							{uiApps.map((a) => (
-								<SurfaceAppCard
-									key={`ui:${a.name}`} app={a}
-									onOpen={() => navigate(`/studio/a/${encodeURIComponent(a.name)}`)}
-									onRemoved={() => { recentlyDeleted.add(a.name); setUiApps((prev) => prev.filter((x) => x.name !== a.name)); }}
-								/>
-							))}
 						</div>
-					</div>
-
-					{/* Create is also one click here (the sidebar launcher
-					    is the always-on primary). */}
-					<div className="pt-1 border-t border-slate-200/60">
-						<div className="pt-5"><QuickStarters heading="Start a new app" /></div>
-					</div>
+					)}
+					<IndexList
+						title="Apps"
+						rows={allRows}
+						search={allRows.length > 6}
+						searchPlaceholder="Search apps…"
+						sectionOrder={SECTION_ORDER}
+						footer={launcher}
+					/>
 				</div>
 			)}
 		</>
@@ -602,6 +672,50 @@ function StatChip({
 
 interface Row { loop: string; wf: MeWorkflowRow; lh?: LoopHealth }
 
+const wfDot = (wf: MeWorkflowRow) => cn("w-2 h-2 rounded-full flex-shrink-0", TONES[workflowTone(wf)].dot);
+const wfSub = (wf: MeWorkflowRow) =>
+	`${describeSchedule(wf.trigger)}${wf.enabled === false ? " · paused" : ""}${wf.running ? " · running…" : (wf.last_run_ok === false && wf.enabled !== false ? " · failed" : "")}`;
+
+// WorkflowSelect — the workflow list consolidated into a dropdown. The trigger
+// shows the active workflow (status dot + name + count); the popover lists all
+// workflows to switch. Replaces the left-rail master list so the panel shows
+// only the selected workflow's content.
+function WorkflowSelect({ rows, selected, onSelect }: { rows: Row[]; selected: string | null; onSelect: (loop: string) => void }) {
+	const [open, setOpen] = useState(false);
+	const cur = rows.find((r) => r.loop === selected) ?? rows[0];
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger asChild>
+				<button className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors max-w-full min-w-0">
+					<span className={wfDot(cur.wf)} />
+					<span className="text-[13px] font-medium text-slate-800 truncate">{loopLabel(cur.wf.name, cur.loop)}</span>
+					<span className="text-[11px] text-slate-400 flex-shrink-0 hidden sm:inline">· {rows.length} workflows</span>
+					<ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" />
+				</button>
+			</PopoverTrigger>
+			<PopoverContent align="start" className="w-72 p-1 max-h-[60vh] overflow-y-auto">
+				{rows.map(({ loop, wf }) => {
+					const active = loop === cur.loop;
+					return (
+						<button key={loop} type="button" onClick={() => { onSelect(loop); setOpen(false); }}
+							className={cn("w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left transition-colors", active ? "bg-gold-50" : "hover:bg-muted")}>
+							<span className={wfDot(wf)} />
+							<span className="flex-1 min-w-0">
+								<span className="block text-[12.5px] font-medium text-slate-800 truncate">{loopLabel(wf.name, loop)}</span>
+								<span className="block text-[10.5px] text-slate-400 truncate">{wfSub(wf)}</span>
+							</span>
+							{/* Recent-run strip so run health is glanceable while switching
+							    (display-only here; the panel header has the clickable one). */}
+							{wf.run_spark && <RunSparkline spec={wf.run_spark} className="flex-shrink-0" />}
+							{active && <Check className="w-3.5 h-3.5 text-gold-600 flex-shrink-0" />}
+						</button>
+					);
+				})}
+			</PopoverContent>
+		</Popover>
+	);
+}
+
 // Stale-while-revalidate caches so re-opening an app renders instantly
 // (no skeleton flash) while a fresh fetch updates in the background.
 const rowsCache = new Map<string, Row[]>();
@@ -612,12 +726,21 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 	const [identity, setIdentity] = useState<AppIdentity | undefined>(() => identCache.get(app));
 	const [deleting, setDeleting] = useState(false);
 	const navigate = useNavigate();
+	// In the workspace, the workflow switcher + "New workflow" portal into the
+	// top strip right after the app name (topstrip-app-slot is empty for
+	// workflow apps — only surface apps fill it). Standalone, they render inline.
+	const appSlotTarget = usePortalTarget("topstrip-app-slot", !!embedded);
 	const [params, setParams] = useSearchParams();
 	const selected = params.get("selected");
 	const initialCycle = params.get("cycle"); // deep-link anchor → open that run
 
 	const load = useCallback(async () => {
-		const [lhR, wfR, uaR] = await Promise.allSettled([me.loopsHealth(), me.listWorkflows(), me.listApps()]);
+		const [lhR, wfR, uaR] = await Promise.allSettled([me.loopsHealth(), me.listWorkflows("scheduled"), me.listApps()]);
+		// A failed workflows poll (429 rate-limit storm, network blip, token
+		// refresh) must NOT blank the page — keep the last-good rows and retry
+		// next tick. Without this, a transient 429 set rows=[] and the app page
+		// rendered the empty surface/"no workflows" state instead of the loops.
+		if (wfR.status !== "fulfilled") return;
 		const lhMap = new Map<string, LoopHealth>();
 		// Configured display name/icon (ui.sidebar) — same source as the sidebar.
 		const uiCfg = uaR.status === "fulfilled" ? (uaR.value.apps || []).find((a) => a.name === app)?.ui : undefined;
@@ -735,17 +858,20 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 				</Link>
 			)}
 
-			<header className="flex items-start gap-3">
-				<div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
-					<Boxes className="w-5 h-5" />
-				</div>
-				<div className="min-w-0">
-					<h1 className="text-lg font-semibold text-slate-900">{identity?.label || appTitle(app)}</h1>
-					<div className="text-xs text-slate-400 font-mono mt-0.5">
-						{app}{identity?.version ? ` · v${identity.version}` : ""}{identity?.published ? " · published" : ""}
+			{/* In the workspace (embedded), the AppSwitcher in the workspace header
+			    owns identity + delete — so this big icon/name header is dropped to
+			    avoid printing the app name twice. */}
+			{!embedded && (
+				<header className="flex items-start gap-3">
+					<div className="w-10 h-10 rounded-xl bg-gold-50 text-gold-600 flex items-center justify-center flex-shrink-0">
+						<Boxes className="w-5 h-5" />
 					</div>
-				</div>
-				{!embedded && (
+					<div className="min-w-0">
+						<h1 className="text-lg font-semibold text-slate-900">{identity?.label || appTitle(app)}</h1>
+						<div className="text-xs text-slate-400 font-mono mt-0.5">
+							{app}{identity?.version ? ` · v${identity.version}` : ""}{identity?.published ? " · published" : ""}
+						</div>
+					</div>
 					<button
 						type="button"
 						onClick={del}
@@ -756,62 +882,68 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 						<Trash2 className="w-3.5 h-3.5" />
 						{deleting ? "Deleting…" : "Delete"}
 					</button>
-				)}
-			</header>
+				</header>
+			)}
 
 			{rows === null ? (
+				// No spiral/logo animation on app switch — just a calm skeleton.
 				<Skeleton lines={3} />
 			) : rows.length === 0 ? (
-				<div className="rounded-xl border border-dashed border-slate-200 bg-white/60 p-8 text-center text-sm text-slate-500">
-					No workflows discovered for this app yet.
+				// No workflows → this is a UI-surface app; show its surface (or its
+				// own "generate a page" CTA) instead of a dead-end message. Negative
+				// margins cancel the AppOverview body padding so the surface (which
+				// brings its own chrome + padding) sits flush in the panel.
+				<div className="-mx-5 -my-5">
+					<Suspense fallback={<div className="px-5 py-8"><Skeleton lines={4} /></div>}>
+						<AppSurface app={app} embedded={embedded} surface={params.get("surface") || undefined} />
+					</Suspense>
 				</div>
 			) : (
-				<div className="space-y-2.5">
-					<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-400 uppercase">Workflows</div>
-					{/* Master–detail: list left, ONE detail card right. A single-
-					    workflow app skips the list entirely. */}
-					{rows.length === 1 ? (
-						selectedRow && (
-							<div id="wf-detail">
+				// The workflow LIST is consolidated into a dropdown, surfaced (with
+				// "New workflow") in the top strip next to the app name when embedded.
+				// The panel shows ONLY the selected workflow — its content (pipeline /
+				// runs / data / insights) is tabbed inside the panel.
+				<div className="space-y-3.5">
+					{(() => {
+						const cluster = (
+							<>
+								{/* "Overview" tab — top-bar parity with surface apps (gpu-rentals
+								    et al.), which portal their nav tabs into this same slot. For a
+								    workflow app the overview is the only view, so it's the active
+								    tab; the workflow picker + New workflow follow (workflow apps
+								    only — surface apps have neither). */}
+								<Link to={`/studio/apps/${encodeURIComponent(app)}`} className="px-2.5 py-1 rounded-lg text-[12px] bg-slate-800 text-white flex-shrink-0 hover:bg-slate-700 transition-colors">Overview</Link>
+								{rows.length > 1 && (
+									<WorkflowSelect rows={rows} selected={effSelected} onSelect={select} />
+								)}
+								<button
+									type="button"
+									onClick={() => navigate(`/studio/a/${encodeURIComponent(app)}/manage`)}
+									className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-dashed border-border text-[12.5px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex-shrink-0"
+								>
+									<Plus className="w-3.5 h-3.5" /> New workflow
+								</button>
+							</>
+						);
+						// Embedded → portal into the top strip beside the app name; the
+						// portal target may resolve a tick late, so fall back to inline.
+						return embedded && appSlotTarget
+							? createPortal(<div className="flex items-center gap-2 min-w-0">{cluster}</div>, appSlotTarget)
+							: <div className="flex items-center gap-2 flex-wrap">{cluster}</div>;
+					})()}
+					<Suspense fallback={<Skeleton lines={3} />}>
+						<div id="wf-detail" className="min-w-0">
+							{selectedRow && (
 								<WorkflowObservabilityPanel
 									app={app} loop={selectedRow.loop} wf={selectedRow.wf} loopHealth={selectedRow.lh}
-									onChanged={load} initialCycle={initialCycle}
+									onChanged={load}
+									initialCycle={(rows.length === 1 || effSelected === (selected ?? initialLoop)) ? initialCycle : null}
+									canDelete={isTenantApp && rows.length > 1}
+									onDelete={() => delLoop(selectedRow.loop, loopLabel(selectedRow.wf.name, selectedRow.loop))}
 								/>
-							</div>
-						)
-					) : (
-						<div className="lg:grid lg:grid-cols-[300px_minmax(0,1fr)] lg:gap-5 lg:items-start">
-							<div className="lg:sticky lg:top-4 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto mb-4 lg:mb-0 pr-0.5 space-y-5">
-								<WorkflowList
-									rows={rows}
-									selected={effSelected}
-									onSelect={select}
-								/>
-								{/* Learned + data fill the otherwise-dead rail under the
-								    short workflow list (they were full-width sections
-								    below the fold — now visible without scrolling). */}
-								<div className="space-y-2">
-									<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-400 uppercase">What it&apos;s learned</div>
-									<LearningTimeline agents={rows[0].wf.memory_agents || []} />
-								</div>
-								<div className="space-y-2">
-									<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-400 uppercase">Data it works on</div>
-									<DatasetExplorer app={app} />
-								</div>
-							</div>
-							<div id="wf-detail" className="min-w-0">
-								{selectedRow && (
-									<WorkflowObservabilityPanel
-										app={app} loop={selectedRow.loop} wf={selectedRow.wf} loopHealth={selectedRow.lh}
-										onChanged={load}
-										initialCycle={effSelected === (selected ?? initialLoop) ? initialCycle : null}
-										canDelete={isTenantApp && rows.length > 1}
-										onDelete={() => delLoop(selectedRow.loop, loopLabel(selectedRow.wf.name, selectedRow.loop))}
-									/>
-								)}
-							</div>
+							)}
 						</div>
-					)}
+					</Suspense>
 				</div>
 			)}
 

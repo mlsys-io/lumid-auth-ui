@@ -9,6 +9,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { bearerHeader } from "@/api/session-bearer";
+import { SpiralOverlay } from "@/components/BrandLoader";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -35,13 +36,13 @@ import { parse as parseYaml } from "yaml";
 // ── Kind metadata (mirrors xp.io kindMeta) ────────────────────────
 
 const KIND_META: Record<string, { glyph: string; border: string; bg: string; text: string; label: string }> = {
-	app:        { glyph: "⁂", border: "border-l-teal-400",    bg: "bg-teal-50",    text: "text-teal-700",    label: "App" },
+	app:        { glyph: "⁂", border: "border-l-gold-400",    bg: "bg-gold-50",    text: "text-gold-700",    label: "App" },
 	skill:      { glyph: "⌘", border: "border-l-violet-400",  bg: "bg-violet-50",  text: "text-violet-700",  label: "Skill" },
-	dataset:    { glyph: "◫", border: "border-l-amber-400",   bg: "bg-amber-50",   text: "text-amber-700",   label: "Dataset" },
+	dataset:    { glyph: "◫", border: "border-l-gold-400",   bg: "bg-gold-50",   text: "text-gold-700",   label: "Dataset" },
 	agent:      { glyph: "❋", border: "border-l-pink-400",    bg: "bg-pink-50",    text: "text-pink-700",    label: "Agent" },
 	workflow:   { glyph: "▷", border: "border-l-blue-400",    bg: "bg-blue-50",    text: "text-blue-700",    label: "Workflow" },
-	experiment: { glyph: "⬡", border: "border-l-emerald-400", bg: "bg-emerald-50", text: "text-emerald-700", label: "Experiment" },
-	autoresearch:{ glyph: "⬡", border: "border-l-emerald-400", bg: "bg-emerald-50", text: "text-emerald-700", label: "Experiment" },
+	experiment: { glyph: "⬡", border: "border-l-gold-400", bg: "bg-gold-50", text: "text-gold-700", label: "Experiment" },
+	autoresearch:{ glyph: "⬡", border: "border-l-gold-400", bg: "bg-gold-50", text: "text-gold-700", label: "Experiment" },
 	strategy:   { glyph: "◈", border: "border-l-blue-400",    bg: "bg-blue-50",    text: "text-blue-700",    label: "Strategy" },
 };
 const kindMeta = (k?: string) =>
@@ -114,6 +115,14 @@ type PendingAction =
 
 // ── Root component ─────────────────────────────────────────────────
 
+// Module-level catalog cache. The 6 catalog fetches use raw fetch() (not the
+// TTL-cached me client), so EVERY visit to Library re-ran all of them + the
+// bearer round-trip — the "second load still slow". Cache the result briefly so
+// navigating away and back is instant; the marketplace changes rarely.
+interface CatalogCache { at: number; apps: RepoCard[]; workflows: RepoCard[]; agents: RepoCard[]; strategies: RepoCard[]; skills: SkillCard[]; datasets: RepoCard[] }
+let catalogCache: CatalogCache | null = null;
+const CATALOG_TTL = 60_000;
+
 export default function MarketplaceBrowse() {
 	const navigate = useNavigate();
 	const [tab, setTab] = useState<Tab>("apps");
@@ -137,31 +146,36 @@ export default function MarketplaceBrowse() {
 	const [err, setErr] = useState<string | null>(null);
 
 	useEffect(() => {
-		(async () => {
-			try {
-				const auth = await bearerHeader();
-				const opts = { credentials: "same-origin" as const, headers: auth };
-				const repo = (kind: string) =>
-					fetch(`/api/v1/repos?kind=${kind}`, opts)
-						.then((r) => r.ok ? r.json().then((d: { repos?: RepoCard[] }) => d.repos || []) : Promise.resolve([]));
-				const [a, wf, ag, st, s, d] = await Promise.all([
-					repo("app"),
-					repo("workflow"),
-					repo("agent"),
-					repo("strategy"),
-					fetch("/api/v1/skills/catalog", opts).then((r) => r.ok ? r.json().then((d: { cards?: SkillCard[] }) => d.cards || []) : Promise.resolve([])),
-					repo("dataset"),
-				]);
-				setApps(a);
-				setWorkflows(wf);
-				setAgents(ag);
-				setStrategies(st);
-				setSkills(s);
-				setDatasets(d);
-			} catch (e) {
-				setErr(e instanceof Error ? e.message : String(e));
-			}
-		})();
+		const apply = (c: CatalogCache) => {
+			setApps(c.apps); setWorkflows(c.workflows); setAgents(c.agents);
+			setStrategies(c.strategies); setSkills(c.skills); setDatasets(c.datasets);
+		};
+		// Fresh cache → paint instantly, no network.
+		if (catalogCache && Date.now() - catalogCache.at < CATALOG_TTL) {
+			apply(catalogCache);
+		} else {
+			(async () => {
+				try {
+					const auth = await bearerHeader();
+					const opts = { credentials: "same-origin" as const, headers: auth };
+					const repo = (kind: string) =>
+						fetch(`/api/v1/repos?kind=${kind}`, opts)
+							.then((r) => r.ok ? r.json().then((d: { repos?: RepoCard[] }) => d.repos || []) : Promise.resolve([]));
+					const [a, wf, ag, st, s, d] = await Promise.all([
+						repo("app"),
+						repo("workflow"),
+						repo("agent"),
+						repo("strategy"),
+						fetch("/api/v1/skills/catalog", opts).then((r) => r.ok ? r.json().then((d: { cards?: SkillCard[] }) => d.cards || []) : Promise.resolve([])),
+						repo("dataset"),
+					]);
+					catalogCache = { at: Date.now(), apps: a, workflows: wf, agents: ag, strategies: st, skills: s, datasets: d };
+					apply(catalogCache);
+				} catch (e) {
+					setErr(e instanceof Error ? e.message : String(e));
+				}
+			})();
+		}
 		// Already-installed detection (separate fetch — its failure shouldn't
 		// blank the catalog).
 		me.listApps()
@@ -260,7 +274,7 @@ export default function MarketplaceBrowse() {
 						value={query}
 						onChange={(e) => { setQuery(e.target.value); setActiveTag(null); }}
 						placeholder={`Search ${tab}…`}
-						className="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-teal-400/20 focus:border-teal-400 transition-all placeholder:text-slate-400"
+						className="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400 transition-all placeholder:text-slate-400"
 					/>
 				</div>
 
@@ -285,7 +299,7 @@ export default function MarketplaceBrowse() {
 						<button
 							key={t}
 							onClick={() => setActiveTag(t)}
-							className="px-2 py-0.5 rounded-full text-[11px] border border-slate-200 text-slate-600 hover:border-teal-400 hover:text-teal-700 transition-colors"
+							className="px-2 py-0.5 rounded-full text-[11px] border border-slate-200 text-slate-600 hover:border-gold-400 hover:text-gold-700 transition-colors"
 						>
 							{t}
 						</button>
@@ -362,7 +376,7 @@ function SortDropdown({ value, onChange }: { value: SortKey; onChange: (v: SortK
 			<select
 				value={value}
 				onChange={(e) => onChange(e.target.value as SortKey)}
-				className="appearance-none pl-3 pr-7 py-1.5 text-sm rounded-lg border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-400/20 focus:border-teal-400 cursor-pointer"
+				className="appearance-none pl-3 pr-7 py-1.5 text-sm rounded-lg border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400 cursor-pointer"
 			>
 				{(Object.keys(labels) as SortKey[]).map((k) => (
 					<option key={k} value={k}>{labels[k]}</option>
@@ -412,8 +426,11 @@ function RepoGrid({
 	}, [repos, query, sort, activeTag]);
 
 	if (repos === null) return (
-		<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-			{[0,1,2,3,4,5].map((i) => <div key={i} className="h-28 rounded-lg bg-slate-100 animate-pulse" />)}
+		<div className="relative">
+			<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+				{[0,1,2,3,4,5].map((i) => <div key={i} className="h-28 rounded-lg bg-slate-100 animate-pulse" />)}
+			</div>
+			<SpiralOverlay />
 		</div>
 	);
 	if (filtered.length === 0) return (
@@ -486,8 +503,8 @@ function RepoCardView({
 				"group rounded-xl border bg-white p-4 flex flex-col shadow-sm transition-all duration-200",
 				STAGGER_CLASS,
 				ctaState === "installed"
-					? "border-emerald-200 bg-emerald-50/30"
-					: "border-slate-200 hover:border-emerald-300 hover:shadow-md hover:-translate-y-0.5",
+					? "border-gold-200 bg-gold-50/30"
+					: "border-slate-200 hover:border-gold-300 hover:shadow-md hover:-translate-y-0.5",
 			)}
 			style={staggerDelay(index)}
 		>
@@ -528,7 +545,7 @@ function RepoCardView({
 			{/* Helper line — what the primary action does for THIS kind */}
 			{ctaState === "idle" && helper && (
 				<p className="mt-3 text-[10.5px] text-slate-500 leading-snug">
-					<Sparkles className="inline w-2.5 h-2.5 mr-0.5 text-emerald-500" />
+					<Sparkles className="inline w-2.5 h-2.5 mr-0.5 text-gold-500" />
 					{helper}
 				</p>
 			)}
@@ -577,10 +594,10 @@ function RepoCardView({
 
 const SKILL_CATEGORIES: Record<string, { bg: string; text: string }> = {
 	email:     { bg: "bg-rose-50",    text: "text-rose-700" },
-	calendar:  { bg: "bg-amber-50",   text: "text-amber-700" },
+	calendar:  { bg: "bg-gold-50",   text: "text-gold-700" },
 	web:       { bg: "bg-sky-50",     text: "text-sky-700" },
 	code:      { bg: "bg-violet-50",  text: "text-violet-700" },
-	research:  { bg: "bg-emerald-50", text: "text-emerald-700" },
+	research:  { bg: "bg-gold-50", text: "text-gold-700" },
 	messaging: { bg: "bg-indigo-50",  text: "text-indigo-700" },
 	data:      { bg: "bg-cyan-50",    text: "text-cyan-700" },
 	sql:       { bg: "bg-orange-50",  text: "text-orange-700" },
@@ -609,8 +626,11 @@ function SkillsGrid({
 	}, [skills, query, activeTag]);
 
 	if (skills === null) return (
-		<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-			{[0,1,2,3].map((i) => <div key={i} className="h-24 rounded-lg bg-slate-100 animate-pulse" />)}
+		<div className="relative">
+			<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+				{[0,1,2,3].map((i) => <div key={i} className="h-24 rounded-lg bg-slate-100 animate-pulse" />)}
+			</div>
+			<SpiralOverlay />
 		</div>
 	);
 	if (filtered.length === 0) return (
@@ -798,7 +818,7 @@ function AppDetailDrawer({
 					{/* Metrics */}
 					<div className="flex items-center gap-3 text-[11px] text-slate-400">
 						{updated && <span>{updated}</span>}
-						{(app.stars ?? 0) > 0 && <span className="inline-flex items-center gap-0.5"><Star className="w-3 h-3 text-amber-400" /> {app.stars}</span>}
+						{(app.stars ?? 0) > 0 && <span className="inline-flex items-center gap-0.5"><Star className="w-3 h-3 text-gold-400" /> {app.stars}</span>}
 						{(app.downloads ?? 0) > 0 && <span className="inline-flex items-center gap-0.5"><Download className="w-3 h-3" /> {app.downloads}</span>}
 						{(app.forks ?? 0) > 0 && <span className="inline-flex items-center gap-0.5"><GitFork className="w-3 h-3" /> {app.forks}</span>}
 					</div>
@@ -844,7 +864,7 @@ function AppDetailDrawer({
 										<Database className="w-3 h-3" /> Mounts {datasetDecls.length} dataset{datasetDecls.length === 1 ? "" : "s"}:
 									</div>
 									{datasetDecls.map((d, i) => (
-										<div key={i} className="font-mono text-[10.5px] text-amber-700 pl-4 truncate">{friendlyName(d.repo || d.id || "")}</div>
+										<div key={i} className="font-mono text-[10.5px] text-gold-700 pl-4 truncate">{friendlyName(d.repo || d.id || "")}</div>
 									))}
 								</div>
 							)}
@@ -861,7 +881,7 @@ function AppDetailDrawer({
 								<div className="text-[11px] text-slate-400">No public apps use this skill yet.</div>
 							) : (
 								consumers.slice(0, 8).map((cns, i) => (
-									<div key={i} className="font-mono text-[11px] text-teal-700 truncate">{cns.name.replace(/^[^/]+\//, "")}</div>
+									<div key={i} className="font-mono text-[11px] text-gold-700 truncate">{cns.name.replace(/^[^/]+\//, "")}</div>
 								))
 							)}
 						</div>
@@ -869,10 +889,10 @@ function AppDetailDrawer({
 
 					{/* Per-kind "how to use" — for the kinds that aren't one-click */}
 					{app.kind === "dataset" && (
-						<div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3.5 space-y-1.5">
-							<div className="text-[12px] font-medium text-amber-800">How to use this dataset</div>
-							<p className="text-[11.5px] text-amber-700 leading-relaxed">An app&apos;s owner adds this to the app&apos;s configuration:</p>
-							<pre className="text-[10.5px] bg-white border border-amber-200 rounded p-2 overflow-x-auto text-slate-700">{`datasets:
+						<div className="rounded-lg border border-gold-200 bg-gold-50/50 p-3.5 space-y-1.5">
+							<div className="text-[12px] font-medium text-gold-800">How to use this dataset</div>
+							<p className="text-[11.5px] text-gold-700 leading-relaxed">An app&apos;s owner adds this to the app&apos;s configuration:</p>
+							<pre className="text-[10.5px] bg-white border border-gold-200 rounded p-2 overflow-x-auto text-slate-700">{`datasets:
   - {id: ${app.name.replace(/[^a-z0-9_]/gi, "_")}, repo: "${slug}",
      version: "${app.version || "1.0.0"}", mount_at: data/seed}`}</pre>
 						</div>
@@ -906,7 +926,7 @@ function AppDetailDrawer({
 								role="switch"
 								aria-checked={sidebar.show}
 								onClick={() => setSidebar((s) => ({ ...s, show: !s.show }))}
-								className={`relative inline-flex h-4.5 w-8 flex-shrink-0 rounded-full border-2 border-transparent transition-colors ${sidebar.show ? "bg-teal-500" : "bg-slate-200"}`}
+								className={`relative inline-flex h-4.5 w-8 flex-shrink-0 rounded-full border-2 border-transparent transition-colors ${sidebar.show ? "bg-gold-500" : "bg-slate-200"}`}
 							>
 								<span className={`pointer-events-none inline-block h-3.5 w-3.5 mt-px transform rounded-full bg-white shadow transition-transform ${sidebar.show ? "translate-x-3.5" : "translate-x-0"}`} />
 							</button>
@@ -915,15 +935,15 @@ function AppDetailDrawer({
 							<>
 								<label className="block">
 									<span className="text-[11px] text-slate-500 block mb-1">Label</span>
-									<input type="text" value={sidebar.label} onChange={(e) => setSidebar((s) => ({ ...s, label: e.target.value }))} className="w-full px-2 py-1 text-[12px] rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-teal-400/20" />
+									<input type="text" value={sidebar.label} onChange={(e) => setSidebar((s) => ({ ...s, label: e.target.value }))} className="w-full px-2 py-1 text-[12px] rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-gold-400/20" />
 								</label>
 								<label className="block">
 									<span className="text-[11px] text-slate-500 block mb-1">Section</span>
-									<input type="text" value={sidebar.section} onChange={(e) => setSidebar((s) => ({ ...s, section: e.target.value }))} className="w-full px-2 py-1 text-[12px] rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-teal-400/20" placeholder="e.g. Trading, Research" />
+									<input type="text" value={sidebar.section} onChange={(e) => setSidebar((s) => ({ ...s, section: e.target.value }))} className="w-full px-2 py-1 text-[12px] rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-gold-400/20" placeholder="e.g. Trading, Research" />
 								</label>
 							</>
 						)}
-						<div className={`text-[11px] px-2 py-1 rounded-md ${sidebar.show ? "bg-teal-50 text-teal-700" : "bg-slate-100 text-slate-500"}`}>
+						<div className={`text-[11px] px-2 py-1 rounded-md ${sidebar.show ? "bg-gold-50 text-gold-700" : "bg-slate-100 text-slate-500"}`}>
 							{sidebar.show
 								? <><Eye className="w-3 h-3 inline mr-1" />{sidebar.section} → {sidebar.label}</>
 								: <><EyeOff className="w-3 h-3 inline mr-1" />Not in sidebar</>
@@ -957,7 +977,7 @@ function AppDetailDrawer({
 				{/* Action footer — the verb depends on the kind */}
 				<div className="p-4 border-t border-slate-100 bg-white">
 					{act === "install" && (isInstalled ? (
-						<button onClick={() => { onOpen(app.name); onClose(); }} className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100 text-sm font-medium transition-all">
+						<button onClick={() => { onOpen(app.name); onClose(); }} className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-gold-50 text-gold-700 border border-gold-200 hover:bg-gold-100 text-sm font-medium transition-all">
 							<Check className="w-4 h-4" /> Open {title} <ArrowRight className="w-4 h-4" />
 						</button>
 					) : (
@@ -1019,14 +1039,14 @@ function RefinementsView({ query }: { query: string }) {
 	return (
 		<ul className="space-y-2">
 			{filtered.map((r) => (
-				<li key={r.id} className={`rounded-lg border bg-white px-4 py-3 flex items-center gap-3 transition-all ${isFresh(r) ? "border-teal-300 bg-teal-50/60" : "border-slate-200"}`}>
+				<li key={r.id} className={`rounded-lg border bg-white px-4 py-3 flex items-center gap-3 transition-all ${isFresh(r) ? "border-gold-300 bg-gold-50/60" : "border-slate-200"}`}>
 					<GitFork className="w-4 h-4 text-slate-400 flex-shrink-0" />
 					<div className="flex-1 min-w-0">
 						<div className="font-medium text-slate-900 text-sm truncate">{r.name}</div>
 						<div className="text-[11px] text-slate-400 mt-0.5">{r.version} · {r.refinedAt} · {r.source}</div>
 					</div>
 					{r.status === "published"
-						? <span className="text-[11px] px-2 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200 flex-shrink-0"><Check className="w-3 h-3 inline" /> Published</span>
+						? <span className="text-[11px] px-2 py-0.5 rounded bg-gold-50 text-gold-700 border border-gold-200 flex-shrink-0"><Check className="w-3 h-3 inline" /> Published</span>
 						: <span className="text-[11px] text-slate-400 flex-shrink-0">Local only</span>
 					}
 				</li>

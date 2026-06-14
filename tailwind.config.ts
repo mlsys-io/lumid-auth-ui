@@ -4,6 +4,10 @@ export default {
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
+      fontFamily: {
+        // Serif display face — wordmark, greetings, page titles ONLY.
+        display: ['"Source Serif 4 Variable"', "Georgia", "ui-serif", "serif"],
+      },
       colors: {
         border: "var(--border)",
         input: "var(--input)",
@@ -15,6 +19,35 @@ export default {
         destructive: { DEFAULT: "var(--destructive)", foreground: "var(--destructive-foreground)" },
         muted: { DEFAULT: "var(--muted)", foreground: "var(--muted-foreground)" },
         accent: { DEFAULT: "var(--accent)", foreground: "var(--accent-foreground)" },
+        // Coral — flourish-only accent (the ✳); claude.ai restyle.
+        coral: { DEFAULT: "var(--accent-coral)" },
+        // Gold — the brand spiral's metallic antique gold/bronze. Deliberately
+        // DESATURATED + DARK (vs Tailwind amber, which reads orange). This is
+        // the Studio accent: active states, action buttons, brand flourishes.
+        gold: {
+          50: "#FBF7EF",
+          100: "#F4ECD9",
+          200: "#E8D9B6",
+          300: "#D8C088",
+          400: "#C5A75E",
+          500: "#B08F45",
+          600: "#96773A",
+          700: "#7B6230",
+          800: "#614D27",
+          900: "#463821",
+          DEFAULT: "#96773A",
+        },
+        // Sidebar tokens were defined in globals.css but never mapped
+        // (the @theme inline block is Tailwind-4 syntax — inert here).
+        sidebar: {
+          DEFAULT: "var(--sidebar)",
+          foreground: "var(--sidebar-foreground)",
+          primary: "var(--sidebar-primary)",
+          "primary-foreground": "var(--sidebar-primary-foreground)",
+          accent: "var(--sidebar-accent)",
+          "accent-foreground": "var(--sidebar-accent-foreground)",
+          border: "var(--sidebar-border)",
+        },
         popover: { DEFAULT: "var(--popover)", foreground: "var(--popover-foreground)" },
         card: { DEFAULT: "var(--card)", foreground: "var(--card-foreground)" },
         // Re-mapped to indigo so ported Runmesh + Lumilake pages'

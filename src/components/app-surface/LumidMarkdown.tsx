@@ -20,14 +20,14 @@ const components: Components = {
   ol: ({ children }) => <ol className="list-decimal pl-5 my-3 space-y-1 text-[14px] text-slate-700">{children}</ol>,
   li: ({ children }) => <li className="leading-relaxed">{children}</li>,
   a: ({ href, children }) => {
-    const cls = "text-emerald-700 underline decoration-emerald-300 hover:decoration-emerald-600 underline-offset-2";
+    const cls = "text-gold-700 underline decoration-gold-300 hover:decoration-gold-600 underline-offset-2";
     if (href && href.startsWith("/") && !href.startsWith("//")) {
       return <Link to={href} className={cls}>{children}</Link>;
     }
     return <a href={href} target={href?.startsWith("http") ? "_blank" : undefined} rel="noopener noreferrer" className={cls}>{children}</a>;
   },
   blockquote: ({ children }) => (
-    <blockquote className="my-3 pl-3 border-l-2 border-emerald-300 text-slate-600 text-[13px] italic">{children}</blockquote>
+    <blockquote className="my-3 pl-3 border-l-2 border-gold-300 text-slate-600 text-[13px] italic">{children}</blockquote>
   ),
   hr: () => <hr className="my-5 border-slate-200" />,
   table: ({ children }) => (

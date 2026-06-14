@@ -9,6 +9,7 @@
 
 import { useEffect, useRef } from 'react';
 import type { DataScope, StudioDataDetail } from '@/components/chat/effects';
+import { clearMeCache } from '@/api/me';
 
 export function useStudioRefetch(scopes: DataScope[], load: () => void): void {
 	const loadRef = useRef(load);
@@ -20,6 +21,9 @@ export function useStudioRefetch(scopes: DataScope[], load: () => void): void {
 		const onData = (e: Event) => {
 			const detail = (e as CustomEvent<StudioDataDetail>).detail;
 			if (!detail?.scopes?.some((s) => want.has(s))) return;
+			// A mutation just happened — drop the aggregate TTL cache so the
+			// reload below sees fresh data rather than a few-second-old snapshot.
+			clearMeCache();
 			// Debounce: a multi-tool turn fires several events back to back.
 			if (timer != null) window.clearTimeout(timer);
 			timer = window.setTimeout(() => { timer = null; loadRef.current(); }, 300);

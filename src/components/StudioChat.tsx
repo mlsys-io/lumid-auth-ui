@@ -8,25 +8,32 @@
 // sessionStorage so navigating between Studio pages keeps context.
 
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
 import { CONNECT_ROUTE } from './studio/starters';
-import { ChevronRight, MessageSquarePlus, Send, Trash2, Loader2, Bot, User, Square, Globe, Telescope, Brain, ChevronDown, Paperclip, X, FileText, FileJson, Image as ImageIcon, Plus, Copy, RotateCcw, Mic, Volume2, Code2, Boxes, Download, ArrowLeft, Crosshair, Lock } from 'lucide-react';
+import { ChevronRight, MessageSquarePlus, Send, Trash2, Loader2, Bot, User, Square, Globe, Telescope, Brain, ChevronDown, Paperclip, X, FileText, FileJson, Image as ImageIcon, Plus, Copy, RotateCcw, Mic, Volume2, Code2, Boxes, Download, ArrowLeft, Crosshair, Lock, Cpu } from 'lucide-react';
 import {
 	buildViewingContext,
 	subscribeStudioPickedTarget,
 	setStudioPickedTarget,
 	getStudioPickedTarget,
+	setStudioSelection,
 	type StudioPickedTarget,
 	type ViewingContext,
 } from './StudioContext';
+import { appTitle, prefetchAppLabels } from './workflow/AppCard';
+import { me, type MeWorkflowRow } from '@/api/me';
+import { summarizeAppState, chipsForApp, openerLine } from './chat/appOpener';
 import { startStudioPicking, stopStudioPicking, isStudioPicking, subscribeStudioPicking } from './StudioPicker';
 import { ChatMarkdown } from './ChatMarkdown';
 import AssemblyCard from './workflow/AssemblyCard';
 import type { Attachment, WireAttachment, Message, ToolCall } from './chat/types';
 import { readChatStream, withLastAssistant } from './chat/protocol';
-import ChatEmptyState from './chat/ChatEmptyState';
+import ChatEmptyState, { ChatHero } from './chat/ChatEmptyState';
+import { entityCardFor } from './chat/entityCards';
+import AppSurfaceCard from './chat/AppSurfaceCard';
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_TEXT_BYTES = 500 * 1024;
@@ -50,6 +57,21 @@ const DOCUMENT_EXTS = ['.pdf', '.docx', '.xlsx', '.pptx', '.rtf', '.odt', '.ods'
 
 const STORAGE_KEY = 'studio_chat_transcript_v1';
 const CHAT_ID_KEY = 'studio_chat_active_id_v1';
+// Per-app "latest session" map { app: chatId } so re-entering an app resumes
+// its most-recent conversation instead of dumping into whatever was open.
+const APP_CHAT_MAP_KEY = 'studio_app_chat_v1';
+function readAppChatMap(): Record<string, string> {
+	try { return JSON.parse(localStorage.getItem(APP_CHAT_MAP_KEY) || '{}') || {}; }
+	catch { return {}; }
+}
+function writeAppChat(app: string, chatId: string | null) {
+	if (!app) return;
+	try {
+		const m = readAppChatMap();
+		if (chatId) m[app] = chatId; else delete m[app];
+		localStorage.setItem(APP_CHAT_MAP_KEY, JSON.stringify(m));
+	} catch { /* ignore */ }
+}
 
 // Persisted transcript shape: { user_sub: string, messages: Message[] }.
 // Tagging with user_sub closes the "same browser tab, different user"
@@ -118,7 +140,7 @@ type ModelOption = { id: string; display_name: string; default: boolean };
 // Mutually-exclusive tool-forcing modes. '' = let the agent decide.
 type ChatMode = '' | 'search' | 'deep_research';
 
-export function StudioChat() {
+export function StudioChat({ docked = false }: { docked?: boolean } = {}) {
 	const location = useLocation();
 	// `id` is the user_sub on the UserInfo shape from /api/v1/user; used
 	// to tag the persisted transcript so it can't leak across accounts.
@@ -159,6 +181,12 @@ export function StudioChat() {
 	const messageQueueRef = useRef<QueuedMessage[]>([]);
 	useEffect(() => { messageQueueRef.current = messageQueue; }, [messageQueue]);
 	const [streaming, setStreaming] = useState(false);
+	// Synchronous in-flight latch. `streaming` is async state, so two rapid
+	// dispatchTurn calls (queue processor microtask racing a manual send, or
+	// StrictMode double-invoke) can both observe streaming===false and fire the
+	// same turn twice. This ref flips synchronously inside dispatchTurn so the
+	// second call is a no-op.
+	const inFlightRef = useRef(false);
 	// LLM model selector. Persists across reloads; populated from
 	// /me/agent/models so backend can add providers without UI changes.
 	const [models, setModels] = useState<ModelOption[]>([]);
@@ -226,9 +254,16 @@ export function StudioChat() {
 	// into the chat record so reloads keep continuity. Ref, not state —
 	// read at fetch time, never rendered.
 	const claudeSessionRef = useRef<string | null>(null);
+	const navigate = useNavigate();
+	// App the active session is grounded on (Studio workspace slug). Drives
+	// per-app session switching + tags saves so the picker can group/route by app.
+	const currentAppRef = useRef<string | null>(null);
+	// Last app whose opener was emitted into THIS session — dedupes the
+	// stash+event double-fire and prevents re-opening on same-app re-entry.
+	const openedAppRef = useRef<string | null>(null);
 	// Recent threads for the history dropdown — populated lazily when
 	// the user opens the menu; refreshed after every save.
-	type HistoryRow = { id: string; title: string; updated_at: string; msg_count: number };
+	type HistoryRow = { id: string; title: string; updated_at: string; msg_count: number; app?: string };
 	const [history, setHistory] = useState<HistoryRow[]>([]);
 	const [historyOpen, setHistoryOpen] = useState(false);
 
@@ -304,6 +339,19 @@ export function StudioChat() {
 	useEffect(() => {
 		try { localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0'); } catch { /* ignore */ }
 	}, [collapsed]);
+
+	// The workspace URL is the source of truth for which app a DOCKED session
+	// belongs to (the docked chat only renders on an app page). We read it at
+	// SAVE time for tagging — NOT into currentAppRef, because clobbering that
+	// ref pre-empts openAppInChat's app-switch detection (it would see
+	// "already on B" and skip switching the session). Kept fresh each render.
+	const pathnameRef = useRef(location.pathname);
+	pathnameRef.current = location.pathname;
+	const workspaceApp = (): string | null => {
+		if (!docked) return null;
+		const m = pathnameRef.current.match(/^\/studio\/apps\/([^/?]+)/);
+		return m && m[1] !== 'all' ? decodeURIComponent(m[1]) : null;
+	};
 
 	// Persist selected model.
 	useEffect(() => {
@@ -420,12 +468,16 @@ export function StudioChat() {
 						model: model || undefined,
 						mode: mode || undefined,
 						claude_session_id: claudeSessionRef.current || undefined,
+						app: (workspaceApp() || currentAppRef.current) || undefined,
 					}),
 				});
 				if (!r.ok) return;
 				const j = await r.json();
 				const newId: string | undefined = j?.data?.id;
 				if (newId && newId !== chatId) setChatId(newId);
+				// Remember this as the app's latest session for resume-on-reentry.
+				const tagApp = workspaceApp() || currentAppRef.current;
+				if (newId && tagApp) writeAppChat(tagApp, newId);
 				lastSavedSigRef.current = sig;
 			} catch { /* ignore */ }
 		}, 600);
@@ -448,19 +500,24 @@ export function StudioChat() {
 	// Load one thread into the chat — replaces current messages +
 	// chatId. Active session is overwritten; the previous thread is
 	// already saved on disk, so the user can navigate back to it.
-	const loadThread = useCallback(async (id: string) => {
+	const loadThread = useCallback(async (id: string): Promise<string | null | false> => {
 		try {
 			const r = await fetch('/api/v1/me/chats/' + encodeURIComponent(id), { credentials: 'include' });
-			if (!r.ok) return;
+			if (!r.ok) return false;
 			const j = await r.json();
 			const rec = j?.data;
-			if (!rec || !Array.isArray(rec.messages)) return;
+			if (!rec || !Array.isArray(rec.messages)) return false;
 			setMessages(rec.messages);
 			setChatId(rec.id);
 			claudeSessionRef.current = rec.claude_session_id || null;
+			const app = (rec.app as string) || null;
+			currentAppRef.current = app;
+			openedAppRef.current = app; // an app's loaded thread shouldn't re-fire its opener
+			if (app) writeAppChat(app, rec.id);
 			lastSavedSigRef.current = '';
 			setHistoryOpen(false);
-		} catch { /* ignore */ }
+			return app;
+		} catch { return false; }
 	}, []);
 
 	const newChat = useCallback(() => {
@@ -469,6 +526,8 @@ export function StudioChat() {
 		setChatId(null);
 		claudeSessionRef.current = null;
 		lastSavedSigRef.current = '';
+		currentAppRef.current = null;   // generic new chat = home (app-less)
+		openedAppRef.current = null;
 		try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
 		setHistoryOpen(false);
 	}, [streaming]);
@@ -792,7 +851,8 @@ export function StudioChat() {
 		baseMessages?: Message[],
 		ctxOverride?: Partial<ViewingContext>,
 	) => {
-		if (!text || streaming) return;
+		if (!text || streaming || inFlightRef.current) return;
+		inFlightRef.current = true;
 		const base = baseMessages ?? messages;
 		const userMsg: Message = { role: 'user', content: text };
 		// Structured "what the user is looking at" payload — replaces the
@@ -824,48 +884,66 @@ export function StudioChat() {
 		}
 		const ctrl = new AbortController();
 		abortRef.current = ctrl;
+		// Retry once on a PRE-STREAM network error (server restart / blip): the
+		// rapid-deploy / identity-restart window otherwise surfaced as a scary
+		// "Couldn't reach the assistant" even though nothing had streamed yet.
+		// `started` guards against retrying mid-stream (which would duplicate).
 		try {
-			const r = await fetch('/api/v1/me/agent/chat/stream', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				credentials: 'include',
-				body: JSON.stringify({
-					messages: wireMessages,
-					context,
-					...(model ? { model } : {}),
-					...(mode ? { mode } : {}),
-					...(think ? { think: true } : {}),
-					...(personaId ? { persona_id: personaId } : agentId ? { agent_id: agentId } : {}),
-					...(claudeSessionRef.current ? { claude_session_id: claudeSessionRef.current } : {}),
-				}),
-				signal: ctrl.signal,
-			});
-			if (!r.ok || !r.body) {
-				const errText = r.status === 401 ? 'Sign in to use chat' : `error ${r.status}`;
-				setMessages((prev) => withLastAssistant(prev, (m) => ({ ...m, content: errText })));
-				return;
+			for (let attempt = 0; ; attempt++) {
+				let started = false;
+				try {
+					const r = await fetch('/api/v1/me/agent/chat/stream', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						credentials: 'include',
+						body: JSON.stringify({
+							messages: wireMessages,
+							context,
+							...(model ? { model } : {}),
+							...(mode ? { mode } : {}),
+							...(think ? { think: true } : {}),
+							...(personaId ? { persona_id: personaId } : agentId ? { agent_id: agentId } : {}),
+							...(claudeSessionRef.current ? { claude_session_id: claudeSessionRef.current } : {}),
+						}),
+						signal: ctrl.signal,
+					});
+					if (!r.ok || !r.body) {
+						const errText = r.status === 401 ? 'Sign in to use chat' : `error ${r.status}`;
+						setMessages((prev) => withLastAssistant(prev, (m) => ({ ...m, content: errText })));
+						return;
+					}
+					started = true;
+					await readChatStream(r, setMessages, {
+						onClaudeSession: (id) => { claudeSessionRef.current = id; },
+						onRoute: (modelUsed, autoRouted) => setLastRoute({ modelUsed, autoRouted }),
+						onUsage: (used, limit) => setUsage({ used, limit }),
+					});
+					break; // success
+				} catch (e: any) {
+					if (e?.name === 'AbortError') throw e; // handled by outer catch
+					const networkish = /network|failed to fetch|load failed/i.test(String(e?.message || e));
+					if (!started && networkish && attempt < 1) {
+						await new Promise((res) => setTimeout(res, 800));
+						continue; // one quiet retry for a connection blip
+					}
+					throw e;
+				}
 			}
-			await readChatStream(r, setMessages, {
-				onClaudeSession: (id) => { claudeSessionRef.current = id; },
-				onRoute: (modelUsed, autoRouted) => setLastRoute({ modelUsed, autoRouted }),
-				onUsage: (used, limit) => setUsage({ used, limit }),
-			});
 		} catch (e: any) {
-			// User-initiated abort produces a DOMException with name="AbortError" —
-			// don't render that as a scary error; just leave whatever partial
-			// content was streamed.
 			if (e?.name === 'AbortError') {
 				setMessages((prev) => withLastAssistant(prev, (m) => ({
 					...m,
 					content: (m.content || '') + (m.content ? '\n\n_— stopped —_' : '_— stopped —_'),
 				})));
 			} else {
-				setMessages((prev) => withLastAssistant(prev, (m) => ({
-					...m,
-					content: m.content || `Couldn't reach the assistant: ${String(e).slice(0, 100)}`,
-				})));
+				const networkish = /network|failed to fetch|load failed/i.test(String(e?.message || e));
+				const msg = networkish
+					? '⚠️ Couldn’t reach the assistant — connection hiccup. Try again in a moment.'
+					: `Couldn't reach the assistant: ${String(e).slice(0, 100)}`;
+				setMessages((prev) => withLastAssistant(prev, (m) => ({ ...m, content: m.content || msg })));
 			}
 		} finally {
+			inFlightRef.current = false;
 			setStreaming(false);
 			abortRef.current = null;
 			// Clear any tools that received tool_start but no tool_call (stream
@@ -880,6 +958,158 @@ export function StudioChat() {
 	// Latest-send-path ref for the studio:ask listener (registered once).
 	const dispatchTurnRef = useRef<typeof dispatchTurn | null>(null);
 	useEffect(() => { dispatchTurnRef.current = dispatchTurn; }, [dispatchTurn]);
+
+	// openAppInChat — ground the chat on an app and open with an agent-led,
+	// progressive opener: ONE deterministic live-state line (instant, no LLM
+	// round-trip, no fake user turn) + 2–3 next-step chips. The conversation
+	// goes LLM-driven the moment the user clicks a chip or types. NO surface
+	// dump — the structured details live in the workspace's middle panel.
+	// Emit the deterministic opener line + chips for `app` (appended to the
+	// current — usually just-cleared — transcript). Marks the app as opened.
+	const emitAppOpener = useCallback((app: string) => {
+		openedAppRef.current = app;
+		void Promise.all([
+			prefetchAppLabels(),
+			me.listWorkflows('scheduled').then((r) => r.workflows || []).catch(() => [] as MeWorkflowRow[]),
+		]).then(([, rows]) => {
+			setStudioSelection({ kind: 'app', id: app, label: appTitle(app), affordances: ['app_action', 'app_read', 'run_loop_now', 'list_loops'] });
+			const st = summarizeAppState(app, rows);
+			setMessages((prev) => [...prev, { role: 'assistant', content: openerLine(app, st), chips: chipsForApp(app, rows) }]);
+		});
+	}, []);
+	// Clear the in-memory session (keeps currentAppRef binding).
+	const clearSession = useCallback(() => {
+		setMessages([]);
+		setChatId(null);
+		claudeSessionRef.current = null;
+		lastSavedSigRef.current = '';
+		try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+	}, []);
+
+	const openAppInChat = useCallback((d: { app: string; surface?: string }) => {
+		if (!d?.app) return;
+		const app = d.app;
+		// Already on this app's session (opener emitted) → nothing to do.
+		if (openedAppRef.current === app && currentAppRef.current === app) return;
+		if (inFlightRef.current) return; // don't yank the session mid-stream
+
+		const wasApp = currentAppRef.current;
+		currentAppRef.current = app;
+
+		// Same app, session already present (e.g. opener not yet emitted on this
+		// mount) — just emit the opener into the existing thread.
+		if (wasApp === app) { emitAppOpener(app); return; }
+
+		// Switching apps → resume this app's latest saved session if any, else
+		// start a fresh session and emit the opener. Never append into the
+		// previous app's / the home session.
+		const saved = readAppChatMap()[app];
+		if (saved) {
+			void loadThread(saved).then((res) => {
+				if (res === false) { writeAppChat(app, null); clearSession(); emitAppOpener(app); }
+			});
+		} else {
+			clearSession();
+			emitAppOpener(app);
+		}
+	}, [loadThread, emitAppOpener, clearSession]);
+
+	// "New chat" — starts a fresh session. In an app context it stays bound to
+	// the app (a NEW session for that app) and re-emits the opener; on the home
+	// it's a plain empty chat. (Distinct from loadThread / resuming.)
+	const newAppSession = useCallback(() => {
+		if (inFlightRef.current) return;
+		const app = currentAppRef.current;
+		clearSession();
+		setHistoryOpen(false);
+		if (app) {
+			writeAppChat(app, null); // don't auto-resume the old one
+			openedAppRef.current = null;
+			emitAppOpener(app);
+		}
+	}, [clearSession, emitAppOpener]);
+
+	// Pick a thread from the session picker. Loads it and, if it belongs to a
+	// DIFFERENT app than the workspace currently shows, switches the middle
+	// panel to that app too (the session and the workspace stay in lockstep).
+	const pickThread = useCallback((h: HistoryRow) => {
+		setHistoryOpen(false);
+		// Set the app binding synchronously so the studio:open-app fired by the
+		// upcoming navigation early-returns instead of resuming the app default.
+		currentAppRef.current = h.app || null;
+		openedAppRef.current = h.app || null;
+		void loadThread(h.id);
+		if (h.app) navigate(`/studio/apps/${encodeURIComponent(h.app)}`);
+	}, [loadThread, navigate]);
+
+	// The chat mounts only at /studio now — asks fired elsewhere are
+	// stashed by the shell (studio_pending_ask_v1) before navigating
+	// here; the New-chat row stashes studio_new_chat_v1. Consume both
+	// on mount; also honor live studio:new-chat events while mounted.
+	useEffect(() => {
+		try {
+			if (sessionStorage.getItem('studio_new_chat_v1')) {
+				sessionStorage.removeItem('studio_new_chat_v1');
+				setMessages([]);
+				setChatId(null);
+				claudeSessionRef.current = null;
+				currentAppRef.current = null;
+				openedAppRef.current = null;
+				// A stale app-open stash (written by the workspace before nav) would
+				// otherwise re-ground this fresh chat with the app's opener — drop it.
+				sessionStorage.removeItem(STORAGE_KEY);
+				sessionStorage.removeItem('studio_open_app_v1');
+			}
+			const raw = sessionStorage.getItem('studio_pending_ask_v1');
+			if (raw) {
+				sessionStorage.removeItem('studio_pending_ask_v1');
+				const detail = JSON.parse(raw);
+				if (detail?.prompt) {
+					setTimeout(() => {
+						if (detail.autosend) void dispatchTurnRef.current?.(String(detail.prompt), [], undefined, detail.context);
+						else setInput(String(detail.prompt));
+					}, 50);
+				}
+			}
+			// Open-app intent (stashed by the workspace when you enter an app):
+			// ground the docked app chat with the opener. The HOME chat (!docked)
+			// is app-less — it must never consume this, or a leftover stash would
+			// re-ground it with a stale app opener after "New chat"/brand click.
+			const openRaw = sessionStorage.getItem('studio_open_app_v1');
+			if (openRaw) {
+				if (docked) {
+					sessionStorage.removeItem('studio_open_app_v1');
+					openAppInChat(JSON.parse(openRaw));
+				} else {
+					// Home chat: discard a stray stash so it can't ground later.
+					sessionStorage.removeItem('studio_open_app_v1');
+				}
+			}
+		} catch { /* stale/invalid stash — ignore */ }
+		const onNew = () => {
+			setMessages([]);
+			setChatId(null);
+			claudeSessionRef.current = null;
+			currentAppRef.current = null;
+			openedAppRef.current = null;
+			try {
+				sessionStorage.removeItem(STORAGE_KEY);
+				sessionStorage.removeItem('studio_new_chat_v1');
+				sessionStorage.removeItem('studio_open_app_v1');
+			} catch { /* ignore */ }
+		};
+		const onOpenApp = (e: Event) => {
+			const d = (e as CustomEvent).detail;
+			if (d?.app) openAppInChat(d);
+		};
+		window.addEventListener('studio:new-chat', onNew);
+		window.addEventListener('studio:open-app', onOpenApp as EventListener);
+		return () => {
+			window.removeEventListener('studio:new-chat', onNew);
+			window.removeEventListener('studio:open-app', onOpenApp as EventListener);
+		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
 
 	// Re-run a turn — drops the clicked assistant message + the user
 	// message before it, then dispatches the original user text again
@@ -971,41 +1201,109 @@ export function StudioChat() {
 		try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
 	};
 
-	// Collapsed: a discreet full-height 32px handle with a vertical
-	// "Ask" label + faint green accent. Part of the layout flow (not
-	// fixed/floating), so the workspace naturally reclaims the width.
-	if (collapsed) {
-		return (
-			<button
-				onClick={() => setCollapsed(false)}
-				title="Open AI chat"
-				aria-label="Open AI chat"
-				className="group w-8 flex-shrink-0 h-screen sticky top-0 flex flex-col items-center justify-center gap-3 border-l border-emerald-100 bg-emerald-50/40 hover:bg-emerald-50 transition-colors"
-			>
-				<MessageSquarePlus className="w-4 h-4 text-emerald-600 group-hover:scale-110 transition-transform" />
-				<span className="text-[11px] font-medium uppercase tracking-[0.12em] text-emerald-700/80 [writing-mode:vertical-rl] rotate-180">
-					Ask
-				</span>
-			</button>
-		);
-	}
+	// Chat action icons render INTO the shell top bar (one aligned row with the
+	// status pills) via this slot — so the chat column has no second header bar.
+	const [stripSlot, setStripSlot] = useState<HTMLElement | null>(null);
+	useEffect(() => { setStripSlot(document.getElementById('topstrip-app-slot')); }, []);
 
+	// Group saved conversations by app for the picker — current app first, other
+	// apps alphabetically, app-less ("General") last.
+	const historyGroups = (() => {
+		const byApp = new Map<string, HistoryRow[]>();
+		for (const h of history) {
+			const k = h.app || '';
+			const arr = byApp.get(k);
+			if (arr) arr.push(h); else byApp.set(k, [h]);
+		}
+		const cur = currentAppRef.current || '';
+		const keys = [...byApp.keys()].sort((a, b) => {
+			if (a === b) return 0;
+			if (a === cur) return -1; if (b === cur) return 1;
+			if (a === '') return 1; if (b === '') return -1;
+			return appTitle(a).localeCompare(appTitle(b));
+		});
+		return keys.map((k) => ({ app: k, label: k ? appTitle(k) : 'General', rows: byApp.get(k)! }));
+	})();
+
+	// Chat chrome (context · artifacts · session picker · clear). Rendered into
+	// the top strip on the home (!docked) and inline at the top of the docked
+	// app chat — so the session picker is ALWAYS available (it had vanished in
+	// docked mode). The picker groups by app and switches the workspace when a
+	// session for another app is chosen.
+	const chromeEl = (
+		<div data-studio-picker-chrome="1" className="flex items-center gap-0.5">
+			<ContextIconButton
+				streaming={streaming}
+				agents={agents}
+				agentId={agentId}
+				selectAgent={selectAgent}
+				personas={personas}
+				personaId={personaId}
+				selectPersona={selectPersona}
+			/>
+			<ArtifactIconButton />
+			<div className="relative">
+				<button
+					onClick={() => { const next = !historyOpen; setHistoryOpen(next); if (next) loadHistory(); }}
+					title="Conversations" aria-label="Conversations" aria-expanded={historyOpen}
+					className={['p-1.5 rounded-md transition-colors', historyOpen ? 'text-gold-700 bg-gold-50' : 'text-muted-foreground hover:text-foreground hover:bg-muted'].join(' ')}
+				>
+					<MessageSquarePlus className="w-3.5 h-3.5" />
+				</button>
+				{historyOpen && (
+					<div className="absolute right-0 top-full mt-1 z-50 w-72 max-h-96 overflow-y-auto rounded-xl border border-border bg-popover shadow-lg shadow-foreground/5 p-1" onClick={(e) => e.stopPropagation()}>
+						<button type="button" onClick={newAppSession}
+							className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] text-foreground hover:bg-gold-50 hover:text-gold-800 transition-colors">
+							<Plus className="w-3.5 h-3.5 text-gold-600" />
+							<span className="font-medium">New chat{currentAppRef.current ? ` · ${appTitle(currentAppRef.current)}` : ''}</span>
+						</button>
+						<div className="h-px bg-muted my-1 mx-2" />
+						{history.length === 0 && (
+							<div className="px-2.5 py-1.5 text-[11px] text-muted-foreground italic">No saved conversations yet.</div>
+						)}
+						{historyGroups.map((g) => (
+							<div key={g.app || '__general'} className="mb-0.5">
+								<div className="px-2.5 pt-1.5 pb-0.5 text-[9.5px] uppercase tracking-wider text-muted-foreground truncate">
+									{g.label}
+								</div>
+								{g.rows.map((h) => (
+									<div key={h.id} className={['group flex items-center gap-1 px-1 py-0.5 rounded-lg transition-colors', h.id === chatId ? 'bg-gold-50/60' : 'hover:bg-muted/60'].join(' ')}>
+										<button type="button" onClick={() => pickThread(h)} className="flex-1 min-w-0 text-left px-1.5 py-1">
+											<div className="text-[12.5px] font-medium text-foreground truncate">{h.title}</div>
+											<div className="text-[10px] text-muted-foreground flex items-center gap-1">
+												<span>{h.msg_count} msg</span>
+												<span>·</span>
+												<span>{relativeTime(h.updated_at)}</span>
+											</div>
+										</button>
+										<button type="button" onClick={() => deleteThread(h.id)} title="Delete"
+											className="p-1 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-rose-600 transition-all">
+											<Trash2 className="w-3 h-3" />
+										</button>
+									</div>
+								))}
+							</div>
+						))}
+					</div>
+				)}
+			</div>
+			{messages.length > 0 && (
+				<button onClick={clear} title="Clear (without deleting)" aria-label="Clear conversation (without deleting)"
+					className="p-1.5 rounded-md text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition-colors">
+					<Trash2 className="w-3.5 h-3.5" />
+				</button>
+			)}
+		</div>
+	);
+
+	// The chat IS the main surface now (claude.ai layout) — mounted as
+	// the /studio route's page content, a centered column that fills the
+	// area under the shell header. The old right-rail collapse/resize
+	// chrome is gone; transcript scrolls internally, composer pins low.
 	return (
-		<aside
+		<div
 			data-studio-picker-chrome="1"
-			style={{ width }}
-			className={[
-				// z-20 lifts the chat aside above the workspace shell header
-				// (which is sticky top-0 z-10). Without this, header
-				// popovers (artifact, history, context) paint UNDER the
-				// shell header when they extend leftward into the
-				// workspace area — the shell header's stacking context
-				// otherwise wins despite later DOM order.
-				'flex flex-col h-screen sticky top-0 flex-shrink-0 relative z-20',
-				'bg-gradient-to-b from-white via-white to-emerald-50/30',
-				'border-l border-slate-200/70 shadow-[inset_1px_0_0_0_rgb(255_255_255/0.8)]',
-				resizing ? 'select-none' : '',
-			].join(' ')}
+			className={['relative z-20 flex flex-col flex-1 min-h-0 w-full', docked ? '' : 'max-w-[780px] mx-auto', messages.length === 0 && !docked ? 'justify-center' : ''].join(' ')}
 			onDragEnter={(e) => {
 				if (!e.dataTransfer?.types?.includes('Files')) return;
 				e.preventDefault();
@@ -1031,169 +1329,15 @@ export function StudioChat() {
 				onPickFiles(e.dataTransfer.files);
 			}}
 		>
-			{/* Drag handle — 8px hit zone with a 1px visible rule that
-			    glows on hover/drag. Lives on the left edge so dragging
-			    left grows the panel. */}
-			<div
-				onPointerDown={startResize}
-				className={[
-					'absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize z-10',
-					'before:absolute before:left-0 before:top-0 before:bottom-0 before:w-px',
-					'before:bg-slate-200 hover:before:bg-emerald-400 before:transition-colors',
-					resizing ? 'before:bg-emerald-500' : '',
-				].join(' ')}
-				title="Drag to resize"
-			/>
-			<header className="relative z-30 h-14 px-4 border-b border-slate-200/70 flex items-center justify-between flex-shrink-0 bg-white/80 backdrop-blur-sm gap-2">
-				<div className="flex items-center gap-2.5 min-w-0 flex-1">
-					<div className="relative w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center shadow-sm shadow-emerald-200 flex-shrink-0">
-						<Bot className="w-4 h-4" />
-						{streaming && (
-							<span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-white animate-pulse" />
-						)}
-					</div>
-					<div className="min-w-0 flex-1 flex items-center gap-1.5 flex-wrap">
-						<span className="text-sm font-semibold text-slate-900 tracking-tight">Just ask</span>
-						<ModelChip
-							streaming={streaming}
-							models={models}
-							model={model}
-							setModel={setModel}
-						/>
-						{usage && usage.limit > 0 && (
-							<span
-								className={[
-									'text-[10px] font-mono font-normal px-1.5 py-px rounded',
-									usage.used >= usage.limit
-										? 'bg-rose-100 text-rose-700'
-										: usage.used > usage.limit * 0.8
-											? 'bg-amber-100 text-amber-700'
-											: 'bg-slate-100 text-slate-500',
-								].join(' ')}
-								title={`Daily token usage: ${usage.used.toLocaleString()} / ${usage.limit.toLocaleString()} (est. $${estimateCost(usage.used, model).toFixed(2)})`}
-							>
-								{formatTokens(usage.used)}/{formatTokens(usage.limit)}
-							</span>
-						)}
-						{lastRoute && (
-							<span
-								className={[
-									'text-[9.5px] font-normal px-1 py-px rounded font-medium',
-									lastRoute.autoRouted && lastRoute.modelUsed !== model
-										? 'bg-sky-100 text-sky-700'
-										: 'bg-slate-100 text-slate-500',
-								].join(' ')}
-								title={lastRoute.autoRouted && lastRoute.modelUsed !== model
-									? `Auto-routed to ${lastRoute.modelUsed} (needed a capability your selected model lacks).`
-									: `Last response from: ${lastRoute.modelUsed}`}
-							>
-								{lastRoute.autoRouted && lastRoute.modelUsed !== model
-									? `auto: ${modelShortLabel(lastRoute.modelUsed)}`
-									: modelShortLabel(lastRoute.modelUsed)}
-							</span>
-						)}
-					</div>
+			{/* Home: chrome renders into the shell top bar. Docked (app page):
+			    chrome renders inline at the top of the chat column, so the session
+			    picker is always available. */}
+			{!docked && stripSlot && createPortal(chromeEl, stripSlot)}
+			{docked && (
+				<div className="flex items-center justify-end gap-0.5 px-2 pt-1.5 pb-1 flex-shrink-0">
+					{chromeEl}
 				</div>
-				<div className="flex items-center gap-0.5 flex-shrink-0">
-					<ContextIconButton
-						streaming={streaming}
-						agents={agents}
-						agentId={agentId}
-						selectAgent={selectAgent}
-						personas={personas}
-						personaId={personaId}
-						selectPersona={selectPersona}
-					/>
-					<ArtifactIconButton />
-
-					{/* History dropdown — anchored relative; popover below
-					    shows recent threads + "New chat". Click outside to
-					    close (window click handler below). */}
-					<div className="relative">
-						<button
-							onClick={() => {
-								const next = !historyOpen;
-								setHistoryOpen(next);
-								if (next) loadHistory();
-							}}
-							title="Conversation history"
-							className={[
-								'p-1.5 rounded-md transition-colors',
-								historyOpen ? 'text-emerald-700 bg-emerald-50' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100',
-							].join(' ')}
-						>
-							<MessageSquarePlus className="w-3.5 h-3.5" />
-						</button>
-						{historyOpen && (
-							<div
-								className="absolute right-0 top-full mt-1 z-50 w-72 max-h-96 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg shadow-slate-200/40 p-1"
-								onClick={(e) => e.stopPropagation()}
-							>
-								<button
-									type="button"
-									onClick={newChat}
-									className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 transition-colors"
-								>
-									<Plus className="w-3.5 h-3.5 text-emerald-600" />
-									<span className="font-medium">New chat</span>
-								</button>
-								<div className="h-px bg-slate-100 my-1 mx-2" />
-								{history.length === 0 && (
-									<div className="px-2.5 py-1.5 text-[11px] text-slate-400 italic">
-										No saved threads yet.
-									</div>
-								)}
-								{history.map((h) => (
-									<div
-										key={h.id}
-										className={[
-											'group flex items-center gap-1 px-1 py-0.5 rounded-lg transition-colors',
-											h.id === chatId ? 'bg-emerald-50/60' : 'hover:bg-slate-50',
-										].join(' ')}
-									>
-										<button
-											type="button"
-											onClick={() => loadThread(h.id)}
-											className="flex-1 min-w-0 text-left px-1.5 py-1"
-										>
-											<div className="text-[12.5px] font-medium text-slate-800 truncate">{h.title}</div>
-											<div className="text-[10px] text-slate-500 flex items-center gap-1">
-												<span>{h.msg_count} msg</span>
-												<span>·</span>
-												<span>{relativeTime(h.updated_at)}</span>
-											</div>
-										</button>
-										<button
-											type="button"
-											onClick={() => deleteThread(h.id)}
-											title="Delete"
-											className="p-1 opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-600 transition-all"
-										>
-											<Trash2 className="w-3 h-3" />
-										</button>
-									</div>
-								))}
-							</div>
-						)}
-					</div>
-					{messages.length > 0 && (
-						<button
-							onClick={clear}
-							title="Clear (without deleting from history)"
-							className="p-1.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-						>
-							<Trash2 className="w-3.5 h-3.5" />
-						</button>
-					)}
-					<button
-						onClick={() => setCollapsed(true)}
-						title="Collapse panel"
-						className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-					>
-						<ChevronRight className="w-4 h-4" />
-					</button>
-				</div>
-			</header>
+			)}
 
 			<div
 				ref={transcriptRef}
@@ -1203,46 +1347,61 @@ export function StudioChat() {
 					// content sticks to the bottom or leaves the user where they are.
 					atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
 				}}
-				className="flex-1 overflow-y-auto px-4 py-4 space-y-3.5 scroll-smooth"
+				className={messages.length === 0
+					? 'flex-none px-4 pb-4'
+					: 'flex-1 overflow-y-auto px-4 py-4 scroll-smooth'}
 			>
-				{messages.length === 0 && <EmptyHint />}
-				{messages.map((m, i) => (
-					<MessageBubble
-					key={i}
-					m={m}
-					streaming={streaming && i === messages.length - 1 && m.role === 'assistant'}
-					onCopy={m.role === 'assistant' && m.content ? () => copyMessage(m.content) : undefined}
-					onRegenerate={m.role === 'assistant' && !streaming && i > 0 && messages[i - 1]?.role === 'user' ? () => regenerate(i) : undefined}
-					onSpeak={m.role === 'assistant' && m.content && typeof window !== 'undefined' && 'speechSynthesis' in window ? () => toggleSpeak(i, m.content) : undefined}
-					isSpeaking={speakingIdx === i}
-					onToolApprove={handleToolApprove}
-				/>
-				))}
+				{messages.length === 0 ? (
+					// Empty state — the greeting hero sits above the composer. In the
+					// docked (3-panel app) chat we DON'T print the "Good morning, …"
+					// hero + spiral icon; the app opener already grounds the convo.
+					!docked ? (
+						<div className="max-w-[640px] mx-auto w-full">
+							<EmptyHint />
+						</div>
+					) : null
+				) : (
+					<div className="space-y-3.5">
+						{messages.map((m, i) => (
+							<MessageBubble
+							key={i}
+							m={m}
+							streaming={streaming && i === messages.length - 1 && m.role === 'assistant'}
+							onCopy={m.role === 'assistant' && m.content ? () => copyMessage(m.content) : undefined}
+							onRegenerate={m.role === 'assistant' && !streaming && i > 0 && messages[i - 1]?.role === 'user' ? () => regenerate(i) : undefined}
+							onSpeak={m.role === 'assistant' && m.content && typeof window !== 'undefined' && 'speechSynthesis' in window ? () => toggleSpeak(i, m.content) : undefined}
+							isSpeaking={speakingIdx === i}
+							onToolApprove={handleToolApprove}
+						/>
+						))}
+					</div>
+				)}
 			</div>
 
-			<footer className="relative z-30 border-t border-slate-200/70 p-3 flex-shrink-0 bg-white/60 backdrop-blur-sm">
+			<footer className="relative z-30 flex-shrink-0 px-4 pt-1 pb-4">
+				<div className="w-full mx-auto max-w-[640px]">
 				{/* Queued messages. Shows the FIFO list of turns waiting
 				    for the current stream to finish. Each row is
 				    clickable to remove from the queue. Hidden when empty. */}
 				{messageQueue.length > 0 && (
 					<div className="mb-2 px-0.5 flex flex-col gap-1">
-						<div className="text-[10px] uppercase tracking-wider text-amber-700 font-semibold flex items-center gap-1">
-							<span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+						<div className="text-[10px] uppercase tracking-wider text-gold-700 font-semibold flex items-center gap-1">
+							<span className="w-1.5 h-1.5 rounded-full bg-gold-500 animate-pulse" />
 							{messageQueue.length} message{messageQueue.length === 1 ? '' : 's'} queued
 						</div>
 						{messageQueue.map((q, i) => (
 							<div
 								key={i}
-								className="flex items-center gap-1.5 text-[11px] bg-amber-50/70 border border-amber-200/60 rounded-lg px-2 py-1"
+								className="flex items-center gap-1.5 text-[11px] bg-gold-50/70 border border-gold-200/60 rounded-lg px-2 py-1"
 							>
-								<span className="flex-1 truncate text-amber-900">{q.text}</span>
+								<span className="flex-1 truncate text-gold-900">{q.text}</span>
 								{q.attachments.length > 0 && (
-									<span className="text-[10px] text-amber-700 font-mono">+{q.attachments.length}</span>
+									<span className="text-[10px] text-gold-700 font-mono">+{q.attachments.length}</span>
 								)}
 								<button
 									type="button"
 									onClick={() => setMessageQueue((arr) => arr.filter((_, idx) => idx !== i))}
-									className="text-amber-600 hover:text-rose-500 transition-colors"
+									className="text-gold-600 hover:text-rose-500 transition-colors"
 									title="Cancel this queued message"
 								>
 									<X className="w-3 h-3" />
@@ -1266,11 +1425,11 @@ export function StudioChat() {
 							const isFreeform = !pickedTarget.affordances || pickedTarget.affordances.length === 0;
 							const chipCls = isFreeform
 								? 'inline-flex items-center gap-1.5 text-[11px] bg-sky-50 border border-sky-200 rounded-full pl-2 pr-1 py-0.5'
-								: 'inline-flex items-center gap-1.5 text-[11px] bg-emerald-50 border border-emerald-200 rounded-full pl-2 pr-1 py-0.5';
-							const iconCls   = isFreeform ? 'w-3 h-3 text-sky-600 flex-shrink-0'      : 'w-3 h-3 text-emerald-600 flex-shrink-0';
-							const kindCls   = isFreeform ? 'text-sky-700 font-medium'                : 'text-emerald-700 font-medium';
-							const labelCls  = isFreeform ? 'text-sky-800 max-w-[260px] truncate'     : 'text-emerald-800 max-w-[260px] truncate';
-							const closeCls  = isFreeform ? 'text-sky-700/70 hover:text-rose-600 transition-colors flex-shrink-0' : 'text-emerald-700/70 hover:text-rose-600 transition-colors flex-shrink-0';
+								: 'inline-flex items-center gap-1.5 text-[11px] bg-gold-50 border border-gold-200 rounded-full pl-2 pr-1 py-0.5';
+							const iconCls   = isFreeform ? 'w-3 h-3 text-sky-600 flex-shrink-0'      : 'w-3 h-3 text-gold-600 flex-shrink-0';
+							const kindCls   = isFreeform ? 'text-sky-700 font-medium'                : 'text-gold-700 font-medium';
+							const labelCls  = isFreeform ? 'text-sky-800 max-w-[260px] truncate'     : 'text-gold-800 max-w-[260px] truncate';
+							const closeCls  = isFreeform ? 'text-sky-700/70 hover:text-rose-600 transition-colors flex-shrink-0' : 'text-gold-700/70 hover:text-rose-600 transition-colors flex-shrink-0';
 							return (
 								<div className={chipCls}>
 									<Crosshair className={iconCls} />
@@ -1297,20 +1456,20 @@ export function StudioChat() {
 						{attachments.map((a, i) => (
 							<div
 								key={i}
-								className="inline-flex items-center gap-1.5 text-[11px] bg-slate-100 border border-slate-200 rounded-full pl-2 pr-1 py-0.5"
+								className="inline-flex items-center gap-1.5 text-[11px] bg-muted border border-border rounded-full pl-2 pr-1 py-0.5"
 								title={`${a.name} · ${(a.sizeBytes / 1024).toFixed(1)} KB`}
 							>
 								{a.kind === 'image'
 									? <ImageIcon className="w-3 h-3 text-sky-600" />
 									: a.kind === 'document'
 										? <FileText className="w-3 h-3 text-violet-600" />
-										: <FileText className="w-3 h-3 text-slate-600" />}
+										: <FileText className="w-3 h-3 text-muted-foreground" />}
 								<span className="font-medium max-w-[120px] truncate">{a.name}</span>
 								<span className="opacity-60">{Math.round(a.sizeBytes / 1024)}KB</span>
 								<button
 									type="button"
 									onClick={() => removeAttachment(i)}
-									className="text-slate-400 hover:text-rose-500 transition-colors"
+									className="text-muted-foreground hover:text-rose-500 transition-colors"
 									title="Remove"
 								>
 									<X className="w-3 h-3" />
@@ -1322,9 +1481,20 @@ export function StudioChat() {
 						)}
 					</div>
 				)}
+				{/* The composer card — one rounded white card (claude style):
+				    chromeless textarea on top, then a bottom action row laid
+				    out via flex order: ⊕ tools + ⌖ picker left, model picker
+				    + stop + round black send right. */}
 				<form
 					onSubmit={(e) => { e.preventDefault(); send(); }}
-					className="flex items-center gap-1.5"
+					className={[
+						'flex flex-wrap items-center gap-1 rounded-2xl border bg-card px-2.5 pt-2 pb-2 transition-all duration-150',
+						// Elegant focus: a soft sage ring + lift, never a hard black
+						// outline. (Was focus-within:border-foreground/25 — near-black.)
+						dragOver
+							? 'border-coral border-dashed ring-2 ring-coral/20'
+							: 'border-border shadow-sm focus-within:border-ring focus-within:ring-4 focus-within:ring-ring/15 focus-within:shadow-md',
+					].join(' ')}
 				>
 					<input
 						ref={fileInputRef}
@@ -1341,31 +1511,34 @@ export function StudioChat() {
 					    floating menu with the three per-turn toggles
 					    (Search / Deep research / Think). Active-toggle
 					    count surfaces as a tiny badge on the button. */}
-					<div ref={toolsAnchorRef} className="relative flex-shrink-0">
+					<div ref={toolsAnchorRef} className="relative flex-shrink-0 order-1">
 						<button
 							type="button"
 							onClick={() => setToolsOpen((v) => !v)}
 							disabled={streaming}
 							title="Tools — Search / Deep research / Think"
+							aria-label="Tools and options"
+							aria-expanded={toolsOpen}
+							aria-haspopup="menu"
 							className={[
-								'relative h-[42px] w-[42px] flex items-center justify-center rounded-xl border transition-all',
+								'relative h-8 w-8 flex items-center justify-center rounded-full transition-all',
 								toolsOpen
-									? 'bg-slate-900 text-white border-slate-900'
+									? 'bg-foreground text-background'
 									: activeToolCount > 0
-										? 'bg-white text-emerald-700 border-emerald-300 hover:border-emerald-400'
-										: 'bg-white text-slate-500 border-slate-200 hover:text-slate-700 hover:border-slate-300',
+										? 'text-gold-700 bg-gold-50 hover:bg-gold-100'
+										: 'text-muted-foreground hover:text-foreground hover:bg-muted',
 								streaming ? 'opacity-50 cursor-not-allowed' : '',
 							].join(' ')}
 						>
 							<Plus className={['w-4 h-4 transition-transform', toolsOpen ? 'rotate-45' : ''].join(' ')} />
 							{activeToolCount > 0 && !toolsOpen && (
-								<span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-emerald-500 text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-white">
+								<span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-gold-500 text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-white">
 									{activeToolCount}
 								</span>
 							)}
 						</button>
 						{toolsOpen && (
-							<div className="absolute bottom-full mb-2 left-0 z-50 min-w-[180px] p-1 rounded-xl border border-slate-200 bg-white shadow-lg shadow-slate-200/40">
+							<div className="absolute bottom-full mb-2 left-0 z-50 min-w-[180px] p-1 rounded-xl border border-border bg-popover shadow-lg shadow-foreground/5">
 								<button
 									type="button"
 									onClick={() => setMode(mode === 'search' ? '' : 'search')}
@@ -1373,10 +1546,10 @@ export function StudioChat() {
 										'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] transition-colors',
 										mode === 'search'
 											? 'bg-sky-50 text-sky-700'
-											: 'text-slate-700 hover:bg-slate-50',
+											: 'text-foreground hover:bg-muted/60',
 									].join(' ')}
 								>
-									<Globe className={['w-3.5 h-3.5', mode === 'search' ? 'text-sky-600' : 'text-slate-500'].join(' ')} />
+									<Globe className={['w-3.5 h-3.5', mode === 'search' ? 'text-sky-600' : 'text-muted-foreground'].join(' ')} />
 									<span className="font-medium flex-1 text-left">Search the web</span>
 									{mode === 'search' && <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />}
 								</button>
@@ -1387,39 +1560,39 @@ export function StudioChat() {
 										'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] transition-colors',
 										mode === 'deep_research'
 											? 'bg-violet-50 text-violet-700'
-											: 'text-slate-700 hover:bg-slate-50',
+											: 'text-foreground hover:bg-muted/60',
 									].join(' ')}
 								>
-									<Telescope className={['w-3.5 h-3.5', mode === 'deep_research' ? 'text-violet-600' : 'text-slate-500'].join(' ')} />
+									<Telescope className={['w-3.5 h-3.5', mode === 'deep_research' ? 'text-violet-600' : 'text-muted-foreground'].join(' ')} />
 									<span className="font-medium flex-1 text-left">Deep research</span>
 									{mode === 'deep_research' && <span className="w-1.5 h-1.5 rounded-full bg-violet-500" />}
 								</button>
-								<div className="h-px bg-slate-100 my-1 mx-2" />
+								<div className="h-px bg-muted my-1 mx-2" />
 								<button
 									type="button"
 									onClick={() => setThink((v) => !v)}
 									className={[
 										'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] transition-colors',
 										think
-											? 'bg-amber-50 text-amber-700'
-											: 'text-slate-700 hover:bg-slate-50',
+											? 'bg-gold-50 text-gold-700'
+											: 'text-foreground hover:bg-muted/60',
 									].join(' ')}
 								>
-									<Brain className={['w-3.5 h-3.5', think ? 'text-amber-600' : 'text-slate-500'].join(' ')} />
+									<Brain className={['w-3.5 h-3.5', think ? 'text-gold-600' : 'text-muted-foreground'].join(' ')} />
 									<span className="font-medium flex-1 text-left">Show thinking</span>
-									{think && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
+									{think && <span className="w-1.5 h-1.5 rounded-full bg-gold-500" />}
 								</button>
 								{/* Agent + Persona pickers moved to the header — they're
 								    persistent context (sticky across turns), not per-turn
 								    tool-forcing toggles. See the chip row beside the model
 								    select in the header subtitle. */}
-								<div className="h-px bg-slate-100 my-1 mx-2" />
+								<div className="h-px bg-muted my-1 mx-2" />
 								<button
 									type="button"
 									onClick={() => fileInputRef.current?.click()}
-									className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] text-slate-700 hover:bg-slate-50 transition-colors"
+									className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] text-foreground hover:bg-muted/60 transition-colors"
 								>
-									<Paperclip className="w-3.5 h-3.5 text-slate-500" />
+									<Paperclip className="w-3.5 h-3.5 text-muted-foreground" />
 									<span className="font-medium flex-1 text-left">Attach file</span>
 								</button>
 								{voiceSupported && (
@@ -1433,10 +1606,10 @@ export function StudioChat() {
 											'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] transition-colors',
 											isListening
 												? 'bg-rose-50 text-rose-700'
-												: 'text-slate-700 hover:bg-slate-50',
+												: 'text-foreground hover:bg-muted/60',
 										].join(' ')}
 									>
-										<Mic className={['w-3.5 h-3.5', isListening ? 'text-rose-600' : 'text-slate-500'].join(' ')} />
+										<Mic className={['w-3.5 h-3.5', isListening ? 'text-rose-600' : 'text-muted-foreground'].join(' ')} />
 										<span className="font-medium flex-1 text-left">
 											{isListening ? 'Stop dictating' : 'Voice input'}
 										</span>
@@ -1446,8 +1619,9 @@ export function StudioChat() {
 							</div>
 						)}
 					</div>
-					<div className="flex-1 relative group">
+					<div className="order-first w-full relative group">
 						<textarea
+							aria-label="Message the assistant"
 							value={input}
 							onChange={(e) => {
 								const v = e.target.value;
@@ -1534,23 +1708,21 @@ export function StudioChat() {
 							}
 							rows={1}
 							className={[
-								'w-full px-3.5 py-2.5 text-sm rounded-xl border bg-white shadow-sm focus:outline-none focus:ring-4 focus:ring-emerald-400/15 focus:border-emerald-400 resize-none max-h-32 transition-all placeholder:text-slate-400',
-								dragOver
-									? 'border-emerald-400 border-dashed bg-emerald-50/40 placeholder:text-emerald-700'
-									: 'border-slate-200',
+								'w-full px-2 pt-1.5 pb-1 text-[15px] leading-relaxed bg-transparent border-0 outline-none shadow-none focus:outline-none focus:ring-0 focus-visible:outline-none resize-none max-h-48 transition-all',
+								dragOver ? 'placeholder:text-coral' : 'placeholder:text-muted-foreground',
 							].join(' ')}
-							style={{ minHeight: '42px' }}
+							style={{ minHeight: '64px', outline: 'none', boxShadow: 'none' }}
 						/>
 						{slashSuggestions.length > 0 && (
-							<div className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-slate-200 rounded-xl shadow-lg z-50 max-h-48 overflow-y-auto">
+							<div className="absolute bottom-full left-0 right-0 mb-1 bg-popover border border-border rounded-xl shadow-lg z-50 max-h-48 overflow-y-auto">
 								{slashSuggestions.map((s, i) => (
 									<button
 										key={i}
 										type="button"
 										className={[
-											'w-full text-left px-3 py-1.5 text-[12px] font-mono hover:bg-slate-50 transition-colors',
+											'w-full text-left px-3 py-1.5 text-[12px] font-mono hover:bg-muted/60 transition-colors',
 											i === 0 && i === slashSuggestions.length - 1 ? 'rounded-xl' : i === 0 ? 'rounded-t-xl' : i === slashSuggestions.length - 1 ? 'rounded-b-xl' : '',
-											i === slashIdx ? 'bg-emerald-50' : '',
+											i === slashIdx ? 'bg-gold-50' : '',
 										].join(' ')}
 										onMouseDown={(e) => {
 											e.preventDefault();
@@ -1558,9 +1730,9 @@ export function StudioChat() {
 											setSlashSuggestions([]);
 										}}
 									>
-										<span className="text-emerald-700 font-semibold">{s.label}</span>
+										<span className="text-gold-700 font-semibold">{s.label}</span>
 										{s.label !== s.template && (
-											<span className="text-slate-400 ml-2 truncate">{s.template.slice(s.label.length)}</span>
+											<span className="text-muted-foreground ml-2 truncate">{s.template.slice(s.label.length)}</span>
 										)}
 									</button>
 								))}
@@ -1572,9 +1744,10 @@ export function StudioChat() {
 							type="button"
 							onClick={() => abortRef.current?.abort()}
 							title="Stop current turn"
-							className="h-[42px] w-[42px] flex items-center justify-center rounded-xl flex-shrink-0 bg-rose-500 text-white hover:bg-rose-600 active:scale-95 shadow-sm shadow-rose-200 transition-all"
+							aria-label="Stop generating"
+							className="order-5 h-8 w-8 flex items-center justify-center rounded-full flex-shrink-0 bg-rose-500 text-white hover:bg-rose-600 active:scale-95 shadow-sm shadow-rose-200 transition-all"
 						>
-							<Square className="w-3.5 h-3.5 fill-current" />
+							<Square className="w-3 h-3 fill-current" />
 						</button>
 					)}
 					{/* Mouse-picker — arms StudioPicker so the user can
@@ -1585,42 +1758,61 @@ export function StudioChat() {
 						type="button"
 						onClick={() => (picking ? stopStudioPicking() : startStudioPicking())}
 						title={picking ? 'Picking — click anything · Esc to cancel' : 'Pick a UI element on the page'}
+						aria-label={picking ? 'Stop picking a UI element' : 'Pick a UI element on the page'}
+						aria-pressed={picking}
 						className={[
-							'h-[42px] w-[42px] flex items-center justify-center rounded-xl flex-shrink-0 border transition-all active:scale-95',
+							'order-2 h-8 w-8 flex items-center justify-center rounded-full flex-shrink-0 transition-all active:scale-95',
 							picking
-								? 'border-emerald-300 bg-emerald-50 text-emerald-700 ring-1 ring-emerald-300'
+								? 'bg-gold-50 text-gold-700 ring-1 ring-gold-300'
 								: pickedTarget
-									? 'border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50'
-									: 'border-slate-200 bg-white text-slate-500 hover:text-slate-700 hover:bg-slate-50',
+									? 'text-gold-700 hover:bg-gold-50'
+									: 'text-muted-foreground hover:text-foreground hover:bg-muted',
 						].join(' ')}
 					>
 						<Crosshair className="w-4 h-4" />
 					</button>
+					{/* Right-side group: model picker (moved from the header)
+					    then the round black send. */}
+					<div className="order-3 flex-1 min-w-[8px]" />
+					<div className="order-4 flex-shrink-0">
+						<ModelChip
+							streaming={streaming}
+							models={models}
+							model={model}
+							setModel={setModel}
+						/>
+					</div>
 					<button
 						type="submit"
 						disabled={!input.trim()}
+						aria-label={streaming ? 'Queue message' : 'Send message'}
 						title={streaming
 							? `Queue this message (sends when current turn finishes)${messageQueue.length > 0 ? ` — ${messageQueue.length} already queued` : ''}`
 							: 'Send'}
 						className={[
-							'relative h-[42px] w-[42px] flex items-center justify-center rounded-xl transition-all flex-shrink-0',
+							'order-6 relative h-8 w-8 flex items-center justify-center rounded-full transition-all flex-shrink-0',
 							!input.trim()
-								? 'bg-slate-100 text-slate-300 cursor-not-allowed'
-								: streaming
-									? 'bg-gradient-to-br from-sky-500 to-sky-600 text-white hover:from-sky-400 hover:to-sky-500 active:scale-95 shadow-sm shadow-sky-200'
-									: 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white hover:from-emerald-400 hover:to-emerald-500 active:scale-95 shadow-sm shadow-emerald-200',
+								? 'bg-muted text-muted-foreground/50 cursor-not-allowed'
+								: 'bg-primary text-primary-foreground hover:bg-primary/85 active:scale-95 shadow-sm',
 						].join(' ')}
 					>
-						<Send className="w-4 h-4" />
+						<Send className="w-3.5 h-3.5" />
 						{messageQueue.length > 0 && (
-							<span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-white">
+							<span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-gold-500 text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-white">
 								{messageQueue.length}
 							</span>
 						)}
 					</button>
 				</form>
+				{/* Suggestions + live digest sit BELOW the composer (claude.ai
+				    style) so the greeting+box are the centered focal point and
+				    nothing tall opens a gap above the box. */}
+				{messages.length === 0 && (
+					<div className="mt-3"><ChatEmptyState /></div>
+				)}
+				</div>
 			</footer>
-		</aside>
+		</div>
 	);
 }
 
@@ -1650,7 +1842,7 @@ const MessageBubble = memo(function MessageBubble({
 				'w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm',
 				isUser
 					? 'bg-gradient-to-br from-slate-300 to-slate-400 text-white'
-					: 'bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-emerald-100',
+					: 'bg-gradient-to-br from-gold-400 to-gold-600 text-white shadow-gold-100',
 			].join(' ')}>
 				{isUser ? <User className="w-3.5 h-3.5" /> : <Bot className="w-3.5 h-3.5" />}
 			</div>
@@ -1664,6 +1856,19 @@ const MessageBubble = memo(function MessageBubble({
 				    card stays anchored and the reveal doesn't get shoved around
 				    (the "flipping" the user saw when text rendered above it). */}
 				{!isUser && m.composed && <AssemblyCard draft={m.composed} />}
+				{/* App surface inline — the app's page (stats/tables/forms) lives
+				    in the conversation. Set by the open-app bridge + show_app_surface. */}
+				{!isUser && m.appSurface && (
+					<div className="mb-2"><AppSurfaceCard app={m.appSurface.app} surface={m.appSurface.surface} /></div>
+				)}
+				{/* Entity cards — observability tool results (apps, workflow
+				    health, runs) render as inline cards with the same state
+				    dots + deep links the old middle pane had, so "how are my
+				    apps doing?" answers visually inside the conversation. */}
+				{!isUser && m.tools && m.tools.map((t, i) => {
+					const card = entityCardFor(t);
+					return card ? <div key={`ec-${t.id || i}`} className="mb-2">{card}</div> : null;
+				})}
 				{/* Text bubble — skip entirely when there's nothing to show (an
 				    empty bubble under a composed card reads as a stray box). */}
 				{(m.content || (streaming && !m.composed)) && (
@@ -1671,8 +1876,8 @@ const MessageBubble = memo(function MessageBubble({
 						'inline-block max-w-full text-[13.5px] rounded-2xl px-3.5 py-2.5 leading-relaxed text-left shadow-sm',
 						m.composed ? 'mt-2' : '',
 						isUser
-							? 'bg-slate-900 text-white rounded-tr-md'
-							: 'bg-white text-slate-800 border border-slate-200/70 rounded-tl-md',
+							? 'bg-primary text-primary-foreground rounded-tr-md'
+							: 'bg-card text-foreground border border-border rounded-tl-md',
 					].join(' ')}>
 						{m.content ? (
 							// User turns are short and rarely markdown-rich;
@@ -1686,18 +1891,31 @@ const MessageBubble = memo(function MessageBubble({
 							)
 						) : (
 							<span className="inline-flex gap-1 items-center">
-								<span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
-								<span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
-								<span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" />
+								<span className="w-1.5 h-1.5 bg-gold-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
+								<span className="w-1.5 h-1.5 bg-gold-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
+								<span className="w-1.5 h-1.5 bg-gold-400 rounded-full animate-bounce" />
 							</span>
 						)}
+					</div>
+				)}
+				{/* Agent-led opener chips — the top of a progressive drill-down.
+				    Each fires a grounded studio:ask turn. */}
+				{!isUser && !streaming && m.chips && m.chips.length > 0 && (
+					<div className="mt-2 flex flex-wrap gap-1.5">
+						{m.chips.map((c) => (
+							<button key={c.label}
+								onClick={() => window.dispatchEvent(new CustomEvent('studio:ask', { detail: { prompt: c.prompt, autosend: true, context: c.context } }))}
+								className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-card text-[12px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+								{c.label}
+							</button>
+						))}
 					</div>
 				)}
 				{!isUser && !streaming && m.content && connectHintFor(m.content) && (
 					<div className="mt-1.5">
 						<Link
 							to={CONNECT_ROUTE[connectHintFor(m.content)!]}
-							className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 text-[12px] hover:bg-amber-100 transition-colors"
+							className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gold-300 bg-gold-50 text-gold-800 text-[12px] hover:bg-gold-100 transition-colors"
 						>
 							<Lock className="w-3.5 h-3.5" />
 							Connect {connectHintFor(m.content) === 'google' ? 'Google' : 'Microsoft'} to continue
@@ -1719,7 +1937,7 @@ const MessageBubble = memo(function MessageBubble({
 				)}
 				{!isUser && m.content && !streaming && (
 					<div
-						className="mt-0.5 text-[10px] text-slate-400 tabular-nums"
+						className="mt-0.5 text-[10px] text-muted-foreground tabular-nums"
 						title="estimated output tokens (~4 chars/token)"
 					>
 						{Math.max(1, Math.round(m.content.length / 4))} tokens
@@ -1742,8 +1960,8 @@ const MessageBubble = memo(function MessageBubble({
 								className={[
 									'p-1 rounded text-[10px]',
 									copied
-										? 'text-emerald-700 bg-emerald-50'
-										: 'text-slate-400 hover:text-slate-700 hover:bg-slate-100',
+										? 'text-gold-700 bg-gold-50'
+										: 'text-muted-foreground hover:text-foreground hover:bg-muted',
 								].join(' ')}
 							>
 								<Copy className="w-3 h-3" />
@@ -1754,7 +1972,7 @@ const MessageBubble = memo(function MessageBubble({
 								type="button"
 								onClick={onRegenerate}
 								title="Regenerate with current model + toggles"
-								className="p-1 rounded text-[10px] text-slate-400 hover:text-emerald-700 hover:bg-emerald-50"
+								className="p-1 rounded text-[10px] text-muted-foreground hover:text-gold-700 hover:bg-gold-50"
 							>
 								<RotateCcw className="w-3 h-3" />
 							</button>
@@ -1768,7 +1986,7 @@ const MessageBubble = memo(function MessageBubble({
 									'p-1 rounded text-[10px]',
 									isSpeaking
 										? 'text-sky-700 bg-sky-50'
-										: 'text-slate-400 hover:text-sky-700 hover:bg-sky-50',
+										: 'text-muted-foreground hover:text-sky-700 hover:bg-sky-50',
 								].join(' ')}
 							>
 								<Volume2 className="w-3 h-3" />
@@ -1788,6 +2006,8 @@ const MessageBubble = memo(function MessageBubble({
 	a.m.content === b.m.content &&
 	a.m.tools === b.m.tools &&
 	a.m.composed === b.m.composed &&
+	a.m.appSurface === b.m.appSurface &&
+	a.m.chips === b.m.chips &&
 	a.streaming === b.streaming &&
 	a.isSpeaking === b.isSpeaking)
 
@@ -1811,7 +2031,7 @@ function ThinkingBlock({ thinking, done }: { thinking: string; done: boolean }) 
 			<button
 				type="button"
 				onClick={() => setOpen((v) => !v)}
-				className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50/80 hover:bg-amber-100/80 border border-amber-200 rounded-full px-2 py-0.5 transition-colors"
+				className="inline-flex items-center gap-1 text-[11px] text-gold-700 bg-gold-50/80 hover:bg-gold-100/80 border border-gold-200 rounded-full px-2 py-0.5 transition-colors"
 			>
 				<Brain className="w-3 h-3" />
 				<span>{label}</span>
@@ -1820,7 +2040,7 @@ function ThinkingBlock({ thinking, done }: { thinking: string; done: boolean }) 
 				/>
 			</button>
 			{open && (
-				<div className="mt-1.5 px-3 py-2 text-[12px] leading-relaxed text-slate-600 bg-amber-50/40 border border-amber-100 rounded-xl whitespace-pre-wrap break-words">
+				<div className="mt-1.5 px-3 py-2 text-[12px] leading-relaxed text-muted-foreground bg-gold-50/40 border border-gold-100 rounded-xl whitespace-pre-wrap break-words">
 					{thinking || (
 						<span className="opacity-50 italic">(no content yet)</span>
 					)}
@@ -1854,11 +2074,11 @@ function ToolChip({ t, onApprove }: { t: ToolCall; onApprove?: (approved: boolea
 				<div className={[
 					'text-[11px] inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border max-w-full',
 					t.approvalRequired
-						? 'bg-amber-50/80 border-amber-300 text-amber-900'
+						? 'bg-gold-50/80 border-gold-300 text-gold-900'
 						: t.pending
 							? 'bg-sky-50/80 border-sky-200 text-sky-800'
 							: t.ok
-								? 'bg-emerald-50/80 border-emerald-200 text-emerald-800'
+								? 'bg-gold-50/80 border-gold-200 text-gold-800'
 								: 'bg-rose-50/80 border-rose-200 text-rose-800',
 				].join(' ')}>
 					{t.approvalRequired
@@ -1883,7 +2103,7 @@ function ToolChip({ t, onApprove }: { t: ToolCall; onApprove?: (approved: boolea
 				{t.link && (
 					<Link
 						to={t.link.to}
-						className="text-[11px] inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50 transition-colors"
+						className="text-[11px] inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-popover border border-gold-300 text-gold-700 hover:bg-gold-50 transition-colors"
 					>
 						{t.link.label} →
 					</Link>
@@ -1892,20 +2112,20 @@ function ToolChip({ t, onApprove }: { t: ToolCall; onApprove?: (approved: boolea
 					<>
 						<button
 							onClick={() => onApprove(true)}
-							className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 transition-colors font-medium"
+							className="text-[11px] px-2 py-0.5 rounded-full bg-gold-600 text-white hover:bg-gold-700 transition-colors font-medium"
 						>
 							Allow
 						</button>
 						<button
 							onClick={() => onApprove(true, true)}
 							title={`Always allow ${t.name} without asking (revoke later in settings)`}
-							className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-700 hover:bg-emerald-100 transition-colors font-medium"
+							className="text-[11px] px-2 py-0.5 rounded-full bg-gold-50 border border-gold-300 text-gold-700 hover:bg-gold-100 transition-colors font-medium"
 						>
 							Always
 						</button>
 						<button
 							onClick={() => onApprove(false)}
-							className="text-[11px] px-2 py-0.5 rounded-full bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors"
+							className="text-[11px] px-2 py-0.5 rounded-full bg-popover border border-border text-foreground hover:bg-muted/60 transition-colors"
 						>
 							Deny
 						</button>
@@ -1914,18 +2134,18 @@ function ToolChip({ t, onApprove }: { t: ToolCall; onApprove?: (approved: boolea
 			</div>
 			{/* Args JSON — shown on demand after a completed tool call */}
 			{argsOpen && hasArgs && (
-				<div className="ml-5 mt-0.5 p-2 rounded-md bg-slate-50 border border-slate-200 text-[10px] font-mono whitespace-pre-wrap break-all max-h-40 overflow-y-auto">
+				<div className="ml-5 mt-0.5 p-2 rounded-md bg-muted/60 border border-border text-[10px] font-mono whitespace-pre-wrap break-all max-h-40 overflow-y-auto">
 					{JSON.stringify(t.args, null, 2)}
 				</div>
 			)}
 			{/* Args shown inline when approval is required (user needs to see what will run) */}
 			{t.approvalRequired && hasArgs && (
-				<div className="ml-5 mt-0.5 p-2 rounded-md bg-amber-50 border border-amber-200 text-[10px] font-mono whitespace-pre-wrap break-all max-h-40 overflow-y-auto">
+				<div className="ml-5 mt-0.5 p-2 rounded-md bg-gold-50 border border-gold-200 text-[10px] font-mono whitespace-pre-wrap break-all max-h-40 overflow-y-auto">
 					{JSON.stringify(t.args, null, 2)}
 				</div>
 			)}
 			{t.resultSummary && !t.pending && (
-				<div className="text-[10px] text-slate-500 pl-5 truncate max-w-[280px]">
+				<div className="text-[10px] text-muted-foreground pl-5 truncate max-w-[280px]">
 					{t.resultSummary}
 				</div>
 			)}
@@ -1945,11 +2165,11 @@ function connectHintFor(text: string): ('google' | 'microsoft') | null {
 	return null;
 }
 
-// EmptyHint — delegates to the context-aware empty state (live digest
-// of failing/running workflows + drafts, page-aware prompt chips,
-// capability-gated starters). See chat/ChatEmptyState.tsx.
+// EmptyHint — the greeting block above the composer (claude home).
+// The digest + prompt pills render separately BELOW the composer —
+// see the ChatEmptyState block after the footer.
 function EmptyHint() {
-	return <ChatEmptyState />;
+	return <ChatHero />;
 }
 
 
@@ -1980,6 +2200,7 @@ function estimateCost(tokens: number, modelId: string): number {
 // "auto: <model>" pill. Avoids the full display name overflowing.
 function modelShortLabel(id: string): string {
 	if (id === 'claude-code-opus') return 'Opus';
+	if (id === 'claude-code-sonnet') return 'Sonnet';
 	if (id === 'kvrun-gemma4') return 'Gemma4';
 	if (id === 'kvrun-minimax') return 'MiniMax';
 	if (id === 'claude-haiku') return 'Haiku';
@@ -2041,20 +2262,20 @@ function ModelChip({
 				onClick={() => setOpen((v) => !v)}
 				disabled={streaming}
 				className={[
-					'inline-flex items-center gap-1 px-1.5 py-px rounded-full text-[10.5px] border transition-colors',
+					'inline-flex items-center gap-1 pl-1.5 pr-1 py-0.5 rounded-full border text-[11px] transition-colors',
 					open
-						? 'bg-slate-100 border-slate-300 text-slate-800'
-						: 'bg-white/60 border-slate-200/80 text-slate-600 hover:bg-slate-50 hover:border-slate-300',
+						? 'bg-muted border-foreground/25 text-foreground'
+						: 'bg-card border-border text-foreground/70 hover:text-foreground hover:border-foreground/25',
 					streaming ? 'opacity-50 cursor-not-allowed' : '',
 				].join(' ')}
-				title="LLM backend"
+				title="Choose the AI model"
 			>
-				<Bot className="w-2.5 h-2.5 flex-shrink-0" />
-				<span className="truncate max-w-[110px]">{current?.display_name || model || 'model'}</span>
+				<Cpu className="w-3 h-3 flex-shrink-0 opacity-70" />
+				<span className="truncate max-w-[120px]">{current ? modelShortLabel(current.id) : (model || 'Model')}</span>
 				<ChevronDown className="w-2.5 h-2.5 flex-shrink-0 opacity-60" />
 			</button>
 			{open && (
-				<div className="absolute top-full left-0 mt-1 z-50 min-w-[180px] p-1 rounded-xl border border-slate-200 bg-white shadow-lg shadow-slate-200/40">
+				<div className="absolute bottom-full right-0 mb-1 z-50 min-w-[180px] p-1 rounded-xl border border-border bg-card shadow-lg shadow-foreground/5">
 					{models.map((m) => (
 						<button
 							key={m.id}
@@ -2062,12 +2283,12 @@ function ModelChip({
 							onClick={() => { setModel(m.id); setOpen(false); }}
 							className={[
 								'w-full text-left flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12px] transition-colors',
-								m.id === model ? 'bg-emerald-50 text-emerald-800' : 'text-slate-700 hover:bg-slate-50',
+								m.id === model ? 'bg-gold-50 text-gold-800' : 'text-foreground hover:bg-muted/60',
 							].join(' ')}
 						>
-							<Bot className={['w-3 h-3', m.id === model ? 'text-emerald-600' : 'text-slate-400'].join(' ')} />
+							<Bot className={['w-3 h-3', m.id === model ? 'text-gold-600' : 'text-muted-foreground'].join(' ')} />
 							<span className="font-medium flex-1">{m.display_name}</span>
-							{m.id === model && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+							{m.id === model && <span className="w-1.5 h-1.5 rounded-full bg-gold-500" />}
 						</button>
 					))}
 				</div>
@@ -2123,8 +2344,8 @@ function ContextIconButton({
 			case 'agent':   return 'text-violet-700  bg-violet-50  hover:bg-violet-100';
 			case 'persona': return 'text-fuchsia-700 bg-fuchsia-50 hover:bg-fuchsia-100';
 			default:        return open
-				? 'text-slate-800 bg-slate-100'
-				: 'text-slate-400 hover:text-slate-700 hover:bg-slate-100';
+				? 'text-foreground bg-muted'
+				: 'text-muted-foreground hover:text-foreground hover:bg-muted';
 		}
 	})();
 	const activeDot = (() => {
@@ -2159,7 +2380,7 @@ function ContextIconButton({
 				)}
 			</button>
 			{open && (
-				<div className="absolute top-full right-0 mt-1 z-50 w-[320px] max-h-[30rem] overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60">
+				<div className="absolute top-full right-0 mt-1 z-50 w-[320px] max-h-[30rem] overflow-y-auto rounded-xl border border-border bg-popover shadow-xl shadow-foreground/10">
 
 					{/* ── Active strip ── shows current selection +
 					    one-click clear. Always visible (rendered as
@@ -2168,13 +2389,13 @@ function ContextIconButton({
 						'flex items-center gap-2 px-3 py-2 border-b',
 						activeKind === 'agent'   ? 'bg-violet-50/70  border-violet-100'  :
 						activeKind === 'persona' ? 'bg-fuchsia-50/70 border-fuchsia-100' :
-						                           'bg-slate-50      border-slate-100',
+						                           'bg-muted/60      border-border/60',
 					].join(' ')}>
 						<div className={[
 							'w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0',
 							activeKind === 'agent'   ? 'bg-violet-100  text-violet-700'  :
 							activeKind === 'persona' ? 'bg-fuchsia-100 text-fuchsia-700' :
-							                           'bg-white border border-slate-200 text-slate-400',
+							                           'bg-popover border border-border text-muted-foreground',
 						].join(' ')}>
 							{currentPersona?.icon
 								? <span className="text-[14px] leading-none">{currentPersona.icon}</span>
@@ -2185,7 +2406,7 @@ function ContextIconButton({
 								'text-[12px] font-semibold truncate',
 								activeKind === 'agent'   ? 'text-violet-900'  :
 								activeKind === 'persona' ? 'text-fuchsia-900' :
-								                           'text-slate-700',
+								                           'text-foreground',
 							].join(' ')}>
 								{currentAgent
 									? (currentAgent.role || currentAgent.id)
@@ -2193,7 +2414,7 @@ function ContextIconButton({
 										? currentPersona.name
 										: 'Default — chat as you'}
 							</div>
-							<div className="text-[10.5px] text-slate-500 truncate">
+							<div className="text-[10.5px] text-muted-foreground truncate">
 								{currentAgent
 									? `agent · ${currentAgent.app || 'standalone'} · ${currentAgent.row_count} memories`
 									: currentPersona
@@ -2206,7 +2427,7 @@ function ContextIconButton({
 								type="button"
 								onClick={() => { selectAgent(''); selectPersona(''); setOpen(false); }}
 								title="Clear context — back to default"
-								className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-white/80 transition-colors"
+								className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-popover/80 transition-colors"
 							>
 								<X className="w-3.5 h-3.5" />
 							</button>
@@ -2221,11 +2442,11 @@ function ContextIconButton({
 								<div className="flex items-center gap-1.5 px-2.5 pt-2 pb-1">
 									<span className="w-0.5 h-3 rounded-full bg-violet-500" />
 									<span className="text-[10px] uppercase tracking-[0.08em] font-semibold text-violet-700">Talk to agent</span>
-									<span className="text-[10px] text-slate-400">grounds chat in agent's bank</span>
+									<span className="text-[10px] text-muted-foreground">grounds chat in agent's bank</span>
 								</div>
 								{agentGroups.map((g) => (
 									<div key={g.label} className="mb-1">
-										<div className="px-2.5 pt-1 pb-0.5 text-[9.5px] uppercase tracking-wider text-slate-400">
+										<div className="px-2.5 pt-1 pb-0.5 text-[9.5px] uppercase tracking-wider text-muted-foreground">
 											{g.label}
 										</div>
 										{g.rows.map((a) => {
@@ -2238,20 +2459,20 @@ function ContextIconButton({
 													onClick={() => { selectAgent(a.id); setOpen(false); }}
 													className={[
 														'w-full text-left flex items-start gap-2 px-2 py-1.5 rounded-lg transition-colors',
-														selected ? 'bg-violet-50' : 'hover:bg-slate-50',
+														selected ? 'bg-violet-50' : 'hover:bg-muted/60',
 													].join(' ')}
 												>
 													<span className={[
 														'w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5',
 														selected
 															? 'bg-violet-200 text-violet-800'
-															: 'bg-slate-100 text-slate-500',
+															: 'bg-muted text-muted-foreground',
 													].join(' ')}>{initial}</span>
 													<div className="flex-1 min-w-0">
 														<div className="flex items-center gap-1.5">
 															<span className={[
 																'text-[12px] font-medium truncate',
-																selected ? 'text-violet-900' : 'text-slate-800',
+																selected ? 'text-violet-900' : 'text-foreground',
 															].join(' ')}>
 																{a.role || a.id}
 															</span>
@@ -2259,11 +2480,11 @@ function ContextIconButton({
 																'ml-auto text-[9.5px] font-mono px-1.5 py-px rounded-full flex-shrink-0',
 																selected
 																	? 'bg-violet-100 text-violet-700'
-																	: 'bg-slate-100 text-slate-500',
+																	: 'bg-muted text-muted-foreground',
 															].join(' ')}>{a.row_count}</span>
 														</div>
 														{a.description && (
-															<div className="text-[10.5px] text-slate-500 leading-snug line-clamp-2 mt-0.5">
+															<div className="text-[10.5px] text-muted-foreground leading-snug line-clamp-2 mt-0.5">
 																{a.description}
 															</div>
 														)}
@@ -2279,11 +2500,11 @@ function ContextIconButton({
 						{/* ── Personas section ── */}
 						{personas.length > 0 && (
 							<>
-								{agents.length > 0 && <div className="h-px bg-slate-100 my-1 mx-2" />}
+								{agents.length > 0 && <div className="h-px bg-muted my-1 mx-2" />}
 								<div className="flex items-center gap-1.5 px-2.5 pt-2 pb-1">
 									<span className="w-0.5 h-3 rounded-full bg-fuchsia-500" />
 									<span className="text-[10px] uppercase tracking-[0.08em] font-semibold text-fuchsia-700">Persona</span>
-									<span className="text-[10px] text-slate-400">custom prompt + tool subset</span>
+									<span className="text-[10px] text-muted-foreground">custom prompt + tool subset</span>
 								</div>
 								{personas.map((p) => {
 									const selected = p.id === personaId;
@@ -2295,18 +2516,18 @@ function ContextIconButton({
 											onClick={() => { selectPersona(p.id); setOpen(false); }}
 											className={[
 												'w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors',
-												selected ? 'bg-fuchsia-50' : 'hover:bg-slate-50',
+												selected ? 'bg-fuchsia-50' : 'hover:bg-muted/60',
 											].join(' ')}
 										>
 											<span className={[
 												'w-6 h-6 rounded-full flex items-center justify-center text-[14px] leading-none flex-shrink-0',
 												selected
 													? 'bg-fuchsia-200'
-													: 'bg-slate-100',
+													: 'bg-muted',
 											].join(' ')}>{p.icon || '🎭'}</span>
 											<span className={[
 												'text-[12px] font-medium flex-1 truncate',
-												selected ? 'text-fuchsia-900' : 'text-slate-800',
+												selected ? 'text-fuchsia-900' : 'text-foreground',
 											].join(' ')}>{p.name}</span>
 											{restricted && (
 												<span
@@ -2314,7 +2535,7 @@ function ContextIconButton({
 														'text-[9px] px-1.5 py-px rounded-full flex-shrink-0',
 														selected
 															? 'bg-fuchsia-100 text-fuchsia-700'
-															: 'bg-slate-100 text-slate-500',
+															: 'bg-muted text-muted-foreground',
 													].join(' ')}
 													title={`Restricted to ${p.allowed_tools!.length} tool${p.allowed_tools!.length===1?'':'s'}`}
 												>{p.allowed_tools!.length}t</span>
@@ -2327,7 +2548,7 @@ function ContextIconButton({
 
 						{/* Footer hint when only one section is populated */}
 						{(agents.length === 0 || personas.length === 0) && (
-							<div className="px-2.5 py-2 mt-1 border-t border-slate-100 text-[10.5px] text-slate-400 leading-snug">
+							<div className="px-2.5 py-2 mt-1 border-t border-border/60 text-[10.5px] text-muted-foreground leading-snug">
 								{agents.length === 0 && personas.length > 0 && (
 									<>No xpio agents installed yet — try <span className="font-mono">app_install</span> a knowledge app.</>
 								)}
@@ -2453,10 +2674,10 @@ function ArtifactIconButton() {
 
 	const KindIcon = ({ k }: { k: ArtifactRow['kind'] }) => {
 		switch (k) {
-			case 'markdown': return <FileText className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />;
+			case 'markdown': return <FileText className="w-3.5 h-3.5 text-gold-600 flex-shrink-0" />;
 			case 'code':     return <Code2 className="w-3.5 h-3.5 text-sky-600 flex-shrink-0" />;
-			case 'json':     return <FileJson className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />;
-			default:         return <FileText className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />;
+			case 'json':     return <FileJson className="w-3.5 h-3.5 text-gold-600 flex-shrink-0" />;
+			default:         return <FileText className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />;
 		}
 	};
 
@@ -2468,38 +2689,38 @@ function ArtifactIconButton() {
 				title={rows.length > 0 ? `Artifacts (${rows.length})` : 'Artifacts'}
 				className={[
 					'relative p-1.5 rounded-md transition-colors',
-					open ? 'text-emerald-700 bg-emerald-50' : 'text-slate-400 hover:text-emerald-700 hover:bg-emerald-50',
+					open ? 'text-gold-700 bg-gold-50' : 'text-muted-foreground hover:text-gold-700 hover:bg-gold-50',
 				].join(' ')}
 			>
 				<Boxes className="w-3.5 h-3.5" />
 				{rows.length > 0 && (
-					<span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-1 rounded-full bg-emerald-500 text-white text-[8.5px] font-bold flex items-center justify-center ring-2 ring-white leading-none">
+					<span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-1 rounded-full bg-gold-500 text-white text-[8.5px] font-bold flex items-center justify-center ring-2 ring-white leading-none">
 						{rows.length > 99 ? '99+' : rows.length}
 					</span>
 				)}
 			</button>
 			{open && (
-				<div className="absolute top-full right-0 mt-1 z-50 w-[420px] max-h-[32rem] flex flex-col rounded-xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60">
+				<div className="absolute top-full right-0 mt-1 z-50 w-[420px] max-h-[32rem] flex flex-col rounded-xl border border-border bg-popover shadow-xl shadow-foreground/10">
 
 					{/* Header strip */}
-					<div className="flex items-center gap-2 px-3 py-2 border-b border-slate-100">
+					<div className="flex items-center gap-2 px-3 py-2 border-b border-border/60">
 						{selected ? (
 							<button
 								type="button"
 								onClick={() => { setSelected(null); setSelectedId(null); }}
-								className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+								className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
 								title="Back to list"
 							>
 								<ArrowLeft className="w-3.5 h-3.5" />
 							</button>
 						) : (
-							<Boxes className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+							<Boxes className="w-4 h-4 text-gold-600 flex-shrink-0" />
 						)}
 						<div className="flex-1 min-w-0">
-							<div className="text-[12.5px] font-semibold text-slate-900 truncate">
+							<div className="text-[12.5px] font-semibold text-foreground truncate">
 								{selected ? selected.title : 'Artifacts'}
 							</div>
-							<div className="text-[10.5px] text-slate-500 truncate">
+							<div className="text-[10.5px] text-muted-foreground truncate">
 								{selected
 									? `${selected.kind}${selected.language ? ' · ' + selected.language : ''} · ${selected.content.length} chars`
 									: `${rows.length} saved`}
@@ -2513,7 +2734,7 @@ function ArtifactIconButton() {
 									title={copied ? 'Copied' : 'Copy'}
 									className={[
 										'p-1.5 rounded-md transition-colors',
-										copied ? 'text-emerald-700 bg-emerald-50' : 'text-slate-400 hover:text-slate-800 hover:bg-slate-100',
+										copied ? 'text-gold-700 bg-gold-50' : 'text-muted-foreground hover:text-foreground hover:bg-muted',
 									].join(' ')}
 								>
 									<Copy className="w-3.5 h-3.5" />
@@ -2522,7 +2743,7 @@ function ArtifactIconButton() {
 									type="button"
 									onClick={downloadOne}
 									title="Download"
-									className="p-1.5 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors"
+									className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
 								>
 									<Download className="w-3.5 h-3.5" />
 								</button>
@@ -2530,7 +2751,7 @@ function ArtifactIconButton() {
 									type="button"
 									onClick={() => deleteOne(selected.id)}
 									title="Delete"
-									className="p-1.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+									className="p-1.5 rounded-md text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition-colors"
 								>
 									<Trash2 className="w-3.5 h-3.5" />
 								</button>
@@ -2543,12 +2764,12 @@ function ArtifactIconButton() {
 						{!selected && (
 							<>
 								{loading && (
-									<div className="px-3 py-3 text-[11px] text-slate-400 flex items-center gap-1.5">
+									<div className="px-3 py-3 text-[11px] text-muted-foreground flex items-center gap-1.5">
 										<Loader2 className="w-3 h-3 animate-spin" /> Loading…
 									</div>
 								)}
 								{!loading && rows.length === 0 && (
-									<div className="px-3 py-4 text-[11.5px] text-slate-400 italic leading-snug">
+									<div className="px-3 py-4 text-[11.5px] text-muted-foreground italic leading-snug">
 										No artifacts yet. The agent saves long-form output here when you ask — research briefs, code listings, anything worth keeping.
 									</div>
 								)}
@@ -2557,16 +2778,16 @@ function ArtifactIconButton() {
 										key={r.id}
 										type="button"
 										onClick={() => loadOne(r.id)}
-										className="w-full text-left px-3 py-1.5 border-b border-slate-50 last:border-b-0 hover:bg-slate-50 transition-colors"
+										className="w-full text-left px-3 py-1.5 border-b border-border/40 last:border-b-0 hover:bg-muted/60 transition-colors"
 									>
 										<div className="flex items-center gap-1.5">
 											<KindIcon k={r.kind} />
-											<span className="text-[12.5px] font-medium text-slate-800 truncate flex-1">{r.title}</span>
-											<span className="text-[10px] text-slate-400 font-mono flex-shrink-0">
+											<span className="text-[12.5px] font-medium text-foreground truncate flex-1">{r.title}</span>
+											<span className="text-[10px] text-muted-foreground font-mono flex-shrink-0">
 												{Math.round(r.bytes / 1024)}KB
 											</span>
 										</div>
-										<div className="flex items-center gap-1 mt-0.5 text-[10px] text-slate-500">
+										<div className="flex items-center gap-1 mt-0.5 text-[10px] text-muted-foreground">
 											<span>{r.kind}</span>
 											{r.language && <span>· {r.language}</span>}
 											{r.source_tool && <span>· {r.source_tool}</span>}
@@ -2577,7 +2798,7 @@ function ArtifactIconButton() {
 							</>
 						)}
 						{selectedLoading && (
-							<div className="px-3 py-3 text-[11px] text-slate-400 flex items-center gap-1.5">
+							<div className="px-3 py-3 text-[11px] text-muted-foreground flex items-center gap-1.5">
 								<Loader2 className="w-3 h-3 animate-spin" /> Loading…
 							</div>
 						)}
@@ -2586,15 +2807,15 @@ function ArtifactIconButton() {
 								{selected.kind === 'markdown' ? (
 									<ChatMarkdown>{selected.content}</ChatMarkdown>
 								) : selected.kind === 'code' ? (
-									<pre className="bg-slate-50 border border-slate-200 rounded-lg p-2 text-[11.5px] overflow-x-auto">
+									<pre className="bg-muted/60 border border-border rounded-lg p-2 text-[11.5px] overflow-x-auto">
 										<code>{selected.content}</code>
 									</pre>
 								) : selected.kind === 'json' ? (
-									<pre className="bg-slate-50 border border-slate-200 rounded-lg p-2 text-[11.5px] overflow-x-auto">
+									<pre className="bg-muted/60 border border-border rounded-lg p-2 text-[11.5px] overflow-x-auto">
 										<code>{(() => { try { return JSON.stringify(JSON.parse(selected.content), null, 2); } catch { return selected.content; } })()}</code>
 									</pre>
 								) : (
-									<div className="whitespace-pre-wrap break-words text-slate-700">{selected.content}</div>
+									<div className="whitespace-pre-wrap break-words text-foreground">{selected.content}</div>
 								)}
 							</div>
 						)}

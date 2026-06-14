@@ -14,11 +14,11 @@ import apiClient from "@/api/client";
 type Memory = { id?: string; kind?: string; content?: string; created_at?: string; agent?: string };
 
 const KIND_CLS: Record<string, string> = {
-	principle: "bg-emerald-50 text-emerald-700 border-emerald-200",
-	recipe: "bg-emerald-50 text-emerald-700 border-emerald-200",
+	principle: "bg-gold-50 text-gold-700 border-gold-200",
+	recipe: "bg-gold-50 text-gold-700 border-gold-200",
 	pattern: "bg-indigo-50 text-indigo-700 border-indigo-200",
 	fact: "bg-slate-50 text-slate-600 border-slate-200",
-	correction: "bg-amber-50 text-amber-700 border-amber-200",
+	correction: "bg-gold-50 text-gold-700 border-gold-200",
 	anti_pattern: "bg-rose-50 text-rose-700 border-rose-200",
 };
 
@@ -78,13 +78,13 @@ export default function LearningTimeline({ agents }: { agents: string[] }) {
 			<ul className="space-y-1">
 				{data.recent.map((m, i) => (
 					<li key={m.id || i} className="flex items-start gap-1.5 text-[11px]">
-						<span className={`mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0 ${(m.kind || "").match(/correction|anti/) ? "bg-amber-400" : "bg-emerald-400"}`} />
+						<span className={`mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0 ${(m.kind || "").match(/correction|anti/) ? "bg-gold-400" : "bg-gold-400"}`} />
 						<span className="text-slate-600 truncate" title={m.content}>{m.content}</span>
 						<span className="text-[10px] text-slate-300 ml-auto flex-shrink-0">{rel(m.created_at)}</span>
 					</li>
 				))}
 			</ul>
-			<Link to="/studio/knowledge" className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-emerald-700 transition-colors">
+			<Link to="/studio/knowledge" className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-gold-700 transition-colors">
 				<Brain className="w-3 h-3" /> Explore all <ArrowRight className="w-3 h-3" />
 			</Link>
 		</div>

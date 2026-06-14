@@ -216,7 +216,7 @@ export function AppSurfaceEditor() {
       // full-screen block. The user can leave to the app at any time.
       return (
         <div className="p-10 flex flex-col items-center justify-center text-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 text-white flex items-center justify-center shadow-sm animate-pulse">
+          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-gold-400 to-gold-500 text-white flex items-center justify-center shadow-sm animate-pulse">
             <Sparkles className="w-5 h-5" />
           </div>
           <div className="text-sm font-medium text-slate-800">Generating your app page…</div>
@@ -263,7 +263,7 @@ export function AppSurfaceEditor() {
         </div>
         <Link
           to={backTo}
-          className="mt-4 inline-flex items-center gap-1.5 text-sm text-emerald-600 hover:text-emerald-700"
+          className="mt-4 inline-flex items-center gap-1.5 text-sm text-gold-600 hover:text-gold-700"
         >
           ← Back to {app}
         </Link>
@@ -317,7 +317,7 @@ export function AppSurfaceEditor() {
               onClick={handleRegenerate}
               disabled={generating}
               title="Regenerate this page with AI"
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-emerald-200 text-[12px] text-emerald-700 hover:bg-emerald-50 transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gold-200 text-[12px] text-gold-700 hover:bg-gold-50 transition-colors disabled:opacity-50"
             >
               {generating
                 ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating…</>
@@ -341,7 +341,7 @@ export function AppSurfaceEditor() {
             className={cn(
               "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all",
               dirty && !saving
-                ? "bg-emerald-500 text-white hover:bg-emerald-600 shadow-sm shadow-emerald-100"
+                ? "bg-gold-500 text-white hover:bg-gold-600 shadow-sm shadow-gold-100"
                 : "bg-slate-100 text-slate-400 cursor-not-allowed",
             )}
           >
@@ -365,7 +365,7 @@ export function AppSurfaceEditor() {
 
       {/* Fork template banner */}
       {isTemplate && (
-        <div className="flex items-start gap-2 px-4 py-2 bg-amber-50 border-b border-amber-200 text-[12px] text-amber-800 flex-shrink-0">
+        <div className="flex items-start gap-2 px-4 py-2 bg-gold-50 border-b border-gold-200 text-[12px] text-gold-800 flex-shrink-0">
           <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
           This surface inherits from a shared template. Saving will create an
           independent copy in this app's <code>ui/home.md</code> and detach it
@@ -400,7 +400,7 @@ export function AppSurfaceEditor() {
 
       {/* Footer: byte counter */}
       <div className="flex items-center px-4 py-1.5 border-t border-slate-100 bg-white flex-shrink-0">
-        <span className={cn("text-[11px] tabular-nums", bytes > maxBytes * 0.9 ? "text-amber-600" : "text-slate-400")}>
+        <span className={cn("text-[11px] tabular-nums", bytes > maxBytes * 0.9 ? "text-gold-600" : "text-slate-400")}>
           {draft.length.toLocaleString()} chars · {bytes.toLocaleString()} bytes / 256 KB
         </span>
         {bytes > maxBytes && (

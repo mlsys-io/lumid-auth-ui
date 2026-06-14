@@ -3,6 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/auth/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/auth/spiral-512.png" />
+    <link rel="apple-touch-icon" href="/auth/apple-touch-icon.png" />
+    <!-- Preload the loader mark so the spinning spiral paints instantly whenever
+         a (often brief) loading state appears, instead of losing the fetch race. -->
+    <link rel="preload" as="image" href="/auth/spiral.png" />
     <title>Lumid Studio</title>
   </head>
   <body>

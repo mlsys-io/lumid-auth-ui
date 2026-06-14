@@ -45,9 +45,9 @@ function statusBadge(s: TaskStatus | "LOST" | "UNKNOWN"): string {
 		case "DONE":
 			return "bg-gray-100 text-gray-700 border-gray-200";
 		case "DISPATCHED":
-			return "bg-green-100 text-green-800 border-green-200";
+			return "bg-gold-100 text-gold-800 border-gold-200";
 		case "PENDING":
-			return "bg-amber-100 text-amber-800 border-amber-200";
+			return "bg-gold-100 text-gold-800 border-gold-200";
 		case "FAILED":
 			return "bg-red-100 text-red-800 border-red-200";
 		case "CANCELLED":
@@ -170,7 +170,7 @@ export default function GpuRentalsList({ config }: { config?: Record<string, unk
 	return (
 		<>
 			<header className="flex items-center gap-2 mb-6">
-				{!hideHeader && <Server className="w-5 h-5 text-emerald-600" />}
+				{!hideHeader && <Server className="w-5 h-5 text-gold-600" />}
 				{!hideHeader && <h1 className="text-2xl font-semibold">{cfgTitle}</h1>}
 				{!hideHeader && (
 					<span className="text-sm text-muted-foreground ml-2">{cfgSubtitle}</span>
@@ -274,7 +274,7 @@ function RentalRow({
 			<td className="py-2 px-2 text-muted-foreground">
 				<span className="inline-flex items-center gap-1">
 					{spec.gpu > 0 ? (
-						<Zap className="w-3.5 h-3.5 text-amber-500" />
+						<Zap className="w-3.5 h-3.5 text-gold-500" />
 					) : (
 						<Cpu className="w-3.5 h-3.5 text-slate-500" />
 					)}

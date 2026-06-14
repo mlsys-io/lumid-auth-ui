@@ -59,11 +59,11 @@ export function FreshUserHero({ name }: { name: string }) {
 	return (
 		<div className="space-y-5">
 			{/* Hero — greeting + single primary ask */}
-			<section className="rounded-2xl border border-slate-200/70 bg-gradient-to-br from-emerald-50 via-white to-sky-50/40 p-6">
+			<section className="rounded-2xl border border-slate-200/70 bg-gradient-to-br from-gold-50 via-white to-sky-50/40 p-6">
 				<div className="flex items-start gap-3">
 					<div className="relative flex-shrink-0">
-						<div className="absolute inset-0 bg-emerald-400/30 blur-md rounded-full" />
-						<div className="relative w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center shadow-sm shadow-emerald-200">
+						<div className="absolute inset-0 bg-gold-400/30 blur-md rounded-full" />
+						<div className="relative w-11 h-11 rounded-xl bg-gradient-to-br from-gold-400 to-gold-600 text-white flex items-center justify-center shadow-sm shadow-gold-200">
 							<Sparkles className="w-5 h-5" />
 						</div>
 					</div>
@@ -101,9 +101,9 @@ function DescribeCard({ onClick }: { onClick: () => void }) {
 	return (
 		<button
 			onClick={onClick}
-			className="group rounded-xl border border-dashed border-emerald-300/70 bg-emerald-50/30 p-3 text-left transition-all flex items-start gap-3 hover:shadow-sm hover:bg-emerald-50/60 active:scale-[0.98]"
+			className="group rounded-xl border border-dashed border-gold-300/70 bg-gold-50/30 p-3 text-left transition-all flex items-start gap-3 hover:shadow-sm hover:bg-gold-50/60 active:scale-[0.98]"
 		>
-			<div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-105">
+			<div className="w-9 h-9 rounded-xl bg-gold-100 text-gold-700 flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-105">
 				<MessagesSquare className="w-4 h-4" />
 			</div>
 			<div className="flex-1 min-w-0">
@@ -112,7 +112,7 @@ function DescribeCard({ onClick }: { onClick: () => void }) {
 					Tell the AI in your words — it composes, installs, and schedules it.
 				</div>
 			</div>
-			<ArrowRight className="w-3.5 h-3.5 text-emerald-400 group-hover:text-emerald-600 transition-colors flex-shrink-0 mt-1" />
+			<ArrowRight className="w-3.5 h-3.5 text-gold-400 group-hover:text-gold-600 transition-colors flex-shrink-0 mt-1" />
 		</button>
 	);
 }
@@ -122,7 +122,7 @@ function StarterCard({ s, index = 0, locked = null, onClick }: {
 }) {
 	const Icon = s.icon;
 	const tones: Record<Starter['tone'], { bg: string; iconBg: string; iconText: string; border: string }> = {
-		amber:  { bg: 'hover:bg-amber-50/60',  iconBg: 'bg-amber-100',  iconText: 'text-amber-700',  border: 'hover:border-amber-200' },
+		amber:  { bg: 'hover:bg-gold-50/60',  iconBg: 'bg-gold-100',  iconText: 'text-gold-700',  border: 'hover:border-gold-200' },
 		rose:   { bg: 'hover:bg-rose-50/60',   iconBg: 'bg-rose-100',   iconText: 'text-rose-700',   border: 'hover:border-rose-200' },
 		sky:    { bg: 'hover:bg-sky-50/60',    iconBg: 'bg-sky-100',    iconText: 'text-sky-700',    border: 'hover:border-sky-200' },
 		violet: { bg: 'hover:bg-violet-50/60', iconBg: 'bg-violet-100', iconText: 'text-violet-700', border: 'hover:border-violet-200' },
@@ -151,7 +151,7 @@ function StarterCard({ s, index = 0, locked = null, onClick }: {
 			<div className="flex-1 min-w-0">
 				<div className="font-medium text-slate-900 text-[13px] leading-tight">{s.title}</div>
 				{locked ? (
-					<div className="text-[11px] text-amber-600 mt-0.5 leading-relaxed">{connectLabel}</div>
+					<div className="text-[11px] text-gold-600 mt-0.5 leading-relaxed">{connectLabel}</div>
 				) : (
 					<div className="text-[11px] text-slate-500 mt-0.5 leading-relaxed line-clamp-2">{s.subtitle}</div>
 				)}

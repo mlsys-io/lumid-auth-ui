@@ -31,10 +31,10 @@ type Memory = {
 };
 
 const KIND_COLORS: Record<string, string> = {
-	principle:    'bg-emerald-50 text-emerald-700 border-emerald-200',
+	principle:    'bg-gold-50 text-gold-700 border-gold-200',
 	pattern:      'bg-indigo-50 text-indigo-700 border-indigo-200',
 	fact:         'bg-slate-50 text-slate-700 border-slate-200',
-	correction:   'bg-amber-50 text-amber-700 border-amber-200',
+	correction:   'bg-gold-50 text-gold-700 border-gold-200',
 	anti_pattern: 'bg-rose-50 text-rose-700 border-rose-200',
 	draft:        'bg-blue-50 text-blue-700 border-blue-200',
 };
@@ -54,7 +54,7 @@ function AgentList() {
 	if (agents.length === 0) {
 		return (
 			<div className="max-w-md mx-auto pt-12 text-center space-y-4">
-				<div className="inline-flex w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 items-center justify-center">
+				<div className="inline-flex w-14 h-14 rounded-2xl bg-gold-50 text-gold-600 items-center justify-center">
 					<Brain className="w-7 h-7" />
 				</div>
 				<div>
@@ -66,7 +66,7 @@ function AgentList() {
 				</div>
 				<Link
 					to="/studio/skills"
-					className="inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-colors"
+					className="inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg bg-gold-500 text-white hover:bg-gold-600 transition-colors"
 				>
 					<Sparkles className="w-4 h-4" /> Set up your AI
 				</Link>

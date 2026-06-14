@@ -237,7 +237,7 @@ export function SubmitLumilakeJob({ title, onSuccessPath }: Props) {
 							spellCheck={false}
 						/>
 						{workflowJson.trim() && !parsedWorkflow.ok && (
-							<div className="mt-2 text-xs text-amber-700">
+							<div className="mt-2 text-xs text-gold-700">
 								{parsedWorkflow.reason === 'json'
 									? 'Not valid JSON yet.'
 									: 'Missing `nodes` / `connections` — this looks like a workload definition, not an n8n workflow.'}

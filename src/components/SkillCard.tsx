@@ -52,7 +52,7 @@ export function SkillCard({
             <div className="text-sm font-semibold text-gray-900 truncate">
               {title}
             </div>
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium">
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gold-50 text-gold-700 border border-gold-200 font-medium">
               {stepLabel}
             </span>
           </div>

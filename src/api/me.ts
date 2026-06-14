@@ -27,11 +27,106 @@ export class MeApiError extends Error {
   }
 }
 
-async function call<T>(
+// In-flight dedup for GETs — the shell, top-strip, and chat empty-state all
+// poll the same endpoints (listWorkflows / listDrafts) on the same intervals
+// and refetch on the same chat→page events. Sharing one in-flight promise
+// collapses concurrent duplicates into a single request.
+const inflight = new Map<string, Promise<unknown>>();
+
+// Short TTL micro-cache for the hot read-only AGGREGATES. In-flight dedup only
+// collapses calls that temporally OVERLAP — but the shell, top-strip, empty-
+// state and apps page each poll these on independent, staggered timers, so
+// their requests almost never line up and dedup misses them. A tiny TTL
+// coalesces that staggered fan-out into one request every few seconds, which
+// is where the bulk of residual /me/* traffic (and 429 pressure) came from.
+// Staleness is bounded to TTL_MS and these views already tolerate ~poll-
+// interval lag; mutations bust the cache via clearMeCache() (wired to the
+// chat→page refetch bus in useStudioRefetch), so a write reflects immediately.
+// Stale-while-revalidate windows. Within FRESH_MS a read is served from cache
+// with no network (collapses staggered pollers). Between FRESH and STALE the
+// cached value is served INSTANTLY (so navigating away and back paints with no
+// spinner) while a background revalidate refreshes the cache for the next read
+// / poll. Past STALE we fetch fresh and await. Mutations bust everything via
+// clearMeCache(). This is what makes every cached Studio page feel instant on
+// re-navigation, not just the ones I special-cased.
+const FRESH_MS = 4000;
+const STALE_MS = 45000;
+const ttlCache = new Map<string, { at: number; value: unknown }>();
+function ttlCacheable(path: string): boolean {
+  const base = path.split("?")[0];
+  return (
+    base === "/apps" ||
+    base === "/workflows" ||
+    base === "/drafts" ||
+    base === "/loops/health" ||
+    base === "/today" ||
+    base === "/runs" ||
+    base === "/knowledge/agents" ||
+    base === "/agent/models" ||
+    base === "/personas" ||
+    base === "/agents"
+  );
+}
+/** Drop all cached aggregate reads so the next call hits the network. Called
+ *  on the studio:data bus after any chat-tool mutation. */
+export function clearMeCache(): void {
+  ttlCache.clear();
+}
+
+// Global 429 circuit breaker. The /me limiter is PER-SESSION; once a session
+// crosses the limit, every one of the ~10 page pollers retrying independently
+// turns a single trip into a self-sustaining storm (observed: 2700+ req in one
+// window → permanent skeletons). Instead, the FIRST 429 puts ALL /me calls into
+// a shared cooldown for Retry-After, so the client stops hammering and the
+// server's window clears. cooldownUntil is an epoch-ms; 0 = open.
+let cooldownUntil = 0;
+
+// Kick a network fetch for `path`, store it in the cache, deduped by `inflight`.
+function fetchAndCache<T>(method: string, path: string, body: unknown, cacheable: boolean): Promise<T> {
+  const existing = inflight.get(path);
+  if (existing) return existing as Promise<T>;
+  const p = doCall<T>(method, path, body)
+    .then((v) => {
+      if (cacheable) ttlCache.set(path, { at: Date.now(), value: v });
+      return v;
+    })
+    .finally(() => inflight.delete(path));
+  inflight.set(path, p);
+  return p;
+}
+
+function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+  if (method === "GET" && body === undefined) {
+    const cacheable = ttlCacheable(path);
+    if (cacheable) {
+      const hit = ttlCache.get(path);
+      const age = hit ? Date.now() - hit.at : Infinity;
+      if (hit && age < FRESH_MS) return Promise.resolve(hit.value as T); // fresh — no network
+      if (hit && age < STALE_MS) {
+        // Serve stale INSTANTLY; revalidate in the background (fire-and-forget,
+        // deduped) so the cache + next poll are fresh.
+        fetchAndCache<T>(method, path, body, true).catch(() => {});
+        return Promise.resolve(hit.value as T);
+      }
+      // Cooling down from a 429 → serve last-known at any age instead of piling on.
+      if (hit && Date.now() < cooldownUntil) return Promise.resolve(hit.value as T);
+    }
+    return fetchAndCache<T>(method, path, body, cacheable);
+  }
+  return doCall<T>(method, path, body);
+}
+
+async function doCall<T>(
   method: string,
   path: string,
   body?: unknown,
 ): Promise<T> {
+  // Already cooling down from a recent 429 — fail fast WITHOUT touching the
+  // network. This is what breaks the storm: pollers that fire mid-cooldown
+  // don't add load, so the server's window can clear.
+  if (Date.now() < cooldownUntil) {
+    throw new MeApiError(429, 1429, "rate limited — cooling down");
+  }
   const headers: Record<string, string> = {};
   let payload: BodyInit | undefined;
   if (body !== undefined) {
@@ -44,6 +139,15 @@ async function call<T>(
     body: payload,
     credentials: "include", // send lm_session cookie cross-origin
   });
+  // On a 429, arm the SHARED cooldown for the server-advised Retry-After
+  // (capped) and fail fast. We deliberately do NOT retry in-call — that's the
+  // per-caller amplification that turned one trip into a sustained storm.
+  if (r.status === 429) {
+    const ra = parseInt(r.headers.get("Retry-After") || "", 10);
+    const waitMs = Number.isFinite(ra) && ra > 0 ? Math.min(ra * 1000, 60000) : 5000;
+    cooldownUntil = Date.now() + waitMs;
+    throw new MeApiError(429, 1429, "too many requests");
+  }
   let json: { ret_code?: number; message?: string; data?: T } = {};
   try {
     json = await r.json();
@@ -51,11 +155,7 @@ async function call<T>(
     /* empty / non-JSON body */
   }
   if (!r.ok || (json.ret_code !== undefined && json.ret_code !== 0)) {
-    throw new MeApiError(
-      r.status,
-      json.ret_code ?? r.status,
-      json.message ?? r.statusText,
-    );
+    throw new MeApiError(r.status, json.ret_code ?? r.status, json.message ?? r.statusText);
   }
   return (json.data ?? ({} as T));
 }
@@ -203,7 +303,7 @@ export const me = {
   patchLoop: (
     app: string,
     loop: string,
-    body: { runtime?: "local" | "cloud"; schedule?: string; enabled?: boolean },
+    body: { runtime?: "local" | "cloud"; schedule?: string; enabled?: boolean; goal?: string },
   ) =>
     call<{ app: string; loop: string; overrides: Record<string, unknown> }>(
       "PATCH",
@@ -505,6 +605,9 @@ export interface MeWorkflowRow {
   kind: "scheduled" | "visual";
   name: string;
   app?: string;
+  // App bundle version (manifest.json) — sent by /me/workflows; the app
+  // index reads the freshest row's version for the app card.
+  version?: string;
   trigger: string;
   enabled: boolean;
   tenant: boolean;

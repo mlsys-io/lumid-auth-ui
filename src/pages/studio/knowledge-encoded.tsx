@@ -22,13 +22,13 @@ type Memory = {
 };
 
 const KIND_COLORS: Record<string, string> = {
-	principle:     'bg-emerald-50 text-emerald-700 border-emerald-200',
-	recipe:        'bg-emerald-50 text-emerald-700 border-emerald-200',
+	principle:     'bg-gold-50 text-gold-700 border-gold-200',
+	recipe:        'bg-gold-50 text-gold-700 border-gold-200',
 	pattern:       'bg-indigo-50 text-indigo-700 border-indigo-200',
 	fact:          'bg-slate-50 text-slate-700 border-slate-200',
-	correction:    'bg-amber-50 text-amber-700 border-amber-200',
+	correction:    'bg-gold-50 text-gold-700 border-gold-200',
 	anti_pattern:  'bg-rose-50 text-rose-700 border-rose-200',
-	cc_correction: 'bg-amber-50 text-amber-700 border-amber-200',
+	cc_correction: 'bg-gold-50 text-gold-700 border-gold-200',
 	cc_decision:   'bg-sky-50 text-sky-700 border-sky-200',
 	cc_override:   'bg-violet-50 text-violet-700 border-violet-200',
 };
@@ -131,7 +131,7 @@ export default function StudioKnowledgeEncoded() {
 									<div key={k} className="flex items-center gap-2">
 										<span className={badgeCls(k)}>{k}</span>
 										<div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
-											<div className="h-full rounded-full bg-emerald-400 transition-all" style={{ width: `${Math.max(4, pct)}%` }} />
+											<div className="h-full rounded-full bg-gold-400 transition-all" style={{ width: `${Math.max(4, pct)}%` }} />
 										</div>
 										<span className="text-[10px] text-slate-400 tabular-nums w-6 text-right">{n}</span>
 									</div>
@@ -148,7 +148,7 @@ export default function StudioKnowledgeEncoded() {
 								const max = words[0][1];
 								const size = 11 + Math.round((n / max) * 12);
 								const op = 0.5 + (n / max) * 0.5;
-								return <span key={w} style={{ fontSize: `${size}px`, opacity: op }} className="text-emerald-800 leading-none font-medium">{w}</span>;
+								return <span key={w} style={{ fontSize: `${size}px`, opacity: op }} className="text-gold-800 leading-none font-medium">{w}</span>;
 							})}
 						</div>
 					</section>
@@ -212,7 +212,7 @@ function Tile({ label, value, ctx, neutral }: { label: string; value: string; ct
 		<div className="rounded-lg border border-slate-200/70 bg-[#f7f7f5] px-4 py-3">
 			<div className="text-[12px] text-slate-500">{label}</div>
 			<div className="mt-1 text-[22px] font-medium text-slate-900 leading-none tracking-tight">{value}</div>
-			<div className={`mt-1.5 text-[11px] ${neutral ? 'text-slate-500' : 'text-emerald-700'}`}>{ctx}</div>
+			<div className={`mt-1.5 text-[11px] ${neutral ? 'text-slate-500' : 'text-gold-700'}`}>{ctx}</div>
 		</div>
 	);
 }

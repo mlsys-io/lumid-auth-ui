@@ -8,9 +8,10 @@
 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { User, Key, Lock, Shield, ExternalLink, Loader2 } from 'lucide-react';
+import { User, Key, Lock, Shield, ExternalLink, Loader2, MessageSquare } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import apiClient from '@/api/client';
+import { useLandingPref } from '@/lib/landing-pref';
 
 type Section = {
 	id: string;
@@ -25,6 +26,7 @@ const SECTIONS: Section[] = [
 	{ id: 'oauth',     icon: Lock,   title: 'Connected services', description: 'Google, Slack, GitHub, and other OAuth grants.' },
 	{ id: 'secrets',   icon: Lock,   title: 'App secrets',      description: 'API keys your installed apps need (per app, per key).' },
 	{ id: 'privacy',   icon: Shield, title: 'Privacy & sharing', description: 'Per-agent auto-publish toggles and data exports.' },
+	{ id: 'chat',      icon: MessageSquare, title: 'Chat & navigation', description: 'How opening something from a list behaves.' },
 ];
 
 export default function StudioSettings() {
@@ -37,7 +39,48 @@ export default function StudioSettings() {
 			<OAuthSection />
 			<SecretsSection />
 			<PrivacySection />
+			<ChatNavSection />
 		</div>
+	);
+}
+
+// ChatNavSection — the configurable landing behavior. Every Studio index
+// (Apps, Library, Jobs) terminates in the chat; this picks whether opening a
+// row asks the AI right away or just lands you in the chat ready to type.
+function ChatNavSection() {
+	const [pref, setPref] = useLandingPref();
+	const options: Array<{ v: 'ask' | 'type'; title: string; desc: string }> = [
+		{ v: 'type', title: 'Just open the chat (default)', desc: 'Lands in the chat with the question pre-filled — you hit send when ready.' },
+		{ v: 'ask',  title: 'Ask the AI right away',        desc: 'Opening something fires the question immediately, so the answer streams in.' },
+	];
+	return (
+		<SectionCard {...SECTIONS[5]}>
+			<div className="space-y-2">
+				<div className="text-xs text-slate-500 mb-1">When I open something from a list:</div>
+				{options.map((o) => (
+					<button
+						key={o.v}
+						type="button"
+						onClick={() => setPref(o.v)}
+						className={[
+							'w-full text-left flex items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors',
+							pref === o.v ? 'border-gold-300 bg-gold-50/60' : 'border-slate-200 hover:bg-slate-50',
+						].join(' ')}
+					>
+						<span className={[
+							'mt-0.5 w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center',
+							pref === o.v ? 'border-gold-500' : 'border-slate-300',
+						].join(' ')}>
+							{pref === o.v && <span className="w-2 h-2 rounded-full bg-gold-500" />}
+						</span>
+						<span className="min-w-0">
+							<span className="block text-sm font-medium text-slate-800">{o.title}</span>
+							<span className="block text-xs text-slate-500 mt-0.5">{o.desc}</span>
+						</span>
+					</button>
+				))}
+			</div>
+		</SectionCard>
 	);
 }
 
@@ -48,7 +91,7 @@ function SectionCard({
 		<section id={id} className="rounded-lg border border-slate-200 bg-white p-4">
 			<header className="flex items-start justify-between gap-3 mb-3">
 				<div className="flex items-start gap-3 min-w-0">
-					<div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
+					<div className="w-9 h-9 rounded-lg bg-gold-50 text-gold-600 flex items-center justify-center flex-shrink-0">
 						<Icon className="w-4 h-4" />
 					</div>
 					<div className="min-w-0">
@@ -76,7 +119,7 @@ function ProfileSection({ email, role }: { email: string; role: string }) {
 				</dd>
 			</dl>
 			<div className="mt-3">
-				<Link to="/account/profile" className="text-xs text-emerald-700 hover:underline inline-flex items-center gap-1">
+				<Link to="/account/profile" className="text-xs text-gold-700 hover:underline inline-flex items-center gap-1">
 					Edit profile <ExternalLink className="w-3 h-3" />
 				</Link>
 			</div>
@@ -104,7 +147,7 @@ function TokensSection() {
 				)}
 			</div>
 			<div className="mt-3">
-				<Link to="/dashboard/tokens" className="text-xs text-emerald-700 hover:underline inline-flex items-center gap-1">
+				<Link to="/dashboard/tokens" className="text-xs text-gold-700 hover:underline inline-flex items-center gap-1">
 					Mint / revoke tokens <ExternalLink className="w-3 h-3" />
 				</Link>
 			</div>
@@ -132,12 +175,12 @@ function ConnectionRow({
 			<div className="text-sm flex items-center gap-2 min-w-0">
 				<span className={[
 					'w-2 h-2 rounded-full inline-block shrink-0',
-					connected ? 'bg-emerald-500' : 'bg-slate-300',
+					connected ? 'bg-gold-500' : 'bg-slate-300',
 				].join(' ')} />
 				<span className="font-medium">{label}</span>
 				<span className="text-slate-500 truncate">{detail}</span>
 			</div>
-			<Link to={href} className="text-xs text-emerald-700 hover:underline inline-flex items-center gap-1 shrink-0">
+			<Link to={href} className="text-xs text-gold-700 hover:underline inline-flex items-center gap-1 shrink-0">
 				{connected ? manageLabel : connectLabel} <ExternalLink className="w-3 h-3" />
 			</Link>
 		</div>
@@ -265,7 +308,7 @@ function PrivacySection() {
 					By default the watcher bank stays local; assistant + philosophy banks can publish.
 					Per-agent toggle below — saves to <code className="font-mono text-xs">.user-overrides.yaml</code>.
 				</p>
-				<Link to="/studio/knowledge" className="text-xs text-emerald-700 hover:underline inline-flex items-center gap-1">
+				<Link to="/studio/knowledge" className="text-xs text-gold-700 hover:underline inline-flex items-center gap-1">
 					Open Knowledge to see what your AI knows <ExternalLink className="w-3 h-3" />
 				</Link>
 			</div>

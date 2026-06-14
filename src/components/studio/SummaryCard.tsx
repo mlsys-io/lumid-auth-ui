@@ -4,11 +4,11 @@
 import { cn } from "@/lib/utils";
 
 const TONE: Record<string, string> = {
-	emerald: "text-emerald-700",
+	emerald: "text-gold-700",
 	slate: "text-slate-700",
 	indigo: "text-indigo-700",
 	rose: "text-rose-700",
-	amber: "text-amber-700",
+	amber: "text-gold-700",
 	sky: "text-sky-700",
 };
 

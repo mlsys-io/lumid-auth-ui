@@ -29,7 +29,7 @@ export default function AskAbout({
 				}));
 			}}
 			className={cn(
-				"inline-flex items-center gap-1 px-2 py-1 text-[11px] rounded-lg border border-emerald-200/70 bg-emerald-50/60 text-emerald-700 hover:bg-emerald-100 transition-colors",
+				"inline-flex items-center gap-1 px-2 py-1 text-[11px] rounded-lg border border-gold-200/70 bg-gold-50/60 text-gold-700 hover:bg-gold-100 transition-colors",
 				className,
 			)}
 			title={prompt}

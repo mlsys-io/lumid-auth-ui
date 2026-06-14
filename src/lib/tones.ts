@@ -34,11 +34,11 @@ export interface ToneBundle {
 
 export const TONES: Record<ToneKey, ToneBundle> = {
 	ok: {
-		dot: "bg-emerald-500",
-		bg: "bg-emerald-50 hover:bg-emerald-100",
-		text: "text-emerald-700",
-		border: "border-emerald-200/60",
-		icon: "text-emerald-600",
+		dot: "bg-gold-500",
+		bg: "bg-gold-50 hover:bg-gold-100",
+		text: "text-gold-700",
+		border: "border-gold-200/60",
+		icon: "text-gold-600",
 	},
 	running: {
 		dot: "bg-sky-500",
@@ -55,11 +55,11 @@ export const TONES: Record<ToneKey, ToneBundle> = {
 		icon: "text-rose-600",
 	},
 	attention: {
-		dot: "bg-amber-500",
-		bg: "bg-amber-50 hover:bg-amber-100",
-		text: "text-amber-700",
-		border: "border-amber-200/60",
-		icon: "text-amber-600",
+		dot: "bg-gold-500",
+		bg: "bg-gold-50 hover:bg-gold-100",
+		text: "text-gold-700",
+		border: "border-gold-200/60",
+		icon: "text-gold-600",
 	},
 	idle: {
 		dot: "bg-slate-300",

@@ -93,7 +93,7 @@ export function PublishToLibrary({
 										type="checkbox"
 										checked={!!checked[s.id]}
 										onChange={(e) => setChecked((m) => ({ ...m, [s.id]: e.target.checked }))}
-										className="accent-emerald-500"
+										className="accent-gold-500"
 									/>
 									{s.label}
 								</label>
@@ -115,7 +115,7 @@ export function PublishToLibrary({
 										className={[
 											'inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-full border transition-colors',
 											on
-												? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+												? 'bg-gold-50 border-gold-200 text-gold-700'
 												: 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50',
 										].join(' ')}
 									>

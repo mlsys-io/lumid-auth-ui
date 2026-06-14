@@ -10,6 +10,7 @@
 // Honest empty states; no synthetic data, ever.
 
 import { useCallback, useEffect, useState } from "react";
+import { SpiralOverlay } from "@/components/BrandLoader";
 import {
 	FlaskConical, ChevronDown, ChevronRight, Loader2, TrendingUp, TrendingDown,
 } from "lucide-react";
@@ -32,7 +33,7 @@ function VerdictChip({ e }: { e: MeExperiment }) {
 	if (e.status === "concluded" || e.status === "archived")
 		return <span className="px-2 py-0.5 rounded-full text-[10px] border bg-slate-50 text-slate-500 border-slate-200">{e.status}</span>;
 	if (e.criteria_met)
-		return <span className="px-2 py-0.5 rounded-full text-[10px] border bg-emerald-50 text-emerald-700 border-emerald-200 font-medium">criteria met</span>;
+		return <span className="px-2 py-0.5 rounded-full text-[10px] border bg-gold-50 text-gold-700 border-gold-200 font-medium">criteria met</span>;
 	return <span className="px-2 py-0.5 rounded-full text-[10px] border bg-violet-50 text-violet-700 border-violet-200">running</span>;
 }
 
@@ -42,7 +43,7 @@ function DeltaChip({ e }: { e: MeExperiment }) {
 	return (
 		<span className={cn(
 			"inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] border font-medium",
-			up ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-rose-50 text-rose-700 border-rose-200",
+			up ? "bg-gold-50 text-gold-700 border-gold-200" : "bg-rose-50 text-rose-700 border-rose-200",
 		)}>
 			{up ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
 			best vs baseline {e.delta_pp >= 0 ? "+" : ""}{e.delta_pp.toFixed(1)}pp
@@ -62,13 +63,13 @@ function Spark({ points, className }: { points: Array<{ ts: string; v: number }>
 	).join(" ");
 	return (
 		<svg width={W} height={H} className={cn("flex-shrink-0", className)}>
-			<polyline points={pts} fill="none" stroke="currentColor" strokeWidth="1.5" className="text-emerald-500" />
+			<polyline points={pts} fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gold-500" />
 		</svg>
 	);
 }
 
 // Multi-variant line chart over result timestamps.
-const SERIES_COLORS = ["#10b981", "#6366f1", "#f59e0b", "#ef4444", "#0ea5e9", "#a855f7"];
+const SERIES_COLORS = ["#B08F45", "#6366f1", "#B08F45", "#ef4444", "#0ea5e9", "#a855f7"];
 function SeriesChart({ series }: { series: MeExperimentDetail["series"] }) {
 	const all = series.flatMap((s) => s.points.map((p) => p.v));
 	if (all.length < 2) return null;
@@ -194,7 +195,7 @@ export function ExperimentCard({ app, e, showApp = false }: { app: string; e: Me
 					{e.loops?.length ? <> · fed by {e.loops.join(", ")}</> : null}
 				</div>
 				{e.criteria_met && e.verdict && (
-					<div className="mt-1.5 text-[11px] text-emerald-700 bg-emerald-50/70 border border-emerald-200 rounded-lg px-2 py-1">✓ {e.verdict}</div>
+					<div className="mt-1.5 text-[11px] text-gold-700 bg-gold-50/70 border border-gold-200 rounded-lg px-2 py-1">✓ {e.verdict}</div>
 				)}
 			</button>
 
@@ -224,9 +225,9 @@ export function ExperimentCard({ app, e, showApp = false }: { app: string; e: Me
 											</thead>
 											<tbody>
 												{variants.sort((a, b) => (b[1].mean ?? 0) - (a[1].mean ?? 0)).map(([vid, agg]) => (
-													<tr key={vid} className={cn("border-b border-slate-50 last:border-0", vid === e.best_variant && "bg-emerald-50/50")}>
+													<tr key={vid} className={cn("border-b border-slate-50 last:border-0", vid === e.best_variant && "bg-gold-50/50")}>
 														<td className="px-3 py-1.5 text-slate-700 font-mono truncate max-w-[180px]">
-															{vid}{vid === e.best_variant && <span className="ml-1.5 text-[9px] text-emerald-600 font-sans font-medium">best</span>}
+															{vid}{vid === e.best_variant && <span className="ml-1.5 text-[9px] text-gold-600 font-sans font-medium">best</span>}
 															{e.baseline === vid && <span className="ml-1.5 text-[9px] text-slate-400 font-sans">baseline</span>}
 														</td>
 														<td className="px-2 py-1.5 text-right tabular-nums font-medium text-slate-800">{fmtV(agg.mean)}</td>
@@ -274,7 +275,7 @@ export default function ExperimentsPanel({ app }: { app: string }) {
 		return () => { live = false; window.clearInterval(id); };
 	}, [app]);
 
-	if (exps === null) return <div className="h-20 rounded-xl bg-slate-100 animate-pulse" />;
+	if (exps === null) return <div className="relative"><div className="h-20 rounded-xl bg-slate-100 animate-pulse" /><SpiralOverlay /></div>;
 	if (exps.length === 0) {
 		return (
 			<div className="rounded-xl border border-dashed border-slate-200 bg-white/60 p-8 text-center text-sm text-slate-500">

@@ -383,7 +383,7 @@ function LumidStat({ body }: { body: Body }) {
 type ColDef = { key: string; label?: string; type?: string; sortable?: boolean };
 
 const STATUS_COLORS: Record<string, string> = {
-  Ongoing:   "bg-green-100 text-green-800 border-green-200",
+  Ongoing:   "bg-gold-100 text-gold-800 border-gold-200",
   Upcoming:  "bg-blue-100 text-blue-800 border-blue-200",
   Completed: "bg-gray-100 text-gray-800 border-gray-200",
 };
@@ -400,7 +400,7 @@ function formatCell(value: unknown, type?: string): React.ReactNode {
   if (type === "pct") {
     if (!isFinite(n)) return "—";
     const pct = formatPercentage(n);
-    const cls = n >= 0 ? "text-green-600" : "text-red-600";
+    const cls = n >= 0 ? "text-gold-600" : "text-red-600";
     return <span className={cls}>{pct}</span>;
   }
   if (type === "badge") return <StatusBadge value={String(value)} />;
@@ -556,8 +556,8 @@ function LumidTable({ body }: { body: Body }) {
   };
   const renderHrefCell = (href: string, content: ReactNode) =>
     isExternalHref(href)
-      ? <a href={href} target="_blank" rel="noopener noreferrer" className="text-emerald-700 hover:underline" onClick={(e) => e.stopPropagation()}>{content}</a>
-      : <Link to={href} className="text-emerald-700 hover:underline" onClick={(e) => e.stopPropagation()}>{content}</Link>;
+      ? <a href={href} target="_blank" rel="noopener noreferrer" className="text-gold-700 hover:underline" onClick={(e) => e.stopPropagation()}>{content}</a>
+      : <Link to={href} className="text-gold-700 hover:underline" onClick={(e) => e.stopPropagation()}>{content}</Link>;
 
   // Card-grid view (no sorting/row-actions — those are table-view affordances)
   if (body.view === "cards") {
@@ -610,8 +610,8 @@ function LumidTable({ body }: { body: Body }) {
         <div className="flex items-center gap-2">
           {tableActions.length > 0 && <ActionBar actions={tableActions} onDone={refetch} />}
           {pollSec > 0 && (
-            <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-emerald-600">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live
+            <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-gold-600">
+              <span className="w-1.5 h-1.5 rounded-full bg-gold-500 animate-pulse" /> Live
             </span>
           )}
         </div>
@@ -628,7 +628,7 @@ function LumidTable({ body }: { body: Body }) {
                     className={cn("px-2.5 py-1.5 text-left font-semibold text-slate-700", sortable && "cursor-pointer select-none hover:text-slate-900")}>
                     <span className="inline-flex items-center gap-1">
                       {c.label ?? c.key}
-                      {sortable && <span className={cn("text-[10px]", sort?.key === c.key ? "text-emerald-600" : "text-slate-400")}>{sortIcon(c.key)}</span>}
+                      {sortable && <span className={cn("text-[10px]", sort?.key === c.key ? "text-gold-600" : "text-slate-400")}>{sortIcon(c.key)}</span>}
                     </span>
                   </th>
                 );
@@ -692,7 +692,7 @@ function LumidChart({ body }: { body: Body }) {
   const seriesKey = body.series_key as string | undefined;
   const kind = (body.kind as string) ?? (body.type as string) ?? "line";
   const height = Number(body.height) || 240;
-  const palette = ["#059669", "#6366f1", "#f59e0b", "#ef4444", "#0ea5e9"];
+  const palette = ["#96773A", "#6366f1", "#B08F45", "#ef4444", "#0ea5e9"];
 
   let chartData: object[];
   let ys: string[];
@@ -786,7 +786,7 @@ function LumidAction({ body }: { body: Body }) {
     <button
       onClick={onClick}
       disabled={busy}
-      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-[13px] font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+      className="inline-flex items-center gap-1.5 rounded-lg bg-gold-600 px-3 py-1.5 text-[13px] font-medium text-white hover:bg-gold-700 disabled:opacity-50"
     >
       {busy ? "Working…" : label}
     </button>
@@ -915,7 +915,7 @@ function LumidSearchTable({ body }: { body: Body }) {
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onKey}
           placeholder={String(body.placeholder ?? "Search…")}
-          className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-teal-400/20 focus:border-teal-400"
+          className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400"
         />
         <button
           onClick={() => setCommitted(query)}
@@ -963,12 +963,15 @@ type SelectOption = { value: string; label: string };
 async function loadFieldOptions(source: string): Promise<SelectOption[]> {
   if (source.startsWith("pats://")) {
     const r = await apiClient.get("/api/v1/identity/personal-access-tokens?limit=100");
-    const rows = (r.data?.data?.tokens ?? []) as Array<{ id: string; name?: string; prefix?: string; revoked_at?: string | null }>;
+    // The identity API returns { id, name, token_prefix, status, revoked_at, … }.
+    // Earlier code read `prefix` (always undefined) so every PAT showed as a
+    // UUID shard; use token_prefix and prefer the explicit `status` flag.
+    const rows = (r.data?.data?.tokens ?? []) as Array<{ id: string; name?: string; token_prefix?: string; status?: string; revoked_at?: number | string | null }>;
     return [
       { value: "session", label: "This session — full access, expires in minutes (recommended)" },
       ...rows
-        .filter((t) => !t.revoked_at)
-        .map((t) => ({ value: t.id, label: `PAT · ${t.name || t.prefix || t.id.slice(0, 8)}` })),
+        .filter((t) => (t.status ? t.status === "active" : !t.revoked_at))
+        .map((t) => ({ value: t.id, label: `PAT · ${t.name || t.token_prefix || t.id.slice(0, 8)}` })),
     ];
   }
   return [];
@@ -1007,7 +1010,7 @@ function FormFieldInput({ f, vals, setVals }: {
           id={fid}
           value={String(vals[f.key] ?? "")}
           onChange={(e) => setVals((v) => ({ ...v, [f.key]: e.target.value }))}
-          className="rounded-md border border-slate-200 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/20 focus:border-emerald-400"
+          className="rounded-md border border-slate-200 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400"
         >
           {(selectOptions ?? []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
@@ -1017,7 +1020,7 @@ function FormFieldInput({ f, vals, setVals }: {
           value={String(vals[f.key] ?? "")}
           placeholder={f.placeholder}
           onChange={(e) => setVals((v) => ({ ...v, [f.key]: e.target.value }))}
-          className="rounded-md border border-slate-200 px-2.5 py-1.5 text-sm font-mono resize-y min-h-[60px] focus:outline-none focus:ring-2 focus:ring-emerald-400/20 focus:border-emerald-400"
+          className="rounded-md border border-slate-200 px-2.5 py-1.5 text-sm font-mono resize-y min-h-[60px] focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400"
         />
       ) : (
         <input
@@ -1027,7 +1030,7 @@ function FormFieldInput({ f, vals, setVals }: {
           placeholder={f.placeholder}
           required={f.required}
           onChange={(e) => setVals((v) => ({ ...v, [f.key]: e.target.value }))}
-          className="rounded-md border border-slate-200 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/20 focus:border-emerald-400"
+          className="rounded-md border border-slate-200 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400"
         />
       )}
     </div>
@@ -1143,12 +1146,12 @@ function LumidForm({ body }: { body: Body }) {
       <div className="flex items-center gap-2">
         <button
           type="submit" disabled={busy}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm hover:from-emerald-600 hover:to-teal-700 disabled:opacity-60 transition"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-gradient-to-br from-gold-500 to-gold-600 text-white shadow-sm hover:from-gold-600 hover:to-gold-700 disabled:opacity-60 transition"
         >
           {busy ? "Submitting…" : submitLabel}
         </button>
         {result && (
-          <span className={cn("text-[12px]", result.ok ? "text-emerald-600" : "text-rose-600")}>{result.msg}</span>
+          <span className={cn("text-[12px]", result.ok ? "text-gold-600" : "text-rose-600")}>{result.msg}</span>
         )}
       </div>
     </form>
@@ -1290,7 +1293,7 @@ function LumidAsk({ body }: { body: Body }) {
               },
             }))
           }
-          className="group px-3 py-1.5 rounded-full border border-emerald-200/70 bg-white hover:bg-emerald-50 text-emerald-800 hover:border-emerald-300 transition-all active:scale-[0.98]"
+          className="group px-3 py-1.5 rounded-full border border-gold-200/70 bg-white hover:bg-gold-50 text-gold-800 hover:border-gold-300 transition-all active:scale-[0.98]"
         >
           <span className="opacity-60 group-hover:opacity-100 transition-opacity mr-0.5">›</span>
           {p}

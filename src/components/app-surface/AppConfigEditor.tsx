@@ -57,7 +57,7 @@ function parseChips(yaml: string): ConfigChip[] {
   if (name)    chips.push({ label: "name",    value: name });
   if (version) chips.push({ label: "version", value: `v${version}` });
   if (kind)    chips.push({ label: "kind",    value: kind });
-  if (loops > 0) chips.push({ label: "loops", value: String(loops), accent: "text-emerald-700 bg-emerald-50 border-emerald-200" });
+  if (loops > 0) chips.push({ label: "loops", value: String(loops), accent: "text-gold-700 bg-gold-50 border-gold-200" });
   if (sidebarLabel)   chips.push({ label: "sidebar label",   value: sidebarLabel });
   if (sidebarSection) chips.push({ label: "sidebar section", value: sidebarSection });
   if (sidebarShow === "false") chips.push({ label: "sidebar", value: "hidden", accent: "text-slate-500 bg-slate-50 border-slate-200" });
@@ -187,7 +187,7 @@ export function AppConfigEditor() {
             className={cn(
               "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all",
               dirty && !saving
-                ? "bg-emerald-500 text-white hover:bg-emerald-600 shadow-sm shadow-emerald-100"
+                ? "bg-gold-500 text-white hover:bg-gold-600 shadow-sm shadow-gold-100"
                 : "bg-slate-100 text-slate-400 cursor-not-allowed",
             )}
           >
@@ -215,7 +215,7 @@ export function AppConfigEditor() {
       )}
 
       {/* YAML warning banner */}
-      <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border-b border-amber-100 text-[11px] text-amber-700 flex-shrink-0">
+      <div className="flex items-center gap-2 px-4 py-2 bg-gold-50 border-b border-gold-100 text-[11px] text-gold-700 flex-shrink-0">
         <AlertTriangle className="w-3 h-3 flex-shrink-0" />
         Editing xpcloud.yaml directly. Invalid YAML will be rejected on save. Changes take effect immediately for UI/sidebar; loop schedule changes require a scheduler restart.
       </div>

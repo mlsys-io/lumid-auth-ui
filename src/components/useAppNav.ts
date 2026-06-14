@@ -10,9 +10,14 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { me, type MeAppCard } from "@/api/me";
+import { registerAppLabel, registerAppSurfacePresence } from "@/components/workflow/AppCard";
 
 export const APP_NAV_INVALIDATE = "studio:apps-invalidate";
-const POLL_MS = 60_000;
+// The installed-app set is near-static — it changes only on install/uninstall,
+// which already fire APP_NAV_INVALIDATE for an immediate refresh. The interval
+// is just a safety net for changes made out-of-band (CLI install), so a slow
+// 5-min tick is plenty; a 60s poll was pure redundant load on /me/apps.
+const POLL_MS = 300_000;
 
 const ICONS: Record<string, LucideIcon> = {
   "boxes": Boxes,
@@ -74,6 +79,12 @@ export function useAppNav(): AppNavSection[] {
     const sb = a.ui?.sidebar;
     // Explicit on/off: show when `show` is omitted (back-compat) or true;
     // skip when the app set `show: false` (keeps its label/icon config).
+    // Register the canonical display label (even for show:false apps) so
+    // appTitle() resolves to the SAME name the sidebar uses, everywhere.
+    if (sb?.label) registerAppLabel(a.name, sb.label);
+    // Surface presence — lets AppSurfaceCard skip the appUI probe (+ its 404)
+    // for apps that declare no UI surface.
+    registerAppSurfacePresence(a.name, !!(a.ui?.surface || (a.ui?.surfaces && Object.keys(a.ui.surfaces).length > 0)));
     if (!sb?.label || sb.show === false || seen.has(a.name)) continue; // tenant walked first → wins over operator-shared dup
     seen.add(a.name);
     const section = sb.section || "Apps";

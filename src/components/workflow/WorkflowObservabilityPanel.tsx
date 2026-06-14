@@ -12,27 +12,30 @@
 // shared apps ("Healthy · ran 2d ago" next to an empty runs list) — when
 // the cycles list is empty this card says "Not run yet", full stop.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-	Activity, Play, Pause, Loader2, Save, Lightbulb, Clock, AlertCircle, Target,
-	ChevronLeft, ChevronRight, ChevronDown, Trash2, FlaskConical,
+	Play, Pause, Loader2, Save, Clock, AlertCircle, Target,
+	ChevronLeft, ChevronRight, ChevronDown, Trash2,
+	Database, Sparkles, Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import apiClient from "@/api/client";
-import { me, MeApiError, type MeWorkflowRow, type MeCycleDetail, type MeMetricSeries, type LoopDefinition } from "@/api/me";
+import { me, MeApiError, type MeWorkflowRow, type MeCycleDetail, type LoopDefinition } from "@/api/me";
 import WorkflowCanvas, { type CanvasStepRef } from "@/components/workflow/WorkflowCanvas";
 import StepInspectorPanel from "@/components/workflow/StepInspectorPanel";
-import { TrendRow } from "@/components/workflow/MetricTrend";
-import WorkflowInsights from "@/components/workflow/WorkflowInsights";
 import { type LoopStageKey } from "@/components/workflow/LoopOrbit";
 import SchedulePicker from "@/components/workflow/SchedulePicker";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { describeSchedule, parseSchedule } from "@/lib/schedule";
 import { loopLabel } from "@/lib/workflow-names";
 import FailureCard from "@/components/workflow/FailureCard";
-import AskAbout from "@/components/AskAbout";
+import RunSparkline from "@/components/RunSparkline";
+// Datasets the workflow works on — heavy (table/preview), so lazy-load it and
+// only mount when the Data tab is opened.
+const DatasetExplorer = lazy(() => import("@/components/workflow/DatasetExplorer"));
 import {
-	ObserveGatePanel, ReviewQueue, OffersPanel,
+	ReviewQueue, OffersPanel,
 	type CycleSummary,
 } from "@/pages/studio/inspector";
 import { cn } from "@/lib/utils";
@@ -62,8 +65,8 @@ function health(wf: MeWorkflowRow, hasRuns: boolean): { label: string; cls: stri
 	if (wf.last_run_ok === false)
 		return { label: "Needs attention", cls: "text-rose-700 bg-rose-50 border-rose-200", dot: "bg-rose-500" };
 	if (wf.last_run_recovered)
-		return { label: "Recovered", cls: "text-amber-700 bg-amber-50 border-amber-200", dot: "bg-amber-500" };
-	if (wf.last_run_ok === true) return { label: "Healthy", cls: "text-emerald-700 bg-emerald-50 border-emerald-200", dot: "bg-emerald-500" };
+		return { label: "Recovered", cls: "text-gold-700 bg-gold-50 border-gold-200", dot: "bg-gold-500" };
+	if (wf.last_run_ok === true) return { label: "Healthy", cls: "text-gold-700 bg-gold-50 border-gold-200", dot: "bg-gold-500" };
 	return { label: "Idle", cls: "text-slate-500 bg-slate-50 border-slate-200", dot: "bg-slate-300" };
 }
 
@@ -157,8 +160,6 @@ export default function WorkflowObservabilityPanel({
 	const [anchorTs, setAnchorTs] = useState<string | null>(initialCycle || null);
 	const [summary, setSummary] = useState<CycleSummary | null>(cached0?.summary ?? null);
 	const [cycleFiles, setCycleFiles] = useState<Record<string, unknown>>({});
-	const [metricSeries, setMetricSeries] = useState<MeMetricSeries[]>([]);
-	const [metricEvents, setMetricEvents] = useState<Record<string, string>>({});
 	const [lastError, setLastError] = useState<string | null>(null);
 	// Live running/event state — distinct from one-shot load motion.
 	const [optimisticRun, setOptimisticRun] = useState(false);
@@ -168,12 +169,17 @@ export default function WorkflowObservabilityPanel({
 	const [selectedStage, setSelectedStage] = useState<LoopStageKey | null>(initialCycle ? "learn" : null);
 	const [stageQ, setStageQ] = useState("");
 	const prevTsRef = useRef<string | null>(null);
+	// Run inspector lives full-width below the Runs/Data grid; scroll it into
+	// view when a run is opened so the click doesn't feel like nothing happened.
+	const inspectorRef = useRef<HTMLDivElement | null>(null);
+	useEffect(() => {
+		if (selectedStage) inspectorRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+	}, [selectedStage, anchorTs]);
 	// Canvas (n8n-style node view): the loop's declared structure +
 	// the selected run's per-step overlay + the click-a-node inspector.
 	const [definition, setDefinition] = useState<LoopDefinition | null>(null);
 	const [canvasCycle, setCanvasCycle] = useState<MeCycleDetail | null>(null);
 	const [canvasStep, setCanvasStep] = useState<CanvasStepRef | null>(null);
-	const [canvasOpen, setCanvasOpen] = useState(true);
 
 	const loadLatestCycle = useCallback(async () => {
 		try {
@@ -221,14 +227,6 @@ export default function WorkflowObservabilityPanel({
 		return () => window.clearInterval(id);
 	}, [loadLatestCycle]);
 
-	// Goal-metric trajectory across cycles (improvement over iterations).
-	useEffect(() => {
-		let live = true;
-		me.loopMetricSeries(app, loop)
-			.then((r) => { if (live) { setMetricSeries(r.series || []); setMetricEvents(r.events || {}); } })
-			.catch(() => { /* no trends → goal header falls back to latest KPIs */ });
-		return () => { live = false; };
-	}, [app, loop]);
 
 	// Canvas structure — the loop declaration verbatim (steps[] or
 	// engine + skills_invoked[]). One fetch per loop.
@@ -255,7 +253,6 @@ export default function WorkflowObservabilityPanel({
 		return () => { live = false; };
 	}, [app, loop, overlayTs]);
 
-	const gate = summary?.observe_gate;
 	const reviewQueue = Array.isArray(summary?.review_queue) ? summary!.review_queue! : [];
 	const offers = Array.isArray(summary?.offers) ? summary!.offers! : [];
 
@@ -270,6 +267,10 @@ export default function WorkflowObservabilityPanel({
 
 	const openRun = (ts: string) => { setAnchorTs(ts); setSelectedStage("learn"); };
 
+	// Run count (shown in the Runs header) + whether a pipeline is declared.
+	const runCount = cycleList?.length ?? 0;
+	const hasPipeline = !!(definition && (definition.steps?.length || definition.skills_invoked?.length || definition.engine?.type || definition.engine?.module));
+
 	return (
 		<div className="rounded-xl border border-slate-200 bg-white p-4 space-y-4 animate-in fade-in duration-300">
 			{/* ── HEADER — title + health + schedule + the controls ── */}
@@ -282,28 +283,48 @@ export default function WorkflowObservabilityPanel({
 							{running ? "Running…" : h.label}
 						</span>
 					</div>
-					<div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
-						<span>{describeSchedule(wf.trigger)}{lastRan ? ` · ${lastRan}` : ""}</span>
-						{(wf.experiment_ids || []).map((eid) => (
-							<Link key={eid} to={`/studio/a/${encodeURIComponent(app)}/experiments`}
-								title={`feeds experiment ${eid}`}
-								className="inline-flex items-center gap-1 px-1.5 py-px rounded-full border border-violet-200 bg-violet-50 text-violet-700 text-[10px] hover:bg-violet-100 transition-colors">
-								<FlaskConical className="w-2.5 h-2.5" />{eid.replace(/_/g, " ")}
-							</Link>
-						))}
+					{/* De-noised: just when it last ran (the status badge above already
+					    says failing/healthy; the experiment chip was redundant noise).
+					    The run-history strip (green/red dots, clickable → cycle preview)
+					    sits alongside — restored here after the workflow list rail that
+					    used to host it was consolidated into the WorkflowSelect dropdown. */}
+					<div className="flex items-center gap-2 mt-0.5">
+						<span className="text-[11px] text-slate-400">{lastRan || describeSchedule(wf.trigger)}</span>
+						{wf.run_spark && (
+							<RunSparkline spec={wf.run_spark} runs={wf.runs_recent} app={app} loop={loop} className="flex-shrink-0" />
+						)}
 					</div>
 				</div>
-				<div className="flex items-center gap-2 flex-shrink-0">
+				<div className="flex items-center gap-1.5 flex-shrink-0">
+					{/* Schedule as a compact dropdown control (like Config): a button
+					    showing the current cadence; the editor + Save live in a popover. */}
+					<Popover>
+						<PopoverTrigger asChild>
+							<button disabled={!!busy}
+								className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50">
+								<Clock className="w-3.5 h-3.5 text-slate-400" />
+								<span className="max-w-[150px] truncate">{describeSchedule(sched)}</span>
+								{schedDirty && <span className="w-1.5 h-1.5 rounded-full bg-gold-500 flex-shrink-0" />}
+								<ChevronDown className="w-3 h-3 text-slate-400 flex-shrink-0" />
+							</button>
+						</PopoverTrigger>
+						<PopoverContent align="end" className="w-72">
+							<div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-2">Schedule</div>
+							<SchedulePicker value={sched} disabled={!!busy} onChange={(c) => { setSched(c); setSchedDirty(true); }} />
+							{schedDirty && (
+								<button onClick={saveSchedule} disabled={!!busy}
+									className="mt-3 w-full inline-flex items-center justify-center gap-1 px-2 py-1.5 text-xs rounded-lg bg-gold-500 text-white hover:bg-gold-600 disabled:opacity-50">
+									{busy === "save" ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />} Save schedule
+								</button>
+							)}
+						</PopoverContent>
+					</Popover>
 					<button onClick={runNow} disabled={!!busy}
-						className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 active:scale-95 disabled:opacity-50 transition-all shadow-sm shadow-emerald-100">
+						className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-gold-500 text-white hover:bg-gold-600 active:scale-95 disabled:opacity-50 transition-all shadow-sm shadow-gold-100">
 						{busy === "run" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
 						Run now
 					</button>
-					<AskAbout
-						prompt={`Suggest improvements for the ${loop} workflow in ${app} — look at its recent runs and propose concrete changes (schedule, steps, prompts).`}
-						context={{ app, loop }}
-						label="Improve"
-					/>
+					{/* "Improve" moved to the chat opener chips (chipsForApp). */}
 					<button onClick={toggle} disabled={!!busy}
 						className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50">
 						{busy === "toggle" ? <Loader2 className="w-3 h-3 animate-spin" /> : enabled ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
@@ -318,131 +339,104 @@ export default function WorkflowObservabilityPanel({
 				</div>
 			</div>
 
-			{/* ── NOT RUN YET — the one empty state (replaces every section) ── */}
-			{cyclesKnown && !tenantHasRuns && !running && !definition && (
-				<div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-5 text-center space-y-1">
-					<div className="text-sm text-slate-600">Not run yet.</div>
-					<div className="text-xs text-slate-400">
-						{onDemand ? "It runs when you click Run now." : `It runs ${describeSchedule(wf.trigger).toLowerCase()} — or run it now to try it.`}
-					</div>
-				</div>
-			)}
+			{/* ── GOAL — the workflow's objective, prominent + editable, shown
+			    per workflow. (Tabs removed — every section lives on one page now.) ── */}
+			<GoalHeader goal={wf.goal} kpis={buildGoalKpis(summary, cycleFiles)} app={app} loop={loop} onSaved={onChanged} />
+
+			{/* A failed last run is an alert. */}
 			{!running && wf.last_run_ok === false && lastError && tenantHasRuns && (
 				<FailureCard error={lastError} app={app} loop={loop} />
 			)}
 
-			{/* ── PIPELINE — n8n-style node canvas. Structure from the loop's
-			    declaration; statuses from the selected run (dot click = replay). ── */}
-			{definition && (definition.steps?.length || definition.skills_invoked?.length || definition.engine?.type || definition.engine?.module) ? (
+			{/* ── PIPELINE — n8n-style node canvas (full width; it's the widest
+			    artifact so it leads the body). ── */}
+			{hasPipeline && (
 				<div className="space-y-2">
-					<button
-						type="button"
-						onClick={() => setCanvasOpen((v) => !v)}
-						className="inline-flex items-center gap-1 text-[11px] tracking-[0.08em] font-medium text-slate-400 uppercase hover:text-slate-600 transition-colors"
-					>
-						{canvasOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+					<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400 uppercase">
 						Pipeline
-						{overlayTs && tenantHasRuns && <span className="normal-case tracking-normal text-slate-400 font-normal">· showing run {cycleDate(overlayTs)}</span>}
-						{!tenantHasRuns && <span className="normal-case tracking-normal text-slate-400 font-normal">· runs when you click Run now</span>}
-					</button>
-					{canvasOpen && (
-						<>
-							<WorkflowCanvas
-								definition={definition}
-								cycle={canvasCycle}
-								running={running}
-								onStepSelect={(ref) => setCanvasStep(ref)}
-							/>
-							{canvasStep && (
-								<StepInspectorPanel
-									step={canvasStep}
-									app={app}
-									loop={loop}
-									ts={overlayTs || undefined}
-									onClose={() => setCanvasStep(null)}
-								/>
-							)}
-						</>
-					)}
-				</div>
-			) : null}
-
-			{/* ── RUNS — what happened, newest first; click to inspect ── */}
-			{tenantHasRuns && (
-				<Section icon={Clock} title="Runs">
-					<ul className="rounded-xl border border-slate-200 bg-white divide-y divide-slate-100 overflow-hidden">
-						{(cycleList ?? []).map((c) => {
-							const cdot = c.running ? "bg-sky-500 running-pulse" : c.ok === false ? "bg-rose-500" : "bg-emerald-500";
-							return (
-								<li key={c.ts}>
-									<button type="button" onClick={() => openRun(c.ts)}
-										className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50 transition-colors">
-										<span className={cn("w-2 h-2 rounded-full flex-shrink-0", cdot)} />
-										<span className="text-xs text-slate-700 tabular-nums">{cycleDate(c.ts)}</span>
-										<span className="text-[11px] text-slate-400">
-											{c.running ? "running…" : c.ok === false ? "failed" : "ok"}
-											{typeof c.duration_s === "number" && c.duration_s > 0 ? ` · ${c.duration_s >= 90 ? Math.round(c.duration_s / 60) + "m" : Math.round(c.duration_s) + "s"}` : ""}
-										</span>
-										<ChevronRight className="w-3.5 h-3.5 text-slate-300 ml-auto flex-shrink-0" />
-									</button>
-								</li>
-							);
-						})}
-					</ul>
-				</Section>
-			)}
-			{/* Per-run stage inspector — opened by clicking a run above. */}
-			{selectedStage && tenantHasRuns && (
-				<StageDetail
-					app={app} loop={loop} stage={selectedStage} initialTs={anchorTs || undefined}
-					onStageChange={(k) => setSelectedStage(k)}
-					q={stageQ} setQ={setStageQ} onClose={() => setSelectedStage(null)}
-				/>
-			)}
-
-			{/* What this loop is chasing + how its metrics move over runs. */}
-			{tenantHasRuns && (wf.goal?.primary || metricSeries.length > 0) && (
-				<GoalHeader goal={wf.goal} kpis={buildGoalKpis(summary, cycleFiles)} series={metricSeries} events={metricEvents} app={app} loop={loop} />
-			)}
-
-			{/* ── SCHEDULE — presets for humans; cron only under Advanced ── */}
-			<Section icon={Activity} title="Schedule">
-				<div className="flex flex-wrap items-start gap-3">
-					{wf.last_run_ok === false && tenantHasRuns && (loopHealth?.consecutive_failures ?? 0) > 0 && (
-						<span className="text-xs text-rose-600 mt-1">{loopHealth!.consecutive_failures} consecutive failures</span>
-					)}
-					<div className="flex items-start gap-1.5 ml-auto">
-						<SchedulePicker
-							value={sched}
-							disabled={!!busy}
-							onChange={(c) => { setSched(c); setSchedDirty(true); }}
-						/>
-						<button
-							onClick={saveSchedule}
-							disabled={!schedDirty || !!busy}
-							className={cn(
-								"inline-flex items-center gap-1 px-2 py-1.5 text-xs rounded-lg transition-colors",
-								schedDirty ? "bg-emerald-500 text-white hover:bg-emerald-600" : "bg-slate-100 text-slate-400 cursor-not-allowed",
-							)}
-						>
-							{busy === "save" ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-							Save
-						</button>
+						{overlayTs && tenantHasRuns && <span className="normal-case tracking-normal text-slate-400 font-normal"> · showing run {cycleDate(overlayTs)}</span>}
+						{!tenantHasRuns && <span className="normal-case tracking-normal text-slate-400 font-normal"> · runs when you click Run now</span>}
 					</div>
+					<WorkflowCanvas
+						definition={definition!}
+						cycle={canvasCycle}
+						running={running}
+						onStepSelect={(ref) => setCanvasStep(ref)}
+					/>
+					{canvasStep && (
+						<StepInspectorPanel
+							step={canvasStep} app={app} loop={loop}
+							ts={overlayTs || undefined} onClose={() => setCanvasStep(null)}
+						/>
+					)}
 				</div>
-			</Section>
-
-			{/* ── INSIGHTS — hidden until there are runs to speak about ── */}
-			{tenantHasRuns && (
-				<Section icon={Lightbulb} title="Insights" delay={120}>
-					<WorkflowInsights slug={wf.slug} />
-					{gate && <div className="mt-2"><ObserveGatePanel gate={gate} /></div>}
-				</Section>
 			)}
 
-			{/* ── SUGGESTED IMPROVEMENTS ───────────────────────────── */}
+			{/* ── RUNS + DATA — side by side only when there's real room (xl); the
+			    panel shares the workspace's center column with the chat, so lg
+			    would cramp both. Stacks otherwise. ── */}
+			<div className="grid xl:grid-cols-2 gap-5 items-start">
+				{/* RUNS — newest first; click to inspect a run below. */}
+				<div className="space-y-2 min-w-0">
+					<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400 uppercase flex items-center gap-1.5">
+						<Clock className="w-3 h-3" /> Runs{runCount > 0 && <span className="text-slate-300 normal-case tracking-normal"> · {runCount}</span>}
+					</div>
+					{tenantHasRuns ? (
+						<ul className="rounded-xl border border-slate-200 bg-white divide-y divide-slate-100 overflow-hidden">
+							{(cycleList ?? []).map((c) => {
+								const cdot = c.running ? "bg-sky-500 running-pulse" : c.ok === false ? "bg-rose-500" : "bg-gold-500";
+								return (
+									<li key={c.ts}>
+										<button type="button" onClick={() => openRun(c.ts)}
+											aria-label={`Inspect run ${cycleDate(c.ts)} — ${c.running ? "running" : c.ok === false ? "failed" : "ok"}`}
+											className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50 transition-colors">
+											<span className={cn("w-2 h-2 rounded-full flex-shrink-0", cdot)} />
+											<span className="text-xs text-slate-700 tabular-nums">{cycleDate(c.ts)}</span>
+											<span className="text-[11px] text-slate-400">
+												{c.running ? "running…" : c.ok === false ? "failed" : "ok"}
+												{typeof c.duration_s === "number" && c.duration_s > 0 ? ` · ${c.duration_s >= 90 ? Math.round(c.duration_s / 60) + "m" : Math.round(c.duration_s) + "s"}` : ""}
+											</span>
+											<ChevronRight className="w-3.5 h-3.5 text-slate-300 ml-auto flex-shrink-0" />
+										</button>
+									</li>
+								);
+							})}
+						</ul>
+					) : (
+						<div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-5 text-center">
+							<div className="text-sm text-slate-600">Not run yet.</div>
+							<div className="text-xs text-slate-400 mt-1">
+								{onDemand ? "It runs when you click Run now." : `It runs ${describeSchedule(wf.trigger).toLowerCase()} — or run it now to try it.`}
+							</div>
+						</div>
+					)}
+				</div>
+
+				{/* DATA — datasets the workflow works on (app-scoped). */}
+				<div className="space-y-2 min-w-0">
+					<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400 uppercase flex items-center gap-1.5">
+						<Database className="w-3 h-3" /> Data it works on
+					</div>
+					<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading datasets…</div>}>
+						<DatasetExplorer app={app} />
+					</Suspense>
+				</div>
+			</div>
+
+			{/* Per-run stage inspector — opened by clicking a run above; full width. */}
+			{selectedStage && tenantHasRuns && (
+				<div ref={inspectorRef}>
+					<StageDetail
+						app={app} loop={loop} stage={selectedStage} initialTs={anchorTs || undefined}
+						onStageChange={(k) => setSelectedStage(k)}
+						q={stageQ} setQ={setStageQ} onClose={() => setSelectedStage(null)}
+					/>
+				</div>
+			)}
+
+			{/* ── SUGGESTED IMPROVEMENTS — review queue + proposed changes. ── */}
 			{(reviewQueue.length > 0 || offers.length > 0) && (
-				<Section icon={Clock} title="Suggested improvements" delay={240}>
+				<Section icon={Sparkles} title="Suggested improvements">
 					{offers.length > 0 && <OffersPanel offers={offers} app={app} loop={loop} ts={cycleTs ?? undefined} />}
 					{reviewQueue.length > 0 && cycleTs && (
 						<div className={offers.length > 0 ? "mt-2" : ""}>
@@ -500,33 +494,99 @@ function buildGoalKpis(summary: CycleSummary | null, files: Record<string, unkno
 	return out.slice(0, 5);
 }
 
-function GoalHeader({ goal, kpis, series, events, app, loop }: { goal?: { primary: string; tracked?: string[] }; kpis: GoalKpi[]; series: MeMetricSeries[]; events: Record<string, string>; app?: string; loop?: string }) {
-	// Best: trajectories (how metrics move over runs). Then latest static
-	// values. Then just the tracked-metric names, terse. The goal line is
-	// optional — the trend curve renders regardless.
-	const hasTrends = series.length > 0;
-	return (
-		<div className="rounded-xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50/80 to-white p-3">
-			<div className="flex items-start gap-2">
-				<Target className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
-				<div className="min-w-0 flex-1">
-					<div className="text-[10px] uppercase tracking-wide text-emerald-700/70 font-semibold" title={(goal?.tracked || []).join(" · ")}>{goal?.primary ? "Goal · how it's trending" : "How it's trending"}</div>
-					{goal?.primary && <div className="text-[13px] text-slate-800 font-medium leading-snug">{humanizeGoal(goal.primary)}</div>}
-					{hasTrends ? (
-						<TrendRow series={series} events={events} tracked={goal?.tracked} app={app} loop={loop} />
-					) : kpis.length > 0 ? (
-						<div className="mt-2 flex flex-wrap gap-3">
-							{kpis.map((k) => (
-								<div key={k.label} className="leading-none">
-									<div className="text-[15px] font-semibold text-slate-900 tabular-nums">{k.value}</div>
-									<div className="text-[10px] text-slate-400 mt-0.5">{k.label}</div>
-								</div>
-							))}
-						</div>
-					) : null}
-				</div>
+// GoalHeader — the loop's objective as a full-width bar near the top of the
+// panel (per workflow). Trends were removed per request; the goal text + live
+// KPI chips show inline, editing happens in a popover (pencil). Saving PATCHes
+// the goal into the tenant's .user-overrides.yaml (merged over the declared
+// xpcloud.yaml goal).
+function GoalHeader({ goal, kpis, app, loop, onSaved }: { goal?: { primary: string; tracked?: string[] }; kpis: GoalKpi[]; app?: string; loop?: string; onSaved?: () => void }) {
+	const [open, setOpen] = useState(false);
+	const [draft, setDraft] = useState(goal?.primary || "");
+	const [saving, setSaving] = useState(false);
+	// Optimistic value shown immediately after save, until the parent refetch
+	// lands the new goal on the `goal` prop (avoids a flash of the old goal).
+	const [optimistic, setOptimistic] = useState<string | null>(null);
+	const shown = optimistic ?? goal?.primary;
+	// Re-seed the draft + clear the optimistic value when the persisted goal
+	// changes (poll/refresh) and the editor is closed.
+	useEffect(() => { if (!open) { setDraft(goal?.primary || ""); setOptimistic(null); } }, [goal?.primary, open]);
+
+	const save = async () => {
+		if (!app || !loop) return;
+		setSaving(true);
+		try {
+			const next = draft.trim();
+			await me.patchLoop(app, loop, { goal: next });
+			setOptimistic(next);
+			toast.success(next ? "Goal updated" : "Goal cleared");
+			setOpen(false);
+			onSaved?.();
+		} catch (e) {
+			toast.error(`Failed: ${e instanceof MeApiError ? e.message : String(e)}`);
+		} finally { setSaving(false); }
+	};
+
+	const editor = (
+		<PopoverContent align="end" className="w-80 space-y-2">
+			<div className="text-[10px] uppercase tracking-wide text-gold-700/70 font-semibold">Goal</div>
+			<textarea
+				value={draft}
+				onChange={(e) => setDraft(e.target.value)}
+				rows={3}
+				autoFocus
+				maxLength={280}
+				placeholder="What is this workflow trying to achieve?"
+				onKeyDown={(e) => {
+					if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); save(); }
+					if (e.key === "Escape") { e.preventDefault(); setOpen(false); }
+				}}
+				className="w-full text-[13px] text-slate-800 leading-snug rounded-lg border border-gold-200 bg-white px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-gold-300 resize-none"
+			/>
+			<div className="flex items-center gap-2">
+				<button type="button" onClick={save} disabled={saving}
+					className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-gold-500 text-white hover:bg-gold-600 disabled:opacity-50">
+					{saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />} Save
+				</button>
+				<button type="button" onClick={() => setOpen(false)} disabled={saving}
+					className="px-2.5 py-1 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50">Cancel</button>
+				<span className="text-[10px] text-slate-400 hidden sm:inline">⌘↵ to save</span>
 			</div>
-		</div>
+		</PopoverContent>
+	);
+
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<div className="rounded-xl border border-gold-200/70 bg-gradient-to-br from-gold-50/80 to-white px-3 py-2.5 flex items-center gap-2 flex-wrap">
+				<Target className="w-4 h-4 text-gold-600 flex-shrink-0" />
+				<span className="text-[10px] uppercase tracking-wide text-gold-700/70 font-semibold flex-shrink-0" title={(goal?.tracked || []).join(" · ")}>Goal</span>
+				{shown ? (
+					<>
+						<PopoverTrigger asChild>
+							<button type="button" title="Edit goal" className="text-[13px] text-slate-800 font-medium leading-snug text-left hover:text-gold-800 transition-colors">{humanizeGoal(shown)}</button>
+						</PopoverTrigger>
+						<PopoverTrigger asChild>
+							<button type="button" title="Edit goal" className="text-gold-700/50 hover:text-gold-700 transition-colors flex-shrink-0">
+								<Pencil className="w-3 h-3" />
+							</button>
+						</PopoverTrigger>
+						{kpis.length > 0 && (
+							<div className="flex items-center gap-2 flex-wrap ml-auto">
+								{kpis.slice(0, 4).map((k) => (
+									<span key={k.label} className="inline-flex items-center gap-1 text-[10.5px] text-slate-500 bg-white/70 border border-gold-100 rounded-full px-2 py-0.5">
+										<span className="font-semibold text-slate-800 tabular-nums">{k.value}</span> {k.label}
+									</span>
+								))}
+							</div>
+						)}
+					</>
+				) : (
+					<PopoverTrigger asChild>
+						<button type="button" className="text-[12.5px] text-gold-700/80 hover:text-gold-700 font-medium transition-colors flex-shrink-0">+ Set a goal</button>
+					</PopoverTrigger>
+				)}
+			</div>
+			{editor}
+		</Popover>
 	);
 }
 
@@ -570,7 +630,7 @@ function KVCard({ title, obj }: { title: string; obj: unknown }) {
 }
 
 function StageNote({ tone, children }: { tone: "ok" | "hold"; children: React.ReactNode }) {
-	return <div className={cn("text-[11px] leading-snug", tone === "ok" ? "text-emerald-700" : "text-amber-700")}>{children}</div>;
+	return <div className={cn("text-[11px] leading-snug", tone === "ok" ? "text-gold-700" : "text-gold-700")}>{children}</div>;
 }
 
 function StageProse({ label, text }: { label: string; text: string }) {
@@ -632,7 +692,7 @@ function StageBody({ stage, detail }: { stage: LoopStageKey; detail: MeCycleDeta
 			if (pushed > 0) blocks.push(<StageNote key="mp" tone="ok">Compounded {pushed} new memor{pushed === 1 ? "y" : "ies"} into your knowledge graph.</StageNote>);
 			if (files.improvement?.mutations_proposed) blocks.push(<StageNote key="imp" tone="ok">Proposed a self-improvement{Array.isArray(files.improvement.mutates) ? ` to its ${files.improvement.mutates.join(", ")} logic` : ""} — queued as a PR.</StageNote>);
 			if (!offers.length && !pushed && !files.improvement?.mutations_proposed)
-				blocks.push(<div key="lk" className="text-[11px] text-slate-500">Nothing new to bank this run. It compounds into your <Link to="/studio/knowledge" className="text-emerald-700 hover:underline">knowledge</Link> as it learns.</div>);
+				blocks.push(<div key="lk" className="text-[11px] text-slate-500">Nothing new to bank this run. It compounds into your <Link to="/studio/knowledge" className="text-gold-700 hover:underline">knowledge</Link> as it learns.</div>);
 			break;
 		}
 	}
@@ -641,7 +701,7 @@ function StageBody({ stage, detail }: { stage: LoopStageKey; detail: MeCycleDeta
 		<ul key="steps" className="space-y-1 pt-0.5">
 			{steps.map((st) => (
 				<li key={st.step_id} className="text-[11px] flex items-start gap-1.5">
-					<span className={cn("mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0", st.ok === false ? "bg-rose-500" : "bg-emerald-400")} />
+					<span className={cn("mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0", st.ok === false ? "bg-rose-500" : "bg-gold-400")} />
 					<span className="text-slate-600"><span className="font-medium text-slate-700">{st.skill || st.step_id}</span>{st.output_summary ? ` — ${st.output_summary}` : ""}{st.error ? ` · ${st.error.split("\n")[0]}` : ""}</span>
 				</li>
 			))}
@@ -671,7 +731,7 @@ function RunFlow({ steps, active, onPick }: {
 					const isActive = stg === active;
 					const tone = st.ok === false
 						? "border-rose-300 bg-rose-50 text-rose-700"
-						: "border-emerald-200 bg-white text-slate-700";
+						: "border-gold-200 bg-white text-slate-700";
 					return (
 						<div key={`${st.step_id || st.skill || i}`} className="flex items-center">
 							{i > 0 && <span className={cn("h-px w-5 flex-shrink-0", st.ok === false ? "bg-rose-200" : "bg-slate-200")} />}
@@ -682,11 +742,11 @@ function RunFlow({ steps, active, onPick }: {
 								className={cn(
 									"flex-shrink-0 rounded-lg border px-2 py-1 text-[10px] leading-tight max-w-[110px] truncate transition-colors",
 									tone,
-									isActive && "ring-2 ring-emerald-400/60",
+									isActive && "ring-2 ring-gold-400/60",
 									!stg && "cursor-default",
 								)}
 							>
-								<span className={cn("inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle", st.ok === false ? "bg-rose-500" : "bg-emerald-400")} />
+								<span className={cn("inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle", st.ok === false ? "bg-rose-500" : "bg-gold-400")} />
 								{st.skill || st.step_id || `step ${i + 1}`}
 							</button>
 						</div>
@@ -754,20 +814,20 @@ function StageDetail({
 	};
 
 	return (
-		<div className="rounded-xl border border-emerald-200/70 bg-emerald-50/30 p-3 animate-in fade-in slide-in-from-top-1 duration-300">
+		<div className="rounded-xl border border-gold-200/70 bg-gold-50/30 p-3 animate-in fade-in slide-in-from-top-1 duration-300">
 			<div className="flex items-center justify-between gap-2">
 				<div className="min-w-0">
-					<div className="text-[13px] font-medium text-emerald-900">{info.label}</div>
+					<div className="text-[13px] font-medium text-gold-900">{info.label}</div>
 					<div className="text-[11px] text-slate-500">{info.role}</div>
 				</div>
 				<div className="flex items-center gap-1.5 flex-shrink-0">
 					{total > 0 && (
 						<div className="flex items-center gap-1">
 							<button type="button" disabled={idx >= total - 1} onClick={() => setIdx((i) => Math.min(total - 1, i + 1))}
-								className="p-0.5 rounded disabled:opacity-30 enabled:hover:bg-emerald-100 text-emerald-700" title="older run"><ChevronLeft className="w-3.5 h-3.5" /></button>
+								className="p-0.5 rounded disabled:opacity-30 enabled:hover:bg-gold-100 text-gold-700" title="older run"><ChevronLeft className="w-3.5 h-3.5" /></button>
 							<span className="text-[10px] text-slate-500 tabular-nums whitespace-nowrap" title={ts}>{cycleDate(ts)} · {idx + 1}/{total}</span>
 							<button type="button" disabled={idx <= 0} onClick={() => setIdx((i) => Math.max(0, i - 1))}
-								className="p-0.5 rounded disabled:opacity-30 enabled:hover:bg-emerald-100 text-emerald-700" title="newer run"><ChevronRight className="w-3.5 h-3.5" /></button>
+								className="p-0.5 rounded disabled:opacity-30 enabled:hover:bg-gold-100 text-gold-700" title="newer run"><ChevronRight className="w-3.5 h-3.5" /></button>
 						</div>
 					)}
 					<button onClick={onClose} className="text-[11px] text-slate-400 hover:text-slate-700 ml-1">close</button>
@@ -787,8 +847,8 @@ function StageDetail({
 							className={cn(
 								"px-2 py-0.5 rounded-full text-[10px] border transition-colors",
 								k === stage
-									? "bg-emerald-600 text-white border-emerald-600"
-									: "bg-white text-slate-500 border-slate-200 hover:border-emerald-300 hover:text-emerald-700",
+									? "bg-gold-600 text-white border-gold-600"
+									: "bg-white text-slate-500 border-slate-200 hover:border-gold-300 hover:text-gold-700",
 							)}>
 							{STAGE_INFO[k].label}
 						</button>
@@ -811,9 +871,9 @@ function StageDetail({
 					value={q}
 					onChange={(e) => setQ(e.target.value)}
 					placeholder={`Ask the AI about the ${info.label.toLowerCase()} stage…`}
-					className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
+					className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-gold-400/40"
 				/>
-				<button type="submit" className="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-emerald-500 text-white hover:bg-emerald-600">Ask</button>
+				<button type="submit" className="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-gold-500 text-white hover:bg-gold-600">Ask</button>
 			</form>
 		</div>
 	);

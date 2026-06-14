@@ -84,7 +84,7 @@ export default function SchedulePicker({ value, onChange, disabled }: {
 					value={preset}
 					disabled={disabled}
 					onChange={(e) => pick(e.target.value as PresetKey)}
-					className="px-2 py-1 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
+					className="px-2 py-1 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-gold-400/40"
 				>
 					{PRESETS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
 				</select>
@@ -102,7 +102,7 @@ export default function SchedulePicker({ value, onChange, disabled }: {
 								else emit({ kind: "weekly", dow, hour: nh, minute: nm });
 							}
 						}}
-						className="px-2 py-[3px] text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
+						className="px-2 py-[3px] text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-gold-400/40"
 					/>
 				)}
 				{preset === "weekly" && (
@@ -110,7 +110,7 @@ export default function SchedulePicker({ value, onChange, disabled }: {
 						value={dow}
 						disabled={disabled}
 						onChange={(e) => { const d = +e.target.value; setDow(d); emit({ kind: "weekly", dow: d, hour: h, minute: m }); }}
-						className="px-2 py-1 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
+						className="px-2 py-1 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-gold-400/40"
 					>
 						{DOW_LABELS.map((l, i) => <option key={l} value={i}>{l.replace(/s$/, "")}</option>)}
 					</select>
@@ -122,7 +122,7 @@ export default function SchedulePicker({ value, onChange, disabled }: {
 						disabled={disabled}
 						onChange={(e) => onChange(e.target.value)}
 						placeholder="cron e.g. 0 8 * * *"
-						className="w-36 px-2 py-1 text-xs font-mono rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
+						className="w-36 px-2 py-1 text-xs font-mono rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-gold-400/40"
 					/>
 				)}
 			</div>

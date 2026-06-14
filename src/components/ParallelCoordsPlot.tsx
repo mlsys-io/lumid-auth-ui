@@ -10,7 +10,7 @@
 // onto evenly-spaced tick positions.
 //
 // Color: rows are colored by their primary categorical dimension
-// (version, newest = emerald-600 → older = slate-400). On hover any
+// (version, newest = gold-600 → older = slate-400). On hover any
 // polyline brightens while others dim.
 
 import { useMemo, useState } from "react";
@@ -36,7 +36,7 @@ type Dim =
 	| { key: keyof Row; label: string; kind: "categorical"; categories: string[] }
 	| { key: keyof Row; label: string; kind: "numeric"; min: number; max: number; format?: (v: number) => string };
 
-const VERSION_PALETTE = ["#94a3b8", "#10b981", "#059669"]; // slate-400 / emerald-500 / emerald-600
+const VERSION_PALETTE = ["#94a3b8", "#B08F45", "#96773A"]; // slate-400 / gold-500 / gold-600
 
 export function ParallelCoordsPlot({ rows, height = 380 }: Props) {
 	const [hovered, setHovered] = useState<number | null>(null);

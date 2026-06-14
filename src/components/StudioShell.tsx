@@ -9,18 +9,19 @@
 // no per-page nav reimplementation.
 
 import { Link, NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
+import ErrorBoundary from './ErrorBoundary';
 import {
 	Boxes,
-	Plus,
+	CirclePlus,
+	PanelLeftClose,
+	PanelLeftOpen,
 	Store,
 	Compass,
 	Settings,
 	Shield,
 	LogOut,
 	ChevronDown,
-	Hexagon,
 	Key,
-	ListChecks,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
@@ -38,7 +39,6 @@ import { httpUser } from '../runmesh/utils/axios';
 // Phase S6a — persistent chat sidebar. AI is the primary interface
 // for Studio; webforms in the main workspace area become the
 // precision channel beside it.
-import { StudioChat } from './StudioChat';
 // Mouse-picker overlay — sits at the document root so it can capture
 // pointer events globally when the user clicks the Crosshair in the
 // chat. Inactive (renders null) until startStudioPicking() is called.
@@ -72,43 +72,59 @@ interface NavItem {
 // API tokens live in the bottom avatar menu; "How it works" is a quiet
 // footer docs link.
 const TOP_NAV: NavItem[] = [
-	{ to: '/studio/apps',    label: 'Home',    icon: Boxes, title: 'your apps + anything needing attention' },
 	{ to: '/studio/library', label: 'Library', icon: Store, title: 'marketplace, skills, and experiments' },
 ];
-// Activity + Inbox folded into Home's status bar (the "runs today" and
-// "inbox" chips link there; the top-strip drafts pill covers other
-// pages). My Jobs is the quieter destination below the fold.
-const SECONDARY_NAV: NavItem[] = [
-	{ to: '/dashboard/jobs', label: 'My Jobs', icon: ListChecks, title: 'background runs and compute jobs' },
-];
+// Jobs/Activity/Inbox are folded into Apps — the Apps hero's "runs today" stat
+// + the top-bar "Right now" ticker link into /studio/runs, so it's no longer a
+// separate top-level destination.
+// Route-chunk prefetch — on hover/focus of a nav item, warm the lazy chunk for
+// its destination so the click navigates with the JS already downloaded (the
+// chunk transfer over the FRP tunnel is the slow part of a first navigation).
+// Vite dedupes these dynamic imports with App.tsx's lazy() — same chunk.
+const ROUTE_PREFETCH: Record<string, () => Promise<unknown>> = {
+	"/studio/library": () => import("@/pages/studio/library-tabs"),
+	"/studio/runs": () => import("@/pages/studio/runs"),
+};
+const prefetched = new Set<string>();
+function prefetchRoute(to: string) {
+	const norm = to.split("?")[0];
+	if (prefetched.has(norm)) return;
+	prefetched.add(norm);
+	const fn = ROUTE_PREFETCH[norm]
+		// the workspace (front + per-app) shares the StudioWorkspace + apps chunks
+		?? ((norm === "/studio/apps" || norm.startsWith("/studio/apps/") || norm.startsWith("/studio/a/"))
+			? () => Promise.all([import("@/pages/studio/StudioWorkspace"), import("@/pages/studio/apps")])
+			: undefined);
+	fn?.().catch(() => prefetched.delete(norm));
+}
+
 function NavItemView({ to, label, icon: Icon, end, badge, title }: NavItem) {
 	return (
 		<NavLink
 			to={to}
 			end={end}
 			title={title}
+			onMouseEnter={() => prefetchRoute(to)}
+			onFocus={() => prefetchRoute(to)}
 			className={({ isActive }) =>
 				cn(
-					'group flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all relative',
+					'group flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors relative',
 					isActive
-						? 'bg-gradient-to-r from-emerald-50 to-emerald-50/30 text-emerald-900 font-medium shadow-sm shadow-emerald-100/50'
-						: 'text-slate-600 hover:bg-slate-50 hover:text-slate-900',
+						? 'bg-black/[0.06] text-foreground font-medium'
+						: 'text-foreground/60 hover:bg-black/[0.04] hover:text-foreground',
 				)
 			}
 		>
 			{({ isActive }) => (
 				<>
-					{isActive && (
-						<span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r-full bg-emerald-500" />
-					)}
 					<Icon className={cn(
 						'w-4 h-4 flex-shrink-0 transition-colors',
-						isActive ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-700',
+						isActive ? 'text-foreground/80' : 'text-foreground/45 group-hover:text-foreground/70',
 					)} />
 					<span>{label}</span>
 					{badge != null && badge > 0 && (
 						<span
-							className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold tabular-nums"
+							className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-gold-100 text-gold-700 text-[10px] font-semibold tabular-nums"
 							title={`${badge} awaiting you`}
 						>
 							{badge}
@@ -123,7 +139,7 @@ function NavItemView({ to, label, icon: Icon, end, badge, title }: NavItem) {
 // Uppercase section divider for app-contributed nav groups.
 function SectionLabel({ children }: { children: React.ReactNode }) {
 	return (
-		<div className="mt-3 mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+		<div className="mt-4 mb-1 px-3 text-[11px] font-medium text-muted-foreground">
 			{children}
 		</div>
 	);
@@ -185,19 +201,24 @@ export function StudioShell() {
 	const location = useLocation();
 	// Hosted /dashboard pages, app surfaces, and management need full width
 	// (admin tables, dataset explorers); core Studio pages stay narrow.
+	// Main page = the chat home (centered chat, height-locked). The app pages
+	// are the full-bleed 3-panel workspace (its own panels own padding/scroll).
+	// /studio/apps/all is the plain grid → neither.
+	const chatHome = location.pathname === '/studio';
+	const appWorkspace = location.pathname === '/studio/apps'
+		|| (/^\/studio\/apps\/[^/]+/.test(location.pathname) && location.pathname !== '/studio/apps/all');
 	const wideMain = location.pathname.startsWith('/dashboard')
 		|| location.pathname.startsWith('/studio/a/')
 		|| location.pathname.startsWith('/studio/manage')
-		// App detail hosts the pipeline canvas + master-detail panel —
-		// the narrow column left a dead gutter beside the chat rail.
-		|| /^\/studio\/apps\/[^/]+/.test(location.pathname);
+		|| location.pathname === '/studio/apps/all';
 	// Bridge lum.id → Runmesh auth store (numeric sys_user.user_id) for the
 	// ported Runmesh admin pages now hosted in this shell. Ported from AppLayout.
 	const setRunmeshUser = useAuthStore((s) => s.setUser);
 	useEffect(() => {
-		// Only admins reach the ported Runmesh pages that need the numeric-id
-		// bridge — skip the /runmesh profile fetch for everyone else.
-		if (!user || !isAdmin) return;
+		// Only admins on a /dashboard route reach the ported Runmesh pages that
+		// need the numeric-id bridge. Gating to /dashboard avoids a needless
+		// (and session-only) /runmesh profile fetch on every /studio chat page.
+		if (!user || !isAdmin || !location.pathname.startsWith('/dashboard')) return;
 		(async () => {
 			try {
 				const profile = await httpUser.get<{ user?: Record<string, unknown> } & Record<string, unknown>>('/runmesh/system/user/profile');
@@ -214,10 +235,19 @@ export function StudioShell() {
 				}
 			} catch { /* best-effort — pages needing this show their own error */ }
 		})();
-	}, [user, isAdmin, setRunmeshUser]);
+	}, [user, isAdmin, setRunmeshUser, location.pathname]);
 
 	const [menuOpen, setMenuOpen] = useState(false);
 	const menuRef = useRef<HTMLDivElement>(null);
+
+	// Sidebar collapse — the resize control lives at the sidebar's top-right and
+	// is always visible (when collapsed it moves to the header's far left).
+	const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+		try { return localStorage.getItem('studio_sidebar_collapsed_v1') === '1'; } catch { return false; }
+	});
+	useEffect(() => {
+		try { localStorage.setItem('studio_sidebar_collapsed_v1', sidebarCollapsed ? '1' : '0'); } catch { /* ignore */ }
+	}, [sidebarCollapsed]);
 
 	// Pending-drafts count → app-contributed nav badges (badge_source:
 	// 'drafts'). The Inbox nav entry folded into Home's status bar; the
@@ -230,11 +260,12 @@ export function StudioShell() {
 	}, []);
 	useEffect(() => {
 		tickDrafts();
-		const id = window.setInterval(tickDrafts, 30_000);
+		const id = window.setInterval(tickDrafts, 60_000);
 		return () => window.clearInterval(id);
 	}, [tickDrafts]);
 	// Chat→page bus: badge updates the moment chat sends/dismisses a draft.
 	useStudioRefetch(["drafts"], tickDrafts);
+
 	useEffect(() => {
 		const onClick = (e: MouseEvent) => {
 			if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
@@ -248,52 +279,75 @@ export function StudioShell() {
 		navigate('/auth/login');
 	};
 
-	// "+ New app" — launches the GUIDED CONVERSATIONAL create flow in the
-	// chat: the AI rolls out the procedure step by step (ask what it should do
-	// → compose → present the pipeline clearly → install). Replaces the old
-	// ad-hoc modal that pre-filled a fixed "crypto momentum trader". Lands on
-	// My Apps so the new app surfaces there once installed, then kicks the chat.
-	const newIntent = () => {
-		navigate('/studio/apps');
-		setTimeout(() => window.dispatchEvent(new CustomEvent('studio:ask', {
-			detail: { prompt: 'I want to set up a new app. Ask me what it should do for me, then assemble it step by step.', autosend: true },
-		})), 60);
+	// "⊕ New chat" — the chat IS the main surface (/studio). Flag a fresh
+	// conversation and land there; StudioChat consumes the flag on mount.
+	const newChat = () => {
+		try { sessionStorage.setItem('studio_new_chat_v1', '1'); } catch { /* ignore */ }
+		if (location.pathname === '/studio') {
+			window.dispatchEvent(new Event('studio:new-chat'));
+		} else {
+			navigate('/studio');
+		}
 	};
+
+	// studio:ask bridge — the chat is mounted on /studio (home) AND on every app
+	// workspace page (the docked right panel). When it's mounted, its OWN
+	// listener handles the ask in place — so we must NOT navigate (doing so on an
+	// app page yanked the user off the workspace, e.g. clicking an opener chip
+	// made the middle panel vanish). Only stash+navigate from pages WITHOUT a
+	// chat (Library, Jobs, …), where StudioChat consumes the stash on mount.
+	useEffect(() => {
+		const chatIsMounted = (path: string) =>
+			path === '/studio' ||
+			(/^\/studio\/apps\/[^/]+/.test(path) && path !== '/studio/apps/all');
+		const onAsk = (e: Event) => {
+			if (chatIsMounted(window.location.pathname)) return; // local chat handles it
+			const detail = (e as CustomEvent).detail;
+			if (!detail?.prompt) return;
+			try { sessionStorage.setItem('studio_pending_ask_v1', JSON.stringify(detail)); } catch { /* ignore */ }
+			navigate('/studio');
+		};
+		window.addEventListener('studio:ask', onAsk as EventListener);
+		return () => window.removeEventListener('studio:ask', onAsk as EventListener);
+	}, [navigate]);
 
 	return (
 		<LanguageProvider>
 		<EnterpriseTipProvider>
 		<div className={cn(
-			'min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 flex',
+			'min-h-screen bg-background flex',
 			resizing && 'select-none cursor-ew-resize',
 		)}>
 			{/* Sidebar ─────────────────────────────────────────────── */}
+			{!sidebarCollapsed && (
 			<aside
 				data-studio-picker-chrome="1"
 				style={{ width: sidebarWidth }}
-				className="relative flex flex-col h-screen flex-shrink-0 bg-white/70 backdrop-blur-sm border-r border-slate-200/70 sticky top-0"
+				className="relative flex flex-col h-screen flex-shrink-0 bg-sidebar border-r border-sidebar-border sticky top-0"
 			>
-				<Link to="/studio" className="px-4 py-4 border-b border-slate-200/60 flex items-center gap-2.5 hover:bg-slate-50/50 transition-colors">
-					<div className="relative">
-						<div className="absolute inset-0 bg-emerald-400/30 blur-md rounded-full" />
-						<Hexagon className="relative w-5 h-5 text-emerald-600 fill-emerald-50" strokeWidth={1.5} />
-					</div>
-					<span className="font-semibold text-[15px] tracking-tight text-slate-900">Lumid Studio</span>
-				</Link>
+				<div className="flex items-center justify-between pr-1.5">
+					<button onClick={newChat} title="New chat" className="px-4 py-4 flex items-baseline text-left flex-1 min-w-0">
+						<span className="font-display text-[18px] font-semibold tracking-tight text-foreground truncate">Lumid Studio</span>
+					</button>
+					<button
+						onClick={() => setSidebarCollapsed(true)}
+						title="Collapse sidebar"
+						aria-label="Collapse sidebar"
+						className="flex-shrink-0 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-black/[0.05] transition-colors"
+					>
+						<PanelLeftClose className="w-4 h-4" />
+					</button>
+				</div>
 
 				<nav className="flex-1 overflow-y-auto px-2 py-3 space-y-px">
-					{/* Primary create action — always visible, the streamlined
-					    "start a new app" entry. */}
+					{/* Primary action — a quiet claude-style row, not a button. */}
 					<button
-						onClick={newIntent}
-						className="w-full mb-2 inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-emerald-500 text-white hover:bg-emerald-600 active:scale-[0.98] shadow-sm shadow-emerald-200/70 transition-all"
+						onClick={newChat}
+						className="w-full mb-1 flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-foreground hover:bg-black/[0.04] transition-colors"
 					>
-						<Plus className="w-4 h-4" /> New app
+						<CirclePlus className="w-4 h-4 text-foreground/55" /> New chat
 					</button>
 					{TOP_NAV.map((item) => <NavItemView key={item.to} {...item} />)}
-					{SECONDARY_NAV.map((item) => (
-					<NavItemView key={item.to} {...item} />
-				))}
 					{/* App-contributed sections — installed xpio apps that declare
 					    ui.sidebar appear here, grouped by section. Data-driven via
 					    useAppNav(); soft-fails to nothing if /me/apps is unreachable. */}
@@ -303,7 +357,7 @@ export function StudioShell() {
 							{sec.items.map((it) => (
 								<NavItemView
 									key={it.app}
-									to={`/studio/a/${encodeURIComponent(it.app)}`}
+									to={`/studio/apps/${encodeURIComponent(it.app)}`}
 									label={it.label}
 									icon={iconFor(it.icon)}
 									badge={it.badge_source === 'drafts' ? draftCount : undefined}
@@ -311,10 +365,6 @@ export function StudioShell() {
 							))}
 						</div>
 					))}
-					{/* Management lives in the bottom user menu (role-gated). */}
-					<div className="my-2 mx-3 h-px bg-slate-200/60" />
-					{/* Marketplace — in-Studio browse + install (apps/skills/datasets). */}
-					<NavItemView to="/studio/marketplace" label="Marketplace" icon={Store} />
 				</nav>
 
 				{/* Docs link — kept apart from the functional nav above so
@@ -322,8 +372,8 @@ export function StudioShell() {
 				<NavLink
 					to="/studio/how"
 					className={({ isActive }) => cn(
-						'mx-3 mb-1 flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs transition-colors',
-						isActive ? 'text-emerald-700' : 'text-slate-400 hover:text-slate-600',
+						'mx-3 mb-1 flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs transition-colors hover:bg-black/[0.04]',
+						isActive ? 'text-foreground/80' : 'text-foreground/45 hover:text-foreground/70',
 					)}
 				>
 					<Compass className="w-3.5 h-3.5 flex-shrink-0" />
@@ -334,61 +384,67 @@ export function StudioShell() {
 				    everything the top-right avatar dropdown used to
 				    (Settings, API tokens, Admin, Sign out) so account
 				    surfaces live in one place. */}
-				<div ref={menuRef} className="p-3 border-t border-slate-200/60 relative">
+				<div ref={menuRef} className="p-3 border-t border-sidebar-border relative">
 					<button
 						onClick={() => setMenuOpen((v) => !v)}
 						className={[
 							'w-full px-1.5 py-1.5 rounded-lg flex items-center gap-2 min-w-0 transition-colors group',
-							menuOpen ? 'bg-slate-100/70' : 'hover:bg-slate-100/70',
+							menuOpen ? 'bg-black/[0.06]' : 'hover:bg-black/[0.04]',
 						].join(' ')}
 						title="Account menu"
 					>
-						<div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center text-xs font-semibold flex-shrink-0 shadow-sm shadow-emerald-100">
+						<div className="w-7 h-7 rounded-full bg-foreground text-background flex items-center justify-center text-xs font-semibold flex-shrink-0">
 							{(user?.email?.[0] || '?').toUpperCase()}
 						</div>
 						<div className="flex-1 min-w-0 text-left">
-							<div className="text-[12px] font-medium truncate text-slate-900">
+							<div className="text-[12px] font-medium truncate text-foreground">
 								{user?.username || user?.email?.split('@')[0] || 'there'}
 							</div>
 							{isAdmin ? (
-								<div className="text-[10px] uppercase tracking-wide text-emerald-700 truncate">
+								<div className="text-[10px] text-muted-foreground truncate">
 									{user?.role === 'super_admin' ? 'super admin' : 'admin'}
 								</div>
 							) : (
-								<div className="text-[10px] text-slate-400 truncate">{user?.email}</div>
+								<div className="text-[10px] text-muted-foreground truncate">{user?.email}</div>
 							)}
 						</div>
 						<ChevronDown className={[
-							'w-3.5 h-3.5 text-slate-400 transition-transform flex-shrink-0',
+							'w-3.5 h-3.5 text-muted-foreground transition-transform flex-shrink-0',
 							menuOpen ? 'rotate-180' : '',
 						].join(' ')} />
 					</button>
 
 					{menuOpen && (
-						<div className="absolute left-3 right-3 bottom-full mb-1 rounded-lg border border-slate-200 bg-white shadow-lg py-1 z-30">
+						<div className="absolute left-3 right-3 bottom-full mb-1 rounded-xl border border-border bg-card shadow-lg py-1 z-30">
+							<Link to="/studio/apps/all"
+								onClick={() => setMenuOpen(false)}
+								className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted">
+								<Boxes className="w-3.5 h-3.5 text-muted-foreground" />
+								Manage apps
+							</Link>
 							<Link to="/studio/settings"
 								onClick={() => setMenuOpen(false)}
-								className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
-								<Settings className="w-3.5 h-3.5 text-slate-500" />
+								className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted">
+								<Settings className="w-3.5 h-3.5 text-muted-foreground" />
 								Settings
 							</Link>
 							<Link to="/studio/account/tokens"
 								onClick={() => setMenuOpen(false)}
-								className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
-								<Key className="w-3.5 h-3.5 text-slate-500" />
+								className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted">
+								<Key className="w-3.5 h-3.5 text-muted-foreground" />
 								API tokens
 							</Link>
 							{isAdmin && (
 								<Link to="/studio/manage"
 									onClick={() => setMenuOpen(false)}
-									className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
-									<Shield className="w-3.5 h-3.5 text-slate-500" />
+									className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted">
+									<Shield className="w-3.5 h-3.5 text-muted-foreground" />
 									Management
 								</Link>
 							)}
 							<button
 								onClick={onLogout}
-								className="w-full flex items-center gap-2 px-3 py-2 text-sm text-rose-700 hover:bg-rose-50 border-t border-slate-100 mt-1 pt-2">
+								className="w-full flex items-center gap-2 px-3 py-2 text-sm text-rose-700 hover:bg-rose-50 border-t border-border/60 mt-1 pt-2">
 								<LogOut className="w-3.5 h-3.5" />
 								Sign out
 							</button>
@@ -403,29 +459,57 @@ export function StudioShell() {
 					title="Drag to resize · double-click to reset"
 					className={cn(
 						'absolute top-0 right-0 z-30 h-full w-1.5 cursor-ew-resize group/resize',
-						'hover:bg-emerald-200/30 transition-colors',
-						resizing && 'bg-emerald-200/40',
+						'hover:bg-black/5 transition-colors',
+						resizing && 'bg-black/10',
 					)}
 				>
 					<span className={cn(
 						'absolute right-0 top-0 h-full w-px transition-colors',
-						'bg-transparent group-hover/resize:bg-emerald-400',
-						resizing && '!bg-emerald-500',
+						'bg-transparent group-hover/resize:bg-foreground/30',
+						resizing && '!bg-foreground/40',
 					)} />
 				</div>
 			</aside>
+			)}
 
 			{/* Main column ─────────────────────────────────────────── */}
-			<div className="flex-1 flex flex-col min-w-0">
+			{/* On the chat route the column is locked to the viewport height
+			    (overflow-hidden) so the composer pins to the SCREEN bottom and
+			    only the transcript scrolls — never the page. Other routes keep
+			    the natural min-h-screen growth + body scroll. */}
+			<div className={cn('flex-1 flex flex-col min-w-0', (chatHome || appWorkspace) && 'h-screen overflow-hidden')}>
 				{/* Top bar — page header lives in TopStatusStrip; account
 				    surfaces moved to the sidebar user menu. */}
-				<header data-studio-picker-chrome="1" className="min-h-[64px] py-2.5 bg-white/70 backdrop-blur-md border-b border-slate-200/70 sticky top-0 z-10 flex items-center px-6 gap-4">
+				<header data-studio-picker-chrome="1" className="min-h-[64px] py-2.5 bg-background/85 backdrop-blur-md border-b border-border sticky top-0 z-10 flex items-center px-6 gap-4">
+					{/* When the sidebar is collapsed, its expand control lives here at
+					    the header's far left — so the resize icon is always visible. */}
+					{sidebarCollapsed && (
+						<button
+							onClick={() => setSidebarCollapsed(false)}
+							title="Show sidebar"
+							aria-label="Show sidebar"
+							className="flex-shrink-0 -ml-1 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+						>
+							<PanelLeftOpen className="w-4 h-4" />
+						</button>
+					)}
 					<TopStatusStrip />
 				</header>
 
-				{/* Workspace */}
-				<main className={cn('flex-1 px-6 py-6 w-full', !wideMain && 'max-w-5xl')}>
-					<Outlet />
+				{/* Workspace. /studio = the chat as the main surface (claude.ai
+				    layout): a flex column pinned to the viewport so the
+				    transcript scrolls internally and the composer stays low. */}
+				<main className={cn(
+					'flex-1 w-full',
+					chatHome
+						? 'flex flex-col min-h-0 px-6 pb-4'  // centered chat home (unchanged main page)
+						: appWorkspace
+							? 'flex flex-col min-h-0'        // full-bleed; the workspace panels own padding
+							: cn('px-6 py-6', !wideMain && 'max-w-5xl'),
+				)}>
+					<ErrorBoundary resetKey={location.pathname}>
+						<Outlet />
+					</ErrorBoundary>
 				</main>
 			</div>
 
@@ -433,12 +517,6 @@ export function StudioShell() {
 			    moved into the chat header right group on 2026-05-29
 			    (see StudioChat.tsx::ArtifactIconButton). Removed
 			    from the layout so the workspace reclaims the width. */}
-
-			{/* Phase S6a — AI chat lives here, sticky to the right.
-			    Collapses to a thin rail; the user toggles. Inside,
-			    StudioChat uses location to give the agent context
-			    about the page the user is on. */}
-			<StudioChat />
 
 			{/* Mouse-picker overlay (no-op until armed). Mounted here
 			    so it can layer above the workspace + chat. */}

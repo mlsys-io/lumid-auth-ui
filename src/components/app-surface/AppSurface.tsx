@@ -56,6 +56,7 @@ const lastSurfaceTitle = new Map<string, string>();
 export function AppSurface({
   app: appProp,
   surface: surfaceProp,
+  embedded,
 }: {
   // When mounted on an explicit route (e.g. the lumid-market competition
   // surfaces), the app + named surface come in as props and the URL's own
@@ -64,6 +65,10 @@ export function AppSurface({
   // route, both come from useParams().
   app?: string;
   surface?: string;
+  // When rendered inside the app workspace, the AppSwitcher already shows the
+  // app name in the top strip — suppress this surface's portaled title to avoid
+  // printing the name twice. Standalone /studio/a/* routes keep the title.
+  embedded?: boolean;
 } = {}) {
   const routeParams = useParams();
   const app = appProp ?? routeParams.app ?? "";
@@ -142,10 +147,16 @@ export function AppSurface({
       <div className="flex flex-wrap gap-1 min-w-0">
         {nav.map((n) => {
           const active = n.surface === current;
+          // Embedded in the workspace → switch surfaces WITHIN the middle panel
+          // (?surface=) so the left nav + right chat stay mounted. Standalone →
+          // the dedicated /studio/a/:app/:surface route.
+          const to = embedded
+            ? `/studio/apps/${encodeURIComponent(app)}?surface=${encodeURIComponent(n.surface)}`
+            : `/studio/a/${encodeURIComponent(app)}/${encodeURIComponent(n.surface)}`;
           return (
             <Link
               key={n.surface}
-              to={`/studio/a/${encodeURIComponent(app)}/${encodeURIComponent(n.surface)}`}
+              to={to}
               className={[
                 "px-2.5 py-1 rounded-lg text-[12px] transition-colors",
                 active
@@ -239,6 +250,8 @@ export function AppSurface({
   const extracted = state.data?.markdown ? splitSurfaceHeader(state.data.markdown).title : undefined;
   if (extracted && app) lastSurfaceTitle.set(app, extracted);
   const headerTitle = extracted ?? (app ? lastSurfaceTitle.get(app) : undefined) ?? app;
+  // Title goes into the strip only when standalone (not embedded in the workspace).
+  const stripTitle = embedded ? undefined : headerTitle;
   useEffect(() => {
     if (stripSlot && headerTitle) document.title = `${headerTitle} · Lumid`;
   }, [stripSlot, headerTitle]);
@@ -254,7 +267,7 @@ export function AppSurface({
         <div className="px-6 py-6 max-w-lg">
           <div className="rounded-xl border border-slate-200 bg-white p-5">
             <div className="flex items-center gap-2 text-slate-800">
-              <Sparkles className="w-4 h-4 text-emerald-500" />
+              <Sparkles className="w-4 h-4 text-gold-500" />
               <span className="text-sm font-medium">No page yet for {app}</span>
             </div>
             <p className="mt-1.5 text-[12px] text-slate-500 leading-relaxed">
@@ -262,7 +275,7 @@ export function AppSurface({
             </p>
             <Link
               to={`${editTo}&generate=1`}
-              className="mt-3 inline-flex items-center gap-1.5 px-3 py-2 text-[13px] font-medium rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm shadow-emerald-100 hover:from-emerald-600 hover:to-teal-700 transition"
+              className="mt-3 inline-flex items-center gap-1.5 px-3 py-2 text-[13px] font-medium rounded-lg bg-gradient-to-br from-gold-500 to-gold-600 text-white shadow-sm shadow-gold-100 hover:from-gold-600 hover:to-gold-700 transition"
             >
               <Sparkles className="w-3.5 h-3.5" />
               Generate a page
@@ -307,7 +320,7 @@ export function AppSurface({
     }
     return (
       <div className="flex flex-col">
-        {actionBar(!!path, state.data.nav, headerTitle)}
+        {actionBar(!!path, state.data.nav, stripTitle)}
         <div className="px-6 py-2">
           <LumidMarkdown source={header.body} params={surfaceParams} appConfig={state.data.config} wide />
         </div>
@@ -321,7 +334,7 @@ export function AppSurface({
     const Native = resolveNativeSurface(native);
     return (
       <div className="flex flex-col">
-        {actionBar(false, state.data.nav, headerTitle)}
+        {actionBar(false, state.data.nav, stripTitle)}
         <div className="px-2 py-2">
           {Native ? (
             <Suspense fallback={<div className="p-8 text-sm text-slate-400">Loading…</div>}>

@@ -47,7 +47,7 @@ export default function StudioIntentDetail() {
 		return (
 			<div className="max-w-3xl mx-auto py-12 text-center">
 				<div className="text-sm text-slate-500 mb-3">No detail panel for this app.</div>
-				<Link to="/studio/intents" className="text-sm text-emerald-700 hover:underline">← Back to Apps</Link>
+				<Link to="/studio/intents" className="text-sm text-gold-700 hover:underline">← Back to Apps</Link>
 			</div>
 		);
 	}
@@ -218,7 +218,7 @@ function StatsRow({ stats }: { stats: IntentStat[] }) {
 					<div className="text-[10px] text-slate-500">{s.label}</div>
 					<div className="mt-0.5 text-[18px] font-medium text-slate-900 leading-none">{s.value}</div>
 					{s.delta && (
-						<div className={`mt-1 text-[10px] ${s.deltaTone === 'neutral' ? 'text-slate-500' : 'text-emerald-700'}`}>
+						<div className={`mt-1 text-[10px] ${s.deltaTone === 'neutral' ? 'text-slate-500' : 'text-gold-700'}`}>
 							{s.delta}
 						</div>
 					)}
@@ -250,7 +250,7 @@ function AutoresearchBodyView({ body, intentId: _intentId }: { body: Autoresearc
 				<div className="flex items-center justify-between gap-3 mb-2">
 					<div className="text-[11px] tracking-[0.06em] text-slate-400">Accuracy vs latency · Pareto frontier</div>
 					<div className="flex items-center gap-1.5 text-[11px] text-slate-500">
-						<span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+						<span className="w-1.5 h-1.5 rounded-full bg-gold-500 inline-block" />
 						<span>{body.direction}</span>
 					</div>
 				</div>
@@ -277,11 +277,11 @@ function AutoresearchBodyView({ body, intentId: _intentId }: { body: Autoresearc
 									<td className="px-3.5 py-2 font-mono text-slate-900">{v.id}</td>
 									<td className="px-3.5 py-2 text-slate-500">{v.config}</td>
 									<td className="px-3.5 py-2 text-right text-slate-900">{v.accuracy.toFixed(1)}%</td>
-									<td className={`px-3.5 py-2 text-right ${v.status === 'over' ? 'text-amber-700' : v.status === 'frontier' ? 'text-emerald-700' : 'text-slate-900'}`}>{v.latency}ms</td>
+									<td className={`px-3.5 py-2 text-right ${v.status === 'over' ? 'text-gold-700' : v.status === 'frontier' ? 'text-gold-700' : 'text-slate-900'}`}>{v.latency}ms</td>
 									<td className="px-3.5 py-2 text-right text-slate-900">${v.cost.toFixed(2)}</td>
 									<td className={`px-3.5 py-2 text-right text-[11px] ${
-										v.status === 'frontier' ? 'text-emerald-700' :
-										v.status === 'over'     ? 'text-amber-700'   :
+										v.status === 'frontier' ? 'text-gold-700' :
+										v.status === 'over'     ? 'text-gold-700'   :
 										                          'text-slate-500'
 									}`}>
 										{v.status === 'frontier' ? 'on frontier' : v.status === 'over' ? 'over budget' : 'dominated'}
@@ -324,11 +324,11 @@ function ParetoChart({ chart }: { chart: AutoresearchBody['chart'] }) {
 				<text x="474" y="215" textAnchor="middle">400ms</text>
 				<text x="568" y="215" textAnchor="middle">500ms</text>
 			</g>
-			<line x1="262" y1="20" x2="262" y2="200" stroke="#10b981" strokeWidth="1" strokeDasharray="3 3" />
-			<text x="266" y="30" fontSize="9" fill="#10b981">200ms budget</text>
-			<polyline points={frontierPath} fill="none" stroke="#10b981" strokeWidth="1.5" opacity="0.6" />
+			<line x1="262" y1="20" x2="262" y2="200" stroke="#B08F45" strokeWidth="1" strokeDasharray="3 3" />
+			<text x="266" y="30" fontSize="9" fill="#B08F45">200ms budget</text>
+			<polyline points={frontierPath} fill="none" stroke="#B08F45" strokeWidth="1.5" opacity="0.6" />
 			{chart.frontier.map((p, i) => (
-				<circle key={`f${i}`} cx={p.cx} cy={p.cy} r="5" fill="#10b981" opacity="0.85" />
+				<circle key={`f${i}`} cx={p.cx} cy={p.cy} r="5" fill="#B08F45" opacity="0.85" />
 			))}
 			{chart.underBudget.map((p, i) => (
 				<circle key={`u${i}`} cx={p.cx} cy={p.cy} r="4" fill="#a1a1aa" opacity="0.6" />
@@ -353,8 +353,8 @@ function JudgmentBodyView({ body, intentId }: { body: JudgmentBody; intentId: st
 					{body.activity.map((a, i) => {
 						const Icon = a.tone === 'good' ? CheckCircle2 : Info;
 						const tone =
-							a.tone === 'good' ? 'text-emerald-600' :
-							a.tone === 'warn' ? 'text-amber-600'   :
+							a.tone === 'good' ? 'text-gold-600' :
+							a.tone === 'warn' ? 'text-gold-600'   :
 							                    'text-slate-400';
 						return (
 							<li
@@ -396,7 +396,7 @@ function JudgmentBodyView({ body, intentId }: { body: JudgmentBody; intentId: st
 							<li key={p.text} className="rounded-lg border border-slate-200/70 bg-white px-4 py-2.5 flex items-start gap-3">
 								<Quote className="w-3.5 h-3.5 text-slate-400 mt-0.5 flex-shrink-0" />
 								<div className="flex-1 min-w-0 text-sm text-slate-800 leading-snug">{p.text}</div>
-								<span className="text-[11px] text-emerald-700 flex-shrink-0">applied {p.count}×</span>
+								<span className="text-[11px] text-gold-700 flex-shrink-0">applied {p.count}×</span>
 							</li>
 						))}
 					</ul>

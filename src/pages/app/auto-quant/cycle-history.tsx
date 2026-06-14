@@ -79,7 +79,7 @@ export function CycleHistory({ loops, strategyName }: CycleHistoryProps) {
 							<span className="text-gray-600 font-medium">{c.loop}</span>
 							<span className="ml-auto flex items-center gap-3">
 								{c.alpha_pp != null && (
-									<span className={c.alpha_pp >= 0 ? "text-green-600" : "text-red-500"}>
+									<span className={c.alpha_pp >= 0 ? "text-gold-600" : "text-red-500"}>
 										{c.alpha_pp >= 0 ? "+" : ""}{c.alpha_pp.toFixed(2)}pp
 									</span>
 								)}

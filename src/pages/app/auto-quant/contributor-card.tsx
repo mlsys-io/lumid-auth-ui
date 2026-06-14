@@ -42,7 +42,7 @@ export function ContributorCard({
 			</div>
 			<div className="flex items-center gap-4 text-gray-600 mb-2">
 				<span className="flex items-center gap-1">
-					<Star className="w-3 h-3 text-amber-400" />
+					<Star className="w-3 h-3 text-gold-400" />
 					{stars} star{stars === 1 ? "" : "s"}
 				</span>
 				<span className="flex items-center gap-1">

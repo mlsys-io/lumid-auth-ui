@@ -32,12 +32,59 @@ export interface AppIdentity {
 }
 
 // Legacy fallbacks for upstream apps that predate ui.sidebar config.
+// Static fallback names — ALIGNED to each app's own ui.sidebar.label so the
+// sidebar name wins everywhere even before the runtime registry populates.
+// (The registry below, fed from live ui.sidebar.label, is authoritative.)
 const TITLE: Record<string, string> = {
-	"personal-agent": "Personal agent",
-	"mbb-ai": "Consulting research",
-	"auto-sysresearch": "Systems research",
-	"auto-quant": "Quant Research",
+	"personal-agent": "Personal Agent",
+	"mbb-ai": "MBB Coach",
+	"auto-sysresearch": "Systems Optimizer",
+	"auto-quant": "Auto-Quant",
 };
+
+// Runtime label registry — populated from each installed app's
+// ui.sidebar.label (see useAppNav). This is the canonical source: "sidebar
+// wins", so appTitle() shows the SAME name in chat / breadcrumbs / surface
+// cards as the sidebar nav, for EVERY app (not just the few in TITLE).
+const SIDEBAR_LABELS: Record<string, string> = {};
+export function registerAppLabel(app: string, label: string): void {
+	if (app && label) SIDEBAR_LABELS[app] = label;
+}
+
+// Surface-presence registry — whether an app declares a UI surface, learned
+// from listApps. Lets AppSurfaceCard skip the me.appUI probe for surfaceless
+// apps (loop bots like lqt-mailbox/yao-agent) and render the overview
+// directly, instead of firing a 404 the browser logs to the console.
+const SURFACE_PRESENCE: Record<string, boolean> = {};
+export function registerAppSurfacePresence(app: string, hasSurface: boolean): void {
+	if (app) SURFACE_PRESENCE[app] = hasSurface;
+}
+/** true / false when known, undefined when not yet loaded. */
+export function appHasSurface(app: string): boolean | undefined {
+	return SURFACE_PRESENCE[app];
+}
+
+// Eager, idempotent label hydration — populates the registries from listApps
+// INDEPENDENT of the sidebar's render. Without this, appTitle() resolves to a
+// humanized slug on the first chat render (before useAppNav has fetched), then
+// flickers to the configured label — and openAppInChat would bake the stale
+// slug-name permanently into the transcript. Callers that need a correct name
+// up front (openAppInChat) await this first. Cheap: listApps is in-flight-
+// deduped + TTL-cached in me.ts, so concurrent callers share one request.
+let labelsPrefetch: Promise<void> | null = null;
+export function prefetchAppLabels(): Promise<void> {
+	if (!labelsPrefetch) {
+		labelsPrefetch = me.listApps()
+			.then((r) => {
+				for (const a of r.apps || []) {
+					if (a.ui?.sidebar?.label) registerAppLabel(a.name, a.ui.sidebar.label);
+					registerAppSurfacePresence(a.name, !!(a.ui?.surface || (a.ui?.surfaces && Object.keys(a.ui.surfaces).length > 0)));
+				}
+			})
+			.catch(() => { /* soft-fail; appTitle falls back to TITLE/humanize */ });
+	}
+	return labelsPrefetch;
+}
 
 const BLURB: Record<string, string> = {
 	"personal-agent": "Morning briefs, inbox triage, and reflections over your email + calendar.",
@@ -46,8 +93,22 @@ const BLURB: Record<string, string> = {
 	"auto-quant": "Momentum + mean-reversion crypto strategies — proposes, backtests, and risk-gates paper trades, learning from every run.",
 };
 
+const ACRONYMS: Record<string, string> = { gpu: "GPU", ai: "AI", lqt: "LQT", sql: "SQL", mbb: "MBB", kol: "KOL", ci: "CI", api: "API" };
+
 export function appTitle(app: string): string {
-	return TITLE[app] || app;
+	// Sidebar wins: the app's live ui.sidebar.label first, then the (aligned)
+	// static map, then a humanized slug.
+	if (SIDEBAR_LABELS[app]) return SIDEBAR_LABELS[app];
+	if (TITLE[app]) return TITLE[app];
+	// Humanize an unmapped slug: drop a leading "lumid-", split on -/_, title-
+	// case, uppercase known acronyms. "lumid-gpu-rentals" -> "GPU Rentals".
+	const humanized = app
+		.replace(/^lumid-/, "")
+		.split(/[-_]/)
+		.filter(Boolean)
+		.map((w) => ACRONYMS[w.toLowerCase()] || w.charAt(0).toUpperCase() + w.slice(1))
+		.join(" ");
+	return humanized || app;
 }
 
 function whenLast(ts?: number): string {
@@ -120,7 +181,7 @@ export default function AppCard({
 			{/* header → the app's configured UI (or the workflow overview when none) */}
 			<button type="button" onClick={openHeader} className="block w-full text-left px-4 pt-3 pb-2">
 				<div className="flex items-center gap-3">
-					<div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
+					<div className="w-9 h-9 rounded-lg bg-gold-50 text-gold-600 flex items-center justify-center flex-shrink-0">
 						<Icon className="w-[18px] h-[18px]" />
 					</div>
 					<div className="min-w-0 flex-1">
@@ -143,7 +204,7 @@ export default function AppCard({
 					</div>
 					<div className="text-[12px] text-slate-400 mt-0.5 truncate">{whenLast(lastActivity)}</div>
 					</div>
-					<ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-emerald-600 transition-colors flex-shrink-0" />
+					<ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-gold-600 transition-colors flex-shrink-0" />
 					<span
 						role="button" tabIndex={0} onClick={remove}
 						className="shrink-0 p-1.5 rounded-md text-slate-300 hover:text-rose-600 hover:bg-rose-50 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -160,7 +221,7 @@ export default function AppCard({
 				{[...workflows].sort((a, b) => Number(!!b.run_spark) - Number(!!a.run_spark)).slice(0, 2).map((w) => (
 					<div
 						key={w.slug}
-						className="flex items-center gap-2 w-full rounded-md px-1.5 -mx-1.5 py-0.5 hover:bg-emerald-50/60 transition-colors"
+						className="flex items-center gap-2 w-full rounded-md px-1.5 -mx-1.5 py-0.5 hover:bg-gold-50/60 transition-colors"
 					>
 						<button
 							type="button"

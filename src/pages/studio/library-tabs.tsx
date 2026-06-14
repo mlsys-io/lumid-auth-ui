@@ -29,7 +29,7 @@ export default function StudioLibraryTabs() {
 							cn(
 								"inline-flex items-center gap-1.5 px-3 py-1.5 text-[12.5px] font-medium rounded-lg border transition-colors",
 								isActive
-									? "border-emerald-300 bg-emerald-50 text-emerald-900"
+									? "border-gold-300 bg-gold-50 text-gold-900"
 									: "border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-800",
 							)
 						}

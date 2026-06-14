@@ -28,9 +28,9 @@ const CYCLE_CACHE = new Map<string, MeCycleDetail>();
 const CYCLE_INFLIGHT = new Map<string, Promise<MeCycleDetail>>();
 
 const OUTCOME: Record<string, { label: string; icon: typeof CheckCircle2; cls: string }> = {
-	ran:             { label: "Ran",             icon: CheckCircle2, cls: "border-emerald-200 bg-emerald-50 text-emerald-700" },
+	ran:             { label: "Ran",             icon: CheckCircle2, cls: "border-gold-200 bg-gold-50 text-gold-700" },
 	no_change:       { label: "No change",       icon: MinusCircle,  cls: "border-slate-200 bg-slate-50 text-slate-600" },
-	awaiting_review: { label: "Awaiting review", icon: Clock,        cls: "border-amber-200 bg-amber-50 text-amber-700" },
+	awaiting_review: { label: "Awaiting review", icon: Clock,        cls: "border-gold-200 bg-gold-50 text-gold-700" },
 	no_setup:        { label: "Not set up",      icon: AlertCircle,  cls: "border-rose-200 bg-rose-50 text-rose-700" },
 };
 
@@ -197,7 +197,7 @@ export default function CycleCard({
 						<OcIcon className="w-3 h-3" />{oc.label}
 					</span>
 					{fixed && (
-						<span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+						<span className="inline-flex items-center gap-1 rounded-full border border-gold-200 bg-gold-50 px-1.5 py-0.5 text-[10px] font-medium text-gold-700">
 							<Wrench className="w-3 h-3" />self-healed
 						</span>
 					)}
@@ -248,9 +248,9 @@ export default function CycleCard({
 						{(fixed || broke) && (
 							<div>
 								<div className="text-[9px] uppercase tracking-wide text-slate-400 font-semibold mb-0.5 flex items-center gap-1">
-									<Wrench className="w-3 h-3 text-amber-500" />What it fixed
+									<Wrench className="w-3 h-3 text-gold-500" />What it fixed
 								</div>
-								<div className={`text-[11px] leading-snug ${broke ? "text-rose-700" : "text-amber-700"}`}>
+								<div className={`text-[11px] leading-snug ${broke ? "text-rose-700" : "text-gold-700"}`}>
 									{broke
 										? (firstError(d) || "Run failed and hasn't recovered yet — open the full run to dig in.")
 										: `A transient error${firstError(d) ? ` (${firstError(d)})` : " (timeout / malformed reply)"} was caught and retried — the run completed on its own.`}
@@ -264,7 +264,7 @@ export default function CycleCard({
 			{/* actions */}
 			<div className="px-2 py-1.5 border-t border-slate-100 flex items-center gap-1">
 				<button type="button" onClick={askAI}
-					className="flex-1 inline-flex items-center justify-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-50 transition-colors">
+					className="flex-1 inline-flex items-center justify-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-gold-700 hover:bg-gold-50 transition-colors">
 					<MessageCircleQuestion className="w-3.5 h-3.5" />Ask my AI
 				</button>
 				{ts && (

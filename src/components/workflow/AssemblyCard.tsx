@@ -151,8 +151,8 @@ export default function AssemblyCard({ draft }: { draft: ComposedDraft }) {
 
 	if (installed) {
 		return (
-			<div className="mt-2 w-full rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white px-4 py-5 text-center space-y-2 animate-in fade-in zoom-in-95 duration-300">
-				<div className="inline-flex w-11 h-11 rounded-2xl bg-emerald-100 text-emerald-600 items-center justify-center"><Check className="w-6 h-6" /></div>
+			<div className="mt-2 w-full rounded-2xl border border-gold-200 bg-gradient-to-br from-gold-50 to-white px-4 py-5 text-center space-y-2 animate-in fade-in zoom-in-95 duration-300">
+				<div className="inline-flex w-11 h-11 rounded-2xl bg-gold-100 text-gold-600 items-center justify-center"><Check className="w-6 h-6" /></div>
 				<div className="text-sm font-medium text-slate-900">{draft.slug.replace(/-draft$/, "")} is live — running its first cycle.</div>
 				<div className="text-xs text-slate-500">Taking you to its dashboard…</div>
 			</div>
@@ -165,8 +165,8 @@ export default function AssemblyCard({ draft }: { draft: ComposedDraft }) {
 	return (
 		<div ref={rootRef} className="mt-2 w-full rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-1 duration-300">
 			{/* Header */}
-			<div className="px-4 py-2.5 border-b border-slate-100 flex items-center gap-2 bg-gradient-to-r from-emerald-50/70 to-white">
-				<div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0">
+			<div className="px-4 py-2.5 border-b border-slate-100 flex items-center gap-2 bg-gradient-to-r from-gold-50/70 to-white">
+				<div className="w-7 h-7 rounded-lg bg-gold-100 text-gold-700 flex items-center justify-center flex-shrink-0">
 					{draft.kind === "trading" ? <TrendingUp className="w-4 h-4" /> : <Package className="w-4 h-4" />}
 				</div>
 				<div className="min-w-0 flex-1">
@@ -226,8 +226,8 @@ export default function AssemblyCard({ draft }: { draft: ComposedDraft }) {
 				{done && (
 					<div className="space-y-3 pt-1 animate-in fade-in duration-300">
 						{draft.goal?.primary && (
-							<div className="rounded-xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50/80 to-white px-3 py-2">
-								<div className="text-[10px] uppercase tracking-wide text-emerald-700/70 font-semibold">Goal</div>
+							<div className="rounded-xl border border-gold-200/70 bg-gradient-to-br from-gold-50/80 to-white px-3 py-2">
+								<div className="text-[10px] uppercase tracking-wide text-gold-700/70 font-semibold">Goal</div>
 								<div className="text-[12.5px] text-slate-800 font-medium">{draft.goal.primary}</div>
 								{draft.goal.tracked && <div className="text-[10px] text-slate-400 mt-0.5">tracks {draft.goal.tracked.join(" · ")}</div>}
 							</div>
@@ -237,7 +237,7 @@ export default function AssemblyCard({ draft }: { draft: ComposedDraft }) {
 							<div className="flex flex-wrap gap-1.5">
 								{SCHEDULES.map((s) => (
 									<button key={s.cron} onClick={() => setSchedule(s.cron)}
-										className={`text-[11px] rounded-full px-2.5 py-1 border transition-colors ${schedule === s.cron ? "bg-emerald-500 text-white border-emerald-500" : "bg-white text-slate-600 border-slate-200 hover:border-emerald-300"}`}>
+										className={`text-[11px] rounded-full px-2.5 py-1 border transition-colors ${schedule === s.cron ? "bg-gold-500 text-white border-gold-500" : "bg-white text-slate-600 border-slate-200 hover:border-gold-300"}`}>
 										{s.label}
 									</button>
 								))}
@@ -245,7 +245,7 @@ export default function AssemblyCard({ draft }: { draft: ComposedDraft }) {
 						</div>
 						<div className="flex justify-end pt-0.5">
 							<button onClick={install} disabled={installing}
-								className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 text-white hover:from-emerald-400 hover:to-emerald-500 active:scale-95 transition-all shadow-sm shadow-emerald-200 disabled:opacity-60">
+								className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-gradient-to-br from-gold-500 to-gold-600 text-white hover:from-gold-400 hover:to-gold-500 active:scale-95 transition-all shadow-sm shadow-gold-200 disabled:opacity-60">
 								{installing ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Installing…</> : <><Play className="w-3.5 h-3.5" />Install &amp; run</>}
 							</button>
 						</div>
@@ -272,11 +272,11 @@ function Stepper({ idx }: { idx: number }) {
 					<div key={s.label} className="flex items-center gap-1 flex-1 last:flex-none">
 						<div className={[
 							"flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-medium transition-colors",
-							state === "done" ? "text-emerald-700" : state === "active" ? "text-emerald-700 bg-emerald-100" : "text-slate-400",
+							state === "done" ? "text-gold-700" : state === "active" ? "text-gold-700 bg-gold-100" : "text-slate-400",
 						].join(" ")}>
 							<span className={[
 								"w-4 h-4 rounded-full flex items-center justify-center text-[9px]",
-								state === "todo" ? "bg-slate-200 text-slate-500" : "bg-emerald-500 text-white",
+								state === "todo" ? "bg-slate-200 text-slate-500" : "bg-gold-500 text-white",
 							].join(" ")}>
 								{state === "done" ? <Check className="w-2.5 h-2.5" /> : i + 1}
 							</span>
@@ -284,7 +284,7 @@ function Stepper({ idx }: { idx: number }) {
 							<Icon className="w-3 h-3 sm:hidden" />
 						</div>
 						{i < stages.length - 1 && (
-							<div className={["flex-1 h-px mx-0.5", i < idx ? "bg-emerald-300" : "bg-slate-200"].join(" ")} />
+							<div className={["flex-1 h-px mx-0.5", i < idx ? "bg-gold-300" : "bg-slate-200"].join(" ")} />
 						)}
 					</div>
 				);
@@ -309,9 +309,9 @@ function SearchPanel({ trace, active, query }: { trace?: AssemblyTrace; active: 
 	return (
 		<div className="space-y-1.5">
 			<SectionLabel n={1} text="Search the xp.io skill catalog" />
-			<div className={["rounded-xl border px-3 py-2 transition-colors", active ? "border-emerald-200 bg-emerald-50/40" : "border-slate-200 bg-white"].join(" ")}>
+			<div className={["rounded-xl border px-3 py-2 transition-colors", active ? "border-gold-200 bg-gold-50/40" : "border-slate-200 bg-white"].join(" ")}>
 				<div className="flex items-center gap-1.5 text-[11px]">
-					{active ? <Loader2 className="w-3.5 h-3.5 text-emerald-500 animate-spin" /> : <Search className="w-3.5 h-3.5 text-slate-400" />}
+					{active ? <Loader2 className="w-3.5 h-3.5 text-gold-500 animate-spin" /> : <Search className="w-3.5 h-3.5 text-slate-400" />}
 					<code className="text-[10.5px] text-slate-500">{s?.endpoint || "xp.io · /api/v1/skills/suggest"}</code>
 					{s?.scorer && <span className="text-[9px] rounded-full px-1.5 py-px bg-slate-100 border border-slate-200 text-slate-500">{s.scorer}</span>}
 				</div>
@@ -335,16 +335,16 @@ function SearchPanel({ trace, active, query }: { trace?: AssemblyTrace; active: 
 // Per-skill "looking it up" beat.
 function SearchingRow({ query }: { query: string }) {
 	return (
-		<div className="flex items-center gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50/40 px-3 py-2">
-			<Search className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0 animate-pulse" />
+		<div className="flex items-center gap-2.5 rounded-lg border border-gold-200 bg-gold-50/40 px-3 py-2">
+			<Search className="w-3.5 h-3.5 text-gold-500 flex-shrink-0 animate-pulse" />
 			<div className="min-w-0 flex-1">
-				<div className="text-[11px] text-emerald-700/80">resolving against fork parent → imports</div>
+				<div className="text-[11px] text-gold-700/80">resolving against fork parent → imports</div>
 				<div className="text-[12.5px] text-slate-700 font-medium truncate">“{query}”</div>
 			</div>
 			<div className="flex gap-0.5 flex-shrink-0">
-				<span className="w-1 h-1 rounded-full bg-emerald-400 animate-bounce [animation-delay:-0.3s]" />
-				<span className="w-1 h-1 rounded-full bg-emerald-400 animate-bounce [animation-delay:-0.15s]" />
-				<span className="w-1 h-1 rounded-full bg-emerald-400 animate-bounce" />
+				<span className="w-1 h-1 rounded-full bg-gold-400 animate-bounce [animation-delay:-0.3s]" />
+				<span className="w-1 h-1 rounded-full bg-gold-400 animate-bounce [animation-delay:-0.15s]" />
+				<span className="w-1 h-1 rounded-full bg-gold-400 animate-bounce" />
 			</div>
 		</div>
 	);
@@ -357,18 +357,18 @@ function MatchedRow({ s, label }: { s: AssemblyStep; label: string }) {
 	const repo = repoShort(s.resolved_repo) || s.source;
 	return (
 		<div className="flex items-start gap-2.5 rounded-lg border border-slate-200 bg-white px-3 py-2">
-			<span className={`mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0 ${isRisk ? "bg-amber-500" : resolved ? "bg-emerald-500" : "bg-slate-300"}`} />
+			<span className={`mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0 ${isRisk ? "bg-gold-500" : resolved ? "bg-gold-500" : "bg-slate-300"}`} />
 			<div className="min-w-0 flex-1">
 				<div className="flex items-center gap-1.5 flex-wrap">
 					<span className="text-[13px] font-medium text-slate-800">{label}</span>
 					<span className="text-[9px] uppercase tracking-wide rounded-full px-1.5 py-px border border-slate-200 text-slate-500">{s.stage}</span>
-					{isRisk && <span className="inline-flex items-center gap-0.5 text-[9px] text-amber-700"><Shield className="w-3 h-3" />risk officer</span>}
+					{isRisk && <span className="inline-flex items-center gap-0.5 text-[9px] text-gold-700"><Shield className="w-3 h-3" />risk officer</span>}
 				</div>
 				{/* Provenance — the "drawing" of where it came from */}
 				<div className="flex items-center gap-1 mt-1 text-[10.5px] min-w-0">
 					{resolved ? (
 						<>
-							<span className="inline-flex items-center gap-0.5 rounded px-1.5 py-px bg-emerald-50 border border-emerald-200 text-emerald-700 flex-shrink-0">
+							<span className="inline-flex items-center gap-0.5 rounded px-1.5 py-px bg-gold-50 border border-gold-200 text-gold-700 flex-shrink-0">
 								<Package className="w-2.5 h-2.5" />{repo}
 							</span>
 							<ArrowRight className="w-3 h-3 text-slate-300 flex-shrink-0" />
@@ -376,7 +376,7 @@ function MatchedRow({ s, label }: { s: AssemblyStep; label: string }) {
 							{s.resolved_sha && <span className="text-slate-300 flex-shrink-0">@{s.resolved_sha}</span>}
 						</>
 					) : (
-						<span className="inline-flex items-center gap-1 text-amber-600">
+						<span className="inline-flex items-center gap-1 text-gold-600">
 							<AlertTriangle className="w-3 h-3" />
 							local-only — ships with the {repo || "fork"} (not separately published)
 						</span>
@@ -385,7 +385,7 @@ function MatchedRow({ s, label }: { s: AssemblyStep; label: string }) {
 				{s.why && <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">{s.why}</div>}
 			</div>
 			{resolved
-				? <Check className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0 mt-0.5" />
+				? <Check className="w-3.5 h-3.5 text-gold-500 flex-shrink-0 mt-0.5" />
 				: <span className="w-3.5 flex-shrink-0" />}
 		</div>
 	);
@@ -393,9 +393,9 @@ function MatchedRow({ s, label }: { s: AssemblyStep; label: string }) {
 
 function VerifyRowView({ v }: { v: VerifyRow }) {
 	const tone = v.status === "pass"
-		? { Icon: Check, c: "text-emerald-600", bg: "bg-emerald-50" }
+		? { Icon: Check, c: "text-gold-600", bg: "bg-gold-50" }
 		: v.status === "warn"
-			? { Icon: AlertTriangle, c: "text-amber-600", bg: "bg-amber-50" }
+			? { Icon: AlertTriangle, c: "text-gold-600", bg: "bg-gold-50" }
 			: { Icon: XIcon, c: "text-rose-600", bg: "bg-rose-50" };
 	const Icon = tone.Icon;
 	return (
