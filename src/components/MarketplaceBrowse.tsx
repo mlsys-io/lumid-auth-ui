@@ -114,6 +114,14 @@ type PendingAction =
 
 // ── Root component ─────────────────────────────────────────────────
 
+// Module-level catalog cache. The 6 catalog fetches use raw fetch() (not the
+// TTL-cached me client), so EVERY visit to Library re-ran all of them + the
+// bearer round-trip — the "second load still slow". Cache the result briefly so
+// navigating away and back is instant; the marketplace changes rarely.
+interface CatalogCache { at: number; apps: RepoCard[]; workflows: RepoCard[]; agents: RepoCard[]; strategies: RepoCard[]; skills: SkillCard[]; datasets: RepoCard[] }
+let catalogCache: CatalogCache | null = null;
+const CATALOG_TTL = 60_000;
+
 export default function MarketplaceBrowse() {
 	const navigate = useNavigate();
 	const [tab, setTab] = useState<Tab>("apps");
@@ -137,31 +145,36 @@ export default function MarketplaceBrowse() {
 	const [err, setErr] = useState<string | null>(null);
 
 	useEffect(() => {
-		(async () => {
-			try {
-				const auth = await bearerHeader();
-				const opts = { credentials: "same-origin" as const, headers: auth };
-				const repo = (kind: string) =>
-					fetch(`/api/v1/repos?kind=${kind}`, opts)
-						.then((r) => r.ok ? r.json().then((d: { repos?: RepoCard[] }) => d.repos || []) : Promise.resolve([]));
-				const [a, wf, ag, st, s, d] = await Promise.all([
-					repo("app"),
-					repo("workflow"),
-					repo("agent"),
-					repo("strategy"),
-					fetch("/api/v1/skills/catalog", opts).then((r) => r.ok ? r.json().then((d: { cards?: SkillCard[] }) => d.cards || []) : Promise.resolve([])),
-					repo("dataset"),
-				]);
-				setApps(a);
-				setWorkflows(wf);
-				setAgents(ag);
-				setStrategies(st);
-				setSkills(s);
-				setDatasets(d);
-			} catch (e) {
-				setErr(e instanceof Error ? e.message : String(e));
-			}
-		})();
+		const apply = (c: CatalogCache) => {
+			setApps(c.apps); setWorkflows(c.workflows); setAgents(c.agents);
+			setStrategies(c.strategies); setSkills(c.skills); setDatasets(c.datasets);
+		};
+		// Fresh cache → paint instantly, no network.
+		if (catalogCache && Date.now() - catalogCache.at < CATALOG_TTL) {
+			apply(catalogCache);
+		} else {
+			(async () => {
+				try {
+					const auth = await bearerHeader();
+					const opts = { credentials: "same-origin" as const, headers: auth };
+					const repo = (kind: string) =>
+						fetch(`/api/v1/repos?kind=${kind}`, opts)
+							.then((r) => r.ok ? r.json().then((d: { repos?: RepoCard[] }) => d.repos || []) : Promise.resolve([]));
+					const [a, wf, ag, st, s, d] = await Promise.all([
+						repo("app"),
+						repo("workflow"),
+						repo("agent"),
+						repo("strategy"),
+						fetch("/api/v1/skills/catalog", opts).then((r) => r.ok ? r.json().then((d: { cards?: SkillCard[] }) => d.cards || []) : Promise.resolve([])),
+						repo("dataset"),
+					]);
+					catalogCache = { at: Date.now(), apps: a, workflows: wf, agents: ag, strategies: st, skills: s, datasets: d };
+					apply(catalogCache);
+				} catch (e) {
+					setErr(e instanceof Error ? e.message : String(e));
+				}
+			})();
+		}
 		// Already-installed detection (separate fetch — its failure shouldn't
 		// blank the catalog).
 		me.listApps()

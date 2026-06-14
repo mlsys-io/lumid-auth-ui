@@ -20,7 +20,6 @@ import {
 	LogOut,
 	ChevronDown,
 	Key,
-	ListChecks,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
@@ -28,9 +27,6 @@ import { cn } from '../lib/utils';
 import { me } from '@/api/me';
 import { useAppNav, iconFor } from './useAppNav';
 import { useStudioRefetch } from '@/hooks/useStudioRefetch';
-import { appTitle } from '@/components/workflow/AppCard';
-import { fireAsk } from '@/components/studio/IndexList';
-import { askApp } from '@/lib/grounded-asks';
 // StudioShell is now the single shell — it also hosts the /dashboard/* pages
 // (admin, quant, lumilake, lqt, product). The ported Runmesh admin pages need
 // these providers + the numeric-id bridge that AppLayout used to supply.
@@ -77,12 +73,9 @@ const TOP_NAV: NavItem[] = [
 	{ to: '/studio/apps',    label: 'Apps',    icon: Boxes, title: 'your apps + anything needing attention' },
 	{ to: '/studio/library', label: 'Library', icon: Store, title: 'marketplace, skills, and experiments' },
 ];
-// Activity + Inbox folded into Home's status bar (the "runs today" and
-// "inbox" chips link there; the top-strip drafts pill covers other
-// pages). My Jobs is the quieter destination below the fold.
-const SECONDARY_NAV: NavItem[] = [
-	{ to: '/studio/runs', label: 'Jobs', icon: ListChecks, title: 'your recent runs — open any to ask about it' },
-];
+// Jobs/Activity/Inbox are folded into Apps — the Apps hero's "runs today" stat
+// + the top-bar "Right now" ticker link into /studio/runs, so it's no longer a
+// separate top-level destination.
 function NavItemView({ to, label, icon: Icon, end, badge, title }: NavItem) {
 	return (
 		<NavLink
@@ -237,32 +230,6 @@ export function StudioShell() {
 	// Chat→page bus: badge updates the moment chat sends/dismisses a draft.
 	useStudioRefetch(["drafts"], tickDrafts);
 
-	// Recents — claude.ai-style plain-text list of the most recently
-	// active apps (max last_run_ts across each app's workflows).
-	const [recents, setRecents] = useState<Array<{ app: string; label: string }>>([]);
-	const tickRecents = useCallback(() => {
-		me.listWorkflows()
-			.then((r) => {
-				const latest = new Map<string, number>();
-				for (const w of r.workflows || []) {
-					if (!w.app || !(w.tenant || w.showcase)) continue;
-					latest.set(w.app, Math.max(latest.get(w.app) || 0, w.last_run_ts || 0));
-				}
-				const top = [...latest.entries()]
-					.filter(([, ts]) => ts > 0)
-					.sort((a, b) => b[1] - a[1])
-					.slice(0, 5)
-					.map(([app]) => ({ app, label: appTitle(app) }));
-				setRecents(top);
-			})
-			.catch(() => { /* list just stays as-is */ });
-	}, []);
-	useEffect(() => {
-		tickRecents();
-		const id = window.setInterval(tickRecents, 60_000);
-		return () => window.clearInterval(id);
-	}, [tickRecents]);
-	useStudioRefetch(["workflows", "runs", "apps"], tickRecents);
 	useEffect(() => {
 		const onClick = (e: MouseEvent) => {
 			if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
@@ -329,9 +296,6 @@ export function StudioShell() {
 						<CirclePlus className="w-4 h-4 text-foreground/55" /> New chat
 					</button>
 					{TOP_NAV.map((item) => <NavItemView key={item.to} {...item} />)}
-					{SECONDARY_NAV.map((item) => (
-					<NavItemView key={item.to} {...item} />
-				))}
 					{/* App-contributed sections — installed xpio apps that declare
 					    ui.sidebar appear here, grouped by section. Data-driven via
 					    useAppNav(); soft-fails to nothing if /me/apps is unreachable. */}
@@ -349,24 +313,6 @@ export function StudioShell() {
 							))}
 						</div>
 					))}
-					{recents.length > 0 && (
-						<div>
-							<SectionLabel>Your apps</SectionLabel>
-							{recents.map((r) => (
-								// Recents open the grounded chat (the conversational
-								// interface), honoring the landing preference — not the
-								// dense observability dashboard, which stays a "details →"
-								// click away on the Apps index.
-								<button
-									key={r.app}
-									onClick={() => fireAsk(askApp(r.app))}
-									className="w-full text-left block px-3 py-1.5 rounded-lg text-[13px] text-foreground/60 hover:bg-black/[0.04] hover:text-foreground truncate transition-colors"
-								>
-									{r.label}
-								</button>
-							))}
-						</div>
-					)}
 				</nav>
 
 				{/* Docs link — kept apart from the functional nav above so
