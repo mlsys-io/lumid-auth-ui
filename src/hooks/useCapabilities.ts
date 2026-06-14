@@ -24,32 +24,46 @@ export interface Capabilities {
 	loading: boolean;
 }
 
-let cache: Omit<Capabilities, "role" | "loading"> | null = null;
+type CapsData = Omit<Capabilities, "role" | "loading">;
+let cache: CapsData | null = null;
+// In-flight promise shared across concurrent first-mounts. The launcher renders
+// on several pages + the empty chat; without this, two simultaneous mounts both
+// pass the `if (cache)` guard (cache only fills AFTER the trio resolves) and
+// each fires the google/microsoft/listApps burst. Awaiting one promise fixes it.
+let inflight: Promise<CapsData> | null = null;
+
+function loadCaps(): Promise<CapsData> {
+	if (inflight) return inflight;
+	inflight = Promise.allSettled([
+		apiClient.get("/api/v1/identity/google-grants"),
+		apiClient.get("/api/v1/identity/microsoft-grants"),
+		me.listApps(),
+	]).then(([g, m, a]) => {
+		const gData = g.status === "fulfilled" ? (g.value.data?.data ?? {}) : {};
+		const mData = m.status === "fulfilled" ? (m.value.data?.data ?? {}) : {};
+		const next: CapsData = {
+			// Google grant state is 'active'; Microsoft grant state is 'connected'.
+			google: (gData.state ?? gData.google?.state) === "active",
+			microsoft: (mData.state ?? mData.microsoft?.state) === "connected",
+			installedApps: a.status === "fulfilled" ? (a.value.apps || []).map((x) => x.name) : [],
+		};
+		cache = next;
+		return next;
+	}).finally(() => { inflight = null; });
+	return inflight;
+}
 
 export function useCapabilities(): Capabilities {
 	const { user } = useAuth();
 	const role = user?.role || "user";
-	const [caps, setCaps] = useState<Omit<Capabilities, "role" | "loading"> | null>(cache);
+	const [caps, setCaps] = useState<CapsData | null>(cache);
 	const [loading, setLoading] = useState(cache === null);
 
 	useEffect(() => {
 		if (cache) return;
 		let live = true;
-		Promise.allSettled([
-			apiClient.get("/api/v1/identity/google-grants"),
-			apiClient.get("/api/v1/identity/microsoft-grants"),
-			me.listApps(),
-		]).then(([g, m, a]) => {
+		loadCaps().then((next) => {
 			if (!live) return;
-			const gData = g.status === "fulfilled" ? (g.value.data?.data ?? {}) : {};
-			const mData = m.status === "fulfilled" ? (m.value.data?.data ?? {}) : {};
-			const next = {
-				// Google grant state is 'active'; Microsoft grant state is 'connected'.
-				google: (gData.state ?? gData.google?.state) === "active",
-				microsoft: (mData.state ?? mData.microsoft?.state) === "connected",
-				installedApps: a.status === "fulfilled" ? (a.value.apps || []).map((x) => x.name) : [],
-			};
-			cache = next;
 			setCaps(next);
 			setLoading(false);
 		});

@@ -655,6 +655,15 @@ html {
 	.value-pop, .running-glow, .heartbeat, .panel-in-right, .panel-in-left {
 		animation: none !important;
 	}
+	/* The chat surface leans on Tailwind's animation utilities (typing dots,
+	 * pulsing status, message slide-in). The custom keyframes above were
+	 * guarded but these weren't — neutralize them too so reduced-motion users
+	 * get a still UI. */
+	.animate-bounce, .animate-pulse, .animate-ping, .animate-spin,
+	[class*="animate-in"], [class*="fade-in"], [class*="slide-in"] {
+		animation: none !important;
+		transition: none !important;
+	}
 }
 
 /* =======================================================================

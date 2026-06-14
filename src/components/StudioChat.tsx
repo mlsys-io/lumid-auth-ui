@@ -1118,6 +1118,8 @@ export function StudioChat() {
 								if (next) loadHistory();
 							}}
 							title="Conversation history"
+							aria-label="Conversation history"
+							aria-expanded={historyOpen}
 							className={[
 								'p-1.5 rounded-md transition-colors',
 								historyOpen ? 'text-emerald-700 bg-emerald-50' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100',
@@ -1181,6 +1183,7 @@ export function StudioChat() {
 						<button
 							onClick={clear}
 							title="Clear (without deleting from history)"
+							aria-label="Clear conversation (without deleting from history)"
 							className="p-1.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
 						>
 							<Trash2 className="w-3.5 h-3.5" />
@@ -1367,6 +1370,9 @@ export function StudioChat() {
 							onClick={() => setToolsOpen((v) => !v)}
 							disabled={streaming}
 							title="Tools — Search / Deep research / Think"
+							aria-label="Tools and options"
+							aria-expanded={toolsOpen}
+							aria-haspopup="menu"
 							className={[
 								'relative h-8 w-8 flex items-center justify-center rounded-full transition-all',
 								toolsOpen
@@ -1468,6 +1474,7 @@ export function StudioChat() {
 					</div>
 					<div className="order-first w-full relative group">
 						<textarea
+							aria-label="Message the assistant"
 							value={input}
 							onChange={(e) => {
 								const v = e.target.value;
@@ -1590,6 +1597,7 @@ export function StudioChat() {
 							type="button"
 							onClick={() => abortRef.current?.abort()}
 							title="Stop current turn"
+							aria-label="Stop generating"
 							className="order-5 h-8 w-8 flex items-center justify-center rounded-full flex-shrink-0 bg-rose-500 text-white hover:bg-rose-600 active:scale-95 shadow-sm shadow-rose-200 transition-all"
 						>
 							<Square className="w-3 h-3 fill-current" />
@@ -1603,6 +1611,8 @@ export function StudioChat() {
 						type="button"
 						onClick={() => (picking ? stopStudioPicking() : startStudioPicking())}
 						title={picking ? 'Picking — click anything · Esc to cancel' : 'Pick a UI element on the page'}
+						aria-label={picking ? 'Stop picking a UI element' : 'Pick a UI element on the page'}
+						aria-pressed={picking}
 						className={[
 							'order-2 h-8 w-8 flex items-center justify-center rounded-full flex-shrink-0 transition-all active:scale-95',
 							picking
@@ -1628,6 +1638,7 @@ export function StudioChat() {
 					<button
 						type="submit"
 						disabled={!input.trim()}
+						aria-label={streaming ? 'Queue message' : 'Send message'}
 						title={streaming
 							? `Queue this message (sends when current turn finishes)${messageQueue.length > 0 ? ` — ${messageQueue.length} already queued` : ''}`
 							: 'Send'}

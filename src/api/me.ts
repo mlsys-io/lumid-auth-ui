@@ -32,16 +32,49 @@ const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
 // In-flight dedup for GETs — the shell, top-strip, and chat empty-state all
 // poll the same endpoints (listWorkflows / listDrafts) on the same intervals
 // and refetch on the same chat→page events. Sharing one in-flight promise
-// collapses those concurrent duplicates into a single request with ZERO
-// staleness risk (no TTL caching — once it settles, the next call is fresh).
-// This is what lets the /me/* rate ceiling come back down.
+// collapses concurrent duplicates into a single request.
 const inflight = new Map<string, Promise<unknown>>();
+
+// Short TTL micro-cache for the hot read-only AGGREGATES. In-flight dedup only
+// collapses calls that temporally OVERLAP — but the shell, top-strip, empty-
+// state and apps page each poll these on independent, staggered timers, so
+// their requests almost never line up and dedup misses them. A tiny TTL
+// coalesces that staggered fan-out into one request every few seconds, which
+// is where the bulk of residual /me/* traffic (and 429 pressure) came from.
+// Staleness is bounded to TTL_MS and these views already tolerate ~poll-
+// interval lag; mutations bust the cache via clearMeCache() (wired to the
+// chat→page refetch bus in useStudioRefetch), so a write reflects immediately.
+const TTL_MS = 3000;
+const ttlCache = new Map<string, { at: number; value: unknown }>();
+function ttlCacheable(path: string): boolean {
+  return (
+    path === "/apps" ||
+    path === "/workflows" || path.startsWith("/workflows?") ||
+    path === "/drafts" || path.startsWith("/drafts?") ||
+    path === "/loops/health"
+  );
+}
+/** Drop all cached aggregate reads so the next call hits the network. Called
+ *  on the studio:data bus after any chat-tool mutation. */
+export function clearMeCache(): void {
+  ttlCache.clear();
+}
 
 function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   if (method === "GET" && body === undefined) {
+    const cacheable = ttlCacheable(path);
+    if (cacheable) {
+      const hit = ttlCache.get(path);
+      if (hit && Date.now() - hit.at < TTL_MS) return Promise.resolve(hit.value as T);
+    }
     const existing = inflight.get(path);
     if (existing) return existing as Promise<T>;
-    const p = doCall<T>(method, path, body).finally(() => inflight.delete(path));
+    const p = doCall<T>(method, path, body)
+      .then((v) => {
+        if (cacheable) ttlCache.set(path, { at: Date.now(), value: v });
+        return v;
+      })
+      .finally(() => inflight.delete(path));
     inflight.set(path, p);
     return p;
   }

@@ -15,7 +15,7 @@
 // Data comes from the same endpoints the pages poll (listWorkflows +
 // drafts); refreshes on the chat→page bus so a fix reflects here too.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Lock, AlertTriangle, Activity, FileText } from 'lucide-react';
 import { me, type MeWorkflowRow } from '@/api/me';
@@ -125,12 +125,20 @@ export default function ChatEmptyState() {
 	const [wfs, setWfs] = useState<MeWorkflowRow[]>([]);
 	const [draftCount, setDraftCount] = useState(0);
 
+	// `live` guards against setState after unmount — load() runs on mount AND
+	// from the refetch bus, so a request can resolve after the user has
+	// navigated off /studio (mirrors the AppSurfaceCard pattern).
+	const liveRef = useRef(true);
+	useEffect(() => {
+		liveRef.current = true;
+		return () => { liveRef.current = false; };
+	}, []);
 	const load = () => {
 		me.listWorkflows()
-			.then((r) => setWfs((r.workflows || []).filter((w) => w.tenant || w.showcase)))
+			.then((r) => { if (liveRef.current) setWfs((r.workflows || []).filter((w) => w.tenant || w.showcase)); })
 			.catch(() => { /* digest just stays empty */ });
 		me.listDrafts({ state: 'pending' })
-			.then((r) => setDraftCount(r.drafts?.length || 0))
+			.then((r) => { if (liveRef.current) setDraftCount(r.drafts?.length || 0); })
 			.catch(() => { /* ignore */ });
 	};
 	useEffect(load, []);

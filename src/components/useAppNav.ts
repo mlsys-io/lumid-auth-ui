@@ -13,7 +13,11 @@ import { me, type MeAppCard } from "@/api/me";
 import { registerAppLabel, registerAppSurfacePresence } from "@/components/workflow/AppCard";
 
 export const APP_NAV_INVALIDATE = "studio:apps-invalidate";
-const POLL_MS = 60_000;
+// The installed-app set is near-static — it changes only on install/uninstall,
+// which already fire APP_NAV_INVALIDATE for an immediate refresh. The interval
+// is just a safety net for changes made out-of-band (CLI install), so a slow
+// 5-min tick is plenty; a 60s poll was pure redundant load on /me/apps.
+const POLL_MS = 300_000;
 
 const ICONS: Record<string, LucideIcon> = {
   "boxes": Boxes,

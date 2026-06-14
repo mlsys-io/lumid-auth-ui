@@ -118,7 +118,7 @@ export function handleEvent(
 			approvalRequired: false,
 			// Map-driven deep link on the chip (effects.ts) — "Open →" is
 			// what closes the install/run loop without leaving the chat.
-			link: ok ? toolLink(String(evt.name || ''), result) : undefined,
+			link: ok ? toolLink(String(evt.name || ''), result, evt.args as Record<string, unknown> | undefined) : undefined,
 		};
 		setMessages((prev) => withLastAssistant(prev, (m) => {
 			const tools = m.tools ? [...m.tools] : [];

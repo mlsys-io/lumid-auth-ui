@@ -59,26 +59,47 @@ export function dispatchToolEffects(name: string, args?: Record<string, unknown>
 		for (const v of vals) if (typeof v === 'string' && v) return v;
 		return undefined;
 	};
+	// Bridge loop tools (run_loop, loop_status, …) are keyed by a single `name`
+	// arg shaped "app:loop" (or bare "loop") and their result carries no
+	// app/loop keys — so parse name to recover the target for a scoped refetch.
+	const named = nameToAppLoop(pickStr(args?.name));
 	const detail: StudioDataDetail = {
 		scopes,
 		tool: name,
-		app: pickStr(result?.app, result?.installed_as, result?.for_app, args?.app),
-		loop: pickStr(result?.loop, args?.loop),
+		app: pickStr(result?.app, result?.installed_as, result?.for_app, args?.app, named.app),
+		loop: pickStr(result?.loop, args?.loop, named.loop),
 	};
 	window.dispatchEvent(new CustomEvent('studio:data', { detail }));
 }
 
+/** Split a bridge loop key "app:loop" (or bare "loop") into parts. */
+function nameToAppLoop(name?: string): { app?: string; loop?: string } {
+	if (!name) return {};
+	const i = name.indexOf(':');
+	if (i >= 0) return { app: name.slice(0, i), loop: name.slice(i + 1) };
+	return { loop: name };
+}
+
 /** In-app deep link for a completed tool call, if the tool yields one. */
-export function toolLink(name: string, result?: Record<string, unknown>): { to: string; label: string } | undefined {
+export function toolLink(name: string, result?: Record<string, unknown>, args?: Record<string, unknown>): { to: string; label: string } | undefined {
 	if (!result) return undefined;
-	const appName = String(result.app || result.installed_as || result.draft_slug || result.for_app || '');
-	const loop = String(result.loop || '');
+	// draft_slug is deliberately NOT in this chain — it names a draft, not an
+	// installed app, so routing to /studio/apps/<draft_slug> 404s (see
+	// compose_workflow below). Bridge loop tools fall back to args.name.
+	const named = nameToAppLoop(typeof args?.name === 'string' ? args.name : undefined);
+	const appName = String(result.app || result.installed_as || result.for_app || named.app || '');
+	const loop = String(result.loop || named.loop || '');
 	switch (name) {
 		case 'install_app':
-		case 'compose_workflow':
 			// Closes the install loop — without it the user has no way back
 			// to their new workflow without leaving the chat.
 			return appName ? { to: `/studio/apps/${encodeURIComponent(appName)}`, label: 'Open' } : undefined;
+		case 'compose_workflow': {
+			// compose produces a DRAFT (not yet installed). Link to the HOST app
+			// (for_app), never draft_slug — the draft has no app route yet.
+			const host = String(result.for_app || result.app || '');
+			return host ? { to: `/studio/apps/${encodeURIComponent(host)}`, label: 'Open' } : undefined;
+		}
 		case 'run_loop':
 		case 'run_loop_now':
 			return appName && loop
