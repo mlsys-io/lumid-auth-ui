@@ -122,7 +122,7 @@ function NavItemView({ to, label, icon: Icon, end, badge, title }: NavItem) {
 // Uppercase section divider for app-contributed nav groups.
 function SectionLabel({ children }: { children: React.ReactNode }) {
 	return (
-		<div className="mt-4 mb-1 px-3 text-[11px] font-medium text-foreground/45">
+		<div className="mt-4 mb-1 px-3 text-[11px] font-medium text-muted-foreground">
 			{children}
 		</div>
 	);
@@ -403,15 +403,15 @@ export function StudioShell() {
 								{user?.username || user?.email?.split('@')[0] || 'there'}
 							</div>
 							{isAdmin ? (
-								<div className="text-[10px] text-foreground/50 truncate">
+								<div className="text-[10px] text-muted-foreground truncate">
 									{user?.role === 'super_admin' ? 'super admin' : 'admin'}
 								</div>
 							) : (
-								<div className="text-[10px] text-foreground/40 truncate">{user?.email}</div>
+								<div className="text-[10px] text-muted-foreground truncate">{user?.email}</div>
 							)}
 						</div>
 						<ChevronDown className={[
-							'w-3.5 h-3.5 text-slate-400 transition-transform flex-shrink-0',
+							'w-3.5 h-3.5 text-muted-foreground transition-transform flex-shrink-0',
 							menuOpen ? 'rotate-180' : '',
 						].join(' ')} />
 					</button>
@@ -420,27 +420,27 @@ export function StudioShell() {
 						<div className="absolute left-3 right-3 bottom-full mb-1 rounded-xl border border-border bg-card shadow-lg py-1 z-30">
 							<Link to="/studio/settings"
 								onClick={() => setMenuOpen(false)}
-								className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-muted">
-								<Settings className="w-3.5 h-3.5 text-slate-500" />
+								className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted">
+								<Settings className="w-3.5 h-3.5 text-muted-foreground" />
 								Settings
 							</Link>
 							<Link to="/studio/account/tokens"
 								onClick={() => setMenuOpen(false)}
-								className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-muted">
-								<Key className="w-3.5 h-3.5 text-slate-500" />
+								className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted">
+								<Key className="w-3.5 h-3.5 text-muted-foreground" />
 								API tokens
 							</Link>
 							{isAdmin && (
 								<Link to="/studio/manage"
 									onClick={() => setMenuOpen(false)}
-									className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-muted">
-									<Shield className="w-3.5 h-3.5 text-slate-500" />
+									className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted">
+									<Shield className="w-3.5 h-3.5 text-muted-foreground" />
 									Management
 								</Link>
 							)}
 							<button
 								onClick={onLogout}
-								className="w-full flex items-center gap-2 px-3 py-2 text-sm text-rose-700 hover:bg-rose-50 border-t border-slate-100 mt-1 pt-2">
+								className="w-full flex items-center gap-2 px-3 py-2 text-sm text-rose-700 hover:bg-rose-50 border-t border-border/60 mt-1 pt-2">
 								<LogOut className="w-3.5 h-3.5" />
 								Sign out
 							</button>

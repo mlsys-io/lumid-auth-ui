@@ -13,7 +13,7 @@ interface Props {
 }
 
 const STATE_BG: Record<string, string> = {
-	succeeded: "bg-emerald-400",
+	succeeded: "bg-amber-400",
 	failed:    "bg-rose-500",
 	running:   "bg-amber-400 animate-pulse",
 	skipped:   "bg-slate-300",

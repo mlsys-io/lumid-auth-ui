@@ -29,7 +29,7 @@
   width: 6px;
   height: 6px;
   border-radius: 9999px;
-  background: #10b981;
+  background: #f59e0b;
   display: inline-block;
   animation: intent-live-ping 2.4s ease-in-out infinite;
 }

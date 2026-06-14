@@ -116,7 +116,7 @@ function StatCard({
 	sub?: string;
 	tone?: "neutral" | "good" | "bad";
 }) {
-	const valueColor = tone === "good" ? "text-green-600" : tone === "bad" ? "text-red-600" : "text-gray-800";
+	const valueColor = tone === "good" ? "text-amber-600" : tone === "bad" ? "text-red-600" : "text-gray-800";
 	return (
 		<div className="rounded border border-gray-200 bg-white p-3">
 			<div className="flex items-center gap-1.5 text-muted-foreground text-[10px] uppercase tracking-wide mb-1">

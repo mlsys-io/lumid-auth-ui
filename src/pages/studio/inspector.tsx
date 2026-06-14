@@ -90,7 +90,7 @@ export interface CycleSummary {
 }
 
 const OUTCOME_META: Record<Outcome, { label: string; icon: typeof CheckCircle2; cls: string }> = {
-	ran:             { label: 'Ran',             icon: CheckCircle2, cls: 'border-emerald-200 bg-emerald-50 text-emerald-800' },
+	ran:             { label: 'Ran',             icon: CheckCircle2, cls: 'border-amber-200 bg-amber-50 text-amber-800' },
 	no_change:       { label: 'No change',       icon: MinusCircle,  cls: 'border-slate-200 bg-slate-50 text-slate-600' },
 	awaiting_review: { label: 'Awaiting review', icon: Clock,        cls: 'border-amber-200 bg-amber-50 text-amber-800' },
 	no_setup:        { label: 'Not set up',      icon: AlertCircle,  cls: 'border-rose-200 bg-rose-50 text-rose-800' },
@@ -137,7 +137,7 @@ export default function CycleInspector() {
 					onClick={() => setExpanded((m) => ({ ...m, [s.step_id]: !m[s.step_id] }))}
 					className="w-full text-left px-3 py-2 flex items-start gap-2 hover:bg-slate-50"
 				>
-					<Icon className={s.ok ? 'w-4 h-4 mt-0.5 text-emerald-600 flex-shrink-0' : 'w-4 h-4 mt-0.5 text-rose-600 flex-shrink-0'} />
+					<Icon className={s.ok ? 'w-4 h-4 mt-0.5 text-amber-600 flex-shrink-0' : 'w-4 h-4 mt-0.5 text-rose-600 flex-shrink-0'} />
 					<div className="min-w-0 flex-1">
 						<div className="flex items-center gap-2">
 							<span className="text-sm font-medium text-slate-800">{s.skill || s.step_id}</span>
@@ -200,7 +200,7 @@ export default function CycleInspector() {
 					return (
 						<section key={stage.key} className="rounded-xl border border-slate-200 bg-white/60 p-3">
 							<div className="flex items-center gap-2 mb-2">
-								<div className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center"><Icon className="w-3.5 h-3.5" /></div>
+								<div className="w-6 h-6 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center"><Icon className="w-3.5 h-3.5" /></div>
 								<h3 className="text-[13px] font-semibold text-slate-800">{stage.label}</h3>
 							</div>
 							{showGate && <div className="mb-2"><ObserveGatePanel gate={gate!} /></div>}
@@ -254,7 +254,7 @@ export function ObserveGatePanel({ gate }: { gate: ObserveGate }) {
 	const cls = !gate.evaluated
 		? 'border-slate-200 bg-slate-50 text-slate-600'
 		: gate.passed
-			? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+			? 'border-amber-200 bg-amber-50 text-amber-800'
 			: 'border-amber-200 bg-amber-50 text-amber-800';
 	return (
 		<section className={`rounded-lg border px-3 py-2.5 ${cls}`}>
@@ -378,7 +378,7 @@ function ReviewRow({
 					)}
 				</div>
 				{done ? (
-					<span className="shrink-0 inline-flex items-center gap-1 text-xs text-emerald-700">
+					<span className="shrink-0 inline-flex items-center gap-1 text-xs text-amber-700">
 						<CheckCircle2 className="w-3.5 h-3.5" /> {done}
 					</span>
 				) : (
@@ -386,7 +386,7 @@ function ReviewRow({
 						<button
 							onClick={() => reply('approve')}
 							disabled={!!busy}
-							className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+							className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 disabled:opacity-50"
 						>
 							{busy === 'approve' ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
 							Approve
@@ -427,7 +427,7 @@ function ReviewRow({
 						<button
 							onClick={approveEdit}
 							disabled={!!busy}
-							className="px-3 py-1 text-xs rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+							className="px-3 py-1 text-xs rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 transition-colors"
 						>
 							{busy === 'edit' ? 'Saving…' : 'Approve with edits'}
 						</button>
@@ -468,7 +468,7 @@ function ReviewRow({
 
 const OFFER_KIND_META: Record<CompoundOffer['kind'], { label: string; icon: typeof Lightbulb; tone: string; iconTone: string }> = {
 	knowledge: { label: 'extra knowledge', icon: Lightbulb, tone: 'border-amber-200 bg-amber-50/40',    iconTone: 'bg-amber-100 text-amber-700' },
-	skill:     { label: 'a skill',         icon: Wand2,     tone: 'border-emerald-200 bg-emerald-50/40', iconTone: 'bg-emerald-100 text-emerald-700' },
+	skill:     { label: 'a skill',         icon: Wand2,     tone: 'border-amber-200 bg-amber-50/40', iconTone: 'bg-amber-100 text-amber-700' },
 	workflow:  { label: 'a workflow',      icon: Workflow,  tone: 'border-indigo-200 bg-indigo-50/40',   iconTone: 'bg-indigo-100 text-indigo-700' },
 	experiment:{ label: 'an experiment verdict', icon: FlaskConical, tone: 'border-violet-200 bg-violet-50/40', iconTone: 'bg-violet-100 text-violet-700' },
 };

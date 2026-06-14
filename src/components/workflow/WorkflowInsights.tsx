@@ -80,11 +80,11 @@ export default function WorkflowInsights({ slug }: { slug: string }) {
 export function DeltaRow({ delta, index = 0 }: { delta: Delta; index?: number }) {
 	const Icon = delta.trend === "up" ? TrendingUp : delta.trend === "down" ? TrendingDown : Minus;
 	const wrap =
-		delta.trend === "up" ? "bg-emerald-50/60 border-emerald-100 text-emerald-900" :
+		delta.trend === "up" ? "bg-amber-50/60 border-amber-100 text-amber-900" :
 		delta.trend === "down" ? "bg-rose-50/60 border-rose-100 text-rose-900" :
 		"bg-slate-50/60 border-slate-100 text-slate-700";
 	const ic =
-		delta.trend === "up" ? "text-emerald-600" :
+		delta.trend === "up" ? "text-amber-600" :
 		delta.trend === "down" ? "text-rose-600" :
 		"text-slate-400";
 	return (
@@ -111,7 +111,7 @@ function MiniStat({
 	const sig = Math.abs(diff) > 0.001;
 	const better = sig && (betterIsHigher ? diff > 0 : diff < 0);
 	const worse = sig && (betterIsHigher ? diff < 0 : diff > 0);
-	const trendClass = better ? "text-emerald-700" : worse ? "text-rose-700" : "text-slate-400";
+	const trendClass = better ? "text-amber-700" : worse ? "text-rose-700" : "text-slate-400";
 	const trendSign = better ? "↑" : worse ? "↓" : "•";
 	return (
 		<div>

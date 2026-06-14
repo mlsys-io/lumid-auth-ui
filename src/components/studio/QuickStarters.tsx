@@ -59,11 +59,11 @@ export function FreshUserHero({ name }: { name: string }) {
 	return (
 		<div className="space-y-5">
 			{/* Hero — greeting + single primary ask */}
-			<section className="rounded-2xl border border-slate-200/70 bg-gradient-to-br from-emerald-50 via-white to-sky-50/40 p-6">
+			<section className="rounded-2xl border border-slate-200/70 bg-gradient-to-br from-amber-50 via-white to-sky-50/40 p-6">
 				<div className="flex items-start gap-3">
 					<div className="relative flex-shrink-0">
-						<div className="absolute inset-0 bg-emerald-400/30 blur-md rounded-full" />
-						<div className="relative w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center shadow-sm shadow-emerald-200">
+						<div className="absolute inset-0 bg-amber-400/30 blur-md rounded-full" />
+						<div className="relative w-11 h-11 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 text-white flex items-center justify-center shadow-sm shadow-amber-200">
 							<Sparkles className="w-5 h-5" />
 						</div>
 					</div>
@@ -101,9 +101,9 @@ function DescribeCard({ onClick }: { onClick: () => void }) {
 	return (
 		<button
 			onClick={onClick}
-			className="group rounded-xl border border-dashed border-emerald-300/70 bg-emerald-50/30 p-3 text-left transition-all flex items-start gap-3 hover:shadow-sm hover:bg-emerald-50/60 active:scale-[0.98]"
+			className="group rounded-xl border border-dashed border-amber-300/70 bg-amber-50/30 p-3 text-left transition-all flex items-start gap-3 hover:shadow-sm hover:bg-amber-50/60 active:scale-[0.98]"
 		>
-			<div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-105">
+			<div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-105">
 				<MessagesSquare className="w-4 h-4" />
 			</div>
 			<div className="flex-1 min-w-0">
@@ -112,7 +112,7 @@ function DescribeCard({ onClick }: { onClick: () => void }) {
 					Tell the AI in your words — it composes, installs, and schedules it.
 				</div>
 			</div>
-			<ArrowRight className="w-3.5 h-3.5 text-emerald-400 group-hover:text-emerald-600 transition-colors flex-shrink-0 mt-1" />
+			<ArrowRight className="w-3.5 h-3.5 text-amber-400 group-hover:text-amber-600 transition-colors flex-shrink-0 mt-1" />
 		</button>
 	);
 }

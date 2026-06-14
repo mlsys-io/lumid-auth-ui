@@ -162,7 +162,7 @@ export default function ChatEmptyState() {
 			{/* ── Right now — the live digest; each row is a grounded action ── */}
 			{hasDigest && (
 				<div className="space-y-1.5">
-					<div className="text-[10.5px] tracking-[0.08em] font-medium text-foreground/45 uppercase px-0.5">Right now</div>
+					<div className="text-[10.5px] tracking-[0.08em] font-medium text-muted-foreground uppercase px-0.5">Right now</div>
 					{failing.map((w) => {
 						const loop = loopOf(w);
 						return (

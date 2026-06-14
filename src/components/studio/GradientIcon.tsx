@@ -9,8 +9,8 @@ import { cn } from "@/lib/utils";
 // Cohesive cool/jewel palette anchored on the emerald brand — deterministic
 // per-app variety without clashing candy tones (no hot pink / fuchsia / amber).
 const PALETTE = [
-	"from-emerald-500 to-teal-600",
-	"from-teal-500 to-cyan-600",
+	"from-amber-500 to-amber-600",
+	"from-amber-500 to-cyan-600",
 	"from-sky-500 to-blue-600",
 	"from-cyan-500 to-sky-600",
 	"from-indigo-500 to-blue-600",

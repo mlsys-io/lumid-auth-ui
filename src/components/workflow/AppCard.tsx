@@ -64,6 +64,28 @@ export function appHasSurface(app: string): boolean | undefined {
 	return SURFACE_PRESENCE[app];
 }
 
+// Eager, idempotent label hydration — populates the registries from listApps
+// INDEPENDENT of the sidebar's render. Without this, appTitle() resolves to a
+// humanized slug on the first chat render (before useAppNav has fetched), then
+// flickers to the configured label — and openAppInChat would bake the stale
+// slug-name permanently into the transcript. Callers that need a correct name
+// up front (openAppInChat) await this first. Cheap: listApps is in-flight-
+// deduped + TTL-cached in me.ts, so concurrent callers share one request.
+let labelsPrefetch: Promise<void> | null = null;
+export function prefetchAppLabels(): Promise<void> {
+	if (!labelsPrefetch) {
+		labelsPrefetch = me.listApps()
+			.then((r) => {
+				for (const a of r.apps || []) {
+					if (a.ui?.sidebar?.label) registerAppLabel(a.name, a.ui.sidebar.label);
+					registerAppSurfacePresence(a.name, !!(a.ui?.surface || (a.ui?.surfaces && Object.keys(a.ui.surfaces).length > 0)));
+				}
+			})
+			.catch(() => { /* soft-fail; appTitle falls back to TITLE/humanize */ });
+	}
+	return labelsPrefetch;
+}
+
 const BLURB: Record<string, string> = {
 	"personal-agent": "Morning briefs, inbox triage, and reflections over your email + calendar.",
 	"mbb-ai": "Active-learning over consulting cases — sharpens its judgement with every run.",
@@ -159,7 +181,7 @@ export default function AppCard({
 			{/* header → the app's configured UI (or the workflow overview when none) */}
 			<button type="button" onClick={openHeader} className="block w-full text-left px-4 pt-3 pb-2">
 				<div className="flex items-center gap-3">
-					<div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
+					<div className="w-9 h-9 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
 						<Icon className="w-[18px] h-[18px]" />
 					</div>
 					<div className="min-w-0 flex-1">
@@ -182,7 +204,7 @@ export default function AppCard({
 					</div>
 					<div className="text-[12px] text-slate-400 mt-0.5 truncate">{whenLast(lastActivity)}</div>
 					</div>
-					<ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-emerald-600 transition-colors flex-shrink-0" />
+					<ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-amber-600 transition-colors flex-shrink-0" />
 					<span
 						role="button" tabIndex={0} onClick={remove}
 						className="shrink-0 p-1.5 rounded-md text-slate-300 hover:text-rose-600 hover:bg-rose-50 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -199,7 +221,7 @@ export default function AppCard({
 				{[...workflows].sort((a, b) => Number(!!b.run_spark) - Number(!!a.run_spark)).slice(0, 2).map((w) => (
 					<div
 						key={w.slug}
-						className="flex items-center gap-2 w-full rounded-md px-1.5 -mx-1.5 py-0.5 hover:bg-emerald-50/60 transition-colors"
+						className="flex items-center gap-2 w-full rounded-md px-1.5 -mx-1.5 py-0.5 hover:bg-amber-50/60 transition-colors"
 					>
 						<button
 							type="button"

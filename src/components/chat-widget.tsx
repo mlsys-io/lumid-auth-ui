@@ -487,7 +487,7 @@ export default function ChatWidget() {
                         className={cn(
                           "inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] border transition",
                           tc.ok
-                            ? "border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                            ? "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
                             : "border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100",
                         )}
                         title={`Click to ${isExpanded ? "hide" : "see"} raw result`}

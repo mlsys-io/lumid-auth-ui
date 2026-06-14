@@ -28,7 +28,7 @@ export function PageHints({ prompts, label, context }: Props) {
 	return (
 		<div className="flex flex-wrap items-center gap-2 mb-5 text-xs">
 			<span className="text-slate-500 inline-flex items-center gap-1.5 mr-0.5">
-				<Sparkles className="w-3.5 h-3.5 text-emerald-500" />
+				<Sparkles className="w-3.5 h-3.5 text-amber-500" />
 				<span className="font-medium">{label || 'Try asking'}</span>
 			</span>
 			{prompts.map((p) => (
@@ -39,7 +39,7 @@ export function PageHints({ prompts, label, context }: Props) {
 							detail: { prompt: p, autosend: true, context },
 						}))
 					}
-					className="group px-3 py-1.5 rounded-full border border-emerald-200/70 bg-white hover:bg-gradient-to-r hover:from-emerald-50 hover:to-white text-emerald-800 hover:text-emerald-900 hover:border-emerald-300 hover:shadow-sm hover:shadow-emerald-100 transition-all active:scale-[0.98]"
+					className="group px-3 py-1.5 rounded-full border border-amber-200/70 bg-white hover:bg-gradient-to-r hover:from-amber-50 hover:to-white text-amber-800 hover:text-amber-900 hover:border-amber-300 hover:shadow-sm hover:shadow-amber-100 transition-all active:scale-[0.98]"
 				>
 					<span className="opacity-60 group-hover:opacity-100 transition-opacity mr-0.5">›</span>
 					{p}

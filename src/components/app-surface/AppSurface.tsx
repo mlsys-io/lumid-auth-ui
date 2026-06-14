@@ -254,7 +254,7 @@ export function AppSurface({
         <div className="px-6 py-6 max-w-lg">
           <div className="rounded-xl border border-slate-200 bg-white p-5">
             <div className="flex items-center gap-2 text-slate-800">
-              <Sparkles className="w-4 h-4 text-emerald-500" />
+              <Sparkles className="w-4 h-4 text-amber-500" />
               <span className="text-sm font-medium">No page yet for {app}</span>
             </div>
             <p className="mt-1.5 text-[12px] text-slate-500 leading-relaxed">
@@ -262,7 +262,7 @@ export function AppSurface({
             </p>
             <Link
               to={`${editTo}&generate=1`}
-              className="mt-3 inline-flex items-center gap-1.5 px-3 py-2 text-[13px] font-medium rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm shadow-emerald-100 hover:from-emerald-600 hover:to-teal-700 transition"
+              className="mt-3 inline-flex items-center gap-1.5 px-3 py-2 text-[13px] font-medium rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-sm shadow-amber-100 hover:from-amber-600 hover:to-amber-700 transition"
             >
               <Sparkles className="w-3.5 h-3.5" />
               Generate a page

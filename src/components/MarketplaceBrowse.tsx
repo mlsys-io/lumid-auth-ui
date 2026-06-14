@@ -35,13 +35,13 @@ import { parse as parseYaml } from "yaml";
 // ── Kind metadata (mirrors xp.io kindMeta) ────────────────────────
 
 const KIND_META: Record<string, { glyph: string; border: string; bg: string; text: string; label: string }> = {
-	app:        { glyph: "⁂", border: "border-l-teal-400",    bg: "bg-teal-50",    text: "text-teal-700",    label: "App" },
+	app:        { glyph: "⁂", border: "border-l-amber-400",    bg: "bg-amber-50",    text: "text-amber-700",    label: "App" },
 	skill:      { glyph: "⌘", border: "border-l-violet-400",  bg: "bg-violet-50",  text: "text-violet-700",  label: "Skill" },
 	dataset:    { glyph: "◫", border: "border-l-amber-400",   bg: "bg-amber-50",   text: "text-amber-700",   label: "Dataset" },
 	agent:      { glyph: "❋", border: "border-l-pink-400",    bg: "bg-pink-50",    text: "text-pink-700",    label: "Agent" },
 	workflow:   { glyph: "▷", border: "border-l-blue-400",    bg: "bg-blue-50",    text: "text-blue-700",    label: "Workflow" },
-	experiment: { glyph: "⬡", border: "border-l-emerald-400", bg: "bg-emerald-50", text: "text-emerald-700", label: "Experiment" },
-	autoresearch:{ glyph: "⬡", border: "border-l-emerald-400", bg: "bg-emerald-50", text: "text-emerald-700", label: "Experiment" },
+	experiment: { glyph: "⬡", border: "border-l-amber-400", bg: "bg-amber-50", text: "text-amber-700", label: "Experiment" },
+	autoresearch:{ glyph: "⬡", border: "border-l-amber-400", bg: "bg-amber-50", text: "text-amber-700", label: "Experiment" },
 	strategy:   { glyph: "◈", border: "border-l-blue-400",    bg: "bg-blue-50",    text: "text-blue-700",    label: "Strategy" },
 };
 const kindMeta = (k?: string) =>
@@ -260,7 +260,7 @@ export default function MarketplaceBrowse() {
 						value={query}
 						onChange={(e) => { setQuery(e.target.value); setActiveTag(null); }}
 						placeholder={`Search ${tab}…`}
-						className="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-teal-400/20 focus:border-teal-400 transition-all placeholder:text-slate-400"
+						className="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/20 focus:border-amber-400 transition-all placeholder:text-slate-400"
 					/>
 				</div>
 
@@ -285,7 +285,7 @@ export default function MarketplaceBrowse() {
 						<button
 							key={t}
 							onClick={() => setActiveTag(t)}
-							className="px-2 py-0.5 rounded-full text-[11px] border border-slate-200 text-slate-600 hover:border-teal-400 hover:text-teal-700 transition-colors"
+							className="px-2 py-0.5 rounded-full text-[11px] border border-slate-200 text-slate-600 hover:border-amber-400 hover:text-amber-700 transition-colors"
 						>
 							{t}
 						</button>
@@ -362,7 +362,7 @@ function SortDropdown({ value, onChange }: { value: SortKey; onChange: (v: SortK
 			<select
 				value={value}
 				onChange={(e) => onChange(e.target.value as SortKey)}
-				className="appearance-none pl-3 pr-7 py-1.5 text-sm rounded-lg border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-400/20 focus:border-teal-400 cursor-pointer"
+				className="appearance-none pl-3 pr-7 py-1.5 text-sm rounded-lg border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400/20 focus:border-amber-400 cursor-pointer"
 			>
 				{(Object.keys(labels) as SortKey[]).map((k) => (
 					<option key={k} value={k}>{labels[k]}</option>
@@ -486,8 +486,8 @@ function RepoCardView({
 				"group rounded-xl border bg-white p-4 flex flex-col shadow-sm transition-all duration-200",
 				STAGGER_CLASS,
 				ctaState === "installed"
-					? "border-emerald-200 bg-emerald-50/30"
-					: "border-slate-200 hover:border-emerald-300 hover:shadow-md hover:-translate-y-0.5",
+					? "border-amber-200 bg-amber-50/30"
+					: "border-slate-200 hover:border-amber-300 hover:shadow-md hover:-translate-y-0.5",
 			)}
 			style={staggerDelay(index)}
 		>
@@ -528,7 +528,7 @@ function RepoCardView({
 			{/* Helper line — what the primary action does for THIS kind */}
 			{ctaState === "idle" && helper && (
 				<p className="mt-3 text-[10.5px] text-slate-500 leading-snug">
-					<Sparkles className="inline w-2.5 h-2.5 mr-0.5 text-emerald-500" />
+					<Sparkles className="inline w-2.5 h-2.5 mr-0.5 text-amber-500" />
 					{helper}
 				</p>
 			)}
@@ -580,7 +580,7 @@ const SKILL_CATEGORIES: Record<string, { bg: string; text: string }> = {
 	calendar:  { bg: "bg-amber-50",   text: "text-amber-700" },
 	web:       { bg: "bg-sky-50",     text: "text-sky-700" },
 	code:      { bg: "bg-violet-50",  text: "text-violet-700" },
-	research:  { bg: "bg-emerald-50", text: "text-emerald-700" },
+	research:  { bg: "bg-amber-50", text: "text-amber-700" },
 	messaging: { bg: "bg-indigo-50",  text: "text-indigo-700" },
 	data:      { bg: "bg-cyan-50",    text: "text-cyan-700" },
 	sql:       { bg: "bg-orange-50",  text: "text-orange-700" },
@@ -861,7 +861,7 @@ function AppDetailDrawer({
 								<div className="text-[11px] text-slate-400">No public apps use this skill yet.</div>
 							) : (
 								consumers.slice(0, 8).map((cns, i) => (
-									<div key={i} className="font-mono text-[11px] text-teal-700 truncate">{cns.name.replace(/^[^/]+\//, "")}</div>
+									<div key={i} className="font-mono text-[11px] text-amber-700 truncate">{cns.name.replace(/^[^/]+\//, "")}</div>
 								))
 							)}
 						</div>
@@ -906,7 +906,7 @@ function AppDetailDrawer({
 								role="switch"
 								aria-checked={sidebar.show}
 								onClick={() => setSidebar((s) => ({ ...s, show: !s.show }))}
-								className={`relative inline-flex h-4.5 w-8 flex-shrink-0 rounded-full border-2 border-transparent transition-colors ${sidebar.show ? "bg-teal-500" : "bg-slate-200"}`}
+								className={`relative inline-flex h-4.5 w-8 flex-shrink-0 rounded-full border-2 border-transparent transition-colors ${sidebar.show ? "bg-amber-500" : "bg-slate-200"}`}
 							>
 								<span className={`pointer-events-none inline-block h-3.5 w-3.5 mt-px transform rounded-full bg-white shadow transition-transform ${sidebar.show ? "translate-x-3.5" : "translate-x-0"}`} />
 							</button>
@@ -915,15 +915,15 @@ function AppDetailDrawer({
 							<>
 								<label className="block">
 									<span className="text-[11px] text-slate-500 block mb-1">Label</span>
-									<input type="text" value={sidebar.label} onChange={(e) => setSidebar((s) => ({ ...s, label: e.target.value }))} className="w-full px-2 py-1 text-[12px] rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-teal-400/20" />
+									<input type="text" value={sidebar.label} onChange={(e) => setSidebar((s) => ({ ...s, label: e.target.value }))} className="w-full px-2 py-1 text-[12px] rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/20" />
 								</label>
 								<label className="block">
 									<span className="text-[11px] text-slate-500 block mb-1">Section</span>
-									<input type="text" value={sidebar.section} onChange={(e) => setSidebar((s) => ({ ...s, section: e.target.value }))} className="w-full px-2 py-1 text-[12px] rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-teal-400/20" placeholder="e.g. Trading, Research" />
+									<input type="text" value={sidebar.section} onChange={(e) => setSidebar((s) => ({ ...s, section: e.target.value }))} className="w-full px-2 py-1 text-[12px] rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/20" placeholder="e.g. Trading, Research" />
 								</label>
 							</>
 						)}
-						<div className={`text-[11px] px-2 py-1 rounded-md ${sidebar.show ? "bg-teal-50 text-teal-700" : "bg-slate-100 text-slate-500"}`}>
+						<div className={`text-[11px] px-2 py-1 rounded-md ${sidebar.show ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500"}`}>
 							{sidebar.show
 								? <><Eye className="w-3 h-3 inline mr-1" />{sidebar.section} → {sidebar.label}</>
 								: <><EyeOff className="w-3 h-3 inline mr-1" />Not in sidebar</>
@@ -957,7 +957,7 @@ function AppDetailDrawer({
 				{/* Action footer — the verb depends on the kind */}
 				<div className="p-4 border-t border-slate-100 bg-white">
 					{act === "install" && (isInstalled ? (
-						<button onClick={() => { onOpen(app.name); onClose(); }} className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100 text-sm font-medium transition-all">
+						<button onClick={() => { onOpen(app.name); onClose(); }} className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 text-sm font-medium transition-all">
 							<Check className="w-4 h-4" /> Open {title} <ArrowRight className="w-4 h-4" />
 						</button>
 					) : (
@@ -1019,14 +1019,14 @@ function RefinementsView({ query }: { query: string }) {
 	return (
 		<ul className="space-y-2">
 			{filtered.map((r) => (
-				<li key={r.id} className={`rounded-lg border bg-white px-4 py-3 flex items-center gap-3 transition-all ${isFresh(r) ? "border-teal-300 bg-teal-50/60" : "border-slate-200"}`}>
+				<li key={r.id} className={`rounded-lg border bg-white px-4 py-3 flex items-center gap-3 transition-all ${isFresh(r) ? "border-amber-300 bg-amber-50/60" : "border-slate-200"}`}>
 					<GitFork className="w-4 h-4 text-slate-400 flex-shrink-0" />
 					<div className="flex-1 min-w-0">
 						<div className="font-medium text-slate-900 text-sm truncate">{r.name}</div>
 						<div className="text-[11px] text-slate-400 mt-0.5">{r.version} · {r.refinedAt} · {r.source}</div>
 					</div>
 					{r.status === "published"
-						? <span className="text-[11px] px-2 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200 flex-shrink-0"><Check className="w-3 h-3 inline" /> Published</span>
+						? <span className="text-[11px] px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 flex-shrink-0"><Check className="w-3 h-3 inline" /> Published</span>
 						: <span className="text-[11px] text-slate-400 flex-shrink-0">Local only</span>
 					}
 				</li>

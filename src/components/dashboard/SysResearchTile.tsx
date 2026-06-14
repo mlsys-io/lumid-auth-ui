@@ -67,7 +67,7 @@ function _statusTone(row: LoopRow): 'good' | 'warn' | 'bad' | 'default' {
 }
 
 function _statusIcon(tone: 'good' | 'warn' | 'bad' | 'default') {
-	if (tone === 'good') return <CheckCircle2 className="w-3 h-3 text-emerald-600" />;
+	if (tone === 'good') return <CheckCircle2 className="w-3 h-3 text-amber-600" />;
 	if (tone === 'bad') return <AlertTriangle className="w-3 h-3 text-red-600" />;
 	if (tone === 'warn') return <AlertTriangle className="w-3 h-3 text-amber-600" />;
 	return <Activity className="w-3 h-3 text-indigo-600" />;
@@ -148,7 +148,7 @@ function LoopCard({ row }: { row: LoopRow }) {
 	const metric = useLoopHeadline(row.loop, row.last_run_ts, row.last_ok);
 	const toneBorder =
 		tone === 'good'
-			? 'border-l-green-500'
+			? 'border-l-amber-500'
 			: tone === 'warn'
 				? 'border-l-amber-500'
 				: tone === 'bad'

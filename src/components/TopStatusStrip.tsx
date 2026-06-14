@@ -51,98 +51,98 @@ const PAGE_META: Array<{
 		icon: Boxes,
 		title: "App",
 		subtitle: "Workflows, status, insights, and suggested improvements.",
-		iconTone: "text-emerald-600",
+		iconTone: "text-amber-600",
 	},
 	{
 		pattern: /^\/studio\/apps/,
 		icon: Boxes,
 		title: "Apps",
 		subtitle: "Your apps and their ongoing progress.",
-		iconTone: "text-emerald-600",
+		iconTone: "text-amber-600",
 	},
 	{
 		pattern: /^\/studio\/(intents|today)/,
 		icon: Sparkles,
 		title: "Apps",
 		subtitle: "Your goals this week. Outcomes graded; judgment encoded.",
-		iconTone: "text-emerald-600",
+		iconTone: "text-amber-600",
 	},
 	{
 		pattern: /^\/studio\/inbox/,
 		icon: InboxIcon,
 		title: "Inbox",
 		subtitle: "Drafts, runs, notices, and the audit trail — in one feed.",
-		iconTone: "text-emerald-600",
+		iconTone: "text-amber-600",
 	},
 	{
 		pattern: /^\/studio\/runs\/[^/]+/,
 		icon: ActivityIcon,
 		title: "Run",
 		subtitle: "Per-step DAG + timeline.",
-		iconTone: "text-emerald-600",
+		iconTone: "text-amber-600",
 	},
 	{
 		pattern: /^\/studio\/runs/,
 		icon: ActivityIcon,
 		title: "Jobs",
 		subtitle: "Your recent runs — open any to ask about it.",
-		iconTone: "text-emerald-600",
+		iconTone: "text-amber-600",
 	},
 	{
 		pattern: /^\/studio\/library\/skills/,
 		icon: Store,
 		title: "Skills",
 		subtitle: "The capabilities your apps import — health, versions, who uses what.",
-		iconTone: "text-emerald-600",
+		iconTone: "text-amber-600",
 	},
 	{
 		pattern: /^\/studio\/library\/experiments/,
 		icon: Store,
 		title: "Experiments",
 		subtitle: "Hypotheses your apps are testing, across every app.",
-		iconTone: "text-emerald-600",
+		iconTone: "text-amber-600",
 	},
 	{
 		pattern: /^\/studio\/(library|marketplace)/,
 		icon: Store,
 		title: "Library",
 		subtitle: "Marketplace, skills, and experiments — pull in, refine, publish back.",
-		iconTone: "text-emerald-600",
+		iconTone: "text-amber-600",
 	},
 	{
 		pattern: /^\/studio\/knowledge\/[^/]+/,
 		icon: Brain,
 		title: "Agent knowledge",
 		subtitle: "Memories the agent has banked.",
-		iconTone: "text-emerald-600",
+		iconTone: "text-amber-600",
 	},
 	{
 		pattern: /^\/studio\/knowledge/,
 		icon: Brain,
 		title: "Knowledge",
 		subtitle: "What's been encoded — yours, audited, portable.",
-		iconTone: "text-emerald-600",
+		iconTone: "text-amber-600",
 	},
 	{
 		pattern: /^\/dashboard\/jobs/,
 		icon: ListChecks,
 		title: "My Jobs",
 		subtitle: "Background runs across cron, FlowMesh, Lumilake, and workflow cycles.",
-		iconTone: "text-emerald-600",
+		iconTone: "text-amber-600",
 	},
 	{
 		pattern: /^\/studio\/settings/,
 		icon: Settings,
 		title: "Settings",
 		subtitle: "Account, tokens, connected services, and privacy — all in one place.",
-		iconTone: "text-slate-600",
+		iconTone: "text-muted-foreground",
 	},
 	{
 		pattern: /^\/studio\/admin/,
 		icon: Shield,
 		title: "Admin",
 		subtitle: "Operator-only.",
-		iconTone: "text-slate-600",
+		iconTone: "text-muted-foreground",
 	},
 ];
 
@@ -164,7 +164,7 @@ function deriveMeta(pathname: string) {
 			icon: pathname.startsWith("/dashboard/admin") || pathname.startsWith("/dashboard/super-admin") ? Shield : LayoutDashboard,
 			title,
 			subtitle: undefined as string | undefined,
-			iconTone: "text-slate-600",
+			iconTone: "text-muted-foreground",
 		};
 	}
 	return null;
@@ -305,22 +305,22 @@ export default function TopStatusStrip() {
 				<div className="min-w-0">
 					{/* Breadcrumb above the title on detail routes */}
 					{crumbs.length > 0 && (
-						<nav className="flex items-center gap-1 text-[11px] text-slate-400 mb-0.5">
+						<nav className="flex items-center gap-1 text-[11px] text-muted-foreground mb-0.5">
 							{crumbs.map((c, i) => (
 								<span key={i} className="inline-flex items-center gap-1 min-w-0">
-									{i > 0 && <ChevronRight className="w-3 h-3 text-slate-300 flex-shrink-0" />}
-									<Link to={c.to} className="hover:text-slate-700 transition-colors truncate">
+									{i > 0 && <ChevronRight className="w-3 h-3 text-muted-foreground/60 flex-shrink-0" />}
+									<Link to={c.to} className="hover:text-foreground transition-colors truncate">
 										{c.label}
 									</Link>
 								</span>
 							))}
 						</nav>
 					)}
-					<h1 className="text-[15px] font-semibold text-slate-900 truncate leading-tight">
+					<h1 className="text-[15px] font-semibold text-foreground truncate leading-tight">
 						{detailLeaf ?? meta?.title ?? ""}
 					</h1>
 					{meta?.subtitle && !detailLeaf && (
-						<p className="text-[11px] text-slate-500 mt-0.5 truncate hidden md:block">
+						<p className="text-[11px] text-muted-foreground mt-0.5 truncate hidden md:block">
 							{meta.subtitle}
 						</p>
 					)}
@@ -332,8 +332,8 @@ export default function TopStatusStrip() {
 			{/* Right — a steady "live" heartbeat (the surface is alive; loops
 			    run in the background) + status pills (only when non-zero). */}
 			<div className="flex items-center gap-2 flex-shrink-0">
-				<span className="inline-flex items-center gap-1.5 text-[11px] text-slate-400" title="Live — your loops run in the background">
-					<span className="w-1.5 h-1.5 rounded-full bg-emerald-500 heartbeat" />
+				<span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground" title="Live — your loops run in the background">
+					<span className="w-1.5 h-1.5 rounded-full bg-amber-500 heartbeat" />
 					<span className="hidden sm:inline">live{(() => { const a = Math.max(0, Math.floor((Date.now() - refreshedAt) / 1000)); return a < 3 ? "" : a < 60 ? ` · ${a}s ago` : ` · ${Math.floor(a / 60)}m ago`; })()}</span>
 				</span>
 				{loaded && counts.drafts > 0 && (

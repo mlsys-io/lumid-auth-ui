@@ -23,7 +23,7 @@ import {
 	type StudioPickedTarget,
 	type ViewingContext,
 } from './StudioContext';
-import { appTitle } from './workflow/AppCard';
+import { appTitle, prefetchAppLabels } from './workflow/AppCard';
 import { startStudioPicking, stopStudioPicking, isStudioPicking, subscribeStudioPicking } from './StudioPicker';
 import { ChatMarkdown } from './ChatMarkdown';
 import AssemblyCard from './workflow/AssemblyCard';
@@ -164,6 +164,12 @@ export function StudioChat() {
 	const messageQueueRef = useRef<QueuedMessage[]>([]);
 	useEffect(() => { messageQueueRef.current = messageQueue; }, [messageQueue]);
 	const [streaming, setStreaming] = useState(false);
+	// Synchronous in-flight latch. `streaming` is async state, so two rapid
+	// dispatchTurn calls (queue processor microtask racing a manual send, or
+	// StrictMode double-invoke) can both observe streaming===false and fire the
+	// same turn twice. This ref flips synchronously inside dispatchTurn so the
+	// second call is a no-op.
+	const inFlightRef = useRef(false);
 	// LLM model selector. Persists across reloads; populated from
 	// /me/agent/models so backend can add providers without UI changes.
 	const [models, setModels] = useState<ModelOption[]>([]);
@@ -797,7 +803,8 @@ export function StudioChat() {
 		baseMessages?: Message[],
 		ctxOverride?: Partial<ViewingContext>,
 	) => {
-		if (!text || streaming) return;
+		if (!text || streaming || inFlightRef.current) return;
+		inFlightRef.current = true;
 		const base = baseMessages ?? messages;
 		const userMsg: Message = { role: 'user', content: text };
 		// Structured "what the user is looking at" payload — replaces the
@@ -888,6 +895,7 @@ export function StudioChat() {
 				setMessages((prev) => withLastAssistant(prev, (m) => ({ ...m, content: m.content || msg })));
 			}
 		} finally {
+			inFlightRef.current = false;
 			setStreaming(false);
 			abortRef.current = null;
 			// Clear any tools that received tool_start but no tool_call (stream
@@ -908,12 +916,18 @@ export function StudioChat() {
 	// No LLM turn (opening an app shouldn't auto-start a conversation).
 	const openAppInChat = useCallback((d: { app: string; surface?: string }) => {
 		if (!d?.app) return;
-		setStudioSelection({ kind: 'app', id: d.app, label: appTitle(d.app), affordances: ['app_action', 'app_read', 'run_loop_now'] });
-		setMessages((prev) => [...prev, {
-			role: 'assistant',
-			content: `Here's **${appTitle(d.app)}** — you can work with it right here. Ask me to do anything, or use the controls below.`,
-			appSurface: { app: d.app, surface: d.surface },
-		}]);
+		// Resolve the label BEFORE composing — the greeting text is baked into the
+		// transcript, so a stale slug-name would persist forever. prefetchAppLabels
+		// resolves instantly if labels are already loaded (the common case).
+		void prefetchAppLabels().then(() => {
+			const label = appTitle(d.app);
+			setStudioSelection({ kind: 'app', id: d.app, label, affordances: ['app_action', 'app_read', 'run_loop_now'] });
+			setMessages((prev) => [...prev, {
+				role: 'assistant',
+				content: `Here's **${label}** — you can work with it right here. Ask me to do anything, or use the controls below.`,
+				appSurface: { app: d.app, surface: d.surface },
+			}]);
+		});
 	}, []);
 
 	// The chat mounts only at /studio now — asks fired elsewhere are
@@ -1122,27 +1136,27 @@ export function StudioChat() {
 							aria-expanded={historyOpen}
 							className={[
 								'p-1.5 rounded-md transition-colors',
-								historyOpen ? 'text-emerald-700 bg-emerald-50' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100',
+								historyOpen ? 'text-amber-700 bg-amber-50' : 'text-muted-foreground hover:text-foreground hover:bg-muted',
 							].join(' ')}
 						>
 							<MessageSquarePlus className="w-3.5 h-3.5" />
 						</button>
 						{historyOpen && (
 							<div
-								className="absolute right-0 top-full mt-1 z-50 w-72 max-h-96 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg shadow-slate-200/40 p-1"
+								className="absolute right-0 top-full mt-1 z-50 w-72 max-h-96 overflow-y-auto rounded-xl border border-border bg-popover shadow-lg shadow-foreground/5 p-1"
 								onClick={(e) => e.stopPropagation()}
 							>
 								<button
 									type="button"
 									onClick={newChat}
-									className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 transition-colors"
+									className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] text-foreground hover:bg-amber-50 hover:text-amber-800 transition-colors"
 								>
-									<Plus className="w-3.5 h-3.5 text-emerald-600" />
+									<Plus className="w-3.5 h-3.5 text-amber-600" />
 									<span className="font-medium">New chat</span>
 								</button>
-								<div className="h-px bg-slate-100 my-1 mx-2" />
+								<div className="h-px bg-muted my-1 mx-2" />
 								{history.length === 0 && (
-									<div className="px-2.5 py-1.5 text-[11px] text-slate-400 italic">
+									<div className="px-2.5 py-1.5 text-[11px] text-muted-foreground italic">
 										No saved threads yet.
 									</div>
 								)}
@@ -1151,7 +1165,7 @@ export function StudioChat() {
 										key={h.id}
 										className={[
 											'group flex items-center gap-1 px-1 py-0.5 rounded-lg transition-colors',
-											h.id === chatId ? 'bg-emerald-50/60' : 'hover:bg-slate-50',
+											h.id === chatId ? 'bg-amber-50/60' : 'hover:bg-muted/60',
 										].join(' ')}
 									>
 										<button
@@ -1159,8 +1173,8 @@ export function StudioChat() {
 											onClick={() => loadThread(h.id)}
 											className="flex-1 min-w-0 text-left px-1.5 py-1"
 										>
-											<div className="text-[12.5px] font-medium text-slate-800 truncate">{h.title}</div>
-											<div className="text-[10px] text-slate-500 flex items-center gap-1">
+											<div className="text-[12.5px] font-medium text-foreground truncate">{h.title}</div>
+											<div className="text-[10px] text-muted-foreground flex items-center gap-1">
 												<span>{h.msg_count} msg</span>
 												<span>·</span>
 												<span>{relativeTime(h.updated_at)}</span>
@@ -1170,7 +1184,7 @@ export function StudioChat() {
 											type="button"
 											onClick={() => deleteThread(h.id)}
 											title="Delete"
-											className="p-1 opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-600 transition-all"
+											className="p-1 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-rose-600 transition-all"
 										>
 											<Trash2 className="w-3 h-3" />
 										</button>
@@ -1184,7 +1198,7 @@ export function StudioChat() {
 							onClick={clear}
 							title="Clear (without deleting from history)"
 							aria-label="Clear conversation (without deleting from history)"
-							className="p-1.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+							className="p-1.5 rounded-md text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition-colors"
 						>
 							<Trash2 className="w-3.5 h-3.5" />
 						</button>
@@ -1278,11 +1292,11 @@ export function StudioChat() {
 							const isFreeform = !pickedTarget.affordances || pickedTarget.affordances.length === 0;
 							const chipCls = isFreeform
 								? 'inline-flex items-center gap-1.5 text-[11px] bg-sky-50 border border-sky-200 rounded-full pl-2 pr-1 py-0.5'
-								: 'inline-flex items-center gap-1.5 text-[11px] bg-emerald-50 border border-emerald-200 rounded-full pl-2 pr-1 py-0.5';
-							const iconCls   = isFreeform ? 'w-3 h-3 text-sky-600 flex-shrink-0'      : 'w-3 h-3 text-emerald-600 flex-shrink-0';
-							const kindCls   = isFreeform ? 'text-sky-700 font-medium'                : 'text-emerald-700 font-medium';
-							const labelCls  = isFreeform ? 'text-sky-800 max-w-[260px] truncate'     : 'text-emerald-800 max-w-[260px] truncate';
-							const closeCls  = isFreeform ? 'text-sky-700/70 hover:text-rose-600 transition-colors flex-shrink-0' : 'text-emerald-700/70 hover:text-rose-600 transition-colors flex-shrink-0';
+								: 'inline-flex items-center gap-1.5 text-[11px] bg-amber-50 border border-amber-200 rounded-full pl-2 pr-1 py-0.5';
+							const iconCls   = isFreeform ? 'w-3 h-3 text-sky-600 flex-shrink-0'      : 'w-3 h-3 text-amber-600 flex-shrink-0';
+							const kindCls   = isFreeform ? 'text-sky-700 font-medium'                : 'text-amber-700 font-medium';
+							const labelCls  = isFreeform ? 'text-sky-800 max-w-[260px] truncate'     : 'text-amber-800 max-w-[260px] truncate';
+							const closeCls  = isFreeform ? 'text-sky-700/70 hover:text-rose-600 transition-colors flex-shrink-0' : 'text-amber-700/70 hover:text-rose-600 transition-colors flex-shrink-0';
 							return (
 								<div className={chipCls}>
 									<Crosshair className={iconCls} />
@@ -1309,20 +1323,20 @@ export function StudioChat() {
 						{attachments.map((a, i) => (
 							<div
 								key={i}
-								className="inline-flex items-center gap-1.5 text-[11px] bg-slate-100 border border-slate-200 rounded-full pl-2 pr-1 py-0.5"
+								className="inline-flex items-center gap-1.5 text-[11px] bg-muted border border-border rounded-full pl-2 pr-1 py-0.5"
 								title={`${a.name} · ${(a.sizeBytes / 1024).toFixed(1)} KB`}
 							>
 								{a.kind === 'image'
 									? <ImageIcon className="w-3 h-3 text-sky-600" />
 									: a.kind === 'document'
 										? <FileText className="w-3 h-3 text-violet-600" />
-										: <FileText className="w-3 h-3 text-slate-600" />}
+										: <FileText className="w-3 h-3 text-muted-foreground" />}
 								<span className="font-medium max-w-[120px] truncate">{a.name}</span>
 								<span className="opacity-60">{Math.round(a.sizeBytes / 1024)}KB</span>
 								<button
 									type="button"
 									onClick={() => removeAttachment(i)}
-									className="text-slate-400 hover:text-rose-500 transition-colors"
+									className="text-muted-foreground hover:text-rose-500 transition-colors"
 									title="Remove"
 								>
 									<X className="w-3 h-3" />
@@ -1378,20 +1392,20 @@ export function StudioChat() {
 								toolsOpen
 									? 'bg-foreground text-background'
 									: activeToolCount > 0
-										? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
+										? 'text-amber-700 bg-amber-50 hover:bg-amber-100'
 										: 'text-muted-foreground hover:text-foreground hover:bg-muted',
 								streaming ? 'opacity-50 cursor-not-allowed' : '',
 							].join(' ')}
 						>
 							<Plus className={['w-4 h-4 transition-transform', toolsOpen ? 'rotate-45' : ''].join(' ')} />
 							{activeToolCount > 0 && !toolsOpen && (
-								<span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-emerald-500 text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-white">
+								<span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-white">
 									{activeToolCount}
 								</span>
 							)}
 						</button>
 						{toolsOpen && (
-							<div className="absolute bottom-full mb-2 left-0 z-50 min-w-[180px] p-1 rounded-xl border border-slate-200 bg-white shadow-lg shadow-slate-200/40">
+							<div className="absolute bottom-full mb-2 left-0 z-50 min-w-[180px] p-1 rounded-xl border border-border bg-popover shadow-lg shadow-foreground/5">
 								<button
 									type="button"
 									onClick={() => setMode(mode === 'search' ? '' : 'search')}
@@ -1399,10 +1413,10 @@ export function StudioChat() {
 										'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] transition-colors',
 										mode === 'search'
 											? 'bg-sky-50 text-sky-700'
-											: 'text-slate-700 hover:bg-slate-50',
+											: 'text-foreground hover:bg-muted/60',
 									].join(' ')}
 								>
-									<Globe className={['w-3.5 h-3.5', mode === 'search' ? 'text-sky-600' : 'text-slate-500'].join(' ')} />
+									<Globe className={['w-3.5 h-3.5', mode === 'search' ? 'text-sky-600' : 'text-muted-foreground'].join(' ')} />
 									<span className="font-medium flex-1 text-left">Search the web</span>
 									{mode === 'search' && <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />}
 								</button>
@@ -1413,14 +1427,14 @@ export function StudioChat() {
 										'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] transition-colors',
 										mode === 'deep_research'
 											? 'bg-violet-50 text-violet-700'
-											: 'text-slate-700 hover:bg-slate-50',
+											: 'text-foreground hover:bg-muted/60',
 									].join(' ')}
 								>
-									<Telescope className={['w-3.5 h-3.5', mode === 'deep_research' ? 'text-violet-600' : 'text-slate-500'].join(' ')} />
+									<Telescope className={['w-3.5 h-3.5', mode === 'deep_research' ? 'text-violet-600' : 'text-muted-foreground'].join(' ')} />
 									<span className="font-medium flex-1 text-left">Deep research</span>
 									{mode === 'deep_research' && <span className="w-1.5 h-1.5 rounded-full bg-violet-500" />}
 								</button>
-								<div className="h-px bg-slate-100 my-1 mx-2" />
+								<div className="h-px bg-muted my-1 mx-2" />
 								<button
 									type="button"
 									onClick={() => setThink((v) => !v)}
@@ -1428,10 +1442,10 @@ export function StudioChat() {
 										'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] transition-colors',
 										think
 											? 'bg-amber-50 text-amber-700'
-											: 'text-slate-700 hover:bg-slate-50',
+											: 'text-foreground hover:bg-muted/60',
 									].join(' ')}
 								>
-									<Brain className={['w-3.5 h-3.5', think ? 'text-amber-600' : 'text-slate-500'].join(' ')} />
+									<Brain className={['w-3.5 h-3.5', think ? 'text-amber-600' : 'text-muted-foreground'].join(' ')} />
 									<span className="font-medium flex-1 text-left">Show thinking</span>
 									{think && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
 								</button>
@@ -1439,13 +1453,13 @@ export function StudioChat() {
 								    persistent context (sticky across turns), not per-turn
 								    tool-forcing toggles. See the chip row beside the model
 								    select in the header subtitle. */}
-								<div className="h-px bg-slate-100 my-1 mx-2" />
+								<div className="h-px bg-muted my-1 mx-2" />
 								<button
 									type="button"
 									onClick={() => fileInputRef.current?.click()}
-									className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] text-slate-700 hover:bg-slate-50 transition-colors"
+									className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] text-foreground hover:bg-muted/60 transition-colors"
 								>
-									<Paperclip className="w-3.5 h-3.5 text-slate-500" />
+									<Paperclip className="w-3.5 h-3.5 text-muted-foreground" />
 									<span className="font-medium flex-1 text-left">Attach file</span>
 								</button>
 								{voiceSupported && (
@@ -1459,10 +1473,10 @@ export function StudioChat() {
 											'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] transition-colors',
 											isListening
 												? 'bg-rose-50 text-rose-700'
-												: 'text-slate-700 hover:bg-slate-50',
+												: 'text-foreground hover:bg-muted/60',
 										].join(' ')}
 									>
-										<Mic className={['w-3.5 h-3.5', isListening ? 'text-rose-600' : 'text-slate-500'].join(' ')} />
+										<Mic className={['w-3.5 h-3.5', isListening ? 'text-rose-600' : 'text-muted-foreground'].join(' ')} />
 										<span className="font-medium flex-1 text-left">
 											{isListening ? 'Stop dictating' : 'Voice input'}
 										</span>
@@ -1567,15 +1581,15 @@ export function StudioChat() {
 							style={{ minHeight: '64px', outline: 'none', boxShadow: 'none' }}
 						/>
 						{slashSuggestions.length > 0 && (
-							<div className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-slate-200 rounded-xl shadow-lg z-50 max-h-48 overflow-y-auto">
+							<div className="absolute bottom-full left-0 right-0 mb-1 bg-popover border border-border rounded-xl shadow-lg z-50 max-h-48 overflow-y-auto">
 								{slashSuggestions.map((s, i) => (
 									<button
 										key={i}
 										type="button"
 										className={[
-											'w-full text-left px-3 py-1.5 text-[12px] font-mono hover:bg-slate-50 transition-colors',
+											'w-full text-left px-3 py-1.5 text-[12px] font-mono hover:bg-muted/60 transition-colors',
 											i === 0 && i === slashSuggestions.length - 1 ? 'rounded-xl' : i === 0 ? 'rounded-t-xl' : i === slashSuggestions.length - 1 ? 'rounded-b-xl' : '',
-											i === slashIdx ? 'bg-emerald-50' : '',
+											i === slashIdx ? 'bg-amber-50' : '',
 										].join(' ')}
 										onMouseDown={(e) => {
 											e.preventDefault();
@@ -1583,9 +1597,9 @@ export function StudioChat() {
 											setSlashSuggestions([]);
 										}}
 									>
-										<span className="text-emerald-700 font-semibold">{s.label}</span>
+										<span className="text-amber-700 font-semibold">{s.label}</span>
 										{s.label !== s.template && (
-											<span className="text-slate-400 ml-2 truncate">{s.template.slice(s.label.length)}</span>
+											<span className="text-muted-foreground ml-2 truncate">{s.template.slice(s.label.length)}</span>
 										)}
 									</button>
 								))}
@@ -1616,9 +1630,9 @@ export function StudioChat() {
 						className={[
 							'order-2 h-8 w-8 flex items-center justify-center rounded-full flex-shrink-0 transition-all active:scale-95',
 							picking
-								? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-300'
+								? 'bg-amber-50 text-amber-700 ring-1 ring-amber-300'
 								: pickedTarget
-									? 'text-emerald-700 hover:bg-emerald-50'
+									? 'text-amber-700 hover:bg-amber-50'
 									: 'text-muted-foreground hover:text-foreground hover:bg-muted',
 						].join(' ')}
 					>
@@ -1689,7 +1703,7 @@ const MessageBubble = memo(function MessageBubble({
 				'w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm',
 				isUser
 					? 'bg-gradient-to-br from-slate-300 to-slate-400 text-white'
-					: 'bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-emerald-100',
+					: 'bg-gradient-to-br from-amber-400 to-amber-600 text-white shadow-amber-100',
 			].join(' ')}>
 				{isUser ? <User className="w-3.5 h-3.5" /> : <Bot className="w-3.5 h-3.5" />}
 			</div>
@@ -1738,9 +1752,9 @@ const MessageBubble = memo(function MessageBubble({
 							)
 						) : (
 							<span className="inline-flex gap-1 items-center">
-								<span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
-								<span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
-								<span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" />
+								<span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
+								<span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
+								<span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-bounce" />
 							</span>
 						)}
 					</div>
@@ -1771,7 +1785,7 @@ const MessageBubble = memo(function MessageBubble({
 				)}
 				{!isUser && m.content && !streaming && (
 					<div
-						className="mt-0.5 text-[10px] text-slate-400 tabular-nums"
+						className="mt-0.5 text-[10px] text-muted-foreground tabular-nums"
 						title="estimated output tokens (~4 chars/token)"
 					>
 						{Math.max(1, Math.round(m.content.length / 4))} tokens
@@ -1794,8 +1808,8 @@ const MessageBubble = memo(function MessageBubble({
 								className={[
 									'p-1 rounded text-[10px]',
 									copied
-										? 'text-emerald-700 bg-emerald-50'
-										: 'text-slate-400 hover:text-slate-700 hover:bg-slate-100',
+										? 'text-amber-700 bg-amber-50'
+										: 'text-muted-foreground hover:text-foreground hover:bg-muted',
 								].join(' ')}
 							>
 								<Copy className="w-3 h-3" />
@@ -1806,7 +1820,7 @@ const MessageBubble = memo(function MessageBubble({
 								type="button"
 								onClick={onRegenerate}
 								title="Regenerate with current model + toggles"
-								className="p-1 rounded text-[10px] text-slate-400 hover:text-emerald-700 hover:bg-emerald-50"
+								className="p-1 rounded text-[10px] text-muted-foreground hover:text-amber-700 hover:bg-amber-50"
 							>
 								<RotateCcw className="w-3 h-3" />
 							</button>
@@ -1820,7 +1834,7 @@ const MessageBubble = memo(function MessageBubble({
 									'p-1 rounded text-[10px]',
 									isSpeaking
 										? 'text-sky-700 bg-sky-50'
-										: 'text-slate-400 hover:text-sky-700 hover:bg-sky-50',
+										: 'text-muted-foreground hover:text-sky-700 hover:bg-sky-50',
 								].join(' ')}
 							>
 								<Volume2 className="w-3 h-3" />
@@ -1873,7 +1887,7 @@ function ThinkingBlock({ thinking, done }: { thinking: string; done: boolean }) 
 				/>
 			</button>
 			{open && (
-				<div className="mt-1.5 px-3 py-2 text-[12px] leading-relaxed text-slate-600 bg-amber-50/40 border border-amber-100 rounded-xl whitespace-pre-wrap break-words">
+				<div className="mt-1.5 px-3 py-2 text-[12px] leading-relaxed text-muted-foreground bg-amber-50/40 border border-amber-100 rounded-xl whitespace-pre-wrap break-words">
 					{thinking || (
 						<span className="opacity-50 italic">(no content yet)</span>
 					)}
@@ -1911,7 +1925,7 @@ function ToolChip({ t, onApprove }: { t: ToolCall; onApprove?: (approved: boolea
 						: t.pending
 							? 'bg-sky-50/80 border-sky-200 text-sky-800'
 							: t.ok
-								? 'bg-emerald-50/80 border-emerald-200 text-emerald-800'
+								? 'bg-amber-50/80 border-amber-200 text-amber-800'
 								: 'bg-rose-50/80 border-rose-200 text-rose-800',
 				].join(' ')}>
 					{t.approvalRequired
@@ -1936,7 +1950,7 @@ function ToolChip({ t, onApprove }: { t: ToolCall; onApprove?: (approved: boolea
 				{t.link && (
 					<Link
 						to={t.link.to}
-						className="text-[11px] inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50 transition-colors"
+						className="text-[11px] inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-popover border border-amber-300 text-amber-700 hover:bg-amber-50 transition-colors"
 					>
 						{t.link.label} →
 					</Link>
@@ -1945,20 +1959,20 @@ function ToolChip({ t, onApprove }: { t: ToolCall; onApprove?: (approved: boolea
 					<>
 						<button
 							onClick={() => onApprove(true)}
-							className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 transition-colors font-medium"
+							className="text-[11px] px-2 py-0.5 rounded-full bg-amber-600 text-white hover:bg-amber-700 transition-colors font-medium"
 						>
 							Allow
 						</button>
 						<button
 							onClick={() => onApprove(true, true)}
 							title={`Always allow ${t.name} without asking (revoke later in settings)`}
-							className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-700 hover:bg-emerald-100 transition-colors font-medium"
+							className="text-[11px] px-2 py-0.5 rounded-full bg-amber-50 border border-amber-300 text-amber-700 hover:bg-amber-100 transition-colors font-medium"
 						>
 							Always
 						</button>
 						<button
 							onClick={() => onApprove(false)}
-							className="text-[11px] px-2 py-0.5 rounded-full bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors"
+							className="text-[11px] px-2 py-0.5 rounded-full bg-popover border border-border text-foreground hover:bg-muted/60 transition-colors"
 						>
 							Deny
 						</button>
@@ -1967,7 +1981,7 @@ function ToolChip({ t, onApprove }: { t: ToolCall; onApprove?: (approved: boolea
 			</div>
 			{/* Args JSON — shown on demand after a completed tool call */}
 			{argsOpen && hasArgs && (
-				<div className="ml-5 mt-0.5 p-2 rounded-md bg-slate-50 border border-slate-200 text-[10px] font-mono whitespace-pre-wrap break-all max-h-40 overflow-y-auto">
+				<div className="ml-5 mt-0.5 p-2 rounded-md bg-muted/60 border border-border text-[10px] font-mono whitespace-pre-wrap break-all max-h-40 overflow-y-auto">
 					{JSON.stringify(t.args, null, 2)}
 				</div>
 			)}
@@ -1978,7 +1992,7 @@ function ToolChip({ t, onApprove }: { t: ToolCall; onApprove?: (approved: boolea
 				</div>
 			)}
 			{t.resultSummary && !t.pending && (
-				<div className="text-[10px] text-slate-500 pl-5 truncate max-w-[280px]">
+				<div className="text-[10px] text-muted-foreground pl-5 truncate max-w-[280px]">
 					{t.resultSummary}
 				</div>
 			)}
@@ -2108,7 +2122,7 @@ function ModelChip({
 				<ChevronDown className="w-2.5 h-2.5 flex-shrink-0 opacity-60" />
 			</button>
 			{open && (
-				<div className="absolute bottom-full right-0 mb-1 z-50 min-w-[180px] p-1 rounded-xl border border-border bg-card shadow-lg shadow-slate-200/40">
+				<div className="absolute bottom-full right-0 mb-1 z-50 min-w-[180px] p-1 rounded-xl border border-border bg-card shadow-lg shadow-foreground/5">
 					{models.map((m) => (
 						<button
 							key={m.id}
@@ -2116,12 +2130,12 @@ function ModelChip({
 							onClick={() => { setModel(m.id); setOpen(false); }}
 							className={[
 								'w-full text-left flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12px] transition-colors',
-								m.id === model ? 'bg-emerald-50 text-emerald-800' : 'text-slate-700 hover:bg-slate-50',
+								m.id === model ? 'bg-amber-50 text-amber-800' : 'text-foreground hover:bg-muted/60',
 							].join(' ')}
 						>
-							<Bot className={['w-3 h-3', m.id === model ? 'text-emerald-600' : 'text-slate-400'].join(' ')} />
+							<Bot className={['w-3 h-3', m.id === model ? 'text-amber-600' : 'text-muted-foreground'].join(' ')} />
 							<span className="font-medium flex-1">{m.display_name}</span>
-							{m.id === model && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+							{m.id === model && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
 						</button>
 					))}
 				</div>
@@ -2177,8 +2191,8 @@ function ContextIconButton({
 			case 'agent':   return 'text-violet-700  bg-violet-50  hover:bg-violet-100';
 			case 'persona': return 'text-fuchsia-700 bg-fuchsia-50 hover:bg-fuchsia-100';
 			default:        return open
-				? 'text-slate-800 bg-slate-100'
-				: 'text-slate-400 hover:text-slate-700 hover:bg-slate-100';
+				? 'text-foreground bg-muted'
+				: 'text-muted-foreground hover:text-foreground hover:bg-muted';
 		}
 	})();
 	const activeDot = (() => {
@@ -2213,7 +2227,7 @@ function ContextIconButton({
 				)}
 			</button>
 			{open && (
-				<div className="absolute top-full right-0 mt-1 z-50 w-[320px] max-h-[30rem] overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60">
+				<div className="absolute top-full right-0 mt-1 z-50 w-[320px] max-h-[30rem] overflow-y-auto rounded-xl border border-border bg-popover shadow-xl shadow-foreground/10">
 
 					{/* ── Active strip ── shows current selection +
 					    one-click clear. Always visible (rendered as
@@ -2222,13 +2236,13 @@ function ContextIconButton({
 						'flex items-center gap-2 px-3 py-2 border-b',
 						activeKind === 'agent'   ? 'bg-violet-50/70  border-violet-100'  :
 						activeKind === 'persona' ? 'bg-fuchsia-50/70 border-fuchsia-100' :
-						                           'bg-slate-50      border-slate-100',
+						                           'bg-muted/60      border-border/60',
 					].join(' ')}>
 						<div className={[
 							'w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0',
 							activeKind === 'agent'   ? 'bg-violet-100  text-violet-700'  :
 							activeKind === 'persona' ? 'bg-fuchsia-100 text-fuchsia-700' :
-							                           'bg-white border border-slate-200 text-slate-400',
+							                           'bg-popover border border-border text-muted-foreground',
 						].join(' ')}>
 							{currentPersona?.icon
 								? <span className="text-[14px] leading-none">{currentPersona.icon}</span>
@@ -2239,7 +2253,7 @@ function ContextIconButton({
 								'text-[12px] font-semibold truncate',
 								activeKind === 'agent'   ? 'text-violet-900'  :
 								activeKind === 'persona' ? 'text-fuchsia-900' :
-								                           'text-slate-700',
+								                           'text-foreground',
 							].join(' ')}>
 								{currentAgent
 									? (currentAgent.role || currentAgent.id)
@@ -2247,7 +2261,7 @@ function ContextIconButton({
 										? currentPersona.name
 										: 'Default — chat as you'}
 							</div>
-							<div className="text-[10.5px] text-slate-500 truncate">
+							<div className="text-[10.5px] text-muted-foreground truncate">
 								{currentAgent
 									? `agent · ${currentAgent.app || 'standalone'} · ${currentAgent.row_count} memories`
 									: currentPersona
@@ -2260,7 +2274,7 @@ function ContextIconButton({
 								type="button"
 								onClick={() => { selectAgent(''); selectPersona(''); setOpen(false); }}
 								title="Clear context — back to default"
-								className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-white/80 transition-colors"
+								className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-popover/80 transition-colors"
 							>
 								<X className="w-3.5 h-3.5" />
 							</button>
@@ -2275,11 +2289,11 @@ function ContextIconButton({
 								<div className="flex items-center gap-1.5 px-2.5 pt-2 pb-1">
 									<span className="w-0.5 h-3 rounded-full bg-violet-500" />
 									<span className="text-[10px] uppercase tracking-[0.08em] font-semibold text-violet-700">Talk to agent</span>
-									<span className="text-[10px] text-slate-400">grounds chat in agent's bank</span>
+									<span className="text-[10px] text-muted-foreground">grounds chat in agent's bank</span>
 								</div>
 								{agentGroups.map((g) => (
 									<div key={g.label} className="mb-1">
-										<div className="px-2.5 pt-1 pb-0.5 text-[9.5px] uppercase tracking-wider text-slate-400">
+										<div className="px-2.5 pt-1 pb-0.5 text-[9.5px] uppercase tracking-wider text-muted-foreground">
 											{g.label}
 										</div>
 										{g.rows.map((a) => {
@@ -2292,20 +2306,20 @@ function ContextIconButton({
 													onClick={() => { selectAgent(a.id); setOpen(false); }}
 													className={[
 														'w-full text-left flex items-start gap-2 px-2 py-1.5 rounded-lg transition-colors',
-														selected ? 'bg-violet-50' : 'hover:bg-slate-50',
+														selected ? 'bg-violet-50' : 'hover:bg-muted/60',
 													].join(' ')}
 												>
 													<span className={[
 														'w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5',
 														selected
 															? 'bg-violet-200 text-violet-800'
-															: 'bg-slate-100 text-slate-500',
+															: 'bg-muted text-muted-foreground',
 													].join(' ')}>{initial}</span>
 													<div className="flex-1 min-w-0">
 														<div className="flex items-center gap-1.5">
 															<span className={[
 																'text-[12px] font-medium truncate',
-																selected ? 'text-violet-900' : 'text-slate-800',
+																selected ? 'text-violet-900' : 'text-foreground',
 															].join(' ')}>
 																{a.role || a.id}
 															</span>
@@ -2313,11 +2327,11 @@ function ContextIconButton({
 																'ml-auto text-[9.5px] font-mono px-1.5 py-px rounded-full flex-shrink-0',
 																selected
 																	? 'bg-violet-100 text-violet-700'
-																	: 'bg-slate-100 text-slate-500',
+																	: 'bg-muted text-muted-foreground',
 															].join(' ')}>{a.row_count}</span>
 														</div>
 														{a.description && (
-															<div className="text-[10.5px] text-slate-500 leading-snug line-clamp-2 mt-0.5">
+															<div className="text-[10.5px] text-muted-foreground leading-snug line-clamp-2 mt-0.5">
 																{a.description}
 															</div>
 														)}
@@ -2333,11 +2347,11 @@ function ContextIconButton({
 						{/* ── Personas section ── */}
 						{personas.length > 0 && (
 							<>
-								{agents.length > 0 && <div className="h-px bg-slate-100 my-1 mx-2" />}
+								{agents.length > 0 && <div className="h-px bg-muted my-1 mx-2" />}
 								<div className="flex items-center gap-1.5 px-2.5 pt-2 pb-1">
 									<span className="w-0.5 h-3 rounded-full bg-fuchsia-500" />
 									<span className="text-[10px] uppercase tracking-[0.08em] font-semibold text-fuchsia-700">Persona</span>
-									<span className="text-[10px] text-slate-400">custom prompt + tool subset</span>
+									<span className="text-[10px] text-muted-foreground">custom prompt + tool subset</span>
 								</div>
 								{personas.map((p) => {
 									const selected = p.id === personaId;
@@ -2349,18 +2363,18 @@ function ContextIconButton({
 											onClick={() => { selectPersona(p.id); setOpen(false); }}
 											className={[
 												'w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors',
-												selected ? 'bg-fuchsia-50' : 'hover:bg-slate-50',
+												selected ? 'bg-fuchsia-50' : 'hover:bg-muted/60',
 											].join(' ')}
 										>
 											<span className={[
 												'w-6 h-6 rounded-full flex items-center justify-center text-[14px] leading-none flex-shrink-0',
 												selected
 													? 'bg-fuchsia-200'
-													: 'bg-slate-100',
+													: 'bg-muted',
 											].join(' ')}>{p.icon || '🎭'}</span>
 											<span className={[
 												'text-[12px] font-medium flex-1 truncate',
-												selected ? 'text-fuchsia-900' : 'text-slate-800',
+												selected ? 'text-fuchsia-900' : 'text-foreground',
 											].join(' ')}>{p.name}</span>
 											{restricted && (
 												<span
@@ -2368,7 +2382,7 @@ function ContextIconButton({
 														'text-[9px] px-1.5 py-px rounded-full flex-shrink-0',
 														selected
 															? 'bg-fuchsia-100 text-fuchsia-700'
-															: 'bg-slate-100 text-slate-500',
+															: 'bg-muted text-muted-foreground',
 													].join(' ')}
 													title={`Restricted to ${p.allowed_tools!.length} tool${p.allowed_tools!.length===1?'':'s'}`}
 												>{p.allowed_tools!.length}t</span>
@@ -2381,7 +2395,7 @@ function ContextIconButton({
 
 						{/* Footer hint when only one section is populated */}
 						{(agents.length === 0 || personas.length === 0) && (
-							<div className="px-2.5 py-2 mt-1 border-t border-slate-100 text-[10.5px] text-slate-400 leading-snug">
+							<div className="px-2.5 py-2 mt-1 border-t border-border/60 text-[10.5px] text-muted-foreground leading-snug">
 								{agents.length === 0 && personas.length > 0 && (
 									<>No xpio agents installed yet — try <span className="font-mono">app_install</span> a knowledge app.</>
 								)}
@@ -2507,10 +2521,10 @@ function ArtifactIconButton() {
 
 	const KindIcon = ({ k }: { k: ArtifactRow['kind'] }) => {
 		switch (k) {
-			case 'markdown': return <FileText className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />;
+			case 'markdown': return <FileText className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />;
 			case 'code':     return <Code2 className="w-3.5 h-3.5 text-sky-600 flex-shrink-0" />;
 			case 'json':     return <FileJson className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />;
-			default:         return <FileText className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />;
+			default:         return <FileText className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />;
 		}
 	};
 
@@ -2522,38 +2536,38 @@ function ArtifactIconButton() {
 				title={rows.length > 0 ? `Artifacts (${rows.length})` : 'Artifacts'}
 				className={[
 					'relative p-1.5 rounded-md transition-colors',
-					open ? 'text-emerald-700 bg-emerald-50' : 'text-slate-400 hover:text-emerald-700 hover:bg-emerald-50',
+					open ? 'text-amber-700 bg-amber-50' : 'text-muted-foreground hover:text-amber-700 hover:bg-amber-50',
 				].join(' ')}
 			>
 				<Boxes className="w-3.5 h-3.5" />
 				{rows.length > 0 && (
-					<span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-1 rounded-full bg-emerald-500 text-white text-[8.5px] font-bold flex items-center justify-center ring-2 ring-white leading-none">
+					<span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-1 rounded-full bg-amber-500 text-white text-[8.5px] font-bold flex items-center justify-center ring-2 ring-white leading-none">
 						{rows.length > 99 ? '99+' : rows.length}
 					</span>
 				)}
 			</button>
 			{open && (
-				<div className="absolute top-full right-0 mt-1 z-50 w-[420px] max-h-[32rem] flex flex-col rounded-xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60">
+				<div className="absolute top-full right-0 mt-1 z-50 w-[420px] max-h-[32rem] flex flex-col rounded-xl border border-border bg-popover shadow-xl shadow-foreground/10">
 
 					{/* Header strip */}
-					<div className="flex items-center gap-2 px-3 py-2 border-b border-slate-100">
+					<div className="flex items-center gap-2 px-3 py-2 border-b border-border/60">
 						{selected ? (
 							<button
 								type="button"
 								onClick={() => { setSelected(null); setSelectedId(null); }}
-								className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+								className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
 								title="Back to list"
 							>
 								<ArrowLeft className="w-3.5 h-3.5" />
 							</button>
 						) : (
-							<Boxes className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+							<Boxes className="w-4 h-4 text-amber-600 flex-shrink-0" />
 						)}
 						<div className="flex-1 min-w-0">
-							<div className="text-[12.5px] font-semibold text-slate-900 truncate">
+							<div className="text-[12.5px] font-semibold text-foreground truncate">
 								{selected ? selected.title : 'Artifacts'}
 							</div>
-							<div className="text-[10.5px] text-slate-500 truncate">
+							<div className="text-[10.5px] text-muted-foreground truncate">
 								{selected
 									? `${selected.kind}${selected.language ? ' · ' + selected.language : ''} · ${selected.content.length} chars`
 									: `${rows.length} saved`}
@@ -2567,7 +2581,7 @@ function ArtifactIconButton() {
 									title={copied ? 'Copied' : 'Copy'}
 									className={[
 										'p-1.5 rounded-md transition-colors',
-										copied ? 'text-emerald-700 bg-emerald-50' : 'text-slate-400 hover:text-slate-800 hover:bg-slate-100',
+										copied ? 'text-amber-700 bg-amber-50' : 'text-muted-foreground hover:text-foreground hover:bg-muted',
 									].join(' ')}
 								>
 									<Copy className="w-3.5 h-3.5" />
@@ -2576,7 +2590,7 @@ function ArtifactIconButton() {
 									type="button"
 									onClick={downloadOne}
 									title="Download"
-									className="p-1.5 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors"
+									className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
 								>
 									<Download className="w-3.5 h-3.5" />
 								</button>
@@ -2584,7 +2598,7 @@ function ArtifactIconButton() {
 									type="button"
 									onClick={() => deleteOne(selected.id)}
 									title="Delete"
-									className="p-1.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+									className="p-1.5 rounded-md text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition-colors"
 								>
 									<Trash2 className="w-3.5 h-3.5" />
 								</button>
@@ -2597,12 +2611,12 @@ function ArtifactIconButton() {
 						{!selected && (
 							<>
 								{loading && (
-									<div className="px-3 py-3 text-[11px] text-slate-400 flex items-center gap-1.5">
+									<div className="px-3 py-3 text-[11px] text-muted-foreground flex items-center gap-1.5">
 										<Loader2 className="w-3 h-3 animate-spin" /> Loading…
 									</div>
 								)}
 								{!loading && rows.length === 0 && (
-									<div className="px-3 py-4 text-[11.5px] text-slate-400 italic leading-snug">
+									<div className="px-3 py-4 text-[11.5px] text-muted-foreground italic leading-snug">
 										No artifacts yet. The agent saves long-form output here when you ask — research briefs, code listings, anything worth keeping.
 									</div>
 								)}
@@ -2611,16 +2625,16 @@ function ArtifactIconButton() {
 										key={r.id}
 										type="button"
 										onClick={() => loadOne(r.id)}
-										className="w-full text-left px-3 py-1.5 border-b border-slate-50 last:border-b-0 hover:bg-slate-50 transition-colors"
+										className="w-full text-left px-3 py-1.5 border-b border-border/40 last:border-b-0 hover:bg-muted/60 transition-colors"
 									>
 										<div className="flex items-center gap-1.5">
 											<KindIcon k={r.kind} />
-											<span className="text-[12.5px] font-medium text-slate-800 truncate flex-1">{r.title}</span>
-											<span className="text-[10px] text-slate-400 font-mono flex-shrink-0">
+											<span className="text-[12.5px] font-medium text-foreground truncate flex-1">{r.title}</span>
+											<span className="text-[10px] text-muted-foreground font-mono flex-shrink-0">
 												{Math.round(r.bytes / 1024)}KB
 											</span>
 										</div>
-										<div className="flex items-center gap-1 mt-0.5 text-[10px] text-slate-500">
+										<div className="flex items-center gap-1 mt-0.5 text-[10px] text-muted-foreground">
 											<span>{r.kind}</span>
 											{r.language && <span>· {r.language}</span>}
 											{r.source_tool && <span>· {r.source_tool}</span>}
@@ -2631,7 +2645,7 @@ function ArtifactIconButton() {
 							</>
 						)}
 						{selectedLoading && (
-							<div className="px-3 py-3 text-[11px] text-slate-400 flex items-center gap-1.5">
+							<div className="px-3 py-3 text-[11px] text-muted-foreground flex items-center gap-1.5">
 								<Loader2 className="w-3 h-3 animate-spin" /> Loading…
 							</div>
 						)}
@@ -2640,15 +2654,15 @@ function ArtifactIconButton() {
 								{selected.kind === 'markdown' ? (
 									<ChatMarkdown>{selected.content}</ChatMarkdown>
 								) : selected.kind === 'code' ? (
-									<pre className="bg-slate-50 border border-slate-200 rounded-lg p-2 text-[11.5px] overflow-x-auto">
+									<pre className="bg-muted/60 border border-border rounded-lg p-2 text-[11.5px] overflow-x-auto">
 										<code>{selected.content}</code>
 									</pre>
 								) : selected.kind === 'json' ? (
-									<pre className="bg-slate-50 border border-slate-200 rounded-lg p-2 text-[11.5px] overflow-x-auto">
+									<pre className="bg-muted/60 border border-border rounded-lg p-2 text-[11.5px] overflow-x-auto">
 										<code>{(() => { try { return JSON.stringify(JSON.parse(selected.content), null, 2); } catch { return selected.content; } })()}</code>
 									</pre>
 								) : (
-									<div className="whitespace-pre-wrap break-words text-slate-700">{selected.content}</div>
+									<div className="whitespace-pre-wrap break-words text-foreground">{selected.content}</div>
 								)}
 							</div>
 						)}

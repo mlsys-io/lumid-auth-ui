@@ -33,13 +33,13 @@ export default function StudioAdmin() {
 			<header className="flex items-baseline justify-between">
 				<div>
 					<h1 className="text-lg font-medium flex items-center gap-2">
-						<Shield className="w-5 h-5 text-emerald-600" />
+						<Shield className="w-5 h-5 text-amber-600" />
 						Admin
 					</h1>
 					<p className="text-sm text-slate-500 mt-0.5">
 						Operator surfaces — folded into Studio. Full dashboard
 						with cert / backup / telemetry tiles lives at
-						<Link to="/dashboard/super-admin" className="ml-1 text-emerald-700 hover:underline">
+						<Link to="/dashboard/super-admin" className="ml-1 text-amber-700 hover:underline">
 							/dashboard/super-admin <ExternalLink className="inline w-3 h-3" />
 						</Link>
 					</p>
@@ -57,7 +57,7 @@ export default function StudioAdmin() {
 							className={[
 								'inline-flex items-center gap-1.5 px-3 py-2 text-sm border-b-2 transition-colors -mb-px',
 								active
-									? 'border-emerald-500 text-emerald-700 font-medium'
+									? 'border-amber-500 text-amber-700 font-medium'
 									: 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300',
 							].join(' ')}
 						>
@@ -114,7 +114,7 @@ function TenantsTab() {
 								<td className="px-3 py-1.5 font-mono text-xs">
 									{t.email}
 									{t.role !== 'user' && (
-										<span className="ml-2 text-[10px] tracking-wide text-emerald-700">{t.role}</span>
+										<span className="ml-2 text-[10px] tracking-wide text-amber-700">{t.role}</span>
 									)}
 								</td>
 								<td className="px-3 py-1.5 text-xs">{t.apps}</td>
@@ -178,7 +178,7 @@ function LoopsTab() {
 									{(l.consecutive_failures ?? 0) > 0 ? (
 										<span className="text-rose-700">{l.consecutive_failures} fail{l.consecutive_failures === 1 ? '' : 's'}</span>
 									) : l.enabled ? (
-										<span className="text-emerald-700">on</span>
+										<span className="text-amber-700">on</span>
 									) : (
 										<span className="text-slate-500">off</span>
 									)}
@@ -256,7 +256,7 @@ function StatCard({ label, value, hint, tone = 'default' }: {
 }) {
 	const toneCls = {
 		default: '',
-		good:    'text-emerald-700',
+		good:    'text-amber-700',
 		warn:    'text-amber-700',
 		bad:     'text-rose-700',
 	}[tone];

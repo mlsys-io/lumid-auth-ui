@@ -9,7 +9,7 @@ type Tone = "slate" | "amber" | "emerald" | "indigo";
 const TONE: Record<Tone, string> = {
 	slate: "border-slate-200 bg-slate-50 text-slate-600",
 	amber: "border-amber-200 bg-amber-50 text-amber-700",
-	emerald: "border-emerald-200 bg-emerald-50 text-emerald-700",
+	emerald: "border-amber-200 bg-amber-50 text-amber-700",
 	indigo: "border-indigo-200 bg-indigo-50 text-indigo-700",
 };
 

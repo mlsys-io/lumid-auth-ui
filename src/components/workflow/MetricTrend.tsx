@@ -13,7 +13,7 @@ import { me, type MeMetricSeries } from "@/api/me";
 
 // Discrete events overlaid on the trajectory.
 export const EVENT_META: Record<string, { color: string; label: string }> = {
-	learn: { color: "#10b981", label: "learned" },
+	learn: { color: "#f59e0b", label: "learned" },
 	fix: { color: "#f59e0b", label: "self-healed" },
 	bug: { color: "#e11d48", label: "error" },
 	analyze: { color: "#6366f1", label: "analysis" },
@@ -107,7 +107,7 @@ export function Sparkline({ values, color, w = 64, h = 20 }: { values: number[];
 	);
 }
 
-const COLOR = { up: "#10b981", down: "#e11d48", flat: "#94a3b8" };
+const COLOR = { up: "#f59e0b", down: "#e11d48", flat: "#94a3b8" };
 function trendColor(t: Trend) { return t.improved === null ? COLOR.flat : t.improved ? COLOR.up : COLOR.down; }
 
 // One metric as a featured cell: value + delta + sparkline.
@@ -327,7 +327,7 @@ export function TrendRow({ series, events, tracked, app, loop }: { series: MeMet
 								className={
 									"text-left rounded-lg px-2 py-1 transition-colors " +
 									(active
-										? "bg-emerald-50/70 ring-1 ring-emerald-200"
+										? "bg-amber-50/70 ring-1 ring-amber-200"
 										: "hover:bg-slate-50 ring-1 ring-transparent")
 								}
 							>

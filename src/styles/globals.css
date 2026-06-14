@@ -2,45 +2,46 @@
  * The raw CSS variables below are plain CSS and work on any version. */
 :root {
 	--font-size: 16px;
-	--background: #F6FAF5; /* light greenish (platform tone, 2026-06-12) */
-	--foreground: #191B18; /* ink, green-tinted */
-	--card: #ffffff;
-	--card-foreground: #191B18;
-	--popover: oklch(1 0 0);
-	--popover-foreground: oklch(0.145 0 0);
-	--primary: #191B18;
-	--primary-foreground: oklch(1 0 0);
-	--secondary: #E9F1E6;
-	--secondary-foreground: #191B18;
-	--muted: #E9F1E6;
-	--muted-foreground: #66705F; /* gray-green */
-	--accent: #E5EFE1;
-	--accent-foreground: #191B18;
+	--background: #FAF7F1; /* warm cream — aligned to the golden spiral mark (2026-06-14) */
+	--foreground: #221C13; /* warm bronze-ink */
+	--card: #FFFEFB; /* barely-warm white */
+	--card-foreground: #221C13;
+	--popover: #FFFEFB;
+	--popover-foreground: #221C13;
+	--primary: #221C13; /* warm dark ink — primary stays dark; gold is the flourish */
+	--primary-foreground: #FBF8F2;
+	--secondary: #F1EADC; /* light champagne */
+	--secondary-foreground: #221C13;
+	--muted: #F1EADC;
+	--muted-foreground: #6E6452; /* warm taupe-gray (~4.7:1 on cream) */
+	--accent: #F2E9D6; /* soft gold wash */
+	--accent-foreground: #221C13;
 	--destructive: #d4183d;
 	--destructive-foreground: #ffffff;
-	--border: #DCE6D7; /* hairline */
+	--border: #E7DCC6; /* warm taupe hairline */
 	--input: transparent;
-	--input-background: #FFFFFF;
+	--input-background: #FFFEFB;
 	--switch-background: #cbced4;
 	--font-weight-medium: 500;
 	--font-weight-normal: 400;
-	--ring: #A7BCA0;
+	--ring: #C2A062; /* metallic gold — focus glow, matches the icon */
 	--chart-1: oklch(0.585 0.233 277.117);
 	--chart-2: oklch(0.647 0.2 328.363);
 	--chart-3: oklch(0.6 0.118 184.704);
 	--chart-4: oklch(0.795 0.184 86.047);
 	--chart-5: oklch(0.646 0.222 41.116);
 	--radius: 0.75rem;
-	--sidebar: #E9F1E6;
-	--sidebar-foreground: #3A3F37;
-	--sidebar-primary: #191B18;
-	--sidebar-primary-foreground: #F6FAF5;
-	--sidebar-accent: rgba(0, 0, 0, 0.06);
-	--sidebar-accent-foreground: #191B18;
-	--sidebar-border: #DCE6D7;
-	--sidebar-ring: #A7BCA0;
-	/* Coral — claude.ai's accent. Flourishes ONLY (the ✳); never fills. */
-	--accent-coral: #D97757;
+	--sidebar: #F2ECDF; /* warm champagne */
+	--sidebar-foreground: #463E2D; /* warm dark taupe */
+	--sidebar-primary: #221C13;
+	--sidebar-primary-foreground: #FAF7F1;
+	--sidebar-accent: rgba(120, 90, 40, 0.08); /* gold-tinted hover */
+	--sidebar-accent-foreground: #221C13;
+	--sidebar-border: #E7DCC6;
+	--sidebar-ring: #C2A062;
+	/* Brand gold — the spiral's metallic gold. Flourishes ONLY; never fills.
+	   (var name kept as accent-coral so the existing `coral` utility stays wired.) */
+	--accent-coral: #B8863C;
 }
 
 .dark {
@@ -62,7 +63,7 @@
 	--destructive-foreground: oklch(0.637 0.237 25.331);
 	--border: oklch(0.269 0 0);
 	--input: oklch(0.269 0 0);
-	--ring: oklch(0.439 0 0);
+	--ring: oklch(0.70 0.09 80); /* gold focus glow (brand) */
 	--font-weight-medium: 500;
 	--font-weight-normal: 400;
 	--chart-1: oklch(0.488 0.243 264.376);
@@ -72,12 +73,12 @@
 	--chart-5: oklch(0.645 0.246 16.439);
 	--sidebar: oklch(0.205 0 0);
 	--sidebar-foreground: oklch(0.985 0 0);
-	--sidebar-primary: oklch(0.488 0.243 264.376);
+	--sidebar-primary: oklch(0.72 0.11 80); /* gold */
 	--sidebar-primary-foreground: oklch(0.985 0 0);
 	--sidebar-accent: oklch(0.269 0 0);
 	--sidebar-accent-foreground: oklch(0.985 0 0);
 	--sidebar-border: oklch(0.269 0 0);
-	--sidebar-ring: oklch(0.439 0 0);
+	--sidebar-ring: oklch(0.70 0.09 80); /* gold */
 }
 
 @theme inline {
@@ -643,7 +644,7 @@ html {
 /* A value just changed (count-up landed / new run). */
 @keyframes valuePop {
 	0%   { transform: scale(1); }
-	40%  { transform: scale(1.12); color: rgb(5 150 105); }
+	40%  { transform: scale(1.12); color: rgb(217 119 6); }
 	100% { transform: scale(1); }
 }
 .value-pop {

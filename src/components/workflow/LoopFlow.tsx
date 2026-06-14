@@ -20,7 +20,7 @@ export type LoopMode = "running" | "idle" | "paused";
 export default function LoopFlow({ mode }: { mode: LoopMode }) {
 	const animated = mode !== "paused";
 	const period = mode === "running" ? 1.6 : 3.6; // seconds
-	const dotColor = mode === "paused" ? "bg-slate-300" : "bg-emerald-500";
+	const dotColor = mode === "paused" ? "bg-slate-300" : "bg-amber-500";
 	const labelColor = mode === "paused" ? "text-slate-400" : "text-slate-600";
 
 	return (
@@ -41,7 +41,7 @@ export default function LoopFlow({ mode }: { mode: LoopMode }) {
 				</Fragment>
 			))}
 			<RotateCw
-				className={cn("w-3 h-3 ml-0.5", mode === "paused" ? "text-slate-300" : "text-emerald-500", animated && "loop-spin")}
+				className={cn("w-3 h-3 ml-0.5", mode === "paused" ? "text-slate-300" : "text-amber-500", animated && "loop-spin")}
 				style={animated ? { animationDuration: `${period * 2}s` } : undefined}
 			/>
 		</div>

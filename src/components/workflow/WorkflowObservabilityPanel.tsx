@@ -63,7 +63,7 @@ function health(wf: MeWorkflowRow, hasRuns: boolean): { label: string; cls: stri
 		return { label: "Needs attention", cls: "text-rose-700 bg-rose-50 border-rose-200", dot: "bg-rose-500" };
 	if (wf.last_run_recovered)
 		return { label: "Recovered", cls: "text-amber-700 bg-amber-50 border-amber-200", dot: "bg-amber-500" };
-	if (wf.last_run_ok === true) return { label: "Healthy", cls: "text-emerald-700 bg-emerald-50 border-emerald-200", dot: "bg-emerald-500" };
+	if (wf.last_run_ok === true) return { label: "Healthy", cls: "text-amber-700 bg-amber-50 border-amber-200", dot: "bg-amber-500" };
 	return { label: "Idle", cls: "text-slate-500 bg-slate-50 border-slate-200", dot: "bg-slate-300" };
 }
 
@@ -295,7 +295,7 @@ export default function WorkflowObservabilityPanel({
 				</div>
 				<div className="flex items-center gap-2 flex-shrink-0">
 					<button onClick={runNow} disabled={!!busy}
-						className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 active:scale-95 disabled:opacity-50 transition-all shadow-sm shadow-emerald-100">
+						className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-500 text-white hover:bg-amber-600 active:scale-95 disabled:opacity-50 transition-all shadow-sm shadow-amber-100">
 						{busy === "run" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
 						Run now
 					</button>
@@ -372,7 +372,7 @@ export default function WorkflowObservabilityPanel({
 				<Section icon={Clock} title="Runs">
 					<ul className="rounded-xl border border-slate-200 bg-white divide-y divide-slate-100 overflow-hidden">
 						{(cycleList ?? []).map((c) => {
-							const cdot = c.running ? "bg-sky-500 running-pulse" : c.ok === false ? "bg-rose-500" : "bg-emerald-500";
+							const cdot = c.running ? "bg-sky-500 running-pulse" : c.ok === false ? "bg-rose-500" : "bg-amber-500";
 							return (
 								<li key={c.ts}>
 									<button type="button" onClick={() => openRun(c.ts)}
@@ -422,7 +422,7 @@ export default function WorkflowObservabilityPanel({
 							disabled={!schedDirty || !!busy}
 							className={cn(
 								"inline-flex items-center gap-1 px-2 py-1.5 text-xs rounded-lg transition-colors",
-								schedDirty ? "bg-emerald-500 text-white hover:bg-emerald-600" : "bg-slate-100 text-slate-400 cursor-not-allowed",
+								schedDirty ? "bg-amber-500 text-white hover:bg-amber-600" : "bg-slate-100 text-slate-400 cursor-not-allowed",
 							)}
 						>
 							{busy === "save" ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
@@ -506,11 +506,11 @@ function GoalHeader({ goal, kpis, series, events, app, loop }: { goal?: { primar
 	// optional — the trend curve renders regardless.
 	const hasTrends = series.length > 0;
 	return (
-		<div className="rounded-xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50/80 to-white p-3">
+		<div className="rounded-xl border border-amber-200/70 bg-gradient-to-br from-amber-50/80 to-white p-3">
 			<div className="flex items-start gap-2">
-				<Target className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
+				<Target className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
 				<div className="min-w-0 flex-1">
-					<div className="text-[10px] uppercase tracking-wide text-emerald-700/70 font-semibold" title={(goal?.tracked || []).join(" · ")}>{goal?.primary ? "Goal · how it's trending" : "How it's trending"}</div>
+					<div className="text-[10px] uppercase tracking-wide text-amber-700/70 font-semibold" title={(goal?.tracked || []).join(" · ")}>{goal?.primary ? "Goal · how it's trending" : "How it's trending"}</div>
 					{goal?.primary && <div className="text-[13px] text-slate-800 font-medium leading-snug">{humanizeGoal(goal.primary)}</div>}
 					{hasTrends ? (
 						<TrendRow series={series} events={events} tracked={goal?.tracked} app={app} loop={loop} />
@@ -570,7 +570,7 @@ function KVCard({ title, obj }: { title: string; obj: unknown }) {
 }
 
 function StageNote({ tone, children }: { tone: "ok" | "hold"; children: React.ReactNode }) {
-	return <div className={cn("text-[11px] leading-snug", tone === "ok" ? "text-emerald-700" : "text-amber-700")}>{children}</div>;
+	return <div className={cn("text-[11px] leading-snug", tone === "ok" ? "text-amber-700" : "text-amber-700")}>{children}</div>;
 }
 
 function StageProse({ label, text }: { label: string; text: string }) {
@@ -632,7 +632,7 @@ function StageBody({ stage, detail }: { stage: LoopStageKey; detail: MeCycleDeta
 			if (pushed > 0) blocks.push(<StageNote key="mp" tone="ok">Compounded {pushed} new memor{pushed === 1 ? "y" : "ies"} into your knowledge graph.</StageNote>);
 			if (files.improvement?.mutations_proposed) blocks.push(<StageNote key="imp" tone="ok">Proposed a self-improvement{Array.isArray(files.improvement.mutates) ? ` to its ${files.improvement.mutates.join(", ")} logic` : ""} — queued as a PR.</StageNote>);
 			if (!offers.length && !pushed && !files.improvement?.mutations_proposed)
-				blocks.push(<div key="lk" className="text-[11px] text-slate-500">Nothing new to bank this run. It compounds into your <Link to="/studio/knowledge" className="text-emerald-700 hover:underline">knowledge</Link> as it learns.</div>);
+				blocks.push(<div key="lk" className="text-[11px] text-slate-500">Nothing new to bank this run. It compounds into your <Link to="/studio/knowledge" className="text-amber-700 hover:underline">knowledge</Link> as it learns.</div>);
 			break;
 		}
 	}
@@ -641,7 +641,7 @@ function StageBody({ stage, detail }: { stage: LoopStageKey; detail: MeCycleDeta
 		<ul key="steps" className="space-y-1 pt-0.5">
 			{steps.map((st) => (
 				<li key={st.step_id} className="text-[11px] flex items-start gap-1.5">
-					<span className={cn("mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0", st.ok === false ? "bg-rose-500" : "bg-emerald-400")} />
+					<span className={cn("mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0", st.ok === false ? "bg-rose-500" : "bg-amber-400")} />
 					<span className="text-slate-600"><span className="font-medium text-slate-700">{st.skill || st.step_id}</span>{st.output_summary ? ` — ${st.output_summary}` : ""}{st.error ? ` · ${st.error.split("\n")[0]}` : ""}</span>
 				</li>
 			))}
@@ -671,7 +671,7 @@ function RunFlow({ steps, active, onPick }: {
 					const isActive = stg === active;
 					const tone = st.ok === false
 						? "border-rose-300 bg-rose-50 text-rose-700"
-						: "border-emerald-200 bg-white text-slate-700";
+						: "border-amber-200 bg-white text-slate-700";
 					return (
 						<div key={`${st.step_id || st.skill || i}`} className="flex items-center">
 							{i > 0 && <span className={cn("h-px w-5 flex-shrink-0", st.ok === false ? "bg-rose-200" : "bg-slate-200")} />}
@@ -682,11 +682,11 @@ function RunFlow({ steps, active, onPick }: {
 								className={cn(
 									"flex-shrink-0 rounded-lg border px-2 py-1 text-[10px] leading-tight max-w-[110px] truncate transition-colors",
 									tone,
-									isActive && "ring-2 ring-emerald-400/60",
+									isActive && "ring-2 ring-amber-400/60",
 									!stg && "cursor-default",
 								)}
 							>
-								<span className={cn("inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle", st.ok === false ? "bg-rose-500" : "bg-emerald-400")} />
+								<span className={cn("inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle", st.ok === false ? "bg-rose-500" : "bg-amber-400")} />
 								{st.skill || st.step_id || `step ${i + 1}`}
 							</button>
 						</div>
@@ -754,20 +754,20 @@ function StageDetail({
 	};
 
 	return (
-		<div className="rounded-xl border border-emerald-200/70 bg-emerald-50/30 p-3 animate-in fade-in slide-in-from-top-1 duration-300">
+		<div className="rounded-xl border border-amber-200/70 bg-amber-50/30 p-3 animate-in fade-in slide-in-from-top-1 duration-300">
 			<div className="flex items-center justify-between gap-2">
 				<div className="min-w-0">
-					<div className="text-[13px] font-medium text-emerald-900">{info.label}</div>
+					<div className="text-[13px] font-medium text-amber-900">{info.label}</div>
 					<div className="text-[11px] text-slate-500">{info.role}</div>
 				</div>
 				<div className="flex items-center gap-1.5 flex-shrink-0">
 					{total > 0 && (
 						<div className="flex items-center gap-1">
 							<button type="button" disabled={idx >= total - 1} onClick={() => setIdx((i) => Math.min(total - 1, i + 1))}
-								className="p-0.5 rounded disabled:opacity-30 enabled:hover:bg-emerald-100 text-emerald-700" title="older run"><ChevronLeft className="w-3.5 h-3.5" /></button>
+								className="p-0.5 rounded disabled:opacity-30 enabled:hover:bg-amber-100 text-amber-700" title="older run"><ChevronLeft className="w-3.5 h-3.5" /></button>
 							<span className="text-[10px] text-slate-500 tabular-nums whitespace-nowrap" title={ts}>{cycleDate(ts)} · {idx + 1}/{total}</span>
 							<button type="button" disabled={idx <= 0} onClick={() => setIdx((i) => Math.max(0, i - 1))}
-								className="p-0.5 rounded disabled:opacity-30 enabled:hover:bg-emerald-100 text-emerald-700" title="newer run"><ChevronRight className="w-3.5 h-3.5" /></button>
+								className="p-0.5 rounded disabled:opacity-30 enabled:hover:bg-amber-100 text-amber-700" title="newer run"><ChevronRight className="w-3.5 h-3.5" /></button>
 						</div>
 					)}
 					<button onClick={onClose} className="text-[11px] text-slate-400 hover:text-slate-700 ml-1">close</button>
@@ -787,8 +787,8 @@ function StageDetail({
 							className={cn(
 								"px-2 py-0.5 rounded-full text-[10px] border transition-colors",
 								k === stage
-									? "bg-emerald-600 text-white border-emerald-600"
-									: "bg-white text-slate-500 border-slate-200 hover:border-emerald-300 hover:text-emerald-700",
+									? "bg-amber-600 text-white border-amber-600"
+									: "bg-white text-slate-500 border-slate-200 hover:border-amber-300 hover:text-amber-700",
 							)}>
 							{STAGE_INFO[k].label}
 						</button>
@@ -811,9 +811,9 @@ function StageDetail({
 					value={q}
 					onChange={(e) => setQ(e.target.value)}
 					placeholder={`Ask the AI about the ${info.label.toLowerCase()} stage…`}
-					className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
+					className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/40"
 				/>
-				<button type="submit" className="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-emerald-500 text-white hover:bg-emerald-600">Ask</button>
+				<button type="submit" className="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-amber-500 text-white hover:bg-amber-600">Ask</button>
 			</form>
 		</div>
 	);

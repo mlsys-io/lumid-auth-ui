@@ -76,7 +76,7 @@ export default function StudioRunDetail() {
 			<header className="flex items-baseline justify-between">
 				<div>
 					<h1 className="text-lg font-medium flex items-center gap-2">
-						<Activity className="w-5 h-5 text-emerald-600" />
+						<Activity className="w-5 h-5 text-amber-600" />
 						{detail.app && detail.loop ? `${detail.app} / ${detail.loop}` : run_id}
 					</h1>
 					<p className="text-sm text-slate-500 mt-0.5 font-mono">
@@ -102,7 +102,7 @@ export default function StudioRunDetail() {
 						{summary.ok === false || (Array.isArray(stepErrors) && stepErrors.length > 0)
 							? <span className="text-rose-700 font-medium">failed</span>
 							: summary.ok === true
-								? <span className="text-emerald-700 font-medium">succeeded</span>
+								? <span className="text-amber-700 font-medium">succeeded</span>
 								: <span className="text-slate-600">{String(summary.state || "—")}</span>
 						}
 					</MetaItem>
@@ -222,7 +222,7 @@ function RunActions({ detail, onChanged }: { detail: MeRunDetail; onChanged: () 
 			<button
 				onClick={handleRerun}
 				disabled={!canRerun}
-				className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-40 transition-colors"
+				className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-40 transition-colors"
 				title={canRerun ? "Re-run this workflow now" : "Re-run is only available for scheduled workflows"}
 			>
 				<Play className="w-3.5 h-3.5" /> Re-run
@@ -230,7 +230,7 @@ function RunActions({ detail, onChanged }: { detail: MeRunDetail; onChanged: () 
 			<button
 				onClick={() => handleMark("succeeded")}
 				disabled={!canMark}
-				className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-50 disabled:opacity-40 transition-colors"
+				className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-amber-200 bg-white text-amber-800 hover:bg-amber-50 disabled:opacity-40 transition-colors"
 				title="Override this run's state to succeeded — writes a manual_mark journal entry"
 			>
 				<Check className="w-3.5 h-3.5" /> Mark succeeded

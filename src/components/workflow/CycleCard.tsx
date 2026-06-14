@@ -28,7 +28,7 @@ const CYCLE_CACHE = new Map<string, MeCycleDetail>();
 const CYCLE_INFLIGHT = new Map<string, Promise<MeCycleDetail>>();
 
 const OUTCOME: Record<string, { label: string; icon: typeof CheckCircle2; cls: string }> = {
-	ran:             { label: "Ran",             icon: CheckCircle2, cls: "border-emerald-200 bg-emerald-50 text-emerald-700" },
+	ran:             { label: "Ran",             icon: CheckCircle2, cls: "border-amber-200 bg-amber-50 text-amber-700" },
 	no_change:       { label: "No change",       icon: MinusCircle,  cls: "border-slate-200 bg-slate-50 text-slate-600" },
 	awaiting_review: { label: "Awaiting review", icon: Clock,        cls: "border-amber-200 bg-amber-50 text-amber-700" },
 	no_setup:        { label: "Not set up",      icon: AlertCircle,  cls: "border-rose-200 bg-rose-50 text-rose-700" },
@@ -264,7 +264,7 @@ export default function CycleCard({
 			{/* actions */}
 			<div className="px-2 py-1.5 border-t border-slate-100 flex items-center gap-1">
 				<button type="button" onClick={askAI}
-					className="flex-1 inline-flex items-center justify-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-50 transition-colors">
+					className="flex-1 inline-flex items-center justify-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-amber-700 hover:bg-amber-50 transition-colors">
 					<MessageCircleQuestion className="w-3.5 h-3.5" />Ask my AI
 				</button>
 				{ts && (

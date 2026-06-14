@@ -216,7 +216,7 @@ export function AppSurfaceEditor() {
       // full-screen block. The user can leave to the app at any time.
       return (
         <div className="p-10 flex flex-col items-center justify-center text-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 text-white flex items-center justify-center shadow-sm animate-pulse">
+          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-400 to-amber-500 text-white flex items-center justify-center shadow-sm animate-pulse">
             <Sparkles className="w-5 h-5" />
           </div>
           <div className="text-sm font-medium text-slate-800">Generating your app page…</div>
@@ -263,7 +263,7 @@ export function AppSurfaceEditor() {
         </div>
         <Link
           to={backTo}
-          className="mt-4 inline-flex items-center gap-1.5 text-sm text-emerald-600 hover:text-emerald-700"
+          className="mt-4 inline-flex items-center gap-1.5 text-sm text-amber-600 hover:text-amber-700"
         >
           ← Back to {app}
         </Link>
@@ -317,7 +317,7 @@ export function AppSurfaceEditor() {
               onClick={handleRegenerate}
               disabled={generating}
               title="Regenerate this page with AI"
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-emerald-200 text-[12px] text-emerald-700 hover:bg-emerald-50 transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-amber-200 text-[12px] text-amber-700 hover:bg-amber-50 transition-colors disabled:opacity-50"
             >
               {generating
                 ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating…</>
@@ -341,7 +341,7 @@ export function AppSurfaceEditor() {
             className={cn(
               "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all",
               dirty && !saving
-                ? "bg-emerald-500 text-white hover:bg-emerald-600 shadow-sm shadow-emerald-100"
+                ? "bg-amber-500 text-white hover:bg-amber-600 shadow-sm shadow-amber-100"
                 : "bg-slate-100 text-slate-400 cursor-not-allowed",
             )}
           >

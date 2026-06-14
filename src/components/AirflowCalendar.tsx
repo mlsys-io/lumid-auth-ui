@@ -73,11 +73,11 @@ export function AirflowCalendar({ runs, days = 14, onCellClick }: Props) {
 				))}
 				<div className="mt-3 flex items-center gap-3 text-[10px] text-slate-500">
 					<span className="inline-flex items-center gap-1">
-						<span className="w-2.5 h-2.5 rounded-sm bg-emerald-100" />
+						<span className="w-2.5 h-2.5 rounded-sm bg-amber-100" />
 						light
 					</span>
 					<span className="inline-flex items-center gap-1">
-						<span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" />
+						<span className="w-2.5 h-2.5 rounded-sm bg-amber-500" />
 						many ok
 					</span>
 					<span className="inline-flex items-center gap-1">

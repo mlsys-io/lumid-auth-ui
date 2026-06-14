@@ -54,7 +54,7 @@ function statusBadge(s: TaskStatus | "UNKNOWN"): string {
 		case "CANCELLED":
 			return "bg-slate-100 text-slate-700 border-slate-200";
 		case "DISPATCHED":
-			return "bg-green-100 text-green-800 border-green-200";
+			return "bg-amber-100 text-amber-800 border-amber-200";
 		case "PENDING":
 			return "bg-amber-100 text-amber-800 border-amber-200";
 		case "FAILED":

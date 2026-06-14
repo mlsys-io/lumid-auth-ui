@@ -78,7 +78,7 @@ const components: Components = {
 	// Blockquote — subtle left-bar treatment, mirrors the agent's
 	// "quoting back" voice.
 	blockquote: ({ children }) => (
-		<blockquote className="my-2 first:mt-0 last:mb-0 pl-3 border-l-2 border-emerald-300 text-slate-600 italic">
+		<blockquote className="my-2 first:mt-0 last:mb-0 pl-3 border-l-2 border-amber-300 text-slate-600 italic">
 			{children}
 		</blockquote>
 	),
@@ -89,7 +89,7 @@ const components: Components = {
 	// workspace pane, not spawn a tab. External links keep new-tab.
 	a: ({ href, children }) => {
 		const h = String(href || "");
-		const cls = "text-emerald-700 underline decoration-emerald-300 hover:decoration-emerald-600 underline-offset-2 break-words";
+		const cls = "text-amber-700 underline decoration-amber-300 hover:decoration-amber-600 underline-offset-2 break-words";
 		if (h.startsWith("/studio") || h.startsWith("/dashboard")) {
 			return <Link to={h} className={cls}>{children}</Link>;
 		}
@@ -156,7 +156,7 @@ export function ChatMarkdown({ children, dark }: Props) {
 			'chat-md',
 			// The dark variant flips code/table backgrounds so they stay
 			// legible on the user-bubble dark background.
-			dark ? '[&_code]:bg-slate-800 [&_code]:text-slate-100 [&_code]:border-slate-700 [&_blockquote]:text-slate-200 [&_blockquote]:border-emerald-400 [&_a]:text-emerald-300 [&_a]:decoration-emerald-500/60 [&_hr]:border-slate-700 [&_table]:border-slate-700 [&_thead]:bg-slate-800 [&_thead]:border-slate-700 [&_tr]:border-slate-800 [&_th]:text-slate-200 [&_td]:text-slate-200' : '',
+			dark ? '[&_code]:bg-slate-800 [&_code]:text-slate-100 [&_code]:border-slate-700 [&_blockquote]:text-slate-200 [&_blockquote]:border-amber-400 [&_a]:text-amber-300 [&_a]:decoration-amber-500/60 [&_hr]:border-slate-700 [&_table]:border-slate-700 [&_thead]:bg-slate-800 [&_thead]:border-slate-700 [&_tr]:border-slate-800 [&_th]:text-slate-200 [&_td]:text-slate-200' : '',
 		].join(' ')}>
 			<ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
 				{clean}

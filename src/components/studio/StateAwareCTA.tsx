@@ -24,7 +24,7 @@ export function StateAwareCTA({
 	switch (state) {
 		case "installed":
 			return (
-				<button onClick={onAction} className={cn(base, "border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100", className)}>
+				<button onClick={onAction} className={cn(base, "border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100", className)}>
 					<Check className="w-3.5 h-3.5" /> {doneLabel} <ArrowRight className="w-3.5 h-3.5" />
 				</button>
 			);
@@ -42,7 +42,7 @@ export function StateAwareCTA({
 			);
 		default:
 			return (
-				<button onClick={onAction} className={cn(base, "bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm shadow-emerald-100 hover:shadow-md hover:from-emerald-600 hover:to-teal-700", className)}>
+				<button onClick={onAction} className={cn(base, "bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-sm shadow-amber-100 hover:shadow-md hover:from-amber-600 hover:to-amber-700", className)}>
 					<Plus className="w-3.5 h-3.5" /> {idleLabel}
 				</button>
 			);

@@ -70,13 +70,13 @@ export function SubscribeAgentDialog({
 
 				{phase === "done" ? (
 					<div className="space-y-3">
-						<div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-[13px] text-emerald-800 flex items-center gap-2">
+						<div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[13px] text-amber-800 flex items-center gap-2">
 							<Check className="w-4 h-4 flex-shrink-0" /> {doneNote}
 						</div>
 						<Link
 							to="/studio/knowledge"
 							onClick={onClose}
-							className="inline-flex items-center gap-1.5 text-[12.5px] text-emerald-700 hover:underline"
+							className="inline-flex items-center gap-1.5 text-[12.5px] text-amber-700 hover:underline"
 						>
 							Open your knowledge <ArrowRight className="w-3.5 h-3.5" />
 						</Link>
