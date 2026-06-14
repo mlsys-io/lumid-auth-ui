@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { AuthGuard, defaultLandingPath } from "./components/auth-guard";
 import { AdminGuard } from "./components/admin-guard";
+import BrandLoader from "./components/BrandLoader";
 import { SuperAdminGuard } from "./components/super-admin-guard";
 // New web-first revamp shell + pages (2026-05-22). Mounted at /app/*
 // here; physically served at xp.io/go/app/* during P0-P3 via the
@@ -336,17 +337,9 @@ function ParamRedirect({ pattern }: { pattern: string }) {
   return <Navigate to={to} replace />;
 }
 
-// Cold-load fallback — a calm, on-brand wordmark with a gentle pulse instead of
-// an off-brand spinning ring (the "swirling" motion). No rotation; just a soft
-// breathe so loading reads as intentional, not janky.
+// Cold-load fallback — the shared on-brand spiral loader on contextual gray boxes.
 function Spinner() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <span className="font-display text-[20px] font-semibold tracking-tight text-foreground/70 animate-pulse">
-        Lumid Studio
-      </span>
-    </div>
-  );
+  return <BrandLoader />;
 }
 
 // RoleHome — used at "/" and the catch-all "*". Reads auth + role and

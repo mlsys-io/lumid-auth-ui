@@ -618,6 +618,20 @@ html {
 	animation: panelInLeft 0.38s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+/* Spiral-spin — the Lumid spiral mark as the loading indicator: a slow,
+   continuous rotation (the brand's own "logo as spinner"). */
+@keyframes spiralSpin {
+	from { transform: rotate(0deg); }
+	to   { transform: rotate(360deg); }
+}
+.spiral-spin {
+	animation: spiralSpin 2.4s linear infinite;
+	will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) {
+	.spiral-spin { animation: none; }
+}
+
 /* Heartbeat — the surface is alive (loops running in the background).
    Classic lub-dub: two quick beats then rest. */
 @keyframes heartbeat {

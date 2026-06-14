@@ -1,7 +1,7 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import React from 'react';
-import { Loading } from './ui/loading';
+import BrandLoader from './BrandLoader';
 
 interface AuthGuardProps {
 	children: React.ReactNode;
@@ -107,7 +107,7 @@ export function AuthGuard({ children, requireAuth = true }: AuthGuardProps) {
 	const location = useLocation();
 
 	if (isLoading) {
-		return <Loading fullScreen />;
+		return <BrandLoader />;
 	}
 
 	if (requireAuth && !isAuthenticated) {
