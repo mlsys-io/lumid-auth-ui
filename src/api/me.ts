@@ -42,14 +42,29 @@ const inflight = new Map<string, Promise<unknown>>();
 // Staleness is bounded to TTL_MS and these views already tolerate ~poll-
 // interval lag; mutations bust the cache via clearMeCache() (wired to the
 // chat→page refetch bus in useStudioRefetch), so a write reflects immediately.
-const TTL_MS = 3000;
+// Stale-while-revalidate windows. Within FRESH_MS a read is served from cache
+// with no network (collapses staggered pollers). Between FRESH and STALE the
+// cached value is served INSTANTLY (so navigating away and back paints with no
+// spinner) while a background revalidate refreshes the cache for the next read
+// / poll. Past STALE we fetch fresh and await. Mutations bust everything via
+// clearMeCache(). This is what makes every cached Studio page feel instant on
+// re-navigation, not just the ones I special-cased.
+const FRESH_MS = 4000;
+const STALE_MS = 45000;
 const ttlCache = new Map<string, { at: number; value: unknown }>();
 function ttlCacheable(path: string): boolean {
+  const base = path.split("?")[0];
   return (
-    path === "/apps" ||
-    path === "/workflows" || path.startsWith("/workflows?") ||
-    path === "/drafts" || path.startsWith("/drafts?") ||
-    path === "/loops/health"
+    base === "/apps" ||
+    base === "/workflows" ||
+    base === "/drafts" ||
+    base === "/loops/health" ||
+    base === "/today" ||
+    base === "/runs" ||
+    base === "/knowledge/agents" ||
+    base === "/agent/models" ||
+    base === "/personas" ||
+    base === "/agents"
   );
 }
 /** Drop all cached aggregate reads so the next call hits the network. Called
@@ -66,26 +81,37 @@ export function clearMeCache(): void {
 // server's window clears. cooldownUntil is an epoch-ms; 0 = open.
 let cooldownUntil = 0;
 
+// Kick a network fetch for `path`, store it in the cache, deduped by `inflight`.
+function fetchAndCache<T>(method: string, path: string, body: unknown, cacheable: boolean): Promise<T> {
+  const existing = inflight.get(path);
+  if (existing) return existing as Promise<T>;
+  const p = doCall<T>(method, path, body)
+    .then((v) => {
+      if (cacheable) ttlCache.set(path, { at: Date.now(), value: v });
+      return v;
+    })
+    .finally(() => inflight.delete(path));
+  inflight.set(path, p);
+  return p;
+}
+
 function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   if (method === "GET" && body === undefined) {
     const cacheable = ttlCacheable(path);
     if (cacheable) {
       const hit = ttlCache.get(path);
-      if (hit && Date.now() - hit.at < TTL_MS) return Promise.resolve(hit.value as T);
-      // During a cooldown, serve the last-known value at ANY age rather than
-      // firing a doomed request — keeps the page populated while we back off.
+      const age = hit ? Date.now() - hit.at : Infinity;
+      if (hit && age < FRESH_MS) return Promise.resolve(hit.value as T); // fresh — no network
+      if (hit && age < STALE_MS) {
+        // Serve stale INSTANTLY; revalidate in the background (fire-and-forget,
+        // deduped) so the cache + next poll are fresh.
+        fetchAndCache<T>(method, path, body, true).catch(() => {});
+        return Promise.resolve(hit.value as T);
+      }
+      // Cooling down from a 429 → serve last-known at any age instead of piling on.
       if (hit && Date.now() < cooldownUntil) return Promise.resolve(hit.value as T);
     }
-    const existing = inflight.get(path);
-    if (existing) return existing as Promise<T>;
-    const p = doCall<T>(method, path, body)
-      .then((v) => {
-        if (cacheable) ttlCache.set(path, { at: Date.now(), value: v });
-        return v;
-      })
-      .finally(() => inflight.delete(path));
-    inflight.set(path, p);
-    return p;
+    return fetchAndCache<T>(method, path, body, cacheable);
   }
   return doCall<T>(method, path, body);
 }
