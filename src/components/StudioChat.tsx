@@ -60,6 +60,10 @@ const CHAT_ID_KEY = 'studio_chat_active_id_v1';
 // Per-app "latest session" map { app: chatId } so re-entering an app resumes
 // its most-recent conversation instead of dumping into whatever was open.
 const APP_CHAT_MAP_KEY = 'studio_app_chat_v1';
+// Reserved chat-context key for the Library, so it gets the SAME per-context
+// resume + grounded-opener behavior as an app (its own thread, resumed on
+// re-entry) rather than a one-off fresh chat. Not a real installed app.
+export const LIBRARY_KEY = 'lumid-library';
 function readAppChatMap(): Record<string, string> {
 	try { return JSON.parse(localStorage.getItem(APP_CHAT_MAP_KEY) || '{}') || {}; }
 	catch { return {}; }
@@ -71,6 +75,20 @@ function writeAppChat(app: string, chatId: string | null) {
 		if (chatId) m[app] = chatId; else delete m[app];
 		localStorage.setItem(APP_CHAT_MAP_KEY, JSON.stringify(m));
 	} catch { /* ignore */ }
+}
+// Forget a chatId everywhere it could be resumed from (per-app resume map +
+// the persisted active id), so a DELETED conversation can't reappear when you
+// re-enter the app. Without this, the prop-driven grounding resumes the
+// per-app thread on every entry — including one you just deleted.
+function forgetChatId(id: string) {
+	if (!id) return;
+	try {
+		const m = readAppChatMap();
+		let changed = false;
+		for (const k of Object.keys(m)) if (m[k] === id) { delete m[k]; changed = true; }
+		if (changed) localStorage.setItem(APP_CHAT_MAP_KEY, JSON.stringify(m));
+	} catch { /* ignore */ }
+	try { if (localStorage.getItem(CHAT_ID_KEY) === id) localStorage.removeItem(CHAT_ID_KEY); } catch { /* ignore */ }
 }
 
 // Persisted transcript shape: { user_sub: string, messages: Message[] }.
@@ -140,7 +158,7 @@ type ModelOption = { id: string; display_name: string; default: boolean };
 // Mutually-exclusive tool-forcing modes. '' = let the agent decide.
 type ChatMode = '' | 'search' | 'deep_research';
 
-export function StudioChat({ docked = false }: { docked?: boolean } = {}) {
+export function StudioChat({ docked = false, groundApp }: { docked?: boolean; groundApp?: string | null } = {}) {
 	const location = useLocation();
 	// `id` is the user_sub on the UserInfo shape from /api/v1/user; used
 	// to tag the persisted transcript so it can't leak across accounts.
@@ -447,6 +465,11 @@ export function StudioChat({ docked = false }: { docked?: boolean } = {}) {
 	const saveTimerRef = useRef<number | null>(null);
 	const lastSavedSigRef = useRef<string>('');
 	useEffect(() => {
+		// Cancel any pending save FIRST. If the transcript was just reset
+		// (delete / New chat → messages=[]), a previously-scheduled debounced
+		// save would otherwise fire with the OLD closure messages and RESURRECT
+		// the just-deleted conversation as a new chat (re-adding it to resume).
+		if (saveTimerRef.current) { window.clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
 		if (streaming) return;
 		if (messages.length < 2) return;
 		const last = messages[messages.length - 1];
@@ -455,7 +478,6 @@ export function StudioChat({ docked = false }: { docked?: boolean } = {}) {
 		const sig = `${messages.length}:${last.content.length}:${(last.thinking||'').length}`;
 		if (sig === lastSavedSigRef.current) return;
 
-		if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
 		saveTimerRef.current = window.setTimeout(async () => {
 			try {
 				const r = await fetch('/api/v1/me/chats', {
@@ -539,6 +561,7 @@ export function StudioChat({ docked = false }: { docked?: boolean } = {}) {
 				method: 'DELETE',
 				credentials: 'include',
 			});
+			forgetChatId(id);          // never resume a deleted thread on re-entry
 			if (id === chatId) newChat();
 			loadHistory();
 		} catch { /* ignore */ }
@@ -968,6 +991,23 @@ export function StudioChat({ docked = false }: { docked?: boolean } = {}) {
 	// current — usually just-cleared — transcript). Marks the app as opened.
 	const emitAppOpener = useCallback((app: string) => {
 		openedAppRef.current = app;
+		// Talk to THIS app's agents by default — drop any manual agent/persona
+		// so the app context (sent with every turn) drives retrieval/routing.
+		setAgentId(''); setPersonaId('');
+		// Library context — no workflows; a marketplace/skills/experiments opener.
+		if (app === LIBRARY_KEY) {
+			setStudioSelection(null);
+			setMessages((prev) => [...prev, {
+				role: 'assistant',
+				content: "Your **Library** — the marketplace, your skills, and experiments. What are you after?",
+				chips: [
+					{ label: 'find an app to install', prompt: 'What apps in the marketplace fit how I work? Recommend a few and say why.' },
+					{ label: 'which skills need updating?', prompt: 'Do any of my installed skills have newer versions or are flagged broken?' },
+					{ label: 'recent experiment results', prompt: 'Summarize my recent experiments — is there a winning variant worth adopting?' },
+				],
+			}]);
+			return;
+		}
 		void Promise.all([
 			prefetchAppLabels(),
 			me.listWorkflows('scheduled').then((r) => r.workflows || []).catch(() => [] as MeWorkflowRow[]),
@@ -1013,6 +1053,14 @@ export function StudioChat({ docked = false }: { docked?: boolean } = {}) {
 			emitAppOpener(app);
 		}
 	}, [loadThread, emitAppOpener, clearSession]);
+
+	// Deterministic grounding: the docked chat is driven by the `groundApp`
+	// prop (the workspace's selected app), NOT by event/stash races — those
+	// could leave the chat showing a stale app (e.g. open gpu-rentals, see
+	// mbb-coach). Whenever the selected app changes, re-ground on it.
+	useEffect(() => {
+		if (docked && groundApp) openAppInChat({ app: groundApp });
+	}, [docked, groundApp, openAppInChat]);
 
 	// "New chat" — starts a fresh session. In an app context it stays bound to
 	// the app (a NEW session for that app) and re-emits the opener; on the home
@@ -1195,11 +1243,29 @@ export function StudioChat({ docked = false }: { docked?: boolean } = {}) {
 		});
 	}, [streaming, dispatchTurn, messageQueue.length]);
 
-	const clear = () => {
+	// Delete the ACTIVE conversation for real — server record + every local
+	// resume source (transcript, active-id, per-app map) — so it can't come
+	// back on refresh or re-entry. (Was a view-only "clear" that left the
+	// server thread + chatId behind, so a reload restored it.) Unsaved chats
+	// (no id) just reset. In an app context, re-emit the fresh opener.
+	const clear = useCallback(async () => {
 		if (streaming) return;
+		const id = chatId;
+		const app = currentAppRef.current;
+		if (id && !confirm('Delete this conversation?')) return;
 		setMessages([]);
+		setChatId(null);
+		claudeSessionRef.current = null;
+		lastSavedSigRef.current = '';
+		openedAppRef.current = null;
 		try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
-	};
+		if (id) {
+			forgetChatId(id);
+			try { await fetch('/api/v1/me/chats/' + encodeURIComponent(id), { method: 'DELETE', credentials: 'include' }); } catch { /* best-effort */ }
+			loadHistory();
+		}
+		if (app) emitAppOpener(app);
+	}, [streaming, chatId, loadHistory, emitAppOpener]);
 
 	// Chat action icons render INTO the shell top bar (one aligned row with the
 	// status pills) via this slot — so the chat column has no second header bar.
@@ -1232,15 +1298,9 @@ export function StudioChat({ docked = false }: { docked?: boolean } = {}) {
 	// session for another app is chosen.
 	const chromeEl = (
 		<div data-studio-picker-chrome="1" className="flex items-center gap-0.5">
-			<ContextIconButton
-				streaming={streaming}
-				agents={agents}
-				agentId={agentId}
-				selectAgent={selectAgent}
-				personas={personas}
-				personaId={personaId}
-				selectPersona={selectPersona}
-			/>
+			{/* Agent/persona picker removed — when an app is selected the chat
+			    talks to THAT app's agents by default (app context drives the
+			    routing; see emitAppOpener clearing any manual selection). */}
 			<ArtifactIconButton />
 			<div className="relative">
 				<button
@@ -1288,7 +1348,7 @@ export function StudioChat({ docked = false }: { docked?: boolean } = {}) {
 				)}
 			</div>
 			{messages.length > 0 && (
-				<button onClick={clear} title="Clear (without deleting)" aria-label="Clear conversation (without deleting)"
+				<button onClick={clear} title="Delete this conversation" aria-label="Delete this conversation"
 					className="p-1.5 rounded-md text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition-colors">
 					<Trash2 className="w-3.5 h-3.5" />
 				</button>

@@ -10,7 +10,7 @@
 // hide chat) are merged into the top strip (TopStatusStrip), portaled in from
 // here and from AppOverview, so the app shows a single header row.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useNavigate } from "react-router-dom";
 import { PanelRightClose, MessageSquare } from "lucide-react";
@@ -31,19 +31,28 @@ export default function StudioWorkspace() {
 	const stored = (() => { try { return localStorage.getItem(FEATURED_KEY) || ""; } catch { return ""; } })();
 	const app = paramApp || stored || installed[0] || "";
 
+	// Stash the CURRENT app for the docked chat SYNCHRONOUSLY (during render),
+	// before the child StudioChat mounts. React runs child mount effects before
+	// the parent's, so a useEffect stash lands too late — the freshly-mounted
+	// chat would read a STALE stash (the previous app) and ground on it. Writing
+	// it in render (guarded to once-per-app) makes the chat ground on THIS app.
+	const stashedAppRef = useRef("");
+	if (app && stashedAppRef.current !== app) {
+		stashedAppRef.current = app;
+		try { sessionStorage.setItem("studio_open_app_v1", JSON.stringify({ app })); } catch { /* ignore */ }
+	}
+
 	// Clean URL: /studio/apps with no param but a resolved default → go to it.
 	useEffect(() => {
 		if (!paramApp && app) navigate(`/studio/apps/${encodeURIComponent(app)}`, { replace: true });
 	}, [paramApp, app, navigate]);
 
-	// Persist the pick + open the app in the docked chat with the agent-led
-	// opener (stash for chat mount, event for live switches; openAppInChat dedupes).
+	// Persist the pick + open the app in the docked chat (the event drives the
+	// LIVE switch when the chat is already mounted; the render-time stash above
+	// handles the fresh-mount case). openAppInChat dedupes the two.
 	useEffect(() => {
 		if (!app) return;
-		try {
-			localStorage.setItem(FEATURED_KEY, app);
-			sessionStorage.setItem("studio_open_app_v1", JSON.stringify({ app }));
-		} catch { /* ignore */ }
+		try { localStorage.setItem(FEATURED_KEY, app); } catch { /* ignore */ }
 		window.dispatchEvent(new CustomEvent("studio:open-app", { detail: { app } }));
 	}, [app]);
 
@@ -68,7 +77,7 @@ export default function StudioWorkspace() {
 			{chatOpen && app && (
 				<div className="w-[400px] xl:w-[460px] flex-shrink-0 flex flex-col min-h-0 bg-background">
 					<div className="flex-1 min-h-0 flex flex-col px-3 py-3">
-						<StudioChat docked />
+						<StudioChat docked groundApp={app} />
 					</div>
 				</div>
 			)}

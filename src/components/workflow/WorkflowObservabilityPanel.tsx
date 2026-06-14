@@ -157,7 +157,8 @@ export default function WorkflowObservabilityPanel({
 	const [cycleTs, setCycleTs] = useState<string | null>(cached0?.ts ?? null);
 	// null = still loading; [] = confirmed zero tenant runs.
 	const [cycleList, setCycleList] = useState<Array<{ ts: string; ok?: boolean; running?: boolean; duration_s?: number }> | null>(null);
-	const [anchorTs, setAnchorTs] = useState<string | null>(initialCycle || null);
+	// Deep-link anchor (?cycle=…) — the run the pipeline/inspector overlays.
+	const [anchorTs] = useState<string | null>(initialCycle || null);
 	const [summary, setSummary] = useState<CycleSummary | null>(cached0?.summary ?? null);
 	const [cycleFiles, setCycleFiles] = useState<Record<string, unknown>>({});
 	const [lastError, setLastError] = useState<string | null>(null);
@@ -265,10 +266,7 @@ export default function WorkflowObservabilityPanel({
 	const lastRan = whenLastFromCycle(cycleList?.[0]?.ts);
 	const onDemand = parseSchedule(wf.trigger).kind === "trigger";
 
-	const openRun = (ts: string) => { setAnchorTs(ts); setSelectedStage("learn"); };
-
-	// Run count (shown in the Runs header) + whether a pipeline is declared.
-	const runCount = cycleList?.length ?? 0;
+	// Whether a pipeline is declared (drives the Pipeline column's content).
 	const hasPipeline = !!(definition && (definition.steps?.length || definition.skills_invoked?.length || definition.engine?.type || definition.engine?.module));
 
 	return (
@@ -276,23 +274,20 @@ export default function WorkflowObservabilityPanel({
 			{/* ── HEADER — title + health + schedule + the controls ── */}
 			<div className="flex flex-wrap items-start gap-2">
 				<div className="min-w-0 flex-1">
+					{/* Top-left card: workflow name · run-state dots (recent-run history,
+					    clickable → cycle preview) · last-state word with the relative time
+					    folded IN (e.g. "Healthy · 10h ago", "Recovered · 3d ago"). No
+					    separate "ran …" line. */}
 					<div className="flex items-center gap-2 flex-wrap">
 						<h3 className="text-sm font-semibold text-slate-900 truncate">{loopLabel(wf.name, loop)}</h3>
-						<span className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-medium", h.cls, justRan && "value-pop")}>
-							<span className={cn("w-1.5 h-1.5 rounded-full", h.dot, running && "running-glow")} />
-							{running ? "Running…" : h.label}
-						</span>
-					</div>
-					{/* De-noised: just when it last ran (the status badge above already
-					    says failing/healthy; the experiment chip was redundant noise).
-					    The run-history strip (green/red dots, clickable → cycle preview)
-					    sits alongside — restored here after the workflow list rail that
-					    used to host it was consolidated into the WorkflowSelect dropdown. */}
-					<div className="flex items-center gap-2 mt-0.5">
-						<span className="text-[11px] text-slate-400">{lastRan || describeSchedule(wf.trigger)}</span>
 						{wf.run_spark && (
 							<RunSparkline spec={wf.run_spark} runs={wf.runs_recent} app={app} loop={loop} className="flex-shrink-0" />
 						)}
+						<span className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-medium", h.cls, justRan && "value-pop")}>
+							<span className={cn("w-1.5 h-1.5 rounded-full", h.dot, running && "running-glow")} />
+							{running ? "Running…" : h.label}
+							{!running && lastRan && <span className="font-normal opacity-70">· {lastRan.replace(/^ran /, "")}</span>}
+						</span>
 					</div>
 				</div>
 				<div className="flex items-center gap-1.5 flex-shrink-0">
@@ -348,70 +343,10 @@ export default function WorkflowObservabilityPanel({
 				<FailureCard error={lastError} app={app} loop={loop} />
 			)}
 
-			{/* ── PIPELINE — n8n-style node canvas (full width; it's the widest
-			    artifact so it leads the body). ── */}
-			{hasPipeline && (
-				<div className="space-y-2">
-					<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400 uppercase">
-						Pipeline
-						{overlayTs && tenantHasRuns && <span className="normal-case tracking-normal text-slate-400 font-normal"> · showing run {cycleDate(overlayTs)}</span>}
-						{!tenantHasRuns && <span className="normal-case tracking-normal text-slate-400 font-normal"> · runs when you click Run now</span>}
-					</div>
-					<WorkflowCanvas
-						definition={definition!}
-						cycle={canvasCycle}
-						running={running}
-						onStepSelect={(ref) => setCanvasStep(ref)}
-					/>
-					{canvasStep && (
-						<StepInspectorPanel
-							step={canvasStep} app={app} loop={loop}
-							ts={overlayTs || undefined} onClose={() => setCanvasStep(null)}
-						/>
-					)}
-				</div>
-			)}
-
-			{/* ── RUNS + DATA — side by side only when there's real room (xl); the
-			    panel shares the workspace's center column with the chat, so lg
-			    would cramp both. Stacks otherwise. ── */}
-			<div className="grid xl:grid-cols-2 gap-5 items-start">
-				{/* RUNS — newest first; click to inspect a run below. */}
-				<div className="space-y-2 min-w-0">
-					<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400 uppercase flex items-center gap-1.5">
-						<Clock className="w-3 h-3" /> Runs{runCount > 0 && <span className="text-slate-300 normal-case tracking-normal"> · {runCount}</span>}
-					</div>
-					{tenantHasRuns ? (
-						<ul className="rounded-xl border border-slate-200 bg-white divide-y divide-slate-100 overflow-hidden">
-							{(cycleList ?? []).map((c) => {
-								const cdot = c.running ? "bg-sky-500 running-pulse" : c.ok === false ? "bg-rose-500" : "bg-gold-500";
-								return (
-									<li key={c.ts}>
-										<button type="button" onClick={() => openRun(c.ts)}
-											aria-label={`Inspect run ${cycleDate(c.ts)} — ${c.running ? "running" : c.ok === false ? "failed" : "ok"}`}
-											className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50 transition-colors">
-											<span className={cn("w-2 h-2 rounded-full flex-shrink-0", cdot)} />
-											<span className="text-xs text-slate-700 tabular-nums">{cycleDate(c.ts)}</span>
-											<span className="text-[11px] text-slate-400">
-												{c.running ? "running…" : c.ok === false ? "failed" : "ok"}
-												{typeof c.duration_s === "number" && c.duration_s > 0 ? ` · ${c.duration_s >= 90 ? Math.round(c.duration_s / 60) + "m" : Math.round(c.duration_s) + "s"}` : ""}
-											</span>
-											<ChevronRight className="w-3.5 h-3.5 text-slate-300 ml-auto flex-shrink-0" />
-										</button>
-									</li>
-								);
-							})}
-						</ul>
-					) : (
-						<div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-5 text-center">
-							<div className="text-sm text-slate-600">Not run yet.</div>
-							<div className="text-xs text-slate-400 mt-1">
-								{onDemand ? "It runs when you click Run now." : `It runs ${describeSchedule(wf.trigger).toLowerCase()} — or run it now to try it.`}
-							</div>
-						</div>
-					)}
-				</div>
-
+			{/* ── DATA (left, ~30%) · PIPELINE (right, ~70%). Runs section removed —
+			    the run history lives in the top-left card's dots (click a dot for a
+			    cycle preview). Stacks on narrow widths. ── */}
+			<div className="grid grid-cols-1 lg:grid-cols-[3fr_7fr] gap-5 items-start">
 				{/* DATA — datasets the workflow works on (app-scoped). */}
 				<div className="space-y-2 min-w-0">
 					<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400 uppercase flex items-center gap-1.5">
@@ -420,6 +355,33 @@ export default function WorkflowObservabilityPanel({
 					<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading datasets…</div>}>
 						<DatasetExplorer app={app} />
 					</Suspense>
+				</div>
+
+				{/* PIPELINE — n8n-style node canvas; the wide artifact, so it gets 70%. */}
+				<div className="space-y-2 min-w-0">
+					<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400 uppercase">
+						Pipeline
+						{overlayTs && tenantHasRuns && <span className="normal-case tracking-normal text-slate-400 font-normal"> · showing run {cycleDate(overlayTs)}</span>}
+						{!tenantHasRuns && <span className="normal-case tracking-normal text-slate-400 font-normal"> · runs when you click Run now</span>}
+					</div>
+					{hasPipeline ? (
+						<>
+							<WorkflowCanvas
+								definition={definition!}
+								cycle={canvasCycle}
+								running={running}
+								onStepSelect={(ref) => setCanvasStep(ref)}
+							/>
+							{canvasStep && (
+								<StepInspectorPanel
+									step={canvasStep} app={app} loop={loop}
+									ts={overlayTs || undefined} onClose={() => setCanvasStep(null)}
+								/>
+							)}
+						</>
+					) : (
+						<div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-5 text-center text-xs text-slate-400">No pipeline declared for this workflow.</div>
+					)}
 				</div>
 			</div>
 
