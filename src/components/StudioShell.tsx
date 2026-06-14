@@ -76,12 +76,34 @@ const TOP_NAV: NavItem[] = [
 // Jobs/Activity/Inbox are folded into Apps — the Apps hero's "runs today" stat
 // + the top-bar "Right now" ticker link into /studio/runs, so it's no longer a
 // separate top-level destination.
+// Route-chunk prefetch — on hover/focus of a nav item, warm the lazy chunk for
+// its destination so the click navigates with the JS already downloaded (the
+// chunk transfer over the FRP tunnel is the slow part of a first navigation).
+// Vite dedupes these dynamic imports with App.tsx's lazy() — same chunk.
+const ROUTE_PREFETCH: Record<string, () => Promise<unknown>> = {
+	"/studio/apps": () => import("@/pages/studio/apps"),
+	"/studio/library": () => import("@/pages/studio/library-tabs"),
+	"/studio/runs": () => import("@/pages/studio/runs"),
+};
+const prefetched = new Set<string>();
+function prefetchRoute(to: string) {
+	const norm = to.split("?")[0];
+	if (prefetched.has(norm)) return;
+	prefetched.add(norm);
+	const fn = ROUTE_PREFETCH[norm]
+		// per-app routes (/studio/a/<app>, /studio/apps/<app>) share the apps chunk
+		?? ((norm.startsWith("/studio/a/") || norm.startsWith("/studio/apps/")) ? () => import("@/pages/studio/apps") : undefined);
+	fn?.().catch(() => prefetched.delete(norm));
+}
+
 function NavItemView({ to, label, icon: Icon, end, badge, title }: NavItem) {
 	return (
 		<NavLink
 			to={to}
 			end={end}
 			title={title}
+			onMouseEnter={() => prefetchRoute(to)}
+			onFocus={() => prefetchRoute(to)}
 			className={({ isActive }) =>
 				cn(
 					'group flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors relative',
