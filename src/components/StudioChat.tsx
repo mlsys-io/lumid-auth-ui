@@ -340,6 +340,18 @@ export function StudioChat({ docked = false }: { docked?: boolean } = {}) {
 		try { localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0'); } catch { /* ignore */ }
 	}, [collapsed]);
 
+	// Keep the app binding in sync with the workspace URL whenever docked — the
+	// docked chat ONLY renders on an app page, so the path is the source of
+	// truth for which app this session belongs to. Makes app-tagging robust
+	// regardless of the open-app event/stash timing (so saved chats are tagged
+	// and the picker can group/route by app).
+	useEffect(() => {
+		if (!docked) return;
+		const m = location.pathname.match(/^\/studio\/apps\/([^/?]+)/);
+		const app = m && m[1] !== 'all' ? decodeURIComponent(m[1]) : null;
+		if (app) currentAppRef.current = app;
+	}, [docked, location.pathname]);
+
 	// Persist selected model.
 	useEffect(() => {
 		try {
@@ -1172,6 +1184,25 @@ export function StudioChat({ docked = false }: { docked?: boolean } = {}) {
 	const [stripSlot, setStripSlot] = useState<HTMLElement | null>(null);
 	useEffect(() => { setStripSlot(document.getElementById('topstrip-app-slot')); }, []);
 
+	// Group saved conversations by app for the picker — current app first, other
+	// apps alphabetically, app-less ("General") last.
+	const historyGroups = (() => {
+		const byApp = new Map<string, HistoryRow[]>();
+		for (const h of history) {
+			const k = h.app || '';
+			const arr = byApp.get(k);
+			if (arr) arr.push(h); else byApp.set(k, [h]);
+		}
+		const cur = currentAppRef.current || '';
+		const keys = [...byApp.keys()].sort((a, b) => {
+			if (a === b) return 0;
+			if (a === cur) return -1; if (b === cur) return 1;
+			if (a === '') return 1; if (b === '') return -1;
+			return appTitle(a).localeCompare(appTitle(b));
+		});
+		return keys.map((k) => ({ app: k, label: k ? appTitle(k) : 'General', rows: byApp.get(k)! }));
+	})();
+
 	// Chat chrome (context · artifacts · session picker · clear). Rendered into
 	// the top strip on the home (!docked) and inline at the top of the docked
 	// app chat — so the session picker is ALWAYS available (it had vanished in
@@ -1208,21 +1239,27 @@ export function StudioChat({ docked = false }: { docked?: boolean } = {}) {
 						{history.length === 0 && (
 							<div className="px-2.5 py-1.5 text-[11px] text-muted-foreground italic">No saved conversations yet.</div>
 						)}
-						{history.map((h) => (
-							<div key={h.id} className={['group flex items-center gap-1 px-1 py-0.5 rounded-lg transition-colors', h.id === chatId ? 'bg-gold-50/60' : 'hover:bg-muted/60'].join(' ')}>
-								<button type="button" onClick={() => pickThread(h)} className="flex-1 min-w-0 text-left px-1.5 py-1">
-									<div className="text-[12.5px] font-medium text-foreground truncate">{h.title}</div>
-									<div className="text-[10px] text-muted-foreground flex items-center gap-1">
-										{h.app && <><span className="text-gold-700 font-medium truncate max-w-[110px]">{appTitle(h.app)}</span><span>·</span></>}
-										<span>{h.msg_count} msg</span>
-										<span>·</span>
-										<span>{relativeTime(h.updated_at)}</span>
+						{historyGroups.map((g) => (
+							<div key={g.app || '__general'} className="mb-0.5">
+								<div className="px-2.5 pt-1.5 pb-0.5 text-[9.5px] uppercase tracking-wider text-muted-foreground truncate">
+									{g.label}
+								</div>
+								{g.rows.map((h) => (
+									<div key={h.id} className={['group flex items-center gap-1 px-1 py-0.5 rounded-lg transition-colors', h.id === chatId ? 'bg-gold-50/60' : 'hover:bg-muted/60'].join(' ')}>
+										<button type="button" onClick={() => pickThread(h)} className="flex-1 min-w-0 text-left px-1.5 py-1">
+											<div className="text-[12.5px] font-medium text-foreground truncate">{h.title}</div>
+											<div className="text-[10px] text-muted-foreground flex items-center gap-1">
+												<span>{h.msg_count} msg</span>
+												<span>·</span>
+												<span>{relativeTime(h.updated_at)}</span>
+											</div>
+										</button>
+										<button type="button" onClick={() => deleteThread(h.id)} title="Delete"
+											className="p-1 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-rose-600 transition-all">
+											<Trash2 className="w-3 h-3" />
+										</button>
 									</div>
-								</button>
-								<button type="button" onClick={() => deleteThread(h.id)} title="Delete"
-									className="p-1 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-rose-600 transition-all">
-									<Trash2 className="w-3 h-3" />
-								</button>
+								))}
 							</div>
 						))}
 					</div>
