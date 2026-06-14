@@ -13,6 +13,8 @@ import ErrorBoundary from './ErrorBoundary';
 import {
 	Boxes,
 	CirclePlus,
+	PanelLeftClose,
+	PanelLeftOpen,
 	Store,
 	Compass,
 	Settings,
@@ -238,6 +240,15 @@ export function StudioShell() {
 	const [menuOpen, setMenuOpen] = useState(false);
 	const menuRef = useRef<HTMLDivElement>(null);
 
+	// Sidebar collapse — the resize control lives at the sidebar's top-right and
+	// is always visible (when collapsed it moves to the header's far left).
+	const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+		try { return localStorage.getItem('studio_sidebar_collapsed_v1') === '1'; } catch { return false; }
+	});
+	useEffect(() => {
+		try { localStorage.setItem('studio_sidebar_collapsed_v1', sidebarCollapsed ? '1' : '0'); } catch { /* ignore */ }
+	}, [sidebarCollapsed]);
+
 	// Pending-drafts count → app-contributed nav badges (badge_source:
 	// 'drafts'). The Inbox nav entry folded into Home's status bar; the
 	// Inbox surface (moved off the My Apps hero), so the count belongs here.
@@ -303,14 +314,25 @@ export function StudioShell() {
 			resizing && 'select-none cursor-ew-resize',
 		)}>
 			{/* Sidebar ─────────────────────────────────────────────── */}
+			{!sidebarCollapsed && (
 			<aside
 				data-studio-picker-chrome="1"
 				style={{ width: sidebarWidth }}
 				className="relative flex flex-col h-screen flex-shrink-0 bg-sidebar border-r border-sidebar-border sticky top-0"
 			>
-				<button onClick={newChat} title="New chat" className="px-4 py-4 flex items-baseline text-left">
-					<span className="font-display text-[18px] font-semibold tracking-tight text-foreground">Lumid Studio</span>
-				</button>
+				<div className="flex items-center justify-between pr-1.5">
+					<button onClick={newChat} title="New chat" className="px-4 py-4 flex items-baseline text-left flex-1 min-w-0">
+						<span className="font-display text-[18px] font-semibold tracking-tight text-foreground truncate">Lumid Studio</span>
+					</button>
+					<button
+						onClick={() => setSidebarCollapsed(true)}
+						title="Collapse sidebar"
+						aria-label="Collapse sidebar"
+						className="flex-shrink-0 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-black/[0.05] transition-colors"
+					>
+						<PanelLeftClose className="w-4 h-4" />
+					</button>
+				</div>
 
 				<nav className="flex-1 overflow-y-auto px-2 py-3 space-y-px">
 					{/* Primary action — a quiet claude-style row, not a button. */}
@@ -443,6 +465,7 @@ export function StudioShell() {
 					)} />
 				</div>
 			</aside>
+			)}
 
 			{/* Main column ─────────────────────────────────────────── */}
 			{/* On the chat route the column is locked to the viewport height
@@ -453,6 +476,18 @@ export function StudioShell() {
 				{/* Top bar — page header lives in TopStatusStrip; account
 				    surfaces moved to the sidebar user menu. */}
 				<header data-studio-picker-chrome="1" className="min-h-[64px] py-2.5 bg-background/85 backdrop-blur-md border-b border-border sticky top-0 z-10 flex items-center px-6 gap-4">
+					{/* When the sidebar is collapsed, its expand control lives here at
+					    the header's far left — so the resize icon is always visible. */}
+					{sidebarCollapsed && (
+						<button
+							onClick={() => setSidebarCollapsed(false)}
+							title="Show sidebar"
+							aria-label="Show sidebar"
+							className="flex-shrink-0 -ml-1 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+						>
+							<PanelLeftOpen className="w-4 h-4" />
+						</button>
+					)}
 					<TopStatusStrip />
 				</header>
 

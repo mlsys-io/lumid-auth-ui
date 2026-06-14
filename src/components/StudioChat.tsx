@@ -57,6 +57,21 @@ const DOCUMENT_EXTS = ['.pdf', '.docx', '.xlsx', '.pptx', '.rtf', '.odt', '.ods'
 
 const STORAGE_KEY = 'studio_chat_transcript_v1';
 const CHAT_ID_KEY = 'studio_chat_active_id_v1';
+// Per-app "latest session" map { app: chatId } so re-entering an app resumes
+// its most-recent conversation instead of dumping into whatever was open.
+const APP_CHAT_MAP_KEY = 'studio_app_chat_v1';
+function readAppChatMap(): Record<string, string> {
+	try { return JSON.parse(localStorage.getItem(APP_CHAT_MAP_KEY) || '{}') || {}; }
+	catch { return {}; }
+}
+function writeAppChat(app: string, chatId: string | null) {
+	if (!app) return;
+	try {
+		const m = readAppChatMap();
+		if (chatId) m[app] = chatId; else delete m[app];
+		localStorage.setItem(APP_CHAT_MAP_KEY, JSON.stringify(m));
+	} catch { /* ignore */ }
+}
 
 // Persisted transcript shape: { user_sub: string, messages: Message[] }.
 // Tagging with user_sub closes the "same browser tab, different user"
@@ -239,9 +254,16 @@ export function StudioChat({ docked = false }: { docked?: boolean } = {}) {
 	// into the chat record so reloads keep continuity. Ref, not state —
 	// read at fetch time, never rendered.
 	const claudeSessionRef = useRef<string | null>(null);
+	const navigate = useNavigate();
+	// App the active session is grounded on (Studio workspace slug). Drives
+	// per-app session switching + tags saves so the picker can group/route by app.
+	const currentAppRef = useRef<string | null>(null);
+	// Last app whose opener was emitted into THIS session — dedupes the
+	// stash+event double-fire and prevents re-opening on same-app re-entry.
+	const openedAppRef = useRef<string | null>(null);
 	// Recent threads for the history dropdown — populated lazily when
 	// the user opens the menu; refreshed after every save.
-	type HistoryRow = { id: string; title: string; updated_at: string; msg_count: number };
+	type HistoryRow = { id: string; title: string; updated_at: string; msg_count: number; app?: string };
 	const [history, setHistory] = useState<HistoryRow[]>([]);
 	const [historyOpen, setHistoryOpen] = useState(false);
 
@@ -433,12 +455,15 @@ export function StudioChat({ docked = false }: { docked?: boolean } = {}) {
 						model: model || undefined,
 						mode: mode || undefined,
 						claude_session_id: claudeSessionRef.current || undefined,
+						app: currentAppRef.current || undefined,
 					}),
 				});
 				if (!r.ok) return;
 				const j = await r.json();
 				const newId: string | undefined = j?.data?.id;
 				if (newId && newId !== chatId) setChatId(newId);
+				// Remember this as the app's latest session for resume-on-reentry.
+				if (newId && currentAppRef.current) writeAppChat(currentAppRef.current, newId);
 				lastSavedSigRef.current = sig;
 			} catch { /* ignore */ }
 		}, 600);
@@ -461,19 +486,24 @@ export function StudioChat({ docked = false }: { docked?: boolean } = {}) {
 	// Load one thread into the chat — replaces current messages +
 	// chatId. Active session is overwritten; the previous thread is
 	// already saved on disk, so the user can navigate back to it.
-	const loadThread = useCallback(async (id: string) => {
+	const loadThread = useCallback(async (id: string): Promise<string | null | false> => {
 		try {
 			const r = await fetch('/api/v1/me/chats/' + encodeURIComponent(id), { credentials: 'include' });
-			if (!r.ok) return;
+			if (!r.ok) return false;
 			const j = await r.json();
 			const rec = j?.data;
-			if (!rec || !Array.isArray(rec.messages)) return;
+			if (!rec || !Array.isArray(rec.messages)) return false;
 			setMessages(rec.messages);
 			setChatId(rec.id);
 			claudeSessionRef.current = rec.claude_session_id || null;
+			const app = (rec.app as string) || null;
+			currentAppRef.current = app;
+			openedAppRef.current = app; // an app's loaded thread shouldn't re-fire its opener
+			if (app) writeAppChat(app, rec.id);
 			lastSavedSigRef.current = '';
 			setHistoryOpen(false);
-		} catch { /* ignore */ }
+			return app;
+		} catch { return false; }
 	}, []);
 
 	const newChat = useCallback(() => {
@@ -482,6 +512,8 @@ export function StudioChat({ docked = false }: { docked?: boolean } = {}) {
 		setChatId(null);
 		claudeSessionRef.current = null;
 		lastSavedSigRef.current = '';
+		currentAppRef.current = null;   // generic new chat = home (app-less)
+		openedAppRef.current = null;
 		try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
 		setHistoryOpen(false);
 	}, [streaming]);
@@ -918,24 +950,83 @@ export function StudioChat({ docked = false }: { docked?: boolean } = {}) {
 	// round-trip, no fake user turn) + 2–3 next-step chips. The conversation
 	// goes LLM-driven the moment the user clicks a chip or types. NO surface
 	// dump — the structured details live in the workspace's middle panel.
-	const openedAppRef = useRef<string | null>(null);
-	const openAppInChat = useCallback((d: { app: string; surface?: string }) => {
-		if (!d?.app || openedAppRef.current === d.app) return; // dedupe stash+event
-		openedAppRef.current = d.app;
+	// Emit the deterministic opener line + chips for `app` (appended to the
+	// current — usually just-cleared — transcript). Marks the app as opened.
+	const emitAppOpener = useCallback((app: string) => {
+		openedAppRef.current = app;
 		void Promise.all([
 			prefetchAppLabels(),
 			me.listWorkflows('scheduled').then((r) => r.workflows || []).catch(() => [] as MeWorkflowRow[]),
 		]).then(([, rows]) => {
-			const label = appTitle(d.app);
-			setStudioSelection({ kind: 'app', id: d.app, label, affordances: ['app_action', 'app_read', 'run_loop_now', 'list_loops'] });
-			const st = summarizeAppState(d.app, rows);
-			setMessages((prev) => [...prev, {
-				role: 'assistant',
-				content: openerLine(d.app, st),
-				chips: chipsForApp(d.app, rows),
-			}]);
+			setStudioSelection({ kind: 'app', id: app, label: appTitle(app), affordances: ['app_action', 'app_read', 'run_loop_now', 'list_loops'] });
+			const st = summarizeAppState(app, rows);
+			setMessages((prev) => [...prev, { role: 'assistant', content: openerLine(app, st), chips: chipsForApp(app, rows) }]);
 		});
 	}, []);
+	// Clear the in-memory session (keeps currentAppRef binding).
+	const clearSession = useCallback(() => {
+		setMessages([]);
+		setChatId(null);
+		claudeSessionRef.current = null;
+		lastSavedSigRef.current = '';
+		try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+	}, []);
+
+	const openAppInChat = useCallback((d: { app: string; surface?: string }) => {
+		if (!d?.app) return;
+		const app = d.app;
+		// Already on this app's session (opener emitted) → nothing to do.
+		if (openedAppRef.current === app && currentAppRef.current === app) return;
+		if (inFlightRef.current) return; // don't yank the session mid-stream
+
+		const wasApp = currentAppRef.current;
+		currentAppRef.current = app;
+
+		// Same app, session already present (e.g. opener not yet emitted on this
+		// mount) — just emit the opener into the existing thread.
+		if (wasApp === app) { emitAppOpener(app); return; }
+
+		// Switching apps → resume this app's latest saved session if any, else
+		// start a fresh session and emit the opener. Never append into the
+		// previous app's / the home session.
+		const saved = readAppChatMap()[app];
+		if (saved) {
+			void loadThread(saved).then((res) => {
+				if (res === false) { writeAppChat(app, null); clearSession(); emitAppOpener(app); }
+			});
+		} else {
+			clearSession();
+			emitAppOpener(app);
+		}
+	}, [loadThread, emitAppOpener, clearSession]);
+
+	// "New chat" — starts a fresh session. In an app context it stays bound to
+	// the app (a NEW session for that app) and re-emits the opener; on the home
+	// it's a plain empty chat. (Distinct from loadThread / resuming.)
+	const newAppSession = useCallback(() => {
+		if (inFlightRef.current) return;
+		const app = currentAppRef.current;
+		clearSession();
+		setHistoryOpen(false);
+		if (app) {
+			writeAppChat(app, null); // don't auto-resume the old one
+			openedAppRef.current = null;
+			emitAppOpener(app);
+		}
+	}, [clearSession, emitAppOpener]);
+
+	// Pick a thread from the session picker. Loads it and, if it belongs to a
+	// DIFFERENT app than the workspace currently shows, switches the middle
+	// panel to that app too (the session and the workspace stay in lockstep).
+	const pickThread = useCallback((h: HistoryRow) => {
+		setHistoryOpen(false);
+		// Set the app binding synchronously so the studio:open-app fired by the
+		// upcoming navigation early-returns instead of resuming the app default.
+		currentAppRef.current = h.app || null;
+		openedAppRef.current = h.app || null;
+		void loadThread(h.id);
+		if (h.app) navigate(`/studio/apps/${encodeURIComponent(h.app)}`);
+	}, [loadThread, navigate]);
 
 	// The chat mounts only at /studio now — asks fired elsewhere are
 	// stashed by the shell (studio_pending_ask_v1) before navigating
@@ -969,6 +1060,8 @@ export function StudioChat({ docked = false }: { docked?: boolean } = {}) {
 		} catch { /* stale/invalid stash — ignore */ }
 		const onNew = () => {
 			setMessages([]);
+			currentAppRef.current = null;
+			openedAppRef.current = null;
 			try { sessionStorage.removeItem(STORAGE_KEY); sessionStorage.removeItem('studio_new_chat_v1'); } catch { /* ignore */ }
 		};
 		const onOpenApp = (e: Event) => {
@@ -1079,6 +1172,71 @@ export function StudioChat({ docked = false }: { docked?: boolean } = {}) {
 	const [stripSlot, setStripSlot] = useState<HTMLElement | null>(null);
 	useEffect(() => { setStripSlot(document.getElementById('topstrip-app-slot')); }, []);
 
+	// Chat chrome (context · artifacts · session picker · clear). Rendered into
+	// the top strip on the home (!docked) and inline at the top of the docked
+	// app chat — so the session picker is ALWAYS available (it had vanished in
+	// docked mode). The picker groups by app and switches the workspace when a
+	// session for another app is chosen.
+	const chromeEl = (
+		<div data-studio-picker-chrome="1" className="flex items-center gap-0.5">
+			<ContextIconButton
+				streaming={streaming}
+				agents={agents}
+				agentId={agentId}
+				selectAgent={selectAgent}
+				personas={personas}
+				personaId={personaId}
+				selectPersona={selectPersona}
+			/>
+			<ArtifactIconButton />
+			<div className="relative">
+				<button
+					onClick={() => { const next = !historyOpen; setHistoryOpen(next); if (next) loadHistory(); }}
+					title="Conversations" aria-label="Conversations" aria-expanded={historyOpen}
+					className={['p-1.5 rounded-md transition-colors', historyOpen ? 'text-gold-700 bg-gold-50' : 'text-muted-foreground hover:text-foreground hover:bg-muted'].join(' ')}
+				>
+					<MessageSquarePlus className="w-3.5 h-3.5" />
+				</button>
+				{historyOpen && (
+					<div className="absolute right-0 top-full mt-1 z-50 w-72 max-h-96 overflow-y-auto rounded-xl border border-border bg-popover shadow-lg shadow-foreground/5 p-1" onClick={(e) => e.stopPropagation()}>
+						<button type="button" onClick={newAppSession}
+							className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] text-foreground hover:bg-gold-50 hover:text-gold-800 transition-colors">
+							<Plus className="w-3.5 h-3.5 text-gold-600" />
+							<span className="font-medium">New chat{currentAppRef.current ? ` · ${appTitle(currentAppRef.current)}` : ''}</span>
+						</button>
+						<div className="h-px bg-muted my-1 mx-2" />
+						{history.length === 0 && (
+							<div className="px-2.5 py-1.5 text-[11px] text-muted-foreground italic">No saved conversations yet.</div>
+						)}
+						{history.map((h) => (
+							<div key={h.id} className={['group flex items-center gap-1 px-1 py-0.5 rounded-lg transition-colors', h.id === chatId ? 'bg-gold-50/60' : 'hover:bg-muted/60'].join(' ')}>
+								<button type="button" onClick={() => pickThread(h)} className="flex-1 min-w-0 text-left px-1.5 py-1">
+									<div className="text-[12.5px] font-medium text-foreground truncate">{h.title}</div>
+									<div className="text-[10px] text-muted-foreground flex items-center gap-1">
+										{h.app && <><span className="text-gold-700 font-medium truncate max-w-[110px]">{appTitle(h.app)}</span><span>·</span></>}
+										<span>{h.msg_count} msg</span>
+										<span>·</span>
+										<span>{relativeTime(h.updated_at)}</span>
+									</div>
+								</button>
+								<button type="button" onClick={() => deleteThread(h.id)} title="Delete"
+									className="p-1 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-rose-600 transition-all">
+									<Trash2 className="w-3 h-3" />
+								</button>
+							</div>
+						))}
+					</div>
+				)}
+			</div>
+			{messages.length > 0 && (
+				<button onClick={clear} title="Clear (without deleting)" aria-label="Clear conversation (without deleting)"
+					className="p-1.5 rounded-md text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition-colors">
+					<Trash2 className="w-3.5 h-3.5" />
+				</button>
+			)}
+		</div>
+	);
+
 	// The chat IS the main surface now (claude.ai layout) — mounted as
 	// the /studio route's page content, a centered column that fills the
 	// area under the shell header. The old right-rail collapse/resize
@@ -1112,106 +1270,14 @@ export function StudioChat({ docked = false }: { docked?: boolean } = {}) {
 				onPickFiles(e.dataTransfer.files);
 			}}
 		>
-			{/* Chat actions render in the shell top bar (one aligned row with the
-			    live/status pills) — the chat column has NO header bar of its own,
-			    so there's no second misaligned bar. */}
-			{!docked && stripSlot && createPortal(
-				<div data-studio-picker-chrome="1" className="flex items-center gap-0.5">
-					<ContextIconButton
-						streaming={streaming}
-						agents={agents}
-						agentId={agentId}
-						selectAgent={selectAgent}
-						personas={personas}
-						personaId={personaId}
-						selectPersona={selectPersona}
-					/>
-					<ArtifactIconButton />
-
-					{/* History dropdown — anchored relative; popover below
-					    shows recent threads + "New chat". Click outside to
-					    close (window click handler below). */}
-					<div className="relative">
-						<button
-							onClick={() => {
-								const next = !historyOpen;
-								setHistoryOpen(next);
-								if (next) loadHistory();
-							}}
-							title="Conversation history"
-							aria-label="Conversation history"
-							aria-expanded={historyOpen}
-							className={[
-								'p-1.5 rounded-md transition-colors',
-								historyOpen ? 'text-gold-700 bg-gold-50' : 'text-muted-foreground hover:text-foreground hover:bg-muted',
-							].join(' ')}
-						>
-							<MessageSquarePlus className="w-3.5 h-3.5" />
-						</button>
-						{historyOpen && (
-							<div
-								className="absolute right-0 top-full mt-1 z-50 w-72 max-h-96 overflow-y-auto rounded-xl border border-border bg-popover shadow-lg shadow-foreground/5 p-1"
-								onClick={(e) => e.stopPropagation()}
-							>
-								<button
-									type="button"
-									onClick={newChat}
-									className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] text-foreground hover:bg-gold-50 hover:text-gold-800 transition-colors"
-								>
-									<Plus className="w-3.5 h-3.5 text-gold-600" />
-									<span className="font-medium">New chat</span>
-								</button>
-								<div className="h-px bg-muted my-1 mx-2" />
-								{history.length === 0 && (
-									<div className="px-2.5 py-1.5 text-[11px] text-muted-foreground italic">
-										No saved threads yet.
-									</div>
-								)}
-								{history.map((h) => (
-									<div
-										key={h.id}
-										className={[
-											'group flex items-center gap-1 px-1 py-0.5 rounded-lg transition-colors',
-											h.id === chatId ? 'bg-gold-50/60' : 'hover:bg-muted/60',
-										].join(' ')}
-									>
-										<button
-											type="button"
-											onClick={() => loadThread(h.id)}
-											className="flex-1 min-w-0 text-left px-1.5 py-1"
-										>
-											<div className="text-[12.5px] font-medium text-foreground truncate">{h.title}</div>
-											<div className="text-[10px] text-muted-foreground flex items-center gap-1">
-												<span>{h.msg_count} msg</span>
-												<span>·</span>
-												<span>{relativeTime(h.updated_at)}</span>
-											</div>
-										</button>
-										<button
-											type="button"
-											onClick={() => deleteThread(h.id)}
-											title="Delete"
-											className="p-1 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-rose-600 transition-all"
-										>
-											<Trash2 className="w-3 h-3" />
-										</button>
-									</div>
-								))}
-							</div>
-						)}
-					</div>
-					{messages.length > 0 && (
-						<button
-							onClick={clear}
-							title="Clear (without deleting from history)"
-							aria-label="Clear conversation (without deleting from history)"
-							className="p-1.5 rounded-md text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition-colors"
-						>
-							<Trash2 className="w-3.5 h-3.5" />
-						</button>
-					)}
-				</div>,
-				stripSlot,
+			{/* Home: chrome renders into the shell top bar. Docked (app page):
+			    chrome renders inline at the top of the chat column, so the session
+			    picker is always available. */}
+			{!docked && stripSlot && createPortal(chromeEl, stripSlot)}
+			{docked && (
+				<div className="flex items-center justify-end gap-0.5 px-2 pt-1.5 pb-1 flex-shrink-0">
+					{chromeEl}
+				</div>
 			)}
 
 			<div
