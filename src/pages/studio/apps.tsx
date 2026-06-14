@@ -13,10 +13,8 @@
 // the panel).
 
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ChevronRight, ArrowRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2, Inbox, Loader2, RotateCcw, X, Plus, PanelLeftClose, PanelLeftOpen } from "lucide-react";
-import { usePortalTarget } from "@/hooks/usePortalTarget";
+import { ChevronRight, ChevronDown, Check, ArrowRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2, Inbox, Loader2, RotateCcw, X, Plus } from "lucide-react";
 import { SpiralOverlay } from "@/components/BrandLoader";
 import { toast } from "sonner";
 import { me, type MeWorkflowRow, type MeAppCard } from "@/api/me";
@@ -24,6 +22,9 @@ import { takePendingCustomize } from "@/lib/just-installed";
 import apiClient from "@/api/client";
 import { iconFor, APP_NAV_INVALIDATE } from "@/components/useAppNav";
 import { setStudioSelection } from "@/components/StudioContext";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { TONES, workflowTone } from "@/lib/tones";
+import { describeSchedule } from "@/lib/schedule";
 import { Skeleton, humanizeLoop, loopLabel } from "@/pages/app-revamp/loops";
 import { QuickStarters } from "@/components/studio/QuickStarters";
 import WorkflowComposer from "@/components/WorkflowComposer";
@@ -39,7 +40,6 @@ import LoopOrbit, { type LoopMode, type LoopStageKey } from "@/components/workfl
 // charts (recharts → vendor-charts) that only the per-app overview renders.
 // They load on demand when an overview actually mounts them.
 const WorkflowObservabilityPanel = lazy(() => import("@/components/workflow/WorkflowObservabilityPanel"));
-const WorkflowList = lazy(() => import("@/components/workflow/WorkflowList"));
 const DatasetExplorer = lazy(() => import("@/components/workflow/DatasetExplorer"));
 // An app with no scheduled workflows is a UI-surface app (GPU Rentals, Lumid
 // Market, …). Rather than a dead-end "no workflows" message, show its actual
@@ -670,6 +670,47 @@ function StatChip({
 
 interface Row { loop: string; wf: MeWorkflowRow; lh?: LoopHealth }
 
+const wfDot = (wf: MeWorkflowRow) => cn("w-2 h-2 rounded-full flex-shrink-0", TONES[workflowTone(wf)].dot);
+const wfSub = (wf: MeWorkflowRow) =>
+	`${describeSchedule(wf.trigger)}${wf.enabled === false ? " · paused" : ""}${wf.running ? " · running…" : (wf.last_run_ok === false && wf.enabled !== false ? " · failed" : "")}`;
+
+// WorkflowSelect — the workflow list consolidated into a dropdown. The trigger
+// shows the active workflow (status dot + name + count); the popover lists all
+// workflows to switch. Replaces the left-rail master list so the panel shows
+// only the selected workflow's content.
+function WorkflowSelect({ rows, selected, onSelect }: { rows: Row[]; selected: string | null; onSelect: (loop: string) => void }) {
+	const [open, setOpen] = useState(false);
+	const cur = rows.find((r) => r.loop === selected) ?? rows[0];
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger asChild>
+				<button className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition-colors max-w-full">
+					<span className={wfDot(cur.wf)} />
+					<span className="text-[13px] font-medium text-slate-800 truncate">{loopLabel(cur.wf.name, cur.loop)}</span>
+					<span className="text-[11px] text-slate-400 flex-shrink-0">· {rows.length} workflows</span>
+					<ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" />
+				</button>
+			</PopoverTrigger>
+			<PopoverContent align="start" className="w-72 p-1 max-h-[60vh] overflow-y-auto">
+				{rows.map(({ loop, wf }) => {
+					const active = loop === cur.loop;
+					return (
+						<button key={loop} type="button" onClick={() => { onSelect(loop); setOpen(false); }}
+							className={cn("w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left transition-colors", active ? "bg-gold-50" : "hover:bg-muted")}>
+							<span className={wfDot(wf)} />
+							<span className="flex-1 min-w-0">
+								<span className="block text-[12.5px] font-medium text-slate-800 truncate">{loopLabel(wf.name, loop)}</span>
+								<span className="block text-[10.5px] text-slate-400 truncate">{wfSub(wf)}</span>
+							</span>
+							{active && <Check className="w-3.5 h-3.5 text-gold-600 flex-shrink-0" />}
+						</button>
+					);
+				})}
+			</PopoverContent>
+		</Popover>
+	);
+}
+
 // Stale-while-revalidate caches so re-opening an app renders instantly
 // (no skeleton flash) while a fresh fetch updates in the background.
 const rowsCache = new Map<string, Row[]>();
@@ -677,12 +718,6 @@ const identCache = new Map<string, AppIdentity | undefined>();
 
 export function AppOverview({ app, embedded, initialLoop }: { app: string; embedded?: boolean; initialLoop?: string | null }) {
 	const [rows, setRows] = useState<Row[] | null>(() => rowsCache.get(app) ?? null);
-	// Hide the workflow-list rail (left). Owned here so the toggle only exists
-	// when there IS a rail to hide (multi-workflow apps); single-workflow and
-	// surface apps render no list, so no toggle (was a no-op button before).
-	const [leftHidden, setLeftHidden] = useState<boolean>(() => { try { return localStorage.getItem("studio_ws_left_hidden") === "1"; } catch { return false; } });
-	useEffect(() => { try { localStorage.setItem("studio_ws_left_hidden", leftHidden ? "1" : "0"); } catch { /* ignore */ } }, [leftHidden]);
-	const leftToggleTarget = usePortalTarget("topstrip-ws-left", !!embedded);
 	const [identity, setIdentity] = useState<AppIdentity | undefined>(() => identCache.get(app));
 	const [deleting, setDeleting] = useState(false);
 	const navigate = useNavigate();
@@ -806,21 +841,8 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 	const effSelected = validSelected ?? validInitial ?? freshestLoop;
 	const selectedRow = rows?.find((r) => r.loop === effSelected) ?? null;
 
-	// The left rail (workflow list) exists only for multi-workflow apps — gate
-	// the toggle on that so it never appears with nothing to hide.
-	const hasLeftRail = (rows?.length ?? 0) > 1;
-
 	return (
 		<div className="space-y-5">
-			{/* Left-panel toggle, portaled into the top strip (single header row).
-			    Only when there's a workflow-list rail to hide. */}
-			{embedded && hasLeftRail && leftToggleTarget && createPortal(
-				<button onClick={() => setLeftHidden((v) => !v)} title={leftHidden ? "Show workflow list" : "Hide workflow list"}
-					className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-					{leftHidden ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
-				</button>,
-				leftToggleTarget,
-			)}
 			{!embedded && (
 				<Link to="/studio/apps" className="inline-flex items-center text-sm text-slate-500 hover:text-slate-900 gap-1">
 					<ChevronRight className="w-4 h-4 rotate-180" /> My Apps
@@ -867,59 +889,38 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 					</Suspense>
 				</div>
 			) : (
-				<div className="space-y-2.5">
-					<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-400 uppercase">Workflows</div>
-					{/* Master–detail: list left, ONE detail card right. A single-
-					    workflow app skips the list entirely. Suspense boundary for
-					    the lazy DAG/charts panels (kept out of the index chunk). */}
+				// The workflow LIST is consolidated into a dropdown (top-left), so the
+				// panel shows only the selected workflow's content full-width. Datasets
+				// sit below. Suspense boundary for the lazy DAG/charts panels.
+				<div className="space-y-3.5">
+					<div className="flex items-center gap-2 flex-wrap">
+						{rows.length > 1 && (
+							<WorkflowSelect rows={rows} selected={effSelected} onSelect={select} />
+						)}
+						<button
+							type="button"
+							onClick={() => navigate(`/studio/a/${encodeURIComponent(app)}/manage`)}
+							className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-dashed border-border text-[12.5px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+						>
+							<Plus className="w-3.5 h-3.5" /> New workflow
+						</button>
+					</div>
 					<Suspense fallback={<Skeleton lines={3} />}>
-					{rows.length === 1 ? (
-						selectedRow && (
-							<div id="wf-detail">
+						<div id="wf-detail" className="min-w-0">
+							{selectedRow && (
 								<WorkflowObservabilityPanel
 									app={app} loop={selectedRow.loop} wf={selectedRow.wf} loopHealth={selectedRow.lh}
-									onChanged={load} initialCycle={initialCycle}
+									onChanged={load}
+									initialCycle={(rows.length === 1 || effSelected === (selected ?? initialLoop)) ? initialCycle : null}
+									canDelete={isTenantApp && rows.length > 1}
+									onDelete={() => delLoop(selectedRow.loop, loopLabel(selectedRow.wf.name, selectedRow.loop))}
 								/>
-							</div>
-						)
-					) : (
-						<div className={leftHidden ? "" : "lg:grid lg:grid-cols-[300px_minmax(0,1fr)] lg:gap-5 lg:items-start"}>
-							{!leftHidden && (
-							<div className="lg:sticky lg:top-4 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto mb-4 lg:mb-0 pr-0.5 space-y-5">
-								<WorkflowList
-									rows={rows}
-									selected={effSelected}
-									onSelect={select}
-								/>
-								{/* + New workflow — creation lived only in the Manage panel;
-								    surface it right under the list. */}
-								<button
-									type="button"
-									onClick={() => navigate(`/studio/a/${encodeURIComponent(app)}/manage`)}
-									className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-dashed border-border text-[12.5px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-								>
-									<Plus className="w-3.5 h-3.5" /> New workflow
-								</button>
-								{/* "What it's learned" removed (low signal). Datasets kept. */}
-								<div className="space-y-2">
-									<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-400 uppercase">Data it works on</div>
-									<DatasetExplorer app={app} />
-								</div>
-							</div>
 							)}
-							<div id="wf-detail" className="min-w-0">
-								{selectedRow && (
-									<WorkflowObservabilityPanel
-										app={app} loop={selectedRow.loop} wf={selectedRow.wf} loopHealth={selectedRow.lh}
-										onChanged={load}
-										initialCycle={effSelected === (selected ?? initialLoop) ? initialCycle : null}
-										canDelete={isTenantApp && rows.length > 1}
-										onDelete={() => delLoop(selectedRow.loop, loopLabel(selectedRow.wf.name, selectedRow.loop))}
-									/>
-								)}
-							</div>
 						</div>
-					)}
+						<div className="space-y-2 pt-1">
+							<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-400 uppercase">Data it works on</div>
+							<DatasetExplorer app={app} />
+						</div>
 					</Suspense>
 				</div>
 			)}

@@ -618,18 +618,21 @@ html {
 	animation: panelInLeft 0.38s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-/* Spiral-spin — the Lumid spiral mark as the loading indicator: a slow,
-   continuous rotation (the brand's own "logo as spinner"). */
-@keyframes spiralSpin {
-	from { transform: rotate(0deg); }
-	to   { transform: rotate(360deg); }
+/* Spiral-rise — the Lumid spiral mark as the loading indicator: it emerges from
+   the bottom up (a clip-reveal + slight rise), holds, then fades and re-emerges
+   — a looping "slide-up" reveal rather than a rotation. */
+@keyframes spiralRise {
+	0%   { clip-path: inset(100% 0 0 0); transform: translateY(22%); opacity: 0; }
+	50%  { clip-path: inset(0% 0 0 0);   transform: translateY(0);   opacity: 1; }
+	78%  { clip-path: inset(0% 0 0 0);   transform: translateY(0);   opacity: 1; }
+	100% { clip-path: inset(0% 0 0 0);   transform: translateY(-12%); opacity: 0; }
 }
-.spiral-spin {
-	animation: spiralSpin 2.4s linear infinite;
-	will-change: transform;
+.spiral-rise {
+	animation: spiralRise 1.9s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+	will-change: transform, clip-path, opacity;
 }
 @media (prefers-reduced-motion: reduce) {
-	.spiral-spin { animation: none; }
+	.spiral-rise { animation: none; }
 }
 
 /* Heartbeat — the surface is alive (loops running in the background).

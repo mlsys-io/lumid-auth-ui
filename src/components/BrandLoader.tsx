@@ -15,7 +15,7 @@ const SPIRAL = "/auth/spiral.png";
 export function SpiralOverlay({ size = "w-9 h-9" }: { size?: string }) {
   return (
     <div className="pointer-events-none absolute inset-0 flex items-center justify-center z-10">
-      <img src={SPIRAL} alt="Loading" className={`spiral-spin ${size} drop-shadow-sm`} />
+      <img src={SPIRAL} alt="Loading" className={`spiral-rise ${size} drop-shadow-sm`} />
     </div>
   );
 }

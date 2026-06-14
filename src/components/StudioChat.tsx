@@ -1051,7 +1051,14 @@ export function StudioChat({ docked = false }: { docked?: boolean } = {}) {
 			if (sessionStorage.getItem('studio_new_chat_v1')) {
 				sessionStorage.removeItem('studio_new_chat_v1');
 				setMessages([]);
+				setChatId(null);
+				claudeSessionRef.current = null;
+				currentAppRef.current = null;
+				openedAppRef.current = null;
+				// A stale app-open stash (written by the workspace before nav) would
+				// otherwise re-ground this fresh chat with the app's opener — drop it.
 				sessionStorage.removeItem(STORAGE_KEY);
+				sessionStorage.removeItem('studio_open_app_v1');
 			}
 			const raw = sessionStorage.getItem('studio_pending_ask_v1');
 			if (raw) {
@@ -1064,19 +1071,32 @@ export function StudioChat({ docked = false }: { docked?: boolean } = {}) {
 					}, 50);
 				}
 			}
-			// Open-app intent (stashed by the route redirect when you navigate to
-			// an app): render its surface inline + ground the chat. No LLM turn.
+			// Open-app intent (stashed by the workspace when you enter an app):
+			// ground the docked app chat with the opener. The HOME chat (!docked)
+			// is app-less — it must never consume this, or a leftover stash would
+			// re-ground it with a stale app opener after "New chat"/brand click.
 			const openRaw = sessionStorage.getItem('studio_open_app_v1');
 			if (openRaw) {
-				sessionStorage.removeItem('studio_open_app_v1');
-				openAppInChat(JSON.parse(openRaw));
+				if (docked) {
+					sessionStorage.removeItem('studio_open_app_v1');
+					openAppInChat(JSON.parse(openRaw));
+				} else {
+					// Home chat: discard a stray stash so it can't ground later.
+					sessionStorage.removeItem('studio_open_app_v1');
+				}
 			}
 		} catch { /* stale/invalid stash — ignore */ }
 		const onNew = () => {
 			setMessages([]);
+			setChatId(null);
+			claudeSessionRef.current = null;
 			currentAppRef.current = null;
 			openedAppRef.current = null;
-			try { sessionStorage.removeItem(STORAGE_KEY); sessionStorage.removeItem('studio_new_chat_v1'); } catch { /* ignore */ }
+			try {
+				sessionStorage.removeItem(STORAGE_KEY);
+				sessionStorage.removeItem('studio_new_chat_v1');
+				sessionStorage.removeItem('studio_open_app_v1');
+			} catch { /* ignore */ }
 		};
 		const onOpenApp = (e: Event) => {
 			const d = (e as CustomEvent).detail;
