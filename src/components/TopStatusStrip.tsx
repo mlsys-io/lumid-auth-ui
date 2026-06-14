@@ -22,6 +22,7 @@ import {
 import { me, type MeWorkflowRow } from "@/api/me";
 import { RUNNING_APPS } from "@/lib/demo";
 import { appTitle } from "@/components/workflow/AppCard";
+import AppSwitcher from "@/components/studio/AppSwitcher";
 import { TONES, type ToneKey } from "@/lib/tones";
 import { loopLabel } from "@/lib/workflow-names";
 import { useStudioRefetch } from "@/hooks/useStudioRefetch";
@@ -227,6 +228,13 @@ export default function TopStatusStrip() {
 		() => /^\/studio\/apps\/[^/]+/.test(location.pathname) && location.pathname !== "/studio/apps/all",
 		[location.pathname],
 	);
+	// The app slug for the workspace identity (the AppSwitcher takes the "App"
+	// place in the strip rather than leaving the left corner empty).
+	const appSlug = useMemo(() => {
+		if (!isAppWorkspace) return "";
+		const m = location.pathname.match(/^\/studio\/apps\/([^/]+)/);
+		return m ? decodeURIComponent(m[1]) : "";
+	}, [isAppWorkspace, location.pathname]);
 
 	// Keep the browser tab honest — index.html ships a static title, so
 	// every page read "Sign in" forever. The leaf (app/run name) wins
@@ -310,9 +318,11 @@ export default function TopStatusStrip() {
 		<div className="flex-1 flex items-center justify-between gap-4 min-w-0">
 			{/* App surfaces portal their nav tabs here (AppSurface) — the strip
 			    otherwise sits empty on /studio/a/* and the tabs wasted a row. */}
-			{/* Left — page identity (hidden on app workspace pages; the
-			    in-page AppSwitcher owns the app name there) */}
-			{!isAppWorkspace && (
+			{/* Left — page identity. On an app workspace page the AppSwitcher
+			    takes the "App" place (the app name shown once, here in the strip). */}
+			{isAppWorkspace ? (
+				<AppSwitcher app={appSlug} />
+			) : (
 			<div className="min-w-0 flex items-start gap-2.5">
 				{Icon && (
 					<Icon className={["w-5 h-5 flex-shrink-0 mt-0.5", meta?.iconTone || ""].join(" ")} />

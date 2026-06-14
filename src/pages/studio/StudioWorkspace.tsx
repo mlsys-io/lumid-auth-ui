@@ -11,7 +11,6 @@ import { useParams, useNavigate } from "react-router-dom";
 import { PanelLeftClose, PanelLeftOpen, PanelRightClose, MessageSquare } from "lucide-react";
 import { StudioChat } from "@/components/StudioChat";
 import { useAppNav } from "@/components/useAppNav";
-import AppSwitcher from "@/components/studio/AppSwitcher";
 import { AppOverview } from "@/pages/studio/apps";
 
 const FEATURED_KEY = "studio_featured_app";
@@ -57,9 +56,9 @@ export default function StudioWorkspace() {
 						className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
 						{leftHidden ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
 					</button>
-					{app
-						? <AppSwitcher app={app} />
-						: <span className="font-display text-[16px] font-medium text-foreground px-1">No apps installed</span>}
+					{/* App identity lives in the top strip (AppSwitcher in the "App"
+					    place) — this sub-header keeps only the panel toggles. */}
+					{!app && <span className="font-display text-[16px] font-medium text-foreground px-1">No apps installed</span>}
 					{!chatOpen && (
 						<button onClick={() => setChatOpen(true)} title="Show chat"
 							className="ml-auto inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[12px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
