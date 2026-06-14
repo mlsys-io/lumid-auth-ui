@@ -70,7 +70,6 @@ interface NavItem {
 // API tokens live in the bottom avatar menu; "How it works" is a quiet
 // footer docs link.
 const TOP_NAV: NavItem[] = [
-	{ to: '/studio/apps',    label: 'Apps',    icon: Boxes, title: 'your apps + anything needing attention' },
 	{ to: '/studio/library', label: 'Library', icon: Store, title: 'marketplace, skills, and experiments' },
 ];
 // Jobs/Activity/Inbox are folded into Apps — the Apps hero's "runs today" stat
@@ -309,9 +308,9 @@ export function StudioShell() {
 				style={{ width: sidebarWidth }}
 				className="relative flex flex-col h-screen flex-shrink-0 bg-sidebar border-r border-sidebar-border sticky top-0"
 			>
-				<Link to="/studio" className="px-4 py-4 flex items-baseline">
+				<button onClick={newChat} title="New chat" className="px-4 py-4 flex items-baseline text-left">
 					<span className="font-display text-[18px] font-semibold tracking-tight text-foreground">Lumid Studio</span>
-				</Link>
+				</button>
 
 				<nav className="flex-1 overflow-y-auto px-2 py-3 space-y-px">
 					{/* Primary action — a quiet claude-style row, not a button. */}
