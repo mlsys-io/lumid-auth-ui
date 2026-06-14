@@ -19,24 +19,27 @@ import {
 	Sparkles, Inbox as InboxIcon,
 	Store, Brain, Settings, Shield, Activity as ActivityIcon, Boxes, ListChecks, LayoutDashboard,
 } from "lucide-react";
-import { me } from "@/api/me";
+import { me, type MeWorkflowRow } from "@/api/me";
 import { RUNNING_APPS } from "@/lib/demo";
 import { appTitle } from "@/components/workflow/AppCard";
 import { TONES, type ToneKey } from "@/lib/tones";
+import { loopLabel } from "@/lib/workflow-names";
 import { useStudioRefetch } from "@/hooks/useStudioRefetch";
+
+// One actionable item for the top-bar "Right now" ticker.
+interface TickerItem { key: string; tone: ToneKey; icon: React.ComponentType<{ className?: string }>; text: string; action: string; to: string }
+
+function loopOf(w: MeWorkflowRow): string {
+	const app = w.app || "";
+	if (app && w.slug.startsWith(app + ":")) return w.slug.slice(app.length + 1);
+	const i = w.slug.indexOf(":");
+	return i >= 0 ? w.slug.slice(i + 1) : w.slug;
+}
 
 // Same scope filter as the My Apps page: count only the user's own apps,
 // not operator-shared ones that listWorkflows() also returns — otherwise the
 // header's failing count diverges from the hero/cards (the "3 vs 1" bug).
 const inScope = (app?: string) => !app || (RUNNING_APPS as readonly string[]).includes(app);
-
-interface Counts {
-	drafts: number;
-	running: number;
-	failingToday: number;
-}
-
-const ZERO: Counts = { drafts: 0, running: 0, failingToday: 0 };
 
 // Per-route page identity. Subtitle is short — top-bar height is bounded.
 const PAGE_META: Array<{
@@ -202,7 +205,7 @@ function detailLeafFor(pathname: string): string | null {
 
 export default function TopStatusStrip() {
 	const location = useLocation();
-	const [counts, setCounts] = useState<Counts>(ZERO);
+	const [items, setItems] = useState<TickerItem[]>([]);
 	const [loaded, setLoaded] = useState(false);
 	const [refreshedAt, setRefreshedAt] = useState(() => Date.now());
 	const [, forceTick] = useState(0);
@@ -238,26 +241,28 @@ export default function TopStatusStrip() {
 				me.listDrafts({ state: "pending" }),
 			]);
 			let draftsCount = 0;
-			let failingToday = 0;
-			let running = 0;
 			if (drafts.status === "fulfilled") {
 				draftsCount = drafts.value.drafts.length;
 			}
+			// Build the "Right now" ticker items (failing → running → drafts).
+			// failing/running use the same scope + definitions as the app cards
+			// (last_run_ok===false, excluding paused; running = cycle in-flight).
+			const next: TickerItem[] = [];
 			if (wfR.status === "fulfilled") {
 				const wfs = (wfR.value.workflows || []).filter((w) => inScope(w.app));
-				// "failing" = workflows whose LAST run failed (last_run_ok===false)
-				// — the same definition as the red dots on the cards and the My
-				// Apps hero count. Previously this counted failed *cycles today*,
-				// which diverged from the dots (e.g. a workflow red since
-				// yesterday, or a failure not in today's cycle list).
-				// Exclude paused workflows — the attention rail does, and the
-				// pill disagreeing with the rail (2 vs 1) read as a bug.
-				failingToday = wfs.filter((w) => w.enabled !== false && w.last_run_ok === false).length;
-				// "running" = workflows with a cycle in-flight right now. Was
-				// hardcoded to 0, so the pill never appeared even mid-run.
-				running = wfs.filter((w) => w.running).length;
+				for (const w of wfs.filter((w) => w.enabled !== false && w.last_run_ok === false)) {
+					const loop = loopOf(w);
+					next.push({ key: w.slug, tone: "failing", icon: AlertTriangle, text: `${appTitle(w.app || "")} · ${loopLabel(w.name, loop)} failing`, action: "diagnose", to: `/studio/apps/${encodeURIComponent(w.app || "")}?selected=${encodeURIComponent(loop)}` });
+				}
+				for (const w of wfs.filter((w) => w.running)) {
+					const loop = loopOf(w);
+					next.push({ key: w.slug, tone: "running", icon: Activity, text: `${appTitle(w.app || "")} · ${loopLabel(w.name, loop)} running`, action: "watch", to: `/studio/apps/${encodeURIComponent(w.app || "")}?selected=${encodeURIComponent(loop)}` });
+				}
 			}
-			setCounts({ drafts: draftsCount, running, failingToday });
+			if (draftsCount > 0) {
+				next.push({ key: "drafts", tone: "ok", icon: FileText, text: `${draftsCount} draft${draftsCount === 1 ? "" : "s"} awaiting you`, action: "review", to: "/studio/inbox" });
+			}
+			setItems(next);
 			setRefreshedAt(Date.now());
 			setLoaded(true);
 		} catch {
@@ -336,68 +341,45 @@ export default function TopStatusStrip() {
 					<span className="w-1.5 h-1.5 rounded-full bg-gold-500 heartbeat" />
 					<span className="hidden sm:inline">live{(() => { const a = Math.max(0, Math.floor((Date.now() - refreshedAt) / 1000)); return a < 3 ? "" : a < 60 ? ` · ${a}s ago` : ` · ${Math.floor(a / 60)}m ago`; })()}</span>
 				</span>
-				{loaded && counts.drafts > 0 && (
-					<StatusPill
-						to="/studio/inbox"
-						icon={FileText}
-						count={counts.drafts}
-						label="pending"
-						tone="ok"
-					/>
-				)}
-				{loaded && counts.running > 0 && (
-					<StatusPill
-						to="/studio/apps"
-						icon={Activity}
-						count={counts.running}
-						label="running"
-						tone="running"
-						pulse
-					/>
-				)}
-				{loaded && counts.failingToday > 0 && (
-					<StatusPill
-						to="/studio/apps?attention=1"
-						icon={AlertTriangle}
-						count={counts.failingToday}
-						label="failing"
-						tone="failing"
-					/>
-				)}
+				{loaded && <RightNowTicker items={items} />}
 			</div>
 		</div>
 	);
 }
 
-function StatusPill({
-	to, icon: Icon, count, label, tone, pulse = false,
-}: {
-	to: string;
-	icon: React.ComponentType<{ className?: string }>;
-	count: number;
-	label: string;
-	tone: ToneKey;
-	pulse?: boolean;
-}) {
-	const t = TONES[tone];
+// RightNowTicker — the live digest as a single flipping line in the top-right.
+// Shows ONE actionable item at a time (failing → running → drafts), auto-
+// advancing every 4s with a quiet flip-in; each is a link to the relevant
+// place. Replaces the old static count pills.
+function RightNowTicker({ items }: { items: TickerItem[] }) {
+	const [i, setI] = useState(0);
+	useEffect(() => { setI(0); }, [items.length]);
+	useEffect(() => {
+		if (items.length <= 1) return;
+		const id = window.setInterval(() => setI((x) => (x + 1) % items.length), 4000);
+		return () => window.clearInterval(id);
+	}, [items.length]);
+	if (items.length === 0) return null;
+	const it = items[Math.min(i, items.length - 1)];
+	const t = TONES[it.tone];
+	const Icon = it.icon;
 	return (
 		<Link
-			to={to}
-			className={[
-				"inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] rounded-full border transition-all",
-				t.bg, t.text, t.border,
-			].join(" ")}
-			title={`${count} ${label}`}
+			to={it.to}
+			title={`Right now — ${it.text}`}
+			className="group inline-flex items-center gap-2 min-w-0 max-w-[260px] sm:max-w-[340px] px-2.5 py-1 rounded-full border border-border bg-card hover:bg-muted transition-colors"
 		>
-			<span className="relative inline-flex">
-				<span className={["w-1.5 h-1.5 rounded-full", t.dot].join(" ")} />
-				{pulse && (
-					<span className={["absolute inset-0 w-1.5 h-1.5 rounded-full animate-ping opacity-75", t.dot].join(" ")} />
-				)}
+			<span className="text-[9px] uppercase tracking-[0.08em] font-semibold text-muted-foreground/70 shrink-0 hidden lg:inline">Now</span>
+			{/* keyed so it re-mounts (and re-animates) on each flip */}
+			<span key={`${it.key}-${i}`} className="inline-flex items-center gap-1.5 min-w-0 animate-in fade-in slide-in-from-bottom-1 duration-300">
+				<Icon className={["w-3.5 h-3.5 shrink-0", t.icon].join(" ")} />
+				<span className="truncate text-[12px] text-foreground">{it.text}</span>
+				<span className={["text-[11px] font-medium shrink-0", t.text].join(" ")}>{it.action}</span>
 			</span>
-			<Icon className="w-3 h-3" />
-			<span className="font-mono tabular-nums font-semibold">{count}</span>
-			<span className="hidden sm:inline">{label}</span>
+			{items.length > 1 && (
+				<span className="text-[9px] text-muted-foreground/60 tabular-nums shrink-0">{i + 1}/{items.length}</span>
+			)}
 		</Link>
 	);
 }
+

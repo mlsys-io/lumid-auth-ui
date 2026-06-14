@@ -1109,7 +1109,7 @@ export function StudioChat() {
 			    live/status pills) — the chat column has NO header bar of its own,
 			    so there's no second misaligned bar. */}
 			{stripSlot && createPortal(
-				<div data-studio-picker-chrome="1" className="flex items-center gap-0.5 ml-auto">
+				<div data-studio-picker-chrome="1" className="flex items-center gap-0.5">
 					<ContextIconButton
 						streaming={streaming}
 						agents={agents}

@@ -1,41 +1,22 @@
-// ChatEmptyState — what the chat (the /studio main surface) shows
-// before the first message, claude.ai-home style.
+// ChatEmptyState — the context-aware "try asking" chips shown BELOW the
+// composer before the first message (claude.ai-home style).
 //
-// Two pieces, because the composer card sits between them in the page:
+//   <ChatHero />        — golden spiral + serif greeting. Rendered ABOVE the
+//                         composer.
+//   <ChatEmptyState />  — the suggestion chips, rendered BELOW the composer.
 //
-//   <ChatHero />        — lone coral ✳ + serif "Good evening, Yao" +
-//                         one-line promise. Rendered ABOVE the composer.
-//   <ChatEmptyState />  — the grounded content rendered BELOW it:
-//     1. "Right now" — a digest of what's actually happening (failing /
-//        running workflows, pending drafts), each row one click from a
-//        grounded chat action (the prompt ships ViewingContext overrides).
-//     2. Context prompts — "try asking" pills that change with the page.
-//     3. Capability-gated starter pills.
-//
-// Data comes from the same endpoints the pages poll (listWorkflows +
-// drafts); refreshes on the chat→page bus so a fix reflects here too.
+// The live "Right now" digest moved to the top-bar ticker (TopStatusStrip),
+// which is present on every page — so it's no longer duplicated here.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { Lock, AlertTriangle, Activity, FileText } from 'lucide-react';
-import { me, type MeWorkflowRow } from '@/api/me';
+import { useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { useCapabilities } from '@/hooks/useCapabilities';
-import { useStudioRefetch } from '@/hooks/useStudioRefetch';
-import { STARTERS, missingReq, CONNECT_ROUTE } from '@/components/studio/starters';
 import { buildViewingContext, type ViewingContext } from '@/components/StudioContext';
 import { appTitle } from '@/components/workflow/AppCard';
 import { loopLabel } from '@/lib/workflow-names';
 
 const fire = (prompt: string, context?: Partial<ViewingContext>) =>
 	window.dispatchEvent(new CustomEvent('studio:ask', { detail: { prompt, autosend: true, context } }));
-
-function loopOf(w: MeWorkflowRow): string {
-	const app = w.app || '';
-	if (app && w.slug.startsWith(app + ':')) return w.slug.slice(app.length + 1);
-	const i = w.slug.indexOf(':');
-	return i >= 0 ? w.slug.slice(i + 1) : w.slug;
-}
 
 // ChatHero — the greeting block above the composer card.
 export function ChatHero() {
@@ -119,113 +100,22 @@ const PILL =
 	'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-card text-[12px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors';
 
 export default function ChatEmptyState() {
-	const caps = useCapabilities();
-	const navigate = useNavigate();
 	const location = useLocation();
-	const [wfs, setWfs] = useState<MeWorkflowRow[]>([]);
-	const [draftCount, setDraftCount] = useState(0);
-
-	// `live` guards against setState after unmount — load() runs on mount AND
-	// from the refetch bus, so a request can resolve after the user has
-	// navigated off /studio (mirrors the AppSurfaceCard pattern).
-	const liveRef = useRef(true);
-	useEffect(() => {
-		liveRef.current = true;
-		return () => { liveRef.current = false; };
-	}, []);
-	const load = () => {
-		me.listWorkflows()
-			.then((r) => { if (liveRef.current) setWfs((r.workflows || []).filter((w) => w.tenant || w.showcase)); })
-			.catch(() => { /* digest just stays empty */ });
-		me.listDrafts({ state: 'pending' })
-			.then((r) => { if (liveRef.current) setDraftCount(r.drafts?.length || 0); })
-			.catch(() => { /* ignore */ });
-	};
-	useEffect(load, []);
-	useStudioRefetch(['workflows', 'loops', 'drafts'], load);
-
-	// "Right now" shows at most TWO items, priority failing → running → drafts.
-	const failing = wfs.filter((w) => w.enabled !== false && w.last_run_ok === false).slice(0, 2);
-	const running = wfs.filter((w) => w.running).slice(0, Math.max(0, 2 - failing.length));
-	const showDrafts = draftCount > 0 && failing.length + running.length < 2;
-	const hasDigest = failing.length > 0 || running.length > 0 || showDrafts;
-
 	const ctx = useMemo(
 		() => buildViewingContext(location.pathname, location.search),
 		[location.pathname, location.search],
 	);
 	const samples = samplesFor(ctx);
-	const starters = STARTERS.slice(0, 3);
 
+	// One quiet row of context-aware suggestions, capped at 3 — the live digest
+	// now lives in the top-bar "Right now" ticker.
 	return (
-		<div className="max-w-[640px] mx-auto w-full space-y-2.5">
-			{/* ── Right now — the live digest; each row is a grounded action ── */}
-			{hasDigest && (
-				<div className="space-y-1.5">
-					<div className="text-[10.5px] tracking-[0.08em] font-medium text-muted-foreground uppercase px-0.5">Right now</div>
-					{failing.map((w) => {
-						const loop = loopOf(w);
-						return (
-							<button
-								key={w.slug}
-								onClick={() => fire(
-									`The ${loopLabel(w.name, loop)} workflow in ${w.app} is failing — diagnose it and tell me how to fix it.`,
-									{ app: w.app, loop },
-								)}
-								className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-card border border-border hover:bg-muted transition-colors text-left text-[12.5px]"
-							>
-								<AlertTriangle className="w-3.5 h-3.5 shrink-0 text-rose-600" />
-								<span className="flex-1 min-w-0 truncate text-foreground">
-									{appTitle(w.app || '')} · {loopLabel(w.name, loop)} failing
-								</span>
-								<span className="text-[11px] font-medium text-rose-700 shrink-0">diagnose</span>
-							</button>
-						);
-					})}
-					{running.map((w) => {
-						const loop = loopOf(w);
-						return (
-							<button
-								key={w.slug}
-								onClick={() => fire(
-									`The ${loopLabel(w.name, loop)} workflow is running right now — what is it doing?`,
-									{ app: w.app, loop },
-								)}
-								className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-card border border-border hover:bg-muted transition-colors text-left text-[12.5px]"
-							>
-								<Activity className="w-3.5 h-3.5 shrink-0 text-sky-600 animate-pulse" />
-								<span className="flex-1 min-w-0 truncate text-foreground">
-									{appTitle(w.app || '')} · {loopLabel(w.name, loop)} running
-								</span>
-								<span className="text-[11px] font-medium text-sky-700 shrink-0">watch</span>
-							</button>
-						);
-					})}
-					{showDrafts && (
-						<button
-							onClick={() => fire(`I have ${draftCount} pending draft${draftCount === 1 ? '' : 's'} — walk me through them.`)}
-							className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-card border border-border hover:bg-muted transition-colors text-left text-[12.5px]"
-						>
-							<FileText className="w-3.5 h-3.5 shrink-0 text-gold-600" />
-							<span className="flex-1 min-w-0 truncate text-foreground">
-								{draftCount} draft{draftCount === 1 ? '' : 's'} awaiting you
-							</span>
-							<span className="text-[11px] font-medium text-gold-700 shrink-0">review</span>
-						</button>
-					)}
-				</div>
-			)}
-
-			{/* One quiet row of context-aware suggestions — capped at 3 so the
-			    empty state stays calm (was two rows = six boxes). Setup actions
-			    live on the Apps page's launcher, not here. */}
-			<div className="flex flex-wrap justify-center gap-1.5">
-				{samples.slice(0, 3).map((s) => (
-					<button key={s.label} onClick={() => fire(s.prompt, s.context)} className={PILL}>
-						{s.label}
-					</button>
-				))}
-			</div>
+		<div className="flex flex-wrap justify-center gap-1.5 max-w-[640px] mx-auto w-full">
+			{samples.slice(0, 3).map((s) => (
+				<button key={s.label} onClick={() => fire(s.prompt, s.context)} className={PILL}>
+					{s.label}
+				</button>
+			))}
 		</div>
 	);
 }
