@@ -177,8 +177,9 @@ function deriveMeta(pathname: string) {
 // hop worth surfacing. Two-segment max; the page title (above) carries
 // the leaf identity.
 function deriveCrumbs(pathname: string): Array<{ label: string; to: string }> {
-	const ma = pathname.match(/^\/studio\/apps\/([^/]+)/);
-	if (ma) return [{ label: "My Apps", to: "/studio/apps" }];
+	// /studio/apps/:app is the workspace — its in-page AppSwitcher owns the app
+	// identity, so the top bar shows no "My Apps / <app>" crumb (was printed
+	// twice). /apps/all (the grid) keeps no crumb either.
 	const m2 = pathname.match(/^\/studio\/runs\/([^/]+)/);
 	if (m2) return [{ label: "Activity", to: "/studio/runs" }];
 	// Cycle inspector is reached from an app's workflow panel.
@@ -194,8 +195,8 @@ function deriveCrumbs(pathname: string): Array<{ label: string; to: string }> {
 }
 
 function detailLeafFor(pathname: string): string | null {
-	const ma = pathname.match(/^\/studio\/apps\/([^/]+)/);
-	if (ma) return appTitle(decodeURIComponent(ma[1]));
+	// apps/:app handled by the in-page AppSwitcher (no top-bar leaf) — but keep
+	// the document.title useful below via the meta title.
 	const m2 = pathname.match(/^\/studio\/runs\/([^/]+)/);
 	if (m2) return decodeURIComponent(m2[1]);
 	const m4 = pathname.match(/^\/studio\/knowledge\/([^/]+)/);

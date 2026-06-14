@@ -123,7 +123,7 @@ type ModelOption = { id: string; display_name: string; default: boolean };
 // Mutually-exclusive tool-forcing modes. '' = let the agent decide.
 type ChatMode = '' | 'search' | 'deep_research';
 
-export function StudioChat() {
+export function StudioChat({ docked = false }: { docked?: boolean } = {}) {
 	const location = useLocation();
 	// `id` is the user_sub on the UserInfo shape from /api/v1/user; used
 	// to tag the persisted transcript so it can't leak across accounts.
@@ -1079,7 +1079,7 @@ export function StudioChat() {
 	return (
 		<div
 			data-studio-picker-chrome="1"
-			className={['relative z-20 flex flex-col flex-1 min-h-0 w-full max-w-[780px] mx-auto', messages.length === 0 ? 'justify-center' : ''].join(' ')}
+			className={['relative z-20 flex flex-col flex-1 min-h-0 w-full', docked ? '' : 'max-w-[780px] mx-auto', messages.length === 0 && !docked ? 'justify-center' : ''].join(' ')}
 			onDragEnter={(e) => {
 				if (!e.dataTransfer?.types?.includes('Files')) return;
 				e.preventDefault();
@@ -1108,7 +1108,7 @@ export function StudioChat() {
 			{/* Chat actions render in the shell top bar (one aligned row with the
 			    live/status pills) — the chat column has NO header bar of its own,
 			    so there's no second misaligned bar. */}
-			{stripSlot && createPortal(
+			{!docked && stripSlot && createPortal(
 				<div data-studio-picker-chrome="1" className="flex items-center gap-0.5">
 					<ContextIconButton
 						streaming={streaming}

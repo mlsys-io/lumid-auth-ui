@@ -81,7 +81,6 @@ const TOP_NAV: NavItem[] = [
 // chunk transfer over the FRP tunnel is the slow part of a first navigation).
 // Vite dedupes these dynamic imports with App.tsx's lazy() — same chunk.
 const ROUTE_PREFETCH: Record<string, () => Promise<unknown>> = {
-	"/studio/apps": () => import("@/pages/studio/apps"),
 	"/studio/library": () => import("@/pages/studio/library-tabs"),
 	"/studio/runs": () => import("@/pages/studio/runs"),
 };
@@ -91,8 +90,10 @@ function prefetchRoute(to: string) {
 	if (prefetched.has(norm)) return;
 	prefetched.add(norm);
 	const fn = ROUTE_PREFETCH[norm]
-		// per-app routes (/studio/a/<app>, /studio/apps/<app>) share the apps chunk
-		?? ((norm.startsWith("/studio/a/") || norm.startsWith("/studio/apps/")) ? () => import("@/pages/studio/apps") : undefined);
+		// the workspace (front + per-app) shares the StudioWorkspace + apps chunks
+		?? ((norm === "/studio/apps" || norm.startsWith("/studio/apps/") || norm.startsWith("/studio/a/"))
+			? () => Promise.all([import("@/pages/studio/StudioWorkspace"), import("@/pages/studio/apps")])
+			: undefined);
 	fn?.().catch(() => prefetched.delete(norm));
 }
 
@@ -199,13 +200,17 @@ export function StudioShell() {
 	const location = useLocation();
 	// Hosted /dashboard pages, app surfaces, and management need full width
 	// (admin tables, dataset explorers); core Studio pages stay narrow.
-	const chatHome = location.pathname === '/studio';
+	// The morphing workspace (front + app pages) owns the full viewport: its own
+	// 3 panels manage padding/scroll, so the shell main is full-bleed + height-
+	// locked (like the old chat home). /studio/apps/all is the plain grid → not.
+	const workspace = location.pathname === '/studio'
+		|| location.pathname === '/studio/apps'
+		|| (/^\/studio\/apps\/[^/]+/.test(location.pathname) && location.pathname !== '/studio/apps/all');
+	const chatHome = workspace;
 	const wideMain = location.pathname.startsWith('/dashboard')
 		|| location.pathname.startsWith('/studio/a/')
 		|| location.pathname.startsWith('/studio/manage')
-		// App detail hosts the pipeline canvas + master-detail panel —
-		// the narrow column left a dead gutter beside the chat rail.
-		|| /^\/studio\/apps\/[^/]+/.test(location.pathname);
+		|| location.pathname === '/studio/apps/all';
 	// Bridge lum.id → Runmesh auth store (numeric sys_user.user_id) for the
 	// ported Runmesh admin pages now hosted in this shell. Ported from AppLayout.
 	const setRunmeshUser = useAuthStore((s) => s.setUser);
@@ -327,7 +332,7 @@ export function StudioShell() {
 							{sec.items.map((it) => (
 								<NavItemView
 									key={it.app}
-									to={`/studio/a/${encodeURIComponent(it.app)}`}
+									to={`/studio/apps/${encodeURIComponent(it.app)}`}
 									label={it.label}
 									icon={iconFor(it.icon)}
 									badge={it.badge_source === 'drafts' ? draftCount : undefined}
@@ -386,6 +391,12 @@ export function StudioShell() {
 
 					{menuOpen && (
 						<div className="absolute left-3 right-3 bottom-full mb-1 rounded-xl border border-border bg-card shadow-lg py-1 z-30">
+							<Link to="/studio/apps/all"
+								onClick={() => setMenuOpen(false)}
+								className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted">
+								<Boxes className="w-3.5 h-3.5 text-muted-foreground" />
+								Manage apps
+							</Link>
 							<Link to="/studio/settings"
 								onClick={() => setMenuOpen(false)}
 								className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted">
@@ -452,8 +463,8 @@ export function StudioShell() {
 				    transcript scrolls internally and the composer stays low. */}
 				<main className={cn(
 					'flex-1 w-full',
-					chatHome
-						? 'flex flex-col min-h-0 px-6 pb-4'
+					workspace
+						? 'flex flex-col min-h-0'            // full-bleed; the workspace panels own padding
 						: cn('px-6 py-6', !wideMain && 'max-w-5xl'),
 				)}>
 					<ErrorBoundary resetKey={location.pathname}>

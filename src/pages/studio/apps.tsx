@@ -14,7 +14,7 @@
 
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ChevronRight, ArrowRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2, Inbox, Loader2, RotateCcw, X } from "lucide-react";
+import { ChevronRight, ArrowRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2, Inbox, Loader2, RotateCcw, X, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { me, type MeWorkflowRow, type MeAppCard } from "@/api/me";
 import { takePendingCustomize } from "@/lib/just-installed";
@@ -37,7 +37,6 @@ import LoopOrbit, { type LoopMode, type LoopStageKey } from "@/components/workfl
 // They load on demand when an overview actually mounts them.
 const WorkflowObservabilityPanel = lazy(() => import("@/components/workflow/WorkflowObservabilityPanel"));
 const WorkflowList = lazy(() => import("@/components/workflow/WorkflowList"));
-const LearningTimeline = lazy(() => import("@/components/workflow/LearningTimeline"));
 const DatasetExplorer = lazy(() => import("@/components/workflow/DatasetExplorer"));
 import { RUNNING_APPS } from "@/lib/demo";
 import { useCountUp } from "@/lib/use-count-up";
@@ -662,7 +661,7 @@ interface Row { loop: string; wf: MeWorkflowRow; lh?: LoopHealth }
 const rowsCache = new Map<string, Row[]>();
 const identCache = new Map<string, AppIdentity | undefined>();
 
-export function AppOverview({ app, embedded, initialLoop }: { app: string; embedded?: boolean; initialLoop?: string | null }) {
+export function AppOverview({ app, embedded, initialLoop, hideLeft }: { app: string; embedded?: boolean; initialLoop?: string | null; hideLeft?: boolean }) {
 	const [rows, setRows] = useState<Row[] | null>(() => rowsCache.get(app) ?? null);
 	const [identity, setIdentity] = useState<AppIdentity | undefined>(() => identCache.get(app));
 	const [deleting, setDeleting] = useState(false);
@@ -790,17 +789,20 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 				</Link>
 			)}
 
-			<header className="flex items-start gap-3">
-				<div className="w-10 h-10 rounded-xl bg-gold-50 text-gold-600 flex items-center justify-center flex-shrink-0">
-					<Boxes className="w-5 h-5" />
-				</div>
-				<div className="min-w-0">
-					<h1 className="text-lg font-semibold text-slate-900">{identity?.label || appTitle(app)}</h1>
-					<div className="text-xs text-slate-400 font-mono mt-0.5">
-						{app}{identity?.version ? ` · v${identity.version}` : ""}{identity?.published ? " · published" : ""}
+			{/* In the workspace (embedded), the AppSwitcher in the workspace header
+			    owns identity + delete — so this big icon/name header is dropped to
+			    avoid printing the app name twice. */}
+			{!embedded && (
+				<header className="flex items-start gap-3">
+					<div className="w-10 h-10 rounded-xl bg-gold-50 text-gold-600 flex items-center justify-center flex-shrink-0">
+						<Boxes className="w-5 h-5" />
 					</div>
-				</div>
-				{!embedded && (
+					<div className="min-w-0">
+						<h1 className="text-lg font-semibold text-slate-900">{identity?.label || appTitle(app)}</h1>
+						<div className="text-xs text-slate-400 font-mono mt-0.5">
+							{app}{identity?.version ? ` · v${identity.version}` : ""}{identity?.published ? " · published" : ""}
+						</div>
+					</div>
 					<button
 						type="button"
 						onClick={del}
@@ -811,8 +813,8 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 						<Trash2 className="w-3.5 h-3.5" />
 						{deleting ? "Deleting…" : "Delete"}
 					</button>
-				)}
-			</header>
+				</header>
+			)}
 
 			{rows === null ? (
 				<Skeleton lines={3} />
@@ -837,25 +839,30 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 							</div>
 						)
 					) : (
-						<div className="lg:grid lg:grid-cols-[300px_minmax(0,1fr)] lg:gap-5 lg:items-start">
+						<div className={hideLeft ? "" : "lg:grid lg:grid-cols-[300px_minmax(0,1fr)] lg:gap-5 lg:items-start"}>
+							{!hideLeft && (
 							<div className="lg:sticky lg:top-4 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto mb-4 lg:mb-0 pr-0.5 space-y-5">
 								<WorkflowList
 									rows={rows}
 									selected={effSelected}
 									onSelect={select}
 								/>
-								{/* Learned + data fill the otherwise-dead rail under the
-								    short workflow list (they were full-width sections
-								    below the fold — now visible without scrolling). */}
-								<div className="space-y-2">
-									<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-400 uppercase">What it&apos;s learned</div>
-									<LearningTimeline agents={rows[0].wf.memory_agents || []} />
-								</div>
+								{/* + New workflow — creation lived only in the Manage panel;
+								    surface it right under the list. */}
+								<button
+									type="button"
+									onClick={() => navigate(`/studio/a/${encodeURIComponent(app)}/manage`)}
+									className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-dashed border-border text-[12.5px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+								>
+									<Plus className="w-3.5 h-3.5" /> New workflow
+								</button>
+								{/* "What it's learned" removed (low signal). Datasets kept. */}
 								<div className="space-y-2">
 									<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-400 uppercase">Data it works on</div>
 									<DatasetExplorer app={app} />
 								</div>
 							</div>
+							)}
 							<div id="wf-detail" className="min-w-0">
 								{selectedRow && (
 									<WorkflowObservabilityPanel

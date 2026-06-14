@@ -27,7 +27,6 @@ const Go            = lazy(() => import("./pages/Go"));
 // alongside existing /app/* and /dashboard/* per the studio-plan.md
 // decision: build alongside, no immediate cutover.
 const StudioShell      = lazy(() => import("./components/StudioShell"));
-const StudioChatHome   = lazy(() => import("./pages/studio/chat"));
 const StudioIntents    = lazy(() => import("./pages/studio/intents"));
 // Phase S5+ — real inbox (no longer a placeholder).
 const StudioInbox      = lazy(() => import("./pages/studio/inbox"));
@@ -39,6 +38,7 @@ function XpioRedirect() {
 }
 // Phase S3-C — app editor (lean v1).
 const StudioApps         = lazy(() => import("./pages/studio/apps"));
+const StudioWorkspace    = lazy(() => import("./pages/studio/StudioWorkspace"));
 // App-defined UI surface (runtime-loaded markdown / native escape-hatch) at /studio/a/:app
 const AppSurface         = lazy(() => import("./components/app-surface/AppSurface"));
 // In-Studio markdown editor for an installed app's surface at /studio/a/:app/edit
@@ -288,18 +288,17 @@ function AppAdminRedirect() {
 // dense standalone page survives as the "?full=1" escape hatch. We stash the
 // app synchronously (before <Navigate> fires) so StudioChat consumes it on
 // mount; the full page renders in place when ?full=1.
-function OpenAppRedirect({ overview, app: appProp, surface }: { overview?: boolean; app?: string; surface?: string }) {
+// Bare app routes (/studio/a/:app, and gpu-rentals home) now open the app
+// WORKSPACE (/studio/apps/:app) — the morphing 3-panel view (nav · details ·
+// grounded chat). ?full=1 stays the standalone surface escape hatch.
+function OpenAppRedirect({ app: appProp, surface }: { app?: string; surface?: string }) {
   const { app: paramApp = "" } = useParams();
   const app = appProp ?? paramApp;
   const [sp] = useSearchParams();
   if (sp.get("full") === "1") {
-    if (overview) return <StudioApps />;
     return appProp ? <AppSurface app={appProp} surface={surface} /> : <AppSurface />;
   }
-  try {
-    if (app) sessionStorage.setItem("studio_open_app_v1", JSON.stringify({ app, surface }));
-  } catch { /* ignore — chat just won't auto-open the surface */ }
-  return <Navigate to="/studio" replace />;
+  return <Navigate to={`/studio/apps/${encodeURIComponent(app)}`} replace />;
 }
 
 // /studio/workflows → /studio/apps, PRESERVING the query (?compose=1
@@ -514,8 +513,9 @@ export default function App() {
               </AuthGuard>
             }
           >
-            {/* The chat IS the main surface (claude.ai layout, 2026-06-12). */}
-            <Route index             element={<StudioChatHome />} />
+            {/* Front page = the morphing workspace: home context (left) + chat
+                (right). Opening an app adds the details middle → 3 panels. */}
+            <Route index             element={<StudioWorkspace front />} />
             {/* Spine is now My Apps. The old Intents/Today landings redirect
                 there; their cycle-inspector + intent-detail sub-routes stay. */}
             <Route path="intents"                       element={<Navigate to="/studio/apps" replace />} />
@@ -623,11 +623,13 @@ export default function App() {
                 bank browser keeps its deep-link at /knowledge/:agent. */}
             <Route path="knowledge"                    element={<StudioKnowledgeEncoded />} />
             <Route path="knowledge/:agent"             element={<StudioKnowledge />} />
-            {/* My Apps is the spine: home (grid) + per-app overview. */}
-            <Route path="apps"                         element={<StudioApps />} />
-            {/* App overview → open in chat (health/runs as cards). ?full=1 =
-                the standalone observability panel (escape hatch). */}
-            <Route path="apps/:app"                    element={<OpenAppRedirect overview />} />
+            {/* The Apps experience is the workspace (one featured app + switcher
+                + grounded chat), NOT a grid. /apps opens the last-featured app;
+                /apps/all is the full installed-app inventory (reached from the
+                user menu's "Manage apps"). */}
+            <Route path="apps"                         element={<StudioWorkspace />} />
+            <Route path="apps/all"                     element={<StudioApps />} />
+            <Route path="apps/:app"                    element={<StudioWorkspace />} />
             {/* Workflows folded into the per-app overview; list redirects,
                 detail pages stay reachable via deep-link. */}
             <Route path="workflows"                    element={<WorkflowsListRedirect />} />
