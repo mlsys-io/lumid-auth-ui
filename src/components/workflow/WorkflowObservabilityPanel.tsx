@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-	Play, Pause, Loader2, Save, Lightbulb, Clock, AlertCircle, Target,
+	Play, Pause, Loader2, Save, Clock, AlertCircle, Target,
 	ChevronLeft, ChevronRight, ChevronDown, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -24,15 +24,15 @@ import { me, MeApiError, type MeWorkflowRow, type MeCycleDetail, type MeMetricSe
 import WorkflowCanvas, { type CanvasStepRef } from "@/components/workflow/WorkflowCanvas";
 import StepInspectorPanel from "@/components/workflow/StepInspectorPanel";
 import { TrendRow } from "@/components/workflow/MetricTrend";
-import WorkflowInsights from "@/components/workflow/WorkflowInsights";
 import { type LoopStageKey } from "@/components/workflow/LoopOrbit";
 import SchedulePicker from "@/components/workflow/SchedulePicker";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { describeSchedule, parseSchedule } from "@/lib/schedule";
 import { loopLabel } from "@/lib/workflow-names";
 import FailureCard from "@/components/workflow/FailureCard";
 import AskAbout from "@/components/AskAbout";
 import {
-	ObserveGatePanel, ReviewQueue, OffersPanel,
+	ReviewQueue, OffersPanel,
 	type CycleSummary,
 } from "@/pages/studio/inspector";
 import { cn } from "@/lib/utils";
@@ -255,7 +255,6 @@ export default function WorkflowObservabilityPanel({
 		return () => { live = false; };
 	}, [app, loop, overlayTs]);
 
-	const gate = summary?.observe_gate;
 	const reviewQueue = Array.isArray(summary?.review_queue) ? summary!.review_queue! : [];
 	const offers = Array.isArray(summary?.offers) ? summary!.offers! : [];
 
@@ -289,15 +288,29 @@ export default function WorkflowObservabilityPanel({
 					</div>
 				</div>
 				<div className="flex items-center gap-1.5 flex-shrink-0">
-					{/* Schedule as a compact top-right control (like a config selector),
-					    Save appears only when changed. */}
-					<SchedulePicker value={sched} disabled={!!busy} onChange={(c) => { setSched(c); setSchedDirty(true); }} />
-					{schedDirty && (
-						<button onClick={saveSchedule} disabled={!!busy}
-							className="inline-flex items-center gap-1 px-2 py-1.5 text-xs rounded-lg bg-gold-500 text-white hover:bg-gold-600 disabled:opacity-50">
-							{busy === "save" ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />} Save
-						</button>
-					)}
+					{/* Schedule as a compact dropdown control (like Config): a button
+					    showing the current cadence; the editor + Save live in a popover. */}
+					<Popover>
+						<PopoverTrigger asChild>
+							<button disabled={!!busy}
+								className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50">
+								<Clock className="w-3.5 h-3.5 text-slate-400" />
+								<span className="max-w-[150px] truncate">{describeSchedule(sched)}</span>
+								{schedDirty && <span className="w-1.5 h-1.5 rounded-full bg-gold-500 flex-shrink-0" />}
+								<ChevronDown className="w-3 h-3 text-slate-400 flex-shrink-0" />
+							</button>
+						</PopoverTrigger>
+						<PopoverContent align="end" className="w-72">
+							<div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-2">Schedule</div>
+							<SchedulePicker value={sched} disabled={!!busy} onChange={(c) => { setSched(c); setSchedDirty(true); }} />
+							{schedDirty && (
+								<button onClick={saveSchedule} disabled={!!busy}
+									className="mt-3 w-full inline-flex items-center justify-center gap-1 px-2 py-1.5 text-xs rounded-lg bg-gold-500 text-white hover:bg-gold-600 disabled:opacity-50">
+									{busy === "save" ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />} Save schedule
+								</button>
+							)}
+						</PopoverContent>
+					</Popover>
 					<button onClick={runNow} disabled={!!busy}
 						className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-gold-500 text-white hover:bg-gold-600 active:scale-95 disabled:opacity-50 transition-all shadow-sm shadow-gold-100">
 						{busy === "run" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
@@ -412,13 +425,7 @@ export default function WorkflowObservabilityPanel({
 
 			{/* GOAL moved to the top; SCHEDULE moved into the header control cluster. */}
 
-			{/* ── INSIGHTS — hidden until there are runs to speak about ── */}
-			{tenantHasRuns && (
-				<Section icon={Lightbulb} title="Insights" delay={120}>
-					<WorkflowInsights slug={wf.slug} />
-					{gate && <div className="mt-2"><ObserveGatePanel gate={gate} /></div>}
-				</Section>
-			)}
+			{/* INSIGHTS section removed (low signal). */}
 
 			{/* ── SUGGESTED IMPROVEMENTS ───────────────────────────── */}
 			{(reviewQueue.length > 0 || offers.length > 0) && (

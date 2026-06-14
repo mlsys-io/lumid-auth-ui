@@ -38,6 +38,11 @@ import LoopOrbit, { type LoopMode, type LoopStageKey } from "@/components/workfl
 const WorkflowObservabilityPanel = lazy(() => import("@/components/workflow/WorkflowObservabilityPanel"));
 const WorkflowList = lazy(() => import("@/components/workflow/WorkflowList"));
 const DatasetExplorer = lazy(() => import("@/components/workflow/DatasetExplorer"));
+// An app with no scheduled workflows is a UI-surface app (GPU Rentals, Lumid
+// Market, …). Rather than a dead-end "no workflows" message, show its actual
+// surface inline — AppSurface renders the page, or its own "generate a page"
+// CTA when the app has none yet.
+const AppSurface = lazy(() => import("@/components/app-surface/AppSurface"));
 import { RUNNING_APPS } from "@/lib/demo";
 import { useCountUp } from "@/lib/use-count-up";
 import { useStudioRefetch } from "@/hooks/useStudioRefetch";
@@ -819,8 +824,14 @@ export function AppOverview({ app, embedded, initialLoop, hideLeft }: { app: str
 			{rows === null ? (
 				<Skeleton lines={3} />
 			) : rows.length === 0 ? (
-				<div className="rounded-xl border border-dashed border-slate-200 bg-white/60 p-8 text-center text-sm text-slate-500">
-					No workflows discovered for this app yet.
+				// No workflows → this is a UI-surface app; show its surface (or its
+				// own "generate a page" CTA) instead of a dead-end message. Negative
+				// margins cancel the AppOverview body padding so the surface (which
+				// brings its own chrome + padding) sits flush in the panel.
+				<div className="-mx-5 -my-5">
+					<Suspense fallback={<div className="px-5 py-8"><Skeleton lines={4} /></div>}>
+						<AppSurface app={app} />
+					</Suspense>
 				</div>
 			) : (
 				<div className="space-y-2.5">
