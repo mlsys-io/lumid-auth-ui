@@ -35,14 +35,14 @@ export default function LoopOrbit({
 	const delayFor = (i: number) => `${(i * period) / LOOP_STAGES.length}s`;
 	const nodeCls =
 		mode === "paused" ? "bg-slate-100 text-slate-400"
-		: mode === "running" ? "bg-amber-100 text-amber-700"
-		: "bg-amber-50 text-amber-600"; // idle = armed, static
+		: mode === "running" ? "bg-gold-100 text-gold-700"
+		: "bg-gold-50 text-gold-600"; // idle = armed, static
 	const clickable = !!onStageClick;
 
 	return (
 		<div className={cn(
 			"rounded-xl border p-3 transition-colors",
-			mode === "running" ? "border-amber-200 bg-amber-50/50"
+			mode === "running" ? "border-gold-200 bg-gold-50/50"
 			: mode === "paused" ? "border-slate-200 bg-slate-50/60"
 			: "border-slate-200 bg-white",
 		)}>
@@ -53,13 +53,13 @@ export default function LoopOrbit({
 					const isSel = selected === s.key;
 					const node = (
 						<span className="relative inline-flex flex-shrink-0">
-							{pulsing && <span className="absolute -inset-1 rounded-full bg-amber-400/50 animate-ping" />}
+							{pulsing && <span className="absolute -inset-1 rounded-full bg-gold-400/50 animate-ping" />}
 							<span
 								className={cn(
 									"relative w-9 h-9 rounded-full flex items-center justify-center transition-all",
 									nodeCls,
-									isSel && "ring-2 ring-amber-500 ring-offset-1",
-									pulsing && "ring-2 ring-amber-400",
+									isSel && "ring-2 ring-gold-500 ring-offset-1",
+									pulsing && "ring-2 ring-gold-400",
 									clickable && "group-hover/stage:scale-110 group-hover/stage:shadow-sm",
 									animated && "loop-stage",
 								)}
@@ -80,7 +80,7 @@ export default function LoopOrbit({
 								<div className="flex-1 h-0.5 bg-slate-200 relative overflow-hidden mx-1">
 									{animated && (
 										<span
-											className="absolute inset-y-0 left-0 w-1/2 bg-gradient-to-r from-transparent via-amber-400 to-transparent loop-sweep"
+											className="absolute inset-y-0 left-0 w-1/2 bg-gradient-to-r from-transparent via-gold-400 to-transparent loop-sweep"
 											style={{ animationDelay: delayFor(i), animationDuration: `${period}s` }}
 										/>
 									)}
@@ -90,7 +90,7 @@ export default function LoopOrbit({
 					);
 				})}
 				<RotateCw
-					className={cn("w-3.5 h-3.5 ml-1 flex-shrink-0", mode === "paused" ? "text-slate-300" : "text-amber-500", animated && "loop-spin")}
+					className={cn("w-3.5 h-3.5 ml-1 flex-shrink-0", mode === "paused" ? "text-slate-300" : "text-gold-500", animated && "loop-spin")}
 					style={animated ? { animationDuration: `${period * 2}s` } : undefined}
 				/>
 			</div>
@@ -99,7 +99,7 @@ export default function LoopOrbit({
 				{LOOP_STAGES.map((s, i) => (
 					<Fragment key={s.key}>
 						<span className={cn("w-9 text-center text-[9px] leading-tight tracking-tight transition-colors",
-							selected === s.key ? "text-amber-700 font-medium" : mode === "paused" ? "text-slate-400" : "text-slate-600")}>
+							selected === s.key ? "text-gold-700 font-medium" : mode === "paused" ? "text-slate-400" : "text-slate-600")}>
 							{s.label}
 						</span>
 						{i < LOOP_STAGES.length - 1 && <span className="flex-1 mx-1" />}

@@ -392,7 +392,7 @@ function ContestSidebarItem({
 			<span
 				className={cn(
 					'inline-block w-1.5 h-1.5 rounded-full flex-none ml-0.5 mr-1',
-					contest.competing ? 'bg-amber-500' : 'bg-slate-300',
+					contest.competing ? 'bg-gold-500' : 'bg-slate-300',
 				)}
 				aria-hidden
 			/>

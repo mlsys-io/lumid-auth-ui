@@ -33,9 +33,9 @@ interface Props {
 }
 
 const STATE_BG: Record<string, string> = {
-	succeeded: "rgb(16 185 129)",   // amber-500
+	succeeded: "rgb(16 185 129)",   // gold-500
 	failed:    "rgb(225 29 72)",    // rose-600
-	running:   "rgb(245 158 11)",   // amber-500
+	running:   "rgb(245 158 11)",   // gold-500
 	skipped:   "rgb(148 163 184)",  // slate-400
 	pending:   "rgb(203 213 225)",  // slate-300
 };

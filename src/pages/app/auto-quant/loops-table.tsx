@@ -5,10 +5,10 @@
 import type { LoopRow } from "@/api/super-admin";
 
 const statusColor = (s: string) => ({
-	ok:      "text-amber-600",
+	ok:      "text-gold-600",
 	never:   "text-gray-400",
 	failing: "text-red-600 font-medium",
-	stale:   "text-amber-600",
+	stale:   "text-gold-600",
 	manual:  "text-gray-500",
 }[s] || "text-gray-500");
 
@@ -61,7 +61,7 @@ export function LoopsTable({ loops }: { loops: LoopRow[] }) {
 								</td>
 								<td className="py-2 px-3">
 									{alpha != null ? (
-										<span className={alpha >= 0 ? "text-amber-600" : "text-red-500"}>
+										<span className={alpha >= 0 ? "text-gold-600" : "text-red-500"}>
 											{alpha >= 0 ? "+" : ""}{alpha.toFixed(2)}pp
 											{r.outcome?.benchmark && (
 												<span className="text-gray-400 ml-1 text-[10px]">

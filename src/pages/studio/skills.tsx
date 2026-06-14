@@ -158,7 +158,7 @@ function SkillDetail({ row }: { row: MeSkillRow }) {
 								<Link
 									key={`${u.app}:${loop}`}
 									to={loop ? `/studio/apps/${encodeURIComponent(u.app)}?selected=${encodeURIComponent(loop)}` : `/studio/apps/${encodeURIComponent(u.app)}`}
-									className="inline-flex items-center gap-1 px-2 py-1 text-[11px] rounded-lg border border-slate-200 bg-slate-50 text-slate-700 hover:bg-amber-50 hover:border-amber-200 transition-colors"
+									className="inline-flex items-center gap-1 px-2 py-1 text-[11px] rounded-lg border border-slate-200 bg-slate-50 text-slate-700 hover:bg-gold-50 hover:border-gold-200 transition-colors"
 								>
 									{u.app}{loop ? ` · ${loopLabel(undefined, loop)}` : ""}
 								</Link>

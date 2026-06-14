@@ -57,7 +57,7 @@ export default function WorkflowList({ rows, selected, onSelect }: {
 								className={cn(
 									"w-full text-left rounded-lg border px-2.5 py-2 transition-colors",
 									active
-										? "border-amber-300 bg-amber-50/50"
+										? "border-gold-300 bg-gold-50/50"
 										: "border-slate-200 bg-white hover:bg-slate-50",
 								)}
 							>

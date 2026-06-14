@@ -134,9 +134,9 @@ export interface DemoIntent {
 // same vocabulary.
 export const AXIS_META: Record<Axis, { label: string; phrase: string; tone: string }> = {
 	standard: { label: 'Standard', phrase: 'how it judges itself',     tone: 'text-violet-700  bg-violet-50  border-violet-100' },
-	examples: { label: 'Examples', phrase: 'what it learns from',       tone: 'text-amber-700 bg-amber-50 border-amber-100' },
+	examples: { label: 'Examples', phrase: 'what it learns from',       tone: 'text-gold-700 bg-gold-50 border-gold-100' },
 	memory:   { label: 'Memory',   phrase: 'what it remembers about you', tone: 'text-sky-700     bg-sky-50     border-sky-100' },
-	rules:    { label: 'Rules',    phrase: 'patterns it figured out',   tone: 'text-amber-700   bg-amber-50   border-amber-100' },
+	rules:    { label: 'Rules',    phrase: 'patterns it figured out',   tone: 'text-gold-700   bg-gold-50   border-gold-100' },
 	recipe:   { label: 'Recipe',   phrase: 'the steps it takes',        tone: 'text-rose-700    bg-rose-50    border-rose-100' },
 	pieces:   { label: 'Pieces',   phrase: 'how it does each step',     tone: 'text-slate-700   bg-slate-50   border-slate-200' },
 };

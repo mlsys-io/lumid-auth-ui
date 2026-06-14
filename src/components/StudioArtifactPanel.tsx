@@ -222,7 +222,7 @@ export function StudioArtifactPanel() {
 			{/* Header */}
 			<header className="flex items-center justify-between px-3 py-2.5 border-b border-slate-200">
 				<div className="flex items-center gap-1.5">
-					<Boxes className="w-4 h-4 text-amber-600" />
+					<Boxes className="w-4 h-4 text-gold-600" />
 					<span className="text-sm font-medium text-slate-800">Artifacts</span>
 					<span className="text-[11px] text-slate-400">({rows.length})</span>
 				</div>
@@ -256,7 +256,7 @@ export function StudioArtifactPanel() {
 							onClick={() => loadOne(r.id)}
 							className={[
 								'w-full text-left px-3 py-1.5 border-b border-slate-100 hover:bg-slate-50 transition-colors',
-								r.id === selectedId ? 'bg-amber-50/60' : '',
+								r.id === selectedId ? 'bg-gold-50/60' : '',
 							].join(' ')}
 						>
 							<div className="flex items-center gap-1.5">
@@ -347,7 +347,7 @@ export function StudioArtifactPanel() {
 			{/* Resize handle on the right edge */}
 			<div
 				onPointerDown={startResize}
-				className={['absolute top-0 right-0 h-full w-1 cursor-col-resize', resizing ? 'bg-amber-300/50' : 'hover:bg-amber-200/40'].join(' ')}
+				className={['absolute top-0 right-0 h-full w-1 cursor-col-resize', resizing ? 'bg-gold-300/50' : 'hover:bg-gold-200/40'].join(' ')}
 			/>
 		</aside>
 	);
@@ -355,9 +355,9 @@ export function StudioArtifactPanel() {
 
 function KindIcon({ kind }: { kind: ArtifactListRow['kind'] }) {
 	switch (kind) {
-		case 'markdown': return <FileText className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />;
+		case 'markdown': return <FileText className="w-3.5 h-3.5 text-gold-600 flex-shrink-0" />;
 		case 'code':     return <Code2 className="w-3.5 h-3.5 text-sky-600 flex-shrink-0" />;
-		case 'json':     return <FileJson className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />;
+		case 'json':     return <FileJson className="w-3.5 h-3.5 text-gold-600 flex-shrink-0" />;
 		default:         return <FileText className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />;
 	}
 }

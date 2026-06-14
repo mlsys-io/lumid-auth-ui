@@ -51,84 +51,84 @@ const PAGE_META: Array<{
 		icon: Boxes,
 		title: "App",
 		subtitle: "Workflows, status, insights, and suggested improvements.",
-		iconTone: "text-amber-600",
+		iconTone: "text-gold-600",
 	},
 	{
 		pattern: /^\/studio\/apps/,
 		icon: Boxes,
 		title: "Apps",
 		subtitle: "Your apps and their ongoing progress.",
-		iconTone: "text-amber-600",
+		iconTone: "text-gold-600",
 	},
 	{
 		pattern: /^\/studio\/(intents|today)/,
 		icon: Sparkles,
 		title: "Apps",
 		subtitle: "Your goals this week. Outcomes graded; judgment encoded.",
-		iconTone: "text-amber-600",
+		iconTone: "text-gold-600",
 	},
 	{
 		pattern: /^\/studio\/inbox/,
 		icon: InboxIcon,
 		title: "Inbox",
 		subtitle: "Drafts, runs, notices, and the audit trail — in one feed.",
-		iconTone: "text-amber-600",
+		iconTone: "text-gold-600",
 	},
 	{
 		pattern: /^\/studio\/runs\/[^/]+/,
 		icon: ActivityIcon,
 		title: "Run",
 		subtitle: "Per-step DAG + timeline.",
-		iconTone: "text-amber-600",
+		iconTone: "text-gold-600",
 	},
 	{
 		pattern: /^\/studio\/runs/,
 		icon: ActivityIcon,
 		title: "Jobs",
 		subtitle: "Your recent runs — open any to ask about it.",
-		iconTone: "text-amber-600",
+		iconTone: "text-gold-600",
 	},
 	{
 		pattern: /^\/studio\/library\/skills/,
 		icon: Store,
 		title: "Skills",
 		subtitle: "The capabilities your apps import — health, versions, who uses what.",
-		iconTone: "text-amber-600",
+		iconTone: "text-gold-600",
 	},
 	{
 		pattern: /^\/studio\/library\/experiments/,
 		icon: Store,
 		title: "Experiments",
 		subtitle: "Hypotheses your apps are testing, across every app.",
-		iconTone: "text-amber-600",
+		iconTone: "text-gold-600",
 	},
 	{
 		pattern: /^\/studio\/(library|marketplace)/,
 		icon: Store,
 		title: "Library",
 		subtitle: "Marketplace, skills, and experiments — pull in, refine, publish back.",
-		iconTone: "text-amber-600",
+		iconTone: "text-gold-600",
 	},
 	{
 		pattern: /^\/studio\/knowledge\/[^/]+/,
 		icon: Brain,
 		title: "Agent knowledge",
 		subtitle: "Memories the agent has banked.",
-		iconTone: "text-amber-600",
+		iconTone: "text-gold-600",
 	},
 	{
 		pattern: /^\/studio\/knowledge/,
 		icon: Brain,
 		title: "Knowledge",
 		subtitle: "What's been encoded — yours, audited, portable.",
-		iconTone: "text-amber-600",
+		iconTone: "text-gold-600",
 	},
 	{
 		pattern: /^\/dashboard\/jobs/,
 		icon: ListChecks,
 		title: "My Jobs",
 		subtitle: "Background runs across cron, FlowMesh, Lumilake, and workflow cycles.",
-		iconTone: "text-amber-600",
+		iconTone: "text-gold-600",
 	},
 	{
 		pattern: /^\/studio\/settings/,
@@ -333,7 +333,7 @@ export default function TopStatusStrip() {
 			    run in the background) + status pills (only when non-zero). */}
 			<div className="flex items-center gap-2 flex-shrink-0">
 				<span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground" title="Live — your loops run in the background">
-					<span className="w-1.5 h-1.5 rounded-full bg-amber-500 heartbeat" />
+					<span className="w-1.5 h-1.5 rounded-full bg-gold-500 heartbeat" />
 					<span className="hidden sm:inline">live{(() => { const a = Math.max(0, Math.floor((Date.now() - refreshedAt) / 1000)); return a < 3 ? "" : a < 60 ? ` · ${a}s ago` : ` · ${Math.floor(a / 60)}m ago`; })()}</span>
 				</span>
 				{loaded && counts.drafts > 0 && (

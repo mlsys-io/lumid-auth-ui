@@ -24,7 +24,7 @@
 	--switch-background: #cbced4;
 	--font-weight-medium: 500;
 	--font-weight-normal: 400;
-	--ring: #C2A062; /* metallic gold — focus glow, matches the icon */
+	--ring: #B58F3C; /* dark metallic gold */ /* metallic gold — focus glow, matches the icon */
 	--chart-1: oklch(0.585 0.233 277.117);
 	--chart-2: oklch(0.647 0.2 328.363);
 	--chart-3: oklch(0.6 0.118 184.704);
@@ -41,7 +41,7 @@
 	--sidebar-ring: #C2A062;
 	/* Brand gold — the spiral's metallic gold. Flourishes ONLY; never fills.
 	   (var name kept as accent-coral so the existing `coral` utility stays wired.) */
-	--accent-coral: #B8863C;
+	--accent-coral: #96773A;
 }
 
 .dark {
@@ -63,7 +63,7 @@
 	--destructive-foreground: oklch(0.637 0.237 25.331);
 	--border: oklch(0.269 0 0);
 	--input: oklch(0.269 0 0);
-	--ring: oklch(0.70 0.09 80); /* gold focus glow (brand) */
+	--ring: oklch(0.68 0.07 88); /* gold focus glow (brand) */
 	--font-weight-medium: 500;
 	--font-weight-normal: 400;
 	--chart-1: oklch(0.488 0.243 264.376);
@@ -73,12 +73,12 @@
 	--chart-5: oklch(0.645 0.246 16.439);
 	--sidebar: oklch(0.205 0 0);
 	--sidebar-foreground: oklch(0.985 0 0);
-	--sidebar-primary: oklch(0.72 0.11 80); /* gold */
+	--sidebar-primary: oklch(0.70 0.08 88); /* gold */
 	--sidebar-primary-foreground: oklch(0.985 0 0);
 	--sidebar-accent: oklch(0.269 0 0);
 	--sidebar-accent-foreground: oklch(0.985 0 0);
 	--sidebar-border: oklch(0.269 0 0);
-	--sidebar-ring: oklch(0.70 0.09 80); /* gold */
+	--sidebar-ring: oklch(0.68 0.07 88); /* gold */
 }
 
 @theme inline {
@@ -644,7 +644,7 @@ html {
 /* A value just changed (count-up landed / new run). */
 @keyframes valuePop {
 	0%   { transform: scale(1); }
-	40%  { transform: scale(1.12); color: rgb(217 119 6); }
+	40%  { transform: scale(1.12); color: rgb(150 119 58); }
 	100% { transform: scale(1); }
 }
 .value-pop {

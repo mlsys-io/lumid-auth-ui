@@ -29,7 +29,7 @@ export function IntentNarrativeHero({
 	if (!hasNarr && !hasMov) return null;
 
 	return (
-		<section className="rounded-xl border border-slate-200/70 bg-gradient-to-br from-amber-50/30 via-white to-white px-5 py-4">
+		<section className="rounded-xl border border-slate-200/70 bg-gradient-to-br from-gold-50/30 via-white to-white px-5 py-4">
 			<div className="text-[11px] tracking-[0.06em] text-slate-400 mb-3">This week your AI</div>
 
 			{hasNarr && (

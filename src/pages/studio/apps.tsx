@@ -138,7 +138,7 @@ function SurfaceAppCard({ app, onOpen, onRemoved }: {
 			type="button" onClick={onOpen}
 			className="group text-left rounded-xl border border-slate-200/80 bg-white px-4 py-3.5 hover:shadow-md hover:shadow-slate-200/60 hover:border-slate-300 transition-all hover:-translate-y-0.5 flex items-center gap-3"
 		>
-			<div className="w-9 h-9 shrink-0 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+			<div className="w-9 h-9 shrink-0 rounded-lg bg-gold-50 text-gold-600 flex items-center justify-center">
 				<Icon className="w-[18px] h-[18px]" />
 			</div>
 			<div className="min-w-0 flex-1">
@@ -147,7 +147,7 @@ function SurfaceAppCard({ app, onOpen, onRemoved }: {
 					{section ? `${section} · ` : ""}{app.tenant ? "installed" : "shared"}
 				</div>
 			</div>
-			<ArrowRight className="w-4 h-4 shrink-0 text-slate-300 group-hover:text-amber-600 transition-colors" />
+			<ArrowRight className="w-4 h-4 shrink-0 text-slate-300 group-hover:text-gold-600 transition-colors" />
 			<span
 				role="button" tabIndex={0} onClick={remove}
 				className="shrink-0 p-1.5 rounded-md text-slate-300 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-50 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -174,7 +174,7 @@ function PendingAppCard({ app, onRetry, onDismiss }: {
 		)}>
 			<div className={cn(
 				"w-9 h-9 shrink-0 rounded-lg border flex items-center justify-center",
-				failed ? "bg-rose-50 border-rose-200 text-rose-500" : "bg-slate-50 border-slate-200 text-amber-500",
+				failed ? "bg-rose-50 border-rose-200 text-rose-500" : "bg-slate-50 border-slate-200 text-gold-500",
 			)}>
 				{failed ? <AlertTriangle className="w-[18px] h-[18px]" /> : <Loader2 className="w-[18px] h-[18px] animate-spin" />}
 			</div>
@@ -188,7 +188,7 @@ function PendingAppCard({ app, onRetry, onDismiss }: {
 				<>
 					<button
 						type="button" onClick={onRetry}
-						className="shrink-0 inline-flex items-center gap-1 text-[12px] rounded-md px-2 py-1 text-amber-700 hover:bg-amber-50 transition-colors"
+						className="shrink-0 inline-flex items-center gap-1 text-[12px] rounded-md px-2 py-1 text-gold-700 hover:bg-gold-50 transition-colors"
 					>
 						<RotateCcw className="w-3.5 h-3.5" /> Retry
 					</button>
@@ -783,7 +783,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 			)}
 
 			<header className="flex items-start gap-3">
-				<div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
+				<div className="w-10 h-10 rounded-xl bg-gold-50 text-gold-600 flex items-center justify-center flex-shrink-0">
 					<Boxes className="w-5 h-5" />
 				</div>
 				<div className="min-w-0">

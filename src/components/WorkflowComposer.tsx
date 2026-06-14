@@ -174,9 +174,9 @@ function Describe({ intent, setIntent, onGo }: { intent: string; setIntent: (s: 
 		<div className="space-y-4">
 			{/* The showcase starter */}
 			<button onClick={() => { setIntent(TRADING_INTENT); setTimeout(onGo, 250); }}
-				className="w-full text-left rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-4 hover:shadow-md hover:shadow-amber-100 transition-all active:scale-[0.99]">
+				className="w-full text-left rounded-xl border border-gold-200 bg-gradient-to-br from-gold-50 to-white p-4 hover:shadow-md hover:shadow-gold-100 transition-all active:scale-[0.99]">
 				<div className="flex items-center gap-3">
-					<div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center"><TrendingUp className="w-5 h-5" /></div>
+					<div className="w-10 h-10 rounded-xl bg-gold-100 text-gold-700 flex items-center justify-center"><TrendingUp className="w-5 h-5" /></div>
 					<div>
 						<div className="text-sm font-semibold text-slate-900">Crypto momentum trader</div>
 						<div className="text-[12px] text-slate-500">A paper bot that senses the market, proposes risk-checked trades every 12h, and learns from each.</div>
@@ -191,9 +191,9 @@ function Describe({ intent, setIntent, onGo }: { intent: string; setIntent: (s: 
 
 			<textarea value={intent} onChange={(e) => setIntent(e.target.value)} rows={3}
 				placeholder="In plain English — what should it do, and how often?"
-				className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-4 focus:ring-amber-400/15 focus:border-amber-400 resize-y" />
+				className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-4 focus:ring-gold-400/15 focus:border-gold-400 resize-y" />
 			<div className="flex justify-end">
-				<button onClick={onGo} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 text-white hover:from-amber-400 hover:to-amber-500 active:scale-95 transition-all shadow-sm shadow-amber-200">
+				<button onClick={onGo} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-gradient-to-br from-gold-500 to-gold-600 text-white hover:from-gold-400 hover:to-gold-500 active:scale-95 transition-all shadow-sm shadow-gold-200">
 					<Sparkles className="w-3.5 h-3.5" />Assemble it
 				</button>
 			</div>
@@ -206,22 +206,22 @@ function Assemble({ drafted, steps, revealed, activeStage }: { drafted: DraftedS
 	return (
 		<div className="space-y-4">
 			<div className="text-center">
-				<div className="inline-flex items-center gap-2 text-sm text-slate-600"><Loader2 className="w-4 h-4 animate-spin text-amber-500" />Assembling your bot…</div>
+				<div className="inline-flex items-center gap-2 text-sm text-slate-600"><Loader2 className="w-4 h-4 animate-spin text-gold-500" />Assembling your bot…</div>
 			</div>
 			<LoopOrbit mode="running" pulse={activeStage} caption={activeStage ? `Wiring the ${activeStage} stage…` : "Matching skills to the pipeline"} />
 			<div className="space-y-1.5">
 				{steps.slice(0, Math.max(revealed, 0)).map((s, i) => (
 					<div key={s.id} className="flex items-start gap-2.5 rounded-lg border border-slate-200 bg-white px-3 py-2 animate-in fade-in slide-in-from-left-2 duration-300">
-						<span className={`mt-0.5 w-1.5 h-1.5 rounded-full flex-shrink-0 ${s.id === "risk_gate" ? "bg-amber-500" : "bg-amber-500"}`} />
+						<span className={`mt-0.5 w-1.5 h-1.5 rounded-full flex-shrink-0 ${s.id === "risk_gate" ? "bg-gold-500" : "bg-gold-500"}`} />
 						<div className="min-w-0 flex-1">
 							<div className="flex items-center gap-2">
 								<span className="text-[13px] font-medium text-slate-800">{(drafted?.skill_summaries?.find((x) => x.name === s.skill)?.display_name) || s.skill}</span>
 								<span className="text-[9px] uppercase tracking-wide rounded-full px-1.5 py-px border border-slate-200 text-slate-500">{STAGE_OF(s)}</span>
-								{s.id === "risk_gate" && <span className="inline-flex items-center gap-0.5 text-[9px] text-amber-700"><Shield className="w-3 h-3" />risk officer</span>}
+								{s.id === "risk_gate" && <span className="inline-flex items-center gap-0.5 text-[9px] text-gold-700"><Shield className="w-3 h-3" />risk officer</span>}
 							</div>
 							{s.why && <div className="text-[11px] text-slate-500 mt-0.5">{s.why}</div>}
 						</div>
-						<Check className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
+						<Check className="w-3.5 h-3.5 text-gold-500 flex-shrink-0 mt-0.5" />
 					</div>
 				))}
 				{revealed < steps.length && <div className="text-[11px] text-slate-300 pl-3">…</div>}
@@ -236,14 +236,14 @@ function Review({ drafted, schedule, setSchedule, installing, onInstall, onBack 
 	const steps = drafted.steps || [];
 	return (
 		<div className="space-y-4">
-			<div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-900 flex items-start gap-2">
+			<div className="rounded-lg bg-gold-50 border border-gold-200 px-3 py-2 text-xs text-gold-900 flex items-start gap-2">
 				<Check className="w-3.5 h-3.5 mt-0.5" />
 				<div><span className="font-medium">Bot assembled.</span> {steps.length} steps across the observe→learn loop{drafted.mode === "paper" ? " · paper mode" : ""}. Review + install.</div>
 			</div>
 
 			{drafted.goal?.primary && (
-				<div className="rounded-xl border border-amber-200/70 bg-gradient-to-br from-amber-50/80 to-white p-3">
-					<div className="text-[10px] uppercase tracking-wide text-amber-700/70 font-semibold">Goal</div>
+				<div className="rounded-xl border border-gold-200/70 bg-gradient-to-br from-gold-50/80 to-white p-3">
+					<div className="text-[10px] uppercase tracking-wide text-gold-700/70 font-semibold">Goal</div>
 					<div className="text-[13px] text-slate-800 font-medium">{drafted.goal.primary}</div>
 					{drafted.goal.tracked && <div className="text-[10px] text-slate-400 mt-1">tracks {drafted.goal.tracked.join(" · ")}</div>}
 				</div>
@@ -254,9 +254,9 @@ function Review({ drafted, schedule, setSchedule, installing, onInstall, onBack 
 			<div className="space-y-1.5">
 				{steps.map((s) => (
 					<div key={s.id} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5">
-						<span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${s.id === "risk_gate" ? "bg-amber-500" : "bg-amber-400"}`} />
+						<span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${s.id === "risk_gate" ? "bg-gold-500" : "bg-gold-400"}`} />
 						<span className="text-[12px] text-slate-700 flex-1 truncate">{(drafted.skill_summaries?.find((x) => x.name === s.skill)?.display_name) || s.skill}</span>
-						{s.id === "risk_gate" && <Shield className="w-3 h-3 text-amber-600" />}
+						{s.id === "risk_gate" && <Shield className="w-3 h-3 text-gold-600" />}
 						<span className="text-[9px] uppercase tracking-wide text-slate-400">{s.stage}</span>
 					</div>
 				))}
@@ -268,7 +268,7 @@ function Review({ drafted, schedule, setSchedule, installing, onInstall, onBack 
 				<div className="flex flex-wrap gap-1.5">
 					{SCHEDULES.map((s) => (
 						<button key={s.cron} onClick={() => setSchedule(s.cron)}
-							className={`text-[11px] rounded-full px-2.5 py-1 border transition-colors ${schedule === s.cron ? "bg-amber-500 text-white border-amber-500" : "bg-white text-slate-600 border-slate-200 hover:border-amber-300"}`}>
+							className={`text-[11px] rounded-full px-2.5 py-1 border transition-colors ${schedule === s.cron ? "bg-gold-500 text-white border-gold-500" : "bg-white text-slate-600 border-slate-200 hover:border-gold-300"}`}>
 							{s.label}
 						</button>
 					))}
@@ -278,7 +278,7 @@ function Review({ drafted, schedule, setSchedule, installing, onInstall, onBack 
 			<div className="pt-1 flex justify-between items-center">
 				<button onClick={onBack} disabled={installing} className="text-xs text-slate-500 hover:text-slate-800">← Back</button>
 				<button onClick={onInstall} disabled={installing}
-					className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 text-white hover:from-amber-400 hover:to-amber-500 active:scale-95 transition-all shadow-sm shadow-amber-200 disabled:opacity-60">
+					className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-gradient-to-br from-gold-500 to-gold-600 text-white hover:from-gold-400 hover:to-gold-500 active:scale-95 transition-all shadow-sm shadow-gold-200 disabled:opacity-60">
 					{installing ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Installing…</> : <><Play className="w-3.5 h-3.5" />Install &amp; run</>}
 				</button>
 			</div>
@@ -289,7 +289,7 @@ function Review({ drafted, schedule, setSchedule, installing, onInstall, onBack 
 function Installed({ slug }: { slug: string }) {
 	return (
 		<div className="py-10 text-center space-y-3">
-			<div className="inline-flex w-14 h-14 rounded-2xl bg-amber-100 text-amber-600 items-center justify-center animate-in zoom-in duration-300"><Check className="w-7 h-7" /></div>
+			<div className="inline-flex w-14 h-14 rounded-2xl bg-gold-100 text-gold-600 items-center justify-center animate-in zoom-in duration-300"><Check className="w-7 h-7" /></div>
 			<div className="text-sm font-medium text-slate-900">{slug} is live — running its first cycle.</div>
 			<div className="text-xs text-slate-500">Taking you to its dashboard…</div>
 		</div>

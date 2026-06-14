@@ -70,7 +70,7 @@ export function StubPage({ title, icon, description, cliHint }: {
 			<div className="flex items-center gap-2 mb-2">
 				{icon}
 				<h1 className="text-xl font-semibold text-slate-900">{title}</h1>
-				<span className="ml-2 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-[10px] uppercase tracking-wide text-amber-700">
+				<span className="ml-2 px-2 py-0.5 rounded-full bg-gold-50 border border-gold-200 text-[10px] uppercase tracking-wide text-gold-700">
 					porting in progress
 				</span>
 			</div>

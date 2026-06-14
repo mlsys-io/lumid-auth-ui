@@ -24,7 +24,7 @@ const STAGE_COLORS: Record<string, string> = {
 	explore:    "bg-blue-100 text-blue-700 border-blue-200",
 	paper:      "bg-indigo-100 text-indigo-700 border-indigo-200",
 	semi:       "bg-purple-100 text-purple-700 border-purple-200",
-	live:       "bg-amber-100 text-amber-700 border-amber-200",
+	live:       "bg-gold-100 text-gold-700 border-gold-200",
 	retired:    "bg-red-100 text-red-500 border-red-200",
 };
 
@@ -94,10 +94,10 @@ export default function StrategyDetailPage() {
 								<span>{strategy.cycle_count} cycles</span>
 							)}
 							{strategy.recent_sharpe != null && (
-								<span>Sharpe: <strong className={strategy.recent_sharpe >= 1 ? "text-amber-600" : strategy.recent_sharpe >= 0 ? "text-gray-700" : "text-red-500"}>{strategy.recent_sharpe.toFixed(2)}</strong></span>
+								<span>Sharpe: <strong className={strategy.recent_sharpe >= 1 ? "text-gold-600" : strategy.recent_sharpe >= 0 ? "text-gray-700" : "text-red-500"}>{strategy.recent_sharpe.toFixed(2)}</strong></span>
 							)}
 							{strategy.lifetime_pnl != null && (
-								<span>Lifetime P&L: <strong className={strategy.lifetime_pnl >= 0 ? "text-amber-600" : "text-red-500"}>{strategy.lifetime_pnl >= 0 ? "+" : ""}{strategy.lifetime_pnl.toFixed(2)}pp</strong></span>
+								<span>Lifetime P&L: <strong className={strategy.lifetime_pnl >= 0 ? "text-gold-600" : "text-red-500"}>{strategy.lifetime_pnl >= 0 ? "+" : ""}{strategy.lifetime_pnl.toFixed(2)}pp</strong></span>
 							)}
 						</div>
 					)}
@@ -123,13 +123,13 @@ export default function StrategyDetailPage() {
 								<div key={stage} className="flex items-center">
 									<div className={`px-2 py-0.5 rounded text-[10px] font-medium border ${
 										isCurrent ? STAGE_COLORS[stage] || "bg-gray-100 text-gray-600 border-gray-200" :
-										isPast ? "bg-amber-50 text-amber-600 border-amber-200" :
+										isPast ? "bg-gold-50 text-gold-600 border-gold-200" :
 										"bg-gray-50 text-gray-400 border-gray-100"
 									} ${isCurrent ? "ring-1 ring-offset-1 ring-indigo-400" : ""}`}>
 										{stage.replace("_", " ")}
 									</div>
 									{i < LIFECYCLE_ORDER.length - 1 && (
-										<span className={`mx-0.5 text-gray-300 text-[10px] ${isPast ? "text-amber-400" : isFuture ? "" : ""}`}>→</span>
+										<span className={`mx-0.5 text-gray-300 text-[10px] ${isPast ? "text-gold-400" : isFuture ? "" : ""}`}>→</span>
 									)}
 								</div>
 							);

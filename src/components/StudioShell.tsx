@@ -107,7 +107,7 @@ function NavItemView({ to, label, icon: Icon, end, badge, title }: NavItem) {
 					<span>{label}</span>
 					{badge != null && badge > 0 && (
 						<span
-							className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold tabular-nums"
+							className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-gold-100 text-gold-700 text-[10px] font-semibold tabular-nums"
 							title={`${badge} awaiting you`}
 						>
 							{badge}

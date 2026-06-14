@@ -41,7 +41,7 @@ export default function KeyPicker() {
 			</div>
 			<div className="flex items-center gap-3 text-[11.5px]">
 				<label className="inline-flex items-center gap-1.5 cursor-pointer">
-					<input type="radio" checked={useSession} onChange={clear} className="accent-amber-600" />
+					<input type="radio" checked={useSession} onChange={clear} className="accent-gold-600" />
 					<span className="text-slate-700">This session</span>
 					<span className="text-slate-400">(recommended)</span>
 				</label>
@@ -50,7 +50,7 @@ export default function KeyPicker() {
 						type="radio"
 						checked={!useSession}
 						onChange={() => setEditing(true)}
-						className="accent-amber-600"
+						className="accent-gold-600"
 					/>
 					<span className="text-slate-700">Custom key</span>
 				</label>
@@ -64,14 +64,14 @@ export default function KeyPicker() {
 								value={draft}
 								onChange={(e) => setDraft(e.target.value)}
 								placeholder="lm_pat_… / flm-…"
-								className="flex-1 px-2 py-1 text-[11.5px] font-mono rounded-md border border-slate-200 bg-white focus:outline-none focus:border-amber-300"
+								className="flex-1 px-2 py-1 text-[11.5px] font-mono rounded-md border border-slate-200 bg-white focus:outline-none focus:border-gold-300"
 								autoFocus
 							/>
 							<button
 								type="button"
 								onClick={pinDraft}
 								disabled={!draft.trim()}
-								className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md bg-amber-600 text-white disabled:opacity-40 hover:bg-amber-700 transition-colors"
+								className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md bg-gold-600 text-white disabled:opacity-40 hover:bg-gold-700 transition-colors"
 							>
 								<Check className="w-3 h-3" />Use
 							</button>

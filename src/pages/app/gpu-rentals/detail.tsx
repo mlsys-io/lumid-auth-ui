@@ -54,9 +54,9 @@ function statusBadge(s: TaskStatus | "UNKNOWN"): string {
 		case "CANCELLED":
 			return "bg-slate-100 text-slate-700 border-slate-200";
 		case "DISPATCHED":
-			return "bg-amber-100 text-amber-800 border-amber-200";
+			return "bg-gold-100 text-gold-800 border-gold-200";
 		case "PENDING":
-			return "bg-amber-100 text-amber-800 border-amber-200";
+			return "bg-gold-100 text-gold-800 border-gold-200";
 		case "FAILED":
 			return "bg-red-100 text-red-800 border-red-200";
 		default:
@@ -515,7 +515,7 @@ export default function GpuRentalDetail() {
 												<span className="text-slate-500 mr-2">{l.ts}</span>
 											)}
 											{l.level && (
-												<span className="text-amber-300 mr-2">[{l.level}]</span>
+												<span className="text-gold-300 mr-2">[{l.level}]</span>
 											)}
 											{l.message}
 										</div>

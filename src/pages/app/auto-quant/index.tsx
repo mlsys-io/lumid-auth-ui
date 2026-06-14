@@ -97,7 +97,7 @@ export default function AutoQuantPage() {
 					{!loading && (
 						<>
 							{ok > 0 && (
-								<span className="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+								<span className="text-xs px-2 py-0.5 rounded-full bg-gold-50 text-gold-700 border border-gold-200">
 									{ok} loop{ok === 1 ? "" : "s"} ok
 								</span>
 							)}

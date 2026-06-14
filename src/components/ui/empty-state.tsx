@@ -47,14 +47,14 @@ export function EmptyState({
 					{to ? (
 						<Link
 							to={to}
-							className="inline-flex items-center gap-1 text-[12px] font-medium text-amber-700 hover:text-amber-800 transition-colors"
+							className="inline-flex items-center gap-1 text-[12px] font-medium text-gold-700 hover:text-gold-800 transition-colors"
 						>
 							{inner}
 						</Link>
 					) : (
 						<button
 							onClick={() => window.dispatchEvent(new CustomEvent("studio:ask", { detail: { prompt: ask, autosend: true } }))}
-							className="inline-flex items-center gap-1 text-[12px] font-medium text-amber-700 hover:text-amber-800 transition-colors"
+							className="inline-flex items-center gap-1 text-[12px] font-medium text-gold-700 hover:text-gold-800 transition-colors"
 						>
 							<MessagesSquare className="w-3 h-3" />
 							{inner}

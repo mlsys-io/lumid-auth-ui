@@ -287,7 +287,7 @@ export default function StudioInbox() {
 				>
 					<RefreshCw className={[
 						"w-3 h-3 transition-transform",
-						refreshing ? "animate-spin text-amber-600" : "",
+						refreshing ? "animate-spin text-gold-600" : "",
 					].join(" ")} />
 					Refresh
 				</button>
@@ -395,9 +395,9 @@ function InboxZeroState() {
 		}));
 	};
 	return (
-		<div className="rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50/40 to-white py-10 px-6 text-center">
-			<div className="w-14 h-14 mx-auto rounded-2xl bg-amber-100/60 flex items-center justify-center mb-4 shadow-inner shadow-amber-50">
-				<CheckCircle2 className="w-7 h-7 text-amber-600" />
+		<div className="rounded-2xl border border-gold-100 bg-gradient-to-br from-gold-50/40 to-white py-10 px-6 text-center">
+			<div className="w-14 h-14 mx-auto rounded-2xl bg-gold-100/60 flex items-center justify-center mb-4 shadow-inner shadow-gold-50">
+				<CheckCircle2 className="w-7 h-7 text-gold-600" />
 			</div>
 			<div className="text-base font-medium text-slate-900">Inbox zero.</div>
 			<p className="text-sm text-slate-600 mt-1.5 max-w-md mx-auto leading-relaxed">
@@ -407,7 +407,7 @@ function InboxZeroState() {
 			<div className="flex items-center justify-center gap-2 mt-5">
 				<button
 					onClick={openComposer}
-					className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors shadow-sm shadow-amber-100"
+					className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-gold-500 text-white hover:bg-gold-600 transition-colors shadow-sm shadow-gold-100"
 				>
 					<Plus className="w-3.5 h-3.5" />
 					New workflow
@@ -416,7 +416,7 @@ function InboxZeroState() {
 					onClick={askAgent}
 					className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
 				>
-					<Sparkles className="w-3.5 h-3.5 text-amber-600" />
+					<Sparkles className="w-3.5 h-3.5 text-gold-600" />
 					Ask for ideas
 				</button>
 			</div>
@@ -435,7 +435,7 @@ function FilterEmptyState({ filter, onReset }: { filter: Filter; onReset: () => 
 			</div>
 			<button
 				onClick={onReset}
-				className="mt-3 text-xs text-amber-700 hover:text-amber-800 hover:underline transition-colors"
+				className="mt-3 text-xs text-gold-700 hover:text-gold-800 hover:underline transition-colors"
 			>
 				Show everything
 			</button>
@@ -462,16 +462,16 @@ function FeedRow({
 	pick?: { kind: string; id: string; label: string; affordances?: string };
 }) {
 	const toneCls = {
-		emerald: 'border-amber-200 bg-amber-50/40 hover:border-amber-300',
+		emerald: 'border-gold-200 bg-gold-50/40 hover:border-gold-300',
 		slate:   'border-slate-200 bg-white hover:border-slate-300',
-		amber:   'border-amber-200 bg-amber-50/40 hover:border-amber-300',
+		amber:   'border-gold-200 bg-gold-50/40 hover:border-gold-300',
 		rose:    'border-rose-200 bg-rose-50/40 hover:border-rose-300',
 		indigo:  'border-indigo-200 bg-indigo-50/30 hover:border-indigo-300',
 	}[tone];
 	const iconCls = {
-		emerald: 'text-amber-600',
+		emerald: 'text-gold-600',
 		slate:   'text-slate-500',
-		amber:   'text-amber-600',
+		amber:   'text-gold-600',
 		rose:    'text-rose-600',
 		indigo:  'text-indigo-600',
 	}[tone];
@@ -506,7 +506,7 @@ function FeedRow({
 					{(actions || link) && (
 						<div className="mt-2.5 flex items-center justify-end gap-2 flex-wrap">
 							{link && (
-								<Link to={link.to} className="text-xs text-amber-700 hover:underline inline-flex items-center gap-0.5">
+								<Link to={link.to} className="text-xs text-gold-700 hover:underline inline-flex items-center gap-0.5">
 									{link.label} <ChevronRight className="w-3 h-3" />
 								</Link>
 							)}
@@ -576,7 +576,7 @@ function DraftCard({
 						</button>
 						<button onClick={() => { onAction('edit', text); setEditing(false); }}
 							disabled={busy}
-							className="px-3 py-1 text-xs rounded bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50">
+							className="px-3 py-1 text-xs rounded bg-gold-500 text-white hover:bg-gold-600 disabled:opacity-50">
 							Save
 						</button>
 					</>
@@ -596,7 +596,7 @@ function DraftCard({
 			actions={
 				<>
 					<button onClick={() => onAction('send')} disabled={busy}
-						className="inline-flex items-center gap-1 px-3 py-1 text-xs rounded border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 disabled:opacity-50">
+						className="inline-flex items-center gap-1 px-3 py-1 text-xs rounded border border-gold-200 bg-gold-50 text-gold-800 hover:bg-gold-100 disabled:opacity-50">
 						{busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />} Send
 					</button>
 					<button onClick={() => setEditing(true)} disabled={busy}
@@ -638,7 +638,7 @@ function CycleCard({ item }: { item: Extract<FeedItem, { kind: 'cycle' }> }) {
 			sub={item.app}
 			body={
 				item.skipReason ? (
-					<span className="text-xs text-amber-800">{item.skipReason}</span>
+					<span className="text-xs text-gold-800">{item.skipReason}</span>
 				) : item.lastError ? (
 					<span className="text-xs text-rose-800 font-mono truncate block">{item.lastError.slice(0, 200)}</span>
 				) : undefined

@@ -27,7 +27,7 @@ const STAGE_COLORS: Record<string, string> = {
 	explore:    "bg-blue-100 text-blue-700",
 	paper:      "bg-indigo-100 text-indigo-700",
 	semi:       "bg-purple-100 text-purple-700",
-	live:       "bg-amber-100 text-amber-700",
+	live:       "bg-gold-100 text-gold-700",
 	retired:    "bg-red-100 text-red-500",
 };
 
@@ -65,7 +65,7 @@ function Sparkline({ sharpe }: { sharpe?: number }) {
 	const isPositive = (sharpe ?? 0) >= 0;
 	return (
 		<svg width={w} height={h} className="overflow-visible">
-			<path d={d} fill="none" stroke={isPositive ? "#d97706" : "#ef4444"} strokeWidth={1.5} />
+			<path d={d} fill="none" stroke={isPositive ? "#96773A" : "#ef4444"} strokeWidth={1.5} />
 		</svg>
 	);
 }
@@ -115,7 +115,7 @@ export function StrategyGrid({ strategies, onPromote }: StrategyGridProps) {
 								</div>
 							</div>
 							{pnl != null && (
-								<div className={`text-xs font-medium ${pnl >= 0 ? "text-amber-600" : "text-red-500"} flex items-center gap-0.5 mt-0.5`}>
+								<div className={`text-xs font-medium ${pnl >= 0 ? "text-gold-600" : "text-red-500"} flex items-center gap-0.5 mt-0.5`}>
 									{pnl >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
 									{pnl >= 0 ? "+" : ""}{pnl.toFixed(2)}pp
 								</div>
@@ -129,7 +129,7 @@ export function StrategyGrid({ strategies, onPromote }: StrategyGridProps) {
 								{s.recent_sharpe != null && (
 									<div>
 										<span className="text-gray-400">Sharpe </span>
-										<span className={`font-mono font-medium ${s.recent_sharpe >= 1 ? "text-amber-600" : s.recent_sharpe >= 0 ? "text-gray-600" : "text-red-500"}`}>
+										<span className={`font-mono font-medium ${s.recent_sharpe >= 1 ? "text-gold-600" : s.recent_sharpe >= 0 ? "text-gray-600" : "text-red-500"}`}>
 											{s.recent_sharpe.toFixed(2)}
 										</span>
 									</div>

@@ -304,7 +304,7 @@ export function StudioPicker() {
 	// sky ring). Both still commit on click.
 	const ringClass =
 		hover?.mode === 'annotated'
-			? 'rounded-lg border-2 border-amber-400 bg-amber-200/15 shadow-[0_0_0_4px_rgba(16,185,129,0.15)]'
+			? 'rounded-lg border-2 border-gold-400 bg-gold-200/15 shadow-[0_0_0_4px_rgba(16,185,129,0.15)]'
 			: 'rounded-md border-2 border-dashed border-sky-400/80 bg-sky-200/10';
 
 	return (
@@ -340,7 +340,7 @@ export function StudioPicker() {
 			>
 				<span
 					className={`w-1.5 h-1.5 rounded-full animate-pulse ${
-						hover?.mode === 'freeform' ? 'bg-sky-400' : 'bg-amber-400'
+						hover?.mode === 'freeform' ? 'bg-sky-400' : 'bg-gold-400'
 					}`}
 				/>
 				<span className="truncate">{hint}</span>

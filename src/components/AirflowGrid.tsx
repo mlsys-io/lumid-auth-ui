@@ -36,9 +36,9 @@ interface Props {
 }
 
 const STATE_CLASS: Record<GridState, string> = {
-	succeeded: "bg-amber-400 hover:bg-amber-500",
+	succeeded: "bg-gold-400 hover:bg-gold-500",
 	failed:    "bg-rose-500 hover:bg-rose-600",
-	running:   "bg-amber-400 hover:bg-amber-500 animate-pulse",
+	running:   "bg-gold-400 hover:bg-gold-500 animate-pulse",
 	skipped:   "bg-slate-300 hover:bg-slate-400",
 	canceled:  "bg-slate-400 hover:bg-slate-500",
 	empty:     "bg-slate-100 hover:bg-slate-200",

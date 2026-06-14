@@ -345,9 +345,9 @@ function RunsCrossGrid({ runs, onCellClick }: { runs: MeRunRow[]; onCellClick: (
 
 function StateChip({ state }: { state: string }) {
 	const cfg: Record<string, { label: string; className: string }> = {
-		succeeded: { label: "succeeded", className: "bg-amber-50 text-amber-800 border-amber-200" },
+		succeeded: { label: "succeeded", className: "bg-gold-50 text-gold-800 border-gold-200" },
 		failed:    { label: "failed",    className: "bg-rose-50 text-rose-800 border-rose-200" },
-		running:   { label: "running",   className: "bg-amber-50 text-amber-800 border-amber-200" },
+		running:   { label: "running",   className: "bg-gold-50 text-gold-800 border-gold-200" },
 		skipped:   { label: "skipped",   className: "bg-slate-50 text-slate-600 border-slate-200" },
 		canceled:  { label: "canceled",  className: "bg-slate-50 text-slate-600 border-slate-200" },
 	};

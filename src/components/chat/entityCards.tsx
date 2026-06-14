@@ -230,7 +230,7 @@ function actionOutcomeCard(label: string, r: Record<string, any>): React.ReactNo
 	return (
 		<div className="max-w-md rounded-xl border border-border bg-card shadow-sm overflow-hidden text-left">
 			<div className="flex items-center gap-2 px-3 py-2 text-[12.5px]">
-				<CheckCircle2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+				<CheckCircle2 className="w-3.5 h-3.5 text-gold-600 shrink-0" />
 				<span className="flex-1 min-w-0 truncate text-foreground">Done · <span className="font-medium">{label}</span></span>
 				{to && (
 					<Link to={to} onClick={(e) => e.stopPropagation()} className="shrink-0 inline-flex items-center gap-0.5 text-[11px] text-muted-foreground hover:text-foreground">

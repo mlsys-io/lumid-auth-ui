@@ -29,7 +29,7 @@ export function GrafanaEmbed({ src, title, height = 320 }: Props) {
 
 	if (errored) {
 		return (
-			<div className="rounded border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+			<div className="rounded border border-gold-300 bg-gold-50 p-4 text-sm text-gold-900">
 				<div className="font-medium mb-1">{title} — embed unavailable</div>
 				<div className="text-xs mb-2">
 					Grafana not reachable. Click through to view in a new tab once it's
@@ -39,7 +39,7 @@ export function GrafanaEmbed({ src, title, height = 320 }: Props) {
 					href={fullSrc}
 					target="_blank"
 					rel="noreferrer"
-					className="inline-flex items-center gap-1 text-amber-800 hover:underline"
+					className="inline-flex items-center gap-1 text-gold-800 hover:underline"
 				>
 					Open Grafana <ExternalLink className="w-3 h-3" />
 				</a>

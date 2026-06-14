@@ -181,7 +181,7 @@ export default function AppCard({
 			{/* header → the app's configured UI (or the workflow overview when none) */}
 			<button type="button" onClick={openHeader} className="block w-full text-left px-4 pt-3 pb-2">
 				<div className="flex items-center gap-3">
-					<div className="w-9 h-9 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
+					<div className="w-9 h-9 rounded-lg bg-gold-50 text-gold-600 flex items-center justify-center flex-shrink-0">
 						<Icon className="w-[18px] h-[18px]" />
 					</div>
 					<div className="min-w-0 flex-1">
@@ -204,7 +204,7 @@ export default function AppCard({
 					</div>
 					<div className="text-[12px] text-slate-400 mt-0.5 truncate">{whenLast(lastActivity)}</div>
 					</div>
-					<ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-amber-600 transition-colors flex-shrink-0" />
+					<ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-gold-600 transition-colors flex-shrink-0" />
 					<span
 						role="button" tabIndex={0} onClick={remove}
 						className="shrink-0 p-1.5 rounded-md text-slate-300 hover:text-rose-600 hover:bg-rose-50 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -221,7 +221,7 @@ export default function AppCard({
 				{[...workflows].sort((a, b) => Number(!!b.run_spark) - Number(!!a.run_spark)).slice(0, 2).map((w) => (
 					<div
 						key={w.slug}
-						className="flex items-center gap-2 w-full rounded-md px-1.5 -mx-1.5 py-0.5 hover:bg-amber-50/60 transition-colors"
+						className="flex items-center gap-2 w-full rounded-md px-1.5 -mx-1.5 py-0.5 hover:bg-gold-50/60 transition-colors"
 					>
 						<button
 							type="button"

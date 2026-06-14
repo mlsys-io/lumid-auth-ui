@@ -198,7 +198,7 @@ export default function AppManagePanel() {
 				<span className="text-slate-300">/</span>
 				<span className="text-[13px] font-medium text-slate-800">Manage</span>
 				{readOnly && (
-					<span className="ml-auto text-[11px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+					<span className="ml-auto text-[11px] px-2 py-0.5 rounded-full bg-gold-50 text-gold-700 border border-gold-200">
 						operator-shared — read-only (install your own copy to edit)
 					</span>
 				)}
@@ -215,7 +215,7 @@ export default function AppManagePanel() {
 						value={effectiveName}
 						onChange={(e) => setNameDraft(e.target.value)}
 						disabled={readOnly || saving}
-						className="flex-1 px-2.5 py-1.5 text-[13px] rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/20 focus:border-amber-400 disabled:bg-slate-50"
+						className="flex-1 px-2.5 py-1.5 text-[13px] rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400 disabled:bg-slate-50"
 					/>
 					<button
 						onClick={saveRename}
@@ -234,7 +234,7 @@ export default function AppManagePanel() {
 					<button
 						onClick={() => setWfFormOpen(true)}
 						disabled={readOnly}
-						className="ml-auto inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[12px] font-medium bg-amber-700 text-white hover:bg-amber-800 disabled:opacity-40 transition-all"
+						className="ml-auto inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[12px] font-medium bg-gold-700 text-white hover:bg-gold-800 disabled:opacity-40 transition-all"
 					>
 						<Plus className="w-3 h-3" /> New workflow
 					</button>
@@ -257,7 +257,7 @@ export default function AppManagePanel() {
 									onClick={() => runNow(l.name || "")}
 									disabled={!l.name || runningLoop === l.name}
 									title="Run now"
-									className="p-1.5 rounded-lg text-slate-400 hover:text-amber-700 hover:bg-amber-50 disabled:opacity-40 transition-colors"
+									className="p-1.5 rounded-lg text-slate-400 hover:text-gold-700 hover:bg-gold-50 disabled:opacity-40 transition-colors"
 								>
 									{runningLoop === l.name ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
 								</button>
@@ -324,7 +324,7 @@ export default function AppManagePanel() {
 					)}
 					{datasets.length > 0 && (
 						<div className="text-[12px] text-slate-600 flex items-start gap-1.5">
-							<Database className="w-3.5 h-3.5 text-amber-400 mt-0.5 flex-shrink-0" />
+							<Database className="w-3.5 h-3.5 text-gold-400 mt-0.5 flex-shrink-0" />
 							<span>Datasets: {datasets.map((d, i) => <code key={i} className="text-[11px] mr-1.5">{d.repo || d.id}</code>)}</span>
 						</div>
 					)}
@@ -459,7 +459,7 @@ function SkillPickerDialog({
 										<div className="text-[10.5px] text-slate-400 font-mono truncate">{s.slug}</div>
 									</div>
 									{already ? (
-										<span className="text-[11px] text-amber-600 inline-flex items-center gap-1 flex-shrink-0"><Check className="w-3 h-3" /> imported</span>
+										<span className="text-[11px] text-gold-600 inline-flex items-center gap-1 flex-shrink-0"><Check className="w-3 h-3" /> imported</span>
 									) : (
 										<button
 											onClick={() => add(s)}
@@ -509,7 +509,7 @@ function NewWorkflowDialog({
 			<DialogContent className="max-w-md">
 				<DialogHeader>
 					<DialogTitle className="flex items-center gap-2 text-[15px]">
-						<CalendarClock className="w-4 h-4 text-amber-600" /> New workflow
+						<CalendarClock className="w-4 h-4 text-gold-600" /> New workflow
 					</DialogTitle>
 					<DialogDescription className="text-[12.5px]">
 						A scheduled loop of skill steps. It lands in this app&apos;s <code className="text-[11px]">xpcloud.yaml</code> and the scheduler picks it up automatically.
@@ -520,7 +520,7 @@ function NewWorkflowDialog({
 						<span className="text-[11.5px] text-slate-500 block mb-1">Name</span>
 						<input
 							value={name} onChange={(e) => setName(e.target.value)} placeholder="morning_brief"
-							className="w-full px-2.5 py-1.5 text-[13px] rounded-lg border border-slate-200 font-mono focus:outline-none focus:ring-2 focus:ring-amber-400/20 focus:border-amber-400"
+							className="w-full px-2.5 py-1.5 text-[13px] rounded-lg border border-slate-200 font-mono focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400"
 						/>
 						{slug && slug !== name && <span className="text-[10.5px] text-slate-400 mt-0.5 block">saved as <code>{slug}</code></span>}
 						{nameClash && <span className="text-[10.5px] text-rose-600 mt-0.5 block">a workflow with this name already exists</span>}
@@ -540,7 +540,7 @@ function NewWorkflowDialog({
 						) : (
 							<input
 								value={schedule} onChange={(e) => setSchedule(e.target.value)} placeholder="0 8 * * *"
-								className="w-full px-2.5 py-1.5 text-[13px] rounded-lg border border-slate-200 font-mono focus:outline-none focus:ring-2 focus:ring-amber-400/20"
+								className="w-full px-2.5 py-1.5 text-[13px] rounded-lg border border-slate-200 font-mono focus:outline-none focus:ring-2 focus:ring-gold-400/20"
 							/>
 						)}
 					</label>
@@ -549,7 +549,7 @@ function NewWorkflowDialog({
 						<input
 							value={skillsText} onChange={(e) => setSkillsText(e.target.value)}
 							placeholder="observe/fetch, analyze/summarize"
-							className="w-full px-2.5 py-1.5 text-[12.5px] rounded-lg border border-slate-200 font-mono focus:outline-none focus:ring-2 focus:ring-amber-400/20"
+							className="w-full px-2.5 py-1.5 text-[12.5px] rounded-lg border border-slate-200 font-mono focus:outline-none focus:ring-2 focus:ring-gold-400/20"
 						/>
 						{suggestedSkills.length > 0 && (
 							<span className="text-[10.5px] text-slate-400 mt-1 block">imported skill repos: {suggestedSkills.join(", ")}</span>
@@ -559,7 +559,7 @@ function NewWorkflowDialog({
 						<span className="text-[11.5px] text-slate-500 block mb-1">Goal <span className="text-slate-400">(optional, shown on the app page)</span></span>
 						<input
 							value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="Summarize overnight market moves"
-							className="w-full px-2.5 py-1.5 text-[13px] rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-400/20"
+							className="w-full px-2.5 py-1.5 text-[13px] rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-gold-400/20"
 						/>
 					</label>
 					<button
@@ -570,7 +570,7 @@ function NewWorkflowDialog({
 							goal,
 						})}
 						disabled={!valid}
-						className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-amber-700 text-white hover:bg-amber-800 disabled:opacity-40 transition-all"
+						className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-gold-700 text-white hover:bg-gold-800 disabled:opacity-40 transition-all"
 					>
 						<Plus className="w-4 h-4" /> Create workflow
 					</button>
@@ -610,7 +610,7 @@ function ShareSection({ app, readOnly }: { app: string; readOnly: boolean }) {
 					<div className="text-[12px] font-medium text-slate-700">Fork</div>
 					<p className="text-[11px] text-slate-500 leading-snug">Your own editable copy — a repo under your xp.io account, installed here.</p>
 					<input value={forkName} onChange={(e) => setForkName(e.target.value)}
-						className="w-full px-2 py-1 text-[11px] font-mono rounded border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-400/30" />
+						className="w-full px-2 py-1 text-[11px] font-mono rounded border border-slate-200 focus:outline-none focus:ring-2 focus:ring-gold-400/30" />
 					<button disabled={!!busy} onClick={() => post("fork", "fork", { name: forkName },
 						(d) => `Forked — installing ${String(d.fork || forkName)}…`)}
 						className="w-full inline-flex items-center justify-center gap-1 px-2 py-1.5 text-[12px] rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40">
@@ -622,7 +622,7 @@ function ShareSection({ app, readOnly }: { app: string; readOnly: boolean }) {
 					<p className="text-[11px] text-slate-500 leading-snug">Push your local changes to your xp.io repo. Version bumps automatically.</p>
 					<button disabled={!!busy || readOnly} onClick={() => post("publish", "publish", {},
 						() => "Publish queued — your repo updates in ~a minute.")}
-						className="w-full inline-flex items-center justify-center gap-1 px-2 py-1.5 text-[12px] rounded-lg bg-amber-700 text-white hover:bg-amber-800 disabled:opacity-40">
+						className="w-full inline-flex items-center justify-center gap-1 px-2 py-1.5 text-[12px] rounded-lg bg-gold-700 text-white hover:bg-gold-800 disabled:opacity-40">
 						{busy === "publish" ? <Loader2 className="w-3 h-3 animate-spin" /> : <UploadCloud className="w-3 h-3" />} Publish changes
 					</button>
 				</div>

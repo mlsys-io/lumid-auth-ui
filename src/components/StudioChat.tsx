@@ -1136,7 +1136,7 @@ export function StudioChat() {
 							aria-expanded={historyOpen}
 							className={[
 								'p-1.5 rounded-md transition-colors',
-								historyOpen ? 'text-amber-700 bg-amber-50' : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+								historyOpen ? 'text-gold-700 bg-gold-50' : 'text-muted-foreground hover:text-foreground hover:bg-muted',
 							].join(' ')}
 						>
 							<MessageSquarePlus className="w-3.5 h-3.5" />
@@ -1149,9 +1149,9 @@ export function StudioChat() {
 								<button
 									type="button"
 									onClick={newChat}
-									className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] text-foreground hover:bg-amber-50 hover:text-amber-800 transition-colors"
+									className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] text-foreground hover:bg-gold-50 hover:text-gold-800 transition-colors"
 								>
-									<Plus className="w-3.5 h-3.5 text-amber-600" />
+									<Plus className="w-3.5 h-3.5 text-gold-600" />
 									<span className="font-medium">New chat</span>
 								</button>
 								<div className="h-px bg-muted my-1 mx-2" />
@@ -1165,7 +1165,7 @@ export function StudioChat() {
 										key={h.id}
 										className={[
 											'group flex items-center gap-1 px-1 py-0.5 rounded-lg transition-colors',
-											h.id === chatId ? 'bg-amber-50/60' : 'hover:bg-muted/60',
+											h.id === chatId ? 'bg-gold-50/60' : 'hover:bg-muted/60',
 										].join(' ')}
 									>
 										<button
@@ -1252,23 +1252,23 @@ export function StudioChat() {
 				    clickable to remove from the queue. Hidden when empty. */}
 				{messageQueue.length > 0 && (
 					<div className="mb-2 px-0.5 flex flex-col gap-1">
-						<div className="text-[10px] uppercase tracking-wider text-amber-700 font-semibold flex items-center gap-1">
-							<span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+						<div className="text-[10px] uppercase tracking-wider text-gold-700 font-semibold flex items-center gap-1">
+							<span className="w-1.5 h-1.5 rounded-full bg-gold-500 animate-pulse" />
 							{messageQueue.length} message{messageQueue.length === 1 ? '' : 's'} queued
 						</div>
 						{messageQueue.map((q, i) => (
 							<div
 								key={i}
-								className="flex items-center gap-1.5 text-[11px] bg-amber-50/70 border border-amber-200/60 rounded-lg px-2 py-1"
+								className="flex items-center gap-1.5 text-[11px] bg-gold-50/70 border border-gold-200/60 rounded-lg px-2 py-1"
 							>
-								<span className="flex-1 truncate text-amber-900">{q.text}</span>
+								<span className="flex-1 truncate text-gold-900">{q.text}</span>
 								{q.attachments.length > 0 && (
-									<span className="text-[10px] text-amber-700 font-mono">+{q.attachments.length}</span>
+									<span className="text-[10px] text-gold-700 font-mono">+{q.attachments.length}</span>
 								)}
 								<button
 									type="button"
 									onClick={() => setMessageQueue((arr) => arr.filter((_, idx) => idx !== i))}
-									className="text-amber-600 hover:text-rose-500 transition-colors"
+									className="text-gold-600 hover:text-rose-500 transition-colors"
 									title="Cancel this queued message"
 								>
 									<X className="w-3 h-3" />
@@ -1292,11 +1292,11 @@ export function StudioChat() {
 							const isFreeform = !pickedTarget.affordances || pickedTarget.affordances.length === 0;
 							const chipCls = isFreeform
 								? 'inline-flex items-center gap-1.5 text-[11px] bg-sky-50 border border-sky-200 rounded-full pl-2 pr-1 py-0.5'
-								: 'inline-flex items-center gap-1.5 text-[11px] bg-amber-50 border border-amber-200 rounded-full pl-2 pr-1 py-0.5';
-							const iconCls   = isFreeform ? 'w-3 h-3 text-sky-600 flex-shrink-0'      : 'w-3 h-3 text-amber-600 flex-shrink-0';
-							const kindCls   = isFreeform ? 'text-sky-700 font-medium'                : 'text-amber-700 font-medium';
-							const labelCls  = isFreeform ? 'text-sky-800 max-w-[260px] truncate'     : 'text-amber-800 max-w-[260px] truncate';
-							const closeCls  = isFreeform ? 'text-sky-700/70 hover:text-rose-600 transition-colors flex-shrink-0' : 'text-amber-700/70 hover:text-rose-600 transition-colors flex-shrink-0';
+								: 'inline-flex items-center gap-1.5 text-[11px] bg-gold-50 border border-gold-200 rounded-full pl-2 pr-1 py-0.5';
+							const iconCls   = isFreeform ? 'w-3 h-3 text-sky-600 flex-shrink-0'      : 'w-3 h-3 text-gold-600 flex-shrink-0';
+							const kindCls   = isFreeform ? 'text-sky-700 font-medium'                : 'text-gold-700 font-medium';
+							const labelCls  = isFreeform ? 'text-sky-800 max-w-[260px] truncate'     : 'text-gold-800 max-w-[260px] truncate';
+							const closeCls  = isFreeform ? 'text-sky-700/70 hover:text-rose-600 transition-colors flex-shrink-0' : 'text-gold-700/70 hover:text-rose-600 transition-colors flex-shrink-0';
 							return (
 								<div className={chipCls}>
 									<Crosshair className={iconCls} />
@@ -1392,14 +1392,14 @@ export function StudioChat() {
 								toolsOpen
 									? 'bg-foreground text-background'
 									: activeToolCount > 0
-										? 'text-amber-700 bg-amber-50 hover:bg-amber-100'
+										? 'text-gold-700 bg-gold-50 hover:bg-gold-100'
 										: 'text-muted-foreground hover:text-foreground hover:bg-muted',
 								streaming ? 'opacity-50 cursor-not-allowed' : '',
 							].join(' ')}
 						>
 							<Plus className={['w-4 h-4 transition-transform', toolsOpen ? 'rotate-45' : ''].join(' ')} />
 							{activeToolCount > 0 && !toolsOpen && (
-								<span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-white">
+								<span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-gold-500 text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-white">
 									{activeToolCount}
 								</span>
 							)}
@@ -1441,13 +1441,13 @@ export function StudioChat() {
 									className={[
 										'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] transition-colors',
 										think
-											? 'bg-amber-50 text-amber-700'
+											? 'bg-gold-50 text-gold-700'
 											: 'text-foreground hover:bg-muted/60',
 									].join(' ')}
 								>
-									<Brain className={['w-3.5 h-3.5', think ? 'text-amber-600' : 'text-muted-foreground'].join(' ')} />
+									<Brain className={['w-3.5 h-3.5', think ? 'text-gold-600' : 'text-muted-foreground'].join(' ')} />
 									<span className="font-medium flex-1 text-left">Show thinking</span>
-									{think && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
+									{think && <span className="w-1.5 h-1.5 rounded-full bg-gold-500" />}
 								</button>
 								{/* Agent + Persona pickers moved to the header — they're
 								    persistent context (sticky across turns), not per-turn
@@ -1589,7 +1589,7 @@ export function StudioChat() {
 										className={[
 											'w-full text-left px-3 py-1.5 text-[12px] font-mono hover:bg-muted/60 transition-colors',
 											i === 0 && i === slashSuggestions.length - 1 ? 'rounded-xl' : i === 0 ? 'rounded-t-xl' : i === slashSuggestions.length - 1 ? 'rounded-b-xl' : '',
-											i === slashIdx ? 'bg-amber-50' : '',
+											i === slashIdx ? 'bg-gold-50' : '',
 										].join(' ')}
 										onMouseDown={(e) => {
 											e.preventDefault();
@@ -1597,7 +1597,7 @@ export function StudioChat() {
 											setSlashSuggestions([]);
 										}}
 									>
-										<span className="text-amber-700 font-semibold">{s.label}</span>
+										<span className="text-gold-700 font-semibold">{s.label}</span>
 										{s.label !== s.template && (
 											<span className="text-muted-foreground ml-2 truncate">{s.template.slice(s.label.length)}</span>
 										)}
@@ -1630,9 +1630,9 @@ export function StudioChat() {
 						className={[
 							'order-2 h-8 w-8 flex items-center justify-center rounded-full flex-shrink-0 transition-all active:scale-95',
 							picking
-								? 'bg-amber-50 text-amber-700 ring-1 ring-amber-300'
+								? 'bg-gold-50 text-gold-700 ring-1 ring-gold-300'
 								: pickedTarget
-									? 'text-amber-700 hover:bg-amber-50'
+									? 'text-gold-700 hover:bg-gold-50'
 									: 'text-muted-foreground hover:text-foreground hover:bg-muted',
 						].join(' ')}
 					>
@@ -1665,7 +1665,7 @@ export function StudioChat() {
 					>
 						<Send className="w-3.5 h-3.5" />
 						{messageQueue.length > 0 && (
-							<span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-white">
+							<span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-gold-500 text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-white">
 								{messageQueue.length}
 							</span>
 						)}
@@ -1703,7 +1703,7 @@ const MessageBubble = memo(function MessageBubble({
 				'w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm',
 				isUser
 					? 'bg-gradient-to-br from-slate-300 to-slate-400 text-white'
-					: 'bg-gradient-to-br from-amber-400 to-amber-600 text-white shadow-amber-100',
+					: 'bg-gradient-to-br from-gold-400 to-gold-600 text-white shadow-gold-100',
 			].join(' ')}>
 				{isUser ? <User className="w-3.5 h-3.5" /> : <Bot className="w-3.5 h-3.5" />}
 			</div>
@@ -1752,9 +1752,9 @@ const MessageBubble = memo(function MessageBubble({
 							)
 						) : (
 							<span className="inline-flex gap-1 items-center">
-								<span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
-								<span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
-								<span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-bounce" />
+								<span className="w-1.5 h-1.5 bg-gold-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
+								<span className="w-1.5 h-1.5 bg-gold-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
+								<span className="w-1.5 h-1.5 bg-gold-400 rounded-full animate-bounce" />
 							</span>
 						)}
 					</div>
@@ -1763,7 +1763,7 @@ const MessageBubble = memo(function MessageBubble({
 					<div className="mt-1.5">
 						<Link
 							to={CONNECT_ROUTE[connectHintFor(m.content)!]}
-							className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 text-[12px] hover:bg-amber-100 transition-colors"
+							className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gold-300 bg-gold-50 text-gold-800 text-[12px] hover:bg-gold-100 transition-colors"
 						>
 							<Lock className="w-3.5 h-3.5" />
 							Connect {connectHintFor(m.content) === 'google' ? 'Google' : 'Microsoft'} to continue
@@ -1808,7 +1808,7 @@ const MessageBubble = memo(function MessageBubble({
 								className={[
 									'p-1 rounded text-[10px]',
 									copied
-										? 'text-amber-700 bg-amber-50'
+										? 'text-gold-700 bg-gold-50'
 										: 'text-muted-foreground hover:text-foreground hover:bg-muted',
 								].join(' ')}
 							>
@@ -1820,7 +1820,7 @@ const MessageBubble = memo(function MessageBubble({
 								type="button"
 								onClick={onRegenerate}
 								title="Regenerate with current model + toggles"
-								className="p-1 rounded text-[10px] text-muted-foreground hover:text-amber-700 hover:bg-amber-50"
+								className="p-1 rounded text-[10px] text-muted-foreground hover:text-gold-700 hover:bg-gold-50"
 							>
 								<RotateCcw className="w-3 h-3" />
 							</button>
@@ -1878,7 +1878,7 @@ function ThinkingBlock({ thinking, done }: { thinking: string; done: boolean }) 
 			<button
 				type="button"
 				onClick={() => setOpen((v) => !v)}
-				className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50/80 hover:bg-amber-100/80 border border-amber-200 rounded-full px-2 py-0.5 transition-colors"
+				className="inline-flex items-center gap-1 text-[11px] text-gold-700 bg-gold-50/80 hover:bg-gold-100/80 border border-gold-200 rounded-full px-2 py-0.5 transition-colors"
 			>
 				<Brain className="w-3 h-3" />
 				<span>{label}</span>
@@ -1887,7 +1887,7 @@ function ThinkingBlock({ thinking, done }: { thinking: string; done: boolean }) 
 				/>
 			</button>
 			{open && (
-				<div className="mt-1.5 px-3 py-2 text-[12px] leading-relaxed text-muted-foreground bg-amber-50/40 border border-amber-100 rounded-xl whitespace-pre-wrap break-words">
+				<div className="mt-1.5 px-3 py-2 text-[12px] leading-relaxed text-muted-foreground bg-gold-50/40 border border-gold-100 rounded-xl whitespace-pre-wrap break-words">
 					{thinking || (
 						<span className="opacity-50 italic">(no content yet)</span>
 					)}
@@ -1921,11 +1921,11 @@ function ToolChip({ t, onApprove }: { t: ToolCall; onApprove?: (approved: boolea
 				<div className={[
 					'text-[11px] inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border max-w-full',
 					t.approvalRequired
-						? 'bg-amber-50/80 border-amber-300 text-amber-900'
+						? 'bg-gold-50/80 border-gold-300 text-gold-900'
 						: t.pending
 							? 'bg-sky-50/80 border-sky-200 text-sky-800'
 							: t.ok
-								? 'bg-amber-50/80 border-amber-200 text-amber-800'
+								? 'bg-gold-50/80 border-gold-200 text-gold-800'
 								: 'bg-rose-50/80 border-rose-200 text-rose-800',
 				].join(' ')}>
 					{t.approvalRequired
@@ -1950,7 +1950,7 @@ function ToolChip({ t, onApprove }: { t: ToolCall; onApprove?: (approved: boolea
 				{t.link && (
 					<Link
 						to={t.link.to}
-						className="text-[11px] inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-popover border border-amber-300 text-amber-700 hover:bg-amber-50 transition-colors"
+						className="text-[11px] inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-popover border border-gold-300 text-gold-700 hover:bg-gold-50 transition-colors"
 					>
 						{t.link.label} →
 					</Link>
@@ -1959,14 +1959,14 @@ function ToolChip({ t, onApprove }: { t: ToolCall; onApprove?: (approved: boolea
 					<>
 						<button
 							onClick={() => onApprove(true)}
-							className="text-[11px] px-2 py-0.5 rounded-full bg-amber-600 text-white hover:bg-amber-700 transition-colors font-medium"
+							className="text-[11px] px-2 py-0.5 rounded-full bg-gold-600 text-white hover:bg-gold-700 transition-colors font-medium"
 						>
 							Allow
 						</button>
 						<button
 							onClick={() => onApprove(true, true)}
 							title={`Always allow ${t.name} without asking (revoke later in settings)`}
-							className="text-[11px] px-2 py-0.5 rounded-full bg-amber-50 border border-amber-300 text-amber-700 hover:bg-amber-100 transition-colors font-medium"
+							className="text-[11px] px-2 py-0.5 rounded-full bg-gold-50 border border-gold-300 text-gold-700 hover:bg-gold-100 transition-colors font-medium"
 						>
 							Always
 						</button>
@@ -1987,7 +1987,7 @@ function ToolChip({ t, onApprove }: { t: ToolCall; onApprove?: (approved: boolea
 			)}
 			{/* Args shown inline when approval is required (user needs to see what will run) */}
 			{t.approvalRequired && hasArgs && (
-				<div className="ml-5 mt-0.5 p-2 rounded-md bg-amber-50 border border-amber-200 text-[10px] font-mono whitespace-pre-wrap break-all max-h-40 overflow-y-auto">
+				<div className="ml-5 mt-0.5 p-2 rounded-md bg-gold-50 border border-gold-200 text-[10px] font-mono whitespace-pre-wrap break-all max-h-40 overflow-y-auto">
 					{JSON.stringify(t.args, null, 2)}
 				</div>
 			)}
@@ -2130,12 +2130,12 @@ function ModelChip({
 							onClick={() => { setModel(m.id); setOpen(false); }}
 							className={[
 								'w-full text-left flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12px] transition-colors',
-								m.id === model ? 'bg-amber-50 text-amber-800' : 'text-foreground hover:bg-muted/60',
+								m.id === model ? 'bg-gold-50 text-gold-800' : 'text-foreground hover:bg-muted/60',
 							].join(' ')}
 						>
-							<Bot className={['w-3 h-3', m.id === model ? 'text-amber-600' : 'text-muted-foreground'].join(' ')} />
+							<Bot className={['w-3 h-3', m.id === model ? 'text-gold-600' : 'text-muted-foreground'].join(' ')} />
 							<span className="font-medium flex-1">{m.display_name}</span>
-							{m.id === model && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
+							{m.id === model && <span className="w-1.5 h-1.5 rounded-full bg-gold-500" />}
 						</button>
 					))}
 				</div>
@@ -2521,9 +2521,9 @@ function ArtifactIconButton() {
 
 	const KindIcon = ({ k }: { k: ArtifactRow['kind'] }) => {
 		switch (k) {
-			case 'markdown': return <FileText className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />;
+			case 'markdown': return <FileText className="w-3.5 h-3.5 text-gold-600 flex-shrink-0" />;
 			case 'code':     return <Code2 className="w-3.5 h-3.5 text-sky-600 flex-shrink-0" />;
-			case 'json':     return <FileJson className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />;
+			case 'json':     return <FileJson className="w-3.5 h-3.5 text-gold-600 flex-shrink-0" />;
 			default:         return <FileText className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />;
 		}
 	};
@@ -2536,12 +2536,12 @@ function ArtifactIconButton() {
 				title={rows.length > 0 ? `Artifacts (${rows.length})` : 'Artifacts'}
 				className={[
 					'relative p-1.5 rounded-md transition-colors',
-					open ? 'text-amber-700 bg-amber-50' : 'text-muted-foreground hover:text-amber-700 hover:bg-amber-50',
+					open ? 'text-gold-700 bg-gold-50' : 'text-muted-foreground hover:text-gold-700 hover:bg-gold-50',
 				].join(' ')}
 			>
 				<Boxes className="w-3.5 h-3.5" />
 				{rows.length > 0 && (
-					<span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-1 rounded-full bg-amber-500 text-white text-[8.5px] font-bold flex items-center justify-center ring-2 ring-white leading-none">
+					<span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-1 rounded-full bg-gold-500 text-white text-[8.5px] font-bold flex items-center justify-center ring-2 ring-white leading-none">
 						{rows.length > 99 ? '99+' : rows.length}
 					</span>
 				)}
@@ -2561,7 +2561,7 @@ function ArtifactIconButton() {
 								<ArrowLeft className="w-3.5 h-3.5" />
 							</button>
 						) : (
-							<Boxes className="w-4 h-4 text-amber-600 flex-shrink-0" />
+							<Boxes className="w-4 h-4 text-gold-600 flex-shrink-0" />
 						)}
 						<div className="flex-1 min-w-0">
 							<div className="text-[12.5px] font-semibold text-foreground truncate">
@@ -2581,7 +2581,7 @@ function ArtifactIconButton() {
 									title={copied ? 'Copied' : 'Copy'}
 									className={[
 										'p-1.5 rounded-md transition-colors',
-										copied ? 'text-amber-700 bg-amber-50' : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+										copied ? 'text-gold-700 bg-gold-50' : 'text-muted-foreground hover:text-foreground hover:bg-muted',
 									].join(' ')}
 								>
 									<Copy className="w-3.5 h-3.5" />

@@ -68,7 +68,7 @@ export function IntentFeedbackRow({
 			state === 'wrong'  ? 'noted · adjusting' :
 			                     'noted';
 		const tone =
-			state === 'good'  ? 'text-amber-700 bg-amber-50 border-amber-100' :
+			state === 'good'  ? 'text-gold-700 bg-gold-50 border-gold-100' :
 			state === 'wrong' ? 'text-rose-700    bg-rose-50    border-rose-100'    :
 			                    'text-slate-600   bg-slate-50   border-slate-200';
 		return (
@@ -97,12 +97,12 @@ export function IntentFeedbackRow({
 						}
 					}}
 					placeholder="What would you change?"
-					className="px-2 py-1 text-[12px] rounded-md border border-slate-200 focus:border-amber-300 focus:ring-1 focus:ring-amber-200 outline-none w-[200px]"
+					className="px-2 py-1 text-[12px] rounded-md border border-slate-200 focus:border-gold-300 focus:ring-1 focus:ring-gold-200 outline-none w-[200px]"
 					autoFocus
 				/>
 				<button
 					onClick={() => send('edit', note)}
-					className="p-1 rounded-md hover:bg-amber-50 text-amber-700"
+					className="p-1 rounded-md hover:bg-gold-50 text-gold-700"
 					title="Save"
 				>
 					<Check className="w-3.5 h-3.5" />

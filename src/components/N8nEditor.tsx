@@ -67,7 +67,7 @@ export function N8nEditor({ workflowId }: Props) {
 
 	return (
 		<div className="space-y-3">
-			<div className="rounded-lg bg-amber-50/60 border border-amber-200/70 px-3 py-2 text-xs text-amber-900 flex items-start gap-2">
+			<div className="rounded-lg bg-gold-50/60 border border-gold-200/70 px-3 py-2 text-xs text-gold-900 flex items-start gap-2">
 				<Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
 				<div>
 					<div className="font-medium mb-0.5">Visual editor — opt-in for now</div>
@@ -98,13 +98,13 @@ export function N8nEditor({ workflowId }: Props) {
 					value={promoteId}
 					onChange={(e) => setPromoteId(e.target.value)}
 					placeholder="paste n8n workflow id to promote"
-					className="flex-1 px-2.5 py-1.5 rounded border border-slate-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-amber-400/30 font-mono"
+					className="flex-1 px-2.5 py-1.5 rounded border border-slate-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-gold-400/30 font-mono"
 				/>
 				<button
 					onClick={promoteToScheduled}
 					disabled={promoting || !promoteId.trim()}
 					title="Translate this n8n workflow into a scheduled xpio workflow (best-effort)."
-					className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-amber-700 hover:bg-amber-50 border border-amber-200 disabled:opacity-40 transition-colors"
+					className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-gold-700 hover:bg-gold-50 border border-gold-200 disabled:opacity-40 transition-colors"
 				>
 					{promoting ? <Loader2 className="w-3 h-3 animate-spin" /> : <ArrowRightCircle className="w-3 h-3" />}
 					Promote to scheduled
@@ -113,7 +113,7 @@ export function N8nEditor({ workflowId }: Props) {
 					href={src}
 					target="_blank"
 					rel="noopener noreferrer"
-					className="inline-flex items-center gap-1 text-amber-700 hover:text-amber-900 underline"
+					className="inline-flex items-center gap-1 text-gold-700 hover:text-gold-900 underline"
 				>
 					Open in new tab <ExternalLink className="w-3 h-3" />
 				</a>

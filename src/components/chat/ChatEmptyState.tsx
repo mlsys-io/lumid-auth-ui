@@ -206,11 +206,11 @@ export default function ChatEmptyState() {
 							onClick={() => fire(`I have ${draftCount} pending draft${draftCount === 1 ? '' : 's'} — walk me through them.`)}
 							className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-card border border-border hover:bg-muted transition-colors text-left text-[12.5px]"
 						>
-							<FileText className="w-3.5 h-3.5 shrink-0 text-amber-600" />
+							<FileText className="w-3.5 h-3.5 shrink-0 text-gold-600" />
 							<span className="flex-1 min-w-0 truncate text-foreground">
 								{draftCount} draft{draftCount === 1 ? '' : 's'} awaiting you
 							</span>
-							<span className="text-[11px] font-medium text-amber-700 shrink-0">review</span>
+							<span className="text-[11px] font-medium text-gold-700 shrink-0">review</span>
 						</button>
 					)}
 				</div>
