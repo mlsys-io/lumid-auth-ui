@@ -23,12 +23,22 @@ export default defineConfig({
     chunkSizeWarningLimit: 900,
     rollupOptions: {
       output: {
-        // Single vendor chunk — separates node_modules (stable across deploys,
-        // cached) from app code (changes often) WITHOUT cross-chunk cycles.
-        // A finer split (react/markdown/charts) created circular chunks that
-        // risk init-order runtime errors, so we keep it simple + safe.
+        // Peel the HEAVY, route-specific LEAF libs out of the shared vendor
+        // chunk so they load only with the lazy routes that use them — the
+        // /studio/apps index pulls none of these, so its first paint no longer
+        // drags the whole 2 MB monolith over the wire. We split only
+        // self-contained leaves (no app imports, no cross-cycle with the React
+        // core), which is what keeps this safe where a finer react/* split
+        // previously caused init-order cycles. Everything else (react, router,
+        // radix, tanstack, lucide, date-fns, axios) stays in `vendor`.
         manualChunks(id: string) {
-          return id.includes("node_modules") ? "vendor" : undefined;
+          if (!id.includes("node_modules")) return undefined;
+          if (/[\\/]node_modules[\\/](@xyflow|reactflow)[\\/]/.test(id)) return "vendor-flow";
+          if (/[\\/]node_modules[\\/](recharts|chart\.js|react-chartjs-2|d3-[^\\/]+|internmap|victory-[^\\/]+)[\\/]/.test(id)) return "vendor-charts";
+          if (/[\\/]node_modules[\\/](@monaco-editor|monaco-editor)[\\/]/.test(id)) return "vendor-editor";
+          if (/[\\/]node_modules[\\/]@emoji-mart[\\/]/.test(id)) return "vendor-emoji";
+          if (/[\\/]node_modules[\\/](react-markdown|remark-[^\\/]+|rehype-[^\\/]+|micromark[^\\/]*|mdast-[^\\/]+|hast-[^\\/]+|hastscript|unist-[^\\/]+|unified|vfile[^\\/]*|property-information|github-markdown-css)[\\/]/.test(id)) return "vendor-markdown";
+          return "vendor";
         },
       },
     },

@@ -30,7 +30,7 @@ function OverviewBody({ app }: { app: string }) {
 	const [wfs, setWfs] = useState<MeWorkflowRow[] | null>(null);
 	useEffect(() => {
 		let live = true;
-		me.listWorkflows()
+		me.listWorkflows("scheduled")
 			.then((r) => { if (live) setWfs((r.workflows || []).filter((w) => w.app === app)); })
 			.catch(() => { if (live) setWfs([]); });
 		return () => { live = false; };

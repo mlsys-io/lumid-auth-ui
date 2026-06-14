@@ -254,7 +254,9 @@ function AppsHome() {
 
 	const load = useCallback(async () => {
 			const [wfR, lhR, todayR, agentsR, appsR, draftsR] = await Promise.allSettled([
-				me.listWorkflows(),
+				// scheduled-only: app cards group xpio loops by app; n8n visual
+				// rows have no app, so fetching them just adds the n8n round-trip.
+				me.listWorkflows("scheduled"),
 				me.loopsHealth(),
 				me.today(),
 				apiClient.get("/api/v1/me/knowledge/agents"),
@@ -664,7 +666,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 	const initialCycle = params.get("cycle"); // deep-link anchor → open that run
 
 	const load = useCallback(async () => {
-		const [lhR, wfR, uaR] = await Promise.allSettled([me.loopsHealth(), me.listWorkflows(), me.listApps()]);
+		const [lhR, wfR, uaR] = await Promise.allSettled([me.loopsHealth(), me.listWorkflows("scheduled"), me.listApps()]);
 		const lhMap = new Map<string, LoopHealth>();
 		// Configured display name/icon (ui.sidebar) — same source as the sidebar.
 		const uiCfg = uaR.status === "fulfilled" ? (uaR.value.apps || []).find((a) => a.name === app)?.ui : undefined;
