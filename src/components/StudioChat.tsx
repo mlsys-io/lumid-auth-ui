@@ -1225,7 +1225,6 @@ export function StudioChat() {
 					// when empty), so there's no dead gap between them.
 					<div className="max-w-[640px] mx-auto w-full">
 						<EmptyHint />
-						<div className="mt-6"><ChatEmptyState /></div>
 					</div>
 				) : (
 					<div className="space-y-3.5">
@@ -1671,6 +1670,12 @@ export function StudioChat() {
 						)}
 					</button>
 				</form>
+				{/* Suggestions + live digest sit BELOW the composer (claude.ai
+				    style) so the greeting+box are the centered focal point and
+				    nothing tall opens a gap above the box. */}
+				{messages.length === 0 && (
+					<div className="mt-3"><ChatEmptyState /></div>
+				)}
 				</div>
 			</footer>
 		</div>

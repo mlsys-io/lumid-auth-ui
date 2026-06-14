@@ -158,7 +158,7 @@ export default function ChatEmptyState() {
 	const starters = STARTERS.slice(0, 3);
 
 	return (
-		<div className="max-w-[640px] mx-auto w-full space-y-5">
+		<div className="max-w-[640px] mx-auto w-full space-y-2.5">
 			{/* ── Right now — the live digest; each row is a grounded action ── */}
 			{hasDigest && (
 				<div className="space-y-1.5">
