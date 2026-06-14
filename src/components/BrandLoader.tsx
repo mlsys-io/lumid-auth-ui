@@ -1,13 +1,26 @@
 // BrandLoader — the canonical waiting indicator. Contextual gray placeholder
 // boxes (the shape content will take) with the Lumid spiral mark resting ON
-// them, slowly rotating about its axis (the coil "turning"). On-brand and
-// in-context — replaces the off-brand spinning ring shown on cold load and
-// during the auth check.
+// them, slowly rotating — on-brand and in-context. Used full-screen on cold
+// load / the auth check.
+//
+// SpiralOverlay is the same spinning mark as an absolutely-positioned overlay,
+// to drop onto ANY existing skeleton/gray-box loading state (Library grid, app
+// workflows, …) so the logo sits on those context boxes too — wrap the skeleton
+// container in `relative` and render <SpiralOverlay/> inside it.
+
+// Small (22KB) spiral so the loader paints instantly even cold (the 512 variant
+// is the favicon — fine for the tab, too heavy for a loader).
+const SPIRAL = "/auth/spiral.png";
+
+export function SpiralOverlay({ size = "w-9 h-9" }: { size?: string }) {
+  return (
+    <div className="pointer-events-none absolute inset-0 flex items-center justify-center z-10">
+      <img src={SPIRAL} alt="Loading" className={`spiral-spin ${size} drop-shadow-sm`} />
+    </div>
+  );
+}
 
 export default function BrandLoader() {
-  // Small (22KB) spiral so the loader paints instantly even cold/throttled
-  // (the 512 variant is the favicon — fine for the tab, too heavy for a loader).
-  const spiral = "/auth/spiral.png";
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-6">
       <div className="relative w-full max-w-3xl">
@@ -16,9 +29,7 @@ export default function BrandLoader() {
           <div className="h-40 rounded-2xl bg-slate-100 animate-pulse" />
           <div className="h-40 rounded-2xl bg-slate-100 animate-pulse" />
         </div>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <img src={spiral} alt="Loading" className="spiral-spin w-11 h-11 drop-shadow-sm" />
-        </div>
+        <SpiralOverlay size="w-11 h-11" />
       </div>
     </div>
   );

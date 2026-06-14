@@ -17,6 +17,7 @@ import { createPortal } from "react-dom";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ChevronRight, ArrowRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2, Inbox, Loader2, RotateCcw, X, Plus, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { usePortalTarget } from "@/hooks/usePortalTarget";
+import { SpiralOverlay } from "@/components/BrandLoader";
 import { toast } from "sonner";
 import { me, type MeWorkflowRow, type MeAppCard } from "@/api/me";
 import { takePendingCustomize } from "@/lib/just-installed";
@@ -518,7 +519,13 @@ function AppsHome() {
 	}, []);
 
 	if (byApp === null) {
-		return <div className="space-y-6"><div className="h-20 rounded-xl bg-slate-100 animate-pulse" /><Skeleton lines={3} /></div>;
+		return (
+			<div className="relative space-y-6">
+				<div className="h-20 rounded-xl bg-slate-100 animate-pulse" />
+				<Skeleton lines={3} />
+				<SpiralOverlay />
+			</div>
+		);
 	}
 
 	const apps = [...byApp.keys()].sort();
@@ -848,7 +855,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 			)}
 
 			{rows === null ? (
-				<Skeleton lines={3} />
+				<div className="relative"><Skeleton lines={3} /><SpiralOverlay /></div>
 			) : rows.length === 0 ? (
 				// No workflows → this is a UI-surface app; show its surface (or its
 				// own "generate a page" CTA) instead of a dead-end message. Negative

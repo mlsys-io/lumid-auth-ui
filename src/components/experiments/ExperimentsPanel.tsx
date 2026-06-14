@@ -10,6 +10,7 @@
 // Honest empty states; no synthetic data, ever.
 
 import { useCallback, useEffect, useState } from "react";
+import { SpiralOverlay } from "@/components/BrandLoader";
 import {
 	FlaskConical, ChevronDown, ChevronRight, Loader2, TrendingUp, TrendingDown,
 } from "lucide-react";
@@ -274,7 +275,7 @@ export default function ExperimentsPanel({ app }: { app: string }) {
 		return () => { live = false; window.clearInterval(id); };
 	}, [app]);
 
-	if (exps === null) return <div className="h-20 rounded-xl bg-slate-100 animate-pulse" />;
+	if (exps === null) return <div className="relative"><div className="h-20 rounded-xl bg-slate-100 animate-pulse" /><SpiralOverlay /></div>;
 	if (exps.length === 0) {
 		return (
 			<div className="rounded-xl border border-dashed border-slate-200 bg-white/60 p-8 text-center text-sm text-slate-500">

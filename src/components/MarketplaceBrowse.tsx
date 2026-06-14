@@ -9,6 +9,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { bearerHeader } from "@/api/session-bearer";
+import { SpiralOverlay } from "@/components/BrandLoader";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -425,8 +426,11 @@ function RepoGrid({
 	}, [repos, query, sort, activeTag]);
 
 	if (repos === null) return (
-		<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-			{[0,1,2,3,4,5].map((i) => <div key={i} className="h-28 rounded-lg bg-slate-100 animate-pulse" />)}
+		<div className="relative">
+			<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+				{[0,1,2,3,4,5].map((i) => <div key={i} className="h-28 rounded-lg bg-slate-100 animate-pulse" />)}
+			</div>
+			<SpiralOverlay />
 		</div>
 	);
 	if (filtered.length === 0) return (
@@ -622,8 +626,11 @@ function SkillsGrid({
 	}, [skills, query, activeTag]);
 
 	if (skills === null) return (
-		<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-			{[0,1,2,3].map((i) => <div key={i} className="h-24 rounded-lg bg-slate-100 animate-pulse" />)}
+		<div className="relative">
+			<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+				{[0,1,2,3].map((i) => <div key={i} className="h-24 rounded-lg bg-slate-100 animate-pulse" />)}
+			</div>
+			<SpiralOverlay />
 		</div>
 	);
 	if (filtered.length === 0) return (
