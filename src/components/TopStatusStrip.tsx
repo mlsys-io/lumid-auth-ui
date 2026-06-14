@@ -220,6 +220,13 @@ export default function TopStatusStrip() {
 
 	const meta = useMemo(() => deriveMeta(location.pathname), [location.pathname]);
 	const crumbs = useMemo(() => deriveCrumbs(location.pathname), [location.pathname]);
+	// On an app workspace page the in-page AppSwitcher already shows the app
+	// name, so the top strip's generic "App" identity is a redundant second
+	// headline — suppress the left identity block there (keep the slot + ticker).
+	const isAppWorkspace = useMemo(
+		() => /^\/studio\/apps\/[^/]+/.test(location.pathname) && location.pathname !== "/studio/apps/all",
+		[location.pathname],
+	);
 
 	// Keep the browser tab honest — index.html ships a static title, so
 	// every page read "Sign in" forever. The leaf (app/run name) wins
@@ -303,7 +310,9 @@ export default function TopStatusStrip() {
 		<div className="flex-1 flex items-center justify-between gap-4 min-w-0">
 			{/* App surfaces portal their nav tabs here (AppSurface) — the strip
 			    otherwise sits empty on /studio/a/* and the tabs wasted a row. */}
-			{/* Left — page identity */}
+			{/* Left — page identity (hidden on app workspace pages; the
+			    in-page AppSwitcher owns the app name there) */}
+			{!isAppWorkspace && (
 			<div className="min-w-0 flex items-start gap-2.5">
 				{Icon && (
 					<Icon className={["w-5 h-5 flex-shrink-0 mt-0.5", meta?.iconTone || ""].join(" ")} />
@@ -332,6 +341,7 @@ export default function TopStatusStrip() {
 					)}
 				</div>
 			</div>
+			)}
 
 			<div id="topstrip-app-slot" className="flex items-center gap-2 min-w-0 flex-1" />
 
