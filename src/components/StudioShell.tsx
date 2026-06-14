@@ -200,13 +200,12 @@ export function StudioShell() {
 	const location = useLocation();
 	// Hosted /dashboard pages, app surfaces, and management need full width
 	// (admin tables, dataset explorers); core Studio pages stay narrow.
-	// The morphing workspace (front + app pages) owns the full viewport: its own
-	// 3 panels manage padding/scroll, so the shell main is full-bleed + height-
-	// locked (like the old chat home). /studio/apps/all is the plain grid → not.
-	const workspace = location.pathname === '/studio'
-		|| location.pathname === '/studio/apps'
+	// Main page = the chat home (centered chat, height-locked). The app pages
+	// are the full-bleed 3-panel workspace (its own panels own padding/scroll).
+	// /studio/apps/all is the plain grid → neither.
+	const chatHome = location.pathname === '/studio';
+	const appWorkspace = location.pathname === '/studio/apps'
 		|| (/^\/studio\/apps\/[^/]+/.test(location.pathname) && location.pathname !== '/studio/apps/all');
-	const chatHome = workspace;
 	const wideMain = location.pathname.startsWith('/dashboard')
 		|| location.pathname.startsWith('/studio/a/')
 		|| location.pathname.startsWith('/studio/manage')
@@ -451,7 +450,7 @@ export function StudioShell() {
 			    (overflow-hidden) so the composer pins to the SCREEN bottom and
 			    only the transcript scrolls — never the page. Other routes keep
 			    the natural min-h-screen growth + body scroll. */}
-			<div className={cn('flex-1 flex flex-col min-w-0', chatHome && 'h-screen overflow-hidden')}>
+			<div className={cn('flex-1 flex flex-col min-w-0', (chatHome || appWorkspace) && 'h-screen overflow-hidden')}>
 				{/* Top bar — page header lives in TopStatusStrip; account
 				    surfaces moved to the sidebar user menu. */}
 				<header data-studio-picker-chrome="1" className="min-h-[64px] py-2.5 bg-background/85 backdrop-blur-md border-b border-border sticky top-0 z-10 flex items-center px-6 gap-4">
@@ -463,9 +462,11 @@ export function StudioShell() {
 				    transcript scrolls internally and the composer stays low. */}
 				<main className={cn(
 					'flex-1 w-full',
-					workspace
-						? 'flex flex-col min-h-0'            // full-bleed; the workspace panels own padding
-						: cn('px-6 py-6', !wideMain && 'max-w-5xl'),
+					chatHome
+						? 'flex flex-col min-h-0 px-6 pb-4'  // centered chat home (unchanged main page)
+						: appWorkspace
+							? 'flex flex-col min-h-0'        // full-bleed; the workspace panels own padding
+							: cn('px-6 py-6', !wideMain && 'max-w-5xl'),
 				)}>
 					<ErrorBoundary resetKey={location.pathname}>
 						<Outlet />

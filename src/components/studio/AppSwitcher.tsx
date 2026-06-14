@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDown, Check, LayoutGrid } from 'lucide-react';
+import { ChevronDown, Check } from 'lucide-react';
 import { useAppNav, iconFor } from '@/components/useAppNav';
 import { appTitle } from '@/components/workflow/AppCard';
 
@@ -63,10 +63,6 @@ export default function AppSwitcher({ app }: { app: string }) {
 							})}
 						</div>
 					))}
-					<button onClick={() => { setOpen(false); navigate('/studio/apps/all'); }}
-						className="w-full flex items-center gap-2.5 px-3 py-2 mt-1 text-[12.5px] text-muted-foreground hover:bg-muted hover:text-foreground border-t border-border/60 transition-colors">
-						<LayoutGrid className="w-3.5 h-3.5 shrink-0" /> Manage all apps
-					</button>
 				</div>
 			)}
 		</div>

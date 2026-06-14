@@ -27,6 +27,7 @@ const Go            = lazy(() => import("./pages/Go"));
 // alongside existing /app/* and /dashboard/* per the studio-plan.md
 // decision: build alongside, no immediate cutover.
 const StudioShell      = lazy(() => import("./components/StudioShell"));
+const StudioChatHome   = lazy(() => import("./pages/studio/chat"));
 const StudioIntents    = lazy(() => import("./pages/studio/intents"));
 // Phase S5+ — real inbox (no longer a placeholder).
 const StudioInbox      = lazy(() => import("./pages/studio/inbox"));
@@ -513,9 +514,9 @@ export default function App() {
               </AuthGuard>
             }
           >
-            {/* Front page = the morphing workspace: home context (left) + chat
-                (right). Opening an app adds the details middle → 3 panels. */}
-            <Route index             element={<StudioWorkspace front />} />
+            {/* The main page stays the chat home (2-panel: sidebar + chat). The
+                3-panel workspace is ONLY for app pages (/studio/apps/:app). */}
+            <Route index             element={<StudioChatHome />} />
             {/* Spine is now My Apps. The old Intents/Today landings redirect
                 there; their cycle-inspector + intent-detail sub-routes stay. */}
             <Route path="intents"                       element={<Navigate to="/studio/apps" replace />} />
