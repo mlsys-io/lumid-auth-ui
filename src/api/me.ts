@@ -27,8 +27,6 @@ export class MeApiError extends Error {
   }
 }
 
-const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
-
 // In-flight dedup for GETs — the shell, top-strip, and chat empty-state all
 // poll the same endpoints (listWorkflows / listDrafts) on the same intervals
 // and refetch on the same chat→page events. Sharing one in-flight promise
@@ -60,12 +58,23 @@ export function clearMeCache(): void {
   ttlCache.clear();
 }
 
+// Global 429 circuit breaker. The /me limiter is PER-SESSION; once a session
+// crosses the limit, every one of the ~10 page pollers retrying independently
+// turns a single trip into a self-sustaining storm (observed: 2700+ req in one
+// window → permanent skeletons). Instead, the FIRST 429 puts ALL /me calls into
+// a shared cooldown for Retry-After, so the client stops hammering and the
+// server's window clears. cooldownUntil is an epoch-ms; 0 = open.
+let cooldownUntil = 0;
+
 function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   if (method === "GET" && body === undefined) {
     const cacheable = ttlCacheable(path);
     if (cacheable) {
       const hit = ttlCache.get(path);
       if (hit && Date.now() - hit.at < TTL_MS) return Promise.resolve(hit.value as T);
+      // During a cooldown, serve the last-known value at ANY age rather than
+      // firing a doomed request — keeps the page populated while we back off.
+      if (hit && Date.now() < cooldownUntil) return Promise.resolve(hit.value as T);
     }
     const existing = inflight.get(path);
     if (existing) return existing as Promise<T>;
@@ -86,45 +95,43 @@ async function doCall<T>(
   path: string,
   body?: unknown,
 ): Promise<T> {
+  // Already cooling down from a recent 429 — fail fast WITHOUT touching the
+  // network. This is what breaks the storm: pollers that fire mid-cooldown
+  // don't add load, so the server's window can clear.
+  if (Date.now() < cooldownUntil) {
+    throw new MeApiError(429, 1429, "rate limited — cooling down");
+  }
   const headers: Record<string, string> = {};
   let payload: BodyInit | undefined;
   if (body !== undefined) {
     headers["Content-Type"] = "application/json";
     payload = JSON.stringify(body);
   }
-  // The /me/* rate limiter aborts BEFORE the handler runs, so a 429 means the
-  // request never executed — safe to retry (even for POST/DELETE). Honor
-  // Retry-After when present (capped), else short exponential backoff. Up to
-  // 3 attempts so a transient burst self-heals instead of surfacing an error.
-  let lastErr: MeApiError | null = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const r = await fetch(`${ME_BASE}/api/v1/me${path}`, {
-      method,
-      headers,
-      body: payload,
-      credentials: "include", // send lm_session cookie cross-origin
-    });
-    if (r.status === 429 && attempt < 2) {
-      const ra = parseInt(r.headers.get("Retry-After") || "", 10);
-      const waitMs = Number.isFinite(ra) && ra > 0 ? Math.min(ra * 1000, 4000) : 400 * (attempt + 1);
-      await sleep(waitMs);
-      continue;
-    }
-    let json: { ret_code?: number; message?: string; data?: T } = {};
-    try {
-      json = await r.json();
-    } catch {
-      /* empty / non-JSON body */
-    }
-    if (!r.ok || (json.ret_code !== undefined && json.ret_code !== 0)) {
-      lastErr = new MeApiError(r.status, json.ret_code ?? r.status, json.message ?? r.statusText);
-      // Retry a 429 that slipped through with a body; otherwise fail now.
-      if (r.status === 429 && attempt < 2) { await sleep(400 * (attempt + 1)); continue; }
-      throw lastErr;
-    }
-    return (json.data ?? ({} as T));
+  const r = await fetch(`${ME_BASE}/api/v1/me${path}`, {
+    method,
+    headers,
+    body: payload,
+    credentials: "include", // send lm_session cookie cross-origin
+  });
+  // On a 429, arm the SHARED cooldown for the server-advised Retry-After
+  // (capped) and fail fast. We deliberately do NOT retry in-call — that's the
+  // per-caller amplification that turned one trip into a sustained storm.
+  if (r.status === 429) {
+    const ra = parseInt(r.headers.get("Retry-After") || "", 10);
+    const waitMs = Number.isFinite(ra) && ra > 0 ? Math.min(ra * 1000, 60000) : 5000;
+    cooldownUntil = Date.now() + waitMs;
+    throw new MeApiError(429, 1429, "too many requests");
   }
-  throw lastErr ?? new MeApiError(429, 1429, "too many requests");
+  let json: { ret_code?: number; message?: string; data?: T } = {};
+  try {
+    json = await r.json();
+  } catch {
+    /* empty / non-JSON body */
+  }
+  if (!r.ok || (json.ret_code !== undefined && json.ret_code !== 0)) {
+    throw new MeApiError(r.status, json.ret_code ?? r.status, json.message ?? r.statusText);
+  }
+  return (json.data ?? ({} as T));
 }
 
 // ── Apps ─────────────────────────────────────────────────────────────────
