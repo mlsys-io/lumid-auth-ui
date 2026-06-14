@@ -36,6 +36,7 @@ import type { LoopHealth } from "@/components/workflow/WorkflowObservabilityPane
 import NeedsAttentionRail from "@/components/workflow/NeedsAttentionRail";
 import IndexList, { type IndexRow } from "@/components/studio/IndexList";
 import { askApp } from "@/lib/grounded-asks";
+import { APP_OVERVIEW_MD } from "@/content/appOverviews";
 import LoopOrbit, { type LoopMode, type LoopStageKey } from "@/components/workflow/LoopOrbit";
 
 // Heavy, AppOverview-only components — lazy so the /studio/apps INDEX chunk
@@ -43,6 +44,9 @@ import LoopOrbit, { type LoopMode, type LoopStageKey } from "@/components/workfl
 // charts (recharts → vendor-charts) that only the per-app overview renders.
 // They load on demand when an overview actually mounts them.
 const WorkflowObservabilityPanel = lazy(() => import("@/components/workflow/WorkflowObservabilityPanel"));
+const WorkflowList = lazy(() => import("@/components/workflow/WorkflowList"));
+// Markdown renderer (named export) for the per-app Overview story copy.
+const LumidMarkdown = lazy(() => import("@/components/app-surface/LumidMarkdown").then((m) => ({ default: m.LumidMarkdown })));
 // An app with no scheduled workflows is a UI-surface app (GPU Rentals, Lumid
 // Market, …). Rather than a dead-end "no workflows" message, show its actual
 // surface inline — AppSurface renders the page, or its own "generate a page"
@@ -558,7 +562,8 @@ function AppsHome() {
 			tone, statusLabel, meta,
 			section: failing > 0 ? "Needs attention" : (sections.get(a) || "Apps"),
 			ask: askApp(a),
-			detailsHref: `/studio/apps/${encodeURIComponent(a)}?full=1`,
+			// Click opens the app's overview page; the chat is the hover "ask".
+			navTo: `/studio/apps/${encodeURIComponent(a)}`,
 		} as IndexRow;
 	});
 	// UI-surface apps (Data Exploration, Market, …) — no loops; their home IS
@@ -571,7 +576,9 @@ function AppsHome() {
 		tone: "idle",
 		section: a.ui?.sidebar?.section || "Apps",
 		ask: askApp(a.name),
-		detailsHref: `/studio/a/${encodeURIComponent(a.name)}?full=1`,
+		// Surface apps: click opens their page (the workspace renders the
+		// surface as the app's overview); chat is the hover "ask".
+		navTo: `/studio/apps/${encodeURIComponent(a.name)}`,
 	} as IndexRow));
 	const allRows = [...appRows, ...surfaceRows];
 
@@ -682,20 +689,28 @@ const wfSub = (wf: MeWorkflowRow) =>
 // only the selected workflow's content.
 function WorkflowSelect({ rows, selected, onSelect }: { rows: Row[]; selected: string | null; onSelect: (loop: string) => void }) {
 	const [open, setOpen] = useState(false);
-	const cur = rows.find((r) => r.loop === selected) ?? rows[0];
+	// `selected` is null in app-overview mode — show a neutral "Pick a workflow"
+	// label then (not a stale workflow name), since the Overview tab is active.
+	const cur = rows.find((r) => r.loop === selected) ?? null;
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger asChild>
 				<button className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors max-w-full min-w-0">
-					<span className={wfDot(cur.wf)} />
-					<span className="text-[13px] font-medium text-slate-800 truncate">{loopLabel(cur.wf.name, cur.loop)}</span>
+					{cur ? (
+						<>
+							<span className={wfDot(cur.wf)} />
+							<span className="text-[13px] font-medium text-slate-800 truncate">{loopLabel(cur.wf.name, cur.loop)}</span>
+						</>
+					) : (
+						<span className="text-[13px] font-medium text-slate-500 truncate">Pick a workflow</span>
+					)}
 					<span className="text-[11px] text-slate-400 flex-shrink-0 hidden sm:inline">· {rows.length} workflows</span>
 					<ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" />
 				</button>
 			</PopoverTrigger>
 			<PopoverContent align="start" className="w-72 p-1 max-h-[60vh] overflow-y-auto">
 				{rows.map(({ loop, wf }) => {
-					const active = loop === cur.loop;
+					const active = loop === cur?.loop;
 					return (
 						<button key={loop} type="button" onClick={() => { onSelect(loop); setOpen(false); }}
 							className={cn("w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left transition-colors", active ? "bg-gold-50" : "hover:bg-muted")}>
@@ -720,6 +735,13 @@ function WorkflowSelect({ rows, selected, onSelect }: { rows: Row[]; selected: s
 // (no skeleton flash) while a fresh fetch updates in the background.
 const rowsCache = new Map<string, Row[]>();
 const identCache = new Map<string, AppIdentity | undefined>();
+// The app's own one-line summary (xpcloud.yaml `summary:`), folded into the
+// overview as an "About this app" line so the page is self-describing (the
+// old lum.id/<app> landing copy lives here now).
+const aboutCache = new Map<string, string>();
+// Explicit "show the app-level overview LIST" marker (the Overview tab). The
+// DEFAULT view is the selected workflow's panel — overview is opt-in.
+const OVERVIEW_SEL = "__overview__";
 
 export function AppOverview({ app, embedded, initialLoop }: { app: string; embedded?: boolean; initialLoop?: string | null }) {
 	const [rows, setRows] = useState<Row[] | null>(() => rowsCache.get(app) ?? null);
@@ -733,6 +755,21 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 	const [params, setParams] = useSearchParams();
 	const selected = params.get("selected");
 	const initialCycle = params.get("cycle"); // deep-link anchor → open that run
+
+	// "About this app" — the app's own summary, folded into the overview.
+	const [about, setAbout] = useState<string>(() => aboutCache.get(app) ?? "");
+	useEffect(() => {
+		let live = true;
+		me.appConfig(app)
+			.then((r) => {
+				if (!live) return;
+				const m = (r.yaml || "").match(/^summary:[ \t]*(.+?)[ \t]*$/m);
+				const s = m ? m[1].replace(/^["']|["']$/g, "").trim() : "";
+				setAbout(s); aboutCache.set(app, s);
+			})
+			.catch(() => { /* no config / not permitted → no about line */ });
+		return () => { live = false; };
+	}, [app]);
 
 	const load = useCallback(async () => {
 		const [lhR, wfR, uaR] = await Promise.allSettled([me.loopsHealth(), me.listWorkflows("scheduled"), me.listApps()]);
@@ -785,6 +822,13 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 		setParams(sp, { replace: true });
 		// Mobile: the detail renders below the list — bring it into view.
 		window.setTimeout(() => document.getElementById("wf-detail")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+	};
+	// Show the app-level overview LIST — the "Overview" tab (opt-in; the panel
+	// is the default view).
+	const selectOverview = () => {
+		const sp = new URLSearchParams(params);
+		sp.set("selected", OVERVIEW_SEL);
+		setParams(sp, { replace: true });
 	};
 
 	// App-level delete is offered for every app: the uninstall intent now
@@ -839,15 +883,15 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 		}
 	};
 
-	// There is always a selection: URL param (if it names a real workflow —
-	// some deep links pass the APP name), then the caller's initialLoop,
-	// then the freshest workflow.
+	// DEFAULT = the freshest workflow's PANEL (the detailed view). The Overview
+	// LIST is an explicit opt-in via the "Overview" tab (?selected=__overview__).
 	const freshestLoop = rows && rows.length
 		? [...rows].sort((a, b) => (b.wf.last_run_ts || 0) - (a.wf.last_run_ts || 0))[0].loop
 		: null;
+	const overviewMode = selected === OVERVIEW_SEL;
 	const validSelected = selected && rows?.some((r) => r.loop === selected) ? selected : null;
 	const validInitial = initialLoop && rows?.some((r) => r.loop === initialLoop) ? initialLoop : null;
-	const effSelected = validSelected ?? validInitial ?? freshestLoop;
+	const effSelected = overviewMode ? null : (validSelected ?? validInitial ?? freshestLoop);
 	const selectedRow = rows?.find((r) => r.loop === effSelected) ?? null;
 
 	return (
@@ -885,6 +929,12 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 				</header>
 			)}
 
+			{/* About this app — folds the app's own summary into the overview so
+			    the page is self-describing (replaces the old lum.id/<app> landing). */}
+			{about && rows !== null && (
+				<p className="text-[12.5px] text-slate-500 leading-relaxed max-w-3xl">{about}</p>
+			)}
+
 			{rows === null ? (
 				// No spiral/logo animation on app switch — just a calm skeleton.
 				<Skeleton lines={3} />
@@ -905,14 +955,22 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 				// runs / data / insights) is tabbed inside the panel.
 				<div className="space-y-3.5">
 					{(() => {
+						// Top strip nav. For multi-workflow apps: [Overview tab] +
+						// [workflow picker] toggle between the app-level overview and a
+						// single workflow's panel. Single-workflow apps show neither.
 						const cluster = (
 							<>
-								{/* "Overview" tab — top-bar parity with surface apps (gpu-rentals
-								    et al.), which portal their nav tabs into this same slot. For a
-								    workflow app the overview is the only view, so it's the active
-								    tab; the workflow picker + New workflow follow (workflow apps
-								    only — surface apps have neither). */}
-								<Link to={`/studio/apps/${encodeURIComponent(app)}`} className="px-2.5 py-1 rounded-lg text-[12px] bg-slate-800 text-white flex-shrink-0 hover:bg-slate-700 transition-colors">Overview</Link>
+								{rows.length > 1 && (
+									<button
+										type="button"
+										onClick={selectOverview}
+										title="App overview — every workflow at a glance"
+										className={cn(
+											"px-2.5 py-1 rounded-lg text-[12px] flex-shrink-0 transition-colors",
+											overviewMode ? "bg-slate-800 text-white" : "text-slate-500 hover:text-slate-800 hover:bg-slate-100",
+										)}
+									>Overview</button>
+								)}
 								{rows.length > 1 && (
 									<WorkflowSelect rows={rows} selected={effSelected} onSelect={select} />
 								)}
@@ -932,17 +990,37 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 							: <div className="flex items-center gap-2 flex-wrap">{cluster}</div>;
 					})()}
 					<Suspense fallback={<Skeleton lines={3} />}>
-						<div id="wf-detail" className="min-w-0">
-							{selectedRow && (
-								<WorkflowObservabilityPanel
-									app={app} loop={selectedRow.loop} wf={selectedRow.wf} loopHealth={selectedRow.lh}
-									onChanged={load}
-									initialCycle={(rows.length === 1 || effSelected === (selected ?? initialLoop)) ? initialCycle : null}
-									canDelete={isTenantApp && rows.length > 1}
-									onDelete={() => delLoop(selectedRow.loop, loopLabel(selectedRow.wf.name, selectedRow.loop))}
-								/>
-							)}
-						</div>
+						{overviewMode ? (
+							// ── App-level OVERVIEW — the app's story (re-authored from the
+							// old lum.id/<app> landing page). No workflow list / data here;
+							// pick a workflow from the top-bar dropdown to drill in. Apps
+							// without curated copy fall back to the workflow list so the
+							// overview is never blank. ──
+							<div className="space-y-6 animate-in fade-in duration-200">
+								{APP_OVERVIEW_MD[app] ? (
+									<div className="max-w-3xl studio-prose">
+										<LumidMarkdown source={APP_OVERVIEW_MD[app]} />
+									</div>
+								) : (
+									<div className="space-y-2">
+										<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-400 uppercase">Workflows</div>
+										<WorkflowList rows={rows} selected={null} onSelect={select} />
+									</div>
+								)}
+							</div>
+						) : (
+							<div id="wf-detail" className="min-w-0">
+								{selectedRow && (
+									<WorkflowObservabilityPanel
+										app={app} loop={selectedRow.loop} wf={selectedRow.wf} loopHealth={selectedRow.lh}
+										onChanged={load}
+										initialCycle={(effSelected === (selected ?? initialLoop)) ? initialCycle : null}
+										canDelete={isTenantApp && rows.length > 1}
+										onDelete={() => delLoop(selectedRow.loop, loopLabel(selectedRow.wf.name, selectedRow.loop))}
+									/>
+								)}
+							</div>
+						)}
 					</Suspense>
 				</div>
 			)}

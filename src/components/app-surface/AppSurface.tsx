@@ -11,7 +11,7 @@
 import { useEffect, useState, Suspense } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { MoreHorizontal, Pencil, Settings, SlidersHorizontal, Sparkles, Trash2 } from "lucide-react";
+import { MoreHorizontal, Pencil, Plus, Settings, SlidersHorizontal, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -183,6 +183,16 @@ export function AppSurface({
   const actionBarInner = (hasMd: boolean, nav?: { surface: string; label?: string }[]) => (
     <>
       {surfaceTabs(nav)}
+      {/* Every app can create a workflow — surface apps (no loops yet) included.
+          Same placement (right after the nav) + style as the workflow-app
+          "New workflow" button, so it reads identically across app types. */}
+      <Link
+        to={`/studio/a/${encodeURIComponent(app)}/manage`}
+        title="Create a workflow for this app"
+        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-dashed border-border text-[12.5px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex-shrink-0"
+      >
+        <Plus className="w-3.5 h-3.5" /> New workflow
+      </Link>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button

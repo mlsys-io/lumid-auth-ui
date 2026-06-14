@@ -18,8 +18,8 @@
 // quiet hover-only "details →" escape hatch via `detailsHref`.
 
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { ArrowUpRight, Search } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ArrowUpRight, MessageSquare, Search } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { TONES, type ToneKey } from '@/lib/tones';
 import type { ViewingContext } from '@/components/StudioContext';
@@ -49,6 +49,11 @@ export interface IndexRow {
 	ask: IndexAsk;
 	/** Quiet hover-only escape hatch to the old dense detail surface. */
 	detailsHref?: string;
+	/** When set, the PRIMARY click navigates here (e.g. an app's overview page)
+	 *  instead of opening the chat; the grounded `ask` then moves to a quiet
+	 *  hover "ask" affordance. Apps use this so a row click lands on the
+	 *  overview, not the conversation. */
+	navTo?: string;
 }
 
 /** Fire a grounded ask into the chat, honoring the landing preference. */
@@ -65,14 +70,18 @@ export function fireAsk(ask: IndexAsk): void {
 }
 
 function Row({ row }: { row: IndexRow }) {
+	const navigate = useNavigate();
 	const Icon = row.icon;
 	const tone = row.tone ? TONES[row.tone] : null;
+	// navTo rows (apps) open their overview on click; everything else opens the
+	// grounded chat (the conversational index).
+	const activate = () => { if (row.navTo) navigate(row.navTo); else fireAsk(row.ask); };
 	return (
 		<div
 			role="button"
 			tabIndex={0}
-			onClick={() => fireAsk(row.ask)}
-			onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fireAsk(row.ask); } }}
+			onClick={activate}
+			onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(); } }}
 			className="group flex items-center gap-3 px-3 py-2.5 cursor-pointer rounded-lg hover:bg-muted transition-colors"
 		>
 			{tone ? (
@@ -91,7 +100,18 @@ function Row({ row }: { row: IndexRow }) {
 					{row.statusLabel}
 				</span>
 			)}
-			{row.detailsHref && (
+			{row.navTo ? (
+				// Primary click already opens the overview — the chat is the quiet
+				// hover affordance here.
+				<button
+					type="button"
+					onClick={(e) => { e.stopPropagation(); fireAsk(row.ask); }}
+					className="shrink-0 inline-flex items-center gap-0.5 text-[11px] text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground transition-all"
+					title="Ask the AI about this"
+				>
+					ask <MessageSquare className="w-3 h-3" />
+				</button>
+			) : row.detailsHref ? (
 				<Link
 					to={row.detailsHref}
 					onClick={(e) => e.stopPropagation()}
@@ -100,7 +120,7 @@ function Row({ row }: { row: IndexRow }) {
 				>
 					details <ArrowUpRight className="w-3 h-3" />
 				</Link>
-			)}
+			) : null}
 		</div>
 	);
 }

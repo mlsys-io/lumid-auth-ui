@@ -207,6 +207,10 @@ export function StudioShell() {
 	const chatHome = location.pathname === '/studio';
 	const appWorkspace = location.pathname === '/studio/apps'
 		|| (/^\/studio\/apps\/[^/]+/.test(location.pathname) && location.pathname !== '/studio/apps/all');
+	// The Library carries its own docked chat (same 2-panel as the app
+	// workspace), so it needs the full-bleed, height-locked main too.
+	const libWorkspace = location.pathname.startsWith('/studio/library');
+	const fullBleed = appWorkspace || libWorkspace;
 	const wideMain = location.pathname.startsWith('/dashboard')
 		|| location.pathname.startsWith('/studio/a/')
 		|| location.pathname.startsWith('/studio/manage')
@@ -477,7 +481,7 @@ export function StudioShell() {
 			    (overflow-hidden) so the composer pins to the SCREEN bottom and
 			    only the transcript scrolls — never the page. Other routes keep
 			    the natural min-h-screen growth + body scroll. */}
-			<div className={cn('flex-1 flex flex-col min-w-0', (chatHome || appWorkspace) && 'h-screen overflow-hidden')}>
+			<div className={cn('flex-1 flex flex-col min-w-0', (chatHome || fullBleed) && 'h-screen overflow-hidden')}>
 				{/* Top bar — page header lives in TopStatusStrip; account
 				    surfaces moved to the sidebar user menu. */}
 				<header data-studio-picker-chrome="1" className="min-h-[64px] py-2.5 bg-background/85 backdrop-blur-md border-b border-border sticky top-0 z-10 flex items-center px-6 gap-4">
@@ -503,8 +507,8 @@ export function StudioShell() {
 					'flex-1 w-full',
 					chatHome
 						? 'flex flex-col min-h-0 px-6 pb-4'  // centered chat home (unchanged main page)
-						: appWorkspace
-							? 'flex flex-col min-h-0'        // full-bleed; the workspace panels own padding
+						: fullBleed
+							? 'flex flex-col min-h-0'        // full-bleed; the panels own padding
 							: cn('px-6 py-6', !wideMain && 'max-w-5xl'),
 				)}>
 					<ErrorBoundary resetKey={location.pathname}>

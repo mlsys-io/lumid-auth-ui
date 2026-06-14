@@ -12,9 +12,9 @@ import { Link } from "react-router-dom";
 import { isLumidDirective, LumidDirective, SurfaceParams } from "./directives";
 
 const components: Components = {
-  h1: ({ children }) => <h1 className="text-2xl font-semibold mt-6 first:mt-0 mb-3 text-slate-900">{children}</h1>,
-  h2: ({ children }) => <h2 className="text-lg font-semibold mt-6 first:mt-0 mb-2 text-slate-900">{children}</h2>,
-  h3: ({ children }) => <h3 className="text-[15px] font-semibold mt-4 first:mt-0 mb-1.5 text-slate-800">{children}</h3>,
+  h1: ({ children }) => <h1 className="text-2xl font-semibold mt-5 first:mt-0 mb-2.5 text-slate-900">{children}</h1>,
+  h2: ({ children }) => <h2 className="text-lg font-semibold mt-4 first:mt-0 mb-2 text-slate-900">{children}</h2>,
+  h3: ({ children }) => <h3 className="text-[15px] font-semibold mt-3 first:mt-0 mb-1.5 text-slate-800">{children}</h3>,
   p: ({ children }) => <p className="leading-relaxed mb-3 text-[14px] text-slate-700">{children}</p>,
   ul: ({ children }) => <ul className="list-disc pl-5 my-3 space-y-1 text-[14px] text-slate-700">{children}</ul>,
   ol: ({ children }) => <ol className="list-decimal pl-5 my-3 space-y-1 text-[14px] text-slate-700">{children}</ol>,
