@@ -12,7 +12,7 @@
 // me.listWorkflows(); per-cycle observability from me.cycleDetail (inside
 // the panel).
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ChevronRight, ArrowRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2, Inbox, Loader2, RotateCcw, X } from "lucide-react";
 import { toast } from "sonner";
@@ -21,18 +21,24 @@ import { takePendingCustomize } from "@/lib/just-installed";
 import apiClient from "@/api/client";
 import { iconFor, APP_NAV_INVALIDATE } from "@/components/useAppNav";
 import { setStudioSelection } from "@/components/StudioContext";
-import WorkflowList from "@/components/workflow/WorkflowList";
 import { Skeleton, humanizeLoop, loopLabel } from "@/pages/app-revamp/loops";
 import { QuickStarters } from "@/components/studio/QuickStarters";
 import WorkflowComposer from "@/components/WorkflowComposer";
 import AppCard, { appTitle, type AppIdentity } from "@/components/workflow/AppCard";
-import WorkflowObservabilityPanel, { type LoopHealth } from "@/components/workflow/WorkflowObservabilityPanel";
+import type { LoopHealth } from "@/components/workflow/WorkflowObservabilityPanel";
 import NeedsAttentionRail from "@/components/workflow/NeedsAttentionRail";
 import IndexList, { type IndexRow } from "@/components/studio/IndexList";
 import { askApp } from "@/lib/grounded-asks";
-import LearningTimeline from "@/components/workflow/LearningTimeline";
-import DatasetExplorer from "@/components/workflow/DatasetExplorer";
 import LoopOrbit, { type LoopMode, type LoopStageKey } from "@/components/workflow/LoopOrbit";
+
+// Heavy, AppOverview-only components — lazy so the /studio/apps INDEX chunk
+// (AppsHome) doesn't statically pull the DAG canvas (@xyflow → vendor-flow) +
+// charts (recharts → vendor-charts) that only the per-app overview renders.
+// They load on demand when an overview actually mounts them.
+const WorkflowObservabilityPanel = lazy(() => import("@/components/workflow/WorkflowObservabilityPanel"));
+const WorkflowList = lazy(() => import("@/components/workflow/WorkflowList"));
+const LearningTimeline = lazy(() => import("@/components/workflow/LearningTimeline"));
+const DatasetExplorer = lazy(() => import("@/components/workflow/DatasetExplorer"));
 import { RUNNING_APPS } from "@/lib/demo";
 import { useCountUp } from "@/lib/use-count-up";
 import { useStudioRefetch } from "@/hooks/useStudioRefetch";
@@ -818,7 +824,9 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 				<div className="space-y-2.5">
 					<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-400 uppercase">Workflows</div>
 					{/* Master–detail: list left, ONE detail card right. A single-
-					    workflow app skips the list entirely. */}
+					    workflow app skips the list entirely. Suspense boundary for
+					    the lazy DAG/charts panels (kept out of the index chunk). */}
+					<Suspense fallback={<Skeleton lines={3} />}>
 					{rows.length === 1 ? (
 						selectedRow && (
 							<div id="wf-detail">
@@ -861,6 +869,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 							</div>
 						</div>
 					)}
+					</Suspense>
 				</div>
 			)}
 
