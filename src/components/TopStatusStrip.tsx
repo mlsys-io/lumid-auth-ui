@@ -319,9 +319,13 @@ export default function TopStatusStrip() {
 			{/* App surfaces portal their nav tabs here (AppSurface) — the strip
 			    otherwise sits empty on /studio/a/* and the tabs wasted a row. */}
 			{/* Left — page identity. On an app workspace page the AppSwitcher
-			    takes the "App" place (the app name shown once, here in the strip). */}
+			    takes the "App" place (the app name shown once, here in the strip).
+			    The workspace's left-panel toggle portals into the slot before it. */}
 			{isAppWorkspace ? (
-				<AppSwitcher app={appSlug} />
+				<div className="flex items-center gap-1 min-w-0">
+					<span id="topstrip-ws-left" className="flex items-center" />
+					<AppSwitcher app={appSlug} />
+				</div>
 			) : (
 			<div className="min-w-0 flex items-start gap-2.5">
 				{Icon && (
@@ -358,6 +362,8 @@ export default function TopStatusStrip() {
 			{/* Right — a steady "live" heartbeat (the surface is alive; loops
 			    run in the background) + status pills (only when non-zero). */}
 			<div className="flex items-center gap-2 flex-shrink-0">
+				{/* Workspace's chat-panel toggle portals here. */}
+				<span id="topstrip-ws-right" className="flex items-center" />
 				<span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground" title="Live — your loops run in the background">
 					<span className="w-1.5 h-1.5 rounded-full bg-gold-500 heartbeat" />
 					<span className="hidden sm:inline">live{(() => { const a = Math.max(0, Math.floor((Date.now() - refreshedAt) / 1000)); return a < 3 ? "" : a < 60 ? ` · ${a}s ago` : ` · ${Math.floor(a / 60)}m ago`; })()}</span>

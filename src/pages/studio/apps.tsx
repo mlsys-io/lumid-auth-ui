@@ -13,8 +13,10 @@
 // the panel).
 
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ChevronRight, ArrowRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2, Inbox, Loader2, RotateCcw, X, Plus } from "lucide-react";
+import { ChevronRight, ArrowRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2, Inbox, Loader2, RotateCcw, X, Plus, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { usePortalTarget } from "@/hooks/usePortalTarget";
 import { toast } from "sonner";
 import { me, type MeWorkflowRow, type MeAppCard } from "@/api/me";
 import { takePendingCustomize } from "@/lib/just-installed";
@@ -666,8 +668,14 @@ interface Row { loop: string; wf: MeWorkflowRow; lh?: LoopHealth }
 const rowsCache = new Map<string, Row[]>();
 const identCache = new Map<string, AppIdentity | undefined>();
 
-export function AppOverview({ app, embedded, initialLoop, hideLeft }: { app: string; embedded?: boolean; initialLoop?: string | null; hideLeft?: boolean }) {
+export function AppOverview({ app, embedded, initialLoop }: { app: string; embedded?: boolean; initialLoop?: string | null }) {
 	const [rows, setRows] = useState<Row[] | null>(() => rowsCache.get(app) ?? null);
+	// Hide the workflow-list rail (left). Owned here so the toggle only exists
+	// when there IS a rail to hide (multi-workflow apps); single-workflow and
+	// surface apps render no list, so no toggle (was a no-op button before).
+	const [leftHidden, setLeftHidden] = useState<boolean>(() => { try { return localStorage.getItem("studio_ws_left_hidden") === "1"; } catch { return false; } });
+	useEffect(() => { try { localStorage.setItem("studio_ws_left_hidden", leftHidden ? "1" : "0"); } catch { /* ignore */ } }, [leftHidden]);
+	const leftToggleTarget = usePortalTarget("topstrip-ws-left", !!embedded);
 	const [identity, setIdentity] = useState<AppIdentity | undefined>(() => identCache.get(app));
 	const [deleting, setDeleting] = useState(false);
 	const navigate = useNavigate();
@@ -677,6 +685,11 @@ export function AppOverview({ app, embedded, initialLoop, hideLeft }: { app: str
 
 	const load = useCallback(async () => {
 		const [lhR, wfR, uaR] = await Promise.allSettled([me.loopsHealth(), me.listWorkflows("scheduled"), me.listApps()]);
+		// A failed workflows poll (429 rate-limit storm, network blip, token
+		// refresh) must NOT blank the page — keep the last-good rows and retry
+		// next tick. Without this, a transient 429 set rows=[] and the app page
+		// rendered the empty surface/"no workflows" state instead of the loops.
+		if (wfR.status !== "fulfilled") return;
 		const lhMap = new Map<string, LoopHealth>();
 		// Configured display name/icon (ui.sidebar) — same source as the sidebar.
 		const uiCfg = uaR.status === "fulfilled" ? (uaR.value.apps || []).find((a) => a.name === app)?.ui : undefined;
@@ -786,8 +799,21 @@ export function AppOverview({ app, embedded, initialLoop, hideLeft }: { app: str
 	const effSelected = validSelected ?? validInitial ?? freshestLoop;
 	const selectedRow = rows?.find((r) => r.loop === effSelected) ?? null;
 
+	// The left rail (workflow list) exists only for multi-workflow apps — gate
+	// the toggle on that so it never appears with nothing to hide.
+	const hasLeftRail = (rows?.length ?? 0) > 1;
+
 	return (
 		<div className="space-y-5">
+			{/* Left-panel toggle, portaled into the top strip (single header row).
+			    Only when there's a workflow-list rail to hide. */}
+			{embedded && hasLeftRail && leftToggleTarget && createPortal(
+				<button onClick={() => setLeftHidden((v) => !v)} title={leftHidden ? "Show workflow list" : "Hide workflow list"}
+					className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+					{leftHidden ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+				</button>,
+				leftToggleTarget,
+			)}
 			{!embedded && (
 				<Link to="/studio/apps" className="inline-flex items-center text-sm text-slate-500 hover:text-slate-900 gap-1">
 					<ChevronRight className="w-4 h-4 rotate-180" /> My Apps
@@ -830,7 +856,7 @@ export function AppOverview({ app, embedded, initialLoop, hideLeft }: { app: str
 				// brings its own chrome + padding) sits flush in the panel.
 				<div className="-mx-5 -my-5">
 					<Suspense fallback={<div className="px-5 py-8"><Skeleton lines={4} /></div>}>
-						<AppSurface app={app} />
+						<AppSurface app={app} embedded={embedded} />
 					</Suspense>
 				</div>
 			) : (
@@ -850,8 +876,8 @@ export function AppOverview({ app, embedded, initialLoop, hideLeft }: { app: str
 							</div>
 						)
 					) : (
-						<div className={hideLeft ? "" : "lg:grid lg:grid-cols-[300px_minmax(0,1fr)] lg:gap-5 lg:items-start"}>
-							{!hideLeft && (
+						<div className={leftHidden ? "" : "lg:grid lg:grid-cols-[300px_minmax(0,1fr)] lg:gap-5 lg:items-start"}>
+							{!leftHidden && (
 							<div className="lg:sticky lg:top-4 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto mb-4 lg:mb-0 pr-0.5 space-y-5">
 								<WorkflowList
 									rows={rows}

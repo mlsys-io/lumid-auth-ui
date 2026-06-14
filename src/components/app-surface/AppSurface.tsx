@@ -56,6 +56,7 @@ const lastSurfaceTitle = new Map<string, string>();
 export function AppSurface({
   app: appProp,
   surface: surfaceProp,
+  embedded,
 }: {
   // When mounted on an explicit route (e.g. the lumid-market competition
   // surfaces), the app + named surface come in as props and the URL's own
@@ -64,6 +65,10 @@ export function AppSurface({
   // route, both come from useParams().
   app?: string;
   surface?: string;
+  // When rendered inside the app workspace, the AppSwitcher already shows the
+  // app name in the top strip — suppress this surface's portaled title to avoid
+  // printing the name twice. Standalone /studio/a/* routes keep the title.
+  embedded?: boolean;
 } = {}) {
   const routeParams = useParams();
   const app = appProp ?? routeParams.app ?? "";
@@ -239,6 +244,8 @@ export function AppSurface({
   const extracted = state.data?.markdown ? splitSurfaceHeader(state.data.markdown).title : undefined;
   if (extracted && app) lastSurfaceTitle.set(app, extracted);
   const headerTitle = extracted ?? (app ? lastSurfaceTitle.get(app) : undefined) ?? app;
+  // Title goes into the strip only when standalone (not embedded in the workspace).
+  const stripTitle = embedded ? undefined : headerTitle;
   useEffect(() => {
     if (stripSlot && headerTitle) document.title = `${headerTitle} · Lumid`;
   }, [stripSlot, headerTitle]);
@@ -307,7 +314,7 @@ export function AppSurface({
     }
     return (
       <div className="flex flex-col">
-        {actionBar(!!path, state.data.nav, headerTitle)}
+        {actionBar(!!path, state.data.nav, stripTitle)}
         <div className="px-6 py-2">
           <LumidMarkdown source={header.body} params={surfaceParams} appConfig={state.data.config} wide />
         </div>
@@ -321,7 +328,7 @@ export function AppSurface({
     const Native = resolveNativeSurface(native);
     return (
       <div className="flex flex-col">
-        {actionBar(false, state.data.nav, headerTitle)}
+        {actionBar(false, state.data.nav, stripTitle)}
         <div className="px-2 py-2">
           {Native ? (
             <Suspense fallback={<div className="p-8 text-sm text-slate-400">Loading…</div>}>
