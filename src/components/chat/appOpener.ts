@@ -60,6 +60,9 @@ export function chipsForApp(app: string, rows: MeWorkflowRow[]): OpenerChip[] {
 	}
 	if (mine.length > 0) {
 		out.push({ label: 'run a workflow', prompt: `Which workflow should I run now, and why?`, context: { app } });
+		// "improve" moved here from the workflow panel's Improve button — the
+		// suggestion belongs in the conversation, beside the other next-steps.
+		out.push({ label: 'improve a workflow', prompt: `Look at ${label}'s recent runs and suggest concrete improvements — schedule, steps, or prompts.`, context: { app } });
 	}
 	if (mine.some((w) => (w.memory_agents || []).length > 0)) {
 		out.push({ label: 'what it learned', prompt: `What has ${label} learned recently?`, context: { app } });
@@ -67,7 +70,7 @@ export function chipsForApp(app: string, rows: MeWorkflowRow[]): OpenerChip[] {
 	if (out.length === 0) {
 		out.push({ label: 'what can this do?', prompt: `What can ${label} do, and what should I do first?`, context: { app } });
 	}
-	return out.slice(0, 3);
+	return out.slice(0, 4);
 }
 
 /** A deterministic, INSTANT one-line opener from live state — no LLM round-trip

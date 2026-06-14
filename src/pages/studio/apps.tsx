@@ -13,6 +13,7 @@
 // the panel).
 
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ChevronRight, ChevronDown, Check, ArrowRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2, Inbox, Loader2, RotateCcw, X, Plus } from "lucide-react";
 import { SpiralOverlay } from "@/components/BrandLoader";
@@ -22,7 +23,9 @@ import { takePendingCustomize } from "@/lib/just-installed";
 import apiClient from "@/api/client";
 import { iconFor, APP_NAV_INVALIDATE } from "@/components/useAppNav";
 import { setStudioSelection } from "@/components/StudioContext";
+import { usePortalTarget } from "@/hooks/usePortalTarget";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import RunSparkline from "@/components/RunSparkline";
 import { TONES, workflowTone } from "@/lib/tones";
 import { describeSchedule } from "@/lib/schedule";
 import { Skeleton, humanizeLoop, loopLabel } from "@/pages/app-revamp/loops";
@@ -40,7 +43,6 @@ import LoopOrbit, { type LoopMode, type LoopStageKey } from "@/components/workfl
 // charts (recharts → vendor-charts) that only the per-app overview renders.
 // They load on demand when an overview actually mounts them.
 const WorkflowObservabilityPanel = lazy(() => import("@/components/workflow/WorkflowObservabilityPanel"));
-const DatasetExplorer = lazy(() => import("@/components/workflow/DatasetExplorer"));
 // An app with no scheduled workflows is a UI-surface app (GPU Rentals, Lumid
 // Market, …). Rather than a dead-end "no workflows" message, show its actual
 // surface inline — AppSurface renders the page, or its own "generate a page"
@@ -684,10 +686,10 @@ function WorkflowSelect({ rows, selected, onSelect }: { rows: Row[]; selected: s
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger asChild>
-				<button className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition-colors max-w-full">
+				<button className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors max-w-full min-w-0">
 					<span className={wfDot(cur.wf)} />
 					<span className="text-[13px] font-medium text-slate-800 truncate">{loopLabel(cur.wf.name, cur.loop)}</span>
-					<span className="text-[11px] text-slate-400 flex-shrink-0">· {rows.length} workflows</span>
+					<span className="text-[11px] text-slate-400 flex-shrink-0 hidden sm:inline">· {rows.length} workflows</span>
 					<ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" />
 				</button>
 			</PopoverTrigger>
@@ -702,6 +704,9 @@ function WorkflowSelect({ rows, selected, onSelect }: { rows: Row[]; selected: s
 								<span className="block text-[12.5px] font-medium text-slate-800 truncate">{loopLabel(wf.name, loop)}</span>
 								<span className="block text-[10.5px] text-slate-400 truncate">{wfSub(wf)}</span>
 							</span>
+							{/* Recent-run strip so run health is glanceable while switching
+							    (display-only here; the panel header has the clickable one). */}
+							{wf.run_spark && <RunSparkline spec={wf.run_spark} className="flex-shrink-0" />}
 							{active && <Check className="w-3.5 h-3.5 text-gold-600 flex-shrink-0" />}
 						</button>
 					);
@@ -721,6 +726,10 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 	const [identity, setIdentity] = useState<AppIdentity | undefined>(() => identCache.get(app));
 	const [deleting, setDeleting] = useState(false);
 	const navigate = useNavigate();
+	// In the workspace, the workflow switcher + "New workflow" portal into the
+	// top strip right after the app name (topstrip-app-slot is empty for
+	// workflow apps — only surface apps fill it). Standalone, they render inline.
+	const appSlotTarget = usePortalTarget("topstrip-app-slot", !!embedded);
 	const [params, setParams] = useSearchParams();
 	const selected = params.get("selected");
 	const initialCycle = params.get("cycle"); // deep-link anchor → open that run
@@ -877,7 +886,8 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 			)}
 
 			{rows === null ? (
-				<div className="relative"><Skeleton lines={3} /><SpiralOverlay /></div>
+				// No spiral/logo animation on app switch — just a calm skeleton.
+				<Skeleton lines={3} />
 			) : rows.length === 0 ? (
 				// No workflows → this is a UI-surface app; show its surface (or its
 				// own "generate a page" CTA) instead of a dead-end message. Negative
@@ -889,22 +899,38 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 					</Suspense>
 				</div>
 			) : (
-				// The workflow LIST is consolidated into a dropdown (top-left), so the
-				// panel shows only the selected workflow's content full-width. Datasets
-				// sit below. Suspense boundary for the lazy DAG/charts panels.
+				// The workflow LIST is consolidated into a dropdown, surfaced (with
+				// "New workflow") in the top strip next to the app name when embedded.
+				// The panel shows ONLY the selected workflow — its content (pipeline /
+				// runs / data / insights) is tabbed inside the panel.
 				<div className="space-y-3.5">
-					<div className="flex items-center gap-2 flex-wrap">
-						{rows.length > 1 && (
-							<WorkflowSelect rows={rows} selected={effSelected} onSelect={select} />
-						)}
-						<button
-							type="button"
-							onClick={() => navigate(`/studio/a/${encodeURIComponent(app)}/manage`)}
-							className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-dashed border-border text-[12.5px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-						>
-							<Plus className="w-3.5 h-3.5" /> New workflow
-						</button>
-					</div>
+					{(() => {
+						const cluster = (
+							<>
+								{/* "Overview" tab — top-bar parity with surface apps (gpu-rentals
+								    et al.), which portal their nav tabs into this same slot. For a
+								    workflow app the overview is the only view, so it's the active
+								    tab; the workflow picker + New workflow follow (workflow apps
+								    only — surface apps have neither). */}
+								<Link to={`/studio/apps/${encodeURIComponent(app)}`} className="px-2.5 py-1 rounded-lg text-[12px] bg-slate-800 text-white flex-shrink-0 hover:bg-slate-700 transition-colors">Overview</Link>
+								{rows.length > 1 && (
+									<WorkflowSelect rows={rows} selected={effSelected} onSelect={select} />
+								)}
+								<button
+									type="button"
+									onClick={() => navigate(`/studio/a/${encodeURIComponent(app)}/manage`)}
+									className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-dashed border-border text-[12.5px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex-shrink-0"
+								>
+									<Plus className="w-3.5 h-3.5" /> New workflow
+								</button>
+							</>
+						);
+						// Embedded → portal into the top strip beside the app name; the
+						// portal target may resolve a tick late, so fall back to inline.
+						return embedded && appSlotTarget
+							? createPortal(<div className="flex items-center gap-2 min-w-0">{cluster}</div>, appSlotTarget)
+							: <div className="flex items-center gap-2 flex-wrap">{cluster}</div>;
+					})()}
 					<Suspense fallback={<Skeleton lines={3} />}>
 						<div id="wf-detail" className="min-w-0">
 							{selectedRow && (
@@ -916,10 +942,6 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 									onDelete={() => delLoop(selectedRow.loop, loopLabel(selectedRow.wf.name, selectedRow.loop))}
 								/>
 							)}
-						</div>
-						<div className="space-y-2 pt-1">
-							<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-400 uppercase">Data it works on</div>
-							<DatasetExplorer app={app} />
 						</div>
 					</Suspense>
 				</div>

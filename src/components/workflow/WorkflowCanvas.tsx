@@ -28,15 +28,18 @@ import { LOOP_STAGES, type LoopStageKey } from "@/components/workflow/LoopOrbit"
 import { describeSchedule } from "@/lib/schedule";
 
 // State colors — shared with RunDagCanvas's palette.
+// Success/ok = brand GOLD (the whole site uses gold for healthy/ok, not green
+// — run dots, sparklines, status pills all do). Failed stays rose, running
+// stays sky (a transient state, matches the runs list).
 const STATE_BG: Record<string, string> = {
-	succeeded: "rgb(16 185 129)",
+	succeeded: "rgb(176 143 69)",  // gold-500
 	failed:    "rgb(225 29 72)",
 	running:   "rgb(14 165 233)",
 	declared:  "rgb(148 163 184)",
 	pending:   "rgb(203 213 225)",
 };
 const STATE_BORDER: Record<string, string> = {
-	succeeded: "rgb(5 150 105)",
+	succeeded: "rgb(150 119 58)",  // gold-600
 	failed:    "rgb(190 18 60)",
 	running:   "rgb(2 132 199)",
 	declared:  "rgb(148 163 184)",
@@ -49,11 +52,11 @@ const STAGE_TINT: Record<string, string> = {
 	hypothesize: "rgba(167, 139, 250, 0.08)",  // violet
 	act:         "rgba(251, 191, 36, 0.09)",   // amber
 	analyze:     "rgba(45, 212, 191, 0.08)",   // teal
-	learn:       "rgba(52, 211, 153, 0.09)",   // emerald
+	learn:       "rgba(176, 143, 69, 0.10)",   // gold (banked outcome = on-brand)
 };
 const STAGE_LABEL_COLOR: Record<string, string> = {
 	observe: "rgb(2 132 199)", hypothesize: "rgb(124 58 237)", act: "rgb(180 83 9)",
-	analyze: "rgb(13 148 136)", learn: "rgb(5 150 105)",
+	analyze: "rgb(13 148 136)", learn: "rgb(123 98 48)",
 };
 
 export interface CanvasStepRef {
@@ -180,7 +183,7 @@ export default function WorkflowCanvas({ definition, cycle, running = false, mod
 					source: `step:${lastID}`,
 					target: "knowledge",
 					animated: running,
-					style: { stroke: "rgb(52 211 153)" },
+					style: { stroke: "rgb(197 167 94)" },
 				});
 			}
 		} else {
@@ -240,7 +243,7 @@ export default function WorkflowCanvas({ definition, cycle, running = false, mod
 					targetPosition: Position.Left,
 					style: nodeStyle("knowledge", "pending"),
 				});
-				edges.push({ id: "e:k", source: "engine", target: "knowledge", animated: running, style: { stroke: "rgb(52 211 153)" } });
+				edges.push({ id: "e:k", source: "engine", target: "knowledge", animated: running, style: { stroke: "rgb(197 167 94)" } });
 			}
 		}
 

@@ -303,7 +303,7 @@ export const me = {
   patchLoop: (
     app: string,
     loop: string,
-    body: { runtime?: "local" | "cloud"; schedule?: string; enabled?: boolean },
+    body: { runtime?: "local" | "cloud"; schedule?: string; enabled?: boolean; goal?: string },
   ) =>
     call<{ app: string; loop: string; overrides: Record<string, unknown> }>(
       "PATCH",
@@ -605,6 +605,9 @@ export interface MeWorkflowRow {
   kind: "scheduled" | "visual";
   name: string;
   app?: string;
+  // App bundle version (manifest.json) — sent by /me/workflows; the app
+  // index reads the freshest row's version for the app card.
+  version?: string;
   trigger: string;
   enabled: boolean;
   tenant: boolean;

@@ -1352,12 +1352,14 @@ export function StudioChat({ docked = false }: { docked?: boolean } = {}) {
 					: 'flex-1 overflow-y-auto px-4 py-4 scroll-smooth'}
 			>
 				{messages.length === 0 ? (
-					// Empty state — greeting + digest sit DIRECTLY above the composer
-					// as one vertically-centered group (the column is justify-center
-					// when empty), so there's no dead gap between them.
-					<div className="max-w-[640px] mx-auto w-full">
-						<EmptyHint />
-					</div>
+					// Empty state — the greeting hero sits above the composer. In the
+					// docked (3-panel app) chat we DON'T print the "Good morning, …"
+					// hero + spiral icon; the app opener already grounds the convo.
+					!docked ? (
+						<div className="max-w-[640px] mx-auto w-full">
+							<EmptyHint />
+						</div>
+					) : null
 				) : (
 					<div className="space-y-3.5">
 						{messages.map((m, i) => (
