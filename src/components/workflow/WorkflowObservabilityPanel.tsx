@@ -17,7 +17,7 @@ import { Link } from "react-router-dom";
 import {
 	Play, Pause, Loader2, Save, Clock, AlertCircle, Target,
 	ChevronLeft, ChevronRight, ChevronDown, Trash2,
-	Database, Sparkles, Pencil,
+	Database, Sparkles, Pencil, Workflow,
 } from "lucide-react";
 import { toast } from "sonner";
 import apiClient from "@/api/client";
@@ -39,6 +39,14 @@ import {
 	type CycleSummary,
 } from "@/pages/studio/inspector";
 import { cn } from "@/lib/utils";
+
+// The goal always shows full-width at the top; Pipeline and Data switch via
+// the left tab rail (detail on the right).
+type DetailTab = "pipeline" | "dataset";
+const TABS: Array<{ key: DetailTab; label: string; icon: React.ComponentType<{ className?: string }> }> = [
+	{ key: "pipeline", label: "Pipeline", icon: Workflow },
+	{ key: "dataset", label: "Data", icon: Database },
+];
 
 export interface LoopHealth {
 	app: string;
@@ -181,8 +189,33 @@ export default function WorkflowObservabilityPanel({
 	const [definition, setDefinition] = useState<LoopDefinition | null>(null);
 	const [canvasCycle, setCanvasCycle] = useState<MeCycleDetail | null>(null);
 	const [canvasStep, setCanvasStep] = useState<CanvasStepRef | null>(null);
+	// Which of the three key variables (goal / pipeline / data) the right-hand
+	// detail pane shows. Pipeline is the centerpiece, so it opens by default.
+	const [tab, setTab] = useState<DetailTab>("pipeline");
+	// Size the Pipeline canvas / Data list to fill the screen: measure the
+	// fill wrapper's top and stretch it to the bottom of the viewport. The
+	// studio shell scrolls (flex-1 overflow-y-auto), so the wrapper is
+	// fixed-height and its content scrolls inside.
+	const fillRef = useRef<HTMLDivElement | null>(null);
+	const [fillH, setFillH] = useState(480);
+	useEffect(() => {
+		const measure = () => {
+			const el = fillRef.current;
+			if (!el) return;
+			const top = el.getBoundingClientRect().top;
+			setFillH(Math.max(360, Math.round(window.innerHeight - top - 24)));
+		};
+		measure();
+		const raf = requestAnimationFrame(measure); // re-measure after layout settles
+		window.addEventListener("resize", measure);
+		return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", measure); };
+	}, [tab, summary, wf.goal]);
 
-	const loadLatestCycle = useCallback(async () => {
+	// force=true refetches the latest cycle's detail even when the newest ts is
+	// unchanged (used after acting on a review, where the same cycle's summary
+	// changed). Steady-state polls pass force=false and skip the heavy detail
+	// fetch when no new run has landed.
+	const loadLatestCycle = useCallback(async (force = false) => {
 		try {
 			// Use the cycle DIR ids (compact, e.g. 20260601T190000Z) from
 			// /me/cycles — NOT me.today()'s journal-event ts, which is logged
@@ -195,36 +228,48 @@ export default function WorkflowObservabilityPanel({
 			cycles.sort((a, b) => (b.ts || "").localeCompare(a.ts || ""));
 			setCycleList(cycles.slice(0, 8));
 			const ts = cycles[0]?.ts;
-			if (!ts) { setCycleTs(null); setSummary(null); cycleCache.set(cacheKey, { ts: null, summary: null }); return; }
+			if (!ts) { setCycleTs(null); setSummary(null); if (!anchorTs) setCanvasCycle(null); cycleCache.set(cacheKey, { ts: null, summary: null }); return; }
 			// A newer cycle than last poll → a run just landed: flash it.
-			if (prevTsRef.current !== null && ts !== prevTsRef.current) {
+			const changed = prevTsRef.current !== null && ts !== prevTsRef.current;
+			if (changed) {
 				setOptimisticRun(false);
 				setJustRan(true);
 				window.setTimeout(() => setJustRan(false), 2600);
 			}
+			const firstSeen = prevTsRef.current !== ts;
 			prevTsRef.current = ts;
 			setCycleTs(ts);
+			// Steady state: latest cycle hasn't changed and nothing forced a
+			// refresh → skip the large detail payload (keep the current summary).
+			if (!firstSeen && !force) return;
 			const r = await apiClient.get(
 				`/api/v1/me/cycles/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/${encodeURIComponent(ts)}`,
 			);
-			const sum = (r.data?.data?.summary ?? {}) as CycleSummary;
+			const detail = (r.data?.data ?? null) as MeCycleDetail | null;
+			const sum = (detail?.summary ?? {}) as CycleSummary;
 			setSummary(sum);
-			setCycleFiles((r.data?.data?.files ?? {}) as Record<string, unknown>);
+			setCycleFiles((detail?.files ?? {}) as Record<string, unknown>);
 			cycleCache.set(cacheKey, { ts, summary: sum });
+			// Feed the canvas overlay from this same fetch — no separate request
+			// unless a deep-link anchor pins an older run (handled below).
+			if (!anchorTs) setCanvasCycle(detail);
 			// #4 — surface "why red": the first failing step's error.
-			const steps = (r.data?.data?.steps ?? []) as Array<{ skill?: string; step_id?: string; error?: string }>;
+			const steps = (detail?.steps ?? []) as Array<{ skill?: string; step_id?: string; error?: string }>;
 			const firstErr = steps.find((s) => s.error);
 			setLastError(firstErr ? `${firstErr.skill || firstErr.step_id || "step"}: ${String(firstErr.error)}` : null);
 		} catch {
 			/* keep any cached summary on transient error */
 		}
-	}, [app, loop, cacheKey]);
+	}, [app, loop, cacheKey, anchorTs]);
 
 	// Poll while the panel is open so the loop visibly advances — new runs,
-	// fresh offers, resolved approvals appear without a manual refresh.
+	// fresh offers, resolved approvals appear without a manual refresh. Pause
+	// when the tab is hidden so a backgrounded panel isn't hammering the API.
 	useEffect(() => {
 		loadLatestCycle();
-		const id = window.setInterval(loadLatestCycle, 20_000);
+		const id = window.setInterval(() => {
+			if (document.visibilityState !== "hidden") loadLatestCycle();
+		}, 20_000);
 		return () => window.clearInterval(id);
 	}, [loadLatestCycle]);
 
@@ -241,18 +286,18 @@ export default function WorkflowObservabilityPanel({
 		return () => { live = false; };
 	}, [app, loop]);
 
-	// Canvas overlay — the SELECTED run's per-step data (n8n's replay:
-	// clicking a dot in the runs strip re-paints the graph with that
-	// run's statuses). Falls back to the latest run.
+	// Canvas overlay for a DEEP-LINKED run (?cycle=<ts>) only — the common
+	// "latest run" overlay is supplied by loadLatestCycle above, avoiding a
+	// duplicate fetch of the same cycle detail.
 	const overlayTs = anchorTs || cycleTs;
 	useEffect(() => {
+		if (!anchorTs) return;
 		let live = true;
-		if (!overlayTs) { setCanvasCycle(null); return; }
-		apiClient.get(`/api/v1/me/cycles/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/${encodeURIComponent(overlayTs)}`)
+		apiClient.get(`/api/v1/me/cycles/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/${encodeURIComponent(anchorTs)}`)
 			.then((r: any) => { if (live) setCanvasCycle((r.data?.data ?? null) as MeCycleDetail | null); })
 			.catch(() => { if (live) setCanvasCycle(null); });
 		return () => { live = false; };
-	}, [app, loop, overlayTs]);
+	}, [app, loop, anchorTs]);
 
 	const reviewQueue = Array.isArray(summary?.review_queue) ? summary!.review_queue! : [];
 	const offers = Array.isArray(summary?.offers) ? summary!.offers! : [];
@@ -334,79 +379,112 @@ export default function WorkflowObservabilityPanel({
 				</div>
 			</div>
 
-			{/* ── GOAL — the workflow's objective, prominent + editable, shown
-			    per workflow. (Tabs removed — every section lives on one page now.) ── */}
+			{/* ── GOAL — the workflow's objective, always shown full-width at the
+			    top (prominent + editable), independent of the tab below. ── */}
 			<GoalHeader goal={wf.goal} kpis={buildGoalKpis(summary, cycleFiles)} app={app} loop={loop} onSaved={onChanged} />
 
-			{/* A failed last run is an alert. */}
+			{/* A failed last run is an alert — kept above the tabs so it's always
+			    visible regardless of which detail tab is open. */}
 			{!running && wf.last_run_ok === false && lastError && tenantHasRuns && (
 				<FailureCard error={lastError} app={app} loop={loop} />
 			)}
 
-			{/* ── DATA (left, ~30%) · PIPELINE (right, ~70%). Runs section removed —
-			    the run history lives in the top-left card's dots (click a dot for a
-			    cycle preview). Stacks on narrow widths. ── */}
-			<div className="grid grid-cols-1 lg:grid-cols-[3fr_7fr] gap-5 items-start">
-				{/* DATA — datasets the workflow works on (app-scoped). */}
-				<div className="space-y-2 min-w-0">
-					<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400 uppercase flex items-center gap-1.5">
-						<Database className="w-3 h-3" /> Data it works on
-					</div>
-					<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading datasets…</div>}>
-						<DatasetExplorer app={app} />
-					</Suspense>
-				</div>
+			{/* ── Pipeline · Data — a left tab rail that switches the detail
+			    content on the right. ── */}
+			<div className="grid grid-cols-1 sm:grid-cols-[148px_1fr] gap-4 items-start">
+				<nav className="flex sm:flex-col gap-1" role="tablist" aria-label="Workflow details">
+					{TABS.map((t) => {
+						const active = tab === t.key;
+						return (
+							<button
+								key={t.key} role="tab" aria-selected={active} onClick={() => setTab(t.key)}
+								className={cn(
+									"flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left transition-colors border",
+									active
+										? "bg-gold-50 text-gold-800 border-gold-200 font-medium"
+										: "text-slate-600 border-transparent hover:bg-slate-50",
+								)}>
+								<t.icon className="w-4 h-4 flex-shrink-0" />
+								<span className="truncate">{t.label}</span>
+							</button>
+						);
+					})}
+				</nav>
 
-				{/* PIPELINE — n8n-style node canvas; the wide artifact, so it gets 70%. */}
-				<div className="space-y-2 min-w-0">
-					<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400 uppercase">
-						Pipeline
-						{overlayTs && tenantHasRuns && <span className="normal-case tracking-normal text-slate-400 font-normal"> · showing run {cycleDate(overlayTs)}</span>}
-						{!tenantHasRuns && <span className="normal-case tracking-normal text-slate-400 font-normal"> · runs when you click Run now</span>}
-					</div>
-					{hasPipeline ? (
-						<>
-							<WorkflowCanvas
-								definition={definition!}
-								cycle={canvasCycle}
-								running={running}
-								onStepSelect={(ref) => setCanvasStep(ref)}
-							/>
-							{canvasStep && (
-								<StepInspectorPanel
-									step={canvasStep} app={app} loop={loop}
-									ts={overlayTs || undefined} onClose={() => setCanvasStep(null)}
-								/>
+				<div className="min-w-0">
+					{/* PIPELINE — vertical n8n-style node canvas + per-step + per-run inspectors. */}
+					{tab === "pipeline" && (
+						<div className="space-y-2 min-w-0 animate-in fade-in duration-200">
+							<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400 uppercase">
+								Pipeline
+								{overlayTs && tenantHasRuns && <span className="normal-case tracking-normal text-slate-400 font-normal"> · showing run {cycleDate(overlayTs)}</span>}
+								{!tenantHasRuns && <span className="normal-case tracking-normal text-slate-400 font-normal"> · runs when you click Run now</span>}
+							</div>
+							{hasPipeline ? (
+								<>
+									{/* Canvas fills the screen height; fitView centers the
+									    graph in the box at native font size. */}
+									<div ref={fillRef} style={{ height: fillH }}>
+										<WorkflowCanvas
+											definition={definition!}
+											cycle={canvasCycle}
+											running={running}
+											height="100%"
+											onStepSelect={(ref) => setCanvasStep(ref)}
+										/>
+									</div>
+									{canvasStep && (
+										<StepInspectorPanel
+											step={canvasStep} app={app} loop={loop}
+											ts={overlayTs || undefined} onClose={() => setCanvasStep(null)}
+										/>
+									)}
+								</>
+							) : (
+								<div ref={fillRef} style={{ height: fillH }} className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 flex items-center justify-center text-xs text-slate-400">No pipeline declared for this workflow.</div>
 							)}
-						</>
-					) : (
-						<div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-5 text-center text-xs text-slate-400">No pipeline declared for this workflow.</div>
+							{/* Per-run stage inspector — opened by clicking a run dot in the header. */}
+							{selectedStage && tenantHasRuns && (
+								<div ref={inspectorRef}>
+									<StageDetail
+										app={app} loop={loop} stage={selectedStage} initialTs={anchorTs || undefined}
+										onStageChange={(k) => setSelectedStage(k)}
+										q={stageQ} setQ={setStageQ} onClose={() => setSelectedStage(null)}
+									/>
+								</div>
+							)}
+						</div>
+					)}
+
+					{/* DATA — datasets the workflow works on (app-scoped). Fills the
+					    screen height; the file list scrolls inside the box. */}
+					{tab === "dataset" && (
+						<div className="space-y-2 min-w-0 animate-in fade-in duration-200">
+							<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400 uppercase flex items-center gap-1.5">
+								<Database className="w-3 h-3" /> Data it works on
+							</div>
+							<div ref={fillRef} style={{ height: fillH }} className="overflow-y-auto rounded-xl border border-slate-200 bg-white p-3">
+								<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading datasets…</div>}>
+									<DatasetExplorer app={app} />
+								</Suspense>
+							</div>
+						</div>
 					)}
 				</div>
 			</div>
-
-			{/* Per-run stage inspector — opened by clicking a run above; full width. */}
-			{selectedStage && tenantHasRuns && (
-				<div ref={inspectorRef}>
-					<StageDetail
-						app={app} loop={loop} stage={selectedStage} initialTs={anchorTs || undefined}
-						onStageChange={(k) => setSelectedStage(k)}
-						q={stageQ} setQ={setStageQ} onClose={() => setSelectedStage(null)}
-					/>
-				</div>
-			)}
-
-			{/* ── SUGGESTED IMPROVEMENTS — review queue + proposed changes. ── */}
+			{/* ── SUGGESTED IMPROVEMENTS — review queue + proposed changes; full
+			    width below the tabs. ── */}
 			{(reviewQueue.length > 0 || offers.length > 0) && (
 				<Section icon={Sparkles} title="Suggested improvements">
 					{offers.length > 0 && <OffersPanel offers={offers} app={app} loop={loop} ts={cycleTs ?? undefined} />}
 					{reviewQueue.length > 0 && cycleTs && (
 						<div className={offers.length > 0 ? "mt-2" : ""}>
-							<ReviewQueue app={app} loop={loop} ts={cycleTs} items={reviewQueue} onActed={loadLatestCycle} />
+							<ReviewQueue app={app} loop={loop} ts={cycleTs} items={reviewQueue} onActed={() => loadLatestCycle(true)} />
 						</div>
 					)}
 				</Section>
 			)}
+
 
 		</div>
 	);
