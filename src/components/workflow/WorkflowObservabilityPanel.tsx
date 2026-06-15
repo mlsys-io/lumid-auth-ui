@@ -17,7 +17,7 @@ import { Link } from "react-router-dom";
 import {
 	Play, Pause, Loader2, Save, Clock, AlertCircle, Target,
 	ChevronLeft, ChevronRight, ChevronDown, Trash2,
-	Database, Sparkles, Pencil, Activity,
+	Database, Sparkles, Pencil, Activity, Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import apiClient from "@/api/client";
@@ -32,6 +32,7 @@ import { loopLabel } from "@/lib/workflow-names";
 import FailureCard from "@/components/workflow/FailureCard";
 import RunSparkline from "@/components/RunSparkline";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import CompareRuns from "@/components/workflow/CompareRuns";
 // Datasets the workflow works on — heavy (table/preview), so lazy-load it and
 // only mount when the Data tab is opened.
 const DatasetExplorer = lazy(() => import("@/components/workflow/DatasetExplorer"));
@@ -196,6 +197,8 @@ export default function WorkflowObservabilityPanel({
 	// Which run the Runs tab draws as a pipeline. null = follow the latest run;
 	// clicking an older run in the list pins it here.
 	const [selectedRunTs, setSelectedRunTs] = useState<string | null>(null);
+	// Runs picked for side-by-side comparison (2-5). >=2 swaps the pipeline for the compare table.
+	const [compareTs, setCompareTs] = useState<string[]>([]);
 	// Size the Pipeline canvas / Data list to fill the screen: measure the
 	// fill wrapper's top and stretch it to the bottom of the viewport. The
 	// studio shell scrolls (flex-1 overflow-y-auto), so the wrapper is
@@ -449,10 +452,10 @@ export default function WorkflowObservabilityPanel({
 												const sel = (selectedRunTs ?? cycleTs) === r.ts;
 												const tone = r.running ? "bg-sky-400" : r.ok === false ? "bg-rose-500" : "bg-gold-400";
 												return (
-													<li key={r.ts}>
+													<li key={r.ts} className={cn("flex items-center", sel ? "bg-gold-50" : "hover:bg-slate-50")}>
 														<button type="button"
 															onClick={() => { setSelectedRunTs(r.ts === cycleTs ? null : r.ts); setCanvasStep(null); }}
-															className={cn("w-full flex items-center gap-2 px-2.5 py-2 text-left transition-colors", sel ? "bg-gold-50" : "hover:bg-slate-50")}>
+															className={cn("flex-1 min-w-0 flex items-center gap-2 px-2.5 py-2 text-left")}>
 															<span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", tone, r.running && "running-glow")} />
 															<span className="min-w-0 flex-1">
 																<span className="block text-[12px] text-slate-700 truncate">{cycleDate(r.ts)}</span>
@@ -462,7 +465,7 @@ export default function WorkflowObservabilityPanel({
 																</span>
 															</span>
 															{r.ts === cycleTs && <span className="text-[9px] uppercase tracking-wide text-gold-600 flex-shrink-0">latest</span>}
-														</button>
+														</button><button type="button" title={compareTs.includes(r.ts) ? "Remove from compare" : "Add to compare"} onClick={() => setCompareTs((prev) => prev.includes(r.ts) ? prev.filter((t) => t !== r.ts) : prev.length >= 5 ? prev : [...prev, r.ts])} className={cn("flex-shrink-0 w-5 h-5 mr-2 rounded border flex items-center justify-center transition-colors", compareTs.includes(r.ts) ? "bg-gold-500 border-gold-500 text-white" : "border-slate-300 text-transparent hover:border-gold-400")}><Check className="w-3 h-3" /></button>
 													</li>
 												);
 											})}
@@ -472,7 +475,11 @@ export default function WorkflowObservabilityPanel({
 								{/* RIGHT — the selected run drawn as a pipeline; clicking a node
 								    reveals its intermediate data in-place below (stays in view). */}
 								<div className="min-w-0 flex flex-col gap-2 min-h-0">
-									{hasPipeline ? (
+									{compareTs.length >= 2 ? (
+										<div className="flex-1 min-h-0 overflow-auto">
+											<CompareRuns app={app} loop={loop} runs={compareTs} onRemove={(ts) => setCompareTs((p) => p.filter((t) => t !== ts))} />
+										</div>
+									) : hasPipeline ? (
 										<div className="flex-1 min-h-0">
 											<WorkflowCanvas
 												definition={definition!}
@@ -485,7 +492,7 @@ export default function WorkflowObservabilityPanel({
 									) : (
 										<div className="flex-1 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 flex items-center justify-center text-xs text-slate-400 p-5 text-center">No pipeline declared for this workflow.</div>
 									)}
-									{canvasStep && (
+									{compareTs.length < 2 && canvasStep && (
 										<div className="shrink-0 max-h-[45%] overflow-y-auto">
 											<StepInspectorPanel
 												step={canvasStep} app={app} loop={loop}
