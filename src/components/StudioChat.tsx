@@ -1301,7 +1301,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 			{/* Agent/persona picker removed — when an app is selected the chat
 			    talks to THAT app's agents by default (app context drives the
 			    routing; see emitAppOpener clearing any manual selection). */}
-			<ArtifactIconButton />
+			<ArtifactIconButton align={docked ? 'right' : 'left'} />
 			<div className="relative">
 				<button
 					onClick={() => { const next = !historyOpen; setHistoryOpen(next); if (next) loadHistory(); }}
@@ -1311,7 +1311,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 					<MessageSquarePlus className="w-3.5 h-3.5" />
 				</button>
 				{historyOpen && (
-					<div className="absolute right-0 top-full mt-1 z-50 w-72 max-h-96 overflow-y-auto rounded-xl border border-border bg-popover shadow-lg shadow-foreground/5 p-1" onClick={(e) => e.stopPropagation()}>
+					<div className={['absolute top-full mt-1 z-50 w-72 max-h-96 overflow-y-auto rounded-xl border border-border bg-popover shadow-lg shadow-foreground/5 p-1', docked ? 'right-0' : 'left-0'].join(' ')} onClick={(e) => e.stopPropagation()}>
 						<button type="button" onClick={newAppSession}
 							className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] text-foreground hover:bg-gold-50 hover:text-gold-800 transition-colors">
 							<Plus className="w-3.5 h-3.5 text-gold-600" />
@@ -2640,7 +2640,7 @@ type ArtifactRow = {
 };
 type ArtifactFull = ArtifactRow & { content: string };
 
-function ArtifactIconButton() {
+function ArtifactIconButton({ align = 'right' }: { align?: 'left' | 'right' }) {
 	const [open, setOpen] = useState(false);
 	const ref = useClickOutside(open, () => setOpen(false));
 	const [rows, setRows] = useState<ArtifactRow[]>([]);
@@ -2760,7 +2760,7 @@ function ArtifactIconButton() {
 				)}
 			</button>
 			{open && (
-				<div className="absolute top-full right-0 mt-1 z-50 w-[420px] max-h-[32rem] flex flex-col rounded-xl border border-border bg-popover shadow-xl shadow-foreground/10">
+				<div className={['absolute top-full mt-1 z-50 w-[420px] max-h-[32rem] flex flex-col rounded-xl border border-border bg-popover shadow-xl shadow-foreground/10', align === 'left' ? 'left-0' : 'right-0'].join(' ')}>
 
 					{/* Header strip */}
 					<div className="flex items-center gap-2 px-3 py-2 border-b border-border/60">
