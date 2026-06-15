@@ -68,7 +68,11 @@ export default function DatasetExplorer({ app }: { app: string }) {
 	};
 
 	if (groups === null) return <div className="h-16 rounded-lg bg-slate-100 animate-pulse" />;
-	if (groups.length === 0) return <div className="text-xs text-slate-400 italic">No bundled datasets found for this app.</div>;
+	if (groups.length === 0) return (
+		<div className="text-xs text-slate-500 leading-relaxed">
+			No static casebook is bundled with this workflow — it reads <span className="font-medium text-slate-700">live / external data</span> (e.g. market feeds, your mailbox, a warehouse). Its goal metrics are scored on each run's outputs; open the <span className="font-medium text-slate-700">Runs</span> tab to inspect what each run saw.
+		</div>
+	);
 
 	return (
 		<div className="space-y-3">
