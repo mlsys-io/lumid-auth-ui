@@ -99,8 +99,8 @@ function stageOf(stepID: string, idx: number, total: number, cycleStage?: string
 // canvas height); GUTTER leaves a left column for the stage labels; COL_X
 // is the x of the main vertical column.
 const NODE_W = 196;
-const STEP_Y = 84;
-const NODE_H = 50;
+const STEP_Y = 108;
+const NODE_H = 80;
 const GUTTER = 96;
 const COL_X = GUTTER + 18;
 
@@ -164,6 +164,8 @@ export default function WorkflowCanvas({ definition, cycle, running = false, mod
 								duration={cs?.duration_s}
 								badges={{ experiment: !!st.experiment, knowledge: !!st.knowledge_agent }}
 								stage={stage}
+								summary={cs?.output_summary}
+								error={cs?.error}
 							/>
 						),
 					},
@@ -231,7 +233,7 @@ export default function WorkflowCanvas({ definition, cycle, running = false, mod
 				nodes.push({
 					id: `skill:${sk}`,
 					position: { x: startX + col * (NODE_W + 44), y: skillTop + row * STEP_Y },
-					data: { label: <NodeLabel title={sk} subtitle={cs ? "" : "declared"} state={state} duration={cs?.duration_s} /> },
+					data: { label: <NodeLabel title={sk} subtitle={cs ? "" : "declared"} state={state} duration={cs?.duration_s} summary={cs?.output_summary} error={cs?.error} /> },
 					targetPosition: Position.Top,
 					style: nodeStyle(state, state),
 				});
@@ -387,19 +389,24 @@ function nodeStyle(_kind: string, state: string): React.CSSProperties {
 	};
 }
 
-function NodeLabel({ title, subtitle, state, duration, badges, stage }: {
+function NodeLabel({ title, subtitle, state, duration, badges, stage, summary, error }: {
 	title: string;
 	subtitle?: string;
 	state: string;
 	duration?: number;
 	badges?: { experiment?: boolean; knowledge?: boolean };
 	stage?: string;
+	summary?: string;
+	error?: string;
 }) {
+	// The run's per-step result, shown AS TEXT inside the node so the pipeline
+	// is self-explanatory without clicking (error wins over output summary).
+	const detail = error ? error.split("\n")[0] : summary;
 	return (
-		<div className="px-3 py-2 text-left" data-pick-kind="cycle-step" data-pick-id={title}>
+		<div className="px-3 py-2 text-left" style={{ width: NODE_W }} data-pick-kind="cycle-step" data-pick-id={title}>
 			<div className="flex items-center gap-1.5">
 				<span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: STATE_BG[state] || STATE_BG.pending }} />
-				<span className="text-[13px] text-slate-900 truncate" style={{ maxWidth: 134 }}>{title}</span>
+				<span className="text-[13px] text-slate-900 truncate flex-1">{title}</span>
 				{badges?.experiment && <span title="runs an experiment" className="text-[11px]">🧪</span>}
 				{badges?.knowledge && <span title="writes to a knowledge bank" className="text-[11px]">🧠</span>}
 			</div>
@@ -408,6 +415,11 @@ function NodeLabel({ title, subtitle, state, duration, badges, stage }: {
 				{duration !== undefined && <span className="text-[11px] text-slate-400 font-mono ml-auto">{duration.toFixed(1)}s</span>}
 				{stage && !subtitle && <span className="text-[10px] uppercase tracking-wide" style={{ color: STAGE_LABEL_COLOR[stage] || "rgb(148 163 184)" }}>{stage}</span>}
 			</div>
+			{detail && (
+				<div className={`mt-1 text-[10px] leading-snug line-clamp-2 ${error ? "text-rose-600" : "text-slate-500"}`} title={detail}>
+					{detail}
+				</div>
+			)}
 		</div>
 	);
 }
