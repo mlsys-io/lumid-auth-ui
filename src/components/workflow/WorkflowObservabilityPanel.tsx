@@ -33,6 +33,7 @@ import FailureCard from "@/components/workflow/FailureCard";
 import RunSparkline from "@/components/RunSparkline";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import CompareRuns from "@/components/workflow/CompareRuns";
+import FanoutBranches from "@/components/workflow/FanoutBranches";
 // Datasets the workflow works on — heavy (table/preview), so lazy-load it and
 // only mount when the Data tab is opened.
 const DatasetExplorer = lazy(() => import("@/components/workflow/DatasetExplorer"));
@@ -480,17 +481,27 @@ export default function WorkflowObservabilityPanel({
 											<CompareRuns app={app} loop={loop} runs={compareTs} onRemove={(ts) => setCompareTs((p) => p.filter((t) => t !== ts))} />
 										</div>
 									) : hasPipeline ? (
-										<div className="flex-1 min-h-0">
-											<WorkflowCanvas
-												definition={definition!}
-												cycle={canvasCycle}
-												running={running}
-												height="100%"
-												onStepSelect={(ref) => setCanvasStep(ref)}
-											/>
-										</div>
+										<>
+											{canvasCycle?.summary && (
+												<FanoutBranches summary={canvasCycle.summary as Record<string, unknown>} />
+											)}
+											<div className="flex-1 min-h-0">
+												<WorkflowCanvas
+													definition={definition!}
+													cycle={canvasCycle}
+													running={running}
+													height="100%"
+													onStepSelect={(ref) => setCanvasStep(ref)}
+												/>
+											</div>
+										</>
 									) : (
-										<div className="flex-1 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 flex items-center justify-center text-xs text-slate-400 p-5 text-center">No pipeline declared for this workflow.</div>
+										<>
+											{canvasCycle?.summary && (
+												<FanoutBranches summary={canvasCycle.summary as Record<string, unknown>} />
+											)}
+											<div className="flex-1 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 flex items-center justify-center text-xs text-slate-400 p-5 text-center">No pipeline declared for this workflow.</div>
+										</>
 									)}
 									{compareTs.length < 2 && canvasStep && (
 										<div className="shrink-0 max-h-[45%] overflow-y-auto">
