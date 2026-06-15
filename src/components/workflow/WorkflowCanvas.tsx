@@ -71,6 +71,10 @@ interface Props {
 	cycle?: MeCycleDetail | null;
 	running?: boolean;
 	mode?: "observe" | "showcase";
+	// Explicit canvas height. When set (e.g. the panel sizes it to the screen),
+	// it overrides the content-derived height; fitView (capped at zoom 1) then
+	// centers the graph in the taller box at native font size.
+	height?: number | string;
 	onStepSelect?: (ref: CanvasStepRef) => void;
 }
 
@@ -89,13 +93,21 @@ function stageOf(stepID: string, idx: number, total: number, cycleStage?: string
 	return LOOP_STAGES[slot].key;
 }
 
-const NODE_W = 190;
-const GAP_X = 70;
+// Vertical layout — the pipeline flows top→bottom. NODE_W is the node
+// width; STEP_Y is the center-to-center vertical distance between stacked
+// nodes; NODE_H approximates a node's rendered height (for band sizing +
+// canvas height); GUTTER leaves a left column for the stage labels; COL_X
+// is the x of the main vertical column.
+const NODE_W = 196;
+const STEP_Y = 84;
+const NODE_H = 50;
+const GUTTER = 96;
+const COL_X = GUTTER + 18;
 
-export default function WorkflowCanvas({ definition, cycle, running = false, mode = "observe", onStepSelect }: Props) {
+export default function WorkflowCanvas({ definition, cycle, running = false, mode = "observe", height: heightProp, onStepSelect }: Props) {
 	const showcase = mode === "showcase";
 
-	const { nodes, edges } = useMemo(() => {
+	const { nodes, edges, contentH } = useMemo(() => {
 		const nodes: Node[] = [];
 		const edges: Edge[] = [];
 		const cycleByStep = new Map<string, MeCycleStep>();
@@ -108,14 +120,14 @@ export default function WorkflowCanvas({ definition, cycle, running = false, mod
 			return "succeeded";
 		};
 
-		let x = 0;
-		const Y = 70;
+		const TOP = 16;
+		let y = TOP;
 
-		// Trigger node — cron or @trigger.
+		// Trigger node — cron or @trigger. Top of the vertical chain.
 		const schedule = definition.schedule || "";
 		nodes.push({
 			id: "trigger",
-			position: { x, y: Y },
+			position: { x: COL_X, y },
 			data: {
 				label: (
 					<NodeLabel
@@ -125,11 +137,11 @@ export default function WorkflowCanvas({ definition, cycle, running = false, mod
 					/>
 				),
 			},
-			sourcePosition: Position.Right,
-			targetPosition: Position.Left,
+			sourcePosition: Position.Bottom,
+			targetPosition: Position.Top,
 			style: nodeStyle("trigger", running ? "running" : "pending"),
 		});
-		x += NODE_W + GAP_X;
+		y += STEP_Y;
 
 		const patternA = (definition.steps?.length || 0) > 0;
 
@@ -142,7 +154,7 @@ export default function WorkflowCanvas({ definition, cycle, running = false, mod
 				const stage = stageOf(id, i, steps.length, cs?.stage);
 				nodes.push({
 					id: `step:${id}`,
-					position: { x, y: Y },
+					position: { x: COL_X, y },
 					data: {
 						label: (
 							<NodeLabel
@@ -155,8 +167,8 @@ export default function WorkflowCanvas({ definition, cycle, running = false, mod
 							/>
 						),
 					},
-					sourcePosition: Position.Right,
-					targetPosition: Position.Left,
+					sourcePosition: Position.Bottom,
+					targetPosition: Position.Top,
 					style: nodeStyle(state, state),
 				});
 				edges.push({
@@ -166,15 +178,15 @@ export default function WorkflowCanvas({ definition, cycle, running = false, mod
 					animated: running,
 					style: { stroke: "rgb(148 163 184)" },
 				});
-				x += NODE_W + GAP_X;
+				y += STEP_Y;
 			});
-			// Knowledge sink off the learn end.
+			// Knowledge sink off the learn end (bottom).
 			if (definition.knowledge_agent) {
 				nodes.push({
 					id: "knowledge",
-					position: { x, y: Y },
+					position: { x: COL_X, y },
 					data: { label: <NodeLabel title={definition.knowledge_agent} subtitle="knowledge bank" state="succeeded" stage="learn" /> },
-					targetPosition: Position.Left,
+					targetPosition: Position.Top,
 					style: nodeStyle("knowledge", "pending"),
 				});
 				const lastID = steps[steps.length - 1].id || steps[steps.length - 1].skill || `step-${steps.length}`;
@@ -185,40 +197,42 @@ export default function WorkflowCanvas({ definition, cycle, running = false, mod
 					animated: running,
 					style: { stroke: "rgb(197 167 94)" },
 				});
+				y += STEP_Y;
 			}
 		} else {
-			// Pattern B — engine node + declared-skill fan-out.
+			// Pattern B — engine node, then declared-skill fan-out in rows below.
 			const engineLabel = definition.engine?.module || definition.engine?.type || "engine";
 			const engineState = running ? "running" : cycle ? (cycle.summary?.step_errors?.length || (cycle.summary as any)?.ok === false ? "failed" : "succeeded") : "pending";
 			nodes.push({
 				id: "engine",
-				position: { x, y: Y },
+				position: { x: COL_X, y },
 				data: { label: <NodeLabel title={`command: ${engineLabel}`} subtitle={definition.engine?.experiment ? `experiment: ${definition.engine.experiment}` : "Pattern B engine"} state={engineState} badges={{ experiment: !!definition.engine?.experiment }} /> },
-				sourcePosition: Position.Right,
-				targetPosition: Position.Left,
+				sourcePosition: Position.Bottom,
+				targetPosition: Position.Top,
 				style: nodeStyle("engine", engineState),
 			});
 			edges.push({ id: "e:t", source: "trigger", target: "engine", animated: running, style: { stroke: "rgb(148 163 184)" } });
-			x += NODE_W + GAP_X;
+			y += STEP_Y;
 
 			const declared = definition.skills_invoked || [];
-			// Grid the fan-out: 4 per column. One vertical stack made the
-			// canvas tall-narrow and fitView crushed it (engine/trigger
-			// rendered off-frame on mbb-ai's 8-skill manifest).
-			const PER_COL = 4;
-			// Center the fan on the engine row — a 1-2 skill fan used to hang
-			// at the top of an otherwise empty canvas.
-			const colRows = Math.min(PER_COL, declared.length || 1);
-			const yStart = Math.max(4, Y - ((colRows - 1) * 72) / 2);
+			// Fan the declared skills into rows BELOW the engine (2 per row) so
+			// the graph still reads top→bottom; a single tall stack would push
+			// the knowledge sink off-frame on big manifests.
+			const PER_ROW = 2;
+			const cols = Math.min(PER_ROW, declared.length || 1);
+			const fanW = cols * NODE_W + (cols - 1) * 44;
+			const startX = COL_X + NODE_W / 2 - fanW / 2;
+			const skillTop = y;
 			declared.forEach((sk, i) => {
 				const cs = cycleByStep.get(sk);
 				const state = stateOf(cs, true);
-				const col = Math.floor(i / PER_COL);
+				const row = Math.floor(i / PER_ROW);
+				const col = i % PER_ROW;
 				nodes.push({
 					id: `skill:${sk}`,
-					position: { x: x + col * (NODE_W + 50), y: yStart + (i % PER_COL) * 72 },
+					position: { x: startX + col * (NODE_W + 44), y: skillTop + row * STEP_Y },
 					data: { label: <NodeLabel title={sk} subtitle={cs ? "" : "declared"} state={state} duration={cs?.duration_s} /> },
-					targetPosition: Position.Left,
+					targetPosition: Position.Top,
 					style: nodeStyle(state, state),
 				});
 				edges.push({
@@ -234,44 +248,47 @@ export default function WorkflowCanvas({ definition, cycle, running = false, mod
 					labelStyle: { fontSize: 9, fill: "rgb(100 116 139)" },
 				});
 			});
-			x += (Math.ceil(declared.length / PER_COL) || 1) * (NODE_W + 50) + 20;
+			y = skillTop + (Math.ceil((declared.length || 1) / PER_ROW)) * STEP_Y;
 			if (definition.knowledge_agent) {
 				nodes.push({
 					id: "knowledge",
-					position: { x, y: Y },
+					position: { x: COL_X, y },
 					data: { label: <NodeLabel title={definition.knowledge_agent} subtitle="knowledge bank" state="succeeded" stage="learn" /> },
-					targetPosition: Position.Left,
+					targetPosition: Position.Top,
 					style: nodeStyle("knowledge", "pending"),
 				});
 				edges.push({ id: "e:k", source: "engine", target: "knowledge", animated: running, style: { stroke: "rgb(197 167 94)" } });
+				y += STEP_Y;
 			}
 		}
 
-		// Stage bands — group-style background nodes behind Pattern A pipelines.
+		// Stage bands — horizontal stripes behind the Pattern A vertical
+		// pipeline, with the stage name in the left gutter (observe at the
+		// top, learn at the bottom — the five stages flow downward).
 		if (patternA && !showcase) {
-			const stageSpans = new Map<string, { minX: number; maxX: number }>();
+			const stageSpans = new Map<string, { minY: number; maxY: number }>();
 			for (const n of nodes) {
 				if (!n.id.startsWith("step:")) continue;
 				const idx = nodes.indexOf(n);
 				const stage = stageOf(n.id.slice(5), idx, nodes.length, cycleByStep.get(n.id.slice(5))?.stage);
-				const span = stageSpans.get(stage) || { minX: n.position.x, maxX: n.position.x };
-				span.minX = Math.min(span.minX, n.position.x);
-				span.maxX = Math.max(span.maxX, n.position.x);
+				const span = stageSpans.get(stage) || { minY: n.position.y, maxY: n.position.y };
+				span.minY = Math.min(span.minY, n.position.y);
+				span.maxY = Math.max(span.maxY, n.position.y);
 				stageSpans.set(stage, span);
 			}
-			let bandIdx = 0;
 			for (const s of LOOP_STAGES) {
 				const span = stageSpans.get(s.key);
 				if (!span) continue;
+				// Stripe behind the column.
 				nodes.unshift({
 					id: `band:${s.key}`,
-					position: { x: span.minX - 14, y: 0 },
-					data: { label: <div className="text-[9px] font-semibold uppercase tracking-wider px-2 pt-1" style={{ color: STAGE_LABEL_COLOR[s.key] }}>{s.label}</div> },
+					position: { x: COL_X - 14, y: span.minY - 10 },
+					data: { label: "" },
 					draggable: false,
 					selectable: false,
 					style: {
-						width: span.maxX - span.minX + NODE_W + 28,
-						height: 170,
+						width: NODE_W + 28,
+						height: span.maxY - span.minY + NODE_H + 20,
 						background: STAGE_TINT[s.key],
 						border: "none",
 						borderRadius: 14,
@@ -279,22 +296,33 @@ export default function WorkflowCanvas({ definition, cycle, running = false, mod
 						pointerEvents: "none" as const,
 					},
 				});
-				bandIdx++;
+				// Stage name in the left gutter, vertically centered on the band.
+				nodes.unshift({
+					id: `bandlabel:${s.key}`,
+					position: { x: 2, y: (span.minY + span.maxY) / 2 + NODE_H / 2 - 8 },
+					data: { label: <div className="text-[10px] font-semibold uppercase tracking-wider text-right" style={{ color: STAGE_LABEL_COLOR[s.key] }}>{s.label}</div> },
+					draggable: false,
+					selectable: false,
+					style: { width: GUTTER, background: "transparent", border: "none", zIndex: 0, pointerEvents: "none" as const },
+				});
 			}
-			void bandIdx;
 		}
 
-		return { nodes, edges };
+		const maxY = nodes.reduce(
+			(m, n) => Math.max(m, n.position.y + (typeof n.style?.height === "number" ? (n.style.height as number) : NODE_H)),
+			0,
+		);
+		return { nodes, edges, contentH: maxY + TOP };
 	}, [definition, cycle, running, showcase]);
 
 	const empty = !definition.steps?.length && !definition.skills_invoked?.length && !definition.engine?.type && !definition.engine?.module;
 	if (empty) return null;
 
-	// Height tracks actual content: a 3-node lqt-mailbox graph gets a
-	// slim strip, an 8-skill fan gets room. fitView's maxZoom (below)
-	// stops small graphs ballooning to fill the slack.
-	const fanRows = Math.min(4, definition.skills_invoked?.length || 0);
-	const height = showcase ? 160 : fanRows > 1 ? Math.max(220, fanRows * 72 + 90) : 190;
+	// Height tracks the actual vertical content so fitView (capped at zoom 1)
+	// renders nodes at their native font size — text stays comparable to the
+	// rest of the page. Long pipelines are capped and pan/scroll instead of
+	// shrinking the text to fit.
+	const height = heightProp ?? (showcase ? 200 : Math.min(Math.max(220, contentH + 24), 760));
 
 	return (
 		<div className="rounded-xl border border-slate-200 bg-white" style={{ height }}>
@@ -306,12 +334,18 @@ export default function WorkflowCanvas({ definition, cycle, running = false, mod
 				nodes={nodes}
 				edges={edges}
 				fitView
-				fitViewOptions={{ padding: showcase ? 0.08 : 0.12, maxZoom: 1 }}
+				// Lock zoom to 1 in observe mode so nodes ALWAYS render at their
+				// native font size — fitView only translates (centers), never
+				// shrinks the graph to cram a tall pipeline into the box. Overflow
+				// is reached by scroll/drag, not by zooming out. Showcase
+				// thumbnails still scale down to fit.
+				fitViewOptions={{ padding: showcase ? 0.1 : 0.12, maxZoom: 1, minZoom: showcase ? 0.2 : 1 }}
 				proOptions={{ hideAttribution: true }}
 				nodesDraggable={false}
 				nodesConnectable={false}
 				elementsSelectable={!showcase}
-				zoomOnScroll={!showcase}
+				zoomOnScroll={false}
+				panOnScroll={!showcase}
 				panOnDrag={!showcase}
 				onNodeClick={(_e, node) => {
 					if (showcase || !onStepSelect) return;
@@ -337,7 +371,7 @@ function nodeStyle(_kind: string, state: string): React.CSSProperties {
 		border: `2px solid ${STATE_BORDER[state] || "rgb(203 213 225)"}`,
 		borderRadius: 12,
 		padding: 0,
-		fontSize: 12,
+		fontSize: 13,
 		fontWeight: 500,
 		boxShadow: state === "running" ? `0 0 0 4px ${STATE_BG.running}30` : "0 1px 2px rgba(15, 23, 42, 0.04)",
 		minWidth: NODE_W,
@@ -357,14 +391,14 @@ function NodeLabel({ title, subtitle, state, duration, badges, stage }: {
 		<div className="px-3 py-2 text-left" data-pick-kind="cycle-step" data-pick-id={title}>
 			<div className="flex items-center gap-1.5">
 				<span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: STATE_BG[state] || STATE_BG.pending }} />
-				<span className="text-[12px] text-slate-900 truncate" style={{ maxWidth: 130 }}>{title}</span>
-				{badges?.experiment && <span title="runs an experiment" className="text-[10px]">🧪</span>}
-				{badges?.knowledge && <span title="writes to a knowledge bank" className="text-[10px]">🧠</span>}
+				<span className="text-[13px] text-slate-900 truncate" style={{ maxWidth: 134 }}>{title}</span>
+				{badges?.experiment && <span title="runs an experiment" className="text-[11px]">🧪</span>}
+				{badges?.knowledge && <span title="writes to a knowledge bank" className="text-[11px]">🧠</span>}
 			</div>
 			<div className="flex items-center gap-1.5 mt-0.5">
-				{subtitle && <span className="text-[10px] text-slate-500 truncate" style={{ maxWidth: 110 }}>{subtitle}</span>}
-				{duration !== undefined && <span className="text-[10px] text-slate-400 font-mono ml-auto">{duration.toFixed(1)}s</span>}
-				{stage && !subtitle && <span className="text-[9px] uppercase tracking-wide" style={{ color: STAGE_LABEL_COLOR[stage] || "rgb(148 163 184)" }}>{stage}</span>}
+				{subtitle && <span className="text-[11px] text-slate-500 truncate" style={{ maxWidth: 112 }}>{subtitle}</span>}
+				{duration !== undefined && <span className="text-[11px] text-slate-400 font-mono ml-auto">{duration.toFixed(1)}s</span>}
+				{stage && !subtitle && <span className="text-[10px] uppercase tracking-wide" style={{ color: STAGE_LABEL_COLOR[stage] || "rgb(148 163 184)" }}>{stage}</span>}
 			</div>
 		</div>
 	);
