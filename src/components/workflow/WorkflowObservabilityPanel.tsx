@@ -168,7 +168,7 @@ export default function WorkflowObservabilityPanel({
 	const cached0 = cycleCache.get(cacheKey);
 	const [cycleTs, setCycleTs] = useState<string | null>(cached0?.ts ?? null);
 	// null = still loading; [] = confirmed zero tenant runs.
-	const [cycleList, setCycleList] = useState<Array<{ ts: string; ok?: boolean; running?: boolean; duration_s?: number }> | null>(null);
+	const [cycleList, setCycleList] = useState<Array<{ ts: string; ok?: boolean; running?: boolean; duration_s?: number; cost_usd?: number; total_tokens?: number }> | null>(null);
 	// Deep-link anchor (?cycle=…) — the run the pipeline/inspector overlays.
 	const [anchorTs] = useState<string | null>(initialCycle || null);
 	const [summary, setSummary] = useState<CycleSummary | null>(cached0?.summary ?? null);
@@ -463,6 +463,8 @@ export default function WorkflowObservabilityPanel({
 																<span className="block text-[10px] text-slate-400">
 																	{r.running ? "running…" : r.ok === false ? "failed" : "ok"}
 																	{typeof r.duration_s === "number" ? ` · ${Math.round(r.duration_s)}s` : ""}
+																	{typeof r.total_tokens === "number" && r.total_tokens > 0 ? ` · ${r.total_tokens >= 1000 ? `${(r.total_tokens / 1000).toFixed(1)}k` : Math.round(r.total_tokens)} tok` : ""}
+																	{typeof r.cost_usd === "number" && r.cost_usd >= 0.01 ? ` · $${r.cost_usd.toFixed(2)}` : ""}
 																</span>
 															</span>
 															{r.ts === cycleTs && <span className="text-[9px] uppercase tracking-wide text-gold-600 flex-shrink-0">latest</span>}
