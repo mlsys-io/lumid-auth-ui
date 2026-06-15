@@ -729,6 +729,17 @@ export interface MeCycleDetail {
     step_errors?: unknown[];
     steps_run?: number;
     command_engine?: { case_file?: string; case_id?: string };
+    // Aggregated LLM cost for the cycle (runner writes it into cycle.json
+    // from per-call usage records). cost_usd is notional — operator cycles
+    // run on the subscription, tenant cycles on owned GPUs (cost_usd=0).
+    cost?: {
+      calls?: number;
+      input_tokens?: number;
+      output_tokens?: number;
+      total_tokens?: number;
+      cost_usd?: number;
+      by_model?: Record<string, { calls: number; input_tokens: number; output_tokens: number; cost_usd: number }>;
+    };
     next?: string;
     [k: string]: unknown;
   };

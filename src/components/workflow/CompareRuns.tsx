@@ -51,6 +51,10 @@ export default function CompareRuns({ app, loop, runs, onRemove }: {
 		return m ? Object.values(m as Record<string, { pushed?: number }>).reduce((n, v) => n + (v?.pushed || 0), 0) : 0;
 	};
 	const dur = (ts: string) => details[ts]?.steps?.reduce((n, s) => n + (s.duration_s || 0), 0);
+	const costOf = (ts: string) => sumOf(ts)?.cost as { cost_usd?: number; total_tokens?: number } | undefined;
+	const anyCost = ordered.some((ts) => costOf(ts)?.total_tokens);
+	const usd = (v?: number) => (v == null ? "—" : v >= 0.01 ? `$${v.toFixed(2)}` : v > 0 ? `$${v.toFixed(4)}` : "$0");
+	const ktok = (v?: number) => (v == null ? "—" : v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v)));
 
 	const delta = (k: string) => {
 		const newest = sumOf(ordered[0])?.metrics?.[k];
@@ -87,6 +91,18 @@ export default function CompareRuns({ app, loop, runs, onRemove }: {
 							<td className={cn(cell, "text-slate-400")}>duration</td>
 							{ordered.map((ts) => { const d = dur(ts); return <td key={ts} className={cell}>{d ? `${Math.round(d)}s` : "—"}</td>; })}
 						</tr>
+						{anyCost && (
+							<>
+								<tr>
+									<td className={cn(cell, "text-slate-400")}>LLM cost</td>
+									{ordered.map((ts) => <td key={ts} className={cn(cell, "tabular-nums")}>{usd(costOf(ts)?.cost_usd)}</td>)}
+								</tr>
+								<tr>
+									<td className={cn(cell, "text-slate-400")}>tokens</td>
+									{ordered.map((ts) => <td key={ts} className={cn(cell, "tabular-nums")}>{ktok(costOf(ts)?.total_tokens)}</td>)}
+								</tr>
+							</>
+						)}
 						{metricKeys.map((k) => {
 							const up = delta(k);
 							return (
