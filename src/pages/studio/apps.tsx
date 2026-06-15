@@ -30,7 +30,7 @@ import { TONES, workflowTone } from "@/lib/tones";
 import { describeSchedule } from "@/lib/schedule";
 import { Skeleton, humanizeLoop, loopLabel } from "@/pages/app-revamp/loops";
 import { QuickStarters } from "@/components/studio/QuickStarters";
-import WorkflowComposer from "@/components/WorkflowComposer";
+import NewWorkflowFlow from "@/components/workflow/NewWorkflowFlow";
 import AppCard, { appTitle, type AppIdentity } from "@/components/workflow/AppCard";
 import type { LoopHealth } from "@/components/workflow/WorkflowObservabilityPanel";
 import NeedsAttentionRail from "@/components/workflow/NeedsAttentionRail";
@@ -590,7 +590,7 @@ function AppsHome() {
 
 	return (
 		<>
-			<WorkflowComposer open={composerOpen} onClose={() => setComposerOpen(false)} />
+			<NewWorkflowFlow open={composerOpen} onClose={() => setComposerOpen(false)} />
 			{fresh ? (
 				// Fresh user — lead with the launcher so they assemble app #1.
 				<div className="max-w-[760px] mx-auto w-full space-y-6 px-1 py-2">
