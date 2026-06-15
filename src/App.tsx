@@ -53,6 +53,7 @@ const AppConfigEditor    = lazy(() => import("./components/app-surface/AppConfig
 // param-redirects into the owning app's panel. Runs stay as the
 // cross-app run index.
 const StudioRuns         = lazy(() => import("./pages/studio/runs"));
+const StudioPortfolio    = lazy(() => import("./pages/studio/portfolio"));
 // Workstream E — skills as a first-class surface (inventory + health + discovery).
 const StudioSkills       = lazy(() => import("./pages/studio/skills"));
 // Workstream F — cross-app experiments aggregate.
@@ -638,6 +639,7 @@ export default function App() {
                 land in a follow-up PR; both still work at their
                 original URLs and are just hidden from the sidebar. */}
             <Route path="runs"                         element={<StudioRuns />} />
+            <Route path="portfolio"                    element={<StudioPortfolio />} />
             <Route path="runs/:run_id"                 element={<StudioRunDetail />} />
             {/* Mind folded into each workflow's Insights panel. */}
             <Route path="mind"                         element={<Navigate to="/studio/apps" replace />} />
