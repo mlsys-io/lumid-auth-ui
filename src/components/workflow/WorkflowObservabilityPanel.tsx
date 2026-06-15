@@ -34,9 +34,12 @@ import RunSparkline from "@/components/RunSparkline";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import CompareRuns from "@/components/workflow/CompareRuns";
 import FanoutBranches from "@/components/workflow/FanoutBranches";
+import GoalTrend from "@/components/workflow/GoalTrend";
+import LearningVelocity from "@/components/workflow/LearningVelocity";
 // Datasets the workflow works on — heavy (table/preview), so lazy-load it and
 // only mount when the Data tab is opened.
 const DatasetExplorer = lazy(() => import("@/components/workflow/DatasetExplorer"));
+const CasebookPanel = lazy(() => import("@/components/workflow/CasebookPanel"));
 import {
 	ReviewQueue, OffersPanel,
 	type CycleSummary,
@@ -440,6 +443,12 @@ export default function WorkflowObservabilityPanel({
 								{overlayTs && tenantHasRuns && <span className="normal-case tracking-normal text-slate-400 font-normal"> · showing {cycleDate(overlayTs)}{(!selectedRunTs || selectedRunTs === cycleTs) ? " (latest)" : ""}</span>}
 								{cyclesKnown && !tenantHasRuns && <span className="normal-case tracking-normal text-slate-400 font-normal"> · runs when you click Run now</span>}
 							</div>
+							{tenantHasRuns && (
+								<div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+									<GoalTrend app={app} loop={loop} runs={(cycleList ?? []).map((r) => r.ts).filter(Boolean)} />
+									<LearningVelocity app={app} loop={loop} runs={(cycleList ?? []).map((r) => r.ts).filter(Boolean)} />
+								</div>
+							)}
 							<div ref={fillRef} style={{ height: fillH }} className="grid grid-cols-1 sm:grid-cols-[210px_1fr] gap-3 min-h-0">
 								{/* LEFT — run timeline */}
 								<div className="overflow-y-auto rounded-xl border border-slate-200 bg-white">
@@ -553,6 +562,12 @@ export default function WorkflowObservabilityPanel({
 										</div>
 									) : null;
 								})()}
+								{/* Casebook = the evolving eval-set the goal metrics are scored
+								    on (per-case scores + evolution); non-empty for command-driven
+								    apps where DatasetExplorer (bundled files) is blank. */}
+								<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading casebook…</div>}>
+									<CasebookPanel app={app} loop={loop} />
+								</Suspense>
 								<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading datasets…</div>}>
 									<DatasetExplorer app={app} />
 								</Suspense>

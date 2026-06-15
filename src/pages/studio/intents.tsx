@@ -11,7 +11,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import WorkflowComposer from '@/components/WorkflowComposer';
+import NewWorkflowFlow from '@/components/workflow/NewWorkflowFlow';
 import AppLoops from '../app-revamp/loops';
 import { me } from '@/api/me';
 import { useAuth } from '@/hooks/useAuth';
@@ -51,7 +51,7 @@ export default function StudioToday() {
 
 	return (
 		<>
-			<WorkflowComposer open={composerOpen} onClose={() => setComposerOpen(false)} />
+			<NewWorkflowFlow open={composerOpen} onClose={() => setComposerOpen(false)} />
 			{empty === true && <div className="space-y-6"><FreshUserHero name={name} /></div>}
 			{empty === false && (
 				// Stage 1 — "given an intent, assemble a workflow (from the
