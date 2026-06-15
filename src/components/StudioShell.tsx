@@ -72,6 +72,7 @@ interface NavItem {
 // API tokens live in the bottom avatar menu; "How it works" is a quiet
 // footer docs link.
 const TOP_NAV: NavItem[] = [
+	{ to: '/studio/portfolio', label: 'Fleet', icon: Boxes, title: 'cross-workflow health, cost, and learning across all your workflows' },
 	{ to: '/studio/library', label: 'Library', icon: Store, title: 'marketplace, skills, and experiments' },
 ];
 // Jobs/Activity/Inbox are folded into Apps — the Apps hero's "runs today" stat
@@ -84,6 +85,7 @@ const TOP_NAV: NavItem[] = [
 const ROUTE_PREFETCH: Record<string, () => Promise<unknown>> = {
 	"/studio/library": () => import("@/pages/studio/library-tabs"),
 	"/studio/runs": () => import("@/pages/studio/runs"),
+	"/studio/portfolio": () => import("@/pages/studio/portfolio"),
 };
 const prefetched = new Set<string>();
 function prefetchRoute(to: string) {

@@ -33,6 +33,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { me, MeApiError, type MeAppCard, type MeDatasetGroup } from "@/api/me";
 import AssemblyCard, { type ComposedDraft } from "@/components/workflow/AssemblyCard";
+import { validateWorkflow, type ValidateCheck } from "@/api/validate";
 
 interface Props {
 	open: boolean;
@@ -526,21 +527,40 @@ function CreateStep({ draft, schedule, setSchedule, creating, created, onCreate 
 	creating: boolean; created: boolean; onCreate: () => void;
 }) {
 	const steps = draft.steps || [];
-	// Validation preview. There is no app_validate / manifest_lint endpoint, so
-	// we derive a lint-style checklist from the compose draft's assembly_trace
-	// (the same probes the AssemblyCard's Verify stage shows) plus a couple of
-	// shape checks computed client-side. See backend follow-up in the report.
+	// Validation preview. The authoritative checks (manifest_lint +
+	// pipeline_shape) come from POST /me/workflows/validate, which reads the
+	// written `<slug>-draft` bundle off disk and runs the same gates app-ci
+	// enforces. We fall back to a client-derived checklist if that endpoint is
+	// unreachable. tools_resolvable + the compose verify[] rows stay client-side
+	// (they come from the compose draft's live xp.io resolution).
 	const verify = draft.assembly_trace?.verify || [];
 	const resolvedN = steps.filter((s) => s.resolved !== false && !!s.resolved_repo).length;
+	const [serverChecks, setServerChecks] = useState<ValidateCheck[] | null>(null);
+	useEffect(() => {
+		let live = true;
+		if (!draft.slug) { setServerChecks(null); return; }
+		validateWorkflow(draft.slug)
+			.then((r) => { if (live) setServerChecks(r.checks); })
+			.catch(() => { if (live) setServerChecks(null); });
+		return () => { live = false; };
+	}, [draft.slug]);
 	const lint = useMemo(() => {
-		const rows: Array<{ check: string; detail: string; status: "pass" | "warn" | "fail" }> = [];
-		rows.push({
-			check: "manifest_lint",
-			detail: draft.slug
-				? `Draft "${draft.slug}" has a valid pipeline shape (${steps.length} step${steps.length === 1 ? "" : "s"}).`
-				: "No draft slug — recompose the pipeline.",
-			status: draft.slug && steps.length > 0 ? "pass" : "fail",
-		});
+		const rows: Array<{ check: string; detail: string; status: "pass" | "warn" | "fail"; issues?: string[] }> = [];
+		if (serverChecks && serverChecks.length > 0) {
+			// Server truth for manifest_lint + pipeline_shape.
+			for (const ck of serverChecks) {
+				rows.push({ check: ck.check, detail: ck.detail || (ck.issues?.join("; ") ?? ""), status: ck.status, issues: ck.issues });
+			}
+		} else {
+			// Fallback: derive a manifest_lint row from the draft shape.
+			rows.push({
+				check: "manifest_lint",
+				detail: draft.slug
+					? `Draft "${draft.slug}" has a valid pipeline shape (${steps.length} step${steps.length === 1 ? "" : "s"}).`
+					: "No draft slug — recompose the pipeline.",
+				status: draft.slug && steps.length > 0 ? "pass" : "fail",
+			});
+		}
 		rows.push({
 			check: "tools_resolvable",
 			detail: steps.length
@@ -552,7 +572,7 @@ function CreateStep({ draft, schedule, setSchedule, creating, created, onCreate 
 		// published, risk wired, pipeline complete) — real signals from xp.io.
 		for (const v of verify) rows.push(v);
 		return rows;
-	}, [draft.slug, steps.length, resolvedN, verify]);
+	}, [draft.slug, steps.length, resolvedN, verify, serverChecks]);
 
 	if (created) {
 		return (
