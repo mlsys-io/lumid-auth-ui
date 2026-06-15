@@ -333,13 +333,21 @@ export default function WorkflowCanvas({ definition, cycle, running = false, mod
 				key={`${nodes.length}:${cycle?.ts || ""}:${showcase}`}
 				nodes={nodes}
 				edges={edges}
-				fitView
-				// Lock zoom to 1 in observe mode so nodes ALWAYS render at their
-				// native font size — fitView only translates (centers), never
-				// shrinks the graph to cram a tall pipeline into the box. Overflow
-				// is reached by scroll/drag, not by zooming out. Showcase
-				// thumbnails still scale down to fit.
+				// Observe mode: center the graph HORIZONTALLY but pin it to the
+				// TOP (zoom 1) — fitView centers both axes (hiding the top of a
+				// tall pipeline), so we fitView for the horizontal centering +
+				// zoom, then override the vertical offset to start at the top and
+				// pan/scroll down for the rest. Showcase thumbnails just fitView.
+				fitView={showcase}
+				defaultViewport={showcase ? undefined : { x: 0, y: 8, zoom: 1 }}
 				fitViewOptions={{ padding: showcase ? 0.1 : 0.12, maxZoom: 1, minZoom: showcase ? 0.2 : 1 }}
+				onInit={showcase ? undefined : (rf) => {
+					requestAnimationFrame(() => {
+						rf.fitView({ padding: 0.12, minZoom: 1, maxZoom: 1 });
+						const vp = rf.getViewport();
+						rf.setViewport({ ...vp, y: 8 });
+					});
+				}}
 				proOptions={{ hideAttribution: true }}
 				nodesDraggable={false}
 				nodesConnectable={false}

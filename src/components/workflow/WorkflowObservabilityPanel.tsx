@@ -393,25 +393,18 @@ export default function WorkflowObservabilityPanel({
 
 			{/* ── GOAL — the workflow's objective, always shown full-width at the
 			    top (prominent + editable), independent of the tab below. ── */}
-			<GoalHeader goal={wf.goal} kpis={buildGoalKpis(summary, cycleFiles)} app={app} loop={loop} onSaved={onChanged} />
-
-			{/* A failed last run is an alert — kept above the tabs so it's always
-			    visible regardless of which detail tab is open. */}
-			{!running && wf.last_run_ok === false && lastError && tenantHasRuns && (
-				<FailureCard error={lastError} app={app} loop={loop} />
-			)}
-
-			{/* ── Pipeline · Data — a left tab rail that switches the detail
-			    content on the right. ── */}
-			<div className="grid grid-cols-1 sm:grid-cols-[148px_1fr] gap-4 items-start">
-				<nav className="flex sm:flex-col gap-1" role="tablist" aria-label="Workflow details">
+			<div className="flex items-center gap-3 flex-wrap">
+				<div className="flex-1 min-w-[200px]">
+					<GoalHeader goal={wf.goal} kpis={buildGoalKpis(summary, cycleFiles)} app={app} loop={loop} onSaved={onChanged} />
+				</div>
+				<nav className="flex gap-1 flex-shrink-0 items-center" role="tablist" aria-label="Workflow details">
 					{TABS.map((t) => {
 						const active = tab === t.key;
 						return (
 							<button
-								key={t.key} role="tab" aria-selected={active} onClick={() => setTab(t.key)}
+								key={`top-${t.key}`} role="tab" aria-selected={active} onClick={() => setTab(t.key)}
 								className={cn(
-									"flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left transition-colors border",
+									"flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors border",
 									active
 										? "bg-gold-50 text-gold-800 border-gold-200 font-medium"
 										: "text-slate-600 border-transparent hover:bg-slate-50",
@@ -422,7 +415,17 @@ export default function WorkflowObservabilityPanel({
 						);
 					})}
 				</nav>
+			</div>
 
+			{/* A failed last run is an alert — kept above the tabs so it's always
+			    visible regardless of which detail tab is open. */}
+			{!running && wf.last_run_ok === false && lastError && tenantHasRuns && (
+				<FailureCard error={lastError} app={app} loop={loop} />
+			)}
+
+			{/* ── Pipeline · Data — a left tab rail that switches the detail
+			    content on the right. ── */}
+			<div className="space-y-3">
 				<div className="min-w-0">
 					{/* RUNS — the execution history (left); the selected run drawn as
 					    a pipeline (right). Pipeline = representation of a run. */}
@@ -466,26 +469,35 @@ export default function WorkflowObservabilityPanel({
 										</ul>
 									)}
 								</div>
-								{/* RIGHT — the selected run drawn as a pipeline */}
-								{hasPipeline ? (
-									<WorkflowCanvas
-										definition={definition!}
-										cycle={canvasCycle}
-										running={running}
-										height="100%"
-										onStepSelect={(ref) => setCanvasStep(ref)}
-									/>
-								) : (
-									<div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 flex items-center justify-center text-xs text-slate-400 p-5 text-center">No pipeline declared for this workflow.</div>
-								)}
+								{/* RIGHT — the selected run drawn as a pipeline; clicking a node
+								    reveals its intermediate data in-place below (stays in view). */}
+								<div className="min-w-0 flex flex-col gap-2 min-h-0">
+									{canvasCycle?.summary && tenantHasRuns && (
+										<ConsequenceBar summary={canvasCycle.summary} onDrill={() => setSelectedStage("act")} />
+									)}
+									{hasPipeline ? (
+										<div className="flex-1 min-h-0">
+											<WorkflowCanvas
+												definition={definition!}
+												cycle={canvasCycle}
+												running={running}
+												height="100%"
+												onStepSelect={(ref) => setCanvasStep(ref)}
+											/>
+										</div>
+									) : (
+										<div className="flex-1 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 flex items-center justify-center text-xs text-slate-400 p-5 text-center">No pipeline declared for this workflow.</div>
+									)}
+									{canvasStep && (
+										<div className="shrink-0 max-h-[45%] overflow-y-auto">
+											<StepInspectorPanel
+												step={canvasStep} app={app} loop={loop}
+												ts={overlayTs || undefined} onClose={() => setCanvasStep(null)}
+											/>
+										</div>
+									)}
+								</div>
 							</div>
-							{/* Click a node → its intermediate data + ask a query about it. */}
-							{canvasStep && (
-								<StepInspectorPanel
-									step={canvasStep} app={app} loop={loop}
-									ts={overlayTs || undefined} onClose={() => setCanvasStep(null)}
-								/>
-							)}
 							{/* Stage drill-down + free-text query on the selected run. */}
 							{selectedStage && tenantHasRuns && (
 								<div ref={inspectorRef}>
@@ -976,6 +988,45 @@ function StageDetail({
 				/>
 				<button type="submit" className="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-gold-500 text-white hover:bg-gold-600">Ask</button>
 			</form>
+		</div>
+	);
+}
+
+// ConsequenceBar — the selected run's outcome at a glance: what it produced,
+// decided, held for review, and learned. Sits above the pipeline so every run
+// has a visible consequence; "details →" opens the per-stage drill.
+function ConsequenceBar({ summary, onDrill }: { summary: Record<string, unknown>; onDrill: () => void }) {
+	/* eslint-disable @typescript-eslint/no-explicit-any */
+	const s = summary as any;
+	const outcome = String(s?.outcome || "");
+	const offers = Array.isArray(s?.offers) ? s.offers.length : 0;
+	const review = Array.isArray(s?.review_queue) ? s.review_queue.length : 0;
+	const stepErrs = Array.isArray(s?.step_errors) ? s.step_errors.length : 0;
+	const pushed = s?.auto_publish?.memories
+		? Object.values(s.auto_publish.memories as Record<string, { pushed?: number }>).reduce((n, v) => n + (v?.pushed || 0), 0)
+		: 0;
+	const metrics = (s?.metrics && typeof s.metrics === "object" && !Array.isArray(s.metrics))
+		? Object.entries(s.metrics as Record<string, unknown>).filter(([, v]) => typeof v === "number" && v !== 0).slice(0, 3)
+		: [];
+	const chip = "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]";
+	const num = (v: number) => (Number.isInteger(v) ? String(v) : String(+v.toFixed(3)));
+	return (
+		<div className="shrink-0 rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+			<span className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mr-1">Consequence</span>
+			{outcome && <span className={cn(chip, "bg-white border border-slate-200 text-slate-700 font-medium")}>{outcome.replace(/_/g, " ")}</span>}
+			{metrics.map(([k, v]) => (
+				<span key={k} className={cn(chip, "bg-white border border-slate-200 text-slate-600")}>
+					<b className="tabular-nums text-slate-800">{num(v as number)}</b> {k.replace(/_/g, " ")}
+				</span>
+			))}
+			{review > 0 && <span className={cn(chip, "bg-amber-50 text-amber-700 border border-amber-200")}>{review} awaiting review</span>}
+			{offers > 0 && <span className={cn(chip, "bg-indigo-50 text-indigo-700 border border-indigo-200")}>{offers} suggestion{offers === 1 ? "" : "s"}</span>}
+			{pushed > 0 && <span className={cn(chip, "bg-gold-50 text-gold-700 border border-gold-200")}>{pushed} learned</span>}
+			{stepErrs > 0 && <span className={cn(chip, "bg-rose-50 text-rose-700 border border-rose-200")}>{stepErrs} step error{stepErrs === 1 ? "" : "s"}</span>}
+			{!outcome && !metrics.length && !review && !offers && !pushed && !stepErrs && (
+				<span className="text-[11px] text-slate-400 italic">No recorded outcome for this run.</span>
+			)}
+			<button onClick={onDrill} className="ml-auto text-[11px] text-gold-700 hover:text-gold-800 font-medium">details →</button>
 		</div>
 	);
 }
