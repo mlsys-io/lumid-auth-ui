@@ -217,22 +217,28 @@ export default function WorkflowCanvas({ definition, cycle, running = false, mod
 			y += STEP_Y;
 
 			const declared = definition.skills_invoked || [];
-			// Fan the declared skills into rows BELOW the engine (2 per row) so
-			// the graph still reads top→bottom; a single tall stack would push
-			// the knowledge sink off-frame on big manifests.
+			// Fan the declared skills into CENTERED rows below the engine (2 per
+			// row) so the graph reads top→bottom and stays symmetric — each row,
+			// including a partial last row, is centered under the engine column
+			// (a lone trailing node sits directly under the engine, not jammed to
+			// the left, which is what made odd counts look jagged).
 			const PER_ROW = 2;
-			const cols = Math.min(PER_ROW, declared.length || 1);
-			const fanW = cols * NODE_W + (cols - 1) * 44;
-			const startX = COL_X + NODE_W / 2 - fanW / 2;
+			const SKILL_GAP = 48;
+			const engineCenterX = COL_X + NODE_W / 2;
+			const total = declared.length;
+			const rowCount = Math.max(1, Math.ceil(total / PER_ROW));
 			const skillTop = y;
 			declared.forEach((sk, i) => {
 				const cs = cycleByStep.get(sk);
 				const state = stateOf(cs, true);
 				const row = Math.floor(i / PER_ROW);
 				const col = i % PER_ROW;
+				const inRow = row === rowCount - 1 ? total - row * PER_ROW : PER_ROW;
+				const rowW = inRow * NODE_W + (inRow - 1) * SKILL_GAP;
+				const rowStartX = engineCenterX - rowW / 2;
 				nodes.push({
 					id: `skill:${sk}`,
-					position: { x: startX + col * (NODE_W + 44), y: skillTop + row * STEP_Y },
+					position: { x: rowStartX + col * (NODE_W + SKILL_GAP), y: skillTop + row * STEP_Y },
 					data: { label: <NodeLabel title={sk} subtitle={cs ? "" : "declared"} state={state} duration={cs?.duration_s} summary={cs?.output_summary} error={cs?.error} /> },
 					targetPosition: Position.Top,
 					style: nodeStyle(state, state),
@@ -241,6 +247,9 @@ export default function WorkflowCanvas({ definition, cycle, running = false, mod
 					id: `e:s${i}`,
 					source: "engine",
 					target: `skill:${sk}`,
+					// Orthogonal routing (down-then-across) keeps the fan-out tidy
+					// instead of bezier curves that cross at odd angles.
+					type: "smoothstep",
 					animated: false,
 					// Dashed "declared" edges — the canonical contract enforces
 					// NO ordering for skills_invoked[] in Pattern B; don't draw
@@ -248,9 +257,10 @@ export default function WorkflowCanvas({ definition, cycle, running = false, mod
 					style: { stroke: "rgb(148 163 184)", strokeDasharray: cs ? undefined : "6 4" },
 					label: cs ? undefined : "declared",
 					labelStyle: { fontSize: 9, fill: "rgb(100 116 139)" },
+					labelBgStyle: { fill: "white", fillOpacity: 0.85 },
 				});
 			});
-			y = skillTop + (Math.ceil((declared.length || 1) / PER_ROW)) * STEP_Y;
+			y = skillTop + rowCount * STEP_Y;
 			if (definition.knowledge_agent) {
 				nodes.push({
 					id: "knowledge",
@@ -259,7 +269,7 @@ export default function WorkflowCanvas({ definition, cycle, running = false, mod
 					targetPosition: Position.Top,
 					style: nodeStyle("knowledge", "pending"),
 				});
-				edges.push({ id: "e:k", source: "engine", target: "knowledge", animated: running, style: { stroke: "rgb(197 167 94)" } });
+				edges.push({ id: "e:k", source: "engine", target: "knowledge", type: "smoothstep", animated: running, style: { stroke: "rgb(197 167 94)" } });
 				y += STEP_Y;
 			}
 		}
