@@ -826,13 +826,13 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 	// the visible conversation.
 	useEffect(() => {
 		const onAsk = (e: Event) => {
-			const ce = e as CustomEvent<{ prompt?: string; autosend?: boolean; context?: Partial<ViewingContext> }>;
+			const ce = e as CustomEvent<{ prompt?: string; autosend?: boolean; context?: Partial<ViewingContext>; model?: string }>;
 			const p = String(ce.detail?.prompt || '').trim();
 			if (!p) return;
 			setCollapsed(false);
 			if (ce.detail?.autosend) {
 				setInput('');
-				void dispatchTurnRef.current?.(p, [], undefined, ce.detail?.context);
+				void dispatchTurnRef.current?.(p, [], undefined, ce.detail?.context, ce.detail?.model);
 			} else {
 				setInput(p);
 			}
@@ -873,6 +873,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		stagedAttachments: Attachment[] = [],
 		baseMessages?: Message[],
 		ctxOverride?: Partial<ViewingContext>,
+		modelOverride?: string,
 	) => {
 		if (!text || streaming || inFlightRef.current) return;
 		inFlightRef.current = true;
@@ -922,7 +923,12 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 						body: JSON.stringify({
 							messages: wireMessages,
 							context,
-							...(model ? { model } : {}),
+							// Per-turn model override (e.g. a grounded "Ask about this
+							// run/step" turn requests a tool-capable model so the
+							// observability tools fire). Falls back to the user's
+							// selected model. Backend still re-checks role permissions
+							// (an over-tier override degrades to the role default).
+							...((modelOverride || model) ? { model: modelOverride || model } : {}),
 							...(mode ? { mode } : {}),
 							...(think ? { think: true } : {}),
 							...(personaId ? { persona_id: personaId } : agentId ? { agent_id: agentId } : {}),
