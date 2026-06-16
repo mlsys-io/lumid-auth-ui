@@ -149,10 +149,12 @@ function MetricEvolution({ series }: { series: CasebookMetricEvolution[] }) {
 	);
 }
 
-export default function CasebookPanel({ app, loop, atTs, onSelectCase, selectedCaseId }: {
+export default function CasebookPanel({ app, loop, atTs, onSelectCase, selectedCaseId, onSelectMetrics, metricsSelected }: {
 	app: string; loop: string; atTs?: string;
 	onSelectCase?: (c: { id: string; label: string }) => void;
 	selectedCaseId?: string;
+	onSelectMetrics?: () => void;
+	metricsSelected?: boolean;
 }) {
 	const [book, setBook] = useState<Casebook | null>(null);
 
@@ -171,17 +173,15 @@ export default function CasebookPanel({ app, loop, atTs, onSelectCase, selectedC
 	const evo = book.metrics_evolution ?? [];
 	const versions = (book.version_history ?? []).filter((v) => v.ts || v.note);
 
-	// Empty casebook → the same teaching empty-state as DatasetExplorer (kept in
-	// sync deliberately): the workflow scores on live/external data, not a
-	// bundled eval-set, so point the user at the Runs tab.
+	// Empty casebook: the workflow scores on live/external data, not a bundled
+	// eval-set — point the user at the trajectory on the right.
 	if (cases.length === 0 && evo.length === 0) {
 		return (
 			<div className="text-xs text-slate-500 leading-relaxed">
-				No static casebook is bundled with this workflow — it reads{" "}
-				<span className="font-medium text-slate-700">live / external data</span> (e.g. market
-				feeds, your mailbox, a warehouse). Its goal metrics are scored on each run's outputs; open
-				the <span className="font-medium text-slate-700">Runs</span> tab to inspect what each run
-				saw.
+				No fixed eval-set — this workflow reads{" "}
+				<span className="font-medium text-slate-700">live / external data</span> (market feeds,
+				a mailbox, a warehouse). Its metrics are scored on each run's outputs; pick a run in the
+				trajectory to see what it produced.
 			</div>
 		);
 	}
@@ -206,30 +206,24 @@ export default function CasebookPanel({ app, loop, atTs, onSelectCase, selectedC
 				)}
 			</div>
 
-			{/* Metric evolution */}
-			<MetricEvolution series={evo} />
-
-			{/* Version / evolution history */}
-			{versions.length > 0 && (
-				<div>
-					<div className="text-[11px] font-medium text-slate-500 flex items-center gap-1.5 mb-1.5">
-						<History className="w-3 h-3 text-slate-400" />
-						Evolution
-					</div>
-					<ul className="space-y-0.5">
-						{versions.map((v, i) => (
-							<li key={`${v.ts}-${i}`} className="flex items-center gap-2 text-[11px]">
-								<span className={cn("text-slate-400 font-mono flex-shrink-0", !v.ts && "italic")}>
-									{v.ts ? v.ts.slice(0, 8) : "declared"}
-								</span>
-								<span className="text-slate-600 flex-1 truncate" title={v.note}>{v.note}</span>
-								{v.n_cases > 0 && (
-									<span className="text-slate-400 tabular-nums flex-shrink-0">{v.n_cases} cases</span>
-								)}
-							</li>
-						))}
-					</ul>
-				</div>
+			{/* Metrics — one data entry; opens its curves in the right canvas. */}
+			{evo.length > 0 && (
+				onSelectMetrics ? (
+					<button
+						onClick={onSelectMetrics}
+						title="View metric trends"
+						className={cn(
+							"w-full text-left rounded-lg border px-2.5 py-2 cursor-pointer transition-colors flex items-center gap-2",
+							metricsSelected ? "border-gold-300 bg-gold-50/60 ring-1 ring-gold-200" : "border-slate-200/70 bg-white hover:border-gold-200 hover:bg-gold-50/30",
+						)}
+					>
+						<TrendingUp className="w-3.5 h-3.5 text-gold-500 flex-shrink-0" />
+						<span className="text-[12px] font-medium text-slate-700 flex-1">Metrics</span>
+						<span className="text-[10px] text-slate-400">{evo.length} tracked →</span>
+					</button>
+				) : (
+					<MetricEvolution series={evo} />
+				)
 			)}
 		</div>
 	);
