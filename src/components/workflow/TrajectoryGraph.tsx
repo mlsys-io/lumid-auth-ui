@@ -23,7 +23,7 @@ import {
 	type Node, type Edge, type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { ArrowLeft, GitBranch, Trophy, Sparkles, Loader2, Clock, FlaskConical, MessageSquare } from "lucide-react";
+import { ArrowLeft, GitBranch, Trophy, Sparkles, Loader2, Clock, FlaskConical, MessageSquare, Bot } from "lucide-react";
 import { toast } from "sonner";
 import {
 	fetchTrajectory, fetchTrajectorySignals, postTrajectorySignal,
@@ -32,6 +32,7 @@ import {
 import { me, type MeCycleDetail, type LoopDefinition } from "@/api/me";
 import WorkflowCanvas, { type CanvasStepRef } from "@/components/workflow/WorkflowCanvas";
 import StepInspectorPanel from "@/components/workflow/StepInspectorPanel";
+import LiveConversation from "@/components/workflow/LiveConversation";
 import { ReviewQueue, OffersPanel, type ReviewItem, type CompoundOffer } from "@/pages/studio/inspector";
 import { useStudioRefetch } from "@/hooks/useStudioRefetch";
 import { cn } from "@/lib/utils";
@@ -170,6 +171,9 @@ function Inner({ app, loop, definition, onSelectVersion, running }: {
 	const [cycleLoading, setCycleLoading] = useState(false);
 	const [menu, setMenu] = useState<{ x: number; y: number; node: GNode } | null>(null);
 	const [canvasStep, setCanvasStep] = useState<CanvasStepRef | null>(null);
+	// Open a cycle's live session conversation (subagent/tool-style). "latest"
+	// = the running/just-finished cycle (it isn't a node yet).
+	const [convTs, setConvTs] = useState<string | null>(null);
 
 	// Load (or reload) the trajectory + signals. Reused by the mount effect
 	// and the chat→page refetch bus so a run triggered elsewhere (e.g. the
@@ -380,9 +384,9 @@ function Inner({ app, loop, definition, onSelectVersion, running }: {
 						)}
 						{totalLearned > 0 && <span className="inline-flex items-center gap-1 text-[11px] text-gold-600"><Sparkles className="w-3 h-3" /> {totalLearned} learned</span>}
 						{running ? (
-							<span className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-sky-600 font-medium normal-case tracking-normal">
-								<span className="w-1.5 h-1.5 rounded-full bg-sky-500 running-glow" /> running… <span className="text-slate-400 font-normal">a new run will appear here when it finishes</span>
-							</span>
+							<button onClick={() => setConvTs("latest")} className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-sky-600 font-medium normal-case tracking-normal hover:text-sky-700 pointer-events-auto" title="Open the running session conversation">
+								<span className="w-1.5 h-1.5 rounded-full bg-sky-500 running-glow" /> running… <span className="text-slate-400 font-normal underline decoration-dotted">watch live →</span>
+							</button>
 						) : (
 							<span className="ml-auto text-[10px] text-slate-300 normal-case tracking-normal">click a node · right-click to branch</span>
 						)}
@@ -413,6 +417,9 @@ function Inner({ app, loop, definition, onSelectVersion, running }: {
 							<div className="px-3 py-1 text-[10px] uppercase tracking-wide text-slate-400 truncate">{menu.node.label}</div>
 							{!menu.node.proposed && (
 								<button onClick={() => openPipeline(menu.node)} className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50 text-left"><FlaskConical className="w-3.5 h-3.5 text-slate-400" /> Open pipeline</button>
+							)}
+							{!menu.node.proposed && menu.node.run_ts && (
+								<button onClick={() => { setConvTs(menu.node.run_ts!); setMenu(null); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50 text-left"><Bot className="w-3.5 h-3.5 text-violet-500" /> View conversation</button>
 							)}
 							{!menu.node.proposed && (
 								<button onClick={() => { askAboutRun(app, loop, menu.node.run_ts, `About this run (${menu.node.label})${menu.node.config ? ` with config ${JSON.stringify(menu.node.config)}` : ""}: what happened, and what would improve the goal?`); setMenu(null); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50 text-left"><MessageSquare className="w-3.5 h-3.5 text-slate-400" /> Ask about this</button>
@@ -525,6 +532,9 @@ function Inner({ app, loop, definition, onSelectVersion, running }: {
 					</div>
 				</div>
 			</div>
+			{convTs && (
+				<LiveConversation app={app} loop={loop} ts={convTs} initialRunning={convTs === "latest" && running} onClose={() => setConvTs(null)} />
+			)}
 		</div>
 	);
 }
