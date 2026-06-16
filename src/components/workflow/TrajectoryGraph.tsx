@@ -156,9 +156,10 @@ function layout(model: GNode[]): Map<string, { x: number; y: number }> {
 
 export interface TrajectoryVersion { cycleTs?: string; runTs?: string; label: string; ts?: string }
 
-function Inner({ app, loop, definition, onSelectVersion }: {
+function Inner({ app, loop, definition, onSelectVersion, running }: {
 	app: string; loop: string; definition?: LoopDefinition | null;
 	onSelectVersion?: (v: TrajectoryVersion | null) => void;
+	running?: boolean;
 }) {
 	const [traj, setTraj] = useState<Trajectory | null>(null);
 	const [signals, setSignals] = useState<TrajectorySignal[]>([]);
@@ -187,6 +188,13 @@ function Inner({ app, loop, definition, onSelectVersion }: {
 	// Re-fetch when a run/cycle changes anywhere (chat tools, Run now) so the
 	// trajectory reflects new + in-flight runs live.
 	useStudioRefetch(["runs", "cycles", "loops", "workflows"], load);
+	// When a run finishes (running true→false), reload so the just-completed
+	// cycle materializes as a node (its cycle.json has now landed).
+	const wasRunning = useRef(false);
+	useEffect(() => {
+		if (wasRunning.current && !running) load();
+		wasRunning.current = !!running;
+	}, [running, load]);
 
 	const reloadSignals = useCallback(() => { fetchTrajectorySignals(app, loop).then(setSignals).catch(() => {}); }, [app, loop]);
 
@@ -336,9 +344,17 @@ function Inner({ app, loop, definition, onSelectVersion }: {
 	if (!traj || (traj.nodes?.length ?? 0) === 0)
 		return (
 			<div className="h-full flex flex-col items-center justify-center gap-2 text-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-6">
+				{running ? (
+					<>
+						<Loader2 className="w-6 h-6 text-sky-500 animate-spin" />
+						<div className="text-sm text-slate-600">First run in progress…</div>
+						<div className="text-xs text-slate-400 max-w-xs">It’ll appear here as a node when it finishes.</div>
+					</>
+				) : (<>
 				<GitBranch className="w-6 h-6 text-slate-300" />
 				<div className="text-sm text-slate-500">No run trajectory yet.</div>
 				<div className="text-xs text-slate-400 max-w-xs">Each run becomes a node here — and when this workflow explores variants, they branch into a tree with the best-so-far on the trunk.</div>
+				</>)}
 			</div>
 		);
 
@@ -363,7 +379,13 @@ function Inner({ app, loop, definition, onSelectVersion }: {
 							<span className="inline-flex items-center gap-1 text-[11px] text-gold-700"><Trophy className="w-3 h-3" /> best <span className="tabular-nums font-medium">{fmtScore(champ.score)}</span>{champ.delta_vs_baseline != null && Math.abs(champ.delta_vs_baseline) > 1e-6 && <span className="tabular-nums">({champ.delta_vs_baseline > 0 ? "+" : ""}{fmtScore(champ.delta_vs_baseline)})</span>}</span>
 						)}
 						{totalLearned > 0 && <span className="inline-flex items-center gap-1 text-[11px] text-gold-600"><Sparkles className="w-3 h-3" /> {totalLearned} learned</span>}
-						<span className="ml-auto text-[10px] text-slate-300 normal-case tracking-normal">click a node · right-click to branch</span>
+						{running ? (
+							<span className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-sky-600 font-medium normal-case tracking-normal">
+								<span className="w-1.5 h-1.5 rounded-full bg-sky-500 running-glow" /> running… <span className="text-slate-400 font-normal">a new run will appear here when it finishes</span>
+							</span>
+						) : (
+							<span className="ml-auto text-[10px] text-slate-300 normal-case tracking-normal">click a node · right-click to branch</span>
+						)}
 					</div>
 
 					<ReactFlow
@@ -507,13 +529,14 @@ function Inner({ app, loop, definition, onSelectVersion }: {
 	);
 }
 
-export default function TrajectoryGraph({ app, loop, definition, onSelectVersion }: {
+export default function TrajectoryGraph({ app, loop, definition, onSelectVersion, running }: {
 	app: string; loop: string; definition?: LoopDefinition | null;
 	onSelectVersion?: (v: TrajectoryVersion | null) => void;
+	running?: boolean;
 }) {
 	// No shared ReactFlowProvider: the trajectory <ReactFlow> and the pipeline
 	// pane's WorkflowCanvas <ReactFlow> must each own an isolated store —
 	// otherwise interacting with the pipeline clobbers the trajectory's nodes
 	// (and the tree vanishes on return). Each bare <ReactFlow> self-stores.
-	return <Inner app={app} loop={loop} definition={definition} onSelectVersion={onSelectVersion} />;
+	return <Inner app={app} loop={loop} definition={definition} onSelectVersion={onSelectVersion} running={running} />;
 }
