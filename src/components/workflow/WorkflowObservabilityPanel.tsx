@@ -418,8 +418,8 @@ export default function WorkflowObservabilityPanel({
 							return sources.length > 0 ? (
 								<div>
 									<div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1">Data sources</div>
-									<div className="flex flex-wrap gap-1.5">
-										{sources.map((d) => (<span key={d} className="text-[10px] text-slate-500 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 font-mono truncate max-w-[10rem]">{d}</span>))}
+									<div className="flex flex-nowrap gap-1.5 overflow-hidden">
+										{sources.map((d) => (<span key={d} className="text-[10px] text-slate-500 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 font-mono truncate max-w-[10rem] flex-shrink-0">{d}</span>))}
 									</div>
 								</div>
 							) : null;
