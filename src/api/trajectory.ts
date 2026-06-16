@@ -111,6 +111,7 @@ export interface CycleLogRow {
 	status?: string;
 	variant_id?: string;
 	note?: string;
+	partial?: boolean;         // in-flight LLM turn (streaming, not yet final)
 	[k: string]: unknown;
 }
 

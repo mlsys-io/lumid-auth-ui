@@ -92,18 +92,23 @@ function parseTurn(resp: string): { kind: 'json' | 'md'; text: string; summary: 
 function SessionLlmTurn({ r, defaultOpen }: { r: CycleLogRow; defaultOpen: boolean }) {
 	const [open, setOpen] = useState(defaultOpen);
 	const resp = String(r.response || '…');
-	const parsed = parseTurn(resp);
+	// While a turn streams, the text is incomplete (often half a JSON) — render
+	// it raw + progressive with a live cursor; only pretty-parse the final text.
+	const streaming = r.partial === true;
+	const parsed = streaming ? { kind: 'md' as const, text: resp, summary: resp.replace(/\s+/g, ' ').slice(0, 120) } : parseTurn(resp);
 	return (
-		<div className="rounded-lg border border-violet-200/60 bg-violet-50/40 overflow-hidden">
+		<div className={['rounded-lg border overflow-hidden', streaming ? 'border-sky-300/70 bg-sky-50/40' : 'border-violet-200/60 bg-violet-50/40'].join(' ')}>
 			<button type="button" onClick={() => setOpen((v) => !v)} className="w-full flex items-center gap-1.5 px-2 py-1.5 text-left hover:bg-violet-100/50 transition-colors">
 				<ChevronRight className={['w-3 h-3 text-violet-400 flex-shrink-0 transition-transform', open ? 'rotate-90' : ''].join(' ')} />
-				<Bot className="w-3.5 h-3.5 text-violet-500 flex-shrink-0" />
-				<span className="text-[11px] font-semibold text-violet-700 flex-shrink-0">{r.model || 'ai'}</span>
-				{parsed.kind === 'json' && <span className="text-[9px] font-medium uppercase tracking-wide text-violet-400 flex-shrink-0">json</span>}
+				<Bot className={['w-3.5 h-3.5 flex-shrink-0', streaming ? 'text-sky-500' : 'text-violet-500'].join(' ')} />
+				<span className={['text-[11px] font-semibold flex-shrink-0', streaming ? 'text-sky-700' : 'text-violet-700'].join(' ')}>{r.model || 'ai'}</span>
+				{streaming ? <span className="text-[9px] font-medium uppercase tracking-wide text-sky-400 flex-shrink-0 animate-pulse">streaming</span> : parsed.kind === 'json' && <span className="text-[9px] font-medium uppercase tracking-wide text-violet-400 flex-shrink-0">json</span>}
 				{!open && <span className="text-[11px] text-slate-400 truncate">{parsed.summary}</span>}
 			</button>
 			{open && (
-				parsed.kind === 'json' ? (
+				streaming ? (
+					<div className="px-2.5 pb-2 text-[11.5px] leading-relaxed text-slate-700 whitespace-pre-wrap break-words font-mono">{resp}<span className="inline-block w-1.5 h-3.5 -mb-0.5 ml-0.5 bg-sky-500 animate-pulse" /></div>
+				) : parsed.kind === 'json' ? (
 					<pre className="mx-2.5 mb-2 px-2.5 py-2 rounded-md bg-slate-900/95 text-[11px] leading-relaxed text-slate-100 overflow-x-auto whitespace-pre">{parsed.text}</pre>
 				) : (
 					<div className="px-2.5 pb-2 text-[11.5px] leading-relaxed text-slate-700 break-words"><ChatMarkdown>{parsed.text}</ChatMarkdown></div>
@@ -328,8 +333,8 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 				setSessionMsgs(sessionRowsToMessages(rows));
 				setSessionRunning(running);
 			}
-			// Poll fast while working so the log streams; once finished, stop.
-			if (running) timer = window.setTimeout(tick, 900);
+			// Poll fast while working so the partial text streams in; stop once done.
+			if (running) timer = window.setTimeout(tick, 600);
 		};
 		tick();
 		return () => { live = false; if (timer) window.clearTimeout(timer); };
