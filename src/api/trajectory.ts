@@ -24,6 +24,7 @@ export interface TrajectoryNode {
 	scored?: boolean;
 	delta_vs_baseline?: number;
 	is_champion?: boolean;
+	duration_s?: number;
 }
 
 export interface TrajectoryCycle {
@@ -64,4 +65,44 @@ export async function fetchTrajectory(app: string, loop: string): Promise<Trajec
 		throw new Error(json.message ?? r.statusText);
 	}
 	return json.data ?? { app, loop, nodes: [], cycles: [] };
+}
+
+// ── Control signals (right-click a node → "branch from here") ──────────
+export interface TrajectorySignal {
+	ts?: string;
+	action: string;
+	loop?: string;
+	from_id?: string;
+	from_variant_id?: string;
+	config?: Record<string, unknown>;
+	note?: string;
+	by?: string;
+	status?: string;
+}
+
+export async function postTrajectorySignal(
+	app: string,
+	body: { loop?: string; action: string; from_id?: string; from_variant_id?: string; config?: Record<string, unknown>; note?: string },
+): Promise<{ recorded: TrajectorySignal; pending: number }> {
+	const r = await fetch(`${ME_BASE}/api/v1/me/apps/${encodeURIComponent(app)}/trajectory/signal`, {
+		method: "POST",
+		credentials: "include",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify(body),
+	});
+	let json: { ret_code?: number; message?: string; data?: { recorded: TrajectorySignal; pending: number } } = {};
+	try { json = await r.json(); } catch { /* empty */ }
+	if (!r.ok || (json.ret_code !== undefined && json.ret_code !== 0) || !json.data) {
+		throw new Error(json.message ?? r.statusText);
+	}
+	return json.data;
+}
+
+export async function fetchTrajectorySignals(app: string, loop: string): Promise<TrajectorySignal[]> {
+	const qs = loop ? `?loop=${encodeURIComponent(loop)}` : "";
+	const r = await fetch(`${ME_BASE}/api/v1/me/apps/${encodeURIComponent(app)}/trajectory/signals${qs}`, { credentials: "include" });
+	let json: { ret_code?: number; data?: { signals?: TrajectorySignal[] } } = {};
+	try { json = await r.json(); } catch { /* empty */ }
+	if (!r.ok || (json.ret_code !== undefined && json.ret_code !== 0)) return [];
+	return json.data?.signals ?? [];
 }
