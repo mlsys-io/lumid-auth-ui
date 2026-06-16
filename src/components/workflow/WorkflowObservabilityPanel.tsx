@@ -32,10 +32,7 @@ import { loopLabel } from "@/lib/workflow-names";
 import FailureCard from "@/components/workflow/FailureCard";
 import RunSparkline from "@/components/RunSparkline";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import CompareRuns from "@/components/workflow/CompareRuns";
-import FanoutBranches from "@/components/workflow/FanoutBranches";
-import GoalTrend from "@/components/workflow/GoalTrend";
-import LearningVelocity from "@/components/workflow/LearningVelocity";
+import TrajectoryGraph from "@/components/workflow/TrajectoryGraph";
 // Datasets the workflow works on — heavy (table/preview), so lazy-load it and
 // only mount when the Data tab is opened.
 const DatasetExplorer = lazy(() => import("@/components/workflow/DatasetExplorer"));
@@ -437,92 +434,16 @@ export default function WorkflowObservabilityPanel({
 					{/* RUNS — the execution history (left); the selected run drawn as
 					    a pipeline (right). Pipeline = representation of a run. */}
 					{tab === "runs" && (
-						<div className="space-y-2 min-w-0 animate-in fade-in duration-200">
-							<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400 uppercase">
+						<div className="space-y-2 min-w-0 h-full flex flex-col animate-in fade-in duration-200">
+							<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400 uppercase flex-shrink-0">
 								Runs
-								{overlayTs && tenantHasRuns && <span className="normal-case tracking-normal text-slate-400 font-normal"> · showing {cycleDate(overlayTs)}{(!selectedRunTs || selectedRunTs === cycleTs) ? " (latest)" : ""}</span>}
 								{cyclesKnown && !tenantHasRuns && <span className="normal-case tracking-normal text-slate-400 font-normal"> · runs when you click Run now</span>}
 							</div>
-							{tenantHasRuns && (
-								<div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-									<GoalTrend app={app} loop={loop} runs={(cycleList ?? []).map((r) => r.ts).filter(Boolean)} />
-									<LearningVelocity app={app} loop={loop} runs={(cycleList ?? []).map((r) => r.ts).filter(Boolean)} />
-								</div>
-							)}
-							<div ref={fillRef} style={{ height: fillH }} className="grid grid-cols-1 sm:grid-cols-[210px_1fr] gap-3 min-h-0">
-								{/* LEFT — run timeline */}
-								<div className="overflow-y-auto rounded-xl border border-slate-200 bg-white">
-									{!cyclesKnown ? (
-										<div className="flex items-center gap-2 text-xs text-slate-400 p-3"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading runs…</div>
-									) : !tenantHasRuns ? (
-										<div className="p-3 text-xs text-slate-400">Not run yet. Click <span className="font-medium text-slate-600">Run now</span> to start a run.</div>
-									) : (
-										<ul className="divide-y divide-slate-100">
-											{(cycleList ?? []).map((r) => {
-												const sel = (selectedRunTs ?? cycleTs) === r.ts;
-												const tone = r.running ? "bg-sky-400" : r.ok === false ? "bg-rose-500" : "bg-gold-400";
-												return (
-													<li key={r.ts} className={cn("flex items-center", sel ? "bg-gold-50" : "hover:bg-slate-50")}>
-														<button type="button"
-															onClick={() => { setSelectedRunTs(r.ts === cycleTs ? null : r.ts); setCanvasStep(null); }}
-															className={cn("flex-1 min-w-0 flex items-center gap-2 px-2.5 py-2 text-left")}>
-															<span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", tone, r.running && "running-glow")} />
-															<span className="min-w-0 flex-1">
-																<span className="block text-[12px] text-slate-700 truncate">{cycleDate(r.ts)}</span>
-																<span className="block text-[10px] text-slate-400">
-																	{r.running ? "running…" : r.ok === false ? "failed" : "ok"}
-																	{typeof r.duration_s === "number" ? ` · ${Math.round(r.duration_s)}s` : ""}
-																	{typeof r.total_tokens === "number" && r.total_tokens > 0 ? ` · ${r.total_tokens >= 1000 ? `${(r.total_tokens / 1000).toFixed(1)}k` : Math.round(r.total_tokens)} tok` : ""}
-																	{typeof r.cost_usd === "number" && r.cost_usd >= 0.01 ? ` · $${r.cost_usd.toFixed(2)}` : ""}
-																</span>
-															</span>
-															{r.ts === cycleTs && <span className="text-[9px] uppercase tracking-wide text-gold-600 flex-shrink-0">latest</span>}
-														</button><button type="button" title={compareTs.includes(r.ts) ? "Remove from compare" : "Add to compare"} onClick={() => setCompareTs((prev) => prev.includes(r.ts) ? prev.filter((t) => t !== r.ts) : prev.length >= 5 ? prev : [...prev, r.ts])} className={cn("flex-shrink-0 w-5 h-5 mr-2 rounded border flex items-center justify-center transition-colors", compareTs.includes(r.ts) ? "bg-gold-500 border-gold-500 text-white" : "border-slate-300 text-transparent hover:border-gold-400")}><Check className="w-3 h-3" /></button>
-													</li>
-												);
-											})}
-										</ul>
-									)}
-								</div>
-								{/* RIGHT — the selected run drawn as a pipeline; clicking a node
-								    reveals its intermediate data in-place below (stays in view). */}
-								<div className="min-w-0 flex flex-col gap-2 min-h-0">
-									{compareTs.length >= 2 ? (
-										<div className="flex-1 min-h-0 overflow-auto">
-											<CompareRuns app={app} loop={loop} runs={compareTs} onRemove={(ts) => setCompareTs((p) => p.filter((t) => t !== ts))} />
-										</div>
-									) : hasPipeline ? (
-										<>
-											{canvasCycle?.summary && (
-												<FanoutBranches summary={canvasCycle.summary as Record<string, unknown>} />
-											)}
-											<div className="flex-1 min-h-0">
-												<WorkflowCanvas
-													definition={definition!}
-													cycle={canvasCycle}
-													running={running}
-													height="100%"
-													onStepSelect={(ref) => setCanvasStep(ref)}
-												/>
-											</div>
-										</>
-									) : (
-										<>
-											{canvasCycle?.summary && (
-												<FanoutBranches summary={canvasCycle.summary as Record<string, unknown>} />
-											)}
-											<div className="flex-1 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 flex items-center justify-center text-xs text-slate-400 p-5 text-center">No pipeline declared for this workflow.</div>
-										</>
-									)}
-									{compareTs.length < 2 && canvasStep && (
-										<div className="shrink-0 max-h-[45%] overflow-y-auto">
-											<StepInspectorPanel
-												step={canvasStep} app={app} loop={loop}
-												ts={overlayTs || undefined} onClose={() => setCanvasStep(null)}
-											/>
-										</div>
-									)}
-								</div>
+							{/* The run history as an evolving TREE: each node a variant, the
+							    champion on the trunk, trend + learning overlaid; click a node to
+							    pan the canvas and bloom in that run's exact pipeline. */}
+							<div ref={fillRef} style={{ height: fillH }} className="min-h-0">
+								<TrajectoryGraph app={app} loop={loop} definition={definition} />
 							</div>
 							{/* Stage drill-down + free-text query on the selected run. */}
 							{selectedStage && tenantHasRuns && (
