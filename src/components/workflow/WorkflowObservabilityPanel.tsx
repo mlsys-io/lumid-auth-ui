@@ -407,68 +407,34 @@ export default function WorkflowObservabilityPanel({
 				<FailureCard error={lastError} app={app} loop={loop} />
 			)}
 
-			{/* Detail area: a left rail (Runs/Data selector + the Data table)
-			    beside the canvas (vertical trajectory for Runs; files for Data). */}
+			{/* Detail area: data assets (left) beside the run trajectory (right). */}
 			<div ref={fillRef} style={{ height: fillH }} className="flex gap-3 min-h-0">
-				{/* LEFT RAIL — selector, plus the casebook table on the Data tab */}
+				{/* LEFT — the data assets the goal is scored on */}
 				<div className="w-[30%] min-w-[210px] max-w-[360px] flex flex-col gap-2 min-h-0">
-					<nav className="flex flex-col gap-1 flex-shrink-0" role="tablist" aria-label="Workflow details">
-						{TABS.map((t) => {
-							const active = tab === t.key;
-							return (
-								<button key={`rail-${t.key}`} role="tab" aria-selected={active} onClick={() => setTab(t.key)}
-									className={cn("flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors border",
-										active ? "bg-gold-50 text-gold-800 border-gold-200 font-medium" : "text-slate-600 border-transparent hover:bg-slate-50")}>
-									<t.icon className="w-4 h-4 flex-shrink-0" />
-									<span className="truncate">{t.label}</span>
-								</button>
-							);
-						})}
-					</nav>
-					<div className="flex-1 min-h-0 overflow-y-auto rounded-xl border border-slate-200 bg-white p-3">
-						{tab === "runs" ? (
-							<div className="space-y-3">
-								{(() => {
-									const sources = (definition?.datasets?.length ? definition.datasets : wf.datasets) || [];
-									return sources.length > 0 ? (
-										<div>
-											<div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1">Data sources</div>
-											<div className="flex flex-wrap gap-1.5">
-												{sources.map((d) => (<span key={d} className="inline-flex items-center gap-1 text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-full px-2 py-0.5 font-mono"><Database className="w-3 h-3 text-slate-400" />{d}</span>))}
-											</div>
-										</div>
-									) : null;
-								})()}
+					<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400 uppercase flex items-center gap-1.5 flex-shrink-0"><Database className="w-3 h-3" /> Data assets</div>
+					<div className="flex-1 min-h-0 overflow-y-auto rounded-xl border border-slate-200 bg-white p-3 space-y-3">
+						{(() => {
+							const sources = (definition?.datasets?.length ? definition.datasets : wf.datasets) || [];
+							return sources.length > 0 ? (
 								<div>
-									<div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1">Reading the tree</div>
-									<ul className="space-y-1 text-[11px] text-slate-500">
-										<li className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: "rgb(176 143 69)" }} /> above baseline</li>
-										<li className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: "rgb(225 29 72)" }} /> below baseline</li>
-										<li className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full border-2 border-dashed border-slate-300 flex-shrink-0" /> not scored yet</li>
-										<li className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: "rgb(176 143 69)", boxShadow: "0 0 0 2px rgba(176,143,69,0.4)" }} /> champion (on the trunk)</li>
-									</ul>
+									<div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1">Data sources</div>
+									<div className="flex flex-wrap gap-1.5">
+										{sources.map((d) => (<span key={d} className="inline-flex items-center gap-1 text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-full px-2 py-0.5 font-mono"><Database className="w-3 h-3 text-slate-400" />{d}</span>))}
+									</div>
 								</div>
-								<div className="text-[11px] text-slate-400 leading-snug">Click a node to slide to its pipeline. Right-click a node to branch a new exploration from it.</div>
-							</div>
-						) : (
-							<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading casebook…</div>}>
-								<CasebookPanel app={app} loop={loop} />
-							</Suspense>
-						)}
+							) : null;
+						})()}
+						<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading casebook…</div>}>
+							<CasebookPanel app={app} loop={loop} />
+						</Suspense>
+						<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading datasets…</div>}>
+							<DatasetExplorer app={app} />
+						</Suspense>
 					</div>
 				</div>
-				{/* RIGHT CANVAS — vertical trajectory (Runs) / bundled files (Data) */}
+				{/* RIGHT — the run trajectory tree */}
 				<div className="flex-1 min-w-0 min-h-0">
-					{tab === "runs" ? (
-						<TrajectoryGraph app={app} loop={loop} definition={definition} />
-					) : (
-						<div className="h-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-3">
-							<div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-2 flex items-center gap-1.5"><Database className="w-3 h-3" /> Bundled files</div>
-							<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading datasets…</div>}>
-								<DatasetExplorer app={app} />
-							</Suspense>
-						</div>
-					)}
+					<TrajectoryGraph app={app} loop={loop} definition={definition} />
 				</div>
 			</div>
 			{/* Stage drill-down + free-text query on the selected run. */}
