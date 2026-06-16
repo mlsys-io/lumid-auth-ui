@@ -13,7 +13,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
 import { CONNECT_ROUTE } from './studio/starters';
-import { ChevronRight, MessageSquarePlus, Send, Trash2, Loader2, Bot, User, Square, Globe, Telescope, Brain, ChevronDown, Paperclip, X, FileText, FileJson, Image as ImageIcon, Plus, Copy, RotateCcw, Mic, Volume2, Code2, Boxes, Download, ArrowLeft, Crosshair, Lock, Cpu } from 'lucide-react';
+import { ChevronRight, MessageSquarePlus, Send, Trash2, Loader2, Bot, User, Square, Globe, Telescope, Brain, ChevronDown, Paperclip, X, FileText, FileJson, Image as ImageIcon, Plus, Copy, RotateCcw, Mic, Volume2, Code2, Boxes, Download, ArrowLeft, Crosshair, Lock, Cpu, Maximize2, Minimize2 } from 'lucide-react';
 import {
 	buildViewingContext,
 	subscribeStudioPickedTarget,
@@ -228,10 +228,11 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 	const [session, setSession] = useState<{ app: string; loop: string; ts: string } | null>(null);
 	const [sessionMsgs, setSessionMsgs] = useState<Message[] | null>(null);
 	const [sessionRunning, setSessionRunning] = useState(false);
+	const [sessionExpanded, setSessionExpanded] = useState(false);
 	useEffect(() => {
 		const onOpen = (e: Event) => {
 			const d = (e as CustomEvent).detail || {};
-			if (d.app && d.loop && d.ts) { setSession({ app: d.app, loop: d.loop, ts: d.ts }); setCollapsed(false); }
+			if (d.app && d.loop && d.ts) { setSession({ app: d.app, loop: d.loop, ts: d.ts }); setSessionExpanded(false); setCollapsed(false); }
 		};
 		window.addEventListener('studio:open-session', onOpen as EventListener);
 		return () => window.removeEventListener('studio:open-session', onOpen as EventListener);
@@ -1455,7 +1456,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 			    rendered with the chat's own MessageBubble (AI turns + tool/stage
 			    cards). Opened via studio:open-session; floats over the chat. */}
 			{session && (
-				<div className="absolute left-3 right-3 top-3 z-40 h-1/3 max-h-[38%] flex flex-col rounded-2xl border border-slate-200/70 bg-white/95 backdrop-blur-sm overflow-hidden ring-1 ring-black/5 shadow-[0_12px_40px_-8px_rgba(15,23,42,0.28)] animate-in fade-in slide-in-from-top-2 duration-200">
+				<div className={['absolute z-40 flex flex-col rounded-2xl border border-slate-200/70 bg-white/95 backdrop-blur-sm overflow-hidden ring-1 ring-black/5 shadow-[0_12px_40px_-8px_rgba(15,23,42,0.28)] animate-in fade-in duration-200', sessionExpanded ? 'inset-3 slide-in-from-bottom-2' : 'left-3 right-3 top-3 h-1/3 max-h-[38%] slide-in-from-top-2'].join(' ')}>
 					<div className="flex items-center gap-2 px-3.5 py-2 border-b border-slate-100 flex-shrink-0 bg-gradient-to-b from-slate-50/80 to-transparent">
 						<span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-violet-100 text-violet-600 flex-shrink-0"><Bot className="w-3.5 h-3.5" /></span>
 						<span className="text-[13px] font-medium text-slate-900 truncate">Session · {session.loop}</span>
@@ -1464,7 +1465,8 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 						) : (
 							<span className="text-[10.5px] text-slate-400 bg-slate-50 rounded-full px-1.5 py-0.5">finished</span>
 						)}
-						<button onClick={() => setSession(null)} className="ml-auto p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"><X className="w-4 h-4" /></button>
+						<button onClick={() => setSessionExpanded((v) => !v)} title={sessionExpanded ? 'Shrink' : 'Pop out'} className="ml-auto p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">{sessionExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}</button>
+						<button onClick={() => setSession(null)} className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"><X className="w-4 h-4" /></button>
 					</div>
 					<div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-3 py-3 space-y-3 [&_*]:max-w-full [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap">
 						{sessionMsgs === null ? (
