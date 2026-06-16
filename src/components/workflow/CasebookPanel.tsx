@@ -106,7 +106,7 @@ function MetricEvolution({ series }: { series: CasebookMetricEvolution[] }) {
 		<div>
 			<div className="text-[11px] font-medium text-slate-500 flex items-center gap-1.5 mb-1.5">
 				<TrendingUp className="w-3 h-3 text-slate-400" />
-				How the casebook's metrics moved
+				Metric trend
 			</div>
 			<div className="space-y-1">
 				{series.map((s) => {
@@ -167,17 +167,9 @@ export default function CasebookPanel({ app, loop }: { app: string; loop: string
 	const scored = cases.filter((c) => typeof c.latest_score === "number").length;
 
 	return (
-		<div className="space-y-4">
-			{/* Roster */}
+		<div className="space-y-3">
+			{/* Roster — the case rows are the table; no section header needed. */}
 			<div>
-				<div className="text-[11px] font-medium text-slate-500 flex items-center gap-1.5 mb-1.5">
-					<Layers className="w-3 h-3 text-slate-400" />
-					Casebook
-					<span className="text-slate-400 font-normal">
-						· {cases.length} case{cases.length === 1 ? "" : "s"}
-						{scored > 0 && `, ${scored} scored`}
-					</span>
-				</div>
 				{cases.length === 0 ? (
 					<div className="flex items-center gap-2 text-[11px] text-slate-400">
 						<Loader2 className="w-3.5 h-3.5" />
@@ -200,7 +192,7 @@ export default function CasebookPanel({ app, loop }: { app: string; loop: string
 				<div>
 					<div className="text-[11px] font-medium text-slate-500 flex items-center gap-1.5 mb-1.5">
 						<History className="w-3 h-3 text-slate-400" />
-						How the casebook evolved
+						Evolution
 					</div>
 					<ul className="space-y-0.5">
 						{versions.map((v, i) => (

@@ -19,8 +19,8 @@
 
 import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import {
-	ReactFlow, ReactFlowProvider, Background, Controls, Position,
-	useReactFlow, type Node, type Edge, type ReactFlowInstance,
+	ReactFlow, Background, Controls, Position,
+	type Node, type Edge, type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { ArrowLeft, GitBranch, Trophy, Sparkles, Loader2, Clock, FlaskConical } from "lucide-react";
@@ -123,7 +123,6 @@ function layout(model: GNode[]): Map<string, { x: number; y: number }> {
 }
 
 function Inner({ app, loop, definition }: { app: string; loop: string; definition?: LoopDefinition | null }) {
-	const rf = useReactFlow();
 	const [traj, setTraj] = useState<Trajectory | null>(null);
 	const [signals, setSignals] = useState<TrajectorySignal[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -383,9 +382,9 @@ function Inner({ app, loop, definition }: { app: string; loop: string; definitio
 }
 
 export default function TrajectoryGraph({ app, loop, definition }: { app: string; loop: string; definition?: LoopDefinition | null }) {
-	return (
-		<ReactFlowProvider>
-			<Inner app={app} loop={loop} definition={definition} />
-		</ReactFlowProvider>
-	);
+	// No shared ReactFlowProvider: the trajectory <ReactFlow> and the pipeline
+	// pane's WorkflowCanvas <ReactFlow> must each own an isolated store —
+	// otherwise interacting with the pipeline clobbers the trajectory's nodes
+	// (and the tree vanishes on return). Each bare <ReactFlow> self-stores.
+	return <Inner app={app} loop={loop} definition={definition} />;
 }
