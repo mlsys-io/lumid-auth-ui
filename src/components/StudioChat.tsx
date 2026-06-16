@@ -301,15 +301,20 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		window.addEventListener('studio:open-session', onOpen as EventListener);
 		return () => window.removeEventListener('studio:open-session', onOpen as EventListener);
 	}, []);
-	// When the user switches the selected workflow, an OPEN session re-binds to
-	// it (ts=latest) so the panel always matches what's selected — instead of
-	// staying stuck on the previous workflow's run. A closed panel stays closed
-	// (we don't pop it open just from browsing).
+	// The session box always corresponds to the SELECTED workflow. When the user
+	// switches workflow: an open box re-binds to the new wf's LIVE run if it's
+	// running, otherwise it CLOSES (we never show another workflow's run). A box
+	// closed (or pinned to a history run of the SAME wf) is left as-is. Detail
+	// carries `running` so we know whether there's a live session to follow.
 	useEffect(() => {
 		const onSel = (e: Event) => {
-			const d = (e as CustomEvent<{ app?: string; loop?: string }>).detail || {};
+			const d = (e as CustomEvent<{ app?: string; loop?: string; running?: boolean }>).detail || {};
 			if (!d.app || !d.loop) return;
-			setSession((cur) => (cur && (cur.app !== d.app || cur.loop !== d.loop)) ? { app: d.app!, loop: d.loop!, ts: 'latest' } : cur);
+			setSession((cur) => {
+				if (!cur) return cur;                                      // closed → stays closed
+				if (cur.app === d.app && cur.loop === d.loop) return cur;  // same wf → unchanged (keeps a pinned history run)
+				return d.running ? { app: d.app!, loop: d.loop!, ts: 'latest' } : null; // follow live, else close
+			});
 		};
 		window.addEventListener('studio:workflow-selected', onSel as EventListener);
 		return () => window.removeEventListener('studio:workflow-selected', onSel as EventListener);
@@ -317,6 +322,9 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 	const sessionSigRef = useRef('');
 	useEffect(() => {
 		if (!session) { setSessionMsgs(null); setSessionRows(null); sessionSigRef.current = ''; return; }
+		// New binding → drop the previous run's content immediately so we never
+		// flash another workflow's session while the first fetch is in flight.
+		setSessionMsgs(null); setSessionRows(null); sessionSigRef.current = '';
 		let live = true; let timer: number | undefined;
 		const tick = async () => {
 			// Pause polling for a backgrounded tab — recheck shortly.

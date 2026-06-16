@@ -136,6 +136,8 @@ export default function WorkflowObservabilityPanel({
 			// (or after a safety window if it produced no new cycle dir).
 			setOptimisticRun(true);
 			window.setTimeout(() => setOptimisticRun(false), 120_000);
+			// Open the live session so the user immediately sees it run.
+			window.dispatchEvent(new CustomEvent("studio:open-session", { detail: { app, loop, ts: "latest" } }));
 			toast.success("Running — the results will land here shortly.");
 		} catch (e) {
 			toast.error(`Failed: ${e instanceof MeApiError ? e.message : String(e)}`);
@@ -165,12 +167,6 @@ export default function WorkflowObservabilityPanel({
 	};
 
 	// ── Latest cycle (for observe gate + review queue + offers) ────
-	// Tell the chat's floating session panel which workflow is now selected, so
-	// an open session re-binds to it instead of showing a stale workflow's run.
-	useEffect(() => {
-		window.dispatchEvent(new CustomEvent("studio:workflow-selected", { detail: { app, loop } }));
-	}, [app, loop]);
-
 	// Seed from cache so re-opening a workflow shows its cycle instantly.
 	const cacheKey = `${app}:${loop}`;
 	const cached0 = cycleCache.get(cacheKey);
@@ -336,6 +332,12 @@ export default function WorkflowObservabilityPanel({
 	const tenantHasRuns = (cycleList?.length ?? 0) > 0;
 	const liveRunning = (cycleList ?? []).some((c) => c.running);
 	const running = optimisticRun || liveRunning;
+	// Tell the chat's floating session box which workflow is selected + whether
+	// it's running, so an open box re-binds to its live run or closes (never
+	// shows a stale workflow's run). Re-fires when `running` flips.
+	useEffect(() => {
+		window.dispatchEvent(new CustomEvent("studio:workflow-selected", { detail: { app, loop, running } }));
+	}, [app, loop, running]);
 	const h = health(wf, tenantHasRuns || !cyclesKnown);
 	const lastRan = whenLastFromCycle(cycleList?.[0]?.ts);
 	const onDemand = parseSchedule(wf.trigger).kind === "trigger";
