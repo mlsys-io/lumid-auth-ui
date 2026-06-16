@@ -61,6 +61,25 @@ function sessionRowsToMessages(rows: CycleLogRow[]): Message[] {
 	return out;
 }
 import ChatEmptyState, { ChatHero } from './chat/ChatEmptyState';
+// A single AI turn in the session transcript — collapsible so a long run's
+// earlier turns fold away (the response is the full, un-clipped generation).
+function SessionLlmTurn({ r, defaultOpen }: { r: CycleLogRow; defaultOpen: boolean }) {
+	const [open, setOpen] = useState(defaultOpen);
+	const resp = String(r.response || '…');
+	const preview = resp.replace(/\s+/g, ' ').trim();
+	return (
+		<div className="rounded-lg border border-violet-200/60 bg-violet-50/40 overflow-hidden">
+			<button type="button" onClick={() => setOpen((v) => !v)} className="w-full flex items-center gap-1.5 px-2 py-1.5 text-left hover:bg-violet-100/50 transition-colors">
+				<ChevronRight className={['w-3 h-3 text-violet-400 flex-shrink-0 transition-transform', open ? 'rotate-90' : ''].join(' ')} />
+				<Bot className="w-3.5 h-3.5 text-violet-500 flex-shrink-0" />
+				<span className="text-[11px] font-semibold text-violet-700 flex-shrink-0">{r.model || 'ai'}</span>
+				{!open && <span className="text-[11px] text-slate-400 truncate">{preview.slice(0, 120)}</span>}
+			</button>
+			{open && <div className="px-2.5 pb-2 text-[11.5px] leading-relaxed text-slate-700 whitespace-pre-wrap break-words">{resp}</div>}
+		</div>
+	);
+}
+
 import { entityCardFor } from './chat/entityCards';
 import AppSurfaceCard from './chat/AppSurfaceCard';
 
@@ -1499,22 +1518,24 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 								<Bot className="w-6 h-6 text-slate-300" />
 								<div className="text-sm text-slate-500">{sessionRunning ? 'Session starting…' : 'No conversation captured for this run.'}</div>
 							</div>
-						) : sessionRunning ? (
-							// While working: a dense streaming log (lines append + the panel
-							// auto-scrolls each poll) — not the full bubble conversation.
-							<div className="font-mono text-[11px] leading-relaxed space-y-0.5">
-								{(sessionRows || []).map((r, i) => r.event === 'llm' ? (
-									<div key={i} className="text-slate-700"><span className="text-violet-500">🤖 {r.model || 'ai'} ›</span> {String(r.response || '…').replace(/\n+/g, ' ↵ ').slice(0, 240)}</div>
-								) : (
-									<div key={i} className={(r.status === 'fail' || r.status === 'failed') ? 'text-rose-500' : 'text-slate-400'}>
-										<span className="text-slate-300">·</span> {r.stage || r.event}{r.status ? ' ' + r.status : ''}{r.variant_id || r.note ? ' — ' + String(r.variant_id || r.note).slice(0, 50) : ''}
-									</div>
-								))}
-								<div className="flex items-center gap-2 text-slate-400 pt-1"><Loader2 className="w-3 h-3 animate-spin" /> <span className="animate-pulse">streaming…</span></div>
+												) : (
+							// Transcript: collapsible AI turns + compact stage lines. The latest
+							// AI turn is open; earlier turns fold away (click the header).
+							<div className="space-y-1">
+								{(() => {
+									const rows = sessionRows || [];
+									let lastLlm = -1;
+									rows.forEach((r, i) => { if (r.event === 'llm') lastLlm = i; });
+									return rows.map((r, i) => r.event === 'llm' ? (
+										<SessionLlmTurn key={i} r={r} defaultOpen={i === lastLlm} />
+									) : (
+										<div key={i} className={['font-mono text-[11px] leading-relaxed pl-1', (r.status === 'fail' || r.status === 'failed') ? 'text-rose-500' : 'text-slate-400'].join(' ')}>
+											<span className="text-slate-300">·</span> {r.stage || r.event}{r.status ? ' ' + r.status : ''}{r.variant_id || r.note ? ' — ' + String(r.variant_id || r.note).slice(0, 60) : ''}
+										</div>
+									));
+								})()}
+								{sessionRunning && <div className="flex items-center gap-2 text-slate-400 pt-1 font-mono text-[11px]"><Loader2 className="w-3 h-3 animate-spin" /> <span className="animate-pulse">streaming…</span></div>}
 							</div>
-						) : (
-							// Finished: the full conversation, rendered with MessageBubble.
-							sessionMsgs.map((m, i) => <div key={i} className="min-w-0 break-words"><MessageBubble m={m} /></div>)
 						)}
 					</div>
 				</div>
