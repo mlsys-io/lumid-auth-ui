@@ -53,12 +53,18 @@ function Sparkline({ values, color, w = 56, h = 16 }: { values: number[]; color:
 }
 
 // One case row: label + field chips + latest score + score-history sparkline.
-function CaseRow({ c }: { c: CasebookCase }) {
-	const hist = c.score_history ?? [];
+const tsDigits = (s?: string) => (s || "").replace(/\D/g, "");
+
+function CaseRow({ c, atTs }: { c: CasebookCase; atTs?: string }) {
+	const fullHist = c.score_history ?? [];
+	// Version-aware: when a trajectory node is selected, show this case's score
+	// AS OF that cycle (the latest history point at/before it).
+	const cut = atTs ? tsDigits(atTs) : "";
+	const hist = cut ? fullHist.filter((p) => tsDigits(p.ts) <= cut) : fullHist;
 	const values = hist.map((p) => p.score);
-	const hasScore = typeof c.latest_score === "number";
-	const first = values[0];
 	const last = values[values.length - 1];
+	const hasScore = cut ? values.length > 0 : typeof c.latest_score === "number";
+	const first = values[0];
 	const delta = values.length >= 2 ? last - first : 0;
 	const good = betterDown(c.label) ? delta < 0 : delta > 0;
 	const color = delta === 0 ? COLOR.flat : good ? COLOR.up : COLOR.down;
@@ -80,7 +86,7 @@ function CaseRow({ c }: { c: CasebookCase }) {
 					<>
 						<Sparkline values={values} color={color} />
 						<span className="text-[12px] font-semibold tabular-nums" style={{ color }}>
-							{fmtScore(c.latest_score as number)}
+							{fmtScore((cut ? last : c.latest_score) as number)}
 						</span>
 					</>
 				) : (
@@ -136,7 +142,7 @@ function MetricEvolution({ series }: { series: CasebookMetricEvolution[] }) {
 	);
 }
 
-export default function CasebookPanel({ app, loop }: { app: string; loop: string }) {
+export default function CasebookPanel({ app, loop, atTs }: { app: string; loop: string; atTs?: string }) {
 	const [book, setBook] = useState<Casebook | null>(null);
 
 	useEffect(() => {
@@ -183,7 +189,7 @@ export default function CasebookPanel({ app, loop }: { app: string; loop: string
 				) : (
 					<ul className="space-y-1">
 						{cases.map((c) => (
-							<CaseRow key={c.id} c={c} />
+							<CaseRow key={c.id} c={c} atTs={atTs} />
 						))}
 					</ul>
 				)}
