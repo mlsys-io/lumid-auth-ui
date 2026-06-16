@@ -31,6 +31,7 @@ import { describeSchedule } from "@/lib/schedule";
 import { Skeleton, humanizeLoop, loopLabel } from "@/pages/app-revamp/loops";
 import { QuickStarters } from "@/components/studio/QuickStarters";
 import NewWorkflowFlow from "@/components/workflow/NewWorkflowFlow";
+import StudioPortfolio from "@/pages/studio/portfolio";
 import AppCard, { appTitle, type AppIdentity } from "@/components/workflow/AppCard";
 import type { LoopHealth } from "@/components/workflow/WorkflowObservabilityPanel";
 import NeedsAttentionRail from "@/components/workflow/NeedsAttentionRail";
@@ -609,6 +610,11 @@ function AppsHome() {
 				</div>
 			) : (
 				<div className="panel-in-left" ref={appsRef}>
+					{/* Fleet rollup — the cross-workflow health/cost/learning view,
+					    merged into Manage apps so there's one place for the fleet. */}
+					<div className="max-w-[760px] mx-auto w-full px-1 mb-5">
+						<StudioPortfolio embedded />
+					</div>
 					{/* In-flight / failed installs stay as action-bearing cards above
 					    the index (retry / dismiss aren't list-row affordances). */}
 					{pendingApps.length > 0 && (

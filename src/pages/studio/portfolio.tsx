@@ -62,7 +62,7 @@ function fmtCompact(v: number): string {
 
 type SortKey = "cost" | "runs" | "learned" | "last_run" | "name";
 
-export default function StudioPortfolio() {
+export default function StudioPortfolio({ embedded = false }: { embedded?: boolean }) {
 	const [data, setData] = useState<Portfolio | null>(null);
 	const [err, setErr] = useState<string | null>(null);
 	const [sortKey, setSortKey] = useState<SortKey>("cost");
@@ -119,7 +119,7 @@ export default function StudioPortfolio() {
 
 	if (data === null && !err) {
 		return (
-			<div className="max-w-5xl mx-auto w-full px-1 py-2 space-y-4">
+			<div className={cn("w-full space-y-4", !embedded && "max-w-5xl mx-auto px-1 py-2")}>
 				<div className="h-20 rounded-xl bg-slate-100 animate-pulse" />
 				<div className="h-64 rounded-xl bg-slate-100 animate-pulse" />
 			</div>
@@ -127,13 +127,19 @@ export default function StudioPortfolio() {
 	}
 
 	return (
-		<div className="max-w-5xl mx-auto w-full px-1 py-2 space-y-5">
+		<div className={cn("w-full space-y-5", !embedded && "max-w-5xl mx-auto px-1 py-2")}>
 			<div className="flex items-center justify-between gap-3">
 				<div className="min-w-0">
-					<Link to="/studio/apps" className="inline-flex items-center text-sm text-slate-500 hover:text-slate-900 gap-1">
-						<ChevronLeft className="w-4 h-4" /> My Apps
-					</Link>
-					<h1 className="text-lg font-semibold text-slate-900 mt-1">Fleet</h1>
+					{embedded ? (
+						<div className="flex items-center gap-1.5 text-sm font-semibold text-slate-900"><Boxes className="w-4 h-4 text-gold-500" /> Fleet</div>
+					) : (
+						<>
+							<Link to="/studio/apps" className="inline-flex items-center text-sm text-slate-500 hover:text-slate-900 gap-1">
+								<ChevronLeft className="w-4 h-4" /> My Apps
+							</Link>
+							<h1 className="text-lg font-semibold text-slate-900 mt-1">Fleet</h1>
+						</>
+					)}
 					<p className="text-[12px] text-slate-400">
 						How your workflows are doing across the board — health, cost, and learning over the last 30 days.
 					</p>
