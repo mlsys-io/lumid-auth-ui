@@ -51,6 +51,17 @@ function fmtDur(s?: number): string | null {
 	const r = Math.round(s % 60);
 	return r ? `${m}m ${r}s` : `${m}m`;
 }
+// Run timestamp → "Jun 12, 11:20" (full ts) or "Jun 11" (day-bucketed cycle).
+function fmtWhen(ts?: string): string | null {
+	if (!ts) return null;
+	let m = ts.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
+	if (m) return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]))
+		.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+	m = ts.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+	if (m) return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]))
+		.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+	return null;
+}
 
 function tone(n: GNode, baseline: number | null | undefined, hib: boolean) {
 	if (n.proposed) return { border: "rgb(176 143 69)", dot: "rgb(176 143 69)", dashed: true };
@@ -122,7 +133,12 @@ function layout(model: GNode[]): Map<string, { x: number; y: number }> {
 	return pos;
 }
 
-function Inner({ app, loop, definition }: { app: string; loop: string; definition?: LoopDefinition | null }) {
+export interface TrajectoryVersion { cycleTs?: string; runTs?: string; label: string; ts?: string }
+
+function Inner({ app, loop, definition, onSelectVersion }: {
+	app: string; loop: string; definition?: LoopDefinition | null;
+	onSelectVersion?: (v: TrajectoryVersion | null) => void;
+}) {
 	const [traj, setTraj] = useState<Trajectory | null>(null);
 	const [signals, setSignals] = useState<TrajectorySignal[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -152,6 +168,7 @@ function Inner({ app, loop, definition }: { app: string; loop: string; definitio
 		const nodes: Node[] = model.map((n) => {
 			const t = tone(n, baseline, hib);
 			const dur = fmtDur(n.duration_s);
+			const when = n.proposed ? null : fmtWhen(n.run_ts || n.cycle_ts);
 			const learned = n.is_champion ? (traj?.cycles || [])[n.depth - 1]?.learned || 0 : 0;
 			const sel = picked?.id === n.id;
 			return {
@@ -165,6 +182,7 @@ function Inner({ app, loop, definition }: { app: string; loop: string; definitio
 								<span className={cn("text-[12px] truncate flex-1 font-medium", n.proposed ? "text-gold-700 italic" : "text-slate-800")}>{n.label}</span>
 								{n.is_champion && <Trophy className="w-3 h-3 text-gold-500 flex-shrink-0" />}
 							</div>
+							{when && <div className="text-[10px] text-slate-400 tabular-nums mt-0.5 truncate">{when}</div>}
 							<div className="flex items-center gap-1.5 mt-0.5">
 								{n.proposed ? (
 									<span className="text-[10px] uppercase tracking-wide text-gold-500">queued</span>
@@ -235,11 +253,13 @@ function Inner({ app, loop, definition }: { app: string; loop: string; definitio
 		setPicked(tn);
 		setView("pipeline");
 		setCycle(null);
+		// Move the data asset (casebook) to this run's version too.
+		onSelectVersion?.({ cycleTs: tn.cycle_ts, runTs: tn.run_ts, label: tn.label });
 		if (tn.run_ts) {
 			setCycleLoading(true);
 			me.cycleDetail(app, loop, tn.run_ts).then(setCycle).catch(() => setCycle(null)).finally(() => setCycleLoading(false));
 		}
-	}, [app, loop]);
+	}, [app, loop, onSelectVersion]);
 
 	const branchFrom = useCallback(async (tn: GNode) => {
 		setMenu(null);
@@ -381,10 +401,13 @@ function Inner({ app, loop, definition }: { app: string; loop: string; definitio
 	);
 }
 
-export default function TrajectoryGraph({ app, loop, definition }: { app: string; loop: string; definition?: LoopDefinition | null }) {
+export default function TrajectoryGraph({ app, loop, definition, onSelectVersion }: {
+	app: string; loop: string; definition?: LoopDefinition | null;
+	onSelectVersion?: (v: TrajectoryVersion | null) => void;
+}) {
 	// No shared ReactFlowProvider: the trajectory <ReactFlow> and the pipeline
 	// pane's WorkflowCanvas <ReactFlow> must each own an isolated store —
 	// otherwise interacting with the pipeline clobbers the trajectory's nodes
 	// (and the tree vanishes on return). Each bare <ReactFlow> self-stores.
-	return <Inner app={app} loop={loop} definition={definition} />;
+	return <Inner app={app} loop={loop} definition={definition} onSelectVersion={onSelectVersion} />;
 }

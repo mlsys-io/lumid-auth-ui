@@ -32,7 +32,7 @@ import { loopLabel } from "@/lib/workflow-names";
 import FailureCard from "@/components/workflow/FailureCard";
 import RunSparkline from "@/components/RunSparkline";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import TrajectoryGraph from "@/components/workflow/TrajectoryGraph";
+import TrajectoryGraph, { type TrajectoryVersion } from "@/components/workflow/TrajectoryGraph";
 // Datasets the workflow works on — heavy (table/preview), so lazy-load it and
 // only mount when the Data tab is opened.
 const DatasetExplorer = lazy(() => import("@/components/workflow/DatasetExplorer"));
@@ -195,6 +195,9 @@ export default function WorkflowObservabilityPanel({
 	const [canvasStep, setCanvasStep] = useState<CanvasStepRef | null>(null);
 	// Which tab the detail pane shows. Runs is the spine, so it opens by default.
 	const [tab, setTab] = useState<DetailTab>("runs");
+	// The trajectory version the data asset (casebook) is pinned to — set when a
+	// trajectory node is clicked, so the left table shows scores as of that run.
+	const [version, setVersion] = useState<TrajectoryVersion | null>(null);
 	// Which run the Runs tab draws as a pipeline. null = follow the latest run;
 	// clicking an older run in the list pins it here.
 	const [selectedRunTs, setSelectedRunTs] = useState<string | null>(null);
@@ -411,7 +414,14 @@ export default function WorkflowObservabilityPanel({
 			<div ref={fillRef} style={{ height: fillH }} className="flex gap-3 min-h-0">
 				{/* LEFT — the data assets the goal is scored on */}
 				<div className="w-[30%] min-w-[210px] max-w-[360px] flex flex-col gap-2 min-h-0">
-					<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400 uppercase flex items-center gap-1.5 flex-shrink-0"><Database className="w-3 h-3" /> Data assets</div>
+					<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400 uppercase flex items-center gap-1.5 flex-shrink-0">
+						<Database className="w-3 h-3" /> Data assets
+						{version && (
+							<button onClick={() => setVersion(null)} title="Back to latest" className="ml-auto inline-flex items-center gap-1 normal-case tracking-normal text-[10px] text-gold-700 bg-gold-50 border border-gold-200 rounded-full px-1.5 py-0.5 hover:bg-gold-100 transition-colors">
+								as of {cycleDate(version.runTs || version.cycleTs)} <span className="text-gold-400">✕</span>
+							</button>
+						)}
+					</div>
 					<div className="flex-1 min-h-0 overflow-y-auto rounded-xl border border-slate-200 bg-white p-3 space-y-3">
 						{(() => {
 							const sources = (definition?.datasets?.length ? definition.datasets : wf.datasets) || [];
@@ -425,7 +435,7 @@ export default function WorkflowObservabilityPanel({
 							) : null;
 						})()}
 						<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading casebook…</div>}>
-							<CasebookPanel app={app} loop={loop} />
+							<CasebookPanel app={app} loop={loop} atTs={version?.runTs || version?.cycleTs} />
 						</Suspense>
 						<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading datasets…</div>}>
 							<DatasetExplorer app={app} />
@@ -434,7 +444,7 @@ export default function WorkflowObservabilityPanel({
 				</div>
 				{/* RIGHT — the run trajectory tree */}
 				<div className="flex-1 min-w-0 min-h-0">
-					<TrajectoryGraph app={app} loop={loop} definition={definition} />
+					<TrajectoryGraph app={app} loop={loop} definition={definition} onSelectVersion={setVersion} />
 				</div>
 			</div>
 			{/* Stage drill-down + free-text query on the selected run. */}
