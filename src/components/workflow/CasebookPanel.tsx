@@ -69,23 +69,25 @@ function CaseRow({ c, atTs, onSelect, selected }: { c: CasebookCase; atTs?: stri
 	const good = betterDown(c.label) ? delta < 0 : delta > 0;
 	const color = delta === 0 ? COLOR.flat : good ? COLOR.up : COLOR.down;
 
-	// Succinct tags: drop redundant/noisy keys (title duplicates the label),
-	// show the value only (key in the tooltip), cap at 3.
-	const HIDE_FIELDS = new Set(["title", "case_id", "id", "version", "year", "q_id", "topic", "question", "name"]);
-	const chips = Object.entries(c.fields ?? {})
-		.filter(([k, v]) => !HIDE_FIELDS.has(k) && String(v).trim().length > 0 && String(v).length <= 40)
-		.slice(0, 3);
+	// Tone dot — the "color flipper": gold above baseline / rose below / slate
+	// flat / hollow when unscored. Replaces the per-field text tags.
+	const dotColor = !hasScore ? "transparent" : color;
 
 	return (
 		<li
 			onClick={onSelect}
 			title="View this case's label → metric mapping log"
 			className={cn(
-				"rounded-lg border px-2.5 py-2 cursor-pointer transition-colors",
+				"rounded-lg border px-2.5 py-1.5 cursor-pointer transition-colors",
 				selected ? "border-gold-300 bg-gold-50/60 ring-1 ring-gold-200" : "border-slate-200/70 bg-white hover:border-gold-200 hover:bg-gold-50/30",
 			)}
 		>
 			<div className="flex items-center gap-2">
+				<span
+					className={cn("w-2 h-2 rounded-full flex-shrink-0", !hasScore && "border border-slate-300")}
+					style={{ background: dotColor }}
+					title={hasScore ? (good ? "above baseline" : delta < 0 ? "below baseline" : "flat") : "not yet scored"}
+				/>
 				<span className="text-[12px] font-medium text-slate-700 truncate flex-1" title={c.id}>
 					{c.label}
 				</span>
@@ -100,19 +102,6 @@ function CaseRow({ c, atTs, onSelect, selected }: { c: CasebookCase; atTs?: stri
 					<span className="text-[10px] text-slate-400 italic flex-shrink-0">not yet scored</span>
 				)}
 			</div>
-			{chips.length > 0 && (
-				<div className="mt-1 flex flex-nowrap gap-1 overflow-hidden">
-					{chips.map(([k, v]) => (
-						<span
-							key={k}
-							className="text-[10px] text-slate-500 bg-slate-100 rounded px-1.5 py-0.5 truncate max-w-[9rem]"
-							title={`${k}: ${String(v)}`}
-						>
-							{String(v).replace(/_/g, " ")}
-						</span>
-					))}
-				</div>
-			)}
 		</li>
 	);
 }

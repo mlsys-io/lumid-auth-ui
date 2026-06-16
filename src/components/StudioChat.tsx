@@ -229,6 +229,12 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 	const [sessionMsgs, setSessionMsgs] = useState<Message[] | null>(null);
 	const [sessionRunning, setSessionRunning] = useState(false);
 	const [sessionExpanded, setSessionExpanded] = useState(false);
+	const sessionScrollRef = useRef<HTMLDivElement | null>(null);
+	// Auto-scroll the session feed to the newest turn as it streams.
+	useEffect(() => {
+		const el = sessionScrollRef.current;
+		if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+	}, [sessionMsgs, sessionExpanded]);
 	useEffect(() => {
 		const onOpen = (e: Event) => {
 			const d = (e as CustomEvent).detail || {};
@@ -1456,7 +1462,11 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 			    rendered with the chat's own MessageBubble (AI turns + tool/stage
 			    cards). Opened via studio:open-session; floats over the chat. */}
 			{session && (
-				<div className={['absolute z-40 flex flex-col rounded-2xl border border-slate-200/70 bg-white/95 backdrop-blur-sm overflow-hidden ring-1 ring-black/5 shadow-[0_12px_40px_-8px_rgba(15,23,42,0.28)] animate-in fade-in duration-200', sessionExpanded ? 'inset-3 slide-in-from-bottom-2' : 'left-3 right-3 top-3 h-1/3 max-h-[38%] slide-in-from-top-2'].join(' ')}>
+				<div
+					className={sessionExpanded ? 'fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-8 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-150' : 'contents'}
+					onClick={sessionExpanded ? (e) => { if (e.target === e.currentTarget) setSessionExpanded(false); } : undefined}
+				>
+				<div className={['flex flex-col rounded-2xl border border-slate-200/70 bg-white/95 backdrop-blur-sm overflow-hidden ring-1 ring-black/5 animate-in fade-in duration-200', sessionExpanded ? 'w-full max-w-3xl h-[82vh] shadow-2xl shadow-slate-900/30 zoom-in-95' : 'absolute left-3 right-3 top-3 z-40 h-1/3 max-h-[38%] shadow-[0_12px_40px_-8px_rgba(15,23,42,0.28)] slide-in-from-top-2'].join(' ')}>
 					<div className="flex items-center gap-2 px-3.5 py-2 border-b border-slate-100 flex-shrink-0 bg-gradient-to-b from-slate-50/80 to-transparent">
 						<span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-violet-100 text-violet-600 flex-shrink-0"><Bot className="w-3.5 h-3.5" /></span>
 						<span className="text-[13px] font-medium text-slate-900 truncate">Session · {session.loop}</span>
@@ -1468,7 +1478,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 						<button onClick={() => setSessionExpanded((v) => !v)} title={sessionExpanded ? 'Shrink' : 'Pop out'} className="ml-auto p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">{sessionExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}</button>
 						<button onClick={() => setSession(null)} className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"><X className="w-4 h-4" /></button>
 					</div>
-					<div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-3 py-3 space-y-3 [&_*]:max-w-full [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap">
+					<div ref={sessionScrollRef} className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-3 py-3 space-y-3 [&_*]:max-w-full [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap">
 						{sessionMsgs === null ? (
 							<div className="h-full flex items-center justify-center text-xs text-slate-400"><Loader2 className="w-4 h-4 animate-spin mr-2" /> Connecting to the session…</div>
 						) : sessionMsgs.length === 0 ? (
@@ -1483,6 +1493,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 							<div className="flex items-center gap-2 text-[11px] text-slate-400"><Loader2 className="w-3 h-3 animate-spin" /> working…</div>
 						)}
 					</div>
+				</div>
 				</div>
 			)}
 			{/* Home: chrome renders into the shell top bar. Docked (app page):
