@@ -1455,7 +1455,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 			    rendered with the chat's own MessageBubble (AI turns + tool/stage
 			    cards). Opened via studio:open-session; floats over the chat. */}
 			{session && (
-				<div className="absolute inset-2 z-40 flex flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-300/50 animate-in fade-in zoom-in-95 duration-200">
+				<div className="absolute left-2 right-2 top-2 z-40 h-1/3 max-h-[36%] flex flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-300/50 animate-in fade-in slide-in-from-top-2 duration-200">
 					<div className="flex items-center gap-2 px-3 py-2 border-b border-slate-100 flex-shrink-0">
 						<Bot className="w-4 h-4 text-violet-500" />
 						<span className="text-sm font-medium text-slate-900 truncate">Session · {session.loop}</span>
