@@ -456,7 +456,7 @@ export default function WorkflowObservabilityPanel({
 					) : caseFocus ? (
 						<CaseMapping app={app} loop={loop} caseId={caseFocus.id} caseLabel={caseFocus.label} atTs={version?.runTs || version?.cycleTs} onBack={() => setCaseFocus(null)} />
 					) : (
-						<TrajectoryGraph app={app} loop={loop} definition={definition} onSelectVersion={setVersion} />
+						<TrajectoryGraph app={app} loop={loop} definition={definition} onSelectVersion={setVersion} running={running} />
 					)}
 				</div>
 			</div>
