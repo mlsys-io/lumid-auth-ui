@@ -23,15 +23,27 @@ import {
 	type Node, type Edge, type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { ArrowLeft, GitBranch, Trophy, Sparkles, Loader2, Clock, FlaskConical } from "lucide-react";
+import { ArrowLeft, GitBranch, Trophy, Sparkles, Loader2, Clock, FlaskConical, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import {
 	fetchTrajectory, fetchTrajectorySignals, postTrajectorySignal,
 	type Trajectory, type TrajectoryNode, type TrajectorySignal,
 } from "@/api/trajectory";
 import { me, type MeCycleDetail, type LoopDefinition } from "@/api/me";
-import WorkflowCanvas from "@/components/workflow/WorkflowCanvas";
+import WorkflowCanvas, { type CanvasStepRef } from "@/components/workflow/WorkflowCanvas";
+import StepInspectorPanel from "@/components/workflow/StepInspectorPanel";
 import { cn } from "@/lib/utils";
+
+// Ground the Studio chatbox on a run / step / variant and (optionally) ask.
+// The chat picks up the context override at send time (StudioChat studio:ask).
+function askAboutRun(app: string, loop: string, ts: string | undefined, prompt: string, stepId?: string) {
+	window.dispatchEvent(new CustomEvent("studio:ask", {
+		detail: {
+			prompt,
+			context: ts ? { app, loop, cycle: { app, loop, ts }, ...(stepId ? { step_id: stepId } : {}) } : { app, loop },
+		},
+	}));
+}
 
 const NODE_W = 184;
 const NODE_H = 66;
@@ -147,6 +159,7 @@ function Inner({ app, loop, definition, onSelectVersion }: {
 	const [cycle, setCycle] = useState<MeCycleDetail | null>(null);
 	const [cycleLoading, setCycleLoading] = useState(false);
 	const [menu, setMenu] = useState<{ x: number; y: number; node: GNode } | null>(null);
+	const [canvasStep, setCanvasStep] = useState<CanvasStepRef | null>(null);
 
 	useEffect(() => {
 		let live = true;
@@ -253,6 +266,7 @@ function Inner({ app, loop, definition, onSelectVersion }: {
 		setPicked(tn);
 		setView("pipeline");
 		setCycle(null);
+		setCanvasStep(null);
 		// Move the data asset (casebook) to this run's version too.
 		onSelectVersion?.({ cycleTs: tn.cycle_ts, runTs: tn.run_ts, label: tn.label });
 		if (tn.run_ts) {
@@ -353,6 +367,9 @@ function Inner({ app, loop, definition, onSelectVersion }: {
 							{!menu.node.proposed && (
 								<button onClick={() => openPipeline(menu.node)} className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50 text-left"><FlaskConical className="w-3.5 h-3.5 text-slate-400" /> Open pipeline</button>
 							)}
+							{!menu.node.proposed && (
+								<button onClick={() => { askAboutRun(app, loop, menu.node.run_ts, `About this run (${menu.node.label})${menu.node.config ? ` with config ${JSON.stringify(menu.node.config)}` : ""}: what happened, and what would improve the goal?`); setMenu(null); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50 text-left"><MessageSquare className="w-3.5 h-3.5 text-slate-400" /> Ask about this</button>
+							)}
 							<button onClick={() => branchFrom(menu.node)} className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-gold-50 text-left"><GitBranch className="w-3.5 h-3.5 text-gold-500" /> Branch from here</button>
 						</div>
 					)}
@@ -361,12 +378,17 @@ function Inner({ app, loop, definition, onSelectVersion }: {
 				{/* ── PANE 2 · the selected run's pipeline ── */}
 				<div className="w-1/2 h-full flex flex-col bg-white">
 					<div className="flex items-start gap-2 px-3 py-2.5 border-b border-slate-100">
-						<button onClick={() => setView("tree")} className="flex-shrink-0 inline-flex items-center gap-1 text-[12px] text-slate-500 hover:text-slate-900 px-2 py-1 -ml-1 rounded-lg hover:bg-slate-100 transition-colors"><ArrowLeft className="w-3.5 h-3.5" /> Trajectory</button>
+						<button onClick={() => { setView("tree"); setCanvasStep(null); }} className="flex-shrink-0 inline-flex items-center gap-1 text-[12px] text-slate-500 hover:text-slate-900 px-2 py-1 -ml-1 rounded-lg hover:bg-slate-100 transition-colors"><ArrowLeft className="w-3.5 h-3.5" /> Trajectory</button>
 						{picked && (
 							<div className="min-w-0 flex-1">
 								<div className="flex items-center gap-1.5">
 									{picked.is_champion && <Trophy className="w-3.5 h-3.5 text-gold-500" />}
-									<span className="text-sm font-medium text-slate-900 truncate">{picked.label}</span>
+									<span className="text-sm font-medium text-slate-900 truncate flex-1">{picked.label}</span>
+									<button
+										onClick={() => askAboutRun(app, loop, picked.run_ts, `About this run (${picked.label})${picked.config ? ` with config ${JSON.stringify(picked.config)}` : ""}: what happened, and what would improve the goal?`)}
+										title="Ask the assistant about this run"
+										className="flex-shrink-0 inline-flex items-center gap-1 text-[11px] text-gold-700 bg-gold-50 border border-gold-200 rounded-full px-2 py-0.5 hover:bg-gold-100 transition-colors"
+									><MessageSquare className="w-3 h-3" /> Ask</button>
 								</div>
 								<div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-0.5 text-[11px] text-slate-500">
 									{picked.scored && picked.score != null && <span className="tabular-nums">{traj.metric || "score"}: <span className="text-slate-700 font-medium">{fmtScore(picked.score)}</span></span>}
@@ -386,11 +408,31 @@ function Inner({ app, loop, definition, onSelectVersion }: {
 							))}
 						</div>
 					)}
-					<div className="flex-1 min-h-0 p-3">
+					<div className="flex-1 min-h-0 p-3 flex flex-col gap-2">
 						{cycleLoading ? (
 							<div className="h-full flex items-center justify-center text-xs text-slate-400"><Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading run…</div>
 						) : definition ? (
-							view === "pipeline" ? <WorkflowCanvas definition={definition} cycle={cycle} height="100%" /> : null
+							view === "pipeline" ? (
+								<>
+									<div className="flex-1 min-h-0">
+										<WorkflowCanvas definition={definition} cycle={cycle} height="100%" onStepSelect={(ref) => setCanvasStep(ref)} />
+									</div>
+									{/* Click a step → its intermediate I/O in-place (the light peek);
+									    the "ask" hands off to chat for anything deeper. */}
+									{canvasStep && (
+										<div className="shrink-0 max-h-[45%] overflow-y-auto">
+											<StepInspectorPanel
+												step={canvasStep} app={app} loop={loop} ts={picked?.run_ts || undefined}
+												onClose={() => setCanvasStep(null)}
+											/>
+											<button
+												onClick={() => askAboutRun(app, loop, picked?.run_ts, `In this run, the step "${canvasStep.step_id}"${canvasStep.skill ? ` (skill ${canvasStep.skill})` : ""}: explain its input/output and whether it helped the goal.`, canvasStep.step_id)}
+												className="mt-1 inline-flex items-center gap-1 text-[11px] text-gold-700 hover:text-gold-900"
+											><MessageSquare className="w-3 h-3" /> Ask about this step</button>
+										</div>
+									)}
+								</>
+							) : null
 						) : (
 							<div className="h-full flex items-center justify-center text-xs text-slate-400">No pipeline declared.</div>
 						)}
