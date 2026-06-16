@@ -182,11 +182,18 @@ function Inner({ app, loop, definition, onSelectVersion, running }: {
 	// and the chat→page refetch bus so a run triggered elsewhere (e.g. the
 	// agent's run_loop_now, or "Run now") shows up here without a manual
 	// refresh — the "I started a run but the Runs tab shows nothing" fix.
+	const trajSigRef = useRef("");
 	const load = useCallback((withSpinner = false) => {
 		if (withSpinner) setLoading(true);
 		let live = true;
 		Promise.all([fetchTrajectory(app, loop).catch(() => null), fetchTrajectorySignals(app, loop).catch(() => [])])
-			.then(([t, s]) => { if (live && t) { setTraj(t); setSignals(s); } })
+			.then(([t, s]) => {
+				if (!live || !t) return;
+				// Skip the rebuild + ReactFlow re-render when the tree is unchanged
+				// (bus events fire on any run/cycle change, often unrelated).
+				const sig = JSON.stringify({ n: t.nodes?.length, c: t.cycles?.length, last: t.nodes?.[t.nodes.length - 1]?.id, sc: t.nodes?.map((x) => x.score), sg: (s as TrajectorySignal[]).length });
+				if (sig !== trajSigRef.current) { trajSigRef.current = sig; setTraj(t); setSignals(s); }
+			})
 			.finally(() => { if (live) setLoading(false); });
 		return () => { live = false; };
 	}, [app, loop]);

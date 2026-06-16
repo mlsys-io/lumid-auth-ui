@@ -244,15 +244,25 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		window.addEventListener('studio:open-session', onOpen as EventListener);
 		return () => window.removeEventListener('studio:open-session', onOpen as EventListener);
 	}, []);
+	const sessionSigRef = useRef('');
 	useEffect(() => {
-		if (!session) { setSessionMsgs(null); setSessionRows(null); return; }
+		if (!session) { setSessionMsgs(null); setSessionRows(null); sessionSigRef.current = ''; return; }
 		let live = true; let timer: number | undefined;
 		const tick = async () => {
+			// Pause polling for a backgrounded tab — recheck shortly.
+			if (typeof document !== 'undefined' && document.hidden) { timer = window.setTimeout(tick, 1500); return; }
 			const { rows, running } = await fetchCycleConversation(session.app, session.loop, session.ts);
 			if (!live) return;
-			setSessionRows(rows);
-			setSessionMsgs(sessionRowsToMessages(rows));
-			setSessionRunning(running);
+			// Skip the heavy re-map + re-render when nothing changed (the poll
+			// returns the full timeline each tick; only churn on real updates).
+			const last = rows[rows.length - 1] as CycleLogRow | undefined;
+			const sig = `${rows.length}|${last?.ts ?? ''}|${(last?.response ?? last?.status ?? '').length}|${running}`;
+			if (sig !== sessionSigRef.current) {
+				sessionSigRef.current = sig;
+				setSessionRows(rows);
+				setSessionMsgs(sessionRowsToMessages(rows));
+				setSessionRunning(running);
+			}
 			// Poll fast while working so the log streams; once finished, stop.
 			if (running) timer = window.setTimeout(tick, 900);
 		};
