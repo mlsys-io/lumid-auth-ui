@@ -279,12 +279,18 @@ function Inner({ app, loop, definition, onSelectVersion }: {
 
 	const branchFrom = useCallback(async (tn: GNode) => {
 		setMenu(null);
+		// Optimistic: show the ghost node instantly (no reload). Dedupe so
+		// repeat clicks on the same node don't stack ghosts.
+		setSignals((prev) => prev.some((s) => s.action === "branch" && (s.status ?? "pending") === "pending" && s.from_id === tn.id)
+			? prev
+			: [...prev, { action: "branch", loop, from_id: tn.id, from_variant_id: tn.variant_id, config: tn.config, status: "pending" }]);
 		try {
 			await postTrajectorySignal(app, { loop, action: "branch", from_id: tn.id, from_variant_id: tn.variant_id, config: tn.config });
 			toast.success("Branch queued — the loop will explore from here next cycle.");
 			reloadSignals();
 		} catch {
 			toast.error("Could not queue the branch.");
+			reloadSignals(); // reconcile: drop the optimistic ghost if the post failed
 		}
 	}, [app, loop, reloadSignals]);
 
