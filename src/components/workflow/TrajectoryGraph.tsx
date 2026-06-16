@@ -32,6 +32,7 @@ import {
 import { me, type MeCycleDetail, type LoopDefinition } from "@/api/me";
 import WorkflowCanvas, { type CanvasStepRef } from "@/components/workflow/WorkflowCanvas";
 import StepInspectorPanel from "@/components/workflow/StepInspectorPanel";
+import { ReviewQueue, OffersPanel, type ReviewItem, type CompoundOffer } from "@/pages/studio/inspector";
 import { cn } from "@/lib/utils";
 
 // Ground the Studio chatbox on a run / step / variant and (optionally) ask.
@@ -193,6 +194,7 @@ function Inner({ app, loop, definition, onSelectVersion }: {
 							<div className="flex items-center gap-1.5">
 								<span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: t.dot }} />
 								<span className={cn("text-[12px] truncate flex-1 font-medium", n.proposed ? "text-gold-700 italic" : "text-slate-800")}>{n.label}</span>
+								{n.needs_decision && <span title="needs a decision — suggestions or held actions" className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0 animate-pulse" />}
 								{n.is_champion && <Trophy className="w-3 h-3 text-gold-500 flex-shrink-0" />}
 							</div>
 							{when && <div className="text-[10px] text-slate-400 tabular-nums mt-0.5 truncate">{when}</div>}
@@ -408,6 +410,45 @@ function Inner({ app, loop, definition, onSelectVersion }: {
 							))}
 						</div>
 					)}
+					{/* Decisions — the advisor's suggestions + held actions for this
+					    run. Suggestions (kind=improvement) get Branch/Ask; held
+					    items get Approve/Reject; other offers Adopt/Dismiss. */}
+					{(() => {
+						const sum = (cycle?.summary || {}) as Record<string, unknown>;
+						const rq = (Array.isArray(sum.review_queue) ? sum.review_queue : []) as ReviewItem[];
+						const allOffers = (Array.isArray(sum.offers) ? sum.offers : []) as CompoundOffer[];
+						const sugg = allOffers.filter((o) => (o as { kind?: string }).kind === "improvement");
+						const other = allOffers.filter((o) => (o as { kind?: string }).kind !== "improvement");
+						if (!rq.length && !allOffers.length) return null;
+						return (
+							<div className="px-3 py-2 border-b border-slate-100 space-y-2 max-h-[42%] overflow-y-auto">
+								{sugg.length > 0 && (
+									<div className="rounded-lg border border-gold-200 bg-gold-50/40 p-2 space-y-1.5">
+										<div className="text-[10px] uppercase tracking-wide text-gold-700 font-semibold flex items-center gap-1"><Sparkles className="w-3 h-3" /> Advisor suggestions</div>
+										{sugg.map((s, i) => {
+											const o = s as { title?: string; detail?: string };
+											return (
+												<div key={i} className="text-[11.5px]">
+													<div className="text-slate-800 font-medium">{o.title}</div>
+													{o.detail && <div className="text-slate-500 leading-snug">{o.detail}</div>}
+													<div className="mt-0.5 flex gap-2">
+														<button onClick={() => branchFrom(picked!)} className="inline-flex items-center gap-1 text-[10.5px] text-gold-700 hover:text-gold-900"><GitBranch className="w-3 h-3" /> Branch this</button>
+														<button onClick={() => askAboutRun(app, loop, picked?.run_ts, `The advisor suggested: "${o.title}". ${o.detail || ""} How do I act on this to move the goal?`)} className="inline-flex items-center gap-1 text-[10.5px] text-gold-700 hover:text-gold-900"><MessageSquare className="w-3 h-3" /> Ask</button>
+													</div>
+												</div>
+											);
+										})}
+									</div>
+								)}
+								{rq.length > 0 && picked?.run_ts && (
+									<ReviewQueue app={app} loop={loop} ts={picked.run_ts} items={rq} onActed={() => picked && openPipeline(picked)} />
+								)}
+								{other.length > 0 && (
+									<OffersPanel offers={other} app={app} loop={loop} ts={picked?.run_ts} />
+								)}
+							</div>
+						);
+					})()}
 					<div className="flex-1 min-h-0 p-3 flex flex-col gap-2">
 						{cycleLoading ? (
 							<div className="h-full flex items-center justify-center text-xs text-slate-400"><Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading run…</div>

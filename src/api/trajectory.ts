@@ -25,6 +25,7 @@ export interface TrajectoryNode {
 	delta_vs_baseline?: number;
 	is_champion?: boolean;
 	duration_s?: number;
+	needs_decision?: boolean;
 }
 
 export interface TrajectoryCycle {
