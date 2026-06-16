@@ -99,6 +99,30 @@ export async function postTrajectorySignal(
 	return json.data;
 }
 
+// One cycle's live session timeline — LLM turns (prompt/response) + stage/tool
+// events, merged chronologically. `running` true = cycle still in flight.
+export interface CycleLogRow {
+	ts?: string;
+	event?: string;            // "llm" | "stage" | "branch" | …
+	model?: string;
+	prompt?: string;
+	response?: string;
+	stage?: string;
+	status?: string;
+	variant_id?: string;
+	note?: string;
+	[k: string]: unknown;
+}
+
+export async function fetchCycleConversation(app: string, loop: string, ts: string): Promise<{ rows: CycleLogRow[]; running: boolean }> {
+	const qs = `?loop=${encodeURIComponent(loop)}&ts=${encodeURIComponent(ts)}`;
+	const r = await fetch(`${ME_BASE}/api/v1/me/apps/${encodeURIComponent(app)}/cycle-log${qs}`, { credentials: "include" });
+	let json: { ret_code?: number; data?: { rows?: CycleLogRow[]; running?: boolean } } = {};
+	try { json = await r.json(); } catch { /* empty */ }
+	if (!r.ok || (json.ret_code !== undefined && json.ret_code !== 0)) return { rows: [], running: false };
+	return { rows: json.data?.rows ?? [], running: !!json.data?.running };
+}
+
 export async function fetchTrajectorySignals(app: string, loop: string): Promise<TrajectorySignal[]> {
 	const qs = loop ? `?loop=${encodeURIComponent(loop)}` : "";
 	const r = await fetch(`${ME_BASE}/api/v1/me/apps/${encodeURIComponent(app)}/trajectory/signals${qs}`, { credentials: "include" });
