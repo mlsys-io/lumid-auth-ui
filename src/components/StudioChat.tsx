@@ -227,6 +227,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 	// `studio:open-session` {app, loop, ts}. ts="latest" → the running cycle.
 	const [session, setSession] = useState<{ app: string; loop: string; ts: string } | null>(null);
 	const [sessionMsgs, setSessionMsgs] = useState<Message[] | null>(null);
+	const [sessionRows, setSessionRows] = useState<CycleLogRow[] | null>(null);
 	const [sessionRunning, setSessionRunning] = useState(false);
 	const [sessionExpanded, setSessionExpanded] = useState(false);
 	const sessionScrollRef = useRef<HTMLDivElement | null>(null);
@@ -244,14 +245,16 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		return () => window.removeEventListener('studio:open-session', onOpen as EventListener);
 	}, []);
 	useEffect(() => {
-		if (!session) { setSessionMsgs(null); return; }
+		if (!session) { setSessionMsgs(null); setSessionRows(null); return; }
 		let live = true; let timer: number | undefined;
 		const tick = async () => {
 			const { rows, running } = await fetchCycleConversation(session.app, session.loop, session.ts);
 			if (!live) return;
+			setSessionRows(rows);
 			setSessionMsgs(sessionRowsToMessages(rows));
 			setSessionRunning(running);
-			if (running) timer = window.setTimeout(tick, 1500);
+			// Poll fast while working so the log streams; once finished, stop.
+			if (running) timer = window.setTimeout(tick, 900);
 		};
 		tick();
 		return () => { live = false; if (timer) window.clearTimeout(timer); };
@@ -1481,16 +1484,27 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 					<div ref={sessionScrollRef} className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-3 py-3 space-y-3 [&_*]:max-w-full [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap">
 						{sessionMsgs === null ? (
 							<div className="h-full flex items-center justify-center text-xs text-slate-400"><Loader2 className="w-4 h-4 animate-spin mr-2" /> Connecting to the session…</div>
-						) : sessionMsgs.length === 0 ? (
+						) : (sessionRows?.length ?? 0) === 0 ? (
 							<div className="h-full flex flex-col items-center justify-center gap-2 text-center text-slate-400">
 								<Bot className="w-6 h-6 text-slate-300" />
 								<div className="text-sm text-slate-500">{sessionRunning ? 'Session starting…' : 'No conversation captured for this run.'}</div>
 							</div>
+						) : sessionRunning ? (
+							// While working: a dense streaming log (lines append + the panel
+							// auto-scrolls each poll) — not the full bubble conversation.
+							<div className="font-mono text-[11px] leading-relaxed space-y-0.5">
+								{(sessionRows || []).map((r, i) => r.event === 'llm' ? (
+									<div key={i} className="text-slate-700"><span className="text-violet-500">🤖 {r.model || 'ai'} ›</span> {String(r.response || '…').replace(/\n+/g, ' ↵ ').slice(0, 240)}</div>
+								) : (
+									<div key={i} className={(r.status === 'fail' || r.status === 'failed') ? 'text-rose-500' : 'text-slate-400'}>
+										<span className="text-slate-300">·</span> {r.stage || r.event}{r.status ? ' ' + r.status : ''}{r.variant_id || r.note ? ' — ' + String(r.variant_id || r.note).slice(0, 50) : ''}
+									</div>
+								))}
+								<div className="flex items-center gap-2 text-slate-400 pt-1"><Loader2 className="w-3 h-3 animate-spin" /> <span className="animate-pulse">streaming…</span></div>
+							</div>
 						) : (
+							// Finished: the full conversation, rendered with MessageBubble.
 							sessionMsgs.map((m, i) => <div key={i} className="min-w-0 break-words"><MessageBubble m={m} /></div>)
-						)}
-						{sessionRunning && sessionMsgs && sessionMsgs.length > 0 && (
-							<div className="flex items-center gap-2 text-[11px] text-slate-400"><Loader2 className="w-3 h-3 animate-spin" /> working…</div>
 						)}
 					</div>
 				</div>

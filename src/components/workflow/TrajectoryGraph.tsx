@@ -388,7 +388,7 @@ function Inner({ app, loop, definition, onSelectVersion, running }: {
 						{totalLearned > 0 && <span className="inline-flex items-center gap-1 text-[11px] text-gold-600"><Sparkles className="w-3 h-3" /> {totalLearned} learned</span>}
 						{running ? (
 							<button onClick={() => openSession(app, loop, "latest")} className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-sky-600 font-medium normal-case tracking-normal hover:text-sky-700 pointer-events-auto" title="Open the running session conversation">
-								<span className="w-1.5 h-1.5 rounded-full bg-sky-500 running-glow" /> running… <span className="text-slate-400 font-normal underline decoration-dotted">watch live →</span>
+								<span className="w-1.5 h-1.5 rounded-full bg-sky-500 running-glow" /> running… <span className="text-slate-400 font-normal underline decoration-dotted">show logs →</span>
 							</button>
 						) : (
 							<span className="ml-auto text-[10px] text-slate-300 normal-case tracking-normal">click a node · right-click to branch</span>
