@@ -42,6 +42,26 @@ export interface Casebook {
 	metrics_evolution?: CasebookMetricEvolution[];
 }
 
+// The data↔metric mapping log for one case: every scoring/labeling record the
+// loop's experiments wrote for it (per run / cycle / sub-question), newest first.
+export interface CaseLogRecord {
+	ts: string;
+	cycle_ts?: string;
+	variant_id?: string;
+	experiment?: string;
+	metrics?: Record<string, number | string | boolean>;
+	dims?: Record<string, unknown>;
+}
+
+export async function fetchCaseLog(app: string, loop: string, caseId: string): Promise<CaseLogRecord[]> {
+	const qs = `?loop=${encodeURIComponent(loop)}&case_id=${encodeURIComponent(caseId)}`;
+	const r = await fetch(`${ME_BASE}/api/v1/me/apps/${encodeURIComponent(app)}/casebook/case-log${qs}`, { credentials: "include" });
+	let json: { ret_code?: number; data?: { records?: CaseLogRecord[] } } = {};
+	try { json = await r.json(); } catch { /* empty */ }
+	if (!r.ok || (json.ret_code !== undefined && json.ret_code !== 0)) return [];
+	return json.data?.records ?? [];
+}
+
 // Fetch the casebook for an app + loop. Mirrors me.ts's unwrap-or-throw, but
 // the caller (CasebookPanel) already treats any failure as "empty", so callers
 // can simply `.catch(() => emptyCasebook)`.
