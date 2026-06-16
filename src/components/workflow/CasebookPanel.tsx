@@ -63,7 +63,12 @@ function CaseRow({ c }: { c: CasebookCase }) {
 	const good = betterDown(c.label) ? delta < 0 : delta > 0;
 	const color = delta === 0 ? COLOR.flat : good ? COLOR.up : COLOR.down;
 
-	const chips = Object.entries(c.fields ?? {}).slice(0, 4);
+	// Succinct tags: drop redundant/noisy keys (title duplicates the label),
+	// show the value only (key in the tooltip), cap at 3.
+	const HIDE_FIELDS = new Set(["title", "case_id", "id", "version", "year", "q_id", "topic", "question", "name"]);
+	const chips = Object.entries(c.fields ?? {})
+		.filter(([k, v]) => !HIDE_FIELDS.has(k) && String(v).trim().length > 0 && String(v).length <= 40)
+		.slice(0, 3);
 
 	return (
 		<li className="rounded-lg border border-slate-200/70 bg-white px-2.5 py-2">
@@ -87,10 +92,10 @@ function CaseRow({ c }: { c: CasebookCase }) {
 					{chips.map(([k, v]) => (
 						<span
 							key={k}
-							className="text-[10px] text-slate-500 bg-slate-100 rounded px-1.5 py-0.5 truncate max-w-[14rem]"
+							className="text-[10px] text-slate-500 bg-slate-100 rounded px-1.5 py-0.5 truncate max-w-[9rem]"
 							title={`${k}: ${String(v)}`}
 						>
-							<span className="text-slate-400">{k}:</span> {String(v)}
+							{String(v).replace(/_/g, " ")}
 						</span>
 					))}
 				</div>
