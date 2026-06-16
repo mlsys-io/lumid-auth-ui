@@ -18,11 +18,23 @@ export interface StreamMeta {
 // Read the fetch-SSE body to completion, dispatching every event.
 // Meta events (claude_session / route / usage) go to the handlers;
 // everything else goes through handleEvent into the message list.
-export async function readChatStream(r: Response, setMessages: SetMessages, meta: StreamMeta = {}): Promise<void> {
+export async function readChatStream(r: Response, setMessages: SetMessages, meta: StreamMeta = {}, signal?: AbortSignal): Promise<void> {
 	if (!r.body) return;
 	const reader = r.body.getReader();
+	// Abort-aware: relying on fetch's signal to error the body stream is
+	// unreliable through the nginx/FRP proxy chain — reader.read() can hang
+	// pending forever, so the stop button never terminates the loop and
+	// `streaming` stays true (dead stop button + stuck message queue). Cancel
+	// the reader explicitly on abort so read() resolves promptly and the loop
+	// exits; re-throw AbortError after so the caller shows "— stopped —".
+	const onAbort = () => { reader.cancel().catch(() => { /* already closing */ }); };
+	if (signal) {
+		if (signal.aborted) { onAbort(); throw new DOMException('Aborted', 'AbortError'); }
+		signal.addEventListener('abort', onAbort, { once: true });
+	}
 	const decoder = new TextDecoder();
 	let buf = '';
+	try {
 	while (true) {
 		const { done, value } = await reader.read();
 		if (done) break;
@@ -54,6 +66,13 @@ export async function readChatStream(r: Response, setMessages: SetMessages, meta
 			}
 		}
 	}
+	} finally {
+		if (signal) signal.removeEventListener('abort', onAbort);
+	}
+	// If we exited the loop because of an abort (reader was cancelled), surface
+	// it as AbortError so the caller renders "— stopped —" and runs its finally
+	// (resetting `streaming` → the queue can drain).
+	if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
 }
 
 export function handleEvent(

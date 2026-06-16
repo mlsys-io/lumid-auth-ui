@@ -946,7 +946,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 						onClaudeSession: (id) => { claudeSessionRef.current = id; },
 						onRoute: (modelUsed, autoRouted) => setLastRoute({ modelUsed, autoRouted }),
 						onUsage: (used, limit) => setUsage({ used, limit }),
-					});
+					}, ctrl.signal);
 					break; // success
 				} catch (e: any) {
 					if (e?.name === 'AbortError') throw e; // handled by outer catch

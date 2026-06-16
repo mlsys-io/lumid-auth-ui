@@ -33,6 +33,7 @@ import { me, type MeCycleDetail, type LoopDefinition } from "@/api/me";
 import WorkflowCanvas, { type CanvasStepRef } from "@/components/workflow/WorkflowCanvas";
 import StepInspectorPanel from "@/components/workflow/StepInspectorPanel";
 import { ReviewQueue, OffersPanel, type ReviewItem, type CompoundOffer } from "@/pages/studio/inspector";
+import { useStudioRefetch } from "@/hooks/useStudioRefetch";
 import { cn } from "@/lib/utils";
 
 // Ground the Studio chatbox on a run / step / variant and (optionally) ask.
@@ -169,14 +170,23 @@ function Inner({ app, loop, definition, onSelectVersion }: {
 	const [menu, setMenu] = useState<{ x: number; y: number; node: GNode } | null>(null);
 	const [canvasStep, setCanvasStep] = useState<CanvasStepRef | null>(null);
 
-	useEffect(() => {
+	// Load (or reload) the trajectory + signals. Reused by the mount effect
+	// and the chat→page refetch bus so a run triggered elsewhere (e.g. the
+	// agent's run_loop_now, or "Run now") shows up here without a manual
+	// refresh — the "I started a run but the Runs tab shows nothing" fix.
+	const load = useCallback((withSpinner = false) => {
+		if (withSpinner) setLoading(true);
 		let live = true;
-		setLoading(true);
 		Promise.all([fetchTrajectory(app, loop).catch(() => null), fetchTrajectorySignals(app, loop).catch(() => [])])
-			.then(([t, s]) => { if (live) { setTraj(t); setSignals(s); } })
+			.then(([t, s]) => { if (live && t) { setTraj(t); setSignals(s); } })
 			.finally(() => { if (live) setLoading(false); });
 		return () => { live = false; };
 	}, [app, loop]);
+
+	useEffect(() => load(true), [load]);
+	// Re-fetch when a run/cycle changes anywhere (chat tools, Run now) so the
+	// trajectory reflects new + in-flight runs live.
+	useStudioRefetch(["runs", "cycles", "loops", "workflows"], load);
 
 	const reloadSignals = useCallback(() => { fetchTrajectorySignals(app, loop).then(setSignals).catch(() => {}); }, [app, loop]);
 
