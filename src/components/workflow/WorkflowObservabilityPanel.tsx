@@ -397,28 +397,8 @@ export default function WorkflowObservabilityPanel({
 
 			{/* ── GOAL — the workflow's objective, always shown full-width at the
 			    top (prominent + editable), independent of the tab below. ── */}
-			<div className="flex items-center gap-3 flex-wrap">
-				<div className="flex-1 min-w-[200px]">
-					<GoalHeader goal={wf.goal} kpis={buildGoalKpis(summary, cycleFiles)} app={app} loop={loop} onSaved={onChanged} />
-				</div>
-				<nav className="flex gap-1 flex-shrink-0 items-center" role="tablist" aria-label="Workflow details">
-					{TABS.map((t) => {
-						const active = tab === t.key;
-						return (
-							<button
-								key={`top-${t.key}`} role="tab" aria-selected={active} onClick={() => setTab(t.key)}
-								className={cn(
-									"flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors border",
-									active
-										? "bg-gold-50 text-gold-800 border-gold-200 font-medium"
-										: "text-slate-600 border-transparent hover:bg-slate-50",
-								)}>
-								<t.icon className="w-4 h-4 flex-shrink-0" />
-								<span className="truncate">{t.label}</span>
-							</button>
-						);
-					})}
-				</nav>
+			<div className="min-w-0">
+				<GoalHeader goal={wf.goal} kpis={buildGoalKpis(summary, cycleFiles)} app={app} loop={loop} onSaved={onChanged} />
 			</div>
 
 			{/* A failed last run is an alert — kept above the tabs so it's always
@@ -427,76 +407,76 @@ export default function WorkflowObservabilityPanel({
 				<FailureCard error={lastError} app={app} loop={loop} />
 			)}
 
-			{/* ── Pipeline · Data — a left tab rail that switches the detail
-			    content on the right. ── */}
-			<div className="space-y-3">
-				<div className="min-w-0">
-					{/* RUNS — the execution history (left); the selected run drawn as
-					    a pipeline (right). Pipeline = representation of a run. */}
-					{tab === "runs" && (
-						<div className="space-y-2 min-w-0 h-full flex flex-col animate-in fade-in duration-200">
-							<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400 uppercase flex-shrink-0">
-								Runs
-								{cyclesKnown && !tenantHasRuns && <span className="normal-case tracking-normal text-slate-400 font-normal"> · runs when you click Run now</span>}
-							</div>
-							{/* The run history as an evolving TREE: each node a variant, the
-							    champion on the trunk, trend + learning overlaid; click a node to
-							    pan the canvas and bloom in that run's exact pipeline. */}
-							<div ref={fillRef} style={{ height: fillH }} className="min-h-0">
-								<TrajectoryGraph app={app} loop={loop} definition={definition} />
-							</div>
-							{/* Stage drill-down + free-text query on the selected run. */}
-							{selectedStage && tenantHasRuns && (
-								<div ref={inspectorRef}>
-									<StageDetail
-										app={app} loop={loop} stage={selectedStage} initialTs={anchorTs || selectedRunTs || undefined}
-										onStageChange={(k) => setSelectedStage(k)}
-										q={stageQ} setQ={setStageQ} onClose={() => setSelectedStage(null)}
-									/>
-								</div>
-							)}
-						</div>
-					)}
-
-					{/* DATA — datasets the workflow works on (app-scoped). Fills the
-					    screen height; the file list scrolls inside the box. */}
-					{tab === "dataset" && (
-						<div className="space-y-2 min-w-0 animate-in fade-in duration-200">
-							<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400 uppercase flex items-center gap-1.5">
-								<Database className="w-3 h-3" /> Data the goal is scored on
-							</div>
-							<div ref={fillRef} style={{ height: fillH }} className="overflow-y-auto rounded-xl border border-slate-200 bg-white p-3 space-y-3">
-								{/* Declared data sources / casebook refs from xpcloud.yaml — shown
-								    even when no files are bundled locally (external-data apps). */}
+			{/* Detail area: a left rail (Runs/Data selector + the Data table)
+			    beside the canvas (vertical trajectory for Runs; files for Data). */}
+			<div ref={fillRef} style={{ height: fillH }} className="flex gap-3 min-h-0">
+				{/* LEFT RAIL — selector, plus the casebook table on the Data tab */}
+				<div className="w-[30%] min-w-[210px] max-w-[360px] flex flex-col gap-2 min-h-0">
+					<nav className="flex flex-col gap-1 flex-shrink-0" role="tablist" aria-label="Workflow details">
+						{TABS.map((t) => {
+							const active = tab === t.key;
+							return (
+								<button key={`rail-${t.key}`} role="tab" aria-selected={active} onClick={() => setTab(t.key)}
+									className={cn("flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors border",
+										active ? "bg-gold-50 text-gold-800 border-gold-200 font-medium" : "text-slate-600 border-transparent hover:bg-slate-50")}>
+									<t.icon className="w-4 h-4 flex-shrink-0" />
+									<span className="truncate">{t.label}</span>
+								</button>
+							);
+						})}
+					</nav>
+					<div className="flex-1 min-h-0 overflow-y-auto rounded-xl border border-slate-200 bg-white p-3">
+						{tab === "runs" ? (
+							<div className="space-y-3">
 								{(() => {
 									const sources = (definition?.datasets?.length ? definition.datasets : wf.datasets) || [];
 									return sources.length > 0 ? (
 										<div>
 											<div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1">Data sources</div>
 											<div className="flex flex-wrap gap-1.5">
-												{sources.map((d) => (
-													<span key={d} className="inline-flex items-center gap-1 text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-full px-2 py-0.5 font-mono">
-														<Database className="w-3 h-3 text-slate-400" />{d}
-													</span>
-												))}
+												{sources.map((d) => (<span key={d} className="inline-flex items-center gap-1 text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-full px-2 py-0.5 font-mono"><Database className="w-3 h-3 text-slate-400" />{d}</span>))}
 											</div>
 										</div>
 									) : null;
 								})()}
-								{/* Casebook = the evolving eval-set the goal metrics are scored
-								    on (per-case scores + evolution); non-empty for command-driven
-								    apps where DatasetExplorer (bundled files) is blank. */}
-								<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading casebook…</div>}>
-									<CasebookPanel app={app} loop={loop} />
-								</Suspense>
-								<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading datasets…</div>}>
-									<DatasetExplorer app={app} />
-								</Suspense>
+								<div>
+									<div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1">Reading the tree</div>
+									<ul className="space-y-1 text-[11px] text-slate-500">
+										<li className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: "rgb(176 143 69)" }} /> above baseline</li>
+										<li className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: "rgb(225 29 72)" }} /> below baseline</li>
+										<li className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full border-2 border-dashed border-slate-300 flex-shrink-0" /> not scored yet</li>
+										<li className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: "rgb(176 143 69)", boxShadow: "0 0 0 2px rgba(176,143,69,0.4)" }} /> champion (on the trunk)</li>
+									</ul>
+								</div>
+								<div className="text-[11px] text-slate-400 leading-snug">Click a node to slide to its pipeline. Right-click a node to branch a new exploration from it.</div>
 							</div>
+						) : (
+							<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading casebook…</div>}>
+								<CasebookPanel app={app} loop={loop} />
+							</Suspense>
+						)}
+					</div>
+				</div>
+				{/* RIGHT CANVAS — vertical trajectory (Runs) / bundled files (Data) */}
+				<div className="flex-1 min-w-0 min-h-0">
+					{tab === "runs" ? (
+						<TrajectoryGraph app={app} loop={loop} definition={definition} />
+					) : (
+						<div className="h-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-3">
+							<div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-2 flex items-center gap-1.5"><Database className="w-3 h-3" /> Bundled files</div>
+							<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading datasets…</div>}>
+								<DatasetExplorer app={app} />
+							</Suspense>
 						</div>
 					)}
 				</div>
 			</div>
+			{/* Stage drill-down + free-text query on the selected run. */}
+			{selectedStage && tenantHasRuns && (
+				<div ref={inspectorRef}>
+					<StageDetail app={app} loop={loop} stage={selectedStage} initialTs={anchorTs || selectedRunTs || undefined} onStageChange={(k) => setSelectedStage(k)} q={stageQ} setQ={setStageQ} onClose={() => setSelectedStage(null)} />
+				</div>
+			)}
 
 
 		</div>
