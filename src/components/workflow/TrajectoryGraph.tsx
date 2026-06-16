@@ -178,6 +178,16 @@ function Inner({ app, loop, definition, onSelectVersion, running }: {
 	const [menu, setMenu] = useState<{ x: number; y: number; node: GNode } | null>(null);
 	const [canvasStep, setCanvasStep] = useState<CanvasStepRef | null>(null);
 
+	// Switching workflow snaps back to the trajectory (tree) view — a pipeline
+	// drilled into the old workflow's run is meaningless for the new one.
+	useEffect(() => {
+		setView("tree");
+		setPicked(null);
+		setCycle(null);
+		setCanvasStep(null);
+		setMenu(null);
+	}, [app, loop]);
+
 	// Load (or reload) the trajectory + signals. Reused by the mount effect
 	// and the chat→page refetch bus so a run triggered elsewhere (e.g. the
 	// agent's run_loop_now, or "Run now") shows up here without a manual
@@ -215,6 +225,11 @@ function Inner({ app, loop, definition, onSelectVersion, running }: {
 	const { model, byId } = useMemo(() => buildModel(traj, signals), [traj, signals]);
 	const hib = traj?.higher_is_better !== false;
 	const baseline = traj?.baseline ?? null;
+
+	// Set after openPipeline is defined; the node's "details" link calls it
+	// (the node label is built above openPipeline, so it can't reference it
+	// directly without a temporal-dead-zone error).
+	const openPipelineRef = useRef<(tn: GNode) => void>(() => {});
 
 	const { nodes, edges } = useMemo(() => {
 		const pos = layout(model);
@@ -263,6 +278,18 @@ function Inner({ app, loop, definition, onSelectVersion, running }: {
 									</span>
 								)}
 							</div>
+							{!n.proposed && (
+								<div className="mt-1 flex justify-end">
+									<button
+										type="button"
+										onClick={(e) => { e.stopPropagation(); openPipelineRef.current(n); }}
+										className="text-[10px] font-medium text-sky-600 hover:text-sky-700 hover:underline pointer-events-auto nodrag"
+										title="Open this run's pipeline (step-by-step)"
+									>
+										details →
+									</button>
+								</div>
+							)}
 						</div>
 					),
 				},
@@ -315,6 +342,15 @@ function Inner({ app, loop, definition, onSelectVersion, running }: {
 			me.cycleDetail(app, loop, tn.run_ts).then(setCycle).catch(() => setCycle(null)).finally(() => setCycleLoading(false));
 		}
 	}, [app, loop, onSelectVersion]);
+	openPipelineRef.current = openPipeline;
+
+	// Plain click = FOCUS this run (don't drill in): highlight the node and move
+	// the data version pointer + related panels (casebook/metrics) to it. The
+	// "details →" link drills into the pipeline; right-click → branch / convo.
+	const focusRun = useCallback((tn: GNode) => {
+		setPicked(tn);
+		onSelectVersion?.({ cycleTs: tn.cycle_ts, runTs: tn.run_ts, label: tn.label });
+	}, [onSelectVersion]);
 
 	const branchFrom = useCallback(async (tn: GNode) => {
 		setMenu(null);
@@ -402,7 +438,7 @@ function Inner({ app, loop, definition, onSelectVersion, running }: {
 						zoomOnScroll={false}
 						panOnScroll
 						panOnDrag
-						onNodeClick={(_e, node) => { const tn = byId.get(node.id); if (tn && !tn.proposed) openPipeline(tn); }}
+						onNodeClick={(_e, node) => { const tn = byId.get(node.id); if (tn && !tn.proposed) focusRun(tn); }}
 						onNodeContextMenu={(e, node) => { e.preventDefault(); const tn = byId.get(node.id); if (tn) setMenu({ x: e.clientX, y: e.clientY, node: tn }); }}
 					>
 						<Background gap={16} color="rgb(241 245 249)" />
