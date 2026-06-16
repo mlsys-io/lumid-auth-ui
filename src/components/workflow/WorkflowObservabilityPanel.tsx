@@ -34,6 +34,7 @@ import RunSparkline from "@/components/RunSparkline";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import TrajectoryGraph, { type TrajectoryVersion } from "@/components/workflow/TrajectoryGraph";
 import CaseMapping from "@/components/workflow/CaseMapping";
+import MetricsView from "@/components/workflow/MetricsView";
 // Datasets the workflow works on — heavy (table/preview), so lazy-load it and
 // only mount when the Data tab is opened.
 const DatasetExplorer = lazy(() => import("@/components/workflow/DatasetExplorer"));
@@ -199,8 +200,11 @@ export default function WorkflowObservabilityPanel({
 	// The trajectory version the data asset (casebook) is pinned to — set when a
 	// trajectory node is clicked, so the left table shows scores as of that run.
 	const [version, setVersion] = useState<TrajectoryVersion | null>(null);
-	// A clicked data case → the right canvas shows its label→metric mapping log.
+	// Right-canvas focus: a clicked data case shows its label→metric mapping log;
+	// the Metrics entry shows the metric curves. Mutually exclusive (else the
+	// trajectory). Selecting one clears the other.
 	const [caseFocus, setCaseFocus] = useState<{ id: string; label: string } | null>(null);
+	const [metricsFocus, setMetricsFocus] = useState(false);
 	// Which run the Runs tab draws as a pipeline. null = follow the latest run;
 	// clicking an older run in the list pins it here.
 	const [selectedRunTs, setSelectedRunTs] = useState<string | null>(null);
@@ -437,18 +441,19 @@ export default function WorkflowObservabilityPanel({
 								</div>
 							) : null;
 						})()}
-						<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading casebook…</div>}>
-							<CasebookPanel app={app} loop={loop} atTs={version?.runTs || version?.cycleTs} onSelectCase={setCaseFocus} selectedCaseId={caseFocus?.id} />
-						</Suspense>
-						<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading datasets…</div>}>
-							<DatasetExplorer app={app} />
+						<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading data…</div>}>
+							<CasebookPanel app={app} loop={loop} atTs={version?.runTs || version?.cycleTs}
+								onSelectCase={(c) => { setCaseFocus(c); setMetricsFocus(false); }} selectedCaseId={caseFocus?.id}
+								onSelectMetrics={() => { setMetricsFocus(true); setCaseFocus(null); }} metricsSelected={metricsFocus} />
 						</Suspense>
 					</div>
 				</div>
 				{/* RIGHT — the run trajectory; or, when a data case is clicked, that
 				    case's label→metric mapping log (Back returns to the trajectory). */}
 				<div className="flex-1 min-w-0 min-h-0">
-					{caseFocus ? (
+					{metricsFocus ? (
+						<MetricsView app={app} loop={loop} atTs={version?.runTs || version?.cycleTs} onBack={() => setMetricsFocus(false)} />
+					) : caseFocus ? (
 						<CaseMapping app={app} loop={loop} caseId={caseFocus.id} caseLabel={caseFocus.label} atTs={version?.runTs || version?.cycleTs} onBack={() => setCaseFocus(null)} />
 					) : (
 						<TrajectoryGraph app={app} loop={loop} definition={definition} onSelectVersion={setVersion} />
