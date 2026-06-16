@@ -88,7 +88,7 @@ function CaseRow({ c }: { c: CasebookCase }) {
 				)}
 			</div>
 			{chips.length > 0 && (
-				<div className="mt-1 flex flex-wrap gap-1">
+				<div className="mt-1 flex flex-nowrap gap-1 overflow-hidden">
 					{chips.map(([k, v]) => (
 						<span
 							key={k}
