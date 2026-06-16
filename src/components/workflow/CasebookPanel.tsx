@@ -55,7 +55,7 @@ function Sparkline({ values, color, w = 56, h = 16 }: { values: number[]; color:
 // One case row: label + field chips + latest score + score-history sparkline.
 const tsDigits = (s?: string) => (s || "").replace(/\D/g, "");
 
-function CaseRow({ c, atTs }: { c: CasebookCase; atTs?: string }) {
+function CaseRow({ c, atTs, onSelect, selected }: { c: CasebookCase; atTs?: string; onSelect?: () => void; selected?: boolean }) {
 	const fullHist = c.score_history ?? [];
 	// Version-aware: when a trajectory node is selected, show this case's score
 	// AS OF that cycle (the latest history point at/before it).
@@ -77,7 +77,14 @@ function CaseRow({ c, atTs }: { c: CasebookCase; atTs?: string }) {
 		.slice(0, 3);
 
 	return (
-		<li className="rounded-lg border border-slate-200/70 bg-white px-2.5 py-2">
+		<li
+			onClick={onSelect}
+			title="View this case's label → metric mapping log"
+			className={cn(
+				"rounded-lg border px-2.5 py-2 cursor-pointer transition-colors",
+				selected ? "border-gold-300 bg-gold-50/60 ring-1 ring-gold-200" : "border-slate-200/70 bg-white hover:border-gold-200 hover:bg-gold-50/30",
+			)}
+		>
 			<div className="flex items-center gap-2">
 				<span className="text-[12px] font-medium text-slate-700 truncate flex-1" title={c.id}>
 					{c.label}
@@ -142,7 +149,11 @@ function MetricEvolution({ series }: { series: CasebookMetricEvolution[] }) {
 	);
 }
 
-export default function CasebookPanel({ app, loop, atTs }: { app: string; loop: string; atTs?: string }) {
+export default function CasebookPanel({ app, loop, atTs, onSelectCase, selectedCaseId }: {
+	app: string; loop: string; atTs?: string;
+	onSelectCase?: (c: { id: string; label: string }) => void;
+	selectedCaseId?: string;
+}) {
 	const [book, setBook] = useState<Casebook | null>(null);
 
 	useEffect(() => {
@@ -189,7 +200,7 @@ export default function CasebookPanel({ app, loop, atTs }: { app: string; loop: 
 				) : (
 					<ul className="space-y-1">
 						{cases.map((c) => (
-							<CaseRow key={c.id} c={c} atTs={atTs} />
+							<CaseRow key={c.id} c={c} atTs={atTs} selected={selectedCaseId === c.id} onSelect={onSelectCase ? () => onSelectCase({ id: c.id, label: c.label }) : undefined} />
 						))}
 					</ul>
 				)}

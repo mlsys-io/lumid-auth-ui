@@ -33,6 +33,7 @@ import FailureCard from "@/components/workflow/FailureCard";
 import RunSparkline from "@/components/RunSparkline";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import TrajectoryGraph, { type TrajectoryVersion } from "@/components/workflow/TrajectoryGraph";
+import CaseMapping from "@/components/workflow/CaseMapping";
 // Datasets the workflow works on — heavy (table/preview), so lazy-load it and
 // only mount when the Data tab is opened.
 const DatasetExplorer = lazy(() => import("@/components/workflow/DatasetExplorer"));
@@ -198,6 +199,8 @@ export default function WorkflowObservabilityPanel({
 	// The trajectory version the data asset (casebook) is pinned to — set when a
 	// trajectory node is clicked, so the left table shows scores as of that run.
 	const [version, setVersion] = useState<TrajectoryVersion | null>(null);
+	// A clicked data case → the right canvas shows its label→metric mapping log.
+	const [caseFocus, setCaseFocus] = useState<{ id: string; label: string } | null>(null);
 	// Which run the Runs tab draws as a pipeline. null = follow the latest run;
 	// clicking an older run in the list pins it here.
 	const [selectedRunTs, setSelectedRunTs] = useState<string | null>(null);
@@ -435,16 +438,21 @@ export default function WorkflowObservabilityPanel({
 							) : null;
 						})()}
 						<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading casebook…</div>}>
-							<CasebookPanel app={app} loop={loop} atTs={version?.runTs || version?.cycleTs} />
+							<CasebookPanel app={app} loop={loop} atTs={version?.runTs || version?.cycleTs} onSelectCase={setCaseFocus} selectedCaseId={caseFocus?.id} />
 						</Suspense>
 						<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading datasets…</div>}>
 							<DatasetExplorer app={app} />
 						</Suspense>
 					</div>
 				</div>
-				{/* RIGHT — the run trajectory tree */}
+				{/* RIGHT — the run trajectory; or, when a data case is clicked, that
+				    case's label→metric mapping log (Back returns to the trajectory). */}
 				<div className="flex-1 min-w-0 min-h-0">
-					<TrajectoryGraph app={app} loop={loop} definition={definition} onSelectVersion={setVersion} />
+					{caseFocus ? (
+						<CaseMapping app={app} loop={loop} caseId={caseFocus.id} caseLabel={caseFocus.label} atTs={version?.runTs || version?.cycleTs} onBack={() => setCaseFocus(null)} />
+					) : (
+						<TrajectoryGraph app={app} loop={loop} definition={definition} onSelectVersion={setVersion} />
+					)}
 				</div>
 			</div>
 			{/* Stage drill-down + free-text query on the selected run. */}
