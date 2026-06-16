@@ -31,6 +31,35 @@ import { ChatMarkdown } from './ChatMarkdown';
 import AssemblyCard from './workflow/AssemblyCard';
 import type { Attachment, WireAttachment, Message, ToolCall } from './chat/types';
 import { readChatStream, withLastAssistant } from './chat/protocol';
+import { fetchCycleConversation, type CycleLogRow } from '@/api/trajectory';
+
+// Map a running/finished cycle's session timeline (LLM turns + stage/tool
+// events) onto the chat's own Message model, so the existing MessageBubble
+// renders it natively — an LLM turn becomes an assistant bubble (response as
+// content, prompt as collapsible reasoning); runs of stage events become one
+// bubble carrying tool cards.
+function sessionRowsToMessages(rows: CycleLogRow[]): Message[] {
+	const out: Message[] = [];
+	let tools: ToolCall[] = [];
+	const flush = () => { if (tools.length) { out.push({ role: 'assistant', content: '', tools }); tools = []; } };
+	for (const r of rows) {
+		if (r.event === 'llm') {
+			flush();
+			// Response = the AI generation (bubble content); prompt = the
+			// collapsible "thinking" block, reusing MessageBubble's existing UI.
+			out.push({ role: 'assistant', content: r.response || '_…generating…_', thinking: r.prompt || undefined, thinkingDone: true });
+		} else {
+			const failed = r.status === 'fail' || r.status === 'failed';
+			tools.push({
+				name: `${r.stage || r.event || 'step'}${r.status ? ' · ' + r.status : ''}`,
+				ok: !failed,
+				resultSummary: String(r.variant_id || r.note || ''),
+			});
+		}
+	}
+	flush();
+	return out;
+}
 import ChatEmptyState, { ChatHero } from './chat/ChatEmptyState';
 import { entityCardFor } from './chat/entityCards';
 import AppSurfaceCard from './chat/AppSurfaceCard';
@@ -193,6 +222,33 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 	// Enter, not whatever's attached when the previous turn finishes.
 	type QueuedMessage = { text: string; attachments: Attachment[] };
 	const [messageQueue, setMessageQueue] = useState<QueuedMessage[]>([]);
+	// Embedded session viewer — a running/selected cycle's conversation rendered
+	// in THIS chatbox with the chat's own MessageBubble. Opened via
+	// `studio:open-session` {app, loop, ts}. ts="latest" → the running cycle.
+	const [session, setSession] = useState<{ app: string; loop: string; ts: string } | null>(null);
+	const [sessionMsgs, setSessionMsgs] = useState<Message[] | null>(null);
+	const [sessionRunning, setSessionRunning] = useState(false);
+	useEffect(() => {
+		const onOpen = (e: Event) => {
+			const d = (e as CustomEvent).detail || {};
+			if (d.app && d.loop && d.ts) { setSession({ app: d.app, loop: d.loop, ts: d.ts }); setCollapsed(false); }
+		};
+		window.addEventListener('studio:open-session', onOpen as EventListener);
+		return () => window.removeEventListener('studio:open-session', onOpen as EventListener);
+	}, []);
+	useEffect(() => {
+		if (!session) { setSessionMsgs(null); return; }
+		let live = true; let timer: number | undefined;
+		const tick = async () => {
+			const { rows, running } = await fetchCycleConversation(session.app, session.loop, session.ts);
+			if (!live) return;
+			setSessionMsgs(sessionRowsToMessages(rows));
+			setSessionRunning(running);
+			if (running) timer = window.setTimeout(tick, 1500);
+		};
+		tick();
+		return () => { live = false; if (timer) window.clearTimeout(timer); };
+	}, [session]);
 	// Ref mirror so the streaming useEffect can dequeue without
 	// becoming a dependency cycle (it ALSO clears the head when
 	// firing, so depending on state would re-trigger).
@@ -1395,6 +1451,38 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 				onPickFiles(e.dataTransfer.files);
 			}}
 		>
+			{/* Floating session conversation — a running/selected cycle's session
+			    rendered with the chat's own MessageBubble (AI turns + tool/stage
+			    cards). Opened via studio:open-session; floats over the chat. */}
+			{session && (
+				<div className="absolute inset-2 z-40 flex flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-300/50 animate-in fade-in zoom-in-95 duration-200">
+					<div className="flex items-center gap-2 px-3 py-2 border-b border-slate-100 flex-shrink-0">
+						<Bot className="w-4 h-4 text-violet-500" />
+						<span className="text-sm font-medium text-slate-900 truncate">Session · {session.loop}</span>
+						{sessionRunning ? (
+							<span className="inline-flex items-center gap-1 text-[11px] text-sky-600"><span className="w-1.5 h-1.5 rounded-full bg-sky-500 running-glow" /> live</span>
+						) : (
+							<span className="text-[11px] text-slate-400">finished</span>
+						)}
+						<button onClick={() => setSession(null)} className="ml-auto p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"><X className="w-4 h-4" /></button>
+					</div>
+					<div className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-3">
+						{sessionMsgs === null ? (
+							<div className="h-full flex items-center justify-center text-xs text-slate-400"><Loader2 className="w-4 h-4 animate-spin mr-2" /> Connecting to the session…</div>
+						) : sessionMsgs.length === 0 ? (
+							<div className="h-full flex flex-col items-center justify-center gap-2 text-center text-slate-400">
+								<Bot className="w-6 h-6 text-slate-300" />
+								<div className="text-sm text-slate-500">{sessionRunning ? 'Session starting…' : 'No conversation captured for this run.'}</div>
+							</div>
+						) : (
+							sessionMsgs.map((m, i) => <MessageBubble key={i} m={m} />)
+						)}
+						{sessionRunning && sessionMsgs && sessionMsgs.length > 0 && (
+							<div className="flex items-center gap-2 text-[11px] text-slate-400"><Loader2 className="w-3 h-3 animate-spin" /> working…</div>
+						)}
+					</div>
+				</div>
+			)}
 			{/* Home: chrome renders into the shell top bar. Docked (app page):
 			    chrome renders inline at the top of the chat column, so the session
 			    picker is always available. */}
