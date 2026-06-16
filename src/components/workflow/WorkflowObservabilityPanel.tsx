@@ -165,6 +165,12 @@ export default function WorkflowObservabilityPanel({
 	};
 
 	// ── Latest cycle (for observe gate + review queue + offers) ────
+	// Tell the chat's floating session panel which workflow is now selected, so
+	// an open session re-binds to it instead of showing a stale workflow's run.
+	useEffect(() => {
+		window.dispatchEvent(new CustomEvent("studio:workflow-selected", { detail: { app, loop } }));
+	}, [app, loop]);
+
 	// Seed from cache so re-opening a workflow shows its cycle instantly.
 	const cacheKey = `${app}:${loop}`;
 	const cached0 = cycleCache.get(cacheKey);
@@ -221,7 +227,10 @@ export default function WorkflowObservabilityPanel({
 			const el = fillRef.current;
 			if (!el) return;
 			const top = el.getBoundingClientRect().top;
-			setFillH(Math.max(360, Math.round(window.innerHeight - top - 24)));
+			// Leave clearance for the scroll column's bottom padding (py-5 = 20px)
+			// + a hair, so the fill region doesn't overshoot the viewport and
+			// force a phantom vertical scrollbar when everything already fits.
+			setFillH(Math.max(360, Math.round(window.innerHeight - top - 44)));
 		};
 		measure();
 		const raf = requestAnimationFrame(measure); // re-measure after layout settles
@@ -349,11 +358,25 @@ export default function WorkflowObservabilityPanel({
 						{wf.run_spark && (
 							<RunSparkline spec={wf.run_spark} runs={wf.runs_recent} app={app} loop={loop} className="flex-shrink-0" />
 						)}
-						<span className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-medium", h.cls, justRan && "value-pop")}>
-							<span className={cn("w-1.5 h-1.5 rounded-full", h.dot, running && "running-glow")} />
-							{running ? "Running…" : h.label}
-							{!running && lastRan && <span className="font-normal opacity-70">· {lastRan.replace(/^ran /, "")}</span>}
-						</span>
+						{running ? (
+							// The single running indicator — also the "show logs" entry
+							// point (the trajectory panel's own running chip was redundant).
+							<button
+								type="button"
+								onClick={() => window.dispatchEvent(new CustomEvent("studio:open-session", { detail: { app, loop, ts: "latest" } }))}
+								title="Open the running session conversation"
+								className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-medium transition hover:brightness-95", h.cls, justRan && "value-pop")}
+							>
+								<span className={cn("w-1.5 h-1.5 rounded-full running-glow", h.dot)} />
+								Running… <span className="font-normal opacity-70 underline decoration-dotted">show logs</span>
+							</button>
+						) : (
+							<span className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-medium", h.cls, justRan && "value-pop")}>
+								<span className={cn("w-1.5 h-1.5 rounded-full", h.dot)} />
+								{h.label}
+								{lastRan && <span className="font-normal opacity-70">· {lastRan.replace(/^ran /, "")}</span>}
+							</span>
+						)}
 						{!running && stepErrs > 0 && wf.last_run_ok !== false && (
 							<span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-amber-200 bg-amber-50 text-amber-700 text-[11px] font-medium" title="The last run completed but some steps errored">
 								<AlertCircle className="w-3 h-3" />{stepErrs} step error{stepErrs === 1 ? "" : "s"}
