@@ -420,16 +420,18 @@ export default function WorkflowObservabilityPanel({
 			{/* Detail area: data assets (left) beside the run trajectory (right). */}
 			<div ref={fillRef} style={{ height: fillH }} className="flex gap-3 min-h-0">
 				{/* LEFT — the data assets the goal is scored on */}
-				<div className="w-[30%] min-w-[210px] max-w-[360px] flex flex-col gap-2 min-h-0">
-					<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400 uppercase flex items-center gap-1.5 flex-shrink-0">
-						<Database className="w-3 h-3" /> Data assets
-						{version && (
-							<button onClick={() => setVersion(null)} title="Back to latest" className="ml-auto inline-flex items-center gap-1 normal-case tracking-normal text-[10px] text-gold-700 bg-gold-50 border border-gold-200 rounded-full px-1.5 py-0.5 hover:bg-gold-100 transition-colors">
-								as of {cycleDate(version.runTs || version.cycleTs)} <span className="text-gold-400">✕</span>
-							</button>
-						)}
-					</div>
-					<div className="flex-1 min-h-0 overflow-y-auto rounded-xl border border-slate-200 bg-white p-3 space-y-3">
+				<div className="w-[30%] min-w-[210px] max-w-[360px] flex flex-col min-h-0">
+					<div className="flex-1 min-h-0 rounded-xl border border-slate-200 bg-white flex flex-col overflow-hidden">
+						{/* In-box header, matching the Trajectory canvas's header. */}
+						<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400 uppercase flex items-center gap-1.5 flex-shrink-0 px-3 py-2 border-b border-slate-100">
+							<Database className="w-3 h-3 text-gold-500" /> Data assets
+							{version && (
+								<button onClick={() => setVersion(null)} title="Back to latest" className="ml-auto inline-flex items-center gap-1 normal-case tracking-normal text-[10px] text-gold-700 bg-gold-50 border border-gold-200 rounded-full px-1.5 py-0.5 hover:bg-gold-100 transition-colors">
+									as of {cycleDate(version.runTs || version.cycleTs)} <span className="text-gold-400">✕</span>
+								</button>
+							)}
+						</div>
+						<div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
 						{(() => {
 							const sources = (definition?.datasets?.length ? definition.datasets : wf.datasets) || [];
 							return sources.length > 0 ? (
@@ -448,6 +450,7 @@ export default function WorkflowObservabilityPanel({
 						</Suspense>
 					</div>
 				</div>
+			</div>
 				{/* RIGHT — the run trajectory; or, when a data case is clicked, that
 				    case's label→metric mapping log (Back returns to the trajectory). */}
 				<div className="flex-1 min-w-0 min-h-0">
