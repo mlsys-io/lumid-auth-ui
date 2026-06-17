@@ -15,7 +15,14 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ChevronRight, ChevronDown, Check, ArrowRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2, Inbox, Loader2, RotateCcw, X, Plus } from "lucide-react";
+import { ChevronRight, ChevronDown, Check, ArrowRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2, Inbox, Loader2, RotateCcw, X, Plus, MoreHorizontal, SlidersHorizontal, Settings } from "lucide-react";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { SpiralOverlay } from "@/components/BrandLoader";
 import { toast } from "sonner";
 import { me, type MeWorkflowRow, type MeAppCard } from "@/api/me";
@@ -987,6 +994,42 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 								>
 									<Plus className="w-3.5 h-3.5" /> New workflow
 								</button>
+								{/* App actions ("⋯") — Manage / Advanced / Remove. Workflow apps
+								    were missing this; only surface apps (AppSurface) had it. */}
+								<DropdownMenu>
+									<DropdownMenuTrigger asChild>
+										<button
+											className="inline-flex items-center justify-center w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:border-slate-300 shadow-sm transition-all flex-shrink-0"
+											title="App actions" aria-label="App actions"
+										>
+											<MoreHorizontal className="w-4 h-4" />
+										</button>
+									</DropdownMenuTrigger>
+									<DropdownMenuContent align="end" className="w-52">
+										<DropdownMenuItem asChild>
+											<Link to={`/studio/a/${encodeURIComponent(app)}/manage`} title="name, workflows, skills">
+												<SlidersHorizontal className="w-3.5 h-3.5" />
+												<span className="flex flex-col">
+													<span>Manage app</span>
+													<span className="text-[11px] text-slate-400">name, workflows, skills</span>
+												</span>
+											</Link>
+										</DropdownMenuItem>
+										<DropdownMenuItem asChild>
+											<Link to={`/studio/a/${encodeURIComponent(app)}/config`}>
+												<Settings className="w-3.5 h-3.5" /> Advanced (YAML)
+											</Link>
+										</DropdownMenuItem>
+										<DropdownMenuSeparator />
+										<DropdownMenuItem
+											disabled={deleting}
+											onSelect={() => del()}
+											className="text-rose-600 focus:text-rose-700 focus:bg-rose-50"
+										>
+											<Trash2 className="w-3.5 h-3.5" /> {deleting ? "Removing…" : "Remove app…"}
+										</DropdownMenuItem>
+									</DropdownMenuContent>
+								</DropdownMenu>
 							</>
 						);
 						// Embedded → portal into the top strip beside the app name; the
