@@ -91,23 +91,28 @@ function parseTurn(resp: string): { kind: 'json' | 'md'; text: string; summary: 
 // earlier turns fold away (the response is the full, un-clipped generation).
 function SessionLlmTurn({ r, defaultOpen }: { r: CycleLogRow; defaultOpen: boolean }) {
 	const [open, setOpen] = useState(defaultOpen);
-	const resp = String(r.response || '…');
+	const respRaw = String(r.response || '');
 	// While a turn streams, the text is incomplete (often half a JSON) — render
 	// it raw + progressive with a live cursor; only pretty-parse the final text.
 	const streaming = r.partial === true;
-	const parsed = streaming ? { kind: 'md' as const, text: resp, summary: resp.replace(/\s+/g, ' ').slice(0, 120) } : parseTurn(resp);
+	// JSON answers stream their reasoning first, then burst the JSON — show the
+	// thinking meanwhile so the box doesn't look frozen.
+	const thinking = String(r.thinking || '');
+	const showThinking = streaming && !respRaw.trim() && !!thinking.trim();
+	const resp = streaming ? (respRaw.trim() ? respRaw : (thinking || '…')) : String(r.response || '…');
+	const parsed = streaming ? { kind: 'md' as const, text: resp, summary: (showThinking ? 'thinking… ' : '') + resp.replace(/\s+/g, ' ').slice(0, 120) } : parseTurn(resp);
 	return (
 		<div className={['rounded-lg border overflow-hidden', streaming ? 'border-sky-300/70 bg-sky-50/40' : 'border-violet-200/60 bg-violet-50/40'].join(' ')}>
 			<button type="button" onClick={() => setOpen((v) => !v)} className="w-full flex items-center gap-1.5 px-2 py-1.5 text-left hover:bg-violet-100/50 transition-colors">
 				<ChevronRight className={['w-3 h-3 text-violet-400 flex-shrink-0 transition-transform', open ? 'rotate-90' : ''].join(' ')} />
 				<Bot className={['w-3.5 h-3.5 flex-shrink-0', streaming ? 'text-sky-500' : 'text-violet-500'].join(' ')} />
 				<span className={['text-[11px] font-semibold flex-shrink-0', streaming ? 'text-sky-700' : 'text-violet-700'].join(' ')}>{r.model || 'ai'}</span>
-				{streaming ? <span className="text-[9px] font-medium uppercase tracking-wide text-sky-400 flex-shrink-0 animate-pulse">streaming</span> : parsed.kind === 'json' && <span className="text-[9px] font-medium uppercase tracking-wide text-violet-400 flex-shrink-0">json</span>}
+				{streaming ? <span className="text-[9px] font-medium uppercase tracking-wide text-sky-400 flex-shrink-0 animate-pulse">{showThinking ? 'thinking' : 'streaming'}</span> : parsed.kind === 'json' && <span className="text-[9px] font-medium uppercase tracking-wide text-violet-400 flex-shrink-0">json</span>}
 				{!open && <span className="text-[11px] text-slate-400 truncate">{parsed.summary}</span>}
 			</button>
 			{open && (
 				streaming ? (
-					<div className="px-2.5 pb-2 text-[11.5px] leading-relaxed text-slate-700 whitespace-pre-wrap break-words font-mono">{resp}<span className="inline-block w-1.5 h-3.5 -mb-0.5 ml-0.5 bg-sky-500 animate-pulse" /></div>
+					<div className={['px-2.5 pb-2 text-[11.5px] leading-relaxed whitespace-pre-wrap break-words font-mono', showThinking ? 'text-slate-400 italic' : 'text-slate-700'].join(' ')}>{resp}<span className="inline-block w-1.5 h-3.5 -mb-0.5 ml-0.5 bg-sky-500 animate-pulse" /></div>
 				) : parsed.kind === 'json' ? (
 					<pre className="mx-2.5 mb-2 px-2.5 py-2 rounded-md bg-slate-900/95 text-[11px] leading-relaxed text-slate-100 overflow-x-auto whitespace-pre">{parsed.text}</pre>
 				) : (
@@ -334,7 +339,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 			// Skip the heavy re-map + re-render when nothing changed (the poll
 			// returns the full timeline each tick; only churn on real updates).
 			const last = rows[rows.length - 1] as CycleLogRow | undefined;
-			const sig = `${rows.length}|${last?.ts ?? ''}|${(last?.response ?? last?.status ?? '').length}|${running}`;
+			const sig = `${rows.length}|${last?.ts ?? ''}|${(last?.response ?? last?.status ?? '').length}|${(last?.thinking ?? '').length}|${running}`;
 			if (sig !== sessionSigRef.current) {
 				sessionSigRef.current = sig;
 				setSessionRows(rows);
@@ -1566,6 +1571,14 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 						) : (
 							<span className="text-[10.5px] text-slate-400 bg-slate-50 rounded-full px-1.5 py-0.5">finished</span>
 						)}
+						{sessionRunning && (
+							<button
+								onClick={async () => { try { await me.stopLoop(session.app, session.loop); setSessionRunning(false); } catch { /* toast handled elsewhere */ } }}
+								title="Stop this run (marks it interrupted)"
+								className="inline-flex items-center gap-1 text-[10.5px] font-medium text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-full px-1.5 py-0.5 transition-colors">
+								<Square className="w-2.5 h-2.5" /> stop
+							</button>
+						)}
 						<button onClick={() => setSessionExpanded((v) => !v)} title={sessionExpanded ? 'Shrink' : 'Pop out'} className="ml-auto p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">{sessionExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}</button>
 						<button onClick={() => setSession(null)} className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"><X className="w-4 h-4" /></button>
 					</div>
@@ -1585,13 +1598,19 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 									const rows = sessionRows || [];
 									let lastLlm = -1;
 									rows.forEach((r, i) => { if (r.event === 'llm') lastLlm = i; });
-									return rows.map((r, i) => r.event === 'llm' ? (
-										<SessionLlmTurn key={i} r={r} defaultOpen={i === lastLlm} />
-									) : (
-										<div key={i} className={['font-mono text-[11px] leading-relaxed pl-1', (r.status === 'fail' || r.status === 'failed') ? 'text-rose-500' : 'text-slate-400'].join(' ')}>
-											<span className="text-slate-300">·</span> {r.stage || r.event}{r.status ? ' ' + r.status : ''}{r.variant_id || r.note ? ' — ' + String(r.variant_id || r.note).slice(0, 60) : ''}
-										</div>
-									));
+									return rows.map((r, i) => {
+										if (r.event === 'llm') return <SessionLlmTurn key={i} r={r} defaultOpen={i === lastLlm} />;
+										const stopped = r.status === 'stopped' || r.status === 'interrupted';
+										if (stopped) return (
+											<div key={i} className="flex items-center gap-1.5 text-[11px] font-medium text-rose-600 bg-rose-50 rounded-md px-2 py-1"><Square className="w-2.5 h-2.5" /> Interrupted — stopped by user</div>
+										);
+										const bad = r.status === 'fail' || r.status === 'failed';
+										return (
+											<div key={i} className={['font-mono text-[11px] leading-relaxed pl-1', bad ? 'text-rose-500' : 'text-slate-400'].join(' ')}>
+												<span className="text-slate-300">·</span> {r.stage || r.event}{r.status ? ' ' + r.status : ''}{r.variant_id || r.note ? ' — ' + String(r.variant_id || r.note).slice(0, 60) : ''}
+											</div>
+										);
+									});
 								})()}
 								{sessionRunning && <div className="flex items-center gap-2 text-slate-400 pt-1 font-mono text-[11px]"><Loader2 className="w-3 h-3 animate-spin" /> <span className="animate-pulse">streaming…</span></div>}
 							</div>

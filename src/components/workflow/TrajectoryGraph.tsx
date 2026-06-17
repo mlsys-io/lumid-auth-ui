@@ -14,10 +14,11 @@
 // Interaction:
 //   • Click a node → the view SLIDES (no popup) from the tree to that run's
 //     exact pipeline; Back slides home with the tree exactly where you left it.
-//   • Right-click a node → control menu (e.g. "Branch from here" queues a
+//   • Right-click a node → control menu (e.g. "Branch out" queues a
 //     signal the loop explores from next cycle; queued branches show as ghosts).
 
 import { useMemo, useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
 	ReactFlow, Background, Controls, Position,
 	type Node, type Edge, type ReactFlowInstance,
@@ -458,8 +459,8 @@ function Inner({ app, loop, definition, onSelectVersion, running }: {
 						</div>
 					)}
 
-					{menu && (
-						<div className="fixed z-50 min-w-[180px] rounded-lg border border-slate-200 bg-white shadow-xl py-1 animate-in fade-in zoom-in-95 duration-100" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
+					{menu && createPortal((
+						<div className="fixed z-[80] min-w-[180px] rounded-lg border border-slate-200 bg-white shadow-xl py-1 animate-in fade-in zoom-in-95 duration-100" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
 							<div className="px-3 py-1 text-[10px] uppercase tracking-wide text-slate-400 truncate">{menu.node.label}</div>
 							{!menu.node.proposed && (
 								<button onClick={() => openPipeline(menu.node)} className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50 text-left"><FlaskConical className="w-3.5 h-3.5 text-slate-400" /> Open pipeline</button>
@@ -470,9 +471,9 @@ function Inner({ app, loop, definition, onSelectVersion, running }: {
 							{!menu.node.proposed && (
 								<button onClick={() => { askAboutRun(app, loop, menu.node.run_ts, `About this run (${menu.node.label})${menu.node.config ? ` with config ${JSON.stringify(menu.node.config)}` : ""}: what happened, and what would improve the goal?`); setMenu(null); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50 text-left"><MessageSquare className="w-3.5 h-3.5 text-slate-400" /> Ask about this</button>
 							)}
-							<button onClick={() => branchFrom(menu.node)} className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-gold-50 text-left"><GitBranch className="w-3.5 h-3.5 text-gold-500" /> Branch from here</button>
+							<button onClick={() => branchFrom(menu.node)} className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] font-medium text-gold-700 hover:bg-gold-50 text-left"><GitBranch className="w-3.5 h-3.5 text-gold-500" /> Branch out</button>
 						</div>
-					)}
+					), document.body)}
 				</div>
 
 				{/* ── PANE 2 · the selected run's pipeline ── */}
