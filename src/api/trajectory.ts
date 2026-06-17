@@ -112,6 +112,7 @@ export interface CycleLogRow {
 	variant_id?: string;
 	note?: string;
 	partial?: boolean;         // in-flight LLM turn (streaming, not yet final)
+	thinking?: string;         // reasoning streamed before the answer (partial turns)
 	[k: string]: unknown;
 }
 

@@ -17,7 +17,7 @@ import { Link } from "react-router-dom";
 import {
 	Play, Pause, Loader2, Save, Clock, AlertCircle, Target,
 	ChevronLeft, ChevronRight, ChevronDown, Trash2,
-	Database, Sparkles, Pencil, Activity, Check,
+	Database, Sparkles, Pencil, Activity, Check, Square,
 } from "lucide-react";
 import { toast } from "sonner";
 import apiClient from "@/api/client";
@@ -139,6 +139,17 @@ export default function WorkflowObservabilityPanel({
 			// Open the live session so the user immediately sees it run.
 			window.dispatchEvent(new CustomEvent("studio:open-session", { detail: { app, loop, ts: "latest" } }));
 			toast.success("Running — the results will land here shortly.");
+		} catch (e) {
+			toast.error(`Failed: ${e instanceof MeApiError ? e.message : String(e)}`);
+		} finally { setBusy(null); }
+	};
+
+	const stopRun = async () => {
+		setBusy("run");
+		try {
+			await me.stopLoop(app, loop);
+			setOptimisticRun(false);
+			toast.success("Stopping — the run will halt at its next step.");
 		} catch (e) {
 			toast.error(`Failed: ${e instanceof MeApiError ? e.message : String(e)}`);
 		} finally { setBusy(null); }
@@ -410,11 +421,19 @@ export default function WorkflowObservabilityPanel({
 							)}
 						</PopoverContent>
 					</Popover>
-					<button onClick={runNow} disabled={!!busy}
-						className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-gold-500 text-white hover:bg-gold-600 active:scale-95 disabled:opacity-50 transition-all shadow-sm shadow-gold-100">
-						{busy === "run" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
-						Run now
-					</button>
+					{running ? (
+						<button onClick={stopRun} disabled={busy === "run"}
+							className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-rose-500 text-white hover:bg-rose-600 active:scale-95 disabled:opacity-50 transition-all shadow-sm">
+							{busy === "run" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Square className="w-3.5 h-3.5" />}
+							Stop
+						</button>
+					) : (
+						<button onClick={runNow} disabled={!!busy}
+							className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-gold-500 text-white hover:bg-gold-600 active:scale-95 disabled:opacity-50 transition-all shadow-sm shadow-gold-100">
+							{busy === "run" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+							Run now
+						</button>
+					)}
 					{/* "Improve" moved to the chat opener chips (chipsForApp). */}
 					<button onClick={toggle} disabled={!!busy}
 						className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50">

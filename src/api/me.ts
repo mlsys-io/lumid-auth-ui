@@ -316,6 +316,11 @@ export const me = {
       `/loops/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/run`,
       { args },
     ),
+  stopLoop: (app: string, loop: string) =>
+    call<{ loop: string; stopped_cycle: string }>(
+      "POST",
+      `/loops/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/stop`,
+    ),
   loopsHealth: () => call<{ apps: MeAppHealth[] }>("GET", "/loops/health"),
 
   // Workstream E — skills as a first-class surface.
