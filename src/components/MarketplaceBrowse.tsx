@@ -101,9 +101,9 @@ function kindAction(kind?: string): KindAction {
 	switch (kind) {
 		case "skill": return "add-skill";
 		case "agent": return "subscribe";
+		case "workflow": return "install"; // forks into a runnable app (loop-bearing); strategy-graph workflows error w/ guidance
 		case "dataset":
-		case "strategy":
-		case "workflow": return "view";
+		case "strategy": return "view";
 		default: return "install"; // app, autoresearch (legacy), unknown
 	}
 }
