@@ -17,7 +17,7 @@ import { parseDocument, YAMLSeq } from "yaml";
 import { toast } from "sonner";
 import {
 	Loader2, Play, Trash2, Plus, Puzzle, Pencil, Check,
-	CalendarClock, BookOpen, Database, Search, ArrowLeft, Share2, GitFork, UploadCloud, GitPullRequest,
+	CalendarClock, BookOpen, Database, Search, ArrowLeft, Share2, GitFork, UploadCloud, GitPullRequest, DownloadCloud,
 } from "lucide-react";
 import apiClient from "@/api/client";
 import { me, MeApiError, waitForIntent } from "@/api/me";
@@ -586,8 +586,21 @@ function NewWorkflowDialog({
 // repo (patch version auto-bumps). Propose opens a pull request on the
 // app this was forked from.
 function ShareSection({ app, readOnly }: { app: string; readOnly: boolean }) {
-	const [busy, setBusy] = useState<null | "fork" | "publish" | "propose">(null);
+	const [busy, setBusy] = useState<null | "fork" | "publish" | "propose" | "pull">(null);
 	const [forkName, setForkName] = useState(`my-${app}`);
+	// Pull upstream updates into THIS install (three-way merge; local edits kept).
+	// Applies to any installed app, not just forks — so it lives in the header.
+	const pullUpdates = async () => {
+		setBusy("pull");
+		try {
+			await apiClient.post(`/api/v1/me/apps/${encodeURIComponent(app)}/update`, {});
+			toast.success("Update queued — upstream changes merge in ~a minute (your edits are preserved).");
+		} catch (e) {
+			/* eslint-disable @typescript-eslint/no-explicit-any */
+			const msg = (e as any)?.response?.data?.message || (e instanceof Error ? e.message : String(e));
+			toast.error(`Failed: ${String(msg).slice(0, 180)}`);
+		} finally { setBusy(null); }
+	};
 	const post = async (kind: "fork" | "publish" | "propose", path: string, body: Record<string, unknown>, okMsg: (d: Record<string, unknown>) => string) => {
 		setBusy(kind);
 		try {
@@ -604,6 +617,11 @@ function ShareSection({ app, readOnly }: { app: string; readOnly: boolean }) {
 		<section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
 			<div className="flex items-center gap-1.5 text-[13px] font-medium text-slate-800">
 				<Share2 className="w-3.5 h-3.5 text-slate-400" /> Share &amp; publish
+				<button disabled={!!busy} onClick={pullUpdates}
+					title="Pull the latest upstream version into this install — three-way merge, your local edits are preserved"
+					className="ml-auto inline-flex items-center gap-1 px-2 py-1 text-[11px] rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40">
+					{busy === "pull" ? <Loader2 className="w-3 h-3 animate-spin" /> : <DownloadCloud className="w-3 h-3" />} Pull updates
+				</button>
 			</div>
 			<div className="grid gap-2.5 sm:grid-cols-3">
 				<div className="rounded-lg border border-slate-200/80 p-3 space-y-1.5">

@@ -251,6 +251,9 @@ export const me = {
     call<{ intent_id: string; status: "pending" }>("POST", "/apps", { slug, runtime, as, ...opts }),
   uninstallApp: (app: string) =>
     call<{ intent_id: string; status: "pending" }>("DELETE", `/apps/${encodeURIComponent(app)}`),
+  // Pull upstream updates into an installed app (three-way merge, queued intent).
+  updateApp: (app: string, dryRun = false) =>
+    call<{ intent_id: string; status: "pending" }>("POST", `/apps/${encodeURIComponent(app)}/update`, { dry_run: dryRun }),
   // Permanently remove a failed/optimistic install card (deletes the
   // underlying install intent for this app name — caller-scoped).
   deleteInstallIntent: (name: string) =>
