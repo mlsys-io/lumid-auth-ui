@@ -91,6 +91,7 @@ function parseTurn(resp: string): { kind: 'json' | 'md'; text: string; summary: 
 // earlier turns fold away (the response is the full, un-clipped generation).
 function SessionLlmTurn({ r, defaultOpen }: { r: CycleLogRow; defaultOpen: boolean }) {
 	const [open, setOpen] = useState(defaultOpen);
+	const [thinkOpen, setThinkOpen] = useState(false);
 	const respRaw = String(r.response || '');
 	// While a turn streams, the text is incomplete (often half a JSON) — render
 	// it raw + progressive with a live cursor; only pretty-parse the final text.
@@ -99,6 +100,8 @@ function SessionLlmTurn({ r, defaultOpen }: { r: CycleLogRow; defaultOpen: boole
 	// thinking meanwhile so the box doesn't look frozen.
 	const thinking = String(r.thinking || '');
 	const showThinking = streaming && !respRaw.trim() && !!thinking.trim();
+	// Finished turn that captured reasoning → offer it as a collapsible block.
+	const finishedThinking = !streaming && !!thinking.trim();
 	const resp = streaming ? (respRaw.trim() ? respRaw : (thinking || '…')) : String(r.response || '…');
 	const parsed = streaming ? { kind: 'md' as const, text: resp, summary: (showThinking ? 'thinking… ' : '') + resp.replace(/\s+/g, ' ').slice(0, 120) } : parseTurn(resp);
 	return (
@@ -111,13 +114,23 @@ function SessionLlmTurn({ r, defaultOpen }: { r: CycleLogRow; defaultOpen: boole
 				{!open && <span className="text-[11px] text-slate-400 truncate">{parsed.summary}</span>}
 			</button>
 			{open && (
-				streaming ? (
-					<div className={['px-2.5 pb-2 text-[11.5px] leading-relaxed whitespace-pre-wrap break-words font-mono', showThinking ? 'text-slate-400 italic' : 'text-slate-700'].join(' ')}>{resp}<span className="inline-block w-1.5 h-3.5 -mb-0.5 ml-0.5 bg-sky-500 animate-pulse" /></div>
-				) : parsed.kind === 'json' ? (
-					<pre className="mx-2.5 mb-2 px-2.5 py-2 rounded-md bg-slate-900/95 text-[11px] leading-relaxed text-slate-100 overflow-x-auto whitespace-pre">{parsed.text}</pre>
-				) : (
-					<div className="px-2.5 pb-2 text-[11.5px] leading-relaxed text-slate-700 break-words"><ChatMarkdown>{parsed.text}</ChatMarkdown></div>
-				)
+				<>
+					{finishedThinking && (
+						<div className="px-2.5 pt-1">
+							<button type="button" onClick={() => setThinkOpen((v) => !v)} className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-400 hover:text-slate-600 transition-colors">
+								<ChevronRight className={['w-2.5 h-2.5 transition-transform', thinkOpen ? 'rotate-90' : ''].join(' ')} /> thinking
+							</button>
+							{thinkOpen && <div className="mt-1 text-[11px] text-slate-400 italic whitespace-pre-wrap break-words border-l-2 border-slate-200 pl-2">{thinking}</div>}
+						</div>
+					)}
+					{streaming ? (
+						<div className={['px-2.5 pb-2 text-[11.5px] leading-relaxed whitespace-pre-wrap break-words font-mono', showThinking ? 'text-slate-400 italic' : 'text-slate-700'].join(' ')}>{resp}<span className="inline-block w-1.5 h-3.5 -mb-0.5 ml-0.5 bg-sky-500 animate-pulse" /></div>
+					) : parsed.kind === 'json' ? (
+						<pre className="mx-2.5 mb-2 px-2.5 py-2 rounded-md bg-slate-900/95 text-[11px] leading-relaxed text-slate-100 overflow-x-auto whitespace-pre">{parsed.text}</pre>
+					) : (
+						<div className="px-2.5 pb-2 text-[11.5px] leading-relaxed text-slate-700 break-words"><ChatMarkdown>{parsed.text}</ChatMarkdown></div>
+					)}
+				</>
 			)}
 		</div>
 	);
