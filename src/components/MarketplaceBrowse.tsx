@@ -158,18 +158,36 @@ export default function MarketplaceBrowse() {
 				try {
 					const auth = await bearerHeader();
 					const opts = { credentials: "same-origin" as const, headers: auth };
+					// The /repos endpoint returns public ∪ caller-owned, so a signed-in
+					// user's OWN private apps/forks would otherwise leak into the
+					// Marketplace browse (they belong in My Apps, not discovery). Filter
+					// to public here. NB: we must NOT use include_forks=false — several
+					// canonical published apps (mbb-ai, auto-quant) are themselves public
+					// forks of templates, and dropping forks would hide them. Visibility
+					// is the right axis: public forks stay, private (own) repos go.
 					const repo = (kind: string) =>
 						fetch(`/api/v1/repos?kind=${kind}`, opts)
-							.then((r) => r.ok ? r.json().then((d: { repos?: RepoCard[] }) => d.repos || []) : Promise.resolve([]));
+							.then((r) => r.ok ? r.json().then((d: { repos?: RepoCard[] }) => (d.repos || []).filter((x) => (x.visibility ?? "public") === "public")) : Promise.resolve([]));
 					const [a, wf, ag, st, s, d] = await Promise.all([
 						repo("app"),
 						repo("workflow"),
 						repo("agent"),
 						repo("strategy"),
 						fetch("/api/v1/skills/catalog", opts).then((r) => r.ok ? r.json().then((d: { cards?: SkillCard[] }) => d.cards || []) : Promise.resolve([])),
-						repo("dataset"),
+						// Datasets: drop autoresearch cycle-output telemetry (tagged
+						// "cycles"). These are per-run experiment artifacts auto-published
+						// by every app's loops — one per tenant per app — so the browse was
+						// showing e.g. 8 identical "auto-quant-cycles" cards. They aren't
+						// installable/discoverable content; only genuine datasets
+						// (e.g. mbb-casebook) belong here. Surfaced instead under each
+						// app's own observability, not the marketplace.
+						repo("dataset").then((rows) => rows.filter((x) => !(x.tags ?? []).includes("cycles"))),
 					]);
-					catalogCache = { at: Date.now(), apps: a, workflows: wf, agents: ag, strategies: st, skills: s, datasets: d };
+					// strategy is now a workflow sub-type (workflow_type: strategy) —
+					// fold any kind=strategy repos into the Workflows tab. `st` is
+					// normally empty post-migration; this keeps stray/un-migrated forks
+					// visible under Workflows rather than a dead Strategies tab.
+					catalogCache = { at: Date.now(), apps: a, workflows: [...wf, ...st], agents: ag, strategies: [], skills: s, datasets: d };
 					apply(catalogCache);
 				} catch (e) {
 					setErr(e instanceof Error ? e.message : String(e));
@@ -188,7 +206,15 @@ export default function MarketplaceBrowse() {
 	// flips to ready when the picker finishes. We do NOT block on a poll here —
 	// the drain can lag ~60s, which used to surface successful installs as
 	// false "timed out" errors.
+	// Anonymous public browse (/explore, served by PublicShell) has no session,
+	// so an install/subscribe mutation would 401. Bounce to login instead of
+	// firing the authed call + surfacing an error toast.
+	const isPublic = typeof window !== "undefined" && window.location.pathname.startsWith("/explore");
+	const requireLogin = () => navigate(`/auth/login?return_to=${encodeURIComponent(window.location.pathname)}`);
+	const guardedAction = (a: PendingAction) => { if (isPublic) { requireLogin(); return; } setAction(a); };
+
 	const install = async (label: string, name: string, ownerSub?: string, sidebarConfig?: { show: boolean; label: string; section: string }) => {
+		if (isPublic) { requireLogin(); return; }
 		const slug = ownerSub ? `${ownerSub}/${name}` : name;
 		setStatuses((m) => ({ ...m, [name]: { state: "installing" } }));
 		try {
@@ -209,7 +235,7 @@ export default function MarketplaceBrowse() {
 		}
 	};
 
-	const openInstalled = (appName: string) => navigate(`/studio/a/${encodeURIComponent(appName)}`);
+	const openInstalled = (appName: string) => isPublic ? requireLogin() : navigate(`/studio/a/${encodeURIComponent(appName)}`);
 
 	if (err) return (
 		<div className="rounded-xl border border-rose-200 bg-rose-50/40 p-6 text-sm text-rose-800">
@@ -235,7 +261,6 @@ export default function MarketplaceBrowse() {
 		{ id: "apps",        label: "Apps",        count: apps?.length ?? null },
 		{ id: "workflows",   label: "Workflows",   count: workflows?.length ?? null },
 		{ id: "agents",      label: "Agents",      count: agents?.length ?? null },
-		{ id: "strategies",  label: "Strategies",  count: strategies?.length ?? null },
 		{ id: "skills",      label: "Skills",      count: skills?.length ?? null },
 		{ id: "datasets",    label: "Datasets",    count: datasets?.length ?? null },
 		{ id: "refinements", label: "Refinements", count: null },
@@ -308,9 +333,9 @@ export default function MarketplaceBrowse() {
 			)}
 
 			{/* Body */}
-			{(tab === "apps" || tab === "workflows" || tab === "agents" || tab === "strategies" || tab === "datasets") && (
+			{(tab === "apps" || tab === "workflows" || tab === "agents" || tab === "datasets") && (
 				<RepoGrid
-					repos={tab === "apps" ? apps : tab === "workflows" ? workflows : tab === "agents" ? agents : tab === "strategies" ? strategies : datasets}
+					repos={tab === "apps" ? apps : tab === "workflows" ? workflows : tab === "agents" ? agents : datasets}
 					query={query}
 					sort={sort}
 					activeTag={activeTag}
@@ -318,7 +343,7 @@ export default function MarketplaceBrowse() {
 					installedNames={installedNames}
 					onSelect={setDetail}
 					onInstall={(r) => install(r.display_name || r.name, r.name, r.owner_sub)}
-					onAction={setAction}
+					onAction={guardedAction}
 					onOpen={openInstalled}
 				/>
 			)}
@@ -327,7 +352,7 @@ export default function MarketplaceBrowse() {
 					skills={skills}
 					query={query}
 					activeTag={activeTag}
-					onAction={setAction}
+					onAction={guardedAction}
 				/>
 			)}
 			{tab === "refinements" && <RefinementsView query={query} />}
@@ -338,8 +363,9 @@ export default function MarketplaceBrowse() {
 					app={detail}
 					status={statuses[detail.name] || { state: "idle" }}
 					installed={installedNames.has(detail.name)}
+					isPublic={isPublic}
 					onInstall={(cfg) => install(detail.display_name || detail.name, detail.name, detail.owner_sub, cfg)}
-					onAction={(a) => { setAction(a); setDetail(null); }}
+					onAction={(a) => { if (isPublic) { requireLogin(); return; } setAction(a); setDetail(null); }}
 					onOpen={openInstalled}
 					onClose={() => setDetail(null)}
 				/>
@@ -690,11 +716,12 @@ interface SidebarConfig { show: boolean; label: string; section: string }
 type SkillImportEntry = string | { repo?: string; version?: string };
 
 function AppDetailDrawer({
-	app, status, installed, onInstall, onAction, onOpen, onClose,
+	app, status, installed, isPublic, onInstall, onAction, onOpen, onClose,
 }: {
 	app: RepoCard;
 	status: InstallStatus;
 	installed: boolean;
+	isPublic?: boolean;
 	onInstall: (cfg: SidebarConfig) => void;
 	onAction: (a: PendingAction) => void;
 	onOpen: (name: string) => void;
@@ -704,6 +731,9 @@ function AppDetailDrawer({
 	const title = app.display_name || app.name;
 	const act = kindAction(app.kind);
 	const slug = `${app.owner_sub}/${app.name}`;
+	// Link to the full read-only repo browser (Files + PRs). Public browse uses
+	// the /explore mount; signed-in uses /studio.
+	const repoHref = `${isPublic ? "/explore" : "/studio"}/r/${encodeURIComponent(app.owner_sub)}/${encodeURIComponent(app.name)}`;
 	const [sidebar, setSidebar] = useState<SidebarConfig>({ show: true, label: title, section: "Apps" });
 	const [preview, setPreview] = useState<{ state: "idle" | "loading" | "unavailable"; markdown?: string }>({ state: "idle" });
 	// The repo's parsed xpcloud.yaml — drives the hierarchy panel (what this
@@ -814,6 +844,11 @@ function AppDetailDrawer({
 				{/* Body */}
 				<div className="flex-1 overflow-y-auto p-5 space-y-4">
 					{app.summary && <p className="text-[13px] text-slate-600 leading-relaxed">{app.summary}</p>}
+
+					<Link to={repoHref} onClick={onClose} className="inline-flex items-center gap-1 text-[12px] text-gold-700 hover:underline">
+						Browse files &amp; pull requests →
+					</Link>
+
 
 					{/* Metrics */}
 					<div className="flex items-center gap-3 text-[11px] text-slate-400">

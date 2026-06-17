@@ -34,12 +34,21 @@ export default function StudioExperiments() {
 
 	// One row per experiment, grouped by app — clicking opens the grounded
 	// chat (the hypothesis + variant comparison live in the conversation).
+	//
+	// Forks inherit the parent app's experiments[], so the same experiment id
+	// (e.g. "ai_minds") recurs across every fork you've installed — producing
+	// rows that read identically apart from the faint app section header.
+	// Disambiguate: when an id appears under more than one app, show the app
+	// inline in the title ("ai_minds · my-fork") so forks read distinctly.
+	const idCounts = new Map<string, number>();
+	for (const e of filtered) idCounts.set(e.id, (idCounts.get(e.id) ?? 0) + 1);
 	const indexRows: IndexRow[] = filtered.map((e) => {
 		const tone: ToneKey = e.criteria_met ? "ok" : e.n_results > 0 ? "running" : "idle";
 		const statusLabel = e.criteria_met ? (e.verdict || "decided") : e.n_results > 0 ? `${e.n_results} results` : "pending";
+		const ambiguous = (idCounts.get(e.id) ?? 0) > 1;
 		return {
 			id: `${e.app}:${e.id}`,
-			title: e.id,
+			title: ambiguous ? `${e.id} · ${appTitle(e.app)}` : e.id,
 			icon: FlaskConical,
 			tone, statusLabel,
 			meta: e.hypothesis,
