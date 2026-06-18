@@ -75,6 +75,8 @@ const StudioAdmin      = lazy(() => import("./pages/studio/admin"));
 const StudioHow        = lazy(() => import("./pages/studio/how"));
 const StudioMarketplace = lazy(() => import("./pages/studio/library"));
 const StudioLibraryTabs = lazy(() => import("./pages/studio/library-tabs"));
+const StudioRepo = lazy(() => import("./pages/studio/repo"));
+const PublicShell = lazy(() => import("./components/PublicShell"));
 
 // Auto-quant operator page (/dashboard/auto-quant/*)
 const AutoQuantPage = lazy(() => import("./pages/app/auto-quant/index"));
@@ -465,6 +467,14 @@ export default function App() {
               should be able to read the canonical xpio contract. */}
           <Route path="/docs/xpio-autoresearch" element={<XpioAutoresearchDoc />} />
 
+          {/* Public marketplace (anonymous discovery) — replaces the retired
+              xp.io SPA. Browse + read-only repo pages without login; install/
+              subscribe bounce through the authed studio (login prompt). */}
+          <Route path="/explore" element={<PublicShell />}>
+            <Route index element={<StudioMarketplace />} />
+            <Route path="r/:owner/:name" element={<StudioRepo />} />
+          </Route>
+
           {/* === Web-first revamp (2026-05-22) ===========================
               New user-facing surface mounted under /app/*. Same React
               bundle is also built with VITE_ROUTER_BASE_PATH=/go for the
@@ -616,6 +626,9 @@ export default function App() {
               <Route path="skills"                     element={<StudioSkills />} />
               <Route path="experiments"                element={<StudioExperiments />} />
             </Route>
+            {/* Read-only repo browser (files + PRs) — replaces the xp_ui repo
+                page. Same component serves the public /explore/r/:owner/:name. */}
+            <Route path="r/:owner/:name"               element={<StudioRepo />} />
             <Route path="marketplace"                  element={<Navigate to="/studio/library/marketplace" replace />} />
             <Route path="skills"                       element={<Navigate to="/studio/library/skills" replace />} />
             <Route path="experiments"                  element={<Navigate to="/studio/library/experiments" replace />} />

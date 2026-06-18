@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useStudioRefetch } from "@/hooks/useStudioRefetch";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowLeft, RefreshCw, Shield } from "lucide-react";
@@ -148,6 +149,9 @@ export default function UsersMatrix() {
 	useEffect(() => {
 		load();
 	}, []);
+
+	// Chat-driven admin_grant_access / admin_set_user_role re-fetch the matrix.
+	useStudioRefetch(["users"], load);
 
 	return (
 		<>

@@ -262,7 +262,7 @@ export const Register = memo(function Register({ onSwitchToLogin, onRegisterSucc
 					<CardHeader className="pt-6">
 						<div className="text-center space-y-2">
 							<h1 className="text-3xl font-bold">Create Account</h1>
-							<p className="text-muted-foreground">Join Lumid QuantArena to start trading</p>
+							<p className="text-muted-foreground">Create your Lumid account to get started</p>
 						</div>
 					</CardHeader>
 
