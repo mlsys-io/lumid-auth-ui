@@ -309,7 +309,7 @@ export function Login({ onLogin }: LoginProps) {
 				<CardHeader className="space-y-1 pb-6">
 					<div className="text-center space-y-2">
 						<h1 className="text-3xl font-bold">Welcome Back</h1>
-						<p className="text-muted-foreground">Sign in to your Lumid QuantArena account</p>
+						<p className="text-muted-foreground">Sign in to your Lumid account</p>
 					</div>
 				</CardHeader>
 

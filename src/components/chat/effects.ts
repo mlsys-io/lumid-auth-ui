@@ -10,21 +10,22 @@
 
 export type DataScope =
 	| 'apps' | 'workflows' | 'loops' | 'runs' | 'cycles'
-	| 'drafts' | 'knowledge' | 'config' | 'experiments';
+	| 'drafts' | 'knowledge' | 'config' | 'experiments' | 'users';
 
 export const TOOL_EFFECTS: Record<string, DataScope[]> = {
 	// loop / workflow execution + schedule
 	run_loop: ['runs', 'cycles', 'loops', 'workflows'],
 	run_loop_now: ['runs', 'cycles', 'loops', 'workflows'],
 	patch_loop: ['loops', 'workflows'],
-	pause_workflow: ['loops', 'workflows'],
-	resume_workflow: ['loops', 'workflows'],
+	pause_workflow: ['loops', 'workflows'],   // handles both pause + resume (enabled flag)
 	delete_loop: ['loops', 'workflows', 'apps'],
+	// NOTE: no `resume_workflow` key — pause_workflow covers resume via the
+	// enabled flag; there is no separate resume_workflow tool.
 	// app lifecycle
 	install_app: ['apps', 'workflows', 'loops'],
 	uninstall_app: ['apps', 'workflows', 'loops'],
 	fork_app: ['apps'],
-	update_app: ['apps', 'workflows'],
+	app_update: ['apps', 'workflows'],   // tool is named `app_update` (was mis-keyed as `update_app` → refetch never fired)
 	compose_workflow: ['workflows', 'drafts'],
 	add_skill_to_workflow: ['workflows', 'apps'],
 	// drafts / inbox
@@ -38,6 +39,9 @@ export const TOOL_EFFECTS: Record<string, DataScope[]> = {
 	xp_ingest: ['knowledge'],
 	xp_feedback: ['knowledge'],
 	subscribe_to_bank: ['knowledge'],
+	// admin control plane (read-only admin_users needs no entry)
+	admin_set_user_role: ['users'],
+	admin_set_user_status: ['users'],
 	// generic app-ops bridge — a form-action/qa write can touch anything the
 	// app owns, so invalidate the broad scopes the indexes/cards read.
 	app_action: ['apps', 'workflows', 'loops', 'runs', 'cycles', 'drafts'],

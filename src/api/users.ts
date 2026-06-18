@@ -54,7 +54,7 @@ export async function getUser(id: string): Promise<AdminUserRow> {
 }
 
 export interface PatchUserRequest {
-	role?: "user" | "admin";
+	role?: "user" | "admin" | "super_admin";
 	status?: "active" | "suspended" | "pending";
 }
 

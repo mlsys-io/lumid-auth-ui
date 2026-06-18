@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useStudioRefetch } from "@/hooks/useStudioRefetch";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -66,6 +67,9 @@ export default function UsersList() {
 	const [q, setQ] = useState("");
 	const [qDebounced, setQDebounced] = useState("");
 	const [loading, setLoading] = useState(true);
+	// Re-fetch when a chat tool mutates users (admin_set_user_role/status).
+	const [bump, setBump] = useState(0);
+	useStudioRefetch(["users"], () => setBump((b) => b + 1));
 
 	// Debounce search to avoid a request per keystroke.
 	useEffect(() => {
@@ -101,7 +105,7 @@ export default function UsersList() {
 			}
 		})();
 		return () => ctrl.abort();
-	}, [status, role, qDebounced, page]);
+	}, [status, role, qDebounced, page, bump]);
 
 	const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
