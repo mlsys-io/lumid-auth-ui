@@ -34,9 +34,16 @@ export default function XpioAutoresearchDoc() {
 				<div className="rounded border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
 					<div className="font-medium mb-1">Doc unavailable</div>
 					<div className="text-xs">
-						Could not fetch <code>/docs/xpio_autoresearch_canonical.md</code>: {error}.
-						The source-of-truth lives at{' '}
-						<code>/proj/LumidOS/LumidOS/docs/architecture/xpio_autoresearch_canonical.md</code>.
+						This documentation is temporarily unavailable. Please try again in a
+						moment. You can also read it on{' '}
+						<a
+							href="https://github.com/mlsys-io/LumidOS/blob/dev/docs/architecture/xpio_autoresearch_canonical.md"
+							className="text-indigo-600 hover:underline"
+							target="_blank"
+							rel="noreferrer"
+						>
+							GitHub
+						</a>.
 					</div>
 				</div>
 			</div>
@@ -47,7 +54,7 @@ export default function XpioAutoresearchDoc() {
 		<div className="max-w-4xl mx-auto p-6">
 			<div className="text-xs text-muted-foreground mb-4 flex items-center justify-between">
 				<span>
-					xpio · architecture · canonical reference
+					XP.io · architecture · canonical reference
 				</span>
 				<a
 					href="/docs/xpio_autoresearch_canonical.md"
