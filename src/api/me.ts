@@ -593,6 +593,24 @@ export const me = {
       count: number;
       as_of: string;
     }>("GET", `/mind/skills?compare=${encodeURIComponent(compare)}`),
+
+  // ── Agent aliases (Phase 4: app→agent) ───────────────────────────
+  // Per docs/architecture/unified-components.md the deployable unit is the
+  // "agent" (was "app"). The backend keeps /me/apps as a stable alias, so
+  // these thin wrappers delegate to the existing endpoints unchanged — the
+  // rename lives at the type/label layer, not the wire. Prefer these in new
+  // code; the `apps`-named methods above stay for back-compat.
+  listAgents: () => me.listApps(),
+  installAgent: (
+    slug: string,
+    runtime: "local" | "cloud" = "local",
+    as?: string,
+    opts?: { sidebar_show?: boolean; sidebar_label?: string; sidebar_section?: string },
+  ) => me.installApp(slug, runtime, as, opts),
+  uninstallAgent: (agent: string) => me.uninstallApp(agent),
+  updateAgent: (agent: string, dryRun = false) => me.updateApp(agent, dryRun),
+  addSkillToAgent: (agent: string, skillRepo: string, version?: string) =>
+    me.addSkillToApp(agent, skillRepo, version),
 };
 
 export interface MeMindStats {

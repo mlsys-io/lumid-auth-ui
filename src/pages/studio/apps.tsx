@@ -592,7 +592,7 @@ function AppsHome() {
 
 	const launcher = (
 		<div className="border-t border-border pt-5">
-			<QuickStarters heading="Set up a new app" />
+			<QuickStarters heading="Set up a new agent" />
 		</div>
 	);
 
@@ -608,8 +608,8 @@ function AppsHome() {
 								<Sparkles className="w-5 h-5" />
 							</div>
 							<div>
-								<h2 className="font-display text-xl font-medium text-foreground tracking-tight">Set up your first app.</h2>
-								<p className="text-sm text-muted-foreground mt-1">Pick a starter and your AI assembles an app — schedules its workflows and runs them for you. Progress lives here.</p>
+								<h2 className="font-display text-xl font-medium text-foreground tracking-tight">Set up your first agent.</h2>
+								<p className="text-sm text-muted-foreground mt-1">Pick a starter and your AI assembles an agent — schedules its workflows and runs them for you. Progress lives here.</p>
 							</div>
 						</div>
 					</div>
@@ -636,10 +636,10 @@ function AppsHome() {
 						</div>
 					)}
 					<IndexList
-						title="Apps"
+						title="Agents"
 						rows={allRows}
 						search={allRows.length > 6}
-						searchPlaceholder="Search apps…"
+						searchPlaceholder="Search agents…"
 						sectionOrder={SECTION_ORDER}
 						footer={launcher}
 					/>
@@ -654,11 +654,11 @@ function AppsHome() {
 function HeroBar({ h, onApps }: { h: Hero; onApps: () => void }) {
 	return (
 		<div className="flex items-center flex-wrap gap-x-1 gap-y-1 -ml-2">
-			<StatChip icon={Boxes} value={h.apps} label="apps" tone="text-slate-400" onClick={onApps} />
+			<StatChip icon={Boxes} value={h.apps} label="agents" tone="text-slate-400" onClick={onApps} />
 			<StatChip icon={Activity} value={h.workflows} label="workflows" tone="text-slate-400" onClick={onApps} />
 			<StatChip icon={Sparkles} value={h.runsToday} label="runs today" tone="text-slate-400" to="/studio/runs" />
 			{h.selfHeals > 0 && <StatChip icon={Wrench} value={h.selfHeals} label="auto-recovered" tone="text-slate-400" title="workflows that recovered from a failed run on their own" onClick={onApps} />}
-			<StatChip icon={Brain} value={h.memories} label="learned" tone="text-slate-400" title="insights your apps saved from recent runs" to="/studio/knowledge" />
+			<StatChip icon={Brain} value={h.memories} label="learned" tone="text-slate-400" title="insights your agents saved from recent runs" to="/studio/knowledge" />
 			{/* failing count intentionally absent — the attention rail below
 			    IS the failure surface (top-strip pill covers other pages). */}
 			<StatChip icon={Inbox} value={h.inbox} label="inbox" tone="text-slate-400" to="/studio/inbox" />
@@ -911,7 +911,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 		<div className="space-y-5">
 			{!embedded && (
 				<Link to="/studio/apps" className="inline-flex items-center text-sm text-slate-500 hover:text-slate-900 gap-1">
-					<ChevronRight className="w-4 h-4 rotate-180" /> My Apps
+					<ChevronRight className="w-4 h-4 rotate-180" /> My Agents
 				</Link>
 			)}
 
@@ -1010,7 +1010,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 											<Link to={`/studio/a/${encodeURIComponent(app)}/manage`} title="name, workflows, skills">
 												<SlidersHorizontal className="w-3.5 h-3.5" />
 												<span className="flex flex-col">
-													<span>Manage app</span>
+													<span>Manage agent</span>
 													<span className="text-[11px] text-slate-400">name, workflows, skills</span>
 												</span>
 											</Link>
@@ -1026,7 +1026,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 											onSelect={() => del()}
 											className="text-rose-600 focus:text-rose-700 focus:bg-rose-50"
 										>
-											<Trash2 className="w-3.5 h-3.5" /> {deleting ? "Removing…" : "Remove app…"}
+											<Trash2 className="w-3.5 h-3.5" /> {deleting ? "Removing…" : "Remove agent…"}
 										</DropdownMenuItem>
 									</DropdownMenuContent>
 								</DropdownMenu>

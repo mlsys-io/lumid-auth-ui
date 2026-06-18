@@ -41,20 +41,24 @@ export function MetaChips({ chips, className }: { chips: Chip[]; className?: str
 
 // Plain-language kind labels + one-line tooltips for fresh users — the raw
 // repo kinds are developer vocabulary, so the card face translates them.
+// Phase 4 (app→agent): the actor is `agent` (was `app`); the knowledge bank is
+// `memory` (was the old `agent` kind). `app` is kept as a dual-read alias →
+// Agent. See docs/architecture/unified-components.md.
 const KIND_CHIP: Record<string, { label: string; title: string }> = {
-	app:          { label: "App",       title: "installs into My Apps and runs for you" },
-	autoresearch: { label: "App",       title: "installs into My Apps and runs for you" },
-	skill:        { label: "Skill",     title: "a capability that plugs into apps you own" },
-	agent:        { label: "Knowledge", title: "a knowledge base you can subscribe to" },
-	dataset:      { label: "Dataset",   title: "data an app can mount" },
+	agent:        { label: "Agent",     title: "installs into My Agents and runs for you" },
+	app:          { label: "Agent",     title: "installs into My Agents and runs for you" }, // legacy alias → Agent
+	autoresearch: { label: "Agent",     title: "installs into My Agents and runs for you" },
+	skill:        { label: "Skill",     title: "a capability that plugs into agents you own" },
+	memory:       { label: "Memory",    title: "a knowledge base you can subscribe to" },
+	dataset:      { label: "Dataset",   title: "data an agent can mount" },
 	strategy:     { label: "Strategy",  title: "a trading strategy for Lumid Market" },
-	workflow:     { label: "Workflow",  title: "a workflow recipe that runs inside apps" },
+	workflow:     { label: "Workflow",  title: "a workflow recipe that runs inside agents" },
 };
 
 // AppMetaChips — the common kind/stars pair (version is intentionally hidden
 // on the card face; it still shows in the detail drawer header).
 export function AppMetaChips({ kind, stars }: { kind?: string; version?: string; stars?: number }) {
-	const kc = KIND_CHIP[kind ?? "app"] ?? KIND_CHIP.app;
+	const kc = KIND_CHIP[kind ?? "agent"] ?? KIND_CHIP.agent;
 	const chips: Chip[] = [{ label: kc.label, uppercase: true, title: kc.title }];
 	if ((stars ?? 0) > 0) chips.push({ label: `★ ${stars}`, tone: "amber" });
 	return <MetaChips chips={chips} />;

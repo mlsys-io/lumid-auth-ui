@@ -306,6 +306,15 @@ function OpenAppRedirect({ app: appProp, surface }: { app?: string; surface?: st
   return <Navigate to={`/studio/apps/${encodeURIComponent(app)}`} replace />;
 }
 
+// Phase 4 (app→agent): /studio/agents/:app → /studio/apps/:app, preserving the
+// query (e.g. ?selected=<loop>). Forward-compat for the canonical "agents"
+// surface while internal navigate() targets still point at /apps.
+function AgentsToAppsRedirect() {
+  const { app = "" } = useParams();
+  const loc = useLocation();
+  return <Navigate to={`/studio/apps/${encodeURIComponent(app)}${loc.search}`} replace />;
+}
+
 // /studio/workflows → /studio/apps, PRESERVING the query (?compose=1
 // must reach the apps page's composer host).
 function WorkflowsListRedirect() {
@@ -643,6 +652,15 @@ export default function App() {
             <Route path="apps"                         element={<StudioWorkspace />} />
             <Route path="apps/all"                     element={<StudioApps />} />
             <Route path="apps/:app"                    element={<StudioWorkspace />} />
+            {/* Phase 4 (app→agent, docs/architecture/unified-components.md):
+                the canonical surface is "agents". Forward-compat aliases route
+                /studio/agents* → the existing /studio/apps* views so canonical
+                links work today; the existing navigate() targets are migrated
+                incrementally. (Reverse /apps→/agents 301 is the eventual end
+                state once all internal links use /agents.) */}
+            <Route path="agents"                       element={<Navigate to="/studio/apps" replace />} />
+            <Route path="agents/all"                   element={<Navigate to="/studio/apps/all" replace />} />
+            <Route path="agents/:app"                  element={<AgentsToAppsRedirect />} />
             {/* Workflows folded into the per-app overview; list redirects,
                 detail pages stay reachable via deep-link. */}
             <Route path="workflows"                    element={<WorkflowsListRedirect />} />
