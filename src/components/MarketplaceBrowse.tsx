@@ -40,7 +40,8 @@ const KIND_META: Record<string, { glyph: string; border: string; bg: string; tex
 	app:        { glyph: "⁂", border: "border-l-gold-400",    bg: "bg-gold-50",    text: "text-gold-700",    label: "App" },
 	skill:      { glyph: "⌘", border: "border-l-violet-400",  bg: "bg-violet-50",  text: "text-violet-700",  label: "Skill" },
 	dataset:    { glyph: "◫", border: "border-l-gold-400",   bg: "bg-gold-50",   text: "text-gold-700",   label: "Dataset" },
-	agent:      { glyph: "❋", border: "border-l-pink-400",    bg: "bg-pink-50",    text: "text-pink-700",    label: "Agent" },
+	memory:     { glyph: "❋", border: "border-l-pink-400",    bg: "bg-pink-50",    text: "text-pink-700",    label: "Memory" },
+	agent:      { glyph: "❋", border: "border-l-pink-400",    bg: "bg-pink-50",    text: "text-pink-700",    label: "Memory" },  // legacy alias → Memory
 	workflow:   { glyph: "▷", border: "border-l-blue-400",    bg: "bg-blue-50",    text: "text-blue-700",    label: "Workflow" },
 	experiment: { glyph: "⬡", border: "border-l-gold-400", bg: "bg-gold-50", text: "text-gold-700", label: "Experiment" },
 	autoresearch:{ glyph: "⬡", border: "border-l-gold-400", bg: "bg-gold-50", text: "text-gold-700", label: "Experiment" },
@@ -261,7 +262,7 @@ export default function MarketplaceBrowse() {
 	const tabs: Array<{ id: Tab; label: string; count: number | null }> = [
 		{ id: "apps",        label: "Apps",        count: apps?.length ?? null },
 		{ id: "workflows",   label: "Workflows",   count: workflows?.length ?? null },
-		{ id: "agents",      label: "Agents",      count: agents?.length ?? null },
+		{ id: "agents",      label: "Memory",      count: agents?.length ?? null },
 		{ id: "skills",      label: "Skills",      count: skills?.length ?? null },
 		{ id: "datasets",    label: "Datasets",    count: datasets?.length ?? null },
 		{ id: "refinements", label: "Refinements", count: null },
@@ -736,7 +737,7 @@ function AppDetailDrawer({
 	// the /explore mount; signed-in uses /studio.
 	const repoHref = `${isPublic ? "/explore" : "/studio"}/r/${encodeURIComponent(app.owner_sub)}/${encodeURIComponent(app.name)}`;
 	const [sidebar, setSidebar] = useState<SidebarConfig>({ show: true, label: title, section: "Apps" });
-	const [preview, setPreview] = useState<{ state: "idle" | "loading" | "unavailable"; markdown?: string }>({ state: "idle" });
+	const [preview, setPreview] = useState<{ state: "idle" | "loading" | "loaded" | "unavailable"; markdown?: string }>({ state: "idle" });
 	// The repo's parsed xpcloud.yaml — drives the hierarchy panel (what this
 	// app imports / declares) without a second fetch.
 	const [repoDoc, setRepoDoc] = useState<Record<string, unknown> | null>(null);
