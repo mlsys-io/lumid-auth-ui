@@ -32,6 +32,7 @@ import {
 	type Refinement,
 } from "@/lib/refinements";
 import { parse as parseYaml } from "yaml";
+import { resolveSpecPath } from "@/lib/manifestPaths";
 
 // ── Kind metadata (mirrors xp.io kindMeta) ────────────────────────
 
@@ -758,8 +759,19 @@ function AppDetailDrawer({
 			try {
 				const auth = await bearerHeader();
 				const opts = { credentials: "same-origin" as const, headers: auth };
-				const yamlResp = await fetch(`/api/v1/repos/${encodeURIComponent(app.owner_sub)}/${encodeURIComponent(app.name)}/blob/main/xpcloud.yaml`, opts);
-				if (!yamlResp.ok) throw new Error("no xpcloud.yaml");
+				// Resolve the spec blob with dual-read: prefer the canonical
+				// .xpcloud.yaml dotfile, fall back to legacy xpcloud.yaml. The
+				// resolver probes each candidate; cache each response so the
+				// resolved path's body is reused without a second GET.
+				const blobBase = `/api/v1/repos/${encodeURIComponent(app.owner_sub)}/${encodeURIComponent(app.name)}/blob/main`;
+				const blobCache = new Map<string, Response>();
+				const specPath = await resolveSpecPath(blobBase, async (path) => {
+					const resp = await fetch(path, opts);
+					blobCache.set(path, resp);
+					return resp.ok;
+				});
+				if (!specPath) throw new Error("no xpcloud.yaml");
+				const yamlResp = blobCache.get(specPath)!;
 				const yamlData = await yamlResp.json().catch(() => null);
 				const yamlText = yamlData?.content ?? (typeof yamlData === "string" ? yamlData : null);
 				if (!yamlText) throw new Error("no content");
