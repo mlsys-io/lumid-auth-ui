@@ -8,7 +8,7 @@
 // The chrome row (nav tabs + "⋯" actions menu) is always rendered so any app
 // can be edited/managed directly from Studio, including apps with no surface yet.
 
-import { useEffect, useState, Suspense } from "react";
+import { useCallback, useEffect, useRef, useState, Suspense } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { MoreHorizontal, Pencil, Plus, Settings, SlidersHorizontal, Sparkles, Trash2, DownloadCloud, UploadCloud, Loader2 } from "lucide-react";
@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { me, type MeAppSurface, MeApiError } from "@/api/me";
 import { setStudioSelection } from "@/components/StudioContext";
+import { useStudioRefetch } from "@/hooks/useStudioRefetch";
 import { LumidMarkdown } from "./LumidMarkdown";
 import { resolveNativeSurface } from "./native-registry";
 
@@ -83,13 +84,21 @@ export function AppSurface({
   }>({ loading: true });
   const [removing, setRemoving] = useState(false);
 
-  useEffect(() => {
-    let live = true;
-    setState({ loading: true });
+  // Loader extracted so the chat→page bus can re-run it: editing or
+  // regenerating this surface from chat (app_ui_set / app_ui_generate) fires
+  // `studio:data` with the 'ui' scope, and we reload in place — no manual
+  // refresh. `silent` keeps the current render up while refetching (no flash
+  // back to the skeleton on a live update). reqRef makes the latest call win:
+  // a stale in-flight load (app/surface switched, or an older refetch) is
+  // ignored, and the effect cleanup bumps it so nothing setStates after unmount.
+  const reqRef = useRef(0);
+  const load = useCallback((silent = false) => {
+    const reqId = ++reqRef.current;
+    if (!silent) setState({ loading: true });
     me.appUI(app, surface)
-      .then((data) => { if (live) setState({ data, loading: false }); })
+      .then((data) => { if (reqRef.current === reqId) setState({ data, loading: false }); })
       .catch((e) => {
-        if (!live) return;
+        if (reqRef.current !== reqId) return;
         if (e instanceof MeApiError && e.ret_code === 1404) {
           // No surface yet — show an opt-in empty state. We do NOT auto-
           // generate here: it blocked the whole surface for up to 90s and
@@ -100,8 +109,11 @@ export function AppSurface({
           setState({ loading: false, error: String(e?.message ?? e) });
         }
       });
-    return () => { live = false; };
   }, [app, surface]);
+
+  useEffect(() => { load(); return () => { reqRef.current++; }; }, [load]);
+  // A chat-driven surface edit/regenerate invalidates 'ui' → reload silently.
+  useStudioRefetch(["ui"], () => load(true));
 
   // Declare the open app surface as the chat's selection — "this app"
   // resolves to the surface's owner even though the /studio/a/:app route

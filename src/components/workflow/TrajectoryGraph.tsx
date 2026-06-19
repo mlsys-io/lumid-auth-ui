@@ -24,7 +24,7 @@ import {
 	type Node, type Edge, type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { ArrowLeft, GitBranch, Trophy, Sparkles, Loader2, Clock, FlaskConical, MessageSquare, Bot } from "lucide-react";
+import { ArrowLeft, GitBranch, Trophy, Sparkles, Loader2, Clock, FlaskConical, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import {
 	fetchTrajectory, fetchTrajectorySignals, postTrajectorySignal,
@@ -32,6 +32,7 @@ import {
 } from "@/api/trajectory";
 import { me, type MeCycleDetail, type LoopDefinition } from "@/api/me";
 import WorkflowCanvas, { type CanvasStepRef } from "@/components/workflow/WorkflowCanvas";
+import RunContextMenu, { type RunMenuActions } from "@/components/workflow/RunContextMenu";
 import StepInspectorPanel from "@/components/workflow/StepInspectorPanel";
 import { ReviewQueue, OffersPanel, type ReviewItem, type CompoundOffer } from "@/pages/studio/inspector";
 import { useStudioRefetch } from "@/hooks/useStudioRefetch";
@@ -287,13 +288,19 @@ function LinearTrajectory({ chain, metric, baseline, hib, pickedId, onFocus, onO
 
 export interface TrajectoryVersion { cycleTs?: string; runTs?: string; label: string; ts?: string }
 
-function Inner({ app, loop, definition, onSelectVersion, running, onShowLog }: {
+function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, actions, selectedForCompare, onToggleCompare }: {
 	app: string; loop: string; definition?: LoopDefinition | null;
 	onSelectVersion?: (v: TrajectoryVersion | null) => void;
 	running?: boolean;
 	// Clicking a run's node/time-chip opens its within-run log (the panel
 	// swaps the canvas to the transcript) — replaces the old "Run log" button.
 	onShowLog?: (ts: string) => void;
+	// The shared run-context menu wiring (the single trajectory tree now carries
+	// every entrance: data, log, compare, promote, discard). When omitted, the
+	// node menu falls back to a minimal branch-only menu.
+	actions?: RunMenuActions;
+	selectedForCompare?: string[];
+	onToggleCompare?: (ts: string) => void;
 }) {
 	const [traj, setTraj] = useState<Trajectory | null>(null);
 	const [signals, setSignals] = useState<TrajectorySignal[]>([]);
@@ -606,21 +613,39 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog }: {
 						</div>
 					)}
 
-					{menu && createPortal((
-						<div className="fixed z-[80] min-w-[180px] rounded-lg border border-slate-200 bg-white shadow-xl py-1 animate-in fade-in zoom-in-95 duration-100" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
-							<div className="px-3 py-1 text-[10px] uppercase tracking-wide text-slate-400 truncate">{menu.node.label}</div>
-							{!menu.node.proposed && (
-								<button onClick={() => openPipeline(menu.node)} className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50 text-left"><FlaskConical className="w-3.5 h-3.5 text-slate-400" /> Open pipeline</button>
-							)}
-							{!menu.node.proposed && menu.node.run_ts && (
-								<button onClick={() => { openSession(app, loop, menu.node.run_ts!); setMenu(null); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50 text-left"><Bot className="w-3.5 h-3.5 text-violet-500" /> View conversation</button>
-							)}
-							{!menu.node.proposed && (
-								<button onClick={() => { askAboutRun(app, loop, menu.node.run_ts, `About this run (${menu.node.label})${menu.node.config ? ` with config ${JSON.stringify(menu.node.config)}` : ""}: what happened, and what would improve the goal?`); setMenu(null); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50 text-left"><MessageSquare className="w-3.5 h-3.5 text-slate-400" /> Ask about this</button>
-							)}
-							<button onClick={() => branchFrom(menu.node)} className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] font-medium text-gold-700 hover:bg-gold-50 text-left"><GitBranch className="w-3.5 h-3.5 text-gold-500" /> Branch out</button>
-						</div>
-					), document.body)}
+					{menu && createPortal(
+						(menu.node.proposed || !actions || !(menu.node.run_ts || menu.node.cycle_ts)) ? (
+							// Ghost/proposed node (or no shared-menu wiring): a minimal menu
+							// — branching a ghost materializes it (bespoke branchFrom).
+							<div className="fixed z-[80] min-w-[180px] rounded-lg border border-slate-200 bg-white shadow-xl py-1 animate-in fade-in zoom-in-95 duration-100" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
+								<div className="px-3 py-1 text-[10px] uppercase tracking-wide text-slate-400 truncate">{menu.node.label}</div>
+								{!menu.node.proposed && (
+									<button onClick={() => openPipeline(menu.node)} className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50 text-left"><FlaskConical className="w-3.5 h-3.5 text-slate-400" /> Open pipeline</button>
+								)}
+								<button onClick={() => branchFrom(menu.node)} className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] font-medium text-gold-700 hover:bg-gold-50 text-left"><GitBranch className="w-3.5 h-3.5 text-gold-500" /> Branch out</button>
+							</div>
+						) : (
+							// Real run node: the SINGLE shared menu — Trajectory's own items
+							// (pipeline/conversation/ask) folded in alongside the restored
+							// data/log/compare/promote/discard entrances.
+							<RunContextMenu
+								x={menu.x} y={menu.y}
+								target={{ kind: "run", ts: menu.node.run_ts || menu.node.cycle_ts, label: menu.node.label }}
+								actions={{
+									...actions,
+									app, loop,
+									openPipeline: () => { openPipeline(menu.node); },
+									viewConversation: (ts) => { openSession(app, loop, ts); },
+									ask: () => { askAboutRun(app, loop, menu.node.run_ts, `About this run (${menu.node.label})${menu.node.config ? ` with config ${JSON.stringify(menu.node.config)}` : ""}: what happened, and what would improve the goal?`); },
+								}}
+								selectedForCompare={selectedForCompare || []}
+								onToggleCompare={onToggleCompare || (() => {})}
+								onClose={() => setMenu(null)}
+								onAfterRuntimeOp={load}
+							/>
+						),
+						document.body,
+					)}
 				</div>
 
 				{/* ── PANE 2 · the selected run's pipeline ── */}
@@ -730,15 +755,18 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog }: {
 	);
 }
 
-export default function TrajectoryGraph({ app, loop, definition, onSelectVersion, running, onShowLog }: {
+export default function TrajectoryGraph({ app, loop, definition, onSelectVersion, running, onShowLog, actions, selectedForCompare, onToggleCompare }: {
 	app: string; loop: string; definition?: LoopDefinition | null;
 	onSelectVersion?: (v: TrajectoryVersion | null) => void;
 	running?: boolean;
 	onShowLog?: (ts: string) => void;
+	actions?: RunMenuActions;
+	selectedForCompare?: string[];
+	onToggleCompare?: (ts: string) => void;
 }) {
 	// No shared ReactFlowProvider: the trajectory <ReactFlow> and the pipeline
 	// pane's WorkflowCanvas <ReactFlow> must each own an isolated store —
 	// otherwise interacting with the pipeline clobbers the trajectory's nodes
 	// (and the tree vanishes on return). Each bare <ReactFlow> self-stores.
-	return <Inner app={app} loop={loop} definition={definition} onSelectVersion={onSelectVersion} running={running} onShowLog={onShowLog} />;
+	return <Inner app={app} loop={loop} definition={definition} onSelectVersion={onSelectVersion} running={running} onShowLog={onShowLog} actions={actions} selectedForCompare={selectedForCompare} onToggleCompare={onToggleCompare} />;
 }

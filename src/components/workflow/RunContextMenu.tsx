@@ -19,7 +19,7 @@
 import { useState } from "react";
 import {
 	GitBranch, GitCompare, RefreshCw, FlaskConical, FileJson, MessageSquare,
-	Info, Pin, ArrowUpCircle, XCircle, Loader2, Clock,
+	Info, Pin, ArrowUpCircle, XCircle, Loader2, Clock, Bot,
 } from "lucide-react";
 import { toast } from "sonner";
 import { me, MeApiError } from "@/api/me";
@@ -42,6 +42,12 @@ export interface RunMenuActions {
 	viewLog?: (ts?: string) => void;            // → TrajectoryLogView
 	explainScore?: (t: RunMenuTarget) => void;  // → provenance / CaseContentViewer
 	annotate?: (t: RunMenuTarget) => void;      // pin/annotate (chat-grounded)
+	// Trajectory-tree-specific inspection (only wired by TrajectoryGraph; the
+	// rows hide elsewhere since the callbacks are absent). Folding these in lets
+	// the single trajectory node menu carry every entrance — Data + Log included.
+	openPipeline?: (ts?: string) => void;       // → open the run's pipeline pane
+	viewConversation?: (ts: string) => void;    // → open the run's chat session
+	ask?: (t: RunMenuTarget) => void;           // → ask the assistant about this run
 	// runtime op context (the app/loop the menu acts within)
 	app: string;
 	loop: string;
@@ -118,6 +124,21 @@ export default function RunContextMenu({
 			onClick={(e) => e.stopPropagation()}
 		>
 			<div className="px-3 py-1 text-[10px] uppercase tracking-wide text-slate-400 truncate">{target.label}</div>
+
+			{/* Trajectory-specific inspection (only present when TrajectoryGraph
+			    wires them) — pipeline / conversation / ask. */}
+			{isRun && actions.openPipeline && (
+				<Row icon={FlaskConical} label="Open pipeline" onClick={wired(() => actions.openPipeline!(target.ts))} />
+			)}
+			{isRun && actions.viewConversation && (
+				<Row icon={Bot} label="View conversation" onClick={wired(() => actions.viewConversation!(target.ts!))} />
+			)}
+			{isRun && actions.ask && (
+				<Row icon={MessageSquare} label="Ask about this" onClick={wired(() => actions.ask!(target))} />
+			)}
+			{isRun && (actions.openPipeline || actions.viewConversation || actions.ask) && (
+				<div className="my-1 border-t border-slate-100" />
+			)}
 
 			{/* RUNTIME — branch out (run targets only) */}
 			{isRun && (

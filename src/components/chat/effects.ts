@@ -10,7 +10,7 @@
 
 export type DataScope =
 	| 'apps' | 'workflows' | 'loops' | 'runs' | 'cycles'
-	| 'drafts' | 'knowledge' | 'config' | 'experiments' | 'users';
+	| 'drafts' | 'knowledge' | 'config' | 'experiments' | 'users' | 'ui';
 
 export const TOOL_EFFECTS: Record<string, DataScope[]> = {
 	// loop / workflow execution + schedule
@@ -35,6 +35,13 @@ export const TOOL_EFFECTS: Record<string, DataScope[]> = {
 	// review + config (C3 tools)
 	review_action: ['cycles', 'runs'],
 	app_config_set: ['apps', 'config', 'workflows'],
+	// app-surface authoring (chat edits/regenerates an app's page) → re-render
+	// the live surface + the app page.
+	app_ui_set: ['ui', 'apps', 'config'],
+	app_ui_generate: ['ui', 'apps', 'config'],
+	// run lifecycle (advisory markers the trajectory/run views read).
+	run_promote: ['runs', 'cycles'],
+	run_discard: ['runs', 'cycles'],
 	// knowledge
 	xp_ingest: ['knowledge'],
 	xp_feedback: ['knowledge'],
@@ -122,6 +129,13 @@ export function toolLink(name: string, result?: Record<string, unknown>, args?: 
 		}
 		case 'app_detail':
 			return appName ? { to: `/studio/apps/${encodeURIComponent(appName)}`, label: 'Open' } : undefined;
+		case 'app_ui_set':
+		case 'app_ui_generate': {
+			// Land on the surface the chat just authored so the user sees it.
+			const surface = String(result.surface || '');
+			const sfx = surface && surface !== 'home' ? `/${encodeURIComponent(surface)}` : '';
+			return appName ? { to: `/studio/a/${encodeURIComponent(appName)}${sfx}`, label: 'View page' } : undefined;
+		}
 		case 'app_action': {
 			// GPU rental create returns a task_id → link to the live rental.
 			const taskID = String(result.task_id || '');

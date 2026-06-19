@@ -826,6 +826,9 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 	// top strip right after the app name (topstrip-app-slot is empty for
 	// workflow apps — only surface apps fill it). Standalone, they render inline.
 	const appSlotTarget = usePortalTarget("topstrip-app-slot", !!embedded);
+	// In the workspace, the app's summary rides in the top bar beside the app
+	// switcher (like the Library page's subtitle), length-constrained.
+	const subtitleTarget = usePortalTarget("topstrip-app-subtitle", !!embedded);
 	const [params, setParams] = useSearchParams();
 	const selected = params.get("selected");
 	const initialCycle = params.get("cycle"); // deep-link anchor → open that run
@@ -1018,9 +1021,21 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 			)}
 
 			{/* About this app — folds the app's own summary into the overview so
-			    the page is self-describing (replaces the old lum.id/<app> landing). */}
+			    the page is self-describing (replaces the old lum.id/<app> landing).
+			    In the workspace it rides in the top bar (constrained); standalone it
+			    folds into the overview body. */}
 			{about && rows !== null && (
-				<p className="text-[12.5px] text-slate-500 leading-relaxed max-w-3xl">{about}</p>
+				embedded
+					? (subtitleTarget && createPortal(
+							<span className="flex items-center gap-1.5 min-w-0 text-[11px] text-muted-foreground">
+								<span className="text-muted-foreground/40 flex-shrink-0">·</span>
+								<span className="truncate max-w-[34rem]" title={about}>
+									{about.length > 110 ? about.slice(0, 109).trimEnd() + "…" : about}
+								</span>
+							</span>,
+							subtitleTarget,
+					  ))
+					: <p className="text-[12.5px] text-slate-500 leading-relaxed max-w-3xl">{about}</p>
 			)}
 
 			{/* Runtime & harness — what the agent runs ON (runtime, engine pattern,
