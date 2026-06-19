@@ -1,7 +1,7 @@
 // MarketplaceBrowse — xp.io-aligned catalog for /studio/marketplace.
 //
 // Visual language mirrors xp.io's marketspace:
-//   - Kind glyphs: ⁂ app  ⌘ skill  ◫ dataset
+//   - Kind glyphs: ⁂ agent (was app)  ⌘ skill  ◫ dataset  ❋ memory
 //   - Left-border color accent per kind (teal / violet / amber)
 //   - White cards, gray-200 borders, compact metadata footer
 //   - Tag chips + sort selector
@@ -32,14 +32,22 @@ import {
 	type Refinement,
 } from "@/lib/refinements";
 import { parse as parseYaml } from "yaml";
+import { resolveSpecPath } from "@/lib/manifestPaths";
 
 // ── Kind metadata (mirrors xp.io kindMeta) ────────────────────────
 
+// Phase 4 (app→agent): the ACTOR identity is `agent` (glyph ⁂; was `app`); the
+// knowledge/bank kind is `memory` (glyph ❋; was the old `agent` kind). The
+// marketplace server NORMALIZES kinds before they reach the UI (kind:app →
+// agent, old kind:agent → memory), so here "agent" = actor, "memory" = knowledge.
+// `app` is kept as a dual-read alias → the agent identity so un-normalized
+// legacy cards still render. See docs/architecture/unified-components.md.
 const KIND_META: Record<string, { glyph: string; border: string; bg: string; text: string; label: string }> = {
-	app:        { glyph: "⁂", border: "border-l-gold-400",    bg: "bg-gold-50",    text: "text-gold-700",    label: "App" },
+	agent:      { glyph: "⁂", border: "border-l-gold-400",    bg: "bg-gold-50",    text: "text-gold-700",    label: "Agent" },   // the actor (was `app`)
+	app:        { glyph: "⁂", border: "border-l-gold-400",    bg: "bg-gold-50",    text: "text-gold-700",    label: "Agent" },   // legacy alias → Agent
 	skill:      { glyph: "⌘", border: "border-l-violet-400",  bg: "bg-violet-50",  text: "text-violet-700",  label: "Skill" },
 	dataset:    { glyph: "◫", border: "border-l-gold-400",   bg: "bg-gold-50",   text: "text-gold-700",   label: "Dataset" },
-	agent:      { glyph: "❋", border: "border-l-pink-400",    bg: "bg-pink-50",    text: "text-pink-700",    label: "Agent" },
+	memory:     { glyph: "❋", border: "border-l-pink-400",    bg: "bg-pink-50",    text: "text-pink-700",    label: "Memory" },  // knowledge (was old `agent` kind)
 	workflow:   { glyph: "▷", border: "border-l-blue-400",    bg: "bg-blue-50",    text: "text-blue-700",    label: "Workflow" },
 	experiment: { glyph: "⬡", border: "border-l-gold-400", bg: "bg-gold-50", text: "text-gold-700", label: "Experiment" },
 	autoresearch:{ glyph: "⬡", border: "border-l-gold-400", bg: "bg-gold-50", text: "text-gold-700", label: "Experiment" },
@@ -90,21 +98,23 @@ type SortKey = "updated" | "stars" | "name";
 
 // ── Kind hierarchy — what the primary action IS per kind ──────────────
 //
-// The kinds are hierarchical, not flat: apps INSTALL into My Apps; skills
-// are IMPORTED by apps (skill_imports[]); knowledge agents are SUBSCRIBED
-// into the caller's KG; datasets are MOUNTED by apps (datasets[]); strategy
-// and workflow repos are browse-only. The server enforces the same contract
-// (install endpoint 422s on non-app kinds), this map just keeps the UI from
-// offering the wrong verb in the first place.
+// The kinds are hierarchical, not flat: agents (was `app`) INSTALL into My
+// Apps; skills are IMPORTED by agents (skill_imports[]); memory banks (was the
+// old `agent` kind) are SUBSCRIBED into the caller's KG; datasets are MOUNTED
+// by agents (datasets[]); strategy and workflow repos are browse-only. The
+// server enforces the same contract (install endpoint 422s on non-agent
+// kinds), this map just keeps the UI from offering the wrong verb in the first
+// place. Post-normalization "agent" = the installable actor; "memory" = the
+// subscribable bank. See docs/architecture/unified-components.md.
 type KindAction = "install" | "add-skill" | "subscribe" | "view";
 function kindAction(kind?: string): KindAction {
 	switch (kind) {
 		case "skill": return "add-skill";
-		case "agent": return "subscribe";
-		case "workflow": return "install"; // forks into a runnable app (loop-bearing); strategy-graph workflows error w/ guidance
+		case "memory": return "subscribe"; // knowledge bank (was old `agent` kind)
+		case "workflow": return "install"; // forks into a runnable agent (loop-bearing); strategy-graph workflows error w/ guidance
 		case "dataset":
 		case "strategy": return "view";
-		default: return "install"; // app, autoresearch (legacy), unknown
+		default: return "install"; // agent, app (legacy alias), autoresearch (legacy), unknown
 	}
 }
 
@@ -168,10 +178,15 @@ export default function MarketplaceBrowse() {
 					const repo = (kind: string) =>
 						fetch(`/api/v1/repos?kind=${kind}`, opts)
 							.then((r) => r.ok ? r.json().then((d: { repos?: RepoCard[] }) => (d.repos || []).filter((x) => (x.visibility ?? "public") === "public")) : Promise.resolve([]));
-					const [a, wf, ag, st, s, d] = await Promise.all([
+					// Phase 4: the ACTOR catalog is kind=agent (was kind=app). The server
+					// normalizes kind:app → agent on read, but dual-read here too (fetch
+					// both, merge) so an un-normalized legacy `app` card still shows. The
+					// KNOWLEDGE catalog is kind=memory (was the old kind=agent).
+					const [aAgent, aApp, wf, mem, st, s, d] = await Promise.all([
+						repo("agent"),
 						repo("app"),
 						repo("workflow"),
-						repo("agent"),
+						repo("memory"),
 						repo("strategy"),
 						fetch("/api/v1/skills/catalog", opts).then((r) => r.ok ? r.json().then((d: { cards?: SkillCard[] }) => d.cards || []) : Promise.resolve([])),
 						// Datasets: drop autoresearch cycle-output telemetry (tagged
@@ -187,7 +202,17 @@ export default function MarketplaceBrowse() {
 					// fold any kind=strategy repos into the Workflows tab. `st` is
 					// normally empty post-migration; this keeps stray/un-migrated forks
 					// visible under Workflows rather than a dead Strategies tab.
-					catalogCache = { at: Date.now(), apps: a, workflows: [...wf, ...st], agents: ag, strategies: [], skills: s, datasets: d };
+					//
+					// `apps` (the actor tab) = kind:agent ∪ legacy kind:app, de-duped by
+					// name so a normalized agent and its legacy app twin don't both show.
+					// `agents` (the knowledge tab, labeled "Memory") = kind:memory.
+					const seenActor = new Set<string>();
+					const actors = [...aAgent, ...aApp].filter((r) => {
+						if (seenActor.has(r.name)) return false;
+						seenActor.add(r.name);
+						return true;
+					});
+					catalogCache = { at: Date.now(), apps: actors, workflows: [...wf, ...st], agents: mem, strategies: [], skills: s, datasets: d };
 					apply(catalogCache);
 				} catch (e) {
 					setErr(e instanceof Error ? e.message : String(e));
@@ -257,10 +282,13 @@ export default function MarketplaceBrowse() {
 		return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([t]) => t);
 	}, [tab, apps, workflows, agents, strategies, skills, datasets]);
 
+	// Phase 4: the actor tab is "Agents" (its state is still `apps` internally —
+	// the actor catalog kept that name to minimize churn). The knowledge tab is
+	// "Memory" (state `agents`, holding kind:memory banks).
 	const tabs: Array<{ id: Tab; label: string; count: number | null }> = [
-		{ id: "apps",        label: "Apps",        count: apps?.length ?? null },
+		{ id: "apps",        label: "Agents",      count: apps?.length ?? null },
 		{ id: "workflows",   label: "Workflows",   count: workflows?.length ?? null },
-		{ id: "agents",      label: "Agents",      count: agents?.length ?? null },
+		{ id: "agents",      label: "Memory",      count: agents?.length ?? null },
 		{ id: "skills",      label: "Skills",      count: skills?.length ?? null },
 		{ id: "datasets",    label: "Datasets",    count: datasets?.length ?? null },
 		{ id: "refinements", label: "Refinements", count: null },
@@ -735,7 +763,7 @@ function AppDetailDrawer({
 	// the /explore mount; signed-in uses /studio.
 	const repoHref = `${isPublic ? "/explore" : "/studio"}/r/${encodeURIComponent(app.owner_sub)}/${encodeURIComponent(app.name)}`;
 	const [sidebar, setSidebar] = useState<SidebarConfig>({ show: true, label: title, section: "Apps" });
-	const [preview, setPreview] = useState<{ state: "idle" | "loading" | "unavailable"; markdown?: string }>({ state: "idle" });
+	const [preview, setPreview] = useState<{ state: "idle" | "loading" | "loaded" | "unavailable"; markdown?: string }>({ state: "idle" });
 	// The repo's parsed xpcloud.yaml — drives the hierarchy panel (what this
 	// app imports / declares) without a second fetch.
 	const [repoDoc, setRepoDoc] = useState<Record<string, unknown> | null>(null);
@@ -758,8 +786,19 @@ function AppDetailDrawer({
 			try {
 				const auth = await bearerHeader();
 				const opts = { credentials: "same-origin" as const, headers: auth };
-				const yamlResp = await fetch(`/api/v1/repos/${encodeURIComponent(app.owner_sub)}/${encodeURIComponent(app.name)}/blob/main/xpcloud.yaml`, opts);
-				if (!yamlResp.ok) throw new Error("no xpcloud.yaml");
+				// Resolve the spec blob with dual-read: prefer the canonical
+				// .xpcloud.yaml dotfile, fall back to legacy xpcloud.yaml. The
+				// resolver probes each candidate; cache each response so the
+				// resolved path's body is reused without a second GET.
+				const blobBase = `/api/v1/repos/${encodeURIComponent(app.owner_sub)}/${encodeURIComponent(app.name)}/blob/main`;
+				const blobCache = new Map<string, Response>();
+				const specPath = await resolveSpecPath(blobBase, async (path) => {
+					const resp = await fetch(path, opts);
+					blobCache.set(path, resp);
+					return resp.ok;
+				});
+				if (!specPath) throw new Error("no xpcloud.yaml");
+				const yamlResp = blobCache.get(specPath)!;
 				const yamlData = await yamlResp.json().catch(() => null);
 				const yamlText = yamlData?.content ?? (typeof yamlData === "string" ? yamlData : null);
 				if (!yamlText) throw new Error("no content");

@@ -197,7 +197,7 @@ const CompetitionLobby = () => {
 						<Plus className="w-3.5 h-3.5" />
 						Create
 					</Button>
-					<AdminManageLink to="/dashboard/admin/competitions" />
+					<AdminManageLink to="/studio/admin/competitions" />
 				</div>
 			</div>
 			{!loading && !competitionsList?.length && (

@@ -28,7 +28,7 @@ import {
 } from '@/api/users';
 import { isSessionExpired } from '@/api/client';
 
-// /dashboard/admin/ landing — operational snapshot for cluster owners.
+// /studio/admin/ landing — operational snapshot for cluster owners.
 // AppLayout already supplies the welcome chrome + sidebar nav, so this
 // page is content-only: 4 headline tiles, a per-cluster breakdown,
 // the GPU inventory roll-up, and the recent admin activity feed.
@@ -103,9 +103,9 @@ export default function AdminOverview() {
 					Admin areas
 				</h2>
 				<div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
-					<AreaLink to="/dashboard/admin/users"        icon={Users}     label="People & access" hint="Users, roles, invitations, audit" />
-					<AreaLink to="/dashboard/admin/clusters"     icon={Server}    label="Infrastructure"  hint="Clusters, workers, billing, reviews" />
-					<AreaLink to="/dashboard/admin/competitions" icon={LineChart} label="Lumid Market admin" hint="Competitions, markets, templates, jobs" />
+					<AreaLink to="/studio/admin/users"        icon={Users}     label="People & access" hint="Users, roles, invitations, audit" />
+					<AreaLink to="/studio/admin/clusters"     icon={Server}    label="Infrastructure"  hint="Clusters, workers, billing, reviews" />
+					<AreaLink to="/studio/admin/competitions" icon={LineChart} label="Lumid Market admin" hint="Competitions, markets, templates, jobs" />
 				</div>
 			</section>
 
@@ -210,7 +210,7 @@ function StatTile({
 }
 
 function ClusterStat({ data }: { data: Cluster[] | null }) {
-	if (data === null) return <ErrorTile icon={Layers} label="Clusters" to="/dashboard/admin/clusters" />;
+	if (data === null) return <ErrorTile icon={Layers} label="Clusters" to="/studio/admin/clusters" />;
 	const active = data.filter((c) => c.status === 'active').length;
 	const pending = data.filter((c) => c.status === 'pending').length;
 	const disabled = data.filter((c) => c.status === 'disabled').length;
@@ -219,7 +219,7 @@ function ClusterStat({ data }: { data: Cluster[] | null }) {
 		<StatTile
 			icon={Layers}
 			label="Clusters"
-			to="/dashboard/admin/clusters"
+			to="/studio/admin/clusters"
 			primary={active}
 			primaryHint={`of ${data.length} total`}
 			secondary={
@@ -238,7 +238,7 @@ function ClusterStat({ data }: { data: Cluster[] | null }) {
 }
 
 function NodeStat({ data }: { data: Node[] | null }) {
-	if (data === null) return <ErrorTile icon={Server} label="Nodes" to="/dashboard/admin/clusters" />;
+	if (data === null) return <ErrorTile icon={Server} label="Nodes" to="/studio/admin/clusters" />;
 	const active = data.filter((n) => n.status === 'active').length;
 	const draining = data.filter((n) => n.status === 'draining').length;
 	const offline = data.filter((n) => n.status === 'offline').length;
@@ -255,7 +255,7 @@ function NodeStat({ data }: { data: Node[] | null }) {
 		<StatTile
 			icon={Server}
 			label="Nodes"
-			to="/dashboard/admin/clusters"
+			to="/studio/admin/clusters"
 			primary={active}
 			primaryHint={`of ${data.length} total`}
 			secondary={
@@ -275,7 +275,7 @@ function NodeStat({ data }: { data: Node[] | null }) {
 }
 
 function WorkerStat({ data }: { data: Worker[] | null }) {
-	if (data === null) return <ErrorTile icon={Cpu} label="Workers" to="/dashboard/admin/clusters" />;
+	if (data === null) return <ErrorTile icon={Cpu} label="Workers" to="/studio/admin/clusters" />;
 	const idle = data.filter((w) => w.status === 'idle').length;
 	const busy = data.filter((w) => w.status === 'busy').length;
 	const starting = data.filter((w) => w.status === 'starting').length;
@@ -298,7 +298,7 @@ function WorkerStat({ data }: { data: Worker[] | null }) {
 		<StatTile
 			icon={Cpu}
 			label="Workers"
-			to="/dashboard/admin/clusters"
+			to="/studio/admin/clusters"
 			primary={
 				<>
 					{live}
@@ -328,7 +328,7 @@ function UserStat({
 }: {
 	data: { rows: AdminUserRow[]; total: number } | null;
 }) {
-	if (data === null) return <ErrorTile icon={Users} label="Users" to="/dashboard/admin/users" />;
+	if (data === null) return <ErrorTile icon={Users} label="Users" to="/studio/admin/users" />;
 	const admins = data.rows.filter((u) => u.role === 'admin').length;
 	const superAdmins = data.rows.filter((u) => u.role === 'super_admin').length;
 	const suspended = data.rows.filter((u) => u.status === 'suspended').length;
@@ -338,7 +338,7 @@ function UserStat({
 		<StatTile
 			icon={Users}
 			label="Users"
-			to="/dashboard/admin/users"
+			to="/studio/admin/users"
 			primary={data.total}
 			primaryHint={`${admins} admin · ${superAdmins} super_admin`}
 			secondary={
@@ -422,7 +422,7 @@ function ClusterBreakdown({
 						<tr key={r.cluster.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50">
 							<td className="py-1.5 px-2">
 								<Link
-									to={`/dashboard/admin/clusters/${r.cluster.id}`}
+									to={`/studio/admin/clusters/${r.cluster.id}`}
 									className="font-medium hover:text-indigo-600"
 								>
 									{r.cluster.name}
@@ -568,7 +568,7 @@ function RecentActivity({
 			}
 			rightAction={
 				<Link
-					to="/dashboard/admin/audit"
+					to="/studio/admin/audit"
 					className="text-[10px] text-muted-foreground hover:text-indigo-600"
 				>
 					View all →

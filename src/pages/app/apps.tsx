@@ -34,14 +34,14 @@ export default function AppApps() {
 			    two-card picker which was visually heavy. */}
 			<div className="mb-6 flex items-center gap-4 flex-wrap">
 				<Link
-					to="/dashboard/n8n"
+					to="/studio/apps"
 					className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm"
 				>
 					<Sparkles className="w-4 h-4" />
 					New workflow
 				</Link>
 				<Link
-					to="/dashboard/workflow/yaml"
+					to="/studio/apps"
 					className="inline-flex items-center gap-1.5 text-sm text-slate-600 hover:text-indigo-600 transition-colors"
 				>
 					<FileCode2 className="w-4 h-4" />

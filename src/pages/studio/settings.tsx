@@ -147,7 +147,7 @@ function TokensSection() {
 				)}
 			</div>
 			<div className="mt-3">
-				<Link to="/dashboard/tokens" className="text-xs text-gold-700 hover:underline inline-flex items-center gap-1">
+				<Link to="/studio/account/tokens" className="text-xs text-gold-700 hover:underline inline-flex items-center gap-1">
 					Mint / revoke tokens <ExternalLink className="w-3 h-3" />
 				</Link>
 			</div>

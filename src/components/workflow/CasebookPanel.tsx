@@ -11,7 +11,7 @@
 // House style mirrors GoalTrend.Sparkline (gold accent, inline-SVG polyline).
 
 import { useEffect, useState } from "react";
-import { Layers, TrendingUp, History, Loader2 } from "lucide-react";
+import { Layers, TrendingUp, History, Loader2, FileJson } from "lucide-react";
 import {
 	fetchCasebook,
 	type Casebook,
@@ -55,7 +55,7 @@ function Sparkline({ values, color, w = 56, h = 16 }: { values: number[]; color:
 // One case row: label + field chips + latest score + score-history sparkline.
 const tsDigits = (s?: string) => (s || "").replace(/\D/g, "");
 
-function CaseRow({ c, atTs, onSelect, selected }: { c: CasebookCase; atTs?: string; onSelect?: () => void; selected?: boolean }) {
+function CaseRow({ c, atTs, onSelect, onViewData, onContextMenu, selected }: { c: CasebookCase; atTs?: string; onSelect?: () => void; onViewData?: () => void; onContextMenu?: (e: React.MouseEvent) => void; selected?: boolean }) {
 	const fullHist = c.score_history ?? [];
 	// Version-aware: when a trajectory node is selected, show this case's score
 	// AS OF that cycle (the latest history point at/before it).
@@ -76,7 +76,8 @@ function CaseRow({ c, atTs, onSelect, selected }: { c: CasebookCase; atTs?: stri
 	return (
 		<li
 			onClick={onSelect}
-			title="View this case's label → metric mapping log"
+			onContextMenu={onContextMenu}
+			title="View this case's label → metric mapping log · right-click for actions"
 			className={cn(
 				"rounded-lg border px-2.5 py-1.5 cursor-pointer transition-colors",
 				selected ? "border-gold-300 bg-gold-50/60 ring-1 ring-gold-200" : "border-slate-200/70 bg-white hover:border-gold-200 hover:bg-gold-50/30",
@@ -94,12 +95,31 @@ function CaseRow({ c, atTs, onSelect, selected }: { c: CasebookCase; atTs?: stri
 				{hasScore ? (
 					<>
 						<Sparkline values={values} color={color} />
-						<span className="text-[12px] font-semibold tabular-nums" style={{ color }}>
+						{/* #12 — the aggregate clicks through to the per-question provenance
+						    in the data viewer (how this % is computed). */}
+						<button
+							type="button"
+							onClick={onViewData ? (e) => { e.stopPropagation(); onViewData(); } : undefined}
+							title="See how this score is computed (per-question breakdown)"
+							className="text-[12px] font-semibold tabular-nums hover:underline decoration-dotted"
+							style={{ color }}
+						>
 							{fmtScore((cut ? last : c.latest_score) as number)}
-						</span>
+						</button>
 					</>
 				) : (
 					<span className="text-[10px] text-slate-400 italic flex-shrink-0">not yet scored</span>
+				)}
+				{/* #11 — open the case's raw data + score trajectory + provenance. */}
+				{onViewData && (
+					<button
+						type="button"
+						onClick={(e) => { e.stopPropagation(); onViewData(); }}
+						title="View this case's data"
+						className="flex-shrink-0 text-slate-300 hover:text-gold-600 transition-colors"
+					>
+						<FileJson className="w-3.5 h-3.5" />
+					</button>
 				)}
 			</div>
 		</li>
@@ -138,9 +158,13 @@ function MetricEvolution({ series }: { series: CasebookMetricEvolution[] }) {
 	);
 }
 
-export default function CasebookPanel({ app, loop, atTs, onSelectCase, selectedCaseId, onSelectMetrics, metricsSelected }: {
+export default function CasebookPanel({ app, loop, atTs, onSelectCase, onViewData, onContextMenuCase, selectedCaseId, onSelectMetrics, metricsSelected }: {
 	app: string; loop: string; atTs?: string;
 	onSelectCase?: (c: { id: string; label: string }) => void;
+	onViewData?: (c: { id: string; label: string }) => void;
+	// #17 — right-click a case row → the shared run/case context menu (handled
+	// by the host, which positions the menu at the cursor).
+	onContextMenuCase?: (c: { id: string; label: string }, e: React.MouseEvent) => void;
 	selectedCaseId?: string;
 	onSelectMetrics?: () => void;
 	metricsSelected?: boolean;
@@ -181,6 +205,15 @@ export default function CasebookPanel({ app, loop, atTs, onSelectCase, selectedC
 		<div className="space-y-3">
 			{/* Roster — the case rows are the table; no section header needed. */}
 			<div>
+				{/* Denominator header: a partial run scores only some cases, so show
+				    "N of <casebook total>" — total is the full casebook size (every
+				    case row from the casebook endpoint), scored = rows with a score.
+				    Without it, a partial run reads as "nothing". */}
+				{cases.length > 0 && (
+					<div className="text-[11px] text-slate-400 mb-1.5">
+						{scored} of {cases.length} case{cases.length === 1 ? "" : "s"} scored
+					</div>
+				)}
 				{cases.length === 0 ? (
 					<div className="flex items-center gap-2 text-[11px] text-slate-400">
 						<Loader2 className="w-3.5 h-3.5" />
@@ -189,7 +222,10 @@ export default function CasebookPanel({ app, loop, atTs, onSelectCase, selectedC
 				) : (
 					<ul className="space-y-1">
 						{cases.map((c) => (
-							<CaseRow key={c.id} c={c} atTs={atTs} selected={selectedCaseId === c.id} onSelect={onSelectCase ? () => onSelectCase({ id: c.id, label: c.label }) : undefined} />
+							<CaseRow key={c.id} c={c} atTs={atTs} selected={selectedCaseId === c.id}
+								onSelect={onSelectCase ? () => onSelectCase({ id: c.id, label: c.label }) : undefined}
+								onViewData={onViewData ? () => onViewData({ id: c.id, label: c.label }) : undefined}
+								onContextMenu={onContextMenuCase ? (e) => onContextMenuCase({ id: c.id, label: c.label }, e) : undefined} />
 						))}
 					</ul>
 				)}

@@ -83,7 +83,7 @@ const RENDERERS: Record<string, Renderer> = {
 		const shown = apps.slice(0, MAX_ROWS);
 		return (
 			<Card
-				title="Apps"
+				title="Agents"
 				more={apps.length - shown.length}
 				rows={shown.map((a) => (
 					<Row key={a.name} to={appLink(a.name)}>

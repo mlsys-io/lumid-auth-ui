@@ -9,12 +9,12 @@ import { SuperAdminGuard } from "./components/super-admin-guard";
 // New web-first revamp shell + pages (2026-05-22). Mounted at /app/*
 // here; physically served at xp.io/go/app/* during P0-P3 via the
 // VITE_ROUTER_BASE_PATH=/go build (see /proj/infra/compose/lumid_ui_go/).
-const UserLayout    = lazy(() => import("./components/user-layout"));
-const AppHome       = lazy(() => import("./pages/app-revamp/home"));
-const AppMarketplace = lazy(() => import("./pages/app-revamp/marketplace"));
-const AppLoops      = lazy(() => import("./pages/app-revamp/loops"));
-const AppResults    = lazy(() => import("./pages/app-revamp/results"));
-const AppKnowledge  = lazy(() => import("./pages/app-revamp/knowledge"));
+// app-revamp /app/* shell retired in the S7 cutover — all /app/* routes are
+// now <Navigate> redirects, so its lazy page imports (home/marketplace/loops/
+// results/knowledge) are unreferenced and were removed 2026-06-19. (Some of
+// those re-exported the moved pages/dashboard/* files, which would otherwise
+// drag the deprecated files back into the build graph.) UserLayout likewise
+// has no route.
 const OnboardingWelcome = lazy(() => import("./pages/onboarding/welcome"));
 const OnboardingDomain  = lazy(() => import("./pages/onboarding/domain"));
 const OnboardingReady   = lazy(() => import("./pages/onboarding/ready"));
@@ -116,15 +116,9 @@ const AdminOverview = lazy(() => import("./pages/dashboard/overview"));
 // Super-admin single pane of glass — billing/identity/QA/infra/build
 // tiles + embedded Grafana panels. Lives at /dashboard/super-admin.
 const SuperAdminDashboard = lazy(() => import("./pages/dashboard/super-admin"));
-const QuantLayout = lazy(() => import("./pages/dashboard/quant-layout"));
-const QuantStrategy = lazy(() => import("./pages/dashboard/quant-strategy"));
-// QuantDatasource lazy import retired 2026-05-03 — folded into
-// Strategy ("Backtest") as a 3rd sub-tab. Old route redirects.
-// QuantBacktesting + QuantRanking lazy imports retired 2026-05-03 —
-// Backtesting absorbed into Strategy as a "Results" sub-tab; Ranking
-// reachable via Competition deep-link only.
-const QuantTemplate = lazy(() => import("./pages/dashboard/quant-template"));
-const QuantMarketData = lazy(() => import("./pages/dashboard/quant-market-data"));
+// Quant* + datasets-* page mounts retired 2026-06-19 — the /dashboard
+// quant/datasets routes were already <Navigate> redirects into Studio;
+// the page files moved to pages/deprecated/dashboard/. Imports removed.
 // Datasets pages are now the Data Exploration apps — the dashboard routes
 // redirect into /studio/a/lumid-data-*, and the components load via the
 // app-surface native-registry (not these lazy consts). Removed as dead code.
@@ -150,11 +144,10 @@ const RunmeshBilling = lazy(() =>
 );
 const RunmeshWorkflowReview = lazy(() => import("./runmesh/pages/WorkflowReview"));
 
-// Research surface (xp.io marketplace plan 2026-05-18)
-const LoopsPage = lazy(() => import("./pages/dashboard/loops"));
-const MarketplacePage = lazy(() => import("./pages/dashboard/marketplace"));
-const KnowledgePage = lazy(() => import("./pages/dashboard/knowledge"));
-const ResultsPage = lazy(() => import("./pages/dashboard/results"));
+// Research surface (xp.io marketplace plan 2026-05-18) — LoopsPage /
+// MarketplacePage / KnowledgePage / ResultsPage page mounts retired
+// 2026-06-19; their /dashboard routes were already redirects. The page
+// files moved to pages/deprecated/dashboard/. Imports removed.
 
 // AppShell deprecated by Phase S7 cutover — /app/* now redirects to
 // /studio/*; the focused Research shell is gone. Import + module
@@ -165,7 +158,8 @@ const ResultsPage = lazy(() => import("./pages/dashboard/results"));
 const AppLayout = lazy(() => import("./components/app-layout"));
 const AppApps = lazy(() => import("./pages/app/apps"));
 const AppWorkflows = lazy(() => import("./pages/app/workflows"));
-const AppJobs = lazy(() => import("./pages/dashboard/jobs"));
+// AppJobs (pages/dashboard/jobs) retired 2026-06-19 — /dashboard/jobs is
+// now a redirect to /studio/apps; the page file moved to deprecated/.
 const AppBilling = lazy(() => import("./pages/app/billing"));
 const AppWorkflowBuilder = lazy(() => import("./pages/app/workflow-builder"));
 const AppWorkflowDetail = lazy(() => import("./pages/app/workflow-detail"));
@@ -283,7 +277,7 @@ function ConnectGoogleStudioRedirect() {
 function AppAdminRedirect() {
   const { "*": tail = "" } = useParams();
   const loc = useLocation();
-  const dest = tail ? `/dashboard/admin/${tail}${loc.search}` : `/dashboard/admin${loc.search}`;
+  const dest = tail ? `/studio/admin/${tail}${loc.search}` : `/studio/admin${loc.search}`;
   return <Navigate to={dest} replace />;
 }
 
@@ -304,6 +298,25 @@ function OpenAppRedirect({ app: appProp, surface }: { app?: string; surface?: st
     return appProp ? <AppSurface app={appProp} surface={surface} /> : <AppSurface />;
   }
   return <Navigate to={`/studio/apps/${encodeURIComponent(app)}`} replace />;
+}
+
+// /dashboard/admin/* → /studio/admin/*. The whole /dashboard URL surface
+// was retired 2026-06-19 (everything consolidated under /studio); this maps
+// the deep admin tail so links like /dashboard/admin/users/matrix survive as
+// /studio/admin/users/matrix, query string preserved.
+function DashboardAdminToStudio() {
+  const tail = useParams()["*"] ?? "";
+  const loc = useLocation();
+  return <Navigate to={`/studio/admin/${tail}${loc.search}`} replace />;
+}
+
+// Phase 4 (app→agent): /studio/agents/:app → /studio/apps/:app, preserving the
+// query (e.g. ?selected=<loop>). Forward-compat for the canonical "agents"
+// surface while internal navigate() targets still point at /apps.
+function AgentsToAppsRedirect() {
+  const { app = "" } = useParams();
+  const loc = useLocation();
+  return <Navigate to={`/studio/apps/${encodeURIComponent(app)}${loc.search}`} replace />;
 }
 
 // /studio/workflows → /studio/apps, PRESERVING the query (?compose=1
@@ -536,7 +549,14 @@ export default function App() {
             <Route path="today/cycle/:app/:loop/:ts"    element={<CycleRedirect />} />
             {/* T13 — per-intent detail panel; dispatched by intent.body.kind. */}
             <Route path="intents/:intentId"             element={<StudioIntentDetail />} />
-            <Route path="inbox"                        element={<StudioInbox />} />
+            {/* Inbox = the canonical xpcloud message inbox (cycle digests +
+                AI-unsure "question" escalations + draft_pending), with the
+                "Needs you" section. Was the drafts/audit feed (StudioInbox),
+                which doesn't fetch xpcloud messages — so operators never saw
+                posted questions. The drafts/audit feed lives at /studio/drafts. */}
+            <Route path="inbox"                        element={<Inbox />} />
+            <Route path="drafts"                       element={<StudioInbox />} />
+            <Route path="account/inbox"                element={<Inbox />} />
             {/* lumid-market competition section — now PURE config surfaces.
                 Each route mounts AppSurface with an explicit named surface
                 (declared in the bundle's xpcloud.yaml ui.surfaces); the page
@@ -643,6 +663,15 @@ export default function App() {
             <Route path="apps"                         element={<StudioWorkspace />} />
             <Route path="apps/all"                     element={<StudioApps />} />
             <Route path="apps/:app"                    element={<StudioWorkspace />} />
+            {/* Phase 4 (app→agent, docs/architecture/unified-components.md):
+                the canonical surface is "agents". Forward-compat aliases route
+                /studio/agents* → the existing /studio/apps* views so canonical
+                links work today; the existing navigate() targets are migrated
+                incrementally. (Reverse /apps→/agents 301 is the eventual end
+                state once all internal links use /agents.) */}
+            <Route path="agents"                       element={<Navigate to="/studio/apps" replace />} />
+            <Route path="agents/all"                   element={<Navigate to="/studio/apps/all" replace />} />
+            <Route path="agents/:app"                  element={<AgentsToAppsRedirect />} />
             {/* Workflows folded into the per-app overview; list redirects,
                 detail pages stay reachable via deep-link. */}
             <Route path="workflows"                    element={<WorkflowsListRedirect />} />
@@ -658,247 +687,11 @@ export default function App() {
             <Route path="mind"                         element={<Navigate to="/studio/apps" replace />} />
             <Route path="how"                          element={<StudioHow />} />
             <Route path="settings"                     element={<StudioSettings />} />
-            <Route path="admin"                        element={<StudioAdmin />} />
-          </Route>
-          {/* Authenticated-but-incomplete users (empty invitation_code)
-              get redirected here by AuthGuard. The page itself runs
-              behind AuthGuard so unauth users still bounce to /login. */}
-          <Route
-            path="/auth/redeem-invite"
-            element={
-              <AuthGuard requireAuth={true}>
-                <RedeemInvite />
-              </AuthGuard>
-            }
-          />
-
-          {/* Unified /dashboard shell. All authenticated routes nest
-              under this so the sidebar is always present. */}
-          {/* Merged shell at /dashboard/*. Previously /dashboard held
-              identity (Profile / Tokens / Connect) and /app held the
-              product (Apps, Workflows, GPU rentals, Lumilake, Admin).
-              2026-04-24 consolidation: one AppLayout renders all of it
-              at /dashboard/*. Legacy /app/* URLs redirect further down. */}
-          {/* One shell: /dashboard/* now renders inside StudioShell too (was
-              AppLayout). URLs/tab-links/redirects unchanged — the pages just
-              host in the unified Studio chrome. Revert to <AppLayout/> here to
-              roll back. AppLayout is retained (referenced by no route now) for
-              that one-line revert + reference. */}
-          <Route
-            path="/dashboard"
-            element={
-              <AuthGuard requireAuth={true}>
-                <StudioShell />
-              </AuthGuard>
-            }
-          >
-            {/* 2026-04-24 reshape — split build from submit from run:
-                  Workflow Builder   = n8n canvas (design the DAG)
-                  Runmesh Submit     = pick + submit to FlowMesh
-                                        (tab 1) or manage schedules
-                                        (tab 2)
-                  Lumilake Submit    = submit to Lumilake
-                  Running jobs       = unified runtime list
-                                        (tab 1: FlowMesh, tab 2: Lumilake)
-                Root redirects to Runmesh Submit since that's the
-                primary action. */}
-            {/* Research Loops — xp.io marketplace plan 2026-05-18 */}
-            <Route path="loops" element={<LoopsPage />} />
-            <Route path="marketplace" element={<MarketplacePage />} />
-            <Route path="knowledge" element={<KnowledgePage />} />
-            <Route path="results" element={<ResultsPage />} />
-
-            {/* /dashboard root = Workflow Builder. AppApps embeds its
-                own header + narrative inline (UserDashboard owns the
-                inner full-height scroll layout, so a route-level
-                wrapper would produce awkward double chrome). */}
-            <Route index element={<AppApps />} />
-
-            {/* Workflow Builder — design surface (n8n iframe). */}
-            <Route path="n8n" element={<AppN8n />} />
-            <Route path="n8n/:id" element={<AppN8n />} />
-            <Route path="workflow" element={<AppWorkflowBuilder />} />
-            <Route path="workflow/:id" element={<AppWorkflowBuilder />} />
-            <Route path="workflow/yaml" element={<AppWorkflowYaml />} />
-            <Route path="workflows/:id" element={<AppWorkflowDetail />} />
-
-            {/* Runmesh Submit — pick + submit to FlowMesh, plus
-                schedules management. Tab shell. */}
-            <Route
-              element={
-                <AdminSectionLayout
-                  title="Runmesh Submit"
-                  subtitle="Pick a workflow to submit to FlowMesh, or manage recurring schedules."
-                  tabs={[
-                    { to: "/dashboard/runmesh/submit", label: "Submit", end: true },
-                    { to: "/dashboard/runmesh/schedules", label: "Schedules" },
-                  ]}
-                />
-              }
-            >
-              <Route path="runmesh/submit" element={<AppRunmeshSubmit />} />
-              {/* T-UI-003 — LQT (Lumid QuantTrading) personas */}
-              <Route path="lqt/trader" element={<AppLqtTrader />} />
-              <Route path="lqt/auditor" element={<AppLqtAuditor />} />
-              <Route path="lqt/researcher" element={<AppLqtResearcher />} />
-              <Route path="lqt/operator" element={<AppLqtOperator />} />
-              <Route path="lqt/accountant" element={<AppLqtAccountant />} />
-              <Route path="lqt/admin" element={<AppLqtAdmin />} />
-              <Route path="runmesh/schedules" element={<AppSchedules />} />
-            </Route>
-
-            {/* Lumilake Submit — pick + configure + submit to Lumilake.
-                Wrapped in a header-only section layout for title +
-                narrative parity with Runmesh Submit. */}
-            <Route
-              element={
-                <AdminSectionLayout
-                  title="Lumilake Submit"
-                  subtitle="Pick a workflow and run it as a Lumilake analytics job — inputs in, results to your chosen lakehouse location."
-                />
-              }
-            >
-              <Route path="lumilake-submit" element={<AppLumilakeSubmit />} />
-            </Route>
-
-            {/* Running jobs — single page, Source dropdown filter
-                (All / Quant / Lumid). Lumilake analytics jobs keep a
-                standalone route for the data-engineer audience but
-                aren't in the dropdown. The old AdminSectionLayout
-                tabs were retired 2026-04-30 along with the Quant
-                Trading-jobs tab in QuantLayout — both folded in here. */}
-            <Route path="jobs" element={<AppJobs />} />
-            <Route path="jobs/lumilake" element={<AppLumilakeJobs />} />
-            <Route path="jobs/runmesh" element={<Navigate to="/dashboard/jobs?source=lumid" replace />} />
-            <Route path="jobs/quant" element={<Navigate to="/dashboard/jobs?source=quant" replace />} />
-
-            {/* Legacy-URL redirects (every old URL still resolves). */}
-            <Route path="tasks" element={<Navigate to="/dashboard/jobs/runmesh" replace />} />
-            <Route path="schedules" element={<Navigate to="/dashboard/runmesh/schedules" replace />} />
-            <Route path="workflows" element={<AppWorkflows />} />   {/* legacy WorkflowMarket — still resolves, not in sidebar */}
-
-            {/* Account — Profile only now. Tokens was tabbed here
-                previously; hoisted out to the sidebar on 2026-04-24
-                because users treat PATs as a top-level concern
-                (CLI/SDK onboarding) rather than a profile sub-page.
-                Connect (OAuth linking) dropped 2026-04-24. Billing
-                stays as its own sidebar entry. */}
-            {/* Account folded into Studio — old /dashboard paths redirect. */}
-            <Route path="profile" element={<Navigate to="/studio/account/profile" replace />} />
-            <Route path="tokens" element={<Navigate to="/studio/account/tokens" replace />} />
-            <Route path="account/connect/google" element={<ConnectGoogleStudioRedirect />} />
-            <Route path="account/connect/power-automate" element={<ConnectPowerAutomate />} />
-            <Route path="account/connect/microsoft" element={<ConnectMicrosoft />} />
-            <Route path="billing" element={<AppBilling />} />
-
-            {/* Theme A4 / A5 / inbox — Lumid Studio authoring side
-                channel. The AI auto-loop (Theme A1) is the primary
-                surface for skill + memory authoring; these forms
-                handle cold-start + override + the human review of
-                staged drafts. The inbox is the steady-state landing. */}
-            <Route path="inbox" element={<Inbox />} />
-            <Route path="skills/new" element={<SkillsNew />} />
-            <Route path="memory/new" element={<MemoryNew />} />
-
-            <Route path="api-docs" element={<AppApiDocs />} />
-            {/* Legacy /dashboard/gpu-rentals/* → consolidated into the Studio
-                config surfaces (one entrance, mirrors the quant teardown). */}
-            <Route path="gpu-rentals" element={<Navigate to="/studio/a/lumid-gpu-rentals" replace />} />
-            <Route path="gpu-rentals/new" element={<Navigate to="/studio/a/lumid-gpu-rentals/new" replace />} />
-            <Route path="gpu-rentals/:id" element={<ParamRedirect pattern="/studio/a/lumid-gpu-rentals/:id" />} />
-
-            {/* Lumid Market migration — all authed lumid.market pages
-                now live under /dashboard/quant/*. lumid.market itself
-                is reduced to the public contest landing + /public/
-                ranking; everything else (strategy, backtesting,
-                competition, etc.) was ported into lumid_ui on
-                2026-04-30. */}
-            {/* All /dashboard/quant/* routes redirect to Studio equivalents.
-                The QuantLayout shell is no longer rendered here — Studio is
-                the canonical shell for all lumid-market pages. */}
-            <Route path="quant">
-              <Route index element={<Navigate to="/studio/a/lumid-market/competition/lobby" replace />} />
-              <Route path="competition">
-                <Route index element={<Navigate to="/studio/a/lumid-market/competition/lobby" replace />} />
-                <Route path="lobby" element={<Navigate to="/studio/a/lumid-market/competition/lobby" replace />} />
-                <Route path="my" element={<Navigate to="/studio/a/lumid-market/competition/my" replace />} />
-                <Route path="pathways" element={<Navigate to="/studio/a/lumid-market/competition/pathways" replace />} />
-              </Route>
-              <Route path="competition/:competitionId" element={<ParamRedirect pattern="/studio/a/lumid-market/competition/:competitionId" />} />
-              <Route path="competition/:competitionId/strategy/:strategyId" element={<ParamRedirect pattern="/studio/a/lumid-market/competition/:competitionId/strategy/:strategyId" />} />
-              <Route path="strategy" element={<Navigate to="/studio/a/lumid-market/competition/my" replace />} />
-              <Route path="backtesting" element={<Navigate to="/studio/a/lumid-market/competition/my" replace />} />
-              <Route path="ranking" element={<Navigate to="/studio/a/lumid-market/competition/lobby" replace />} />
-              <Route path="template" element={<Navigate to="/studio/a/lumid-market/competition/lobby" replace />} />
-              <Route path="datasource" element={<Navigate to="/studio/a/lumid-market/competition/my" replace />} />
-              <Route path="market-data" element={<Navigate to="/studio/a/lumid-market/competition/lobby" replace />} />
-              <Route path="flowmesh-jobs" element={<Navigate to="/dashboard/jobs?source=quant" replace />} />
-              <Route path="research/:strategyId" element={<ParamRedirect pattern="/studio/a/lumid-market/strategy/research/:strategyId" />} />
-            </Route>
-
-            {/* Datasets — FinData embed (Tier E of lumid.data prereq plan).
-                Surfaced under /dashboard/datasets/findata; the iframe loads
-                the FinData Vue SPA via /findata-embed/ same-origin proxy. */}
-            {/* Datasets are now the Data Exploration apps — redirect into Studio. */}
-            <Route path="datasets/findata" element={<Navigate to="/studio/a/lumid-data-findata" replace />} />
-            <Route path="datasets/macro"   element={<Navigate to="/studio/a/lumid-data-macro" replace />} />
-            <Route path="datasets/kols"    element={<Navigate to="/studio/a/lumid-data-kols" replace />} />
-            <Route path="datasets/news"    element={<Navigate to="/studio/a/lumid-data-news" replace />} />
-            <Route path="datasets/predmarket" element={<Navigate to="/studio/a/lumid-data-predmarket" replace />} />
-            <Route path="datasets/markets" element={<Navigate to="/studio/a/lumid-data-markets" replace />} />
-
-            {/* Lumilake-origin pages grouped under /app/lumilake/*.
-                data-label + modelling hidden 2026-04-24 — not
-                implemented yet; page files kept on disk for future
-                reinstatement. */}
-            <Route path="lumilake">
-              <Route index element={<AppLumilakeDashboard />} />
-              <Route path="data" element={<AppLumilakeData />} />
-              <Route path="sql" element={<AppLumilakeSQL />} />
-              <Route path="python" element={<AppLumilakePython />} />
-              {/* Low-code (Lumilake n8n builder) is the same n8n as
-                  the Workflows page at /dashboard. Redirect so the
-                  two entry points don't diverge; the Workflows page's
-                  output-target toggle (FlowMesh vs Lumilake) picks
-                  backend — a future refactor. */}
-              {/* Both Lumilake-specific URLs now redirect into the
-                  unified /dashboard surface: low-code → lumilake-submit,
-                  jobs → the FlowMesh+Lumilake merged runtime tab. */}
-              <Route
-                path="low-code"
-                element={<Navigate to="/dashboard/lumilake-submit" replace />}
-              />
-              <Route path="jobs" element={<Navigate to="/dashboard/jobs/lumilake" replace />} />
-            </Route>
-
-            {/* Auto-quant operator page — Theme I strategy-grid-first.
-                Gated by regular auth (any logged-in user). The page hits
-                /api/v1/admin/loops which is admin-only, but the page itself
-                has value for any operator who has the app installed. */}
-            <Route path="auto-quant" element={<AutoQuantPage />} />
-            <Route path="auto-quant/strategy/:name" element={<AutoQuantStrategyDetail />} />
-
-            {/* Admin section — same shell, gated by role. Consolidated
-                into 3 tabbed areas + Overview (Runmesh ops merged into
-                Infrastructure on 2026-04-24 now that the supplier-node
-                auto-mirror makes them one conceptual surface):
-                  • People & access  → users, access matrix, invitations, audit, setup
-                  • Infrastructure    → clusters, workers, suppliers, billing, reviews
-                  • QuantArena        → competitions, portfolios, templates, flowmesh jobs
-                Each area renders the child route inside an
-                <AdminSectionLayout> that draws a tab strip at the top.
-                Existing deep links (e.g. /app/admin/users/matrix) still
-                resolve — the tab router is URL-based. Detail views
-                (users/:id, clusters/:id, clusters/new) render OUTSIDE
-                the tab shell since they aren't siblings of the tabs. */}
-            <Route
-              path="super-admin"
-              element={
-                <SuperAdminGuard>
-                  <SuperAdminDashboard />
-                </SuperAdminGuard>
-              }
-            />
+            {/* Billing — folded into Studio account (was /dashboard/billing). */}
+            <Route path="account/billing"              element={<AppBilling />} />
+            {/* Admin (Option B) — lean StudioAdmin is the landing; the deep
+                admin pages from the retired /dashboard/admin tree are re-homed
+                here under /studio/admin/*. Gated by AdminGuard. */}
             <Route
               path="admin"
               element={
@@ -907,7 +700,7 @@ export default function App() {
                 </AdminGuard>
               }
             >
-              <Route index element={<AdminOverview />} />
+              <Route index element={<StudioAdmin />} />
 
               {/* People & access — 5 tabs */}
               <Route
@@ -916,11 +709,11 @@ export default function App() {
                     title="People & access"
                     subtitle="Users, roles, invitations, and the audit trail."
                     tabs={[
-                      { to: "/dashboard/admin/users", label: "Users", end: true },
-                      { to: "/dashboard/admin/users/matrix", label: "Access matrix" },
-                      { to: "/dashboard/admin/invitations", label: "Invitations" },
-                      { to: "/dashboard/admin/audit", label: "Audit log" },
-                      { to: "/dashboard/admin/setup", label: "Setup" },
+                      { to: "/studio/admin/users", label: "Users", end: true },
+                      { to: "/studio/admin/users/matrix", label: "Access matrix" },
+                      { to: "/studio/admin/invitations", label: "Invitations" },
+                      { to: "/studio/admin/audit", label: "Audit log" },
+                      { to: "/studio/admin/setup", label: "Setup" },
                     ]}
                   />
                 }
@@ -934,37 +727,18 @@ export default function App() {
               {/* User detail lives outside the tab layout — it's drill-down, not peer. */}
               <Route path="users/:id" element={<AppAdminUserDetail />} />
 
-              {/* Infrastructure — unified GPU/compute admin surface
-                  (consolidated from the old Infrastructure + Runmesh ops
-                  split on 2026-04-24). Clusters is the primary view —
-                  nodes, workers, and commercial/vendor metadata all roll
-                  up there via the supplier-node auto-mirror. Suppliers
-                  keeps a cross-cluster vendor list for legacy rows;
-                  Billing is the platform-wide ledger (per-user view is
-                  /dashboard/billing); Reviews gates workflow execution.
-                  Legacy /admin/lumilake-workers redirects into the
-                  unified Workers page. */}
+              {/* Infrastructure — unified GPU/compute admin surface. */}
               <Route
                 element={
                   <AdminSectionLayout
                     title="Infrastructure"
                     subtitle="Clusters, workers, billing, and workflow review — one admin surface for the compute layer. Suppliers are auto-mirrored from clusters; the standalone Suppliers tab is retired."
                     tabs={[
-                      { to: "/dashboard/admin/clusters", label: "Clusters", end: true },
-                      { to: "/dashboard/admin/cluster-workers", label: "Workers" },
-                      // Suppliers retired from the sidebar 2026-04-25 —
-                      // every cluster auto-creates one vendor row, so
-                      // /admin/suppliers and /admin/clusters showed the
-                      // same physical things from two lenses. Vendor
-                      // metadata now lives on the Commercial tab of each
-                      // cluster. Route stays reachable for the rare
-                      // untied-vendor case.
-                      // Billing + platform-wide accounting are
-                      // super_admin-only. Regular admins manage users
-                      // / clusters / workflows but don't touch money.
-                      { to: "/dashboard/admin/billing", label: "Billing", requireSuperAdmin: true },
-                      { to: "/dashboard/admin/workflow-review", label: "Reviews" },
-                      { to: "/dashboard/admin/infra-setup", label: "Setup guide" },
+                      { to: "/studio/admin/clusters", label: "Clusters", end: true },
+                      { to: "/studio/admin/cluster-workers", label: "Workers" },
+                      { to: "/studio/admin/billing", label: "Billing", requireSuperAdmin: true },
+                      { to: "/studio/admin/workflow-review", label: "Reviews" },
+                      { to: "/studio/admin/infra-setup", label: "Setup guide" },
                     ]}
                   />
                 }
@@ -987,14 +761,12 @@ export default function App() {
               <Route
                 path="lumilake-workers"
                 element={
-                  <Navigate to="/dashboard/admin/cluster-workers?role=lumilake" replace />
+                  <Navigate to="/studio/admin/cluster-workers?role=lumilake" replace />
                 }
               />
               <Route path="clusters/new" element={<AppAdminClustersNew />} />
               {/* Cluster detail uses its own tab strip in place of the
-                  Infrastructure section strip — flat one-level nav while
-                  inside a cluster. Old /admin/clusters/:id deep-links
-                  resolve via the index redirect to /overview. */}
+                  Infrastructure section strip. */}
               <Route path="clusters/:id" element={<AppAdminClustersDetail />}>
                 <Route index element={<Navigate to="overview" replace />} />
                 <Route path="overview" element={<ClusterDetailOverview />} />
@@ -1012,10 +784,10 @@ export default function App() {
                     title="QuantArena"
                     subtitle="Trading platform admin — competitions, markets, templates, jobs."
                     tabs={[
-                      { to: "/dashboard/admin/competitions", label: "Competitions", end: true },
-                      { to: "/dashboard/admin/markets", label: "Markets" },
-                      { to: "/dashboard/admin/templates", label: "Backtest templates" },
-                      { to: "/dashboard/admin/flowmesh-jobs", label: "FlowMesh jobs" },
+                      { to: "/studio/admin/competitions", label: "Competitions", end: true },
+                      { to: "/studio/admin/markets", label: "Markets" },
+                      { to: "/studio/admin/templates", label: "Backtest templates" },
+                      { to: "/studio/admin/flowmesh-jobs", label: "FlowMesh jobs" },
                     ]}
                   />
                 }
@@ -1027,10 +799,55 @@ export default function App() {
               </Route>
 
               {/* Retired surface — legacy deep-link redirects */}
-              <Route path="nodes" element={<Navigate to="/dashboard/admin/clusters" replace />} />
-              <Route path="lumilake-users" element={<Navigate to="/dashboard/admin/users" replace />} />
+              <Route path="nodes" element={<Navigate to="/studio/admin/clusters" replace />} />
+              <Route path="lumilake-users" element={<Navigate to="/studio/admin/users" replace />} />
             </Route>
+            {/* Super-admin single pane of glass. */}
+            <Route
+              path="super-admin"
+              element={
+                <SuperAdminGuard>
+                  <SuperAdminDashboard />
+                </SuperAdminGuard>
+              }
+            />
           </Route>
+          {/* Authenticated-but-incomplete users (empty invitation_code)
+              get redirected here by AuthGuard. The page itself runs
+              behind AuthGuard so unauth users still bounce to /login. */}
+          <Route
+            path="/auth/redeem-invite"
+            element={
+              <AuthGuard requireAuth={true}>
+                <RedeemInvite />
+              </AuthGuard>
+            }
+          />
+
+          {/* ============================================================
+              /dashboard URL surface RETIRED 2026-06-19. Everything is
+              consolidated under /studio (both shells already rendered
+              StudioShell). These are flat <Navigate> redirects — no shell —
+              that preserve every old deep-link into its /studio equivalent.
+              ============================================================ */}
+          <Route path="/dashboard" element={<Navigate to="/studio" replace />} />
+          <Route path="/dashboard/inbox" element={<Navigate to="/studio/inbox" replace />} />
+          <Route path="/dashboard/marketplace" element={<Navigate to="/studio/library/marketplace" replace />} />
+          <Route path="/dashboard/knowledge" element={<Navigate to="/studio/knowledge" replace />} />
+          <Route path="/dashboard/results" element={<Navigate to="/studio/apps" replace />} />
+          <Route path="/dashboard/loops" element={<Navigate to="/studio/runs" replace />} />
+          <Route path="/dashboard/jobs" element={<Navigate to="/studio/apps" replace />} />
+          <Route path="/dashboard/billing" element={<Navigate to="/studio/account/billing" replace />} />
+          <Route path="/dashboard/profile" element={<Navigate to="/studio/account/profile" replace />} />
+          <Route path="/dashboard/tokens" element={<Navigate to="/studio/account/tokens" replace />} />
+          <Route path="/dashboard/auto-quant" element={<Navigate to="/studio/a/auto-quant" replace />} />
+          <Route path="/dashboard/super-admin" element={<Navigate to="/studio/super-admin" replace />} />
+          {/* OAuth connect — preserve ?return_to so the Google flow returns home. */}
+          <Route path="/dashboard/account/connect/google" element={<ConnectGoogleStudioRedirect />} />
+          {/* Deep admin tail → /studio/admin/<tail> (query preserved). */}
+          <Route path="/dashboard/admin/*" element={<DashboardAdminToStudio />} />
+          {/* Everything else under /dashboard → /studio. */}
+          <Route path="/dashboard/*" element={<Navigate to="/studio" replace />} />
 
           {/* Legacy paths — one-hop redirect to /dashboard/*. */}
           <Route path="/auth/dashboard" element={<Navigate to="/dashboard" replace />} />

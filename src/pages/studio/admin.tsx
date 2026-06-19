@@ -6,6 +6,9 @@
 // /dashboard/super-admin and is one click away via the "Full
 // dashboard" link. Goal here is consolidation of ENTRY points, not
 // duplication of every tile.
+//
+// The full super-admin dashboard lives at /studio/super-admin (the
+// /dashboard URL surface was retired 2026-06-19).
 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -39,8 +42,8 @@ export default function StudioAdmin() {
 					<p className="text-sm text-slate-500 mt-0.5">
 						Operator surfaces — folded into Studio. Full dashboard
 						with cert / backup / telemetry tiles lives at
-						<Link to="/dashboard/super-admin" className="ml-1 text-gold-700 hover:underline">
-							/dashboard/super-admin <ExternalLink className="inline w-3 h-3" />
+						<Link to="/studio/super-admin" className="ml-1 text-gold-700 hover:underline">
+							/studio/super-admin <ExternalLink className="inline w-3 h-3" />
 						</Link>
 					</p>
 				</div>

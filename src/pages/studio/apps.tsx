@@ -15,7 +15,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ChevronRight, ChevronDown, Check, ArrowRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2, Inbox, Loader2, RotateCcw, X, Plus, MoreHorizontal, SlidersHorizontal, Settings } from "lucide-react";
+import { ChevronRight, ChevronDown, Check, ArrowRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2, Inbox, Loader2, RotateCcw, X, Plus, MoreHorizontal, SlidersHorizontal, Settings, Pencil, Cpu, Cloud, Workflow, Clock, Database } from "lucide-react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -592,7 +592,7 @@ function AppsHome() {
 
 	const launcher = (
 		<div className="border-t border-border pt-5">
-			<QuickStarters heading="Set up a new app" />
+			<QuickStarters heading="Set up a new agent" />
 		</div>
 	);
 
@@ -608,8 +608,8 @@ function AppsHome() {
 								<Sparkles className="w-5 h-5" />
 							</div>
 							<div>
-								<h2 className="font-display text-xl font-medium text-foreground tracking-tight">Set up your first app.</h2>
-								<p className="text-sm text-muted-foreground mt-1">Pick a starter and your AI assembles an app — schedules its workflows and runs them for you. Progress lives here.</p>
+								<h2 className="font-display text-xl font-medium text-foreground tracking-tight">Set up your first agent.</h2>
+								<p className="text-sm text-muted-foreground mt-1">Pick a starter and your AI assembles an agent — schedules its workflows and runs them for you. Progress lives here.</p>
 							</div>
 						</div>
 					</div>
@@ -636,10 +636,10 @@ function AppsHome() {
 						</div>
 					)}
 					<IndexList
-						title="Apps"
+						title="Agents"
 						rows={allRows}
 						search={allRows.length > 6}
-						searchPlaceholder="Search apps…"
+						searchPlaceholder="Search agents…"
 						sectionOrder={SECTION_ORDER}
 						footer={launcher}
 					/>
@@ -654,11 +654,11 @@ function AppsHome() {
 function HeroBar({ h, onApps }: { h: Hero; onApps: () => void }) {
 	return (
 		<div className="flex items-center flex-wrap gap-x-1 gap-y-1 -ml-2">
-			<StatChip icon={Boxes} value={h.apps} label="apps" tone="text-slate-400" onClick={onApps} />
+			<StatChip icon={Boxes} value={h.apps} label="agents" tone="text-slate-400" onClick={onApps} />
 			<StatChip icon={Activity} value={h.workflows} label="workflows" tone="text-slate-400" onClick={onApps} />
 			<StatChip icon={Sparkles} value={h.runsToday} label="runs today" tone="text-slate-400" to="/studio/runs" />
 			{h.selfHeals > 0 && <StatChip icon={Wrench} value={h.selfHeals} label="auto-recovered" tone="text-slate-400" title="workflows that recovered from a failed run on their own" onClick={onApps} />}
-			<StatChip icon={Brain} value={h.memories} label="learned" tone="text-slate-400" title="insights your apps saved from recent runs" to="/studio/knowledge" />
+			<StatChip icon={Brain} value={h.memories} label="learned" tone="text-slate-400" title="insights your agents saved from recent runs" to="/studio/knowledge" />
 			{/* failing count intentionally absent — the attention rail below
 			    IS the failure surface (top-strip pill covers other pages). */}
 			<StatChip icon={Inbox} value={h.inbox} label="inbox" tone="text-slate-400" to="/studio/inbox" />
@@ -755,6 +755,67 @@ const aboutCache = new Map<string, string>();
 // Explicit "show the app-level overview LIST" marker (the Overview tab). The
 // DEFAULT view is the selected workflow's panel — overview is opt-in.
 const OVERVIEW_SEL = "__overview__";
+
+// "Runtime & harness" strip — a compact, muted row that tells the operator what
+// the agent actually runs ON. Everything is DERIVED from already-fetched data
+// (rows = MeWorkflowRow + LoopHealth, identity = AppIdentity); no new API calls,
+// no per-app hardcoding. Each chip only renders when its field exists, so the
+// strip degrades gracefully (an empty strip renders nothing).
+function RuntimeStrip({ rows, identity }: { rows: Row[]; identity?: AppIdentity }) {
+	if (!rows.length) return null;
+
+	// Engine / pattern — MeWorkflowRow.engine is the loop's declared engine
+	// ("command" → Pattern B, anything else / steps-driven → Pattern A). We read
+	// the freshest row's engine; fall back to "steps" when absent (Pattern A is
+	// the runner-driven default). Distinct engines across loops are de-duped.
+	const engines = Array.from(new Set(rows.map((r) => (r.wf.engine || "").trim().toLowerCase()).filter(Boolean)));
+	const isCommand = engines.includes("command");
+	const pattern = engines.length === 0 ? null : isCommand ? "B · command" : "A · steps";
+
+	// Runtime — there is no explicit target/compute field on the loop payload,
+	// so we infer: an operator (non-tenant) app runs locally on the Claude Code
+	// subscription; a tenant app's cycles are routed to the cloud GPU fleet by
+	// the scheduler (see CLAUDE.md "LLM in xpio apps"). `wf.tenant` is the only
+	// honest signal we have here.
+	const isTenant = rows.some((r) => r.wf.tenant);
+	const runtime = isTenant ? { label: "Cloud GPU", Icon: Cloud } : { label: "Local Claude Code", Icon: Cpu };
+
+	// Workflow(s) driving the agent — the human loop labels.
+	const wfNames = rows.map((r) => loopLabel(r.wf.name, r.loop)).filter(Boolean);
+	const wfText = wfNames.length <= 2 ? wfNames.join(", ") : `${wfNames.slice(0, 2).join(", ")} +${wfNames.length - 2}`;
+
+	// Schedule — prefer the tenant cron (wf.trigger) and fall back to loop-health
+	// schedule; render the distinct human-readable schedules.
+	const scheds = Array.from(new Set(
+		rows.map((r) => describeSchedule(r.wf.trigger || r.lh?.schedule)).filter((s) => s && s !== "—"),
+	));
+	const schedText = scheds.length ? (scheds.length <= 2 ? scheds.join(", ") : `${scheds.slice(0, 2).join(", ")} +${scheds.length - 2}`) : null;
+
+	// Memory banks — app-level memory_agents, repeated on each loop row; de-dupe.
+	const banks = Array.from(new Set(rows.flatMap((r) => r.wf.memory_agents || []).filter(Boolean)));
+	const banksText = banks.length ? (banks.length <= 2 ? banks.join(", ") : `${banks.slice(0, 2).join(", ")} +${banks.length - 2}`) : null;
+
+	type Chip = { Icon: typeof Cpu; label: string; title?: string };
+	const chips: Chip[] = [
+		{ Icon: runtime.Icon, label: runtime.label, title: isTenant ? "Tenant cycles route to the cloud GPU fleet" : "Operator loops run on the local Claude Code subscription" },
+	];
+	if (pattern) chips.push({ Icon: Settings, label: `Pattern ${pattern}`, title: "Engine pattern (xpio autoresearch contract)" });
+	if (wfText) chips.push({ Icon: Workflow, label: wfText, title: wfNames.join(", ") });
+	if (schedText) chips.push({ Icon: Clock, label: schedText, title: scheds.join(", ") });
+	if (banksText) chips.push({ Icon: Database, label: banksText, title: `Memory banks: ${banks.join(", ")}` });
+	if (identity?.kind) chips.push({ Icon: Boxes, label: identity.kind, title: "Marketplace kind" });
+
+	return (
+		<div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-slate-400">
+			{chips.map((c, i) => (
+				<span key={i} className="inline-flex items-center gap-1 min-w-0" title={c.title}>
+					<c.Icon className="w-3 h-3 flex-shrink-0 text-slate-400" />
+					<span className="truncate max-w-[14rem]">{c.label}</span>
+				</span>
+			))}
+		</div>
+	);
+}
 
 export function AppOverview({ app, embedded, initialLoop }: { app: string; embedded?: boolean; initialLoop?: string | null }) {
 	const [rows, setRows] = useState<Row[] | null>(() => rowsCache.get(app) ?? null);
@@ -911,7 +972,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 		<div className="space-y-5">
 			{!embedded && (
 				<Link to="/studio/apps" className="inline-flex items-center text-sm text-slate-500 hover:text-slate-900 gap-1">
-					<ChevronRight className="w-4 h-4 rotate-180" /> My Apps
+					<ChevronRight className="w-4 h-4 rotate-180" /> My Agents
 				</Link>
 			)}
 
@@ -946,6 +1007,13 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 			    the page is self-describing (replaces the old lum.id/<app> landing). */}
 			{about && rows !== null && (
 				<p className="text-[12.5px] text-slate-500 leading-relaxed max-w-3xl">{about}</p>
+			)}
+
+			{/* Runtime & harness — what the agent runs ON (runtime, engine pattern,
+			    workflows, schedule, memory banks). Derived from the already-loaded
+			    rows/identity; only shown once there are scheduled workflows. */}
+			{rows !== null && rows.length > 0 && (
+				<RuntimeStrip rows={rows} identity={identity} />
 			)}
 
 			{rows === null ? (
@@ -1007,10 +1075,15 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 									</DropdownMenuTrigger>
 									<DropdownMenuContent align="end" className="w-52">
 										<DropdownMenuItem asChild>
+											<Link to={`/studio/a/${encodeURIComponent(app)}/edit`} title="Edit this page (surface markdown / layout)">
+												<Pencil className="w-3.5 h-3.5" /> Edit this page
+											</Link>
+										</DropdownMenuItem>
+										<DropdownMenuItem asChild>
 											<Link to={`/studio/a/${encodeURIComponent(app)}/manage`} title="name, workflows, skills">
 												<SlidersHorizontal className="w-3.5 h-3.5" />
 												<span className="flex flex-col">
-													<span>Manage app</span>
+													<span>Manage agent</span>
 													<span className="text-[11px] text-slate-400">name, workflows, skills</span>
 												</span>
 											</Link>
@@ -1026,7 +1099,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 											onSelect={() => del()}
 											className="text-rose-600 focus:text-rose-700 focus:bg-rose-50"
 										>
-											<Trash2 className="w-3.5 h-3.5" /> {deleting ? "Removing…" : "Remove app…"}
+											<Trash2 className="w-3.5 h-3.5" /> {deleting ? "Removing…" : "Remove agent…"}
 										</DropdownMenuItem>
 									</DropdownMenuContent>
 								</DropdownMenu>

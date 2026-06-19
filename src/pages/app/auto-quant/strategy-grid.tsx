@@ -153,7 +153,7 @@ export function StrategyGrid({ strategies, onPromote }: StrategyGridProps) {
 								size="sm"
 								variant="outline"
 								className="flex-1 h-7 text-xs"
-								onClick={() => navigate(`/dashboard/auto-quant/strategy/${encodeURIComponent(s.name)}`)}
+								onClick={() => navigate(`/studio/a/auto-quant?strategy=${encodeURIComponent(s.name)}`)}
 							>
 								Drill down
 							</Button>

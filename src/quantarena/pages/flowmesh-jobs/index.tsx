@@ -114,7 +114,7 @@ const FlowMeshJobs = () => {
 					<p className="text-sm text-muted-foreground">Schedule trading bots and AI workflows to run automatically</p>
 				</div>
 				<div className="flex items-center gap-3">
-					<AdminManageLink to="/dashboard/admin/flowmesh-jobs" />
+					<AdminManageLink to="/studio/admin/flowmesh-jobs" />
 					<Button variant="outline" size="sm" className="gap-2 cursor-pointer" onClick={() => setRefresh(Date.now())} disabled={loading}>
 						<RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
 					</Button>

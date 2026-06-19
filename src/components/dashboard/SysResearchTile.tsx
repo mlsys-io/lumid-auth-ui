@@ -156,7 +156,7 @@ function LoopCard({ row }: { row: LoopRow }) {
 					: 'border-l-indigo-500';
 	return (
 		<Link
-			to={`/dashboard/results?app=${APP_NAME}&loop=${row.loop}`}
+			to={`/studio/apps/${APP_NAME}?selected=${row.loop}`}
 			className={`bg-white border border-gray-200 border-l-4 ${toneBorder} rounded p-4 hover:shadow-sm transition block`}
 		>
 			<div className="flex items-center gap-1.5 text-xs uppercase tracking-wide text-muted-foreground mb-2">
@@ -229,7 +229,7 @@ export function SysResearchTile({ loops }: Props) {
 				<GitBranch className="w-3 h-3" />
 				<span>
 					<code>auto-sysresearch</code> — NL-to-SQL variant search.{' '}
-					<Link to={`/dashboard/results?app=${APP_NAME}`} className="text-indigo-600 underline">
+					<Link to={`/studio/apps/${APP_NAME}`} className="text-indigo-600 underline">
 						all cycles →
 					</Link>
 				</span>

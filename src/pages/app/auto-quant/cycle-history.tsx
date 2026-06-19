@@ -88,7 +88,7 @@ export function CycleHistory({ loops, strategyName }: CycleHistoryProps) {
 								)}
 								{c.cycle_dir && (
 									<a
-										href={`/dashboard/super-admin/cycle-transcript?dir=${encodeURIComponent(c.cycle_dir)}`}
+										href={`/studio/super-admin/cycle-transcript?dir=${encodeURIComponent(c.cycle_dir)}`}
 										target="_blank"
 										rel="noreferrer"
 										onClick={(e) => e.stopPropagation()}

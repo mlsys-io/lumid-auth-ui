@@ -68,7 +68,7 @@ export default function ResearchPage() {
 	return (
 		<div className="max-w-5xl mx-auto p-6 space-y-4">
 			<div>
-				<Link to="/dashboard/quant/strategy" className="text-xs text-indigo-500 hover:underline">← back to strategies</Link>
+				<Link to="/studio/a/lumid-market/competition/my" className="text-xs text-indigo-500 hover:underline">← back to strategies</Link>
 				<h1 className="text-2xl font-bold text-gray-900 mt-2">{bundle.strategy_name}</h1>
 				{bundle.description && <p className="text-sm text-gray-500 mt-1">{bundle.description}</p>}
 				<div className="flex gap-3 mt-2 text-xs">

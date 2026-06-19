@@ -185,7 +185,7 @@ export default function GpuRentalsList({ config }: { config?: Record<string, unk
 					>
 						<RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
 					</Button>
-					<Link to="/dashboard/gpu-rentals/new">
+					<Link to="/studio/a/lumid-gpu-rentals/new">
 						<Button size="sm">
 							<Plus className="w-4 h-4 mr-1" />
 							New rental
@@ -210,7 +210,7 @@ export default function GpuRentalsList({ config }: { config?: Record<string, unk
 				<CardContent>
 					{!hasAny ? (
 						<div className="py-12 text-center">
-							<Button onClick={() => navigate("/dashboard/gpu-rentals/new")}>
+							<Button onClick={() => navigate("/studio/a/lumid-gpu-rentals/new")}>
 								<Plus className="w-4 h-4 mr-1" />
 								Create your first rental
 							</Button>
@@ -262,7 +262,7 @@ function RentalRow({
 		<tr className="border-b last:border-0 hover:bg-accent/40">
 			<td className="py-2 px-2">
 				<Link
-					to={`/dashboard/gpu-rentals/${encodeURIComponent(row.rental.task_id)}`}
+					to={`/studio/a/lumid-gpu-rentals/${encodeURIComponent(row.rental.task_id)}`}
 					className="text-indigo-600 hover:underline font-medium"
 				>
 					{row.rental.name}
@@ -307,7 +307,7 @@ function RentalRow({
 			<td className="py-2 px-2 text-right">
 				{isLive ? (
 					<div className="inline-flex items-center gap-1">
-						<Link to={`/dashboard/gpu-rentals/${encodeURIComponent(row.rental.task_id)}`}>
+						<Link to={`/studio/a/lumid-gpu-rentals/${encodeURIComponent(row.rental.task_id)}`}>
 							<Button size="sm" variant="outline">
 								<Terminal className="w-4 h-4 mr-1" />
 								Connect

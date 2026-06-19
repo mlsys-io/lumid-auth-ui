@@ -188,7 +188,7 @@ export function AppSurface({
           "New workflow" button, so it reads identically across app types. */}
       <Link
         to={`/studio/a/${encodeURIComponent(app)}/manage`}
-        title="Create a workflow for this app"
+        title="Create a workflow for this agent"
         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-dashed border-border text-[12.5px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex-shrink-0"
       >
         <Plus className="w-3.5 h-3.5" /> New workflow
@@ -197,8 +197,8 @@ export function AppSurface({
         <DropdownMenuTrigger asChild>
           <button
             className="ml-auto inline-flex items-center justify-center w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:border-slate-300 shadow-sm transition-all"
-            title="App actions"
-            aria-label="App actions"
+            title="Agent actions"
+            aria-label="Agent actions"
           >
             <MoreHorizontal className="w-4 h-4" />
           </button>
@@ -215,7 +215,7 @@ export function AppSurface({
             <Link to={`/studio/a/${encodeURIComponent(app)}/manage`} title="name, workflows, skills">
               <SlidersHorizontal className="w-3.5 h-3.5" />
               <span className="flex flex-col">
-                <span>Manage app</span>
+                <span>Manage agent</span>
                 <span className="text-[11px] text-slate-400">name, workflows, skills</span>
               </span>
             </Link>
@@ -231,7 +231,7 @@ export function AppSurface({
             onSelect={() => removeApp()}
             className="text-rose-600 focus:text-rose-700 focus:bg-rose-50"
           >
-            <Trash2 className="w-3.5 h-3.5" /> {removing ? "Removing…" : "Remove app…"}
+            <Trash2 className="w-3.5 h-3.5" /> {removing ? "Removing…" : "Remove agent…"}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -278,10 +278,10 @@ export function AppSurface({
           <div className="rounded-xl border border-slate-200 bg-white p-5">
             <div className="flex items-center gap-2 text-slate-800">
               <Sparkles className="w-4 h-4 text-gold-500" />
-              <span className="text-sm font-medium">No page yet for {app}</span>
+              <span className="text-sm font-medium">No page yet for this agent</span>
             </div>
             <p className="mt-1.5 text-[12px] text-slate-500 leading-relaxed">
-              Generate one automatically from the app&apos;s config + skills — you can tweak it before saving. Or author it by hand from <strong>Edit</strong>.
+              Generate one automatically from the agent&apos;s config + skills — you can tweak it before saving. Or author it by hand from <strong>Edit</strong>.
             </p>
             <Link
               to={`${editTo}&generate=1`}
@@ -301,7 +301,7 @@ export function AppSurface({
       <div className="flex flex-col">
         {actionBar(false)}
         <div className="px-6 py-4">
-          <div className="text-sm text-rose-600">Couldn&apos;t load this app&apos;s surface.</div>
+          <div className="text-sm text-rose-600">Couldn&apos;t load this agent&apos;s surface.</div>
           <div className="mt-1 text-xs text-slate-400">{state.error}</div>
         </div>
       </div>
@@ -362,7 +362,7 @@ export function AppSurface({
     <div className="flex flex-col">
       {actionBar(false)}
       <div className="px-6 py-2">
-        <LumidMarkdown source="_This app declares no surface content._" />
+        <LumidMarkdown source="_This agent declares no surface content._" />
       </div>
     </div>
   );

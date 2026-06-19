@@ -218,7 +218,7 @@ export default function GpuRentalWizard() {
 				});
 			}
 			toast.success("Rental submitted");
-			navigate(`/dashboard/gpu-rentals/${encodeURIComponent(task.task_id)}`);
+			navigate(`/studio/a/lumid-gpu-rentals/${encodeURIComponent(task.task_id)}`);
 		} catch (e) {
 			toast.error((e as Error)?.message ?? "Submit failed");
 		} finally {
@@ -229,7 +229,7 @@ export default function GpuRentalWizard() {
 	return (
 		<>
 			<header className="flex items-center gap-3 mb-6">
-				<Link to="/dashboard/gpu-rentals">
+				<Link to="/studio/a/lumid-gpu-rentals">
 					<Button variant="ghost" size="sm">
 						<ArrowLeft className="w-4 h-4 mr-1" />
 						GPU rentals
@@ -601,7 +601,7 @@ export default function GpuRentalWizard() {
 								Balance is ${balanceNum.toFixed(2)} — FlowMesh will reject
 								submissions below $0.01.{" "}
 								<Link
-									to="/dashboard/billing"
+									to="/studio/account/billing"
 									className="underline font-medium"
 								>
 									Top up
@@ -620,7 +620,7 @@ export default function GpuRentalWizard() {
 				</div>
 
 				<div className="mt-6 flex items-center gap-2 justify-end">
-					<Link to="/dashboard/gpu-rentals">
+					<Link to="/studio/a/lumid-gpu-rentals">
 						<Button type="button" variant="outline" disabled={submitting}>
 							Cancel
 						</Button>

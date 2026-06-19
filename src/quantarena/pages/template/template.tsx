@@ -31,7 +31,7 @@ const Template = () => {
 					<h1 className="text-3xl font-bold">Backtesting Template</h1>
 					<p className="text-muted-foreground">Manage parameter templates for backtest tasks</p>
 				</div>
-				<AdminManageLink to="/dashboard/admin/templates" />
+				<AdminManageLink to="/studio/admin/templates" />
 			</div>
 			<Tabs value={activeTab} onValueChange={handleTabChange}>
 				<TabsList>

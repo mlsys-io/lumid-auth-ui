@@ -4,7 +4,9 @@
 // Powers the StudioRepo page that replaces the retired xp_ui repo browser.
 import { bearerHeader } from "@/api/session-bearer";
 
-export type RepoKind = "app" | "skill" | "agent" | "dataset" | "workflow";
+// Phase 4 (app→agent): canonical actor = `agent` (was `app`), knowledge bank =
+// `memory` (was the old `agent` kind); `app`/`agent` kept as dual-read aliases.
+export type RepoKind = "agent" | "app" | "skill" | "memory" | "dataset" | "workflow";
 
 export interface Repo {
 	owner_sub: string;
