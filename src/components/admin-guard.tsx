@@ -4,9 +4,9 @@ import { useAuth } from '../hooks/useAuth';
 import { Loading } from './ui/loading';
 
 /**
- * Routes under /dashboard/admin/* — visible only to users whose
+ * Routes under /studio/admin/* — visible only to users whose
  * lum.id role is "admin" (or "super_admin", which inherits every
- * admin capability). Falls back to /dashboard for signed-in
+ * admin capability). Falls back to /studio for signed-in
  * non-admins; unauth users get a return_to back to the page they
  * wanted.
  */
@@ -21,7 +21,7 @@ export function AdminGuard({ children }: { children: ReactNode }) {
 		return <Navigate to={`/auth/login?return_to=${encodeURIComponent(here)}`} replace />;
 	}
 	if (user?.role !== 'admin' && user?.role !== 'super_admin') {
-		return <Navigate to="/dashboard" replace />;
+		return <Navigate to="/studio" replace />;
 	}
 	return <>{children}</>;
 }

@@ -319,6 +319,46 @@ export const me = {
       `/loops/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/run`,
       { args },
     ),
+
+  // ── Branch / lineage runtime ops (G3c contract) ─────────────────────
+  // These three back the right-click run/branch menu's RUNTIME items. The
+  // backend agent (G3c) implements them; until then they 404/501 and the
+  // helpers throw a MeApiError the caller catches to show a "runtime coming"
+  // toast (the menu item stays visible but pending). Exact request shapes
+  // here ARE the contract the backend implements against.
+  //
+  // POST /me/apps/:app/loops/:loop/run  — launch a run as a fork / re-run /
+  //   variant of an existing run. Body is all-optional:
+  //     from_run_ts?  — the cycle dir-id to fork/re-run from (lineage parent)
+  //     variant?      — a config override map to explore as a new variant
+  //     branch_label? — human label for the new branch (shows on the node)
+  //   Returns the queued job (same envelope shape as runLoopNow).
+  launchRun: (
+    app: string,
+    loop: string,
+    body: { from_run_ts?: string; variant?: Record<string, unknown>; branch_label?: string },
+  ) =>
+    call<{ job_id: string; state: string }>(
+      "POST",
+      `/apps/${encodeURIComponent(app)}/loops/${encodeURIComponent(loop)}/run`,
+      body,
+    ),
+  // POST /me/apps/:app/runs/:ts/promote — mark this run/branch's learning as
+  //   KEPT (its memories/config become the champion lineage going forward).
+  promoteRun: (app: string, ts: string, note?: string) =>
+    call<{ app: string; ts: string; state: string }>(
+      "POST",
+      `/apps/${encodeURIComponent(app)}/runs/${encodeURIComponent(ts)}/promote`,
+      note ? { note } : {},
+    ),
+  // POST /me/apps/:app/runs/:ts/discard — mark this run/branch's learning as
+  //   DROPPED (its memories/config are not carried forward).
+  discardRun: (app: string, ts: string, note?: string) =>
+    call<{ app: string; ts: string; state: string }>(
+      "POST",
+      `/apps/${encodeURIComponent(app)}/runs/${encodeURIComponent(ts)}/discard`,
+      note ? { note } : {},
+    ),
   stopLoop: (app: string, loop: string) =>
     call<{ loop: string; stopped_cycle: string }>(
       "POST",
@@ -546,6 +586,17 @@ export const me = {
       `/cycles/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/${encodeURIComponent(ts)}`,
     ),
 
+  // Run history for the branch/lineage tree (#16). Same endpoint the panel
+  // already polls, but typed to carry the OPTIONAL lineage fields the backend
+  // adds to each cycle's cycle.json (parent_run_id / branch_label / key_metric).
+  // When those fields are absent (older cycles) the tree degrades to a linear
+  // by-time chain — the consumer handles that.
+  cyclesList: (app: string, loop: string, limit = 50) =>
+    call<{ cycles: MeCycleListItem[]; count: number }>(
+      "GET",
+      `/cycles?app=${encodeURIComponent(app)}&loop=${encodeURIComponent(loop)}&limit=${limit}`,
+    ),
+
   // ── Dataset / casebook explorer ─────────────────────────────────
   appDatasets: (app: string) =>
     call<{ app: string; datasets: MeDatasetGroup[]; count: number }>(
@@ -710,6 +761,28 @@ export interface MeExperimentDetail extends MeExperiment {
 export interface MeDatasetFileRef { path: string; name: string; bytes: number; kind: string }
 export interface MeDatasetGroup { group: string; label: string; files: MeDatasetFileRef[] }
 export interface MeDatasetFile { app: string; path: string; name: string; kind: string; bytes: number; truncated: boolean; content: string }
+
+// One row of GET /me/cycles?app=&loop= — a run in this loop's history. The
+// lineage fields are OPTIONAL: the backend (G3c) writes parent_run_id +
+// branch_label into cycle.json so runs form a tree; key_metric is the run's
+// headline score for the tree node. Older cycles lack them → linear fallback.
+export interface MeCycleListItem {
+  app?: string;
+  loop?: string;
+  ts: string;             // cycle dir-id (→ me.cycleDetail) — the node id
+  ok?: boolean;
+  running?: boolean;
+  duration_s?: number;
+  step_count?: number;
+  cost_usd?: number;
+  total_tokens?: number;
+  // ── Lineage (optional; absent on pre-G3c cycles) ──
+  parent_run_id?: string; // the cycle ts this run forked/continued from
+  branch_label?: string;  // human label for the branch this run belongs to
+  // The run's headline metric, surfaced on the node. Either a {name,value}
+  // pair or a bare number; read defensively.
+  key_metric?: { name?: string; value?: number } | number;
+}
 
 // One addressable dot in a workflow's run sparkline.
 export interface SparkRun {

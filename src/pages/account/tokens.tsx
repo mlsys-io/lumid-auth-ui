@@ -829,7 +829,7 @@ function GoogleGrantCard({ onChange }: { onChange?: () => void }) {
 		// Not connected — show the Connect call-to-action.
 		return (
 			<Link
-				to="/dashboard/account/connect/google"
+				to="/studio/account/connect/google"
 				className="block rounded-xl border border-gray-200 bg-white p-4 hover:border-indigo-300 hover:bg-indigo-50/30 transition-colors"
 			>
 				<div className="flex items-start gap-3">
@@ -903,7 +903,7 @@ function GoogleGrantCard({ onChange }: { onChange?: () => void }) {
 				<div className="flex flex-col items-end gap-2">
 					{isRevoked ? (
 						<Link
-							to="/dashboard/account/connect/google"
+							to="/studio/account/connect/google"
 							className="text-xs text-indigo-600 hover:underline"
 						>
 							Reconnect →
@@ -911,7 +911,7 @@ function GoogleGrantCard({ onChange }: { onChange?: () => void }) {
 					) : (
 						<>
 							<Link
-								to="/dashboard/account/connect/google"
+								to="/studio/account/connect/google"
 								className="text-xs text-gray-500 hover:text-gray-900 hover:underline"
 							>
 								View

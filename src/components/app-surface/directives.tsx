@@ -103,8 +103,15 @@ export async function resolveSource(spec: string, force = false): Promise<unknow
   let data: unknown;
   if (spec.startsWith("me://")) {
     const p = spec.slice("me://".length).replace(/^\/+/, "");
-    if (p === "today") {
-      data = await me.today();
+    if (p === "today" || p.startsWith("today?")) {
+      // me://today[?app=<name>] — daily cycle feed; the optional app filter
+      // scopes the cycle count to ONE agent (else it counts every app's runs).
+      const tqs = p.includes("?") ? p.slice(p.indexOf("?") + 1) : "";
+      const tApp = new URLSearchParams(tqs).get("app");
+      const today = await me.today();
+      data = tApp
+        ? { ...today, cycles: (today.cycles ?? []).filter((c: { app?: string }) => c.app === tApp) }
+        : today;
     } else if (p === "workflows" || p.startsWith("workflows?")) {
       // me://workflows?app=<name> — the caller's workflow rows for ONE app
       // (name, last_run_ok, last_run_ts, running, enabled). Lets any app's

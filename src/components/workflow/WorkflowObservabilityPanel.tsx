@@ -13,11 +13,12 @@
 // the cycles list is empty this card says "Not run yet", full stop.
 
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import {
 	Play, Pause, Loader2, Save, Clock, AlertCircle, Target,
 	ChevronLeft, ChevronRight, ChevronDown, Trash2,
-	Database, Sparkles, Pencil, Activity, Check, Square,
+	Database, Sparkles, Pencil, Activity, Check, Square, GitBranch,
 } from "lucide-react";
 import { toast } from "sonner";
 import apiClient from "@/api/client";
@@ -35,6 +36,11 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import TrajectoryGraph, { type TrajectoryVersion } from "@/components/workflow/TrajectoryGraph";
 import CaseMapping from "@/components/workflow/CaseMapping";
 import MetricsView from "@/components/workflow/MetricsView";
+import CaseContentViewer from "@/components/workflow/CaseContentViewer";
+import TrajectoryLogView from "@/components/workflow/TrajectoryLogView";
+import BranchTreeView, { RunCompareView } from "@/components/workflow/BranchTreeView";
+import RunContextMenu, { type RunMenuActions, type RunMenuTarget } from "@/components/workflow/RunContextMenu";
+import type { MeExperiment } from "@/api/me";
 // Datasets the workflow works on — heavy (table/preview), so lazy-load it and
 // only mount when the Data tab is opened.
 const DatasetExplorer = lazy(() => import("@/components/workflow/DatasetExplorer"));
@@ -218,6 +224,36 @@ export default function WorkflowObservabilityPanel({
 	// trajectory). Selecting one clears the other.
 	const [caseFocus, setCaseFocus] = useState<{ id: string; label: string } | null>(null);
 	const [metricsFocus, setMetricsFocus] = useState(false);
+	// #11 — a clicked "view data" on a case shows its raw case JSON + score
+	// trajectory + per-question provenance (CaseContentViewer). #14 — a "log"
+	// affordance shows the within-run transcript (TrajectoryLogView). Both join
+	// the same mutually-exclusive swap chain; opening one clears the others.
+	const [caseDataFocus, setCaseDataFocus] = useState<{ id: string; label: string } | null>(null);
+	const [logFocus, setLogFocus] = useState(false);
+	// #16 — the lineage (branch tree) view + the two-run comparison. treeFocus
+	// swaps the right canvas for the lineage tree; compareSel holds the 0–2 run
+	// ts picked (via the context menu's "compare with…") — length 2 swaps the
+	// canvas again for the side-by-side delta. Both join the swap chain.
+	const [treeFocus, setTreeFocus] = useState(false);
+	const [compareSel, setCompareSel] = useState<string[]>([]);
+	// Clear all right-canvas focuses (so the chain shows the trajectory).
+	const clearFocus = useCallback(() => { setCaseFocus(null); setMetricsFocus(false); setCaseDataFocus(null); setLogFocus(false); setTreeFocus(false); setCompareSel([]); }, []);
+	// Toggle a run into the 2-slot compare set (drops the oldest past 2). When it
+	// reaches 2, ensure the lineage canvas is showing so the compare view renders.
+	const toggleCompare = useCallback((ts: string) => {
+		setCompareSel((prev) => prev.includes(ts) ? prev.filter((t) => t !== ts) : [...prev, ts].slice(-2));
+	}, []);
+	// #17 — right-click menu opened on a CASEBOOK case row (the tree owns its
+	// own menu internally; this is for the Data-assets rows).
+	const [caseMenu, setCaseMenu] = useState<{ x: number; y: number; target: RunMenuTarget } | null>(null);
+	useEffect(() => {
+		if (!caseMenu) return;
+		const h = () => setCaseMenu(null);
+		const k = (e: KeyboardEvent) => { if (e.key === "Escape") setCaseMenu(null); };
+		window.addEventListener("click", h);
+		window.addEventListener("keydown", k);
+		return () => { window.removeEventListener("click", h); window.removeEventListener("keydown", k); };
+	}, [caseMenu]);
 	// Which run the Runs tab draws as a pipeline. null = follow the latest run;
 	// clicking an older run in the list pins it here.
 	const [selectedRunTs, setSelectedRunTs] = useState<string | null>(null);
@@ -332,6 +368,24 @@ export default function WorkflowObservabilityPanel({
 		return () => { live = false; };
 	}, [app, loop, overlayTs]);
 
+	// #15 — the experiment attached to THIS loop, for the goal metric badge.
+	// Match generically: an experiment whose loops[] includes this loop; if the
+	// app has exactly one experiment, use it. No app-specific names.
+	const [loopExp, setLoopExp] = useState<MeExperiment | null>(null);
+	useEffect(() => {
+		let live = true;
+		setLoopExp(null);
+		me.experiments(app)
+			.then(({ experiments }) => {
+				if (!live) return;
+				const list = experiments || [];
+				const attached = list.filter((e) => e.loops?.includes(loop));
+				setLoopExp(attached[0] ?? (list.length === 1 ? list[0] : null));
+			})
+			.catch(() => { /* no metric badge */ });
+		return () => { live = false; };
+	}, [app, loop]);
+
 	const reviewQueue = Array.isArray(summary?.review_queue) ? summary!.review_queue! : [];
 	const offers = Array.isArray(summary?.offers) ? summary!.offers! : [];
 	// Honesty: a run can report ok:true yet have per-step errors. Surface that
@@ -355,6 +409,47 @@ export default function WorkflowObservabilityPanel({
 
 	// Whether a pipeline is declared (drives the Pipeline column's content).
 	const hasPipeline = !!(definition && (definition.steps?.length || definition.skills_invoked?.length || definition.engine?.type || definition.engine?.module));
+
+	// #17 — the shared context-menu action set. Wires the items that have a
+	// destination already (view data / log / explain score / annotate / compare)
+	// through the existing swap-state focuses + chat bus; the runtime ops live in
+	// RunContextMenu itself (me.ts). One object, reused by the lineage tree AND
+	// the casebook case rows so the menu behaves identically everywhere.
+	const menuActions: RunMenuActions = {
+		app, loop,
+		// Focus a run: pin it as the version the left casebook + right panels read.
+		focusRun: (ts: string) => {
+			setSelectedRunTs(ts);
+			setVersion({ runTs: ts, cycleTs: ts, label: cycleDate(ts) || ts });
+		},
+		// View data: a case → its raw JSON + provenance (CaseContentViewer); a run
+		// → pin that run's version and show its within-run log.
+		viewData: (t: RunMenuTarget) => {
+			clearFocus();
+			if (t.kind === "case" && t.caseId) { setCaseDataFocus({ id: t.caseId, label: t.label }); }
+			else if (t.ts) { setVersion({ runTs: t.ts, cycleTs: t.ts, label: cycleDate(t.ts) || t.ts }); setLogFocus(true); }
+		},
+		// View trajectory log at a run ts.
+		viewLog: (ts?: string) => { clearFocus(); if (ts) setVersion({ runTs: ts, cycleTs: ts, label: cycleDate(ts) || ts }); setLogFocus(true); },
+		// Explain score: a case → its per-question provenance (CaseContentViewer);
+		// a run → the metric charts (MetricsView) for context.
+		explainScore: (t: RunMenuTarget) => {
+			clearFocus();
+			if (t.kind === "case" && t.caseId) setCaseDataFocus({ id: t.caseId, label: t.label });
+			else setMetricsFocus(true);
+		},
+		// Pin / annotate: hand off to the grounded chatbox so the user can attach a
+		// note / ask the agent to remember this run (generic, no per-app store).
+		annotate: (t: RunMenuTarget) => {
+			window.dispatchEvent(new CustomEvent("studio:ask", {
+				detail: {
+					prompt: `Annotate ${t.kind === "case" ? `case "${t.label}"` : `run ${t.label}`} on ${app} / ${loop}: `,
+					autosend: false,
+					context: { app, loop, ...(t.ts ? { cycle: { app, loop, ts: t.ts } } : {}) },
+				},
+			}));
+		},
+	};
 
 	return (
 		<ErrorBoundary resetKey={`${app}:${loop}`}>
@@ -452,7 +547,8 @@ export default function WorkflowObservabilityPanel({
 			{/* ── GOAL — the workflow's objective, always shown full-width at the
 			    top (prominent + editable), independent of the tab below. ── */}
 			<div className="min-w-0">
-				<GoalHeader goal={wf.goal} kpis={buildGoalKpis(summary, cycleFiles)} app={app} loop={loop} onSaved={onChanged} />
+				<GoalHeader goal={wf.goal} kpis={buildGoalKpis(summary, cycleFiles)} app={app} loop={loop} onSaved={onChanged}
+						experiment={loopExp} onOpenMetrics={() => { clearFocus(); setMetricsFocus(true); }} />
 			</div>
 
 			{/* A failed last run is an alert — kept above the tabs so it's always
@@ -469,8 +565,20 @@ export default function WorkflowObservabilityPanel({
 						{/* In-box header, matching the Trajectory canvas's header. */}
 						<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400 uppercase flex items-center gap-1.5 flex-shrink-0 px-3 py-2 border-b border-slate-100">
 							<Database className="w-3 h-3 text-gold-500" /> Data assets
+							{/* #16 — branch/lineage tree of the run history. */}
+							<button onClick={() => { clearFocus(); setTreeFocus(true); }} title="Open the run lineage — runs as a parent→child branch tree, with cross-run compare"
+								className={cn("ml-auto inline-flex items-center gap-1 normal-case tracking-normal text-[10px] rounded-full px-1.5 py-0.5 border transition-colors",
+									treeFocus ? "text-gold-700 bg-gold-50 border-gold-200" : "text-slate-500 bg-white border-slate-200 hover:border-gold-200 hover:text-gold-700")}>
+								<GitBranch className="w-3 h-3" /> Lineage
+							</button>
+							{/* #14 — within-run transcript of the selected (or latest) run. */}
+							<button onClick={() => { clearFocus(); setLogFocus(true); }} title="Open the within-run transcript (step-by-step analyst↔judge log)"
+								className={cn("inline-flex items-center gap-1 normal-case tracking-normal text-[10px] rounded-full px-1.5 py-0.5 border transition-colors",
+									logFocus ? "text-violet-700 bg-violet-50 border-violet-200" : "text-slate-500 bg-white border-slate-200 hover:border-violet-200 hover:text-violet-700")}>
+								<Activity className="w-3 h-3" /> Run log
+							</button>
 							{version && (
-								<button onClick={() => setVersion(null)} title="Back to latest" className="ml-auto inline-flex items-center gap-1 normal-case tracking-normal text-[10px] text-gold-700 bg-gold-50 border border-gold-200 rounded-full px-1.5 py-0.5 hover:bg-gold-100 transition-colors">
+								<button onClick={() => setVersion(null)} title="Back to latest" className="inline-flex items-center gap-1 normal-case tracking-normal text-[10px] text-gold-700 bg-gold-50 border border-gold-200 rounded-full px-1.5 py-0.5 hover:bg-gold-100 transition-colors">
 									as of {cycleDate(version.runTs || version.cycleTs)} <span className="text-gold-400">✕</span>
 								</button>
 							)}
@@ -489,8 +597,10 @@ export default function WorkflowObservabilityPanel({
 						})()}
 						<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading data…</div>}>
 							<CasebookPanel app={app} loop={loop} atTs={version?.runTs || version?.cycleTs}
-								onSelectCase={(c) => { setCaseFocus(c); setMetricsFocus(false); }} selectedCaseId={caseFocus?.id}
-								onSelectMetrics={() => { setMetricsFocus(true); setCaseFocus(null); }} metricsSelected={metricsFocus} />
+								onSelectCase={(c) => { clearFocus(); setCaseFocus(c); }} selectedCaseId={caseFocus?.id || caseDataFocus?.id}
+								onViewData={(c) => { clearFocus(); setCaseDataFocus(c); }}
+								onContextMenuCase={(c, e) => { e.preventDefault(); setCaseMenu({ x: e.clientX, y: e.clientY, target: { kind: "case", caseId: c.id, label: c.label } }); }}
+								onSelectMetrics={() => { clearFocus(); setMetricsFocus(true); }} metricsSelected={metricsFocus} />
 						</Suspense>
 					</div>
 				</div>
@@ -498,7 +608,17 @@ export default function WorkflowObservabilityPanel({
 				{/* RIGHT — the run trajectory; or, when a data case is clicked, that
 				    case's label→metric mapping log (Back returns to the trajectory). */}
 				<div className="flex-1 min-w-0 min-h-0">
-					{metricsFocus ? (
+					{treeFocus && compareSel.length === 2 ? (
+						<RunCompareView app={app} loop={loop} tsA={compareSel[0]} tsB={compareSel[1]} onBack={() => setCompareSel([])} />
+					) : treeFocus ? (
+						<BranchTreeView app={app} loop={loop} atTs={version?.runTs || version?.cycleTs}
+							onBack={() => setTreeFocus(false)} actions={menuActions}
+							selectedForCompare={compareSel} onToggleCompare={toggleCompare} />
+					) : logFocus ? (
+						<TrajectoryLogView app={app} loop={loop} ts={version?.runTs || version?.cycleTs || anchorTs || selectedRunTs || undefined} onBack={() => setLogFocus(false)} />
+					) : caseDataFocus ? (
+						<CaseContentViewer app={app} loop={loop} expId={loopExp?.id} caseId={caseDataFocus.id} caseLabel={caseDataFocus.label} atTs={version?.runTs || version?.cycleTs} onBack={() => setCaseDataFocus(null)} />
+					) : metricsFocus ? (
 						<MetricsView app={app} loop={loop} atTs={version?.runTs || version?.cycleTs} onBack={() => setMetricsFocus(false)} />
 					) : caseFocus ? (
 						<CaseMapping app={app} loop={loop} caseId={caseFocus.id} caseLabel={caseFocus.label} atTs={version?.runTs || version?.cycleTs} onBack={() => setCaseFocus(null)} />
@@ -514,6 +634,16 @@ export default function WorkflowObservabilityPanel({
 				</div>
 			)}
 
+			{/* #17 — the right-click menu for a casebook case row (the lineage
+			    tree owns its own internal menu). One shared menu component. */}
+			{caseMenu && createPortal(
+				<RunContextMenu
+					x={caseMenu.x} y={caseMenu.y} target={caseMenu.target} actions={menuActions}
+					selectedForCompare={compareSel} onToggleCompare={toggleCompare}
+					onClose={() => setCaseMenu(null)}
+				/>,
+				document.body,
+			)}
 
 		</div>
 		</ErrorBoundary>
@@ -569,7 +699,7 @@ function buildGoalKpis(summary: CycleSummary | null, files: Record<string, unkno
 // KPI chips show inline, editing happens in a popover (pencil). Saving PATCHes
 // the goal into the tenant's .user-overrides.yaml (merged over the declared
 // xpcloud.yaml goal).
-function GoalHeader({ goal, kpis, app, loop, onSaved }: { goal?: { primary: string; tracked?: string[] }; kpis: GoalKpi[]; app?: string; loop?: string; onSaved?: () => void }) {
+function GoalHeader({ goal, kpis, app, loop, onSaved, experiment, onOpenMetrics }: { goal?: { primary: string; tracked?: string[] }; kpis: GoalKpi[]; app?: string; loop?: string; onSaved?: () => void; experiment?: MeExperiment | null; onOpenMetrics?: () => void }) {
 	const [open, setOpen] = useState(false);
 	const [draft, setDraft] = useState(goal?.primary || "");
 	const [saving, setSaving] = useState(false);
@@ -639,6 +769,9 @@ function GoalHeader({ goal, kpis, app, loop, onSaved }: { goal?: { primary: stri
 								<Pencil className="w-3 h-3" />
 							</button>
 						</PopoverTrigger>
+						{/* #15 — the metric this goal is scored on (name + current mean +
+						    verdict), linking the loop→its experiment. Clicks open MetricsView. */}
+						<MetricBadge experiment={experiment} onClick={onOpenMetrics} />
 						{kpis.length > 0 && (
 							<div className="flex items-center gap-2 flex-wrap ml-auto">
 								{kpis.slice(0, 4).map((k) => (
@@ -657,6 +790,37 @@ function GoalHeader({ goal, kpis, app, loop, onSaved }: { goal?: { primary: stri
 			</div>
 			{editor}
 		</Popover>
+	);
+}
+
+// MetricBadge — #15. The goal's metric at a glance: "metric: <name>" + the
+// current best mean + a verdict chip. Generic over whatever metric the loop's
+// attached experiment declares; clicking opens the metric charts (MetricsView).
+function MetricBadge({ experiment: e, onClick }: { experiment?: MeExperiment | null; onClick?: () => void }) {
+	if (!e) return null;
+	const name = e.metric_name || e.metric?.name || "";
+	if (!name) return null;
+	// Current mean: the best variant's mean if available, else baseline_value.
+	const best = e.best_variant ? e.variants?.[e.best_variant] : undefined;
+	const mean = best?.mean ?? e.baseline_value ?? null;
+	const fmt = (v: number) => (Number.isInteger(v) ? String(v) : Math.abs(v) < 1 ? String(+v.toFixed(3)) : String(+v.toFixed(2)));
+	const verdict = e.criteria_met ? "criteria met" : (e.status && e.status !== "running" ? e.status : "running");
+	const verdictCls = e.criteria_met
+		? "bg-gold-100 text-gold-700 border-gold-200"
+		: "bg-violet-50 text-violet-600 border-violet-200";
+	return (
+		<button
+			type="button"
+			onClick={onClick}
+			title={`Metric: ${name}${typeof mean === "number" ? ` · current ${fmt(mean)}` : ""}${e.hypothesis ? ` · ${e.hypothesis}` : ""} — open metric charts`}
+			className="inline-flex items-center gap-1.5 text-[10.5px] rounded-full border border-violet-200 bg-violet-50/60 px-2 py-0.5 hover:bg-violet-100 transition-colors flex-shrink-0"
+		>
+			<Activity className="w-3 h-3 text-violet-500" />
+			<span className="text-slate-500">metric</span>
+			<span className="font-semibold text-slate-800">{name.replace(/_/g, " ")}</span>
+			{typeof mean === "number" && <span className="tabular-nums text-slate-700 font-medium">{fmt(mean)}</span>}
+			<span className={cn("rounded-full border px-1.5 leading-tight", verdictCls)}>{verdict}</span>
+		</button>
 	);
 }
 

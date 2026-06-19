@@ -33,6 +33,15 @@ export interface InboxMessage {
 	};
 	posted_at: number;
 	seen_at: number | null;
+	/** The human's replies to this message (thread), newest-last. Attached by
+	 *  GET /inbox/messages so the UI can show what was answered. */
+	replies?: Array<{
+		reply_id: string;
+		kind: string;
+		payload?: Record<string, unknown>;
+		instructions?: string;
+		posted_at: number;
+	}>;
 	/** Number of step instructions queued after user replies (client-side only). */
 	_instructionsQueued?: number;
 }

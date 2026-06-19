@@ -74,7 +74,7 @@ export default function OnboardingDomain() {
       //    detour to that flow before /ready. P0 routes through the
       //    existing /dashboard/account/connect/google page.
       if (d.needsGoogle) {
-        navigate("/dashboard/account/connect/google?return_to=/onboarding/ready");
+        navigate("/studio/account/connect/google?return_to=/onboarding/ready");
         return;
       }
       navigate(`/onboarding/ready?app=${encodeURIComponent(d.appSlug)}&loop=${encodeURIComponent(d.firstLoop.loop)}`);

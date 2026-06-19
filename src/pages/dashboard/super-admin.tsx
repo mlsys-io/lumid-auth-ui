@@ -39,7 +39,7 @@ import { isSessionExpired } from '@/api/client';
 import { GrafanaEmbed } from '@/components/grafana-embed';
 import { SysResearchTile } from '@/components/dashboard/SysResearchTile';
 
-// /dashboard/super-admin — single-page operational + business pane of
+// /studio/super-admin — single-page operational + business pane of
 // glass for super_admin role. AppLayout supplies the sidebar; this
 // page is content-only.
 //
@@ -267,7 +267,7 @@ function UsersTile({ users }: { users: Snap['users'] }) {
 		<Tile
 			icon={Shield}
 			label="Users"
-			to="/dashboard/admin/users"
+			to="/studio/admin/users"
 			primary={users.total.toLocaleString()}
 			secondary="active accounts"
 		/>
@@ -363,7 +363,7 @@ function AuthVolumeTile({ auth }: { auth: AuthStats | null }) {
 		<Tile
 			icon={Activity}
 			label="Logins (24h)"
-			to="/dashboard/admin/audit?event=login"
+			to="/studio/admin/audit?event=login"
 			primary={auth.login.total.toLocaleString()}
 			secondary={`${auth.oauth.total} via OAuth · click for full audit log`}
 		/>
@@ -378,7 +378,7 @@ function FailedLoginsTile({ auth }: { auth: AuthStats | null }) {
 		<Tile
 			icon={AlertTriangle}
 			label="Failed logins (24h)"
-			to="/dashboard/admin/audit?event=login_failed"
+			to="/studio/admin/audit?event=login_failed"
 			primary={failed.toLocaleString()}
 			secondary={<Sparkline values={auth.hourly.map((h) => h.failed)} />}
 			tone={tone}
@@ -1207,7 +1207,7 @@ function RecentInsightsFeed({ rows }: { rows: import('@/api/super-admin').LoopRo
 							<span>{new Date(r.last_run_ts * 1000).toLocaleString()}</span>
 							{r.latest_cycle_dir && (
 								<a
-									href={`/dashboard/super-admin/cycle-transcript?dir=${encodeURIComponent(r.latest_cycle_dir)}`}
+									href={`/studio/super-admin/cycle-transcript?dir=${encodeURIComponent(r.latest_cycle_dir)}`}
 									target="_blank"
 									rel="noreferrer"
 									className="text-indigo-500 hover:underline"
@@ -1367,7 +1367,7 @@ function LoopDetailRow({ loop: r }: { loop: import('@/api/super-admin').LoopRow 
 								)}
 								{r.latest_cycle_dir && (
 									<a
-										href={`/dashboard/super-admin/cycle-transcript?dir=${encodeURIComponent(r.latest_cycle_dir)}`}
+										href={`/studio/super-admin/cycle-transcript?dir=${encodeURIComponent(r.latest_cycle_dir)}`}
 										target="_blank"
 										rel="noreferrer"
 										className="text-[10px] text-indigo-500 hover:underline mt-0.5 inline-block"

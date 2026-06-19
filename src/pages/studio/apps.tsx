@@ -15,7 +15,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ChevronRight, ChevronDown, Check, ArrowRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2, Inbox, Loader2, RotateCcw, X, Plus, MoreHorizontal, SlidersHorizontal, Settings } from "lucide-react";
+import { ChevronRight, ChevronDown, Check, ArrowRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2, Inbox, Loader2, RotateCcw, X, Plus, MoreHorizontal, SlidersHorizontal, Settings, Pencil, Cpu, Cloud, Workflow, Clock, Database } from "lucide-react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -756,6 +756,67 @@ const aboutCache = new Map<string, string>();
 // DEFAULT view is the selected workflow's panel — overview is opt-in.
 const OVERVIEW_SEL = "__overview__";
 
+// "Runtime & harness" strip — a compact, muted row that tells the operator what
+// the agent actually runs ON. Everything is DERIVED from already-fetched data
+// (rows = MeWorkflowRow + LoopHealth, identity = AppIdentity); no new API calls,
+// no per-app hardcoding. Each chip only renders when its field exists, so the
+// strip degrades gracefully (an empty strip renders nothing).
+function RuntimeStrip({ rows, identity }: { rows: Row[]; identity?: AppIdentity }) {
+	if (!rows.length) return null;
+
+	// Engine / pattern — MeWorkflowRow.engine is the loop's declared engine
+	// ("command" → Pattern B, anything else / steps-driven → Pattern A). We read
+	// the freshest row's engine; fall back to "steps" when absent (Pattern A is
+	// the runner-driven default). Distinct engines across loops are de-duped.
+	const engines = Array.from(new Set(rows.map((r) => (r.wf.engine || "").trim().toLowerCase()).filter(Boolean)));
+	const isCommand = engines.includes("command");
+	const pattern = engines.length === 0 ? null : isCommand ? "B · command" : "A · steps";
+
+	// Runtime — there is no explicit target/compute field on the loop payload,
+	// so we infer: an operator (non-tenant) app runs locally on the Claude Code
+	// subscription; a tenant app's cycles are routed to the cloud GPU fleet by
+	// the scheduler (see CLAUDE.md "LLM in xpio apps"). `wf.tenant` is the only
+	// honest signal we have here.
+	const isTenant = rows.some((r) => r.wf.tenant);
+	const runtime = isTenant ? { label: "Cloud GPU", Icon: Cloud } : { label: "Local Claude Code", Icon: Cpu };
+
+	// Workflow(s) driving the agent — the human loop labels.
+	const wfNames = rows.map((r) => loopLabel(r.wf.name, r.loop)).filter(Boolean);
+	const wfText = wfNames.length <= 2 ? wfNames.join(", ") : `${wfNames.slice(0, 2).join(", ")} +${wfNames.length - 2}`;
+
+	// Schedule — prefer the tenant cron (wf.trigger) and fall back to loop-health
+	// schedule; render the distinct human-readable schedules.
+	const scheds = Array.from(new Set(
+		rows.map((r) => describeSchedule(r.wf.trigger || r.lh?.schedule)).filter((s) => s && s !== "—"),
+	));
+	const schedText = scheds.length ? (scheds.length <= 2 ? scheds.join(", ") : `${scheds.slice(0, 2).join(", ")} +${scheds.length - 2}`) : null;
+
+	// Memory banks — app-level memory_agents, repeated on each loop row; de-dupe.
+	const banks = Array.from(new Set(rows.flatMap((r) => r.wf.memory_agents || []).filter(Boolean)));
+	const banksText = banks.length ? (banks.length <= 2 ? banks.join(", ") : `${banks.slice(0, 2).join(", ")} +${banks.length - 2}`) : null;
+
+	type Chip = { Icon: typeof Cpu; label: string; title?: string };
+	const chips: Chip[] = [
+		{ Icon: runtime.Icon, label: runtime.label, title: isTenant ? "Tenant cycles route to the cloud GPU fleet" : "Operator loops run on the local Claude Code subscription" },
+	];
+	if (pattern) chips.push({ Icon: Settings, label: `Pattern ${pattern}`, title: "Engine pattern (xpio autoresearch contract)" });
+	if (wfText) chips.push({ Icon: Workflow, label: wfText, title: wfNames.join(", ") });
+	if (schedText) chips.push({ Icon: Clock, label: schedText, title: scheds.join(", ") });
+	if (banksText) chips.push({ Icon: Database, label: banksText, title: `Memory banks: ${banks.join(", ")}` });
+	if (identity?.kind) chips.push({ Icon: Boxes, label: identity.kind, title: "Marketplace kind" });
+
+	return (
+		<div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-slate-400">
+			{chips.map((c, i) => (
+				<span key={i} className="inline-flex items-center gap-1 min-w-0" title={c.title}>
+					<c.Icon className="w-3 h-3 flex-shrink-0 text-slate-400" />
+					<span className="truncate max-w-[14rem]">{c.label}</span>
+				</span>
+			))}
+		</div>
+	);
+}
+
 export function AppOverview({ app, embedded, initialLoop }: { app: string; embedded?: boolean; initialLoop?: string | null }) {
 	const [rows, setRows] = useState<Row[] | null>(() => rowsCache.get(app) ?? null);
 	const [identity, setIdentity] = useState<AppIdentity | undefined>(() => identCache.get(app));
@@ -948,6 +1009,13 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 				<p className="text-[12.5px] text-slate-500 leading-relaxed max-w-3xl">{about}</p>
 			)}
 
+			{/* Runtime & harness — what the agent runs ON (runtime, engine pattern,
+			    workflows, schedule, memory banks). Derived from the already-loaded
+			    rows/identity; only shown once there are scheduled workflows. */}
+			{rows !== null && rows.length > 0 && (
+				<RuntimeStrip rows={rows} identity={identity} />
+			)}
+
 			{rows === null ? (
 				// No spiral/logo animation on app switch — just a calm skeleton.
 				<Skeleton lines={3} />
@@ -1006,6 +1074,11 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 										</button>
 									</DropdownMenuTrigger>
 									<DropdownMenuContent align="end" className="w-52">
+										<DropdownMenuItem asChild>
+											<Link to={`/studio/a/${encodeURIComponent(app)}/edit`} title="Edit this page (surface markdown / layout)">
+												<Pencil className="w-3.5 h-3.5" /> Edit this page
+											</Link>
+										</DropdownMenuItem>
 										<DropdownMenuItem asChild>
 											<Link to={`/studio/a/${encodeURIComponent(app)}/manage`} title="name, workflows, skills">
 												<SlidersHorizontal className="w-3.5 h-3.5" />

@@ -243,7 +243,7 @@ function EmptyState() {
 				Configure <code className="bg-gray-100 px-1 rounded text-xs">inbox_publish:</code> in your app&apos;s xpcloud.yaml. Each cycle will post a message here.
 			</p>
 			<Link
-				to="/dashboard/skills/new"
+				to="/studio/apps"
 				className="text-sm text-indigo-500 hover:underline"
 			>
 				Or hand-author a skill →
@@ -300,9 +300,37 @@ function MessageCard({
 			</div>
 
 			<MessagePayload payload={message.payload} />
+			<RepliesThread message={message} />
 			<DraftActions message={message} onAction={onAction} />
 			<QuestionReply message={message} onAction={onAction} />
 			<CycleSummaryStepInstructions message={message} onAction={onAction} />
+		</div>
+	);
+}
+
+// Shows the human's own replies back under a message (the thread), so a sent
+// reply is visible — previously replies lived only in the loop-side sidecar.
+function RepliesThread({ message }: { message: InboxMessage }) {
+	const replies = message.replies;
+	if (!replies || replies.length === 0) return null;
+	return (
+		<div className="mt-3 space-y-1.5 border-l-2 border-emerald-200 pl-3">
+			{replies.map((r) => {
+				const text =
+					(r.payload?.body as string) ||
+					r.instructions ||
+					(r.payload?.text as string) ||
+					(r.kind === "approve" ? "✓ Approved" : r.kind === "reject" ? "✗ Rejected" : r.kind);
+				return (
+					<div key={r.reply_id} className="text-xs">
+						<span className="font-semibold text-emerald-700">
+							<User className="w-3 h-3 inline mr-1" />You replied
+						</span>
+						<span className="text-muted-foreground"> · {relativeTime(r.posted_at)}</span>
+						<div className="text-gray-700 mt-0.5 break-words">{text}</div>
+					</div>
+				);
+			})}
 		</div>
 	);
 }
@@ -324,7 +352,58 @@ function MessagePayload({ payload }: { payload: Record<string, unknown> }) {
 	const recap = payload.recap as string | undefined;
 	const stepRecap = payload.step_recap as Array<{ step_id: string; recap?: string; summary?: string }> | undefined;
 
+	// question / escalation payloads (the human-in-the-loop channel)
+	const question = payload.question as string | undefined;
+	const options = payload.options as string[] | undefined;
+	const context = payload.context as string | undefined;
+	const recommendation = payload.recommendation as string | undefined;
+	// cycle_summary digest payloads
+	const topFindings = payload.top_findings as
+		| Array<{ severity?: string; surface?: string; title?: string }>
+		| undefined;
+	const metrics = payload.metrics as Record<string, unknown> | undefined;
+
 	const lines: React.ReactNode[] = [];
+
+	if (question) {
+		lines.push(
+			<p key="q" className="text-sm font-medium text-gray-900">{question}</p>
+		);
+		if (context) lines.push(
+			<p key="qctx" className="text-xs text-muted-foreground">{context}</p>
+		);
+		if (recommendation) lines.push(
+			<p key="qrec" className="text-xs text-gray-600"><span className="font-semibold">Suggested:</span> {recommendation}</p>
+		);
+		if (options?.length) lines.push(
+			<ul key="qopts" className="text-xs text-gray-700 list-disc ml-4 space-y-0.5">
+				{options.map((o, i) => <li key={i}>{o}</li>)}
+			</ul>
+		);
+	}
+
+	if (topFindings?.length) {
+		lines.push(
+			<ul key="tf" className="text-xs space-y-0.5">
+				{topFindings.map((f, i) => (
+					<li key={i} className="flex gap-1.5">
+						<span className={`font-semibold ${f.severity === "blocker" ? "text-red-600" : "text-amber-600"}`}>{f.severity}</span>
+						<span className="text-muted-foreground">{f.surface}</span>
+						<span className="text-gray-700">{f.title}</span>
+					</li>
+				))}
+			</ul>
+		);
+	}
+	if (metrics && Object.keys(metrics).length) {
+		lines.push(
+			<div key="m" className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+				{Object.entries(metrics).map(([k, v]) => (
+					<span key={k}>{k}=<span className="font-mono text-gray-700">{String(v)}</span></span>
+				))}
+			</div>
+		);
+	}
 
 	if (recap) {
 		lines.push(
@@ -460,15 +539,28 @@ function MessagePayload({ payload }: { payload: Record<string, unknown> }) {
 	}
 
 	if (lines.length === 0) {
-		const raw = JSON.stringify(payload);
-		const meaningful = raw.replace(/"ts":"[^"]+",?/g, "").replace(/^\{,/, "{").replace(/,\}$/, "}");
-		if (meaningful.length > 2) {
+		// Generic fallback — render any unrecognized payload as readable
+		// key/value rows so a message is never blank ("(empty)"/"No summary").
+		const entries = Object.entries(payload || {}).filter(
+			([k, v]) => k !== "ts" && v != null && v !== "" &&
+				!(Array.isArray(v) && v.length === 0),
+		);
+		if (entries.length) {
 			lines.push(
-				<p key="raw" className="text-xs text-muted-foreground font-mono">{meaningful.slice(0, 300)}</p>
+				<div key="kv" className="text-xs space-y-0.5">
+					{entries.map(([k, v]) => (
+						<div key={k} className="flex gap-1.5">
+							<span className="text-muted-foreground shrink-0">{k}:</span>
+							<span className="text-gray-700 break-words">
+								{typeof v === "object" ? JSON.stringify(v).slice(0, 200) : String(v).slice(0, 200)}
+							</span>
+						</div>
+					))}
+				</div>
 			);
 		} else {
 			lines.push(
-				<p key="empty" className="text-xs text-muted-foreground italic">No summary content.</p>
+				<p key="empty" className="text-xs text-muted-foreground italic">No details.</p>
 			);
 		}
 	}
@@ -562,6 +654,9 @@ function QuestionReply({
 		setSubmitting(true);
 		try {
 			await postReply(message.id, "text", { body });
+			// replying marks the message seen (server also does this) so it
+			// leaves the unread / "Needs you" set — fixes "replied still unseen".
+			try { await markSeen(message.id); } catch { /* server marks it too */ }
 			toast.success("Reply sent — next cycle will ingest as a memory.");
 			setBody("");
 			onAction();

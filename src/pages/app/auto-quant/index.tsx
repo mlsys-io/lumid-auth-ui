@@ -109,7 +109,7 @@ export default function AutoQuantPage() {
 						</>
 					)}
 					<Link
-						to="/dashboard/inbox?app=auto-quant"
+						to="/studio/inbox?app=auto-quant"
 						className="text-xs text-indigo-600 hover:underline"
 					>
 						Inbox →

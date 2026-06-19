@@ -6,8 +6,8 @@ import { Loading } from './ui/loading';
 /**
  * Billing + accounting routes — super_admin only. Regular admins
  * can do everything else (users, clusters, workflows, reviews) but
- * not touch money-moving endpoints. Falls back to /dashboard/admin
- * for signed-in admins, /dashboard for regular users.
+ * not touch money-moving endpoints. Falls back to /studio/admin
+ * for signed-in admins, /studio for regular users.
  */
 export function SuperAdminGuard({ children }: { children: ReactNode }) {
 	const { user, isLoading, isAuthenticated } = useAuth();
@@ -20,7 +20,7 @@ export function SuperAdminGuard({ children }: { children: ReactNode }) {
 	}
 	if (user?.role !== 'super_admin') {
 		const fallback =
-			user?.role === 'admin' ? '/dashboard/admin' : '/dashboard';
+			user?.role === 'admin' ? '/studio/admin' : '/studio';
 		return <Navigate to={fallback} replace />;
 	}
 	return <>{children}</>;

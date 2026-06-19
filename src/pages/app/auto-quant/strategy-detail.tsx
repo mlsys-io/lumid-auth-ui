@@ -67,7 +67,7 @@ export default function StrategyDetailPage() {
 			{/* Breadcrumb */}
 			<div className="flex items-center gap-2 text-sm">
 				<Link
-					to="/dashboard/auto-quant"
+					to="/studio/a/auto-quant"
 					className="flex items-center gap-1 text-muted-foreground hover:text-gray-700"
 				>
 					<ArrowLeft className="w-3.5 h-3.5" />

@@ -129,7 +129,7 @@ export default function InfrastructureSetup() {
 					</CardDescription>
 				</CardHeader>
 				<CardContent className="space-y-3 text-sm">
-					<Link to="/dashboard/admin/clusters">
+					<Link to="/studio/admin/clusters">
 						<Button variant="outline" size="sm">
 							<Layers className="w-4 h-4 mr-1" />
 							Clusters → New cluster

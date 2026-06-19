@@ -51,7 +51,7 @@ const Datasource = () => {
 						Centralized data bundle and universe management for backtesting
 					</p>
 				</div>
-				<AdminManageLink to="/dashboard/admin/markets" />
+				<AdminManageLink to="/studio/admin/markets" />
 			</div>
 			<DatasourceTabs />
 		</TooltipProvider>

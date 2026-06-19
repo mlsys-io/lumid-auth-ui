@@ -15,6 +15,7 @@ import {
 	FlaskConical, ChevronDown, ChevronRight, Loader2, TrendingUp, TrendingDown,
 } from "lucide-react";
 import { me, type MeExperiment, type MeExperimentDetail, type MeExperimentCase } from "@/api/me";
+import { fetchCasebook } from "@/api/casebook";
 import { cn } from "@/lib/utils";
 
 const KIND_LABEL: Record<string, string> = {
@@ -101,10 +102,30 @@ function SeriesChart({ series }: { series: MeExperimentDetail["series"] }) {
 }
 
 // Casebook view — per-case score history + drill to per-question latest.
-function CasesTable({ app, expId, cases }: { app: string; expId: string; cases: MeExperimentCase[] }) {
+// `loop` lets us look up the full casebook size (the denominator) so a partial
+// run reads as "N of <total>" rather than just the scored rows.
+function CasesTable({ app, expId, loop, cases }: { app: string; expId: string; loop?: string; cases: MeExperimentCase[] }) {
 	const [open, setOpen] = useState<string | null>(null);
 	const [drill, setDrill] = useState<Record<string, { ts: string; metrics: Record<string, number> }> | null>(null);
 	const [loading, setLoading] = useState(false);
+	// Casebook total (denominator). Generic: the casebook endpoint returns the
+	// full cases[] for this app+loop; its length is the casebook size. null until
+	// loaded / when no loop is known — then we fall back to distinct case_ids seen.
+	const [bookTotal, setBookTotal] = useState<number | null>(null);
+	useEffect(() => {
+		if (!loop) { setBookTotal(null); return; }
+		let live = true;
+		fetchCasebook(app, loop)
+			.then((b) => { if (live) setBookTotal((b.cases ?? []).length); })
+			.catch(() => { if (live) setBookTotal(null); });
+		return () => { live = false; };
+	}, [app, loop]);
+	// scored = cases with ≥1 result (a recorded run). total = casebook size when
+	// known, else the distinct case_ids that have results (so the header is never
+	// a lie about a denominator we couldn't read).
+	const scored = cases.filter((c) => c.n > 0).length;
+	const total = bookTotal != null && bookTotal >= scored ? bookTotal : cases.length;
+	const totalKnown = bookTotal != null && bookTotal >= scored;
 	const openCase = async (cid: string) => {
 		if (open === cid) { setOpen(null); return; }
 		setOpen(cid); setLoading(true); setDrill(null);
@@ -115,6 +136,10 @@ function CasesTable({ app, expId, cases }: { app: string; expId: string; cases: 
 		setLoading(false);
 	};
 	return (
+		<>
+		<div className="text-[11px] text-slate-400 mb-1.5">
+			{scored} of {total} case{total === 1 ? "" : "s"} scored{!totalKnown ? " so far" : ""}
+		</div>
 		<div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100 overflow-hidden">
 			{cases.map((c) => {
 				const reg = (c.delta_vs_prev ?? 0) < 0;
@@ -155,6 +180,7 @@ function CasesTable({ app, expId, cases }: { app: string; expId: string; cases: 
 				);
 			})}
 		</div>
+		</>
 	);
 }
 
@@ -250,7 +276,7 @@ export function ExperimentCard({ app, e, showApp = false }: { app: string; e: Me
 							{detail.cases?.length > 0 && (
 								<div>
 									<div className="text-[10px] uppercase tracking-wide font-semibold text-slate-400 mb-1.5">Casebook — per-case score history</div>
-									<CasesTable app={app} expId={e.id} cases={detail.cases} />
+									<CasesTable app={app} expId={e.id} loop={e.loops?.[0]} cases={detail.cases} />
 								</div>
 							)}
 						</>

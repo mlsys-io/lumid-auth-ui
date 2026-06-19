@@ -93,7 +93,7 @@ export default function GpuRentalDetail() {
 	// navigation inside Studio; fall back to the legacy dashboard path elsewhere.
 	const rentalsBase = location.pathname.startsWith("/studio/")
 		? "/studio/a/lumid-gpu-rentals"
-		: "/dashboard/gpu-rentals";
+		: "/studio/a/lumid-gpu-rentals";
 	const { user } = useAuth();
 
 	const [task, setTask] = useState<Task | null>(null);
@@ -402,7 +402,7 @@ export default function GpuRentalDetail() {
 								<p className="text-xs text-red-700">
 									Balance won't cover the remaining TTL at this rate.{" "}
 									<Link
-										to="/dashboard/billing"
+										to="/studio/account/billing"
 										className="underline font-medium"
 									>
 										Top up
