@@ -15,7 +15,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ChevronRight, ChevronDown, Check, ArrowRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2, Inbox, Loader2, RotateCcw, X, Plus, MoreHorizontal, SlidersHorizontal, Settings, Pencil, Cpu, Cloud, Workflow, Clock, Database } from "lucide-react";
+import { ChevronRight, ChevronDown, Check, ArrowRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2, Inbox, Loader2, RotateCcw, X, Plus, MoreHorizontal, SlidersHorizontal, Settings, Pencil, Cpu, Cloud, Workflow, Clock, Database, DownloadCloud, UploadCloud } from "lucide-react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -931,6 +931,20 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 		}
 	};
 
+	// Pull / publish — toolbar buttons (fork + propose happen in xpio, not here).
+	const [shareBusy, setShareBusy] = useState<null | "pull" | "publish">(null);
+	const shareAction = async (kind: "pull" | "publish", path: string, okMsg: string) => {
+		setShareBusy(kind);
+		try {
+			await apiClient.post(`/api/v1/me/apps/${encodeURIComponent(app)}/${path}`, {});
+			toast.success(okMsg);
+		} catch (e) {
+			/* eslint-disable @typescript-eslint/no-explicit-any */
+			const msg = (e as any)?.response?.data?.message || (e instanceof Error ? e.message : String(e));
+			toast.error(`Failed: ${String(msg).slice(0, 180)}`);
+		} finally { setShareBusy(null); }
+	};
+
 	// Per-workflow (loop) hard-delete — only for the user's own apps, and never
 	// the last loop (the backend blocks that; we also hide the button then).
 	const [deletingLoop, setDeletingLoop] = useState<string | null>(null);
@@ -1061,6 +1075,25 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 									className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-dashed border-border text-[12.5px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex-shrink-0"
 								>
 									<Plus className="w-3.5 h-3.5" /> New workflow
+								</button>
+								{/* Pull / publish — toolbar icon buttons (fork + propose live in xpio). */}
+								<button
+									onClick={() => shareAction("pull", "update", "Update queued — upstream changes merge in ~a minute (your edits are preserved).")}
+									disabled={!!shareBusy}
+									title="Pull updates — merge the latest upstream version (your local edits are preserved)"
+									aria-label="Pull updates"
+									className="inline-flex items-center justify-center w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:border-slate-300 shadow-sm transition-all flex-shrink-0 disabled:opacity-40"
+								>
+									{shareBusy === "pull" ? <Loader2 className="w-4 h-4 animate-spin" /> : <DownloadCloud className="w-4 h-4" />}
+								</button>
+								<button
+									onClick={() => shareAction("publish", "publish", "Publish queued — your repo updates in ~a minute.")}
+									disabled={!!shareBusy}
+									title="Publish changes — push your local changes to your xp.io repo (version auto-bumps)"
+									aria-label="Publish changes"
+									className="inline-flex items-center justify-center w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:border-slate-300 shadow-sm transition-all flex-shrink-0 disabled:opacity-40"
+								>
+									{shareBusy === "publish" ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
 								</button>
 								{/* App actions ("⋯") — Manage / Advanced / Remove. Workflow apps
 								    were missing this; only surface apps (AppSurface) had it. */}

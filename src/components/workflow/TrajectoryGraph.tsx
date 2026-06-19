@@ -17,7 +17,7 @@
 //   • Right-click a node → control menu (e.g. "Branch out" queues a
 //     signal the loop explores from next cycle; queued branches show as ghosts).
 
-import { useMemo, useState, useEffect, useCallback, useRef } from "react";
+import { useMemo, useState, useEffect, useCallback, useRef, type MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
 import {
 	ReactFlow, Background, Controls, Position,
@@ -129,37 +129,160 @@ function buildModel(traj: Trajectory | null, signals: TrajectorySignal[]): {
 	return { model, byId };
 }
 
-function layout(model: GNode[]): Map<string, { x: number; y: number }> {
+// A node as drawn after collapsing the champion trunk: `displayParentId` may be
+// several generations up (with `elided` champion-only cycles hidden between),
+// and `displayDepth` is the row in the COLLAPSED tree.
+type DisplayG = GNode & { displayParentId?: string; elided: number; displayDepth: number };
+const KEEP_RECENT = 5;
+
+// Collapse long champion-only stretches of the trunk so the drawn height tracks
+// BRANCH structure, not raw cycle count — a long regression sweep otherwise
+// renders one row per cycle, growing into a tall thread that's tiny when fit and
+// unreadable. We always keep: the baseline/root, any generation that explored
+// variants (branch points) and every variant, leaves, nodes needing a decision,
+// queued ghosts, the focused node, and the most recent KEEP_RECENT champions.
+// Each collapsed run folds into the connecting trunk edge as a "+N cycles" badge.
+function buildDisplay(model: GNode[], pickedId: string | null): DisplayG[] {
+	const byId = new Map(model.map((n) => [n.id, n] as const));
+	const parentOf = (n: GNode) => (n.parent_id && byId.has(n.parent_id) ? n.parent_id : undefined);
+	const kids = new Map<string | undefined, GNode[]>();
+	for (const n of model) { const k = parentOf(n); const a = kids.get(k) || []; a.push(n); kids.set(k, a); }
+	const nKids = (id: string) => (kids.get(id) || []).length;
+	const recent = new Set(
+		model.filter((n) => n.is_champion).sort((a, b) => a.depth - b.depth).slice(-KEEP_RECENT).map((n) => n.id),
+	);
+	const isSig = (n: GNode) =>
+		n.proposed ||                                            // queued ghost
+		!parentOf(n) ||                                          // baseline / root
+		nKids(n.id) !== 1 ||                                     // branch point or leaf
+		(parentOf(n) ? nKids(parentOf(n)!) !== 1 : false) ||     // first node off a branch
+		!n.is_champion ||                                        // any variant always shows
+		!!n.needs_decision || n.id === pickedId || recent.has(n.id);
+	const sig = model.filter(isSig).sort((a, b) => a.depth - b.depth); // parents first
+	const sigSet = new Set(sig.map((n) => n.id));
+	const ddCache = new Map<string, number>();
+	const out: DisplayG[] = [];
+	for (const n of sig) {
+		let p = parentOf(n), elided = 0;
+		while (p && !sigSet.has(p)) { elided++; p = parentOf(byId.get(p)!); }
+		const displayParentId = p && sigSet.has(p) ? p : undefined;
+		const dd = displayParentId != null ? (ddCache.get(displayParentId) ?? 0) + 1 : 0;
+		ddCache.set(n.id, dd);
+		out.push({ ...n, displayParentId, elided, displayDepth: dd });
+	}
+	return out;
+}
+
+// Tidy vertical tree (Knuth post-order): leaves pack left→right into COL_X slots,
+// every parent is centered over its children's span — variants never overlap and
+// the champion trunk stays straight. Operates on the COLLAPSED display nodes.
+function layout(nodes: DisplayG[]): Map<string, { x: number; y: number }> {
 	const pos = new Map<string, { x: number; y: number }>();
-	const real = model.filter((n) => !n.proposed);
-	const depths = new Map<number, GNode[]>();
-	for (const n of real) {
-		const a = depths.get(n.depth) || [];
-		a.push(n);
-		depths.set(n.depth, a);
-	}
-	for (const d of [...depths.keys()].sort((a, b) => a - b)) {
-		const group = depths.get(d)!;
-		const champ = group.find((n) => n.is_champion) || (group.length === 1 ? group[0] : undefined);
-		let trunkX = 0;
-		if (champ?.parent_id && pos.has(champ.parent_id)) trunkX = pos.get(champ.parent_id)!.x;
-		if (champ) {
-			pos.set(champ.id, { x: trunkX, y: d * ROW_Y });
-			group.filter((n) => n.id !== champ.id).forEach((n, i) => {
-				const k = Math.floor(i / 2) + 1;
-				const sign = i % 2 === 0 ? -1 : 1;
-				pos.set(n.id, { x: trunkX + sign * k * COL_X, y: d * ROW_Y });
-			});
-		} else {
-			group.forEach((n, i) => pos.set(n.id, { x: (i - (group.length - 1) / 2) * COL_X, y: d * ROW_Y }));
-		}
-	}
-	// Ghosts hang just below + offset from their source.
-	for (const g of model.filter((n) => n.proposed)) {
-		const p = g.parent_id ? pos.get(g.parent_id) : undefined;
-		pos.set(g.id, p ? { x: p.x + COL_X * 0.7, y: p.y + ROW_Y * 0.72 } : { x: 0, y: 0 });
-	}
+	const byParent = new Map<string | undefined, DisplayG[]>();
+	for (const n of nodes) { const a = byParent.get(n.displayParentId) || []; a.push(n); byParent.set(n.displayParentId, a); }
+	// champion first (keeps the trunk on the left of its branch fan), then by age
+	for (const arr of byParent.values())
+		arr.sort((a, b) => (b.is_champion ? 1 : 0) - (a.is_champion ? 1 : 0) || a.depth - b.depth || a.id.localeCompare(b.id));
+	let leaf = 0;
+	const seen = new Set<string>();
+	const place = (n: DisplayG): number => {
+		if (seen.has(n.id)) return pos.get(n.id)?.x ?? 0;     // cycle guard
+		seen.add(n.id);
+		const ch = (byParent.get(n.id) || []).filter((k) => !seen.has(k.id));
+		let x: number;
+		if (!ch.length) { x = leaf * COL_X; leaf++; }
+		else { const xs = ch.map(place); x = (xs[0] + xs[xs.length - 1]) / 2; }
+		pos.set(n.id, { x, y: n.displayDepth * ROW_Y });
+		return x;
+	};
+	(byParent.get(undefined) || []).forEach(place);
+	for (const n of nodes) if (!pos.has(n.id)) { pos.set(n.id, { x: (leaf++) * COL_X, y: n.displayDepth * ROW_Y }); }
+	const xs = [...pos.values()].map((p) => p.x);
+	if (xs.length) { const mid = (Math.min(...xs) + Math.max(...xs)) / 2; for (const p of pos.values()) p.x -= mid; }
 	return pos;
+}
+
+// LinearTrajectory — a straight champion chain (no branches) reads far better as
+// a metric TREND than a tall vertical node tree: the tree forces fitView to zoom
+// out for many cycles, which both buries the shape and shrinks the label text
+// below the rest of the page. This renders the chain as a compact line chart +
+// a wrapped row of clickable cycle chips — plain HTML/SVG, page-consistent text,
+// no zoom. Same click/right-click affordances as the tree nodes.
+function LinearTrajectory({ chain, metric, baseline, hib, pickedId, onFocus, onOpen, onMenu }: {
+	chain: GNode[]; metric?: string | null; baseline?: number | null; hib: boolean;
+	pickedId?: string; onFocus: (n: GNode) => void; onOpen: (n: GNode) => void;
+	onMenu: (e: ReactMouseEvent, n: GNode) => void;
+}) {
+	const scored = chain.filter((n) => n.scored && typeof n.score === "number");
+	const W = 1000, H = 200, padL = 12, padR = 12, padT = 14, padB = 14;
+	const vals = scored.map((n) => n.score as number);
+	const lo = vals.length ? Math.min(...vals, ...(baseline != null ? [baseline] : [])) : 0;
+	const hi = vals.length ? Math.max(...vals, ...(baseline != null ? [baseline] : [])) : 1;
+	const rng = hi - lo || 1;
+	const px = (i: number) => padL + (scored.length <= 1 ? (W - padL - padR) / 2 : (i / (scored.length - 1)) * (W - padL - padR));
+	const py = (v: number) => padT + (1 - (v - lo) / rng) * (H - padT - padB);
+	const pts = scored.map((n, i) => `${px(i)},${py(n.score as number)}`);
+	const first = scored[0], last = scored[scored.length - 1];
+	return (
+		<div className="h-full w-full overflow-y-auto px-3 pt-9 pb-3 flex flex-col gap-3">
+			<div className="text-[11px] text-slate-500">
+				Straight-line trajectory · {scored.length} scored {scored.length === 1 ? "cycle" : "cycles"}
+				{metric && <> · <span className="font-mono text-slate-600">{metric}</span></>}
+				{baseline != null && <> · base <span className="tabular-nums">{fmtScore(baseline)}</span></>}
+			</div>
+			{scored.length >= 2 && (
+				<div className="rounded-lg border border-slate-200/70 bg-white p-2 flex-shrink-0">
+					<svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full" style={{ height: 150 }}>
+						{baseline != null && (
+							<line x1={padL} x2={W - padR} y1={py(baseline)} y2={py(baseline)} stroke="rgb(148 163 184)" strokeDasharray="6 5" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+						)}
+						<polyline points={pts.join(" ")} fill="none" stroke="rgb(176 143 69)" strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+						{scored.map((n, i) => {
+							const t = tone(n, baseline, hib);
+							const sel = n.id === pickedId;
+							return (
+								<circle key={n.id} cx={px(i)} cy={py(n.score as number)} r={sel ? 6 : 4}
+									fill={t.dot} stroke="white" strokeWidth="2" vectorEffect="non-scaling-stroke"
+									className="cursor-pointer" onClick={() => onFocus(n)}
+									onContextMenu={(e) => onMenu(e, n)}>
+									<title>{`${fmtWhen(n.run_ts || n.cycle_ts) || ""} · ${fmtScore(n.score as number)}`}</title>
+								</circle>
+							);
+						})}
+					</svg>
+					<div className="flex justify-between text-[10px] text-slate-400 tabular-nums mt-1">
+						<span>{fmtWhen(first?.run_ts || first?.cycle_ts)} · {first && fmtScore(first.score as number)}</span>
+						<span>{fmtWhen(last?.run_ts || last?.cycle_ts)} · {last && fmtScore(last.score as number)}</span>
+					</div>
+				</div>
+			)}
+			{/* clickable cycle chips — page-consistent text, wraps instead of zooming */}
+			<div className="flex flex-wrap gap-1.5 content-start">
+				{chain.map((n) => {
+					const t = tone(n, baseline, hib);
+					const sel = n.id === pickedId;
+					return (
+						<button key={n.id} type="button"
+							onClick={() => onFocus(n)}
+							onDoubleClick={() => !n.proposed && onOpen(n)}
+							onContextMenu={(e) => { e.preventDefault(); onMenu(e, n); }}
+							title="click to focus · double-click for the pipeline · right-click for actions"
+							className={cn(
+								"inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-left transition-colors",
+								sel ? "border-sky-400 ring-1 ring-sky-200 bg-sky-50/40" : "border-slate-200 bg-white hover:bg-slate-50",
+							)}>
+							<span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: t.dot }} />
+							<span className="text-[11px] text-slate-600 tabular-nums">{fmtWhen(n.run_ts || n.cycle_ts) || n.label}</span>
+							{n.is_champion && <Trophy className="w-3 h-3 text-gold-500 flex-shrink-0" />}
+							{n.scored && n.score != null
+								? <span className="text-[11px] font-semibold tabular-nums text-slate-800">{fmtScore(n.score)}</span>
+								: <span className="text-[10px] uppercase tracking-wide text-slate-400">{n.kind === "baseline" ? "base" : "—"}</span>}
+						</button>
+					);
+				})}
+			</div>
+		</div>
+	);
 }
 
 export interface TrajectoryVersion { cycleTs?: string; runTs?: string; label: string; ts?: string }
@@ -233,8 +356,10 @@ function Inner({ app, loop, definition, onSelectVersion, running }: {
 	const openPipelineRef = useRef<(tn: GNode) => void>(() => {});
 
 	const { nodes, edges } = useMemo(() => {
-		const pos = layout(model);
-		const nodes: Node[] = model.map((n) => {
+		const display = buildDisplay(model, picked?.id ?? null);
+		const shown = new Set(display.map((n) => n.id));
+		const pos = layout(display);
+		const nodes: Node[] = display.map((n) => {
 			const t = tone(n, baseline, hib);
 			const dur = fmtDur(n.duration_s);
 			const when = n.proposed ? null : fmtWhen(n.run_ts || n.cycle_ts);
@@ -242,7 +367,7 @@ function Inner({ app, loop, definition, onSelectVersion, running }: {
 			const sel = picked?.id === n.id;
 			return {
 				id: n.id,
-				position: pos.get(n.id) || { x: 0, y: n.depth * ROW_Y },
+				position: pos.get(n.id) || { x: 0, y: n.displayDepth * ROW_Y },
 				data: {
 					label: (
 						<div className="px-2.5 py-1.5 text-left" style={{ width: NODE_W }}>
@@ -311,20 +436,28 @@ function Inner({ app, loop, definition, onSelectVersion, running }: {
 			};
 		});
 		const edges: Edge[] = [];
-		for (const n of model) {
-			if (!n.parent_id) continue;
-			const parent = byId.get(n.parent_id);
+		for (const n of display) {
+			if (!n.displayParentId || !shown.has(n.displayParentId)) continue;
+			const parent = byId.get(n.displayParentId);
 			const trunk = !!n.is_champion && (!!parent?.is_champion || parent?.kind === "baseline");
 			edges.push({
-				id: `e:${n.parent_id}->${n.id}`,
-				source: n.parent_id,
+				id: `e:${n.displayParentId}->${n.id}`,
+				source: n.displayParentId,
 				target: n.id,
 				type: "smoothstep",
-				animated: trunk || !!n.proposed,
+				animated: (trunk || !!n.proposed) && n.elided === 0,
+				// A collapsed run of champion-only cycles gets a "+N cycles" badge so
+				// the elided history reads without inflating the tree's height.
+				label: n.elided > 0 ? `+${n.elided} cycle${n.elided > 1 ? "s" : ""}` : undefined,
+				labelShowBg: n.elided > 0,
+				labelBgPadding: [6, 2],
+				labelBgBorderRadius: 8,
+				labelStyle: { fill: "rgb(100 116 139)", fontSize: 10, fontWeight: 500 },
+				labelBgStyle: { fill: "rgb(248 250 252)", stroke: "rgb(226 232 240)" },
 				style: n.proposed
 					? { stroke: "rgb(176 143 69)", strokeWidth: 1.5, strokeDasharray: "5 4" }
 					: trunk
-						? { stroke: "rgb(176 143 69)", strokeWidth: 2.5 }
+						? { stroke: "rgb(176 143 69)", strokeWidth: 2.5, strokeDasharray: n.elided > 0 ? "6 3" : undefined }
 						: { stroke: "rgb(203 213 225)", strokeWidth: 1.5, strokeDasharray: n.scored ? undefined : "5 4" },
 			});
 		}
@@ -412,6 +545,19 @@ function Inner({ app, loop, definition, onSelectVersion, running }: {
 	const totalLearned = (traj.cycles || []).reduce((n, c) => n + (c.learned || 0), 0);
 	const champ = (traj.nodes || []).filter((n) => n.is_champion).slice(-1)[0];
 
+	// Pure linear chain = no node has >1 child and there are no queued branches.
+	// A straight line of cycles (e.g. mbb-ai's regression_sweep) renders far
+	// better as a metric trend (LinearTrajectory) than a tall, zoomed-out node
+	// tree. Branched trajectories keep the ReactFlow tree (with collapse).
+	const linearChain = (() => {
+		const real = model.filter((n) => !n.proposed);
+		if (model.some((n) => n.proposed) || real.length < 3) return null;
+		const kids = new Map<string, number>();
+		for (const n of real) if (n.parent_id) kids.set(n.parent_id, (kids.get(n.parent_id) || 0) + 1);
+		if ([...kids.values()].some((c) => c > 1)) return null; // a branch exists
+		return [...real].sort((a, b) => a.depth - b.depth);
+	})();
+
 	return (
 		<div className="relative h-full rounded-xl border border-slate-200 bg-white overflow-hidden">
 			<div
@@ -426,25 +572,35 @@ function Inner({ app, loop, definition, onSelectVersion, running }: {
 						<span className="ml-auto text-[10px] text-slate-300 normal-case tracking-normal">click a node · right-click to branch</span>
 					</div>
 
-					<ReactFlow
-						key={`${nodes.length}`}
-						nodes={nodes}
-						edges={edges}
-						onInit={onInit}
-						fitView={false}
-						proOptions={{ hideAttribution: true }}
-						nodesDraggable={false}
-						nodesConnectable={false}
-						elementsSelectable
-						zoomOnScroll={false}
-						panOnScroll
-						panOnDrag
-						onNodeClick={(_e, node) => { const tn = byId.get(node.id); if (tn && !tn.proposed) focusRun(tn); }}
-						onNodeContextMenu={(e, node) => { e.preventDefault(); const tn = byId.get(node.id); if (tn) setMenu({ x: e.clientX, y: e.clientY, node: tn }); }}
-					>
-						<Background gap={16} color="rgb(241 245 249)" />
-						<Controls showInteractive={false} />
-					</ReactFlow>
+					{linearChain ? (
+						<LinearTrajectory
+							chain={linearChain} metric={traj.metric} baseline={baseline} hib={hib}
+							pickedId={picked?.id}
+							onFocus={focusRun}
+							onOpen={(n) => openPipelineRef.current(n)}
+							onMenu={(e, n) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, node: n }); }}
+						/>
+					) : (
+						<ReactFlow
+							key={`${nodes.length}`}
+							nodes={nodes}
+							edges={edges}
+							onInit={onInit}
+							fitView={false}
+							proOptions={{ hideAttribution: true }}
+							nodesDraggable={false}
+							nodesConnectable={false}
+							elementsSelectable
+							zoomOnScroll={false}
+							panOnScroll
+							panOnDrag
+							onNodeClick={(_e, node) => { const tn = byId.get(node.id); if (tn && !tn.proposed) focusRun(tn); }}
+							onNodeContextMenu={(e, node) => { e.preventDefault(); const tn = byId.get(node.id); if (tn) setMenu({ x: e.clientX, y: e.clientY, node: tn }); }}
+						>
+							<Background gap={16} color="rgb(241 245 249)" />
+							<Controls showInteractive={false} />
+						</ReactFlow>
+					)}
 
 					{/* stats rollup — moved off the top bar to keep it uncluttered */}
 					{((traj.has_variants && traj.metric) || champ?.score != null || totalLearned > 0) && (

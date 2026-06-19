@@ -33,7 +33,7 @@ import { cn } from "@/lib/utils";
 // ── node geometry (mirrors TrajectoryGraph's vertical tree) ──
 const NODE_W = 184;
 const ROW_Y = 116;
-const COL_X = 208;
+const COL_X = 216;
 
 export interface LineageNode {
 	ts: string;
@@ -94,37 +94,74 @@ export function buildLineage(rows: MeCycleListItem[]): { nodes: LineageNode[]; h
 	return { nodes, hasRealLineage };
 }
 
-// Vertical layout: depth→y; the trunk (a node that is its parent's FIRST child)
-// keeps the parent's x; later siblings (branches) fan out left/right.
-function layout(nodes: LineageNode[]): Map<string, { x: number; y: number }> {
+// A node as actually drawn: linear-spine runs are collapsed, so a node's drawn
+// parent may be several real runs up the chain (`elided` counts the hidden ones)
+// and `displayDepth` is its position in the COLLAPSED tree, not the raw lineage.
+type DisplayNode = LineageNode & { displayParentTs?: string; elided: number; displayDepth: number };
+
+// Collapse long single-child "spine" segments so the drawn depth tracks BRANCH
+// structure, not raw run count. Without this a 50-run linear history renders as
+// a 50-deep vertical thread — tiny when fit-to-view and impossible to read (the
+// "tree is long → ugly" problem). We ALWAYS keep: roots, branch points and
+// leaves (child count ≠ 1), the first node of each branch, labeled forks, the
+// focused + compare-selected runs, and the most recent KEEP_RECENT runs (so the
+// active area is never hidden). Every other run on a straight spine folds into
+// the connecting edge as a "+N runs" badge.
+const KEEP_RECENT = 6;
+
+function buildDisplay(lineage: LineageNode[], atTs: string | undefined, compare: Set<string>): DisplayNode[] {
+	const byTs = new Map(lineage.map((n) => [n.ts, n] as const));
+	const kids = new Map<string | undefined, LineageNode[]>();
+	for (const n of lineage) { const a = kids.get(n.parentTs) || []; a.push(n); kids.set(n.parentTs, a); }
+	const nKids = (ts: string) => (kids.get(ts) || []).length;
+	const recent = new Set(
+		[...lineage].sort((a, b) => (b.ts || "").localeCompare(a.ts || "")).slice(0, KEEP_RECENT).map((n) => n.ts),
+	);
+	const isSig = (n: LineageNode) =>
+		!n.parentTs || !byTs.has(n.parentTs) ||              // root
+		nKids(n.ts) !== 1 ||                                 // branch point or leaf
+		(n.parentTs ? nKids(n.parentTs) !== 1 : false) ||    // first node of a branch
+		!!n.branchLabel || n.ts === atTs || compare.has(n.ts) || recent.has(n.ts);
+	const sig = lineage.filter(isSig);            // lineage is chrono (parents first)
+	const sigSet = new Set(sig.map((n) => n.ts));
+	const depthCache = new Map<string, number>();
+	const out: DisplayNode[] = [];
+	for (const n of sig) {
+		let p = n.parentTs, elided = 0;
+		while (p && byTs.has(p) && !sigSet.has(p)) { elided++; p = byTs.get(p)!.parentTs; }
+		const displayParentTs = p && byTs.has(p) && sigSet.has(p) ? p : undefined;
+		const dd = displayParentTs != null ? (depthCache.get(displayParentTs) ?? 0) + 1 : 0;
+		depthCache.set(n.ts, dd);
+		out.push({ ...n, displayParentTs, elided, displayDepth: dd });
+	}
+	return out;
+}
+
+// Tidy vertical tree (Knuth post-order): leaves pack left→right into COL_X slots,
+// every parent is centered over the span of its children — sibling subtrees can
+// never overlap (the old fixed-offset fan did), and a linear history draws as a
+// straight vertical trunk. Operates on the COLLAPSED display nodes.
+function layout(nodes: DisplayNode[]): Map<string, { x: number; y: number }> {
 	const pos = new Map<string, { x: number; y: number }>();
-	const byParent = new Map<string | undefined, LineageNode[]>();
-	for (const n of nodes) {
-		const a = byParent.get(n.parentTs) || [];
-		a.push(n);
-		byParent.set(n.parentTs, a);
-	}
-	// roots
-	const roots = byParent.get(undefined) || [];
-	roots.forEach((r, i) => pos.set(r.ts, { x: (i - (roots.length - 1) / 2) * COL_X, y: 0 }));
-	// BFS children, fanning siblings around the parent's x
-	const queue = [...roots];
-	const seen = new Set(roots.map((r) => r.ts));
-	while (queue.length) {
-		const p = queue.shift()!;
-		const px = pos.get(p.ts)?.x ?? 0;
-		const kids = (byParent.get(p.ts) || []).filter((k) => !seen.has(k.ts));
-		kids.forEach((k, i) => {
-			// first child stays on the trunk; others fan -, +, -, + …
-			const x = i === 0 ? px : px + (i % 2 === 1 ? 1 : -1) * Math.ceil(i / 2) * COL_X;
-			pos.set(k.ts, { x, y: k.depth * ROW_Y });
-			seen.add(k.ts);
-			queue.push(k);
-		});
-	}
-	// any orphan (cycle in lineage / unseen) → stack by depth
-	let orphan = 0;
-	for (const n of nodes) if (!pos.has(n.ts)) pos.set(n.ts, { x: (++orphan) * COL_X, y: n.depth * ROW_Y });
+	const byParent = new Map<string | undefined, DisplayNode[]>();
+	for (const n of nodes) { const a = byParent.get(n.displayParentTs) || []; a.push(n); byParent.set(n.displayParentTs, a); }
+	for (const arr of byParent.values()) arr.sort((a, b) => (a.ts || "").localeCompare(b.ts || ""));
+	let leaf = 0;
+	const seen = new Set<string>();
+	const place = (n: DisplayNode): number => {
+		if (seen.has(n.ts)) return pos.get(n.ts)?.x ?? 0;   // cycle guard
+		seen.add(n.ts);
+		const ch = (byParent.get(n.ts) || []).filter((k) => !seen.has(k.ts));
+		let x: number;
+		if (!ch.length) { x = leaf * COL_X; leaf++; }
+		else { const xs = ch.map(place); x = (xs[0] + xs[xs.length - 1]) / 2; }
+		pos.set(n.ts, { x, y: n.displayDepth * ROW_Y });
+		return x;
+	};
+	(byParent.get(undefined) || []).forEach(place);
+	for (const n of nodes) if (!pos.has(n.ts)) { pos.set(n.ts, { x: (leaf++) * COL_X, y: n.displayDepth * ROW_Y }); }
+	const xs = [...pos.values()].map((p) => p.x);
+	if (xs.length) { const mid = (Math.min(...xs) + Math.max(...xs)) / 2; for (const p of pos.values()) p.x -= mid; }
 	return pos;
 }
 
@@ -155,16 +192,18 @@ export default function BranchTreeView({
 	const byTs = useMemo(() => new Map(lineage.map((n) => [n.ts, n] as const)), [lineage]);
 
 	const { nodes, edges } = useMemo(() => {
-		const pos = layout(lineage);
-		const cut = atTs || "";
 		const sel = new Set(selectedForCompare);
-		const nodes: Node[] = lineage.map((n) => {
+		const display = buildDisplay(lineage, atTs, sel);
+		const shownByTs = new Map(display.map((n) => [n.ts, n] as const));
+		const pos = layout(display);
+		const cut = atTs || "";
+		const nodes: Node[] = display.map((n) => {
 			const isAt = n.ts === cut;
 			const isSel = sel.has(n.ts);
 			const tone = n.running ? "rgb(56 189 248)" : n.ok === false ? "rgb(225 29 72)" : "rgb(176 143 69)";
 			return {
 				id: n.ts,
-				position: pos.get(n.ts) || { x: 0, y: n.depth * ROW_Y },
+				position: pos.get(n.ts) || { x: 0, y: n.displayDepth * ROW_Y },
 				data: {
 					label: (
 						<div className="px-2.5 py-1.5 text-left" style={{ width: NODE_W }}>
@@ -206,18 +245,26 @@ export default function BranchTreeView({
 			};
 		});
 		const edges: Edge[] = [];
-		for (const n of lineage) {
-			if (!n.parentTs || !byTs.has(n.parentTs)) continue;
+		for (const n of display) {
+			if (!n.displayParentTs || !shownByTs.has(n.displayParentTs)) continue;
 			edges.push({
-				id: `e:${n.parentTs}->${n.ts}`,
-				source: n.parentTs,
+				id: `e:${n.displayParentTs}->${n.ts}`,
+				source: n.displayParentTs,
 				target: n.ts,
 				type: "smoothstep",
-				style: { stroke: "rgb(203 213 225)", strokeWidth: 1.75 },
+				// A collapsed spine of N hidden runs gets a "+N runs" badge so the
+				// elided history is legible without inflating the tree's depth.
+				label: n.elided > 0 ? `+${n.elided} run${n.elided > 1 ? "s" : ""}` : undefined,
+				labelShowBg: n.elided > 0,
+				labelBgPadding: [6, 2],
+				labelBgBorderRadius: 8,
+				labelStyle: { fill: "rgb(100 116 139)", fontSize: 10, fontWeight: 500 },
+				labelBgStyle: { fill: "rgb(248 250 252)", stroke: "rgb(226 232 240)" },
+				style: { stroke: "rgb(203 213 225)", strokeWidth: n.elided > 0 ? 1.75 : 1.5, strokeDasharray: n.elided > 0 ? "5 3" : undefined },
 			});
 		}
 		return { nodes, edges };
-	}, [lineage, byTs, atTs, selectedForCompare]);
+	}, [lineage, atTs, selectedForCompare]);
 
 	// Close the menu on outside click / Escape (mirrors TrajectoryGraph).
 	useEffect(() => {

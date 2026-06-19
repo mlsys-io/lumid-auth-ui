@@ -49,19 +49,19 @@ function LogRow({ r }: { r: CycleLogRow }) {
 				{r.prompt && (
 					<div>
 						<div className="text-[9px] uppercase tracking-wide text-slate-400 mb-0.5">prompt</div>
-						<div className="text-[11px] text-slate-600 leading-snug whitespace-pre-wrap max-h-32 overflow-y-auto">{String(r.prompt).slice(0, 2000)}</div>
+						<div className="text-[11px] text-slate-600 leading-snug whitespace-pre-wrap break-words">{String(r.prompt).slice(0, 2000)}</div>
 					</div>
 				)}
 				{r.thinking && (
 					<div>
 						<div className="text-[9px] uppercase tracking-wide text-slate-400 mb-0.5">thinking</div>
-						<div className="text-[11px] text-slate-400 italic leading-snug whitespace-pre-wrap max-h-24 overflow-y-auto">{String(r.thinking).slice(0, 1200)}</div>
+						<div className="text-[11px] text-slate-400 italic leading-snug whitespace-pre-wrap break-words">{String(r.thinking).slice(0, 1200)}</div>
 					</div>
 				)}
 				{r.response && (
 					<div>
 						<div className="text-[9px] uppercase tracking-wide text-gold-600 mb-0.5">response</div>
-						<div className="text-[11px] text-slate-700 leading-snug whitespace-pre-wrap max-h-40 overflow-y-auto">{String(r.response).slice(0, 3000)}</div>
+						<div className="text-[11px] text-slate-700 leading-snug whitespace-pre-wrap break-words">{String(r.response).slice(0, 3000)}</div>
 					</div>
 				)}
 			</li>

@@ -155,9 +155,14 @@ export default function CaseContentViewer({ app, loop, expId, caseId, caseLabel,
 			.finally(() => setFileLoading(false));
 	};
 
-	// Score trajectory values (version-aware cut, like CaseRow).
+	// Score trajectory values (version-aware cut, like CaseRow). A version pin
+	// must NOT erase the whole curve: if cutting to the pinned version leaves
+	// fewer than 2 points (e.g. the pinned run predates this case's scoring),
+	// fall back to the full history so the trend stays visible.
 	const cut = atTs ? tsDigits(atTs) : "";
-	const hist = (book?.score_history ?? []).filter((p) => !cut || tsDigits(p.ts) <= cut);
+	const fullHist = book?.score_history ?? [];
+	const cutHist = fullHist.filter((p) => !cut || tsDigits(p.ts) <= cut);
+	const hist = cutHist.length >= 2 ? cutHist : fullHist;
 	const values = hist.map((p) => p.score);
 
 	// Provenance breakdown — experiment questions first, else derive from the
