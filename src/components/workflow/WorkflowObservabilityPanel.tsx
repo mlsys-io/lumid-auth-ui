@@ -134,6 +134,21 @@ export default function WorkflowObservabilityPanel({
 	const [schedDirty, setSchedDirty] = useState(false);
 	useEffect(() => { setSched(schedSeed); setSchedDirty(false); }, [schedSeed]);
 
+	// Per-workflow model switch — sits beside the schedule control. Writes the
+	// loops[].model override via patchLoop; the scheduler maps it to the cycle's
+	// LLM env. "" = the runtime default (tenant cycles → shared kv.run Gemma).
+	const [model, setModel] = useState<string>((wf as { model?: string }).model || "");
+	useEffect(() => { setModel((wf as { model?: string }).model || ""); }, [wf]);
+	const saveModel = async (m: string) => {
+		setModel(m); setBusy("save");
+		try {
+			await me.patchLoop(app, loop, { model: m });
+			toast.success(m ? `Model → ${m}` : "Model → default (kv.run Gemma)");
+			onChanged?.();
+		} catch (e) { toast.error(String((e as Error)?.message ?? e)); }
+		finally { setBusy(null); }
+	};
+
 	const runNow = async () => {
 		setBusy("run");
 		try {
@@ -516,6 +531,19 @@ export default function WorkflowObservabilityPanel({
 							)}
 						</PopoverContent>
 					</Popover>
+					{/* Per-workflow model switch — beside the schedule control. */}
+					<select
+						value={model}
+						onChange={(e) => saveModel(e.target.value)}
+						disabled={!!busy}
+						title="Which model this workflow's runtime uses. Default = the shared kv.run Gemma GPU for tenant cycles; tiers route through the Claude CLI."
+						className="px-2 py-1.5 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 max-w-[160px]"
+					>
+						<option value="">Default (kv.run Gemma)</option>
+						<option value="sonnet">Claude Sonnet</option>
+						<option value="opus">Claude Opus</option>
+						<option value="haiku">Claude Haiku</option>
+					</select>
 					{running ? (
 						<button onClick={stopRun} disabled={busy === "run"}
 							className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-rose-500 text-white hover:bg-rose-600 active:scale-95 disabled:opacity-50 transition-all shadow-sm">

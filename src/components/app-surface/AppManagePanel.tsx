@@ -30,11 +30,13 @@ type LoopDef = { name?: string; schedule?: string; skills?: unknown[]; steps?: u
 // Per-workflow runtime model options (loops[].model). "" = the app default;
 // tiers route through the Claude CLI, kvrun-gemma through the kv.run GPU.
 const WORKFLOW_MODELS: { value: string; label: string }[] = [
-	{ value: "", label: "Default model" },
+	// "Default" = no per-workflow override → the runtime default, which for
+	// tenant cycles is the shared kv.run Gemma GPU (label says so, since
+	// "default" was unclear). The tiers override to the Claude CLI.
+	{ value: "", label: "Default (kv.run Gemma)" },
 	{ value: "sonnet", label: "Claude Sonnet" },
 	{ value: "opus", label: "Claude Opus" },
 	{ value: "haiku", label: "Claude Haiku" },
-	{ value: "kvrun-gemma", label: "kv.run (Gemma GPU)" },
 ];
 type SkillImport = string | { repo?: string; version?: string };
 

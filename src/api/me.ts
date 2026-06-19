@@ -306,7 +306,7 @@ export const me = {
   patchLoop: (
     app: string,
     loop: string,
-    body: { runtime?: "local" | "cloud"; schedule?: string; enabled?: boolean; goal?: string },
+    body: { runtime?: "local" | "cloud"; schedule?: string; enabled?: boolean; goal?: string; model?: string },
   ) =>
     call<{ app: string; loop: string; overrides: Record<string, unknown> }>(
       "PATCH",
