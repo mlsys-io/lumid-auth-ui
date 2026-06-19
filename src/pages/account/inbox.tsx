@@ -50,19 +50,24 @@ export default function InboxPage() {
 	const [appFilter, setAppFilter] = useState("");
 	const [unreadOnly, setUnreadOnly] = useState(false);
 	const [messages, setMessages] = useState<InboxMessage[]>([]);
+	// "Needs you" — attention-needed kinds fetched SEPARATELY (kind filter) so
+	// questions/flags/drafts surface above the routine cycle_summary flood
+	// (the recent-100 feed is ~all digests; an escalation would never appear).
+	const [attention, setAttention] = useState<InboxMessage[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [unread, setUnread] = useState(0);
+	const ATTENTION_KINDS = "question,flag,draft_pending";
 
 	const refresh = async () => {
 		try {
-			const resp = await listInboxMessages({
-				app: appFilter || undefined,
-				unread_only: unreadOnly,
-				limit: 100,
-			});
+			const [resp, att] = await Promise.all([
+				listInboxMessages({ app: appFilter || undefined, unread_only: unreadOnly, limit: 100 }),
+				listInboxMessages({ app: appFilter || undefined, kind: ATTENTION_KINDS, limit: 50 }),
+			]);
 			setMessages(resp.messages);
 			setUnread(resp.unread);
+			setAttention(att.messages);
 			setError(null);
 		} catch (e: unknown) {
 			const msg = e instanceof Error ? e.message : String(e);
@@ -82,14 +87,14 @@ export default function InboxPage() {
 		const tick = async () => {
 			let ok = true;
 			try {
-				const resp = await listInboxMessages({
-					app: appFilter || undefined,
-					unread_only: unreadOnly,
-					limit: 100,
-				});
+				const [resp, att] = await Promise.all([
+					listInboxMessages({ app: appFilter || undefined, unread_only: unreadOnly, limit: 100 }),
+					listInboxMessages({ app: appFilter || undefined, kind: ATTENTION_KINDS, limit: 50 }),
+				]);
 				if (cancelled) return;
 				setMessages(resp.messages);
 				setUnread(resp.unread);
+				setAttention(att.messages);
 				setError(null);
 			} catch (e: unknown) {
 				ok = false;
@@ -187,15 +192,44 @@ export default function InboxPage() {
 				</div>
 			)}
 
-			{!loading && !error && messages.length === 0 && (
+			{/* Needs you — attention-needed messages (questions/flags/drafts),
+			    surfaced above the routine cycle_summary activity feed. */}
+			{attention.length > 0 && (
+				<section className="mb-6">
+					<h2 className="text-sm font-semibold text-amber-900 flex items-center gap-2 mb-2">
+						<MessageSquare className="w-4 h-4 text-amber-500" />
+						Needs you
+						<span className="bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full text-xs">
+							{attention.length}
+						</span>
+					</h2>
+					<p className="text-xs text-muted-foreground mb-3">
+						Decisions your AI is unsure about + pending drafts. Reply and the next cycle ingests your guidance.
+					</p>
+					<div className="space-y-3">
+						{attention.map((m) => (
+							<MessageCard key={`att:${m.id}`} message={m} onSeen={() => onSeen(m.id)} onAction={refresh} />
+						))}
+					</div>
+				</section>
+			)}
+
+			{!loading && !error && messages.length === 0 && attention.length === 0 && (
 				<EmptyState />
 			)}
 
-			<div className="space-y-3">
-				{messages.map((m) => (
-					<MessageCard key={m.id} message={m} onSeen={() => onSeen(m.id)} onAction={refresh} />
-				))}
-			</div>
+			{messages.length > 0 && (
+				<>
+					{attention.length > 0 && (
+						<h2 className="text-sm font-semibold text-muted-foreground mb-2">Recent activity</h2>
+					)}
+					<div className="space-y-3">
+						{messages.map((m) => (
+							<MessageCard key={m.id} message={m} onSeen={() => onSeen(m.id)} onAction={refresh} />
+						))}
+					</div>
+				</>
+			)}
 		</div>
 	);
 }

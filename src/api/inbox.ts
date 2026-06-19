@@ -42,6 +42,9 @@ export interface ListMessagesParams {
 	since?: number;
 	limit?: number;
 	unread_only?: boolean;
+	/** Comma-separated kind allowlist, e.g. "question,flag,draft_pending" —
+	 *  surfaces attention-needed messages above the cycle_summary flood. */
+	kind?: string;
 }
 
 export interface ListMessagesResponse {
