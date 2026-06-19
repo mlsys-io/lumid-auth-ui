@@ -25,7 +25,17 @@ import {
 	Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 
-type LoopDef = { name?: string; schedule?: string; skills?: unknown[]; steps?: unknown[]; goal?: string };
+type LoopDef = { name?: string; schedule?: string; skills?: unknown[]; steps?: unknown[]; goal?: string; model?: string };
+
+// Per-workflow runtime model options (loops[].model). "" = the app default;
+// tiers route through the Claude CLI, kvrun-gemma through the kv.run GPU.
+const WORKFLOW_MODELS: { value: string; label: string }[] = [
+	{ value: "", label: "Default model" },
+	{ value: "sonnet", label: "Claude Sonnet" },
+	{ value: "opus", label: "Claude Opus" },
+	{ value: "haiku", label: "Claude Haiku" },
+	{ value: "kvrun-gemma", label: "kv.run (Gemma GPU)" },
+];
 type SkillImport = string | { repo?: string; version?: string };
 
 // xp.io page for an owner/name repo ref. Returns null for refs that aren't
@@ -159,6 +169,21 @@ export default function AppManagePanel() {
 			seq.add(d.createNode(entry));
 		}, `Workflow "${wf.name}" added — the scheduler discovers it on its next tick.`);
 
+	// Per-workflow model switch — writes loops[].model (comment-preserving).
+	// The scheduler reads it and routes this loop's LLM calls accordingly.
+	const setLoopModel = (loopName: string, model: string) =>
+		mutate((d) => {
+			const seq = d.get(loopsKey, true) as YAMLSeq | undefined;
+			if (!seq || !Array.isArray(seq.items)) return;
+			for (const it of seq.items) {
+				const node = it as { get?: (k: string) => unknown; set?: (k: string, v: unknown) => void; has?: (k: string) => boolean; delete?: (k: string) => void };
+				if (node.get?.("name") === loopName) {
+					if (model) node.set?.("model", model);
+					else if (node.has?.("model")) node.delete?.("model");
+				}
+			}
+		}, model ? `"${loopName}" model → ${model}.` : `"${loopName}" → default model.`);
+
 	const removeWorkflow = async (name: string) => {
 		if (!window.confirm(`Remove workflow "${name}"? Its run history stays on disk.`)) return;
 		try {
@@ -270,6 +295,15 @@ export default function AppManagePanel() {
 										{Array.isArray(l.steps) && l.steps.length > 0 && <span className="ml-2 text-slate-300">· {l.steps.length} step{l.steps.length > 1 ? "s" : ""}</span>}
 									</div>
 								</div>
+								<select
+									value={l.model || ""}
+									onChange={(e) => setLoopModel(l.name || "", e.target.value)}
+									disabled={readOnly || saving || !l.name}
+									title="Which model this workflow's runtime uses"
+									className="text-[11px] rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-slate-600 disabled:opacity-40 max-w-[140px]"
+								>
+									{WORKFLOW_MODELS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+								</select>
 								<button
 									onClick={() => runNow(l.name || "")}
 									disabled={!l.name || runningLoop === l.name}
