@@ -287,10 +287,13 @@ function LinearTrajectory({ chain, metric, baseline, hib, pickedId, onFocus, onO
 
 export interface TrajectoryVersion { cycleTs?: string; runTs?: string; label: string; ts?: string }
 
-function Inner({ app, loop, definition, onSelectVersion, running }: {
+function Inner({ app, loop, definition, onSelectVersion, running, onShowLog }: {
 	app: string; loop: string; definition?: LoopDefinition | null;
 	onSelectVersion?: (v: TrajectoryVersion | null) => void;
 	running?: boolean;
+	// Clicking a run's node/time-chip opens its within-run log (the panel
+	// swaps the canvas to the transcript) — replaces the old "Run log" button.
+	onShowLog?: (ts: string) => void;
 }) {
 	const [traj, setTraj] = useState<Trajectory | null>(null);
 	const [signals, setSignals] = useState<TrajectorySignal[]>([]);
@@ -484,7 +487,11 @@ function Inner({ app, loop, definition, onSelectVersion, running }: {
 	const focusRun = useCallback((tn: GNode) => {
 		setPicked(tn);
 		onSelectVersion?.({ cycleTs: tn.cycle_ts, runTs: tn.run_ts, label: tn.label });
-	}, [onSelectVersion]);
+		// Clicking a run's node/chip opens its within-run log (consolidated into
+		// the trajectory view — no separate "Run log" button). Ghosts have no run.
+		const ts = tn.run_ts || tn.cycle_ts;
+		if (ts && !tn.proposed) onShowLog?.(ts);
+	}, [onSelectVersion, onShowLog]);
 
 	const branchFrom = useCallback(async (tn: GNode) => {
 		setMenu(null);
@@ -545,18 +552,6 @@ function Inner({ app, loop, definition, onSelectVersion, running }: {
 	const totalLearned = (traj.cycles || []).reduce((n, c) => n + (c.learned || 0), 0);
 	const champ = (traj.nodes || []).filter((n) => n.is_champion).slice(-1)[0];
 
-	// Pure linear chain = no node has >1 child and there are no queued branches.
-	// A straight line of cycles (e.g. mbb-ai's regression_sweep) renders far
-	// better as a metric trend (LinearTrajectory) than a tall, zoomed-out node
-	// tree. Branched trajectories keep the ReactFlow tree (with collapse).
-	const linearChain = (() => {
-		const real = model.filter((n) => !n.proposed);
-		if (model.some((n) => n.proposed) || real.length < 3) return null;
-		const kids = new Map<string, number>();
-		for (const n of real) if (n.parent_id) kids.set(n.parent_id, (kids.get(n.parent_id) || 0) + 1);
-		if ([...kids.values()].some((c) => c > 1)) return null; // a branch exists
-		return [...real].sort((a, b) => a.depth - b.depth);
-	})();
 
 	return (
 		<div className="relative h-full rounded-xl border border-slate-200 bg-white overflow-hidden">
@@ -572,15 +567,11 @@ function Inner({ app, loop, definition, onSelectVersion, running }: {
 						<span className="ml-auto text-[10px] text-slate-300 normal-case tracking-normal">click a node · right-click to branch</span>
 					</div>
 
-					{linearChain ? (
-						<LinearTrajectory
-							chain={linearChain} metric={traj.metric} baseline={baseline} hib={hib}
-							pickedId={picked?.id}
-							onFocus={focusRun}
-							onOpen={(n) => openPipelineRef.current(n)}
-							onMenu={(e, n) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, node: n }); }}
-						/>
-					) : (
+					{/* Trajectory is ALWAYS the node tree — every run is a node labeled
+					    with its date + score (the linear chart hid the per-run score,
+					    and made mbb-ai look like Metrics). Collapse keeps long chains
+					    legible; a linear history is a straight vertical trunk. */}
+					{(
 						<ReactFlow
 							key={`${nodes.length}`}
 							nodes={nodes}
@@ -739,14 +730,15 @@ function Inner({ app, loop, definition, onSelectVersion, running }: {
 	);
 }
 
-export default function TrajectoryGraph({ app, loop, definition, onSelectVersion, running }: {
+export default function TrajectoryGraph({ app, loop, definition, onSelectVersion, running, onShowLog }: {
 	app: string; loop: string; definition?: LoopDefinition | null;
 	onSelectVersion?: (v: TrajectoryVersion | null) => void;
 	running?: boolean;
+	onShowLog?: (ts: string) => void;
 }) {
 	// No shared ReactFlowProvider: the trajectory <ReactFlow> and the pipeline
 	// pane's WorkflowCanvas <ReactFlow> must each own an isolated store —
 	// otherwise interacting with the pipeline clobbers the trajectory's nodes
 	// (and the tree vanishes on return). Each bare <ReactFlow> self-stores.
-	return <Inner app={app} loop={loop} definition={definition} onSelectVersion={onSelectVersion} running={running} />;
+	return <Inner app={app} loop={loop} definition={definition} onSelectVersion={onSelectVersion} running={running} onShowLog={onShowLog} />;
 }

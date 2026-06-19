@@ -290,7 +290,7 @@ export default function BranchTreeView({
 				<button onClick={onBack} className="flex-shrink-0 inline-flex items-center gap-1 text-[12px] text-slate-500 hover:text-slate-900 px-2 py-1 -ml-1 rounded-lg hover:bg-slate-100 transition-colors"><ArrowLeft className="w-3.5 h-3.5" /> Trajectory</button>
 				<div className="flex items-center gap-1.5 min-w-0">
 					<GitBranch className="w-3.5 h-3.5 text-gold-500 flex-shrink-0" />
-					<span className="text-sm font-medium text-slate-900">Lineage</span>
+					<span className="text-sm font-medium text-slate-900">History</span>
 					<span className="text-[11px] text-slate-400 truncate">· {hasRealLineage ? "runs by parent → child" : "runs over time (no branches yet)"}</span>
 				</div>
 				{selectedForCompare.length > 0 && (
@@ -300,7 +300,7 @@ export default function BranchTreeView({
 			</div>
 			<div className="flex-1 min-h-0 relative">
 				{rows === null ? (
-					<div className="h-full flex items-center justify-center text-xs text-slate-400"><Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading lineage…</div>
+					<div className="h-full flex items-center justify-center text-xs text-slate-400"><Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading history…</div>
 				) : lineage.length === 0 ? (
 					<div className="h-full flex flex-col items-center justify-center gap-2 text-center text-slate-400 p-6">
 						<GitCommitVertical className="w-6 h-6 text-slate-300" />
@@ -384,7 +384,7 @@ export function RunCompareView({ app, loop, tsA, tsB, onBack }: {
 	return (
 		<div className="h-full flex flex-col rounded-xl border border-slate-200 bg-white overflow-hidden animate-in fade-in duration-200">
 			<div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-100">
-				<button onClick={onBack} className="flex-shrink-0 inline-flex items-center gap-1 text-[12px] text-slate-500 hover:text-slate-900 px-2 py-1 -ml-1 rounded-lg hover:bg-slate-100 transition-colors"><ArrowLeft className="w-3.5 h-3.5" /> Lineage</button>
+				<button onClick={onBack} className="flex-shrink-0 inline-flex items-center gap-1 text-[12px] text-slate-500 hover:text-slate-900 px-2 py-1 -ml-1 rounded-lg hover:bg-slate-100 transition-colors"><ArrowLeft className="w-3.5 h-3.5" /> History</button>
 				<div className="flex items-center gap-1.5 min-w-0">
 					<GitBranch className="w-3.5 h-3.5 text-sky-500 flex-shrink-0" />
 					<span className="text-sm font-medium text-slate-900">Compare runs</span>

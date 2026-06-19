@@ -594,17 +594,13 @@ export default function WorkflowObservabilityPanel({
 						<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400 uppercase flex items-center gap-1.5 flex-shrink-0 px-3 py-2 border-b border-slate-100">
 							<Database className="w-3 h-3 text-gold-500" /> Data assets
 							{/* #16 — branch/lineage tree of the run history. */}
-							<button onClick={() => { clearFocus(); setTreeFocus(true); }} title="Open the run lineage — runs as a parent→child branch tree, with cross-run compare"
+							<button onClick={() => { clearFocus(); setTreeFocus(true); }} title="Open the run history — runs as a parent→child branch tree, with cross-run compare"
 								className={cn("ml-auto inline-flex items-center gap-1 normal-case tracking-normal text-[10px] rounded-full px-1.5 py-0.5 border transition-colors",
 									treeFocus ? "text-gold-700 bg-gold-50 border-gold-200" : "text-slate-500 bg-white border-slate-200 hover:border-gold-200 hover:text-gold-700")}>
-								<GitBranch className="w-3 h-3" /> Lineage
+								<GitBranch className="w-3 h-3" /> History
 							</button>
-							{/* #14 — within-run transcript of the selected (or latest) run. */}
-							<button onClick={() => { clearFocus(); setLogFocus(true); }} title="Open the within-run transcript (step-by-step analyst↔judge log)"
-								className={cn("inline-flex items-center gap-1 normal-case tracking-normal text-[10px] rounded-full px-1.5 py-0.5 border transition-colors",
-									logFocus ? "text-violet-700 bg-violet-50 border-violet-200" : "text-slate-500 bg-white border-slate-200 hover:border-violet-200 hover:text-violet-700")}>
-								<Activity className="w-3 h-3" /> Run log
-							</button>
+							{/* #14 — the within-run transcript is no longer a button: clicking
+							    a run's time chip / node in the trajectory opens its log. */}
 							{version && (
 								<button onClick={() => setVersion(null)} title="Back to latest" className="inline-flex items-center gap-1 normal-case tracking-normal text-[10px] text-gold-700 bg-gold-50 border border-gold-200 rounded-full px-1.5 py-0.5 hover:bg-gold-100 transition-colors">
 									as of {cycleDate(version.runTs || version.cycleTs)} <span className="text-gold-400">✕</span>
@@ -651,7 +647,8 @@ export default function WorkflowObservabilityPanel({
 					) : caseFocus ? (
 						<CaseMapping app={app} loop={loop} caseId={caseFocus.id} caseLabel={caseFocus.label} atTs={version?.runTs || version?.cycleTs} onBack={() => setCaseFocus(null)} />
 					) : (
-						<TrajectoryGraph app={app} loop={loop} definition={definition} onSelectVersion={setVersion} running={running} />
+						<TrajectoryGraph app={app} loop={loop} definition={definition} onSelectVersion={setVersion} running={running}
+							onShowLog={(ts) => { setVersion({ runTs: ts, cycleTs: ts, label: cycleDate(ts) || ts }); setLogFocus(true); }} />
 					)}
 				</div>
 			</div>
