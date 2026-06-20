@@ -634,8 +634,7 @@ export default function WorkflowObservabilityPanel({
 			    save vertical space (WS-1/WS-3). */}
 			<div className="flex items-center gap-3 flex-wrap">
 				<div className="min-w-0 flex-1">
-					<GoalHeader goal={wf.goal} kpis={buildGoalKpis(summary, cycleFiles)} app={app} loop={loop} onSaved={onChanged}
-							experiment={loopExp} onOpenMetrics={() => { switchMode("observe"); openMetrics(); }} />
+					<GoalHeader goal={wf.goal} kpis={buildGoalKpis(summary, cycleFiles)} app={app} loop={loop} onSaved={onChanged} />
 				</div>
 				<div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 flex-shrink-0">
 					{(["observe", "improve", "tune"] as WorkflowMode[]).map((m) => {
@@ -851,7 +850,7 @@ function buildGoalKpis(summary: CycleSummary | null, files: Record<string, unkno
 // KPI chips show inline, editing happens in a popover (pencil). Saving PATCHes
 // the goal into the tenant's .user-overrides.yaml (merged over the declared
 // xpcloud.yaml goal).
-function GoalHeader({ goal, kpis, app, loop, onSaved, experiment, onOpenMetrics }: { goal?: { primary: string; tracked?: string[] }; kpis: GoalKpi[]; app?: string; loop?: string; onSaved?: () => void; experiment?: MeExperiment | null; onOpenMetrics?: () => void }) {
+function GoalHeader({ goal, kpis, app, loop, onSaved }: { goal?: { primary: string; tracked?: string[] }; kpis: GoalKpi[]; app?: string; loop?: string; onSaved?: () => void }) {
 	const [open, setOpen] = useState(false);
 	const [draft, setDraft] = useState(goal?.primary || "");
 	const [saving, setSaving] = useState(false);
@@ -921,9 +920,6 @@ function GoalHeader({ goal, kpis, app, loop, onSaved, experiment, onOpenMetrics 
 								<Pencil className="w-3 h-3" />
 							</button>
 						</PopoverTrigger>
-						{/* #15 — the metric this goal is scored on (name + current mean +
-						    verdict), linking the loop→its experiment. Clicks open MetricsView. */}
-						<MetricBadge experiment={experiment} onClick={onOpenMetrics} />
 						{kpis.length > 0 && (
 							<div className="flex items-center gap-2 flex-wrap ml-auto">
 								{kpis.slice(0, 4).map((k) => (
@@ -942,37 +938,6 @@ function GoalHeader({ goal, kpis, app, loop, onSaved, experiment, onOpenMetrics 
 			</div>
 			{editor}
 		</Popover>
-	);
-}
-
-// MetricBadge — #15. The goal's metric at a glance: "metric: <name>" + the
-// current best mean + a verdict chip. Generic over whatever metric the loop's
-// attached experiment declares; clicking opens the metric charts (MetricsView).
-function MetricBadge({ experiment: e, onClick }: { experiment?: MeExperiment | null; onClick?: () => void }) {
-	if (!e) return null;
-	const name = e.metric_name || e.metric?.name || "";
-	if (!name) return null;
-	// Current mean: the best variant's mean if available, else baseline_value.
-	const best = e.best_variant ? e.variants?.[e.best_variant] : undefined;
-	const mean = best?.mean ?? e.baseline_value ?? null;
-	const fmt = (v: number) => (Number.isInteger(v) ? String(v) : Math.abs(v) < 1 ? String(+v.toFixed(3)) : String(+v.toFixed(2)));
-	const verdict = e.criteria_met ? "criteria met" : (e.status && e.status !== "running" ? e.status : "running");
-	const verdictCls = e.criteria_met
-		? "bg-gold-100 text-gold-700 border-gold-200"
-		: "bg-violet-50 text-violet-600 border-violet-200";
-	return (
-		<button
-			type="button"
-			onClick={onClick}
-			title={`Metric: ${name}${typeof mean === "number" ? ` · current ${fmt(mean)}` : ""}${e.hypothesis ? ` · ${e.hypothesis}` : ""} — open metric charts`}
-			className="inline-flex items-center gap-1.5 text-[10.5px] rounded-full border border-violet-200 bg-violet-50/60 px-2 py-0.5 hover:bg-violet-100 transition-colors flex-shrink-0"
-		>
-			<Activity className="w-3 h-3 text-violet-500" />
-			<span className="text-slate-500">metric</span>
-			<span className="font-semibold text-slate-800">{name.replace(/_/g, " ")}</span>
-			{typeof mean === "number" && <span className="tabular-nums text-slate-700 font-medium">{fmt(mean)}</span>}
-			<span className={cn("rounded-full border px-1.5 leading-tight", verdictCls)}>{verdict}</span>
-		</button>
 	);
 }
 
