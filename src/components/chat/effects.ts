@@ -10,7 +10,7 @@
 
 export type DataScope =
 	| 'apps' | 'workflows' | 'loops' | 'runs' | 'cycles'
-	| 'drafts' | 'knowledge' | 'config' | 'experiments' | 'users';
+	| 'drafts' | 'knowledge' | 'config' | 'experiments' | 'users' | 'ui';
 
 export const TOOL_EFFECTS: Record<string, DataScope[]> = {
 	// loop / workflow execution + schedule
@@ -35,6 +35,13 @@ export const TOOL_EFFECTS: Record<string, DataScope[]> = {
 	// review + config (C3 tools)
 	review_action: ['cycles', 'runs'],
 	app_config_set: ['apps', 'config', 'workflows'],
+	// app-surface authoring (chat edits/regenerates an app's page) → re-render
+	// the live surface + the app page.
+	app_ui_set: ['ui', 'apps', 'config'],
+	app_ui_generate: ['ui', 'apps', 'config'],
+	// run lifecycle (advisory markers the trajectory/run views read).
+	run_promote: ['runs', 'cycles'],
+	run_discard: ['runs', 'cycles'],
 	// knowledge
 	xp_ingest: ['knowledge'],
 	xp_feedback: ['knowledge'],
@@ -55,10 +62,17 @@ export interface StudioDataDetail {
 	loop?: string;
 }
 
-/** Fire the chat→page invalidation event for a successful mutating tool. */
-export function dispatchToolEffects(name: string, args?: Record<string, unknown>, result?: Record<string, unknown>): void {
-	const scopes = TOOL_EFFECTS[name];
-	if (!scopes) return;
+/**
+ * Fire the chat→page invalidation event for a successful mutating tool.
+ *
+ * `scopesOverride` is the server-authoritative scope list emitted on the
+ * `tool_call` event (me_agent_scopes.go). When present it wins, so a NEW
+ * backend tool refetches the right pages with no change here; the local
+ * TOOL_EFFECTS map is the fallback for older servers / tools not yet emitting.
+ */
+export function dispatchToolEffects(name: string, args?: Record<string, unknown>, result?: Record<string, unknown>, scopesOverride?: DataScope[]): void {
+	const scopes = (scopesOverride && scopesOverride.length ? scopesOverride : TOOL_EFFECTS[name]);
+	if (!scopes || !scopes.length) return;
 	const pickStr = (...vals: unknown[]) => {
 		for (const v of vals) if (typeof v === 'string' && v) return v;
 		return undefined;
@@ -122,6 +136,13 @@ export function toolLink(name: string, result?: Record<string, unknown>, args?: 
 		}
 		case 'app_detail':
 			return appName ? { to: `/studio/apps/${encodeURIComponent(appName)}`, label: 'Open' } : undefined;
+		case 'app_ui_set':
+		case 'app_ui_generate': {
+			// Land on the surface the chat just authored so the user sees it.
+			const surface = String(result.surface || '');
+			const sfx = surface && surface !== 'home' ? `/${encodeURIComponent(surface)}` : '';
+			return appName ? { to: `/studio/a/${encodeURIComponent(appName)}${sfx}`, label: 'View page' } : undefined;
+		}
 		case 'app_action': {
 			// GPU rental create returns a task_id → link to the live rental.
 			const taskID = String(result.task_id || '');

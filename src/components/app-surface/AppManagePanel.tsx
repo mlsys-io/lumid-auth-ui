@@ -11,23 +11,52 @@
 // skills root, so adding one goes through the add_skill intent (same flow as
 // the marketplace's "Add to app…") rather than a bare yaml edit.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { parseDocument, YAMLSeq } from "yaml";
 import { toast } from "sonner";
 import {
 	Loader2, Play, Trash2, Plus, Puzzle, Pencil, Check,
-	CalendarClock, BookOpen, Database, Search, ArrowLeft, Share2, GitFork, UploadCloud, GitPullRequest, DownloadCloud,
+	CalendarClock, BookOpen, Database, Search, ArrowLeft,
 } from "lucide-react";
-import apiClient from "@/api/client";
 import { me, MeApiError, waitForIntent } from "@/api/me";
 import { bearerHeader } from "@/api/session-bearer";
 import {
 	Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 
-type LoopDef = { name?: string; schedule?: string; skills?: unknown[]; steps?: unknown[]; goal?: string };
+type LoopDef = { name?: string; schedule?: string; skills?: unknown[]; steps?: unknown[]; goal?: string; model?: string };
+
+// Per-workflow runtime model options (loops[].model). "" = the app default;
+// tiers route through the Claude CLI, kvrun-gemma through the kv.run GPU.
+const WORKFLOW_MODELS: { value: string; label: string }[] = [
+	// "Default" = no per-workflow override → the runtime default, which for
+	// tenant cycles is the shared kv.run Gemma GPU (label says so, since
+	// "default" was unclear). The tiers override to the Claude CLI.
+	{ value: "", label: "Default (kv.run Gemma)" },
+	{ value: "sonnet", label: "Claude Sonnet" },
+	{ value: "opus", label: "Claude Opus" },
+	{ value: "haiku", label: "Claude Haiku" },
+];
 type SkillImport = string | { repo?: string; version?: string };
+
+// xp.io page for an owner/name repo ref. Returns null for refs that aren't
+// xp.io repos (community skills, bare ids) so callers fall back to plain text.
+function xpioHref(ref: string): string | null {
+	if (!ref || !ref.includes("/") || ref.startsWith("community/")) return null;
+	return `https://xp.io/${ref}`;
+}
+// Render a repo ref as a link to its xp.io page when it has one, else as text.
+function XpioRef({ ref, className, children }: { ref: string; className?: string; children?: ReactNode }) {
+	const href = xpioHref(ref);
+	if (!href) return <span className={className}>{children ?? ref}</span>;
+	return (
+		<a href={href} target="_blank" rel="noreferrer" title={`Open ${ref} on xp.io`}
+			className={className ? `${className} hover:underline` : "hover:underline"}>
+			{children ?? ref}
+		</a>
+	);
+}
 
 const SCHEDULE_PRESETS: { label: string; value: string }[] = [
 	{ label: "Manual only (@trigger)", value: "@trigger" },
@@ -142,6 +171,21 @@ export default function AppManagePanel() {
 			seq.add(d.createNode(entry));
 		}, `Workflow "${wf.name}" added — the scheduler discovers it on its next tick.`);
 
+	// Per-workflow model switch — writes loops[].model (comment-preserving).
+	// The scheduler reads it and routes this loop's LLM calls accordingly.
+	const setLoopModel = (loopName: string, model: string) =>
+		mutate((d) => {
+			const seq = d.get(loopsKey, true) as YAMLSeq | undefined;
+			if (!seq || !Array.isArray(seq.items)) return;
+			for (const it of seq.items) {
+				const node = it as { get?: (k: string) => unknown; set?: (k: string, v: unknown) => void; has?: (k: string) => boolean; delete?: (k: string) => void };
+				if (node.get?.("name") === loopName) {
+					if (model) node.set?.("model", model);
+					else if (node.has?.("model")) node.delete?.("model");
+				}
+			}
+		}, model ? `"${loopName}" model → ${model}.` : `"${loopName}" → default model.`);
+
 	const removeWorkflow = async (name: string) => {
 		if (!window.confirm(`Remove workflow "${name}"? Its run history stays on disk.`)) return;
 		try {
@@ -253,6 +297,15 @@ export default function AppManagePanel() {
 										{Array.isArray(l.steps) && l.steps.length > 0 && <span className="ml-2 text-slate-300">· {l.steps.length} step{l.steps.length > 1 ? "s" : ""}</span>}
 									</div>
 								</div>
+								<select
+									value={l.model || ""}
+									onChange={(e) => setLoopModel(l.name || "", e.target.value)}
+									disabled={readOnly || saving || !l.name}
+									title="Which model this workflow's runtime uses"
+									className="text-[11px] rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-slate-600 disabled:opacity-40 max-w-[140px]"
+								>
+									{WORKFLOW_MODELS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+								</select>
 								<button
 									onClick={() => runNow(l.name || "")}
 									disabled={!l.name || runningLoop === l.name}
@@ -296,7 +349,7 @@ export default function AppManagePanel() {
 							const ver = typeof s === "object" ? s.version : undefined;
 							return (
 								<div key={i} className="flex items-center gap-3 px-3 py-2">
-									<div className="flex-1 min-w-0 font-mono text-[12px] text-violet-700 truncate">{repo}{ver ? <span className="text-slate-400"> @ {ver}</span> : null}</div>
+									<XpioRef ref={repo} className="flex-1 min-w-0 font-mono text-[12px] text-violet-700 truncate">{repo}{ver ? <span className="text-slate-400"> @ {ver}</span> : null}</XpioRef>
 									<button
 										onClick={() => removeImport(repo)}
 										disabled={readOnly}
@@ -319,20 +372,21 @@ export default function AppManagePanel() {
 					{memoryAgents.length > 0 && (
 						<div className="text-[12px] text-slate-600 flex items-start gap-1.5">
 							<BookOpen className="w-3.5 h-3.5 text-pink-400 mt-0.5 flex-shrink-0" />
-							<span>Knowledge agents: {memoryAgents.map((a) => <code key={String(a)} className="text-[11px] mr-1.5">{typeof a === "string" ? a : JSON.stringify(a)}</code>)}</span>
+							<span>Memory: {memoryAgents.map((a) => { const s = typeof a === "string" ? a : JSON.stringify(a); return <Link key={s} to={`/studio/knowledge/${encodeURIComponent(s)}`} title={`Open the ${s} memory bank`} className="text-[11px] mr-1.5 font-mono text-pink-700 hover:underline">{s}</Link>; })}</span>
 						</div>
 					)}
 					{datasets.length > 0 && (
 						<div className="text-[12px] text-slate-600 flex items-start gap-1.5">
 							<Database className="w-3.5 h-3.5 text-gold-400 mt-0.5 flex-shrink-0" />
-							<span>Datasets: {datasets.map((d, i) => <code key={i} className="text-[11px] mr-1.5">{d.repo || d.id}</code>)}</span>
+							<span>Datasets: {datasets.map((d, i) => { const s = String(d.repo || d.id || ""); return <XpioRef key={i} ref={s} className="text-[11px] mr-1.5 font-mono text-gold-700">{s}</XpioRef>; })}</span>
 						</div>
 					)}
 					<p className="text-[11px] text-slate-400">Edit these in <Link to={`/studio/a/${encodeURIComponent(app)}/config`} className="underline">Config</Link> (raw xpcloud.yaml).</p>
 				</section>
 			)}
 
-			<ShareSection app={app} readOnly={readOnly} />
+			{/* Share & publish (fork / publish / propose / pull) moved to the app
+			    page's top "⋯" menu — see AppSurface.tsx. */}
 
 			{/* Dialogs */}
 			<SkillPickerDialog
@@ -580,81 +634,4 @@ function NewWorkflowDialog({
 	);
 }
 
-// ── Share & publish — the fork → publish → propose loop (2026-06-11) ──
-// Fork makes the user their own editable copy (repo under THEIR xp.io
-// account + installed here). Publish pushes their local changes to that
-// repo (patch version auto-bumps). Propose opens a pull request on the
-// app this was forked from.
-function ShareSection({ app, readOnly }: { app: string; readOnly: boolean }) {
-	const [busy, setBusy] = useState<null | "fork" | "publish" | "propose" | "pull">(null);
-	const [forkName, setForkName] = useState(`my-${app}`);
-	// Pull upstream updates into THIS install (three-way merge; local edits kept).
-	// Applies to any installed app, not just forks — so it lives in the header.
-	const pullUpdates = async () => {
-		setBusy("pull");
-		try {
-			await apiClient.post(`/api/v1/me/apps/${encodeURIComponent(app)}/update`, {});
-			toast.success("Update queued — upstream changes merge in ~a minute (your edits are preserved).");
-		} catch (e) {
-			/* eslint-disable @typescript-eslint/no-explicit-any */
-			const msg = (e as any)?.response?.data?.message || (e instanceof Error ? e.message : String(e));
-			toast.error(`Failed: ${String(msg).slice(0, 180)}`);
-		} finally { setBusy(null); }
-	};
-	const post = async (kind: "fork" | "publish" | "propose", path: string, body: Record<string, unknown>, okMsg: (d: Record<string, unknown>) => string) => {
-		setBusy(kind);
-		try {
-			const r = await apiClient.post(`/api/v1/me/apps/${encodeURIComponent(app)}/${path}`, body);
-			const data = (r.data?.data ?? {}) as Record<string, unknown>;
-			toast.success(okMsg(data));
-		} catch (e) {
-			/* eslint-disable @typescript-eslint/no-explicit-any */
-			const msg = (e as any)?.response?.data?.message || (e instanceof Error ? e.message : String(e));
-			toast.error(`Failed: ${String(msg).slice(0, 180)}`);
-		} finally { setBusy(null); }
-	};
-	return (
-		<section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-			<div className="flex items-center gap-1.5 text-[13px] font-medium text-slate-800">
-				<Share2 className="w-3.5 h-3.5 text-slate-400" /> Share &amp; publish
-				<button disabled={!!busy} onClick={pullUpdates}
-					title="Pull the latest upstream version into this install — three-way merge, your local edits are preserved"
-					className="ml-auto inline-flex items-center gap-1 px-2 py-1 text-[11px] rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40">
-					{busy === "pull" ? <Loader2 className="w-3 h-3 animate-spin" /> : <DownloadCloud className="w-3 h-3" />} Pull updates
-				</button>
-			</div>
-			<div className="grid gap-2.5 sm:grid-cols-3">
-				<div className="rounded-lg border border-slate-200/80 p-3 space-y-1.5">
-					<div className="text-[12px] font-medium text-slate-700">Fork</div>
-					<p className="text-[11px] text-slate-500 leading-snug">Your own editable copy — a repo under your xp.io account, installed here.</p>
-					<input value={forkName} onChange={(e) => setForkName(e.target.value)}
-						className="w-full px-2 py-1 text-[11px] font-mono rounded border border-slate-200 focus:outline-none focus:ring-2 focus:ring-gold-400/30" />
-					<button disabled={!!busy} onClick={() => post("fork", "fork", { name: forkName },
-						(d) => `Forked — installing ${String(d.fork || forkName)}…`)}
-						className="w-full inline-flex items-center justify-center gap-1 px-2 py-1.5 text-[12px] rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40">
-						{busy === "fork" ? <Loader2 className="w-3 h-3 animate-spin" /> : <GitFork className="w-3 h-3" />} Fork this app
-					</button>
-				</div>
-				<div className="rounded-lg border border-slate-200/80 p-3 space-y-1.5">
-					<div className="text-[12px] font-medium text-slate-700">Publish</div>
-					<p className="text-[11px] text-slate-500 leading-snug">Push your local changes to your xp.io repo. Version bumps automatically.</p>
-					<button disabled={!!busy || readOnly} onClick={() => post("publish", "publish", {},
-						() => "Publish queued — your repo updates in ~a minute.")}
-						className="w-full inline-flex items-center justify-center gap-1 px-2 py-1.5 text-[12px] rounded-lg bg-gold-700 text-white hover:bg-gold-800 disabled:opacity-40">
-						{busy === "publish" ? <Loader2 className="w-3 h-3 animate-spin" /> : <UploadCloud className="w-3 h-3" />} Publish changes
-					</button>
-				</div>
-				<div className="rounded-lg border border-slate-200/80 p-3 space-y-1.5">
-					<div className="text-[12px] font-medium text-slate-700">Propose</div>
-					<p className="text-[11px] text-slate-500 leading-snug">Offer your published changes back to the app you forked from, as a pull request.</p>
-					<button disabled={!!busy || readOnly} onClick={() => post("propose", "propose", {},
-						(d) => `Pull request opened on ${String(d.upstream || "upstream")}.`)}
-						className="w-full inline-flex items-center justify-center gap-1 px-2 py-1.5 text-[12px] rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40">
-						{busy === "propose" ? <Loader2 className="w-3 h-3 animate-spin" /> : <GitPullRequest className="w-3 h-3" />} Propose upstream
-					</button>
-				</div>
-			</div>
-		</section>
-	);
-}
 

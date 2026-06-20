@@ -18,7 +18,7 @@ import { Link } from "react-router-dom";
 import {
 	Play, Pause, Loader2, Save, Clock, AlertCircle, Target,
 	ChevronLeft, ChevronRight, ChevronDown, Trash2,
-	Database, Sparkles, Pencil, Activity, Check, Square, GitBranch,
+	Database, Sparkles, Pencil, Activity, Check, Square, MessageSquare,
 } from "lucide-react";
 import { toast } from "sonner";
 import apiClient from "@/api/client";
@@ -38,7 +38,7 @@ import CaseMapping from "@/components/workflow/CaseMapping";
 import MetricsView from "@/components/workflow/MetricsView";
 import CaseContentViewer from "@/components/workflow/CaseContentViewer";
 import TrajectoryLogView from "@/components/workflow/TrajectoryLogView";
-import BranchTreeView, { RunCompareView } from "@/components/workflow/BranchTreeView";
+import { RunCompareView } from "@/components/workflow/BranchTreeView";
 import RunContextMenu, { type RunMenuActions, type RunMenuTarget } from "@/components/workflow/RunContextMenu";
 import type { MeExperiment } from "@/api/me";
 // Datasets the workflow works on — heavy (table/preview), so lazy-load it and
@@ -133,6 +133,21 @@ export default function WorkflowObservabilityPanel({
 	const [sched, setSched] = useState(schedSeed);
 	const [schedDirty, setSchedDirty] = useState(false);
 	useEffect(() => { setSched(schedSeed); setSchedDirty(false); }, [schedSeed]);
+
+	// Per-workflow model switch — sits beside the schedule control. Writes the
+	// loops[].model override via patchLoop; the scheduler maps it to the cycle's
+	// LLM env. "" = the runtime default (tenant cycles → shared kv.run Gemma).
+	const [model, setModel] = useState<string>((wf as { model?: string }).model || "");
+	useEffect(() => { setModel((wf as { model?: string }).model || ""); }, [wf]);
+	const saveModel = async (m: string) => {
+		setModel(m); setBusy("save");
+		try {
+			await me.patchLoop(app, loop, { model: m });
+			toast.success(m ? `Model → ${m}` : "Model → default (kv.run Gemma)");
+			onChanged?.();
+		} catch (e) { toast.error(String((e as Error)?.message ?? e)); }
+		finally { setBusy(null); }
+	};
 
 	const runNow = async () => {
 		setBusy("run");
@@ -230,14 +245,13 @@ export default function WorkflowObservabilityPanel({
 	// the same mutually-exclusive swap chain; opening one clears the others.
 	const [caseDataFocus, setCaseDataFocus] = useState<{ id: string; label: string } | null>(null);
 	const [logFocus, setLogFocus] = useState(false);
-	// #16 — the lineage (branch tree) view + the two-run comparison. treeFocus
-	// swaps the right canvas for the lineage tree; compareSel holds the 0–2 run
-	// ts picked (via the context menu's "compare with…") — length 2 swaps the
-	// canvas again for the side-by-side delta. Both join the swap chain.
-	const [treeFocus, setTreeFocus] = useState(false);
+	// #16 — the two-run comparison. compareSel holds the 0–2 run ts picked (via
+	// the trajectory node menu's "compare with…"); length 2 swaps the canvas for
+	// the side-by-side delta. (History/lineage is gone — the trajectory tree is
+	// the single run tree, and it carries every per-run entrance in its menu.)
 	const [compareSel, setCompareSel] = useState<string[]>([]);
 	// Clear all right-canvas focuses (so the chain shows the trajectory).
-	const clearFocus = useCallback(() => { setCaseFocus(null); setMetricsFocus(false); setCaseDataFocus(null); setLogFocus(false); setTreeFocus(false); setCompareSel([]); }, []);
+	const clearFocus = useCallback(() => { setCaseFocus(null); setMetricsFocus(false); setCaseDataFocus(null); setLogFocus(false); setCompareSel([]); }, []);
 	// Toggle a run into the 2-slot compare set (drops the oldest past 2). When it
 	// reaches 2, ensure the lineage canvas is showing so the compare view renders.
 	const toggleCompare = useCallback((ts: string) => {
@@ -423,11 +437,13 @@ export default function WorkflowObservabilityPanel({
 			setVersion({ runTs: ts, cycleTs: ts, label: cycleDate(ts) || ts });
 		},
 		// View data: a case → its raw JSON + provenance (CaseContentViewer); a run
-		// → pin that run's version and show its within-run log.
+		// → pin that run's version and show the data it's scored on (MetricsView).
+		// (Distinct from "View log", which shows the within-run transcript — they
+		// used to both open the log, which read as a duplicate row.)
 		viewData: (t: RunMenuTarget) => {
 			clearFocus();
 			if (t.kind === "case" && t.caseId) { setCaseDataFocus({ id: t.caseId, label: t.label }); }
-			else if (t.ts) { setVersion({ runTs: t.ts, cycleTs: t.ts, label: cycleDate(t.ts) || t.ts }); setLogFocus(true); }
+			else if (t.ts) { setVersion({ runTs: t.ts, cycleTs: t.ts, label: cycleDate(t.ts) || t.ts }); setMetricsFocus(true); }
 		},
 		// View trajectory log at a run ts.
 		viewLog: (ts?: string) => { clearFocus(); if (ts) setVersion({ runTs: ts, cycleTs: ts, label: cycleDate(ts) || ts }); setLogFocus(true); },
@@ -516,6 +532,19 @@ export default function WorkflowObservabilityPanel({
 							)}
 						</PopoverContent>
 					</Popover>
+					{/* Per-workflow model switch — beside the schedule control. */}
+					<select
+						value={model}
+						onChange={(e) => saveModel(e.target.value)}
+						disabled={!!busy}
+						title="Which model this workflow's runtime uses. Default = the shared kv.run Gemma GPU for tenant cycles; tiers route through the Claude CLI."
+						className="px-2 py-1.5 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 max-w-[160px]"
+					>
+						<option value="">Default (kv.run Gemma)</option>
+						<option value="sonnet">Claude Sonnet</option>
+						<option value="opus">Claude Opus</option>
+						<option value="haiku">Claude Haiku</option>
+					</select>
 					{running ? (
 						<button onClick={stopRun} disabled={busy === "run"}
 							className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-rose-500 text-white hover:bg-rose-600 active:scale-95 disabled:opacity-50 transition-all shadow-sm">
@@ -565,18 +594,20 @@ export default function WorkflowObservabilityPanel({
 						{/* In-box header, matching the Trajectory canvas's header. */}
 						<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400 uppercase flex items-center gap-1.5 flex-shrink-0 px-3 py-2 border-b border-slate-100">
 							<Database className="w-3 h-3 text-gold-500" /> Data assets
-							{/* #16 — branch/lineage tree of the run history. */}
-							<button onClick={() => { clearFocus(); setTreeFocus(true); }} title="Open the run lineage — runs as a parent→child branch tree, with cross-run compare"
+							{/* Explicit entrances for the selected/latest run: Data (the data
+							    the run is scored on) + Log (its within-run transcript). Both
+							    are also reachable from the trajectory node menu. */}
+							<button onClick={() => { clearFocus(); setMetricsFocus(true); }} title="Open the latest (or selected) run's data — the casebook + metric scores it's graded on"
 								className={cn("ml-auto inline-flex items-center gap-1 normal-case tracking-normal text-[10px] rounded-full px-1.5 py-0.5 border transition-colors",
-									treeFocus ? "text-gold-700 bg-gold-50 border-gold-200" : "text-slate-500 bg-white border-slate-200 hover:border-gold-200 hover:text-gold-700")}>
-								<GitBranch className="w-3 h-3" /> Lineage
+									metricsFocus ? "text-gold-700 bg-gold-50 border-gold-200" : "text-slate-500 bg-white border-slate-200 hover:border-gold-200 hover:text-gold-700")}>
+								<Database className="w-3 h-3" /> Data
 							</button>
-							{/* #14 — within-run transcript of the selected (or latest) run. */}
-							<button onClick={() => { clearFocus(); setLogFocus(true); }} title="Open the within-run transcript (step-by-step analyst↔judge log)"
+							<button onClick={() => { clearFocus(); setLogFocus(true); }} title="Open the latest (or selected) run's within-run transcript (analyst↔judge log)"
 								className={cn("inline-flex items-center gap-1 normal-case tracking-normal text-[10px] rounded-full px-1.5 py-0.5 border transition-colors",
 									logFocus ? "text-violet-700 bg-violet-50 border-violet-200" : "text-slate-500 bg-white border-slate-200 hover:border-violet-200 hover:text-violet-700")}>
-								<Activity className="w-3 h-3" /> Run log
+								<MessageSquare className="w-3 h-3" /> Log
 							</button>
+							{/* A run's node/time-chip in the trajectory also opens its log. */}
 							{version && (
 								<button onClick={() => setVersion(null)} title="Back to latest" className="inline-flex items-center gap-1 normal-case tracking-normal text-[10px] text-gold-700 bg-gold-50 border border-gold-200 rounded-full px-1.5 py-0.5 hover:bg-gold-100 transition-colors">
 									as of {cycleDate(version.runTs || version.cycleTs)} <span className="text-gold-400">✕</span>
@@ -608,12 +639,8 @@ export default function WorkflowObservabilityPanel({
 				{/* RIGHT — the run trajectory; or, when a data case is clicked, that
 				    case's label→metric mapping log (Back returns to the trajectory). */}
 				<div className="flex-1 min-w-0 min-h-0">
-					{treeFocus && compareSel.length === 2 ? (
+					{compareSel.length === 2 ? (
 						<RunCompareView app={app} loop={loop} tsA={compareSel[0]} tsB={compareSel[1]} onBack={() => setCompareSel([])} />
-					) : treeFocus ? (
-						<BranchTreeView app={app} loop={loop} atTs={version?.runTs || version?.cycleTs}
-							onBack={() => setTreeFocus(false)} actions={menuActions}
-							selectedForCompare={compareSel} onToggleCompare={toggleCompare} />
 					) : logFocus ? (
 						<TrajectoryLogView app={app} loop={loop} ts={version?.runTs || version?.cycleTs || anchorTs || selectedRunTs || undefined} onBack={() => setLogFocus(false)} />
 					) : caseDataFocus ? (
@@ -623,7 +650,9 @@ export default function WorkflowObservabilityPanel({
 					) : caseFocus ? (
 						<CaseMapping app={app} loop={loop} caseId={caseFocus.id} caseLabel={caseFocus.label} atTs={version?.runTs || version?.cycleTs} onBack={() => setCaseFocus(null)} />
 					) : (
-						<TrajectoryGraph app={app} loop={loop} definition={definition} onSelectVersion={setVersion} running={running} />
+						<TrajectoryGraph app={app} loop={loop} definition={definition} onSelectVersion={setVersion} running={running}
+							onShowLog={(ts) => { setVersion({ runTs: ts, cycleTs: ts, label: cycleDate(ts) || ts }); setLogFocus(true); }}
+							actions={menuActions} selectedForCompare={compareSel} onToggleCompare={toggleCompare} />
 					)}
 				</div>
 			</div>

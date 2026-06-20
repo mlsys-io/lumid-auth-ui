@@ -8,11 +8,12 @@
 // The chrome row (nav tabs + "⋯" actions menu) is always rendered so any app
 // can be edited/managed directly from Studio, including apps with no surface yet.
 
-import { useEffect, useState, Suspense } from "react";
+import { useCallback, useEffect, useRef, useState, Suspense } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { MoreHorizontal, Pencil, Plus, Settings, SlidersHorizontal, Sparkles, Trash2 } from "lucide-react";
+import { MoreHorizontal, Pencil, Plus, Settings, SlidersHorizontal, Sparkles, Trash2, DownloadCloud, UploadCloud, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import apiClient from "@/api/client";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,6 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { me, type MeAppSurface, MeApiError } from "@/api/me";
 import { setStudioSelection } from "@/components/StudioContext";
+import { useStudioRefetch } from "@/hooks/useStudioRefetch";
 import { LumidMarkdown } from "./LumidMarkdown";
 import { resolveNativeSurface } from "./native-registry";
 
@@ -82,13 +84,21 @@ export function AppSurface({
   }>({ loading: true });
   const [removing, setRemoving] = useState(false);
 
-  useEffect(() => {
-    let live = true;
-    setState({ loading: true });
+  // Loader extracted so the chat→page bus can re-run it: editing or
+  // regenerating this surface from chat (app_ui_set / app_ui_generate) fires
+  // `studio:data` with the 'ui' scope, and we reload in place — no manual
+  // refresh. `silent` keeps the current render up while refetching (no flash
+  // back to the skeleton on a live update). reqRef makes the latest call win:
+  // a stale in-flight load (app/surface switched, or an older refetch) is
+  // ignored, and the effect cleanup bumps it so nothing setStates after unmount.
+  const reqRef = useRef(0);
+  const load = useCallback((silent = false) => {
+    const reqId = ++reqRef.current;
+    if (!silent) setState({ loading: true });
     me.appUI(app, surface)
-      .then((data) => { if (live) setState({ data, loading: false }); })
+      .then((data) => { if (reqRef.current === reqId) setState({ data, loading: false }); })
       .catch((e) => {
-        if (!live) return;
+        if (reqRef.current !== reqId) return;
         if (e instanceof MeApiError && e.ret_code === 1404) {
           // No surface yet — show an opt-in empty state. We do NOT auto-
           // generate here: it blocked the whole surface for up to 90s and
@@ -99,8 +109,11 @@ export function AppSurface({
           setState({ loading: false, error: String(e?.message ?? e) });
         }
       });
-    return () => { live = false; };
   }, [app, surface]);
+
+  useEffect(() => { load(); return () => { reqRef.current++; }; }, [load]);
+  // A chat-driven surface edit/regenerate invalidates 'ui' → reload silently.
+  useStudioRefetch(["ui"], () => load(true));
 
   // Declare the open app surface as the chat's selection — "this app"
   // resolves to the surface's owner even though the /studio/a/:app route
@@ -180,6 +193,27 @@ export function AppSurface({
   useEffect(() => {
     setStripSlot(document.getElementById("topstrip-app-slot"));
   }, []);
+
+  // Share/publish actions — moved off the Manage page's "Share & publish" box
+  // into this top "⋯" menu so the loop (pull upstream / publish / fork /
+  // propose) is one click from any app surface.
+  const [shareBusy, setShareBusy] = useState<null | "pull" | "publish">(null);
+  const shareAction = async (
+    kind: "pull" | "publish", path: string,
+    body: Record<string, unknown>, okMsg: (d: Record<string, unknown>) => string,
+  ) => {
+    setShareBusy(kind);
+    try {
+      const r = await apiClient.post(`/api/v1/me/apps/${encodeURIComponent(app)}/${path}`, body);
+      const data = (r.data?.data ?? {}) as Record<string, unknown>;
+      toast.success(okMsg(data));
+    } catch (e) {
+      /* eslint-disable @typescript-eslint/no-explicit-any */
+      const msg = (e as any)?.response?.data?.message || (e instanceof Error ? e.message : String(e));
+      toast.error(`Failed: ${String(msg).slice(0, 180)}`);
+    } finally { setShareBusy(null); }
+  };
+
   const actionBarInner = (hasMd: boolean, nav?: { surface: string; label?: string }[]) => (
     <>
       {surfaceTabs(nav)}
@@ -193,10 +227,29 @@ export function AppSurface({
       >
         <Plus className="w-3.5 h-3.5" /> New workflow
       </Link>
+      {/* Pull / publish — toolbar icon buttons (fork + propose live in xpio). */}
+      <button
+        onClick={() => shareAction("pull", "update", {}, () => "Update queued — upstream changes merge in ~a minute (your edits are preserved).")}
+        disabled={!!shareBusy}
+        title="Pull updates — merge the latest upstream version (your local edits are preserved)"
+        aria-label="Pull updates"
+        className="inline-flex items-center justify-center w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:border-slate-300 shadow-sm transition-all flex-shrink-0 disabled:opacity-40"
+      >
+        {shareBusy === "pull" ? <Loader2 className="w-4 h-4 animate-spin" /> : <DownloadCloud className="w-4 h-4" />}
+      </button>
+      <button
+        onClick={() => shareAction("publish", "publish", {}, () => "Publish queued — your repo updates in ~a minute.")}
+        disabled={!!shareBusy}
+        title="Publish changes — push your local changes to your xp.io repo (version auto-bumps)"
+        aria-label="Publish changes"
+        className="inline-flex items-center justify-center w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:border-slate-300 shadow-sm transition-all flex-shrink-0 disabled:opacity-40"
+      >
+        {shareBusy === "publish" ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+      </button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
-            className="ml-auto inline-flex items-center justify-center w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:border-slate-300 shadow-sm transition-all"
+            className="inline-flex items-center justify-center w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:border-slate-300 shadow-sm transition-all flex-shrink-0"
             title="Agent actions"
             aria-label="Agent actions"
           >

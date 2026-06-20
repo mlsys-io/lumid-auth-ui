@@ -7,6 +7,11 @@ ARG BASE_PATH=/auth/
 ARG VITE_ROUTER_BASE_PATH=
 ENV BASE_PATH=$BASE_PATH
 ENV VITE_ROUTER_BASE_PATH=$VITE_ROUTER_BASE_PATH
+# Build provenance baked into the bundle (vite `define` reads these).
+ARG GIT_SHA
+ARG BUILD_TIME
+ENV GIT_SHA=$GIT_SHA
+ENV BUILD_TIME=$BUILD_TIME
 COPY package*.json ./
 RUN if [ -f package-lock.json ]; then npm ci --legacy-peer-deps; else npm install --legacy-peer-deps; fi
 COPY . .
