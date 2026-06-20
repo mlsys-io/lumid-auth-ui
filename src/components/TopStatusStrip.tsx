@@ -325,9 +325,6 @@ export default function TopStatusStrip() {
 				<div className="flex items-center gap-1 min-w-0">
 					<span id="topstrip-ws-left" className="flex items-center" />
 					<AppSwitcher app={appSlug} />
-					{/* The app's summary rides here (like the Library page's subtitle),
-					    portaled in by AppOverview and length-constrained. */}
-					<span id="topstrip-app-subtitle" className="hidden lg:flex items-center min-w-0" />
 				</div>
 			) : (
 			<div className="min-w-0 flex items-start gap-2.5">
