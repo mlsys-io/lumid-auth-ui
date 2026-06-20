@@ -629,22 +629,15 @@ export default function WorkflowObservabilityPanel({
 				</div>
 			</div>
 
-			{/* ── GOAL — the workflow's objective, always shown full-width at the
-			    top (persistent header), independent of the mode below. ── */}
-			<div className="min-w-0">
-				<GoalHeader goal={wf.goal} kpis={buildGoalKpis(summary, cycleFiles)} app={app} loop={loop} onSaved={onChanged}
-						experiment={loopExp} onOpenMetrics={() => { switchMode("observe"); openMetrics(); }} />
-			</div>
-
-			{/* A failed last run is an alert — kept above the modes so it's always
-			    visible regardless of which mode is open. */}
-			{!running && wf.last_run_ok === false && lastError && tenantHasRuns && (
-				<FailureCard error={lastError} app={app} loop={loop} />
-			)}
-
-			{/* ── MODE SWITCH + BREADCRUMB (WS-1/WS-3) — the disentangling move. ── */}
-			<div className="flex items-center gap-2 flex-wrap">
-				<div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+			{/* GOAL + MODE SWITCH on one row — the workflow's persistent objective
+			    collapsed onto the same line as the Observe/Improve/Tune switch to
+			    save vertical space (WS-1/WS-3). */}
+			<div className="flex items-center gap-3 flex-wrap">
+				<div className="min-w-0 flex-1">
+					<GoalHeader goal={wf.goal} kpis={buildGoalKpis(summary, cycleFiles)} app={app} loop={loop} onSaved={onChanged}
+							experiment={loopExp} onOpenMetrics={() => { switchMode("observe"); openMetrics(); }} />
+				</div>
+				<div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 flex-shrink-0">
 					{(["observe", "improve", "tune"] as WorkflowMode[]).map((m) => {
 						const Icon = m === "observe" ? Eye : m === "improve" ? FlaskConical : SlidersHorizontal;
 						return (
@@ -656,12 +649,22 @@ export default function WorkflowObservabilityPanel({
 						);
 					})}
 				</div>
-				{/* Breadcrumb — renders the stack; the "as of <version>" chip lives IN it. */}
+			</div>
+
+			{/* A failed last run is an alert — kept above the modes so it's always
+			    visible regardless of which mode is open. */}
+			{!running && wf.last_run_ok === false && lastError && tenantHasRuns && (
+				<FailureCard error={lastError} app={app} loop={loop} />
+			)}
+
+			{/* Breadcrumb (WS-3) — only after drilling into a sub-view (or pinning a
+			    run). The active mode already shows in the switch above, so there is no
+			    redundant mode-name root; click the active mode to reset to its base. */}
+			{(stack.length > 0 || version) && (
 				<div className="flex items-center gap-1 text-[11px] text-slate-500 min-w-0">
-					<button type="button" onClick={() => dispatchNav({ type: "reset" })} className="hover:text-slate-800 transition-colors">{MODE_LABELS[mode].text}</button>
 					{stack.map((f, i) => (
 						<span key={i} className="flex items-center gap-1 min-w-0">
-							<ChevronRight className="w-3 h-3 text-slate-300 flex-shrink-0" />
+							{i > 0 && <ChevronRight className="w-3 h-3 text-slate-300 flex-shrink-0" />}
 							<span className={cn("truncate", i === stack.length - 1 ? "text-slate-800 font-medium" : "")}>
 								{f.kind === "case" || f.kind === "caseData" ? (f.caseLabel || VIEW_LABELS.case) : VIEW_LABELS[f.kind] || f.kind}
 							</span>
@@ -679,7 +682,7 @@ export default function WorkflowObservabilityPanel({
 						</button>
 					)}
 				</div>
-			</div>
+			)}
 
 			{/* ── TUNE — links out to the prompt + config editors (their own routes). ── */}
 			{mode === "tune" ? (
