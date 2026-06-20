@@ -243,6 +243,32 @@ export interface MeIntentResult {
   result?: Record<string, unknown>;
 }
 
+// One app prompt file (WS-7). `source: "local"` = an editable override in the
+// tenant's own bundle; `"shared"` = inherited read-only from a shared skill
+// (editing it writes a local override). `name` is the bundle-relative stem,
+// e.g. "analyst_system", "analyst_skill_value", "judge_score_qual".
+export interface MeAppPrompt {
+  name: string;
+  source: "local" | "shared";
+  editable: boolean;
+  sha?: string;
+}
+export interface MeAppPromptDetail extends MeAppPrompt {
+  app: string;
+  content: string;
+  path?: string;
+}
+
+// One run-log search hit (WS-6). `index` is the row's position in the log so
+// the UI can scroll/highlight it; `field` names which part matched.
+export interface MeRunLogMatch {
+  ts?: string;
+  event?: string;
+  field?: string;
+  snippet?: string;
+  index: number;
+}
+
 export const me = {
   // Apps
   listApps: () => call<{ apps: MeAppCard[] }>("GET", "/apps"),
@@ -288,6 +314,44 @@ export const me = {
     ),
   generateAppUI: (app: string) =>
     call<{ markdown: string; path: string }>("POST", `/apps/${encodeURIComponent(app)}/ui/generate`),
+
+  // ── App prompts (Tune / WS-7) ───────────────────────────────────────
+  // The analyst & judge prompt files (`prompts/*.md`) an app runs on. They
+  // resolve two-tier: a local copy in the tenant's own bundle ALWAYS overrides
+  // the shared-skill copy. `source: "local"` = editable override; `"shared"` =
+  // read-only inherited (editing it WRITES a local override).
+  appPrompts: (app: string) =>
+    call<{ prompts: MeAppPrompt[] }>("GET", `/apps/${encodeURIComponent(app)}/prompts`),
+  // Read one prompt's content (+ sha for the optimistic lock).
+  appPrompt: (app: string, name: string) =>
+    call<MeAppPromptDetail>(
+      "GET",
+      `/apps/${encodeURIComponent(app)}/prompts/${encodeURIComponent(name)}`,
+    ),
+  // Write a prompt — always to the tenant's OWN bundle (a shared one becomes a
+  // local override). baseSha = optimistic lock (1409 on stale).
+  updateAppPrompt: (app: string, name: string, content: string, baseSha?: string) =>
+    call<{ saved: boolean; sha: string }>(
+      "PUT",
+      `/apps/${encodeURIComponent(app)}/prompts/${encodeURIComponent(name)}`,
+      { content, base_sha: baseSha },
+    ),
+  // Revert a local override back to the shared copy.
+  resetAppPrompt: (app: string, name: string) =>
+    call<{ reverted: boolean }>(
+      "DELETE",
+      `/apps/${encodeURIComponent(app)}/prompts/${encodeURIComponent(name)}`,
+    ),
+
+  // ── Run-log search (Run log / Stages, WS-6) ─────────────────────────
+  // Grep a run's transcript + step errors. `type` narrows the scan
+  // (llm | stage | error); omit to scan all.
+  searchRunLog: (app: string, loop: string, ts: string, q: string, type?: string) =>
+    call<{ matches: MeRunLogMatch[]; count: number }>(
+      "GET",
+      `/cycles/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/${encodeURIComponent(ts)}/search` +
+        `?q=${encodeURIComponent(q)}${type ? `&type=${encodeURIComponent(type)}` : ""}`,
+    ),
   deleteLoop: (app: string, loop: string) =>
     call<{ app: string; removed_loop: string; remaining: number; note: string }>(
       "DELETE", `/apps/${encodeURIComponent(app)}/loops/${encodeURIComponent(loop)}`),

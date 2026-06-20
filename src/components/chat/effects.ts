@@ -10,7 +10,8 @@
 
 export type DataScope =
 	| 'apps' | 'workflows' | 'loops' | 'runs' | 'cycles'
-	| 'drafts' | 'knowledge' | 'config' | 'experiments' | 'users' | 'ui';
+	| 'drafts' | 'knowledge' | 'config' | 'experiments' | 'users' | 'ui'
+	| 'prompts';
 
 export const TOOL_EFFECTS: Record<string, DataScope[]> = {
 	// loop / workflow execution + schedule
@@ -42,6 +43,12 @@ export const TOOL_EFFECTS: Record<string, DataScope[]> = {
 	// run lifecycle (advisory markers the trajectory/run views read).
 	run_promote: ['runs', 'cycles'],
 	run_discard: ['runs', 'cycles'],
+	// prompt authoring (Tune tab / WS-7) — an edit/revert re-renders the
+	// prompt list + the app card (semver may bump on push).
+	app_prompt_set: ['prompts', 'apps'],
+	app_prompt_reset: ['prompts', 'apps'],
+	// branch-with-intention (WS-5) — a new attempt lands as a queued run.
+	branch_run: ['runs', 'cycles', 'workflows'],
 	// knowledge
 	xp_ingest: ['knowledge'],
 	xp_feedback: ['knowledge'],
@@ -142,6 +149,17 @@ export function toolLink(name: string, result?: Record<string, unknown>, args?: 
 			const surface = String(result.surface || '');
 			const sfx = surface && surface !== 'home' ? `/${encodeURIComponent(surface)}` : '';
 			return appName ? { to: `/studio/a/${encodeURIComponent(appName)}${sfx}`, label: 'View page' } : undefined;
+		}
+		case 'app_prompt_set':
+		case 'app_prompt_reset':
+			// Land on the app's prompt editor so the user sees the edited prompt.
+			return appName ? { to: `/studio/a/${encodeURIComponent(appName)}/prompts`, label: 'Open prompts' } : undefined;
+		case 'branch_run': {
+			// A branch queues a new run on the loop — link to it being watched.
+			const bl = String(result.loop || args?.loop || named.loop || '');
+			return appName && bl
+				? { to: `/studio/apps/${encodeURIComponent(appName)}?selected=${encodeURIComponent(bl)}`, label: 'Watch' }
+				: undefined;
 		}
 		case 'app_action': {
 			// GPU rental create returns a task_id → link to the live rental.
