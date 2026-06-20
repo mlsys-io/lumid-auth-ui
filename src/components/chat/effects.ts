@@ -62,10 +62,17 @@ export interface StudioDataDetail {
 	loop?: string;
 }
 
-/** Fire the chat→page invalidation event for a successful mutating tool. */
-export function dispatchToolEffects(name: string, args?: Record<string, unknown>, result?: Record<string, unknown>): void {
-	const scopes = TOOL_EFFECTS[name];
-	if (!scopes) return;
+/**
+ * Fire the chat→page invalidation event for a successful mutating tool.
+ *
+ * `scopesOverride` is the server-authoritative scope list emitted on the
+ * `tool_call` event (me_agent_scopes.go). When present it wins, so a NEW
+ * backend tool refetches the right pages with no change here; the local
+ * TOOL_EFFECTS map is the fallback for older servers / tools not yet emitting.
+ */
+export function dispatchToolEffects(name: string, args?: Record<string, unknown>, result?: Record<string, unknown>, scopesOverride?: DataScope[]): void {
+	const scopes = (scopesOverride && scopesOverride.length ? scopesOverride : TOOL_EFFECTS[name]);
+	if (!scopes || !scopes.length) return;
 	const pickStr = (...vals: unknown[]) => {
 		for (const v of vals) if (typeof v === 'string' && v) return v;
 		return undefined;

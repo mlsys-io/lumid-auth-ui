@@ -5,7 +5,7 @@
 
 import type { ComposedDraft } from '../workflow/AssemblyCard';
 import type { Message, ToolCall } from './types';
-import { dispatchToolEffects, toolLink } from './effects';
+import { dispatchToolEffects, toolLink, type DataScope } from './effects';
 
 type SetMessages = React.Dispatch<React.SetStateAction<Message[]>>;
 
@@ -155,8 +155,13 @@ export function handleEvent(
 		}));
 		// Chat→page bus: a successful mutating tool invalidates the data
 		// scopes it touched; pages re-fetch via useStudioRefetch instead of
-		// waiting out their polling interval.
-		if (ok) dispatchToolEffects(String(evt.name || ''), evt.args as Record<string, unknown> | undefined, result);
+		// waiting out their polling interval. The server emits the authoritative
+		// scope list on the event (me_agent_scopes.go); fall back to the local
+		// map for older servers / not-yet-mapped tools.
+		if (ok) {
+			const serverScopes = Array.isArray(evt.scopes) ? (evt.scopes as DataScope[]) : undefined;
+			dispatchToolEffects(String(evt.name || ''), evt.args as Record<string, unknown> | undefined, result, serverScopes);
+		}
 		// Surface compose_workflow results INLINE — attach the rich draft to
 		// this assistant message so the bubble renders an AssemblyCard (the
 		// workflow assembling itself, search by search). No modal: the build

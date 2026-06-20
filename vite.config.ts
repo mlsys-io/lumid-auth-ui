@@ -7,6 +7,13 @@ import { resolve } from "node:path";
 // at root without a rebuild.
 export default defineConfig({
   base: process.env.BASE_PATH || "/auth/",
+  // Build provenance baked into the bundle so the super-admin dashboard can
+  // show what commit is actually running (code↔running-binary drift gap).
+  // GIT_SHA is passed as a --build-arg by CD; falls back to 'dev' locally.
+  define: {
+    __BUILD_COMMIT__: JSON.stringify(process.env.GIT_SHA || "dev"),
+    __BUILD_TIME__: JSON.stringify(process.env.BUILD_TIME || "dev"),
+  },
   resolve: {
     alias: {
       "@": resolve(__dirname, "src"),
