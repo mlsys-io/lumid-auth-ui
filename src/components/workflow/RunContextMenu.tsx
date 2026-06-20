@@ -48,6 +48,9 @@ export interface RunMenuActions {
 	openPipeline?: (ts?: string) => void;       // → open the run's pipeline pane
 	viewConversation?: (ts: string) => void;    // → open the run's chat session
 	ask?: (t: RunMenuTarget) => void;           // → ask the assistant about this run
+	// Branch WITH INTENTION (WS-5) — opens the intention dialog instead of an
+	// empty branch. When wired it REPLACES the bare "Branch out" runtime item.
+	branchWithIntent?: (ts: string, label: string) => void;
 	// runtime op context (the app/loop the menu acts within)
 	app: string;
 	loop: string;
@@ -77,6 +80,13 @@ function Row({ icon: Icon, label, onClick, tone = "default", pending, busy }: Ro
 			<span className="flex-1">{label}</span>
 			{pending && <Clock className="w-3 h-3 text-slate-300 flex-shrink-0" />}
 		</button>
+	);
+}
+
+// A section divider+label so the menu's items split into Observe vs Improve.
+function Section({ label }: { label: string }) {
+	return (
+		<div className="mt-1 mb-0.5 px-3 pt-1 border-t border-slate-100 text-[9px] uppercase tracking-wide text-slate-300 font-semibold">{label}</div>
 	);
 }
 
@@ -125,75 +135,52 @@ export default function RunContextMenu({
 		>
 			<div className="px-3 py-1 text-[10px] uppercase tracking-wide text-slate-400 truncate">{target.label}</div>
 
-			{/* Trajectory-specific inspection (only present when TrajectoryGraph
-			    wires them) — pipeline / conversation / ask. */}
+			{/* ── OBSERVE — inspect what happened ── */}
+			<Section label="Observe" />
 			{isRun && actions.openPipeline && (
 				<Row icon={FlaskConical} label="Open pipeline" onClick={wired(() => actions.openPipeline!(target.ts))} />
 			)}
-			{isRun && actions.viewConversation && (
-				<Row icon={Bot} label="View conversation" onClick={wired(() => actions.viewConversation!(target.ts!))} />
-			)}
-			{isRun && actions.ask && (
-				<Row icon={MessageSquare} label="Ask about this" onClick={wired(() => actions.ask!(target))} />
-			)}
-			{isRun && (actions.openPipeline || actions.viewConversation || actions.ask) && (
-				<div className="my-1 border-t border-slate-100" />
-			)}
-
-			{/* RUNTIME — branch out (run targets only) */}
-			{isRun && (
-				<Row icon={GitBranch} label="Branch out" tone="gold" busy={busy === "branch"} pending={pending["branch"]}
-					onClick={() => runtimeOp("branch", () => me.launchRun(actions.app, actions.loop, { from_run_ts: target.ts, branch_label: `branch of ${target.label}` }), "Branch queued — exploring from here.")} />
-			)}
-
-			{/* WIRED — compare with… (run targets only) */}
-			{isRun && (
-				<Row icon={GitCompare} tone="sky"
-					label={selectedForCompare.includes(target.ts!) ? "Remove from compare" : selectedForCompare.length >= 2 ? "Compare with… (replaces oldest)" : "Compare with…"}
-					onClick={() => { onToggleCompare(target.ts!); onClose(); }} />
-			)}
-
-			{/* RUNTIME — re-run from here + run variant (run targets only) */}
-			{isRun && (
-				<Row icon={RefreshCw} label="Re-run from here" busy={busy === "rerun"} pending={pending["rerun"]}
-					onClick={() => runtimeOp("rerun", () => me.launchRun(actions.app, actions.loop, { from_run_ts: target.ts }), "Re-running from this point…")} />
-			)}
-			{isRun && (
-				<Row icon={FlaskConical} label="Run variant…" busy={busy === "variant"} pending={pending["variant"]}
-					onClick={() => {
-						// A variant needs a config override; keep it generic — let the user
-						// describe it in chat, which composes the variant. If annotate/chat
-						// isn't wired, fall through to a no-op variant launch so the runtime
-						// contract is still exercised.
-						if (actions.annotate) { actions.annotate({ ...target }); onClose(); return; }
-						runtimeOp("variant", () => me.launchRun(actions.app, actions.loop, { from_run_ts: target.ts, variant: {} }), "Variant queued…");
-					}} />
-			)}
-
-			<div className="my-1 border-t border-slate-100" />
-
-			{/* WIRED — inspection */}
 			{actions.viewData && (
 				<Row icon={FileJson} label="View data" onClick={wired(() => actions.viewData!(target))} />
 			)}
 			{isRun && actions.viewLog && (
-				<Row icon={MessageSquare} label="View trajectory log" onClick={wired(() => actions.viewLog!(target.ts))} />
+				<Row icon={MessageSquare} label="View run log" onClick={wired(() => actions.viewLog!(target.ts))} />
+			)}
+			{isRun && actions.viewConversation && (
+				<Row icon={Bot} label="View conversation" onClick={wired(() => actions.viewConversation!(target.ts!))} />
 			)}
 			{actions.explainScore && (
 				<Row icon={Info} label="Explain score" onClick={wired(() => actions.explainScore!(target))} />
+			)}
+			{isRun && actions.ask && (
+				<Row icon={MessageSquare} label="Ask about this" onClick={wired(() => actions.ask!(target))} />
 			)}
 			{actions.annotate && (
 				<Row icon={Pin} label="Pin / annotate" onClick={wired(() => actions.annotate!(target))} />
 			)}
 
-			{/* RUNTIME — promote / discard (run targets only) */}
+			{/* ── IMPROVE — experiment on it (run targets only) ── */}
 			{isRun && (
 				<>
-					<div className="my-1 border-t border-slate-100" />
+					<Section label="Improve" />
+					{/* Branch WITH INTENTION (WS-5) — opens the dialog when wired; else
+					    falls back to the bare runtime branch so the contract still works. */}
+					{actions.branchWithIntent ? (
+						<Row icon={GitBranch} label="Branch…" tone="gold"
+							onClick={wired(() => actions.branchWithIntent!(target.ts!, target.label))} />
+					) : (
+						<Row icon={GitBranch} label="Branch out" tone="gold" busy={busy === "branch"} pending={pending["branch"]}
+							onClick={() => runtimeOp("branch", () => me.launchRun(actions.app, actions.loop, { from_run_ts: target.ts, branch_label: `branch of ${target.label}` }), "Branch queued — exploring from here.")} />
+					)}
+					<Row icon={GitCompare} tone="sky"
+						label={selectedForCompare.includes(target.ts!) ? "Remove from compare" : selectedForCompare.length >= 2 ? "Compare with… (replaces oldest)" : "Compare with…"}
+						onClick={() => { onToggleCompare(target.ts!); onClose(); }} />
+					<Row icon={RefreshCw} label="Re-run from here" busy={busy === "rerun"} pending={pending["rerun"]}
+						onClick={() => runtimeOp("rerun", () => me.launchRun(actions.app, actions.loop, { from_run_ts: target.ts }), "Re-running from this point…")} />
 					<Row icon={ArrowUpCircle} label="Promote" tone="gold" busy={busy === "promote"} pending={pending["promote"]}
-						onClick={() => runtimeOp("promote", () => me.promoteRun(actions.app, target.ts!), "Promoted — kept this branch's learning.")} />
+						onClick={() => runtimeOp("promote", () => me.promoteRun(actions.app, target.ts!), "Promoted — kept this attempt's learning.")} />
 					<Row icon={XCircle} label="Discard" tone="danger" busy={busy === "discard"} pending={pending["discard"]}
-						onClick={() => runtimeOp("discard", () => me.discardRun(actions.app, target.ts!), "Discarded — dropped this branch's learning.")} />
+						onClick={() => runtimeOp("discard", () => me.discardRun(actions.app, target.ts!), "Discarded — dropped this attempt's learning.")} />
 				</>
 			)}
 		</div>

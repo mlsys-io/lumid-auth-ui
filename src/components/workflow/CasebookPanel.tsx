@@ -11,7 +11,7 @@
 // House style mirrors GoalTrend.Sparkline (gold accent, inline-SVG polyline).
 
 import { useEffect, useState } from "react";
-import { Layers, TrendingUp, History, Loader2, FileJson } from "lucide-react";
+import { Layers, TrendingUp, History, Loader2, FileJson, MoreHorizontal } from "lucide-react";
 import {
 	fetchCasebook,
 	type Casebook,
@@ -119,6 +119,17 @@ function CaseRow({ c, atTs, onSelect, onViewData, onContextMenu, selected }: { c
 						className="flex-shrink-0 text-slate-300 hover:text-gold-600 transition-colors"
 					>
 						<FileJson className="w-3.5 h-3.5" />
+					</button>
+				)}
+				{/* WS-3 — a VISIBLE ⋯ opens the same actions menu as right-click. */}
+				{onContextMenu && (
+					<button
+						type="button"
+						onClick={(e) => { e.stopPropagation(); onContextMenu(e); }}
+						title="More actions"
+						className="flex-shrink-0 text-slate-300 hover:text-slate-700 transition-colors"
+					>
+						<MoreHorizontal className="w-3.5 h-3.5" />
 					</button>
 				)}
 			</div>

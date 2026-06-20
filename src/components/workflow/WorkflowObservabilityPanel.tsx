@@ -12,13 +12,15 @@
 // shared apps ("Healthy · ran 2d ago" next to an empty runs list) — when
 // the cycles list is empty this card says "Not run yet", full stop.
 
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import {
 	Play, Pause, Loader2, Save, Clock, AlertCircle, Target,
 	ChevronLeft, ChevronRight, ChevronDown, Trash2,
 	Database, Sparkles, Pencil, Activity, Check, Square, MessageSquare,
+	Eye, FlaskConical, SlidersHorizontal, ArrowLeft,
+	PanelLeftClose, PanelLeftOpen, FileText, BarChart3,
 } from "lucide-react";
 import { toast } from "sonner";
 import apiClient from "@/api/client";
@@ -40,6 +42,8 @@ import CaseContentViewer from "@/components/workflow/CaseContentViewer";
 import TrajectoryLogView from "@/components/workflow/TrajectoryLogView";
 import { RunCompareView } from "@/components/workflow/BranchTreeView";
 import RunContextMenu, { type RunMenuActions, type RunMenuTarget } from "@/components/workflow/RunContextMenu";
+import BranchDialog from "@/components/workflow/BranchDialog";
+import { L, MODE_LABELS, VIEW_LABELS, type WorkflowMode } from "@/components/workflow/labels";
 import type { MeExperiment } from "@/api/me";
 // Datasets the workflow works on — heavy (table/preview), so lazy-load it and
 // only mount when the Data tab is opened.
@@ -106,6 +110,43 @@ function whenLastFromCycle(ts?: string): string {
 
 // Cache the latest-cycle summary per (app:loop) for instant re-open.
 const cycleCache = new Map<string, { ts: string | null; summary: CycleSummary | null }>();
+
+// ── View-stack (WS-3) ──────────────────────────────────────────────────
+// Replaces the flat focus booleans (logFocus/caseDataFocus/metricsFocus/
+// caseFocus/compareSel) with ONE push/pop stack so Back returns to the
+// PREVIOUS view, not always the run tree. The base view of each mode is
+// implicit (empty stack); pushing opens a sub-view, popping goes back one.
+type ViewKind = "log" | "metrics" | "case" | "caseData" | "compare";
+interface ViewFrame {
+	kind: ViewKind;
+	// The version (run ts) the view is pinned to (the "as of" chip).
+	version?: TrajectoryVersion | null;
+	// case targets carry id + label.
+	caseId?: string;
+	caseLabel?: string;
+	// compare carries the two selected ts.
+	compareSel?: string[];
+}
+type NavAction =
+	| { type: "push"; frame: ViewFrame }
+	| { type: "pop" }
+	| { type: "reset" }                       // back to the mode's base view
+	| { type: "setCompare"; sel: string[] };  // toggle compare set (replaces top compare frame)
+
+function navReducer(stack: ViewFrame[], action: NavAction): ViewFrame[] {
+	switch (action.type) {
+		case "push": return [...stack, action.frame];
+		case "pop": return stack.slice(0, -1);
+		case "reset": return [];
+		case "setCompare": {
+			// Keep a single compare frame at the top reflecting the selection;
+			// drop it when fewer than 2 are selected.
+			const base = stack.filter((f) => f.kind !== "compare");
+			return action.sel.length === 2 ? [...base, { kind: "compare", compareSel: action.sel }] : base;
+		}
+		default: return stack;
+	}
+}
 
 export default function WorkflowObservabilityPanel({
 	app, loop, wf, loopHealth, onChanged, initialCycle, canDelete, onDelete,
@@ -231,32 +272,49 @@ export default function WorkflowObservabilityPanel({
 	const [canvasStep, setCanvasStep] = useState<CanvasStepRef | null>(null);
 	// Which tab the detail pane shows. Runs is the spine, so it opens by default.
 	const [tab, setTab] = useState<DetailTab>("runs");
-	// The trajectory version the data asset (casebook) is pinned to — set when a
-	// trajectory node is clicked, so the left table shows scores as of that run.
-	const [version, setVersion] = useState<TrajectoryVersion | null>(null);
-	// Right-canvas focus: a clicked data case shows its label→metric mapping log;
-	// the Metrics entry shows the metric curves. Mutually exclusive (else the
-	// trajectory). Selecting one clears the other.
-	const [caseFocus, setCaseFocus] = useState<{ id: string; label: string } | null>(null);
-	const [metricsFocus, setMetricsFocus] = useState(false);
-	// #11 — a clicked "view data" on a case shows its raw case JSON + score
-	// trajectory + per-question provenance (CaseContentViewer). #14 — a "log"
-	// affordance shows the within-run transcript (TrajectoryLogView). Both join
-	// the same mutually-exclusive swap chain; opening one clears the others.
-	const [caseDataFocus, setCaseDataFocus] = useState<{ id: string; label: string } | null>(null);
-	const [logFocus, setLogFocus] = useState(false);
-	// #16 — the two-run comparison. compareSel holds the 0–2 run ts picked (via
-	// the trajectory node menu's "compare with…"); length 2 swaps the canvas for
-	// the side-by-side delta. (History/lineage is gone — the trajectory tree is
-	// the single run tree, and it carries every per-run entrance in its menu.)
-	const [compareSel, setCompareSel] = useState<string[]>([]);
-	// Clear all right-canvas focuses (so the chain shows the trajectory).
-	const clearFocus = useCallback(() => { setCaseFocus(null); setMetricsFocus(false); setCaseDataFocus(null); setLogFocus(false); setCompareSel([]); }, []);
-	// Toggle a run into the 2-slot compare set (drops the oldest past 2). When it
-	// reaches 2, ensure the lineage canvas is showing so the compare view renders.
+	// ── Mode + view stack (WS-1/WS-3) ─────────────────────────────────
+	// The three disentangled concerns. Observe = default. Tune is a thin tab
+	// that links out to the prompt + config editors (their own routes).
+	const [mode, setMode] = useState<WorkflowMode>("observe");
+	// The "Cases & data" rail can collapse (the fixed 30% column cramped the
+	// tree on small screens). Stacks vertically below lg.
+	const [railOpen, setRailOpen] = useState(true);
+	// The view stack within the current mode. Empty = the mode's base view
+	// (Observe: run tree + cases; Improve: run tree + compare). Back pops.
+	const [stack, dispatchNav] = useReducer(navReducer, []);
+	const top = stack[stack.length - 1] as ViewFrame | undefined;
+	// Switching mode clears the sub-view stack so each mode opens clean.
+	const switchMode = useCallback((m: WorkflowMode) => { setMode(m); dispatchNav({ type: "reset" }); }, []);
+
+	// The version the casebook + sub-views are pinned to (the "as of" chip). It
+	// lives on the top frame; the rail reads the deepest version on the stack.
+	const stackVersion = (() => { for (let i = stack.length - 1; i >= 0; i--) if (stack[i].version) return stack[i].version!; return null; })();
+	const [pinnedVersion, setPinnedVersion] = useState<TrajectoryVersion | null>(null);
+	const version = stackVersion || pinnedVersion;
+
+	// Derived view selectors (replace the old booleans; sub-view JSX unchanged).
+	const logFocus = top?.kind === "log";
+	const metricsFocus = top?.kind === "metrics";
+	const caseFocus = top?.kind === "case" ? { id: top.caseId!, label: top.caseLabel! } : null;
+	const caseDataFocus = top?.kind === "caseData" ? { id: top.caseId!, label: top.caseLabel! } : null;
+	const compareSel = (stack.find((f) => f.kind === "compare")?.compareSel) ?? [];
+
+	// Navigation helpers — push a sub-view, pop back one, reset to base.
+	const back = useCallback(() => dispatchNav({ type: "pop" }), []);
+	const openLog = useCallback((v?: TrajectoryVersion | null) => dispatchNav({ type: "push", frame: { kind: "log", version: v } }), []);
+	const openMetrics = useCallback(() => dispatchNav({ type: "push", frame: { kind: "metrics", version } }), [version]);
+	const openCase = useCallback((c: { id: string; label: string }) => dispatchNav({ type: "push", frame: { kind: "case", caseId: c.id, caseLabel: c.label, version } }), [version]);
+	const openCaseData = useCallback((c: { id: string; label: string }) => dispatchNav({ type: "push", frame: { kind: "caseData", caseId: c.id, caseLabel: c.label, version } }), [version]);
+	const pinVersion = useCallback((v: TrajectoryVersion | null) => setPinnedVersion(v), []);
+	// Toggle a run into the 2-slot compare set; 2 → a compare frame renders.
 	const toggleCompare = useCallback((ts: string) => {
-		setCompareSel((prev) => prev.includes(ts) ? prev.filter((t) => t !== ts) : [...prev, ts].slice(-2));
-	}, []);
+		const cur = compareSel;
+		const next = cur.includes(ts) ? cur.filter((t) => t !== ts) : [...cur, ts].slice(-2);
+		setMode("improve");
+		dispatchNav({ type: "setCompare", sel: next });
+	}, [compareSel]);
+	// State for the WS-5 branch-with-intention dialog (run ts + label).
+	const [branchFor, setBranchFor] = useState<{ ts?: string; label: string } | null>(null);
 	// #17 — right-click menu opened on a CASEBOOK case row (the tree owns its
 	// own menu internally; this is for the Data-assets rows).
 	const [caseMenu, setCaseMenu] = useState<{ x: number; y: number; target: RunMenuTarget } | null>(null);
@@ -434,26 +492,24 @@ export default function WorkflowObservabilityPanel({
 		// Focus a run: pin it as the version the left casebook + right panels read.
 		focusRun: (ts: string) => {
 			setSelectedRunTs(ts);
-			setVersion({ runTs: ts, cycleTs: ts, label: cycleDate(ts) || ts });
+			pinVersion({ runTs: ts, cycleTs: ts, label: cycleDate(ts) || ts });
 		},
 		// View data: a case → its raw JSON + provenance (CaseContentViewer); a run
 		// → pin that run's version and show the data it's scored on (MetricsView).
-		// (Distinct from "View log", which shows the within-run transcript — they
-		// used to both open the log, which read as a duplicate row.)
 		viewData: (t: RunMenuTarget) => {
-			clearFocus();
-			if (t.kind === "case" && t.caseId) { setCaseDataFocus({ id: t.caseId, label: t.label }); }
-			else if (t.ts) { setVersion({ runTs: t.ts, cycleTs: t.ts, label: cycleDate(t.ts) || t.ts }); setMetricsFocus(true); }
+			if (t.kind === "case" && t.caseId) { openCaseData({ id: t.caseId, label: t.label }); }
+			else if (t.ts) { pinVersion({ runTs: t.ts, cycleTs: t.ts, label: cycleDate(t.ts) || t.ts }); openMetrics(); }
 		},
-		// View trajectory log at a run ts.
-		viewLog: (ts?: string) => { clearFocus(); if (ts) setVersion({ runTs: ts, cycleTs: ts, label: cycleDate(ts) || ts }); setLogFocus(true); },
+		// View run log at a run ts.
+		viewLog: (ts?: string) => { openLog(ts ? { runTs: ts, cycleTs: ts, label: cycleDate(ts) || ts } : undefined); },
 		// Explain score: a case → its per-question provenance (CaseContentViewer);
 		// a run → the metric charts (MetricsView) for context.
 		explainScore: (t: RunMenuTarget) => {
-			clearFocus();
-			if (t.kind === "case" && t.caseId) setCaseDataFocus({ id: t.caseId, label: t.label });
-			else setMetricsFocus(true);
+			if (t.kind === "case" && t.caseId) openCaseData({ id: t.caseId, label: t.label });
+			else openMetrics();
 		},
+		// Branch WITH INTENTION (WS-5) — opens the dialog.
+		branchWithIntent: (ts: string, label: string) => setBranchFor({ ts, label }),
 		// Pin / annotate: hand off to the grounded chatbox so the user can attach a
 		// note / ask the agent to remember this run (generic, no per-app store).
 		annotate: (t: RunMenuTarget) => {
@@ -574,96 +630,154 @@ export default function WorkflowObservabilityPanel({
 			</div>
 
 			{/* ── GOAL — the workflow's objective, always shown full-width at the
-			    top (prominent + editable), independent of the tab below. ── */}
+			    top (persistent header), independent of the mode below. ── */}
 			<div className="min-w-0">
 				<GoalHeader goal={wf.goal} kpis={buildGoalKpis(summary, cycleFiles)} app={app} loop={loop} onSaved={onChanged}
-						experiment={loopExp} onOpenMetrics={() => { clearFocus(); setMetricsFocus(true); }} />
+						experiment={loopExp} onOpenMetrics={() => { switchMode("observe"); openMetrics(); }} />
 			</div>
 
-			{/* A failed last run is an alert — kept above the tabs so it's always
-			    visible regardless of which detail tab is open. */}
+			{/* A failed last run is an alert — kept above the modes so it's always
+			    visible regardless of which mode is open. */}
 			{!running && wf.last_run_ok === false && lastError && tenantHasRuns && (
 				<FailureCard error={lastError} app={app} loop={loop} />
 			)}
 
-			{/* Detail area: data assets (left) beside the run trajectory (right). */}
-			<div ref={fillRef} style={{ height: fillH }} className="flex gap-3 min-h-0">
-				{/* LEFT — the data assets the goal is scored on */}
-				<div className="w-[30%] min-w-[210px] max-w-[360px] flex flex-col min-h-0">
-					<div className="flex-1 min-h-0 rounded-xl border border-slate-200 bg-white flex flex-col overflow-hidden">
-						{/* In-box header, matching the Trajectory canvas's header. */}
-						<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400 uppercase flex items-center gap-1.5 flex-shrink-0 px-3 py-2 border-b border-slate-100">
-							<Database className="w-3 h-3 text-gold-500" /> Data assets
-							{/* Explicit entrances for the selected/latest run: Data (the data
-							    the run is scored on) + Log (its within-run transcript). Both
-							    are also reachable from the trajectory node menu. */}
-							<button onClick={() => { clearFocus(); setMetricsFocus(true); }} title="Open the latest (or selected) run's data — the casebook + metric scores it's graded on"
-								className={cn("ml-auto inline-flex items-center gap-1 normal-case tracking-normal text-[10px] rounded-full px-1.5 py-0.5 border transition-colors",
-									metricsFocus ? "text-gold-700 bg-gold-50 border-gold-200" : "text-slate-500 bg-white border-slate-200 hover:border-gold-200 hover:text-gold-700")}>
-								<Database className="w-3 h-3" /> Data
+			{/* ── MODE SWITCH + BREADCRUMB (WS-1/WS-3) — the disentangling move. ── */}
+			<div className="flex items-center gap-2 flex-wrap">
+				<div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+					{(["observe", "improve", "tune"] as WorkflowMode[]).map((m) => {
+						const Icon = m === "observe" ? Eye : m === "improve" ? FlaskConical : SlidersHorizontal;
+						return (
+							<button key={m} type="button" onClick={() => switchMode(m)} title={MODE_LABELS[m].tip}
+								className={cn("inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md transition-colors",
+									mode === m ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800")}>
+								<Icon className="w-3.5 h-3.5" /> {MODE_LABELS[m].text}
 							</button>
-							<button onClick={() => { clearFocus(); setLogFocus(true); }} title="Open the latest (or selected) run's within-run transcript (analyst↔judge log)"
-								className={cn("inline-flex items-center gap-1 normal-case tracking-normal text-[10px] rounded-full px-1.5 py-0.5 border transition-colors",
-									logFocus ? "text-violet-700 bg-violet-50 border-violet-200" : "text-slate-500 bg-white border-slate-200 hover:border-violet-200 hover:text-violet-700")}>
-								<MessageSquare className="w-3 h-3" /> Log
-							</button>
-							{/* A run's node/time-chip in the trajectory also opens its log. */}
-							{version && (
-								<button onClick={() => setVersion(null)} title="Back to latest" className="inline-flex items-center gap-1 normal-case tracking-normal text-[10px] text-gold-700 bg-gold-50 border border-gold-200 rounded-full px-1.5 py-0.5 hover:bg-gold-100 transition-colors">
-									as of {cycleDate(version.runTs || version.cycleTs)} <span className="text-gold-400">✕</span>
-								</button>
-							)}
-						</div>
-						<div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
-						{(() => {
-							const sources = (definition?.datasets?.length ? definition.datasets : wf.datasets) || [];
-							return sources.length > 0 ? (
-								<div>
-									<div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1">Data sources</div>
-									<div className="flex flex-nowrap gap-1.5 overflow-hidden">
-										{sources.map((d) => (<span key={d} className="text-[10px] text-slate-500 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 font-mono truncate max-w-[10rem] flex-shrink-0">{d}</span>))}
-									</div>
-								</div>
-							) : null;
-						})()}
-						<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading data…</div>}>
-							<CasebookPanel app={app} loop={loop} atTs={version?.runTs || version?.cycleTs}
-								onSelectCase={(c) => { clearFocus(); setCaseFocus(c); }} selectedCaseId={caseFocus?.id || caseDataFocus?.id}
-								onViewData={(c) => { clearFocus(); setCaseDataFocus(c); }}
-								onContextMenuCase={(c, e) => { e.preventDefault(); setCaseMenu({ x: e.clientX, y: e.clientY, target: { kind: "case", caseId: c.id, label: c.label } }); }}
-								onSelectMetrics={() => { clearFocus(); setMetricsFocus(true); }} metricsSelected={metricsFocus} />
-						</Suspense>
-					</div>
+						);
+					})}
+				</div>
+				{/* Breadcrumb — renders the stack; the "as of <version>" chip lives IN it. */}
+				<div className="flex items-center gap-1 text-[11px] text-slate-500 min-w-0">
+					<button type="button" onClick={() => dispatchNav({ type: "reset" })} className="hover:text-slate-800 transition-colors">{MODE_LABELS[mode].text}</button>
+					{stack.map((f, i) => (
+						<span key={i} className="flex items-center gap-1 min-w-0">
+							<ChevronRight className="w-3 h-3 text-slate-300 flex-shrink-0" />
+							<span className={cn("truncate", i === stack.length - 1 ? "text-slate-800 font-medium" : "")}>
+								{f.kind === "case" || f.kind === "caseData" ? (f.caseLabel || VIEW_LABELS.case) : VIEW_LABELS[f.kind] || f.kind}
+							</span>
+						</span>
+					))}
+					{version && (
+						<button onClick={() => pinVersion(null)} title="Pinned to a run — click to clear (back to latest)"
+							className="ml-1 inline-flex items-center gap-1 normal-case tracking-normal text-[10px] text-gold-700 bg-gold-50 border border-gold-200 rounded-full px-1.5 py-0.5 hover:bg-gold-100 transition-colors flex-shrink-0">
+							<Clock className="w-2.5 h-2.5" /> as of {cycleDate(version.runTs || version.cycleTs)} <span className="text-gold-400">✕</span>
+						</button>
+					)}
+					{stack.length > 0 && (
+						<button type="button" onClick={back} className="ml-1 inline-flex items-center gap-0.5 text-slate-500 hover:text-slate-900 px-1.5 py-0.5 rounded hover:bg-slate-100 transition-colors flex-shrink-0">
+							<ArrowLeft className="w-3 h-3" /> Back
+						</button>
+					)}
 				</div>
 			</div>
-				{/* RIGHT — the run trajectory; or, when a data case is clicked, that
-				    case's label→metric mapping log (Back returns to the trajectory). */}
+
+			{/* ── TUNE — links out to the prompt + config editors (their own routes). ── */}
+			{mode === "tune" ? (
+				<div className="grid gap-3 sm:grid-cols-2">
+					<Link to={`/studio/a/${encodeURIComponent(app)}/prompts`}
+						className="rounded-xl border border-slate-200 bg-white p-4 hover:border-gold-300 hover:shadow-sm transition-all group">
+						<div className="flex items-center gap-2 text-sm font-medium text-slate-900"><FileText className="w-4 h-4 text-gold-600" /> Prompts</div>
+						<div className="mt-1 text-[12px] text-slate-500">Edit the analyst &amp; judge instructions this app runs on. Shared prompts stay read-only — editing one creates a local override.</div>
+						<div className="mt-2 text-[11px] text-gold-700 group-hover:underline">Open prompt editor →</div>
+					</Link>
+					<Link to={`/studio/a/${encodeURIComponent(app)}/config`}
+						className="rounded-xl border border-slate-200 bg-white p-4 hover:border-gold-300 hover:shadow-sm transition-all group">
+						<div className="flex items-center gap-2 text-sm font-medium text-slate-900"><SlidersHorizontal className="w-4 h-4 text-gold-600" /> Config</div>
+						<div className="mt-1 text-[12px] text-slate-500">Edit this app's <code className="text-[11px] bg-slate-50 border border-slate-200 rounded px-1">xpcloud.yaml</code> — loops, goals, datasets, skills.</div>
+						<div className="mt-2 text-[11px] text-gold-700 group-hover:underline">Open config editor →</div>
+					</Link>
+				</div>
+			) : (
+			/* ── OBSERVE / IMPROVE — the rail + the mode body. ── */
+			<div ref={fillRef} style={{ height: fillH }} className="flex flex-col lg:flex-row gap-3 min-h-0">
+				{/* LEFT — the collapsible "Cases & data" rail. Stacks above the body
+				    below lg; collapses to a thin reopen button when closed. */}
+				{railOpen ? (
+					<div className="w-full lg:w-[30%] lg:min-w-[210px] lg:max-w-[360px] flex flex-col min-h-0 max-h-64 lg:max-h-none">
+						<div className="flex-1 min-h-0 rounded-xl border border-slate-200 bg-white flex flex-col overflow-hidden">
+							<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400 uppercase flex items-center gap-1.5 flex-shrink-0 px-3 py-2 border-b border-slate-100">
+								<Database className="w-3 h-3 text-gold-500" /> <span title={L.casesAndData.tip}>{L.casesAndData.text}</span>
+								<button onClick={() => { switchMode("observe"); openMetrics(); }} title={L.metrics.tip}
+									className={cn("ml-auto inline-flex items-center gap-1 normal-case tracking-normal text-[10px] rounded-full px-1.5 py-0.5 border transition-colors",
+										metricsFocus ? "text-gold-700 bg-gold-50 border-gold-200" : "text-slate-500 bg-white border-slate-200 hover:border-gold-200 hover:text-gold-700")}>
+									<BarChart3 className="w-3 h-3" /> {L.metrics.text}
+								</button>
+								<button onClick={() => openLog(version)} title={L.runLog.tip}
+									className={cn("inline-flex items-center gap-1 normal-case tracking-normal text-[10px] rounded-full px-1.5 py-0.5 border transition-colors",
+										logFocus ? "text-violet-700 bg-violet-50 border-violet-200" : "text-slate-500 bg-white border-slate-200 hover:border-violet-200 hover:text-violet-700")}>
+									<MessageSquare className="w-3 h-3" /> {L.runLog.text}
+								</button>
+								<button onClick={() => setRailOpen(false)} title="Hide the cases & data rail" className="text-slate-300 hover:text-slate-600 transition-colors">
+									<PanelLeftClose className="w-3.5 h-3.5" />
+								</button>
+							</div>
+							<div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
+							{(() => {
+								const sources = (definition?.datasets?.length ? definition.datasets : wf.datasets) || [];
+								return sources.length > 0 ? (
+									<div>
+										<div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1">Data sources</div>
+										<div className="flex flex-nowrap gap-1.5 overflow-hidden">
+											{sources.map((d) => (<span key={d} className="text-[10px] text-slate-500 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 font-mono truncate max-w-[10rem] flex-shrink-0">{d}</span>))}
+										</div>
+									</div>
+								) : null;
+							})()}
+							<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading data…</div>}>
+								<CasebookPanel app={app} loop={loop} atTs={version?.runTs || version?.cycleTs}
+									onSelectCase={(c) => { switchMode("observe"); openCase(c); }} selectedCaseId={caseFocus?.id || caseDataFocus?.id}
+									onViewData={(c) => { switchMode("observe"); openCaseData(c); }}
+									onContextMenuCase={(c, e) => { e.preventDefault(); setCaseMenu({ x: e.clientX, y: e.clientY, target: { kind: "case", caseId: c.id, label: c.label } }); }}
+									onSelectMetrics={() => { switchMode("observe"); openMetrics(); }} metricsSelected={metricsFocus} />
+							</Suspense>
+						</div>
+					</div>
+				</div>
+				) : (
+					<button onClick={() => setRailOpen(true)} title="Show the cases & data rail"
+						className="flex-shrink-0 self-start inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-[11px] text-slate-500 hover:text-slate-800 hover:border-slate-300 transition-colors">
+						<PanelLeftOpen className="w-3.5 h-3.5" /> {L.casesAndData.text}
+					</button>
+				)}
+				{/* RIGHT — the mode body: the active sub-view, else the mode's base
+				    (Observe & Improve both show the run tree as the base). */}
 				<div className="flex-1 min-w-0 min-h-0">
 					{compareSel.length === 2 ? (
-						<RunCompareView app={app} loop={loop} tsA={compareSel[0]} tsB={compareSel[1]} onBack={() => setCompareSel([])} />
+						<RunCompareView app={app} loop={loop} tsA={compareSel[0]} tsB={compareSel[1]} onBack={back} />
 					) : logFocus ? (
-						<TrajectoryLogView app={app} loop={loop} ts={version?.runTs || version?.cycleTs || anchorTs || selectedRunTs || undefined} onBack={() => setLogFocus(false)} />
+						<TrajectoryLogView app={app} loop={loop} ts={version?.runTs || version?.cycleTs || anchorTs || selectedRunTs || undefined} onBack={back} backLabel="Back" />
 					) : caseDataFocus ? (
-						<CaseContentViewer app={app} loop={loop} expId={loopExp?.id} caseId={caseDataFocus.id} caseLabel={caseDataFocus.label} atTs={version?.runTs || version?.cycleTs} onBack={() => setCaseDataFocus(null)} />
+						<CaseContentViewer app={app} loop={loop} expId={loopExp?.id} caseId={caseDataFocus.id} caseLabel={caseDataFocus.label} atTs={version?.runTs || version?.cycleTs} onBack={back} />
 					) : metricsFocus ? (
-						<MetricsView app={app} loop={loop} atTs={version?.runTs || version?.cycleTs} onBack={() => setMetricsFocus(false)} />
+						<MetricsView app={app} loop={loop} atTs={version?.runTs || version?.cycleTs} onBack={back} />
 					) : caseFocus ? (
-						<CaseMapping app={app} loop={loop} caseId={caseFocus.id} caseLabel={caseFocus.label} atTs={version?.runTs || version?.cycleTs} onBack={() => setCaseFocus(null)} />
+						<CaseMapping app={app} loop={loop} caseId={caseFocus.id} caseLabel={caseFocus.label} atTs={version?.runTs || version?.cycleTs} onBack={back} />
 					) : (
-						<TrajectoryGraph app={app} loop={loop} definition={definition} onSelectVersion={setVersion} running={running}
-							onShowLog={(ts) => { setVersion({ runTs: ts, cycleTs: ts, label: cycleDate(ts) || ts }); setLogFocus(true); }}
+						<TrajectoryGraph app={app} loop={loop} definition={definition} onSelectVersion={pinVersion} running={running}
+							onShowLog={(ts) => openLog({ runTs: ts, cycleTs: ts, label: cycleDate(ts) || ts })}
 							actions={menuActions} selectedForCompare={compareSel} onToggleCompare={toggleCompare} />
 					)}
 				</div>
 			</div>
-			{/* Stage drill-down + free-text query on the selected run. */}
-			{selectedStage && tenantHasRuns && (
+			)}
+			{/* Stage drill-down + free-text query on the selected run (Observe). */}
+			{mode !== "tune" && selectedStage && tenantHasRuns && (
 				<div ref={inspectorRef}>
 					<StageDetail app={app} loop={loop} stage={selectedStage} initialTs={anchorTs || selectedRunTs || undefined} onStageChange={(k) => setSelectedStage(k)} q={stageQ} setQ={setStageQ} onClose={() => setSelectedStage(null)} />
 				</div>
 			)}
 
-			{/* #17 — the right-click menu for a casebook case row (the lineage
+			{/* The visible ⋯ / right-click menu for a casebook case row (the run
 			    tree owns its own internal menu). One shared menu component. */}
 			{caseMenu && createPortal(
 				<RunContextMenu
@@ -672,6 +786,12 @@ export default function WorkflowObservabilityPanel({
 					onClose={() => setCaseMenu(null)}
 				/>,
 				document.body,
+			)}
+
+			{/* WS-5 — branch-with-intention dialog. */}
+			{branchFor && (
+				<BranchDialog app={app} loop={loop} fromTs={branchFor.ts} fromLabel={branchFor.label}
+					onClose={() => setBranchFor(null)} onLaunched={() => { setOptimisticRun(true); window.setTimeout(() => setOptimisticRun(false), 120_000); }} />
 			)}
 
 		</div>
@@ -971,7 +1091,7 @@ function StageBody({ stage, detail }: { stage: LoopStageKey; detail: MeCycleDeta
 		</ul>,
 	);
 
-	if (!blocks.length) return <div className="text-[11px] text-slate-400 italic">{STAGE_INFO[stage].role} — nothing recorded for this stage in this cycle.</div>;
+	if (!blocks.length) return <div className="text-[11px] text-slate-400 italic">{STAGE_INFO[stage].role} — nothing recorded for this stage in this run.</div>;
 	return <div className="space-y-2">{blocks}</div>;
 }
 
@@ -1123,7 +1243,7 @@ function StageDetail({
 				{loading && !detail ? (
 					<div className="flex items-center gap-2 text-[11px] text-slate-400 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" />reading the run…</div>
 				) : !detail ? (
-					<div className="text-xs text-slate-400 italic py-1">No run recorded yet for this loop.</div>
+					<div className="text-xs text-slate-400 italic py-1">No run recorded yet for this workflow.</div>
 				) : (
 					<StageBody stage={stage} detail={detail} />
 				)}

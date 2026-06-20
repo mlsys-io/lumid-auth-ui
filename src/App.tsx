@@ -48,6 +48,7 @@ const AppSurfaceEditor   = lazy(() => import("./components/app-surface/AppSurfac
 // In-Studio YAML config editor for an installed app at /studio/a/:app/config
 const AppManagePanel    = lazy(() => import("./components/app-surface/AppManagePanel"));
 const AppConfigEditor    = lazy(() => import("./components/app-surface/AppConfigEditor"));
+const AppPromptsEditor   = lazy(() => import("./components/app-surface/AppPromptsEditor"));
 // W1 workflow surfaces folded into /studio/apps (per-app observability
 // panel); /workflows and /mind redirect there, /workflows/:slug
 // param-redirects into the owning app's panel. Runs stay as the
@@ -605,6 +606,9 @@ export default function App() {
             <Route path="a/:app/edit"                   element={<AppSurfaceEditor />} />
             <Route path="a/:app/edit/:surface"          element={<AppSurfaceEditor />} />
             <Route path="a/:app/config"                 element={<AppConfigEditor />} />
+            {/* Tune › Prompts (WS-7) — edit the analyst & judge prompt files.
+                Static segment beats the generic :surface below. */}
+            <Route path="a/:app/prompts"                element={<AppPromptsEditor />} />
             {/* App management — rename (card/sidebar label), workflows
                 (create/run/remove loops), skill imports. Static segment
                 beats the generic :surface below. */}
