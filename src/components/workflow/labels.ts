@@ -62,5 +62,6 @@ export const VIEW_LABELS: Record<string, string> = {
 	tree: L.runTree.text,
 	compare: "Compare",
 	prompts: "Prompts",
+	prompt: "Prompt",
 	config: "Config",
 };

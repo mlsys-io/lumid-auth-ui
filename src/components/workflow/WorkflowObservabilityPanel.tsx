@@ -51,6 +51,9 @@ import type { MeExperiment } from "@/api/me";
 // only mount when the Data tab is opened.
 const DatasetExplorer = lazy(() => import("@/components/workflow/DatasetExplorer"));
 const CasebookPanel = lazy(() => import("@/components/workflow/CasebookPanel"));
+// Edit an analyst/judge prompt IN the right canvas (not a route push), so
+// clicking a prompt in the Assets rail keeps the user in the workflow panel.
+const EmbeddedPromptEditor = lazy(() => import("@/components/app-surface/AppPromptsEditor").then((m) => ({ default: m.EmbeddedPromptEditor })));
 import {
 	ReviewQueue, OffersPanel,
 	type CycleSummary,
@@ -118,7 +121,7 @@ const cycleCache = new Map<string, { ts: string | null; summary: CycleSummary | 
 // caseFocus/compareSel) with ONE push/pop stack so Back returns to the
 // PREVIOUS view, not always the run tree. The base view of each mode is
 // implicit (empty stack); pushing opens a sub-view, popping goes back one.
-type ViewKind = "log" | "metrics" | "case" | "caseData" | "compare";
+type ViewKind = "log" | "metrics" | "case" | "caseData" | "compare" | "prompt";
 interface ViewFrame {
 	kind: ViewKind;
 	// The version (run ts) the view is pinned to (the "as of" chip).
@@ -128,6 +131,9 @@ interface ViewFrame {
 	caseLabel?: string;
 	// compare carries the two selected ts.
 	compareSel?: string[];
+	// prompt targets carry the file name + a pretty label.
+	promptName?: string;
+	promptLabel?: string;
 }
 type NavAction =
 	| { type: "push"; frame: ViewFrame }
@@ -304,6 +310,7 @@ export default function WorkflowObservabilityPanel({
 	const metricsFocus = top?.kind === "metrics";
 	const caseFocus = top?.kind === "case" ? { id: top.caseId!, label: top.caseLabel! } : null;
 	const caseDataFocus = top?.kind === "caseData" ? { id: top.caseId!, label: top.caseLabel! } : null;
+	const promptFocus = top?.kind === "prompt" ? { name: top.promptName!, label: top.promptLabel! } : null;
 	const compareSel = (stack.find((f) => f.kind === "compare")?.compareSel) ?? [];
 
 	// Navigation helpers — push a sub-view, pop back one, reset to base.
@@ -312,6 +319,16 @@ export default function WorkflowObservabilityPanel({
 	const openMetrics = useCallback(() => dispatchNav({ type: "push", frame: { kind: "metrics", version } }), [version]);
 	const openCase = useCallback((c: { id: string; label: string }) => dispatchNav({ type: "push", frame: { kind: "case", caseId: c.id, caseLabel: c.label, version } }), [version]);
 	const openCaseData = useCallback((c: { id: string; label: string }) => dispatchNav({ type: "push", frame: { kind: "caseData", caseId: c.id, caseLabel: c.label, version } }), [version]);
+	// Open a prompt in the right canvas (no version pin — prompts aren't "as of"
+	// a run; they're the current editable instructions). A prompt is a top-level
+	// tuning view, not a sub-view of a run, so it REPLACES the stack (reset →
+	// push) rather than nesting — that's why it needs no breadcrumb/Back bar.
+	// Clicking the already-open prompt toggles it closed (back to the run tree).
+	const openPrompt = useCallback((name: string, label: string) => {
+		if (top?.kind === "prompt" && top.promptName === name) { dispatchNav({ type: "reset" }); return; }
+		dispatchNav({ type: "reset" });
+		dispatchNav({ type: "push", frame: { kind: "prompt", promptName: name, promptLabel: label } });
+	}, [top]);
 	const pinVersion = useCallback((v: TrajectoryVersion | null) => setPinnedVersion(v), []);
 	// Toggle a run into the 2-slot compare set; 2 → a compare frame renders.
 	const toggleCompare = useCallback((ts: string) => {
@@ -698,14 +715,16 @@ export default function WorkflowObservabilityPanel({
 
 			{/* Breadcrumb (WS-3) — only after drilling into a sub-view (or pinning a
 			    run). The active mode already shows in the switch above, so there is no
-			    redundant mode-name root; click the active mode to reset to its base. */}
-			{(stack.length > 0 || version) && (
+			    redundant mode-name root; click the active mode to reset to its base.
+			    Suppressed for the prompt editor: it's a toggle (click the rail card
+			    again to close), so it needs no breadcrumb/Back bar. */}
+			{(stack.length > 0 || version) && !promptFocus && (
 				<div className="flex items-center gap-1 text-[11px] text-slate-500 min-w-0">
 					{stack.map((f, i) => (
 						<span key={i} className="flex items-center gap-1 min-w-0">
 							{i > 0 && <ChevronRight className="w-3 h-3 text-slate-300 flex-shrink-0" />}
 							<span className={cn("truncate", i === stack.length - 1 ? "text-slate-800 font-medium" : "")}>
-								{f.kind === "case" || f.kind === "caseData" ? (f.caseLabel || VIEW_LABELS.case) : VIEW_LABELS[f.kind] || f.kind}
+								{f.kind === "case" || f.kind === "caseData" ? (f.caseLabel || VIEW_LABELS.case) : f.kind === "prompt" ? (f.promptLabel || VIEW_LABELS.prompt) : VIEW_LABELS[f.kind] || f.kind}
 							</span>
 						</span>
 					))}
@@ -737,6 +756,13 @@ export default function WorkflowObservabilityPanel({
 								<button onClick={() => openLog(version)} title={L.runLog.tip} className={cn("inline-flex items-center gap-1 normal-case tracking-normal text-[10px] rounded-full px-1.5 py-0.5 border transition-colors", logFocus ? "text-violet-700 bg-violet-50 border-violet-200" : "text-slate-500 bg-white border-slate-200 hover:border-violet-200 hover:text-violet-700")}><MessageSquare className="w-3 h-3" /> {L.runLog.text}</button>
 								<button onClick={() => setRailOpen(false)} title="Hide the assets rail" className="text-slate-300 hover:text-slate-600 transition-colors"><PanelLeftClose className="w-3.5 h-3.5" /></button>
 							</div>
+							{/* Version + publish covers EVERY asset in this panel — data,
+							    agents, memory and prompts are all versioned & published
+							    together (distinct from the workflow's runs), so the bar sits
+							    at the very top rather than inside one group. */}
+							<div className="flex-shrink-0 px-2 pt-2">
+								<TuneVersionBar app={app} identity={identity} onChanged={onChanged} />
+							</div>
 							<div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-2">
 								<RailGroup title={L.casesAndData.text} icon={Database} defaultOpen>
 									{(() => {
@@ -758,16 +784,16 @@ export default function WorkflowObservabilityPanel({
 											onSelectMetrics={() => openMetrics()} metricsSelected={metricsFocus} />
 									</Suspense>
 								</RailGroup>
-								<RailGroup title="Agents" icon={Brain}>
-									<AgentsRailContent agents={wf.memory_agents || []} />
-								</RailGroup>
-								<RailGroup title="Prompts & tuning" icon={SlidersHorizontal}>
-									<div className="space-y-2 pt-1">
-										<TuneVersionBar app={app} identity={identity} onChanged={onChanged} />
-										<PromptsTuneCard app={app} />
-										<Link to={`/studio/a/${encodeURIComponent(app)}/config`} className="block text-[11px] text-gold-700 hover:underline">Open app config (xpcloud.yaml) →</Link>
-									</div>
-								</RailGroup>
+									{/* Agents (memory banks) + Prompts/tuning are one concern — the
+									    agent IS its banks + its instructions — so they live in a
+									    single section instead of two look-alike grouped tables. */}
+									<RailGroup title="Agents & prompts" icon={SlidersHorizontal}>
+										<div className="space-y-2 pt-1">
+											<AgentsRailContent agents={wf.memory_agents || []} />
+											<PromptsTuneCard app={app} onOpenPrompt={openPrompt} selectedPrompt={promptFocus?.name} />
+											<Link to={`/studio/a/${encodeURIComponent(app)}/config`} className="block text-[11px] text-gold-700 hover:underline">Open app config (xpcloud.yaml) →</Link>
+										</div>
+									</RailGroup>
 							</div>
 						</div>
 					</div>
@@ -779,6 +805,10 @@ export default function WorkflowObservabilityPanel({
 						<RunCompareView app={app} loop={loop} tsA={compareSel[0]} tsB={compareSel[1]} onBack={back} />
 					) : logFocus ? (
 						<TrajectoryLogView app={app} loop={loop} ts={version?.runTs || version?.cycleTs || anchorTs || selectedRunTs || undefined} onBack={back} backLabel="Back" />
+					) : promptFocus ? (
+						<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-4"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading prompt…</div>}>
+							<EmbeddedPromptEditor app={app} name={promptFocus.name} onChangedSource={onChanged} />
+						</Suspense>
 					) : caseDataFocus ? (
 						<CaseContentViewer app={app} loop={loop} expId={loopExp?.id} caseId={caseDataFocus.id} caseLabel={caseDataFocus.label} atTs={version?.runTs || version?.cycleTs} onBack={back} />
 					) : metricsFocus ? (
@@ -894,28 +924,37 @@ function AgentsRailContent({ agents }: { agents: string[] }) {
 	if (!agents.length) return <div className="text-[11px] text-slate-400 italic py-1">No knowledge agents configured.</div>;
 	return (
 		<div className="space-y-1 pt-1">
-			<div className="text-[10px] text-slate-400 leading-snug mb-1">Each bank is git-backed — every learning is a commit — and cloud-synced.</div>
+			<div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Memory banks</div>
+			<div className="text-[10px] text-slate-400 leading-snug mb-1">The knowledge this agent accumulates — what it learns and reuses each run. Each bank is git-backed (every learning is a commit) and cloud-synced. Click to browse.</div>
 			{agents.map((a) => (
 				<Link key={a} to={`/studio/knowledge/${encodeURIComponent(a)}`}
+					title={`Browse the "${a}" memory bank`}
 					className="flex items-center gap-1.5 text-[12px] text-slate-600 hover:text-gold-700 transition-colors">
+					{/* No per-row "versioned" pill — the top bar owns versioning for the
+					    whole bundle; per-row badges are reserved for provenance
+					    (local/shared), the one consistent badge idea. */}
 					<Brain className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" /> <span className="truncate">{a}</span>
-					<span className="ml-auto flex-shrink-0 text-[9px] uppercase tracking-wide rounded-full px-1.5 py-0.5 border text-emerald-600 bg-emerald-50 border-emerald-200" title="git-backed + cloud-synced">versioned</span>
 				</Link>
 			))}
 		</div>
 	);
 }
 
-// TuneVersionBar — WS-9 versioning surfaced IN the panel: the app's version +
-// whether the current prompt/config edits are published, with a one-click
-// Publish (app_push: commit to the xp.io repo + auto-bump semver). Without
-// this, "tuning is versioned" was invisible — edits only versioned on a CLI
-// push the user couldn't see or trigger here.
+// TuneVersionBar — WS-9 versioning surfaced IN the panel. It versions + publishes
+// the WHOLE asset bundle this panel holds — data/cases, agents/memory and prompts
+// (not the workflow's runs) — with a one-click Publish (app_push: commit to the
+// xp.io repo + auto-bump semver). Sits at the very top of the Assets panel.
 function TuneVersionBar({ app, identity, onChanged }: { app: string; identity?: AppIdentity; onChanged?: () => void }) {
 	const [busy, setBusy] = useState(false);
 	const version = identity?.version;
-	const dirty = identity ? (identity.status === "dirty" || identity.status === "ahead") : false;
-	const unpublished = identity ? (!identity.published || identity.status === "unpublished") : false;
+	// Publish state is only KNOWN when identity carries it. The /me/loops/health
+	// feed that fills published/status is OPERATOR-scoped, so TENANT apps arrive
+	// with both undefined — and `!undefined` wrongly read as "unpublished",
+	// flagging every tenant app. Treat unknown as a neutral "versioned" state and
+	// only assert unpublished/in-sync when we positively know.
+	const known = identity != null && (identity.published !== undefined || identity.status !== undefined);
+	const unpublished = identity?.published === false || identity?.status === "unpublished";
+	const dirty = identity?.status === "dirty" || identity?.status === "ahead";
 	const publish = async () => {
 		setBusy(true);
 		try {
@@ -927,22 +966,24 @@ function TuneVersionBar({ app, identity, onChanged }: { app: string; identity?: 
 		} finally { setBusy(false); }
 	};
 	return (
-		<div className="flex items-center gap-2 flex-wrap rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2">
+		<div title="Versions & publishes everything in this panel — data, agents, memory and prompts — to your xp.io repo." className="flex items-center gap-2 flex-wrap rounded-xl border border-slate-200 bg-white px-3 py-2">
 			<GitBranch className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
 			<span className="text-[12px] text-slate-600">Version</span>
 			<span className="text-[12px] font-mono font-semibold text-slate-800">{version ? `v${version}` : "—"}</span>
 			{unpublished ? (
 				<span className="text-[10px] uppercase tracking-wide rounded-full px-1.5 py-0.5 border text-slate-500 bg-white border-slate-200">unpublished</span>
 			) : dirty ? (
-				<span className="text-[10px] uppercase tracking-wide rounded-full px-1.5 py-0.5 border text-gold-700 bg-gold-50 border-gold-200" title="Local prompt/config edits aren't published yet">edited since publish</span>
-			) : (
+				<span className="text-[10px] uppercase tracking-wide rounded-full px-1.5 py-0.5 border text-gold-700 bg-gold-50 border-gold-200" title="Local edits to data / agents / prompts aren't published yet">edited since publish</span>
+			) : known ? (
 				<span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide rounded-full px-1.5 py-0.5 border text-emerald-600 bg-emerald-50 border-emerald-200"><Check className="w-3 h-3" /> in sync</span>
+			) : (
+				<span title="Versioned & git-backed. Publish to push these assets to your xp.io repo." className="text-[10px] uppercase tracking-wide rounded-full px-1.5 py-0.5 border text-slate-500 bg-white border-slate-200">versioned</span>
 			)}
 			<button onClick={publish} disabled={busy}
 				className={cn("ml-auto inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg transition-colors disabled:opacity-50",
 					(dirty || unpublished) ? "bg-gold-500 text-white hover:bg-gold-600" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50")}>
 				{busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-				{unpublished ? "Publish" : dirty ? "Publish edits" : "Re-publish"}
+				{unpublished ? "Publish" : dirty ? "Publish edits" : known ? "Re-publish" : "Publish"}
 			</button>
 		</div>
 	);
@@ -952,7 +993,13 @@ function TuneVersionBar({ app, identity, onChanged }: { app: string; identity?: 
 // the analyst & judge prompts this app runs on, grouped, with a local/shared
 // tag each, so it's self-evident WHERE the agent instructions live and that
 // they're editable. The whole card links to the full prompt editor.
-function PromptsTuneCard({ app }: { app: string }) {
+function PromptsTuneCard({ app, onOpenPrompt, selectedPrompt }: {
+	app: string;
+	// When provided, a prompt row opens IN the panel's right canvas (view-stack
+	// push) instead of navigating to the full /prompts route.
+	onOpenPrompt?: (name: string, label: string) => void;
+	selectedPrompt?: string;
+}) {
 	const [prompts, setPrompts] = useState<{ name: string; source?: string; editable?: boolean }[] | null>(null);
 	const [err, setErr] = useState<string | null>(null);
 	useEffect(() => {
@@ -971,17 +1018,32 @@ function PromptsTuneCard({ app }: { app: string }) {
 				<Icon className="w-3.5 h-3.5 text-gold-600" /> {title} <span className="text-slate-300 font-normal normal-case">· {items.length}</span>
 			</div>
 			<div className="space-y-0.5">
-				{items.map((p) => (
-					<Link key={p.name} to={`/studio/a/${encodeURIComponent(app)}/prompts?p=${encodeURIComponent(p.name)}`}
-						className="flex items-center gap-1.5 text-[12px] text-slate-600 hover:text-gold-700 transition-colors group">
-						<span className="truncate">{pretty(p.name)}</span>
+				{items.map((p) => {
+					const label = pretty(p.name);
+					const badge = (
 						<span className={cn("ml-auto flex-shrink-0 text-[9px] uppercase tracking-wide rounded-full px-1.5 py-0.5 border",
 							isLocal(p.source) ? "text-gold-700 bg-gold-50 border-gold-200" : "text-slate-400 bg-slate-50 border-slate-200")}
 							title={isLocal(p.source) ? "local override — editable in your bundle" : "shared (read-only) — editing creates a local override"}>
 							{isLocal(p.source) ? "local" : "shared"}
 						</span>
-					</Link>
-				))}
+					);
+					// In-panel: open the editor in the right canvas (no navigation).
+					return onOpenPrompt ? (
+						<button key={p.name} type="button" onClick={() => onOpenPrompt(p.name, label)}
+							title={selectedPrompt === p.name ? "Click to close" : "Open prompt"}
+							className={cn("w-full flex items-center gap-1.5 text-[12px] text-left rounded px-1 -mx-1 transition-colors",
+								selectedPrompt === p.name ? "text-gold-800 bg-gold-50" : "text-slate-600 hover:text-gold-700 hover:bg-gold-50/40")}>
+							<span className="truncate">{label}</span>
+							{badge}
+						</button>
+					) : (
+						<Link key={p.name} to={`/studio/a/${encodeURIComponent(app)}/prompts?p=${encodeURIComponent(p.name)}`}
+							className="flex items-center gap-1.5 text-[12px] text-slate-600 hover:text-gold-700 transition-colors group">
+							<span className="truncate">{label}</span>
+							{badge}
+						</Link>
+					);
+				})}
 				{items.length === 0 && <div className="text-[11px] text-slate-400 italic">none</div>}
 			</div>
 		</div>
