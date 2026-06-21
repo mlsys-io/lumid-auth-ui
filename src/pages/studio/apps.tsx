@@ -806,7 +806,9 @@ function RuntimeStrip({ rows, identity, embedded }: { rows: Row[]; identity?: Ap
 	// Schedule is always shown in the selected workflow's card (its own picker),
 	// so omit it from the strip to remove that duplication.
 	void schedText;
-	if (banksText) chips.push({ Icon: Database, label: banksText, title: `Memory banks: ${banks.join(", ")}` });
+	// Memory banks (agents) now live in the workflow panel's Assets rail —
+	// omit them here to avoid duplicating the agents list.
+	void banksText;
 	if (identity?.kind) chips.push({ Icon: Boxes, label: identity.kind, title: "Marketplace kind" });
 
 	return (

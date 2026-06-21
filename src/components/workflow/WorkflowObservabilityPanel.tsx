@@ -873,14 +873,17 @@ function RailGroup({ title, icon: Icon, defaultOpen, children }: {
 	title: string; icon: typeof Database; defaultOpen?: boolean; children: React.ReactNode;
 }) {
 	const [open, setOpen] = useState(defaultOpen ?? false);
+	// Borderless section — the rail's outer box is the only border; groups are
+	// dividers within it, so children (which bring their own chrome) never
+	// double-box.
 	return (
-		<div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
+		<div className="border-b border-slate-100 last:border-b-0">
 			<button type="button" onClick={() => setOpen((o) => !o)}
-				className="w-full flex items-center gap-1.5 px-2.5 py-2 text-[11px] uppercase tracking-wide font-semibold text-slate-500 hover:bg-slate-50 transition-colors">
+				className="w-full flex items-center gap-1.5 px-1.5 py-2 text-[11px] uppercase tracking-wide font-semibold text-slate-500 hover:text-slate-700 transition-colors">
 				<Icon className="w-3.5 h-3.5 text-gold-500" /> <span>{title}</span>
 				<ChevronDown className={cn("w-3.5 h-3.5 ml-auto text-slate-400 transition-transform", open && "rotate-180")} />
 			</button>
-			{open && <div className="px-2.5 pb-2.5 pt-0.5 border-t border-slate-100">{children}</div>}
+			{open && <div className="px-1.5 pb-2.5 pt-0.5">{children}</div>}
 		</div>
 	);
 }
@@ -988,12 +991,10 @@ function PromptsTuneCard({ app }: { app: string }) {
 	const judge = (prompts || []).filter((p) => p.name.startsWith("judge"));
 	const other = (prompts || []).filter((p) => !p.name.startsWith("analyst") && !p.name.startsWith("judge"));
 
+	// Bare content (no own card/title) — it lives inside the rail's "Prompts &
+	// tuning" group, which already titles + boxes it.
 	return (
-		<div className="rounded-xl border border-slate-200 bg-white p-4">
-			<div className="flex items-center gap-2 text-sm font-medium text-slate-900 mb-3">
-				<FileText className="w-4 h-4 text-gold-600" /> Agent prompts
-				<Link to={`/studio/a/${encodeURIComponent(app)}/prompts`} className="ml-auto text-[11px] text-gold-700 hover:underline">Open prompt editor →</Link>
-			</div>
+		<div className="pt-1">
 			{err ? (
 				<div className="text-[12px] text-rose-500">Couldn't load prompts: {err}</div>
 			) : prompts === null ? (
@@ -1001,10 +1002,11 @@ function PromptsTuneCard({ app }: { app: string }) {
 			) : prompts.length === 0 ? (
 				<div className="text-[12px] text-slate-400 italic">This app declares no editable prompts.</div>
 			) : (
-				<div className="grid gap-4 sm:grid-cols-2">
+				<div className="space-y-3">
 					{groupRow("Analyst", Brain, analyst)}
 					{groupRow("Judge", Scale, judge)}
 					{other.length > 0 && groupRow("Other", FileText, other)}
+					<Link to={`/studio/a/${encodeURIComponent(app)}/prompts`} className="block text-[11px] text-gold-700 hover:underline">Open full prompt editor →</Link>
 				</div>
 			)}
 		</div>
