@@ -1170,6 +1170,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 								{selectedRow && (
 									<WorkflowObservabilityPanel
 										app={app} loop={selectedRow.loop} wf={selectedRow.wf} loopHealth={selectedRow.lh}
+										identity={identity}
 										onChanged={load}
 										initialCycle={(effSelected === (selected ?? initialLoop)) ? initialCycle : null}
 										canDelete={isTenantApp && rows.length > 1}

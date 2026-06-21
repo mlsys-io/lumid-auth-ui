@@ -21,11 +21,12 @@ import {
 	Database, Sparkles, Pencil, Activity, Check, Square, MessageSquare,
 	Eye, FlaskConical, SlidersHorizontal, ArrowLeft,
 	PanelLeftClose, PanelLeftOpen, FileText, BarChart3, MoreHorizontal,
-	Brain, Scale,
+	Brain, Scale, GitBranch,
 } from "lucide-react";
 import { toast } from "sonner";
 import apiClient from "@/api/client";
 import { me, MeApiError, type MeWorkflowRow, type MeCycleDetail, type LoopDefinition } from "@/api/me";
+import { type AppIdentity } from "@/components/workflow/AppCard";
 import WorkflowCanvas, { type CanvasStepRef } from "@/components/workflow/WorkflowCanvas";
 import StepInspectorPanel from "@/components/workflow/StepInspectorPanel";
 import { type LoopStageKey } from "@/components/workflow/LoopOrbit";
@@ -44,7 +45,7 @@ import TrajectoryLogView from "@/components/workflow/TrajectoryLogView";
 import { RunCompareView } from "@/components/workflow/BranchTreeView";
 import RunContextMenu, { type RunMenuActions, type RunMenuTarget } from "@/components/workflow/RunContextMenu";
 import BranchDialog from "@/components/workflow/BranchDialog";
-import { L, MODE_LABELS, VIEW_LABELS, type WorkflowMode } from "@/components/workflow/labels";
+import { L, VIEW_LABELS } from "@/components/workflow/labels";
 import type { MeExperiment } from "@/api/me";
 // Datasets the workflow works on — heavy (table/preview), so lazy-load it and
 // only mount when the Data tab is opened.
@@ -150,13 +151,15 @@ function navReducer(stack: ViewFrame[], action: NavAction): ViewFrame[] {
 }
 
 export default function WorkflowObservabilityPanel({
-	app, loop, wf, loopHealth, onChanged, initialCycle, canDelete, onDelete,
+	app, loop, wf, loopHealth, onChanged, initialCycle, canDelete, onDelete, identity,
 }: {
 	app: string;
 	loop: string;
 	wf: MeWorkflowRow;
 	loopHealth?: LoopHealth;
 	onChanged?: () => void;
+	// App version/publish state (for the Tune tab's versioning header).
+	identity?: AppIdentity;
 	// Deep-link anchor (?cycle=<ts>) — when set (e.g. CycleCard "Open full
 	// cycle"), auto-open a stage on that run instead of waiting for a click.
 	initialCycle?: string | null;
@@ -281,7 +284,6 @@ export default function WorkflowObservabilityPanel({
 	// ── Mode + view stack (WS-1/WS-3) ─────────────────────────────────
 	// The three disentangled concerns. Observe = default. Tune is a thin tab
 	// that links out to the prompt + config editors (their own routes).
-	const [mode, setMode] = useState<WorkflowMode>("observe");
 	// The "Cases & data" rail can collapse (the fixed 30% column cramped the
 	// tree on small screens). Stacks vertically below lg.
 	const [railOpen, setRailOpen] = useState(true);
@@ -290,7 +292,6 @@ export default function WorkflowObservabilityPanel({
 	const [stack, dispatchNav] = useReducer(navReducer, []);
 	const top = stack[stack.length - 1] as ViewFrame | undefined;
 	// Switching mode clears the sub-view stack so each mode opens clean.
-	const switchMode = useCallback((m: WorkflowMode) => { setMode(m); dispatchNav({ type: "reset" }); }, []);
 
 	// The version the casebook + sub-views are pinned to (the "as of" chip). It
 	// lives on the top frame; the rail reads the deepest version on the stack.
@@ -316,7 +317,6 @@ export default function WorkflowObservabilityPanel({
 	const toggleCompare = useCallback((ts: string) => {
 		const cur = compareSel;
 		const next = cur.includes(ts) ? cur.filter((t) => t !== ts) : [...cur, ts].slice(-2);
-		setMode("improve");
 		dispatchNav({ type: "setCompare", sel: next });
 	}, [compareSel]);
 	// State for the WS-5 branch-with-intention dialog (run ts + label).
@@ -688,18 +688,6 @@ export default function WorkflowObservabilityPanel({
 				<div className="min-w-0 flex-1">
 					<GoalHeader goal={wf.goal} kpis={buildGoalKpis(summary, cycleFiles)} app={app} loop={loop} onSaved={onChanged} />
 				</div>
-				<div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 flex-shrink-0">
-					{(["observe", "improve", "tune"] as WorkflowMode[]).map((m) => {
-						const Icon = m === "observe" ? Eye : m === "improve" ? FlaskConical : SlidersHorizontal;
-						return (
-							<button key={m} type="button" onClick={() => switchMode(m)} title={MODE_LABELS[m].tip}
-								className={cn("inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md transition-colors",
-									mode === m ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800")}>
-								<Icon className="w-3.5 h-3.5" /> {MODE_LABELS[m].text}
-							</button>
-						);
-					})}
-				</div>
 			</div>
 
 			{/* A failed last run is an alert — kept above the modes so it's always
@@ -736,73 +724,56 @@ export default function WorkflowObservabilityPanel({
 			)}
 
 			{/* ── TUNE — inspect/edit the agent prompts + app config. ── */}
-			{mode === "tune" ? (
-				<div className="space-y-3">
-					<div className="text-[12px] text-slate-500">
-						<span className="font-medium text-slate-700">Tune what the agents are.</span> The analyst &amp; judge are driven by editable prompt files — inspect any of them, and edit to change behavior. Shared prompts are read-only; editing one creates a local override (the shared copy is never touched).
-					</div>
-					<PromptsTuneCard app={app} />
-					<Link to={`/studio/a/${encodeURIComponent(app)}/config`}
-						className="block rounded-xl border border-slate-200 bg-white p-4 hover:border-gold-300 hover:shadow-sm transition-all group">
-						<div className="flex items-center gap-2 text-sm font-medium text-slate-900"><SlidersHorizontal className="w-4 h-4 text-gold-600" /> App config</div>
-						<div className="mt-1 text-[12px] text-slate-500">Edit this app's <code className="text-[11px] bg-slate-50 border border-slate-200 rounded px-1">xpcloud.yaml</code> — loops, goals, datasets, skills.</div>
-						<div className="mt-2 text-[11px] text-gold-700 group-hover:underline">Open config editor →</div>
-					</Link>
-				</div>
-			) : (
-			/* ── OBSERVE / IMPROVE — the rail + the mode body. ── */
+			{/* ── ONE PANEL: assets rail (collapsible groups) + run canvas. No
+			    Observe/Improve/Tune modes — the rail holds cases & data, agents,
+			    and prompts/tuning; the canvas is the runs (read + experiment). ── */}
 			<div ref={fillRef} style={{ height: fillH }} className="flex flex-col lg:flex-row gap-3 min-h-0">
-				{/* LEFT — the collapsible "Cases & data" rail. Stacks above the body
-				    below lg; collapses to a thin reopen button when closed. */}
 				{railOpen ? (
-					<div className="w-full lg:w-[30%] lg:min-w-[210px] lg:max-w-[360px] flex flex-col min-h-0 max-h-64 lg:max-h-none">
-						<div className="flex-1 min-h-0 rounded-xl border border-slate-200 bg-white flex flex-col overflow-hidden">
-							<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400 uppercase flex items-center gap-1.5 flex-shrink-0 px-3 py-2 border-b border-slate-100">
-								<Database className="w-3 h-3 text-gold-500" /> <span title={L.casesAndData.tip}>{L.casesAndData.text}</span>
-								<button onClick={() => { switchMode("observe"); openMetrics(); }} title={L.metrics.tip}
-									className={cn("ml-auto inline-flex items-center gap-1 normal-case tracking-normal text-[10px] rounded-full px-1.5 py-0.5 border transition-colors",
-										metricsFocus ? "text-gold-700 bg-gold-50 border-gold-200" : "text-slate-500 bg-white border-slate-200 hover:border-gold-200 hover:text-gold-700")}>
-									<BarChart3 className="w-3 h-3" /> {L.metrics.text}
-								</button>
-								<button onClick={() => openLog(version)} title={L.runLog.tip}
-									className={cn("inline-flex items-center gap-1 normal-case tracking-normal text-[10px] rounded-full px-1.5 py-0.5 border transition-colors",
-										logFocus ? "text-violet-700 bg-violet-50 border-violet-200" : "text-slate-500 bg-white border-slate-200 hover:border-violet-200 hover:text-violet-700")}>
-									<MessageSquare className="w-3 h-3" /> {L.runLog.text}
-								</button>
-								<button onClick={() => setRailOpen(false)} title="Hide the cases & data rail" className="text-slate-300 hover:text-slate-600 transition-colors">
-									<PanelLeftClose className="w-3.5 h-3.5" />
-								</button>
+					<div className="w-full lg:w-[30%] lg:min-w-[220px] lg:max-w-[360px] flex flex-col min-h-0 max-h-72 lg:max-h-none">
+						<div className="flex-1 min-h-0 rounded-xl border border-slate-200 bg-slate-50/40 flex flex-col overflow-hidden">
+							<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400 uppercase flex items-center gap-1.5 flex-shrink-0 px-3 py-2 border-b border-slate-100 bg-white">
+								<Database className="w-3 h-3 text-gold-500" /> <span>Assets</span>
+								<button onClick={() => openMetrics()} title={L.metrics.tip} className={cn("ml-auto inline-flex items-center gap-1 normal-case tracking-normal text-[10px] rounded-full px-1.5 py-0.5 border transition-colors", metricsFocus ? "text-gold-700 bg-gold-50 border-gold-200" : "text-slate-500 bg-white border-slate-200 hover:border-gold-200 hover:text-gold-700")}><BarChart3 className="w-3 h-3" /> {L.metrics.text}</button>
+								<button onClick={() => openLog(version)} title={L.runLog.tip} className={cn("inline-flex items-center gap-1 normal-case tracking-normal text-[10px] rounded-full px-1.5 py-0.5 border transition-colors", logFocus ? "text-violet-700 bg-violet-50 border-violet-200" : "text-slate-500 bg-white border-slate-200 hover:border-violet-200 hover:text-violet-700")}><MessageSquare className="w-3 h-3" /> {L.runLog.text}</button>
+								<button onClick={() => setRailOpen(false)} title="Hide the assets rail" className="text-slate-300 hover:text-slate-600 transition-colors"><PanelLeftClose className="w-3.5 h-3.5" /></button>
 							</div>
-							<div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
-							{(() => {
-								const sources = (definition?.datasets?.length ? definition.datasets : wf.datasets) || [];
-								return sources.length > 0 ? (
-									<div>
-										<div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1">Data sources</div>
-										<div className="flex flex-nowrap gap-1.5 overflow-hidden">
-											{sources.map((d) => (<span key={d} className="text-[10px] text-slate-500 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 font-mono truncate max-w-[10rem] flex-shrink-0">{d}</span>))}
-										</div>
+							<div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-2">
+								<RailGroup title={L.casesAndData.text} icon={Database} defaultOpen>
+									{(() => {
+										const sources = (definition?.datasets?.length ? definition.datasets : wf.datasets) || [];
+										return sources.length > 0 ? (
+											<div className="mb-2 pt-1">
+												<div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1">Data sources</div>
+												<div className="flex flex-wrap gap-1.5">
+													{sources.map((d) => (<span key={d} className="text-[10px] text-slate-500 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 font-mono truncate max-w-[10rem]">{d}</span>))}
+												</div>
+											</div>
+										) : null;
+									})()}
+									<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading data…</div>}>
+										<CasebookPanel app={app} loop={loop} atTs={version?.runTs || version?.cycleTs}
+											onSelectCase={(c) => openCase(c)} selectedCaseId={caseFocus?.id || caseDataFocus?.id}
+											onViewData={(c) => openCaseData(c)}
+											onContextMenuCase={(c, e) => { e.preventDefault(); setCaseMenu({ x: e.clientX, y: e.clientY, target: { kind: "case", caseId: c.id, label: c.label } }); }}
+											onSelectMetrics={() => openMetrics()} metricsSelected={metricsFocus} />
+									</Suspense>
+								</RailGroup>
+								<RailGroup title="Agents" icon={Brain}>
+									<AgentsRailContent agents={wf.memory_agents || []} />
+								</RailGroup>
+								<RailGroup title="Prompts & tuning" icon={SlidersHorizontal}>
+									<div className="space-y-2 pt-1">
+										<TuneVersionBar app={app} identity={identity} onChanged={onChanged} />
+										<PromptsTuneCard app={app} />
+										<Link to={`/studio/a/${encodeURIComponent(app)}/config`} className="block text-[11px] text-gold-700 hover:underline">Open app config (xpcloud.yaml) →</Link>
 									</div>
-								) : null;
-							})()}
-							<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading data…</div>}>
-								<CasebookPanel app={app} loop={loop} atTs={version?.runTs || version?.cycleTs}
-									onSelectCase={(c) => { switchMode("observe"); openCase(c); }} selectedCaseId={caseFocus?.id || caseDataFocus?.id}
-									onViewData={(c) => { switchMode("observe"); openCaseData(c); }}
-									onContextMenuCase={(c, e) => { e.preventDefault(); setCaseMenu({ x: e.clientX, y: e.clientY, target: { kind: "case", caseId: c.id, label: c.label } }); }}
-									onSelectMetrics={() => { switchMode("observe"); openMetrics(); }} metricsSelected={metricsFocus} />
-							</Suspense>
+								</RailGroup>
+							</div>
 						</div>
 					</div>
-				</div>
 				) : (
-					<button onClick={() => setRailOpen(true)} title="Show the cases & data rail"
-						className="flex-shrink-0 self-start inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-[11px] text-slate-500 hover:text-slate-800 hover:border-slate-300 transition-colors">
-						<PanelLeftOpen className="w-3.5 h-3.5" /> {L.casesAndData.text}
-					</button>
+					<button onClick={() => setRailOpen(true)} title="Show the assets rail" className="flex-shrink-0 self-start inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-[11px] text-slate-500 hover:text-slate-800 hover:border-slate-300 transition-colors"><PanelLeftOpen className="w-3.5 h-3.5" /> Assets</button>
 				)}
-				{/* RIGHT — the mode body: the active sub-view, else the mode's base
-				    (Observe & Improve both show the run tree as the base). */}
 				<div className="flex-1 min-w-0 min-h-0">
 					{compareSel.length === 2 ? (
 						<RunCompareView app={app} loop={loop} tsA={compareSel[0]} tsB={compareSel[1]} onBack={back} />
@@ -816,17 +787,15 @@ export default function WorkflowObservabilityPanel({
 						<CaseMapping app={app} loop={loop} caseId={caseFocus.id} caseLabel={caseFocus.label} atTs={version?.runTs || version?.cycleTs} onBack={back} />
 					) : (
 						<TrajectoryGraph app={app} loop={loop} definition={definition} onSelectVersion={pinVersion} running={running}
-							mode={mode === "improve" ? "improve" : "observe"}
+							mode="improve"
 							onShowLog={(ts) => openLog({ runTs: ts, cycleTs: ts, label: cycleDate(ts) || ts })}
 							actions={menuActions}
-							selectedForCompare={mode === "improve" ? compareSel : []}
-							onToggleCompare={mode === "improve" ? toggleCompare : undefined} />
+							selectedForCompare={compareSel} onToggleCompare={toggleCompare} />
 					)}
 				</div>
 			</div>
-			)}
 			{/* Stage drill-down + free-text query on the selected run (Observe). */}
-			{mode !== "tune" && selectedStage && tenantHasRuns && (
+			{selectedStage && tenantHasRuns && (
 				<div ref={inspectorRef}>
 					<StageDetail app={app} loop={loop} stage={selectedStage} initialTs={anchorTs || selectedRunTs || undefined} onStageChange={(k) => setSelectedStage(k)} q={stageQ} setQ={setStageQ} onClose={() => setSelectedStage(null)} />
 				</div>
@@ -896,6 +865,84 @@ function buildGoalKpis(summary: CycleSummary | null, files: Record<string, unkno
 		}
 	}
 	return out.slice(0, 5);
+}
+
+// RailGroup — a collapsible section in the left assets rail. Lets one rail hold
+// Cases & data · Agents · Prompts/tuning without overwhelming (each group folds).
+function RailGroup({ title, icon: Icon, defaultOpen, children }: {
+	title: string; icon: typeof Database; defaultOpen?: boolean; children: React.ReactNode;
+}) {
+	const [open, setOpen] = useState(defaultOpen ?? false);
+	return (
+		<div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
+			<button type="button" onClick={() => setOpen((o) => !o)}
+				className="w-full flex items-center gap-1.5 px-2.5 py-2 text-[11px] uppercase tracking-wide font-semibold text-slate-500 hover:bg-slate-50 transition-colors">
+				<Icon className="w-3.5 h-3.5 text-gold-500" /> <span>{title}</span>
+				<ChevronDown className={cn("w-3.5 h-3.5 ml-auto text-slate-400 transition-transform", open && "rotate-180")} />
+			</button>
+			{open && <div className="px-2.5 pb-2.5 pt-0.5 border-t border-slate-100">{children}</div>}
+		</div>
+	);
+}
+
+// AgentsRailContent — the app's knowledge agents (memory banks), now living in
+// the assets rail. Each bank is git-backed + cloud-synced; click to browse it.
+function AgentsRailContent({ agents }: { agents: string[] }) {
+	if (!agents.length) return <div className="text-[11px] text-slate-400 italic py-1">No knowledge agents configured.</div>;
+	return (
+		<div className="space-y-1 pt-1">
+			<div className="text-[10px] text-slate-400 leading-snug mb-1">Each bank is git-backed — every learning is a commit — and cloud-synced.</div>
+			{agents.map((a) => (
+				<Link key={a} to={`/studio/knowledge/${encodeURIComponent(a)}`}
+					className="flex items-center gap-1.5 text-[12px] text-slate-600 hover:text-gold-700 transition-colors">
+					<Brain className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" /> <span className="truncate">{a}</span>
+					<span className="ml-auto flex-shrink-0 text-[9px] uppercase tracking-wide rounded-full px-1.5 py-0.5 border text-emerald-600 bg-emerald-50 border-emerald-200" title="git-backed + cloud-synced">versioned</span>
+				</Link>
+			))}
+		</div>
+	);
+}
+
+// TuneVersionBar — WS-9 versioning surfaced IN the panel: the app's version +
+// whether the current prompt/config edits are published, with a one-click
+// Publish (app_push: commit to the xp.io repo + auto-bump semver). Without
+// this, "tuning is versioned" was invisible — edits only versioned on a CLI
+// push the user couldn't see or trigger here.
+function TuneVersionBar({ app, identity, onChanged }: { app: string; identity?: AppIdentity; onChanged?: () => void }) {
+	const [busy, setBusy] = useState(false);
+	const version = identity?.version;
+	const dirty = identity ? (identity.status === "dirty" || identity.status === "ahead") : false;
+	const unpublished = identity ? (!identity.published || identity.status === "unpublished") : false;
+	const publish = async () => {
+		setBusy(true);
+		try {
+			await me.publishApp(app);
+			toast.success("Publish queued — versioning the current edits to xp.io.");
+			onChanged?.();
+		} catch (e) {
+			toast.error(`Publish failed: ${e instanceof MeApiError ? e.message : String(e)}`);
+		} finally { setBusy(false); }
+	};
+	return (
+		<div className="flex items-center gap-2 flex-wrap rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2">
+			<GitBranch className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+			<span className="text-[12px] text-slate-600">Version</span>
+			<span className="text-[12px] font-mono font-semibold text-slate-800">{version ? `v${version}` : "—"}</span>
+			{unpublished ? (
+				<span className="text-[10px] uppercase tracking-wide rounded-full px-1.5 py-0.5 border text-slate-500 bg-white border-slate-200">unpublished</span>
+			) : dirty ? (
+				<span className="text-[10px] uppercase tracking-wide rounded-full px-1.5 py-0.5 border text-gold-700 bg-gold-50 border-gold-200" title="Local prompt/config edits aren't published yet">edited since publish</span>
+			) : (
+				<span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide rounded-full px-1.5 py-0.5 border text-emerald-600 bg-emerald-50 border-emerald-200"><Check className="w-3 h-3" /> in sync</span>
+			)}
+			<button onClick={publish} disabled={busy}
+				className={cn("ml-auto inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg transition-colors disabled:opacity-50",
+					(dirty || unpublished) ? "bg-gold-500 text-white hover:bg-gold-600" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50")}>
+				{busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+				{unpublished ? "Publish" : dirty ? "Publish edits" : "Re-publish"}
+			</button>
+		</div>
+	);
 }
 
 // PromptsTuneCard — the discoverable entry to the agent prompts (Tune). Shows

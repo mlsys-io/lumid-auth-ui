@@ -298,6 +298,11 @@ export const me = {
   // file changed since the read that produced baseSha.
   updateAppConfig: (app: string, yaml: string, baseSha?: string) =>
     call<{ ok: boolean; bytes: number; sha?: string }>("PUT", `/apps/${encodeURIComponent(app)}/config`, { yaml, base_sha: baseSha }),
+  // Publish the app bundle to its xp.io repo — commits the current prompts/
+  // config/UI edits and auto-bumps semver (app_push). Versions the "tuning".
+  publishApp: (app: string, body?: { commit_message?: string; summary?: string }) =>
+    call<{ message: string; data?: Record<string, unknown> }>(
+      "POST", `/apps/${encodeURIComponent(app)}/publish`, body || {}),
   // Write a surface for an installed app: `markdown` for .md surfaces, `spec`
   // (raw page.yaml text, compiler-validated server-side) for structured page
   // surfaces. baseSha = optimistic lock. For @fork_of / @shared paths the
