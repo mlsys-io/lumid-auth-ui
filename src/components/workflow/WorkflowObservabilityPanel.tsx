@@ -21,6 +21,7 @@ import {
 	Database, Sparkles, Pencil, Activity, Check, Square, MessageSquare,
 	Eye, FlaskConical, SlidersHorizontal, ArrowLeft,
 	PanelLeftClose, PanelLeftOpen, FileText, BarChart3, MoreHorizontal,
+	Brain, Scale,
 } from "lucide-react";
 import { toast } from "sonner";
 import apiClient from "@/api/client";
@@ -734,18 +735,16 @@ export default function WorkflowObservabilityPanel({
 				</div>
 			)}
 
-			{/* ── TUNE — links out to the prompt + config editors (their own routes). ── */}
+			{/* ── TUNE — inspect/edit the agent prompts + app config. ── */}
 			{mode === "tune" ? (
-				<div className="grid gap-3 sm:grid-cols-2">
-					<Link to={`/studio/a/${encodeURIComponent(app)}/prompts`}
-						className="rounded-xl border border-slate-200 bg-white p-4 hover:border-gold-300 hover:shadow-sm transition-all group">
-						<div className="flex items-center gap-2 text-sm font-medium text-slate-900"><FileText className="w-4 h-4 text-gold-600" /> Prompts</div>
-						<div className="mt-1 text-[12px] text-slate-500">Edit the analyst &amp; judge instructions this app runs on. Shared prompts stay read-only — editing one creates a local override.</div>
-						<div className="mt-2 text-[11px] text-gold-700 group-hover:underline">Open prompt editor →</div>
-					</Link>
+				<div className="space-y-3">
+					<div className="text-[12px] text-slate-500">
+						<span className="font-medium text-slate-700">Tune what the agents are.</span> The analyst &amp; judge are driven by editable prompt files — inspect any of them, and edit to change behavior. Shared prompts are read-only; editing one creates a local override (the shared copy is never touched).
+					</div>
+					<PromptsTuneCard app={app} />
 					<Link to={`/studio/a/${encodeURIComponent(app)}/config`}
-						className="rounded-xl border border-slate-200 bg-white p-4 hover:border-gold-300 hover:shadow-sm transition-all group">
-						<div className="flex items-center gap-2 text-sm font-medium text-slate-900"><SlidersHorizontal className="w-4 h-4 text-gold-600" /> Config</div>
+						className="block rounded-xl border border-slate-200 bg-white p-4 hover:border-gold-300 hover:shadow-sm transition-all group">
+						<div className="flex items-center gap-2 text-sm font-medium text-slate-900"><SlidersHorizontal className="w-4 h-4 text-gold-600" /> App config</div>
 						<div className="mt-1 text-[12px] text-slate-500">Edit this app's <code className="text-[11px] bg-slate-50 border border-slate-200 rounded px-1">xpcloud.yaml</code> — loops, goals, datasets, skills.</div>
 						<div className="mt-2 text-[11px] text-gold-700 group-hover:underline">Open config editor →</div>
 					</Link>
@@ -897,6 +896,72 @@ function buildGoalKpis(summary: CycleSummary | null, files: Record<string, unkno
 		}
 	}
 	return out.slice(0, 5);
+}
+
+// PromptsTuneCard — the discoverable entry to the agent prompts (Tune). Shows
+// the analyst & judge prompts this app runs on, grouped, with a local/shared
+// tag each, so it's self-evident WHERE the agent instructions live and that
+// they're editable. The whole card links to the full prompt editor.
+function PromptsTuneCard({ app }: { app: string }) {
+	const [prompts, setPrompts] = useState<{ name: string; source?: string; editable?: boolean }[] | null>(null);
+	const [err, setErr] = useState<string | null>(null);
+	useEffect(() => {
+		let live = true;
+		me.appPrompts(app)
+			.then((r) => { if (live) setPrompts(r.prompts || []); })
+			.catch((e) => { if (live) setErr(e instanceof MeApiError ? e.message : String(e)); });
+		return () => { live = false; };
+	}, [app]);
+
+	const pretty = (n: string) => n.replace(/\.md$/, "").replace(/^analyst_skill_/, "").replace(/^analyst_/, "").replace(/^judge_/, "").replace(/_/g, " ").trim() || n;
+	const isLocal = (s?: string) => (s || "").startsWith("local");
+	const groupRow = (title: string, Icon: typeof FileText, items: { name: string; source?: string }[]) => (
+		<div className="min-w-0">
+			<div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-1">
+				<Icon className="w-3.5 h-3.5 text-gold-600" /> {title} <span className="text-slate-300 font-normal normal-case">· {items.length}</span>
+			</div>
+			<div className="space-y-0.5">
+				{items.map((p) => (
+					<Link key={p.name} to={`/studio/a/${encodeURIComponent(app)}/prompts?p=${encodeURIComponent(p.name)}`}
+						className="flex items-center gap-1.5 text-[12px] text-slate-600 hover:text-gold-700 transition-colors group">
+						<span className="truncate">{pretty(p.name)}</span>
+						<span className={cn("ml-auto flex-shrink-0 text-[9px] uppercase tracking-wide rounded-full px-1.5 py-0.5 border",
+							isLocal(p.source) ? "text-gold-700 bg-gold-50 border-gold-200" : "text-slate-400 bg-slate-50 border-slate-200")}
+							title={isLocal(p.source) ? "local override — editable in your bundle" : "shared (read-only) — editing creates a local override"}>
+							{isLocal(p.source) ? "local" : "shared"}
+						</span>
+					</Link>
+				))}
+				{items.length === 0 && <div className="text-[11px] text-slate-400 italic">none</div>}
+			</div>
+		</div>
+	);
+
+	const analyst = (prompts || []).filter((p) => p.name.startsWith("analyst"));
+	const judge = (prompts || []).filter((p) => p.name.startsWith("judge"));
+	const other = (prompts || []).filter((p) => !p.name.startsWith("analyst") && !p.name.startsWith("judge"));
+
+	return (
+		<div className="rounded-xl border border-slate-200 bg-white p-4">
+			<div className="flex items-center gap-2 text-sm font-medium text-slate-900 mb-3">
+				<FileText className="w-4 h-4 text-gold-600" /> Agent prompts
+				<Link to={`/studio/a/${encodeURIComponent(app)}/prompts`} className="ml-auto text-[11px] text-gold-700 hover:underline">Open prompt editor →</Link>
+			</div>
+			{err ? (
+				<div className="text-[12px] text-rose-500">Couldn't load prompts: {err}</div>
+			) : prompts === null ? (
+				<div className="flex items-center gap-2 text-xs text-slate-400"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading prompts…</div>
+			) : prompts.length === 0 ? (
+				<div className="text-[12px] text-slate-400 italic">This app declares no editable prompts.</div>
+			) : (
+				<div className="grid gap-4 sm:grid-cols-2">
+					{groupRow("Analyst", Brain, analyst)}
+					{groupRow("Judge", Scale, judge)}
+					{other.length > 0 && groupRow("Other", FileText, other)}
+				</div>
+			)}
+		</div>
+	);
 }
 
 // GoalHeader — the loop's objective as a full-width bar near the top of the

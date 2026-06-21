@@ -12,7 +12,7 @@
 // mutated. A banner makes this explicit before the first save.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
 	FileText, Save, X, AlertTriangle, Info, Loader2, RotateCcw,
@@ -36,6 +36,10 @@ function prettyName(name: string): string {
 
 export function AppPromptsEditor() {
 	const { app = "" } = useParams<{ app: string }>();
+	// Deep link: /studio/a/:app/prompts?p=<name> opens that prompt directly
+	// (used by the Tune card's per-prompt rows).
+	const [sp] = useSearchParams();
+	const wantPrompt = sp.get("p");
 	const [prompts, setPrompts] = useState<MeAppPrompt[] | null>(null);
 	const [listError, setListError] = useState<string | null>(null);
 	const [selected, setSelected] = useState<string | null>(null);
@@ -47,11 +51,13 @@ export function AppPromptsEditor() {
 			.then(({ prompts }) => {
 				const list = prompts || [];
 				setPrompts(list);
-				// Auto-select the first prompt so the editor isn't empty on open.
-				setSelected((cur) => cur ?? (list[0]?.name ?? null));
+				// Honor ?p=<name> when present (deep link), else auto-select the
+				// first prompt so the editor isn't empty on open.
+				const deep = wantPrompt && list.some((p) => p.name === wantPrompt) ? wantPrompt : null;
+				setSelected((cur) => deep ?? cur ?? (list[0]?.name ?? null));
 			})
 			.catch((e) => setListError(String((e as Error)?.message ?? e)));
-	}, [app]);
+	}, [app, wantPrompt]);
 	useEffect(() => { loadList(); }, [loadList]);
 
 	const groups = useMemo(() => {
