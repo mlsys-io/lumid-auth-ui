@@ -600,66 +600,41 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 						<span className="ml-auto text-[10px] text-slate-300 normal-case tracking-normal">{mode === "observe" ? "click a run to read its log · ⋯ for stages & metrics" : "⋯ a run to branch · compare · promote · discard"}</span>
 					</div>
 
-					{/* OBSERVE = a chronological run list (watch what happened).
-					    IMPROVE = the branching node tree (experiment: branch/compare/
-					    promote). Same data, two purpose-built views — so switching
-					    modes is an actual change, not just a different right-click. */}
-					{mode === "observe" ? (
-						<div className="absolute inset-0 overflow-y-auto pt-11 pb-3 px-3">
-							<div className="space-y-1">
-								{[...model]
-									.filter((n) => !n.proposed)
-									.sort((a, b) => String(b.run_ts || b.cycle_ts || "").localeCompare(String(a.run_ts || a.cycle_ts || "")))
-									.map((n) => {
-										const t = tone(n, baseline, hib);
-										const ts = n.run_ts || n.cycle_ts || "";
-										return (
-											<div key={n.id}
-												onClick={() => ts && onShowLog?.(ts)}
-												onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, node: n }); }}
-												className="group flex items-center gap-2.5 rounded-lg border border-slate-200 bg-white px-3 py-2 hover:border-sky-300 hover:bg-sky-50/40 transition-colors cursor-pointer">
-												<span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: t.dot }} />
-												<span className="text-[12px] text-slate-700 tabular-nums flex-shrink-0 w-32 truncate">{fmtWhen(ts) || n.label}</span>
-												{n.is_champion && <span title="best so far"><Trophy className="w-3.5 h-3.5 text-gold-500 flex-shrink-0" /></span>}
-												{n.scored && n.score != null
-													? <span className="text-[12px] font-semibold tabular-nums text-slate-800">{fmtScore(n.score)}</span>
-													: <span className="text-[10px] uppercase tracking-wide text-slate-400">{n.kind === "baseline" ? "start" : "—"}</span>}
-												{fmtDur(n.duration_s) && <span className="inline-flex items-center gap-0.5 text-[11px] text-slate-400 tabular-nums"><Clock className="w-3 h-3" />{fmtDur(n.duration_s)}</span>}
-												<span className="ml-auto flex items-center gap-2 flex-shrink-0">
-													<span className="text-[11px] text-sky-600 opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center gap-1"><MessageSquare className="w-3 h-3" /> log</span>
-													<span role="button" tabIndex={0} title="More — stages, metrics, data"
-														onClick={(e) => { e.stopPropagation(); setMenu({ x: e.clientX, y: e.clientY, node: n }); }}
-														className="p-0.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100"><MoreHorizontal className="w-3.5 h-3.5" /></span>
-												</span>
-											</div>
-										);
-									})}
-							</div>
-						</div>
-					) : (
-						<ReactFlow
-							key={`${nodes.length}`}
-							nodes={nodes}
-							edges={edges}
-							onInit={onInit}
-							fitView={false}
-							proOptions={{ hideAttribution: true }}
-							nodesDraggable={false}
-							nodesConnectable={false}
-							elementsSelectable
-							zoomOnScroll={false}
-							panOnScroll
-							panOnDrag
-							onNodeClick={(_e, node) => { const tn = byId.get(node.id); if (tn && !tn.proposed) focusRun(tn); }}
-							onNodeContextMenu={(e, node) => { e.preventDefault(); const tn = byId.get(node.id); if (tn) setMenu({ x: e.clientX, y: e.clientY, node: tn }); }}
-						>
-							<Background gap={16} color="rgb(241 245 249)" />
-							<Controls showInteractive={false} />
-						</ReactFlow>
-					)}
+					{/* ONE run view for both modes — the runs (time · score per node)
+					    appear exactly once. The mode changes interaction, not the data:
+					    Observe → click a node to read its log; Improve → adds the
+					    experiment affordances (⋯ branch/compare/promote, compare-select,
+					    the best/baseline rollup below). No duplicate list. */}
+					<ReactFlow
+						key={`${nodes.length}`}
+						nodes={nodes}
+						edges={edges}
+						onInit={onInit}
+						fitView={false}
+						proOptions={{ hideAttribution: true }}
+						nodesDraggable={false}
+						nodesConnectable={false}
+						elementsSelectable
+						zoomOnScroll={false}
+						panOnScroll
+						panOnDrag
+						onNodeClick={(_e, node) => {
+							const tn = byId.get(node.id);
+							if (!tn || tn.proposed) return;
+							// Observe = read: a click opens the run's log. Improve = focus
+							// the node for experiment ops.
+							if (mode === "observe") onShowLog?.(tn.run_ts || tn.cycle_ts || "");
+							else focusRun(tn);
+						}}
+						onNodeContextMenu={(e, node) => { e.preventDefault(); const tn = byId.get(node.id); if (tn) setMenu({ x: e.clientX, y: e.clientY, node: tn }); }}
+					>
+						<Background gap={16} color="rgb(241 245 249)" />
+						<Controls showInteractive={false} />
+					</ReactFlow>
 
-					{/* stats rollup — moved off the top bar to keep it uncluttered */}
-					{((traj.has_variants && traj.metric) || champ?.score != null || totalLearned > 0) && (
+					{/* stats rollup — experiment-flavored (variants/best/baseline), so
+					    show it only in Improve; Observe stays a clean read surface. */}
+					{mode !== "observe" && ((traj.has_variants && traj.metric) || champ?.score != null || totalLearned > 0) && (
 						<div className="absolute bottom-0 left-0 right-0 z-10 flex items-center gap-3 px-3 py-2 bg-gradient-to-t from-white via-white/90 to-transparent pointer-events-none">
 							{traj.has_variants && traj.metric && (
 								<span className="text-[11px] text-slate-400">{traj.nodes.length} variants · <span className="font-mono text-slate-600">{traj.metric}</span>{traj.baseline != null && <> · base <span className="tabular-nums">{fmtScore(traj.baseline)}</span></>}</span>
