@@ -20,7 +20,7 @@ import {
 	ChevronLeft, ChevronRight, ChevronDown, Trash2,
 	Database, Sparkles, Pencil, Activity, Check, Square, MessageSquare,
 	Eye, FlaskConical, SlidersHorizontal, ArrowLeft,
-	PanelLeftClose, PanelLeftOpen, FileText, BarChart3,
+	PanelLeftClose, PanelLeftOpen, FileText, BarChart3, MoreHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 import apiClient from "@/api/client";
@@ -588,19 +588,6 @@ export default function WorkflowObservabilityPanel({
 							)}
 						</PopoverContent>
 					</Popover>
-					{/* Per-workflow model switch — beside the schedule control. */}
-					<select
-						value={model}
-						onChange={(e) => saveModel(e.target.value)}
-						disabled={!!busy}
-						title="Which model this workflow's runtime uses. Default = the shared kv.run Gemma GPU for tenant cycles; tiers route through the Claude CLI."
-						className="px-2 py-1.5 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 max-w-[160px]"
-					>
-						<option value="">Default (kv.run Gemma)</option>
-						<option value="sonnet">Claude Sonnet</option>
-						<option value="opus">Claude Opus</option>
-						<option value="haiku">Claude Haiku</option>
-					</select>
 					{running ? (
 						<button onClick={stopRun} disabled={busy === "run"}
 							className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-rose-500 text-white hover:bg-rose-600 active:scale-95 disabled:opacity-50 transition-all shadow-sm">
@@ -614,18 +601,45 @@ export default function WorkflowObservabilityPanel({
 							Run now
 						</button>
 					)}
-					{/* "Improve" moved to the chat opener chips (chipsForApp). */}
-					<button onClick={toggle} disabled={!!busy}
-						className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50">
-						{busy === "toggle" ? <Loader2 className="w-3 h-3 animate-spin" /> : enabled ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
-						{enabled ? "Pause" : "Resume"}
-					</button>
-					{canDelete && (
-						<button onClick={onDelete} title="Delete this workflow"
-							className="p-1.5 rounded-lg text-slate-300 hover:text-red-600 hover:bg-red-50 transition-colors">
-							<Trash2 className="w-3.5 h-3.5" />
-						</button>
-					)}
+					{/* Secondary controls (model · pause/resume · delete) folded into a
+					    ⋯ menu so the header row stays calm — Schedule + Run now are the
+					    only inline controls. Every action is one click away. */}
+					<Popover>
+						<PopoverTrigger asChild>
+							<button disabled={!!busy} title="More — model, pause, delete"
+								className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-800 disabled:opacity-50">
+								{busy === "toggle" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MoreHorizontal className="w-3.5 h-3.5" />}
+							</button>
+						</PopoverTrigger>
+						<PopoverContent align="end" className="w-60 space-y-3">
+							<div>
+								<div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-1.5">Model</div>
+								<select
+									value={model}
+									onChange={(e) => saveModel(e.target.value)}
+									disabled={!!busy}
+									title="Which model this workflow's runtime uses. Default = the shared kv.run Gemma GPU for tenant cycles; tiers route through the Claude CLI."
+									className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"
+								>
+									<option value="">Default (kv.run Gemma)</option>
+									<option value="sonnet">Claude Sonnet</option>
+									<option value="opus">Claude Opus</option>
+									<option value="haiku">Claude Haiku</option>
+								</select>
+							</div>
+							<button onClick={toggle} disabled={!!busy}
+								className="w-full inline-flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50">
+								{busy === "toggle" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : enabled ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+								{enabled ? "Pause workflow" : "Resume workflow"}
+							</button>
+							{canDelete && (
+								<button onClick={onDelete} title="Delete this workflow"
+									className="w-full inline-flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-colors">
+									<Trash2 className="w-3.5 h-3.5" /> Delete workflow
+								</button>
+							)}
+						</PopoverContent>
+					</Popover>
 				</div>
 			</div>
 

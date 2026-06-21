@@ -761,7 +761,7 @@ const OVERVIEW_SEL = "__overview__";
 // (rows = MeWorkflowRow + LoopHealth, identity = AppIdentity); no new API calls,
 // no per-app hardcoding. Each chip only renders when its field exists, so the
 // strip degrades gracefully (an empty strip renders nothing).
-function RuntimeStrip({ rows, identity }: { rows: Row[]; identity?: AppIdentity }) {
+function RuntimeStrip({ rows, identity, embedded }: { rows: Row[]; identity?: AppIdentity; embedded?: boolean }) {
 	if (!rows.length) return null;
 
 	// Engine / pattern — MeWorkflowRow.engine is the loop's declared engine
@@ -800,8 +800,12 @@ function RuntimeStrip({ rows, identity }: { rows: Row[]; identity?: AppIdentity 
 		{ Icon: runtime.Icon, label: runtime.label, title: isTenant ? "Tenant cycles route to the cloud GPU fleet" : "Operator loops run on the local Claude Code subscription" },
 	];
 	if (pattern) chips.push({ Icon: Settings, label: `Pattern ${pattern}`, title: "Engine pattern (xpio autoresearch contract)" });
-	if (wfText) chips.push({ Icon: Workflow, label: wfText, title: wfNames.join(", ") });
-	if (schedText) chips.push({ Icon: Clock, label: schedText, title: scheds.join(", ") });
+	// Workflows are listed in the top-bar workflow picker in the workspace —
+	// only show them here when standalone (no picker). Avoids the duplicate.
+	if (wfText && !embedded) chips.push({ Icon: Workflow, label: wfText, title: wfNames.join(", ") });
+	// Schedule is always shown in the selected workflow's card (its own picker),
+	// so omit it from the strip to remove that duplication.
+	void schedText;
 	if (banksText) chips.push({ Icon: Database, label: banksText, title: `Memory banks: ${banks.join(", ")}` });
 	if (identity?.kind) chips.push({ Icon: Boxes, label: identity.kind, title: "Marketplace kind" });
 
@@ -1032,7 +1036,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 			    workflows, schedule, memory banks). Derived from the already-loaded
 			    rows/identity; only shown once there are scheduled workflows. */}
 			{rows !== null && rows.length > 0 && (
-				<RuntimeStrip rows={rows} identity={identity} />
+				<RuntimeStrip rows={rows} identity={identity} embedded={embedded} />
 			)}
 
 			{rows === null ? (
