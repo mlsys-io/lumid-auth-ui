@@ -1007,9 +1007,6 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 						<div className="text-xs text-slate-400 font-mono mt-0.5">
 							{app}{identity?.version ? ` · v${identity.version}` : ""}{identity?.published ? " · published" : ""}
 						</div>
-						{about && (
-							<p className="text-sm text-muted-foreground mt-1 line-clamp-2 max-w-2xl" title={about}>{about}</p>
-						)}
 					</div>
 					<button
 						type="button"
@@ -1024,13 +1021,9 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 				</header>
 			)}
 
-			{/* App summary — below the title, length-constrained (like the GPU rental
-			    page). Standalone renders it inside the header above; the workspace
-			    (embedded) has no body header, so show it here at the top of the body,
-			    just under the top-bar app title. */}
-			{embedded && about && rows !== null && (
-				<p className="text-sm text-muted-foreground line-clamp-2 max-w-2xl" title={about}>{about}</p>
-			)}
+			{/* Per-app subtitle (the xpcloud.yaml summary) removed — the title +
+			    runtime strip carry enough; the full summary still lives in the
+			    "About this app" overview section. */}
 
 			{/* Runtime & harness — what the agent runs ON (runtime, engine pattern,
 			    workflows, schedule, memory banks). Derived from the already-loaded
