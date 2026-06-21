@@ -190,10 +190,15 @@ export default function WorkflowObservabilityPanel({
 		finally { setBusy(null); }
 	};
 
-	const runNow = async () => {
+	// Run scope (WS): "all" runs the whole case set (default); a case id runs
+	// just that case. Passed to the loop as `args.cases` (the command filters;
+	// loops that don't template `{{ args.cases }}` simply ignore it).
+	const [scopeOpen, setScopeOpen] = useState(false);
+	const runNow = async (scope?: string) => {
 		setBusy("run");
 		try {
-			await me.runLoopNow(app, loop);
+			const args = scope && scope !== "all" ? { cases: scope } : undefined;
+			await me.runLoopNow(app, loop, args);
 			// Show the loop running now; cleared when the new cycle lands
 			// (or after a safety window if it produced no new cycle dir).
 			setOptimisticRun(true);
@@ -595,11 +600,43 @@ export default function WorkflowObservabilityPanel({
 							Stop
 						</button>
 					) : (
-						<button onClick={runNow} disabled={!!busy}
-							className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-gold-500 text-white hover:bg-gold-600 active:scale-95 disabled:opacity-50 transition-all shadow-sm shadow-gold-100">
-							{busy === "run" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
-							Run now
-						</button>
+						// Split Run button: "Run now" runs the default scope (all cases);
+						// the ▾ opens a Run-scope menu (all vs just the focused case).
+						(() => {
+							const scopeCase = caseFocus || caseDataFocus;
+							return (
+								<div className="inline-flex items-center">
+									<button onClick={() => runNow("all")} disabled={!!busy}
+										className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-l-lg bg-gold-500 text-white hover:bg-gold-600 active:scale-95 disabled:opacity-50 transition-all shadow-sm shadow-gold-100">
+										{busy === "run" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+										Run now
+									</button>
+									<Popover open={scopeOpen} onOpenChange={setScopeOpen}>
+										<PopoverTrigger asChild>
+											<button disabled={!!busy} title="Run scope — all cases or just this one"
+												className="inline-flex items-center px-1.5 py-1.5 rounded-r-lg bg-gold-500 text-white hover:bg-gold-600 border-l border-gold-400/60 disabled:opacity-50 transition-colors">
+												<ChevronDown className="w-3.5 h-3.5" />
+											</button>
+										</PopoverTrigger>
+										<PopoverContent align="end" className="w-60 p-1">
+											<div className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Run scope</div>
+											<button onClick={() => { setScopeOpen(false); runNow("all"); }}
+												className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md text-slate-700 hover:bg-slate-50 text-left">
+												<Database className="w-3.5 h-3.5 text-slate-400" /> All cases
+											</button>
+											{scopeCase ? (
+												<button onClick={() => { setScopeOpen(false); runNow(scopeCase.id); }}
+													className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md text-slate-700 hover:bg-slate-50 text-left">
+													<Target className="w-3.5 h-3.5 text-gold-500" /> <span className="truncate">Just this case: {scopeCase.label}</span>
+												</button>
+											) : (
+												<div className="px-2 py-1.5 text-[11px] text-slate-400">Select a case in the rail to run just that one.</div>
+											)}
+										</PopoverContent>
+									</Popover>
+								</div>
+							);
+						})()
 					)}
 					{/* Secondary controls (model · pause/resume · delete) folded into a
 					    ⋯ menu so the header row stays calm — Schedule + Run now are the
