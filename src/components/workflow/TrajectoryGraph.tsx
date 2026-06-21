@@ -24,7 +24,7 @@ import {
 	type Node, type Edge, type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { ArrowLeft, GitBranch, Trophy, Sparkles, Loader2, Clock, FlaskConical, MessageSquare, MoreHorizontal } from "lucide-react";
+import { ArrowLeft, GitBranch, Trophy, Sparkles, Loader2, Clock, FlaskConical, MessageSquare, MoreHorizontal, Eye } from "lucide-react";
 import { toast } from "sonner";
 import {
 	fetchTrajectory, fetchTrajectorySignals, postTrajectorySignal,
@@ -296,7 +296,7 @@ function LinearTrajectory({ chain, metric, baseline, hib, pickedId, onFocus, onO
 
 export interface TrajectoryVersion { cycleTs?: string; runTs?: string; label: string; ts?: string }
 
-function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, actions, selectedForCompare, onToggleCompare }: {
+function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, actions, selectedForCompare, onToggleCompare, mode = "improve" }: {
 	app: string; loop: string; definition?: LoopDefinition | null;
 	onSelectVersion?: (v: TrajectoryVersion | null) => void;
 	running?: boolean;
@@ -309,6 +309,7 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 	actions?: RunMenuActions;
 	selectedForCompare?: string[];
 	onToggleCompare?: (ts: string) => void;
+	mode?: "observe" | "improve";
 }) {
 	const [traj, setTraj] = useState<Trajectory | null>(null);
 	const [signals, setSignals] = useState<TrajectorySignal[]>([]);
@@ -590,8 +591,13 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 				<div className="w-1/2 h-full relative">
 					{/* header rollup — trend + learning, at a glance */}
 					<div className="absolute top-0 left-0 right-0 z-10 flex items-center gap-3 px-3 py-2 bg-gradient-to-b from-white via-white/90 to-transparent pointer-events-none">
-						<span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wide" title="branching tree of runs & attempts (trajectory)"><GitBranch className="w-3.5 h-3.5 text-gold-500" /> Run tree</span>
-						<span className="ml-auto text-[10px] text-slate-300 normal-case tracking-normal">click a node · ⋯ for actions</span>
+						{mode === "observe" ? (
+							<span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-sky-600 uppercase tracking-wide" title="watch runs — read-only"><Eye className="w-3.5 h-3.5" /> Watching</span>
+						) : (
+							<span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-gold-600 uppercase tracking-wide" title="experiment — branch, compare, promote, discard"><FlaskConical className="w-3.5 h-3.5" /> Experiment</span>
+						)}
+						<span className="text-[10px] text-slate-300 normal-case tracking-normal">· Run tree</span>
+						<span className="ml-auto text-[10px] text-slate-300 normal-case tracking-normal">{mode === "observe" ? "click a run to inspect its log, stages & metrics" : "⋯ a run to branch · compare · promote · discard"}</span>
 					</div>
 
 					{/* Trajectory is ALWAYS the node tree — every run is a node labeled
@@ -660,6 +666,7 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 								}}
 								selectedForCompare={selectedForCompare || []}
 								onToggleCompare={onToggleCompare || (() => {})}
+								mode={mode}
 								onClose={() => setMenu(null)}
 								onAfterRuntimeOp={load}
 							/>
@@ -775,7 +782,7 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 	);
 }
 
-export default function TrajectoryGraph({ app, loop, definition, onSelectVersion, running, onShowLog, actions, selectedForCompare, onToggleCompare }: {
+export default function TrajectoryGraph({ app, loop, definition, onSelectVersion, running, onShowLog, actions, selectedForCompare, onToggleCompare, mode = "improve" }: {
 	app: string; loop: string; definition?: LoopDefinition | null;
 	onSelectVersion?: (v: TrajectoryVersion | null) => void;
 	running?: boolean;
@@ -783,10 +790,12 @@ export default function TrajectoryGraph({ app, loop, definition, onSelectVersion
 	actions?: RunMenuActions;
 	selectedForCompare?: string[];
 	onToggleCompare?: (ts: string) => void;
+	/** observe = read-only watching (no branch/compare/promote); improve = experiment. */
+	mode?: "observe" | "improve";
 }) {
 	// No shared ReactFlowProvider: the trajectory <ReactFlow> and the pipeline
 	// pane's WorkflowCanvas <ReactFlow> must each own an isolated store —
 	// otherwise interacting with the pipeline clobbers the trajectory's nodes
 	// (and the tree vanishes on return). Each bare <ReactFlow> self-stores.
-	return <Inner app={app} loop={loop} definition={definition} onSelectVersion={onSelectVersion} running={running} onShowLog={onShowLog} actions={actions} selectedForCompare={selectedForCompare} onToggleCompare={onToggleCompare} />;
+	return <Inner app={app} loop={loop} definition={definition} onSelectVersion={onSelectVersion} running={running} onShowLog={onShowLog} actions={actions} selectedForCompare={selectedForCompare} onToggleCompare={onToggleCompare} mode={mode} />;
 }

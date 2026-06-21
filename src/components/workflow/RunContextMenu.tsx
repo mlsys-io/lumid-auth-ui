@@ -91,7 +91,7 @@ function Section({ label }: { label: string }) {
 }
 
 export default function RunContextMenu({
-	x, y, target, actions, selectedForCompare, onToggleCompare, onClose, onAfterRuntimeOp,
+	x, y, target, actions, selectedForCompare, onToggleCompare, onClose, onAfterRuntimeOp, mode = "improve",
 }: {
 	x: number; y: number;
 	target: RunMenuTarget;
@@ -100,6 +100,8 @@ export default function RunContextMenu({
 	onToggleCompare: (ts: string) => void;
 	onClose: () => void;
 	onAfterRuntimeOp?: () => void;
+	/** observe → only the read-only Observe section; improve → also the Improve ops. */
+	mode?: "observe" | "improve";
 }) {
 	// Per-item pending flag — set when a runtime op 404/501s so the item shows it
 	// won't work yet. Keyed by op name.
@@ -159,8 +161,8 @@ export default function RunContextMenu({
 				<Row icon={Pin} label="Pin / annotate" onClick={wired(() => actions.annotate!(target))} />
 			)}
 
-			{/* ── IMPROVE — experiment on it (run targets only) ── */}
-			{isRun && (
+			{/* ── IMPROVE — experiment on it (run targets only; hidden in Observe) ── */}
+			{isRun && mode !== "observe" && (
 				<>
 					<Section label="Improve" />
 					{/* Branch WITH INTENTION (WS-5) — opens the dialog when wired; else

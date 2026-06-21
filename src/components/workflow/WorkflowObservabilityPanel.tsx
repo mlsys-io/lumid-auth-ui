@@ -766,8 +766,11 @@ export default function WorkflowObservabilityPanel({
 						<CaseMapping app={app} loop={loop} caseId={caseFocus.id} caseLabel={caseFocus.label} atTs={version?.runTs || version?.cycleTs} onBack={back} />
 					) : (
 						<TrajectoryGraph app={app} loop={loop} definition={definition} onSelectVersion={pinVersion} running={running}
+							mode={mode === "improve" ? "improve" : "observe"}
 							onShowLog={(ts) => openLog({ runTs: ts, cycleTs: ts, label: cycleDate(ts) || ts })}
-							actions={menuActions} selectedForCompare={compareSel} onToggleCompare={toggleCompare} />
+							actions={menuActions}
+							selectedForCompare={mode === "improve" ? compareSel : []}
+							onToggleCompare={mode === "improve" ? toggleCompare : undefined} />
 					)}
 				</div>
 			</div>
