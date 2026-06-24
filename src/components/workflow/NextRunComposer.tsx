@@ -210,7 +210,7 @@ export default function NextRunComposer({ app, loop, fromTs, fromLabel, schedule
 					.map((t) => parseOverrides(t))
 					.filter((v) => Object.keys(v).length > 0);
 				if (variants.length === 0) {
-					toast.error("Add at least one variant (key = value) to fan out.");
+					toast.error("Add at least one experiment (key = value) to fan out.");
 					setBusy(false);
 					return;
 				}
@@ -222,7 +222,7 @@ export default function NextRunComposer({ app, loop, fromTs, fromLabel, schedule
 					priority: Number.isFinite(priority as number) ? priority : undefined,
 					variants,
 				});
-				toast.success(`${queued} variant${queued === 1 ? "" : "s"} queued.`);
+				toast.success(`${queued} experiment${queued === 1 ? "" : "s"} queued.`);
 				onLaunched?.();
 				onClose();
 				return;
@@ -245,7 +245,7 @@ export default function NextRunComposer({ app, loop, fromTs, fromLabel, schedule
 				auto_promote: autoPromote && criteriaExpr ? true : undefined,
 				cases: scopedCases,
 			});
-			toast.success("Attempt queued — it'll appear in the run tree shortly.");
+			toast.success("Experiment queued — it'll appear in the run tree shortly.");
 			onLaunched?.();
 			onClose();
 		} catch (e) {
@@ -254,7 +254,7 @@ export default function NextRunComposer({ app, loop, fromTs, fromLabel, schedule
 	};
 
 	const parentNode = nodes.find((n) => n.run_ts === parent);
-	const launchLabel = tryMode === "fanout" ? "Queue variants" : "Run attempt";
+	const launchLabel = tryMode === "fanout" ? "Queue experiments" : "Run experiment";
 	const LaunchIcon = busy ? Loader2 : tryMode === "fanout" ? Layers : Play;
 
 	return createPortal(
