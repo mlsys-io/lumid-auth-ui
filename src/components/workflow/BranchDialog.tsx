@@ -50,7 +50,7 @@ export default function BranchDialog({ app, loop, fromTs, fromLabel, onClose, on
 
 	const submit = async () => {
 		const directive = note.trim();
-		if (!directive) { toast.error("Say what this attempt should explore."); return; }
+		if (!directive) { toast.error("Say what this experiment should explore."); return; }
 		const variant = parseOverrides(overridesText);
 		setBusy(true);
 		try {
@@ -69,7 +69,7 @@ export default function BranchDialog({ app, loop, fromTs, fromLabel, onClose, on
 				branch_label: directive.slice(0, 48),
 				variant: Object.keys(variant).length ? variant : undefined,
 			});
-			toast.success("Attempt queued — exploring your direction.");
+			toast.success("Experiment queued — exploring your direction.");
 			onLaunched?.();
 			onClose();
 		} catch (e) {

@@ -237,12 +237,12 @@ export function ExperimentCard({ app, e, showApp = false }: { app: string; e: Me
 						<>
 							{variants.length > 0 && (
 								<div>
-									<div className="text-[10px] uppercase tracking-wide font-semibold text-slate-400 mb-1.5">Variants</div>
+									<div className="text-[10px] uppercase tracking-wide font-semibold text-slate-400 mb-1.5">Experiments</div>
 									<div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
 										<table className="w-full text-[11px]">
 											<thead>
 												<tr className="text-left text-slate-400 border-b border-slate-100">
-													<th className="px-3 py-1.5 font-medium">variant</th>
+													<th className="px-3 py-1.5 font-medium">experiment</th>
 													<th className="px-2 py-1.5 font-medium text-right">mean</th>
 													<th className="px-2 py-1.5 font-medium text-right">n</th>
 													<th className="px-2 py-1.5 font-medium text-right">stdev</th>
