@@ -253,7 +253,7 @@ export default function AppManagePanel() {
 				<div className="flex items-center gap-1.5 text-[13px] font-medium text-slate-800">
 					<Pencil className="w-3.5 h-3.5 text-slate-400" /> Name
 				</div>
-				<p className="text-[11.5px] text-slate-500">Shown on the My Apps card and the sidebar. The install id (<code className="text-[10.5px]">{app}</code>) doesn&apos;t change.</p>
+				<p className="text-[11.5px] text-slate-500">Shown on the My Agents card and the sidebar. The install id (<code className="text-[10.5px]">{app}</code>) doesn&apos;t change.</p>
 				<div className="flex gap-2">
 					<input
 						value={effectiveName}

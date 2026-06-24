@@ -159,7 +159,7 @@ export default function InboxPage() {
 					onChange={(e) => setAppFilter(e.target.value)}
 					className="border rounded px-2 py-1 text-sm"
 				>
-					<option value="">All apps</option>
+					<option value="">All agents</option>
 					{apps.map((a) => (
 						<option key={a} value={a}>{a}</option>
 					))}

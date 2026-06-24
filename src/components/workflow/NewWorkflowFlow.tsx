@@ -426,9 +426,9 @@ function DataStep({ casebook, setCasebook, dataNote, setDataNote }: {
 			<div>
 				<div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1.5">Existing casebooks</div>
 				{apps === null ? (
-					<div className="text-[12px] text-slate-400 flex items-center gap-1.5 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" />Loading your apps…</div>
+					<div className="text-[12px] text-slate-400 flex items-center gap-1.5 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" />Loading your agents…</div>
 				) : apps.length === 0 ? (
-					<div className="text-[12px] text-slate-400 py-2">No apps yet — start empty above.</div>
+					<div className="text-[12px] text-slate-400 py-2">No agents yet — start empty above.</div>
 				) : (
 					<div className="space-y-1.5">
 						{apps.map((a) => {

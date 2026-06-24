@@ -550,7 +550,7 @@ function AppsHome() {
 	// ui.sidebar.section the left nav uses. Clicking a row opens the grounded
 	// chat (askApp); the old observability panel stays one click away via the
 	// hover-only "details →" link.
-	const SECTION_ORDER = ["Needs attention", "Compute", "Research", "Trading", "Knowledge", "Apps"];
+	const SECTION_ORDER = ["Needs attention", "Compute", "Research", "Trading", "Knowledge", "Agents"];
 	const appRows: IndexRow[] = apps.map((a) => {
 		const rows = byApp.get(a) || [];
 		const failing = rows.filter((w) => w.enabled !== false && w.last_run_ok === false).length;
@@ -567,7 +567,7 @@ function AppsHome() {
 			title: identity.get(a)?.label || appTitle(a),
 			icon: iconFor(identity.get(a)?.icon || a),
 			tone, statusLabel, meta,
-			section: failing > 0 ? "Needs attention" : (sections.get(a) || "Apps"),
+			section: failing > 0 ? "Needs attention" : (sections.get(a) || "Agents"),
 			ask: askApp(a),
 			// Click opens the app's overview page; the chat is the hover "ask".
 			navTo: `/studio/apps/${encodeURIComponent(a)}`,
@@ -581,7 +581,7 @@ function AppsHome() {
 		title: a.ui?.sidebar?.label || appTitle(a.name),
 		icon: iconFor(a.ui?.sidebar?.icon || a.name),
 		tone: "idle",
-		section: a.ui?.sidebar?.section || "Apps",
+		section: a.ui?.sidebar?.section || "Agents",
 		ask: askApp(a.name),
 		// Surface apps: click opens their page (the workspace renders the
 		// surface as the app's overview); chat is the hover "ask".
@@ -926,8 +926,8 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 	const del = async () => {
 		if (deleting) return;
 		if (!window.confirm(
-			`Delete "${appTitle(app)}"?\n\nThis uninstalls the app and removes it from ` +
-			`your apps. The bundle (incl. run history) is archived to .xp/.trash and is ` +
+			`Delete "${appTitle(app)}"?\n\nThis uninstalls the agent and removes it from ` +
+			`your agents. The bundle (incl. run history) is archived to .xp/.trash and is ` +
 			`recoverable; any scheduled workflows stop running.`)) return;
 		setDeleting(true);
 		try {
@@ -1022,7 +1022,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 						type="button"
 						onClick={del}
 						disabled={deleting}
-						title="Delete this app — archives it (recoverable) and removes it from your apps"
+						title="Delete this agent — archives it (recoverable) and removes it from your agents"
 						className="ml-auto flex-shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-colors disabled:opacity-50"
 					>
 						<Trash2 className="w-3.5 h-3.5" />
