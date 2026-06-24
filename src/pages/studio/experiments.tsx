@@ -83,7 +83,7 @@ export default function StudioExperiments() {
 			search={indexRows.length > 6}
 			searchPlaceholder="Search experiments…"
 			toolbar={toolbar}
-			empty="Apps declare experiments (hypothesis × variants × a metric); results accumulate as workflows run. Ask what experiments could help your apps."
+			empty="Agents declare experiments (hypothesis × variants × a metric); results accumulate as workflows run. Ask what experiments could help your agents."
 		/>
 	);
 }

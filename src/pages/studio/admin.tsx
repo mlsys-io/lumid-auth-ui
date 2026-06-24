@@ -103,7 +103,7 @@ function TenantsTab() {
 					<thead className="bg-slate-50 text-left text-xs text-slate-600 tracking-wide">
 						<tr>
 							<th className="px-3 py-2 font-medium">Email</th>
-							<th className="px-3 py-2 font-medium w-20">Apps</th>
+							<th className="px-3 py-2 font-medium w-20">Agents</th>
 							<th className="px-3 py-2 font-medium w-24">Storage</th>
 							<th className="px-3 py-2 font-medium w-24">Cycles</th>
 							<th className="px-3 py-2 font-medium w-24">LLM today</th>
@@ -162,7 +162,7 @@ function LoopsTab() {
 				<table className="w-full text-sm">
 					<thead className="bg-slate-50 text-left text-xs text-slate-600 tracking-wide">
 						<tr>
-							<th className="px-3 py-2 font-medium">App / Loop</th>
+							<th className="px-3 py-2 font-medium">Agent / Loop</th>
 							<th className="px-3 py-2 font-medium w-32">Schedule</th>
 							<th className="px-3 py-2 font-medium w-32">Last run</th>
 							<th className="px-3 py-2 font-medium w-24">State</th>

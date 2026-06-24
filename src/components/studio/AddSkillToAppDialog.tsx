@@ -55,7 +55,7 @@ export function AddSkillToAppDialog({
 			const result = await waitForIntent(resp.intent_id, { timeoutMs: 90_000 });
 			const data = (result.result ?? {}) as { ok?: boolean; changed?: boolean; error?: string };
 			if (data.error) throw new Error(data.error);
-			setDoneNote(data.changed === false ? "Already imported — nothing to change." : "Imported. The app picks it up on its next run.");
+			setDoneNote(data.changed === false ? "Already imported — nothing to change." : "Imported. The agent picks it up on its next run.");
 			setPhase("done");
 		} catch (e) {
 			toast.error("Couldn't add the skill: " + (e instanceof Error ? e.message : String(e)));
@@ -68,12 +68,12 @@ export function AddSkillToAppDialog({
 			<DialogContent className="max-w-md">
 				<DialogHeader>
 					<DialogTitle className="flex items-center gap-2 text-[15px]">
-						<Puzzle className="w-4 h-4 text-violet-500" /> Add {skillLabel} to an app
+						<Puzzle className="w-4 h-4 text-violet-500" /> Add {skillLabel} to an agent
 					</DialogTitle>
 					<DialogDescription className="text-[12.5px]">
-						Skills aren&apos;t installed standalone — they&apos;re imported by an app
+						Skills aren&apos;t installed standalone — they&apos;re imported by an agent
 						(<code className="text-[11px]">skill_imports</code>). Pick which of your
-						apps should use this skill.
+						agents should use this skill.
 					</DialogDescription>
 				</DialogHeader>
 
@@ -91,10 +91,10 @@ export function AddSkillToAppDialog({
 						</Link>
 					</div>
 				) : apps === null ? (
-					<div className="py-6 text-center text-sm text-slate-400"><Loader2 className="w-4 h-4 animate-spin inline mr-2" />Loading your apps…</div>
+					<div className="py-6 text-center text-sm text-slate-400"><Loader2 className="w-4 h-4 animate-spin inline mr-2" />Loading your agents…</div>
 				) : apps.length === 0 ? (
 					<div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-[12.5px] text-slate-600">
-						You don&apos;t have any installed apps yet. Install an app first — then
+						You don&apos;t have any installed agents yet. Install an agent first — then
 						come back and add this skill to it.
 					</div>
 				) : (
@@ -117,7 +117,7 @@ export function AddSkillToAppDialog({
 							disabled={!target || phase === "working"}
 							className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 transition-all"
 						>
-							{phase === "working" ? <><Loader2 className="w-4 h-4 animate-spin" /> Adding…</> : <>Add to {target || "app"}</>}
+							{phase === "working" ? <><Loader2 className="w-4 h-4 animate-spin" /> Adding…</> : <>Add to {target || "agent"}</>}
 						</button>
 					</div>
 				)}

@@ -47,9 +47,9 @@ export function askExperiment(app: string, id: string, label: string): IndexAsk 
 }
 
 export function askMarketplaceItem(title: string, slug: string, kind?: string): IndexAsk {
-	const what = kind === 'skill' ? 'skill' : kind === 'dataset' ? 'dataset' : 'app';
+	const what = kind === 'skill' ? 'skill' : kind === 'dataset' ? 'dataset' : 'agent';
 	return {
-		prompt: `What is the ${title} ${what} and would it help me, given my installed apps and how I use them? If it's a good fit, install it.`,
+		prompt: `What is the ${title} ${what} and would it help me, given my installed agents and how I use them? If it's a good fit, install it.`,
 		selection: { kind: 'app', id: slug, label: title },
 	};
 }
