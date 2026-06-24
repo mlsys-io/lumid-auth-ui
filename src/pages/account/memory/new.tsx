@@ -120,7 +120,7 @@ export default function MemoryNewPage() {
 			<div className="space-y-4 bg-white border border-slate-200 rounded-xl p-5">
 				<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 					<div>
-						<Label htmlFor="app">App</Label>
+						<Label htmlFor="app">Agent</Label>
 						<Input
 							id="app"
 							value={app}

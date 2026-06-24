@@ -87,7 +87,7 @@ export function useAppNav(): AppNavSection[] {
     registerAppSurfacePresence(a.name, !!(a.ui?.surface || (a.ui?.surfaces && Object.keys(a.ui.surfaces).length > 0)));
     if (!sb?.label || sb.show === false || seen.has(a.name)) continue; // tenant walked first → wins over operator-shared dup
     seen.add(a.name);
-    const section = sb.section || "Apps";
+    const section = sb.section || "Agents";
     if (!bySection.has(section)) bySection.set(section, []);
     bySection.get(section)!.push({
       app: a.name,

@@ -61,7 +61,7 @@ export default function OnboardingReady() {
             </h1>
             <p className="text-sm text-slate-600 mt-3">
               {stage === "installing"
-                ? `Installing ${app || "your app"}. This takes a moment.`
+                ? `Installing ${app || "your agent"}. This takes a moment.`
                 : `${app}/${loop} is running its first observe → hypothesize → act → analyze → learn cycle. Usually 1–3 minutes.`}
             </p>
             <p className="text-xs text-slate-400 mt-6 tabular-nums">{elapsed}s elapsed</p>

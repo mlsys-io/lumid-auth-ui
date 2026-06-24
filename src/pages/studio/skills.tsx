@@ -81,7 +81,7 @@ export default function StudioSkills() {
 		icon: Compass,
 		meta: c.summary || c.category || "",
 		section: "Discover",
-		ask: { prompt: `Add the "${c.display_name || c.name}" skill to one of my apps — help me pick which app and wire it in.` },
+		ask: { prompt: `Add the "${c.display_name || c.name}" skill to one of my agents — help me pick which agent and wire it in.` },
 	} as IndexRow));
 
 	return (

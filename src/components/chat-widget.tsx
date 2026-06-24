@@ -54,9 +54,9 @@ const STARTER_PROMPTS: { label: string; prompt: string }[] = [
 const TOOL_FOLLOWUPS: Record<string, string[]> = {
   list_apps:           ["Run a one-shot now",    "Install something new",         "What's each one for?"],
   list_recent_cycles:  ["Show the latest result", "Rate the most recent one",     "Run another now"],
-  query_my_knowledge:  ["Search for something else", "What apps do I have?",      "What ran today?"],
+  query_my_knowledge:  ["Search for something else", "What agents do I have?",    "What ran today?"],
   list_marketplace:    ["Install one of these",  "Show me what's trending",       "What's similar to what I have?"],
-  install_app:         ["Run a one-shot now",    "What does it do?",              "List my apps"],
+  install_app:         ["Run a one-shot now",    "What does it do?",              "List my agents"],
   uninstall_app:       ["What's left installed?", "Install something else",       "What should I run now?"],
   give_feedback:       ["What's next?",          "Show cycles waiting for review", "Run a new cycle"],
   run_loop_now:        ["Show me the result when it's done", "What else can I run?", "List recent cycles"],
@@ -71,7 +71,7 @@ function pillLabel(tc: ToolCallSummary): string {
   switch (tc.name) {
     case "list_apps": {
       const n = (r.count as number | undefined) ?? (Array.isArray(r.apps) ? r.apps.length : 0);
-      return `Listed your apps (${n})`;
+      return `Listed your agents (${n})`;
     }
     case "install_app": {
       const name = (r.name as string) || (tc.args.slug as string) || "app";

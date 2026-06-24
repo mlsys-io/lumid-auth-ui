@@ -54,7 +54,7 @@ function samplesFor(ctx: ViewingContext): Array<{ label: string; prompt: string;
 				ctx.loop
 					? { label: `walk me through the last ${loopLabel(undefined, ctx.loop)} run`, prompt: `Walk me through the last ${loopLabel(undefined, ctx.loop)} run — what it did, what it learned, anything wrong.`, context: base }
 					: { label: `how is ${appName} doing?`, prompt: `How is ${appName} doing — health, recent runs, anything I should act on?`, context: base },
-				{ label: 'suggest an improvement', prompt: `Look at this app's recent runs and suggest one concrete improvement.`, context: base },
+				{ label: 'suggest an improvement', prompt: `Look at this agent's recent runs and suggest one concrete improvement.`, context: base },
 				{ label: `what has it learned lately?`, prompt: `What has ${appName} learned recently (new memories, adopted offers)?`, context: base },
 			];
 		}
@@ -80,7 +80,7 @@ function samplesFor(ctx: ViewingContext): Array<{ label: string; prompt: string;
 			];
 		case 'marketplace':
 			return [
-				{ label: 'what should I install next?', prompt: 'Based on my installed apps and how I use them, what from the marketplace would help most?' },
+				{ label: 'what should I install next?', prompt: 'Based on my installed agents and how I use them, what from the marketplace would help most?' },
 			];
 		case 'knowledge':
 		case 'knowledge-agent':

@@ -135,7 +135,7 @@ export default function StudioPortfolio({ embedded = false }: { embedded?: boole
 					) : (
 						<>
 							<Link to="/studio/apps" className="inline-flex items-center text-sm text-slate-500 hover:text-slate-900 gap-1">
-								<ChevronLeft className="w-4 h-4" /> My Apps
+								<ChevronLeft className="w-4 h-4" /> My Agents
 							</Link>
 							<h1 className="text-lg font-semibold text-slate-900 mt-1">Fleet</h1>
 						</>
@@ -176,10 +176,10 @@ export default function StudioPortfolio({ embedded = false }: { embedded?: boole
 					<Boxes className="w-7 h-7 text-slate-300 mx-auto mb-2" />
 					<div className="text-[13px] font-medium text-slate-700">No workflows yet</div>
 					<p className="text-[12px] text-slate-400 mt-1">
-						Set up an app and its workflows will roll up here.
+						Set up an agent and its workflows will roll up here.
 					</p>
 					<Link to="/studio/apps" className="inline-block mt-3 text-[12px] font-medium text-gold-700 hover:underline">
-						Go to My Apps →
+						Go to My Agents →
 					</Link>
 				</div>
 			) : (

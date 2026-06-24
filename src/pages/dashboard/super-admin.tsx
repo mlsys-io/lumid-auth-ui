@@ -307,7 +307,7 @@ function TenantsTile({ tenants }: { tenants: TenantsResp | null }) {
 					<thead className="bg-slate-50 text-left text-xs text-slate-600 uppercase tracking-wide">
 						<tr>
 							<th className="px-3 py-2 font-medium">Email</th>
-							<th className="px-3 py-2 font-medium w-20">Apps</th>
+							<th className="px-3 py-2 font-medium w-20">Agents</th>
 							<th className="px-3 py-2 font-medium w-24">Storage</th>
 							<th className="px-3 py-2 font-medium w-20">Cycles</th>
 							<th className="px-3 py-2 font-medium w-28">LLM today</th>
@@ -1091,7 +1091,7 @@ function LoopStatusTile({ loops }: { loops: LoopsResp | null }) {
 						<table className="w-full text-xs font-mono">
 							<thead className="text-[10px] uppercase tracking-wide text-muted-foreground">
 								<tr className="border-b border-gray-100">
-									<th className="text-left font-medium py-1 pr-3">app</th>
+									<th className="text-left font-medium py-1 pr-3">agent</th>
 									<th className="text-left font-medium py-1 pr-3">version</th>
 									<th className="text-left font-medium py-1 pr-3">kind</th>
 									<th className="text-left font-medium py-1 pr-3">status</th>
@@ -1116,7 +1116,7 @@ function LoopStatusTile({ loops }: { loops: LoopsResp | null }) {
 					<table className="w-full text-xs">
 						<thead className="text-[10px] uppercase tracking-wide text-muted-foreground">
 							<tr className="border-b border-gray-100">
-								<th className="text-left font-medium py-1.5 pr-3">app</th>
+								<th className="text-left font-medium py-1.5 pr-3">agent</th>
 								<th className="text-left font-medium py-1.5 pr-3">loop</th>
 								<th className="text-left font-medium py-1.5 pr-3">schedule</th>
 								<th className="text-left font-medium py-1.5 pr-3">declared in</th>
