@@ -223,6 +223,22 @@ export interface MeAppSurface {
 // phase). Each row is an *app* (kind=app), not a loop — the server
 // already filters skill repos out so this is the right feed for the
 // /app home list.
+// One recommended next move from the next-actions recommender (recommend.py).
+export interface NextAction {
+  action: "run_more" | "try_variant" | "score_remaining" | "promote" | "calibrate" | "kickstart" | string;
+  reason: string;
+  loop?: string | null;
+  experiment_id?: string | null;
+  run_args?: {
+    count?: number;
+    priority?: number;
+    variant?: Record<string, unknown> | null;
+    branch_label?: string | null;
+    from_run_ts?: string | null;
+  } | null;
+  severity?: "info" | "suggest" | "act" | string;
+}
+
 export interface MeAppHealth {
   app: string;
   kind: string;
@@ -298,6 +314,11 @@ export const me = {
   // file changed since the read that produced baseSha.
   updateAppConfig: (app: string, yaml: string, baseSha?: string) =>
     call<{ ok: boolean; bytes: number; sha?: string }>("PUT", `/apps/${encodeURIComponent(app)}/config`, { yaml, base_sha: baseSha }),
+  // Publish the app bundle to its xp.io repo — commits the current prompts/
+  // config/UI edits and auto-bumps semver (app_push). Versions the "tuning".
+  publishApp: (app: string, body?: { commit_message?: string; summary?: string }) =>
+    call<{ message: string; data?: Record<string, unknown> }>(
+      "POST", `/apps/${encodeURIComponent(app)}/publish`, body || {}),
   // Write a surface for an installed app: `markdown` for .md surfaces, `spec`
   // (raw page.yaml text, compiler-validated server-side) for structured page
   // surfaces. baseSha = optimistic lock. For @fork_of / @shared paths the
@@ -397,14 +418,52 @@ export const me = {
   //     variant?      — a config override map to explore as a new variant
   //     branch_label? — human label for the new branch (shows on the node)
   //   Returns the queued job (same envelope shape as runLoopNow).
+  //   Phase B/C/D additions (all optional, snake_case on the wire):
+  //     criteria?     — success-criteria expression evaluated against the run's
+  //                     deltas (e.g. "delta_pp >= 0 and n >= 20")
+  //     auto_promote? — promote the run automatically when `criteria` is met
+  //     cases?        — restrict evaluation to this subset of casebook case ids
+  //                     (omit / empty = full casebook)
+  //     not_before?   — ISO datetime; the run defers until then (schedule-once)
   launchRun: (
     app: string,
     loop: string,
-    body: { from_run_ts?: string; variant?: Record<string, unknown>; branch_label?: string },
+    body: {
+      from_run_ts?: string;
+      variant?: Record<string, unknown>;
+      branch_label?: string;
+      criteria?: string;
+      auto_promote?: boolean;
+      cases?: string[];
+      not_before?: string;
+    },
   ) =>
     call<{ job_id: string; state: string }>(
       "POST",
-      `/apps/${encodeURIComponent(app)}/loops/${encodeURIComponent(loop)}/run`,
+      // The unified run-now/fork route is /me/loops/:app/:loop/run (MeLoopRunNow,
+      // which reads from_run_ts/variant/branch_label). The old /apps/.../loops/...
+      // path 404'd — which made Branch + Re-run silently fail.
+      `/loops/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/run`,
+      body,
+    ),
+  // POST /me/apps/:app/loops/:loop/enqueue — fan out MANY runs at once. Each
+  // entry in `variants[]` becomes a queued run that forks from `from_run_ts`,
+  // sharing `branch_label` / `criteria` / `priority`. Returns how many queued.
+  enqueueRuns: (
+    app: string,
+    loop: string,
+    body: {
+      from_run_ts?: string;
+      branch_label?: string;
+      criteria?: string;
+      cases?: string[];
+      priority?: number;
+      variants: Record<string, unknown>[];
+    },
+  ) =>
+    call<{ queued: number }>(
+      "POST",
+      `/apps/${encodeURIComponent(app)}/loops/${encodeURIComponent(loop)}/enqueue`,
       body,
     ),
   // POST /me/apps/:app/runs/:ts/promote — mark this run/branch's learning as
@@ -429,6 +488,12 @@ export const me = {
       `/loops/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/stop`,
     ),
   loopsHealth: () => call<{ apps: MeAppHealth[] }>("GET", "/loops/health"),
+
+  // GET /me/apps/:app/next-actions — the deterministic recommender
+  // (sdk/apps/recommend.py via lumid-trajectory). Powers the Next Run composer's
+  // "Suggested" banner. Best-effort: callers treat any failure as "no suggestions".
+  nextActions: (app: string) =>
+    call<{ actions: NextAction[]; ok?: boolean }>("GET", `/apps/${encodeURIComponent(app)}/next-actions`),
 
   // Workstream E — skills as a first-class surface.
   // Workstream F — cross-app experiments aggregate.
@@ -673,6 +738,15 @@ export const me = {
       `/apps/${encodeURIComponent(app)}/dataset-file?path=${encodeURIComponent(path)}`,
     ),
 
+  // A case's full evaluation report (per-Q triangulated scores + cited evidence
+  // + cross-cycle regressions) — the interview_report markdown the runner wrote.
+  // `ts` (a cycle dir-id) pins the report to a specific run; omit for the newest.
+  caseReport: (app: string, caseId: string, ts?: string) =>
+    call<{ case_id: string; ts: string; name: string; content: string; truncated: boolean }>(
+      "GET",
+      `/apps/${encodeURIComponent(app)}/case-report?case_id=${encodeURIComponent(caseId)}${ts ? `&ts=${encodeURIComponent(ts)}` : ""}`,
+    ),
+
   // Goal-metric trajectory across cycles (improvement over iterations).
   // `events` maps a cycle dir-id → a discrete event (learn|fix|bug|analyze)
   // for the curve overlay.
@@ -784,9 +858,25 @@ export interface MeWorkflowRow {
   goal?: { primary: string; tracked?: string[] };
   // Dataset ids/refs the loop runs against (xpcloud.yaml loops[].datasets).
   datasets?: string[];
+  // The app's top-level dataset repos with their own version — each a
+  // separate, independently-versioned xpio DATASET repo the app mounts
+  // (distinct from the app's own AGENT repo). Drives the Data tab's version.
+  datasets_detail?: MeDatasetRef[];
   // The app's knowledge agents (top-level memory_agents + roles[].memory_agent).
   // Powers the learning-history timeline. App-level, repeated on each loop row.
   memory_agents?: string[];
+  // The workflow's agent at its current version ("v<N>" memories banked). The
+  // agent attaches to the workflow and evolves; the run tree shows per-run
+  // versions, this is its "now". Empty when no memory agents.
+  agent_version?: string;
+}
+
+// One mounted dataset repo + its own version (an independently versioned xpio
+// DATASET repo, distinct from the app's AGENT repo).
+export interface MeDatasetRef {
+  id?: string;
+  repo?: string;
+  version?: string;
 }
 
 // Goal-metric trajectory (GET /me/apps/:app/loops/:loop/metric-series).

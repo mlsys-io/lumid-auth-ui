@@ -7,7 +7,7 @@
 // state directs them to the composer.
 
 import { useEffect, useState } from 'react';
-import { Brain, ChevronRight, Sparkles } from 'lucide-react';
+import { Brain, ChevronRight, Sparkles, ArrowLeft } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import apiClient from '@/api/client';
 import PageHints from '@/components/PageHints';
@@ -109,7 +109,7 @@ function AgentList() {
 	);
 }
 
-function AgentDetail({ agentId }: { agentId: string }) {
+function AgentDetail({ agentId, embedded, onBack }: { agentId: string; embedded?: boolean; onBack?: () => void }) {
 	const [memories, setMemories] = useState<Memory[] | null>(null);
 	const [kindFilter, setKindFilter] = useState<string>('');
 	const [error, setError] = useState<string | null>(null);
@@ -133,11 +133,96 @@ function AgentDetail({ agentId }: { agentId: string }) {
 		return () => setStudioSelection(null);
 	}, [agentId]);
 
-	if (error) return <div className="text-rose-700 text-sm">{error}</div>;
-	if (memories === null) return <div className="text-sm text-slate-500 italic">Loading memories…</div>;
+	const kinds = memories ? (Array.from(new Set(memories.map((m) => m.kind).filter(Boolean))) as string[]) : [];
 
-	const kinds = Array.from(new Set(memories.map((m) => m.kind).filter(Boolean))) as string[];
+	const filters = kinds.length > 1 ? (
+		<div className="flex items-center gap-2 flex-wrap">
+			<button
+				onClick={() => setKindFilter('')}
+				className={[
+					'px-3 py-1 rounded-full text-xs transition-colors',
+					!kindFilter ? 'bg-gray-900 text-white' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50',
+				].join(' ')}
+			>All</button>
+			{kinds.map((k) => (
+				<button
+					key={k}
+					onClick={() => setKindFilter(k!)}
+					className={[
+						'px-3 py-1 rounded-full text-xs transition-colors',
+						kindFilter === k ? 'bg-gray-900 text-white' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50',
+					].join(' ')}
+				>{k}</button>
+			))}
+		</div>
+	) : null;
 
+	const list = (
+		<ul className="space-y-2">
+			{(memories ?? []).map((m, i) => (
+				<li
+					key={m.id || `${m.created_at}-${i}`}
+					className="rounded-lg border border-slate-200 bg-white p-3"
+				>
+					<div className="flex items-start gap-3">
+						{m.kind && (
+							<span className={['px-2 py-0.5 rounded-full text-[10px] tracking-wide border flex-shrink-0', KIND_COLORS[m.kind] || 'bg-slate-50 text-slate-600 border-slate-200'].join(' ')}>
+								{m.kind}
+							</span>
+						)}
+						<div className="min-w-0 flex-1">
+							<div className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">
+								{m.content || '(no content)'}
+							</div>
+							<div className="text-[11px] text-slate-500 mt-1.5 flex items-center gap-2 flex-wrap">
+								{m.created_at && <span>{new Date(m.created_at).toLocaleString()}</span>}
+								{m.source && <span>· {m.source}</span>}
+								{m.confidence != null && <span>· confidence {m.confidence.toFixed(2)}</span>}
+								{(m.recurrence ?? 0) > 1 && <span>· seen ×{m.recurrence}</span>}
+							</div>
+						</div>
+					</div>
+				</li>
+			))}
+			{memories !== null && memories.length === 0 && (
+				<li className="text-sm text-slate-500 italic">No memories matching this filter.</li>
+			)}
+		</ul>
+	);
+
+	const stateMsg = error
+		? <div className="text-rose-700 text-sm">{error}</div>
+		: memories === null
+			? <div className="text-sm text-slate-500 italic">Loading memories…</div>
+			: null;
+
+	// Embedded — rendered IN the workflow panel's right canvas (like the prompt
+	// editor). A compact card with header + scroll; the host owns Back (toggle).
+	if (embedded) {
+		return (
+			<div className="h-full flex flex-col rounded-xl border border-slate-200 bg-white overflow-hidden animate-in fade-in duration-200">
+				<div className="flex items-center gap-2 px-3 py-2 border-b border-slate-100 flex-shrink-0">
+					{onBack && (
+						<button onClick={onBack} title="Back to run tree" className="inline-flex items-center gap-1 text-[12px] text-slate-500 hover:text-slate-900 transition-colors flex-shrink-0">
+							<ArrowLeft className="w-3.5 h-3.5" /> Run tree
+						</button>
+					)}
+					{onBack && <span className="text-slate-300">·</span>}
+					<Brain className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+					<span className="font-mono text-[13px] font-medium text-slate-800 truncate" title={agentId}>{agentId}</span>
+					{memories && <span className="text-[11px] text-slate-400">· {memories.length} memories</span>}
+					<Link to={`/studio/knowledge/${encodeURIComponent(agentId)}`} className="ml-auto text-[11px] text-slate-400 hover:text-slate-700 transition-colors">Open full →</Link>
+				</div>
+				<div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
+					{stateMsg}
+					{memories !== null && !error && filters}
+					{memories !== null && !error && list}
+				</div>
+			</div>
+		);
+	}
+
+	if (stateMsg) return stateMsg;
 	return (
 		<div className="space-y-4">
 			<Link to="/studio/knowledge" className="inline-flex items-center text-sm text-slate-600 hover:text-slate-900 gap-1">
@@ -145,63 +230,19 @@ function AgentDetail({ agentId }: { agentId: string }) {
 			</Link>
 			<header>
 				<h1 className="font-mono text-lg font-medium">{agentId}</h1>
-				<p className="text-sm text-slate-500 mt-1">{memories.length} memory record(s)</p>
+				<p className="text-sm text-slate-500 mt-1">{(memories ?? []).length} memory record(s)</p>
 			</header>
-
-			{kinds.length > 1 && (
-				<div className="flex items-center gap-2 flex-wrap">
-					<button
-						onClick={() => setKindFilter('')}
-						className={[
-							'px-3 py-1 rounded-full text-xs transition-colors',
-							!kindFilter ? 'bg-gray-900 text-white' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50',
-						].join(' ')}
-					>All</button>
-					{kinds.map((k) => (
-						<button
-							key={k}
-							onClick={() => setKindFilter(k!)}
-							className={[
-								'px-3 py-1 rounded-full text-xs transition-colors',
-								kindFilter === k ? 'bg-gray-900 text-white' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50',
-							].join(' ')}
-						>{k}</button>
-					))}
-				</div>
-			)}
-
-			<ul className="space-y-2">
-				{memories.map((m, i) => (
-					<li
-						key={m.id || `${m.created_at}-${i}`}
-						className="rounded-lg border border-slate-200 bg-white p-3"
-					>
-						<div className="flex items-start gap-3">
-							{m.kind && (
-								<span className={['px-2 py-0.5 rounded-full text-[10px] tracking-wide border flex-shrink-0', KIND_COLORS[m.kind] || 'bg-slate-50 text-slate-600 border-slate-200'].join(' ')}>
-									{m.kind}
-								</span>
-							)}
-							<div className="min-w-0 flex-1">
-								<div className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">
-									{m.content || '(no content)'}
-								</div>
-								<div className="text-[11px] text-slate-500 mt-1.5 flex items-center gap-2 flex-wrap">
-									{m.created_at && <span>{new Date(m.created_at).toLocaleString()}</span>}
-									{m.source && <span>· {m.source}</span>}
-									{m.confidence != null && <span>· confidence {m.confidence.toFixed(2)}</span>}
-									{(m.recurrence ?? 0) > 1 && <span>· seen ×{m.recurrence}</span>}
-								</div>
-							</div>
-						</div>
-					</li>
-				))}
-				{memories.length === 0 && (
-					<li className="text-sm text-slate-500 italic">No memories matching this filter.</li>
-				)}
-			</ul>
+			{filters}
+			{list}
 		</div>
 	);
+}
+
+// EmbeddedAgentBank — the per-agent memory browser, reusable INSIDE the workflow
+// panel's right canvas (like EmbeddedPromptEditor). Same fetch + list as the
+// full /studio/knowledge/:agent route, minus the page chrome.
+export function EmbeddedAgentBank({ agentId, onBack }: { agentId: string; onBack?: () => void }) {
+	return <AgentDetail agentId={agentId} embedded onBack={onBack} />;
 }
 
 export default function StudioKnowledge() {

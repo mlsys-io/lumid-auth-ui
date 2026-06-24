@@ -362,13 +362,16 @@ export default function TopStatusStrip() {
 			{/* Right — a steady "live" heartbeat (the surface is alive; loops
 			    run in the background) + status pills (only when non-zero). */}
 			<div className="flex items-center gap-2 flex-shrink-0">
-				{/* Workspace's chat-panel toggle portals here. */}
-				<span id="topstrip-ws-right" className="flex items-center" />
+				{/* The "Right now" ticker is secondary — hide it on narrow viewports
+				    so the app identity + workflow selector don't get crushed. */}
+				<span className="hidden lg:inline-flex">{loaded && <RightNowTicker items={items} />}</span>
+				{/* "live" heartbeat — sits just left of the chat toggle. */}
 				<span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground" title="Live — your loops run in the background">
 					<span className="w-1.5 h-1.5 rounded-full bg-gold-500 heartbeat" />
 					<span className="hidden sm:inline">live{(() => { const a = Math.max(0, Math.floor((Date.now() - refreshedAt) / 1000)); return a < 3 ? "" : a < 60 ? ` · ${a}s ago` : ` · ${Math.floor(a / 60)}m ago`; })()}</span>
 				</span>
-				{loaded && <RightNowTicker items={items} />}
+				{/* Workspace's chat-panel toggle portals here — kept the TOP-MOST RIGHT. */}
+				<span id="topstrip-ws-right" className="flex items-center" />
 			</div>
 		</div>
 	);

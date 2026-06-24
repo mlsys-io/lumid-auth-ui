@@ -12,11 +12,11 @@
 // mutated. A banner makes this explicit before the first save.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
 	FileText, Save, X, AlertTriangle, Info, Loader2, RotateCcw,
-	Eye, EyeOff, Scale, Brain,
+	Eye, Pencil, Scale, Brain, ArrowLeft,
 } from "lucide-react";
 import { me, MeApiError, type MeAppPrompt } from "@/api/me";
 import { LumidMarkdown } from "./LumidMarkdown";
@@ -36,6 +36,10 @@ function prettyName(name: string): string {
 
 export function AppPromptsEditor() {
 	const { app = "" } = useParams<{ app: string }>();
+	// Deep link: /studio/a/:app/prompts?p=<name> opens that prompt directly
+	// (used by the Tune card's per-prompt rows).
+	const [sp] = useSearchParams();
+	const wantPrompt = sp.get("p");
 	const [prompts, setPrompts] = useState<MeAppPrompt[] | null>(null);
 	const [listError, setListError] = useState<string | null>(null);
 	const [selected, setSelected] = useState<string | null>(null);
@@ -47,11 +51,13 @@ export function AppPromptsEditor() {
 			.then(({ prompts }) => {
 				const list = prompts || [];
 				setPrompts(list);
-				// Auto-select the first prompt so the editor isn't empty on open.
-				setSelected((cur) => cur ?? (list[0]?.name ?? null));
+				// Honor ?p=<name> when present (deep link), else auto-select the
+				// first prompt so the editor isn't empty on open.
+				const deep = wantPrompt && list.some((p) => p.name === wantPrompt) ? wantPrompt : null;
+				setSelected((cur) => deep ?? cur ?? (list[0]?.name ?? null));
 			})
 			.catch((e) => setListError(String((e as Error)?.message ?? e)));
-	}, [app]);
+	}, [app, wantPrompt]);
 	useEffect(() => { loadList(); }, [loadList]);
 
 	const groups = useMemo(() => {
@@ -135,6 +141,30 @@ function SourceBadge({ source }: { source: "local" | "shared" }) {
 	);
 }
 
+// EmbeddedPromptEditor — the single-prompt editor, reusable INSIDE another
+// panel (the workflow Observability panel's right canvas) instead of the
+// full /studio/a/:app/prompts route. Clicking an analyst/judge prompt in the
+// Assets rail opens this here rather than navigating away. A thin back header
+// + the existing split-pane PromptPane.
+export function EmbeddedPromptEditor({ app, name, onBack, onChangedSource }: {
+	app: string; name: string; onBack?: () => void; onChangedSource?: () => void;
+}) {
+	return (
+		<div className="flex flex-col h-full min-h-0 rounded-xl border border-slate-200 bg-white overflow-hidden">
+			{onBack && (
+				<div className="flex items-center px-3 py-1.5 border-b border-slate-100 flex-shrink-0">
+					<button onClick={onBack} className="inline-flex items-center gap-1 text-[12px] text-slate-500 hover:text-slate-900 transition-colors">
+						<ArrowLeft className="w-3.5 h-3.5" /> Run tree
+					</button>
+				</div>
+			)}
+			<div className="flex-1 min-h-0">
+				<PromptPane key={name} app={app} name={name} onChangedSource={onChangedSource ?? (() => {})} />
+			</div>
+		</div>
+	);
+}
+
 // One prompt's split-pane editor with the base_sha optimistic lock.
 function PromptPane({ app, name, onChangedSource }: { app: string; name: string; onChangedSource: () => void }) {
 	const [original, setOriginal] = useState<string | null>(null);
@@ -145,7 +175,11 @@ function PromptPane({ app, name, onChangedSource }: { app: string; name: string;
 	const [saving, setSaving] = useState(false);
 	const [reverting, setReverting] = useState(false);
 	const [loadError, setLoadError] = useState<string | null>(null);
-	const [showPreview, setShowPreview] = useState(true);
+	// One view at a time, switchable — not a side-by-side split. Narrow embedded
+	// panels can't afford two columns, and a single column reads cleaner.
+	// Default to PREVIEW — opening a prompt is usually to read it; switch to Edit
+	// to change it.
+	const [mode, setMode] = useState<"edit" | "preview">("preview");
 	const liveRef = useRef(true);
 
 	const dirty = original !== null && draft !== original;
@@ -216,10 +250,19 @@ function PromptPane({ app, name, onChangedSource }: { app: string; name: string;
 				</span>
 				<SourceBadge source={source} />
 				<div className="ml-auto flex items-center gap-2">
-					<button onClick={() => setShowPreview((v) => !v)} title={showPreview ? "Hide preview" : "Show preview"}
-						className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 text-[12px] text-slate-600 hover:bg-slate-50 transition-colors">
-						{showPreview ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />} {showPreview ? "Hide preview" : "Preview"}
-					</button>
+					{/* Switch between editing and rendered preview — one view at a time. */}
+					<div className="inline-flex rounded-lg border border-slate-200 overflow-hidden">
+						<button onClick={() => setMode("edit")} title="Edit"
+							className={cn("inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] transition-colors",
+								mode === "edit" ? "bg-slate-100 text-slate-800" : "text-slate-500 hover:bg-slate-50")}>
+							<Pencil className="w-3.5 h-3.5" /> Edit
+						</button>
+						<button onClick={() => setMode("preview")} title="Preview"
+							className={cn("inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] border-l border-slate-200 transition-colors",
+								mode === "preview" ? "bg-slate-100 text-slate-800" : "text-slate-500 hover:bg-slate-50")}>
+							<Eye className="w-3.5 h-3.5" /> Preview
+						</button>
+					</div>
 					{source === "local" && (
 						<button onClick={handleRevert} disabled={reverting} title="Revert to the shared copy"
 							className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 text-[12px] text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">
@@ -254,15 +297,14 @@ function PromptPane({ app, name, onChangedSource }: { app: string; name: string;
 				</div>
 			)}
 
-			{/* Body */}
+			{/* Body — one view at a time (edit OR preview), switched in the toolbar. */}
 			<div className="flex flex-1 min-h-0">
-				<div className={cn("flex flex-col min-h-0", showPreview ? "w-1/2 border-r border-slate-200" : "w-full")}>
+				{mode === "edit" ? (
 					<textarea value={draft} onChange={(e) => setDraft(e.target.value)} spellCheck={false}
 						placeholder="Write the prompt (markdown) here…"
 						className="flex-1 w-full font-mono text-[13px] leading-relaxed p-4 resize-none border-0 focus:outline-none bg-white text-slate-800 placeholder:text-slate-300" />
-				</div>
-				{showPreview && (
-					<div className="w-1/2 overflow-y-auto">
+				) : (
+					<div className="flex-1 overflow-y-auto">
 						<div className="px-6 py-4"><LumidMarkdown source={draft || "_Nothing to preview yet._"} /></div>
 					</div>
 				)}

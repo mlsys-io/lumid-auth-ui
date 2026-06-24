@@ -30,6 +30,7 @@ import { cn } from '../lib/utils';
 import { me } from '@/api/me';
 import { useAppNav, iconFor } from './useAppNav';
 import { useStudioRefetch } from '@/hooks/useStudioRefetch';
+import { useIsNarrow } from '@/hooks/useIsNarrow';
 // StudioShell is now the single shell — it also hosts the /dashboard/* pages
 // (admin, quant, lumilake, lqt, product). The ported Runmesh admin pages need
 // these providers + the numeric-id bridge that AppLayout used to supply.
@@ -256,6 +257,17 @@ export function StudioShell() {
 		try { localStorage.setItem('studio_sidebar_collapsed_v1', sidebarCollapsed ? '1' : '0'); } catch { /* ignore */ }
 	}, [sidebarCollapsed]);
 
+	// Low-width: auto-hide the sidebar so the center isn't crushed. This is a
+	// DERIVED override — it never writes the persisted pref, so the user's wide
+	// preference survives. On narrow, the sidebar starts hidden; the header's
+	// expand control opens it for the session (narrowNavOpen).
+	const isNarrow = useIsNarrow(1024);
+	const [narrowNavOpen, setNarrowNavOpen] = useState(false);
+	useEffect(() => { if (!isNarrow) setNarrowNavOpen(false); }, [isNarrow]);
+	const sidebarHidden = isNarrow ? !narrowNavOpen : sidebarCollapsed;
+	const hideSidebar = () => { if (isNarrow) setNarrowNavOpen(false); else setSidebarCollapsed(true); };
+	const showSidebar = () => { if (isNarrow) setNarrowNavOpen(true); else setSidebarCollapsed(false); };
+
 	// Pending-drafts count → app-contributed nav badges (badge_source:
 	// 'drafts'). The Inbox nav entry folded into Home's status bar; the
 	// Inbox surface (moved off the My Apps hero), so the count belongs here.
@@ -326,7 +338,7 @@ export function StudioShell() {
 			resizing && 'select-none cursor-ew-resize',
 		)}>
 			{/* Sidebar ─────────────────────────────────────────────── */}
-			{!sidebarCollapsed && (
+			{!sidebarHidden && (
 			<aside
 				data-studio-picker-chrome="1"
 				style={{ width: sidebarWidth }}
@@ -337,7 +349,7 @@ export function StudioShell() {
 						<span className="font-display text-[18px] font-semibold tracking-tight text-foreground truncate">Lumid Studio</span>
 					</button>
 					<button
-						onClick={() => setSidebarCollapsed(true)}
+						onClick={hideSidebar}
 						title="Collapse sidebar"
 						aria-label="Collapse sidebar"
 						className="flex-shrink-0 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-black/[0.05] transition-colors"
@@ -493,12 +505,12 @@ export function StudioShell() {
 			<div className={cn('flex-1 flex flex-col min-w-0', (chatHome || fullBleed) && 'h-screen overflow-hidden')}>
 				{/* Top bar — page header lives in TopStatusStrip; account
 				    surfaces moved to the sidebar user menu. */}
-				<header data-studio-picker-chrome="1" className="min-h-[64px] py-2.5 bg-background/85 backdrop-blur-md border-b border-border sticky top-0 z-10 flex items-center px-6 gap-4">
+				<header data-studio-picker-chrome="1" className="min-h-[64px] py-2.5 bg-background/85 backdrop-blur-md border-b border-border sticky top-0 z-10 flex items-center px-3 sm:px-6 gap-2 sm:gap-4">
 					{/* When the sidebar is collapsed, its expand control lives here at
 					    the header's far left — so the resize icon is always visible. */}
-					{sidebarCollapsed && (
+					{sidebarHidden && (
 						<button
-							onClick={() => setSidebarCollapsed(false)}
+							onClick={showSidebar}
 							title="Show sidebar"
 							aria-label="Show sidebar"
 							className="flex-shrink-0 -ml-1 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"

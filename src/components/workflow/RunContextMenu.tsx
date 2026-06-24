@@ -16,10 +16,10 @@
 // is caught and shown as a "runtime coming" toast, and the item is visually
 // marked pending after a failed attempt — it never crashes the menu.
 
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import {
 	GitBranch, GitCompare, RefreshCw, FlaskConical, FileJson, MessageSquare,
-	Info, Pin, ArrowUpCircle, XCircle, Loader2, Clock, Bot,
+	Info, ArrowUpCircle, XCircle, Loader2, Clock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { me, MeApiError } from "@/api/me";
@@ -41,12 +41,10 @@ export interface RunMenuActions {
 	viewData?: (t: RunMenuTarget) => void;      // → CaseContentViewer / run data
 	viewLog?: (ts?: string) => void;            // → TrajectoryLogView
 	explainScore?: (t: RunMenuTarget) => void;  // → provenance / CaseContentViewer
-	annotate?: (t: RunMenuTarget) => void;      // pin/annotate (chat-grounded)
 	// Trajectory-tree-specific inspection (only wired by TrajectoryGraph; the
 	// rows hide elsewhere since the callbacks are absent). Folding these in lets
 	// the single trajectory node menu carry every entrance — Data + Log included.
 	openPipeline?: (ts?: string) => void;       // → open the run's pipeline pane
-	viewConversation?: (ts: string) => void;    // → open the run's chat session
 	ask?: (t: RunMenuTarget) => void;           // → ask the assistant about this run
 	// Branch WITH INTENTION (WS-5) — opens the intention dialog instead of an
 	// empty branch. When wired it REPLACES the bare "Branch out" runtime item.
@@ -63,8 +61,10 @@ type RowProps = {
 	tone?: "default" | "gold" | "sky" | "danger";
 	pending?: boolean;
 	busy?: boolean;
+	title?: string;
+	sub?: string;       // a second muted line under the label, explaining the action
 };
-function Row({ icon: Icon, label, onClick, tone = "default", pending, busy }: RowProps) {
+function Row({ icon: Icon, label, onClick, tone = "default", pending, busy, title, sub }: RowProps) {
 	const toneCls =
 		tone === "gold" ? "text-gold-700 hover:bg-gold-50"
 			: tone === "sky" ? "text-sky-700 hover:bg-sky-50"
@@ -74,11 +74,15 @@ function Row({ icon: Icon, label, onClick, tone = "default", pending, busy }: Ro
 		<button
 			onClick={onClick}
 			disabled={busy}
-			className={`w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-left transition-colors disabled:opacity-60 ${toneCls}`}
+			title={title}
+			className={`w-full flex items-start gap-2 px-3 py-1.5 text-[12px] text-left transition-colors disabled:opacity-60 ${toneCls}`}
 		>
-			{busy ? <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0" /> : <Icon className="w-3.5 h-3.5 flex-shrink-0 opacity-70" />}
-			<span className="flex-1">{label}</span>
-			{pending && <Clock className="w-3 h-3 text-slate-300 flex-shrink-0" />}
+			{busy ? <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0 mt-0.5" /> : <Icon className="w-3.5 h-3.5 flex-shrink-0 opacity-70 mt-0.5" />}
+			<span className="flex-1 min-w-0">
+				<span className="block">{label}</span>
+				{sub && <span className="block text-[10px] text-slate-400 leading-tight font-normal">{sub}</span>}
+			</span>
+			{pending && <Clock className="w-3 h-3 text-slate-300 flex-shrink-0 mt-0.5" />}
 		</button>
 	);
 }
@@ -91,7 +95,7 @@ function Section({ label }: { label: string }) {
 }
 
 export default function RunContextMenu({
-	x, y, target, actions, selectedForCompare, onToggleCompare, onClose, onAfterRuntimeOp,
+	x, y, target, actions, selectedForCompare, onToggleCompare, onClose, onAfterRuntimeOp, mode = "improve",
 }: {
 	x: number; y: number;
 	target: RunMenuTarget;
@@ -100,12 +104,29 @@ export default function RunContextMenu({
 	onToggleCompare: (ts: string) => void;
 	onClose: () => void;
 	onAfterRuntimeOp?: () => void;
+	/** observe → only the read-only Observe section; improve → also the Improve ops. */
+	mode?: "observe" | "improve";
 }) {
 	// Per-item pending flag — set when a runtime op 404/501s so the item shows it
 	// won't work yet. Keyed by op name.
 	const [pending, setPending] = useState<Record<string, boolean>>({});
 	const [busy, setBusy] = useState<string | null>(null);
 	const isRun = target.kind === "run" && !!target.ts;
+
+	// Keep the menu on-screen: measure it and clamp into the viewport (flips up /
+	// left when opened near the bottom / right edge). Runs pre-paint, so no flash.
+	const menuRef = useRef<HTMLDivElement>(null);
+	const [pos, setPos] = useState({ left: x, top: y });
+	useLayoutEffect(() => {
+		const el = menuRef.current;
+		if (!el) return;
+		const { width, height } = el.getBoundingClientRect();
+		const pad = 8;
+		setPos({
+			left: Math.max(pad, Math.min(x, window.innerWidth - width - pad)),
+			top: Math.max(pad, Math.min(y, window.innerHeight - height - pad)),
+		});
+	}, [x, y]);
 
 	// Run a runtime op; on a not-ready backend, toast + mark pending (no crash).
 	const runtimeOp = async (name: string, fn: () => Promise<unknown>, okMsg: string) => {
@@ -129,8 +150,9 @@ export default function RunContextMenu({
 
 	return (
 		<div
-			className="fixed z-[80] min-w-[208px] rounded-lg border border-slate-200 bg-white shadow-xl py-1 animate-in fade-in zoom-in-95 duration-100"
-			style={{ left: x, top: y }}
+			ref={menuRef}
+			className="fixed z-[80] min-w-[208px] max-h-[80vh] overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-xl py-1 animate-in fade-in zoom-in-95 duration-100"
+			style={{ left: pos.left, top: pos.top }}
 			onClick={(e) => e.stopPropagation()}
 		>
 			<div className="px-3 py-1 text-[10px] uppercase tracking-wide text-slate-400 truncate">{target.label}</div>
@@ -140,33 +162,34 @@ export default function RunContextMenu({
 			{isRun && actions.openPipeline && (
 				<Row icon={FlaskConical} label="Open pipeline" onClick={wired(() => actions.openPipeline!(target.ts))} />
 			)}
-			{actions.viewData && (
+			{/* View data: CASE rows only (opens the case's data + score provenance).
+			    For a run, "Explain score" below covers the metric view — they were
+			    redundant (both opened the same view) on run nodes. */}
+			{!isRun && actions.viewData && (
 				<Row icon={FileJson} label="View data" onClick={wired(() => actions.viewData!(target))} />
 			)}
 			{isRun && actions.viewLog && (
 				<Row icon={MessageSquare} label="View run log" onClick={wired(() => actions.viewLog!(target.ts))} />
 			)}
-			{isRun && actions.viewConversation && (
-				<Row icon={Bot} label="View conversation" onClick={wired(() => actions.viewConversation!(target.ts!))} />
-			)}
-			{actions.explainScore && (
+			{/* "View conversation" was removed — it rendered the SAME cycle-log as
+			    "View run log" (just in the floating chat instead of the panel). */}
+			{/* Explain score: RUN nodes only → the run's metric charts. (A case's
+			    "View data" already opens its per-question score provenance.) */}
+			{isRun && actions.explainScore && (
 				<Row icon={Info} label="Explain score" onClick={wired(() => actions.explainScore!(target))} />
 			)}
 			{isRun && actions.ask && (
 				<Row icon={MessageSquare} label="Ask about this" onClick={wired(() => actions.ask!(target))} />
 			)}
-			{actions.annotate && (
-				<Row icon={Pin} label="Pin / annotate" onClick={wired(() => actions.annotate!(target))} />
-			)}
 
-			{/* ── IMPROVE — experiment on it (run targets only) ── */}
-			{isRun && (
+			{/* ── IMPROVE — experiment on it (run targets only; hidden in Observe) ── */}
+			{isRun && mode !== "observe" && (
 				<>
 					<Section label="Improve" />
 					{/* Branch WITH INTENTION (WS-5) — opens the dialog when wired; else
 					    falls back to the bare runtime branch so the contract still works. */}
 					{actions.branchWithIntent ? (
-						<Row icon={GitBranch} label="Branch…" tone="gold"
+						<Row icon={GitBranch} label="Plan next run…" tone="gold" sub="branch from here · change · run or schedule"
 							onClick={wired(() => actions.branchWithIntent!(target.ts!, target.label))} />
 					) : (
 						<Row icon={GitBranch} label="Branch out" tone="gold" busy={busy === "branch"} pending={pending["branch"]}
@@ -177,10 +200,10 @@ export default function RunContextMenu({
 						onClick={() => { onToggleCompare(target.ts!); onClose(); }} />
 					<Row icon={RefreshCw} label="Re-run from here" busy={busy === "rerun"} pending={pending["rerun"]}
 						onClick={() => runtimeOp("rerun", () => me.launchRun(actions.app, actions.loop, { from_run_ts: target.ts }), "Re-running from this point…")} />
-					<Row icon={ArrowUpCircle} label="Promote" tone="gold" busy={busy === "promote"} pending={pending["promote"]}
-						onClick={() => runtimeOp("promote", () => me.promoteRun(actions.app, target.ts!), "Promoted — kept this attempt's learning.")} />
-					<Row icon={XCircle} label="Discard" tone="danger" busy={busy === "discard"} pending={pending["discard"]}
-						onClick={() => runtimeOp("discard", () => me.discardRun(actions.app, target.ts!), "Discarded — dropped this attempt's learning.")} />
+					<Row icon={ArrowUpCircle} label="Promote to champion" tone="gold" sub="make this run the default config carried forward" busy={busy === "promote"} pending={pending["promote"]}
+						onClick={() => runtimeOp("promote", () => me.promoteRun(actions.app, target.ts!), "Promoted — this run is now the champion carried forward.")} />
+					<Row icon={XCircle} label="Discard this run" tone="danger" sub="drop its learning — not carried forward" busy={busy === "discard"} pending={pending["discard"]}
+						onClick={() => runtimeOp("discard", () => me.discardRun(actions.app, target.ts!), "Discarded — this run's learning won't carry forward.")} />
 				</>
 			)}
 		</div>

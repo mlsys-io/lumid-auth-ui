@@ -33,7 +33,7 @@ export const L = {
 	runs: { text: "runs", tip: "cycles" } as Label,
 	// The within-run transcript (one term for what used to be Conversation /
 	// Transcript / Trajectory log).
-	runLog: { text: "Run log", tip: "the within-run transcript (analyst↔judge turns + step/stage events)" } as Label,
+	runLog: { text: "Evaluation", tip: "the run's evaluation record — the within-run transcript (analyst↔judge turns + step/stage events)" } as Label,
 	// The data the goal is scored on.
 	casesAndData: { text: "Cases & data", tip: "the cases + datasets the goal is scored on" } as Label,
 	// The metric scores view (resolves the old "Data" button → Metrics collision).
@@ -62,5 +62,6 @@ export const VIEW_LABELS: Record<string, string> = {
 	tree: L.runTree.text,
 	compare: "Compare",
 	prompts: "Prompts",
+	prompt: "Prompt",
 	config: "Config",
 };

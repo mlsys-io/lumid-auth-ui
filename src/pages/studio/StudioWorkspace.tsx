@@ -17,6 +17,8 @@ import { PanelRightClose, MessageSquare } from "lucide-react";
 import { StudioChat } from "@/components/StudioChat";
 import { useAppNav } from "@/components/useAppNav";
 import { usePortalTarget } from "@/hooks/usePortalTarget";
+import { useIsNarrow } from "@/hooks/useIsNarrow";
+import { cn } from "@/lib/utils";
 import { AppOverview } from "@/pages/studio/apps";
 
 const FEATURED_KEY = "studio_featured_app";
@@ -59,6 +61,15 @@ export default function StudioWorkspace() {
 	const [chatOpen, setChatOpen] = useState<boolean>(() => { try { return localStorage.getItem(CHAT_KEY) !== "0"; } catch { return true; } });
 	useEffect(() => { try { localStorage.setItem(CHAT_KEY, chatOpen ? "1" : "0"); } catch { /* ignore */ } }, [chatOpen]);
 
+	// Low-width: auto-hide the chat panel so the center has room (derived
+	// override — never writes the persisted pref). On narrow it starts hidden;
+	// the toggle opens it for the session (it then takes over, full width).
+	const isNarrow = useIsNarrow(1024);
+	const [narrowChatOpen, setNarrowChatOpen] = useState(false);
+	useEffect(() => { if (!isNarrow) setNarrowChatOpen(false); }, [isNarrow]);
+	const chatVisible = !!app && (isNarrow ? narrowChatOpen : chatOpen);
+	const toggleChat = () => { if (isNarrow) setNarrowChatOpen((v) => !v); else setChatOpen((v) => !v); };
+
 	// Chat-panel toggle lives in the top strip (single header row).
 	const chatTarget = usePortalTarget("topstrip-ws-right", !!app);
 
@@ -73,9 +84,10 @@ export default function StudioWorkspace() {
 				</div>
 			</div>
 
-			{/* RIGHT — grounded chat (side panel, collapsible) */}
-			{chatOpen && app && (
-				<div className="w-[400px] xl:w-[460px] flex-shrink-0 flex flex-col min-h-0 bg-background">
+			{/* RIGHT — grounded chat (side panel, collapsible; auto-hidden on narrow,
+			    where it takes over full width when opened). */}
+			{chatVisible && (
+				<div className={cn("flex-shrink-0 flex flex-col min-h-0 bg-background", isNarrow ? "w-full" : "w-[400px] xl:w-[460px]")}>
 					<div className="flex-1 min-h-0 flex flex-col px-3 py-3">
 						<StudioChat docked groundApp={app} />
 					</div>
@@ -84,9 +96,9 @@ export default function StudioWorkspace() {
 
 			{/* Chat toggle, portaled into the top strip's right cluster. */}
 			{chatTarget && createPortal(
-				<button onClick={() => setChatOpen((v) => !v)} title={chatOpen ? "Hide chat" : "Show chat"}
+				<button onClick={toggleChat} title={chatVisible ? "Hide chat" : "Show chat"}
 					className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-					{chatOpen ? <PanelRightClose className="w-4 h-4" /> : <MessageSquare className="w-4 h-4" />}
+					{chatVisible ? <PanelRightClose className="w-4 h-4" /> : <MessageSquare className="w-4 h-4" />}
 				</button>,
 				chatTarget,
 			)}

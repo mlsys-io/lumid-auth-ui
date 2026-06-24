@@ -12,43 +12,50 @@
 // shared apps ("Healthy · ran 2d ago" next to an empty runs list) — when
 // the cycles list is empty this card says "Not run yet", full stop.
 
-import { lazy, Suspense, useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { Fragment, lazy, Suspense, useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import {
-	Play, Pause, Loader2, Save, Clock, AlertCircle, Target,
+	Play, Pause, Loader2, Save, AlertCircle, Target,
 	ChevronLeft, ChevronRight, ChevronDown, Trash2,
-	Database, Sparkles, Pencil, Activity, Check, Square, MessageSquare,
-	Eye, FlaskConical, SlidersHorizontal, ArrowLeft,
-	PanelLeftClose, PanelLeftOpen, FileText, BarChart3,
+	Database, Sparkles, Pencil, Activity, Square,
+	Eye, FlaskConical, ArrowLeft,
+	PanelLeftClose, PanelLeftOpen, FileText, BarChart3, MoreHorizontal,
+	Brain, Scale, GitBranch, DownloadCloud, UploadCloud,
 } from "lucide-react";
 import { toast } from "sonner";
 import apiClient from "@/api/client";
-import { me, MeApiError, type MeWorkflowRow, type MeCycleDetail, type LoopDefinition } from "@/api/me";
+import { me, MeApiError, type MeWorkflowRow, type MeCycleDetail, type LoopDefinition, type MeDatasetRef } from "@/api/me";
+import { type AppIdentity } from "@/components/workflow/AppCard";
 import WorkflowCanvas, { type CanvasStepRef } from "@/components/workflow/WorkflowCanvas";
 import StepInspectorPanel from "@/components/workflow/StepInspectorPanel";
 import { type LoopStageKey } from "@/components/workflow/LoopOrbit";
-import SchedulePicker from "@/components/workflow/SchedulePicker";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { describeSchedule, parseSchedule } from "@/lib/schedule";
+import { parseSchedule } from "@/lib/schedule";
 import { loopLabel } from "@/lib/workflow-names";
 import FailureCard from "@/components/workflow/FailureCard";
-import RunSparkline from "@/components/RunSparkline";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import TrajectoryGraph, { type TrajectoryVersion } from "@/components/workflow/TrajectoryGraph";
-import CaseMapping from "@/components/workflow/CaseMapping";
+import { fetchTrajectory, type Trajectory, type TrajectoryNode } from "@/api/trajectory";
+import { useStudioRefetch } from "@/hooks/useStudioRefetch";
+import { usePortalTarget } from "@/hooks/usePortalTarget";
 import MetricsView from "@/components/workflow/MetricsView";
 import CaseContentViewer from "@/components/workflow/CaseContentViewer";
 import TrajectoryLogView from "@/components/workflow/TrajectoryLogView";
 import { RunCompareView } from "@/components/workflow/BranchTreeView";
 import RunContextMenu, { type RunMenuActions, type RunMenuTarget } from "@/components/workflow/RunContextMenu";
-import BranchDialog from "@/components/workflow/BranchDialog";
-import { L, MODE_LABELS, VIEW_LABELS, type WorkflowMode } from "@/components/workflow/labels";
+import NextRunComposer from "@/components/workflow/NextRunComposer";
+import { L, VIEW_LABELS } from "@/components/workflow/labels";
 import type { MeExperiment } from "@/api/me";
 // Datasets the workflow works on — heavy (table/preview), so lazy-load it and
 // only mount when the Data tab is opened.
 const DatasetExplorer = lazy(() => import("@/components/workflow/DatasetExplorer"));
 const CasebookPanel = lazy(() => import("@/components/workflow/CasebookPanel"));
+// Edit an analyst/judge prompt IN the right canvas (not a route push), so
+// clicking a prompt in the Assets rail keeps the user in the workflow panel.
+const EmbeddedPromptEditor = lazy(() => import("@/components/app-surface/AppPromptsEditor").then((m) => ({ default: m.EmbeddedPromptEditor })));
+// Browse a memory bank IN the right canvas (not a route), like prompts.
+const EmbeddedAgentBank = lazy(() => import("@/pages/studio/knowledge").then((m) => ({ default: m.EmbeddedAgentBank })));
 import {
 	ReviewQueue, OffersPanel,
 	type CycleSummary,
@@ -116,7 +123,7 @@ const cycleCache = new Map<string, { ts: string | null; summary: CycleSummary | 
 // caseFocus/compareSel) with ONE push/pop stack so Back returns to the
 // PREVIOUS view, not always the run tree. The base view of each mode is
 // implicit (empty stack); pushing opens a sub-view, popping goes back one.
-type ViewKind = "log" | "metrics" | "case" | "caseData" | "compare";
+type ViewKind = "log" | "metrics" | "case" | "caseData" | "compare" | "prompt" | "memory";
 interface ViewFrame {
 	kind: ViewKind;
 	// The version (run ts) the view is pinned to (the "as of" chip).
@@ -126,6 +133,11 @@ interface ViewFrame {
 	caseLabel?: string;
 	// compare carries the two selected ts.
 	compareSel?: string[];
+	// prompt targets carry the file name + a pretty label.
+	promptName?: string;
+	promptLabel?: string;
+	// memory targets carry the agent (bank) id.
+	agentId?: string;
 }
 type NavAction =
 	| { type: "push"; frame: ViewFrame }
@@ -148,14 +160,93 @@ function navReducer(stack: ViewFrame[], action: NavAction): ViewFrame[] {
 	}
 }
 
+// VersionDots — the compact run-tree version strip shown by the workflow title.
+// Driven by the SAME source as the run tree (the trajectory), so the dots line
+// up one-for-one with its nodes: baseline, v1, v2, … in order. Each dot is
+// colored by trend vs baseline and clicking it pins that version. Replaces the
+// old loop-health RunSparkline, whose runs didn't correspond to the tree.
+function VersionDots({ app, loop, currentId, onPick }: {
+	app: string; loop: string; currentId?: string; onPick?: (v: TrajectoryVersion) => void;
+}) {
+	const [traj, setTraj] = useState<Trajectory | null>(null);
+	const load = useCallback(() => {
+		let live = true;
+		fetchTrajectory(app, loop).then((t) => { if (live) setTraj(t); }).catch(() => {});
+		return () => { live = false; };
+	}, [app, loop]);
+	useEffect(() => load(), [load]);
+	useStudioRefetch(["runs", "cycles", "loops", "workflows"], load);
+
+	const nodes = traj?.nodes ?? [];
+	if (nodes.length === 0) return null;
+	const baseline = traj?.baseline ?? null;
+	const hib = traj?.higher_is_better !== false;
+	const fmt = (v?: number | null) => v == null ? "—" : (v >= -1 && v <= 1 ? `${Math.round(v * 100)}%` : Number.isInteger(v) ? String(v) : String(+v.toFixed(3)));
+	const verN = (n: TrajectoryNode) => parseInt((n.agent_version || "").replace(/\D/g, "")) || 0;
+	const ordered = [...nodes].sort((a, b) => {
+		if (a.kind === "baseline") return -1;
+		if (b.kind === "baseline") return 1;
+		return verN(a) - verN(b);
+	});
+	const dotCls = (n: TrajectoryNode) => {
+		if (n.kind === "baseline") return "bg-slate-400";
+		if (!n.scored || n.score == null) return "bg-slate-300";
+		const d = baseline != null ? (hib ? n.score - baseline : baseline - n.score) : 0;
+		return d > 1e-6 ? "bg-gold-400" : d < -1e-6 ? "bg-rose-500" : "bg-slate-400";
+	};
+	const label = (n: TrajectoryNode) => n.kind === "baseline"
+		? `baseline · ${fmt(baseline)}`
+		: `${n.agent_version || "run"}${n.model ? ` · ${n.model}` : ""} · ${fmt(n.score)}`;
+	// Cap the strip: show the baseline + the last 6 runs (and always the
+	// selected one); older runs collapse into a "+N" marker so the dots never
+	// crowd the title line.
+	const MAX_RUNS = 6;
+	const headCount = ordered.length > 0 && ordered[0].kind === "baseline" ? 1 : 0;
+	let shown = ordered, hidden = 0;
+	const rest = ordered.slice(headCount);
+	if (rest.length > MAX_RUNS) {
+		const head = ordered.slice(0, headCount);
+		let tail = rest.slice(-MAX_RUNS);
+		const selNode = currentId ? rest.find((n) => n.run_ts === currentId || n.cycle_ts === currentId) : undefined;
+		if (selNode && !tail.includes(selNode)) tail = [selNode, ...tail].slice(-MAX_RUNS);
+		hidden = rest.length - tail.length;
+		shown = [...head, ...tail];
+	}
+	return (
+		<span className="inline-flex items-center gap-1 flex-nowrap" title="run-tree versions — baseline, v1, v2, …">
+			{shown.map((n, i) => {
+				const sel = !!currentId && (n.run_ts === currentId || n.cycle_ts === currentId);
+				return (
+					<Fragment key={n.id}>
+						{hidden > 0 && i === headCount && (
+							<span className="text-[10px] leading-none text-slate-400 px-0.5 tabular-nums" title={`${hidden} earlier run${hidden === 1 ? "" : "s"} not shown`}>+{hidden}</span>
+						)}
+						<button type="button" title={label(n)}
+							onClick={() => onPick?.({ cycleTs: n.cycle_ts, runTs: n.run_ts, label: n.agent_version || n.label, agentVersion: n.agent_version, dataVersion: n.data_version, metric: traj?.metric, score: n.score })}
+							className={cn("w-2 h-2 rounded-full transition-transform hover:scale-125", dotCls(n), sel && "ring-2 ring-sky-300 ring-offset-1")} />
+					</Fragment>
+				);
+			})}
+		</span>
+	);
+}
+
 export default function WorkflowObservabilityPanel({
-	app, loop, wf, loopHealth, onChanged, initialCycle, canDelete, onDelete,
+	app, loop, wf, loopHealth, onChanged, initialCycle, canDelete, onDelete, identity,
+	onShare, shareBusy,
 }: {
 	app: string;
 	loop: string;
 	wf: MeWorkflowRow;
 	loopHealth?: LoopHealth;
 	onChanged?: () => void;
+	// Pull / publish the AGENT (app) repo — lifted up from the apps.tsx toolbar
+	// into this header (left of Run/Stop). The owner runs shareAction(); this
+	// panel only renders the buttons + reflects its busy state.
+	onShare?: (action: "pull" | "publish") => void;
+	shareBusy?: string | null;
+	// App version/publish state (for the Tune tab's versioning header).
+	identity?: AppIdentity;
 	// Deep-link anchor (?cycle=<ts>) — when set (e.g. CycleCard "Open full
 	// cycle"), auto-open a stage on that run instead of waiting for a click.
 	initialCycle?: string | null;
@@ -170,42 +261,15 @@ export default function WorkflowObservabilityPanel({
 	// wf.trigger is the loop's cron, read from the *tenant* app (me_workflows
 	// reads tenantAppsDir); loopsHealth is operator-scoped so it's only a
 	// fallback. Seed from the tenant-correct value first.
+	// Current recurring cadence (seed) — passed to the Plan-next-run composer,
+	// which now owns the schedule editor (the panel's popover was removed).
 	const schedSeed = wf.trigger || loopHealth?.schedule || "";
-	const [sched, setSched] = useState(schedSeed);
-	const [schedDirty, setSchedDirty] = useState(false);
-	useEffect(() => { setSched(schedSeed); setSchedDirty(false); }, [schedSeed]);
 
-	// Per-workflow model switch — sits beside the schedule control. Writes the
-	// loops[].model override via patchLoop; the scheduler maps it to the cycle's
-	// LLM env. "" = the runtime default (tenant cycles → shared kv.run Gemma).
-	const [model, setModel] = useState<string>((wf as { model?: string }).model || "");
-	useEffect(() => { setModel((wf as { model?: string }).model || ""); }, [wf]);
-	const saveModel = async (m: string) => {
-		setModel(m); setBusy("save");
-		try {
-			await me.patchLoop(app, loop, { model: m });
-			toast.success(m ? `Model → ${m}` : "Model → default (kv.run Gemma)");
-			onChanged?.();
-		} catch (e) { toast.error(String((e as Error)?.message ?? e)); }
-		finally { setBusy(null); }
-	};
+	// (Per-workflow model picker removed — the model is chosen per run in the
+	// Plan-next composer's Config overrides, which is where it actually matters.)
 
-	const runNow = async () => {
-		setBusy("run");
-		try {
-			await me.runLoopNow(app, loop);
-			// Show the loop running now; cleared when the new cycle lands
-			// (or after a safety window if it produced no new cycle dir).
-			setOptimisticRun(true);
-			window.setTimeout(() => setOptimisticRun(false), 120_000);
-			// Open the live session so the user immediately sees it run.
-			window.dispatchEvent(new CustomEvent("studio:open-session", { detail: { app, loop, ts: "latest" } }));
-			toast.success("Running — the results will land here shortly.");
-		} catch (e) {
-			toast.error(`Failed: ${e instanceof MeApiError ? e.message : String(e)}`);
-		} finally { setBusy(null); }
-	};
-
+	// Run-now is now launched from the Plan-next-run composer (the header's
+	// "Plan next run" button), which owns scope/branch/criteria/schedule.
 	const stopRun = async () => {
 		setBusy("run");
 		try {
@@ -222,17 +286,6 @@ export default function WorkflowObservabilityPanel({
 		try {
 			await me.patchLoop(app, loop, { enabled: target });
 			toast.success(target ? "Resumed" : "Paused");
-			onChanged?.();
-		} catch (e) {
-			toast.error(`Failed: ${e instanceof MeApiError ? e.message : String(e)}`);
-		} finally { setBusy(null); }
-	};
-	const saveSchedule = async () => {
-		setBusy("save");
-		try {
-			await me.patchLoop(app, loop, { schedule: sched });
-			toast.success("Schedule updated");
-			setSchedDirty(false);
 			onChanged?.();
 		} catch (e) {
 			toast.error(`Failed: ${e instanceof MeApiError ? e.message : String(e)}`);
@@ -275,16 +328,22 @@ export default function WorkflowObservabilityPanel({
 	// ── Mode + view stack (WS-1/WS-3) ─────────────────────────────────
 	// The three disentangled concerns. Observe = default. Tune is a thin tab
 	// that links out to the prompt + config editors (their own routes).
-	const [mode, setMode] = useState<WorkflowMode>("observe");
 	// The "Cases & data" rail can collapse (the fixed 30% column cramped the
 	// tree on small screens). Stacks vertically below lg.
 	const [railOpen, setRailOpen] = useState(true);
+	// Which asset tab the rail shows. Data and Agents are DIFFERENT xpio assets
+	// (a dataset repo vs an agent repo), each independently versioned — so they
+	// are two top tabs, not collapsible groups in one box.
+	const [assetTab, setAssetTab] = useState<"data" | "agents">("data");
+	// Hoist the run controls onto the workflow-selector line (top strip).
+	const wfControlsTarget = usePortalTarget("topstrip-wf-controls", true);
+	// Broadcast the active assets tab so the app toolbar can scope pull/publish to
+	// the AGENT — those buttons publish the agent repo, so they're hidden on the
 	// The view stack within the current mode. Empty = the mode's base view
 	// (Observe: run tree + cases; Improve: run tree + compare). Back pops.
 	const [stack, dispatchNav] = useReducer(navReducer, []);
 	const top = stack[stack.length - 1] as ViewFrame | undefined;
 	// Switching mode clears the sub-view stack so each mode opens clean.
-	const switchMode = useCallback((m: WorkflowMode) => { setMode(m); dispatchNav({ type: "reset" }); }, []);
 
 	// The version the casebook + sub-views are pinned to (the "as of" chip). It
 	// lives on the top frame; the rail reads the deepest version on the stack.
@@ -297,22 +356,43 @@ export default function WorkflowObservabilityPanel({
 	const metricsFocus = top?.kind === "metrics";
 	const caseFocus = top?.kind === "case" ? { id: top.caseId!, label: top.caseLabel! } : null;
 	const caseDataFocus = top?.kind === "caseData" ? { id: top.caseId!, label: top.caseLabel! } : null;
-	const compareSel = (stack.find((f) => f.kind === "compare")?.compareSel) ?? [];
+	const promptFocus = top?.kind === "prompt" ? { name: top.promptName!, label: top.promptLabel! } : null;
+	const memoryFocus = top?.kind === "memory" ? { agentId: top.agentId! } : null;
+	// The in-progress compare selection (run ts's). MUST be its own state: it was
+	// previously derived from a stack frame that only existed at length 2, so the
+	// FIRST pick was never stored and you could never reach two → Compare was dead.
+	const [compareSel, setCompareSel] = useState<string[]>([]);
 
 	// Navigation helpers — push a sub-view, pop back one, reset to base.
 	const back = useCallback(() => dispatchNav({ type: "pop" }), []);
+	// The right-canvas asset/detail viewers (case data, prompt, memory, metrics,
+	// log, compare) are each ONE level off the run tree — so their Back returns
+	// straight to the run tree, never to an intermediate frame ("previous page").
+	const backToTree = useCallback(() => dispatchNav({ type: "reset" }), []);
 	const openLog = useCallback((v?: TrajectoryVersion | null) => dispatchNav({ type: "push", frame: { kind: "log", version: v } }), []);
 	const openMetrics = useCallback(() => dispatchNav({ type: "push", frame: { kind: "metrics", version } }), [version]);
-	const openCase = useCallback((c: { id: string; label: string }) => dispatchNav({ type: "push", frame: { kind: "case", caseId: c.id, caseLabel: c.label, version } }), [version]);
 	const openCaseData = useCallback((c: { id: string; label: string }) => dispatchNav({ type: "push", frame: { kind: "caseData", caseId: c.id, caseLabel: c.label, version } }), [version]);
+	// Open a prompt in the right canvas (no version pin — prompts aren't "as of"
+	// a run; they're the current editable instructions). A prompt is a top-level
+	// tuning view, not a sub-view of a run, so it REPLACES the stack (reset →
+	// push) rather than nesting — that's why it needs no breadcrumb/Back bar.
+	// Clicking the already-open prompt toggles it closed (back to the run tree).
+	const openPrompt = useCallback((name: string, label: string) => {
+		if (top?.kind === "prompt" && top.promptName === name) { dispatchNav({ type: "reset" }); return; }
+		dispatchNav({ type: "reset" });
+		dispatchNav({ type: "push", frame: { kind: "prompt", promptName: name, promptLabel: label } });
+	}, [top]);
+	// Open a memory bank in the right canvas — same toggle behavior as prompts.
+	const openAgent = useCallback((agentId: string) => {
+		if (top?.kind === "memory" && top.agentId === agentId) { dispatchNav({ type: "reset" }); return; }
+		dispatchNav({ type: "reset" });
+		dispatchNav({ type: "push", frame: { kind: "memory", agentId } });
+	}, [top]);
 	const pinVersion = useCallback((v: TrajectoryVersion | null) => setPinnedVersion(v), []);
 	// Toggle a run into the 2-slot compare set; 2 → a compare frame renders.
 	const toggleCompare = useCallback((ts: string) => {
-		const cur = compareSel;
-		const next = cur.includes(ts) ? cur.filter((t) => t !== ts) : [...cur, ts].slice(-2);
-		setMode("improve");
-		dispatchNav({ type: "setCompare", sel: next });
-	}, [compareSel]);
+		setCompareSel((cur) => cur.includes(ts) ? cur.filter((t) => t !== ts) : [...cur, ts].slice(-2));
+	}, []);
 	// State for the WS-5 branch-with-intention dialog (run ts + label).
 	const [branchFor, setBranchFor] = useState<{ ts?: string; label: string } | null>(null);
 	// #17 — right-click menu opened on a CASEBOOK case row (the tree owns its
@@ -336,21 +416,29 @@ export default function WorkflowObservabilityPanel({
 	// studio shell scrolls (flex-1 overflow-y-auto), so the wrapper is
 	// fixed-height and its content scrolls inside.
 	const fillRef = useRef<HTMLDivElement | null>(null);
+	const headerRef = useRef<HTMLDivElement | null>(null);
 	const [fillH, setFillH] = useState(480);
 	useEffect(() => {
 		const measure = () => {
 			const el = fillRef.current;
 			if (!el) return;
 			const top = el.getBoundingClientRect().top;
-			// Leave clearance for the scroll column's bottom padding (py-5 = 20px)
-			// + a hair, so the fill region doesn't overshoot the viewport and
-			// force a phantom vertical scrollbar when everything already fits.
-			setFillH(Math.max(360, Math.round(window.innerHeight - top - 44)));
+			// Stretch the panels to fill from here to the viewport bottom, clearing
+			// only the scroll column's bottom padding (page wrapper py-5 = 20px).
+			// The goal row now sits ABOVE this row, so the columns own no extra
+			// vertical chrome — using ~20px maximizes height without a scrollbar.
+			setFillH(Math.max(420, Math.round(window.innerHeight - top - 20)));
 		};
 		measure();
 		const raf = requestAnimationFrame(measure); // re-measure after layout settles
 		window.addEventListener("resize", measure);
-		return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", measure); };
+		// The header grows AFTER mount (version dots load, action buttons wrap),
+		// which pushes the grid down; without re-measuring, the stale fixed height
+		// overruns and the header box overlaps the data/agent panel. Observe the
+		// header so the grid is always sized to the space BELOW the current header.
+		const ro = new ResizeObserver(() => measure());
+		if (headerRef.current) ro.observe(headerRef.current);
+		return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", measure); ro.disconnect(); };
 	}, [tab, summary, wf.goal]);
 
 	// force=true refetches the latest cycle's detail even when the newest ts is
@@ -465,6 +553,13 @@ export default function WorkflowObservabilityPanel({
 	const stepErrs = Array.isArray(summary?.step_errors) ? summary!.step_errors!.length : 0;
 
 	const enabled = wf.enabled !== false;
+	// The agent repo path (owner/app) for the Agent card's name link. We don't get
+	// the app's own repo owner directly, so derive it from a mounted dataset repo
+	// (same owner). Best-effort: falls back to a plain name when unavailable.
+	const agentRepo = (() => {
+		const owner = (wf.datasets_detail || []).map((d) => d.repo).find(Boolean)?.split("/")[0];
+		return owner ? `${owner}/${app}` : undefined;
+	})();
 	const cyclesKnown = cycleList !== null;
 	const tenantHasRuns = (cycleList?.length ?? 0) > 0;
 	const liveRunning = (cycleList ?? []).some((c) => c.running);
@@ -510,268 +605,229 @@ export default function WorkflowObservabilityPanel({
 		},
 		// Branch WITH INTENTION (WS-5) — opens the dialog.
 		branchWithIntent: (ts: string, label: string) => setBranchFor({ ts, label }),
-		// Pin / annotate: hand off to the grounded chatbox so the user can attach a
-		// note / ask the agent to remember this run (generic, no per-app store).
-		annotate: (t: RunMenuTarget) => {
-			window.dispatchEvent(new CustomEvent("studio:ask", {
-				detail: {
-					prompt: `Annotate ${t.kind === "case" ? `case "${t.label}"` : `run ${t.label}`} on ${app} / ${loop}: `,
-					autosend: false,
-					context: { app, loop, ...(t.ts ? { cycle: { app, loop, ts: t.ts } } : {}) },
-				},
-			}));
-		},
 	};
+
+	// Run-state chip — rendered inside the TrajectoryGraph's own "Run tree"
+	// header (passed as headerRight), so there's a single run-tree label.
+	const statusChip = (
+		<span className="inline-flex items-center gap-1.5">
+			{running ? (
+				<button type="button"
+					onClick={() => window.dispatchEvent(new CustomEvent("studio:open-session", { detail: { app, loop, ts: "latest" } }))}
+					title="Open the running session conversation"
+					className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-medium transition hover:brightness-95", h.cls, justRan && "value-pop")}>
+					<span className={cn("w-1.5 h-1.5 rounded-full running-glow", h.dot)} />
+					Running… <span className="font-normal opacity-70 underline decoration-dotted">show logs</span>
+				</button>
+			) : (
+				<span className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-medium", h.cls, justRan && "value-pop")}>
+					<span className={cn("w-1.5 h-1.5 rounded-full", h.dot)} />
+					{h.label}
+					{lastRan && <span className="font-normal opacity-70">· {lastRan.replace(/^ran /, "")}</span>}
+				</span>
+			)}
+			{!running && stepErrs > 0 && wf.last_run_ok !== false && (
+				<span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-amber-200 bg-amber-50 text-amber-700 text-[11px] font-medium" title="The last run completed but some steps errored">
+					<AlertCircle className="w-3 h-3" />{stepErrs} step error{stepErrs === 1 ? "" : "s"}
+				</span>
+			)}
+		</span>
+	);
 
 	return (
 		<ErrorBoundary resetKey={`${app}:${loop}`}>
-		<div className="rounded-xl border border-slate-200 bg-white p-4 space-y-4 animate-in fade-in duration-300">
-			{/* ── HEADER — title + health + schedule + the controls ── */}
-			<div className="flex flex-wrap items-start gap-2">
-				<div className="min-w-0 flex-1">
-					{/* Top-left card: workflow name · run-state dots (recent-run history,
-					    clickable → cycle preview) · last-state word with the relative time
-					    folded IN (e.g. "Healthy · 10h ago", "Recovered · 3d ago"). No
-					    separate "ran …" line. */}
-					<div className="flex items-center gap-2 flex-wrap">
-						<h3 className="text-sm font-semibold text-slate-900 truncate">{loopLabel(wf.name, loop)}</h3>
-						{wf.run_spark && (
-							<RunSparkline spec={wf.run_spark} runs={wf.runs_recent} app={app} loop={loop} className="flex-shrink-0" />
-						)}
-						{running ? (
-							// The single running indicator — also the "show logs" entry
-							// point (the trajectory panel's own running chip was redundant).
-							<button
-								type="button"
-								onClick={() => window.dispatchEvent(new CustomEvent("studio:open-session", { detail: { app, loop, ts: "latest" } }))}
-								title="Open the running session conversation"
-								className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-medium transition hover:brightness-95", h.cls, justRan && "value-pop")}
-							>
-								<span className={cn("w-1.5 h-1.5 rounded-full running-glow", h.dot)} />
-								Running… <span className="font-normal opacity-70 underline decoration-dotted">show logs</span>
-							</button>
-						) : (
-							<span className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-medium", h.cls, justRan && "value-pop")}>
-								<span className={cn("w-1.5 h-1.5 rounded-full", h.dot)} />
-								{h.label}
-								{lastRan && <span className="font-normal opacity-70">· {lastRan.replace(/^ran /, "")}</span>}
-							</span>
-						)}
-						{!running && stepErrs > 0 && wf.last_run_ok !== false && (
-							<span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-amber-200 bg-amber-50 text-amber-700 text-[11px] font-medium" title="The last run completed but some steps errored">
-								<AlertCircle className="w-3 h-3" />{stepErrs} step error{stepErrs === 1 ? "" : "s"}
-							</span>
-						)}
-					</div>
-				</div>
-				<div className="flex items-center gap-1.5 flex-shrink-0">
-					{/* Schedule as a compact dropdown control (like Config): a button
-					    showing the current cadence; the editor + Save live in a popover. */}
-					<Popover>
-						<PopoverTrigger asChild>
-							<button disabled={!!busy}
-								className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50">
-								<Clock className="w-3.5 h-3.5 text-slate-400" />
-								<span className="max-w-[150px] truncate">{describeSchedule(sched)}</span>
-								{schedDirty && <span className="w-1.5 h-1.5 rounded-full bg-gold-500 flex-shrink-0" />}
-								<ChevronDown className="w-3 h-3 text-slate-400 flex-shrink-0" />
-							</button>
-						</PopoverTrigger>
-						<PopoverContent align="end" className="w-72">
-							<div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-2">Schedule</div>
-							<SchedulePicker value={sched} disabled={!!busy} onChange={(c) => { setSched(c); setSchedDirty(true); }} />
-							{schedDirty && (
-								<button onClick={saveSchedule} disabled={!!busy}
-									className="mt-3 w-full inline-flex items-center justify-center gap-1 px-2 py-1.5 text-xs rounded-lg bg-gold-500 text-white hover:bg-gold-600 disabled:opacity-50">
-									{busy === "save" ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />} Save schedule
-								</button>
-							)}
-						</PopoverContent>
-					</Popover>
-					{/* Per-workflow model switch — beside the schedule control. */}
-					<select
-						value={model}
-						onChange={(e) => saveModel(e.target.value)}
-						disabled={!!busy}
-						title="Which model this workflow's runtime uses. Default = the shared kv.run Gemma GPU for tenant cycles; tiers route through the Claude CLI."
-						className="px-2 py-1.5 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 max-w-[160px]"
-					>
-						<option value="">Default (kv.run Gemma)</option>
-						<option value="sonnet">Claude Sonnet</option>
-						<option value="opus">Claude Opus</option>
-						<option value="haiku">Claude Haiku</option>
-					</select>
-					{running ? (
-						<button onClick={stopRun} disabled={busy === "run"}
-							className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-rose-500 text-white hover:bg-rose-600 active:scale-95 disabled:opacity-50 transition-all shadow-sm">
-							{busy === "run" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Square className="w-3.5 h-3.5" />}
-							Stop
-						</button>
-					) : (
-						<button onClick={runNow} disabled={!!busy}
-							className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-gold-500 text-white hover:bg-gold-600 active:scale-95 disabled:opacity-50 transition-all shadow-sm shadow-gold-100">
-							{busy === "run" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
-							Run now
-						</button>
-					)}
-					{/* "Improve" moved to the chat opener chips (chipsForApp). */}
-					<button onClick={toggle} disabled={!!busy}
-						className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50">
-						{busy === "toggle" ? <Loader2 className="w-3 h-3 animate-spin" /> : enabled ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
-						{enabled ? "Pause" : "Resume"}
-					</button>
-					{canDelete && (
-						<button onClick={onDelete} title="Delete this workflow"
-							className="p-1.5 rounded-lg text-slate-300 hover:text-red-600 hover:bg-red-50 transition-colors">
-							<Trash2 className="w-3.5 h-3.5" />
-						</button>
-					)}
-				</div>
+		<div className="space-y-4 animate-in fade-in duration-300">
+		{/* GOAL row — above the two panels, full width. headerRef rides here so the
+		    fill region below re-measures when the goal area grows/shrinks. */}
+		<div ref={headerRef} className="flex items-center gap-3 flex-wrap">
+			<div className="min-w-0 flex-1">
+				<GoalHeader goal={wf.goal} app={app} loop={loop} onSaved={onChanged} />
 			</div>
-
-			{/* ── GOAL — the workflow's objective, always shown full-width at the
-			    top (persistent header), independent of the mode below. ── */}
-			<div className="min-w-0">
-				<GoalHeader goal={wf.goal} kpis={buildGoalKpis(summary, cycleFiles)} app={app} loop={loop} onSaved={onChanged}
-						experiment={loopExp} onOpenMetrics={() => { switchMode("observe"); openMetrics(); }} />
-			</div>
-
-			{/* A failed last run is an alert — kept above the modes so it's always
-			    visible regardless of which mode is open. */}
-			{!running && wf.last_run_ok === false && lastError && tenantHasRuns && (
-				<FailureCard error={lastError} app={app} loop={loop} />
-			)}
-
-			{/* ── MODE SWITCH + BREADCRUMB (WS-1/WS-3) — the disentangling move. ── */}
-			<div className="flex items-center gap-2 flex-wrap">
-				<div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
-					{(["observe", "improve", "tune"] as WorkflowMode[]).map((m) => {
-						const Icon = m === "observe" ? Eye : m === "improve" ? FlaskConical : SlidersHorizontal;
-						return (
-							<button key={m} type="button" onClick={() => switchMode(m)} title={MODE_LABELS[m].tip}
-								className={cn("inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md transition-colors",
-									mode === m ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800")}>
-								<Icon className="w-3.5 h-3.5" /> {MODE_LABELS[m].text}
-							</button>
-						);
-					})}
-				</div>
-				{/* Breadcrumb — renders the stack; the "as of <version>" chip lives IN it. */}
-				<div className="flex items-center gap-1 text-[11px] text-slate-500 min-w-0">
-					<button type="button" onClick={() => dispatchNav({ type: "reset" })} className="hover:text-slate-800 transition-colors">{MODE_LABELS[mode].text}</button>
-					{stack.map((f, i) => (
-						<span key={i} className="flex items-center gap-1 min-w-0">
-							<ChevronRight className="w-3 h-3 text-slate-300 flex-shrink-0" />
-							<span className={cn("truncate", i === stack.length - 1 ? "text-slate-800 font-medium" : "")}>
-								{f.kind === "case" || f.kind === "caseData" ? (f.caseLabel || VIEW_LABELS.case) : VIEW_LABELS[f.kind] || f.kind}
-							</span>
-						</span>
-					))}
-					{version && (
-						<button onClick={() => pinVersion(null)} title="Pinned to a run — click to clear (back to latest)"
-							className="ml-1 inline-flex items-center gap-1 normal-case tracking-normal text-[10px] text-gold-700 bg-gold-50 border border-gold-200 rounded-full px-1.5 py-0.5 hover:bg-gold-100 transition-colors flex-shrink-0">
-							<Clock className="w-2.5 h-2.5" /> as of {cycleDate(version.runTs || version.cycleTs)} <span className="text-gold-400">✕</span>
-						</button>
-					)}
-					{stack.length > 0 && (
-						<button type="button" onClick={back} className="ml-1 inline-flex items-center gap-0.5 text-slate-500 hover:text-slate-900 px-1.5 py-0.5 rounded hover:bg-slate-100 transition-colors flex-shrink-0">
-							<ArrowLeft className="w-3 h-3" /> Back
-						</button>
-					)}
-				</div>
-			</div>
-
-			{/* ── TUNE — links out to the prompt + config editors (their own routes). ── */}
-			{mode === "tune" ? (
-				<div className="grid gap-3 sm:grid-cols-2">
-					<Link to={`/studio/a/${encodeURIComponent(app)}/prompts`}
-						className="rounded-xl border border-slate-200 bg-white p-4 hover:border-gold-300 hover:shadow-sm transition-all group">
-						<div className="flex items-center gap-2 text-sm font-medium text-slate-900"><FileText className="w-4 h-4 text-gold-600" /> Prompts</div>
-						<div className="mt-1 text-[12px] text-slate-500">Edit the analyst &amp; judge instructions this app runs on. Shared prompts stay read-only — editing one creates a local override.</div>
-						<div className="mt-2 text-[11px] text-gold-700 group-hover:underline">Open prompt editor →</div>
-					</Link>
-					<Link to={`/studio/a/${encodeURIComponent(app)}/config`}
-						className="rounded-xl border border-slate-200 bg-white p-4 hover:border-gold-300 hover:shadow-sm transition-all group">
-						<div className="flex items-center gap-2 text-sm font-medium text-slate-900"><SlidersHorizontal className="w-4 h-4 text-gold-600" /> Config</div>
-						<div className="mt-1 text-[12px] text-slate-500">Edit this app's <code className="text-[11px] bg-slate-50 border border-slate-200 rounded px-1">xpcloud.yaml</code> — loops, goals, datasets, skills.</div>
-						<div className="mt-2 text-[11px] text-gold-700 group-hover:underline">Open config editor →</div>
-					</Link>
-				</div>
-			) : (
-			/* ── OBSERVE / IMPROVE — the rail + the mode body. ── */
-			<div ref={fillRef} style={{ height: fillH }} className="flex flex-col lg:flex-row gap-3 min-h-0">
-				{/* LEFT — the collapsible "Cases & data" rail. Stacks above the body
-				    below lg; collapses to a thin reopen button when closed. */}
-				{railOpen ? (
-					<div className="w-full lg:w-[30%] lg:min-w-[210px] lg:max-w-[360px] flex flex-col min-h-0 max-h-64 lg:max-h-none">
-						<div className="flex-1 min-h-0 rounded-xl border border-slate-200 bg-white flex flex-col overflow-hidden">
-							<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400 uppercase flex items-center gap-1.5 flex-shrink-0 px-3 py-2 border-b border-slate-100">
-								<Database className="w-3 h-3 text-gold-500" /> <span title={L.casesAndData.tip}>{L.casesAndData.text}</span>
-								<button onClick={() => { switchMode("observe"); openMetrics(); }} title={L.metrics.tip}
-									className={cn("ml-auto inline-flex items-center gap-1 normal-case tracking-normal text-[10px] rounded-full px-1.5 py-0.5 border transition-colors",
-										metricsFocus ? "text-gold-700 bg-gold-50 border-gold-200" : "text-slate-500 bg-white border-slate-200 hover:border-gold-200 hover:text-gold-700")}>
-									<BarChart3 className="w-3 h-3" /> {L.metrics.text}
-								</button>
-								<button onClick={() => openLog(version)} title={L.runLog.tip}
-									className={cn("inline-flex items-center gap-1 normal-case tracking-normal text-[10px] rounded-full px-1.5 py-0.5 border transition-colors",
-										logFocus ? "text-violet-700 bg-violet-50 border-violet-200" : "text-slate-500 bg-white border-slate-200 hover:border-violet-200 hover:text-violet-700")}>
-									<MessageSquare className="w-3 h-3" /> {L.runLog.text}
-								</button>
-								<button onClick={() => setRailOpen(false)} title="Hide the cases & data rail" className="text-slate-300 hover:text-slate-600 transition-colors">
-									<PanelLeftClose className="w-3.5 h-3.5" />
-								</button>
+		</div>
+		{!running && wf.last_run_ok === false && lastError && tenantHasRuns && (
+			<FailureCard error={lastError} app={app} loop={loop} />
+		)}
+		{/* DATA/AGENTS rail + WORKFLOW card, side by side, BOUNDED to the screen
+		    fill height: the rail scrolls internally; the workflow card does not. */}
+		<div ref={fillRef} style={{ height: fillH }} className="flex flex-col lg:flex-row gap-3 items-stretch min-w-0 w-full">
+				{!caseFocus && (railOpen ? (
+					<div className="w-full lg:w-[30%] lg:min-w-[220px] lg:max-w-[380px] flex-shrink-0 flex flex-col min-h-0 max-h-[55vh] lg:max-h-none lg:h-full">
+						<div className="flex-1 min-h-0 rounded-xl border border-slate-200 bg-slate-50/40 flex flex-col overflow-hidden">
+							{/* Two tabs — Data and Agents are SEPARATE xpio repos (a dataset
+							    repo and an agent repo), each independently versioned. No
+							    "Assets/Metrics/Log" header line — the tabs are the top; Metrics
+							    lives in the right panel and Log is per-run in the trajectory. */}
+							<div className="flex items-stretch flex-shrink-0 border-b border-slate-100 bg-white">
+								<AssetTab active={assetTab === "data"} onClick={() => setAssetTab("data")} icon={Database} label="Data" />
+								<AssetTab active={assetTab === "agents"} onClick={() => setAssetTab("agents")} icon={Brain} label="Agents" />
+								<button onClick={() => setRailOpen(false)} title="Hide the assets panel" className="px-2.5 flex items-center text-slate-300 hover:text-slate-600 transition-colors"><PanelLeftClose className="w-3.5 h-3.5" /></button>
 							</div>
-							<div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
-							{(() => {
-								const sources = (definition?.datasets?.length ? definition.datasets : wf.datasets) || [];
-								return sources.length > 0 ? (
-									<div>
-										<div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1">Data sources</div>
-										<div className="flex flex-nowrap gap-1.5 overflow-hidden">
-											{sources.map((d) => (<span key={d} className="text-[10px] text-slate-500 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 font-mono truncate max-w-[10rem] flex-shrink-0">{d}</span>))}
-										</div>
+							{/* Per-tab version bar — each asset is its own versioned xpio repo. */}
+							<div className="flex-shrink-0 px-2 pt-2">
+								{assetTab === "data" ? (
+									<div className="space-y-1">
+										<DatasetVersionBar datasets={wf.datasets_detail} fallbackRefs={(definition?.datasets?.length ? definition.datasets : wf.datasets) || []} />
+										{/* The aggregate avg-score card was removed — the per-case curves /
+										    scores below (cut to the selected run's version) are what matter. */}
 									</div>
-								) : null;
-							})()}
-							<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading data…</div>}>
-								<CasebookPanel app={app} loop={loop} atTs={version?.runTs || version?.cycleTs}
-									onSelectCase={(c) => { switchMode("observe"); openCase(c); }} selectedCaseId={caseFocus?.id || caseDataFocus?.id}
-									onViewData={(c) => { switchMode("observe"); openCaseData(c); }}
-									onContextMenuCase={(c, e) => { e.preventDefault(); setCaseMenu({ x: e.clientX, y: e.clientY, target: { kind: "case", caseId: c.id, label: c.label } }); }}
-									onSelectMetrics={() => { switchMode("observe"); openMetrics(); }} metricsSelected={metricsFocus} />
-							</Suspense>
+								) : (
+									<TuneVersionBar app={app} identity={identity} repo={agentRepo}
+										selectedAgentVersion={version?.agentVersion}
+										restingAgentVersion={wf.agent_version}
+										asOf={version ? cycleDate(version.runTs || version.cycleTs) : undefined} />
+								)}
+							</div>
+							<div className="flex-1 min-h-0 overflow-y-auto p-2">
+								{assetTab === "data" ? (
+									<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading data…</div>}>
+										<CasebookPanel app={app} loop={loop} atTs={version?.runTs || version?.cycleTs}
+											onSelectCase={(c) => openCaseData(c)} selectedCaseId={caseFocus?.id || caseDataFocus?.id}
+											onViewData={(c) => openCaseData(c)}
+											onContextMenuCase={(c, e) => { e.preventDefault(); setCaseMenu({ x: e.clientX, y: e.clientY, target: { kind: "case", caseId: c.id, label: c.label } }); }}
+											showMetrics={false} />
+									</Suspense>
+								) : (
+									<div className="space-y-3 pt-1">
+										<Foldable title="Memory banks" defaultOpen>
+											<AgentsRailContent agents={wf.memory_agents || []} onOpenAgent={openAgent} selectedAgent={memoryFocus?.agentId} hideHeader />
+										</Foldable>
+										<Foldable title="Prompts" defaultOpen>
+											<PromptsTuneCard app={app} onOpenPrompt={openPrompt} selectedPrompt={promptFocus?.name} />
+										</Foldable>
+										<Link to={`/studio/a/${encodeURIComponent(app)}/config`} className="block text-[11px] text-gold-700 hover:underline">Open app config (xpcloud.yaml) →</Link>
+									</div>
+								)}
+							</div>
 						</div>
 					</div>
-				</div>
 				) : (
-					<button onClick={() => setRailOpen(true)} title="Show the cases & data rail"
-						className="flex-shrink-0 self-start inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-[11px] text-slate-500 hover:text-slate-800 hover:border-slate-300 transition-colors">
-						<PanelLeftOpen className="w-3.5 h-3.5" /> {L.casesAndData.text}
-					</button>
-				)}
-				{/* RIGHT — the mode body: the active sub-view, else the mode's base
-				    (Observe & Improve both show the run tree as the base). */}
-				<div className="flex-1 min-w-0 min-h-0">
+					<button onClick={() => setRailOpen(true)} title="Show the assets rail" className="flex-shrink-0 self-start inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-[11px] text-slate-500 hover:text-slate-800 hover:border-slate-300 transition-colors"><PanelLeftOpen className="w-3.5 h-3.5" /> Assets</button>
+				))}
+			{/* WORKFLOW card — bordered box bounded to the row height; the run tree
+			    fills it and does NOT scroll the page. */}
+			<div className="flex-1 min-w-0 rounded-xl border border-slate-200 bg-white flex flex-col overflow-hidden">
+			{/* RUN CONTROLS — hoisted onto the workflow-selector line (top strip):
+			    status chip · version dots · pull/publish · plan-next · pause · delete.
+			    The workflow name itself is the selector, so it's not repeated here.
+			    Falls back to an inline row if the portal slot isn't mounted yet. */}
+			{(() => {
+				const controls = (
+					<div className="flex items-center gap-1.5 flex-wrap min-w-0">
+						<VersionDots app={app} loop={loop} currentId={version?.runTs || version?.cycleTs} onPick={pinVersion} />
+						<span className="w-px h-5 bg-slate-200 mx-0.5" aria-hidden />
+						{onShare && assetTab !== "data" && (
+							<>
+								<button onClick={() => onShare("pull")} disabled={!!shareBusy}
+									title="Pull agent updates — merge the latest upstream version (your local edits are preserved)"
+									aria-label="Pull agent updates"
+									className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:border-slate-300 disabled:opacity-40 transition-colors">
+									{shareBusy === "pull" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <DownloadCloud className="w-3.5 h-3.5" />}
+								</button>
+								<button onClick={() => onShare("publish")} disabled={!!shareBusy}
+									title="Publish the agent — push your local changes to your xp.io repo (version auto-bumps)"
+									aria-label="Publish agent changes"
+									className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:border-slate-300 disabled:opacity-40 transition-colors">
+									{shareBusy === "publish" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
+								</button>
+							</>
+						)}
+						{running ? (
+							<button onClick={stopRun} disabled={busy === "run"}
+								className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-rose-500 text-white hover:bg-rose-600 active:scale-95 disabled:opacity-50 transition-all shadow-sm">
+								{busy === "run" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Square className="w-3.5 h-3.5" />}
+								Stop
+							</button>
+						) : (
+							<button onClick={() => setBranchFor({ label: "next run" })} disabled={!!busy}
+								title="Plan the next run — branch · change · criteria · fan-out · case scope · schedule"
+								className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-gold-500 text-white hover:bg-gold-600 active:scale-95 disabled:opacity-50 transition-all shadow-sm shadow-gold-100">
+								{busy === "run" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+								Plan next run
+							</button>
+						)}
+						<button onClick={toggle} disabled={!!busy} title={enabled ? "Pause this workflow's schedule" : "Resume this workflow's schedule"}
+							className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+							{busy === "toggle" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : enabled ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+							{enabled ? "Pause" : "Resume"}
+						</button>
+						{canDelete && (
+							<Popover>
+								<PopoverTrigger asChild>
+									<button disabled={!!busy} title="More — delete"
+										className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-800 disabled:opacity-50">
+										<MoreHorizontal className="w-3.5 h-3.5" />
+									</button>
+								</PopoverTrigger>
+								<PopoverContent align="end" className="w-52">
+									<button onClick={onDelete} title="Delete this workflow"
+										className="w-full inline-flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-colors">
+										<Trash2 className="w-3.5 h-3.5" /> Delete workflow
+									</button>
+								</PopoverContent>
+							</Popover>
+						)}
+					</div>
+				);
+				return wfControlsTarget ? createPortal(controls, wfControlsTarget) : <div className="flex flex-wrap items-center gap-2">{controls}</div>;
+			})()}
+
+			{/* ── TUNE — inspect/edit the agent prompts + app config. ── */}
+			{/* ── ONE PANEL: assets rail (collapsible groups) + run canvas. No
+			    Observe/Improve/Tune modes — the rail holds cases & data, agents,
+			    and prompts/tuning; the canvas is the runs (read + experiment). ── */}
+			<div className="flex-1 min-h-0 flex">
+				<div className="flex-1 min-w-0 min-h-0 relative overflow-hidden">
+					{/* Metrics + full Evaluation log — overlaid INTO the workflow
+					    (trajectory) panel's top-right, only on the base view; each opens
+					    in place with its own Back. The log is the run's full transcript. */}
+					{compareSel.length !== 2 && !logFocus && !promptFocus && !memoryFocus && !caseDataFocus && !metricsFocus && !caseFocus && (
+						<div className="absolute bottom-9 right-2 z-20 flex flex-col items-end gap-1.5">
+							<button onClick={() => openMetrics()} title={`${L.metrics.text} — ${L.metrics.tip}`}
+								className="inline-flex items-center justify-center w-9 h-9 rounded-lg border text-slate-500 bg-white/90 backdrop-blur border-slate-200 hover:border-gold-200 hover:text-gold-700 transition-colors shadow-sm">
+								<BarChart3 className="w-4 h-4" />
+							</button>
+							{/* Evaluation-log button removed — it duplicated the run log already
+							    reachable from each run (node ⋯ → View run log / the run's pipeline). */}
+						</div>
+					)}
+					{/* Compare is a two-pick action; show a hint once one run is picked. */}
+					{compareSel.length === 1 && (
+						<div className="absolute bottom-2 left-2 z-20 inline-flex items-center gap-2 text-[11px] rounded-full px-2.5 py-1 border bg-sky-50 border-sky-200 text-sky-700 shadow-sm">
+							1 run selected — pick another run’s ⋯ → “Compare with…”
+							<button onClick={() => setCompareSel([])} className="text-sky-500 hover:text-sky-800 underline">clear</button>
+						</div>
+					)}
+					<div className="h-full min-h-0">
 					{compareSel.length === 2 ? (
-						<RunCompareView app={app} loop={loop} tsA={compareSel[0]} tsB={compareSel[1]} onBack={back} />
+						<RunCompareView app={app} loop={loop} tsA={compareSel[0]} tsB={compareSel[1]} onBack={() => setCompareSel([])} />
 					) : logFocus ? (
-						<TrajectoryLogView app={app} loop={loop} ts={version?.runTs || version?.cycleTs || anchorTs || selectedRunTs || undefined} onBack={back} backLabel="Back" />
+						<TrajectoryLogView app={app} loop={loop} ts={version?.runTs || version?.cycleTs || anchorTs || selectedRunTs || undefined} onBack={backToTree} backLabel="Run tree" />
+					) : promptFocus ? (
+						<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-4"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading prompt…</div>}>
+							<EmbeddedPromptEditor app={app} name={promptFocus.name} onBack={backToTree} onChangedSource={onChanged} />
+						</Suspense>
+					) : memoryFocus ? (
+						<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-4"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading memories…</div>}>
+							<EmbeddedAgentBank agentId={memoryFocus.agentId} onBack={backToTree} />
+						</Suspense>
 					) : caseDataFocus ? (
-						<CaseContentViewer app={app} loop={loop} expId={loopExp?.id} caseId={caseDataFocus.id} caseLabel={caseDataFocus.label} atTs={version?.runTs || version?.cycleTs} onBack={back} />
+						<CaseContentViewer app={app} loop={loop} expId={loopExp?.id} caseId={caseDataFocus.id} caseLabel={caseDataFocus.label} atTs={version?.runTs || version?.cycleTs} onBack={backToTree} />
 					) : metricsFocus ? (
-						<MetricsView app={app} loop={loop} atTs={version?.runTs || version?.cycleTs} onBack={back} />
-					) : caseFocus ? (
-						<CaseMapping app={app} loop={loop} caseId={caseFocus.id} caseLabel={caseFocus.label} atTs={version?.runTs || version?.cycleTs} onBack={back} />
+						<MetricsView app={app} loop={loop} atTs={version?.runTs || version?.cycleTs} onBack={backToTree} />
 					) : (
 						<TrajectoryGraph app={app} loop={loop} definition={definition} onSelectVersion={pinVersion} running={running}
+							mode="improve" headerRight={statusChip}
 							onShowLog={(ts) => openLog({ runTs: ts, cycleTs: ts, label: cycleDate(ts) || ts })}
-							actions={menuActions} selectedForCompare={compareSel} onToggleCompare={toggleCompare} />
+							actions={menuActions}
+							selectedForCompare={compareSel} onToggleCompare={toggleCompare} />
 					)}
+					</div>
 				</div>
 			</div>
-			)}
+			</div>
+		</div>
 			{/* Stage drill-down + free-text query on the selected run (Observe). */}
-			{mode !== "tune" && selectedStage && tenantHasRuns && (
+			{selectedStage && tenantHasRuns && (
 				<div ref={inspectorRef}>
 					<StageDetail app={app} loop={loop} stage={selectedStage} initialTs={anchorTs || selectedRunTs || undefined} onStageChange={(k) => setSelectedStage(k)} q={stageQ} setQ={setStageQ} onClose={() => setSelectedStage(null)} />
 				</div>
@@ -790,8 +846,8 @@ export default function WorkflowObservabilityPanel({
 
 			{/* WS-5 — branch-with-intention dialog. */}
 			{branchFor && (
-				<BranchDialog app={app} loop={loop} fromTs={branchFor.ts} fromLabel={branchFor.label}
-					onClose={() => setBranchFor(null)} onLaunched={() => { setOptimisticRun(true); window.setTimeout(() => setOptimisticRun(false), 120_000); }} />
+				<NextRunComposer app={app} loop={loop} fromTs={branchFor.ts} fromLabel={branchFor.label} schedule={schedSeed}
+					onClose={() => setBranchFor(null)} onLaunched={() => { setOptimisticRun(true); window.setTimeout(() => setOptimisticRun(false), 120_000); }} onChanged={onChanged} />
 			)}
 
 		</div>
@@ -815,32 +871,245 @@ function humanizeGoal(s: string): string {
 	return t ? t[0].toUpperCase() + t.slice(1) : t;
 }
 
-type GoalKpi = { label: string; value: string };
+// (Goal-box KPIs removed — metrics live in the run tree / Metrics view, not the
+// goal box. The goal box now shows only the objective + the run-state chip.)
 
-// Build the loop's LIVE progress KPIs from the latest cycle — real numbers
-// beat a list of metric names. Pulls numeric metrics from cycle.json and the
-// well-known sysresearch observations (best accuracy, variants tried).
-function buildGoalKpis(summary: CycleSummary | null, files: Record<string, unknown>): GoalKpi[] {
-	/* eslint-disable @typescript-eslint/no-explicit-any */
-	const out: GoalKpi[] = [];
-	const seen = new Set<string>();
-	const push = (label: string, value: string) => { if (!seen.has(label)) { seen.add(label); out.push({ label, value }); } };
-	const num = (v: number) => (Number.isInteger(v) ? String(v) : String(+v.toFixed(4)));
+// Foldable — a collapsible section (chevron + title) used inside the Agents tab
+// so Memory banks / Prompts can be folded away.
+function Foldable({ title, defaultOpen, children }: { title: string; defaultOpen?: boolean; children: React.ReactNode }) {
+	const [open, setOpen] = useState(defaultOpen ?? true);
+	return (
+		<div>
+			<button type="button" onClick={() => setOpen((o) => !o)}
+				className="w-full flex items-center gap-1 text-[10px] uppercase tracking-wide text-slate-400 font-semibold py-1 hover:text-slate-600 transition-colors">
+				<ChevronDown className={cn("w-3 h-3 transition-transform", !open && "-rotate-90")} /> {title}
+			</button>
+			{open && <div>{children}</div>}
+		</div>
+	);
+}
 
-	const obs = files?.observations as any;
-	if (obs && typeof obs === "object") {
-		if (typeof obs.best_accuracy_so_far === "number") push("best accuracy", `${Math.round(obs.best_accuracy_so_far * 100)}%`);
-		if (typeof obs.history_size === "number") push("variants tried", num(obs.history_size));
-	}
-	const m = (summary as any)?.metrics;
-	if (m && typeof m === "object") {
-		for (const [k, v] of Object.entries(m)) {
-			if (typeof v !== "number" || v === 0) continue;
-			if (/^(xpio_ingested|auto_reflect)/.test(k)) continue;
-			push(k.replace(/_/g, " "), num(v as number));
+// AssetTab — one of the two top tabs (Data / Agents). Data and Agents are
+// genuinely different xpio assets (a dataset repo vs an agent repo), so they
+// get tabs, not collapsible groups.
+function AssetTab({ active, onClick, icon: Icon, label }: {
+	active: boolean; onClick: () => void; icon: typeof Database; label: string;
+}) {
+	return (
+		<button type="button" onClick={onClick}
+			className={cn(
+				"flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-[12px] font-medium border-b-2 -mb-px transition-colors",
+				active ? "border-gold-500 text-slate-900 bg-gold-50/40" : "border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50",
+			)}>
+			<Icon className={cn("w-3.5 h-3.5", active ? "text-gold-500" : "text-slate-400")} /> {label}
+		</button>
+	);
+}
+
+// AssetVersionRow — the SHARED git card used by BOTH the dataset and the agent
+// version bars, so they are layout-identical: [git] · label · name(link) ·
+// version chip (rendered verbatim — caller formats the prefix). `asOf` shows a
+// small muted "as of …" hint. No action button (publish lives in the app toolbar).
+function AssetVersionRow({ label, name, href, version, title, asOf }: {
+	label: string; name: string; href?: string; version?: string; title?: string; asOf?: string;
+}) {
+	return (
+		<div title={title} className="flex items-center gap-2 flex-wrap rounded-xl border border-slate-200 bg-white px-3 py-2">
+			<GitBranch className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+			<span className="text-[12px] text-slate-600">{label}</span>
+			{href ? (
+				<a href={href} target="_blank" rel="noreferrer" className="text-[12px] font-mono font-semibold text-gold-700 hover:underline truncate max-w-[12rem]" title={name}>{name}</a>
+			) : (
+				<span className="text-[12px] font-mono font-semibold text-slate-800 truncate max-w-[12rem]" title={name}>{name}</span>
+			)}
+			{version ? (
+				<span className="text-[10px] uppercase tracking-wide rounded-full px-1.5 py-0.5 border text-slate-500 bg-white border-slate-200 font-mono">{version}</span>
+			) : (
+				<span className="text-[10px] uppercase tracking-wide rounded-full px-1.5 py-0.5 border text-slate-400 bg-slate-50 border-slate-200">versioned</span>
+			)}
+			{asOf && <span className="ml-auto text-[10px] text-slate-400 truncate" title={`as of ${asOf}`}>as of {asOf}</span>}
+		</div>
+	);
+}
+
+// DatasetVersionBar — the Data tab's version header. Each mounted dataset is its
+// OWN independently-versioned xpio dataset repo (distinct from the agent repo),
+// so show repo + version with a link out. Falls back to listing loop-level
+// dataset refs when the app declares no top-level dataset repos.
+function DatasetVersionBar({ datasets, fallbackRefs }: { datasets?: MeDatasetRef[]; fallbackRefs?: string[] }) {
+	const list = (datasets || []).filter((d) => d.repo || d.id);
+	if (list.length === 0) {
+		const refs = (fallbackRefs || []).filter(Boolean);
+		if (refs.length === 0) {
+			return <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-400">No mounted dataset repo — this workflow reads live / external data.</div>;
 		}
+		return (
+			<div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+				<div className="flex items-center gap-1.5 text-[12px] text-slate-600"><Database className="w-3.5 h-3.5 text-slate-400" /> Data sources</div>
+				<div className="flex flex-wrap gap-1.5 mt-1.5">
+					{refs.map((d) => (<span key={d} className="text-[10px] text-slate-500 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 font-mono truncate max-w-[12rem]" title={d}>{d}</span>))}
+				</div>
+			</div>
+		);
 	}
-	return out.slice(0, 5);
+	return (
+		<div className="space-y-1">
+			{list.map((d, i) => {
+				const repo = d.repo || d.id || "";
+				const name = repo.split("/").pop() || repo;
+				return (
+					<AssetVersionRow key={i} label="Dataset" name={name}
+						href={d.repo ? `https://xp.io/${d.repo}` : undefined} version={d.version ? `v${d.version}` : undefined} title={`Dataset repo: ${repo}`} />
+				);
+			})}
+		</div>
+	);
+}
+
+// AgentsRailContent — the app's knowledge agents (memory banks), now living in
+// the assets rail. Each bank is git-backed + cloud-synced; click to browse it.
+function AgentsRailContent({ agents, onOpenAgent, selectedAgent, hideHeader }: {
+	agents: string[];
+	// When provided, a bank opens IN the right canvas (toggle) instead of
+	// navigating to /studio/knowledge/:agent.
+	onOpenAgent?: (agentId: string) => void;
+	selectedAgent?: string;
+	// Suppress the internal "Memory banks" label when a Foldable already titles it.
+	hideHeader?: boolean;
+}) {
+	if (!agents.length) return <div className="text-[11px] text-slate-400 italic py-1">No knowledge agents configured.</div>;
+	return (
+		<div className="space-y-1 pt-1">
+			{!hideHeader && <div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1">Memory banks</div>}
+			{agents.map((a) => {
+				// No per-row "versioned" pill — the top bar owns versioning for the
+				// whole bundle; per-row badges are reserved for provenance.
+				const inner = <><Brain className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" /> <span className="truncate">{a}</span></>;
+				return onOpenAgent ? (
+					<button key={a} type="button" onClick={() => onOpenAgent(a)}
+						title={selectedAgent === a ? "Click to close" : `Browse the "${a}" memory bank`}
+						className={cn("w-full flex items-center gap-1.5 text-[12px] text-left rounded px-1 -mx-1 transition-colors",
+							selectedAgent === a ? "text-gold-800 bg-gold-50" : "text-slate-600 hover:text-gold-700 hover:bg-gold-50/40")}>
+						{inner}
+					</button>
+				) : (
+					<Link key={a} to={`/studio/knowledge/${encodeURIComponent(a)}`}
+						title={`Browse the "${a}" memory bank`}
+						className="flex items-center gap-1.5 text-[12px] text-slate-600 hover:text-gold-700 transition-colors">
+						{inner}
+					</Link>
+				);
+			})}
+		</div>
+	);
+}
+
+// TuneVersionBar — the Agent tab's git card: the AGENT repo (the app itself,
+// kind: agent) with its version. Same layout as the dataset card (AssetVersionRow):
+// label · name(link) · version chip, no button. Publish lives in the app toolbar.
+function TuneVersionBar({ app, identity, repo, selectedAgentVersion, restingAgentVersion, asOf }: {
+	app: string; identity?: AppIdentity; repo?: string;
+	// When a run-tree node is selected, show THAT node's (fixed) agent version;
+	// at rest show the agent's CURRENT version (latest bank state) — same scale as
+	// the node chips. App semver is only a last-resort fallback. Agent evolves.
+	selectedAgentVersion?: string; restingAgentVersion?: string; asOf?: string;
+}) {
+	const version = selectedAgentVersion || restingAgentVersion || (identity?.version ? `v${identity.version}` : undefined);
+	return (
+		<AssetVersionRow label="Agent" name={app}
+			href={repo ? `https://xp.io/${repo}` : undefined}
+			version={version}
+			asOf={selectedAgentVersion ? asOf : undefined}
+			title={selectedAgentVersion
+				? "Agent version at the selected run — the knowledge the agent had banked by then."
+				: "The agent repo — its memory banks + prompts, versioned in xp.io."} />
+	);
+}
+
+// PromptsTuneCard — the discoverable entry to the agent prompts (Tune). Shows
+// the analyst & judge prompts this app runs on, grouped, with a local/shared
+// tag each, so it's self-evident WHERE the agent instructions live and that
+// they're editable. The whole card links to the full prompt editor.
+function PromptsTuneCard({ app, onOpenPrompt, selectedPrompt }: {
+	app: string;
+	// When provided, a prompt row opens IN the panel's right canvas (view-stack
+	// push) instead of navigating to the full /prompts route.
+	onOpenPrompt?: (name: string, label: string) => void;
+	selectedPrompt?: string;
+}) {
+	const [prompts, setPrompts] = useState<{ name: string; source?: string; editable?: boolean }[] | null>(null);
+	const [err, setErr] = useState<string | null>(null);
+	useEffect(() => {
+		let live = true;
+		me.appPrompts(app)
+			.then((r) => { if (live) setPrompts(r.prompts || []); })
+			.catch((e) => { if (live) setErr(e instanceof MeApiError ? e.message : String(e)); });
+		return () => { live = false; };
+	}, [app]);
+
+	const pretty = (n: string) => n.replace(/\.md$/, "").replace(/^analyst_skill_/, "").replace(/^analyst_/, "").replace(/^judge_/, "").replace(/_/g, " ").trim() || n;
+	const isLocal = (s?: string) => (s || "").startsWith("local");
+	const groupRow = (title: string, Icon: typeof FileText, items: { name: string; source?: string }[]) => (
+		<div className="min-w-0">
+			<div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-1">
+				<Icon className="w-3.5 h-3.5 text-gold-600" /> {title} <span className="text-slate-300 font-normal normal-case">· {items.length}</span>
+			</div>
+			<div className="space-y-0.5">
+				{items.map((p) => {
+					const label = pretty(p.name);
+					const badge = (
+						<span className={cn("ml-auto flex-shrink-0 text-[9px] uppercase tracking-wide rounded-full px-1.5 py-0.5 border",
+							isLocal(p.source) ? "text-gold-700 bg-gold-50 border-gold-200" : "text-slate-400 bg-slate-50 border-slate-200")}
+							title={isLocal(p.source) ? "local override — editable in your bundle" : "shared (read-only) — editing creates a local override"}>
+							{isLocal(p.source) ? "local" : "shared"}
+						</span>
+					);
+					// In-panel: open the editor in the right canvas (no navigation).
+					return onOpenPrompt ? (
+						<button key={p.name} type="button" onClick={() => onOpenPrompt(p.name, label)}
+							title={selectedPrompt === p.name ? "Click to close" : "Open prompt"}
+							className={cn("w-full flex items-center gap-1.5 text-[12px] text-left rounded px-1 -mx-1 transition-colors",
+								selectedPrompt === p.name ? "text-gold-800 bg-gold-50" : "text-slate-600 hover:text-gold-700 hover:bg-gold-50/40")}>
+							<span className="truncate">{label}</span>
+							{badge}
+						</button>
+					) : (
+						<Link key={p.name} to={`/studio/a/${encodeURIComponent(app)}/prompts?p=${encodeURIComponent(p.name)}`}
+							className="flex items-center gap-1.5 text-[12px] text-slate-600 hover:text-gold-700 transition-colors group">
+							<span className="truncate">{label}</span>
+							{badge}
+						</Link>
+					);
+				})}
+				{items.length === 0 && <div className="text-[11px] text-slate-400 italic">none</div>}
+			</div>
+		</div>
+	);
+
+	const analyst = (prompts || []).filter((p) => p.name.startsWith("analyst"));
+	const judge = (prompts || []).filter((p) => p.name.startsWith("judge"));
+	const other = (prompts || []).filter((p) => !p.name.startsWith("analyst") && !p.name.startsWith("judge"));
+
+	// Bare content (no own card/title) — it lives inside the rail's "Prompts &
+	// tuning" group, which already titles + boxes it.
+	return (
+		<div className="pt-1">
+			{err ? (
+				<div className="text-[12px] text-rose-500">Couldn't load prompts: {err}</div>
+			) : prompts === null ? (
+				<div className="flex items-center gap-2 text-xs text-slate-400"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading prompts…</div>
+			) : prompts.length === 0 ? (
+				<div className="text-[12px] text-slate-400 italic">This app declares no editable prompts.</div>
+			) : (
+				<div className="space-y-3">
+					{groupRow("Analyst", Brain, analyst)}
+					{groupRow("Judge", Scale, judge)}
+					{other.length > 0 && groupRow("Other", FileText, other)}
+					<Link to={`/studio/a/${encodeURIComponent(app)}/prompts`} className="block text-[11px] text-gold-700 hover:underline">Open full prompt editor →</Link>
+				</div>
+			)}
+		</div>
+	);
 }
 
 // GoalHeader — the loop's objective as a full-width bar near the top of the
@@ -848,7 +1117,7 @@ function buildGoalKpis(summary: CycleSummary | null, files: Record<string, unkno
 // KPI chips show inline, editing happens in a popover (pencil). Saving PATCHes
 // the goal into the tenant's .user-overrides.yaml (merged over the declared
 // xpcloud.yaml goal).
-function GoalHeader({ goal, kpis, app, loop, onSaved, experiment, onOpenMetrics }: { goal?: { primary: string; tracked?: string[] }; kpis: GoalKpi[]; app?: string; loop?: string; onSaved?: () => void; experiment?: MeExperiment | null; onOpenMetrics?: () => void }) {
+function GoalHeader({ goal, app, loop, onSaved }: { goal?: { primary: string; tracked?: string[] }; app?: string; loop?: string; onSaved?: () => void }) {
 	const [open, setOpen] = useState(false);
 	const [draft, setDraft] = useState(goal?.primary || "");
 	const [saving, setSaving] = useState(false);
@@ -918,18 +1187,6 @@ function GoalHeader({ goal, kpis, app, loop, onSaved, experiment, onOpenMetrics 
 								<Pencil className="w-3 h-3" />
 							</button>
 						</PopoverTrigger>
-						{/* #15 — the metric this goal is scored on (name + current mean +
-						    verdict), linking the loop→its experiment. Clicks open MetricsView. */}
-						<MetricBadge experiment={experiment} onClick={onOpenMetrics} />
-						{kpis.length > 0 && (
-							<div className="flex items-center gap-2 flex-wrap ml-auto">
-								{kpis.slice(0, 4).map((k) => (
-									<span key={k.label} className="inline-flex items-center gap-1 text-[10.5px] text-slate-500 bg-white/70 border border-gold-100 rounded-full px-2 py-0.5">
-										<span className="font-semibold text-slate-800 tabular-nums">{k.value}</span> {k.label}
-									</span>
-								))}
-							</div>
-						)}
 					</>
 				) : (
 					<PopoverTrigger asChild>
@@ -939,37 +1196,6 @@ function GoalHeader({ goal, kpis, app, loop, onSaved, experiment, onOpenMetrics 
 			</div>
 			{editor}
 		</Popover>
-	);
-}
-
-// MetricBadge — #15. The goal's metric at a glance: "metric: <name>" + the
-// current best mean + a verdict chip. Generic over whatever metric the loop's
-// attached experiment declares; clicking opens the metric charts (MetricsView).
-function MetricBadge({ experiment: e, onClick }: { experiment?: MeExperiment | null; onClick?: () => void }) {
-	if (!e) return null;
-	const name = e.metric_name || e.metric?.name || "";
-	if (!name) return null;
-	// Current mean: the best variant's mean if available, else baseline_value.
-	const best = e.best_variant ? e.variants?.[e.best_variant] : undefined;
-	const mean = best?.mean ?? e.baseline_value ?? null;
-	const fmt = (v: number) => (Number.isInteger(v) ? String(v) : Math.abs(v) < 1 ? String(+v.toFixed(3)) : String(+v.toFixed(2)));
-	const verdict = e.criteria_met ? "criteria met" : (e.status && e.status !== "running" ? e.status : "running");
-	const verdictCls = e.criteria_met
-		? "bg-gold-100 text-gold-700 border-gold-200"
-		: "bg-violet-50 text-violet-600 border-violet-200";
-	return (
-		<button
-			type="button"
-			onClick={onClick}
-			title={`Metric: ${name}${typeof mean === "number" ? ` · current ${fmt(mean)}` : ""}${e.hypothesis ? ` · ${e.hypothesis}` : ""} — open metric charts`}
-			className="inline-flex items-center gap-1.5 text-[10.5px] rounded-full border border-violet-200 bg-violet-50/60 px-2 py-0.5 hover:bg-violet-100 transition-colors flex-shrink-0"
-		>
-			<Activity className="w-3 h-3 text-violet-500" />
-			<span className="text-slate-500">metric</span>
-			<span className="font-semibold text-slate-800">{name.replace(/_/g, " ")}</span>
-			{typeof mean === "number" && <span className="tabular-nums text-slate-700 font-medium">{fmt(mean)}</span>}
-			<span className={cn("rounded-full border px-1.5 leading-tight", verdictCls)}>{verdict}</span>
-		</button>
 	);
 }
 

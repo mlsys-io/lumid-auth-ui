@@ -17,14 +17,14 @@
 //   • Right-click a node → control menu (e.g. "Branch out" queues a
 //     signal the loop explores from next cycle; queued branches show as ghosts).
 
-import { useMemo, useState, useEffect, useCallback, useRef, type MouseEvent as ReactMouseEvent } from "react";
+import { useMemo, useState, useEffect, useCallback, useRef, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
 	ReactFlow, Background, Controls, Position,
 	type Node, type Edge, type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { ArrowLeft, GitBranch, Trophy, Sparkles, Loader2, Clock, FlaskConical, MessageSquare, MoreHorizontal } from "lucide-react";
+import { ArrowLeft, GitBranch, Trophy, Sparkles, Loader2, FlaskConical, MessageSquare, MoreHorizontal, Eye } from "lucide-react";
 import { toast } from "sonner";
 import {
 	fetchTrajectory, fetchTrajectorySignals, postTrajectorySignal,
@@ -37,13 +37,6 @@ import StepInspectorPanel from "@/components/workflow/StepInspectorPanel";
 import { ReviewQueue, OffersPanel, type ReviewItem, type CompoundOffer } from "@/pages/studio/inspector";
 import { useStudioRefetch } from "@/hooks/useStudioRefetch";
 import { cn } from "@/lib/utils";
-
-// Open a cycle's session as a floating conversation in the main chatbox
-// (StudioChat listens for studio:open-session and renders it with its own
-// MessageBubble). ts="latest" → the running cycle.
-function openSession(app: string, loop: string, ts: string) {
-	window.dispatchEvent(new CustomEvent("studio:open-session", { detail: { app, loop, ts } }));
-}
 
 // Ground the Studio chatbox on a run / step / variant and (optionally) ask.
 // The chat picks up the context override at send time (StudioChat studio:ask).
@@ -63,10 +56,12 @@ function askAboutRun(app: string, loop: string, ts: string | undefined, prompt: 
 	}));
 }
 
-const NODE_W = 184;
-const NODE_H = 66;
-const ROW_Y = 124; // vertical gap between depths (cycles)
-const COL_X = 208; // horizontal gap between sibling variants
+const NODE_W = 132;
+const NODE_H = 44;
+const ROW_Y = 66;  // vertical gap between depths (cycles)
+const COL_X = 146; // horizontal gap between sibling variants
+const SNAKE_ROW_Y = 66;  // vertical gap between snake rows (compact nodes)
+const SNAKE_MIN = 9;     // chain length past which a LINEAR tree wraps into a snake
 
 type GNode = TrajectoryNode & { proposed?: boolean; note?: string };
 
@@ -74,23 +69,26 @@ function fmtScore(v?: number): string {
 	if (v == null) return "—";
 	return Number.isInteger(v) ? String(v) : String(+v.toFixed(3));
 }
-function fmtDur(s?: number): string | null {
-	if (s == null || s <= 0) return null;
-	if (s < 60) return `${s < 10 ? s.toFixed(1) : Math.round(s)}s`;
-	const m = Math.floor(s / 60);
-	const r = Math.round(s % 60);
-	return r ? `${m}m ${r}s` : `${m}m`;
-}
-// Run timestamp → "Jun 12, 11:20" (full ts) or "Jun 11" (day-bucketed cycle).
+// Run timestamp → "Jun 12, 23:20" (full ts, 24h) or "Jun 11" (day-bucketed).
 function fmtWhen(ts?: string): string | null {
 	if (!ts) return null;
 	let m = ts.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
 	if (m) return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]))
-		.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+		.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
 	m = ts.match(/^(\d{4})-(\d{2})-(\d{2})$/);
 	if (m) return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]))
 		.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 	return null;
+}
+
+// A meaningful menu/header label for a node — its version (+ model), falling
+// back to the run date, then the raw label. Avoids surfacing the backend's
+// placeholder "variant" label in the context menu / prompts.
+function menuNodeLabel(n: GNode): string {
+	if (n.proposed) return n.label;
+	if (n.agent_version) return n.model ? `${n.agent_version} · ${n.model}` : n.agent_version;
+	if (n.label && n.label !== "variant") return n.label;
+	return fmtWhen(n.run_ts || n.cycle_ts) || "run";
 }
 
 function tone(n: GNode, baseline: number | null | undefined, hib: boolean) {
@@ -203,6 +201,50 @@ function layout(nodes: DisplayG[]): Map<string, { x: number; y: number }> {
 	return pos;
 }
 
+// snakeLayout — when the display is a SINGLE linear chain (no forks) longer than
+// SNAKE_MIN, lay it out as a boustrophedon "snake": fill a row left→right, drop
+// to the next row, fill it right→left, and so on. A long history then reads as a
+// compact wrapped grid instead of one very tall column. Returns null when the
+// tree isn't linear (any fork) — the caller falls back to the vertical tree.
+// Also returns per-node source/target handle sides so edges flow along the snake
+// (horizontal within a row, vertical at the turns).
+function snakeLayout(nodes: DisplayG[]): {
+	pos: Map<string, { x: number; y: number }>;
+	srcPos: Map<string, Position>;
+	tgtPos: Map<string, Position>;
+} | null {
+	if (nodes.length <= SNAKE_MIN) return null;
+	const byParent = new Map<string | undefined, DisplayG[]>();
+	for (const n of nodes) { const a = byParent.get(n.displayParentId) || []; a.push(n); byParent.set(n.displayParentId, a); }
+	const roots = byParent.get(undefined) || [];
+	if (roots.length !== 1) return null;          // need a single root
+	for (const [, arr] of byParent) if (arr.length > 1) return null; // any fork → not linear
+	// walk the chain root→leaf
+	const order: DisplayG[] = [];
+	const seen = new Set<string>();
+	let cur: DisplayG | undefined = roots[0];
+	while (cur && !seen.has(cur.id)) { seen.add(cur.id); order.push(cur); cur = (byParent.get(cur.id) || [])[0]; }
+	if (order.length !== nodes.length) return null; // disconnected → bail
+	const cols = Math.max(3, Math.min(9, Math.ceil(Math.sqrt(order.length * 1.7))));
+	const pos = new Map<string, { x: number; y: number }>();
+	const srcPos = new Map<string, Position>();
+	const tgtPos = new Map<string, Position>();
+	order.forEach((n, k) => {
+		const row = Math.floor(k / cols);
+		const ltr = row % 2 === 0;
+		const col = ltr ? k % cols : cols - 1 - (k % cols);
+		pos.set(n.id, { x: col * COL_X, y: row * SNAKE_ROW_Y });
+	});
+	order.forEach((n, k) => {
+		const row = Math.floor(k / cols), ltr = row % 2 === 0;
+		if (k < order.length - 1) // outgoing handle → next node
+			srcPos.set(n.id, Math.floor((k + 1) / cols) !== row ? Position.Bottom : ltr ? Position.Right : Position.Left);
+		if (k > 0)               // incoming handle ← prev node
+			tgtPos.set(n.id, Math.floor((k - 1) / cols) !== row ? Position.Top : ltr ? Position.Left : Position.Right);
+	});
+	return { pos, srcPos, tgtPos };
+}
+
 // LinearTrajectory — a straight champion chain (no branches) reads far better as
 // a metric TREND than a tall vertical node tree: the tree forces fitView to zoom
 // out for many cycles, which both buries the shape and shrinks the label text
@@ -294,9 +336,9 @@ function LinearTrajectory({ chain, metric, baseline, hib, pickedId, onFocus, onO
 	);
 }
 
-export interface TrajectoryVersion { cycleTs?: string; runTs?: string; label: string; ts?: string }
+export interface TrajectoryVersion { cycleTs?: string; runTs?: string; label: string; ts?: string; agentVersion?: string; dataVersion?: string; metric?: string; score?: number }
 
-function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, actions, selectedForCompare, onToggleCompare }: {
+function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, actions, selectedForCompare, onToggleCompare, mode = "improve", headerRight }: {
 	app: string; loop: string; definition?: LoopDefinition | null;
 	onSelectVersion?: (v: TrajectoryVersion | null) => void;
 	running?: boolean;
@@ -309,6 +351,9 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 	actions?: RunMenuActions;
 	selectedForCompare?: string[];
 	onToggleCompare?: (ts: string) => void;
+	mode?: "observe" | "improve";
+	/** Rendered at the right of the "Run tree" header (e.g. the run-state chip). */
+	headerRight?: ReactNode;
 }) {
 	const [traj, setTraj] = useState<Trajectory | null>(null);
 	const [signals, setSignals] = useState<TrajectorySignal[]>([]);
@@ -379,61 +424,89 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 	const { nodes, edges } = useMemo(() => {
 		const display = buildDisplay(model, picked?.id ?? null);
 		const shown = new Set(display.map((n) => n.id));
-		const pos = layout(display);
+		// A long, fork-free chain wraps into a snake; otherwise the vertical tree.
+		const snake = snakeLayout(display);
+		const pos = snake ? snake.pos : layout(display);
+		// The trophy + gold lineage mark the GENUINE best run — the single
+		// best-scoring node. (The backend flags every cycle's best variant as
+		// "champion", but with one variant per cycle that's every node — meaningless.)
+		let bestId: string | null = null, bestScore = 0;
+		for (const d of display) {
+			if (d.proposed || d.kind === "baseline" || !d.scored || d.score == null) continue;
+			if (bestId === null || (hib ? d.score > bestScore : d.score < bestScore)) { bestId = d.id; bestScore = d.score; }
+		}
+		// the path root→best is the trunk (gold); the rest of the tree stays neutral.
+		const displayById = new Map(display.map((d) => [d.id, d] as const));
+		const trunkSet = new Set<string>();
+		for (let c = bestId ? displayById.get(bestId) : undefined; c; c = c.displayParentId ? displayById.get(c.displayParentId) : undefined) trunkSet.add(c.id);
 		const nodes: Node[] = display.map((n) => {
 			const t = tone(n, baseline, hib);
-			const dur = fmtDur(n.duration_s);
 			const when = n.proposed ? null : fmtWhen(n.run_ts || n.cycle_ts);
-			const learned = n.is_champion ? (traj?.cycles || [])[n.depth - 1]?.learned || 0 : 0;
+			const learned = n.learned ?? 0;
 			const sel = picked?.id === n.id;
+			const isBase = n.kind === "baseline";
+			const isBest = n.id === bestId;
+			// Delta is vs the PREVIOUS version (this run's parent), not the fixed
+			// baseline — so it reads as the step-by-step gain/loss along the branch.
+			const parentNode = !isBase && n.parent_id ? byId.get(n.parent_id) : undefined;
+			const dParent = (!n.proposed && n.scored && n.score != null && parentNode?.scored && parentNode.score != null)
+				? (hib ? n.score - parentNode.score : parentNode.score - n.score) : null;
+			// The node's headline is its VERSION in the agent's history (the run tree
+			// is that history). A ghost shows its queued label; baseline says so.
+			const primary = n.proposed ? n.label : isBase ? "baseline" : (n.agent_version || "run");
+			// Only surface a config descriptor when it's actually informative (the
+			// backend emits "variant" for an empty config — not worth showing).
+			const configLabel = !n.proposed && !isBase && n.label && n.label !== "variant" ? n.label : null;
 			return {
 				id: n.id,
 				position: pos.get(n.id) || { x: 0, y: n.displayDepth * ROW_Y },
 				data: {
 					label: (
-						<div className="px-2.5 py-1.5 text-left" style={{ width: NODE_W }}>
-							<div className="flex items-center gap-1.5">
-								<span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: t.dot }} />
-								<span className={cn("text-[12px] truncate flex-1 font-medium", n.proposed ? "text-gold-700 italic" : "text-slate-800")}>{n.label}</span>
+						<div className="group relative px-2 py-1 text-left" style={{ width: NODE_W }}>
+							<div className="flex items-center gap-1">
+								<span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: t.dot }} />
+								<span className={cn("text-[11px] font-semibold flex-shrink-0 leading-none", n.proposed ? "text-gold-700 italic" : isBase ? "text-slate-500" : "text-slate-800")}
+									title={isBase ? "starting point — the score before any run" : `version ${primary} — this run's place in the agent's history`}>{primary}</span>
+								{/* data version (e.g. v0.7.6) is omitted on the node — constant across runs; shown in the drill-in header + Data panel. */}
+								<span className="flex-1" />
 								{n.needs_decision && <span title="needs a decision — suggestions or held actions" className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0 animate-pulse" />}
-								{n.is_champion && <Trophy className="w-3 h-3 text-gold-500 flex-shrink-0" />}
+								{isBest && <span title="best run — highest score in this tree"><Trophy className="w-2.5 h-2.5 text-gold-500 flex-shrink-0" /></span>}
+								<span className="flex-1" />
+								{n.model && <span title={`model — the LLM this run used (${n.model})`} className="flex-shrink-0 text-[8px] uppercase tracking-wide rounded px-1 border text-violet-700 bg-violet-50 border-violet-200 leading-[1.6]">{n.model}</span>}
 							</div>
-							{when && <div className="text-[10px] text-slate-400 tabular-nums mt-0.5 truncate">{when}</div>}
-							<div className="flex items-center gap-1.5 mt-0.5">
+							<div className="flex items-center gap-1.5 mt-1 text-[10px] leading-none">
+								{configLabel && <span className="text-slate-500 truncate max-w-[54px]" title={configLabel}>{configLabel}</span>}
+								{when && <span className="text-slate-400 tabular-nums">{when}</span>}
 								{n.proposed ? (
 									<span className="text-[10px] uppercase tracking-wide text-gold-500">queued</span>
 								) : n.scored && n.score != null ? (
-									<span className="text-[11px] tabular-nums text-slate-600">{fmtScore(n.score)}</span>
-								) : n.kind !== "baseline" ? (
-									<span className="text-[10px] uppercase tracking-wide text-slate-400">not scored</span>
+									<span className="tabular-nums text-slate-700 font-medium" title={`${traj?.metric || "score"} = ${fmtScore(n.score)} — this run's metric on the dataset`}>{fmtScore(n.score)}</span>
+								) : !isBase ? (
+									<span className="uppercase tracking-wide text-slate-400">not scored</span>
 								) : (
-									<span className="text-[10px] uppercase tracking-wide text-slate-400">baseline</span>
+									<span className="uppercase tracking-wide text-slate-400">start</span>
 								)}
-								{n.delta_vs_baseline != null && Math.abs(n.delta_vs_baseline) > 1e-6 && (
-									<span className={cn("text-[10px] tabular-nums", n.delta_vs_baseline > 0 ? "text-gold-600" : "text-rose-500")}>
-										{n.delta_vs_baseline > 0 ? "+" : ""}{fmtScore(n.delta_vs_baseline)}
+								{dParent != null && Math.abs(dParent) > 1e-6 && (
+									<span title="change vs the previous version (parent run)" className={cn("tabular-nums", dParent > 0 ? "text-gold-600" : "text-rose-500")}>
+										{dParent > 0 ? "+" : ""}{fmtScore(dParent)}
 									</span>
 								)}
-								{dur && (
-									<span className="ml-auto inline-flex items-center gap-0.5 text-[10px] text-slate-400 tabular-nums" title="execution time">
-										<Clock className="w-2.5 h-2.5" />{dur}
-									</span>
-								)}
+								{/* runtime (e.g. 4m43s) removed — not a tracked metric. */}
 								{learned > 0 && (
-									<span className={cn("inline-flex items-center gap-0.5 text-[10px] text-gold-600", dur ? "" : "ml-auto")} title={`${learned} memories banked this cycle`}>
+									<span className="ml-auto inline-flex items-center gap-0.5 text-gold-600" title={`${learned} memories banked this run`}>
 										<Sparkles className="w-2.5 h-2.5" />{learned}
 									</span>
 								)}
 							</div>
 							{!n.proposed && (
-								<div className="mt-1 flex items-center justify-end gap-1.5">
+								<div className="absolute bottom-0.5 right-1 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 rounded shadow-sm px-0.5 pointer-events-auto">
 									<button
 										type="button"
 										onClick={(e) => { e.stopPropagation(); openPipelineRef.current(n); }}
-										className="text-[10px] font-medium text-sky-600 hover:text-sky-700 hover:underline pointer-events-auto nodrag"
+										className="inline-flex items-center p-0.5 text-sky-600 hover:text-sky-700 pointer-events-auto nodrag"
 										title="Open this run's pipeline (step-by-step)"
 									>
-										details →
+										<Eye className="w-3 h-3" />
 									</button>
 									<button
 										type="button"
@@ -448,15 +521,15 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 						</div>
 					),
 				},
-				sourcePosition: Position.Bottom,
-				targetPosition: Position.Top,
+				sourcePosition: snake ? (snake.srcPos.get(n.id) ?? Position.Bottom) : Position.Bottom,
+				targetPosition: snake ? (snake.tgtPos.get(n.id) ?? Position.Top) : Position.Top,
 				style: {
 					background: n.proposed ? "rgb(254 252 245)" : "white",
 					border: `2px ${t.dashed ? "dashed" : "solid"} ${t.border}`,
 					borderRadius: 12,
 					padding: 0,
 					minWidth: NODE_W,
-					boxShadow: n.is_champion
+					boxShadow: isBest
 						? "0 0 0 3px rgba(176,143,69,0.18), 0 1px 3px rgba(15,23,42,0.08)"
 						: sel ? "0 0 0 3px rgba(56,189,248,0.4)" : "0 1px 2px rgba(15,23,42,0.05)",
 					transition: "box-shadow .2s",
@@ -467,13 +540,14 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 		const edges: Edge[] = [];
 		for (const n of display) {
 			if (!n.displayParentId || !shown.has(n.displayParentId)) continue;
-			const parent = byId.get(n.displayParentId);
-			const trunk = !!n.is_champion && (!!parent?.is_champion || parent?.kind === "baseline");
+			const trunk = trunkSet.has(n.id) && trunkSet.has(n.displayParentId);
 			edges.push({
 				id: `e:${n.displayParentId}->${n.id}`,
 				source: n.displayParentId,
 				target: n.id,
-				type: "smoothstep",
+				// Bezier curves for the branched tree (diagonal forks read cleanly);
+				// smoothstep only for the snake grid, where right-angles fit the rows.
+				type: snake ? "smoothstep" : "default",
 				animated: (trunk || !!n.proposed) && n.elided === 0,
 				// A collapsed run of champion-only cycles gets a "+N cycles" badge so
 				// the elided history reads without inflating the tree's height.
@@ -499,7 +573,7 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 		setCycle(null);
 		setCanvasStep(null);
 		// Move the data asset (casebook) to this run's version too.
-		onSelectVersion?.({ cycleTs: tn.cycle_ts, runTs: tn.run_ts, label: tn.label });
+		onSelectVersion?.({ cycleTs: tn.cycle_ts, runTs: tn.run_ts, label: tn.label, agentVersion: tn.agent_version, dataVersion: tn.data_version, metric: traj?.metric, score: tn.score });
 		if (tn.run_ts) {
 			setCycleLoading(true);
 			me.cycleDetail(app, loop, tn.run_ts).then(setCycle).catch(() => setCycle(null)).finally(() => setCycleLoading(false));
@@ -508,17 +582,17 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 	openPipelineRef.current = openPipeline;
 	openMenuRef.current = (e: ReactMouseEvent, tn: GNode) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, node: tn }); };
 
-	// Plain click = FOCUS this run (don't drill in): highlight the node and move
-	// the data version pointer + related panels (casebook/metrics) to it. The
-	// "details →" link drills into the pipeline; right-click → branch / convo.
+	// Plain click = FOCUS this run: highlight the node and LINK the left
+	// Data/Agents panels to this run's versions (metric+score, data version,
+	// agent version) by pinning it — staying on the tree. We deliberately do NOT
+	// open the log here: onShowLog pushes a stack frame whose version carries no
+	// metric/score, which would OVERRIDE the pinned version and make the left
+	// metric card vanish. The run log/pipeline open explicitly via the node's
+	// hover actions (details → pipeline) and ⋯ menu (View run log).
 	const focusRun = useCallback((tn: GNode) => {
 		setPicked(tn);
-		onSelectVersion?.({ cycleTs: tn.cycle_ts, runTs: tn.run_ts, label: tn.label });
-		// Clicking a run's node/chip opens its within-run log (consolidated into
-		// the trajectory view — no separate "Run log" button). Ghosts have no run.
-		const ts = tn.run_ts || tn.cycle_ts;
-		if (ts && !tn.proposed) onShowLog?.(ts);
-	}, [onSelectVersion, onShowLog]);
+		onSelectVersion?.({ cycleTs: tn.cycle_ts, runTs: tn.run_ts, label: tn.label, agentVersion: tn.agent_version, dataVersion: tn.data_version, metric: traj?.metric, score: tn.score });
+	}, [onSelectVersion, traj]);
 
 	const branchFrom = useCallback(async (tn: GNode) => {
 		setMenu(null);
@@ -577,7 +651,8 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 		);
 
 	const totalLearned = (traj.cycles || []).reduce((n, c) => n + (c.learned || 0), 0);
-	const champ = (traj.nodes || []).filter((n) => n.is_champion).slice(-1)[0];
+	const champ = (traj.nodes || []).filter((n) => n.kind !== "baseline" && n.scored && n.score != null)
+		.sort((a, b) => (hib ? (b.score as number) - (a.score as number) : (a.score as number) - (b.score as number)))[0];
 
 
 	return (
@@ -589,42 +664,52 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 				{/* ── PANE 1 · the trajectory tree ── */}
 				<div className="w-1/2 h-full relative">
 					{/* header rollup — trend + learning, at a glance */}
-					<div className="absolute top-0 left-0 right-0 z-10 flex items-center gap-3 px-3 py-2 bg-gradient-to-b from-white via-white/90 to-transparent pointer-events-none">
-						<span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wide" title="branching tree of runs & attempts (trajectory)"><GitBranch className="w-3.5 h-3.5 text-gold-500" /> Run tree</span>
-						<span className="ml-auto text-[10px] text-slate-300 normal-case tracking-normal">click a node · ⋯ for actions</span>
+					<div className="absolute top-0 left-0 right-0 z-10 flex items-center gap-2 px-3 py-2 bg-gradient-to-b from-white via-white/90 to-transparent pointer-events-none">
+						<span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wide flex-shrink-0" title="branching tree of runs & attempts"><GitBranch className="w-3.5 h-3.5 text-gold-500" /> Run tree</span>
+						<span className="text-[10px] text-slate-300 normal-case tracking-normal truncate hidden xl:inline">click a run to link the panels · ⋯ for log, branch, compare</span>
+						{headerRight && <div className="ml-auto flex-shrink-0 pointer-events-auto">{headerRight}</div>}
 					</div>
 
-					{/* Trajectory is ALWAYS the node tree — every run is a node labeled
-					    with its date + score (the linear chart hid the per-run score,
-					    and made mbb-ai look like Metrics). Collapse keeps long chains
-					    legible; a linear history is a straight vertical trunk. */}
-					{(
-						<ReactFlow
-							key={`${nodes.length}`}
-							nodes={nodes}
-							edges={edges}
-							onInit={onInit}
-							fitView={false}
-							proOptions={{ hideAttribution: true }}
-							nodesDraggable={false}
-							nodesConnectable={false}
-							elementsSelectable
-							zoomOnScroll={false}
-							panOnScroll
-							panOnDrag
-							onNodeClick={(_e, node) => { const tn = byId.get(node.id); if (tn && !tn.proposed) focusRun(tn); }}
-							onNodeContextMenu={(e, node) => { e.preventDefault(); const tn = byId.get(node.id); if (tn) setMenu({ x: e.clientX, y: e.clientY, node: tn }); }}
-						>
-							<Background gap={16} color="rgb(241 245 249)" />
-							<Controls showInteractive={false} />
-						</ReactFlow>
-					)}
+					{/* ONE run view for both modes — the runs (time · score per node)
+					    appear exactly once. The mode changes interaction, not the data:
+					    Observe → click a node to read its log; Improve → adds the
+					    experiment affordances (⋯ branch/compare/promote, compare-select,
+					    the best/baseline rollup below). No duplicate list. */}
+					<ReactFlow
+						key={`${nodes.length}`}
+						nodes={nodes}
+						edges={edges}
+						onInit={onInit}
+						fitView={false}
+						proOptions={{ hideAttribution: true }}
+						nodesDraggable={false}
+						nodesConnectable={false}
+						elementsSelectable
+						zoomOnScroll
+						zoomOnPinch
+						minZoom={0.2}
+						maxZoom={2}
+						panOnDrag
+						onNodeClick={(_e, node) => {
+							const tn = byId.get(node.id);
+							if (!tn || tn.proposed) return;
+							// Observe = read: a click opens the run's log. Improve = focus
+							// the node for experiment ops.
+							if (mode === "observe") onShowLog?.(tn.run_ts || tn.cycle_ts || "");
+							else focusRun(tn);
+						}}
+						onNodeContextMenu={(e, node) => { e.preventDefault(); const tn = byId.get(node.id); if (tn) setMenu({ x: e.clientX, y: e.clientY, node: tn }); }}
+					>
+						<Background gap={16} color="rgb(241 245 249)" />
+						<Controls showInteractive={false} />
+					</ReactFlow>
 
-					{/* stats rollup — moved off the top bar to keep it uncluttered */}
-					{((traj.has_variants && traj.metric) || champ?.score != null || totalLearned > 0) && (
-						<div className="absolute bottom-0 left-0 right-0 z-10 flex items-center gap-3 px-3 py-2 bg-gradient-to-t from-white via-white/90 to-transparent pointer-events-none">
+					{/* stats rollup — experiment-flavored (variants/best/baseline), so
+					    show it only in Improve; Observe stays a clean read surface. */}
+					{mode !== "observe" && ((traj.has_variants && traj.metric) || champ?.score != null || totalLearned > 0) && (
+						<div className="absolute bottom-0 left-0 right-0 z-10 flex items-center justify-end gap-3 px-3 py-2 bg-gradient-to-t from-white via-white/90 to-transparent pointer-events-none">
 							{traj.has_variants && traj.metric && (
-								<span className="text-[11px] text-slate-400">{traj.nodes.length} variants · <span className="font-mono text-slate-600">{traj.metric}</span>{traj.baseline != null && <> · base <span className="tabular-nums">{fmtScore(traj.baseline)}</span></>}</span>
+								<span className="text-[11px] text-slate-400">{traj.nodes.filter((n) => n.kind !== "baseline").length} runs · <span className="font-mono text-slate-600">{traj.metric}</span>{traj.baseline != null && <> · start <span className="tabular-nums">{fmtScore(traj.baseline)}</span></>}</span>
 							)}
 							{champ?.score != null && (
 								<span className="inline-flex items-center gap-1 text-[11px] text-gold-700"><Trophy className="w-3 h-3" /> best <span className="tabular-nums font-medium">{fmtScore(champ.score)}</span>{champ.delta_vs_baseline != null && Math.abs(champ.delta_vs_baseline) > 1e-6 && <span className="tabular-nums">({champ.delta_vs_baseline > 0 ? "+" : ""}{fmtScore(champ.delta_vs_baseline)})</span>}</span>
@@ -638,7 +723,7 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 							// Ghost/proposed node (or no shared-menu wiring): a minimal menu
 							// — branching a ghost materializes it (bespoke branchFrom).
 							<div className="fixed z-[80] min-w-[180px] rounded-lg border border-slate-200 bg-white shadow-xl py-1 animate-in fade-in zoom-in-95 duration-100" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
-								<div className="px-3 py-1 text-[10px] uppercase tracking-wide text-slate-400 truncate">{menu.node.label}</div>
+								<div className="px-3 py-1 text-[10px] uppercase tracking-wide text-slate-400 truncate">{menuNodeLabel(menu.node)}</div>
 								{!menu.node.proposed && (
 									<button onClick={() => openPipeline(menu.node)} className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50 text-left"><FlaskConical className="w-3.5 h-3.5 text-slate-400" /> Open pipeline</button>
 								)}
@@ -650,16 +735,16 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 							// data/log/compare/promote/discard entrances.
 							<RunContextMenu
 								x={menu.x} y={menu.y}
-								target={{ kind: "run", ts: menu.node.run_ts || menu.node.cycle_ts, label: menu.node.label }}
+								target={{ kind: "run", ts: menu.node.run_ts || menu.node.cycle_ts, label: menuNodeLabel(menu.node) }}
 								actions={{
 									...actions,
 									app, loop,
 									openPipeline: () => { openPipeline(menu.node); },
-									viewConversation: (ts) => { openSession(app, loop, ts); },
-									ask: () => { askAboutRun(app, loop, menu.node.run_ts, `About this run (${menu.node.label})${menu.node.config ? ` with config ${JSON.stringify(menu.node.config)}` : ""}: what happened, and what would improve the goal?`); },
+									ask: () => { askAboutRun(app, loop, menu.node.run_ts, `About this run (${menuNodeLabel(menu.node)})${menu.node.config ? ` with config ${JSON.stringify(menu.node.config)}` : ""}: what happened, and what would improve the goal?`); },
 								}}
 								selectedForCompare={selectedForCompare || []}
 								onToggleCompare={onToggleCompare || (() => {})}
+								mode={mode}
 								onClose={() => setMenu(null)}
 								onAfterRuntimeOp={load}
 							/>
@@ -675,8 +760,11 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 						{picked && (
 							<div className="min-w-0 flex-1">
 								<div className="flex items-center gap-1.5">
-									{picked.is_champion && <Trophy className="w-3.5 h-3.5 text-gold-500" />}
-									<span className="text-sm font-medium text-slate-900 truncate flex-1">{picked.label}</span>
+									{champ && picked.id === champ.id && <Trophy className="w-3.5 h-3.5 text-gold-500" />}
+									<span className="text-sm font-medium text-slate-900 flex-shrink-0" title="this run's version in the agent's history">{picked.agent_version || picked.label}</span>
+									{picked.model && <span title={`model — ${picked.model}`} className="flex-shrink-0 text-[9px] uppercase tracking-wide rounded-full px-1.5 py-0.5 border text-violet-700 bg-violet-50 border-violet-200">{picked.model}</span>}
+									{picked.data_version && <span title="dataset version this run was evaluated on" className="flex-shrink-0 text-[9px] font-mono rounded-full px-1.5 py-0.5 border text-sky-700 bg-sky-50 border-sky-200">{picked.data_version}</span>}
+									<span className="flex-1" />
 									<button
 										onClick={() => askAboutRun(app, loop, picked.run_ts, `About this run (${picked.label})${picked.config ? ` with config ${JSON.stringify(picked.config)}` : ""}: what happened, and what would improve the goal?`)}
 										title="Ask the assistant about this run"
@@ -686,7 +774,6 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 								<div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-0.5 text-[11px] text-slate-500">
 									{picked.scored && picked.score != null && <span className="tabular-nums">{traj.metric || "score"}: <span className="text-slate-700 font-medium">{fmtScore(picked.score)}</span></span>}
 									{picked.delta_vs_baseline != null && Math.abs(picked.delta_vs_baseline) > 1e-6 && <span className={cn("tabular-nums", picked.delta_vs_baseline > 0 ? "text-gold-600" : "text-rose-500")}>{picked.delta_vs_baseline > 0 ? "+" : ""}{fmtScore(picked.delta_vs_baseline)} vs base</span>}
-									{fmtDur(picked.duration_s) && <span className="inline-flex items-center gap-0.5 tabular-nums"><Clock className="w-3 h-3" />{fmtDur(picked.duration_s)}</span>}
 								</div>
 							</div>
 						)}
@@ -775,7 +862,7 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 	);
 }
 
-export default function TrajectoryGraph({ app, loop, definition, onSelectVersion, running, onShowLog, actions, selectedForCompare, onToggleCompare }: {
+export default function TrajectoryGraph({ app, loop, definition, onSelectVersion, running, onShowLog, actions, selectedForCompare, onToggleCompare, mode = "improve", headerRight }: {
 	app: string; loop: string; definition?: LoopDefinition | null;
 	onSelectVersion?: (v: TrajectoryVersion | null) => void;
 	running?: boolean;
@@ -783,10 +870,13 @@ export default function TrajectoryGraph({ app, loop, definition, onSelectVersion
 	actions?: RunMenuActions;
 	selectedForCompare?: string[];
 	onToggleCompare?: (ts: string) => void;
+	/** observe = read-only watching (no branch/compare/promote); improve = experiment. */
+	mode?: "observe" | "improve";
+	headerRight?: ReactNode;
 }) {
 	// No shared ReactFlowProvider: the trajectory <ReactFlow> and the pipeline
 	// pane's WorkflowCanvas <ReactFlow> must each own an isolated store —
 	// otherwise interacting with the pipeline clobbers the trajectory's nodes
 	// (and the tree vanishes on return). Each bare <ReactFlow> self-stores.
-	return <Inner app={app} loop={loop} definition={definition} onSelectVersion={onSelectVersion} running={running} onShowLog={onShowLog} actions={actions} selectedForCompare={selectedForCompare} onToggleCompare={onToggleCompare} />;
+	return <Inner app={app} loop={loop} definition={definition} onSelectVersion={onSelectVersion} running={running} onShowLog={onShowLog} actions={actions} selectedForCompare={selectedForCompare} onToggleCompare={onToggleCompare} mode={mode} headerRight={headerRight} />;
 }
