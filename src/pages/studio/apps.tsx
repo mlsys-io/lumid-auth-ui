@@ -15,7 +15,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ChevronRight, ChevronDown, Check, ArrowRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2, Inbox, Loader2, RotateCcw, X, Plus, MoreHorizontal, SlidersHorizontal, Settings, Pencil, Cpu, Cloud, Workflow, Clock, Database, DownloadCloud, UploadCloud } from "lucide-react";
+import { ChevronRight, ChevronDown, Check, ArrowRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2, Inbox, Loader2, RotateCcw, X, Plus, MoreHorizontal, SlidersHorizontal, Settings, Pencil, Cpu, Cloud, Workflow, Clock, Database } from "lucide-react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -32,7 +32,6 @@ import { iconFor, APP_NAV_INVALIDATE } from "@/components/useAppNav";
 import { setStudioSelection } from "@/components/StudioContext";
 import { usePortalTarget } from "@/hooks/usePortalTarget";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import RunSparkline from "@/components/RunSparkline";
 import { TONES, workflowTone } from "@/lib/tones";
 import { describeSchedule } from "@/lib/schedule";
 import { Skeleton, humanizeLoop, loopLabel } from "@/pages/app-revamp/loops";
@@ -700,7 +699,7 @@ const wfSub = (wf: MeWorkflowRow) =>
 // shows the active workflow (status dot + name + count); the popover lists all
 // workflows to switch. Replaces the left-rail master list so the panel shows
 // only the selected workflow's content.
-function WorkflowSelect({ rows, selected, onSelect }: { rows: Row[]; selected: string | null; onSelect: (loop: string) => void }) {
+function WorkflowSelect({ rows, selected, onSelect, onNew }: { rows: Row[]; selected: string | null; onSelect: (loop: string) => void; onNew?: () => void }) {
 	const [open, setOpen] = useState(false);
 	// `selected` is null in app-overview mode — show a neutral "Pick a workflow"
 	// label then (not a stale workflow name), since the Overview tab is active.
@@ -734,11 +733,19 @@ function WorkflowSelect({ rows, selected, onSelect }: { rows: Row[]; selected: s
 							</span>
 							{/* Recent-run strip so run health is glanceable while switching
 							    (display-only here; the panel header has the clickable one). */}
-							{wf.run_spark && <RunSparkline spec={wf.run_spark} className="flex-shrink-0" />}
 							{active && <Check className="w-3.5 h-3.5 text-gold-600 flex-shrink-0" />}
 						</button>
 					);
 				})}
+				{onNew && (
+					<>
+						<div className="my-1 border-t border-slate-100" />
+						<button type="button" onClick={() => { setOpen(false); onNew(); }}
+							className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left text-[12.5px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+							<Plus className="w-3.5 h-3.5 flex-shrink-0" /> New workflow
+						</button>
+					</>
+				)}
 			</PopoverContent>
 		</Popover>
 	);
@@ -795,21 +802,15 @@ function RuntimeStrip({ rows, identity, embedded }: { rows: Row[]; identity?: Ap
 	const banks = Array.from(new Set(rows.flatMap((r) => r.wf.memory_agents || []).filter(Boolean)));
 	const banksText = banks.length ? (banks.length <= 2 ? banks.join(", ") : `${banks.slice(0, 2).join(", ")} +${banks.length - 2}`) : null;
 
+	// The runtime ("Cloud GPU"), engine pattern ("Pattern A · steps") and kind
+	// chips were removed — inferred / internal-jargon metadata that read as
+	// clutter. Only the workflow list remains, and only when standalone (the
+	// workspace already lists workflows in the top-bar picker).
+	void runtime; void pattern; void identity; void schedText; void banksText;
 	type Chip = { Icon: typeof Cpu; label: string; title?: string };
-	const chips: Chip[] = [
-		{ Icon: runtime.Icon, label: runtime.label, title: isTenant ? "Tenant cycles route to the cloud GPU fleet" : "Operator loops run on the local Claude Code subscription" },
-	];
-	if (pattern) chips.push({ Icon: Settings, label: `Pattern ${pattern}`, title: "Engine pattern (xpio autoresearch contract)" });
-	// Workflows are listed in the top-bar workflow picker in the workspace —
-	// only show them here when standalone (no picker). Avoids the duplicate.
+	const chips: Chip[] = [];
 	if (wfText && !embedded) chips.push({ Icon: Workflow, label: wfText, title: wfNames.join(", ") });
-	// Schedule is always shown in the selected workflow's card (its own picker),
-	// so omit it from the strip to remove that duplication.
-	void schedText;
-	// Memory banks (agents) now live in the workflow panel's Assets rail —
-	// omit them here to avoid duplicating the agents list.
-	void banksText;
-	if (identity?.kind) chips.push({ Icon: Boxes, label: identity.kind, title: "Marketplace kind" });
+	if (!chips.length) return null;
 
 	return (
 		<div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-slate-400">
@@ -861,22 +862,27 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 		const lhMap = new Map<string, LoopHealth>();
 		// Configured display name/icon (ui.sidebar) — same source as the sidebar.
 		const uiCfg = uaR.status === "fulfilled" ? (uaR.value.apps || []).find((a) => a.name === app)?.ui : undefined;
+		// Drive from listWorkflows (tenant-correct) so the user's own
+		// workflows always show; enrich with loop health when present.
+		const wfs = wfR.status === "fulfilled" ? (wfR.value.workflows || []).filter((w) => w.app === app) : [];
+		// Version: /me/loops/health is OPERATOR-scoped, so its `ident` carries NO
+		// version for TENANT installs (the app is absent there) — fall back to the
+		// tenant workflow rows' version. Without this the panel's Agents version
+		// bar read empty for every tenant app even though the agent repo exists.
+		const wfVersion = wfs.find((w) => w.version)?.version;
 		if (lhR.status === "fulfilled") {
 			const resp = lhR.value as unknown as LoopsHealthResp;
 			for (const l of (resp.loops || []).filter((l) => l.app === app)) lhMap.set(l.loop, l);
 			const ident = (resp.apps || []).find((a) => a.app === app);
-			if (ident || uiCfg) {
+			if (ident || uiCfg || wfVersion) {
 				const id = {
-					version: ident?.version, kind: ident?.kind, published: ident?.published, status: ident?.status,
+					version: ident?.version || wfVersion, kind: ident?.kind, published: ident?.published, status: ident?.status,
 					label: uiCfg?.sidebar?.label, icon: uiCfg?.sidebar?.icon,
 					hasSurface: !!(uiCfg?.surface || (uiCfg?.surfaces && Object.keys(uiCfg.surfaces).length > 0)),
 				};
 				identCache.set(app, id); setIdentity(id);
 			}
 		}
-		// Drive from listWorkflows (tenant-correct) so the user's own
-		// workflows always show; enrich with loop health when present.
-		const wfs = wfR.status === "fulfilled" ? (wfR.value.workflows || []).filter((w) => w.app === app) : [];
 		const next = wfs.map((w) => { const loop = loopOf(w); return { loop, wf: w, lh: lhMap.get(loop) }; });
 		rowsCache.set(app, next);
 		setRows(next);
@@ -939,6 +945,8 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 
 	// Pull / publish — toolbar buttons (fork + propose happen in xpio, not here).
 	const [shareBusy, setShareBusy] = useState<null | "pull" | "publish">(null);
+	// Pull/publish push the AGENT (app) repo — the buttons now live in the
+	// workflow panel header (passed down via onShare); shareAction stays here.
 	const shareAction = async (kind: "pull" | "publish", path: string, okMsg: string) => {
 		setShareBusy(kind);
 		try {
@@ -1054,52 +1062,29 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 				// runs / data / insights) is tabbed inside the panel.
 				<div className="space-y-3.5">
 					{(() => {
-						// Top strip nav. For multi-workflow apps: [Overview tab] +
-						// [workflow picker] toggle between the app-level overview and a
-						// single workflow's panel. Single-workflow apps show neither.
+						// Top strip nav: [Overview tab] + the workflow selector. EVERY app
+						// (incl. single-workflow) shows Overview + the selector, so the bar
+						// is consistent — a single workflow (e.g. case_cycle) lives INSIDE
+						// the selector dropdown, not as a separate static tab.
 						const cluster = (
 							<>
-								{rows.length > 1 && (
-									<button
-										type="button"
-										onClick={selectOverview}
-										title="App overview — every workflow at a glance"
-										className={cn(
-											"px-2.5 py-1 rounded-lg text-[12px] flex-shrink-0 transition-colors",
-											overviewMode ? "bg-slate-800 text-white" : "text-slate-500 hover:text-slate-800 hover:bg-slate-100",
-										)}
-									>Overview</button>
-								)}
-								{rows.length > 1 && (
-									<WorkflowSelect rows={rows} selected={effSelected} onSelect={select} />
-								)}
 								<button
 									type="button"
-									onClick={() => navigate(`/studio/a/${encodeURIComponent(app)}/manage`)}
-									className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-dashed border-border text-[12.5px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex-shrink-0"
-								>
-									<Plus className="w-3.5 h-3.5" /> New workflow
-								</button>
-								{/* Pull / publish — toolbar icon buttons (fork + propose live in xpio). */}
-								<button
-									onClick={() => shareAction("pull", "update", "Update queued — upstream changes merge in ~a minute (your edits are preserved).")}
-									disabled={!!shareBusy}
-									title="Pull updates — merge the latest upstream version (your local edits are preserved)"
-									aria-label="Pull updates"
-									className="inline-flex items-center justify-center w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:border-slate-300 shadow-sm transition-all flex-shrink-0 disabled:opacity-40"
-								>
-									{shareBusy === "pull" ? <Loader2 className="w-4 h-4 animate-spin" /> : <DownloadCloud className="w-4 h-4" />}
-								</button>
-								<button
-									onClick={() => shareAction("publish", "publish", "Publish queued — your repo updates in ~a minute.")}
-									disabled={!!shareBusy}
-									title="Publish changes — push your local changes to your xp.io repo (version auto-bumps)"
-									aria-label="Publish changes"
-									className="inline-flex items-center justify-center w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:border-slate-300 shadow-sm transition-all flex-shrink-0 disabled:opacity-40"
-								>
-									{shareBusy === "publish" ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
-								</button>
-								{/* App actions ("⋯") — Manage / Advanced / Remove. Workflow apps
+									onClick={selectOverview}
+									title="App overview — every workflow at a glance"
+									className={cn(
+										"px-2.5 py-1 rounded-lg text-[12px] flex-shrink-0 transition-colors",
+										overviewMode ? "bg-slate-800 text-white" : "text-slate-500 hover:text-slate-800 hover:bg-slate-100",
+									)}
+								>Overview</button>
+								{rows.length >= 1 && (
+									<WorkflowSelect rows={rows} selected={effSelected} onSelect={select}
+										onNew={() => navigate(`/studio/a/${encodeURIComponent(app)}/manage`)} />
+								)}
+								{/* Slot: the open workflow panel hoists its run controls (status ·
+								    version dots · pull/publish · plan-next · pause) onto this line. */}
+								<span id="topstrip-wf-controls" className="flex items-center gap-1.5 flex-wrap min-w-0" />
+							{/* App actions ("⋯") — Manage / Advanced / Remove. Workflow apps
 								    were missing this; only surface apps (AppSurface) had it. */}
 								<DropdownMenu>
 									<DropdownMenuTrigger asChild>
@@ -1173,6 +1158,10 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 									<WorkflowObservabilityPanel
 										app={app} loop={selectedRow.loop} wf={selectedRow.wf} loopHealth={selectedRow.lh}
 										identity={identity}
+										onShare={(action) => action === "pull"
+											? shareAction("pull", "update", "Update queued — upstream changes merge in ~a minute (your edits are preserved).")
+											: shareAction("publish", "publish", "Publish queued — your repo updates in ~a minute.")}
+										shareBusy={shareBusy}
 										onChanged={load}
 										initialCycle={(effSelected === (selected ?? initialLoop)) ? initialCycle : null}
 										canDelete={isTenantApp && rows.length > 1}

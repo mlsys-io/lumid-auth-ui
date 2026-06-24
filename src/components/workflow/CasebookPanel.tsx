@@ -11,7 +11,7 @@
 // House style mirrors GoalTrend.Sparkline (gold accent, inline-SVG polyline).
 
 import { useEffect, useState } from "react";
-import { Layers, TrendingUp, History, Loader2, FileJson, MoreHorizontal } from "lucide-react";
+import { Layers, TrendingUp, History, Loader2, MoreHorizontal, ArrowUp, ArrowDown, ArrowRight } from "lucide-react";
 import {
 	fetchCasebook,
 	type Casebook,
@@ -57,21 +57,24 @@ const tsDigits = (s?: string) => (s || "").replace(/\D/g, "");
 
 function CaseRow({ c, atTs, onSelect, onViewData, onContextMenu, selected }: { c: CasebookCase; atTs?: string; onSelect?: () => void; onViewData?: () => void; onContextMenu?: (e: React.MouseEvent) => void; selected?: boolean }) {
 	const fullHist = c.score_history ?? [];
-	// Version-aware: when a trajectory node is selected, show this case's score
-	// AS OF that cycle (the latest history point at/before it).
 	const cut = atTs ? tsDigits(atTs) : "";
 	const hist = cut ? fullHist.filter((p) => tsDigits(p.ts) <= cut) : fullHist;
 	const values = hist.map((p) => p.score);
 	const last = values[values.length - 1];
-	const hasScore = cut ? values.length > 0 : typeof c.latest_score === "number";
+	// The score AT the selected run (exact ts). When a run didn't score this case
+	// we show "not this run" rather than silently repeating the previous run's
+	// number — that carry-forward made adjacent runs (e.g. v4/v5) look identical.
+	const exact = cut ? fullHist.find((p) => tsDigits(p.ts) === cut)?.score : undefined;
+	const runScore = cut ? exact : (typeof c.latest_score === "number" ? c.latest_score : undefined);
+	const hasAny = values.length > 0 || typeof c.latest_score === "number";
 	const first = values[0];
 	const delta = values.length >= 2 ? last - first : 0;
 	const good = betterDown(c.label) ? delta < 0 : delta > 0;
 	const color = delta === 0 ? COLOR.flat : good ? COLOR.up : COLOR.down;
 
-	// Tone dot — the "color flipper": gold above baseline / rose below / slate
-	// flat / hollow when unscored. Replaces the per-field text tags.
-	const dotColor = !hasScore ? "transparent" : color;
+	// Tone dot — gold above baseline / rose below / slate flat; hollow when this
+	// case carries no score, muted-flat when it has history but not for THIS run.
+	const dotColor = !hasAny ? "transparent" : runScore === undefined ? COLOR.flat : color;
 
 	return (
 		<li
@@ -85,42 +88,51 @@ function CaseRow({ c, atTs, onSelect, onViewData, onContextMenu, selected }: { c
 		>
 			<div className="flex items-center gap-2">
 				<span
-					className={cn("w-2 h-2 rounded-full flex-shrink-0", !hasScore && "border border-slate-300")}
+					className={cn("w-2 h-2 rounded-full flex-shrink-0", !hasAny && "border border-slate-300")}
 					style={{ background: dotColor }}
-					title={hasScore ? (good ? "above baseline" : delta < 0 ? "below baseline" : "flat") : "not yet scored"}
+					title={!hasAny ? "not yet scored" : runScore === undefined ? "not scored in the selected run" : good ? "above baseline" : delta < 0 ? "below baseline" : "flat"}
 				/>
 				<span className="text-[12px] font-medium text-slate-700 truncate flex-1" title={c.id}>
 					{c.label}
 				</span>
-				{hasScore ? (
+				{hasAny ? (
 					<>
-						<Sparkline values={values} color={color} />
-						{/* #12 — the aggregate clicks through to the per-question provenance
-						    in the data viewer (how this % is computed). */}
-						<button
-							type="button"
-							onClick={onViewData ? (e) => { e.stopPropagation(); onViewData(); } : undefined}
-							title="See how this score is computed (per-question breakdown)"
-							className="text-[12px] font-semibold tabular-nums hover:underline decoration-dotted"
-							style={{ color }}
-						>
-							{fmtScore((cut ? last : c.latest_score) as number)}
-						</button>
+						{(() => {
+							// Trend ARROW (no curve): ↑ value rose · ↓ fell · → flat. Color
+							// encodes good/bad (gold/rose), direction encodes the raw move.
+							const A = delta > 1e-6 ? ArrowUp : delta < -1e-6 ? ArrowDown : ArrowRight;
+							return <A className="w-3.5 h-3.5 flex-shrink-0" style={{ color }} aria-hidden />;
+						})()}
+						{runScore !== undefined ? (
+							/* Scored in the selected run — prominent, clicks through to the
+							   per-question provenance (how this % is computed). */
+							<button
+								type="button"
+								onClick={onViewData ? (e) => { e.stopPropagation(); onViewData(); } : undefined}
+								title="See how this score is computed (per-question breakdown)"
+								className="text-[12px] font-semibold tabular-nums hover:underline decoration-dotted"
+								style={{ color }}
+							>
+								{fmtScore(runScore)}
+							</button>
+						) : last !== undefined ? (
+							/* NOT scored in this run — show its last known score MUTED with a
+							   ·prev marker, so adjacent runs stay distinguishable without a
+							   wall of "not this run". */
+							<span className="flex-shrink-0 tabular-nums text-slate-400" title="carried from a previous run — this case wasn't scored in the selected run">
+								<span className="text-[11px]">{fmtScore(last)}</span>
+								<span className="text-[9px] ml-0.5">·prev</span>
+							</span>
+						) : (
+							<span className="text-[10px] text-slate-400 italic flex-shrink-0">not yet scored</span>
+						)}
 					</>
 				) : (
 					<span className="text-[10px] text-slate-400 italic flex-shrink-0">not yet scored</span>
 				)}
-				{/* #11 — open the case's raw data + score trajectory + provenance. */}
-				{onViewData && (
-					<button
-						type="button"
-						onClick={(e) => { e.stopPropagation(); onViewData(); }}
-						title="View this case's data"
-						className="flex-shrink-0 text-slate-300 hover:text-gold-600 transition-colors"
-					>
-						<FileJson className="w-3.5 h-3.5" />
-					</button>
-				)}
+				{/* The redundant "view this case's data" icon was removed — the case
+				    detail (open it by clicking the score, or ⋯ → View data) already
+				    shows the raw case data alongside the trajectory + provenance. */}
 				{/* WS-3 — a VISIBLE ⋯ opens the same actions menu as right-click. */}
 				{onContextMenu && (
 					<button
@@ -169,7 +181,7 @@ function MetricEvolution({ series }: { series: CasebookMetricEvolution[] }) {
 	);
 }
 
-export default function CasebookPanel({ app, loop, atTs, onSelectCase, onViewData, onContextMenuCase, selectedCaseId, onSelectMetrics, metricsSelected }: {
+export default function CasebookPanel({ app, loop, atTs, onSelectCase, onViewData, onContextMenuCase, selectedCaseId, onSelectMetrics, metricsSelected, showMetrics = true }: {
 	app: string; loop: string; atTs?: string;
 	onSelectCase?: (c: { id: string; label: string }) => void;
 	onViewData?: (c: { id: string; label: string }) => void;
@@ -179,6 +191,9 @@ export default function CasebookPanel({ app, loop, atTs, onSelectCase, onViewDat
 	selectedCaseId?: string;
 	onSelectMetrics?: () => void;
 	metricsSelected?: boolean;
+	// Hide the in-panel metrics section (the Data tab drops it — metrics live in
+	// the panel header chip, not duplicated under the cases).
+	showMetrics?: boolean;
 }) {
 	const [book, setBook] = useState<Casebook | null>(null);
 
@@ -243,7 +258,7 @@ export default function CasebookPanel({ app, loop, atTs, onSelectCase, onViewDat
 			</div>
 
 			{/* Metrics — one data entry; opens its curves in the right canvas. */}
-			{evo.length > 0 && (
+			{showMetrics && evo.length > 0 && (
 				onSelectMetrics ? (
 					<button
 						onClick={onSelectMetrics}

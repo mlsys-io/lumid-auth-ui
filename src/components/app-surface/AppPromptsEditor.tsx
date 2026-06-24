@@ -16,7 +16,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
 	FileText, Save, X, AlertTriangle, Info, Loader2, RotateCcw,
-	Eye, Pencil, Scale, Brain,
+	Eye, Pencil, Scale, Brain, ArrowLeft,
 } from "lucide-react";
 import { me, MeApiError, type MeAppPrompt } from "@/api/me";
 import { LumidMarkdown } from "./LumidMarkdown";
@@ -146,13 +146,21 @@ function SourceBadge({ source }: { source: "local" | "shared" }) {
 // full /studio/a/:app/prompts route. Clicking an analyst/judge prompt in the
 // Assets rail opens this here rather than navigating away. A thin back header
 // + the existing split-pane PromptPane.
-export function EmbeddedPromptEditor({ app, name, onChangedSource }: {
-	app: string; name: string; onChangedSource?: () => void;
+export function EmbeddedPromptEditor({ app, name, onBack, onChangedSource }: {
+	app: string; name: string; onBack?: () => void; onChangedSource?: () => void;
 }) {
-	// No back bar — the host panel's breadcrumb owns Back. Just the editor.
 	return (
 		<div className="flex flex-col h-full min-h-0 rounded-xl border border-slate-200 bg-white overflow-hidden">
-			<PromptPane key={name} app={app} name={name} onChangedSource={onChangedSource ?? (() => {})} />
+			{onBack && (
+				<div className="flex items-center px-3 py-1.5 border-b border-slate-100 flex-shrink-0">
+					<button onClick={onBack} className="inline-flex items-center gap-1 text-[12px] text-slate-500 hover:text-slate-900 transition-colors">
+						<ArrowLeft className="w-3.5 h-3.5" /> Run tree
+					</button>
+				</div>
+			)}
+			<div className="flex-1 min-h-0">
+				<PromptPane key={name} app={app} name={name} onChangedSource={onChangedSource ?? (() => {})} />
+			</div>
 		</div>
 	);
 }
@@ -169,7 +177,9 @@ function PromptPane({ app, name, onChangedSource }: { app: string; name: string;
 	const [loadError, setLoadError] = useState<string | null>(null);
 	// One view at a time, switchable — not a side-by-side split. Narrow embedded
 	// panels can't afford two columns, and a single column reads cleaner.
-	const [mode, setMode] = useState<"edit" | "preview">("edit");
+	// Default to PREVIEW — opening a prompt is usually to read it; switch to Edit
+	// to change it.
+	const [mode, setMode] = useState<"edit" | "preview">("preview");
 	const liveRef = useRef(true);
 
 	const dirty = original !== null && draft !== original;
