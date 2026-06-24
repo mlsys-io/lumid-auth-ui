@@ -21,10 +21,11 @@ import { useMemo, useState, useEffect, useCallback, useRef, type MouseEvent as R
 import { createPortal } from "react-dom";
 import {
 	ReactFlow, Background, Controls, Position,
-	type Node, type Edge, type ReactFlowInstance,
+	BaseEdge, EdgeLabelRenderer, getBezierPath, getSmoothStepPath,
+	type Node, type Edge, type EdgeProps, type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { ArrowLeft, GitBranch, Trophy, Sparkles, Loader2, FlaskConical, MessageSquare, MoreHorizontal, Eye } from "lucide-react";
+import { ArrowLeft, GitBranch, Trophy, Sparkles, Loader2, FlaskConical, MessageSquare, MoreHorizontal, Eye, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import {
 	fetchTrajectory, fetchTrajectorySignals, postTrajectorySignal,
@@ -67,7 +68,7 @@ type GNode = TrajectoryNode & { proposed?: boolean; note?: string };
 
 function fmtScore(v?: number): string {
 	if (v == null) return "—";
-	return Number.isInteger(v) ? String(v) : String(+v.toFixed(3));
+	return Number.isInteger(v) ? String(v) : String(+v.toFixed(2));
 }
 // Run timestamp → "Jun 12, 23:20" (full ts, 24h) or "Jun 11" (day-bucketed).
 function fmtWhen(ts?: string): string | null {
@@ -91,16 +92,22 @@ function menuNodeLabel(n: GNode): string {
 	return fmtWhen(n.run_ts || n.cycle_ts) || "run";
 }
 
+// Node boxes share a UNIFORM neutral border so the tree reads calmly — the
+// trend (better/worse vs baseline) lives in the colored status DOT + the
+// signed delta text inside each node (and the header version dots), not in a
+// sea of red/gold borders. `border` here is the box outline; `dot` is the trend.
+const _UNIFORM_BORDER = "rgb(203 213 225)"; // slate-300 — same for every node
 function tone(n: GNode, baseline: number | null | undefined, hib: boolean) {
 	if (n.proposed) return { border: "rgb(176 143 69)", dot: "rgb(176 143 69)", dashed: true };
-	if (n.kind === "baseline") return { border: "rgb(100 116 139)", dot: "rgb(100 116 139)", dashed: false };
-	if (!n.scored || n.score == null) return { border: "rgb(203 213 225)", dot: "rgb(203 213 225)", dashed: true };
+	if (n.kind === "baseline") return { border: _UNIFORM_BORDER, dot: "rgb(100 116 139)", dashed: false };
+	if (!n.scored || n.score == null) return { border: _UNIFORM_BORDER, dot: "rgb(203 213 225)", dashed: true };
 	const d =
 		n.delta_vs_baseline != null ? n.delta_vs_baseline
 			: baseline != null ? (hib ? n.score - baseline : baseline - n.score) : 0;
-	if (d > 1e-6) return { border: "rgb(150 119 58)", dot: "rgb(176 143 69)", dashed: false };
-	if (d < -1e-6) return { border: "rgb(190 18 60)", dot: "rgb(225 29 72)", dashed: false };
-	return { border: "rgb(148 163 184)", dot: "rgb(148 163 184)", dashed: false };
+	// Uniform border for every scored node; the DOT carries the trend.
+	if (d > 1e-6) return { border: _UNIFORM_BORDER, dot: "rgb(176 143 69)", dashed: false };
+	if (d < -1e-6) return { border: _UNIFORM_BORDER, dot: "rgb(225 29 72)", dashed: false };
+	return { border: _UNIFORM_BORDER, dot: "rgb(148 163 184)", dashed: false };
 }
 
 // Vertical tree: depth → y; champion stays on the parent's trunk x, siblings
@@ -141,7 +148,7 @@ const KEEP_RECENT = 5;
 // variants (branch points) and every variant, leaves, nodes needing a decision,
 // queued ghosts, the focused node, and the most recent KEEP_RECENT champions.
 // Each collapsed run folds into the connecting trunk edge as a "+N cycles" badge.
-function buildDisplay(model: GNode[], pickedId: string | null): DisplayG[] {
+function buildDisplay(model: GNode[], pickedId: string | null, expanded: Set<string>): DisplayG[] {
 	const byId = new Map(model.map((n) => [n.id, n] as const));
 	const parentOf = (n: GNode) => (n.parent_id && byId.has(n.parent_id) ? n.parent_id : undefined);
 	const kids = new Map<string | undefined, GNode[]>();
@@ -157,8 +164,15 @@ function buildDisplay(model: GNode[], pickedId: string | null): DisplayG[] {
 		(parentOf(n) ? nKids(parentOf(n)!) !== 1 : false) ||     // first node off a branch
 		!n.is_champion ||                                        // any variant always shows
 		!!n.needs_decision || n.id === pickedId || recent.has(n.id);
-	const sig = model.filter(isSig).sort((a, b) => a.depth - b.depth); // parents first
-	const sigSet = new Set(sig.map((n) => n.id));
+	const sigSet = new Set(model.filter(isSig).map((n) => n.id));
+	// Expanded "+N cycles" badges: reveal the elided champion-only cycles between
+	// an expanded anchor and its display parent by promoting them to significant.
+	for (const anchor of expanded) {
+		if (!sigSet.has(anchor)) continue;
+		let p = parentOf(byId.get(anchor)!);
+		while (p && !sigSet.has(p)) { sigSet.add(p); p = parentOf(byId.get(p)!); }
+	}
+	const sig = model.filter((n) => sigSet.has(n.id)).sort((a, b) => a.depth - b.depth); // parents first
 	const ddCache = new Map<string, number>();
 	const out: DisplayG[] = [];
 	for (const n of sig) {
@@ -170,6 +184,43 @@ function buildDisplay(model: GNode[], pickedId: string | null): DisplayG[] {
 		out.push({ ...n, displayParentId, elided, displayDepth: dd });
 	}
 	return out;
+}
+
+// A trunk edge that hides a run of champion-only cycles. Renders the path plus a
+// clickable pill — "+N cycles" to expand the hidden runs, "collapse" to fold them
+// back. The pill is the ONLY interactive bit (nodrag/nopan + pointerEvents).
+type CollapsibleEdgeData = {
+	elided?: number;
+	collapsed?: boolean;       // true = "+N cycles" (expand); false = "collapse"
+	anchorId?: string;
+	snake?: boolean;
+	onToggle?: (id: string) => void;
+};
+function CollapsibleEdge(props: EdgeProps) {
+	const { sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, markerEnd, style } = props;
+	const d = (props.data || {}) as CollapsibleEdgeData;
+	const [path, labelX, labelY] = d.snake
+		? getSmoothStepPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition })
+		: getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition });
+	const n = d.elided || 0;
+	return (
+		<>
+			<BaseEdge id={props.id} path={path} markerEnd={markerEnd} style={style} />
+			<EdgeLabelRenderer>
+				<button
+					type="button"
+					className="nodrag nopan inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[10px] font-medium bg-white text-slate-500 border-slate-200 hover:border-gold-300 hover:text-gold-700 shadow-sm transition-colors"
+					style={{ position: "absolute", transform: `translate(-50%,-50%) translate(${labelX}px,${labelY}px)`, pointerEvents: "all" }}
+					title={d.collapsed ? "Show the hidden cycles" : "Hide these cycles again"}
+					onClick={(e) => { e.stopPropagation(); if (d.anchorId) d.onToggle?.(d.anchorId); }}
+				>
+					{d.collapsed
+						? <><ChevronDown className="w-2.5 h-2.5" />+{n} cycle{n > 1 ? "s" : ""}</>
+						: <><ChevronUp className="w-2.5 h-2.5" />collapse</>}
+				</button>
+			</EdgeLabelRenderer>
+		</>
+	);
 }
 
 // Tidy vertical tree (Knuth post-order): leaves pack left→right into COL_X slots,
@@ -358,6 +409,14 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 	const [traj, setTraj] = useState<Trajectory | null>(null);
 	const [signals, setSignals] = useState<TrajectorySignal[]>([]);
 	const [loading, setLoading] = useState(true);
+	// Which "+N cycles" badges are expanded (keyed by the anchor node id).
+	const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+	const toggleExpand = useCallback((id: string) => setExpanded((s) => {
+		const next = new Set(s);
+		if (next.has(id)) next.delete(id); else next.add(id);
+		return next;
+	}), []);
+	const edgeTypes = useMemo(() => ({ collapsible: CollapsibleEdge }), []);
 	const [picked, setPicked] = useState<GNode | null>(null);
 	const [view, setView] = useState<"tree" | "pipeline">("tree");
 	const [cycle, setCycle] = useState<MeCycleDetail | null>(null);
@@ -422,7 +481,7 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 	const openMenuRef = useRef<(e: ReactMouseEvent, tn: GNode) => void>(() => {});
 
 	const { nodes, edges } = useMemo(() => {
-		const display = buildDisplay(model, picked?.id ?? null);
+		const display = buildDisplay(model, picked?.id ?? null, expanded);
 		const shown = new Set(display.map((n) => n.id));
 		// A long, fork-free chain wraps into a snake; otherwise the vertical tree.
 		const snake = snakeLayout(display);
@@ -462,7 +521,7 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 				position: pos.get(n.id) || { x: 0, y: n.displayDepth * ROW_Y },
 				data: {
 					label: (
-						<div className="group relative px-2 py-1 text-left" style={{ width: NODE_W }}>
+						<div className="group relative px-2 py-1 text-left w-full h-full flex flex-col justify-center overflow-hidden">
 							<div className="flex items-center gap-1">
 								<span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: t.dot }} />
 								<span className={cn("text-[11px] font-semibold flex-shrink-0 leading-none", n.proposed ? "text-gold-700 italic" : isBase ? "text-slate-500" : "text-slate-800")}
@@ -525,10 +584,15 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 				targetPosition: snake ? (snake.tgtPos.get(n.id) ?? Position.Top) : Position.Top,
 				style: {
 					background: n.proposed ? "rgb(254 252 245)" : "white",
-					border: `2px ${t.dashed ? "dashed" : "solid"} ${t.border}`,
+					border: `1.5px ${t.dashed ? "dashed" : "solid"} ${t.border}`,
 					borderRadius: 12,
 					padding: 0,
-					minWidth: NODE_W,
+					// FIXED width AND height so every node is the same box regardless of
+					// content (model chip / config label / learned badge / baseline).
+					width: NODE_W,
+					height: NODE_H,
+					boxSizing: "border-box",
+					overflow: "hidden",
 					boxShadow: isBest
 						? "0 0 0 3px rgba(176,143,69,0.18), 0 1px 3px rgba(15,23,42,0.08)"
 						: sel ? "0 0 0 3px rgba(56,189,248,0.4)" : "0 1px 2px rgba(15,23,42,0.05)",
@@ -541,22 +605,21 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 		for (const n of display) {
 			if (!n.displayParentId || !shown.has(n.displayParentId)) continue;
 			const trunk = trunkSet.has(n.id) && trunkSet.has(n.displayParentId);
+			// A trunk edge hides cycles (elided>0 → "+N cycles" expand pill) OR is an
+			// already-expanded anchor (→ "collapse" pill). Either gets the custom
+			// interactive edge; everything else is a plain edge.
+			const collapsible = n.elided > 0 || expanded.has(n.id);
 			edges.push({
 				id: `e:${n.displayParentId}->${n.id}`,
 				source: n.displayParentId,
 				target: n.id,
 				// Bezier curves for the branched tree (diagonal forks read cleanly);
 				// smoothstep only for the snake grid, where right-angles fit the rows.
-				type: snake ? "smoothstep" : "default",
+				type: collapsible ? "collapsible" : snake ? "smoothstep" : "default",
 				animated: (trunk || !!n.proposed) && n.elided === 0,
-				// A collapsed run of champion-only cycles gets a "+N cycles" badge so
-				// the elided history reads without inflating the tree's height.
-				label: n.elided > 0 ? `+${n.elided} cycle${n.elided > 1 ? "s" : ""}` : undefined,
-				labelShowBg: n.elided > 0,
-				labelBgPadding: [6, 2],
-				labelBgBorderRadius: 8,
-				labelStyle: { fill: "rgb(100 116 139)", fontSize: 10, fontWeight: 500 },
-				labelBgStyle: { fill: "rgb(248 250 252)", stroke: "rgb(226 232 240)" },
+				data: collapsible
+					? { elided: n.elided, collapsed: n.elided > 0, anchorId: n.id, snake: !!snake, onToggle: toggleExpand }
+					: undefined,
 				style: n.proposed
 					? { stroke: "rgb(176 143 69)", strokeWidth: 1.5, strokeDasharray: "5 4" }
 					: trunk
@@ -565,7 +628,7 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 			});
 		}
 		return { nodes, edges };
-	}, [model, byId, baseline, hib, picked, traj]);
+	}, [model, byId, baseline, hib, picked, traj, expanded, toggleExpand]);
 
 	const openPipeline = useCallback((tn: GNode) => {
 		setPicked(tn);
@@ -645,7 +708,7 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 				) : (<>
 				<GitBranch className="w-6 h-6 text-slate-300" />
 				<div className="text-sm text-slate-500">No run trajectory yet.</div>
-				<div className="text-xs text-slate-400 max-w-xs">Each run becomes a node here — and when this workflow explores variants, they branch into a tree with the best-so-far on the trunk.</div>
+				<div className="text-xs text-slate-400 max-w-xs">Each run becomes a node here — and when this workflow explores experiments, they branch into a tree with the best-so-far on the trunk.</div>
 				</>)}
 			</div>
 		);
@@ -665,7 +728,7 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 				<div className="w-1/2 h-full relative">
 					{/* header rollup — trend + learning, at a glance */}
 					<div className="absolute top-0 left-0 right-0 z-10 flex items-center gap-2 px-3 py-2 bg-gradient-to-b from-white via-white/90 to-transparent pointer-events-none">
-						<span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wide flex-shrink-0" title="branching tree of runs & attempts"><GitBranch className="w-3.5 h-3.5 text-gold-500" /> Run tree</span>
+						<span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wide flex-shrink-0" title="branching tree of experiments"><GitBranch className="w-3.5 h-3.5 text-gold-500" /> Run tree</span>
 						<span className="text-[10px] text-slate-300 normal-case tracking-normal truncate hidden xl:inline">click a run to link the panels · ⋯ for log, branch, compare</span>
 						{headerRight && <div className="ml-auto flex-shrink-0 pointer-events-auto">{headerRight}</div>}
 					</div>
@@ -679,6 +742,7 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 						key={`${nodes.length}`}
 						nodes={nodes}
 						edges={edges}
+						edgeTypes={edgeTypes}
 						onInit={onInit}
 						fitView={false}
 						proOptions={{ hideAttribution: true }}
