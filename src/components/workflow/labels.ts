@@ -8,6 +8,12 @@
 // these helpers only translate what reaches the screen. Import from here
 // instead of hardcoding so terminology stays consistent and "loop"/"cycle"
 // leakage can't creep back in.
+//
+// U1 unified vocabulary (2026-06-24, see docs/architecture/*.md): the run axis
+// is **experiment** (the config you run + compare — absorbs the old
+// variant/attempt) over a **dataset**, scoring **items** (absorbs case/dims).
+// These labels now SHOW "experiment"; tooltips keep the legacy term for power
+// users. The backend field stays `variant_id` (mirrored by `experiment`).
 
 export interface Label {
 	/** The plain-language word shown to the user. */
@@ -17,20 +23,20 @@ export interface Label {
 }
 
 export const L = {
-	// The cross-run branching tree of runs & attempts.
-	runTree: { text: "Run tree", tip: "branching tree of runs & attempts (trajectory)" } as Label,
-	// One config point an autoresearch run explored within a run.
-	attempt: { text: "attempt", tip: "variant" } as Label,
-	attempts: { text: "attempts", tip: "variants" } as Label,
-	// The best-performing attempt so far.
+	// The cross-run branching tree of experiments.
+	runTree: { text: "Run tree", tip: "branching tree of experiments (trajectory)" } as Label,
+	// One configured run you compare (U1: experiment; was variant/attempt).
+	attempt: { text: "experiment", tip: "experiment — one configured run you compare (was variant/attempt)" } as Label,
+	attempts: { text: "experiments", tip: "experiments (was variants/attempts)" } as Label,
+	// The best-performing experiment so far.
 	champion: { text: "best ★", tip: "champion — best so far" } as Label,
 	// The starting configuration the tree branches from.
 	baseline: { text: "starting point", tip: "baseline" } as Label,
 	// Learnings written back into the knowledge graph.
 	compound: { text: "saved learnings", tip: "compounded into the knowledge graph" } as Label,
 	// One execution of a workflow.
-	run: { text: "run", tip: "cycle" } as Label,
-	runs: { text: "runs", tip: "cycles" } as Label,
+	run: { text: "run", tip: "experiment run (cycle)" } as Label,
+	runs: { text: "runs", tip: "experiment runs (cycles)" } as Label,
 	// The within-run transcript (one term for what used to be Conversation /
 	// Transcript / Trajectory log).
 	runLog: { text: "Evaluation", tip: "the run's evaluation record — the within-run transcript (analyst↔judge turns + step/stage events)" } as Label,
