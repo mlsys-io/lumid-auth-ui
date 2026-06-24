@@ -96,14 +96,14 @@ const PAGE_META: Array<{
 		pattern: /^\/studio\/library\/skills/,
 		icon: Store,
 		title: "Skills",
-		subtitle: "The capabilities your apps import — health, versions, who uses what.",
+		subtitle: "The capabilities your agents import — health, versions, who uses what.",
 		iconTone: "text-gold-600",
 	},
 	{
 		pattern: /^\/studio\/library\/experiments/,
 		icon: Store,
 		title: "Experiments",
-		subtitle: "Hypotheses your apps are testing, across every app.",
+		subtitle: "Hypotheses your agents are testing, across every agent.",
 		iconTone: "text-gold-600",
 	},
 	{
@@ -185,7 +185,7 @@ function deriveCrumbs(pathname: string): Array<{ label: string; to: string }> {
 	if (m2) return [{ label: "Activity", to: "/studio/runs" }];
 	// Cycle inspector is reached from an app's workflow panel.
 	const m3 = pathname.match(/^\/studio\/(?:intents|today)\/cycle\/([^/]+)\/([^/]+)\/[^/]+/);
-	if (m3) return [{ label: "My Apps", to: "/studio/apps" }, { label: appTitle(decodeURIComponent(m3[1])), to: `/studio/apps/${m3[1]}?selected=${m3[2]}` }];
+	if (m3) return [{ label: "My Agents", to: "/studio/apps" }, { label: appTitle(decodeURIComponent(m3[1])), to: `/studio/apps/${m3[1]}?selected=${m3[2]}` }];
 	// T13 — /studio/intents/:slug shows the autoresearch detail panel.
 	// Match it AFTER the cycle regex so the cycle path isn't shadowed.
 	const m3b = pathname.match(/^\/studio\/intents\/[^/]+/);

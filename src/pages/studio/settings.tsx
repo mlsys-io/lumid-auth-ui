@@ -24,7 +24,7 @@ const SECTIONS: Section[] = [
 	{ id: 'profile',   icon: User,   title: 'Profile',          description: 'Your email, display name, and account basics.' },
 	{ id: 'tokens',    icon: Key,    title: 'API tokens',       description: 'Personal access tokens for CLI and integrations.' },
 	{ id: 'oauth',     icon: Lock,   title: 'Connected services', description: 'Google, Slack, GitHub, and other OAuth grants.' },
-	{ id: 'secrets',   icon: Lock,   title: 'App secrets',      description: 'API keys your installed apps need (per app, per key).' },
+	{ id: 'secrets',   icon: Lock,   title: 'Agent secrets',    description: 'API keys your installed agents need (per agent, per key).' },
 	{ id: 'privacy',   icon: Shield, title: 'Privacy & sharing', description: 'Per-agent auto-publish toggles and data exports.' },
 	{ id: 'chat',      icon: MessageSquare, title: 'Chat & navigation', description: 'How opening something from a list behaves.' },
 ];

@@ -251,7 +251,7 @@ export default function MarketplaceBrowse() {
 			setStatuses((m) => ({ ...m, [name]: { state: "installing", intentId: resp.intent_id } }));
 			// Mark it so My Apps opens the generate+customize step once it lands.
 			markPendingCustomize(name);
-			toast.success(`Installing ${label}… it'll appear in My Apps shortly.`);
+			toast.success(`Installing ${label}… it'll appear in My Agents shortly.`);
 			navigate("/studio/apps");
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : String(e);
@@ -515,8 +515,8 @@ function RepoGrid({
 // Per-kind helper copy under the card body — says what the primary action
 // actually DOES, since it differs per kind.
 const KIND_HELPER: Record<KindAction, string> = {
-	"install":   "Installs into My Apps · runs on its schedule · first run is automatic",
-	"add-skill": "Plugs into an app you own — pick which one",
+	"install":   "Installs into My Agents · runs on its schedule · first run is automatic",
+	"add-skill": "Plugs into an agent you own — pick which one",
 	"subscribe": "Syncs its knowledge into yours — re-sync anytime",
 	"view":      "", // per-kind line chosen below
 };
@@ -762,7 +762,7 @@ function AppDetailDrawer({
 	// Link to the full read-only repo browser (Files + PRs). Public browse uses
 	// the /explore mount; signed-in uses /studio.
 	const repoHref = `${isPublic ? "/explore" : "/studio"}/r/${encodeURIComponent(app.owner_sub)}/${encodeURIComponent(app.name)}`;
-	const [sidebar, setSidebar] = useState<SidebarConfig>({ show: true, label: title, section: "Apps" });
+	const [sidebar, setSidebar] = useState<SidebarConfig>({ show: true, label: title, section: "Agents" });
 	const [preview, setPreview] = useState<{ state: "idle" | "loading" | "loaded" | "unavailable"; markdown?: string }>({ state: "idle" });
 	// The repo's parsed xpcloud.yaml — drives the hierarchy panel (what this
 	// app imports / declares) without a second fetch.
@@ -948,7 +948,7 @@ function AppDetailDrawer({
 					{/* For skills: who uses it (hierarchy, bottom-up) */}
 					{app.kind === "skill" && (
 						<div className="rounded-lg border border-slate-200 p-3.5 space-y-1.5">
-							<div className="text-[12px] font-medium text-slate-700">Apps using this skill</div>
+							<div className="text-[12px] font-medium text-slate-700">Agents using this skill</div>
 							{consumers === null ? (
 								<div className="text-[11px] text-slate-400"><Loader2 className="w-3 h-3 animate-spin inline mr-1" />checking…</div>
 							) : consumers.length === 0 ? (
@@ -1059,7 +1059,7 @@ function AppDetailDrawer({
 							<button onClick={() => onInstall(sidebar)} disabled={isInstalling} className={`w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${isInstalling ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-slate-900 text-white hover:bg-slate-700 active:scale-[0.98]"}`}>
 								{isInstalling ? <><Loader2 className="w-4 h-4 animate-spin" /> Installing…</> : <><Plus className="w-4 h-4" /> Install {title}</>}
 							</button>
-							<p className="mt-2 text-center text-[11px] text-slate-400">Appears in My Apps — first run starts automatically.</p>
+							<p className="mt-2 text-center text-[11px] text-slate-400">Appears in My Agents — first run starts automatically.</p>
 						</>
 					))}
 					{act === "add-skill" && (
