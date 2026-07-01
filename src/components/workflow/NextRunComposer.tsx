@@ -17,11 +17,11 @@
 // Phases B–D add success-criteria/auto-decide, variant fan-out + data scope,
 // and schedule-once — deferred (see the plan).
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { GitBranch, Loader2, X, Sparkles, Play, Trophy, Target, Layers, Clock, Save } from "lucide-react";
+import { GitBranch, Loader2, X, Play, Trophy, Target, Layers, Clock, Save } from "lucide-react";
 import { toast } from "sonner";
-import { me, MeApiError, type NextAction } from "@/api/me";
+import { me, MeApiError } from "@/api/me";
 import { fetchTrajectory, postTrajectorySignal, type Trajectory, type TrajectoryNode } from "@/api/trajectory";
 import { fetchCasebook, type CasebookCase } from "@/api/casebook";
 import SchedulePicker from "@/components/workflow/SchedulePicker";
@@ -64,51 +64,53 @@ function nodeLabel(n: TrajectoryNode): string {
 	const v = n.agent_version || "run";
 	return `${v}${n.model ? ` · ${n.model}` : ""} · ${fmtScore(n.score)}`;
 }
-const ACTION_VERB: Record<string, string> = {
-	run_more: "Run more samples",
-	try_variant: "Try a variant",
-	score_remaining: "Score remaining cases",
-	promote: "Promote the winner",
-	calibrate: "Re-calibrate",
-	kickstart: "First run",
-};
 
-export default function NextRunComposer({ app, loop, fromTs, fromLabel, schedule, onClose, onLaunched, onChanged }: {
+export default function NextRunComposer({ app, loop, fromTs, fromLabel, schedule, prefill, onClose, onLaunched, onChanged }: {
 	app: string;
 	loop: string;
 	fromTs?: string;       // the run to start from (lineage parent); default = champion
 	fromLabel?: string;
 	schedule?: string;     // the loop's current recurring cadence (cron / "@trigger")
+	// "Edit a planned run" — seed criteria/cases from the cancelled planned row.
+	prefill?: { branch_label?: string; criteria?: string; cases?: string[] | null };
 	onClose: () => void;
 	onLaunched?: () => void;
 	onChanged?: () => void; // fired after the recurring schedule is saved
 }) {
 	const [traj, setTraj] = useState<Trajectory | null>(null);
-	const [actions, setActions] = useState<NextAction[]>([]);
 	const [parent, setParent] = useState<string | undefined>(fromTs);
 	const [note, setNote] = useState("");
 	const [overridesText, setOverridesText] = useState("");
 	const [busy, setBusy] = useState(false);
 
-	// Recurring schedule (moved here from the workflow header). Saved via patchLoop.
+	// Recurring schedule (a settings control — NOT the run attempt). Auto-applies
+	// on change (debounced), so there's no Save button and setting a cadence never
+	// implies "run now": patchLoop only updates the cron, it fires nothing.
 	const [cron, setCron] = useState(schedule || "@trigger");
-	const [schedDirty, setSchedDirty] = useState(false);
 	const [savingSched, setSavingSched] = useState(false);
-	const saveSchedule = async () => {
-		setSavingSched(true);
-		try {
-			await me.patchLoop(app, loop, { schedule: cron });
-			toast.success(`Schedule set — ${describeSchedule(cron)}.`);
-			setSchedDirty(false);
-			onChanged?.();
-		} catch (e) {
-			toast.error(`Failed: ${e instanceof MeApiError ? e.message : String(e)}`);
-		} finally { setSavingSched(false); }
-	};
+	const [schedSaved, setSchedSaved] = useState(false);
+	const savedCronRef = useRef(schedule || "@trigger");
+	useEffect(() => {
+		if (cron === savedCronRef.current) return; // unchanged → nothing to save
+		const t = window.setTimeout(async () => {
+			setSavingSched(true); setSchedSaved(false);
+			try {
+				await me.patchLoop(app, loop, { schedule: cron });
+				savedCronRef.current = cron;
+				setSchedSaved(true);
+				onChanged?.();
+				window.setTimeout(() => setSchedSaved(false), 2500);
+			} catch (e) {
+				toast.error(`Schedule failed: ${e instanceof MeApiError ? e.message : String(e)}`);
+			} finally { setSavingSched(false); }
+		}, 650);
+		return () => window.clearTimeout(t);
+	}, [cron, app, loop, onChanged]);
 
-	// Phase B — success criteria + auto-decide.
-	const [criteriaKey, setCriteriaKey] = useState<string>("none");
-	const [criteriaCustom, setCriteriaCustom] = useState("");
+	// Phase B — success criteria + auto-decide. Seeded from `prefill` when editing
+	// a planned run (custom criteria → the Advanced field).
+	const [criteriaKey, setCriteriaKey] = useState<string>(prefill?.criteria ? "custom" : "none");
+	const [criteriaCustom, setCriteriaCustom] = useState(prefill?.criteria || "");
 	const [autoPromote, setAutoPromote] = useState(false);
 
 	// Phase C — variant fan-out.
@@ -116,11 +118,17 @@ export default function NextRunComposer({ app, loop, fromTs, fromLabel, schedule
 	const [variantRows, setVariantRows] = useState<string[]>([""]);
 	const [priorityText, setPriorityText] = useState("");
 
+	// Phase D — WHEN the run attempt fires: "now" or a one-off future time
+	// (not_before). Each "at a time" launch lands as its own PLANNED row, so a
+	// loop can have MANY scheduled runs (not just the single recurring cadence).
+	const [whenMode, setWhenMode] = useState<"now" | "at">("now");
+	const [runAt, setRunAt] = useState("");
+
 	// Phase C — data scope (evaluate on full casebook vs a subset of cases).
-	const [scope, setScope] = useState<"full" | "subset">("full");
+	const [scope, setScope] = useState<"full" | "subset">(prefill?.cases?.length ? "subset" : "full");
 	const [cases, setCases] = useState<CasebookCase[]>([]);
 	const [casesLoaded, setCasesLoaded] = useState(false);
-	const [pickedCases, setPickedCases] = useState<Set<string>>(new Set());
+	const [pickedCases, setPickedCases] = useState<Set<string>>(new Set(prefill?.cases || []));
 
 	// Resolve the criteria expression: presets map to a fixed string; "custom"
 	// uses the free-text field. "" = no automatic check.
@@ -135,11 +143,10 @@ export default function NextRunComposer({ app, loop, fromTs, fromLabel, schedule
 		[scope, pickedCases],
 	);
 
-	// Load the run tree (parent picker + champion default) + recommender.
+	// Load the run tree (parent picker + champion default).
 	useEffect(() => {
 		let live = true;
 		fetchTrajectory(app, loop).then((t) => { if (live) setTraj(t); }).catch(() => {});
-		me.nextActions(app).then((r) => { if (live) setActions(r.actions || []); }).catch(() => {});
 		return () => { live = false; };
 	}, [app, loop]);
 
@@ -164,14 +171,6 @@ export default function NextRunComposer({ app, loop, fromTs, fromLabel, schedule
 		if (def) setParent(def);
 	}, [fromTs, champion, nodes, parent]);
 
-	// Suggestions for this loop (or loop-agnostic), most actionable first.
-	const suggestions = useMemo(
-		() => actions
-			.filter((a) => !a.loop || a.loop === loop)
-			.sort((a, b) => (b.severity === "act" ? 1 : 0) - (a.severity === "act" ? 1 : 0)),
-		[actions, loop],
-	);
-
 	// Lazy-load the case list the first time the user opens "Subset".
 	useEffect(() => {
 		if (scope !== "subset" || casesLoaded) return;
@@ -187,14 +186,6 @@ export default function NextRunComposer({ app, loop, fromTs, fromLabel, schedule
 			if (next.has(id)) next.delete(id); else next.add(id);
 			return next;
 		});
-
-	const applySuggestion = (a: NextAction) => {
-		if (a.reason) setNote(a.reason);
-		const v = a.run_args?.variant;
-		if (v && Object.keys(v).length) {
-			setOverridesText(Object.entries(v).map(([k, val]) => `${k} = ${val}`).join("\n"));
-		}
-	};
 
 	const launchNow = async () => {
 		const directive = note.trim();
@@ -237,6 +228,13 @@ export default function NextRunComposer({ app, loop, fromTs, fromLabel, schedule
 					config: hasVariant ? variant : undefined,
 				});
 			}
+			// "At a time" → a one-off scheduled (deferred) run; else run now.
+			const notBefore = whenMode === "at" && runAt ? new Date(runAt).toISOString() : undefined;
+			if (whenMode === "at" && !runAt) {
+				toast.error("Pick a date & time, or switch to “Now”.");
+				setBusy(false);
+				return;
+			}
 			await me.launchRun(app, loop, {
 				from_run_ts: parent,
 				branch_label: label,
@@ -244,8 +242,11 @@ export default function NextRunComposer({ app, loop, fromTs, fromLabel, schedule
 				criteria: criteriaExpr || undefined,
 				auto_promote: autoPromote && criteriaExpr ? true : undefined,
 				cases: scopedCases,
+				not_before: notBefore,
 			});
-			toast.success("Experiment queued — it'll appear in the run tree shortly.");
+			toast.success(notBefore
+				? `Scheduled for ${new Date(runAt).toLocaleString()} — see Planned runs.`
+				: "Experiment queued — it'll appear in the run tree shortly.");
 			onLaunched?.();
 			onClose();
 		} catch (e) {
@@ -254,8 +255,9 @@ export default function NextRunComposer({ app, loop, fromTs, fromLabel, schedule
 	};
 
 	const parentNode = nodes.find((n) => n.run_ts === parent);
-	const launchLabel = tryMode === "fanout" ? "Queue experiments" : "Run experiment";
-	const LaunchIcon = busy ? Loader2 : tryMode === "fanout" ? Layers : Play;
+	const launchLabel = tryMode === "fanout" ? "Queue experiments"
+		: whenMode === "at" ? "Schedule run" : "Run experiment";
+	const LaunchIcon = busy ? Loader2 : tryMode === "fanout" ? Layers : whenMode === "at" ? Clock : Play;
 
 	return createPortal(
 		<div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/30 backdrop-blur-sm animate-in fade-in duration-150" onClick={onClose}>
@@ -270,22 +272,6 @@ export default function NextRunComposer({ app, loop, fromTs, fromLabel, schedule
 
 				{/* body — fixed-size popout: this scrolls, header/footer stay put */}
 				<div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
-						{/* Suggested (recommender) */}
-						{suggestions.length > 0 && (
-							<div className="rounded-lg border border-gold-200 bg-gold-50/50 p-2.5 space-y-1.5">
-								<div className="text-[10px] uppercase tracking-wide text-gold-700 font-semibold flex items-center gap-1"><Sparkles className="w-3 h-3" /> Suggested</div>
-								{suggestions.slice(0, 2).map((a, i) => (
-									<div key={i} className="flex items-start gap-2 text-[11.5px]">
-										<div className="min-w-0 flex-1">
-											<span className="font-medium text-slate-800">{ACTION_VERB[a.action] || a.action}</span>
-											<span className="text-slate-500"> — {a.reason}</span>
-										</div>
-										<button onClick={() => applySuggestion(a)} className="flex-shrink-0 text-[10.5px] text-gold-700 hover:text-gold-900 underline decoration-dotted">Use</button>
-									</div>
-								))}
-							</div>
-						)}
-
 						{/* Start from */}
 						<div>
 							<label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Start from</label>
@@ -410,19 +396,35 @@ export default function NextRunComposer({ app, loop, fromTs, fromLabel, schedule
 								</div>
 							)}
 
+							{/* When the run ATTEMPT fires: now, or a one-off future time. Each
+							    "At a time" launch is its own planned run — many are allowed. */}
+							<div className="flex items-start gap-2">
+								<span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 w-[88px] flex-shrink-0 pt-1 inline-flex items-center gap-1"><Clock className="w-3 h-3" /> When</span>
+								<div className="flex-1 min-w-0 space-y-1.5">
+									<div className="inline-flex items-center gap-1">
+										<button type="button" onClick={() => setWhenMode("now")} className={cn("px-2 py-0.5 rounded-md text-[11px] font-medium border", whenMode === "now" ? "bg-gold-50 text-gold-700 border-gold-200" : "text-slate-500 border-slate-200 hover:bg-slate-50")}>Now</button>
+										<button type="button" onClick={() => setWhenMode("at")} className={cn("px-2 py-0.5 rounded-md text-[11px] font-medium border", whenMode === "at" ? "bg-gold-50 text-gold-700 border-gold-200" : "text-slate-500 border-slate-200 hover:bg-slate-50")}>At a time</button>
+										{whenMode === "at" && (
+											<input type="datetime-local" value={runAt} onChange={(e) => setRunAt(e.target.value)}
+												className="px-2 py-[3px] text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-gold-400/40" />
+										)}
+									</div>
+									<div className="text-[10px] text-slate-400">{whenMode === "at" ? "Queues a one-off scheduled run — appears in Planned runs; you can add several." : "Runs once, right away."}</div>
+								</div>
+							</div>
+
 							{/* Recurring schedule (cadence) — moved here from the workflow header. */}
 							<div className="flex items-start gap-2">
 								<span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 w-[88px] flex-shrink-0 pt-1 inline-flex items-center gap-1"><Clock className="w-3 h-3" /> Schedule</span>
 								<div className="flex-1 min-w-0 space-y-1.5">
-									<SchedulePicker value={cron} disabled={savingSched} onChange={(c) => { setCron(c); setSchedDirty(true); }} />
+									<SchedulePicker value={cron} disabled={savingSched} onChange={(c) => setCron(c)} />
 									<div className="flex items-center gap-2">
-										<span className="text-[10px] text-slate-400">{describeSchedule(cron)} · separate from “Run attempt” (which runs once now).</span>
-										{schedDirty && (
-											<button onClick={saveSchedule} disabled={savingSched}
-												className="ml-auto inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-lg bg-gold-500 text-white hover:bg-gold-600 disabled:opacity-50 flex-shrink-0">
-												{savingSched ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />} Save
-											</button>
-										)}
+										<span className="text-[10px] text-slate-400">{describeSchedule(cron)} · saves automatically · separate from “Run attempt” (which runs once now).</span>
+										{savingSched ? (
+											<span className="ml-auto inline-flex items-center gap-1 text-[10px] text-slate-400 flex-shrink-0"><Loader2 className="w-3 h-3 animate-spin" /> Saving…</span>
+										) : schedSaved ? (
+											<span className="ml-auto inline-flex items-center gap-1 text-[10px] text-gold-600 flex-shrink-0"><Save className="w-3 h-3" /> Saved</span>
+										) : null}
 									</div>
 								</div>
 							</div>

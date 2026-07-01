@@ -51,7 +51,12 @@ export default function SchedulePicker({ value, onChange, disabled }: {
 	disabled?: boolean;
 }) {
 	const parsed = useMemo(() => parseSchedule(value), [value]);
-	const preset = presetOf(parsed);
+	// "Advanced (cron)" is a STICKY UI mode, not derived from the value: a cron a
+	// user types may parse back to a preset pattern (e.g. "*/15 * * * *"), which
+	// would otherwise yank the select to "Every 15 min" and make the input vanish
+	// mid-edit. `override` pins the chosen mode; null = derive from the value.
+	const [override, setOverride] = useState<PresetKey | null>(null);
+	const preset: PresetKey = override ?? presetOf(parsed);
 	// Sticky sub-control state so switching presets keeps a sensible time.
 	const [time, setTime] = useState(() =>
 		"hour" in parsed ? toTimeInput(parsed.hour, parsed.minute) : "08:00");
@@ -83,7 +88,13 @@ export default function SchedulePicker({ value, onChange, disabled }: {
 				<select
 					value={preset}
 					disabled={disabled}
-					onChange={(e) => pick(e.target.value as PresetKey)}
+					onChange={(e) => {
+						const k = e.target.value as PresetKey;
+						// Pin "Advanced"; for real presets clear the override so the
+						// value round-trips and stays in sync.
+						setOverride(k === "custom" ? "custom" : null);
+						pick(k);
+					}}
 					className="px-2 py-1 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-gold-400/40"
 				>
 					{PRESETS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
@@ -120,7 +131,9 @@ export default function SchedulePicker({ value, onChange, disabled }: {
 						type="text"
 						value={parsed.kind === "custom" ? parsed.cron : formatSchedule(parsed)}
 						disabled={disabled}
-						onChange={(e) => onChange(e.target.value)}
+						// Keep Advanced pinned while editing — a partial/preset-shaped
+						// cron must not flip the mode out from under the cursor.
+						onChange={(e) => { setOverride("custom"); onChange(e.target.value); }}
 						placeholder="cron e.g. 0 8 * * *"
 						className="w-36 px-2 py-1 text-xs font-mono rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-gold-400/40"
 					/>

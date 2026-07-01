@@ -24,6 +24,48 @@ import { AppOverview } from "@/pages/studio/apps";
 const FEATURED_KEY = "studio_featured_app";
 const CHAT_KEY = "studio_ws_chat_open";
 
+// Drag-resizable chat width (the RIGHT panel), persisted to localStorage.
+// Mirrors the StudioShell sidebar pattern but INVERTED: it's a right-edge panel,
+// so dragging its LEFT handle leftward (clientX decreasing) WIDENS it.
+const CHAT_WIDTH_KEY = "studio_ws_chat_width_v1";
+const CHAT_MIN = 320;
+const CHAT_MAX = 760;
+const CHAT_DEFAULT = 440; // ~ the old w-[400px]/xl:w-[460px] midpoint
+
+function useChatWidth() {
+	const [width, setWidth] = useState<number>(() => {
+		try {
+			const v = parseInt(localStorage.getItem(CHAT_WIDTH_KEY) || "", 10);
+			if (!Number.isNaN(v)) return Math.min(CHAT_MAX, Math.max(CHAT_MIN, v));
+		} catch { /* ignore */ }
+		return CHAT_DEFAULT;
+	});
+	const [resizing, setResizing] = useState(false);
+	// Persist only on drag-end — keep localStorage writes off the hot path.
+	useEffect(() => {
+		if (resizing) return;
+		try { localStorage.setItem(CHAT_WIDTH_KEY, String(width)); } catch { /* ignore */ }
+	}, [resizing]); // eslint-disable-line react-hooks/exhaustive-deps
+	const startResize = (startX: number) => {
+		const startW = width;
+		setResizing(true);
+		const onMove = (ev: PointerEvent) => {
+			// inverted: moving left (clientX < startX) increases width.
+			const next = Math.min(CHAT_MAX, Math.max(CHAT_MIN, startW - (ev.clientX - startX)));
+			setWidth(next);
+		};
+		const onUp = () => {
+			window.removeEventListener("pointermove", onMove);
+			window.removeEventListener("pointerup", onUp);
+			setResizing(false);
+		};
+		window.addEventListener("pointermove", onMove);
+		window.addEventListener("pointerup", onUp);
+	};
+	const reset = () => setWidth(CHAT_DEFAULT);
+	return { width, resizing, startResize, reset };
+}
+
 export default function StudioWorkspace() {
 	const { app: paramApp } = useParams<{ app?: string }>();
 	const navigate = useNavigate();
@@ -70,6 +112,9 @@ export default function StudioWorkspace() {
 	const chatVisible = !!app && (isNarrow ? narrowChatOpen : chatOpen);
 	const toggleChat = () => { if (isNarrow) setNarrowChatOpen((v) => !v); else setChatOpen((v) => !v); };
 
+	// Horizontal resize of the docked chat (desktop only; narrow = full width).
+	const { width: chatWidth, resizing: chatResizing, startResize: startChatResize, reset: resetChatWidth } = useChatWidth();
+
 	// Chat-panel toggle lives in the top strip (single header row).
 	const chatTarget = usePortalTarget("topstrip-ws-right", !!app);
 
@@ -87,7 +132,25 @@ export default function StudioWorkspace() {
 			{/* RIGHT — grounded chat (side panel, collapsible; auto-hidden on narrow,
 			    where it takes over full width when opened). */}
 			{chatVisible && (
-				<div className={cn("flex-shrink-0 flex flex-col min-h-0 bg-background", isNarrow ? "w-full" : "w-[400px] xl:w-[460px]")}>
+				<div
+					className={cn("flex-shrink-0 flex flex-col min-h-0 bg-background relative",
+						isNarrow && "w-full",
+						chatResizing && "select-none cursor-ew-resize")}
+					style={isNarrow ? undefined : { width: chatWidth }}
+				>
+					{/* Drag-to-resize handle on the LEFT edge (desktop only) —
+					    double-click resets. Inverted: drag left to widen the chat. */}
+					{!isNarrow && (
+						<div
+							onPointerDown={(e) => { e.preventDefault(); startChatResize(e.clientX); }}
+							onDoubleClick={resetChatWidth}
+							title="Drag to resize · double-click to reset"
+							className="absolute top-0 left-0 z-30 h-full w-1.5 -ml-0.5 cursor-ew-resize group/cr"
+						>
+							<div className={cn("absolute inset-y-0 left-0 w-px transition-colors",
+								chatResizing ? "bg-foreground/40" : "bg-transparent group-hover/cr:bg-foreground/30")} />
+						</div>
+					)}
 					<div className="flex-1 min-h-0 flex flex-col px-3 py-3">
 						<StudioChat docked groundApp={app} />
 					</div>

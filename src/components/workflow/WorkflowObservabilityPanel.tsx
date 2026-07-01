@@ -21,7 +21,7 @@ import {
 	Database, Sparkles, Pencil, Activity, Square,
 	Eye, FlaskConical, ArrowLeft,
 	PanelLeftClose, PanelLeftOpen, FileText, BarChart3, MoreHorizontal,
-	Brain, Scale, GitBranch, DownloadCloud, UploadCloud,
+	Brain, Scale, GitBranch, DownloadCloud, UploadCloud, CalendarClock, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import apiClient from "@/api/client";
@@ -31,7 +31,7 @@ import WorkflowCanvas, { type CanvasStepRef } from "@/components/workflow/Workfl
 import StepInspectorPanel from "@/components/workflow/StepInspectorPanel";
 import { type LoopStageKey } from "@/components/workflow/LoopOrbit";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { parseSchedule } from "@/lib/schedule";
+import { parseSchedule, describeSchedule } from "@/lib/schedule";
 import { loopLabel } from "@/lib/workflow-names";
 import FailureCard from "@/components/workflow/FailureCard";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -231,6 +231,118 @@ function VersionDots({ app, loop, currentId, onPick }: {
 	);
 }
 
+// PlannedRunsButton — the counterpart to "Plan next run". Lists still-queued
+// one-shots (run-now not yet drained + "schedule once" deferred rows) and lets
+// you cancel them. Shows a count badge; hidden entirely when there are none, so
+// it never adds noise to the common case.
+type PlannedRow = Awaited<ReturnType<typeof me.plannedRuns>>["planned"][number];
+function PlannedRunsButton({ app, loop, schedule, onEdit, onEditSchedule }: {
+	app: string; loop: string;
+	schedule?: string;                 // recurring cadence (cron / "@trigger")
+	onEdit?: (r: PlannedRow) => void;  // cancel + reopen Plan-next prefilled
+	onEditSchedule?: () => void;       // open Plan-next to edit the recurring cadence
+}) {
+	const [open, setOpen] = useState(false);
+	const [rows, setRows] = useState<PlannedRow[]>([]);
+	const [busy, setBusy] = useState<string | null>(null);
+	const load = useCallback(() => {
+		me.plannedRuns(app, loop).then((d) => setRows(d.planned || []))
+			.catch(() => setRows([]));
+	}, [app, loop]);
+	useEffect(() => { load(); }, [load]);
+	useStudioRefetch(["runs", "cycles", "loops"], load);
+	useEffect(() => { if (open) load(); }, [open, load]);
+
+	const cancel = async (jobId: string) => {
+		setBusy(jobId);
+		try {
+			await me.cancelPlanned(app, loop, jobId);
+			setRows((r) => r.filter((x) => x.job_id !== jobId));
+			toast.success("Planned run cancelled");
+		} catch (e) {
+			toast.error(`Failed: ${e instanceof MeApiError ? e.message : String(e)}`);
+		} finally { setBusy(null); }
+	};
+
+	// A real recurring cadence (not on-demand) is ALSO a planned thing the user
+	// expects to see here — surface it as a (non-cancellable) row.
+	const recurring = !!schedule && !/^@?trigger$/i.test(schedule.trim()) && schedule.trim() !== "";
+	// Show the button when there's anything planned: queued one-shots OR a cadence.
+	if (rows.length === 0 && !recurring) return null;
+	const count = rows.length + (recurring ? 1 : 0);
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger asChild>
+				<button title="Planned runs — recurring schedule + queued/scheduled-once runs not yet started"
+					className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors">
+					<CalendarClock className="w-3.5 h-3.5" />
+					Planned
+					<span className="inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-gold-100 text-gold-700 text-[10px] font-semibold tabular-nums">{count}</span>
+				</button>
+			</PopoverTrigger>
+			<PopoverContent align="end" className="w-80 p-2">
+				<div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold px-1 pb-1">Planned runs</div>
+				<div className="space-y-1 max-h-72 overflow-y-auto">
+					{recurring && (
+						<div className="flex items-start gap-2 rounded-lg border border-gold-100 bg-gold-50/50 px-2 py-1.5">
+							<div className="min-w-0 flex-1">
+								<div className="text-[12px] font-medium text-slate-800">Recurring</div>
+								<div className="text-[10.5px] text-slate-500">{describeSchedule(schedule!)}</div>
+								<div className="text-[10px] text-slate-400">runs on this cadence</div>
+							</div>
+							{onEditSchedule && (
+								<button onClick={() => { setOpen(false); onEditSchedule(); }}
+									title="Edit the recurring schedule"
+									className="flex-shrink-0 p-1 rounded-md text-slate-400 hover:text-gold-700 hover:bg-gold-50 transition-colors">
+									<Pencil className="w-3.5 h-3.5" />
+								</button>
+							)}
+						</div>
+					)}
+					{rows.map((r) => {
+						const when = r.not_before
+							? `scheduled ${cycleDate(isoToCycleTs(r.not_before)) || r.not_before}`
+							: "queued — runs next drain";
+						const bits = [
+							r.cases?.length ? `${r.cases.length} case${r.cases.length === 1 ? "" : "s"}` : "full casebook",
+							r.criteria ? "criteria" : null,
+							r.auto_promote ? "auto-promote" : null,
+						].filter(Boolean).join(" · ");
+						return (
+							<div key={r.job_id} className="flex items-start gap-2 rounded-lg border border-slate-100 bg-slate-50/50 px-2 py-1.5">
+								<div className="min-w-0 flex-1">
+									<div className="text-[12px] font-medium text-slate-800 truncate">{r.branch_label || "next run"}</div>
+									<div className="text-[10.5px] text-slate-500">{when}</div>
+									{bits && <div className="text-[10px] text-slate-400">{bits}</div>}
+								</div>
+								{onEdit && (
+									<button onClick={() => { setOpen(false); onEdit(r); }} disabled={busy === r.job_id}
+										title="Edit — cancel this and reopen Plan next run prefilled"
+										className="flex-shrink-0 p-1 rounded-md text-slate-400 hover:text-gold-700 hover:bg-gold-50 disabled:opacity-50 transition-colors">
+										<Pencil className="w-3.5 h-3.5" />
+									</button>
+								)}
+								<button onClick={() => cancel(r.job_id)} disabled={busy === r.job_id}
+									title="Cancel this planned run"
+									className="flex-shrink-0 p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-50 transition-colors">
+									{busy === r.job_id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+								</button>
+							</div>
+						);
+					})}
+				</div>
+			</PopoverContent>
+		</Popover>
+	);
+}
+
+// "2027-01-01T00:00:00Z" → "20270101T000000Z" so cycleDate() can format it.
+function isoToCycleTs(iso?: string): string {
+	if (!iso) return "";
+	const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+	return m ? `${m[1]}${m[2]}${m[3]}T${m[4]}${m[5]}${m[6]}Z` : "";
+}
+
 export default function WorkflowObservabilityPanel({
 	app, loop, wf, loopHealth, onChanged, initialCycle, canDelete, onDelete, identity,
 	onShare, shareBusy,
@@ -394,7 +506,7 @@ export default function WorkflowObservabilityPanel({
 		setCompareSel((cur) => cur.includes(ts) ? cur.filter((t) => t !== ts) : [...cur, ts].slice(-2));
 	}, []);
 	// State for the WS-5 branch-with-intention dialog (run ts + label).
-	const [branchFor, setBranchFor] = useState<{ ts?: string; label: string } | null>(null);
+	const [branchFor, setBranchFor] = useState<{ ts?: string; label: string; prefill?: { branch_label?: string; criteria?: string; cases?: string[] | null } } | null>(null);
 	// #17 — right-click menu opened on a CASEBOOK case row (the tree owns its
 	// own menu internally; this is for the Data-assets rows).
 	const [caseMenu, setCaseMenu] = useState<{ x: number; y: number; target: RunMenuTarget } | null>(null);
@@ -651,7 +763,7 @@ export default function WorkflowObservabilityPanel({
 		    fill height: the rail scrolls internally; the workflow card does not. */}
 		<div ref={fillRef} style={{ height: fillH }} className="flex flex-col lg:flex-row gap-3 items-stretch min-w-0 w-full">
 				{!caseFocus && (railOpen ? (
-					<div className="w-full lg:w-[30%] lg:min-w-[220px] lg:max-w-[380px] flex-shrink-0 flex flex-col min-h-0 max-h-[55vh] lg:max-h-none lg:h-full">
+					<div className="w-full lg:w-[24%] lg:min-w-[200px] lg:max-w-[300px] flex-shrink-0 flex flex-col min-h-0 max-h-[55vh] lg:max-h-none lg:h-full">
 						<div className="flex-1 min-h-0 rounded-xl border border-slate-200 bg-slate-50/40 flex flex-col overflow-hidden">
 							{/* Two tabs — Data and Agents are SEPARATE xpio repos (a dataset
 							    repo and an agent repo), each independently versioned. No
@@ -745,11 +857,26 @@ export default function WorkflowObservabilityPanel({
 								Plan next run
 							</button>
 						)}
-						<button onClick={toggle} disabled={!!busy} title={enabled ? "Pause this workflow's schedule" : "Resume this workflow's schedule"}
-							className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50">
-							{busy === "toggle" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : enabled ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-							{enabled ? "Pause" : "Resume"}
-						</button>
+						{/* Manage planned runs — sibling of "Plan next run"; self-hides when
+						    nothing is queued. */}
+						<PlannedRunsButton app={app} loop={loop} schedule={schedSeed}
+							onEditSchedule={() => setBranchFor({ label: "edit schedule" })}
+							onEdit={async (r) => {
+								// Edit = cancel the queued row, then reopen Plan-next prefilled.
+								try { await me.cancelPlanned(app, loop, r.job_id); } catch { /* ignore */ }
+								setBranchFor({ ts: r.from_run_ts || undefined, label: r.branch_label || "next run",
+									prefill: { branch_label: r.branch_label, criteria: r.criteria, cases: r.cases } });
+							}} />
+						{/* Pause only makes sense while a cycle is running; when idle don't
+						    show it. Resume always shows when the schedule is paused so it
+						    can be re-enabled. (running||!enabled) → visible. */}
+						{(running || !enabled) && (
+							<button onClick={toggle} disabled={!!busy} title={enabled ? "Pause this workflow's schedule" : "Resume this workflow's schedule"}
+								className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+								{busy === "toggle" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : enabled ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+								{enabled ? "Pause" : "Resume"}
+							</button>
+						)}
 						{canDelete && (
 							<Popover>
 								<PopoverTrigger asChild>
@@ -846,7 +973,7 @@ export default function WorkflowObservabilityPanel({
 
 			{/* WS-5 — branch-with-intention dialog. */}
 			{branchFor && (
-				<NextRunComposer app={app} loop={loop} fromTs={branchFor.ts} fromLabel={branchFor.label} schedule={schedSeed}
+				<NextRunComposer app={app} loop={loop} fromTs={branchFor.ts} fromLabel={branchFor.label} schedule={schedSeed} prefill={branchFor.prefill}
 					onClose={() => setBranchFor(null)} onLaunched={() => { setOptimisticRun(true); window.setTimeout(() => setOptimisticRun(false), 120_000); }} onChanged={onChanged} />
 			)}
 
@@ -916,7 +1043,7 @@ function AssetVersionRow({ label, name, href, version, title, asOf }: {
 	return (
 		<div title={title} className="flex items-center gap-2 flex-wrap rounded-xl border border-slate-200 bg-white px-3 py-2">
 			<GitBranch className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-			<span className="text-[12px] text-slate-600">{label}</span>
+			{label && <span className="text-[12px] text-slate-600">{label}</span>}
 			{href ? (
 				<a href={href} target="_blank" rel="noreferrer" className="text-[12px] font-mono font-semibold text-gold-700 hover:underline truncate max-w-[12rem]" title={name}>{name}</a>
 			) : (
@@ -958,7 +1085,7 @@ function DatasetVersionBar({ datasets, fallbackRefs }: { datasets?: MeDatasetRef
 				const repo = d.repo || d.id || "";
 				const name = repo.split("/").pop() || repo;
 				return (
-					<AssetVersionRow key={i} label="Dataset" name={name}
+					<AssetVersionRow key={i} label="" name={name}
 						href={d.repo ? `https://xp.io/${d.repo}` : undefined} version={d.version ? `v${d.version}` : undefined} title={`Dataset repo: ${repo}`} />
 				);
 			})}
@@ -1016,7 +1143,7 @@ function TuneVersionBar({ app, identity, repo, selectedAgentVersion, restingAgen
 }) {
 	const version = selectedAgentVersion || restingAgentVersion || (identity?.version ? `v${identity.version}` : undefined);
 	return (
-		<AssetVersionRow label="Agent" name={app}
+		<AssetVersionRow label="" name={app}
 			href={repo ? `https://xp.io/${repo}` : undefined}
 			version={version}
 			asOf={selectedAgentVersion ? asOf : undefined}

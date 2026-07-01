@@ -466,6 +466,36 @@ export const me = {
       `/apps/${encodeURIComponent(app)}/loops/${encodeURIComponent(loop)}/enqueue`,
       body,
     ),
+  // GET /me/loops/:app/:loop/planned — still-queued one-shots (Plan-next "Run
+  //   now" not yet drained + "Schedule once" deferred rows). loop="_" → all loops.
+  plannedRuns: (app: string, loop: string) =>
+    call<{
+      app: string;
+      loop: string;
+      count: number;
+      planned: {
+        job_id: string;
+        loop: string;
+        submitted_at?: string;
+        branch_label?: string;
+        from_run_ts?: string;
+        not_before?: string; // set → "scheduled once" (deferred)
+        criteria?: string;
+        cases?: string[] | null;
+        auto_promote?: boolean | null;
+        variant?: Record<string, unknown> | null;
+      }[];
+    }>(
+      "GET",
+      `/loops/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/planned`,
+    ),
+  // POST /me/loops/:app/:loop/planned/cancel — cancel a queued one-shot.
+  cancelPlanned: (app: string, loop: string, jobId: string) =>
+    call<{ job_id: string; cancelled: boolean }>(
+      "POST",
+      `/loops/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/planned/cancel`,
+      { job_id: jobId },
+    ),
   // POST /me/apps/:app/runs/:ts/promote — mark this run/branch's learning as
   //   KEPT (its memories/config become the champion lineage going forward).
   promoteRun: (app: string, ts: string, note?: string) =>
