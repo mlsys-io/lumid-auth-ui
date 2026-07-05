@@ -1,0 +1,3 @@
+nightly CD lane e2e proof
+2026-07-05T00:21:49Z ylu@yao.lu
+trivial non-functional marker to trigger a :nightly-<sha> build
