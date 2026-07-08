@@ -44,10 +44,10 @@ jobs:
             type=sha,prefix=sha-
             type=raw,value=latest,enable={{is_default_branch}}
             # CD lanes (see deploy_infra k8s-lift/cd/POLICY.md): a git tag vX.Y.Z emits
-            # :vX.Y.Z (via type=ref,event=tag above) -> prod canary lane; a merge to dev
-            # emits :nightly-<short-sha> -> nightly lane (Image Updater newest-build on
-            # ^nightly-). Confirmed :vX.Y.Z already emitted (v0.4.0 present on ghcr).
-            type=sha,prefix=nightly-,enable=${{ github.ref == 'refs/heads/dev' }}
+            # :vX.Y.Z (via type=ref,event=tag above) -> prod canary lane. The :nightly-<sha>
+            # tag is built by a SEPARATE job below (build-and-push-nightly) so it can bake a
+            # nightly-origin bundle (same-origin at nightly.lum.id) distinct from this
+            # lum.id-origin build. Confirmed :vX.Y.Z already emitted (v0.4.0 present on ghcr).
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -60,6 +60,48 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            VITE_API_BASE=https://lum.id
+            VITE_API_ORIGIN=https://lum.id
+            GIT_SHA=${{ github.sha }}
+            BUILD_TIME=${{ github.event.head_commit.timestamp }}
+
+  # Nightly lane — a DISTINCT build whose bundle targets https://nightly.lum.id
+  # (same-origin at the nightly host, so NO cross-origin CORS on the auth
+  # authority). Only on dev. Pushes ONLY the :nightly-<sha> tag the Argo Image
+  # Updater tracks (^nightly-). The nightly ingress proxies /api,/oauth,
+  # /.well-known,/inbox-api on nightly.lum.id to the landing routing hub.
+  build-and-push-nightly:
+    if: github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.GHCR_USER }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Short SHA
+        id: sha
+        run: echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push (nightly-origin bundle)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:nightly-${{ steps.sha.outputs.short }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VITE_API_ORIGIN=https://nightly.lum.id
             GIT_SHA=${{ github.sha }}
             BUILD_TIME=${{ github.event.head_commit.timestamp }}
