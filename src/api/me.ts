@@ -631,6 +631,14 @@ export const me = {
       "DELETE",
       `/apps/${encodeURIComponent(app)}/secrets/${encodeURIComponent(key)}`,
     ),
+  // Live-verify a pasted Claude credential against Anthropic and store it only
+  // if it authenticates. Backs the "Connect Claude" pop-out login window.
+  verifyClaude: (app: string, value: string, key?: string) =>
+    call<{ app: string; key: string; valid: boolean; stored: boolean; upstream_status: number; reason: string }>(
+      "POST",
+      `/apps/${encodeURIComponent(app)}/secrets/claude-verify`,
+      key ? { value, key } : { value },
+    ),
 
   // ── Workflow surface (W1) ───────────────────────────────────────
   // Workflow = supertype across xpio scheduled loops + n8n visual
