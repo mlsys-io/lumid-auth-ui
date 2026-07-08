@@ -616,7 +616,7 @@ export const me = {
 
   // Secrets — values never come back; only presence.
   listSecrets: (app: string) =>
-    call<{ app: string; secrets: { key: string; is_set: boolean; updated_at: string }[] }>(
+    call<{ app: string; secrets: { key: string; is_set: boolean; preview?: string; updated_at: string }[] }>(
       "GET",
       `/apps/${encodeURIComponent(app)}/secrets`,
     ),
@@ -630,6 +630,14 @@ export const me = {
     call<{ app: string; key: string }>(
       "DELETE",
       `/apps/${encodeURIComponent(app)}/secrets/${encodeURIComponent(key)}`,
+    ),
+  // Live-verify a pasted Claude credential against Anthropic and store it only
+  // if it authenticates. Backs the "Connect Claude" pop-out login window.
+  verifyClaude: (app: string, value: string, key?: string) =>
+    call<{ app: string; key: string; valid: boolean; stored: boolean; upstream_status: number; reason: string }>(
+      "POST",
+      `/apps/${encodeURIComponent(app)}/secrets/claude-verify`,
+      key ? { value, key } : { value },
     ),
 
   // ── Workflow surface (W1) ───────────────────────────────────────

@@ -5,3 +5,4 @@ node_modules/
 *.log
 .vite
 .DS_Store
+e2e/node_modules

@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { me, MeApiError, waitForIntent } from "@/api/me";
 import { bearerHeader } from "@/api/session-bearer";
+import AppSecretsSection, { type ConfigField } from "./AppSecretsSection";
 import {
 	Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -363,6 +364,11 @@ export default function AppManagePanel() {
 						})}
 					</div>
 				)}
+			</section>
+
+			{/* Credentials — pure-UI secret entry driven by xpcloud.yaml config_schema */}
+			<section className="rounded-xl border border-slate-200 bg-white p-4">
+				<AppSecretsSection app={app} schema={(js?.config_schema as ConfigField[] | undefined) ?? undefined} />
 			</section>
 
 			{/* Knowledge + datasets — read-only context */}
