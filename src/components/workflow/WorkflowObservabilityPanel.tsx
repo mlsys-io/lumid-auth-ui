@@ -18,9 +18,9 @@ import { Link } from "react-router-dom";
 import {
 	Play, Pause, Loader2, Save, AlertCircle, Target,
 	ChevronLeft, ChevronRight, ChevronDown, Trash2,
-	Database, Sparkles, Pencil, Activity, Square,
+	Database, Sparkles, Pencil, Square,
 	Eye, FlaskConical, ArrowLeft,
-	PanelLeftClose, PanelLeftOpen, FileText, BarChart3, MoreHorizontal,
+	FileText, BarChart3, MoreHorizontal,
 	Brain, Scale, GitBranch, DownloadCloud, UploadCloud,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -62,14 +62,9 @@ import {
 } from "@/pages/studio/inspector";
 import { cn } from "@/lib/utils";
 
-// The goal always shows full-width at the top; Runs and Data switch via the
-// left tab rail. "Pipeline" is NOT a tab — it's how a selected run is drawn
-// inside Runs (Pipeline = the representation of a run).
-type DetailTab = "runs" | "dataset";
-const TABS: Array<{ key: DetailTab; label: string; icon: React.ComponentType<{ className?: string }> }> = [
-	{ key: "runs", label: "Runs", icon: Activity },
-	{ key: "dataset", label: "Data", icon: Database },
-];
+// The goal always shows full-width at the top; Runs · Data · Agents switch via
+// the one Observe tab bar. "Pipeline" is NOT a tab — it's how a selected run is
+// drawn inside Runs (Pipeline = the representation of a run).
 
 export interface LoopHealth {
 	app: string;
@@ -326,18 +321,13 @@ export default function WorkflowObservabilityPanel({
 	const [definition, setDefinition] = useState<LoopDefinition | null>(null);
 	const [canvasCycle, setCanvasCycle] = useState<MeCycleDetail | null>(null);
 	const [canvasStep, setCanvasStep] = useState<CanvasStepRef | null>(null);
-	// Which tab the detail pane shows. Runs is the spine, so it opens by default.
-	const [tab, setTab] = useState<DetailTab>("runs");
 	// ── Mode + view stack (WS-1/WS-3) ─────────────────────────────────
-	// The three disentangled concerns. Observe = default. Tune is a thin tab
-	// that links out to the prompt + config editors (their own routes).
-	// The "Cases & data" rail can collapse (the fixed 30% column cramped the
-	// tree on small screens). Stacks vertically below lg.
-	const [railOpen, setRailOpen] = useState(true);
-	// Which asset tab the rail shows. Data and Agents are DIFFERENT xpio assets
-	// (a dataset repo vs an agent repo), each independently versioned — so they
-	// are two top tabs, not collapsible groups in one box.
-	const [assetTab, setAssetTab] = useState<"data" | "agents">("data");
+	// ONE consolidated Observe panel: Runs (the spine) · Data · Agents shown one
+	// at a time in a single card, instead of the old persistent side rail beside
+	// the run canvas. Runs is the default; opening a case / prompt / bank from the
+	// Data or Agents tab flips back to Runs where the detail overlays render.
+	const [observeTab, setObserveTab] = useState<"runs" | "data" | "agents">("runs");
+	const pickObserve = useCallback((t: "runs" | "data" | "agents") => setObserveTab(t), []);
 	// Hoist the run controls onto the workflow-selector line (top strip).
 	const wfControlsTarget = usePortalTarget("topstrip-wf-controls", true);
 	// Broadcast the active assets tab so the app toolbar can scope pull/publish to
@@ -374,19 +364,21 @@ export default function WorkflowObservabilityPanel({
 	const backToTree = useCallback(() => dispatchNav({ type: "reset" }), []);
 	const openLog = useCallback((v?: TrajectoryVersion | null) => dispatchNav({ type: "push", frame: { kind: "log", version: v } }), []);
 	const openMetrics = useCallback(() => dispatchNav({ type: "push", frame: { kind: "metrics", version } }), [version]);
-	const openCaseData = useCallback((c: { id: string; label: string }) => dispatchNav({ type: "push", frame: { kind: "caseData", caseId: c.id, caseLabel: c.label, version } }), [version]);
+	const openCaseData = useCallback((c: { id: string; label: string }) => { setObserveTab("runs"); dispatchNav({ type: "push", frame: { kind: "caseData", caseId: c.id, caseLabel: c.label, version } }); }, [version]);
 	// Open a prompt in the right canvas (no version pin — prompts aren't "as of"
 	// a run; they're the current editable instructions). A prompt is a top-level
 	// tuning view, not a sub-view of a run, so it REPLACES the stack (reset →
 	// push) rather than nesting — that's why it needs no breadcrumb/Back bar.
 	// Clicking the already-open prompt toggles it closed (back to the run tree).
 	const openPrompt = useCallback((name: string, label: string) => {
+		setObserveTab("runs");
 		if (top?.kind === "prompt" && top.promptName === name) { dispatchNav({ type: "reset" }); return; }
 		dispatchNav({ type: "reset" });
 		dispatchNav({ type: "push", frame: { kind: "prompt", promptName: name, promptLabel: label } });
 	}, [top]);
 	// Open a memory bank in the right canvas — same toggle behavior as prompts.
 	const openAgent = useCallback((agentId: string) => {
+		setObserveTab("runs");
 		if (top?.kind === "memory" && top.agentId === agentId) { dispatchNav({ type: "reset" }); return; }
 		dispatchNav({ type: "reset" });
 		dispatchNav({ type: "push", frame: { kind: "memory", agentId } });
@@ -442,7 +434,7 @@ export default function WorkflowObservabilityPanel({
 		const ro = new ResizeObserver(() => measure());
 		if (headerRef.current) ro.observe(headerRef.current);
 		return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", measure); ro.disconnect(); };
-	}, [tab, summary, wf.goal]);
+	}, [observeTab, summary, wf.goal]);
 
 	// force=true refetches the latest cycle's detail even when the newest ts is
 	// unchanged (used after acting on a review, where the same cycle's summary
@@ -650,65 +642,17 @@ export default function WorkflowObservabilityPanel({
 		{!running && wf.last_run_ok === false && lastError && tenantHasRuns && (
 			<FailureCard error={lastError} app={app} loop={loop} />
 		)}
-		{/* DATA/AGENTS rail + WORKFLOW card, side by side, BOUNDED to the screen
-		    fill height: the rail scrolls internally; the workflow card does not. */}
-		<div ref={fillRef} style={{ height: fillH }} className="flex flex-col lg:flex-row gap-3 items-stretch min-w-0 w-full">
-				{!caseFocus && (railOpen ? (
-					<div className="w-full lg:w-[30%] lg:min-w-[220px] lg:max-w-[380px] flex-shrink-0 flex flex-col min-h-0 max-h-[55vh] lg:max-h-none lg:h-full">
-						<div className="flex-1 min-h-0 rounded-xl border border-slate-200 bg-slate-50/40 flex flex-col overflow-hidden">
-							{/* Two tabs — Data and Agents are SEPARATE xpio repos (a dataset
-							    repo and an agent repo), each independently versioned. No
-							    "Assets/Metrics/Log" header line — the tabs are the top; Metrics
-							    lives in the right panel and Log is per-run in the trajectory. */}
-							<div className="flex items-stretch flex-shrink-0 border-b border-slate-100 bg-white">
-								<AssetTab active={assetTab === "data"} onClick={() => setAssetTab("data")} icon={Database} label="Data" />
-								<AssetTab active={assetTab === "agents"} onClick={() => setAssetTab("agents")} icon={Brain} label="Agents" />
-								<button onClick={() => setRailOpen(false)} title="Hide the assets panel" className="px-2.5 flex items-center text-slate-300 hover:text-slate-600 transition-colors"><PanelLeftClose className="w-3.5 h-3.5" /></button>
-							</div>
-							{/* Per-tab version bar — each asset is its own versioned xpio repo. */}
-							<div className="flex-shrink-0 px-2 pt-2">
-								{assetTab === "data" ? (
-									<div className="space-y-1">
-										<DatasetVersionBar datasets={wf.datasets_detail} fallbackRefs={(definition?.datasets?.length ? definition.datasets : wf.datasets) || []} />
-										{/* The aggregate avg-score card was removed — the per-case curves /
-										    scores below (cut to the selected run's version) are what matter. */}
-									</div>
-								) : (
-									<TuneVersionBar app={app} identity={identity} repo={agentRepo}
-										selectedAgentVersion={version?.agentVersion}
-										restingAgentVersion={wf.agent_version}
-										asOf={version ? cycleDate(version.runTs || version.cycleTs) : undefined} />
-								)}
-							</div>
-							<div className="flex-1 min-h-0 overflow-y-auto p-2">
-								{assetTab === "data" ? (
-									<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading data…</div>}>
-										<CasebookPanel app={app} loop={loop} atTs={version?.runTs || version?.cycleTs}
-											onSelectCase={(c) => openCaseData(c)} selectedCaseId={caseFocus?.id || caseDataFocus?.id}
-											onViewData={(c) => openCaseData(c)}
-											onContextMenuCase={(c, e) => { e.preventDefault(); setCaseMenu({ x: e.clientX, y: e.clientY, target: { kind: "case", caseId: c.id, label: c.label } }); }}
-											showMetrics={false} />
-									</Suspense>
-								) : (
-									<div className="space-y-3 pt-1">
-										<Foldable title="Memory banks" defaultOpen>
-											<AgentsRailContent agents={wf.memory_agents || []} onOpenAgent={openAgent} selectedAgent={memoryFocus?.agentId} hideHeader />
-										</Foldable>
-										<Foldable title="Prompts" defaultOpen>
-											<PromptsTuneCard app={app} onOpenPrompt={openPrompt} selectedPrompt={promptFocus?.name} />
-										</Foldable>
-										<Link to={`/studio/a/${encodeURIComponent(app)}/config`} className="block text-[11px] text-gold-700 hover:underline">Open app config (xpcloud.yaml) →</Link>
-									</div>
-								)}
-							</div>
-						</div>
-					</div>
-				) : (
-					<button onClick={() => setRailOpen(true)} title="Show the assets rail" className="flex-shrink-0 self-start inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-[11px] text-slate-500 hover:text-slate-800 hover:border-slate-300 transition-colors"><PanelLeftOpen className="w-3.5 h-3.5" /> Assets</button>
-				))}
-			{/* WORKFLOW card — bordered box bounded to the row height; the run tree
-			    fills it and does NOT scroll the page. */}
-			<div className="flex-1 min-w-0 rounded-xl border border-slate-200 bg-white flex flex-col overflow-hidden">
+		{/* ONE Observe panel — Runs · Data · Agents shown one at a time (Runs is
+		    the spine). Consolidated from the old side-rail + canvas split so the
+		    workspace reads as just Observe + Chat. */}
+		<div ref={fillRef} style={{ height: fillH }} className="flex flex-col gap-2 items-stretch min-w-0 w-full">
+			<div className="flex items-stretch flex-shrink-0 border border-slate-200 bg-white rounded-xl overflow-hidden">
+				<AssetTab active={observeTab === "runs"} onClick={() => pickObserve("runs")} icon={GitBranch} label="Runs" />
+				<AssetTab active={observeTab === "data"} onClick={() => pickObserve("data")} icon={Database} label="Data" />
+				<AssetTab active={observeTab === "agents"} onClick={() => pickObserve("agents")} icon={Brain} label="Agents" />
+			</div>
+			{/* WORKFLOW card — the single content surface for the active tab. */}
+			<div className="flex-1 min-w-0 min-h-0 rounded-xl border border-slate-200 bg-white flex flex-col overflow-hidden">
 			{/* RUN CONTROLS — hoisted onto the workflow-selector line (top strip):
 			    status chip · version dots · pull/publish · plan-next · pause · delete.
 			    The workflow name itself is the selector, so it's not repeated here.
@@ -718,7 +662,7 @@ export default function WorkflowObservabilityPanel({
 					<div className="flex items-center gap-1.5 flex-wrap min-w-0">
 						<VersionDots app={app} loop={loop} currentId={version?.runTs || version?.cycleTs} onPick={pinVersion} />
 						<span className="w-px h-5 bg-slate-200 mx-0.5" aria-hidden />
-						{onShare && assetTab !== "data" && (
+						{onShare && observeTab !== "data" && (
 							<>
 								<button onClick={() => onShare("pull")} disabled={!!shareBusy}
 									title="Pull agent updates — merge the latest upstream version (your local edits are preserved)"
@@ -774,10 +718,36 @@ export default function WorkflowObservabilityPanel({
 				return wfControlsTarget ? createPortal(controls, wfControlsTarget) : <div className="flex flex-wrap items-center gap-2">{controls}</div>;
 			})()}
 
-			{/* ── TUNE — inspect/edit the agent prompts + app config. ── */}
-			{/* ── ONE PANEL: assets rail (collapsible groups) + run canvas. No
-			    Observe/Improve/Tune modes — the rail holds cases & data, agents,
-			    and prompts/tuning; the canvas is the runs (read + experiment). ── */}
+			{/* ── Tab content — Runs is the run canvas; Data / Agents replace it in
+			    place (same versioned xpio repos, now folded into this one panel so
+			    the workspace is just Observe + Chat). Opening a case / prompt / bank
+			    from Data or Agents flips back to Runs where the detail overlays. ── */}
+			{observeTab === "data" ? (
+				<div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
+					<DatasetVersionBar datasets={wf.datasets_detail} fallbackRefs={(definition?.datasets?.length ? definition.datasets : wf.datasets) || []} />
+					<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading data…</div>}>
+						<CasebookPanel app={app} loop={loop} atTs={version?.runTs || version?.cycleTs}
+							onSelectCase={(c) => openCaseData(c)} selectedCaseId={caseFocus?.id || caseDataFocus?.id}
+							onViewData={(c) => openCaseData(c)}
+							onContextMenuCase={(c, e) => { e.preventDefault(); setCaseMenu({ x: e.clientX, y: e.clientY, target: { kind: "case", caseId: c.id, label: c.label } }); }}
+							showMetrics={false} />
+					</Suspense>
+				</div>
+			) : observeTab === "agents" ? (
+				<div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
+					<TuneVersionBar app={app} identity={identity} repo={agentRepo}
+						selectedAgentVersion={version?.agentVersion}
+						restingAgentVersion={wf.agent_version}
+						asOf={version ? cycleDate(version.runTs || version.cycleTs) : undefined} />
+					<Foldable title="Memory banks" defaultOpen>
+						<AgentsRailContent agents={wf.memory_agents || []} onOpenAgent={openAgent} selectedAgent={memoryFocus?.agentId} hideHeader />
+					</Foldable>
+					<Foldable title="Prompts" defaultOpen>
+						<PromptsTuneCard app={app} onOpenPrompt={openPrompt} selectedPrompt={promptFocus?.name} />
+					</Foldable>
+					<Link to={`/studio/a/${encodeURIComponent(app)}/config`} className="block text-[11px] text-gold-700 hover:underline">Open app config (xpcloud.yaml) →</Link>
+				</div>
+			) : (
 			<div className="flex-1 min-h-0 flex">
 				<div className="flex-1 min-w-0 min-h-0 relative overflow-hidden">
 					{/* Metrics + full Evaluation log — overlaid INTO the workflow
@@ -827,6 +797,7 @@ export default function WorkflowObservabilityPanel({
 					</div>
 				</div>
 			</div>
+			)}
 			</div>
 		</div>
 			{/* Stage drill-down + free-text query on the selected run (Observe). */}
