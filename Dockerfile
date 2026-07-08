@@ -12,9 +12,19 @@ ARG GIT_SHA
 ARG BUILD_TIME
 ENV GIT_SHA=$GIT_SHA
 ENV BUILD_TIME=$BUILD_TIME
+# Origin the bundle points its API clients at. Default https://lum.id — matches
+# the prod deploy AND the deliberate design where the SAME bundle also serves
+# xp.io/go cross-origin (covered by lumid-identity's CORS allowlist). The NIGHTLY
+# lane overrides this to https://nightly.lum.id so nightly.lum.id calls its OWN
+# origin (same-origin, no CORS) — the nightly ingress proxies /api,/oauth,
+# /.well-known,/inbox-api to the landing routing hub. Written to
+# .env.production.local, which Vite loads at HIGHER precedence than
+# .env.production; with the default value the two are identical (prod unchanged).
+ARG VITE_API_ORIGIN=https://lum.id
 COPY package*.json ./
 RUN if [ -f package-lock.json ]; then npm ci --legacy-peer-deps; else npm install --legacy-peer-deps; fi
 COPY . .
+RUN printf 'VITE_API_BASE_URL=%s\nVITE_ME_API_BASE=%s\n' "$VITE_API_ORIGIN" "$VITE_API_ORIGIN" > .env.production.local
 RUN npm run build
 # Precompress every static asset at MAX brotli (q11) + max gzip (-9), so nginx
 # serves the precompressed file with zero per-request CPU. Brotli is ~20%
