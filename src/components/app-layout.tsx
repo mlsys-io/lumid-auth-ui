@@ -9,6 +9,7 @@ import {
 	User as UserIcon,
 	LogOut,
 	Menu,
+	ChevronLeft,
 	X,
 	Server,
 	Shield,
@@ -404,8 +405,15 @@ function ContestSidebarItem({
 export default function AppLayout() {
 	const { user, logout } = useAuth();
 	const navigate = useNavigate();
+	const location = useLocation();
 	const [mobileOpen, setMobileOpen] = useState(false);
 	const close = () => setMobileOpen(false);
+	// Auto-hide the left nav inside an app workspace (/studio/apps/:app) so the
+	// page reads as just Observe + Chat. Collapses to a slim reveal rail the user
+	// can click (or hover) to bring the nav back; expands again on other routes.
+	const isAppWorkspace = /^\/studio\/apps\/[^/]+/.test(location.pathname);
+	const [navOpen, setNavOpen] = useState(!isAppWorkspace);
+	useEffect(() => { setNavOpen(!isAppWorkspace); }, [isAppWorkspace]);
 	const [inboxUnread, setInboxUnread] = useState(0);
 	const inboxTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -628,7 +636,32 @@ export default function AppLayout() {
 				)}
 
 				<div className="max-w-7xl mx-auto flex">
-					<div className="hidden md:flex sticky top-0 h-screen">{sidebar}</div>
+					{navOpen ? (
+						<div className="hidden md:flex sticky top-0 h-screen group/nav relative">
+							{sidebar}
+							{isAppWorkspace && (
+								<button
+									type="button"
+									onClick={() => setNavOpen(false)}
+									title="Hide navigation"
+									aria-label="Hide navigation"
+									className="absolute top-3 -right-3 z-10 hidden group-hover/nav:flex items-center justify-center w-6 h-6 rounded-full border border-slate-200 bg-white text-slate-400 hover:text-slate-700 shadow-sm">
+									<ChevronLeft className="w-3.5 h-3.5" />
+								</button>
+							)}
+						</div>
+					) : (
+						<div className="hidden md:flex sticky top-0 h-screen">
+							<button
+								type="button"
+								onClick={() => setNavOpen(true)}
+								title="Show navigation"
+								aria-label="Show navigation"
+								className="mt-3 ml-1 flex items-center justify-center w-7 h-7 rounded-lg border border-slate-200 bg-white/90 text-slate-400 hover:text-slate-700 hover:border-slate-300 shadow-sm transition-colors">
+								<Menu className="w-4 h-4" />
+							</button>
+						</div>
+					)}
 
 					<main className="app-main flex-1 min-w-0 bg-slate-50 px-4 md:px-8 py-6 flex flex-col">
 						{/* Ported Runmesh + Lumilake pages bring their own
