@@ -264,9 +264,18 @@ export function StudioShell() {
 	const isNarrow = useIsNarrow(1024);
 	const [narrowNavOpen, setNarrowNavOpen] = useState(false);
 	useEffect(() => { if (!isNarrow) setNarrowNavOpen(false); }, [isNarrow]);
-	const sidebarHidden = isNarrow ? !narrowNavOpen : sidebarCollapsed;
-	const hideSidebar = () => { if (isNarrow) setNarrowNavOpen(false); else setSidebarCollapsed(true); };
-	const showSidebar = () => { if (isNarrow) setNarrowNavOpen(true); else setSidebarCollapsed(false); };
+	// Per-app workspace (/studio/apps/:app): auto-hide the nav so the page reads
+	// as just Observe + Chat. Same DERIVED-override philosophy as narrow — it
+	// never writes the persisted pref, so the user's global choice survives
+	// leaving the workspace; within it the header's expand control reveals the
+	// nav for the session (appNavOpen), and it re-hides when switching apps.
+	const inAppWorkspace = /^\/studio\/apps\/[^/]+/.test(location.pathname)
+		&& location.pathname !== '/studio/apps/all';
+	const [appNavOpen, setAppNavOpen] = useState(false);
+	useEffect(() => { setAppNavOpen(false); }, [location.pathname]);
+	const sidebarHidden = isNarrow ? !narrowNavOpen : (inAppWorkspace ? !appNavOpen : sidebarCollapsed);
+	const hideSidebar = () => { if (isNarrow) setNarrowNavOpen(false); else if (inAppWorkspace) setAppNavOpen(false); else setSidebarCollapsed(true); };
+	const showSidebar = () => { if (isNarrow) setNarrowNavOpen(true); else if (inAppWorkspace) setAppNavOpen(true); else setSidebarCollapsed(false); };
 
 	// Pending-drafts count → app-contributed nav badges (badge_source:
 	// 'drafts'). The Inbox nav entry folded into Home's status bar; the
