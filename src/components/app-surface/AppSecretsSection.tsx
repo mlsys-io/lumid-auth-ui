@@ -127,7 +127,7 @@ export type ConfigField = {
 	required?: boolean;
 };
 
-type SecretRow = { key: string; is_set: boolean; updated_at?: string };
+type SecretRow = { key: string; is_set: boolean; preview?: string; updated_at?: string };
 
 export default function AppSecretsSection({
 	app,
@@ -152,6 +152,7 @@ export default function AppSecretsSection({
 	useEffect(() => { reload(); }, [reload]);
 
 	const isSet = (k: string) => rows.find((r) => r.key === k)?.is_set ?? false;
+	const preview = (k: string) => rows.find((r) => r.key === k)?.preview ?? "";
 
 	const save = async (key: string, value: string) => {
 		if (!value) return;
@@ -192,7 +193,12 @@ export default function AppSecretsSection({
 				<span className="text-[13px] font-medium text-slate-800">{f.label || f.key}</span>
 				{f.required && <span className="text-rose-500 text-[11px]">required</span>}
 				{isSet(f.key) ? (
-					<span className="inline-flex items-center gap-1 text-[11px] text-emerald-600"><Check className="w-3 h-3" /> set</span>
+					<span className="inline-flex items-center gap-1 text-[11px] text-emerald-600">
+						<Check className="w-3 h-3" /> set
+						{preview(f.key) && (
+							<code className="ml-1 text-[10.5px] text-slate-500 font-mono" title="stored value (masked)">{preview(f.key)}</code>
+						)}
+					</span>
 				) : (
 					<span className="text-[11px] text-amber-600">not set</span>
 				)}

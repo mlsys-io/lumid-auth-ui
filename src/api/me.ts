@@ -616,7 +616,7 @@ export const me = {
 
   // Secrets — values never come back; only presence.
   listSecrets: (app: string) =>
-    call<{ app: string; secrets: { key: string; is_set: boolean; updated_at: string }[] }>(
+    call<{ app: string; secrets: { key: string; is_set: boolean; preview?: string; updated_at: string }[] }>(
       "GET",
       `/apps/${encodeURIComponent(app)}/secrets`,
     ),
