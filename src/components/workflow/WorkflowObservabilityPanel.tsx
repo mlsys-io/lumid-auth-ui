@@ -169,6 +169,7 @@ function VersionDots({ app, loop, currentId, onPick }: {
 	app: string; loop: string; currentId?: string; onPick?: (v: TrajectoryVersion) => void;
 }) {
 	const [traj, setTraj] = useState<Trajectory | null>(null);
+	const [expanded, setExpanded] = useState(false); // "+N" click → show the full strip
 	const load = useCallback(() => {
 		let live = true;
 		fetchTrajectory(app, loop).then((t) => { if (live) setTraj(t); }).catch(() => {});
@@ -204,7 +205,7 @@ function VersionDots({ app, loop, currentId, onPick }: {
 	const headCount = ordered.length > 0 && ordered[0].kind === "baseline" ? 1 : 0;
 	let shown = ordered, hidden = 0;
 	const rest = ordered.slice(headCount);
-	if (rest.length > MAX_RUNS) {
+	if (!expanded && rest.length > MAX_RUNS) {
 		const head = ordered.slice(0, headCount);
 		let tail = rest.slice(-MAX_RUNS);
 		const selNode = currentId ? rest.find((n) => n.run_ts === currentId || n.cycle_ts === currentId) : undefined;
@@ -219,7 +220,9 @@ function VersionDots({ app, loop, currentId, onPick }: {
 				return (
 					<Fragment key={n.id}>
 						{hidden > 0 && i === headCount && (
-							<span className="text-[10px] leading-none text-slate-400 px-0.5 tabular-nums" title={`${hidden} earlier run${hidden === 1 ? "" : "s"} not shown`}>+{hidden}</span>
+							<button type="button" onClick={() => setExpanded(true)}
+								className="text-[10px] leading-none text-slate-400 hover:text-slate-700 px-0.5 tabular-nums cursor-pointer"
+								title={`show ${hidden} earlier run${hidden === 1 ? "" : "s"}`}>+{hidden}</button>
 						)}
 						<button type="button" title={label(n)}
 							onClick={() => onPick?.({ cycleTs: n.cycle_ts, runTs: n.run_ts, label: n.agent_version || n.label, agentVersion: n.agent_version, dataVersion: n.data_version, metric: traj?.metric, score: n.score })}
