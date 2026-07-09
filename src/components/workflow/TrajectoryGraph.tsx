@@ -276,7 +276,10 @@ function snakeLayout(nodes: DisplayG[]): {
 	let cur: DisplayG | undefined = roots[0];
 	while (cur && !seen.has(cur.id)) { seen.add(cur.id); order.push(cur); cur = (byParent.get(cur.id) || [])[0]; }
 	if (order.length !== nodes.length) return null; // disconnected → bail
-	const cols = Math.max(3, Math.min(9, Math.ceil(Math.sqrt(order.length * 1.7))));
+	// Aim for a squarish grid (was *1.7 = wide-and-short, which fitView could only
+	// shrink to fit width, leaving the nodes tiny). A narrower/taller snake lets
+	// fitView zoom in and fill the canvas, so the nodes read larger.
+	const cols = Math.max(3, Math.min(8, Math.ceil(Math.sqrt(order.length))));
 	const pos = new Map<string, { x: number; y: number }>();
 	const srcPos = new Map<string, Position>();
 	const tgtPos = new Map<string, Position>();
@@ -685,13 +688,14 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 	}, [menu]);
 
 	const onInit = useCallback((inst: ReactFlowInstance) => {
-		// Vertical: fit horizontally + cap zoom, then pin to the TOP so the tree
-		// begins at the top and pans/scrolls downward.
-		requestAnimationFrame(() => {
-			inst.fitView({ padding: 0.16, maxZoom: 1, minZoom: 0.35 });
-			const vp = inst.getViewport();
-			inst.setViewport({ ...vp, y: 16 });
-		});
+		// Fit the whole tree to the canvas and CENTER it. Double-rAF so ReactFlow
+		// has measured node sizes before fitView computes bounds (a single frame
+		// runs pre-measure → wrong bounds → the tree lands low with dead space
+		// above). maxZoom 1.75 lets a small/compact trajectory zoom IN to fill the
+		// canvas instead of floating tiny in the middle.
+		requestAnimationFrame(() => requestAnimationFrame(() => {
+			inst.fitView({ padding: 0.1, maxZoom: 1.75, minZoom: 0.3 });
+		}));
 	}, []);
 
 	if (loading)
