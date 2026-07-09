@@ -1115,6 +1115,20 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 												<Settings className="w-3.5 h-3.5" /> Advanced (YAML)
 											</Link>
 										</DropdownMenuItem>
+										{/* Delete THIS workflow (one loop) — folded in here so the top
+										    strip has a single "⋯" instead of two adjacent ones (the
+										    open workflow panel used to hoist its own delete menu). */}
+										{!overviewMode && selectedRow && (
+											<>
+												<DropdownMenuSeparator />
+												<DropdownMenuItem
+													onSelect={() => delLoop(selectedRow.loop, loopLabel(selectedRow.wf.name, selectedRow.loop))}
+													className="text-rose-600 focus:text-rose-700 focus:bg-rose-50"
+												>
+													<Trash2 className="w-3.5 h-3.5" /> Delete workflow
+												</DropdownMenuItem>
+											</>
+										)}
 										<DropdownMenuSeparator />
 										<DropdownMenuItem
 											disabled={deleting}

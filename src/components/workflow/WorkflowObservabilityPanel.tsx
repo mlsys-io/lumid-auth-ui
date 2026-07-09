@@ -753,22 +753,10 @@ export default function WorkflowObservabilityPanel({
 							{busy === "toggle" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : enabled ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
 							{enabled ? "Pause" : "Resume"}
 						</button>
-						{canDelete && (
-							<Popover>
-								<PopoverTrigger asChild>
-									<button disabled={!!busy} title="More — delete"
-										className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-800 disabled:opacity-50">
-										<MoreHorizontal className="w-3.5 h-3.5" />
-									</button>
-								</PopoverTrigger>
-								<PopoverContent align="end" className="w-52">
-									<button onClick={onDelete} title="Delete this workflow"
-										className="w-full inline-flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-colors">
-										<Trash2 className="w-3.5 h-3.5" /> Delete workflow
-									</button>
-								</PopoverContent>
-							</Popover>
-						)}
+						{/* The per-workflow "Delete workflow" action moved into the app-actions
+						    "⋯" menu (apps.tsx) so the top strip shows a single ⋯, not two
+						    adjacent ones. onDelete/canDelete are still accepted for API
+						    compatibility but no longer render a second menu here. */}
 					</div>
 				);
 				return wfControlsTarget ? createPortal(controls, wfControlsTarget) : <div className="flex flex-wrap items-center gap-2">{controls}</div>;
