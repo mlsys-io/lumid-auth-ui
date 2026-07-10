@@ -50,6 +50,13 @@ export const NATIVE_SURFACES: Record<string, ComponentType<NativeSurfaceProps>> 
   // an allowlisted base-id (nginx /dataapp-proxy/<id>/). Powers lumid-data-explorer.
   "data-app-browser": lazy(() => import("./DataAppBrowser")),
 
+  // Federated data-lake viewer — one screen across the whole data mesh
+  // (findata /findata, lumid-data /data, lqt-data /lqt-data). UI-fanout: fetches
+  // each instance's catalog + a capped sample directly, merges client-side. No
+  // platform hub; data never moves. Config: { title }. Powers lumid-data-lake
+  // (also mounted directly at /studio/a/lumid-data-lake).
+  "data-lake-viewer": lazy(() => import("./DataLakeViewer")),
+
   // The app's workflow/autoresearch machinery (loops, run history, cycle
   // inspector) embedded as a tab of its configured UI. App comes from the
   // route — any loop-bearing app can declare a `workflows` surface with this.

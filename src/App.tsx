@@ -43,6 +43,9 @@ const StudioApps         = lazy(() => import("./pages/studio/apps"));
 const StudioWorkspace    = lazy(() => import("./pages/studio/StudioWorkspace"));
 // App-defined UI surface (runtime-loaded markdown / native escape-hatch) at /studio/a/:app
 const AppSurface         = lazy(() => import("./components/app-surface/AppSurface"));
+// Federated data-lake viewer — mounted directly at /studio/a/lumid-data-lake
+// (also resolvable as the `data-lake-viewer` native surface key).
+const DataLakeViewer     = lazy(() => import("./components/app-surface/DataLakeViewer"));
 // In-Studio markdown editor for an installed app's surface at /studio/a/:app/edit
 const AppSurfaceEditor   = lazy(() => import("./components/app-surface/AppSurfaceEditor"));
 // In-Studio YAML config editor for an installed app at /studio/a/:app/config
@@ -599,6 +602,11 @@ export default function App() {
                 IPOs links here; {symbol} is injected into the detail surface
                 (ohlc price chart + fundamentals + news). Beats the generic route. */}
             <Route path="a/lumid-data-findata/symbol/:symbol" element={<AppSurface app="lumid-data-findata" surface="symbol" />} />
+            {/* Federated data-lake viewer — one screen across the whole data mesh
+                (findata /findata, lumid-data /data, lqt-data /lqt-data). Rendered
+                directly (no xpcloud bundle needed); static segment beats the
+                generic a/:app + a/:app/:surface routes below. */}
+            <Route path="a/lumid-data-lake" element={<div className="p-4"><DataLakeViewer /></div>} />
             {/* App-defined UI surface — apps declare ui.surface in xpcloud.yaml;
                 served as runtime markdown (or a first-party native key). */}
             {/* Editor/config routes must come before the generic :surface param
