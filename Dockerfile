@@ -12,13 +12,12 @@ ARG GIT_SHA
 ARG BUILD_TIME
 ENV GIT_SHA=$GIT_SHA
 ENV BUILD_TIME=$BUILD_TIME
-# Origin the bundle points its API clients at. Default https://lum.id — matches
-# the prod deploy AND the deliberate design where the SAME bundle also serves
-# xp.io/go cross-origin (covered by lumid-identity's CORS allowlist). The NIGHTLY
-# lane overrides this to https://nightly.lum.id so nightly.lum.id calls its OWN
-# origin (same-origin, no CORS) — the nightly ingress proxies /api,/oauth,
-# /.well-known,/inbox-api to the landing routing hub. Written to
-# .env.production.local, which Vite loads at HIGHER precedence than
+# Origin the bundle points its API clients at when served OFF lum.id (xp.io/go
+# cross-origin, covered by lumid-identity's CORS allowlist) — on any *.lum.id
+# host the bundle resolves the identity origin at RUNTIME instead
+# (src/config/identity-origin.ts), so prod and nightly work from the SAME image
+# (the nightly lane only re-tags the CI build and can't change build args).
+# Written to .env.production.local, which Vite loads at HIGHER precedence than
 # .env.production; with the default value the two are identical (prod unchanged).
 ARG VITE_API_ORIGIN=https://lum.id
 COPY package*.json ./

@@ -8,8 +8,11 @@
 // /studio/portfolio open, so it skips me.ts's hot-path TTL cache / in-flight
 // dedup machinery.
 
-const ME_BASE =
-	(import.meta.env.VITE_ME_API_BASE as string | undefined) || "https://lum.id";
+import { identityOrigin } from "../config/identity-origin";
+
+const ME_BASE = identityOrigin(
+	import.meta.env.VITE_ME_API_BASE as string | undefined
+);
 
 export type PortfolioHealth =
 	| "healthy"

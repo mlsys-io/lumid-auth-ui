@@ -11,10 +11,12 @@
 //   { ret_code: number, message: string, data: any }
 // We unwrap `.data` on success and throw on non-2xx or non-zero ret_code.
 
+import { identityOrigin } from "../config/identity-origin";
+
 export const ME_BASE =
-  // Vite-inlined env. In prod (lum.id deploy) and xp.io/go deploy both
-  // call lum.id since that's where lumid-identity lives.
-  (import.meta.env.VITE_ME_API_BASE as string | undefined) || "https://lum.id";
+  // Same-origin on any *.lum.id host (nightly proxies /api); the built env
+  // value only applies off-lum.id (xp.io/go), where identity is cross-origin.
+  identityOrigin(import.meta.env.VITE_ME_API_BASE as string | undefined);
 
 export class MeApiError extends Error {
   ret_code: number;

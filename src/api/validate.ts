@@ -7,8 +7,11 @@
 // Independent of me.ts (same lum.id envelope + cookie auth idiom); callers
 // treat any failure as "fall back to the client-derived checklist".
 
-const ME_BASE =
-	(import.meta.env.VITE_ME_API_BASE as string | undefined) || "https://lum.id";
+import { identityOrigin } from "../config/identity-origin";
+
+const ME_BASE = identityOrigin(
+	import.meta.env.VITE_ME_API_BASE as string | undefined
+);
 
 export interface ValidateCheck {
 	check: string;
