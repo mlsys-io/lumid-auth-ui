@@ -102,39 +102,49 @@ interface Selection {
 
 function TableDetail({ sel }: { sel: Selection }) {
   const [tab, setTab] = useState<Tab>("sample");
-  const [sample, setSample] = useState<SampleResult | null>(null);
-  const [cols, setCols] = useState<JsonSchema | null>(null);
-  const [profile, setProfile] = useState<Record<string, unknown> | null>(null);
+  // Key-stamped so a stale value from the previously-selected table is never
+  // shown, nor mistaken for "already loaded". (A plain truthiness guard raced
+  // the reset effect: switching table while on the default Sample tab left the
+  // pane blank because the effect deps [tab,key] didn't change after the reset.)
+  const [sample, setSample] = useState<{ key: string; val: SampleResult } | null>(null);
+  const [cols, setCols] = useState<{ key: string; val: JsonSchema } | null>(null);
+  const [profile, setProfile] = useState<{ key: string; val: Record<string, unknown> } | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [limit, setLimit] = useState(100);
 
   const key = `${sel.inst.id}/${sel.schema}/${sel.table.table}`;
 
-  // Reset when the selected table changes.
+  // Reset the active tab to Sample when the table changes. Data slots don't need
+  // clearing — render + the load guard key off `key`, so a stale slot is ignored
+  // until its replacement arrives.
   useEffect(() => {
     setTab("sample");
-    setSample(null);
-    setCols(null);
-    setProfile(null);
-    setErr("");
   }, [key]);
 
   useEffect(() => {
-    let live = true;
-    (async () => {
-      setBusy(true);
+    const need =
+      (tab === "sample" && sample?.key !== key) ||
+      (tab === "columns" && cols?.key !== key) ||
+      (tab === "profile" && profile?.key !== key);
+    if (!need) {
       setErr("");
+      return;
+    }
+    let live = true;
+    setBusy(true);
+    setErr("");
+    (async () => {
       try {
-        if (tab === "sample" && !sample) {
+        if (tab === "sample") {
           const r = await lake.sample(sel.inst.basePath, sel.schema, sel.table.table, limit);
-          if (live) setSample(r);
-        } else if (tab === "columns" && !cols) {
+          if (live) setSample({ key, val: r });
+        } else if (tab === "columns") {
           const r = await lake.tableColumns(sel.inst.basePath, sel.schema, sel.table.table);
-          if (live) setCols(r);
-        } else if (tab === "profile" && !profile) {
+          if (live) setCols({ key, val: r });
+        } else {
           const r = await lake.tableProfile(sel.inst.basePath, sel.schema, sel.table.table);
-          if (live) setProfile(r);
+          if (live) setProfile({ key, val: r });
         }
       } catch (e: unknown) {
         if (live) setErr(e instanceof Error ? e.message : String(e));
@@ -153,7 +163,7 @@ function TableDetail({ sel }: { sel: Selection }) {
     setErr("");
     try {
       const r = await lake.sample(sel.inst.basePath, sel.schema, sel.table.table, limit);
-      setSample(r);
+      setSample({ key, val: r });
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -162,8 +172,11 @@ function TableDetail({ sel }: { sel: Selection }) {
   };
 
   const t = sel.table;
-  const colProps = cols?.properties ?? {};
-  const required = new Set(cols?.required ?? []);
+  const curSample = sample?.key === key ? sample.val : null;
+  const curCols = cols?.key === key ? cols.val : null;
+  const curProfile = profile?.key === key ? profile.val : null;
+  const colProps = curCols?.properties ?? {};
+  const required = new Set(curCols?.required ?? []);
 
   return (
     <div className="flex-1 flex flex-col min-w-0">
@@ -219,25 +232,25 @@ function TableDetail({ sel }: { sel: Selection }) {
             >
               {busy ? "Sampling…" : "Sample"}
             </button>
-            {sample && (
+            {curSample && (
               <span className="text-slate-400">
-                {sample.meta.rowcount} rows · {fmtBytes(sample.meta.size_bytes)} materialized
+                {curSample.meta.rowcount} rows · {fmtBytes(curSample.meta.size_bytes)} materialized
                 {" "}(only this capped blob crossed)
               </span>
             )}
           </div>
-          {busy && !sample ? (
+          {busy && !curSample ? (
             <div className="text-[12px] text-slate-400 p-4">Materializing capped sample…</div>
-          ) : sample ? (
-            <GenericTable rows={sample.rows} />
+          ) : curSample ? (
+            <GenericTable rows={curSample.rows} />
           ) : null}
         </>
       )}
 
       {tab === "columns" && (
-        busy ? (
+        busy && !curCols ? (
           <div className="text-[12px] text-slate-400 p-4">Loading columns…</div>
-        ) : cols ? (
+        ) : curCols ? (
           <div className="overflow-auto max-h-[520px] border border-slate-200 rounded">
             <table className="w-full text-[11px]">
               <thead className="bg-slate-100 sticky top-0">
@@ -271,11 +284,11 @@ function TableDetail({ sel }: { sel: Selection }) {
       )}
 
       {tab === "profile" && (
-        busy ? (
+        busy && !curProfile ? (
           <div className="text-[12px] text-slate-400 p-4">Loading profile…</div>
-        ) : profile ? (
+        ) : curProfile ? (
           <pre className="text-[11px] bg-slate-50 border border-slate-200 rounded p-2 overflow-auto max-h-[520px]">
-            {JSON.stringify(profile, null, 2)}
+            {JSON.stringify(curProfile, null, 2)}
           </pre>
         ) : (
           <div className="text-[12px] text-slate-400 p-4">No profile.</div>

@@ -53,11 +53,7 @@ export function instanceById(id: string): LakeInstance | undefined {
 
 const enc = encodeURIComponent;
 
-async function call<T>(
-  basePath: string,
-  path: string,
-  init?: RequestInit,
-): Promise<T> {
+async function send(basePath: string, path: string, init?: RequestInit): Promise<Response> {
   const auth = await bearerHeader();
   const r = await fetch(`${basePath}${path}`, {
     credentials: "same-origin",
@@ -73,8 +69,20 @@ async function call<T>(
     }
     throw new Error(`${path} → ${r.status} ${r.statusText}${detail ? ` — ${detail}` : ""}`);
   }
+  return r;
+}
+
+async function call<T>(basePath: string, path: string, init?: RequestInit): Promise<T> {
+  const r = await send(basePath, path, init);
   const ct = r.headers.get("content-type") ?? "";
   return (ct.includes("json") ? r.json() : r.text()) as Promise<T>;
+}
+
+// Fetch a materialized blob as raw text regardless of content-type. The blob is
+// opaque data (JSONL over application/octet-stream today), NOT an API envelope —
+// content-type sniffing would mis-handle it if the service ever served x-ndjson.
+async function callText(basePath: string, path: string): Promise<string> {
+  return (await send(basePath, path)).text();
 }
 
 // ── Types (loose — the instance is single-source-of-truth) ───────────────────
@@ -178,7 +186,7 @@ export const lake = {
     });
     const rows: Record<string, unknown>[] = [];
     if (meta.materialized_uri) {
-      const text = await call<string>(b, meta.materialized_uri);
+      const text = await callText(b, meta.materialized_uri);
       for (const line of text.split("\n")) {
         const l = line.trim();
         if (!l) continue;
