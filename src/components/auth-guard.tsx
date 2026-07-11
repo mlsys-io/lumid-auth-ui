@@ -49,8 +49,21 @@ export function isSafeReturnTo(raw: string | null | undefined): raw is string {
 		raw.startsWith('/dashboard') ||
 		raw.startsWith('/account') ||
 		raw.startsWith('/onboarding') ||
+		// OIDC resume: identity's authorize endpoint bounces unauthenticated
+		// users to /auth/login?return_to=/oauth/authorize?... and the flow
+		// must land back there after sign-in (Argo CD SSO et al). Same-origin
+		// backend route; authorize re-validates client_id/redirect_uri/PKCE
+		// itself, so honoring it is not an open-redirect vector.
+		raw.startsWith('/oauth/authorize') ||
 		raw === '/'
 	);
+}
+
+/** True for return_to paths served by the BACKEND (nginx-proxied), not the
+ *  SPA router — these need a full page load; `<Navigate>` would dead-end in
+ *  the SPA's catch-all. */
+export function isBackendReturnTo(raw: string): boolean {
+	return raw.startsWith('/oauth/');
 }
 
 /** Role-aware default landing path.
@@ -149,6 +162,12 @@ export function AuthGuard({ children, requireAuth = true }: AuthGuardProps) {
 		// so phishy external URLs can't use /auth/login as a bounce.
 		const returnTo = new URLSearchParams(location.search).get('return_to');
 		if (isSafeReturnTo(returnTo)) {
+			if (isBackendReturnTo(returnTo)) {
+				// Backend route (e.g. /oauth/authorize resume) — the SPA
+				// router can't serve it; hand the browser over.
+				window.location.replace(returnTo);
+				return null;
+			}
 			return <Navigate to={returnTo} replace />;
 		}
 		return <Navigate to={defaultLandingPath(user?.role)} replace />;
