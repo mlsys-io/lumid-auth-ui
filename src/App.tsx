@@ -79,6 +79,7 @@ const StudioAdmin      = lazy(() => import("./pages/studio/admin"));
 const StudioHow        = lazy(() => import("./pages/studio/how"));
 const StudioMarketplace = lazy(() => import("./pages/studio/library"));
 const StudioLibraryTabs = lazy(() => import("./pages/studio/library-tabs"));
+const StudioData        = lazy(() => import("./pages/studio/data"));
 const StudioRepo = lazy(() => import("./pages/studio/repo"));
 const PublicShell = lazy(() => import("./components/PublicShell"));
 
@@ -650,6 +651,10 @@ export default function App() {
                 (MarketplaceBrowse). Was redirecting out to xp.io, leaving no
                 in-app install affordance; now mounts the page so install works
                 from the dashboard. */}
+            {/* Data — a system app (Catalog + Explorer tabs). Folds the old
+                lumid-data-lake + lumid-data-explorer marketplace cards into one
+                built-in surface. */}
+            <Route path="data"                         element={<StudioData />} />
             {/* Library — Marketplace / Skills / Experiments as tabs under
                 one nav entry; the old top-level paths redirect in. */}
             <Route path="library"                      element={<StudioLibraryTabs />}>

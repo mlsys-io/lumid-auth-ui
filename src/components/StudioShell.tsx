@@ -16,6 +16,7 @@ import {
 	PanelLeftClose,
 	PanelLeftOpen,
 	Store,
+	Database,
 	Compass,
 	Settings,
 	Shield,
@@ -75,6 +76,7 @@ interface NavItem {
 // footer docs link.
 const TOP_NAV: NavItem[] = [
 	// Fleet is merged into "Manage apps" (/studio/apps/all) — no separate entry.
+	{ to: '/studio/data', label: 'Data', icon: Database, title: 'browse the data mesh — catalog + endpoint explorer' },
 	{ to: '/studio/library', label: 'Library', icon: Store, title: 'marketplace, skills, and experiments' },
 ];
 // Jobs/Activity/Inbox are folded into Apps — the Apps hero's "runs today" stat
@@ -86,6 +88,7 @@ const TOP_NAV: NavItem[] = [
 // Vite dedupes these dynamic imports with App.tsx's lazy() — same chunk.
 const ROUTE_PREFETCH: Record<string, () => Promise<unknown>> = {
 	"/studio/library": () => import("@/pages/studio/library-tabs"),
+	"/studio/data": () => import("@/pages/studio/data"),
 	"/studio/runs": () => import("@/pages/studio/runs"),
 	"/studio/portfolio": () => import("@/pages/studio/portfolio"),
 };
