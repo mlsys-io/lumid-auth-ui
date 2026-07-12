@@ -219,15 +219,85 @@ export interface InstanceCatalog {
   loading?: boolean; // seed state while this instance's catalog is still in flight
 }
 
-// ── Stale-while-revalidate cache ─────────────────────────────────────────────
+// ── Stale-while-revalidate cache (sessionStorage-backed) ─────────────────────
 // Catalog + table SHAPES barely change within a session, but every mount
 // refetched them (blank spinner on every open). Cache per instance / schema:
 // the viewer paints the cached shape INSTANTLY, then revalidates in the
-// background and swaps in fresh data. Module-level (survives unmount/remount),
-// cleared on full reload. No TTL — always revalidate; the cache only removes
-// the perceived cold-load, never serves knowingly-stale-forever data.
-const _catCache = new Map<string, InstanceCatalog>();
-const _tblCache = new Map<string, TableEntry[]>();
+// background and swaps in fresh data. Persisted to sessionStorage so it also
+// survives a full page reload (and clears on tab close). TTL-guarded and
+// version-keyed; every read still revalidates, so persisted data is only ever
+// a brief first-paint, never knowingly-stale-forever.
+const _CACHE_TTL_MS = 15 * 60 * 1000; // 15 min — beyond this, don't even seed
+const _CACHE_VER = "v1"; // bump if InstanceCatalog/TableEntry shape changes
+
+interface CacheEnvelope<T> {
+  at: number;
+  data: T;
+}
+
+function _ss(): Storage | null {
+  try {
+    return typeof sessionStorage !== "undefined" ? sessionStorage : null;
+  } catch {
+    return null; // privacy-mode / disabled storage → in-memory only
+  }
+}
+
+function _load<T>(key: string): Map<string, T> {
+  const m = new Map<string, T>();
+  const ss = _ss();
+  if (!ss) return m;
+  try {
+    const raw = ss.getItem(`dlv:${_CACHE_VER}:${key}`);
+    if (!raw) return m;
+    const obj = JSON.parse(raw) as Record<string, CacheEnvelope<T>>;
+    const now = Date.now();
+    for (const [k, env] of Object.entries(obj)) {
+      if (env && now - env.at < _CACHE_TTL_MS) m.set(k, env.data);
+    }
+  } catch {
+    /* corrupt entry → ignore, start clean */
+  }
+  return m;
+}
+
+function _persist<T>(key: string, m: Map<string, T>) {
+  const ss = _ss();
+  if (!ss) return;
+  try {
+    const now = Date.now();
+    const obj: Record<string, CacheEnvelope<T>> = {};
+    for (const [k, data] of m) obj[k] = { at: now, data };
+    ss.setItem(`dlv:${_CACHE_VER}:${key}`, JSON.stringify(obj));
+  } catch {
+    /* quota / serialization failure → in-memory cache still works */
+  }
+}
+
+const _catCache = _load<InstanceCatalog>("cat");
+const _tblCache = _load<TableEntry[]>("tbl");
+
+/** Drop the persisted + in-memory cache. Wired to session expiry so a new
+ *  user on the same tab can't briefly see the previous session's catalog
+ *  shape (bearer-scoped) before revalidation replaces it. */
+export function clearDataLakeCache() {
+  _catCache.clear();
+  _tblCache.clear();
+  const ss = _ss();
+  if (ss) {
+    try {
+      ss.removeItem(`dlv:${_CACHE_VER}:cat`);
+      ss.removeItem(`dlv:${_CACHE_VER}:tbl`);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+if (typeof window !== "undefined") {
+  // api/client.ts fires this once per session expiry (the same event the
+  // AuthProvider listens for to bounce to login).
+  window.addEventListener("lumid:session-expired", clearDataLakeCache);
+}
 
 /** Synchronously return a cached instance catalog for instant first paint,
  *  or undefined if never fetched this session. Always pair with a revalidate. */
@@ -248,6 +318,7 @@ export async function loadTables(
   const r = await lake.tables(instance.basePath, schema);
   const tables = r.tables ?? [];
   _tblCache.set(`${instance.id}/${schema}`, tables);
+  _persist("tbl", _tblCache);
   return tables;
 }
 
@@ -268,6 +339,7 @@ export async function fetchInstanceCatalog(instance: LakeInstance): Promise<Inst
       freshness: f.status === "fulfilled" ? f.value : undefined,
     };
     _catCache.set(instance.id, cat);
+    _persist("cat", _catCache);
     return cat;
   } catch (e: unknown) {
     // Don't cache errors — a transient failure shouldn't stick; next open retries.

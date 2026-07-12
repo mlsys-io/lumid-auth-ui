@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 import { getUserInfo, logout as logoutApi } from "../api";
 import type { UserInfo } from "../api";
+import { clearDataLakeCache } from "../api/dataLake";
 
 // The identity backend sets an HttpOnly `lm_session` cookie on
 // .lum.id after /login. We never touch it from JS — instead, every
@@ -88,6 +89,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem("studio_chat_active_id_v1");
         localStorage.removeItem("studio_chat_agent_v1");
         localStorage.removeItem("studio_chat_persona_v1");
+        // Data-lake catalog cache (sessionStorage) is bearer-scoped — wipe it
+        // so the next user on this tab can't see the prior session's schema
+        // /table shape before revalidation.
+        clearDataLakeCache();
       } catch { /* private mode / quota */ }
     }
   };
