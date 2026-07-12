@@ -13,6 +13,9 @@ import { useEffect, useMemo, useState } from "react";
 import {
   LAKE_INSTANCES,
   fetchInstanceCatalog,
+  peekInstanceCatalog,
+  peekTables,
+  loadTables,
   lake,
   fmtBytes,
   fmtRows,
@@ -313,24 +316,29 @@ function SchemaNode({
   selectedKey: string;
   onSelect: (s: Selection) => void;
 }) {
+  // Seed from the session cache so an already-viewed schema expands instantly.
+  const [tables, setTables] = useState<TableEntry[] | null>(
+    () => peekTables(inst.id, schema) ?? null,
+  );
   const [open, setOpen] = useState(false);
-  const [tables, setTables] = useState<TableEntry[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
   useEffect(() => {
-    if (!open || tables) return;
+    if (!open) return;
     let live = true;
-    setBusy(true);
-    lake
-      .tables(inst.basePath, schema)
-      .then((r) => live && setTables(r.tables ?? []))
-      .catch((e) => live && setErr(String(e?.message ?? e)))
+    // Revalidate even when cached (background) so a re-expand shows fresh data
+    // without a spinner; only show 'busy' when there's nothing cached to paint.
+    if (!tables) setBusy(true);
+    loadTables(inst, schema)
+      .then((t) => live && setTables(t))
+      .catch((e) => live && !tables && setErr(String(e?.message ?? e)))
       .finally(() => live && setBusy(false));
     return () => {
       live = false;
     };
-  }, [open, tables, inst.basePath, schema]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, inst.id, inst.basePath, schema]);
 
   const f = filter.trim().toLowerCase();
   const shown = tables?.filter((t) => !f || t.table.toLowerCase().includes(f)) ?? null;
@@ -394,12 +402,16 @@ export default function DataLakeViewer({ config }: { config?: Record<string, unk
 
   useEffect(() => {
     let live = true;
-    setLoading(true);
-    // Seed every instance immediately so the tree renders at once (instance
-    // headers + skeletons), then STREAM each catalog in as it resolves —
-    // instead of blocking the whole screen on the slowest instance's
-    // round-trip. loading clears after the first instance lands.
-    setCat(LAKE_INSTANCES.map((instance) => ({ instance, schemas: [], loading: true })));
+    // Seed from the session cache for an INSTANT paint on remount; instances
+    // not yet cached show 'loading…'. Then STREAM a revalidation of every
+    // instance — cached ones swap in fresh data silently, uncached ones fill
+    // as they land. loading only blocks the first-ever open (no cache at all).
+    const seeded = LAKE_INSTANCES.map(
+      (instance): InstanceCatalog =>
+        peekInstanceCatalog(instance) ?? { instance, schemas: [], loading: true },
+    );
+    setCat(seeded);
+    setLoading(seeded.every((c) => c.loading));
     LAKE_INSTANCES.forEach((instance) => {
       fetchInstanceCatalog(instance).then((c) => {
         if (!live) return;

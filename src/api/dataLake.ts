@@ -219,9 +219,42 @@ export interface InstanceCatalog {
   loading?: boolean; // seed state while this instance's catalog is still in flight
 }
 
+// ── Stale-while-revalidate cache ─────────────────────────────────────────────
+// Catalog + table SHAPES barely change within a session, but every mount
+// refetched them (blank spinner on every open). Cache per instance / schema:
+// the viewer paints the cached shape INSTANTLY, then revalidates in the
+// background and swaps in fresh data. Module-level (survives unmount/remount),
+// cleared on full reload. No TTL — always revalidate; the cache only removes
+// the perceived cold-load, never serves knowingly-stale-forever data.
+const _catCache = new Map<string, InstanceCatalog>();
+const _tblCache = new Map<string, TableEntry[]>();
+
+/** Synchronously return a cached instance catalog for instant first paint,
+ *  or undefined if never fetched this session. Always pair with a revalidate. */
+export function peekInstanceCatalog(instance: LakeInstance): InstanceCatalog | undefined {
+  return _catCache.get(instance.id);
+}
+
+/** Cached tables for (instance, schema), or undefined. */
+export function peekTables(instanceId: string, schema: string): TableEntry[] | undefined {
+  return _tblCache.get(`${instanceId}/${schema}`);
+}
+
+/** Fetch + cache one schema's tables (revalidate). Never throws upstream. */
+export async function loadTables(
+  instance: LakeInstance,
+  schema: string,
+): Promise<TableEntry[]> {
+  const r = await lake.tables(instance.basePath, schema);
+  const tables = r.tables ?? [];
+  _tblCache.set(`${instance.id}/${schema}`, tables);
+  return tables;
+}
+
 // Fetch ONE instance's catalog + freshness, isolated (never throws — a down
 // instance resolves to an error card). Exported so the viewer can stream each
 // instance's result into the UI as it lands instead of blocking on the slowest.
+// Caches successful results for instant re-paint on remount.
 export async function fetchInstanceCatalog(instance: LakeInstance): Promise<InstanceCatalog> {
   try {
     const [s, f] = await Promise.allSettled([
@@ -229,12 +262,15 @@ export async function fetchInstanceCatalog(instance: LakeInstance): Promise<Inst
       lake.freshness(instance.basePath),
     ]);
     if (s.status === "rejected") throw s.reason;
-    return {
+    const cat: InstanceCatalog = {
       instance,
       schemas: s.value.schemas ?? [],
       freshness: f.status === "fulfilled" ? f.value : undefined,
     };
+    _catCache.set(instance.id, cat);
+    return cat;
   } catch (e: unknown) {
+    // Don't cache errors — a transient failure shouldn't stick; next open retries.
     return {
       instance,
       schemas: [],
