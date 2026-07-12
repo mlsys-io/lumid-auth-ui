@@ -20,7 +20,13 @@ import { bearerHeader } from "@/api/session-bearer";
 export interface LakeInstance {
   id: string;
   label: string;
-  basePath: string; // same-origin prefix; landing nginx forwards to the instance
+  // Request base. Either a SAME-ORIGIN path prefix ("/findata" — the landing
+  // nginx root-strips + forwards to the instance, no CORS) OR an ABSOLUTE
+  // origin ("https://lumid.trade" — a cross-origin instance on its own
+  // domain; the instance must CORS-allow us, and auth rides the bearer
+  // header, never the cookie, since credentials stay same-origin).
+  // send() concatenates base+path, so fetch() handles either shape.
+  basePath: string;
   blurb?: string;
 }
 
@@ -40,8 +46,10 @@ export const LAKE_INSTANCES: LakeInstance[] = [
   {
     id: "lqt-data",
     label: "LQT Data",
-    basePath: "/lqt-data",
-    blurb: "LQT observability + mailbox planes.",
+    // Migrated 2026-07-12 off the legacy same-origin lum.id/lqt-data path onto
+    // its own domain (LQT umbrella; CORS-open, bearer-authed).
+    basePath: "https://lumid.trade",
+    blurb: "LQT planes — audit ledger, mailbox command plane, observability, xpio.",
   },
 ];
 
