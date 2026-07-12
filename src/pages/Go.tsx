@@ -341,10 +341,13 @@ export function Go({ embedded = false }: { embedded?: boolean } = {}) {
     setError(null);
 
     // Anonymous? Send them through /auth/login with a return path
-    // back to this page; composition stays in sessionStorage.
+    // back to this page; composition stays in sessionStorage. The
+    // param MUST be `return_to` — that's the only key the post-login
+    // AuthGuard honors; `next` was silently dropped, stranding the
+    // user on the role default instead of back on the composer.
     if (!isAuthenticated) {
       const me = window.location.pathname + window.location.search;
-      navigate(`/auth/login?next=${encodeURIComponent(me)}`);
+      navigate(`/auth/login?return_to=${encodeURIComponent(me)}`);
       return;
     }
 
@@ -686,7 +689,9 @@ export function Go({ embedded = false }: { embedded?: boolean } = {}) {
           </span>
           {!isAuthenticated && !isLoading && (
             <a
-              href="/auth/login"
+              href={`/auth/login?return_to=${encodeURIComponent(
+                window.location.pathname + window.location.search
+              )}`}
               className="text-sm text-gray-600 hover:text-gray-900"
             >
               Sign in

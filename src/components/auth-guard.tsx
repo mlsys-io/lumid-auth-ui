@@ -21,6 +21,31 @@ interface AuthGuardProps {
  * any arbitrary host. Export so `pages/auth/callback.tsx` can share
  * the exact same check.
  */
+// Same-origin path prefixes we're willing to bounce a user back to after
+// login. One list, consulted by BOTH the absolute-URL and plain-path
+// branches below — they used to carry separate hand-maintained copies that
+// drifted (the absolute branch was missing /onboarding, /oauth, /go).
+function isSafeReturnPath(path: string): boolean {
+	return (
+		path.startsWith('/studio') ||
+		path.startsWith('/app') ||
+		path.startsWith('/dashboard') ||
+		path.startsWith('/account') ||
+		path.startsWith('/onboarding') ||
+		// /go composer bundle (VITE_ROUTER_BASE_PATH=/go) — anonymous users
+		// sign in mid-composition and must land back on the composer, not
+		// the role default (their picks live in sessionStorage).
+		path.startsWith('/go') ||
+		// OIDC resume: identity's authorize endpoint bounces unauthenticated
+		// users to /auth/login?return_to=/oauth/authorize?... and the flow
+		// must land back there after sign-in (Argo CD SSO et al). Same-origin
+		// backend route; authorize re-validates client_id/redirect_uri/PKCE
+		// itself, so honoring it is not an open-redirect vector.
+		path.startsWith('/oauth/authorize') ||
+		path === '/'
+	);
+}
+
 export function isSafeReturnTo(raw: string | null | undefined): raw is string {
 	if (!raw) return false;
 	// Reject protocol-relative URLs that browsers treat as absolute.
@@ -30,33 +55,13 @@ export function isSafeReturnTo(raw: string | null | undefined): raw is string {
 		try {
 			const u = new URL(raw);
 			if (u.origin !== window.location.origin) return false;
-			// Same-origin absolute — collapse to path for Navigate.
-			return (
-				u.pathname.startsWith('/studio') ||
-					u.pathname.startsWith('/app') ||
-				u.pathname.startsWith('/dashboard') ||
-				u.pathname.startsWith('/account') ||
-				u.pathname === '/'
-			);
+			return isSafeReturnPath(u.pathname); // same-origin absolute → check path
 		} catch {
 			return false;
 		}
 	}
-	// Plain paths — must start with a known safe prefix.
-	return (
-		raw.startsWith('/studio') ||
-		raw.startsWith('/app') ||
-		raw.startsWith('/dashboard') ||
-		raw.startsWith('/account') ||
-		raw.startsWith('/onboarding') ||
-		// OIDC resume: identity's authorize endpoint bounces unauthenticated
-		// users to /auth/login?return_to=/oauth/authorize?... and the flow
-		// must land back there after sign-in (Argo CD SSO et al). Same-origin
-		// backend route; authorize re-validates client_id/redirect_uri/PKCE
-		// itself, so honoring it is not an open-redirect vector.
-		raw.startsWith('/oauth/authorize') ||
-		raw === '/'
-	);
+	// Plain path.
+	return isSafeReturnPath(raw);
 }
 
 /** True for return_to paths served by the BACKEND (nginx-proxied), not the
