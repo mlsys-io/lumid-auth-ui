@@ -216,31 +216,35 @@ export interface InstanceCatalog {
   schemas: SchemaEntry[];
   freshness?: Freshness;
   error?: string; // a down instance degrades to an error card, others unaffected
+  loading?: boolean; // seed state while this instance's catalog is still in flight
+}
+
+// Fetch ONE instance's catalog + freshness, isolated (never throws — a down
+// instance resolves to an error card). Exported so the viewer can stream each
+// instance's result into the UI as it lands instead of blocking on the slowest.
+export async function fetchInstanceCatalog(instance: LakeInstance): Promise<InstanceCatalog> {
+  try {
+    const [s, f] = await Promise.allSettled([
+      lake.schemas(instance.basePath),
+      lake.freshness(instance.basePath),
+    ]);
+    if (s.status === "rejected") throw s.reason;
+    return {
+      instance,
+      schemas: s.value.schemas ?? [],
+      freshness: f.status === "fulfilled" ? f.value : undefined,
+    };
+  } catch (e: unknown) {
+    return {
+      instance,
+      schemas: [],
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
 }
 
 export async function federatedCatalog(): Promise<InstanceCatalog[]> {
-  return Promise.all(
-    LAKE_INSTANCES.map(async (instance) => {
-      try {
-        const [s, f] = await Promise.allSettled([
-          lake.schemas(instance.basePath),
-          lake.freshness(instance.basePath),
-        ]);
-        if (s.status === "rejected") throw s.reason;
-        return {
-          instance,
-          schemas: s.value.schemas ?? [],
-          freshness: f.status === "fulfilled" ? f.value : undefined,
-        };
-      } catch (e: unknown) {
-        return {
-          instance,
-          schemas: [],
-          error: e instanceof Error ? e.message : String(e),
-        };
-      }
-    }),
-  );
+  return Promise.all(LAKE_INSTANCES.map(fetchInstanceCatalog));
 }
 
 // ── Formatting helpers ───────────────────────────────────────────────────────

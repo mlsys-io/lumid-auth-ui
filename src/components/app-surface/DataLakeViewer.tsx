@@ -12,7 +12,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   LAKE_INSTANCES,
-  federatedCatalog,
+  fetchInstanceCatalog,
   lake,
   fmtBytes,
   fmtRows,
@@ -395,9 +395,20 @@ export default function DataLakeViewer({ config }: { config?: Record<string, unk
   useEffect(() => {
     let live = true;
     setLoading(true);
-    federatedCatalog()
-      .then((c) => live && setCat(c))
-      .finally(() => live && setLoading(false));
+    // Seed every instance immediately so the tree renders at once (instance
+    // headers + skeletons), then STREAM each catalog in as it resolves —
+    // instead of blocking the whole screen on the slowest instance's
+    // round-trip. loading clears after the first instance lands.
+    setCat(LAKE_INSTANCES.map((instance) => ({ instance, schemas: [], loading: true })));
+    LAKE_INSTANCES.forEach((instance) => {
+      fetchInstanceCatalog(instance).then((c) => {
+        if (!live) return;
+        setCat((prev) =>
+          prev.map((p) => (p.instance.id === instance.id ? c : p)),
+        );
+        setLoading(false);
+      });
+    });
     return () => {
       live = false;
     };
@@ -466,12 +477,14 @@ export default function DataLakeViewer({ config }: { config?: Record<string, unk
                   <span className="text-slate-400 w-3">{openInst[c.instance.id] ? "▾" : "▸"}</span>
                   {c.instance.label}
                   <span className="ml-auto text-[10px] font-normal text-slate-400">
-                    {c.error ? "offline" : `${c.schemas.length} schemas`}
+                    {c.loading ? "…" : c.error ? "offline" : `${c.schemas.length} schemas`}
                   </span>
                 </button>
                 {openInst[c.instance.id] && (
                   <div>
-                    {c.error ? (
+                    {c.loading ? (
+                      <div className="px-2 py-1 text-[11px] text-slate-400">loading…</div>
+                    ) : c.error ? (
                       <div className="px-2 py-1 text-[11px] text-red-500" title={c.error}>
                         {c.error.slice(0, 80)}
                       </div>
