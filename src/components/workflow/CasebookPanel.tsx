@@ -11,7 +11,7 @@
 // House style mirrors GoalTrend.Sparkline (gold accent, inline-SVG polyline).
 
 import { useEffect, useState } from "react";
-import { Layers, TrendingUp, History, Loader2, MoreHorizontal, ArrowUp, ArrowDown, ArrowRight } from "lucide-react";
+import { Layers, TrendingUp, History, Loader2, MoreHorizontal, ArrowUp, ArrowDown, ArrowRight, ChevronDown, ChevronUp } from "lucide-react";
 import {
 	fetchCasebook,
 	type Casebook,
@@ -196,6 +196,9 @@ export default function CasebookPanel({ app, loop, atTs, onSelectCase, onViewDat
 	showMetrics?: boolean;
 }) {
 	const [book, setBook] = useState<Casebook | null>(null);
+	// The not-yet-scored group is collapsed by default — a mostly-unscored
+	// casebook otherwise reads as a wall of identical gray rows.
+	const [showUnscored, setShowUnscored] = useState(false);
 
 	useEffect(() => {
 		let live = true;
@@ -225,7 +228,14 @@ export default function CasebookPanel({ app, loop, atTs, onSelectCase, onViewDat
 		);
 	}
 
-	const scored = cases.filter((c) => typeof c.latest_score === "number").length;
+	// A case "carries a score" when any run ever scored it (latest or history).
+	const hasScore = (c: CasebookCase) => typeof c.latest_score === "number" || (c.score_history ?? []).length > 0;
+	const scoredCases = cases.filter(hasScore);
+	const unscoredCases = cases.filter((c) => !hasScore(c));
+	const scored = scoredCases.length;
+	// Keep a hidden group's selected case reachable: selecting an unscored case
+	// (e.g. via the chat or a deep link) force-expands the group.
+	const unscoredOpen = showUnscored || unscoredCases.some((c) => c.id === selectedCaseId);
 
 	return (
 		<div className="space-y-3">
@@ -247,12 +257,30 @@ export default function CasebookPanel({ app, loop, atTs, onSelectCase, onViewDat
 					</div>
 				) : (
 					<ul className="space-y-1">
-						{cases.map((c) => (
+						{/* Scored cases first — they carry signal; the unscored remainder
+						    folds into one summary row so a partially-scored casebook
+						    doesn't open on a screenful of "not yet scored". */}
+						{(unscoredOpen ? [...scoredCases, ...unscoredCases] : scoredCases).map((c) => (
 							<CaseRow key={c.id} c={c} atTs={atTs} selected={selectedCaseId === c.id}
 								onSelect={onSelectCase ? () => onSelectCase({ id: c.id, label: c.label }) : undefined}
 								onViewData={onViewData ? () => onViewData({ id: c.id, label: c.label }) : undefined}
 								onContextMenu={onContextMenuCase ? (e) => onContextMenuCase({ id: c.id, label: c.label }, e) : undefined} />
 						))}
+						{unscoredCases.length > 0 && (
+							<li>
+								<button
+									type="button"
+									onClick={() => setShowUnscored((v) => !v)}
+									title={unscoredOpen ? "Hide the not-yet-scored cases" : "Show the not-yet-scored cases"}
+									className="w-full flex items-center gap-1.5 rounded-lg border border-dashed border-slate-200 px-2.5 py-1.5 text-[11px] text-slate-400 hover:text-slate-600 hover:border-gold-200 transition-colors"
+								>
+									{unscoredOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+									{unscoredOpen
+										? "hide not-yet-scored cases"
+										: `${unscoredCases.length} more case${unscoredCases.length === 1 ? "" : "s"} not yet scored`}
+								</button>
+							</li>
+						)}
 					</ul>
 				)}
 			</div>

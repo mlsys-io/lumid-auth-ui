@@ -135,37 +135,40 @@ function buildModel(traj: Trajectory | null, signals: TrajectorySignal[]): {
 	return { model, byId };
 }
 
-// A node as drawn after collapsing the champion trunk: `displayParentId` may be
-// several generations up (with `elided` champion-only cycles hidden between),
+// A node as drawn after collapsing linear stretches: `displayParentId` may be
+// several generations up (with `elided` mid-chain cycles hidden between),
 // and `displayDepth` is the row in the COLLAPSED tree.
 type DisplayG = GNode & { displayParentId?: string; elided: number; displayDepth: number };
 const KEEP_RECENT = 5;
 
-// Collapse long champion-only stretches of the trunk so the drawn height tracks
-// BRANCH structure, not raw cycle count — a long regression sweep otherwise
-// renders one row per cycle, growing into a tall thread that's tiny when fit and
+// Collapse long single-child stretches of the tree so the drawn size tracks
+// BRANCH structure, not raw cycle count — a long history otherwise renders one
+// node per cycle, growing into a dense grid that's tiny when fit and
 // unreadable. We always keep: the baseline/root, any generation that explored
-// variants (branch points) and every variant, leaves, nodes needing a decision,
-// queued ghosts, the focused node, and the most recent KEEP_RECENT champions.
-// Each collapsed run folds into the connecting trunk edge as a "+N cycles" badge.
+// variants (branch points, plus every sibling of a branch), leaves, nodes
+// needing a decision, queued ghosts, the focused node, and the most recent
+// KEEP_RECENT runs. Everything else — a mid-chain run with one parent and one
+// child, champion or not — folds into the connecting edge as a "+N cycles"
+// badge the user can expand.
 function buildDisplay(model: GNode[], pickedId: string | null, expanded: Set<string>): DisplayG[] {
 	const byId = new Map(model.map((n) => [n.id, n] as const));
 	const parentOf = (n: GNode) => (n.parent_id && byId.has(n.parent_id) ? n.parent_id : undefined);
 	const kids = new Map<string | undefined, GNode[]>();
 	for (const n of model) { const k = parentOf(n); const a = kids.get(k) || []; a.push(n); kids.set(k, a); }
 	const nKids = (id: string) => (kids.get(id) || []).length;
+	// The newest KEEP_RECENT runs (any kind) stay visible — recent history is
+	// what the user came to read; the deep past is what collapses.
 	const recent = new Set(
-		model.filter((n) => n.is_champion).sort((a, b) => a.depth - b.depth).slice(-KEEP_RECENT).map((n) => n.id),
+		model.filter((n) => !n.proposed).sort((a, b) => a.depth - b.depth).slice(-KEEP_RECENT).map((n) => n.id),
 	);
 	const isSig = (n: GNode) =>
 		n.proposed ||                                            // queued ghost
 		!parentOf(n) ||                                          // baseline / root
 		nKids(n.id) !== 1 ||                                     // branch point or leaf
 		(parentOf(n) ? nKids(parentOf(n)!) !== 1 : false) ||     // first node off a branch
-		!n.is_champion ||                                        // any variant always shows
 		!!n.needs_decision || n.id === pickedId || recent.has(n.id);
 	const sigSet = new Set(model.filter(isSig).map((n) => n.id));
-	// Expanded "+N cycles" badges: reveal the elided champion-only cycles between
+	// Expanded "+N cycles" badges: reveal the elided mid-chain cycles between
 	// an expanded anchor and its display parent by promoting them to significant.
 	for (const anchor of expanded) {
 		if (!sigSet.has(anchor)) continue;
@@ -186,7 +189,7 @@ function buildDisplay(model: GNode[], pickedId: string | null, expanded: Set<str
 	return out;
 }
 
-// A trunk edge that hides a run of champion-only cycles. Renders the path plus a
+// An edge that hides a run of collapsed mid-chain cycles. Renders the path plus a
 // clickable pill — "+N cycles" to expand the hidden runs, "collapse" to fold them
 // back. The pill is the ONLY interactive bit (nodrag/nopan + pointerEvents).
 type CollapsibleEdgeData = {
