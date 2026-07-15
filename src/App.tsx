@@ -90,6 +90,7 @@ const Callback = lazy(() => import("./pages/auth/callback").then((m) => ({ defau
 const ForgotPassword = lazy(() => import("./pages/auth/forgot-password"));
 const ResetPassword = lazy(() => import("./pages/auth/reset-password"));
 const XpioAutoresearchDoc = lazy(() => import("./pages/docs/xpio-autoresearch"));
+const PluginImageCdDoc = lazy(() => import("./pages/docs/plugin-image-cd"));
 const RedeemInvite = lazy(() => import("./pages/auth/redeem-invite"));
 
 // The unified shell for /dashboard/* (absorbed the old /app/* tree in
@@ -480,6 +481,16 @@ export default function App() {
           {/* Public docs — anyone browsing app repos before forking
               should be able to read the canonical xpio contract. */}
           <Route path="/docs/xpio-autoresearch" element={<XpioAutoresearchDoc />} />
+          {/* Internal ops runbook (GHCR repos, deploy topology) — AUTH REQUIRED,
+              unlike the public xpio contract above. */}
+          <Route
+            path="/docs/plugin-image-cd"
+            element={
+              <AuthGuard requireAuth={true}>
+                <PluginImageCdDoc />
+              </AuthGuard>
+            }
+          />
 
           {/* Public marketplace (anonymous discovery) — replaces the retired
               xp.io SPA. Browse + read-only repo pages without login; install/
