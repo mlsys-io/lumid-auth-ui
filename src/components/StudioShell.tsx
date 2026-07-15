@@ -408,6 +408,23 @@ export function StudioShell() {
 					<span>How it works</span>
 				</NavLink>
 
+				{/* Admin-only: internal CD runbook (Lumilake + FlowMesh plugin-image
+				    releases). Opens the auth-gated /docs/plugin-image-cd doc in a new
+				    tab. Hidden from non-admins; the edge gate (lumid-landing nginx)
+				    enforces access server-side regardless. */}
+				{isAdmin && (
+					<a
+						href="/docs/plugin-image-cd"
+						target="_blank"
+						rel="noreferrer"
+						className="mx-3 mb-1 flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs transition-colors text-foreground/45 hover:text-foreground/70 hover:bg-black/[0.04]"
+						title="Lumilake & FlowMesh plugin-image CD runbook (admin)"
+					>
+						<Shield className="w-3.5 h-3.5 flex-shrink-0" />
+						<span>CD runbook</span>
+					</a>
+				)}
+
 				{/* User menu — pinned bottom-left, opens upward. Holds
 				    everything the top-right avatar dropdown used to
 				    (Settings, API tokens, Admin, Sign out) so account
