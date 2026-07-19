@@ -91,6 +91,7 @@ const ForgotPassword = lazy(() => import("./pages/auth/forgot-password"));
 const ResetPassword = lazy(() => import("./pages/auth/reset-password"));
 const XpioAutoresearchDoc = lazy(() => import("./pages/docs/xpio-autoresearch"));
 const PluginImageCdDoc = lazy(() => import("./pages/docs/plugin-image-cd"));
+const LqtStrategiesDoc = lazy(() => import("./pages/docs/lqt-strategies"));
 const RedeemInvite = lazy(() => import("./pages/auth/redeem-invite"));
 
 // The unified shell for /dashboard/* (absorbed the old /app/* tree in
@@ -488,6 +489,16 @@ export default function App() {
             element={
               <AuthGuard requireAuth={true}>
                 <PluginImageCdDoc />
+              </AuthGuard>
+            }
+          />
+          {/* End-user "write & submit a strategy" guide — AUTH REQUIRED
+              (matches plugin-image-cd; submitting needs an account + PAT). */}
+          <Route
+            path="/docs/lqt-strategies"
+            element={
+              <AuthGuard requireAuth={true}>
+                <LqtStrategiesDoc />
               </AuthGuard>
             }
           />
