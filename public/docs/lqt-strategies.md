@@ -2,7 +2,7 @@
 
 **A complete reference for strategy researchers.** Write a trading strategy in the LQT DSL, submit it with your lum.id token, and it runs **shadow/paper** against live prediction markets (Polymarket + Kalshi). No real money is ever placed by a submitted strategy.
 
-> **Doc version 1.0.0** · updated 2026-07-18 · audience: **strategy researcher** (normal user role). See the [changelog](#changelog) at the end.
+> **Doc version 1.0.1** · updated 2026-07-18 · audience: **strategy researcher** (normal user role). See the [changelog](#changelog) at the end.
 
 This page is self-contained: everything needed to author a valid `.lqts` strategy and submit it over HTTP is here, grounded in the compiler and gateway source.
 
@@ -77,7 +77,7 @@ Three properties that define the model:
 - **Paper by default.** A submitted strategy runs in **shadow/paper** mode: every `buy`/`sell` is recorded as what it *would* do, but mints **zero** real orders. Writing and submitting is risk-free.
 - **Orders are proposals.** Each `buy`/`sell` your strategy emits is a *proposal* handed to the governed risk gate, which can still reject it (position limits, NegRisk equivalence, staleness, kill-switch, …). The DSL decides intent; the gate decides what is allowed.
 
-Markets are **prediction markets**: prices are probabilities in `[0, 1]`, payoff is binary and oracle-settled. In the DSL those prices are represented as integer **ticks** (see [§3.8](#38-numbers--the-tick-scale)).
+Markets are **prediction markets**: prices are probabilities in `[0, 1]`, payoff is binary and oracle-settled. In the DSL those prices are represented as integer **ticks** (see [§3.8](#38-numbers--the-tick-scale)). Your strategy is evaluated against your tenant's **monitored universe** — the active instruments configured for you across **Polymarket** (instrument id = the `0x` condition id) and **Kalshi** (instrument id = the `KX…` ticker). The universe is tenant configuration, so it can change without you redeploying.
 
 ---
 
@@ -193,7 +193,9 @@ Rules: a signal may reference earlier signals but not itself or a later one (com
 | `params.<name>` | scalar | a declared parameter |
 | `ctx("...")` | scalar / bool | runtime context — see below |
 
-**Platform signals** (`signal("name")`): named values your LQT deployment publishes for you to consume (e.g. order-flow imbalance, model forecasts, cross-venue signals). The exact set is deployment-specific — ask your operator which names are live, or just compute your own inline signals, which need no setup.
+**Platform signals** (`signal("name")`): named values your LQT deployment publishes into the `lqt.signals` table (via a `signal.publish` producer) for strategies to consume. The set is **open / deployment-defined** — any lowercase name a producer has published is readable; there is no fixed enum. Commonly published names include `outcome_forecast`, `momentum_30m`, `xvenue_divergence`, `leadlag`, `ofi_z`, `vpin`, `smart_money`, `whale_concentration`, `implied_vol` — but which are *live* is specific to your deployment. Discover them by asking your operator (or, with DB access, `SELECT DISTINCT signal_name FROM lqt.signals`), or just compute your own inline signals, which need no setup.
+
+Each signal row carries three fields the accessors read: `signal("x")` → the score, `signal_conf("x")` → confidence in basis points, `signal_mid("x")` → the producer's mid snapshot (**fails loud if the producer didn't publish a mid** — only use it for signals you know carry one).
 
 **`ctx(...)` context reads** (all fail-safe with documented defaults):
 
@@ -329,9 +331,17 @@ curl -X POST "$LQT_API/registry/strategies" \
 
 | Status | Body | Meaning |
 |---|---|---|
-| `202 Accepted` | `{ "msg_id": "...", "status": "queued" }` | accepted; compiled + registered under your tenant, running paper |
-| `400 Bad Request` | error string | missing/both of `dsl`/`program_hex`, or the DSL fails to compile (located diagnostic: line/column + reason) — fix and resubmit |
+| `202 Accepted` | `{ "msg_id": "...", "status": "queued" }` | request accepted and queued; **compile happens next, asynchronously** (see below) |
+| `400 Bad Request` | error string | neither or both of `dsl`/`program_hex` supplied |
 | `401 / 403` | — | bad token, or your PAT lacks the `lqt:strategy` scope |
+| `502 / 503` | error string | submit relay unreachable / not configured on this deployment |
+
+**Compilation is asynchronous — the `202` does not mean it compiled.** `POST /registry/strategies` is a relay: it validates the request shape and queues the strategy, then a background worker compiles your `.lqts` and either registers it or rejects it. The outcome arrives as a **`strategy.ack`** message on your outbox:
+
+- **Success** → your strategy is registered under your tenant and starts running paper.
+- **Compile failure** → a reject-ack whose reason is the compiler's verbatim diagnostic, e.g. `compile failed: <line/column + reason>`. Fix and resubmit the same `strategy_id`.
+
+So the loop is: `POST` → `202 queued` → read your outbox (see [§5](#5--after-you-submit)) for the `strategy.ack` to confirm it compiled. To catch errors *before* submitting, validate locally with the CLI ([§4.3](#43-optional-compile-offline-first)).
 
 Leaving `region_scope` out runs your strategy in the default paper lane. You never need to set it to run paper.
 
@@ -350,12 +360,19 @@ The hex from `compile` is exactly what you'd send as `program_hex`.
 
 ## 5 · After you submit
 
-- **It runs shadow/paper.** Your strategy evaluates against live market data and records what it *would* do — proposals, would-be fills, and PnL — while placing **no real orders**.
+- **It runs shadow/paper.** Your strategy evaluates against live market data on a recurring cycle and records what it *would* do — proposals, would-be fills, and PnL — while placing **no real orders**.
 - **It's isolated to you.** Row-level security scopes every strategy, position, and result to your tenant. You can't see or affect anyone else's strategies, and they can't see yours.
-- **Resubmitting updates it.** POST the same `strategy_id` with new `dsl`/`version` to replace the running version in place; the runtime picks up the change on its next refresh.
+- **Resubmitting updates it.** POST the same `strategy_id` with new `dsl`/`version` to replace the running version in place (an UPSERT on `(tenant, strategy_id)`); the runtime picks up the change on its next refresh.
 - **Iterate freely.** Because everything is paper and deterministic, you can tune params and rules and resubmit as often as you like with zero financial risk.
 
-Results and per-cycle telemetry are recorded on the observability plane, scoped to your tenant. Ask your operator for the read surface available in your deployment.
+### Reading results
+
+Two channels, both scoped to your tenant by your PAT:
+
+- **Mailbox outbox — `GET /xpio/results`** (Bearer PAT). Returns messages the platform wrote to your outbox, including your `strategy.ack` (compile outcome, [§4.2](#42-submit)) and, when your deployment has result emission enabled, per-cycle `result.*` messages. A cycle result payload carries the funnel counts — `n_proposed`, `n_submitted`, `n_rejected`, a `reject_reasons` map, `cycle_id`, `strategy_id` — i.e. how many orders your strategy proposed, how many passed the risk gate, and why the rest were rejected.
+- **Observability cycles — `obs.runtime_cycles`.** Each cycle also records a row keyed on `(box_id, cycle_id, strategy_id, ts)` with the same funnel counts plus `decision_latency_ns` / `gate_latency_ns` / `router_latency_ns`. This lives in the observability warehouse.
+
+Honest limitation: there is **no dedicated per-tenant "list my cycles" HTTP endpoint** for normal users in the platform today — `GET /xpio/results` is the self-serve channel, and deeper `obs.runtime_cycles` access (a read credential or a small query endpoint) is something to request from your operator. Poll `GET /xpio/results` first; it's tenant-scoped and needs only your PAT.
 
 ---
 
@@ -459,6 +476,7 @@ strategy trend_with_stop {
 
 ## Changelog
 
+- **1.0.1** (2026-07-18) — Corrected the submit flow to reflect that `POST /registry/strategies` is a **relay**: it returns `202 queued` and compilation happens **asynchronously**, with the outcome (success or a `compile failed:` diagnostic) arriving as a `strategy.ack` on your outbox — not as a synchronous `400`. Enriched platform signals (open/`lqt.signals`-defined set with common names + `signal_mid` fail-loud note), the monitored universe (Polymarket condition-ids / Kalshi tickers), and a concrete, honest results-reading section (`GET /xpio/results` funnel counts; no dedicated per-tenant cycles API). Verified against `crates/lqt-auth`, `services/lqt-api-gateway`, `services/mailbox-consumer`, and `lqt.signals`/`obs.runtime_cycles` schemas.
 - **1.0.0** (2026-07-18) — Rewritten as the complete **strategy-researcher** reference. Full source-verified DSL grammar (top-level structure, `params`, inline + platform signals, every accessor, `when`/branching, actions, numeric builtins, operators & precedence, fixed-point tick scaling, and limits), the exact `POST /registry/strategies` submit contract with request/response/error tables, offline `lqt-strategy` CLI notes, four worked examples, and reference tables. Scoped to the normal-user paper path.
 - **0.1.0** (2026-07-17) — Initial overview draft.
 
