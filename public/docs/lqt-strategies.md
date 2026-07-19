@@ -2,7 +2,7 @@
 
 **A complete reference for strategy researchers.** Write a trading strategy in the LQT DSL, submit it with your lum.id token, and it runs **shadow/paper** against live prediction markets (Polymarket + Kalshi). No real money is ever placed by a submitted strategy.
 
-> **Doc version 1.0.1** · updated 2026-07-18 · audience: **strategy researcher** (normal user role). See the [changelog](#changelog) at the end.
+> **Doc version 1.0.2** · updated 2026-07-19 · audience: **strategy researcher** (normal user role). See the [changelog](#changelog) at the end.
 
 This page is self-contained: everything needed to author a valid `.lqts` strategy and submit it over HTTP is here, grounded in the compiler and gateway source.
 
@@ -367,12 +367,13 @@ The hex from `compile` is exactly what you'd send as `program_hex`.
 
 ### Reading results
 
-Two channels, both scoped to your tenant by your PAT:
+Three channels, all scoped to **your** tenant by your PAT (a strategy's telemetry is attributed to the lum.id account that submitted it — you only ever see your own):
 
-- **Mailbox outbox — `GET /xpio/results`** (Bearer PAT). Returns messages the platform wrote to your outbox, including your `strategy.ack` (compile outcome, [§4.2](#42-submit)) and, when your deployment has result emission enabled, per-cycle `result.*` messages. A cycle result payload carries the funnel counts — `n_proposed`, `n_submitted`, `n_rejected`, a `reject_reasons` map, `cycle_id`, `strategy_id` — i.e. how many orders your strategy proposed, how many passed the risk gate, and why the rest were rejected.
-- **Observability cycles — `obs.runtime_cycles`.** Each cycle also records a row keyed on `(box_id, cycle_id, strategy_id, ts)` with the same funnel counts plus `decision_latency_ns` / `gate_latency_ns` / `router_latency_ns`. This lives in the observability warehouse.
+- **Inspect your strategy — `GET /lqt/inspect/cycles/<strategy_id>`** (Bearer PAT). The dedicated per-strategy inspection endpoint: returns your recent `obs.runtime_cycles` for that strategy — the funnel (`n_proposed` / `n_submitted` / `n_rejected` / `suppressed`), the `reject_reasons` distribution, per-cycle latency (`decision_/gate_/router_latency_ns`), and `decision_mid_ticks`. The tenant filter is **server-injected from your token** — you cannot read another user's cycles, and they cannot read yours. `GET /lqt/inspect/strategies` lists the strategies you've registered.
+- **Ask over the mailbox — topic `strategy.inspect`** (async). POST a `strategy.inspect` message `{strategy_id, window_s?}` (same PAT auth as submit); the platform writes a `strategy.inspect.result` to your outbox with the aggregated funnel + reject distribution + latency percentiles + your strategy's recent result messages. Poll `GET /xpio/results` for the reply. Use this when you want the rollup rather than raw cycles.
+- **Raw results — `GET /xpio/results`** (Bearer PAT). Your outbox stream: the `strategy.ack` (compile outcome, [§4.2](#42-submit)) plus any per-cycle `result.*` messages your strategy produced.
 
-Honest limitation: there is **no dedicated per-tenant "list my cycles" HTTP endpoint** for normal users in the platform today — `GET /xpio/results` is the self-serve channel, and deeper `obs.runtime_cycles` access (a read credential or a small query endpoint) is something to request from your operator. Poll `GET /xpio/results` first; it's tenant-scoped and needs only your PAT.
+Start with `GET /lqt/inspect/cycles/<strategy_id>` — it's the direct read of how your strategy is behaving (proposed vs gated vs rejected, and why).
 
 ---
 
@@ -476,6 +477,7 @@ strategy trend_with_stop {
 
 ## Changelog
 
+- **1.0.2** (2026-07-19) — Documented **user inspection**: the dedicated `GET /lqt/inspect/cycles/<strategy_id>` + `/lqt/inspect/strategies` read endpoints and the async `strategy.inspect` mailbox topic — a strategy's telemetry is now attributed to the submitting tenant and readable per-strategy (funnel, reject distribution, latency), server-injected tenant scope so you only ever see your own. Replaces the prior "no per-tenant cycles API — ask your operator" note.
 - **1.0.1** (2026-07-18) — Corrected the submit flow to reflect that `POST /registry/strategies` is a **relay**: it returns `202 queued` and compilation happens **asynchronously**, with the outcome (success or a `compile failed:` diagnostic) arriving as a `strategy.ack` on your outbox — not as a synchronous `400`. Enriched platform signals (open/`lqt.signals`-defined set with common names + `signal_mid` fail-loud note), the monitored universe (Polymarket condition-ids / Kalshi tickers), and a concrete, honest results-reading section (`GET /xpio/results` funnel counts; no dedicated per-tenant cycles API). Verified against `crates/lqt-auth`, `services/lqt-api-gateway`, `services/mailbox-consumer`, and `lqt.signals`/`obs.runtime_cycles` schemas.
 - **1.0.0** (2026-07-18) — Rewritten as the complete **strategy-researcher** reference. Full source-verified DSL grammar (top-level structure, `params`, inline + platform signals, every accessor, `when`/branching, actions, numeric builtins, operators & precedence, fixed-point tick scaling, and limits), the exact `POST /registry/strategies` submit contract with request/response/error tables, offline `lqt-strategy` CLI notes, four worked examples, and reference tables. Scoped to the normal-user paper path.
 - **0.1.0** (2026-07-17) — Initial overview draft.
