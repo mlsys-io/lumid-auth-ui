@@ -2,7 +2,7 @@
 
 **A complete reference for strategy researchers.** Write a trading strategy in the LQT DSL, submit it with your lum.id token, and it runs **shadow/paper** against live prediction markets (Polymarket + Kalshi). No real money is ever placed by a submitted strategy.
 
-> **Doc version 1.0.1** · updated 2026-07-18 · audience: **strategy researcher** (normal user role). See the [changelog](#changelog) at the end.
+> **Doc version 1.0.3** · updated 2026-07-20 · audience: **strategy researcher** (normal user role). See the [changelog](#changelog) at the end.
 
 This page is self-contained: everything needed to author a valid `.lqts` strategy and submit it over HTTP is here, grounded in the compiler and gateway source.
 
@@ -49,21 +49,31 @@ strategy pm_momentum {
 LQTS
 
 # 2. Get a lum.id PAT with the `lqt:strategy` scope (Account -> Tokens), then submit:
-curl -X POST "$LQT_API/registry/strategies" \
+curl -X POST "https://lum.id/lqt/submit/lqt_inbox" \
   -H "Authorization: Bearer $LQT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "$(jq -n --arg dsl "$(cat momentum.lqts)" '{
-        name: "pm_momentum",
-        strategy_id: "pm_momentum",
-        version: "1",
-        dsl: $dsl
+  -d "$(jq -n --arg dsl "$(cat momentum.lqts)" --arg pat "$LQT_TOKEN" '{
+        records: [{
+          msg_id: "cli-\(now)",
+          topic: "strategy.deploy",
+          payload: {
+            topic: "strategy.deploy",
+            auth: { pat: $pat },
+            name: "pm_momentum",
+            strategy_id: "pm_momentum",
+            version: "1",
+            strategy: { dsl: $dsl }
+          }
+        }]
       }')"
 
-# -> 202 { "msg_id": "...", "status": "queued" }
+# -> 200 { "received": 1, "inserted": 1, "status": "ok" }
 # Your strategy compiles server-side, registers under your tenant, and runs PAPER.
+# Confirm it registered:
+#   curl -H "Authorization: Bearer $LQT_TOKEN" https://lum.id/lqt/inspect/strategies
 ```
 
-`$LQT_API` = your LQT deployment's public API base (e.g. `https://lumid.trade`). `$LQT_TOKEN` = your PAT.
+`$LQT_TOKEN` = your lum.id PAT. It appears **twice**: as the `Authorization` bearer (which passes the endpoint's `lqt:strategy` scope check) **and** inside `payload.auth.pat` (the per-strategy **owner** credential the runtime verifies in-transaction — this is what attributes the strategy to your tenant).
 
 ---
 
@@ -300,30 +310,42 @@ Sign in at [lum.id](https://lum.id) → **Account → Tokens** and mint a Person
 
 ### 4.2 Submit
 
-`POST /registry/strategies` on the LQT API, authenticated with your PAT. The gateway compiles your DSL, registers it under your tenant, and starts running it paper.
+`POST https://lum.id/lqt/submit/lqt_inbox`, authenticated with your PAT. This is the **self-serve submission** endpoint: your PAT's `lqt:strategy` scope authorises the write, a background worker compiles your DSL and registers it under your tenant, and it starts running paper.
 
-**Request body:**
+The body is a **records envelope** carrying one `strategy.deploy` message. Your PAT goes **both** in the `Authorization` header (scope check) **and** in `payload.auth.pat` (the per-strategy owner credential — this is what the runtime verifies and what attributes the strategy to your tenant; a submission without it is rejected).
+
+**`payload` fields:**
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
+| `topic` | string | ✓ | `"strategy.deploy"` |
+| `auth.pat` | string | ✓ | **your PAT** — the strategy owner. Without it the consumer rejects (`auth_denied`) |
 | `name` | string | ✓ | human label |
 | `strategy_id` | string | ✓ | stable id; resubmitting the same id **updates in place** |
 | `version` | string | ✓ | your version label, e.g. `"1"` |
-| `dsl` | string | ✓* | your `.lqts` source |
-| `program_hex` | string | ✓* | pre-compiled bytecode (alternative to `dsl`) |
+| `strategy.dsl` | string | ✓* | your `.lqts` source |
+| `strategy.program_hex` | string | ✓* | pre-compiled bytecode (alternative to `dsl`) |
 | `region_scope` | string[] | — | omit to use the default paper lane |
 
-\* Provide **exactly one** of `dsl` or `program_hex`. Supplying neither or both is a `400`.
+\* Provide **exactly one** of `strategy.dsl` or `strategy.program_hex`.
 
 ```bash
-curl -X POST "$LQT_API/registry/strategies" \
+curl -X POST "https://lum.id/lqt/submit/lqt_inbox" \
   -H "Authorization: Bearer $LQT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "pm_momentum",
-    "strategy_id": "pm_momentum",
-    "version": "1",
-    "dsl": "strategy pm_momentum { params { size_lots: 50 } signal fast = ewma(market.mid, halflife_s = 10) signal slow = ewma(market.mid, halflife_s = 60) when fast > slow { buy params.size_lots lots @ market.ask } when fast < slow && position.net_lots > 0 { sell position.net_lots lots @ market.bid } }"
+    "records": [{
+      "msg_id": "cli-001",
+      "topic": "strategy.deploy",
+      "payload": {
+        "topic": "strategy.deploy",
+        "auth": { "pat": "'"$LQT_TOKEN"'" },
+        "name": "pm_momentum",
+        "strategy_id": "pm_momentum",
+        "version": "1",
+        "strategy": { "dsl": "strategy pm_momentum { params { size_lots: 50 } signal fast = ewma(market.mid, halflife_s = 10) signal slow = ewma(market.mid, halflife_s = 60) when fast > slow { buy params.size_lots lots @ market.ask } when fast < slow && position.net_lots > 0 { sell position.net_lots lots @ market.bid } }" }
+      }
+    }]
   }'
 ```
 
@@ -331,17 +353,16 @@ curl -X POST "$LQT_API/registry/strategies" \
 
 | Status | Body | Meaning |
 |---|---|---|
-| `202 Accepted` | `{ "msg_id": "...", "status": "queued" }` | request accepted and queued; **compile happens next, asynchronously** (see below) |
-| `400 Bad Request` | error string | neither or both of `dsl`/`program_hex` supplied |
-| `401 / 403` | — | bad token, or your PAT lacks the `lqt:strategy` scope |
-| `502 / 503` | error string | submit relay unreachable / not configured on this deployment |
+| `200 OK` | `{ "received": 1, "inserted": 1, "status": "ok" }` | request accepted + queued; **compile happens next, asynchronously** (see below) |
+| `400 Bad Request` | error string | malformed envelope, or neither/both of `dsl`/`program_hex` |
+| `401 / 403` | error string | bad token, or your PAT lacks the `lqt:strategy` scope |
 
-**Compilation is asynchronous — the `202` does not mean it compiled.** `POST /registry/strategies` is a relay: it validates the request shape and queues the strategy, then a background worker compiles your `.lqts` and either registers it or rejects it. The outcome arrives as a **`strategy.ack`** message on your outbox:
+**Compilation is asynchronous — `200 ok` means *queued*, not *compiled*.** The endpoint durably records the `strategy.deploy` message; a background worker then compiles your `.lqts` and either registers it or rejects it. Confirm the outcome by listing your strategies (`GET /lqt/inspect/strategies`, [§5](#5--after-you-submit)) — a registered strategy appears there with a non-empty `program_hash` — or by reading the **`strategy.ack`** on your outbox:
 
-- **Success** → your strategy is registered under your tenant and starts running paper.
+- **Success** → your strategy is registered under your tenant (`program_hash` set) and starts running paper.
 - **Compile failure** → a reject-ack whose reason is the compiler's verbatim diagnostic, e.g. `compile failed: <line/column + reason>`. Fix and resubmit the same `strategy_id`.
 
-So the loop is: `POST` → `202 queued` → read your outbox (see [§5](#5--after-you-submit)) for the `strategy.ack` to confirm it compiled. To catch errors *before* submitting, validate locally with the CLI ([§4.3](#43-optional-compile-offline-first)).
+So the loop is: `POST` → `200 ok` (queued) → confirm via `GET /lqt/inspect/strategies` (or read the `strategy.ack` on your outbox — see [§5](#5--after-you-submit)). To catch errors *before* submitting, validate locally with the CLI ([§4.3](#43-optional-compile-offline-first)).
 
 Leaving `region_scope` out runs your strategy in the default paper lane. You never need to set it to run paper.
 
@@ -367,12 +388,13 @@ The hex from `compile` is exactly what you'd send as `program_hex`.
 
 ### Reading results
 
-Two channels, both scoped to your tenant by your PAT:
+Three channels, all scoped to **your** tenant by your PAT (a strategy's telemetry is attributed to the lum.id account that submitted it — you only ever see your own):
 
-- **Mailbox outbox — `GET /xpio/results`** (Bearer PAT). Returns messages the platform wrote to your outbox, including your `strategy.ack` (compile outcome, [§4.2](#42-submit)) and, when your deployment has result emission enabled, per-cycle `result.*` messages. A cycle result payload carries the funnel counts — `n_proposed`, `n_submitted`, `n_rejected`, a `reject_reasons` map, `cycle_id`, `strategy_id` — i.e. how many orders your strategy proposed, how many passed the risk gate, and why the rest were rejected.
-- **Observability cycles — `obs.runtime_cycles`.** Each cycle also records a row keyed on `(box_id, cycle_id, strategy_id, ts)` with the same funnel counts plus `decision_latency_ns` / `gate_latency_ns` / `router_latency_ns`. This lives in the observability warehouse.
+- **Inspect your strategy — `GET /lqt/inspect/cycles/<strategy_id>`** (Bearer PAT). The dedicated per-strategy inspection endpoint: returns your recent `obs.runtime_cycles` for that strategy — the funnel (`n_proposed` / `n_submitted` / `n_rejected` / `suppressed`), the `reject_reasons` distribution, per-cycle latency (`decision_/gate_/router_latency_ns`), and `decision_mid_ticks`. The tenant filter is **server-injected from your token** — you cannot read another user's cycles, and they cannot read yours. `GET /lqt/inspect/strategies` lists the strategies you've registered.
+- **Ask over the mailbox — topic `strategy.inspect`** (async). POST a `strategy.inspect` message `{strategy_id, window_s?}` (same PAT auth as submit); the platform writes a `strategy.inspect.result` to your outbox with the aggregated funnel + reject distribution + latency percentiles + your strategy's recent result messages. Poll `GET /xpio/results` for the reply. Use this when you want the rollup rather than raw cycles.
+- **Raw results — `GET /xpio/results`** (Bearer PAT). Your outbox stream: the `strategy.ack` (compile outcome, [§4.2](#42-submit)) plus any per-cycle `result.*` messages your strategy produced.
 
-Honest limitation: there is **no dedicated per-tenant "list my cycles" HTTP endpoint** for normal users in the platform today — `GET /xpio/results` is the self-serve channel, and deeper `obs.runtime_cycles` access (a read credential or a small query endpoint) is something to request from your operator. Poll `GET /xpio/results` first; it's tenant-scoped and needs only your PAT.
+Start with `GET /lqt/inspect/cycles/<strategy_id>` — it's the direct read of how your strategy is behaving (proposed vs gated vs rejected, and why).
 
 ---
 
@@ -476,6 +498,8 @@ strategy trend_with_stop {
 
 ## Changelog
 
+- **1.0.3** (2026-07-20) — **Corrected the submit endpoint to the working self-serve path.** The previously-documented `POST /registry/strategies` relay silently drops the owner credential for a normal user (the strategy queues but never registers). Self-serve submission now goes to **`POST https://lum.id/lqt/submit/lqt_inbox`** with a records-envelope carrying one `strategy.deploy` message; your PAT appears both as the `Authorization` bearer (scope check) and in `payload.auth.pat` (the owner credential the runtime verifies). Returns `200 { …, "status": "ok" }` (queued); compile stays async — confirm via `GET /lqt/inspect/strategies` (non-empty `program_hash` = registered). End-to-end verified as a normal user (submit → compile → register → inspect), no privileged relay.
+- **1.0.2** (2026-07-19) — Documented **user inspection**: the dedicated `GET /lqt/inspect/cycles/<strategy_id>` + `/lqt/inspect/strategies` read endpoints and the async `strategy.inspect` mailbox topic — a strategy's telemetry is now attributed to the submitting tenant and readable per-strategy (funnel, reject distribution, latency), server-injected tenant scope so you only ever see your own. Replaces the prior "no per-tenant cycles API — ask your operator" note.
 - **1.0.1** (2026-07-18) — Corrected the submit flow to reflect that `POST /registry/strategies` is a **relay**: it returns `202 queued` and compilation happens **asynchronously**, with the outcome (success or a `compile failed:` diagnostic) arriving as a `strategy.ack` on your outbox — not as a synchronous `400`. Enriched platform signals (open/`lqt.signals`-defined set with common names + `signal_mid` fail-loud note), the monitored universe (Polymarket condition-ids / Kalshi tickers), and a concrete, honest results-reading section (`GET /xpio/results` funnel counts; no dedicated per-tenant cycles API). Verified against `crates/lqt-auth`, `services/lqt-api-gateway`, `services/mailbox-consumer`, and `lqt.signals`/`obs.runtime_cycles` schemas.
 - **1.0.0** (2026-07-18) — Rewritten as the complete **strategy-researcher** reference. Full source-verified DSL grammar (top-level structure, `params`, inline + platform signals, every accessor, `when`/branching, actions, numeric builtins, operators & precedence, fixed-point tick scaling, and limits), the exact `POST /registry/strategies` submit contract with request/response/error tables, offline `lqt-strategy` CLI notes, four worked examples, and reference tables. Scoped to the normal-user paper path.
 - **0.1.0** (2026-07-17) — Initial overview draft.
