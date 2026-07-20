@@ -14,7 +14,7 @@
 // workspace. Collapses to a thin rail (Files icon) when not in use.
 
 import { useCallback, useEffect, useState } from 'react';
-import { Boxes, ChevronLeft, ChevronRight, Copy, Download, FileText, FileJson, Code2, Trash2, X, Loader2 } from 'lucide-react';
+import { Boxes, ChevronLeft, ChevronRight, Copy, Download, FileText, FileJson, Code2, Trash2, X, Loader2, Image as ImageIcon, AudioLines } from 'lucide-react';
 import { ChatMarkdown } from './ChatMarkdown';
 
 const COLLAPSE_KEY = 'studio_artifact_panel_collapsed_v1';
@@ -25,7 +25,7 @@ const DEFAULT_WIDTH = 380;
 
 type ArtifactListRow = {
 	id: string;
-	kind: 'markdown' | 'code' | 'json' | 'text';
+	kind: 'markdown' | 'code' | 'json' | 'text' | 'image' | 'audio';
 	title: string;
 	language?: string;
 	source_tool?: string;
@@ -138,6 +138,20 @@ export function StudioArtifactPanel() {
 
 	const downloadOne = useCallback(() => {
 		if (!selected) return;
+		const safeTitle = selected.title.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 60) || selected.id;
+		const a = document.createElement('a');
+		// image/audio artifacts are data: URLs — download them verbatim so the
+		// bytes round-trip (a text/plain blob would corrupt them).
+		if ((selected.kind === 'image' || selected.kind === 'audio') && selected.content.startsWith('data:')) {
+			const mime = selected.content.slice(5, selected.content.indexOf(';'));
+			const ext = mime.split('/')[1] || (selected.kind === 'image' ? 'png' : 'mp3');
+			a.href = selected.content;
+			a.download = `${safeTitle}.${ext}`;
+			document.body.appendChild(a);
+			a.click();
+			setTimeout(() => document.body.removeChild(a), 100);
+			return;
+		}
 		const ext = (() => {
 			switch (selected.kind) {
 				case 'markdown': return 'md';
@@ -146,9 +160,7 @@ export function StudioArtifactPanel() {
 				default: return 'txt';
 			}
 		})();
-		const safeTitle = selected.title.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 60) || selected.id;
 		const blob = new Blob([selected.content], { type: 'text/plain' });
-		const a = document.createElement('a');
 		a.href = URL.createObjectURL(blob);
 		a.download = `${safeTitle}.${ext}`;
 		document.body.appendChild(a);
@@ -335,6 +347,18 @@ export function StudioArtifactPanel() {
 									<pre className="bg-slate-50 border border-slate-200 rounded-lg p-2 text-[11.5px] overflow-x-auto">
 										<code>{prettyJson(selected.content)}</code>
 									</pre>
+								) : selected.kind === 'image' ? (
+									<a href={selected.content} target="_blank" rel="noreferrer">
+										<img
+											src={selected.content}
+											alt={selected.title}
+											className="max-w-full rounded-lg border border-slate-200"
+										/>
+									</a>
+								) : selected.kind === 'audio' ? (
+									<audio controls src={selected.content} className="w-full">
+										Your browser does not support audio playback.
+									</audio>
 								) : (
 									<div className="whitespace-pre-wrap break-words text-slate-700">{selected.content}</div>
 								)}
@@ -358,6 +382,8 @@ function KindIcon({ kind }: { kind: ArtifactListRow['kind'] }) {
 		case 'markdown': return <FileText className="w-3.5 h-3.5 text-gold-600 flex-shrink-0" />;
 		case 'code':     return <Code2 className="w-3.5 h-3.5 text-sky-600 flex-shrink-0" />;
 		case 'json':     return <FileJson className="w-3.5 h-3.5 text-gold-600 flex-shrink-0" />;
+		case 'image':    return <ImageIcon className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />;
+		case 'audio':    return <AudioLines className="w-3.5 h-3.5 text-violet-600 flex-shrink-0" />;
 		default:         return <FileText className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />;
 	}
 }
