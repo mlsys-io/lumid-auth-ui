@@ -32,6 +32,16 @@ import {
 import { getJson } from '../utils/axios';
 import { useLqtSse } from '../utils/sse';
 import { ServiceStatusGrid } from '../components/ServiceStatusGrid';
+// Phase 6 (T-ANALYSIS-SLO) — obs-sourced SLO + fleet + analysis panels.
+// The dedicated page is `slo.tsx`; the operator console embeds the same
+// panels so the SLO surface is reachable wherever the operator route
+// mounts (the standalone /slo route is wired alongside it).
+import {
+  FillQualityCard,
+  FleetCard,
+  PnlReconCard,
+  SloRollupCard,
+} from './slo';
 import type {
   AlertsBody,
   DriftObserversBody,
@@ -284,8 +294,20 @@ export function OperatorPage() {
         <AlertsCard />
         <PreflightCard />
       </div>
+
+      {/* Phase 6 (T-ANALYSIS-SLO) — operator SLO views on the obs plane
+          (rebuilt after Grafana/Prometheus were retired). */}
+      <h2 className="pt-2 text-base font-semibold">SLO &amp; fleet</h2>
+      <SloRollupCard />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <FleetCard />
+        <FillQualityCard />
+      </div>
+      <PnlReconCard />
+
       <p className="text-xs text-muted-foreground">
         HSM rotation drill, replicator restart, and alert silence ship in Phase 2 (T-UI-013).
+        SLO-breach highlighting is client-side; a server-side alert rule is a documented follow-up.
       </p>
     </div>
   );

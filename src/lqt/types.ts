@@ -499,3 +499,98 @@ export interface HsmKeysBody {
 // Convenience union for the kill-switch indicator.
 // ============================================================
 export type KillSwitchSummary = 'ACTIVE' | 'PARTIAL' | 'DISABLED' | 'UNKNOWN';
+
+// ============================================================
+// Phase 6 (T-ANALYSIS-SLO) — operator SLO + fleet + analysis views.
+// Mirror the wire structs in
+// `services/lqt-api-gateway/src/handlers/operator.rs`.
+// ============================================================
+
+/** One (region, strategy) SLO group from `/api/ops/slo`. */
+export interface SloGroup {
+  region_id: string;
+  strategy_id: string;
+  cycles: number;
+  cycle_p50_ns: number;
+  cycle_p99_ns: number;
+  decision_p99_ns: number;
+  gate_p99_ns: number;
+  router_p99_ns: number;
+  n_proposed: number;
+  n_submitted: number;
+  n_rejected: number;
+  n_suppressed: number;
+}
+
+export interface RejectReason {
+  reason: string;
+  count: number;
+}
+
+export interface SloBody {
+  groups: SloGroup[];
+  reject_reasons: RejectReason[];
+  window_minutes: number;
+  obs_reachable: boolean;
+}
+
+/** One region's fleet-liveness row from `/api/ops/fleet`. */
+export interface FleetRegion {
+  region_id: string;
+  box_count: number;
+  active_strategies: number;
+  cycles: number;
+  last_cycle_at_ns: number;
+  ingest_lag_seconds: number;
+}
+
+export interface FleetBody {
+  regions: FleetRegion[];
+  window_minutes: number;
+  obs_reachable: boolean;
+}
+
+/** One `analysis.pnl_reconciliation` row from `/api/ops/pnl-reconciliation`. */
+export interface PnlReconRow {
+  strategy_id: string;
+  venue: string;
+  day: string;
+  realized_pnl_micros: number;
+  expected_pnl_micros: number;
+  pnl_divergence_micros: number;
+  settled_positions: number;
+  unreconciled_positions: number;
+  mismark_positions: number;
+  mismark_threshold_bps: number;
+  fills_count: number;
+}
+
+export interface PnlReconBody {
+  rows: PnlReconRow[];
+  days: number;
+}
+
+/** One `analysis.fill_quality` row from `/api/ops/fill-quality`. */
+export interface FillQualityRow {
+  strategy_id: string;
+  venue: string;
+  day: string;
+  markout_1s_bps: number;
+  markout_10s_bps: number;
+  markout_60s_bps: number;
+  markout_300s_bps: number;
+  markout_net_1s_bps: number;
+  markout_net_10s_bps: number;
+  markout_net_60s_bps: number;
+  markout_net_300s_bps: number;
+  toxic_fill_pct: number;
+  net_toxic_fill_pct: number;
+  toxic_base_n: number;
+  net_of_markout_usd: number;
+  fills_scored: number;
+}
+
+export interface FillQualityBody {
+  rows: FillQualityRow[];
+  days: number;
+}

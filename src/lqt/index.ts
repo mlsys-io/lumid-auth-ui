@@ -12,6 +12,7 @@ export { TraderPage } from './pages/trader';
 export { AuditorPage } from './pages/auditor';
 export { ResearcherPage } from './pages/researcher';
 export { OperatorPage } from './pages/operator';
+export { SloPage } from './pages/slo';
 export { AccountantPage } from './pages/accountant';
 export { AdminPage } from './pages/admin';
 
