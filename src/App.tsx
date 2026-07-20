@@ -92,6 +92,7 @@ const ResetPassword = lazy(() => import("./pages/auth/reset-password"));
 const XpioAutoresearchDoc = lazy(() => import("./pages/docs/xpio-autoresearch"));
 const PluginImageCdDoc = lazy(() => import("./pages/docs/plugin-image-cd"));
 const LqtStrategiesDoc = lazy(() => import("./pages/docs/lqt-strategies"));
+const OperationsDoc = lazy(() => import("./pages/docs/operations"));
 const RedeemInvite = lazy(() => import("./pages/auth/redeem-invite"));
 
 // The unified shell for /dashboard/* (absorbed the old /app/* tree in
@@ -119,6 +120,10 @@ const AdminOverview = lazy(() => import("./pages/dashboard/overview"));
 // Super-admin single pane of glass — billing/identity/QA/infra/build
 // tiles + embedded Grafana panels. Lives at /dashboard/super-admin.
 const SuperAdminDashboard = lazy(() => import("./pages/dashboard/super-admin"));
+// Live operations status page — super_admin-gated. Reads the whole-stack
+// stack_check scorecard + venue-health + resource-usage from the LQT
+// gateway. Lives at /status/operations.
+const OperationsStatusPage = lazy(() => import("./pages/status/operations"));
 // Quant* + datasets-* page mounts retired 2026-06-19 — the /dashboard
 // quant/datasets routes were already <Navigate> redirects into Studio;
 // the page files moved to pages/deprecated/dashboard/. Imports removed.
@@ -500,6 +505,29 @@ export default function App() {
               <AuthGuard requireAuth={true}>
                 <LqtStrategiesDoc />
               </AuthGuard>
+            }
+          />
+          {/* Operations checklist — AUTH REQUIRED (internal ops runbook,
+              matches plugin-image-cd). Companion to the live status page
+              at /status/operations. */}
+          <Route
+            path="/docs/operations"
+            element={
+              <AuthGuard requireAuth={true}>
+                <OperationsDoc />
+              </AuthGuard>
+            }
+          />
+
+          {/* Live operations status — super_admin only. Standalone page
+              (own layout), so it lives at the top level rather than inside
+              the studio shell. Companion doc at /docs/operations. */}
+          <Route
+            path="/status/operations"
+            element={
+              <SuperAdminGuard>
+                <OperationsStatusPage />
+              </SuperAdminGuard>
             }
           />
 

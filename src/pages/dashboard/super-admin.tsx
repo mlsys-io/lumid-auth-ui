@@ -159,6 +159,7 @@ export default function SuperAdminDashboard() {
 					<BuildStatusTile builds={snap.builds} />
 				</div>
 				<BuildStatusTable builds={snap.builds} />
+				<OperationsStatusTile />
 			</Section>
 
 			{/* 2. Source state — codebase + xpio app bundles. Both are
@@ -264,6 +265,33 @@ function Tile({ icon: Icon, label, to, primary, secondary, tone = 'default' }: T
 		</div>
 	);
 	return to ? <Link to={to}>{inner}</Link> : inner;
+}
+
+// ---- Operations status entry ----
+//
+// Full-width entry that links to the live /status/operations page (the
+// stack_check scorecard + venue-health + resource-usage strips). Kept as
+// a link rather than an inline fetch because that page reads the LQT
+// gateway cross-domain (session-bearer) while the rest of this dashboard
+// is same-origin identity endpoints.
+function OperationsStatusTile() {
+	return (
+		<Link
+			to="/status/operations"
+			className="mt-3 flex items-center justify-between bg-white border border-gray-200 border-l-4 border-l-indigo-500 rounded p-4 hover:shadow-sm transition"
+		>
+			<div className="flex items-center gap-2">
+				<Activity className="w-4 h-4 text-indigo-700" />
+				<div>
+					<div className="text-sm font-medium">Operations status</div>
+					<div className="text-xs text-muted-foreground">
+						Live whole-stack scorecard · venue health · resource usage
+					</div>
+				</div>
+			</div>
+			<span className="text-xs text-indigo-600">Open →</span>
+		</Link>
+	);
 }
 
 // ---- Identity tiles ----
