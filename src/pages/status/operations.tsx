@@ -57,6 +57,9 @@ interface ResourceUsageBox {
 	cpu_pct?: number | null;
 	mem_pct?: number | null;
 	disk_pct?: number | null;
+	load1?: number | null;
+	load5?: number | null;
+	ncpu?: number | null;
 	ts?: string;
 }
 
@@ -121,6 +124,9 @@ function normResource(raw: unknown): ResourceUsageBody {
 		cpu_pct: r.cpu_pct,
 		mem_pct: r.mem_pct,
 		disk_pct: r.disk_pct,
+		load1: r.load1,
+		load5: r.load5,
+		ncpu: r.ncpu,
 		ts: r.ts,
 	}));
 	return { boxes };
@@ -468,6 +474,21 @@ function ResourceStrip({ state }: { state: SectionState<ResourceUsageBody> }) {
 							);
 						})}
 					</div>
+					{b.load1 != null && b.ncpu ? (
+						<div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-[11px]">
+							<span className="uppercase text-muted-foreground">load (1m)</span>
+							<span
+								className={`font-mono font-medium ${
+									b.load1 > b.ncpu ? 'text-red-600'
+									: b.load1 > b.ncpu * 0.7 ? 'text-amber-600'
+									: 'text-green-700'
+								}`}
+							>
+								{b.load1.toFixed(2)} / {b.ncpu} cpu
+								{b.load5 != null ? ` \u00b7 5m ${b.load5.toFixed(2)}` : ''}
+							</span>
+						</div>
+					) : null}
 				</div>
 			))}
 		</div>
