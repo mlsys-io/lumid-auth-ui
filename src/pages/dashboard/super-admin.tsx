@@ -158,8 +158,8 @@ export default function SuperAdminDashboard() {
 					<BackupStatusTile backups={snap.backups} />
 					<BuildStatusTile builds={snap.builds} />
 				</div>
-				<BuildStatusTable builds={snap.builds} />
 				<OperationsStatusTile />
+				<BuildStatusTable builds={snap.builds} />
 			</Section>
 
 			{/* 2. Source state — codebase + xpio app bundles. Both are
