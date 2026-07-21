@@ -77,6 +77,67 @@ interface VenueHealthBody {
 	venues: VenueHealthEntry[];
 }
 
+// The lqt read endpoints return BARE ARRAYS of raw obs.* rows (full history, snake_case
+// columns like `box_id`/`check_name`). Normalize each to the wrapped, latest-run shape the
+// section components consume (tolerant of both a bare array and a pre-wrapped object).
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function latestKey(r: any): string {
+	return String(r.run_id ?? r.ts ?? '');
+}
+function normStackCheck(raw: unknown): StackCheckBody {
+	const arr: any[] = Array.isArray(raw) ? raw : ((raw as any)?.rows ?? []);
+	if (arr.length === 0) return { rows: [] };
+	// keep only the most-recent sweep (max run_id, else max ts)
+	const latest = arr.reduce((m, r) => (latestKey(r) > m ? latestKey(r) : m), '');
+	const rows = arr
+		.filter((r) => latestKey(r) === latest)
+		.map((r) => ({
+			dimension: r.dimension,
+			check_name: r.check_name ?? r.check,
+			status: r.status,
+			detail: r.detail,
+			remediation: r.remediation,
+			cadence: r.cadence,
+			ts: r.ts,
+		}));
+	return { rows };
+}
+function normResource(raw: unknown): ResourceUsageBody {
+	const arr: any[] = Array.isArray(raw) ? raw : ((raw as any)?.boxes ?? []);
+	const byBox = new Map<string, any>();
+	for (const r of arr) {
+		const b = r.box ?? r.box_id ?? r.name ?? 'unknown';
+		const prev = byBox.get(b);
+		if (!prev || String(r.ts ?? '') > String(prev.ts ?? '')) byBox.set(b, r);
+	}
+	const boxes = [...byBox.entries()].map(([box, r]) => ({
+		box,
+		cpu_pct: r.cpu_pct,
+		mem_pct: r.mem_pct,
+		disk_pct: r.disk_pct,
+		ts: r.ts,
+	}));
+	return { boxes };
+}
+function normVenue(raw: unknown): VenueHealthBody {
+	const arr: any[] = Array.isArray(raw) ? raw : ((raw as any)?.venues ?? []);
+	const byV = new Map<string, any>();
+	for (const r of arr) {
+		const v = r.venue ?? r.name ?? 'unknown';
+		const prev = byV.get(v);
+		if (!prev || String(r.ts ?? '') > String(prev.ts ?? '')) byV.set(v, r);
+	}
+	const venues = [...byV.entries()].map(([venue, r]) => ({
+		venue,
+		status: r.status,
+		book_age_ms: r.book_age_ms,
+		detail: r.detail,
+		ts: r.ts,
+	}));
+	return { box: '', venues };
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
 // A section's fetch resolves to one of: data | not-available (404) | error.
 type SectionState<T> =
 	| { kind: 'loading' }
@@ -86,9 +147,13 @@ type SectionState<T> =
 
 // Fetch a gateway path into a SectionState, mapping 404 → unavailable so a
 // not-yet-deployed probe shows a graceful placeholder instead of an error.
-async function fetchSection<T>(path: string): Promise<SectionState<T>> {
+async function fetchSection<T>(
+	path: string,
+	normalize?: (raw: unknown) => T,
+): Promise<SectionState<T>> {
 	try {
-		const data = await getJson<T>(path);
+		const raw = await getJson<unknown>(path);
+		const data = normalize ? normalize(raw) : (raw as T);
 		return { kind: 'ok', data };
 	} catch (e) {
 		if (e instanceof LqtGatewayError && e.status === 404) {
@@ -514,9 +579,11 @@ export default function OperationsStatusPage() {
 	const refresh = useCallback(async () => {
 		setRefreshing(true);
 		const [sc, rs, ...vh] = await Promise.all([
-			fetchSection<StackCheckBody>('/lqt/stack-check'),
-			fetchSection<ResourceUsageBody>(`/lqt/resource-usage/${RESOURCE_SCOPE}`),
-			...VENUE_BOXES.map((box) => fetchSection<VenueHealthBody>(`/lqt/venue-health/${box}`)),
+			fetchSection<StackCheckBody>('/lqt/stack-check', normStackCheck),
+			fetchSection<ResourceUsageBody>(`/lqt/resource-usage/${RESOURCE_SCOPE}`, normResource),
+			...VENUE_BOXES.map((box) =>
+				fetchSection<VenueHealthBody>(`/lqt/venue-health/${box}`, normVenue),
+			),
 		]);
 		setScorecard(sc);
 		setResources(rs);
