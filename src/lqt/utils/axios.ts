@@ -32,8 +32,14 @@ import axios, {
 // `https://lqt.lum.id` is operator-overridden at deploy time.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const ENV = ((import.meta as any)?.env ?? {}) as Record<string, string | undefined>;
+// SAME-ORIGIN by default. The status page hits lum.id/lqt/* which the landing
+// nginx proxies to the in-cluster `lqt` read service, injecting the read-scoped
+// service PAT server-side (mirrors the /findata-cloud findata-token.conf pattern).
+// So the browser sends NO Authorization header and no cross-domain hop — the old
+// `https://lqt.lum.id` default was an unrouted domain (network error). An operator
+// can still override to an absolute gateway URL via VITE_LQT_API_GATEWAY_URL.
 const LQT_API_GATEWAY_URL: string =
-  ENV.VITE_LQT_API_GATEWAY_URL ?? 'https://lqt.lum.id';
+  ENV.VITE_LQT_API_GATEWAY_URL ?? '';
 
 /**
  * Cached scoped session-bearer. `null` means uncached or expired.
@@ -141,40 +147,21 @@ export const lqtAxios: AxiosInstance = axios.create({
   },
 });
 
-// Request interceptor — attach the scoped bearer.
-lqtAxios.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
-  try {
-    const bearer = await getBearer();
-    config.headers.set('Authorization', `Bearer ${bearer.token}`);
-  } catch (e) {
-    // Mint failure — surface as gateway error so the caller can
-    // route to login. We let the request fly without a token so
-    // the gateway returns 401 with a clear shape.
-    // eslint-disable-next-line no-console
-    console.warn('[lqt] session-bearer mint failed; sending unauthenticated:', e);
-  }
-  return config;
-});
+// Request interceptor — SAME-ORIGIN mode: attach NO Authorization header. The
+// landing nginx (/lqt/ location) injects the read-scoped service PAT server-side
+// only when the caller presents no bearer (findata-token.conf precedence), so
+// sending anything here would OVERRIDE that injection and get rejected. The old
+// cross-domain session-bearer machinery (getBearer/fetchSessionBearer) is retained
+// below as dead code for the future absolute-gateway path but is intentionally
+// not wired.
+lqtAxios.interceptors.request.use((config: InternalAxiosRequestConfig) => config);
 
 // Response interceptor — single-shot 401 retry with a fresh token.
 lqtAxios.interceptors.response.use(
   (r) => r,
   async (err: AxiosError) => {
-    const cfg = err.config as InternalAxiosRequestConfig & { __lqt_retried?: boolean };
-    if (err.response?.status === 401 && cfg && !cfg.__lqt_retried) {
-      cfg.__lqt_retried = true;
-      invalidateBearerCache();
-      try {
-        const bearer = await getBearer();
-        cfg.headers.set('Authorization', `Bearer ${bearer.token}`);
-        return lqtAxios.request(cfg);
-      } catch (refreshErr) {
-        throw new LqtGatewayError('session_bearer_refresh_failed', {
-          status: 401,
-          cause: refreshErr,
-        });
-      }
-    }
+    // SAME-ORIGIN mode: no bearer to refresh — the nginx /lqt/ proxy owns auth.
+    // Surface the status verbatim so the page can show a clear error.
     if (err.response) {
       throw new LqtGatewayError(`gateway_${err.response.status}`, {
         status: err.response.status,
