@@ -133,13 +133,26 @@ function normVenue(raw: unknown): VenueHealthBody {
 		const prev = byV.get(v);
 		if (!prev || String(r.ts ?? '') > String(prev.ts ?? '')) byV.set(v, r);
 	}
-	const venues = [...byV.entries()].map(([venue, r]) => ({
-		venue,
-		status: r.status,
-		book_age_ms: r.book_age_ms,
-		detail: r.detail,
-		ts: r.ts,
-	}));
+	const venues = [...byV.entries()].map(([venue, r]) => {
+		// The obs.venue_health feed carries ws_connected + last_msg_age_s (not a
+		// precomputed status/book_age). Derive: disconnected → FAIL; connected but
+		// the last message is stale (>120s) → WARN; else PASS. book_age ← last_msg_age.
+		const ageS = r.last_msg_age_s ?? null;
+		let status = r.status as string | undefined;
+		if (!status) {
+			if (r.ws_connected === false) status = 'FAIL';
+			else if (ageS != null && ageS > 120) status = 'WARN';
+			else if (r.ws_connected === true) status = 'PASS';
+			else status = 'UNKNOWN';
+		}
+		return {
+			venue,
+			status,
+			book_age_ms: r.book_age_ms ?? (ageS != null ? Math.round(ageS * 1000) : undefined),
+			detail: r.detail ?? (r.feed ? `feed=${r.feed}` : undefined),
+			ts: r.ts,
+		};
+	});
 	return { box: '', venues };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -175,7 +188,7 @@ async function fetchSection<T>(
 
 // The boxes we probe venue health for. If a box has no venues (or 404s),
 // its strip is simply omitted / shown as unavailable.
-const VENUE_BOXES = ['dublin', 'chicago', 'nyc'] as const;
+const VENUE_BOXES = ['denmark', 'nyc', 'chicago'] as const;
 const RESOURCE_SCOPE = 'host';
 
 const REFRESH_MS = 30_000;
