@@ -102,10 +102,11 @@ export default function AdminOverview() {
 					<ShieldCheck className="w-3 h-3" />
 					Admin areas
 				</h2>
-				<div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
+				<div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
 					<AreaLink to="/studio/admin/users"        icon={Users}     label="People & access" hint="Users, roles, invitations, audit" />
 					<AreaLink to="/studio/admin/clusters"     icon={Server}    label="Infrastructure"  hint="Clusters, workers, billing, reviews" />
 					<AreaLink to="/studio/admin/competitions" icon={LineChart} label="Lumid Market admin" hint="Competitions, markets, templates, jobs" />
+					<AreaLink to="/status/operations"         icon={Activity}  label="Operations status" hint="Stack health, resource + venue, bottomlines" />
 				</div>
 			</section>
 
