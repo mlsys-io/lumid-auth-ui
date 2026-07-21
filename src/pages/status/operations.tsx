@@ -87,19 +87,25 @@ function latestKey(r: any): string {
 function normStackCheck(raw: unknown): StackCheckBody {
 	const arr: any[] = Array.isArray(raw) ? raw : ((raw as any)?.rows ?? []);
 	if (arr.length === 0) return { rows: [] };
-	// keep only the most-recent sweep (max run_id, else max ts)
-	const latest = arr.reduce((m, r) => (latestKey(r) > m ? latestKey(r) : m), '');
-	const rows = arr
-		.filter((r) => latestKey(r) === latest)
-		.map((r) => ({
-			dimension: r.dimension,
-			check_name: r.check_name ?? r.check,
-			status: r.status,
-			detail: r.detail,
-			remediation: r.remediation,
-			cadence: r.cadence,
-			ts: r.ts,
-		}));
+	// Show each check's CURRENT status: keep the latest row per (dimension, check_name)
+	// across all runs. obs.stack_check interleaves the periodic full 17-dimension sweep with
+	// lightweight opsagent heartbeats, so a naive "latest run_id" would surface only the
+	// heartbeat (one `opsagent` row). Latest-per-check surfaces every dimension.
+	const byCheck = new Map<string, any>();
+	for (const r of arr) {
+		const k = `${r.dimension} ${r.check_name ?? r.check}`;
+		const prev = byCheck.get(k);
+		if (!prev || latestKey(r) > latestKey(prev)) byCheck.set(k, r);
+	}
+	const rows = [...byCheck.values()].map((r) => ({
+		dimension: r.dimension,
+		check_name: r.check_name ?? r.check,
+		status: r.status,
+		detail: r.detail,
+		remediation: r.remediation,
+		cadence: r.cadence,
+		ts: r.ts,
+	}));
 	return { rows };
 }
 function normResource(raw: unknown): ResourceUsageBody {
