@@ -340,3 +340,69 @@ export async function fetchClaudeQuota(): Promise<ClaudeQuotaResp> {
 	const r = await apiClient.get<DataResponse<ClaudeQuotaResp>>('/api/v1/admin/claude-quota');
 	return r.data.data;
 }
+
+export interface AdminClaudeTokenResult {
+	email: string;
+	valid: boolean;
+	stored: boolean;
+	upstream_status: number;
+	reason: string;
+}
+
+export async function adminAddClaudeToken(email: string, token: string, app?: string): Promise<AdminClaudeTokenResult> {
+	const r = await apiClient.post<DataResponse<AdminClaudeTokenResult>>('/api/v1/admin/claude-token', { email, token, app });
+	return r.data.data;
+}
+
+// ---- /api/v1/admin/users ----
+
+export interface AdminUserRow {
+	id: string;
+	email: string;
+	email_verified: boolean;
+	name?: string;
+	role: string;
+	status: string;
+	created_at: string;
+	updated_at: string;
+	active_token_count: number;
+	last_login_at?: string;
+}
+
+export interface AdminUsersResp {
+	users: AdminUserRow[];
+	total: number;
+	page: number;
+	page_size: number;
+}
+
+export async function fetchAdminUsers(page = 1, pageSize = 50, status = 'all'): Promise<AdminUsersResp> {
+	const r = await apiClient.get<DataResponse<AdminUsersResp>>('/api/v1/admin/users', {
+		params: { page, page_size: pageSize, status },
+	});
+	return r.data.data;
+}
+
+// ---- /api/v1/cluster/clusters ----
+
+export interface ClusterRow {
+	id: string;
+	name: string;
+	region?: string;
+	status: string;
+	owner_user_id: string;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface ClusterListResp {
+	clusters: ClusterRow[];
+	total: number;
+}
+
+export async function fetchClusterList(): Promise<ClusterListResp> {
+	const r = await apiClient.get<DataResponse<ClusterListResp>>('/api/v1/cluster/clusters', {
+		params: { page_size: 100 },
+	});
+	return r.data.data;
+}

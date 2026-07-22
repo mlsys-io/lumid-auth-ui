@@ -9,9 +9,10 @@
 // the last known snapshot with a warning badge.
 
 import { useEffect, useState, useCallback } from 'react';
-import { RefreshCw, Zap, AlertTriangle, CheckCircle, Clock, Loader2 } from 'lucide-react';
+import { RefreshCw, Zap, AlertTriangle, CheckCircle, Clock, Loader2, UserPlus, X } from 'lucide-react';
 import {
 	fetchClaudeQuota,
+	adminAddClaudeToken,
 	type ClaudeQuotaAccount,
 	type ClaudeQuotaLimit,
 } from '@/api/super-admin';
@@ -133,6 +134,101 @@ function AccountRow({ acc }: { acc: ClaudeQuotaAccount }) {
 	);
 }
 
+// ── Add-account modal ──────────────────────────────────────────────
+
+function AddAccountModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
+	const [email, setEmail] = useState('');
+	const [token, setToken] = useState('');
+	const [busy,  setBusy]  = useState(false);
+	const [msg,   setMsg]   = useState<{ ok: boolean; text: string } | null>(null);
+
+	const submit = async () => {
+		const e = email.trim().toLowerCase();
+		const t = token.trim();
+		if (!e || !t) { setMsg({ ok: false, text: 'Email and token are required.' }); return; }
+		setBusy(true);
+		setMsg(null);
+		try {
+			const r = await adminAddClaudeToken(e, t);
+			if (r.valid && r.stored) {
+				setMsg({ ok: true, text: `Token stored for ${r.email}. Quota will refresh within 5 min.` });
+				setTimeout(() => { onClose(); onAdded(); }, 1500);
+			} else if (!r.valid) {
+				setMsg({ ok: false, text: `Invalid token: ${r.reason}` });
+			} else {
+				setMsg({ ok: false, text: r.reason || 'Unknown error' });
+			}
+		} catch (err: any) {
+			setMsg({ ok: false, text: String(err?.response?.data?.message || err?.message || err) });
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	return (
+		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+			<div className="w-full max-w-md rounded-xl border border-slate-200 bg-white shadow-lg p-5 mx-4">
+				<div className="flex items-center justify-between mb-4">
+					<h2 className="font-semibold text-slate-800 flex items-center gap-2">
+						<UserPlus className="w-4 h-4 text-gold-600" />
+						Connect Claude account
+					</h2>
+					<button onClick={onClose} className="text-slate-400 hover:text-slate-700">
+						<X className="w-4 h-4" />
+					</button>
+				</div>
+				<p className="text-xs text-slate-500 mb-4">
+					Paste the user's <code className="font-mono bg-slate-100 px-1 rounded">sk-ant-oat01-*</code> token.
+					The token is verified against Anthropic before storage and will appear in the quota view within 5 minutes.
+				</p>
+				<div className="space-y-3">
+					<div>
+						<label className="block text-xs font-medium text-slate-600 mb-1">User email</label>
+						<input
+							type="email"
+							value={email}
+							onChange={(e) => setEmail(e.target.value)}
+							placeholder="user@example.com"
+							className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gold-400"
+						/>
+					</div>
+					<div>
+						<label className="block text-xs font-medium text-slate-600 mb-1">Claude OAuth token</label>
+						<input
+							type="password"
+							value={token}
+							onChange={(e) => setToken(e.target.value)}
+							placeholder="sk-ant-oat01-…"
+							className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-gold-400"
+						/>
+					</div>
+					{msg && (
+						<div className={`text-xs rounded px-2.5 py-2 ${msg.ok ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' : 'bg-rose-50 border border-rose-200 text-rose-800'}`}>
+							{msg.text}
+						</div>
+					)}
+					<div className="flex justify-end gap-2 pt-1">
+						<button
+							onClick={onClose}
+							className="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-800 transition"
+						>
+							Cancel
+						</button>
+						<button
+							onClick={submit}
+							disabled={busy}
+							className="inline-flex items-center gap-1.5 rounded-md bg-gold-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-gold-700 disabled:opacity-50 transition"
+						>
+							{busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+							Connect
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	);
+}
+
 function SummaryBar({ accounts }: { accounts: ClaudeQuotaAccount[] }) {
 	const critical = accounts.filter((a) => a.severity === 'critical').length;
 	const warning  = accounts.filter((a) => a.severity === 'warning').length;
@@ -160,6 +256,7 @@ export default function StudioClaudeQuota() {
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [lastFetch, setLastFetch] = useState<Date | null>(null);
+	const [showAdd, setShowAdd] = useState(false);
 
 	const load = useCallback((silent = false) => {
 		if (!silent) setLoading(true);
@@ -181,6 +278,12 @@ export default function StudioClaudeQuota() {
 
 	return (
 		<div className="space-y-4">
+			{showAdd && (
+				<AddAccountModal
+					onClose={() => setShowAdd(false)}
+					onAdded={() => { setShowAdd(false); load(true); }}
+				/>
+			)}
 			<header className="flex items-baseline justify-between">
 				<div>
 					<h1 className="text-lg font-medium flex items-center gap-2">
@@ -199,6 +302,13 @@ export default function StudioClaudeQuota() {
 							updated {fmtTs(lastFetch.toISOString())}
 						</span>
 					)}
+					<button
+						onClick={() => setShowAdd(true)}
+						className="inline-flex items-center gap-1.5 rounded-md border border-gold-300 bg-gold-50 px-2.5 py-1.5 text-xs font-medium text-gold-800 hover:bg-gold-100 transition"
+					>
+						<UserPlus className="w-3.5 h-3.5" />
+						Add account
+					</button>
 					<button
 						onClick={() => load()}
 						disabled={loading}
