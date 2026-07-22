@@ -177,9 +177,14 @@ function AddAccountModal({ onClose, onAdded }: { onClose: () => void; onAdded: (
 						<X className="w-4 h-4" />
 					</button>
 				</div>
-				<p className="text-xs text-slate-500 mb-1">
-					On the user's machine (must have Claude Code CLI installed and logged in), run:
+				<p className="text-xs text-slate-500 mb-2">
+					Log in as the target user with the Claude CLI, then copy their token:
 				</p>
+				<ol className="text-xs text-slate-600 space-y-1.5 mb-3 list-none">
+					<li><span className="font-mono bg-slate-100 px-1 rounded mr-1">1</span> <code className="font-mono">claude auth login</code> — sign in as the target user</li>
+					<li><span className="font-mono bg-slate-100 px-1 rounded mr-1">2</span> Copy the token printed below</li>
+					<li><span className="font-mono bg-slate-100 px-1 rounded mr-1">3</span> <code className="font-mono">claude auth logout</code> — then log back in as yourself</li>
+				</ol>
 				<pre className="text-[11px] font-mono bg-slate-900 text-emerald-300 rounded px-3 py-2 mb-3 select-all overflow-x-auto">
 {`node -e "const h=require('os').homedir();console.log(JSON.parse(require('fs').readFileSync(h+'/.claude/.credentials.json','utf8')).claudeAiOauth.accessToken)"`}
 				</pre>
