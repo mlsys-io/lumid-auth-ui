@@ -1,9 +1,9 @@
 // Claude Code quota status across all org accounts — super_admin only.
 //
-// Reads every user who has stored a CLAUDE_CODE_OAUTH_TOKEN via the
-// "Connect Claude" modal in Studio settings. Fetches live quota from
-// claude.ai for each (5-min server-side cache). Sorted by pressure
-// (five_hour_pct DESC) so the accounts closest to their limit float up.
+// Reads every row in claude_quota_tokens (admin-managed via "Add account").
+// Quota is fetched live from api.anthropic.com/v1/messages response headers
+// (anthropic-ratelimit-unified-5h-utilization etc.) — 5-min server-side cache.
+// Sorted by pressure (five_hour_pct DESC).
 //
 // The page auto-refreshes every 2 minutes. Stale/errored accounts show
 // the last known snapshot with a warning badge.
@@ -302,8 +302,7 @@ export default function StudioClaudeQuota() {
 					</h1>
 					<p className="text-sm text-slate-500 mt-0.5">
 						Live 5-hour and 7-day quota across all org accounts.
-						Tokens are stored via the "Connect Claude" modal in each
-						user's Studio settings.
+						Use "Add account" to register each user's Claude Code OAuth token.
 					</p>
 				</div>
 				<div className="flex items-center gap-3">
@@ -345,7 +344,7 @@ export default function StudioClaudeQuota() {
 						No accounts have connected a Claude token yet.
 					</p>
 					<p className="text-xs text-slate-400 mt-1">
-						Users connect via Studio → Settings → Agent secrets → CLAUDE_CODE_OAUTH_TOKEN.
+						Click "Add account" above and paste each user's Claude Code OAuth token.
 					</p>
 				</div>
 			) : (
