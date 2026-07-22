@@ -36,10 +36,6 @@ export default function StudioManage() {
 						<Link to="/studio/super-admin" className="ml-1 text-gold-700 hover:underline">
 							/studio/super-admin <ExternalLink className="inline w-3 h-3" />
 						</Link>
-						&nbsp;·&nbsp;
-						<Link to="/quota" className="text-gold-700 hover:underline">
-							Claude quota <ExternalLink className="inline w-3 h-3" />
-						</Link>
 					</p>
 				</div>
 			</header>

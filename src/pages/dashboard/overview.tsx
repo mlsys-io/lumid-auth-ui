@@ -107,6 +107,7 @@ export default function AdminOverview() {
 					<AreaLink to="/studio/admin/clusters"     icon={Server}    label="Infrastructure"  hint="Clusters, workers, billing, reviews" />
 					<AreaLink to="/studio/admin/competitions" icon={LineChart} label="Lumid Market admin" hint="Competitions, markets, templates, jobs" />
 					<AreaLink to="/status/operations"         icon={Activity}  label="Operations status" hint="Stack health, resource + venue, bottomlines" />
+					<AreaLink to="/quota"                     icon={Zap}       label="Claude quota"      hint="Org Claude Code usage — 5h / 7d limits" />
 				</div>
 			</section>
 
