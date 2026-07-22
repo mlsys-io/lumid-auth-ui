@@ -306,3 +306,37 @@ export async function fetchTenants(): Promise<TenantsResp> {
 	const r = await apiClient.get<DataResponse<TenantsResp>>('/api/v1/admin/tenants');
 	return r.data.data;
 }
+
+// ---- /admin/claude-quota (super_admin only) ----
+
+export interface ClaudeQuotaLimit {
+	kind: string;
+	group: string;
+	percent: number;
+	severity: string;
+	resets_at: string;
+	is_active: boolean;
+}
+
+export interface ClaudeQuotaAccount {
+	email: string;
+	ts: string;
+	five_hour_pct: number;
+	seven_day_pct: number;
+	five_hour_reset: string;
+	seven_day_reset: string;
+	severity: 'normal' | 'warning' | 'critical';
+	stale?: boolean;
+	error?: string;
+	limits?: ClaudeQuotaLimit[];
+}
+
+export interface ClaudeQuotaResp {
+	accounts: ClaudeQuotaAccount[];
+	count: number;
+}
+
+export async function fetchClaudeQuota(): Promise<ClaudeQuotaResp> {
+	const r = await apiClient.get<DataResponse<ClaudeQuotaResp>>('/api/v1/admin/claude-quota');
+	return r.data.data;
+}

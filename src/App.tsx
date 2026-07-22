@@ -72,6 +72,8 @@ const StudioSettings   = lazy(() => import("./pages/studio/settings"));
 const StudioAdmin      = lazy(() => import("./pages/studio/admin"));
 // LQT Strategies — read-only roster view at /studio/manage (SuperAdminGuard).
 const StudioManage     = lazy(() => import("./pages/studio/manage"));
+// Claude Code quota status across all org accounts (super_admin only).
+const StudioClaudeQuota = lazy(() => import("./pages/studio/claude-quota"));
 // Phase S3-B — cycle inspector.
 // "How Lumid works" — walkable 3-stage loop (Assemble → Adapt → Compound)
 // illustrated against the demo intents. Stages 1-2 concrete, 3 open.
@@ -685,6 +687,7 @@ export default function App() {
                 admin section trees (users/clusters/competitions) keep their
                 existing /studio/admin/* tab-strip routes. */}
             <Route path="manage" element={<SuperAdminGuard><StudioManage /></SuperAdminGuard>} />
+            <Route path="claude-quota" element={<SuperAdminGuard><StudioClaudeQuota /></SuperAdminGuard>} />
             <Route path="admin-overview" element={<AdminGuard><AdminOverview /></AdminGuard>} />
             {/* Sidebar consolidation 2026-05-25: skills merged into the
                 catalog (now "Library"); runs + mind folded into Workflows.

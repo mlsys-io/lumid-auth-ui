@@ -23,6 +23,7 @@ import {
 	ChevronDown,
 	Key,
 	Inbox,
+	Zap,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
@@ -199,6 +200,7 @@ export function StudioShell() {
 	const { user, logout } = useAuth();
 	const navigate = useNavigate();
 	const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+	const isSuperAdmin = user?.role === 'super_admin';
 	const { width: sidebarWidth, resizing, startResize, reset: resetSidebar } = useSidebarWidth();
 	// App-driven nav: installed apps that declare ui.sidebar, grouped by section.
 	const appNav = useAppNav();
@@ -218,6 +220,7 @@ export function StudioShell() {
 	const wideMain = location.pathname.startsWith('/dashboard')
 		|| location.pathname.startsWith('/studio/a/')
 		|| location.pathname.startsWith('/studio/manage')
+		|| location.pathname.startsWith('/studio/claude-quota')
 		|| location.pathname === '/studio/apps/all';
 	// Bridge lum.id → Runmesh auth store (numeric sys_user.user_id) for the
 	// ported Runmesh admin pages now hosted in this shell. Ported from AppLayout.
@@ -491,6 +494,14 @@ export function StudioShell() {
 									className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted">
 									<Shield className="w-3.5 h-3.5 text-muted-foreground" />
 									Management
+								</Link>
+							)}
+							{isSuperAdmin && (
+								<Link to="/studio/claude-quota"
+									onClick={() => setMenuOpen(false)}
+									className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted">
+									<Zap className="w-3.5 h-3.5 text-muted-foreground" />
+									Claude quota
 								</Link>
 							)}
 							<button
