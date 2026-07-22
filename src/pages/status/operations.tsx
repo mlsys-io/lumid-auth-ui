@@ -33,6 +33,7 @@ import {
 	TableRow,
 } from '@/components/ui/table';
 import { getJson, LqtGatewayError } from '@/lqt/utils/axios';
+import { fetchRoster, type LqtStrategiesRoster, type RosterBox } from '@/lqt/roster';
 
 // ---- wire types (mirror the Stream D scorecard readers) ----
 
@@ -77,6 +78,67 @@ interface VenueHealthBody {
 	venues: VenueHealthEntry[];
 }
 
+// The lqt read endpoints return BARE ARRAYS of raw obs.* rows (full history, snake_case
+// columns like `box_id`/`check_name`). Normalize each to the wrapped, latest-run shape the
+// section components consume (tolerant of both a bare array and a pre-wrapped object).
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function latestKey(r: any): string {
+	return String(r.run_id ?? r.ts ?? '');
+}
+function normStackCheck(raw: unknown): StackCheckBody {
+	const arr: any[] = Array.isArray(raw) ? raw : ((raw as any)?.rows ?? []);
+	if (arr.length === 0) return { rows: [] };
+	// keep only the most-recent sweep (max run_id, else max ts)
+	const latest = arr.reduce((m, r) => (latestKey(r) > m ? latestKey(r) : m), '');
+	const rows = arr
+		.filter((r) => latestKey(r) === latest)
+		.map((r) => ({
+			dimension: r.dimension,
+			check_name: r.check_name ?? r.check,
+			status: r.status,
+			detail: r.detail,
+			remediation: r.remediation,
+			cadence: r.cadence,
+			ts: r.ts,
+		}));
+	return { rows };
+}
+function normResource(raw: unknown): ResourceUsageBody {
+	const arr: any[] = Array.isArray(raw) ? raw : ((raw as any)?.boxes ?? []);
+	const byBox = new Map<string, any>();
+	for (const r of arr) {
+		const b = r.box ?? r.box_id ?? r.name ?? 'unknown';
+		const prev = byBox.get(b);
+		if (!prev || String(r.ts ?? '') > String(prev.ts ?? '')) byBox.set(b, r);
+	}
+	const boxes = [...byBox.entries()].map(([box, r]) => ({
+		box,
+		cpu_pct: r.cpu_pct,
+		mem_pct: r.mem_pct,
+		disk_pct: r.disk_pct,
+		ts: r.ts,
+	}));
+	return { boxes };
+}
+function normVenue(raw: unknown): VenueHealthBody {
+	const arr: any[] = Array.isArray(raw) ? raw : ((raw as any)?.venues ?? []);
+	const byV = new Map<string, any>();
+	for (const r of arr) {
+		const v = r.venue ?? r.name ?? 'unknown';
+		const prev = byV.get(v);
+		if (!prev || String(r.ts ?? '') > String(prev.ts ?? '')) byV.set(v, r);
+	}
+	const venues = [...byV.entries()].map(([venue, r]) => ({
+		venue,
+		status: r.status,
+		book_age_ms: r.book_age_ms,
+		detail: r.detail,
+		ts: r.ts,
+	}));
+	return { box: '', venues };
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
 // A section's fetch resolves to one of: data | not-available (404) | error.
 type SectionState<T> =
 	| { kind: 'loading' }
@@ -86,9 +148,13 @@ type SectionState<T> =
 
 // Fetch a gateway path into a SectionState, mapping 404 → unavailable so a
 // not-yet-deployed probe shows a graceful placeholder instead of an error.
-async function fetchSection<T>(path: string): Promise<SectionState<T>> {
+async function fetchSection<T>(
+	path: string,
+	normalize?: (raw: unknown) => T,
+): Promise<SectionState<T>> {
 	try {
-		const data = await getJson<T>(path);
+		const raw = await getJson<unknown>(path);
+		const data = normalize ? normalize(raw) : (raw as T);
 		return { kind: 'ok', data };
 	} catch (e) {
 		if (e instanceof LqtGatewayError && e.status === 404) {
@@ -104,6 +170,25 @@ async function fetchSection<T>(path: string): Promise<SectionState<T>> {
 
 // The boxes we probe venue health for. If a box has no venues (or 404s),
 // its strip is simply omitted / shown as unavailable.
+// Roster fetch → SectionState, reusing the shared fetchRoster() helper (so the
+// studio view and this page stay consistent) while mapping 404 → unavailable
+// exactly like fetchSection does for the other probes.
+async function fetchRosterSection(): Promise<SectionState<LqtStrategiesRoster>> {
+	try {
+		const data = await fetchRoster();
+		return { kind: 'ok', data };
+	} catch (e) {
+		if (e instanceof LqtGatewayError && e.status === 404) {
+			return { kind: 'unavailable' };
+		}
+		const message =
+			e instanceof LqtGatewayError
+				? `${e.message}${e.status ? ` (${e.status})` : ''}`
+				: String(e);
+		return { kind: 'error', message };
+	}
+}
+
 const VENUE_BOXES = ['dublin', 'chicago', 'nyc'] as const;
 const RESOURCE_SCOPE = 'host';
 
@@ -474,6 +559,187 @@ function VenueHealthStrip({
 	);
 }
 
+// ---- Strategies / research program roster ----
+
+// Arm status → tone-ish chip. live=ok; high-reject=attention; silent=idle.
+function armState(b: RosterBox): 'live' | 'attention' | 'silent' {
+	if (!b.live) return 'silent';
+	const submitted = b.n_submitted ?? 0;
+	const rejected = b.n_rejected ?? 0;
+	// A high reject share on an otherwise-live arm is worth flagging.
+	if (rejected > 0 && rejected >= submitted) return 'attention';
+	return 'live';
+}
+
+function ArmDot({ b }: { b: RosterBox }) {
+	const st = armState(b);
+	const cls =
+		st === 'live'
+			? 'bg-green-500'
+			: st === 'attention'
+				? 'bg-amber-500'
+				: 'bg-slate-300';
+	const label = st === 'live' ? 'live' : st === 'attention' ? 'high reject' : 'silent';
+	return (
+		<span className="inline-flex items-center gap-1.5">
+			<span className={`inline-block w-2 h-2 rounded-full ${cls}`} />
+			<span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+				{label}
+			</span>
+		</span>
+	);
+}
+
+function fmtAge(secs?: number): string {
+	if (secs == null) return '—';
+	const s = Math.max(0, Math.floor(secs));
+	if (s < 60) return `${s}s ago`;
+	if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+	if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+	return `${Math.floor(s / 86400)}d ago`;
+}
+
+function fmtMetric(v: number): string {
+	if (v == null || Number.isNaN(v)) return '—';
+	if (Number.isInteger(v)) return String(v);
+	const abs = Math.abs(v);
+	if (abs !== 0 && abs < 0.01) return v.toExponential(2);
+	return v.toFixed(abs < 1 ? 4 : 2);
+}
+
+function StrategiesSection({ state }: { state: SectionState<LqtStrategiesRoster> }) {
+	if (state.kind === 'loading') return <SectionLoading />;
+	if (state.kind === 'unavailable') return <SectionUnavailable what="Strategies roster" />;
+	if (state.kind === 'error')
+		return <SectionError what="Strategies roster" message={state.message} />;
+
+	const { boxes, summary } = state.data;
+	if (!boxes || boxes.length === 0) {
+		return (
+			<div className="text-sm text-muted-foreground py-4 text-center">
+				No strategy arms reported.
+			</div>
+		);
+	}
+
+	// Group rows by box_id; live arms first, then most-recently-seen.
+	const byBox = new Map<string, RosterBox[]>();
+	for (const b of boxes) {
+		const list = byBox.get(b.box_id) ?? [];
+		list.push(b);
+		byBox.set(b.box_id, list);
+	}
+	const groups = Array.from(byBox.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+	const familyEntries = Object.entries(summary?.families ?? {}).sort((a, b) => b[1] - a[1]);
+
+	return (
+		<div className="space-y-4">
+			{/* summary strip */}
+			<div className="flex flex-wrap items-center gap-3 text-xs">
+				<span className="inline-flex items-center gap-1.5 rounded border border-green-200 bg-green-50 px-2 py-1 text-green-800">
+					<span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+					{summary?.live_arms ?? 0} live
+				</span>
+				<span className="inline-flex items-center gap-1.5 rounded border border-slate-200 bg-slate-50 px-2 py-1 text-slate-700">
+					<span className="inline-block w-2 h-2 rounded-full bg-slate-300" />
+					{summary?.silent_arms ?? 0} silent
+				</span>
+				<span className="rounded border border-gray-200 bg-gray-50 px-2 py-1 text-gray-700">
+					{summary?.total_arms ?? boxes.length} total arms
+				</span>
+				{familyEntries.length > 0 && (
+					<span className="flex flex-wrap items-center gap-1.5">
+						{familyEntries.map(([fam, n]) => (
+							<span
+								key={fam}
+								className="rounded border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[10px] font-mono text-indigo-700"
+							>
+								{fam}: {n}
+							</span>
+						))}
+					</span>
+				)}
+			</div>
+
+			{/* per-box tables */}
+			{groups.map(([boxId, rows]) => (
+				<div
+					key={boxId}
+					className="bg-white border border-gray-200 rounded overflow-x-auto"
+				>
+					<div className="px-4 py-2 border-b border-gray-100 text-xs uppercase tracking-wide font-medium text-gray-700">
+						{boxId}
+						<span className="ml-2 text-muted-foreground normal-case tracking-normal">
+							{rows.length} arm{rows.length === 1 ? '' : 's'}
+						</span>
+					</div>
+					<Table>
+						<TableHeader>
+							<TableRow>
+								<TableHead className="text-[10px] uppercase">family</TableHead>
+								<TableHead className="text-[10px] uppercase">mode</TableHead>
+								<TableHead className="text-[10px] uppercase">state</TableHead>
+								<TableHead className="text-[10px] uppercase">age</TableHead>
+								<TableHead className="text-[10px] uppercase text-right">cycles</TableHead>
+								<TableHead className="text-[10px] uppercase text-right">
+									prop / sub / rej
+								</TableHead>
+								<TableHead className="text-[10px] uppercase">key metric</TableHead>
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{rows
+								.slice()
+								.sort(
+									(a, b) =>
+										Number(b.live) - Number(a.live) ||
+										(a.age_secs ?? 0) - (b.age_secs ?? 0),
+								)
+								.map((b) => (
+									<TableRow key={`${b.box_id}:${b.family}:${b.mode}`}>
+										<TableCell className="font-mono text-xs">{b.family}</TableCell>
+										<TableCell className="text-xs">
+											<Badge variant="outline" className="text-[10px] font-mono">
+												{b.mode}
+											</Badge>
+										</TableCell>
+										<TableCell>
+											<ArmDot b={b} />
+										</TableCell>
+										<TableCell className="font-mono text-xs text-muted-foreground">
+											{fmtAge(b.age_secs)}
+										</TableCell>
+										<TableCell className="font-mono text-xs text-right tabular-nums">
+											{b.cycles ?? 0}
+										</TableCell>
+										<TableCell className="font-mono text-xs text-right tabular-nums text-muted-foreground">
+											{b.n_proposed ?? 0} / {b.n_submitted ?? 0} /{' '}
+											<span className={(b.n_rejected ?? 0) > 0 ? 'text-red-600' : ''}>
+												{b.n_rejected ?? 0}
+											</span>
+										</TableCell>
+										<TableCell className="text-xs">
+											{b.key_metric ? (
+												<span className="font-mono">
+													<span className="text-muted-foreground">
+														{b.key_metric.name}:
+													</span>{' '}
+													{fmtMetric(b.key_metric.value)}
+												</span>
+											) : (
+												<span className="text-muted-foreground">—</span>
+											)}
+										</TableCell>
+									</TableRow>
+								))}
+						</TableBody>
+					</Table>
+				</div>
+			))}
+		</div>
+	);
+}
+
 // ---- section wrapper (mirrors super-admin dashboard) ----
 
 function Section({
@@ -508,18 +774,25 @@ export default function OperationsStatusPage() {
 	const [venues, setVenues] = useState<
 		{ box: string; state: SectionState<VenueHealthBody> }[]
 	>(VENUE_BOXES.map((box) => ({ box, state: { kind: 'loading' } })));
+	const [roster, setRoster] = useState<SectionState<LqtStrategiesRoster>>({
+		kind: 'loading',
+	});
 	const [refreshing, setRefreshing] = useState(false);
 	const [lastRefresh, setLastRefresh] = useState<number | null>(null);
 
 	const refresh = useCallback(async () => {
 		setRefreshing(true);
-		const [sc, rs, ...vh] = await Promise.all([
-			fetchSection<StackCheckBody>('/lqt/stack-check'),
-			fetchSection<ResourceUsageBody>(`/lqt/resource-usage/${RESOURCE_SCOPE}`),
-			...VENUE_BOXES.map((box) => fetchSection<VenueHealthBody>(`/lqt/venue-health/${box}`)),
+		const [sc, rs, ro, ...vh] = await Promise.all([
+			fetchSection<StackCheckBody>('/lqt/stack-check', normStackCheck),
+			fetchSection<ResourceUsageBody>(`/lqt/resource-usage/${RESOURCE_SCOPE}`, normResource),
+			fetchRosterSection(),
+			...VENUE_BOXES.map((box) =>
+				fetchSection<VenueHealthBody>(`/lqt/venue-health/${box}`, normVenue),
+			),
 		]);
 		setScorecard(sc);
 		setResources(rs);
+		setRoster(ro);
 		setVenues(VENUE_BOXES.map((box, i) => ({ box, state: vh[i] })));
 		setLastRefresh(Date.now());
 		setRefreshing(false);
@@ -569,6 +842,11 @@ export default function OperationsStatusPage() {
 			{/* 3. Venue health — per-box venue freshness strip */}
 			<Section icon={Server} label="Venue health">
 				<VenueHealthStrip states={venues} />
+			</Section>
+
+			{/* 4. Strategies / research program — per-box arm roster */}
+			<Section icon={Server} label="Strategies / research program">
+				<StrategiesSection state={roster} />
 			</Section>
 		</div>
 	);

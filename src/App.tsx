@@ -70,6 +70,8 @@ const StudioIntentDetail = lazy(() => import("./pages/studio/intent-detail"));
 // Phase S1.5 — Settings consolidation; Phase S4 — Admin tabs.
 const StudioSettings   = lazy(() => import("./pages/studio/settings"));
 const StudioAdmin      = lazy(() => import("./pages/studio/admin"));
+// LQT Strategies — read-only roster view at /studio/manage (SuperAdminGuard).
+const StudioManage     = lazy(() => import("./pages/studio/manage"));
 // Phase S3-B — cycle inspector.
 // "How Lumid works" — walkable 3-stage loop (Assemble → Adapt → Compound)
 // illustrated against the demo intents. Stages 1-2 concrete, 3 open.
@@ -677,11 +679,13 @@ export default function App() {
             <Route path="account/profile"               element={<Profile />} />
             <Route path="account/tokens"                element={<Tokens />} />
             <Route path="account/connect/google"        element={<ConnectGoogle />} />
-            {/* Management landing inside Studio — role-gated. Deep admin
-                section trees (users/clusters/competitions) keep their existing
-                /dashboard/admin/* tab-strip routes for now; the overview links
-                into them. (Full re-shell is a follow-up.) */}
-            <Route path="manage" element={<AdminGuard><AdminOverview /></AdminGuard>} />
+            {/* /studio/manage is now the LQT Strategies roster (read-only,
+                SuperAdminGuard). The former operational-snapshot landing
+                (AdminOverview) stays reachable at /studio/admin-overview. Deep
+                admin section trees (users/clusters/competitions) keep their
+                existing /studio/admin/* tab-strip routes. */}
+            <Route path="manage" element={<SuperAdminGuard><StudioManage /></SuperAdminGuard>} />
+            <Route path="admin-overview" element={<AdminGuard><AdminOverview /></AdminGuard>} />
             {/* Sidebar consolidation 2026-05-25: skills merged into the
                 catalog (now "Library"); runs + mind folded into Workflows.
                 Marketplace → Library rename (demo IA); old paths redirect.
