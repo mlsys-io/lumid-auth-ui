@@ -177,9 +177,14 @@ function AddAccountModal({ onClose, onAdded }: { onClose: () => void; onAdded: (
 						<X className="w-4 h-4" />
 					</button>
 				</div>
-				<p className="text-xs text-slate-500 mb-4">
-					Paste the user's <code className="font-mono bg-slate-100 px-1 rounded">sk-ant-oat01-*</code> token.
-					The token is verified against Anthropic before storage and will appear in the quota view within 5 minutes.
+				<p className="text-xs text-slate-500 mb-1">
+					Paste the user's Claude Code OAuth token. Run this on their machine to retrieve it:
+				</p>
+				<pre className="text-[11px] font-mono bg-slate-900 text-emerald-300 rounded px-3 py-2 mb-3 select-all overflow-x-auto whitespace-pre-wrap break-all">
+{`python3 -c "import json,pathlib; d=json.loads(pathlib.Path('~/.claude/.credentials.json').expanduser().read_text()); print(d.get('claudeAiOauth',{}).get('accessToken','not found'))"`}
+				</pre>
+				<p className="text-xs text-slate-400 mb-4">
+					The token starts with <code className="font-mono bg-slate-100 px-1 rounded">sk-ant-oat01-</code> and is verified against Anthropic before storage.
 				</p>
 				<div className="space-y-3">
 					<div>
