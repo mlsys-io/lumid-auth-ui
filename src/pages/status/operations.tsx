@@ -58,6 +58,9 @@ interface ResourceUsageBox {
 	cpu_pct?: number | null;
 	mem_pct?: number | null;
 	disk_pct?: number | null;
+	load1?: number | null;
+	load5?: number | null;
+	ncpu?: number | null;
 	ts?: string;
 }
 
@@ -88,19 +91,25 @@ function latestKey(r: any): string {
 function normStackCheck(raw: unknown): StackCheckBody {
 	const arr: any[] = Array.isArray(raw) ? raw : ((raw as any)?.rows ?? []);
 	if (arr.length === 0) return { rows: [] };
-	// keep only the most-recent sweep (max run_id, else max ts)
-	const latest = arr.reduce((m, r) => (latestKey(r) > m ? latestKey(r) : m), '');
-	const rows = arr
-		.filter((r) => latestKey(r) === latest)
-		.map((r) => ({
-			dimension: r.dimension,
-			check_name: r.check_name ?? r.check,
-			status: r.status,
-			detail: r.detail,
-			remediation: r.remediation,
-			cadence: r.cadence,
-			ts: r.ts,
-		}));
+	// Show each check's CURRENT status: keep the latest row per (dimension, check_name)
+	// across all runs. obs.stack_check interleaves the periodic full 17-dimension sweep with
+	// lightweight opsagent heartbeats, so a naive "latest run_id" would surface only the
+	// heartbeat (one `opsagent` row). Latest-per-check surfaces every dimension.
+	const byCheck = new Map<string, any>();
+	for (const r of arr) {
+		const k = `${r.dimension} ${r.check_name ?? r.check}`;
+		const prev = byCheck.get(k);
+		if (!prev || latestKey(r) > latestKey(prev)) byCheck.set(k, r);
+	}
+	const rows = [...byCheck.values()].map((r) => ({
+		dimension: r.dimension,
+		check_name: r.check_name ?? r.check,
+		status: r.status,
+		detail: r.detail,
+		remediation: r.remediation,
+		cadence: r.cadence,
+		ts: r.ts,
+	}));
 	return { rows };
 }
 function normResource(raw: unknown): ResourceUsageBody {
@@ -116,6 +125,9 @@ function normResource(raw: unknown): ResourceUsageBody {
 		cpu_pct: r.cpu_pct,
 		mem_pct: r.mem_pct,
 		disk_pct: r.disk_pct,
+		load1: r.load1,
+		load5: r.load5,
+		ncpu: r.ncpu,
 		ts: r.ts,
 	}));
 	return { boxes };
@@ -128,13 +140,26 @@ function normVenue(raw: unknown): VenueHealthBody {
 		const prev = byV.get(v);
 		if (!prev || String(r.ts ?? '') > String(prev.ts ?? '')) byV.set(v, r);
 	}
-	const venues = [...byV.entries()].map(([venue, r]) => ({
-		venue,
-		status: r.status,
-		book_age_ms: r.book_age_ms,
-		detail: r.detail,
-		ts: r.ts,
-	}));
+	const venues = [...byV.entries()].map(([venue, r]) => {
+		// The obs.venue_health feed carries ws_connected + last_msg_age_s (not a
+		// precomputed status/book_age). Derive: disconnected → FAIL; connected but
+		// the last message is stale (>120s) → WARN; else PASS. book_age ← last_msg_age.
+		const ageS = r.last_msg_age_s ?? null;
+		let status = r.status as string | undefined;
+		if (!status) {
+			if (r.ws_connected === false) status = 'FAIL';
+			else if (ageS != null && ageS > 120) status = 'WARN';
+			else if (r.ws_connected === true) status = 'PASS';
+			else status = 'UNKNOWN';
+		}
+		return {
+			venue,
+			status,
+			book_age_ms: r.book_age_ms ?? (ageS != null ? Math.round(ageS * 1000) : undefined),
+			detail: r.detail ?? (r.feed ? `feed=${r.feed}` : undefined),
+			ts: r.ts,
+		};
+	});
 	return { box: '', venues };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -189,7 +214,7 @@ async function fetchRosterSection(): Promise<SectionState<LqtStrategiesRoster>> 
 	}
 }
 
-const VENUE_BOXES = ['dublin', 'chicago', 'nyc'] as const;
+const VENUE_BOXES = ['denmark', 'nyc', 'chicago'] as const;
 const RESOURCE_SCOPE = 'host';
 
 const REFRESH_MS = 30_000;
@@ -469,6 +494,21 @@ function ResourceStrip({ state }: { state: SectionState<ResourceUsageBody> }) {
 							);
 						})}
 					</div>
+					{b.load1 != null && b.ncpu ? (
+						<div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-[11px]">
+							<span className="uppercase text-muted-foreground">load (1m)</span>
+							<span
+								className={`font-mono font-medium ${
+									b.load1 > b.ncpu ? 'text-red-600'
+									: b.load1 > b.ncpu * 0.7 ? 'text-amber-600'
+									: 'text-green-700'
+								}`}
+							>
+								{b.load1.toFixed(2)} / {b.ncpu} cpu
+								{b.load5 != null ? ` \u00b7 5m ${b.load5.toFixed(2)}` : ''}
+							</span>
+						</div>
+					) : null}
 				</div>
 			))}
 		</div>

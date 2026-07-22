@@ -158,6 +158,7 @@ export default function SuperAdminDashboard() {
 					<BackupStatusTile backups={snap.backups} />
 					<BuildStatusTile builds={snap.builds} />
 				</div>
+				<OperationsStatusTile />
 				<BuildStatusTable builds={snap.builds} />
 				<OperationsStatusTile />
 			</Section>

@@ -12,7 +12,7 @@
 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Shield, Users, RefreshCw, Server, ExternalLink, Loader2 } from 'lucide-react';
+import { Shield, Users, RefreshCw, Server, ExternalLink, Loader2, Activity } from 'lucide-react';
 import {
 	fetchTenants,        type TenantsResp,
 	fetchLoops,          type LoopsResp,
@@ -47,6 +47,13 @@ export default function StudioAdmin() {
 						</Link>
 					</p>
 				</div>
+				<Link
+					to="/status/operations"
+					className="shrink-0 inline-flex items-center gap-1.5 rounded-md border border-gold-300 bg-gold-50 px-3 py-1.5 text-sm font-medium text-gold-800 hover:bg-gold-100"
+				>
+					<Activity className="w-4 h-4" />
+					Operations status
+				</Link>
 			</header>
 
 			<nav className="border-b border-slate-200 flex items-center gap-1">
