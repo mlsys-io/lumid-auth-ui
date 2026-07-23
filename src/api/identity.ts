@@ -91,7 +91,7 @@ export async function getPATAccessLog(patId: number): Promise<PATAccessLogEntry[
 // actually mint (backend will 403 anyway, but the UI should not offer
 // a choice that's known to fail).
 export interface ScopePreset {
-	id: 'readonly' | 'trading_bot' | 'full' | 'custom';
+	id: 'readonly' | 'trading_bot' | 'claude_proxy' | 'full' | 'custom';
 	label: string;
 	description: string;
 	scopes: Scope[];
@@ -113,6 +113,14 @@ export const SCOPE_PRESETS: ScopePreset[] = [
 		description: 'QuantArena read + trade. Typical for LLM trading bots.',
 		scopes: ['qa:write'],
 		requires: { qa: 'write' },
+	},
+	{
+		id: 'claude_proxy',
+		label: 'Claude proxy',
+		description:
+			'Route Claude Code through the org account pool at lum.id/claude. Set ANTHROPIC_BASE_URL=https://lum.id/claude and ANTHROPIC_AUTH_TOKEN to this PAT.',
+		scopes: ['claude:proxy'],
+		requires: {},
 	},
 	{
 		id: 'full',

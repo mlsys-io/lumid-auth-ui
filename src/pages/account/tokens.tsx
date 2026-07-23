@@ -241,6 +241,7 @@ function MintDialog({
 		>,
 	);
 	const [customWildcard, setCustomWildcard] = useState(false);
+	const [capScopes, setCapScopes] = useState<Set<string>>(new Set());
 
 	useEffect(() => {
 		if (!open) return;
@@ -256,6 +257,7 @@ function MintDialog({
 			>,
 		);
 		setCustomWildcard(false);
+		setCapScopes(new Set());
 		setGrantable(null);
 		getGrantableScopes()
 			.then(setGrantable)
@@ -298,8 +300,9 @@ function MintDialog({
 			const lvl = custom[svc];
 			if (lvl !== 'none') out.push(`${svc}:${lvl}`);
 		}
+		for (const cap of capScopes) out.push(cap);
 		return out;
-	}, [mode, preset, custom, customWildcard]);
+	}, [mode, preset, custom, customWildcard, capScopes]);
 
 	const canMint =
 		name.trim().length > 0 &&
@@ -438,6 +441,8 @@ function MintDialog({
 								setCustom={setCustom}
 								wildcard={customWildcard}
 								setWildcard={setCustomWildcard}
+								capScopes={capScopes}
+								setCapScopes={setCapScopes}
 								resultingScopes={scopes}
 							/>
 						)}
@@ -475,12 +480,22 @@ function MintDialog({
 
 // ---- Custom scope picker ----
 
+const CAP_SCOPES = [
+	{
+		id: 'claude:proxy',
+		label: 'Claude proxy',
+		desc: 'Route Claude Code through the org account pool at lum.id/claude',
+	},
+] as const;
+
 function CustomScopePicker({
 	grantable,
 	custom,
 	setCustom,
 	wildcard,
 	setWildcard,
+	capScopes,
+	setCapScopes,
 	resultingScopes,
 }: {
 	grantable: GrantableScopes | null;
@@ -492,6 +507,8 @@ function CustomScopePicker({
 	) => void;
 	wildcard: boolean;
 	setWildcard: (v: boolean) => void;
+	capScopes: Set<string>;
+	setCapScopes: (v: Set<string>) => void;
 	resultingScopes: Scope[];
 }) {
 	return (
@@ -563,6 +580,32 @@ function CustomScopePicker({
 					<span className="text-xs text-slate-400">admin role only</span>
 				)}
 			</label>
+
+			{/* Capability scopes */}
+			<div className="space-y-1.5">
+				<p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+					Capability scopes
+				</p>
+				{CAP_SCOPES.map(({ id, label, desc }) => (
+					<label key={id} className="flex items-start gap-2 cursor-pointer">
+						<input
+							type="checkbox"
+							className="mt-0.5"
+							checked={capScopes.has(id)}
+							onChange={(e) => {
+								const next = new Set(capScopes);
+								e.target.checked ? next.add(id) : next.delete(id);
+								setCapScopes(next);
+							}}
+						/>
+						<span>
+							<span className="text-sm font-medium">{label}</span>
+							<span className="ml-1 font-mono text-xs text-slate-400">{id}</span>
+							<p className="text-xs text-slate-500">{desc}</p>
+						</span>
+					</label>
+				))}
+			</div>
 
 			<p className="text-xs text-slate-500">
 				Grants{' '}
