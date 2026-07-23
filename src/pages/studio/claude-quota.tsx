@@ -372,6 +372,7 @@ export default function StudioClaudeQuota() {
 					the most available quota. Mint a PAT with the <code className="font-mono bg-slate-100 px-1 rounded">claude:proxy</code> scope
 					at <a href="/dashboard/tokens" className="text-gold-700 hover:underline">/dashboard/tokens</a>.
 					Model choice is yours: <code className="font-mono bg-slate-100 px-1 rounded">claude --model opus</code> etc. passes through.
+					Full guide: <a href="/docs/claude" className="text-gold-700 hover:underline">/docs/claude</a>.
 				</p>
 				<pre className="text-[11px] font-mono bg-slate-900 text-emerald-300 rounded px-3 py-2 select-all overflow-x-auto">
 {`export ANTHROPIC_BASE_URL=https://lum.id/claude

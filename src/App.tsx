@@ -95,6 +95,7 @@ const XpioAutoresearchDoc = lazy(() => import("./pages/docs/xpio-autoresearch"))
 const PluginImageCdDoc = lazy(() => import("./pages/docs/plugin-image-cd"));
 const LqtStrategiesDoc = lazy(() => import("./pages/docs/lqt-strategies"));
 const OperationsDoc = lazy(() => import("./pages/docs/operations"));
+const ClaudePoolDoc = lazy(() => import("./pages/docs/claude-pool"));
 const RedeemInvite = lazy(() => import("./pages/auth/redeem-invite"));
 
 // The unified shell for /dashboard/* (absorbed the old /app/* tree in
@@ -506,6 +507,16 @@ export default function App() {
             element={
               <AuthGuard requireAuth={true}>
                 <LqtStrategiesDoc />
+              </AuthGuard>
+            }
+          />
+          {/* Claude account-pool user guide — AUTH REQUIRED (org-internal;
+              using the pool needs an account + claude:proxy PAT anyway). */}
+          <Route
+            path="/docs/claude"
+            element={
+              <AuthGuard requireAuth={true}>
+                <ClaudePoolDoc />
               </AuthGuard>
             }
           />
