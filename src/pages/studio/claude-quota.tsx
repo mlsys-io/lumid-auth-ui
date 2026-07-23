@@ -290,7 +290,7 @@ export default function StudioClaudeQuota() {
 	}, [load]);
 
 	return (
-		<div className="space-y-3 max-w-3xl">
+		<div className="space-y-3 max-w-3xl mx-auto">
 			{showAdd && (
 				<AddAccountModal
 					onClose={() => setShowAdd(false)}
