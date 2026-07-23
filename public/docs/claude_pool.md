@@ -134,6 +134,26 @@ output tokens, summed across all your PATs). Defaults: 2M tokens / 5h and
 - Current per-user consumption is visible to admins on
   [/quota](/quota) under **Per-user pool usage**.
 
+## Session recording
+
+Every conversation routed through the pool is **recorded by default** — the
+full request context, system prompt, tools, tool calls/results, sampling
+params, and the model's responses. Browse your own at
+[/claude-sessions](/claude-sessions), turn-by-turn.
+
+- **Storage is delta-compacted.** The API re-sends the whole conversation each
+  turn; we store only the new messages per turn, so a long session doesn't
+  balloon.
+- **Access.** You can always read your own sessions. `super_admin` operators
+  can read any user's (full content — treat the pool as operator-visible).
+- **Opt out.** Toggle recording off on [/claude-sessions](/claude-sessions) (or
+  `POST /api/v1/me/claude-recording {"enabled":false}`). While off, nothing is
+  stored for your sessions; token metering still applies.
+
+> Because transcripts capture whatever you send — code, secrets, PII — keep
+> recording off for sensitive work, or use your personal account instead of the
+> pool.
+
 ## Contributing your account to the pool
 
 Admins add accounts on [lum.id/quota](/quota) → **Add account** — paste the

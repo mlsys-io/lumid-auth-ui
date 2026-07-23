@@ -72,6 +72,7 @@ const StudioSettings   = lazy(() => import("./pages/studio/settings"));
 const StudioAdmin      = lazy(() => import("./pages/studio/admin"));
 // Claude Code quota status across all org accounts (super_admin only) — /quota.
 const StudioClaudeQuota = lazy(() => import("./pages/studio/claude-quota"));
+const StudioClaudeSessions = lazy(() => import("./pages/studio/claude-sessions"));
 // Phase S3-B — cycle inspector.
 // "How Lumid works" — walkable 3-stage loop (Assemble → Adapt → Compound)
 // illustrated against the demo intents. Stages 1-2 concrete, 3 open.
@@ -550,6 +551,16 @@ export default function App() {
               <AdminGuard>
                 <StudioClaudeQuota />
               </AdminGuard>
+            }
+          />
+          {/* Claude pool session transcripts — any authed pool user sees their
+              own; super_admin can flip to the all-users view (gated server-side). */}
+          <Route
+            path="/claude-sessions"
+            element={
+              <AuthGuard requireAuth={true}>
+                <StudioClaudeSessions />
+              </AuthGuard>
             }
           />
 

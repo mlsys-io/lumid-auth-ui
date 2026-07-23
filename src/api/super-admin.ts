@@ -362,6 +362,70 @@ export async function fetchClaudeUserUsage(): Promise<ClaudeUserUsageResp> {
 	return r.data.data;
 }
 
+// ── Claude session transcripts (lum.id/claude recording) ──────────────
+export interface ClaudeSessionCard {
+	conv_key: string;
+	user_sub?: string;
+	account: string;
+	model: string;
+	title: string;
+	turn_count: number;
+	input_tokens: number;
+	output_tokens: number;
+	tool_use_count: number;
+	first_ts: string;
+	last_ts: string;
+}
+
+export interface ClaudeSessionTurn {
+	turn_index: number;
+	ts: string;
+	model: string;
+	endpoint: string;
+	stream: boolean;
+	input_tokens: number;
+	output_tokens: number;
+	tool_use_count: number;
+	duration_ms: number;
+	truncated: boolean;
+	request_meta: unknown; // {system, tools, max_tokens, ...} minus messages
+	new_messages: unknown; // messages[] added this turn
+	response: unknown;     // full response (assembled JSON or raw SSE string)
+}
+
+export interface ClaudeSessionDetail {
+	session: ClaudeSessionCard;
+	turns: ClaudeSessionTurn[];
+}
+
+// admin=true → super_admin all-users view; else owner's own sessions.
+export async function fetchClaudeSessions(admin = false): Promise<ClaudeSessionCard[]> {
+	const path = admin ? '/api/v1/admin/claude-sessions' : '/api/v1/me/claude-sessions';
+	const r = await apiClient.get<DataResponse<{ sessions: ClaudeSessionCard[] }>>(path);
+	return r.data.data.sessions ?? [];
+}
+
+export async function fetchClaudeSession(convKey: string, admin = false): Promise<ClaudeSessionDetail> {
+	const base = admin ? '/api/v1/admin/claude-sessions' : '/api/v1/me/claude-sessions';
+	const r = await apiClient.get<DataResponse<ClaudeSessionDetail>>(`${base}/${convKey}`);
+	return r.data.data;
+}
+
+export async function deleteClaudeSession(convKey: string, admin = false): Promise<void> {
+	const base = admin ? '/api/v1/admin/claude-sessions' : '/api/v1/me/claude-sessions';
+	await apiClient.delete(`${base}/${convKey}`);
+}
+
+export async function fetchClaudeRecording(): Promise<boolean> {
+	const r = await apiClient.get<DataResponse<{ enabled: boolean }>>('/api/v1/me/claude-recording');
+	return r.data.data.enabled;
+}
+
+export async function setClaudeRecording(enabled: boolean): Promise<boolean> {
+	const r = await apiClient.post<DataResponse<{ enabled: boolean }>>('/api/v1/me/claude-recording', { enabled });
+	return r.data.data.enabled;
+}
+
 export interface AdminClaudeTokenResult {
 	email: string;
 	valid: boolean;

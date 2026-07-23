@@ -460,6 +460,7 @@ export ANTHROPIC_AUTH_TOKEN=lm_pat_live_...`}
 				</ol>
 				<p className="text-[11px] text-slate-400">
 					Each user has their own 5h/7d pool budget (shown above once you've made requests).
+					Recorded sessions: <a href="/claude-sessions" className="text-gold-700 hover:underline">/claude-sessions</a>.
 					Full guide: <a href="/docs/claude" className="text-gold-700 hover:underline">/docs/claude</a>.
 				</p>
 			</div>

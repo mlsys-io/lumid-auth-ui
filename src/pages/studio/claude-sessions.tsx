@@ -1,0 +1,249 @@
+// Claude account-pool session transcripts (lum.id/claude recording).
+//
+// Owner view: your own recorded sessions from the pool. super_admin can flip
+// to the all-users view. Recording is on by default; toggle it here.
+//
+// Each session is a conversation (grouped server-side by model + first user
+// message). Selecting one reconstructs the turn-by-turn transcript: the
+// request context/tools/params, the messages added each turn, and the full
+// response (including tool_use / API calls).
+
+import { useCallback, useEffect, useState } from 'react';
+import { MessageSquare, Loader2, RefreshCw, ChevronRight, Shield, Circle, Trash2 } from 'lucide-react';
+import {
+	fetchClaudeSessions,
+	fetchClaudeSession,
+	deleteClaudeSession,
+	fetchClaudeRecording,
+	setClaudeRecording,
+	type ClaudeSessionCard,
+	type ClaudeSessionDetail,
+} from '@/api/super-admin';
+
+function fmtTokens(n: number): string {
+	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+	if (n >= 1_000) return `${Math.round(n / 1_000)}k`;
+	return String(n);
+}
+
+function fmtTs(iso: string): string {
+	if (!iso || iso.startsWith('0001')) return '—';
+	return new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function Json({ value }: { value: unknown }) {
+	if (value === null || value === undefined) return <span className="text-slate-400 text-xs italic">none</span>;
+	let text: string;
+	if (typeof value === 'string') text = value;
+	else text = JSON.stringify(value, null, 2);
+	return (
+		<pre className="text-[11px] font-mono bg-slate-900 text-slate-200 rounded px-3 py-2 overflow-x-auto max-h-96 overflow-y-auto whitespace-pre-wrap break-words">
+			{text}
+		</pre>
+	);
+}
+
+function TurnBlock({ turn }: { turn: ClaudeSessionDetail['turns'][number] }) {
+	const [open, setOpen] = useState(false);
+	return (
+		<div className="rounded border border-slate-200">
+			<button
+				onClick={() => setOpen((o) => !o)}
+				className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-50"
+			>
+				<ChevronRight className={`w-3.5 h-3.5 text-slate-400 transition-transform ${open ? 'rotate-90' : ''}`} />
+				<span className="text-xs font-medium text-slate-700">turn {turn.turn_index + 1}</span>
+				<span className="text-[10px] text-slate-400">{turn.model}</span>
+				{turn.stream && <span className="text-[10px] text-slate-400">stream</span>}
+				{turn.tool_use_count > 0 && (
+					<span className="text-[10px] text-indigo-500">{turn.tool_use_count} tool</span>
+				)}
+				<span className="ml-auto text-[10px] font-mono text-slate-500">
+					{turn.input_tokens}in / {turn.output_tokens}out · {turn.duration_ms}ms
+				</span>
+				{turn.truncated && <span className="text-[10px] text-amber-500">truncated</span>}
+			</button>
+			{open && (
+				<div className="px-3 pb-3 space-y-2">
+					<div>
+						<div className="text-[10px] uppercase tracking-wide text-slate-400 mb-1">
+							new messages this turn
+						</div>
+						<Json value={turn.new_messages} />
+					</div>
+					<div>
+						<div className="text-[10px] uppercase tracking-wide text-slate-400 mb-1">
+							request params (system / tools / sampling)
+						</div>
+						<Json value={turn.request_meta} />
+					</div>
+					<div>
+						<div className="text-[10px] uppercase tracking-wide text-slate-400 mb-1">response</div>
+						<Json value={turn.response} />
+					</div>
+				</div>
+			)}
+		</div>
+	);
+}
+
+export default function StudioClaudeSessions() {
+	const [admin, setAdmin] = useState(false);
+	const [canAdmin, setCanAdmin] = useState(false);
+	const [sessions, setSessions] = useState<ClaudeSessionCard[] | null>(null);
+	const [selected, setSelected] = useState<ClaudeSessionDetail | null>(null);
+	const [loading, setLoading] = useState(true);
+	const [detailLoading, setDetailLoading] = useState(false);
+	const [recording, setRecording] = useState<boolean | null>(null);
+	const [error, setError] = useState<string | null>(null);
+
+	const load = useCallback(() => {
+		setLoading(true);
+		fetchClaudeSessions(admin)
+			.then((s) => { setSessions(s); setError(null); })
+			.catch((e) => setError(String(e?.response?.data?.message || e?.message || e)))
+			.finally(() => setLoading(false));
+	}, [admin]);
+
+	useEffect(() => { load(); }, [load]);
+
+	useEffect(() => {
+		fetchClaudeRecording().then(setRecording).catch(() => {});
+		// Probe admin view availability once (super_admin only → 403 otherwise).
+		fetchClaudeSessions(true).then(() => setCanAdmin(true)).catch(() => setCanAdmin(false));
+	}, []);
+
+	const openSession = (convKey: string) => {
+		setDetailLoading(true);
+		setSelected(null);
+		fetchClaudeSession(convKey, admin)
+			.then(setSelected)
+			.catch((e) => setError(String(e?.message || e)))
+			.finally(() => setDetailLoading(false));
+	};
+
+	const toggleRecording = async () => {
+		if (recording === null) return;
+		const next = !recording;
+		setRecording(next);
+		try { await setClaudeRecording(next); } catch { setRecording(!next); }
+	};
+
+	const removeSession = async (convKey: string) => {
+		try {
+			await deleteClaudeSession(convKey, admin);
+			setSessions((prev) => prev?.filter((s) => s.conv_key !== convKey) ?? null);
+			if (selected?.session.conv_key === convKey) setSelected(null);
+		} catch (e: any) {
+			setError(String(e?.message || e));
+		}
+	};
+
+	return (
+		<div className="space-y-3 max-w-5xl mx-auto">
+			<header className="flex items-center justify-between">
+				<div>
+					<h1 className="text-base font-medium flex items-center gap-2">
+						<MessageSquare className="w-4 h-4 text-gold-600" />
+						Claude pool sessions
+					</h1>
+					<p className="text-xs text-slate-400 mt-0.5">
+						Conversations recorded through <code className="font-mono">lum.id/claude</code> — full context, tools, and responses.
+					</p>
+				</div>
+				<div className="flex items-center gap-3">
+					{recording !== null && (
+						<button
+							onClick={toggleRecording}
+							className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-900"
+							title="Recording is on by default; turn it off to stop storing your sessions."
+						>
+							<Circle className={`w-3 h-3 ${recording ? 'fill-emerald-500 text-emerald-500' : 'fill-slate-300 text-slate-300'}`} />
+							recording {recording ? 'on' : 'off'}
+						</button>
+					)}
+					{canAdmin && (
+						<button
+							onClick={() => { setSelected(null); setAdmin((a) => !a); }}
+							className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition ${admin ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+						>
+							<Shield className="w-3.5 h-3.5" />
+							{admin ? 'all users' : 'my sessions'}
+						</button>
+					)}
+					<button onClick={load} disabled={loading}
+						className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-gold-700 disabled:opacity-50">
+						<RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> refresh
+					</button>
+				</div>
+			</header>
+
+			{error && (
+				<div className="text-sm rounded border border-rose-200 bg-rose-50 text-rose-800 px-3 py-2">{error}</div>
+			)}
+
+			<div className="grid grid-cols-1 md:grid-cols-[minmax(0,340px)_1fr] gap-4">
+				{/* session list */}
+				<div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100 max-h-[70vh] overflow-y-auto">
+					{sessions === null ? (
+						<div className="p-4 text-sm text-slate-500 flex items-center gap-2">
+							<Loader2 className="w-3.5 h-3.5 animate-spin" /> loading…
+						</div>
+					) : sessions.length === 0 ? (
+						<div className="p-6 text-center text-sm text-slate-500">
+							No recorded sessions yet. Use the pool from your terminal and they'll appear here.
+						</div>
+					) : (
+						sessions.map((s) => (
+							<div
+								key={s.conv_key}
+								className={`group flex items-start gap-1 px-3 py-2 hover:bg-slate-50 ${selected?.session.conv_key === s.conv_key ? 'bg-gold-50' : ''}`}
+							>
+								<button onClick={() => openSession(s.conv_key)} className="flex-1 min-w-0 text-left">
+									<div className="text-xs font-medium text-slate-800 truncate">{s.title || '(untitled)'}</div>
+									<div className="text-[10px] text-slate-400 flex items-center gap-2 mt-0.5">
+										{admin && s.user_sub && <span className="truncate max-w-[90px]">{s.account}</span>}
+										<span>{s.model}</span>
+										<span>{s.turn_count} turns</span>
+										<span>{fmtTokens(s.input_tokens + s.output_tokens)} tok</span>
+										<span className="ml-auto">{fmtTs(s.last_ts)}</span>
+									</div>
+								</button>
+								<button
+									onClick={() => removeSession(s.conv_key)}
+									className="shrink-0 mt-0.5 text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition"
+									title="Delete session"
+								>
+									<Trash2 className="w-3.5 h-3.5" />
+								</button>
+							</div>
+						))
+					)}
+				</div>
+
+				{/* detail */}
+				<div className="min-w-0">
+					{detailLoading ? (
+						<div className="p-4 text-sm text-slate-500 flex items-center gap-2">
+							<Loader2 className="w-3.5 h-3.5 animate-spin" /> loading transcript…
+						</div>
+					) : selected ? (
+						<div className="space-y-2">
+							<div className="text-xs text-slate-500">
+								<span className="font-medium text-slate-700">{selected.session.title || '(untitled)'}</span>
+								{' · '}{selected.session.model}{' · '}{selected.session.turn_count} turns{' · '}
+								{fmtTokens(selected.session.input_tokens)} in / {fmtTokens(selected.session.output_tokens)} out
+								{selected.session.tool_use_count > 0 && ` · ${selected.session.tool_use_count} tool calls`}
+							</div>
+							{selected.turns.map((t) => <TurnBlock key={t.turn_index} turn={t} />)}
+						</div>
+					) : (
+						<div className="p-6 text-center text-sm text-slate-400 border border-dashed border-slate-200 rounded-lg">
+							Select a session to view its full transcript.
+						</div>
+					)}
+				</div>
+			</div>
+		</div>
+	);
+}
