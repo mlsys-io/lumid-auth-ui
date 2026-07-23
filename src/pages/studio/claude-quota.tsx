@@ -12,9 +12,11 @@ import { useEffect, useState, useCallback } from 'react';
 import { RefreshCw, Zap, AlertTriangle, CheckCircle, Loader2, UserPlus, X, Trash2 } from 'lucide-react';
 import {
 	fetchClaudeQuota,
+	fetchClaudeUserUsage,
 	adminAddClaudeToken,
 	adminDeleteClaudeToken,
 	type ClaudeQuotaAccount,
+	type ClaudeUserUsageResp,
 } from '@/api/super-admin';
 
 const AUTO_REFRESH_MS = 2 * 60 * 1000;
@@ -250,6 +252,58 @@ function AddAccountModal({ onClose, onAdded }: { onClose: () => void; onAdded: (
 	);
 }
 
+function fmtTokens(n: number): string {
+	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+	if (n >= 1_000) return `${Math.round(n / 1_000)}k`;
+	return String(n);
+}
+
+function usageSeverity(pct: number): string {
+	if (pct >= 100) return 'critical';
+	if (pct >= 85) return 'warning';
+	return 'normal';
+}
+
+// Per-user pool consumption — the per-PAT quota counterpart of the account
+// table above. Same rolling 5h/7d windows, enforced by claude-proxy.
+function UserUsageSection({ usage }: { usage: ClaudeUserUsageResp }) {
+	if (!usage.users.length) return null;
+	return (
+		<div>
+			<p className="text-xs font-medium text-slate-600 mb-1.5">
+				Per-user pool usage
+				<span className="ml-2 font-normal text-slate-400">
+					caps: {fmtTokens(usage.five_hour_tokens)} tok / 5h · {fmtTokens(usage.seven_day_tokens)} tok / 7d
+				</span>
+			</p>
+			<div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100">
+				{usage.users.map((u) => (
+					<div key={u.email} className="flex items-center gap-3 px-2.5 py-1.5 min-w-0">
+						<SeverityDot severity={usageSeverity(Math.max(u.five_hour_pct, u.seven_day_pct))} />
+						<span className="w-44 shrink-0 truncate text-xs font-medium text-slate-800" title={u.email}>
+							{u.email}
+						</span>
+						<div className="flex items-center gap-1.5 shrink-0" title={`${u.five_hour_tokens.toLocaleString()} tokens`}>
+							<span className="text-[10px] text-slate-400 w-4">5h</span>
+							<MiniBar pct={u.five_hour_pct} severity={usageSeverity(u.five_hour_pct)} />
+							<span className="text-[10px] font-mono text-slate-600 w-8 text-right">{Math.round(u.five_hour_pct)}%</span>
+						</div>
+						<div className="flex items-center gap-1.5 shrink-0" title={`${u.seven_day_tokens.toLocaleString()} tokens`}>
+							<span className="text-[10px] text-slate-400 w-4">7d</span>
+							<MiniBar pct={u.seven_day_pct} severity={usageSeverity(u.seven_day_pct)} />
+							<span className="text-[10px] font-mono text-slate-600 w-8 text-right">{Math.round(u.seven_day_pct)}%</span>
+						</div>
+						<span className="flex-1 min-w-0 text-[10px] text-slate-400 truncate">
+							{fmtTokens(u.seven_day_tokens)} tok · {u.requests_7d} req
+						</span>
+						<span className="shrink-0 text-[10px] text-slate-400">{fmtTs(u.last_ts)}</span>
+					</div>
+				))}
+			</div>
+		</div>
+	);
+}
+
 function SummaryBar({ accounts }: { accounts: ClaudeQuotaAccount[] }) {
 	const critical = accounts.filter((a) => a.severity === 'critical').length;
 	const warning  = accounts.filter((a) => a.severity === 'warning').length;
@@ -266,6 +320,7 @@ function SummaryBar({ accounts }: { accounts: ClaudeQuotaAccount[] }) {
 
 export default function StudioClaudeQuota() {
 	const [accounts, setAccounts] = useState<ClaudeQuotaAccount[] | null>(null);
+	const [userUsage, setUserUsage] = useState<ClaudeUserUsageResp | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [lastFetch, setLastFetch] = useState<Date | null>(null);
@@ -281,6 +336,9 @@ export default function StudioClaudeQuota() {
 			})
 			.catch((e) => setError(String(e?.message || e)))
 			.finally(() => setLoading(false));
+		fetchClaudeUserUsage()
+			.then(setUserUsage)
+			.catch(() => {}); // section simply hidden if unavailable
 	}, []);
 
 	useEffect(() => {
@@ -364,21 +422,46 @@ export default function StudioClaudeQuota() {
 				</>
 			)}
 
-			{/* Account-pool proxy usage */}
+			{userUsage && <UserUsageSection usage={userUsage} />}
+
+			{/* Setup: point your Claude Code CLI at the pool */}
 			<div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-				<p className="text-xs font-medium text-slate-600 mb-1.5">Use the pool from your terminal</p>
-				<p className="text-[11px] text-slate-500 mb-2">
-					Point your own Claude Code at the org account pool — requests route to the account with
-					the most available quota. Mint a PAT with the <code className="font-mono bg-slate-100 px-1 rounded">claude:proxy</code> scope
-					at <a href="/dashboard/tokens" className="text-gold-700 hover:underline">/dashboard/tokens</a>.
-					Model choice is yours: <code className="font-mono bg-slate-100 px-1 rounded">claude --model opus</code> etc. passes through.
+				<p className="text-xs font-medium text-slate-600 mb-2">Set up your Claude Code CLI to use the pool</p>
+				<ol className="text-[11px] text-slate-500 space-y-2 mb-2 list-none">
+					<li>
+						<span className="font-mono bg-slate-200 text-slate-700 px-1.5 rounded mr-1.5">1</span>
+						Mint a PAT at <a href="/dashboard/tokens" className="text-gold-700 hover:underline">/dashboard/tokens</a> with
+						the scope <code className="font-mono bg-slate-100 px-1 rounded">claude:proxy</code>.
+					</li>
+					<li>
+						<span className="font-mono bg-slate-200 text-slate-700 px-1.5 rounded mr-1.5">2</span>
+						Add the pool endpoint + your PAT to <code className="font-mono bg-slate-100 px-1 rounded">~/.claude/settings.json</code> (applies
+						to every session; your personal <code className="font-mono bg-slate-100 px-1 rounded">claude auth login</code> stays untouched — remove the two keys to switch back):
+						<pre className="text-[11px] font-mono bg-slate-900 text-emerald-300 rounded px-3 py-2 mt-1.5 select-all overflow-x-auto">
+{`{
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://lum.id/claude",
+    "ANTHROPIC_AUTH_TOKEN": "lm_pat_live_..."
+  }
+}`}
+						</pre>
+						<span className="block mt-1 text-slate-400">…or per-shell instead:</span>
+						<pre className="text-[11px] font-mono bg-slate-900 text-emerald-300 rounded px-3 py-2 mt-1 select-all overflow-x-auto">
+{`export ANTHROPIC_BASE_URL=https://lum.id/claude
+export ANTHROPIC_AUTH_TOKEN=lm_pat_live_...`}
+						</pre>
+					</li>
+					<li>
+						<span className="font-mono bg-slate-200 text-slate-700 px-1.5 rounded mr-1.5">3</span>
+						Run <code className="font-mono bg-slate-100 px-1 rounded">claude</code> as usual — requests route to the pooled
+						account with the most quota. Model choice passes through
+						(<code className="font-mono bg-slate-100 px-1 rounded">claude --model opus</code>, <code className="font-mono bg-slate-100 px-1 rounded">/model</code>).
+					</li>
+				</ol>
+				<p className="text-[11px] text-slate-400">
+					Each user has their own 5h/7d pool budget (shown above once you've made requests).
 					Full guide: <a href="/docs/claude" className="text-gold-700 hover:underline">/docs/claude</a>.
 				</p>
-				<pre className="text-[11px] font-mono bg-slate-900 text-emerald-300 rounded px-3 py-2 select-all overflow-x-auto">
-{`export ANTHROPIC_BASE_URL=https://lum.id/claude
-export ANTHROPIC_AUTH_TOKEN=lm_pat_live_...   # PAT with claude:proxy scope
-claude -p "hello"`}
-				</pre>
 			</div>
 		</div>
 	);

@@ -341,6 +341,27 @@ export async function fetchClaudeQuota(): Promise<ClaudeQuotaResp> {
 	return r.data.data;
 }
 
+export interface ClaudeUserUsage {
+	email: string;
+	five_hour_tokens: number;
+	seven_day_tokens: number;
+	five_hour_pct: number;
+	seven_day_pct: number;
+	requests_7d: number;
+	last_ts: string;
+}
+
+export interface ClaudeUserUsageResp {
+	users: ClaudeUserUsage[];
+	five_hour_tokens: number; // per-user cap
+	seven_day_tokens: number; // per-user cap
+}
+
+export async function fetchClaudeUserUsage(): Promise<ClaudeUserUsageResp> {
+	const r = await apiClient.get<DataResponse<ClaudeUserUsageResp>>('/api/v1/admin/claude-user-usage');
+	return r.data.data;
+}
+
 export interface AdminClaudeTokenResult {
 	email: string;
 	valid: boolean;
