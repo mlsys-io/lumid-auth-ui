@@ -28,7 +28,7 @@ function fmtTime(iso: string): string {
 	if (diffMs < 0) return 'now';
 	const h = Math.floor(diffMs / 3600000);
 	const m = Math.floor((diffMs % 3600000) / 60000);
-	if (h > 24) return `${Math.floor(h / 24)}d`;
+	if (h > 24) return `${Math.floor(h / 24)}d ${h % 24}h`;
 	if (h > 0) return `${h}h ${m}m`;
 	return `${m}m`;
 }
