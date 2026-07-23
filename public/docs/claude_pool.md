@@ -82,8 +82,22 @@ claude --model opus -p "..."      # per-invocation
 export ANTHROPIC_MODEL=claude-opus-4-8   # env default
 ```
 
-Whatever model your client requests is what the pooled account serves
-(subject to that account's plan).
+Whatever model your client requests is forwarded to the pooled account
+(subject to that account's plan **and** your role tier below).
+
+### Model access by role
+
+The pool gates model families by your lum.id role:
+
+| Role | Sonnet / Haiku | Opus | Fable |
+|------|:---:|:---:|:---:|
+| `user` | ✅ | — | — |
+| `admin` | ✅ | ✅ | — |
+| `super_admin` | ✅ | ✅ | ✅ |
+
+Requesting a model above your tier returns `403` with the required role —
+switch to an allowed model (e.g. `--model sonnet`) or ask an admin to raise
+your role. Unlisted/base models are available to everyone.
 
 ---
 
@@ -98,10 +112,12 @@ Whatever model your client requests is what the pooled account serves
   mid-session would re-bill your whole context as fresh input tokens.
 - **Own-account preference.** If your lum.id email matches an account in the
   pool, you get your own account first (when it's healthy).
-- **Automatic failover.** On a 401/429 from Anthropic the sticky lease is
-  evicted and the next request re-routes to a different account. Expired
-  access tokens are refreshed server-side automatically (accounts registered
-  with a refresh token).
+- **Automatic failover.** When Anthropic returns 401/403/429 for an account,
+  the proxy benches it for ~5 minutes and retries your request against a
+  different account (up to 3) — so a rate-limited or dead account rotates out
+  within the same call, not just the next one. Expired access tokens are
+  refreshed server-side automatically (accounts registered with a refresh
+  token).
 - **Live quota tracking.** The proxy reads Anthropic's rate-limit headers off
   every response and feeds the [/quota](/quota) dashboard — no extra probes.
 
