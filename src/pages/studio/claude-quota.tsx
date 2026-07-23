@@ -83,7 +83,7 @@ function AccountRow({ acc, onDelete }: { acc: ClaudeQuotaAccount; onDelete: (ema
 			<div className="flex items-center gap-1.5 shrink-0">
 				<span className="text-[10px] text-slate-400 w-4">5h</span>
 				<MiniBar pct={acc.five_hour_pct ?? 0} severity={acc.severity} />
-				<span className="text-[10px] font-mono text-slate-600 w-7 text-right">{acc.five_hour_pct ?? 0}%</span>
+				<span className="text-[10px] font-mono text-slate-600 w-8 text-right">{Math.round(acc.five_hour_pct ?? 0)}%</span>
 				<span className="text-[10px] text-slate-400 w-12">↺{fmtTime(acc.five_hour_reset)}</span>
 			</div>
 
@@ -91,7 +91,7 @@ function AccountRow({ acc, onDelete }: { acc: ClaudeQuotaAccount; onDelete: (ema
 			<div className="flex items-center gap-1.5 shrink-0">
 				<span className="text-[10px] text-slate-400 w-4">7d</span>
 				<MiniBar pct={acc.seven_day_pct ?? 0} severity={acc.severity} />
-				<span className="text-[10px] font-mono text-slate-600 w-7 text-right">{acc.seven_day_pct ?? 0}%</span>
+				<span className="text-[10px] font-mono text-slate-600 w-8 text-right">{Math.round(acc.seven_day_pct ?? 0)}%</span>
 				<span className="text-[10px] text-slate-400 w-14">↺{fmtTime(acc.seven_day_reset)}</span>
 			</div>
 
@@ -363,6 +363,22 @@ export default function StudioClaudeQuota() {
 					</div>
 				</>
 			)}
+
+			{/* Account-pool proxy usage */}
+			<div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+				<p className="text-xs font-medium text-slate-600 mb-1.5">Use the pool from your terminal</p>
+				<p className="text-[11px] text-slate-500 mb-2">
+					Point your own Claude Code at the org account pool — requests route to the account with
+					the most available quota. Mint a PAT with the <code className="font-mono bg-slate-100 px-1 rounded">claude:proxy</code> scope
+					at <a href="/dashboard/tokens" className="text-gold-700 hover:underline">/dashboard/tokens</a>.
+					Model choice is yours: <code className="font-mono bg-slate-100 px-1 rounded">claude --model opus</code> etc. passes through.
+				</p>
+				<pre className="text-[11px] font-mono bg-slate-900 text-emerald-300 rounded px-3 py-2 select-all overflow-x-auto">
+{`export ANTHROPIC_BASE_URL=https://lum.id/claude
+export ANTHROPIC_AUTH_TOKEN=lm_pat_live_...   # PAT with claude:proxy scope
+claude -p "hello"`}
+				</pre>
+			</div>
 		</div>
 	);
 }
