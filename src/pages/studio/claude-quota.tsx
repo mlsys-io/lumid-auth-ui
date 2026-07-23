@@ -9,13 +9,12 @@
 // the last known snapshot with a warning badge.
 
 import { useEffect, useState, useCallback } from 'react';
-import { RefreshCw, Zap, AlertTriangle, CheckCircle, Clock, Loader2, UserPlus, X, Trash2 } from 'lucide-react';
+import { RefreshCw, Zap, AlertTriangle, CheckCircle, Loader2, UserPlus, X, Trash2 } from 'lucide-react';
 import {
 	fetchClaudeQuota,
 	adminAddClaudeToken,
 	adminDeleteClaudeToken,
 	type ClaudeQuotaAccount,
-	type ClaudeQuotaLimit,
 } from '@/api/super-admin';
 
 const AUTO_REFRESH_MS = 2 * 60 * 1000;
@@ -47,130 +46,84 @@ function SeverityDot({ severity }: { severity: string }) {
 	return <span className={`inline-block w-2 h-2 rounded-full ${cls} shrink-0`} />;
 }
 
-function PctBar({ pct, severity }: { pct: number; severity: string }) {
+
+function MiniBar({ pct, severity }: { pct: number; severity: string }) {
 	const fill =
 		severity === 'critical' ? 'bg-rose-500' :
 		severity === 'warning'  ? 'bg-amber-400' :
 		pct > 60                ? 'bg-gold-400'  :
 		'bg-emerald-400';
 	return (
-		<div className="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden">
-			<div
-				className={`h-full rounded-full transition-all ${fill}`}
-				style={{ width: `${Math.min(100, pct)}%` }}
-			/>
+		<div className="w-16 h-1 rounded-full bg-slate-100 overflow-hidden">
+			<div className={`h-full rounded-full ${fill}`} style={{ width: `${Math.min(100, pct)}%` }} />
 		</div>
 	);
 }
 
-function ActiveLimit({ limit }: { limit: ClaudeQuotaLimit }) {
-	return (
-		<span className="inline-flex items-center gap-1 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-mono text-slate-600">
-			{limit.kind}: {limit.percent}%
-			<span className="text-slate-400">→ {fmtTime(limit.resets_at)}</span>
-		</span>
-	);
-}
-
 function AccountRow({ acc, onDelete }: { acc: ClaudeQuotaAccount; onDelete: (email: string) => void }) {
-	const activeLimits = (acc.limits ?? []).filter((l) => l.is_active);
 	const [confirming, setConfirming] = useState(false);
-	const [deleting, setDeleting] = useState(false);
+	const [deleting,   setDeleting]   = useState(false);
 
 	async function handleDelete() {
 		setDeleting(true);
-		try {
-			await adminDeleteClaudeToken(acc.email);
-			onDelete(acc.email);
-		} catch {
-			setDeleting(false);
-			setConfirming(false);
-		}
+		try { await adminDeleteClaudeToken(acc.email); onDelete(acc.email); }
+		catch { setDeleting(false); setConfirming(false); }
 	}
 
 	return (
-		<div className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-3 hover:border-slate-300 transition-colors">
-			{/* header */}
-			<div className="flex items-center gap-2 min-w-0">
-				<SeverityDot severity={acc.severity} />
-				<span className="flex-1 min-w-0 truncate text-sm font-medium text-slate-800">
-					{acc.email}
-				</span>
-				{acc.stale && (
-					<span className="shrink-0 inline-flex items-center gap-1 rounded bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[10px] text-amber-700">
-						<AlertTriangle className="w-3 h-3" /> stale
-					</span>
-				)}
-				{acc.error && (
-					<span className="shrink-0 text-[10px] text-rose-600 truncate max-w-[160px]" title={acc.error}>
-						{acc.error}
-					</span>
-				)}
-				<span className="shrink-0 text-[10px] text-slate-400 flex items-center gap-0.5">
-					<Clock className="w-3 h-3" /> {fmtTs(acc.ts)}
-				</span>
-				{confirming ? (
-					<div className="shrink-0 flex items-center gap-1">
-						<span className="text-[10px] text-rose-700">Remove?</span>
-						<button
-							onClick={handleDelete}
-							disabled={deleting}
-							className="inline-flex items-center gap-0.5 rounded bg-rose-600 px-1.5 py-0.5 text-[10px] font-medium text-white hover:bg-rose-700 disabled:opacity-50 transition"
-						>
-							{deleting ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : 'Yes'}
-						</button>
-						<button
-							onClick={() => setConfirming(false)}
-							disabled={deleting}
-							className="inline-flex items-center rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition"
-						>
-							No
-						</button>
-					</div>
-				) : (
-					<button
-						onClick={() => setConfirming(true)}
-						className="shrink-0 text-slate-300 hover:text-rose-500 transition"
-						title="Remove account"
-					>
-						<Trash2 className="w-3.5 h-3.5" />
+		<div className="flex items-center gap-3 px-2.5 py-1.5 rounded border border-transparent hover:border-slate-200 hover:bg-slate-50 transition-colors min-w-0">
+			<SeverityDot severity={acc.severity} />
+
+			{/* email */}
+			<span className="w-44 shrink-0 truncate text-xs font-medium text-slate-800" title={acc.email}>
+				{acc.email}
+			</span>
+
+			{/* 5h bar */}
+			<div className="flex items-center gap-1.5 shrink-0">
+				<span className="text-[10px] text-slate-400 w-4">5h</span>
+				<MiniBar pct={acc.five_hour_pct ?? 0} severity={acc.severity} />
+				<span className="text-[10px] font-mono text-slate-600 w-7 text-right">{acc.five_hour_pct ?? 0}%</span>
+				<span className="text-[10px] text-slate-400 w-12">↺{fmtTime(acc.five_hour_reset)}</span>
+			</div>
+
+			{/* 7d bar */}
+			<div className="flex items-center gap-1.5 shrink-0">
+				<span className="text-[10px] text-slate-400 w-4">7d</span>
+				<MiniBar pct={acc.seven_day_pct ?? 0} severity={acc.severity} />
+				<span className="text-[10px] font-mono text-slate-600 w-7 text-right">{acc.seven_day_pct ?? 0}%</span>
+				<span className="text-[10px] text-slate-400 w-14">↺{fmtTime(acc.seven_day_reset)}</span>
+			</div>
+
+			{/* error / stale */}
+			{acc.error ? (
+				<span className="flex-1 min-w-0 text-[10px] text-rose-500 truncate" title={acc.error}>{acc.error}</span>
+			) : acc.stale ? (
+				<span className="flex-1 min-w-0 text-[10px] text-amber-500">stale</span>
+			) : (
+				<span className="flex-1" />
+			)}
+
+			{/* timestamp */}
+			<span className="shrink-0 text-[10px] text-slate-400">{fmtTs(acc.ts)}</span>
+
+			{/* delete */}
+			{confirming ? (
+				<div className="shrink-0 flex items-center gap-1">
+					<button onClick={handleDelete} disabled={deleting}
+						className="rounded bg-rose-600 px-1.5 py-0.5 text-[10px] font-medium text-white hover:bg-rose-700 disabled:opacity-50 transition">
+						{deleting ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : 'rm'}
 					</button>
-				)}
-			</div>
-
-			{/* bars */}
-			<div className="grid grid-cols-2 gap-3">
-				<div>
-					<div className="flex items-center justify-between mb-1">
-						<span className="text-[10px] text-slate-500">5-hour</span>
-						<span className="text-[10px] font-mono font-medium text-slate-700">
-							{acc.five_hour_pct ?? 0}%
-						</span>
-					</div>
-					<PctBar pct={acc.five_hour_pct ?? 0} severity={acc.severity} />
-					<div className="text-[10px] text-slate-400 mt-0.5">
-						resets in {fmtTime(acc.five_hour_reset)}
-					</div>
+					<button onClick={() => setConfirming(false)} disabled={deleting}
+						className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-500 hover:bg-slate-100 disabled:opacity-50 transition">
+						×
+					</button>
 				</div>
-				<div>
-					<div className="flex items-center justify-between mb-1">
-						<span className="text-[10px] text-slate-500">7-day</span>
-						<span className="text-[10px] font-mono font-medium text-slate-700">
-							{acc.seven_day_pct ?? 0}%
-						</span>
-					</div>
-					<PctBar pct={acc.seven_day_pct ?? 0} severity={acc.severity} />
-					<div className="text-[10px] text-slate-400 mt-0.5">
-						resets in {fmtTime(acc.seven_day_reset)}
-					</div>
-				</div>
-			</div>
-
-			{/* active limits */}
-			{activeLimits.length > 0 && (
-				<div className="flex flex-wrap gap-1">
-					{activeLimits.map((l) => <ActiveLimit key={l.kind} limit={l} />)}
-				</div>
+			) : (
+				<button onClick={() => setConfirming(true)}
+					className="shrink-0 text-slate-300 hover:text-rose-400 transition" title="Remove">
+					<Trash2 className="w-3 h-3" />
+				</button>
 			)}
 		</div>
 	);
@@ -302,19 +255,11 @@ function SummaryBar({ accounts }: { accounts: ClaudeQuotaAccount[] }) {
 	const warning  = accounts.filter((a) => a.severity === 'warning').length;
 	const healthy  = accounts.length - critical - warning;
 	return (
-		<div className="grid grid-cols-3 gap-3">
-			<div className="rounded-lg border border-slate-200 bg-white p-3 text-center">
-				<div className="text-2xl font-medium text-rose-600">{critical}</div>
-				<div className="text-xs text-slate-500 mt-0.5">critical</div>
-			</div>
-			<div className="rounded-lg border border-slate-200 bg-white p-3 text-center">
-				<div className="text-2xl font-medium text-amber-600">{warning}</div>
-				<div className="text-xs text-slate-500 mt-0.5">warning</div>
-			</div>
-			<div className="rounded-lg border border-slate-200 bg-white p-3 text-center">
-				<div className="text-2xl font-medium text-emerald-600">{healthy}</div>
-				<div className="text-xs text-slate-500 mt-0.5">healthy</div>
-			</div>
+		<div className="flex items-center gap-4 text-xs text-slate-500">
+			{critical > 0 && <span className="text-rose-600 font-medium">{critical} critical</span>}
+			{warning  > 0 && <span className="text-amber-600 font-medium">{warning} warning</span>}
+			<span className="text-emerald-600">{healthy} healthy</span>
+			<span className="text-slate-300">/ {accounts.length} total</span>
 		</div>
 	);
 }
@@ -345,22 +290,21 @@ export default function StudioClaudeQuota() {
 	}, [load]);
 
 	return (
-		<div className="space-y-4">
+		<div className="space-y-3">
 			{showAdd && (
 				<AddAccountModal
 					onClose={() => setShowAdd(false)}
 					onAdded={() => { setShowAdd(false); load(true); }}
 				/>
 			)}
-			<header className="flex items-baseline justify-between">
+			<header className="flex items-center justify-between">
 				<div>
-					<h1 className="text-lg font-medium flex items-center gap-2">
-						<Zap className="w-5 h-5 text-gold-600" />
+					<h1 className="text-base font-medium flex items-center gap-2">
+						<Zap className="w-4 h-4 text-gold-600" />
 						Claude Code quota
 					</h1>
-					<p className="text-sm text-slate-500 mt-0.5">
-						Live 5-hour and 7-day quota across all org accounts.
-						Use "Add account" to register each user's Claude Code OAuth token.
+					<p className="text-xs text-slate-400 mt-0.5">
+						Live 5h / 7d quota across all org accounts.
 					</p>
 				</div>
 				<div className="flex items-center gap-3">
@@ -408,7 +352,7 @@ export default function StudioClaudeQuota() {
 			) : (
 				<>
 					<SummaryBar accounts={accounts} />
-					<div className="space-y-2">
+					<div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100">
 						{accounts.map((a) => (
 							<AccountRow
 								key={a.email}
