@@ -532,13 +532,13 @@ export default function App() {
               </SuperAdminGuard>
             }
           />
-          {/* Claude Code quota dashboard — super_admin only, top-level /quota */}
+          {/* Claude Code quota dashboard — admin + super_admin, top-level /quota */}
           <Route
             path="/quota"
             element={
-              <SuperAdminGuard>
+              <AdminGuard>
                 <StudioClaudeQuota />
-              </SuperAdminGuard>
+              </AdminGuard>
             }
           />
 

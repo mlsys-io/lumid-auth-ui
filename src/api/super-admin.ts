@@ -349,9 +349,15 @@ export interface AdminClaudeTokenResult {
 	reason: string;
 }
 
-export async function adminAddClaudeToken(email: string, token: string, app?: string): Promise<AdminClaudeTokenResult> {
-	const r = await apiClient.post<DataResponse<AdminClaudeTokenResult>>('/api/v1/admin/claude-token', { email, token, app });
+export async function adminAddClaudeToken(email: string, token: string, refreshToken?: string): Promise<AdminClaudeTokenResult> {
+	const body: Record<string, string> = { email, token };
+	if (refreshToken) body.refresh_token = refreshToken;
+	const r = await apiClient.post<DataResponse<AdminClaudeTokenResult>>('/api/v1/admin/claude-token', body);
 	return r.data.data;
+}
+
+export async function adminDeleteClaudeToken(email: string): Promise<void> {
+	await apiClient.delete(`/api/v1/admin/claude-token/${encodeURIComponent(email)}`);
 }
 
 // ---- /api/v1/admin/users ----

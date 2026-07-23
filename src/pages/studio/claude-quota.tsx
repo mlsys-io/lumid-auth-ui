@@ -9,10 +9,11 @@
 // the last known snapshot with a warning badge.
 
 import { useEffect, useState, useCallback } from 'react';
-import { RefreshCw, Zap, AlertTriangle, CheckCircle, Clock, Loader2, UserPlus, X } from 'lucide-react';
+import { RefreshCw, Zap, AlertTriangle, CheckCircle, Clock, Loader2, UserPlus, X, Trash2 } from 'lucide-react';
 import {
 	fetchClaudeQuota,
 	adminAddClaudeToken,
+	adminDeleteClaudeToken,
 	type ClaudeQuotaAccount,
 	type ClaudeQuotaLimit,
 } from '@/api/super-admin';
@@ -71,8 +72,22 @@ function ActiveLimit({ limit }: { limit: ClaudeQuotaLimit }) {
 	);
 }
 
-function AccountRow({ acc }: { acc: ClaudeQuotaAccount }) {
+function AccountRow({ acc, onDelete }: { acc: ClaudeQuotaAccount; onDelete: (email: string) => void }) {
 	const activeLimits = (acc.limits ?? []).filter((l) => l.is_active);
+	const [confirming, setConfirming] = useState(false);
+	const [deleting, setDeleting] = useState(false);
+
+	async function handleDelete() {
+		setDeleting(true);
+		try {
+			await adminDeleteClaudeToken(acc.email);
+			onDelete(acc.email);
+		} catch {
+			setDeleting(false);
+			setConfirming(false);
+		}
+	}
+
 	return (
 		<div className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-3 hover:border-slate-300 transition-colors">
 			{/* header */}
@@ -94,6 +109,33 @@ function AccountRow({ acc }: { acc: ClaudeQuotaAccount }) {
 				<span className="shrink-0 text-[10px] text-slate-400 flex items-center gap-0.5">
 					<Clock className="w-3 h-3" /> {fmtTs(acc.ts)}
 				</span>
+				{confirming ? (
+					<div className="shrink-0 flex items-center gap-1">
+						<span className="text-[10px] text-rose-700">Remove?</span>
+						<button
+							onClick={handleDelete}
+							disabled={deleting}
+							className="inline-flex items-center gap-0.5 rounded bg-rose-600 px-1.5 py-0.5 text-[10px] font-medium text-white hover:bg-rose-700 disabled:opacity-50 transition"
+						>
+							{deleting ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : 'Yes'}
+						</button>
+						<button
+							onClick={() => setConfirming(false)}
+							disabled={deleting}
+							className="inline-flex items-center rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition"
+						>
+							No
+						</button>
+					</div>
+				) : (
+					<button
+						onClick={() => setConfirming(true)}
+						className="shrink-0 text-slate-300 hover:text-rose-500 transition"
+						title="Remove account"
+					>
+						<Trash2 className="w-3.5 h-3.5" />
+					</button>
+				)}
 			</div>
 
 			{/* bars */}
@@ -137,22 +179,25 @@ function AccountRow({ acc }: { acc: ClaudeQuotaAccount }) {
 // ── Add-account modal ──────────────────────────────────────────────
 
 function AddAccountModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
-	const [email, setEmail] = useState('');
-	const [token, setToken] = useState('');
-	const [busy,  setBusy]  = useState(false);
-	const [msg,   setMsg]   = useState<{ ok: boolean; text: string } | null>(null);
+	const [email,        setEmail]        = useState('');
+	const [token,        setToken]        = useState('');
+	const [refreshToken, setRefreshToken] = useState('');
+	const [busy,         setBusy]         = useState(false);
+	const [msg,          setMsg]          = useState<{ ok: boolean; text: string } | null>(null);
 
 	const submit = async () => {
 		const e = email.trim().toLowerCase();
 		const t = token.trim();
+		const rt = refreshToken.trim() || undefined;
 		if (!e || !t) { setMsg({ ok: false, text: 'Email and token are required.' }); return; }
 		setBusy(true);
 		setMsg(null);
 		try {
-			const r = await adminAddClaudeToken(e, t);
+			const r = await adminAddClaudeToken(e, t, rt);
 			if (r.valid && r.stored) {
-				setMsg({ ok: true, text: `Token stored for ${r.email}. Quota will refresh within 5 min.` });
-				setTimeout(() => { onClose(); onAdded(); }, 1500);
+				const extra = rt ? ' Auto-refresh enabled.' : '';
+				setMsg({ ok: true, text: `Token stored for ${r.email}.${extra} Quota will refresh within 5 min.` });
+				setTimeout(() => { onClose(); onAdded(); }, 1800);
 			} else if (!r.valid) {
 				setMsg({ ok: false, text: `Invalid token: ${r.reason}` });
 			} else {
@@ -178,18 +223,19 @@ function AddAccountModal({ onClose, onAdded }: { onClose: () => void; onAdded: (
 					</button>
 				</div>
 				<p className="text-xs text-slate-500 mb-2">
-					Log in as the target user with the Claude CLI, then copy their token:
+					Log in as the target user with the Claude CLI, then copy their tokens:
 				</p>
 				<ol className="text-xs text-slate-600 space-y-1.5 mb-3 list-none">
 					<li><span className="font-mono bg-slate-100 px-1 rounded mr-1">1</span> <code className="font-mono">claude auth login</code> — sign in as the target user</li>
-					<li><span className="font-mono bg-slate-100 px-1 rounded mr-1">2</span> Copy the token printed below</li>
+					<li><span className="font-mono bg-slate-100 px-1 rounded mr-1">2</span> Copy both tokens from the output below</li>
 					<li><span className="font-mono bg-slate-100 px-1 rounded mr-1">3</span> <code className="font-mono">claude auth logout</code> — then log back in as yourself</li>
 				</ol>
-				<pre className="text-[11px] font-mono bg-slate-900 text-emerald-300 rounded px-3 py-2 mb-3 select-all overflow-x-auto">
-{`node -e "const h=require('os').homedir();console.log(JSON.parse(require('fs').readFileSync(h+'/.claude/.credentials.json','utf8')).claudeAiOauth.accessToken)"`}
+				<pre className="text-[11px] font-mono bg-slate-900 text-emerald-300 rounded px-3 py-2 mb-1 select-all overflow-x-auto">
+{`node -e "const h=require('os').homedir(),c=JSON.parse(require('fs').readFileSync(h+'/.claude/.credentials.json','utf8')).claudeAiOauth;console.log('access:',c.accessToken,'\\nrefresh:',c.refreshToken)"`}
 				</pre>
 				<p className="text-xs text-slate-400 mb-4">
-					The token starts with <code className="font-mono bg-slate-100 px-1 rounded">sk-ant-oat01-</code> and is verified against Anthropic before storage.
+					Access token starts with <code className="font-mono bg-slate-100 px-1 rounded">sk-ant-oat01-</code>.
+					Adding the refresh token enables <strong>auto-renewal</strong> when the access token expires.
 				</p>
 				<div className="space-y-3">
 					<div>
@@ -203,12 +249,24 @@ function AddAccountModal({ onClose, onAdded }: { onClose: () => void; onAdded: (
 						/>
 					</div>
 					<div>
-						<label className="block text-xs font-medium text-slate-600 mb-1">Claude OAuth token</label>
+						<label className="block text-xs font-medium text-slate-600 mb-1">Claude OAuth access token</label>
 						<input
 							type="password"
 							value={token}
 							onChange={(e) => setToken(e.target.value)}
 							placeholder="sk-ant-oat01-…"
+							className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-gold-400"
+						/>
+					</div>
+					<div>
+						<label className="block text-xs font-medium text-slate-600 mb-1">
+							Refresh token <span className="text-slate-400 font-normal">(optional — enables auto-renewal)</span>
+						</label>
+						<input
+							type="password"
+							value={refreshToken}
+							onChange={(e) => setRefreshToken(e.target.value)}
+							placeholder="paste refresh token here…"
 							className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-gold-400"
 						/>
 					</div>
@@ -351,7 +409,13 @@ export default function StudioClaudeQuota() {
 				<>
 					<SummaryBar accounts={accounts} />
 					<div className="space-y-2">
-						{accounts.map((a) => <AccountRow key={a.email} acc={a} />)}
+						{accounts.map((a) => (
+							<AccountRow
+								key={a.email}
+								acc={a}
+								onDelete={(email) => setAccounts((prev) => prev?.filter((x) => x.email !== email) ?? [])}
+							/>
+						))}
 					</div>
 				</>
 			)}
