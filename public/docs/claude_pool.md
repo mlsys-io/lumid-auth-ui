@@ -17,6 +17,8 @@ no install, no PAT setup. Pick a **(Code)** model from the model picker:
 | Claude Sonnet (Code) | everyone | Account pool (your 5h/7d quota) |
 | Claude Opus (Code) | admin+ | Account pool |
 | Claude Fable 5 (Code) | super_admin | Account pool |
+| Kimi K3 (Code) | admin+ | Moonshot API — cost-metered, no pool quota |
+| GLM-5.2 (Code) | admin+ | OpenRouter — cost-metered, no pool quota |
 | Qwen3.6-35B (Code · Lumid GPU) | everyone | In-house GPU — **no pool quota** |
 
 Each turn runs the claude CLI in a sandboxed per-user workspace (Bash, file
