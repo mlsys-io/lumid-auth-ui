@@ -341,14 +341,23 @@ export async function fetchClaudeQuota(): Promise<ClaudeQuotaResp> {
 	return r.data.data;
 }
 
+export interface ClaudeUserModelUsage {
+	tokens_7d: number;
+	cost_cents_7d: number;
+}
+
 export interface ClaudeUserUsage {
 	email: string;
 	five_hour_tokens: number;
 	seven_day_tokens: number;
 	five_hour_pct: number;
 	seven_day_pct: number;
+	cost_cents_7d: number;
 	requests_7d: number;
 	last_ts: string;
+	five_hour_reset?: string;
+	seven_day_reset?: string;
+	models?: Record<string, ClaudeUserModelUsage>;
 }
 
 export interface ClaudeUserUsageResp {

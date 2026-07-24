@@ -19,7 +19,7 @@ import {
 	type ClaudeUserUsageResp,
 } from '@/api/super-admin';
 
-const AUTO_REFRESH_MS = 2 * 60 * 1000;
+// No auto-refresh — load once on mount; user clicks refresh manually.
 
 function fmtTime(iso: string): string {
 	if (!iso || iso.startsWith('0001')) return '—';
@@ -309,6 +309,25 @@ function usageSeverity(pct: number): string {
 	return 'normal';
 }
 
+function fmtCents(cents: number): string {
+	if (cents === 0) return '$0';
+	if (cents < 100) return `$${(cents / 100).toFixed(3)}`;
+	return `$${(cents / 100).toFixed(2)}`;
+}
+
+function fmtReset(iso?: string): string {
+	if (!iso || iso.startsWith('0001')) return '';
+	const d = new Date(iso);
+	const now = new Date();
+	const diffMs = d.getTime() - now.getTime();
+	if (diffMs <= 0) return 'now';
+	const h = Math.floor(diffMs / 3600000);
+	const m = Math.floor((diffMs % 3600000) / 60000);
+	if (h > 24) return `↺${Math.floor(h / 24)}d`;
+	if (h > 0) return `↺${h}h${m}m`;
+	return `↺${m}m`;
+}
+
 // Per-user pool consumption — the per-PAT quota counterpart of the account
 // table above. Same rolling 5h/7d windows, enforced by claude-proxy.
 function UserUsageSection({ usage }: { usage: ClaudeUserUsageResp }) {
@@ -318,33 +337,53 @@ function UserUsageSection({ usage }: { usage: ClaudeUserUsageResp }) {
 			<p className="text-xs font-medium text-slate-600 mb-1.5">
 				Per-user pool usage
 				<span className="ml-2 font-normal text-slate-400">
-					caps: {fmtTokens(usage.five_hour_tokens)} tok / 5h · {fmtTokens(usage.seven_day_tokens)} tok / 7d
+					caps: {fmtTokens(usage.five_hour_tokens)} tok / 5h · {fmtTokens(usage.seven_day_tokens)} tok / 7d (claude-* only)
 					{' · '}users with a <code className="font-mono text-[10px]">claude:proxy</code> PAT appear even at 0 usage
 				</span>
 			</p>
 			<div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100">
-				{usage.users.map((u) => (
-					<div key={u.email} className="flex items-center gap-3 px-2.5 py-1.5 min-w-0">
-						<SeverityDot severity={usageSeverity(Math.max(u.five_hour_pct, u.seven_day_pct))} />
-						<span className="w-44 shrink-0 truncate text-xs font-medium text-slate-800" title={u.email}>
-							{u.email}
-						</span>
-						<div className="flex items-center gap-1.5 shrink-0" title={`${u.five_hour_tokens.toLocaleString()} tokens`}>
-							<span className="text-[10px] text-slate-400 w-4">5h</span>
-							<MiniBar pct={u.five_hour_pct} severity={usageSeverity(u.five_hour_pct)} />
-							<span className="text-[10px] font-mono text-slate-600 w-8 text-right">{fmtPct(u.five_hour_pct)}</span>
+				{usage.users.map((u) => {
+					const sev = usageSeverity(Math.max(u.five_hour_pct, u.seven_day_pct));
+					const reset5h = fmtReset(u.five_hour_reset);
+					const reset7d = fmtReset(u.seven_day_reset);
+					const modelEntries = u.models ? Object.entries(u.models).filter(([, v]) => v.tokens_7d > 0).sort((a, b) => b[1].tokens_7d - a[1].tokens_7d) : [];
+					return (
+						<div key={u.email} className="px-2.5 py-1.5 min-w-0">
+							<div className="flex items-center gap-3">
+								<SeverityDot severity={sev} />
+								<span className="w-44 shrink-0 truncate text-xs font-medium text-slate-800" title={u.email}>
+									{u.email}
+								</span>
+								<div className="flex items-center gap-1 shrink-0" title={`${u.five_hour_tokens.toLocaleString()} tokens`}>
+									<span className="text-[10px] text-slate-400 w-4">5h</span>
+									<MiniBar pct={u.five_hour_pct} severity={usageSeverity(u.five_hour_pct)} />
+									<span className="text-[10px] font-mono text-slate-600 w-8 text-right">{fmtPct(u.five_hour_pct)}</span>
+									{reset5h && <span className="text-[10px] text-slate-400 w-10">{reset5h}</span>}
+								</div>
+								<div className="flex items-center gap-1 shrink-0" title={`${u.seven_day_tokens.toLocaleString()} tokens`}>
+									<span className="text-[10px] text-slate-400 w-4">7d</span>
+									<MiniBar pct={u.seven_day_pct} severity={usageSeverity(u.seven_day_pct)} />
+									<span className="text-[10px] font-mono text-slate-600 w-8 text-right">{fmtPct(u.seven_day_pct)}</span>
+									{reset7d && <span className="text-[10px] text-slate-400 w-10">{reset7d}</span>}
+								</div>
+								<span className="flex-1 min-w-0 text-[10px] text-slate-400 truncate">
+									{fmtTokens(u.seven_day_tokens)} tok · {u.requests_7d} req
+									{u.cost_cents_7d > 0 && <> · <span className="text-slate-500">{fmtCents(u.cost_cents_7d)}</span></>}
+								</span>
+								<span className="shrink-0 text-[10px] text-slate-400">{fmtTs(u.last_ts)}</span>
+							</div>
+							{modelEntries.length > 0 && (
+								<div className="flex flex-wrap gap-1.5 mt-0.5 ml-6">
+									{modelEntries.map(([model, v]) => (
+										<span key={model} className="text-[10px] font-mono text-slate-500 bg-slate-50 border border-slate-200 px-1.5 rounded" title={`${v.tokens_7d.toLocaleString()} tok`}>
+											{model} {fmtTokens(v.tokens_7d)}{v.cost_cents_7d > 0 ? ` ${fmtCents(v.cost_cents_7d)}` : ''}
+										</span>
+									))}
+								</div>
+							)}
 						</div>
-						<div className="flex items-center gap-1.5 shrink-0" title={`${u.seven_day_tokens.toLocaleString()} tokens`}>
-							<span className="text-[10px] text-slate-400 w-4">7d</span>
-							<MiniBar pct={u.seven_day_pct} severity={usageSeverity(u.seven_day_pct)} />
-							<span className="text-[10px] font-mono text-slate-600 w-8 text-right">{fmtPct(u.seven_day_pct)}</span>
-						</div>
-						<span className="flex-1 min-w-0 text-[10px] text-slate-400 truncate">
-							{fmtTokens(u.seven_day_tokens)} tok · {u.requests_7d} req
-						</span>
-						<span className="shrink-0 text-[10px] text-slate-400">{fmtTs(u.last_ts)}</span>
-					</div>
-				))}
+					);
+				})}
 			</div>
 		</div>
 	);
@@ -390,8 +429,6 @@ export default function StudioClaudeQuota() {
 
 	useEffect(() => {
 		load();
-		const t = setInterval(() => load(true), AUTO_REFRESH_MS);
-		return () => clearInterval(t);
 	}, [load]);
 
 	return (
@@ -508,14 +545,15 @@ export ANTHROPIC_AUTH_TOKEN=lm_pat_live_...`}
 					</li>
 					<li>
 						<span className="font-mono bg-slate-200 text-slate-700 px-1.5 rounded mr-1.5">4</span>
-						<strong className="text-slate-700">Kimi K3 (Moonshot)</strong> — use Kimi K3 only; routes through <code className="font-mono bg-slate-100 px-1 rounded">lum.id/llm</code>
-						alongside the Anthropic pool — no separate setup needed beyond the PAT above:
+						<strong className="text-slate-700">Non-Anthropic models</strong> — require <code className="font-mono bg-slate-100 px-1 rounded">role=admin</code>; route through <code className="font-mono bg-slate-100 px-1 rounded">lum.id/llm</code>
+						alongside the Anthropic pool — same PAT, same setup:
 						<pre className="text-[11px] font-mono bg-slate-900 text-emerald-300 rounded px-3 py-2 mt-1.5 select-all overflow-x-auto">
-{`claude --model kimi-k3              # Kimi K3 via Moonshot (lum.id/llm relay)`}
+{`claude --model kimi-k3              # Kimi K3 via Moonshot  ($3/$15 per M tok)
+claude --model z-ai/glm-5.2         # GLM-5.2 via OpenRouter ($0.77/$2.42 per M tok)`}
 						</pre>
 						<span className="block mt-1 text-slate-400">
-							Other in-cluster models: <code className="font-mono bg-slate-100 px-1 rounded">qwen3.6-27b</code> (default) · <code className="font-mono bg-slate-100 px-1 rounded">qwen3.6-35b-a3b</code> (MoE, long context).
-							Model-tier checks apply only to <code className="font-mono bg-slate-100 px-1 rounded">claude-*</code> names.
+							Other in-cluster models (no auth tier): <code className="font-mono bg-slate-100 px-1 rounded">qwen3.6-27b</code> (default) · <code className="font-mono bg-slate-100 px-1 rounded">qwen3.6-35b-a3b</code> (MoE, long context).
+							Token quota applies to <code className="font-mono bg-slate-100 px-1 rounded">claude-*</code> names only; other models record cost in USD.
 						</span>
 					</li>
 				</ol>
@@ -523,6 +561,7 @@ export ANTHROPIC_AUTH_TOKEN=lm_pat_live_...`}
 					Each user has their own 5h/7d pool budget (shown above once you've made requests).
 					Recorded sessions: <a href="/claude-sessions" className="text-gold-700 hover:underline">/claude-sessions</a>.
 					Full guide: <a href="/docs/claude" className="text-gold-700 hover:underline">/docs/claude</a>.
+					This page: <a href="/code" className="text-gold-700 hover:underline">/code</a>.
 				</p>
 			</div>
 		</div>

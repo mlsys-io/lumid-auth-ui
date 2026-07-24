@@ -70,7 +70,7 @@ const StudioIntentDetail = lazy(() => import("./pages/studio/intent-detail"));
 // Phase S1.5 — Settings consolidation; Phase S4 — Admin tabs.
 const StudioSettings   = lazy(() => import("./pages/studio/settings"));
 const StudioAdmin      = lazy(() => import("./pages/studio/admin"));
-// Claude Code quota status across all org accounts (super_admin only) — /quota.
+// Claude Code quota status across all org accounts (super_admin only) — /code.
 const StudioClaudeQuota = lazy(() => import("./pages/studio/claude-quota"));
 const StudioClaudeSessions = lazy(() => import("./pages/studio/claude-sessions"));
 // Phase S3-B — cycle inspector.
@@ -546,9 +546,9 @@ export default function App() {
               </SuperAdminGuard>
             }
           />
-          {/* Claude Code quota dashboard — admin + super_admin, top-level /quota */}
+          {/* Claude Code quota dashboard — admin + super_admin, top-level /code */}
           <Route
-            path="/quota"
+            path="/code"
             element={
               <AdminGuard>
                 <StudioClaudeQuota />
@@ -713,7 +713,7 @@ export default function App() {
             <Route path="account/tokens"                element={<Tokens />} />
             <Route path="account/connect/google"        element={<ConnectGoogle />} />
             {/* /studio/manage = AdminOverview (cluster/users/audit operational hub).
-                Claude Code quota lives at the top-level /quota route (super_admin only). */}
+                Claude Code quota lives at the top-level /code route (admin+). */}
             <Route path="manage" element={<AdminGuard><AdminOverview /></AdminGuard>} />
             <Route path="admin-overview" element={<AdminGuard><AdminOverview /></AdminGuard>} />
             {/* Sidebar consolidation 2026-05-25: skills merged into the

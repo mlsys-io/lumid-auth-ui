@@ -408,6 +408,16 @@ export function StudioShell() {
 					<span>How it works</span>
 				</NavLink>
 
+				{/* Claude pool guide — visible to all logged-in users. */}
+				<a
+					href="/docs/claude"
+					className="mx-3 mb-1 flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs transition-colors text-foreground/45 hover:text-foreground/70 hover:bg-black/[0.04]"
+					title="Claude Code account pool guide"
+				>
+					<Shield className="w-3.5 h-3.5 flex-shrink-0" />
+					<span>Claude guide</span>
+				</a>
+
 				{/* Admin-only: internal CD runbook (Lumilake + FlowMesh plugin-image
 				    releases). Opens the auth-gated /docs/plugin-image-cd doc in a new
 				    tab. Hidden from non-admins; the edge gate (lumid-landing nginx)

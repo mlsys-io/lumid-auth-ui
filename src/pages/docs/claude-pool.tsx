@@ -31,7 +31,7 @@ export default function ClaudePoolDoc() {
 					<div className="font-medium mb-1">Doc unavailable</div>
 					<div className="text-xs">
 						This documentation is temporarily unavailable. Please try again in a
-						moment. The quota dashboard at <Link to="/quota" className="text-indigo-600 hover:underline">/quota</Link>{' '}
+						moment. The quota dashboard at <Link to="/code" className="text-indigo-600 hover:underline">/quota</Link>{' '}
 						carries a short version of the setup snippet.
 					</div>
 				</div>
@@ -44,7 +44,7 @@ export default function ClaudePoolDoc() {
 			<div className="text-xs text-muted-foreground mb-4 flex items-center justify-between">
 				<span>Lumid · Claude account pool · user guide</span>
 				<span className="flex items-center gap-3">
-					<Link to="/quota" className="text-indigo-600 hover:underline">
+					<Link to="/code" className="text-indigo-600 hover:underline">
 						Quota dashboard →
 					</Link>
 					<a

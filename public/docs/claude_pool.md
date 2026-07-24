@@ -89,15 +89,29 @@ Whatever model your client requests is forwarded to the pooled account
 
 The pool gates model families by your lum.id role:
 
-| Role | Sonnet / Haiku | Opus | Fable |
-|------|:---:|:---:|:---:|
-| `user` | ✅ | — | — |
-| `admin` | ✅ | ✅ | — |
-| `super_admin` | ✅ | ✅ | ✅ |
+| Role | Sonnet / Haiku | Opus | Fable | kimi-k3 / GLM-5.2 |
+|------|:---:|:---:|:---:|:---:|
+| `user` | ✅ | — | — | — |
+| `admin` | ✅ | ✅ | — | ✅ |
+| `super_admin` | ✅ | ✅ | ✅ | ✅ |
 
 Requesting a model above your tier returns `403` with the required role —
 switch to an allowed model (e.g. `--model sonnet`) or ask an admin to raise
 your role. Unlisted/base models are available to everyone.
+
+### Non-Anthropic models (kimi-k3, GLM-5.2)
+
+Two additional models are available to `admin`+ via the `lum.id/llm` relay —
+same PAT, no extra setup:
+
+| Model flag | Backing | Price (input/output per M tok) |
+|---|---|---|
+| `--model kimi-k3` | Moonshot | $3 / $15 |
+| `--model z-ai/glm-5.2` | OpenRouter | $0.77 / $2.42 |
+
+These models **do not consume the Anthropic pool quota** (they use separate API
+keys). Usage is recorded and visible on [/code](/code) under **Per-user pool
+usage** → model breakdown, with actual cost in USD rather than token counts.
 
 ---
 
@@ -119,7 +133,7 @@ your role. Unlisted/base models are available to everyone.
   refreshed server-side automatically (accounts registered with a refresh
   token).
 - **Live quota tracking.** The proxy reads Anthropic's rate-limit headers off
-  every response and feeds the [/quota](/quota) dashboard — no extra probes.
+  every response and feeds the [/code](/code) dashboard — no extra probes.
 
 ## Your personal pool quota
 
@@ -132,7 +146,7 @@ output tokens, summed across all your PATs). Defaults: 2M tokens / 5h and
   Claude Code backs off; the window rolls continuously, so capacity returns
   as old usage ages out.
 - Current per-user consumption is visible to admins on
-  [/quota](/quota) under **Per-user pool usage**.
+  [/code](/code) under **Per-user pool usage**.
 
 ## Session recording
 
@@ -156,7 +170,7 @@ params, and the model's responses. Browse your own at
 
 ## Contributing your account to the pool
 
-Admins add accounts on [lum.id/quota](/quota) → **Add account** — paste the
+Admins add accounts on [lum.id/code](/code) → **Add account** — paste the
 access + refresh token from your `~/.claude/.credentials.json` (the dialog
 shows the exact one-liner). Adding the refresh token enables automatic
 renewal, so the account keeps working after the access token expires.
