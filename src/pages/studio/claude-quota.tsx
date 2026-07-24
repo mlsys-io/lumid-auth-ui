@@ -111,25 +111,38 @@ function AccountRow({
 				<span className="text-[10px] text-slate-400 w-14">↺{fmtTime(acc.seven_day_reset)}</span>
 			</div>
 
-			{/* error / stale */}
+			{/* error / stale / re-add */}
 			{acc.error ? (
 				<span className="flex items-center gap-1.5 flex-1 min-w-0">
 					<span className="text-[10px] text-rose-500 truncate" title={acc.error}>
 						{isAuthError ? 'Token expired' : acc.error}
 					</span>
-					{isAuthError && (
-						<button
-							onClick={() => onReAdd(acc.email)}
-							className="shrink-0 text-[10px] text-rose-600 underline hover:text-rose-800 whitespace-nowrap"
-						>
-							re-add
-						</button>
-					)}
+					<button
+						onClick={() => onReAdd(acc.email)}
+						className="shrink-0 text-[10px] text-rose-600 underline hover:text-rose-800 whitespace-nowrap"
+					>
+						re-add
+					</button>
 				</span>
 			) : acc.stale ? (
-				<span className="flex-1 min-w-0 text-[10px] text-amber-500">stale</span>
+				<span className="flex items-center gap-1.5 flex-1 min-w-0">
+					<span className="text-[10px] text-amber-500">stale</span>
+					<button
+						onClick={() => onReAdd(acc.email)}
+						className="shrink-0 text-[10px] text-slate-400 underline hover:text-slate-600 whitespace-nowrap"
+					>
+						re-add
+					</button>
+				</span>
 			) : (
-				<span className="flex-1" />
+				<span className="flex items-center gap-1.5 flex-1 min-w-0">
+					<button
+						onClick={() => onReAdd(acc.email)}
+						className="shrink-0 text-[10px] text-slate-300 underline hover:text-slate-500 whitespace-nowrap"
+					>
+						re-add
+					</button>
+				</span>
 			)}
 
 			{/* timestamp */}
