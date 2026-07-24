@@ -8,8 +8,8 @@
 // request context/tools/params, the messages added each turn, and the full
 // response (including tool_use / API calls).
 
-import { useCallback, useEffect, useState } from 'react';
-import { MessageSquare, Loader2, RefreshCw, ChevronRight, Shield, Circle, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { MessageSquare, Loader2, RefreshCw, ChevronRight, Shield, Circle, Trash2, Download, Search } from 'lucide-react';
 import {
 	fetchClaudeSessions,
 	fetchClaudeSession,
@@ -96,6 +96,8 @@ export default function StudioClaudeSessions() {
 	const [detailLoading, setDetailLoading] = useState(false);
 	const [recording, setRecording] = useState<boolean | null>(null);
 	const [error, setError] = useState<string | null>(null);
+	const [search, setSearch] = useState('');
+	const [userFilter, setUserFilter] = useState('');
 
 	const load = useCallback(() => {
 		setLoading(true);
@@ -104,6 +106,33 @@ export default function StudioClaudeSessions() {
 			.catch((e) => setError(String(e?.response?.data?.message || e?.message || e)))
 			.finally(() => setLoading(false));
 	}, [admin]);
+
+	// Unique user emails available in the current session list (admin view only).
+	const userOptions = useMemo(() => {
+		if (!admin || !sessions) return [];
+		const seen = new Set<string>();
+		const out: string[] = [];
+		for (const s of sessions) {
+			const label = s.user_email || s.user_sub || '';
+			if (label && !seen.has(label)) { seen.add(label); out.push(label); }
+		}
+		return out.sort();
+	}, [admin, sessions]);
+
+	const filtered = useMemo(() => {
+		if (!sessions) return sessions;
+		const q = search.trim().toLowerCase();
+		return sessions.filter((s) => {
+			if (userFilter && s.user_email !== userFilter && s.user_sub !== userFilter) return false;
+			if (!q) return true;
+			return (
+				s.title?.toLowerCase().includes(q) ||
+				s.model?.toLowerCase().includes(q) ||
+				s.user_email?.toLowerCase().includes(q) ||
+				s.account?.toLowerCase().includes(q)
+			);
+		});
+	}, [sessions, search, userFilter]);
 
 	useEffect(() => { load(); }, [load]);
 
@@ -164,7 +193,7 @@ export default function StudioClaudeSessions() {
 					)}
 					{canAdmin && (
 						<button
-							onClick={() => { setSelected(null); setAdmin((a) => !a); }}
+							onClick={() => { setSelected(null); setSearch(''); setUserFilter(''); setAdmin((a) => !a); }}
 							className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition ${admin ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
 						>
 							<Shield className="w-3.5 h-3.5" />
@@ -182,19 +211,55 @@ export default function StudioClaudeSessions() {
 				<div className="text-sm rounded border border-rose-200 bg-rose-50 text-rose-800 px-3 py-2">{error}</div>
 			)}
 
+			{/* Search + user filter */}
+			<div className="flex items-center gap-2">
+				<div className="relative flex-1 max-w-sm">
+					<Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+					<input
+						type="text"
+						value={search}
+						onChange={(e) => setSearch(e.target.value)}
+						placeholder="Search title, model…"
+						className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
+					/>
+				</div>
+				{admin && userOptions.length > 0 && (
+					<select
+						value={userFilter}
+						onChange={(e) => setUserFilter(e.target.value)}
+						className="text-xs border border-slate-200 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-slate-300 max-w-[200px] truncate"
+					>
+						<option value="">All users</option>
+						{userOptions.map((u) => (
+							<option key={u} value={u}>{u}</option>
+						))}
+					</select>
+				)}
+				{(search || userFilter) && (
+					<button
+						onClick={() => { setSearch(''); setUserFilter(''); }}
+						className="text-xs text-slate-400 hover:text-slate-700"
+					>
+						clear
+					</button>
+				)}
+			</div>
+
 			<div className="grid grid-cols-1 md:grid-cols-[minmax(0,340px)_1fr] gap-4">
 				{/* session list */}
 				<div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100 max-h-[70vh] overflow-y-auto">
-					{sessions === null ? (
+					{filtered === null ? (
 						<div className="p-4 text-sm text-slate-500 flex items-center gap-2">
 							<Loader2 className="w-3.5 h-3.5 animate-spin" /> loading…
 						</div>
-					) : sessions.length === 0 ? (
+					) : filtered.length === 0 ? (
 						<div className="p-6 text-center text-sm text-slate-500">
-							No recorded sessions yet. Use the pool from your terminal and they'll appear here.
+							{sessions?.length === 0
+								? "No recorded sessions yet. Use the pool from your terminal and they'll appear here."
+								: 'No sessions match your filter.'}
 						</div>
 					) : (
-						sessions.map((s) => (
+						filtered.map((s) => (
 							<div
 								key={s.conv_key}
 								className={`group flex items-start gap-1 px-3 py-2 hover:bg-slate-50 ${selected?.session.conv_key === s.conv_key ? 'bg-gold-50' : ''}`}
@@ -202,7 +267,9 @@ export default function StudioClaudeSessions() {
 								<button onClick={() => openSession(s.conv_key)} className="flex-1 min-w-0 text-left">
 									<div className="text-xs font-medium text-slate-800 truncate">{s.title || '(untitled)'}</div>
 									<div className="text-[10px] text-slate-400 flex items-center gap-2 mt-0.5">
-										{admin && s.user_sub && <span className="truncate max-w-[90px]">{s.account}</span>}
+										{(s.user_email || s.user_sub) && (
+											<span className="truncate max-w-[130px] text-slate-500 font-medium">{s.user_email || s.user_sub}</span>
+										)}
 										<span>{s.model}</span>
 										<span>{s.turn_count} turns</span>
 										<span>{fmtTokens(s.input_tokens + s.output_tokens)} tok</span>
@@ -229,11 +296,28 @@ export default function StudioClaudeSessions() {
 						</div>
 					) : selected ? (
 						<div className="space-y-2">
-							<div className="text-xs text-slate-500">
-								<span className="font-medium text-slate-700">{selected.session.title || '(untitled)'}</span>
-								{' · '}{selected.session.model}{' · '}{selected.session.turn_count} turns{' · '}
-								{fmtTokens(selected.session.input_tokens)} in / {fmtTokens(selected.session.output_tokens)} out
-								{selected.session.tool_use_count > 0 && ` · ${selected.session.tool_use_count} tool calls`}
+							<div className="flex items-center justify-between gap-2">
+								<div className="text-xs text-slate-500 min-w-0">
+									<span className="font-medium text-slate-700">{selected.session.title || '(untitled)'}</span>
+									{' · '}{selected.session.model}{' · '}{selected.session.turn_count} turns{' · '}
+									{fmtTokens(selected.session.input_tokens)} in / {fmtTokens(selected.session.output_tokens)} out
+									{selected.session.tool_use_count > 0 && ` · ${selected.session.tool_use_count} tool calls`}
+								</div>
+								<button
+									onClick={() => {
+										const blob = new Blob([JSON.stringify(selected, null, 2)], { type: 'application/json' });
+										const url = URL.createObjectURL(blob);
+										const a = document.createElement('a');
+										a.href = url;
+										a.download = `session-${selected.session.conv_key.slice(0, 8)}.json`;
+										a.click();
+										URL.revokeObjectURL(url);
+									}}
+									className="shrink-0 inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800 border border-slate-200 rounded px-2 py-1"
+									title="Download session as JSON"
+								>
+									<Download className="w-3.5 h-3.5" /> JSON
+								</button>
 							</div>
 							{selected.turns.map((t) => <TurnBlock key={t.turn_index} turn={t} />)}
 						</div>
