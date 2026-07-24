@@ -62,7 +62,15 @@ function MiniBar({ pct, severity }: { pct: number; severity: string }) {
 	);
 }
 
-function AccountRow({ acc, onDelete }: { acc: ClaudeQuotaAccount; onDelete: (email: string) => void }) {
+function AccountRow({
+	acc,
+	onDelete,
+	onReAdd,
+}: {
+	acc: ClaudeQuotaAccount;
+	onDelete: (email: string) => void;
+	onReAdd: (email: string) => void;
+}) {
 	const [confirming, setConfirming] = useState(false);
 	const [deleting,   setDeleting]   = useState(false);
 
@@ -71,6 +79,12 @@ function AccountRow({ acc, onDelete }: { acc: ClaudeQuotaAccount; onDelete: (ema
 		try { await adminDeleteClaudeToken(acc.email); onDelete(acc.email); }
 		catch { setDeleting(false); setConfirming(false); }
 	}
+
+	const isAuthError = acc.error && (
+		acc.error.includes('invalid') || acc.error.includes('unauthorized') ||
+		acc.error.includes('401') || acc.error.includes('403') ||
+		acc.error.includes('invalidated') || acc.error.includes('invalid_grant')
+	);
 
 	return (
 		<div className="flex items-center gap-3 px-2.5 py-1.5 rounded border border-transparent hover:border-slate-200 hover:bg-slate-50 transition-colors min-w-0">
@@ -99,7 +113,19 @@ function AccountRow({ acc, onDelete }: { acc: ClaudeQuotaAccount; onDelete: (ema
 
 			{/* error / stale */}
 			{acc.error ? (
-				<span className="flex-1 min-w-0 text-[10px] text-rose-500 truncate" title={acc.error}>{acc.error}</span>
+				<span className="flex items-center gap-1.5 flex-1 min-w-0">
+					<span className="text-[10px] text-rose-500 truncate" title={acc.error}>
+						{isAuthError ? 'Token expired' : acc.error}
+					</span>
+					{isAuthError && (
+						<button
+							onClick={() => onReAdd(acc.email)}
+							className="shrink-0 text-[10px] text-rose-600 underline hover:text-rose-800 whitespace-nowrap"
+						>
+							re-add
+						</button>
+					)}
+				</span>
 			) : acc.stale ? (
 				<span className="flex-1 min-w-0 text-[10px] text-amber-500">stale</span>
 			) : (
@@ -133,8 +159,8 @@ function AccountRow({ acc, onDelete }: { acc: ClaudeQuotaAccount; onDelete: (ema
 
 // ── Add-account modal ──────────────────────────────────────────────
 
-function AddAccountModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
-	const [email,        setEmail]        = useState('');
+function AddAccountModal({ onClose, onAdded, prefillEmail }: { onClose: () => void; onAdded: () => void; prefillEmail?: string }) {
+	const [email,        setEmail]        = useState(prefillEmail ?? '');
 	const [token,        setToken]        = useState('');
 	const [refreshToken, setRefreshToken] = useState('');
 	const [busy,         setBusy]         = useState(false);
@@ -326,6 +352,7 @@ export default function StudioClaudeQuota() {
 	const [loading, setLoading] = useState(true);
 	const [lastFetch, setLastFetch] = useState<Date | null>(null);
 	const [showAdd, setShowAdd] = useState(false);
+	const [reAddEmail, setReAddEmail] = useState<string | undefined>(undefined);
 
 	const load = useCallback((silent = false) => {
 		if (!silent) setLoading(true);
@@ -352,8 +379,9 @@ export default function StudioClaudeQuota() {
 		<div className="space-y-3 max-w-3xl mx-auto">
 			{showAdd && (
 				<AddAccountModal
-					onClose={() => setShowAdd(false)}
-					onAdded={() => { setShowAdd(false); load(true); }}
+					onClose={() => { setShowAdd(false); setReAddEmail(undefined); }}
+					onAdded={() => { setShowAdd(false); setReAddEmail(undefined); load(true); }}
+					prefillEmail={reAddEmail}
 				/>
 			)}
 			<header className="flex items-center justify-between">
@@ -373,7 +401,7 @@ export default function StudioClaudeQuota() {
 						</span>
 					)}
 					<button
-						onClick={() => setShowAdd(true)}
+						onClick={() => { setReAddEmail(undefined); setShowAdd(true); }}
 						className="inline-flex items-center gap-1.5 rounded-md border border-gold-300 bg-gold-50 px-2.5 py-1.5 text-xs font-medium text-gold-800 hover:bg-gold-100 transition"
 					>
 						<UserPlus className="w-3.5 h-3.5" />
@@ -417,6 +445,7 @@ export default function StudioClaudeQuota() {
 								key={a.email}
 								acc={a}
 								onDelete={(email) => setAccounts((prev) => prev?.filter((x) => x.email !== email) ?? [])}
+								onReAdd={(email) => { setReAddEmail(email); setShowAdd(true); }}
 							/>
 						))}
 					</div>

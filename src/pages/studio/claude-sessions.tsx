@@ -43,6 +43,93 @@ function Json({ value }: { value: unknown }) {
 	);
 }
 
+// Extract text from an SSE string (the raw SSE body stored for streaming turns).
+// Returns rendered text blocks, or null if parsing fails / not SSE-shaped.
+function parseSseText(raw: string): { text: string; thinking: string | null } | null {
+	if (!raw.startsWith('data:')) return null;
+	const textParts: string[] = [];
+	let thinking = '';
+	let inThinking = false;
+	for (const line of raw.split('\n')) {
+		if (!line.startsWith('data:')) continue;
+		const payload = line.slice(5).trim();
+		if (!payload || payload === '[DONE]') continue;
+		try {
+			const ev = JSON.parse(payload);
+			if (ev.type === 'content_block_start') {
+				inThinking = ev.content_block?.type === 'thinking';
+			}
+			if (ev.type === 'content_block_delta') {
+				const d = ev.delta;
+				if (d?.type === 'text_delta') {
+					if (inThinking) thinking += d.text;
+					else textParts.push(d.text);
+				} else if (d?.type === 'thinking_delta') {
+					thinking += d.thinking;
+				}
+			}
+		} catch { /* skip malformed */ }
+	}
+	if (!textParts.length && !thinking) return null;
+	return { text: textParts.join(''), thinking: thinking || null };
+}
+
+function ResponseView({ response, stream }: { response: unknown; stream: boolean }) {
+	const [showRaw, setShowRaw] = useState(false);
+	const [showThinking, setShowThinking] = useState(false);
+
+	// Detect gzip-corrupted blob: proxy pre-v0.1.5 forwarded Accept-Encoding,
+	// causing Anthropic to compress SSE; json.Marshal(string(gzipBytes)) replaced
+	// bytes > 127 with U+FFFD. The first byte of gzip magic (0x1f) is still intact.
+	if (typeof response === 'string' && response.charCodeAt(0) === 0x1f) {
+		return (
+			<div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+				Compressed recording (pre-v0.1.5 proxy) — raw bytes not displayable.
+				<button onClick={() => setShowRaw((v) => !v)} className="ml-2 underline text-amber-600">
+					{showRaw ? 'hide' : 'show raw'}
+				</button>
+				{showRaw && <Json value={response} />}
+			</div>
+		);
+	}
+
+	// For streaming turns, try to parse SSE events and render text.
+	if (stream && typeof response === 'string') {
+		const parsed = parseSseText(response);
+		if (parsed) {
+			return (
+				<div className="space-y-2">
+					{parsed.thinking && (
+						<div className="rounded border border-indigo-100 bg-indigo-50">
+							<button
+								onClick={() => setShowThinking((v) => !v)}
+								className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-[10px] text-indigo-600 hover:bg-indigo-100"
+							>
+								<span className="font-medium">thinking block</span>
+								<span className="ml-auto opacity-60">{showThinking ? '▲' : '▼'}</span>
+							</button>
+							{showThinking && (
+								<pre className="text-[11px] font-mono bg-indigo-900 text-indigo-200 rounded-b px-3 py-2 overflow-x-auto max-h-72 overflow-y-auto whitespace-pre-wrap break-words">
+									{parsed.thinking}
+								</pre>
+							)}
+						</div>
+					)}
+					<pre className="text-[11px] font-mono bg-slate-900 text-slate-200 rounded px-3 py-2 overflow-x-auto max-h-96 overflow-y-auto whitespace-pre-wrap break-words">
+						{parsed.text || <span className="text-slate-500 italic">(no text blocks)</span>}
+					</pre>
+					<button onClick={() => setShowRaw((v) => !v)} className="text-[10px] text-slate-400 hover:text-slate-700">
+						{showRaw ? 'hide raw SSE ▲' : 'show raw SSE ▼'}
+					</button>
+					{showRaw && <Json value={response} />}
+				</div>
+			);
+		}
+	}
+
+	return <Json value={response} />;
+}
+
 function TurnBlock({ turn }: { turn: ClaudeSessionDetail['turns'][number] }) {
 	const [open, setOpen] = useState(false);
 	return (
@@ -54,9 +141,9 @@ function TurnBlock({ turn }: { turn: ClaudeSessionDetail['turns'][number] }) {
 				<ChevronRight className={`w-3.5 h-3.5 text-slate-400 transition-transform ${open ? 'rotate-90' : ''}`} />
 				<span className="text-xs font-medium text-slate-700">turn {turn.turn_index + 1}</span>
 				<span className="text-[10px] text-slate-400">{turn.model}</span>
-				{turn.stream && <span className="text-[10px] text-slate-400">stream</span>}
+				{turn.stream && <span className="text-[10px] bg-slate-100 text-slate-500 px-1 rounded">SSE</span>}
 				{turn.tool_use_count > 0 && (
-					<span className="text-[10px] text-indigo-500">{turn.tool_use_count} tool</span>
+					<span className="text-[10px] bg-indigo-50 text-indigo-500 px-1 rounded">{turn.tool_use_count} tool</span>
 				)}
 				<span className="ml-auto text-[10px] font-mono text-slate-500">
 					{turn.input_tokens}in / {turn.output_tokens}out · {turn.duration_ms}ms
@@ -79,7 +166,7 @@ function TurnBlock({ turn }: { turn: ClaudeSessionDetail['turns'][number] }) {
 					</div>
 					<div>
 						<div className="text-[10px] uppercase tracking-wide text-slate-400 mb-1">response</div>
-						<Json value={turn.response} />
+						<ResponseView response={turn.response} stream={turn.stream} />
 					</div>
 				</div>
 			)}
@@ -262,7 +349,7 @@ export default function StudioClaudeSessions() {
 						filtered.map((s) => (
 							<div
 								key={s.conv_key}
-								className={`group flex items-start gap-1 px-3 py-2 hover:bg-slate-50 ${selected?.session.conv_key === s.conv_key ? 'bg-gold-50' : ''}`}
+								className={`group flex items-start gap-1 px-3 py-2 hover:bg-slate-50 border-l-2 transition-colors ${selected?.session.conv_key === s.conv_key ? 'bg-gold-50 border-gold-400' : 'border-transparent'}`}
 							>
 								<button onClick={() => openSession(s.conv_key)} className="flex-1 min-w-0 text-left">
 									<div className="text-xs font-medium text-slate-800 truncate">{s.title || '(untitled)'}</div>
