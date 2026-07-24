@@ -222,6 +222,14 @@ export function friendlyChatError(raw: string): string {
 	if (/daily.*budget|budget exhausted/i.test(s)) {
 		return '⚠️ You’ve hit today’s chat token budget. It resets in 24h — or ask an admin to raise it.';
 	}
+	// Claude pool quota (claude-code models) — windows roll continuously;
+	// reset times live on the composer quota pill and lum.id/code.
+	if (/pooled claude quota|pool quota/i.test(s)) {
+		return '⚠️ Your Claude pool quota is used up for now. It rolls back as older usage ages out — reset times are on the quota pill or lum.id/code.';
+	}
+	if (/sandbox is at capacity/i.test(s)) {
+		return '⚠️ The Claude Code sandbox is at capacity — give it a minute and try again.';
+	}
 	if (/429|rate.?limit|too many requests/i.test(s)) {
 		return '⚠️ Going a little fast — give it a few seconds and try again.';
 	}

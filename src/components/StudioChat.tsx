@@ -31,6 +31,9 @@ import { ChatMarkdown } from './ChatMarkdown';
 import AssemblyCard from './workflow/AssemblyCard';
 import type { Attachment, WireAttachment, Message, ToolCall } from './chat/types';
 import { readChatStream, withLastAssistant } from './chat/protocol';
+import { claudeToolView } from './chat/toolViews';
+import { QuotaMeter } from './claude/QuotaMeter';
+import { SessionStrip } from './claude/SessionStrip';
 import { fetchCycleConversation, type CycleLogRow } from '@/api/trajectory';
 
 // Map a running/finished cycle's session timeline (LLM turns + stage/tool
@@ -444,6 +447,10 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 	// into the chat record so reloads keep continuity. Ref, not state —
 	// read at fetch time, never rendered.
 	const claudeSessionRef = useRef<string | null>(null);
+	// State mirror of claudeSessionRef so the composer can render the
+	// session pill (the ref alone never re-renders). Always write through
+	// setCCSession so both stay in sync.
+	const [claudeSession, setClaudeSession] = useState<string | null>(null);
 	const navigate = useNavigate();
 	// App the active session is grounded on (Studio workspace slug). Drives
 	// per-app session switching + tags saves so the picker can group/route by app.
@@ -462,6 +469,9 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 	// the rolling 24h consumed. costUsd is a coarse estimate computed
 	// client-side from per-model pricing (server doesn't compute it).
 	const [usage, setUsage] = useState<{ used: number; limit: number } | null>(null);
+	// Bumped when a turn completes so the claude pool QuotaMeter refetches
+	// right away instead of waiting for its 2-min poll.
+	const [quotaRefresh, setQuotaRefresh] = useState(0);
 	// Voice input — Web Speech API. isListening becomes true while the
 	// browser is actively dictating; recognized text is appended to
 	// the textarea on each result. Null recognitionRef = unsupported.
@@ -703,7 +713,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 			if (!rec || !Array.isArray(rec.messages)) return false;
 			setMessages(rec.messages);
 			setChatId(rec.id);
-			claudeSessionRef.current = rec.claude_session_id || null;
+			claudeSessionRef.current = rec.claude_session_id || null; setClaudeSession(rec.claude_session_id || null);
 			const app = (rec.app as string) || null;
 			currentAppRef.current = app;
 			openedAppRef.current = app; // an app's loaded thread shouldn't re-fire its opener
@@ -718,7 +728,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		if (streaming) return;
 		setMessages([]);
 		setChatId(null);
-		claudeSessionRef.current = null;
+		claudeSessionRef.current = null; setClaudeSession(null);
 		lastSavedSigRef.current = '';
 		currentAppRef.current = null;   // generic new chat = home (app-less)
 		openedAppRef.current = null;
@@ -1115,10 +1125,11 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 					}
 					started = true;
 					await readChatStream(r, setMessages, {
-						onClaudeSession: (id) => { claudeSessionRef.current = id; },
+						onClaudeSession: (id) => { claudeSessionRef.current = id; setClaudeSession(id); },
 						onRoute: (modelUsed, autoRouted) => setLastRoute({ modelUsed, autoRouted }),
 						onUsage: (used, limit) => setUsage({ used, limit }),
 					}, ctrl.signal);
+					setQuotaRefresh((n) => n + 1);
 					break; // success
 				} catch (e: any) {
 					if (e?.name === 'AbortError') throw e; // handled by outer catch
@@ -1199,7 +1210,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 	const clearSession = useCallback(() => {
 		setMessages([]);
 		setChatId(null);
-		claudeSessionRef.current = null;
+		claudeSessionRef.current = null; setClaudeSession(null);
 		lastSavedSigRef.current = '';
 		try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
 	}, []);
@@ -1278,7 +1289,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 				sessionStorage.removeItem('studio_new_chat_v1');
 				setMessages([]);
 				setChatId(null);
-				claudeSessionRef.current = null;
+				claudeSessionRef.current = null; setClaudeSession(null);
 				currentAppRef.current = null;
 				openedAppRef.current = null;
 				// A stale app-open stash (written by the workspace before nav) would
@@ -1315,7 +1326,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		const onNew = () => {
 			setMessages([]);
 			setChatId(null);
-			claudeSessionRef.current = null;
+			claudeSessionRef.current = null; setClaudeSession(null);
 			currentAppRef.current = null;
 			openedAppRef.current = null;
 			try {
@@ -1433,7 +1444,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		if (id && !confirm('Delete this conversation?')) return;
 		setMessages([]);
 		setChatId(null);
-		claudeSessionRef.current = null;
+		claudeSessionRef.current = null; setClaudeSession(null);
 		lastSavedSigRef.current = '';
 		openedAppRef.current = null;
 		try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
@@ -1784,6 +1795,15 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 						)}
 					</div>
 				)}
+				{/* Claude Code session context — pill + recording notice, only
+				    when a claude-code-* model is selected. */}
+				{model.startsWith('claude-code') && (
+					<SessionStrip
+						session={claudeSession}
+						streaming={streaming}
+						onClear={() => { claudeSessionRef.current = null; setClaudeSession(null); }}
+					/>
+				)}
 				{/* The composer card — one rounded white card (claude style):
 				    chromeless textarea on top, then a bottom action row laid
 				    out via flex order: ⊕ tools + ⌖ picker left, model picker
@@ -2074,9 +2094,15 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 					>
 						<Crosshair className="w-4 h-4" />
 					</button>
-					{/* Right-side group: model picker (moved from the header)
-					    then the round black send. */}
+					{/* Right-side group: pool quota meter (claude-code models only)
+					    + model picker (moved from the header) then the round
+					    black send. */}
 					<div className="order-3 flex-1 min-w-[8px]" />
+					{model.startsWith('claude-code') && (
+						<div className="order-4 flex-shrink-0 mr-1">
+							<QuotaMeter refreshKey={quotaRefresh} />
+						</div>
+					)}
 					<div className="order-4 flex-shrink-0">
 						<ModelChip
 							streaming={streaming}
@@ -2361,6 +2387,12 @@ function ThinkingBlock({ thinking, done }: { thinking: string; done: boolean }) 
 // approvalRequired=true.
 function ToolChip({ t, onApprove }: { t: ToolCall; onApprove?: (approved: boolean, always?: boolean) => void }) {
 	const [argsOpen, setArgsOpen] = useState(false);
+	// Claude Code tool names (Bash, Edit, TodoWrite, …) arrive verbatim from
+	// the claude-sandbox stream and get claude.ai/code-style rich views.
+	// Approval never applies to them (the CLI runs its own tools), so the
+	// dispatch is safe ahead of the approval branch below.
+	const CCView = !t.approvalRequired ? claudeToolView(t.name) : null;
+	if (CCView) return <CCView t={t} />;
 	const Icon =
 		t.name === 'web_search' ? Globe
 		: t.name === 'deep_research' ? Telescope
