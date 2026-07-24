@@ -508,13 +508,15 @@ export ANTHROPIC_AUTH_TOKEN=lm_pat_live_...`}
 					</li>
 					<li>
 						<span className="font-mono bg-slate-200 text-slate-700 px-1.5 rounded mr-1.5">4</span>
-						<strong className="text-slate-700">Non-Anthropic models</strong> — pass <code className="font-mono bg-slate-100 px-1 rounded">--model &lt;name&gt;</code> for in-cluster
-						or OpenRouter models; model-tier checks apply only to <code className="font-mono bg-slate-100 px-1 rounded">claude-*</code> names:
+						<strong className="text-slate-700">Kimi K3 (Moonshot)</strong> — use Kimi K3 only; routes through <code className="font-mono bg-slate-100 px-1 rounded">lum.id/llm</code>
+						alongside the Anthropic pool — no separate setup needed beyond the PAT above:
 						<pre className="text-[11px] font-mono bg-slate-900 text-emerald-300 rounded px-3 py-2 mt-1.5 select-all overflow-x-auto">
-{`claude --model qwen3.6-27b          # in-cluster (lum.id/llm, default)
-claude --model qwen3.6-35b-a3b      # in-cluster MoE, longer context
-claude --model openai/gpt-4o        # OpenRouter (requires OPENAI_COMPAT_KEY)`}
+{`claude --model kimi-k3              # Kimi K3 via Moonshot (lum.id/llm relay)`}
 						</pre>
+						<span className="block mt-1 text-slate-400">
+							Other in-cluster models: <code className="font-mono bg-slate-100 px-1 rounded">qwen3.6-27b</code> (default) · <code className="font-mono bg-slate-100 px-1 rounded">qwen3.6-35b-a3b</code> (MoE, long context).
+							Model-tier checks apply only to <code className="font-mono bg-slate-100 px-1 rounded">claude-*</code> names.
+						</span>
 					</li>
 				</ol>
 				<p className="text-[11px] text-slate-400">
