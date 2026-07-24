@@ -8,7 +8,7 @@
 // The page auto-refreshes every 2 minutes. Stale/errored accounts show
 // the last known snapshot with a warning badge.
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { RefreshCw, Zap, AlertTriangle, CheckCircle, Loader2, UserPlus, X, Trash2 } from 'lucide-react';
 import {
 	fetchClaudeQuota,
@@ -19,7 +19,7 @@ import {
 	type ClaudeUserUsageResp,
 } from '@/api/super-admin';
 
-// No auto-refresh — load once on mount; user clicks refresh manually.
+const USER_USAGE_REFRESH_MS = 2 * 60 * 1000; // 2 min auto-refresh for per-user section
 
 function fmtTime(iso: string): string {
 	if (!iso || iso.startsWith('0001')) return '—';
@@ -330,17 +330,25 @@ function fmtReset(iso?: string): string {
 
 // Per-user pool consumption — the per-PAT quota counterpart of the account
 // table above. Same rolling 5h/7d windows, enforced by claude-proxy.
-function UserUsageSection({ usage }: { usage: ClaudeUserUsageResp }) {
+function UserUsageSection({ usage, countdown }: { usage: ClaudeUserUsageResp; countdown: number }) {
 	if (!usage.users.length) return null;
+	const mm = Math.floor(countdown / 60);
+	const ss = countdown % 60;
+	const cdText = mm > 0 ? `${mm}m ${ss}s` : `${ss}s`;
 	return (
 		<div>
-			<p className="text-xs font-medium text-slate-600 mb-1.5">
-				Per-user pool usage
-				<span className="ml-2 font-normal text-slate-400">
+			<div className="flex items-center gap-2 mb-1.5">
+				<p className="text-xs font-medium text-slate-600">
+					Per-user pool usage
+				</p>
+				<span className="text-[10px] text-slate-400 font-normal">
 					caps: {fmtTokens(usage.five_hour_tokens)} tok / 5h · {fmtTokens(usage.seven_day_tokens)} tok / 7d (claude-* only)
 					{' · '}users with a <code className="font-mono text-[10px]">claude:proxy</code> PAT appear even at 0 usage
 				</span>
-			</p>
+				<span className="ml-auto shrink-0 text-[10px] text-slate-400 tabular-nums">
+					↺ {cdText}
+				</span>
+			</div>
 			<div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100">
 				{usage.users.map((u) => {
 					const sev = usageSeverity(Math.max(u.five_hour_pct, u.seven_day_pct));
@@ -411,6 +419,14 @@ export default function StudioClaudeQuota() {
 	const [lastFetch, setLastFetch] = useState<Date | null>(null);
 	const [showAdd, setShowAdd] = useState(false);
 	const [reAddEmail, setReAddEmail] = useState<string | undefined>(undefined);
+	const [countdown, setCountdown] = useState(USER_USAGE_REFRESH_MS / 1000);
+	const countdownRef = useRef(USER_USAGE_REFRESH_MS / 1000);
+
+	const loadUserUsage = useCallback(() => {
+		fetchClaudeUserUsage()
+			.then(setUserUsage)
+			.catch(() => {});
+	}, []);
 
 	const load = useCallback((silent = false) => {
 		if (!silent) setLoading(true);
@@ -422,14 +438,22 @@ export default function StudioClaudeQuota() {
 			})
 			.catch((e) => setError(String(e?.message || e)))
 			.finally(() => setLoading(false));
-		fetchClaudeUserUsage()
-			.then(setUserUsage)
-			.catch(() => {}); // section simply hidden if unavailable
-	}, []);
+		loadUserUsage();
+	}, [loadUserUsage]);
 
+	// Auto-refresh user usage every 2 min with a live countdown.
 	useEffect(() => {
 		load();
-	}, [load]);
+		const tick = setInterval(() => {
+			countdownRef.current -= 1;
+			if (countdownRef.current <= 0) {
+				countdownRef.current = USER_USAGE_REFRESH_MS / 1000;
+				loadUserUsage();
+			}
+			setCountdown(countdownRef.current);
+		}, 1000);
+		return () => clearInterval(tick);
+	}, [load, loadUserUsage]);
 
 	return (
 		<div className="space-y-3 max-w-3xl mx-auto">
@@ -508,7 +532,7 @@ export default function StudioClaudeQuota() {
 				</>
 			)}
 
-			{userUsage && <UserUsageSection usage={userUsage} />}
+			{userUsage && <UserUsageSection usage={userUsage} countdown={countdown} />}
 
 			{/* Setup: point your Claude Code CLI at the pool */}
 			<div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
