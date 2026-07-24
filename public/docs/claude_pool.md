@@ -16,7 +16,7 @@ limit while other accounts sit idle.
 ```bash
 export ANTHROPIC_BASE_URL=https://lum.id/claude
 export ANTHROPIC_AUTH_TOKEN=lm_pat_live_...   # your claude:proxy PAT
-claude -p "hello"
+claude
 ```
 
 That's it. No new client, no re-login — this is the standard Claude Code
@@ -55,7 +55,7 @@ Export the variables only where you want pool routing — e.g. in a project's
 alias claude-pool='ANTHROPIC_BASE_URL=https://lum.id/claude ANTHROPIC_AUTH_TOKEN=$LUMID_CLAUDE_PAT claude'
 ```
 
-Then `claude-pool -p "..."` uses the pool while plain `claude` stays on your
+Then `claude-pool` uses the pool while plain `claude` stays on your
 personal login.
 
 ### C. Raw API
@@ -77,8 +77,8 @@ curl https://lum.id/claude/v1/messages \
 Model choice is entirely yours and passes through untouched:
 
 ```bash
-claude --model opus -p "..."      # per-invocation
-/model                            # interactive session
+claude --model opus               # per-invocation flag
+/model                            # switch model inside a session
 export ANTHROPIC_MODEL=claude-opus-4-8   # env default
 ```
 
