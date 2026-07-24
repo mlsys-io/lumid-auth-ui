@@ -7,6 +7,28 @@ limit while other accounts sit idle.
 
 ---
 
+## No terminal? Use the Studio chatbox
+
+The [Studio chatbox](/studio) runs **real Claude Code sessions** server-side —
+no install, no PAT setup. Pick a **(Code)** model from the model picker:
+
+| Model | Who | Backed by |
+|---|---|---|
+| Claude Sonnet (Code) | everyone | Account pool (your 5h/7d quota) |
+| Claude Opus (Code) | admin+ | Account pool |
+| Claude Fable 5 (Code) | super_admin | Account pool |
+| Qwen3.6-35B (Code · Lumid GPU) | everyone | In-house GPU — **no pool quota** |
+
+Each turn runs the claude CLI in a sandboxed per-user workspace (Bash, file
+edits, todo lists render inline). The session pill above the composer shows
+the live session; reopening a chat thread resumes it. Pool-backed models show
+your personal quota next to the model picker, and their sessions are recorded
+on [/claude-sessions](/claude-sessions) like any pool traffic. The Qwen entry
+runs the same Claude Code harness against our own GPUs — free at the margin,
+not recorded by the pool, best for lighter coding tasks.
+
+---
+
 ## Quick start
 
 1. **Mint a PAT** at [lum.id/dashboard/tokens](/dashboard/tokens) with the
