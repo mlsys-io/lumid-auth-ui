@@ -226,7 +226,8 @@ export default function StudioClaudeSessions() {
 	useEffect(() => {
 		fetchClaudeRecording().then(setRecording).catch(() => {});
 		// Probe admin view availability (requires admin or super_admin — role=user gets 403).
-		fetchClaudeSessions(true).then(() => setCanAdmin(true)).catch(() => setCanAdmin(false));
+		// If the probe succeeds, default to the all-users view so admins see everything on load.
+		fetchClaudeSessions(true).then(() => { setCanAdmin(true); setAdmin(true); }).catch(() => setCanAdmin(false));
 	}, []);
 
 	const openSession = (convKey: string) => {

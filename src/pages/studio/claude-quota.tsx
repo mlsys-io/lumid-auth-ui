@@ -284,6 +284,12 @@ function fmtTokens(n: number): string {
 	return String(n);
 }
 
+function fmtPct(pct: number): string {
+	if (pct === 0) return '0%';
+	if (pct < 1) return '<1%';
+	return `${Math.round(pct)}%`;
+}
+
 function usageSeverity(pct: number): string {
 	if (pct >= 100) return 'critical';
 	if (pct >= 85) return 'warning';
@@ -313,12 +319,12 @@ function UserUsageSection({ usage }: { usage: ClaudeUserUsageResp }) {
 						<div className="flex items-center gap-1.5 shrink-0" title={`${u.five_hour_tokens.toLocaleString()} tokens`}>
 							<span className="text-[10px] text-slate-400 w-4">5h</span>
 							<MiniBar pct={u.five_hour_pct} severity={usageSeverity(u.five_hour_pct)} />
-							<span className="text-[10px] font-mono text-slate-600 w-8 text-right">{Math.round(u.five_hour_pct)}%</span>
+							<span className="text-[10px] font-mono text-slate-600 w-8 text-right">{fmtPct(u.five_hour_pct)}</span>
 						</div>
 						<div className="flex items-center gap-1.5 shrink-0" title={`${u.seven_day_tokens.toLocaleString()} tokens`}>
 							<span className="text-[10px] text-slate-400 w-4">7d</span>
 							<MiniBar pct={u.seven_day_pct} severity={usageSeverity(u.seven_day_pct)} />
-							<span className="text-[10px] font-mono text-slate-600 w-8 text-right">{Math.round(u.seven_day_pct)}%</span>
+							<span className="text-[10px] font-mono text-slate-600 w-8 text-right">{fmtPct(u.seven_day_pct)}</span>
 						</div>
 						<span className="flex-1 min-w-0 text-[10px] text-slate-400 truncate">
 							{fmtTokens(u.seven_day_tokens)} tok · {u.requests_7d} req
