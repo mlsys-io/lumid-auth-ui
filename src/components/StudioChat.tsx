@@ -1796,11 +1796,14 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 					</div>
 				)}
 				{/* Claude Code session context — pill + recording notice, only
-				    when a claude-code-* model is selected. */}
+				    when a claude-code-* model is selected. pool=false for the
+				    lumid-llm-backed entries (qwen): those aren't recorded by
+				    the pool and don't consume pool quota. */}
 				{model.startsWith('claude-code') && (
 					<SessionStrip
 						session={claudeSession}
 						streaming={streaming}
+						pool={/claude-code-(sonnet|opus|fable)/.test(model)}
 						onClear={() => { claudeSessionRef.current = null; setClaudeSession(null); }}
 					/>
 				)}
@@ -2098,7 +2101,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 					    + model picker (moved from the header) then the round
 					    black send. */}
 					<div className="order-3 flex-1 min-w-[8px]" />
-					{model.startsWith('claude-code') && (
+					{/claude-code-(sonnet|opus|fable)/.test(model) && (
 						<div className="order-4 flex-shrink-0 mr-1">
 							<QuotaMeter refreshKey={quotaRefresh} />
 						</div>

@@ -18,10 +18,15 @@ const NOTICE_KEY = 'cc_recording_notice_v1';
 export function SessionStrip({
 	session,
 	streaming,
+	pool,
 	onClear,
 }: {
 	session: string | null;
 	streaming: boolean;
+	// pool=true for pooled-Anthropic models (recorded on /claude-sessions,
+	// pool quota applies); false for lumid-llm-backed models (own GPUs — no
+	// pool recording, so no transcripts link / recording notice).
+	pool: boolean;
 	onClear: () => void;
 }) {
 	const [noticeDismissed, setNoticeDismissed] = useState(() => {
@@ -53,10 +58,12 @@ export function SessionStrip({
 			) : (
 				<span className="text-muted-foreground">new Claude Code session — runs in your sandbox workspace</span>
 			)}
-			<Link to="/claude-sessions" className="text-indigo-600 hover:underline">
-				transcripts →
-			</Link>
-			{!noticeDismissed && (
+			{pool && (
+				<Link to="/claude-sessions" className="text-indigo-600 hover:underline">
+					transcripts →
+				</Link>
+			)}
+			{pool && !noticeDismissed && (
 				<span className="inline-flex items-center gap-1.5 text-muted-foreground">
 					<span>
 						Sessions are <Link to="/claude-sessions" className="underline">recorded</Link> by
