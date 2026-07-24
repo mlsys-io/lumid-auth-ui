@@ -366,6 +366,7 @@ export async function fetchClaudeUserUsage(): Promise<ClaudeUserUsageResp> {
 export interface ClaudeSessionCard {
 	conv_key: string;
 	user_sub?: string;
+	user_email?: string;
 	account: string;
 	model: string;
 	title: string;
