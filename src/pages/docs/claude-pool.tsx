@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import 'github-markdown-css/github-markdown-light.css';
 
 // /docs/claude — AUTH-REQUIRED (org-internal; using the pool needs an
@@ -15,7 +16,7 @@ export default function ClaudePoolDoc() {
 	const [error, setError] = useState<string>('');
 
 	useEffect(() => {
-		fetch('/docs/claude_pool.md')
+		fetch(`/docs/claude_pool.md?v=${import.meta.env.VITE_APP_VERSION ?? Date.now()}`, { cache: 'no-store' })
 			.then((r) => {
 				if (!r.ok) throw new Error(`HTTP ${r.status}`);
 				return r.text();
@@ -57,7 +58,7 @@ export default function ClaudePoolDoc() {
 				</span>
 			</div>
 			<article className="markdown-body" style={{ background: 'transparent' }}>
-				<ReactMarkdown>{markdown}</ReactMarkdown>
+				<ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
 			</article>
 		</div>
 	);
