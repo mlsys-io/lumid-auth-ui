@@ -138,7 +138,7 @@ export default function StudioClaudeSessions() {
 
 	useEffect(() => {
 		fetchClaudeRecording().then(setRecording).catch(() => {});
-		// Probe admin view availability once (super_admin only → 403 otherwise).
+		// Probe admin view availability (requires admin or super_admin — role=user gets 403).
 		fetchClaudeSessions(true).then(() => setCanAdmin(true)).catch(() => setCanAdmin(false));
 	}, []);
 

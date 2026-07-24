@@ -533,6 +533,8 @@ export default function App() {
             }
           />
 
+          {/* /status → /status/operations shorthand. */}
+          <Route path="/status" element={<Navigate to="/status/operations" replace />} />
           {/* Live operations status — super_admin only. Standalone page
               (own layout), so it lives at the top level rather than inside
               the studio shell. Companion doc at /docs/operations. */}
