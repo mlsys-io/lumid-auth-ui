@@ -2347,15 +2347,11 @@ const MessageBubble = memo(function MessageBubble({
 					</div>
 				)}
 				{/* Tool chips are blocks now (rendered above, in order) — the old
-				    flat trailing list would double-render them. */}
-				{!isUser && m.content && !streaming && (
-					<div
-						className="mt-0.5 text-[10px] text-muted-foreground tabular-nums"
-						title="estimated output tokens (~4 chars/token)"
-					>
-						{Math.max(1, Math.round(m.content.length / 4))} tokens
-					</div>
-				)}
+				    flat trailing list would double-render them.
+				    The crude ~4-chars/token per-message estimate that used to sit
+				    here is gone: the turn footer (TurnStatsFooter) now shows the
+				    real output-token count for Claude Code turns, and a guessed
+				    number next to an accurate one just read as a contradiction. */}
 				{showActions && (
 					<div className={[
 						'mt-1 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity',
