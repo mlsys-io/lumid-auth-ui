@@ -2246,6 +2246,13 @@ const MessageBubble = memo(function MessageBubble({
 	// The typing placeholder belongs to the BUBBLE, not to a block: while
 	// streaming, an empty text block simply doesn't exist yet.
 	const noTextYet = !blocks.some((b) => b.kind === 'text' && b.text);
+	// An "agentic" turn interleaves tools/reasoning/sub-agents with narration.
+	// There, each text block is a one-sentence aside between steps, and wrapping
+	// every one in a chunky card produced a stack of 7 bubbles that dominated
+	// the transcript. Claude Code renders that narration as light flowing text,
+	// so on agentic turns assistant text drops the card. A plain chat answer
+	// (single text block, no tools) keeps its bubble.
+	const agentic = blocks.some((b) => b.kind === 'tool' || b.kind === 'subagent' || b.kind === 'reasoning');
 
 	const blockProps = {
 		isUser, streaming, onToolApprove,
@@ -2265,19 +2272,31 @@ const MessageBubble = memo(function MessageBubble({
 		// the true end of the stream. Before this, the three bouncing dots
 		// vanished on the first token and the text then grew with nothing
 		// marking the live edge.
-		renderText: (text: string, done?: boolean) => (
-			<div className={[
-				'inline-block max-w-full text-[13.5px] rounded-2xl px-3.5 py-2.5 leading-relaxed text-left shadow-sm mt-2 first:mt-0',
-				isUser
-					? 'bg-primary text-primary-foreground rounded-tr-md'
-					: 'bg-card text-foreground border border-border rounded-tl-md',
-			].join(' ')}>
-				{isUser
-					? <div className="whitespace-pre-wrap break-words">{text}</div>
-					: <ChatMarkdown>{text}</ChatMarkdown>}
-				{!isUser && streaming && !done && <StreamCaret />}
-			</div>
-		),
+		renderText: (text: string, done?: boolean) => {
+			// Light narration on agentic assistant turns; keep the bubble for
+			// user messages and plain chat answers.
+			if (!isUser && agentic) {
+				return (
+					<div className="max-w-full text-[13.5px] leading-relaxed text-left px-1 mt-2 first:mt-0 text-foreground/90">
+						<ChatMarkdown>{text}</ChatMarkdown>
+						{streaming && !done && <StreamCaret />}
+					</div>
+				);
+			}
+			return (
+				<div className={[
+					'inline-block max-w-full text-[13.5px] rounded-2xl px-3.5 py-2.5 leading-relaxed text-left shadow-sm mt-2 first:mt-0',
+					isUser
+						? 'bg-primary text-primary-foreground rounded-tr-md'
+						: 'bg-card text-foreground border border-border rounded-tl-md',
+				].join(' ')}>
+					{isUser
+						? <div className="whitespace-pre-wrap break-words">{text}</div>
+						: <ChatMarkdown>{text}</ChatMarkdown>}
+					{!isUser && streaming && !done && <StreamCaret />}
+				</div>
+			);
+		},
 		renderReasoning: (text: string, done: boolean, elapsedMs?: number, tokens?: number) => (
 			<ThinkingBlock thinking={text} done={done} elapsedMs={elapsedMs} tokens={tokens} />
 		),
