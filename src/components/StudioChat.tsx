@@ -2319,9 +2319,20 @@ const MessageBubble = memo(function MessageBubble({
 				    be forced FIRST; it now lands where compose_workflow
 				    actually completed. The original anti-flicker reason still
 				    holds because blocks only ever append. */}
-				{blocks.map((b) => (
-					<Appear key={b.id}><BlockView {...blockProps} b={b} /></Appear>
-				))}
+				{blocks.map((b, i) => {
+					// Visual attention: while a turn is streaming, the newest block
+					// is the live one — earlier steps recede to ~55% so the eye
+					// tracks the current action instead of the whole wall. Once the
+					// turn settles, everything returns to full weight.
+					const settled = streaming && i < blocks.length - 1;
+					return (
+						<Appear key={b.id}>
+							<div className={['transition-opacity duration-500', settled ? 'opacity-55 hover:opacity-100' : ''].join(' ')}>
+								<BlockView {...blockProps} b={b} />
+							</div>
+						</Appear>
+					);
+				})}
 				{/* Pre-first-token placeholder — bubble-level, see noTextYet. */}
 				{noTextYet && streaming && !m.composed && (
 					<div className={[
@@ -2439,7 +2450,16 @@ const MessageBubble = memo(function MessageBubble({
 // from the streaming answer. Token count is a ~4-chars/token estimate
 // (we don't get a usage count for the streamed thinking deltas).
 function ThinkingBlock({ thinking, done, elapsedMs, tokens }: { thinking: string; done: boolean; elapsedMs?: number; tokens?: number }) {
-	const [open, setOpen] = useState<boolean>(false);
+	// Open while the model is still reasoning so you can watch it, then
+	// auto-collapse once it's done so the finished answer isn't buried under a
+	// wall of reasoning. Sticky against a user who clicked either way.
+	const [open, setOpen] = useState<boolean>(!done);
+	const touched = useRef(false);
+	const wasStreaming = useRef(!done);
+	useEffect(() => {
+		if (wasStreaming.current && done && !touched.current) setOpen(false);
+		wasStreaming.current = !done;
+	}, [done]);
 	// Prefer the provider's own count (system/thinking_tokens); the ~4-chars
 	// estimate is the fallback for providers that don't report one.
 	const tokenCount = tokens ?? (thinking.length ? Math.max(1, Math.round(thinking.length / 4)) : 0);
@@ -2461,7 +2481,7 @@ function ThinkingBlock({ thinking, done, elapsedMs, tokens }: { thinking: string
 		<div className="mb-1.5">
 			<button
 				type="button"
-				onClick={() => setOpen((v) => !v)}
+				onClick={() => { touched.current = true; setOpen((v) => !v); }}
 				className="inline-flex items-center gap-1 text-[11px] text-gold-700 bg-gold-50/80 hover:bg-gold-100/80 border border-gold-200 rounded-full px-2 py-0.5 transition-colors"
 			>
 				<Brain className="w-3 h-3" />

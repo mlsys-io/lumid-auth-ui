@@ -8,7 +8,7 @@
 // falls back to the generic ToolChip for anything unregistered (all the
 // in-house snake_case tools keep their existing chip).
 
-import { useState, type ReactElement } from 'react';
+import { useState, useEffect, useRef, type ReactElement } from 'react';
 import { Loader2, ChevronDown, Terminal, FileText, FilePen, Search, ListTodo, Globe, Bot, NotebookPen, ClipboardList, Zap, Plug, Wrench } from 'lucide-react';
 import type { ToolCall } from './types';
 import { Collapse } from './motion';
@@ -40,6 +40,25 @@ export function StatusDot({ t }: { t: ToolCall }) {
 
 // Collapsible monospace block, capped height, used for command output +
 // file previews.
+// Auto-collapse: a tool's output is expanded while it's running and folds to
+// its header line once it completes, so a finished turn is a tidy list of
+// commands rather than a wall of output (this is the "auto collapse" behavior).
+// Sticky against the user: once they click, we never fight them.
+//
+// pending=true keeps it open; the pending→done transition collapses it. Passing
+// `keepOpen` (e.g. a failure, where the output is the point) leaves it expanded.
+function useAutoCollapse(pending: boolean | undefined, keepOpen = false) {
+	const [open, setOpen] = useState<boolean>(!!pending || keepOpen);
+	const touched = useRef(false);
+	const wasPending = useRef(!!pending);
+	useEffect(() => {
+		if (wasPending.current && !pending && !touched.current && !keepOpen) setOpen(false);
+		wasPending.current = !!pending;
+	}, [pending, keepOpen]);
+	const toggle = () => { touched.current = true; setOpen((v) => !v); };
+	return [open, toggle] as const;
+}
+
 // Cap what actually reaches the DOM. max-h + overflow only hides overflow — a
 // 48 KB single line with break-all still has to be laid out, and it read as a
 // wall of characters with no indication of how much there was.
@@ -70,7 +89,7 @@ export function MonoBlock({ text, tone }: { text: string; tone?: 'error' }) {
 
 // ── Bash — terminal block: `$ command` + output ─────────────────────────────
 function BashView({ t }: { t: ToolCall }) {
-	const [open, setOpen] = useState(true);
+	const [open, toggle] = useAutoCollapse(t.pending, !t.ok && !t.pending);
 	const cmd = str(t.args?.command);
 	// The CLI's typed result splits the streams and flags interruption; the
 	// flattened string merges them. Prefer typed when the bridge forwarded it
@@ -82,7 +101,7 @@ function BashView({ t }: { t: ToolCall }) {
 	const out = typed ? stdout : resultText(t);
 	return (
 		<div className="max-w-full text-[11px]">
-			<button onClick={() => setOpen(!open)} className="inline-flex items-center gap-1.5 max-w-full group">
+			<button onClick={toggle} className="inline-flex items-center gap-1.5 max-w-full group">
 				<Terminal className="w-3 h-3 text-zinc-500 shrink-0" />
 				<span className="font-mono text-zinc-700 truncate max-w-[420px]">$ {cmd || '(bash)'}</span>
 				{interrupted && (
@@ -154,7 +173,7 @@ function diffLines(oldS: string, newS: string): Array<{ sign: '-' | '+' | ' '; l
 }
 
 function EditView({ t }: { t: ToolCall }) {
-	const [open, setOpen] = useState(true);
+	const [open, toggle] = useAutoCollapse(t.pending, !t.ok && !t.pending);
 	const path = str(t.args?.file_path);
 	// MultiEdit carries edits[]; single Edit carries old_string/new_string.
 	const edits = Array.isArray(t.args?.edits)
@@ -162,7 +181,7 @@ function EditView({ t }: { t: ToolCall }) {
 		: [{ old_string: str(t.args?.old_string), new_string: str(t.args?.new_string) }];
 	return (
 		<div className="max-w-full text-[11px]">
-			<button onClick={() => setOpen(!open)} className="inline-flex items-center gap-1.5 max-w-full group">
+			<button onClick={toggle} className="inline-flex items-center gap-1.5 max-w-full group">
 				<FilePen className="w-3 h-3 text-amber-600 shrink-0" />
 				<span className="font-mono text-zinc-700 truncate max-w-[420px]">{path || 'edit'}</span>
 				{edits.length > 1 && <span className="opacity-60">×{edits.length}</span>}
@@ -196,13 +215,13 @@ function EditView({ t }: { t: ToolCall }) {
 
 // ── Write — path header + collapsible content preview ───────────────────────
 function WriteView({ t }: { t: ToolCall }) {
-	const [open, setOpen] = useState(false);
+	const [open, toggle] = useAutoCollapse(t.pending, !t.ok && !t.pending);
 	const path = str(t.args?.file_path);
 	const content = str(t.args?.content);
 	const lines = content ? content.split('\n').length : 0;
 	return (
 		<div className="max-w-full text-[11px]">
-			<button onClick={() => setOpen(!open)} className="inline-flex items-center gap-1.5 max-w-full group">
+			<button onClick={toggle} className="inline-flex items-center gap-1.5 max-w-full group">
 				<FileText className="w-3 h-3 text-emerald-600 shrink-0" />
 				<span className="font-mono text-zinc-700 truncate max-w-[420px]">{path || 'write'}</span>
 				{lines > 0 && <span className="opacity-60">{lines} lines</span>}
@@ -271,12 +290,12 @@ function TodoView({ t }: { t: ToolCall }) {
 
 // ── Task — sub-agent card ───────────────────────────────────────────────────
 function TaskView({ t }: { t: ToolCall }) {
-	const [open, setOpen] = useState(false);
+	const [open, toggle] = useAutoCollapse(t.pending, !t.ok && !t.pending);
 	const desc = str(t.args?.description) || str(t.args?.prompt).slice(0, 80);
 	const out = resultText(t);
 	return (
 		<div className="max-w-full text-[11px]">
-			<button onClick={() => setOpen(!open)} className="inline-flex items-center gap-1.5 max-w-full group">
+			<button onClick={toggle} className="inline-flex items-center gap-1.5 max-w-full group">
 				<Bot className="w-3 h-3 text-indigo-600 shrink-0" />
 				<span className="text-zinc-700">agent: {desc || 'task'}</span>
 				<StatusDot t={t} />
@@ -292,12 +311,12 @@ function TaskView({ t }: { t: ToolCall }) {
 // ── WebFetch / WebSearch — chip (WebFetch fails under the sandbox netpol —
 // the error renders plainly via the ✗ dot + output) ─────────────────────────
 function WebView({ t }: { t: ToolCall }) {
-	const [open, setOpen] = useState(false);
+	const [open, toggle] = useAutoCollapse(t.pending, !t.ok && !t.pending);
 	const target = str(t.args?.url) || str(t.args?.query);
 	const out = resultText(t);
 	return (
 		<div className="max-w-full text-[11px]">
-			<button onClick={() => setOpen(!open)} className="inline-flex items-center gap-1.5 max-w-full group">
+			<button onClick={toggle} className="inline-flex items-center gap-1.5 max-w-full group">
 				<Globe className="w-3 h-3 text-sky-600 shrink-0" />
 				<span className="font-mono text-zinc-700 truncate max-w-[420px]">{t.name} {target}</span>
 				<StatusDot t={t} />
@@ -314,14 +333,14 @@ function WebView({ t }: { t: ToolCall }) {
 
 // ── NotebookEdit — cell-scoped edit ─────────────────────────────────────────
 function NotebookView({ t }: { t: ToolCall }) {
-	const [open, setOpen] = useState(false);
+	const [open, toggle] = useAutoCollapse(t.pending, !t.ok && !t.pending);
 	const path = str(t.args?.notebook_path);
 	const cell = str(t.args?.cell_id);
 	const mode = str(t.args?.edit_mode) || 'replace';
 	const src = str(t.args?.new_source);
 	return (
 		<div className="max-w-full text-[11px]">
-			<button onClick={() => setOpen(!open)} className="inline-flex items-center gap-1.5 max-w-full group">
+			<button onClick={toggle} className="inline-flex items-center gap-1.5 max-w-full group">
 				<NotebookPen className="w-3 h-3 text-orange-600 shrink-0" />
 				<span className="font-mono text-zinc-700 truncate max-w-[380px]">{path || 'notebook'}</span>
 				<span className="opacity-60">{mode}{cell ? ` ${cell.slice(0, 8)}` : ''}</span>
@@ -335,11 +354,11 @@ function NotebookView({ t }: { t: ToolCall }) {
 
 // ── ExitPlanMode — the plan awaiting approval ───────────────────────────────
 function PlanView({ t }: { t: ToolCall }) {
-	const [open, setOpen] = useState(true);
+	const [open, toggle] = useAutoCollapse(t.pending, !t.ok && !t.pending);
 	const plan = str(t.args?.plan);
 	return (
 		<div className="max-w-full text-[11px]">
-			<button onClick={() => setOpen(!open)} className="inline-flex items-center gap-1.5 max-w-full group">
+			<button onClick={toggle} className="inline-flex items-center gap-1.5 max-w-full group">
 				<ClipboardList className="w-3 h-3 text-violet-600 shrink-0" />
 				<span className="text-zinc-700">plan ready</span>
 				<StatusDot t={t} />
@@ -356,12 +375,12 @@ function PlanView({ t }: { t: ToolCall }) {
 
 // ── SlashCommand / Skill — named invocation ─────────────────────────────────
 function CommandView({ t }: { t: ToolCall }) {
-	const [open, setOpen] = useState(false);
+	const [open, toggle] = useAutoCollapse(t.pending, !t.ok && !t.pending);
 	const name = str(t.args?.command) || str(t.args?.skill) || str(t.args?.name);
 	const out = resultText(t);
 	return (
 		<div className="max-w-full text-[11px]">
-			<button onClick={() => setOpen(!open)} className="inline-flex items-center gap-1.5 max-w-full group">
+			<button onClick={toggle} className="inline-flex items-center gap-1.5 max-w-full group">
 				<Zap className="w-3 h-3 text-gold-600 shrink-0" />
 				<span className="font-mono text-zinc-700 truncate max-w-[420px]">{t.name === 'Skill' ? 'skill' : ''} {name || t.name}</span>
 				<StatusDot t={t} />
@@ -376,13 +395,13 @@ function CommandView({ t }: { t: ToolCall }) {
 
 // ── BashOutput / KillShell — background-shell control ───────────────────────
 function ShellCtlView({ t }: { t: ToolCall }) {
-	const [open, setOpen] = useState(true);
+	const [open, toggle] = useAutoCollapse(t.pending, !t.ok && !t.pending);
 	const id = str(t.args?.bash_id) || str(t.args?.shell_id);
 	const out = resultText(t);
 	const kill = t.name === 'KillShell';
 	return (
 		<div className="max-w-full text-[11px]">
-			<button onClick={() => setOpen(!open)} className="inline-flex items-center gap-1.5 max-w-full group">
+			<button onClick={toggle} className="inline-flex items-center gap-1.5 max-w-full group">
 				<Terminal className={['w-3 h-3 shrink-0', kill ? 'text-rose-500' : 'text-zinc-500'].join(' ')} />
 				<span className="font-mono text-zinc-700 truncate max-w-[420px]">
 					{kill ? 'kill' : 'output'} {id}
@@ -397,14 +416,14 @@ function ShellCtlView({ t }: { t: ToolCall }) {
 
 // ── MCP tools (mcp__<server>__<tool>) — server-labelled chip ───────────────
 function McpView({ t }: { t: ToolCall }) {
-	const [open, setOpen] = useState(false);
+	const [open, toggle] = useAutoCollapse(t.pending, !t.ok && !t.pending);
 	const parts = t.name.split('__');
 	const server = parts[1] || 'mcp';
 	const tool = parts.slice(2).join('__') || t.name;
 	const out = resultText(t);
 	return (
 		<div className="max-w-full text-[11px]">
-			<button onClick={() => setOpen(!open)} className="inline-flex items-center gap-1.5 max-w-full group">
+			<button onClick={toggle} className="inline-flex items-center gap-1.5 max-w-full group">
 				<Plug className="w-3 h-3 text-teal-600 shrink-0" />
 				<span className="shrink-0 px-1 rounded bg-teal-50 text-teal-700 text-[9.5px] border border-teal-200">{server}</span>
 				<span className="font-mono text-zinc-700 truncate max-w-[360px]">{tool}</span>
@@ -470,13 +489,13 @@ function TaskItemView({ t }: { t: ToolCall }) {
 
 // ── the rest of this sandbox's tools — labelled, not anonymous ──────────────
 function NamedView({ t }: { t: ToolCall }) {
-	const [open, setOpen] = useState(false);
+	const [open, toggle] = useAutoCollapse(t.pending, !t.ok && !t.pending);
 	const a = t.args || {};
 	const detail = str(a.name) || str(a.cron) || str(a.prompt) || str(a.message) || str(a.description) || str(a.summary);
 	const out = resultText(t);
 	return (
 		<div className="max-w-full text-[11px]">
-			<button onClick={() => setOpen(!open)} className="inline-flex items-center gap-1.5 max-w-full group">
+			<button onClick={toggle} className="inline-flex items-center gap-1.5 max-w-full group">
 				<Wrench className="w-3 h-3 text-zinc-500 shrink-0" />
 				<span className="font-mono text-zinc-700">{t.name}</span>
 				{detail && <span className="truncate max-w-[320px] text-muted-foreground">{detail}</span>}
