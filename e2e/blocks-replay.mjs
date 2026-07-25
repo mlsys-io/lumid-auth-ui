@@ -306,5 +306,53 @@ test('completeTool still applies DEFINED fields over the pending ones', () => {
 	assert.equal(m.blocks[0].tool.ok, false, 'ok:false must not be treated as absent');
 });
 
+// ── hardening (security/robustness audit) ──────────────────────────────────
+
+test('stripForPersist clamps AND redacts tool args (secret-at-rest)', () => {
+	let m = B.startTool(fresh(), { id:'w1', name:'Write', args:{ file_path:'.env', content:'x'.repeat(20000) } });
+	m = B.completeTool(m, { id:'w1', name:'Write', ok:true });
+	// a secret-shaped arg key
+	let m2 = B.startTool(fresh(), { id:'b1', name:'Bash', args:{ command:'deploy', api_key:'sk-SECRET-123' } });
+	m2 = B.completeTool(m2, { id:'b1', name:'Bash', ok:true });
+	const [o1] = B.stripForPersist([m]);
+	const [o2] = B.stripForPersist([m2]);
+	const bigArgs = JSON.stringify(o1.blocks.find(b=>b.kind==='tool').tool.args);
+	assert.ok(bigArgs.length < 6000, 'oversized content clamped, got '+bigArgs.length);
+	const redacted = o2.blocks.find(b=>b.kind==='tool').tool.args;
+	assert.equal(redacted.api_key, '[redacted]', 'secret-shaped key must be redacted');
+	assert.equal(redacted.command, 'deploy', 'non-secret arg preserved');
+});
+
+test('appendToolArgs caps the accumulator (no unbounded growth)', () => {
+	let m = B.startTool(fresh(), { id:'a1', name:'Bash' });
+	for (let i=0;i<50;i++) m = B.appendToolArgs(m, 'a1', 'y'.repeat(10000)); // 500KB attempted
+	const pj = m.blocks[0].partialJson || '';
+	assert.ok(pj.length <= 256*1024, 'partialJson capped, got '+pj.length);
+});
+
+test('blocks[] growth is bounded per message', () => {
+	let m = fresh();
+	// alternate text/tool to force a new block each time, well past the cap
+	for (let i=0;i<5000;i++){
+		m = B.startTool(m, { id:'t'+i, name:'Bash' });
+		m = B.completeTool(m, { id:'t'+i, name:'Bash', ok:true });
+	}
+	assert.ok(m.blocks.length <= 4000+2, 'top-level blocks capped, got '+m.blocks.length);
+});
+
+test('nesting depth is bounded (no stack blow-up)', () => {
+	let m = fresh();
+	let parent = undefined;
+	// chain 200 nested Task/Agent tool_starts, each parented to the previous
+	for (let i=0;i<200;i++){
+		const id = 'x'+i;
+		m = B.startTool(m, { id, name:'Task' }, parent);
+		parent = id;
+	}
+	// must not throw, and depth must be bounded — a deep child degrades to top level
+	const measure = (bs, d=0) => bs.reduce((mx,b)=> b.kind==='subagent' ? Math.max(mx, measure(b.children, d+1)) : Math.max(mx,d), d);
+	assert.ok(measure(m.blocks) <= 6, 'nesting bounded, got depth '+measure(m.blocks));
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

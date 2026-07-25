@@ -103,12 +103,21 @@ function syncContent(m: Message): Message {
  * Returns null when parentId names a sub-agent we've never seen — callers turn
  * that into a placeholder via ensureSubagent rather than dropping the event.
  */
+// Nesting-depth ceiling. Claude Code sub-agents cannot spawn sub-agents, so real
+// depth is 2. A crafted stream chaining parent_ids could otherwise recurse
+// without bound → stack exhaustion on the next event or on persist. Beyond this
+// we stop descending; a too-deep child event degrades to a top-level append
+// (edit()'s placeholder path) rather than crashing.
+const MAX_NEST_DEPTH = 4;
+
 function inScope(
 	blocks: Block[],
 	parentId: string | undefined,
 	fn: (bs: Block[]) => Block[],
+	depth = 0,
 ): Block[] | null {
 	if (!parentId) return fn(blocks);
+	if (depth >= MAX_NEST_DEPTH) return null;
 	let found = false;
 	const next = blocks.map((b) => {
 		if (b.kind !== 'subagent') return b;
@@ -116,14 +125,18 @@ function inScope(
 			found = true;
 			return { ...b, children: fn(b.children) };
 		}
-		// Depth is 2 in practice (sub-agents can't spawn sub-agents), but recurse
-		// anyway so an unexpected nesting doesn't silently drop content.
-		const deeper = inScope(b.children, parentId, fn);
+		const deeper = inScope(b.children, parentId, fn, depth + 1);
 		if (deeper) { found = true; return { ...b, children: deeper }; }
 		return b;
 	});
 	return found ? next : null;
 }
+
+// Hard cap on top-level blocks per message. A hostile/buggy stream that
+// alternates tool/text forever would otherwise grow blocks[] without bound
+// (memory + render cost). The cap is far above any real turn; past it we stop
+// appending rather than let one message pin the tab.
+const MAX_BLOCKS = 4000;
 
 function edit(
 	m: Message,
@@ -137,6 +150,9 @@ function edit(
 		const seeded = ensureSubagentBlocks(base, { toolUseId: parentId });
 		next = inScope(seeded, parentId, fn) ?? seeded;
 	}
+	// Bound top-level growth. Mutations in place (same length) always pass;
+	// only unbounded appends past the cap are refused.
+	if (next.length > MAX_BLOCKS && next.length > base.length) return m;
 	return { ...m, blocks: next };
 }
 
@@ -331,15 +347,27 @@ export function startTool(
 	]);
 }
 
+// Bounds the streaming-args accumulator. Without a cap, a stream that spams
+// tool_args_delta for one id grows a single string without limit (memory) and
+// re-parses the whole thing on EVERY delta (O(n²) CPU) — a tab-freezing DoS.
+// The complete args also arrive on the finished assistant message, so this is
+// only a latency nicety; dropping past the cap loses nothing correctness-wise.
+const TOOL_ARGS_CAP = 256 * 1024;
+
 export function appendToolArgs(m: Message, id: string, partialJson: string, parentId?: string): Message {
 	if (!id) return m;
 	return edit(m, parentId, (bs) => {
 		const at = bs.findIndex((b) => b.kind === 'tool' && b.tool.id === id);
 		if (at < 0) return bs;
 		const b = bs[at] as ToolBlock;
-		const acc = (b.partialJson || '') + partialJson;
+		if ((b.partialJson || '').length >= TOOL_ARGS_CAP) return bs; // stop accumulating
+		const acc = ((b.partialJson || '') + partialJson).slice(0, TOOL_ARGS_CAP);
 		let args = b.tool.args;
-		try { args = JSON.parse(acc); } catch { /* still incomplete — expected */ }
+		// Only attempt the parse once the buffer looks balanced-ish, and never
+		// on every byte: cheap guard before the O(n) JSON.parse.
+		if (acc.endsWith('}') || acc.endsWith(']') || acc.endsWith('"')) {
+			try { args = JSON.parse(acc); } catch { /* still incomplete — expected */ }
+		}
 		const next = bs.slice();
 		next[at] = { ...b, partialJson: acc, tool: { ...b.tool, args } };
 		return next;
@@ -528,27 +556,59 @@ function terminalStatus(s?: string): SubagentStatus | undefined {
 }
 
 /**
- * Shrink a transcript for persistence.
+ * Shrink + de-secret a transcript before it is persisted.
  *
- * sessionStorage has a ~5 MB quota and the write happens on EVERY `messages`
- * change — i.e. once per streamed token. Tool results were already persisted
- * uncapped, which blocks roughly double; a couple of big Read/Bash outputs can
- * blow the quota and silently kill persistence for the whole session. Drops
- * streaming scratch (partialJson, pending) and clamps result text.
+ * Two sinks consume this: sessionStorage (same-origin, cleared on tab close)
+ * and the /me/chats POST (durable server DB). Both used to receive tool
+ * `result` clamped but tool `args` UNCAPPED — and args are exactly where
+ * high-value secrets live: Write.args.content is a whole file body (a generated
+ * .env, a token config), Bash.args.command can carry inline AUTH_TOKEN=…,
+ * Edit.args.old_string/new_string carry file text. So "read my .env and fix the
+ * typo" wrote the secret into the chats DB in cleartext. We now clamp args too
+ * and redact secret-shaped values by key name.
+ *
+ * sessionStorage also has a ~5 MB quota and the write fires ~once per streamed
+ * token; clamping keeps a long transcript from silently losing persistence.
  */
 const PERSIST_RESULT_CAP = 8 * 1024;
+const PERSIST_ARG_CAP = 4 * 1024;
+const SECRET_KEY_RE = /(token|secret|password|passwd|api[_-]?key|authorization|credential|private[_-]?key)/i;
+
+function redactSecrets(v: unknown, depth = 0): unknown {
+	if (depth > 6 || v == null) return v;
+	if (Array.isArray(v)) return v.map((x) => redactSecrets(x, depth + 1));
+	if (typeof v === 'object') {
+		const out: Record<string, unknown> = {};
+		for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+			out[k] = SECRET_KEY_RE.test(k) ? '[redacted]' : redactSecrets(val, depth + 1);
+		}
+		return out;
+	}
+	return v;
+}
+
+function clampField<T>(val: T, cap: number): T {
+	try {
+		const s = JSON.stringify(val);
+		if (s && s.length > cap) {
+			return { _truncated: true, preview: s.slice(0, cap) } as unknown as T;
+		}
+	} catch { return undefined as unknown as T; }
+	return val;
+}
 
 export function stripForPersist(msgs: Message[]): Message[] {
 	const clampTool = (t: ToolCall): ToolCall => {
 		const next: ToolCall = { ...t };
 		delete next.pending;
+		if (next.args !== undefined) {
+			next.args = clampField(redactSecrets(next.args), PERSIST_ARG_CAP) as Record<string, unknown>;
+		}
 		if (next.result !== undefined) {
-			try {
-				const s = JSON.stringify(next.result);
-				if (s.length > PERSIST_RESULT_CAP) {
-					next.result = { _truncated: true, preview: s.slice(0, PERSIST_RESULT_CAP) } as unknown as Record<string, unknown>;
-				}
-			} catch { next.result = undefined; }
+			next.result = clampField(redactSecrets(next.result), PERSIST_RESULT_CAP) as Record<string, unknown>;
+		}
+		if (next.resultTyped !== undefined) {
+			next.resultTyped = clampField(redactSecrets(next.resultTyped), PERSIST_RESULT_CAP) as Record<string, unknown>;
 		}
 		return next;
 	};

@@ -158,7 +158,15 @@ export function ChatMarkdown({ children, dark }: Props) {
 			// legible on the user-bubble dark background.
 			dark ? '[&_code]:bg-slate-800 [&_code]:text-slate-100 [&_code]:border-slate-700 [&_blockquote]:text-slate-200 [&_blockquote]:border-gold-400 [&_a]:text-gold-300 [&_a]:decoration-gold-500/60 [&_hr]:border-slate-700 [&_table]:border-slate-700 [&_thead]:bg-slate-800 [&_thead]:border-slate-700 [&_tr]:border-slate-800 [&_th]:text-slate-200 [&_td]:text-slate-200' : '',
 		].join(' ')}>
-			<ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+			{/* skipHtml is defense-in-depth, NOT the current protection: react-markdown
+			    9.x already ignores raw HTML unless rehype-raw is added, and default
+			    URL sanitization blocks javascript:/data: hrefs. But assistant text
+			    is indirectly attacker-influenced (it summarizes tool output / file
+			    contents), so if anyone ever adds rehype-raw this flag keeps a stray
+			    <script>/<img onerror> in a tool result from becoming stored-XSS.
+			    DO NOT add rehype-raw or route any tool field through
+			    dangerouslySetInnerHTML. */}
+			<ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml components={components}>
 				{clean}
 			</ReactMarkdown>
 		</div>
