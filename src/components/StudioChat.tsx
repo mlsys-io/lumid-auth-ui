@@ -2118,13 +2118,21 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 								const turn = turnIdRef.current;
 								if (turn) {
 									try {
-										await fetch('/api/v1/me/agent/chat/interrupt', {
+										const r = await fetch('/api/v1/me/agent/chat/interrupt', {
 											method: 'POST',
 											credentials: 'include',
 											headers: { 'Content-Type': 'application/json' },
 											body: JSON.stringify({ turn_id: turn }),
 										});
-										return; // the stream ends itself with a `stopped` event
+										if (r.ok) {
+											// The stream should now end itself with `stopped`. Don't
+											// trust it blindly: if the CLI can't service the
+											// interrupt, `streaming` would stay true forever and the
+											// button would be dead. Hard-abort as a backstop.
+											const ac = abortRef.current;
+											setTimeout(() => { if (abortRef.current === ac) ac?.abort(); }, 8000);
+											return;
+										}
 									} catch { /* fall through to the hard abort */ }
 								}
 								abortRef.current?.abort();
