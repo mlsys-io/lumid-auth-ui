@@ -6,8 +6,20 @@
 import type { ComposedDraft } from '../workflow/AssemblyCard';
 import type { Message, ToolCall } from './types';
 import { dispatchToolEffects, toolLink, type DataScope } from './effects';
+// The block state machine. handleEvent is a thin wire adapter over it: all
+// ordering, nesting and correlation logic lives in ./blocks so it stays pure
+// and replayable (e2e/blocks-replay.mjs).
+import * as B from './blocks';
 
 type SetMessages = React.Dispatch<React.SetStateAction<Message[]>>;
+
+/** Sub-agent usage blob → a token count for the progress line. */
+function subagentTokens(u: unknown): number | undefined {
+	if (!u || typeof u !== 'object') return undefined;
+	const o = u as Record<string, unknown>;
+	const n = o.total_tokens ?? o.output_tokens;
+	return typeof n === 'number' ? n : undefined;
+}
 
 export interface StreamMeta {
 	onClaudeSession?: (sessionId: string) => void;
@@ -79,67 +91,77 @@ export function handleEvent(
 	evt: { type: string; [k: string]: any },
 	setMessages: SetMessages,
 ) {
+	const parent: string | undefined = typeof evt.parent_id === 'string' && evt.parent_id
+		? evt.parent_id : undefined;
+	const wireIdx: number | undefined = typeof evt.index === 'number' ? evt.index : undefined;
+
 	if (evt.type === 'text' && typeof evt.delta === 'string') {
-		setMessages((prev) => withLastAssistant(prev, (m) => ({
-			...m, content: (m.content || '') + evt.delta,
-		})));
+		setMessages((prev) => withLastAssistant(prev, (m) => B.appendText(m, evt.delta, parent, wireIdx)));
 	} else if (evt.type === 'thinking_start') {
-		// Open an empty thinking block. Deltas append; thinking_stop closes.
-		// parent_id means this came from a SUB-AGENT. A message holds one flat
-		// thinking string, so folding a sub-agent's reasoning into it would
-		// splice two trains of thought together. Skipped until the block model
-		// can nest it under its Task.
-		if (evt.parent_id) return;
-		setMessages((prev) => withLastAssistant(prev, (m) => ({
-			...m,
-			thinking: m.thinking || '',
-			thinkingDone: false,
-		})));
+		// A NEW reasoning block every time — a turn can think more than once,
+		// and the old reducer's `thinking || ''` concatenated the second one
+		// onto the first with no separator.
+		setMessages((prev) => withLastAssistant(prev, (m) => B.openReasoning(m, parent, wireIdx)));
 	} else if (evt.type === 'thinking' && typeof evt.delta === 'string') {
-		if (evt.parent_id) return; // sub-agent reasoning — see thinking_start
-		setMessages((prev) => withLastAssistant(prev, (m) => ({
-			...m,
-			thinking: (m.thinking || '') + evt.delta,
-		})));
+		setMessages((prev) => withLastAssistant(prev, (m) => B.appendReasoning(m, evt.delta, parent, wireIdx)));
 	} else if (evt.type === 'thinking_stop') {
-		if (evt.parent_id) return; // sub-agent reasoning — see thinking_start
-		setMessages((prev) => withLastAssistant(prev, (m) => ({
-			...m,
-			thinkingDone: true,
-		})));
+		setMessages((prev) => withLastAssistant(prev, (m) => B.closeReasoning(m, parent, wireIdx)));
+	} else if (evt.type === 'block_stop') {
+		// Close the block so the next delta of that kind starts a fresh one.
+		setMessages((prev) => withLastAssistant(prev, (m) => (
+			evt.kind === 'thinking' ? B.closeReasoning(m, parent, wireIdx) : B.closeText(m, parent, wireIdx)
+		)));
 	} else if (evt.type === 'tool_start') {
-		// Agent declared a tool call before results stream in. Show a
-		// spinner-style chip so the user sees activity immediately.
-		// args arrive here already complete (the bridge builds tool_start from
-		// the finished assistant message), so the pending chip can name its
-		// target instead of rendering an empty `$ (bash)`.
-		setMessages((prev) => withLastAssistant(prev, (m) => ({
-			...m,
-			tools: [
-				...(m.tools || []),
-				{
-					id: String(evt.id || ''),
-					name: String(evt.name || 'tool'),
-					ok: true,
-					pending: true,
-					args: evt.args && typeof evt.args === 'object' ? evt.args : undefined,
-					summary: evt.args && typeof evt.args === 'object'
-						? summarizeToolArgs(evt.args) : undefined,
-				},
-			],
+		// args arrive complete here (the bridge builds tool_start from the
+		// finished assistant message), so the pending chip can name its target
+		// instead of rendering an empty `$ (bash)`.
+		const args = evt.args && typeof evt.args === 'object' ? evt.args as Record<string, unknown> : undefined;
+		setMessages((prev) => withLastAssistant(prev, (m) => B.startTool(m, {
+			id: String(evt.id || '') || undefined,
+			name: String(evt.name || 'tool'),
+			args,
+			summary: args ? summarizeToolArgs(args) : undefined,
+		}, parent)));
+	} else if (evt.type === 'tool_args_delta' && typeof evt.partial_json === 'string') {
+		setMessages((prev) => withLastAssistant(prev, (m) => B.appendToolArgs(m, String(evt.id || ''), evt.partial_json, parent)));
+	} else if (evt.type === 'subagent_start') {
+		setMessages((prev) => withLastAssistant(prev, (m) => B.startSubagent(m, {
+			taskId: evt.task_id ? String(evt.task_id) : undefined,
+			toolUseId: evt.tool_use_id ? String(evt.tool_use_id) : undefined,
+			subagentType: evt.subagent_type ? String(evt.subagent_type) : undefined,
+			description: evt.description ? String(evt.description) : undefined,
+			prompt: evt.prompt ? String(evt.prompt) : undefined,
 		})));
+	} else if (evt.type === 'subagent_progress') {
+		setMessages((prev) => withLastAssistant(prev, (m) => B.progressSubagent(m, {
+			taskId: evt.task_id ? String(evt.task_id) : undefined,
+			toolUseId: evt.tool_use_id ? String(evt.tool_use_id) : undefined,
+			description: evt.description ? String(evt.description) : undefined,
+			lastToolName: evt.last_tool_name ? String(evt.last_tool_name) : undefined,
+			tokens: subagentTokens(evt.usage),
+			status: evt.status ? String(evt.status) : undefined,
+		})));
+	} else if (evt.type === 'subagent_done') {
+		setMessages((prev) => withLastAssistant(prev, (m) => B.doneSubagent(m, {
+			taskId: evt.task_id ? String(evt.task_id) : undefined,
+			toolUseId: evt.tool_use_id ? String(evt.tool_use_id) : undefined,
+			status: evt.status ? String(evt.status) : undefined,
+			summary: evt.summary ? String(evt.summary) : undefined,
+			tokens: subagentTokens(evt.usage),
+		})));
+	} else if (evt.type === 'compaction') {
+		setMessages((prev) => withLastAssistant(prev, (m) => B.pushNotice(
+			m, 'info', 'Context compacted',
+			evt.pre ? `was ${evt.pre} tokens` : undefined,
+		)));
 	} else if (evt.type === 'tool_approval_required') {
 		// Backend paused; update the pending chip to show approval buttons.
-		const approvalId = String(evt.approval_id || '');
-		const toolId = String(evt.id || '');
-		setMessages((prev) => withLastAssistant(prev, (m) => {
-			const tools = (m.tools || []).map((t) =>
-				(toolId && t.id === toolId) || (!toolId && t.pending && t.name === evt.name)
-					? { ...t, approvalRequired: true, approvalId, args: evt.args as Record<string, unknown> }
-					: t
-			);
-			return { ...m, tools };
-		}));
+		setMessages((prev) => withLastAssistant(prev, (m) => B.markApproval(m, {
+			id: String(evt.id || '') || undefined,
+			name: evt.name ? String(evt.name) : undefined,
+			approvalId: String(evt.approval_id || ''),
+			args: evt.args as Record<string, unknown> | undefined,
+		})));
 	} else if (evt.type === 'tool_call') {
 		const ok = evt.ok !== false;
 		const result = (evt.result || undefined) as Record<string, unknown> | undefined;
@@ -157,20 +179,10 @@ export function handleEvent(
 			// what closes the install/run loop without leaving the chat.
 			link: ok ? toolLink(String(evt.name || ''), result, evt.args as Record<string, unknown> | undefined) : undefined,
 		};
-		setMessages((prev) => withLastAssistant(prev, (m) => {
-			const tools = m.tools ? [...m.tools] : [];
-			// Replace the latest pending entry matching by id or name; else push.
-			const pendIdx = (() => {
-				for (let i = tools.length - 1; i >= 0; i--) {
-					const t = tools[i];
-					if ((completed.id && t.id === completed.id) || (t.pending && t.name === completed.name)) return i;
-				}
-				return -1;
-			})();
-			if (pendIdx >= 0) tools[pendIdx] = completed;
-			else tools.push(completed);
-			return { ...m, tools };
-		}));
+		// Correlation is SCOPED by parent_id. The old flat version fell back to
+		// "last pending with the same name" across the whole list, so a
+		// sub-agent's Bash result would complete the PARENT's pending Bash.
+		setMessages((prev) => withLastAssistant(prev, (m) => B.completeTool(m, completed, parent)));
 		// Chat→page bus: a successful mutating tool invalidates the data
 		// scopes it touched; pages re-fetch via useStudioRefetch instead of
 		// waiting out their polling interval. The server emits the authoritative
@@ -202,7 +214,10 @@ export function handleEvent(
 				assembly_trace: r.assembly_trace || undefined,
 			};
 			if (draft.slug) {
-				setMessages((prev) => withLastAssistant(prev, (m) => ({ ...m, composed: draft })));
+				// An ordered card block, so the AssemblyCard lands where
+				// compose_workflow actually completed instead of being forced
+				// to the top of the turn.
+				setMessages((prev) => withLastAssistant(prev, (m) => B.pushCard(m, { type: 'assembly', draft }, draft.slug)));
 			}
 		}
 		// Auto-open the artifact panel when the agent saves a new artifact.
@@ -214,17 +229,14 @@ export function handleEvent(
 			}));
 		}
 	} else if (evt.type === 'error' && evt.message) {
-		setMessages((prev) => withLastAssistant(prev, (m) => ({
-			...m,
-			content: (m.content ? m.content + '\n\n' : '') + friendlyChatError(evt.message),
-		})));
+		// An ordered block, not text glued onto the reply — so the error sits
+		// where it happened and never pollutes m.content (which is the wire
+		// history the next turn replays).
+		setMessages((prev) => withLastAssistant(prev, (m) => B.pushNotice(m, 'error', friendlyChatError(evt.message))));
 	} else if (evt.type === 'notice' && evt.message) {
 		// Operator-facing note attached to the turn (admin/super_admin only).
 		// Was emitted by the server and silently dropped here.
-		setMessages((prev) => withLastAssistant(prev, (m) => ({
-			...m,
-			content: (m.content ? m.content + '\n\n' : '') + `_${String(evt.message)}_`,
-		})));
+		setMessages((prev) => withLastAssistant(prev, (m) => B.pushNotice(m, 'info', String(evt.message))));
 	}
 	// 'done' — no UI change needed.
 	// 'ping' — SSE heartbeat that keeps idle intermediaries from dropping a

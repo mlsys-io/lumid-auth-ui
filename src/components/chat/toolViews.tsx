@@ -14,7 +14,7 @@ import type { ToolCall } from './types';
 
 // resultText flattens a claude CLI tool_result content payload — a plain
 // string or an array of {type:"text", text} blocks — into displayable text.
-function resultText(t: ToolCall): string {
+export function resultText(t: ToolCall): string {
 	const r = t.result as unknown;
 	if (r == null) return '';
 	if (typeof r === 'string') return r;
@@ -32,14 +32,14 @@ function str(v: unknown): string {
 }
 
 // Status dot shared by the views: spinner while pending, ✓/✗ after.
-function StatusDot({ t }: { t: ToolCall }) {
+export function StatusDot({ t }: { t: ToolCall }) {
 	if (t.pending) return <Loader2 className="w-3 h-3 animate-spin text-sky-600" />;
 	return <span className={['text-[10px]', t.ok ? 'text-emerald-600' : 'text-rose-600'].join(' ')}>{t.ok ? '✓' : '✗'}</span>;
 }
 
 // Collapsible monospace block, capped height, used for command output +
 // file previews.
-function MonoBlock({ text, tone }: { text: string; tone?: 'error' }) {
+export function MonoBlock({ text, tone }: { text: string; tone?: 'error' }) {
 	if (!text) return null;
 	return (
 		<pre className={[

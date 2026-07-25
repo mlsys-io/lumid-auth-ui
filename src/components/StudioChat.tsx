@@ -7,7 +7,7 @@
 // EventSource can't POST). Conversation history persists in
 // sessionStorage so navigating between Studio pages keeps context.
 
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
@@ -29,9 +29,11 @@ import { summarizeAppState, chipsForApp, openerLine } from './chat/appOpener';
 import { startStudioPicking, stopStudioPicking, isStudioPicking, subscribeStudioPicking } from './StudioPicker';
 import { ChatMarkdown } from './ChatMarkdown';
 import AssemblyCard from './workflow/AssemblyCard';
-import type { Attachment, WireAttachment, Message, ToolCall } from './chat/types';
+import type { Attachment, WireAttachment, Message, ToolCall, Block } from './chat/types';
 import { readChatStream, withLastAssistant } from './chat/protocol';
 import { claudeToolView } from './chat/toolViews';
+import { blocksOf, failPendingTools, clearApproval, stripForPersist } from './chat/blocks';
+import { BlockView, EntityCardBlock } from './chat/blockViews';
 import { QuotaMeter } from './claude/QuotaMeter';
 import { SessionStrip } from './claude/SessionStrip';
 import { fetchCycleConversation, type CycleLogRow } from '@/api/trajectory';
@@ -223,11 +225,9 @@ function loadTranscript(currentSub: string | null | undefined): Message[] {
 		const msgs = parsed.messages as Message[];
 		// Scrub tools left pending from a previous session (hard refresh
 		// mid-stream) — no live stream will ever resolve them.
-		return msgs.map((m) =>
-			m.tools?.some((t) => t.pending)
-				? { ...m, tools: m.tools.map((t) => t.pending ? { ...t, pending: false, ok: false } : t) }
-				: m
-		);
+		// failPendingTools walks blocks (incl. sub-agent children) and falls
+		// back to the legacy tools[] for pre-block persisted threads.
+		return msgs.map(failPendingTools);
 	} catch {
 		return [];
 	}
@@ -529,12 +529,23 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 
 	// Persist transcript tagged with the current user_sub. No identity →
 	// no persistence (nothing to bind it to, so nothing can leak).
+	// Throttled: this used to serialize the whole transcript on every `messages`
+	// change — once per streamed token — against a ~5 MB quota, with tool
+	// results stored uncapped. stripForPersist clamps them; the timer keeps a
+	// long turn from stringifying the transcript hundreds of times.
 	useEffect(() => {
 		if (!userSub) return;
-		try {
-			sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ user_sub: userSub, messages }));
-		} catch { /* ignore */ }
-	}, [messages, userSub]);
+		const write = () => {
+			try {
+				sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
+					user_sub: userSub, messages: stripForPersist(messages),
+				}));
+			} catch { /* quota or serialization — nothing actionable */ }
+		};
+		if (!streaming) { write(); return; }   // flush immediately once idle
+		const id = window.setTimeout(write, 500);
+		return () => window.clearTimeout(id);
+	}, [messages, userSub, streaming]);
 	// Persist collapse state across reloads.
 	useEffect(() => {
 		try { localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0'); } catch { /* ignore */ }
@@ -657,7 +668,8 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		const last = messages[messages.length - 1];
 		if (last.role !== 'assistant' || !last.content) return;
 		// Cheap signature so we don't re-POST when reordering UI bits.
-		const sig = `${messages.length}:${last.content.length}:${(last.thinking||'').length}`;
+		// blocks.length covers reasoning/tools now that they aren't flat fields.
+		const sig = `${messages.length}:${last.content.length}:${last.blocks?.length ?? 0}:${(last.thinking||'').length}`;
 		if (sig === lastSavedSigRef.current) return;
 
 		saveTimerRef.current = window.setTimeout(async () => {
@@ -668,7 +680,8 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 					credentials: 'include',
 					body: JSON.stringify({
 						...(chatId ? { id: chatId } : {}),
-						messages,
+						// Clamp huge tool results before they hit the DB too.
+						messages: stripForPersist(messages),
 						model: model || undefined,
 						mode: mode || undefined,
 						claude_session_id: claudeSessionRef.current || undefined,
@@ -1079,7 +1092,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 				? { role: 'user' as const, content: text, attachments: wireAttachments }
 				: { role: 'user' as const, content: text },
 		];
-		const assistantMsg: Message = { role: 'assistant', content: '', tools: [] };
+		const assistantMsg: Message = { role: 'assistant', content: '', blocks: [] };
 		setMessages(() => [...base, userMsg, assistantMsg]);
 		setStreaming(true);
 		setLastRoute(null);
@@ -1160,10 +1173,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 			abortRef.current = null;
 			// Clear any tools that received tool_start but no tool_call (stream
 			// ended or errored before the result landed — leave them as failed).
-			setMessages((prev) => withLastAssistant(prev, (m) => {
-				if (!m.tools?.some((t) => t.pending)) return m;
-				return { ...m, tools: m.tools.map((t) => t.pending ? { ...t, pending: false, ok: false } : t) };
-			}));
+			setMessages((prev) => withLastAssistant(prev, failPendingTools));
 		}
 	}, [messages, streaming, location.pathname, location.search, model, mode, think, agentId, personaId]);
 
@@ -1373,14 +1383,9 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 
 	const handleToolApprove = useCallback(async (approvalId: string, approved: boolean, always?: boolean, tool?: string) => {
 		// Optimistically clear the approval state in the UI immediately.
-		setMessages((prev) => prev.map((m) => ({
-			...m,
-			tools: m.tools?.map((t) =>
-				t.approvalId === approvalId
-					? { ...t, approvalRequired: false, approvalId: undefined }
-					: t
-			),
-		})));
+		// Walks blocks (including sub-agent children) as well as the legacy
+		// tools[]; a flat map would miss an approval raised inside a Task.
+		setMessages((prev) => prev.map((m) => clearApproval(m, approvalId)));
 		try {
 			await fetch('/api/v1/me/agent/chat/tool-approve', {
 				method: 'POST',
@@ -2170,8 +2175,63 @@ const MessageBubble = memo(function MessageBubble({
 	const isUser = m.role === 'user';
 	const [copied, setCopied] = useState(false);
 	const showActions = !streaming && (onCopy || onRegenerate || onSpeak);
+
+	// Blocks in ARRIVAL order. Legacy messages (persisted threads, the
+	// studio:notify note, app-opener turns, xpio cycle rows) have no `blocks`,
+	// so blocksOf() synthesizes them in the exact order this component used to
+	// hardcode — those render byte-identically to before.
+	const blocks = useMemo(() => blocksOf(m), [
+		m.blocks, m.content, m.thinking, m.thinkingDone, m.tools,
+		m.composed, m.appSurface, m.chips, m.role,
+	]);
+	// The typing placeholder belongs to the BUBBLE, not to a block: while
+	// streaming, an empty text block simply doesn't exist yet.
+	const noTextYet = !blocks.some((b) => b.kind === 'text' && b.text);
+
+	const blockProps = {
+		isUser, streaming, onToolApprove,
+		renderTool: (t: ToolCall, onApprove?: (approved: boolean, always?: boolean) => void) => (
+			<div className={['mt-2 flex flex-col gap-1', isUser ? 'items-end' : 'items-start'].join(' ')}>
+				<ToolChip t={t} onApprove={onApprove} />
+			</div>
+		),
+		renderText: (text: string) => (
+			<div className={[
+				'inline-block max-w-full text-[13.5px] rounded-2xl px-3.5 py-2.5 leading-relaxed text-left shadow-sm mt-2 first:mt-0',
+				isUser
+					? 'bg-primary text-primary-foreground rounded-tr-md'
+					: 'bg-card text-foreground border border-border rounded-tl-md',
+			].join(' ')}>
+				{isUser
+					? <div className="whitespace-pre-wrap break-words">{text}</div>
+					: <ChatMarkdown>{text}</ChatMarkdown>}
+			</div>
+		),
+		renderReasoning: (text: string, done: boolean, elapsedMs?: number) => (
+			<ThinkingBlock thinking={text} done={done} elapsedMs={elapsedMs} />
+		),
+		renderCard: (card: Extract<Block, { kind: 'card' }>['card']) => {
+			if (card.type === 'assembly') return <AssemblyCard draft={card.draft} />;
+			if (card.type === 'appSurface') {
+				return <div className="mb-2"><AppSurfaceCard app={card.app} surface={card.surface} /></div>;
+			}
+			return <EntityCardBlock tool={card.tool} />;
+		},
+		renderChips: (chips: NonNullable<Message['chips']>) => (
+			<div className="mt-2 flex flex-wrap gap-1.5">
+				{chips.map((c) => (
+					<button key={c.label}
+						onClick={() => window.dispatchEvent(new CustomEvent('studio:ask', { detail: { prompt: c.prompt, autosend: true, context: c.context } }))}
+						className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-card text-[12px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+						{c.label}
+					</button>
+				))}
+			</div>
+		),
+	};
+
 	return (
-		<div className={['group flex gap-2.5 animate-in fade-in slide-in-from-bottom-1 duration-200', isUser ? 'flex-row-reverse' : ''].join(' ')}>
+		<div className={['group flex gap-2.5', isUser ? 'flex-row-reverse' : ''].join(' ')}>
 			<div className={[
 				'w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm',
 				isUser
@@ -2181,68 +2241,27 @@ const MessageBubble = memo(function MessageBubble({
 				{isUser ? <User className="w-3.5 h-3.5" /> : <Bot className="w-3.5 h-3.5" />}
 			</div>
 			<div className={['min-w-0 flex-1', isUser ? 'text-right' : ''].join(' ')}>
-				{!isUser && m.thinking !== undefined && (
-					<ThinkingBlock thinking={m.thinking} done={!!m.thinkingDone} />
-				)}
-				{/* When this turn composed a workflow, the AssemblyCard is the
-				    artifact and renders FIRST — above the text + tool chips.
-				    Anything the agent streams afterwards grows BELOW it, so the
-				    card stays anchored and the reveal doesn't get shoved around
-				    (the "flipping" the user saw when text rendered above it). */}
-				{!isUser && m.composed && <AssemblyCard draft={m.composed} />}
-				{/* App surface inline — the app's page (stats/tables/forms) lives
-				    in the conversation. Set by the open-app bridge + show_app_surface. */}
-				{!isUser && m.appSurface && (
-					<div className="mb-2"><AppSurfaceCard app={m.appSurface.app} surface={m.appSurface.surface} /></div>
-				)}
-				{/* Entity cards — observability tool results (apps, workflow
-				    health, runs) render as inline cards with the same state
-				    dots + deep links the old middle pane had, so "how are my
-				    apps doing?" answers visually inside the conversation. */}
-				{!isUser && m.tools && m.tools.map((t, i) => {
-					const card = entityCardFor(t);
-					return card ? <div key={`ec-${t.id || i}`} className="mb-2">{card}</div> : null;
-				})}
-				{/* Text bubble — skip entirely when there's nothing to show (an
-				    empty bubble under a composed card reads as a stray box). */}
-				{(m.content || (streaming && !m.composed)) && (
+				{/* Blocks in arrival order. Text→tool→text now renders as it
+				    happened instead of all text above all tools, and a
+				    sub-agent's calls nest under the Task that spawned them.
+				    NOTE a deliberate behavior change: the AssemblyCard used to
+				    be forced FIRST; it now lands where compose_workflow
+				    actually completed. The original anti-flicker reason still
+				    holds because blocks only ever append. */}
+				{blocks.map((b) => (
+					<BlockView key={b.id} {...blockProps} b={b} />
+				))}
+				{/* Pre-first-token placeholder — bubble-level, see noTextYet. */}
+				{noTextYet && streaming && !m.composed && (
 					<div className={[
-						'inline-block max-w-full text-[13.5px] rounded-2xl px-3.5 py-2.5 leading-relaxed text-left shadow-sm',
-						m.composed ? 'mt-2' : '',
-						isUser
-							? 'bg-primary text-primary-foreground rounded-tr-md'
-							: 'bg-card text-foreground border border-border rounded-tl-md',
+						'inline-block max-w-full rounded-2xl px-3.5 py-2.5 shadow-sm mt-2',
+						'bg-card text-foreground border border-border rounded-tl-md',
 					].join(' ')}>
-						{m.content ? (
-							// User turns are short and rarely markdown-rich;
-							// render plain so URLs / commands they type stay
-							// intact. Assistant turns go through full markdown —
-							// tables, code blocks, lists, links, images.
-							isUser ? (
-								<div className="whitespace-pre-wrap break-words">{m.content}</div>
-							) : (
-								<ChatMarkdown>{m.content}</ChatMarkdown>
-							)
-						) : (
-							<span className="inline-flex gap-1 items-center">
-								<span className="w-1.5 h-1.5 bg-gold-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
-								<span className="w-1.5 h-1.5 bg-gold-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
-								<span className="w-1.5 h-1.5 bg-gold-400 rounded-full animate-bounce" />
-							</span>
-						)}
-					</div>
-				)}
-				{/* Agent-led opener chips — the top of a progressive drill-down.
-				    Each fires a grounded studio:ask turn. */}
-				{!isUser && !streaming && m.chips && m.chips.length > 0 && (
-					<div className="mt-2 flex flex-wrap gap-1.5">
-						{m.chips.map((c) => (
-							<button key={c.label}
-								onClick={() => window.dispatchEvent(new CustomEvent('studio:ask', { detail: { prompt: c.prompt, autosend: true, context: c.context } }))}
-								className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-card text-[12px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
-								{c.label}
-							</button>
-						))}
+						<span className="inline-flex gap-1 items-center">
+							<span className="w-1.5 h-1.5 bg-gold-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
+							<span className="w-1.5 h-1.5 bg-gold-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
+							<span className="w-1.5 h-1.5 bg-gold-400 rounded-full animate-bounce" />
+						</span>
 					</div>
 				)}
 				{!isUser && !streaming && m.content && connectHintFor(m.content) && (
@@ -2256,19 +2275,8 @@ const MessageBubble = memo(function MessageBubble({
 						</Link>
 					</div>
 				)}
-				{m.tools && m.tools.length > 0 && (
-					<div className={['mt-2 flex flex-col gap-1', isUser ? 'items-end' : 'items-start'].join(' ')}>
-						{m.tools.map((t, i) => (
-							<ToolChip
-								key={i}
-								t={t}
-								onApprove={t.approvalRequired && t.approvalId && onToolApprove
-									? (approved, always) => onToolApprove(t.approvalId!, approved, always, t.name)
-									: undefined}
-							/>
-						))}
-					</div>
-				)}
+				{/* Tool chips are blocks now (rendered above, in order) — the old
+				    flat trailing list would double-render them. */}
 				{!isUser && m.content && !streaming && (
 					<div
 						className="mt-0.5 text-[10px] text-muted-foreground tabular-nums"
@@ -2337,6 +2345,11 @@ const MessageBubble = memo(function MessageBubble({
 	// meaningful fields. Stops every keystroke/poll from re-parsing the whole
 	// transcript — the cause of the "fast at first, slower and slower" lag.
 	a.m.role === b.m.role &&
+	// `blocks` is the primary identity for block-produced messages. Every
+	// mutator in ./chat/blocks returns a NEW array along the mutated path
+	// (including inside SubagentBlock.children) — a missed clone there shows up
+	// as "sub-agent output freezes mid-stream".
+	a.m.blocks === b.m.blocks &&
 	a.m.content === b.m.content &&
 	// thinking/thinkingDone MUST be compared. A thinking delta changes only
 	// these two fields, so omitting them made the comparator report "equal"
@@ -2358,11 +2371,14 @@ const MessageBubble = memo(function MessageBubble({
 // so they still see activity without the panel hijacking attention
 // from the streaming answer. Token count is a ~4-chars/token estimate
 // (we don't get a usage count for the streamed thinking deltas).
-function ThinkingBlock({ thinking, done }: { thinking: string; done: boolean }) {
+function ThinkingBlock({ thinking, done, elapsedMs }: { thinking: string; done: boolean; elapsedMs?: number }) {
 	const [open, setOpen] = useState<boolean>(false);
 	const tokenCount = thinking.length ? Math.max(1, Math.round(thinking.length / 4)) : 0;
+	// Duration comes from the block's own start/end stamps when available
+	// (block model); legacy messages have none and keep the token-only label.
+	const secs = elapsedMs !== undefined && elapsedMs > 900 ? Math.round(elapsedMs / 1000) : 0;
 	const label = done
-		? `Thought (${tokenCount} tokens)`
+		? (secs ? `Thought for ${secs}s (${tokenCount} tokens)` : `Thought (${tokenCount} tokens)`)
 		: tokenCount > 0
 			? `Thinking… ${tokenCount} tokens`
 			: 'Thinking…';
