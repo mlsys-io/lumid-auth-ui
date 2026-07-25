@@ -35,7 +35,6 @@ import { claudeToolView } from './chat/toolViews';
 import { blocksOf, failPendingTools, clearApproval, stripForPersist } from './chat/blocks';
 import { BlockView, EntityCardBlock } from './chat/blockViews';
 import { Appear, Collapse, StreamCaret, JumpToLatest, useMotionOK, AnimatePresence } from './chat/motion';
-import { QuotaMeter } from './claude/QuotaMeter';
 import { TurnStatsFooter, type TurnStats } from './claude/TurnStats';
 import { SessionStrip } from './claude/SessionStrip';
 import { fetchCycleConversation, type CycleLogRow } from '@/api/trajectory';
@@ -475,9 +474,8 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 	// the rolling 24h consumed. costUsd is a coarse estimate computed
 	// client-side from per-model pricing (server doesn't compute it).
 	const [usage, setUsage] = useState<{ used: number; limit: number } | null>(null);
-	// Bumped when a turn completes so the claude pool QuotaMeter refetches
+
 	// right away instead of waiting for its 2-min poll.
-	const [quotaRefresh, setQuotaRefresh] = useState(0);
 	// Per-turn telemetry (cost/duration/steps/cache) from the Claude Code
 	// `result` event. Keyed to the turn index so it renders under that turn only.
 	const [turnStats, setTurnStats] = useState<TurnStats | null>(null);
@@ -1159,7 +1157,6 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 						onTurnStats: setTurnStats,
 						onTurnId: (id) => { turnIdRef.current = id; },
 					}, ctrl.signal);
-					setQuotaRefresh((n) => n + 1);
 					break; // success
 				} catch (e: any) {
 					if (e?.name === 'AbortError') throw e; // handled by outer catch
@@ -2165,15 +2162,11 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 					>
 						<Crosshair className="w-4 h-4" />
 					</button>
-					{/* Right-side group: pool quota meter (claude-code models only)
-					    + model picker (moved from the header) then the round
-					    black send. */}
+					{/* Right-side group: model picker (moved from the header) then
+					    the round black send.
+					    The pool-quota pill used to sit here; it was noise in the
+					    composer and the same numbers live on lum.id/code. */}
 					<div className="order-3 flex-1 min-w-[8px]" />
-					{/claude-code-(sonnet|opus|fable|kimi|glm)/.test(model) && (
-						<div className="order-4 flex-shrink-0 mr-1">
-							<QuotaMeter refreshKey={quotaRefresh} />
-						</div>
-					)}
 					<div className="order-4 flex-shrink-0">
 						<ModelChip
 							streaming={streaming}
