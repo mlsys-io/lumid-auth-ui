@@ -10,6 +10,7 @@ import { dispatchToolEffects, toolLink, type DataScope } from './effects';
 // ordering, nesting and correlation logic lives in ./blocks so it stays pure
 // and replayable (e2e/blocks-replay.mjs).
 import * as B from './blocks';
+import { parseTurnStats, type TurnStats } from '../claude/TurnStats';
 
 type SetMessages = React.Dispatch<React.SetStateAction<Message[]>>;
 
@@ -25,6 +26,9 @@ export interface StreamMeta {
 	onClaudeSession?: (sessionId: string) => void;
 	onRoute?: (modelUsed: string, autoRouted: boolean) => void;
 	onUsage?: (used: number, limit: number) => void;
+	// Per-turn telemetry from the Claude Code `result` event (cost, durations,
+	// steps, cache split). Distinct from onUsage, which is the per-user budget.
+	onTurnStats?: (s: TurnStats) => void;
 }
 
 // Read the fetch-SSE body to completion, dispatching every event.
@@ -64,6 +68,8 @@ export async function readChatStream(r: Response, setMessages: SetMessages, meta
 						if (evt.session_id) meta.onClaudeSession?.(String(evt.session_id));
 					} else if (evt.type === 'route') {
 						meta.onRoute?.(String(evt.model_used || ''), !!evt.auto_routed);
+					} else if (evt.type === 'turn_stats') {
+						meta.onTurnStats?.(parseTurnStats(evt));
 					} else if (evt.type === 'usage') {
 						if (typeof evt.budget_used === 'number' && typeof evt.budget_limit === 'number') {
 							meta.onUsage?.(evt.budget_used, evt.budget_limit);
@@ -171,6 +177,8 @@ export function handleEvent(
 			ok,
 			args: evt.args as Record<string, unknown> | undefined,
 			result,
+			resultTyped: (evt.result_typed && typeof evt.result_typed === 'object')
+				? evt.result_typed as Record<string, unknown> : undefined,
 			summary: summarizeToolArgs(evt.args),
 			resultSummary: summarizeToolResult(evt.name, evt.result),
 			pending: false,

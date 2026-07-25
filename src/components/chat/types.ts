@@ -25,6 +25,12 @@ export type ToolCall = {
 	ok: boolean;
 	args?: Record<string, unknown>;      // from tool_call SSE event (already emitted by backend)
 	result?: Record<string, unknown>;    // from tool_call SSE event
+	// The claude CLI's TYPED result, forwarded by the bridge alongside the
+	// flattened `result`. Bash → {stdout, stderr, interrupted, isImage};
+	// Task/Agent → {totalTokens, totalToolUseCount, toolStats, status}. Only
+	// present for the MAIN agent's calls — the CLI omits it on the user
+	// messages it forwards for a sub-agent.
+	resultTyped?: Record<string, unknown>;
 	summary?: string;
 	resultSummary?: string;
 	// `pending` = received tool_start but no tool_call yet (in-flight).

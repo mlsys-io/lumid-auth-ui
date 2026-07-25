@@ -9,7 +9,7 @@
 // in-house snake_case tools keep their existing chip).
 
 import { useState, type ReactElement } from 'react';
-import { Loader2, ChevronDown, Terminal, FileText, FilePen, Search, ListTodo, Globe, Bot } from 'lucide-react';
+import { Loader2, ChevronDown, Terminal, FileText, FilePen, Search, ListTodo, Globe, Bot, NotebookPen, ClipboardList, Zap, Plug } from 'lucide-react';
 import type { ToolCall } from './types';
 
 // resultText flattens a claude CLI tool_result content payload — a plain
@@ -55,26 +55,85 @@ export function MonoBlock({ text, tone }: { text: string; tone?: 'error' }) {
 function BashView({ t }: { t: ToolCall }) {
 	const [open, setOpen] = useState(true);
 	const cmd = str(t.args?.command);
-	const out = resultText(t);
+	// The CLI's typed result splits the streams and flags interruption; the
+	// flattened string merges them. Prefer typed when the bridge forwarded it
+	// (main-agent calls only — sub-agent results arrive without it).
+	const typed = t.resultTyped;
+	const stdout = typed ? str(typed.stdout) : '';
+	const stderr = typed ? str(typed.stderr) : '';
+	const interrupted = !!typed?.interrupted;
+	const out = typed ? stdout : resultText(t);
 	return (
 		<div className="max-w-full text-[11px]">
 			<button onClick={() => setOpen(!open)} className="inline-flex items-center gap-1.5 max-w-full group">
 				<Terminal className="w-3 h-3 text-zinc-500 shrink-0" />
 				<span className="font-mono text-zinc-700 truncate max-w-[420px]">$ {cmd || '(bash)'}</span>
+				{interrupted && (
+					<span className="shrink-0 px-1 rounded bg-amber-100 text-amber-800 text-[9.5px] border border-amber-200">
+						interrupted
+					</span>
+				)}
 				<StatusDot t={t} />
 				<ChevronDown className={['w-3 h-3 opacity-40 group-hover:opacity-100 transition-transform', open ? 'rotate-180' : ''].join(' ')} />
 			</button>
-			{open && !t.pending && <MonoBlock text={out} tone={t.ok ? undefined : 'error'} />}
+			{open && !t.pending && (
+				<>
+					<MonoBlock text={out} tone={t.ok ? undefined : 'error'} />
+					{/* stderr kept visually distinct rather than concatenated —
+					    "did it warn or did it fail" is the whole question. */}
+					{stderr && <MonoBlock text={stderr} tone="error" />}
+					{typed && !stdout && !stderr && !!typed.noOutputExpected && (
+						<div className="mt-1 text-[10px] text-muted-foreground italic">(no output)</div>
+					)}
+				</>
+			)}
 		</div>
 	);
 }
 
-// ── Edit / MultiEdit — old/new line diff ────────────────────────────────────
-function diffLines(oldS: string, newS: string): Array<{ sign: '-' | '+'; line: string }> {
-	const out: Array<{ sign: '-' | '+'; line: string }> = [];
-	for (const l of oldS.split('\n')) out.push({ sign: '-', line: l });
-	for (const l of newS.split('\n')) out.push({ sign: '+', line: l });
-	return out;
+// ── Edit / MultiEdit — real line diff ───────────────────────────────────────
+// A proper LCS diff, so unchanged lines show as context instead of every old
+// line being marked removed and every new line added (which is what the
+// previous "diff" did — it made a one-character change look like a rewrite).
+function diffLines(oldS: string, newS: string): Array<{ sign: '-' | '+' | ' '; line: string }> {
+	const a = oldS.split('\n');
+	const b = newS.split('\n');
+	// Guard: LCS is O(n*m); fall back to a plain replacement view on huge edits.
+	if (a.length * b.length > 250_000) {
+		return [...a.map((l) => ({ sign: '-' as const, line: l })), ...b.map((l) => ({ sign: '+' as const, line: l }))];
+	}
+	const lcs: number[][] = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+	for (let i = a.length - 1; i >= 0; i--) {
+		for (let j = b.length - 1; j >= 0; j--) {
+			lcs[i][j] = a[i] === b[j] ? lcs[i + 1][j + 1] + 1 : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+		}
+	}
+	const out: Array<{ sign: '-' | '+' | ' '; line: string }> = [];
+	let i = 0, j = 0;
+	while (i < a.length && j < b.length) {
+		if (a[i] === b[j]) { out.push({ sign: ' ', line: a[i] }); i++; j++; }
+		else if (lcs[i + 1][j] >= lcs[i][j + 1]) { out.push({ sign: '-', line: a[i] }); i++; }
+		else { out.push({ sign: '+', line: b[j] }); j++; }
+	}
+	while (i < a.length) { out.push({ sign: '-', line: a[i++] }); }
+	while (j < b.length) { out.push({ sign: '+', line: b[j++] }); }
+	// Collapse long unchanged runs — a diff is about what moved.
+	const CONTEXT = 2;
+	const keep = new Array(out.length).fill(false);
+	out.forEach((d, k) => {
+		if (d.sign === ' ') return;
+		for (let x = Math.max(0, k - CONTEXT); x <= Math.min(out.length - 1, k + CONTEXT); x++) keep[x] = true;
+	});
+	const folded: Array<{ sign: '-' | '+' | ' '; line: string }> = [];
+	let skipped = 0;
+	out.forEach((d, k) => {
+		if (keep[k]) {
+			if (skipped) { folded.push({ sign: ' ', line: `⋯ ${skipped} unchanged line${skipped === 1 ? '' : 's'}` }); skipped = 0; }
+			folded.push(d);
+		} else skipped++;
+	});
+	if (skipped) folded.push({ sign: ' ', line: `⋯ ${skipped} unchanged line${skipped === 1 ? '' : 's'}` });
+	return folded;
 }
 
 function EditView({ t }: { t: ToolCall }) {
@@ -102,7 +161,9 @@ function EditView({ t }: { t: ToolCall }) {
 									key={j}
 									className={[
 										'px-2 font-mono text-[10.5px] whitespace-pre-wrap break-all',
-										d.sign === '-' ? 'bg-rose-50 text-rose-800' : 'bg-emerald-50 text-emerald-800',
+										d.sign === '-' ? 'bg-rose-50 text-rose-800'
+											: d.sign === '+' ? 'bg-emerald-50 text-emerald-800'
+												: 'text-muted-foreground',
 									].join(' ')}
 								>
 									<span className="select-none opacity-60 mr-1">{d.sign}</span>{d.line}
@@ -223,8 +284,119 @@ function WebView({ t }: { t: ToolCall }) {
 				<Globe className="w-3 h-3 text-sky-600 shrink-0" />
 				<span className="font-mono text-zinc-700 truncate max-w-[420px]">{t.name} {target}</span>
 				<StatusDot t={t} />
+				{!t.pending && out && (
+					<ChevronDown className={['w-3 h-3 opacity-40 group-hover:opacity-100 transition-transform', open ? 'rotate-180' : ''].join(' ')} />
+				)}
 			</button>
-			{open && !t.ok && <MonoBlock text={out} tone="error" />}
+			{/* Was `!t.ok` — successful fetches/searches were unviewable, which is
+			    exactly the case you want to read. */}
+			{open && !t.pending && <MonoBlock text={out} tone={t.ok ? undefined : 'error'} />}
+		</div>
+	);
+}
+
+// ── NotebookEdit — cell-scoped edit ─────────────────────────────────────────
+function NotebookView({ t }: { t: ToolCall }) {
+	const [open, setOpen] = useState(false);
+	const path = str(t.args?.notebook_path);
+	const cell = str(t.args?.cell_id);
+	const mode = str(t.args?.edit_mode) || 'replace';
+	const src = str(t.args?.new_source);
+	return (
+		<div className="max-w-full text-[11px]">
+			<button onClick={() => setOpen(!open)} className="inline-flex items-center gap-1.5 max-w-full group">
+				<NotebookPen className="w-3 h-3 text-orange-600 shrink-0" />
+				<span className="font-mono text-zinc-700 truncate max-w-[380px]">{path || 'notebook'}</span>
+				<span className="opacity-60">{mode}{cell ? ` ${cell.slice(0, 8)}` : ''}</span>
+				<StatusDot t={t} />
+				<ChevronDown className={['w-3 h-3 opacity-40 group-hover:opacity-100 transition-transform', open ? 'rotate-180' : ''].join(' ')} />
+			</button>
+			{open && <MonoBlock text={src.length > 4000 ? src.slice(0, 4000) + '\n…' : src} />}
+		</div>
+	);
+}
+
+// ── ExitPlanMode — the plan awaiting approval ───────────────────────────────
+function PlanView({ t }: { t: ToolCall }) {
+	const [open, setOpen] = useState(true);
+	const plan = str(t.args?.plan);
+	return (
+		<div className="max-w-full text-[11px]">
+			<button onClick={() => setOpen(!open)} className="inline-flex items-center gap-1.5 max-w-full group">
+				<ClipboardList className="w-3 h-3 text-violet-600 shrink-0" />
+				<span className="text-zinc-700">plan ready</span>
+				<StatusDot t={t} />
+				<ChevronDown className={['w-3 h-3 opacity-40 group-hover:opacity-100 transition-transform', open ? 'rotate-180' : ''].join(' ')} />
+			</button>
+			{open && plan && (
+				<div className="mt-1 px-2.5 py-2 rounded-md border border-violet-200 bg-violet-50/50 text-[11.5px] leading-relaxed whitespace-pre-wrap break-words max-h-64 overflow-y-auto">
+					{plan}
+				</div>
+			)}
+		</div>
+	);
+}
+
+// ── SlashCommand / Skill — named invocation ─────────────────────────────────
+function CommandView({ t }: { t: ToolCall }) {
+	const [open, setOpen] = useState(false);
+	const name = str(t.args?.command) || str(t.args?.skill) || str(t.args?.name);
+	const out = resultText(t);
+	return (
+		<div className="max-w-full text-[11px]">
+			<button onClick={() => setOpen(!open)} className="inline-flex items-center gap-1.5 max-w-full group">
+				<Zap className="w-3 h-3 text-gold-600 shrink-0" />
+				<span className="font-mono text-zinc-700 truncate max-w-[420px]">{t.name === 'Skill' ? 'skill' : ''} {name || t.name}</span>
+				<StatusDot t={t} />
+				{!t.pending && out && (
+					<ChevronDown className={['w-3 h-3 opacity-40 group-hover:opacity-100 transition-transform', open ? 'rotate-180' : ''].join(' ')} />
+				)}
+			</button>
+			{open && !t.pending && <MonoBlock text={out} tone={t.ok ? undefined : 'error'} />}
+		</div>
+	);
+}
+
+// ── BashOutput / KillShell — background-shell control ───────────────────────
+function ShellCtlView({ t }: { t: ToolCall }) {
+	const [open, setOpen] = useState(true);
+	const id = str(t.args?.bash_id) || str(t.args?.shell_id);
+	const out = resultText(t);
+	const kill = t.name === 'KillShell';
+	return (
+		<div className="max-w-full text-[11px]">
+			<button onClick={() => setOpen(!open)} className="inline-flex items-center gap-1.5 max-w-full group">
+				<Terminal className={['w-3 h-3 shrink-0', kill ? 'text-rose-500' : 'text-zinc-500'].join(' ')} />
+				<span className="font-mono text-zinc-700 truncate max-w-[420px]">
+					{kill ? 'kill' : 'output'} {id}
+				</span>
+				<StatusDot t={t} />
+				<ChevronDown className={['w-3 h-3 opacity-40 group-hover:opacity-100 transition-transform', open ? 'rotate-180' : ''].join(' ')} />
+			</button>
+			{open && !t.pending && <MonoBlock text={out} tone={t.ok ? undefined : 'error'} />}
+		</div>
+	);
+}
+
+// ── MCP tools (mcp__<server>__<tool>) — server-labelled chip ───────────────
+function McpView({ t }: { t: ToolCall }) {
+	const [open, setOpen] = useState(false);
+	const parts = t.name.split('__');
+	const server = parts[1] || 'mcp';
+	const tool = parts.slice(2).join('__') || t.name;
+	const out = resultText(t);
+	return (
+		<div className="max-w-full text-[11px]">
+			<button onClick={() => setOpen(!open)} className="inline-flex items-center gap-1.5 max-w-full group">
+				<Plug className="w-3 h-3 text-teal-600 shrink-0" />
+				<span className="shrink-0 px-1 rounded bg-teal-50 text-teal-700 text-[9.5px] border border-teal-200">{server}</span>
+				<span className="font-mono text-zinc-700 truncate max-w-[360px]">{tool}</span>
+				<StatusDot t={t} />
+				{!t.pending && out && (
+					<ChevronDown className={['w-3 h-3 opacity-40 group-hover:opacity-100 transition-transform', open ? 'rotate-180' : ''].join(' ')} />
+				)}
+			</button>
+			{open && !t.pending && <MonoBlock text={out} tone={t.ok ? undefined : 'error'} />}
 		</div>
 	);
 }
@@ -239,13 +411,25 @@ const TOOL_VIEWS: Record<string, (props: { t: ToolCall }) => ReactElement> = {
 	Glob: SearchView,
 	Grep: SearchView,
 	TodoWrite: TodoView,
+	// The CLI registers this as `Task` but emits tool_use name `Agent`
+	// (verified in a live 2.1.x capture) — key both.
 	Task: TaskView,
+	Agent: TaskView,
 	WebFetch: WebView,
 	WebSearch: WebView,
+	NotebookEdit: NotebookView,
+	ExitPlanMode: PlanView,
+	SlashCommand: CommandView,
+	Skill: CommandView,
+	BashOutput: ShellCtlView,
+	KillShell: ShellCtlView,
 };
 
 // claudeToolView returns the rich view component for a Claude Code tool
 // name, or null when the generic ToolChip should render instead.
 export function claudeToolView(name: string): ((props: { t: ToolCall }) => ReactElement) | null {
-	return TOOL_VIEWS[name] ?? null;
+	if (TOOL_VIEWS[name]) return TOOL_VIEWS[name];
+	// MCP tools are dynamic (mcp__<server>__<tool>) so they can't be enumerated.
+	if (name.startsWith('mcp__')) return McpView;
+	return null;
 }

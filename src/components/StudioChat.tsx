@@ -35,6 +35,7 @@ import { claudeToolView } from './chat/toolViews';
 import { blocksOf, failPendingTools, clearApproval, stripForPersist } from './chat/blocks';
 import { BlockView, EntityCardBlock } from './chat/blockViews';
 import { QuotaMeter } from './claude/QuotaMeter';
+import { TurnStatsFooter, type TurnStats } from './claude/TurnStats';
 import { SessionStrip } from './claude/SessionStrip';
 import { fetchCycleConversation, type CycleLogRow } from '@/api/trajectory';
 
@@ -472,6 +473,9 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 	// Bumped when a turn completes so the claude pool QuotaMeter refetches
 	// right away instead of waiting for its 2-min poll.
 	const [quotaRefresh, setQuotaRefresh] = useState(0);
+	// Per-turn telemetry (cost/duration/steps/cache) from the Claude Code
+	// `result` event. Keyed to the turn index so it renders under that turn only.
+	const [turnStats, setTurnStats] = useState<TurnStats | null>(null);
 	// Voice input — Web Speech API. isListening becomes true while the
 	// browser is actively dictating; recognized text is appended to
 	// the textarea on each result. Null recognitionRef = unsupported.
@@ -1092,6 +1096,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 				? { role: 'user' as const, content: text, attachments: wireAttachments }
 				: { role: 'user' as const, content: text },
 		];
+		setTurnStats(null);
 		const assistantMsg: Message = { role: 'assistant', content: '', blocks: [] };
 		setMessages(() => [...base, userMsg, assistantMsg]);
 		setStreaming(true);
@@ -1141,6 +1146,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 						onClaudeSession: (id) => { claudeSessionRef.current = id; setClaudeSession(id); },
 						onRoute: (modelUsed, autoRouted) => setLastRoute({ modelUsed, autoRouted }),
 						onUsage: (used, limit) => setUsage({ used, limit }),
+						onTurnStats: setTurnStats,
 					}, ctrl.signal);
 					setQuotaRefresh((n) => n + 1);
 					break; // success
@@ -1693,6 +1699,12 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 							onToolApprove={handleToolApprove}
 						/>
 						))}
+						{/* Turn telemetry from the Claude Code `result` event —
+						    cost, wall/API duration, time-to-first-token, steps and
+						    the cache hit split. Attached to the finished reply. */}
+						{turnStats && !streaming && messages[messages.length - 1]?.role === 'assistant' && (
+							<div className="pl-[38px]"><TurnStatsFooter s={turnStats} /></div>
+						)}
 					</div>
 				)}
 			</div>
