@@ -9,7 +9,7 @@
 // in-house snake_case tools keep their existing chip).
 
 import { useState, type ReactElement } from 'react';
-import { Loader2, ChevronDown, Terminal, FileText, FilePen, Search, ListTodo, Globe, Bot, NotebookPen, ClipboardList, Zap, Plug } from 'lucide-react';
+import { Loader2, ChevronDown, Terminal, FileText, FilePen, Search, ListTodo, Globe, Bot, NotebookPen, ClipboardList, Zap, Plug, Wrench } from 'lucide-react';
 import type { ToolCall } from './types';
 import { Collapse } from './motion';
 
@@ -418,6 +418,78 @@ function McpView({ t }: { t: ToolCall }) {
 	);
 }
 
+// ── Task* family — this sandbox's task-list tools ───────────────────────────
+//
+// This CLI build exposes TaskCreate / TaskUpdate / TaskList / TaskGet /
+// TaskOutput / TaskStop instead of TodoWrite (which is keyed above but does not
+// exist here). They had no renderer, so a turn that created seven tasks showed
+// seven anonymous generic chips — the single worst source of visual debris in a
+// real transcript. Each is now ONE tight line so a run of them reads as a
+// checklist rather than a stack of blocks.
+function TaskItemView({ t }: { t: ToolCall }) {
+	const a = t.args || {};
+	const subject = str(a.subject) || str(a.description);
+	const status = str(a.status);
+	const id = str(a.taskId) || str(a.task_id);
+
+	let glyph = '•';
+	let label = subject || t.name;
+	let tone = 'text-zinc-700';
+	switch (t.name) {
+		case 'TaskCreate':
+			glyph = '+';
+			label = subject || 'task';
+			break;
+		case 'TaskUpdate':
+			// The common case is a status flip; show what it became.
+			glyph = status === 'completed' ? '✓' : status === 'in_progress' ? '▸' : '~';
+			label = subject || (status ? status.replace('_', ' ') : 'update') + (id ? ` #${id}` : '');
+			tone = status === 'completed' ? 'text-emerald-700' : 'text-zinc-600';
+			break;
+		case 'TaskList':
+			glyph = '☰'; label = 'task list'; tone = 'text-zinc-500';
+			break;
+		case 'TaskGet':
+			glyph = '?'; label = id ? `task #${id}` : 'task'; tone = 'text-zinc-500';
+			break;
+		case 'TaskStop':
+			glyph = '■'; label = id ? `stop #${id}` : 'stop task'; tone = 'text-rose-600';
+			break;
+		case 'TaskOutput':
+			glyph = '»'; label = id ? `output #${id}` : 'task output'; tone = 'text-zinc-500';
+			break;
+	}
+	return (
+		<div className="max-w-full text-[11px] flex items-center gap-1.5">
+			<span className="w-3 shrink-0 text-center opacity-50 select-none">{glyph}</span>
+			<span className={['truncate max-w-[440px]', tone].join(' ')}>{label}</span>
+			<StatusDot t={t} />
+		</div>
+	);
+}
+
+// ── the rest of this sandbox's tools — labelled, not anonymous ──────────────
+function NamedView({ t }: { t: ToolCall }) {
+	const [open, setOpen] = useState(false);
+	const a = t.args || {};
+	const detail = str(a.name) || str(a.cron) || str(a.prompt) || str(a.message) || str(a.description) || str(a.summary);
+	const out = resultText(t);
+	return (
+		<div className="max-w-full text-[11px]">
+			<button onClick={() => setOpen(!open)} className="inline-flex items-center gap-1.5 max-w-full group">
+				<Wrench className="w-3 h-3 text-zinc-500 shrink-0" />
+				<span className="font-mono text-zinc-700">{t.name}</span>
+				{detail && <span className="truncate max-w-[320px] text-muted-foreground">{detail}</span>}
+				<StatusDot t={t} />
+				{!t.pending && out && (
+					<ChevronDown className={['w-3 h-3 opacity-40 group-hover:opacity-100 transition-transform', open ? 'rotate-180' : ''].join(' ')} />
+				)}
+			</button>
+			<Collapse open={open && !t.pending}><MonoBlock text={out} tone={t.ok ? undefined : 'error'} /></Collapse>
+		</div>
+	);
+}
+
 // Registry keyed by the CLI's tool names (verbatim from the stream).
 const TOOL_VIEWS: Record<string, (props: { t: ToolCall }) => ReactElement> = {
 	Bash: BashView,
@@ -440,6 +512,23 @@ const TOOL_VIEWS: Record<string, (props: { t: ToolCall }) => ReactElement> = {
 	Skill: CommandView,
 	BashOutput: ShellCtlView,
 	KillShell: ShellCtlView,
+	// This sandbox's task-list family (it has no TodoWrite).
+	TaskCreate: TaskItemView,
+	TaskUpdate: TaskItemView,
+	TaskList: TaskItemView,
+	TaskGet: TaskItemView,
+	TaskStop: TaskItemView,
+	TaskOutput: TaskItemView,
+	// Present in this sandbox and previously anonymous.
+	CronCreate: NamedView,
+	CronDelete: NamedView,
+	CronList: NamedView,
+	EnterWorktree: NamedView,
+	ExitWorktree: NamedView,
+	ReportFindings: NamedView,
+	ScheduleWakeup: NamedView,
+	SendMessage: NamedView,
+	Workflow: NamedView,
 };
 
 // claudeToolView returns the rich view component for a Claude Code tool
