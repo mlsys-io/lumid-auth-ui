@@ -32,6 +32,9 @@ export interface StreamMeta {
 	// Sandbox-assigned id for this run; POST /me/agent/chat/interrupt targets it
 	// to stop the turn cooperatively instead of tearing the stream.
 	onTurnId?: (turnID: string) => void;
+	// The session's tool/agent/skill/MCP surface, from system/init. Claude Code
+	// shows this; we had been forwarding it and dropping it on the floor.
+	onCapabilities?: (c: { model?: string; tools?: string[]; agents?: string[]; skills?: string[]; mcp?: unknown }) => void;
 }
 
 // Read the fetch-SSE body to completion, dispatching every event.
@@ -71,6 +74,11 @@ export async function readChatStream(r: Response, setMessages: SetMessages, meta
 						if (evt.session_id) meta.onClaudeSession?.(String(evt.session_id));
 					} else if (evt.type === 'route') {
 						meta.onRoute?.(String(evt.model_used || ''), !!evt.auto_routed);
+					} else if (evt.type === 'capabilities') {
+						meta.onCapabilities?.({
+							model: evt.model, tools: evt.tools, agents: evt.agents,
+							skills: evt.skills, mcp: evt.mcp_servers,
+						});
 					} else if (evt.type === 'turn_id') {
 						if (evt.turn_id) meta.onTurnId?.(String(evt.turn_id));
 					} else if (evt.type === 'turn_stats') {

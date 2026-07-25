@@ -452,6 +452,9 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 	// session pill (the ref alone never re-renders). Always write through
 	// setCCSession so both stay in sync.
 	const [claudeSession, setClaudeSession] = useState<string | null>(null);
+	// Capabilities of the live CC session (tools/agents/skills/MCP), surfaced
+	// in the SessionStrip like Claude Code's own context header.
+	const [claudeCaps, setClaudeCaps] = useState<{ model?: string; tools?: string[]; agents?: string[]; skills?: string[]; mcp?: unknown } | null>(null);
 	// Sandbox turn id for the run in flight. Lets Stop go through the CLI's own
 	// interrupt instead of just aborting the fetch (which SIGKILLed the process
 	// and threw away partial work).
@@ -1156,6 +1159,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 						onUsage: (used, limit) => setUsage({ used, limit }),
 						onTurnStats: setTurnStats,
 						onTurnId: (id) => { turnIdRef.current = id; },
+						onCapabilities: setClaudeCaps,
 					}, ctrl.signal);
 					break; // success
 				} catch (e: any) {
@@ -1843,6 +1847,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 						session={claudeSession}
 						streaming={streaming}
 						pool={/claude-code-(sonnet|opus|fable|kimi|glm)/.test(model)}
+						caps={claudeCaps}
 						onClear={() => { claudeSessionRef.current = null; setClaudeSession(null); }}
 					/>
 				)}
