@@ -406,6 +406,14 @@ export interface ClaudeSessionTurn {
 export interface ClaudeSessionDetail {
 	session: ClaudeSessionCard;
 	turns: ClaudeSessionTurn[];
+	// Pagination. The endpoint returns the NEWEST window of turns, not the whole
+	// transcript: a 517-turn session was a 72 MB / 48s response that blew the
+	// 30s client timeout. Walk backwards with ?before=<oldest_turn_index>.
+	total_turns?: number;
+	returned?: number;
+	oldest_turn_index?: number;
+	has_more?: boolean;
+	remaining?: number;
 }
 
 // admin=true → super_admin all-users view; else owner's own sessions.
@@ -415,9 +423,17 @@ export async function fetchClaudeSessions(admin = false): Promise<ClaudeSessionC
 	return r.data.data.sessions ?? [];
 }
 
-export async function fetchClaudeSession(convKey: string, admin = false): Promise<ClaudeSessionDetail> {
+export async function fetchClaudeSession(
+	convKey: string,
+	admin = false,
+	opts: { limit?: number; before?: number } = {},
+): Promise<ClaudeSessionDetail> {
 	const base = admin ? '/api/v1/admin/claude-sessions' : '/api/v1/me/claude-sessions';
-	const r = await apiClient.get<DataResponse<ClaudeSessionDetail>>(`${base}/${convKey}`);
+	const qs = new URLSearchParams();
+	if (opts.limit) qs.set('limit', String(opts.limit));
+	if (opts.before !== undefined) qs.set('before', String(opts.before));
+	const suffix = qs.toString() ? `?${qs}` : '';
+	const r = await apiClient.get<DataResponse<ClaudeSessionDetail>>(`${base}/${convKey}${suffix}`);
 	return r.data.data;
 }
 

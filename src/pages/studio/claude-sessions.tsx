@@ -181,6 +181,8 @@ export default function StudioClaudeSessions() {
 	const [selected, setSelected] = useState<ClaudeSessionDetail | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [detailLoading, setDetailLoading] = useState(false);
+	const [loadingEarlier, setLoadingEarlier] = useState(false);
+	const [downloading, setDownloading] = useState(false);
 	const [recording, setRecording] = useState<boolean | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [search, setSearch] = useState('');
@@ -233,10 +235,38 @@ export default function StudioClaudeSessions() {
 	const openSession = (convKey: string) => {
 		setDetailLoading(true);
 		setSelected(null);
+		// Newest window only. Fetching a whole transcript was a 72 MB / 48s
+		// response for a 517-turn session — past the client's 30s timeout, and
+		// far more than a browser should parse.
 		fetchClaudeSession(convKey, admin)
 			.then(setSelected)
 			.catch((e) => setError(String(e?.message || e)))
 			.finally(() => setDetailLoading(false));
+	};
+
+	// Walk backwards through a long transcript, prepending older turns.
+	const loadEarlier = () => {
+		if (!selected || loadingEarlier) return;
+		const key = selected.session.conv_key;
+		const before = selected.oldest_turn_index;
+		if (before === undefined) return;
+		setLoadingEarlier(true);
+		fetchClaudeSession(key, admin, { before })
+			.then((older) => {
+				setSelected((cur) => {
+					// Guard against a different session having been opened meanwhile.
+					if (!cur || cur.session.conv_key !== key) return cur;
+					return {
+						...cur,
+						turns: [...older.turns, ...cur.turns],
+						oldest_turn_index: older.oldest_turn_index,
+						has_more: older.has_more,
+						remaining: older.remaining,
+					};
+				});
+			})
+			.catch((e) => setError(String(e?.message || e)))
+			.finally(() => setLoadingEarlier(false));
 	};
 
 	const toggleRecording = async () => {
@@ -392,21 +422,57 @@ export default function StudioClaudeSessions() {
 									{selected.session.tool_use_count > 0 && ` · ${selected.session.tool_use_count} tool calls`}
 								</div>
 								<button
-									onClick={() => {
-										const blob = new Blob([JSON.stringify(selected, null, 2)], { type: 'application/json' });
-										const url = URL.createObjectURL(blob);
-										const a = document.createElement('a');
-										a.href = url;
-										a.download = `session-${selected.session.conv_key.slice(0, 8)}.json`;
-										a.click();
-										URL.revokeObjectURL(url);
+									onClick={async () => {
+										// The view holds only a WINDOW of turns, so exporting
+										// `selected` would quietly produce a partial transcript.
+										// Re-fetch the whole thing for the download instead.
+										setDownloading(true);
+										try {
+											const total = selected.total_turns ?? selected.turns.length;
+											const full = selected.has_more
+												? await fetchClaudeSession(selected.session.conv_key, admin, { limit: Math.max(total, 200) })
+												: selected;
+											const blob = new Blob([JSON.stringify(full, null, 2)], { type: 'application/json' });
+											const url = URL.createObjectURL(blob);
+											const a = document.createElement('a');
+											a.href = url;
+											a.download = `session-${selected.session.conv_key.slice(0, 8)}.json`;
+											a.click();
+											URL.revokeObjectURL(url);
+										} catch (e: any) {
+											setError(String(e?.message || e));
+										} finally {
+											setDownloading(false);
+										}
 									}}
-									className="shrink-0 inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800 border border-slate-200 rounded px-2 py-1"
-									title="Download session as JSON"
+									disabled={downloading}
+									className="shrink-0 inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800 border border-slate-200 rounded px-2 py-1 disabled:opacity-50"
+									title="Download the FULL session as JSON"
 								>
-									<Download className="w-3.5 h-3.5" /> JSON
+									{downloading
+										? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+										: <Download className="w-3.5 h-3.5" />} JSON
 								</button>
 							</div>
+							{/* Long transcripts load newest-first; walk backwards on demand. */}
+							{selected.has_more && (
+								<div className="mb-2 flex items-center justify-center gap-2 text-xs">
+									<button
+										type="button"
+										onClick={loadEarlier}
+										disabled={loadingEarlier}
+										className="inline-flex items-center gap-1.5 border border-slate-200 rounded px-2.5 py-1 text-slate-600 hover:text-slate-900 hover:bg-slate-50 disabled:opacity-50"
+									>
+										{loadingEarlier
+											? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> loading…</>
+											: <>Load earlier turns</>}
+									</button>
+									<span className="text-slate-400">
+										showing {selected.turns.length} of {selected.total_turns ?? selected.turns.length}
+										{selected.remaining ? ` · ${selected.remaining} older` : ''}
+									</span>
+								</div>
+							)}
 							{selected.turns.map((t) => <TurnBlock key={t.turn_index} turn={t} />)}
 						</div>
 					) : (
