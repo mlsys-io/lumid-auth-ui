@@ -168,8 +168,8 @@ usage** → model breakdown, with actual cost in USD rather than token counts.
 
 Each user gets their own quota on the pool, mirroring Anthropic's window
 shape: a **5-hour** and a **7-day** rolling token budget (uncached input +
-output tokens, summed across all your PATs). Defaults: 2M tokens / 5h and
-20M tokens / 7d (operator-tunable).
+output tokens, summed across all your PATs). Defaults: 4M tokens / 5h and
+40M tokens / 7d (operator-tunable).
 
 - When a window is exhausted the proxy returns `429` with the reason and
   Claude Code backs off; the window rolls continuously, so capacity returns
