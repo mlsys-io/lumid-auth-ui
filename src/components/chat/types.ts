@@ -73,6 +73,9 @@ export type ReasoningBlock = {
 	done?: boolean;
 	startedAt?: number;  // for "thought for Ns"
 	endedAt?: number;
+	// The CLI's own reasoning-token count (system/thinking_tokens). When absent
+	// the renderer falls back to a ~4-chars/token estimate.
+	tokens?: number;
 };
 
 // Wraps the EXISTING ToolCall verbatim so every renderer in toolViews.tsx and

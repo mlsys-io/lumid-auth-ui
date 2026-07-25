@@ -263,6 +263,20 @@ export function appendReasoning(m: Message, delta: string, parentId?: string, id
 	});
 }
 
+/** Attach the provider's own reasoning-token count to the open block. */
+export function setReasoningTokens(m: Message, tokens: number, parentId?: string): Message {
+	return edit(m, parentId, (bs) => {
+		for (let i = bs.length - 1; i >= 0; i--) {
+			if (bs[i].kind === 'reasoning') {
+				const next = bs.slice();
+				next[i] = { ...(bs[i] as ReasoningBlock), tokens };
+				return next;
+			}
+		}
+		return bs;
+	});
+}
+
 /** Open a NEW reasoning block. Never reuses an old one — a turn can think more than once. */
 export function openReasoning(m: Message, parentId?: string, idx?: number): Message {
 	return edit(m, parentId, (bs) => [

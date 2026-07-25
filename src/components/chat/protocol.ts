@@ -29,6 +29,9 @@ export interface StreamMeta {
 	// Per-turn telemetry from the Claude Code `result` event (cost, durations,
 	// steps, cache split). Distinct from onUsage, which is the per-user budget.
 	onTurnStats?: (s: TurnStats) => void;
+	// Sandbox-assigned id for this run; POST /me/agent/chat/interrupt targets it
+	// to stop the turn cooperatively instead of tearing the stream.
+	onTurnId?: (turnID: string) => void;
 }
 
 // Read the fetch-SSE body to completion, dispatching every event.
@@ -68,6 +71,8 @@ export async function readChatStream(r: Response, setMessages: SetMessages, meta
 						if (evt.session_id) meta.onClaudeSession?.(String(evt.session_id));
 					} else if (evt.type === 'route') {
 						meta.onRoute?.(String(evt.model_used || ''), !!evt.auto_routed);
+					} else if (evt.type === 'turn_id') {
+						if (evt.turn_id) meta.onTurnId?.(String(evt.turn_id));
 					} else if (evt.type === 'turn_stats') {
 						meta.onTurnStats?.(parseTurnStats(evt));
 					} else if (evt.type === 'usage') {
@@ -155,6 +160,16 @@ export function handleEvent(
 			summary: evt.summary ? String(evt.summary) : undefined,
 			tokens: subagentTokens(evt.usage),
 		})));
+	} else if (evt.type === 'thinking_tokens') {
+		// The CLI's own reasoning-token count, replacing the ~4-chars/token
+		// estimate. Applies to the newest open reasoning block.
+		if (typeof evt.tokens === 'number') {
+			setMessages((prev) => withLastAssistant(prev, (m) => B.setReasoningTokens(m, evt.tokens, parent)));
+		}
+	} else if (evt.type === 'stopped') {
+		// User pressed Stop. An ordered notice, NOT an error — the turn did what
+		// was asked of it.
+		setMessages((prev) => withLastAssistant(prev, (m) => B.pushNotice(m, 'info', 'Stopped')));
 	} else if (evt.type === 'compaction') {
 		setMessages((prev) => withLastAssistant(prev, (m) => B.pushNotice(
 			m, 'info', 'Context compacted',

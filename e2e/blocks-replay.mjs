@@ -270,5 +270,17 @@ test('completeTool never drops an unmatched result', () => {
 	assert.equal(m.blocks[0].tool.result, 'out');
 });
 
+test('setReasoningTokens uses the provider count over the char estimate', () => {
+	let m = B.openReasoning(fresh());
+	m = B.appendReasoning(m, 'x'.repeat(400));   // estimate would be ~100
+	m = B.setReasoningTokens(m, 69);
+	assert.equal(m.blocks[0].tokens, 69);
+});
+
+test('setReasoningTokens is a no-op with no reasoning block', () => {
+	const m = B.setReasoningTokens(fresh(), 42);
+	assert.equal(m.blocks.length, 0);
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

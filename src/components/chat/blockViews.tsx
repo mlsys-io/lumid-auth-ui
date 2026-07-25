@@ -27,7 +27,7 @@ export type BlockViewProps = {
 	// components live there and stay there.
 	renderTool: (t: ToolCall, onApprove?: (approved: boolean, always?: boolean) => void) => ReactNode;
 	renderText: (text: string, done?: boolean) => ReactNode;
-	renderReasoning: (text: string, done: boolean, elapsedMs?: number) => ReactNode;
+	renderReasoning: (text: string, done: boolean, elapsedMs?: number, tokens?: number) => ReactNode;
 	renderCard: (card: Extract<Block, { kind: 'card' }>['card']) => ReactNode;
 	renderChips: (chips: Extract<Block, { kind: 'chips' }>['chips']) => ReactNode;
 };
@@ -44,6 +44,7 @@ export function BlockView(props: BlockViewProps) {
 				b.text,
 				!!b.done,
 				b.startedAt ? (b.endedAt ?? Date.now()) - b.startedAt : undefined,
+				b.tokens,
 			)}</>;
 
 		case 'tool': {

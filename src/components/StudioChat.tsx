@@ -453,6 +453,10 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 	// session pill (the ref alone never re-renders). Always write through
 	// setCCSession so both stay in sync.
 	const [claudeSession, setClaudeSession] = useState<string | null>(null);
+	// Sandbox turn id for the run in flight. Lets Stop go through the CLI's own
+	// interrupt instead of just aborting the fetch (which SIGKILLed the process
+	// and threw away partial work).
+	const turnIdRef = useRef<string | null>(null);
 	const navigate = useNavigate();
 	// App the active session is grounded on (Studio workspace slug). Drives
 	// per-app session switching + tags saves so the picker can group/route by app.
@@ -1102,6 +1106,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 				: { role: 'user' as const, content: text },
 		];
 		setTurnStats(null);
+		turnIdRef.current = null;
 		const assistantMsg: Message = { role: 'assistant', content: '', blocks: [] };
 		setMessages(() => [...base, userMsg, assistantMsg]);
 		setStreaming(true);
@@ -1152,6 +1157,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 						onRoute: (modelUsed, autoRouted) => setLastRoute({ modelUsed, autoRouted }),
 						onUsage: (used, limit) => setUsage({ used, limit }),
 						onTurnStats: setTurnStats,
+						onTurnId: (id) => { turnIdRef.current = id; },
 					}, ctrl.signal);
 					setQuotaRefresh((n) => n + 1);
 					break; // success
@@ -2104,7 +2110,25 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 					{streaming && (
 						<button
 							type="button"
-							onClick={() => abortRef.current?.abort()}
+							onClick={async () => {
+								// Cooperative stop: the CLI finishes its current tool,
+								// flushes a real result, and persists session state, so
+								// the turn stays resumable. Aborting the fetch alone
+								// SIGKILLed the process and discarded partial work.
+								const turn = turnIdRef.current;
+								if (turn) {
+									try {
+										await fetch('/api/v1/me/agent/chat/interrupt', {
+											method: 'POST',
+											credentials: 'include',
+											headers: { 'Content-Type': 'application/json' },
+											body: JSON.stringify({ turn_id: turn }),
+										});
+										return; // the stream ends itself with a `stopped` event
+									} catch { /* fall through to the hard abort */ }
+								}
+								abortRef.current?.abort();
+							}}
 							title="Stop current turn"
 							aria-label="Stop generating"
 							className="order-5 h-8 w-8 flex items-center justify-center rounded-full flex-shrink-0 bg-rose-500 text-white hover:bg-rose-600 active:scale-95 shadow-sm shadow-rose-200 transition-all"
@@ -2241,8 +2265,8 @@ const MessageBubble = memo(function MessageBubble({
 				{!isUser && streaming && !done && <StreamCaret />}
 			</div>
 		),
-		renderReasoning: (text: string, done: boolean, elapsedMs?: number) => (
-			<ThinkingBlock thinking={text} done={done} elapsedMs={elapsedMs} />
+		renderReasoning: (text: string, done: boolean, elapsedMs?: number, tokens?: number) => (
+			<ThinkingBlock thinking={text} done={done} elapsedMs={elapsedMs} tokens={tokens} />
 		),
 		renderCard: (card: Extract<Block, { kind: 'card' }>['card']) => {
 			if (card.type === 'assembly') return <AssemblyCard draft={card.draft} />;
@@ -2405,9 +2429,11 @@ const MessageBubble = memo(function MessageBubble({
 // so they still see activity without the panel hijacking attention
 // from the streaming answer. Token count is a ~4-chars/token estimate
 // (we don't get a usage count for the streamed thinking deltas).
-function ThinkingBlock({ thinking, done, elapsedMs }: { thinking: string; done: boolean; elapsedMs?: number }) {
+function ThinkingBlock({ thinking, done, elapsedMs, tokens }: { thinking: string; done: boolean; elapsedMs?: number; tokens?: number }) {
 	const [open, setOpen] = useState<boolean>(false);
-	const tokenCount = thinking.length ? Math.max(1, Math.round(thinking.length / 4)) : 0;
+	// Prefer the provider's own count (system/thinking_tokens); the ~4-chars
+	// estimate is the fallback for providers that don't report one.
+	const tokenCount = tokens ?? (thinking.length ? Math.max(1, Math.round(thinking.length / 4)) : 0);
 	// Duration comes from the block's own start/end stamps when available
 	// (block model); legacy messages have none and keep the token-only label.
 	const secs = elapsedMs !== undefined && elapsedMs > 900 ? Math.round(elapsedMs / 1000) : 0;
