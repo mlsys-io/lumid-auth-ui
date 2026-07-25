@@ -10,7 +10,8 @@
 // changes at all.
 
 import { useState, useEffect, useRef, type ReactNode } from 'react';
-import { Loader2, ChevronDown, Bot, AlertTriangle, Info, Scissors } from 'lucide-react';
+import { Loader2, Bot, AlertTriangle, Info, Scissors } from 'lucide-react';
+import { Appear, Collapse, Chevron, StreamCaret, useMotionOK } from './motion';
 
 import type { Block, SubagentBlock, ToolCall } from './types';
 import { MonoBlock, resultText } from './toolViews';
@@ -70,7 +71,7 @@ export function BlockView(props: BlockViewProps) {
 function NoticeView({ level, text, detail }: { level: 'error' | 'info'; text: string; detail?: string }) {
 	const err = level === 'error';
 	return (
-		<div className={[
+		<Appear className={[
 			'mt-2 flex items-start gap-1.5 px-2.5 py-1.5 rounded-lg border text-[12px]',
 			err ? 'border-rose-200 bg-rose-50/70 text-rose-900' : 'border-border bg-muted/50 text-muted-foreground',
 		].join(' ')}>
@@ -82,7 +83,7 @@ function NoticeView({ level, text, detail }: { level: 'error' | 'info'; text: st
 				{text}
 				{detail && <span className="ml-1 opacity-70">({detail})</span>}
 			</span>
-		</div>
+		</Appear>
 	);
 }
 
@@ -149,7 +150,7 @@ function SubagentBlockView(props: BlockViewProps & { b: SubagentBlock; depth: nu
 				onClick={() => { touched.current = true; setOpen((v) => !v); }}
 				className="group/sa w-full flex items-center gap-1.5 text-left text-[12px] text-muted-foreground hover:text-foreground transition-colors"
 			>
-				<ChevronDown className={['w-3 h-3 flex-shrink-0 transition-transform', open ? '' : '-rotate-90'].join(' ')} />
+				<Chevron open={open} className="flex-shrink-0 opacity-70" />
 				<Bot className="w-3.5 h-3.5 flex-shrink-0 text-indigo-500" />
 				<span className="font-medium text-foreground truncate">{label}</span>
 				{b.subagentType && (
@@ -168,8 +169,8 @@ function SubagentBlockView(props: BlockViewProps & { b: SubagentBlock; depth: nu
 
 			{meta && <div className="mt-0.5 ml-[18px] text-[10px] text-muted-foreground tabular-nums">{meta}</div>}
 
-			{open && (
-				<div className="ml-[18px]">
+			<Collapse open={open} className="ml-[18px]">
+				<div>
 					{b.prompt && (
 						<>
 							<button
@@ -187,7 +188,7 @@ function SubagentBlockView(props: BlockViewProps & { b: SubagentBlock; depth: nu
 						<BlockView key={c.id} {...props} b={c} depth={depth + 1} />
 					))}
 				</div>
-			)}
+			</Collapse>
 
 			{/* Visible even when collapsed — this is the answer the parent consumed. */}
 			{!running && summary && (

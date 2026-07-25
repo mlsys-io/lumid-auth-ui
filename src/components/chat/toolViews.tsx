@@ -11,6 +11,7 @@
 import { useState, type ReactElement } from 'react';
 import { Loader2, ChevronDown, Terminal, FileText, FilePen, Search, ListTodo, Globe, Bot, NotebookPen, ClipboardList, Zap, Plug } from 'lucide-react';
 import type { ToolCall } from './types';
+import { Collapse } from './motion';
 
 // resultText flattens a claude CLI tool_result content payload — a plain
 // string or an array of {type:"text", text} blocks — into displayable text.
@@ -76,7 +77,7 @@ function BashView({ t }: { t: ToolCall }) {
 				<StatusDot t={t} />
 				<ChevronDown className={['w-3 h-3 opacity-40 group-hover:opacity-100 transition-transform', open ? 'rotate-180' : ''].join(' ')} />
 			</button>
-			{open && !t.pending && (
+			<Collapse open={open && !t.pending}>
 				<>
 					<MonoBlock text={out} tone={t.ok ? undefined : 'error'} />
 					{/* stderr kept visually distinct rather than concatenated —
@@ -86,7 +87,7 @@ function BashView({ t }: { t: ToolCall }) {
 						<div className="mt-1 text-[10px] text-muted-foreground italic">(no output)</div>
 					)}
 				</>
-			)}
+			</Collapse>
 		</div>
 	);
 }
@@ -152,7 +153,7 @@ function EditView({ t }: { t: ToolCall }) {
 				<StatusDot t={t} />
 				<ChevronDown className={['w-3 h-3 opacity-40 group-hover:opacity-100 transition-transform', open ? 'rotate-180' : ''].join(' ')} />
 			</button>
-			{open && (
+			<Collapse open={open}>
 				<div className="mt-1 rounded-md border border-border overflow-hidden max-h-56 overflow-y-auto">
 					{edits.map((e, i) => (
 						<div key={i} className={i > 0 ? 'border-t border-border' : ''}>
@@ -172,7 +173,7 @@ function EditView({ t }: { t: ToolCall }) {
 						</div>
 					))}
 				</div>
-			)}
+			</Collapse>
 		</div>
 	);
 }
@@ -192,7 +193,7 @@ function WriteView({ t }: { t: ToolCall }) {
 				<StatusDot t={t} />
 				<ChevronDown className={['w-3 h-3 opacity-40 group-hover:opacity-100 transition-transform', open ? 'rotate-180' : ''].join(' ')} />
 			</button>
-			{open && <MonoBlock text={content.length > 4000 ? content.slice(0, 4000) + '\n…' : content} />}
+			<Collapse open={open}><MonoBlock text={content.length > 4000 ? content.slice(0, 4000) + '\n…' : content} /></Collapse>
 		</div>
 	);
 }
@@ -267,7 +268,7 @@ function TaskView({ t }: { t: ToolCall }) {
 					<ChevronDown className={['w-3 h-3 opacity-40 group-hover:opacity-100 transition-transform', open ? 'rotate-180' : ''].join(' ')} />
 				)}
 			</button>
-			{open && <MonoBlock text={out.length > 4000 ? out.slice(0, 4000) + '\n…' : out} />}
+			<Collapse open={open}><MonoBlock text={out.length > 4000 ? out.slice(0, 4000) + '\n…' : out} /></Collapse>
 		</div>
 	);
 }
@@ -290,7 +291,7 @@ function WebView({ t }: { t: ToolCall }) {
 			</button>
 			{/* Was `!t.ok` — successful fetches/searches were unviewable, which is
 			    exactly the case you want to read. */}
-			{open && !t.pending && <MonoBlock text={out} tone={t.ok ? undefined : 'error'} />}
+			<Collapse open={open && !t.pending}><MonoBlock text={out} tone={t.ok ? undefined : 'error'} /></Collapse>
 		</div>
 	);
 }
@@ -311,7 +312,7 @@ function NotebookView({ t }: { t: ToolCall }) {
 				<StatusDot t={t} />
 				<ChevronDown className={['w-3 h-3 opacity-40 group-hover:opacity-100 transition-transform', open ? 'rotate-180' : ''].join(' ')} />
 			</button>
-			{open && <MonoBlock text={src.length > 4000 ? src.slice(0, 4000) + '\n…' : src} />}
+			<Collapse open={open}><MonoBlock text={src.length > 4000 ? src.slice(0, 4000) + '\n…' : src} /></Collapse>
 		</div>
 	);
 }
@@ -328,11 +329,11 @@ function PlanView({ t }: { t: ToolCall }) {
 				<StatusDot t={t} />
 				<ChevronDown className={['w-3 h-3 opacity-40 group-hover:opacity-100 transition-transform', open ? 'rotate-180' : ''].join(' ')} />
 			</button>
-			{open && plan && (
+			<Collapse open={open && !!plan}>
 				<div className="mt-1 px-2.5 py-2 rounded-md border border-violet-200 bg-violet-50/50 text-[11.5px] leading-relaxed whitespace-pre-wrap break-words max-h-64 overflow-y-auto">
 					{plan}
 				</div>
-			)}
+			</Collapse>
 		</div>
 	);
 }
@@ -352,7 +353,7 @@ function CommandView({ t }: { t: ToolCall }) {
 					<ChevronDown className={['w-3 h-3 opacity-40 group-hover:opacity-100 transition-transform', open ? 'rotate-180' : ''].join(' ')} />
 				)}
 			</button>
-			{open && !t.pending && <MonoBlock text={out} tone={t.ok ? undefined : 'error'} />}
+			<Collapse open={open && !t.pending}><MonoBlock text={out} tone={t.ok ? undefined : 'error'} /></Collapse>
 		</div>
 	);
 }
@@ -373,7 +374,7 @@ function ShellCtlView({ t }: { t: ToolCall }) {
 				<StatusDot t={t} />
 				<ChevronDown className={['w-3 h-3 opacity-40 group-hover:opacity-100 transition-transform', open ? 'rotate-180' : ''].join(' ')} />
 			</button>
-			{open && !t.pending && <MonoBlock text={out} tone={t.ok ? undefined : 'error'} />}
+			<Collapse open={open && !t.pending}><MonoBlock text={out} tone={t.ok ? undefined : 'error'} /></Collapse>
 		</div>
 	);
 }
@@ -396,7 +397,7 @@ function McpView({ t }: { t: ToolCall }) {
 					<ChevronDown className={['w-3 h-3 opacity-40 group-hover:opacity-100 transition-transform', open ? 'rotate-180' : ''].join(' ')} />
 				)}
 			</button>
-			{open && !t.pending && <MonoBlock text={out} tone={t.ok ? undefined : 'error'} />}
+			<Collapse open={open && !t.pending}><MonoBlock text={out} tone={t.ok ? undefined : 'error'} /></Collapse>
 		</div>
 	);
 }

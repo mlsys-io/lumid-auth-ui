@@ -34,6 +34,7 @@ import { readChatStream, withLastAssistant } from './chat/protocol';
 import { claudeToolView } from './chat/toolViews';
 import { blocksOf, failPendingTools, clearApproval, stripForPersist } from './chat/blocks';
 import { BlockView, EntityCardBlock } from './chat/blockViews';
+import { Appear, Collapse, StreamCaret, JumpToLatest, useMotionOK, AnimatePresence } from './chat/motion';
 import { QuotaMeter } from './claude/QuotaMeter';
 import { TurnStatsFooter, type TurnStats } from './claude/TurnStats';
 import { SessionStrip } from './claude/SessionStrip';
@@ -519,6 +520,10 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 	// yanking them down on every stream delta. Updated by the transcript's
 	// onScroll; seeded true so the first turn pins as expected.
 	const atBottomRef = useRef(true);
+	// Mirrored into state so the jump-to-latest button can render. The ref
+	// stays authoritative for the auto-scroll effect (no re-render per delta).
+	const [atBottom, setAtBottom] = useState(true);
+	const motionOK = useMotionOK();
 	// Phase S6 polish — abort handle so the user can cut a runaway
 	// stream short. Reset on every send/queueSend; set just before the
 	// fetch; consumed by the Stop button.
@@ -1594,10 +1599,10 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 			    cards). Opened via studio:open-session; floats over the chat. */}
 			{session && (
 				<div
-					className={sessionExpanded ? 'fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-8 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-150' : 'contents'}
+					className={sessionExpanded ? 'fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-8 bg-slate-900/40 backdrop-blur-sm duration-150' : 'contents'}
 					onClick={sessionExpanded ? (e) => { if (e.target === e.currentTarget) setSessionExpanded(false); } : undefined}
 				>
-				<div className={['flex flex-col rounded-2xl border border-slate-200/70 bg-white/95 backdrop-blur-sm overflow-hidden ring-1 ring-black/5 animate-in fade-in duration-200', sessionExpanded ? 'w-full max-w-3xl h-[82vh] shadow-2xl shadow-slate-900/30 zoom-in-95' : 'absolute left-3 right-3 top-3 z-40 h-1/3 max-h-[38%] shadow-[0_12px_40px_-8px_rgba(15,23,42,0.28)] slide-in-from-top-2'].join(' ')}>
+				<div className={['flex flex-col rounded-2xl border border-slate-200/70 bg-white/95 backdrop-blur-sm overflow-hidden ring-1 ring-black/5 duration-200', sessionExpanded ? 'w-full max-w-3xl h-[82vh] shadow-2xl shadow-slate-900/30' : 'absolute left-3 right-3 top-3 z-40 h-1/3 max-h-[38%] shadow-[0_12px_40px_-8px_rgba(15,23,42,0.28)]'].join(' ')}>
 					<div className="flex items-center gap-2 px-3.5 py-2 border-b border-slate-100 flex-shrink-0 bg-gradient-to-b from-slate-50/80 to-transparent">
 						<span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-violet-100 text-violet-600 flex-shrink-0"><Bot className="w-3.5 h-3.5" /></span>
 						<span className="text-[13px] font-medium text-slate-900 truncate">Session · {session.loop}</span>
@@ -1671,6 +1676,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 					// "near bottom" = within 80px of the end. Toggles whether new
 					// content sticks to the bottom or leaves the user where they are.
 					atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+					if (atBottomRef.current !== atBottom) setAtBottom(atBottomRef.current);
 				}}
 				className={messages.length === 0
 					? 'flex-none px-4 pb-4'
@@ -1710,6 +1716,17 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 			</div>
 
 			<footer className="relative z-30 flex-shrink-0 px-4 pt-1 pb-4">
+				{/* Jump to latest — the transcript had no way back down once you
+				    scrolled up, and auto-scroll deliberately stops following you. */}
+				<AnimatePresence>
+					{!atBottom && messages.length > 0 && (
+						<JumpToLatest onClick={() => {
+							const el = transcriptRef.current;
+							if (el) el.scrollTo({ top: el.scrollHeight, behavior: motionOK ? 'smooth' : 'auto' });
+							atBottomRef.current = true; setAtBottom(true);
+						}} />
+					)}
+				</AnimatePresence>
 				<div className="w-full mx-auto max-w-[640px]">
 				{/* Queued messages. Shows the FIFO list of turns waiting
 				    for the current stream to finish. Each row is
@@ -2207,7 +2224,11 @@ const MessageBubble = memo(function MessageBubble({
 				<ToolChip t={t} onApprove={onApprove} />
 			</div>
 		),
-		renderText: (text: string) => (
+		// `live` marks the block currently being written, so the caret sits at
+		// the true end of the stream. Before this, the three bouncing dots
+		// vanished on the first token and the text then grew with nothing
+		// marking the live edge.
+		renderText: (text: string, done?: boolean) => (
 			<div className={[
 				'inline-block max-w-full text-[13.5px] rounded-2xl px-3.5 py-2.5 leading-relaxed text-left shadow-sm mt-2 first:mt-0',
 				isUser
@@ -2217,6 +2238,7 @@ const MessageBubble = memo(function MessageBubble({
 				{isUser
 					? <div className="whitespace-pre-wrap break-words">{text}</div>
 					: <ChatMarkdown>{text}</ChatMarkdown>}
+				{!isUser && streaming && !done && <StreamCaret />}
 			</div>
 		),
 		renderReasoning: (text: string, done: boolean, elapsedMs?: number) => (
@@ -2243,7 +2265,7 @@ const MessageBubble = memo(function MessageBubble({
 	};
 
 	return (
-		<div className={['group flex gap-2.5', isUser ? 'flex-row-reverse' : ''].join(' ')}>
+		<Appear className={['group flex gap-2.5', isUser ? 'flex-row-reverse' : ''].join(' ')}>
 			<div className={[
 				'w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm',
 				isUser
@@ -2261,7 +2283,7 @@ const MessageBubble = memo(function MessageBubble({
 				    actually completed. The original anti-flicker reason still
 				    holds because blocks only ever append. */}
 				{blocks.map((b) => (
-					<BlockView key={b.id} {...blockProps} b={b} />
+					<Appear key={b.id}><BlockView {...blockProps} b={b} /></Appear>
 				))}
 				{/* Pre-first-token placeholder — bubble-level, see noTextYet. */}
 				{noTextYet && streaming && !m.composed && (
@@ -2349,7 +2371,7 @@ const MessageBubble = memo(function MessageBubble({
 					</div>
 				)}
 			</div>
-		</div>
+		</Appear>
 	);
 }, (a, b) =>
 	// Skip re-render unless the MESSAGE changed. The call site passes fresh
@@ -2407,13 +2429,13 @@ function ThinkingBlock({ thinking, done, elapsedMs }: { thinking: string; done: 
 					className={['w-3 h-3 transition-transform', open ? 'rotate-180' : ''].join(' ')}
 				/>
 			</button>
-			{open && (
+			<Collapse open={open}>
 				<div className="mt-1.5 px-3 py-2 text-[12px] leading-relaxed text-muted-foreground bg-gold-50/40 border border-gold-100 rounded-xl whitespace-pre-wrap break-words">
 					{thinking || (
 						<span className="opacity-50 italic">(no content yet)</span>
 					)}
 				</div>
-			)}
+			</Collapse>
 		</div>
 	);
 }

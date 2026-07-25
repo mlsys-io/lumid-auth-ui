@@ -48,6 +48,10 @@ export default defineConfig({
           // @tanstack (react-query) is runmesh-only — peel it so Studio routes
           // don't carry it in the shared vendor chunk.
           if (/[\\/]node_modules[\\/]@tanstack[\\/]/.test(id)) return "vendor-tanstack";
+          // framer-motion is used only by the chat transcript, which is itself
+          // lazy-loaded. Left in the shared vendor chunk it added ~42 kB gzip to
+          // EVERY page's initial load, including ones with no animation at all.
+          if (/[\\/]node_modules[\\/](framer-motion|motion-dom|motion-utils)[\\/]/.test(id)) return "vendor-motion";
           return "vendor";
         },
       },
