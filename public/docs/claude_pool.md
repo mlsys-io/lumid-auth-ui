@@ -21,8 +21,13 @@ no install, no PAT setup. Pick a **(Code)** model from the model picker:
 | GLM-5.2 (Code) | admin+ | OpenRouter — cost-metered, no pool quota |
 | Qwen3.6-35B (Code · Lumid GPU) | everyone | In-house GPU — **no pool quota** |
 
-Each turn runs the claude CLI in a sandboxed per-user workspace (Bash, file
-edits, todo lists render inline). The session pill above the composer shows
+Each turn runs the claude CLI in a sandboxed per-user workspace, and the
+transcript renders the way the CLI does: reasoning blocks, tool calls in the
+order they happened (with a real diff for edits and a terminal block for Bash),
+and a sub-agent's own work nested under the Task that spawned it. Stop
+interrupts the agent cooperatively — it finishes the tool it's on, so the turn
+stays resumable instead of being killed mid-write. Each finished turn shows its
+cost, duration, step count and cache hit rate. The session pill above the composer shows
 the live session; reopening a chat thread resumes it. Pool-backed models show
 your personal quota next to the model picker, and their sessions are recorded
 on [/claude-sessions](/claude-sessions) like any pool traffic. The Qwen entry
