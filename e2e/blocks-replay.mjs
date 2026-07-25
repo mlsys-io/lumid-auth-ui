@@ -282,5 +282,29 @@ test('setReasoningTokens is a no-op with no reasoning block', () => {
 	assert.equal(m.blocks.length, 0);
 });
 
+test('completeTool PRESERVES args — tool_call carries none', () => {
+	// The Claude Code bridge builds tool_call from the tool_result message,
+	// which has no args/summary. A plain {...prev, ...completed} let undefined
+	// clobber them, so every FINISHED tool lost its command/path and each
+	// renderer fell back to a bare label: "$ (bash)", "write", "read".
+	let m = B.startTool(fresh(), {
+		id: 'a1', name: 'Bash',
+		args: { command: 'mkdir -p parity' }, summary: 'command: mkdir -p parity',
+	});
+	m = B.completeTool(m, { id: 'a1', name: 'Bash', ok: true, result: 'created', args: undefined, summary: undefined });
+	const t = m.blocks[0].tool;
+	assert.deepEqual(t.args, { command: 'mkdir -p parity' }, 'args must survive completion');
+	assert.equal(t.summary, 'command: mkdir -p parity', 'summary must survive completion');
+	assert.equal(t.result, 'created');
+	assert.equal(t.pending, false);
+});
+
+test('completeTool still applies DEFINED fields over the pending ones', () => {
+	let m = B.startTool(fresh(), { id: 'a1', name: 'Bash', args: { command: 'x' } });
+	m = B.completeTool(m, { id: 'a1', name: 'Bash', ok: false, result: 'boom', args: { command: 'y' } });
+	assert.deepEqual(m.blocks[0].tool.args, { command: 'y' }, 'a defined arg must win');
+	assert.equal(m.blocks[0].tool.ok, false, 'ok:false must not be treated as absent');
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

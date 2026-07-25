@@ -138,6 +138,48 @@ export function JumpToLatest({ onClick }: { onClick: () => void }) {
 	);
 }
 
+/**
+ * Shimmer for a row that is actively working. A static ✓/spinner glyph is easy
+ * to miss on a dense transcript — the whole row breathing is what reads as
+ * "this is happening now".
+ */
+export function Working({ children, className }: { children: ReactNode; className?: string }) {
+	const ok = useMotionOK();
+	if (!ok) return <div className={className}>{children}</div>;
+	return (
+		<motion.div
+			className={className}
+			animate={{ opacity: [1, 0.55, 1] }}
+			transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
+		>
+			{children}
+		</motion.div>
+	);
+}
+
+/**
+ * Three-dot "thinking" pulse. Reasoning had NO in-progress affordance at all —
+ * just a static "Thinking…" label that looked identical to a finished block.
+ */
+export function ThinkingDots() {
+	const ok = useMotionOK();
+	if (!ok) return <span className="inline-flex gap-[3px]">{[0, 1, 2].map((i) => (
+		<span key={i} className="w-1 h-1 rounded-full bg-gold-500" />
+	))}</span>;
+	return (
+		<span className="inline-flex gap-[3px] items-center">
+			{[0, 1, 2].map((i) => (
+				<motion.span
+					key={i}
+					className="w-1 h-1 rounded-full bg-gold-500"
+					animate={{ opacity: [0.25, 1, 0.25], y: [0, -1.5, 0] }}
+					transition={{ duration: 1.1, repeat: Infinity, ease: 'easeInOut', delay: i * 0.16 }}
+				/>
+			))}
+		</span>
+	);
+}
+
 /** Chevron that rotates instead of snapping. */
 export function Chevron({ open, className }: { open: boolean; className?: string }) {
 	const ok = useMotionOK();

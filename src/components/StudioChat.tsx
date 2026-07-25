@@ -34,7 +34,7 @@ import { readChatStream, withLastAssistant } from './chat/protocol';
 import { claudeToolView } from './chat/toolViews';
 import { blocksOf, failPendingTools, clearApproval, stripForPersist } from './chat/blocks';
 import { BlockView, EntityCardBlock } from './chat/blockViews';
-import { Appear, Collapse, StreamCaret, JumpToLatest, useMotionOK, AnimatePresence } from './chat/motion';
+import { Appear, Collapse, StreamCaret, JumpToLatest, ThinkingDots, Working, useMotionOK, AnimatePresence } from './chat/motion';
 import { TurnStatsFooter, type TurnStats } from './claude/TurnStats';
 import { SessionStrip } from './claude/SessionStrip';
 import { fetchCycleConversation, type CycleLogRow } from '@/api/trajectory';
@@ -2244,11 +2244,18 @@ const MessageBubble = memo(function MessageBubble({
 
 	const blockProps = {
 		isUser, streaming, onToolApprove,
-		renderTool: (t: ToolCall, onApprove?: (approved: boolean, always?: boolean) => void) => (
-			<div className={['mt-2 flex flex-col gap-1', isUser ? 'items-end' : 'items-start'].join(' ')}>
-				<ToolChip t={t} onApprove={onApprove} />
-			</div>
-		),
+		// Tool rows sit tight (mt-1) rather than mt-2: a turn can fire seven in a
+		// row, and a full gap between each read as scattered debris rather than
+		// one sequence of steps. A running tool pulses so it's findable in a
+		// dense transcript.
+		renderTool: (t: ToolCall, onApprove?: (approved: boolean, always?: boolean) => void) => {
+			const row = (
+				<div className={['mt-1 flex flex-col', isUser ? 'items-end' : 'items-start'].join(' ')}>
+					<ToolChip t={t} onApprove={onApprove} />
+				</div>
+			);
+			return t.pending && !t.approvalRequired ? <Working>{row}</Working> : row;
+		},
 		// `live` marks the block currently being written, so the caret sits at
 		// the true end of the stream. Before this, the three bouncing dots
 		// vanished on the first token and the text then grew with nothing
@@ -2438,8 +2445,14 @@ function ThinkingBlock({ thinking, done, elapsedMs, tokens }: { thinking: string
 	// Duration comes from the block's own start/end stamps when available
 	// (block model); legacy messages have none and keep the token-only label.
 	const secs = elapsedMs !== undefined && elapsedMs > 900 ? Math.round(elapsedMs / 1000) : 0;
+	// A reasoning block with no content and no tokens is noise — the CLI opens
+	// one speculatively on many turns, which rendered as a stray
+	// "Thought (0 tokens)" pill.
+	if (done && !thinking && !tokenCount) return null;
 	const label = done
-		? (secs ? `Thought for ${secs}s (${tokenCount} tokens)` : `Thought (${tokenCount} tokens)`)
+		? (tokenCount
+			? (secs ? `Thought for ${secs}s (${tokenCount} tokens)` : `Thought (${tokenCount} tokens)`)
+			: (secs ? `Thought for ${secs}s` : 'Thought'))
 		: tokenCount > 0
 			? `Thinking… ${tokenCount} tokens`
 			: 'Thinking…';
@@ -2452,6 +2465,7 @@ function ThinkingBlock({ thinking, done, elapsedMs, tokens }: { thinking: string
 			>
 				<Brain className="w-3 h-3" />
 				<span>{label}</span>
+				{!done && <ThinkingDots />}
 				<ChevronDown
 					className={['w-3 h-3 transition-transform', open ? 'rotate-180' : ''].join(' ')}
 				/>

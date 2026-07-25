@@ -11,7 +11,7 @@
 
 import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { Loader2, Bot, AlertTriangle, Info, Scissors } from 'lucide-react';
-import { Appear, Collapse, Chevron, StreamCaret, useMotionOK } from './motion';
+import { Appear, Collapse, Chevron, Working } from './motion';
 
 import type { Block, SubagentBlock, ToolCall } from './types';
 import { MonoBlock, resultText } from './toolViews';
@@ -168,7 +168,11 @@ function SubagentBlockView(props: BlockViewProps & { b: SubagentBlock; depth: nu
 				</span>
 			</button>
 
-			{meta && <div className="mt-0.5 ml-[18px] text-[10px] text-muted-foreground tabular-nums">{meta}</div>}
+			{meta && (
+				running
+					? <Working className="mt-0.5 ml-[18px] text-[10px] text-muted-foreground tabular-nums">{meta}</Working>
+					: <div className="mt-0.5 ml-[18px] text-[10px] text-muted-foreground tabular-nums">{meta}</div>
+			)}
 
 			<Collapse open={open} className="ml-[18px]">
 				<div>

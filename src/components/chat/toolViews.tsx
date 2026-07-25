@@ -40,15 +40,31 @@ export function StatusDot({ t }: { t: ToolCall }) {
 
 // Collapsible monospace block, capped height, used for command output +
 // file previews.
+// Cap what actually reaches the DOM. max-h + overflow only hides overflow — a
+// 48 KB single line with break-all still has to be laid out, and it read as a
+// wall of characters with no indication of how much there was.
+const MONO_CAP = 6000;
+
 export function MonoBlock({ text, tone }: { text: string; tone?: 'error' }) {
 	if (!text) return null;
+	const over = text.length > MONO_CAP;
+	const shown = over ? text.slice(0, MONO_CAP) : text;
+	const size = text.length >= 1024 ? `${(text.length / 1024).toFixed(1)} KB` : `${text.length} B`;
 	return (
-		<pre className={[
-			'mt-1 p-2 rounded-md border text-[10.5px] font-mono whitespace-pre-wrap break-all max-h-48 overflow-y-auto',
-			tone === 'error' ? 'bg-rose-50/60 border-rose-200 text-rose-900' : 'bg-zinc-900 border-zinc-700 text-zinc-100',
-		].join(' ')}>
-			{text}
-		</pre>
+		<div className="mt-1">
+			<pre className={[
+				'p-2 rounded-md border text-[10.5px] font-mono whitespace-pre-wrap break-all max-h-48 overflow-y-auto',
+				tone === 'error' ? 'bg-rose-50/60 border-rose-200 text-rose-900' : 'bg-zinc-900 border-zinc-700 text-zinc-100',
+				over ? 'rounded-b-none' : '',
+			].join(' ')}>
+				{shown}
+			</pre>
+			{over && (
+				<div className="px-2 py-0.5 rounded-b-md border border-t-0 border-zinc-700 bg-zinc-800 text-[9.5px] text-zinc-400 tabular-nums">
+					showing first {(MONO_CAP / 1024).toFixed(0)} KB of {size}
+				</div>
+			)}
+		</div>
 	);
 }
 

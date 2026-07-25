@@ -384,7 +384,20 @@ export function completeTool(m: Message, completed: ToolCall, parentId?: string)
 				if ((b.kind === 'tool' || b.kind === 'subagent') && b.tool.pending && b.tool.name === completed.name) { at = i; break; }
 			}
 		}
-		const merged = (prev: ToolCall): ToolCall => ({ ...prev, ...completed, pending: false });
+		// Merge only DEFINED fields. A plain {...prev, ...completed} let
+		// undefined clobber good values: the Claude Code bridge builds tool_call
+		// from the tool_result message, which carries no args/summary, so every
+		// finished tool lost its command/path and every renderer fell back to a
+		// bare label ("$ (bash)", "write", "read"). tool_start is the only event
+		// that has the arguments.
+		const merged = (prev: ToolCall): ToolCall => {
+			const next: ToolCall = { ...prev };
+			for (const [k, v] of Object.entries(completed) as Array<[keyof ToolCall, unknown]>) {
+				if (v !== undefined) (next as Record<string, unknown>)[k as string] = v;
+			}
+			next.pending = false;
+			return next;
+		};
 
 		if (at < 0) {
 			// Never drop a result: append it as a finished block.
