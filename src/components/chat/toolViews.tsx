@@ -102,8 +102,11 @@ function BashView({ t }: { t: ToolCall }) {
 	return (
 		<div className="max-w-full text-[11px]">
 			<button onClick={toggle} className="inline-flex items-center gap-1.5 max-w-full group">
+				{/* The Terminal icon already signals "shell"; a `$` prefix on top
+				    of it read as a doubled prompt (>_ $). Icon + monospace command
+				    is one prompt, consistent with the other icon-led tool rows. */}
 				<Terminal className="w-3 h-3 text-zinc-500 shrink-0" />
-				<span className="font-mono text-zinc-700 truncate max-w-[420px]">$ {cmd || '(bash)'}</span>
+				<span className="font-mono text-zinc-700 truncate max-w-[420px]">{cmd || '(bash)'}</span>
 				{interrupted && (
 					<span className="shrink-0 px-1 rounded bg-amber-100 text-amber-800 text-[9.5px] border border-amber-200">
 						interrupted
@@ -215,20 +218,30 @@ function EditView({ t }: { t: ToolCall }) {
 
 // ── Write — path header + collapsible content preview ───────────────────────
 function WriteView({ t }: { t: ToolCall }) {
-	const [open, toggle] = useAutoCollapse(t.pending, !t.ok && !t.pending);
+	const failed = !t.ok && !t.pending;
+	const err = failed ? resultText(t) : '';
+	// A FAILED write must NOT keep the content preview open (keepOpen=false):
+	// the preview is the intended file body, not the error, so force-opening it
+	// showed a wall of comments that told you nothing about why it failed. On
+	// failure we surface the error instead; on success it folds like everything.
+	const [open, toggle] = useAutoCollapse(t.pending);
 	const path = str(t.args?.file_path);
 	const content = str(t.args?.content);
 	const lines = content ? content.split('\n').length : 0;
 	return (
 		<div className="max-w-full text-[11px]">
 			<button onClick={toggle} className="inline-flex items-center gap-1.5 max-w-full group">
-				<FileText className="w-3 h-3 text-emerald-600 shrink-0" />
+				<FileText className={['w-3 h-3 shrink-0', failed ? 'text-rose-500' : 'text-emerald-600'].join(' ')} />
 				<span className="font-mono text-zinc-700 truncate max-w-[420px]">{path || 'write'}</span>
 				{lines > 0 && <span className="opacity-60">{lines} lines</span>}
 				<StatusDot t={t} />
 				<ChevronDown className={['w-3 h-3 opacity-40 group-hover:opacity-100 transition-transform', open ? 'rotate-180' : ''].join(' ')} />
 			</button>
-			<Collapse open={open}><MonoBlock text={content.length > 4000 ? content.slice(0, 4000) + '\n…' : content} /></Collapse>
+			{/* Failure → the error, always visible (it's short and it's the point).
+			    Success → the collapsible content preview. */}
+			{failed && err
+				? <MonoBlock text={err} tone="error" />
+				: <Collapse open={open}><MonoBlock text={content.length > 4000 ? content.slice(0, 4000) + '\n…' : content} /></Collapse>}
 		</div>
 	);
 }
