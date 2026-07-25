@@ -85,29 +85,47 @@ export function handleEvent(
 		})));
 	} else if (evt.type === 'thinking_start') {
 		// Open an empty thinking block. Deltas append; thinking_stop closes.
+		// parent_id means this came from a SUB-AGENT. A message holds one flat
+		// thinking string, so folding a sub-agent's reasoning into it would
+		// splice two trains of thought together. Skipped until the block model
+		// can nest it under its Task.
+		if (evt.parent_id) return;
 		setMessages((prev) => withLastAssistant(prev, (m) => ({
 			...m,
 			thinking: m.thinking || '',
 			thinkingDone: false,
 		})));
 	} else if (evt.type === 'thinking' && typeof evt.delta === 'string') {
+		if (evt.parent_id) return; // sub-agent reasoning — see thinking_start
 		setMessages((prev) => withLastAssistant(prev, (m) => ({
 			...m,
 			thinking: (m.thinking || '') + evt.delta,
 		})));
 	} else if (evt.type === 'thinking_stop') {
+		if (evt.parent_id) return; // sub-agent reasoning — see thinking_start
 		setMessages((prev) => withLastAssistant(prev, (m) => ({
 			...m,
 			thinkingDone: true,
 		})));
 	} else if (evt.type === 'tool_start') {
-		// Agent declared a tool call before args/results stream in. Show a
+		// Agent declared a tool call before results stream in. Show a
 		// spinner-style chip so the user sees activity immediately.
+		// args arrive here already complete (the bridge builds tool_start from
+		// the finished assistant message), so the pending chip can name its
+		// target instead of rendering an empty `$ (bash)`.
 		setMessages((prev) => withLastAssistant(prev, (m) => ({
 			...m,
 			tools: [
 				...(m.tools || []),
-				{ id: String(evt.id || ''), name: String(evt.name || 'tool'), ok: true, pending: true },
+				{
+					id: String(evt.id || ''),
+					name: String(evt.name || 'tool'),
+					ok: true,
+					pending: true,
+					args: evt.args && typeof evt.args === 'object' ? evt.args : undefined,
+					summary: evt.args && typeof evt.args === 'object'
+						? summarizeToolArgs(evt.args) : undefined,
+				},
 			],
 		})));
 	} else if (evt.type === 'tool_approval_required') {
@@ -200,8 +218,20 @@ export function handleEvent(
 			...m,
 			content: (m.content ? m.content + '\n\n' : '') + friendlyChatError(evt.message),
 		})));
+	} else if (evt.type === 'notice' && evt.message) {
+		// Operator-facing note attached to the turn (admin/super_admin only).
+		// Was emitted by the server and silently dropped here.
+		setMessages((prev) => withLastAssistant(prev, (m) => ({
+			...m,
+			content: (m.content ? m.content + '\n\n' : '') + `_${String(evt.message)}_`,
+		})));
 	}
-	// 'done' — no UI change needed for now.
+	// 'done' — no UI change needed.
+	// 'ping' — SSE heartbeat that keeps idle intermediaries from dropping a
+	//   long tool call; carries no state.
+	// 'block_start'/'block_stop'/'tool_args_delta'/'subagent_*'/'capabilities'/
+	//   'status'/'compaction'/'turn_stats' — forwarded by the Claude Code
+	//   bridge and consumed once the block model lands.
 }
 
 // Turn a raw upstream error into something a user can act on. The most

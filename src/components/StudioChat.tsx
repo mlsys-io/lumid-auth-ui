@@ -2338,6 +2338,12 @@ const MessageBubble = memo(function MessageBubble({
 	// transcript — the cause of the "fast at first, slower and slower" lag.
 	a.m.role === b.m.role &&
 	a.m.content === b.m.content &&
+	// thinking/thinkingDone MUST be compared. A thinking delta changes only
+	// these two fields, so omitting them made the comparator report "equal"
+	// and the bubble never re-rendered — reasoning sat invisible until some
+	// other field moved (first text delta, a tool_start, or end of turn).
+	a.m.thinking === b.m.thinking &&
+	a.m.thinkingDone === b.m.thinkingDone &&
 	a.m.tools === b.m.tools &&
 	a.m.composed === b.m.composed &&
 	a.m.appSurface === b.m.appSurface &&
