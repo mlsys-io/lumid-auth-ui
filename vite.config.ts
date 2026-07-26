@@ -44,7 +44,7 @@ export default defineConfig({
           if (/[\\/]node_modules[\\/](recharts|chart\.js|react-chartjs-2|d3-[^\\/]+|internmap|victory-[^\\/]+)[\\/]/.test(id)) return "vendor-charts";
           if (/[\\/]node_modules[\\/](@monaco-editor|monaco-editor)[\\/]/.test(id)) return "vendor-editor";
           if (/[\\/]node_modules[\\/]@emoji-mart[\\/]/.test(id)) return "vendor-emoji";
-          if (/[\\/]node_modules[\\/](react-markdown|remark-[^\\/]+|rehype-[^\\/]+|micromark[^\\/]*|mdast-[^\\/]+|hast-[^\\/]+|hastscript|unist-[^\\/]+|unified|vfile[^\\/]*|property-information|github-markdown-css)[\\/]/.test(id)) return "vendor-markdown";
+          if (/[\\/]node_modules[\\/](react-markdown|remark-[^\\/]+|rehype-[^\\/]+|micromark[^\\/]*|mdast-[^\\/]+|hast-[^\\/]+|hastscript|unist-[^\\/]+|unified|vfile[^\\/]*|property-information|github-markdown-css|katex)[\\/]/.test(id)) return "vendor-markdown";
           // @tanstack (react-query) is runmesh-only — peel it so Studio routes
           // don't carry it in the shared vendor chunk.
           if (/[\\/]node_modules[\\/]@tanstack[\\/]/.test(id)) return "vendor-tanstack";

@@ -6,14 +6,13 @@
 //     claude_session_id, so reopening a thread resumes its CLI session.
 //     (Pool transcript cards on /claude-sessions are keyed by conv_key, a
 //     recording key — they are NOT resumable, so no dropdown here.)
-//   • one-time recording notice (sessions are recorded by default; opt-out
-//     lives on /claude-sessions), dismissed into localStorage.
+//   • transcripts link for pool-recorded models (the "sessions are recorded"
+//     notice was retired 2026-07-25 — it read as an alarming card; the
+//     /claude-sessions page itself documents recording + opt-out).
 
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { X, Circle, Wrench, Bot, Sparkles, Plug } from 'lucide-react';
-
-const NOTICE_KEY = 'cc_recording_notice_v1';
 
 type Caps = { model?: string; tools?: string[]; agents?: string[]; skills?: string[]; mcp?: unknown };
 
@@ -89,15 +88,6 @@ export function SessionStrip({
 	caps?: Caps | null;
 	onClear: () => void;
 }) {
-	const [noticeDismissed, setNoticeDismissed] = useState(() => {
-		try { return localStorage.getItem(NOTICE_KEY) === '1'; } catch { return true; }
-	});
-
-	const dismissNotice = () => {
-		setNoticeDismissed(true);
-		try { localStorage.setItem(NOTICE_KEY, '1'); } catch { /* ignore */ }
-	};
-
 	return (
 		<div className="flex items-center gap-2 flex-wrap px-1 pb-1 text-[11px]">
 			{session ? (
@@ -123,17 +113,6 @@ export function SessionStrip({
 				<Link to="/claude-sessions" className="text-indigo-600 hover:underline">
 					transcripts →
 				</Link>
-			)}
-			{pool && !noticeDismissed && (
-				<span className="inline-flex items-center gap-1.5 text-muted-foreground">
-					<span>
-						Sessions are <Link to="/claude-sessions" className="underline">recorded</Link> by
-						default (opt-out there).
-					</span>
-					<button onClick={dismissNotice} className="opacity-50 hover:opacity-100" title="Dismiss">
-						<X className="w-3 h-3" />
-					</button>
-				</span>
 			)}
 		</div>
 	);

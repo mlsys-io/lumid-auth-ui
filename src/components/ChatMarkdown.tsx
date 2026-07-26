@@ -16,6 +16,9 @@
 
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import type { Components } from 'react-markdown';
 import { Link } from 'react-router-dom';
 
@@ -122,10 +125,15 @@ const components: Components = {
 	del: ({ children }) => <del className="opacity-60">{children}</del>,
 };
 
-// The agent sometimes emits LaTeX math (e.g. "$\rightarrow$") but the chat
-// renderer has no KaTeX, so it shows the raw source. Convert the common macros
-// to Unicode. Safe around money: only "$word$" (a macro wrapper) is touched —
-// "$0.0033" stays intact (a digit follows the $, not a letter-run + closing $).
+// Real math rendering (remark-math → rehype-katex) landed 2026-07-25 — the
+// SDE/quant answers this product exists for were showing raw "$$X_t = …$$"
+// source. remark-math only understands dollar delimiters, and Claude-family
+// models mostly emit \( \) / \[ \], so those are normalized to dollars first.
+//
+// Single-dollar inline math is DISABLED (singleDollarTextMath: false): this
+// is a trading UI, and "$5 … $10" ranges are everywhere; a money false
+// positive is worse than a rare un-rendered $x$. Inline math therefore rides
+// on $$…$$ (inline when not alone in its block) or \( \).
 const TEX: Record<string, string> = {
 	rightarrow: "→", to: "→", longrightarrow: "→", Rightarrow: "⇒", implies: "⇒",
 	leftarrow: "←", leftrightarrow: "↔", uparrow: "↑", downarrow: "↓", mapsto: "↦",
@@ -135,12 +143,26 @@ const TEX: Record<string, string> = {
 };
 function sanitizeMath(s: string): string {
 	return s
-		// $\macro$ or $macro$ (inline-math wrapping one macro) → Unicode
-		.replace(/\$\s*\\?([a-zA-Z]+)\s*\$/g, (m, name) => TEX[name] ?? m)
-		// bare \macro anywhere → Unicode (only known macros; \n \t etc. untouched)
-		.replace(/\\([a-zA-Z]+)/g, (m, name) => TEX[name] ?? m)
-		// stray \( \) \[ \] inline/display math delimiters → drop
-		.replace(/\\[()[\]]/g, "");
+		// \[ display \] → block $$ … $$ (own paragraph so remark-math treats it
+		// as display math)
+		.replace(/\\\[([\s\S]+?)\\\]/g, (_m, inner) => `\n\n$$\n${inner}\n$$\n\n`)
+		// \( inline \) → inline $$ … $$ (double-dollar inside a text run is
+		// inline math to remark-math, and immune to money-ambiguity)
+		.replace(/\\\((.+?)\\\)/g, (_m, inner) => `$$${inner}$$`)
+		// $x_t$ single-dollar spans that LOOK like LaTeX (contain \ ^ _ { })
+		// → $$…$$ so they render despite single-dollar parsing being off.
+		// "$5 and $10" has none of those characters and stays plain money.
+		.replace(/(?<!\$)\$(?!\$)([^$\n]+?)\$(?!\$)/g, (m, inner) =>
+			/[\\^_{}]/.test(inner) ? `$$${inner}$$` : m)
+		// $\macro$ or $macro$ (single-macro inline math, which the disabled
+		// single-dollar parser would leave raw) → Unicode. The lookarounds keep
+		// it OUT of $$…$$ spans the rules above just produced — without them it
+		// ate the inner dollars of "$$\mu$$" and left a mangled "$μ$" behind.
+		.replace(/(?<!\$)\$\s*\\?([a-zA-Z]+)\s*\$(?!\$)/g, (m, name) => TEX[name] ?? m)
+		// bare \macro OUTSIDE math wrappers → Unicode (only known macros; the
+		// same characters render fine if one slips inside a $$ span, KaTeX
+		// accepts Unicode greek/arrows)
+		.replace(/\\([a-zA-Z]+)/g, (m, name) => TEX[name] ?? m);
 }
 
 interface Props {
@@ -154,6 +176,9 @@ export function ChatMarkdown({ children, dark }: Props) {
 	return (
 		<div className={[
 			'chat-md',
+			// Display math can be wider than the bubble (long derivations):
+			// scroll it inside its own box instead of busting the layout.
+			'[&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_.katex-display]:py-1 [&_.katex-display]:my-2',
 			// The dark variant flips code/table backgrounds so they stay
 			// legible on the user-bubble dark background.
 			dark ? '[&_code]:bg-slate-800 [&_code]:text-slate-100 [&_code]:border-slate-700 [&_blockquote]:text-slate-200 [&_blockquote]:border-gold-400 [&_a]:text-gold-300 [&_a]:decoration-gold-500/60 [&_hr]:border-slate-700 [&_table]:border-slate-700 [&_thead]:bg-slate-800 [&_thead]:border-slate-700 [&_tr]:border-slate-800 [&_th]:text-slate-200 [&_td]:text-slate-200' : '',
@@ -165,8 +190,15 @@ export function ChatMarkdown({ children, dark }: Props) {
 			    contents), so if anyone ever adds rehype-raw this flag keeps a stray
 			    <script>/<img onerror> in a tool result from becoming stored-XSS.
 			    DO NOT add rehype-raw or route any tool field through
-			    dangerouslySetInnerHTML. */}
-			<ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml components={components}>
+			    dangerouslySetInnerHTML. (rehype-katex is fine: it only renders
+			    KaTeX-generated element trees from math nodes, and KaTeX's `trust`
+			    option defaults to false so \href/\includegraphics stay inert.) */}
+			<ReactMarkdown
+				remarkPlugins={[remarkGfm, [remarkMath, { singleDollarTextMath: false }]]}
+				rehypePlugins={[[rehypeKatex, { output: 'html' }]]}
+				skipHtml
+				components={components}
+			>
 				{clean}
 			</ReactMarkdown>
 		</div>

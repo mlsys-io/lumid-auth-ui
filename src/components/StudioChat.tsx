@@ -1718,6 +1718,26 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 						{turnStats && !streaming && messages[messages.length - 1]?.role === 'assistant' && (
 							<div className="pl-[38px]"><TurnStatsFooter s={turnStats} /></div>
 						)}
+						{/* Claude Code session context — pill + capability chip +
+						    transcripts link, only when a claude-code-* model is
+						    selected. Lives at the END of the transcript so it reads
+						    as part of the response it belongs to and scrolls away
+						    with it, instead of permanently occupying a strip above
+						    the composer. pool=true for every pool-proxy-backed
+						    model — Anthropic (sonnet/opus/fable) AND the oaicompat
+						    externals (kimi/glm), which are recorded + cost-metered.
+						    false only for the lumid-llm-backed entries (qwen). */}
+						{model.startsWith('claude-code') && (
+							<div className="pl-[38px]">
+								<SessionStrip
+									session={claudeSession}
+									streaming={streaming}
+									pool={/claude-code-(sonnet|opus|fable|kimi|glm)/.test(model)}
+									caps={claudeCaps}
+									onClear={() => { claudeSessionRef.current = null; setClaudeSession(null); }}
+								/>
+							</div>
+						)}
 					</div>
 				)}
 			</div>
@@ -1835,21 +1855,6 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 							<span className="text-[11px] text-rose-600">{attachError}</span>
 						)}
 					</div>
-				)}
-				{/* Claude Code session context — pill + recording notice, only
-				    when a claude-code-* model is selected. pool=true for every
-				    pool-proxy-backed model — Anthropic (sonnet/opus/fable) AND
-				    the oaicompat externals (kimi/glm), which are also recorded
-				    + cost-metered. false only for the lumid-llm-backed entries
-				    (qwen): no pool recording, no pool metering. */}
-				{model.startsWith('claude-code') && (
-					<SessionStrip
-						session={claudeSession}
-						streaming={streaming}
-						pool={/claude-code-(sonnet|opus|fable|kimi|glm)/.test(model)}
-						caps={claudeCaps}
-						onClear={() => { claudeSessionRef.current = null; setClaudeSession(null); }}
-					/>
 				)}
 				{/* The composer card — one rounded white card (claude style):
 				    chromeless textarea on top, then a bottom action row laid
@@ -2496,27 +2501,40 @@ function ThinkingBlock({ thinking, done, elapsedMs, tokens }: { thinking: string
 		: tokenCount > 0
 			? `Thinking… ${tokenCount} tokens`
 			: 'Thinking…';
+	// Current Claude models return reasoning ENCRYPTED — only a signature and
+	// a token count ever reach us, so the text stays empty for the whole turn.
+	// An expandable panel with nothing in it read as a bug ("(no content
+	// yet)"); with no text there is nothing to expand, so the pill is
+	// status-only. The panel comes back the moment a provider streams real
+	// reasoning text (lumid-llm <think> models, legacy Anthropic thinking).
+	const expandable = !!thinking;
 	return (
 		<div className="mb-1.5">
 			<button
 				type="button"
-				onClick={() => { touched.current = true; setOpen((v) => !v); }}
-				className="inline-flex items-center gap-1 text-[11px] text-gold-700 bg-gold-50/80 hover:bg-gold-100/80 border border-gold-200 rounded-full px-2 py-0.5 transition-colors"
+				onClick={() => { if (!expandable) return; touched.current = true; setOpen((v) => !v); }}
+				title={expandable ? undefined : 'Reasoning is encrypted by the provider — only the token count is visible'}
+				className={[
+					'inline-flex items-center gap-1 text-[11px] text-gold-700 bg-gold-50/80 border border-gold-200 rounded-full px-2 py-0.5 transition-colors',
+					expandable ? 'hover:bg-gold-100/80' : 'cursor-default',
+				].join(' ')}
 			>
 				<Brain className="w-3 h-3" />
 				<span>{label}</span>
 				{!done && <ThinkingDots />}
-				<ChevronDown
-					className={['w-3 h-3 transition-transform', open ? 'rotate-180' : ''].join(' ')}
-				/>
+				{expandable && (
+					<ChevronDown
+						className={['w-3 h-3 transition-transform', open ? 'rotate-180' : ''].join(' ')}
+					/>
+				)}
 			</button>
-			<Collapse open={open}>
-				<div className="mt-1.5 px-3 py-2 text-[12px] leading-relaxed text-muted-foreground bg-gold-50/40 border border-gold-100 rounded-xl whitespace-pre-wrap break-words">
-					{thinking || (
-						<span className="opacity-50 italic">(no content yet)</span>
-					)}
-				</div>
-			</Collapse>
+			{expandable && (
+				<Collapse open={open}>
+					<div className="mt-1.5 px-3 py-2 text-[12px] leading-relaxed text-muted-foreground bg-gold-50/40 border border-gold-100 rounded-xl whitespace-pre-wrap break-words">
+						{thinking}
+					</div>
+				</Collapse>
+			)}
 		</div>
 	);
 }
