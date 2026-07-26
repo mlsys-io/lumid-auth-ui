@@ -354,7 +354,6 @@ function UserUsageSection({ usage, countdown }: { usage: ClaudeUserUsageResp; co
 					const sev = usageSeverity(Math.max(u.five_hour_pct, u.seven_day_pct));
 					const reset5h = fmtReset(u.five_hour_reset);
 					const reset7d = fmtReset(u.seven_day_reset);
-					const modelEntries = u.models ? Object.entries(u.models).filter(([, v]) => v.tokens_7d > 0).sort((a, b) => b[1].tokens_7d - a[1].tokens_7d) : [];
 					return (
 						<div key={u.email} className="px-2.5 py-1.5 min-w-0">
 							<div className="flex items-center gap-3">
@@ -380,15 +379,72 @@ function UserUsageSection({ usage, countdown }: { usage: ClaudeUserUsageResp; co
 								</span>
 								<span className="shrink-0 text-[10px] text-slate-400">{fmtTs(u.last_ts)}</span>
 							</div>
-							{modelEntries.length > 0 && (
-								<div className="flex flex-wrap gap-1.5 mt-0.5 ml-6">
-									{modelEntries.map(([model, v]) => (
-										<span key={model} className="text-[10px] font-mono text-slate-500 bg-slate-50 border border-slate-200 px-1.5 rounded" title={`${v.tokens_7d.toLocaleString()} tok`}>
-											{model} {fmtTokens(v.tokens_7d)}{v.cost_cents_7d > 0 ? ` ${fmtCents(v.cost_cents_7d)}` : ''}
-										</span>
-									))}
-								</div>
-							)}
+						</div>
+					);
+				})}
+			</div>
+		</div>
+	);
+}
+
+// Per-model usage + cost, aggregated across all pool users — 7d window.
+// claude-* models draw on the pooled quota (tokens); other models are
+// pay-per-use and carry a USD cost.
+function ModelCostPanel({ usage }: { usage: ClaudeUserUsageResp }) {
+	const byModel = new Map<string, { tokens: number; cost: number; users: { email: string; tokens: number; cost: number }[] }>();
+	for (const u of usage.users) {
+		if (!u.models) continue;
+		for (const [model, v] of Object.entries(u.models)) {
+			if (v.tokens_7d <= 0 && v.cost_cents_7d <= 0) continue;
+			let agg = byModel.get(model);
+			if (!agg) { agg = { tokens: 0, cost: 0, users: [] }; byModel.set(model, agg); }
+			agg.tokens += v.tokens_7d;
+			agg.cost += v.cost_cents_7d;
+			agg.users.push({ email: u.email, tokens: v.tokens_7d, cost: v.cost_cents_7d });
+		}
+	}
+	if (byModel.size === 0) return null;
+
+	const rows = [...byModel.entries()].sort((a, b) => (b[1].cost - a[1].cost) || (b[1].tokens - a[1].tokens));
+	const maxTokens = Math.max(...rows.map(([, v]) => v.tokens), 1);
+	const totalCost = rows.reduce((s, [, v]) => s + v.cost, 0);
+	const totalTokens = rows.reduce((s, [, v]) => s + v.tokens, 0);
+
+	return (
+		<div>
+			<div className="flex items-center gap-2 mb-1.5">
+				<p className="text-xs font-medium text-slate-600">Per-model usage &amp; cost · 7d</p>
+				<span className="text-[10px] text-slate-400 font-normal">
+					<code className="font-mono text-[10px]">claude-*</code> draws pool quota (tokens); other models bill per use
+				</span>
+				<span className="ml-auto shrink-0 text-[10px] font-mono text-slate-500">
+					{fmtTokens(totalTokens)} tok{totalCost > 0 ? ` · ${fmtCents(totalCost)}` : ''}
+				</span>
+			</div>
+			<div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100">
+				{rows.map(([model, v]) => {
+					const users = [...v.users].sort((a, b) => (b.cost - a.cost) || (b.tokens - a.tokens));
+					return (
+						<div key={model} className="flex items-center gap-3 px-2.5 py-1.5 min-w-0">
+							<span className="w-44 shrink-0 truncate text-xs font-mono text-slate-800" title={model}>
+								{model}
+							</span>
+							<div className="w-24 h-1 rounded-full bg-slate-100 overflow-hidden shrink-0" title={`${v.tokens.toLocaleString()} tokens`}>
+								<div className="h-full rounded-full bg-gold-400" style={{ width: `${Math.max(2, (v.tokens / maxTokens) * 100)}%` }} />
+							</div>
+							<span className="w-14 shrink-0 text-right text-[10px] font-mono text-slate-600">{fmtTokens(v.tokens)}</span>
+							<span className="w-14 shrink-0 text-right text-[10px] font-mono text-slate-700">
+								{v.cost > 0 ? fmtCents(v.cost) : <span className="text-slate-300">pool</span>}
+							</span>
+							<span className="flex-1 min-w-0 truncate text-[10px] text-slate-400">
+								{users.slice(0, 4).map((uu, i) => (
+									<span key={uu.email} title={`${uu.tokens.toLocaleString()} tok${uu.cost > 0 ? ` · ${fmtCents(uu.cost)}` : ''}`}>
+										{i > 0 && ' · '}
+										{uu.email.split('@')[0]} {fmtTokens(uu.tokens)}{uu.cost > 0 ? ` ${fmtCents(uu.cost)}` : ''}
+									</span>
+								))}
+								{users.length > 4 && ` · +${users.length - 4} more`}
+							</span>
 						</div>
 					);
 				})}
@@ -534,60 +590,13 @@ export default function StudioClaudeQuota() {
 
 			{userUsage && <UserUsageSection usage={userUsage} countdown={countdown} />}
 
-			{/* Setup: point your Claude Code CLI at the pool */}
-			<div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-				<p className="text-xs font-medium text-slate-600 mb-2">Set up your Claude Code CLI to use the pool</p>
-				<ol className="text-[11px] text-slate-500 space-y-2 mb-2 list-none">
-					<li>
-						<span className="font-mono bg-slate-200 text-slate-700 px-1.5 rounded mr-1.5">1</span>
-						Mint a PAT at <a href="/dashboard/tokens" className="text-gold-700 hover:underline">/dashboard/tokens</a> with
-						the scope <code className="font-mono bg-slate-100 px-1 rounded">claude:proxy</code>.
-					</li>
-					<li>
-						<span className="font-mono bg-slate-200 text-slate-700 px-1.5 rounded mr-1.5">2</span>
-						Add the pool endpoint + your PAT to <code className="font-mono bg-slate-100 px-1 rounded">~/.claude/settings.json</code> (applies
-						to every session; your personal <code className="font-mono bg-slate-100 px-1 rounded">claude auth login</code> stays untouched — remove the two keys to switch back):
-						<pre className="text-[11px] font-mono bg-slate-900 text-emerald-300 rounded px-3 py-2 mt-1.5 select-all overflow-x-auto">
-{`{
-  "env": {
-    "ANTHROPIC_BASE_URL": "https://lum.id/claude",
-    "ANTHROPIC_AUTH_TOKEN": "lm_pat_live_..."
-  }
-}`}
-						</pre>
-						<span className="block mt-1 text-slate-400">…or per-shell instead:</span>
-						<pre className="text-[11px] font-mono bg-slate-900 text-emerald-300 rounded px-3 py-2 mt-1 select-all overflow-x-auto">
-{`export ANTHROPIC_BASE_URL=https://lum.id/claude
-export ANTHROPIC_AUTH_TOKEN=lm_pat_live_...`}
-						</pre>
-					</li>
-					<li>
-						<span className="font-mono bg-slate-200 text-slate-700 px-1.5 rounded mr-1.5">3</span>
-						Run <code className="font-mono bg-slate-100 px-1 rounded">claude</code> as usual — requests route to the pooled
-						account with the most quota. Model choice passes through
-						(<code className="font-mono bg-slate-100 px-1 rounded">claude --model opus</code>, <code className="font-mono bg-slate-100 px-1 rounded">/model</code>).
-					</li>
-					<li>
-						<span className="font-mono bg-slate-200 text-slate-700 px-1.5 rounded mr-1.5">4</span>
-						<strong className="text-slate-700">Non-Anthropic models</strong> — require <code className="font-mono bg-slate-100 px-1 rounded">role=admin</code>; route through <code className="font-mono bg-slate-100 px-1 rounded">lum.id/llm</code>
-						alongside the Anthropic pool — same PAT, same setup:
-						<pre className="text-[11px] font-mono bg-slate-900 text-emerald-300 rounded px-3 py-2 mt-1.5 select-all overflow-x-auto">
-{`claude --model kimi-k3              # Kimi K3 via Moonshot  ($3/$15 per M tok)
-claude --model z-ai/glm-5.2         # GLM-5.2 via OpenRouter ($0.77/$2.42 per M tok)`}
-						</pre>
-						<span className="block mt-1 text-slate-400">
-							Other in-cluster models (no auth tier): <code className="font-mono bg-slate-100 px-1 rounded">qwen3.6-27b</code> (default) · <code className="font-mono bg-slate-100 px-1 rounded">qwen3.6-35b-a3b</code> (MoE, long context).
-							Token quota applies to <code className="font-mono bg-slate-100 px-1 rounded">claude-*</code> names only; other models record cost in USD.
-						</span>
-					</li>
-				</ol>
-				<p className="text-[11px] text-slate-400">
-					Each user has their own 5h/7d pool budget (shown above once you've made requests).
-					Recorded sessions: <a href="/claude-sessions" className="text-gold-700 hover:underline">/claude-sessions</a>.
-					Full guide: <a href="/docs/claude" className="text-gold-700 hover:underline">/docs/claude</a>.
-					This page: <a href="/code" className="text-gold-700 hover:underline">/code</a>.
-				</p>
-			</div>
+			{userUsage && <ModelCostPanel usage={userUsage} />}
+
+			<p className="text-[11px] text-slate-400">
+				Setup + full guide: <a href="/docs/claude" className="text-gold-700 hover:underline">/docs/claude</a>.
+				Recorded sessions: <a href="/claude-sessions" className="text-gold-700 hover:underline">/claude-sessions</a>.
+				Mint a <code className="font-mono bg-slate-100 px-1 rounded">claude:proxy</code> PAT at <a href="/dashboard/tokens" className="text-gold-700 hover:underline">/dashboard/tokens</a>.
+			</p>
 		</div>
 	);
 }
