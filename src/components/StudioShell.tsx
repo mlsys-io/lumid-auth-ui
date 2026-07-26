@@ -19,6 +19,7 @@ import {
 	Compass,
 	Settings,
 	Shield,
+	BookOpen,
 	LogOut,
 	ChevronDown,
 	Key,
@@ -408,32 +409,21 @@ export function StudioShell() {
 					<span>How it works</span>
 				</NavLink>
 
-				{/* Claude pool guide — visible to all logged-in users. */}
-				<a
-					href="/docs/claude"
-					className="mx-3 mb-1 flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs transition-colors text-foreground/45 hover:text-foreground/70 hover:bg-black/[0.04]"
-					title="Claude Code account pool guide"
+				{/* Documentation panel — replaces the old per-doc footer links
+				    (Claude guide, CD runbook): every guide/runbook/contract now
+				    lives behind one in-shell index at /studio/docs. Auth-gated
+				    docs stay enforced server-side by the edge gate regardless. */}
+				<NavLink
+					to="/studio/docs"
+					className={({ isActive }) => cn(
+						'mx-3 mb-1 flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs transition-colors hover:bg-black/[0.04]',
+						isActive ? 'text-foreground/80' : 'text-foreground/45 hover:text-foreground/70',
+					)}
+					title="Guides, contracts, and runbooks"
 				>
-					<Shield className="w-3.5 h-3.5 flex-shrink-0" />
-					<span>Claude guide</span>
-				</a>
-
-				{/* Admin-only: internal CD runbook (Lumilake + FlowMesh plugin-image
-				    releases). Opens the auth-gated /docs/plugin-image-cd doc in a new
-				    tab. Hidden from non-admins; the edge gate (lumid-landing nginx)
-				    enforces access server-side regardless. */}
-				{isAdmin && (
-					<a
-						href="/docs/plugin-image-cd"
-						target="_blank"
-						rel="noreferrer"
-						className="mx-3 mb-1 flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs transition-colors text-foreground/45 hover:text-foreground/70 hover:bg-black/[0.04]"
-						title="Lumilake & FlowMesh plugin-image CD runbook (admin)"
-					>
-						<Shield className="w-3.5 h-3.5 flex-shrink-0" />
-						<span>CD runbook</span>
-					</a>
-				)}
+					<BookOpen className="w-3.5 h-3.5 flex-shrink-0" />
+					<span>Documentation</span>
+				</NavLink>
 
 				{/* User menu — pinned bottom-left, opens upward. Holds
 				    everything the top-right avatar dropdown used to

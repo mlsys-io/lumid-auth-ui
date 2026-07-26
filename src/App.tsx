@@ -77,6 +77,7 @@ const StudioClaudeSessions = lazy(() => import("./pages/studio/claude-sessions")
 // "How Lumid works" — walkable 3-stage loop (Assemble → Adapt → Compound)
 // illustrated against the demo intents. Stages 1-2 concrete, 3 open.
 const StudioHow        = lazy(() => import("./pages/studio/how"));
+const StudioDocs       = lazy(() => import("./pages/studio/docs"));
 const StudioMarketplace = lazy(() => import("./pages/studio/library"));
 const StudioLibraryTabs = lazy(() => import("./pages/studio/library-tabs"));
 const StudioRepo = lazy(() => import("./pages/studio/repo"));
@@ -774,6 +775,11 @@ export default function App() {
             {/* Mind folded into each workflow's Insights panel. */}
             <Route path="mind"                         element={<Navigate to="/studio/apps" replace />} />
             <Route path="how"                          element={<StudioHow />} />
+            {/* Documentation panel — index over every guide/runbook/contract,
+                with an in-shell reader. Standalone /docs/* routes stay live
+                (public xpio contract + external deep links). */}
+            <Route path="docs"                         element={<StudioDocs />} />
+            <Route path="docs/:slug"                   element={<StudioDocs />} />
             <Route path="settings"                     element={<StudioSettings />} />
             {/* Billing — folded into Studio account (was /dashboard/billing). */}
             <Route path="account/billing"              element={<AppBilling />} />
