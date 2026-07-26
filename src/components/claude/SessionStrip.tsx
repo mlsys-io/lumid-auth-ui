@@ -11,7 +11,6 @@
 //     /claude-sessions page itself documents recording + opt-out).
 
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { X, Circle, Wrench, Bot, Sparkles, Plug } from 'lucide-react';
 
 type Caps = { model?: string; tools?: string[]; agents?: string[]; skills?: string[]; mcp?: unknown };
@@ -75,16 +74,11 @@ function CapChip({ caps }: { caps: Caps }) {
 export function SessionStrip({
 	session,
 	streaming,
-	pool,
 	caps,
 	onClear,
 }: {
 	session: string | null;
 	streaming: boolean;
-	// pool=true for pooled-Anthropic models (recorded on /claude-sessions,
-	// pool quota applies); false for lumid-llm-backed models (own GPUs — no
-	// pool recording, so no transcripts link / recording notice).
-	pool: boolean;
 	caps?: Caps | null;
 	onClear: () => void;
 }) {
@@ -109,11 +103,6 @@ export function SessionStrip({
 				</button>
 			</span>
 			{caps && <CapChip caps={caps} />}
-			{pool && (
-				<Link to="/claude-sessions" className="text-indigo-600 hover:underline">
-					transcripts →
-				</Link>
-			)}
 		</div>
 	);
 }

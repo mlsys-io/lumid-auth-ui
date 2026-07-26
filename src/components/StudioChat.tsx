@@ -1574,10 +1574,11 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 	// This walks the streaming reply's blocks (incl. sub-agent children, in
 	// arrival order so the LAST unfinished thing wins) and feeds the slim
 	// status line above the composer.
-	const activity = useMemo((): { kind: 'tool'; name: string; summary?: string } | { kind: 'thinking' } | null => {
+	const activity = useMemo((): { kind: 'tool'; name: string; summary?: string } | { kind: 'thinking' } | { kind: 'working' } | null => {
 		if (!streaming) return null;
 		const last = messages[messages.length - 1];
-		if (!last || last.role !== 'assistant') return null;
+		// Turn dispatched but the assistant placeholder hasn't landed yet.
+		if (!last || last.role !== 'assistant') return { kind: 'working' };
 		let found: { kind: 'tool'; name: string; summary?: string } | { kind: 'thinking' } | null =
 			// Legacy non-block path: thinking streamed onto the message itself.
 			last.thinking && !last.thinkingDone ? { kind: 'thinking' } : null;
@@ -1593,10 +1594,14 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 			}
 		};
 		walk(last.blocks);
-		return found;
+		// While a turn streams there is ALWAYS a line: session boot, the gap
+		// between a tool result and the model's next step, and long API
+		// latency all fall through to a generic "Working…" — the chat must
+		// never look stuck with no explanation.
+		return found ?? { kind: 'working' };
 	}, [streaming, messages]);
 	// Elapsed seconds for the CURRENT activity (resets when it changes).
-	const activityKey = activity ? (activity.kind === 'tool' ? `t:${activity.name}:${activity.summary ?? ''}` : 'think') : '';
+	const activityKey = activity ? (activity.kind === 'tool' ? `t:${activity.name}:${activity.summary ?? ''}` : activity.kind) : '';
 	const [activityElapsed, setActivityElapsed] = useState(0);
 	useEffect(() => {
 		if (!activityKey) return;
@@ -1920,7 +1925,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 							</span>
 						) : (
 							<span>
-								Thinking…
+								{activity.kind === 'thinking' ? 'Thinking…' : 'Working…'}
 								{activityElapsed >= 3 && <span className="opacity-60"> — {activityElapsed}s</span>}
 							</span>
 						)}
