@@ -7,7 +7,7 @@
 // EventSource can't POST). Conversation history persists in
 // sessionStorage so navigating between Studio pages keeps context.
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
@@ -1568,6 +1568,15 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		</div>
 	);
 
+	// Index of the latest assistant reply — the SessionStrip renders as that
+	// reply's header (top of the current response).
+	const lastAssistantIdx = (() => {
+		for (let i = messages.length - 1; i >= 0; i--) {
+			if (messages[i].role === 'assistant') return i;
+		}
+		return -1;
+	})();
+
 	// The chat IS the main surface now (claude.ai layout) — mounted as
 	// the /studio route's page content, a centered column that fills the
 	// area under the shell header. The old right-rail collapse/resize
@@ -1701,8 +1710,30 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 				) : (
 					<div className="space-y-3.5">
 						{messages.map((m, i) => (
+							<Fragment key={i}>
+							{/* Claude Code session context — pill + capability chip
+							    + transcripts link, only when a claude-code-* model
+							    is selected. Sits at the TOP of the current response
+							    (above the latest assistant reply, where the mode
+							    notice used to be) so it reads as that reply's
+							    session header and scrolls with the transcript.
+							    pool=true for every pool-proxy-backed model —
+							    Anthropic (sonnet/opus/fable) AND the oaicompat
+							    externals (kimi/glm), which are recorded +
+							    cost-metered. false only for the lumid-llm-backed
+							    entries (qwen). */}
+							{model.startsWith('claude-code') && m.role === 'assistant' && i === lastAssistantIdx && (
+								<div className="pl-[38px]">
+									<SessionStrip
+										session={claudeSession}
+										streaming={streaming}
+										pool={/claude-code-(sonnet|opus|fable|kimi|glm)/.test(model)}
+										caps={claudeCaps}
+										onClear={() => { claudeSessionRef.current = null; setClaudeSession(null); }}
+									/>
+								</div>
+							)}
 							<MessageBubble
-							key={i}
 							m={m}
 							streaming={streaming && i === messages.length - 1 && m.role === 'assistant'}
 							onCopy={m.role === 'assistant' && m.content ? () => copyMessage(m.content) : undefined}
@@ -1711,32 +1742,13 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 							isSpeaking={speakingIdx === i}
 							onToolApprove={handleToolApprove}
 						/>
+							</Fragment>
 						))}
 						{/* Turn telemetry from the Claude Code `result` event —
 						    cost, wall/API duration, time-to-first-token, steps and
 						    the cache hit split. Attached to the finished reply. */}
 						{turnStats && !streaming && messages[messages.length - 1]?.role === 'assistant' && (
 							<div className="pl-[38px]"><TurnStatsFooter s={turnStats} /></div>
-						)}
-						{/* Claude Code session context — pill + capability chip +
-						    transcripts link, only when a claude-code-* model is
-						    selected. Lives at the END of the transcript so it reads
-						    as part of the response it belongs to and scrolls away
-						    with it, instead of permanently occupying a strip above
-						    the composer. pool=true for every pool-proxy-backed
-						    model — Anthropic (sonnet/opus/fable) AND the oaicompat
-						    externals (kimi/glm), which are recorded + cost-metered.
-						    false only for the lumid-llm-backed entries (qwen). */}
-						{model.startsWith('claude-code') && (
-							<div className="pl-[38px]">
-								<SessionStrip
-									session={claudeSession}
-									streaming={streaming}
-									pool={/claude-code-(sonnet|opus|fable|kimi|glm)/.test(model)}
-									caps={claudeCaps}
-									onClear={() => { claudeSessionRef.current = null; setClaudeSession(null); }}
-								/>
-							</div>
 						)}
 					</div>
 				)}
@@ -2487,6 +2499,20 @@ function ThinkingBlock({ thinking, done, elapsedMs, tokens }: { thinking: string
 	// Prefer the provider's own count (system/thinking_tokens); the ~4-chars
 	// estimate is the fallback for providers that don't report one.
 	const tokenCount = tokens ?? (thinking.length ? Math.max(1, Math.round(thinking.length / 4)) : 0);
+	// The CLI reports thinking tokens in ~50-token quanta, which made the live
+	// label jump 0 → 50 → 95 → …. Tick the DISPLAYED count up by 1 toward the
+	// latest report (paced to land just before the next quantum arrives) so it
+	// reads as a per-token counter; snap once the block is done.
+	const [shownCount, setShownCount] = useState(tokenCount);
+	useEffect(() => {
+		if (done || shownCount > tokenCount) { setShownCount(tokenCount); return; }
+		if (shownCount === tokenCount) return;
+		const diff = tokenCount - shownCount;
+		const t = setTimeout(() => setShownCount((s) => Math.min(tokenCount, s + 1)),
+			Math.max(15, Math.min(120, 1200 / diff)));
+		return () => clearTimeout(t);
+	}, [done, shownCount, tokenCount]);
+	const liveCount = done ? tokenCount : shownCount;
 	// Duration comes from the block's own start/end stamps when available
 	// (block model); legacy messages have none and keep the token-only label.
 	const secs = elapsedMs !== undefined && elapsedMs > 900 ? Math.round(elapsedMs / 1000) : 0;
@@ -2498,8 +2524,8 @@ function ThinkingBlock({ thinking, done, elapsedMs, tokens }: { thinking: string
 		? (tokenCount
 			? (secs ? `Thought for ${secs}s (${tokenCount} tokens)` : `Thought (${tokenCount} tokens)`)
 			: (secs ? `Thought for ${secs}s` : 'Thought'))
-		: tokenCount > 0
-			? `Thinking… ${tokenCount} tokens`
+		: liveCount > 0
+			? `Thinking… ${liveCount} tokens`
 			: 'Thinking…';
 	// Current Claude models return reasoning ENCRYPTED — only a signature and
 	// a token count ever reach us, so the text stays empty for the whole turn.
