@@ -1568,6 +1568,44 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		</div>
 	);
 
+	// ── live activity: what is Claude doing RIGHT NOW ─────────────────────
+	// A long Bash run or sub-agent used to be invisible unless you spotted the
+	// small pulsing chip in the transcript — a working turn "looked stuck".
+	// This walks the streaming reply's blocks (incl. sub-agent children, in
+	// arrival order so the LAST unfinished thing wins) and feeds the slim
+	// status line above the composer.
+	const activity = useMemo((): { kind: 'tool'; name: string; summary?: string } | { kind: 'thinking' } | null => {
+		if (!streaming) return null;
+		const last = messages[messages.length - 1];
+		if (!last || last.role !== 'assistant') return null;
+		let found: { kind: 'tool'; name: string; summary?: string } | { kind: 'thinking' } | null =
+			// Legacy non-block path: thinking streamed onto the message itself.
+			last.thinking && !last.thinkingDone ? { kind: 'thinking' } : null;
+		const walk = (bs?: Block[]) => {
+			for (const b of bs ?? []) {
+				if (b.kind === 'tool' && b.tool.pending && !b.tool.approvalRequired) {
+					found = { kind: 'tool', name: b.tool.name, summary: b.tool.summary };
+				} else if (b.kind === 'reasoning' && !b.done) {
+					found = { kind: 'thinking' };
+				} else if (b.kind === 'subagent') {
+					walk(b.children);
+				}
+			}
+		};
+		walk(last.blocks);
+		return found;
+	}, [streaming, messages]);
+	// Elapsed seconds for the CURRENT activity (resets when it changes).
+	const activityKey = activity ? (activity.kind === 'tool' ? `t:${activity.name}:${activity.summary ?? ''}` : 'think') : '';
+	const [activityElapsed, setActivityElapsed] = useState(0);
+	useEffect(() => {
+		if (!activityKey) return;
+		const started = Date.now();
+		setActivityElapsed(0);
+		const t = setInterval(() => setActivityElapsed(Math.round((Date.now() - started) / 1000)), 1000);
+		return () => clearInterval(t);
+	}, [activityKey]);
+
 	// Index of the latest assistant reply — the SessionStrip renders as that
 	// reply's header (top of the current response).
 	const lastAssistantIdx = (() => {
@@ -1865,6 +1903,26 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 						))}
 						{attachError && (
 							<span className="text-[11px] text-rose-600">{attachError}</span>
+						)}
+					</div>
+				)}
+				{/* Live activity — pinned above the composer so a working turn
+				    never "looks stuck": names the running tool (or thinking)
+				    with a ticking elapsed counter. */}
+				{activity && (
+					<div className="flex items-center gap-1.5 px-2 pb-1 text-[11px] text-gold-700" aria-live="polite">
+						<Loader2 className="w-3 h-3 animate-spin" />
+						{activity.kind === 'tool' ? (
+							<span className="truncate">
+								Running <span className="font-mono font-medium">{activity.name}</span>
+								{activity.summary && <span className="opacity-70"> · {activity.summary.slice(0, 70)}</span>}
+								{activityElapsed >= 3 && <span className="opacity-60"> — {activityElapsed}s</span>}
+							</span>
+						) : (
+							<span>
+								Thinking…
+								{activityElapsed >= 3 && <span className="opacity-60"> — {activityElapsed}s</span>}
+							</span>
 						)}
 					</div>
 				)}
