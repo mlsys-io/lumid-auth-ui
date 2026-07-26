@@ -329,6 +329,10 @@ export interface ClaudeQuotaAccount {
 	stale?: boolean;
 	error?: string;
 	limits?: ClaudeQuotaLimit[];
+	// Quarantine: the token family was revoked (invalid_grant) — the backend
+	// stops retrying it; recovery is a re-add with a fresh `claude auth login`.
+	revoked?: boolean;
+	revoke_reason?: string;
 }
 
 export interface ClaudeQuotaResp {

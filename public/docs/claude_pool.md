@@ -204,6 +204,30 @@ access + refresh token from your `~/.claude/.credentials.json` (the dialog
 shows the exact one-liner). Adding the refresh token enables automatic
 renewal, so the account keeps working after the access token expires.
 
+### One family, one holder — the logout step is load-bearing
+
+Anthropic **rotates the refresh token on every renewal**: each exchange
+returns a new refresh token and invalidates the previous one, so a
+credential family has exactly one live refresh token at a time. If the
+same credentials live in the pool *and* in your own `~/.claude/`, both
+sides refresh independently — whichever refreshes first silently stales
+the other, and when the stale side next presents its token, Anthropic's
+reuse detection **revokes the entire family** for both. The pool then
+shows the account as *"Family revoked — re-add required"* and quarantines
+it (no more retries) until it's re-added.
+
+The fix is family separation, done at contribution time:
+
+1. `claude auth login` as the account being contributed
+2. Copy the tokens into **Add account** (pool now owns this family)
+3. `claude auth logout` — **do not skip this**
+4. `claude auth login` again for your own use — this mints a *separate*
+   family, so your local refreshes can never collide with the pool's
+
+If your own account is in the pool, the cleanest setup is to not hold a
+local login at all: point your CLI at the pool (`ANTHROPIC_BASE_URL` +
+PAT, per Quick start) — one family, one holder, nothing to collide.
+
 ---
 
 ## Notes & limits

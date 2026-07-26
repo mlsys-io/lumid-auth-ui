@@ -80,11 +80,14 @@ function AccountRow({
 		catch { setDeleting(false); setConfirming(false); }
 	}
 
-	const isAuthError = acc.error && (
+	// `revoked` is the backend's first-class quarantine state (invalid_grant →
+	// family revoked, refresh retries stopped). The string-match is a fallback
+	// for older identity builds that only surface the raw error text.
+	const isAuthError = acc.revoked || (acc.error && (
 		acc.error.includes('invalid') || acc.error.includes('unauthorized') ||
 		acc.error.includes('401') || acc.error.includes('403') ||
 		acc.error.includes('invalidated') || acc.error.includes('invalid_grant')
-	);
+	));
 
 	return (
 		<div className="flex items-center gap-3 px-2.5 py-1.5 rounded border border-transparent hover:border-slate-200 hover:bg-slate-50 transition-colors min-w-0">
@@ -114,8 +117,10 @@ function AccountRow({
 			{/* error / stale / re-add */}
 			{acc.error ? (
 				<span className="flex items-center gap-1.5 flex-1 min-w-0">
-					<span className="text-[10px] text-rose-500 truncate" title={acc.error}>
-						{isAuthError ? 'Token expired' : acc.error}
+					<span className="text-[10px] text-rose-500 truncate" title={acc.revoke_reason || acc.error}>
+						{acc.revoked
+							? 'Family revoked — re-add with a fresh claude auth login'
+							: isAuthError ? 'Token expired' : acc.error}
 					</span>
 					<button
 						onClick={() => onReAdd(acc.email)}
