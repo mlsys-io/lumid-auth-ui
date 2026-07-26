@@ -76,7 +76,6 @@ const StudioClaudeSessions = lazy(() => import("./pages/studio/claude-sessions")
 // Phase S3-B — cycle inspector.
 // "How Lumid works" — walkable 3-stage loop (Assemble → Adapt → Compound)
 // illustrated against the demo intents. Stages 1-2 concrete, 3 open.
-const StudioHow        = lazy(() => import("./pages/studio/how"));
 const StudioDocs       = lazy(() => import("./pages/studio/docs"));
 const StudioMarketplace = lazy(() => import("./pages/studio/library"));
 const StudioLibraryTabs = lazy(() => import("./pages/studio/library-tabs"));
@@ -774,7 +773,9 @@ export default function App() {
             <Route path="runs/:run_id"                 element={<StudioRunDetail />} />
             {/* Mind folded into each workflow's Insights panel. */}
             <Route path="mind"                         element={<Navigate to="/studio/apps" replace />} />
-            <Route path="how"                          element={<StudioHow />} />
+            {/* "How it works" folded into the Documentation panel — old
+                deep links redirect. */}
+            <Route path="how"                          element={<Navigate to="/studio/docs/how" replace />} />
             {/* Documentation panel — index over every guide/runbook/contract,
                 with an in-shell reader. Standalone /docs/* routes stay live
                 (public xpio contract + external deep links). */}

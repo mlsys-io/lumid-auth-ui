@@ -13,8 +13,9 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import 'github-markdown-css/github-markdown-light.css';
 import {
-	BookOpen, Zap, FileCode2, Activity, Layers, CandlestickChart, Compass, ArrowLeft, Loader2,
+	BookOpen, Zap, FileCode2, Activity, Layers, CandlestickChart, Compass, ArrowLeft, Loader2, Sparkles,
 } from 'lucide-react';
+import StudioHow from './how';
 
 interface DocEntry {
 	slug: string;
@@ -97,10 +98,22 @@ function DocIndex() {
 				</h1>
 				<p className="text-xs text-slate-400 mt-1">
 					Guides, contracts, and runbooks for the Lumid platform.
-					For a tour of the Studio itself, see{' '}
-					<Link to="/studio/how" className="text-gold-700 hover:underline">How it works</Link>.
 				</p>
 			</header>
+			{/* How Lumid works — the interactive Studio tour, folded in here
+			    (was the standalone /studio/how; that route now redirects). */}
+			<Link
+				to="/studio/docs/how"
+				className="group mb-6 flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3.5 hover:border-gold-300 hover:shadow-sm transition"
+			>
+				<Sparkles className="w-4 h-4 mt-0.5 text-foreground/45 group-hover:text-gold-600 transition-colors" />
+				<span>
+					<span className="block text-sm font-medium text-slate-800">How Lumid works</span>
+					<span className="block text-xs text-slate-500 leading-relaxed mt-0.5">
+						A walkable tour of the loop every intent runs through — assemble, then adapt &amp; improve.
+					</span>
+				</span>
+			</Link>
 			{GROUPS.map((g) => (
 				<section key={g} className="mb-6">
 					<h2 className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-2">{g}</h2>
@@ -175,6 +188,18 @@ function DocReader({ doc }: { doc: DocEntry }) {
 
 export default function StudioDocs() {
 	const { slug } = useParams<{ slug?: string }>();
+	// "how" is the interactive tour (a React page, not markdown) — render it
+	// inside the docs chrome so it reads as part of the same collection.
+	if (slug === 'how') {
+		return (
+			<div className="max-w-4xl mx-auto px-6 py-6">
+				<Link to="/studio/docs" className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-gold-700 mb-4">
+					<ArrowLeft className="w-3.5 h-3.5" /> All docs
+				</Link>
+				<StudioHow />
+			</div>
+		);
+	}
 	const doc = slug ? DOCS.find((d) => d.slug === slug) : undefined;
 	if (slug && !doc) {
 		return (

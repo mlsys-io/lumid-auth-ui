@@ -16,7 +16,6 @@ import {
 	PanelLeftClose,
 	PanelLeftOpen,
 	Store,
-	Compass,
 	Settings,
 	Shield,
 	BookOpen,
@@ -396,23 +395,11 @@ export function StudioShell() {
 					))}
 				</nav>
 
-				{/* Docs link — kept apart from the functional nav above so
-				    "how it works" reads as reference, not a workspace. */}
-				<NavLink
-					to="/studio/how"
-					className={({ isActive }) => cn(
-						'mx-3 mb-1 flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs transition-colors hover:bg-black/[0.04]',
-						isActive ? 'text-foreground/80' : 'text-foreground/45 hover:text-foreground/70',
-					)}
-				>
-					<Compass className="w-3.5 h-3.5 flex-shrink-0" />
-					<span>How it works</span>
-				</NavLink>
-
 				{/* Documentation panel — replaces the old per-doc footer links
-				    (Claude guide, CD runbook): every guide/runbook/contract now
-				    lives behind one in-shell index at /studio/docs. Auth-gated
-				    docs stay enforced server-side by the edge gate regardless. */}
+				    (How it works, Claude guide, CD runbook): the tour and every
+				    guide/runbook/contract live behind one in-shell index at
+				    /studio/docs. Auth-gated docs stay enforced server-side by
+				    the edge gate regardless. */}
 				<NavLink
 					to="/studio/docs"
 					className={({ isActive }) => cn(
