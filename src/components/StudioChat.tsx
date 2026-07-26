@@ -988,11 +988,27 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 	// the bottom. If they've scrolled up (to read, or to watch an inline
 	// workflow-assembly card animate), don't drag them back down on every
 	// delta. That repeated yank is what made the assembly "jump".
+	//
+	// rAF-throttled, and self-induced scrolls are flagged: the container has
+	// CSS scroll-smooth, so a bare per-delta `scrollTop =` assignment ANIMATES
+	// — mid-animation the measured position lags the target, the onScroll
+	// handler reads it, concludes the user scrolled up, and auto-follow
+	// silently disengages ("Jump to latest" popping up unasked).
+	const scrollRaf = useRef(0);
+	const selfScrollUntil = useRef(0);
 	useEffect(() => {
-		const el = transcriptRef.current;
-		if (!el || !atBottomRef.current) return;
-		el.scrollTop = el.scrollHeight;
+		if (!atBottomRef.current) return;
+		if (scrollRaf.current) return; // one queued frame is enough
+		scrollRaf.current = requestAnimationFrame(() => {
+			scrollRaf.current = 0;
+			const el = transcriptRef.current;
+			if (!el || !atBottomRef.current) return;
+			// Instant jump for stream-follow; smooth stays for user actions.
+			selfScrollUntil.current = Date.now() + 200;
+			el.scrollTo({ top: el.scrollHeight, behavior: 'instant' as ScrollBehavior });
+		});
 	}, [messages, streaming]);
+	useEffect(() => () => { if (scrollRaf.current) cancelAnimationFrame(scrollRaf.current); }, []);
 
 	// Persist width once the user releases the drag (not on every
 	// mousemove tick — keeps localStorage writes off the hot path).
@@ -1600,17 +1616,6 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		// never look stuck with no explanation.
 		return found ?? { kind: 'working' };
 	}, [streaming, messages]);
-	// Elapsed seconds for the CURRENT activity (resets when it changes).
-	const activityKey = activity ? (activity.kind === 'tool' ? `t:${activity.name}:${activity.summary ?? ''}` : activity.kind) : '';
-	const [activityElapsed, setActivityElapsed] = useState(0);
-	useEffect(() => {
-		if (!activityKey) return;
-		const started = Date.now();
-		setActivityElapsed(0);
-		const t = setInterval(() => setActivityElapsed(Math.round((Date.now() - started) / 1000)), 1000);
-		return () => clearInterval(t);
-	}, [activityKey]);
-
 	// Index of the latest assistant reply — the SessionStrip renders as that
 	// reply's header (top of the current response).
 	const lastAssistantIdx = (() => {
@@ -1731,6 +1736,10 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 			<div
 				ref={transcriptRef}
 				onScroll={(e) => {
+					// Ignore scroll events our own stream-follow just caused —
+					// measuring mid-jump mis-reads as "user scrolled up" and
+					// turns auto-follow off while they never touched anything.
+					if (Date.now() < selfScrollUntil.current) return;
 					const el = e.currentTarget;
 					// "near bottom" = within 80px of the end. Toggles whether new
 					// content sticks to the bottom or leaves the user where they are.
@@ -1770,7 +1779,6 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 									<SessionStrip
 										session={claudeSession}
 										streaming={streaming}
-										pool={/claude-code-(sonnet|opus|fable|kimi|glm)/.test(model)}
 										caps={claudeCaps}
 										onClear={() => { claudeSessionRef.current = null; setClaudeSession(null); }}
 									/>
@@ -1913,24 +1921,9 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 				)}
 				{/* Live activity — pinned above the composer so a working turn
 				    never "looks stuck": names the running tool (or thinking)
-				    with a ticking elapsed counter. */}
-				{activity && (
-					<div className="flex items-center gap-1.5 px-2 pb-1 text-[11px] text-gold-700" aria-live="polite">
-						<Loader2 className="w-3 h-3 animate-spin" />
-						{activity.kind === 'tool' ? (
-							<span className="truncate">
-								Running <span className="font-mono font-medium">{activity.name}</span>
-								{activity.summary && <span className="opacity-70"> · {activity.summary.slice(0, 70)}</span>}
-								{activityElapsed >= 3 && <span className="opacity-60"> — {activityElapsed}s</span>}
-							</span>
-						) : (
-							<span>
-								{activity.kind === 'thinking' ? 'Thinking…' : 'Working…'}
-								{activityElapsed >= 3 && <span className="opacity-60"> — {activityElapsed}s</span>}
-							</span>
-						)}
-					</div>
-				)}
+				    with a ticking elapsed counter. Own component so its 1 Hz
+				    tick re-renders ~20 nodes, not the whole chat root. */}
+				{activity && <ActivityLine activity={activity} />}
 				{/* The composer card — one rounded white card (claude style):
 				    chromeless textarea on top, then a bottom action row laid
 				    out via flex order: ⊕ tools + ⌖ picker left, model picker
@@ -2550,6 +2543,39 @@ const MessageBubble = memo(function MessageBubble({
 	a.streaming === b.streaming &&
 	a.isSpeaking === b.isSpeaking)
 
+// ActivityLine — the "what is Claude doing right now" strip above the
+// composer. Owns its own elapsed-seconds state so the 1 Hz tick re-renders
+// only this subtree; the chat root re-renders only when the ACTIVITY changes.
+function ActivityLine({ activity }: {
+	activity: { kind: 'tool'; name: string; summary?: string } | { kind: 'thinking' } | { kind: 'working' };
+}) {
+	const key = activity.kind === 'tool' ? `t:${activity.name}:${activity.summary ?? ''}` : activity.kind;
+	const [elapsed, setElapsed] = useState(0);
+	useEffect(() => {
+		const started = Date.now();
+		setElapsed(0);
+		const t = setInterval(() => setElapsed(Math.round((Date.now() - started) / 1000)), 1000);
+		return () => clearInterval(t);
+	}, [key]);
+	return (
+		<div className="flex items-center gap-1.5 px-2 pb-1 text-[11px] text-gold-700" aria-live="polite">
+			<Loader2 className="w-3 h-3 animate-spin" />
+			{activity.kind === 'tool' ? (
+				<span className="truncate">
+					Running <span className="font-mono font-medium">{activity.name}</span>
+					{activity.summary && <span className="opacity-70"> · {activity.summary.slice(0, 70)}</span>}
+					{elapsed >= 3 && <span className="opacity-60"> — {elapsed}s</span>}
+				</span>
+			) : (
+				<span>
+					{activity.kind === 'thinking' ? 'Thinking…' : 'Working…'}
+					{elapsed >= 3 && <span className="opacity-60"> — {elapsed}s</span>}
+				</span>
+			)}
+		</div>
+	);
+}
+
 // ThinkingBlock — collapsible reasoning panel above the assistant's
 // reply. Auto-expanded while streaming so the user sees the model
 // Collapsed by default — the user clicks to peek at the reasoning. The
@@ -2575,19 +2601,26 @@ function ThinkingBlock({ thinking, done, elapsedMs, tokens }: { thinking: string
 	// estimate is the fallback for providers that don't report one.
 	const tokenCount = tokens ?? (thinking.length ? Math.max(1, Math.round(thinking.length / 4)) : 0);
 	// The CLI reports thinking tokens in ~50-token quanta, which made the live
-	// label jump 0 → 50 → 95 → …. Tick the DISPLAYED count up by 1 toward the
-	// latest report (paced to land just before the next quantum arrives) so it
-	// reads as a per-token counter; snap once the block is done.
+	// label jump 0 → 50 → 95 → …. Tick the DISPLAYED count toward the latest
+	// report so it reads as a live counter; snap once the block is done.
+	// Fixed ~100ms cadence with an adaptive step (not +1 per tick): a +1/15ms
+	// version was ~66 renders/s and still needed 75s to catch a 5K-token
+	// report it was chasing.
 	const [shownCount, setShownCount] = useState(tokenCount);
 	useEffect(() => {
 		if (done || shownCount > tokenCount) { setShownCount(tokenCount); return; }
 		if (shownCount === tokenCount) return;
 		const diff = tokenCount - shownCount;
-		const t = setTimeout(() => setShownCount((s) => Math.min(tokenCount, s + 1)),
-			Math.max(15, Math.min(120, 1200 / diff)));
+		const t = setTimeout(
+			() => setShownCount((s) => Math.min(tokenCount, s + Math.max(1, Math.ceil(diff / 12)))),
+			100,
+		);
 		return () => clearTimeout(t);
 	}, [done, shownCount, tokenCount]);
 	const liveCount = done ? tokenCount : shownCount;
+	// 1000+ reads as 1.1K / 2.5K — the raw figure gets long and the precision
+	// is meaningless past a thousand (the count is an estimate anyway).
+	const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n < 10000 ? 1 : 0)}K` : String(n));
 	// Duration comes from the block's own start/end stamps when available
 	// (block model); legacy messages have none and keep the token-only label.
 	const secs = elapsedMs !== undefined && elapsedMs > 900 ? Math.round(elapsedMs / 1000) : 0;
@@ -2597,10 +2630,10 @@ function ThinkingBlock({ thinking, done, elapsedMs, tokens }: { thinking: string
 	if (done && !thinking && !tokenCount) return null;
 	const label = done
 		? (tokenCount
-			? (secs ? `Thought for ${secs}s (${tokenCount} tokens)` : `Thought (${tokenCount} tokens)`)
+			? (secs ? `Thought for ${secs}s (${fmt(tokenCount)} tokens)` : `Thought (${fmt(tokenCount)} tokens)`)
 			: (secs ? `Thought for ${secs}s` : 'Thought'))
 		: liveCount > 0
-			? `Thinking… ${liveCount} tokens`
+			? `Thinking… ${fmt(liveCount)} tokens`
 			: 'Thinking…';
 	// Current Claude models return reasoning ENCRYPTED — only a signature and
 	// a token count ever reach us, so the text stays empty for the whole turn.

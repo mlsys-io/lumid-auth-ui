@@ -92,6 +92,19 @@ export function blocksOf(m: Message): Block[] {
 
 /** Re-derive the `content` mirror after any text change. One place, one rule. */
 function syncContent(m: Message): Message {
+	// Fast path for the by-far-common shape (a reply that is one flowing text
+	// block, growing token by token): mirror that block directly instead of
+	// filter/map/join over the whole list — the full re-join allocated a fresh
+	// n-byte string on EVERY delta, an independent O(n²) term per turn.
+	if (m.blocks) {
+		let only: TextBlock | null = null;
+		for (const b of m.blocks) {
+			if (b.kind !== 'text') continue;
+			if (only) { only = null; break; } // >1 text block → slow path
+			only = b as TextBlock;
+		}
+		if (only) return only.text === m.content ? m : { ...m, content: only.text };
+	}
 	const text = messageText(m);
 	return text === m.content ? m : { ...m, content: text };
 }

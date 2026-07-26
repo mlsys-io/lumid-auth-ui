@@ -20,6 +20,7 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import type { Components } from 'react-markdown';
+import { memo, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 
 const components: Components = {
@@ -171,8 +172,16 @@ interface Props {
 	dark?: boolean;
 }
 
-export function ChatMarkdown({ children, dark }: Props) {
-	const clean = typeof children === "string" ? sanitizeMath(children) : children;
+// memo + prop-identical bail: react-markdown 9 has zero internal memoization —
+// parse + rehype-katex run in the component body on EVERY render. Unmemoized,
+// each streamed token re-parsed every settled paragraph and re-rendered every
+// KaTeX equation in the message (O(n²) per turn — the "fast at first, slower
+// and slower" signature).
+export const ChatMarkdown = memo(function ChatMarkdown({ children, dark }: Props) {
+	const clean = useMemo(
+		() => (typeof children === "string" ? sanitizeMath(children) : children),
+		[children],
+	);
 	return (
 		<div className={[
 			'chat-md',
@@ -203,6 +212,6 @@ export function ChatMarkdown({ children, dark }: Props) {
 			</ReactMarkdown>
 		</div>
 	);
-}
+});
 
 export default ChatMarkdown;

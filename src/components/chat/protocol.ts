@@ -56,6 +56,23 @@ export async function readChatStream(r: Response, setMessages: SetMessages, meta
 	}
 	const decoder = new TextDecoder();
 	let buf = '';
+	// Delta coalescing: consecutive text/thinking deltas within one network
+	// chunk collapse into ONE setMessages, so the render rate is capped at the
+	// chunk arrival rate instead of the token rate. On a fast stream a chunk
+	// carries dozens of tokens; dispatching each one re-rendered (and re-parsed
+	// the markdown of) the live message once per token — the top term of the
+	// "slower and slower as the reply grows" O(n²). Ordering is preserved: the
+	// pending run is flushed before ANY other event kind is dispatched.
+	let pend: { kind: 'text' | 'thinking'; delta: string; parent?: string; idx?: number } | null = null;
+	const flushPending = () => {
+		if (!pend) return;
+		const p = pend;
+		pend = null;
+		setMessages((prev) => withLastAssistant(prev, (m) =>
+			p.kind === 'text'
+				? B.appendText(m, p.delta, p.parent, p.idx)
+				: B.appendReasoning(m, p.delta, p.parent, p.idx)));
+	};
 	try {
 	while (true) {
 		const { done, value } = await reader.read();
@@ -70,6 +87,20 @@ export async function readChatStream(r: Response, setMessages: SetMessages, meta
 				if (!line.startsWith('data: ')) continue;
 				try {
 					const evt = JSON.parse(line.slice(6));
+					if ((evt.type === 'text' || evt.type === 'thinking') && typeof evt.delta === 'string') {
+						const parent = typeof evt.parent_id === 'string' && evt.parent_id ? evt.parent_id : undefined;
+						const idx = typeof evt.index === 'number' ? evt.index : undefined;
+						if (pend && pend.kind === evt.type && pend.parent === parent && pend.idx === idx) {
+							pend.delta += evt.delta;
+						} else {
+							flushPending();
+							pend = { kind: evt.type, delta: evt.delta, parent, idx };
+						}
+						continue;
+					}
+					// Any non-delta event closes the pending run first so block
+					// boundaries, tool events, and terminals keep arrival order.
+					flushPending();
 					if (evt.type === 'claude_session') {
 						if (evt.session_id) meta.onClaudeSession?.(String(evt.session_id));
 					} else if (evt.type === 'route') {
@@ -96,8 +127,12 @@ export async function readChatStream(r: Response, setMessages: SetMessages, meta
 				} catch { /* malformed line; skip */ }
 			}
 		}
+		// End of chunk: paint what arrived rather than holding the tail for
+		// the next network read (a stalled stream must not hide tokens).
+		flushPending();
 	}
 	} finally {
+		flushPending();
 		if (signal) signal.removeEventListener('abort', onAbort);
 	}
 	// If we exited the loop because of an abort (reader was cancelled), surface
