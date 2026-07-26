@@ -2098,7 +2098,16 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 								'w-full px-2 pt-1.5 pb-1 text-[15px] leading-relaxed bg-transparent border-0 outline-none shadow-none focus:outline-none focus:ring-0 focus-visible:outline-none resize-none max-h-48 transition-all',
 								dragOver ? 'placeholder:text-coral' : 'placeholder:text-muted-foreground',
 							].join(' ')}
-							style={{ minHeight: '64px', outline: 'none', boxShadow: 'none' }}
+							// Fresh chat keeps the roomy 64px hero box; once the
+							// conversation is going the composer shrinks to a single
+							// line so the transcript owns the vertical space.
+							// field-sizing:content lets it grow with the draft (up
+							// to max-h-48) on browsers that support it.
+							style={{
+								minHeight: messages.length === 0 ? '64px' : '34px',
+								outline: 'none', boxShadow: 'none',
+								...({ fieldSizing: 'content' } as Record<string, string>),
+							}}
 						/>
 						{slashSuggestions.length > 0 && (
 							<div className="absolute bottom-full left-0 right-0 mb-1 bg-popover border border-border rounded-xl shadow-lg z-50 max-h-48 overflow-y-auto">
@@ -2486,16 +2495,19 @@ const MessageBubble = memo(function MessageBubble({
 // from the streaming answer. Token count is a ~4-chars/token estimate
 // (we don't get a usage count for the streamed thinking deltas).
 function ThinkingBlock({ thinking, done, elapsedMs, tokens }: { thinking: string; done: boolean; elapsedMs?: number; tokens?: number }) {
-	// Open while the model is still reasoning so you can watch it, then
-	// auto-collapse once it's done so the finished answer isn't buried under a
-	// wall of reasoning. Sticky against a user who clicked either way.
-	const [open, setOpen] = useState<boolean>(!done);
+	// Auto-open while the model streams a VISIBLE trace so you can watch it,
+	// then auto-collapse once it's done so the finished answer isn't buried
+	// under a wall of reasoning. Starts closed (encrypted-reasoning models
+	// never produce text, and their explainer shouldn't pop open unasked).
+	// Sticky against a user who clicked either way.
+	const [open, setOpen] = useState(false);
 	const touched = useRef(false);
 	const wasStreaming = useRef(!done);
 	useEffect(() => {
+		if (!done && thinking && !touched.current) setOpen(true);
 		if (wasStreaming.current && done && !touched.current) setOpen(false);
 		wasStreaming.current = !done;
-	}, [done]);
+	}, [done, thinking]);
 	// Prefer the provider's own count (system/thinking_tokens); the ~4-chars
 	// estimate is the fallback for providers that don't report one.
 	const tokenCount = tokens ?? (thinking.length ? Math.max(1, Math.round(thinking.length / 4)) : 0);
@@ -2529,38 +2541,36 @@ function ThinkingBlock({ thinking, done, elapsedMs, tokens }: { thinking: string
 			: 'Thinking…';
 	// Current Claude models return reasoning ENCRYPTED — only a signature and
 	// a token count ever reach us, so the text stays empty for the whole turn.
-	// An expandable panel with nothing in it read as a bug ("(no content
-	// yet)"); with no text there is nothing to expand, so the pill is
-	// status-only. The panel comes back the moment a provider streams real
-	// reasoning text (lumid-llm <think> models, legacy Anthropic thinking).
-	const expandable = !!thinking;
+	// The pill stays clickable either way: with text it expands the trace;
+	// without text it expands a one-line explanation of WHY there is no trace
+	// (a dead pill read as a bug, and "(no content yet)" read as a worse one).
+	// Real traces come back the moment a provider streams reasoning text
+	// (lumid-llm <think> models, legacy Anthropic thinking).
 	return (
 		<div className="mb-1.5">
 			<button
 				type="button"
-				onClick={() => { if (!expandable) return; touched.current = true; setOpen((v) => !v); }}
-				title={expandable ? undefined : 'Reasoning is encrypted by the provider — only the token count is visible'}
-				className={[
-					'inline-flex items-center gap-1 text-[11px] text-gold-700 bg-gold-50/80 border border-gold-200 rounded-full px-2 py-0.5 transition-colors',
-					expandable ? 'hover:bg-gold-100/80' : 'cursor-default',
-				].join(' ')}
+				onClick={() => { touched.current = true; setOpen((v) => !v); }}
+				className="inline-flex items-center gap-1 text-[11px] text-gold-700 bg-gold-50/80 hover:bg-gold-100/80 border border-gold-200 rounded-full px-2 py-0.5 transition-colors"
 			>
 				<Brain className="w-3 h-3" />
 				<span>{label}</span>
 				{!done && <ThinkingDots />}
-				{expandable && (
-					<ChevronDown
-						className={['w-3 h-3 transition-transform', open ? 'rotate-180' : ''].join(' ')}
-					/>
-				)}
+				<ChevronDown
+					className={['w-3 h-3 transition-transform', open ? 'rotate-180' : ''].join(' ')}
+				/>
 			</button>
-			{expandable && (
-				<Collapse open={open}>
-					<div className="mt-1.5 px-3 py-2 text-[12px] leading-relaxed text-muted-foreground bg-gold-50/40 border border-gold-100 rounded-xl whitespace-pre-wrap break-words">
-						{thinking}
-					</div>
-				</Collapse>
-			)}
+			<Collapse open={open}>
+				<div className="mt-1.5 px-3 py-2 text-[12px] leading-relaxed text-muted-foreground bg-gold-50/40 border border-gold-100 rounded-xl whitespace-pre-wrap break-words">
+					{thinking || (
+						<span className="italic">
+							Claude keeps its reasoning private — the API returns it encrypted, so only
+							the duration and token count are visible. Models that stream open reasoning
+							(e.g. the qwen entries) show their full trace here.
+						</span>
+					)}
+				</div>
+			</Collapse>
 		</div>
 	);
 }

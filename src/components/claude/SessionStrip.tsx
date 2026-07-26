@@ -88,26 +88,26 @@ export function SessionStrip({
 	caps?: Caps | null;
 	onClear: () => void;
 }) {
+	// Nothing to show before the CLI session exists — the old "new Claude Code
+	// session — runs in your sandbox workspace" hint + transcripts link row was
+	// noise on every fresh turn (removed 2026-07-26 by operator request).
+	if (!session) return null;
 	return (
 		<div className="flex items-center gap-2 flex-wrap px-1 pb-1 text-[11px]">
-			{session ? (
-				<span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-indigo-200 bg-indigo-50/70 text-indigo-800">
-					<Circle className="w-2 h-2 fill-indigo-500 text-indigo-500" />
-					<span className="font-mono" title="Claude Code session backing this thread — reopening the thread later resumes it">
-						session {session.slice(0, 8)}
-					</span>
-					<button
-						onClick={onClear}
-						disabled={streaming}
-						title="Start a fresh Claude Code session on the next turn"
-						className="opacity-50 hover:opacity-100 disabled:opacity-25"
-					>
-						<X className="w-3 h-3" />
-					</button>
+			<span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-indigo-200 bg-indigo-50/70 text-indigo-800">
+				<Circle className="w-2 h-2 fill-indigo-500 text-indigo-500" />
+				<span className="font-mono" title="Claude Code session backing this thread — reopening the thread later resumes it">
+					session {session.slice(0, 8)}
 				</span>
-			) : (
-				<span className="text-muted-foreground">new Claude Code session — runs in your sandbox workspace</span>
-			)}
+				<button
+					onClick={onClear}
+					disabled={streaming}
+					title="Start a fresh Claude Code session on the next turn"
+					className="opacity-50 hover:opacity-100 disabled:opacity-25"
+				>
+					<X className="w-3 h-3" />
+				</button>
+			</span>
 			{caps && <CapChip caps={caps} />}
 			{pool && (
 				<Link to="/claude-sessions" className="text-indigo-600 hover:underline">
