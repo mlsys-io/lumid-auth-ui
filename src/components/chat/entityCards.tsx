@@ -12,7 +12,7 @@
 // card row and the tool chip's "Open →" land in the same place.
 
 import { Link } from 'react-router-dom';
-import { ArrowUpRight, CheckCircle2 } from 'lucide-react';
+import { ArrowUpRight, CheckCircle2, Workflow as WorkflowIcon } from 'lucide-react';
 import type { ToolCall } from './types';
 import { TONES, statusTone, type ToneKey } from '@/lib/tones';
 import { appTitle } from '@/components/workflow/AppCard';
@@ -76,7 +76,37 @@ function Row({ to, children }: { to?: string; children: React.ReactNode }) {
 
 type Renderer = (result: Record<string, any>) => React.ReactNode | null;
 
+function workflowResultCard(kind: 'halo' | 'run', r: Record<string, any>): React.ReactNode {
+	if (r?.error) {
+		return <Card title="Workflow" rows={[<Row key="e"><span className="text-rose-600 text-[12px]">{String(r.error).slice(0, 140)}</span></Row>]} />;
+	}
+	const rows: React.ReactNode[] = [];
+	if (kind === 'halo') {
+		const workers = Array.isArray(r.selected_workers) ? r.selected_workers.length : 0;
+		const counts = r.runtime_graph_node_counts && typeof r.runtime_graph_node_counts === 'object'
+			? Object.values(r.runtime_graph_node_counts as Record<string, number>).reduce((a, b) => a + (b || 0), 0) : undefined;
+		const nodes = r.merged_runtime_node_count ?? counts;
+		rows.push(<Row key="s"><span className="text-[12.5px]">Optimized · {workers} worker{workers === 1 ? '' : 's'}{nodes != null ? ` · ${nodes} node${nodes === 1 ? '' : 's'}` : ''}</span></Row>);
+	} else {
+		const st = String(r.status || '').toLowerCase() || 'submitted';
+		rows.push(<Row key="s"><span className="text-[12.5px]">Run {st}{r.workflow_id ? ` · ${String(r.workflow_id).slice(0, 14)}…` : ''}</span></Row>);
+	}
+	rows.push(
+		<Row key="o">
+			<button
+				onClick={() => window.dispatchEvent(new CustomEvent('studio:workflow-panel-toggle'))}
+				className="inline-flex items-center gap-1 text-[12px] text-gold-700 hover:underline"
+			>
+				<WorkflowIcon className="w-3 h-3" /> Open workflow
+			</button>
+		</Row>,
+	);
+	return <Card title={kind === 'halo' ? 'Workflow · HALO plan' : 'Workflow run'} rows={rows} />;
+}
+
 const RENDERERS: Record<string, Renderer> = {
+	optimize_workflow: (r) => workflowResultCard('halo', r),
+	run_workflow: (r) => workflowResultCard('run', r),
 	list_apps: (r) => {
 		const apps: Array<{ name: string; tenant?: boolean }> = Array.isArray(r.apps) ? r.apps : [];
 		if (apps.length === 0) return null;

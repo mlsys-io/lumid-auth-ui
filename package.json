@@ -12,6 +12,7 @@
     "test:blocks": "node --experimental-strip-types e2e/blocks-replay.mjs"
   },
   "dependencies": {
+    "@dagrejs/dagre": "^1.1.8",
     "@emoji-mart/data": "^1.2.1",
     "@emoji-mart/react": "^1.1.1",
     "@fontsource-variable/source-serif-4": "^5.2.9",
