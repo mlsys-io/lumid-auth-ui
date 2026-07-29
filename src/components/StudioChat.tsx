@@ -67,6 +67,8 @@ function sessionRowsToMessages(rows: CycleLogRow[]): Message[] {
 	return out;
 }
 import { ChatHero } from './chat/ChatEmptyState';
+import { StudioWorkflowPanel } from './StudioWorkflowPanel';
+import { Workflow as WorkflowIcon } from 'lucide-react';
 // Parse an AI turn's raw output into something readable: tenant cycles emit
 // machine JSON (often a single unformatted line), sometimes inside a ```json
 // fence or after a thinking preamble. Pull the JSON out and pretty-print it;
@@ -1612,6 +1614,17 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 			    talks to THAT app's agents by default (app context drives the
 			    routing; see emitAppOpener clearing any manual selection). */}
 			<ArtifactIconButton align={docked ? 'right' : 'left'} />
+			{/* Workflow-viz side panel toggle. Auto-opens when an optimize_workflow/
+			    run_workflow tool completes (chat/protocol.ts); this button re-opens
+			    it. The panel itself (a fixed right drawer) is mounted below. */}
+			<button
+				onClick={() => window.dispatchEvent(new CustomEvent('studio:workflow-panel-toggle'))}
+				title="Workflow" aria-label="Workflow visualization"
+				className="p-1.5 rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-muted"
+			>
+				<WorkflowIcon className="w-4 h-4" />
+			</button>
+			<StudioWorkflowPanel />
 			<div className="relative">
 				<button
 					onClick={() => { const next = !historyOpen; setHistoryOpen(next); if (next) loadHistory(); }}

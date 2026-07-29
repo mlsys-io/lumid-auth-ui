@@ -294,6 +294,24 @@ export function handleEvent(
 				detail: { id: String(evt.result.id) },
 			}));
 		}
+		// Open the workflow-viz side panel when a Lumilake workflow tool
+		// completes — StudioWorkflowPanel renders the DAG (parsed from the
+		// tool's `workflow_yaml` arg) + the HALO plan (the result) as overlay.
+		if ((evt.name === 'optimize_workflow' || evt.name === 'run_workflow') && ok && evt.result) {
+			const a = (evt.args && typeof evt.args === 'object')
+				? evt.args as Record<string, unknown>
+				: (() => { try { return JSON.parse(String(evt.args)); } catch { return {}; } })();
+			const wfYaml = typeof a.workflow_yaml === 'string' ? a.workflow_yaml : '';
+			if (wfYaml.trim()) {
+				window.dispatchEvent(new CustomEvent('studio:workflow-open', {
+					detail: {
+						workflow_yaml: wfYaml,
+						plan: evt.result,
+						title: evt.name === 'run_workflow' ? 'Workflow run' : 'Workflow · HALO plan',
+					},
+				}));
+			}
+		}
 	} else if (evt.type === 'error' && evt.message) {
 		// An ordered block, not text glued onto the reply — so the error sits
 		// where it happened and never pollutes m.content (which is the wire
