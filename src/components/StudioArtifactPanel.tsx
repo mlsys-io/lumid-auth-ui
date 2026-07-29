@@ -14,8 +14,8 @@
 // workspace. Collapses to a thin rail (Files icon) when not in use.
 
 import { useCallback, useEffect, useState } from 'react';
-import { Boxes, ChevronLeft, ChevronRight, Copy, Download, FileText, FileJson, Code2, Trash2, X, Loader2, Image as ImageIcon, AudioLines } from 'lucide-react';
-import { ChatMarkdown } from './ChatMarkdown';
+import { Boxes, ChevronLeft, ChevronRight, Copy, Download, Trash2, X, Loader2 } from 'lucide-react';
+import { ArtifactView, ArtifactKindIcon, type ArtifactKind } from './ArtifactView';
 
 const COLLAPSE_KEY = 'studio_artifact_panel_collapsed_v1';
 const WIDTH_KEY    = 'studio_artifact_panel_width_v1';
@@ -25,7 +25,7 @@ const DEFAULT_WIDTH = 380;
 
 type ArtifactListRow = {
 	id: string;
-	kind: 'markdown' | 'code' | 'json' | 'text' | 'image' | 'audio';
+	kind: ArtifactKind;
 	title: string;
 	language?: string;
 	source_tool?: string;
@@ -140,11 +140,11 @@ export function StudioArtifactPanel() {
 		if (!selected) return;
 		const safeTitle = selected.title.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 60) || selected.id;
 		const a = document.createElement('a');
-		// image/audio artifacts are data: URLs — download them verbatim so the
+		// image/audio/pdf artifacts are data: URLs — download them verbatim so the
 		// bytes round-trip (a text/plain blob would corrupt them).
-		if ((selected.kind === 'image' || selected.kind === 'audio') && selected.content.startsWith('data:')) {
+		if ((selected.kind === 'image' || selected.kind === 'audio' || selected.kind === 'pdf') && selected.content.startsWith('data:')) {
 			const mime = selected.content.slice(5, selected.content.indexOf(';'));
-			const ext = mime.split('/')[1] || (selected.kind === 'image' ? 'png' : 'mp3');
+			const ext = mime.split('/')[1] || (selected.kind === 'image' ? 'png' : selected.kind === 'pdf' ? 'pdf' : 'mp3');
 			a.href = selected.content;
 			a.download = `${safeTitle}.${ext}`;
 			document.body.appendChild(a);
@@ -156,6 +156,7 @@ export function StudioArtifactPanel() {
 			switch (selected.kind) {
 				case 'markdown': return 'md';
 				case 'json': return 'json';
+				case 'chart': return 'json';
 				case 'code': return selected.language || 'txt';
 				default: return 'txt';
 			}
@@ -272,7 +273,7 @@ export function StudioArtifactPanel() {
 							].join(' ')}
 						>
 							<div className="flex items-center gap-1.5">
-								<KindIcon kind={r.kind} />
+								<ArtifactKindIcon kind={r.kind} />
 								<span className="text-[12.5px] font-medium text-slate-800 truncate flex-1">{r.title}</span>
 								<span className="text-[10px] text-slate-400 font-mono flex-shrink-0">
 									{Math.round(r.bytes / 1024)}KB
@@ -337,31 +338,7 @@ export function StudioArtifactPanel() {
 								</button>
 							</div>
 							<div className="text-[12.5px]">
-								{selected.kind === 'markdown' ? (
-									<ChatMarkdown>{selected.content}</ChatMarkdown>
-								) : selected.kind === 'code' ? (
-									<pre className="bg-slate-50 border border-slate-200 rounded-lg p-2 text-[11.5px] overflow-x-auto">
-										<code>{selected.content}</code>
-									</pre>
-								) : selected.kind === 'json' ? (
-									<pre className="bg-slate-50 border border-slate-200 rounded-lg p-2 text-[11.5px] overflow-x-auto">
-										<code>{prettyJson(selected.content)}</code>
-									</pre>
-								) : selected.kind === 'image' ? (
-									<a href={selected.content} target="_blank" rel="noreferrer">
-										<img
-											src={selected.content}
-											alt={selected.title}
-											className="max-w-full rounded-lg border border-slate-200"
-										/>
-									</a>
-								) : selected.kind === 'audio' ? (
-									<audio controls src={selected.content} className="w-full">
-										Your browser does not support audio playback.
-									</audio>
-								) : (
-									<div className="whitespace-pre-wrap break-words text-slate-700">{selected.content}</div>
-								)}
+								<ArtifactView kind={selected.kind} content={selected.content} title={selected.title} language={selected.language} />
 							</div>
 						</>
 					)}
@@ -375,22 +352,6 @@ export function StudioArtifactPanel() {
 			/>
 		</aside>
 	);
-}
-
-function KindIcon({ kind }: { kind: ArtifactListRow['kind'] }) {
-	switch (kind) {
-		case 'markdown': return <FileText className="w-3.5 h-3.5 text-gold-600 flex-shrink-0" />;
-		case 'code':     return <Code2 className="w-3.5 h-3.5 text-sky-600 flex-shrink-0" />;
-		case 'json':     return <FileJson className="w-3.5 h-3.5 text-gold-600 flex-shrink-0" />;
-		case 'image':    return <ImageIcon className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />;
-		case 'audio':    return <AudioLines className="w-3.5 h-3.5 text-violet-600 flex-shrink-0" />;
-		default:         return <FileText className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />;
-	}
-}
-
-function prettyJson(s: string): string {
-	try { return JSON.stringify(JSON.parse(s), null, 2); }
-	catch { return s; }
 }
 
 function formatDate(iso: string): string {

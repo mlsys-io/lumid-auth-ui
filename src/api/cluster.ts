@@ -97,6 +97,21 @@ export async function listClusters(
 	return r.data.data;
 }
 
+// Slim, secret-free cluster list for the Workspace picker — any authenticated
+// user (the admin listClusters() above is RequireAdmin → 403 for normal users).
+export interface SelectableCluster {
+	id: string;
+	name: string;
+	region?: string;
+	status: ClusterStatus;
+}
+export async function listSelectableClusters(): Promise<SelectableCluster[]> {
+	const r = await apiClient.get<DataResponse<{ clusters: SelectableCluster[] }>>(
+		"/api/v1/cluster/clusters/selectable",
+	);
+	return r.data.data.clusters || [];
+}
+
 export async function getCluster(id: string): Promise<Cluster> {
 	const r = await apiClient.get<DataResponse<{ cluster: Cluster }>>(
 		`/api/v1/cluster/clusters/${encodeURIComponent(id)}`,
