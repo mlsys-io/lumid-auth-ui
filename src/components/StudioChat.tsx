@@ -1166,21 +1166,37 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		if (!text || streaming || inFlightRef.current) return;
 		inFlightRef.current = true;
 		const base = baseMessages ?? messages;
-		const userMsg: Message = { role: 'user', content: text };
+		const userMsg: Message = {
+			role: 'user', content: text,
+			...(stagedAttachments.length > 0 ? { attachments: stagedAttachments } : {}),
+		};
 		// Structured "what the user is looking at" payload — replaces the
 		// old prose preamble (which polluted the stored transcript and
 		// re-sent stale page notes on every history replay). The backend
 		// renders this into a per-request system block.
 		const context = buildViewingContext(location.pathname, location.search, ctxOverride);
-		const wireAttachments: WireAttachment[] = stagedAttachments.map((a) =>
+		// One attachment → wire mapping, used for both the current turn and prior
+		// turns' history. Returns null when the heavy body was already dropped
+		// (stripForPersist on a reloaded thread), so we never re-send an empty
+		// blob the server would choke on.
+		const toWire = (a: Attachment): WireAttachment | null =>
 			a.kind === 'image'
-				? { kind: 'image', name: a.name, mime: a.mime, data_b64: a.dataB64 }
+				? (a.dataB64 ? { kind: 'image', name: a.name, mime: a.mime, data_b64: a.dataB64 } : null)
 				: a.kind === 'document'
-					? { kind: 'document', name: a.name, mime: a.mime, data_b64: a.dataB64 }
-					: { kind: 'text', name: a.name, text: a.text }
-		);
+					? (a.dataB64 ? { kind: 'document', name: a.name, mime: a.mime, data_b64: a.dataB64 } : null)
+					: (a.text ? { kind: 'text', name: a.name, text: a.text } : null);
+		const wireOf = (atts?: Attachment[]): WireAttachment[] =>
+			(atts || []).map(toWire).filter((w): w is WireAttachment => w !== null);
+		const wireAttachments = wireOf(stagedAttachments);
 		const wireMessages = [
-			...base.map((m) => ({ role: m.role, content: m.content })),
+			// Re-send prior turns' still-loaded attachments so a follow-up
+			// ("summarize it again") still sees the file it referenced earlier.
+			...base.map((m) => {
+				const wa = wireOf(m.attachments);
+				return wa.length > 0
+					? { role: m.role, content: m.content, attachments: wa }
+					: { role: m.role, content: m.content };
+			}),
 			wireAttachments.length > 0
 				? { role: 'user' as const, content: text, attachments: wireAttachments }
 				: { role: 'user' as const, content: text },
@@ -2479,6 +2495,21 @@ const MessageBubble = memo(function MessageBubble({
 						</Appear>
 					);
 				})}
+				{/* Files the user attached to this turn — a chip per file so the
+				    upload stays visible on the bubble + across reloads (the body
+				    is stripped on persist; the chip is not). */}
+				{isUser && m.attachments && m.attachments.length > 0 && (
+					<div className="mt-1.5 flex flex-wrap gap-1.5 justify-end">
+						{m.attachments.map((a, ai) => (
+							<span key={ai} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-primary/10 text-primary text-[11px] max-w-[220px]">
+								{a.kind === 'image' ? <ImageIcon className="w-3 h-3 flex-shrink-0" />
+									: a.kind === 'document' ? <FileText className="w-3 h-3 flex-shrink-0" />
+										: <Paperclip className="w-3 h-3 flex-shrink-0" />}
+								<span className="truncate">{a.name}</span>
+							</span>
+						))}
+					</div>
+				)}
 				{/* Pre-first-token placeholder — bubble-level, see noTextYet. */}
 				{noTextYet && streaming && !m.composed && (
 					<div className={[

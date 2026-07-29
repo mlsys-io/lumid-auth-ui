@@ -159,6 +159,12 @@ export type Message = {
 	// via legacyBlocks() in ./blocks.
 	blocks?: Block[];
 
+	// Files the user attached to THIS turn. Kept on the message so they render as
+	// chips on the bubble, survive a reload, and get re-sent as history so a
+	// follow-up ("summarize it again") still sees them. stripForPersist drops the
+	// heavy base64/text bodies before persisting — the chip (kind/name/mime) stays.
+	attachments?: Attachment[];
+
 	// ── legacy, read-only ────────────────────────────────────────────────────
 	// Still written by pre-block producers and present in persisted threads;
 	// consumed ONLY by legacyBlocks(). Do not add new readers.

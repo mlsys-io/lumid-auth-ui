@@ -15,7 +15,7 @@
 // shows up as "sub-agent output freezes mid-stream".
 
 import type {
-	Block, Message, ReasoningBlock, SubagentBlock, SubagentStatus,
+	Attachment, Block, Message, ReasoningBlock, SubagentBlock, SubagentStatus,
 	TextBlock, ToolBlock, ToolCall, CardBlock,
 } from './types';
 import { entityCardFor } from './entityCards';
@@ -633,10 +633,16 @@ export function stripForPersist(msgs: Message[]): Message[] {
 		if (b.kind === 'subagent') return { ...b, tool: clampTool(b.tool), children: walk(b.children) };
 		return b;
 	});
+	// Drop the heavy base64/text body from attachments — keep the lightweight
+	// chip (kind/name/mime/sizeBytes) so it still renders after a reload, without
+	// pushing multi-MB blobs into the ~5 MB sessionStorage / DB record.
+	const stripAtt = (a: Attachment): Attachment =>
+		a.kind === 'text' ? { ...a, text: '' } : { ...a, dataB64: '' };
 	return msgs.map((m) => ({
 		...m,
 		...(m.blocks ? { blocks: walk(m.blocks) } : {}),
 		...(m.tools ? { tools: m.tools.map(clampTool) } : {}),
+		...(m.attachments ? { attachments: m.attachments.map(stripAtt) } : {}),
 	}));
 }
 
