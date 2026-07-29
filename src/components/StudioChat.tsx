@@ -26,8 +26,8 @@ import {
 import { appTitle, prefetchAppLabels } from './workflow/AppCard';
 import { me, type MeWorkflowRow } from '@/api/me';
 import { summarizeAppState, chipsForApp, openerLine } from './chat/appOpener';
-import { startStudioPicking, stopStudioPicking, isStudioPicking, subscribeStudioPicking } from './StudioPicker';
 import { ChatMarkdown } from './ChatMarkdown';
+import { ArtifactView, ArtifactKindIcon, artifactDownload, type ArtifactKind } from './ArtifactView';
 import AssemblyCard from './workflow/AssemblyCard';
 import type { Attachment, WireAttachment, Message, ToolCall, Block } from './chat/types';
 import { readChatStream, withLastAssistant } from './chat/protocol';
@@ -66,7 +66,7 @@ function sessionRowsToMessages(rows: CycleLogRow[]): Message[] {
 	flush();
 	return out;
 }
-import ChatEmptyState, { ChatHero } from './chat/ChatEmptyState';
+import { ChatHero } from './chat/ChatEmptyState';
 // Parse an AI turn's raw output into something readable: tenant cycles emit
 // machine JSON (often a single unformatted line), sometimes inside a ```json
 // fence or after a thinking preamble. Pull the JSON out and pretty-print it;
@@ -233,6 +233,22 @@ function loadTranscript(currentSub: string | null | undefined): Message[] {
 		return [];
 	}
 }
+
+// loadSessionId restores the claude_session_id saved alongside the transcript,
+// so the session pill + CLI --resume continuity survive a page refresh. Same
+// user_sub guard as loadTranscript (never surface another account's session).
+function loadSessionId(currentSub: string | null | undefined): string | null {
+	if (!currentSub) return null;
+	try {
+		const raw = sessionStorage.getItem(STORAGE_KEY);
+		if (!raw) return null;
+		const parsed = JSON.parse(raw);
+		if (Array.isArray(parsed) || parsed?.user_sub !== currentSub) return null;
+		return (parsed.claude_session_id as string) || null;
+	} catch {
+		return null;
+	}
+}
 const COLLAPSE_KEY = 'studio_chat_collapsed_v1';
 const WIDTH_KEY = 'studio_chat_width_v1';
 const MODEL_KEY = 'studio_chat_model_v1';
@@ -258,6 +274,10 @@ const MODE_KEY = 'studio_chat_mode_v1';
 const THINK_KEY = 'studio_chat_think_v1';
 const AGENT_KEY = 'studio_chat_agent_v1';
 const PERSONA_KEY = 'studio_chat_persona_v1';
+// Working context (like picking a git repo): which xpio repo / FM cluster / lumid-data app.
+const WS_REPO_KEY = 'studio_chat_ws_repo_v1';
+const WS_CLUSTER_KEY = 'studio_chat_ws_cluster_v1';
+const WS_DATA_KEY = 'studio_chat_ws_data_v1';
 const MIN_WIDTH = 320;
 const MAX_WIDTH = 720;
 const DEFAULT_WIDTH = 400;
@@ -434,6 +454,15 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		try { return localStorage.getItem(PERSONA_KEY) || ''; }
 		catch { return ''; }
 	});
+	// ── Working context (xpio repo / FM cluster / lumid-data app) ──
+	type WsOption = { id: string; label: string };
+	const [wsRepos, setWsRepos] = useState<WsOption[]>([]);
+	const [wsClusters, setWsClusters] = useState<WsOption[]>([]);
+	const [wsDataApps, setWsDataApps] = useState<WsOption[]>([]);
+	const lsGet = (k: string) => { try { return localStorage.getItem(k) || ''; } catch { return ''; } };
+	const [wsRepo, setWsRepo] = useState<string>(() => lsGet(WS_REPO_KEY));
+	const [wsCluster, setWsCluster] = useState<string>(() => lsGet(WS_CLUSTER_KEY));
+	const [wsDataApp, setWsDataApp] = useState<string>(() => lsGet(WS_DATA_KEY));
 	// Active chat thread id. null = unsaved thread; gets a server-minted
 	// id after the first auto-save. Persists across reloads so refreshing
 	// the page keeps you in the same thread.
@@ -447,11 +476,13 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 	// CLI session (prior tool results + context carry over), and saved
 	// into the chat record so reloads keep continuity. Ref, not state —
 	// read at fetch time, never rendered.
-	const claudeSessionRef = useRef<string | null>(null);
+	const claudeSessionRef = useRef<string | null>(loadSessionId(userSub));
 	// State mirror of claudeSessionRef so the composer can render the
 	// session pill (the ref alone never re-renders). Always write through
-	// setCCSession so both stay in sync.
-	const [claudeSession, setClaudeSession] = useState<string | null>(null);
+	// setCCSession so both stay in sync. Seeded from the persisted transcript
+	// so a page refresh keeps the session pill (and --resume) instead of
+	// dropping it to null.
+	const [claudeSession, setClaudeSession] = useState<string | null>(() => loadSessionId(userSub));
 	// Capabilities of the live CC session (tools/agents/skills/MCP), surfaced
 	// in the SessionStrip like Claude Code's own context header.
 	const [claudeCaps, setClaudeCaps] = useState<{ model?: string; tools?: string[]; agents?: string[]; skills?: string[]; mcp?: unknown } | null>(null);
@@ -497,14 +528,10 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 	// picker when the agent overrode the user's selection.
 	const [lastRoute, setLastRoute] = useState<{ modelUsed: string; autoRouted: boolean } | null>(null);
 
-	// Mouse-picker state — `picking` mirrors the module-level flag in
-	// StudioPicker so the icon button can render "armed"; `pickedTarget`
-	// mirrors the held selection so the chip above the input shows what
-	// the user has pinned. Both come from module subscriptions in
-	// StudioContext / StudioPicker so any page can mutate them.
-	const [picking, setPicking] = useState<boolean>(() => isStudioPicking());
+	// `pickedTarget` mirrors the held selection so the chip above the input
+	// shows what the user has pinned (still surfaced by other pages via the
+	// StudioContext subscription; the composer's own picker button was removed).
 	const [pickedTarget, setPickedTargetState] = useState<StudioPickedTarget | null>(() => getStudioPickedTarget());
-	useEffect(() => subscribeStudioPicking(setPicking), []);
 	useEffect(() => subscribeStudioPickedTarget(setPickedTargetState), []);
 
 	// Staged attachments for the next send. Cleared after dispatch.
@@ -553,6 +580,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 			try {
 				sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
 					user_sub: userSub, messages: stripForPersist(messages),
+					claude_session_id: claudeSessionRef.current || null,
 				}));
 			} catch { /* quota or serialization — nothing actionable */ }
 		};
@@ -649,6 +677,41 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 				const j = await r.json();
 				const list: PersonaRow[] = j?.data?.personas || [];
 				setPersonas(list);
+			} catch { /* ignore */ }
+		})();
+	}, []);
+
+	// Persist the 3 working-context selectors.
+	useEffect(() => { try { wsRepo ? localStorage.setItem(WS_REPO_KEY, wsRepo) : localStorage.removeItem(WS_REPO_KEY); } catch { /* ignore */ } }, [wsRepo]);
+	useEffect(() => { try { wsCluster ? localStorage.setItem(WS_CLUSTER_KEY, wsCluster) : localStorage.removeItem(WS_CLUSTER_KEY); } catch { /* ignore */ } }, [wsCluster]);
+	useEffect(() => { try { wsDataApp ? localStorage.setItem(WS_DATA_KEY, wsDataApp) : localStorage.removeItem(WS_DATA_KEY); } catch { /* ignore */ } }, [wsDataApp]);
+
+	// Load working-context options once (repos = knowledge banks; clusters = FM
+	// fleet; data apps = lumid-data). Each source already exists; all best-effort.
+	useEffect(() => {
+		(async () => {
+			// xpio repos — the user's accessible knowledge banks (kind=memory).
+			try {
+				const r = await fetch('/api/v1/repos?kind=memory&mine=1', { credentials: 'include' });
+				if (r.ok) {
+					const j = await r.json();
+					const repos = j?.repos || j?.data?.repos || [];
+					setWsRepos(repos.map((x: any) => ({ id: x.name, label: x.display_name || x.name })));
+				}
+			} catch { /* ignore */ }
+			// FM clusters — slim selectable list (default row added in the picker).
+			try {
+				const { listSelectableClusters } = await import('../api/cluster');
+				const cs = await listSelectableClusters();
+				setWsClusters(cs.map((c) => ({ id: c.id, label: c.name + (c.region ? ` · ${c.region}` : '') })));
+			} catch { /* ignore */ }
+			// lumid-data apps — the /dataapp-proxy federation allowlist.
+			try {
+				const r = await fetch('/dataapp-proxy/_sources', { credentials: 'include' });
+				if (r.ok) {
+					const j = await r.json();
+					setWsDataApps((j?.sources || []).map((s: any) => ({ id: s.id, label: s.label || s.id })));
+				}
 			} catch { /* ignore */ }
 		})();
 	}, []);
@@ -1159,6 +1222,9 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 							...(mode ? { mode } : {}),
 							...(think ? { think: true } : {}),
 							...(personaId ? { persona_id: personaId } : agentId ? { agent_id: agentId } : {}),
+							...(wsRepo ? { xpio_repo: wsRepo } : {}),
+							...(wsCluster ? { cluster_id: wsCluster } : {}),
+							...(wsDataApp ? { data_app: wsDataApp } : {}),
 							...(claudeSessionRef.current ? { claude_session_id: claudeSessionRef.current } : {}),
 						}),
 						signal: ctrl.signal,
@@ -2228,33 +2294,18 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 							<Square className="w-3 h-3 fill-current" />
 						</button>
 					)}
-					{/* Mouse-picker — arms StudioPicker so the user can
-					    click any [data-pick-id] on the page and pin it
-					    as the chat's referent. Sits left of Send so it
-					    feels like a compose-time action, not a setting. */}
-					<button
-						type="button"
-						onClick={() => (picking ? stopStudioPicking() : startStudioPicking())}
-						title={picking ? 'Picking — click anything · Esc to cancel' : 'Pick a UI element on the page'}
-						aria-label={picking ? 'Stop picking a UI element' : 'Pick a UI element on the page'}
-						aria-pressed={picking}
-						className={[
-							'order-2 h-8 w-8 flex items-center justify-center rounded-full flex-shrink-0 transition-all active:scale-95',
-							picking
-								? 'bg-gold-50 text-gold-700 ring-1 ring-gold-300'
-								: pickedTarget
-									? 'text-gold-700 hover:bg-gold-50'
-									: 'text-muted-foreground hover:text-foreground hover:bg-muted',
-						].join(' ')}
-					>
-						<Crosshair className="w-4 h-4" />
-					</button>
 					{/* Right-side group: model picker (moved from the header) then
 					    the round black send.
 					    The pool-quota pill used to sit here; it was noise in the
 					    composer and the same numbers live on lum.id/code. */}
 					<div className="order-3 flex-1 min-w-[8px]" />
-					<div className="order-4 flex-shrink-0">
+					<div className="order-4 flex-shrink-0 flex items-center gap-1">
+						<WorkspaceChip
+							repos={wsRepos} clusters={wsClusters} dataApps={wsDataApps}
+							repo={wsRepo} setRepo={setWsRepo}
+							cluster={wsCluster} setCluster={setWsCluster}
+							dataApp={wsDataApp} setDataApp={setWsDataApp}
+						/>
 						<ModelChip
 							streaming={streaming}
 							models={models}
@@ -2284,12 +2335,6 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 						)}
 					</button>
 				</form>
-				{/* Suggestions + live digest sit BELOW the composer (claude.ai
-				    style) so the greeting+box are the centered focal point and
-				    nothing tall opens a gap above the box. */}
-				{messages.length === 0 && (
-					<div className="mt-3"><ChatEmptyState /></div>
-				)}
 				</div>
 			</footer>
 		</div>
@@ -2924,6 +2969,71 @@ function ModelChip({
 	);
 }
 
+// WorkspaceChip — the session working context (like picking a git repo): which
+// xpio repo the knowledge tools default to, which FlowMesh cluster compute runs
+// on (sandbox is the mandatory runtime; cluster is optional — default = in-cluster),
+// and which lumid-data app data tools query. Sent as xpio_repo/cluster_id/data_app.
+function WorkspaceChip({
+	repos, clusters, dataApps, repo, setRepo, cluster, setCluster, dataApp, setDataApp,
+}: {
+	repos: { id: string; label: string }[];
+	clusters: { id: string; label: string }[];
+	dataApps: { id: string; label: string }[];
+	repo: string; setRepo: (v: string) => void;
+	cluster: string; setCluster: (v: string) => void;
+	dataApp: string; setDataApp: (v: string) => void;
+}) {
+	const [open, setOpen] = useState(false);
+	const ref = useClickOutside(open, () => setOpen(false));
+	const active = [repo, cluster, dataApp].filter(Boolean).length;
+	const sel = 'w-full text-[12px] rounded-lg border border-border bg-card px-2 py-1 text-foreground focus:outline-none focus:border-foreground/25';
+	const hdr = 'text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1';
+	return (
+		<div ref={ref} className="relative">
+			<button
+				type="button"
+				onClick={() => setOpen((v) => !v)}
+				className={[
+					'inline-flex items-center gap-1 pl-1.5 pr-1 py-0.5 rounded-full border text-[11px] transition-colors',
+					open || active
+						? 'bg-muted border-foreground/25 text-foreground'
+						: 'bg-card border-border text-foreground/70 hover:text-foreground hover:border-foreground/25',
+				].join(' ')}
+				title="Working context — xpio repo, FlowMesh cluster, lumid-data app"
+			>
+				<Boxes className="w-3 h-3 flex-shrink-0 opacity-70" />
+				<span className="truncate max-w-[110px]">{active ? `Context · ${active}` : 'Context'}</span>
+				<ChevronDown className="w-2.5 h-2.5 flex-shrink-0 opacity-60" />
+			</button>
+			{open && (
+				<div className="absolute bottom-full right-0 mb-1 z-50 w-[264px] p-2.5 rounded-xl border border-border bg-card shadow-lg shadow-foreground/5 space-y-2.5">
+					<div>
+						<div className={hdr}>xpio repo</div>
+						<select className={sel} value={repo} onChange={(e) => setRepo(e.target.value)}>
+							<option value="">All my knowledge (default)</option>
+							{repos.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+						</select>
+					</div>
+					<div>
+						<div className={hdr}>FlowMesh cluster</div>
+						<select className={sel} value={cluster} onChange={(e) => setCluster(e.target.value)}>
+							<option value="">Scheduler + sandbox (in-cluster)</option>
+							{clusters.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+						</select>
+					</div>
+					<div>
+						<div className={hdr}>lumid-data app</div>
+						<select className={sel} value={dataApp} onChange={(e) => setDataApp(e.target.value)}>
+							<option value="">Default data instance</option>
+							{dataApps.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+						</select>
+					</div>
+				</div>
+			)}
+		</div>
+	);
+}
+
 // ContextIconButton — combined agent + persona picker. Both are
 // mutually-exclusive context overrides (`resolvePromptAndTools` in
 // the server gives persona priority when both are set), so it makes
@@ -3198,7 +3308,7 @@ function ContextIconButton({
 // dispatches `studio:artifact-saved`.
 type ArtifactRow = {
 	id: string;
-	kind: 'markdown' | 'code' | 'json' | 'text';
+	kind: ArtifactKind;
 	title: string;
 	language?: string;
 	source_tool?: string;
@@ -3263,21 +3373,7 @@ function ArtifactIconButton({ align = 'right' }: { align?: 'left' | 'right' }) {
 
 	const downloadOne = useCallback(() => {
 		if (!selected) return;
-		const ext = selected.kind === 'markdown' ? 'md'
-			: selected.kind === 'json' ? 'json'
-			: selected.kind === 'code' ? (selected.language || 'txt')
-			: 'txt';
-		const safeTitle = selected.title.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 60) || selected.id;
-		const blob = new Blob([selected.content], { type: 'text/plain' });
-		const a = document.createElement('a');
-		a.href = URL.createObjectURL(blob);
-		a.download = `${safeTitle}.${ext}`;
-		document.body.appendChild(a);
-		a.click();
-		setTimeout(() => {
-			document.body.removeChild(a);
-			URL.revokeObjectURL(a.href);
-		}, 100);
+		artifactDownload(selected.kind, selected.content, selected.title, selected.id);
 	}, [selected]);
 
 	// Open via the chat header icon + auto-open on save event.
@@ -3299,14 +3395,7 @@ function ArtifactIconButton({ align = 'right' }: { align?: 'left' | 'right' }) {
 	// Refresh list when the popover opens.
 	useEffect(() => { if (open) loadList(); }, [open, loadList]);
 
-	const KindIcon = ({ k }: { k: ArtifactRow['kind'] }) => {
-		switch (k) {
-			case 'markdown': return <FileText className="w-3.5 h-3.5 text-gold-600 flex-shrink-0" />;
-			case 'code':     return <Code2 className="w-3.5 h-3.5 text-sky-600 flex-shrink-0" />;
-			case 'json':     return <FileJson className="w-3.5 h-3.5 text-gold-600 flex-shrink-0" />;
-			default:         return <FileText className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />;
-		}
-	};
+	const KindIcon = ({ k }: { k: ArtifactRow['kind'] }) => <ArtifactKindIcon kind={k} />;
 
 	return (
 		<div ref={ref} className="relative">
@@ -3431,19 +3520,7 @@ function ArtifactIconButton({ align = 'right' }: { align?: 'left' | 'right' }) {
 						)}
 						{selected && !selectedLoading && (
 							<div className="px-3 py-2.5 text-[12.5px]">
-								{selected.kind === 'markdown' ? (
-									<ChatMarkdown>{selected.content}</ChatMarkdown>
-								) : selected.kind === 'code' ? (
-									<pre className="bg-muted/60 border border-border rounded-lg p-2 text-[11.5px] overflow-x-auto">
-										<code>{selected.content}</code>
-									</pre>
-								) : selected.kind === 'json' ? (
-									<pre className="bg-muted/60 border border-border rounded-lg p-2 text-[11.5px] overflow-x-auto">
-										<code>{(() => { try { return JSON.stringify(JSON.parse(selected.content), null, 2); } catch { return selected.content; } })()}</code>
-									</pre>
-								) : (
-									<div className="whitespace-pre-wrap break-words text-foreground">{selected.content}</div>
-								)}
+								<ArtifactView kind={selected.kind} content={selected.content} title={selected.title} language={selected.language} />
 							</div>
 						)}
 					</div>
