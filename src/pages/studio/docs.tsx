@@ -13,7 +13,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import 'github-markdown-css/github-markdown-light.css';
 import {
-	BookOpen, Zap, FileCode2, Activity, Layers, CandlestickChart, Compass, ArrowLeft, Loader2, Sparkles,
+	BookOpen, Zap, FileCode2, Activity, Layers, CandlestickChart, Compass, ArrowLeft, Loader2, Sparkles, Cpu,
 } from 'lucide-react';
 import StudioHow from './how';
 
@@ -55,6 +55,14 @@ const DOCS: DocEntry[] = [
 		md: 'TRADING_API.md',
 		group: 'Guides',
 		icon: Activity,
+	},
+	{
+		slug: 'fm-ll-queries',
+		title: 'FlowMesh & Lumilake queries',
+		description: 'Example compute queries for the two pillars — chatbox prompts, MCP tools, and raw proxy HTTP. List workers, submit jobs, HALO-optimize & run workflows.',
+		md: 'fm-ll-example-queries.md',
+		group: 'Guides',
+		icon: Cpu,
 	},
 	{
 		slug: 'xpio-autoresearch',
