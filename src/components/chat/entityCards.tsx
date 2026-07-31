@@ -13,7 +13,7 @@
 
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, CheckCircle2, Workflow as WorkflowIcon } from 'lucide-react';
-import { baseToolName, type ToolCall } from './types';
+import { baseToolName, unwrapToolResult, type ToolCall } from './types';
 import { TONES, statusTone, type ToneKey } from '@/lib/tones';
 import { appTitle } from '@/components/workflow/AppCard';
 import { loopLabel } from '@/lib/workflow-names';
@@ -474,7 +474,9 @@ function appReadCard(r: Record<string, any>): React.ReactNode {
 /** Inline entity card for a completed, successful tool call — or null. */
 export function entityCardFor(t: ToolCall): React.ReactNode | null {
 	if (t.pending || !t.ok || !t.result) return null;
-	const r = t.result as Record<string, any>;
+	// MCP tools (mcp__lumid__*) deliver results as content blocks; native tools
+	// return the object directly. Normalize so both render the same.
+	const r = unwrapToolResult(t.result) as Record<string, any>;
 	// Generic app-ops tools (operate any app from chat).
 	if (t.name === 'show_app_surface' && r.app) {
 		return <AppSurfaceCard app={String(r.app)} surface={r.surface ? String(r.surface) : undefined} />;

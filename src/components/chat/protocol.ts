@@ -4,7 +4,7 @@
 // handled on one path and silently dropped on the other).
 
 import type { ComposedDraft } from '../workflow/AssemblyCard';
-import { baseToolName, type Message, type ToolCall } from './types';
+import { baseToolName, unwrapToolResult, type Message, type ToolCall } from './types';
 import { dispatchToolEffects, toolLink, type DataScope } from './effects';
 // The block state machine. handleEvent is a thin wire adapter over it: all
 // ordering, nesting and correlation logic lives in ./blocks so it stays pure
@@ -310,7 +310,7 @@ export function handleEvent(
 				window.dispatchEvent(new CustomEvent('studio:workflow-open', {
 					detail: {
 						workflow_yaml: wfYaml,
-						plan: evt.result,
+						plan: unwrapToolResult(evt.result),
 						title: wfName === 'run_workflow' ? 'Workflow run' : 'Workflow · HALO plan',
 					},
 				}));

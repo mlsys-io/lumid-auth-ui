@@ -202,3 +202,19 @@ export function baseToolName(name: string): string {
 	const parts = name.split('__');
 	return parts.slice(2).join('__') || name;
 }
+
+// MCP tools deliver a tool result as content blocks `[{type:'text', text:'<json>'}]`
+// (unlike native tools, which return the object directly). Normalize to the
+// object/value the entity-card renderers + workflow panel consume, so a
+// mcp__lumid__* result renders the same as a native one.
+export function unwrapToolResult(result: unknown): any {
+	if (Array.isArray(result)) {
+		const txt = result
+			.map((b) => (b && typeof b === 'object' && typeof (b as { text?: unknown }).text === 'string' ? (b as { text: string }).text : ''))
+			.join('');
+		if (txt.trim()) {
+			try { return JSON.parse(txt); } catch { return { text: txt }; }
+		}
+	}
+	return result;
+}
