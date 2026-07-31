@@ -104,6 +104,123 @@ function workflowResultCard(kind: 'halo' | 'run', r: Record<string, any>): React
 	return <Card title={kind === 'halo' ? 'Workflow · HALO plan' : 'Workflow run'} rows={rows} />;
 }
 
+// Map a FlowMesh/Lumilake worker or job status to a tone (statusTone only knows
+// the loops-health vocabulary; these are FM/LL states: IDLE/BUSY, pending/
+// running/completed/failed/cancelled, PENDING/DISPATCHED/DONE…).
+function jobTone(s: any): ToneKey {
+	const v = String(s || '').toLowerCase();
+	if (['idle', 'completed', 'done', 'ok', 'succeeded'].includes(v)) return 'ok';
+	if (['busy', 'running', 'dispatched', 'pending', 'processing'].includes(v)) return 'running';
+	if (['failed', 'error'].includes(v)) return 'failing';
+	if (['cancelled', 'canceled', 'stale', 'stopping', 'stopped', 'not_ready'].includes(v)) return 'attention';
+	return 'idle';
+}
+
+// Thin inline progress bar (0–100). Accepts a fraction (≤1) or a percent.
+function ProgressBar({ value }: { value: number }) {
+	const p = Math.max(0, Math.min(100, value <= 1 && value > 0 ? value * 100 : value));
+	return (
+		<span className="inline-block w-24 h-1.5 rounded-full bg-muted overflow-hidden align-middle">
+			<span className="block h-full bg-gold-600 rounded-full" style={{ width: `${p}%` }} />
+		</span>
+	);
+}
+
+function fmtEta(sec: any): string {
+	const s = typeof sec === 'number' ? sec : parseFloat(String(sec));
+	if (!Number.isFinite(s) || s <= 0) return '';
+	if (s < 60) return `~${Math.round(s)}s left`;
+	if (s < 3600) return `~${Math.round(s / 60)}m left`;
+	return `~${Math.round(s / 3600)}h left`;
+}
+
+// Lumilake job status/progress → live-ish card (status dot, % bar, ETA, batches).
+// Shared by lumilake_job_status and run_lumilake_job (which carries a terminal
+// status). Rendered inline so a job is watched inside the conversation.
+function lumilakeJobCard(r: Record<string, any>): React.ReactNode {
+	if (r?.error) {
+		return <Card title="Lumilake job" rows={[<Row key="e"><span className="text-rose-600 text-[12px]">{String(r.error).slice(0, 160)}</span></Row>]} />;
+	}
+	const status = String(r.status || '').toLowerCase();
+	const jid = r.job_id ? String(r.job_id) : '';
+	const p = typeof r.percentage === 'number' ? r.percentage : undefined;
+	const rows: React.ReactNode[] = [
+		<Row key="s">
+			<Dot tone={jobTone(status)} />
+			<span className="text-[12.5px] capitalize">{status || 'submitted'}</span>
+			{p != null ? <ProgressBar value={p} /> : null}
+			{p != null ? <span className="text-[11.5px] text-muted-foreground">{Math.round(p <= 1 ? p * 100 : p)}%</span> : null}
+			<span className="ml-auto text-[11px] text-muted-foreground">{fmtEta(r.eta_seconds)}</span>
+		</Row>,
+	];
+	const b = r.batches as Record<string, any> | undefined;
+	if (b && (b.total != null)) {
+		rows.push(<Row key="b"><span className="text-[11.5px] text-muted-foreground">batches: {b.completed ?? 0}/{b.total} done{b.running ? ` · ${b.running} running` : ''}{b.failed ? ` · ${b.failed} failed` : ''}</span></Row>);
+	}
+	// Terminal run_lumilake_job carries outputs — summarize inline.
+	if (r.outputs != null) {
+		const txt = typeof r.outputs === 'string' ? r.outputs : JSON.stringify(r.outputs);
+		rows.push(<Row key="o"><span className="text-[12px] text-foreground/80 line-clamp-2 break-words">{txt.slice(0, 200)}</span></Row>);
+	}
+	if (jid) rows.push(<Row key="id"><span className="font-mono text-[10.5px] text-muted-foreground">{jid.slice(0, 22)}</span></Row>);
+	return <Card title="Lumilake job" rows={rows} />;
+}
+
+// Lumilake job result → outputs card (grouped text).
+function lumilakeResultCard(r: Record<string, any>): React.ReactNode {
+	if (r?.error) return <Card title="Lumilake result" rows={[<Row key="e"><span className="text-rose-600 text-[12px]">{String(r.error).slice(0, 160)}</span></Row>]} />;
+	if (r.status === 'not_ready') return <Card title="Lumilake result" rows={[<Row key="n"><span className="text-[12px] text-muted-foreground">Not ready — job still running</span></Row>]} />;
+	const out = r.outputs;
+	const txt = out == null ? '(no output)' : (typeof out === 'string' ? out : JSON.stringify(out, null, 0));
+	return <Card title="Lumilake result" rows={[<Row key="o"><span className="text-[12px] text-foreground/85 whitespace-pre-wrap break-words line-clamp-6">{txt.slice(0, 500)}</span></Row>]} />;
+}
+
+// Lumilake job trace → critical-path / provenance card (best-effort).
+function jobTraceCard(r: Record<string, any>): React.ReactNode {
+	if (r?.error) return <Card title="Job trace" rows={[<Row key="e"><span className="text-rose-600 text-[12px]">{String(r.error).slice(0, 160)}</span></Row>]} />;
+	const rows: React.ReactNode[] = [];
+	if (r.note) rows.push(<Row key="n"><span className="text-[12px] text-muted-foreground">{String(r.note)}</span></Row>);
+	const tr = r.trace as Record<string, any> | undefined;
+	if (tr && typeof tr === 'object') {
+		const cp = tr.critical_path || tr.criticalPath;
+		const e2e = tr.e2e_seconds ?? tr.total_seconds ?? tr.e2e;
+		if (e2e != null) rows.push(<Row key="e2e"><span className="text-[12.5px]">E2E {typeof e2e === 'number' ? `${e2e.toFixed(1)}s` : String(e2e)}</span></Row>);
+		if (Array.isArray(cp) && cp.length) {
+			rows.push(<Row key="cp"><span className="text-[11.5px] text-muted-foreground truncate">critical path: {cp.map((n: any) => (typeof n === 'string' ? n : (n?.node || n?.name || ''))).filter(Boolean).slice(0, 6).join(' → ')}</span></Row>);
+		}
+	}
+	if (r.trace_id) rows.push(<Row key="tid"><span className="font-mono text-[10.5px] text-muted-foreground">{String(r.trace_id).slice(0, 22)}</span></Row>);
+	if (rows.length === 0) rows.push(<Row key="empty"><span className="text-[12px] text-muted-foreground">No trace recorded yet</span></Row>);
+	return <Card title="Job trace" rows={rows} />;
+}
+
+// FlowMesh workflow log tail → compact log lines card.
+function workflowLogsCard(r: Record<string, any>): React.ReactNode {
+	if (r?.error) return <Card title="Workflow logs" rows={[<Row key="e"><span className="text-rose-600 text-[12px]">{String(r.error).slice(0, 160)}</span></Row>]} />;
+	const lines: any[] = Array.isArray(r.lines) ? r.lines : [];
+	if (lines.length === 0) return <Card title="Workflow logs" rows={[<Row key="n"><span className="text-[12px] text-muted-foreground">No log lines yet</span></Row>]} />;
+	const shown = lines.slice(-8);
+	const tone = (lvl: string) => lvl === 'ERROR' ? 'text-rose-600' : lvl === 'WARNING' ? 'text-amber-600' : 'text-foreground/75';
+	const rows = shown.map((l, i) => (
+		<Row key={`l${i}`}>
+			<span className={`font-mono text-[11px] truncate ${tone(String(l.level || '').toUpperCase())}`}>
+				<span className="text-muted-foreground/70">{String(l.level || '').slice(0, 4)}</span> {String(l.message ?? '').slice(0, 160)}
+			</span>
+		</Row>
+	));
+	return <Card title="Workflow logs" rows={rows} more={lines.length - shown.length} />;
+}
+
+// Cancel confirmation (FM workflow or LL job).
+function cancelCard(kind: 'workflow' | 'job', r: Record<string, any>): React.ReactNode {
+	if (r?.error) return <Card title="Cancel" rows={[<Row key="e"><span className="text-rose-600 text-[12px]">{String(r.error).slice(0, 160)}</span></Row>]} />;
+	const id = String(r.workflow_id || r.job_id || '');
+	const st = String(r.status || 'cancelled');
+	return <Card title={kind === 'job' ? 'Job cancelled' : 'Workflow cancelled'} rows={[
+		<Row key="s"><Dot tone={jobTone(st)} /><span className="text-[12.5px] capitalize">{st}</span><span className="ml-auto font-mono text-[10.5px] text-muted-foreground">{id.slice(0, 18)}</span></Row>,
+	]} />;
+}
+
 // FlowMesh worker roster (list_workers → {workers:[{alias,status,node_alias,
 // cluster,...}]}) as a compact health card — status dot + node/cluster + state,
 // instead of the raw-JSON MCP chip.
@@ -127,7 +244,7 @@ function workersCard(r: Record<string, any>): React.ReactNode {
 		const cluster = w.cluster ? String(w.cluster) : '';
 		rows.push(
 			<Row key={`w${i}`}>
-				<Dot tone={statusTone(String(w.status || ''))} />
+				<Dot tone={jobTone(w.status)} />
 				<span className="font-mono text-[12px] truncate">{String(w.alias || w.id || `worker ${i}`)}</span>
 				{node ? <span className="text-[11.5px] text-muted-foreground truncate">{node}{cluster ? ` · ${cluster}` : ''}</span> : null}
 				<span className="ml-auto text-[11px] text-muted-foreground shrink-0">{String(w.status || '').toUpperCase()}</span>
@@ -141,6 +258,14 @@ const RENDERERS: Record<string, Renderer> = {
 	optimize_workflow: (r) => workflowResultCard('halo', r),
 	run_workflow: (r) => workflowResultCard('run', r),
 	list_workers: (r) => workersCard(r),
+	// FM/LL job lifecycle — each tool call renders an inline card in the chat.
+	run_lumilake_job: (r) => lumilakeJobCard(r),
+	lumilake_job_status: (r) => lumilakeJobCard(r),
+	lumilake_job_result: (r) => lumilakeResultCard(r),
+	lumilake_job_trace: (r) => jobTraceCard(r),
+	cancel_lumilake_job: (r) => cancelCard('job', r),
+	cancel_workflow: (r) => cancelCard('workflow', r),
+	workflow_logs: (r) => workflowLogsCard(r),
 	list_apps: (r) => {
 		const apps: Array<{ name: string; tenant?: boolean }> = Array.isArray(r.apps) ? r.apps : [];
 		if (apps.length === 0) return null;
