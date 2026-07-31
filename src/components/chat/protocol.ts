@@ -4,7 +4,7 @@
 // handled on one path and silently dropped on the other).
 
 import type { ComposedDraft } from '../workflow/AssemblyCard';
-import type { Message, ToolCall } from './types';
+import { baseToolName, type Message, type ToolCall } from './types';
 import { dispatchToolEffects, toolLink, type DataScope } from './effects';
 // The block state machine. handleEvent is a thin wire adapter over it: all
 // ordering, nesting and correlation logic lives in ./blocks so it stays pure
@@ -297,7 +297,11 @@ export function handleEvent(
 		// Open the workflow-viz side panel when a Lumilake workflow tool
 		// completes — StudioWorkflowPanel renders the DAG (parsed from the
 		// tool's `workflow_yaml` arg) + the HALO plan (the result) as overlay.
-		if ((evt.name === 'optimize_workflow' || evt.name === 'run_workflow') && ok && evt.result) {
+		// Tools arrive over the MCP wire as `mcp__lumid__optimize_workflow`; the
+		// panel dispatch keys on the bare name, so normalize first (was silently
+		// never matching → the DAG/HALO side panel never opened from chat).
+		const wfName = baseToolName(String(evt.name || ''));
+		if ((wfName === 'optimize_workflow' || wfName === 'run_workflow') && ok && evt.result) {
 			const a = (evt.args && typeof evt.args === 'object')
 				? evt.args as Record<string, unknown>
 				: (() => { try { return JSON.parse(String(evt.args)); } catch { return {}; } })();
@@ -307,7 +311,7 @@ export function handleEvent(
 					detail: {
 						workflow_yaml: wfYaml,
 						plan: evt.result,
-						title: evt.name === 'run_workflow' ? 'Workflow run' : 'Workflow · HALO plan',
+						title: wfName === 'run_workflow' ? 'Workflow run' : 'Workflow · HALO plan',
 					},
 				}));
 			}

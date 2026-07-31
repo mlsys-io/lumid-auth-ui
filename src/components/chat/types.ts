@@ -190,3 +190,15 @@ export type Message = {
 	// fires a grounded studio:ask turn. Set by openAppInChat; not persisted.
 	chips?: Array<{ label: string; prompt: string; context?: { app: string; loop?: string } }>;
 };
+
+// LumidOS tools reach the chat stream as Claude-Code MCP names
+// `mcp__<server>__<tool>` (e.g. `mcp__lumid__optimize_workflow`), but the
+// entity-card RENDERERS and the workflow-panel dispatch key on the BARE tool
+// name (`optimize_workflow`). Strip a leading `mcp__<server>__` so both the
+// hosted MCP form and native bare tools resolve to the same key. Native tools
+// (no `mcp__` prefix) pass through unchanged.
+export function baseToolName(name: string): string {
+	if (!name || !name.startsWith('mcp__')) return name;
+	const parts = name.split('__');
+	return parts.slice(2).join('__') || name;
+}

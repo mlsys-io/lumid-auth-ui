@@ -13,7 +13,7 @@
 
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, CheckCircle2, Workflow as WorkflowIcon } from 'lucide-react';
-import type { ToolCall } from './types';
+import { baseToolName, type ToolCall } from './types';
 import { TONES, statusTone, type ToneKey } from '@/lib/tones';
 import { appTitle } from '@/components/workflow/AppCard';
 import { loopLabel } from '@/lib/workflow-names';
@@ -104,9 +104,43 @@ function workflowResultCard(kind: 'halo' | 'run', r: Record<string, any>): React
 	return <Card title={kind === 'halo' ? 'Workflow · HALO plan' : 'Workflow run'} rows={rows} />;
 }
 
+// FlowMesh worker roster (list_workers → {workers:[{alias,status,node_alias,
+// cluster,...}]}) as a compact health card — status dot + node/cluster + state,
+// instead of the raw-JSON MCP chip.
+function workersCard(r: Record<string, any>): React.ReactNode {
+	const workers: any[] = Array.isArray(r?.workers) ? r.workers : [];
+	if (workers.length === 0) {
+		const msg = r?.error ? String(r.error).slice(0, 140) : 'No workers registered';
+		return <Card title="FlowMesh workers" rows={[<Row key="e"><span className={`text-[12px] ${r?.error ? 'text-rose-600' : 'text-muted-foreground'}`}>{msg}</span></Row>]} />;
+	}
+	const norm = (s: any) => String(s || '').toLowerCase();
+	const idle = workers.filter((w) => norm(w.status) === 'idle').length;
+	const busy = workers.filter((w) => ['busy', 'running'].includes(norm(w.status))).length;
+	const rows: React.ReactNode[] = [
+		<Row key="sum">
+			<span className="text-[12.5px]">{workers.length} worker{workers.length === 1 ? '' : 's'}{idle ? ` · ${idle} idle` : ''}{busy ? ` · ${busy} busy` : ''}</span>
+		</Row>,
+	];
+	const shown = workers.slice(0, 6);
+	shown.forEach((w, i) => {
+		const node = w.node_alias ? String(w.node_alias) : '';
+		const cluster = w.cluster ? String(w.cluster) : '';
+		rows.push(
+			<Row key={`w${i}`}>
+				<Dot tone={statusTone(String(w.status || ''))} />
+				<span className="font-mono text-[12px] truncate">{String(w.alias || w.id || `worker ${i}`)}</span>
+				{node ? <span className="text-[11.5px] text-muted-foreground truncate">{node}{cluster ? ` · ${cluster}` : ''}</span> : null}
+				<span className="ml-auto text-[11px] text-muted-foreground shrink-0">{String(w.status || '').toUpperCase()}</span>
+			</Row>,
+		);
+	});
+	return <Card title="FlowMesh workers" rows={rows} more={workers.length - shown.length} />;
+}
+
 const RENDERERS: Record<string, Renderer> = {
 	optimize_workflow: (r) => workflowResultCard('halo', r),
 	run_workflow: (r) => workflowResultCard('run', r),
+	list_workers: (r) => workersCard(r),
 	list_apps: (r) => {
 		const apps: Array<{ name: string; tenant?: boolean }> = Array.isArray(r.apps) ? r.apps : [];
 		if (apps.length === 0) return null;
@@ -323,7 +357,7 @@ export function entityCardFor(t: ToolCall): React.ReactNode | null {
 	if (t.name === 'app_read') return appReadCard(r);
 	if (t.name === 'app_action') return actionOutcomeCard(String(r.action || 'action'), r);
 	if (t.name === 'qa_call') return actionOutcomeCard(`${r.method || 'POST'} ${r.path || ''}`.trim(), r);
-	const render = RENDERERS[t.name];
+	const render = RENDERERS[baseToolName(t.name)];
 	if (!render) return null;
 	try {
 		return render(r);
