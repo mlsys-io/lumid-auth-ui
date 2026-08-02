@@ -67,14 +67,34 @@ const fm = await turn(
 assert(fm.tools.includes('mcp__lumid__submit_workflow'), `FM: submit_workflow tool invoked (saw: ${fm.tools.join(',') || 'none'})`);
 assert(/wfl-[0-9a-f]/.test(fm.raw), 'FM: submission accepted — a wfl- workflow id came back');
 
-// ── LL: optimize (Lumilake) — must fire + get past auth ──
+// ── LL: optimize (Lumilake) — must fire, get past auth, AND optimize ──
+// Pass a VALID Lumilake workflow verbatim. `echo` is NOT a Lumilake op (that's a
+// FlowMesh task type) — using it makes the optimizer return a *validation* error
+// that the auth regex below misreads. A single LLMChatOp with config.model is the
+// smallest workflow HALO will actually schedule.
+const llYaml = [
+  'name: opt-demo',
+  'inputs:',
+  '  Q: ["hello"]',
+  'ops:',
+  '  - id: reply',
+  '    op: LLMChatOp',
+  '    inputs: [Q]',
+  '    config:',
+  '      model: Qwen/Qwen3-8B',
+  '    messages:',
+  '      - role: user',
+  '        content: "{q}"',
+].join('\\n');
+
 const ll = await turn(
-  'Use the optimize_workflow tool on a simple 2-stage echo workflow and report whether it reached the optimizer (past auth) or errored.',
+  `Use the optimize_workflow tool on this EXACT Lumilake YAML (pass it verbatim as the workflow), then report the raw result:\n\n${llYaml.replace(/\\n/g, '\n')}`,
   180000,
 );
 assert(ll.tools.includes('mcp__lumid__optimize_workflow'), `LL: optimize_workflow tool invoked (saw: ${ll.tools.join(',') || 'none'})`);
 const llAuthErr = /401|unauthor|claude:proxy scope|missing bearer/i.test(ll.raw);
 assert(!llAuthErr, 'LL: optimize_workflow got PAST auth (no 401 / scope error)');
+assert(/selected_workers|worker_assignment|"ok":\s*true|request_id/.test(ll.raw), 'LL: optimizer returned a schedule (past validation too)');
 
 console.log(fails.length ? `\n${fails.length} FAILED` : '\nALL PASS');
 process.exit(fails.length ? 1 : 0);
