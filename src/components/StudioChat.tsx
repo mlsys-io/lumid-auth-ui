@@ -31,7 +31,7 @@ import { ArtifactView, ArtifactKindIcon, artifactDownload, type ArtifactKind } f
 import AssemblyCard from './workflow/AssemblyCard';
 import type { Attachment, WireAttachment, Message, ToolCall, Block } from './chat/types';
 import { readChatStream, withLastAssistant } from './chat/protocol';
-import { claudeToolView } from './chat/toolViews';
+import { claudeToolView, QuietToolPill } from './chat/toolViews';
 import { blocksOf, failPendingTools, clearApproval, stripForPersist } from './chat/blocks';
 import { BlockView, EntityCardBlock } from './chat/blockViews';
 import { Appear, Collapse, StreamCaret, JumpToLatest, ThinkingDots, Working, useMotionOK, AnimatePresence } from './chat/motion';
@@ -67,7 +67,7 @@ function sessionRowsToMessages(rows: CycleLogRow[]): Message[] {
 	flush();
 	return out;
 }
-import { ChatHero } from './chat/ChatEmptyState';
+import ChatEmptyState, { ChatHero } from './chat/ChatEmptyState';
 import { StudioWorkflowPanel } from './StudioWorkflowPanel';
 import { Workflow as WorkflowIcon } from 'lucide-react';
 // Parse an AI turn's raw output into something readable: tenant cycles emit
@@ -1857,6 +1857,13 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 					!docked ? (
 						<div className="max-w-[640px] mx-auto w-full">
 							<EmptyHint />
+							{/* Starter chips — the FinData / QuantArena entry points a
+							    first-time user clicks to begin. Each fires studio:ask
+							    with its own app context, so the chip IS the lightweight
+							    working-context spine (no separate picker needed). */}
+							<div className="mt-5">
+								<ChatEmptyState />
+							</div>
 						</div>
 					) : null
 				) : (
@@ -2775,12 +2782,25 @@ function ThinkingBlock({ thinking, done, elapsedMs, tokens }: { thinking: string
 // approvalRequired=true.
 function ToolChip({ t, onApprove }: { t: ToolCall; onApprove?: (approved: boolean, always?: boolean) => void }) {
 	const [argsOpen, setArgsOpen] = useState(false);
+	const [ccExpanded, setCcExpanded] = useState(false);
+	// Simple mode hushes the low-level mechanics: Claude Code tool views
+	// (terminal blocks, diffs, checklists, raw JSON) collapse to one calm
+	// QuietToolPill the user can click to expand. Advanced shows them verbatim.
+	const { advanced } = useViewMode();
 	// Claude Code tool names (Bash, Edit, TodoWrite, …) arrive verbatim from
 	// the claude-sandbox stream and get claude.ai/code-style rich views.
 	// Approval never applies to them (the CLI runs its own tools), so the
 	// dispatch is safe ahead of the approval branch below.
 	const CCView = !t.approvalRequired ? claudeToolView(t.name) : null;
-	if (CCView) return <CCView t={t} />;
+	if (CCView) {
+		if (!advanced && !ccExpanded) return <QuietToolPill t={t} onExpand={() => setCcExpanded(true)} />;
+		return <CCView t={t} />;
+	}
+	// In Simple mode, when this tool renders its own entity card (chart,
+	// leaderboard, app surface, list…), the card carries the meaning — so drop
+	// the redundant tool-name pill above it. Keep the pill while pending or on
+	// failure so progress and errors stay visible.
+	if (!advanced && !t.pending && t.ok && entityCardFor(t)) return null;
 	const Icon =
 		t.name === 'web_search' ? Globe
 		: t.name === 'deep_research' ? Telescope

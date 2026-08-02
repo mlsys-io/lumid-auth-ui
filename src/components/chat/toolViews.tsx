@@ -38,6 +38,49 @@ export function StatusDot({ t }: { t: ToolCall }) {
 	return <span className={['text-[10px]', t.ok ? 'text-emerald-600' : 'text-rose-600'].join(' ')}>{t.ok ? '✓' : '✗'}</span>;
 }
 
+// ── Simple-mode quiet collapse ───────────────────────────────────────────────
+// In Simple mode a non-technical user shouldn't see terminal blocks, diffs, or
+// raw JSON. Each Claude Code tool view collapses to one calm line ("Ran a
+// command ✓"), which the curious can click to reveal the full view. Entity
+// cards (charts, leaderboards, app surfaces) are a SEPARATE render path and are
+// never collapsed — only the low-level mechanics are hushed.
+const QUIET_LABELS: Record<string, string> = {
+	Bash: 'Ran a command', bash_exec: 'Ran a command', SlashCommand: 'Ran a command',
+	Edit: 'Edited a file', MultiEdit: 'Edited a file', Write: 'Wrote a file',
+	Read: 'Read a file', NotebookEdit: 'Edited a notebook',
+	Glob: 'Looked through files', Grep: 'Searched the code',
+	TodoWrite: 'Planned the steps', Task: 'Ran a sub-task', Skill: 'Ran a skill',
+	WebSearch: 'Searched the web', WebFetch: 'Read a web page',
+};
+export function quietLabelFor(t: ToolCall): string {
+	if (QUIET_LABELS[t.name]) return QUIET_LABELS[t.name];
+	if (t.name.startsWith('Kill') || t.name.startsWith('Bash')) return 'Managed a process';
+	return 'Worked on it';
+}
+const QUIET_ICON: Record<string, typeof Terminal> = {
+	Bash: Terminal, bash_exec: Terminal, SlashCommand: Terminal,
+	Edit: FilePen, MultiEdit: FilePen, Write: FileText, Read: FileText,
+	NotebookEdit: NotebookPen, Glob: Search, Grep: Search,
+	TodoWrite: ListTodo, Task: Bot, Skill: Zap, WebSearch: Globe, WebFetch: Globe,
+};
+// QuietToolPill — one muted line standing in for a full tool view. Click to
+// reveal the real terminal/diff/checklist view.
+export function QuietToolPill({ t, onExpand }: { t: ToolCall; onExpand: () => void }) {
+	const Icon = QUIET_ICON[t.name] || Wrench;
+	return (
+		<button
+			onClick={onExpand}
+			title="Show details"
+			className="group inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-border/60 bg-muted/40 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors max-w-full"
+		>
+			<StatusDot t={t} />
+			<Icon className="w-3 h-3 opacity-70 shrink-0" />
+			<span className="truncate max-w-[280px]">{quietLabelFor(t)}</span>
+			<ChevronDown className="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity shrink-0" />
+		</button>
+	);
+}
+
 // Collapsible monospace block, capped height, used for command output +
 // file previews.
 // Auto-collapse: a tool's output is expanded while it's running and folds to
