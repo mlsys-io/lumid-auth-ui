@@ -1,6 +1,6 @@
 // /onboarding/ready — landing pad after domain pick. Polls for the
-// first cycle artifact for ~3 minutes, then redirects to /app/results
-// when it appears. Falls back to /app/loops if nothing lands by the
+// first cycle artifact for ~3 minutes, then redirects to /studio/apps
+// when it appears. Falls back to /studio/runs if nothing lands by the
 // deadline so the user has something to look at.
 
 import { useEffect, useState } from "react";
@@ -45,8 +45,8 @@ export default function OnboardingReady() {
     return () => { cancelled = true; clearInterval(tick); };
   }, [app, loop, stage]);
 
-  const goResults = () => navigate("/app/results");
-  const goLoops   = () => navigate("/app/loops");
+  const goResults = () => navigate("/studio/apps");
+  const goLoops   = () => navigate("/studio/runs");
 
   return (
     <div className="min-h-screen grid place-items-center bg-gradient-to-br from-indigo-50 via-white to-purple-50">

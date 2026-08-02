@@ -185,11 +185,6 @@ const AppApiDocs = lazy(() => import("./pages/app/api-docs"));
 // lumid-gpu-rentals is now PURE config surfaces (AppSurface + ui/*.md). The
 // list/wizard route mounts were retired; the rental detail (terminal/SSH/logs/
 // billing) survives as a lumid:native embed loaded via native-registry.ts.
-// Lumilake-origin pages (grouped under /app/lumilake/*)
-const AppLumilakeDashboard = lazy(() => import("./pages/app/lumilake/dashboard"));
-const AppLumilakeData = lazy(() => import("./pages/app/lumilake/data"));
-const AppLumilakeSQL = lazy(() => import("./pages/app/lumilake/sql"));
-const AppLumilakePython = lazy(() => import("./pages/app/lumilake/python"));
 // Replaced 2026-04-24 — Runmesh Submit + Lumilake Submit are now real
 // "pick an existing workflow + configure params + submit" pages, not
 // reuses of the list/management view. The old AppApps (UserDashboard)
@@ -203,8 +198,6 @@ const AppLqtOperator = lazy(() => import("@/lqt/pages/operator").then(m => ({ de
 const AppLqtAccountant = lazy(() => import("@/lqt/pages/accountant").then(m => ({ default: m.AccountantPage })));
 const AppLqtAdmin = lazy(() => import("@/lqt/pages/admin").then(m => ({ default: m.AdminPage })));
 
-const AppLumilakeSubmit = lazy(() => import("./pages/app/lumilake-submit"));
-const AppLumilakeJobs = lazy(() => import("./pages/app/lumilake/jobs"));
 // Lumilake workers page retired 2026-04-24 — /app/admin/lumilake-workers
 // redirects to /app/admin/cluster-workers?role=lumilake. The unified
 // Workers page pulls from the lumid_cluster registry (both roles).
