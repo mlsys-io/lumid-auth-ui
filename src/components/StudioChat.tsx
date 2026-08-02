@@ -37,6 +37,7 @@ import { BlockView, EntityCardBlock } from './chat/blockViews';
 import { Appear, Collapse, StreamCaret, JumpToLatest, ThinkingDots, Working, useMotionOK, AnimatePresence } from './chat/motion';
 import { TurnStatsFooter, type TurnStats } from './claude/TurnStats';
 import { SessionStrip } from './claude/SessionStrip';
+import { useViewMode } from './ViewModeProvider';
 import { fetchCycleConversation, type CycleLogRow } from '@/api/trajectory';
 
 // Map a running/finished cycle's session timeline (LLM turns + stage/tool
@@ -290,6 +291,10 @@ type ChatMode = '' | 'search' | 'deep_research';
 
 export function StudioChat({ docked = false, groundApp }: { docked?: boolean; groundApp?: string | null } = {}) {
 	const location = useLocation();
+	// View mode: in simple (default) mode the chat runs "clean" — engineer
+	// telemetry (cost/tokens/session), the slash palette, and the model picker
+	// are hidden. `verbose` is the advanced-mode signal these gate on.
+	const { advanced: verbose } = useViewMode();
 	// `id` is the user_sub on the UserInfo shape from /api/v1/user; used
 	// to tag the persisted transcript so it can't leak across accounts.
 	const { user } = useAuth();
@@ -1869,7 +1874,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 							    externals (kimi/glm), which are recorded +
 							    cost-metered. false only for the lumid-llm-backed
 							    entries (qwen). */}
-							{model.startsWith('claude-code') && m.role === 'assistant' && i === lastAssistantIdx && (
+							{verbose && model.startsWith('claude-code') && m.role === 'assistant' && i === lastAssistantIdx && (
 								<div className="pl-[38px]">
 									<SessionStrip
 										session={claudeSession}
@@ -1893,7 +1898,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 						{/* Turn telemetry from the Claude Code `result` event —
 						    cost, wall/API duration, time-to-first-token, steps and
 						    the cache hit split. Attached to the finished reply. */}
-						{turnStats && !streaming && messages[messages.length - 1]?.role === 'assistant' && (
+						{verbose && turnStats && !streaming && messages[messages.length - 1]?.role === 'assistant' && (
 							<div className="pl-[38px]"><TurnStatsFooter s={turnStats} /></div>
 						)}
 					</div>
@@ -2164,7 +2169,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 							onChange={(e) => {
 								const v = e.target.value;
 								setInput(v);
-								if (v.startsWith('/')) {
+								if (verbose && v.startsWith('/')) {
 									const q = v.toLowerCase();
 									const matches = SLASH_COMMANDS.filter((c) => c.label.toLowerCase().startsWith(q));
 									setSlashSuggestions(matches);
@@ -2328,6 +2333,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 					    The pool-quota pill used to sit here; it was noise in the
 					    composer and the same numbers live on lum.id/code. */}
 					<div className="order-3 flex-1 min-w-[8px]" />
+					{verbose && (
 					<div className="order-4 flex-shrink-0 flex items-center gap-1">
 						<WorkspaceChip
 							repos={wsRepos} clusters={wsClusters} dataApps={wsDataApps}
@@ -2342,6 +2348,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 							setModel={setModel}
 						/>
 					</div>
+					)}
 					<button
 						type="submit"
 						disabled={!input.trim()}

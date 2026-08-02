@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { useViewMode } from './ViewModeProvider';
 import { cn } from '../lib/utils';
 import { me } from '@/api/me';
 import { useAppNav, iconFor } from './useAppNav';
@@ -199,6 +200,10 @@ export function StudioShell() {
 	const { user, logout } = useAuth();
 	const navigate = useNavigate();
 	const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+	// View mode: simple (default, chat-first) hides the whole shell chrome and
+	// runs the chatbox full-bleed; advanced renders the current Studio verbatim.
+	const { advanced, setMode } = useViewMode();
+	const simple = !advanced;
 	const { width: sidebarWidth, resizing, startResize, reset: resetSidebar } = useSidebarWidth();
 	// App-driven nav: installed apps that declare ui.sidebar, grouped by section.
 	const appNav = useAppNav();
@@ -247,6 +252,9 @@ export function StudioShell() {
 
 	const [menuOpen, setMenuOpen] = useState(false);
 	const menuRef = useRef<HTMLDivElement>(null);
+	// Simple-mode header account dropdown (the sidebar user menu is hidden there).
+	const [acctOpen, setAcctOpen] = useState(false);
+	const acctRef = useRef<HTMLDivElement>(null);
 
 	// Sidebar collapse — the resize control lives at the sidebar's top-right and
 	// is always visible (when collapsed it moves to the header's far left).
@@ -273,7 +281,8 @@ export function StudioShell() {
 		&& location.pathname !== '/studio/apps/all';
 	const [appNavOpen, setAppNavOpen] = useState(false);
 	useEffect(() => { setAppNavOpen(false); }, [location.pathname]);
-	const sidebarHidden = isNarrow ? !narrowNavOpen : (inAppWorkspace ? !appNavOpen : sidebarCollapsed);
+	// Simple mode: no sidebar at all — the chatbox is the whole surface.
+	const sidebarHidden = simple ? true : (isNarrow ? !narrowNavOpen : (inAppWorkspace ? !appNavOpen : sidebarCollapsed));
 	const hideSidebar = () => { if (isNarrow) setNarrowNavOpen(false); else if (inAppWorkspace) setAppNavOpen(false); else setSidebarCollapsed(true); };
 	const showSidebar = () => { if (isNarrow) setNarrowNavOpen(true); else if (inAppWorkspace) setAppNavOpen(true); else setSidebarCollapsed(false); };
 
@@ -297,6 +306,7 @@ export function StudioShell() {
 	useEffect(() => {
 		const onClick = (e: MouseEvent) => {
 			if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+			if (!acctRef.current?.contains(e.target as Node)) setAcctOpen(false);
 		};
 		document.addEventListener('mousedown', onClick);
 		return () => document.removeEventListener('mousedown', onClick);
@@ -521,7 +531,7 @@ export function StudioShell() {
 				<header data-studio-picker-chrome="1" className="min-h-[64px] py-2.5 bg-background/85 backdrop-blur-md border-b border-border sticky top-0 z-10 flex items-center px-3 sm:px-6 gap-2 sm:gap-4">
 					{/* When the sidebar is collapsed, its expand control lives here at
 					    the header's far left — so the resize icon is always visible. */}
-					{sidebarHidden && (
+					{sidebarHidden && !simple && (
 						<button
 							onClick={showSidebar}
 							title="Show sidebar"
@@ -532,6 +542,47 @@ export function StudioShell() {
 						</button>
 					)}
 					<TopStatusStrip />
+					<div className="ml-auto flex items-center gap-2 flex-shrink-0">
+						{/* Simple / Advanced toggle — the one mode control, in both modes */}
+						<div className="flex items-center rounded-full border border-border bg-muted/40 p-0.5 text-[11px]">
+							<button
+								onClick={() => setMode('simple')}
+								title="Simple, chat-first view"
+								className={cn('px-2.5 py-1 rounded-full transition-colors', simple ? 'bg-background text-foreground font-medium shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+							>
+								Simple
+							</button>
+							<button
+								onClick={() => setMode('advanced')}
+								title="The full Advanced Studio"
+								className={cn('px-2.5 py-1 rounded-full transition-colors', advanced ? 'bg-background text-foreground font-medium shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+							>
+								Advanced
+							</button>
+						</div>
+						{/* Account — only in simple (advanced has the sidebar user menu) */}
+						{simple && (
+							<div ref={acctRef} className="relative">
+								<button
+									onClick={() => setAcctOpen((o) => !o)}
+									title={user?.username || 'Account'}
+									className="w-8 h-8 rounded-full bg-foreground text-background flex items-center justify-center text-xs font-semibold"
+								>
+									{(user?.username || user?.email || '?').slice(0, 1).toUpperCase()}
+								</button>
+								{acctOpen && (
+									<div className="absolute right-0 mt-1.5 w-44 rounded-lg border border-border bg-popover shadow-lg py-1 z-20 text-sm">
+										<button onClick={() => { setAcctOpen(false); navigate('/studio/settings'); }} className="w-full text-left px-3 py-1.5 hover:bg-muted flex items-center gap-2">
+											<Settings className="w-3.5 h-3.5" /> Settings
+										</button>
+										<button onClick={onLogout} className="w-full text-left px-3 py-1.5 hover:bg-muted flex items-center gap-2 text-muted-foreground">
+											<LogOut className="w-3.5 h-3.5" /> Sign out
+										</button>
+									</div>
+								)}
+							</div>
+						)}
+					</div>
 				</header>
 
 				{/* Workspace. /studio = the chat as the main surface (claude.ai

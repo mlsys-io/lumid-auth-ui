@@ -131,13 +131,12 @@ function SkillDetail({ row }: { row: MeSkillRow }) {
 					<div className="text-[11px] text-slate-400 font-mono truncate">{row.repo}</div>
 					{row.summary && <p className="text-[12px] text-slate-600 mt-1">{row.summary}</p>}
 				</div>
-				<a
-					href={`https://xp.io/${row.repo}`}
-					target="_blank" rel="noreferrer"
+				<Link
+					to={`/studio/r/${row.repo}`}
 					className="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-slate-700 transition-colors flex-shrink-0"
 				>
-					xp.io <ExternalLink className="w-3 h-3" />
-				</a>
+					view <ExternalLink className="w-3 h-3" />
+				</Link>
 			</div>
 
 			{h && (

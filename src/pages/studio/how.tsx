@@ -358,14 +358,12 @@ function CompoundBody({ intent }: { intent: DemoIntent }) {
 				})}
 			</div>
 
-			<a
-				href="https://xp.io"
-				target="_blank"
-				rel="noreferrer"
+			<Link
+				to="/studio/knowledge"
 				className="inline-flex items-center gap-1 text-[12px] text-indigo-700 hover:text-indigo-800 hover:underline"
 			>
-				Browse what's compounded into the marketplace <ArrowRight className="w-3.5 h-3.5" />
-			</a>
+				Browse what's compounded <ArrowRight className="w-3.5 h-3.5" />
+			</Link>
 		</div>
 	);
 }

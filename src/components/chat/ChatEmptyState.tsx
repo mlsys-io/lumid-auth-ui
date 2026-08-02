@@ -88,10 +88,15 @@ function samplesFor(ctx: ViewingContext): Array<{ label: string; prompt: string;
 				{ label: 'what did you learn about me this week?', prompt: 'What did you learn about me this week?' },
 			];
 		default:
+			// Chat-home landing. Initiate with two concrete apps a common user
+			// can explore by clicking — FinData (market data) + QuantArena
+			// (trading). Each prompt drives the agent to render the app's live
+			// surface inline (charts / leaderboard).
 			return [
-				{ label: 'what should I do next?', prompt: 'what should I do next?' },
-				{ label: "what's pending in my inbox?", prompt: "what's pending in my inbox?" },
-				{ label: 'what did you learn about me this week?', prompt: 'what did you learn about me this week?' },
+				{ label: 'Explore a stock — AAPL', prompt: 'Explore AAPL — show its price chart and key fundamentals from FinData.' },
+				{ label: "Today's market movers", prompt: "Show today's top market gainers and losers from FinData." },
+				{ label: 'Trading leaderboard', prompt: 'Show the QuantArena trading competition leaderboard.' },
+				{ label: 'What did you learn this week?', prompt: 'What did you learn about me this week?' },
 			];
 	}
 }
