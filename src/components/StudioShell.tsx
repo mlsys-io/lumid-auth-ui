@@ -282,7 +282,7 @@ export function StudioShell() {
 	const [appNavOpen, setAppNavOpen] = useState(false);
 	useEffect(() => { setAppNavOpen(false); }, [location.pathname]);
 	// Simple mode: no sidebar at all — the chatbox is the whole surface.
-	const sidebarHidden = simple ? true : (isNarrow ? !narrowNavOpen : (inAppWorkspace ? !appNavOpen : sidebarCollapsed));
+	const sidebarHidden = isNarrow ? !narrowNavOpen : (inAppWorkspace ? !appNavOpen : sidebarCollapsed);
 	const hideSidebar = () => { if (isNarrow) setNarrowNavOpen(false); else if (inAppWorkspace) setAppNavOpen(false); else setSidebarCollapsed(true); };
 	const showSidebar = () => { if (isNarrow) setNarrowNavOpen(true); else if (inAppWorkspace) setAppNavOpen(true); else setSidebarCollapsed(false); };
 
@@ -531,7 +531,7 @@ export function StudioShell() {
 				<header data-studio-picker-chrome="1" className="min-h-[64px] py-2.5 bg-background/85 backdrop-blur-md border-b border-border sticky top-0 z-10 flex items-center px-3 sm:px-6 gap-2 sm:gap-4">
 					{/* When the sidebar is collapsed, its expand control lives here at
 					    the header's far left — so the resize icon is always visible. */}
-					{sidebarHidden && !simple && (
+					{sidebarHidden && (
 						<button
 							onClick={showSidebar}
 							title="Show sidebar"
@@ -560,8 +560,9 @@ export function StudioShell() {
 								Advanced
 							</button>
 						</div>
-						{/* Account — only in simple (advanced has the sidebar user menu) */}
-						{simple && (
+						{/* Account — only when the sidebar (which carries the user
+						    menu) is hidden, so we never show two account entries. */}
+						{simple && sidebarHidden && (
 							<div ref={acctRef} className="relative">
 								<button
 									onClick={() => setAcctOpen((o) => !o)}
