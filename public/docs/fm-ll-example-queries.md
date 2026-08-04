@@ -79,10 +79,12 @@ response isn't LLM-usage JSON (e.g. a trade/data payload).
 
 Lumilake runs a **Lumilake-native workflow**: `name` + `inputs` (map of name → list of values) +
 `ops[]`, where each op has `id`, `op` (op type), and `inputs[]` (each entry references either
-another op's `id` — an upstream edge — or a top-level input name). Op catalog: `DataRetrievalOp`,
-`FormatOp`, `LambdaOp`, `LLMChatOp`, `LLMVisionOp`, `ImageGenerationOp`, `MessageOp`, `InputOp`,
-`OutputOp`. Ask the agent for `lumilake_node_specs()` / `lumilake_workflow_schema()` for the full
-field-by-field contract.
+another op's `id` — an upstream edge — or a top-level input name). Op catalog (deployed v0.1.3):
+`DataOp`, `DataRetrievalOp`, `EmbeddingOp`, `FormatOp`, `ImageGenerationOp`, `LLMChatOp`,
+`LLMVisionOp`, `LambdaOp`, `MessageOp`. **There is no `InputOp`/`OutputOp`** — inputs are the
+top-level `inputs:` map, and outputs are captured by the job's `output_location` (not an op). Ask
+the agent for `lumilake_node_specs()` / `lumilake_workflow_schema()` for the full field-by-field
+contract.
 
 ### Chatbox (natural language)
 - "Compose a Lumilake workflow that reads NVDA daily OHLC and summarizes the trend, then optimize it."
@@ -97,13 +99,16 @@ A successful `optimize_workflow` / `run_workflow` also pops the **workflow DAG s
 ```jsonc
 // lumilake_workflow_schema()  → the YAML contract + a minimal worked example
 // lumilake_node_specs()       → the op catalog with each op's required fields
-// optimize_workflow(workflow_yaml=..., inputs=?) → HALO plan (no execution)
-// run_workflow(workflow_yaml=..., inputs=?)      → submit→wait→result (lean outputs)
-// workflow_status(workflow_id=...)
+// optimize_workflow(workflow_yaml=..., inputs=?)                 → HALO plan (no execution)
+// run_lumilake_job(workflow_yaml=..., inputs=?, output_location=?) → submit→wait→result
+// lumilake_job_status(job_id=...) / lumilake_job_result(job_id=...)
 ```
 `optimize_workflow` **plans only** (worker assignment) — it does NOT execute the ops, so it's fast
-and safe even when an LLM op's backend is offline. `run_workflow` auto-adds
-`output: {destination: {type: http}}` so `/results` is retrievable, and returns lean text.
+and safe even when an LLM op's backend is offline. `run_lumilake_job` executes on the fleet;
+`output_location` defaults to an S3 prefix and MUST be `{type: s3, prefix: …}` or
+`{type: db, table, column}` (the deployed server rejects `inline`/`http`).
+(Note: the FlowMesh-native `run_workflow` tool is a *different* tool — it runs FlowMesh task specs,
+not Lumilake-native `ops` workflows.)
 
 ### Raw HTTP — HALO optimize (verified)
 `POST /ll/api/v1/jobs/preview` needs the **`Workflow-Format: yaml`** header, a **non-empty
@@ -134,14 +139,15 @@ ops:
     op: FormatOp
     inputs: [Name]
     template: "Hello, {Name}!"
+    format_kwargs: {Name: Name}
   - id: Reply
     op: LLMChatOp
     inputs: [Greeting]
-    model: nvidia/Gemma-4-26B-A4B-NVFP4   # full gateway id — see gotcha
-    prompt: "Acknowledge this greeting in one short sentence: {Greeting}"
-  - id: out
-    op: OutputOp
-    inputs: [Reply]
+    messages:                                  # REQUIRED — LLMChatOp takes `messages`, not `prompt`
+      - {role: user, content: "Acknowledge this greeting in one short sentence: {Greeting}"}
+    config: {model: qwen3.6-27b, max_tokens: 64, temperature: 0.2}   # full mesh id — see gotcha
+# No OutputOp / InputOp exist. The last op's result IS the output; on run, capture
+# it via the job's output_location — {type: s3, prefix: ...} or {type: db, table, column}.
 ```
 
 ---
@@ -154,6 +160,11 @@ ops:
   `lumid-llm-mesh` notes.
 - **Lumilake preview requires** the `Workflow-Format: yaml` header **and** a non-empty `inputs`
   block — a missing header or empty inputs → `422 inputs is required`.
+- **Lumilake op contract (deployed v0.1.3, verified 2026-08-03)** — no `InputOp`/`OutputOp`;
+  `LLMChatOp` needs `messages` + `config.model` (NOT `prompt` / top-level `model`); and a run's
+  `output_location` must be `{type: s3, prefix: …}` or `{type: db, table, column}` (`inline`/`http`
+  → 422). The older op shape in stale docs/specs will 422 — always author from
+  `lumilake_node_specs()`.
 - **`optimize_workflow` never runs the ops** — it only produces the HALO worker plan. Use it to
   validate a composed workflow cheaply; use `run_workflow` to actually execute.
 - **FlowMesh registry vs execution** can drift — `list_workers` shows the registry (what enrolled +

@@ -38,8 +38,11 @@ export function StudioWorkflowPanel() {
 		const onOpen = (e: Event) => {
 			const d = (e as CustomEvent).detail as WorkflowPayload | undefined;
 			if (d && typeof d.workflow_yaml === 'string' && d.workflow_yaml.trim()) {
+				// Hold the latest workflow but DON'T auto-pop the full-height drawer.
+				// The compact inline chat card (workflowResultCard) is the default
+				// surface; the user opens the DAG on demand via its "Open full graph"
+				// button (which fires studio:workflow-panel-toggle).
 				setWf(d);
-				setOpen(true);
 			}
 		};
 		const onToggle = () => setOpen((v) => !v);

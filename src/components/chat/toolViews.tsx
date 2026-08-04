@@ -44,17 +44,41 @@ export function StatusDot({ t }: { t: ToolCall }) {
 // command ✓"), which the curious can click to reveal the full view. Entity
 // cards (charts, leaderboards, app surfaces) are a SEPARATE render path and are
 // never collapsed — only the low-level mechanics are hushed.
+// bareToolName strips the MCP wrapper `mcp__<server>__<tool>` down to `<tool>`
+// so the in-house snake_case tools (which arrive wrapped) match the label maps
+// below instead of falling through to the generic "Worked on it".
+export function bareToolName(name: string): string {
+	if (name.startsWith('mcp__')) {
+		const parts = name.split('__');
+		return parts[parts.length - 1] || name;
+	}
+	return name;
+}
 const QUIET_LABELS: Record<string, string> = {
+	// Claude Code native tools
 	Bash: 'Ran a command', bash_exec: 'Ran a command', SlashCommand: 'Ran a command',
 	Edit: 'Edited a file', MultiEdit: 'Edited a file', Write: 'Wrote a file',
 	Read: 'Read a file', NotebookEdit: 'Edited a notebook',
 	Glob: 'Looked through files', Grep: 'Searched the code',
 	TodoWrite: 'Planned the steps', Task: 'Ran a sub-task', Skill: 'Ran a skill',
 	WebSearch: 'Searched the web', WebFetch: 'Read a web page',
+	web_search: 'Searched the web', web_fetch: 'Read a web page', deep_research: 'Researched the web',
+	// In-house MCP tools (data / compute / knowledge / trading) — friendly verbs
+	// so a run of them reads as work, not a wall of "Worked on it".
+	data_query: 'Looked up data', data_catalog: 'Browsed the data catalog', data_apps: 'Checked data sources',
+	get_price: 'Fetched a price', list_competitions: 'Checked competitions',
+	view_leaderboard: 'Checked the leaderboard', view_results: 'Checked results',
+	optimize_workflow: 'Planned the workflow', run_workflow: 'Ran the workflow',
+	lumilake_node_specs: 'Checked workflow options', lumilake_workflow_schema: 'Checked the workflow format',
+	lumilake_job_status: 'Checked the job', lumilake_job_result: 'Read the job result',
+	submit_workflow: 'Submitted a job', workflow_status: 'Checked a job', list_workers: 'Checked the compute fleet',
+	xp_ask: 'Searched knowledge', xp_memories: 'Recalled memories', xp_status: 'Checked knowledge',
+	show_app_surface: 'Opened an app view', app_read: 'Read an app', list_loops: 'Listed loops', run_loop: 'Ran a loop',
 };
 export function quietLabelFor(t: ToolCall): string {
-	if (QUIET_LABELS[t.name]) return QUIET_LABELS[t.name];
-	if (t.name.startsWith('Kill') || t.name.startsWith('Bash')) return 'Managed a process';
+	const bare = bareToolName(t.name);
+	if (QUIET_LABELS[bare]) return QUIET_LABELS[bare];
+	if (bare.startsWith('Kill') || bare.startsWith('Bash')) return 'Managed a process';
 	return 'Worked on it';
 }
 const QUIET_ICON: Record<string, typeof Terminal> = {
@@ -66,7 +90,7 @@ const QUIET_ICON: Record<string, typeof Terminal> = {
 // QuietToolPill — one muted line standing in for a full tool view. Click to
 // reveal the real terminal/diff/checklist view.
 export function QuietToolPill({ t, onExpand }: { t: ToolCall; onExpand: () => void }) {
-	const Icon = QUIET_ICON[t.name] || Wrench;
+	const Icon = QUIET_ICON[bareToolName(t.name)] || Wrench;
 	return (
 		<button
 			onClick={onExpand}

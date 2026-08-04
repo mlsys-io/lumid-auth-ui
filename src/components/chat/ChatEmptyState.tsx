@@ -88,12 +88,13 @@ function samplesFor(ctx: ViewingContext): Array<{ label: string; prompt: string;
 				{ label: 'what did you learn about me this week?', prompt: 'What did you learn about me this week?' },
 			];
 		default:
-			// Chat-home landing. Initiate with two concrete apps a common user
-			// can explore by clicking — FinData (market data) + QuantArena
-			// (trading). Each prompt drives the agent to render the app's live
-			// surface inline (charts / leaderboard).
+			// Chat-home landing. Initiate with concrete working-contexts a common
+			// user can explore by clicking — FinData (market data), a FinData→Lumilake
+			// analysis (HALO-optimized workflow via /ll), and QuantArena (trading).
+			// Each prompt drives the agent to render the app's live surface / DAG inline.
 			return [
 				{ label: 'Explore a stock — AAPL', prompt: 'Explore AAPL — show its price chart and key fundamentals from FinData.' },
+				{ label: 'Analyze NVDA with Lumilake', prompt: 'Analyze NVDA — pull its recent daily prices from FinData, then compose and run a HALO-optimized Lumilake workflow that summarizes the trend and flags risks.' },
 				{ label: "Today's market movers", prompt: "Show today's top market gainers and losers from FinData." },
 				{ label: 'Trading leaderboard', prompt: 'Show the QuantArena trading competition leaderboard.' },
 				{ label: 'What did you learn this week?', prompt: 'What did you learn about me this week?' },
@@ -116,7 +117,7 @@ export default function ChatEmptyState() {
 	// now lives in the top-bar "Right now" ticker.
 	return (
 		<div className="flex flex-wrap justify-center gap-1.5 max-w-[640px] mx-auto w-full">
-			{samples.slice(0, 3).map((s) => (
+			{samples.slice(0, 4).map((s) => (
 				<button key={s.label} onClick={() => fire(s.prompt, s.context)} className={PILL}>
 					{s.label}
 				</button>

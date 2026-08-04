@@ -2384,6 +2384,50 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 	);
 }
 
+// A finished, successful, card-less tool step is "quiet" — in Simple mode a
+// run of these collapses into one QuietGroup line instead of a wall of pills.
+// Pending / failed / approval-needed / card-bearing tools are NEVER absorbed
+// (progress, errors, and entity cards must stay visible).
+function isQuietToolBlock(b: Block): boolean {
+	return b.kind === 'tool' && !b.tool.pending && b.tool.ok === true && !b.tool.approvalRequired && !entityCardFor(b.tool);
+}
+type RenderUnit = { kind: 'block'; block: Block } | { kind: 'group'; blocks: Block[] };
+function groupQuietBlocks(blocks: Block[], enabled: boolean): RenderUnit[] {
+	if (!enabled) return blocks.map((block) => ({ kind: 'block', block }));
+	const units: RenderUnit[] = [];
+	let run: Block[] = [];
+	const flush = () => {
+		if (run.length >= 2) units.push({ kind: 'group', blocks: run });
+		else run.forEach((block) => units.push({ kind: 'block', block }));
+		run = [];
+	};
+	for (const b of blocks) {
+		if (isQuietToolBlock(b)) { run.push(b); continue; }
+		flush();
+		units.push({ kind: 'block', block: b });
+	}
+	flush();
+	return units;
+}
+// QuietGroup — a collapsed 'Worked through N steps ✓' line that expands to the
+// individual (friendly-labeled) tool pills. Keeps a busy turn to one calm row.
+function QuietGroup({ members, render }: { members: Block[]; render: (b: Block) => JSX.Element }) {
+	const [open, setOpen] = useState(false);
+	return (
+		<div className="mt-1 flex flex-col items-start">
+			<button
+				onClick={() => setOpen((o) => !o)}
+				className="group inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-border/60 bg-muted/40 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+			>
+				<span className="text-[10px] text-emerald-600">✓</span>
+				<span>Worked through {members.length} steps</span>
+				<ChevronDown className={['w-3 h-3 opacity-50 transition-transform', open ? 'rotate-180' : ''].join(' ')} />
+			</button>
+			{open && <div className="mt-1 flex flex-col gap-1 pl-2 border-l border-border/50">{members.map(render)}</div>}
+		</div>
+	);
+}
+
 const MessageBubble = memo(function MessageBubble({
 	m,
 	streaming,
@@ -2403,6 +2447,8 @@ const MessageBubble = memo(function MessageBubble({
 }) {
 	const isUser = m.role === 'user';
 	const [copied, setCopied] = useState(false);
+	// Simple mode coalesces a run of finished tool steps into one calm line.
+	const { advanced } = useViewMode();
 	const showActions = !streaming && (onCopy || onRegenerate || onSpeak);
 
 	// Blocks in ARRIVAL order. Legacy messages (persisted threads, the
@@ -2508,7 +2554,15 @@ const MessageBubble = memo(function MessageBubble({
 				    be forced FIRST; it now lands where compose_workflow
 				    actually completed. The original anti-flicker reason still
 				    holds because blocks only ever append. */}
-				{blocks.map((b, i) => {
+				{groupQuietBlocks(blocks, !advanced && !streaming).map((unit, i) => {
+					if (unit.kind === 'group') {
+						return (
+							<Appear key={unit.blocks[0].id}>
+								<QuietGroup members={unit.blocks} render={(mb) => <BlockView key={mb.id} {...blockProps} b={mb} />} />
+							</Appear>
+						);
+					}
+					const b = unit.block;
 					// Visual attention: while a turn is streaming, the newest block
 					// is the live one — earlier steps recede to ~55% so the eye
 					// tracks the current action instead of the whole wall. Once the
@@ -2791,6 +2845,11 @@ function ToolChip({ t, onApprove }: { t: ToolCall; onApprove?: (approved: boolea
 	// the claude-sandbox stream and get claude.ai/code-style rich views.
 	// Approval never applies to them (the CLI runs its own tools), so the
 	// dispatch is safe ahead of the approval branch below.
+	// Simple mode: if this tool renders its own entity card (a separate 'card'
+	// block carries the meaning), drop the redundant pill entirely — this must
+	// run BEFORE the CCView branch, else mcp__ tools show a stray "Worked on
+	// it" QuietToolPill above their card.
+	if (!advanced && !t.pending && t.ok && !t.approvalRequired && entityCardFor(t)) return null;
 	const CCView = !t.approvalRequired ? claudeToolView(t.name) : null;
 	if (CCView) {
 		if (!advanced && !ccExpanded) return <QuietToolPill t={t} onExpand={() => setCcExpanded(true)} />;

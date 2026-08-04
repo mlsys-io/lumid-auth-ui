@@ -86,7 +86,8 @@ function workflowResultCard(kind: 'halo' | 'run', r: Record<string, any>): React
 		const counts = r.runtime_graph_node_counts && typeof r.runtime_graph_node_counts === 'object'
 			? Object.values(r.runtime_graph_node_counts as Record<string, number>).reduce((a, b) => a + (b || 0), 0) : undefined;
 		const nodes = r.merged_runtime_node_count ?? counts;
-		rows.push(<Row key="s"><span className="text-[12.5px]">Optimized · {workers} worker{workers === 1 ? '' : 's'}{nodes != null ? ` · ${nodes} node${nodes === 1 ? '' : 's'}` : ''}</span></Row>);
+		const optMs = typeof r.optimization_seconds === 'number' ? Math.round(r.optimization_seconds * 1000) : undefined;
+		rows.push(<Row key="s"><span className="text-[12.5px]">Optimized · {workers} worker{workers === 1 ? '' : 's'}{nodes != null ? ` · ${nodes} node${nodes === 1 ? '' : 's'}` : ''}{optMs != null ? ` · ${optMs} ms` : ''}</span></Row>);
 	} else {
 		const st = String(r.status || '').toLowerCase() || 'submitted';
 		rows.push(<Row key="s"><span className="text-[12.5px]">Run {st}{r.workflow_id ? ` · ${String(r.workflow_id).slice(0, 14)}…` : ''}</span></Row>);
@@ -97,7 +98,7 @@ function workflowResultCard(kind: 'halo' | 'run', r: Record<string, any>): React
 				onClick={() => window.dispatchEvent(new CustomEvent('studio:workflow-panel-toggle'))}
 				className="inline-flex items-center gap-1 text-[12px] text-gold-700 hover:underline"
 			>
-				<WorkflowIcon className="w-3 h-3" /> Open workflow
+				<WorkflowIcon className="w-3 h-3" /> Open full graph
 			</button>
 		</Row>,
 	);
