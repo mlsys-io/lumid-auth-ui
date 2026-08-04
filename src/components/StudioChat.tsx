@@ -67,7 +67,7 @@ function sessionRowsToMessages(rows: CycleLogRow[]): Message[] {
 	flush();
 	return out;
 }
-import ChatEmptyState, { ChatHero } from './chat/ChatEmptyState';
+import { ChatHero } from './chat/ChatEmptyState';
 import { StudioWorkflowPanel } from './StudioWorkflowPanel';
 import { Workflow as WorkflowIcon } from 'lucide-react';
 // Parse an AI turn's raw output into something readable: tenant cycles emit
@@ -1857,13 +1857,6 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 					!docked ? (
 						<div className="max-w-[640px] mx-auto w-full">
 							<EmptyHint />
-							{/* Starter chips — the FinData / QuantArena entry points a
-							    first-time user clicks to begin. Each fires studio:ask
-							    with its own app context, so the chip IS the lightweight
-							    working-context spine (no separate picker needed). */}
-							<div className="mt-5">
-								<ChatEmptyState />
-							</div>
 						</div>
 					) : null
 				) : (

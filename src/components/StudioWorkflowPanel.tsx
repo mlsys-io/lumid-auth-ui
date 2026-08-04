@@ -84,7 +84,12 @@ export function StudioWorkflowPanel() {
 
 	return (
 		<aside
-			className="fixed top-0 right-0 z-40 h-screen flex flex-col bg-card border-l border-border shadow-xl"
+			// Slide-in inspector on the right edge. Starts BELOW the sticky top bar
+			// (min-h-[64px] = top-16) instead of top-0/h-screen, so it no longer
+			// overlays the header (toggle, account menu, panel icons). z-40 keeps it
+			// above chat content (z-20/30) but below composer menus (z-50) + the
+			// session-expand modal (z-60).
+			className="fixed top-16 right-0 bottom-0 z-40 flex flex-col bg-card border-l border-border shadow-xl"
 			style={{ width }}
 		>
 			{/* left-edge resize handle */}
