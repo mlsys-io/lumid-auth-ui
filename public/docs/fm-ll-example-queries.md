@@ -134,6 +134,9 @@ Returns the HALO plan, e.g. (real output, hello-world → 1 op):
 name: hello-world
 inputs:
   Name: ["world"]           # one greeting per slice
+outputs:                    # REQUIRED — no top-level outputs -> job fails "Missing output"
+  - name: reply
+    ref: "Reply"            # ref = the id of the op whose result is the output
 ops:
   - id: Greeting
     op: FormatOp
@@ -145,19 +148,24 @@ ops:
     inputs: [Greeting]
     messages:                                  # REQUIRED — LLMChatOp takes `messages`, not `prompt`
       - {role: user, content: "Acknowledge this greeting in one short sentence: {Greeting}"}
-    config: {model: qwen3.6-27b, max_tokens: 64, temperature: 0.2}   # full mesh id — see gotcha
-# No OutputOp / InputOp exist. The last op's result IS the output; on run, capture
-# it via the job's output_location — {type: s3, prefix: ...} or {type: db, table, column}.
+    config: {model: Qwen/Qwen2.5-7B-Instruct, max_tokens: 64, temperature: 0.2}  # HuggingFace id — see gotcha
+# No OutputOp / InputOp ops — declare a top-level `outputs:` block instead. On run,
+# capture via the job's output_location — {type: s3, prefix: ...} or {type: db, table, column}.
 ```
 
 ---
 
 ## Gotchas (learned the hard way)
 
-- **LLM model IDs are the FULL gateway keys**, not friendly short names. Use
-  `nvidia/Gemma-4-26B-A4B-NVFP4`, `qwen3.6-27b`, `qwen3.6-35b-a3b` — **NOT** `gemma`. Unknown ids
-  fall through to the OpenRouter catch-all and 502 ("upstream LLM unreachable"). See the
-  `lumid-llm-mesh` notes.
+- **Two different model-id namespaces — don't mix them.** For the **lumid-llm mesh** (OpenAI-compat
+  gateway, `/fm` chat paths) use the FULL gateway keys `nvidia/Gemma-4-26B-A4B-NVFP4`,
+  `qwen3.6-27b`, `qwen3.6-35b-a3b` — **NOT** `gemma` (unknown ids → OpenRouter catch-all → 502).
+  For a **Lumilake `LLMChatOp`** use a **HuggingFace id** (`Qwen/Qwen2.5-7B-Instruct`,
+  `Qwen/Qwen2.5-0.5B-Instruct`): Lumilake runs the op as a FlowMesh **vLLM** inference task that
+  loads the model from HF, so a mesh alias like `qwen3.6-27b` raises `not a valid model identifier
+  on huggingface.co` and the task fails.
+- **Lumilake workflows need a top-level `outputs:` block** (`- name: <label>, ref: <op-id>`) — with
+  no outputs declared the job runs the ops then fails `Missing output for workflow`.
 - **Lumilake preview requires** the `Workflow-Format: yaml` header **and** a non-empty `inputs`
   block — a missing header or empty inputs → `422 inputs is required`.
 - **Lumilake op contract (deployed v0.1.3, verified 2026-08-03)** — no `InputOp`/`OutputOp`;
