@@ -74,8 +74,25 @@ function OpNode({ data }: NodeProps<Node<NodeData>>) {
 }
 const nodeTypes = { op: OpNode };
 
-type ParsedOp = { id: string; op: string; inputs?: unknown };
+type ParsedOp = { id: string; op: string; inputs?: unknown; config?: unknown; template?: unknown; data_spec?: unknown; fn_name?: unknown };
 type Parsed = { name?: string; inputs?: Record<string, unknown>; ops?: ParsedOp[] };
+
+// A meaningful one-line detail for a node subtitle — the op's key parameter
+// (model / template / data mode / fn) rather than just repeating the op type
+// (which the node color + label already convey). This is what makes the graph
+// worth opening instead of an unlabeled box grid.
+function opDetail(o: ParsedOp): string {
+	const cfg = o.config && typeof o.config === 'object' ? (o.config as Record<string, unknown>) : undefined;
+	if (cfg?.model) return String(cfg.model);
+	if (o.op === 'FormatOp' && typeof o.template === 'string') return `"${o.template.slice(0, 30)}${o.template.length > 30 ? '…' : ''}"`;
+	if ((o.op === 'DataRetrievalOp' || o.op === 'DataOp') && o.data_spec && typeof o.data_spec === 'object') {
+		const d = o.data_spec as Record<string, unknown>;
+		const m = d.mode || d.type;
+		return m ? `data · ${String(m)}` : 'data';
+	}
+	if (o.op === 'LambdaOp' && o.fn_name) return `fn ${String(o.fn_name)}`;
+	return o.op || 'op';
+}
 
 // Best-effort: map a HALO worker_assignment (worker -> [runtime node ids]) to op
 // ids by substring (runtime ids embed the op id). Returns opId -> worker.
@@ -145,7 +162,7 @@ export function parseWorkflow(workflowYaml: string, plan?: HaloPlan): { nodes: N
 			id: o.id, type: 'op',
 			position: { x: p.x - NODE_W / 2, y: p.y - NODE_H / 2 },
 			style: { width: NODE_W, height: NODE_H },
-			data: { label: o.id, op: o.op || 'Op', subtitle: o.op || '', worker: wbo[o.id] },
+			data: { label: o.id, op: o.op || 'Op', subtitle: opDetail(o), worker: wbo[o.id] },
 		});
 	}
 	return { nodes, edges };
@@ -176,7 +193,7 @@ export default function LumilakeWorkflowCanvas({ workflowYaml, plan }: { workflo
 		);
 	}
 	return (
-		<div ref={wrap} className="h-full w-full">
+		<div ref={wrap} className="h-full w-full overflow-hidden">
 			<ReactFlow
 				nodes={nodes} edges={edges}
 				onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}

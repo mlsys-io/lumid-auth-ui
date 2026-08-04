@@ -114,7 +114,7 @@ export function StudioWorkflowPanel() {
 					<X className="w-4 h-4" />
 				</button>
 			</header>
-			<div className="flex-1 min-h-0">
+			<div className="flex-1 min-h-0 overflow-hidden">
 				{wf?.workflow_yaml
 					? <LumilakeWorkflowCanvas workflowYaml={wf.workflow_yaml} plan={wf.plan} />
 					: <div className="p-4 text-[12px] text-muted-foreground">No workflow to show yet — optimize or run one from chat.</div>}
