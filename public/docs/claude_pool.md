@@ -168,14 +168,62 @@ usage** → model breakdown, with actual cost in USD rather than token counts.
 
 Each user gets their own quota on the pool, mirroring Anthropic's window
 shape: a **5-hour** and a **7-day** rolling token budget (uncached input +
-output tokens, summed across all your PATs). Defaults: 4M tokens / 5h and
-40M tokens / 7d (operator-tunable).
+output tokens, summed across all your PATs). Currently **2M tokens / 5h**
+and **15M / 7d** — operator-tunable via `LUMID_QUOTA_CLAUDE_{5H,7D}_TOKENS`
+(the code defaults are 4M/40M, deliberately lowered for a small pool).
 
 - When a window is exhausted the proxy returns `429` with the reason and
   Claude Code backs off; the window rolls continuously, so capacity returns
   as old usage ages out.
 - Current per-user consumption is visible to admins on
   [/code](/code) under **Per-user pool usage**.
+
+### Seeing your usage from the CLI
+
+**Claude Code's built-in `/usage` cannot show pool usage** — it is a
+subscription-account view. Internally `fetchUtilization()` returns early on a
+check of your OAuth *subscription scopes*, and even past that it calls
+`claude.ai/api/oauth/usage` rather than your `ANTHROPIC_BASE_URL`. Gateway
+users have no OAuth session, so nothing lum.id serves can appear there.
+
+Two surfaces do work. Both use the same script, and both reuse the PAT you
+already export — `GET /api/v1/me/claude-usage` authenticates the user and
+needs **no extra scope** (`claude:proxy` gates only the proxy route itself).
+
+```bash
+curl -fsSL https://lum.id/docs/lumid-pool-usage.sh -o ~/.claude/lumid-pool-usage.sh
+chmod +x ~/.claude/lumid-pool-usage.sh
+curl -fsSL https://lum.id/docs/quota.md -o ~/.claude/commands/quota.md
+```
+
+**`/quota` — a slash command**, the closest thing to `/usage`:
+
+```
+lum.id/claude — your pool usage
+
+  5h  ████████████████████░░░░░░░░  71.0%   1.42M / 2.00M   resets in 1h36m
+  7d  █████████████████░░░░░░░░░░░  62.3%   9.35M / 15.00M  resets in 52h59m
+
+  by model (7d)
+    claude-sonnet-5                       7.10M
+    claude-opus-5                         1.90M
+
+  1284 requests over 7d  ·  $41.73
+```
+
+**A statusline** — always visible, one line. Add to `~/.claude/settings.json`:
+
+```json
+{ "statusLine": { "type": "command", "command": "~/.claude/lumid-pool-usage.sh" } }
+```
+
+```
+⧉ pool 71%/5h ↺1h36m · 62%/7d
+```
+
+It colours cyan → yellow (≥70%) → red (≥90%) on whichever window binds
+first. Results are cached for 60s and curl is capped at 2s, so it never
+stalls your prompt; on any failure it prints nothing rather than an error.
 
 ## Session recording
 
