@@ -169,7 +169,7 @@ usage** → model breakdown, with actual cost in USD rather than token counts.
 Each user gets their own quota on the pool, mirroring Anthropic's window
 shape: a **5-hour** and a **7-day** rolling token budget (uncached input +
 output tokens, summed across all your PATs). Currently **2M tokens / 5h**
-and **15M / 7d** — operator-tunable via `LUMID_QUOTA_CLAUDE_{5H,7D}_TOKENS`
+and **30M / 7d** — operator-tunable via `LUMID_QUOTA_CLAUDE_{5H,7D}_TOKENS`
 (the code defaults are 4M/40M, deliberately lowered for a small pool).
 
 - When a window is exhausted the proxy returns `429` with the reason and
@@ -202,7 +202,7 @@ curl -fsSL https://lum.id/docs/quota.md -o ~/.claude/commands/quota.md
 lum.id/claude — your pool usage
 
   5h  ████████████████████░░░░░░░░  71.0%   1.42M / 2.00M   resets in 1h36m
-  7d  █████████████████░░░░░░░░░░░  62.3%   9.35M / 15.00M  resets in 52h59m
+  7d  ████████░░░░░░░░░░░░░░░░░░░░  31.2%   9.35M / 30.00M  resets in 52h59m
 
   by model (7d)
     claude-sonnet-5                       7.10M
