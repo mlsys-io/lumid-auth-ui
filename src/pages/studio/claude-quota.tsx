@@ -21,6 +21,14 @@ import {
 
 const USER_USAGE_REFRESH_MS = 2 * 60 * 1000; // 2 min auto-refresh for per-user section
 
+// Known field boxes with a claude-field-relay tunnel already wired
+// (deploy_infra: wg-relay-dublin/, wg-relay-chicago/). Extend this list as
+// new boxes get their own tunnel + relay — "Other…" in the Add-account form
+// still allows a free-text label ahead of that, so this list is a UX
+// convenience (prevents typos on the two boxes that already exist), not a
+// hard validation boundary.
+const KNOWN_FIELD_BOXES = ['dublin', 'chicago'];
+
 function fmtTime(iso: string): string {
 	if (!iso || iso.startsWith('0001')) return '—';
 	const d = new Date(iso);
@@ -194,6 +202,9 @@ function AddAccountModal({
 	const [token,        setToken]        = useState('');
 	const [refreshToken, setRefreshToken] = useState('');
 	const [label,        setLabel]        = useState(prefillLabel ?? '');
+	// Custom mode = free-text entry for a field box not yet in KNOWN_FIELD_BOXES
+	// (e.g. onboarding a third box ahead of adding it to the known list).
+	const [customLabel,  setCustomLabel]  = useState(!!prefillLabel && !KNOWN_FIELD_BOXES.includes(prefillLabel));
 	const [busy,         setBusy]         = useState(false);
 	const [msg,          setMsg]          = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -286,15 +297,32 @@ function AddAccountModal({
 					</div>
 					<div>
 						<label className="block text-xs font-medium text-slate-600 mb-1">
-							Field box <span className="text-slate-400 font-normal">(optional — e.g. "dublin")</span>
+							Field box <span className="text-slate-400 font-normal">(optional)</span>
 						</label>
-						<input
-							type="text"
-							value={label}
-							onChange={(e) => setLabel(e.target.value)}
-							placeholder="leave blank for a normal pooled account"
-							className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-gold-400"
-						/>
+						<select
+							value={customLabel ? '__custom__' : label}
+							onChange={(e) => {
+								if (e.target.value === '__custom__') { setCustomLabel(true); setLabel(''); }
+								else { setCustomLabel(false); setLabel(e.target.value); }
+							}}
+							className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gold-400"
+						>
+							<option value="">— none (normal pooled account) —</option>
+							{KNOWN_FIELD_BOXES.map((box) => (
+								<option key={box} value={box}>{box}</option>
+							))}
+							<option value="__custom__">Other…</option>
+						</select>
+						{customLabel && (
+							<input
+								type="text"
+								value={label}
+								onChange={(e) => setLabel(e.target.value)}
+								placeholder="new field-box label"
+								autoFocus
+								className="w-full mt-2 rounded border border-slate-300 px-2.5 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-gold-400"
+							/>
+						)}
 						<p className="text-[11px] text-slate-400 mt-1">
 							Tags this account as belonging to a field box — its traffic routes through that box's relay instead of the pool's default network.
 						</p>
