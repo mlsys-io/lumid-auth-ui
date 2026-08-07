@@ -98,6 +98,16 @@ function AccountRow({
 				{acc.email}
 			</span>
 
+			{/* field-box label */}
+			{acc.label && (
+				<span
+					className="shrink-0 rounded-full bg-slate-100 border border-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-500"
+					title={`Field-box account — routes via the ${acc.label} relay`}
+				>
+					{acc.label}
+				</span>
+			)}
+
 			{/* 5h bar */}
 			<div className="flex items-center gap-1.5 shrink-0">
 				<span className="text-[10px] text-slate-400 w-4">5h</span>
@@ -177,10 +187,13 @@ function AccountRow({
 
 // ── Add-account modal ──────────────────────────────────────────────
 
-function AddAccountModal({ onClose, onAdded, prefillEmail }: { onClose: () => void; onAdded: () => void; prefillEmail?: string }) {
+function AddAccountModal({
+	onClose, onAdded, prefillEmail, prefillLabel,
+}: { onClose: () => void; onAdded: () => void; prefillEmail?: string; prefillLabel?: string }) {
 	const [email,        setEmail]        = useState(prefillEmail ?? '');
 	const [token,        setToken]        = useState('');
 	const [refreshToken, setRefreshToken] = useState('');
+	const [label,        setLabel]        = useState(prefillLabel ?? '');
 	const [busy,         setBusy]         = useState(false);
 	const [msg,          setMsg]          = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -188,14 +201,16 @@ function AddAccountModal({ onClose, onAdded, prefillEmail }: { onClose: () => vo
 		const e = email.trim().toLowerCase();
 		const t = token.trim();
 		const rt = refreshToken.trim() || undefined;
+		const lb = label.trim() || undefined;
 		if (!e || !t) { setMsg({ ok: false, text: 'Email and token are required.' }); return; }
 		setBusy(true);
 		setMsg(null);
 		try {
-			const r = await adminAddClaudeToken(e, t, rt);
+			const r = await adminAddClaudeToken(e, t, rt, lb);
 			if (r.valid && r.stored) {
 				const extra = rt ? ' Auto-refresh enabled.' : '';
-				setMsg({ ok: true, text: `Token stored for ${r.email}.${extra} Quota will refresh within 5 min.` });
+				const boxNote = lb ? ` Tagged "${lb}" — routes via that field box's relay.` : '';
+				setMsg({ ok: true, text: `Token stored for ${r.email}.${extra}${boxNote} Quota will refresh within 5 min.` });
 				setTimeout(() => { onClose(); onAdded(); }, 1800);
 			} else if (!r.valid) {
 				setMsg({ ok: false, text: `Invalid token: ${r.reason}` });
@@ -268,6 +283,21 @@ function AddAccountModal({ onClose, onAdded, prefillEmail }: { onClose: () => vo
 							placeholder="paste refresh token here…"
 							className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-gold-400"
 						/>
+					</div>
+					<div>
+						<label className="block text-xs font-medium text-slate-600 mb-1">
+							Field box <span className="text-slate-400 font-normal">(optional — e.g. "dublin")</span>
+						</label>
+						<input
+							type="text"
+							value={label}
+							onChange={(e) => setLabel(e.target.value)}
+							placeholder="leave blank for a normal pooled account"
+							className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-gold-400"
+						/>
+						<p className="text-[11px] text-slate-400 mt-1">
+							Tags this account as belonging to a field box — its traffic routes through that box's relay instead of the pool's default network.
+						</p>
 					</div>
 					{msg && (
 						<div className={`text-xs rounded px-2.5 py-2 ${msg.ok ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' : 'bg-rose-50 border border-rose-200 text-rose-800'}`}>
@@ -523,6 +553,7 @@ export default function StudioClaudeQuota() {
 					onClose={() => { setShowAdd(false); setReAddEmail(undefined); }}
 					onAdded={() => { setShowAdd(false); setReAddEmail(undefined); load(true); }}
 					prefillEmail={reAddEmail}
+					prefillLabel={reAddEmail ? accounts?.find((a) => a.email === reAddEmail)?.label : undefined}
 				/>
 			)}
 			<header className="flex items-center justify-between">
