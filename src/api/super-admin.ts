@@ -333,6 +333,10 @@ export interface ClaudeQuotaAccount {
 	// stops retrying it; recovery is a re-add with a fresh `claude auth login`.
 	revoked?: boolean;
 	revoke_reason?: string;
+	// Label: set when this account belongs to a field box (e.g. "dublin") —
+	// its Messages API + token-refresh traffic routes through that box's own
+	// relay instead of the default direct path. Empty for a normal account.
+	label?: string;
 }
 
 export interface ClaudeQuotaResp {
@@ -462,11 +466,18 @@ export interface AdminClaudeTokenResult {
 	stored: boolean;
 	upstream_status: number;
 	reason: string;
+	label?: string;
 }
 
-export async function adminAddClaudeToken(email: string, token: string, refreshToken?: string): Promise<AdminClaudeTokenResult> {
+export async function adminAddClaudeToken(
+	email: string,
+	token: string,
+	refreshToken?: string,
+	label?: string,
+): Promise<AdminClaudeTokenResult> {
 	const body: Record<string, string> = { email, token };
 	if (refreshToken) body.refresh_token = refreshToken;
+	if (label) body.label = label;
 	const r = await apiClient.post<DataResponse<AdminClaudeTokenResult>>('/api/v1/admin/claude-token', body);
 	return r.data.data;
 }
