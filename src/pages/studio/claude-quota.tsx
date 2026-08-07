@@ -196,8 +196,13 @@ function AccountRow({
 // ── Add-account modal ──────────────────────────────────────────────
 
 function AddAccountModal({
-	onClose, onAdded, prefillEmail, prefillLabel,
-}: { onClose: () => void; onAdded: () => void; prefillEmail?: string; prefillLabel?: string }) {
+	onClose, onAdded, prefillEmail, prefillLabel, takenLabels,
+}: {
+	onClose: () => void; onAdded: () => void; prefillEmail?: string; prefillLabel?: string;
+	// label -> the OTHER account already holding it (this account's own current
+	// label, on a re-add, is excluded by the caller so it doesn't block itself).
+	takenLabels?: Record<string, string>;
+}) {
 	const [email,        setEmail]        = useState(prefillEmail ?? '');
 	const [token,        setToken]        = useState('');
 	const [refreshToken, setRefreshToken] = useState('');
@@ -214,6 +219,10 @@ function AddAccountModal({
 		const rt = refreshToken.trim() || undefined;
 		const lb = label.trim() || undefined;
 		if (!e || !t) { setMsg({ ok: false, text: 'Email and token are required.' }); return; }
+		if (lb && takenLabels?.[lb]) {
+			setMsg({ ok: false, text: `"${lb}" is already allocated to ${takenLabels[lb]} — pick a different label or clear this account's first.` });
+			return;
+		}
 		setBusy(true);
 		setMsg(null);
 		try {
@@ -308,11 +317,21 @@ function AddAccountModal({
 							className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gold-400"
 						>
 							<option value="">— none (normal pooled account) —</option>
-							{KNOWN_FIELD_BOXES.map((box) => (
-								<option key={box} value={box}>{box}</option>
-							))}
+							{KNOWN_FIELD_BOXES.map((box) => {
+								const takenBy = takenLabels?.[box];
+								return (
+									<option key={box} value={box} disabled={!!takenBy}>
+										{box}{takenBy ? ` — already allocated (${takenBy})` : ''}
+									</option>
+								);
+							})}
 							<option value="__custom__">Other…</option>
 						</select>
+						{label && takenLabels?.[label] && !customLabel && (
+							<p className="text-[11px] text-rose-500 mt-1">
+								"{label}" is already allocated to {takenLabels[label]} — each field box holds one account.
+							</p>
+						)}
 						{customLabel && (
 							<input
 								type="text"
@@ -582,6 +601,13 @@ export default function StudioClaudeQuota() {
 					onAdded={() => { setShowAdd(false); setReAddEmail(undefined); load(true); }}
 					prefillEmail={reAddEmail}
 					prefillLabel={reAddEmail ? accounts?.find((a) => a.email === reAddEmail)?.label : undefined}
+					// Every OTHER account's label is "taken" — a re-add excludes its own
+					// current label so it doesn't block re-registering itself.
+					takenLabels={Object.fromEntries(
+						(accounts ?? [])
+							.filter((a) => a.label && a.email !== reAddEmail)
+							.map((a) => [a.label as string, a.email]),
+					)}
 				/>
 			)}
 			<header className="flex items-center justify-between">
