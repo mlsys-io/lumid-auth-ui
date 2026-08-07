@@ -22,12 +22,18 @@ import {
 const USER_USAGE_REFRESH_MS = 2 * 60 * 1000; // 2 min auto-refresh for per-user section
 
 // Known field boxes with a claude-field-relay tunnel already wired
-// (deploy_infra: wg-relay-dublin/, wg-relay-chicago/). Extend this list as
-// new boxes get their own tunnel + relay — "Other…" in the Add-account form
-// still allows a free-text label ahead of that, so this list is a UX
-// convenience (prevents typos on the two boxes that already exist), not a
-// hard validation boundary.
-const KNOWN_FIELD_BOXES = ['dublin', 'chicago'];
+// (deploy_infra: wg-relay-{dublin,chicago,nyc,dublin-nightly}/). All four are
+// live in LUMID_CLAUDE_FIELD_RELAYS on claude-proxy AND lumid-identity, so a
+// label picked here routes that account's traffic — Messages API and OAuth
+// refresh — out through that box's own IP.
+//
+// MUST stay in sync with LUMID_CLAUDE_FIELD_RELAYS. A label with no matching
+// relay entry is not an error: claude-proxy's Director falls through to the
+// normal direct-to-Anthropic path on a lookup miss, so the account silently
+// behaves as if unlabeled. That is a quiet failure, which is exactly why this
+// list exists. "Other…" still allows a free-text label, so this is a UX
+// convenience (typo prevention), not a hard validation boundary.
+const KNOWN_FIELD_BOXES = ['dublin', 'chicago', 'nyc', 'dublin-nightly'];
 
 function fmtTime(iso: string): string {
 	if (!iso || iso.startsWith('0001')) return '—';
