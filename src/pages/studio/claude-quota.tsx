@@ -24,7 +24,7 @@ import {
 const USER_USAGE_REFRESH_MS = 2 * 60 * 1000; // 2 min auto-refresh for per-user section
 
 // Known field boxes with a claude-field-relay tunnel already wired
-// (deploy_infra: wg-relay-{dublin,chicago,nyc,dublin-nightly}/). All four are
+// (deploy_infra: wg-relay-{denmark,chicago,nyc,nightly-dk}/). All four are
 // live in LUMID_CLAUDE_FIELD_RELAYS on claude-proxy AND lumid-identity, so a
 // label picked here routes that account's traffic — Messages API and OAuth
 // refresh — out through that box's own IP.
@@ -35,7 +35,7 @@ const USER_USAGE_REFRESH_MS = 2 * 60 * 1000; // 2 min auto-refresh for per-user 
 // behaves as if unlabeled. That is a quiet failure, which is exactly why this
 // list exists. "Other…" still allows a free-text label, so this is a UX
 // convenience (typo prevention), not a hard validation boundary.
-const KNOWN_FIELD_BOXES = ['dublin', 'chicago', 'nyc', 'dublin-nightly'];
+const KNOWN_FIELD_BOXES = ['denmark', 'chicago', 'nyc', 'nightly-dk'];
 
 function fmtTime(iso: string): string {
 	if (!iso || iso.startsWith('0001')) return '—';
@@ -233,7 +233,11 @@ function fmtCount(n: number): string {
 // Nothing else in the product surfaces that.
 function FieldBoxPanel() {
 	const [data, setData] = useState<ClaudeFieldBoxResp | null>(null);
-	const [hours, setHours] = useState(24);
+	// 1h by default: this panel is read to answer "what is happening now" —
+	// is a box carrying traffic, is anything bypassing its relay. A 24h window
+	// buries a routing regression that started ten minutes ago under a day of
+	// healthy history. Wider windows stay one click away.
+	const [hours, setHours] = useState(1);
 	const [err, setErr] = useState('');
 
 	useEffect(() => {
