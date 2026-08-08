@@ -299,9 +299,13 @@ function FieldBoxPanel() {
 						)}
 						{data.boxes.map((b) => {
 							const labelled = b.field_box !== '';
-							const bad = labelled && b.not_via_relay > 0;
+							const idle = b.turns === 0;
+								const bad = labelled && b.not_via_relay > 0;
 							return (
-								<tr key={b.field_box || '(direct)'} className="border-t border-slate-100">
+								<tr
+										key={b.field_box || '(direct)'}
+										className={`border-t border-slate-100 ${idle ? 'opacity-60' : ''}`}
+									>
 									<td className="px-2.5 py-1 font-medium text-slate-800">
 										{b.field_box || <span className="text-slate-400">(direct)</span>}
 									</td>
@@ -312,7 +316,12 @@ function FieldBoxPanel() {
 										{fmtCount(b.input_tokens + b.output_tokens)}
 									</td>
 									<td className="px-2.5 py-1">
-										{!labelled ? (
+										{idle ? (
+											// A configured box with no turns in this window. Must NOT
+											// render "all relayed" — that would be a health claim about
+											// traffic that never happened.
+											<span className="text-slate-400">no traffic</span>
+										) : !labelled ? (
 											<span className="text-slate-400">direct by design</span>
 										) : bad ? (
 											<span className="text-amber-600">
