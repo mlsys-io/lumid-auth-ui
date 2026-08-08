@@ -15,6 +15,8 @@ import {
 	fetchClaudeUserUsage,
 	adminAddClaudeToken,
 	adminDeleteClaudeToken,
+	fetchClaudeFieldBoxes,
+	type ClaudeFieldBoxResp,
 	type ClaudeQuotaAccount,
 	type ClaudeUserUsageResp,
 } from '@/api/super-admin';
@@ -196,6 +198,139 @@ function AccountRow({
 				</button>
 			)}
 		</div>
+	);
+}
+
+// fmtBytes renders a byte count at human scale. Raw byte counts are unreadable
+// at a glance and the interesting range here spans six orders of magnitude
+// (a single turn is ~KB, a busy box does GB/day), so the unit has to float.
+// Binary units (1024) to match how the wire figures are actually measured.
+function fmtBytes(n: number): string {
+	if (!n || n < 0) return '0 B';
+	const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+	let v = n;
+	let i = 0;
+	while (v >= 1024 && i < units.length - 1) {
+		v /= 1024;
+		i++;
+	}
+	// Sub-10 values keep a decimal so 1.4 GB doesn't collapse to "1 GB";
+	// above that the decimal is noise.
+	return `${v < 10 && i > 0 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
+}
+
+function fmtCount(n: number): string {
+	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+	if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+	return String(n);
+}
+
+// FieldBoxPanel — per-field-box traffic + relay health.
+//
+// The via_relay column is the operational point, not the bytes: a labelled box
+// showing "direct" turns means its account egressed from the CLUSTER, not the
+// box, and the whole reason the field boxes exist is silently not happening.
+// Nothing else in the product surfaces that.
+function FieldBoxPanel() {
+	const [data, setData] = useState<ClaudeFieldBoxResp | null>(null);
+	const [hours, setHours] = useState(24);
+	const [err, setErr] = useState('');
+
+	useEffect(() => {
+		let alive = true;
+		fetchClaudeFieldBoxes(hours)
+			.then((d) => { if (alive) { setData(d); setErr(''); } })
+			.catch((e) => { if (alive) setErr(String(e)); });
+		return () => { alive = false; };
+	}, [hours]);
+
+	if (err) return <div className="text-[11px] text-rose-500">Field-box traffic unavailable: {err}</div>;
+	if (!data) return <div className="text-[11px] text-slate-400">Loading field-box traffic…</div>;
+
+	const degraded = data.totals.degraded_turns;
+
+	return (
+		<section className="space-y-2">
+			<div className="flex items-center justify-between">
+				<h2 className="text-sm font-medium text-slate-800">
+					Field-box traffic
+					<span className="ml-2 text-[11px] font-normal text-slate-400">
+						{fmtBytes(data.totals.request_bytes + data.totals.response_bytes)} over {data.window_hours}h
+					</span>
+				</h2>
+				<select
+					value={hours}
+					onChange={(e) => setHours(Number(e.target.value))}
+					className="rounded border border-slate-300 px-1.5 py-0.5 text-[11px]"
+				>
+					<option value={1}>1h</option>
+					<option value={24}>24h</option>
+					<option value={168}>7d</option>
+				</select>
+			</div>
+
+			{degraded > 0 && (
+				<div className="rounded border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900">
+					<span className="font-medium">{fmtCount(degraded)} turns bypassed their field box.</span>{' '}
+					Those requests left from the cluster IP, not the box the account is labelled for —
+					check <code>LUMID_CLAUDE_FIELD_RELAYS</code> and the relay containers.
+				</div>
+			)}
+
+			<div className="rounded border border-slate-200 overflow-hidden">
+				<table className="w-full text-[11px]">
+					<thead className="bg-slate-50 text-slate-500">
+						<tr>
+							<th className="text-left  font-medium px-2.5 py-1">Box</th>
+							<th className="text-right font-medium px-2.5 py-1">In</th>
+							<th className="text-right font-medium px-2.5 py-1">Out</th>
+							<th className="text-right font-medium px-2.5 py-1">Turns</th>
+							<th className="text-right font-medium px-2.5 py-1">Tokens</th>
+							<th className="text-left  font-medium px-2.5 py-1">Routing</th>
+						</tr>
+					</thead>
+					<tbody>
+						{data.boxes.length === 0 && (
+							<tr><td colSpan={6} className="px-2.5 py-2 text-slate-400">No recorded turns in this window.</td></tr>
+						)}
+						{data.boxes.map((b) => {
+							const labelled = b.field_box !== '';
+							const bad = labelled && b.not_via_relay > 0;
+							return (
+								<tr key={b.field_box || '(direct)'} className="border-t border-slate-100">
+									<td className="px-2.5 py-1 font-medium text-slate-800">
+										{b.field_box || <span className="text-slate-400">(direct)</span>}
+									</td>
+									<td className="px-2.5 py-1 text-right font-mono text-slate-600">{fmtBytes(b.request_bytes)}</td>
+									<td className="px-2.5 py-1 text-right font-mono text-slate-600">{fmtBytes(b.response_bytes)}</td>
+									<td className="px-2.5 py-1 text-right font-mono text-slate-600">{fmtCount(b.turns)}</td>
+									<td className="px-2.5 py-1 text-right font-mono text-slate-500">
+										{fmtCount(b.input_tokens + b.output_tokens)}
+									</td>
+									<td className="px-2.5 py-1">
+										{!labelled ? (
+											<span className="text-slate-400">direct by design</span>
+										) : bad ? (
+											<span className="text-amber-600">
+												{fmtCount(b.via_relay)} relayed · {fmtCount(b.not_via_relay)} direct
+											</span>
+										) : (
+											<span className="text-emerald-600">all relayed</span>
+										)}
+									</td>
+								</tr>
+							);
+						})}
+					</tbody>
+				</table>
+			</div>
+			<p className="text-[10px] text-slate-400">
+				Sizes are true wire bytes, unaffected by the transcript cap.
+				{data.signal_since
+					? ` Routing verified for turns since ${new Date(data.signal_since).toLocaleString()}.`
+					: ' Routing verification has no data yet.'}
+			</p>
+		</section>
 	);
 }
 
@@ -683,6 +818,10 @@ export default function StudioClaudeQuota() {
 					</div>
 				</>
 			)}
+
+			{/* Per-field-box traffic + relay health. Self-contained (own fetch)
+			    so a field-box outage can't blank the quota page above it. */}
+			<FieldBoxPanel />
 
 			{userUsage && <UserUsageSection usage={userUsage} countdown={countdown} />}
 
