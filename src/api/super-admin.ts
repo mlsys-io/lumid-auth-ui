@@ -538,3 +538,39 @@ export async function fetchClusterList(): Promise<ClusterListResp> {
 	});
 	return r.data.data;
 }
+
+// ── per-field-box traffic breakdown (/code panel) ──────────────────────────
+
+export interface ClaudeFieldBoxRow {
+	/** "" = dispatched DIRECT from the cluster (unlabelled account). */
+	field_box: string;
+	turns: number;
+	via_relay: number;
+	not_via_relay: number;
+	request_bytes: number;
+	response_bytes: number;
+	input_tokens: number;
+	output_tokens: number;
+	last_ts: string;
+}
+
+export interface ClaudeFieldBoxResp {
+	window_hours: number;
+	/** When via_relay reporting began; totals.degraded_turns only covers turns after it. */
+	signal_since: string | null;
+	boxes: ClaudeFieldBoxRow[];
+	totals: {
+		turns: number;
+		request_bytes: number;
+		response_bytes: number;
+		/** Labelled turns that did NOT take the relay hop. >0 = silent degradation. */
+		degraded_turns: number;
+	};
+}
+
+export async function fetchClaudeFieldBoxes(hours = 24): Promise<ClaudeFieldBoxResp> {
+	const r = await apiClient.get<DataResponse<ClaudeFieldBoxResp>>(
+		`/api/v1/admin/claude-field-boxes?hours=${hours}`,
+	);
+	return r.data.data;
+}
