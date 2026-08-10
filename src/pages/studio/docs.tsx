@@ -13,7 +13,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import 'github-markdown-css/github-markdown-light.css';
 import {
-	BookOpen, Zap, FileCode2, Activity, Layers, CandlestickChart, Compass, ArrowLeft, Loader2, Sparkles, Cpu,
+	BookOpen, Zap, FileCode2, Activity, Layers, CandlestickChart, Compass, ArrowLeft, Loader2, Sparkles, Cpu, Database,
 } from 'lucide-react';
 import StudioHow from './how';
 
@@ -55,6 +55,14 @@ const DOCS: DocEntry[] = [
 		md: 'TRADING_API.md',
 		group: 'Guides',
 		icon: Activity,
+	},
+	{
+		slug: 'findata-sql',
+		title: 'FinData SQL access',
+		description: 'Query the FinData warehouse with real SQL — psql/DBeaver/DuckDB, verify-full TLS, read-only guardrails, schema orientation.',
+		md: 'findata-sql.md',
+		group: 'Guides',
+		icon: Database,
 	},
 	{
 		slug: 'fm-ll-queries',
