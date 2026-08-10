@@ -29,9 +29,12 @@ export interface RecentChatItem {
 // `loaded` lets the sidebar tell "still fetching" apart from "genuinely no
 // chats yet". Without it an empty list and a broken fetch look identical,
 // which reads to the user as the whole section being missing.
-// 20, not 8: every debounced save fires studio:recent-invalidate, so the
-// open thread keeps bumping to the top and a short list visibly pushes
-// older rows off the end mid-session.
+//
+// limit = 0 means UNCAPPED, and is what the sidebar uses. It splits the list
+// into app-less "Recent" plus a per-app folder, so capping here would cap the
+// combined set — a chatty app would push every app-less thread off "Recent"
+// (and vice versa) rather than each list being independently deep.
+// Callers cap their own slice after grouping.
 export function useRecentChats(limit = 20): { items: RecentChatItem[]; loaded: boolean } {
   const [items, setItems] = useState<RecentChatItem[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -64,8 +67,8 @@ export function useRecentChats(limit = 20): { items: RecentChatItem[]; loaded: b
             };
           })
           .sort((a, b) => (b.updatedAt - a.updatedAt) || (a._i - b._i))
-          .slice(0, limit)
           .map(({ _i, ...item }) => item);
+        if (limit > 0) mapped.length = Math.min(mapped.length, limit);
         setItems(mapped);
         setLoaded(true);
       } catch {

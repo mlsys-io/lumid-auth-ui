@@ -147,6 +147,7 @@ function SessionLlmTurn({ r, defaultOpen }: { r: CycleLogRow; defaultOpen: boole
 
 import { entityCardFor } from './chat/entityCards';
 import AppSurfaceCard from './chat/AppSurfaceCard';
+import { CHAT_ID_KEY, readAppChatMap, writeAppChat, forgetChatId } from './appChatMap';
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_TEXT_BYTES = 500 * 1024;
@@ -169,40 +170,10 @@ const DOCUMENT_MIMES = new Set([
 const DOCUMENT_EXTS = ['.pdf', '.docx', '.xlsx', '.pptx', '.rtf', '.odt', '.ods', '.odp', '.epub'];
 
 const STORAGE_KEY = 'studio_chat_transcript_v1';
-const CHAT_ID_KEY = 'studio_chat_active_id_v1';
-// Per-app "latest session" map { app: chatId } so re-entering an app resumes
-// its most-recent conversation instead of dumping into whatever was open.
-const APP_CHAT_MAP_KEY = 'studio_app_chat_v1';
 // Reserved chat-context key for the Library, so it gets the SAME per-context
 // resume + grounded-opener behavior as an app (its own thread, resumed on
 // re-entry) rather than a one-off fresh chat. Not a real installed app.
 export const LIBRARY_KEY = 'lumid-library';
-function readAppChatMap(): Record<string, string> {
-	try { return JSON.parse(localStorage.getItem(APP_CHAT_MAP_KEY) || '{}') || {}; }
-	catch { return {}; }
-}
-function writeAppChat(app: string, chatId: string | null) {
-	if (!app) return;
-	try {
-		const m = readAppChatMap();
-		if (chatId) m[app] = chatId; else delete m[app];
-		localStorage.setItem(APP_CHAT_MAP_KEY, JSON.stringify(m));
-	} catch { /* ignore */ }
-}
-// Forget a chatId everywhere it could be resumed from (per-app resume map +
-// the persisted active id), so a DELETED conversation can't reappear when you
-// re-enter the app. Without this, the prop-driven grounding resumes the
-// per-app thread on every entry — including one you just deleted.
-function forgetChatId(id: string) {
-	if (!id) return;
-	try {
-		const m = readAppChatMap();
-		let changed = false;
-		for (const k of Object.keys(m)) if (m[k] === id) { delete m[k]; changed = true; }
-		if (changed) localStorage.setItem(APP_CHAT_MAP_KEY, JSON.stringify(m));
-	} catch { /* ignore */ }
-	try { if (localStorage.getItem(CHAT_ID_KEY) === id) localStorage.removeItem(CHAT_ID_KEY); } catch { /* ignore */ }
-}
 
 // Persisted transcript shape: { user_sub: string, messages: Message[] }.
 // Tagging with user_sub closes the "same browser tab, different user"
@@ -1357,6 +1328,11 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 	// Latest-send-path ref for the studio:ask listener (registered once).
 	const dispatchTurnRef = useRef<typeof dispatchTurn | null>(null);
 	useEffect(() => { dispatchTurnRef.current = dispatchTurn; }, [dispatchTurn]);
+	// Same escape hatch as dispatchTurnRef: the window-listener effect below is
+	// mount-only ([]), so it must read these through refs or it captures the
+	// first render's values forever.
+	const dockedRef = useRef(docked);
+	useEffect(() => { dockedRef.current = docked; }, [docked]);
 
 	// openAppInChat — ground the chat on an app and open with an agent-led,
 	// progressive opener: ONE deterministic live-state line (instant, no LLM
@@ -1401,6 +1377,23 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		lastSavedSigRef.current = '';
 		try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
 	}, []);
+
+	// Deliberate "start a SECOND conversation in this app" (the sidebar folder's
+	// + button). openAppInChat() can't serve this: it early-returns when the app
+	// is already grounded — correct for re-entry, wrong here, where the app being
+	// current is exactly the case we must still act on. Skips the resume map
+	// entirely and opens a fresh grounded thread.
+	const newAppChat = useCallback((app: string) => {
+		if (!app) return;
+		if (inFlightRef.current) return; // don't yank the session mid-stream
+		writeAppChat(app, null);         // don't resume the thread we're leaving
+		currentAppRef.current = app;
+		openedAppRef.current = null;     // let the opener fire for the new thread
+		clearSession();
+		emitAppOpener(app);
+	}, [clearSession, emitAppOpener]);
+	const newAppChatRef = useRef<typeof newAppChat | null>(null);
+	useEffect(() => { newAppChatRef.current = newAppChat; }, [newAppChat]);
 
 	const openAppInChat = useCallback((d: { app: string; surface?: string }) => {
 		if (!d?.app) return;
@@ -1532,11 +1525,20 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 			const d = (e as CustomEvent).detail;
 			if (d?.app) openAppInChat(d);
 		};
+		// Sidebar app-folder "+" — only the DOCKED chat may serve it; the home
+		// chat is app-less by definition and would otherwise silently steal a
+		// grounded thread onto /studio.
+		const onNewAppChat = (e: Event) => {
+			const app = (e as CustomEvent<{ app?: string }>).detail?.app;
+			if (app && dockedRef.current) newAppChatRef.current?.(app);
+		};
 		window.addEventListener('studio:new-chat', onNew);
 		window.addEventListener('studio:open-app', onOpenApp as EventListener);
+		window.addEventListener('studio:new-app-chat', onNewAppChat as EventListener);
 		return () => {
 			window.removeEventListener('studio:new-chat', onNew);
 			window.removeEventListener('studio:open-app', onOpenApp as EventListener);
+			window.removeEventListener('studio:new-app-chat', onNewAppChat as EventListener);
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);

@@ -42,12 +42,28 @@ export function iconFor(name?: string): LucideIcon {
   return (name && ICONS[name]) || Boxes;
 }
 
+// Fallback display name for an app that ships no `ui.sidebar.label`.
+// "venue-link-matcher" → "Venue Link Matcher". Most installed apps declare
+// no sidebar block at all, and skipping them made a Library install look
+// like it did nothing — the app was installed, it just had no way to appear.
+export function humanizeAppName(slug: string): string {
+  return slug
+    .replace(/[-_]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(" ") || slug;
+}
+
 export interface AppNavItem {
   app: string;
   label: string;
   icon?: string;
   order: number;
   badge_source?: string;
+  // "installing" / "failed" surface in the rail so a Library install shows
+  // progress in place instead of a row that silently never works.
+  status?: "ready" | "installing" | "failed";
 }
 export interface AppNavSection {
   section: string;
@@ -85,16 +101,22 @@ export function useAppNav(): AppNavSection[] {
     // Surface presence — lets AppSurfaceCard skip the appUI probe (+ its 404)
     // for apps that declare no UI surface.
     registerAppSurfacePresence(a.name, !!(a.ui?.surface || (a.ui?.surfaces && Object.keys(a.ui.surfaces).length > 0)));
-    if (!sb?.label || sb.show === false || seen.has(a.name)) continue; // tenant walked first → wins over operator-shared dup
+    // EVERY installed app gets a rail entry now — a `ui.sidebar.label` is an
+    // optional override, not the price of admission. Requiring it meant
+    // installing from the Library appeared to do nothing for the (majority)
+    // of apps that ship no sidebar block. `show: false` stays an explicit
+    // opt-out for apps that deliberately don't want a rail row.
+    if (sb?.show === false || seen.has(a.name)) continue; // tenant walked first → wins over operator-shared dup
     seen.add(a.name);
-    const section = sb.section || "Agents";
+    const section = sb?.section || "Agents";
     if (!bySection.has(section)) bySection.set(section, []);
     bySection.get(section)!.push({
       app: a.name,
-      label: sb.label,
-      icon: sb.icon,
-      order: sb.order ?? 100,
-      badge_source: sb.badge_source,
+      label: sb?.label || humanizeAppName(a.name),
+      icon: sb?.icon,
+      order: sb?.order ?? 100,
+      badge_source: sb?.badge_source,
+      status: a.status,
     });
   }
   return [...bySection.entries()]
