@@ -227,7 +227,7 @@ function RecentRow({ item, navigate }: { item: RecentChatItem; navigate: (to: st
 // indistinguishable from a broken one, which is exactly how this first
 // read to the user. Empty state says so in words instead.
 function RecentSection({ navigate }: { navigate: (to: string) => void }) {
-	const { items, loaded } = useRecentChats(8);
+	const { items, loaded } = useRecentChats();
 	if (!loaded) return null;
 	return (
 		<div>

@@ -29,7 +29,10 @@ export interface RecentChatItem {
 // `loaded` lets the sidebar tell "still fetching" apart from "genuinely no
 // chats yet". Without it an empty list and a broken fetch look identical,
 // which reads to the user as the whole section being missing.
-export function useRecentChats(limit = 8): { items: RecentChatItem[]; loaded: boolean } {
+// 20, not 8: every debounced save fires studio:recent-invalidate, so the
+// open thread keeps bumping to the top and a short list visibly pushes
+// older rows off the end mid-session.
+export function useRecentChats(limit = 20): { items: RecentChatItem[]; loaded: boolean } {
   const [items, setItems] = useState<RecentChatItem[]>([]);
   const [loaded, setLoaded] = useState(false);
 
@@ -42,16 +45,27 @@ export function useRecentChats(limit = 8): { items: RecentChatItem[]; loaded: bo
         const j = await r.json();
         const rows: HistoryRow[] = j?.data?.chats || [];
         if (!live) return;
+        // The server already returns these newest-updated first. Re-sorting
+        // on a NaN key (any record with an empty/unparseable updated_at)
+        // makes the comparator inconsistent, and JS then reorders rows
+        // arbitrarily between polls — which looks like conversations
+        // randomly disappearing. Keep the server's order, and only use the
+        // timestamp as a NaN-safe tiebreak.
         const mapped = rows
-          .map((h) => ({
-            kind: (h.app ? "agent" : "chat") as RecentChatItem["kind"],
-            id: h.id,
-            title: h.title,
-            app: h.app,
-            updatedAt: +new Date(h.updated_at),
-          }))
-          .sort((a, b) => b.updatedAt - a.updatedAt)
-          .slice(0, limit);
+          .map((h, i) => {
+            const t = Date.parse(h.updated_at);
+            return {
+              kind: (h.app ? "agent" : "chat") as RecentChatItem["kind"],
+              id: h.id,
+              title: h.title,
+              app: h.app,
+              updatedAt: Number.isNaN(t) ? 0 : t,
+              _i: i,
+            };
+          })
+          .sort((a, b) => (b.updatedAt - a.updatedAt) || (a._i - b._i))
+          .slice(0, limit)
+          .map(({ _i, ...item }) => item);
         setItems(mapped);
         setLoaded(true);
       } catch {
