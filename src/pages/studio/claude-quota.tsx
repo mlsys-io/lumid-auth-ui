@@ -259,6 +259,8 @@ function FieldBoxPanel() {
 				<h2 className="text-sm font-medium text-slate-800">
 					Field-box traffic
 					<span className="ml-2 text-[11px] font-normal text-slate-400">
+						{fmtCount(data.totals.homed_users)} users placed ·{' '}
+						{fmtCount(data.totals.active_users)} active ·{' '}
 						{fmtBytes(data.totals.request_bytes + data.totals.response_bytes)} over {data.window_hours}h
 					</span>
 				</h2>
@@ -286,6 +288,12 @@ function FieldBoxPanel() {
 					<thead className="bg-slate-50 text-slate-500">
 						<tr>
 							<th className="text-left  font-medium px-2.5 py-1">Box</th>
+							{/* Users before the byte columns on purpose: rebalancing is
+							    decided on people first, load second. Rendered
+							    "homed/active" — placement, then who actually showed up. */}
+							<th className="text-right font-medium px-2.5 py-1" title="Homed / active users">
+								Users
+							</th>
 							<th className="text-right font-medium px-2.5 py-1">In</th>
 							<th className="text-right font-medium px-2.5 py-1">Out</th>
 							<th className="text-right font-medium px-2.5 py-1">Turns</th>
@@ -295,7 +303,7 @@ function FieldBoxPanel() {
 					</thead>
 					<tbody>
 						{data.boxes.length === 0 && (
-							<tr><td colSpan={6} className="px-2.5 py-2 text-slate-400">No recorded turns in this window.</td></tr>
+							<tr><td colSpan={7} className="px-2.5 py-2 text-slate-400">No recorded turns in this window.</td></tr>
 						)}
 						{data.boxes.map((b) => {
 							const labelled = b.field_box !== '';
@@ -308,6 +316,16 @@ function FieldBoxPanel() {
 									>
 									<td className="px-2.5 py-1 font-medium text-slate-800">
 										{b.field_box || <span className="text-slate-400">(direct)</span>}
+									</td>
+									<td
+										className={`px-2.5 py-1 text-right font-mono ${b.homed_users > 0 ? 'text-slate-800' : 'text-slate-400'}`}
+										title={
+											`${b.homed_users} user(s) homed on this box's account (current placement) · ` +
+											`${b.active_users} distinct user(s) actually routed through it in this window`
+										}
+									>
+										{fmtCount(b.homed_users)}
+										<span className="ml-1 font-normal text-slate-400">/{fmtCount(b.active_users)}</span>
 									</td>
 									<td className="px-2.5 py-1 text-right font-mono text-slate-600">{fmtBytes(b.request_bytes)}</td>
 									<td className="px-2.5 py-1 text-right font-mono text-slate-600">{fmtBytes(b.response_bytes)}</td>
@@ -338,6 +356,10 @@ function FieldBoxPanel() {
 				</table>
 			</div>
 			<p className="text-[10px] text-slate-400">
+				Users read <span className="font-mono">homed/active</span>: homed is who is assigned to the
+				box's account right now (the balancing number, not windowed); active is who actually routed
+				through it in the window. Active overlaps between boxes because leases rotate, and misses
+				users who opted out of transcript recording — read it as a floor.
 				Sizes are true wire bytes, unaffected by the transcript cap.
 				{data.signal_since
 					? ` Routing verified for turns since ${new Date(data.signal_since).toLocaleString()}.`

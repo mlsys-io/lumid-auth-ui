@@ -544,6 +544,17 @@ export async function fetchClusterList(): Promise<ClusterListResp> {
 export interface ClaudeFieldBoxRow {
 	/** "" = dispatched DIRECT from the cluster (unlabelled account). */
 	field_box: string;
+	/**
+	 * Users ASSIGNED to this box's pooled account right now (current state,
+	 * not windowed). The balancing number — what a rebalance moves.
+	 */
+	homed_users: number;
+	/**
+	 * Distinct users whose turns took this box in the window. Overlaps between
+	 * boxes (leases rotate) and undercounts users who opted out of transcript
+	 * recording, so it is traffic evidence, not placement.
+	 */
+	active_users: number;
 	turns: number;
 	via_relay: number;
 	not_via_relay: number;
@@ -560,6 +571,11 @@ export interface ClaudeFieldBoxResp {
 	signal_since: string | null;
 	boxes: ClaudeFieldBoxRow[];
 	totals: {
+		/** Users assigned across all boxes. Sums cleanly — one account per user. */
+		homed_users: number;
+		/** Distinct users seen in the window — NOT the sum of boxes[].active_users,
+		 *  since one user can span boxes when a lease rotates. */
+		active_users: number;
 		turns: number;
 		request_bytes: number;
 		response_bytes: number;
