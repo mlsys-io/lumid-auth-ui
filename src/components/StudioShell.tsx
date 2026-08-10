@@ -21,8 +21,11 @@ import {
 	BookOpen,
 	LogOut,
 	ChevronDown,
+	ChevronRight,
 	Key,
 	Inbox,
+	MessageSquare,
+	Bot,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
@@ -30,8 +33,11 @@ import { useViewMode } from './ViewModeProvider';
 import { cn } from '../lib/utils';
 import { me } from '@/api/me';
 import { useAppNav, iconFor } from './useAppNav';
+import { useRecentChats, type RecentChatItem } from './useRecentChats';
 import { useStudioRefetch } from '@/hooks/useStudioRefetch';
 import { useIsNarrow } from '@/hooks/useIsNarrow';
+import { useCollapse } from '@/hooks/useCollapse';
+import { formatRelative } from '@/lib/relative-time';
 // StudioShell is now the single shell — it also hosts the /dashboard/* pages
 // (admin, quant, lumilake, lqt, product). The ported Runmesh admin pages need
 // these providers + the numeric-id bridge that AppLayout used to supply.
@@ -150,6 +156,43 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 	);
 }
 
+// "Recent" — the user's most recent chat threads, each opening back into
+// the exact right-pane context it was started in: a bare chatbox at
+// /studio ('chat' kind) or an app-grounded, docked chat at
+// /studio/apps/:app ('agent' kind). Both are the same StudioChat
+// component; the kind only decides where we navigate before it mounts.
+function RecentRow({ item, navigate }: { item: RecentChatItem; navigate: (to: string) => void }) {
+	const Icon = item.kind === 'agent' ? Bot : MessageSquare;
+	const open = () => {
+		try {
+			sessionStorage.setItem('studio_open_chat_v1', JSON.stringify({ id: item.id, app: item.app }));
+		} catch { /* ignore */ }
+		navigate(item.app ? `/studio/apps/${encodeURIComponent(item.app)}` : '/studio');
+	};
+	return (
+		<button
+			onClick={open}
+			title={item.title}
+			className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-foreground/60 hover:bg-black/[0.04] hover:text-foreground transition-colors text-left"
+		>
+			<Icon className="w-4 h-4 flex-shrink-0 text-foreground/45" />
+			<span className="flex-1 min-w-0 truncate">{item.title || 'Untitled chat'}</span>
+			<span className="flex-shrink-0 text-[10px] text-muted-foreground tabular-nums">{formatRelative(item.updatedAt)}</span>
+		</button>
+	);
+}
+
+function RecentSection({ navigate }: { navigate: (to: string) => void }) {
+	const items = useRecentChats(8);
+	if (items.length === 0) return null;
+	return (
+		<div>
+			<SectionLabel>Recent</SectionLabel>
+			{items.map((item) => <RecentRow key={item.id} item={item} navigate={navigate} />)}
+		</div>
+	);
+}
+
 // Drag-resizable sidebar width, persisted to localStorage. Mirrors the
 // StudioChat right-panel pattern (pointer events, clamp, persist on drag-end)
 // so both rails behave identically. (2026-05-30)
@@ -207,6 +250,7 @@ export function StudioShell() {
 	const { width: sidebarWidth, resizing, startResize, reset: resetSidebar } = useSidebarWidth();
 	// App-driven nav: installed apps that declare ui.sidebar, grouped by section.
 	const appNav = useAppNav();
+	const [agentsCollapsed, toggleAgents] = useCollapse('studio_sidebar_agents_v1', false);
 	const location = useLocation();
 	// Hosted /dashboard pages, app surfaces, and management need full width
 	// (admin tables, dataset explorers); core Studio pages stay narrow.
@@ -386,23 +430,37 @@ export function StudioShell() {
 						<CirclePlus className="w-4 h-4 text-foreground/55" /> New chat
 					</button>
 					{TOP_NAV.map((item) => <NavItemView key={item.to} {...item} />)}
+					{/* Recent — the user's most recent chat + agent-grounded threads. */}
+					<RecentSection navigate={navigate} />
 					{/* App-contributed sections — installed xpio apps that declare
-					    ui.sidebar appear here, grouped by section. Data-driven via
-					    useAppNav(); soft-fails to nothing if /me/apps is unreachable. */}
-					{appNav.map((sec) => (
-						<div key={sec.section}>
-							<SectionLabel>{sec.section}</SectionLabel>
-							{sec.items.map((it) => (
-								<NavItemView
-									key={it.app}
-									to={`/studio/apps/${encodeURIComponent(it.app)}`}
-									label={it.label}
-									icon={iconFor(it.icon)}
-									badge={it.badge_source === 'drafts' ? draftCount : undefined}
-								/>
+					    ui.sidebar appear here, grouped by section, nested inside one
+					    collapsible "Agents" folder. Data-driven via useAppNav();
+					    soft-fails to nothing if /me/apps is unreachable. */}
+					{appNav.length > 0 && (
+						<div>
+							<button
+								onClick={toggleAgents}
+								className="mt-4 mb-1 w-full flex items-center gap-1 px-3 text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+							>
+								<ChevronRight className={cn('w-3 h-3 transition-transform', !agentsCollapsed && 'rotate-90')} />
+								Agents
+							</button>
+							{!agentsCollapsed && appNav.map((sec) => (
+								<div key={sec.section}>
+									{sec.section !== 'Agents' && <SectionLabel>{sec.section}</SectionLabel>}
+									{sec.items.map((it) => (
+										<NavItemView
+											key={it.app}
+											to={`/studio/apps/${encodeURIComponent(it.app)}`}
+											label={it.label}
+											icon={iconFor(it.icon)}
+											badge={it.badge_source === 'drafts' ? draftCount : undefined}
+										/>
+									))}
+								</div>
 							))}
 						</div>
-					))}
+					)}
 				</nav>
 
 				{/* Documentation panel — replaces the old per-doc footer links

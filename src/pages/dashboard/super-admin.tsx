@@ -38,6 +38,7 @@ import { listUsers, type AdminUserRow } from '@/api/users';
 import { isSessionExpired } from '@/api/client';
 import { GrafanaEmbed } from '@/components/grafana-embed';
 import { SysResearchTile } from '@/components/dashboard/SysResearchTile';
+import { useCollapse as useCollapseShared } from '@/hooks/useCollapse';
 
 // /studio/super-admin — single-page operational + business pane of
 // glass for super_admin role. AppLayout supplies the sidebar; this
@@ -55,23 +56,9 @@ import { SysResearchTile } from '@/components/dashboard/SysResearchTile';
 // useCollapse — persistent expand/collapse toggle, keyed in
 // localStorage so each operator's preferences stick across reloads.
 // Used by Telemetry, BuildStatusTable, CodebaseReposTile, LoopStatusTile.
+// Thin wrapper over the shared hook, preserving the `super-admin:` key prefix.
 function useCollapse(key: string, defaultCollapsed = true): [boolean, () => void] {
-	const storeKey = `super-admin:${key}`;
-	const [collapsed, setCollapsed] = useState(() => {
-		if (typeof localStorage === 'undefined') return defaultCollapsed;
-		const v = localStorage.getItem(storeKey);
-		if (v === '1') return true;
-		if (v === '0') return false;
-		return defaultCollapsed;
-	});
-	const toggle = () => {
-		setCollapsed((prev) => {
-			const next = !prev;
-			try { localStorage.setItem(storeKey, next ? '1' : '0'); } catch { /* private mode */ }
-			return next;
-		});
-	};
-	return [collapsed, toggle];
+	return useCollapseShared(`super-admin:${key}`, defaultCollapsed);
 }
 
 interface Snap {

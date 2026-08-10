@@ -780,6 +780,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 				const tagApp = workspaceApp() || currentAppRef.current;
 				if (newId && tagApp) writeAppChat(tagApp, newId);
 				lastSavedSigRef.current = sig;
+				window.dispatchEvent(new CustomEvent('studio:recent-invalidate'));
 			} catch { /* ignore */ }
 		}, 600);
 		return () => {
@@ -843,6 +844,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 			forgetChatId(id);          // never resume a deleted thread on re-entry
 			if (id === chatId) newChat();
 			loadHistory();
+			window.dispatchEvent(new CustomEvent('studio:recent-invalidate'));
 		} catch { /* ignore */ }
 	}, [chatId, newChat, loadHistory]);
 
@@ -1454,6 +1456,15 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 					// Home chat: discard a stray stash so it can't ground later.
 					sessionStorage.removeItem('studio_open_app_v1');
 				}
+			}
+			// Recent-sidebar row click: stashed by the shell before navigating to
+			// either / (home) or /studio/apps/:app (docked) — whichever mounts
+			// picks it up and resumes that exact thread.
+			const openChatRaw = sessionStorage.getItem('studio_open_chat_v1');
+			if (openChatRaw) {
+				sessionStorage.removeItem('studio_open_chat_v1');
+				const { id } = JSON.parse(openChatRaw);
+				if (id) void loadThread(id);
 			}
 		} catch { /* stale/invalid stash — ignore */ }
 		const onNew = () => {
