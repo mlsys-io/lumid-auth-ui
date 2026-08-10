@@ -44,7 +44,16 @@ export function useRecentChats(limit = 20): { items: RecentChatItem[]; loaded: b
     const tick = async () => {
       try {
         const r = await fetch("/api/v1/me/chats", { credentials: "include" });
-        if (!r.ok) { if (live) setLoaded(true); return; }
+        if (!r.ok) {
+          // Say so. A failed fetch renders exactly like an empty history
+          // ("No conversations yet"), so without this line a 401 from an
+          // expired session is indistinguishable from having no chats —
+          // which is precisely the ambiguity that makes "Recent is broken"
+          // reports impossible to act on.
+          console.warn(`[studio] recent chats unavailable: HTTP ${r.status}`);
+          if (live) setLoaded(true);
+          return;
+        }
         const j = await r.json();
         const rows: HistoryRow[] = j?.data?.chats || [];
         if (!live) return;
@@ -71,9 +80,11 @@ export function useRecentChats(limit = 20): { items: RecentChatItem[]; loaded: b
         if (limit > 0) mapped.length = Math.min(mapped.length, limit);
         setItems(mapped);
         setLoaded(true);
-      } catch {
+      } catch (e) {
         // soft-fail: mark loaded so the section shows its empty state
-        // rather than sitting on a spinner forever.
+        // rather than sitting on a spinner forever — but log, for the
+        // same reason as the !r.ok branch above.
+        console.warn("[studio] recent chats fetch failed:", e);
         if (live) setLoaded(true);
       }
     };
