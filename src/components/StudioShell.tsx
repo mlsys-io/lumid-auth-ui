@@ -170,10 +170,19 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 function RecentRow({ item, navigate }: { item: RecentChatItem; navigate: (to: string) => void }) {
 	const Icon = item.kind === 'agent' ? Bot : MessageSquare;
 	const open = () => {
+		const target = item.app ? `/studio/apps/${encodeURIComponent(item.app)}` : '/studio';
+		if (window.location.pathname === target) {
+			// Already there: navigate() would be a no-op and the chat would
+			// never remount, so hand it the thread directly instead.
+			window.dispatchEvent(new CustomEvent('studio:open-chat', {
+				detail: { id: item.id, app: item.app || null },
+			}));
+			return;
+		}
 		try {
 			sessionStorage.setItem('studio_open_chat_v1', JSON.stringify({ id: item.id, app: item.app }));
 		} catch { /* ignore */ }
-		navigate(item.app ? `/studio/apps/${encodeURIComponent(item.app)}` : '/studio');
+		navigate(target);
 	};
 	// Delete lived in the chat's Conversations popover, which this section
 	// replaced — so it has to live here now, or the capability is simply gone.

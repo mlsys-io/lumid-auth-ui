@@ -848,6 +848,36 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		} catch { /* ignore */ }
 	}, [chatId, newChat, loadHistory]);
 
+	// Recent-row clicks arrive two ways, because the sidebar lives in a
+	// different component tree:
+	//   - route CHANGES (or a fresh mount) → sessionStorage stash, read here.
+	//     Keyed on pathname, not mount: navigating /studio/apps/A → …/B keeps
+	//     this component mounted, so a mount-only read would never fire.
+	//   - route UNCHANGED (already on the target) → studio:open-chat event,
+	//     since navigate() to the current path is a no-op and nothing remounts.
+	//     This is the same split the studio:ask bridge already makes.
+	useEffect(() => {
+		const consume = (id: string, app?: string | null) => {
+			currentAppRef.current = app || null;
+			openedAppRef.current = app || null;
+			void loadThread(id);
+		};
+		try {
+			const raw = sessionStorage.getItem('studio_open_chat_v1');
+			if (raw) {
+				sessionStorage.removeItem('studio_open_chat_v1');
+				const { id, app } = JSON.parse(raw);
+				if (id) consume(id, app);
+			}
+		} catch { /* stale/invalid stash — ignore */ }
+		const onOpenChat = (e: Event) => {
+			const d = (e as CustomEvent<{ id?: string; app?: string | null }>).detail;
+			if (d?.id) consume(d.id, d.app);
+		};
+		window.addEventListener('studio:open-chat', onOpenChat as EventListener);
+		return () => window.removeEventListener('studio:open-chat', onOpenChat as EventListener);
+	}, [location.pathname, loadThread]);
+
 	// The sidebar's Recent list owns deletion now (the in-chat Conversations
 	// popover it replaced used to). If it deleted the thread this chat has
 	// open, reset to a fresh one so we're not editing a row that's gone.
@@ -1474,12 +1504,9 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 			// Recent-sidebar row click: stashed by the shell before navigating to
 			// either / (home) or /studio/apps/:app (docked) — whichever mounts
 			// picks it up and resumes that exact thread.
-			const openChatRaw = sessionStorage.getItem('studio_open_chat_v1');
-			if (openChatRaw) {
-				sessionStorage.removeItem('studio_open_chat_v1');
-				const { id } = JSON.parse(openChatRaw);
-				if (id) void loadThread(id);
-			}
+			// (studio_open_chat_v1 is consumed by its own path-keyed effect
+			// below — a mount-only read misses same-route and param-only
+			// navigations, where this component never remounts.)
 		} catch { /* stale/invalid stash — ignore */ }
 		const onNew = () => {
 			setMessages([]);
