@@ -563,6 +563,23 @@ export interface ClaudeFieldBoxRow {
 	input_tokens: number;
 	output_tokens: number;
 	last_ts: string;
+	/**
+	 * The anthropic-sdk-typescript fingerprint claude-proxy is currently
+	 * attaching to this box's egress. Absent for the "(direct)" row and for
+	 * any homed-but-unconfigured label — see identity's
+	 * claude_field_fingerprint.go.
+	 */
+	fingerprint?: {
+		user_agent: string;
+		os: string;
+		arch: string;
+		runtime: string;
+		package_version: string;
+		/** true = pinned via LUMID_CLAUDE_FIELD_RELAY_FINGERPRINTS; never rotates. */
+		override: boolean;
+		/** absent/empty when override is true. */
+		rotates_at?: string;
+	};
 }
 
 export interface ClaudeFieldBoxResp {

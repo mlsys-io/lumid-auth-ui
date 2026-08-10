@@ -316,6 +316,22 @@ function FieldBoxPanel() {
 									>
 									<td className="px-2.5 py-1 font-medium text-slate-800">
 										{b.field_box || <span className="text-slate-400">(direct)</span>}
+										{b.fingerprint && (
+											<span
+												className="ml-1.5 rounded bg-slate-100 px-1 py-0.5 font-mono text-[9px] font-normal text-slate-500 cursor-default"
+												title={
+													`${b.fingerprint.user_agent}\n` +
+													`${b.fingerprint.os}/${b.fingerprint.arch} · ${b.fingerprint.runtime}\n` +
+													(b.fingerprint.override
+														? 'explicit override — does not rotate'
+														: b.fingerprint.rotates_at
+															? `rotates ${new Date(b.fingerprint.rotates_at).toLocaleDateString()}`
+															: '')
+												}
+											>
+												{b.fingerprint.package_version}
+											</span>
+										)}
 									</td>
 									<td
 										className={`px-2.5 py-1 text-right font-mono ${b.homed_users > 0 ? 'text-slate-800' : 'text-slate-400'}`}
