@@ -482,7 +482,7 @@ export function StudioShell() {
 								className="mt-4 mb-1 w-full flex items-center gap-1 px-3 text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors"
 							>
 								<ChevronRight className={cn('w-3 h-3 transition-transform', !agentsCollapsed && 'rotate-90')} />
-								Agents
+								Application
 							</button>
 							{!agentsCollapsed && appNav.map((sec) => (
 								<div key={sec.section}>
