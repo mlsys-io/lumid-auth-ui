@@ -805,10 +805,18 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 	const loadThread = useCallback(async (id: string): Promise<string | null | false> => {
 		try {
 			const r = await fetch('/api/v1/me/chats/' + encodeURIComponent(id), { credentials: 'include' });
-			if (!r.ok) return false;
+			// Both failure paths below used to return false with NO signal at
+			// all — from the sidebar that reads as a dead click. Say something.
+			if (!r.ok) {
+				console.warn(`[studio] could not open conversation ${id}: HTTP ${r.status}`);
+				return false;
+			}
 			const j = await r.json();
 			const rec = j?.data;
-			if (!rec || !Array.isArray(rec.messages)) return false;
+			if (!rec || !Array.isArray(rec.messages)) {
+				console.warn(`[studio] conversation ${id} has no messages array`, rec);
+				return false;
+			}
 			setMessages(rec.messages);
 			setChatId(rec.id);
 			claudeSessionRef.current = rec.claude_session_id || null; setClaudeSession(rec.claude_session_id || null);
