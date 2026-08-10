@@ -39,7 +39,7 @@ import { me } from '@/api/me';
 import { useAppNav, iconFor, type AppNavItem } from './useAppNav';
 import { useRecentChats, RECENT_CHATS_INVALIDATE, type RecentChatItem } from './useRecentChats';
 import { writeAppChat } from './appChatMap';
-import { ArtifactIconButton } from './StudioChat';
+import { ArtifactIconButton } from './ArtifactIconButton';
 import { useStudioRefetch } from '@/hooks/useStudioRefetch';
 import { useIsNarrow } from '@/hooks/useIsNarrow';
 import { useCollapse } from '@/hooks/useCollapse';
