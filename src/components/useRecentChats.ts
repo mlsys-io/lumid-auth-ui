@@ -26,15 +26,19 @@ export interface RecentChatItem {
   updatedAt: number;
 }
 
-export function useRecentChats(limit = 8): RecentChatItem[] {
+// `loaded` lets the sidebar tell "still fetching" apart from "genuinely no
+// chats yet". Without it an empty list and a broken fetch look identical,
+// which reads to the user as the whole section being missing.
+export function useRecentChats(limit = 8): { items: RecentChatItem[]; loaded: boolean } {
   const [items, setItems] = useState<RecentChatItem[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let live = true;
     const tick = async () => {
       try {
         const r = await fetch("/api/v1/me/chats", { credentials: "include" });
-        if (!r.ok) return;
+        if (!r.ok) { if (live) setLoaded(true); return; }
         const j = await r.json();
         const rows: HistoryRow[] = j?.data?.chats || [];
         if (!live) return;
@@ -49,7 +53,12 @@ export function useRecentChats(limit = 8): RecentChatItem[] {
           .sort((a, b) => b.updatedAt - a.updatedAt)
           .slice(0, limit);
         setItems(mapped);
-      } catch { /* soft-fail; sidebar just shows no Recent section */ }
+        setLoaded(true);
+      } catch {
+        // soft-fail: mark loaded so the section shows its empty state
+        // rather than sitting on a spinner forever.
+        if (live) setLoaded(true);
+      }
     };
     tick();
     const id = window.setInterval(tick, POLL_MS);
@@ -65,5 +74,5 @@ export function useRecentChats(limit = 8): RecentChatItem[] {
     };
   }, [limit]);
 
-  return items;
+  return { items, loaded };
 }

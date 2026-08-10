@@ -848,6 +848,20 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		} catch { /* ignore */ }
 	}, [chatId, newChat, loadHistory]);
 
+	// The sidebar's Recent list owns deletion now (the in-chat Conversations
+	// popover it replaced used to). If it deleted the thread this chat has
+	// open, reset to a fresh one so we're not editing a row that's gone.
+	useEffect(() => {
+		const onDeleted = (e: Event) => {
+			const id = (e as CustomEvent<{ id?: string }>).detail?.id;
+			if (!id) return;
+			forgetChatId(id);
+			if (id === chatId) newChat();
+		};
+		window.addEventListener('studio:chat-deleted', onDeleted as EventListener);
+		return () => window.removeEventListener('studio:chat-deleted', onDeleted as EventListener);
+	}, [chatId, newChat]);
+
 	// File picker handler — turns each selected file into an
 	// Attachment, validates size + kind. Errors surface in a one-line
 	// banner above the input.
@@ -1629,7 +1643,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 			{/* Agent/persona picker removed — when an app is selected the chat
 			    talks to THAT app's agents by default (app context drives the
 			    routing; see emitAppOpener clearing any manual selection). */}
-			<ArtifactIconButton align={docked ? 'right' : 'left'} />
+			{/* Artifacts moved to the left sidebar (StudioShell) — see above. */}
 			{/* Workflow-viz side panel toggle. Auto-opens when an optimize_workflow/
 			    run_workflow tool completes (chat/protocol.ts); this button re-opens
 			    it. The panel itself (a fixed right drawer) is mounted below. */}
@@ -1641,51 +1655,9 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 				<WorkflowIcon className="w-4 h-4" />
 			</button>
 			<StudioWorkflowPanel />
-			<div className="relative">
-				<button
-					onClick={() => { const next = !historyOpen; setHistoryOpen(next); if (next) loadHistory(); }}
-					title="Conversations" aria-label="Conversations" aria-expanded={historyOpen}
-					className={['p-1.5 rounded-md transition-colors', historyOpen ? 'text-gold-700 bg-gold-50' : 'text-muted-foreground hover:text-foreground hover:bg-muted'].join(' ')}
-				>
-					<MessageSquarePlus className="w-3.5 h-3.5" />
-				</button>
-				{historyOpen && (
-					<div className={['absolute top-full mt-1 z-50 w-72 max-h-96 overflow-y-auto rounded-xl border border-border bg-popover shadow-lg shadow-foreground/5 p-1', docked ? 'right-0' : 'left-0'].join(' ')} onClick={(e) => e.stopPropagation()}>
-						<button type="button" onClick={newAppSession}
-							className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] text-foreground hover:bg-gold-50 hover:text-gold-800 transition-colors">
-							<Plus className="w-3.5 h-3.5 text-gold-600" />
-							<span className="font-medium">New chat{currentAppRef.current ? ` · ${appTitle(currentAppRef.current)}` : ''}</span>
-						</button>
-						<div className="h-px bg-muted my-1 mx-2" />
-						{history.length === 0 && (
-							<div className="px-2.5 py-1.5 text-[11px] text-muted-foreground italic">No saved conversations yet.</div>
-						)}
-						{historyGroups.map((g) => (
-							<div key={g.app || '__general'} className="mb-0.5">
-								<div className="px-2.5 pt-1.5 pb-0.5 text-[9.5px] uppercase tracking-wider text-muted-foreground truncate">
-									{g.label}
-								</div>
-								{g.rows.map((h) => (
-									<div key={h.id} className={['group flex items-center gap-1 px-1 py-0.5 rounded-lg transition-colors', h.id === chatId ? 'bg-gold-50/60' : 'hover:bg-muted/60'].join(' ')}>
-										<button type="button" onClick={() => pickThread(h)} className="flex-1 min-w-0 text-left px-1.5 py-1">
-											<div className="text-[12.5px] font-medium text-foreground truncate">{h.title}</div>
-											<div className="text-[10px] text-muted-foreground flex items-center gap-1">
-												<span>{h.msg_count} msg</span>
-												<span>·</span>
-												<span>{relativeTime(h.updated_at)}</span>
-											</div>
-										</button>
-										<button type="button" onClick={() => deleteThread(h.id)} title="Delete"
-											className="p-1 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-rose-600 transition-all">
-											<Trash2 className="w-3 h-3" />
-										</button>
-									</div>
-								))}
-							</div>
-						))}
-					</div>
-				)}
-			</div>
+			{/* The Conversations picker moved to the shell's left sidebar
+			    ("Recent") on 2026-08-10 — one list, always visible, instead of
+			    a popover buried in the chat header. Artifacts moved with it. */}
 			{messages.length > 0 && (
 				<button onClick={clear} title="Delete this conversation" aria-label="Delete this conversation"
 					className="p-1.5 rounded-md text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition-colors">
@@ -3451,7 +3423,7 @@ type ArtifactRow = {
 };
 type ArtifactFull = ArtifactRow & { content: string };
 
-function ArtifactIconButton({ align = 'right' }: { align?: 'left' | 'right' }) {
+export function ArtifactIconButton({ align = 'right', variant = 'icon' }: { align?: 'left' | 'right'; variant?: 'icon' | 'sidebar' }) {
 	const [open, setOpen] = useState(false);
 	const ref = useClickOutside(open, () => setOpen(false));
 	const [rows, setRows] = useState<ArtifactRow[]>([]);
@@ -3531,8 +3503,30 @@ function ArtifactIconButton({ align = 'right' }: { align?: 'left' | 'right' }) {
 
 	const KindIcon = ({ k }: { k: ArtifactRow['kind'] }) => <ArtifactKindIcon kind={k} />;
 
+	// Two triggers, one panel: the compact icon (chat header, legacy callers)
+	// and a full-width sidebar nav row matching NavItemView's weight.
+	const sidebar = variant === 'sidebar';
 	return (
 		<div ref={ref} className="relative">
+			{sidebar ? (
+				<button
+					type="button"
+					onClick={() => setOpen((v) => !v)}
+					title={rows.length > 0 ? `Artifacts (${rows.length})` : 'Artifacts'}
+					className={[
+						'group w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
+						open ? 'bg-black/[0.06] text-foreground font-medium' : 'text-foreground/60 hover:bg-black/[0.04] hover:text-foreground',
+					].join(' ')}
+				>
+					<Boxes className={['w-4 h-4 flex-shrink-0 transition-colors', open ? 'text-foreground/80' : 'text-foreground/45 group-hover:text-foreground/70'].join(' ')} />
+					<span>Artifacts</span>
+					{rows.length > 0 && (
+						<span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-gold-100 text-gold-700 text-[10px] font-semibold tabular-nums">
+							{rows.length > 99 ? '99+' : rows.length}
+						</span>
+					)}
+				</button>
+			) : (
 			<button
 				type="button"
 				onClick={() => setOpen((v) => !v)}
@@ -3549,8 +3543,14 @@ function ArtifactIconButton({ align = 'right' }: { align?: 'left' | 'right' }) {
 					</span>
 				)}
 			</button>
+			)}
 			{open && (
-				<div className={['absolute top-full mt-1 z-50 w-[420px] max-h-[32rem] flex flex-col rounded-xl border border-border bg-popover shadow-xl shadow-foreground/10', align === 'left' ? 'left-0' : 'right-0'].join(' ')}>
+				<div className={[
+					'absolute z-50 w-[420px] max-h-[32rem] flex flex-col rounded-xl border border-border bg-popover shadow-xl shadow-foreground/10',
+					// Sidebar variant opens upward and to the right so the 420px
+					// panel clears the narrow rail instead of being clipped by it.
+					sidebar ? 'left-0 bottom-full mb-1' : ['top-full mt-1', align === 'left' ? 'left-0' : 'right-0'].join(' '),
+				].join(' ')}>
 
 					{/* Header strip */}
 					<div className="flex items-center gap-2 px-3 py-2 border-b border-border/60">

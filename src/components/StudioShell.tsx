@@ -26,6 +26,8 @@ import {
 	Inbox,
 	MessageSquare,
 	Bot,
+	Trash2,
+	CalendarClock,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
@@ -33,7 +35,8 @@ import { useViewMode } from './ViewModeProvider';
 import { cn } from '../lib/utils';
 import { me } from '@/api/me';
 import { useAppNav, iconFor } from './useAppNav';
-import { useRecentChats, type RecentChatItem } from './useRecentChats';
+import { useRecentChats, RECENT_CHATS_INVALIDATE, type RecentChatItem } from './useRecentChats';
+import { ArtifactIconButton } from './StudioChat';
 import { useStudioRefetch } from '@/hooks/useStudioRefetch';
 import { useIsNarrow } from '@/hooks/useIsNarrow';
 import { useCollapse } from '@/hooks/useCollapse';
@@ -83,6 +86,9 @@ interface NavItem {
 const TOP_NAV: NavItem[] = [
 	// Fleet is merged into "Manage apps" (/studio/apps/all) — no separate entry.
 	{ to: '/studio/library', label: 'Library', icon: Store, title: 'marketplace, skills, and experiments' },
+	// "Scheduled" — the claude.ai counterpart of our workflow/loop runs. Points
+	// at the unified runs surface (list/grid/gantt/calendar over every loop).
+	{ to: '/studio/runs', label: 'Scheduled', icon: CalendarClock, title: 'scheduled workflows and loop runs' },
 ];
 // Jobs/Activity/Inbox are folded into Apps — the Apps hero's "runs today" stat
 // + the top-bar "Right now" ticker link into /studio/runs, so it's no longer a
@@ -169,26 +175,59 @@ function RecentRow({ item, navigate }: { item: RecentChatItem; navigate: (to: st
 		} catch { /* ignore */ }
 		navigate(item.app ? `/studio/apps/${encodeURIComponent(item.app)}` : '/studio');
 	};
+	// Delete lived in the chat's Conversations popover, which this section
+	// replaced — so it has to live here now, or the capability is simply gone.
+	const del = async (e: React.MouseEvent) => {
+		e.stopPropagation();
+		if (!confirm('Delete this conversation?')) return;
+		try {
+			await fetch('/api/v1/me/chats/' + encodeURIComponent(item.id), {
+				method: 'DELETE',
+				credentials: 'include',
+			});
+			// Tell a mounted chat to reset if this was the thread it had open.
+			window.dispatchEvent(new CustomEvent('studio:chat-deleted', { detail: { id: item.id } }));
+			window.dispatchEvent(new CustomEvent(RECENT_CHATS_INVALIDATE));
+		} catch { /* ignore */ }
+	};
+	// Title-only row, claude.ai-style — the relative time was noise at this
+	// density. It survives as the hover tooltip, where it costs nothing.
 	return (
-		<button
-			onClick={open}
-			title={item.title}
-			className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-foreground/60 hover:bg-black/[0.04] hover:text-foreground transition-colors text-left"
-		>
-			<Icon className="w-4 h-4 flex-shrink-0 text-foreground/45" />
-			<span className="flex-1 min-w-0 truncate">{item.title || 'Untitled chat'}</span>
-			<span className="flex-shrink-0 text-[10px] text-muted-foreground tabular-nums">{formatRelative(item.updatedAt)}</span>
-		</button>
+		<div className="group relative flex items-center">
+			<button
+				onClick={open}
+				title={`${item.title || 'Untitled chat'} · ${formatRelative(item.updatedAt)}`}
+				className="flex-1 min-w-0 flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-foreground/60 hover:bg-black/[0.04] hover:text-foreground transition-colors text-left"
+			>
+				<Icon className="w-4 h-4 flex-shrink-0 text-foreground/45" />
+				<span className="flex-1 min-w-0 truncate">{item.title || 'Untitled chat'}</span>
+			</button>
+			<button
+				onClick={del}
+				title="Delete conversation"
+				aria-label="Delete conversation"
+				className="absolute right-1 p-1 rounded-md opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition-all"
+			>
+				<Trash2 className="w-3 h-3" />
+			</button>
+		</div>
 	);
 }
 
+// The header is ALWAYS rendered once loaded — an absent section is
+// indistinguishable from a broken one, which is exactly how this first
+// read to the user. Empty state says so in words instead.
 function RecentSection({ navigate }: { navigate: (to: string) => void }) {
-	const items = useRecentChats(8);
-	if (items.length === 0) return null;
+	const { items, loaded } = useRecentChats(8);
+	if (!loaded) return null;
 	return (
 		<div>
 			<SectionLabel>Recent</SectionLabel>
-			{items.map((item) => <RecentRow key={item.id} item={item} navigate={navigate} />)}
+			{items.length === 0 ? (
+				<div className="px-3 py-2 text-xs text-muted-foreground/70">No conversations yet</div>
+			) : (
+				items.map((item) => <RecentRow key={item.id} item={item} navigate={navigate} />)
+			)}
 		</div>
 	);
 }
@@ -462,6 +501,14 @@ export function StudioShell() {
 						</div>
 					)}
 				</nav>
+
+				{/* Artifacts — moved out of the chat header (2026-08-10) so it sits
+				    with the other persistent surfaces. Deliberately OUTSIDE the
+				    scrolling <nav>: its 420px panel is absolutely positioned and
+				    would be clipped by that container's overflow-y-auto. */}
+				<div className="px-2 pb-1">
+					<ArtifactIconButton variant="sidebar" />
+				</div>
 
 				{/* Documentation panel — replaces the old per-doc footer links
 				    (How it works, Claude guide, CD runbook): the tour and every
