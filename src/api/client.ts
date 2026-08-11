@@ -33,6 +33,42 @@ function notifySessionExpired() {
   }
 }
 
+// The session endpoint. A 401 from THIS is unambiguous — the session really is
+// gone — so it short-circuits the confirmation probe below.
+const SESSION_PROBE_PATH = "/api/v1/user";
+
+// Not every 401 means "your session expired".
+//
+// Services behind lum.id also answer 401 for "authenticated, but this token
+// lacks the scope for this endpoint" — `/api/v1/cluster/clusters/selectable` is
+// the one that bit us. Treating those as expiry logged people out of a working
+// session: Studio would load, every core call would succeed, and then one
+// unrelated background call would 401 and bounce them to /auth/login.
+//
+// So before declaring expiry, ASK. One cheap re-check of the session endpoint
+// distinguishes the two cases definitively:
+//   probe 200 → session is alive; that 401 was a permission problem. Stay put.
+//   probe 401 → session really is gone. Fire.
+// Deliberately a bare axios call, not apiClient — going back through this
+// interceptor would recurse.
+async function confirmSessionGone(): Promise<boolean> {
+  try {
+    const r = await axios.get(SESSION_PROBE_PATH, {
+      baseURL: API_BASE_URL,
+      withCredentials: true,
+      timeout: 10_000,
+      // Any status resolves, so a 401 lands here rather than in catch.
+      validateStatus: () => true,
+    });
+    return r.status === 401;
+  } catch {
+    // Network error, timeout, offline: we genuinely can't tell. Don't log the
+    // user out on a blip — a wrong "session expired" costs their in-progress
+    // work, a missed one costs one more failed request.
+    return false;
+  }
+}
+
 /** True when an error is the 401 envelope the response interceptor emits.
  *  Use in `.catch` blocks so pages can skip their own error toast for
  *  session-expired cases (the AuthProvider listener already handles UX). */
@@ -74,7 +110,17 @@ apiClient.interceptors.response.use(
       // `lumid:session-expired` event, which AuthProvider listens
       // for and turns into one navigation. Pages still reject here
       // so their own async work can abort cleanly.
-      notifySessionExpired();
+      const from = error.config?.url || "";
+      if (from.includes(SESSION_PROBE_PATH)) {
+        // Straight from the session endpoint — no ambiguity, no probe.
+        notifySessionExpired();
+      } else if (!sessionExpiredFired) {
+        // Confirm before logging anyone out. Fire-and-forget: the caller's
+        // rejection below must not wait on the probe.
+        void confirmSessionGone().then((gone) => {
+          if (gone) notifySessionExpired();
+        });
+      }
       return Promise.reject(new ApiError(401, "unauthenticated", error.response));
     }
     const data = error.response?.data;

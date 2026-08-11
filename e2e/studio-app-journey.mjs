@@ -44,10 +44,21 @@ page.on('response', r => { const u = r.url(); if (u.includes('/api/v1/me/') && r
 
 await page.goto(`${BASE}/studio/apps/${APP}`, { waitUntil: 'networkidle', timeout: 45000 });
 await page.waitForTimeout(4000);
+
+// The app workspace AUTO-HIDES the sidebar (it reads as just Observe + Chat),
+// so it has to be revealed before anything about it can be asserted. Without
+// this the sidebar check tests an element that was never rendered.
+const reveal = page.locator('button[aria-label="Show sidebar"]');
+if (await reveal.count()) { await reveal.first().click(); await page.waitForTimeout(800); }
+
 const text = await page.locator('body').innerText();
 
 // 3. Assertions — the three surfaces the user reported empty.
-assert(/Venue Link Matcher|venue-link-matcher/i.test(text) && text.includes('Agents'), 'sidebar shows the app under Agents');
+// Assert the app's own ROW, not the section label above it: that label has been
+// renamed twice ("Agents" → "Application" → "Applications") and is cosmetic, so
+// pinning to it makes this fail for a reason that has nothing to do with the app
+// rendering. The row is the thing the user actually needs to see.
+assert(/Venue Link Matcher|venue-link-matcher/i.test(text), 'sidebar shows the app row');
 assert(/\d+ workflows?|Match cycle|match_cycle/i.test(text), 'Workflow tab renders workflows (not empty)');
 assert(!text.includes('No mounted dataset repo'), 'Data tab shows a mounted dataset (not the empty message)');
 assert(api404.length === 0, `no /me/* 404s (saw: ${api404.join(', ') || 'none'})`);
