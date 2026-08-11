@@ -174,14 +174,16 @@ await turn('What is the first question?');
 // ask (a real interviewer would), and allow ONE retry so a single unlucky turn
 // cannot fail a gate that is otherwise green. Retrying a flaky assertion is only
 // honest when the thing under test is non-deterministic by nature; it is here.
-let t3 = await turn('Answer that question for the same client — name the company and its industry in your answer.');
-if (!CASE_FACTS.test(t3.split('name the company and its industry in your answer.').pop() || '')) {
-  t3 = await turn('Stay on this case. Restate the client and industry, then answer.');
-}
+// Ask something ONLY answerable from the loaded case, so a correct answer
+// necessarily contains case content. The previous phrasing hoped turn 3's prose
+// would happen to mention the industry — it did on some runs and not others,
+// which is variance in one generative turn, not a continuity failure. A gate
+// should not depend on which words a model reaches for.
+const t3 = await turn('Without me repeating it: what industry is this client in, and what decision are they weighing?');
 // Same discipline on turn 3: look only at text produced AFTER our last input.
-const t3Analyst = t3.split('then answer.').pop() || t3.split('in your answer.').pop() || '';
+const t3Analyst = t3.split('what decision are they weighing?').pop() || '';
 assert(!!anchor && CASE_FACTS.test(t3Analyst),
-  `G3 turn 3 still discusses the case's own subject matter (multi-turn, not 3 one-shots)`);
+  `G3 turn 3 recalls the case without being re-told it (multi-turn, not 3 one-shots)`);
 
 // ── G10: time-to-first-answer ─────────────────────────────────────────────
 assert(clicks <= 4, `G10 ≤4 interactions to a scored answer (used ${clicks})`);
