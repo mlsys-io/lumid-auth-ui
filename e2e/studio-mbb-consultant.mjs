@@ -220,7 +220,25 @@ assert(/ground truth|keypoint|grounded/i.test(scoreTxt),
 // open-mode answer has nothing to attach to.
 const draftsBefore = await (await api(`/api/v1/me/drafts?app=${APP}`)).json().catch(() => ({}));
 const nBefore = (draftsBefore?.data?.drafts || draftsBefore?.drafts || []).length;
-await turn('That case answer was wrong — record a correction against this app so it is reviewed.');
+// Click the control, don't type at the model. Typing "that was wrong" leaves
+// routing to tool selection, which measurably does not happen — that is why the
+// button exists. Driving the real affordance is also what a user does.
+page.once('dialog', d => d.accept('It ignored private-label economics.'));
+const correctBtn = page.locator('button[title*="record a correction" i]').last();
+if (await correctBtn.count()) {
+  await correctBtn.click();
+  clicks++;
+  // The turn it fires still has to stream out before the draft exists.
+  let last = -1, stable = 0, waited = 0;
+  while (waited < 90000) {
+    await page.waitForTimeout(2000); waited += 2000;
+    const n = (await page.locator('body').innerText()).length;
+    if (n === last) { if (++stable >= 3) break; } else { stable = 0; last = n; }
+  }
+} else {
+  console.log('NOTE  no "Correct this" control found — falling back to prose');
+  await turn('That case answer was wrong — record a correction against this app so it is reviewed.');
+}
 let nAfter = nBefore;
 for (let i = 0; i < 10; i++) {           // bounded poll, then fail — never hang
   await page.waitForTimeout(3000);
