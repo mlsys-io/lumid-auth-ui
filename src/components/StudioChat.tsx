@@ -405,6 +405,17 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		try { return localStorage.getItem(THINK_KEY) === '1'; }
 		catch { return false; }
 	});
+	// "Ask the app" — route this turn through the grounded app's analyst instead
+	// of answering generically. ON by default in an app workspace: you opened the
+	// app to talk to IT, and the model does not make that choice on its own
+	// (measured across gemma and Sonnet). Off for administrative asks like
+	// "list my cases" or "run the workflow".
+	const [askApp, setAskApp] = useState<boolean>(true);
+	// dispatchTurn's body is built inside a callback that must not re-create on
+	// every toggle, so read the flag through a ref (same pattern as
+	// dispatchTurnRef).
+	const askAppRef = useRef(askApp);
+	useEffect(() => { askAppRef.current = askApp; }, [askApp]);
 	// Optional xpio agent to chat with (empty = default behavior:
 	// chat grounded in the user's me-prefs). When set, the system
 	// prompt swaps for the agent's bank context.
@@ -1275,6 +1286,15 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 							...(wsCluster ? { cluster_id: wsCluster } : {}),
 							...(wsDataApp ? { data_app: wsDataApp } : {}),
 							...(claudeSessionRef.current ? { claude_session_id: claudeSessionRef.current } : {}),
+							// "Ask the app" — the user has said this turn is a domain
+							// question for THIS app, so don't leave it to tool selection.
+							// Measured: neither gemma nor Sonnet picks app_answer on its
+							// own, so a free-form question gets answered by the generic
+							// assistant while the app's voice, rubric and
+							// grounded/ungrounded distinction go unused. Stating the
+							// intent beats inferring it.
+							...(askAppRef.current && (workspaceApp() || currentAppRef.current)
+								? { tool_choice: 'app_answer' } : {}),
 						}),
 						signal: ctrl.signal,
 					});
@@ -2131,6 +2151,29 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 									<span className="font-medium flex-1 text-left">Deep research</span>
 									{mode === 'deep_research' && <span className="w-1.5 h-1.5 rounded-full bg-violet-500" />}
 								</button>
+								{/* Ask the app — only meaningful when a grounded app is in
+								    context. Explicit beats inferred: the model does not pick
+								    the app's analyst on its own, so this is how the user says
+								    "answer as this app" rather than hoping. Turn it OFF for
+								    administrative asks ("list my cases", "run the workflow"). */}
+								{docked && (
+									<>
+										<div className="h-px bg-muted my-1 mx-2" />
+										<button
+											type="button"
+											onClick={() => setAskApp((v) => !v)}
+											title="Answer using this app's analyst, prompts and scoring rubric"
+											className={[
+												'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] transition-colors',
+												askApp ? 'bg-emerald-50 text-emerald-700' : 'text-foreground hover:bg-muted/60',
+											].join(' ')}
+										>
+											<Boxes className={['w-3.5 h-3.5', askApp ? 'text-emerald-600' : 'text-muted-foreground'].join(' ')} />
+											<span className="font-medium flex-1 text-left">Ask the app</span>
+											{askApp && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+										</button>
+									</>
+								)}
 								<div className="h-px bg-muted my-1 mx-2" />
 								<button
 									type="button"
