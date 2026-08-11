@@ -1945,7 +1945,10 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 									if (!what) return;
 									void dispatchTurnRef.current?.(
 										`Record a correction against this app: ${what}`,
-										[], undefined, undefined, undefined, 'give_feedback',
+										// app_feedback, not give_feedback: the latter scores a
+										// scheduled CYCLE and needs a loop + timestamp, which an
+										// interactive answer does not have.
+										[], undefined, undefined, undefined, 'app_feedback',
 									);
 								}
 								: undefined}
