@@ -223,7 +223,10 @@ const nBefore = (draftsBefore?.data?.drafts || draftsBefore?.drafts || []).lengt
 // Click the control, don't type at the model. Typing "that was wrong" leaves
 // routing to tool selection, which measurably does not happen — that is why the
 // button exists. Driving the real affordance is also what a user does.
-page.once('dialog', d => d.accept('It ignored private-label economics.'));
+// Persistent, not once(): window.prompt BLOCKS the click's handler until a
+// dialog handler responds, and a `once` listener already consumed by any
+// earlier dialog leaves the click hanging with no draft ever written.
+page.on('dialog', d => d.accept('It ignored private-label economics.'));
 const correctBtn = page.locator('button[title*="record a correction" i]').last();
 if (await correctBtn.count()) {
   await correctBtn.click();
@@ -240,7 +243,10 @@ if (await correctBtn.count()) {
   await turn('That case answer was wrong — record a correction against this app so it is reviewed.');
 }
 let nAfter = nBefore;
-for (let i = 0; i < 10; i++) {           // bounded poll, then fail — never hang
+// 60s, not 30: the click fires a full turn (forced tool + stream) and the row
+// is only queryable once that completes. Bounded so it still fails rather than
+// hangs.
+for (let i = 0; i < 20; i++) {
   await page.waitForTimeout(3000);
   const d = await (await api(`/api/v1/me/drafts?app=${APP}`)).json().catch(() => ({}));
   nAfter = (d?.data?.drafts || d?.drafts || []).length;
