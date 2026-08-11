@@ -13,7 +13,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
 import { CONNECT_ROUTE } from './studio/starters';
-import { ChevronRight, MessageSquarePlus, Send, Trash2, Loader2, Bot, User, Square, Globe, Telescope, Brain, ChevronDown, Paperclip, X, FileText, FileJson, Image as ImageIcon, Plus, Copy, RotateCcw, Mic, Volume2, Code2, Boxes, Download, ArrowLeft, Crosshair, Lock, Cpu, Maximize2, Minimize2 } from 'lucide-react';
+import { ThumbsDown, ChevronRight, MessageSquarePlus, Send, Trash2, Loader2, Bot, User, Square, Globe, Telescope, Brain, ChevronDown, Paperclip, X, FileText, FileJson, Image as ImageIcon, Plus, Copy, RotateCcw, Mic, Volume2, Code2, Boxes, Download, ArrowLeft, Crosshair, Lock, Cpu, Maximize2, Minimize2 } from 'lucide-react';
 import {
 	buildViewingContext,
 	subscribeStudioPickedTarget,
@@ -1206,6 +1206,10 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		baseMessages?: Message[],
 		ctxOverride?: Partial<ViewingContext>,
 		modelOverride?: string,
+		// Force a specific tool for THIS turn (see tool_choice in
+		// lumid-identity). Used by "Correct this", where routing to the app's
+		// feedback path is the user's stated intent, not the model's guess.
+		toolChoice?: string,
 	) => {
 		if (!text || streaming || inFlightRef.current) return;
 		inFlightRef.current = true;
@@ -1293,8 +1297,10 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 							// assistant while the app's voice, rubric and
 							// grounded/ungrounded distinction go unused. Stating the
 							// intent beats inferring it.
-							...(askAppRef.current && (workspaceApp() || currentAppRef.current)
-								? { tool_choice: 'app_answer' } : {}),
+							...(toolChoice
+								? { tool_choice: toolChoice }
+								: askAppRef.current && (workspaceApp() || currentAppRef.current)
+									? { tool_choice: 'app_answer' } : {}),
 						}),
 						signal: ctrl.signal,
 					});
@@ -1930,6 +1936,19 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 							streaming={streaming && i === messages.length - 1 && m.role === 'assistant'}
 							onCopy={m.role === 'assistant' && m.content ? () => copyMessage(m.content) : undefined}
 							onRegenerate={m.role === 'assistant' && !streaming && i > 0 && messages[i - 1]?.role === 'user' ? () => regenerate(i) : undefined}
+							// Only in a grounded app chat — a correction needs an app to
+							// belong to. Forces give_feedback rather than trusting the model
+							// to route it, the same reason "Ask the app" forces app_answer.
+							onCorrect={m.role === 'assistant' && !streaming && docked && (workspaceApp() || currentAppRef.current)
+								? () => {
+									const what = window.prompt('What was wrong with this answer?');
+									if (!what) return;
+									void dispatchTurnRef.current?.(
+										`Record a correction against this app: ${what}`,
+										[], undefined, undefined, undefined, 'give_feedback',
+									);
+								}
+								: undefined}
 							onSpeak={m.role === 'assistant' && m.content && typeof window !== 'undefined' && 'speechSynthesis' in window ? () => toggleSpeak(i, m.content) : undefined}
 							isSpeaking={speakingIdx === i}
 							onToolApprove={handleToolApprove}
@@ -2490,6 +2509,7 @@ const MessageBubble = memo(function MessageBubble({
 	streaming,
 	onCopy,
 	onRegenerate,
+	onCorrect,
 	onSpeak,
 	isSpeaking,
 	onToolApprove,
@@ -2498,6 +2518,7 @@ const MessageBubble = memo(function MessageBubble({
 	streaming?: boolean;
 	onCopy?: () => void;
 	onRegenerate?: () => void;
+	onCorrect?: () => void;
 	onSpeak?: () => void;
 	isSpeaking?: boolean;
 	onToolApprove?: (approvalId: string, approved: boolean, always?: boolean, tool?: string) => void;
@@ -2700,6 +2721,22 @@ const MessageBubble = memo(function MessageBubble({
 								].join(' ')}
 							>
 								<Copy className="w-3 h-3" />
+							</button>
+						)}
+						{/* Correct this — the deliberate counterpart to Regenerate. Regenerate
+						    asks for a different answer; this says the answer was WRONG and
+						    routes that judgement to the app so it is staged for review and
+						    can improve later turns. Typing "that was wrong" in the composer
+						    does not do it: the model does not route a free-form correction
+						    to the app's feedback path on its own. */}
+						{onCorrect && (
+							<button
+								type="button"
+								onClick={onCorrect}
+								title="Mark this answer wrong and record a correction for review"
+								className="p-1 rounded text-[10px] text-muted-foreground hover:text-rose-600 hover:bg-rose-50"
+							>
+								<ThumbsDown className="w-3 h-3" />
 							</button>
 						)}
 						{onRegenerate && (
