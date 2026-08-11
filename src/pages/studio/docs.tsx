@@ -32,7 +32,7 @@ const DOCS: DocEntry[] = [
 	{
 		slug: 'claude',
 		title: 'Claude account pool',
-		description: 'Point your Claude Code CLI at the lum.id pool — PAT setup, model routing, per-user 5h/7d budgets, non-Anthropic models.',
+		description: 'Point your Claude Code CLI at the lum.id pool — PAT setup, model routing, per-user short-window/7d budgets, non-Anthropic models.',
 		md: 'claude_pool.md',
 		group: 'Guides',
 		icon: Zap,

@@ -603,9 +603,13 @@ function fmtReset(iso?: string): string {
 }
 
 // Per-user pool consumption — the per-PAT quota counterpart of the account
-// table above. Same rolling 5h/7d windows, enforced by claude-proxy.
+// table above. NOTE: this short window is LUMID's own per-user fairness cap
+// (env-tunable, 4h since 2026-08-11) and is deliberately NOT the same thing
+// as the 5h window in the account table above, which is Anthropic's own
+// rate-limit window for the pooled subscription. They drift out of phase.
 function UserUsageSection({ usage, countdown }: { usage: ClaudeUserUsageResp; countdown: number }) {
 	if (!usage.users.length) return null;
+	const shortWin = usage.short_window_label || '4h';
 	const mm = Math.floor(countdown / 60);
 	const ss = countdown % 60;
 	const cdText = mm > 0 ? `${mm}m ${ss}s` : `${ss}s`;
@@ -616,7 +620,7 @@ function UserUsageSection({ usage, countdown }: { usage: ClaudeUserUsageResp; co
 					Per-user pool usage
 				</p>
 				<span className="text-[10px] text-slate-400 font-normal">
-					caps: {fmtTokens(usage.five_hour_tokens)} tok / 5h · {fmtTokens(usage.seven_day_tokens)} tok / 7d (claude-* only)
+					caps: {fmtTokens(usage.five_hour_tokens)} tok / {shortWin} · {fmtTokens(usage.seven_day_tokens)} tok / 7d (claude-* only)
 					{' · '}users with a <code className="font-mono text-[10px]">claude:proxy</code> PAT appear even at 0 usage
 				</span>
 				<span className="ml-auto shrink-0 text-[10px] text-slate-400 tabular-nums">
@@ -626,7 +630,7 @@ function UserUsageSection({ usage, countdown }: { usage: ClaudeUserUsageResp; co
 			<div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100">
 				{usage.users.map((u) => {
 					const sev = usageSeverity(Math.max(u.five_hour_pct, u.seven_day_pct));
-					const reset5h = fmtReset(u.five_hour_reset);
+					const resetShort = fmtReset(u.five_hour_reset);
 					const reset7d = fmtReset(u.seven_day_reset);
 					return (
 						<div key={u.email} className="px-2.5 py-1.5 min-w-0">
@@ -636,10 +640,10 @@ function UserUsageSection({ usage, countdown }: { usage: ClaudeUserUsageResp; co
 									{u.email}
 								</span>
 								<div className="flex items-center gap-1 shrink-0" title={`${u.five_hour_tokens.toLocaleString()} tokens`}>
-									<span className="text-[10px] text-slate-400 w-4">5h</span>
+									<span className="text-[10px] text-slate-400 w-4">{shortWin}</span>
 									<MiniBar pct={u.five_hour_pct} severity={usageSeverity(u.five_hour_pct)} />
 									<span className="text-[10px] font-mono text-slate-600 w-8 text-right">{fmtPct(u.five_hour_pct)}</span>
-									{reset5h && <span className="text-[10px] text-slate-400 w-10">{reset5h}</span>}
+									{resetShort && <span className="text-[10px] text-slate-400 w-10">{resetShort}</span>}
 								</div>
 								<div className="flex items-center gap-1 shrink-0" title={`${u.seven_day_tokens.toLocaleString()} tokens`}>
 									<span className="text-[10px] text-slate-400 w-4">7d</span>

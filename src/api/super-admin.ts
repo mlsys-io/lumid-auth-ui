@@ -370,8 +370,13 @@ export interface ClaudeUserUsage {
 
 export interface ClaudeUserUsageResp {
 	users: ClaudeUserUsage[];
-	five_hour_tokens: number; // per-user cap
+	five_hour_tokens: number; // per-user cap for the SHORT window
 	seven_day_tokens: number; // per-user cap
+	// Length of the short window, e.g. "4h". Server-supplied because it is
+	// env-tunable (LUMID_QUOTA_CLAUDE_SHORT_WINDOW) and stopped being 5h on
+	// 2026-08-11 — a hardcoded label silently lies the next time it moves.
+	// The five_hour_* keys keep their historical names for wire compatibility.
+	short_window_label?: string;
 }
 
 export async function fetchClaudeUserUsage(): Promise<ClaudeUserUsageResp> {
