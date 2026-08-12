@@ -37,6 +37,7 @@ import { useViewMode } from './ViewModeProvider';
 import { cn } from '../lib/utils';
 import { me } from '@/api/me';
 import { useAppNav, iconFor, type AppNavItem } from './useAppNav';
+import type { LucideIcon } from 'lucide-react';
 import { useRecentChats, RECENT_CHATS_INVALIDATE, type RecentChatItem } from './useRecentChats';
 import { writeAppChat } from './appChatMap';
 import { ArtifactIconButton } from './ArtifactIconButton';
@@ -170,8 +171,24 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 // /studio ('chat' kind) or an app-grounded, docked chat at
 // /studio/apps/:app ('agent' kind). Both are the same StudioChat
 // component; the kind only decides where we navigate before it mounts.
-function RecentRow({ item, navigate }: { item: RecentChatItem; navigate: (to: string) => void }) {
-	const Icon = item.kind === 'agent' ? Bot : MessageSquare;
+// Titles collide by construction: both server title stages read only the opening
+// exchange, and an app's threads are all opened by the same templated prompt.
+// End-truncation then renders every row identically ("Case_019_Beta…") — the
+// distinguishing part is at the END, which is exactly what gets cut. Keep both.
+function middleTruncate(s: string, max = 30): string {
+	if (s.length <= max) return s;
+	const head = Math.ceil((max - 1) * 0.55);
+	return `${s.slice(0, head)}…${s.slice(s.length - (max - 1 - head))}`;
+}
+
+function RecentRow({ item, navigate, appIcon }: {
+	item: RecentChatItem;
+	navigate: (to: string) => void;
+	appIcon?: LucideIcon;
+}) {
+	// The app's OWN icon carries the grouping now the list is flat, so each app
+	// stays visually distinct without a folder per app.
+	const Icon = appIcon || (item.kind === 'agent' ? Bot : MessageSquare);
 	const open = () => {
 		const target = item.app ? `/studio/apps/${encodeURIComponent(item.app)}` : '/studio';
 		if (window.location.pathname === target) {
@@ -212,7 +229,10 @@ function RecentRow({ item, navigate }: { item: RecentChatItem; navigate: (to: st
 				className="flex-1 min-w-0 flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-foreground/60 hover:bg-black/[0.04] hover:text-foreground transition-colors text-left"
 			>
 				<Icon className="w-4 h-4 flex-shrink-0 text-foreground/45" />
-				<span className="flex-1 min-w-0 truncate">{item.title || 'Untitled chat'}</span>
+				<span className="flex-1 min-w-0 truncate">{middleTruncate(item.title || 'Untitled chat')}</span>
+				<span className="flex-shrink-0 text-[10px] text-muted-foreground/60 tabular-nums">
+					{formatRelative(item.updatedAt)}
+				</span>
 			</button>
 			<button
 				onClick={del}
@@ -241,37 +261,50 @@ const RECENT_PER_LIST = 20;
 // place. Before this split, "Recent" mixed both and an app's threads were
 // only reachable by scrolling a global list that other apps kept pushing
 // them off of.
-function RecentSection({ items, loaded, navigate }: {
+function RecentSection({ items, loaded, navigate, iconForApp }: {
 	items: RecentChatItem[];
 	loaded: boolean;
 	navigate: (to: string) => void;
+	iconForApp: (app?: string | null) => LucideIcon | undefined;
 }) {
+	const [showAll, setShowAll] = useState(false);
 	if (!loaded) return null;
+	const shown = showAll ? items : items.slice(0, RECENT_PER_LIST);
 	return (
 		<div>
-			<SectionLabel>Recent</SectionLabel>
+			<SectionLabel>Conversations</SectionLabel>
 			{items.length === 0 ? (
 				<div className="px-3 py-2 text-xs text-muted-foreground/70">No conversations yet</div>
 			) : (
-				items.map((item) => <RecentRow key={item.id} item={item} navigate={navigate} />)
+				<>
+					{shown.map((item) => (
+						<RecentRow key={item.id} item={item} navigate={navigate} appIcon={iconForApp(item.app)} />
+					))}
+					{items.length > shown.length && (
+						<button
+							onClick={() => setShowAll(true)}
+							className="w-full px-3 py-1.5 text-left text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+						>
+							Show {items.length - shown.length} more
+						</button>
+					)}
+				</>
 			)}
 		</div>
 	);
 }
 
-// One installed app = one expandable folder holding that app's own
-// conversations. Collapsed by default so N installed apps don't bury the
-// rail; the open set is persisted so the app you actually work in stays
-// open across reloads.
+// One installed app = one LAUNCHER row. It used to be an expandable folder
+// holding that app's conversations, which is what crowded the rail: N apps x
+// their threads, nested and truncated to ~14 characters. Conversations now live
+// in the single flat list above, identified by this app's icon; this row exists
+// to open the app and to start a fresh thread in it.
 function AppFolder({
-	item, chats, navigate, badge, expanded, onToggle,
+	item, navigate, badge,
 }: {
 	item: AppNavItem;
-	chats: RecentChatItem[];
 	navigate: (to: string) => void;
 	badge?: number;
-	expanded: boolean;
-	onToggle: () => void;
 }) {
 	const location = useLocation();
 	const to = `/studio/apps/${encodeURIComponent(item.app)}`;
@@ -308,19 +341,10 @@ function AppFolder({
 				active ? 'bg-black/[0.06]' : 'hover:bg-black/[0.04]',
 			)}>
 				<button
-					onClick={onToggle}
-					title={expanded ? 'Collapse' : 'Expand conversations'}
-					aria-label={expanded ? 'Collapse' : 'Expand conversations'}
-					aria-expanded={expanded}
-					className="pl-2 pr-0.5 py-2 text-muted-foreground hover:text-foreground flex-shrink-0"
-				>
-					<ChevronRight className={cn('w-3 h-3 transition-transform', expanded && 'rotate-90')} />
-				</button>
-				<button
 					onClick={() => navigate(to)}
 					title={failed ? `${item.label} — install failed` : item.label}
 					className={cn(
-						'flex-1 min-w-0 flex items-center gap-2 pr-2 py-2 text-sm text-left',
+						'flex-1 min-w-0 flex items-center gap-2 pl-3 pr-2 py-2 text-sm text-left',
 						active ? 'text-foreground font-medium' : 'text-foreground/70 hover:text-foreground',
 					)}
 				>
@@ -341,20 +365,6 @@ function AppFolder({
 					<CirclePlus className="w-3.5 h-3.5" />
 				</button>
 			</div>
-			{expanded && (
-				<div className="ml-4 pl-2 border-l border-sidebar-border/70">
-					{chats.length === 0 ? (
-						<button
-							onClick={newAppChat}
-							className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-muted-foreground/70 hover:text-foreground hover:bg-black/[0.04] transition-colors text-left"
-						>
-							<CirclePlus className="w-3 h-3" /> Start a conversation
-						</button>
-					) : (
-						chats.map((c) => <RecentRow key={c.id} item={c} navigate={navigate} />)
-					)}
-				</div>
-			)}
 		</div>
 	);
 }
@@ -421,36 +431,19 @@ export function StudioShell() {
 	// the two can't drift apart between polls. Uncapped on purpose — each list
 	// is capped below, AFTER grouping, so a chatty app can't crowd out Recent.
 	const { items: recentChats, loaded: chatsLoaded } = useRecentChats(0);
-	const bareChats = useMemo(
-		() => recentChats.filter((c) => !c.app).slice(0, RECENT_PER_LIST),
+	// FLAT and recency-ranked: one entry per conversation, app-grounded or not.
+	// Folders per app buried the list (11 nested rows, all truncated to the same
+	// 14 characters) and split "what did I just do" across N collapsed sections.
+	// The app is carried by the row's icon instead.
+	const allChats = useMemo(
+		() => [...recentChats].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)),
 		[recentChats],
 	);
-	const chatsByApp = useMemo(() => {
-		const m = new Map<string, RecentChatItem[]>();
-		for (const c of recentChats) {
-			if (!c.app) continue;
-			const arr = m.get(c.app);
-			if (arr) { if (arr.length < RECENT_PER_LIST) arr.push(c); }
-			else m.set(c.app, [c]);
-		}
-		return m;
-	}, [recentChats]);
-	// Which app folders are expanded. Persisted (a set, not one flag) so the
-	// app you actually work in stays open across reloads while the rest stay
-	// collapsed — with N apps installed, defaulting them all open would bury
-	// everything below the fold.
-	const [openApps, setOpenApps] = useState<Record<string, boolean>>(() => {
-		try { return JSON.parse(localStorage.getItem('studio_sidebar_open_apps_v1') || '{}') || {}; }
-		catch { return {}; }
-	});
-	const toggleApp = useCallback((app: string) => {
-		setOpenApps((prev) => {
-			const next = { ...prev, [app]: !prev[app] };
-			if (!next[app]) delete next[app];
-			try { localStorage.setItem('studio_sidebar_open_apps_v1', JSON.stringify(next)); } catch { /* ignore */ }
-			return next;
-		});
-	}, []);
+	const iconForApp = useCallback((app?: string | null): LucideIcon | undefined => {
+		if (!app) return undefined;
+		for (const sec of appNav) for (const it of sec.items) if (it.app === app) return iconFor(it.icon);
+		return undefined;
+	}, [appNav]);
 	const location = useLocation();
 	// Hosted /dashboard pages, app surfaces, and management need full width
 	// (admin tables, dataset explorers); core Studio pages stay narrow.
@@ -524,20 +517,6 @@ export function StudioShell() {
 	// else: collapse it if you want it gone, and that choice holds.
 	const inAppWorkspace = /^\/studio\/apps\/[^/]+/.test(location.pathname)
 		&& location.pathname !== '/studio/apps/all';
-	// Entering an app opens its folder, so its conversations are visible where
-	// you're actually working without a second click. Only ever expands —
-	// collapsing stays the user's explicit choice.
-	useEffect(() => {
-		if (!inAppWorkspace) return;
-		const app = decodeURIComponent(location.pathname.split('/')[3] || '');
-		if (!app) return;
-		setOpenApps((prev) => {
-			if (prev[app]) return prev;
-			const next = { ...prev, [app]: true };
-			try { localStorage.setItem('studio_sidebar_open_apps_v1', JSON.stringify(next)); } catch { /* ignore */ }
-			return next;
-		});
-	}, [inAppWorkspace, location.pathname]);
 	// Simple mode: no sidebar at all — the chatbox is the whole surface.
 	const sidebarHidden = isNarrow ? !narrowNavOpen : sidebarCollapsed;
 	const hideSidebar = () => { if (isNarrow) setNarrowNavOpen(false); else setSidebarCollapsed(true); };
@@ -646,7 +625,7 @@ export function StudioShell() {
 					{/* Recent — app-LESS threads only. Anything grounded in an app
 					    lives under that app's folder below, so "New chat" above and
 					    the app folders are siblings, not a hierarchy. */}
-					<RecentSection items={bareChats} loaded={chatsLoaded} navigate={navigate} />
+					<RecentSection items={allChats} loaded={chatsLoaded} navigate={navigate} iconForApp={iconForApp} />
 					{/* Installed apps — EVERY installed app gets a folder here
 					    (ui.sidebar is an optional label/icon override, not the
 					    admission price), each expanding to its own conversations.
@@ -668,11 +647,8 @@ export function StudioShell() {
 										<AppFolder
 											key={it.app}
 											item={it}
-											chats={chatsByApp.get(it.app) || []}
 											navigate={navigate}
 											badge={it.badge_source === 'drafts' ? draftCount : undefined}
-											expanded={!!openApps[it.app]}
-											onToggle={() => toggleApp(it.app)}
 										/>
 									))}
 								</div>
