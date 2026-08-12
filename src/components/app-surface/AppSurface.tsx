@@ -8,7 +8,7 @@
 // The chrome row (nav tabs + "⋯" actions menu) is always rendered so any app
 // can be edited/managed directly from Studio, including apps with no surface yet.
 
-import { useCallback, useEffect, useRef, useState, Suspense } from "react";
+import { useCallback, useEffect, useRef, useState, Suspense, type ComponentProps } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { MoreHorizontal, Pencil, Plus, Settings, SlidersHorizontal, Sparkles, Trash2, DownloadCloud, UploadCloud, Loader2 } from "lucide-react";
@@ -26,6 +26,7 @@ import { setStudioSelection } from "@/components/StudioContext";
 import { useStudioRefetch } from "@/hooks/useStudioRefetch";
 import { LumidMarkdown } from "./LumidMarkdown";
 import { resolveNativeSurface } from "./native-registry";
+import { InAppSurfaceContext } from "./surfaceContext";
 
 // Pull a leading "# Title" (+ the first plain paragraph as subtitle) out of
 // a surface markdown. When the top-strip slot is available, that header
@@ -55,7 +56,7 @@ function splitSurfaceHeader(md: string): { title?: string; subtitle?: string; bo
 // secondary markdowns) reuse it so the strip identity never blanks out.
 const lastSurfaceTitle = new Map<string, string>();
 
-export function AppSurface({
+function AppSurfaceImpl({
   app: appProp,
   surface: surfaceProp,
   embedded,
@@ -426,6 +427,19 @@ export function AppSurface({
         <LumidMarkdown source="_This agent declares no surface content._" />
       </div>
     </div>
+  );
+}
+
+/**
+ * Everything a surface renders — markdown, directives, natives — runs with
+ * InAppSurfaceContext=true, so an AppOverview mounted underneath falls back to
+ * its workflow list instead of rendering this surface again.
+ */
+export function AppSurface(props: ComponentProps<typeof AppSurfaceImpl>) {
+  return (
+    <InAppSurfaceContext.Provider value={true}>
+      <AppSurfaceImpl {...props} />
+    </InAppSurfaceContext.Provider>
   );
 }
 

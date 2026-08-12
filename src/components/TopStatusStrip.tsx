@@ -357,7 +357,12 @@ export default function TopStatusStrip() {
 			</div>
 			)}
 
-			<div id="topstrip-app-slot" className="flex items-center gap-2 min-w-0 flex-1" />
+			{/* TWO slots, deliberately. The app's declared nav tabs and the workflow
+			    controls are portaled by different components; sharing one container
+			    stacked their children on top of each other, so a click landed on
+			    whichever happened to be above. Separate nodes lay out side by side. */}
+			<div id="topstrip-app-slot" className="flex items-center gap-2 min-w-0" />
+			<div id="topstrip-wf-slot" className="flex items-center gap-2 min-w-0 flex-1" />
 
 			{/* Right — a steady "live" heartbeat (the surface is alive; loops
 			    run in the background) + status pills (only when non-zero). */}

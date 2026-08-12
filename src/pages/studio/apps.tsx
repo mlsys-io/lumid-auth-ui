@@ -44,6 +44,7 @@ import NeedsAttentionRail from "@/components/workflow/NeedsAttentionRail";
 import IndexList, { type IndexRow } from "@/components/studio/IndexList";
 import { askApp } from "@/lib/grounded-asks";
 import { APP_OVERVIEW_MD } from "@/content/appOverviews";
+import { useInAppSurface } from "@/components/app-surface/surfaceContext";
 import LoopOrbit, { type LoopMode, type LoopStageKey } from "@/components/workflow/LoopOrbit";
 
 // Heavy, AppOverview-only components — lazy so the /studio/apps INDEX chunk
@@ -832,7 +833,11 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 	// In the workspace, the workflow switcher + "New workflow" portal into the
 	// top strip right after the app name (topstrip-app-slot is empty for
 	// workflow apps — only surface apps fill it). Standalone, they render inline.
-	const appSlotTarget = usePortalTarget("topstrip-app-slot", !!embedded);
+	// Its OWN slot — the app surface owns "topstrip-app-slot" for its nav tabs.
+	// Two portals into one node stack their children (that is what put the
+	// surface tabs on top of this selector); separate nodes lay out side by side.
+	const appSlotTarget = usePortalTarget("topstrip-wf-slot", !!embedded);
+	const nestedInSurface = useInAppSurface();
 	const [params, setParams] = useSearchParams();
 	const selected = params.get("selected");
 	const initialCycle = params.get("cycle"); // deep-link anchor → open that run
@@ -1072,15 +1077,22 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 						// the selector dropdown, not as a separate static tab.
 						const cluster = (
 							<>
-								<button
-									type="button"
-									onClick={selectOverview}
-									title="App overview — every workflow at a glance"
-									className={cn(
-										"px-2.5 py-1 rounded-lg text-[12px] flex-shrink-0 transition-colors",
-										overviewMode ? "bg-slate-800 text-white" : "text-slate-500 hover:text-slate-800 hover:bg-slate-100",
-									)}
-								>Overview</button>
+								{/* An app that declares its own nav already has an Overview tab
+								    (nav[0] → surface `home`), styled identically. Two lit pills for
+								    one destination, and this one tracked ?selected= while the tabs
+								    track ?surface=, so it stayed lit on every surface. The app's
+								    tab bar owns navigation; this pill only exists for apps without one. */}
+								{!identity?.hasSurface && (
+									<button
+										type="button"
+										onClick={selectOverview}
+										title="App overview — every workflow at a glance"
+										className={cn(
+											"px-2.5 py-1 rounded-lg text-[12px] flex-shrink-0 transition-colors",
+											overviewMode ? "bg-slate-800 text-white" : "text-slate-500 hover:text-slate-800 hover:bg-slate-100",
+										)}
+									>Overview</button>
+								)}
 								{rows.length >= 1 && (
 									<WorkflowSelect rows={rows} selected={effSelected} onSelect={select}
 										onNew={() => navigate(`/studio/a/${encodeURIComponent(app)}/manage`)} />
@@ -1159,7 +1171,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 							// without curated copy fall back to the workflow list so the
 							// overview is never blank. ──
 							<div className="space-y-6 animate-in fade-in duration-200">
-								{identity?.hasSurface ? (
+								{identity?.hasSurface && !nestedInSurface ? (
 									// The app DECLARED a page — that wins. Previously the surface
 									// rendered only for apps with zero workflows, so any app that
 									// scheduled one lost its own overview to APP_OVERVIEW_MD (copy
@@ -1169,7 +1181,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 									// environment, the UI stays generic.
 									<div className="-mx-5 -my-5">
 										<Suspense fallback={<div className="px-5 py-8"><Skeleton lines={4} /></div>}>
-											<AppSurface app={app} embedded={embedded} inlineChrome surface={params.get("surface") || undefined} />
+											<AppSurface app={app} embedded={embedded} surface={params.get("surface") || undefined} />
 										</Suspense>
 									</div>
 								) : APP_OVERVIEW_MD[app] ? (

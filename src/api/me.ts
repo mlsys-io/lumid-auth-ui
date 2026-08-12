@@ -570,7 +570,7 @@ export const me = {
     ),
 
   // Drafts queue
-  listDrafts: (params?: { app?: string; state?: "pending" | "sent" | "dismissed" }) =>
+  listDrafts: (params?: { app?: string; state?: string }) =>
     call<{
       drafts: Array<{
         id: string;
@@ -581,8 +581,13 @@ export const me = {
         subject?: string;
         body?: string;
         confidence?: number;
-        state: "pending" | "sent" | "dismissed";
+        // The server documents pending|approved|rejected on models.MeDraft and
+        // pending|sent|dismissed on the file path. Both reach this list, so the
+        // union is the honest type until the two are reconciled server-side.
+        state: "pending" | "sent" | "dismissed" | "approved" | "rejected";
         acted_at?: string;
+        agent?: string;
+        created_at?: string;
       }>;
       count: number;
     }>(

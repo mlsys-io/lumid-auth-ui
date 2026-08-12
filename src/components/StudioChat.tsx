@@ -170,7 +170,13 @@ const DOCUMENT_MIMES = new Set([
 ]);
 const DOCUMENT_EXTS = ['.pdf', '.docx', '.xlsx', '.pptx', '.rtf', '.odt', '.ods', '.odp', '.epub'];
 
-const STORAGE_KEY = 'studio_chat_transcript_v1';
+// The persisted transcript is scoped PER SURFACE. One shared key meant the
+// app-less home chat restored whatever the docked app chat last held, so
+// visiting an app and then clicking "New chat" showed that app's conversation
+// and its grounded opener at /studio — contradicting "New chat = no default
+// app, parallel to apps". Home and each app now keep their own slot.
+const STORAGE_KEY_BASE = 'studio_chat_transcript_v1';
+const transcriptKey = (scope: string) => `${STORAGE_KEY_BASE}:${scope}`;
 // Reserved chat-context key for the Library, so it gets the SAME per-context
 // resume + grounded-opener behavior as an app (its own thread, resumed on
 // re-entry) rather than a one-off fresh chat. Not a real installed app.
@@ -182,20 +188,20 @@ export const LIBRARY_KEY = 'lumid-library';
 // user's conversation. AuthProvider also clears the slot on logout;
 // this guard is belt-and-suspenders for cookie expiry / cross-tab
 // session swaps where logout() never runs. Mirrors chat-widget.tsx.
-function loadTranscript(currentSub: string | null | undefined): Message[] {
+function loadTranscript(currentSub: string | null | undefined, scope: string): Message[] {
 	if (!currentSub) return [];
 	try {
-		const raw = sessionStorage.getItem(STORAGE_KEY);
+		const raw = sessionStorage.getItem(transcriptKey(scope));
 		if (!raw) return [];
 		const parsed = JSON.parse(raw);
 		// Legacy shape (an unwrapped array) predates the guard — discard
 		// rather than risk rendering it under the wrong identity.
 		if (Array.isArray(parsed)) {
-			sessionStorage.removeItem(STORAGE_KEY);
+			sessionStorage.removeItem(transcriptKey(scope));
 			return [];
 		}
 		if (parsed?.user_sub !== currentSub || !Array.isArray(parsed.messages)) {
-			sessionStorage.removeItem(STORAGE_KEY);
+			sessionStorage.removeItem(transcriptKey(scope));
 			return [];
 		}
 		const msgs = parsed.messages as Message[];
@@ -212,10 +218,10 @@ function loadTranscript(currentSub: string | null | undefined): Message[] {
 // loadSessionId restores the claude_session_id saved alongside the transcript,
 // so the session pill + CLI --resume continuity survive a page refresh. Same
 // user_sub guard as loadTranscript (never surface another account's session).
-function loadSessionId(currentSub: string | null | undefined): string | null {
+function loadSessionId(currentSub: string | null | undefined, scope: string): string | null {
 	if (!currentSub) return null;
 	try {
-		const raw = sessionStorage.getItem(STORAGE_KEY);
+		const raw = sessionStorage.getItem(transcriptKey(scope));
 		if (!raw) return null;
 		const parsed = JSON.parse(raw);
 		if (Array.isArray(parsed) || parsed?.user_sub !== currentSub) return null;
@@ -295,7 +301,10 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		} catch { return DEFAULT_WIDTH; }
 	});
 	const [resizing, setResizing] = useState(false);
-	const [messages, setMessages] = useState<Message[]>(() => loadTranscript(userSub));
+	// One slot per surface: the app-less home, and one per grounded app. Sharing
+	// a slot is what let an app's conversation reappear at /studio.
+	const chatScope = docked ? `app:${groundApp || 'none'}` : 'home';
+	const [messages, setMessages] = useState<Message[]>(() => loadTranscript(userSub, chatScope));
 	const [input, setInput] = useState('');
 	const [slashSuggestions, setSlashSuggestions] = useState<{ label: string; template: string }[]>([]);
 	const [slashIdx, setSlashIdx] = useState(0);
@@ -472,13 +481,13 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 	// CLI session (prior tool results + context carry over), and saved
 	// into the chat record so reloads keep continuity. Ref, not state —
 	// read at fetch time, never rendered.
-	const claudeSessionRef = useRef<string | null>(loadSessionId(userSub));
+	const claudeSessionRef = useRef<string | null>(loadSessionId(userSub, chatScope));
 	// State mirror of claudeSessionRef so the composer can render the
 	// session pill (the ref alone never re-renders). Always write through
 	// setCCSession so both stay in sync. Seeded from the persisted transcript
 	// so a page refresh keeps the session pill (and --resume) instead of
 	// dropping it to null.
-	const [claudeSession, setClaudeSession] = useState<string | null>(() => loadSessionId(userSub));
+	const [claudeSession, setClaudeSession] = useState<string | null>(() => loadSessionId(userSub, chatScope));
 	// Capabilities of the live CC session (tools/agents/skills/MCP), surfaced
 	// in the SessionStrip like Claude Code's own context header.
 	const [claudeCaps, setClaudeCaps] = useState<{ model?: string; tools?: string[]; agents?: string[]; skills?: string[]; mcp?: unknown } | null>(null);
@@ -561,7 +570,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 	// returned a different user, or a session swap), drop the in-memory
 	// transcript before it can be rendered/persisted under the new user.
 	useEffect(() => {
-		setMessages((cur) => (cur.length === 0 ? cur : loadTranscript(userSub)));
+		setMessages((cur) => (cur.length === 0 ? cur : loadTranscript(userSub, chatScope)));
 	}, [userSub]);
 
 	// Persist transcript tagged with the current user_sub. No identity →
@@ -574,7 +583,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		if (!userSub) return;
 		const write = () => {
 			try {
-				sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
+				sessionStorage.setItem(transcriptKey(chatScope), JSON.stringify({
 					user_sub: userSub, messages: stripForPersist(messages),
 					claude_session_id: claudeSessionRef.current || null,
 				}));
@@ -827,7 +836,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		lastSavedSigRef.current = '';
 		currentAppRef.current = null;   // generic new chat = home (app-less)
 		openedAppRef.current = null;
-		try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+		try { sessionStorage.removeItem(transcriptKey(chatScope)); } catch { /* ignore */ }
 		setHistoryOpen(false);
 	}, [streaming]);
 
@@ -1408,7 +1417,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		setChatId(null);
 		claudeSessionRef.current = null; setClaudeSession(null);
 		lastSavedSigRef.current = '';
-		try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+		try { sessionStorage.removeItem(transcriptKey(chatScope)); } catch { /* ignore */ }
 	}, []);
 
 	// Deliberate "start a SECOND conversation in this app" (the sidebar folder's
@@ -1507,7 +1516,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 				openedAppRef.current = null;
 				// A stale app-open stash (written by the workspace before nav) would
 				// otherwise re-ground this fresh chat with the app's opener — drop it.
-				sessionStorage.removeItem(STORAGE_KEY);
+				sessionStorage.removeItem(transcriptKey(chatScope));
 				sessionStorage.removeItem('studio_open_app_v1');
 			}
 			const raw = sessionStorage.getItem('studio_pending_ask_v1');
@@ -1549,7 +1558,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 			currentAppRef.current = null;
 			openedAppRef.current = null;
 			try {
-				sessionStorage.removeItem(STORAGE_KEY);
+				sessionStorage.removeItem(transcriptKey(chatScope));
 				sessionStorage.removeItem('studio_new_chat_v1');
 				sessionStorage.removeItem('studio_open_app_v1');
 			} catch { /* ignore */ }
@@ -1670,7 +1679,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		claudeSessionRef.current = null; setClaudeSession(null);
 		lastSavedSigRef.current = '';
 		openedAppRef.current = null;
-		try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+		try { sessionStorage.removeItem(transcriptKey(chatScope)); } catch { /* ignore */ }
 		if (id) {
 			forgetChatId(id);
 			try { await fetch('/api/v1/me/chats/' + encodeURIComponent(id), { method: 'DELETE', credentials: 'include' }); } catch { /* best-effort */ }
