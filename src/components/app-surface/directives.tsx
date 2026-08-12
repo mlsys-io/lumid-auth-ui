@@ -430,7 +430,18 @@ function formatCell(value: unknown, type?: string): React.ReactNode {
   }
   if (type === "badge") return <StatusBadge value={String(value)} />;
   if (type === "datetime") {
-    // Unix seconds or ms → locale string. < 1e12 ⇒ seconds.
+    // Two wire shapes reach here. Numeric epochs (< 1e12 ⇒ seconds), and ISO-8601
+    // strings — Go's time.Time marshals to RFC3339, so every timestamp coming
+    // from a Go service is a string. Only the numeric form was handled, so an
+    // RFC3339 value became NaN and rendered as "—": the Review table's "When"
+    // column looked like missing data when the field was present and correct.
+    if (typeof value === "string") {
+      const ms = Date.parse(value);
+      if (!isFinite(ms)) return "—";
+      // Go's zero time marshals to year 1 — that is "never", not a date.
+      const d = new Date(ms);
+      return d.getUTCFullYear() <= 1 ? "—" : d.toLocaleString();
+    }
     if (!isFinite(n) || n === 0) return "—";
     const ms = n < 1e12 ? n * 1000 : n;
     return new Date(ms).toLocaleString();
