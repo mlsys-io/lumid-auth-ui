@@ -663,7 +663,12 @@ function LumidTable({ body }: { body: Body }) {
 
   const columns: ColDef[] = cols.length ? cols : Object.keys(rowArr[0]).map((k) => ({ key: k, label: k }));
   const tableSortable = body.sortable === true;
-  const isSortable = (c: ColDef) => tableSortable || c.sortable === true;
+  // A declared `order:` IS a statement that the column sorts — that is the only
+  // reason to spell out a sequence. Without this the ordering code was
+  // unreachable: sorting is off unless opted into, so the header click did
+  // nothing and the page's own "sort by difficulty" instruction was a promise
+  // the table never kept.
+  const isSortable = (c: ColDef) => tableSortable || c.sortable === true || Array.isArray(c.order);
   const toggleSort = (key: string) =>
     setSort((prev) =>
       !prev || prev.key !== key ? { key, dir: "desc" } : prev.dir === "desc" ? { key, dir: "asc" } : null);
