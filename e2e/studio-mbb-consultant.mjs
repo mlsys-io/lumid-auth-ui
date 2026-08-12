@@ -231,15 +231,47 @@ assert(/ground truth|keypoint|grounded/i.test(scoreTxt),
 // open-mode answer has nothing to attach to.
 const draftsBefore = await (await api(`/api/v1/me/drafts?app=${APP}`)).json().catch(() => ({}));
 const nBefore = (draftsBefore?.data?.drafts || draftsBefore?.drafts || []).length;
-// Click the control, don't type at the model. Typing "that was wrong" leaves
-// routing to tool selection, which measurably does not happen — that is why the
-// button exists. Driving the real affordance is also what a user does.
+
+// Watch what the click actually SENDS. This gate failed for a while with the
+// server verified working end-to-end — the button, the forced-tool path and the
+// draft write were each confirmed by hand, yet the count never moved. A gate
+// that reports only "10 → 10" cannot distinguish "the click never fired" from
+// "the write failed", and both were guessed at (wrongly, twice) before anyone
+// looked at the request. So the harness records the turn it triggers.
+const correctionPosts = [];
+const onChatPost = (r) => {
+  if (!r.url().includes('/me/agent/chat')) return;
+  let d = {};
+  try { d = JSON.parse(r.postData() || '{}'); } catch { /* non-JSON body */ }
+  correctionPosts.push({ tool_choice: d.tool_choice || null, app: d?.context?.app || null });
+};
+page.on('request', onChatPost);
+
 // Persistent, not once(): window.prompt BLOCKS the click's handler until a
 // dialog handler responds, and a `once` listener already consumed by any
 // earlier dialog leaves the click hanging with no draft ever written.
-page.on('dialog', d => d.accept('It ignored private-label economics.'));
+let dialogsSeen = 0;
+page.on('dialog', d => { dialogsSeen++; d.accept('It ignored private-label economics.'); });
+
+// The control only renders while NOT streaming, so a click issued during the
+// tail of the previous turn hits nothing and silently takes the prose fallback
+// — which does not route to app_feedback and so stages no draft. Wait for it to
+// be attached AND stable before clicking, rather than sampling once.
 const correctBtn = page.locator('button[title*="record a correction" i]').last();
-if (await correctBtn.count()) {
+let clickable = false;
+for (let i = 0; i < 20; i++) {
+  if (await correctBtn.count() && await correctBtn.isVisible().catch(() => false)) {
+    await page.waitForTimeout(1500);           // settle: it must still be there
+    if (await correctBtn.count() && await correctBtn.isVisible().catch(() => false)) {
+      clickable = true;
+      break;
+    }
+  }
+  await page.waitForTimeout(1500);
+}
+
+const postsBefore = correctionPosts.length;
+if (clickable) {
   await correctBtn.click();
   clicks++;
   // The turn it fires still has to stream out before the draft exists.
@@ -250,20 +282,37 @@ if (await correctBtn.count()) {
     if (n === last) { if (++stable >= 3) break; } else { stable = 0; last = n; }
   }
 } else {
-  console.log('NOTE  no "Correct this" control found — falling back to prose');
+  console.log('NOTE  "Correct this" never became stably clickable — falling back to prose');
   await turn('That case answer was wrong — record a correction against this app so it is reviewed.');
 }
+
 let nAfter = nBefore;
-// 60s, not 30: the click fires a full turn (forced tool + stream) and the row
-// is only queryable once that completes. Bounded so it still fails rather than
-// hangs.
 for (let i = 0; i < 20; i++) {
   await page.waitForTimeout(3000);
   const d = await (await api(`/api/v1/me/drafts?app=${APP}`)).json().catch(() => ({}));
   nAfter = (d?.data?.drafts || d?.drafts || []).length;
   if (nAfter > nBefore) break;
 }
+page.off('request', onChatPost);
+
+// Report the request on failure. "10 → 10" plus the turn that was (or was not)
+// sent is a diagnosis; the count alone is a mystery.
+const fired = correctionPosts.slice(postsBefore);
+if (!(nAfter > nBefore)) {
+  console.log(`NOTE  G5 sent ${fired.length} turn(s) after the click: ` +
+    (fired.map(f => `tool_choice=${f.tool_choice} app=${f.app}`).join(' | ') || '(none)'));
+  // Which half failed: the prompt never opened (handler wiring / button inert),
+  // or it opened and the turn still did not go out.
+  console.log(`NOTE  G5 dialogs seen: ${dialogsSeen} (0 = the prompt never opened)`);
+}
 assert(nAfter > nBefore, `G5 correction staged a draft (${nBefore} → ${nAfter})`);
+// The write is only meaningful if it came from the BUTTON's forced path. A
+// draft staged by the model picking the tool on its own would pass the count
+// check while the affordance stayed broken.
+if (nAfter > nBefore) {
+  assert(fired.some(f => f.tool_choice === 'app_feedback' && f.app),
+    'G5 correction went through the button\'s forced app_feedback path');
+}
 
 // ── G9 ────────────────────────────────────────────────────────────────────
 assert(api404.length === 0, `G9 no /me/* 404s (saw: ${api404.join(', ') || 'none'})`);
