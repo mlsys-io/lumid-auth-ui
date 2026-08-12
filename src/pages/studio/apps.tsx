@@ -836,8 +836,14 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 	// Its OWN slot — the app surface owns "topstrip-app-slot" for its nav tabs.
 	// Two portals into one node stack their children (that is what put the
 	// surface tabs on top of this selector); separate nodes lay out side by side.
-	const appSlotTarget = usePortalTarget("topstrip-wf-slot", !!embedded);
 	const nestedInSurface = useInAppSurface();
+	// Only the OUTERMOST overview owns the strip. A nested AppOverview (a surface
+	// mounting `lumid:native app-workflows`) is a panel inside the page, not the
+	// page's chrome — it was portaling a SECOND workflow selector into the same
+	// slot, which collapsed the slot to zero width and overlapped the status
+	// pills. The depth guard stops it rendering the surface; it must also stop it
+	// claiming the strip.
+	const appSlotTarget = usePortalTarget("topstrip-wf-slot", !!embedded && !nestedInSurface);
 	const [params, setParams] = useSearchParams();
 	const selected = params.get("selected");
 	const initialCycle = params.get("cycle"); // deep-link anchor → open that run
