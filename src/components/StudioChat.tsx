@@ -1980,12 +1980,19 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 								? () => {
 									const what = window.prompt('What was wrong with this answer?');
 									if (!what) return;
+									// Carry the app EXPLICITLY. The forced-tool path grounds on
+									// context.app and returns nothing without it, so a correction
+									// sent context-less produced an empty turn and no draft — the
+									// button looked like it did nothing.
+									const correctionApp = workspaceApp() || currentAppRef.current || undefined;
 									void dispatchTurnRef.current?.(
 										`Record a correction against this app: ${what}`,
 										// app_feedback, not give_feedback: the latter scores a
 										// scheduled CYCLE and needs a loop + timestamp, which an
 										// interactive answer does not have.
-										[], undefined, undefined, undefined, 'app_feedback',
+										[], undefined,
+										correctionApp ? { page: 'app', app: correctionApp } : undefined,
+										undefined, 'app_feedback',
 									);
 								}
 								: undefined}
