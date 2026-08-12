@@ -13,7 +13,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
 import { CONNECT_ROUTE } from './studio/starters';
-import { ThumbsDown, ChevronRight, MessageSquarePlus, Send, Trash2, Loader2, Bot, User, Square, Globe, Telescope, Brain, ChevronDown, Paperclip, X, FileText, FileJson, Image as ImageIcon, Plus, Copy, RotateCcw, Mic, Volume2, Code2, Boxes, Download, ArrowLeft, Crosshair, Lock, Cpu, Maximize2, Minimize2 } from 'lucide-react';
+import { ThumbsDown, ChevronRight, MessageSquarePlus, Send, Trash2, Loader2, Bot, User, Square, Globe, Telescope, Brain, ChevronDown, Paperclip, X, FileText, FileJson, Image as ImageIcon, Plus, Copy, RotateCcw, Mic, Volume2, Code2, Boxes, Download, ArrowLeft, Crosshair, Lock, Cpu, Maximize2, Minimize2, AlertTriangle } from 'lucide-react';
 import {
 	buildViewingContext,
 	subscribeStudioPickedTarget,
@@ -257,7 +257,13 @@ const MIN_WIDTH = 320;
 const MAX_WIDTH = 720;
 const DEFAULT_WIDTH = 400;
 
-type ModelOption = { id: string; display_name: string; default: boolean };
+// app_tools: does this model get the app's tool catalog (casebook, scoring,
+// review)? The claude-code path is handed no tools, so inside an app it
+// quietly becomes a different product — same voice, no data. Older servers
+// omit the field; treat undefined as capable so nothing regresses to a
+// permanent warning.
+type ModelOption = { id: string; display_name: string; default: boolean; app_tools?: boolean };
+const modelHasAppTools = (m?: ModelOption) => m?.app_tools !== false;
 // Mutually-exclusive tool-forcing modes. '' = let the agent decide.
 type ChatMode = '' | 'search' | 'deep_research';
 
@@ -2432,6 +2438,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 							models={models}
 							model={model}
 							setModel={setModel}
+							groundApp={groundApp}
 						/>
 					</div>
 					)}
@@ -3122,12 +3129,13 @@ function modelShortLabel(id: string): string {
 
 
 function ModelChip({
-	streaming, models, model, setModel,
+	streaming, models, model, setModel, groundApp,
 }: {
 	streaming: boolean;
 	models: ModelOption[];
 	model: string;
 	setModel: (id: string) => void;
+	groundApp?: string | null;
 }) {
 	const [open, setOpen] = useState(false);
 	const ref = useClickOutside(open, () => setOpen(false));
@@ -3150,6 +3158,9 @@ function ModelChip({
 			>
 				<Cpu className="w-3 h-3 flex-shrink-0 opacity-70" />
 				<span className="truncate max-w-[120px]">{current ? modelShortLabel(current.id) : (model || 'Model')}</span>
+				{groundApp && !modelHasAppTools(current) && (
+					<AlertTriangle className="w-3 h-3 flex-shrink-0 text-amber-500" />
+				)}
 				<ChevronDown className="w-2.5 h-2.5 flex-shrink-0 opacity-60" />
 			</button>
 			{open && (
@@ -3166,9 +3177,18 @@ function ModelChip({
 						>
 							<Bot className={['w-3 h-3', m.id === model ? 'text-gold-600' : 'text-muted-foreground'].join(' ')} />
 							<span className="font-medium flex-1">{m.display_name}</span>
+							{groundApp && !modelHasAppTools(m) && (
+								<span className="text-[10px] text-amber-600 whitespace-nowrap">no app tools</span>
+							)}
 							{m.id === model && <span className="w-1.5 h-1.5 rounded-full bg-gold-500" />}
 						</button>
 					))}
+					{groundApp && models.some((m) => !modelHasAppTools(m)) && (
+						<p className="px-2.5 pt-1.5 pb-1 text-[10px] leading-snug text-muted-foreground border-t border-border mt-1">
+							Models marked <span className="text-amber-600">no app tools</span> can’t read
+							this app’s data or score answers.
+						</p>
+					)}
 				</div>
 			)}
 		</div>
