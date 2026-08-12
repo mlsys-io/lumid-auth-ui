@@ -4,7 +4,10 @@ Covers the browser-visible surface: the Studio sidebar, and the `mbb-consultant`
 app workspace (case interview, scoring, corrections). App-side logic lives in
 `~/.xp/apps/mbb-consultant/TESTING.md`.
 
-**Status: the automated journey passes 10/10.** Manual steps below are for
+**Status: the automated journey passes 10/10, verified as a NON-OWNER**
+(`findata-svc@lum.id`). Run it that way by default — the owner path hid three
+defects behind a green suite: a repo-owner assumption, a private app repo, and
+an unredeemed invite gate. Manual steps below are for
 eyeballing UX and for anything the journey cannot assert.
 
 ---
@@ -101,6 +104,12 @@ On `/studio/apps/<app>` the rail is auto-hidden **by design**; reveal it with th
 | B6 | Pick a case, answer 3 turns | Turn 3 still knows the client without being re-told |
 | B7 | Click 👎 on an answer, type a reason | A draft appears in **Review**; sidebar badge increments |
 | B8 | Open the composer menu | **Ask the app** toggle, on by default |
+| B9 | Open the model picker inside an app | `claude-code-*` entries tagged **no app tools**; an amber marker on the chip when one is selected |
+
+**B9 matters**: a claude-code model keeps the analyst voice but loses `casebook`,
+scoring and review — answers look right and are ungrounded. The warning is
+driven by the server's `app_tools` capability on `/me/agent/models`, not by
+matching the model id, and only appears when grounded in an app.
 
 **B8 matters**: with it on, a domain question routes through the app's analyst
 instead of the generic assistant. Turn it off for administrative asks ("run the

@@ -193,9 +193,18 @@ assert(clicks <= 4, `G10 ≤4 interactions to a scored answer (used ${clicks})`)
 // the network is never idle and this times out on a perfectly healthy page.
 await page.reload({ waitUntil: 'domcontentloaded' });
 await waitForStudio(page).catch(() => {});
-await page.waitForTimeout(4000);
-const afterReload = await page.locator('body').innerText();
-assert(!!anchor && new RegExp(anchor.replace(/\s+/g, '\\s*'), 'i').test(afterReload),
+// POLL, don't sleep. The restored transcript is fetched from the chat store
+// after mount, so a fixed wait races the round-trip: this gate failed once and
+// passed on an identical rerun, which is the signature of a timing assumption,
+// not of broken persistence. Polling asserts the same fact without the race.
+const anchorRe = anchor ? new RegExp(anchor.replace(/\s+/g, '\\s*'), 'i') : null;
+let afterReload = '';
+for (let i = 0; i < 24; i++) {          // up to ~24s
+  afterReload = await page.locator('body').innerText();
+  if (anchorRe && anchorRe.test(afterReload)) break;
+  await page.waitForTimeout(1000);
+}
+assert(!!anchorRe && anchorRe.test(afterReload),
   'G4 transcript survives a reload');
 
 // ── G8: casebook scoring is grounded, and says so ─────────────────────────
