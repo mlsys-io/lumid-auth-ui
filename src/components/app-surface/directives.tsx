@@ -547,7 +547,10 @@ function LumidTable({ body }: { body: Body }) {
     const { key, dir } = sort;
     const mul = dir === "asc" ? 1 : -1;
     return [...rowArr].sort((a, b) => {
-      const av = a[key], bv = b[key];
+      // getPath, not a[key]: a column key may address a nested field
+      // (fields.difficulty), and sorting must read the same value the
+      // cell renders or the arrow lies about the order.
+      const av = getPath(a, key), bv = getPath(b, key);
       const an = Number(av), bn = Number(bv);
       if (isFinite(an) && isFinite(bn) && av !== "" && bv !== "") return (an - bn) * mul;
       return String(av ?? "").localeCompare(String(bv ?? "")) * mul;
@@ -628,7 +631,7 @@ function LumidTable({ body }: { body: Body }) {
                   {statCols.map((c) => (
                     <div key={c.key} className="flex justify-between text-[12px]">
                       <span className="text-slate-500">{c.label ?? c.key}</span>
-                      <span className="font-medium text-slate-700">{formatCell(row[c.key], c.type)}</span>
+                      <span className="font-medium text-slate-700">{formatCell(getPath(row, c.key), c.type)}</span>
                     </div>
                   ))}
                 </div>
@@ -689,8 +692,8 @@ function LumidTable({ body }: { body: Body }) {
                   {columns.map((c, ci) => {
                     const cell = <>{
                       href && ci === 0
-                        ? renderHrefCell(href, formatCell(row[c.key], c.type))
-                        : formatCell(row[c.key], c.type)
+                        ? renderHrefCell(href, formatCell(getPath(row, c.key), c.type))
+                        : formatCell(getPath(row, c.key), c.type)
                     }</>;
                     return <td key={c.key} className="px-2.5 py-1.5 text-slate-700 align-top max-w-[260px] truncate">{cell}</td>;
                   })}
