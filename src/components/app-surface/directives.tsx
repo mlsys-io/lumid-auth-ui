@@ -405,7 +405,12 @@ function LumidStat({ body }: { body: Body }) {
   );
 }
 
-type ColDef = { key: string; label?: string; type?: string; sortable?: boolean };
+type ColDef = {
+  key: string; label?: string; type?: string; sortable?: boolean;
+  // Optional explicit low→high ordering for a CATEGORICAL column (see the sort
+  // comparator in LumidTable). Values not listed sort last.
+  order?: unknown[];
+};
 
 const STATUS_COLORS: Record<string, string> = {
   Ongoing:   "bg-gold-100 text-gold-800 border-gold-200",
@@ -549,30 +554,97 @@ function LumidTable({ body }: { body: Body }) {
   // Click-to-sort state. Header cycle: unsorted → desc → asc → unsorted (so the
   // first click on a metric shows the leaders, matching the native leaderboard).
   const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" } | null>(null);
+  // `search_keys:` — CLIENT-SIDE narrowing of the rows already in the browser.
+  //
+  // This is deliberately NOT lumid:search-table (further down this file). That
+  // widget re-fetches the SOURCE on every committed query via a
+  // `source_template` containing {query} — the right shape when the result set
+  // lives server-side and is too large to ship (KOL tweet search). `search_keys`
+  // is the opposite case: the whole set already arrived in one response (the MBB
+  // casebook's 50 cases), so filtering is pure local work — no request, no Enter
+  // key, instant as you type. Use search-table for search; use search_keys to
+  // find a row in a list you already have.
+  const [query, setQuery] = useState("");
+
+  const cols = (body.columns as ColDef[] | undefined) ?? [];
+  const searchKeys = Array.isArray(body.search_keys)
+    ? (body.search_keys as unknown[]).map((k) => String(k)).filter(Boolean)
+    : [];
+  const searchable = searchKeys.length > 0;
+  // Stable memo deps for values derived from `body` (a fresh object each render).
+  const searchSig = searchKeys.join(" ");
+  const orderSig = JSON.stringify(cols.map((c) => [c.key, c.order ?? null]));
 
   const rows = getPath(data, body.path as string | undefined);
   const rowArr = Array.isArray(rows) ? (rows as Record<string, unknown>[]) : [];
 
+  // Filter first, then sort — so the sort arrow describes what is on screen.
+  const filteredRows = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle || !searchSig) return rowArr;
+    const keys = searchSig.split(" ");
+    // getPath so dotted keys (fields.industry) match the value the cell renders.
+    return rowArr.filter((r) =>
+      keys.some((k) => String(getPath(r, k) ?? "").toLowerCase().includes(needle)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowArr, query, searchSig]);
+
   const sortedRows = useMemo(() => {
-    if (!sort) return rowArr;
+    if (!sort) return filteredRows;
     const { key, dir } = sort;
     const mul = dir === "asc" ? 1 : -1;
-    return [...rowArr].sort((a, b) => {
+    // A column may declare `order:` — the TRUE low→high sequence of a
+    // categorical value (Easy < Easy-Medium < Medium < Medium-Hard < Hard).
+    // Without it those sort lexicographically, which puts Hard before Medium
+    // and makes the header arrow lie. Values not in the list rank last, in
+    // both directions, so unknowns never jump to the top on a desc click.
+    const orderList: string[] = (JSON.parse(orderSig) as [string, unknown[] | null][])
+      .find(([k]) => k === key)?.[1]?.map((v) => String(v)) ?? [];
+    const rank = (v: unknown) => {
+      const i = orderList.indexOf(String(v ?? ""));
+      return i < 0 ? Number.MAX_SAFE_INTEGER : i;
+    };
+    return [...filteredRows].sort((a, b) => {
       // getPath, not a[key]: a column key may address a nested field
       // (fields.difficulty), and sorting must read the same value the
       // cell renders or the arrow lies about the order.
       const av = getPath(a, key), bv = getPath(b, key);
+      if (orderList.length) {
+        const ar = rank(av), br = rank(bv);
+        if (ar === br) return 0;
+        if (ar === Number.MAX_SAFE_INTEGER) return 1;
+        if (br === Number.MAX_SAFE_INTEGER) return -1;
+        return (ar - br) * mul;
+      }
       const an = Number(av), bn = Number(bv);
       if (isFinite(an) && isFinite(bn) && av !== "" && bv !== "") return (an - bn) * mul;
       return String(av ?? "").localeCompare(String(bv ?? "")) * mul;
     });
-  }, [rowArr, sort]);
+  }, [filteredRows, sort, orderSig]);
 
   if (pending) return <PendingLine token={pending} />;
   if (loading) return <Loading />;
   if (error) return <ErrLine msg={error} />;
 
-  const cols = (body.columns as ColDef[] | undefined) ?? [];
+  // Rendered above the table whenever `search_keys` is present. Absent it this
+  // is null and the widget behaves exactly as before.
+  const searchBox = searchable ? (
+    <div className="flex items-center gap-2">
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder={String(body.search_placeholder ?? "Filter…")}
+        aria-label={String(body.search_placeholder ?? "Filter rows")}
+        className="w-full sm:w-72 px-2.5 py-1 text-[12px] rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400"
+      />
+      {query.trim() !== "" && (
+        <span className="text-[11px] text-slate-400 tabular-nums shrink-0">
+          {filteredRows.length} of {rowArr.length}
+        </span>
+      )}
+    </div>
+  ) : null;
+
   const tableActions = (body.actions as ActionDef[] | undefined)?.filter((a) => a && a.label) ?? [];
   const rowActions = (body.row_actions as ActionDef[] | undefined)?.filter((a) => a && a.label) ?? [];
 
@@ -625,6 +697,10 @@ function LumidTable({ body }: { body: Body }) {
     return (
       <div className="space-y-2">
         {tableActions.length > 0 && <ActionBar actions={tableActions} onDone={refetch} />}
+        {searchBox}
+        {sortedRows.length === 0 && (
+          <div className="text-[12px] text-slate-400">No rows match “{query.trim()}”.</div>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {sortedRows.slice(0, 60).map((row, i) => {
             const href = rowHref ? rowHref(row) : "";
@@ -674,6 +750,10 @@ function LumidTable({ body }: { body: Body }) {
           )}
         </div>
       )}
+      {searchBox}
+      {sortedRows.length === 0 ? (
+        <div className="text-[12px] text-slate-400">No rows match “{query.trim()}”.</div>
+      ) : (
       <div className="overflow-x-auto rounded-lg border border-slate-200">
         <table className="min-w-full text-[12px] border-collapse">
           <thead className="bg-slate-50 border-b border-slate-200">
@@ -721,6 +801,7 @@ function LumidTable({ body }: { body: Body }) {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }

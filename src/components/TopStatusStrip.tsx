@@ -276,7 +276,10 @@ export default function TopStatusStrip() {
 				}
 			}
 			if (draftsCount > 0) {
-				next.push({ key: "drafts", tone: "ok", icon: FileText, text: `${draftsCount} draft${draftsCount === 1 ? "" : "s"} awaiting you`, action: "review", to: "/studio/inbox" });
+				// Reads as one sentence with the action appended: "6 drafts need your
+			// review · open". The previous pairing rendered "…awaiting you review",
+			// which looks like a grammar slip rather than text + button.
+			next.push({ key: "drafts", tone: "ok", icon: FileText, text: `${draftsCount} draft${draftsCount === 1 ? "" : "s"} need${draftsCount === 1 ? "s" : ""} your review`, action: "open", to: "/studio/inbox" });
 			}
 			setItems(next);
 			setRefreshedAt(Date.now());
