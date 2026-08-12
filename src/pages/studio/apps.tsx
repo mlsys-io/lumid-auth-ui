@@ -1155,7 +1155,20 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 							// without curated copy fall back to the workflow list so the
 							// overview is never blank. ──
 							<div className="space-y-6 animate-in fade-in duration-200">
-								{APP_OVERVIEW_MD[app] ? (
+								{identity?.hasSurface ? (
+									// The app DECLARED a page — that wins. Previously the surface
+									// rendered only for apps with zero workflows, so any app that
+									// scheduled one lost its own overview to APP_OVERVIEW_MD (copy
+									// hardcoded in this bundle, keyed by app name) or to a bare
+									// workflow list. An app's page then could not be changed by
+									// editing the app, which is backwards: the app supplies the
+									// environment, the UI stays generic.
+									<div className="-mx-5 -my-5">
+										<Suspense fallback={<div className="px-5 py-8"><Skeleton lines={4} /></div>}>
+											<AppSurface app={app} embedded={embedded} surface={params.get("surface") || undefined} />
+										</Suspense>
+									</div>
+								) : APP_OVERVIEW_MD[app] ? (
 									<div className="max-w-3xl studio-prose">
 										<LumidMarkdown source={APP_OVERVIEW_MD[app]} />
 									</div>
