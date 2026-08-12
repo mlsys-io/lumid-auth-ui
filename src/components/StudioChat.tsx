@@ -13,7 +13,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
 import { CONNECT_ROUTE } from './studio/starters';
-import { ThumbsDown, ChevronRight, MessageSquarePlus, Send, Trash2, Loader2, Bot, User, Square, Globe, Telescope, Brain, ChevronDown, Paperclip, X, FileText, FileJson, Image as ImageIcon, Plus, Copy, RotateCcw, Mic, Volume2, Code2, Boxes, Download, ArrowLeft, Crosshair, Lock, Cpu, Maximize2, Minimize2, AlertTriangle } from 'lucide-react';
+import { ThumbsDown, ChevronRight, MessageSquarePlus, Send, Trash2, Loader2, Bot, User, Square, Globe, Telescope, Brain, ChevronDown, Paperclip, X, FileText, FileJson, Image as ImageIcon, Plus, Copy, RotateCcw, Mic, Volume2, Code2, Boxes, Download, ArrowLeft, Crosshair, Lock, Cpu, Maximize2, Minimize2, AlertTriangle , GraduationCap } from 'lucide-react';
 import {
 	buildViewingContext,
 	subscribeStudioPickedTarget,
@@ -426,6 +426,25 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 	// (measured across gemma and Sonnet). Off for administrative asks like
 	// "list my cases" or "run the workflow".
 	const [askApp, setAskApp] = useState<boolean>(true);
+	// Interview mode — WHO sits in which seat for this conversation.
+	//   train_ai : the AI answers, you interview it   (default)
+	//   free     : open question, no case, no ground truth
+	//   coach    : YOU answer, the AI interviews and scores you
+	// Persisted per app so returning to an app resumes how you were working.
+	// The server derives the model's ROLE from this; it never accepts a role.
+	const modeKey = `studio_interview_mode_v1:${groundApp || 'none'}`;
+	const [interviewMode, setInterviewMode] = useState<'train_ai' | 'free' | 'coach'>(() => {
+		try {
+			const v = localStorage.getItem(modeKey);
+			if (v === 'free' || v === 'coach' || v === 'train_ai') return v;
+		} catch { /* ignore */ }
+		return 'train_ai';
+	});
+	const interviewModeRef = useRef(interviewMode);
+	useEffect(() => {
+		interviewModeRef.current = interviewMode;
+		try { localStorage.setItem(modeKey, interviewMode); } catch { /* ignore */ }
+	}, [interviewMode, modeKey]);
 	// dispatchTurn's body is built inside a callback that must not re-create on
 	// every toggle, so read the flag through a ref (same pattern as
 	// dispatchTurnRef).
@@ -1291,7 +1310,10 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 						credentials: 'include',
 						body: JSON.stringify({
 							messages: wireMessages,
-							context,
+							// The mode rides on the context the server already reads. It
+							// selects an experience, not a privilege — the role it maps to
+							// is decided server-side.
+							context: context ? { ...context, mode: interviewModeRef.current } : context,
 							// Per-turn model override (e.g. a grounded "Ask about this
 							// run/step" turn requests a tool-capable model so the
 							// observability tools fire). Falls back to the user's
@@ -2209,6 +2231,41 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 											<span className="font-medium flex-1 text-left">Ask the app</span>
 											{askApp && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
 										</button>
+										{/* Interview mode — who sits in which seat. Switching mid-case
+										    inverts the roles halfway through a conversation, which
+										    reads as the assistant losing the plot, so a switch starts
+										    a fresh thread. */}
+										<div className="h-px bg-muted my-1 mx-2" />
+										<div className="px-2.5 pt-1 pb-0.5 text-[10px] uppercase tracking-wide text-muted-foreground/70">
+											Interview mode
+										</div>
+										{([
+											{ id: 'train_ai', label: 'Train the AI', hint: 'You interview, the AI answers and is scored' },
+											{ id: 'free', label: 'Free answering', hint: 'Ask anything — score is indicative, no ground truth' },
+											{ id: 'coach', label: 'Train me', hint: 'The AI interviews YOU and scores your answers' },
+										] as const).map((m) => (
+											<button
+												key={m.id}
+												type="button"
+												onClick={() => {
+													if (m.id === interviewMode) return;
+													setInterviewMode(m.id);
+													// A fresh thread: the seats just swapped.
+													window.dispatchEvent(new CustomEvent('studio:new-app-chat', {
+														detail: { app: groundApp || undefined },
+													}));
+												}}
+												title={m.hint}
+												className={[
+													'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] transition-colors',
+													interviewMode === m.id ? 'bg-sky-50 text-sky-800' : 'text-foreground hover:bg-muted/60',
+												].join(' ')}
+											>
+												<GraduationCap className={['w-3.5 h-3.5', interviewMode === m.id ? 'text-sky-600' : 'text-muted-foreground'].join(' ')} />
+												<span className="font-medium flex-1 text-left">{m.label}</span>
+												{interviewMode === m.id && <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />}
+											</button>
+										))}
 									</>
 								)}
 								<div className="h-px bg-muted my-1 mx-2" />
