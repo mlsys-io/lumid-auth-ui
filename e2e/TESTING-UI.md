@@ -85,8 +85,8 @@ apps added nothing to the rail. **A5 is the subtle one**: `openAppInChat`
 early-returns when the app is already grounded, so `+` needs its own event — if
 it reopens the previous thread, that path regressed.
 
-On `/studio/apps/<app>` the rail is auto-hidden **by design**; reveal it with the
-"Show sidebar" control before judging anything about it.
+The rail used to auto-hide on `/studio/apps/<app>`; it no longer does, and follows
+the same persisted collapse preference as the rest of Studio.
 
 ---
 
@@ -96,7 +96,9 @@ On `/studio/apps/<app>` the rail is auto-hidden **by design**; reveal it with th
 
 | # | Do | Pass |
 |---|---|---|
-| B1 | Open the app | Sidebar row **MBB Consultant** (briefcase, under Research) |
+| B1 | Open the app | Sidebar row **MBB Consultant** (briefcase, under Research). The left rail STAYS — it no longer auto-hides on app pages |
+| B0 | Land on the app | Opens on the app's own page (Start here + case picker), not the workflow panel |
+| B10 | Click **Start** on any case row | The case opens in chat and the analyst restates it — nothing to copy |
 | B2 | Nav tabs | Overview · Environment · Review · Workflows · Experiments |
 | B3 | **Environment** | Harness / Infra / Data / Agents / Prompts — 11 skill cards, 8 judge rubrics |
 | B4 | **Review** | Drafts table; empty state reads "Nothing to review" |
@@ -105,6 +107,11 @@ On `/studio/apps/<app>` the rail is auto-hidden **by design**; reveal it with th
 | B7 | Click 👎 on an answer, type a reason | A draft appears in **Review**; sidebar badge increments |
 | B8 | Open the composer menu | **Ask the app** toggle, on by default |
 | B9 | Open the model picker inside an app | `claude-code-*` entries tagged **no app tools**; an amber marker on the chip when one is selected |
+
+**B10 matters**: the picker reads `me://app-data?app=&tool=casebook` — the SAME
+tool the analyst uses — so a row it offers is by construction a row the agent
+can open. A hand-written table in page.yaml cannot promise that, and drifted
+(it claimed 52 cases against 50).
 
 **B9 matters**: a claude-code model keeps the analyst voice but loses `casebook`,
 scoring and review — answers look right and are ungrounded. The warning is
