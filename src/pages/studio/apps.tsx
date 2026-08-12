@@ -1185,9 +1185,15 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 									// workflow list. An app's page then could not be changed by
 									// editing the app, which is backwards: the app supplies the
 									// environment, the UI stays generic.
+									// inlineChrome: the app's chrome (tabs + New workflow + share
+									// actions) needs ~600px and the strip slot resolves to ~180 beside
+									// the app name and the workflow selector — portaled, the five tabs
+									// wrapped to one per line and stacked under "New workflow". Inline
+									// they get the panel's full width. The tabs are still the ONLY tab
+									// bar; the strip's duplicate Overview pill is gone either way.
 									<div className="-mx-5 -my-5">
 										<Suspense fallback={<div className="px-5 py-8"><Skeleton lines={4} /></div>}>
-											<AppSurface app={app} embedded={embedded} surface={params.get("surface") || undefined} />
+											<AppSurface app={app} embedded={embedded} inlineChrome surface={params.get("surface") || undefined} />
 										</Suspense>
 									</div>
 								) : APP_OVERVIEW_MD[app] ? (

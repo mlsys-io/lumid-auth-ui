@@ -10,7 +10,8 @@ const check = (ok, name, extra='') => { console.log(`${ok?'PASS':'FAIL'}  ${name
 await p.goto('https://lum.id/studio/apps/mbb-consultant?surface=workflows', { waitUntil:'domcontentloaded' });
 await p.waitForTimeout(11000);
 const wfBody = await p.locator('body').innerText();
-const wfHits = (wfBody.match(/The `?interview`? loop is/g) || []).length;
+// regression_sweep appears exactly once in workflows.md — a stable unique marker.
+const wfHits = (wfBody.match(/regression_sweep/g) || []).length;
 check(wfHits === 1, 'P0-1 Workflows renders once (no recursion)', `body copies=${wfHits}`);
 
 // P0-4 one nav owner + no overlap
