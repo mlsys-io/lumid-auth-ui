@@ -175,6 +175,19 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 // exchange, and an app's threads are all opened by the same templated prompt.
 // End-truncation then renders every row identically ("Case_019_Beta…") — the
 // distinguishing part is at the END, which is exactly what gets cut. Keep both.
+// Compact age for a dense rail. "18 hours ago" cost ~70px per row, which came
+// straight out of the title and put every row back to "Case_01…".
+function compactAge(value: string | number | null | undefined): string {
+	const ms = typeof value === 'number' ? value : Date.parse(String(value ?? ''));
+	if (!isFinite(ms)) return '';
+	const s = Math.max(0, (Date.now() - ms) / 1000);
+	if (s < 60) return 'now';
+	if (s < 3600) return `${Math.floor(s / 60)}m`;
+	if (s < 86400) return `${Math.floor(s / 3600)}h`;
+	if (s < 86400 * 7) return `${Math.floor(s / 86400)}d`;
+	return `${Math.floor(s / (86400 * 7))}w`;
+}
+
 function middleTruncate(s: string, max = 30): string {
 	if (s.length <= max) return s;
 	const head = Math.ceil((max - 1) * 0.55);
@@ -230,8 +243,8 @@ function RecentRow({ item, navigate, appIcon }: {
 			>
 				<Icon className="w-4 h-4 flex-shrink-0 text-foreground/45" />
 				<span className="flex-1 min-w-0 truncate">{middleTruncate(item.title || 'Untitled chat')}</span>
-				<span className="flex-shrink-0 text-[10px] text-muted-foreground/60 tabular-nums">
-					{formatRelative(item.updatedAt)}
+				<span className="flex-shrink-0 text-[10px] text-muted-foreground/50 tabular-nums">
+					{compactAge(item.updatedAt)}
 				</span>
 			</button>
 			<button
@@ -622,15 +635,6 @@ export function StudioShell() {
 						<CirclePlus className="w-4 h-4 text-foreground/55" /> New chat
 					</button>
 					{TOP_NAV.map((item) => <NavItemView key={item.to} {...item} />)}
-					{/* Recent — app-LESS threads only. Anything grounded in an app
-					    lives under that app's folder below, so "New chat" above and
-					    the app folders are siblings, not a hierarchy. */}
-					<RecentSection items={allChats} loaded={chatsLoaded} navigate={navigate} iconForApp={iconForApp} />
-					{/* Installed apps — EVERY installed app gets a folder here
-					    (ui.sidebar is an optional label/icon override, not the
-					    admission price), each expanding to its own conversations.
-					    Data-driven via useAppNav(); soft-fails to nothing if
-					    /me/apps is unreachable. */}
 					{appNav.length > 0 && (
 						<div>
 							<button
@@ -655,6 +659,15 @@ export function StudioShell() {
 							))}
 						</div>
 					)}
+					{/* Recent — app-LESS threads only. Anything grounded in an app
+					    lives under that app's folder below, so "New chat" above and
+					    the app folders are siblings, not a hierarchy. */}
+					<RecentSection items={allChats} loaded={chatsLoaded} navigate={navigate} iconForApp={iconForApp} />
+					{/* Installed apps — EVERY installed app gets a folder here
+					    (ui.sidebar is an optional label/icon override, not the
+					    admission price), each expanding to its own conversations.
+					    Data-driven via useAppNav(); soft-fails to nothing if
+					    /me/apps is unreachable. */}
 				</nav>
 
 				{/* Artifacts — moved out of the chat header (2026-08-10) so it sits
