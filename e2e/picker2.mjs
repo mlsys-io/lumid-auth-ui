@@ -18,13 +18,21 @@ if (await box.count()) {
   await p.waitForTimeout(1200);
 }
 // sort by Difficulty, read the first values
-const hdr = p.locator('th', { hasText: /^Difficulty$/ });
+// the header now carries a sort arrow, so match loosely
+const hdr = p.locator('th', { hasText: /Difficulty/ });
+console.log('difficulty header found:', await hdr.count());
 if (await hdr.count()) {
   await hdr.first().click(); await p.waitForTimeout(1200);
   const first = await p.locator('table tbody tr td:nth-child(3)').allInnerTexts();
   console.log('difficulty desc-first:', first.slice(0,4).join(' | '));
   await hdr.first().click(); await p.waitForTimeout(1200);
   const second = await p.locator('table tbody tr td:nth-child(3)').allInnerTexts();
-  console.log('difficulty asc-first :', second.slice(0,4).join(' | '));
+  const seq = [];
+  for (const v of second) if (!seq.includes(v)) seq.push(v);
+  console.log('difficulty asc sequence:', seq.join(' < '));
+  const semantic = ['Easy','Easy-Medium','Medium','Medium-Hard','Hard'];
+  const lexical  = ['Easy','Easy-Medium','Hard','Medium','Medium-Hard'];
+  console.log('matches SEMANTIC order :', JSON.stringify(seq) === JSON.stringify(semantic));
+  console.log('matches lexical order  :', JSON.stringify(seq) === JSON.stringify(lexical));
 }
 await b.close();
