@@ -990,7 +990,11 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 	const freshestLoop = rows && rows.length
 		? [...rows].sort((a, b) => (b.wf.last_run_ts || 0) - (a.wf.last_run_ts || 0))[0].loop
 		: null;
-	const overviewMode = selected === OVERVIEW_SEL;
+	// Land on the app's OWN page when it declares one and nothing specific was
+	// requested. Defaulting to the freshest workflow meant an authored overview
+	// was reachable only by clicking a tab nobody knew to click — the app's
+	// front door sat behind its own observability panel.
+	const overviewMode = selected ? selected === OVERVIEW_SEL : !!identity?.hasSurface;
 	const validSelected = selected && rows?.some((r) => r.loop === selected) ? selected : null;
 	const validInitial = initialLoop && rows?.some((r) => r.loop === initialLoop) ? initialLoop : null;
 	const effSelected = overviewMode ? null : (validSelected ?? validInitial ?? freshestLoop);

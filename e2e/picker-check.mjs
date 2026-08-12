@@ -1,18 +1,16 @@
 import { chromium } from 'playwright';
-const PAT = process.env.LUMID_PAT;
 const b = await chromium.launch({ channel: 'chrome' });
-const ctx = await b.newContext({ extraHTTPHeaders: { Authorization: `Bearer ${PAT}` } });
+const ctx = await b.newContext({ extraHTTPHeaders: { Authorization: `Bearer ${process.env.LUMID_PAT}` } });
 const p = await ctx.newPage();
 await p.goto('https://lum.id/studio/apps/mbb-consultant', { waitUntil: 'domcontentloaded' });
-await p.waitForTimeout(9000);
-const tabs = await p.locator('[role="tab"], nav button, nav a').allInnerTexts();
-console.log('tabs seen:', [...new Set(tabs.map(t=>t.trim()).filter(Boolean))].slice(0,15));
-for (const name of ['Overview','Interview','Environment','Review','Workflows','Experiments']) {
-  const el = p.getByRole('button', { name: new RegExp(`^${name}$`) }).or(p.getByRole('link', { name: new RegExp(`^${name}$`) }));
-  if (await el.count() === 0) { console.log(`  ${name}: (no tab)`); continue; }
-  await el.first().click().catch(()=>{});
-  await p.waitForTimeout(4000);
-  const t = await p.locator('body').innerText();
-  console.log(`  ${name}: startHere=${/Start here/i.test(t)} rows=${await p.locator('table tbody tr').count()} startBtns=${await p.getByRole('button',{name:/^Start$/}).count()}`);
-}
+await p.waitForTimeout(10000);
+const ov = p.getByRole('button', { name: /^Overview$/ });
+console.log('Overview buttons found:', await ov.count());
+if (await ov.count()) { await ov.first().click(); await p.waitForTimeout(8000); }
+const body = await p.locator('body').innerText();
+console.log('rows          :', await p.locator('table tbody tr').count());
+console.log('Start buttons :', await p.getByRole('button', { name: /^Start$/ }).count());
+console.log('Start here    :', /Start here/i.test(body));
+console.log('Industry      :', /Industry/.test(body));
+console.log('page head     :', body.replace(/\s+/g,' ').slice(0,220));
 await b.close();

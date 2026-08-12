@@ -1,0 +1,12 @@
+import { chromium } from 'playwright';
+const b = await chromium.launch({ channel: 'chrome' });
+const ctx = await b.newContext({ extraHTTPHeaders: { Authorization: `Bearer ${process.env.LUMID_PAT}` } });
+const p = await ctx.newPage();
+p.on('console', m => { if (m.type()==='error') console.log('CONSOLE ERR:', m.text().slice(0,220)); });
+p.on('pageerror', e => console.log('PAGE ERR:', String(e).slice(0,300)));
+await p.goto('https://lum.id/studio/apps/mbb-consultant', { waitUntil: 'domcontentloaded' });
+await p.waitForTimeout(12000);
+const txt = await p.locator('body').innerText();
+console.log('body length:', txt.length);
+console.log('body head  :', txt.replace(/\s+/g,' ').slice(0,200));
+await b.close();
