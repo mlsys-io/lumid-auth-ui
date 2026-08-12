@@ -1,7 +1,30 @@
 import { chromium } from 'playwright';
-const b = await chromium.launch({ channel: 'chrome' });
+
+// Auth: a PAT if one is handed in, else log in with the password and reuse the
+// lm_session cookie (same recipe as studio-app-journey.mjs) so the probe needs
+// no minted token.
+const BASE  = process.env.LUMID_BASE  || 'https://lum.id';
+const EMAIL = process.env.LUMID_EMAIL || 'admin@lum.id';
+const PAT   = process.env.LUMID_PAT;
+const PW    = process.env.LUMID_PASSWORD;
+if (!PAT && !PW) { console.error('LUMID_PAT or LUMID_PASSWORD required'); process.exit(2); }
+
+let session = null;
+if (!PAT) {
+  const res = await fetch(`${BASE}/api/v1/login`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: EMAIL, password: PW }),
+  });
+  if (res.status !== 200) { console.error(`login → ${res.status}`); process.exit(2); }
+  session = (res.headers.get('set-cookie') || '').match(/lm_session=([^;]+)/)?.[1];
+  if (!session) { console.error('no lm_session cookie'); process.exit(2); }
+}
+
+const b = await chromium.launch({ channel: 'chrome', args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 const ctx = await b.newContext({ viewport:{width:1440,height:900},
-  extraHTTPHeaders: { Authorization: `Bearer ${process.env.LUMID_PAT}` } });
+  ...(PAT ? { extraHTTPHeaders: { Authorization: `Bearer ${PAT}` } } : {}) });
+if (session) await ctx.addCookies([{ name:'lm_session', value:session, domain:'.lum.id',
+  path:'/', httpOnly:true, secure:true, sameSite:'Lax' }]);
 const p = await ctx.newPage();
 const fails = [];
 const check = (ok, name, extra='') => { console.log(`${ok?'PASS':'FAIL'}  ${name}${extra?'  '+extra:''}`); if(!ok) fails.push(name); };
@@ -17,7 +40,7 @@ check(wfHits === 1, 'P0-1 Workflows renders once (no recursion)', `body copies=$
 // P0-4 one nav owner + no overlap
 const boxes = await p.evaluate(() => {
   const els = [...document.querySelectorAll('button,a')].filter(e=>{
-    const r=e.getBoundingClientRect(); return r.top<130 && r.left>260 && r.width>0;
+    const r=e.getBoundingClientRect(); return r.top<130 && r.left>230 && r.width>0;
   });
   // Skip ancestor/descendant pairs: a nested control always overlaps its parent.
   return els.map((e,i)=>{const r=e.getBoundingClientRect();
@@ -38,9 +61,16 @@ check(!bad, 'P0-4 no two strip controls overlap', bad||'');
 // P0-2 review table
 await p.goto('https://lum.id/studio/apps/mbb-consultant?surface=review', { waitUntil:'domcontentloaded' });
 await p.waitForTimeout(10000);
+// An empty queue is a legitimate state ("No rows."), not a failure — but it also
+// proves nothing about the columns, so say so rather than passing silently.
 const cells = await p.locator('table tbody td').allInnerTexts();
 const dashes = cells.filter(c=>c.trim()==='—').length;
-check(cells.length>0 && dashes===0, 'P0-2 Review has no em-dash cells', `cells=${cells.length} dashes=${dashes}`);
+if (cells.length === 0) {
+  const empty = /No rows\./.test(await p.locator('body').innerText());
+  check(empty, 'P0-2 Review renders (queue empty — columns untested)', empty?'':'no table and no empty state');
+} else {
+  check(dashes===0, 'P0-2 Review has no em-dash cells', `cells=${cells.length} dashes=${dashes}`);
+}
 
 // P0-3 home is app-less
 await p.goto('https://lum.id/studio/apps/mbb-consultant', { waitUntil:'domcontentloaded' });
