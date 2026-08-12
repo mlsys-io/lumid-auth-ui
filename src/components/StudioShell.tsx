@@ -516,15 +516,14 @@ export function StudioShell() {
 	const isNarrow = useIsNarrow(1024);
 	const [narrowNavOpen, setNarrowNavOpen] = useState(false);
 	useEffect(() => { if (!isNarrow) setNarrowNavOpen(false); }, [isNarrow]);
-	// Per-app workspace (/studio/apps/:app): auto-hide the nav so the page reads
-	// as just Observe + Chat. Same DERIVED-override philosophy as narrow — it
-	// never writes the persisted pref, so the user's global choice survives
-	// leaving the workspace; within it the header's expand control reveals the
-	// nav for the session (appNavOpen), and it re-hides when switching apps.
+	// Per-app workspace (/studio/apps/:app). The nav used to auto-hide here so
+	// the page read as just Observe + Chat, but hiding it on the one route where
+	// you most want to move between apps and conversations cost more than the
+	// focus it bought — and it re-hid on every app switch, so the reveal never
+	// stuck. The sidebar now follows the SAME persisted preference as everywhere
+	// else: collapse it if you want it gone, and that choice holds.
 	const inAppWorkspace = /^\/studio\/apps\/[^/]+/.test(location.pathname)
 		&& location.pathname !== '/studio/apps/all';
-	const [appNavOpen, setAppNavOpen] = useState(false);
-	useEffect(() => { setAppNavOpen(false); }, [location.pathname]);
 	// Entering an app opens its folder, so its conversations are visible where
 	// you're actually working without a second click. Only ever expands —
 	// collapsing stays the user's explicit choice.
@@ -540,9 +539,9 @@ export function StudioShell() {
 		});
 	}, [inAppWorkspace, location.pathname]);
 	// Simple mode: no sidebar at all — the chatbox is the whole surface.
-	const sidebarHidden = isNarrow ? !narrowNavOpen : (inAppWorkspace ? !appNavOpen : sidebarCollapsed);
-	const hideSidebar = () => { if (isNarrow) setNarrowNavOpen(false); else if (inAppWorkspace) setAppNavOpen(false); else setSidebarCollapsed(true); };
-	const showSidebar = () => { if (isNarrow) setNarrowNavOpen(true); else if (inAppWorkspace) setAppNavOpen(true); else setSidebarCollapsed(false); };
+	const sidebarHidden = isNarrow ? !narrowNavOpen : sidebarCollapsed;
+	const hideSidebar = () => { if (isNarrow) setNarrowNavOpen(false); else setSidebarCollapsed(true); };
+	const showSidebar = () => { if (isNarrow) setNarrowNavOpen(true); else setSidebarCollapsed(false); };
 
 	// Pending-drafts count → app-contributed nav badges (badge_source:
 	// 'drafts'). The Inbox nav entry folded into Home's status bar; the
