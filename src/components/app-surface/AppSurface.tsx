@@ -59,12 +59,19 @@ export function AppSurface({
   app: appProp,
   surface: surfaceProp,
   embedded,
+  inlineChrome,
 }: {
   // When mounted on an explicit route (e.g. the lumid-market competition
   // surfaces), the app + named surface come in as props and the URL's own
   // params (competitionId, strategyId) are forwarded to the markdown for
   // `{token}` injection. When mounted on the generic /studio/a/:app/:surface
   // route, both come from useParams().
+  // inlineChrome — render the nav row in the page instead of portaling it into
+  // #topstrip-app-slot. The workspace overview portals its OWN controls into
+  // that same node, and two portals sharing one container stack their children:
+  // the surface tabs landed on top of the workflow selector and "New workflow",
+  // so a click hit whichever happened to be above. One strip, one owner.
+  inlineChrome?: boolean;
   app?: string;
   surface?: string;
   // When rendered inside the app workspace, the AppSwitcher already shows the
@@ -191,8 +198,9 @@ export function AppSurface({
   // there — the strip sat empty on app surfaces while the tabs burned a row.
   const [stripSlot, setStripSlot] = useState<HTMLElement | null>(null);
   useEffect(() => {
+    if (inlineChrome) { setStripSlot(null); return; }
     setStripSlot(document.getElementById("topstrip-app-slot"));
-  }, []);
+  }, [inlineChrome]);
 
   // Share/publish actions — moved off the Manage page's "Share & publish" box
   // into this top "⋯" menu so the loop (pull upstream / publish / fork /

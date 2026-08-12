@@ -1169,7 +1169,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 									// environment, the UI stays generic.
 									<div className="-mx-5 -my-5">
 										<Suspense fallback={<div className="px-5 py-8"><Skeleton lines={4} /></div>}>
-											<AppSurface app={app} embedded={embedded} surface={params.get("surface") || undefined} />
+											<AppSurface app={app} embedded={embedded} inlineChrome surface={params.get("surface") || undefined} />
 										</Suspense>
 									</div>
 								) : APP_OVERVIEW_MD[app] ? (
