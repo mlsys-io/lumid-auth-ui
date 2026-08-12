@@ -106,12 +106,20 @@ the same persisted collapse preference as the rest of Studio.
 | B6 | Pick a case, answer 3 turns | Turn 3 still knows the client without being re-told |
 | B7 | Click 👎 on an answer, type a reason | A draft appears in **Review**; sidebar badge increments |
 | B8 | Open the composer menu | **Ask the app** toggle, on by default |
+| B11 | Same menu, **Interview mode** | Train the AI (default) · Free answering · Train me. Switching starts a fresh thread |
+| B12 | Pick **Train me**, then Start a case | The AI interviews YOU: asks Q1 only — no later question, no script, no answer key |
+| B13 | **Results** tab | Turns recorded + a row per cycle. Case/Mode read `—` for turns that called no case; that is correct, not missing data |
 | B9 | Open the model picker inside an app | `claude-code-*` entries tagged **no app tools**; an amber marker on the chip when one is selected |
 
 **B10 matters**: the picker reads `me://app-data?app=&tool=casebook` — the SAME
 tool the analyst uses — so a row it offers is by construction a row the agent
 can open. A hand-written table in page.yaml cannot promise that, and drifted
 (it claimed 52 cases against 50).
+
+**B12 is the security-relevant one.** Coach mode inverts the seats, so the model
+holds interviewer material. It gets ONE question and never the opening script —
+an earlier build handed it the full script and it revealed Q2, Q3 and Q4 in its
+opening turn. If you ever see a later question before its turn, stop and report it.
 
 **B9 matters**: a claude-code model keeps the analyst voice but loses `casebook`,
 scoring and review — answers look right and are ungrounded. The warning is
