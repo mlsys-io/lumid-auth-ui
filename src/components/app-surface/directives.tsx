@@ -133,6 +133,24 @@ export async function resolveSource(spec: string, force = false): Promise<unknow
       const qs = p.includes("?") ? p.slice(p.indexOf("?") + 1) : "";
       const params = Object.fromEntries(new URLSearchParams(qs)) as Parameters<typeof me.listDrafts>[0];
       data = await me.listDrafts(params);
+    } else if (p.startsWith("app-data?")) {
+      // me://app-data?app=<name>&tool=<name> — an app's OWN content, read
+      // through the same tool the agent uses, so a row the surface offers is
+      // by construction a row the agent can open. Server allowlists which
+      // tools a surface may invoke (a surface runs unattended on page load).
+      const qs = p.slice(p.indexOf("?") + 1);
+      const sp = new URLSearchParams(qs);
+      const dApp = sp.get("app") ?? "";
+      const dTool = sp.get("tool") ?? "";
+      if (!dApp || !dTool) throw new Error("app-data needs app= and tool=");
+      const auth = await bearerHeader();
+      const r = await fetch(
+        `/api/v1/me/apps/${encodeURIComponent(dApp)}/data?tool=${encodeURIComponent(dTool)}`,
+        { credentials: "include", headers: auth },
+      );
+      if (!r.ok) throw new Error(`app-data ${r.status}`);
+      const j = await r.json();
+      data = j?.data ?? j;
     } else {
       throw new Error(`source not allowed: ${spec}`);
     }
@@ -435,6 +453,11 @@ function isExternalHref(h: string): boolean { return /^https?:\/\//i.test(h); }
 // refresh live in declarative config instead of a bespoke native component.
 type ActionDef = {
   label: string;
+  // ask — send an interpolated prompt into the chat rail instead of calling an
+  // API. Turns any table into a picker: the row supplies the identifiers, so
+  // the user never copies one by hand. {field} interpolates from the row, the
+  // same syntax qa_post already uses.
+  ask?: string;
   qa_post?: string;
   qa_delete?: string;
   confirm?: string;
@@ -465,12 +488,26 @@ function ActionButton({ a, row, onDone, size = "sm" }: {
   a: ActionDef; row?: Record<string, unknown>; onDone?: () => void; size?: "sm" | "xs";
 }) {
   const role = useContext(AuthContext)?.user?.role ?? "user";
+  const appFromRoute = useRouteParams().app;
   const [busy, setBusy] = useState(false);
   if (!roleAllows(role, a.gate)) return null;
   const danger = a.variant === "danger";
   const run = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (a.confirm && !window.confirm(a.confirm)) return;
+    if (a.ask) {
+      const interp = (s: string) =>
+        row ? s.replace(/\{([^}]+)\}/g, (_, k) => String(row[k] ?? "")) : s;
+      window.dispatchEvent(new CustomEvent("studio:ask", {
+        detail: {
+          prompt: interp(a.ask),
+          autosend: true,
+          context: { page: "app-surface", ...(appFromRoute ? { app: appFromRoute } : {}) },
+        },
+      }));
+      onDone?.();
+      return;
+    }
     setBusy(true);
     try {
       await runQaAction(a, row);
