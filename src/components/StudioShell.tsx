@@ -322,7 +322,8 @@ function AppFolder({
 	const location = useLocation();
 	const to = `/studio/apps/${encodeURIComponent(item.app)}`;
 	const active = location.pathname === to;
-	const Icon = iconFor(item.icon);
+	// Seed with the slug so an app that declares no icon still gets its own.
+	const Icon = iconFor(item.icon, item.app);
 	const installing = item.status === 'installing';
 	const failed = item.status === 'failed';
 
@@ -454,7 +455,7 @@ export function StudioShell() {
 	);
 	const iconForApp = useCallback((app?: string | null): LucideIcon | undefined => {
 		if (!app) return undefined;
-		for (const sec of appNav) for (const it of sec.items) if (it.app === app) return iconFor(it.icon);
+		for (const sec of appNav) for (const it of sec.items) if (it.app === app) return iconFor(it.icon, it.app);
 		return undefined;
 	}, [appNav]);
 	const location = useLocation();

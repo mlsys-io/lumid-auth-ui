@@ -7,6 +7,8 @@ import { useEffect, useState } from "react";
 import {
   Boxes, Database, LineChart, BarChart3, Newspaper, TrendingUp, Globe,
   Activity, Coins, Users, CandlestickChart, MessagesSquare, Brain, Cpu,
+  Briefcase, BookOpen, GraduationCap, FlaskConical, Microscope, Compass,
+  Target, Sparkles, Shield, Wrench, Rocket, Layers, Network, Search,
   type LucideIcon,
 } from "lucide-react";
 import { me, type MeAppCard } from "@/api/me";
@@ -36,10 +38,49 @@ const ICONS: Record<string, LucideIcon> = {
   "messages-square": MessagesSquare,
   "brain": Brain,
   "cpu": Cpu,
+  // Names apps actually declare that had no entry, so they silently fell back
+  // to Boxes — mbb-consultant asks for "briefcase".
+  "briefcase": Briefcase,
+  "book": BookOpen,
+  "book-open": BookOpen,
+  "graduation-cap": GraduationCap,
+  "flask": FlaskConical,
+  "flask-conical": FlaskConical,
+  "microscope": Microscope,
+  "compass": Compass,
+  "target": Target,
+  "sparkles": Sparkles,
+  "shield": Shield,
+  "wrench": Wrench,
+  "rocket": Rocket,
+  "layers": Layers,
+  "network": Network,
+  "search": Search,
 };
 
-export function iconFor(name?: string): LucideIcon {
-  return (name && ICONS[name]) || Boxes;
+// Distinct fallbacks. A single default made every app that declares no icon —
+// or declares one we don't map — visually identical, which defeats the point of
+// showing an icon at all now that the sidebar identifies an app's conversations
+// by it rather than by nesting. Picked deterministically from the app slug, so
+// an app keeps the same glyph across reloads and between users.
+const FALLBACK_ICONS: LucideIcon[] = [
+  Boxes, Layers, Network, Compass, Target, FlaskConical,
+  Microscope, Rocket, Shield, Wrench, BookOpen, Sparkles,
+];
+
+function hashSlug(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+export function iconFor(name?: string, seed?: string): LucideIcon {
+  const declared = name && ICONS[name.toLowerCase()];
+  if (declared) return declared;
+  // No usable declaration: give this app a stable glyph of its own rather than
+  // the same default as everyone else.
+  if (seed) return FALLBACK_ICONS[hashSlug(seed) % FALLBACK_ICONS.length];
+  return Boxes;
 }
 
 // Fallback display name for an app that ships no `ui.sidebar.label`.
