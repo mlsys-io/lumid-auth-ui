@@ -303,7 +303,17 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 	const [resizing, setResizing] = useState(false);
 	// One slot per surface: the app-less home, and one per grounded app. Sharing
 	// a slot is what let an app's conversation reappear at /studio.
-	const chatScope = docked ? `app:${groundApp || 'none'}` : 'home';
+	// Scope from the ROUTE, not the prop. groundApp arrives a render late after a
+	// reload, so keying on it made the docked chat briefly scope to `app:none` —
+	// it then loaded (and persisted to) a different slot than the one it had just
+	// saved, so a reloaded conversation came back empty and the composer's turns
+	// went to a transcript nobody was reading. The path is correct on the very
+	// first render, which is the whole point.
+	const routeApp = (() => {
+		const m = /^\/studio\/apps\/([^/?#]+)/.exec(location.pathname);
+		return m ? decodeURIComponent(m[1]) : '';
+	})();
+	const chatScope = docked ? `app:${groundApp || routeApp || 'none'}` : 'home';
 	const [messages, setMessages] = useState<Message[]>(() => loadTranscript(userSub, chatScope));
 	const [input, setInput] = useState('');
 	const [slashSuggestions, setSlashSuggestions] = useState<{ label: string; template: string }[]>([]);
