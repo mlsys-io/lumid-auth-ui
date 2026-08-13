@@ -636,6 +636,15 @@ export function StudioShell() {
 						<CirclePlus className="w-4 h-4 text-foreground/55" /> New chat
 					</button>
 					{TOP_NAV.map((item) => <NavItemView key={item.to} {...item} />)}
+					{/* Recent — app-LESS threads only. Anything grounded in an app
+					    lives under that app's folder below, so "New chat" above and
+					    the app folders are siblings, not a hierarchy. */}
+					<RecentSection items={allChats} loaded={chatsLoaded} navigate={navigate} iconForApp={iconForApp} />
+					{/* Installed apps — EVERY installed app gets a folder here
+					    (ui.sidebar is an optional label/icon override, not the
+					    admission price), each expanding to its own conversations.
+					    Data-driven via useAppNav(); soft-fails to nothing if
+					    /me/apps is unreachable. */}
 					{appNav.length > 0 && (
 						<div>
 							<button
@@ -645,7 +654,11 @@ export function StudioShell() {
 								<ChevronRight className={cn('w-3 h-3 transition-transform', !agentsCollapsed && 'rotate-90')} />
 								Applications
 							</button>
-							{!agentsCollapsed && appNav.map((sec) => (
+							{/* One flat list, capped. The rail is for getting BACK to
+							    something, not for browsing an inventory — the Library is
+							    where you go to see everything installed. Four keeps the
+							    section a footer rather than a second page of chrome. */}
+							{!agentsCollapsed && [{ section: 'all', items: appNav.flatMap((s) => s.items).slice(0, 4) }].map((sec) => (
 								<div key={sec.section}>
 									{/* No per-section label. The manifest's `ui.sidebar.section`
 									    ("Research", "Agents", …) split a handful of apps across
@@ -664,15 +677,6 @@ export function StudioShell() {
 							))}
 						</div>
 					)}
-					{/* Recent — app-LESS threads only. Anything grounded in an app
-					    lives under that app's folder below, so "New chat" above and
-					    the app folders are siblings, not a hierarchy. */}
-					<RecentSection items={allChats} loaded={chatsLoaded} navigate={navigate} iconForApp={iconForApp} />
-					{/* Installed apps — EVERY installed app gets a folder here
-					    (ui.sidebar is an optional label/icon override, not the
-					    admission price), each expanding to its own conversations.
-					    Data-driven via useAppNav(); soft-fails to nothing if
-					    /me/apps is unreachable. */}
 				</nav>
 
 				{/* Artifacts — moved out of the chat header (2026-08-10) so it sits
