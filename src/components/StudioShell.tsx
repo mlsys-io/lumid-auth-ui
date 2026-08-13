@@ -285,7 +285,7 @@ function RecentSection({ items, loaded, navigate, iconForApp }: {
 	const shown = showAll ? items : items.slice(0, RECENT_PER_LIST);
 	return (
 		<div>
-			<SectionLabel>Conversations</SectionLabel>
+			<SectionLabel>Recent</SectionLabel>
 			{items.length === 0 ? (
 				<div className="px-3 py-2 text-xs text-muted-foreground/70">No conversations yet</div>
 			) : (
@@ -647,7 +647,11 @@ export function StudioShell() {
 							</button>
 							{!agentsCollapsed && appNav.map((sec) => (
 								<div key={sec.section}>
-									{sec.section !== 'Agents' && <SectionLabel>{sec.section}</SectionLabel>}
+									{/* No per-section label. The manifest's `ui.sidebar.section`
+									    ("Research", "Agents", …) split a handful of apps across
+									    headed groups, which cost a row of chrome per group to
+									    categorise a list short enough to read at a glance. The
+									    icons already distinguish them. */}
 									{sec.items.map((it) => (
 										<AppFolder
 											key={it.app}
