@@ -645,6 +645,12 @@ export function StudioShell() {
 					    admission price), each expanding to its own conversations.
 					    Data-driven via useAppNav(); soft-fails to nothing if
 					    /me/apps is unreachable. */}
+				</nav>
+
+				{/* Installed apps are PINNED to the bottom, outside the scrolling
+				    nav. Inside it, a long Recent list pushed them off-screen and
+				    reaching an app meant scrolling past every conversation. */}
+				<div className="px-2">
 					{appNav.length > 0 && (
 						<div>
 							<button
@@ -677,7 +683,7 @@ export function StudioShell() {
 							))}
 						</div>
 					)}
-				</nav>
+				</div>
 
 				{/* Artifacts — moved out of the chat header (2026-08-10) so it sits
 				    with the other persistent surfaces. Deliberately OUTSIDE the
