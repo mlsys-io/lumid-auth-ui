@@ -636,6 +636,14 @@ export function StudioShell() {
 						<CirclePlus className="w-4 h-4 text-foreground/55" /> New chat
 					</button>
 					{TOP_NAV.map((item) => <NavItemView key={item.to} {...item} />)}
+					{/* Artifacts sits with the other destinations, under Scheduled.
+					    NOTE: its 420px panel is absolutely positioned, and this
+					    container scrolls — if the panel ever appears clipped, that is
+					    why, and the fix is to portal the panel rather than move the
+					    button back out. */}
+					<div className="px-1">
+						<ArtifactIconButton variant="sidebar" />
+					</div>
 					{/* Recent — app-LESS threads only. Anything grounded in an app
 					    lives under that app's folder below, so "New chat" above and
 					    the app folders are siblings, not a hierarchy. */}
@@ -653,18 +661,15 @@ export function StudioShell() {
 				<div className="px-2">
 					{appNav.length > 0 && (
 						<div>
-							<button
-								onClick={toggleAgents}
-								className="mt-4 mb-1 w-full flex items-center gap-1 px-3 text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors"
-							>
-								<ChevronRight className={cn('w-3 h-3 transition-transform', !agentsCollapsed && 'rotate-90')} />
-								Applications
-							</button>
-							{/* One flat list, capped. The rail is for getting BACK to
+							{/* No header, no disclosure. Four pinned rows do not need a
+							    section title telling you they are applications — the icons
+							    and the position say it, and a collapse control on a
+							    four-item list only offers to hide the thing you came for.
+							    One flat list, capped. The rail is for getting BACK to
 							    something, not for browsing an inventory — the Library is
 							    where you go to see everything installed. Four keeps the
 							    section a footer rather than a second page of chrome. */}
-							{!agentsCollapsed && [{ section: 'all', items: appNav.flatMap((s) => s.items).slice(0, 4) }].map((sec) => (
+							{[{ section: 'all', items: appNav.flatMap((s) => s.items).slice(0, 4) }].map((sec) => (
 								<div key={sec.section}>
 									{/* No per-section label. The manifest's `ui.sidebar.section`
 									    ("Research", "Agents", …) split a handful of apps across
@@ -685,13 +690,6 @@ export function StudioShell() {
 					)}
 				</div>
 
-				{/* Artifacts — moved out of the chat header (2026-08-10) so it sits
-				    with the other persistent surfaces. Deliberately OUTSIDE the
-				    scrolling <nav>: its 420px panel is absolutely positioned and
-				    would be clipped by that container's overflow-y-auto. */}
-				<div className="px-2 pb-1">
-					<ArtifactIconButton variant="sidebar" />
-				</div>
 
 				{/* Documentation panel — replaces the old per-doc footer links
 				    (How it works, Claude guide, CD runbook): the tour and every
