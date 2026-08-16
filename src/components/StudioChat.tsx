@@ -1418,7 +1418,20 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 				setMessages((prev) => [...prev, {
 					role: 'assistant',
 					content: opener.line as string,
-					chips: (opener.chips || []).slice(0, 4).map((c) => ({ ...c, context: { app } })),
+					// Carry the chip's declared MODE as context. A chip is a fixed
+					// workflow the user picked by clicking, so leaving the setup in
+					// the prompt text makes the model re-derive what the click
+					// already settled — and prose about who plays which role is
+					// easy to misread. Observed: a chip that said both "interview
+					// me" and "you're the interviewer and I'm the candidate" sent
+					// the model off reasoning about whether those contradicted,
+					// then it announced it would fetch the cases and stopped
+					// without calling anything.
+					chips: (opener.chips || []).slice(0, 4).map((c) => ({
+						label: c.label,
+						prompt: c.prompt,
+						context: { app, ...(c.mode ? { mode: c.mode } : {}) },
+					})),
 				}]);
 				return;
 			}

@@ -180,7 +180,7 @@ export interface MeAppUiSurface {
 // operator-shaped ("N workflows, last run 1h ago" + "run a workflow"), which is
 // right for an app you OPERATE and wrong for one you USE. Opt-in: an app that
 // declares none keeps the live-state default.
-export interface MeAppUiOpenerChip { label: string; prompt: string }
+export interface MeAppUiOpenerChip { label: string; prompt: string; mode?: string }
 export interface MeAppUiOpener {
   line?: string;
   chips?: MeAppUiOpenerChip[];
