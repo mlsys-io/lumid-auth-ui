@@ -27,12 +27,25 @@ type Mode = {
   id: ModeId;
   label: string;
   blurb: string;
+  /**
+   * What the USER types once the chat opens. The single most useful thing to
+   * know before choosing, and it is genuinely different per mode: in Benchmark
+   * you are the interviewer and never answer; in Interview you are the
+   * candidate and answer everything. Getting that backwards wastes the first
+   * two turns of every session.
+   */
+  youType: string;
   /** What the scorecard is worth in this mode — the honesty line. */
   scoring: string;
   needsCase: boolean;
   /** Built at click time so the case id can be interpolated. */
   prompt: (caseId: string) => string;
 };
+
+// Every launch prompt ends by telling the agent to state the next action in one
+// line. Guidance belongs in the turn you are on, not in a manual above the
+// fold — a user who has started does not scroll back up to a table.
+const ORIENT = "End your first message with ONE short line telling me exactly what to type next.";
 
 // The three modes. `scoring` is not decoration: an open-question score has no
 // ground truth behind it and must never read as a benchmark number, which is
@@ -42,14 +55,18 @@ const MODES: Mode[] = [
     id: "benchmark",
     label: "AI answers a case",
     blurb: "The analyst works a real casebook case. You play the interviewer.",
+    youType: "“next question”, or what the answer got wrong",
     scoring: "Scored against that case's ground truth",
     needsCase: true,
-    prompt: (id) => `Let's work case ${id}. Give me the opening.`,
+    prompt: (id) =>
+      `Let's work case ${id}. Give me the opening, then answer the questions in ` +
+      `order — I'm the interviewer, so I won't be answering them. ${ORIENT}`,
   },
   {
     id: "interview",
     label: "AI interviews you",
     blurb: "Roles reversed — the AI poses the case and scores your answers.",
+    youType: "your answer — and ask for any facts you need",
     scoring: "Scored against that case's ground truth",
     needsCase: true,
     // Names the mode and the exact call, because the app's default posture is
@@ -61,17 +78,22 @@ const MODES: Mode[] = [
       `Interviewer mode: interview me on case ${id}. Open it with ` +
       `case(case_id="${id}", role="interviewer") and follow procedure.md's ` +
       `Interviewer mode section. Give me the opening prompt, then wait for my ` +
-      `answer before continuing.`,
+      `answer before continuing. ${ORIENT}`,
   },
   {
     id: "practice",
     label: "Ask anything",
     blurb: "Your own question, no case file. Same analyst voice, same rubric.",
+    youType: "your consulting question",
     scoring: "Indicative only — no ground truth",
     needsCase: false,
+    // Does NOT pretend a question was already asked — it invites one. The old
+    // wording ("I'd like to ask an open question") left the agent with nothing
+    // to answer and it had to ask what the question was, burning a turn.
     prompt: () =>
-      `I'd like to ask an open consulting question (no casebook case). ` +
-      `Answer it in analyst voice, then score it and show the no-ground-truth caveat.`,
+      `Open-question mode: I want to ask my own consulting question, with no ` +
+      `casebook case. Ask me for it in one line. When I give it, answer in analyst ` +
+      `voice, then score it and show the no-ground-truth caveat verbatim.`,
   },
 ];
 
@@ -160,7 +182,13 @@ export default function CaseBrowser({ config }: NativeSurfaceProps) {
               >
                 <div className="text-sm font-medium text-foreground">{m.label}</div>
                 <div className="mt-1 text-[12px] text-muted-foreground leading-snug">{m.blurb}</div>
-                <div className="mt-2 text-[11px] text-muted-foreground/80">{m.scoring}</div>
+                {/* The decisive line: what YOU type. Whether you answer or ask
+                    flips between modes, and getting it wrong wastes the first
+                    turns of a session. */}
+                <div className="mt-2 text-[12px] text-foreground/70 leading-snug">
+                  <span className="text-muted-foreground">You type: </span>{m.youType}
+                </div>
+                <div className="mt-1.5 text-[11px] text-muted-foreground/80">{m.scoring}</div>
               </button>
             );
           })}
@@ -320,10 +348,12 @@ export default function CaseBrowser({ config }: NativeSurfaceProps) {
               ? "Ask a question"
               : "Start case"}
         </button>
+        {/* Restate the input at the moment of committing — the mode card may
+            have scrolled out of view behind a 50-case list. */}
         <span className="text-[12px] text-muted-foreground">
           {activeMode.needsCase && !selected
             ? "Pick a case first."
-            : `Opens in the chat rail · ${activeMode.scoring.toLowerCase()}`}
+            : <>Opens the chat · then you type <span className="text-foreground/70">{activeMode.youType}</span></>}
         </span>
       </div>
     </div>
