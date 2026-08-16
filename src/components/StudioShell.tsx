@@ -661,14 +661,21 @@ export function StudioShell() {
 				<div className="px-2">
 					{appNav.length > 0 && (
 						<div>
-							{/* No header, no disclosure. Four pinned rows do not need a
-							    section title telling you they are applications — the icons
-							    and the position say it, and a collapse control on a
+							{/* Rule + "Your Apps" heading. Both live INSIDE the
+							    appNav.length guard so an empty app list doesn't leave a
+							    stray divider floating above the user menu. The rule is
+							    full-bleed via -mx-2 to cancel the wrapper's px-2, matching
+							    the user menu's border-t below rather than sitting inset.
+							    (This replaces an earlier "no header, no disclosure"
+							    decision — the rows are still one flat capped list, they
+							    just get a named boundary now that separates them from the
+							    scrolling nav above.) */}
+							<div className="-mx-2 border-t border-sidebar-border" />
+							<SectionLabel>Your Apps</SectionLabel>
+							{/* Still no disclosure control: a collapse toggle on a
 							    four-item list only offers to hide the thing you came for.
-							    One flat list, capped. The rail is for getting BACK to
-							    something, not for browsing an inventory — the Library is
-							    where you go to see everything installed. Four keeps the
-							    section a footer rather than a second page of chrome. */}
+							    The rail is for getting BACK to something, not browsing an
+							    inventory — the Library shows everything installed. */}
 							{[{ section: 'all', items: appNav.flatMap((s) => s.items).slice(0, 4) }].map((sec) => (
 								<div key={sec.section}>
 									{/* No per-section label. The manifest's `ui.sidebar.section`
