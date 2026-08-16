@@ -56,6 +56,28 @@ const shot = async (name) => {
 };
 const txt = async (sel) => { try { return (await page.locator(sel).first().innerText()).trim(); } catch { return ''; } };
 
+// The chat rail ONLY. Asserting against `body` is how this script lied three
+// times on its first run: the page copy says "ground truth" and "scored", and
+// the launch prompt is echoed into the transcript, so a body scan finds the
+// page talking to itself. Chat claims must be read from the chat.
+// FOUR elements carry data-studio-picker-chrome (sidebar, top strip, rail…),
+// and .last() picked an empty one — which is why this reported "" while the
+// screenshot plainly showed the interview working. The chat rail is the only
+// one containing the composer, so identify it by that.
+const chatPanel = () =>
+  page.locator('[data-studio-picker-chrome="1"]').filter({ has: page.locator('textarea') }).last();
+const chatText = async () => {
+  try { return (await chatPanel().innerText()).trim(); } catch { return ''; }
+};
+// The agent's turns only — excludes the user's own bubble, so an assertion
+// cannot match the prompt we injected.
+const agentText = async () => {
+  const all = await chatText();
+  const i = all.indexOf(LAUNCH_MARKER);
+  return i >= 0 ? all.slice(i + LAUNCH_MARKER.length) : all;
+};
+let LAUNCH_MARKER = '';
+
 // ── 1. Land on the app cold ───────────────────────────────────────────
 await page.goto(`${BASE}/studio/apps/${APP}`, { waitUntil: 'networkidle', timeout: 60000 });
 await page.waitForTimeout(3000);
@@ -96,12 +118,15 @@ if (nCases) {
   const opening = await txt('text=/Opening/i');
   const qs = await page.locator('li').filter({ hasText: /^Q\d/ }).count();
   note('CASES', `case detail rendered — opening section: ${opening ? 'yes' : 'NO'}, questions listed: ${qs}`);
-  const leak = /ground.?truth|keypoint|structure_4/i.test(await txt('body'));
+  // Scope to the case pane — the PAGE copy legitimately says "ground truth".
+  const pane = await txt('div:has(> div:text-matches("Opening", "i"))');
+  const leak = /keypoint|structure_4|minimum_expected/i.test(pane);
   note('CASES', `answer key visible to candidate: ${leak ? 'LEAK' : 'no (correct)'}`);
 }
 
 // ── 4. Start, and see whether the chat orients them ───────────────────
 const start = page.locator('button', { hasText: /^(Interview me|Start case|Ask a question)$/ }).first();
+LAUNCH_MARKER = 'give me the opening';
 note('START', `start button label: ${JSON.stringify(await start.innerText().catch(() => ''))}`);
 await start.click();
 await page.waitForTimeout(2000);
@@ -109,21 +134,32 @@ await shot('04-after-start');
 
 // The chat streams; wait for it to settle by watching the composer re-enable.
 const composer = page.locator('textarea').first();
-let settled = false;
-for (let i = 0; i < 60; i++) {
-  await page.waitForTimeout(3000);
-  const disabled = await composer.isDisabled().catch(() => false);
-  const body = await txt('body');
-  if (!disabled && /premier|oil|client|case/i.test(body) && body.length > 1200) { settled = true; break; }
-}
+
+// Settle = the rail stops showing Thinking…/Working…. The composer stays
+// ENABLED during a turn (it queues: "sends when current turn finishes"), so
+// isDisabled() is useless here and made every wait a no-op.
+const settle = async (maxMs = 240000) => {
+  const t0 = Date.now();
+  let quiet = 0;
+  while (Date.now() - t0 < maxMs) {
+    await page.waitForTimeout(2500);
+    const t = await chatText();
+    if (/Thinking…|Working…|MESSAGE QUEUED/i.test(t)) { quiet = 0; continue; }
+    if (++quiet >= 2) return true;   // two clean reads — streaming has stopped
+  }
+  return false;
+};
+const settled = await settle();
 await shot('05-first-turn');
 note('CHAT', `first agent turn settled: ${settled}`);
 
-const chatText = await txt('body');
+const agent = await agentText();
 // Did it end by telling the user what to type? That is the guidance rule.
-const orientation = chatText.match(/[^.\n]{0,120}(reply with|tell me|say `|type |when you'?re ready|go ahead)[^.\n]{0,120}[.?]/i);
+const orientation = agent.match(/[^.\n]{0,120}(reply with|tell me|say `|type |when you'?re ready|go ahead)[^.\n]{0,120}[.?]/i);
 note('CHAT', `closes with a next-action line: ${orientation ? JSON.stringify(orientation[0].trim().slice(0, 140)) : 'NOT FOUND'}`);
-note('CHAT', `did it answer its own question (should NOT): ${/I would structure|I'd structure|my framework/i.test(chatText) ? 'YES — bad' : 'no'}`);
+note('CHAT', `did it answer its own question (should NOT): ${/I would structure|I'd structure|my framework/i.test(agent) ? 'YES — bad' : 'no'}`);
+note('CHAT', `visible prompt leaks internals: ${/case\(case_id=|procedure\.md|role="interviewer"/.test(await chatText()) ? 'YES — bad' : 'no'}`);
+note('CHAT', `agent opening (first 200 chars): ${JSON.stringify(agent.slice(0, 200))}`);
 
 // ── 5. Answer as the candidate ────────────────────────────────────────
 if (settled) {
@@ -135,16 +171,19 @@ if (settled) {
     "start on the cost side."
   );
   await composer.press('Enter');
-  await page.waitForTimeout(3000);
-  for (let i = 0; i < 60; i++) {
-    await page.waitForTimeout(3000);
-    if (!(await composer.isDisabled().catch(() => false))) break;
-  }
   await page.waitForTimeout(2000);
+  const replied = await settle();
+  note('ANSWER', `second turn settled: ${replied}`);
   await shot('06-after-my-answer');
-  const after = await txt('body');
-  note('ANSWER', `scored my answer: ${/score|framework|\d{1,3}(\.\d)?\s*(%|\/)/i.test(after) ? 'yes' : 'NO'}`);
-  note('ANSWER', `told me the next move: ${/next question|ready|reply|say |tell me/i.test(after.slice(-1500)) ? 'yes' : 'NO'}`);
+  const after = await agentText();
+  note('ANSWER', `agent replied to my answer: ${after.length > 200 ? 'yes' : 'NO (still thinking / queued)'}`);
+  note('ANSWER', `scored it: ${/score|framework|\d{1,3}(\.\d)?\s*(%|\/)/i.test(after) ? 'yes' : 'NO'}`);
+  // A trailing QUESTION is the commonest way an interviewer hands the turn
+  // back — "which would you dig into first?" is the next move. Matching only
+  // imperative phrasing scored a perfectly good turn as guidance-free.
+  const tail = after.trim().slice(-400);
+  note('ANSWER', `told me the next move: ${/\?\s*$|next question|ready|reply|tell me|go ahead/i.test(tail) ? 'yes' : 'NO'}`);
+  note('ANSWER', `last 200 chars: ${JSON.stringify(after.slice(-200))}`);
 }
 
 note('ERRORS', errors.length ? `${errors.length}: ${[...new Set(errors)].slice(0, 5).join(' · ')}` : 'none');
