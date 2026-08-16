@@ -449,19 +449,33 @@ function AddAccountModal({
 					</button>
 				</div>
 				<p className="text-xs text-slate-500 mb-2">
-					Log in as the target user with the Claude CLI, then copy their tokens:
+					Mint the token in a <strong>throwaway HOME</strong>, so your own Claude session is
+					never touched and no second copy is left behind. Run this whole block:
 				</p>
 				<ol className="text-xs text-slate-600 space-y-1.5 mb-3 list-none">
-					<li><span className="font-mono bg-slate-100 px-1 rounded mr-1">1</span> <code className="font-mono">claude auth login</code> — sign in as the target user</li>
-					<li><span className="font-mono bg-slate-100 px-1 rounded mr-1">2</span> Copy both tokens from the output below</li>
-					<li><span className="font-mono bg-slate-100 px-1 rounded mr-1">3</span> <code className="font-mono">claude auth logout</code> — then log back in as yourself</li>
+					<li><span className="font-mono bg-slate-100 px-1 rounded mr-1">1</span> Paste the block — it signs in as the target user inside a temporary directory</li>
+					<li><span className="font-mono bg-slate-100 px-1 rounded mr-1">2</span> Copy both tokens from the output into the fields below</li>
+					<li><span className="font-mono bg-slate-100 px-1 rounded mr-1">3</span> The directory is deleted on the last line — nothing to undo, nothing to log out of</li>
 				</ol>
 				<pre className="text-[11px] font-mono bg-slate-900 text-emerald-300 rounded px-3 py-2 mb-1 select-all overflow-x-auto">
-{`node -e "const h=require('os').homedir(),c=JSON.parse(require('fs').readFileSync(h+'/.claude/.credentials.json','utf8')).claudeAiOauth;console.log('access:',c.accessToken,'\\nrefresh:',c.refreshToken)"`}
+{`D=$(mktemp -d)
+HOME=$D claude auth login
+HOME=$D node -e "const c=JSON.parse(require('fs').readFileSync(process.env.HOME+'/.claude/.credentials.json','utf8')).claudeAiOauth;console.log('access:',c.accessToken,'\\nrefresh:',c.refreshToken)"
+rm -rf "$D"`}
 				</pre>
+				<div className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded px-2.5 py-2 mb-3">
+					<strong>Never run <code className="font-mono">claude auth logout</code> for a pooled account.</strong>{" "}
+					Logout revokes the token family on Anthropic's side, destroying the credential you just
+					copied — an account added on 2026-08-15 died 3 minutes later this way. Equally, never mint
+					into your normal <code className="font-mono">~/.claude</code>: if the credential stays there,
+					your own Claude Code refreshes it on its own schedule, rotates the family, and the pool's
+					copy dies hours later (this killed two more accounts). Discarding is safe; revoking and
+					sharing are not.
+				</div>
 				<p className="text-xs text-slate-400 mb-4">
 					Access token starts with <code className="font-mono bg-slate-100 px-1 rounded">sk-ant-oat01-</code>.
 					Adding the refresh token enables <strong>auto-renewal</strong> when the access token expires.
+					The pool must be the <strong>only</strong> holder of this credential.
 				</p>
 				<div className="space-y-3">
 					<div>
