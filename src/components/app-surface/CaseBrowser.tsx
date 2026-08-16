@@ -52,9 +52,16 @@ const MODES: Mode[] = [
     blurb: "Roles reversed — the AI poses the case and scores your answers.",
     scoring: "Scored against that case's ground truth",
     needsCase: true,
+    // Names the mode and the exact call, because the app's default posture is
+    // the opposite one. procedure.md has an "Interviewer mode" section and
+    // case(role="interviewer") returns the interviewer preamble with the case —
+    // saying so here is what reliably gets the agent into that branch instead
+    // of answering the case itself.
     prompt: (id) =>
-      `Interview me on case ${id}. You are the interviewer — give me the opening prompt, ` +
-      `then wait for my answer before continuing. Score each of my answers on the 3-axis rubric.`,
+      `Interviewer mode: interview me on case ${id}. Open it with ` +
+      `case(case_id="${id}", role="interviewer") and follow procedure.md's ` +
+      `Interviewer mode section. Give me the opening prompt, then wait for my ` +
+      `answer before continuing.`,
   },
   {
     id: "practice",
