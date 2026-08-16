@@ -1449,6 +1449,11 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		clearSession();
 		emitAppOpener(app);
 	}, [clearSession, emitAppOpener]);
+	// Set while a thread resume is in flight for an app, so a re-render of the
+	// grounding effect cannot paste an opener over the loading transcript.
+	// Set while a thread resume is in flight for an app, so a re-render of the
+	// grounding effect cannot paste an opener over the loading transcript.
+	const resumingRef = useRef<string | null>(null);
 	const newAppChatRef = useRef<typeof newAppChat | null>(null);
 	useEffect(() => { newAppChatRef.current = newAppChat; }, [newAppChat]);
 
@@ -1462,6 +1467,15 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		const wasApp = currentAppRef.current;
 		currentAppRef.current = app;
 
+		// A resume for THIS app is already in flight — do nothing. Without this
+		// the effect below re-runs whenever its callback deps change identity,
+		// and by then currentAppRef is already `app`, so the `wasApp === app`
+		// branch fired and appended the opener ON TOP of the thread still being
+		// loaded. On a page refresh that is exactly what you saw: the
+		// conversation came back and "Pick a mode and a case…" was pasted over
+		// it, which reads as the thread having been lost.
+		if (resumingRef.current === app) return;
+
 		// Same app, session already present (e.g. opener not yet emitted on this
 		// mount) — just emit the opener into the existing thread.
 		if (wasApp === app) { emitAppOpener(app); return; }
@@ -1471,9 +1485,13 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		// previous app's / the home session.
 		const saved = readAppChatMap()[app];
 		if (saved) {
-			void loadThread(saved).then((res) => {
-				if (res === false) { writeAppChat(app, null); clearSession(); emitAppOpener(app); }
-			});
+			resumingRef.current = app;
+			void loadThread(saved)
+				.then((res) => {
+					if (res === false) { writeAppChat(app, null); clearSession(); emitAppOpener(app); }
+					else { openedAppRef.current = app; } // resumed — the opener has already had its turn
+				})
+				.finally(() => { if (resumingRef.current === app) resumingRef.current = null; });
 		} else {
 			clearSession();
 			emitAppOpener(app);
