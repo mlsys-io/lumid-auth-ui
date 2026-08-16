@@ -42,10 +42,19 @@ type Mode = {
   prompt: (caseId: string) => string;
 };
 
-// Every launch prompt ends by telling the agent to state the next action in one
-// line. Guidance belongs in the turn you are on, not in a manual above the
-// fold — a user who has started does not scroll back up to a table.
-const ORIENT = "End your first message with ONE short line telling me exactly what to type next.";
+// Launch prompts are SHOWN TO THE USER as their own first message, so they have
+// to read like something a person would type.
+//
+// They previously carried the machinery — `case(case_id="…", role="interviewer")`,
+// a reference to procedure.md, and a meta-instruction about how to format the
+// reply. All of it rendered verbatim in the transcript, so a first-time user's
+// opening message was function calls and file names. It looked broken and it
+// leaked internals for no benefit: the mechanics belong in procedure.md, which
+// the agent already reads, and the "tell them what to type next" rule is a
+// standing instruction there rather than something to repeat in every prompt.
+//
+// Keep these short, human, and explicit about the ROLE — that is the one thing
+// the agent must not get wrong, since the app's default posture is the opposite.
 
 // The three modes. `scoring` is not decoration: an open-question score has no
 // ground truth behind it and must never read as a benchmark number, which is
@@ -59,8 +68,8 @@ const MODES: Mode[] = [
     scoring: "Scored against that case's ground truth",
     needsCase: true,
     prompt: (id) =>
-      `Let's work case ${id}. Give me the opening, then answer the questions in ` +
-      `order — I'm the interviewer, so I won't be answering them. ${ORIENT}`,
+      `Let's work case ${id}. I'm the interviewer — give me the opening, then ` +
+      `answer the case questions in order.`,
   },
   {
     id: "interview",
@@ -69,16 +78,11 @@ const MODES: Mode[] = [
     youType: "your answer — and ask for any facts you need",
     scoring: "Scored against that case's ground truth",
     needsCase: true,
-    // Names the mode and the exact call, because the app's default posture is
-    // the opposite one. procedure.md has an "Interviewer mode" section and
-    // case(role="interviewer") returns the interviewer preamble with the case —
-    // saying so here is what reliably gets the agent into that branch instead
-    // of answering the case itself.
+    // States the role explicitly. The app's default posture is the opposite,
+    // and procedure.md's Interviewer-mode section keys off exactly this.
     prompt: (id) =>
-      `Interviewer mode: interview me on case ${id}. Open it with ` +
-      `case(case_id="${id}", role="interviewer") and follow procedure.md's ` +
-      `Interviewer mode section. Give me the opening prompt, then wait for my ` +
-      `answer before continuing. ${ORIENT}`,
+      `Interview me on case ${id}. You're the interviewer and I'm the ` +
+      `candidate — give me the opening, then wait for my answer before moving on.`,
   },
   {
     id: "practice",
@@ -91,9 +95,8 @@ const MODES: Mode[] = [
     // wording ("I'd like to ask an open question") left the agent with nothing
     // to answer and it had to ask what the question was, burning a turn.
     prompt: () =>
-      `Open-question mode: I want to ask my own consulting question, with no ` +
-      `casebook case. Ask me for it in one line. When I give it, answer in analyst ` +
-      `voice, then score it and show the no-ground-truth caveat verbatim.`,
+      `I'd like to ask my own consulting question — no casebook case. ` +
+      `Ask me what it is.`,
   },
 ];
 
@@ -303,25 +306,46 @@ export default function CaseBrowser({ config }: NativeSurfaceProps) {
                   </div>
                 )}
 
+                {/* WHO IS ASKING decides whether the questions are shown.
+                    As the interviewer you need to see what you will ask. As the
+                    CANDIDATE, reading Q1-Q4 before the interview starts is
+                    reading ahead — it removes the thinking-on-your-feet the
+                    exercise exists to measure. So show the shape, not the
+                    content. (Withholding them here is the same instinct as the
+                    interviewer withholding structure_2 during the case.) */}
                 {detail.questions && detail.questions.length > 0 && (
-                  <div>
-                    <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1">
-                      Questions ({detail.questions.length})
+                  mode === "interview" ? (
+                    <div>
+                      <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1">
+                        Questions
+                      </div>
+                      <p className="text-[13px] text-muted-foreground">
+                        {detail.questions.length} questions
+                        {" — "}
+                        {detail.questions.map((qq) => qq.type).filter(Boolean).join(", ")}.
+                        {" "}You'll get them one at a time, hidden until asked.
+                      </p>
                     </div>
-                    <ol className="space-y-1.5">
-                      {detail.questions.map((qq) => (
-                        <li key={qq.q_id} className="text-[13px]">
-                          <span className="text-muted-foreground">{qq.q_id}</span>
-                          {qq.type && (
-                            <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-foreground/10 text-foreground/70">
-                              {qq.type}
-                            </span>
-                          )}
-                          <div className="text-foreground/90">{qq.question_text}</div>
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
+                  ) : (
+                    <div>
+                      <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1">
+                        Questions ({detail.questions.length})
+                      </div>
+                      <ol className="space-y-1.5">
+                        {detail.questions.map((qq) => (
+                          <li key={qq.q_id} className="text-[13px]">
+                            <span className="text-muted-foreground">{qq.q_id}</span>
+                            {qq.type && (
+                              <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-foreground/10 text-foreground/70">
+                                {qq.type}
+                              </span>
+                            )}
+                            <div className="text-foreground/90">{qq.question_text}</div>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  )
                 )}
               </div>
             )}
