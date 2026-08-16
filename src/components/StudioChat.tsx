@@ -445,6 +445,14 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		} catch { /* ignore */ }
 		return 'train_ai';
 	});
+	// The case the user picked rides only the FIRST turn: it arrives on the
+	// studio:ask event, and buildViewingContext rebuilds from the URL after that
+	// — and the URL has no case in it. So every later turn in an open case was
+	// sent with no case_id, and anything reading it server-side (the mode
+	// directive block, a staged correction's context) saw a conversation about
+	// nothing in particular. Sticky for the conversation, cleared on reset, the
+	// same shape interviewModeRef already uses for the mode.
+	const caseIdRef = useRef<string>('');
 	const interviewModeRef = useRef(interviewMode);
 	useEffect(() => {
 		interviewModeRef.current = interviewMode;
@@ -1234,6 +1242,11 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		// re-sent stale page notes on every history replay). The backend
 		// renders this into a per-request system block.
 		const context = buildViewingContext(location.pathname, location.search, ctxOverride);
+		// A newly-picked case replaces the remembered one; turns that carry none
+		// inherit it.
+		if (ctxOverride && typeof ctxOverride.case_id === 'string' && ctxOverride.case_id) {
+			caseIdRef.current = ctxOverride.case_id;
+		}
 		// One attachment → wire mapping, used for both the current turn and prior
 		// turns' history. Returns null when the heavy body was already dropped
 		// (stripForPersist on a reloaded thread), so we never re-send an empty
@@ -1290,7 +1303,15 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 							// The mode rides on the context the server already reads. It
 							// selects an experience, not a privilege — the role it maps to
 							// is decided server-side.
-							context: context ? { ...context, mode: interviewModeRef.current } : context,
+							context: context
+								? {
+										...context,
+										mode: interviewModeRef.current,
+										...(context.case_id || caseIdRef.current
+											? { case_id: (context.case_id as string) || caseIdRef.current }
+											: {}),
+									}
+								: context,
 							// Per-turn model override (e.g. a grounded "Ask about this
 							// run/step" turn requests a tool-capable model so the
 							// observability tools fire). Falls back to the user's
@@ -1459,6 +1480,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		writeAppChat(app, null);         // don't resume the thread we're leaving
 		currentAppRef.current = app;
 		openedAppRef.current = null;     // let the opener fire for the new thread
+		caseIdRef.current = '';          // a new thread is not still in the old case
 		clearSession();
 		emitAppOpener(app);
 	}, [clearSession, emitAppOpener]);

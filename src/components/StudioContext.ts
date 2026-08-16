@@ -101,6 +101,11 @@ export interface ViewingContext {
 	/** Compact live-state summary for the agent-led app opener (frontend-
 	 *  prefetched from cached workflows). Override-only — not derived here. */
 	app_state?: { failing?: string[]; running?: string[]; lastRunRel?: string; loopCount?: number };
+	/** The casebook case the user opened. Override-only — it has no URL to be
+	 *  derived from, so the chat keeps it for the life of the conversation. */
+	case_id?: string;
+	/** Which of the app's modes the surface launched. Override-only. */
+	mode?: string;
 }
 
 /**

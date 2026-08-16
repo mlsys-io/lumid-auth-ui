@@ -2,20 +2,50 @@
 // header popover (StudioChat) and the side canvas (StudioArtifactPanel) so rich
 // output kinds render identically everywhere.
 //
-// Kinds: markdown | code | json | text | image | audio | chart | pdf
-//   - chart: a JSON spec { type, data, xKey, series } rendered with recharts.
-//     The catalog→query→plot loop (WS7) feeds data_query rows straight into `data`.
-//   - pdf: previews inline via native <embed> (no react-pdf dependency).
+// Kinds: markdown | code | json | text | image | audio | chart | vega | candles | table | pdf
+//   - chart:   a JSON spec { type, data, xKey, series } rendered with recharts.
+//              The catalog→query→plot loop (WS7) feeds data_query rows straight into `data`.
+//              Kept for back-compat; `vega` is the richer default for new charts.
+//   - vega:    a Vega-Lite spec. Layering, faceting, binning, dual axis, heatmaps,
+//              scatter — plus tooltips/pan/zoom/brushing via `params`, and an
+//              export-PNG/SVG actions menu. A public grammar the model already knows.
+//   - candles: OHLC (+ optional volume) on a real financial time scale, with a
+//              magnet crosshair and drag-pan / scroll-zoom.
+//   - table:   query result rows, sortable by header and filterable by substring.
+//   - pdf:     previews inline via native <embed> (no react-pdf dependency).
+//
+// The three rich kinds are code-split (React.lazy): the vega runtime alone is
+// ~3.7 MB unpacked, so a markdown artifact must never pay for it.
 
+import { lazy, Suspense } from 'react';
 import {
 	ResponsiveContainer, LineChart, BarChart, AreaChart,
 	Line, Bar, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts';
-import { FileText, FileJson, Code2, Image as ImageIcon, AudioLines, BarChart3, FileType2 } from 'lucide-react';
+import {
+	FileText, FileJson, Code2, Image as ImageIcon, AudioLines, BarChart3, FileType2,
+	CandlestickChart, Table2, AreaChart as AreaChartIcon,
+} from 'lucide-react';
 import { ChatMarkdown } from './ChatMarkdown';
 
+const VegaArtifact = lazy(() => import('./artifacts/VegaArtifact'));
+const CandlesArtifact = lazy(() => import('./artifacts/CandlesArtifact'));
+const TableArtifact = lazy(() => import('./artifacts/TableArtifact'));
+
 export type ArtifactKind =
-	| 'markdown' | 'code' | 'json' | 'text' | 'image' | 'audio' | 'chart' | 'pdf';
+	| 'markdown' | 'code' | 'json' | 'text' | 'image' | 'audio'
+	| 'chart' | 'vega' | 'candles' | 'table' | 'pdf';
+
+// Reserve the rendered height while a split chunk loads so the panel doesn't
+// jump once vega resolves.
+function RichFallback() {
+	return (
+		<div className="w-full flex items-center justify-center text-[11.5px] text-slate-400"
+			style={{ height: 280 }}>
+			Loading chart…
+		</div>
+	);
+}
 
 export function ArtifactView({ kind, content, title, language }: {
 	kind: ArtifactKind;
@@ -52,6 +82,12 @@ export function ArtifactView({ kind, content, title, language }: {
 			);
 		case 'chart':
 			return <ChartArtifact spec={content} />;
+		case 'vega':
+			return <Suspense fallback={<RichFallback />}><VegaArtifact spec={content} /></Suspense>;
+		case 'candles':
+			return <Suspense fallback={<RichFallback />}><CandlesArtifact spec={content} /></Suspense>;
+		case 'table':
+			return <Suspense fallback={<RichFallback />}><TableArtifact spec={content} /></Suspense>;
 		case 'pdf':
 			return (
 				<embed src={content} type="application/pdf"
@@ -70,6 +106,9 @@ export function ArtifactKindIcon({ kind }: { kind: ArtifactKind }) {
 		case 'image':    return <ImageIcon className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />;
 		case 'audio':    return <AudioLines className="w-3.5 h-3.5 text-violet-600 flex-shrink-0" />;
 		case 'chart':    return <BarChart3 className="w-3.5 h-3.5 text-sky-600 flex-shrink-0" />;
+		case 'vega':     return <AreaChartIcon className="w-3.5 h-3.5 text-sky-600 flex-shrink-0" />;
+		case 'candles':  return <CandlestickChart className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />;
+		case 'table':    return <Table2 className="w-3.5 h-3.5 text-indigo-600 flex-shrink-0" />;
 		case 'pdf':      return <FileType2 className="w-3.5 h-3.5 text-rose-600 flex-shrink-0" />;
 		default:         return <FileText className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />;
 	}
@@ -90,7 +129,10 @@ export function artifactDownload(kind: ArtifactKind, content: string, title: str
 		setTimeout(() => document.body.removeChild(a), 100);
 		return;
 	}
-	const ext = kind === 'markdown' ? 'md' : kind === 'json' || kind === 'chart' ? 'json' : kind === 'code' ? 'txt' : 'txt';
+	// The spec-bearing kinds are all JSON on disk, so they round-trip into a
+	// re-usable file rather than an opaque .txt.
+	const JSON_KINDS: ArtifactKind[] = ['json', 'chart', 'vega', 'candles', 'table'];
+	const ext = kind === 'markdown' ? 'md' : JSON_KINDS.includes(kind) ? 'json' : 'txt';
 	const blob = new Blob([content], { type: 'text/plain' });
 	a.href = URL.createObjectURL(blob);
 	a.download = `${safeTitle}.${ext}`;

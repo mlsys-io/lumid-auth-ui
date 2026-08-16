@@ -42,6 +42,17 @@ export default defineConfig({
           if (!id.includes("node_modules")) return undefined;
           if (/[\\/]node_modules[\\/](@xyflow|reactflow)[\\/]/.test(id)) return "vendor-flow";
           if (/[\\/]node_modules[\\/](recharts|chart\.js|react-chartjs-2|d3-[^\\/]+|internmap|victory-[^\\/]+)[\\/]/.test(id)) return "vendor-charts";
+          // vega + vega-lite + vega-embed back the `vega` artifact kind, which is
+          // React.lazy'd in ArtifactView. The runtime is ~3.7 MB unpacked, so it
+          // MUST stay out of `vendor` — otherwise every page pays for a chart kind
+          // most sessions never open. Its shared d3-* deps land in vendor-charts
+          // above (recharts needs them too); rollup loads both chunks on demand.
+          // json-stringify-pretty-compact is pulled in ONLY by vega-embed (it
+          // renders the "view source" panel); left unlisted it lands in the eager
+          // `vendor` chunk, which defeats the point of splitting vega out.
+          if (/[\\/]node_modules[\\/](vega[^\\/]*|topojson-client|json-stringify-pretty-compact)[\\/]/.test(id)) return "vendor-vega";
+          // lightweight-charts backs the `candles` kind — also lazy, ~50 kB gzip.
+          if (/[\\/]node_modules[\\/]lightweight-charts[\\/]/.test(id)) return "vendor-charts-fin";
           if (/[\\/]node_modules[\\/](@monaco-editor|monaco-editor)[\\/]/.test(id)) return "vendor-editor";
           if (/[\\/]node_modules[\\/]@emoji-mart[\\/]/.test(id)) return "vendor-emoji";
           if (/[\\/]node_modules[\\/](react-markdown|remark-[^\\/]+|rehype-[^\\/]+|micromark[^\\/]*|mdast-[^\\/]+|hast-[^\\/]+|hastscript|unist-[^\\/]+|unified|vfile[^\\/]*|property-information|github-markdown-css|katex)[\\/]/.test(id)) return "vendor-markdown";
