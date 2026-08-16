@@ -158,8 +158,10 @@ ops:
 ## Gotchas (learned the hard way)
 
 - **Two different model-id namespaces — don't mix them.** For the **lumid-llm mesh** (OpenAI-compat
-  gateway, `/fm` chat paths) use the FULL gateway keys `nvidia/Gemma-4-26B-A4B-NVFP4`,
+  gateway, `/fm` chat paths) use the FULL gateway keys `qwen3.8-27b` (the default, 1M context),
   `qwen3.6-27b`, `qwen3.6-35b-a3b` — **NOT** `gemma` (unknown ids → OpenRouter catch-all → 502).
+  `nvidia/Gemma-4-26B-A4B-NVFP4` was **retired 2026-08-15** when both GB10 boxes moved to
+  `qwen3.8-27b`; requests naming it no longer resolve.
   For a **Lumilake `LLMChatOp`** use a **HuggingFace id** (`Qwen/Qwen2.5-7B-Instruct`,
   `Qwen/Qwen2.5-0.5B-Instruct`): Lumilake runs the op as a FlowMesh **vLLM** inference task that
   loads the model from HF, so a mesh alias like `qwen3.6-27b` raises `not a valid model identifier
