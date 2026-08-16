@@ -100,12 +100,22 @@ const MODES: Mode[] = [
   },
 ];
 
-function startChat(prompt: string, app: string) {
+function startChat(prompt: string, app: string, mode: ModeId, caseId: string) {
   // Same bridge the Overview's row_actions and PageHints use — the chat rail
   // owns the conversation; this surface only grounds and launches it.
+  //
+  // The MODE travels as context, not as prose. These are fixed workflows chosen
+  // by a click, but they used to reach the model as an ordinary sentence, so the
+  // first turn was spent inferring intent across ~100 tools — measured at 32s
+  // and 53s of thinking. The server turns this into an explicit directive naming
+  // the role and the first call, which the user never has to read.
   window.dispatchEvent(
     new CustomEvent("studio:ask", {
-      detail: { prompt, autosend: true, context: { app } },
+      detail: {
+        prompt,
+        autosend: true,
+        context: { app, mode, ...(caseId ? { case_id: caseId } : {}) },
+      },
     }),
   );
 }
@@ -358,7 +368,7 @@ export default function CaseBrowser({ config }: NativeSurfaceProps) {
         <button
           type="button"
           disabled={!canStart}
-          onClick={() => startChat(activeMode.prompt(selected), app)}
+          onClick={() => startChat(activeMode.prompt(selected), app, activeMode.id, selected)}
           className={[
             "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
             canStart
