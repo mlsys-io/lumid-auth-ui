@@ -176,8 +176,18 @@ export interface MeAppUiSurface {
   markdown?: string;    // bundle-relative path to the surface doc (served via me.appUI)
   native?: string;      // reserved first-party registry key (bundle-internal only)
 }
+// An app-declared first turn for the chat. The default opener is
+// operator-shaped ("N workflows, last run 1h ago" + "run a workflow"), which is
+// right for an app you OPERATE and wrong for one you USE. Opt-in: an app that
+// declares none keeps the live-state default.
+export interface MeAppUiOpenerChip { label: string; prompt: string }
+export interface MeAppUiOpener {
+  line?: string;
+  chips?: MeAppUiOpenerChip[];
+}
 export interface MeAppUi {
   sidebar?: MeAppUiSidebar;
+  opener?: MeAppUiOpener;              // overrides the chat's first turn
   surface?: MeAppUiSurface;            // default ("home") surface
   surfaces?: Record<string, string>;  // optional named markdowns: name → bundle-relative .md
 }

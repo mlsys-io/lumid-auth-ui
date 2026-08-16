@@ -1404,8 +1404,24 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		void Promise.all([
 			prefetchAppLabels(),
 			me.listWorkflows('scheduled').then((r) => r.workflows || []).catch(() => [] as MeWorkflowRow[]),
-		]).then(([, rows]) => {
+			// The app's own opener, when it declares one.
+			me.listApps().then((r) => (r.apps || []).find((a) => a.name === app)?.ui?.opener).catch(() => undefined),
+		]).then(([, rows, opener]) => {
 			setStudioSelection({ kind: 'app', id: app, label: appTitle(app), affordances: ['app_action', 'app_read', 'run_loop_now', 'list_loops'] });
+			// An app-DECLARED opener wins. The default below is operator-shaped
+			// ("N workflows, last run 1h ago" + "run a workflow"), which is right
+			// for an app you OPERATE and wrong for one you USE — someone opening
+			// mbb-consultant to practise a case was greeted with workflow
+			// telemetry they could do nothing with. Opt-in, so every ops app the
+			// default was written for is unchanged.
+			if (opener?.line) {
+				setMessages((prev) => [...prev, {
+					role: 'assistant',
+					content: opener.line as string,
+					chips: (opener.chips || []).slice(0, 4).map((c) => ({ ...c, context: { app } })),
+				}]);
+				return;
+			}
 			const st = summarizeAppState(app, rows);
 			setMessages((prev) => [...prev, { role: 'assistant', content: openerLine(app, st), chips: chipsForApp(app, rows) }]);
 		});
