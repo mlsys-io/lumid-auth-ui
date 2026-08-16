@@ -691,27 +691,12 @@ export function StudioShell() {
 				</div>
 
 
-				{/* Documentation panel — replaces the old per-doc footer links
-				    (How it works, Claude guide, CD runbook): the tour and every
-				    guide/runbook/contract live behind one in-shell index at
-				    /studio/docs. Auth-gated docs stay enforced server-side by
-				    the edge gate regardless. */}
-				<NavLink
-					to="/studio/docs"
-					className={({ isActive }) => cn(
-						'mx-3 mb-1 flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs transition-colors hover:bg-black/[0.04]',
-						isActive ? 'text-foreground/80' : 'text-foreground/45 hover:text-foreground/70',
-					)}
-					title="Guides, contracts, and runbooks"
-				>
-					<BookOpen className="w-3.5 h-3.5 flex-shrink-0" />
-					<span>Documentation</span>
-				</NavLink>
-
 				{/* User menu — pinned bottom-left, opens upward. Holds
 				    everything the top-right avatar dropdown used to
 				    (Settings, API tokens, Admin, Sign out) so account
-				    surfaces live in one place. */}
+				    surfaces live in one place, plus Documentation — the
+				    standalone sidebar link was folded in here so the rail
+				    carries navigation only. */}
 				<div ref={menuRef} className="p-3 border-t border-sidebar-border relative">
 					<button
 						onClick={() => setMenuOpen((v) => !v)}
@@ -776,6 +761,16 @@ export function StudioShell() {
 									Management
 								</Link>
 							)}
+							{/* Documentation — the in-shell index over every guide,
+							    contract and runbook. Auth-gated docs stay enforced
+							    server-side by the edge gate regardless. */}
+							<Link to="/studio/docs"
+								onClick={() => setMenuOpen(false)}
+								title="Guides, contracts, and runbooks"
+								className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted">
+								<BookOpen className="w-3.5 h-3.5 text-muted-foreground" />
+								Documentation
+							</Link>
 							<button
 								onClick={onLogout}
 								className="w-full flex items-center gap-2 px-3 py-2 text-sm text-rose-700 hover:bg-rose-50 border-t border-border/60 mt-1 pt-2">
@@ -861,6 +856,12 @@ export function StudioShell() {
 									<div className="absolute right-0 mt-1.5 w-44 rounded-lg border border-border bg-popover shadow-lg py-1 z-20 text-sm">
 										<button onClick={() => { setAcctOpen(false); navigate('/studio/settings'); }} className="w-full text-left px-3 py-1.5 hover:bg-muted flex items-center gap-2">
 											<Settings className="w-3.5 h-3.5" /> Settings
+										</button>
+										{/* Documentation also lives here: this dropdown only
+										    renders when the sidebar is hidden, which is exactly
+										    when the sidebar user menu carrying it is unreachable. */}
+										<button onClick={() => { setAcctOpen(false); navigate('/studio/docs'); }} className="w-full text-left px-3 py-1.5 hover:bg-muted flex items-center gap-2">
+											<BookOpen className="w-3.5 h-3.5" /> Documentation
 										</button>
 										<button onClick={onLogout} className="w-full text-left px-3 py-1.5 hover:bg-muted flex items-center gap-2 text-muted-foreground">
 											<LogOut className="w-3.5 h-3.5" /> Sign out
