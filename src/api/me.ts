@@ -751,6 +751,23 @@ export const me = {
       `/apps/${encodeURIComponent(app)}/dataset-file?path=${encodeURIComponent(path)}`,
     ),
 
+  // The case roster — what the picker lists.
+  casebook: (app: string) =>
+    call<{ app: string; cases: MeCasebookCase[] }>(
+      "GET",
+      `/apps/${encodeURIComponent(app)}/casebook`,
+    ),
+
+  // One case, ANALYST-SAFE: opening prompt, client context, question texts.
+  // The server builds this by inclusion, so it structurally cannot carry
+  // structure_4_ground_truth — a candidate may read the question, never the
+  // marking scheme. Do not add a "full" variant on this path.
+  casebookCase: (app: string, caseId: string) =>
+    call<MeCasebookCaseDetail>(
+      "GET",
+      `/apps/${encodeURIComponent(app)}/casebook/${encodeURIComponent(caseId)}`,
+    ),
+
   // A case's full evaluation report (per-Q triangulated scores + cited evidence
   // + cross-cycle regressions) — the interview_report markdown the runner wrote.
   // `ts` (a cycle dir-id) pins the report to a specific run; omit for the newest.
@@ -925,6 +942,37 @@ export interface MeExperimentDetail extends MeExperiment {
 }
 
 // Dataset explorer shapes (GET /me/apps/:app/datasets + /dataset-file).
+// A roster row. `fields` is the scalar preview the server can cheaply extract
+// (industry, difficulty, title…); anything longer lives in the detail read.
+export interface MeCasebookCase {
+  id: string;
+  label: string;
+  fields?: Record<string, unknown>;
+  latest_score?: number;
+}
+
+// The analyst-safe case view. Note what is ABSENT and must stay absent:
+// structure_4_ground_truth (the answer key) and structure_2 (the interviewer's
+// release inventory — facts the candidate is meant to have to ask for).
+export interface MeCasebookCaseDetail {
+  id: string;
+  unavailable?: boolean;
+  case_type?: string;
+  difficulty?: string;
+  industry?: string;
+  topic?: string;
+  expected_duration_minutes?: number;
+  opening_prompt?: string;
+  source?: { title?: string; year?: number };
+  client_context?: Record<string, unknown>;
+  questions?: Array<{
+    q_id: string;
+    type?: string;
+    question_text?: string;
+    information_to_share_upfront?: string;
+  }>;
+}
+
 export interface MeDatasetFileRef { path: string; name: string; bytes: number; kind: string }
 export interface MeDatasetGroup { group: string; label: string; files: MeDatasetFileRef[] }
 export interface MeDatasetFile { app: string; path: string; name: string; kind: string; bytes: number; truncated: boolean; content: string }
