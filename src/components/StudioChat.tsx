@@ -1752,6 +1752,26 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 			{/* The Conversations picker moved to the shell's left sidebar
 			    ("Recent") on 2026-08-10 — one list, always visible, instead of
 			    a popover buried in the chat header. Artifacts moved with it. */}
+			{/* New conversation, grounded on the SAME app.
+			    The docked chat had only Delete, so the only way to start fresh on
+			    an app page was to destroy the thread you were looking at — you
+			    lost the transcript to get a clean one. (Clicking the app in the
+			    sidebar also starts a new thread, but nothing says so, and you are
+			    already on the app's page.) newAppChat has existed all along and
+			    listens on studio:new-app-chat; it just had no button. Docked only:
+			    the home chat has "New chat" in the sidebar. */}
+			{docked && messages.length > 0 && (
+				<button
+					onClick={() => {
+						const app = workspaceApp() || currentAppRef.current;
+						if (app) window.dispatchEvent(new CustomEvent('studio:new-app-chat', { detail: { app } }));
+					}}
+					title="New conversation" aria-label="New conversation"
+					className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+				>
+					<MessageSquarePlus className="w-4 h-4" />
+				</button>
+			)}
 			{messages.length > 0 && (
 				<button onClick={clear} title="Delete this conversation" aria-label="Delete this conversation"
 					className="p-1.5 rounded-md text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition-colors">
