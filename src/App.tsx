@@ -80,6 +80,7 @@ const StudioClaudeSessions = lazy(() => import("./pages/studio/claude-sessions")
 const StudioDocs       = lazy(() => import("./pages/studio/docs"));
 const StudioMarketplace = lazy(() => import("./pages/studio/library"));
 const StudioLibraryTabs = lazy(() => import("./pages/studio/library-tabs"));
+const StudioData        = lazy(() => import("./pages/studio/data"));
 const StudioRepo = lazy(() => import("./pages/studio/repo"));
 const PublicShell = lazy(() => import("./components/PublicShell"));
 
@@ -722,6 +723,11 @@ export default function App() {
                 (MarketplaceBrowse). Was redirecting out to xp.io, leaving no
                 in-app install affordance; now mounts the page so install works
                 from the dashboard. */}
+            {/* Data — a system app (Catalog + Explorer tabs), like Library.
+                Catalog is the federated data-lake viewer; Explorer runs any
+                allowlisted data-app's declared endpoints. Renders the native
+                components directly — no /me/apps/:app/ui round-trip. */}
+            <Route path="data"                         element={<StudioData />} />
             {/* Library — Marketplace / Skills / Experiments as tabs under
                 one nav entry; the old top-level paths redirect in. */}
             <Route path="library"                      element={<StudioLibraryTabs />}>

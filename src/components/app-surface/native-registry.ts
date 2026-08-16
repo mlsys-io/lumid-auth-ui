@@ -50,6 +50,13 @@ export const NATIVE_SURFACES: Record<string, ComponentType<NativeSurfaceProps>> 
   // an allowlisted base-id (nginx /dataapp-proxy/<id>/). Powers lumid-data-explorer.
   "data-app-browser": lazy(() => import("./DataAppBrowser")),
 
+  // Federated data-lake catalog viewer — instance->schema->table tree with
+  // sample/columns/profile tabs and freshness pills, fanned out client-side
+  // across every lumid-data-service instance. Powers lumid-data-lake's Catalog
+  // tab (and /studio/data). Interactive tree + per-selection fetches, so it
+  // can't be a directive. Config: { title }.
+  "data-lake-viewer": lazy(() => import("./DataLakeViewer")),
+
   // Case browser — pick a mode, READ a case, then start. Interactive (mode
   // state + selection + a detail fetch per selection), so it can't be a
   // directive. Powers mbb-consultant's front door: the roster table could list

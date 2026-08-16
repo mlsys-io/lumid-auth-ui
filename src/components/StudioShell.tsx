@@ -16,6 +16,7 @@ import {
 	PanelLeftClose,
 	PanelLeftOpen,
 	Store,
+	Database,
 	Settings,
 	Shield,
 	BookOpen,
@@ -89,6 +90,7 @@ interface NavItem {
 // footer docs link.
 const TOP_NAV: NavItem[] = [
 	// Fleet is merged into "Manage apps" (/studio/apps/all) — no separate entry.
+	{ to: '/studio/data', label: 'Data', icon: Database, title: 'browse the data mesh — catalog + endpoint explorer' },
 	{ to: '/studio/library', label: 'Library', icon: Store, title: 'marketplace, skills, and experiments' },
 	// "Scheduled" — the claude.ai counterpart of our workflow/loop runs. Points
 	// at the unified runs surface (list/grid/gantt/calendar over every loop).
@@ -103,6 +105,7 @@ const TOP_NAV: NavItem[] = [
 // Vite dedupes these dynamic imports with App.tsx's lazy() — same chunk.
 const ROUTE_PREFETCH: Record<string, () => Promise<unknown>> = {
 	"/studio/library": () => import("@/pages/studio/library-tabs"),
+	"/studio/data": () => import("@/pages/studio/data"),
 	"/studio/runs": () => import("@/pages/studio/runs"),
 	"/studio/portfolio": () => import("@/pages/studio/portfolio"),
 };
