@@ -297,7 +297,29 @@ function FieldBoxPanel() {
 							<th className="text-right font-medium px-2.5 py-1">In</th>
 							<th className="text-right font-medium px-2.5 py-1">Out</th>
 							<th className="text-right font-medium px-2.5 py-1">Turns</th>
-							<th className="text-right font-medium px-2.5 py-1">Tokens</th>
+							{/* NOT the quota number, and deliberately not called "Tokens".
+							    This column is raw input+output from claude_session_turns,
+							    which (a) is only written for users who have session
+							    recording ON, (b) has no cache columns at all, so cached
+							    prompt tokens land inside "input", and (c) applies no model
+							    weighting. The per-user table and the caps use
+							    ClaudeWeightedTokensSQL over usage_events instead — the same
+							    expression the proxy's admission gate uses. Over one 7-day
+							    window the two read 1.55B vs 94.7M on "input" alone, so
+							    presenting both as "Tokens" invited exactly the comparison
+							    that cannot hold. */}
+							<th
+								className="text-right font-medium px-2.5 py-1"
+								title={
+									'Raw input+output from RECORDED turns only — not a quota figure.\n' +
+									'• Only counts users with session recording enabled\n' +
+									'• Excludes cache read/write tokens (usually the bulk of the draw)\n' +
+									'• No model weighting\n' +
+									'For quota, read the per-user table below.'
+								}
+							>
+								Recorded tok
+							</th>
 							<th className="text-left  font-medium px-2.5 py-1">Routing</th>
 						</tr>
 					</thead>
@@ -346,7 +368,13 @@ function FieldBoxPanel() {
 									<td className="px-2.5 py-1 text-right font-mono text-slate-600">{fmtBytes(b.request_bytes)}</td>
 									<td className="px-2.5 py-1 text-right font-mono text-slate-600">{fmtBytes(b.response_bytes)}</td>
 									<td className="px-2.5 py-1 text-right font-mono text-slate-600">{fmtCount(b.turns)}</td>
-									<td className="px-2.5 py-1 text-right font-mono text-slate-500">
+									<td
+										className="px-2.5 py-1 text-right font-mono text-slate-500"
+										title={
+											'Recorded turns only, raw input+output, no cache, no model weighting — ' +
+											'not comparable to the per-user token figures below.'
+										}
+									>
 										{fmtCount(b.input_tokens + b.output_tokens)}
 									</td>
 									<td className="px-2.5 py-1">
@@ -377,6 +405,10 @@ function FieldBoxPanel() {
 				through it in the window. Active overlaps between boxes because leases rotate, and misses
 				users who opted out of transcript recording — read it as a floor.
 				Sizes are true wire bytes, unaffected by the transcript cap.
+				{' '}<span className="font-mono">Recorded tok</span> is raw input+output from those same
+				recorded turns — it excludes cache tokens and applies no model weighting, so it is a
+				traffic-shape indicator and <strong>not</strong> a quota figure. Quota is the weighted
+				per-user number below, computed with the same expression the proxy's admission gate uses.
 				{data.signal_since
 					? ` Routing verified for turns since ${new Date(data.signal_since).toLocaleString()}.`
 					: ' Routing verification has no data yet.'}
