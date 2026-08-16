@@ -39,6 +39,30 @@ interface ToolCallSummary {
 const STORAGE_KEY = "lumid:chat:v1";
 const MAX_PERSISTED_MESSAGES = 40;
 
+// Panel size bounds. The minimum is the point below which the composer and a
+// couple of messages stop coexisting; the maximum keeps it a widget rather
+// than a takeover — full screen is what /studio is for.
+const WIDGET_SIZE_KEY = "lumid:chat:size:v1";
+const DEFAULT_W = 400;
+const DEFAULT_H = 560;
+const MIN_W = 320;
+const MIN_H = 360;
+const MAX_W = 900;
+const MAX_H = 900;
+
+/** Clamp to the bounds AND to the viewport, leaving the 1rem inset the
+ *  widget is positioned with. Viewport-clamping matters on reload: a size
+ *  saved on a large monitor would otherwise open off-screen on a laptop,
+ *  putting the resize grip somewhere unreachable. */
+function clampSize(w: number, h: number): { w: number; h: number } {
+  const maxW = Math.min(MAX_W, Math.max(MIN_W, window.innerWidth - 32));
+  const maxH = Math.min(MAX_H, Math.max(MIN_H, window.innerHeight - 32));
+  return {
+    w: Math.round(Math.max(MIN_W, Math.min(maxW, w))),
+    h: Math.round(Math.max(MIN_H, Math.min(maxH, h))),
+  };
+}
+
 // Initial chips shown when the conversation is empty. Clicking sends
 // the prompt immediately rather than filling the textbox — fewer clicks,
 // more conversational.
@@ -145,6 +169,63 @@ export default function ChatWidget() {
   // Identity used to tag persisted chat. `id` is the user_sub on the
   // UserInfo shape returned by /api/v1/user.
   const userSub = user?.id ?? null;
+
+  // Panel size. Was hardcoded w-[400px] h-[560px] with no way to change it —
+  // on a long answer with code blocks that is a lot of scrolling in a small box.
+  //
+  // The widget is anchored BOTTOM-RIGHT, so the grip goes on the TOP-LEFT
+  // corner and both axes invert: dragging up/left grows it. Persisted so the
+  // size survives a reload, and clamped to the viewport so a size saved on a
+  // big monitor cannot render the widget unusable on a laptop.
+  const [size, setSize] = useState<{ w: number; h: number }>(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem(WIDGET_SIZE_KEY) || "null");
+      if (raw && Number.isFinite(raw.w) && Number.isFinite(raw.h)) return clampSize(raw.w, raw.h);
+    } catch { /* ignore */ }
+    return { w: DEFAULT_W, h: DEFAULT_H };
+  });
+  const [resizing, setResizing] = useState(false);
+
+  const startResize = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    setResizing(true);
+    const sx = e.clientX, sy = e.clientY, sw = size.w, sh = size.h;
+    const onMove = (ev: PointerEvent) => {
+      // Bottom-right anchored: leftward/upward drag must GROW the panel.
+      setSize(clampSize(sw + (sx - ev.clientX), sh + (sy - ev.clientY)));
+    };
+    const onUp = () => {
+      setResizing(false);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }, [size]);
+
+  useEffect(() => {
+    if (resizing) return;  // persist on release, not per pointermove
+    try { localStorage.setItem(WIDGET_SIZE_KEY, JSON.stringify(size)); } catch { /* ignore */ }
+  }, [resizing, size]);
+
+  // Hold the resize cursor and suppress selection for the whole drag — the
+  // pointer leaves the small grip immediately, taking the cursor with it.
+  useEffect(() => {
+    if (!resizing) return;
+    const { body } = document;
+    const c = body.style.cursor, u = body.style.userSelect;
+    body.style.cursor = "nwse-resize";
+    body.style.userSelect = "none";
+    return () => { body.style.cursor = c; body.style.userSelect = u; };
+  }, [resizing]);
+
+  // A window shrunk below a saved size would otherwise leave the widget
+  // hanging off-screen with its grip unreachable.
+  useEffect(() => {
+    const onResize = () => setSize((s) => clampSize(s.w, s.h));
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -406,7 +487,30 @@ export default function ChatWidget() {
   const showFollowups = !busy && followups.length > 0 && messages.length > 0;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 w-[400px] max-w-[calc(100vw-2rem)] h-[560px] max-h-[calc(100vh-2rem)] bg-white rounded-xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden">
+    <div
+      className="fixed bottom-4 right-4 z-50 max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] bg-white rounded-xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden"
+      // Inline, because the value is a dragged number — Tailwind cannot emit
+      // arbitrary classes at runtime. The max-* classes stay as a backstop for
+      // the frame before the viewport-clamp effect runs.
+      style={{ width: size.w, height: size.h }}
+    >
+      {/* Resize grip. Top-LEFT because the panel is anchored bottom-right, so
+          that is the only corner that moves when it grows. Sits above the
+          header (z-20) or the header's own controls would eat the drag. */}
+      <div
+        onPointerDown={startResize}
+        onDoubleClick={() => setSize(clampSize(DEFAULT_W, DEFAULT_H))}
+        role="separator"
+        aria-label="Resize chat (double-click to reset)"
+        title="Drag to resize · double-click to reset"
+        className={cn(
+          "absolute left-0 top-0 z-20 h-4 w-4 cursor-nwse-resize",
+          "before:absolute before:left-[5px] before:top-[5px] before:h-2 before:w-2",
+          "before:border-l-2 before:border-t-2 before:rounded-tl-sm",
+          resizing ? "before:border-slate-500" : "before:border-slate-300 hover:before:border-slate-500",
+          "before:transition-colors",
+        )}
+      />
       <header className="flex items-center justify-between px-4 py-3 border-b border-slate-200/60 bg-gradient-to-br from-indigo-50 to-purple-50">
         <div className="flex items-center gap-2">
           <div className="p-1.5 rounded-md bg-gradient-to-br from-indigo-500 to-purple-600">

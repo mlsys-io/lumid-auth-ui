@@ -231,7 +231,13 @@ function loadSessionId(currentSub: string | null | undefined, scope: string): st
 	}
 }
 const COLLAPSE_KEY = 'studio_chat_collapsed_v1';
-const WIDTH_KEY = 'studio_chat_width_v1';
+// NOTE: chat-rail width/resize lives in pages/studio/StudioWorkspace.tsx —
+// the rail is the parent element, and this component just fills what it is
+// given. A full resize implementation used to sit HERE and was unreachable
+// after the chat became a centered column: state, bounds, drag handler and
+// persistence, rendered by nothing. It read as a working feature for anyone
+// grepping this file, while the rail was hardcoded `w-[400px]`. Removed
+// 2026-08-16; do not re-add it here.
 const MODEL_KEY = 'studio_chat_model_v1';
 // Slash command palette — shorthand prompts for common LumidOS operations.
 // Typing "/" at the start of input triggers filtering on this list.
@@ -259,9 +265,6 @@ const PERSONA_KEY = 'studio_chat_persona_v1';
 const WS_REPO_KEY = 'studio_chat_ws_repo_v1';
 const WS_CLUSTER_KEY = 'studio_chat_ws_cluster_v1';
 const WS_DATA_KEY = 'studio_chat_ws_data_v1';
-const MIN_WIDTH = 320;
-const MAX_WIDTH = 720;
-const DEFAULT_WIDTH = 400;
 
 // app_tools: does this model get the app's tool catalog (casebook, scoring,
 // review)? The claude-code path is handed no tools, so inside an app it
@@ -293,14 +296,6 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 			return raw === null ? true : raw === '1';
 		} catch { return true; }
 	});
-	const [width, setWidth] = useState<number>(() => {
-		try {
-			const raw = localStorage.getItem(WIDTH_KEY);
-			const n = raw ? parseInt(raw, 10) : NaN;
-			return Number.isFinite(n) && n >= MIN_WIDTH && n <= MAX_WIDTH ? n : DEFAULT_WIDTH;
-		} catch { return DEFAULT_WIDTH; }
-	});
-	const [resizing, setResizing] = useState(false);
 	// One slot per surface: the app-less home, and one per grounded app. Sharing
 	// a slot is what let an app's conversation reappear at /studio.
 	// Scope from the ROUTE, not the prop. groundApp arrives a render late after a
@@ -1160,34 +1155,6 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		});
 	}, [messages, streaming]);
 	useEffect(() => () => { if (scrollRaf.current) cancelAnimationFrame(scrollRaf.current); }, []);
-
-	// Persist width once the user releases the drag (not on every
-	// mousemove tick — keeps localStorage writes off the hot path).
-	useEffect(() => {
-		if (resizing) return;
-		try { localStorage.setItem(WIDTH_KEY, String(width)); } catch { /* ignore */ }
-	}, [resizing, width]);
-
-	// Resize drag — pointer events handle both mouse and touch.
-	const startResize = useCallback((e: React.PointerEvent) => {
-		e.preventDefault();
-		setResizing(true);
-		const startX = e.clientX;
-		const startW = width;
-		const onMove = (ev: PointerEvent) => {
-			// Drag handle is on the LEFT edge of a right-anchored panel,
-			// so moving the cursor left grows the panel.
-			const next = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, startW + (startX - ev.clientX)));
-			setWidth(next);
-		};
-		const onUp = () => {
-			setResizing(false);
-			window.removeEventListener('pointermove', onMove);
-			window.removeEventListener('pointerup', onUp);
-		};
-		window.addEventListener('pointermove', onMove);
-		window.addEventListener('pointerup', onUp);
-	}, [width]);
 
 	// Phase S6d — listen for prompt suggestions from workspaces.
 	// Any page can dispatch `window.dispatchEvent(new CustomEvent('studio:ask',
