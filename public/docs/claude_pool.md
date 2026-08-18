@@ -118,7 +118,7 @@ Whatever model your client requests is forwarded to the pooled account
 
 The pool gates model families by your lum.id role:
 
-| Role | Sonnet / Haiku | Opus | Fable | kimi-k3 / GLM-5.2 |
+| Role | Sonnet / Haiku | Opus | Fable | relay models |
 |------|:---:|:---:|:---:|:---:|
 | `user` | ✅ | — | — | — |
 | `admin` | ✅ | ✅ | — | ✅ |
@@ -128,15 +128,26 @@ Requesting a model above your tier returns `403` with the required role —
 switch to an allowed model (e.g. `--model sonnet`) or ask an admin to raise
 your role. Unlisted/base models are available to everyone.
 
-### Non-Anthropic models (kimi-k3, GLM-5.2)
+### Non-Anthropic models (kimi-k3, GLM-5.2, DeepSeek)
 
-Two additional models are available to `admin`+ via the `lum.id/llm` relay —
+Additional models are available to `admin`+ via the `lum.id/llm` relay —
 same PAT, no extra setup:
 
-| Model flag | Backing | Price (input/output per M tok) |
-|---|---|---|
-| `--model kimi-k3` | Moonshot | $3 / $15 |
-| `--model z-ai/glm-5.2` | OpenRouter | $0.77 / $2.42 |
+| Model flag | Backing | Context | Price (input/output per M tok) |
+|---|---|---|---|
+| `--model kimi-k3` | Moonshot | — | $3 / $15 |
+| `--model z-ai/glm-5.2` | OpenRouter | — | $0.77 / $2.42 |
+| `--model deepseek/deepseek-v4-flash-0731` | OpenRouter | 1.31M | $0.14 / $0.28 |
+
+Any OpenRouter model id works, not just the ones listed — unlisted models fall
+through to the OpenRouter catch-all. Only the four locally-served models appear
+in `GET /v1/models`, so a model being absent from that list does **not** mean it
+is unavailable.
+
+**DeepSeek v4 Flash is a reasoning model**, and its reasoning tokens count
+against `max_tokens`. A small budget returns `content: null` with
+`finish_reason: "length"` — that is the budget being consumed before any answer
+is emitted, not an error. Allow a few hundred tokens minimum.
 
 These models **do not consume the Anthropic pool quota** (they use separate API
 keys). Usage is recorded and visible on [/code](/code) under **Per-user pool
