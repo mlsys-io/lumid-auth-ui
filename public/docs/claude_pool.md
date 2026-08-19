@@ -14,6 +14,7 @@ no install, no PAT setup. Pick a **(Code)** model from the model picker:
 
 | Model | Who | Backed by |
 |---|---|---|
+| DeepSeek-V4-Flash (Lumid GPU) | everyone | In-house GB10 pair — **default**, no pool quota |
 | Claude Sonnet (Code) | everyone | Account pool (your 5h/7d quota) |
 | Claude Opus (Code) | admin+ | Account pool |
 | Claude Fable 5 (Code) | super_admin | Account pool |
@@ -33,6 +34,16 @@ your personal quota next to the model picker, and their sessions are recorded
 on [/claude-sessions](/claude-sessions) like any pool traffic. The Qwen entry
 runs the same Claude Code harness against our own GPUs — free at the margin,
 not recorded by the pool, best for lighter coding tasks.
+
+**The chatbox default is DeepSeek-V4-Flash, served on our own hardware.** It runs
+tensor-parallel across the two GB10 boxes, so ordinary chat costs nothing per
+token and consumes no pool quota — reach for a Claude **(Code)** model when you
+want a real Claude Code session (tool use, repo edits, sub-agents), and leave
+everyday chat on the default. It is a reasoning model, so its thinking is
+streamed as a reasoning block and kept out of the final answer. Note this is the
+*in-house* copy, not the metered OpenRouter one — see
+[Non-Anthropic models](#non-anthropic-models-kimi-k3-glm-52-deepseek) for why the
+`deepseek/` prefix matters.
 
 ---
 
@@ -135,14 +146,32 @@ same PAT, no extra setup:
 
 | Model flag | Backing | Context | Price (input/output per M tok) |
 |---|---|---|---|
+| `--model deepseek-v4-flash` | **In-house GB10 pair** | 256K | **free** — owned GPUs |
 | `--model kimi-k3` | Moonshot | — | $3 / $15 |
 | `--model z-ai/glm-5.2` | OpenRouter | — | $0.77 / $2.42 |
 | `--model deepseek/deepseek-v4-flash-0731` | OpenRouter | 1.31M | $0.14 / $0.28 |
 
+> **Two DeepSeek-V4-Flash entries, and the difference is the bill.** They are the
+> same model weights reached two different ways, and the *only* thing telling them
+> apart is the `deepseek/` vendor prefix:
+>
+> - **`deepseek-v4-flash`** (no prefix) — served on **our own two GB10 boxes**,
+>   tensor-parallel across the pair. Free at the margin, no metering, no data
+>   leaving the tailnet. 256K context. This is the one the Studio chatbox uses by
+>   default. Prefer it.
+> - **`deepseek/deepseek-v4-flash-0731`** (vendor prefix) — the **OpenRouter**
+>   hosted copy, cost-metered per token, larger 1.31M context.
+>
+> Reach for the OpenRouter one only when you genuinely need context beyond 256K
+> or the in-house pair is down; otherwise the prefix just spends money on a model
+> we already host.
+
 Any OpenRouter model id works, not just the ones listed — unlisted models fall
-through to the OpenRouter catch-all. Only the four locally-served models appear
-in `GET /v1/models`, so a model being absent from that list does **not** mean it
-is unavailable.
+through to the OpenRouter catch-all. That fallthrough is also a trap worth knowing:
+a **mistyped or retired local model id does not 404**, it silently becomes an
+OpenRouter request. Only the locally-served models appear in `GET /v1/models`, so
+a model being absent from that list does **not** mean it is unavailable — but it
+does mean you are about to be billed for it.
 
 **DeepSeek v4 Flash is a reasoning model**, and its reasoning tokens count
 against `max_tokens`. A small budget returns `content: null` with

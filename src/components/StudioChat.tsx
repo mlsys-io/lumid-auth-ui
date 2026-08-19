@@ -3246,8 +3246,9 @@ function estimateCost(tokens: number, modelId: string): number {
 function modelShortLabel(id: string): string {
 	if (id === 'claude-code-opus') return 'Opus';
 	if (id === 'claude-code-sonnet') return 'Sonnet';
-	// id is historical (see me_agent.go) — it now serves Qwen3.8-27B, not Gemma-4.
-	if (id === 'kvrun-gemma4') return 'Qwen3.8';
+	// id is historical (see me_agent.go) — it now serves DeepSeek-V4-Flash on the
+	// GB10 pair, not Gemma-4 (and not Qwen3.8, which it served in between).
+	if (id === 'kvrun-gemma4') return 'DeepSeek';
 	if (id === 'kvrun-minimax') return 'MiniMax';
 	if (id === 'claude-haiku') return 'Haiku';
 	return id.length > 10 ? id.slice(0, 10) + '…' : id;
