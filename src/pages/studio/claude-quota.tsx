@@ -9,6 +9,7 @@
 // the last known snapshot with a warning badge.
 
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { useAuth } from '../../hooks/useAuth';
 import { RefreshCw, Zap, AlertTriangle, CheckCircle, Loader2, UserPlus, X, Trash2, RotateCcw } from 'lucide-react';
 import {
 	fetchClaudeQuota,
@@ -16,6 +17,7 @@ import {
 	adminAddClaudeToken,
 	adminDeleteClaudeToken,
 	adminResetClaudePoolWindow,
+	adminResetClaudePoolWindowAll,
 	fetchClaudeFieldBoxes,
 	type ClaudeFieldBoxResp,
 	type ClaudeQuotaAccount,
@@ -658,9 +660,13 @@ function UserUsageSection({
 	usage,
 	countdown,
 	onReset,
+	isSuper,
 }: {
 	usage: ClaudeUserUsageResp;
 	countdown: number;
+	// /code is AdminGuard, the reset route is RequireSuperAdmin — so the page
+	// has viewers who must not be shown the reset controls at all.
+	isSuper: boolean;
 	// Re-fetch after a reset so the row shows 0% immediately rather than the
 	// pre-reset figure until the 2-minute auto-refresh happens to fire.
 	onReset: () => void;
@@ -680,8 +686,9 @@ function UserUsageSection({
 					caps: {fmtTokens(usage.five_hour_tokens)} tok / {shortWin} · {fmtTokens(usage.seven_day_tokens)} tok / 7d (claude-* only)
 					{' · '}users with a <code className="font-mono text-[10px]">claude:proxy</code> PAT appear even at 0 usage
 				</span>
-				<span className="ml-auto shrink-0 text-[10px] text-slate-400 tabular-nums">
-					↺ {cdText}
+				<span className="ml-auto shrink-0 flex items-center gap-2">
+					<ResetAllButton isSuper={isSuper} userCount={usage.users.length} shortLabel={shortWin} onDone={onReset} />
+					<span className="text-[10px] text-slate-400 tabular-nums">↺ {cdText}</span>
 				</span>
 			</div>
 			<div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100">
@@ -712,7 +719,7 @@ function UserUsageSection({
 								    the timestamp) these sat at the extreme right of an already dense
 								    row with no flex-wrap, so on anything but a very wide window they
 								    were pushed out of view — shipped once that way and invisible. */}
-								<ResetWindowButtons email={u.email} shortLabel={shortWin} onDone={onReset} />
+								<ResetWindowButtons isSuper={isSuper} email={u.email} shortLabel={shortWin} onDone={onReset} />
 								<span className="flex-1 min-w-0 text-[10px] text-slate-400 truncate">
 									{fmtTokens(u.seven_day_tokens)} tok · {u.requests_7d} req
 									{u.cost_cents_7d > 0 && <> · <span className="text-slate-500">{fmtCents(u.cost_cents_7d)}</span></>}
@@ -727,8 +734,117 @@ function UserUsageSection({
 	);
 }
 
+// Reset the clock for EVERY user. Deliberately harder to fire than the per-row
+// button: this is the fleet-wide giveaway, and the two are one click apart on the
+// same screen.
+//
+// Friction is a typed confirmation naming the exact user count, not a yes/no —
+// window.confirm on a destructive-ish bulk action is muscle-memory dismissed. The
+// count comes from the rendered list, so the operator confirms against what they
+// can actually see.
+//
+// "both" is offered because the case this exists for is a cap retune (2026-08-11:
+// 4M/5h -> 2M/4h left every anchor stale under the old policy), where you want
+// everyone clean on both clocks at once.
+function ResetAllButton({ isSuper, userCount, shortLabel, onDone }: { isSuper: boolean; userCount: number; shortLabel: string; onDone: () => void }) {
+	const [open, setOpen] = useState(false);
+	const [win, setWin] = useState<'short' | 'weekly' | 'both'>('short');
+	const [typed, setTyped] = useState('');
+	const [busy, setBusy] = useState(false);
+	const [err, setErr] = useState<string | null>(null);
+
+	const phrase = `reset ${userCount}`;
+	const armed = typed.trim().toLowerCase() === phrase;
+
+	const run = async () => {
+		if (!armed) return;
+		setBusy(true);
+		setErr(null);
+		try {
+			await adminResetClaudePoolWindowAll(win);
+			setOpen(false);
+			setTyped('');
+			onDone();
+		} catch (e) {
+			setErr(e instanceof Error ? e.message : String(e));
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	if (!isSuper) return null;
+	if (!open) {
+		return (
+			<button
+				type="button"
+				onClick={() => setOpen(true)}
+				className="inline-flex items-center gap-1 rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5
+					text-[10px] font-medium text-amber-800 hover:bg-amber-100 transition"
+				title={`Reset the quota clock for all ${userCount} users`}
+			>
+				<RotateCcw className="w-2.5 h-2.5" />
+				reset all
+			</button>
+		);
+	}
+
+	return (
+		<span className="inline-flex items-center gap-1.5 rounded border border-amber-300 bg-amber-50 px-2 py-1">
+			<span className="text-[10px] text-amber-900">
+				reset <strong>all {userCount}</strong> users:
+			</span>
+			{(['short', 'weekly', 'both'] as const).map((w) => (
+				<button
+					key={w}
+					type="button"
+					onClick={() => setWin(w)}
+					className={`rounded px-1 py-0.5 text-[10px] font-medium transition ${
+						win === w ? 'bg-amber-600 text-white' : 'text-amber-800 hover:bg-amber-100'
+					}`}
+				>
+					{w === 'short' ? shortLabel : w === 'weekly' ? '7d' : 'both'}
+				</button>
+			))}
+			<input
+				value={typed}
+				onChange={(e) => setTyped(e.target.value)}
+				placeholder={`type "${phrase}"`}
+				className="w-28 rounded border border-amber-300 px-1 py-0.5 text-[10px] font-mono
+					focus:outline-none focus:border-amber-500"
+			/>
+			<button
+				type="button"
+				onClick={() => void run()}
+				disabled={!armed || busy}
+				className="rounded bg-amber-600 px-1.5 py-0.5 text-[10px] font-medium text-white
+					hover:bg-amber-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+			>
+				{busy ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : 'confirm'}
+			</button>
+			<button
+				type="button"
+				onClick={() => { setOpen(false); setTyped(''); setErr(null); }}
+				className="text-[10px] text-amber-700 hover:text-amber-900"
+			>
+				cancel
+			</button>
+			{err && <span className="text-[10px] text-red-600 max-w-[10rem] truncate" title={err}>{err}</span>}
+		</span>
+	);
+}
+
 // Reset one user's pooled-quota clock. super_admin only — the route is
-// RequireSuperAdmin server-side and this whole page is super_admin-gated, so the
+// RequireSuperAdmin server-side.
+//
+// NOTE: this page is NOT super_admin-gated. /code sits behind AdminGuard, so a
+// plain `admin` loads it fine; only the reset ROUTE is super_admin. An earlier
+// version of this comment claimed the page was gated and rendered the buttons
+// unconditionally, which showed every admin a control that could only ever
+// answer 403 "super_admin required". Both controls now take an `isSuper` prop
+// and render nothing without it. The server check is still the real boundary —
+// this is about not offering an action the viewer cannot take.
+//
+// the
 // button is the third gate, not the only one.
 //
 // Confirms first. Resetting is not destructive (the server EXPIRES the anchor, so
@@ -736,10 +852,12 @@ function UserUsageSection({
 // IS a quota giveaway, and the two windows are worth very different amounts: the
 // 4h clock refreshes on its own within hours, the 7d one is the weekly budget.
 function ResetWindowButtons({
+	isSuper,
 	email,
 	shortLabel,
 	onDone,
 }: {
+	isSuper: boolean;
 	email: string;
 	shortLabel: string;
 	onDone: () => void;
@@ -765,6 +883,10 @@ function ResetWindowButtons({
 		}
 	};
 
+
+	// Rendered on an AdminGuard page, but the endpoint is RequireSuperAdmin.
+	// Without this a plain admin sees a button whose only outcome is a 403.
+	if (!isSuper) return null;
 	return (
 		<span className="flex items-center gap-1 shrink-0">
 			<span className="text-[10px] text-slate-400">reset</span>
@@ -880,6 +1002,10 @@ function SummaryBar({ accounts }: { accounts: ClaudeQuotaAccount[] }) {
 }
 
 export default function StudioClaudeQuota() {
+	// /code is AdminGuard (admin + super_admin); the reset endpoint is
+	// RequireSuperAdmin. Gate the reset controls on the stricter of the two.
+	const { user } = useAuth();
+	const isSuper = user?.role === 'super_admin';
 	const [accounts, setAccounts] = useState<ClaudeQuotaAccount[] | null>(null);
 	const [userUsage, setUserUsage] = useState<ClaudeUserUsageResp | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -1012,7 +1138,7 @@ export default function StudioClaudeQuota() {
 			    so a field-box outage can't blank the quota page above it. */}
 			<FieldBoxPanel />
 
-			{userUsage && <UserUsageSection usage={userUsage} countdown={countdown} onReset={loadUserUsage} />}
+			{userUsage && <UserUsageSection usage={userUsage} countdown={countdown} onReset={loadUserUsage} isSuper={isSuper} />}
 
 			{userUsage && <ModelCostPanel usage={userUsage} />}
 

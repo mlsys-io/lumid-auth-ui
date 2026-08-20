@@ -502,14 +502,34 @@ export async function adminDeleteClaudeToken(email: string): Promise<void> {
  * so the user reads zero and a fresh window opens on their next charge instead
  * of a 4h clock ticking down while they are not working.
  *
- * Omitting the email would reset EVERY user, which this helper deliberately does
- * not expose — a fleet-wide giveaway should not be one mis-click away.
+ * Takes a REQUIRED email. The fleet-wide form is a separate function below, so
+ * "reset one user" can never become "reset everyone" by passing undefined.
  */
 export async function adminResetClaudePoolWindow(
 	email: string,
 	window: 'short' | 'weekly',
 ): Promise<void> {
 	await apiClient.post('/api/v1/admin/claude-pool/reset-window', { email, window });
+}
+
+/**
+ * Reset the pooled-quota clock for EVERY user. super_admin only.
+ *
+ * Separate function rather than an optional email on the one above: an omitted
+ * argument is exactly how a single-user reset silently becomes a fleet-wide one.
+ * Making it its own call means the blast radius is visible at the call site and
+ * cannot be reached by accident.
+ *
+ * This is what the endpoint was originally built for — on 2026-08-11 the cap moved
+ * 4M/5h -> 2M/4h and every anchor in the table had been opened under the old
+ * policy, so users who had spent 3M were instantly over the new ceiling through no
+ * action of their own. A fleet reset hands everyone a clean window under the new
+ * rules. Outside a retune like that, prefer the per-user button.
+ */
+export async function adminResetClaudePoolWindowAll(
+	window: 'short' | 'weekly' | 'both',
+): Promise<void> {
+	await apiClient.post('/api/v1/admin/claude-pool/reset-window', { window });
 }
 
 // ---- /api/v1/admin/users ----
