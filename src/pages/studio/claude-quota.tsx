@@ -708,12 +708,16 @@ function UserUsageSection({
 									<span className="text-[10px] font-mono text-slate-600 w-8 text-right">{fmtPct(u.seven_day_pct)}</span>
 									{reset7d && <span className="text-[10px] text-slate-400 w-10">{reset7d}</span>}
 								</div>
+								{/* BEFORE the flex-1 filler on purpose. Appended after it (and after
+								    the timestamp) these sat at the extreme right of an already dense
+								    row with no flex-wrap, so on anything but a very wide window they
+								    were pushed out of view — shipped once that way and invisible. */}
+								<ResetWindowButtons email={u.email} shortLabel={shortWin} onDone={onReset} />
 								<span className="flex-1 min-w-0 text-[10px] text-slate-400 truncate">
 									{fmtTokens(u.seven_day_tokens)} tok · {u.requests_7d} req
 									{u.cost_cents_7d > 0 && <> · <span className="text-slate-500">{fmtCents(u.cost_cents_7d)}</span></>}
 								</span>
 								<span className="shrink-0 text-[10px] text-slate-400">{fmtTs(u.last_ts)}</span>
-								<ResetWindowButtons email={u.email} shortLabel={shortWin} onDone={onReset} />
 							</div>
 						</div>
 					);
@@ -763,6 +767,7 @@ function ResetWindowButtons({
 
 	return (
 		<span className="flex items-center gap-1 shrink-0">
+			<span className="text-[10px] text-slate-400">reset</span>
 			{(['short', 'weekly'] as const).map((win) => {
 				const label = win === 'short' ? shortLabel : '7d';
 				return (
@@ -772,8 +777,9 @@ function ResetWindowButtons({
 						onClick={() => void run(win)}
 						disabled={busy !== null}
 						title={`Reset this user's ${label} quota window`}
-						className="inline-flex items-center gap-0.5 rounded border border-slate-200 px-1 py-0.5 text-[10px] text-slate-500
-							hover:border-indigo-300 hover:text-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+						className="inline-flex items-center gap-0.5 rounded border border-indigo-200 bg-indigo-50/60 px-1.5 py-0.5
+							text-[10px] font-medium text-indigo-700 hover:bg-indigo-100 hover:border-indigo-300
+							disabled:opacity-40 disabled:cursor-not-allowed transition"
 					>
 						{busy === win ? (
 							<Loader2 className="w-2.5 h-2.5 animate-spin" />
