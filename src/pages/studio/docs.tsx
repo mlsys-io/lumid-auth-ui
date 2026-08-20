@@ -13,7 +13,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import 'github-markdown-css/github-markdown-light.css';
 import {
-	BookOpen, Zap, FileCode2, Activity, Layers, CandlestickChart, Compass, ArrowLeft, Loader2, Sparkles, Cpu, Database,
+	BookOpen, Zap, FileCode2, Activity, Layers, CandlestickChart, Compass, ArrowLeft, Loader2, Sparkles, Cpu, Database, TerminalSquare,
 } from 'lucide-react';
 import StudioHow from './how';
 
@@ -71,6 +71,15 @@ const DOCS: DocEntry[] = [
 		md: 'fm-ll-example-queries.md',
 		group: 'Guides',
 		icon: Cpu,
+	},
+	{
+		slug: 'flowmesh-ssh',
+		title: 'FlowMesh SSH tasks',
+		description: 'Get an interactive shell on a GPU/CPU worker — forward vs proxy access, per-site port ranges, the task spec, and the failure modes worth recognising.',
+		md: 'flowmesh-ssh.md',
+		group: 'Guides',
+		icon: TerminalSquare,
+		companion: { to: '/studio/docs/fm-ll-queries', label: 'FlowMesh queries' },
 	},
 	{
 		slug: 'xpio-autoresearch',
