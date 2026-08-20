@@ -13,6 +13,12 @@
  *   GET /lqt/resource-usage/:scope    → { boxes: ResourceUsageBox[] }
  *   GET /lqt/venue-health/:box        → { venues: VenueHealthEntry[] }
  *
+ * The first panel is a CROSS-CLUSTER node view (cloud + home k3s + office k3s),
+ * derived from the scorecard's `onprem_nodes` dimension rather than a separate
+ * fetch. That dimension emits one row per node with the site as a `cloud:` /
+ * `home:` / `office:` prefix on check_name; rendered only inside the by-dimension
+ * accordion it is unusable as a fleet view.
+ *
  * Any endpoint that 404s (probe not deployed yet) degrades to a graceful
  * "not yet available" panel rather than blanking the page. Auto-refreshes
  * every ~30s.
@@ -312,6 +318,185 @@ function SectionLoading() {
 		<div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
 			<Loader2 className="w-4 h-4 animate-spin" />
 			Loading…
+		</div>
+	);
+}
+
+// ---- Clusters: cross-cluster node health, grouped by site ----
+//
+// Derived from the SAME scorecard rows the section below renders — no extra
+// fetch. The `onprem_nodes` dimension emits one row per node across all three
+// clusters, with the site encoded as a `cloud:` / `home:` / `office:` prefix on
+// check_name (e.g. `home:luyaomini1`). Rendered as one dimension among ~20 that
+// is unreadable as a fleet view: 16 rows behind a collapsed accordion, sorted by
+// nothing in particular, with the cluster buried in a string.
+//
+// This section is the reason the dimension exists. Until it shipped neither
+// on-prem cluster had ANY monitoring — the 22-hour office Lumilake deadlock on
+// 2026-08-19 was a node sitting in DiskPressure with nothing watching. It is
+// also now quorum-relevant: since 2026-08-20 both on-prem sites run 3-server
+// embedded etcd, so a node going NotReady can cost a control plane, not just a
+// workload.
+
+const CLUSTER_ORDER = ['cloud', 'home', 'office'] as const;
+
+const CLUSTER_LABEL: Record<string, string> = {
+	cloud: 'Cloud · UpCloud UKS',
+	home: 'Home · k3s',
+	office: 'Office · k3s',
+};
+
+function splitNodeCheck(checkName: string): { cluster: string; node: string } {
+	const i = checkName.indexOf(':');
+	if (i === -1) return { cluster: 'other', node: checkName };
+	return { cluster: checkName.slice(0, i), node: checkName.slice(i + 1) };
+}
+
+// The probe runs on a 15m cadence, and normStackCheck deliberately keeps the
+// latest row PER CHECK across all runs (so the periodic full sweep is not masked
+// by the lighter opsagent heartbeat). The cost of that choice: a node that stops
+// being probed at all keeps rendering its last known status forever. On a page
+// whose job is "is anything wrong anywhere", silently-frozen green is the worst
+// possible failure mode — so treat anything older than 3 cadences as STALE and
+// stop counting it as ready.
+const NODE_STALE_MS = 45 * 60 * 1000;
+
+function isStale(ts?: string): boolean {
+	if (!ts) return false; // no timestamp on the row — do not invent staleness
+	const t = Date.parse(ts);
+	return Number.isFinite(t) && Date.now() - t > NODE_STALE_MS;
+}
+
+function clusterWorst(nodes: { status: CheckStatus; stale: boolean }[]): CheckStatus {
+	if (nodes.length === 0) return 'UNKNOWN';
+	const up = (s: CheckStatus) => (s || '').toUpperCase();
+	if (nodes.some((n) => up(n.status) === 'FAIL')) return 'FAIL';
+	if (nodes.some((n) => up(n.status) === 'WARN')) return 'WARN';
+	if (nodes.some((n) => n.stale)) return 'WARN';
+	return 'PASS';
+}
+
+function ClustersSection({ state }: { state: SectionState<StackCheckBody> }) {
+	const clusters = useMemo(() => {
+		if (state.kind !== 'ok') return [];
+		const byCluster = new Map<
+			string,
+			{ node: string; status: CheckStatus; detail?: string; stale: boolean }[]
+		>();
+		for (const row of state.data.rows) {
+			if (row.dimension !== 'onprem_nodes') continue;
+			const { cluster, node } = splitNodeCheck(row.check_name || '');
+			const list = byCluster.get(cluster) ?? [];
+			const stale = isStale(row.ts);
+			list.push({
+				node,
+				// A stale row's status is not evidence of anything current.
+				status: stale ? 'STALE' : row.status,
+				detail: stale ? `no report since ${fmtTs(row.ts)}` : row.detail,
+				stale,
+			});
+			byCluster.set(cluster, list);
+		}
+		return Array.from(byCluster.entries())
+			.map(([cluster, nodes]) => ({
+				cluster,
+				nodes: nodes.sort((a, b) => a.node.localeCompare(b.node)),
+				ready: nodes.filter((n) => !n.stale && (n.status || '').toUpperCase() === 'PASS').length,
+				// NOT the shared worstStatus(): its statusRank() sorts anything
+				// unrecognised (our STALE) as rank 3, i.e. BETTER than PASS, so one
+				// healthy sibling would mask a node that stopped reporting entirely.
+				// Changing that helper would alter the Scorecard's ordering too, so
+				// the rollup is computed locally: stale is a WARN — we do not know
+				// the node's state, which is not the same as knowing it is fine.
+				worst: clusterWorst(nodes),
+			}))
+			.sort((a, b) => {
+				const ia = CLUSTER_ORDER.indexOf(a.cluster as (typeof CLUSTER_ORDER)[number]);
+				const ib = CLUSTER_ORDER.indexOf(b.cluster as (typeof CLUSTER_ORDER)[number]);
+				return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+			});
+	}, [state]);
+
+	if (state.kind === 'loading') return <SectionLoading />;
+	if (state.kind === 'unavailable') return <SectionUnavailable what="Clusters" />;
+	if (state.kind === 'error') return <SectionError what="Clusters" message={state.message} />;
+
+	// The probe is one dimension inside a shared scorecard, so "scorecard ok but
+	// no onprem_nodes rows" is a real state: opsagent is reporting, this
+	// dimension is not. Say so precisely rather than showing an empty grid.
+	if (clusters.length === 0) {
+		return (
+			<div className="text-sm text-muted-foreground py-4 text-center">
+				No <code className="text-xs">onprem_nodes</code> rows in the latest scorecard run — the
+				cross-cluster probe is not reporting.
+			</div>
+		);
+	}
+
+	const totalNodes = clusters.reduce((n, c) => n + c.nodes.length, 0);
+	const totalReady = clusters.reduce((n, c) => n + c.ready, 0);
+
+	return (
+		<div className="space-y-3">
+			<div className="text-xs text-muted-foreground">
+				{totalReady}/{totalNodes} nodes ready across {clusters.length} cluster
+				{clusters.length === 1 ? '' : 's'}
+			</div>
+			<div className="grid gap-3 md:grid-cols-3">
+				{clusters.map((c) => (
+					<div
+						key={c.cluster}
+						className={`bg-white border border-gray-200 border-l-4 rounded p-3 ${borderClasses(
+							c.worst,
+						)}`}
+					>
+						<div className="flex items-center justify-between gap-2 mb-2">
+							<span className="text-sm font-medium">
+								{CLUSTER_LABEL[c.cluster] ?? c.cluster}
+							</span>
+							<StatusChip status={c.worst} />
+						</div>
+						<div className="text-xs text-muted-foreground mb-2 tabular-nums">
+							{c.ready}/{c.nodes.length} ready
+						</div>
+						<ul className="space-y-1">
+							{c.nodes.map((n) => {
+								const ok = (n.status || '').toUpperCase() === 'PASS';
+								// Stale is amber, not red: we have lost sight of the node, which
+								// is a different claim from "the node is broken".
+								const tone = ok
+									? 'text-green-600'
+									: n.stale
+										? 'text-amber-600'
+										: 'text-red-600';
+								return (
+									<li key={n.node} className="flex items-start justify-between gap-2 text-xs">
+										<span className="font-mono truncate" title={n.node}>
+											{n.node}
+										</span>
+										<span className={`${tone} shrink-0`} title={n.detail || n.status}>
+											{ok ? 'ready' : n.stale ? 'stale' : n.status}
+										</span>
+									</li>
+								);
+							})}
+						</ul>
+						{/* Surface any non-PASS detail inline — a node that is NotReady or
+						    under DiskPressure is the whole point of this panel, and it must
+						    not require hovering a title attribute to discover. */}
+						{c.nodes
+							.filter((n) => (n.status || '').toUpperCase() !== 'PASS')
+							.map((n) => (
+								<div
+									key={`${n.node}-detail`}
+									className={`mt-2 text-xs ${n.stale ? 'text-amber-700' : 'text-red-700'}`}
+								>
+									<span className="font-mono">{n.node}</span>: {n.detail || n.status}
+								</div>
+							))}
+					</div>
+				))}
+			</div>
 		</div>
 	);
 }
@@ -869,22 +1054,30 @@ export default function OperationsStatusPage() {
 				</button>
 			</div>
 
-			{/* 1. Scorecard — per-dimension summary + expandable per-check table */}
+			{/* 1. Clusters — cross-cluster node health. FIRST, deliberately: it answers
+			    "is anything wrong anywhere" in one glance, and it is the only panel
+			    that spans all three clusters. Reuses the scorecard state, no extra
+			    fetch. */}
+			<Section icon={Server} label="Clusters · nodes across all sites">
+				<ClustersSection state={scorecard} />
+			</Section>
+
+			{/* 2. Scorecard — per-dimension summary + expandable per-check table */}
 			<Section icon={Server} label="Scorecard · by dimension">
 				<ScorecardSection state={scorecard} />
 			</Section>
 
-			{/* 2. Resource usage — per-box cpu/mem/disk strip */}
+			{/* 3. Resource usage — per-box cpu/mem/disk strip */}
 			<Section icon={Server} label="Resource usage">
 				<ResourceStrip state={resources} />
 			</Section>
 
-			{/* 3. Venue health — per-box venue freshness strip */}
+			{/* 4. Venue health — per-box venue freshness strip */}
 			<Section icon={Server} label="Venue health">
 				<VenueHealthStrip states={venues} />
 			</Section>
 
-			{/* 4. Strategies / research program — per-box arm roster */}
+			{/* 5. Strategies / research program — per-box arm roster */}
 			<Section icon={Server} label="Strategies / research program">
 				<StrategiesSection state={roster} />
 			</Section>
