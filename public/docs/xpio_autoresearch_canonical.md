@@ -1,6 +1,36 @@
 # xpio Autoresearch Loop — Canonical Reference
 
-Status: stable (2026-05-09). Workflow alias added 2026-05-25 (W1.1). The canonical contract every xpio app should target. The runtime is `sdk/apps/app_runner.py`. This doc cites file:line for every claim so it stays anchored when the runner evolves.
+Status: stable (2026-05-09). Workflow alias added 2026-05-25 (W1.1). Vocabulary unified 2026-06-24 (U1 — see below). The canonical contract every xpio app should target. The runtime is `sdk/apps/app_runner.py`. This doc cites file:line for every claim so it stays anchored when the runner evolves.
+
+## Unified vocabulary (U1, the run axis)
+
+xpio's concepts are sound, but one idea had 2–3 names across the docs, the code, and the UI. The whole
+system is **7 words on two axes** — the *compose* axis (an agent's makeup) is specified in
+`unified-components.md`; this doc owns the *run* axis (what happens when a workflow executes).
+
+| Axis | Words |
+|---|---|
+| **Compose** (makeup) | **agent** ← **workflow** + **skill** + **memory** |
+| **Run** (execution over data) | **experiment** runs a workflow over a **dataset**, scoring its **items** |
+
+**Run-axis words (this doc):**
+
+| Word | One concept | Absorbs (retired synonyms) |
+|---|---|---|
+| **experiment** | one configured run of a workflow over a dataset — the unit you run and compare (model/judge/params config + its metric) | `loop`, `cycle`, `cycle_ts`, `run`, `variant`, `variant_id`, `arm`, `branch` |
+| **dataset** | the data an experiment runs over; its records are the items | — |
+| **item** | one record of the dataset, scored by an experiment | `dims`, `case`, `sample`, `result-row` |
+
+Two sentences capture it: *an **agent** is made of **workflows** + **skills** + **memory**; an
+**experiment** runs a workflow over a **dataset**, scoring its **items**.*
+
+> **Migration note (read before you grep).** The runtime *identifiers* are renaming to match this
+> vocabulary (`loops:`→`workflows:`/`experiments:`, `cycle()`→`experiment run`, `cycle_ts`→`experiment_id`,
+> `variant_id`→folded into `experiment_id`, `dims`→`item`, `data/cycles/`→`.lumid/experiments/`).
+> Back-compat aliases and read-fallbacks are retained so installed bundles and old data keep resolving.
+> Until the code rename lands, the sections below continue to cite the **current** identifiers (`loops`,
+> `cycle`, `cycle_ts`, `variant_id`, `dims`) verbatim so every `file:line` stays accurate — read them
+> through the table above.
 
 ## Workflow as the supertype
 
@@ -9,7 +39,7 @@ As of W1 of the Personal AI plan, **workflow** is the user-facing supertype acro
 | User-facing word | What it points to | Where it lives |
 |---|---|---|
 | **Workflow** (scheduled) | An xpio loop in `xpcloud.yaml::loops[]` (or `workflows[]` — see below) | `~/.xp/apps/<app>/` or `~/.tenants/<sub>/.xp/apps/<app>/` |
-| **Workflow** (visual) | An n8n DAG | n8n's own database, surfaced via `lum.id/n8n/` |
+| **Workflow** (visual) | An n8n DAG | n8n's own database. **NOT CURRENTLY DEPLOYED** (verified 2026-08-21): there is no n8n in the cluster and `lum.id/n8n/` does not answer — it proxies to the pre-UKS docker-bridge gateway and *hangs* rather than 404ing. The `flowmesh-n8n/` fork exists in-tree but is unbuilt. Treat this row as the intended shape, not a live surface. |
 | **Workflow** (atomic) | A 1-step skill — the marketplace's gmail-mcp, tavily-search, etc. | Community-owned repo at `xpcloud /repos/community/<skill>` |
 | **Workflow** (composed) | A multi-step skill (an app, in old vocabulary) — personal-agent, mbb-ai, etc. | Same xpcloud namespace |
 
@@ -296,6 +326,24 @@ fenced-block directives** that become live, data-bound widgets:
 | ` ```lumid:list ` | a list of cards | same |
 | ` ```lumid:action ` | a button (`open`/`run_loop`/`install_app`) | `me://*` POST |
 | ` ```lumid:iframe ` | a sandboxed iframe | same-origin proxy allowlist only |
+| ` ```lumid:workflow ` | the loop's pipeline as a node canvas (n8n-style; body: `loop:`, optional `cycle: latest` to overlay the latest run's per-step statuses) | `me://workflows/*`, `me://cycles/*` |
+| ` ```lumid:ask ` | prompt chips that route into the Studio chat rail with this app as structured grounding (body: `prompts: [...]`, optional `loop:`) | — (dispatches `studio:ask`) |
+
+**`lumid:form` conventions.** Fields support `type: password`, `advanced: true`
+(folds into a collapsed Advanced disclosure), and `options_source:` for
+allowlisted dynamic selects (`pats://flowmesh` / `pats://lumilake` — the
+user's own PATs as run-as profiles; raw token values are never exposed).
+Two RESERVED keys are consumed by the platform before the app action runs:
+`run_as_pat` (a PAT id — identity mints a short-lived bridge JWT with that
+PAT's scope profile; same principal) and `run_as_key` (a pasted external
+key used verbatim — a different principal). Any action that submits
+FlowMesh or Lumilake work on the user's behalf gets these for free via the
+shared resolver; "session" (default) mints a short-lived bridge JWT with
+the action's declared capability set.
+
+Every rendered directive block also carries `data-pick-kind="surface-block"`,
+so the chat rail's crosshair picker can pin any widget on an app-authored
+surface as the conversation's referent — no per-app work needed.
 
 Directive `source` may bind **only** to vetted, auth-gated `me://*` endpoints and
 the anon `/findata-cloud/*` proxy — never arbitrary URLs. Unknown `lumid:*` blocks
@@ -669,6 +717,40 @@ The runner consults `approval_policy.rules[]` to decide whether each side-effect
 - `decision: force` — always require approval, regardless of confidence.
 
 Match keys: `kind: {skill, memory}`, `path_match: glob`, `source: "<agent_pattern>"`, `min_confidence: float`. First match wins. Default behavior comes from `approval_policy.default` (typically `stage`).
+
+## Optimization loop — goal, decision advisor, branch control (observe → decide → steer)
+
+The whole point of a loop is to move the user's **goal**. The runner makes the *decide* and *steer* steps canonical so every app inherits them — no app-specific code.
+
+**Goal** — declared per loop as `goal: {primary: "<plain-English objective>", tracked: [<metric names>]}` (already in use). The *quantitative* progress comes from the attached experiment (`steps[].experiment` / `engine.experiment` → the runtime ledger's metric vs baseline/criteria); `goal.primary` is the human framing the advisor reasons against.
+
+**Decision advisor** (optional) — a periodic, goal-directed pass declared per loop:
+
+```yaml
+loops:
+  - name: my_loop
+    goal: {primary: "maximize accuracy", tracked: [accuracy]}
+    engine: {type: command, module: benchmark, experiment: my_exp}
+    decision_advisor:
+      enabled: true
+      run_every_cycles: 3          # fire every Nth cycle (1 = every cycle)
+      advisor_module: commands/improve   # optional custom analyzer (else built-in)
+      advisor_agent: "<app>-advisor"     # optional
+      proposal_approval: stage     # auto | stage | force (defaults to stage)
+```
+
+After a cycle, `_run_improvement_advisor()` (in `app_runner.py`, gated by `enabled` + `run_every_cycles`) reads the run's signals (recent cycle metrics + `step_errors`) and the attached experiment progress (`summary["experiments"]`) against `goal.primary`, then emits a short verdict — **`status: improving|stalled|regressed`, `what_broke`, and ≤3 `suggestions`** — written to `data/cycles/<loop>/<ts>/suggestions.json`. Each suggestion is appended to `summary["offers"]` as `kind: "improvement"`, so it rides the **existing offers + `approval_policy` + inbox-reply channel** (no new surface). An approved suggestion edits `xpcloud.yaml` and ships through the normal `app_push` semver auto-bump — versioning is unchanged.
+
+**Branch control (steer)** — a human (right-click "branch from here") or the advisor ("branch this") appends a record to `data/control/signals.jsonl`:
+
+```jsonc
+{"ts":"…Z","action":"branch","loop":"my_loop","from_id":"v:abc","from_variant_id":"abc",
+ "config":{…variant overrides…},"note":"…","by":"<sub>","status":"pending"}
+```
+
+Pre-cycle, `_consume_branch_signals()` drains pending `branch` records for the loop, flips them `pending→consumed`, and exposes the variant specs three ways — `summary["branch_signals"]`, `data/cycles/<loop>/<ts>/branch_variants.json`, and the `LUMID_BRANCH_VARIANTS` env — so a Pattern B engine or a variant proposer can seed the next run from them. Generic across both engine patterns.
+
+**Data of record (new, blessed):** `data/control/signals.jsonl` (append-only branch signals; runner flips status) and the per-cycle `suggestions.json` + `branch_variants.json` artifacts. The advisor produces *offers*, never a parallel ledger.
 
 ## Scheduler discovery
 

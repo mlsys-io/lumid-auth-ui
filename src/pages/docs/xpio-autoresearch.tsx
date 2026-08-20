@@ -11,6 +11,22 @@ import 'github-markdown-css/github-markdown-light.css';
 // /proj/LumidOS/LumidOS/docs/architecture/xpio_autoresearch_canonical.md
 // via a manual `cp` step (a `make docs-sync` target is the follow-up).
 //
+// THE MANUAL STEP DRIFTS — it did, for ~2 months. Re-synced 2026-08-21 after
+// the mirror was found 82 lines behind, missing two whole sections the source
+// had gained (`## Unified vocabulary (U1, the run axis)` and `## Optimization
+// loop … observe → decide → steer`). Nothing enforces the copy, and nothing
+// warned: this route kept serving a stale contract to anonymous forkers, who
+// are exactly the readers least able to notice.
+//
+// Before editing this MD, diff it — and edit the SOURCE, never this copy:
+//   diff public/docs/xpio_autoresearch_canonical.md \
+//        /proj/LumidOS/LumidOS/docs/architecture/xpio_autoresearch_canonical.md
+//   cp   /proj/LumidOS/LumidOS/docs/architecture/xpio_autoresearch_canonical.md \
+//        public/docs/xpio_autoresearch_canonical.md
+// The source is the strict superset by design; if that diff ever shows lines
+// unique to THIS copy, someone edited the mirror and their edit is about to be
+// lost — reconcile into the source first.
+//
 // Anyone browsing xp.io app repos before forking should land here; the
 // xp_ui frontend has a footer link pointing at this route.
 
