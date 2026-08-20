@@ -30,23 +30,28 @@ need a per-site mesh key.
 and 0 Lumilake workers while the on-prem meshes had the rest. They now fan out to **all three sites**
 — `cloud`, `home`, `office` — and merge.
 
-**This changes the response shape of the list endpoints.** They used to return a bare JSON array;
-they now return an object:
+The list endpoints still return a **JSON array** — the same contract as before, just merged across
+all sites, with each record carrying an extra `site` field. Existing callers keep working unchanged
+and simply see more.
+
+Per-site status comes back in a response header, so nothing is lost:
+
+```
+X-Mesh-Sites: cloud=1,home=9,office=5
+X-Mesh-Sites: cloud=0,home=5,office=error(HTTP 401)     # a failing site is named, not hidden
+```
+
+Read that header before trusting a count: it is what distinguishes **"office is unreachable"** from
+**"office has no workers"** — a distinction the old single-upstream view could not express.
+
+If you would rather have it structured, `?shape=full` returns an object instead:
 
 ```jsonc
 {
-  "items": [ { "...": "...", "site": "home" } ],   // every record tagged with its site
-  "sites": [                                        // per-site outcome, ALWAYS present
-    { "site": "cloud",  "ok": true,  "count": 1, "ms": 207 },
-    { "site": "home",   "ok": true,  "count": 9, "ms": 408 },
-    { "site": "office", "ok": false, "count": 0, "ms": 62, "error": "HTTP 401" }
-  ]
+  "items": [ { "...": "...", "site": "home" } ],
+  "sites": [ { "site": "home", "ok": true, "count": 9, "ms": 408 } ]
 }
 ```
-
-Read `sites[]` before trusting `items[]`: a site that is down or slow is reported rather than
-silently omitted, so **"office is unreachable" is distinguishable from "office has no workers"** —
-a distinction the old single-upstream view could not express.
 
 Federated today: `fm/api/v1/nodes`, `fm/api/v1/workers`, `ll/api/v1/workers`. **Every other path is
 proxied verbatim to the cloud and is unchanged.**
@@ -101,10 +106,9 @@ PAT=lm_pat_live_xxx
 # Health
 curl -s https://lum.id/fm/healthz          # -> {"ok":true}
 
-# List workers — FEDERATED: an object, not a bare array (see "The surface")
-curl -s https://lum.id/fm/api/v1/workers -H "Authorization: Bearer $PAT"
-#   -> 200, {"items":[…workers, each tagged with "site"…], "sites":[…per-site status…]}
-#   -> 13 workers today: home 5, office 8, cloud 0
+# List workers — FEDERATED, still a JSON array; each record gains a "site" field
+curl -si https://lum.id/fm/api/v1/workers -H "Authorization: Bearer $PAT"
+#   -> 200, [ …13 workers… ]   header: X-Mesh-Sites: cloud=0,home=5,office=8
 #
 # Nodes and workers are DIFFERENT lists on FlowMesh — nodes is 15 (cloud 1, home 9,
 # office 5), workers is 13. Pick the one you actually mean.
