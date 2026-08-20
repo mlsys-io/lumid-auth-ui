@@ -218,14 +218,22 @@ ops:
 ## Gotchas (learned the hard way)
 
 - **Two different model-id namespaces — don't mix them.** For the **lumid-llm mesh** (OpenAI-compat
-  gateway, `/fm` chat paths) use the FULL gateway keys `qwen3.8-27b` (the default, 1M context),
-  `qwen3.6-27b`, `qwen3.6-35b-a3b` — **NOT** `gemma` (unknown ids → OpenRouter catch-all → 502).
-  `nvidia/Gemma-4-26B-A4B-NVFP4` was **retired 2026-08-15** when both GB10 boxes moved to
-  `qwen3.8-27b`; requests naming it no longer resolve.
+  gateway, `/fm` chat paths) use the FULL gateway keys. `GET /llm/v1/models` is the live list —
+  read it rather than trusting any doc, this one included. As of **2026-08-21** it is exactly two:
+  `deepseek-v4-flash` (the **default**, in-house on the GB10 pair, free at the margin) and
+  `kimi-k3` (Moonshot, cost-metered). Every `qwen*` and `gemma*` id this doc used to list is
+  **retired** — `qwen3.8-27b` went when the GB10 pair moved to DeepSeek, and the `qwen3.6-*` pair
+  went with luyao1 on 2026-08-17.
+  **An unknown id does not 502 — it falls through to the OpenRouter catch-all and is BILLED.**
+  Verified 2026-08-21: `z-ai/glm-5.2` is not in `LUMID_LLM_BACKENDS` and still returns 200, served
+  and metered via OpenRouter. So a typo'd or stale model id fails *silently and expensively*
+  rather than loudly. The one deliberate exception is `deepseek-v4-flash`, which is pinned NOT to
+  fall through: it 502s honestly while the in-house pair is down, so an outage stays visible
+  instead of turning into an invisible bill.
   For a **Lumilake `LLMChatOp`** use a **HuggingFace id** (`Qwen/Qwen2.5-7B-Instruct`,
   `Qwen/Qwen2.5-0.5B-Instruct`): Lumilake runs the op as a FlowMesh **vLLM** inference task that
-  loads the model from HF, so a mesh alias like `qwen3.6-27b` raises `not a valid model identifier
-  on huggingface.co` and the task fails.
+  loads the model from HF, so a mesh alias like `deepseek-v4-flash` raises `not a valid model
+  identifier on huggingface.co` and the task fails.
 - **Lumilake workflows need a top-level `outputs:` block** (`- name: <label>, ref: <op-id>`) — with
   no outputs declared the job runs the ops then fails `Missing output for workflow`.
 - **Lumilake preview requires** the `Workflow-Format: yaml` header **and** a non-empty `inputs`

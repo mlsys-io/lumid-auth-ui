@@ -1,11 +1,19 @@
 // /studio/docs — the Documentation panel inside the Studio shell.
 //
-// One index over every guide/runbook/contract the platform ships, with an
-// in-shell markdown reader at /studio/docs/:slug. The markdown sources are
-// the same files the standalone /docs/* routes render (public/docs/*.md) —
-// this page doesn't fork content, it gathers it behind the side panel.
-// The standalone routes stay live: /docs/xpio-autoresearch must remain
-// public for anonymous forkers, and external links reference /docs/claude.
+// One index over the guides/runbooks the platform ships, with an in-shell
+// markdown reader at /studio/docs/:slug. The markdown sources are the same
+// files the standalone /docs/* routes render (public/docs/*.md) — this page
+// doesn't fork content, it gathers it behind the side panel.
+//
+// NOT EVERY DOC IS INDEXED HERE, and two deliberate omissions (2026-08-21):
+//   * the xpio autoresearch contract — /docs/xpio-autoresearch stays LIVE and
+//     public (anonymous forkers need it, /proj/CLAUDE.md and a pile of
+//     xpcloud.yaml headers link to it, and super-admin deep-links an anchor
+//     into it). Only the Studio index card was dropped.
+//   * "How Lumid works" — /studio/docs/how still renders and /studio/how
+//     still redirects to it, so existing links keep working; it is simply no
+//     longer surfaced on the index.
+// Re-adding either is a DOCS entry / a <Link>, nothing more.
 
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -13,7 +21,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import 'github-markdown-css/github-markdown-light.css';
 import {
-	BookOpen, Zap, FileCode2, Activity, Layers, CandlestickChart, Compass, ArrowLeft, Loader2, Sparkles, Cpu, Database, TerminalSquare,
+	BookOpen, Zap, FileCode2, Activity, CandlestickChart, Compass, ArrowLeft, Loader2, Cpu, Database, TerminalSquare,
 } from 'lucide-react';
 import StudioHow from './how';
 
@@ -82,15 +90,6 @@ const DOCS: DocEntry[] = [
 		companion: { to: '/studio/docs/fm-ll-queries', label: 'FlowMesh queries' },
 	},
 	{
-		slug: 'xpio-autoresearch',
-		title: 'xpio autoresearch contract',
-		description: 'The canonical app contract — Pattern A vs B engines, the 5-stage flow, xpcloud.yaml schema, privacy allowlist, scheduler discovery.',
-		md: 'xpio_autoresearch_canonical.md',
-		group: 'Contracts',
-		icon: Layers,
-		standalone: '/docs/xpio-autoresearch',
-	},
-	{
 		slug: 'operations',
 		title: 'Operations runbook',
 		description: 'Whole-stack health probe — the 17 dimensions, what each check means, and how to respond when one goes red.',
@@ -111,7 +110,11 @@ const DOCS: DocEntry[] = [
 	},
 ];
 
-const GROUPS: DocEntry['group'][] = ['Guides', 'Contracts', 'Runbooks'];
+const GROUP_ORDER: DocEntry['group'][] = ['Guides', 'Contracts', 'Runbooks'];
+// Only groups that actually have entries — otherwise removing the last doc in a
+// group leaves a heading over an empty grid (which is how 'Contracts' looked the
+// moment the xpio card was dropped).
+const GROUPS = GROUP_ORDER.filter((g) => DOCS.some((d) => d.group === g));
 
 function DocIndex() {
 	return (
@@ -125,20 +128,6 @@ function DocIndex() {
 					Guides, contracts, and runbooks for the Lumid platform.
 				</p>
 			</header>
-			{/* How Lumid works — the interactive Studio tour, folded in here
-			    (was the standalone /studio/how; that route now redirects). */}
-			<Link
-				to="/studio/docs/how"
-				className="group mb-6 flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3.5 hover:border-gold-300 hover:shadow-sm transition"
-			>
-				<Sparkles className="w-4 h-4 mt-0.5 text-foreground/45 group-hover:text-gold-600 transition-colors" />
-				<span>
-					<span className="block text-sm font-medium text-slate-800">How Lumid works</span>
-					<span className="block text-xs text-slate-500 leading-relaxed mt-0.5">
-						A walkable tour of the loop every intent runs through — assemble, then adapt &amp; improve.
-					</span>
-				</span>
-			</Link>
 			{GROUPS.map((g) => (
 				<section key={g} className="mb-6">
 					<h2 className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-2">{g}</h2>

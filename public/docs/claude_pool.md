@@ -20,7 +20,6 @@ no install, no PAT setup. Pick a **(Code)** model from the model picker:
 | Claude Fable 5 (Code) | super_admin | Account pool |
 | Kimi K3 (Code) | admin+ | Moonshot API — cost-metered, no pool quota |
 | GLM-5.2 (Code) | admin+ | OpenRouter — cost-metered, no pool quota |
-| Qwen3.6-35B (Code · Lumid GPU) | everyone | In-house GPU — **no pool quota** |
 
 Each turn runs the claude CLI in a sandboxed per-user workspace, and the
 transcript renders the way the CLI does: reasoning blocks, tool calls in the
@@ -31,9 +30,15 @@ stays resumable instead of being killed mid-write. Each finished turn shows its
 cost, duration, step count and cache hit rate. The session pill above the composer shows
 the live session; reopening a chat thread resumes it. Pool-backed models show
 your personal quota next to the model picker, and their sessions are recorded
-on [/claude-sessions](/claude-sessions) like any pool traffic. The Qwen entry
-runs the same Claude Code harness against our own GPUs — free at the margin,
-not recorded by the pool, best for lighter coding tasks.
+on [/claude-sessions](/claude-sessions) like any pool traffic. The
+DeepSeek-V4-Flash entry runs the same Claude Code harness against our own GPUs —
+free at the margin, not recorded by the pool, and open to every role.
+
+> The **Qwen3.6-35B** row was removed on 2026-08-21. It claimed an in-house GPU
+> and availability to everyone, and neither is true any more: `SELF_HOSTED_MODELS`
+> on claude-proxy defaults to `deepseek-v4-flash` alone, so any other non-Anthropic
+> id is treated as externally billed and gated to admin+. The qwen backends
+> themselves went with luyao1 on 2026-08-17.
 
 **The chatbox default is DeepSeek-V4-Flash, served on our own hardware.** It runs
 tensor-parallel across the two GB10 boxes, so ordinary chat costs nothing per

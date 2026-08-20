@@ -149,7 +149,7 @@ with a pointer, not FAIL. Once populated, Polymarket/Kalshi liveness moves to li
 ### flowmesh + lumilake
 | Check | Surface | Threshold | Remediation | Cadence |
 |---|---|---|---|---|
-| flowmesh-host / lumilake | `kv.run:8000/{flowmesh,lumilake}/healthz` | 2xx/3xx | SURFACE — SKIP when kv.run:8000 is in-cluster-only from the dev box | 15m |
+| flowmesh-host / lumilake | `lum.id/{fm,ll}/healthz` | 2xx/3xx | SURFACE | 15m |
 
 ### runmesh
 | Check | Surface | Threshold | Remediation | Cadence |
@@ -183,7 +183,6 @@ backends), resource (per-box disk), auth (healthz / introspect / jwks), xpcloud 
 - `bottomlines` #9/#12/#5/#14 — need the cold-SoR (181) or deploy-plane, not the data
   plane (honest SKIP per the superdogfood runbook, never faked green).
 - `auth/auth-stats` + `xpcloud/loop-slo` — admin-gated; SKIP without `LQT_ADMIN_PAT`.
-- `flowmesh+lumilake` — `kv.run:8000` is in-cluster-only from the dev box.
 - `cloud/kv.run findata` — kv.run raw service ports (:5000/:5012) are firewalled to
   the field/bastion network; findata liveness is covered live via `findata`.
 - `secrets/cert-expiry` — owned by the `lb-cert-reconcile` CronJob, not this probe.
