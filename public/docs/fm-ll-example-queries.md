@@ -15,13 +15,61 @@ execution) and Lumilake (HALO workflow optimizer + runner) — three ways:
 
 ## The surface
 
-| Pillar | Proxy base | Cluster-scoped | MCP tools |
+| Pillar | Proxy base | Site-scoped | MCP tools |
 |---|---|---|---|
-| FlowMesh | `https://lum.id/fm` → FM Host `/api/v1/*` | `https://lum.id/fm/c/<cluster_id>/…` | `list_workers`, `submit_workflow`, `workflow_status` |
-| Lumilake | `https://lum.id/ll` → Lumilake `/api/v1/*` | — | `optimize_workflow`, `run_workflow`, `lumilake_workflow_schema`, `lumilake_node_specs` |
+| FlowMesh | `https://lum.id/fm` → **federated** `/api/v1/*` | `https://lum.id/fm/<site>/…` | `list_workers`, `submit_workflow`, `workflow_status` |
+| Lumilake | `https://lum.id/ll` → **federated** `/api/v1/*` | `https://lum.id/ll/<site>/…` | `optimize_workflow`, `run_workflow`, `lumilake_workflow_schema`, `lumilake_node_specs` |
 
 Auth: `Authorization: Bearer <lm_pat_live_…>`. The chatbox/MCP path carries the session identity
-automatically — you don't pass a token in a prompt.
+automatically — you don't pass a token in a prompt. **One PAT works on all three sites** — you never
+need a per-site mesh key.
+
+### Federated since 2026-08-20 — the list endpoints changed shape
+
+`/fm` and `/ll` used to proxy only to the **cloud** control plane, so they reported 1 FlowMesh node
+and 0 Lumilake workers while the on-prem meshes had the rest. They now fan out to **all three sites**
+— `cloud`, `home`, `office` — and merge.
+
+**This changes the response shape of the list endpoints.** They used to return a bare JSON array;
+they now return an object:
+
+```jsonc
+{
+  "items": [ { "...": "...", "site": "home" } ],   // every record tagged with its site
+  "sites": [                                        // per-site outcome, ALWAYS present
+    { "site": "cloud",  "ok": true,  "count": 1, "ms": 207 },
+    { "site": "home",   "ok": true,  "count": 9, "ms": 408 },
+    { "site": "office", "ok": false, "count": 0, "ms": 62, "error": "HTTP 401" }
+  ]
+}
+```
+
+Read `sites[]` before trusting `items[]`: a site that is down or slow is reported rather than
+silently omitted, so **"office is unreachable" is distinguishable from "office has no workers"** —
+a distinction the old single-upstream view could not express.
+
+Federated today: `fm/api/v1/nodes`, `fm/api/v1/workers`, `ll/api/v1/workers`. **Every other path is
+proxied verbatim to the cloud and is unchanged.**
+
+### Picking a site
+
+```bash
+# All sites (default)
+curl -s https://lum.id/fm/api/v1/nodes -H "Authorization: Bearer $PAT"
+#   -> 15 items: cloud 1, home 9, office 5
+
+# Narrow the fan-out — SAME response shape, so callers don't branch
+curl -s "https://lum.id/fm/api/v1/nodes?site=home"          # -> 9
+curl -s "https://lum.id/fm/api/v1/nodes?site=home,office"   # -> 14
+
+# Talk to ONE mesh directly — works for EVERY endpoint, not just the lists,
+# and returns that mesh's native shape (a bare array here)
+curl -s https://lum.id/fm/home/api/v1/nodes    -H "Authorization: Bearer $PAT"   # -> 9
+curl -s https://lum.id/ll/office/api/v1/workers -H "Authorization: Bearer $PAT"  # -> 8
+```
+
+Use `?site=` when you want the federated shape with fewer sites. Use `/fm/<site>/…` when you want to
+*operate* on one mesh — inspect a node, or reach an endpoint the federator does not merge.
 
 ---
 
@@ -53,9 +101,17 @@ PAT=lm_pat_live_xxx
 # Health
 curl -s https://lum.id/fm/healthz          # -> {"ok":true}
 
-# List workers
+# List workers — FEDERATED: an object, not a bare array (see "The surface")
 curl -s https://lum.id/fm/api/v1/workers -H "Authorization: Bearer $PAT"
-#   -> 200, JSON array of workers (id, status, gpu, node, …)
+#   -> 200, {"items":[…workers, each tagged with "site"…], "sites":[…per-site status…]}
+#   -> 13 workers today: home 5, office 8, cloud 0
+#
+# Nodes and workers are DIFFERENT lists on FlowMesh — nodes is 15 (cloud 1, home 9,
+# office 5), workers is 13. Pick the one you actually mean.
+curl -s https://lum.id/fm/api/v1/nodes -H "Authorization: Bearer $PAT"
+
+# One site, native shape (bare array)
+curl -s https://lum.id/fm/home/api/v1/workers -H "Authorization: Bearer $PAT"   # -> 5
 ```
 
 FlowMesh **echo** task shape (note: `data.type: list` + `data.items`, NOT `data.messages`):
