@@ -9,12 +9,13 @@
 // the last known snapshot with a warning badge.
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { RefreshCw, Zap, AlertTriangle, CheckCircle, Loader2, UserPlus, X, Trash2 } from 'lucide-react';
+import { RefreshCw, Zap, AlertTriangle, CheckCircle, Loader2, UserPlus, X, Trash2, RotateCcw } from 'lucide-react';
 import {
 	fetchClaudeQuota,
 	fetchClaudeUserUsage,
 	adminAddClaudeToken,
 	adminDeleteClaudeToken,
+	adminResetClaudePoolWindow,
 	fetchClaudeFieldBoxes,
 	type ClaudeFieldBoxResp,
 	type ClaudeQuotaAccount,
@@ -653,7 +654,17 @@ function fmtReset(iso?: string): string {
 // (env-tunable, 4h since 2026-08-11) and is deliberately NOT the same thing
 // as the 5h window in the account table above, which is Anthropic's own
 // rate-limit window for the pooled subscription. They drift out of phase.
-function UserUsageSection({ usage, countdown }: { usage: ClaudeUserUsageResp; countdown: number }) {
+function UserUsageSection({
+	usage,
+	countdown,
+	onReset,
+}: {
+	usage: ClaudeUserUsageResp;
+	countdown: number;
+	// Re-fetch after a reset so the row shows 0% immediately rather than the
+	// pre-reset figure until the 2-minute auto-refresh happens to fire.
+	onReset: () => void;
+}) {
 	if (!usage.users.length) return null;
 	const shortWin = usage.short_window_label || '4h';
 	const mm = Math.floor(countdown / 60);
@@ -702,12 +713,83 @@ function UserUsageSection({ usage, countdown }: { usage: ClaudeUserUsageResp; co
 									{u.cost_cents_7d > 0 && <> · <span className="text-slate-500">{fmtCents(u.cost_cents_7d)}</span></>}
 								</span>
 								<span className="shrink-0 text-[10px] text-slate-400">{fmtTs(u.last_ts)}</span>
+								<ResetWindowButtons email={u.email} shortLabel={shortWin} onDone={onReset} />
 							</div>
 						</div>
 					);
 				})}
 			</div>
 		</div>
+	);
+}
+
+// Reset one user's pooled-quota clock. super_admin only — the route is
+// RequireSuperAdmin server-side and this whole page is super_admin-gated, so the
+// button is the third gate, not the only one.
+//
+// Confirms first. Resetting is not destructive (the server EXPIRES the anchor, so
+// the user simply reads zero and opens a fresh window on their next charge) but it
+// IS a quota giveaway, and the two windows are worth very different amounts: the
+// 4h clock refreshes on its own within hours, the 7d one is the weekly budget.
+function ResetWindowButtons({
+	email,
+	shortLabel,
+	onDone,
+}: {
+	email: string;
+	shortLabel: string;
+	onDone: () => void;
+}) {
+	const [busy, setBusy] = useState<'short' | 'weekly' | null>(null);
+	const [err, setErr] = useState<string | null>(null);
+
+	const run = async (win: 'short' | 'weekly') => {
+		const label = win === 'short' ? shortLabel : '7d';
+		if (!window.confirm(`Reset the ${label} quota clock for ${email}?`)) return;
+		setBusy(win);
+		setErr(null);
+		try {
+			await adminResetClaudePoolWindow(email, win);
+			onDone();
+		} catch (e) {
+			// Surface the failure on the row. A silent no-op here would be worse
+			// than useless: the operator would believe the user was unblocked and
+			// the user would keep getting 429s.
+			setErr(e instanceof Error ? e.message : String(e));
+		} finally {
+			setBusy(null);
+		}
+	};
+
+	return (
+		<span className="flex items-center gap-1 shrink-0">
+			{(['short', 'weekly'] as const).map((win) => {
+				const label = win === 'short' ? shortLabel : '7d';
+				return (
+					<button
+						key={win}
+						type="button"
+						onClick={() => void run(win)}
+						disabled={busy !== null}
+						title={`Reset this user's ${label} quota window`}
+						className="inline-flex items-center gap-0.5 rounded border border-slate-200 px-1 py-0.5 text-[10px] text-slate-500
+							hover:border-indigo-300 hover:text-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+					>
+						{busy === win ? (
+							<Loader2 className="w-2.5 h-2.5 animate-spin" />
+						) : (
+							<RotateCcw className="w-2.5 h-2.5" />
+						)}
+						{label}
+					</button>
+				);
+			})}
+			{err && (
+				<span className="text-[10px] text-red-600 max-w-[10rem] truncate" title={err}>
+					{err}
+				</span>
+			)}
+		</span>
 	);
 }
 
@@ -924,7 +1006,7 @@ export default function StudioClaudeQuota() {
 			    so a field-box outage can't blank the quota page above it. */}
 			<FieldBoxPanel />
 
-			{userUsage && <UserUsageSection usage={userUsage} countdown={countdown} />}
+			{userUsage && <UserUsageSection usage={userUsage} countdown={countdown} onReset={loadUserUsage} />}
 
 			{userUsage && <ModelCostPanel usage={userUsage} />}
 

@@ -491,6 +491,27 @@ export async function adminDeleteClaudeToken(email: string): Promise<void> {
 	await apiClient.delete(`/api/v1/admin/claude-token/${encodeURIComponent(email)}`);
 }
 
+/**
+ * Reset ONE user's pooled-quota clock. super_admin only (the route is
+ * RequireSuperAdmin server-side; the page is gated too, so this is defence in
+ * depth rather than the only check).
+ *
+ * `window` maps to the server's vocabulary: 'short' is the 4h window, 'weekly'
+ * the 7d one. The server EXPIRES the anchor rather than deleting the row or
+ * stamping it to now — an expired anchor is the natural "no window open" state,
+ * so the user reads zero and a fresh window opens on their next charge instead
+ * of a 4h clock ticking down while they are not working.
+ *
+ * Omitting the email would reset EVERY user, which this helper deliberately does
+ * not expose — a fleet-wide giveaway should not be one mis-click away.
+ */
+export async function adminResetClaudePoolWindow(
+	email: string,
+	window: 'short' | 'weekly',
+): Promise<void> {
+	await apiClient.post('/api/v1/admin/claude-pool/reset-window', { email, window });
+}
+
 // ---- /api/v1/admin/users ----
 
 export interface AdminUserRow {
