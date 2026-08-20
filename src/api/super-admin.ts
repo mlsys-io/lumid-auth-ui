@@ -528,8 +528,17 @@ export async function adminResetClaudePoolWindow(
  */
 export async function adminResetClaudePoolWindowAll(
 	window: 'short' | 'weekly' | 'both',
-): Promise<void> {
-	await apiClient.post('/api/v1/admin/claude-pool/reset-window', { window });
+): Promise<{ reset: number; window: string }> {
+	// Returns the row count on purpose. The handler documents that it "always
+	// reports the row count and which window moved, so a pool-wide reset is
+	// never silent" — dropping it here would defeat that from the one surface
+	// where the reset is actually fired. The per-user form stays void: there
+	// the scope is the row you clicked.
+	const r = await apiClient.post<DataResponse<{ reset: number; window: string }>>(
+		'/api/v1/admin/claude-pool/reset-window',
+		{ window },
+	);
+	return { reset: r.data.data.reset ?? 0, window: r.data.data.window || window };
 }
 
 // ---- /api/v1/admin/users ----

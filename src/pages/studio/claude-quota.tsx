@@ -752,6 +752,11 @@ function ResetAllButton({ isSuper, userCount, shortLabel, onDone }: { isSuper: b
 	const [typed, setTyped] = useState('');
 	const [busy, setBusy] = useState(false);
 	const [err, setErr] = useState<string | null>(null);
+	// Result of the last fleet reset. The handler reports rows-affected so a
+	// pool-wide reset "is never silent"; echoing it here is the only place an
+	// operator sees it without reading identity's logs. Note it can legitimately
+	// be LOWER than userCount — only users with an open window have a row.
+	const [done, setDone] = useState<{ reset: number; window: string } | null>(null);
 
 	const phrase = `reset ${userCount}`;
 	const armed = typed.trim().toLowerCase() === phrase;
@@ -761,7 +766,8 @@ function ResetAllButton({ isSuper, userCount, shortLabel, onDone }: { isSuper: b
 		setBusy(true);
 		setErr(null);
 		try {
-			await adminResetClaudePoolWindowAll(win);
+			const r = await adminResetClaudePoolWindowAll(win);
+			setDone(r);
 			setOpen(false);
 			setTyped('');
 			onDone();
@@ -775,6 +781,12 @@ function ResetAllButton({ isSuper, userCount, shortLabel, onDone }: { isSuper: b
 	if (!isSuper) return null;
 	if (!open) {
 		return (
+			<span className="inline-flex items-center gap-1.5">
+			{done && (
+				<span className="text-[10px] text-emerald-700" title="rows affected, reported by the server">
+					reset {done.reset} {done.window}
+				</span>
+			)}
 			<button
 				type="button"
 				onClick={() => setOpen(true)}
@@ -785,6 +797,7 @@ function ResetAllButton({ isSuper, userCount, shortLabel, onDone }: { isSuper: b
 				<RotateCcw className="w-2.5 h-2.5" />
 				reset all
 			</button>
+			</span>
 		);
 	}
 
