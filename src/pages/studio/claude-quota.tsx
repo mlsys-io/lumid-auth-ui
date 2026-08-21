@@ -683,7 +683,7 @@ function UserUsageSection({
 					Per-user pool usage
 				</p>
 				<span className="text-[10px] text-slate-400 font-normal">
-					caps: {fmtTokens(usage.five_hour_tokens)} tok / {shortWin} · {fmtTokens(usage.seven_day_tokens)} tok / 7d (claude-* only)
+					caps: {fmtTokens(usage.five_hour_tokens)} tok / {shortWin} · {fmtTokens(usage.seven_day_tokens)} tok / 7d (all models share this window — Claude and self-hosted deepseek/kimi)
 					{' · '}users with a <code className="font-mono text-[10px]">claude:proxy</code> PAT appear even at 0 usage
 				</span>
 				<span className="ml-auto shrink-0 flex items-center gap-2">
@@ -726,6 +726,23 @@ function UserUsageSection({
 								</span>
 								<span className="shrink-0 text-[10px] text-slate-400">{fmtTs(u.last_ts)}</span>
 							</div>
+							{/* Per-model breakdown — includes NON-Claude models (deepseek-v4-flash,
+							    kimi, openrouter fallthrough). They draw on the SAME window, so a
+							    user's pool usage is not attributable to Claude alone. Surfacing
+							    the models (name + cost) makes that visible per user. */}
+							{u.models && Object.keys(u.models).length > 0 && (
+								<div className="flex flex-wrap items-center gap-1 mt-0.5 pl-7">
+									{Object.entries(u.models)
+										.sort(([, a], [, b]) => (b.cost_cents_7d - a.cost_cents_7d) || (b.tokens_7d - a.tokens_7d))
+										.map(([m, v]) => (
+											<span key={m} className="px-1.5 py-px rounded bg-slate-100 text-[9px] text-slate-500 tabular-nums"
+												title={`${fmtTokens(v.tokens_7d)} tok · ${fmtCents(v.cost_cents_7d)}`}>
+												{m}
+												{v.cost_cents_7d > 0 && <span className="text-slate-400"> · {fmtCents(v.cost_cents_7d)}</span>}
+											</span>
+										))}
+								</div>
+							)}
 						</div>
 					);
 				})}
