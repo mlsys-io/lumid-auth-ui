@@ -15,11 +15,13 @@ no install, no PAT setup. Pick a **(Code)** model from the model picker:
 | Model | Who | Backed by |
 |---|---|---|
 | DeepSeek-V4-Flash (Lumid GPU) | everyone | In-house GB10 pair — **default**, no pool quota |
+| DeepSeek V4 Flash (OpenRouter offload) | everyone | OpenRouter — only when the in-house pair is saturated/unavailable |
 | Claude Sonnet (Code) | everyone | Account pool (your 5h/7d quota) |
 | Claude Opus (Code) | admin+ | Account pool |
 | Claude Fable 5 (Code) | super_admin | Account pool |
-| Kimi K3 (Code) | admin+ | Moonshot API — cost-metered, no pool quota |
-| GLM-5.2 (Code) | admin+ | OpenRouter — cost-metered, no pool quota |
+
+Other non-Anthropic vendor models (Kimi K3, GLM-5.2, any OpenRouter model) are
+**disabled** — see [Non-Anthropic models](#non-anthropic-models-deepseek-family-only).
 
 Each turn runs the claude CLI in a sandboxed per-user workspace, and the
 transcript renders the way the CLI does: reasoning blocks, tool calls in the
@@ -37,8 +39,10 @@ free at the margin, not recorded by the pool, and open to every role.
 > The **Qwen3.6-35B** row was removed on 2026-08-21. It claimed an in-house GPU
 > and availability to everyone, and neither is true any more: `SELF_HOSTED_MODELS`
 > on claude-proxy defaults to `deepseek-v4-flash` alone, so any other non-Anthropic
-> id is treated as externally billed and gated to admin+. The qwen backends
-> themselves went with luyao1 on 2026-08-17.
+> id is treated as externally billed. On 2026-08-21 external non-deepseek models
+> became **refused for every role** (see
+> [Non-Anthropic models](#non-anthropic-models-deepseek-family-only)). The qwen
+> backends themselves went with luyao1 on 2026-08-17.
 
 **The chatbox default is DeepSeek-V4-Flash, served on our own hardware.** It runs
 tensor-parallel across the two GB10 boxes, so ordinary chat costs nothing per
@@ -46,8 +50,8 @@ token and consumes no pool quota — reach for a Claude **(Code)** model when yo
 want a real Claude Code session (tool use, repo edits, sub-agents), and leave
 everyday chat on the default. It is a reasoning model, so its thinking is
 streamed as a reasoning block and kept out of the final answer. Note this is the
-*in-house* copy, not the metered OpenRouter one — see
-[Non-Anthropic models](#non-anthropic-models-kimi-k3-glm-52-deepseek) for why the
+*in-house* copy, not the metered OpenRouter offload — see
+[Non-Anthropic models](#non-anthropic-models-deepseek-family-only) for why the
 `deepseek/` prefix matters.
 
 ---
@@ -134,27 +138,30 @@ Whatever model your client requests is forwarded to the pooled account
 
 The pool gates model families by your lum.id role:
 
-| Role | Sonnet / Haiku | Opus | Fable | relay models |
+| Role | Sonnet / Haiku | Opus | Fable | DeepSeek family (in-house + offload) |
 |------|:---:|:---:|:---:|:---:|
-| `user` | ✅ | — | — | — |
+| `user` | ✅ | — | — | ✅ |
 | `admin` | ✅ | ✅ | — | ✅ |
 | `super_admin` | ✅ | ✅ | ✅ | ✅ |
 
 Requesting a model above your tier returns `403` with the required role —
 switch to an allowed model (e.g. `--model sonnet`) or ask an admin to raise
-your role. Unlisted/base models are available to everyone.
+your role. Unlisted Claude-base models are available to everyone. The DeepSeek
+family (in-house `deepseek-v4-flash` + OpenRouter offload) is the only
+non-Anthropic model family enabled, and is open to **all roles** — there are no
+admin-only vendor models (Kimi K3 / GLM-5.2 / generic OpenRouter were disabled
+2026-08-21).
 
-### Non-Anthropic models (kimi-k3, GLM-5.2, DeepSeek)
+### Non-Anthropic models (DeepSeek family only)
 
-Additional models are available to `admin`+ via the `lum.id/llm` relay —
-same PAT, no extra setup:
+The only non-Anthropic models available are the **deepseek-v4-flash family** —
+and they are open to **every role** (user, admin, super_admin) via the
+`lum.id/llm` relay, same PAT as the Claude pool:
 
 | Model flag | Backing | Context | Price (input/output per M tok) |
 |---|---|---|---|
 | `--model deepseek-v4-flash` | **In-house GB10 pair** | 256K | **free** — owned GPUs |
-| `--model kimi-k3` | Moonshot | — | $3 / $15 |
-| `--model z-ai/glm-5.2` | OpenRouter | — | $0.77 / $2.42 |
-| `--model deepseek/deepseek-v4-flash-0731` | OpenRouter | 1.31M | $0.14 / $0.28 |
+| `--model deepseek/deepseek-v4-flash-0731` | OpenRouter (offload) | 1.31M | $0.14 / $0.28 |
 
 > **Two DeepSeek-V4-Flash entries, and the difference is the bill.** They are the
 > same model weights reached two different ways, and the *only* thing telling them
@@ -165,18 +172,22 @@ same PAT, no extra setup:
 >   leaving the tailnet. 256K context. This is the one the Studio chatbox uses by
 >   default. Prefer it.
 > - **`deepseek/deepseek-v4-flash-0731`** (vendor prefix) — the **OpenRouter**
->   hosted copy, cost-metered per token, larger 1.31M context.
->
-> Reach for the OpenRouter one only when you genuinely need context beyond 256K
-> or the in-house pair is down; otherwise the prefix just spends money on a model
-> we already host.
+>   hosted copy, cost-metered per token, larger 1.31M context. It exists only as
+>   **offload**: reach for it only when the in-house pair is saturated or down, or
+>   you genuinely need context beyond 256K — otherwise the prefix just spends
+>   money on a model we already host.
 
-Any OpenRouter model id works, not just the ones listed — unlisted models fall
-through to the OpenRouter catch-all. That fallthrough is also a trap worth knowing:
-a **mistyped or retired local model id does not 404**, it silently becomes an
-OpenRouter request. Only the locally-served models appear in `GET /v1/models`, so
-a model being absent from that list does **not** mean it is unavailable — but it
-does mean you are about to be billed for it.
+**All other non-Anthropic vendor models are disabled.** Kimi K3, GLM-5.2, and the
+OpenRouter catch-all (any unlisted/mistyped model id) are refused for **every
+role — admins included** — so no external bill can ever be run up on a model the
+platform does not deliberately host or offload. Previously these were available
+to `admin`+; that access was removed on 2026-08-21. The proxy's
+`denyExternalModelForRole` enforces this: only `deepseek-v4-flash` (self-hosted)
+and `deepseek/deepseek-v4-flash-0731` (offload) are accepted; any other
+non-Anthropic request returns `403`.
+
+> A **mistyped local model id no longer silently bills**: it is refused outright
+> instead of falling through to a metered OpenRouter rack.
 
 **DeepSeek v4 Flash is a reasoning model**, and its reasoning tokens count
 against `max_tokens`. A small budget returns `content: null` with
