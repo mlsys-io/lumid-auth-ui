@@ -90,6 +90,15 @@ unset, Claude Code's own default applies — set it explicitly so every user
 lands on the free native model. (You may of course set it to a Claude pool
 model instead, subject to the [role table](#model-access-by-role) below.)
 
+> **About the `[1m]` suffix.** `deepseek-v4-flash` has a **1M-token context
+> window**. Claude Code appends a context-length marker to the model id it
+> sends — e.g. `deepseek-v4-flash[1m]` for a 1M-context session. The proxy
+> strips this `[1m]` suffix before routing, so the backend always sees the bare
+> `deepseek-v4-flash`. You never need to type it, and it is never forwarded to
+> the pool or the fleet — it is purely a client hint about the session's context
+> window. Just set `ANTHROPIC_MODEL=deepseek-v4-flash` (without the suffix) and
+> you get the full 1M context.
+
 ---
 
 ## Integrating with your existing Claude Code client
@@ -182,11 +191,14 @@ removed 2026-08-22) is the only non-Anthropic model enabled, and is open to
 generic OpenRouter were disabled 2026-08-21).
 
 > **The `[1m]` context suffix.** Claude Code appends a context-length marker to
-> the model id it sends — e.g. `claude-sonnet-5[1m]` for a 1M-context session.
-> The proxy strips this `[1m]` suffix before routing, so the backend always sees
-> the bare model id (`claude-sonnet-5`). You never need to type it, and it is
-> never forwarded to the pool or the self-hosted fleet — it is purely a client
-> hint about the session's context window.
+> the model id it sends — e.g. `claude-sonnet-5[1m]` for a 1M-context session,
+> or `deepseek-v4-flash[1m]` for the native model's **1M-token window**. The
+> proxy strips this `[1m]` suffix before routing, so the backend always sees the
+> bare model id (`claude-sonnet-5` / `deepseek-v4-flash`). You never need to type
+> it, and it is never forwarded to the pool or the self-hosted fleet — it is
+> purely a client hint about the session's context window. Selecting
+> `deepseek-v4-flash` (with or without the suffix) always yields the full 1M
+> context.
 
 ### Non-Anthropic models (DeepSeek only)
 
@@ -196,15 +208,16 @@ Claude pool:
 
 | Model flag | Backing | Context | Price (input/output per M tok) |
 |---|---|---|---|
-| `--model deepseek-v4-flash` | **In-house GB10 pair** | 256K | **free** — owned GPUs |
+| `--model deepseek-v4-flash` | **In-house GB10 pair** | 1M | **free** — owned GPUs |
 
 > **There is no OpenRouter offload.** The `deepseek/deepseek-v4-flash-0731`
 > vendor-prefixed id was **removed 2026-08-22** — both claude and llm requests to
 > deepseek-v4-flash go through our on-prem fleet first, and there is no metered
 > offload path. `deepseek-v4-flash` is served on **our own two GB10 boxes**,
 > tensor-parallel across the pair. Free at the margin, no metering, no data
-> leaving the tailnet. 256K context. This is the one the Studio chatbox uses by
-> default, and the one you should set as `ANTHROPIC_MODEL`.
+> leaving the tailnet. **1M context** (hence the `[1m]` suffix Claude Code
+> appends — see [Model selection](#model-selection)). This is the one the Studio
+> chatbox uses by default, and the one you should set as `ANTHROPIC_MODEL`.
 
 **All other non-Anthropic vendor models are disabled.** Kimi K3, GLM-5.2, the
 OpenRouter catch-all (any unlisted/mistyped model id), and the removed
