@@ -366,6 +366,14 @@ export interface ClaudeUserUsage {
 	five_hour_reset?: string;
 	seven_day_reset?: string;
 	models?: Record<string, ClaudeUserModelUsage>;
+	// RAW 7d token totals exactly as Anthropic reported them — the true token
+	// count, distinct from the weighted five_hour_tokens/seven_day_tokens quota
+	// unit (cache reads at a tenth, model by price ratio).
+	raw_input_tokens_7d?: number;
+	raw_output_tokens_7d?: number;
+	raw_cache_read_tokens_7d?: number;
+	raw_cache_creation_tokens_7d?: number;
+	raw_total_tokens_7d?: number;
 }
 
 export interface ClaudeUserUsageResp {

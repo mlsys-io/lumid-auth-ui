@@ -22,8 +22,7 @@ no install, no PAT setup. Pick a **(Code)** model from the model picker:
 | Model | Who | Backed by |
 |---|---|---|
 | DeepSeek-V4-Flash (Lumid GPU) | everyone | In-house GB10 pair — **default**, no pool quota |
-| DeepSeek V4 Flash (OpenRouter offload) | everyone | OpenRouter — only when the in-house pair is saturated/unavailable |
-| Claude Sonnet (Code) | admin+ | Account pool (your 5h/7d quota) |
+| Claude Sonnet (Code) | admin+ | Account pool (your 4h/7d quota) |
 | Claude Opus (Code) | admin+ | Account pool |
 | Claude Fable 5 (Code) | super_admin | Account pool |
 
@@ -165,7 +164,7 @@ native model — this is the recommendation, not a lock-in.
 
 The pool gates model families by your lum.id role:
 
-| Role | Sonnet / Haiku | Opus | Fable | DeepSeek family (in-house + offload) |
+| Role | Sonnet / Haiku | Opus | Fable | DeepSeek (in-house) |
 |------|:---:|:---:|:---:|:---:|
 | `user` | — | — | — | ✅ |
 | `admin` | ✅ | ✅ | — | ✅ |
@@ -177,44 +176,44 @@ Code runs on `deepseek-v4-flash` by default, which is free and open to every
 role. Requesting a model above your tier returns `403` with the required role —
 switch to an allowed model (e.g. `--model deepseek-v4-flash`) or ask an admin
 to raise your role. Unlisted Claude-base models are available to everyone. The
-DeepSeek family (in-house `deepseek-v4-flash` + OpenRouter offload) is the only
-non-Anthropic model family enabled, and is open to **all roles** — there are no
-admin-only vendor models (Kimi K3 / GLM-5.2 / generic OpenRouter were disabled
-2026-08-21).
+DeepSeek model (in-house `deepseek-v4-flash` — the OpenRouter offload was
+removed 2026-08-22) is the only non-Anthropic model enabled, and is open to
+**all roles** — there are no admin-only vendor models (Kimi K3 / GLM-5.2 /
+generic OpenRouter were disabled 2026-08-21).
 
-### Non-Anthropic models (DeepSeek family only)
+> **The `[1m]` context suffix.** Claude Code appends a context-length marker to
+> the model id it sends — e.g. `claude-sonnet-5[1m]` for a 1M-context session.
+> The proxy strips this `[1m]` suffix before routing, so the backend always sees
+> the bare model id (`claude-sonnet-5`). You never need to type it, and it is
+> never forwarded to the pool or the self-hosted fleet — it is purely a client
+> hint about the session's context window.
 
-The only non-Anthropic models available are the **deepseek-v4-flash family** —
-and they are open to **every role** (user, admin, super_admin) via the
-`lum.id/llm` relay, same PAT as the Claude pool:
+### Non-Anthropic models (DeepSeek only)
+
+The only non-Anthropic model available is **deepseek-v4-flash**, open to **every
+role** (user, admin, super_admin) via the `lum.id/llm` relay, same PAT as the
+Claude pool:
 
 | Model flag | Backing | Context | Price (input/output per M tok) |
 |---|---|---|---|
 | `--model deepseek-v4-flash` | **In-house GB10 pair** | 256K | **free** — owned GPUs |
-| `--model deepseek/deepseek-v4-flash-0731` | OpenRouter (offload) | 1.31M | $0.14 / $0.28 |
 
-> **Two DeepSeek-V4-Flash entries, and the difference is the bill.** They are the
-> same model weights reached two different ways, and the *only* thing telling them
-> apart is the `deepseek/` vendor prefix:
->
-> - **`deepseek-v4-flash`** (no prefix) — served on **our own two GB10 boxes**,
->   tensor-parallel across the pair. Free at the margin, no metering, no data
->   leaving the tailnet. 256K context. This is the one the Studio chatbox uses by
->   default, and the one you should set as `ANTHROPIC_MODEL`. Prefer it.
-> - **`deepseek/deepseek-v4-flash-0731`** (vendor prefix) — the **OpenRouter**
->   hosted copy, cost-metered per token, larger 1.31M context. It exists only as
->   **offload**: reach for it only when the in-house pair is saturated or down, or
->   you genuinely need context beyond 256K — otherwise the prefix just spends
->   money on a model we already host.
+> **There is no OpenRouter offload.** The `deepseek/deepseek-v4-flash-0731`
+> vendor-prefixed id was **removed 2026-08-22** — both claude and llm requests to
+> deepseek-v4-flash go through our on-prem fleet first, and there is no metered
+> offload path. `deepseek-v4-flash` is served on **our own two GB10 boxes**,
+> tensor-parallel across the pair. Free at the margin, no metering, no data
+> leaving the tailnet. 256K context. This is the one the Studio chatbox uses by
+> default, and the one you should set as `ANTHROPIC_MODEL`.
 
-**All other non-Anthropic vendor models are disabled.** Kimi K3, GLM-5.2, and the
-OpenRouter catch-all (any unlisted/mistyped model id) are refused for **every
-role — admins included** — so no external bill can ever be run up on a model the
-platform does not deliberately host or offload. Previously these were available
-to `admin`+; that access was removed on 2026-08-21. The proxy's
+**All other non-Anthropic vendor models are disabled.** Kimi K3, GLM-5.2, the
+OpenRouter catch-all (any unlisted/mistyped model id), and the removed
+`deepseek/deepseek-v4-flash-0731` offload are refused for **every role — admins
+included** — so no external bill can ever be run up on a model the platform does
+not deliberately host. Previously these were available to `admin`+; that access
+was removed on 2026-08-21 and tightened further on 2026-08-22. The proxy's
 `denyExternalModelForRole` enforces this: only `deepseek-v4-flash` (self-hosted)
-and `deepseek/deepseek-v4-flash-0731` (offload) are accepted; any other
-non-Anthropic request returns `403`.
+is accepted; any other non-Anthropic request returns `403`.
 
 > A **mistyped local model id no longer silently bills**: it is refused outright
 > instead of falling through to a metered OpenRouter rack.
@@ -225,9 +224,10 @@ against `max_tokens`. A small budget returns `content: null` with
 is emitted, not an error. Allow a few hundred tokens minimum (the curl example
 above uses `max_tokens: 1024` for exactly this reason).
 
-These models **do not consume the Anthropic pool quota** (they use separate API
-keys). Usage is recorded and visible on [/code](/code) under **Per-user pool
-usage** → model breakdown, with actual cost in USD rather than token counts.
+DeepSeek **does not consume the Anthropic pool quota** and is **not limited by
+the per-user pool cap** — it is recorded (counted) but never enforced against the
+pool window. Usage is visible on [/code](/code) under **Per-user pool usage** →
+model breakdown, tagged by serving route (onprem).
 
 ---
 
@@ -258,10 +258,11 @@ usage** → model breakdown, with actual cost in USD rather than token counts.
 ## Your personal pool quota
 
 Each user gets their own quota on the pool, mirroring Anthropic's window
-shape: a **5-hour** and a **7-day** rolling token budget (uncached input +
-output tokens, summed across all your PATs). Currently **2M tokens / 5h**
-and **30M / 7d** — operator-tunable via `LUMID_QUOTA_CLAUDE_{5H,7D}_TOKENS`
-(the code defaults are 4M/40M, deliberately lowered for a small pool).
+shape: a **4-hour** and a **7-day** rolling token budget (uncached input +
+output tokens, summed across all your PATs). Currently **15M tokens / 4h**
+and **150M / 7d** — operator-tunable via `LUMID_QUOTA_CLAUDE_{5H,7D}_TOKENS`
+(the code defaults are 4M/40M; the live values are set in the lumid-identity
+deployment manifest).
 
 - When a window is exhausted the proxy returns `429` with the reason and
   Claude Code backs off; the window rolls continuously, so capacity returns
@@ -269,7 +270,7 @@ and **30M / 7d** — operator-tunable via `LUMID_QUOTA_CLAUDE_{5H,7D}_TOKENS`
 - Current per-user consumption is visible to admins on
   [/code](/code) under **Per-user pool usage**.
 - The pool quota applies to the **pooled Claude models only** — the DeepSeek
-  family runs on separate keys and never counts against the 2M/30M windows.
+  family runs on separate keys and never counts against the 15M/150M windows.
 
 ### Seeing your usage from the CLI
 
@@ -294,12 +295,14 @@ curl -fsSL https://lum.id/docs/quota.md -o ~/.claude/commands/quota.md
 ```
 lum.id/claude — your pool usage
 
-  5h  ████████████████████░░░░░░░░  71.0%   1.42M / 2.00M   resets in 1h36m
-  7d  ████████░░░░░░░░░░░░░░░░░░░░  31.2%   9.35M / 30.00M  resets in 52h59m
+  4h  ████████████████████░░░░░░░░  71.0%   10.7M / 15.0M   resets in 1h36m
+  7d  ████████░░░░░░░░░░░░░░░░░░░░  31.2%   46.8M / 150M    resets in 52h59m
 
   by model (7d)
     claude-sonnet-5                       7.10M
     claude-opus-5                         1.90M
+    deepseek-v4-flash (onprem)           35.0M
+    deepseek/deepseek-v4-flash-0731 (OpenRouter)   2.8M
 
   1284 requests over 7d  ·  $41.73
 ```

@@ -620,6 +620,25 @@ function fmtTokens(n: number): string {
 	return String(n);
 }
 
+// modelRoute classifies a model id by its serving route so the per-model chips
+// distinguish onprem (self-hosted GB10) from pooled Claude. The OpenRouter
+// offload (`deepseek/deepseek-v4-flash-0731`) was removed 2026-08-22 — both
+// claude and llm requests to deepseek-v4-flash go through our on-prem fleet
+// first, so there is no metered offload path to label. Classification is keyed
+// on the EXACT model id, not a shape heuristic:
+//   - `deepseek-v4-flash` → onprem (self-hosted GB10 pair)
+//   - `claude-*`          → pooled Claude (Anthropic quota)
+// Anything else falls through to a neutral label rather than being guessed.
+function modelRoute(model: string): { label: string; cls: string } {
+	if (model === 'deepseek-v4-flash') {
+		return { label: 'onprem (self-hosted)', cls: 'bg-emerald-50 text-emerald-600 border border-emerald-100' };
+	}
+	if (model.startsWith('claude-')) {
+		return { label: 'pooled Claude', cls: 'bg-slate-100 text-slate-500' };
+	}
+	return { label: 'other', cls: 'bg-slate-100 text-slate-500' };
+}
+
 function fmtPct(pct: number): string {
 	if (pct === 0) return '0%';
 	if (pct < 1) return '<1%';
@@ -683,7 +702,7 @@ function UserUsageSection({
 					Per-user pool usage
 				</p>
 				<span className="text-[10px] text-slate-400 font-normal">
-					caps: {fmtTokens(usage.five_hour_tokens)} tok / {shortWin} · {fmtTokens(usage.seven_day_tokens)} tok / 7d (all models share this window — Claude and self-hosted deepseek/kimi)
+					caps: {fmtTokens(usage.five_hour_tokens)} tok / {shortWin} · {fmtTokens(usage.seven_day_tokens)} tok / 7d (pooled Claude only — deepseek is counted but not limited)
 					{' · '}users with a <code className="font-mono text-[10px]">claude:proxy</code> PAT appear even at 0 usage
 				</span>
 				<span className="ml-auto shrink-0 flex items-center gap-2">
@@ -721,26 +740,33 @@ function UserUsageSection({
 								    were pushed out of view — shipped once that way and invisible. */}
 								<ResetWindowButtons isSuper={isSuper} email={u.email} shortLabel={shortWin} onDone={onReset} />
 								<span className="flex-1 min-w-0 text-[10px] text-slate-400 truncate">
-									{fmtTokens(u.seven_day_tokens)} tok · {u.requests_7d} req
-									{u.cost_cents_7d > 0 && <> · <span className="text-slate-500">{fmtCents(u.cost_cents_7d)}</span></>}
+									{/* RAW token count (Anthropic's own figure), not the weighted quota unit. */}
+									{u.raw_total_tokens_7d != null
+										? <>{fmtTokens(u.raw_total_tokens_7d)} tok · {u.requests_7d} req</>
+										: <>{fmtTokens(u.seven_day_tokens)} tok · {u.requests_7d} req</>}
 								</span>
 								<span className="shrink-0 text-[10px] text-slate-400">{fmtTs(u.last_ts)}</span>
 							</div>
 							{/* Per-model breakdown — includes NON-Claude models (deepseek-v4-flash,
 							    kimi, openrouter fallthrough). They draw on the SAME window, so a
 							    user's pool usage is not attributable to Claude alone. Surfacing
-							    the models (name + cost) makes that visible per user. */}
+							    the models makes that visible per user. Each chip is tagged with
+							    its serving route: onprem (self-hosted GB10) vs openrouter (the
+							    metered catch-all) vs pooled Claude. */}
 							{u.models && Object.keys(u.models).length > 0 && (
 								<div className="flex flex-wrap items-center gap-1 mt-0.5 pl-7">
 									{Object.entries(u.models)
-										.sort(([, a], [, b]) => (b.cost_cents_7d - a.cost_cents_7d) || (b.tokens_7d - a.tokens_7d))
-										.map(([m, v]) => (
-											<span key={m} className="px-1.5 py-px rounded bg-slate-100 text-[9px] text-slate-500 tabular-nums"
-												title={`${fmtTokens(v.tokens_7d)} tok · ${fmtCents(v.cost_cents_7d)}`}>
-												{m}
-												{v.cost_cents_7d > 0 && <span className="text-slate-400"> · {fmtCents(v.cost_cents_7d)}</span>}
-											</span>
-										))}
+										.sort(([, a], [, b]) => (b.tokens_7d - a.tokens_7d))
+										.map(([m, v]) => {
+											const route = modelRoute(m);
+											return (
+												<span key={m} className={`px-1.5 py-px rounded text-[9px] tabular-nums ${route.cls}`}
+													title={`${fmtTokens(v.tokens_7d)} tok · ${route.label}`}>
+													{m}
+													<span className="text-slate-400"> · {fmtTokens(v.tokens_7d)}</span>
+												</span>
+											);
+										})}
 								</div>
 							)}
 						</div>
@@ -1169,8 +1195,6 @@ export default function StudioClaudeQuota() {
 			<FieldBoxPanel />
 
 			{userUsage && <UserUsageSection usage={userUsage} countdown={countdown} onReset={loadUserUsage} isSuper={isSuper} />}
-
-			{userUsage && <ModelCostPanel usage={userUsage} />}
 
 			<p className="text-[11px] text-slate-400">
 				Setup + full guide: <a href="/docs/claude" className="text-gold-700 hover:underline">/docs/claude</a>.
