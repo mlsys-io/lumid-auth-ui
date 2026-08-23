@@ -38,6 +38,17 @@ interface DocEntry {
 
 const DOCS: DocEntry[] = [
 	{
+		// First on the list on purpose: it is the only doc that assumes you have
+		// never logged in, and every other Guide here reads better after it.
+		slug: 'first-run',
+		title: 'First run: signup to a working strategy',
+		description: 'The actual path, walked end to end as a plain user account — signup, your first token, chat, Claude Code, data, strategies. Records what misled, not just what worked.',
+		md: 'first-run.md',
+		group: 'Guides',
+		icon: Compass,
+		companion: { to: '/studio/docs/deepseek', label: 'Your model' },
+	},
+	{
 		slug: 'deepseek',
 		title: 'Your model: deepseek-v4-flash',
 		description: 'The model you are actually on, and it is unlimited. The one timeout setting that matters, why the first turn is slow, and what "unlimited" does and does not mean.',
