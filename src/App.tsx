@@ -56,6 +56,8 @@ const AppPromptsEditor   = lazy(() => import("./components/app-surface/AppPrompt
 // cross-app run index.
 const StudioRuns         = lazy(() => import("./pages/studio/runs"));
 const StudioPortfolio    = lazy(() => import("./pages/studio/portfolio"));
+// The caller's own LQT strategies + their runtime cycles, over /lqt/inspect/*.
+const StudioStrategies   = lazy(() => import("./pages/studio/strategies"));
 // Workstream E — skills as a first-class surface (inventory + health + discovery).
 const StudioSkills       = lazy(() => import("./pages/studio/skills"));
 // Workstream F — cross-app experiments aggregate.
@@ -772,6 +774,7 @@ export default function App() {
                 original URLs and are just hidden from the sidebar. */}
             <Route path="runs"                         element={<StudioRuns />} />
             <Route path="portfolio"                    element={<StudioPortfolio />} />
+            <Route path="strategies"                   element={<StudioStrategies />} />
             <Route path="runs/:run_id"                 element={<StudioRunDetail />} />
             {/* Mind folded into each workflow's Insights panel. */}
             <Route path="mind"                         element={<Navigate to="/studio/apps" replace />} />
