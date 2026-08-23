@@ -404,16 +404,15 @@ export async function fetchClaudeUserUsage(): Promise<ClaudeUserUsageResp> {
 
 // ── OpenRouter balance ───────────────────────────────────────────────
 // Metered pay-per-use side of the pool. The key never leaves the server; this
-// endpoint returns the normalized balance. available:false degrades gracefully
-// (missing key / unreachable) so the panel blanks instead of erroring.
+// endpoint returns the account credit (GET /api/v1/credits → total_credits /
+// total_usage in USD). balance_usd = total_credits - total_usage. available:false
+// degrades gracefully (missing key / unreachable) so the panel blanks instead
+// of erroring.
 export interface OpenRouterBalanceResp {
 	available: boolean;
 	balance_usd: number;
-	limit_usd: number;
+	total_credits: number;
 	usage_usd: number;
-	currency: string;
-	is_free_tier: boolean;
-	label?: string;
 	error?: string;
 }
 

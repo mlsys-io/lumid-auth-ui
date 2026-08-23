@@ -1077,9 +1077,10 @@ function ModelCostPanel({ usage }: { usage: ClaudeUserUsageResp }) {
 
 // OpenRouterBalancePanel — the metered pay-per-use side of the pool. Shows how
 // much credit is left on the OpenRouter account backing the non-Claude models
-// (kimi-*, z-ai/*, deepseek/deepseek-* fallthrough). The key never leaves the
-// server; this panel renders the normalized balance. available:false (missing
-// key / unreachable) blanks the panel instead of erroring the page.
+// (kimi-*, z-ai/*, deepseek/deepseek-* fallthrough). Reads GET /api/v1/credits
+// (total_credits - total_usage) via the admin endpoint; the key never leaves
+// the server. available:false (missing key / unreachable) blanks the panel
+// instead of erroring the page.
 function OpenRouterBalancePanel() {
 	const [data, setData] = useState<OpenRouterBalanceResp | null>(null);
 
@@ -1097,29 +1098,26 @@ function OpenRouterBalancePanel() {
 		<div className="rounded-lg border border-violet-200 bg-violet-50/50 px-3 py-2">
 			<div className="flex items-center gap-2">
 				<span className="text-xs font-medium text-slate-700">OpenRouter balance</span>
-				{data.is_free_tier && (
-					<span className="rounded-full bg-violet-100 border border-violet-200 px-1.5 py-0.5 text-[10px] font-medium text-violet-700">
-						free tier
-					</span>
-				)}
-				{data.label && (
-					<span className="text-[10px] text-slate-400 truncate" title={data.label}>{data.label}</span>
-				)}
-				<span className="ml-auto shrink-0 font-mono text-xs text-slate-700">
+				<span className="ml-auto shrink-0 font-mono text-xs text-violet-800">
 					{data.available ? (
-						<>${data.balance_usd.toFixed(2)} <span className="text-slate-400">left</span> · ${data.usage_usd.toFixed(2)} <span className="text-slate-400">used</span>{data.limit_usd > 0 ? <> / ${data.limit_usd.toFixed(2)}</> : ''}</>
+						<>${data.balance_usd.toFixed(2)} <span className="text-slate-400 font-normal">credit</span>{data.usage_usd > 0 ? <> · ${data.usage_usd.toFixed(2)} <span className="text-slate-400 font-normal">used</span></> : ''}</>
 					) : (
 						<span className="text-slate-400 text-[11px] font-normal">not configured</span>
 					)}
 				</span>
 			</div>
-			{data.available && data.limit_usd > 0 && (
-				<div className="mt-1.5 h-1 rounded-full bg-violet-100 overflow-hidden">
-					<div
-						className="h-full rounded-full bg-violet-500"
-						style={{ width: `${Math.min(100, (data.usage_usd / data.limit_usd) * 100)}%` }}
-					/>
-				</div>
+			{data.available && data.total_credits > 0 && (
+				<>
+					<div className="mt-1.5 h-1 rounded-full bg-violet-100 overflow-hidden">
+						<div
+							className="h-full rounded-full bg-violet-500"
+							style={{ width: `${Math.max(2, Math.min(100, (data.balance_usd / data.total_credits) * 100))}%` }}
+						/>
+					</div>
+					<p className="mt-1 text-[10px] text-slate-400">
+						{fmtPct((data.balance_usd / data.total_credits) * 100)} of ${data.total_credits.toFixed(2)} credit remaining
+					</p>
+				</>
 			)}
 			{data.error && (
 				<p className="mt-1 text-[10px] text-slate-400">{data.error}</p>
