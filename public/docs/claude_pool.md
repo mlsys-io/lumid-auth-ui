@@ -293,8 +293,28 @@ model breakdown, tagged by serving route (onprem).
 > deepseek is: unlimited.
 
 Each user gets their own quota on the pool, mirroring Anthropic's window
-shape: a **4-hour** and a **7-day** rolling token budget (uncached input +
-output tokens, summed across all your PATs).
+shape: a **4-hour** and a **7-day** rolling budget, summed across all your PATs.
+
+**The budget is denominated in weighted QUOTA UNITS, not raw tokens** — and the
+difference is about 10x, so this is worth reading before you compare a number
+here against a token count anywhere else. Cached input is *not* free; it is
+counted at a discount, and on a typical Claude Code turn it is nearly all of the
+input:
+
+| counted | weight |
+|---|---|
+| fresh input, output | 1x |
+| **cache read** | **0.1x** |
+| cache write (5-minute TTL) | 1.25x |
+| cache write (1-hour TTL) | 2x |
+| then multiplied by model | opus 1x · sonnet 0.6x · haiku 0.2x · non-Claude 0.1x |
+
+The weights are Anthropic's price ratios, so a unit is "what this cost the pool",
+not "a token". A turn over a 120k-token context typically reports `input_tokens`
+in the hundreds with `cache_read_input_tokens` around 118k — roughly 1.2M raw
+tokens across a session can draw only ~120k units. That is why `/code` shows raw
+tokens and units side by side, labelled separately: one number cannot honestly be
+both, and reading units as tokens makes your usage look ~10x smaller than it is.
 
 Since 2026-08-23 the budget is **tiered by role**, because a single global
 number cannot serve both a cohort and the operators running the platform —
