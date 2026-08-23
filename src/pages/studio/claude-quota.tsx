@@ -1004,66 +1004,6 @@ function ResetWindowButtons({
 	);
 }
 
-// Per-model usage, aggregated across all pool users — 7d window. Tokens only;
-// the OpenRouter balance panel is the single place dollars appear on this page.
-function ModelCostPanel({ usage }: { usage: ClaudeUserUsageResp }) {
-	const byModel = new Map<string, { tokens: number; users: { email: string; tokens: number }[] }>();
-	for (const u of usage.users) {
-		if (!u.models) continue;
-		for (const [model, v] of Object.entries(u.models)) {
-			if (v.tokens_7d <= 0) continue;
-			let agg = byModel.get(model);
-			if (!agg) { agg = { tokens: 0, users: [] }; byModel.set(model, agg); }
-			agg.tokens += v.tokens_7d;
-			agg.users.push({ email: u.email, tokens: v.tokens_7d });
-		}
-	}
-	if (byModel.size === 0) return null;
-
-	const rows = [...byModel.entries()].sort((a, b) => (b[1].tokens - a[1].tokens));
-	const maxTokens = Math.max(...rows.map(([, v]) => v.tokens), 1);
-	const totalTokens = rows.reduce((s, [, v]) => s + v.tokens, 0);
-
-	return (
-		<div>
-			<div className="flex items-center gap-2 mb-1.5">
-				<p className="text-xs font-medium text-slate-600">Per-model usage · 7d</p>
-				<span className="text-[10px] text-slate-400 font-normal">
-					<code className="font-mono text-[10px]">claude-*</code> draws pool quota; other models are pay-per-use
-				</span>
-				<span className="ml-auto shrink-0 text-[10px] font-mono text-slate-500">
-					{fmtTokens(totalTokens)} tok
-				</span>
-			</div>
-			<div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100">
-				{rows.map(([model, v]) => {
-					const users = [...v.users].sort((a, b) => (b.tokens - a.tokens));
-					return (
-						<div key={model} className="flex items-center gap-3 px-2.5 py-1.5 min-w-0">
-							<span className="w-44 shrink-0 truncate text-xs font-mono text-slate-800" title={model}>
-								{model}
-							</span>
-							<div className="w-24 h-1 rounded-full bg-slate-100 overflow-hidden shrink-0" title={`${v.tokens.toLocaleString()} tokens`}>
-								<div className="h-full rounded-full bg-gold-400" style={{ width: `${Math.max(2, (v.tokens / maxTokens) * 100)}%` }} />
-							</div>
-							<span className="w-14 shrink-0 text-right text-[10px] font-mono text-slate-600">{fmtTokens(v.tokens)}</span>
-							<span className="flex-1 min-w-0 truncate text-[10px] text-slate-400">
-								{users.slice(0, 4).map((uu, i) => (
-									<span key={uu.email} title={`${uu.tokens.toLocaleString()} tok`}>
-										{i > 0 && ' · '}
-										{uu.email.split('@')[0]} {fmtTokens(uu.tokens)}
-									</span>
-								))}
-								{users.length > 4 && ` · +${users.length - 4} more`}
-							</span>
-						</div>
-					);
-				})}
-			</div>
-		</div>
-	);
-}
-
 // OpenRouterBalancePanel — the metered pay-per-use side of the pool. Shows how
 // much credit is left on the OpenRouter account backing the non-Claude models
 // (kimi-*, z-ai/*, deepseek/deepseek-* fallthrough). Reads GET /api/v1/credits
@@ -1120,11 +1060,14 @@ function SummaryBar({ accounts }: { accounts: ClaudeQuotaAccount[] }) {
 	const warning  = accounts.filter((a) => a.severity === 'warning').length;
 	const healthy  = accounts.length - critical - warning;
 	return (
-		<div className="flex items-center gap-4 text-xs text-slate-500">
-			{critical > 0 && <span className="text-rose-600 font-medium">{critical} critical</span>}
-			{warning  > 0 && <span className="text-amber-600 font-medium">{warning} warning</span>}
-			<span className="text-emerald-600">{healthy} healthy</span>
-			<span className="text-slate-300">/ {accounts.length} total</span>
+		<div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+			<div className="text-xs font-medium text-slate-700">Pooled accounts</div>
+			<div className="flex items-center gap-4 text-xs text-slate-500 mt-0.5">
+				{critical > 0 && <span className="text-rose-600 font-medium">{critical} critical</span>}
+				{warning  > 0 && <span className="text-amber-600 font-medium">{warning} warning</span>}
+				<span className="text-emerald-600">{healthy} healthy</span>
+				<span className="text-slate-300">/ {accounts.length} total</span>
+			</div>
 		</div>
 	);
 }
@@ -1178,7 +1121,7 @@ export default function StudioClaudeQuota() {
 	}, [load, loadUserUsage]);
 
 	return (
-		<div className="space-y-3 max-w-3xl mx-auto">
+		<div className="space-y-3 max-w-5xl mx-auto">
 			{showAdd && (
 				<AddAccountModal
 					onClose={() => { setShowAdd(false); setReAddEmail(undefined); }}
@@ -1228,8 +1171,6 @@ export default function StudioClaudeQuota() {
 				</div>
 			</header>
 
-			<OpenRouterBalancePanel />
-
 			{error ? (
 				<div className="text-sm rounded border border-rose-200 bg-rose-50 text-rose-800 px-3 py-2">
 					{error}
@@ -1239,18 +1180,28 @@ export default function StudioClaudeQuota() {
 					<Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…
 				</div>
 			) : accounts.length === 0 ? (
-				<div className="rounded-lg border border-slate-200 bg-white p-6 text-center">
-					<CheckCircle className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-					<p className="text-sm text-slate-500">
-						No accounts have connected a Claude token yet.
-					</p>
-					<p className="text-xs text-slate-400 mt-1">
-						Click "Add account" above and paste each user's Claude Code OAuth token.
-					</p>
-				</div>
+				<>
+					{/* OpenRouter credit — still useful with no pooled accounts. */}
+					<OpenRouterBalancePanel />
+					<div className="rounded-lg border border-slate-200 bg-white p-6 text-center">
+						<CheckCircle className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+						<p className="text-sm text-slate-500">
+							No accounts have connected a Claude token yet.
+						</p>
+						<p className="text-xs text-slate-400 mt-1">
+							Click "Add account" above and paste each user's Claude Code OAuth token.
+						</p>
+					</div>
+				</>
 			) : (
 				<>
-					<SummaryBar accounts={accounts} />
+					{/* Top row: OpenRouter credit + pooled-account health side by side.
+					    Both are one-glance status figures; pairing them reclaims the
+					    vertical space two stacked cards would eat. */}
+					<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+						<OpenRouterBalancePanel />
+						<SummaryBar accounts={accounts} />
+					</div>
 					<div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100">
 						{accounts.map((a) => (
 							<AccountRow
