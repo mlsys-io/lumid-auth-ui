@@ -70,14 +70,14 @@ function SeverityDot({ severity }: { severity: string }) {
 }
 
 
-function MiniBar({ pct, severity }: { pct: number; severity: string }) {
+function MiniBar({ pct, severity, w = 'w-16' }: { pct: number; severity: string; w?: string }) {
 	const fill =
 		severity === 'critical' ? 'bg-rose-500' :
 		severity === 'warning'  ? 'bg-amber-400' :
 		pct > 60                ? 'bg-gold-400'  :
 		'bg-emerald-400';
 	return (
-		<div className="w-16 h-1 rounded-full bg-slate-100 overflow-hidden">
+		<div className={`${w} h-1 rounded-full bg-slate-100 overflow-hidden`}>
 			<div className={`h-full rounded-full ${fill}`} style={{ width: `${Math.min(100, pct)}%` }} />
 		</div>
 	);
@@ -726,13 +726,13 @@ function UserUsageSection({
 								</span>
 								<div className="flex items-center gap-1 shrink-0" title={`${(u.claude_five_hour_tokens ?? u.five_hour_tokens).toLocaleString()} pooled-Claude tokens`}>
 									<span className="text-[10px] text-slate-400 w-4">{shortWin}</span>
-									<MiniBar pct={shortPct} severity={usageSeverity(shortPct)} />
+									<MiniBar pct={shortPct} severity={usageSeverity(shortPct)} w="w-10" />
 									<span className="text-[10px] font-mono text-slate-600 w-8 text-right">{fmtPct(shortPct)}</span>
 									{resetShort && <span className="text-[10px] text-slate-400 w-10">{resetShort}</span>}
 								</div>
 								<div className="flex items-center gap-1 shrink-0" title={`${(u.claude_seven_day_tokens ?? u.seven_day_tokens).toLocaleString()} pooled-Claude tokens`}>
 									<span className="text-[10px] text-slate-400 w-4">7d</span>
-									<MiniBar pct={weekPct} severity={usageSeverity(weekPct)} />
+									<MiniBar pct={weekPct} severity={usageSeverity(weekPct)} w="w-10" />
 									<span className="text-[10px] font-mono text-slate-600 w-8 text-right">{fmtPct(weekPct)}</span>
 									{reset7d && <span className="text-[10px] text-slate-400 w-10">{reset7d}</span>}
 								</div>
