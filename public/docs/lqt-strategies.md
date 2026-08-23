@@ -2,7 +2,7 @@
 
 **A complete reference for strategy researchers.** Write a trading strategy in the LQT DSL, submit it with your lum.id token, and it runs **shadow/paper** against live prediction markets (Polymarket + Kalshi). As a normal user, your strategies always run shadow/paper — no real orders are ever placed.
 
-> **Doc version 1.0.3** · updated 2026-07-20 · audience: **strategy researcher** (normal user role). See the [changelog](#changelog) at the end.
+> **Doc version 1.0.4** · updated 2026-08-23 · audience: **strategy researcher** (normal user role). See the [changelog](#changelog) at the end.
 
 This page is self-contained: everything needed to author a valid `.lqts` strategy and submit it over HTTP is here, grounded in the compiler and gateway source.
 
@@ -70,7 +70,7 @@ curl -X POST "https://lum.id/lqt/submit/lqt_inbox" \
 # -> 200 { "received": 1, "inserted": 1, "status": "ok" }
 # Your strategy compiles server-side, registers under your tenant, and runs PAPER.
 # Confirm it registered:
-#   curl -H "Authorization: Bearer $LQT_TOKEN" https://lum.id/xpio/strategies
+#   curl -H "Authorization: Bearer $LQT_TOKEN" https://lumid.trade/xpio/strategies
 ```
 
 `$LQT_TOKEN` = your lum.id PAT. It appears **twice**: as the `Authorization` bearer (which passes the endpoint's `lqt:strategy` scope check) **and** inside `payload.auth.pat` (the per-strategy **owner** credential the runtime verifies in-transaction — this is what attributes the strategy to your tenant).
@@ -389,7 +389,13 @@ The hex from `compile` is exactly what you'd send as `program_hex`.
 
 ### Reading results
 
-Three channels, all scoped to **your** tenant by your PAT (a strategy's telemetry is attributed to the lum.id account that submitted it — you only ever see your own):
+Three channels, all scoped to **your** tenant by your PAT (a strategy's telemetry is attributed to the lum.id account that submitted it — you only ever see your own).
+
+> **Host note — the `/xpio/*` read endpoints below are NOT served from `lum.id`.** Use
+> **`https://lumid.trade/xpio/…`** (or the equivalent `https://lum.id/lqt-mailbox/xpio/…`).
+> A bare `https://lum.id/xpio/strategies` falls through to the landing site and answers **302** to
+> the login page, so `curl` returns HTML rather than your strategies. Submission is different and
+> *is* on `lum.id`: `POST https://lum.id/lqt/submit/lqt_inbox`.
 
 - **List your strategies — `GET /xpio/strategies`** (Bearer PAT). Returns the strategies registered under your tenant, including `program_hash` (non-empty = successfully compiled and running), `status`, and metadata.
 - **Ask for a cycle rollup — topic `strategy.inspect`** (async). POST a `strategy.inspect` message `{strategy_id, window_s?}` (same PAT auth and envelope as submit); the platform writes a `strategy.inspect.result` to your outbox with the aggregated funnel (`n_proposed` / `n_submitted` / `n_rejected` / `suppressed`), the `reject_reasons` distribution, latency percentiles, and your strategy's recent result messages. Read the reply from `GET /xpio/results`.
@@ -499,6 +505,7 @@ strategy trend_with_stop {
 
 ## Changelog
 
+- **1.0.4** (2026-08-23) — Corrected the results host: `/xpio/*` reads are served from `lumid.trade` (or `lum.id/lqt-mailbox/xpio/…`), **not** `lum.id`, where they 302 to the login page. Step 3's `lqt:strategy` scope is now selectable in the Tokens UI — previously identity granted it but nothing in the UI could request it, so this doc asked for a PAT that could not be minted.
 - **1.0.3** (2026-07-20) — Corrected submit endpoint: self-serve path is `POST https://lum.id/lqt/submit/lqt_inbox`; PAT required in both `Authorization` header and `payload.auth.pat`. Compile is async — confirm via `GET /xpio/strategies`.
 - **1.0.2** (2026-07-19) — Documented results reading: `GET /xpio/strategies` (registered strategies), `strategy.inspect` mailbox topic (cycle rollup), `GET /xpio/results` (raw outbox). Per-tenant scope server-injected from PAT.
 - **1.0.1** (2026-07-18) — Clarified async compile flow; enriched platform signal and universe reference tables; added results-reading section.

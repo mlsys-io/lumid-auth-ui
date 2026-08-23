@@ -480,11 +480,26 @@ function MintDialog({
 
 // ---- Custom scope picker ----
 
+// Opaque capability tags from identity's `capabilityScopes` allowlist
+// (admin_users.go). They are grantable by ANY active authenticated user and
+// confer no platform access — parseScope ignores them — so they belong here
+// and NOT in SCOPE_SERVICES, which drives the service:level access matrix.
+//
+// Keep this in sync with capabilityScopes. A tag that identity grants but this
+// list omits is unmintable from the UI with no other way to ask for it: there
+// is no free-text scope field. That is how `lqt:strategy` came to be required
+// by step 3 of the published /docs/lqt-strategies instructions while being
+// impossible to obtain — the whole strategy funnel dead-ended on this array.
 const CAP_SCOPES = [
 	{
 		id: 'claude:proxy',
 		label: 'Claude proxy',
 		desc: 'Route Claude Code through the org account pool at lum.id/claude',
+	},
+	{
+		id: 'lqt:strategy',
+		label: 'LQT strategy deploy',
+		desc: 'Submit and deploy your own LQT strategies (the strategy.deploy mailbox topic). Confers no admin and no real-trade — live trading is gated separately.',
 	},
 ] as const;
 
