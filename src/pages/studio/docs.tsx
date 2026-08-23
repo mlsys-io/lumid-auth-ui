@@ -21,7 +21,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import 'github-markdown-css/github-markdown-light.css';
 import {
-	BookOpen, Zap, FileCode2, Activity, CandlestickChart, Compass, ArrowLeft, Loader2, Cpu, Database, TerminalSquare,
+	BookOpen, Zap, FileCode2, Activity, CandlestickChart, Compass, ArrowLeft, Loader2, Cpu, Database, TerminalSquare, Bot,
 } from 'lucide-react';
 import StudioHow from './how';
 
@@ -38,9 +38,18 @@ interface DocEntry {
 
 const DOCS: DocEntry[] = [
 	{
+		slug: 'deepseek',
+		title: 'Your model: deepseek-v4-flash',
+		description: 'The model you are actually on, and it is unlimited. The one timeout setting that matters, why the first turn is slow, and what "unlimited" does and does not mean.',
+		md: 'deepseek.md',
+		group: 'Guides',
+		icon: Bot,
+		companion: { to: '/studio/docs/claude', label: 'Client setup' },
+	},
+	{
 		slug: 'claude',
-		title: 'Claude account pool',
-		description: 'Point your Claude Code CLI at the lum.id pool — PAT setup, model routing, per-user short-window/7d budgets, non-Anthropic models.',
+		title: 'Claude account pool (deprecated)',
+		description: 'DEPRECATED — the pool is no longer the path; see "Your model" first. Retained for Claude Code client setup, the role/model matrix, and session recording.',
 		md: 'claude_pool.md',
 		group: 'Guides',
 		icon: Zap,
