@@ -83,6 +83,35 @@ function MiniBar({ pct, severity, w = 'w-16' }: { pct: number; severity: string;
 	);
 }
 
+// StackedBar — the per-user 4h and 7d windows on ONE track, so a row reads at a
+// glance instead of two separate bars. The 4h window fills from the LEFT, the
+// 7d from the RIGHT; they meet in the middle. Each side keeps its own severity
+// colour, and the centre gap shows how much headroom remains on both.
+function StackedBar({ shortPct, weekPct }: { shortPct: number; weekPct: number }) {
+	const shortFill =
+		usageSeverity(shortPct) === 'critical' ? 'bg-rose-500' :
+		usageSeverity(shortPct) === 'warning'  ? 'bg-amber-400' :
+		shortPct > 60                          ? 'bg-gold-400'  :
+		'bg-emerald-400';
+	const weekFill =
+		usageSeverity(weekPct) === 'critical' ? 'bg-rose-500' :
+		usageSeverity(weekPct) === 'warning'  ? 'bg-amber-400' :
+		weekPct > 60                          ? 'bg-gold-400'  :
+		'bg-emerald-400';
+	// Cap each side at 50% of the track so they never overlap; the pct text
+	// beside the bar carries the true number beyond that.
+	const shortW = Math.min(50, shortPct / 2);
+	const weekW = Math.min(50, weekPct / 2);
+	return (
+		<div className="w-20 h-1 rounded-full bg-slate-100 overflow-hidden flex shrink-0"
+			title={`${shortPct.toFixed(0)}% (4h) · ${weekPct.toFixed(0)}% (7d)`}>
+			<div className={`h-full rounded-l-full ${shortFill}`} style={{ width: `${shortW}%` }} />
+			<div className="flex-1" />
+			<div className={`h-full rounded-r-full ${weekFill}`} style={{ width: `${weekW}%` }} />
+		</div>
+	);
+}
+
 function AccountRow({
 	acc,
 	onDelete,
@@ -716,7 +745,6 @@ function UserUsageSection({
 					const weekPct = u.claude_seven_day_pct ?? u.seven_day_pct;
 					const sev = usageSeverity(Math.max(shortPct, weekPct));
 					const resetShort = fmtReset(u.five_hour_reset);
-					const reset7d = fmtReset(u.seven_day_reset);
 					return (
 						<div key={u.email} className="px-2.5 py-1.5 min-w-0">
 							<div className="flex items-center gap-3">
@@ -724,17 +752,12 @@ function UserUsageSection({
 								<span className="w-44 shrink-0 truncate text-xs font-medium text-slate-800" title={u.email}>
 									{u.email}
 								</span>
-								<div className="flex items-center gap-1 shrink-0" title={`${(u.claude_five_hour_tokens ?? u.five_hour_tokens).toLocaleString()} pooled-Claude tokens`}>
-									<span className="text-[10px] text-slate-400 w-4">{shortWin}</span>
-									<MiniBar pct={shortPct} severity={usageSeverity(shortPct)} w="w-10" />
-									<span className="text-[10px] font-mono text-slate-600 w-8 text-right">{fmtPct(shortPct)}</span>
+								<div className="flex items-center gap-1.5 shrink-0" title={`${(u.claude_five_hour_tokens ?? u.five_hour_tokens).toLocaleString()} pooled-Claude tokens (4h) · ${(u.claude_seven_day_tokens ?? u.seven_day_tokens).toLocaleString()} (7d)`}>
+									<StackedBar shortPct={shortPct} weekPct={weekPct} />
+									<span className="text-[10px] font-mono text-slate-600 tabular-nums">
+										{fmtPct(shortPct)}<span className="text-slate-300">·</span>{fmtPct(weekPct)}
+									</span>
 									{resetShort && <span className="text-[10px] text-slate-400 w-10">{resetShort}</span>}
-								</div>
-								<div className="flex items-center gap-1 shrink-0" title={`${(u.claude_seven_day_tokens ?? u.seven_day_tokens).toLocaleString()} pooled-Claude tokens`}>
-									<span className="text-[10px] text-slate-400 w-4">7d</span>
-									<MiniBar pct={weekPct} severity={usageSeverity(weekPct)} w="w-10" />
-									<span className="text-[10px] font-mono text-slate-600 w-8 text-right">{fmtPct(weekPct)}</span>
-									{reset7d && <span className="text-[10px] text-slate-400 w-10">{reset7d}</span>}
 								</div>
 								{/* BEFORE the flex-1 filler on purpose. Appended after it (and after
 								    the timestamp) these sat at the extreme right of an already dense
