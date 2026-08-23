@@ -1,5 +1,22 @@
 # Claude Account Pool — `lum.id/claude`
 
+> ## ⚠️ The Claude account pool is DEPRECATED (2026-08-23)
+>
+> **Everyone uses `deepseek-v4-flash`, and it is unlimited.** No token budget,
+> no 4h/7d window, no waiting for an account slot — the model runs on our own
+> GB10 pair and is configured `dailyBudgetTokens: -1`. The practical limits are
+> a 6000/min gateway rate limit and GPU concurrency, not a quota.
+>
+> **If you are a researcher, you can stop after [Quick start](#quick-start).**
+> Set `ANTHROPIC_MODEL=deepseek-v4-flash` and you are done. Everything below
+> about pooled accounts, per-user quota, homing and contributing accounts
+> describes the *operator* path and is kept for reference only — do not plan
+> work around it.
+>
+> No longer applicable to new work:
+> [Your personal pool quota](#your-personal-pool-quota) ·
+> [Contributing your account to the pool](#contributing-your-account-to-the-pool)
+
 Run your own Claude Code through the org's pooled accounts, or on our
 in-house LLM fleet. The proxy authenticates you with a lum.id PAT, then
 routes every request to the pool or the fleet.
@@ -270,12 +287,30 @@ model breakdown, tagged by serving route (onprem).
 
 ## Your personal pool quota
 
+> **DEPRECATED — this section applies only to pooled Claude models, which are no
+> longer the path anyone should use.** `deepseek-v4-flash` has no quota at all.
+> If you are trying to work out "how much have I got left", the answer for
+> deepseek is: unlimited.
+
 Each user gets their own quota on the pool, mirroring Anthropic's window
 shape: a **4-hour** and a **7-day** rolling token budget (uncached input +
-output tokens, summed across all your PATs). Currently **15M tokens / 4h**
-and **150M / 7d** — operator-tunable via `LUMID_QUOTA_CLAUDE_{5H,7D}_TOKENS`
-(the code defaults are 4M/40M; the live values are set in the lumid-identity
-deployment manifest).
+output tokens, summed across all your PATs).
+
+Since 2026-08-23 the budget is **tiered by role**, because a single global
+number cannot serve both a cohort and the operators running the platform —
+sized for the operators it is no limit at all for 20 people, and sized for them
+it throttles the heaviest legitimate work:
+
+| Role | 4h | 7d |
+|---|---|---|
+| `admin` / `super_admin` | **uncapped** | **uncapped** |
+| `user` | 2M | 20M |
+
+Set by `LUMID_QUOTA_CLAUDE_USER_{5H,7D}_TOKENS` (role `user`) and
+`LUMID_QUOTA_CLAUDE_{5H,7D}_TOKENS` (the default tier), both in the
+lumid-identity deployment manifest. The earlier figures documented here — a
+single global 15M/150M applying to everyone — were briefly live and are what
+caused operators to be throttled by a cohort-sized cap.
 
 - When a window is exhausted the proxy returns `429` with the reason and
   Claude Code backs off; the window rolls continuously, so capacity returns
@@ -359,6 +394,11 @@ params, and the model's responses. Browse your own at
 > DeepSeek-V4-Flash, so toggle it off when you want no transcript.
 
 ## Contributing your account to the pool
+
+> **DEPRECATED — the pool is no longer being grown.** Nobody needs to contribute
+> an account. The procedure below is retained because it is genuinely hard-won
+> (the `logout` step has killed accounts twice) and would be needed again if the
+> pool were ever revived.
 
 Admins add accounts on [lum.id/code](/code) → **Add account** — paste the
 access + refresh token from your `~/.claude/.credentials.json` (the dialog
