@@ -651,23 +651,6 @@ function fmtTokens(n: number): string {
 	return String(n);
 }
 
-// modelRoute classifies a model id by its serving route so the per-model chips
-// distinguish pooled Claude from OpenRouter from onprem (self-hosted GB10).
-// Mirrors identity's common.ClassifyProvider — keep the two in step.
-//   - `claude-*`          → pooled Claude (Anthropic subscription, 4h/7d-constrained)
-//   - `deepseek-v4-flash` → onprem (self-hosted GB10 pair, free at the margin)
-//   - everything else     → OpenRouter (metered pay-per-use: kimi-*, z-ai/*,
-//     deepseek/deepseek-*, any unlisted id)
-function modelRoute(model: string): { label: string; cls: string } {
-	if (model.startsWith('claude-')) {
-		return { label: 'pooled Claude', cls: 'bg-slate-100 text-slate-500' };
-	}
-	if (model === 'deepseek-v4-flash') {
-		return { label: 'onprem (self-hosted)', cls: 'bg-emerald-50 text-emerald-600 border border-emerald-100' };
-	}
-	return { label: 'OpenRouter', cls: 'bg-violet-50 text-violet-600 border border-violet-100' };
-}
-
 function fmtPct(pct: number): string {
 	if (pct === 0) return '0%';
 	if (pct < 1) return '<1%';
@@ -759,47 +742,12 @@ function UserUsageSection({
 									</span>
 									{resetShort && <span className="text-[10px] text-slate-400 w-10">{resetShort}</span>}
 								</div>
-								{/* BEFORE the flex-1 filler on purpose. Appended after it (and after
-								    the timestamp) these sat at the extreme right of an already dense
-								    row with no flex-wrap, so on anything but a very wide window they
-								    were pushed out of view — shipped once that way and invisible. */}
-								<ResetWindowButtons isSuper={isSuper} email={u.email} shortLabel={shortWin} onDone={onReset} />
-								<span className="flex-1 min-w-0 text-[10px] text-slate-400 truncate">
-									{/* RAW token count (Anthropic's own figure), not the weighted quota unit. */}
-									{u.raw_total_tokens_7d != null
-										? <>{fmtTokens(u.raw_total_tokens_7d)} tok · {u.requests_7d} req</>
-										: <>{fmtTokens(u.seven_day_tokens)} tok · {u.requests_7d} req</>}
-								</span>
-								<span className="shrink-0 text-[10px] text-slate-400">{fmtTs(u.last_ts)}</span>
-							</div>
-							{/* Per-model breakdown — includes NON-Claude models (deepseek-v4-flash,
-							    kimi, openrouter fallthrough). They draw on the SAME window, so a
-							    user's pool usage is not attributable to Claude alone. Surfacing
-							    the models makes that visible per user. Each chip is tagged with
-							    its serving route: onprem (self-hosted GB10) vs openrouter (the
-							    metered catch-all) vs pooled Claude. */}
-							{u.models && Object.keys(u.models).length > 0 && (
-								<div className="flex flex-wrap items-center gap-1 mt-0.5 pl-7">
-									{Object.entries(u.models)
-										.sort(([, a], [, b]) => (b.tokens_7d - a.tokens_7d))
-										.map(([m, v]) => {
-											const route = modelRoute(m);
-											return (
-												<span key={m} className={`px-1.5 py-px rounded text-[9px] tabular-nums ${route.cls}`}
-													title={`${fmtTokens(v.tokens_7d)} tok · ${route.label}`}>
-													{m}
-													<span className="text-slate-400"> · {fmtTokens(v.tokens_7d)}</span>
-												</span>
-											);
-										})}
-								</div>
-							)}
-							{/* Provider-grouped 7d subtotals — Claude / OpenRouter / onprem.
-							    Lets the eye sum each serving route without reading every
-							    model chip. Colors match modelRoute(). */}
-							{u.providers && Object.keys(u.providers).length > 0 && (
-								<div className="flex flex-wrap items-center gap-1 mt-0.5 pl-7">
-									{(["claude", "openrouter", "onprem"] as const).map((p) => {
+								{/* Color-coded provider subtotals fill the middle gap — Claude
+								    slate, onprem emerald, OpenRouter violet (mirror modelRoute).
+								    Aggregates the per-model breakdown, so the model chips are
+								    folded away and each user stays on ONE line. */}
+								<span className="flex-1 min-w-0 flex items-center gap-1 overflow-hidden">
+									{u.providers && (["claude", "openrouter", "onprem"] as const).map((p) => {
 										const v = u.providers![p];
 										if (!v || v.tokens_7d <= 0) return null;
 										const cls =
@@ -810,15 +758,23 @@ function UserUsageSection({
 											p === 'claude' ? 'Claude' :
 											p === 'onprem' ? 'onprem' : 'OpenRouter';
 										return (
-											<span key={p} className={`px-1.5 py-px rounded text-[9px] tabular-nums ${cls}`}
+											<span key={p} className={`px-1.5 py-px rounded text-[9px] tabular-nums whitespace-nowrap ${cls}`}
 												title={`${v.tokens_7d.toLocaleString()} tok`}>
 												{lbl}
 												<span className="text-slate-400"> · {fmtTokens(v.tokens_7d)}</span>
 											</span>
 										);
 									})}
-								</div>
-							)}
+								</span>
+								<ResetWindowButtons isSuper={isSuper} email={u.email} shortLabel={shortWin} onDone={onReset} />
+								<span className="shrink-0 text-[10px] text-slate-400">
+									{/* RAW token count (Anthropic's own figure), not the weighted quota unit. */}
+									{u.raw_total_tokens_7d != null
+										? <>{fmtTokens(u.raw_total_tokens_7d)} tok · {u.requests_7d} req</>
+										: <>{fmtTokens(u.seven_day_tokens)} tok · {u.requests_7d} req</>}
+								</span>
+								<span className="shrink-0 text-[10px] text-slate-400">{fmtTs(u.last_ts)}</span>
+							</div>
 						</div>
 					);
 				})}
