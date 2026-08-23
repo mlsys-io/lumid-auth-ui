@@ -125,6 +125,24 @@ ATTACH 'host=sql.lum.id port=5432 dbname=findata user=lumid_reader password=<pw>
 SELECT * FROM findata.market.ohlc_daily WHERE symbol = 'AAPL' ORDER BY date DESC LIMIT 5;
 ```
 
+## From the Studio chatbox (natural language → SQL)
+
+You don't need a SQL client at all — the **Studio chatbox** (`lum.id/studio`) can run analytical
+queries against FinData for you. Select **FinData** in the data-app picker, then ask in plain
+English. The model discovers the schema with `data_catalog` and runs read-only SQL with
+`data_query` (which POSTs to `/retrieve` — SELECT-only, read-only txn, row cap, statement timeout).
+
+Example prompts:
+
+> Use `data_catalog` on findata to list the schemas, then `data_catalog` on the `market` schema.
+> Then `data_query` with `SELECT symbol, date, close FROM market.ohlc_daily WHERE symbol = 'AAPL'
+> ORDER BY date DESC LIMIT 5`.
+
+Charts work too — the model can render query results with `save_artifact`.
+
+This works on the `claude-code-*` model path and the default DeepSeek path. Bring-your-own-Claude-Code
+instructions are in the LumidOS guide *Query FinData from Claude Code*.
+
 ## Notes
 
 - **This is a shared credential.** Everyone connects as `lumid_reader`; there's no per-user

@@ -18,6 +18,7 @@ import { TONES, statusTone, type ToneKey } from '@/lib/tones';
 import { appTitle } from '@/components/workflow/AppCard';
 import { loopLabel } from '@/lib/workflow-names';
 import AppSurfaceCard from './AppSurfaceCard';
+import { ArtifactCard } from './ArtifactCard';
 
 const MAX_ROWS = 6;
 
@@ -481,6 +482,12 @@ export function entityCardFor(t: ToolCall): React.ReactNode | null {
 	// Generic app-ops tools (operate any app from chat).
 	if (t.name === 'show_app_surface' && r.app) {
 		return <AppSurfaceCard app={String(r.app)} surface={r.surface ? String(r.surface) : undefined} />;
+	}
+	// save_artifact → render the saved chart/table/vega inline in the thread.
+	// The tool result carries only the id; the card fetches the content by id
+	// (same endpoint the side panel uses) and renders it with ArtifactView.
+	if (baseToolName(t.name) === 'save_artifact' && r.id) {
+		return <ArtifactCard id={String(r.id)} title={typeof r.title === 'string' ? r.title : undefined} />;
 	}
 	if (t.name === 'app_read') return appReadCard(r);
 	if (t.name === 'app_action') return actionOutcomeCard(String(r.action || 'action'), r);
