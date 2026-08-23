@@ -29,6 +29,7 @@ import {
 	Bot,
 	Trash2,
 	CalendarClock,
+	FlaskConical,
 	Loader2,
 	AlertCircle,
 } from 'lucide-react';
@@ -95,6 +96,12 @@ const TOP_NAV: NavItem[] = [
 	// "Scheduled" — the claude.ai counterpart of our workflow/loop runs. Points
 	// at the unified runs surface (list/grid/gantt/calendar over every loop).
 	{ to: '/studio/runs', label: 'Scheduled', icon: CalendarClock, title: 'scheduled workflows and loop runs' },
+	// Strategies — the quant researcher's primary object. Top-level despite the
+	// pruning above because for that cohort it IS the work: everything else in
+	// Studio is a means to a strategy, and the surface was previously reachable
+	// only by curl. Shows an empty state with a link to the docs for accounts
+	// that have none, so it costs a non-researcher one ignorable nav row.
+	{ to: '/studio/strategies', label: 'Strategies', icon: FlaskConical, title: 'your LQT strategies — compile status and runtime cycles' },
 ];
 // Jobs/Activity/Inbox are folded into Apps — the Apps hero's "runs today" stat
 // + the top-bar "Right now" ticker link into /studio/runs, so it's no longer a
@@ -108,6 +115,7 @@ const ROUTE_PREFETCH: Record<string, () => Promise<unknown>> = {
 	"/studio/data": () => import("@/pages/studio/data"),
 	"/studio/runs": () => import("@/pages/studio/runs"),
 	"/studio/portfolio": () => import("@/pages/studio/portfolio"),
+	"/studio/strategies": () => import("@/pages/studio/strategies"),
 };
 const prefetched = new Set<string>();
 function prefetchRoute(to: string) {
