@@ -350,7 +350,15 @@ export async function fetchClaudeQuota(): Promise<ClaudeQuotaResp> {
 }
 
 export interface ClaudeUserModelUsage {
+	// RAW tokens: input + output + cache read + cache creation. The SAME basis
+	// for every model, so a cache-heavy Claude row and a cache-free deepseek row
+	// are directly comparable. (This was input+output only until 2026-08-23,
+	// which showed Claude at roughly a twentieth of its real volume beside
+	// non-Claude models in the same table.)
 	tokens_7d: number;
+	// Price-weighted quota units — what the pool cap is actually enforced
+	// against. Optional: older server builds don't emit it.
+	weighted_tokens_7d?: number;
 	cost_cents_7d: number;
 }
 

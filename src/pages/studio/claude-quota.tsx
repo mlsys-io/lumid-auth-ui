@@ -709,7 +709,8 @@ function UserUsageSection({
 					Per-user pool usage
 				</p>
 				<span className="text-[10px] text-slate-400 font-normal">
-					caps: {fmtTokens(usage.five_hour_tokens)} tok / {shortWin} · {fmtTokens(usage.seven_day_tokens)} tok / 7d (pooled Claude only — deepseek is counted but not limited)
+					caps: {fmtTokens(usage.five_hour_tokens)} units / {shortWin} · {fmtTokens(usage.seven_day_tokens)} units / 7d (pooled Claude only — deepseek is counted but not limited)
+					{' · '}<span title="Quota units are price-weighted: a cache READ counts 0.1x, a 5m cache write 1.25x, a 1h write 2x; sonnet 0.6x, haiku 0.2x, non-Claude 0.1x. A Claude Code turn is mostly cache-read, so units run ~10x below raw tokens. Raw tokens are shown alongside.">units ≠ tokens</span>
 					{' · '}users with a <code className="font-mono text-[10px]">claude:proxy</code> PAT appear even at 0 usage
 				</span>
 				<span className="ml-auto shrink-0 flex items-center gap-2">
@@ -735,7 +736,7 @@ function UserUsageSection({
 								<span className="w-44 shrink-0 truncate text-xs font-medium text-slate-800" title={u.email}>
 									{u.email}
 								</span>
-								<div className="flex items-center gap-1.5 shrink-0" title={`${(u.claude_five_hour_tokens ?? u.five_hour_tokens).toLocaleString()} pooled-Claude tokens (4h) · ${(u.claude_seven_day_tokens ?? u.seven_day_tokens).toLocaleString()} (7d)`}>
+								<div className="flex items-center gap-1.5 shrink-0" title={`${(u.claude_five_hour_tokens ?? u.five_hour_tokens).toLocaleString()} pooled-Claude QUOTA UNITS (${shortWin}) · ${(u.claude_seven_day_tokens ?? u.seven_day_tokens).toLocaleString()} (7d) — price-weighted, not raw tokens`}>
 									<StackedBar shortPct={shortPct} weekPct={weekPct} />
 									<span className="text-[10px] font-mono text-slate-600 tabular-nums">
 										{fmtPct(shortPct)}<span className="text-slate-300">·</span>{fmtPct(weekPct)}
@@ -759,7 +760,8 @@ function UserUsageSection({
 											p === 'onprem' ? 'onprem' : 'OpenRouter';
 										return (
 											<span key={p} className={`px-1.5 py-px rounded text-[9px] tabular-nums whitespace-nowrap ${cls}`}
-												title={`${v.tokens_7d.toLocaleString()} tok`}>
+												title={`${v.tokens_7d.toLocaleString()} raw tokens (input+output+cache — the SAME basis for every provider, so Claude and deepseek are comparable)`
+													+ (v.weighted_tokens_7d != null ? ` · ${v.weighted_tokens_7d.toLocaleString()} quota units` : '')}>
 												{lbl}
 												<span className="text-slate-400"> · {fmtTokens(v.tokens_7d)}</span>
 											</span>
@@ -767,11 +769,25 @@ function UserUsageSection({
 									})}
 								</span>
 								<ResetWindowButtons isSuper={isSuper} email={u.email} shortLabel={shortWin} onDone={onReset} />
-								<span className="shrink-0 text-[10px] text-slate-400">
-									{/* RAW token count (Anthropic's own figure), not the weighted quota unit. */}
+								{/* BOTH units, each named. These differ by ~10x on real Claude
+								    Code traffic (a turn is 90-95% cache-read, weighted 0.1x), so
+								    showing one bare number labelled "tok" read as a large
+								    under-count of actual usage. Raw is Anthropic's own figure;
+								    units are what the cap is enforced against. The fallback is
+								    labelled "units" too -- it IS the weighted figure, and
+								    calling it "tok" is exactly the bug. */}
+								<span className="shrink-0 text-[10px] text-slate-400 tabular-nums"
+									title={u.raw_total_tokens_7d != null
+										? `raw 7d: ${u.raw_total_tokens_7d.toLocaleString()} tokens `
+											+ `(in ${(u.raw_input_tokens_7d ?? 0).toLocaleString()} · `
+											+ `out ${(u.raw_output_tokens_7d ?? 0).toLocaleString()} · `
+											+ `cache-read ${(u.raw_cache_read_tokens_7d ?? 0).toLocaleString()} · `
+											+ `cache-write ${(u.raw_cache_creation_tokens_7d ?? 0).toLocaleString()})`
+										: 'raw token breakdown unavailable from this server build'}>
 									{u.raw_total_tokens_7d != null
-										? <>{fmtTokens(u.raw_total_tokens_7d)} tok · {u.requests_7d} req</>
-										: <>{fmtTokens(u.seven_day_tokens)} tok · {u.requests_7d} req</>}
+										? <>{fmtTokens(u.raw_total_tokens_7d)} tok<span className="text-slate-300"> · </span>{fmtTokens(u.seven_day_tokens)} units</>
+										: <>{fmtTokens(u.seven_day_tokens)} units</>}
+									<span className="text-slate-300"> · </span>{u.requests_7d} req
 								</span>
 								<span className="shrink-0 text-[10px] text-slate-400">{fmtTs(u.last_ts)}</span>
 							</div>
