@@ -24,7 +24,7 @@ import {
 } from 'recharts';
 import {
 	FileText, FileJson, Code2, Image as ImageIcon, AudioLines, BarChart3, FileType2,
-	CandlestickChart, Table2, AreaChart as AreaChartIcon,
+	CandlestickChart, Table2, AreaChart as AreaChartIcon, TrendingUp,
 } from 'lucide-react';
 import { ChatMarkdown } from './ChatMarkdown';
 
@@ -34,7 +34,7 @@ const TableArtifact = lazy(() => import('./artifacts/TableArtifact'));
 
 export type ArtifactKind =
 	| 'markdown' | 'code' | 'json' | 'text' | 'image' | 'audio'
-	| 'chart' | 'vega' | 'candles' | 'table' | 'pdf';
+	| 'chart' | 'vega' | 'candles' | 'table' | 'pdf' | 'tradingview';
 
 // Reserve the rendered height while a split chunk loads so the panel doesn't
 // jump once vega resolves.
@@ -93,6 +93,8 @@ export function ArtifactView({ kind, content, title, language }: {
 				<embed src={content} type="application/pdf"
 					className="w-full rounded-lg border border-slate-200" style={{ height: '70vh' }} />
 			);
+		case 'tradingview':
+			return <TradingViewArtifact url={content} title={title} />;
 		default:
 			return <div className="whitespace-pre-wrap break-words text-slate-700">{content}</div>;
 	}
@@ -110,6 +112,7 @@ export function ArtifactKindIcon({ kind }: { kind: ArtifactKind }) {
 		case 'candles':  return <CandlestickChart className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />;
 		case 'table':    return <Table2 className="w-3.5 h-3.5 text-indigo-600 flex-shrink-0" />;
 		case 'pdf':      return <FileType2 className="w-3.5 h-3.5 text-rose-600 flex-shrink-0" />;
+		case 'tradingview': return <TrendingUp className="w-3.5 h-3.5 text-teal-600 flex-shrink-0" />;
 		default:         return <FileText className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />;
 	}
 }
@@ -202,4 +205,38 @@ function ChartArtifact({ spec }: { spec: string }) {
 function prettyJson(s: string): string {
 	try { return JSON.stringify(JSON.parse(s), null, 2); }
 	catch { return s; }
+}
+
+// TradingViewArtifact — renders a TradingView official embed URL as a sandboxed
+// iframe. Defense-in-depth: only s3.tradingview.com / www.tradingview.com embed
+// URLs are allowed through; anything else shows a fallback rather than iframing
+// an arbitrary origin.
+const TV_ALLOWED_HOSTS = ['s3.tradingview.com', 'www.tradingview.com'];
+
+function TradingViewArtifact({ url, title }: { url: string; title?: string }) {
+	const trimmed = url.trim();
+	let host = '';
+	try {
+		host = new URL(trimmed).hostname.toLowerCase();
+	} catch {
+		/* fall through to blocked */
+	}
+	if (!TV_ALLOWED_HOSTS.includes(host)) {
+		return (
+			<div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-500">
+				TradingView widget blocked — not a recognized TradingView embed URL.
+			</div>
+		);
+	}
+	return (
+		<iframe
+			src={trimmed}
+			title={title || 'TradingView'}
+			className="w-full rounded-lg border border-slate-200"
+			style={{ height: 400, border: 0 }}
+			sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"
+			loading="lazy"
+			referrerPolicy="no-referrer-when-downgrade"
+		/>
+	);
 }
