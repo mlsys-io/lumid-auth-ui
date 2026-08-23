@@ -19,9 +19,11 @@ import {
 	adminResetClaudePoolWindow,
 	adminResetClaudePoolWindowAll,
 	fetchClaudeFieldBoxes,
+	fetchOpenRouterBalance,
 	type ClaudeFieldBoxResp,
 	type ClaudeQuotaAccount,
 	type ClaudeUserUsageResp,
+	type OpenRouterBalanceResp,
 } from '@/api/super-admin';
 
 const USER_USAGE_REFRESH_MS = 2 * 60 * 1000; // 2 min auto-refresh for per-user section
@@ -621,22 +623,20 @@ function fmtTokens(n: number): string {
 }
 
 // modelRoute classifies a model id by its serving route so the per-model chips
-// distinguish onprem (self-hosted GB10) from pooled Claude. The OpenRouter
-// offload (`deepseek/deepseek-v4-flash-0731`) was removed 2026-08-22 — both
-// claude and llm requests to deepseek-v4-flash go through our on-prem fleet
-// first, so there is no metered offload path to label. Classification is keyed
-// on the EXACT model id, not a shape heuristic:
-//   - `deepseek-v4-flash` → onprem (self-hosted GB10 pair)
-//   - `claude-*`          → pooled Claude (Anthropic quota)
-// Anything else falls through to a neutral label rather than being guessed.
+// distinguish pooled Claude from OpenRouter from onprem (self-hosted GB10).
+// Mirrors identity's common.ClassifyProvider — keep the two in step.
+//   - `claude-*`          → pooled Claude (Anthropic subscription, 4h/7d-constrained)
+//   - `deepseek-v4-flash` → onprem (self-hosted GB10 pair, free at the margin)
+//   - everything else     → OpenRouter (metered pay-per-use: kimi-*, z-ai/*,
+//     deepseek/deepseek-*, any unlisted id)
 function modelRoute(model: string): { label: string; cls: string } {
-	if (model === 'deepseek-v4-flash') {
-		return { label: 'onprem (self-hosted)', cls: 'bg-emerald-50 text-emerald-600 border border-emerald-100' };
-	}
 	if (model.startsWith('claude-')) {
 		return { label: 'pooled Claude', cls: 'bg-slate-100 text-slate-500' };
 	}
-	return { label: 'other', cls: 'bg-slate-100 text-slate-500' };
+	if (model === 'deepseek-v4-flash') {
+		return { label: 'onprem (self-hosted)', cls: 'bg-emerald-50 text-emerald-600 border border-emerald-100' };
+	}
+	return { label: 'OpenRouter', cls: 'bg-violet-50 text-violet-600 border border-violet-100' };
 }
 
 function fmtPct(pct: number): string {
@@ -712,7 +712,14 @@ function UserUsageSection({
 			</div>
 			<div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100">
 				{usage.users.map((u) => {
-					const sev = usageSeverity(Math.max(u.five_hour_pct, u.seven_day_pct));
+					// Bars reflect POOLED CLAUDE ONLY — the gate exempts
+					// deepseek/on-prem and OpenRouter from the cap, so drawing
+					// them against the Claude budget would misread as pressure.
+					// Fall back to the full-window figure if the server hasn't
+					// emitted the Claude-only pct yet.
+					const shortPct = u.claude_five_hour_pct ?? u.five_hour_pct;
+					const weekPct = u.claude_seven_day_pct ?? u.seven_day_pct;
+					const sev = usageSeverity(Math.max(shortPct, weekPct));
 					const resetShort = fmtReset(u.five_hour_reset);
 					const reset7d = fmtReset(u.seven_day_reset);
 					return (
@@ -722,16 +729,16 @@ function UserUsageSection({
 								<span className="w-44 shrink-0 truncate text-xs font-medium text-slate-800" title={u.email}>
 									{u.email}
 								</span>
-								<div className="flex items-center gap-1 shrink-0" title={`${u.five_hour_tokens.toLocaleString()} tokens`}>
+								<div className="flex items-center gap-1 shrink-0" title={`${(u.claude_five_hour_tokens ?? u.five_hour_tokens).toLocaleString()} pooled-Claude tokens`}>
 									<span className="text-[10px] text-slate-400 w-4">{shortWin}</span>
-									<MiniBar pct={u.five_hour_pct} severity={usageSeverity(u.five_hour_pct)} />
-									<span className="text-[10px] font-mono text-slate-600 w-8 text-right">{fmtPct(u.five_hour_pct)}</span>
+									<MiniBar pct={shortPct} severity={usageSeverity(shortPct)} />
+									<span className="text-[10px] font-mono text-slate-600 w-8 text-right">{fmtPct(shortPct)}</span>
 									{resetShort && <span className="text-[10px] text-slate-400 w-10">{resetShort}</span>}
 								</div>
-								<div className="flex items-center gap-1 shrink-0" title={`${u.seven_day_tokens.toLocaleString()} tokens`}>
+								<div className="flex items-center gap-1 shrink-0" title={`${(u.claude_seven_day_tokens ?? u.seven_day_tokens).toLocaleString()} pooled-Claude tokens`}>
 									<span className="text-[10px] text-slate-400 w-4">7d</span>
-									<MiniBar pct={u.seven_day_pct} severity={usageSeverity(u.seven_day_pct)} />
-									<span className="text-[10px] font-mono text-slate-600 w-8 text-right">{fmtPct(u.seven_day_pct)}</span>
+									<MiniBar pct={weekPct} severity={usageSeverity(weekPct)} />
+									<span className="text-[10px] font-mono text-slate-600 w-8 text-right">{fmtPct(weekPct)}</span>
 									{reset7d && <span className="text-[10px] text-slate-400 w-10">{reset7d}</span>}
 								</div>
 								{/* BEFORE the flex-1 filler on purpose. Appended after it (and after
@@ -767,6 +774,31 @@ function UserUsageSection({
 												</span>
 											);
 										})}
+								</div>
+							)}
+							{/* Provider-grouped 7d subtotals — Claude / OpenRouter / onprem.
+							    Lets the eye sum each serving route without reading every
+							    model chip. Colors match modelRoute(). */}
+							{u.providers && Object.keys(u.providers).length > 0 && (
+								<div className="flex flex-wrap items-center gap-1 mt-0.5 pl-7">
+									{(["claude", "openrouter", "onprem"] as const).map((p) => {
+										const v = u.providers![p];
+										if (!v || (v.tokens_7d <= 0 && v.cost_cents_7d <= 0)) return null;
+										const cls =
+											p === 'claude' ? 'bg-slate-100 text-slate-500' :
+											p === 'onprem' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+											'bg-violet-50 text-violet-600 border border-violet-100';
+										const lbl =
+											p === 'claude' ? 'Claude' :
+											p === 'onprem' ? 'onprem' : 'OpenRouter';
+										return (
+											<span key={p} className={`px-1.5 py-px rounded text-[9px] tabular-nums ${cls}`}
+												title={`${v.tokens_7d.toLocaleString()} tok${v.cost_cents_7d > 0 ? ` · ${fmtCents(v.cost_cents_7d)}` : ''}`}>
+												{lbl}
+												<span className="text-slate-400"> · {fmtTokens(v.tokens_7d)}{v.cost_cents_7d > 0 ? ` ${fmtCents(v.cost_cents_7d)}` : ''}</span>
+											</span>
+										);
+									})}
 								</div>
 							)}
 						</div>
@@ -1043,6 +1075,59 @@ function ModelCostPanel({ usage }: { usage: ClaudeUserUsageResp }) {
 	);
 }
 
+// OpenRouterBalancePanel — the metered pay-per-use side of the pool. Shows how
+// much credit is left on the OpenRouter account backing the non-Claude models
+// (kimi-*, z-ai/*, deepseek/deepseek-* fallthrough). The key never leaves the
+// server; this panel renders the normalized balance. available:false (missing
+// key / unreachable) blanks the panel instead of erroring the page.
+function OpenRouterBalancePanel() {
+	const [data, setData] = useState<OpenRouterBalanceResp | null>(null);
+
+	useEffect(() => {
+		let alive = true;
+		fetchOpenRouterBalance()
+			.then((d) => { if (alive) setData(d); })
+			.catch(() => { /* degrade silently — panel just stays blank */ });
+		return () => { alive = false; };
+	}, []);
+
+	if (!data) return null;
+
+	return (
+		<div className="rounded-lg border border-violet-200 bg-violet-50/50 px-3 py-2">
+			<div className="flex items-center gap-2">
+				<span className="text-xs font-medium text-slate-700">OpenRouter balance</span>
+				{data.is_free_tier && (
+					<span className="rounded-full bg-violet-100 border border-violet-200 px-1.5 py-0.5 text-[10px] font-medium text-violet-700">
+						free tier
+					</span>
+				)}
+				{data.label && (
+					<span className="text-[10px] text-slate-400 truncate" title={data.label}>{data.label}</span>
+				)}
+				<span className="ml-auto shrink-0 font-mono text-xs text-slate-700">
+					{data.available ? (
+						<>${data.balance_usd.toFixed(2)} <span className="text-slate-400">left</span> · ${data.usage_usd.toFixed(2)} <span className="text-slate-400">used</span>{data.limit_usd > 0 ? <> / ${data.limit_usd.toFixed(2)}</> : ''}</>
+					) : (
+						<span className="text-slate-400 text-[11px] font-normal">not configured</span>
+					)}
+				</span>
+			</div>
+			{data.available && data.limit_usd > 0 && (
+				<div className="mt-1.5 h-1 rounded-full bg-violet-100 overflow-hidden">
+					<div
+						className="h-full rounded-full bg-violet-500"
+						style={{ width: `${Math.min(100, (data.usage_usd / data.limit_usd) * 100)}%` }}
+					/>
+				</div>
+			)}
+			{data.error && (
+				<p className="mt-1 text-[10px] text-slate-400">{data.error}</p>
+			)}
+		</div>
+	);
+}
+
 function SummaryBar({ accounts }: { accounts: ClaudeQuotaAccount[] }) {
 	const critical = accounts.filter((a) => a.severity === 'critical').length;
 	const warning  = accounts.filter((a) => a.severity === 'warning').length;
@@ -1155,6 +1240,8 @@ export default function StudioClaudeQuota() {
 					</button>
 				</div>
 			</header>
+
+			<OpenRouterBalancePanel />
 
 			{error ? (
 				<div className="text-sm rounded border border-rose-200 bg-rose-50 text-rose-800 px-3 py-2">

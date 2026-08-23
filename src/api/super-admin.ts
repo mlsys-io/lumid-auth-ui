@@ -360,12 +360,22 @@ export interface ClaudeUserUsage {
 	seven_day_tokens: number;
 	five_hour_pct: number;
 	seven_day_pct: number;
+	// Claude-only weighted draw + pct — the bars reflect POOLED CLAUDE ONLY
+	// (the gate exempts deepseek/on-prem from the cap), so OpenRouter/on-prem
+	// usage must not draw against the Claude budget on-screen.
+	claude_five_hour_tokens?: number;
+	claude_seven_day_tokens?: number;
+	claude_five_hour_pct?: number;
+	claude_seven_day_pct?: number;
 	cost_cents_7d: number;
 	requests_7d: number;
 	last_ts: string;
 	five_hour_reset?: string;
 	seven_day_reset?: string;
 	models?: Record<string, ClaudeUserModelUsage>;
+	// Provider-grouped 7d subtotals: "claude" | "openrouter" | "onprem" →
+	// {tokens_7d, cost_cents_7d}.
+	providers?: Record<string, ClaudeUserModelUsage>;
 	// RAW 7d token totals exactly as Anthropic reported them — the true token
 	// count, distinct from the weighted five_hour_tokens/seven_day_tokens quota
 	// unit (cache reads at a tenth, model by price ratio).
@@ -389,6 +399,26 @@ export interface ClaudeUserUsageResp {
 
 export async function fetchClaudeUserUsage(): Promise<ClaudeUserUsageResp> {
 	const r = await apiClient.get<DataResponse<ClaudeUserUsageResp>>('/api/v1/admin/claude-user-usage');
+	return r.data.data;
+}
+
+// ── OpenRouter balance ───────────────────────────────────────────────
+// Metered pay-per-use side of the pool. The key never leaves the server; this
+// endpoint returns the normalized balance. available:false degrades gracefully
+// (missing key / unreachable) so the panel blanks instead of erroring.
+export interface OpenRouterBalanceResp {
+	available: boolean;
+	balance_usd: number;
+	limit_usd: number;
+	usage_usd: number;
+	currency: string;
+	is_free_tier: boolean;
+	label?: string;
+	error?: string;
+}
+
+export async function fetchOpenRouterBalance(): Promise<OpenRouterBalanceResp> {
+	const r = await apiClient.get<DataResponse<OpenRouterBalanceResp>>('/api/v1/admin/openrouter-balance');
 	return r.data.data;
 }
 
