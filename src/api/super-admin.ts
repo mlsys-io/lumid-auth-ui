@@ -387,6 +387,13 @@ export interface ClaudeUserUsage {
 	// RAW 7d token totals exactly as Anthropic reported them — the true token
 	// count, distinct from the weighted five_hour_tokens/seven_day_tokens quota
 	// unit (cache reads at a tenth, model by price ratio).
+	// Per-USER caps (role-tiered). cap_unlimited marks the admin/super_admin
+	// tier, whose cap is a math.MaxInt32 SENTINEL rather than a budget — so
+	// `used / cap` is a fraction of a sentinel and means nothing. Display
+	// surfaces MUST branch on this instead of rendering the percentage.
+	cap_5h?: number;
+	cap_7d?: number;
+	cap_unlimited?: boolean;
 	raw_input_tokens_7d?: number;
 	raw_output_tokens_7d?: number;
 	raw_cache_read_tokens_7d?: number;

@@ -65,6 +65,10 @@ function SeverityDot({ severity }: { severity: string }) {
 	const cls =
 		severity === 'critical' ? 'bg-rose-500' :
 		severity === 'warning'  ? 'bg-amber-400' :
+		// 'none' = no cap applies (admin/super_admin). Deliberately NOT green:
+		// green claims "healthy, plenty of headroom", which is a measurement, and
+		// there is nothing being measured. Slate reads as not-applicable.
+		severity === 'none'     ? 'bg-slate-300' :
 		'bg-emerald-400';
 	return <span className={`inline-block w-2 h-2 rounded-full ${cls} shrink-0`} />;
 }
@@ -727,7 +731,16 @@ function UserUsageSection({
 					// emitted the Claude-only pct yet.
 					const shortPct = u.claude_five_hour_pct ?? u.five_hour_pct;
 					const weekPct = u.claude_seven_day_pct ?? u.seven_day_pct;
-					const sev = usageSeverity(Math.max(shortPct, weekPct));
+					// An admin/super_admin has NO cap: the server sends a math.MaxInt32
+					// sentinel so one enforcement path serves every role, and divides by
+					// it anyway. The result is a fraction of a sentinel, not of a budget
+					// — admin@lum.id read "2%·6%" while actually drawing 1.1 BILLION raw
+					// Claude tokens in 7 days, because 128M weighted units / MaxInt32
+					// happens to land on 6. A plausible small number is worse than an
+					// obvious zero: it reads as a real measurement. The server flags this
+					// with cap_unlimited precisely so we don't render it.
+					const uncapped = u.cap_unlimited === true;
+					const sev = uncapped ? 'none' : usageSeverity(Math.max(shortPct, weekPct));
 					const resetShort = fmtReset(u.five_hour_reset);
 					return (
 						<div key={u.email} className="px-2.5 py-1.5 min-w-0">
@@ -736,11 +749,19 @@ function UserUsageSection({
 								<span className="w-44 shrink-0 truncate text-xs font-medium text-slate-800" title={u.email}>
 									{u.email}
 								</span>
-								<div className="flex items-center gap-1.5 shrink-0" title={`${(u.claude_five_hour_tokens ?? u.five_hour_tokens).toLocaleString()} pooled-Claude QUOTA UNITS (${shortWin}) · ${(u.claude_seven_day_tokens ?? u.seven_day_tokens).toLocaleString()} (7d) — price-weighted, not raw tokens`}>
-									<StackedBar shortPct={shortPct} weekPct={weekPct} />
-									<span className="text-[10px] font-mono text-slate-600 tabular-nums">
-										{fmtPct(shortPct)}<span className="text-slate-300">·</span>{fmtPct(weekPct)}
-									</span>
+								<div className="flex items-center gap-1.5 shrink-0" title={uncapped
+									? `${u.email} is admin/super_admin — UNCAPPED. The server sends a math.MaxInt32 sentinel as the cap so enforcement needs no per-role branch; a percentage of it would be meaningless, so none is shown. Actual draw: ${(u.claude_five_hour_tokens ?? u.five_hour_tokens).toLocaleString()} quota units (${shortWin}) · ${(u.claude_seven_day_tokens ?? u.seven_day_tokens).toLocaleString()} (7d).`
+									: `${(u.claude_five_hour_tokens ?? u.five_hour_tokens).toLocaleString()} pooled-Claude QUOTA UNITS (${shortWin}) · ${(u.claude_seven_day_tokens ?? u.seven_day_tokens).toLocaleString()} (7d) — price-weighted, not raw tokens`}>
+									{uncapped ? (
+										<span className="text-[10px] font-medium text-slate-400 tabular-nums">uncapped</span>
+									) : (
+										<>
+											<StackedBar shortPct={shortPct} weekPct={weekPct} />
+											<span className="text-[10px] font-mono text-slate-600 tabular-nums">
+												{fmtPct(shortPct)}<span className="text-slate-300">·</span>{fmtPct(weekPct)}
+											</span>
+										</>
+									)}
 									{resetShort && <span className="text-[10px] text-slate-400 w-10">{resetShort}</span>}
 								</div>
 								{/* Color-coded provider subtotals fill the middle gap — Claude
