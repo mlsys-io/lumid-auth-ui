@@ -651,11 +651,6 @@ function usageSeverity(pct: number): string {
 	return 'normal';
 }
 
-function fmtCents(cents: number): string {
-	if (cents === 0) return '$0';
-	if (cents < 100) return `$${(cents / 100).toFixed(3)}`;
-	return `$${(cents / 100).toFixed(2)}`;
-}
 
 function fmtReset(iso?: string): string {
 	if (!iso || iso.startsWith('0001')) return '';
@@ -783,7 +778,7 @@ function UserUsageSection({
 								<div className="flex flex-wrap items-center gap-1 mt-0.5 pl-7">
 									{(["claude", "openrouter", "onprem"] as const).map((p) => {
 										const v = u.providers![p];
-										if (!v || (v.tokens_7d <= 0 && v.cost_cents_7d <= 0)) return null;
+										if (!v || v.tokens_7d <= 0) return null;
 										const cls =
 											p === 'claude' ? 'bg-slate-100 text-slate-500' :
 											p === 'onprem' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
@@ -793,9 +788,9 @@ function UserUsageSection({
 											p === 'onprem' ? 'onprem' : 'OpenRouter';
 										return (
 											<span key={p} className={`px-1.5 py-px rounded text-[9px] tabular-nums ${cls}`}
-												title={`${v.tokens_7d.toLocaleString()} tok${v.cost_cents_7d > 0 ? ` · ${fmtCents(v.cost_cents_7d)}` : ''}`}>
+												title={`${v.tokens_7d.toLocaleString()} tok`}>
 												{lbl}
-												<span className="text-slate-400"> · {fmtTokens(v.tokens_7d)}{v.cost_cents_7d > 0 ? ` ${fmtCents(v.cost_cents_7d)}` : ''}</span>
+												<span className="text-slate-400"> · {fmtTokens(v.tokens_7d)}</span>
 											</span>
 										);
 									})}
@@ -1009,43 +1004,40 @@ function ResetWindowButtons({
 	);
 }
 
-// Per-model usage + cost, aggregated across all pool users — 7d window.
-// claude-* models draw on the pooled quota (tokens); other models are
-// pay-per-use and carry a USD cost.
+// Per-model usage, aggregated across all pool users — 7d window. Tokens only;
+// the OpenRouter balance panel is the single place dollars appear on this page.
 function ModelCostPanel({ usage }: { usage: ClaudeUserUsageResp }) {
-	const byModel = new Map<string, { tokens: number; cost: number; users: { email: string; tokens: number; cost: number }[] }>();
+	const byModel = new Map<string, { tokens: number; users: { email: string; tokens: number }[] }>();
 	for (const u of usage.users) {
 		if (!u.models) continue;
 		for (const [model, v] of Object.entries(u.models)) {
-			if (v.tokens_7d <= 0 && v.cost_cents_7d <= 0) continue;
+			if (v.tokens_7d <= 0) continue;
 			let agg = byModel.get(model);
-			if (!agg) { agg = { tokens: 0, cost: 0, users: [] }; byModel.set(model, agg); }
+			if (!agg) { agg = { tokens: 0, users: [] }; byModel.set(model, agg); }
 			agg.tokens += v.tokens_7d;
-			agg.cost += v.cost_cents_7d;
-			agg.users.push({ email: u.email, tokens: v.tokens_7d, cost: v.cost_cents_7d });
+			agg.users.push({ email: u.email, tokens: v.tokens_7d });
 		}
 	}
 	if (byModel.size === 0) return null;
 
-	const rows = [...byModel.entries()].sort((a, b) => (b[1].cost - a[1].cost) || (b[1].tokens - a[1].tokens));
+	const rows = [...byModel.entries()].sort((a, b) => (b[1].tokens - a[1].tokens));
 	const maxTokens = Math.max(...rows.map(([, v]) => v.tokens), 1);
-	const totalCost = rows.reduce((s, [, v]) => s + v.cost, 0);
 	const totalTokens = rows.reduce((s, [, v]) => s + v.tokens, 0);
 
 	return (
 		<div>
 			<div className="flex items-center gap-2 mb-1.5">
-				<p className="text-xs font-medium text-slate-600">Per-model usage &amp; cost · 7d</p>
+				<p className="text-xs font-medium text-slate-600">Per-model usage · 7d</p>
 				<span className="text-[10px] text-slate-400 font-normal">
-					<code className="font-mono text-[10px]">claude-*</code> draws pool quota (tokens); other models bill per use
+					<code className="font-mono text-[10px]">claude-*</code> draws pool quota; other models are pay-per-use
 				</span>
 				<span className="ml-auto shrink-0 text-[10px] font-mono text-slate-500">
-					{fmtTokens(totalTokens)} tok{totalCost > 0 ? ` · ${fmtCents(totalCost)}` : ''}
+					{fmtTokens(totalTokens)} tok
 				</span>
 			</div>
 			<div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100">
 				{rows.map(([model, v]) => {
-					const users = [...v.users].sort((a, b) => (b.cost - a.cost) || (b.tokens - a.tokens));
+					const users = [...v.users].sort((a, b) => (b.tokens - a.tokens));
 					return (
 						<div key={model} className="flex items-center gap-3 px-2.5 py-1.5 min-w-0">
 							<span className="w-44 shrink-0 truncate text-xs font-mono text-slate-800" title={model}>
@@ -1055,14 +1047,11 @@ function ModelCostPanel({ usage }: { usage: ClaudeUserUsageResp }) {
 								<div className="h-full rounded-full bg-gold-400" style={{ width: `${Math.max(2, (v.tokens / maxTokens) * 100)}%` }} />
 							</div>
 							<span className="w-14 shrink-0 text-right text-[10px] font-mono text-slate-600">{fmtTokens(v.tokens)}</span>
-							<span className="w-14 shrink-0 text-right text-[10px] font-mono text-slate-700">
-								{v.cost > 0 ? fmtCents(v.cost) : <span className="text-slate-300">pool</span>}
-							</span>
 							<span className="flex-1 min-w-0 truncate text-[10px] text-slate-400">
 								{users.slice(0, 4).map((uu, i) => (
-									<span key={uu.email} title={`${uu.tokens.toLocaleString()} tok${uu.cost > 0 ? ` · ${fmtCents(uu.cost)}` : ''}`}>
+									<span key={uu.email} title={`${uu.tokens.toLocaleString()} tok`}>
 										{i > 0 && ' · '}
-										{uu.email.split('@')[0]} {fmtTokens(uu.tokens)}{uu.cost > 0 ? ` ${fmtCents(uu.cost)}` : ''}
+										{uu.email.split('@')[0]} {fmtTokens(uu.tokens)}
 									</span>
 								))}
 								{users.length > 4 && ` · +${users.length - 4} more`}
