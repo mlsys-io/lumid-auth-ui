@@ -75,6 +75,7 @@ const DOCS: DocEntry[] = [
 		group: 'Guides',
 		icon: CandlestickChart,
 		standalone: '/docs/lqt-strategies',
+		companion: { to: '/studio/strategies', label: 'Your strategies' },
 	},
 	{
 		slug: 'trading-api',
@@ -87,10 +88,14 @@ const DOCS: DocEntry[] = [
 	{
 		slug: 'findata-sql',
 		title: 'FinData SQL access',
-		description: 'Query the FinData warehouse with real SQL — psql/DBeaver/DuckDB, verify-full TLS, read-only guardrails, schema orientation.',
+		description: 'Query the FinData warehouse with real SQL — mint your own credential, psql/DBeaver/DuckDB, verify-full TLS, read-only guardrails, schema orientation.',
 		md: 'findata-sql.md',
 		group: 'Guides',
 		icon: Database,
+		// The doc explains the warehouse; the panel is the only way to get a
+		// credential for it. Without this link the two never referenced each
+		// other, so reading the guide left you to go find the mint page.
+		companion: { to: '/studio/account/findata-sql', label: 'Mint a credential' },
 	},
 	{
 		slug: 'fm-ll-queries',

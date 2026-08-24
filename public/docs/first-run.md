@@ -10,14 +10,23 @@ Budget about 15 minutes. You need nothing but an email address.
 
 ## 0. Sign up
 
-Signup is **self-serve**. There is no operator in the loop and no invitation to
-wait for.
+**You need an invitation code before you start.** Registration will not complete
+without one — it is a required field, not a "have one?" prompt. If you were
+brought in as part of a cohort, whoever invited you has it.
 
 1. Go to <https://lum.id> — `/` redirects to `/auth/login`.
-2. Choose **Register**, enter your email.
-3. A 6-digit code is emailed to you. **The code is mandatory** — registration
-   does not complete without it.
-4. Enter the code, set a password, you are in as `role=user`.
+2. Choose **Register**. You will fill in: username, email, a 6-digit email
+   verification code, **the invitation code**, and a password.
+3. The 6-digit code is emailed to you and is separate from the invitation code.
+   Both are mandatory.
+4. Submit, and you are in as `role=user`. You land on the login page — sign in.
+
+An invitation code may also carry **access grants**, which is how a cohort gets
+entitlements it could not grant itself (warehouse access, for instance). If
+yours does, redeeming it applies them at signup with nothing else to do. Already
+registered and handed a code later? Redeem it from
+**[Account → Tokens](/studio/account/tokens)** — look for *"Have an access
+code?"*.
 
 Two things worth knowing before they surprise you:
 
@@ -33,6 +42,10 @@ Two things worth knowing before they surprise you:
 > credentials are present and the registration path calls the real sender), but
 > if the code does not arrive, that is the one step here nobody has watched
 > recently. Say so and it gets looked at.
+>
+> This section previously claimed signup was self-serve with "no invitation to
+> wait for". That was wrong — the form has always required a code — and it is
+> corrected above. It is exactly the drift this hedge was warning about.
 
 ---
 
@@ -51,7 +64,7 @@ for a plain `role=user`. Nothing on the default path is admin-gated.
 
 ## 2. Mint your first token — in the browser
 
-Go to **<https://lum.id/dashboard/tokens>** and mint a PAT. Give it the scopes
+Go to **<https://lum.id/studio/account/tokens>** and mint a PAT. Give it the scopes
 you need; for the researcher path that is:
 
 | Scope | Buys you |
@@ -110,8 +123,10 @@ If your PAT is missing the scope you get a clear 403 that names the fix:
 403  PAT lacks the claude:proxy scope — mint one at lum.id/dashboard/tokens
 ```
 
-**Verified:** that 403 is exactly what a scope-less PAT receives, and it points
-at the right page.
+**Verified:** that 403 is exactly what a scope-less PAT receives. Note it names
+`/dashboard/tokens`, which is the **old** path — it still redirects, but the
+canonical page is `/studio/account/tokens`. The message text is wrong, not you;
+it is quoted here verbatim so you recognise it when you see it.
 
 ---
 
@@ -139,7 +154,11 @@ work around it.
 - **In chat** — just ask. Findata questions are answered against the live
   warehouse, and this path is comfortable at cohort scale: everyone shares a
   prompt prefix, so the cache works in your favour rather than against it.
-- **Over SQL** — `sql.lum.id:5432`, read-only. Setup and the CA bundle are in
+- **Over SQL** — `sql.lum.id:5432`, read-only, as your own `sql_<name>` role with
+  a password you mint at [Account → FinData SQL](/studio/account/findata-sql).
+  Unlike everything else on this page, this one is **granted, not self-serve**:
+  it needs a `findata` access grant *and* a provisioned role. The panel tells you
+  which you are missing. Setup, TLS and the CA bundle are in
   [FinData SQL](/studio/docs/findata-sql).
 - **Browse** — the catalog at `/dataapp-proxy/_sources` lists what is exposed.
 
@@ -163,12 +182,23 @@ correctness check on your logic, never as performance.
 
 ## What you cannot do yourself
 
-One thing, and it is intentional: **`lumid:write`**. It is a platform-level
-scope, and granting it requires already having it, so a fresh account cannot
-self-serve it. You need it only to author analytics jobs. Ask an operator — it
-is a one-line grant, not a process.
+Three things, and all of them are intentional:
 
-Everything else on this page, a new account does alone.
+- **`lumid:write`** — a platform-level scope. Granting it requires already
+  having it, so a fresh account cannot self-serve it. You need it only to author
+  analytics jobs.
+- **The `findata` access grant** — warehouse access is given per person, not to
+  everyone, because it is a direct connection to 1.7 TB of production data.
+- **A `sql_<name>` warehouse role** — provisioned separately from the grant.
+  Being entitled and having a role are two different states, and the SQL panel
+  distinguishes them.
+
+All three are one-line operator actions, not processes. An invitation code can
+carry the first two, which is how a cohort gets them without anyone filing a
+request.
+
+Everything else on this page, a new account does alone — including querying
+FinData in chat, which needs no grant at all.
 
 ---
 
