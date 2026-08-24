@@ -48,6 +48,13 @@ jobs:
             # tag is built by a SEPARATE job below (build-and-push-nightly) so it can bake a
             # nightly-origin bundle (same-origin at nightly.lum.id) distinct from this
             # lum.id-origin build. Confirmed :vX.Y.Z already emitted (v0.4.0 present on ghcr).
+            #
+            # Do NOT re-add `type=sha,prefix=nightly-` to THIS job. A stash left that
+            # here as a conflict once: it would emit a second :nightly-<sha> from the
+            # lum.id-origin bundle, colliding with build-and-push-nightly's tag, and
+            # whichever pushed last would decide whether nightly.lum.id served a bundle
+            # pointing at the wrong origin -- reintroducing exactly the cross-origin CORS
+            # on the auth authority that splitting the jobs exists to avoid.
 
       - name: Build and push
         uses: docker/build-push-action@v6
