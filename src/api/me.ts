@@ -295,10 +295,57 @@ export interface MeRunLogMatch {
   index: number;
 }
 
+/** GET /me/findata-sql — always 200 for a signed-in caller. */
+export interface FindataSQLStatus {
+  entitled: boolean;
+  /** False when the server has no provisioner DSN configured. */
+  available: boolean;
+  host: string;
+  port: number;
+  database: string;
+  sslmode: string;
+  ca_url: string;
+  ttl_days: number;
+  /** Present when !entitled, or entitled with no warehouse role yet. */
+  reason?: string;
+  role?: string;
+  last_minted_at?: string | null;
+  credential_expires_at?: string | null;
+  credential_active?: boolean;
+}
+
+/** POST /me/findata-sql/credential — `password` is returned exactly once. */
+export interface FindataSQLCredential {
+  role: string;
+  password: string;
+  expires_at: string;
+  dsn: string;
+  note: string;
+}
+
 export const me = {
   // Apps
   listApps: () => call<{ apps: MeAppCard[] }>("GET", "/apps"),
   gpuRentals: () => call<{ rentals: Array<Record<string, unknown>>; count: number }>("GET", "/gpu-rentals"),
+
+  // FinData SQL — self-service warehouse credentials.
+  //
+  // `findataSQL` is 200 even when the caller is NOT entitled: not-entitled is a
+  // state the UI has to explain, not an error to swallow. `reason` carries the
+  // explanation and distinguishes "no grant" from "granted but no role yet",
+  // which need different things from the reader.
+  //
+  // `mintFindataSQL` returns the password EXACTLY ONCE. It is not stored
+  // server-side and no endpoint can return it again, so the caller must hold it
+  // in state and render it immediately — dropping it means the user has to
+  // rotate to get another.
+  findataSQL: () => call<FindataSQLStatus>("GET", "/findata-sql"),
+  mintFindataSQL: () => call<FindataSQLCredential>("POST", "/findata-sql/credential"),
+  revokeFindataSQL: () =>
+    call<{ role: string; sessions_terminated: number; note: string }>(
+      "DELETE",
+      "/findata-sql/credential",
+    ),
   installApp: (slug: string, runtime: "local" | "cloud" = "local", as?: string, opts?: { sidebar_show?: boolean; sidebar_label?: string; sidebar_section?: string }) =>
     call<{ intent_id: string; status: "pending" }>("POST", "/apps", { slug, runtime, as, ...opts }),
   uninstallApp: (app: string) =>

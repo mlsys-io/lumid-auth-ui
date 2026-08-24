@@ -771,6 +771,16 @@ export function StudioShell() {
 								<Key className="w-3.5 h-3.5 text-muted-foreground" />
 								API tokens
 							</Link>
+							{/* Shown to everyone, not gated on entitlement: the page itself
+							    explains "you do not have warehouse access, ask an operator".
+							    Hiding it would make the feature undiscoverable to exactly the
+							    people who need to ask for it. */}
+							<Link to="/studio/account/findata-sql"
+								onClick={() => setMenuOpen(false)}
+								className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted">
+								<Database className="w-3.5 h-3.5 text-muted-foreground" />
+								SQL access
+							</Link>
 							{isAdmin && (
 								<Link to="/studio/manage"
 									onClick={() => setMenuOpen(false)}

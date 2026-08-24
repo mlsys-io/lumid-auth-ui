@@ -109,6 +109,7 @@ const RedeemInvite = lazy(() => import("./pages/auth/redeem-invite"));
 // the Apps landing.
 const Profile = lazy(() => import("./pages/account/profile"));
 const Tokens = lazy(() => import("./pages/account/tokens"));
+const FindataSQL = lazy(() => import("./pages/account/findata-sql"));
 const ConnectGoogle = lazy(() => import("./pages/account/connect-google"));
 const ConnectPowerAutomate = lazy(() => import("./pages/account/connect-power-automate"));
 const ConnectMicrosoft = lazy(() => import("./pages/account/connect-microsoft"));
@@ -710,6 +711,7 @@ export default function App() {
                 reachable (back-compat) and redirect here. */}
             <Route path="account/profile"               element={<Profile />} />
             <Route path="account/tokens"                element={<Tokens />} />
+            <Route path="account/findata-sql"           element={<FindataSQL />} />
             <Route path="account/connect/google"        element={<ConnectGoogle />} />
             {/* /studio/manage = AdminOverview (cluster/users/audit operational hub).
                 Claude Code quota lives at the top-level /code route (admin+). */}
