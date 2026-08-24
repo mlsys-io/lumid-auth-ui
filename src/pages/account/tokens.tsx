@@ -296,13 +296,18 @@ function MintDialog({
 		}
 		const out: Scope[] = [];
 		if (customWildcard) out.push('*');
-		for (const svc of SCOPE_SERVICES) {
-			const lvl = custom[svc];
+		// Same server-first list the table renders. Iterating SCOPE_SERVICES here
+		// while the table rendered the server's list would be worse than the
+		// original bug: the row appears, you select a level, and the scope is
+		// silently dropped on submit. `custom` is seeded from the mirror, so a
+		// service known only to the server has no entry yet — default it.
+		for (const svc of grantable?.services ?? SCOPE_SERVICES) {
+			const lvl = custom[svc] ?? 'none';
 			if (lvl !== 'none') out.push(`${svc}:${lvl}`);
 		}
 		for (const cap of capScopes) out.push(cap);
 		return out;
-	}, [mode, preset, custom, customWildcard, capScopes]);
+	}, [mode, preset, custom, customWildcard, capScopes, grantable]);
 
 	const canMint =
 		name.trim().length > 0 &&
@@ -541,7 +546,17 @@ function CustomScopePicker({
 						</tr>
 					</thead>
 					<tbody>
-						{SCOPE_SERVICES.map((svc) => {
+						{/* Render the SERVER's service list, not the local SCOPE_SERVICES
+						    mirror, falling back to the mirror only until the fetch lands.
+						    The two drift: `findata` was added to identity's accessServices
+						    on 2026-08-24 and the server offered it immediately
+						    (grantable-scopes -> services + matrix), while this table showed
+						    six rows and no way to mint findata:read at all. That is the same
+						    failure that left lqt:strategy required-but-unobtainable — a
+						    scope the backend accepts and the UI gives you no way to ask
+						    for. Reading the server's list means the next service added
+						    appears here on its own. */}
+						{(grantable?.services ?? SCOPE_SERVICES).map((svc) => {
 							const have = grantable?.matrix[svc] ?? 'none';
 							return (
 								<tr key={svc} className="border-t border-slate-100">
@@ -554,7 +569,12 @@ function CustomScopePicker({
 									{LEVELS.map((l) => {
 										const disabled =
 											l !== 'none' && grantable !== null && !levelSatisfies(have, l);
-										const checked = custom[svc] === l;
+										// `?? 'none'`: `custom` is seeded from the local
+									// SCOPE_SERVICES mirror, so a service the SERVER knows
+									// about but the mirror does not has no entry yet. Without
+									// the default, that row renders with NO level selected —
+									// not even "none" — which reads as a broken control.
+									const checked = (custom[svc] ?? 'none') === l;
 										return (
 											<td key={l} className="text-center py-2 px-3">
 												<input
