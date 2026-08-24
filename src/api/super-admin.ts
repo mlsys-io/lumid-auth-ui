@@ -364,6 +364,11 @@ export interface ClaudeUserModelUsage {
 
 export interface ClaudeUserUsage {
 	email: string;
+	// Role, so the Claude-pool chrome can be hidden for `user`: their
+	// sonnet/haiku is aliased to the in-house deepseek before it ever reaches
+	// the pool, so their bars are permanently empty and their reset clocks and
+	// window-reset buttons act on a window they never draw from.
+	role?: string;
 	five_hour_tokens: number;
 	seven_day_tokens: number;
 	five_hour_pct: number;

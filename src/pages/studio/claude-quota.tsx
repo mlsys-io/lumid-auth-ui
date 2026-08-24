@@ -759,11 +759,20 @@ function UserUsageSection({
 					// obvious zero: it reads as a real measurement. The server flags this
 					// with cap_unlimited precisely so we don't render it.
 					const uncapped = u.cap_unlimited === true;
+					// role `user` never touches the Claude pool: aliasClaudeForRole
+					// rewrites their sonnet/haiku to the in-house deepseek upstream of
+					// any pool routing. So the 4h/7d bars are permanently empty, the
+					// reset clocks tick on a window they never draw from, and the reset
+					// buttons would act on nothing. Showing that chrome implies a
+					// relationship to the pool that does not exist — and buries the one
+					// number that IS real for them, their deepseek volume, among four
+					// that are not.
+					const usesPool = u.role !== 'user';
 					const winAge = fmtWindowAge(u.seven_window_age_seconds);
 					// Prefer the pool-only trailing figure; fall back through the
 					// all-models one to the old window-scoped field on older servers.
 					const poolTok = u.trailing_7d_claude_tokens ?? u.trailing_7d_tokens ?? u.raw_total_tokens_7d;
-					const sev = uncapped ? 'none' : usageSeverity(Math.max(shortPct, weekPct));
+					const sev = (!usesPool || uncapped) ? 'none' : usageSeverity(Math.max(shortPct, weekPct));
 					const resetShort = fmtReset(u.five_hour_reset);
 					// There was NO 7d clock. seven_day_reset has always been returned
 					// and nothing displayed it, so the 7d bar had no reset instant
@@ -777,7 +786,13 @@ function UserUsageSection({
 								<span className="flex-1 min-w-0 truncate text-xs font-medium text-slate-800" title={u.email}>
 									{u.email}
 								</span>
-								<div className="flex items-center gap-1.5 shrink-0" title={uncapped
+								{!usesPool && (
+									<span className="shrink-0 text-[10px] text-slate-400 italic"
+										title="Role `user`: sonnet/haiku is served by the in-house deepseek, so this account never draws on the Claude pool. No window, no cap, nothing to reset.">
+										not pooled
+									</span>
+								)}
+								{usesPool && <div className="flex items-center gap-1.5 shrink-0" title={uncapped
 									? `${u.email} is admin/super_admin — UNCAPPED. The server sends a math.MaxInt32 sentinel as the cap so enforcement needs no per-role branch; a percentage of it would be meaningless, so none is shown. Actual draw: ${(u.claude_five_hour_tokens ?? u.five_hour_tokens).toLocaleString()} quota units (${shortWin}) · ${(u.claude_seven_day_tokens ?? u.seven_day_tokens).toLocaleString()} (7d).`
 									: `${(u.claude_five_hour_tokens ?? u.five_hour_tokens).toLocaleString()} pooled-Claude QUOTA UNITS (${shortWin}) · ${(u.claude_seven_day_tokens ?? u.seven_day_tokens).toLocaleString()} (7d) — price-weighted, not raw tokens`}>
 									{uncapped ? (
@@ -794,8 +809,8 @@ function UserUsageSection({
 									    so a reset instant is unambiguously the 4h one or the 7d one. */}
 									{resetShort && <span className="text-[10px] text-sky-500 tabular-nums" title={`4h window resets ${u.five_hour_reset ?? ''}`}>{resetShort}</span>}
 									{resetWeek && <span className="text-[10px] text-violet-500 tabular-nums" title={`7d window resets ${u.seven_day_reset ?? ''}`}>{resetWeek}</span>}
-								</div>
-								<ResetWindowButtons isSuper={isSuper} email={u.email} shortLabel={shortWin} onDone={onReset} />
+								</div>}
+								{usesPool && <ResetWindowButtons isSuper={isSuper} email={u.email} shortLabel={shortWin} onDone={onReset} />}
 								<span className="shrink-0 text-[10px] text-slate-400">{fmtTs(u.last_ts)}</span>
 							</div>
 							{/* SECOND LINE — usage detail.
