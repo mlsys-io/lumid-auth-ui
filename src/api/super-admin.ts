@@ -394,6 +394,20 @@ export interface ClaudeUserUsage {
 	cap_5h?: number;
 	cap_7d?: number;
 	cap_unlimited?: boolean;
+	// TRUE rolling windows, independent of the quota anchor. The *_7d fields
+	// above are WINDOW-scoped: the window opens on first charge and rolls only
+	// once fully elapsed, so a continuously-active user's "7d" figure can cover
+	// hours, and an EXPIRED window reads 0 — rendering a heavy user as idle.
+	// These answer "how much has this person actually used".
+	trailing_4h_tokens?: number;
+	trailing_7d_tokens?: number;
+	trailing_4h_weighted?: number;
+	trailing_7d_weighted?: number;
+	trailing_7d_requests?: number;
+	// How far INTO each window we are, so the window-scoped numbers can be
+	// labelled honestly instead of implying they span the full period.
+	five_window_age_seconds?: number;
+	seven_window_age_seconds?: number;
 	raw_input_tokens_7d?: number;
 	raw_output_tokens_7d?: number;
 	raw_cache_read_tokens_7d?: number;

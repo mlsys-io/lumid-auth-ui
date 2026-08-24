@@ -668,6 +668,17 @@ function usageSeverity(pct: number): string {
 }
 
 
+// How far into a quota window we are, e.g. "18h in". The window-scoped columns
+// are meaningless without it: a "7d" figure whose window opened 18 hours ago
+// covers 18 hours, and reads as though it covered a week.
+function fmtWindowAge(sec?: number): string {
+	if (sec == null || sec <= 0) return '';
+	const h = Math.floor(sec / 3600);
+	if (h >= 24) return `${Math.floor(h / 24)}d ${h % 24}h in`;
+	if (h >= 1) return `${h}h in`;
+	return `${Math.max(1, Math.floor(sec / 60))}m in`;
+}
+
 function fmtReset(iso?: string): string {
 	if (!iso || iso.startsWith('0001')) return '';
 	const d = new Date(iso);
@@ -740,6 +751,7 @@ function UserUsageSection({
 					// obvious zero: it reads as a real measurement. The server flags this
 					// with cap_unlimited precisely so we don't render it.
 					const uncapped = u.cap_unlimited === true;
+					const winAge = fmtWindowAge(u.seven_window_age_seconds);
 					const sev = uncapped ? 'none' : usageSeverity(Math.max(shortPct, weekPct));
 					const resetShort = fmtReset(u.five_hour_reset);
 					return (
@@ -798,17 +810,35 @@ function UserUsageSection({
 								    labelled "units" too -- it IS the weighted figure, and
 								    calling it "tok" is exactly the bug. */}
 								<span className="shrink-0 text-[10px] text-slate-400 tabular-nums"
-									title={u.raw_total_tokens_7d != null
+									title={u.trailing_7d_tokens != null
+										? `TRUE rolling windows (anchor-independent):\n`
+											+ `  4h: ${(u.trailing_4h_tokens ?? 0).toLocaleString()} tok\n`
+											+ `  7d: ${u.trailing_7d_tokens.toLocaleString()} tok\n\n`
+											+ `QUOTA WINDOW (what the cap is enforced against)${winAge ? ` — ${winAge}` : ''}:\n`
+											+ `  ${u.seven_day_tokens.toLocaleString()} weighted units\n`
+											+ `  raw within window: ${(u.raw_total_tokens_7d ?? 0).toLocaleString()} tok\n\n`
+											+ `The window opens on first use and rolls only once fully elapsed, so it `
+											+ `can cover far less than 7 days — and an expired window reads 0.`
+										: u.raw_total_tokens_7d != null
 										? `raw 7d: ${u.raw_total_tokens_7d.toLocaleString()} tokens `
 											+ `(in ${(u.raw_input_tokens_7d ?? 0).toLocaleString()} · `
 											+ `out ${(u.raw_output_tokens_7d ?? 0).toLocaleString()} · `
 											+ `cache-read ${(u.raw_cache_read_tokens_7d ?? 0).toLocaleString()} · `
 											+ `cache-write ${(u.raw_cache_creation_tokens_7d ?? 0).toLocaleString()})`
 										: 'raw token breakdown unavailable from this server build'}>
-									{u.raw_total_tokens_7d != null
-										? <>{fmtTokens(u.raw_total_tokens_7d)} tok<span className="text-slate-300"> · </span>{fmtTokens(u.seven_day_tokens)} units</>
-										: <>{fmtTokens(u.seven_day_tokens)} units</>}
-									<span className="text-slate-300"> · </span>{u.requests_7d} req
+									{/* Lead with the TRUE rolling 7d — that is what "usage" means to a
+									    reader. The window-scoped unit figure follows, tagged with how far
+									    into its window it is, because those two numbers can differ by
+									    several times over and the difference is invisible otherwise. */}
+									{u.trailing_7d_tokens != null
+										? <>{fmtTokens(u.trailing_7d_tokens)} tok<span className="text-slate-400">/7d</span></>
+										: u.raw_total_tokens_7d != null
+											? <>{fmtTokens(u.raw_total_tokens_7d)} tok</>
+											: null}
+									<span className="text-slate-300"> · </span>
+									{fmtTokens(u.seven_day_tokens)} units
+									{winAge && <span className="text-slate-400"> ({winAge})</span>}
+									<span className="text-slate-300"> · </span>{u.trailing_7d_requests ?? u.requests_7d} req
 								</span>
 								<span className="shrink-0 text-[10px] text-slate-400">{fmtTs(u.last_ts)}</span>
 							</div>
