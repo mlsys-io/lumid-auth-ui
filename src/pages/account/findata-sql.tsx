@@ -215,6 +215,13 @@ psql "host=${status.host} port=${status.port} dbname=${status.database} \\
 						a query you need is being cut off, say so rather than working around
 						it — that is a sign the query wants an index or the REST API.
 					</p>
+					<p className="text-xs text-muted-foreground">
+						<a href="/studio/docs/findata-sql" className="underline underline-offset-2">
+							FinData SQL guide
+						</a>{' '}
+						— DBeaver and DuckDB setup, the schema tour, and why an unscoped{' '}
+						<code>count(*)</code> on a hypertable times out.
+					</p>
 				</section>
 			)}
 		</div>
