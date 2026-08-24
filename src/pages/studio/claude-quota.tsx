@@ -129,16 +129,11 @@ function AccountRow({
 	acc,
 	onDelete,
 	onReAdd,
-	isSuper,
 	onChanged,
 }: {
 	acc: ClaudeQuotaAccount;
 	onDelete: (email: string) => void;
 	onReAdd: (email: string) => void;
-	// Pause/resume is super_admin server-side, so the control is hidden below
-	// that. The server check remains the real boundary — this only avoids
-	// showing a button that would 403.
-	isSuper: boolean;
 	// The accounts list has no auto-refresh (the 1s interval only reloads the
 	// per-user section), so a mutation must ask for a refetch explicitly or the
 	// row keeps showing the pre-click state.
@@ -281,8 +276,12 @@ function AccountRow({
 
 			{/* delete */}
 			{/* Pause / Resume. Sits before the destructive delete so the reversible
-			    control is the one nearest to hand. */}
-			{isSuper && !acc.revoked && (
+			    control is the one nearest to hand.
+			    NOT isSuper-gated, matching the delete button beside it: the route
+			    is RequireAdmin, and an admin who may remove an account outright
+			    must not be blocked from the reversible pause. Gating it tighter
+			    simply hid it from the operators who run the pool. */}
+			{!acc.revoked && (
 				<button
 					onClick={togglePause}
 					disabled={pausing}
@@ -1467,7 +1466,6 @@ export default function StudioClaudeQuota() {
 								acc={a}
 								onDelete={(email) => setAccounts((prev) => prev?.filter((x) => x.email !== email) ?? [])}
 								onReAdd={(email) => { setReAddEmail(email); setShowAdd(true); }}
-								isSuper={isSuper}
 								// AdminClaudeQuota fans out live Anthropic probes and can take
 								// seconds, so patch the row optimistically first — otherwise the
 								// pill appears to lag the click — then refetch for the truth.
