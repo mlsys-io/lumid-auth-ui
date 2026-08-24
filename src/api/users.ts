@@ -82,7 +82,8 @@ export type AccessService =
 	| "runmesh"
 	| "lumilake"
 	| "flowmesh"
-	| "xpcloud";
+	| "xpcloud"
+	| "findata";
 
 export type AccessLevel = "none" | "read" | "write" | "admin";
 
@@ -172,6 +173,19 @@ export function csvExportUrl(params: ListUsersParams = {}): string {
 
 // Services in the order the UI renders them. Exposed for the grid view
 // so columns stay stable.
+//
+// KEEP IN SYNC WITH `accessServices` in lumid_identity
+// (internal/handler/admin_users.go). This array is a mirror, and when it drifts
+// the missing service becomes ungrantable from the admin UI entirely — the
+// matrix and the user-detail radios both iterate this list, so a service the
+// backend knows about simply has no column and no control. `findata` was in
+// exactly that state until 2026-08-24: warehouse access could only be granted
+// by redeeming a scoped invitation code or by calling the API by hand.
+//
+// `findata` is also the one service the backend deliberately does NOT default
+// to `read` — MeFindataSQL reads the explicit user_access_grants row rather
+// than computeAccess, because computeAccess falls back to read for every active
+// user, which would hand the whole user base a warehouse seat.
 export const ACCESS_SERVICES: AccessService[] = [
 	"lumid",
 	"qa",
@@ -179,6 +193,7 @@ export const ACCESS_SERVICES: AccessService[] = [
 	"lumilake",
 	"flowmesh",
 	"xpcloud",
+	"findata",
 ];
 
 // Suppress unused-import warning for the BaseResponse re-export.
