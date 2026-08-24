@@ -26,6 +26,7 @@ import {
 	type MintPATResponse,
 } from '../../api/identity';
 import { isSessionExpired } from '../../api/client';
+import { updateInvitationCode } from '../../api/auth';
 
 /**
  * /account/tokens — mint, list, revoke, audit Personal Access Tokens.
@@ -73,6 +74,8 @@ export default function TokensPage() {
 					<Plus className="w-4 h-4" /> New token
 				</Button>
 			</div>
+
+			<AccessCodeRedeemer />
 
 			{loading ? (
 				<div className="text-sm text-gray-500 py-6">Loading…</div>
@@ -1025,4 +1028,85 @@ function RelativeTime({ iso }: { iso: string }) {
 	else if (diff < 86400) label = `${Math.floor(diff / 3600)}h ago`;
 	else label = `${Math.floor(diff / 86400)}d ago`;
 	return <span title={iso}>{label}</span>;
+}
+
+// Redeem an access code.
+//
+// WHY IT LIVES ON THIS PAGE. The moment someone needs it is the moment they
+// open the mint dialog, look for `lumid:write`, and find they cannot grant it
+// to themselves. Putting the remedy on the page where that discovery happens
+// means they do not have to know the feature exists in order to find it.
+//
+// It is NOT on the OAuth callback dialog, which is where invitation codes were
+// redeemed before: that dialog only appears for accounts with no code yet, so
+// it is unreachable for every already-onboarded user — which is precisely the
+// population that needs a grant. All twenty cohort accounts were in exactly
+// that state.
+//
+// Deliberately quiet by default: it is a one-line prompt, not a form, because
+// most people visiting this page have no code and should not be asked for one.
+function AccessCodeRedeemer() {
+	const [open, setOpen] = useState(false);
+	const [code, setCode] = useState('');
+	const [busy, setBusy] = useState(false);
+
+	async function redeem() {
+		const c = code.trim();
+		if (!c) return;
+		setBusy(true);
+		try {
+			await updateInvitationCode({ invitation_code: c });
+			// Reload rather than patch local state: redeeming rewrites the
+			// caller's grants, and the mint dialog reads those from
+			// grantable-scopes at open time. A stale in-memory view here would
+			// show the new scope as still ungrantable, which reads as the
+			// redemption having failed.
+			toast.success('Access code redeemed — your new scopes are available now');
+			setCode('');
+			setOpen(false);
+			setTimeout(() => window.location.reload(), 600);
+		} catch (e: unknown) {
+			toast.error((e as Error)?.message || 'Could not redeem that code');
+		} finally {
+			setBusy(false);
+		}
+	}
+
+	if (!open) {
+		return (
+			<button
+				onClick={() => setOpen(true)}
+				className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+			>
+				Have an access code? Redeem it to unlock scopes you can't grant yourself.
+			</button>
+		);
+	}
+
+	return (
+		<div className="rounded-lg border p-4 space-y-2">
+			<Label htmlFor="access-code">Access code</Label>
+			<div className="flex gap-2">
+				<Input
+					id="access-code"
+					value={code}
+					onChange={(e) => setCode(e.target.value)}
+					onKeyDown={(e) => e.key === 'Enter' && void redeem()}
+					placeholder="paste the code an operator sent you"
+					className="font-mono"
+				/>
+				<Button onClick={() => void redeem()} disabled={busy || !code.trim()}>
+					{busy ? 'Redeeming…' : 'Redeem'}
+				</Button>
+				<Button variant="ghost" onClick={() => setOpen(false)}>
+					Cancel
+				</Button>
+			</div>
+			<p className="text-xs text-muted-foreground">
+				Access codes grant entitlements you cannot give yourself — <code>lumid:write</code>{' '}
+				being the usual one. Redeeming applies the grant to your account; you then mint
+				tokens with it as normal. A code can only be redeemed once per person.
+			</p>
+		</div>
+	);
 }
