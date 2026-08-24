@@ -16,6 +16,7 @@ import {
 	fetchClaudeUserUsage,
 	adminAddClaudeToken,
 	adminDeleteClaudeToken,
+	adminSetClaudeAccountDrain,
 	adminResetClaudePoolWindow,
 	adminResetClaudePoolWindowAll,
 	fetchClaudeFieldBoxes,
@@ -128,13 +129,49 @@ function AccountRow({
 	acc,
 	onDelete,
 	onReAdd,
+	isSuper,
+	onChanged,
 }: {
 	acc: ClaudeQuotaAccount;
 	onDelete: (email: string) => void;
 	onReAdd: (email: string) => void;
+	// Pause/resume is super_admin server-side, so the control is hidden below
+	// that. The server check remains the real boundary — this only avoids
+	// showing a button that would 403.
+	isSuper: boolean;
+	// The accounts list has no auto-refresh (the 1s interval only reloads the
+	// per-user section), so a mutation must ask for a refetch explicitly or the
+	// row keeps showing the pre-click state.
+	onChanged: () => void;
 }) {
 	const [confirming, setConfirming] = useState(false);
 	const [deleting,   setDeleting]   = useState(false);
+	const [pausing,    setPausing]    = useState(false);
+	const [pauseErr,   setPauseErr]   = useState('');
+	const paused = !!acc.draining_since;
+
+	async function togglePause() {
+		// Spell out the semantics: "pause" reads as "kill", and an operator who
+		// thinks this disconnects people will never use it — or will use it and
+		// panic. The one thing they need to know is that nobody is cut off.
+		const msg = paused
+			? `Resume ${acc.email}? It starts taking new sessions again on the next placement tick.`
+			: `Pause ${acc.email}?\n\nIt stops taking NEW sessions immediately. Conversations already on it finish normally — nobody is disconnected and no session is moved between subscriptions.\n\nUsers drift off as they go idle; that drift is the transfer.`;
+		if (!window.confirm(msg)) return;
+		setPausing(true);
+		setPauseErr('');
+		try {
+			await adminSetClaudeAccountDrain(acc.email, !paused, paused ? '' : 'paused from /code');
+			onChanged();
+		} catch (e) {
+			// Surfaced inline, like ResetWindowButtons: an operator who believes
+			// an account is paused when it is not will keep leasing it, which is
+			// worse than an obvious failure.
+			setPauseErr(e instanceof Error ? e.message : String(e));
+		} finally {
+			setPausing(false);
+		}
+	}
 
 	async function handleDelete() {
 		setDeleting(true);
@@ -167,6 +204,23 @@ function AccountRow({
 					title={`Field-box account — routes via the ${acc.label} relay`}
 				>
 					{acc.label}
+				</span>
+			)}
+
+			{/* Operator PAUSE. Amber, not red: the account is not broken and is
+			    still serving the people on it — it is winding down on purpose. */}
+			{paused && (
+				<span
+					className="shrink-0 rounded-full bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[10px] font-medium text-amber-700"
+					title={
+						`PAUSED by an operator${acc.drain_reason ? ` — ${acc.drain_reason}` : ''}\n` +
+						`since ${acc.draining_since}\n\n` +
+						`Takes no new sessions. Conversations already on it are still being served and ` +
+						`finish normally; users move off as they go idle. Unlike a bench this never ` +
+						`expires — it clears only when someone resumes it.`
+					}
+				>
+					paused
 				</span>
 			)}
 
@@ -226,6 +280,28 @@ function AccountRow({
 			<span className="shrink-0 text-[10px] text-slate-400">{fmtTs(acc.ts)}</span>
 
 			{/* delete */}
+			{/* Pause / Resume. Sits before the destructive delete so the reversible
+			    control is the one nearest to hand. */}
+			{isSuper && !acc.revoked && (
+				<button
+					onClick={togglePause}
+					disabled={pausing}
+					className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium transition disabled:opacity-50 ${
+						paused
+							? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+							: 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
+					}`}
+					title={paused
+						? 'Resume: start taking new sessions again'
+						: 'Pause: stop taking NEW sessions. In-flight conversations finish normally — nobody is disconnected.'}
+				>
+					{pausing ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : paused ? 'resume' : 'pause'}
+				</button>
+			)}
+			{pauseErr && (
+				<span className="shrink-0 max-w-40 truncate text-[10px] text-rose-500" title={pauseErr}>{pauseErr}</span>
+			)}
+
 			{confirming ? (
 				<div className="shrink-0 flex items-center gap-1">
 					<button onClick={handleDelete} disabled={deleting}
@@ -1391,6 +1467,16 @@ export default function StudioClaudeQuota() {
 								acc={a}
 								onDelete={(email) => setAccounts((prev) => prev?.filter((x) => x.email !== email) ?? [])}
 								onReAdd={(email) => { setReAddEmail(email); setShowAdd(true); }}
+								isSuper={isSuper}
+								// AdminClaudeQuota fans out live Anthropic probes and can take
+								// seconds, so patch the row optimistically first — otherwise the
+								// pill appears to lag the click — then refetch for the truth.
+								onChanged={() => {
+									setAccounts((prev) => prev?.map((x) => x.email === a.email
+										? { ...x, draining_since: x.draining_since ? undefined : new Date().toISOString() }
+										: x) ?? []);
+									load(true);
+								}}
 							/>
 						))}
 					</div>

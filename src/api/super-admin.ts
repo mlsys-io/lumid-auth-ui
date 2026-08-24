@@ -331,6 +331,11 @@ export interface ClaudeQuotaAccount {
 	limits?: ClaudeQuotaLimit[];
 	// Quarantine: the token family was revoked (invalid_grant) — the backend
 	// stops retrying it; recovery is a re-add with a fresh `claude auth login`.
+	// Operator PAUSE (graceful drain) — distinct from a bench. A paused account
+	// is still serving the conversations already on it; it just takes no new
+	// ones. Rendering it as "down" would be as wrong as rendering it healthy.
+	draining_since?: string;
+	drain_reason?: string;
 	revoked?: boolean;
 	revoke_reason?: string;
 	// Label: set when this account belongs to a field box (e.g. "dublin") —
@@ -595,6 +600,25 @@ export async function adminDeleteClaudeToken(email: string): Promise<void> {
  * Takes a REQUIRED email. The fleet-wide form is a separate function below, so
  * "reset one user" can never become "reset everyone" by passing undefined.
  */
+/**
+ * Pause (drain) or resume a pooled Claude account.
+ *
+ * Pause is graceful: the account stops taking NEW sessions and new placements
+ * immediately, while conversations already bound to it finish normally. Nobody
+ * is disconnected and no session is moved between subscriptions — moving a live
+ * conversation is itself a suspension signal, which is what this replaces.
+ *
+ * Users drift off as they go idle; that drift is the transfer. The server
+ * refuses (409) to pause the last un-paused account.
+ */
+export async function adminSetClaudeAccountDrain(
+	email: string,
+	draining: boolean,
+	reason?: string,
+): Promise<void> {
+	await apiClient.post('/api/v1/admin/claude-account/drain', { email, draining, reason });
+}
+
 export async function adminResetClaudePoolWindow(
 	email: string,
 	window: 'short' | 'weekly',
