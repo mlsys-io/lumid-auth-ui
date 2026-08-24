@@ -31,6 +31,7 @@ export default function AdminInvitations() {
 	const [maxUses, setMaxUses] = useState(1);
 	const [note, setNote] = useState('');
 	const [ttlDays, setTtlDays] = useState(0);
+	const [scopes, setScopes] = useState('');
 	const [minting, setMinting] = useState(false);
 
 	async function refresh() {
@@ -58,9 +59,17 @@ export default function AdminInvitations() {
 				max_uses: maxUses,
 				note: note.trim() || undefined,
 				ttl_days: ttlDays || 0,
+				scopes: scopes.trim() || undefined,
 			});
-			toast.success(`Minted ${r.total} code${r.total === 1 ? '' : 's'}`);
+			// Say what was granted, not just how many codes exist. A code that
+			// silently carries lumid:write is the one you most want confirmed
+			// back before you hand it to twenty people.
+			toast.success(
+				`Minted ${r.total} code${r.total === 1 ? '' : 's'}` +
+					(scopes.trim() ? ` granting ${scopes.trim()}` : ''),
+			);
 			setNote('');
+			setScopes('');
 			refresh();
 		} catch (e: unknown) {
 			toast.error((e as Error)?.message || 'Mint failed');
@@ -145,6 +154,23 @@ export default function AdminInvitations() {
 								placeholder="e.g. YC batch friends"
 							/>
 						</div>
+						<div className="sm:col-span-2 lg:col-span-4 space-y-1">
+							<Label htmlFor="scopes">Access granted on redemption (optional)</Label>
+							<Input
+								id="scopes"
+								value={scopes}
+								onChange={(e) => setScopes(e.target.value)}
+								placeholder="lumid:write findata:read"
+							/>
+							<p className="text-xs text-slate-500">
+								Space-separated <code>service:level</code>. Redeeming writes these as
+								access grants, so a code can hand out an entitlement a user cannot
+								grant themselves — <code>lumid:write</code> being the one that matters.
+								One code with 20 uses onboards a whole cohort without touching
+								individual accounts. Wildcards are refused; leave blank for a
+								signup-only code.
+							</p>
+						</div>
 						<div className="sm:col-span-2 lg:col-span-4">
 							<Button onClick={onMint} disabled={minting} className="w-full sm:w-auto">
 								{minting ? 'Minting…' : 'Mint'}
@@ -198,7 +224,18 @@ export default function AdminInvitations() {
 											<td className="py-2 pr-3">
 												{c.uses_remaining}/{c.max_uses}
 											</td>
-											<td className="py-2 pr-3 truncate max-w-[200px]">{c.note || '—'}</td>
+											<td className="py-2 pr-3 truncate max-w-[200px]">
+											{c.note || '—'}
+											{/* Shown under the note rather than in its own column: a
+											    code that grants access is materially different from a
+											    signup code, and that must be visible when deciding who
+											    to send it to — not discoverable only by redeeming it. */}
+											{c.scopes && (
+												<div className="text-[11px] font-mono text-amber-700">
+													grants {c.scopes}
+												</div>
+											)}
+										</td>
 											<td className="py-2 pr-3 text-muted-foreground">
 												{c.expires_at ? new Date(c.expires_at).toLocaleDateString() : '—'}
 											</td>
