@@ -725,8 +725,52 @@ function UserUsageSection({
 	const mm = Math.floor(countdown / 60);
 	const ss = countdown % 60;
 	const cdText = mm > 0 ? `${mm}m ${ss}s` : `${ss}s`;
+	// ON-PREM SAVINGS BANNER.
+	//
+	// Rendered as a RANGE on purpose. The two ends differ ~5x because deepseek
+	// reports its whole prompt as input_tokens, so the upper end charges every
+	// token at full input price while a real OpenRouter buyer would get
+	// prefix-cache reads at 1/5 (our own local hit rate is ~97%). Showing a
+	// single figure here would be a confident number with a 5x error bar.
+	const savMax = usage.onprem_savings_cents_7d_max;
+	const savMin = usage.onprem_savings_cents_7d_min;
+	const orSpend = usage.openrouter_spend_cents_7d;
+	const usd = (c: number) => `$${(c / 100).toFixed(2)}`;
 	return (
 		<div>
+			{savMax != null && savMax > 0 && (
+				<div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded border border-emerald-100 bg-emerald-50 px-2.5 py-1.5">
+					<span className="text-[11px] font-medium text-emerald-700">
+						Saved by on-prem (7d): {usd(savMin ?? Math.round(savMax / 5))}–{usd(savMax)}
+					</span>
+					<span
+						className="text-[10px] text-emerald-600/80"
+						title={
+							'What the GB10-served share WOULD have cost on OpenRouter, at the rate the overflow actually pays ' +
+							'($0.04/M in, $0.08/M out — the cheapest endpoint, not the top-level list price). ' +
+							'The range is real: deepseek reports its whole prompt as input_tokens, so the high end charges every ' +
+							'token at full input price, while a buyer would get prefix-cache reads at 1/5. Our local hit rate is ~97%, ' +
+							'so the truth sits nearer the low end. This is avoided spend, never an invoice.'
+						}
+					>
+						range, not an estimate — why?
+					</span>
+					{orSpend != null && (
+						<span className="text-[10px] text-slate-500 ml-auto">
+							actually spent on OpenRouter overflow:{' '}
+							<span className="tabular-nums font-medium text-violet-600">{usd(orSpend)}</span>
+							{savMin != null && orSpend > savMin && (
+								<span
+									className="ml-1 text-amber-600"
+									title="Overflow is costing more than the low estimate of what on-prem is saving. That is a signal to chase spill volume, not to add hardware."
+								>
+									· exceeds low estimate
+								</span>
+							)}
+						</span>
+					)}
+				</div>
+			)}
 			<div className="flex items-center gap-2 mb-1.5">
 				<p className="text-xs font-medium text-slate-600">
 					Per-user pool usage
