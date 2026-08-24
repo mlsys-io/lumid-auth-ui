@@ -1200,6 +1200,23 @@ function LumidForm({ body }: { body: Body }) {
   // trigger a real QA write without a per-app server allowlist entry, because
   // QA enforces auth + scope + role on its own endpoints.
   const submitQa = typeof body.submit_qa === "string" ? body.submit_qa : "";
+  // loop: run one of the caller's OWN xpio loops with the form's field values as
+  // args. The third submit path, and the one that closes a real gap: `action`
+  // collects input but can only reach the three keys in identity's formActions
+  // allowlist, while `lumid:action intent=run_loop` reaches any loop but renders
+  // a bare button with NO fields — its `args` are forwarded verbatim, so a spec
+  // written as `args: {strategy: "{strategy}"}` sent the literal 10-character
+  // string `{strategy}` and reported success. Every app needing input->verb was
+  // choosing between a 403 and silent garbage.
+  //
+  // No server allowlist is needed because MeLoopRunNow is already scoped to the
+  // authenticated caller and their own app: this cannot reach another tenant's
+  // loop, and adding a verb stays an app-side edit rather than a Go change.
+  const submitLoop = typeof body.loop === "string" ? body.loop : "";
+  const submitApp = typeof body.app === "string" ? body.app : "";
+  // Same source ActionButton uses (:app in /studio/a/:app/:surface), so a spec
+  // on its own page writes `loop:` alone and the app is inferred.
+  const appFromRoute = useRouteParams().app;
   const submitMethod = String(body.submit_method ?? "POST").toUpperCase();
   const navigate = useNavigate();
   const redirectTo = typeof body.redirect_to === "string" ? body.redirect_to : "";
@@ -1226,7 +1243,8 @@ function LumidForm({ body }: { body: Body }) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
-  if (!action && !submitQa) return <ErrLine msg="lumid:form needs `action` or `submit_qa`" />;
+  if (!action && !submitQa && !submitLoop)
+    return <ErrLine msg="lumid:form needs `action`, `submit_qa`, or `loop`" />;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1243,6 +1261,23 @@ function LumidForm({ body }: { body: Body }) {
         if (submitMethod === "DELETE") await apiClient.delete(submitQa);
         else await apiClient.post(submitQa, payload);
         setResult({ ok: true, msg: String(body.success_message ?? "Done.") });
+        if (redirectTo) setTimeout(() => navigate(redirectTo), 600);
+      } else if (submitLoop) {
+        // Coerced like submit_qa, so a `type: number` field arrives as a number
+        // rather than a string the command has to parse.
+        const args = coerceValues(fields, vals);
+        // The app defaults to the surface's own app, which is what a spec
+        // author means by `loop:` on their own page. `app:` stays overridable
+        // for the rare cross-app case.
+        const appName = submitApp || appFromRoute;
+        if (!appName) throw new Error("this form needs an `app` — it could not infer one from the surface");
+        await me.runLoopNow(appName, submitLoop, args);
+        // "Queued", never "Done": runLoopNow enqueues a cycle and returns. The
+        // result lands in the app's run history, and a form that claimed
+        // success here would be asserting an outcome it has not seen. This is
+        // the same distinction the mailbox draws between 200-queued and the
+        // later ack, and collapsing it is how "it said it worked" happens.
+        setResult({ ok: true, msg: String(body.success_message ?? `Queued ${submitLoop}.`) });
         if (redirectTo) setTimeout(() => navigate(redirectTo), 600);
       } else {
         const auth = await bearerHeader();
