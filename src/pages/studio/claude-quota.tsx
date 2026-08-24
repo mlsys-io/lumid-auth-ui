@@ -761,7 +761,7 @@ function UserUsageSection({
 						<div key={u.email} className="px-2.5 py-1.5 min-w-0">
 							<div className="flex items-center gap-3">
 								<SeverityDot severity={sev} />
-								<span className="w-44 shrink-0 truncate text-xs font-medium text-slate-800" title={u.email}>
+								<span className="flex-1 min-w-0 truncate text-xs font-medium text-slate-800" title={u.email}>
 									{u.email}
 								</span>
 								<div className="flex items-center gap-1.5 shrink-0" title={uncapped
@@ -779,32 +779,19 @@ function UserUsageSection({
 									)}
 									{resetShort && <span className="text-[10px] text-slate-400 w-10">{resetShort}</span>}
 								</div>
-								{/* Color-coded provider subtotals fill the middle gap — Claude
-								    slate, onprem emerald, OpenRouter violet (mirror modelRoute).
-								    Aggregates the per-model breakdown, so the model chips are
-								    folded away and each user stays on ONE line. */}
-								<span className="flex-1 min-w-0 flex items-center gap-1 overflow-hidden">
-									{u.providers && (["claude", "openrouter", "onprem"] as const).map((p) => {
-										const v = u.providers![p];
-										if (!v || v.tokens_7d <= 0) return null;
-										const cls =
-											p === 'claude' ? 'bg-slate-100 text-slate-500' :
-											p === 'onprem' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
-											'bg-violet-50 text-violet-600 border border-violet-100';
-										const lbl =
-											p === 'claude' ? 'Claude' :
-											p === 'onprem' ? 'onprem' : 'OpenRouter';
-										return (
-											<span key={p} className={`px-1.5 py-px rounded text-[9px] tabular-nums whitespace-nowrap ${cls}`}
-												title={`${v.tokens_7d.toLocaleString()} raw tokens (input+output+cache — the SAME basis for every provider, so Claude and deepseek are comparable)`
-													+ (v.weighted_tokens_7d != null ? ` · ${v.weighted_tokens_7d.toLocaleString()} quota units` : '')}>
-												{lbl}
-												<span className="text-slate-400"> · {fmtTokens(v.tokens_7d)}</span>
-											</span>
-										);
-									})}
-								</span>
 								<ResetWindowButtons isSuper={isSuper} email={u.email} shortLabel={shortWin} onDone={onReset} />
+								<span className="shrink-0 text-[10px] text-slate-400">{fmtTs(u.last_ts)}</span>
+							</div>
+							{/* SECOND LINE — usage detail.
+							    Everything below used to sit on line 1 alongside the identity,
+							    bars and actions. Six of those seven children were shrink-0, so
+							    the provider chips were the only flexible one and absorbed all
+							    the pressure: as figures were added to the metrics span the chips
+							    clipped to nothing and the row overflowed. Splitting the concerns
+							    — line 1 identifies and gates, line 2 quantifies — removes the
+							    competition for width entirely, and lets the chips WRAP instead
+							    of being occluded. Indented to align under the email. */}
+							<div className="mt-0.5 pl-5 flex items-baseline gap-x-3 gap-y-1 flex-wrap">
 								{/* BOTH units, each named. These differ by ~10x on real Claude
 								    Code traffic (a turn is 90-95% cache-read, weighted 0.1x), so
 								    showing one bare number labelled "tok" read as a large
@@ -812,7 +799,7 @@ function UserUsageSection({
 								    units are what the cap is enforced against. The fallback is
 								    labelled "units" too -- it IS the weighted figure, and
 								    calling it "tok" is exactly the bug. */}
-								<span className="shrink-0 text-[10px] text-slate-400 tabular-nums"
+								<span className="text-[10px] text-slate-400 tabular-nums whitespace-nowrap"
 									title={u.trailing_7d_tokens != null
 										? `TRUE rolling windows (anchor-independent):\n`
 											+ `  4h pool: ${(u.trailing_4h_claude_tokens ?? u.trailing_4h_tokens ?? 0).toLocaleString()} tok\n`
@@ -851,7 +838,31 @@ function UserUsageSection({
 									{winAge && <span className="text-slate-400"> ({winAge})</span>}
 									<span className="text-slate-300"> · </span>{u.trailing_7d_requests ?? u.requests_7d} req
 								</span>
-								<span className="shrink-0 text-[10px] text-slate-400">{fmtTs(u.last_ts)}</span>
+								{/* Color-coded provider subtotals fill the middle gap — Claude
+								    slate, onprem emerald, OpenRouter violet (mirror modelRoute).
+								    Aggregates the per-model breakdown, so the model chips are
+								    folded away and each user stays on ONE line. */}
+								<span className="flex items-center gap-1 flex-wrap">
+									{u.providers && (["claude", "openrouter", "onprem"] as const).map((p) => {
+										const v = u.providers![p];
+										if (!v || v.tokens_7d <= 0) return null;
+										const cls =
+											p === 'claude' ? 'bg-slate-100 text-slate-500' :
+											p === 'onprem' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+											'bg-violet-50 text-violet-600 border border-violet-100';
+										const lbl =
+											p === 'claude' ? 'Claude' :
+											p === 'onprem' ? 'onprem' : 'OpenRouter';
+										return (
+											<span key={p} className={`px-1.5 py-px rounded text-[9px] tabular-nums whitespace-nowrap ${cls}`}
+												title={`${v.tokens_7d.toLocaleString()} raw tokens (input+output+cache — the SAME basis for every provider, so Claude and deepseek are comparable)`
+													+ (v.weighted_tokens_7d != null ? ` · ${v.weighted_tokens_7d.toLocaleString()} quota units` : '')}>
+												{lbl}
+												<span className="text-slate-400"> · {fmtTokens(v.tokens_7d)}</span>
+											</span>
+										);
+									})}
+								</span>
 							</div>
 						</div>
 					);
