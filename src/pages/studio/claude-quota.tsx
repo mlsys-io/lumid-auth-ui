@@ -91,24 +91,32 @@ function MiniBar({ pct, severity, w = 'w-16' }: { pct: number; severity: string;
 // glance instead of two separate bars. The 4h window fills from the LEFT, the
 // 7d from the RIGHT; they meet in the middle. Each side keeps its own severity
 // colour, and the centre gap shows how much headroom remains on both.
+// The two halves of the track are DIFFERENT WINDOWS, and they were drawn in the
+// same colour — identical severity ramp for both — so which half you were
+// looking at could only be inferred from its position. They now carry distinct
+// hues at rest: sky for the short window, violet for the 7d.
+//
+// Severity still overrides both. A bar approaching its cap has to read as
+// approaching its cap whichever window it belongs to, so warning/critical keep
+// amber/rose and the window hue only applies while there is headroom. Telling
+// 4h from 7d matters less than telling "fine" from "about to be denied".
+function windowFill(pct: number, window: 'short' | 'week'): string {
+	if (usageSeverity(pct) === 'critical') return 'bg-rose-500';
+	if (usageSeverity(pct) === 'warning') return 'bg-amber-400';
+	if (pct > 60) return 'bg-gold-400';
+	return window === 'short' ? 'bg-sky-400' : 'bg-violet-400';
+}
+
 function StackedBar({ shortPct, weekPct }: { shortPct: number; weekPct: number }) {
-	const shortFill =
-		usageSeverity(shortPct) === 'critical' ? 'bg-rose-500' :
-		usageSeverity(shortPct) === 'warning'  ? 'bg-amber-400' :
-		shortPct > 60                          ? 'bg-gold-400'  :
-		'bg-emerald-400';
-	const weekFill =
-		usageSeverity(weekPct) === 'critical' ? 'bg-rose-500' :
-		usageSeverity(weekPct) === 'warning'  ? 'bg-amber-400' :
-		weekPct > 60                          ? 'bg-gold-400'  :
-		'bg-emerald-400';
+	const shortFill = windowFill(shortPct, 'short');
+	const weekFill = windowFill(weekPct, 'week');
 	// Cap each side at 50% of the track so they never overlap; the pct text
 	// beside the bar carries the true number beyond that.
 	const shortW = Math.min(50, shortPct / 2);
 	const weekW = Math.min(50, weekPct / 2);
 	return (
 		<div className="w-20 h-1 rounded-full bg-slate-100 overflow-hidden flex shrink-0"
-			title={`${shortPct.toFixed(0)}% (4h) · ${weekPct.toFixed(0)}% (7d)`}>
+			title={`${shortPct.toFixed(0)}% of the 4h cap (sky, left) · ${weekPct.toFixed(0)}% of the 7d cap (violet, right)`}>
 			<div className={`h-full rounded-l-full ${shortFill}`} style={{ width: `${shortW}%` }} />
 			<div className="flex-1" />
 			<div className={`h-full rounded-r-full ${weekFill}`} style={{ width: `${weekW}%` }} />
@@ -757,6 +765,11 @@ function UserUsageSection({
 					const poolTok = u.trailing_7d_claude_tokens ?? u.trailing_7d_tokens ?? u.raw_total_tokens_7d;
 					const sev = uncapped ? 'none' : usageSeverity(Math.max(shortPct, weekPct));
 					const resetShort = fmtReset(u.five_hour_reset);
+					// There was NO 7d clock. seven_day_reset has always been returned
+					// and nothing displayed it, so the 7d bar had no reset instant
+					// beside it — the one number that says whether a high percentage
+					// is about to clear on its own or sit there for days.
+					const resetWeek = fmtReset(u.seven_day_reset);
 					return (
 						<div key={u.email} className="px-2.5 py-1.5 min-w-0">
 							<div className="flex items-center gap-3">
@@ -777,7 +790,10 @@ function UserUsageSection({
 											</span>
 										</>
 									)}
-									{resetShort && <span className="text-[10px] text-slate-400 w-10">{resetShort}</span>}
+									{/* Both clocks, colour-matched to the bar half each belongs to,
+									    so a reset instant is unambiguously the 4h one or the 7d one. */}
+									{resetShort && <span className="text-[10px] text-sky-500 tabular-nums" title={`4h window resets ${u.five_hour_reset ?? ''}`}>{resetShort}</span>}
+									{resetWeek && <span className="text-[10px] text-violet-500 tabular-nums" title={`7d window resets ${u.seven_day_reset ?? ''}`}>{resetWeek}</span>}
 								</div>
 								<ResetWindowButtons isSuper={isSuper} email={u.email} shortLabel={shortWin} onDone={onReset} />
 								<span className="shrink-0 text-[10px] text-slate-400">{fmtTs(u.last_ts)}</span>
