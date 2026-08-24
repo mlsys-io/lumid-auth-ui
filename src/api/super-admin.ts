@@ -399,6 +399,11 @@ export interface ClaudeUserUsage {
 	// once fully elapsed, so a continuously-active user's "7d" figure can cover
 	// hours, and an EXPIRED window reads 0 — rendering a heavy user as idle.
 	// These answer "how much has this person actually used".
+	// POOL-ONLY (claude-*) trailing raw tokens. The fields below include
+	// deepseek/on-prem, which enforcePoolQuota EXEMPTS — so for a table headed
+	// "per-user pool usage" these are the honest ones.
+	trailing_4h_claude_tokens?: number;
+	trailing_7d_claude_tokens?: number;
 	trailing_4h_tokens?: number;
 	trailing_7d_tokens?: number;
 	trailing_4h_weighted?: number;

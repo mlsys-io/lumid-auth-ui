@@ -752,6 +752,9 @@ function UserUsageSection({
 					// with cap_unlimited precisely so we don't render it.
 					const uncapped = u.cap_unlimited === true;
 					const winAge = fmtWindowAge(u.seven_window_age_seconds);
+					// Prefer the pool-only trailing figure; fall back through the
+					// all-models one to the old window-scoped field on older servers.
+					const poolTok = u.trailing_7d_claude_tokens ?? u.trailing_7d_tokens ?? u.raw_total_tokens_7d;
 					const sev = uncapped ? 'none' : usageSeverity(Math.max(shortPct, weekPct));
 					const resetShort = fmtReset(u.five_hour_reset);
 					return (
@@ -812,8 +815,9 @@ function UserUsageSection({
 								<span className="shrink-0 text-[10px] text-slate-400 tabular-nums"
 									title={u.trailing_7d_tokens != null
 										? `TRUE rolling windows (anchor-independent):\n`
-											+ `  4h: ${(u.trailing_4h_tokens ?? 0).toLocaleString()} tok\n`
-											+ `  7d: ${u.trailing_7d_tokens.toLocaleString()} tok\n\n`
+											+ `  4h pool: ${(u.trailing_4h_claude_tokens ?? u.trailing_4h_tokens ?? 0).toLocaleString()} tok\n`
+											+ `  7d pool: ${(u.trailing_7d_claude_tokens ?? u.trailing_7d_tokens).toLocaleString()} tok\n`
+											+ `  7d all models (incl. exempt on-prem): ${u.trailing_7d_tokens.toLocaleString()} tok\n\n`
 											+ `QUOTA WINDOW (what the cap is enforced against)${winAge ? ` — ${winAge}` : ''}:\n`
 											+ `  ${u.seven_day_tokens.toLocaleString()} weighted units\n`
 											+ `  raw within window: ${(u.raw_total_tokens_7d ?? 0).toLocaleString()} tok\n\n`
@@ -830,13 +834,20 @@ function UserUsageSection({
 									    reader. The window-scoped unit figure follows, tagged with how far
 									    into its window it is, because those two numbers can differ by
 									    several times over and the difference is invisible otherwise. */}
-									{u.trailing_7d_tokens != null
-										? <>{fmtTokens(u.trailing_7d_tokens)} tok<span className="text-slate-400">/7d</span></>
-										: u.raw_total_tokens_7d != null
-											? <>{fmtTokens(u.raw_total_tokens_7d)} tok</>
-											: null}
+									{/* POOL usage: claude-* only. deepseek runs on our own GB10 and the
+									    cap exempts it, so folding it in overstated what the shared pool
+									    bore — 26% of one user's headline on 2026-08-24. Non-pool volume
+									    is still visible, in the provider chips to the left. */}
+									{poolTok != null
+										? <>{fmtTokens(poolTok)} tok<span className="text-slate-400">/7d</span></>
+										: null}
 									<span className="text-slate-300"> · </span>
-									{fmtTokens(u.seven_day_tokens)} units
+									{/* Claude-only weighted, so this figure and the BAR beside it are the
+									    same population. They were not: the printed number was all-models
+									    while the bar was claude-only, and for suzhengy that read 102.5M
+									    next to a bar drawn from 19.8M — a 5.2x disagreement between two
+									    numbers touching each other on the same row. */}
+									{fmtTokens(u.claude_seven_day_tokens ?? u.seven_day_tokens)} units
 									{winAge && <span className="text-slate-400"> ({winAge})</span>}
 									<span className="text-slate-300"> · </span>{u.trailing_7d_requests ?? u.requests_7d} req
 								</span>
