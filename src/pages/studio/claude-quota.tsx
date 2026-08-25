@@ -86,26 +86,37 @@ function SeverityDot({ severity }: { severity: string }) {
 // deliberately adjacent to it, so the pair cannot drift. Text sits a step darker
 // than the fill (-600 vs -400/-500) because a 10px glyph needs more contrast
 // than a 4px bar to read at the same weight.
-function severityText(pct: number, severity: string): string {
-	if (severity === 'critical') return 'text-rose-600';
-	if (severity === 'warning') return 'text-amber-600';
-	if (pct > 60) return 'text-gold-600';
-	return 'text-emerald-600';
+// Account rows carry the same two channels. `severity` is the SERVER's verdict
+// for the account (not recomputed from pct), so this mirrors MiniBar's ladder
+// rather than usageSeverity's.
+function severityText(pct: number, severity: string, window: 'short' | 'week'): string {
+	const short = window === 'short';
+	if (severity === 'critical') return short ? 'text-rose-500' : 'text-rose-700';
+	if (severity === 'warning') return short ? 'text-amber-500' : 'text-amber-700';
+	if (pct > 60) return short ? 'text-gold-500' : 'text-gold-700';
+	return short ? 'text-emerald-500' : 'text-emerald-700';
 }
 
-function windowText(pct: number, _window: 'short' | 'week'): string {
-	if (usageSeverity(pct) === 'critical') return 'text-rose-600';
-	if (usageSeverity(pct) === 'warning') return 'text-amber-600';
-	if (pct > 60) return 'text-gold-600';
-	return 'text-emerald-600';
+// Text runs a step darker than its fill at both ends — a 10px glyph needs more
+// contrast than a 4px bar to read at the same weight — while keeping the same
+// light/dark split between the windows.
+function windowText(pct: number, window: 'short' | 'week'): string {
+	const short = window === 'short';
+	switch (usageSeverity(pct)) {
+		case 'critical': return short ? 'text-rose-500' : 'text-rose-700';
+		case 'warning': return short ? 'text-amber-500' : 'text-amber-700';
+	}
+	if (pct > 60) return short ? 'text-gold-500' : 'text-gold-700';
+	return short ? 'text-emerald-500' : 'text-emerald-700';
 }
 
-function MiniBar({ pct, severity, w = 'w-16' }: { pct: number; severity: string; w?: string }) {
+function MiniBar({ pct, severity, window = 'short', w = 'w-16' }: { pct: number; severity: string; window?: 'short' | 'week'; w?: string }) {
+	const short = window === 'short';
 	const fill =
-		severity === 'critical' ? 'bg-rose-500' :
-		severity === 'warning'  ? 'bg-amber-400' :
-		pct > 60                ? 'bg-gold-400'  :
-		'bg-emerald-400';
+		severity === 'critical' ? (short ? 'bg-rose-400' : 'bg-rose-600') :
+		severity === 'warning'  ? (short ? 'bg-amber-300' : 'bg-amber-500') :
+		pct > 60                ? (short ? 'bg-gold-300' : 'bg-gold-500') :
+		(short ? 'bg-emerald-300' : 'bg-emerald-500');
 	return (
 		<div className={`${w} h-1 rounded-full bg-slate-100 overflow-hidden`}>
 			<div className={`h-full rounded-full ${fill}`} style={{ width: `${Math.min(100, pct)}%` }} />
@@ -141,11 +152,32 @@ function MiniBar({ pct, severity, w = 'w-16' }: { pct: number; severity: string;
 // left and the 7d from the right, and the reset clocks beside them keep their
 // sky/violet identity. Position and the clocks carry window; colour carries
 // pressure. One meaning per channel.
-function windowFill(pct: number, _window: 'short' | 'week'): string {
-	if (usageSeverity(pct) === 'critical') return 'bg-rose-500';
-	if (usageSeverity(pct) === 'warning') return 'bg-amber-400';
-	if (pct > 60) return 'bg-gold-400';
-	return 'bg-emerald-400';
+// TWO CHANNELS, TWO MEANINGS.
+//
+//   HUE   = pressure   emerald -> gold -> amber -> rose
+//   SHADE = window     4h is the light step, 7d the dark one
+//
+// Getting here took two wrong turns worth recording. First the fills encoded the
+// WINDOW as hue (sky/violet) while the figures beside them were flat slate, so
+// the same quantity was two colours depending which panel you read. Collapsing
+// everything to severity fixed that and broke the other half: with hue carrying
+// only pressure, a 4h and a 7d mark at similar load became indistinguishable.
+//
+// Hue and shade are independent channels, so both facts fit without collision: a
+// window stays ONE colour across its bar half, its percentage and its clock,
+// while 4h and 7d remain tellable apart at a glance.
+//
+// Class names are written out in full on purpose — Tailwind scans for literal
+// strings, so a computed `bg-${hue}-${shade}` would be purged from the bundle
+// and silently render unstyled.
+function windowFill(pct: number, window: 'short' | 'week'): string {
+	const short = window === 'short';
+	switch (usageSeverity(pct)) {
+		case 'critical': return short ? 'bg-rose-400' : 'bg-rose-600';
+		case 'warning': return short ? 'bg-amber-300' : 'bg-amber-500';
+	}
+	if (pct > 60) return short ? 'bg-gold-300' : 'bg-gold-500';
+	return short ? 'bg-emerald-300' : 'bg-emerald-500';
 }
 
 function StackedBar({ shortPct, weekPct }: { shortPct: number; weekPct: number }) {
@@ -262,17 +294,17 @@ function AccountRow({
 			{/* 5h bar */}
 			<div className="flex items-center gap-1.5 shrink-0">
 				<span className="text-[10px] text-slate-400 w-4">5h</span>
-				<MiniBar pct={acc.five_hour_pct ?? 0} severity={acc.severity} />
-				<span className={`text-[10px] font-mono w-8 text-right ${severityText(acc.five_hour_pct ?? 0, acc.severity)}`}>{Math.round(acc.five_hour_pct ?? 0)}%</span>
-				<span className={`text-[10px] w-12 ${severityText(acc.five_hour_pct ?? 0, acc.severity)}`}>↺{fmtTime(acc.five_hour_reset)}</span>
+				<MiniBar pct={acc.five_hour_pct ?? 0} severity={acc.severity} window="short" />
+				<span className={`text-[10px] font-mono w-8 text-right ${severityText(acc.five_hour_pct ?? 0, acc.severity, 'short')}`}>{Math.round(acc.five_hour_pct ?? 0)}%</span>
+				<span className={`text-[10px] w-12 ${severityText(acc.five_hour_pct ?? 0, acc.severity, 'short')}`}>↺{fmtTime(acc.five_hour_reset)}</span>
 			</div>
 
 			{/* 7d bar */}
 			<div className="flex items-center gap-1.5 shrink-0">
 				<span className="text-[10px] text-slate-400 w-4">7d</span>
-				<MiniBar pct={acc.seven_day_pct ?? 0} severity={acc.severity} />
-				<span className={`text-[10px] font-mono w-8 text-right ${severityText(acc.seven_day_pct ?? 0, acc.severity)}`}>{Math.round(acc.seven_day_pct ?? 0)}%</span>
-				<span className={`text-[10px] w-14 ${severityText(acc.seven_day_pct ?? 0, acc.severity)}`}>↺{fmtTime(acc.seven_day_reset)}</span>
+				<MiniBar pct={acc.seven_day_pct ?? 0} severity={acc.severity} window="week" />
+				<span className={`text-[10px] font-mono w-8 text-right ${severityText(acc.seven_day_pct ?? 0, acc.severity, 'week')}`}>{Math.round(acc.seven_day_pct ?? 0)}%</span>
+				<span className={`text-[10px] w-14 ${severityText(acc.seven_day_pct ?? 0, acc.severity, 'week')}`}>↺{fmtTime(acc.seven_day_reset)}</span>
 			</div>
 
 			{/* error / stale / re-add */}
