@@ -999,31 +999,6 @@ function UserUsageSection({
 					// beside it — the one number that says whether a high percentage
 					// is about to clear on its own or sit there for days.
 					const resetWeek = fmtReset(u.seven_day_reset);
-					// EXPIRED WINDOW vs GENUINELY IDLE — these rendered identically, and
-					// that is the bug, not the zero itself.
-					//
-					// ClaudePoolUsage returns 0 outright when neither anchor is live, and
-					// that is CORRECT for the gate: an elapsed window means the budget has
-					// reset, so nothing is spent against the new one. But five_hour_reset
-					// is `omitempty`, so an elapsed window arrives as pct 0 with NO reset
-					// clock — visually identical to a user who has never touched the pool.
-					// Measured 2026-08-24: two users who had burned ~1.7B tokens between
-					// them rendered as 0/0. The percentage was not wrong; it was answering
-					// "how much of the CAP is spent" while being read as "how active is
-					// this person".
-					//
-					// The trailing figures answer the second question and are already on
-					// the payload, so surface them the moment the window stops carrying
-					// meaning. Never silently substitute one for the other — a reader must
-					// be able to tell which question the number in front of them answers.
-					const shortWindowDead = usesPool && !uncapped && !u.five_hour_reset;
-					const weekWindowDead = usesPool && !uncapped && !u.seven_day_reset;
-					const anyWindowDead = shortWindowDead || weekWindowDead;
-					const trailPool = u.trailing_7d_claude_tokens ?? u.trailing_7d_tokens ?? 0;
-					// Only interesting when there IS usage behind the zero. A user who is
-					// both window-expired and has never drawn is simply idle, and saying so
-					// twice would be noise.
-					const resetNotIdle = anyWindowDead && trailPool > 0;
 					return (
 						<div key={u.email} className="px-2.5 py-1.5 min-w-0">
 							<div className="flex items-center gap-3">
@@ -1060,20 +1035,6 @@ function UserUsageSection({
 									    right. */}
 									{resetShort && <span className={`text-[10px] tabular-nums ${windowText(shortPct, 'short')}`} title={`4h window resets ${u.five_hour_reset ?? ''}`}>{resetShort}</span>}
 									{resetWeek && <span className={`text-[10px] tabular-nums ${windowText(weekPct, 'week')}`} title={`7d window resets ${u.seven_day_reset ?? ''}`}>{resetWeek}</span>}
-									{resetNotIdle && (
-										<span
-											className="text-[10px] px-1 py-px rounded bg-amber-50 text-amber-700 border border-amber-100 whitespace-nowrap"
-											title={
-												`This 0% means the ${shortWindowDead && weekWindowDead ? 'windows have' : shortWindowDead ? `${shortWin} window has` : '7d window has'} ` +
-												`ELAPSED, not that the user is idle. The cap window opens on first charge and rolls once fully elapsed; ` +
-												`with no live anchor the server correctly reports 0 spent against the next window.\n\n` +
-												`Actually used in the trailing 7d: ${trailPool.toLocaleString()} pooled-Claude raw tokens.\n\n` +
-												`The bar answers "how much of the cap is spent". This badge answers "has this person been active".`
-											}
-										>
-											↺ window reset · {fmtTokens(trailPool)} in 7d
-										</span>
-									)}
 								</div>}
 								{usesPool && <ResetWindowButtons isSuper={isSuper} email={u.email} shortLabel={shortWin} onDone={onReset} />}
 								<span className="shrink-0 text-[10px] text-slate-400">{fmtTs(u.last_ts)}</span>
