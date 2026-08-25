@@ -53,8 +53,30 @@ If you would rather have it structured, `?shape=full` returns an object instead:
 }
 ```
 
-Federated today: `fm/api/v1/nodes`, `fm/api/v1/workers`, `ll/api/v1/workers`. **Every other path is
-proxied verbatim to the cloud and is unchanged.**
+Federated today: `fm/api/v1/nodes`, `fm/api/v1/workers`, `ll/api/v1/workers`, **and per-worker
+retrieve** `GET /api/v1/workers/{id}` (added 2026-08-25 — see below). **Everything else — notably
+`POST /api/v1/workflows` (submit) — is proxied verbatim to the cloud and is unchanged.**
+
+#### Per-worker retrieve fans out too (2026-08-25)
+
+Listing workers across all sites was useless if you couldn't then retrieve one — and the retrieve
+path proxied to the cloud, which has **zero** workers, so `GET /api/v1/workers/{id}` 404'd for every
+on-prem worker. That was the root cause of Lumilake jobs sticking in "running" forever: the
+scheduler listed 28 workers then 404'd on every profile fetch. Retrieve now fans out across all three
+sites and returns the first site that has the worker, tagged with which site answered:
+
+```bash
+curl -si https://lum.id/fm/api/v1/workers/wkr-30 -H "Authorization: Bearer $PAT"
+#   -> 200, X-Worker-Site: office
+curl -si https://lum.id/fm/api/v1/workers/wkr-6  -H "Authorization: Bearer $PAT"
+#   -> 200, X-Worker-Site: home
+curl -s https://lum.id/fm/api/v1/workers/wkr-nonexistent -H "Authorization: Bearer $PAT"
+#   -> 404
+```
+
+Worker ids are globally unique (`wkr-NNN`), so the first site that answers is the owning site.
+Lumilake's orchestrator is pointed at the populated **office** site (`/fm/office`) so list +
+retrieve + submit all reach a mesh that actually has workers.
 
 ### Picking a site
 
