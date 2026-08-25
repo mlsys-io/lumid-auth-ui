@@ -264,7 +264,7 @@ function AccountRow({
 				<span className="text-[10px] text-slate-400 w-4">5h</span>
 				<MiniBar pct={acc.five_hour_pct ?? 0} severity={acc.severity} />
 				<span className={`text-[10px] font-mono w-8 text-right ${severityText(acc.five_hour_pct ?? 0, acc.severity)}`}>{Math.round(acc.five_hour_pct ?? 0)}%</span>
-				<span className="text-[10px] text-slate-400 w-12">↺{fmtTime(acc.five_hour_reset)}</span>
+				<span className={`text-[10px] w-12 ${severityText(acc.five_hour_pct ?? 0, acc.severity)}`}>↺{fmtTime(acc.five_hour_reset)}</span>
 			</div>
 
 			{/* 7d bar */}
@@ -272,7 +272,7 @@ function AccountRow({
 				<span className="text-[10px] text-slate-400 w-4">7d</span>
 				<MiniBar pct={acc.seven_day_pct ?? 0} severity={acc.severity} />
 				<span className={`text-[10px] font-mono w-8 text-right ${severityText(acc.seven_day_pct ?? 0, acc.severity)}`}>{Math.round(acc.seven_day_pct ?? 0)}%</span>
-				<span className="text-[10px] text-slate-400 w-14">↺{fmtTime(acc.seven_day_reset)}</span>
+				<span className={`text-[10px] w-14 ${severityText(acc.seven_day_pct ?? 0, acc.severity)}`}>↺{fmtTime(acc.seven_day_reset)}</span>
 			</div>
 
 			{/* error / stale / re-add */}
@@ -1020,10 +1020,14 @@ function UserUsageSection({
 											</span>
 										</>
 									)}
-									{/* Both clocks, colour-matched to the bar half each belongs to,
-									    so a reset instant is unambiguously the 4h one or the 7d one. */}
-									{resetShort && <span className="text-[10px] text-sky-500 tabular-nums" title={`4h window resets ${u.five_hour_reset ?? ''}`}>{resetShort}</span>}
-									{resetWeek && <span className="text-[10px] text-violet-500 tabular-nums" title={`7d window resets ${u.seven_day_reset ?? ''}`}>{resetWeek}</span>}
+									{/* Each clock carries the colour of the window it belongs to — the same
+									    colour as that window's bar half and its percentage. A window is then
+									    one consistent colour across all three of its marks, and that colour
+									    means pressure. Which clock is which is carried by order (4h then 7d)
+									    and the tooltip, exactly as the bar halves are carried by left and
+									    right. */}
+									{resetShort && <span className={`text-[10px] tabular-nums ${windowText(shortPct, 'short')}`} title={`4h window resets ${u.five_hour_reset ?? ''}`}>{resetShort}</span>}
+									{resetWeek && <span className={`text-[10px] tabular-nums ${windowText(weekPct, 'week')}`} title={`7d window resets ${u.seven_day_reset ?? ''}`}>{resetWeek}</span>}
 									{resetNotIdle && (
 										<span
 											className="text-[10px] px-1 py-px rounded bg-amber-50 text-amber-700 border border-amber-100 whitespace-nowrap"
