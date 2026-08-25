@@ -39,6 +39,11 @@ export default function FindataSQL() {
 	// Held in state and never re-fetched: the server cannot return it again.
 	const [minted, setMinted] = useState<FindataSQLCredential | null>(null);
 	const [copied, setCopied] = useState<string | null>(null);
+	// The exact ask, ready to send. Provisioning is an out-of-band script with
+	// no API, so this page offers the words rather than a button that pretends
+	// to file a request it cannot file.
+	const PROVISION_REQUEST =
+		'Please provision my FinData SQL role (sql_<name>) — my findata grant is already set.';
 
 	const load = useCallback(async () => {
 		try {
@@ -129,6 +134,13 @@ export default function FindataSQL() {
 					{status.reason ?? 'Ask an operator to grant it.'} It is granted per
 					person rather than given to everyone, because this is 1.7&nbsp;TB of
 					production data.
+					<br />
+					<br />
+					Asking FinData questions in chat is a <em>different</em> entitlement and
+					needs no grant — it queries the same warehouse through a service
+					credential, so it already works for you. This page is only for a direct
+					SQL login. Being denied here does not mean you are locked out of the
+					data.
 				</Notice>
 			)}
 
@@ -137,6 +149,20 @@ export default function FindataSQL() {
 					<strong>You are entitled, but no warehouse role exists yet.</strong> An
 					operator needs to provision one — this is a separate step from the
 					grant, and not something you can do from here.
+					<br />
+					<br />
+					There is no self-service path for this and no request button, because
+					provisioning is an out-of-band script with no API — a button here would
+					be pretending. What there is: the exact ask, ready to send.
+					<button
+						type="button"
+						className="mt-2 block w-full rounded border px-3 py-2 text-left text-xs font-mono hover:bg-muted"
+						onClick={() => copy('request', PROVISION_REQUEST)}
+					>
+						{copied === 'request'
+							? 'Copied — send this to an operator'
+							: PROVISION_REQUEST}
+					</button>
 				</Notice>
 			)}
 
