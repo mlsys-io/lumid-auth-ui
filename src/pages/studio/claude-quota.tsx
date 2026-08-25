@@ -797,6 +797,35 @@ function UserUsageSection({
 }) {
 	if (!usage.users.length) return null;
 	const shortWin = usage.short_window_label || '4h';
+	// CAPS ARE PER-ROLE, so one number cannot describe this table.
+	//
+	// This line used to print the GLOBAL pair (ClaudePoolLimits, the admin tier)
+	// while every bar beneath it was drawn against the viewer's own
+	// ClaudePoolLimitsForUser. That was survivable while the two were equal; once
+	// the user tier was cut to 24.5M/245M against an admin 70M/900M the header
+	// contradicted the rows it labelled, and a cap change looked like it had not
+	// deployed. Derive the tiers from the rows instead — cap_5h/cap_7d are
+	// already on the wire per user, so this needs no new field and cannot drift
+	// from what the bars actually divide by.
+	const capTiers = (() => {
+		const seen = new Map<string, { c5: number; c7: number; unlimited: boolean }>();
+		for (const u of usage.users) {
+			if (u.cap_5h == null || u.cap_7d == null) continue;
+			seen.set(`${u.cap_5h}/${u.cap_7d}`, {
+				c5: u.cap_5h, c7: u.cap_7d, unlimited: u.cap_unlimited === true,
+			});
+		}
+		const tiers = [...seen.values()].filter((t) => !t.unlimited);
+		// Fall back to the server's global pair only when no row carries a cap
+		// (older server, or a table of nothing but uncapped admins).
+		if (tiers.length === 0) {
+			return `${fmtTokens(usage.five_hour_tokens)} units / ${shortWin} · ${fmtTokens(usage.seven_day_tokens)} units / 7d`;
+		}
+		return tiers
+			.sort((a, b) => b.c5 - a.c5)
+			.map((t) => `${fmtTokens(t.c5)} / ${shortWin} · ${fmtTokens(t.c7)} / 7d`)
+			.join('  |  ');
+	})();
 	const mm = Math.floor(countdown / 60);
 	const ss = countdown % 60;
 	const cdText = mm > 0 ? `${mm}m ${ss}s` : `${ss}s`;
@@ -851,7 +880,7 @@ function UserUsageSection({
 					Per-user pool usage
 				</p>
 				<span className="text-[10px] text-slate-400 font-normal">
-					caps: {fmtTokens(usage.five_hour_tokens)} units / {shortWin} · {fmtTokens(usage.seven_day_tokens)} units / 7d (pooled Claude only — deepseek is counted but not limited)
+					caps: {capTiers} (pooled Claude only — deepseek is counted but not limited)
 					{' · '}<span title="Quota units are price-weighted: a cache READ counts 0.1x, a 5m cache write 1.25x, a 1h write 2x; sonnet 0.6x, haiku 0.2x, non-Claude 0.1x. A Claude Code turn is mostly cache-read, so units run ~10x below raw tokens. Raw tokens are shown alongside.">units ≠ tokens</span>
 					{' · '}users with a <code className="font-mono text-[10px]">claude:proxy</code> PAT appear even at 0 usage
 				</span>
@@ -1398,7 +1427,7 @@ export default function StudioClaudeQuota() {
 				<div>
 					<h1 className="text-base font-medium flex items-center gap-2">
 						<Zap className="w-4 h-4 text-gold-600" />
-						Claude Code quota
+						Token Dashboard
 					</h1>
 					<p className="text-xs text-slate-400 mt-0.5">
 						Live 5h / 7d quota across all org accounts.
