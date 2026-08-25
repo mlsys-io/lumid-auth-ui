@@ -75,6 +75,31 @@ function SeverityDot({ severity }: { severity: string }) {
 }
 
 
+// A bar and the number beside it describe the SAME quantity, so they must carry
+// the same colour. They did not: every fill was severity-coded (rose / amber /
+// gold / sky / violet) while every percentage rendered flat slate-600, so a row
+// at 99% showed a red bar next to grey text and read as unremarkable. The reset
+// clocks were already matched to their bar half; the numbers were the one thing
+// left out.
+//
+// Both helpers below derive from the SAME predicates as their fill counterpart,
+// deliberately adjacent to it, so the pair cannot drift. Text sits a step darker
+// than the fill (-600 vs -400/-500) because a 10px glyph needs more contrast
+// than a 4px bar to read at the same weight.
+function severityText(pct: number, severity: string): string {
+	if (severity === 'critical') return 'text-rose-600';
+	if (severity === 'warning') return 'text-amber-600';
+	if (pct > 60) return 'text-gold-600';
+	return 'text-emerald-600';
+}
+
+function windowText(pct: number, window: 'short' | 'week'): string {
+	if (usageSeverity(pct) === 'critical') return 'text-rose-600';
+	if (usageSeverity(pct) === 'warning') return 'text-amber-600';
+	if (pct > 60) return 'text-gold-600';
+	return window === 'short' ? 'text-sky-600' : 'text-violet-600';
+}
+
 function MiniBar({ pct, severity, w = 'w-16' }: { pct: number; severity: string; w?: string }) {
 	const fill =
 		severity === 'critical' ? 'bg-rose-500' :
@@ -223,7 +248,7 @@ function AccountRow({
 			<div className="flex items-center gap-1.5 shrink-0">
 				<span className="text-[10px] text-slate-400 w-4">5h</span>
 				<MiniBar pct={acc.five_hour_pct ?? 0} severity={acc.severity} />
-				<span className="text-[10px] font-mono text-slate-600 w-8 text-right">{Math.round(acc.five_hour_pct ?? 0)}%</span>
+				<span className={`text-[10px] font-mono w-8 text-right ${severityText(acc.five_hour_pct ?? 0, acc.severity)}`}>{Math.round(acc.five_hour_pct ?? 0)}%</span>
 				<span className="text-[10px] text-slate-400 w-12">↺{fmtTime(acc.five_hour_reset)}</span>
 			</div>
 
@@ -231,7 +256,7 @@ function AccountRow({
 			<div className="flex items-center gap-1.5 shrink-0">
 				<span className="text-[10px] text-slate-400 w-4">7d</span>
 				<MiniBar pct={acc.seven_day_pct ?? 0} severity={acc.severity} />
-				<span className="text-[10px] font-mono text-slate-600 w-8 text-right">{Math.round(acc.seven_day_pct ?? 0)}%</span>
+				<span className={`text-[10px] font-mono w-8 text-right ${severityText(acc.seven_day_pct ?? 0, acc.severity)}`}>{Math.round(acc.seven_day_pct ?? 0)}%</span>
 				<span className="text-[10px] text-slate-400 w-14">↺{fmtTime(acc.seven_day_reset)}</span>
 			</div>
 
@@ -973,8 +998,10 @@ function UserUsageSection({
 									) : (
 										<>
 											<StackedBar shortPct={shortPct} weekPct={weekPct} />
-											<span className="text-[10px] font-mono text-slate-600 tabular-nums">
-												{fmtPct(shortPct)}<span className="text-slate-300">·</span>{fmtPct(weekPct)}
+											<span className="text-[10px] font-mono tabular-nums">
+												<span className={windowText(shortPct, 'short')}>{fmtPct(shortPct)}</span>
+												<span className="text-slate-300">·</span>
+												<span className={windowText(weekPct, 'week')}>{fmtPct(weekPct)}</span>
 											</span>
 										</>
 									)}
