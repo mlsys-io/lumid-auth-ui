@@ -93,11 +93,11 @@ function severityText(pct: number, severity: string): string {
 	return 'text-emerald-600';
 }
 
-function windowText(pct: number, window: 'short' | 'week'): string {
+function windowText(pct: number, _window: 'short' | 'week'): string {
 	if (usageSeverity(pct) === 'critical') return 'text-rose-600';
 	if (usageSeverity(pct) === 'warning') return 'text-amber-600';
 	if (pct > 60) return 'text-gold-600';
-	return window === 'short' ? 'text-sky-600' : 'text-violet-600';
+	return 'text-emerald-600';
 }
 
 function MiniBar({ pct, severity, w = 'w-16' }: { pct: number; severity: string; w?: string }) {
@@ -126,11 +126,26 @@ function MiniBar({ pct, severity, w = 'w-16' }: { pct: number; severity: string;
 // approaching its cap whichever window it belongs to, so warning/critical keep
 // amber/rose and the window hue only applies while there is headroom. Telling
 // 4h from 7d matters less than telling "fine" from "about to be denied".
-function windowFill(pct: number, window: 'short' | 'week'): string {
+// ONE COLOUR LANGUAGE FOR USAGE, page-wide.
+//
+// This used to fall back to sky (4h) / violet (7d), so the same quantity was
+// coloured two different ways depending on which panel you looked at: an
+// account bar at 70% rendered gold-400 (#C5A75E, a bronze that reads brown)
+// while a user row at 30% rendered cyan and purple. Nothing tied them together,
+// and adding colour to the numbers made the clash obvious rather than causing
+// it.
+//
+// Severity is now the only thing that drives usage colour anywhere:
+// emerald -> gold -> amber -> rose, identical to MiniBar. WHICH WINDOW a figure
+// belongs to is still unambiguous without colour — the 4h half fills from the
+// left and the 7d from the right, and the reset clocks beside them keep their
+// sky/violet identity. Position and the clocks carry window; colour carries
+// pressure. One meaning per channel.
+function windowFill(pct: number, _window: 'short' | 'week'): string {
 	if (usageSeverity(pct) === 'critical') return 'bg-rose-500';
 	if (usageSeverity(pct) === 'warning') return 'bg-amber-400';
 	if (pct > 60) return 'bg-gold-400';
-	return window === 'short' ? 'bg-sky-400' : 'bg-violet-400';
+	return 'bg-emerald-400';
 }
 
 function StackedBar({ shortPct, weekPct }: { shortPct: number; weekPct: number }) {
@@ -142,7 +157,7 @@ function StackedBar({ shortPct, weekPct }: { shortPct: number; weekPct: number }
 	const weekW = Math.min(50, weekPct / 2);
 	return (
 		<div className="w-20 h-1 rounded-full bg-slate-100 overflow-hidden flex shrink-0"
-			title={`${shortPct.toFixed(0)}% of the 4h cap (sky, left) · ${weekPct.toFixed(0)}% of the 7d cap (violet, right)`}>
+			title={`${shortPct.toFixed(0)}% of the 4h cap (left) · ${weekPct.toFixed(0)}% of the 7d cap (right) — colour is pressure, not window`}>
 			<div className={`h-full rounded-l-full ${shortFill}`} style={{ width: `${shortW}%` }} />
 			<div className="flex-1" />
 			<div className={`h-full rounded-r-full ${weekFill}`} style={{ width: `${weekW}%` }} />
