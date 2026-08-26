@@ -127,6 +127,29 @@ export async function resolveSource(spec: string, force = false): Promise<unknow
       data = await me.loopsHealth();
     } else if (p === "apps") {
       data = await me.listApps();
+    } else if (p === "chats" || p.startsWith("chats?")) {
+      // me://chats[?app=<name>][&strategy_id=<id>] — the caller's saved
+      // threads. Backs the per-strategy "Sessions" table in strategy.yaml.
+      //
+      // strategy_id FAILS CLOSED. GET /api/v1/me/chats returns
+      // {id,title,model,mode,app,msg_count,created_at,updated_at} — there is
+      // no strategy field, so a thread cannot yet be attributed to one.
+      // Ignoring the filter would render "Sessions for this strategy" showing
+      // every thread for the app, which is worse than an empty table: it
+      // attributes other strategies' conversations to this one. So an
+      // unsupported strategy_id yields nothing until the backend persists the
+      // grounding that ActionDef.ask_select already emits.
+      const cqs = p.includes("?") ? p.slice(p.indexOf("?") + 1) : "";
+      const cParams = new URLSearchParams(cqs);
+      const cApp = cParams.get("app");
+      const cStrategy = (cParams.get("strategy_id") || "").trim();
+      const all = await me.chats();
+      let rows = all.chats ?? [];
+      if (cApp) rows = rows.filter((r) => String(r.app ?? "") === cApp);
+      if (cStrategy) {
+        rows = rows.filter((r) => String(r.strategy_id ?? "") === cStrategy);
+      }
+      data = { chats: rows };
     } else if (p === "strategies") {
       // me://strategies — the caller's own LQT strategies. Scoped server-side
       // to the session's user id (an LQT tenant IS a lum.id user id), so the

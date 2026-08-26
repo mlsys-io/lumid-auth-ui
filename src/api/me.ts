@@ -334,6 +334,10 @@ export const me = {
   // whether the read is wired at all and `reason` says why the list is empty,
   // so the workspace can offer the create path instead of rendering a bare
   // table that reads as broken. Same contract as findataSQL.
+  // Saved chat threads for the caller. Rows: {id,title,model,mode,app,
+  // msg_count,created_at,updated_at} — note there is NO strategy field yet.
+  chats: () => call<{ chats: Array<Record<string, unknown>> }>("GET", "/chats"),
+
   strategies: () => call<{
     strategies: Array<Record<string, unknown>>;
     available: boolean;
