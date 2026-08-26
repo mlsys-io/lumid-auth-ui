@@ -21,6 +21,13 @@ brought in as part of a cohort, whoever invited you has it.
    Both are mandatory.
 4. Submit, and you are in as `role=user`. You land on the login page — sign in.
 
+![The Create Account form, with Invitation Code as a required field of its own.](/docs/img/first-run-register.png)
+
+*Note the two separate codes. **Verification Code** is the 6-digit one emailed to
+you and has a **Send** button next to it; **Invitation Code** is the one you were
+given by whoever invited you. Confusing them is the most common way this step
+stalls.*
+
 An invitation code may also carry **access grants**, which is how a cohort gets
 entitlements it could not grant itself (warehouse access, for instance). If
 yours does, redeeming it applies them at signup with nothing else to do. Already
@@ -52,6 +59,13 @@ Two things worth knowing before they surprise you:
 ## 1. Log in and land in Studio
 
 <https://lum.id/studio> — chat-first. Advanced surfaces are behind the toggle.
+
+![The Lumid sign-in card: Continue with Google above, email and password below.](/docs/img/first-run-login.png)
+
+*`/` redirects here, so <https://lum.id> and <https://lum.id/auth/login> are the
+same door. **Continue with Google** works too — if you sign up that way you will
+be asked for your invitation code straight afterwards rather than during the
+form.*
 
 Your session is a cookie on the apex domain, which is why `xp.io` and the other
 subdomains log you in automatically.
@@ -156,6 +170,10 @@ work around it.
   prompt prefix, so the cache works in your favour rather than against it.
 - **Over SQL** — `sql.lum.id:5432`, read-only, as your own `sql_<name>` role with
   a password you mint at [Account → FinData SQL](/studio/account/findata-sql).
+  You can also reach it from **Settings → Warehouse access**, which shows whether
+  you have a credential without your having to open the page. Minting a personal
+  access token tagged `findata:sql` issues the same credential at the same time,
+  if you would rather do both in one step.
   Unlike everything else on this page, this one is **granted, not self-serve**:
   it needs a `findata` access grant *and* a provisioned role. The panel tells you
   which you are missing. Setup, TLS and the CA bundle are in
