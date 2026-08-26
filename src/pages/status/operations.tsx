@@ -220,7 +220,10 @@ async function fetchRosterSection(): Promise<SectionState<LqtStrategiesRoster>> 
 	}
 }
 
-const VENUE_BOXES = ['denmark', 'nyc', 'chicago'] as const;
+// nightly-dk carries the production Polymarket feed + postgres-prod since the
+// 2026-08-26 data/trading split — it is a monitored field box, not just the
+// nightly-build host.
+const VENUE_BOXES = ['denmark', 'nyc', 'chicago', 'nightly-dk'] as const;
 const RESOURCE_SCOPE = 'host';
 
 const REFRESH_MS = 30_000;
