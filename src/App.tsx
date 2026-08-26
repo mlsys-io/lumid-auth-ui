@@ -625,6 +625,12 @@ export default function App() {
             {/* The main page stays the chat home (2-panel: sidebar + chat). The
                 3-panel workspace is ONLY for app pages (/studio/apps/:app). */}
             <Route index             element={<StudioChatHome />} />
+            {/* A saved thread by URL. Thread identity was localStorage-only,
+                so a conversation had no address: /studio/chat/<id> links from
+                other surfaces (the per-strategy Sessions table emits exactly
+                this href) hit the catch-all below, and two threads could not
+                be open at once. Same surface, one thread pre-opened. */}
+            <Route path="chat/:id"   element={<StudioChatHome />} />
             {/* Spine is now My Apps. The old Intents/Today landings redirect
                 there; their cycle-inspector + intent-detail sub-routes stay. */}
             <Route path="intents"                       element={<Navigate to="/studio/apps" replace />} />

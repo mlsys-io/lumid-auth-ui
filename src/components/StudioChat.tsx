@@ -276,7 +276,7 @@ const modelHasAppTools = (m?: ModelOption) => m?.app_tools !== false;
 // Mutually-exclusive tool-forcing modes. '' = let the agent decide.
 type ChatMode = '' | 'search' | 'deep_research';
 
-export function StudioChat({ docked = false, groundApp }: { docked?: boolean; groundApp?: string | null } = {}) {
+export function StudioChat({ docked = false, groundApp, threadId }: { docked?: boolean; groundApp?: string | null; threadId?: string } = {}) {
 	const location = useLocation();
 	// View mode: in simple (default) mode the chat runs "clean" — engineer
 	// telemetry (cost/tokens/session), the slash palette, and the model picker
@@ -314,6 +314,13 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 	// Sticky on purpose: later turns in the same thread stay about the same
 	// strategy, and a save that omitted it would unground the thread.
 	const groundedStrategyRef = useRef<string>('');
+	// The app a `studio:ask` came FROM, latched for the same reason as the
+	// strategy above. workspaceApp() only matches /studio/apps/:app, but config
+	// surfaces live at /studio/a/:app/:surface — so a Discuss raised there can
+	// reach the save with no app at all, and the per-strategy Sessions table
+	// (which filters on app AND strategy) drops every row. Used only as the
+	// last fallback, so it can never override a live workspace grounding.
+	const groundedAppRef = useRef<string>('');
 	const [messages, setMessages] = useState<Message[]>(() => loadTranscript(userSub, chatScope));
 	const [input, setInput] = useState('');
 	const [slashSuggestions, setSlashSuggestions] = useState<{ label: string; template: string }[]>([]);
@@ -804,7 +811,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 						model: model || undefined,
 						mode: mode || undefined,
 						claude_session_id: claudeSessionRef.current || undefined,
-						app: (workspaceApp() || currentAppRef.current) || undefined,
+						app: (workspaceApp() || currentAppRef.current || groundedAppRef.current) || undefined,
 						strategy_id: groundedStrategyRef.current || undefined,
 					}),
 				});
@@ -856,6 +863,12 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 			setMessages(rec.messages);
 			setChatId(rec.id);
 			claudeSessionRef.current = rec.claude_session_id || null; setClaudeSession(rec.claude_session_id || null);
+			// Adopt this thread's OWN grounding — including the empty case. An
+			// ungrounded thread opened after a grounded one would otherwise
+			// inherit the stale latch and be re-filed under that strategy on
+			// its next save.
+			groundedStrategyRef.current = (rec.strategy_id as string) || '';
+			groundedAppRef.current = (rec.app as string) || '';
 			const app = (rec.app as string) || null;
 			currentAppRef.current = app;
 			openedAppRef.current = app; // an app's loaded thread shouldn't re-fire its opener
@@ -874,6 +887,13 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		lastSavedSigRef.current = '';
 		currentAppRef.current = null;   // generic new chat = home (app-less)
 		openedAppRef.current = null;
+		// Drop the strategy grounding too. The latch survives to the SAVE by
+		// design, so leaving it set here would file the NEXT, unrelated thread
+		// under whichever strategy was last discussed — the per-strategy
+		// Sessions table would then attribute a foreign conversation to it,
+		// which is the failure the table's fail-closed filter exists to avoid.
+		groundedStrategyRef.current = '';
+		groundedAppRef.current = '';
 		try { sessionStorage.removeItem(transcriptKey(chatScope)); } catch { /* ignore */ }
 		setHistoryOpen(false);
 	}, [streaming]);
@@ -921,6 +941,19 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		window.addEventListener('studio:open-chat', onOpenChat as EventListener);
 		return () => window.removeEventListener('studio:open-chat', onOpenChat as EventListener);
 	}, [location.pathname, loadThread]);
+
+	// /studio/chat/:id — a thread addressed by URL. The two paths above both
+	// need a live sender (a sidebar click, an already-mounted component); a
+	// route gives a thread a durable address instead, which is what a link
+	// from another surface needs: the per-strategy Sessions table renders
+	// `row_href: /studio/chat/{id}`, and until this existed that link fell
+	// through to the catch-all route. It also lets two threads on the same
+	// strategy be open in two tabs — thread identity was localStorage-only,
+	// so they used to fight over one slot.
+	useEffect(() => {
+		if (!threadId || threadId === chatId) return;
+		void loadThread(threadId);
+	}, [threadId, chatId, loadThread]);
 
 	// The sidebar's Recent list owns deletion now (the in-chat Conversations
 	// popover it replaced used to). If it deleted the thread this chat has
@@ -1194,6 +1227,8 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 			if (sel && sel.kind === 'strategy' && sel.id) {
 				groundedStrategyRef.current = String(sel.id);
 			}
+			const askApp = ce.detail?.context?.app;
+			if (askApp) groundedAppRef.current = String(askApp);
 			setCollapsed(false);
 			if (ce.detail?.autosend) {
 				setInput('');
