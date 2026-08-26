@@ -29,7 +29,6 @@ import {
 	Bot,
 	Trash2,
 	CalendarClock,
-	FlaskConical,
 	Loader2,
 	AlertCircle,
 } from 'lucide-react';
@@ -42,7 +41,6 @@ import { useAppNav, iconFor, type AppNavItem } from './useAppNav';
 import type { LucideIcon } from 'lucide-react';
 import { useRecentChats, RECENT_CHATS_INVALIDATE, type RecentChatItem } from './useRecentChats';
 import { writeAppChat } from './appChatMap';
-import { ArtifactIconButton } from './ArtifactIconButton';
 import { useStudioRefetch } from '@/hooks/useStudioRefetch';
 import { useIsNarrow } from '@/hooks/useIsNarrow';
 import { useCollapse } from '@/hooks/useCollapse';
@@ -96,12 +94,14 @@ const TOP_NAV: NavItem[] = [
 	// "Scheduled" — the claude.ai counterpart of our workflow/loop runs. Points
 	// at the unified runs surface (list/grid/gantt/calendar over every loop).
 	{ to: '/studio/runs', label: 'Scheduled', icon: CalendarClock, title: 'scheduled workflows and loop runs' },
-	// Strategies — the quant researcher's primary object. Top-level despite the
-	// pruning above because for that cohort it IS the work: everything else in
-	// Studio is a means to a strategy, and the surface was previously reachable
-	// only by curl. Shows an empty state with a link to the docs for accounts
-	// that have none, so it costs a non-researcher one ignorable nav row.
-	{ to: '/studio/strategies', label: 'Strategies', icon: FlaskConical, title: 'your LQT strategies — compile status and runtime cycles' },
+	// NO "Strategies" row here. Strategies are an LQT object, not a Studio-wide
+	// one: the surface belongs to the LQT app and is reached from inside it
+	// (the LQT app's own declared `strategies` surface, /studio/a/<app>/strategies
+	// — the app slug is being renamed lqt-mailbox → quant-research). At top
+	// level it charged every non-LQT cohort a permanent nav row that only ever
+	// rendered an empty state. The standalone /studio/strategies route stays
+	// mounted — deep links and the docs companion link into it — it just is not
+	// advertised outside the app that owns it.
 ];
 // Jobs/Activity/Inbox are folded into Apps — the Apps hero's "runs today" stat
 // + the top-bar "Right now" ticker link into /studio/runs, so it's no longer a
@@ -115,7 +115,6 @@ const ROUTE_PREFETCH: Record<string, () => Promise<unknown>> = {
 	"/studio/data": () => import("@/pages/studio/data"),
 	"/studio/runs": () => import("@/pages/studio/runs"),
 	"/studio/portfolio": () => import("@/pages/studio/portfolio"),
-	"/studio/strategies": () => import("@/pages/studio/strategies"),
 };
 const prefetched = new Set<string>();
 function prefetchRoute(to: string) {
@@ -647,14 +646,12 @@ export function StudioShell() {
 						<CirclePlus className="w-4 h-4 text-foreground/55" /> New chat
 					</button>
 					{TOP_NAV.map((item) => <NavItemView key={item.to} {...item} />)}
-					{/* Artifacts sits with the other destinations, under Scheduled.
-					    NOTE: its 420px panel is absolutely positioned, and this
-					    container scrolls — if the panel ever appears clipped, that is
-					    why, and the fix is to portal the panel rather than move the
-					    button back out. */}
-					<div className="px-1">
-						<ArtifactIconButton variant="sidebar" />
-					</div>
+					{/* NO Artifacts row here. Artifacts belong to a conversation, so
+					    the trigger lives with the conversation — the icon group at the
+					    top-right of the chatbox (StudioChat's `chromeEl`). In the rail
+					    it was a permanent destination for something that is really a
+					    per-thread output, and its 420px panel had to open upward out
+					    of a scrolling container to avoid being clipped. */}
 					{/* Recent — app-LESS threads only. Anything grounded in an app
 					    lives under that app's folder below, so "New chat" above and
 					    the app folders are siblings, not a hierarchy. */}
@@ -770,16 +767,6 @@ export function StudioShell() {
 								className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted">
 								<Key className="w-3.5 h-3.5 text-muted-foreground" />
 								API tokens
-							</Link>
-							{/* Shown to everyone, not gated on entitlement: the page itself
-							    explains "you do not have warehouse access, ask an operator".
-							    Hiding it would make the feature undiscoverable to exactly the
-							    people who need to ask for it. */}
-							<Link to="/studio/account/findata-sql"
-								onClick={() => setMenuOpen(false)}
-								className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted">
-								<Database className="w-3.5 h-3.5 text-muted-foreground" />
-								SQL access
 							</Link>
 							{isAdmin && (
 								<Link to="/studio/manage"

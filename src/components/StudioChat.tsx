@@ -28,6 +28,7 @@ import { me, type MeWorkflowRow } from '@/api/me';
 import { summarizeAppState, chipsForApp, openerLine } from './chat/appOpener';
 import { ChatMarkdown } from './ChatMarkdown';
 import { ArtifactView, ArtifactKindIcon, artifactDownload, type ArtifactKind } from './ArtifactView';
+import { ArtifactIconButton } from './ArtifactIconButton';
 import { useClickOutside } from '@/hooks/useClickOutside';
 import AssemblyCard from './workflow/AssemblyCard';
 import type { Attachment, WireAttachment, Message, ToolCall, Block } from './chat/types';
@@ -1839,7 +1840,12 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 			{/* Agent/persona picker removed — when an app is selected the chat
 			    talks to THAT app's agents by default (app context drives the
 			    routing; see emitAppOpener clearing any manual selection). */}
-			{/* Artifacts moved to the left sidebar (StudioShell) — see above. */}
+			{/* Artifacts — back in the chat's top-right icon group (2026-08-26).
+			    They are per-conversation output, so the trigger belongs beside
+			    the conversation's other controls rather than being a standing
+			    destination in the shell rail. The popover anchors here and
+			    opens downward; nothing else about the panel changed. */}
+			<ArtifactIconButton />
 			{/* Workflow-viz side panel toggle. Auto-opens when an optimize_workflow/
 			    run_workflow tool completes (chat/protocol.ts); this button re-opens
 			    it. The panel itself (a fixed right drawer) is mounted below. */}
