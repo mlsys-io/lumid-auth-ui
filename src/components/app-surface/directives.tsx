@@ -474,6 +474,13 @@ type ActionDef = {
   // the user never copies one by hand. {field} interpolates from the row, the
   // same syntax qa_post already uses.
   ask?: string;
+  // ask_select — ground the spawned thread to the ROW, not just the app.
+  //
+  // Without it every per-row "Discuss" on a table emits the same context
+  // ({page, app}), so threads about different rows are indistinguishable once
+  // saved: the sidebar folders them all under the app. `id`/`label` take the
+  // same {field} interpolation as `ask`.
+  ask_select?: { kind?: string; id?: string; label?: string };
   qa_post?: string;
   qa_delete?: string;
   confirm?: string;
@@ -514,11 +521,25 @@ function ActionButton({ a, row, onDone, size = "sm" }: {
     if (a.ask) {
       const interp = (s: string) =>
         row ? s.replace(/\{([^}]+)\}/g, (_, k) => String(row[k] ?? "")) : s;
+      // A row-scoped selection makes the thread about THIS row. Interpolated
+      // from the row like the prompt, so the surface author writes
+      // `id: "{strategy_id}"` rather than the UI guessing which column is the key.
+      const sel = a.ask_select && (a.ask_select.id || a.ask_select.label)
+        ? {
+            kind: String(a.ask_select.kind ?? "strategy"),
+            id: interp(String(a.ask_select.id ?? "")),
+            label: interp(String(a.ask_select.label ?? a.ask_select.id ?? "")),
+          }
+        : undefined;
       window.dispatchEvent(new CustomEvent("studio:ask", {
         detail: {
           prompt: interp(a.ask),
           autosend: true,
-          context: { page: "app-surface", ...(appFromRoute ? { app: appFromRoute } : {}) },
+          context: {
+            page: "app-surface",
+            ...(appFromRoute ? { app: appFromRoute } : {}),
+            ...(sel ? { selection: sel } : {}),
+          },
         },
       }));
       onDone?.();
@@ -572,7 +593,7 @@ function LumidTable({ body }: { body: Body }) {
     : [];
   const searchable = searchKeys.length > 0;
   // Stable memo deps for values derived from `body` (a fresh object each render).
-  const searchSig = searchKeys.join(" ");
+  const searchSig = searchKeys.join("\u0000");
   const orderSig = JSON.stringify(cols.map((c) => [c.key, c.order ?? null]));
 
   const rows = getPath(data, body.path as string | undefined);
@@ -582,7 +603,7 @@ function LumidTable({ body }: { body: Body }) {
   const filteredRows = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle || !searchSig) return rowArr;
-    const keys = searchSig.split(" ");
+    const keys = searchSig.split("\u0000");
     // getPath so dotted keys (fields.industry) match the value the cell renders.
     return rowArr.filter((r) =>
       keys.some((k) => String(getPath(r, k) ?? "").toLowerCase().includes(needle)));

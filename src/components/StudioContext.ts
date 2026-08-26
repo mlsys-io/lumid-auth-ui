@@ -20,7 +20,11 @@ export type StudioSelectionKind =
 	| 'memory'
 	| 'skill'
 	| 'intent'
-	| 'experiment';
+	| 'experiment'
+	// A row in a strategy workspace table. Lets a per-row "Discuss" ground its
+	// thread to THAT strategy instead of only to the app, so a user's threads
+	// for different strategies stay separable.
+	| 'strategy';
 
 export interface StudioSelection {
 	kind: StudioSelectionKind;
