@@ -328,6 +328,19 @@ export const me = {
   listApps: () => call<{ apps: MeAppCard[] }>("GET", "/apps"),
   gpuRentals: () => call<{ rentals: Array<Record<string, unknown>>; count: number }>("GET", "/gpu-rentals"),
 
+  // LQT strategy registry — the caller's own working strategies.
+  //
+  // 200 even when the registry is unconfigured or empty: `available` says
+  // whether the read is wired at all and `reason` says why the list is empty,
+  // so the workspace can offer the create path instead of rendering a bare
+  // table that reads as broken. Same contract as findataSQL.
+  strategies: () => call<{
+    strategies: Array<Record<string, unknown>>;
+    available: boolean;
+    reason?: string;
+    scan_failures?: number;
+  }>("GET", "/strategies"),
+
   // FinData SQL — self-service warehouse credentials.
   //
   // `findataSQL` is 200 even when the caller is NOT entitled: not-entitled is a

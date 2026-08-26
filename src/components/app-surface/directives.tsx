@@ -127,6 +127,11 @@ export async function resolveSource(spec: string, force = false): Promise<unknow
       data = await me.loopsHealth();
     } else if (p === "apps") {
       data = await me.listApps();
+    } else if (p === "strategies") {
+      // me://strategies — the caller's own LQT strategies. Scoped server-side
+      // to the session's user id (an LQT tenant IS a lum.id user id), so the
+      // surface cannot widen it: there is no tenant parameter to pass.
+      data = await me.strategies();
     } else if (p === "gpu-rentals") {
       data = await me.gpuRentals();
     } else if (p === "drafts" || p.startsWith("drafts?")) {
@@ -481,6 +486,10 @@ type ActionDef = {
   // saved: the sidebar folders them all under the app. `id`/`label` take the
   // same {field} interpolation as `ask`.
   ask_select?: { kind?: string; id?: string; label?: string };
+  // run_loop — trigger an app loop with row-interpolated args, the per-row
+  // counterpart of the section-level `action` widget's run_loop intent. Same
+  // one intent path and the same audit story; the row supplies the arguments.
+  run_loop?: { app?: string; loop: string; args?: Record<string, unknown> };
   qa_post?: string;
   qa_delete?: string;
   confirm?: string;
@@ -547,6 +556,19 @@ function ActionButton({ a, row, onDone, size = "sm" }: {
     }
     setBusy(true);
     try {
+      if (a.run_loop?.loop) {
+        const interpVal = (v: unknown) =>
+          typeof v === "string" && row
+            ? v.replace(/\{([^}]+)\}/g, (_, k) => String(row[k] ?? ""))
+            : v;
+        const args = Object.fromEntries(
+          Object.entries(a.run_loop.args ?? {}).map(([k, v]) => [k, interpVal(v)]),
+        );
+        await me.runLoopNow(String(a.run_loop.app ?? appFromRoute ?? ""), String(a.run_loop.loop), args);
+        toast.success(a.success ?? `Triggered ${a.run_loop.loop}`);
+        onDone?.();
+        return;
+      }
       await runQaAction(a, row);
       toast.success(a.success ?? "Done.");
       onDone?.();
