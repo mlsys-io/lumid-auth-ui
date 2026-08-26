@@ -309,6 +309,11 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 		return m ? decodeURIComponent(m[1]) : '';
 	})();
 	const chatScope = docked ? `app:${groundApp || routeApp || 'none'}` : 'home';
+	// The strategy this thread is about, when it was opened from a strategy
+	// row's "Discuss". Mirrors how `app` grounds a thread, one level finer.
+	// Sticky on purpose: later turns in the same thread stay about the same
+	// strategy, and a save that omitted it would unground the thread.
+	const groundedStrategyRef = useRef<string>('');
 	const [messages, setMessages] = useState<Message[]>(() => loadTranscript(userSub, chatScope));
 	const [input, setInput] = useState('');
 	const [slashSuggestions, setSlashSuggestions] = useState<{ label: string; template: string }[]>([]);
@@ -800,6 +805,7 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 						mode: mode || undefined,
 						claude_session_id: claudeSessionRef.current || undefined,
 						app: (workspaceApp() || currentAppRef.current) || undefined,
+						strategy_id: groundedStrategyRef.current || undefined,
 					}),
 				});
 				if (!r.ok) return;
@@ -1180,6 +1186,14 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 			const ce = e as CustomEvent<{ prompt?: string; autosend?: boolean; context?: Partial<ViewingContext>; model?: string }>;
 			const p = String(ce.detail?.prompt || '').trim();
 			if (!p) return;
+			// Latch a strategy grounding so it survives to the SAVE. The event's
+			// `context` is a per-TURN override — it never reaches the persisted
+			// row — so without this the thread is stored with `app` only and the
+			// per-strategy Sessions table (which fails closed) stays empty.
+			const sel = ce.detail?.context?.selection;
+			if (sel && sel.kind === 'strategy' && sel.id) {
+				groundedStrategyRef.current = String(sel.id);
+			}
 			setCollapsed(false);
 			if (ce.detail?.autosend) {
 				setInput('');
