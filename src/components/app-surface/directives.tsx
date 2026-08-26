@@ -179,9 +179,19 @@ export async function resolveSource(spec: string, force = false): Promise<unknow
       const dApp = sp.get("app") ?? "";
       const dTool = sp.get("tool") ?? "";
       if (!dApp || !dTool) throw new Error("app-data needs app= and tool=");
+      // Forward every OTHER param to the server, which narrows the tool's
+      // result by them. Without this a surface could not scope an app-data
+      // table at all: `&strategy_id=X` was dropped here and the table showed
+      // everything under a heading claiming it was filtered.
+      const extra = new URLSearchParams();
+      sp.forEach((v, k) => {
+        if (k !== "app" && k !== "tool" && v) extra.append(k, v);
+      });
+      const dq = extra.toString();
       const auth = await bearerHeader();
       const r = await fetch(
-        `/api/v1/me/apps/${encodeURIComponent(dApp)}/data?tool=${encodeURIComponent(dTool)}`,
+        `/api/v1/me/apps/${encodeURIComponent(dApp)}/data?tool=${encodeURIComponent(dTool)}` +
+          (dq ? `&${dq}` : ""),
         { credentials: "include", headers: auth },
       );
       if (!r.ok) throw new Error(`app-data ${r.status}`);
