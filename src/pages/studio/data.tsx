@@ -12,16 +12,20 @@
 // cross-node surface path entirely.
 
 import { lazy, Suspense, useState } from "react";
-import { Database, TableProperties } from "lucide-react";
+import { Database, TableProperties, Terminal } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const DataLakeViewer = lazy(() => import("@/components/app-surface/DataLakeViewer"));
 const DataAppBrowser = lazy(() => import("@/components/app-surface/DataAppBrowser"));
+const SqlConsole = lazy(() => import("@/components/app-surface/SqlConsole"));
 
-type Tab = "catalog" | "explorer";
+type Tab = "catalog" | "explorer" | "query";
 const TABS: { id: Tab; label: string; icon: typeof Database }[] = [
 	{ id: "catalog", label: "Catalog", icon: Database },
 	{ id: "explorer", label: "Explorer", icon: TableProperties },
+	// Query runs ad-hoc SELECT through the same path chat's data_query uses.
+	// Last in the row on purpose: Catalog is how you find out what to query.
+	{ id: "query", label: "Query", icon: Terminal },
 ];
 
 export default function StudioData() {
@@ -61,6 +65,9 @@ export default function StudioData() {
 					</div>
 					<div className={tab === "explorer" ? "h-full" : "hidden"}>
 						{seen.has("explorer") && <DataAppBrowser config={{ data_app: "findata", data_app_label: "FinData" }} />}
+					</div>
+					<div className={tab === "query" ? "h-full" : "hidden"}>
+						{seen.has("query") && <SqlConsole />}
 					</div>
 				</Suspense>
 			</div>

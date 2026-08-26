@@ -32,7 +32,9 @@ one; that is a normal operation, not an incident.
 
 Three things follow from the credential being yours:
 
-- **It expires after 7 days.** The panel shows the time remaining and rotates with one click.
+- **It expires after 90 days.** The panel shows the time remaining and rotates
+  with one click. The number is read from the API rather than written here, so if
+  this ever disagrees with the panel, believe the panel.
   A client that suddenly cannot connect has usually just hit this.
 - **Rotating replaces the old password immediately.** Update anything that stored it.
 - **Revoking terminates live sessions**, not just future ones. The panel reports how many.

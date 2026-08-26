@@ -336,6 +336,12 @@ export const me = {
   // table that reads as broken. Same contract as findataSQL.
   // Saved chat threads for the caller. Rows: {id,title,model,mode,app,
   // msg_count,created_at,updated_at} — note there is NO strategy field yet.
+  // SQL console. Wraps the same toolDataQuery path chat uses, so the console
+  // and the assistant cannot answer the same question differently. SELECT only;
+  // identity appends a LIMIT when the caller omits one.
+  dataQuery: (sql: string, limit?: number) =>
+    call<{ rows: Array<Record<string, unknown>>; count: number }>(
+      "POST", "/data-query", { sql, limit }),
   chats: () => call<{ chats: Array<Record<string, unknown>> }>("GET", "/chats"),
 
   strategies: () => call<{
