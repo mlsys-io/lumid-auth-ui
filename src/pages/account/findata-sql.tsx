@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '../../components/ui/button';
 import { toast } from 'sonner';
-import { AlertTriangle, Check, Copy, Database, Clock, ShieldOff, Loader2 } from 'lucide-react';
+import { AlertTriangle, Check, Copy, Database, Clock, ShieldOff, Loader2, Download } from 'lucide-react';
 import { me, type FindataSQLStatus, type FindataSQLCredential } from '../../api/me';
 
 function relativeExpiry(iso?: string | null): string | null {
@@ -221,14 +221,46 @@ export default function FindataSQL() {
 			)}
 
 			{status.entitled && (
-				<section className="space-y-2 rounded-lg border p-4 text-sm">
+				<section className="space-y-3 rounded-lg border p-4 text-sm">
 					<h2 className="font-medium">Connecting</h2>
-					<pre className="overflow-x-auto rounded bg-muted p-3 text-xs">
-						{`curl -O ${status.ca_url}
-psql "host=${status.host} port=${status.port} dbname=${status.database} \\
+					{/* The CA used to be handed over as `curl -O`, which put a terminal in
+					    the middle of an otherwise click-through flow for no reason: it is a
+					    static file, so a download control does the same job. The psql form
+					    is still here, but demoted -- most people use a GUI client, and
+					    nothing about this warehouse requires a shell. */}
+					<div className="flex flex-wrap items-center gap-3">
+						<Button asChild variant="outline" size="sm">
+							<a href={status.ca_url} download="sql-ca.pem">
+								<Download aria-hidden="true" />
+								Download CA certificate
+							</a>
+						</Button>
+						<span className="text-xs text-muted-foreground">
+							Required — <code>sslmode={status.sslmode}</code> verifies the server against it.
+						</span>
+					</div>
+					<dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
+						<dt className="text-muted-foreground">Host</dt>
+						<dd className="font-mono">{status.host}</dd>
+						<dt className="text-muted-foreground">Port</dt>
+						<dd className="font-mono">{status.port}</dd>
+						<dt className="text-muted-foreground">Database</dt>
+						<dd className="font-mono">{status.database}</dd>
+						<dt className="text-muted-foreground">User</dt>
+						<dd className="font-mono">{status.role ?? 'sql_<name>'}</dd>
+						<dt className="text-muted-foreground">SSL mode</dt>
+						<dd className="font-mono">{status.sslmode}</dd>
+					</dl>
+					<details className="rounded border bg-muted/40 p-2">
+						<summary className="cursor-pointer text-xs text-muted-foreground">
+							Command line (optional)
+						</summary>
+						<pre className="mt-2 overflow-x-auto rounded bg-muted p-3 text-xs">
+							{`psql "host=${status.host} port=${status.port} dbname=${status.database} \\
       user=${status.role ?? 'sql_<name>'} sslmode=${status.sslmode} \\
       sslrootcert=sql-ca.pem"`}
-					</pre>
+						</pre>
+					</details>
 					<p className="text-xs text-muted-foreground">
 						Use <code>sslmode=verify-full</code>, not <code>require</code>.{' '}
 						<code>require</code> encrypts but authenticates nothing — it accepts
@@ -242,10 +274,12 @@ psql "host=${status.host} port=${status.port} dbname=${status.database} \\
 						it — that is a sign the query wants an index or the REST API.
 					</p>
 					<p className="text-xs text-muted-foreground">
+						No terminal needed — DBeaver, DuckDB and pgAdmin all take the settings
+						above directly. The{' '}
 						<a href="/studio/docs/findata-sql" className="underline underline-offset-2">
 							FinData SQL guide
 						</a>{' '}
-						— DBeaver and DuckDB setup, the schema tour, and why an unscoped{' '}
+						has their setup, the schema tour, and why an unscoped{' '}
 						<code>count(*)</code> on a hypertable times out.
 					</p>
 				</section>
