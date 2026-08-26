@@ -34,12 +34,16 @@ export default function SqlConsole() {
 			const r = await me.dataQuery(q);
 			setRows(r.rows ?? []);
 			setMs(Math.round(performance.now() - t0));
-		} catch (e: any) {
+		} catch (e) {
 			// Surface the warehouse's own words. "relation market.ohlcv does not
 			// exist" tells the reader what to fix; "query failed" does not.
-			const msg =
-				e?.response?.data?.message ?? e?.response?.data?.error ?? e?.message ?? 'query failed';
-			setErr(String(msg));
+			//
+			// me.ts throws MeApiError, whose `message` IS the server's `message`
+			// field (doCall unwraps the {ret_code,message,data} envelope). Do not
+			// reach for `e.response.data.message` here -- that is the axios shape,
+			// which this client never produces, so it would silently always miss
+			// and fall through to the generic text.
+			setErr(e instanceof Error && e.message ? e.message : 'query failed');
 			setRows(null);
 			setMs(null);
 		} finally {
