@@ -150,11 +150,19 @@ export async function resolveSource(spec: string, force = false): Promise<unknow
         rows = rows.filter((r) => String(r.strategy_id ?? "") === cStrategy);
       }
       data = { chats: rows };
-    } else if (p === "strategies") {
-      // me://strategies — the caller's own LQT strategies. Scoped server-side
-      // to the session's user id (an LQT tenant IS a lum.id user id), so the
-      // surface cannot widen it: there is no tenant parameter to pass.
-      data = await me.strategies();
+    } else if (p === "strategies" || p.startsWith("strategies?")) {
+      // me://strategies[?strategy_id=<id>] — the caller's own LQT strategies.
+      // Scoped server-side to the session's user id (an LQT tenant IS a lum.id
+      // user id), so the surface cannot widen it: there is no tenant parameter
+      // to pass. The optional strategy_id narrows to one row for a detail page,
+      // WITHOUT reaching for dataapp://lqt/xpio/strategies — that path injects
+      // the shared service PAT and would show another tenant's strategy.
+      const sqs = p.includes("?") ? p.slice(p.indexOf("?") + 1) : "";
+      const sid = (new URLSearchParams(sqs).get("strategy_id") || "").trim();
+      const res = await me.strategies();
+      data = sid
+        ? { ...res, strategies: (res.strategies ?? []).filter((r) => String(r.strategy_id ?? "") === sid) }
+        : res;
     } else if (p === "gpu-rentals") {
       data = await me.gpuRentals();
     } else if (p === "drafts" || p.startsWith("drafts?")) {
