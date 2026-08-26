@@ -2580,12 +2580,14 @@ export function StudioChat({ docked = false, groundApp }: { docked?: boolean; gr
 					<div className="order-3 flex-1 min-w-[8px]" />
 					{verbose && (
 					<div className="order-4 flex-shrink-0 flex items-center gap-1">
-						<WorkspaceChip
-							repos={wsRepos} clusters={wsClusters} dataApps={wsDataApps}
-							repo={wsRepo} setRepo={setWsRepo}
-							cluster={wsCluster} setCluster={setWsCluster}
-							dataApp={wsDataApp} setDataApp={setWsDataApp}
-						/>
+						{/* The "Context · N" chip (WorkspaceChip) used to sit here. Removed
+						    from the composer: it exposed xpio repo / FlowMesh cluster /
+						    lumid-data app pickers — engineer-facing choices a researcher
+						    has no basis to make, occupying prime space next to the input.
+						    The component and its state (wsRepo/wsCluster/wsDataApp) are
+						    intentionally KEPT and still sent with the turn, so defaults
+						    are unchanged and a settings surface can expose them again
+						    without rebuilding the mechanism. */}
 						<ModelChip
 							streaming={streaming}
 							models={models}
