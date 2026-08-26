@@ -222,12 +222,25 @@ export default function FindataSQL() {
 
 			{status.entitled && (
 				<section className="space-y-3 rounded-lg border p-4 text-sm">
-					<h2 className="font-medium">Connecting</h2>
-					{/* The CA used to be handed over as `curl -O`, which put a terminal in
-					    the middle of an otherwise click-through flow for no reason: it is a
-					    static file, so a download control does the same job. The psql form
-					    is still here, but demoted -- most people use a GUI client, and
-					    nothing about this warehouse requires a shell. */}
+					<h2 className="font-medium">Connecting from your own tool</h2>
+					{/* SCOPE OF THIS WHOLE PANEL: it is the power-user path, not the default.
+					    A Postgres credential and a CA are only needed to explore the warehouse
+					    from your OWN database client. Everything reachable in Studio (Data ->
+					    Catalog / Explorer) or through chat goes over HTTP as the signed-in
+					    user and needs neither -- so presenting this as the next step after
+					    minting overstated it. Same for the CLI: the query runs server-side,
+					    so nothing about a cert is local.
+
+					    Within the panel, the CA used to be handed over as `curl -O`. It is a
+					    static file, so a download control does the same job, and the psql
+					    form is demoted -- GUI clients want fields, not a command to take
+					    apart. */}
+					<p className="text-xs text-muted-foreground">
+						Only needed if you want to explore the warehouse from your own database
+						client. To browse or query without any of this, use{' '}
+						<a href="/studio/data" className="underline underline-offset-2">Data</a>{' '}
+						or just ask in chat — both run as you, with no credential to manage.
+					</p>
 					<div className="flex flex-wrap items-center gap-3">
 						<Button asChild variant="outline" size="sm">
 							<a href={status.ca_url} download="sql-ca.pem">
