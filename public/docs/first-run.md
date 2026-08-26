@@ -106,6 +106,13 @@ error from a script — log in and mint it in the UI, then use it in the script.
 
 Open the chatbox in Studio and ask something. That is the whole setup.
 
+![A chat turn calling query_findata and answering from the news feed.](/docs/img/first-run-chat.png)
+
+*Note the `query_findata` chip. Chat reaches the warehouse **as you** through
+tools — no credential, no connection string, nothing to configure. This is the
+path most people should use, and the reason the SQL seat further down is
+optional rather than a setup step.*
+
 You do not need a token, a scope, or a model choice. The platform mints a
 `claude:proxy` token for you behind the scenes on your first turn and keeps it
 fresh. Your model is **`deepseek-v4-flash`** and it is unlimited — see
@@ -179,6 +186,25 @@ work around it.
   which you are missing. Setup, TLS and the CA bundle are in
   [FinData SQL](/studio/docs/findata-sql).
 - **Browse** — the catalog at `/dataapp-proxy/_sources` lists what is exposed.
+
+The seat lives in **Settings**, next to API tokens — it is the same shape, a
+credential you mint once and are shown once:
+
+![The Warehouse access card in Settings, before minting.](/docs/img/first-run-warehouse-card.png)
+
+Two states are worth telling apart, because they need different things from
+you. *"No credential yet for `sql_<name>`"* means you are entitled and one click
+away. *"Entitled, but no warehouse role provisioned yet"* means an operator has
+to provision the role first — nothing you do in the UI will fix it, and the
+panel says so rather than leaving you clicking.
+
+Once you have a role, everything a GUI client needs is on the page as fields:
+
+![The connection panel: a CA download button and the connection settings as fields.](/docs/img/first-run-sql-connect.png)
+
+*No terminal at any point. DBeaver, DuckDB and pgAdmin take those settings
+directly, and the CA is a download rather than something to fetch by hand — you
+only need it because `verify-full` checks the server against it.*
 
 ---
 
