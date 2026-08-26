@@ -9,10 +9,10 @@
 // fetches itself, and it couples to the chat only through two window events
 // (`studio:artifact-saved`, `studio:artifact-panel-toggle`).
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ArrowLeft, Boxes, Copy, Download, Loader2, Trash2 } from 'lucide-react';
 import { ArtifactView, ArtifactKindIcon, artifactDownload, type ArtifactKind } from './ArtifactView';
-import { useClickOutside } from '@/hooks/useClickOutside';
 
 // ArtifactIconButton — full artifact panel embedded in a popover
 // anchored to the icon. Replaces the old left-rail StudioArtifactPanel.
@@ -30,9 +30,17 @@ type ArtifactRow = {
 };
 type ArtifactFull = ArtifactRow & { content: string };
 
+// Panel geometry. The panel is rendered into document.body and positioned
+// with `fixed`, NOT absolutely inside the trigger's container — see `place()`.
+const PANEL_W = 420;
+const PANEL_MAX_H = 512; // 32rem, the old max-h-[32rem]
+const GAP = 8;
+
 export function ArtifactIconButton({ align = 'right', variant = 'icon' }: { align?: 'left' | 'right'; variant?: 'icon' | 'sidebar' }) {
 	const [open, setOpen] = useState(false);
-	const ref = useClickOutside(open, () => setOpen(false));
+	const anchorRef = useRef<HTMLDivElement>(null);
+	const panelRef = useRef<HTMLDivElement>(null);
+	const [pos, setPos] = useState<{ left: number; top: number; width: number; maxH: number } | null>(null);
 	const [rows, setRows] = useState<ArtifactRow[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -108,13 +116,85 @@ export function ArtifactIconButton({ align = 'right', variant = 'icon' }: { alig
 	// Refresh list when the popover opens.
 	useEffect(() => { if (open) loadList(); }, [open, loadList]);
 
+	// place() — viewport coordinates for the panel.
+	//
+	// WHY THE PANEL IS PORTALLED AND FIXED. Anchoring it `absolute` inside the
+	// trigger put it inside two ancestors that destroy it: the Studio main
+	// column is `h-screen overflow-hidden` on chat routes, which CLIPS anything
+	// hanging below the sticky header, and that header is `z-10` while the chat
+	// column is `relative z-20` — so even the unclipped part painted UNDERNEATH
+	// the transcript. Neither is fixable with a z-index on the panel: the header
+	// is its own stacking context, so the panel can never outrank a sibling of
+	// the header from inside it. Rendering into document.body leaves both
+	// ancestors behind. (The old sidebar variant dodged this by opening upward
+	// out of the rail — same bug, different escape hatch.)
+	const place = useCallback(() => {
+		const el = anchorRef.current;
+		if (!el) return;
+		const r = el.getBoundingClientRect();
+		const vw = window.innerWidth;
+		const vh = window.innerHeight;
+		const width = Math.min(PANEL_W, vw - 2 * GAP);
+		const below = vh - r.bottom - GAP * 2;
+		const above = r.top - GAP * 2;
+		// Prefer below; flip up only when below is genuinely cramped AND above
+		// is roomier, so the panel doesn't jump sides on a few pixels of scroll.
+		const openBelow = below >= 260 || below >= above;
+		const maxH = Math.max(180, Math.min(PANEL_MAX_H, openBelow ? below : above));
+		const top = openBelow ? r.bottom + 4 : Math.max(GAP, r.top - 4 - maxH);
+		// Sidebar rail: hang off the rail's own left edge. Elsewhere: align the
+		// panel's right edge to the trigger unless the caller asked for left.
+		let left = variant === 'sidebar' ? r.left : align === 'left' ? r.left : r.right - width;
+		left = Math.min(Math.max(GAP, left), vw - width - GAP);
+		setPos({ left, top, width, maxH });
+	}, [align, variant]);
+
+	// Measure before paint so the panel never renders at a stale position for a
+	// frame. `scroll` is captured so an ancestor scrolling (the transcript, the
+	// rail) re-places it rather than leaving it stranded mid-air.
+	useLayoutEffect(() => {
+		if (!open) { setPos(null); return; }
+		place();
+		window.addEventListener('resize', place);
+		window.addEventListener('scroll', place, true);
+		return () => {
+			window.removeEventListener('resize', place);
+			window.removeEventListener('scroll', place, true);
+		};
+	}, [open, place]);
+
+	// Dismissal. Cannot use useClickOutside: it tests containment against ONE
+	// ref, and the panel is no longer a descendant of the trigger — every click
+	// inside the panel would read as "outside" and close it mid-interaction.
+	// The setTimeout(0) is the same guard that hook documents: without it the
+	// click that OPENS the panel is still propagating when the listener
+	// attaches and closes it immediately.
+	useEffect(() => {
+		if (!open) return;
+		const onDown = (e: MouseEvent) => {
+			const t = e.target as Node;
+			if (anchorRef.current?.contains(t) || panelRef.current?.contains(t)) return;
+			setOpen(false);
+		};
+		const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+		const id = window.setTimeout(() => {
+			document.addEventListener('mousedown', onDown);
+			document.addEventListener('keydown', onKey);
+		}, 0);
+		return () => {
+			window.clearTimeout(id);
+			document.removeEventListener('mousedown', onDown);
+			document.removeEventListener('keydown', onKey);
+		};
+	}, [open]);
+
 	const KindIcon = ({ k }: { k: ArtifactRow['kind'] }) => <ArtifactKindIcon kind={k} />;
 
 	// Two triggers, one panel: the compact icon (chat header, legacy callers)
 	// and a full-width sidebar nav row matching NavItemView's weight.
 	const sidebar = variant === 'sidebar';
 	return (
-		<div ref={ref} className="relative">
+		<div ref={anchorRef} className="relative">
 			{sidebar ? (
 				<button
 					type="button"
@@ -151,13 +231,12 @@ export function ArtifactIconButton({ align = 'right', variant = 'icon' }: { alig
 				)}
 			</button>
 			)}
-			{open && (
-				<div className={[
-					'absolute z-50 w-[420px] max-h-[32rem] flex flex-col rounded-xl border border-border bg-popover shadow-xl shadow-foreground/10',
-					// Sidebar variant opens upward and to the right so the 420px
-					// panel clears the narrow rail instead of being clipped by it.
-					sidebar ? 'left-0 bottom-full mb-1' : ['top-full mt-1', align === 'left' ? 'left-0' : 'right-0'].join(' '),
-				].join(' ')}>
+			{open && pos && createPortal(
+				<div
+					ref={panelRef}
+					style={{ position: 'fixed', left: pos.left, top: pos.top, width: pos.width, maxHeight: pos.maxH }}
+					className="z-[60] flex flex-col rounded-xl border border-border bg-popover shadow-xl shadow-foreground/10"
+				>
 
 					{/* Header strip */}
 					<div className="flex items-center gap-2 px-3 py-2 border-b border-border/60">
@@ -265,7 +344,8 @@ export function ArtifactIconButton({ align = 'right', variant = 'icon' }: { alig
 							</div>
 						)}
 					</div>
-				</div>
+				</div>,
+				document.body,
 			)}
 		</div>
 	);
