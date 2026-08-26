@@ -8,7 +8,7 @@
 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { User, Key, Lock, Shield, ExternalLink, Loader2, MessageSquare } from 'lucide-react';
+import { User, Key, Lock, Shield, ExternalLink, Loader2, MessageSquare, Database } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import apiClient from '@/api/client';
 import { useLandingPref } from '@/lib/landing-pref';
@@ -27,6 +27,9 @@ const SECTIONS: Section[] = [
 	{ id: 'secrets',   icon: Lock,   title: 'Agent secrets',    description: 'API keys your installed agents need (per agent, per key).' },
 	{ id: 'privacy',   icon: Shield, title: 'Privacy & sharing', description: 'Per-agent auto-publish toggles and data exports.' },
 	{ id: 'chat',      icon: MessageSquare, title: 'Chat & navigation', description: 'How opening something from a list behaves.' },
+	// APPENDED, not inserted: the entries above are addressed positionally
+	// (SECTIONS[5] is Chat & navigation), so inserting shifts every card below.
+	{ id: 'warehouse', icon: Database, title: 'Warehouse access', description: 'A Postgres login for the FinData warehouse, for your own SQL client.' },
 ];
 
 export default function StudioSettings() {
@@ -36,6 +39,7 @@ export default function StudioSettings() {
 			{/* Title + subtitle render in the StudioShell top-bar (TopStatusStrip). */}
 			<ProfileSection email={user?.email ?? ''} role={user?.role ?? ''} />
 			<TokensSection />
+			<WarehouseSection />
 			<OAuthSection />
 			<SecretsSection />
 			<PrivacySection />
@@ -122,6 +126,68 @@ function ProfileSection({ email, role }: { email: string; role: string }) {
 				<Link to="/account/profile" className="text-xs text-gold-700 hover:underline inline-flex items-center gap-1">
 					Edit profile <ExternalLink className="w-3 h-3" />
 				</Link>
+			</div>
+		</SectionCard>
+	);
+}
+
+// WarehouseSection — the FinData SQL seat, surfaced the same way as API
+// tokens because it is the same shape: you mint it yourself and it is shown
+// once.
+//
+// It lives here because it had NO navigation entry at all. fa21526 removed the
+// link from the Studio rail ("SQL access ... move to their owners") but never
+// added it to an owner, leaving /studio/account/findata-sql reachable only via
+// a companion button on the docs page. A page nobody can find is a page nobody
+// uses.
+//
+// The status endpoint is always 200 for a signed-in caller and explains WHY in
+// `reason`, so this renders the explanation rather than an error — most users
+// are not entitled, and "ask an operator" is a different instruction from
+// "mint one".
+function WarehouseSection() {
+	const [st, setSt] = useState<any | null>(null);
+	const [err, setErr] = useState(false);
+	useEffect(() => {
+		apiClient.get('/api/v1/me/findata-sql')
+			.then((r: any) => setSt(r.data?.data ?? r.data ?? null))
+			.catch(() => setErr(true));
+	}, []);
+
+	const active = st?.credential_active === true;
+	const canMint = st?.entitled === true && !!st?.role;
+
+	return (
+		<SectionCard {...SECTIONS[6]}>
+			<div className="text-sm">
+				{err ? (
+					<span className="text-slate-500">Could not load warehouse status.</span>
+				) : st === null ? (
+					<span className="text-slate-500 italic inline-flex items-center gap-1">
+						<Loader2 className="w-3 h-3 animate-spin" /> Checking…
+					</span>
+				) : active ? (
+					<>Active credential for <strong>{st.role}</strong>.</>
+				) : canMint ? (
+					<>No credential yet for <strong>{st.role}</strong>.</>
+				) : (
+					<span className="text-slate-500">{st.reason ?? 'Not available on this account.'}</span>
+				)}
+			</div>
+			{/* Only offered when it would actually work. Sending an un-entitled
+			    user to a page that can only tell them "ask an operator" is a
+			    dead end wearing the clothes of an action. */}
+			{canMint && (
+				<div className="mt-3">
+					<Link to="/studio/account/findata-sql" className="text-xs text-gold-700 hover:underline inline-flex items-center gap-1">
+						{active ? 'Rotate / revoke credential' : 'Mint a credential'} <ExternalLink className="w-3 h-3" />
+					</Link>
+				</div>
+			)}
+			{/* Everyone else gets the honest framing: you do not need this to use
+			    the data, only to point your own client at it. */}
+			<div className="mt-2 text-xs text-slate-500">
+				Not needed to explore the data — Data and chat query as you, with no credential.
 			</div>
 		</SectionCard>
 	);
