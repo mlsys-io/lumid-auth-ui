@@ -35,8 +35,17 @@ export default function SqlConsole() {
 			setRows(r.rows ?? []);
 			setMs(Math.round(performance.now() - t0));
 		} catch (e) {
-			// Surface the warehouse's own words. "relation market.ohlcv does not
-			// exist" tells the reader what to fix; "query failed" does not.
+			// Pass the server's message through verbatim rather than restating it.
+			//
+			// How much that is worth depends on the failure, measured against prod
+			// (e2e spec 23 records both as annotations):
+			//   REJECTED (non-SELECT) -> useful: "sql rejected: only a single
+			//     read-only select is allowed; got: update ..."
+			//   EXECUTION error       -> useless: findata /retrieve flattens it to
+			//     "bad request: sql execution failed: db error", so a typo'd table
+			//     name arrives with the cause already destroyed upstream.
+			// Do NOT write a comment here promising "relation ... does not exist".
+			// This layer cannot produce it; the fix belongs in findata's /retrieve.
 			//
 			// me.ts throws MeApiError, whose `message` IS the server's `message`
 			// field (doCall unwraps the {ret_code,message,data} envelope). Do not
