@@ -2,7 +2,7 @@
 // master–detail workflows page (AppOverview renders the list; this is the
 // right-hand card for the selected workflow).
 //
-// Reads top-down: header (title + health + Run now / Pause / Delete) →
+// Reads top-down: header (title + health + Plan next run / Stop / Pause) →
 // runs (clickable, newest first; click opens the per-run stage inspector)
 // → goal trends → schedule (preset picker, cron only under Advanced) →
 // insights (one sentence + deltas) → suggested improvements.
