@@ -422,6 +422,8 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 	// so a wedged turn cannot spin the retry forever (60 x 800ms ~ 48s).
 	const [queueTick, setQueueTick] = useState(0);
 	const queueRetriesRef = useRef(0);
+	// One drain at a time. Not a cancellation flag — see the drain effect.
+	const drainingRef = useRef(false);
 	useEffect(() => { messageQueueRef.current = messageQueue; }, [messageQueue]);
 	const [streaming, setStreaming] = useState(false);
 	// Synchronous in-flight latch. `streaming` is async state, so two rapid
@@ -1879,25 +1881,40 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 		if (streaming) return;
 		const head = messageQueueRef.current[0];
 		if (!head) return;
-		let cancelled = false;
-		Promise.resolve().then(async () => {
-			if (cancelled) return;
-			const sent = await dispatchTurn(head.text, head.attachments, undefined,
-				head.ctxOverride, head.modelOverride, head.toolChoice);
-			if (cancelled) return;
-			if (sent) {
-				setMessageQueue((q) => q.slice(1));
-				queueRetriesRef.current = 0;
-				return;
+		// A CONCURRENCY guard, not a cancel-on-cleanup.
+		//
+		// The first version cancelled the in-flight attempt from the effect's
+		// cleanup. dispatchTurn is a useCallback keyed on `messages`, so its
+		// identity changes on every message update and this effect re-runs
+		// constantly -- each re-run cancelling the previous attempt, and the
+		// post-await `if (cancelled) return` discarding BOTH the success path
+		// and the retry scheduling. Nothing ever drained: the browser gate saw
+		// "queued: true" at click and the item still queued at failure.
+		//
+		// Cancelling was the wrong tool. All that is needed is "do not start a
+		// second drain while one is running"; the attempt itself must always be
+		// allowed to finish and record its outcome.
+		if (drainingRef.current) return;
+		drainingRef.current = true;
+		void (async () => {
+			try {
+				const sent = await dispatchTurn(head.text, head.attachments, undefined,
+					head.ctxOverride, head.modelOverride, head.toolChoice);
+				if (sent) {
+					setMessageQueue((q) => q.slice(1));
+					queueRetriesRef.current = 0;
+					return;
+				}
+				// Refused — still in flight. Nudge the effect to run again rather
+				// than waiting for an unrelated dep to change.
+				if (queueRetriesRef.current < 60) {
+					queueRetriesRef.current += 1;
+					setTimeout(() => setQueueTick((t) => t + 1), 800);
+				}
+			} finally {
+				drainingRef.current = false;
 			}
-			// Refused — still in flight. Nudge the effect to run again rather
-			// than waiting for an unrelated dep to change.
-			if (queueRetriesRef.current < 60) {
-				queueRetriesRef.current += 1;
-				setTimeout(() => setQueueTick((t) => t + 1), 800);
-			}
-		});
-		return () => { cancelled = true; };
+		})();
 	}, [streaming, dispatchTurn, messageQueue.length, queueTick]);
 
 	// Delete the ACTIVE conversation for real — server record + every local
