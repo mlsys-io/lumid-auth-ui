@@ -25,6 +25,7 @@ import {
 } from './StudioContext';
 import { appTitle, prefetchAppLabels } from './workflow/AppCard';
 import { me, type MeWorkflowRow } from '@/api/me';
+import { toast } from 'sonner';
 import { summarizeAppState, chipsForApp, openerLine } from './chat/appOpener';
 import { ChatMarkdown } from './ChatMarkdown';
 import { ArtifactView, ArtifactKindIcon, artifactDownload, type ArtifactKind } from './ArtifactView';
@@ -1329,7 +1330,12 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 		// feedback path is the user's stated intent, not the model's guess.
 		toolChoice?: string,
 	) => {
-		if (!text || streaming || inFlightRef.current) return;
+		// Returns whether the turn was actually DISPATCHED. A silent early
+		// return is fine for the composer (the text stays in the box, so the
+		// user can see nothing happened) but not for a programmatic caller
+		// like "Correct this", which has already collected the user's words in
+		// a prompt() and would otherwise drop them with no trace.
+		if (!text || streaming || inFlightRef.current) return false;
 		inFlightRef.current = true;
 		const base = baseMessages ?? messages;
 		const userMsg: Message = {
@@ -1484,6 +1490,7 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 			// ended or errored before the result landed — leave them as failed).
 			setMessages((prev) => withLastAssistant(prev, failPendingTools));
 		}
+		return true;
 	}, [messages, streaming, location.pathname, location.search, model, mode, think, agentId, personaId]);
 
 	// Latest-send-path ref for the studio:ask listener (registered once).
@@ -2166,7 +2173,7 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 							// belong to. Forces give_feedback rather than trusting the model
 							// to route it, the same reason "Ask the app" forces app_answer.
 							onCorrect={m.role === 'assistant' && !streaming && docked && (workspaceApp() || currentAppRef.current)
-								? () => {
+								? async () => {
 									const what = window.prompt('What was wrong with this answer?');
 									if (!what) return;
 									// Carry the app EXPLICITLY. The forced-tool path grounds on
@@ -2174,7 +2181,7 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 									// sent context-less produced an empty turn and no draft — the
 									// button looked like it did nothing.
 									const correctionApp = workspaceApp() || currentAppRef.current || undefined;
-									void dispatchTurnRef.current?.(
+									const send = () => dispatchTurnRef.current?.(
 										`Record a correction against this app: ${what}`,
 										// app_feedback, not give_feedback: the latter scores a
 										// scheduled CYCLE and needs a loop + timestamp, which an
@@ -2183,6 +2190,18 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 										correctionApp ? { page: 'app', app: correctionApp } : undefined,
 										undefined, 'app_feedback',
 									);
+									// dispatchTurn refuses while a turn is still in flight, and
+									// this button becomes clickable the instant `streaming`
+									// flips -- before inFlightRef clears in the previous turn's
+									// finally. Clicking in that window used to discard the
+									// correction the user had ALREADY TYPED, with no error and
+									// no draft: the browser gate saw the prompt open and zero
+									// requests leave. Retry once across the gap, then say so
+									// rather than swallowing their words.
+									if (await send()) return;
+									await new Promise((r) => setTimeout(r, 1200));
+									if (await send()) return;
+									toast.error('Still finishing the previous answer — click "Correct this" again in a moment.');
 								}
 								: undefined}
 							onSpeak={m.role === 'assistant' && m.content && typeof window !== 'undefined' && 'speechSynthesis' in window ? () => toggleSpeak(i, m.content) : undefined}
