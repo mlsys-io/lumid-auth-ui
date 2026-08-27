@@ -249,6 +249,19 @@ const scoreTxt = await turn('Score my last answer against the case, and say whet
 assert(/ground truth|keypoint|grounded/i.test(scoreTxt),
   'G8 casebook score states it is ground-truth backed');
 
+// ── G11: the score is a NUMBER, not a sentence about scoring ──────────────
+// G8 alone cannot catch a dead judge. When app_judge fails it returns
+// {"error": "judge returned no parsable score"}, and the agent -- being
+// helpful -- writes a paragraph ABOUT the rubric that still contains the words
+// "ground truth" and "keypoints". So G8 passed for as long as the judge model
+// id was unroutable and every single scored turn was failing.
+//
+// A real verdict always carries a magnitude: "3 / 12", "25%", "0.25". Assert
+// that, and the whole class of "scoring is silently broken" becomes visible at
+// the product level rather than only in the tool result.
+assert(/\b\d{1,3}\s*(?:\/|of|out of)\s*\d{1,3}\b|\b\d{1,3}(?:\.\d+)?\s*%/i.test(scoreTxt),
+  'G11 the scored turn reports an actual number, not just prose about scoring');
+
 // ── G5: feedback stages a draft ───────────────────────────────────────────
 // Deliberately AFTER the casebook turns, not after an open question: the app is
 // only in the loop on the casebook path, so a correction typed against an
