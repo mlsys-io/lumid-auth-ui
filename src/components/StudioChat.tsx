@@ -790,6 +790,55 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 		// save would otherwise fire with the OLD closure messages and RESURRECT
 		// the just-deleted conversation as a new chat (re-adding it to resume).
 		if (saveTimerRef.current) { window.clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
+
+		// EARLY SAVE — create the row as soon as the user's turn exists, before
+		// the assistant has replied.
+		//
+		// The guards below only persist a COMPLETED turn (not streaming, >=2
+		// messages, last is a non-empty assistant message). On Claude that is
+		// almost invisible. On deepseek it is not: TTFT carries an ~18k-token
+		// tool-schema prefix, so a turn runs for a minute or more, and if the
+		// user looks away — or the request is cancelled — NOTHING is written.
+		// Measured: `[me-agent] stream turn failed provider=deepseek-v4-flash
+		// err=context canceled` after 1m12s, and no chat row at all. That is why
+		// ZERO chats in the whole table have ever carried a strategy_id: the
+		// grounding was fine, the row was never created.
+		//
+		// So: if this thread has no id yet and the user has spoken, write it now.
+		// The completed-turn save below still runs and updates the same row (it
+		// sends `id`), so this only ever ADDS the early row -- and it carries the
+		// same app/strategy grounding, which is what makes an app's Sessions
+		// list populate the moment Discuss is clicked.
+		if (!chatId && messages.length >= 1 && messages[0]?.role === 'user') {
+			const seedApp = (workspaceApp() || currentAppRef.current || groundedAppRef.current) || undefined;
+			const seedStrategy = groundedStrategyRef.current || undefined;
+			if (seedStrategy || seedApp) {
+				void (async () => {
+					try {
+						const r = await fetch('/api/v1/me/chats', {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' },
+							credentials: 'include',
+							body: JSON.stringify({
+								messages: stripForPersist(messages),
+								model: model || undefined,
+								mode: mode || undefined,
+								app: seedApp,
+								strategy_id: seedStrategy,
+							}),
+						});
+						if (!r.ok) return;
+						const j = await r.json();
+						const seededId: string | undefined = j?.data?.id;
+						if (seededId) {
+							setChatId(seededId);
+							if (seedApp) writeAppChat(seedApp, seededId);
+						}
+					} catch { /* best-effort: the completed-turn save still runs */ }
+				})();
+			}
+		}
+
 		if (streaming) return;
 		if (messages.length < 2) return;
 		const last = messages[messages.length - 1];
