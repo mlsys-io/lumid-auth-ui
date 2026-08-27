@@ -1642,6 +1642,25 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 				sessionStorage.removeItem('studio_pending_ask_v1');
 				const detail = JSON.parse(raw);
 				if (detail?.prompt) {
+					// Latch the grounding BEFORE dispatching — the same latch the
+					// live `studio:ask` listener does.
+					//
+					// It has to happen on BOTH paths. `context` is a per-TURN
+					// override and never reaches the persisted row, so a thread
+					// started this way was stored with `app` only. This path is the
+					// one an app surface actually takes: StudioChat is mounted at
+					// /studio and /studio/apps/:app, but an app SURFACE lives at
+					// /studio/a/:app/… where it is NOT mounted — so the shell
+					// stashes and navigates here, the in-place listener never runs,
+					// and the latch was silently skipped. Net effect: no chat has
+					// ever been saved with a strategy_id (0 rows, whole table), and
+					// lqt-mailbox's "Sessions" table — which fails closed on
+					// strategy_id — read empty for every strategy.
+					const sel = detail?.context?.selection;
+					if (sel && sel.kind === 'strategy' && sel.id) {
+						groundedStrategyRef.current = String(sel.id);
+					}
+					if (detail?.context?.app) groundedAppRef.current = String(detail.context.app);
 					setTimeout(() => {
 						if (detail.autosend) void dispatchTurnRef.current?.(String(detail.prompt), [], undefined, detail.context);
 						else setInput(String(detail.prompt));
