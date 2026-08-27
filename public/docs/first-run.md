@@ -116,7 +116,7 @@ optional rather than a setup step.*
 You do not need a token, a scope, or a model choice. The platform mints a
 `claude:proxy` token for you behind the scenes on your first turn and keeps it
 fresh. Your model is **`deepseek-v4-flash`** and it is unlimited — see
-[Your model](/studio/docs/deepseek) for what that does and does not mean.
+[AI coding](/studio/docs/deepseek) for what that does and does not mean.
 
 **First turn of a session is slower than the rest.** Your sandbox is spawned on
 demand and reclaimed after 15 idle minutes, so the turn after a long pause pays

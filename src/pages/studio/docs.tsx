@@ -34,6 +34,11 @@ interface DocEntry {
 	icon: React.ComponentType<{ className?: string }>;
 	standalone?: string;   // legacy full-page route, kept for deep links
 	companion?: { to: string; label: string }; // live surface this doc documents
+	// Dropped from the index grid but still renderable at /studio/docs/:slug.
+	// The earlier omissions (xpio, "how") were done by deleting the DOCS entry,
+	// which works only because those two have routes of their own; for a
+	// markdown doc the entry IS the route, so hiding has to be a flag.
+	hidden?: boolean;
 }
 
 const DOCS: DocEntry[] = [
@@ -46,11 +51,11 @@ const DOCS: DocEntry[] = [
 		md: 'first-run.md',
 		group: 'Guides',
 		icon: Compass,
-		companion: { to: '/studio/docs/deepseek', label: 'Your model' },
+		companion: { to: '/studio/docs/deepseek', label: 'AI coding' },
 	},
 	{
 		slug: 'deepseek',
-		title: 'Your model: deepseek-v4-flash',
+		title: 'AI coding',
 		description: 'The model you are actually on, and it is unlimited. The one timeout setting that matters, why the first turn is slow, and what "unlimited" does and does not mean.',
 		md: 'deepseek.md',
 		group: 'Guides',
@@ -59,8 +64,8 @@ const DOCS: DocEntry[] = [
 	},
 	{
 		slug: 'claude',
-		title: 'Claude account pool (deprecated)',
-		description: 'DEPRECATED — the pool is no longer the path; see "Your model" first. Retained for Claude Code client setup, the role/model matrix, and session recording.',
+		title: 'Claude account pool (Admin+)',
+		description: 'Pooled Anthropic accounts — Sonnet/Haiku for admin, Opus/Fable for super_admin. Claude Code client setup, the role/model matrix, per-user pool quota, and session recording. Everyone else wants "AI coding" first.',
 		md: 'claude_pool.md',
 		group: 'Guides',
 		icon: Zap,
@@ -84,6 +89,8 @@ const DOCS: DocEntry[] = [
 		md: 'TRADING_API.md',
 		group: 'Guides',
 		icon: Activity,
+		// Hidden from the index, route kept alive for existing deep links.
+		hidden: true,
 	},
 	{
 		slug: 'findata-sql',
@@ -116,7 +123,7 @@ const DOCS: DocEntry[] = [
 	},
 	{
 		slug: 'operations',
-		title: 'Operations runbook',
+		title: 'Operations runbook (Admin+)',
 		description: 'Whole-stack health probe — the 17 dimensions, what each check means, and how to respond when one goes red.',
 		md: 'operations.md',
 		group: 'Runbooks',
@@ -126,7 +133,7 @@ const DOCS: DocEntry[] = [
 	},
 	{
 		slug: 'plugin-image-cd',
-		title: 'Plugin-image CD',
+		title: 'Plugin-image CD (Admin+)',
 		description: 'Shipping plugin-baked images for Lumilake & FlowMesh — build, digest-pin, Argo roll, GPU-fleet per-box recipe.',
 		md: 'plugin-image-cd.md',
 		group: 'Runbooks',
@@ -136,10 +143,32 @@ const DOCS: DocEntry[] = [
 ];
 
 const GROUP_ORDER: DocEntry['group'][] = ['Guides', 'Contracts', 'Runbooks'];
+// What the index renders. Hidden docs stay in DOCS so their reader route still
+// resolves; they simply never get a card.
+const INDEXED = DOCS.filter((d) => !d.hidden);
 // Only groups that actually have entries — otherwise removing the last doc in a
 // group leaves a heading over an empty grid (which is how 'Contracts' looked the
-// moment the xpio card was dropped).
-const GROUPS = GROUP_ORDER.filter((g) => DOCS.some((d) => d.group === g));
+// moment the xpio card was dropped). Computed over INDEXED so hiding the last
+// doc in a group drops its heading too.
+const GROUPS = GROUP_ORDER.filter((g) => INDEXED.some((d) => d.group === g));
+
+// Live surfaces, not documents — they belong on this page because "where do I
+// actually go to use this" is the question the index otherwise leaves hanging.
+// Absolute hrefs: these are served by lumid-landing, not by the SPA router.
+const RESOURCES: { href: string; label: string; description: string; icon: React.ComponentType<{ className?: string }> }[] = [
+	{
+		href: '/llm',
+		label: 'lum.id/llm',
+		description: 'The in-house LLM gateway — OpenAI- and Anthropic-shaped endpoints, and the models that are actually routable.',
+		icon: Bot,
+	},
+	{
+		href: '/findata',
+		label: 'lum.id/findata',
+		description: 'The FinData warehouse surface — catalog, lineage and the read APIs behind the market datasets.',
+		icon: Database,
+	},
+];
 
 function DocIndex() {
 	return (
@@ -157,7 +186,7 @@ function DocIndex() {
 				<section key={g} className="mb-6">
 					<h2 className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-2">{g}</h2>
 					<div className="grid gap-2 sm:grid-cols-2">
-						{DOCS.filter((d) => d.group === g).map((d) => (
+						{INDEXED.filter((d) => d.group === g).map((d) => (
 							<Link
 								key={d.slug}
 								to={`/studio/docs/${d.slug}`}
@@ -173,6 +202,24 @@ function DocIndex() {
 					</div>
 				</section>
 			))}
+			<section className="mb-6">
+				<h2 className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-2">Resources</h2>
+				<div className="grid gap-2 sm:grid-cols-2">
+					{RESOURCES.map((r) => (
+						<a
+							key={r.href}
+							href={r.href}
+							className="group rounded-lg border border-slate-200 bg-white p-3.5 hover:border-gold-300 hover:shadow-sm transition"
+						>
+							<div className="flex items-center gap-2 mb-1">
+								<r.icon className="w-4 h-4 text-foreground/45 group-hover:text-gold-600 transition-colors" />
+								<span className="text-sm font-medium text-slate-800">{r.label}</span>
+							</div>
+							<p className="text-xs text-slate-500 leading-relaxed">{r.description}</p>
+						</a>
+					))}
+				</div>
+			</section>
 		</div>
 	);
 }

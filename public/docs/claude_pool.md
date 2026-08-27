@@ -1,19 +1,20 @@
-# Claude Account Pool — `lum.id/claude`
+# Claude Account Pool — `lum.id/claude` (Admin+)
 
-> ## ⚠️ The Claude account pool is DEPRECATED (2026-08-23)
+> ## The pooled Claude models are **admin+ only**
 >
-> **Everyone uses `deepseek-v4-flash`, and it is unlimited.** No token budget,
-> no 4h/7d window, no waiting for an account slot — the model runs on our own
-> GB10 pair and is configured `dailyBudgetTokens: -1`. The practical limits are
-> a 6000/min gateway rate limit and GPU concurrency, not a quota.
+> **If your role is `user`, this page is not your path — use
+> `deepseek-v4-flash`, and it is unlimited.** No token budget, no 4h/7d window,
+> no waiting for an account slot: the model runs on our own GB10 pair and is
+> configured `dailyBudgetTokens: -1`. The practical limits are a 6000/min
+> gateway rate limit and GPU concurrency, not a quota.
 >
 > **If you are a researcher, you can stop after [Quick start](#quick-start).**
 > Set `ANTHROPIC_MODEL=deepseek-v4-flash` and you are done. Everything below
-> about pooled accounts, per-user quota, homing and contributing accounts
-> describes the *operator* path and is kept for reference only — do not plan
-> work around it.
+> about pooled accounts, per-user quota, homing and contributing accounts is
+> the **operator** path — Sonnet/Haiku need `admin`, Opus/Fable need
+> `super_admin`.
 >
-> No longer applicable to new work:
+> Admin+ only:
 > [Your personal pool quota](#your-personal-pool-quota) ·
 > [Contributing your account to the pool](#contributing-your-account-to-the-pool)
 
@@ -287,10 +288,9 @@ model breakdown, tagged by serving route (onprem).
 
 ## Your personal pool quota
 
-> **DEPRECATED — this section applies only to pooled Claude models, which are no
-> longer the path anyone should use.** `deepseek-v4-flash` has no quota at all.
-> If you are trying to work out "how much have I got left", the answer for
-> deepseek is: unlimited.
+> **Admin+ — this section applies only to the pooled Claude models.**
+> `deepseek-v4-flash` has no quota at all. If you are trying to work out "how
+> much have I got left", the answer for deepseek is: unlimited.
 
 Each user gets their own quota on the pool, mirroring Anthropic's window
 shape: a **4-hour** and a **7-day** rolling budget, summed across all your PATs.
@@ -415,10 +415,10 @@ params, and the model's responses. Browse your own at
 
 ## Contributing your account to the pool
 
-> **DEPRECATED — the pool is no longer being grown.** Nobody needs to contribute
-> an account. The procedure below is retained because it is genuinely hard-won
-> (the `logout` step has killed accounts twice) and would be needed again if the
-> pool were ever revived.
+> **Admin+, and the pool is not currently being grown.** Nobody needs to
+> contribute an account today. The procedure below is retained because it is
+> genuinely hard-won (the `logout` step has killed accounts twice) and is what
+> you follow if the pool is expanded again.
 
 Admins add accounts on [lum.id/code](/code) → **Add account** — paste the
 access + refresh token from your `~/.claude/.credentials.json` (the dialog

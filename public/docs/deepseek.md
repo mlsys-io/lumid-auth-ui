@@ -1,12 +1,12 @@
-# Your model: `deepseek-v4-flash`
+# AI coding — `deepseek-v4-flash`
 
 **This is the model you are on, and it is unlimited.** No token budget, no
 rolling window, no waiting for a slot. It runs on our own GB10 pair, so it costs
 nothing at the margin and is open to every role.
 
-The Claude account pool is **deprecated** (2026-08-23). If you find a doc, a
-dashboard or a runbook talking about 4h/7d quota windows, per-user token caps or
-homing onto pool accounts, it is describing the old operator path — not yours.
+The Claude account pool is **admin+ only**. If you find a doc, a dashboard or a
+runbook talking about 4h/7d quota windows, per-user token caps or homing onto
+pool accounts, it is describing the operator path — not yours.
 
 ---
 
