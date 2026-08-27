@@ -1,4 +1,4 @@
-# Onboarding: your first scored consulting case
+# AI Consulting Onboarding
 
 This walks the MBB Consultant app end to end. It was executed against
 production on **2026-08-27** from a freshly-created `role=user` account — not an

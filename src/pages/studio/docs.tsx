@@ -59,7 +59,7 @@ const DOCS: DocEntry[] = [
 		// Walked as a fresh role=user account, so it records the failures a
 		// non-owner hits rather than the ones the author remembers.
 		slug: 'mbb-consultant',
-		title: 'Onboarding: your first scored consulting case',
+		title: 'AI Consulting Onboarding',
 		description: 'Install the app, pick a mode and a case, get scored against real ground truth, and turn a wrong answer into a correction that sticks. Recorded from one live run, timings included.',
 		md: 'mbb-consultant.md',
 		group: 'Guides',
