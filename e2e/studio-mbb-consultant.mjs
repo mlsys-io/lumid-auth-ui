@@ -103,6 +103,11 @@ if (cookieVal) {
 const page = await ctx.newPage();
 const api404 = [];
 page.on('response', r => { const u = r.url(); if (u.includes('/api/v1/me/') && r.status() === 404) api404.push(u.replace(BASE, '')); });
+// Uncaught errors in the page. G5's failure mode is "the click produced
+// nothing", and an exception thrown inside the click handler looks exactly
+// like a handler that declined to act -- from outside, both are silence.
+const pageErrors = [];
+page.on('pageerror', (e) => pageErrors.push(String(e).slice(0, 160)));
 
 
 /** Wait for Studio to actually render (composer present), not just for a
@@ -368,6 +373,20 @@ if (!(nAfter > nBefore)) {
   // Which half failed: the prompt never opened (handler wiring / button inert),
   // or it opened and the turn still did not go out.
   console.log(`NOTE  G5 dialogs seen: ${dialogsSeen} (0 = the prompt never opened)`);
+  // Which of the THREE remaining possibilities actually happened. The prompt
+  // opening and no request leaving is consistent with all of them, and they
+  // need different fixes, so the gate should say which rather than leaving the
+  // next person to guess (this one has been guessed at twice, wrongly):
+  //
+  //   toast + queued  -> dispatch was refused and the correction is sitting in
+  //                      the FIFO undrained; the bug is the drain.
+  //   toast, no queue -> it was enqueued and drained into nothing.
+  //   neither         -> onCorrect never reached the send at all (a throw, or
+  //                      dispatchTurnRef.current was null).
+  const body = await page.locator('body').innerText().catch(() => '');
+  console.log(`NOTE  G5 "correction queued" toast present: ${/correction queued/i.test(body)}`);
+  console.log(`NOTE  G5 queue indicator present: ${/message[s]? queued/i.test(body)}`);
+  console.log(`NOTE  G5 page errors: ${pageErrors.length ? pageErrors.slice(0, 3).join(' | ') : 'none'}`);
 }
 assert(nAfter > nBefore, `G5 correction staged a draft (${nBefore} → ${nAfter})`);
 // The write is only meaningful if it came from the BUTTON's forced path. A
