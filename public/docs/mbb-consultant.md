@@ -6,8 +6,22 @@ admin, not the author — because a walkthrough done as the owner hides exactly
 the failures a new user hits first. Timings and scores below are recorded from
 that run, not estimated.
 
-Budget about 15 minutes. You need an account and nothing else: no token, no
-install, no local tooling.
+Budget about 15 minutes. You need two things: an account, and an **invitation
+code**.
+
+The code is easy to miss, because registration succeeds without one. You will
+get a verified account and then be stopped at `/auth/redeem-invite` on every
+page until you enter it — so it looks like something broke rather than like a
+step you skipped. Your code comes from whoever invited you; if you joined as
+part of a cohort, that is your organiser. It is not the 6-digit code emailed to
+you at signup, which verifies your address and is separate.
+
+Beyond that, nothing: no token, no install, no local tooling.
+
+*(Corrected 2026-08-28. This originally said "an account and nothing else",
+which was true of the API path this walkthrough was recorded on and false in a
+browser — the invitation gate is enforced client-side by AuthGuard, so an
+API-only walkthrough never meets it.)*
 
 ---
 
