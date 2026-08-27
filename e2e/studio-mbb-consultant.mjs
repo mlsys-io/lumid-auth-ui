@@ -407,6 +407,62 @@ if (nAfter > nBefore) {
     'G5 correction went through the button\'s forced app_feedback path');
 }
 
+// ── G12: the correction ROUND-TRIPS ───────────────────────────────────────
+// G5 proves a draft was STAGED. That is half the promise. ui/review.md tells the
+// user their approved correction shapes future answers, and for a long time the
+// second half was quietly untrue: the picker wrote the card edit to the tenant
+// bundle on the xpio PVC, identity never mounts that PVC and read a cache of the
+// PUBLISHED bundle instead, so Review said "approved" and the answers never
+// changed. Nothing failed; there was simply no assertion anywhere that approval
+// had an effect, which is exactly why it could stay broken.
+//
+// This asserts the contract, not the prose. Approving is observable and
+// deterministic (state flips, and the response names the card the edit lands
+// on); whether the model then USES the correction is a generative question this
+// gate deliberately does not ask, for the same reason it never asserts on answer
+// text. The reader half — approved draft → correction present in the card the
+// model is handed — is pinned by the Go unit tests in
+// me_agent_app_corrections_test.go, where it can be checked exactly.
+if (nAfter > nBefore) {
+  const dl = await (await api(`/api/v1/me/drafts?app=${APP}`)).json().catch(() => ({}));
+  const rows = dl?.data?.drafts || dl?.drafts || [];
+  // The one G5 just staged: a skill-card draft carries the marker line naming
+  // the card its edit lands on. Match on that rather than on position, so an
+  // unrelated draft arriving concurrently cannot make this pass or fail.
+  const skillDraft = rows.filter(
+    d => /Proposed edit to prompts\/analyst_skill_([a-z][a-z0-9_]{2,40})\.md/.test(d.body || ''),
+  ).pop();
+  assert(!!skillDraft, 'G12 the staged draft names a skill card to correct');
+
+  if (skillDraft) {
+    const card = (skillDraft.body.match(
+      /Proposed edit to prompts\/analyst_skill_([a-z][a-z0-9_]{2,40})\.md/) || [])[1];
+    // "send" is the approve action for DB-backed drafts — the HTTP route and the
+    // chat tool deliberately share dbDraftApprove so the two cannot disagree
+    // about whether a draft the queue displays can be acted on.
+    const ap = await api(`/api/v1/me/drafts/${encodeURIComponent(skillDraft.id)}/send`, { method: 'POST' });
+    const apBody = await ap.json().catch(() => ({}));
+    const d = apBody?.data || {};
+    assert(ap.status === 200 && d.state === 'approved',
+      `G12 approving the correction succeeds (status ${ap.status}, state ${d.state || 'none'})`);
+    // The response must name the card the edit applies to. A generic "ok" is
+    // what a silently-inert approval looked like for weeks.
+    assert(typeof d.applies === 'string' && d.applies.includes(`analyst_skill_${card}.md`),
+      `G12 approval names the card it edits (${card}): ${d.applies || 'NO applies FIELD'}`);
+    // And it must not tell the user to go and wait. The skill rung is live on
+    // approval; the old string sent them off to watch for something that had
+    // already happened.
+    assert(!/within a minute or two/i.test(d.next || ''),
+      `G12 approval does not report the skill edit as pending: ${d.next || '(no next)'}`);
+
+    // The queue must agree afterwards. A state flip the list does not reflect is
+    // the same failure in a different place.
+    const after = await (await api(`/api/v1/me/drafts?app=${APP}&state=approved`)).json().catch(() => ({}));
+    const approved = (after?.data?.drafts || after?.drafts || []).some(x => x.id === skillDraft.id);
+    assert(approved, 'G12 the approved draft is listed as approved');
+  }
+}
+
 // ── G9 ────────────────────────────────────────────────────────────────────
 assert(api404.length === 0, `G9 no /me/* 404s (saw: ${api404.join(', ') || 'none'})`);
 
