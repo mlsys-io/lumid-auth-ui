@@ -14,10 +14,26 @@ interface DomainCard {
   icon: React.ComponentType<{ className?: string }>;
   title: string;
   blurb: string;
-  // Default app to install for this domain.
+  // Default app to install, FULLY QUALIFIED as "<owner_sub>/<name>".
+  //
+  // Never a bare name. An install intent records this slug verbatim, and
+  // identity recovers the bundle's author from it; a bare name leaves no owner
+  // to recover, so it falls back to the CALLER's sub, whose repo does not
+  // exist. The install still reports ready and then every surface 404s.
+  //
+  // Identity now rescues a bare name by resolving it on xpcloud, but that only
+  // works while exactly one public repo carries it — and two owners already
+  // publish "auto-quant" and two publish "mbb-ai", so the rescue correctly
+  // refuses to guess for precisely the apps this page installs. Qualifying here
+  // does not depend on global name uniqueness at all.
   appSlug: string;
-  // Loop to one-shot immediately after install.
-  firstLoop: { app: string; loop: string };
+  // Local install directory name — what /me/apps lists and what runLoopNow and
+  // /onboarding/ready match on. NOT the slug: those take the bare name.
+  appName: string;
+  // Loop to one-shot immediately after install. Optional: an interactive app
+  // has nothing to pre-compute, and mbb-consultant's only loop is @trigger and
+  // documents "never call run_loop_now to respond to a person".
+  firstLoop?: { app: string; loop: string };
   needsGoogle?: boolean;
 }
 
@@ -27,7 +43,8 @@ const DOMAINS: DomainCard[] = [
     icon: TrendingUp,
     title: "Trading",
     blurb: "Auto-research crypto markets, draft trades, watch a daily leaderboard.",
-    appSlug: "auto-quant",
+    appSlug: "a3f48236-ffe9-4fb9-9548-6e044d5cd9c7/auto-quant",
+    appName: "auto-quant",
     firstLoop: { app: "auto-quant", loop: "crypto_lqa" },
   },
   {
@@ -35,7 +52,8 @@ const DOMAINS: DomainCard[] = [
     icon: Sun,
     title: "Daily Life",
     blurb: "Morning brief over your email + calendar. A philosopher reflection over coffee.",
-    appSlug: "personal-agent",
+    appSlug: "a3f48236-ffe9-4fb9-9548-6e044d5cd9c7/personal-agent",
+    appName: "personal-agent",
     firstLoop: { app: "personal-agent", loop: "morning_brief" },
     needsGoogle: true,
   },
@@ -43,9 +61,15 @@ const DOMAINS: DomainCard[] = [
     id: "research",
     icon: FlaskConical,
     title: "Consulting & research",
-    blurb: "Active-learning over consulting cases or systems-config research. Sharpens with each cycle.",
-    appSlug: "mbb-ai",
-    firstLoop: { app: "mbb-ai", loop: "case_cycle" },
+    blurb: "Be interviewed on real consulting cases and scored against their ground truth — or put your own question to an analyst.",
+    // Was mbb-ai, which ships NO ui/ at all: the card installed an agent whose
+    // Studio page is an empty shell. mbb-consultant is the same casebook with a
+    // real surface (case browser, Review queue, Results table).
+    appSlug: "db86775d-91b1-4752-802f-926039ae648f/mbb-consultant",
+    appName: "mbb-consultant",
+    // No one-shot: this app answers in the chat, so there is no cycle to wait
+    // on. Its only loop is @trigger-scheduled and its own description says it
+    // "runs asynchronously and returns nothing to the conversation".
   },
 ];
 
@@ -64,10 +88,12 @@ export default function OnboardingDomain() {
 
       // 2. Fire a one-shot of the first loop so the user has a real
       //    artifact when they land on /onboarding/ready.
-      try {
-        await me.runLoopNow(d.firstLoop.app, d.firstLoop.loop);
-      } catch {
-        // Non-fatal — the next scheduled cycle will fire anyway.
+      if (d.firstLoop) {
+        try {
+          await me.runLoopNow(d.firstLoop.app, d.firstLoop.loop);
+        } catch {
+          // Non-fatal — the next scheduled cycle will fire anyway.
+        }
       }
 
       // 3. If the app needs an external connection (Google for daily),
@@ -77,7 +103,15 @@ export default function OnboardingDomain() {
         navigate("/studio/account/connect/google?return_to=/onboarding/ready");
         return;
       }
-      navigate(`/onboarding/ready?app=${encodeURIComponent(d.appSlug)}&loop=${encodeURIComponent(d.firstLoop.loop)}`);
+      // No loop to wait on → land the user IN the app rather than parking them
+      // on a progress page that would poll for a cycle that is never coming and
+      // time out after three minutes. For an app you talk to, the app IS the
+      // first artifact. /ready matches on the bare name, so pass appName.
+      if (!d.firstLoop) {
+        navigate(`/studio/apps/${encodeURIComponent(d.appName)}`);
+        return;
+      }
+      navigate(`/onboarding/ready?app=${encodeURIComponent(d.appName)}&loop=${encodeURIComponent(d.firstLoop.loop)}`);
     } catch (e) {
       setError(e instanceof MeApiError ? e.message : String(e));
       setBusy(null);

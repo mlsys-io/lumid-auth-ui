@@ -21,7 +21,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import 'github-markdown-css/github-markdown-light.css';
 import {
-	BookOpen, Zap, FileCode2, Activity, CandlestickChart, Compass, ArrowLeft, Loader2, Cpu, Database, TerminalSquare, Bot,
+	BookOpen, Zap, FileCode2, Activity, CandlestickChart, Compass, ArrowLeft, Loader2, Cpu, Database, TerminalSquare, Bot, GraduationCap,
 } from 'lucide-react';
 import StudioHow from './how';
 
@@ -52,6 +52,19 @@ const DOCS: DocEntry[] = [
 		group: 'Guides',
 		icon: Compass,
 		companion: { to: '/studio/docs/deepseek', label: 'AI coding' },
+	},
+	{
+		// Second on purpose: first-run gets you an account and a working chat;
+		// this is the first thing a consulting-cohort user actually DOES with it.
+		// Walked as a fresh role=user account, so it records the failures a
+		// non-owner hits rather than the ones the author remembers.
+		slug: 'mbb-consultant',
+		title: 'Onboarding: your first scored consulting case',
+		description: 'Install the app, pick a mode and a case, get scored against real ground truth, and turn a wrong answer into a correction that sticks. Recorded from one live run, timings included.',
+		md: 'mbb-consultant.md',
+		group: 'Guides',
+		icon: GraduationCap,
+		companion: { to: '/studio/apps/mbb-consultant', label: 'Open the app' },
 	},
 	{
 		slug: 'deepseek',
