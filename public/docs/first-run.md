@@ -175,6 +175,17 @@ work around it.
 - **In chat** — just ask. Findata questions are answered against the live
   warehouse, and this path is comfortable at cohort scale: everyone shares a
   prompt prefix, so the cache works in your favour rather than against it.
+- **In the browser** — Studio → **Data** → **Query**. A read-only `SELECT` box
+  that runs as you, with no credential to set up. It is the same engine the chat
+  tool uses, so the console and the assistant cannot disagree about an answer.
+  A `LIMIT` is added when you omit one. Browse **Catalog** first to find schemas
+  and tables.
+
+  ![The Query tab: a SELECT against the warehouse and its result table.](/docs/img/first-run-sql-console.png)
+
+  Errors come back in the warehouse's own words rather than a generic failure —
+  and an empty result says so explicitly, because "no rows" and "it broke" are
+  different things worth telling apart.
 - **Over SQL** — `sql.lum.id:5432`, read-only, as your own `sql_<name>` role with
   a password you mint at [Account → FinData SQL](/studio/account/findata-sql).
   You can also reach it from **Settings → Warehouse access**, which shows whether
@@ -214,6 +225,30 @@ Read [LQT strategies](/docs/lqt-strategies) — it is the accurate one. In short
 you write DSL, it is compiled off-box, the compiled program goes to the field
 boxes, and telemetry comes back on the observation plane rather than the
 mailbox you submitted to.
+
+Open **LQT Strategies** in the sidebar. Give the strategy a name, paste `.lqts`
+source, and submit:
+
+![The Strategies surface: the deploy form above, your registry below.](/docs/img/first-run-strategies.png)
+
+The name is an **identifier**, not a title — `my_strategy`, not `"My Strategy"`
+and not `my-strategy` (a dash parses as subtraction). Model the body on the
+examples in the docs; a source that does not compile is rejected with the
+compiler's own parse error.
+
+Registration is not instant: the mailbox accepts your submission, then a
+consumer compiles and registers it. Your row appears when that finishes. Click
+it for the detail surface:
+
+![The strategy detail page: registration, sessions, backtests, and how to stop it.](/docs/img/first-run-strategy-detail.png)
+
+From here **Backtest** queues a replay, **Forward test** reports without
+submitting, and **Discuss** opens a chat already bound to this strategy — that
+thread is listed under Sessions, so the conversation stays attached to the work
+rather than scrolling away in a general chat.
+
+You may run **4 backtests at once**. A fifth is refused until one finishes —
+that is the cap doing its job, not a fault.
 
 **One honest caveat about backtests.** Backtesting today runs against a
 synthetic tape, not recorded market data. It will produce a number, and that
