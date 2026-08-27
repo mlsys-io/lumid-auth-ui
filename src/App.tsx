@@ -973,7 +973,7 @@ export default function App() {
           {/* /app/* — DEPRECATED as of Phase S7 cutover. The Research
               shell collapsed into Studio. All known /app/* deep links
               redirect to their Studio equivalent; unknown paths land
-              on /studio/today.
+              on /studio/apps.
 
               The old LoopsPage / MarketplacePage / KnowledgePage /
               ResultsPage components remain imported because their
@@ -981,12 +981,16 @@ export default function App() {
               rendered inside StudioIntents). When inactive direct-mount
               references are pruned, those imports can go too.
 
-              Old bookmarks → Studio mapping:
-                /app             → /studio/today
-                /app/loops       → /studio/today (AppLoops renders inside)
-                /app/marketplace → /studio/skills
+              Old bookmarks → Studio mapping. These used to point at
+              /studio/today, which has itself since been retired -- the
+              `today` route right above now forwards to /studio/apps -- so
+              the redirects go straight there rather than through a hop
+              that only redirects again:
+                /app             → /studio/apps
+                /app/loops       → /studio/apps (AppLoops renders inside)
+                /app/marketplace → xp.io (XpioRedirect, off-SPA)
                 /app/knowledge   → /studio/knowledge
-                /app/results     → /studio/today */}
+                /app/results     → /studio/apps */}
           <Route path="/app"             element={<Navigate to="/studio/apps"      replace />} />
           <Route path="/app/loops"       element={<Navigate to="/studio/apps"      replace />} />
           <Route path="/app/marketplace" element={<XpioRedirect />} />
