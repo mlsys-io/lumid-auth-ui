@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useRef, useState, Suspense, type ComponentProps } from "react";
 import { createPortal } from "react-dom";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { MoreHorizontal, Pencil, Plus, Settings, SlidersHorizontal, Sparkles, Trash2, DownloadCloud, UploadCloud, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import apiClient from "@/api/client";
@@ -81,6 +81,15 @@ function AppSurfaceImpl({
   embedded?: boolean;
 } = {}) {
   const routeParams = useParams();
+  // QUERY params, not just path params. An app's `row_href` may hand the next
+  // surface its key in the query string — lqt-mailbox's strategies table links
+  // to `/studio/a/lqt-mailbox/strategy?strategy_id={strategy_id}` — and
+  // `interpolate()` only substitutes tokens it is GIVEN. Passing route params
+  // alone left `{strategy_id}` unresolved, so every widget on that page sat at
+  // "Waiting for a strategy_id" forever, including when reached by clicking the
+  // row that set the query string. Path params still win on a key collision:
+  // a mounted route is more specific than a caller-supplied query.
+  const [searchParamsRaw] = useSearchParams();
   const app = appProp ?? routeParams.app ?? "";
   const surface = surfaceProp ?? routeParams.surface;
   const navigate = useNavigate();
@@ -384,9 +393,12 @@ function AppSurfaceImpl({
     // sources like qa://competition/{competitionId}/leaderboard resolve. The
     // app's xpcloud `config:` is flattened in as `{config.<key>}` tokens —
     // surfaces stay generic templates, per-install values live in Config.
-    const surfaceParams = Object.fromEntries(
-      Object.entries(routeParams).filter(([, v]) => typeof v === "string"),
-    ) as Record<string, string>;
+    const surfaceParams = {
+      ...Object.fromEntries(searchParamsRaw.entries()),
+      ...Object.fromEntries(
+        Object.entries(routeParams).filter(([, v]) => typeof v === "string"),
+      ),
+    } as Record<string, string>;
     for (const [k, v] of Object.entries(state.data.config ?? {})) {
       if (["string", "number", "boolean"].includes(typeof v)) surfaceParams[`config.${k}`] = String(v);
     }
