@@ -203,9 +203,22 @@ await turn('What is the first question?');
 // would happen to mention the industry — it did on some runs and not others,
 // which is variance in one generative turn, not a continuity failure. A gate
 // should not depend on which words a model reaches for.
-const t3 = await turn('Without me repeating it: what industry is this client in, and what decision are they weighing?');
-// Same discipline on turn 3: look only at text produced AFTER our last input.
-const t3Analyst = t3.split('what decision are they weighing?').pop() || '';
+// The retry the comment above promises was never actually implemented -- the
+// reasoning was written down and the code went straight to a single-shot
+// assert, so the gate has been strictly harsher than its own stated contract.
+// Ask at most twice, and NEVER re-state the case in the retry: the whole point
+// is that the model still holds it. Re-seeding would turn a continuity gate
+// into a reading-comprehension one that cannot fail.
+const T3_ASK = 'Without me repeating it: what industry is this client in, and what decision are they weighing?';
+let t3Analyst = '';
+for (let attempt = 0; attempt < 2; attempt++) {
+  const t3 = await turn(attempt === 0
+    ? T3_ASK
+    : 'Answer that directly, in one sentence: the industry and the decision.');
+  // Same discipline on turn 3: look only at text produced AFTER our last input.
+  t3Analyst = t3.split(attempt === 0 ? T3_ASK : 'the industry and the decision.').pop() || '';
+  if (CASE_FACTS.test(t3Analyst)) break;
+}
 assert(!!anchor && CASE_FACTS.test(t3Analyst),
   `G3 turn 3 recalls the case without being re-told it (multi-turn, not 3 one-shots)`);
 
