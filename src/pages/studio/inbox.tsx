@@ -385,9 +385,18 @@ function InboxFeedBody({
 // that produces drafts the user can act on).
 function InboxZeroState() {
 	const openComposer = () => {
-		// /studio/workflows mounts and reads ?compose=1 on entry to pop
-		// the composer modal — no need to keep this page mounted.
-		window.location.href = '/studio/workflows?compose=1';
+		// The ?compose=1 host is /studio/apps/all (pages/studio/apps.tsx reads
+		// the param and opens NewWorkflowFlow).
+		//
+		// This used to point at /studio/workflows?compose=1 and the button did
+		// NOTHING. WorkflowsListRedirect does forward the query — its comment
+		// still says "?compose=1 must reach the apps page's composer host" — but
+		// the host moved out from under it: /studio/apps is StudioWorkspace,
+		// which never reads the param and then self-redirects to
+		// /studio/apps/<app> with no search string, dropping it. So the redirect
+		// was faithful and the destination had changed, which is why nothing
+		// looked broken from either side.
+		window.location.href = '/studio/apps/all?compose=1';
 	};
 	const askAgent = () => {
 		window.dispatchEvent(new CustomEvent('studio:ask', {
