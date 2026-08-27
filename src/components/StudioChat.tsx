@@ -332,7 +332,19 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 	// Captures attachments at queue-time so the next message goes
 	// out with the files that were attached when the user pressed
 	// Enter, not whatever's attached when the previous turn finishes.
-	type QueuedMessage = { text: string; attachments: Attachment[] };
+	// The queue carries the WHOLE dispatch, not just the text. It used to hold
+	// {text, attachments} only, so anything queued lost its tool_choice and its
+	// viewing context on the way out -- which is why a correction could not be
+	// queued: it would have gone as an ordinary prose turn, routed nowhere near
+	// app_feedback, and staged no draft. Carrying the params is what lets a
+	// forced-tool turn wait its turn instead of being dropped.
+	type QueuedMessage = {
+		text: string;
+		attachments: Attachment[];
+		ctxOverride?: Partial<ViewingContext>;
+		modelOverride?: string;
+		toolChoice?: string;
+	};
 	const [messageQueue, setMessageQueue] = useState<QueuedMessage[]>([]);
 	// Embedded session viewer — a running/selected cycle's conversation rendered
 	// in THIS chatbox with the chat's own MessageBubble. Opened via
@@ -1853,7 +1865,8 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 		setMessageQueue((q) => q.slice(1));
 		// Microtask so the state update lands first.
 		Promise.resolve().then(() => {
-			void dispatchTurn(head.text, head.attachments);
+			void dispatchTurn(head.text, head.attachments, undefined,
+				head.ctxOverride, head.modelOverride, head.toolChoice);
 		});
 	}, [streaming, dispatchTurn, messageQueue.length]);
 
@@ -2196,12 +2209,23 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 									// finally. Clicking in that window used to discard the
 									// correction the user had ALREADY TYPED, with no error and
 									// no draft: the browser gate saw the prompt open and zero
-									// requests leave. Retry once across the gap, then say so
-									// rather than swallowing their words.
+									// requests leave.
+									//
+									// A timed retry was not enough -- the gate still caught a
+									// run where both attempts were refused, because the window
+									// is however long the previous turn takes, not a fixed
+									// 1.2s. So QUEUE it instead: the same FIFO the composer
+									// uses, which now carries tool_choice and context so a
+									// forced-tool turn survives the trip. No timing window
+									// left to lose the correction in.
 									if (await send()) return;
-									await new Promise((r) => setTimeout(r, 1200));
-									if (await send()) return;
-									toast.error('Still finishing the previous answer — click "Correct this" again in a moment.');
+									setMessageQueue((q) => [...q, {
+										text: `Record a correction against this app: ${what}`,
+										attachments: [],
+										ctxOverride: correctionApp ? { page: 'app', app: correctionApp } : undefined,
+										toolChoice: 'app_feedback',
+									}]);
+									toast('Correction queued — it will send when the current answer finishes.');
 								}
 								: undefined}
 							onSpeak={m.role === 'assistant' && m.content && typeof window !== 'undefined' && 'speechSynthesis' in window ? () => toggleSpeak(i, m.content) : undefined}
