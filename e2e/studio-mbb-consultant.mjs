@@ -84,7 +84,16 @@ assert(
 );
 
 // ── browser ───────────────────────────────────────────────────────────────
-const b = await chromium.launch({ headless: true, channel: 'chrome', args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+// channel:'chrome' requires Google Chrome to be INSTALLED, which it is not on
+// the dev box -- so this suite could not launch at all there, which is part of
+// why tier 4 had never run. Prefer the system Chrome when present (closest to
+// what a user runs), fall back to Playwright's bundled chromium, which is
+// already cached under ~/.cache/ms-playwright. CHROME=<path> overrides both.
+const launchArgs = ['--no-sandbox', '--disable-dev-shm-usage'];
+const b = process.env.CHROME
+  ? await chromium.launch({ headless: true, executablePath: process.env.CHROME, args: launchArgs })
+  : await chromium.launch({ headless: true, channel: 'chrome', args: launchArgs })
+      .catch(() => chromium.launch({ headless: true, args: launchArgs }));
 const ctx = await b.newContext(
   cookieVal ? {} : { extraHTTPHeaders: { Authorization: `Bearer ${PAT}` } },
 );
