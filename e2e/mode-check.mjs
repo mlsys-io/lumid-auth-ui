@@ -1,5 +1,6 @@
 import { chromium } from 'playwright';
-const b = await chromium.launch({ channel: 'chrome' });
+import { launchBrowser } from './_browser.mjs';
+const b = await launchBrowser(chromium);
 const ctx = await b.newContext({ viewport:{width:1440,height:900},
   extraHTTPHeaders: { Authorization: `Bearer ${process.env.LUMID_PAT}` } });
 const p = await ctx.newPage();

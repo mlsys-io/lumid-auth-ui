@@ -1,7 +1,8 @@
 import { chromium } from 'playwright';
+import { launchBrowser } from './_browser.mjs';
 const BASE='https://lum.id', PAT=process.env.ANTHROPIC_AUTH_TOKEN;
 const fails=[]; const assert=(c,m)=>{console.log(`${c?'PASS':'FAIL'}  ${m}`); if(!c)fails.push(m);};
-const b=await chromium.launch({headless:true, channel:'chrome', args:['--no-sandbox','--disable-dev-shm-usage']});
+const b=await launchBrowser(chromium);
 const ctx=await b.newContext();
 // Bearer-inject the pool PAT on all API calls (app auth is cookie-based).
 await ctx.route('**/api/v1/**', r=>r.continue({headers:{...r.request().headers(), authorization:`Bearer ${PAT}`}}));

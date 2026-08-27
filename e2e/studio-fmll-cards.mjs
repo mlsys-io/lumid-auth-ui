@@ -1,10 +1,11 @@
 import { chromium } from 'playwright';
+import { launchBrowser } from './_browser.mjs';
 const BASE='https://lum.id', PAT=process.env.ANTHROPIC_AUTH_TOKEN;
 const fails=[]; const assert=(c,m)=>{console.log(`${c?'PASS':'FAIL'}  ${m}`); if(!c)fails.push(m);};
 // REAL newlines (join), so the backend parses the YAML.
 const echoYaml=['apiVersion: lumid/v1','kind: Task','metadata:','  name: e2e-echo','spec:','  taskType: echo','  data:','    type: list','    items:','      - "hi"'].join('\n');
 
-const b=await chromium.launch({headless:true, channel:'chrome', args:['--no-sandbox','--disable-dev-shm-usage']});
+const b=await launchBrowser(chromium);
 const ctx=await b.newContext();
 await ctx.route('**/api/v1/**', r=>r.continue({headers:{...r.request().headers(), authorization:`Bearer ${PAT}`}}));
 await ctx.route('**/api/v1/cluster/clusters/selectable*', r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ret_code:0,data:{clusters:[]},clusters:[]})}));

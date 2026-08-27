@@ -13,6 +13,7 @@
 // Exit 0 = all assertions pass; non-zero = a regression.
 
 import { chromium } from 'playwright';
+import { launchBrowser } from './_browser.mjs';
 
 const BASE  = process.env.LUMID_BASE  || 'https://lum.id';
 const EMAIL = process.env.LUMID_EMAIL || 'admin@lum.id';
@@ -35,7 +36,7 @@ assert(!!m, 'lm_session cookie issued');
 if (!m) process.exit(1);
 
 // 2. Drive the page.
-const b = await chromium.launch({ headless: true, channel: 'chrome', args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+const b = await launchBrowser(chromium);
 const ctx = await b.newContext();
 await ctx.addCookies([{ name: 'lm_session', value: m[1], domain: '.lum.id', path: '/', httpOnly: true, secure: true, sameSite: 'Lax' }]);
 const page = await ctx.newPage();

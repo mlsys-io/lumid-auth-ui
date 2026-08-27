@@ -1,5 +1,6 @@
 import { chromium } from 'playwright';
-const b = await chromium.launch({ channel: 'chrome' });
+import { launchBrowser } from './_browser.mjs';
+const b = await launchBrowser(chromium);
 const ctx = await b.newContext({ extraHTTPHeaders: { Authorization: `Bearer ${process.env.LUMID_PAT}` } });
 const p = await ctx.newPage();
 p.on('console', m => { if (m.type()==='error') console.log('CONSOLE ERR:', m.text().slice(0,220)); });

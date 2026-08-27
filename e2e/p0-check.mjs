@@ -1,4 +1,5 @@
 import { chromium } from 'playwright';
+import { launchBrowser } from './_browser.mjs';
 
 // Auth: a PAT if one is handed in, else log in with the password and reuse the
 // lm_session cookie (same recipe as studio-app-journey.mjs) so the probe needs
@@ -20,7 +21,7 @@ if (!PAT) {
   if (!session) { console.error('no lm_session cookie'); process.exit(2); }
 }
 
-const b = await chromium.launch({ channel: 'chrome', args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+const b = await launchBrowser(chromium);
 const ctx = await b.newContext({ viewport:{width:1440,height:900},
   ...(PAT ? { extraHTTPHeaders: { Authorization: `Bearer ${PAT}` } } : {}) });
 if (session) await ctx.addCookies([{ name:'lm_session', value:session, domain:'.lum.id',
