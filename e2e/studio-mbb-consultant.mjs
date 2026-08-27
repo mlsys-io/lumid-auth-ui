@@ -160,11 +160,25 @@ async function turn(text, timeout = 120000) {
   // Settle = the transcript stopped growing for 3 consecutive samples. Watching
   // length rather than sleeping a fixed time keeps this honest for both a
   // 2-second reply and a 60-second one.
+  //
+  // Length alone is NOT enough, and this was the single flakiest thing in the
+  // suite. While a tool runs the transcript shows a live ticker --
+  // "Running case_open — 7s" -> "— 8s" -- which is the SAME LENGTH, so three
+  // stable samples elapse and this returned mid-tool. Measured: turn 1's whole
+  // visible output was "Thought for 9s / case_open / Running case_open — 7s",
+  // i.e. the case had not been opened yet, so every downstream assertion that
+  // reads case content failed. It depended on whether the tool call happened to
+  // straddle the 4.5s window, which is exactly why G3/G4 failed on some runs
+  // and passed on identical reruns.
+  //
+  // So settle = the transcript stopped growing AND nothing is still in flight.
+  const BUSY = /Thinking…|Working…|Running\s|MESSAGE QUEUED/i;
   let last = -1, stable = 0;
   while (Date.now() - t0 < timeout) {
     await page.waitForTimeout(1500);
-    const len = (await page.locator('body').innerText()).length;
-    if (len === last) { if (++stable >= 3) break; } else { stable = 0; last = len; }
+    const body = await page.locator('body').innerText();
+    if (BUSY.test(body)) { stable = 0; last = body.length; continue; }
+    if (body.length === last) { if (++stable >= 3) break; } else { stable = 0; last = body.length; }
   }
   return page.locator('body').innerText();
 }
