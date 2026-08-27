@@ -418,6 +418,10 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 	// becoming a dependency cycle (it ALSO clears the head when
 	// firing, so depending on state would re-trigger).
 	const messageQueueRef = useRef<QueuedMessage[]>([]);
+	// Re-trigger for the queue drain when a dispatch is refused, plus a bound
+	// so a wedged turn cannot spin the retry forever (60 x 800ms ~ 48s).
+	const [queueTick, setQueueTick] = useState(0);
+	const queueRetriesRef = useRef(0);
 	useEffect(() => { messageQueueRef.current = messageQueue; }, [messageQueue]);
 	const [streaming, setStreaming] = useState(false);
 	// Synchronous in-flight latch. `streaming` is async state, so two rapid
@@ -1854,21 +1858,47 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 		void dispatchTurn(text, staged);
 	}, [input, streaming, attachments, dispatchTurn]);
 
-	// Queue processor — after each streaming turn settles, if the
-	// queue has a head, pop and dispatch. Runs in a microtask so
-	// React's state has fully flushed before the next turn kicks off.
+	// Queue processor — after each streaming turn settles, dispatch the head.
+	//
+	// It used to POP FIRST and dispatch into a microtask, ignoring the result.
+	// dispatchTurn refuses on `streaming || inFlightRef.current` while this
+	// effect only gates on `streaming`, so there is a real window where the
+	// drain believes it is safe and the dispatch still declines -- and the
+	// message, already removed from the queue, was destroyed. Silent loss, one
+	// layer below the click site.
+	//
+	// The other half is that nothing re-triggers this effect after a refusal:
+	// the deps do not change, so a queued item that misses its window sits
+	// there forever. The browser gate caught exactly that -- "queue indicator
+	// present: true", zero requests sent, draft count unmoved.
+	//
+	// So: dispatch FIRST, remove only on success, and schedule a retry when it
+	// declines. Bounded, so a permanently-wedged turn cannot spin forever; the
+	// item stays visible in the queue rather than vanishing.
 	useEffect(() => {
 		if (streaming) return;
 		const head = messageQueueRef.current[0];
 		if (!head) return;
-		// Pop the head off the queue, then dispatch.
-		setMessageQueue((q) => q.slice(1));
-		// Microtask so the state update lands first.
-		Promise.resolve().then(() => {
-			void dispatchTurn(head.text, head.attachments, undefined,
+		let cancelled = false;
+		Promise.resolve().then(async () => {
+			if (cancelled) return;
+			const sent = await dispatchTurn(head.text, head.attachments, undefined,
 				head.ctxOverride, head.modelOverride, head.toolChoice);
+			if (cancelled) return;
+			if (sent) {
+				setMessageQueue((q) => q.slice(1));
+				queueRetriesRef.current = 0;
+				return;
+			}
+			// Refused — still in flight. Nudge the effect to run again rather
+			// than waiting for an unrelated dep to change.
+			if (queueRetriesRef.current < 60) {
+				queueRetriesRef.current += 1;
+				setTimeout(() => setQueueTick((t) => t + 1), 800);
+			}
 		});
-	}, [streaming, dispatchTurn, messageQueue.length]);
+		return () => { cancelled = true; };
+	}, [streaming, dispatchTurn, messageQueue.length, queueTick]);
 
 	// Delete the ACTIVE conversation for real — server record + every local
 	// resume source (transcript, active-id, per-app map) — so it can't come

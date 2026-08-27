@@ -340,9 +340,18 @@ for (let i = 0; i < 20; i++) {
 }
 
 const postsBefore = correctionPosts.length;
+// Sampled RIGHT AFTER the click, not at failure time. The toast is transient
+// (sonner auto-dismisses in ~4s) and the failure report runs ~150s later, so
+// reading it then always said "false" regardless of what happened -- the check
+// was useless exactly when it mattered.
+let toastAtClick = false, queuedAtClick = false;
 if (clickable) {
   await correctBtn.click();
   clicks++;
+  await page.waitForTimeout(2500);
+  const justAfter = await page.locator('body').innerText().catch(() => '');
+  toastAtClick = /correction queued/i.test(justAfter);
+  queuedAtClick = /message[s]? queued/i.test(justAfter);
   // The turn it fires still has to stream out before the draft exists.
   let last = -1, stable = 0, waited = 0;
   while (waited < 90000) {
@@ -384,8 +393,9 @@ if (!(nAfter > nBefore)) {
   //   neither         -> onCorrect never reached the send at all (a throw, or
   //                      dispatchTurnRef.current was null).
   const body = await page.locator('body').innerText().catch(() => '');
-  console.log(`NOTE  G5 "correction queued" toast present: ${/correction queued/i.test(body)}`);
-  console.log(`NOTE  G5 queue indicator present: ${/message[s]? queued/i.test(body)}`);
+  console.log(`NOTE  G5 at click — toast: ${toastAtClick}, queued: ${queuedAtClick}`);
+  console.log(`NOTE  G5 queue indicator STILL present at failure: ${/message[s]? queued/i.test(body)} `+
+    `(true = enqueued and never drained)`);
   console.log(`NOTE  G5 page errors: ${pageErrors.length ? pageErrors.slice(0, 3).join(' | ') : 'none'}`);
 }
 assert(nAfter > nBefore, `G5 correction staged a draft (${nBefore} → ${nAfter})`);
