@@ -46,7 +46,7 @@ const DOCS: DocEntry[] = [
 		// First on the list on purpose: it is the only doc that assumes you have
 		// never logged in, and every other Guide here reads better after it.
 		slug: 'first-run',
-		title: 'First run: signup to a working strategy',
+		title: 'Quant Research Onboarding',
 		description: 'The actual path, walked end to end as a plain user account — signup, your first token, chat, Claude Code, data, strategies. Records what misled, not just what worked.',
 		md: 'first-run.md',
 		group: 'Guides',
@@ -277,7 +277,20 @@ function DocReader({ doc }: { doc: DocEntry }) {
 					<Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…
 				</div>
 			) : (
-				<article className="markdown-body" style={{ background: 'transparent' }}>
+				<article className="markdown-body docs-md" style={{ background: 'transparent' }}>
+					{/* github-markdown-css caps images at 100% of the column, which on a
+					    wide screen renders every screenshot larger than the prose it
+					    illustrates. Cap them and centre them so they read as figures. */}
+					<style>{`
+						.docs-md img {
+							display: block;
+							margin: 1.25rem auto;
+							max-width: min(560px, 100%);
+							height: auto;
+							border: 1px solid #d0d7de;
+							border-radius: 6px;
+						}
+					`}</style>
 					<ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
 				</article>
 			)}

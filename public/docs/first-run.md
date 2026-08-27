@@ -1,4 +1,4 @@
-# First run: from signup to a working strategy
+# Quant Research Onboarding
 
 This is the actual path, walked end to end against production as a plain
 `role=user` account on 2026-08-24. Every step below has a recorded result. Where
