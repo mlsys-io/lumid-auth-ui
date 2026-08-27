@@ -59,14 +59,29 @@ const api = (p, opts = {}) => fetch(`${BASE}${p}`, {
   ...opts, headers: { ...authHeaders, 'Content-Type': 'application/json', ...(opts.headers || {}) },
 });
 
-// ── G1: every declared surface resolves ───────────────────────────────────
+// ── G1: every declared surface resolves, and resolves to a DIFFERENT doc ──
 // mbb-ai's failure mode is exactly this returning 404 while the app still
 // appears installed, so check it before touching the browser.
-const SURFACES = ['home', 'environment', 'review', 'workflows', 'experiments'];
+//
+// The PATH form is required. This used to request `/ui?surface=<name>`, but the
+// server routes on the path segment (c.Param("surface")) and ignores the query
+// string — so every request returned `home`, five identical 200s counted as five
+// passing surfaces, and the gate could not fail. It is also the form the SPA
+// uses (src/api/me.ts), so the query form was not even testing the real path.
+//
+// Comparing bodies is the other half: five 200s that are the same document is
+// precisely the bug that hid here, and only a distinctness check catches it.
+const SURFACES = ['home', 'environment', 'review', 'workflows', 'experiments', 'results'];
+const surfaceBodies = new Map();
 for (const s of SURFACES) {
-  const r = await api(`/api/v1/me/apps/${encodeURIComponent(APP)}/ui?surface=${s}`);
+  const r = await api(`/api/v1/me/apps/${encodeURIComponent(APP)}/ui/${encodeURIComponent(s)}`);
   assert(r.status === 200, `G1 surface '${s}' → 200 (got ${r.status})`);
+  surfaceBodies.set(s, await r.text());
 }
+assert(
+  new Set(surfaceBodies.values()).size === SURFACES.length,
+  `G1 each surface returns its own document (got ${new Set(surfaceBodies.values()).size} distinct of ${SURFACES.length})`,
+);
 
 // ── browser ───────────────────────────────────────────────────────────────
 const b = await chromium.launch({ headless: true, channel: 'chrome', args: ['--no-sandbox', '--disable-dev-shm-usage'] });
