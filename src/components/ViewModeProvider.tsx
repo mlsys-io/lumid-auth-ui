@@ -13,12 +13,14 @@ export type ViewMode = 'simple' | 'advanced';
 const KEY = 'studio_view_mode';
 export const VIEW_MODE_EVENT = 'studio:view-mode-changed';
 
+// The Simple/Advanced chip was removed from the shell header, so nothing can
+// flip this any more. Read as 'simple' UNCONDITIONALLY rather than honouring
+// the persisted key: a user who had already switched to Advanced would
+// otherwise be pinned there forever with no control left to switch back.
+// The Advanced branches downstream are kept intact — restoring the chip is a
+// revert, not a rewrite.
 function readMode(): ViewMode {
-	try {
-		return localStorage.getItem(KEY) === 'advanced' ? 'advanced' : 'simple';
-	} catch {
-		return 'simple';
-	}
+	return 'simple';
 }
 
 interface ViewModeCtx {

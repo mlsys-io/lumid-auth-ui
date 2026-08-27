@@ -445,7 +445,7 @@ export function StudioShell() {
 	const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
 	// View mode: simple (default, chat-first) hides the whole shell chrome and
 	// runs the chatbox full-bleed; advanced renders the current Studio verbatim.
-	const { advanced, setMode } = useViewMode();
+	const { advanced } = useViewMode();
 	const simple = !advanced;
 	const { width: sidebarWidth, resizing, startResize, reset: resetSidebar } = useSidebarWidth();
 	// App-driven nav: every installed app, grouped by section.
@@ -839,23 +839,6 @@ export function StudioShell() {
 					)}
 					<TopStatusStrip />
 					<div className="ml-auto flex items-center gap-2 flex-shrink-0">
-						{/* Simple / Advanced toggle — the one mode control, in both modes */}
-						<div className="flex items-center rounded-full border border-border bg-muted/40 p-0.5 text-[11px]">
-							<button
-								onClick={() => setMode('simple')}
-								title="Simple, chat-first view"
-								className={cn('px-2.5 py-1 rounded-full transition-colors', simple ? 'bg-background text-foreground font-medium shadow-sm' : 'text-muted-foreground hover:text-foreground')}
-							>
-								Simple
-							</button>
-							<button
-								onClick={() => setMode('advanced')}
-								title="The full Advanced Studio"
-								className={cn('px-2.5 py-1 rounded-full transition-colors', advanced ? 'bg-background text-foreground font-medium shadow-sm' : 'text-muted-foreground hover:text-foreground')}
-							>
-								Advanced
-							</button>
-						</div>
 						{/* Account — only when the sidebar (which carries the user
 						    menu) is hidden, so we never show two account entries. */}
 						{simple && sidebarHidden && (
