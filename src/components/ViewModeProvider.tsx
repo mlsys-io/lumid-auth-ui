@@ -1,6 +1,6 @@
-// Studio view mode — Simple (default, chat-first for common users) vs
-// Advanced (today's full page-based Studio, all controls). One switch drives
-// the shell chrome + chat verbosity + nav. Persisted in localStorage so it
+// Studio view mode — Advanced (the default: today's full page-based Studio,
+// all controls) vs Simple (chat-first, chrome hidden). One switch drives the
+// shell chrome + chat verbosity + nav. Persisted in localStorage so it
 // survives reloads; a custom event + the storage event keep tabs in sync.
 //
 // This is UIUX only — it changes what's *shown by default*, never access or the
@@ -14,13 +14,18 @@ const KEY = 'studio_view_mode';
 export const VIEW_MODE_EVENT = 'studio:view-mode-changed';
 
 // The Simple/Advanced chip was removed from the shell header, so nothing can
-// flip this any more. Read as 'simple' UNCONDITIONALLY rather than honouring
-// the persisted key: a user who had already switched to Advanced would
-// otherwise be pinned there forever with no control left to switch back.
-// The Advanced branches downstream are kept intact — restoring the chip is a
-// revert, not a rewrite.
+// flip this any more — `setMode`/`toggle` below have no callers and the mode is
+// in practice a constant. Advanced is that constant: the chatbox opens with the
+// full Studio chrome and verbose chat.
+//
+// Read UNCONDITIONALLY rather than honouring the persisted key. That was the
+// rule when the constant was 'simple' and it still holds, only mirrored: with
+// no control left, anyone carrying `studio_view_mode=simple` from before the
+// chip was removed would be pinned to Simple forever. The key is still written
+// by setMode and still read by nothing, deliberately — restoring the chip is a
+// revert of this function, not a rewrite.
 function readMode(): ViewMode {
-	return 'simple';
+	return 'advanced';
 }
 
 interface ViewModeCtx {
@@ -31,9 +36,11 @@ interface ViewModeCtx {
 	toggle: () => void;
 }
 
+// Matches readMode(): a consumer rendered outside the provider must not fall
+// back to the opposite mode and flash the wrong chrome.
 const Ctx = createContext<ViewModeCtx>({
-	mode: 'simple',
-	advanced: false,
+	mode: 'advanced',
+	advanced: true,
 	setMode: () => {},
 	toggle: () => {},
 });

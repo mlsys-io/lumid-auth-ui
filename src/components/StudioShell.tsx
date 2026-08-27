@@ -443,8 +443,8 @@ export function StudioShell() {
 	const { user, logout } = useAuth();
 	const navigate = useNavigate();
 	const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
-	// View mode: simple (default, chat-first) hides the whole shell chrome and
-	// runs the chatbox full-bleed; advanced renders the current Studio verbatim.
+	// View mode: advanced (the default) renders the current Studio verbatim;
+	// simple hides the whole shell chrome and runs the chatbox full-bleed.
 	const { advanced } = useViewMode();
 	const simple = !advanced;
 	const { width: sidebarWidth, resizing, startResize, reset: resetSidebar } = useSidebarWidth();
