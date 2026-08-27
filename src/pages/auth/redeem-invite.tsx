@@ -61,11 +61,24 @@ export default function RedeemInvitePage() {
 		<div className="min-h-screen flex items-center justify-center bg-background p-4">
 			<div className="w-full max-w-md rounded-lg border bg-card p-6 shadow-sm">
 				<h1 className="text-xl font-semibold mb-1">Enter your invitation code</h1>
-				<p className="text-sm text-muted-foreground mb-4">
-					Lumid is invite-only while we onboard the first wave of users.
+				<p className="text-sm text-muted-foreground mb-3">
+					Lumid is invite-only while we onboard the first wave of users. Your
+					account is created and verified — this is the last step.
 					{user?.email && (
 						<> Signed in as <code className="text-xs">{user.email}</code>.</>
 					)}
+				</p>
+				{/* Every user who lands here is BLOCKED: AuthGuard force-redirects any
+				    non-admin with an empty invitation_code, so this page is the whole
+				    product until a code is entered. It previously said only that Lumid
+				    was invite-only, which states the rule without giving a next action
+				    — and real accounts sat here for weeks with zero redemptions. Say
+				    where a code comes from, and give a way to ask for one. */}
+				<p className="text-sm text-muted-foreground mb-4">
+					Your code comes from whoever invited you — if you joined as part of a
+					cohort or a class, that is your organiser. It is <strong>not</strong>{' '}
+					the 6-digit code that was emailed to you when you registered; that one
+					verified your address and is already used.
 				</p>
 				<form onSubmit={submit} className="space-y-4">
 					<div className="space-y-2">
@@ -92,7 +105,21 @@ export default function RedeemInvitePage() {
 						) : 'Continue'}
 					</Button>
 				</form>
-				<div className="mt-4 pt-4 border-t text-center">
+				<div className="mt-4 pt-4 border-t space-y-2 text-center">
+					{/* The only other exit was "sign out", which does not get anyone a
+					    code. hello@lum.id is the contact address the app already uses
+					    (components/app-layout.tsx). Subject carries the signed-in
+					    address so a request is actionable without a round trip. */}
+					<a
+						href={`mailto:hello@lum.id?subject=${encodeURIComponent(
+							'Invitation code request',
+						)}&body=${encodeURIComponent(
+							`I registered${user?.email ? ` as ${user.email}` : ''} but do not have an invitation code.`,
+						)}`}
+						className="block text-xs text-muted-foreground hover:text-foreground"
+					>
+						Don't have a code? Ask for one
+					</a>
 					<button
 						type="button"
 						onClick={handleLogout}
