@@ -3450,6 +3450,11 @@ function estimateCost(tokens: number, modelId: string): number {
 		switch (modelId) {
 			case 'claude-haiku':   return 0.0025; // input $1/M + output $5/M, midpoint
 			case 'kvrun-minimax':  return 0.0;     // owned GPUs — sunk cost
+			// GLM runs on our own s0 CPU (sunk cost) but the ladder is
+			// CPU -> OpenRouter with no tier-0, so a request arriving while the 8
+			// CPU slots are busy IS billed. Not 0.0: the overflow is real money.
+			// $0.15/M in + $0.50/M out, midpoint.
+			case 'glm-5.3-flash':  return 0.000325;
 			default:               return 0.001;   // conservative fallback
 		}
 	})();
@@ -3464,6 +3469,7 @@ function modelShortLabel(id: string): string {
 	// id is historical (see me_agent.go) — it now serves DeepSeek-V4-Flash on the
 	// GB10 pair, not Gemma-4 (and not Qwen3.8, which it served in between).
 	if (id === 'kvrun-gemma4') return 'DeepSeek';
+	if (id === 'glm-5.3-flash') return 'GLM-5.3';
 	if (id === 'kvrun-minimax') return 'MiniMax';
 	if (id === 'claude-haiku') return 'Haiku';
 	return id.length > 10 ? id.slice(0, 10) + '…' : id;
