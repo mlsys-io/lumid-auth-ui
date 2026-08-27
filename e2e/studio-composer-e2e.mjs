@@ -28,6 +28,16 @@ const ctx = await b.newContext();
 await ctx.addCookies([{ name: 'lm_session', value: m[1], domain: '.lum.id', path: '/', httpOnly: true, secure: true, sameSite: 'Lax' }]);
 const page = await ctx.newPage();
 
+// ADVANCED mode, deliberately. Simple mode is the default now and it hides
+// the model picker on purpose -- StudioChat's own comment: "in simple
+// (default) mode the chat runs clean -- engineer telemetry, the slash palette,
+// and the model picker are hidden". This suite asserts composer CHROME, so it
+// has to ask for the mode that has chrome; run against the default it was
+// reporting the model chip as missing while the product was behaving exactly
+// as designed.
+await page.addInitScript(() => {
+	try { localStorage.setItem('studio_view_mode', 'advanced'); } catch { /* private mode */ }
+});
 await page.goto(`${BASE}/studio`, { waitUntil: 'networkidle', timeout: 45000 });
 await page.waitForTimeout(3500);
 
@@ -36,8 +46,12 @@ const modelChip = page.locator('button[title="Choose the AI model"]');
 const ctxChip   = page.locator('button[title^="Working context"]');
 await modelChip.first().waitFor({ timeout: 15000 }).catch(() => {});
 
-assert(await ctxChip.count() >= 1,  'Context (working-context) chip renders');
-assert(await modelChip.count() >= 1, 'Model chip renders');
+// The Context chip was REMOVED from the composer (b5f06c3) -- asserting it
+// renders was asserting a deleted feature. What still matters is that the
+// working-context control is reachable SOMEWHERE, so this no longer fails when
+// it is absent from the composer specifically.
+console.log(`NOTE  working-context chip in composer: ${await ctxChip.count() >= 1}`);
+assert(await modelChip.count() >= 1, 'Model chip renders (advanced mode)');
 
 // 1. Context chip LEFT of model chip (smaller x).
 if (await ctxChip.count() && await modelChip.count()) {
