@@ -1965,7 +1965,25 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 				}
 				// Refused — still in flight. Nudge the effect to run again rather
 				// than waiting for an unrelated dep to change.
-				if (queueRetriesRef.current < 60) {
+				//
+				// The bound exists so a WEDGED turn cannot spin forever, but it was
+				// counting refusals that are simply "the previous turn has not
+				// finished yet" — and 60 x 800ms is ~48s, while a scored casebook
+				// turn on this app legitimately runs ~190s. So a correction queued
+				// behind one exhausted its budget mid-answer and stranded: the
+				// browser gate saw the prompt open, the toast fire, zero requests
+				// leave, and the item still queued 150s later.
+				//
+				// A slow turn and a wedged one look identical from here, so
+				// distinguish them by PROGRESS rather than by elapsed attempts:
+				// while something is genuinely in flight the retry is not a failed
+				// attempt at all, so do not spend budget on it. The bound then
+				// applies only when nothing is happening, which is what it was for.
+				const inProgress = inFlightRef.current || streaming;
+				if (inProgress) {
+					queueRetriesRef.current = 0;
+					setTimeout(() => setQueueTick((t) => t + 1), 800);
+				} else if (queueRetriesRef.current < 60) {
 					queueRetriesRef.current += 1;
 					setTimeout(() => setQueueTick((t) => t + 1), 800);
 				}
@@ -2324,6 +2342,10 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 									// forced-tool turn survives the trip. No timing window
 									// left to lose the correction in.
 									if (await send()) return;
+									// Fresh item, fresh budget: the counter only resets on a
+									// successful drain, so a correction queued after an earlier
+									// item exhausted its retries would inherit zero.
+									queueRetriesRef.current = 0;
 									setMessageQueue((q) => [...q, {
 										text: `Record a correction against this app: ${what}`,
 										attachments: [],
