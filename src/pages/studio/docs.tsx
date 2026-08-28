@@ -51,7 +51,7 @@ const DOCS: DocEntry[] = [
 		md: 'first-run.md',
 		group: 'Guides',
 		icon: Compass,
-		companion: { to: '/studio/docs/deepseek', label: 'AI coding' },
+		companion: { to: '/studio/docs/coding', label: 'AI coding' },
 	},
 	{
 		// Second on purpose: first-run gets you an account and a working chat;
@@ -67,13 +67,30 @@ const DOCS: DocEntry[] = [
 		companion: { to: '/studio/apps/mbb-consultant', label: 'Open the app' },
 	},
 	{
-		slug: 'deepseek',
+		// slug is 'coding', not 'deepseek': the page is about AI coding as a
+		// capability and now documents TWO models, so naming the URL after one of
+		// them aged badly the moment a second arrived. The old slug is kept below
+		// as a hidden alias -- for a markdown doc the ENTRY IS THE ROUTE, so
+		// deleting it would 404 every link already in the wild, including the one
+		// in first-run.md and anything a user bookmarked.
+		slug: 'coding',
 		title: 'AI coding',
 		description: 'The model you are actually on, and it is unlimited. The one timeout setting that matters, why the first turn is slow, and what "unlimited" does and does not mean.',
-		md: 'deepseek.md',
+		md: 'coding.md',
 		group: 'Guides',
 		icon: Bot,
 		companion: { to: '/studio/docs/claude', label: 'Client setup' },
+	},
+	{
+		// Back-compat alias for /studio/docs/deepseek. Hidden from the index grid
+		// but still renderable, so existing links keep resolving to the same page.
+		slug: 'deepseek',
+		title: 'AI coding',
+		description: 'Renamed to /studio/docs/coding.',
+		md: 'coding.md',
+		group: 'Guides',
+		icon: Bot,
+		hidden: true,
 	},
 	{
 		slug: 'claude',
