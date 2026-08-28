@@ -1,82 +1,15 @@
 # Quant Research Onboarding
 
-This is the actual path, walked end to end against production as a plain
-`role=user` account on 2026-08-24. Every step below has a recorded result. Where
-something failed or misled, it says so — this is a transcript, not a brochure.
+The path from a working account to a strategy you have tested, walked end to
+end against production as a plain `role=user` account. Every step has a
+recorded result, and where something failed or misled it says so — this is a
+transcript, not a brochure.
 
-Budget about 15 minutes. You need nothing but an email address.
-
----
-
-## 0. Sign up
-
-**You need an invitation code before you start.** Registration will not complete
-without one — it is a required field, not a "have one?" prompt. If you were
-brought in as part of a cohort, whoever invited you has it.
-
-1. Go to <https://lum.id> — `/` redirects to `/auth/login`.
-2. Choose **Register**. You will fill in: username, email, a 6-digit email
-   verification code, **the invitation code**, and a password.
-3. The 6-digit code is emailed to you and is separate from the invitation code.
-   Both are mandatory.
-4. Submit, and you are in as `role=user`. You land on the login page — sign in.
-
-![The Create Account form, with Invitation Code as a required field of its own.](/docs/img/first-run-register.png)
-
-*Note the two separate codes. **Verification Code** is the 6-digit one emailed to
-you and has a **Send** button next to it; **Invitation Code** is the one you were
-given by whoever invited you. Confusing them is the most common way this step
-stalls.*
-
-An invitation code may also carry **access grants**, which is how a cohort gets
-entitlements it could not grant itself (warehouse access, for instance). If
-yours does, redeeming it applies them at signup with nothing else to do. Already
-registered and handed a code later? Redeem it from
-**[Account → Tokens](/studio/account/tokens)** — look for *"Have an access
-code?"*.
-
-Two things worth knowing before they surprise you:
-
-- **One code per email per 60 seconds.** Hitting "resend" twice in a row gets you
-  a rate-limit error, not a second email. Wait a minute.
-- **Use an inbox you can actually read.** If you are testing with an alias of an
-  address that also *sends* our mail, some providers (Gmail notably) file the
-  message in All Mail rather than Inbox and it looks lost.
-
-> **Not verified in this walkthrough.** The rest of this document was executed
-> live; the signup leg was not, because the account used was an existing one and
-> no test inbox was available. Delivery is wired in production (the mail
-> credentials are present and the registration path calls the real sender), but
-> if the code does not arrive, that is the one step here nobody has watched
-> recently. Say so and it gets looked at.
->
-> This section previously claimed signup was self-serve with "no invitation to
-> wait for". That was wrong — the form has always required a code — and it is
-> corrected above. It is exactly the drift this hedge was warning about.
+Assumes you are signed in. Budget about 20 minutes.
 
 ---
 
-## 1. Log in and land in Studio
-
-<https://lum.id/studio> — chat-first. Advanced surfaces are behind the toggle.
-
-![The Lumid sign-in card: Continue with Google above, email and password below.](/docs/img/first-run-login.png)
-
-*`/` redirects here, so <https://lum.id> and <https://lum.id/auth/login> are the
-same door. **Continue with Google** works too — if you sign up that way you will
-be asked for your invitation code straight afterwards rather than during the
-form.*
-
-Your session is a cookie on the apex domain, which is why `xp.io` and the other
-subdomains log you in automatically.
-
-**Verified:** Studio, your apps, your runs, loop health, your usage, the data
-catalog, strategies, knowledge agents and experiments — 12 surfaces, all `200`
-for a plain `role=user`. Nothing on the default path is admin-gated.
-
----
-
-## 2. Mint your first token — in the browser
+## 1. Mint your first token — in the browser
 
 Go to **<https://lum.id/studio/account/tokens>** and mint a PAT. Give it the scopes
 you need; for the researcher path that is:
@@ -102,7 +35,7 @@ error from a script — log in and mint it in the UI, then use it in the script.
 
 ---
 
-## 3. Chat — nothing to configure
+## 2. Chat — nothing to configure
 
 Open the chatbox in Studio and ask something. That is the whole setup.
 
@@ -127,7 +60,7 @@ the spawn again. This is expected and is not your prompt.
 
 ---
 
-## 4. Install the Quant Research app
+## 3. Install the Quant Research app
 
 Strategies live in an **app**, and a new account has none installed — the
 sidebar entry does not exist until you add it. This is the step most people
@@ -150,7 +83,7 @@ Afterwards it appears in the sidebar and its four surfaces are yours:
 not a failure — you have not registered anything yet.*
 
 ---
-## 5. Explore the data
+## 4. Explore the data
 
 - **In chat** — just ask. Findata questions are answered against the live
   warehouse, and this path is comfortable at cohort scale: everyone shares a
@@ -204,7 +137,7 @@ turning something you noticed here into a strategy you can test.*
 
 ---
 
-## 6. Formulate a strategy
+## 5. Formulate a strategy
 
 ### What a strategy is here
 
@@ -266,9 +199,41 @@ someone who knows more than you. That is the point: your first strategy should
 be simple enough that when the result comes back you can tell a plumbing
 failure from a bad idea. Save the good idea for after you trust the machinery.
 
+### A harder one: an LLM reading the news
+
+Signals do not have to be microstructure. A **signal producer** can be any
+process that writes a value into `lqt.signal_history` — including an LLM that
+reads news or social posts about a market and scores whether they move it
+toward YES or NO. The strategy that consumes it stays exactly as simple:
+
+```
+strategy news_sentiment_v1 {
+  params { conviction: 0.60, size_lots: 25 }
+  when signal("news_llm") > params.conviction
+     and signal("vpin") < 0.70 {
+    buy params.size_lots lots @ mid
+  }
+}
+```
+
+Two signals now: act on the language model's conviction, **but only when flow
+is not toxic**. That second clause is doing the real work — it is the
+difference between "the news looks good" and "the news looks good and I am not
+about to be picked off by someone who already knew".
+
+**This one will not score `recorded` today.** `news_llm` is not a published
+signal — only `vpin`, `ofi_z` and `outcome_forecast` are — so it runs against
+a seeded constant and is labelled `signals: static`. Shown deliberately: the
+hard part of a strategy like this is not the DSL, it is **producing the signal**
+— an ingest for the posts, a model call per item, a score written per
+instrument, at a cadence the market actually moves on. That is a signal
+project, and it is the point at which you graduate from this page.
+
+---
+
 ### Deploy it
 
-Open **Quant Research → Strategies** in the sidebar (installed in step 4).
+Open **Quant Research → Strategies** in the sidebar (installed in step 3).
 Give the strategy a name, paste `.lqts`
 source, and submit:
 
@@ -307,6 +272,16 @@ later. Nothing is wrong if the first click shows no numbers.
 **Forward test has no start button.** Your strategy forward-tests from the
 moment it deploys — the action *reads* what the paper arm has published. Zero
 scorecards means it has not published yet, not that it failed.
+
+**No Sharpe or drawdown here either, and for a sharper reason.** A scorecard is
+a snapshot per cycle — fills, buy/sell split, `net_usd`, `fees_usd`,
+`net_ev_bps`, markouts — not a continuous equity curve, so there is no return
+series to take a ratio over. Worse, a paper arm that has run for hours has
+nowhere near enough independent observations for an annualised Sharpe to mean
+anything; computing one would produce a confident number built on a handful of
+fills. Read `fills`, the markouts, and whether `net_usd` is positive *after*
+`fees_usd` — and treat a run with `sell_fills: 0` as unfinished rather than
+profitable, because an unclosed position has not been tested by anything yet.
 
 ### View the results
 
@@ -389,6 +364,16 @@ fake half — that is exactly how a synthetic result gets mistaken for an edge.
   0.00. A position sitting at 0.90 is worth *zero* if it resolves the other way,
   which is why marking to the last price can be badly wrong.
 
+**Why there is no Sharpe ratio or max drawdown.** Nothing computes them yet.
+The trace records every step — timestamp, mid, and the actions taken — so an
+equity curve and a return series are *derivable*; they are simply not derived,
+and we would rather show you the fills than a ratio nobody validated. Two
+things to keep in mind when they arrive: a Sharpe over a strategy that took
+zero trades is undefined, not zero; and these are binary-settlement contracts,
+so the return distribution is not the roughly-normal one Sharpe assumes — a
+position that drifts to 0.90 and resolves NO loses everything in one step, and
+a volatility-scaled ratio will flatter that badly.
+
 **Expect your first real run to take no trades.** Two current backtests are real
 on all three axes across ~7,500 recorded prints and made **zero** trades — the
 signal never crossed the threshold. That is a result, not a breakage. Do not
@@ -401,11 +386,11 @@ scorecards. Zero scorecards means it has not published yet, not that it failed.
 
 ---
 
-## 7. Claude Code from your own machine
+## 6. Claude Code from your own machine
 
 ```bash
 export ANTHROPIC_BASE_URL=https://lum.id/claude
-export ANTHROPIC_AUTH_TOKEN=lm_pat_live_...   # the PAT from step 2
+export ANTHROPIC_AUTH_TOKEN=lm_pat_live_...   # the PAT from step 1
 export ANTHROPIC_MODEL=deepseek-v4-flash
 export API_TIMEOUT_MS=600000                  # do not skip this
 ```
@@ -428,25 +413,6 @@ it is quoted here verbatim so you recognise it when you see it.
 
 ---
 
-## 8. Call the model directly
-
-```bash
-curl https://lum.id/llm/v1/chat/completions \
-  -H "Authorization: Bearer $LUMID_PAT" \
-  -H 'Content-Type: application/json' \
-  -d '{"model":"deepseek-v4-flash","max_tokens":64,
-       "messages":[{"role":"user","content":"hello"}]}'
-```
-
-**Verified:** `200` in 3.6 s on a warm cache.
-
-`deepseek-v4-flash` is the only model this gateway serves. It is a strict
-allowlist — an unrecognised model id is refused by name, not quietly routed
-somewhere else and billed. If you need a model that is not there, ask; do not
-work around it.
-
----
-
 ## What you cannot do yourself
 
 Three things, and all of them are intentional:
@@ -466,6 +432,28 @@ request.
 
 Everything else on this page, a new account does alone — including querying
 FinData in chat, which needs no grant at all.
+
+---
+
+## Where to go next
+
+Everything below is at **<https://lum.id/studio/docs>**.
+
+| doc | why you would open it |
+|---|---|
+| [LQT strategies](/studio/docs/lqt-strategies) | the full `.lqts` language — the one to read once you have deployed something |
+| [AI coding](/studio/docs/coding) | the model you are on, what "unlimited" means, the one timeout that matters |
+| [Trading API](/studio/docs/trading-api) | submitting and inspecting strategies programmatically |
+| [FinData SQL access](/studio/docs/findata-sql) | a warehouse seat, if chat-based queries stop being enough |
+| [FlowMesh & Lumilake queries](/studio/docs/fm-ll-queries) | running jobs across the compute fleet |
+| [AI Consulting Onboarding](/studio/docs/mbb-consultant) | the other cohort track, if you are on it |
+
+**In the repo**, deeper than this page goes:
+
+* `docs/researcher-onboarding/` — the research cycle, the promotion gates, the
+  signal contract, and how to submit progress.
+* `docs/dsl/SYNTAX.md` — the strategy language reference.
+* `python/lqt_research/signals/` — real signal implementations to model yours on.
 
 ---
 
