@@ -206,7 +206,31 @@ turning something you noticed here into a strategy you can test.*
 
 ## 6. Formulate a strategy
 
-Read [LQT strategies](/docs/lqt-strategies) — it is the accurate one. In short:
+### What a strategy is here
+
+A **strategy** is a small program that decides, over and over, whether to place
+an order. Not a document, not a spreadsheet, not a backtest script you run
+yourself — a set of rules the platform executes for you, on live market data,
+one decision per market tick.
+
+It has three parts, and that is all:
+
+1. **Inputs** — the signals it reads. `signal("vpin")` fetches the current
+   value of a published signal for the market being evaluated.
+2. **A condition** — when it should act. `when signal("vpin") > 0.85`.
+3. **An action** — what to do. `buy 50 lots @ mid`.
+
+You write it in **`.lqts`**, a deliberately small language: fixed-point integer
+maths, no clock, no randomness, no file access. That constraint is the point —
+the same inputs always produce the same decisions, so a run can be replayed
+exactly and audited later. It is not a general programming language and is not
+meant to be.
+
+Once registered, the same program is used two ways: replayed against **recorded
+history** (a backtest) and run against the **live market in paper mode** (a
+forward test). You do not write two versions.
+
+Read [LQT strategies](/docs/lqt-strategies) for the full language. In short:
 you write DSL, it is compiled off-box, the compiled program goes to the field
 boxes, and telemetry comes back on the observation plane rather than the
 mailbox you submitted to.
@@ -250,6 +274,11 @@ source, and submit:
 
 ![The Strategies surface: the deploy form above, your registry below.](/docs/img/first-run-strategies.png)
 
+Your registry, once you have registered something — one row per strategy, with
+`Compiled` showing the `program_hash`:
+
+![The Strategies surface with registered rows.](/docs/img/first-run-strategies-view.png)
+
 The name is an **identifier**, not a title — `my_strategy`, not `"My Strategy"`
 and not `my-strategy` (a dash parses as subtraction). Model the body on the
 examples in the docs; a source that does not compile is rejected with the
@@ -283,14 +312,30 @@ scorecards means it has not published yet, not that it failed.
 
 The **Backtest** and **Forward test** surfaces in the sidebar are the
 across-all-strategies views; the row actions above are the per-strategy ones.
-Read the three labels before the P&L, every time — see *Reading a backtest
-result* below.
+
+Backtest results — read the three labels *before* the P&L, every time:
+
+![The Backtest surface: claims with their replay, signals and settlement labels.](/docs/img/first-run-backtest-result.png)
+
+Forward-test scorecards from the live paper arm:
+
+![The Forward test surface: scorecards per strategy.](/docs/img/first-run-forward-result.png)
+
+And **Runtime**, which is the decision funnel rather than P&L — proposed,
+submitted, rejected, and the top reject reason. This is where you look when a
+strategy is registered but nothing is happening:
+
+![The Runtime surface: the decision funnel per strategy.](/docs/img/first-run-runtime.png)
 
 ### Discuss it, then go round again
 
 **Discuss** on the row opens a chat already bound to that strategy, so "why did
 this propose nothing yesterday?" resolves against the right one with nothing
-re-pasted. The thread is listed under Sessions, so the conversation stays
+re-pasted.
+
+![Discuss: a chat already bound to one strategy.](/docs/img/first-run-discuss.png)
+
+The thread is listed under Sessions, so the conversation stays
 attached to the work
 rather than scrolling away in a general chat.
 
