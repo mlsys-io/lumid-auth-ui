@@ -247,15 +247,48 @@ submitting, and **Discuss** opens a chat already bound to this strategy — that
 thread is listed under Sessions, so the conversation stays attached to the work
 rather than scrolling away in a general chat.
 
-You may run **4 backtests at once**. A fifth is refused until one finishes —
-that is the cap doing its job, not a fault.
+**One backtest at a time, 300 seconds apart.** A second submission while one
+is in flight is *refused*, not queued — the consumer runs the replay inline, so
+an unbounded queue would stall every other tenant. The refusal tells you the
+earliest time you may retry; read it rather than re-submitting.
 
-**One honest caveat about backtests.** Backtesting today runs against a
-synthetic tape, not recorded market data. It will produce a number, and that
-number is not evidence. Check the `replay` field on a result before you believe
-a PnL: if it does not say you replayed real data, you did not. Corpus-backed
-replay is scoped and in progress; until it lands, treat backtest output as a
-correctness check on your logic, never as performance.
+### Reading a backtest result
+
+**Backtests now replay recorded market history.** This changed on 2026-08-28;
+if you have seen an older version of this page saying the tape is synthetic,
+that is out of date.
+
+Every result carries **three independent labels**, and it counts as performance
+only when all three say real:
+
+| label | real | not real | what it means |
+|---|---|---|---|
+| `replay` | `pg_tape` | `synthetic_lcg` | recorded venue prints, or a made-up tape |
+| `signals` | `recorded` | `static` | your decisions ran on published signal values, or one constant |
+| `settlement` | `resolved` | `mark_to_market` | settled against the real outcome, or marked at the end |
+
+A result with **no** `replay` field is treated as not-real by rule. A real tape
+driving fabricated signals produces a number whose genuine half vouches for its
+fake half — that is exactly how a synthetic result gets mistaken for an edge.
+
+**Two things that decide whether your strategy can ever score `real`:**
+
+* **Only three signal names are published**: `vpin`, `ofi_z`,
+  `outcome_forecast`. A strategy reading any other name can never beat
+  `signals: static`, however well written. Check before you choose.
+* **Settlement is binary.** These are event contracts: YES pays 1.00, NO pays
+  0.00. A position sitting at 0.90 is worth *zero* if it resolves the other way,
+  which is why marking to the last price can be badly wrong.
+
+**Expect your first real run to take no trades.** Two current backtests are real
+on all three axes across ~7,500 recorded prints and made **zero** trades — the
+signal never crossed the threshold. That is a result, not a breakage. Do not
+tune the threshold against the same window you score on; the number that
+produces is guaranteed to look good and guaranteed to mean nothing.
+
+**Forward test is live paper, and it does not start anything.** A strategy
+forward-tests from the moment it deploys; the action *reads* the paper arm's
+scorecards. Zero scorecards means it has not published yet, not that it failed.
 
 ---
 
