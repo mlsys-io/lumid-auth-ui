@@ -1442,6 +1442,18 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 							// (an over-tier override degrades to the role default).
 							...((modelOverride || model) ? { model: modelOverride || model } : {}),
 							...(mode ? { mode } : {}),
+							// SIMPLE view -> ask the server for the curated core tool
+							// set instead of the whole catalog. Studio sends the catalog
+							// on every turn and it is ~91% of the prefix, so this is the
+							// single biggest lever on time-to-first-token.
+							//
+							// Sent only when NOT advanced, and absent means "full
+							// catalog" server-side. That direction is deliberate: any
+							// client that has not been updated keeps today's behaviour,
+							// and a missing tool degrades an answer silently rather than
+							// erroring, so a default-on version of this flag would be an
+							// invisible regression for every other caller.
+							...(!verbose ? { simple: true } : {}),
 							...(think ? { think: true } : {}),
 							...(personaId ? { persona_id: personaId } : agentId ? { agent_id: agentId } : {}),
 							...(wsRepo ? { xpio_repo: wsRepo } : {}),
