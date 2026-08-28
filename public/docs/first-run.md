@@ -110,13 +110,17 @@ Open the chatbox in Studio and ask something. That is the whole setup.
 
 *Note the `query_findata` chip. Chat reaches the warehouse **as you** through
 tools — no credential, no connection string, nothing to configure. This is the
-path most people should use, and the reason the SQL seat further down is
+path most people should use, and the reason the SQL seat listed at the end is
 optional rather than a setup step.*
 
 You do not need a token, a scope, or a model choice. The platform mints a
 `claude:proxy` token for you behind the scenes on your first turn and keeps it
-fresh. Your model is **`deepseek-v4-flash`** and it is unlimited — see
-[AI coding](/studio/docs/coding) for what that does and does not mean.
+fresh. Your model is one of the **in-cluster GPU models** — `glm-5.3-flash` by
+default — and it is unlimited, because it runs on our own hardware and costs
+nothing per call. The picker offers the others you are entitled to; the
+metered models are held for admin accounts so nobody spends a budget by
+accident on their first afternoon. See [AI coding](/studio/docs/coding) for
+what "unlimited" does and does not mean.
 
 **First turn of a session is slower than the rest.** Your sandbox is spawned on
 demand and reclaimed after 15 idle minutes, so the turn after a long pause pays
@@ -124,53 +128,7 @@ the spawn again. This is expected and is not your prompt.
 
 ---
 
-## 4. Claude Code from your own machine
-
-```bash
-export ANTHROPIC_BASE_URL=https://lum.id/claude
-export ANTHROPIC_AUTH_TOKEN=lm_pat_live_...   # the PAT from step 2
-export ANTHROPIC_MODEL=deepseek-v4-flash
-export API_TIMEOUT_MS=600000                  # do not skip this
-```
-
-**`API_TIMEOUT_MS` is not optional.** The default client timeout is 60 s, and a
-large cold prompt can spend longer than that just reading your context before it
-emits a byte. Without the override you get *"Waiting for API response · will
-retry"* and it looks like a network fault. It is not.
-
-If your PAT is missing the scope you get a clear 403 that names the fix:
-
-```
-403  PAT lacks the claude:proxy scope — mint one at lum.id/dashboard/tokens
-```
-
-**Verified:** that 403 is exactly what a scope-less PAT receives. Note it names
-`/dashboard/tokens`, which is the **old** path — it still redirects, but the
-canonical page is `/studio/account/tokens`. The message text is wrong, not you;
-it is quoted here verbatim so you recognise it when you see it.
-
----
-
-## 5. Call the model directly
-
-```bash
-curl https://lum.id/llm/v1/chat/completions \
-  -H "Authorization: Bearer $LUMID_PAT" \
-  -H 'Content-Type: application/json' \
-  -d '{"model":"deepseek-v4-flash","max_tokens":64,
-       "messages":[{"role":"user","content":"hello"}]}'
-```
-
-**Verified:** `200` in 3.6 s on a warm cache.
-
-`deepseek-v4-flash` is the only model this gateway serves. It is a strict
-allowlist — an unrecognised model id is refused by name, not quietly routed
-somewhere else and billed. If you need a model that is not there, ask; do not
-work around it.
-
----
-
-## 6. Query the data
+## 4. Explore the data
 
 - **In chat** — just ask. Findata questions are answered against the live
   warehouse, and this path is comfortable at cohort scale: everyone shares a
@@ -219,14 +177,38 @@ only need it because `verify-full` checks the server against it.*
 
 ---
 
-## 7. Write a strategy
+## 5. Install the Quant Research app
+
+Strategies live in an **app**, and a new account has none installed — the
+sidebar entry does not exist until you add it. This is the step most people
+miss, because anyone who has been here a while already has it.
+
+Go to **[Library → Marketplace](https://lum.id/studio/library/marketplace)**,
+find **Quant Research**, and install it. It is public, so nothing needs
+approving.
+
+Afterwards it appears in the sidebar and its four surfaces are yours:
+
+| surface | what it shows |
+|---|---|
+| **Strategies** | everything you have registered — start here |
+| **Backtest** | claims and their honesty labels |
+| **Forward test** | live-paper scorecards |
+| **Runtime** | what each field box is doing |
+
+*A fresh install shows an empty Strategies table saying so. That is correct,
+not a failure — you have not registered anything yet.*
+
+---
+## 6. Write a strategy
 
 Read [LQT strategies](/docs/lqt-strategies) — it is the accurate one. In short:
 you write DSL, it is compiled off-box, the compiled program goes to the field
 boxes, and telemetry comes back on the observation plane rather than the
 mailbox you submitted to.
 
-Open **LQT Strategies** in the sidebar. Give the strategy a name, paste `.lqts`
+Open **Quant Research → Strategies** in the sidebar (installed in step 5).
+Give the strategy a name, paste `.lqts`
 source, and submit:
 
 ![The Strategies surface: the deploy form above, your registry below.](/docs/img/first-run-strategies.png)
@@ -289,6 +271,52 @@ produces is guaranteed to look good and guaranteed to mean nothing.
 **Forward test is live paper, and it does not start anything.** A strategy
 forward-tests from the moment it deploys; the action *reads* the paper arm's
 scorecards. Zero scorecards means it has not published yet, not that it failed.
+
+---
+
+## 7. Claude Code from your own machine
+
+```bash
+export ANTHROPIC_BASE_URL=https://lum.id/claude
+export ANTHROPIC_AUTH_TOKEN=lm_pat_live_...   # the PAT from step 2
+export ANTHROPIC_MODEL=deepseek-v4-flash
+export API_TIMEOUT_MS=600000                  # do not skip this
+```
+
+**`API_TIMEOUT_MS` is not optional.** The default client timeout is 60 s, and a
+large cold prompt can spend longer than that just reading your context before it
+emits a byte. Without the override you get *"Waiting for API response · will
+retry"* and it looks like a network fault. It is not.
+
+If your PAT is missing the scope you get a clear 403 that names the fix:
+
+```
+403  PAT lacks the claude:proxy scope — mint one at lum.id/dashboard/tokens
+```
+
+**Verified:** that 403 is exactly what a scope-less PAT receives. Note it names
+`/dashboard/tokens`, which is the **old** path — it still redirects, but the
+canonical page is `/studio/account/tokens`. The message text is wrong, not you;
+it is quoted here verbatim so you recognise it when you see it.
+
+---
+
+## 8. Call the model directly
+
+```bash
+curl https://lum.id/llm/v1/chat/completions \
+  -H "Authorization: Bearer $LUMID_PAT" \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"deepseek-v4-flash","max_tokens":64,
+       "messages":[{"role":"user","content":"hello"}]}'
+```
+
+**Verified:** `200` in 3.6 s on a warm cache.
+
+`deepseek-v4-flash` is the only model this gateway serves. It is a strict
+allowlist — an unrecognised model id is refused by name, not quietly routed
+somewhere else and billed. If you need a model that is not there, ask; do not
+work around it.
 
 ---
 

@@ -54,7 +54,7 @@ const DOCS: DocEntry[] = [
 		// never logged in, and every other Guide here reads better after it.
 		slug: 'first-run',
 		title: 'Quant Research Onboarding',
-		description: 'The actual path, walked end to end as a plain user account — signup, your first token, chat, Claude Code, data, strategies. Records what misled, not just what worked.',
+		description: 'The actual path, walked end to end as a plain user account — signup, your first token, chat, exploring the data, installing the Quant Research app, and writing a strategy. Records what misled, not just what worked.',
 		md: 'first-run.md',
 		group: 'Guides',
 		icon: Compass,
