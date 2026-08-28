@@ -480,7 +480,12 @@ export function StudioShell() {
 	// The Library carries its own docked chat (same 2-panel as the app
 	// workspace), so it needs the full-bleed, height-locked main too.
 	const libWorkspace = location.pathname.startsWith('/studio/library');
-	const fullBleed = appWorkspace || libWorkspace;
+	// /studio/data docks the same chat rail, so it needs the same treatment.
+	// Without it the page falls to the default `max-w-5xl` branch, which boxes
+	// the whole two-panel row mid-viewport — the rail then sits against the
+	// middle of the screen instead of the right edge, with dead space beside it.
+	const dataWorkspace = location.pathname.startsWith('/studio/data');
+	const fullBleed = appWorkspace || libWorkspace || dataWorkspace;
 	const wideMain = location.pathname.startsWith('/dashboard')
 		|| location.pathname.startsWith('/studio/a/')
 		|| location.pathname.startsWith('/studio/manage')
