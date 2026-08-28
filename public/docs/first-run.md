@@ -119,21 +119,17 @@ not a failure — you have not registered anything yet.*
   [FinData SQL](/studio/docs/findata-sql).
 - **Browse** — the catalog at `/dataapp-proxy/_sources` lists what is exposed.
 
-**What is actually in there.** Three sources, and for this page you want the
-third:
+**What is actually in there.** The catalog lists three sources — FinData
+(fundamentals, estimates, prediction markets, news), Lumid Data (reference,
+macro, events, regulatory) and LQT (strategies, results, telemetry). **The Query
+tab reaches FinData only**; there is no source picker, so a table that exists in
+one of the other two is not queryable from that box.
 
-| source | holds |
-|---|---|
-| **FinData** | fundamentals, estimates, prediction markets, news |
-| **Lumid Data** | reference, macro, events, regulatory, provenance |
-| **LQT** | strategies, results, telemetry, venue health — **and the market-data tape** |
-
-The tape is the one that matters for a backtest: recorded trade prints per
-instrument, in `md.kalshi_trade_tape_ingest` and its `pm_` / `pm_us_` siblings,
-each row an `instrument_id`, a `ts_event_ns`, a `price_ticks` and a
-`size_lots`. Published signal values live alongside them in `lqt.signals` and
-`lqt.signal_history`. **Open Catalog and confirm the exact names before writing
-a query against them** — this page can go stale, and the catalog cannot.
+For this page the tables that matter are all in FinData, under
+`prediction_markets`: `kalshi_markets` and `pm_us_markets` (the contracts
+themselves), `kalshi_trades`, `kalshi_orderbook_snapshots`, and candle tables at
+1m/5m/15m/1h/1d for both venues. Browse **Catalog** to confirm names before
+querying — this page can go stale, the catalog cannot.
 
 The seat lives in **Settings**, next to API tokens — it is the same shape, a
 credential you mint once and are shown once:
@@ -220,21 +216,30 @@ yet, and one that fell below $5,000 of liquidity drops out.
 
 **Symbols.** An `instrument_id` is the venue's own ticker, carried verbatim.
 Kalshi's look like `KXBTCD-26AUG2519-T78899.99` — series, date, strike. To see
-what is actually in your universe right now, ask the warehouse rather than
-guessing:
+what is live now, run this in Studio → **Data** → **Query**:
 
 ```sql
-SELECT DISTINCT instrument_id, COUNT(*) AS prints
-FROM md.kalshi_trade_tape_ingest
-WHERE ts_event_ns > (EXTRACT(EPOCH FROM NOW()) - 86400) * 1e9
-GROUP BY instrument_id
-ORDER BY prints DESC
+SELECT ticker, title
+FROM prediction_markets.kalshi_markets
+WHERE status = 'active'
 LIMIT 20;
 ```
 
-Run it against the **LQT** source (§4). That is the list with real recent
-activity — which is the list worth backtesting on, since an instrument with no
-prints replays as nothing.
+**Two things about that query are load-bearing, and both cost time to discover.**
+
+*No `ORDER BY`, no `COUNT(*)`.* The Query tab has a request timeout the big
+prediction-market tables do not respect: a plain `LIMIT` returns immediately,
+while sorting by volume — or even `SELECT count(*)` on the same table — reliably
+returns `context deadline exceeded`. That is a platform limit, not your SQL.
+Filter narrowly and take a `LIMIT`; if you need a ranked answer over the whole
+table, use the SQL seat further down rather than the console.
+
+*The console reads **FinData only**.* There is no source selector — the same
+table can be named differently in different stores, and the tape the backtest
+replays (`md.kalshi_trade_tape_ingest`, on the LQT database) is **not** the one
+you query here (`md.kalshi_trade_tape`, in FinData). Same data, different store,
+different name. Reaching the LQT store is done through the app's own surfaces,
+not this box.
 
 **Signals — who computes them, and where they land.**
 
@@ -384,6 +389,41 @@ strategy read the news before it happened.
 **4. Run it on a cadence.** A signal that updates once is not a signal. It has to
 be produced continuously, at a rate the market actually moves on, or the live
 strategy reads a stale value and the backtest has coverage gaps.
+
+#### Where this code runs — not where you might assume
+
+**The model is never called from inside the strategy.** The `.lqts` above does
+one thing: read a number that is already there. It compiles to bytecode and runs
+on the field boxes, in a hot path measured in microseconds, with no clock, no
+network and no randomness. An HTTP call to a language model cannot live there,
+and the DSL gives you no way to write one.
+
+So an LLM strategy is always **two processes**:
+
+| | what it is | where it runs |
+|---|---|---|
+| the **producer** | your Python: fetch text → score it → publish | off the hot path, on a schedule |
+| the **strategy** | the `.lqts` above | on the field boxes, per market tick |
+
+They are coupled only through `lqt.signal_history`. The strategy cannot tell
+whether `news_llm` came from a language model, a regression, or a person typing
+numbers in — which is exactly why the split works.
+
+The producer graduates through five rungs, and you can stop at whichever one
+your idea has earned:
+
+1. **Notebook** — `make jupyter` on the dev stack, port 8888. Throwaway; prove
+   the prompt returns something parseable.
+2. **Script** — `python/lqt_research/signals/`, committed, deterministic.
+3. **Workflow** — a FlowMesh YAML with a schedule. **This is the first rung
+   where the signal is actually produced continuously**, and it is the one an
+   LLM producer needs, because a signal that updates once is not a signal.
+4. **MCP tool** — callable by name.
+5. **xpio app** — packaged, installable, learning every cycle.
+
+Do not skip to rung 3. A prompt that works on ten hand-picked posts and falls
+over on the eleventh is the normal outcome, and rungs 1–2 are where that is
+cheap to find out.
 
 #### What this costs you, honestly
 

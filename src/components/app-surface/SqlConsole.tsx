@@ -15,7 +15,15 @@ import { useCallback, useMemo, useState } from 'react';
 import { Play, Loader2, AlertTriangle, Table2 } from 'lucide-react';
 import { me } from '@/api/me';
 
-const SAMPLE = 'SELECT * FROM market.ohlcv LIMIT 20';
+// Must be a query that actually RUNS — this is prefilled, so the first thing a
+// new user does is press Run on it. `SELECT * FROM market.ohlcv LIMIT 20` was
+// the previous sample and it returns `SQL execution failed: db error`: that
+// table is not in FinData, which is the only store this console reads.
+//
+// Deliberately no ORDER BY / COUNT(*): the big prediction-market tables exceed
+// the retrieve timeout when sorted or aggregated, so a sample using either
+// would greet a new user with `context deadline exceeded` instead.
+const SAMPLE = "SELECT ticker, title FROM prediction_markets.kalshi_markets WHERE status = 'active' LIMIT 20";
 
 export default function SqlConsole() {
 	const [sql, setSql] = useState(SAMPLE);
