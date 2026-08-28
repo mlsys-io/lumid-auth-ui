@@ -128,7 +128,30 @@ the spawn again. This is expected and is not your prompt.
 
 ---
 
-## 4. Explore the data
+## 4. Install the Quant Research app
+
+Strategies live in an **app**, and a new account has none installed — the
+sidebar entry does not exist until you add it. This is the step most people
+miss, because anyone who has been here a while already has it.
+
+Go to **[Library → Marketplace](https://lum.id/studio/library/marketplace)**,
+find **Quant Research**, and install it. It is public, so nothing needs
+approving.
+
+Afterwards it appears in the sidebar and its four surfaces are yours:
+
+| surface | what it shows |
+|---|---|
+| **Strategies** | everything you have registered — start here |
+| **Backtest** | claims and their honesty labels |
+| **Forward test** | live-paper scorecards |
+| **Runtime** | what each field box is doing |
+
+*A fresh install shows an empty Strategies table saying so. That is correct,
+not a failure — you have not registered anything yet.*
+
+---
+## 5. Explore the data
 
 - **In chat** — just ask. Findata questions are answered against the live
   warehouse, and this path is comfortable at cohort scale: everyone shares a
@@ -177,37 +200,52 @@ only need it because `verify-full` checks the server against it.*
 
 ---
 
-## 5. Install the Quant Research app
-
-Strategies live in an **app**, and a new account has none installed — the
-sidebar entry does not exist until you add it. This is the step most people
-miss, because anyone who has been here a while already has it.
-
-Go to **[Library → Marketplace](https://lum.id/studio/library/marketplace)**,
-find **Quant Research**, and install it. It is public, so nothing needs
-approving.
-
-Afterwards it appears in the sidebar and its four surfaces are yours:
-
-| surface | what it shows |
-|---|---|
-| **Strategies** | everything you have registered — start here |
-| **Backtest** | claims and their honesty labels |
-| **Forward test** | live-paper scorecards |
-| **Runtime** | what each field box is doing |
-
-*A fresh install shows an empty Strategies table saying so. That is correct,
-not a failure — you have not registered anything yet.*
+*You now have the app and the data. The next step is the point of both:
+turning something you noticed here into a strategy you can test.*
 
 ---
-## 6. Write a strategy
+
+## 6. Formulate a strategy
 
 Read [LQT strategies](/docs/lqt-strategies) — it is the accurate one. In short:
 you write DSL, it is compiled off-box, the compiled program goes to the field
 boxes, and telemetry comes back on the observation plane rather than the
 mailbox you submitted to.
 
-Open **Quant Research → Strategies** in the sidebar (installed in step 5).
+### An example to start from
+
+A strategy is a few lines. This one reads a published signal and buys when it
+clears a threshold:
+
+```
+strategy vpin_toxicity_v1 {
+  params { max_toxicity: 0.85, size_lots: 50 }
+  when signal("vpin") > params.max_toxicity {
+    buy params.size_lots lots @ mid
+  }
+}
+```
+
+`params` are named constants baked in as defaults, so you can re-run the same
+program at a different setting without editing it. The `when` block is the
+whole strategy: on each step, read the `vpin` signal, and if it is above 0.85,
+buy 50 lots at the mid price. No exit rule — the position is settled by the
+market's own outcome.
+
+**Why `vpin`.** It is one of only **three signals published** — `vpin`,
+`ofi_z`, `outcome_forecast`. A strategy reading any other name still runs, but
+can never be scored against real signal values. Check what exists before you
+choose what to read.
+
+**It is deliberately a bad strategy.** VPIN estimates how much of the current
+flow is informed, so buying when it is high means taking the other side of
+someone who knows more than you. That is the point: your first strategy should
+be simple enough that when the result comes back you can tell a plumbing
+failure from a bad idea. Save the good idea for after you trust the machinery.
+
+### Deploy it
+
+Open **Quant Research → Strategies** in the sidebar (installed in step 4).
 Give the strategy a name, paste `.lqts`
 source, and submit:
 
@@ -224,10 +262,55 @@ it for the detail surface:
 
 ![The strategy detail page: registration, sessions, backtests, and how to stop it.](/docs/img/first-run-strategy-detail.png)
 
-From here **Backtest** queues a replay, **Forward test** reports without
-submitting, and **Discuss** opens a chat already bound to this strategy — that
-thread is listed under Sessions, so the conversation stays attached to the work
+### Backtest and forward test
+
+Both are row actions on your strategy. They answer different questions.
+
+| | what it does | what it answers |
+|---|---|---|
+| **Backtest** | replays recorded market history | *would this have worked?* |
+| **Poll result** | fetches the verdict of that replay | — |
+| **Forward test** | reads the live-paper arm's scorecards | *does it work now, against a book that pushes back?* |
+
+**Backtest is two clicks, not one.** *Backtest* submits and returns immediately
+with a claim id; *Poll result* fetches the verdict later, usually minutes
+later. Nothing is wrong if the first click shows no numbers.
+
+**Forward test has no start button.** Your strategy forward-tests from the
+moment it deploys — the action *reads* what the paper arm has published. Zero
+scorecards means it has not published yet, not that it failed.
+
+### View the results
+
+The **Backtest** and **Forward test** surfaces in the sidebar are the
+across-all-strategies views; the row actions above are the per-strategy ones.
+Read the three labels before the P&L, every time — see *Reading a backtest
+result* below.
+
+### Discuss it, then go round again
+
+**Discuss** on the row opens a chat already bound to that strategy, so "why did
+this propose nothing yesterday?" resolves against the right one with nothing
+re-pasted. The thread is listed under Sessions, so the conversation stays
+attached to the work
 rather than scrolling away in a general chat.
+
+Ask it to read the funnel with you — *why did this take no trades?* — and to
+propose one change. Then **deploy the next round**: paste the revised `.lqts`
+as a new strategy, backtest it, and compare.
+
+**Change one thing per round.** Two changes and a moved number tell you nothing
+about which one moved it. And do not tune a threshold against the same window
+you score on — that number is guaranteed to look good and guaranteed to mean
+nothing.
+
+**Check the model actually changed it.** Ask for a *changed* `program_hash` on
+the registry row. The assistant saying it updated your strategy is not
+evidence; a new hash is. An unchanged hash after an "update" means the DSL
+never recompiled.
+
+That loop — formulate, deploy, backtest, read, discuss, revise — is the job.
+Everything above it is setup you do once.
 
 **One backtest at a time, 300 seconds apart.** A second submission while one
 is in flight is *refused*, not queued — the consumer runs the replay inline, so
