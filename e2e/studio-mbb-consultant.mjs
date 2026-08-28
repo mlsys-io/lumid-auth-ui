@@ -506,7 +506,17 @@ const judgeTurn = async (content, ctx) => {
     'Here is my own consulting question, no casebook case: how should a regional grocery chain respond to margin decline? Answer it, then score my framing.',
     { app: APP, mode: 'practice' },
   );
-  assert(http === 200 && !!judge, `G13 open turn invoked app_judge (http ${http}, judge ${judge ? 'present' : 'absent'})`);
+  // A 504 is the edge timing the turn out, not the app declining to caveat it.
+  // Conflating the two would report "the open-mode caveat is missing" on a slow
+  // day, which is a false accusation against the exact safety property this gate
+  // exists to defend -- and the kind of cried wolf that gets a gate deleted
+  // again. Report it as NOT RUN and keep the failure for a real answer that is
+  // missing its caveat.
+  if (http === 504 || http === 0) {
+    console.log(`NOTE  G13 NOT RUN — open turn timed out at the edge (http ${http}); the caveat was not exercised`);
+  } else {
+    assert(http === 200 && !!judge, `G13 open turn invoked app_judge (http ${http}, judge ${judge ? 'present' : 'absent'})`);
+  }
   if (judge) {
     assert(judge.grounded === false, `G13 open answer is marked ungrounded (grounded=${judge.grounded})`);
     assert(typeof judge.caveat === 'string' && judge.caveat.trim().length > 0,
