@@ -47,8 +47,8 @@ Open the chatbox in Studio and ask something. That is the whole setup.
 
 *Note the `query_findata` chip. Chat reaches the warehouse **as you** through
 tools — no credential, no connection string, nothing to configure. This is the
-path most people should use, and the reason the SQL seat listed at the end is
-optional rather than a setup step.*
+path most people should use, and the reason a Postgres seat is a link at the
+end of this page rather than a setup step.*
 
 You do not need a token, a scope, or a model choice. The platform mints a
 `claude:proxy` token for you behind the scenes on your first turn and keeps it
@@ -93,73 +93,24 @@ not a failure — you have not registered anything yet.*
 ---
 ## 4. Explore the data
 
-- **In chat** — just ask. Findata questions are answered against the live
-  warehouse, and this path is comfortable at cohort scale: everyone shares a
-  prompt prefix, so the cache works in your favour rather than against it.
-- **In the browser** — Studio → **Data** → **Query**. A read-only `SELECT` box
-  that runs as you, with no credential to set up. It is the same engine the chat
-  tool uses, so the console and the assistant cannot disagree about an answer.
-  A `LIMIT` is added when you omit one. Browse **Catalog** first to find schemas
-  and tables.
+**Ask in chat.** Market-data questions are answered against the live warehouse
+as you, through tools — no credential, no connection string, nothing to
+configure. Ask for the markets with the most volume in the last day, what a
+ticker resolves on, or how much history exists for an instrument, and you get
+the answer plus the query that produced it.
 
-  ![The Query tab: a SELECT against the warehouse and its result table.](/docs/img/first-run-sql-console.png)
+That is the whole of this step. It is also the path that scales across a
+cohort: everyone shares a prompt prefix, so the cache works in your favour.
 
-  Errors come back in the warehouse's own words rather than a generic failure —
-  and an empty result says so explicitly, because "no rows" and "it broke" are
-  different things worth telling apart.
-- **Over SQL** — `sql.lum.id:5432`, read-only, as your own `sql_<name>` role with
-  a password you mint at [Account → FinData SQL](/studio/account/findata-sql).
-  You can also reach it from **Settings → Warehouse access**, which shows whether
-  you have a credential without your having to open the page. Minting a personal
-  access token tagged `findata:sql` issues the same credential at the same time,
-  if you would rather do both in one step.
-  Unlike everything else on this page, this one is **granted, not self-serve**:
-  it needs a `findata` access grant *and* a provisioned role. The panel tells you
-  which you are missing. Setup, TLS and the CA bundle are in
-  [FinData SQL](/studio/docs/findata-sql).
-- **Browse** — the catalog at `/dataapp-proxy/_sources` lists what is exposed.
-
-**What is actually in there.** The catalog lists three sources — FinData
-(fundamentals, estimates, prediction markets, news), Lumid Data (reference,
-macro, events, regulatory) and LQT (strategies, results, telemetry). **The Query
-tab reaches FinData only**; there is no source picker, so a table that exists in
-one of the other two is not queryable from that box.
-
-For this page the tables that matter are in FinData under `prediction_markets`.
-Start with **`lqt_monitored_universe`** — the markets actually being monitored
-now, with `venue`, `instrument_id`, `question`, `volume_24h` and `active`. It is
-small enough to sort, which most of its neighbours are not.
-
-Then `kalshi_trades` and `kalshi_orderbook_snapshots` for microstructure, and
-candle tables at 1m/5m/15m/1h/1d for both venues. `kalshi_markets` and
-`pm_us_markets` are the raw all-time contract archives — useful for history,
-but `kalshi_markets` alone is 71M rows and 216 GB, so filter hard and never
-sort it (see §5). Browse **Catalog** to confirm names before querying; this page
-can go stale, the catalog cannot.
-
-The seat lives in **Settings**, next to API tokens — it is the same shape, a
-credential you mint once and are shown once:
-
-![The Warehouse access card in Settings, before minting.](/docs/img/first-run-warehouse-card.png)
-
-Two states are worth telling apart, because they need different things from
-you. *"No credential yet for `sql_<name>`"* means you are entitled and one click
-away. *"Entitled, but no warehouse role provisioned yet"* means an operator has
-to provision the role first — nothing you do in the UI will fix it, and the
-panel says so rather than leaving you clicking.
-
-Once you have a role, everything a GUI client needs is on the page as fields:
-
-![The connection panel: a CA download button and the connection settings as fields.](/docs/img/first-run-sql-connect.png)
-
-*No terminal at any point. DBeaver, DuckDB and pgAdmin take those settings
-directly, and the CA is a download rather than something to fetch by hand — you
-only need it because `verify-full` checks the server against it.*
+*If you later want a Postgres seat of your own, or the raw table layout, that is
+[FinData SQL](/studio/docs/findata-sql) — deliberately not on this page, because
+you do not need it to run a strategy and the tables are large enough to punish
+casual browsing.*
 
 ---
 
-*You now have the app and the data. The next step is the point of both:
-turning something you noticed here into a strategy you can test.*
+*You now have the app and a way to ask about the data. The next step is the
+point of both: turning something you noticed into a strategy you can test.*
 
 ---
 
@@ -223,34 +174,11 @@ yet, and one that fell below $5,000 of liquidity drops out.
 **Symbols.** An `instrument_id` is the venue's own ticker, carried verbatim.
 Kalshi's look like `KXBTCD-26AUG2519-T78899.99` — series, date, strike.
 
-The universe is also a table you can query. Studio → **Data** → **Query**:
-
-```sql
-SELECT venue, instrument_id, question, volume_24h
-FROM prediction_markets.lqt_monitored_universe
-WHERE active AND as_of > now() - interval '2 days'
-ORDER BY volume_24h DESC NULLS LAST
-LIMIT 20;
-```
-
-That returns in about a second, across both venues, ranked by traded volume —
-which is the list worth backtesting on, since an instrument with no activity
-replays as nothing. Drop `ORDER BY` and add `WHERE venue = 'kalshi'` to narrow.
-
-**Query the universe table, not the raw market archive.** The obvious-looking
-`prediction_markets.kalshi_markets` is an **all-time archive: 71 million rows,
-216 GB**, one row per strike per hour per series for every market that has ever
-existed. A plain `LIMIT` off it returns fine, but `ORDER BY volume` — or even
-`SELECT count(*)` — reliably returns `context deadline exceeded`, because
-sorting 216 GB cannot finish inside a request. That is scale, not a broken
-query and not your SQL. `lqt_monitored_universe` is 60× smaller and already
-scoped to what is being monitored now, so ranking it is cheap.
-
-**One naming trap.** The Query tab reads **FinData only** — there is no source
-selector — and the same data is named differently in different stores. The tape
-a backtest replays lives on the LQT database as `md.kalshi_trade_tape_ingest`;
-what you can query here is FinData's `md.kalshi_trade_tape`. Same prints,
-different store, different name.
+To see what is in your universe right now, ask in chat — *"which monitored
+markets have the most volume in the last two days?"* — rather than hunting for a
+table. The monitored universe is a live list and chat reads it directly; an
+instrument with no recent activity replays as nothing, so this is the list worth
+backtesting on.
 
 **Signals — who computes them, and where they land.**
 
@@ -338,11 +266,10 @@ it is special to the platform — it is a signal like any other, and the DSL
 cannot tell it came from a language model. The four stages you have to build:
 
 **1. Get the text.** You need posts or headlines with timestamps, and you need
-to know which market each one bears on. FinData is the warehouse — query it the
-way §4 showed — and the honest position today is that **there is no tweet feed
-in it**. You would be adding an ingest: pull from whatever source you have
-rights to, land it with a `ts_event_ns` and an `instrument_id`, and only then is
-there anything to score. Budget most of your time here, not on the prompt.
+to know which market each one bears on. The honest position today is that
+**there is no tweet feed in the warehouse**. You would be adding an ingest:
+pull from whatever source you have rights to, land it with a `ts_event_ns` and
+an `instrument_id`, and only then is there anything to score. Budget most of your time here, not on the prompt.
 
 **2. Score it with the in-house model.** Call `https://lum.id/llm` — it is
 OpenAI-compatible, so any OpenAI client works by changing the base URL, with
