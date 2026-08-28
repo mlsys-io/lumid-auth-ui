@@ -92,7 +92,7 @@ export function subscribeStudioPickedTarget(l: (t: StudioPickedTarget | null) =>
 
 export interface ViewingContext {
 	path: string;
-	/** Page family: apps | app | app-surface | runs | run-detail | inbox |
+	/** Page family: apps | app | app-surface | data | runs | run-detail | inbox |
 	 *  knowledge | knowledge-agent | marketplace | skills | experiments |
 	 *  home | settings | admin | other */
 	page: string;
@@ -139,6 +139,12 @@ export function buildViewingContext(
 	} else if ((m = pathname.match(/^\/studio\/a\/([^/]+)/))) {
 		ctx.page = 'app-surface';
 		ctx.app = decodeURIComponent(m[1]);
+	// /studio/data — the data mesh surface (Catalog/Explorer/Query + a docked
+	// chat). It matched none of the branches, so every turn from that page
+	// arrived as page:'other' and the agent had no idea the user was looking at
+	// the catalog it was being asked about.
+	} else if (pathname.startsWith('/studio/data')) {
+		ctx.page = 'data';
 	} else if ((m = pathname.match(/^\/studio\/runs\/([^/]+)/))) {
 		ctx.page = 'run-detail';
 		ctx.run_id = decodeURIComponent(m[1]);

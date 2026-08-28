@@ -183,6 +183,14 @@ const transcriptKey = (scope: string) => `${STORAGE_KEY_BASE}:${scope}`;
 // resume + grounded-opener behavior as an app (its own thread, resumed on
 // re-entry) rather than a one-off fresh chat. Not a real installed app.
 export const LIBRARY_KEY = 'lumid-library';
+// Same reservation for /studio/data. That page absorbed the Data Lake Explorer
+// marketplace app (lumid-data-lake), which was a strict subset of it apart from
+// its docked chat — so the chat came with it, and needs a scope key. There is no
+// installed app behind this one either: the opener below is hardcoded (ported
+// verbatim from the retired bundle's ui.opener) and the data_catalog /
+// data_query / save_artifact tools it drives are platform tools, not app tools,
+// so nothing here depends on a bundle being installed.
+export const DATA_KEY = 'lumid-data-mesh';
 
 // Persisted transcript shape: { user_sub: string, messages: Message[] }.
 // Tagging with user_sub closes the "same browser tab, different user"
@@ -671,6 +679,12 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 	pathnameRef.current = location.pathname;
 	const workspaceApp = (): string | null => {
 		if (!docked) return null;
+		// /studio/data is a first-party surface with a docked chat but no app in
+		// its URL. Without this it saved every thread untagged, so the Data
+		// conversation could not be resumed on re-entry and turned up in history
+		// under "General" — the exact failure the per-app resume map exists to
+		// prevent.
+		if (/^\/studio\/data(\/|$|\?)/.test(pathnameRef.current)) return DATA_KEY;
 		const m = pathnameRef.current.match(/^\/studio\/apps\/([^/?]+)/);
 		return m && m[1] !== 'all' ? decodeURIComponent(m[1]) : null;
 	};
@@ -1554,6 +1568,38 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 					{ label: 'find an app to install', prompt: 'What apps in the marketplace fit how I work? Recommend a few and say why.' },
 					{ label: 'which skills need updating?', prompt: 'Do any of my installed skills have newer versions or are flagged broken?' },
 					{ label: 'recent experiment results', prompt: 'Summarize my recent experiments — is there a winning variant worth adopting?' },
+				],
+			}]);
+			return;
+		}
+		// Data context — /studio/data. Ported verbatim from the retired
+		// lumid-data-lake bundle's ui.opener, which this page absorbed. The
+		// default opener below is operator-shaped ("N workflows, last run 1h
+		// ago") and meaningless here: there are no loops behind this surface, so
+		// without this branch the Data chat would open by reporting telemetry
+		// that does not exist.
+		//
+		// Every prompt names app="findata" EXPLICITLY rather than relying on the
+		// working-context data-app picker: an unset picker would otherwise send
+		// the query to the default instance. sdk/ops/data.py::_candidate_bases
+		// tries {base}/findata first and falls back to the root, so this is
+		// correct against the single-instance findata backend either way.
+		if (app === DATA_KEY) {
+			setStudioSelection(null);
+			setMessages((prev) => [...prev, {
+				role: 'assistant',
+				content: "This is the **Lumid data mesh**. Browse it in the **Catalog** tab, run a declared endpoint in **Explorer**, query it directly in **Query** — or just ask me here. I can query **findata** and chart what comes back.",
+				chips: [
+					{ label: "what's in findata?", prompt: 'Call data_catalog with app="findata" and summarize what\'s actually in there — the schemas, roughly how big each one is, and the two or three tables in each that I\'d realistically start from. Group it by what kind of question each schema answers, not just as a list of names.' },
+					{ label: 'fundamentals for a symbol', prompt: 'Using data_query with app="findata", pull the latest fundamentals and key metrics for AAPL, then tell me what stands out — margins, growth, leverage. Call data_catalog first if you need to confirm the right table or endpoint. Show the numbers you used in a small table.' },
+					{ label: 'prediction-market snapshot', prompt: 'Using data_query with app="findata", query the prediction_markets schema for the most active markets right now and summarize what they\'re currently pricing. Check the catalog first for the right table and columns, and say how fresh the data is.' },
+					// interval="1d" is spelled out because it is the ONLY value that
+					// returns bars: the endpoint's default is 1min (0 rows for NVDA),
+					// and "1day", "daily" and "1D" all come back empty. Measured
+					// against the live endpoint 2026-08-17 — 1d gave 245 bars. Leaving
+					// the model to guess produced an empty chart, which reads as a
+					// broken surface on the very first click.
+					{ label: 'chart a symbol', prompt: 'Using data_query with app="findata", call the /ohlc/NVDA endpoint with interval="1d", keep the last ~6 months of bars, and plot the close as a line chart with save_artifact so it lands in my artifact panel. Note anything unusual in the move.' },
 				],
 			}]);
 			return;
