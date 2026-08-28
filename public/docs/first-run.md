@@ -20,7 +20,7 @@ Give it the scopes you need; for the researcher path that is:
 
 | Scope | Buys you |
 |---|---|
-| `claude:proxy` | Claude Code and the `/claude` API on deepseek |
+| `claude:proxy` | the `/claude` API, and Claude Code if you later run it locally |
 | `lqt:strategy` | submitting and inspecting strategies |
 
 **This step must happen in the browser, and that is deliberate.** A PAT cannot
@@ -384,6 +384,33 @@ source, and submit:
 
 ![The Strategies surface: the deploy form above, your registry below.](/docs/img/first-run-strategies.png)
 
+**You do not have to write the `.lqts` by hand.** Ask the chatbox for it. It
+knows the DSL and can read what signals exist, so it will not invent a name that
+is not published:
+
+> *Write me a `.lqts` strategy that buys 25 lots at mid when the `ofi_z` signal
+> is above 0.15, with the threshold and size as params. Reply with just the code
+> block.*
+
+![The chatbox returning a compilable .lqts strategy.](/docs/img/first-run-chat-strategy.png)
+
+That produced, verbatim:
+
+```
+strategy ofi_z_momentum {
+  params { threshold: 0.15, size_lots: 25 }
+  when signal("ofi_z") > params.threshold {
+    buy params.size_lots lots @ mid
+  }
+}
+```
+
+Copy the code block and paste it straight into the deploy form above — that is
+the whole loop. **Read it before you paste it.** The model is good at the shape
+and cannot know whether `0.15` is a sensible threshold for the regime you care
+about; that judgement is the part that is yours, and §5 says why picking it
+against the window you score on is how you fool yourself.
+
 Your registry, once you have registered something — one row per strategy, with
 `Compiled` showing the `program_hash`:
 
@@ -470,6 +497,28 @@ re-pasted.
 
 ![Discuss: a chat already bound to one strategy.](/docs/img/first-run-discuss.png)
 
+**The chat can do the analysis, not just the conversation.** It reaches your own
+results through the same tools the surfaces use, so you can ask for the reading
+rather than assembling it yourself:
+
+> *Look at my backtest results so far. How many are real on all three honesty
+> axes, how many took zero trades, and what is the outcome breakdown?*
+
+![The chat pulling your own results through lqt_mailbox_read to answer.](/docs/img/first-run-chat-analytics.png)
+
+*The chips are the tools running —`lqt_mailbox_read` against `results`,
+`strategies` and `stats`. Those are your rows, scoped to you; the chat is not
+guessing from the page, it is querying. Analysis over more than a handful of
+runs takes it a minute or two, which the transcript shows honestly rather than
+hiding.*
+
+Things worth asking it, all of which it can actually answer:
+
+* *Compare these two backtests side by side — what changed and what moved?*
+* *My `n_proposed` is 0. Walk me through why the guard never fired.*
+* *Chart the equity curve and mark the max drawdown.*
+* *Is this Sharpe meaningful given how few trades it took?*
+
 The thread is listed under Sessions, so the conversation stays
 attached to the work
 rather than scrolling away in a general chat.
@@ -552,6 +601,23 @@ Max drawdown has none of that fragility — it is exact integer arithmetic on th
 raw curve, and the settlement counts toward it, so the worst case a binary
 market can hand you is included rather than smoothed away.
 
+**Comparing two runs is the point, and it is the thing to ask for.** A single
+result is hard to read; a pair is not. Change exactly one thing — a threshold, a
+window, an instrument — and ask:
+
+> *A/B these two backtests. Same axes on both? Which fields actually moved, and
+> is the difference bigger than the difference between their two windows?*
+
+That last clause is the one that matters. Two runs over different instruments or
+different date ranges are not an A/B — they differ in the thing you did not
+control as well as the thing you did, and a moved number tells you nothing about
+which. If the axes differ between the two, stop: you are comparing a real result
+to a synthetic one.
+
+Ask for the equity curve and the drawdown marked on it when the numbers are
+close. A curve that ends in the same place can get there by drifting or by one
+lucky settlement, and only one of those is a strategy.
+
 **Expect your first real run to take no trades.** Two current backtests are real
 on all three axes across ~7,500 recorded prints and made **zero** trades — the
 signal never crossed the threshold. That is a result, not a breakage. Do not
@@ -561,33 +627,6 @@ produces is guaranteed to look good and guaranteed to mean nothing.
 **Forward test is live paper, and it does not start anything.** A strategy
 forward-tests from the moment it deploys; the action *reads* the paper arm's
 scorecards. Zero scorecards means it has not published yet, not that it failed.
-
----
-
-## 6. Claude Code from your own machine
-
-```bash
-export ANTHROPIC_BASE_URL=https://lum.id/claude
-export ANTHROPIC_AUTH_TOKEN=lm_pat_live_...   # the PAT from step 1
-export ANTHROPIC_MODEL=deepseek-v4-flash
-export API_TIMEOUT_MS=600000                  # do not skip this
-```
-
-**`API_TIMEOUT_MS` is not optional.** The default client timeout is 60 s, and a
-large cold prompt can spend longer than that just reading your context before it
-emits a byte. Without the override you get *"Waiting for API response · will
-retry"* and it looks like a network fault. It is not.
-
-If your PAT is missing the scope you get a clear 403 that names the fix:
-
-```
-403  PAT lacks the claude:proxy scope — mint one at lum.id/dashboard/tokens
-```
-
-**Verified:** that 403 is exactly what a scope-less PAT receives. Note it names
-`/dashboard/tokens`, which is the **old** path — it still redirects, but the
-canonical page is `/studio/account/tokens`. The message text is wrong, not you;
-it is quoted here verbatim so you recognise it when you see it.
 
 ---
 
