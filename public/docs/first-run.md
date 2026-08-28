@@ -125,11 +125,17 @@ macro, events, regulatory) and LQT (strategies, results, telemetry). **The Query
 tab reaches FinData only**; there is no source picker, so a table that exists in
 one of the other two is not queryable from that box.
 
-For this page the tables that matter are all in FinData, under
-`prediction_markets`: `kalshi_markets` and `pm_us_markets` (the contracts
-themselves), `kalshi_trades`, `kalshi_orderbook_snapshots`, and candle tables at
-1m/5m/15m/1h/1d for both venues. Browse **Catalog** to confirm names before
-querying — this page can go stale, the catalog cannot.
+For this page the tables that matter are in FinData under `prediction_markets`.
+Start with **`lqt_monitored_universe`** — the markets actually being monitored
+now, with `venue`, `instrument_id`, `question`, `volume_24h` and `active`. It is
+small enough to sort, which most of its neighbours are not.
+
+Then `kalshi_trades` and `kalshi_orderbook_snapshots` for microstructure, and
+candle tables at 1m/5m/15m/1h/1d for both venues. `kalshi_markets` and
+`pm_us_markets` are the raw all-time contract archives — useful for history,
+but `kalshi_markets` alone is 71M rows and 216 GB, so filter hard and never
+sort it (see §5). Browse **Catalog** to confirm names before querying; this page
+can go stale, the catalog cannot.
 
 The seat lives in **Settings**, next to API tokens — it is the same shape, a
 credential you mint once and are shown once:
@@ -215,31 +221,36 @@ filtered for liquidity. A market that just opened may not be in your universe
 yet, and one that fell below $5,000 of liquidity drops out.
 
 **Symbols.** An `instrument_id` is the venue's own ticker, carried verbatim.
-Kalshi's look like `KXBTCD-26AUG2519-T78899.99` — series, date, strike. To see
-what is live now, run this in Studio → **Data** → **Query**:
+Kalshi's look like `KXBTCD-26AUG2519-T78899.99` — series, date, strike.
+
+The universe is also a table you can query. Studio → **Data** → **Query**:
 
 ```sql
-SELECT ticker, title
-FROM prediction_markets.kalshi_markets
-WHERE status = 'active'
+SELECT venue, instrument_id, question, volume_24h
+FROM prediction_markets.lqt_monitored_universe
+WHERE active AND as_of > now() - interval '2 days'
+ORDER BY volume_24h DESC NULLS LAST
 LIMIT 20;
 ```
 
-**Two things about that query are load-bearing, and both cost time to discover.**
+That returns in about a second, across both venues, ranked by traded volume —
+which is the list worth backtesting on, since an instrument with no activity
+replays as nothing. Drop `ORDER BY` and add `WHERE venue = 'kalshi'` to narrow.
 
-*No `ORDER BY`, no `COUNT(*)`.* The Query tab has a request timeout the big
-prediction-market tables do not respect: a plain `LIMIT` returns immediately,
-while sorting by volume — or even `SELECT count(*)` on the same table — reliably
-returns `context deadline exceeded`. That is a platform limit, not your SQL.
-Filter narrowly and take a `LIMIT`; if you need a ranked answer over the whole
-table, use the SQL seat further down rather than the console.
+**Query the universe table, not the raw market archive.** The obvious-looking
+`prediction_markets.kalshi_markets` is an **all-time archive: 71 million rows,
+216 GB**, one row per strike per hour per series for every market that has ever
+existed. A plain `LIMIT` off it returns fine, but `ORDER BY volume` — or even
+`SELECT count(*)` — reliably returns `context deadline exceeded`, because
+sorting 216 GB cannot finish inside a request. That is scale, not a broken
+query and not your SQL. `lqt_monitored_universe` is 60× smaller and already
+scoped to what is being monitored now, so ranking it is cheap.
 
-*The console reads **FinData only**.* There is no source selector — the same
-table can be named differently in different stores, and the tape the backtest
-replays (`md.kalshi_trade_tape_ingest`, on the LQT database) is **not** the one
-you query here (`md.kalshi_trade_tape`, in FinData). Same data, different store,
-different name. Reaching the LQT store is done through the app's own surfaces,
-not this box.
+**One naming trap.** The Query tab reads **FinData only** — there is no source
+selector — and the same data is named differently in different stores. The tape
+a backtest replays lives on the LQT database as `md.kalshi_trade_tape_ingest`;
+what you can query here is FinData's `md.kalshi_trade_tape`. Same prints,
+different store, different name.
 
 **Signals — who computes them, and where they land.**
 
