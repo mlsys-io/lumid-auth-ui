@@ -11,8 +11,12 @@ Assumes you are signed in. Budget about 20 minutes.
 
 ## 1. Mint your first token — in the browser
 
-Go to **<https://lum.id/studio/account/tokens>** and mint a PAT. Give it the scopes
-you need; for the researcher path that is:
+Go to **<https://lum.id/studio/account/tokens>** and click **Mint your first
+token**.
+
+![The Personal Access Tokens page, before any token exists.](/docs/img/first-run-mint-token.png)
+
+Give it the scopes you need; for the researcher path that is:
 
 | Scope | Buys you |
 |---|---|
@@ -79,6 +83,10 @@ Afterwards it appears in the sidebar and its four surfaces are yours:
 | **Forward test** | live-paper scorecards |
 | **Runtime** | what each field box is doing |
 
+A **field box** is one of the servers that actually runs strategies — currently
+Denmark, Chicago and New York, placed near the venues they trade. You never log
+into one; you deploy to them and read what comes back.
+
 *A fresh install shows an empty Strategies table saying so. That is correct,
 not a failure — you have not registered anything yet.*
 
@@ -110,6 +118,22 @@ not a failure — you have not registered anything yet.*
   which you are missing. Setup, TLS and the CA bundle are in
   [FinData SQL](/studio/docs/findata-sql).
 - **Browse** — the catalog at `/dataapp-proxy/_sources` lists what is exposed.
+
+**What is actually in there.** Three sources, and for this page you want the
+third:
+
+| source | holds |
+|---|---|
+| **FinData** | fundamentals, estimates, prediction markets, news |
+| **Lumid Data** | reference, macro, events, regulatory, provenance |
+| **LQT** | strategies, results, telemetry, venue health — **and the market-data tape** |
+
+The tape is the one that matters for a backtest: recorded trade prints per
+instrument, in `md.kalshi_trade_tape_ingest` and its `pm_` / `pm_us_` siblings,
+each row an `instrument_id`, a `ts_event_ns`, a `price_ticks` and a
+`size_lots`. Published signal values live alongside them in `lqt.signals` and
+`lqt.signal_history`. **Open Catalog and confirm the exact names before writing
+a query against them** — this page can go stale, and the catalog cannot.
 
 The seat lives in **Settings**, next to API tokens — it is the same shape, a
 credential you mint once and are shown once:
@@ -168,6 +192,75 @@ you write DSL, it is compiled off-box, the compiled program goes to the field
 boxes, and telemetry comes back on the observation plane rather than the
 mailbox you submitted to.
 
+### Where its inputs come from
+
+Before the example, the two things it depends on — because neither appears from
+nowhere, and not knowing where they come from is the usual reason a first
+strategy silently does nothing.
+
+**The universe — which markets your strategy runs on.**
+
+You do not pick a market in the strategy. The strategy is a rule; the platform
+decides which instruments to run it against. That list is the **universe**, and
+it is refreshed on a schedule by a `universe.refresh` job that asks each venue
+what is currently tradeable, then publishes the result to FinData as
+`blobs/lqt/universe/<venue>.json`. The field boxes read that blob — they do not
+query the venues for it themselves.
+
+Two cadences run today, and they own different venues:
+
+| cadence | venue | cap | liquidity floor |
+|---|---|---|---|
+| `fast-kalshi`, every 10 min | Kalshi only, 6 fast crypto series | 200 | none |
+| `all-venue`, every 6 hours | Polymarket + Polymarket US | 240 | $5,000 |
+
+So Kalshi's crypto hourlies turn over quickly and the Polymarket side is
+filtered for liquidity. A market that just opened may not be in your universe
+yet, and one that fell below $5,000 of liquidity drops out.
+
+**Symbols.** An `instrument_id` is the venue's own ticker, carried verbatim.
+Kalshi's look like `KXBTCD-26AUG2519-T78899.99` — series, date, strike. To see
+what is actually in your universe right now, ask the warehouse rather than
+guessing:
+
+```sql
+SELECT DISTINCT instrument_id, COUNT(*) AS prints
+FROM md.kalshi_trade_tape_ingest
+WHERE ts_event_ns > (EXTRACT(EPOCH FROM NOW()) - 86400) * 1e9
+GROUP BY instrument_id
+ORDER BY prints DESC
+LIMIT 20;
+```
+
+Run it against the **LQT** source (§4). That is the list with real recent
+activity — which is the list worth backtesting on, since an instrument with no
+prints replays as nothing.
+
+**Signals — who computes them, and where they land.**
+
+A signal is not something your strategy calculates. It is a number some other
+process published, which your strategy then reads by name. Producers write
+through the `signal.publish` mailbox seam into two tables:
+
+* `lqt.signals` — the latest value per `(tenant, signal_name, instrument)`, which
+  is what the live runtime reads;
+* `lqt.signal_history` — **append-only**, every value ever published with the
+  venue event time it was true at. This is the table a backtest replays, and it
+  is the reason `signals: recorded` is possible at all.
+
+Values are stored as integers (`score_ticks`) with a per-signal scale, so a
+strategy comparing against `0.85` is comparing against a stored `8500`:
+
+| signal | what it measures | stored scale |
+|---|---|---|
+| `vpin` | share of current flow that looks informed, in `[0,1]` | `× 10000` |
+| `ofi_z` | order-flow imbalance, z-scored and signed | `× 1000` |
+| `outcome_forecast` | model forecast of how the market resolves | `× 10000` |
+
+**Those three are the only published names.** `signal_history` began filling on
+2026-08-25, so there is no signal coverage before that date no matter how far
+back the price tape goes.
+
 ### An example to start from
 
 A strategy is a few lines. This one reads a published signal and buys when it
@@ -201,10 +294,11 @@ failure from a bad idea. Save the good idea for after you trust the machinery.
 
 ### A harder one: an LLM reading the news
 
-Signals do not have to be microstructure. A **signal producer** can be any
-process that writes a value into `lqt.signal_history` — including an LLM that
-reads news or social posts about a market and scores whether they move it
-toward YES or NO. The strategy that consumes it stays exactly as simple:
+The `vpin` example works because somebody else already publishes `vpin`. This
+one shows what changes when **you** have to produce the signal — which is where
+most of the real work in a strategy like this actually lives.
+
+The strategy half stays small. That is the point:
 
 ```
 strategy news_sentiment_v1 {
@@ -216,18 +310,91 @@ strategy news_sentiment_v1 {
 }
 ```
 
-Two signals now: act on the language model's conviction, **but only when flow
-is not toxic**. That second clause is doing the real work — it is the
-difference between "the news looks good" and "the news looks good and I am not
-about to be picked off by someone who already knew".
+Two signals: act on the model's conviction, **but only when flow is not toxic**.
+That second clause does the real work — it separates "the news looks good" from
+"the news looks good and I am not about to be picked off by someone who already
+knew".
 
-**This one will not score `recorded` today.** `news_llm` is not a published
-signal — only `vpin`, `ofi_z` and `outcome_forecast` are — so it runs against
-a seeded constant and is labelled `signals: static`. Shown deliberately: the
-hard part of a strategy like this is not the DSL, it is **producing the signal**
-— an ingest for the posts, a model call per item, a score written per
-instrument, at a cadence the market actually moves on. That is a signal
-project, and it is the point at which you graduate from this page.
+#### What `news_llm` actually is
+
+It is a number between 0 and 1, per instrument, that you publish. Nothing about
+it is special to the platform — it is a signal like any other, and the DSL
+cannot tell it came from a language model. The four stages you have to build:
+
+**1. Get the text.** You need posts or headlines with timestamps, and you need
+to know which market each one bears on. FinData is the warehouse — query it the
+way §4 showed — and the honest position today is that **there is no tweet feed
+in it**. You would be adding an ingest: pull from whatever source you have
+rights to, land it with a `ts_event_ns` and an `instrument_id`, and only then is
+there anything to score. Budget most of your time here, not on the prompt.
+
+**2. Score it with the in-house model.** Call `https://lum.id/llm` — it is
+OpenAI-compatible, so any OpenAI client works by changing the base URL, with
+your PAT as the bearer token. Use it rather than a paid API; it runs on our own
+GPUs and costs you nothing.
+
+```python
+import os, httpx
+
+r = httpx.post(
+    "https://lum.id/llm/v1/chat/completions",
+    headers={"Authorization": f"Bearer {os.environ['LUMID_PAT']}"},
+    json={
+        "model": "deepseek-v4-flash",
+        "messages": [
+            {"role": "system",
+             "content": "Score how much this post moves the market toward YES. "
+                        "Reply with only a number from 0.00 to 1.00."},
+            {"role": "user",
+             "content": f"Market: {question}\n\nPost: {post_text}"},
+        ],
+        "temperature": 0,
+    },
+    timeout=60,
+).json()
+score = float(r["choices"][0]["message"]["content"].strip())
+```
+
+`temperature: 0` is not decoration. A signal that returns a different number for
+the same input cannot be replayed, and a backtest over it is not reproducible.
+
+**3. Publish it.** Post a `signal.publish` message to the mailbox with your PAT.
+The handler upserts the batch in one transaction into `lqt.signals` — the hot
+table the live runtime reads — and appends to `lqt.signal_history`, which is
+what makes a later backtest able to claim `signals: recorded`. The payload takes
+a batch:
+
+```json
+{"signals": [
+  {"signal_name": "news_llm",
+   "instrument_id": "KXBTCD-26AUG2519-T78899.99",
+   "score_ticks": 7200,
+   "confidence_bps": 6000,
+   "ts_event_ns": 1756400000000000000}
+]}
+```
+
+`score_ticks` is the integer form: `0.72` at the `× 10000` scale is `7200`. Pick
+a scale and never change it — the strategy compares against a decoded value, so
+a silent rescale changes the meaning of every threshold you have already tested.
+`ts_event_ns` must be **when the post existed**, not when you scored it.
+Stamping it with the scoring time is lookahead: the backtest would let the
+strategy read the news before it happened.
+
+**4. Run it on a cadence.** A signal that updates once is not a signal. It has to
+be produced continuously, at a rate the market actually moves on, or the live
+strategy reads a stale value and the backtest has coverage gaps.
+
+#### What this costs you, honestly
+
+**It will not score `recorded` today.** `news_llm` is not published, so the run
+falls back to a seeded constant and is labelled `signals: static` — a result you
+cannot present no matter how good the number looks. That is not a bug to work
+around; it is the label doing its job. Publishing the signal is what changes it.
+
+The hard parts, in the order they will bite: getting rights to the text, mapping
+a post to the right instrument, keeping the model's output parseable, and
+holding a cadence. The DSL is the easy half, and it is already written above.
 
 ---
 
@@ -273,13 +440,28 @@ later. Nothing is wrong if the first click shows no numbers.
 moment it deploys — the action *reads* what the paper arm has published. Zero
 scorecards means it has not published yet, not that it failed.
 
-**No Sharpe or drawdown here either, and for a sharper reason.** A scorecard is
-a snapshot per cycle — fills, buy/sell split, `net_usd`, `fees_usd`,
-`net_ev_bps`, markouts — not a continuous equity curve, so there is no return
-series to take a ratio over. Worse, a paper arm that has run for hours has
-nowhere near enough independent observations for an annualised Sharpe to mean
-anything; computing one would produce a confident number built on a handful of
-fills. Read `fills`, the markouts, and whether `net_usd` is positive *after*
+**What window a backtest replays.** You do not choose it. The worker takes the
+**most recent 7 days** of recorded prints for that instrument, capped at
+**50,000 events** — the newest ones, not the oldest, so a busy market gives you
+a shorter span than a quiet one. Then, if it can find recorded signal values, it
+**clips the replay to the span those signals actually cover**, because no
+instrument has a signal in force at its first print. A run needs at least 200
+prints left after clipping, or it falls back to seeded constants and labels
+itself `signals: static`. The result reports `tape_window_secs`,
+`tape_max_events` and `span_secs`, so you never have to infer the window.
+
+That clipping is also why a backtest cannot reach back before **2026-08-25**
+with real signals: `lqt.signal_history` started filling then.
+
+**Forward test reports risk over cycles, not prints.** A scorecard is a snapshot
+per cycle — fills, buy/sell split, `net_usd`, `fees_usd`, `net_ev_bps`,
+markouts. The cumulative arm folds those into an equity curve and reports a
+Sharpe and a max drawdown on the `risk_cumulative` line. It banks **one
+observation per cycle**, so it needs 30 cycles before reporting a ratio at all —
+at a 5-minute cadence that is two and a half hours of live paper. Below that
+you get `sharpe_undefined` and a drawdown, which is the honest pair.
+
+Read `fills`, the markouts, and whether `net_usd` is positive *after*
 `fees_usd` — and treat a run with `sell_fills: 0` as unfinished rather than
 profitable, because an unclosed position has not been tested by anything yet.
 
@@ -364,15 +546,33 @@ fake half — that is exactly how a synthetic result gets mistaken for an edge.
   0.00. A position sitting at 0.90 is worth *zero* if it resolves the other way,
   which is why marking to the last price can be badly wrong.
 
-**Why there is no Sharpe ratio or max drawdown.** Nothing computes them yet.
-The trace records every step — timestamp, mid, and the actions taken — so an
-equity curve and a return series are *derivable*; they are simply not derived,
-and we would rather show you the fills than a ratio nobody validated. Two
-things to keep in mind when they arrive: a Sharpe over a strategy that took
-zero trades is undefined, not zero; and these are binary-settlement contracts,
-so the return distribution is not the roughly-normal one Sharpe assumes — a
-position that drifts to 0.90 and resolves NO loses everything in one step, and
-a volatility-scaled ratio will flatter that badly.
+**Sharpe and max drawdown.** A result carries `sharpe`, `max_drawdown_ticks`
+and `max_drawdown_bps`, derived from a mark-to-market equity curve the harness
+records at every step.
+
+Three things about them are worth knowing before you quote one:
+
+* **`sharpe: null` is not zero.** It is refused — deliberately — when the run
+  took no trades, when there are too few observations, or when the curve has no
+  variance. A Sharpe over a strategy that never opened a position is undefined,
+  and printing `0.00` would read as flat performance rather than no measurement.
+* **It is a P&L Sharpe, annualised on a 1-minute grid.** There is no capital
+  base to divide by, so it is the mean over the standard deviation of equity
+  *increments*, not of percentage returns. The curve is resampled onto a fixed
+  clock before differencing, because replay steps are trade prints — annualising
+  per-step would scale the answer by how heavily the instrument traded rather
+  than how long you were exposed.
+* **Binary settlement breaks the assumption Sharpe rests on.** YES pays 1.00 and
+  NO pays 0.00, so a position marked at 0.90 that resolves the wrong way loses
+  everything in a single step. That is precisely the tail a volatility-scaled
+  ratio assumes away, so a Sharpe over a settled run **understates** its risk.
+  The result also carries `sharpe_ex_settlement` — the same ratio with the
+  terminal jump removed. When the two disagree sharply, the headline number is
+  describing a coin flip, and `settlement_jump_ticks` tells you how big it was.
+
+Max drawdown has none of that fragility — it is exact integer arithmetic on the
+raw curve, and the settlement counts toward it, so the worst case a binary
+market can hand you is included rather than smoothed away.
 
 **Expect your first real run to take no trades.** Two current backtests are real
 on all three axes across ~7,500 recorded prints and made **zero** trades — the
