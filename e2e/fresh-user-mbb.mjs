@@ -11,8 +11,11 @@
 //
 // Env: LUMID_EMAIL, LUMID_PASSWORD, CHROME (path to a chrome binary).
 
-import pw from '/tmp/pw/node_modules/playwright-core/index.js';
-const { chromium } = pw;
+// Was a hardcoded '/tmp/pw/node_modules/playwright-core/index.js'. /tmp is
+// scratch and gets cleared, so this import threw and the walk could not run at
+// all -- which is part of why it produced no observations. Its sibling
+// studio-mbb-consultant.mjs imports the package normally; match it.
+import { chromium } from 'playwright';
 import fs from 'node:fs';
 
 const BASE = process.env.LUMID_BASE || 'https://lum.id';

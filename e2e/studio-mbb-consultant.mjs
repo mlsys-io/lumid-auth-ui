@@ -463,6 +463,233 @@ if (nAfter > nBefore) {
   }
 }
 
+// ── G13-G15: the judge CONTRACT, asserted on the tool result ─────────────
+//
+// The browser gates above read rendered prose, which is the right instrument
+// for "did the user see a score" and the wrong one for "is the score well
+// formed". G11 already showed why: a dead judge produced a fluent paragraph
+// containing "ground truth" and "keypoints" and passed for eleven days. Prose
+// cannot distinguish a three-axis verdict from a one-axis one, or a two-seat
+// panel from a seat that silently dropped.
+//
+// So these call the chat API directly and assert on app_judge's RESULT. Same
+// path the Studio composer uses -- context.app is what the app surface sets --
+// but the structure is visible instead of narrated.
+const judgeTurn = async (content, ctx) => {
+  const r = await api('/api/v1/me/agent/chat', {
+    method: 'POST',
+    body: JSON.stringify({ context: ctx, model: 'deepseek-v4-flash', messages: [{ role: 'user', content }] }),
+  });
+  if (r.status !== 200) return { http: r.status, judge: null };
+  const b = await r.json();
+  const calls = b?.data?.tool_calls || [];
+  return { http: 200, judge: (calls.find(c => c.name === 'app_judge') || {}).result || null };
+};
+
+// ── G13: an OPEN answer is marked ungrounded and says why ────────────────
+//
+// This gate previously asserted the open-mode caveat, was found permanently red,
+// and was removed as "unreachable by design -- the platform answers a free-form
+// question with deep_research and never invokes this app".
+//
+// That is true of an UNGROUNDED chat turn and false of the app-grounded one,
+// which is the path the product's own "Ask anything" mode uses (CaseBrowser
+// dispatches mode:"practice" into the app chat). Verified directly: with
+// context.app set, app_judge returns grounded:false, mode:"open" and the caveat
+// "No case selected, so there is no ground truth to score against."
+//
+// It is restored because it is the app's central safety property. An open score
+// that is NOT marked indicative is a number that looks like a benchmark result
+// and is not one -- the single worst thing this app could emit.
+{
+  const { http, judge } = await judgeTurn(
+    'Here is my own consulting question, no casebook case: how should a regional grocery chain respond to margin decline? Answer it, then score my framing.',
+    { app: APP, mode: 'practice' },
+  );
+  assert(http === 200 && !!judge, `G13 open turn invoked app_judge (http ${http}, judge ${judge ? 'present' : 'absent'})`);
+  if (judge) {
+    assert(judge.grounded === false, `G13 open answer is marked ungrounded (grounded=${judge.grounded})`);
+    assert(typeof judge.caveat === 'string' && judge.caveat.trim().length > 0,
+      'G13 open answer carries a caveat explaining there is no ground truth');
+  }
+}
+
+// ── G14/G15: a casebook verdict is three-axis and panel-labelled ─────────
+{
+  const { http, judge } = await judgeTurn(
+    `Open the labelled case ${CASE} and ask its first question. Treat this as my answer: ` +
+    'I would size the market, map the main competitors and their shares, check typical margins, ' +
+    'and test whether we can produce at a cost that clears them. Score it against the ground truth.',
+    { app: APP, mode: 'interview' },
+  );
+  assert(http === 200 && !!judge, `G14 casebook turn invoked app_judge (http ${http})`);
+  if (judge) {
+    assert(judge.grounded === true, `G14 casebook answer is grounded (grounded=${judge.grounded})`);
+
+    // The app's headline is a 3-AXIS rubric. G11 only asserts that a number
+    // exists, so a judge returning one axis and two nulls passes it. The spec
+    // says to omit axes the question does not exercise, so require at least one
+    // present and every present one numeric and in range -- a string, a null or
+    // a 7-on-a-0-1-scale is a malformed verdict however confident it reads.
+    const axes = judge.axes && typeof judge.axes === 'object' ? judge.axes : null;
+    assert(!!axes, `G14 verdict carries an axes object (got ${JSON.stringify(judge.axes)})`);
+    if (axes) {
+      const named = Object.keys(axes);
+      const known = named.filter(k => ['framework', 'qualitative', 'quantitative'].includes(k));
+      assert(known.length > 0, `G14 axes use the declared rubric names (got ${named.join(',') || 'none'})`);
+      const bad = known.filter(k => typeof axes[k] !== 'number' || axes[k] < 0 || axes[k] > 1);
+      assert(bad.length === 0, `G14 every reported axis is a number in 0-1 (bad: ${bad.join(',') || 'none'})`);
+    }
+
+    // covered/total are the denominator the whole benchmark rests on, and the
+    // rubric fixes total -- asking the model for it returned 1, 3 and 13 for the
+    // same fixed-size rubric, which is why it is computed server-side now.
+    assert(Number.isInteger(judge.covered) && Number.isInteger(judge.total) && judge.total > 0,
+      `G14 covered/total are integers with a real denominator (${judge.covered}/${judge.total})`);
+
+    // ── G15: the panel is labelled, and a dropped seat degrades ──────────
+    //
+    // The panel's design is that a seat which cannot produce a usable number is
+    // DROPPED, never counted as a zero -- that rule is why the app survived the
+    // eleven days its pinned judge model 503'd on every call. A zero would have
+    // silently halved every correct answer instead.
+    //
+    // Cannot fake a dead seat from here (the panel is set in the app spec), so
+    // assert the invariant that is observable either way: panel_n is a real
+    // count, judge_models names exactly that many seats, and a short panel is
+    // flagged low_confidence rather than passed off as a full one.
+    assert(Number.isInteger(judge.panel_n) && judge.panel_n >= 1,
+      `G15 verdict reports how many seats scored it (panel_n=${judge.panel_n})`);
+    if (Array.isArray(judge.judge_models)) {
+      assert(judge.judge_models.length === judge.panel_n,
+        `G15 judge_models matches panel_n (${judge.judge_models.length} vs ${judge.panel_n})`);
+    }
+    // A single-seat panel is a degraded panel: it must say so, and it must not
+    // be the analyst grading itself unlabelled.
+    if (judge.panel_n < 2) {
+      assert(judge.low_confidence === true,
+        `G15 a short panel is flagged low_confidence (panel_n=${judge.panel_n}, low_confidence=${judge.low_confidence})`);
+    }
+    // Never a zero from a seat that failed: score 0 is legitimate (a wrong
+    // answer), but only when a seat actually scored it.
+    assert(!(judge.score === 0 && judge.panel_n === 0),
+      'G15 a zero score never comes from an empty panel');
+  }
+}
+
+// ── G16: the analyst must not hand over the answer key ───────────────────
+//
+// The judge prompt embeds the case's ground truth labelled "CONFIDENTIAL --
+// never quote it back", and the analyst reads the same bundle. In INTERVIEW
+// mode the candidate has not answered yet, so any keypoint that appears in the
+// interviewer's question is the answer key leaking -- and every score after it
+// is void, silently. Nothing checked this.
+//
+// Scored only against keypoints long enough to be distinctive: a rubric line
+// like "margins" would match innocuous prose and make the gate cry wolf.
+{
+  const dsOwner = 'db86775d-91b1-4752-802f-926039ae648f';
+  let keypoints = [];
+  try {
+    const r = await fetch(`https://xp.io/api/v1/repos/${dsOwner}/mbb-casebook-cases/blob/main/data/${CASE}.json`);
+    if (r.ok) {
+      let txt = await r.text();
+      try { const j = JSON.parse(txt); if (typeof j.content === 'string') txt = Buffer.from(j.content, 'base64').toString('utf8'); } catch { /* raw */ }
+      const gt = JSON.parse(txt).structure_4_ground_truth || {};
+      const first = Object.keys(gt).find(k => k.endsWith('_ground_truth'));
+      keypoints = JSON.stringify(gt[first] || '').match(/"([^"]{18,})"/g)?.map(x => x.slice(1, -1)) || [];
+    }
+  } catch { /* dataset unreachable — reported below, not asserted around */ }
+
+  if (!keypoints.length) {
+    console.log(`NOTE  G16 NOT RUN — could not read ground truth for ${CASE}`);
+  } else {
+    const { http, judge } = await judgeTurn(
+      `Open the labelled case ${CASE} in interview mode and ask me the first question. Do not answer it yourself.`,
+      { app: APP, mode: 'interview' },
+    );
+    void judge;
+    const r = await api('/api/v1/me/agent/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        context: { app: APP, mode: 'interview' },
+        model: 'deepseek-v4-flash',
+        messages: [{ role: 'user', content: `Open case ${CASE} and ask me its first question. I have not answered yet.` }],
+      }),
+    });
+    const body = r.status === 200 ? await r.json() : {};
+    const said = String(body?.data?.reply || '');
+    const leaked = keypoints.filter(k => said.toLowerCase().includes(k.toLowerCase()));
+    assert(http === 200 && said.length > 0, `G16 interviewer produced a question (http ${r.status})`);
+    assert(leaked.length === 0,
+      `G16 the interviewer did not quote the answer key (leaked ${leaked.length}: ${leaked.slice(0, 2).join(' | ').slice(0, 90)})`);
+  }
+}
+
+// ── G17: the scorecard verb the UI tells users to type ───────────────────
+//
+// ui/page.yaml tells the user `scorecard` works in any mode. Nothing typed it.
+// It resolves to app_report, and the contract that matters is the SPLIT:
+// casebook rows are scored against real keypoints and open rows are not, so a
+// single blended average is a number that means nothing. The app's own
+// ui/results.md says "mode is the column to read first".
+{
+  const r = await api('/api/v1/me/agent/chat', {
+    method: 'POST',
+    body: JSON.stringify({
+      context: { app: APP },
+      model: 'deepseek-v4-flash',
+      messages: [{ role: 'user', content: 'scorecard' }],
+    }),
+  });
+  const body = r.status === 200 ? await r.json() : {};
+  const call = (body?.data?.tool_calls || []).find(c => c.name === 'app_report');
+  assert(!!call, `G17 typing "scorecard" invokes app_report (tools fired: ${(body?.data?.tool_calls || []).map(c => c.name).join(',') || 'none'})`);
+  if (call?.result) {
+    const res = call.result;
+    const keys = Object.keys(res).join(',');
+    // Casebook and open must be distinguishable. Either per-row (a mode field)
+    // or as separate aggregates -- both are honest, a single blended number is
+    // not.
+    const rows = res.turns || res.rows || [];
+    const perRowMode = Array.isArray(rows) && rows.length > 0 && rows.every(t => 'mode' in t);
+    const splitAggregate = /casebook/i.test(keys) && /open/i.test(keys);
+    assert(perRowMode || splitAggregate || (Array.isArray(rows) && rows.length === 0),
+      `G17 report separates casebook from open (keys: ${keys}, rows: ${Array.isArray(rows) ? rows.length : 'n/a'})`);
+  }
+}
+
+// ── G18: one user's scored turns stay out of another's scorecard ─────────
+//
+// Runs only with a SECOND account configured (LUMID_EMAIL_B / LUMID_PASSWORD_B).
+// Skipped loudly rather than silently: per-user isolation is the claim that a
+// shared benchmark app lives or dies on, and a suite that quietly omits it
+// reads as if it had been checked.
+if (process.env.LUMID_EMAIL_B && process.env.LUMID_PASSWORD_B) {
+  const lr = await fetch(`${BASE}/api/v1/login`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: process.env.LUMID_EMAIL_B, password: process.env.LUMID_PASSWORD_B }),
+  });
+  const bTok = (await lr.json())?.data?.token;
+  assert(!!bTok, 'G18 second account logs in');
+  if (bTok) {
+    const bRes = await fetch(`${BASE}/api/v1/me/app-data?app=${encodeURIComponent(APP)}&tool=report`, {
+      headers: { Authorization: `Bearer ${bTok}` },
+    });
+    const bBody = bRes.status === 200 ? await bRes.json() : {};
+    const bRows = bBody?.data?.turns || bBody?.data?.rows || [];
+    const aRes = await api(`/api/v1/me/app-data?app=${encodeURIComponent(APP)}&tool=report`);
+    const aBody = aRes.status === 200 ? await aRes.json() : {};
+    const aRows = aBody?.data?.turns || aBody?.data?.rows || [];
+    // A has just been scored by the gates above; B has never used the app.
+    assert(aRows.length > 0, `G18 caller has scored turns to leak (${aRows.length})`);
+    assert(bRows.length === 0,
+      `G18 a second account sees none of them (saw ${bRows.length})`);
+  }
+} else {
+  console.log('NOTE  G18 NOT RUN — set LUMID_EMAIL_B / LUMID_PASSWORD_B to check per-user isolation');
+}
+
 // ── G9 ────────────────────────────────────────────────────────────────────
 assert(api404.length === 0, `G9 no /me/* 404s (saw: ${api404.join(', ') || 'none'})`);
 
