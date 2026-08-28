@@ -790,7 +790,18 @@ function LumidTable({ body }: { body: Body }) {
   if (rowArr.length === 0) {
     // Still show table-level actions (e.g. an admin "Reset all") even with no
     // rows, so the control isn't hidden just because the board is empty.
-    const empty = <div className="text-[12px] text-slate-400">No rows.</div>;
+    //
+    // Prefer the surface author's own `empty:` copy. This used to be a
+    // hardcoded "No rows." that ignored `body.empty` entirely, so every author
+    // who wrote a next action for an empty table — "No strategies yet. Deploy
+    // one below and it appears here…" — had it silently dropped, in every app,
+    // and a new user's first view of a surface was two words that tell them
+    // nothing about what to do.
+    const authored =
+      typeof body.empty === "string" && body.empty.trim() ? body.empty.trim() : null;
+    const empty = (
+      <div className="text-[12px] text-slate-400">{authored ?? "No rows."}</div>
+    );
     if (!tableActions.length) return empty;
     return (
       <div className="space-y-2">
@@ -968,7 +979,12 @@ function LumidChart({ body }: { body: Body }) {
   if (loading) return <Loading />;
   if (error) return <ErrLine msg={error} />;
   const rawRows = getPath(data, body.path as string | undefined);
-  if (!Array.isArray(rawRows) || rawRows.length === 0) return <div className="text-[12px] text-slate-400">No data.</div>;
+  // Same author-copy rule as the table above: `empty:` wins over the default.
+  if (!Array.isArray(rawRows) || rawRows.length === 0) {
+    const authored =
+      typeof body.empty === "string" && body.empty.trim() ? body.empty.trim() : null;
+    return <div className="text-[12px] text-slate-400">{authored ?? "No data."}</div>;
+  }
   // Support both legacy (x/y) and new (x_key/y_key) names.
   const xKey = (body.x_key as string) ?? (body.x as string) ?? "x";
   const yKey = (body.y_key as string) ?? (body.y as string);
