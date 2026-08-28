@@ -534,8 +534,8 @@ const judgeTurn = async (content, ctx) => {
   // exists to defend -- and the kind of cried wolf that gets a gate deleted
   // again. Report it as NOT RUN and keep the failure for a real answer that is
   // missing its caveat.
-  if (http === 504 || http === 0) {
-    console.log(`NOTE  G13 NOT RUN — open turn timed out at the edge (http ${http}); the caveat was not exercised`);
+  if (http === 502 || http === 504 || http === 0) {
+    console.log(`NOTE  G13 NOT RUN — open turn timed out (http ${http}); the caveat was not exercised`);
   } else {
     assert(http === 200 && !!judge, `G13 open turn invoked app_judge (http ${http}, judge ${judge ? 'present' : 'absent'})`);
   }
@@ -554,7 +554,15 @@ const judgeTurn = async (content, ctx) => {
     'and test whether we can produce at a cost that clears them. Score it against the ground truth.',
     { app: APP, mode: 'interview' },
   );
-  assert(http === 200 && !!judge, `G14 casebook turn invoked app_judge (http ${http})`);
+  // Same distinction G13 makes. A timed-out turn did not exercise the rubric,
+  // and reporting it as "the verdict has no axes" would accuse the judge of
+  // malformed output on a slow day -- 502 is identity's own 5-minute ceiling and
+  // 504 the edge's, both of which this app's ~190s scored turns sit close to.
+  if (http === 502 || http === 504 || http === 0) {
+    console.log(`NOTE  G14/G15 NOT RUN — casebook turn timed out (http ${http})`);
+  } else {
+    assert(http === 200 && !!judge, `G14 casebook turn invoked app_judge (http ${http})`);
+  }
   if (judge) {
     assert(judge.grounded === true, `G14 casebook answer is grounded (grounded=${judge.grounded})`);
 
@@ -634,10 +642,35 @@ const judgeTurn = async (content, ctx) => {
     const r = await fetch(`https://xp.io/api/v1/repos/${dsOwner}/mbb-casebook-cases/blob/main/data/${file}`);
     if (r.ok) {
       let txt = await r.text();
-      try { const j = JSON.parse(txt); if (typeof j.content === 'string') txt = Buffer.from(j.content, 'base64').toString('utf8'); } catch { /* raw */ }
+      // The blob endpoint returns {path, ref, content} with content as PLAIN
+      // TEXT -- there is no `encoding` field and it is not base64. Decoding it
+      // as base64 anyway produced bytes that then failed JSON.parse, and the
+      // surrounding try/catch reported that as "could not read ground truth" --
+      // so the gate blamed a missing case for a bug in its own parsing.
+      try {
+        const j = JSON.parse(txt);
+        if (typeof j.content === 'string') txt = j.content;
+      } catch { /* already the raw document */ }
       const gt = JSON.parse(txt).structure_4_ground_truth || {};
       const first = Object.keys(gt).find(k => k.endsWith('_ground_truth'));
-      keypoints = JSON.stringify(gt[first] || '').match(/"([^"]{18,})"/g)?.map(x => x.slice(1, -1)) || [];
+      // Pull the actual keypoints[] arrays -- they live under
+      // pillars.<pillar>.keypoints. Scraping every long quoted string instead
+      // swept up scoring_method, minimum_expected and outstanding_threshold,
+      // which are rubric METADATA: matching those against the interviewer's
+      // prose would flag a leak that never happened.
+      const collect = (node, out = []) => {
+        if (Array.isArray(node)) { node.forEach(n => collect(n, out)); return out; }
+        if (node && typeof node === 'object') {
+          for (const [k, v] of Object.entries(node)) {
+            if (k === 'keypoints' && Array.isArray(v)) out.push(...v.filter(x => typeof x === 'string'));
+            else collect(v, out);
+          }
+        }
+        return out;
+      };
+      // Long enough to be distinctive: a keypoint like "Margins" would match
+      // innocuous prose and make the gate cry wolf.
+      keypoints = collect(gt[first]).filter(k => k.length >= 18);
     }
   } catch { /* dataset unreachable — reported below, not asserted around */ }
 
