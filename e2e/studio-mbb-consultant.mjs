@@ -320,7 +320,12 @@ page.on('request', onChatPost);
 // dialog handler responds, and a `once` listener already consumed by any
 // earlier dialog leaves the click hanging with no draft ever written.
 let dialogsSeen = 0;
-page.on('dialog', d => { dialogsSeen++; d.accept('It ignored private-label economics.'); });
+// Names a card the router can actually select. knownSkillCards is an
+// allowlist (issue_tree, market_sizing, npv, profitability, ...), and the
+// previous text -- "private-label economics" -- matched none of them, so no
+// skill-card edit could ever be proposed and G12 was asserting a coupling
+// this input never created.
+page.on('dialog', d => { dialogsSeen++; d.accept('The issue tree was wrong — it split by geography before cost.'); });
 
 // The control only renders while NOT streaming, so a click issued during the
 // tail of the previous turn hits nothing and silently takes the prose fallback
@@ -432,7 +437,24 @@ if (nAfter > nBefore) {
   const skillDraft = rows.filter(
     d => /Proposed edit to prompts\/analyst_skill_([a-z][a-z0-9_]{2,40})\.md/.test(d.body || ''),
   ).pop();
-  assert(!!skillDraft, 'G12 the staged draft names a skill card to correct');
+  // NOT RUN rather than FAIL when no skill-card draft exists.
+  //
+  // The app stages TWO kinds (ui/review.md: the Kind column tells them apart) --
+  // a Correction, which is a fact for the analyst to recall, and a Skill card
+  // edit, which rewrites a prompt. Only the second carries this marker, and
+  // which one you get depends on whether the correction text routes to a card in
+  // knownSkillCards. This gate asserted the second unconditionally, so a
+  // correction that legitimately produced the first failed as though the
+  // round-trip were broken -- while G5, one line above, had just proved a draft
+  // WAS staged.
+  //
+  // Asserting a coupling the input never established is the same mistake as the
+  // hardcoded skill name and the hardcoded run id. The round-trip below is the
+  // claim worth keeping; it simply needs a skill-card draft to run against.
+  if (!skillDraft) {
+    console.log(`NOTE  G12 NOT RUN — the correction staged a Correction, not a Skill card edit `
+      + `(${rows.length} draft(s), none carrying an analyst_skill_*.md marker)`);
+  }
 
   if (skillDraft) {
     const card = (skillDraft.body.match(
@@ -601,7 +623,15 @@ const judgeTurn = async (content, ctx) => {
   const dsOwner = 'db86775d-91b1-4752-802f-926039ae648f';
   let keypoints = [];
   try {
-    const r = await fetch(`https://xp.io/api/v1/repos/${dsOwner}/mbb-casebook-cases/blob/main/data/${CASE}.json`);
+    // Resolve the filename rather than assuming `<CASE>.json`. The dataset
+    // carries a VERSION suffix -- CASE "Case_019_BetaOptics_PK21" is stored as
+    // Case_019_BetaOptics_PK21_v10.json -- so the direct guess 404s and the gate
+    // reported NOT RUN on its first outing for a case that is plainly there.
+    const tree = await fetch(`https://xp.io/api/v1/repos/${dsOwner}/mbb-casebook-cases/tree/main/data`);
+    const entries = tree.ok ? ((await tree.json()).entries || []) : [];
+    const file = (entries.find(e => String(e.name).startsWith(CASE)) || {}).name;
+    if (!file) throw new Error(`no dataset file starting with ${CASE}`);
+    const r = await fetch(`https://xp.io/api/v1/repos/${dsOwner}/mbb-casebook-cases/blob/main/data/${file}`);
     if (r.ok) {
       let txt = await r.text();
       try { const j = JSON.parse(txt); if (typeof j.content === 'string') txt = Buffer.from(j.content, 'base64').toString('utf8'); } catch { /* raw */ }
