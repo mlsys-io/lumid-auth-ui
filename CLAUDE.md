@@ -1,41 +1,51 @@
 # CLAUDE.md — lumid-ui
 
-This file provides guidance to Claude Code (claude.ai/code) when working in this repository.
-
 **`lumid-ui` is the single React SPA behind almost every authenticated surface on `lum.id`** —
 auth pages, the account area, Studio, the super-admin dashboard, the Claude quota/session views,
 and the *verbatim ports* of the retired Runmesh, Lumilake and QuantArena-admin frontends.
 React + Vite + TypeScript + shadcn/ui. Repo: `mlsys-io/lumid-auth-ui` (the name predates the
 scope). `package.json` says `0.4.0`; **the real version is the git tag** (`v0.5.118`, …).
 
+Full `lum.id` path map, auth architecture and deploy protocol: root `/proj/CLAUDE.md` §2, §4, §7.
+
 > **Where this runs (checked 2026-08-09).** Argo **Rollout** (not a Deployment) named `lumid-ui`,
-> **4 replicas, canary strategy with a Job-smoke analysis gate**, ns `lumid` on cluster
-> `lumid-prod2`, **service** tier. Argo app `lumid-ui` from `/proj/deploy_infra/k8s-lift/lumid-ui/`.
-> It is never exposed directly: the `lumid-landing` nginx owns `lum.id` and proxies the
-> authenticated paths to it. There is a parallel **nightly lane** (`lumid-ui-nightly` at
-> `nightly.lum.id`) that re-tags the CI image.
->
-> **GitOps history worth knowing:** UI deploys were silently broken for a while by a stale
-> `.argocd-source-*` override; fixed 2026-07-25 with `ServerSideApply=true` plus a retag past the
-> override. If a tag appears to deploy but the live bundle doesn't change, suspect that file
-> before suspecting the build.
->
-> **Verifying a deploy: assets live under `/auth/assets/`, not `/assets/`.** `curl`ing
-> `lum.id/assets/<chunk>.js` 404s even on a perfectly healthy deploy, which reads exactly like
-> the stale-bundle failure above. Get the real path from the served HTML
-> (`curl -s https://lum.id/studio | grep -oE 'assets/index-[^"]+\.js'` → prefix `/auth/`), then
-> grep the chunk for a string unique to your change. Chunk hashes from a local `npm run build`
-> do NOT match CI's, so comparing filenames proves nothing — compare content.
-> The Argo **Rollout** also means the flip isn't atomic: canary steps 25% → smoke → 50% → smoke
-> → 100%, all pauses time-bounded (60s), so it self-promotes; a failed smoke gate leaves it
-> `Degraded` on the OLD version rather than serving a broken bundle.
+> **4 replicas, canary with a Job-smoke analysis gate**, ns `lumid`, **service** tier; Argo app
+> `lumid-ui` from `/proj/deploy_infra/k8s-lift/lumid-ui/`. Never exposed directly — the
+> `lumid-landing` nginx owns `lum.id` and proxies the authenticated paths to it. A parallel
+> **nightly lane** (`lumid-ui-nightly` at `nightly.lum.id`) re-tags the CI image.
 
 ## Release / deploy
 
-Cut a `vX.Y.Z` git tag → CI builds the image → pin it in the Argo app → commit to `deploy_infra`
-branch `migration/uks`. `kubectl set image` is reverted by selfHeal. Canary gating is a **Job
-smoke test** (curl the canary Service for HTTP 200 + a latency ceiling) — *not* Prometheus, which
-was torn down 2026-07-04. Protocol: `/proj/deploy_infra/k8s-lift/CD-PROTOCOL.md`.
+**Cut a `vX.Y.Z` git tag and stop — the rest is automatic.** CI builds
+`ghcr.io/mlsys-io/lumid-ui:vX.Y.Z`, then **Argo CD Image Updater** (semver, allow-tags
+`^v\d+\.\d+\.\d+$`, write-back `git:secret:argocd/git-creds` → branch `migration/uks`)
+resolves it and commits the pin into
+`k8s-lift/lumid-ui/.argocd-source-lumid-ui.yaml` itself — the `build: automatic update of
+lumid-ui` commits. **There is no manual pin step**; this file claimed one until 2026-08-28, which
+sends you to hand-edit a file the updater owns and will overwrite. Same lane as `lumid-identity`.
+
+`kubectl set image` is still reverted by selfHeal — the ban stands. If you need the rollout NOW
+rather than at the next reconcile, nudge the Application instead:
+`kubectl -n argocd annotate application lumid-ui argocd.argoproj.io/refresh=normal --overwrite`.
+Rollback = cut a **higher** tag; the updater only moves forward on semver.
+
+Canary gating is a **Job smoke test** (curl the canary Service for HTTP 200 + a latency ceiling)
+— *not* Prometheus, which was torn down 2026-07-04. Protocol:
+`/proj/deploy_infra/k8s-lift/CD-PROTOCOL.md`.
+
+Three deploy-verification traps, in the order they bite:
+
+1. **A stale `.argocd-source-*` override silently breaks deploys.** Fixed 2026-07-25 with
+   `ServerSideApply=true` plus a retag past the override. If a tag appears to deploy but the live
+   bundle doesn't change, suspect that file before suspecting the build.
+2. **Assets live under `/auth/assets/`, not `/assets/`.** `curl`ing `lum.id/assets/<chunk>.js`
+   404s even on a perfectly healthy deploy, which reads exactly like trap 1. Get the real path
+   from the served HTML (`curl -s https://lum.id/studio | grep -oE 'assets/index-[^"]+\.js'` →
+   prefix `/auth/`), then grep the chunk for a string unique to your change. Chunk hashes from a
+   local `npm run build` do NOT match CI's — compare content, never filenames.
+3. **The flip is not atomic.** Rollout canary steps 25% → smoke → 50% → smoke → 100%, all pauses
+   time-bounded (60 s) so it self-promotes; a failed smoke gate leaves it `Degraded` on the OLD
+   version rather than serving a broken bundle.
 
 ## Layout
 
@@ -48,7 +58,7 @@ src/pages/
   dashboard/               super-admin.tsx — the 5-section operational dashboard
   studio/                  THE app surface. Chat-first "Simple mode" is the default;
                            "Advanced" (the older Studio) is behind a toggle
-  onboarding/, explore/, status/, docs/, app-revamp/
+  onboarding/, status/, docs/, app/, app-revamp/, deprecated/, Go.tsx
   docs/xpio-autoresearch.tsx   renders public/docs/xpio_autoresearch_canonical.md.
                            PUBLIC route — NO AuthGuard, deliberately, so anonymous
                            forkers can read the contract before installing
@@ -56,9 +66,14 @@ src/runmesh/               the entire Runmesh admin tree ported verbatim (~14k L
                            imports mass-rewritten @/* → @/runmesh/*
 src/lumilake/, src/admin/, src/qa/, src/quantarena/, src/lqt/   the other absorbed frontends
 src/components/            auth-guard.tsx, admin-guard.tsx, shared UI
+  StudioShell.tsx          sidebar + top strip; owns the fullBleed/wideMain route rules
+  StudioChat.tsx           the chat; LIBRARY_KEY / DATA_KEY virtual scopes live here
+  ChatRail.tsx             the docked rail (width, drag-resize, narrow takeover,
+                           portaled toggle) — shared by the app workspace and /studio/data
 src/hooks/                 incl. useCollapse(key, default) — localStorage-persisted tile toggles
 public/docs/               mirrored copy of the canonical autoresearch contract
 ```
+<!-- STALE (checked 2026-08-23): src/pages/explore/ was listed here but does not exist. -->
 
 ## Commands
 
@@ -90,8 +105,19 @@ npm run test:blocks    # e2e/blocks-replay.mjs
 - **Super-admin dashboard ordering is deliberate** — operational urgency first: health → source →
   autoresearch loops → identity → telemetry. Collapse states persist under
   `localStorage["super-admin:<key>"]`.
+- **A route that docks `StudioChat` must be added to `fullBleed` in `StudioShell.tsx`.**
+  `<main>` has three layouts, and the default branch is `px-6 py-6 max-w-5xl`. A page that renders
+  the chat rail inside that cap looks *broken but not obviously so*: the rail is correctly pinned
+  to its container's right edge, and that edge is the middle of the viewport. Full-bleed also
+  carries `h-screen overflow-hidden`, which is what makes the transcript scroll inside the rail
+  instead of growing the page — so missing it costs you two bugs, not one. `/studio/apps/:app`,
+  `/studio/library` and `/studio/data` are the current members; full-bleed panels own their own
+  padding.
+- **Not every docked chat is grounded on an installed app.** `StudioChat` takes a `groundApp`
+  slug, but `LIBRARY_KEY` and `DATA_KEY` are *virtual* scopes with hardcoded openers in
+  `emitAppOpener` — no bundle behind them. That works only because the tools those chats drive
+  (`data_catalog`, `data_query`, `save_artifact`) are platform tools; an app-declared tool would
+  need a real install. A new virtual scope also needs a `workspaceApp()` branch, or its threads
+  save untagged and can't be resumed.
 - **Studio Simple mode is UIUX-only** over an unchanged engine. If a change to Simple mode
   requires an engine change, that's a signal to reconsider the change.
-
-Broader context — the full `lum.id` path map, the auth architecture, and the deploy protocol — is
-in the root `/proj/CLAUDE.md` §2 and §4.
