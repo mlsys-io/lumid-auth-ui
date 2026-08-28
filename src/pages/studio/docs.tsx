@@ -16,7 +16,7 @@
 // Re-adding either is a DOCS entry / a <Link>, nothing more.
 
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import 'github-markdown-css/github-markdown-light.css';
@@ -24,6 +24,8 @@ import {
 	BookOpen, Zap, FileCode2, Activity, CandlestickChart, Compass, ArrowLeft, Loader2, Cpu, Database, TerminalSquare, Bot, GraduationCap,
 } from 'lucide-react';
 import StudioHow from './how';
+import { useAuth } from '../../hooks/useAuth';
+import { Loading } from '../../components/ui/loading';
 
 interface DocEntry {
 	slug: string;
@@ -39,6 +41,11 @@ interface DocEntry {
 	// which works only because those two have routes of their own; for a
 	// markdown doc the entry IS the route, so hiding has to be a flag.
 	hidden?: boolean;
+	// (Admin+) docs — hidden from the index for non-admins and their reader
+	// route redirects them away. UX only: the real gate is auth_request on
+	// the /docs/<file> location in lum-id-landing.conf, without which the raw
+	// markdown would stay publicly fetchable.
+	adminOnly?: boolean;
 }
 
 const DOCS: DocEntry[] = [
@@ -99,6 +106,7 @@ const DOCS: DocEntry[] = [
 		md: 'claude_pool.md',
 		group: 'Guides',
 		icon: Zap,
+		adminOnly: true,
 		standalone: '/docs/claude',
 		companion: { to: '/code', label: 'Quota dashboard' },
 	},
@@ -158,6 +166,7 @@ const DOCS: DocEntry[] = [
 		md: 'operations.md',
 		group: 'Runbooks',
 		icon: Compass,
+		adminOnly: true,
 		standalone: '/docs/operations',
 		companion: { to: '/status/operations', label: 'Live status' },
 	},
@@ -168,13 +177,17 @@ const DOCS: DocEntry[] = [
 		md: 'plugin-image-cd.md',
 		group: 'Runbooks',
 		icon: FileCode2,
+		adminOnly: true,
 		standalone: '/docs/plugin-image-cd',
 	},
 ];
 
 const GROUP_ORDER: DocEntry['group'][] = ['Guides', 'Contracts', 'Runbooks'];
 // What the index renders. Hidden docs stay in DOCS so their reader route still
-// resolves; they simply never get a card.
+// resolves; they simply never get a card. adminOnly docs additionally drop off
+// the index for non-admin users — useAuth resolves by the time the index
+// renders (StudioShell is already behind AuthGuard), so no isLoading branch is
+// needed here.
 const INDEXED = DOCS.filter((d) => !d.hidden);
 // Only groups that actually have entries — otherwise removing the last doc in a
 // group leaves a heading over an empty grid (which is how 'Contracts' looked the
@@ -201,6 +214,9 @@ const RESOURCES: { href: string; label: string; description: string; icon: React
 ];
 
 function DocIndex() {
+	const { user } = useAuth();
+	const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+	const visible = INDEXED.filter((d) => !d.adminOnly || isAdmin);
 	return (
 		<div className="max-w-3xl mx-auto px-6 py-8">
 			<header className="mb-6">
@@ -212,11 +228,11 @@ function DocIndex() {
 					Guides, contracts, and runbooks for the Lumid platform.
 				</p>
 			</header>
-			{GROUPS.map((g) => (
+			{GROUPS.filter((g) => visible.some((d) => d.group === g)).map((g) => (
 				<section key={g} className="mb-6">
 					<h2 className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-2">{g}</h2>
 					<div className="grid gap-2 sm:grid-cols-2">
-						{INDEXED.filter((d) => d.group === g).map((d) => (
+						{visible.filter((d) => d.group === g).map((d) => (
 							<Link
 								key={d.slug}
 								to={`/studio/docs/${d.slug}`}
@@ -317,6 +333,15 @@ function DocReader({ doc }: { doc: DocEntry }) {
 
 export default function StudioDocs() {
 	const { slug } = useParams<{ slug?: string }>();
+	const { user, isLoading } = useAuth();
+	const found = slug ? DOCS.find((d) => d.slug === slug) : undefined;
+	// (Admin+) docs redirect non-admins. isLoading short-circuits first so a
+	// user whose profile hasn't landed yet isn't bounced by mistake — same
+	// ordering AdminGuard uses.
+	if (found?.adminOnly && isLoading) return <Loading fullScreen />;
+	if (found?.adminOnly && user?.role !== 'admin' && user?.role !== 'super_admin') {
+		return <Navigate to="/studio/docs" replace />;
+	}
 	// "how" is the interactive tour (a React page, not markdown) — render it
 	// inside the docs chrome so it reads as part of the same collection.
 	if (slug === 'how') {
