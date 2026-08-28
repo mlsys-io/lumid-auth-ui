@@ -655,6 +655,21 @@ function LumidTable({ body }: { body: Body }) {
     ? (body.search_keys as unknown[]).map((k) => String(k)).filter(Boolean)
     : [];
   const searchable = searchKeys.length > 0;
+  // DECLARATIVE ROW HIDING — `hide_when: [{ key, prefix|equals|contains }]`.
+  //
+  // For rows that are noise by construction rather than by the reader's
+  // current interest: test fixtures, seeded demos. On quant-research's
+  // strategy list, 10 of 17 registry rows are `e2e_*` / `smoke_*`, so the
+  // real strategies were outnumbered on the page a user goes to to find them.
+  //
+  // Hidden rows are COUNTED AND TOGGLEABLE, never silently dropped. A surface
+  // that quietly omits rows is a surface that lies about what exists — and
+  // the fixtures are real registrations someone may well need to see.
+  const hideRules = Array.isArray(body.hide_when)
+    ? (body.hide_when as Record<string, unknown>[]).filter((r) => r && r.key)
+    : [];
+  const hideSig = JSON.stringify(hideRules);
+  const [showHidden, setShowHidden] = useState(false);
   // Stable memo deps for values derived from `body` (a fresh object each render).
   const searchSig = searchKeys.join("\u0000");
   const orderSig = JSON.stringify(cols.map((c) => [c.key, c.order ?? null]));
@@ -663,15 +678,35 @@ function LumidTable({ body }: { body: Body }) {
   const rowArr = Array.isArray(rows) ? (rows as Record<string, unknown>[]) : [];
 
   // Filter first, then sort — so the sort arrow describes what is on screen.
+  // Rows the declarative rules would hide. Computed even when showing them, so
+  // the toggle can state the count honestly.
+  const hiddenRows = useMemo(() => {
+    const rules = JSON.parse(hideSig || "[]") as Record<string, unknown>[];
+    if (!rules.length) return [] as Record<string, unknown>[];
+    return rowArr.filter((r) =>
+      rules.some((rule) => {
+        const v = String(getPath(r, String(rule.key)) ?? "");
+        if (typeof rule.prefix === "string") return v.startsWith(rule.prefix);
+        if (typeof rule.equals === "string") return v === rule.equals;
+        if (typeof rule.contains === "string") return v.includes(rule.contains);
+        return false;
+      }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowArr, hideSig]);
+
   const filteredRows = useMemo(() => {
+    const base =
+      hiddenRows.length && !showHidden
+        ? rowArr.filter((r) => !hiddenRows.includes(r))
+        : rowArr;
     const needle = query.trim().toLowerCase();
-    if (!needle || !searchSig) return rowArr;
+    if (!needle || !searchSig) return base;
     const keys = searchSig.split("\u0000");
     // getPath so dotted keys (fields.industry) match the value the cell renders.
-    return rowArr.filter((r) =>
+    return base.filter((r) =>
       keys.some((k) => String(getPath(r, k) ?? "").toLowerCase().includes(needle)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rowArr, query, searchSig]);
+  }, [rowArr, query, searchSig, hiddenRows, showHidden]);
 
   const sortedRows = useMemo(() => {
     if (!sort) return filteredRows;
@@ -712,6 +747,21 @@ function LumidTable({ body }: { body: Body }) {
 
   // Rendered above the table whenever `search_keys` is present. Absent it this
   // is null and the widget behaves exactly as before.
+  // Always rendered when rules hid something — the count is the honesty: the
+  // reader can see that rows exist and choose to look at them.
+  const hiddenToggle = hiddenRows.length ? (
+    <button
+      type="button"
+      onClick={() => setShowHidden((v) => !v)}
+      className="text-[11px] text-slate-400 hover:text-slate-600 underline decoration-dotted underline-offset-2 shrink-0"
+      title="Rows hidden by this surface's hide_when rules (test fixtures, seeded demos)"
+    >
+      {showHidden
+        ? `hide ${hiddenRows.length} fixture${hiddenRows.length === 1 ? "" : "s"}`
+        : `${hiddenRows.length} hidden`}
+    </button>
+  ) : null;
+
   const searchBox = searchable ? (
     <div className="flex items-center gap-2">
       <input
@@ -726,7 +776,12 @@ function LumidTable({ body }: { body: Body }) {
           {filteredRows.length} of {rowArr.length}
         </span>
       )}
+      {hiddenToggle}
     </div>
+  ) : hiddenToggle ? (
+    // No search box on this table, but rows are hidden — the count still has
+    // to be reachable, so render the toggle on its own.
+    <div className="flex items-center gap-2">{hiddenToggle}</div>
   ) : null;
 
   const tableActions = (body.actions as ActionDef[] | undefined)?.filter((a) => a && a.label) ?? [];
