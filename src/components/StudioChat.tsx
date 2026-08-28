@@ -283,6 +283,13 @@ const WS_DATA_KEY = 'studio_chat_ws_data_v1';
 // permanent warning.
 type ModelOption = { id: string; display_name: string; default: boolean; app_tools?: boolean };
 const modelHasAppTools = (m?: ModelOption) => m?.app_tools !== false;
+// Which lane a model runs in. `claude-code-*` models drive the Claude CLI in a
+// sandbox; everything else answers in-thread. Same test the transcripts link
+// uses, kept as the id prefix rather than `app_tools === false` on purpose:
+// app_tools describes a CONSEQUENCE of the lane (the CLI path is handed no app
+// tools) and an older server omits it entirely, so keying the menu on it would
+// silently collapse both groups into one.
+const isCodeModel = (id: string) => id.startsWith('claude-code');
 // Mutually-exclusive tool-forcing modes. '' = let the agent decide.
 type ChatMode = '' | 'search' | 'deep_research';
 
@@ -3583,6 +3590,15 @@ function ModelChip({
 	const ref = useClickOutside(open, () => setOpen(false));
 	const current = models.find((m) => m.id === model);
 	if (models.length === 0) return null;
+	// Split the menu by lane. A flat list put "Claude Sonnet (Code)" next to
+	// "GLM-5.3-Flash" as if they were interchangeable, when picking one switches
+	// the whole execution path. Headers only appear when BOTH lanes are present,
+	// so a deployment serving one kind of model still gets a plain list.
+	const groups = [
+		{ key: 'chat', label: 'Chat', items: models.filter((m) => !isCodeModel(m.id)) },
+		{ key: 'code', label: 'Code', items: models.filter((m) => isCodeModel(m.id)) },
+	].filter((g) => g.items.length > 0);
+	const showHeaders = groups.length > 1;
 	return (
 		<div ref={ref} className="relative">
 			<button
@@ -3607,23 +3623,32 @@ function ModelChip({
 			</button>
 			{open && (
 				<div className="absolute bottom-full right-0 mb-1 z-50 min-w-[180px] p-1 rounded-xl border border-border bg-card shadow-lg shadow-foreground/5">
-					{models.map((m) => (
-						<button
-							key={m.id}
-							type="button"
-							onClick={() => { setModel(m.id); setOpen(false); }}
-							className={[
-								'w-full text-left flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12px] transition-colors',
-								m.id === model ? 'bg-gold-50 text-gold-800' : 'text-foreground hover:bg-muted/60',
-							].join(' ')}
-						>
-							<Bot className={['w-3 h-3', m.id === model ? 'text-gold-600' : 'text-muted-foreground'].join(' ')} />
-							<span className="font-medium flex-1">{m.display_name}</span>
-							{groundApp && !modelHasAppTools(m) && (
-								<span className="text-[10px] text-amber-600 whitespace-nowrap">no app tools</span>
+					{groups.map((g) => (
+						<div key={g.key}>
+							{showHeaders && (
+								<p className="px-2.5 pt-1.5 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+									{g.label}
+								</p>
 							)}
-							{m.id === model && <span className="w-1.5 h-1.5 rounded-full bg-gold-500" />}
-						</button>
+							{g.items.map((m) => (
+								<button
+									key={m.id}
+									type="button"
+									onClick={() => { setModel(m.id); setOpen(false); }}
+									className={[
+										'w-full text-left flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12px] transition-colors',
+										m.id === model ? 'bg-gold-50 text-gold-800' : 'text-foreground hover:bg-muted/60',
+									].join(' ')}
+								>
+									<Bot className={['w-3 h-3', m.id === model ? 'text-gold-600' : 'text-muted-foreground'].join(' ')} />
+									<span className="font-medium flex-1">{m.display_name}</span>
+									{groundApp && !modelHasAppTools(m) && (
+										<span className="text-[10px] text-amber-600 whitespace-nowrap">no app tools</span>
+									)}
+									{m.id === model && <span className="w-1.5 h-1.5 rounded-full bg-gold-500" />}
+								</button>
+							))}
+						</div>
 					))}
 					{groundApp && models.some((m) => !modelHasAppTools(m)) && (
 						<p className="px-2.5 pt-1.5 pb-1 text-[10px] leading-snug text-muted-foreground border-t border-border mt-1">
