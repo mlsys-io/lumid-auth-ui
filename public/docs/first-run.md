@@ -573,6 +573,42 @@ fake half — that is exactly how a synthetic result gets mistaken for an edge.
   0.00. A position sitting at 0.90 is worth *zero* if it resolves the other way,
   which is why marking to the last price can be badly wrong.
 
+**A real one, field by field.** This is `bt_vpin_3axis`, a run that is real on
+all three axes:
+
+```json
+{
+  "instrument_id": "KXBTCD-26AUG2519-T78899.99",
+  "replay": "pg_tape", "signals": "recorded", "settlement": "resolved",
+  "prints_replayed": 7548, "span_secs": 47183,
+  "tape_window_secs": 604800, "tape_max_events": 50000,
+  "steps_evaluated": 7548, "total_actions": 0,
+  "filled_lots": 0, "realized_pnl_ticks": 0, "fees_ticks": 0, "net_lots": 0,
+  "sharpe": null, "sharpe_ex_settlement": null,
+  "max_drawdown_ticks": 0, "max_drawdown_bps": null,
+  "final_equity_ticks": 0, "settlement_jump_ticks": 0,
+  "metrics_observations": 0, "metrics_bucket_secs": 60
+}
+```
+
+Read top-down and it tells a clear story. The three axes are all real, so this
+counts. It replayed 7,548 recorded prints over about 13 hours — `span_secs`,
+well inside the 7-day window it was allowed. And then: **`total_actions: 0`.**
+
+That single field explains every other zero. The guard never fired, so nothing
+was proposed, so nothing filled, so P&L is zero — not because the strategy lost
+nothing, but because it never played. `sharpe` is `null` rather than `0.0` for
+exactly that reason, and `max_drawdown_bps` is `null` because there was never a
+positive peak to take a percentage of. `max_drawdown_ticks` is a true `0`: a
+position you never opened cannot draw down.
+
+**This is a good result, and it is the one you should expect first.** It says
+the machinery works end to end and your threshold is wrong for the observed
+distribution — which is a fact about the market you can act on. The failure
+would be reading `realized_pnl_ticks: 0` as "flat" and moving on.
+
+![The Backtest surface: claims with their replay, signals and settlement labels.](/docs/img/first-run-backtest-result.png)
+
 **Sharpe and max drawdown.** A result carries `sharpe`, `max_drawdown_ticks`
 and `max_drawdown_bps`, derived from a mark-to-market equity curve the harness
 records at every step.
