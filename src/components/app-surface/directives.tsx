@@ -469,6 +469,23 @@ function StatusBadge({ value }: { value: string }) {
   return <span className={cn("inline-flex px-1.5 py-0.5 rounded text-[11px] font-medium border", cls)}>{value}</span>;
 }
 
+/** Text for a table that rendered no rows AFTER filtering.
+ *
+ * `No rows match "{query}"` is only true when the user actually typed something.
+ * It also fired when `hide_when` removed every row and the query was empty,
+ * producing a literal `No rows match ""` — and suppressing the authored
+ * `empty:` text the page spec provides. A registry holding only fixture rows
+ * (Strategies hides `e2e_` / `smoke_` / `verify-` / `probe-` prefixes) hit this
+ * on a fresh account, which is exactly when the authored text matters most.
+ */
+function filteredEmptyText(query: string, body: Record<string, unknown>): string {
+  const q = query.trim();
+  if (q) return `No rows match \u201C${q}\u201D.`;
+  const authored =
+    typeof body.empty === "string" && body.empty.trim() ? body.empty.trim() : null;
+  return authored ?? "No rows.";
+}
+
 function formatCell(value: unknown, type?: string): React.ReactNode {
   if (value == null || value === "") return "—";
   const n = Number(value);
@@ -854,7 +871,7 @@ function LumidTable({ body }: { body: Body }) {
         {tableActions.length > 0 && <ActionBar actions={tableActions} onDone={refetch} />}
         {searchBox}
         {sortedRows.length === 0 && (
-          <div className="text-[12px] text-slate-400">No rows match “{query.trim()}”.</div>
+          <div className="text-[12px] text-slate-400">{filteredEmptyText(query, body)}</div>
         )}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {sortedRows.slice(0, 60).map((row, i) => {
@@ -907,7 +924,7 @@ function LumidTable({ body }: { body: Body }) {
       )}
       {searchBox}
       {sortedRows.length === 0 ? (
-        <div className="text-[12px] text-slate-400">No rows match “{query.trim()}”.</div>
+        <div className="text-[12px] text-slate-400">{filteredEmptyText(query, body)}</div>
       ) : (
       <div className="overflow-x-auto rounded-lg border border-slate-200">
         <table className="min-w-full text-[12px] border-collapse">

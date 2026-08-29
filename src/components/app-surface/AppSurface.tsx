@@ -98,6 +98,7 @@ function AppSurfaceImpl({
     loading: boolean;
     error?: string;
     noSurface?: boolean;
+    notInstalled?: boolean;
   }>({ loading: true });
   const [removing, setRemoving] = useState(false);
 
@@ -117,11 +118,24 @@ function AppSurfaceImpl({
       .catch((e) => {
         if (reqRef.current !== reqId) return;
         if (e instanceof MeApiError && e.ret_code === 1404) {
-          // No surface yet — show an opt-in empty state. We do NOT auto-
-          // generate here: it blocked the whole surface for up to 90s and
-          // would clobber a native app's component. Generation is an explicit
-          // user action (button → the editor's generate flow).
-          setState({ loading: false, noSurface: true });
+          // 1404 covers TWO different situations and they need different
+          // answers. "app not found" means the slug is wrong or the app is not
+          // installed; "unknown surface" means the app is here but this page is
+          // not. Collapsing both into the generate-a-page card meant a mistyped
+          // slug invited the user to LLM-generate a replacement over an app
+          // that already has four surfaces — destructive, from a typo.
+          const notInstalled = /app not found|unknown app|not installed/i.test(
+            String(e?.message ?? ""),
+          );
+          if (notInstalled) {
+            setState({ loading: false, notInstalled: true });
+          } else {
+            // No surface yet — show an opt-in empty state. We do NOT auto-
+            // generate here: it blocked the whole surface for up to 90s and
+            // would clobber a native app's component. Generation is an explicit
+            // user action (button → the editor's generate flow).
+            setState({ loading: false, noSurface: true });
+          }
         } else {
           setState({ loading: false, error: String(e?.message ?? e) });
         }
@@ -339,6 +353,32 @@ function AppSurfaceImpl({
 
   if (state.loading) {
     return <div className="p-8 text-sm text-slate-400">Loading {app}…</div>;
+  }
+
+  if (state.notInstalled) {
+    return (
+      <div className="flex flex-col">
+        {actionBar(false)}
+        <div className="px-6 py-6 max-w-lg">
+          <div className="rounded-xl border border-slate-200 bg-white p-5">
+            <div className="text-sm font-medium text-slate-800">
+              No app called &ldquo;{app}&rdquo;
+            </div>
+            <p className="mt-1.5 text-[12px] text-slate-500 leading-relaxed">
+              Either the name is misspelled, or it is not installed on your account.
+              Deliberately no <strong>Generate a page</strong> here — that would author a
+              new app over a name you probably just mistyped.
+            </p>
+            <Link
+              to="/studio/library/marketplace"
+              className="mt-3 inline-flex items-center gap-1.5 px-3 py-2 text-[13px] font-medium rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition"
+            >
+              Browse the marketplace
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (state.noSurface) {
