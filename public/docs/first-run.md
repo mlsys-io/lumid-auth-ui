@@ -56,6 +56,14 @@ tools — no credential, no connection string, nothing to configure. This is the
 path most people should use, and the reason a Postgres seat is a link at the
 end of this page rather than a setup step.*
 
+Ask it market-data questions too — the markets with the most volume in the
+last day, what a ticker resolves on, how much history exists for an instrument.
+You get the answer plus the query that produced it. *If you later want a
+Postgres seat of your own, or the raw table layout, that is
+[FinData SQL](/studio/docs/findata-sql) — deliberately not on this page, because
+you do not need it to run a strategy and the tables are large enough to punish
+casual browsing.*
+
 You do not need a token, a scope, or a model choice. The platform mints a
 `claude:proxy` token for you behind the scenes on your first turn and keeps it
 fresh. Your model is **`deepseek-v4-flash`** and it is unlimited — it runs on
@@ -97,30 +105,13 @@ into one; you deploy to them and read what comes back.
 not a failure — you have not registered anything yet.*
 
 ---
-## 4. Explore the data
-
-**Ask in chat.** Market-data questions are answered against the live warehouse
-as you, through tools — no credential, no connection string, nothing to
-configure. Ask for the markets with the most volume in the last day, what a
-ticker resolves on, or how much history exists for an instrument, and you get
-the answer plus the query that produced it.
-
-That is the whole of this step. It is also the path that scales across a
-cohort: everyone shares a prompt prefix, so the cache works in your favour.
-
-*If you later want a Postgres seat of your own, or the raw table layout, that is
-[FinData SQL](/studio/docs/findata-sql) — deliberately not on this page, because
-you do not need it to run a strategy and the tables are large enough to punish
-casual browsing.*
-
----
 
 *You now have the app and a way to ask about the data. The next step is the
 point of both: turning something you noticed into a strategy you can test.*
 
 ---
 
-## 5. Formulate a strategy
+## 4. Formulate a strategy
 
 ### What a strategy is here
 
@@ -128,6 +119,17 @@ A **strategy** is a small program that decides, over and over, whether to place
 an order. Not a document, not a spreadsheet, not a backtest script you run
 yourself — a set of rules the platform executes for you, on live market data,
 one decision per market tick.
+
+**The vocabulary, once.** These five words carry the whole page, and nothing
+below re-explains them:
+
+| word | what it means here |
+|---|---|
+| **market** | a single yes/no question with a price — *"will BTC close above $X at 5pm?"* — that trades between 0 and 1 and settles at exactly one of them. Not a stock. |
+| **mid** | the midpoint between the best bid and the best ask. `@ mid` means "at the current fair price", not a limit you chose. |
+| **lot** | one contract — the unit you size in. `50 lots` is a size, not a price. One lot pays out in full if the market resolves your way, and nothing if it does not. |
+| **print** | one recorded market event — a trade or a book update. A backtest replays prints; "7,500 prints" is how much history it saw. |
+| **tick** | **two meanings, and they never mean each other.** A *market tick* is one evaluation moment — one pass of your rules. A *tick* in `price_ticks`, `score_ticks` or `max_drawdown_ticks` is the fixed-point money unit: the DSL has no floats, so a price is an integer on a 0–10,000 scale. `mid = 5000` means 50%. |
 
 It has three parts, and that is all:
 
@@ -242,147 +244,26 @@ someone who knows more than you. That is the point: your first strategy should
 be simple enough that when the result comes back you can tell a plumbing
 failure from a bad idea. Save the good idea for after you trust the machinery.
 
-### A harder one: an LLM reading the news
+### A harder one: producing your own signal
 
-The `vpin` example works because somebody else already publishes `vpin`. This
-one shows what changes when **you** have to produce the signal — which is where
-most of the real work in a strategy like this actually lives.
+The example above works because somebody else already publishes `vpin`. The
+harder and more interesting project is producing a signal *nobody* publishes —
+an LLM reading news or social text, scoring it, and writing the result into
+`lqt.signal_history` on a cadence.
 
-The strategy half stays small. That is the point:
+The strategy half stays small; the producer is the real work. It has its own
+page, because it is a bigger project than a strategy and it reads better once
+you have deployed something: **[Producing your own
+signal](/studio/docs/lqt-signals)** — what the signal actually is, where the
+code runs, and what it costs you.
 
-```
-strategy news_sentiment_v1 {
-  params { conviction: 0.60, size_lots: 25 }
-  when signal("news_llm") > params.conviction
-     and signal("vpin") < 0.70 {
-    buy params.size_lots lots @ mid
-  }
-}
-```
-
-Two signals: act on the model's conviction, **but only when flow is not toxic**.
-That second clause does the real work — it separates "the news looks good" from
-"the news looks good and I am not about to be picked off by someone who already
-knew".
-
-#### What `news_llm` actually is
-
-It is a number between 0 and 1, per instrument, that you publish. Nothing about
-it is special to the platform — it is a signal like any other, and the DSL
-cannot tell it came from a language model. The four stages you have to build:
-
-**1. Get the text.** You need posts or headlines with timestamps, and you need
-to know which market each one bears on. The honest position today is that
-**there is no tweet feed in the warehouse**. You would be adding an ingest:
-pull from whatever source you have rights to, land it with a `ts_event_ns` and
-an `instrument_id`, and only then is there anything to score. Budget most of your time here, not on the prompt.
-
-**2. Score it with the in-house model.** Call `https://lum.id/llm` — it is
-OpenAI-compatible, so any OpenAI client works by changing the base URL, with
-your PAT as the bearer token. Use it rather than a paid API; it runs on our own
-GPUs and costs you nothing.
-
-```python
-import os, httpx
-
-r = httpx.post(
-    "https://lum.id/llm/v1/chat/completions",
-    headers={"Authorization": f"Bearer {os.environ['LUMID_PAT']}"},
-    json={
-        "model": "deepseek-v4-flash",
-        "messages": [
-            {"role": "system",
-             "content": "Score how much this post moves the market toward YES. "
-                        "Reply with only a number from 0.00 to 1.00."},
-            {"role": "user",
-             "content": f"Market: {question}\n\nPost: {post_text}"},
-        ],
-        "temperature": 0,
-    },
-    timeout=60,
-).json()
-score = float(r["choices"][0]["message"]["content"].strip())
-```
-
-`temperature: 0` is not decoration. A signal that returns a different number for
-the same input cannot be replayed, and a backtest over it is not reproducible.
-
-**3. Publish it.** Post a `signal.publish` message to the mailbox with your PAT.
-The handler upserts the batch in one transaction into `lqt.signals` — the hot
-table the live runtime reads — and appends to `lqt.signal_history`, which is
-what makes a later backtest able to claim `signals: recorded`. The payload takes
-a batch:
-
-```json
-{"signals": [
-  {"signal_name": "news_llm",
-   "instrument_id": "KXBTCD-26AUG2519-T78899.99",
-   "score_ticks": 7200,
-   "confidence_bps": 6000,
-   "ts_event_ns": 1756400000000000000}
-]}
-```
-
-`score_ticks` is the integer form: `0.72` at the `× 10000` scale is `7200`. Pick
-a scale and never change it — the strategy compares against a decoded value, so
-a silent rescale changes the meaning of every threshold you have already tested.
-`ts_event_ns` must be **when the post existed**, not when you scored it.
-Stamping it with the scoring time is lookahead: the backtest would let the
-strategy read the news before it happened.
-
-**4. Run it on a cadence.** A signal that updates once is not a signal. It has to
-be produced continuously, at a rate the market actually moves on, or the live
-strategy reads a stale value and the backtest has coverage gaps.
-
-#### Where this code runs — not where you might assume
-
-**The model is never called from inside the strategy.** The `.lqts` above does
-one thing: read a number that is already there. It compiles to bytecode and runs
-on the field boxes, in a hot path measured in microseconds, with no clock, no
-network and no randomness. An HTTP call to a language model cannot live there,
-and the DSL gives you no way to write one.
-
-So an LLM strategy is always **two processes**:
-
-| | what it is | where it runs |
-|---|---|---|
-| the **producer** | your Python: fetch text → score it → publish | off the hot path, on a schedule |
-| the **strategy** | the `.lqts` above | on the field boxes, per market tick |
-
-They are coupled only through `lqt.signal_history`. The strategy cannot tell
-whether `news_llm` came from a language model, a regression, or a person typing
-numbers in — which is exactly why the split works.
-
-The producer graduates through five rungs, and you can stop at whichever one
-your idea has earned:
-
-1. **Notebook** — `make jupyter` on the dev stack, port 8888. Throwaway; prove
-   the prompt returns something parseable.
-2. **Script** — `python/lqt_research/signals/`, committed, deterministic.
-3. **Workflow** — a FlowMesh YAML with a schedule. **This is the first rung
-   where the signal is actually produced continuously**, and it is the one an
-   LLM producer needs, because a signal that updates once is not a signal.
-4. **MCP tool** — callable by name.
-5. **xpio app** — packaged, installable, learning every cycle.
-
-Do not skip to rung 3. A prompt that works on ten hand-picked posts and falls
-over on the eleventh is the normal outcome, and rungs 1–2 are where that is
-cheap to find out.
-
-#### What this costs you, honestly
-
-**It will not score `recorded` today.** `news_llm` is not published, so the run
-falls back to a seeded constant and is labelled `signals: static` — a result you
-cannot present no matter how good the number looks. That is not a bug to work
-around; it is the label doing its job. Publishing the signal is what changes it.
-
-The hard parts, in the order they will bite: getting rights to the text, mapping
-a post to the right instrument, keeping the model's output parseable, and
-holding a cadence. The DSL is the easy half, and it is already written above.
+**Until that signal is published, a strategy reading it scores
+`signals: static`** — a seeded constant, not presentable. That is the label
+doing its job, not a bug to work around.
 
 ---
 
-## 6. Deploy it
+## 5. Deploy it
 
 Open **Quant Research → Strategies** in the sidebar (installed in step 3).
 Give the strategy a name, paste `.lqts`
@@ -414,7 +295,7 @@ strategy ofi_z_momentum {
 Copy the code block and paste it straight into the deploy form above — that is
 the whole loop. **Read it before you paste it.** The model is good at the shape
 and cannot know whether `0.15` is a sensible threshold for the regime you care
-about; that judgement is the part that is yours, and §5 says why picking it
+about; that judgement is the part that is yours, and §4 says why picking it
 against the window you score on is how you fool yourself.
 
 Your registry, once you have registered something — one row per strategy, with
@@ -433,7 +314,7 @@ it for the detail surface:
 
 ![The strategy detail page: registration, sessions, backtests, and how to stop it.](/docs/img/first-run-strategy-detail.png)
 
-## 7. Backtest and forward test
+## 6. Backtest and forward test
 
 Both are row actions on your strategy. They answer different questions.
 
@@ -476,7 +357,7 @@ Read `fills`, the markouts, and whether `net_usd` is positive *after*
 `fees_usd` — and treat a run with `sell_fills: 0` as unfinished rather than
 profitable, because an unclosed position has not been tested by anything yet.
 
-## 8. View the results
+## 7. View the results
 
 The **Backtest** and **Forward test** surfaces in the sidebar are the
 across-all-strategies views; the row actions above are the per-strategy ones.
@@ -495,7 +376,7 @@ strategy is registered but nothing is happening:
 
 ![The Runtime surface: the decision funnel per strategy.](/docs/img/first-run-runtime.png)
 
-## 9. Reading a backtest result
+## 8. Reading a backtest result
 
 **Backtests now replay recorded market history.** This changed on 2026-08-28;
 if you have seen an older version of this page saying the tape is synthetic,
@@ -614,7 +495,7 @@ scorecards. Zero scorecards means it has not published yet, not that it failed.
 
 ---
 
-## 10. Discuss it, then go round again
+## 9. Discuss it, then go round again
 
 **Discuss** on the row opens a chat already bound to that strategy, so "why did
 this propose nothing yesterday?" resolves against the right one with nothing
@@ -701,6 +582,7 @@ Everything below is at **<https://lum.id/studio/docs>**.
 | doc | why you would open it |
 |---|---|
 | [LQT strategies](/studio/docs/lqt-strategies) | the full `.lqts` language — the one to read once you have deployed something |
+| [Producing your own signal](/studio/docs/lqt-signals) | when the signal you need does not exist yet — an LLM producer, end to end |
 | [AI coding](/studio/docs/coding) | the model you are on, what "unlimited" means, the one timeout that matters |
 | [FinData SQL access](/studio/docs/findata-sql) | a warehouse seat, if chat-based queries stop being enough |
 | [FlowMesh & Lumilake queries](/studio/docs/fm-ll-queries) | running jobs across the compute fleet |

@@ -54,7 +54,7 @@ const DOCS: DocEntry[] = [
 		// never logged in, and every other Guide here reads better after it.
 		slug: 'first-run',
 		title: 'Quant Research Onboarding',
-		description: 'The actual path, walked end to end as a plain user account — signup, your first token, chat, exploring the data, installing the Quant Research app, and writing a strategy. Records what misled, not just what worked.',
+		description: 'The actual path, walked end to end as a plain user account — your first token, chat, installing the Quant Research app, and writing, deploying and reading a strategy. Records what misled, not just what worked.',
 		md: 'first-run.md',
 		group: 'Guides',
 		icon: Compass,
@@ -119,6 +119,19 @@ const DOCS: DocEntry[] = [
 		icon: CandlestickChart,
 		standalone: '/docs/lqt-strategies',
 		companion: { to: '/studio/strategies', label: 'Your strategies' },
+	},
+	{
+		// Split out of first-run 2026-08-29: 138 lines of producer tutorial that
+		// arrived before the reader had deployed anything. It is the natural
+		// SECOND project, so it reads better as its own page with a pointer left
+		// behind — not as a digression inside the walkthrough.
+		slug: 'lqt-signals',
+		title: 'Producing your own signal',
+		description: 'The other half of a strategy: when no one publishes the signal you need. An LLM reading news, end to end — what the signal is, where the code runs, and what it costs.',
+		md: 'lqt-signals.md',
+		group: 'Guides',
+		icon: Bot,
+		companion: { to: '/studio/docs/first-run', label: 'Onboarding' },
 	},
 	{
 		slug: 'trading-api',
