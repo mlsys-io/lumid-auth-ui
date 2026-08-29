@@ -332,6 +332,31 @@ later. Nothing is wrong if the first click shows no numbers.
 moment it deploys — the action *reads* what the paper arm has published. Zero
 scorecards means it has not published yet, not that it failed.
 
+### Or just ask for it
+
+Every one of these is also a chat tool, so you can run the whole loop in
+sentences instead of forms. The app declares them; the chat calls them as you,
+against your own rows:
+
+| what you want | what you say |
+|---|---|
+| run one | *Backtest `ofi_z_momentum` on `KXBTCD-26AUG2519-T78899.99`.* |
+| the verdict | *Poll my backtest results — is the last one done, and are all three axes real?* |
+| live paper | *What is `ofi_z_momentum` doing on the forward arm? Any scorecards yet?* |
+| the funnel | *Analyse `ofi_z_momentum` — proposed, submitted, rejected, and why.* |
+| stop it | *Disable `ofi_z_momentum`.* |
+
+**Name the instrument, in the form or in the sentence.** Left blank, the
+consumer defaults the symbol to `SYNTH` — a generator, not a market — and you
+get a `synthetic_lcg` run that looks like a result and is not one. It is
+labelled, never hidden, but it is easier not to spend the five minutes. This
+bites the same way in chat: say which market you mean.
+
+**Where chat genuinely helps is the refusal.** Submits are at least five minutes
+apart and at most one may be open; a breach is *refused*, not queued. Chat reads
+that refusal back with the earliest retry time. The form gives you an error and
+leaves you guessing whether it landed.
+
 **What window a backtest replays.** You do not choose it. The worker takes the
 **most recent 7 days** of recorded prints for that instrument, capped at
 **50,000 events** — the newest ones, not the oldest, so a busy market gives you
