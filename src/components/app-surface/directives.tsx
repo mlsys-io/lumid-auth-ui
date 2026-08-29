@@ -574,6 +574,47 @@ async function runQaAction(a: ActionDef, row?: Record<string, unknown>): Promise
   else await apiClient.post(path, {});
 }
 
+// A queued cycle can still fail AFTER the 202, and for seconds afterwards
+// nothing on screen would say so.
+//
+// `POST /me/loops/:app/:loop/run` returns `job_id` and nothing more, because
+// identity genuinely cannot tell whether the cycle will start: it mounts no
+// tenant volume, so the bundle tree it could stat is not the one the scheduler
+// executes from. The scheduler reports the real outcome onto the intent a few
+// seconds later. Identity briefly tried to block on that (v0.5.273) and it had
+// to be removed — a failed dispatch reports at ~6-7s and a successful one at
+// ~8s, so waiting caught most failures at the cost of a 15x slowdown on every
+// healthy click.
+//
+// So poll here instead, in the background, with the toast already shown. The
+// user is never blocked, and a dispatch that dies gets a real error naming the
+// scheduler's own reason — instead of "Backtest queued · poll for the verdict"
+// over a cycle that never ran, which is what 28 tenants saw for weeks.
+const DISPATCH_POLL_MS = 2000;
+const DISPATCH_POLL_LIMIT = 12; // ~24s: covers the ~8s report with slack
+
+async function reportDispatchFailure(jobID: string, label: string): Promise<void> {
+  if (!jobID) return;
+  for (let i = 0; i < DISPATCH_POLL_LIMIT; i++) {
+    await new Promise((r) => setTimeout(r, DISPATCH_POLL_MS));
+    let res: Awaited<ReturnType<typeof me.getIntent>>;
+    try {
+      res = await me.getIntent(jobID);
+    } catch {
+      return; // transient read problem — never invent a failure
+    }
+    if (res?.status !== "completed") continue;
+    const result = (res.result ?? {}) as { ok?: boolean; error?: unknown };
+    // `ok` absent is NOT a failure: only an explicit false is.
+    if (result.ok === false) {
+      const raw = typeof result.error === "string" ? result.error.trim() : "";
+      const reason = (raw.split(/[\r\n]/)[0] || "the scheduler could not start it").slice(0, 240);
+      toast.error(`${label} did not run: ${reason}`, { duration: 12000 });
+    }
+    return; // completed either way — stop polling
+  }
+}
+
 function ActionButton({ a, row, onDone, size = "sm" }: {
   a: ActionDef; row?: Record<string, unknown>; onDone?: () => void; size?: "sm" | "xs";
 }) {
@@ -622,8 +663,13 @@ function ActionButton({ a, row, onDone, size = "sm" }: {
         const args = Object.fromEntries(
           Object.entries(a.run_loop.args ?? {}).map(([k, v]) => [k, interpVal(v)]),
         );
-        await me.runLoopNow(String(a.run_loop.app ?? appFromRoute ?? ""), String(a.run_loop.loop), args);
+        const queued = await me.runLoopNow(
+          String(a.run_loop.app ?? appFromRoute ?? ""), String(a.run_loop.loop), args,
+        );
         toast.success(a.success ?? `Triggered ${a.run_loop.loop}`);
+        // Fire-and-forget: the toast is already up, and this only ever ADDS an
+        // error if the dispatch actually failed.
+        void reportDispatchFailure(String(queued?.job_id ?? ""), String(a.run_loop.loop));
         onDone?.();
         return;
       }
@@ -1084,8 +1130,9 @@ function LumidAction({ body }: { body: Body }) {
         if (body.to.startsWith("/") && !body.to.startsWith("//")) navigate(body.to);
         else toast.error("Only in-app links are allowed");
       } else if (intent === "run_loop" && body.app && body.loop) {
-        await me.runLoopNow(String(body.app), String(body.loop), (body.args as Record<string, unknown>) ?? undefined);
+        const q = await me.runLoopNow(String(body.app), String(body.loop), (body.args as Record<string, unknown>) ?? undefined);
         toast.success(`Triggered ${body.loop}`);
+        void reportDispatchFailure(String(q?.job_id ?? ""), String(body.loop));
       } else if (intent === "install_app" && body.app) {
         await me.installApp(String(body.app));
         toast.success(`Installing ${body.app}…`);
@@ -1443,7 +1490,10 @@ function LumidForm({ body }: { body: Body }) {
         // for the rare cross-app case.
         const appName = submitApp || appFromRoute;
         if (!appName) throw new Error("this form needs an `app` — it could not infer one from the surface");
-        await me.runLoopNow(appName, submitLoop, args);
+        const queuedRun = await me.runLoopNow(appName, submitLoop, args);
+        // The queued cycle can still fail to dispatch; surface that rather than
+        // leaving the "queued" toast as the last word. See reportDispatchFailure.
+        void reportDispatchFailure(String(queuedRun?.job_id ?? ""), submitLoop);
         // "Queued", never "Done": runLoopNow enqueues a cycle and returns. The
         // result lands in the app's run history, and a form that claimed
         // success here would be asserting an outcome it has not seen. This is
