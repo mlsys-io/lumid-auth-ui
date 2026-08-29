@@ -376,7 +376,7 @@ holding a cadence. The DSL is the easy half, and it is already written above.
 
 ---
 
-### Deploy it
+## 6. Deploy it
 
 Open **Quant Research → Strategies** in the sidebar (installed in step 3).
 Give the strategy a name, paste `.lqts`
@@ -427,7 +427,7 @@ it for the detail surface:
 
 ![The strategy detail page: registration, sessions, backtests, and how to stop it.](/docs/img/first-run-strategy-detail.png)
 
-### Backtest and forward test
+## 7. Backtest and forward test
 
 Both are row actions on your strategy. They answer different questions.
 
@@ -470,7 +470,7 @@ Read `fills`, the markouts, and whether `net_usd` is positive *after*
 `fees_usd` — and treat a run with `sell_fills: 0` as unfinished rather than
 profitable, because an unclosed position has not been tested by anything yet.
 
-### View the results
+## 8. View the results
 
 The **Backtest** and **Forward test** surfaces in the sidebar are the
 across-all-strategies views; the row actions above are the per-strategy ones.
@@ -489,63 +489,7 @@ strategy is registered but nothing is happening:
 
 ![The Runtime surface: the decision funnel per strategy.](/docs/img/first-run-runtime.png)
 
-### Discuss it, then go round again
-
-**Discuss** on the row opens a chat already bound to that strategy, so "why did
-this propose nothing yesterday?" resolves against the right one with nothing
-re-pasted.
-
-![Discuss: a chat already bound to one strategy.](/docs/img/first-run-discuss.png)
-
-**The chat can do the analysis, not just the conversation.** It reaches your own
-results through the same tools the surfaces use, so you can ask for the reading
-rather than assembling it yourself:
-
-> *Look at my backtest results so far. How many are real on all three honesty
-> axes, how many took zero trades, and what is the outcome breakdown?*
-
-![The chat pulling your own results through lqt_mailbox_read to answer.](/docs/img/first-run-chat-analytics.png)
-
-*The chips are the tools running —`lqt_mailbox_read` against `results`,
-`strategies` and `stats`. Those are your rows, scoped to you; the chat is not
-guessing from the page, it is querying. Analysis over more than a handful of
-runs takes it a minute or two, which the transcript shows honestly rather than
-hiding.*
-
-Things worth asking it, all of which it can actually answer:
-
-* *Compare these two backtests side by side — what changed and what moved?*
-* *My `n_proposed` is 0. Walk me through why the guard never fired.*
-* *Chart the equity curve and mark the max drawdown.*
-* *Is this Sharpe meaningful given how few trades it took?*
-
-The thread is listed under Sessions, so the conversation stays
-attached to the work
-rather than scrolling away in a general chat.
-
-Ask it to read the funnel with you — *why did this take no trades?* — and to
-propose one change. Then **deploy the next round**: paste the revised `.lqts`
-as a new strategy, backtest it, and compare.
-
-**Change one thing per round.** Two changes and a moved number tell you nothing
-about which one moved it. And do not tune a threshold against the same window
-you score on — that number is guaranteed to look good and guaranteed to mean
-nothing.
-
-**Check the model actually changed it.** Ask for a *changed* `program_hash` on
-the registry row. The assistant saying it updated your strategy is not
-evidence; a new hash is. An unchanged hash after an "update" means the DSL
-never recompiled.
-
-That loop — formulate, deploy, backtest, read, discuss, revise — is the job.
-Everything above it is setup you do once.
-
-**One backtest at a time, 300 seconds apart.** A second submission while one
-is in flight is *refused*, not queued — the consumer runs the replay inline, so
-an unbounded queue would stall every other tenant. The refusal tells you the
-earliest time you may retry; read it rather than re-submitting.
-
-### Reading a backtest result
+## 9. Reading a backtest result
 
 **Backtests now replay recorded market history.** This changed on 2026-08-28;
 if you have seen an older version of this page saying the tape is synthetic,
@@ -607,8 +551,6 @@ the machinery works end to end and your threshold is wrong for the observed
 distribution — which is a fact about the market you can act on. The failure
 would be reading `realized_pnl_ticks: 0` as "flat" and moving on.
 
-![The Backtest surface: claims with their replay, signals and settlement labels.](/docs/img/first-run-backtest-result.png)
-
 **Sharpe and max drawdown.** A result carries `sharpe`, `max_drawdown_ticks`
 and `max_drawdown_bps`, derived from a mark-to-market equity curve the harness
 records at every step.
@@ -665,6 +607,62 @@ forward-tests from the moment it deploys; the action *reads* the paper arm's
 scorecards. Zero scorecards means it has not published yet, not that it failed.
 
 ---
+
+## 10. Discuss it, then go round again
+
+**Discuss** on the row opens a chat already bound to that strategy, so "why did
+this propose nothing yesterday?" resolves against the right one with nothing
+re-pasted.
+
+![Discuss: a chat already bound to one strategy.](/docs/img/first-run-discuss.png)
+
+**The chat can do the analysis, not just the conversation.** It reaches your own
+results through the same tools the surfaces use, so you can ask for the reading
+rather than assembling it yourself:
+
+> *Look at my backtest results so far. How many are real on all three honesty
+> axes, how many took zero trades, and what is the outcome breakdown?*
+
+![The chat pulling your own results through lqt_mailbox_read to answer.](/docs/img/first-run-chat-analytics.png)
+
+*The chips are the tools running —`lqt_mailbox_read` against `results`,
+`strategies` and `stats`. Those are your rows, scoped to you; the chat is not
+guessing from the page, it is querying. Analysis over more than a handful of
+runs takes it a minute or two, which the transcript shows honestly rather than
+hiding.*
+
+Things worth asking it, all of which it can actually answer:
+
+* *Compare these two backtests side by side — what changed and what moved?*
+* *My `n_proposed` is 0. Walk me through why the guard never fired.*
+* *Chart the equity curve and mark the max drawdown.*
+* *Is this Sharpe meaningful given how few trades it took?*
+
+The thread is listed under Sessions, so the conversation stays
+attached to the work
+rather than scrolling away in a general chat.
+
+Ask it to read the funnel with you — *why did this take no trades?* — and to
+propose one change. Then **deploy the next round**: paste the revised `.lqts`
+as a new strategy, backtest it, and compare.
+
+**Change one thing per round.** Two changes and a moved number tell you nothing
+about which one moved it. And do not tune a threshold against the same window
+you score on — that number is guaranteed to look good and guaranteed to mean
+nothing.
+
+**Check the model actually changed it.** Ask for a *changed* `program_hash` on
+the registry row. The assistant saying it updated your strategy is not
+evidence; a new hash is. An unchanged hash after an "update" means the DSL
+never recompiled.
+
+That loop — formulate, deploy, backtest, read, discuss, revise — is the job.
+Everything above it is setup you do once.
+
+**One backtest at a time, 300 seconds apart.** A second submission while one
+is in flight is *refused*, not queued — the consumer runs the replay inline, so
+an unbounded queue would stall every other tenant. The refusal tells you the
+earliest time you may retry; read it rather than re-submitting.
 
 ## What you cannot do yourself
 
