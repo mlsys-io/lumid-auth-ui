@@ -447,6 +447,11 @@ all three axes:
 }
 ```
 
+*This run was captured before the resample grid became adaptive, so its
+`metrics_bucket_secs` reads `60`. An equivalent run today would report a grid
+sized to its own span — around `393` for a 47,183-second window. Read the field,
+do not assume the number.*
+
 Read top-down and it tells a clear story. The three axes are all real, so this
 counts. It replayed 7,548 recorded prints over about 13 hours — `span_secs`,
 well inside the 7-day window it was allowed. And then: **`total_actions: 0`.**
@@ -473,12 +478,17 @@ Three things about them are worth knowing before you quote one:
   took no trades, when there are too few observations, or when the curve has no
   variance. A Sharpe over a strategy that never opened a position is undefined,
   and printing `0.00` would read as flat performance rather than no measurement.
-* **It is a P&L Sharpe, annualised on a 1-minute grid.** There is no capital
-  base to divide by, so it is the mean over the standard deviation of equity
-  *increments*, not of percentage returns. The curve is resampled onto a fixed
-  clock before differencing, because replay steps are trade prints — annualising
-  per-step would scale the answer by how heavily the instrument traded rather
-  than how long you were exposed.
+* **It is a P&L Sharpe, annualised on a grid sized to your run.** There is no
+  capital base to divide by, so it is the mean over the standard deviation of
+  equity *increments*, not of percentage returns. The curve is resampled onto a
+  wall-clock grid before differencing, because replay steps are trade prints —
+  annualising per-step would scale the answer by how heavily the instrument
+  traded rather than how long you were exposed. The grid targets ~120
+  observations across the span and is never finer than the mean interval between
+  prints, so a quiet market gets a coarser bucket than a busy one. The result
+  reports the grid it used as `metrics_bucket_secs` and the count as
+  `metrics_observations` — read them before comparing two runs, because a
+  different grid is a different measurement.
 * **Binary settlement breaks the assumption Sharpe rests on.** YES pays 1.00 and
   NO pays 0.00, so a position marked at 0.90 that resolves the wrong way loses
   everything in a single step. That is precisely the tail a volatility-scaled
