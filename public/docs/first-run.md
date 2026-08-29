@@ -5,7 +5,13 @@ end against production as a plain `role=user` account. Every step has a
 recorded result, and where something failed or misled it says so — this is a
 transcript, not a brochure.
 
-Assumes you are signed in. Budget about 20 minutes.
+Assumes you are signed in.
+
+**How long this takes.** Reading and deploying your first strategy: about 20
+minutes. Getting a verdict back is not on that clock — a backtest is submitted
+and then polled, usually minutes later, and submissions are capped at one at a
+time and five minutes apart. A forward test needs hours of live paper before its
+numbers mean anything. Plan the first sitting around the deploy, not the result.
 
 ---
 
@@ -140,7 +146,7 @@ Once registered, the same program is used two ways: replayed against **recorded
 history** (a backtest) and run against the **live market in paper mode** (a
 forward test). You do not write two versions.
 
-Read [LQT strategies](/docs/lqt-strategies) for the full language. In short:
+Read [LQT strategies](/studio/docs/lqt-strategies) for the full language. In short:
 you write DSL, it is compiled off-box, the compiled program goes to the field
 boxes, and telemetry comes back on the observation plane rather than the
 mailbox you submitted to.
@@ -669,8 +675,10 @@ earliest time you may retry; read it rather than re-submitting.
 Three things, and all of them are intentional:
 
 - **`lumid:write`** — a platform-level scope. Granting it requires already
-  having it, so a fresh account cannot self-serve it. You need it only to author
-  analytics jobs.
+  having it, so a fresh account cannot self-serve it. You need it to author
+  analytics jobs — **not** to mint tokens, whatever the 403 in §1 claims. That
+  error message names the wrong scope; minting from the browser needs no scope
+  at all.
 - **The `findata` access grant** — warehouse access is given per person, not to
   everyone, because it is a direct connection to 1.7 TB of production data.
 - **A `sql_<name>` warehouse role** — provisioned separately from the grant.
@@ -694,7 +702,6 @@ Everything below is at **<https://lum.id/studio/docs>**.
 |---|---|
 | [LQT strategies](/studio/docs/lqt-strategies) | the full `.lqts` language — the one to read once you have deployed something |
 | [AI coding](/studio/docs/coding) | the model you are on, what "unlimited" means, the one timeout that matters |
-| [Trading API](/studio/docs/trading-api) | submitting and inspecting strategies programmatically |
 | [FinData SQL access](/studio/docs/findata-sql) | a warehouse seat, if chat-based queries stop being enough |
 | [FlowMesh & Lumilake queries](/studio/docs/fm-ll-queries) | running jobs across the compute fleet |
 | [AI Consulting Onboarding](/studio/docs/mbb-consultant) | the other cohort track, if you are on it |
