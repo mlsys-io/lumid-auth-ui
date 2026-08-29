@@ -7,11 +7,20 @@ transcript, not a brochure.
 
 Assumes you are signed in.
 
-**How long this takes.** Reading and deploying your first strategy: about 20
-minutes. Getting a verdict back is not on that clock — a backtest is submitted
-and then polled, usually minutes later, and submissions are capped at one at a
-time and five minutes apart. A forward test needs hours of live paper before its
-numbers mean anything. Plan the first sitting around the deploy, not the result.
+**How long this takes.** Most of it is reading. The machinery itself is quick —
+measured end to end on 2026-08-29 with a brand-new account: mint a token and
+install the app in under 20 seconds, deploy a strategy and see it compile in
+about 10 more, and a backtest that named a real instrument settled in **14–60
+seconds**.
+
+Two things are genuinely slower and neither is a fault. Backtest submissions are
+capped at **one at a time, five minutes apart**, so the second run waits even
+though the first was quick; and a **forward test needs hours of live paper**
+before its numbers mean anything — it banks one observation per cycle and wants
+30 of them before it will report a ratio at all.
+
+So plan the first sitting around the deploy. You will have a verdict in the same
+sitting; what you will not have is a forward-test scorecard.
 
 ---
 
@@ -33,15 +42,15 @@ Give it the scopes you need; for the researcher path that is:
 mint another PAT — try it from the API with a normal token and you get:
 
 ```
-403  PAT scope insufficient: lumid:write required to mint tokens
+403  a PAT cannot mint another PAT — mint it at lum.id/dashboard/tokens
+     while logged in, or use a PAT with lumid:write
 ```
 
-That message is misleading and we are fixing the wording. It reads as though you
-need a scope you cannot grant yourself. You do not: the check exempts
-browser sessions entirely, so **any logged-in user can mint any scope they are
-entitled to from the dashboard**. The block exists only to stop a leaked token
-from minting itself a wider one. If you are reading this because you hit that
-error from a script — log in and mint it in the UI, then use it in the script.
+The message tells you what to do, and it is not asking you to find a scope you
+cannot grant yourself: the check **exempts browser sessions entirely**, so any
+logged-in user can mint any scope they are entitled to. The block exists only to
+stop a leaked token from minting itself a wider one. `lum.id/dashboard/tokens`
+and the Studio page linked above are the same tokens page.
 
 ---
 
@@ -614,9 +623,8 @@ Three things, and all of them are intentional:
 
 - **`lumid:write`** — a platform-level scope. Granting it requires already
   having it, so a fresh account cannot self-serve it. You need it to author
-  analytics jobs — **not** to mint tokens, whatever the 403 in §1 claims. That
-  error message names the wrong scope; minting from the browser needs no scope
-  at all.
+  analytics jobs — **not** to mint tokens. Minting from the browser needs no
+  scope at all, which is what the 403 in §1 says.
 - **The `findata` access grant** — warehouse access is given per person, not to
   everyone, because it is a direct connection to 1.7 TB of production data.
 - **A `sql_<name>` warehouse role** — provisioned separately from the grant.
