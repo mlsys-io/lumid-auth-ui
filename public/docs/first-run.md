@@ -546,16 +546,23 @@ re-pasted.
 results through the same tools the surfaces use, so you can ask for the reading
 rather than assembling it yourself:
 
-> *Look at my backtest results so far. How many are real on all three honesty
-> axes, how many took zero trades, and what is the outcome breakdown?*
+> *Look at the backtest results on the feed. How many are real on all three
+> honesty axes, how many took zero trades, and what is the outcome breakdown?
+> Then tell me which of them are mine.*
 
-![The chat pulling your own results through lqt_mailbox_read to answer.](/docs/img/first-run-chat-analytics.png)
+![The chat reading the results feed through lqt_mailbox_read to answer.](/docs/img/first-run-chat-analytics.png)
 
 *The chips are the tools running —`lqt_mailbox_read` against `results`,
-`strategies` and `stats`. Those are your rows, scoped to you; the chat is not
-guessing from the page, it is querying. Analysis over more than a handful of
-runs takes it a minute or two, which the transcript shows honestly rather than
-hiding.*
+`strategies` and `stats`. The chat is not guessing from the page, it is
+querying. **Read the scope, though: those three feeds are platform-wide.**
+`/xpio/results` carries no tenant column at all, and the `stats` and
+`strategies` feeds reach the platform through a shared service token — so a
+count from any of them describes everyone, not you. Two things are genuinely
+yours: the **Strategies table**, scoped server-side to your account id, and
+anything from **`analyze`**, which reads the tenant-scoped observation plane. If
+a number matters, ask which of the two it came from. Analysis over more than a
+handful of runs takes it a minute or two, which the transcript shows honestly
+rather than hiding.*
 
 Things worth asking it, all of which it can actually answer:
 
