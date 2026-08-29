@@ -514,9 +514,13 @@ control as well as the thing you did, and a moved number tells you nothing about
 which. If the axes differ between the two, stop: you are comparing a real result
 to a synthetic one.
 
-Ask for the equity curve and the drawdown marked on it when the numbers are
-close. A curve that ends in the same place can get there by drifting or by one
-lucky settlement, and only one of those is a strategy.
+When the two are close, the question to ask is *how* each got there — a run that
+ends in the same place can drift there or arrive on one lucky settlement, and
+only one of those is a strategy. A backtest publishes no equity curve to look
+at, but it publishes the answer directly: `settlement_jump_ticks` is how much of
+the result the final resolution handed you, and `sharpe_ex_settlement` is the
+same ratio with that jump removed. If the two Sharpes disagree sharply, the
+headline number is describing a coin flip.
 
 **Expect your first real run to take no trades.** Two current backtests are real
 on all three axes across ~7,500 recorded prints and made **zero** trades — the
@@ -557,8 +561,19 @@ Things worth asking it, all of which it can actually answer:
 
 * *Compare these two backtests side by side — what changed and what moved?*
 * *My `n_proposed` is 0. Walk me through why the guard never fired.*
-* *Chart the equity curve and mark the max drawdown.*
 * *Is this Sharpe meaningful given how few trades it took?*
+* *Plot my forward scorecards as an equity curve and mark the max drawdown.*
+* *Chart Sharpe against trade count across all my runs — is the best one just
+  the thinnest?*
+
+**What it can plot, and what it cannot.** A *forward* run publishes one
+scorecard per cycle, so a series of them is a real time series and charts as
+one. A *backtest* publishes only its end state — the axes, the counts, and the
+scalars including `sharpe` and `max_drawdown_ticks`. The step-by-step equity
+curve is computed inside the worker and never leaves it, so asking for "the
+backtest's equity curve" has nothing behind it. Across *runs* is the axis that
+does work for backtests: Sharpe against trades, drawdown against window, the
+three axes across everything you have submitted.
 
 The thread is listed under Sessions, so the conversation stays
 attached to the work
