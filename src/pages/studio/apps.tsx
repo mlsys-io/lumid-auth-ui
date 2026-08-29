@@ -1005,7 +1005,23 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 	// requested. Defaulting to the freshest workflow meant an authored overview
 	// was reachable only by clicking a tab nobody knew to click — the app's
 	// front door sat behind its own observability panel.
-	const overviewMode = selected ? selected === OVERVIEW_SEL : !!identity?.hasSurface;
+	//
+	// An EXPLICIT `?surface=` in the URL counts as declaring one. `hasSurface`
+	// is INFERRED — it comes from the `ui:` block on /me/apps, which identity
+	// can only fill in for an app it can read locally or whose published spec
+	// it managed to fetch. Identity mounts no tenant volume, so for a
+	// cloud-installed app that inference fails silently and the app is
+	// downgraded to "workflow app": /studio/apps/<app>?surface=runtime rendered
+	// the run-trajectory panel instead of the Runtime surface, on an account
+	// where the app was installed, healthy and listed in the sidebar.
+	//
+	// The doc links these surfaces, so the failure lands on a reader following
+	// the walkthrough. A URL that names a surface is not a hint to weigh
+	// against a probe — it is the request. AppSurface already renders an honest
+	// "no page yet" when the surface genuinely is not there, so trusting the
+	// URL costs nothing when the inference was right to be false.
+	const urlSurface = (params.get("surface") || "").trim();
+	const overviewMode = selected ? selected === OVERVIEW_SEL : (!!identity?.hasSurface || !!urlSurface);
 	const validSelected = selected && rows?.some((r) => r.loop === selected) ? selected : null;
 	const validInitial = initialLoop && rows?.some((r) => r.loop === initialLoop) ? initialLoop : null;
 	const effSelected = overviewMode ? null : (validSelected ?? validInitial ?? freshestLoop);
@@ -1177,7 +1193,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 							// without curated copy fall back to the workflow list so the
 							// overview is never blank. ──
 							<div className="space-y-6 animate-in fade-in duration-200">
-								{identity?.hasSurface && !nestedInSurface ? (
+								{(identity?.hasSurface || !!urlSurface) && !nestedInSurface ? (
 									// The app DECLARED a page — that wins. Previously the surface
 									// rendered only for apps with zero workflows, so any app that
 									// scheduled one lost its own overview to APP_OVERVIEW_MD (copy
