@@ -5,14 +5,14 @@ pool, so neither spends Anthropic quota.
 
 | | `deepseek-v4-flash` | `glm-5.3-flash` |
 |---|---|---|
-| runs on | our GB10 pair | our CPU box, overflowing to OpenRouter |
+| runs on | our H100 NVL pair | our CPU box, overflowing to OpenRouter |
 | daily budget | **unlimited** | 1.5M tokens (~200 chat turns) |
-| context | 256K | 1M |
+| context | 512K | 1M |
 | first turn | fast | can be slow — see below |
 
 **`deepseek-v4-flash` is unlimited.** No token budget, no rolling window, no
-waiting for a slot. It runs on our own GB10 pair, so it costs nothing at the
-margin.
+waiting for a slot. It runs on our own H100 NVL pair, so it costs nothing at
+the margin.
 
 **`glm-5.3-flash`** is a 321B/18B-active MoE (MIT licence) served from our own
 CPU box, with OpenRouter as the overflow when that box is busy. It has a finite
@@ -50,7 +50,7 @@ that produces nothing for 30s is answered from OpenRouter instead. Decode is not
 the problem: GLM decodes at ~13 tok/s, slightly faster than deepseek's ~12.
 
 If you are sending very large prompts (a full repo context, a 45k-token tool
-catalog), prefer deepseek — the GB10 prefills ~20x faster.
+catalog), prefer deepseek — the H100 pair prefills far faster.
 
 No terminal? The [Studio chatbox](/studio) runs the same model server-side — no
 install, no PAT.
@@ -64,20 +64,26 @@ in [Claude pool & lum.id/claude](/studio/docs/claude).
 
 **`export API_TIMEOUT_MS=600000`.** Set it before anything else.
 
-Claude Code ships a 60-second client timeout (`x-stainless-timeout=60`). Prefill
-on the GB10 runs at roughly **1.6–1.7k tokens/sec**, so a turn whose context
-misses the cache takes about:
+Claude Code ships a 60-second client timeout (`x-stainless-timeout=60`). The
+table below (prefill ~1.6-1.7k tokens/sec, giving the "cold time to first
+token" figures) was measured on the **retired GB10 backend** — deepseek-v4-flash
+now runs on an H100 NVL pair (as of 2026-08-30) and these specific numbers have
+not been re-benchmarked since. Treat them as **stale but directionally
+useful**: cache-missing large-context turns can still exceed a 60s client
+timeout, so the advice to raise it stands even though the exact thresholds
+below need re-verification.
 
-| context | cold time to first token |
+| context | cold time to first token (GB10, unverified on H100) |
 |---|---|
 | 30k | ~24 s |
 | 60k | ~49 s |
 | 120k | ~103 s |
 
-So **any cache-missing turn above roughly 72k tokens exceeds the default client
-timeout**, aborts, and retries with backoff. What you see is
+So a cache-missing turn above roughly 72k tokens **may** exceed the default
+client timeout, abort, and retry with backoff. What you see is
 *"Waiting for API response · will retry in Xm · check your network"* — which
-looks like a network fault and is not one. Raising the timeout fixes it.
+looks like a network fault and is not one. Raising the timeout fixes it
+regardless of the exact threshold.
 
 A prefix-cache **hit** is ~1.3 s regardless of size, which is why the second turn
 in a conversation is so much faster than the first.
@@ -123,9 +129,12 @@ else. You are very unlikely to meet it interactively; a script fanning out can.
 
 ## Context window
 
-**1M tokens.** Claude Code appends a `[1m]` marker to the model id
-(`deepseek-v4-flash[1m]`); the proxy strips it before routing. You never type it,
-and selecting `deepseek-v4-flash` always gives you the full window.
+**512K tokens.** The model is architecturally trained up to 1M (YaRN-extended),
+but the deployed serving config runs at a 512K ceiling — the highest context
+validated safe under real concurrent load on the current hardware. Claude Code
+appends a `[1m]` marker to the model id (`deepseek-v4-flash[1m]`); the proxy
+strips it before routing. You never type it, and selecting `deepseek-v4-flash`
+gets you the deployed 512K window, not the full 1M the marker implies.
 
 ---
 

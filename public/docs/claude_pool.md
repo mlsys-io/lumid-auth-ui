@@ -4,7 +4,7 @@
 >
 > **If your role is `user`, this page is not your path — use
 > `deepseek-v4-flash`, and it is unlimited.** No token budget, no 4h/7d window,
-> no waiting for an account slot: the model runs on our own GB10 pair and is
+> no waiting for an account slot: the model runs on our own H100 NVL pair and is
 > configured `dailyBudgetTokens: -1`. The practical limits are a 6000/min
 > gateway rate limit and GPU concurrency, not a quota.
 >
@@ -39,7 +39,7 @@ no install, no PAT setup. Pick a **(Code)** model from the model picker:
 
 | Model | Who | Backed by |
 |---|---|---|
-| DeepSeek-V4-Flash (Lumid GPU) | everyone | In-house GB10 pair — **default**, no pool quota |
+| DeepSeek-V4-Flash (Lumid GPU) | everyone | In-house H100 NVL pair — **default**, no pool quota |
 | Claude Sonnet (Code) | admin+ | Account pool (your 4h/7d quota) |
 | Claude Opus (Code) | admin+ | Account pool |
 | Claude Fable 5 (Code) | super_admin | Account pool |
@@ -77,7 +77,7 @@ the same per-user [session recording](#session-recording) toggle — see below.)
 > backends themselves went with luyao1 on 2026-08-17.
 
 **The chatbox default is DeepSeek-V4-Flash, served on our own hardware.** It runs
-tensor-parallel across the two GB10 boxes, so ordinary chat costs nothing per
+tensor-parallel across two H100 NVL GPUs, so ordinary chat costs nothing per
 token and consumes no pool quota — reach for a Claude **(Code)** model when you
 want a real Claude Code session (tool use, repo edits, sub-agents), and leave
 everyday chat on the default. It is a reasoning model, so its thinking is
@@ -108,14 +108,19 @@ unset, Claude Code's own default applies — set it explicitly so every user
 lands on the free native model. (You may of course set it to a Claude pool
 model instead, subject to the [role table](#model-access-by-role) below.)
 
-> **About the `[1m]` suffix.** `deepseek-v4-flash` has a **1M-token context
-> window**. Claude Code appends a context-length marker to the model id it
-> sends — e.g. `deepseek-v4-flash[1m]` for a 1M-context session. The proxy
-> strips this `[1m]` suffix before routing, so the backend always sees the bare
+> **About the `[1m]` suffix.** `deepseek-v4-flash` is architecturally trained up
+> to a 1M-token context window (YaRN-extended), but the deployed serving
+> config currently runs at a **512K-token ceiling** — the highest context
+> validated safe under real concurrent load on the current hardware (see
+> `k8s-lift/lumid-llm/lumid-llm.yaml` for the tuning history). Claude Code
+> appends a context-length marker to the model id it sends — e.g.
+> `deepseek-v4-flash[1m]` for a long-context session. The proxy strips this
+> `[1m]` suffix before routing, so the backend always sees the bare
 > `deepseek-v4-flash`. You never need to type it, and it is never forwarded to
 > the pool or the fleet — it is purely a client hint about the session's context
-> window. Just set `ANTHROPIC_MODEL=deepseek-v4-flash` (without the suffix) and
-> you get the full 1M context.
+> window. Just set `ANTHROPIC_MODEL=deepseek-v4-flash` (without the suffix);
+> requests are served up to the deployed 512K ceiling, not the full 1M the
+> architecture supports.
 
 ---
 
@@ -210,13 +215,15 @@ generic OpenRouter were disabled 2026-08-21).
 
 > **The `[1m]` context suffix.** Claude Code appends a context-length marker to
 > the model id it sends — e.g. `claude-sonnet-5[1m]` for a 1M-context session,
-> or `deepseek-v4-flash[1m]` for the native model's **1M-token window**. The
-> proxy strips this `[1m]` suffix before routing, so the backend always sees the
-> bare model id (`claude-sonnet-5` / `deepseek-v4-flash`). You never need to type
-> it, and it is never forwarded to the pool or the self-hosted fleet — it is
-> purely a client hint about the session's context window. Selecting
-> `deepseek-v4-flash` (with or without the suffix) always yields the full 1M
-> context.
+> or `deepseek-v4-flash[1m]` for a long-context session. The proxy strips this
+> `[1m]` suffix before routing, so the backend always sees the bare model id
+> (`claude-sonnet-5` / `deepseek-v4-flash`). You never need to type it, and it
+> is never forwarded to the pool or the self-hosted fleet — it is purely a
+> client hint about the session's context window. `deepseek-v4-flash` is
+> architecturally trained up to 1M tokens (YaRN-extended), but the deployed
+> serving config currently runs at a **512K-token ceiling** (with or without
+> the `[1m]` suffix) — the highest context validated safe under real
+> concurrent load on the current hardware.
 
 ### Non-Anthropic models (DeepSeek only)
 
@@ -226,15 +233,16 @@ Claude pool:
 
 | Model flag | Backing | Context | Price (input/output per M tok) |
 |---|---|---|---|
-| `--model deepseek-v4-flash` | **In-house GB10 pair** | 1M | **free** — owned GPUs |
+| `--model deepseek-v4-flash` | **In-house H100 NVL pair** | 512K | **free** — owned GPUs |
 
-> **There is no OpenRouter offload.** The `deepseek/deepseek-v4-flash-0731`
-> vendor-prefixed id was **removed 2026-08-22** — both claude and llm requests to
-> deepseek-v4-flash go through our on-prem fleet first, and there is no metered
-> offload path. `deepseek-v4-flash` is served on **our own two GB10 boxes**,
-> tensor-parallel across the pair. Free at the margin, no metering, no data
-> leaving the tailnet. **1M context** (hence the `[1m]` suffix Claude Code
-> appends — see [Model selection](#model-selection)). This is the one the Studio
+> **OpenRouter is a bounded overflow, not the primary path.** `deepseek-v4-flash`
+> is served on our own **two H100 NVL GPUs** (tensor-parallel pair) first —
+> free at the margin, no metering, no data leaving the tailnet on the common
+> path. Requests only spill to OpenRouter's `deepseek/deepseek-v4-flash-0731`
+> when the in-house backend is at its concurrency roof or a request runs long
+> enough to trigger the hedge — that overflow is metered. **512K context**
+> (below the `[1m]` suffix's literal claim — see [Model selection](#model-selection)
+> above for why). This is the one the Studio
 > chatbox uses by default, and the one you should set as `ANTHROPIC_MODEL`.
 
 **All other non-Anthropic vendor models are disabled.** Kimi K3, GLM-5.2, the
