@@ -280,17 +280,33 @@ source, and submit:
 
 ![The Strategies surface: the deploy form above, your registry below.](/docs/img/first-run-strategies.png)
 
-**You do not have to write the `.lqts` by hand.** Ask the chatbox for it. It
-knows the DSL and can read what signals exist, so it will not invent a name that
-is not published:
+**You do not have to write the `.lqts` by hand.** Ask the chatbox — but ask it
+to **submit** the strategy, not to print one:
 
-> *Write me a `.lqts` strategy that buys 25 lots at mid when the `ofi_z` signal
-> is above 0.15, with the threshold and size as params. Reply with just the code
-> block.*
+> *Submit a `.lqts` strategy for me: buy 25 lots at mid when the `ofi_z` signal
+> is above 0.15, with the threshold and size as params. Name it
+> `ofi_z_momentum_v1`.*
 
 ![The chatbox returning a compilable .lqts strategy.](/docs/img/first-run-chat-strategy.png)
 
-That produced, verbatim:
+**Why "submit" and not "write me one".** The `send_strategy` tool compiles
+server-side and hands the compiler's verdict straight back — on failure, the
+exact parse error with character offsets into the source, plus a hint naming the
+fix. The assistant sees that in the same turn and corrects itself. Ask it to
+*print* a code block instead and you become the error channel: you paste
+something that looks right, the registry stays empty, and nothing tells either
+of you why.
+
+That difference is measured, not theoretical. Across four onboarding walks on
+2026-08-29/30, strategies the assistant wrote for a human to paste failed to
+compile in the large majority of attempts, and each attempt invented a
+*different* plausible-looking dialect — `on bar { if … }`, `on_signal(…) {
+submit { tif = IMMEDIATE_OR_CANCEL } }`, `params { threshold = 0.15 }`. None of
+those exist. All of them look entirely reasonable. The compiler is the only
+thing that can tell you, so put it in the loop.
+
+A strategy that compiles looks like this — and if you want to check the
+assistant's work, or write one yourself, this is the shape:
 
 ```
 strategy ofi_z_momentum {
@@ -301,11 +317,20 @@ strategy ofi_z_momentum {
 }
 ```
 
-Copy the code block and paste it straight into the deploy form above — that is
-the whole loop. **Read it before you paste it.** The model is good at the shape
-and cannot know whether `0.15` is a sensible threshold for the regime you care
-about; that judgement is the part that is yours, and §4 says why picking it
-against the window you score on is how you fool yourself.
+`params { a: 1, b: 2 }` with colons (though `param a = 1` lines are also
+accepted), guards are `when <condition> { <actions> }` with braces, actions are
+`buy N lots @ mid` / `sell N lots @ mid`, and comments are `#` or `//`.
+
+**Read it before you accept it.** The model is good at the shape and cannot know
+whether `0.15` is a sensible threshold for the regime you care about; that
+judgement is the part that is yours, and §4 says why picking it against the
+window you score on is how you fool yourself.
+
+The deploy form above still works, and is the right path when you already have
+source you trust — paste it, name it, submit. Just know that it has no feedback
+loop: a rejection lands on your Strategies surface under **Rejected
+submissions**, with the compiler's reason, rather than coming back to you in
+chat.
 
 Your registry, once you have registered something — one row per strategy, with
 `Compiled` showing the `program_hash`:
