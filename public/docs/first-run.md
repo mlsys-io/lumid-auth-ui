@@ -289,6 +289,14 @@ to **submit** the strategy, not to print one:
 
 ![The chatbox returning a compilable .lqts strategy.](/docs/img/first-run-chat-strategy.png)
 
+**You will be asked to approve it.** Submitting is a write, so the chat pauses
+on an **Allow / Always / Deny** prompt and the turn blocks until you click.
+Click **Always** rather than **Allow** if you expect the assistant to iterate:
+`Allow` grants once, so a fix-and-resubmit cycle stops again on the second
+attempt, and a turn left sitting on that prompt eventually times out with
+nothing in your registry and no error explaining why. `Always` is per-tool and
+per-account, and you can revoke it later from your account settings.
+
 **Why "submit" and not "write me one".** The `send_strategy` tool compiles
 server-side and hands the compiler's verdict straight back — on failure, the
 exact parse error with character offsets into the source, plus a hint naming the
@@ -301,9 +309,15 @@ That difference is measured, not theoretical. Across four onboarding walks on
 2026-08-29/30, strategies the assistant wrote for a human to paste failed to
 compile in the large majority of attempts, and each attempt invented a
 *different* plausible-looking dialect — `on bar { if … }`, `on_signal(…) {
-submit { tif = IMMEDIATE_OR_CANCEL } }`, `params { threshold = 0.15 }`. None of
-those exist. All of them look entirely reasonable. The compiler is the only
-thing that can tell you, so put it in the loop.
+submit { tif = IMMEDIATE_OR_CANCEL } }`, `buy lots = size at mid`. None of those
+exist. All of them look entirely reasonable. The compiler is the only thing that
+can tell you, so put it in the loop.
+
+Two of the shapes students kept reaching for were common enough that the
+language moved instead of the students: `param threshold = 0.15` as a line, and
+`=` in place of `:` inside a `params { }` block, both now compile. Guessing is
+still how you find the other cases, though — which is the argument for letting
+the compiler answer rather than a code block.
 
 A strategy that compiles looks like this — and if you want to check the
 assistant's work, or write one yourself, this is the shape:
@@ -317,9 +331,10 @@ strategy ofi_z_momentum {
 }
 ```
 
-`params { a: 1, b: 2 }` with colons (though `param a = 1` lines are also
-accepted), guards are `when <condition> { <actions> }` with braces, actions are
-`buy N lots @ mid` / `sell N lots @ mid`, and comments are `#` or `//`.
+`params { a: 1, b: 2 }` with colons — `params { a = 1 }` and standalone
+`param a = 1` lines are accepted too — guards are `when <condition> { <actions> }`
+with braces, actions are `buy N lots @ mid` / `sell N lots @ mid`, and comments
+are `#` or `//`.
 
 **Read it before you accept it.** The model is good at the shape and cannot know
 whether `0.15` is a sensible threshold for the regime you care about; that
