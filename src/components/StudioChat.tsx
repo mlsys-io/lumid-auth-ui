@@ -35,7 +35,7 @@ import AssemblyCard from './workflow/AssemblyCard';
 import type { Attachment, WireAttachment, Message, ToolCall, Block } from './chat/types';
 import { readChatStream, withLastAssistant } from './chat/protocol';
 import { claudeToolView, QuietToolPill } from './chat/toolViews';
-import { blocksOf, failPendingTools, clearApproval, stripForPersist } from './chat/blocks';
+import { blocksOf, failPendingTools, clearApproval, markApproval, pushNotice, stripForPersist } from './chat/blocks';
 import { BlockView, EntityCardBlock } from './chat/blockViews';
 import { Appear, Collapse, StreamCaret, JumpToLatest, ThinkingDots, Working, useMotionOK, AnimatePresence } from './chat/motion';
 import { TurnStatsFooter, type TurnStats } from './claude/TurnStats';
@@ -1890,7 +1890,7 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 		// tools[]; a flat map would miss an approval raised inside a Task.
 		setMessages((prev) => prev.map((m) => clearApproval(m, approvalId)));
 		try {
-			await fetch('/api/v1/me/agent/chat/tool-approve', {
+			const r = await fetch('/api/v1/me/agent/chat/tool-approve', {
 				method: 'POST',
 				credentials: 'include',
 				headers: { 'Content-Type': 'application/json' },
@@ -1900,7 +1900,35 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 					...(always ? { always: true, tool: tool || '' } : {}),
 				}),
 			});
-		} catch { /* stream will receive a timeout denial */ }
+			// A NON-OK RESPONSE IS NOT A SUCCESS. This used to be an unchecked
+			// `await fetch(...)`, so a 400/401/500 was indistinguishable from an
+			// approval that landed — and because the chip is cleared above
+			// BEFORE the result is known, the failure had nothing left on screen
+			// to show. The tool stayed pending, the activity line counted up, and
+			// the turn died at the server's 10-minute approval timeout.
+			//
+			// Measured 2026-08-30, walk run17: two of three students clicked
+			// Allow/Always exactly once each, the click never took effect, and
+			// the only trace was "Running lqt_mailbox_submit — 279s" in the UI
+			// against `approval denied/timeout` in identity's log. A student
+			// meeting that has clicked the button and has no reason to suspect
+			// anything went wrong.
+			if (!r.ok) throw new Error(`approve failed: ${r.status} ${r.statusText}`);
+		} catch (e) {
+			// Put the prompt back and say so, so the click is retryable.
+			//
+			// Re-marked against CURRENT state rather than restoring a snapshot
+			// taken before the clear: the stream keeps appending while the POST
+			// is in flight, and rolling back would drop whatever arrived in
+			// between. markApproval falls back to the last pending tool of this
+			// name, which is precisely the one still waiting on this approval.
+			setMessages((prev) => withLastAssistant(prev, (m) => pushNotice(
+				markApproval(m, { name: tool, approvalId }),
+				'error',
+				'Could not send that approval — click again',
+				String(e).slice(0, 200),
+			)));
+		}
 	}, []);
 
 
