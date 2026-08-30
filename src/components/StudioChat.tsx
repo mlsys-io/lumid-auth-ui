@@ -1920,7 +1920,22 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 			// that can only 404 again — measured on walk run19, where a 1 Hz
 			// auto-approver turned one consumed approval into a resurrect-and-
 			// retry loop with an alarming error on a turn that had SUCCEEDED.
-			if (r.status === 404) return;
+			if (r.status === 404) {
+				// Say so, quietly. Not restoring the prompt is right — the id is
+				// spent and a retry can only 404 again — but going SILENT was not:
+				// v0.5.296 removed the only evidence distinguishing "a duplicate
+				// click after the real one succeeded" (harmless) from "the first
+				// click hit a stale chip while the live prompt waited" (fatal, and
+				// indistinguishable from the turn simply hanging). Walk run20 then
+				// showed clicks landing and submits timing out anyway, with nothing
+				// on screen to say which had happened. An info notice keeps the
+				// prompt cleared and the fact recoverable.
+				setMessages((prev) => withLastAssistant(prev, (m) => pushNotice(
+					m, 'info', 'That approval was already handled or had expired',
+					`approval_id ${approvalId.slice(0, 8)}… — tool-approve returned 404`,
+				)));
+				return;
+			}
 			if (!r.ok) throw new Error(`approve failed: ${r.status} ${r.statusText}`);
 		} catch (e) {
 			// Put the prompt back and say so, so the click is retryable.
