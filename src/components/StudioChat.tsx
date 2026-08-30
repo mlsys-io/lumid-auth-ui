@@ -1913,6 +1913,14 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 			// against `approval denied/timeout` in identity's log. A student
 			// meeting that has clicked the button and has no reason to suspect
 			// anything went wrong.
+			// 404 IS NOT A FAILURE TO RETRY. The server consumes an approval with
+			// an atomic LoadAndDelete, so a 404 means the id was ALREADY handled
+			// (a double-click, or two tabs) or the 10-minute window expired. In
+			// both cases the prompt is dead and restoring it would invite a click
+			// that can only 404 again — measured on walk run19, where a 1 Hz
+			// auto-approver turned one consumed approval into a resurrect-and-
+			// retry loop with an alarming error on a turn that had SUCCEEDED.
+			if (r.status === 404) return;
 			if (!r.ok) throw new Error(`approve failed: ${r.status} ${r.statusText}`);
 		} catch (e) {
 			// Put the prompt back and say so, so the click is retryable.
