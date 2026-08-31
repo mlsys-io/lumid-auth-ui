@@ -480,7 +480,9 @@ function OnPremGpuPanel() {
 						className={`inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 text-[10px] tabular-nums ${
 							b.healthy ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-rose-50 text-rose-600 border border-rose-100'
 						}`}
-						title={`${b.url} · tier ${b.tier}${b.queue_depth >= 0 ? ` · engine queue ${b.queue_depth}` : ''}${!b.healthy ? ' · UNHEALTHY' : ''}`}
+						title={`${b.url} · tier ${b.tier}${b.queue_depth >= 0 ? ` · engine queue ${b.queue_depth}` : ''}${!b.healthy ? ' · UNHEALTHY' : ''}${
+							b.tok_s !== null && b.qps === null ? ' · this backend exposes no request-completion counter (llama.cpp), qps is not measurable' : ''
+						}`}
 					>
 						<span className="font-medium">{b.label}</span>
 						<span className="opacity-60">·</span>
@@ -488,7 +490,11 @@ function OnPremGpuPanel() {
 						{b.tok_s !== null && (
 							<>
 								<span className="opacity-60">·</span>
-								<span>{b.qps?.toFixed(2)} qps</span>
+								{/* qps null here (with tok_s already Some) means this backend's
+								    dialect has no request-completion counter at all -- llama.cpp,
+								    permanently, not "still warming up". A blank number after "qps"
+								    reads as broken; say so plainly instead. */}
+								<span>{b.qps === null ? 'qps n/a' : `${b.qps.toFixed(2)} qps`}</span>
 							</>
 						)}
 					</span>
