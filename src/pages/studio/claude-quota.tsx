@@ -1025,6 +1025,13 @@ function UserUsageSection({
 												<span className="text-slate-300">·</span>
 												<span className={windowText(weekPct, 'week')}>{fmtPct(weekPct)}</span>
 											</span>
+											{/* The badge is what a glance sees — a low % right after the 7d
+											    anchor rolls reads as "barely used" even for a heavy continuous
+											    consumer whose TRUE 7d volume (the detail line below) is still
+											    huge. The detail line already carries this via winAge; without
+											    it here too, the one number people actually glance at is the
+											    misleading one. */}
+											{winAge && <span className="text-[9px] text-slate-400 tabular-nums">({winAge})</span>}
 										</>
 									)}
 									{/* Each clock carries the colour of the window it belongs to — the same
