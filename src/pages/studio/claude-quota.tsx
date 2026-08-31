@@ -21,10 +21,12 @@ import {
 	adminResetClaudePoolWindowAll,
 	fetchClaudeFieldBoxes,
 	fetchOpenRouterBalance,
+	fetchOnpremGpuStats,
 	type ClaudeFieldBoxResp,
 	type ClaudeQuotaAccount,
 	type ClaudeUserUsageResp,
 	type OpenRouterBalanceResp,
+	type OnpremGpuStatsResp,
 } from '@/api/super-admin';
 
 const USER_USAGE_REFRESH_MS = 2 * 60 * 1000; // 2 min auto-refresh for per-user section
@@ -416,6 +418,87 @@ function fmtCount(n: number): string {
 	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
 	if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
 	return String(n);
+}
+
+// OnPremGpuPanel — live tok/s + QPS per on-prem GPU backend (h100/GX10/s0
+// CPU, all serving deepseek-v4-flash), rolling window computed by lumid-llm
+// itself off its existing 5s /metrics scrape.
+//
+// Self-contained (own fetch, own error state) for the same reason as
+// FieldBoxPanel below: a lumid-llm hiccup must blank only this strip, not the
+// pool-quota sections above it. Polls its OWN faster interval rather than the
+// page-level USER_USAGE_REFRESH_MS (2min) — a "live" throughput number on a
+// 2-minute refresh reads as broken, not slow.
+const ONPREM_GPU_REFRESH_MS = 12 * 1000;
+
+function OnPremGpuPanel() {
+	const [data, setData] = useState<OnpremGpuStatsResp | null>(null);
+	const [err, setErr] = useState('');
+
+	useEffect(() => {
+		let alive = true;
+		const load = () => {
+			fetchOnpremGpuStats()
+				.then((d) => { if (alive) { setData(d); setErr(''); } })
+				.catch((e) => { if (alive) setErr(String(e)); });
+		};
+		load();
+		const id = setInterval(load, ONPREM_GPU_REFRESH_MS);
+		return () => { alive = false; clearInterval(id); };
+	}, []);
+
+	if (err) return <div className="text-[11px] text-rose-500">On-prem GPU stats unavailable: {err}</div>;
+	if (!data) return <div className="text-[11px] text-slate-400">Loading on-prem GPU stats…</div>;
+	if (!data.available) {
+		// Graceful degrade from the server (lumid-llm unreachable, credential
+		// missing) — a real, named reason, not a blank panel that reads as "no
+		// GPUs configured".
+		return (
+			<div className="text-[11px] text-slate-400">
+				On-prem GPU stats unavailable{data.error ? `: ${data.error}` : ''}.
+			</div>
+		);
+	}
+
+	const windowLabel = data.window_seconds
+		? data.window_seconds >= 60 ? `${Math.round(data.window_seconds / 60)}m` : `${data.window_seconds}s`
+		: '5m';
+	const backends = data.backends ?? [];
+
+	return (
+		<section className="space-y-2">
+			<h2 className="text-sm font-medium text-slate-800">
+				On-prem GPU throughput
+				<span className="ml-2 text-[11px] font-normal text-slate-400">
+					tok/s · qps ({windowLabel} rolling)
+				</span>
+			</h2>
+			<div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+				{backends.map((b) => (
+					<span
+						key={b.url}
+						className={`inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 text-[10px] tabular-nums ${
+							b.healthy ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-rose-50 text-rose-600 border border-rose-100'
+						}`}
+						title={`${b.url} · tier ${b.tier}${b.queue_depth >= 0 ? ` · engine queue ${b.queue_depth}` : ''}${!b.healthy ? ' · UNHEALTHY' : ''}`}
+					>
+						<span className="font-medium">{b.label}</span>
+						<span className="opacity-60">·</span>
+						<span>{b.tok_s === null ? 'warming up…' : `${b.tok_s.toFixed(1)} tok/s`}</span>
+						{b.tok_s !== null && (
+							<>
+								<span className="opacity-60">·</span>
+								<span>{b.qps?.toFixed(2)} qps</span>
+							</>
+						)}
+					</span>
+				))}
+				{backends.length === 0 && (
+					<span className="text-[11px] text-slate-400">No on-prem GPU backends configured.</span>
+				)}
+			</div>
+		</section>
+	);
 }
 
 // FieldBoxPanel — per-field-box traffic + relay health.
@@ -1555,6 +1638,10 @@ export default function StudioClaudeQuota() {
 					</div>
 				</>
 			)}
+
+			{/* On-prem GPU throughput. Self-contained (own fetch, own faster poll)
+			    so a lumid-llm hiccup can't blank the quota page above it. */}
+			<OnPremGpuPanel />
 
 			{/* Per-field-box traffic + relay health. Self-contained (own fetch)
 			    so a field-box outage can't blank the quota page above it. */}

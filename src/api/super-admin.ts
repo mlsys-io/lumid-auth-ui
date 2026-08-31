@@ -479,6 +479,37 @@ export async function fetchOpenRouterBalance(): Promise<OpenRouterBalanceResp> {
 	return r.data.data;
 }
 
+// ── On-prem GPU throughput ─────────────────────────────────────────────
+// Live tok/s + QPS per on-prem GPU backend (h100/GX10/s0 CPU, all serving
+// deepseek-v4-flash), computed over a rolling window by lumid-llm itself
+// (reuses its existing 5s /metrics scrape, no new upstream poll) and
+// passed through here with a short server-side cache. tok_s/qps are null
+// until the backend has been sampled twice in the window ("warming up"),
+// distinct from a genuine 0 (idle, but measured). queue_depth is -1 when
+// unknown, mirroring lumid-llm's own convention — never render it as a
+// literal depth of negative one.
+export interface OnpremGpuBackendStats {
+	label: string;
+	url: string;
+	tier: number;
+	healthy: boolean;
+	tok_s: number | null;
+	qps: number | null;
+	queue_depth: number;
+}
+
+export interface OnpremGpuStatsResp {
+	available: boolean;
+	window_seconds?: number;
+	backends?: OnpremGpuBackendStats[];
+	error?: string;
+}
+
+export async function fetchOnpremGpuStats(): Promise<OnpremGpuStatsResp> {
+	const r = await apiClient.get<DataResponse<OnpremGpuStatsResp>>('/api/v1/admin/onprem-gpu-stats');
+	return r.data.data;
+}
+
 // ── Claude session transcripts (lum.id/claude recording) ──────────────
 export interface ClaudeSessionCard {
 	conv_key: string;
