@@ -40,12 +40,13 @@ no install, no PAT setup. Pick a **(Code)** model from the model picker:
 | Model | Who | Backed by |
 |---|---|---|
 | DeepSeek-V4-Flash (Lumid GPU) | everyone | In-house H100 NVL pair — **default**, no pool quota |
+| Qwen3.8-27B (Code · Lumid GPU) | everyone | In-house luyao1 RTX 5090, tier=0 — no pool quota, one physical tier |
 | Claude Sonnet (Code) | admin+ | Account pool (your 4h/7d quota) |
 | Claude Opus (Code) | admin+ | Account pool |
 | Claude Fable 5 (Code) | super_admin | Account pool |
 
-Other non-Anthropic vendor models (Kimi K3, GLM-5.2, any OpenRouter model) are
-**disabled** — see [Non-Anthropic models](#non-anthropic-models-deepseek-family-only).
+Other non-Anthropic vendor models (Kimi K3, GLM-5.3-Flash, any OpenRouter model) are
+**disabled** — see [Non-Anthropic models](#non-anthropic-models-deepseek-and-qwen38-only).
 
 Each turn runs the claude CLI in a sandboxed per-user workspace, and the
 transcript renders the way the CLI does: reasoning blocks, tool calls in the
@@ -72,9 +73,16 @@ the same per-user [session recording](#session-recording) toggle — see below.)
 > and availability to everyone, and neither is true any more: `SELF_HOSTED_MODELS`
 > on claude-proxy defaults to `deepseek-v4-flash` alone, so any other non-Anthropic
 > id is treated as externally billed. On 2026-08-21 external non-deepseek models
-> became **refused for every role** (see
-> [Non-Anthropic models](#non-anthropic-models-deepseek-family-only)). The qwen
-> backends themselves went with luyao1 on 2026-08-17.
+> became **refused for every role**. The qwen backends themselves went with
+> luyao1 on 2026-08-17.
+>
+> **Qwen3.8-27B added back 2026-09-01 — a different model, a different backend.**
+> Not a revival of Qwen3.6-35B: `qwen3.6-27b`/`qwen3.6-35b-a3b` and `glm-5.3-flash`
+> were purged fleet-wide the same day (`qwen3.6-27b` was the source of a real
+> OpenRouter cost-abuse incident — 102 of 147 requests in one window, from `user`
+> accounts). Qwen3.8-27B runs on luyao1's RTX 5090, tier=0, `SELF_HOSTED_MODELS`
+> on claude-proxy, and is open to every role — same footing as deepseek. See
+> [Non-Anthropic models](#non-anthropic-models-deepseek-and-qwen38-only).
 
 **The chatbox default is DeepSeek-V4-Flash, served on our own hardware.** It runs
 tensor-parallel across two H100 NVL GPUs, so ordinary chat costs nothing per
@@ -196,22 +204,23 @@ native model — this is the recommendation, not a lock-in.
 
 The pool gates model families by your lum.id role:
 
-| Role | Sonnet / Haiku | Opus | Fable | DeepSeek (in-house) |
-|------|:---:|:---:|:---:|:---:|
-| `user` | — | — | — | ✅ |
-| `admin` | ✅ | ✅ | — | ✅ |
-| `super_admin` | ✅ | ✅ | ✅ | ✅ |
+| Role | Sonnet / Haiku | Opus | Fable | DeepSeek (in-house) | Qwen3.8-27B (in-house) |
+|------|:---:|:---:|:---:|:---:|:---:|
+| `user` | — | — | — | ✅ | ✅ |
+| `admin` | ✅ | ✅ | — | ✅ | ✅ |
+| `super_admin` | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 **Sonnet / Haiku are now `admin`+**, and **Opus is `admin`+**, so ordinary
 (`user`) accounts do not get faithful Anthropic Claude models — their Claude
 Code runs on `deepseek-v4-flash` by default, which is free and open to every
 role. Requesting a model above your tier returns `403` with the required role —
 switch to an allowed model (e.g. `--model deepseek-v4-flash`) or ask an admin
-to raise your role. Unlisted Claude-base models are available to everyone. The
-DeepSeek model (in-house `deepseek-v4-flash` — the OpenRouter offload was
-removed 2026-08-22) is the only non-Anthropic model enabled, and is open to
-**all roles** — there are no admin-only vendor models (Kimi K3 / GLM-5.2 /
-generic OpenRouter were disabled 2026-08-21).
+to raise your role. Unlisted Claude-base models are available to everyone.
+**Two** non-Anthropic models are enabled, both in-house and open to **all
+roles** — `deepseek-v4-flash` (default, multi-tier GB10 ladder) and
+`qwen3.8-27b` (luyao1 RTX 5090, one physical tier). There are no admin-only
+vendor models (Kimi K3 / GLM-5.3-Flash / generic OpenRouter, and every
+`qwen3.6-*` id, were disabled — GLM and qwen3.6 as of 2026-09-01).
 
 > **The `[1m]` context suffix.** Claude Code appends a context-length marker to
 > the model id it sends — e.g. `claude-sonnet-5[1m]` for a 1M-context session,
@@ -225,34 +234,41 @@ generic OpenRouter were disabled 2026-08-21).
 > the `[1m]` suffix) — the highest context validated safe under real
 > concurrent load on the current hardware.
 
-### Non-Anthropic models (DeepSeek only)
+### Non-Anthropic models (DeepSeek and Qwen3.8 only)
 
-The only non-Anthropic model available is **deepseek-v4-flash**, open to **every
-role** (user, admin, super_admin) via the `lum.id/llm` relay, same PAT as the
-Claude pool:
+Two non-Anthropic models are available, both open to **every role** (user,
+admin, super_admin) via the `lum.id/llm` relay, same PAT as the Claude pool:
 
 | Model flag | Backing | Context | Price (input/output per M tok) |
 |---|---|---|---|
 | `--model deepseek-v4-flash` | **In-house H100 NVL pair** | 512K | **free** — owned GPUs |
+| `--model qwen3.8-27b` | **In-house luyao1 RTX 5090** | 376K | **free** — owned GPU |
 
-> **OpenRouter is a bounded overflow, not the primary path.** `deepseek-v4-flash`
-> is served on our own **two H100 NVL GPUs** (tensor-parallel pair) first —
-> free at the margin, no metering, no data leaving the tailnet on the common
-> path. Requests only spill to OpenRouter's `deepseek/deepseek-v4-flash-0731`
-> when the in-house backend is at its concurrency roof or a request runs long
-> enough to trigger the hedge — that overflow is metered. **512K context**
-> (below the `[1m]` suffix's literal claim — see [Model selection](#model-selection)
-> above for why). This is the one the Studio
-> chatbox uses by default, and the one you should set as `ANTHROPIC_MODEL`.
+> **OpenRouter is a bounded overflow, not the primary path, for either model.**
+> `deepseek-v4-flash` is served on our own **two H100 NVL GPUs** (tensor-parallel
+> pair) first — free at the margin, no metering, no data leaving the tailnet on
+> the common path. `qwen3.8-27b` is served on luyao1's RTX 5090 first (one
+> physical tier, not a multi-GPU ladder). Requests only spill to OpenRouter
+> (`deepseek/deepseek-v4-flash-0731` / `qwen/qwen3.8-27b`) when the in-house
+> backend is at its concurrency roof or a request runs long enough to trigger
+> the hedge — that overflow is metered. **512K context for deepseek** (below the
+> `[1m]` suffix's literal claim — see [Model selection](#model-selection) above
+> for why), **376K for qwen3.8-27b** (measured VRAM ceiling for 8 real parallel
+> slots on a single 32GB card, stress-tested clean). Deepseek is the one the
+> Studio chatbox uses by default, and the one you should set as
+> `ANTHROPIC_MODEL`.
 
-**All other non-Anthropic vendor models are disabled.** Kimi K3, GLM-5.2, the
-OpenRouter catch-all (any unlisted/mistyped model id), and the removed
-`deepseek/deepseek-v4-flash-0731` offload are refused for **every role — admins
-included** — so no external bill can ever be run up on a model the platform does
-not deliberately host. Previously these were available to `admin`+; that access
-was removed on 2026-08-21 and tightened further on 2026-08-22. The proxy's
-`denyExternalModelForRole` enforces this: only `deepseek-v4-flash` (self-hosted)
-is accepted; any other non-Anthropic request returns `403`.
+**All other non-Anthropic vendor models are disabled.** Kimi K3, GLM-5.3-Flash,
+every `qwen3.6-*` id, the OpenRouter catch-all (any unlisted/mistyped model
+id), and the removed `deepseek/deepseek-v4-flash-0731` offload are refused for
+**every role — admins included** — so no external bill can ever be run up on a
+model the platform does not deliberately host. GLM-5.3-Flash and the qwen3.6
+pair were dropped 2026-09-01 (`qwen3.6-27b` was the source of a real
+OpenRouter cost-abuse incident — 102 of 147 requests in one window, from
+`user` accounts); Kimi K3 and generic OpenRouter were removed 2026-08-21. The
+proxy's `denyExternalModelForRole` enforces this: only `deepseek-v4-flash` and
+`qwen3.8-27b` (both self-hosted) are accepted; any other non-Anthropic request
+returns `403`.
 
 > A **mistyped local model id no longer silently bills**: it is refused outright
 > instead of falling through to a metered OpenRouter rack.

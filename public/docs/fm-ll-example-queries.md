@@ -241,17 +241,23 @@ ops:
 
 - **Two different model-id namespaces — don't mix them.** For the **lumid-llm mesh** (OpenAI-compat
   gateway, `/fm` chat paths) use the FULL gateway keys. `GET /llm/v1/models` is the live list —
-  read it rather than trusting any doc, this one included. As of **2026-08-21** it is exactly two:
-  `deepseek-v4-flash` (the **default**, in-house on the GB10 pair, free at the margin) and
-  `kimi-k3` (Moonshot, cost-metered). Every `qwen*` and `gemma*` id this doc used to list is
-  **retired** — `qwen3.8-27b` went when the GB10 pair moved to DeepSeek, and the `qwen3.6-*` pair
-  went with luyao1 on 2026-08-17.
+  read it rather than trusting any doc, this one included. As of **2026-09-01** it is exactly two:
+  `deepseek-v4-flash` (the **default**, in-house multi-tier GB10+s0 CPU ladder, free at the
+  margin) and `qwen3.8-27b` (in-house on luyao1's RTX 5090, tier=0, OpenRouter as bounded
+  overflow only). `kimi-k3` is **not currently configured** (older notes named it; verify against
+  `GET /llm/v1/models` rather than trusting that). Every `qwen3.6-*`/`qwen-2.5-*`/etc identity-
+  mapped id and `glm-5.3-flash` were purged the same day this line was corrected —
+  `qwen3.6-27b` was the OpenRouter cost-abuse finding that triggered the purge (102 of 147
+  requests in one window from role=user), and every other purged id carried the same shape of
+  exposure without having been exploited yet.
   **An unknown id does not 502 — it falls through to the OpenRouter catch-all and is BILLED.**
   Verified 2026-08-21: `z-ai/glm-5.2` is not in `LUMID_LLM_BACKENDS` and still returns 200, served
-  and metered via OpenRouter. So a typo'd or stale model id fails *silently and expensively*
-  rather than loudly. The one deliberate exception is `deepseek-v4-flash`, which is pinned NOT to
-  fall through: it 502s honestly while the in-house pair is down, so an outage stays visible
-  instead of turning into an invisible bill.
+  and metered via OpenRouter — but as of the 2026-09-01 purge, any id purged from
+  `LUMID_LLM_OPENROUTER_MODEL_MAP` (including `glm-5.3-flash` and every `qwen3.6-*` id) now
+  correctly gets `lumid-llm`'s own 503 instead, per the fix (`llm-0d342a8`) this note already
+  describes below for `deepseek-v4-flash`'s pinned behavior. So a typo'd or stale model id fails
+  *loudly* now for anything actually purged, not just for deepseek. The one remaining silent-bill
+  risk is an id that is genuinely still in the OpenRouter map but a caller no longer means to use.
   For a **Lumilake `LLMChatOp`** use a **HuggingFace id** (`Qwen/Qwen2.5-7B-Instruct`,
   `Qwen/Qwen2.5-0.5B-Instruct`): Lumilake runs the op as a FlowMesh **vLLM** inference task that
   loads the model from HF, so a mesh alias like `deepseek-v4-flash` raises `not a valid model
