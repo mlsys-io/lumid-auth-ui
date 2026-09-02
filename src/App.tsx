@@ -126,6 +126,10 @@ const AdminInvitations = lazy(() => import("./pages/account/admin-invitations"))
 // that are zero in our deployment); pulls live cluster/node/worker/
 // user/audit data instead. Source at pages/dashboard/overview.tsx.
 const AdminOverview = lazy(() => import("./pages/dashboard/overview"));
+// Per-app user insights — how one xpio app is actually being used, across every
+// tenant. Generic over apps: the app is a route param, so a second app is a URL
+// rather than a new page.
+const AppInsights = lazy(() => import("./pages/dashboard/app-insights"));
 // Super-admin single pane of glass — billing/identity/QA/infra/build
 // tiles + embedded Grafana panels. Lives at /dashboard/super-admin.
 const SuperAdminDashboard = lazy(() => import("./pages/dashboard/super-admin"));
@@ -723,6 +727,7 @@ export default function App() {
                 Claude Code quota lives at the top-level /code route (admin+). */}
             <Route path="manage" element={<AdminGuard><AdminOverview /></AdminGuard>} />
             <Route path="admin-overview" element={<AdminGuard><AdminOverview /></AdminGuard>} />
+            <Route path="admin/apps/:app/insights" element={<AdminGuard><AppInsights /></AdminGuard>} />
             {/* Sidebar consolidation 2026-05-25: skills merged into the
                 catalog (now "Library"); runs + mind folded into Workflows.
                 Marketplace → Library rename (demo IA); old paths redirect.
