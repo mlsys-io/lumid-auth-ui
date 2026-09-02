@@ -488,4 +488,8 @@ PAT, per Quick start) — one family, one holder, nothing to collide.
   streaming. (DeepSeek on our own pair has no such ceiling concern; the
   OpenRouter offload does.)
 - Requests are logged (your email, chosen account, path, model, status,
-  duration) for usage accounting. Prompt/response bodies are **not** logged.
+  duration) for usage accounting. **This line used to also claim prompt/response
+  bodies are not logged — that was true before session recording shipped and
+  is stale now.** See [Session recording](#session-recording) above: full
+  request/response content IS recorded by default (opt-out per user, not
+  per-request), for every model including DeepSeek-V4-Flash.
