@@ -56,6 +56,19 @@ export async function readChatStream(r: Response, setMessages: SetMessages, meta
 	}
 	const decoder = new TextDecoder();
 	let buf = '';
+	// Tracks whether the server's own terminal `done` event was actually
+	// received, distinct from the fetch stream's `reader.read()` reporting
+	// `done: true` (which just means the underlying TCP connection closed —
+	// true both for a clean server-side finish AND for a proxy/network
+	// cutoff mid-turn, e.g. an intermediary's read timeout). Before this,
+	// readChatStream returned successfully either way: dispatchTurn's
+	// `break; // success` never fired, an interrupted turn was
+	// indistinguishable from a completed one, and the user was left staring
+	// at a truncated answer with no error, no retry, nothing to say their
+	// message + partial progress were saved and a follow-up would resume —
+	// exactly the "stale chat" symptom reported after long tool-heavy turns.
+	let sawDone = false;
+	let sawError = false;
 	// Delta coalescing: consecutive text/thinking deltas within one network
 	// chunk collapse into ONE setMessages, so the render rate is capped at the
 	// chunk arrival rate instead of the token rate. On a fast stream a chunk
@@ -122,6 +135,11 @@ export async function readChatStream(r: Response, setMessages: SetMessages, meta
 						// the stream caller missed the early route event).
 						if (evt.model_used) meta.onRoute?.(String(evt.model_used), !!evt.auto_routed);
 					} else {
+						if (evt.type === 'done') sawDone = true;
+						// The server already surfaces its own detected errors via
+						// handleEvent's 'error' notice below -- don't ALSO throw the
+						// generic "interrupted" notice on top of a specific one.
+						else if (evt.type === 'error') sawError = true;
 						handleEvent(evt, setMessages);
 					}
 				} catch { /* malformed line; skip */ }
@@ -139,6 +157,16 @@ export async function readChatStream(r: Response, setMessages: SetMessages, meta
 	// it as AbortError so the caller renders "— stopped —" and runs its finally
 	// (resetting `streaming` → the queue can drain).
 	if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+	// The underlying connection closed without the server's own `done` (or an
+	// already-surfaced `error`) event ever arriving — a genuine mid-turn
+	// cutoff (proxy/network timeout, backend restart, etc.), not a normal
+	// finish. Distinguishable by name so the caller can tell this apart from
+	// both a clean completion and the pre-stream network-blip retry case.
+	if (!sawDone && !sawError) {
+		const err = new Error('stream ended without a terminal event');
+		err.name = 'StreamInterrupted';
+		throw err;
+	}
 }
 
 export function handleEvent(

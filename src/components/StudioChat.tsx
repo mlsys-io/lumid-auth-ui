@@ -1526,6 +1526,23 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 					...m,
 					content: (m.content || '') + (m.content ? '\n\n_— stopped —_' : '_— stopped —_'),
 				})));
+			} else if (e?.name === 'StreamInterrupted') {
+				// The connection died mid-turn (proxy/network timeout, backend
+				// restart, etc.) — NOT a normal finish, and NOT the same as
+				// "couldn't reach the assistant" (which implies nothing happened;
+				// here a turn was genuinely in flight, possibly ran real tools,
+				// and the sandbox session persists server-side). Previously this
+				// silently looked like a completed — if oddly short — answer:
+				// readChatStream resolved successfully either way, so `break;
+				// // success` fired and no error, retry, or explanation ever
+				// reached the user. Always APPEND (never overwrite m.content,
+				// unlike the generic branch below) since partial content may
+				// already have streamed in and still needs the caveat.
+				setMessages((prev) => withLastAssistant(prev, (m) => pushNotice(
+					m, 'error',
+					'⚠️ Connection interrupted mid-response',
+					'Your message and any progress so far were saved — send another message to continue where this left off.',
+				)));
 			} else {
 				const networkish = /network|failed to fetch|load failed/i.test(String(e?.message || e));
 				const msg = networkish
