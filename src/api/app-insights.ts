@@ -38,6 +38,9 @@ export interface SubmissionFunnel {
 	reject_reasons: InsightCount[];
 	attempts_to_first_deploy: InsightCount[];
 	users_never_deployed: number;
+	/** Users whose every submission predates outcome recording. Not a failure —
+	 *  we do not know what happened to them. */
+	users_outcome_unknown: number;
 	verdict_ms_p50?: number;
 	verdict_ms_p95?: number;
 }
@@ -72,6 +75,7 @@ export interface AppInsights {
 		is_floor: boolean;
 		floor_note: string;
 	};
+	truncated: { submissions: boolean; runs: boolean; intents: boolean; row_cap: number };
 	activity: InsightDay[];
 	caveats: string[];
 }

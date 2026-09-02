@@ -190,7 +190,11 @@ export default function AppInsightsPage() {
 			) : null}
 
 			<div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-				<Stat label="Submissions" value={f.total} sub={`${f.users} distinct users`} />
+				<Stat
+					label="Submissions"
+					value={data.truncated?.submissions ? `≥${f.total}` : f.total}
+					sub={`${f.users} distinct users${data.truncated?.submissions ? ' · scan capped' : ''}`}
+				/>
 				<Stat
 					label="Deployed"
 					value={f.attributed.deployed}
@@ -198,12 +202,24 @@ export default function AppInsightsPage() {
 					tone={f.unknown_outcome > 0 ? 'warn' : 'plain'}
 				/>
 				<Stat label="Rejected" value={f.attributed.rejected} sub="compiler refused" tone={f.attributed.rejected > 0 ? 'warn' : 'plain'} />
-				<Stat
-					label="Never deployed"
-					value={f.users_never_deployed}
-					sub="users with no successful submit"
-					tone={f.users_never_deployed > 0 ? 'bad' : 'plain'}
-				/>
+				{f.users_never_deployed > 0 || f.users_outcome_unknown === 0 ? (
+					<Stat
+						label="Never deployed"
+						value={f.users_never_deployed}
+						sub="users with a recorded outcome, none of them a deploy"
+						tone={f.users_never_deployed > 0 ? 'bad' : 'plain'}
+					/>
+				) : (
+					// Every submission in the window predates outcome recording.
+					// Showing "N never deployed" here would report a gap in our
+					// records as a fact about those people.
+					<Stat
+						label="Outcome unknown"
+						value={f.users_outcome_unknown}
+						sub="users whose submissions predate outcome recording"
+						tone="warn"
+					/>
+				)}
 			</div>
 
 			<Panel
@@ -226,6 +242,12 @@ export default function AppInsightsPage() {
 					{f.users_never_deployed > 0 ? (
 						<div className="mt-3 text-xs text-slate-500">
 							{f.users_never_deployed} user(s) submitted and never deployed — excluded from the buckets above.
+						</div>
+					) : null}
+					{f.users_outcome_unknown > 0 ? (
+						<div className="mt-3 text-xs text-amber-600">
+							{f.users_outcome_unknown} user(s) have no recorded outcome at all — their submissions predate
+							verdict recording, so whether they succeeded is not knowable from this data.
 						</div>
 					) : null}
 				</Panel>
@@ -251,7 +273,10 @@ export default function AppInsightsPage() {
 			</div>
 
 			<div className="grid gap-4 md:grid-cols-2">
-				<Panel title="Loop runs" note={`${data.runs.users} user(s) · last run ${data.runs.newest_run_ts ? humanAge(data.runs.stale_seconds) + ' ago' : 'never'}`}>
+				<Panel
+					title={`Loop runs — ${data.runs.total.toLocaleString()}`}
+					note={`${data.runs.users} user(s) · last run ${data.runs.newest_run_ts ? humanAge(data.runs.stale_seconds) + ' ago' : 'never'}`}
+				>
 					<BarList rows={data.runs.by_loop} empty="No runs recorded in this window." />
 					{data.runs.failures_by_loop.length > 0 ? (
 						<div className="mt-4">
