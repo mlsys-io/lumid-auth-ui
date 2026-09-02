@@ -480,14 +480,26 @@ export async function fetchOpenRouterBalance(): Promise<OpenRouterBalanceResp> {
 }
 
 // ── On-prem GPU throughput ─────────────────────────────────────────────
-// Live tok/s + QPS per on-prem GPU backend (h100/GX10/s0 CPU, all serving
-// deepseek-v4-flash), computed over a rolling window by lumid-llm itself
-// (reuses its existing 5s /metrics scrape, no new upstream poll) and
-// passed through here with a short server-side cache. tok_s/qps are null
-// until the backend has been sampled twice in the window ("warming up"),
-// distinct from a genuine 0 (idle, but measured). queue_depth is -1 when
-// unknown, mirroring lumid-llm's own convention — never render it as a
+// Live tok/s + QPS per on-prem GPU backend (h100/GX10/s0 CPU + luyao1,
+// deepseek-v4-flash and qwen3.8-27b), computed over a rolling window by
+// lumid-llm itself (reuses its existing 5s /metrics scrape, no new upstream
+// poll) and passed through here with a short server-side cache. tok_s/qps
+// are null until the backend has been sampled twice in the window ("warming
+// up"), distinct from a genuine 0 (idle, but measured). queue_depth is -1
+// when unknown, mirroring lumid-llm's own convention — never render it as a
 // literal depth of negative one.
+//
+// inflight/peak_inflight_5m added 2026-09-02: an operator read `29.7 tok/s ·
+// 0.05 qps` as contradictory. It isn't (qps is completions/s, and a backend
+// running few, individually SLOW requests generates tokens steadily while
+// finishing almost nothing per second) — but qps alone doesn't answer what
+// they actually wanted to know: how many requests are running AT ONCE, and
+// whether there was a burst. inflight is lumid-llm's own live in-flight
+// count for the backend (gateway-side, not scraped — populated for every
+// dialect including llama.cpp, unlike qps). peak_inflight_5m is the
+// high-water mark over the same rolling window, so a burst that already
+// drained between two dashboard polls (~12-15s apart) is still visible.
+// Both are null only before the first sample lands (mirrors tok_s).
 export interface OnpremGpuBackendStats {
 	label: string;
 	url: string;
@@ -495,6 +507,8 @@ export interface OnpremGpuBackendStats {
 	healthy: boolean;
 	tok_s: number | null;
 	qps: number | null;
+	inflight: number;
+	peak_inflight_5m: number | null;
 	queue_depth: number;
 }
 

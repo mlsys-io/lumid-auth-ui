@@ -481,8 +481,8 @@ function OnPremGpuPanel() {
 							b.healthy ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-rose-50 text-rose-600 border border-rose-100'
 						}`}
 						title={`${b.url} · tier ${b.tier}${b.queue_depth >= 0 ? ` · engine queue ${b.queue_depth}` : ''}${!b.healthy ? ' · UNHEALTHY' : ''}${
-							b.tok_s !== null && b.qps === null ? ' · this backend exposes no request-completion counter (llama.cpp), qps is not measurable' : ''
-						}`}
+							b.qps !== null ? ` · ${b.qps.toFixed(2)} completions/s (5m avg)` : b.tok_s !== null ? ' · this backend exposes no request-completion counter (llama.cpp), completions/s is not measurable' : ''
+						} · tok/s and completions/s can look contradictory when requests are individually slow: tokens flow steadily while few requests FINISH per second. inflight (below) is concurrency, not a rate.`}
 					>
 						<span className="font-medium">{b.label}</span>
 						<span className="opacity-60">·</span>
@@ -490,11 +490,19 @@ function OnPremGpuPanel() {
 						{b.tok_s !== null && (
 							<>
 								<span className="opacity-60">·</span>
-								{/* qps null here (with tok_s already Some) means this backend's
-								    dialect has no request-completion counter at all -- llama.cpp,
-								    permanently, not "still warming up". A blank number after "qps"
-								    reads as broken; say so plainly instead. */}
-								<span>{b.qps === null ? 'qps n/a' : `${b.qps.toFixed(2)} qps`}</span>
+								{/* Leads with concurrency (inflight / peak-in-5m), not qps --
+								    qps (completions/s) reads as contradictory next to a healthy
+								    tok/s when requests are individually slow: few finish per
+								    second even though tokens are flowing the whole time one is
+								    running. inflight answers "how many at once, was there a
+								    burst" directly, and unlike qps it's measurable for every
+								    backend dialect (gateway-side counter, not scraped). */}
+								<span>
+									{b.inflight} inflight
+									{b.peak_inflight_5m !== null && b.peak_inflight_5m > b.inflight
+										? ` (peak ${b.peak_inflight_5m}/5m)`
+										: ''}
+								</span>
 							</>
 						)}
 					</span>
