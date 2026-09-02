@@ -227,7 +227,13 @@ export default function StudioClaudeSessions() {
 
 	useEffect(() => {
 		fetchClaudeRecording().then(setRecording).catch(() => {});
-		// Probe admin view availability (requires admin or super_admin — role=user gets 403).
+		// Probe admin view availability. TIGHTENED 2026-09-02 (security audit
+		// finding): the backend route now requires super_admin, not admin+ —
+		// a plain admin's probe 403s and falls through to the catch below,
+		// same as role=user always did. No UI change needed here: this was
+		// already a graceful probe-and-degrade, not a hard role check, so a
+		// plain admin just sees their own sessions instead of the all-users
+		// view, with no visible error.
 		// If the probe succeeds, default to the all-users view so admins see everything on load.
 		fetchClaudeSessions(true).then(() => { setCanAdmin(true); setAdmin(true); }).catch(() => setCanAdmin(false));
 	}, []);
