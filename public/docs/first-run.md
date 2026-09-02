@@ -190,7 +190,15 @@ filtered for liquidity. A market that just opened may not be in your universe
 yet, and one that fell below $5,000 of liquidity drops out.
 
 **Symbols.** An `instrument_id` is the venue's own ticker, carried verbatim.
-Kalshi's look like `KXBTCD-26AUG2519-T78899.99` — series, date, strike.
+Kalshi's look like `KXBTCD-26SEP0211-T77099.99` — series, date, strike.
+
+**Every one of them expires, and so does its tape.** The replay window is the
+last **7 days** (`tape_window_secs: 604800`), so an instrument whose date has
+fallen outside that window has no prints left to replay: the run falls back to
+the synthetic generator and comes back `replay: "synthetic_lcg"` with
+`prints_replayed: 0`. Nothing is broken and the label is honest — you just
+measured a generator. **Never copy a dated ticker out of a document**, this one
+included; every one printed here is a shape, not a live id.
 
 To see what is in your universe right now, ask in chat — *"which monitored
 markets have the most volume in the last two days?"* — rather than hunting for a
@@ -390,7 +398,7 @@ against your own rows:
 
 | what you want | what you say |
 |---|---|
-| run one | *Backtest `ofi_z_momentum` on `KXBTCD-26AUG2519-T78899.99`.* |
+| run one | *Backtest `ofi_z_momentum` on a currently active BTC market — pick one with recent volume.* |
 | the verdict | *Poll my backtest results — is the last one done, and are all three axes real?* |
 | live paper | *What is `ofi_z_momentum` doing on the forward arm? Any scorecards yet?* |
 | the funnel | *Analyse `ofi_z_momentum` — proposed, submitted, rejected, and why.* |
@@ -479,8 +487,11 @@ fake half — that is exactly how a synthetic result gets mistaken for an edge.
   0.00. A position sitting at 0.90 is worth *zero* if it resolves the other way,
   which is why marking to the last price can be badly wrong.
 
-**A real one, field by field.** This is `bt_vpin_3axis`, a run that is real on
-all three axes:
+**A real one, field by field.** This is `bt_vpin_3axis`, a run that was real on
+all three axes when it was taken (**2026-08-28**). It is a transcript, not a
+recipe: its instrument settled in August and has since aged out of the 7-day
+replay window, so re-running that exact ticker today returns `synthetic_lcg`.
+Read it for the field shapes; pick your own live instrument.
 
 ```json
 {

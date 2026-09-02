@@ -87,10 +87,15 @@ table the live runtime reads — and appends to `lqt.signal_history`, which is
 what makes a later backtest able to claim `signals: recorded`. The payload takes
 a batch:
 
+The `instrument_id` must be one that is **live now** — a signal published
+against an expired ticker is stored, but no backtest will ever replay against
+it (the tape window is 7 days). `GET /lqt-data/market/kalshi-active-instruments`
+returns the currently traded set, most active first.
+
 ```json
 {"signals": [
   {"signal_name": "news_llm",
-   "instrument_id": "KXBTCD-26AUG2519-T78899.99",
+   "instrument_id": "KXBTCD-26SEP0211-T77099.99",
    "score_ticks": 7200,
    "confidence_bps": 6000,
    "ts_event_ns": 1756400000000000000}
