@@ -98,14 +98,21 @@ Go to **[Library → Marketplace](https://lum.id/studio/library/marketplace)**,
 find **Quant Research**, and install it. It is public, so nothing needs
 approving.
 
-Afterwards it appears in the sidebar and its four surfaces are yours:
+Afterwards it appears in the sidebar and its five surfaces are yours:
 
 | surface | what it shows |
 |---|---|
 | **Strategies** | everything you have registered — start here |
-| **Backtest** | claims and their honesty labels |
+| **Backtest (dry run)** | claims and their honesty labels |
 | **Forward test** | live-paper scorecards |
 | **Runtime** | what each field box is doing |
+| **Experiments** | declared arms and their measured results |
+
+If your sidebar says **LQT Strategies** rather than **Quant Research**, you are
+on the app's pre-rename card: it stops at three surfaces, labels the backtest
+*(registers)* — which is wrong, submitting is a dry run — and its assistant has
+no copy of the `.lqts` reference, so it will invent syntax. Install **Quant
+Research** from the Marketplace and use that one.
 
 A **field box** is one of the servers that actually runs strategies — currently
 Denmark, Chicago and New York, placed near the venues they trade. You never log
