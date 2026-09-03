@@ -241,6 +241,15 @@ function ArmsBlock({ app, e }: { app: string; e: MeExperiment }) {
 					const id = String(a.id);
 					const seen = (e.variants || {})[id];
 					const isBaseline = e.baseline === id;
+					// An arm with no config beyond its own name is a LABEL for
+					// "whatever the app does by default", not a runnable
+					// configuration — dispatching it just runs the loop with no
+					// arguments. quant-research's `current` arm is exactly this:
+					// firing it produced "strategy is empty", a button that could
+					// never succeed. Such experiments are measured PASSIVELY, from
+					// the runs users already make (record_result on the loop's own
+					// path), so show the arm and withhold the button.
+					const runnable = Object.keys(a).some((k) => k !== "id" && k !== "description");
 					return (
 						<div key={id} className="flex items-center gap-2 px-3 py-2">
 							<div className="min-w-0 flex-1">
@@ -253,7 +262,12 @@ function ArmsBlock({ app, e }: { app: string; e: MeExperiment }) {
 								</div>
 								{a.description && <div className="text-[10px] text-slate-400 truncate">{String(a.description)}</div>}
 							</div>
-							{sent[id] ? (
+							{!runnable ? (
+								<span className="text-[10px] text-slate-400 whitespace-nowrap"
+									title="This arm declares no configuration to apply, so there is nothing to dispatch — it is measured from the runs you already make.">
+									measured passively
+								</span>
+							) : sent[id] ? (
 								<span className="text-[10px] text-emerald-600 whitespace-nowrap">queued ✓</span>
 							) : (
 								<button
