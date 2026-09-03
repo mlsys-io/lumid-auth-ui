@@ -10,9 +10,10 @@
 
 import { useCallback, useEffect, useRef, useState, Suspense, type ComponentProps } from "react";
 import { recordInteraction } from "@/api/interactions";
+import { useAuth } from "@/hooks/useAuth";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { MoreHorizontal, Pencil, Plus, Settings, SlidersHorizontal, Sparkles, Trash2, DownloadCloud, UploadCloud, Loader2 } from "lucide-react";
+import { MoreHorizontal, Pencil, Plus, Settings, SlidersHorizontal, Sparkles, Trash2, DownloadCloud, UploadCloud, Loader2, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
 import apiClient from "@/api/client";
 import {
@@ -94,6 +95,9 @@ function AppSurfaceImpl({
   const app = appProp ?? routeParams.app ?? "";
   const surface = surfaceProp ?? routeParams.surface;
   const navigate = useNavigate();
+  // Same test AdminGuard applies, so a visible link never leads to a bounce.
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin" || user?.role === "super_admin";
   const [state, setState] = useState<{
     data?: MeAppSurface;
     loading: boolean;
@@ -263,6 +267,22 @@ function AppSurfaceImpl({
       {/* Every app can create a workflow — surface apps (no loops yet) included.
           Same placement (right after the nav) + style as the workflow-app
           "New workflow" button, so it reads identically across app types. */}
+      {/* Insights — admin only. The page existed with no entry point at all:
+          the route was registered and nothing anywhere linked to it, so it was
+          reachable only by typing the URL. It belongs HERE rather than in a
+          global admin menu because it is per-app — you are looking at the app,
+          so the question "how is this being used" is about the app in front of
+          you. Gated on role rather than route-guarded alone, so a non-admin is
+          never shown a link that would bounce them. */}
+      {isAdmin && (
+        <Link
+          to={`/studio/admin/apps/${encodeURIComponent(app)}/insights`}
+          title="Usage insights for this app — submissions, runs, and what people do on the page"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-dashed border-border text-[12.5px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex-shrink-0"
+        >
+          <BarChart3 className="w-3.5 h-3.5" /> Insights
+        </Link>
+      )}
       <Link
         to={`/studio/a/${encodeURIComponent(app)}/manage`}
         title="Create a workflow for this agent"
