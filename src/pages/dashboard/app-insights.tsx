@@ -304,6 +304,32 @@ export default function AppInsightsPage() {
 			</div>
 
 			<Panel
+				title="What people did on the page"
+				note="Surface views, form submits and row actions. Names only — never what was typed. Empty until enough traffic since capture was added."
+			>
+				{data.interactions && data.interactions.total > 0 ? (
+					<div className="grid gap-4 md:grid-cols-2">
+						<div>
+							<div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-slate-500">By action</div>
+							<BarList rows={data.interactions.by_action} empty="" />
+						</div>
+						<div>
+							<div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-slate-500">Surfaces opened</div>
+							<BarList rows={data.interactions.by_surface} empty="No surface views yet." />
+						</div>
+					</div>
+				) : (
+					<div className="text-sm text-slate-500">
+						Nothing captured in this window. Interaction capture was added recently, so an empty panel
+						here means <em>no data yet</em> — not that nobody visited.
+					</div>
+				)}
+				{data.interactions && data.interactions.total > 0 ? (
+					<div className="mt-3 text-xs text-slate-500">{data.interactions.users} distinct visitor(s)</div>
+				) : null}
+			</Panel>
+
+			<Panel
 				title="Chat threads"
 				note={
 					<span className="inline-flex items-start gap-1.5">

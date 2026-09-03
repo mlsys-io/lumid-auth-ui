@@ -9,6 +9,7 @@
 // can be edited/managed directly from Studio, including apps with no surface yet.
 
 import { useCallback, useEffect, useRef, useState, Suspense, type ComponentProps } from "react";
+import { recordInteraction } from "@/api/interactions";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { MoreHorizontal, Pencil, Plus, Settings, SlidersHorizontal, Sparkles, Trash2, DownloadCloud, UploadCloud, Loader2 } from "lucide-react";
@@ -143,6 +144,16 @@ function AppSurfaceImpl({
   }, [app, surface]);
 
   useEffect(() => { load(); return () => { reqRef.current++; }; }, [load]);
+
+  // One surface_view per (app, surface) mount. This is the only record of
+  // someone opening a page and doing nothing — the population a funnel
+  // otherwise cannot see at all, and the difference between "nobody came" and
+  // "everybody bounced". Keyed so a re-render or a silent chat-driven reload
+  // does not inflate it.
+  useEffect(() => {
+    if (!app) return;
+    recordInteraction({ app, action: "surface_view", surface: surface || "home" });
+  }, [app, surface]);
   // A chat-driven surface edit/regenerate invalidates 'ui' → reload silently.
   useStudioRefetch(["ui"], () => load(true));
 

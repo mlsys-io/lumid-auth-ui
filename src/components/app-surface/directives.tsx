@@ -17,6 +17,7 @@
 import { createContext, useContext, useId, useCallback, useMemo, Suspense, useEffect, useState, type ReactNode } from "react";
 import { parse as parseYaml } from "yaml";
 import { Link, useNavigate, useParams as useRouteParams } from "react-router-dom";
+import { recordInteraction } from "@/api/interactions";
 import { toast } from "sonner";
 import { AuthContext } from "@/hooks/useAuth";
 import {
@@ -626,6 +627,15 @@ function ActionButton({ a, row, onDone, size = "sm" }: {
   const run = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (a.confirm && !window.confirm(a.confirm)) return;
+    // The action's LABEL, never the row. A row can carry a strategy id, a
+    // name, whatever the surface author put in it — none of that belongs in
+    // an analytics event, and the label alone answers "which button do people
+    // actually press".
+    recordInteraction({
+      app: (a.run_loop?.app as string) || appFromRoute || "",
+      action: "row_action", widget: "table",
+      target: String(a.label ?? a.run_loop?.loop ?? "action"),
+    });
     if (a.ask) {
       const interp = (s: string) =>
         row ? s.replace(/\{([^}]+)\}/g, (_, k) => String(row[k] ?? "")) : s;
@@ -1467,6 +1477,7 @@ function LumidForm({ body }: { body: Body }) {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const startedAt = performance.now();
     setBusy(true); setResult(null);
     try {
       if (submitQa) {
@@ -1500,6 +1511,11 @@ function LumidForm({ body }: { body: Body }) {
         // the same distinction the mailbox draws between 200-queued and the
         // later ack, and collapsing it is how "it said it worked" happens.
         setResult({ ok: true, msg: String(body.success_message ?? `Queued ${submitLoop}.`) });
+        // The loop NAME, never the field values — those are the user's own
+        // content and the run record already carries what was submitted.
+        recordInteraction({ app: appName, action: "form_submit", widget: "form",
+                            target: submitLoop, ok: true,
+                            duration_ms: Math.round(performance.now() - startedAt) });
         if (redirectTo) setTimeout(() => navigate(redirectTo), 600);
       } else {
         const auth = await bearerHeader();
@@ -1518,6 +1534,14 @@ function LumidForm({ body }: { body: Body }) {
     } catch (err) {
       const m = (err as { message?: string })?.message ?? String(err);
       setResult({ ok: false, msg: m });
+      // Record the FAILURE too. A form that always fails and a form nobody
+      // submits produce the same silence otherwise, and they need very
+      // different responses. The error text is NOT sent — only that it failed.
+      if (submitLoop) {
+        recordInteraction({ app: submitApp || appFromRoute || "", action: "form_submit",
+                            widget: "form", target: submitLoop, ok: false,
+                            duration_ms: Math.round(performance.now() - startedAt) });
+      }
     } finally {
       setBusy(false);
     }

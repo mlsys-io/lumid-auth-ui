@@ -76,6 +76,12 @@ export interface AppInsights {
 		floor_note: string;
 	};
 	truncated: { submissions: boolean; runs: boolean; intents: boolean; row_cap: number };
+	interactions: {
+		total: number;
+		users: number;
+		by_action: InsightCount[];
+		by_surface: InsightCount[];
+	};
 	activity: InsightDay[];
 	caveats: string[];
 }
