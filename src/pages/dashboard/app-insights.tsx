@@ -304,6 +304,36 @@ export default function AppInsightsPage() {
 			</div>
 
 			<Panel
+				title="Backtest honesty"
+				note="Whether a result can be quoted as performance. Presentable means ALL THREE axes came back real — prices, signals and settlement — so real prices cannot vouch for a constant signal."
+			>
+				{data.backtests && data.backtests.total > 0 ? (
+					<div className="grid gap-4 md:grid-cols-2">
+						<div>
+							<div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-slate-500">Verdict</div>
+							<BarList rows={data.backtests.by_verdict} empty="" />
+						</div>
+						<div>
+							<div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-slate-500">Tape provenance</div>
+							<BarList
+								rows={data.backtests.by_tape}
+								empty="No run recorded which tape it replayed."
+							/>
+						</div>
+					</div>
+				) : (
+					<div className="text-sm text-slate-500">No backtest runs in this window.</div>
+				)}
+				{/* "Unlabelled" is its own bucket on purpose: a run that recorded no
+				    axes is not the same as one that recorded them and failed the
+				    test, and folding the two would overstate how much is known. */}
+				<div className="mt-3 text-xs text-slate-500">
+					Runs carrying no axis labels are counted as <em>unlabelled</em>, never as not-presentable —
+					absent and false are different claims.
+				</div>
+			</Panel>
+
+			<Panel
 				title="What people did on the page"
 				note="Surface views, form submits and row actions. Names only — never what was typed. Empty until enough traffic since capture was added."
 			>
