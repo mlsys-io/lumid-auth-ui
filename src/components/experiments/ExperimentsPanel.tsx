@@ -14,7 +14,7 @@ import { SpiralOverlay } from "@/components/BrandLoader";
 import {
 	FlaskConical, ChevronDown, ChevronRight, Loader2, TrendingUp, TrendingDown,
 } from "lucide-react";
-import { me, type MeExperiment, type MeExperimentDetail, type MeExperimentCase } from "@/api/me";
+import { me, waitForIntent, type MeExperiment, type MeExperimentArm, type MeExperimentDetail, type MeExperimentCase } from "@/api/me";
 import { fetchCasebook } from "@/api/casebook";
 import { cn } from "@/lib/utils";
 
@@ -184,6 +184,107 @@ function CasesTable({ app, expId, loop, cases }: { app: string; expId: string; l
 	);
 }
 
+// ── declared arms + dispatch ────────────────────────────────────────────────
+//
+// `e.variants` is what has been OBSERVED; `e.arms` is what the app DECLARED. An
+// arm in the second and not the first has never run — and until identity
+// started emitting `arms`, it was invisible: nothing could show it, let alone
+// offer to run it.
+//
+// Dispatch goes through the SAME path as everything else (enqueue_runs intent →
+// the app's own run queue → the scheduler's drain), so the queue's back-pressure
+// applies and a chat dispatch and a click land identically.
+function ArmsBlock({ app, e }: { app: string; e: MeExperiment }) {
+	const [busy, setBusy] = useState<string | null>(null);
+	const [sent, setSent] = useState<Record<string, string>>({});
+	const [err, setErr] = useState<string | null>(null);
+	const arms = e.arms || [];
+	// An experiment attached to no loop has nowhere to dispatch to. Say so
+	// rather than offering a button that can only 400.
+	const loop = e.loops?.[0] || "";
+
+	const run = useCallback(async (armId: string, cfg: MeExperimentArm) => {
+		if (!loop) return;
+		setBusy(armId); setErr(null);
+		try {
+			const { id: _id, description: _d, ...overrides } = cfg;
+			// `{...overrides, arm: id}` is the shape _variant.resolve() consumes:
+			// the arm's config plus the NAME, which is what evaluate() aggregates
+			// on and what `baseline: {arm: <id>}` matches.
+			const r = await me.enqueueRuns(app, loop, {
+				variants: [{ ...overrides, arm: armId }],
+				branch_label: armId,
+				priority: 50,
+			});
+			setSent((p) => ({ ...p, [armId]: r.intent_id }));
+			// Report what the runner did, not what we asked for — identity
+			// accepts the batch, the scheduler performs it.
+			waitForIntent(r.intent_id, { timeoutMs: 90_000 })
+				.then((res) => {
+					const out = (res.result || {}) as Record<string, unknown>;
+					if (out.ok === false) setErr(String(out.error || "dispatch failed"));
+				})
+				.catch(() => { /* still queued; the ledger will show it */ });
+		} catch (ex) {
+			setErr(ex instanceof Error ? ex.message : String(ex));
+		} finally {
+			setBusy(null);
+		}
+	}, [app, loop]);
+
+	if (arms.length === 0) return null;
+	return (
+		<div>
+			<div className="text-[10px] uppercase tracking-wide font-semibold text-slate-400 mb-1.5">Declared arms</div>
+			<div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-50">
+				{arms.map((a) => {
+					const id = String(a.id);
+					const seen = (e.variants || {})[id];
+					const isBaseline = e.baseline === id;
+					return (
+						<div key={id} className="flex items-center gap-2 px-3 py-2">
+							<div className="min-w-0 flex-1">
+								<div className="flex items-center gap-1.5">
+									<span className="text-[11px] font-mono text-slate-700 truncate">{id}</span>
+									{isBaseline && <span className="text-[9px] text-slate-400">baseline</span>}
+									{seen
+										? <span className="text-[9px] text-slate-400 tabular-nums">· {seen.n} run{seen.n === 1 ? "" : "s"}</span>
+										: <span className="text-[9px] text-violet-600">· never run</span>}
+								</div>
+								{a.description && <div className="text-[10px] text-slate-400 truncate">{String(a.description)}</div>}
+							</div>
+							{sent[id] ? (
+								<span className="text-[10px] text-emerald-600 whitespace-nowrap">queued ✓</span>
+							) : (
+								<button
+									type="button"
+									disabled={!loop || busy === id}
+									onClick={() => run(id, a)}
+									title={loop ? `Runs one cycle of ${loop} with this arm applied` : "This experiment is attached to no workflow, so there is nowhere to dispatch it"}
+									className={cn(
+										"px-2 py-1 rounded-md text-[10px] font-medium border whitespace-nowrap transition-colors",
+										loop
+											? "border-violet-200 text-violet-700 bg-violet-50 hover:bg-violet-100"
+											: "border-slate-200 text-slate-300 bg-slate-50 cursor-not-allowed",
+									)}
+								>
+									{busy === id ? "queueing…" : seen ? "Run 1 more" : "Run this arm"}
+								</button>
+							)}
+						</div>
+					);
+				})}
+			</div>
+			{!loop && (
+				<div className="mt-1 text-[10px] text-amber-700">
+					Attached to no workflow — declare it under a loop's <span className="font-mono">engine.experiment</span> before it can be dispatched.
+				</div>
+			)}
+			{err && <div className="mt-1 text-[10px] text-rose-600">{err}</div>}
+		</div>
+	);
+}
+
 export function ExperimentCard({ app, e, showApp = false }: { app: string; e: MeExperiment; showApp?: boolean }) {
 	const [open, setOpen] = useState(false);
 	const [detail, setDetail] = useState<MeExperimentDetail | null>(null);
@@ -227,6 +328,19 @@ export function ExperimentCard({ app, e, showApp = false }: { app: string; e: Me
 
 			{open && (
 				<div className="border-t border-slate-100 px-4 py-3 space-y-3 bg-slate-50/40">
+					{/* Not-comparable is a fact about the INSTRUMENT and outranks
+					    any per-arm number below it, so it goes first. */}
+					{e.comparable === false && (
+						<div className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
+							<span className="font-medium">Not a verdict.</span> These arms were measured under{" "}
+							{e.instruments ?? "several"} different instruments
+							{e.compare_within?.length ? <> (<span className="font-mono">{e.compare_within.join(", ")}</span>)</> : null}
+							, so a ranking would measure the instrument as much as the arm. The per-arm means below still hold.
+						</div>
+					)}
+					{/* Arms render whether or not anything has run — a never-run arm
+					    is exactly the one worth offering to dispatch. */}
+					<ArmsBlock app={app} e={e} />
 					{e.n_results === 0 ? (
 						<div className="text-xs text-slate-500">
 							Declared, no results yet — they land here when {e.loops?.length ? <span className="font-medium">{e.loops.join(", ")}</span> : "an attached workflow"} next runs.

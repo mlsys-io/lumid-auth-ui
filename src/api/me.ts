@@ -1001,9 +1001,26 @@ export interface MeMetricSeries { label: string; points: Array<{ ts: string; v: 
 
 // ── Experiments (xpio opinion) ──────────────────────────────────────
 export interface MeExperimentVariantAgg { n: number; mean: number; stdev?: number | null; last?: number }
+export interface MeExperimentArm {
+  id: string;
+  description?: string;
+  [k: string]: unknown; // the arm's config overrides (judge_panel, prompts, …)
+}
 export interface MeExperiment {
   id: string; hypothesis: string; kind: "explore" | "arms" | "regression";
   status: string; dataset_id?: string;
+  // DECLARED arms (experiments[].arms[]), as opposed to `variants`, which is
+  // what has actually been OBSERVED. An arm present here and absent there has
+  // never been run — that is the one the panel offers to dispatch.
+  arms?: MeExperimentArm[];
+  // Honesty fields written by experiments.evaluate(). `comparable: false` means
+  // the RANKING was withheld because the arms were measured under different
+  // instruments; per-arm means are still facts. Never render a winner then.
+  comparable?: boolean;
+  instruments?: number | null;
+  compare_within?: string[] | null;
+  dataset_version?: string | null;
+  dataset_versions_seen?: string[];
   metric?: { name: string; higher_is_better?: boolean; source?: string };
   metric_name?: string; benchmark_id?: string; baseline?: unknown;
   success_criteria?: string; min_samples?: number; loops?: string[];
