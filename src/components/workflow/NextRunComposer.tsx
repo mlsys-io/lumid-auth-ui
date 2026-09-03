@@ -214,7 +214,7 @@ export default function NextRunComposer({ app, loop, fromTs, fromLabel, schedule
 					setBusy(false);
 					return;
 				}
-				const { queued } = await me.enqueueRuns(app, loop, {
+				const { requested } = await me.enqueueRuns(app, loop, {
 					from_run_ts: parent,
 					branch_label: label,
 					criteria: criteriaExpr || undefined,
@@ -222,7 +222,12 @@ export default function NextRunComposer({ app, loop, fromTs, fromLabel, schedule
 					priority: Number.isFinite(priority as number) ? priority : undefined,
 					variants,
 				});
-				toast.success(`${queued} experiment${queued === 1 ? "" : "s"} queued.`);
+				// "requested", not "queued": identity accepted the batch, the
+				// scheduler runs it. Claiming a completed count here is what the
+				// old contract did while queueing nothing at all.
+				toast.success(
+					`${requested} experiment${requested === 1 ? "" : "s"} queued — they start as the runner picks them up.`,
+				);
 				onLaunched?.();
 				onClose();
 				return;

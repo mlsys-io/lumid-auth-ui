@@ -504,7 +504,6 @@ export const me = {
   //     auto_promote? — promote the run automatically when `criteria` is met
   //     cases?        — restrict evaluation to this subset of casebook case ids
   //                     (omit / empty = full casebook)
-  //     not_before?   — ISO datetime; the run defers until then (schedule-once)
   launchRun: (
     app: string,
     loop: string,
@@ -515,7 +514,6 @@ export const me = {
       criteria?: string;
       auto_promote?: boolean;
       cases?: string[];
-      not_before?: string;
     },
   ) =>
     call<{ job_id: string; state: string }>(
@@ -528,7 +526,16 @@ export const me = {
     ),
   // POST /me/apps/:app/loops/:loop/enqueue — fan out MANY runs at once. Each
   // entry in `variants[]` becomes a queued run that forks from `from_run_ts`,
-  // sharing `branch_label` / `criteria` / `priority`. Returns how many queued.
+  // sharing `branch_label` / `criteria` / `priority`.
+  //
+  // Returns 202 + {intent_id, requested} — NOT a queued count. Identity writes
+  // one `enqueue_runs` intent and the scheduler does the queue writes on the
+  // tenant volume it alone can reach, so the real count is only known there and
+  // arrives on the intent result (GET /me/intents/:id).
+  //
+  // This used to return {queued} and it was always a lie: the old handler
+  // shelled a CLI that does not exist in the identity image, every call failed,
+  // and it answered HTTP 200 {"queued": 0}.
   enqueueRuns: (
     app: string,
     loop: string,
@@ -541,7 +548,7 @@ export const me = {
       variants: Record<string, unknown>[];
     },
   ) =>
-    call<{ queued: number }>(
+    call<{ intent_id: string; requested: number; state: string }>(
       "POST",
       `/apps/${encodeURIComponent(app)}/loops/${encodeURIComponent(loop)}/enqueue`,
       body,
