@@ -645,6 +645,45 @@ function CustomScopePicker({
 				))}
 			</div>
 
+			{/* Claude pool overrides — only pools the caller belongs to besides
+			    their primary. The primary pool is already what an unscoped
+			    token draws from; this exists so a member of a SECOND pool can
+			    mint a token that deliberately routes to that one instead. */}
+			{(grantable?.claude_pools ?? []).filter((p) => !p.is_primary).length > 0 && (
+				<div className="space-y-1.5">
+					<p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+						Claude pool override
+					</p>
+					{(grantable?.claude_pools ?? [])
+						.filter((p) => !p.is_primary)
+						.map((p) => {
+							const id = `claude-pool:${p.id}`;
+							return (
+								<label key={id} className="flex items-start gap-2 cursor-pointer">
+									<input
+										type="checkbox"
+										className="mt-0.5"
+										checked={capScopes.has(id)}
+										onChange={(e) => {
+											const next = new Set(capScopes);
+											e.target.checked ? next.add(id) : next.delete(id);
+											setCapScopes(next);
+										}}
+									/>
+									<span>
+										<span className="text-sm font-medium">{p.name}</span>
+										<span className="ml-1 font-mono text-xs text-slate-400">{id}</span>
+										<p className="text-xs text-slate-500">
+											Route Claude Code through this pool's accounts instead of your
+											primary pool, for this token only.
+										</p>
+									</span>
+								</label>
+							);
+						})}
+				</div>
+			)}
+
 			<p className="text-xs text-slate-500">
 				Grants{' '}
 				<span className="font-mono text-slate-700">

@@ -134,11 +134,21 @@ export const SCOPE_PRESETS: ScopePreset[] = [
 
 // ---- grantable-scopes ----
 
+export interface GrantablePool {
+	id: string;
+	name: string;
+	is_primary: boolean;
+}
+
 export interface GrantableScopes {
 	role: 'user' | 'admin';
 	services: ScopeService[];
 	matrix: Record<ScopeService, ScopeLevel>;
 	can_wildcard: boolean;
+	// The caller's own Claude pool memberships — each is grantable as a
+	// `claude-pool:<id>` scope (see identity's isClaudePoolScope). Absent /
+	// empty for a user in only their primary pool with nothing else to pick.
+	claude_pools?: GrantablePool[];
 }
 
 export async function getGrantableScopes(): Promise<GrantableScopes> {
