@@ -19,6 +19,15 @@ import {
 	adminSetClaudeAccountDrain,
 	adminResetClaudePoolWindow,
 	adminResetClaudePoolWindowAll,
+	adminUpdateClaudeAccount,
+	fetchClaudePools,
+	adminCreateClaudePool,
+	adminUpdateClaudePool,
+	adminDeleteClaudePool,
+	fetchClaudePoolMembers,
+	adminAddClaudePoolMember,
+	adminRemoveClaudePoolMember,
+	adminSetClaudePoolPrimary,
 	fetchClaudeFieldBoxes,
 	fetchOpenRouterBalance,
 	fetchOnpremGpuStats,
@@ -27,6 +36,8 @@ import {
 	type ClaudeUserUsageResp,
 	type OpenRouterBalanceResp,
 	type OnpremGpuStatsResp,
+	type ClaudePool,
+	type ClaudePoolMember,
 } from '@/api/super-admin';
 
 const USER_USAGE_REFRESH_MS = 2 * 60 * 1000; // 2 min auto-refresh for per-user section
@@ -43,6 +54,11 @@ const USER_USAGE_REFRESH_MS = 2 * 60 * 1000; // 2 min auto-refresh for per-user 
 // behaves as if unlabeled. That is a quiet failure, which is exactly why this
 // list exists. "Other…" still allows a free-text label, so this is a UX
 // convenience (typo prevention), not a hard validation boundary.
+//
+// Label is NOT the same axis as Pool (below): Label routes an account's
+// EGRESS NETWORK; Pool decides WHO MAY DRAW on it. An account has exactly
+// one of each, and the two are independent — a pool can freely mix labelled
+// and unlabelled accounts.
 const KNOWN_FIELD_BOXES = ['denmark', 'chicago', 'nyc', 'nightly-dk'];
 
 function fmtTime(iso: string): string {
@@ -201,23 +217,47 @@ function StackedBar({ shortPct, weekPct }: { shortPct: number; weekPct: number }
 
 function AccountRow({
 	acc,
+	pools,
 	onDelete,
 	onReAdd,
 	onChanged,
+	onPoolChanged,
 }: {
 	acc: ClaudeQuotaAccount;
+	// For the pool <select> — every pool an admin could move this account to.
+	pools: ClaudePool[];
 	onDelete: (email: string) => void;
 	onReAdd: (email: string) => void;
 	// The accounts list has no auto-refresh (the 1s interval only reloads the
 	// per-user section), so a mutation must ask for a refetch explicitly or the
 	// row keeps showing the pre-click state.
 	onChanged: () => void;
+	// Separate from onChanged: that callback optimistically toggles
+	// draining_since (pause/resume's own shape), which a pool move must not
+	// trigger. A plain refetch is enough here — pool moves are rare enough
+	// not to need an optimistic update of their own.
+	onPoolChanged: () => void;
 }) {
 	const [confirming, setConfirming] = useState(false);
 	const [deleting,   setDeleting]   = useState(false);
 	const [pausing,    setPausing]    = useState(false);
 	const [pauseErr,   setPauseErr]   = useState('');
+	const [movingPool, setMovingPool] = useState(false);
 	const paused = !!acc.draining_since;
+
+	async function handlePoolChange(newPoolId: string) {
+		if (newPoolId === (acc.pool_id || 'default')) return;
+		setMovingPool(true);
+		try {
+			await adminUpdateClaudeAccount(acc.email, { pool_id: newPoolId });
+			onPoolChanged();
+		} catch {
+			// Swallowed like the pause/delete handlers above — onChanged's refetch
+			// will show the row's real (unchanged) pool if the write failed.
+		} finally {
+			setMovingPool(false);
+		}
+	}
 
 	async function togglePause() {
 		// Spell out the semantics: "pause" reads as "kill", and an operator who
@@ -275,6 +315,20 @@ function AccountRow({
 					{acc.label}
 				</span>
 			)}
+
+			{/* pool — WHO MAY DRAW on this account, orthogonal to the field-box
+			    label above (which is purely egress-network routing). */}
+			<select
+				value={acc.pool_id || 'default'}
+				onChange={(e) => handlePoolChange(e.target.value)}
+				disabled={movingPool || pools.length === 0}
+				title="Claude pool — moving this changes who may draw on this account and runs placement immediately"
+				className="shrink-0 rounded-full bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700 disabled:opacity-50"
+			>
+				{pools.map((p) => (
+					<option key={p.id} value={p.id}>{p.name}</option>
+				))}
+			</select>
 
 			{/* Operator PAUSE. Amber, not red: the account is not broken and is
 			    still serving the people on it — it is winding down on purpose. */}
@@ -710,17 +764,21 @@ function FieldBoxPanel() {
 // ── Add-account modal ──────────────────────────────────────────────
 
 function AddAccountModal({
-	onClose, onAdded, prefillEmail, prefillLabel, takenLabels,
+	onClose, onAdded, prefillEmail, prefillLabel, takenLabels, pools,
 }: {
 	onClose: () => void; onAdded: () => void; prefillEmail?: string; prefillLabel?: string;
 	// label -> the OTHER account already holding it (this account's own current
 	// label, on a re-add, is excluded by the caller so it doesn't block itself).
 	takenLabels?: Record<string, string>;
+	// Every pool this account could join. Pre-selects "default" so the
+	// zero-disruption path (never create a second pool) needs no extra click.
+	pools: ClaudePool[];
 }) {
 	const [email,        setEmail]        = useState(prefillEmail ?? '');
 	const [token,        setToken]        = useState('');
 	const [refreshToken, setRefreshToken] = useState('');
 	const [label,        setLabel]        = useState(prefillLabel ?? '');
+	const [poolId,       setPoolId]       = useState('default');
 	// Custom mode = free-text entry for a field box not yet in KNOWN_FIELD_BOXES
 	// (e.g. onboarding a third box ahead of adding it to the known list).
 	const [customLabel,  setCustomLabel]  = useState(!!prefillLabel && !KNOWN_FIELD_BOXES.includes(prefillLabel));
@@ -740,7 +798,7 @@ function AddAccountModal({
 		setBusy(true);
 		setMsg(null);
 		try {
-			const r = await adminAddClaudeToken(e, t, rt, lb);
+			const r = await adminAddClaudeToken(e, t, rt, lb, poolId !== 'default' ? poolId : undefined);
 			if (r.valid && r.stored) {
 				const extra = rt ? ' Auto-refresh enabled.' : '';
 				const boxNote = lb ? ` Tagged "${lb}" — routes via that field box's relay.` : '';
@@ -874,6 +932,21 @@ rm -rf "$D"`}
 							Tags this account as belonging to a field box — its traffic routes through that box's relay instead of the pool's default network.
 						</p>
 					</div>
+					<div>
+						<label className="block text-xs font-medium text-slate-600 mb-1">Pool</label>
+						<select
+							value={poolId}
+							onChange={(e) => setPoolId(e.target.value)}
+							className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gold-400"
+						>
+							{pools.map((p) => (
+								<option key={p.id} value={p.id}>{p.name}</option>
+							))}
+						</select>
+						<p className="text-[11px] text-slate-400 mt-1">
+							Who may draw on this account — a different axis from the field box above (that's egress routing, this is access).
+						</p>
+					</div>
 					{msg && (
 						<div className={`text-xs rounded px-2.5 py-2 ${msg.ok ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' : 'bg-rose-50 border border-rose-200 text-rose-800'}`}>
 							{msg.text}
@@ -896,6 +969,339 @@ rm -rf "$D"`}
 						</button>
 					</div>
 				</div>
+			</div>
+		</div>
+	);
+}
+
+// ── Claude pools ────────────────────────────────────────────────────────
+//
+// A pool is a partition of the account table: its own accounts (an account
+// belongs to exactly one pool) and its own member users (a user may belong
+// to more than one — e.g. a second PAT scoped to a non-primary pool for
+// testing). "distributed" mode is today's unchanged spread-load behavior;
+// "conservative" fills accounts one at a time, saturating the first before
+// touching the second.
+
+function CreatePoolModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+	const [id,   setId]   = useState('');
+	const [name, setName] = useState('');
+	const [mode, setMode] = useState<'distributed' | 'conservative'>('distributed');
+	const [ceiling, setCeiling] = useState('');
+	const [busy, setBusy] = useState(false);
+	const [msg,  setMsg]  = useState<{ ok: boolean; text: string } | null>(null);
+
+	const submit = async () => {
+		const idTrim = id.trim().toLowerCase();
+		const nameTrim = name.trim();
+		if (!idTrim || !nameTrim) { setMsg({ ok: false, text: 'ID and name are required.' }); return; }
+		setBusy(true);
+		setMsg(null);
+		try {
+			await adminCreateClaudePool(idTrim, nameTrim, mode, ceiling ? Number(ceiling) : undefined);
+			onCreated();
+		} catch (err: any) {
+			setMsg({ ok: false, text: String(err?.response?.data?.message || err?.message || err) });
+			setBusy(false);
+		}
+	};
+
+	return (
+		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+			<div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white shadow-lg p-5 mx-4">
+				<div className="flex items-center justify-between mb-4">
+					<h2 className="font-semibold text-slate-800">New pool</h2>
+					<button onClick={onClose} className="text-slate-400 hover:text-slate-700">
+						<X className="w-4 h-4" />
+					</button>
+				</div>
+				<div className="space-y-3">
+					<div>
+						<label className="block text-xs font-medium text-slate-600 mb-1">
+							ID <span className="text-slate-400 font-normal">(slug, immutable — used in PAT scopes)</span>
+						</label>
+						<input
+							type="text"
+							value={id}
+							onChange={(e) => setId(e.target.value)}
+							placeholder="eu-overflow"
+							className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-gold-400"
+						/>
+					</div>
+					<div>
+						<label className="block text-xs font-medium text-slate-600 mb-1">Name</label>
+						<input
+							type="text"
+							value={name}
+							onChange={(e) => setName(e.target.value)}
+							placeholder="EU Overflow"
+							className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gold-400"
+						/>
+					</div>
+					<div>
+						<label className="block text-xs font-medium text-slate-600 mb-1">Mode</label>
+						<select
+							value={mode}
+							onChange={(e) => setMode(e.target.value as 'distributed' | 'conservative')}
+							className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gold-400"
+						>
+							<option value="distributed">distributed — spread load across every account</option>
+							<option value="conservative">conservative — fill accounts one at a time</option>
+						</select>
+					</div>
+					{mode === 'conservative' && (
+						<div>
+							<label className="block text-xs font-medium text-slate-600 mb-1">
+								Ceiling <span className="text-slate-400 font-normal">(users/account safety backstop, blank = default 6)</span>
+							</label>
+							<input
+								type="number"
+								value={ceiling}
+								onChange={(e) => setCeiling(e.target.value)}
+								placeholder="6"
+								className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gold-400"
+							/>
+						</div>
+					)}
+					{msg && (
+						<div className="text-xs rounded px-2.5 py-2 bg-rose-50 border border-rose-200 text-rose-800">
+							{msg.text}
+						</div>
+					)}
+					<div className="flex justify-end gap-2 pt-1">
+						<button onClick={onClose} className="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-800 transition">
+							Cancel
+						</button>
+						<button
+							onClick={submit}
+							disabled={busy}
+							className="inline-flex items-center gap-1.5 rounded-md bg-gold-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-gold-700 disabled:opacity-50 transition"
+						>
+							{busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+							Create
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	);
+}
+
+function PoolMembersModal({ pool, onClose }: { pool: ClaudePool; onClose: () => void }) {
+	const [members, setMembers] = useState<ClaudePoolMember[] | null>(null);
+	const [addInput, setAddInput] = useState('');
+	const [busy, setBusy] = useState(false);
+	const [err, setErr] = useState('');
+
+	const reload = useCallback(() => {
+		fetchClaudePoolMembers(pool.id).then(setMembers).catch(() => {});
+	}, [pool.id]);
+
+	useEffect(() => { reload(); }, [reload]);
+
+	const add = async () => {
+		const v = addInput.trim();
+		if (!v) return;
+		setBusy(true);
+		setErr('');
+		try {
+			await adminAddClaudePoolMember(pool.id, v);
+			setAddInput('');
+			reload();
+		} catch (e: any) {
+			setErr(String(e?.response?.data?.message || e?.message || e));
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	const remove = async (userSub: string) => {
+		setBusy(true);
+		setErr('');
+		try {
+			await adminRemoveClaudePoolMember(pool.id, userSub);
+			reload();
+		} catch (e: any) {
+			setErr(String(e?.response?.data?.message || e?.message || e));
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	const setPrimary = async (userSub: string) => {
+		setBusy(true);
+		setErr('');
+		try {
+			await adminSetClaudePoolPrimary(pool.id, userSub);
+			reload();
+		} catch (e: any) {
+			setErr(String(e?.response?.data?.message || e?.message || e));
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	return (
+		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+			<div className="w-full max-w-md rounded-xl border border-slate-200 bg-white shadow-lg p-5 mx-4">
+				<div className="flex items-center justify-between mb-4">
+					<h2 className="font-semibold text-slate-800">{pool.name} — members</h2>
+					<button onClick={onClose} className="text-slate-400 hover:text-slate-700">
+						<X className="w-4 h-4" />
+					</button>
+				</div>
+				<div className="flex items-center gap-2 mb-3">
+					<input
+						type="text"
+						value={addInput}
+						onChange={(e) => setAddInput(e.target.value)}
+						placeholder="user email or sub"
+						className="flex-1 rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gold-400"
+					/>
+					<button
+						onClick={add}
+						disabled={busy || !addInput.trim()}
+						className="shrink-0 rounded-md bg-gold-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-gold-700 disabled:opacity-50 transition"
+					>
+						Add
+					</button>
+				</div>
+				{err && <p className="text-xs text-rose-600 mb-2">{err}</p>}
+				<div className="rounded-lg border border-slate-200 divide-y divide-slate-100 max-h-80 overflow-y-auto">
+					{members === null ? (
+						<div className="p-3 text-xs text-slate-400 flex items-center gap-2">
+							<Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…
+						</div>
+					) : members.length === 0 ? (
+						<div className="p-3 text-xs text-slate-400">No members yet.</div>
+					) : (
+						members.map((m) => (
+							<div key={m.user_sub} className="flex items-center gap-2 px-2.5 py-1.5">
+								<span className="flex-1 min-w-0 truncate text-xs text-slate-700" title={m.email}>
+									{m.email}
+								</span>
+								{m.is_primary ? (
+									<span className="shrink-0 rounded-full bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700">
+										primary
+									</span>
+								) : (
+									<button
+										onClick={() => setPrimary(m.user_sub)}
+										disabled={busy}
+										className="shrink-0 text-[10px] text-slate-400 underline hover:text-slate-600 disabled:opacity-50"
+									>
+										make primary
+									</button>
+								)}
+								<button
+									onClick={() => remove(m.user_sub)}
+									disabled={busy}
+									className="shrink-0 text-slate-400 hover:text-rose-600 disabled:opacity-50"
+									title="Remove from this pool"
+								>
+									<X className="w-3 h-3" />
+								</button>
+							</div>
+						))
+					)}
+				</div>
+			</div>
+		</div>
+	);
+}
+
+function PoolsPanel({ pools, onChanged }: { pools: ClaudePool[]; onChanged: () => void }) {
+	const [showCreate, setShowCreate] = useState(false);
+	const [membersFor, setMembersFor] = useState<ClaudePool | null>(null);
+	const [busyId, setBusyId] = useState<string | null>(null);
+
+	const toggleMode = async (p: ClaudePool) => {
+		const next = p.mode === 'distributed' ? 'conservative' : 'distributed';
+		if (!window.confirm(
+			`Switch ${p.name} to ${next}?\n\n` +
+			(next === 'conservative'
+				? 'New placements will concentrate on one account at a time instead of spreading load, until it is exhausted.'
+				: 'New placements will spread load across every servable account again.') +
+			'\n\nTakes effect on the next placement pass, not instantly.',
+		)) return;
+		setBusyId(p.id);
+		try { await adminUpdateClaudePool(p.id, { mode: next }); onChanged(); }
+		finally { setBusyId(null); }
+	};
+
+	const deletePool = async (p: ClaudePool) => {
+		if (!window.confirm(`Delete pool ${p.name}? Its accounts and members will be reassigned to the default pool.`)) return;
+		setBusyId(p.id);
+		try {
+			await adminDeleteClaudePool(p.id, true);
+			onChanged();
+		} catch (e: any) {
+			alert(String(e?.response?.data?.message || e?.message || e));
+		} finally {
+			setBusyId(null);
+		}
+	};
+
+	return (
+		<div>
+			{showCreate && (
+				<CreatePoolModal onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); onChanged(); }} />
+			)}
+			{membersFor && <PoolMembersModal pool={membersFor} onClose={() => setMembersFor(null)} />}
+			<div className="flex items-center gap-2 mb-1.5">
+				<p className="text-xs font-medium text-slate-600">Pools</p>
+				<span className="text-[10px] text-slate-400 font-normal">
+					who may draw on which accounts — orthogonal to field boxes (egress routing)
+				</span>
+				<button
+					onClick={() => setShowCreate(true)}
+					className="ml-auto inline-flex items-center gap-1 rounded-md border border-gold-300 bg-gold-50 px-2 py-1 text-[10px] font-medium text-gold-800 hover:bg-gold-100 transition"
+				>
+					<UserPlus className="w-3 h-3" />
+					New pool
+				</button>
+			</div>
+			<div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100">
+				{pools.map((p) => (
+					<div key={p.id} className="flex items-center gap-3 px-2.5 py-1.5">
+						<span className="w-32 shrink-0 truncate text-xs font-medium text-slate-800" title={p.id}>{p.name}</span>
+						<button
+							onClick={() => toggleMode(p)}
+							disabled={busyId === p.id}
+							title="Click to toggle mode"
+							className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium border transition disabled:opacity-50 ${
+								p.mode === 'conservative'
+									? 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'
+									: 'bg-sky-50 border-sky-200 text-sky-700 hover:bg-sky-100'
+							}`}
+						>
+							{p.mode}{p.mode === 'conservative' ? ` (ceiling ${p.conservative_ceiling || 6})` : ''}
+						</button>
+						<span className="shrink-0 text-[10px] text-slate-400">{p.account_count} account{p.account_count === 1 ? '' : 's'}</span>
+						<span className="shrink-0 text-[10px] text-slate-400">{p.member_count} member{p.member_count === 1 ? '' : 's'}</span>
+						{p.owner_email && (
+							<span className="shrink-0 text-[10px] text-slate-400 truncate" title="Owner (attribution only)">
+								owner: {p.owner_email}
+							</span>
+						)}
+						<button
+							onClick={() => setMembersFor(p)}
+							className="shrink-0 ml-auto text-[10px] text-slate-500 underline hover:text-slate-700"
+						>
+							manage members
+						</button>
+						{p.id !== 'default' && (
+							<button
+								onClick={() => deletePool(p)}
+								disabled={busyId === p.id}
+								className="shrink-0 text-slate-400 hover:text-rose-600 disabled:opacity-50"
+								title="Delete pool (reassigns accounts/members to default)"
+							>
+								<Trash2 className="w-3 h-3" />
+							</button>
+						)}
+					</div>
+				))}
 			</div>
 		</div>
 	);
@@ -954,6 +1360,7 @@ function UserUsageSection({
 	countdown,
 	onReset,
 	isSuper,
+	pools,
 }: {
 	usage: ClaudeUserUsageResp;
 	countdown: number;
@@ -963,8 +1370,15 @@ function UserUsageSection({
 	// Re-fetch after a reset so the row shows 0% immediately rather than the
 	// pre-reset figure until the 2-minute auto-refresh happens to fire.
 	onReset: () => void;
+	// For the pool filter — client-side only, this table's row count doesn't
+	// warrant a server round-trip per filter change.
+	pools: ClaudePool[];
 }) {
+	const [poolFilter, setPoolFilter] = useState('');
 	if (!usage.users.length) return null;
+	const visibleUsers = poolFilter
+		? usage.users.filter((u) => (u.pools ?? []).includes(poolFilter))
+		: usage.users;
 	const shortWin = usage.short_window_label || '4h';
 	// CAPS ARE PER-ROLE, so one number cannot describe this table.
 	//
@@ -1054,12 +1468,25 @@ function UserUsageSection({
 					{' · '}users with a <code className="font-mono text-[10px]">claude:proxy</code> PAT appear even at 0 usage
 				</span>
 				<span className="ml-auto shrink-0 flex items-center gap-2">
+					{pools.length > 1 && (
+						<select
+							value={poolFilter}
+							onChange={(e) => setPoolFilter(e.target.value)}
+							title="Filter this table to one pool"
+							className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-500"
+						>
+							<option value="">all pools</option>
+							{pools.map((p) => (
+								<option key={p.id} value={p.id}>{p.name}</option>
+							))}
+						</select>
+					)}
 					<ResetAllButton isSuper={isSuper} userCount={usage.users.length} shortLabel={shortWin} onDone={onReset} />
 					<span className="text-[10px] text-slate-400 tabular-nums">↺ {cdText}</span>
 				</span>
 			</div>
 			<div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100">
-				{usage.users.map((u) => {
+				{visibleUsers.map((u) => {
 					// Bars reflect POOLED CLAUDE ONLY — the gate exempts
 					// deepseek/on-prem and OpenRouter from the cap, so drawing
 					// them against the Claude budget would misread as pressure.
@@ -1103,6 +1530,18 @@ function UserUsageSection({
 								<span className="flex-1 min-w-0 truncate text-xs font-medium text-slate-800" title={u.email}>
 									{u.email}
 								</span>
+								{u.primary_pool && (
+									<span
+										className="shrink-0 rounded-full bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700"
+										title={
+											(u.pools && u.pools.length > 1)
+												? `Primary pool: ${u.primary_pool}. Also a member of: ${u.pools.filter((p) => p !== u.primary_pool).join(', ')}`
+												: `Pool: ${u.primary_pool}`
+										}
+									>
+										{u.primary_pool}{u.pools && u.pools.length > 1 ? ` +${u.pools.length - 1}` : ''}
+									</span>
+								)}
 								{!usesPool && (
 									<span className="shrink-0 text-[10px] text-slate-400 italic"
 										title="Role `user`: sonnet/haiku is served by the in-house deepseek, so this account never draws on the Claude pool. No window, no cap, nothing to reset.">
@@ -1508,6 +1947,7 @@ export default function StudioClaudeQuota() {
 	const isSuper = user?.role === 'super_admin';
 	const [accounts, setAccounts] = useState<ClaudeQuotaAccount[] | null>(null);
 	const [userUsage, setUserUsage] = useState<ClaudeUserUsageResp | null>(null);
+	const [pools, setPools] = useState<ClaudePool[]>([]);
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [lastFetch, setLastFetch] = useState<Date | null>(null);
@@ -1522,6 +1962,10 @@ export default function StudioClaudeQuota() {
 			.catch(() => {});
 	}, []);
 
+	const loadPools = useCallback(() => {
+		fetchClaudePools().then(setPools).catch(() => {});
+	}, []);
+
 	const load = useCallback((silent = false) => {
 		if (!silent) setLoading(true);
 		fetchClaudeQuota()
@@ -1533,7 +1977,8 @@ export default function StudioClaudeQuota() {
 			.catch((e) => setError(String(e?.message || e)))
 			.finally(() => setLoading(false));
 		loadUserUsage();
-	}, [loadUserUsage]);
+		loadPools();
+	}, [loadUserUsage, loadPools]);
 
 	// Auto-refresh user usage every 2 min with a live countdown.
 	useEffect(() => {
@@ -1564,6 +2009,7 @@ export default function StudioClaudeQuota() {
 							.filter((a) => a.label && a.email !== reAddEmail)
 							.map((a) => [a.label as string, a.email]),
 					)}
+					pools={pools}
 				/>
 			)}
 			<header className="flex items-center justify-between">
@@ -1631,11 +2077,13 @@ export default function StudioClaudeQuota() {
 						<OpenRouterBalancePanel />
 						<SummaryBar accounts={accounts} />
 					</div>
+					{pools.length > 0 && <PoolsPanel pools={pools} onChanged={loadPools} />}
 					<div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100">
 						{accounts.map((a) => (
 							<AccountRow
 								key={a.email}
 								acc={a}
+								pools={pools}
 								onDelete={(email) => setAccounts((prev) => prev?.filter((x) => x.email !== email) ?? [])}
 								onReAdd={(email) => { setReAddEmail(email); setShowAdd(true); }}
 								// AdminClaudeQuota fans out live Anthropic probes and can take
@@ -1647,6 +2095,7 @@ export default function StudioClaudeQuota() {
 										: x) ?? []);
 									load(true);
 								}}
+								onPoolChanged={() => load(true)}
 							/>
 						))}
 					</div>
@@ -1661,7 +2110,7 @@ export default function StudioClaudeQuota() {
 			    so a field-box outage can't blank the quota page above it. */}
 			<FieldBoxPanel />
 
-			{userUsage && <UserUsageSection usage={userUsage} countdown={countdown} onReset={loadUserUsage} isSuper={isSuper} />}
+			{userUsage && <UserUsageSection usage={userUsage} countdown={countdown} onReset={loadUserUsage} isSuper={isSuper} pools={pools} />}
 
 			<p className="text-[11px] text-slate-400">
 				Setup + full guide: <a href="/docs/claude" className="text-gold-700 hover:underline">/docs/claude</a>.

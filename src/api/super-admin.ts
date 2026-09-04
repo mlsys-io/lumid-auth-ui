@@ -342,6 +342,14 @@ export interface ClaudeQuotaAccount {
 	// its Messages API + token-refresh traffic routes through that box's own
 	// relay instead of the default direct path. Empty for a normal account.
 	label?: string;
+	// Pool: WHO MAY DRAW on this account — orthogonal to label (egress
+	// routing). Every account belongs to exactly one pool; "default" for any
+	// deployment that never created a second one.
+	pool_id?: string;
+	pool_name?: string;
+	// This account's position in its pool's CONSERVATIVE-mode fill order.
+	// Meaningless in a "distributed" pool.
+	pool_sort_order?: number;
 }
 
 export interface ClaudeQuotaResp {
@@ -428,6 +436,11 @@ export interface ClaudeUserUsage {
 	raw_cache_read_tokens_7d?: number;
 	raw_cache_creation_tokens_7d?: number;
 	raw_total_tokens_7d?: number;
+	// Pool membership (many-to-many — a user may belong to more than one).
+	// primary_pool is the one used when no PAT carries an explicit
+	// "claude-pool:<id>" scope override.
+	pools?: string[];
+	primary_pool?: string;
 }
 
 export interface ClaudeUserUsageResp {
@@ -612,6 +625,7 @@ export interface AdminClaudeTokenResult {
 	upstream_status: number;
 	reason: string;
 	label?: string;
+	pool_id?: string;
 }
 
 export async function adminAddClaudeToken(
@@ -619,16 +633,120 @@ export async function adminAddClaudeToken(
 	token: string,
 	refreshToken?: string,
 	label?: string,
+	poolId?: string,
 ): Promise<AdminClaudeTokenResult> {
 	const body: Record<string, string> = { email, token };
 	if (refreshToken) body.refresh_token = refreshToken;
 	if (label) body.label = label;
+	if (poolId) body.pool_id = poolId;
 	const r = await apiClient.post<DataResponse<AdminClaudeTokenResult>>('/api/v1/admin/claude-token', body);
 	return r.data.data;
 }
 
 export async function adminDeleteClaudeToken(email: string): Promise<void> {
 	await apiClient.delete(`/api/v1/admin/claude-token/${encodeURIComponent(email)}`);
+}
+
+/**
+ * Move an account between field boxes AND/OR between pools. Despite the URL
+ * (kept for route stability — it's the endpoint an operator already knows),
+ * this now handles two orthogonal axes: `label` (egress network routing) and
+ * `pool_id`/`pool_sort_order` (who may draw on this account). Moving pools
+ * triggers an immediate placement refresh server-side.
+ */
+export async function adminUpdateClaudeAccount(
+	email: string,
+	patch: { label?: string; pool_id?: string; pool_sort_order?: number },
+): Promise<void> {
+	await apiClient.patch(`/api/v1/admin/claude-token/${encodeURIComponent(email)}`, patch);
+}
+
+// ── Claude pools (RequireAdmin — see claude_pool_admin.go for why nothing
+// here needs super_admin: it's structural administration exactly like
+// account add/remove/drain, at the same gate) ───────────────────────────
+
+export interface ClaudePool {
+	id: string;
+	name: string;
+	mode: 'distributed' | 'conservative';
+	owner_sub?: string;
+	owner_email?: string;
+	conservative_ceiling: number;
+	account_count: number;
+	member_count: number;
+	created_at: string;
+}
+
+export interface ClaudePoolMember {
+	user_sub: string;
+	email: string;
+	is_primary: boolean;
+	added_at: string;
+}
+
+export async function fetchClaudePools(): Promise<ClaudePool[]> {
+	const r = await apiClient.get<DataResponse<{ pools: ClaudePool[] }>>('/api/v1/admin/claude-pools');
+	return r.data.data.pools;
+}
+
+export async function adminCreateClaudePool(
+	id: string,
+	name: string,
+	mode?: 'distributed' | 'conservative',
+	conservativeCeiling?: number,
+): Promise<ClaudePool> {
+	const body: Record<string, unknown> = { id, name };
+	if (mode) body.mode = mode;
+	if (conservativeCeiling != null) body.conservative_ceiling = conservativeCeiling;
+	const r = await apiClient.post<DataResponse<ClaudePool>>('/api/v1/admin/claude-pools', body);
+	return r.data.data;
+}
+
+export async function adminUpdateClaudePool(
+	id: string,
+	patch: { name?: string; mode?: 'distributed' | 'conservative'; conservative_ceiling?: number },
+): Promise<{ warning?: string }> {
+	const r = await apiClient.patch<DataResponse<{ warning?: string }>>(
+		`/api/v1/admin/claude-pools/${encodeURIComponent(id)}`,
+		patch,
+	);
+	return r.data.data;
+}
+
+export async function adminDeleteClaudePool(id: string, force?: boolean): Promise<void> {
+	const q = force ? '?force=true' : '';
+	await apiClient.delete(`/api/v1/admin/claude-pools/${encodeURIComponent(id)}${q}`);
+}
+
+export async function fetchClaudePoolMembers(id: string): Promise<ClaudePoolMember[]> {
+	const r = await apiClient.get<DataResponse<{ members: ClaudePoolMember[] }>>(
+		`/api/v1/admin/claude-pools/${encodeURIComponent(id)}/members`,
+	);
+	return r.data.data.members;
+}
+
+export async function adminAddClaudePoolMember(
+	id: string,
+	userSubOrEmail: string,
+	isPrimary?: boolean,
+): Promise<void> {
+	const body: Record<string, unknown> = isPrimary != null ? { is_primary: isPrimary } : {};
+	if (userSubOrEmail.includes('@')) body.email = userSubOrEmail;
+	else body.user_sub = userSubOrEmail;
+	await apiClient.post(`/api/v1/admin/claude-pools/${encodeURIComponent(id)}/members`, body);
+}
+
+export async function adminRemoveClaudePoolMember(id: string, userSub: string): Promise<void> {
+	await apiClient.delete(
+		`/api/v1/admin/claude-pools/${encodeURIComponent(id)}/members/${encodeURIComponent(userSub)}`,
+	);
+}
+
+export async function adminSetClaudePoolPrimary(id: string, userSub: string): Promise<void> {
+	await apiClient.post(
+		`/api/v1/admin/claude-pools/${encodeURIComponent(id)}/members/${encodeURIComponent(userSub)}/primary`,
+		{},
+	);
 }
 
 /**
