@@ -1247,7 +1247,7 @@ function PoolMembersModal({ pool, onClose }: { pool: ClaudePool; onClose: () => 
 	);
 }
 
-function PoolsPanel({ pools, onChanged }: { pools: ClaudePool[]; onChanged: () => void }) {
+function PoolsPanel({ pools, onChanged, isSuper }: { pools: ClaudePool[]; onChanged: () => void; isSuper: boolean }) {
 	const [showCreate, setShowCreate] = useState(false);
 	const [membersFor, setMembersFor] = useState<ClaudePool | null>(null);
 	const [busyId, setBusyId] = useState<string | null>(null);
@@ -1303,13 +1303,23 @@ function PoolsPanel({ pools, onChanged }: { pools: ClaudePool[]; onChanged: () =
 				<span className="text-[10px] text-slate-400 font-normal">
 					who may draw on which accounts — orthogonal to field boxes (egress routing)
 				</span>
-				<button
-					onClick={() => setShowCreate(true)}
-					className="ml-auto inline-flex items-center gap-1 rounded-md border border-gold-300 bg-gold-50 px-2 py-1 text-[10px] font-medium text-gold-800 hover:bg-gold-100 transition"
-				>
-					<UserPlus className="w-3 h-3" />
-					New pool
-				</button>
+				{isSuper && (
+					<button
+						onClick={() => setShowCreate(true)}
+						className="ml-auto inline-flex items-center gap-1 rounded-md border border-gold-300 bg-gold-50 px-2 py-1 text-[10px] font-medium text-gold-800 hover:bg-gold-100 transition"
+					>
+						<UserPlus className="w-3 h-3" />
+						New pool
+					</button>
+				)}
+				{!isSuper && (
+					<span
+						className="ml-auto text-[10px] text-slate-400"
+						title="Creating a pool grants a new named slice of subscription budget — that's super_admin-only, same as reset-window. Everything else on this panel (mode, membership, deletion) is plain admin."
+					>
+						new pool: super_admin only
+					</span>
+				)}
 			</div>
 			<div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100">
 				{pools.map((p) => (
@@ -2153,7 +2163,7 @@ export default function StudioClaudeQuota() {
 						<OpenRouterBalancePanel />
 						<SummaryBar accounts={accounts} />
 					</div>
-					{pools.length > 0 && <PoolsPanel pools={pools} onChanged={loadPools} />}
+					{pools.length > 0 && <PoolsPanel pools={pools} onChanged={loadPools} isSuper={isSuper} />}
 					<div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100">
 						{accounts.map((a) => (
 							<AccountRow
