@@ -243,17 +243,21 @@ function AccountRow({
 	const [pausing,    setPausing]    = useState(false);
 	const [pauseErr,   setPauseErr]   = useState('');
 	const [movingPool, setMovingPool] = useState(false);
+	const [poolErr,    setPoolErr]    = useState('');
 	const paused = !!acc.draining_since;
 
 	async function handlePoolChange(newPoolId: string) {
 		if (newPoolId === (acc.pool_id || 'default')) return;
 		setMovingPool(true);
+		setPoolErr('');
 		try {
 			await adminUpdateClaudeAccount(acc.email, { pool_id: newPoolId });
 			onPoolChanged();
-		} catch {
-			// Swallowed like the pause/delete handlers above — onChanged's refetch
-			// will show the row's real (unchanged) pool if the write failed.
+		} catch (e) {
+			// Surfaced inline, like pauseErr below — a silent failure here left
+			// the admin believing a pool move succeeded when the select had
+			// just reverted with no explanation.
+			setPoolErr(e instanceof Error ? e.message : String(e));
 		} finally {
 			setMovingPool(false);
 		}
@@ -427,6 +431,9 @@ function AccountRow({
 			)}
 			{pauseErr && (
 				<span className="shrink-0 max-w-40 truncate text-[10px] text-rose-500" title={pauseErr}>{pauseErr}</span>
+			)}
+			{poolErr && (
+				<span className="shrink-0 max-w-40 truncate text-[10px] text-rose-500" title={poolErr}>pool move failed: {poolErr}</span>
 			)}
 
 			{confirming ? (
@@ -764,9 +771,15 @@ function FieldBoxPanel() {
 // ── Add-account modal ──────────────────────────────────────────────
 
 function AddAccountModal({
-	onClose, onAdded, prefillEmail, prefillLabel, takenLabels, pools,
+	onClose, onAdded, prefillEmail, prefillLabel, prefillPool, takenLabels, pools,
 }: {
 	onClose: () => void; onAdded: () => void; prefillEmail?: string; prefillLabel?: string;
+	// The account's CURRENT pool_id on a re-add. Without this the pool select
+	// silently defaulted to "default" on every re-add — a credential fenced
+	// into a restricted pool would get pulled back into default the next
+	// time its token needed refreshing, undoing that isolation with no
+	// warning. Undefined for a brand-new account (falls to "default").
+	prefillPool?: string;
 	// label -> the OTHER account(s) already using it (comma-joined). Informational
 	// only — see the "multiple accounts, one field box" note below. This account's
 	// own current label, on a re-add, is excluded by the caller so it doesn't warn
@@ -780,7 +793,7 @@ function AddAccountModal({
 	const [token,        setToken]        = useState('');
 	const [refreshToken, setRefreshToken] = useState('');
 	const [label,        setLabel]        = useState(prefillLabel ?? '');
-	const [poolId,       setPoolId]       = useState('default');
+	const [poolId,       setPoolId]       = useState(prefillPool ?? 'default');
 	// Custom mode = free-text entry for a field box not yet in KNOWN_FIELD_BOXES
 	// (e.g. onboarding a third box ahead of adding it to the known list).
 	const [customLabel,  setCustomLabel]  = useState(!!prefillLabel && !KNOWN_FIELD_BOXES.includes(prefillLabel));
@@ -942,11 +955,14 @@ rm -rf "$D"`}
 						<select
 							value={poolId}
 							onChange={(e) => setPoolId(e.target.value)}
-							className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gold-400"
+							disabled={pools.length === 0}
+							className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gold-400 disabled:opacity-50"
 						>
-							{pools.map((p) => (
-								<option key={p.id} value={p.id}>{p.name}</option>
-							))}
+							{pools.length === 0
+								? <option value={poolId}>loading pools…</option>
+								: pools.map((p) => (
+									<option key={p.id} value={p.id}>{p.name}</option>
+								))}
 						</select>
 						<p className="text-[11px] text-slate-400 mt-1">
 							Who may draw on this account — a different axis from the field box above (that's egress routing, this is access).
@@ -1000,10 +1016,24 @@ function CreatePoolModal({ onClose, onCreated }: { onClose: () => void; onCreate
 		const idTrim = id.trim().toLowerCase();
 		const nameTrim = name.trim();
 		if (!idTrim || !nameTrim) { setMsg({ ok: false, text: 'ID and name are required.' }); return; }
+		// Matches the server's three-way sentinel (conservativeCeiling):
+		// positive = explicit value, 0/blank = inherit the global default,
+		// -1 = explicitly unlimited. Number("") is 0 (falls through to
+		// "blank" below); Number("6a") is NaN, which must be rejected rather
+		// than silently sent as `conservative_ceiling: null`.
+		let ceilingVal: number | undefined;
+		if (ceiling.trim() !== '') {
+			const n = Number(ceiling);
+			if (!Number.isInteger(n) || n < -1) {
+				setMsg({ ok: false, text: 'Ceiling must be a positive integer, 0 (default), or -1 (no limit).' });
+				return;
+			}
+			ceilingVal = n;
+		}
 		setBusy(true);
 		setMsg(null);
 		try {
-			await adminCreateClaudePool(idTrim, nameTrim, mode, ceiling ? Number(ceiling) : undefined);
+			await adminCreateClaudePool(idTrim, nameTrim, mode, ceilingVal);
 			onCreated();
 		} catch (err: any) {
 			setMsg({ ok: false, text: String(err?.response?.data?.message || err?.message || err) });
@@ -1057,13 +1087,15 @@ function CreatePoolModal({ onClose, onCreated }: { onClose: () => void; onCreate
 					{mode === 'conservative' && (
 						<div>
 							<label className="block text-xs font-medium text-slate-600 mb-1">
-								Ceiling <span className="text-slate-400 font-normal">(users/account safety backstop, blank = default 6)</span>
+								Ceiling <span className="text-slate-400 font-normal">(users/account safety backstop — blank/0 = default, -1 = no limit)</span>
 							</label>
 							<input
 								type="number"
+								min={-1}
+								step={1}
 								value={ceiling}
 								onChange={(e) => setCeiling(e.target.value)}
-								placeholder="6"
+								placeholder="blank = default"
 								className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gold-400"
 							/>
 						</div>
@@ -1219,6 +1251,11 @@ function PoolsPanel({ pools, onChanged }: { pools: ClaudePool[]; onChanged: () =
 	const [showCreate, setShowCreate] = useState(false);
 	const [membersFor, setMembersFor] = useState<ClaudePool | null>(null);
 	const [busyId, setBusyId] = useState<string | null>(null);
+	// Per-pool inline feedback — replaces a bare alert() for delete failures
+	// (inconsistent with this file's own pauseErr/poolErr convention) and is
+	// also where toggleMode's server-returned `warning` (previously
+	// discarded entirely) now actually reaches the operator.
+	const [rowMsg, setRowMsg] = useState<Record<string, string>>({});
 
 	const toggleMode = async (p: ClaudePool) => {
 		const next = p.mode === 'distributed' ? 'conservative' : 'distributed';
@@ -1230,8 +1267,16 @@ function PoolsPanel({ pools, onChanged }: { pools: ClaudePool[]; onChanged: () =
 			'\n\nTakes effect on the next placement pass, not instantly.',
 		)) return;
 		setBusyId(p.id);
-		try { await adminUpdateClaudePool(p.id, { mode: next }); onChanged(); }
-		finally { setBusyId(null); }
+		setRowMsg((m) => ({ ...m, [p.id]: '' }));
+		try {
+			const { warning } = await adminUpdateClaudePool(p.id, { mode: next });
+			if (warning) setRowMsg((m) => ({ ...m, [p.id]: warning }));
+			onChanged();
+		} catch (e: any) {
+			setRowMsg((m) => ({ ...m, [p.id]: String(e?.response?.data?.message || e?.message || e) }));
+		} finally {
+			setBusyId(null);
+		}
 	};
 
 	const deletePool = async (p: ClaudePool) => {
@@ -1241,7 +1286,7 @@ function PoolsPanel({ pools, onChanged }: { pools: ClaudePool[]; onChanged: () =
 			await adminDeleteClaudePool(p.id, true);
 			onChanged();
 		} catch (e: any) {
-			alert(String(e?.response?.data?.message || e?.message || e));
+			setRowMsg((m) => ({ ...m, [p.id]: String(e?.response?.data?.message || e?.message || e) }));
 		} finally {
 			setBusyId(null);
 		}
@@ -1280,7 +1325,7 @@ function PoolsPanel({ pools, onChanged }: { pools: ClaudePool[]; onChanged: () =
 									: 'bg-sky-50 border-sky-200 text-sky-700 hover:bg-sky-100'
 							}`}
 						>
-							{p.mode}{p.mode === 'conservative' ? ` (ceiling ${p.conservative_ceiling || 6})` : ''}
+							{p.mode}{p.mode === 'conservative' ? ` (ceiling ${fmtCeiling(p.conservative_ceiling)})` : ''}
 						</button>
 						<span className="shrink-0 text-[10px] text-slate-400">{p.account_count} account{p.account_count === 1 ? '' : 's'}</span>
 						<span className="shrink-0 text-[10px] text-slate-400">{p.member_count} member{p.member_count === 1 ? '' : 's'}</span>
@@ -1295,6 +1340,9 @@ function PoolsPanel({ pools, onChanged }: { pools: ClaudePool[]; onChanged: () =
 						>
 							manage members
 						</button>
+						{rowMsg[p.id] && (
+							<span className="shrink-0 max-w-52 truncate text-[10px] text-amber-600" title={rowMsg[p.id]}>{rowMsg[p.id]}</span>
+						)}
 						{p.id !== 'default' && (
 							<button
 								onClick={() => deletePool(p)}
@@ -1310,6 +1358,19 @@ function PoolsPanel({ pools, onChanged }: { pools: ClaudePool[]; onChanged: () =
 			</div>
 		</div>
 	);
+}
+
+// fmtCeiling renders ClaudePool.conservative_ceiling's three-way sentinel
+// (see the backend's conservativeCeiling): positive = the explicit value,
+// 0 = inherit the global default (unknown here — env-tunable server-side,
+// so "default" rather than guessing a number that could be stale), -1 =
+// explicitly unlimited. A plain `n || 6` used to render 0 as "6", silently
+// misrepresenting an admin's explicit "inherit default" as if it were also
+// the value, and had no way to show -1 (unlimited) at all.
+function fmtCeiling(n: number): string {
+	if (n > 0) return String(n);
+	if (n < 0) return 'no limit';
+	return 'default';
 }
 
 function fmtTokens(n: number): string {
@@ -1971,6 +2032,11 @@ export default function StudioClaudeQuota() {
 		fetchClaudePools().then(setPools).catch(() => {});
 	}, []);
 
+	// Deliberately does NOT call loadPools() — most callers (pause/resume,
+	// delete) never touch pool membership or an account's pool_id, so
+	// fetching pools on every one of those was a wasted round trip forever.
+	// Callers that DO affect a pool's account_count/member_count (add
+	// account, pool move) call loadPools() explicitly alongside this.
 	const load = useCallback((silent = false) => {
 		if (!silent) setLoading(true);
 		fetchClaudeQuota()
@@ -1982,12 +2048,12 @@ export default function StudioClaudeQuota() {
 			.catch((e) => setError(String(e?.message || e)))
 			.finally(() => setLoading(false));
 		loadUserUsage();
-		loadPools();
-	}, [loadUserUsage, loadPools]);
+	}, [loadUserUsage]);
 
 	// Auto-refresh user usage every 2 min with a live countdown.
 	useEffect(() => {
 		load();
+		loadPools();
 		const tick = setInterval(() => {
 			countdownRef.current -= 1;
 			if (countdownRef.current <= 0) {
@@ -1997,16 +2063,17 @@ export default function StudioClaudeQuota() {
 			setCountdown(countdownRef.current);
 		}, 1000);
 		return () => clearInterval(tick);
-	}, [load, loadUserUsage]);
+	}, [load, loadUserUsage, loadPools]);
 
 	return (
 		<div className="space-y-3 max-w-5xl mx-auto">
 			{showAdd && (
 				<AddAccountModal
 					onClose={() => { setShowAdd(false); setReAddEmail(undefined); }}
-					onAdded={() => { setShowAdd(false); setReAddEmail(undefined); load(true); }}
+					onAdded={() => { setShowAdd(false); setReAddEmail(undefined); load(true); loadPools(); }}
 					prefillEmail={reAddEmail}
 					prefillLabel={reAddEmail ? accounts?.find((a) => a.email === reAddEmail)?.label : undefined}
+					prefillPool={reAddEmail ? accounts?.find((a) => a.email === reAddEmail)?.pool_id : undefined}
 					// Every OTHER account already on a label, comma-joined — informational
 					// (sharing a label is allowed, see AddAccountModal). A re-add excludes
 					// this account's own current label so it doesn't note itself.
@@ -2104,7 +2171,7 @@ export default function StudioClaudeQuota() {
 										: x) ?? []);
 									load(true);
 								}}
-								onPoolChanged={() => load(true)}
+								onPoolChanged={() => { load(true); loadPools(); }}
 							/>
 						))}
 					</div>
