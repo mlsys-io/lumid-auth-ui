@@ -15,6 +15,7 @@
 // fall back to a labelled code block (graceful degradation).
 
 import { createContext, useContext, useId, useCallback, useMemo, Suspense, useEffect, useState, type ReactNode } from "react";
+import { askOrStash } from "@/components/chat/askBus";
 import { parse as parseYaml } from "yaml";
 import { Link, useNavigate, useParams as useRouteParams } from "react-router-dom";
 import { recordInteraction } from "@/api/interactions";
@@ -621,6 +622,7 @@ function ActionButton({ a, row, onDone, size = "sm" }: {
 }) {
   const role = useContext(AuthContext)?.user?.role ?? "user";
   const appFromRoute = useRouteParams().app;
+  const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   if (!roleAllows(role, a.gate)) return null;
   const danger = a.variant === "danger";
@@ -649,17 +651,27 @@ function ActionButton({ a, row, onDone, size = "sm" }: {
             label: interp(String(a.ask_select.label ?? a.ask_select.id ?? "")),
           }
         : undefined;
-      window.dispatchEvent(new CustomEvent("studio:ask", {
-        detail: {
-          prompt: interp(a.ask),
-          autosend: true,
-          context: {
-            page: "app-surface",
-            ...(appFromRoute ? { app: appFromRoute } : {}),
-            ...(sel ? { selection: sel } : {}),
-          },
+      // Ask where a chat can hear it. `/studio/a/:app/:surface` — the
+      // full-page surface route — docks NO rail, so this used to dispatch a
+      // window event with no listener: the button depressed, the handler
+      // completed, and nothing happened. e2e 22 step 9-10 caught it as "no
+      // chat bound to this strategy" four minutes later.
+      //
+      // askOrStash parks the payload when nobody is listening; we then send
+      // the user to the workspace route, which mounts the rail and drains the
+      // stash on mount. Same app, same selection, one navigation.
+      const detail = {
+        prompt: interp(a.ask),
+        autosend: true,
+        context: {
+          page: "app-surface",
+          ...(appFromRoute ? { app: appFromRoute } : {}),
+          ...(sel ? { selection: sel } : {}),
         },
-      }));
+      };
+      if (!askOrStash(detail) && appFromRoute) {
+        navigate(`/studio/apps/${encodeURIComponent(appFromRoute)}`);
+      }
       onDone?.();
       return;
     }

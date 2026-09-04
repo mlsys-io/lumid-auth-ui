@@ -8,6 +8,7 @@
 // sessionStorage so navigating between Studio pages keeps context.
 
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { markChatMounted, drainAsk } from "@/components/chat/askBus";
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
@@ -1328,7 +1329,24 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 			}
 		};
 		window.addEventListener('studio:ask', onAsk as EventListener);
-		return () => window.removeEventListener('studio:ask', onAsk as EventListener);
+		// Register as a live listener, and drain anything a page parked because
+		// no chat was mounted when it asked. `/studio/a/:app/:surface` docks no
+		// rail, so a Discuss there used to dispatch into nothing — the button
+		// depressed, the handler completed, and the event vanished. The stash
+		// carries it across the navigation to a page that HAS a chat.
+		const unmark = markChatMounted();
+		const parked = drainAsk();
+		if (parked) {
+			// After paint, so the listener above is attached and the send path's
+			// ref is populated — an immediate dispatch would race its own mount.
+			queueMicrotask(() => {
+				window.dispatchEvent(new CustomEvent('studio:ask', { detail: parked }));
+			});
+		}
+		return () => {
+			unmark();
+			window.removeEventListener('studio:ask', onAsk as EventListener);
+		};
 	}, []);
 
 	// `studio:notify` — a page posts a passive note (e.g. a loop event
