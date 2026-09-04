@@ -51,10 +51,16 @@ function IncludedAppRows({ app }: { app: string }) {
 
 export default function AppWorkflowsSurface({ config }: { config?: Record<string, unknown> }) {
 	const { app = "" } = useParams<{ app: string }>();
-	const own = typeof config?.app === "string" && config.app ? String(config.app) : app;
+	// Two config shapes reach a native: `ui.surface.native` passes the app's
+	// config flat, while a `lumid:native` FENCE passes its whole body (minus
+	// `key`) — so a fence written as `config: {include: […]}` arrives NESTED
+	// under `config`. Read both; the nested form wins when present.
+	const cfg = (config && typeof config.config === "object" && config.config !== null
+		? config.config : config) as Record<string, unknown> | undefined;
+	const own = typeof cfg?.app === "string" && cfg.app ? String(cfg.app) : app;
 	if (!own) return null;
-	const include = Array.isArray(config?.include)
-		? (config!.include as unknown[]).map(String).filter((a) => a && a !== own)
+	const include = Array.isArray(cfg?.include)
+		? (cfg!.include as unknown[]).map(String).filter((a) => a && a !== own)
 		: [];
 	return (
 		<>
