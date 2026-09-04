@@ -88,6 +88,7 @@ export default function NextRunComposer({ app, loop, fromTs, fromLabel, schedule
 	const [parent, setParent] = useState<string | undefined>(fromTs);
 	const [note, setNote] = useState("");
 	const [overridesText, setOverridesText] = useState("");
+	const [argsText, setArgsText] = useState("");
 	const [busy, setBusy] = useState(false);
 
 	// Recurring schedule (moved here from the workflow header). Saved via patchLoop.
@@ -199,6 +200,8 @@ export default function NextRunComposer({ app, loop, fromTs, fromLabel, schedule
 	const launchNow = async () => {
 		const directive = note.trim();
 		const variant = parseOverrides(overridesText);
+		const runArgs = parseOverrides(argsText);
+		const hasArgs = Object.keys(runArgs).length > 0;
 		const hasVariant = Object.keys(variant).length > 0;
 		const label = (directive || (parent ? "re-run" : "run")).slice(0, 48);
 		const priority = priorityText.trim() ? Number(priorityText.trim()) : undefined;
@@ -221,6 +224,7 @@ export default function NextRunComposer({ app, loop, fromTs, fromLabel, schedule
 					cases: scopedCases,
 					priority: Number.isFinite(priority as number) ? priority : undefined,
 					variants,
+					args: hasArgs ? runArgs : undefined,
 				});
 				// "requested", not "queued": identity accepted the batch, the
 				// scheduler runs it. Claiming a completed count here is what the
@@ -249,6 +253,7 @@ export default function NextRunComposer({ app, loop, fromTs, fromLabel, schedule
 				criteria: criteriaExpr || undefined,
 				auto_promote: autoPromote && criteriaExpr ? true : undefined,
 				cases: scopedCases,
+				args: hasArgs ? runArgs : undefined,
 			});
 			toast.success("Experiment queued — it'll appear in the run tree shortly.");
 			onLaunched?.();
@@ -325,6 +330,18 @@ export default function NextRunComposer({ app, loop, fromTs, fromLabel, schedule
 								placeholder={"one per line, e.g.\nmodel = claude\ntemperature = 0.3"}
 								className="mt-1 w-full font-mono text-[12px] text-slate-800 leading-snug rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-gold-300 resize-none" />
 							<div className="mt-0.5 text-[10px] text-slate-400">Becomes the attempt's variant. Numbers / true / false are coerced.</div>
+						</div>
+
+						{/* An arm changes CONFIG; the run still needs a SUBJECT — the
+						    loop's own {{ args.* }} (which strategy, which case). A
+						    dispatched variant with no subject runs cleanly and measures
+						    nothing ("strategy is empty", observed twice live). */}
+						<div>
+							<label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Run args <span className="normal-case font-normal text-slate-300">(the loop's subject — optional)</span></label>
+							<textarea value={argsText} onChange={(e) => setArgsText(e.target.value)} rows={2}
+								placeholder={"one per line, e.g.\nstrategy_id = mom_30m_1788…\ncases = 3"}
+								className="mt-1 w-full font-mono text-[12px] text-slate-800 leading-snug rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-gold-300 resize-none" />
+							<div className="mt-0.5 text-[10px] text-slate-400">Passed as the loop's own invocation args (<span className="font-mono">args.*</span>), not the variant.</div>
 						</div>
 
 						{/* Phase B — Evaluate / success criteria */}

@@ -514,6 +514,9 @@ export const me = {
       criteria?: string;
       auto_promote?: boolean;
       cases?: string[];
+      // The loop's own invocation args — the run's SUBJECT (verified live:
+      // POST {args:{action:"status"}} runs the backtest status action).
+      args?: Record<string, unknown>;
     },
   ) =>
     call<{ job_id: string; state: string }>(
@@ -546,6 +549,11 @@ export const me = {
       cases?: string[];
       priority?: number;
       variants: Record<string, unknown>[];
+      // The loop's own invocation args ({{ args.* }}) — the SUBJECT of the
+      // run. An arm changes CONFIG; without a subject some loops run and
+      // measure nothing (live failure: "strategy is empty"). Identity has
+      // accepted this since v0.5.316; the type just never admitted it.
+      args?: Record<string, unknown>;
     },
   ) =>
     call<{ intent_id: string; requested: number; state: string }>(
@@ -1013,6 +1021,12 @@ export interface MeExperiment {
   // what has actually been OBSERVED. An arm present here and absent there has
   // never been run — that is the one the panel offers to dispatch.
   arms?: MeExperimentArm[];
+  // App-authored dispatch routing. `loop` picks WHICH attached loop a button
+  // dispatch uses (only one may be self-sufficient); `ask`, when present,
+  // means the run needs a SUBJECT the button cannot know (e.g. which
+  // strategy) — hand dispatch to the chat rail with this question instead of
+  // firing a run that measures nothing.
+  dispatch?: { loop?: string; ask?: string };
   // Honesty fields written by experiments.evaluate(). `comparable: false` means
   // the RANKING was withheld because the arms were measured under different
   // instruments; per-arm means are still facts. Never render a winner then.

@@ -15,6 +15,7 @@ import {
 	FlaskConical, ChevronDown, ChevronRight, Loader2, TrendingUp, TrendingDown,
 } from "lucide-react";
 import { me, waitForIntent, type MeExperiment, type MeExperimentArm, type MeExperimentDetail, type MeExperimentCase } from "@/api/me";
+import { askOrStash } from "@/components/chat/askBus";
 import { fetchCasebook } from "@/api/casebook";
 import { cn } from "@/lib/utils";
 
@@ -35,7 +36,12 @@ function VerdictChip({ e }: { e: MeExperiment }) {
 		return <span className="px-2 py-0.5 rounded-full text-[10px] border bg-slate-50 text-slate-500 border-slate-200">{e.status}</span>;
 	if (e.criteria_met)
 		return <span className="px-2 py-0.5 rounded-full text-[10px] border bg-gold-50 text-gold-700 border-gold-200 font-medium">criteria met</span>;
-	return <span className="px-2 py-0.5 rounded-full text-[10px] border bg-violet-50 text-violet-700 border-violet-200">running</span>;
+	// "running" on an experiment with zero results claimed activity where
+	// there was none — an active declaration with no rows is collecting,
+	// not running.
+	if (!e.n_results)
+		return <span className="px-2 py-0.5 rounded-full text-[10px] border bg-slate-50 text-slate-500 border-slate-200">no results yet</span>;
+	return <span className="px-2 py-0.5 rounded-full text-[10px] border bg-violet-50 text-violet-700 border-violet-200">collecting</span>;
 }
 
 function DeltaChip({ e }: { e: MeExperiment }) {
@@ -200,11 +206,30 @@ function ArmsBlock({ app, e }: { app: string; e: MeExperiment }) {
 	const [err, setErr] = useState<string | null>(null);
 	const arms = e.arms || [];
 	// An experiment attached to no loop has nowhere to dispatch to. Say so
-	// rather than offering a button that can only 400.
-	const loop = e.loops?.[0] || "";
+	// rather than offering a button that can only 400. When several loops feed
+	// one experiment, the declaration's dispatch.loop picks the one that is
+	// self-sufficient for a button (it must still be ATTACHED — a hint naming
+	// a foreign loop is ignored, matching resolveExperimentArm server-side).
+	const hinted = e.dispatch?.loop;
+	const loop = (hinted && e.loops?.includes(hinted) ? hinted : e.loops?.[0]) || "";
+	// dispatch.ask means the run needs a SUBJECT this button cannot know
+	// (which strategy, which case). The surface shows; the chat acts — hand
+	// the dispatch to the rail with the app's own question instead of firing
+	// a run that returns "strategy is empty" and measures nothing.
+	const needsSubject = !!e.dispatch?.ask;
 
 	const run = useCallback(async (armId: string, cfg: MeExperimentArm) => {
 		if (!loop) return;
+		if (needsSubject) {
+			askOrStash({
+				prompt: `Dispatch arm "${armId}" of experiment "${e.id}" on ${app} `
+					+ `(loop ${loop}) with dispatch_experiment_arm. ${e.dispatch?.ask} `
+					+ `Ask me for anything you don't know, then queue it and tell me the intent id.`,
+				context: { page: "experiments", app, loop },
+			});
+			setSent((p) => ({ ...p, [armId]: "chat" }));
+			return;
+		}
 		setBusy(armId); setErr(null);
 		try {
 			const { id: _id, description: _d, ...overrides } = cfg;
@@ -230,7 +255,7 @@ function ArmsBlock({ app, e }: { app: string; e: MeExperiment }) {
 		} finally {
 			setBusy(null);
 		}
-	}, [app, loop]);
+	}, [app, loop, needsSubject, e.id, e.dispatch?.ask]);
 
 	if (arms.length === 0) return null;
 	return (
@@ -268,13 +293,19 @@ function ArmsBlock({ app, e }: { app: string; e: MeExperiment }) {
 									measured passively
 								</span>
 							) : sent[id] ? (
-								<span className="text-[10px] text-emerald-600 whitespace-nowrap">queued ✓</span>
+								<span className="text-[10px] text-emerald-600 whitespace-nowrap">
+									{sent[id] === "chat" ? "in the chat →" : "queued ✓"}
+								</span>
 							) : (
 								<button
 									type="button"
 									disabled={!loop || busy === id}
 									onClick={() => run(id, a)}
-									title={loop ? `Runs one cycle of ${loop} with this arm applied` : "This experiment is attached to no workflow, so there is nowhere to dispatch it"}
+									title={!loop
+										? "This experiment is attached to no workflow, so there is nowhere to dispatch it"
+										: needsSubject
+											? "This run needs a subject the button cannot know — the chat asks, then dispatches"
+											: `Runs one cycle of ${loop} with this arm applied`}
 									className={cn(
 										"px-2 py-1 rounded-md text-[10px] font-medium border whitespace-nowrap transition-colors",
 										loop
@@ -282,7 +313,7 @@ function ArmsBlock({ app, e }: { app: string; e: MeExperiment }) {
 											: "border-slate-200 text-slate-300 bg-slate-50 cursor-not-allowed",
 									)}
 								>
-									{busy === id ? "queueing…" : seen ? "Run 1 more" : "Run this arm"}
+									{busy === id ? "queueing…" : needsSubject ? "Run via chat" : seen ? "Run 1 more" : "Run this arm"}
 								</button>
 							)}
 						</div>
@@ -327,6 +358,17 @@ export function ExperimentCard({ app, e, showApp = false }: { app: string; e: Me
 					<span className="px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide bg-slate-100 text-slate-500">{KIND_LABEL[e.kind] || e.kind}</span>
 					<VerdictChip e={e} />
 					<DeltaChip e={e} />
+					{/* Arms live in the EXPANDED body; without this chip a collapsed
+					    card gives no sign runnable arms are inside — the dispatch
+					    affordance was invisible until a speculative click. */}
+					{(e.arms?.length ?? 0) > 0 && (() => {
+						const neverRun = (e.arms || []).filter((a) => !(e.variants || {})[String(a.id)]).length;
+						return (
+							<span className="px-1.5 py-0.5 rounded-full text-[10px] border bg-violet-50/60 text-violet-700 border-violet-200/60 tabular-nums">
+								{e.arms!.length} arm{e.arms!.length === 1 ? "" : "s"}{neverRun > 0 ? ` · ${neverRun} never run` : ""}
+							</span>
+						);
+					})()}
 					<span className="ml-auto text-[11px] text-slate-400 tabular-nums">{e.n_results} result{e.n_results === 1 ? "" : "s"}</span>
 				</div>
 				<div className="text-xs text-slate-600 mt-1">{e.hypothesis}</div>
@@ -417,7 +459,15 @@ export function ExperimentCard({ app, e, showApp = false }: { app: string; e: Me
 	);
 }
 
-export default function ExperimentsPanel({ app }: { app: string }) {
+// `loop` narrows to the experiments a single workflow feeds — how the
+// workflow observability panel renders "Metric & arms" IN PLACE on the loop
+// that owns them, instead of a separate Experiments page. When the filter
+// leaves nothing, render nothing: on a loop page an empty state would just be
+// noise under the runs (`quiet` skips the declare-one hint for the same
+// reason).
+export default function ExperimentsPanel({ app, loop, quiet = false }: {
+	app: string; loop?: string; quiet?: boolean;
+}) {
 	const [exps, setExps] = useState<MeExperiment[] | null>(null);
 	useEffect(() => {
 		let live = true;
@@ -429,8 +479,13 @@ export default function ExperimentsPanel({ app }: { app: string }) {
 		return () => { live = false; window.clearInterval(id); };
 	}, [app]);
 
-	if (exps === null) return <div className="relative"><div className="h-20 rounded-xl bg-slate-100 animate-pulse" /><SpiralOverlay /></div>;
-	if (exps.length === 0) {
+	if (exps === null) {
+		if (quiet) return null;
+		return <div className="relative"><div className="h-20 rounded-xl bg-slate-100 animate-pulse" /><SpiralOverlay /></div>;
+	}
+	const shown = loop ? exps.filter((e) => e.loops?.includes(loop)) : exps;
+	if (shown.length === 0) {
+		if (quiet || loop) return null;
 		return (
 			<div className="rounded-xl border border-dashed border-slate-200 bg-white/60 p-8 text-center text-sm text-slate-500">
 				No experiments declared. An experiment tests a hypothesis by running
@@ -441,7 +496,7 @@ export default function ExperimentsPanel({ app }: { app: string }) {
 	}
 	return (
 		<div className="space-y-2.5">
-			{exps.map((e) => <ExperimentCard key={e.id} app={app} e={e} />)}
+			{shown.map((e) => <ExperimentCard key={e.id} app={app} e={e} />)}
 		</div>
 	);
 }

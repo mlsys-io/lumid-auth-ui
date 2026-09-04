@@ -51,6 +51,7 @@ import type { MeExperiment } from "@/api/me";
 // only mount when the Data tab is opened.
 const DatasetExplorer = lazy(() => import("@/components/workflow/DatasetExplorer"));
 const CasebookPanel = lazy(() => import("@/components/workflow/CasebookPanel"));
+const ExperimentsPanel = lazy(() => import("@/components/experiments/ExperimentsPanel"));
 // Edit an analyst/judge prompt IN the right canvas (not a route push), so
 // clicking a prompt in the Assets rail keeps the user in the workflow panel.
 const EmbeddedPromptEditor = lazy(() => import("@/components/app-surface/AppPromptsEditor").then((m) => ({ default: m.EmbeddedPromptEditor })));
@@ -817,6 +818,22 @@ export default function WorkflowObservabilityPanel({
 			</div>
 			</div>
 		</div>
+			{/* METRIC & ARMS — the experiments THIS loop feeds, in place. A loop
+			    with a metric and a dataset is an experiment; its arms belong on
+			    the workflow that owns them, not on a separate Experiments page
+			    (that tab was this tier torn off one loop and given a page —
+			    rendering two inert cards while the loop's own runs sat
+			    unlabelled elsewhere). Renders nothing when the loop feeds no
+			    experiment: a plain workflow has Outputs only. */}
+			{loopExp && (
+				<section className="space-y-1.5">
+					<div className="text-[10px] uppercase tracking-wide font-semibold text-slate-400">Metric &amp; arms</div>
+					<Suspense fallback={null}>
+						<ExperimentsPanel app={app} loop={loop} quiet />
+					</Suspense>
+				</section>
+			)}
+
 			{/* Stage drill-down + free-text query on the selected run (Observe). */}
 			{selectedStage && tenantHasRuns && (
 				<div ref={inspectorRef}>
