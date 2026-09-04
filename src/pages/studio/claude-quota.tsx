@@ -767,8 +767,10 @@ function AddAccountModal({
 	onClose, onAdded, prefillEmail, prefillLabel, takenLabels, pools,
 }: {
 	onClose: () => void; onAdded: () => void; prefillEmail?: string; prefillLabel?: string;
-	// label -> the OTHER account already holding it (this account's own current
-	// label, on a re-add, is excluded by the caller so it doesn't block itself).
+	// label -> the OTHER account(s) already using it (comma-joined). Informational
+	// only — see the "multiple accounts, one field box" note below. This account's
+	// own current label, on a re-add, is excluded by the caller so it doesn't warn
+	// about itself.
 	takenLabels?: Record<string, string>;
 	// Every pool this account could join. Pre-selects "default" so the
 	// zero-disruption path (never create a second pool) needs no extra click.
@@ -791,10 +793,12 @@ function AddAccountModal({
 		const rt = refreshToken.trim() || undefined;
 		const lb = label.trim() || undefined;
 		if (!e || !t) { setMsg({ ok: false, text: 'Email and token are required.' }); return; }
-		if (lb && takenLabels?.[lb]) {
-			setMsg({ ok: false, text: `"${lb}" is already allocated to ${takenLabels[lb]} — pick a different label or clear this account's first.` });
-			return;
-		}
+		// Sharing a label across accounts is ALLOWED: claude-proxy's fingerprint
+		// and relay machinery are keyed by label, not by account, so N accounts
+		// on one field box already present correctly as one shared client
+		// identity / egress IP — that's not a workaround, it's the intended
+		// anti-fingerprinting shape. No blocking check here on purpose; the
+		// "already used by" note below is informational, not a validation error.
 		setBusy(true);
 		setMsg(null);
 		try {
@@ -904,18 +908,19 @@ rm -rf "$D"`}
 						>
 							<option value="">— none (normal pooled account) —</option>
 							{KNOWN_FIELD_BOXES.map((box) => {
-								const takenBy = takenLabels?.[box];
+								const usedBy = takenLabels?.[box];
 								return (
-									<option key={box} value={box} disabled={!!takenBy}>
-										{box}{takenBy ? ` — already allocated (${takenBy})` : ''}
+									<option key={box} value={box}>
+										{box}{usedBy ? ` — also used by ${usedBy}` : ''}
 									</option>
 								);
 							})}
 							<option value="__custom__">Other…</option>
 						</select>
 						{label && takenLabels?.[label] && !customLabel && (
-							<p className="text-[11px] text-rose-500 mt-1">
-								"{label}" is already allocated to {takenLabels[label]} — each field box holds one account.
+							<p className="text-[11px] text-slate-400 mt-1">
+								"{label}" is already used by {takenLabels[label]} — accounts sharing a field box present as one
+								client identity (same egress IP, same fingerprint), which is fine and often the point.
 							</p>
 						)}
 						{customLabel && (
@@ -2002,13 +2007,17 @@ export default function StudioClaudeQuota() {
 					onAdded={() => { setShowAdd(false); setReAddEmail(undefined); load(true); }}
 					prefillEmail={reAddEmail}
 					prefillLabel={reAddEmail ? accounts?.find((a) => a.email === reAddEmail)?.label : undefined}
-					// Every OTHER account's label is "taken" — a re-add excludes its own
-					// current label so it doesn't block re-registering itself.
-					takenLabels={Object.fromEntries(
-						(accounts ?? [])
-							.filter((a) => a.label && a.email !== reAddEmail)
-							.map((a) => [a.label as string, a.email]),
-					)}
+					// Every OTHER account already on a label, comma-joined — informational
+					// (sharing a label is allowed, see AddAccountModal). A re-add excludes
+					// this account's own current label so it doesn't note itself.
+					takenLabels={(() => {
+						const byLabel: Record<string, string[]> = {};
+						for (const a of accounts ?? []) {
+							if (!a.label || a.email === reAddEmail) continue;
+							(byLabel[a.label] ??= []).push(a.email);
+						}
+						return Object.fromEntries(Object.entries(byLabel).map(([l, emails]) => [l, emails.join(', ')]));
+					})()}
 					pools={pools}
 				/>
 			)}
