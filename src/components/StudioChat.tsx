@@ -850,7 +850,16 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 		// sends `id`), so this only ever ADDS the early row -- and it carries the
 		// same app/strategy grounding, which is what makes an app's Sessions
 		// list populate the moment Discuss is clicked.
-		if (!chatId && messages.length >= 1 && messages[0]?.role === 'user') {
+		// ANY user turn, not messages[0]. An APP-GROUNDED chat opens with
+		// emitAppOpener's assistant message, so messages[0].role is 'assistant'
+		// and this guard could never hold for the very flow it was written for:
+		// Discuss on an app surface. The row was therefore still only written on
+		// COMPLETION, and a turn slower than the caller's patience persisted
+		// nothing — e2e 22 step 9-10 saw a 4m0s stream aborted at 240s with no
+		// chat row, months after the early save was added to prevent exactly
+		// that. A bare chat (user speaks first) satisfied both forms, which is
+		// why this looked correct wherever anyone checked it.
+		if (!chatId && messages.some((m) => m.role === 'user')) {
 			const seedApp = (workspaceApp() || currentAppRef.current || groundedAppRef.current) || undefined;
 			const seedStrategy = groundedStrategyRef.current || undefined;
 			if (seedStrategy || seedApp) {
