@@ -1081,11 +1081,27 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 				// own "generate a page" CTA) instead of a dead-end message. Negative
 				// margins cancel the AppOverview body padding so the surface (which
 				// brings its own chrome + padding) sits flush in the panel.
+				//
+				// NESTED GUARD — same rule as the overview branch below. A surface
+				// can mount this component again (ui/workflows.md → lumid:native
+				// key: app-workflows), and this branch was the one mount of
+				// AppSurface WITHOUT the guard: an app whose workflow rows came
+				// back empty recursed surface → native → overview → surface until
+				// React gave up, portaling a tab bar into the top strip per level
+				// (observed on quant-research 2026-09-04, ~9 deep). Inside a
+				// surface, an empty row set renders the honest empty state instead.
+				nestedInSurface ? (
+					<div className="text-sm text-slate-500 px-1 py-2">
+						No workflows discovered for this app yet — they appear here once
+						the scheduler reports them (or after the first run).
+					</div>
+				) : (
 				<div className="-mx-5 -my-5">
 					<Suspense fallback={<div className="px-5 py-8"><Skeleton lines={4} /></div>}>
 						<AppSurface app={app} embedded={embedded} surface={params.get("surface") || undefined} />
 					</Suspense>
 				</div>
+				)
 			) : (
 				// The workflow LIST is consolidated into a dropdown, surfaced (with
 				// "New workflow") in the top strip next to the app name when embedded.
