@@ -286,23 +286,62 @@ model breakdown, tagged by serving route (onprem).
 
 ---
 
+## Pools — accounts and users are grouped, not one shared pot
+
+Since 2026-09, pooled accounts and users are split into named **pools**
+rather than one undifferentiated pot. Every user has a **primary pool**
+(`default` unless an admin moved you) — an ordinary PAT draws from your
+primary pool automatically, nothing to configure. A pool runs in one of two
+modes, which changes how [load balancing](#how-load-balancing-works) behaves
+within it:
+
+- **distributed** (the default, and everything in the next section describes
+  it) — spread load across every account in the pool by headroom.
+- **conservative** — fill accounts in a fixed order, saturating one before
+  moving to the next, instead of spreading load across all of them. Used
+  when a pool wants to run one subscription down before touching the next
+  rather than keep several partially warm.
+
+**If you belong to more than one pool**, mint a **second PAT** scoped to the
+non-primary one instead of relying on your default: at
+[lum.id/dashboard/tokens](/dashboard/tokens), switch to **Custom** scope
+mode — any pool you're a member of besides your primary appears under
+**Claude pool override** as a checkbox, labelled by name. A PAT minted with
+that scope routes to that pool's accounts specifically; your unscoped PAT
+(and everyone else's default traffic) is unaffected and keeps using your
+primary pool. You don't need to already know the pool's raw id — the picker
+shows it by name.
+
+Pools are managed on [/code](/code) → **Pools**: viewing, mode, and
+membership are `admin`+, same as everything else there; **creating a new
+pool is `super_admin`-only** — a new pool is a new named slice of
+subscription budget, the same bar as resetting someone's quota window.
+
 ## How load balancing works
 
+Everything below describes selection **within whichever pool a request
+resolves to** (your primary pool for an unscoped PAT, or the pool named by a
+`claude-pool:<id>`-scoped PAT) — see **Pools** above. Most users are in
+exactly one pool, so in practice this is still "the pool" for them. This
+section describes **distributed** mode; a
+**conservative** pool instead fills accounts in a fixed order and only rolls
+to the next one on genuine exhaustion, rather than spreading by headroom.
+
 - **Headroom-based selection.** For each new session the proxy asks
-  lumid-identity for the pooled account with the lowest
+  lumid-identity for the account, within your pool, with the lowest
   `max(5-hour, 7-day)` utilization — the binding constraint is whichever
   window is fuller. Accounts that are rate-limit `exceeded` are skipped.
 - **Sticky sessions.** Your requests stay on the same account for ~30
   minutes. This keeps Anthropic's prompt cache warm — switching accounts
   mid-session would re-bill your whole context as fresh input tokens.
-- **Own-account preference.** If your lum.id email matches an account in the
-  pool, you get your own account first (when it's healthy).
+- **Own-account preference.** If your lum.id email matches an account in
+  your pool, you get your own account first (when it's healthy).
 - **Automatic failover.** When Anthropic returns 401/403/429 for an account,
   the proxy benches it for ~5 minutes and retries your request against a
-  different account (up to 3) — so a rate-limited or dead account rotates out
-  within the same call, not just the next one. Expired access tokens are
-  refreshed server-side automatically (accounts registered with a refresh
-  token).
+  different account in the same pool (up to 3) — so a rate-limited or dead
+  account rotates out within the same call, not just the next one. Expired
+  access tokens are refreshed server-side automatically (accounts registered
+  with a refresh token).
 - **Live quota tracking.** The proxy reads Anthropic's rate-limit headers off
   every response and feeds the [/code](/code) dashboard — no extra probes.
 
