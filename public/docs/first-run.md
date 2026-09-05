@@ -307,7 +307,7 @@ Open **Quant Research → Strategies** in the sidebar (installed in step 3).
 Give the strategy a name, paste `.lqts`
 source, and submit:
 
-![The Strategies surface: the deploy form above, your registry below.](/docs/img/first-run-strategies.png)
+![The Strategies tab: your registry above, the deploy form below.](/docs/img/first-run-strategies.png)
 
 **You do not have to write the `.lqts` by hand.** Ask the chatbox — but ask it
 to **submit** the strategy, not to print one:
@@ -379,7 +379,7 @@ chat.
 Your registry, once you have registered something — one row per strategy, with
 `Compiled` showing the `program_hash`:
 
-![The Strategies surface with registered rows.](/docs/img/first-run-strategies-view.png)
+![The Strategies tab with registered rows.](/docs/img/first-run-strategies-view.png)
 
 The name is an **identifier**, not a title — `my_strategy`, not `"My Strategy"`
 and not `my-strategy` (a dash parses as subtraction). Model the body on the
@@ -489,17 +489,17 @@ what it produced. The per-strategy views also hang off each **Strategies** row.
 
 Backtest results — read the three labels *before* the P&L, every time:
 
-![The Backtest surface: claims with their replay, signals and settlement labels.](/docs/img/first-run-backtest-result.png)
+![Workflows → Backtest: the run tree, its datasets (musk_tweets_v1, tape_covered_v1), and Metric & arms below.](/docs/img/first-run-backtest-result.png)
 
 Forward-test scorecards from the live paper arm:
 
-![The Forward test surface: scorecards per strategy.](/docs/img/first-run-forward-result.png)
+![Workflows → Forward test: the paper arm's reads.](/docs/img/first-run-forward-result.png)
 
 And the **Analyze** loop, which is the decision funnel rather than P&L —
 proposed, submitted, rejected, and the top reject reason. This is where you
 look when a strategy is registered but nothing is happening:
 
-![The decision funnel per strategy.](/docs/img/first-run-runtime.png)
+![Workflows → Analyze: the decision funnel — proposed, submitted, rejected, and the top reason.](/docs/img/first-run-runtime.png)
 
 ## 8. Reading a backtest result
 
