@@ -307,7 +307,7 @@ Open **Quant Research → Strategies** in the sidebar (installed in step 3).
 Give the strategy a name, paste `.lqts`
 source, and submit:
 
-![The Strategies tab: your registry above, the deploy form below.](/docs/img/first-run-strategies.png)
+![The Strategies tab: your registry above, the deploy form below.](/docs/img/first-run-strategies-2.png)
 
 **You do not have to write the `.lqts` by hand.** Ask the chatbox — but ask it
 to **submit** the strategy, not to print one:
@@ -379,7 +379,7 @@ chat.
 Your registry, once you have registered something — one row per strategy, with
 `Compiled` showing the `program_hash`:
 
-![The Strategies tab with registered rows.](/docs/img/first-run-strategies-view.png)
+![The Strategies tab with registered rows.](/docs/img/first-run-strategies-view-2.png)
 
 The name is an **identifier**, not a title — `my_strategy`, not `"My Strategy"`
 and not `my-strategy` (a dash parses as subtraction). Model the body on the
@@ -390,7 +390,7 @@ Registration is not instant: the mailbox accepts your submission, then a
 consumer compiles and registers it. Your row appears when that finishes. Click
 it for the detail surface:
 
-![The strategy detail page: registration, sessions, backtests, and how to stop it.](/docs/img/first-run-strategy-detail.png)
+![The strategy detail page: registration, sessions, backtests, and how to stop it.](/docs/img/first-run-strategy-detail-2.png)
 
 ## 6. Backtest and forward test
 
@@ -489,17 +489,17 @@ what it produced. The per-strategy views also hang off each **Strategies** row.
 
 Backtest results — read the three labels *before* the P&L, every time:
 
-![Workflows → Backtest: the run tree, its datasets (musk_tweets_v1, tape_covered_v1), and Metric & arms below.](/docs/img/first-run-backtest-result.png)
+![Workflows → Backtest: the run tree, its datasets (musk_tweets_v1, tape_covered_v1), and Metric & arms below.](/docs/img/first-run-backtest-result-2.png)
 
 Forward-test scorecards from the live paper arm:
 
-![Workflows → Forward test: the paper arm's reads.](/docs/img/first-run-forward-result.png)
+![Workflows → Forward test: the paper arm's reads.](/docs/img/first-run-forward-result-2.png)
 
 And the **Analyze** loop, which is the decision funnel rather than P&L —
 proposed, submitted, rejected, and the top reject reason. This is where you
 look when a strategy is registered but nothing is happening:
 
-![Workflows → Analyze: the decision funnel — proposed, submitted, rejected, and the top reason.](/docs/img/first-run-runtime.png)
+![Workflows → Analyze: the decision funnel — proposed, submitted, rejected, and the top reason.](/docs/img/first-run-runtime-2.png)
 
 ## 8. Reading a backtest result
 
@@ -643,7 +643,7 @@ scorecards. Zero scorecards means it has not published yet, not that it failed.
 this propose nothing yesterday?" resolves against the right one with nothing
 re-pasted.
 
-![Discuss: a chat already bound to one strategy.](/docs/img/first-run-discuss.png)
+![Discuss: a chat already bound to one strategy.](/docs/img/first-run-discuss-2.png)
 
 **The chat can do the analysis, not just the conversation.** It reaches your own
 results through the same tools the surfaces use, so you can ask for the reading
