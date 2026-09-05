@@ -103,8 +103,14 @@ judge is not grading eloquence.
 
 ## 4. Read your score
 
-The **Results** tab is the record: what ran, on which case, what it scored, and
-whether it was backed by ground truth.
+The app has **two tabs**: **Work** (pick a mode and a case, plus the review
+queue) and **Workflows** (the `interview` and `case_eval` loops, each a row —
+open one for its runs, and for `judge_panel_parity`'s Metric & arms in place).
+There is no separate Results or Experiments tab: a run is a row on its loop,
+and the scores render on the loop that produced them.
+
+Open **Workflows → interview** (or **case_eval** for a batch) to see what ran,
+on which case, what it scored, and whether it was backed by ground truth.
 
 **Read the `Mode` column first.**
 
@@ -134,8 +140,10 @@ difference between a benchmark result and a vibe.
 ## 5. Corrections — the part that compounds
 
 When an answer is wrong, say so in the chat: `wrong — the issue tree should
-split cost before volume`. That stages a draft into the **Review** tab. Nothing
-is applied while it sits there.
+split cost before volume`. That stages a draft into the review queue on the **Work** tab. Nothing
+is applied while it sits there — and beside **Approve** you can **Measure as
+arm** (test the edit over the casebook before adopting it) or **Add to
+casebook** (stage the gap as a candidate case).
 
 Two kinds land in that queue, and the *Kind* column tells them apart:
 

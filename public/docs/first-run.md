@@ -98,21 +98,24 @@ Go to **[Library → Marketplace](https://lum.id/studio/library/marketplace)**,
 find **Quant Research**, and install it. It is public, so nothing needs
 approving.
 
-Afterwards it appears in the sidebar and its five surfaces are yours:
+Afterwards it appears in the sidebar with **two tabs**:
 
-| surface | what it shows |
+| tab | what it shows |
 |---|---|
-| **Strategies** | everything you have registered — start here |
-| **Backtest (dry run)** | claims and their honesty labels |
-| **Forward test** | live-paper scorecards |
-| **Runtime** | what each field box is doing |
-| **Experiments** | declared arms and their measured results |
+| **Strategies** | everything you have registered — start here. Deploy, and each row's actions run a Backtest / Forward test / Discuss |
+| **Workflows** | every loop the app runs, one row each — Backtest, Forward test, Analyze, and the tweet-driven Kol strategy. Open a row for its runs; a loop with a metric and a dataset (like `backtest`) also shows **Metric & arms** in place |
+
+There is deliberately no separate Backtest / Forward / Runtime / Experiments
+tab: those are loops, so they live as rows on **Workflows**, and an
+experiment's arms render on the loop that feeds them rather than on a page of
+their own. Open a run from any row to see exactly what it produced — its
+honesty labels (prices / signals / settlement), the claim, the PnL split.
 
 If your sidebar says **LQT Strategies** rather than **Quant Research**, you are
-on the app's pre-rename card: it stops at three surfaces, labels the backtest
-*(registers)* — which is wrong, submitting is a dry run — and its assistant has
-no copy of the `.lqts` reference, so it will invent syntax. Install **Quant
-Research** from the Marketplace and use that one.
+on the app's pre-rename card: it labels the backtest *(registers)* — which is
+wrong, submitting is a dry run — and its assistant has no copy of the `.lqts`
+reference, so it will invent syntax. Install **Quant Research** from the
+Marketplace and use that one.
 
 A **field box** is one of the servers that actually runs strategies — currently
 Denmark, Chicago and New York, placed near the venues they trade. You never log
@@ -447,10 +450,32 @@ Read `fills`, the markouts, and whether `net_usd` is positive *after*
 `fees_usd` — and treat a run with `sell_fills: 0` as unfinished rather than
 profitable, because an unclosed position has not been tested by anything yet.
 
+## 6b. Let a KOL's tweets pick the parameterization
+
+There is a fourth loop on **Workflows**: **Kol strategy**. It reads a frozen
+slice of a market-moving account's tweets (Elon Musk, in `musk_tweets_v1`),
+scores a momentum-vs-caution lean, and from that lean *parameterizes* a
+strategy — a momentum lean trades `ofi_z` breakouts, a caution lean trades
+`vpin` mean-reversion, and conviction sets the threshold. Then it submits a
+backtest, so the tape decides.
+
+The honest boundary matters: **a tweet is never a signal.** Only `vpin`,
+`ofi_z` and `outcome_forecast` exist; the tweet only chooses *which* one and
+*how hard*. The number that comes back is a backtest verdict on recorded
+prints, with the same three honesty axes as every other run — not a narrative.
+
+Open **Workflows → Kol strategy → Metric & arms**. The `musk_v1` arm is
+one-click (it is self-sufficient — it has the tweet slice and picks its own
+tape-covered symbol); `current` is a passive reference. `real_tape` reads the
+fraction of runs that replayed recorded prints rather than falling back to
+synthetic. Or in chat: *"run the musk_v1 arm, then poll it."*
+
+---
+
 ## 7. View the results
 
-The **Backtest** and **Forward test** surfaces in the sidebar are the
-across-all-strategies views; the row actions above are the per-strategy ones.
+Everything is on **Workflows**: pick a loop, read its runs, open any run for
+what it produced. The per-strategy views also hang off each **Strategies** row.
 
 Backtest results — read the three labels *before* the P&L, every time:
 
@@ -460,11 +485,11 @@ Forward-test scorecards from the live paper arm:
 
 ![The Forward test surface: scorecards per strategy.](/docs/img/first-run-forward-result.png)
 
-And **Runtime**, which is the decision funnel rather than P&L — proposed,
-submitted, rejected, and the top reject reason. This is where you look when a
-strategy is registered but nothing is happening:
+And the **Analyze** loop, which is the decision funnel rather than P&L —
+proposed, submitted, rejected, and the top reject reason. This is where you
+look when a strategy is registered but nothing is happening:
 
-![The Runtime surface: the decision funnel per strategy.](/docs/img/first-run-runtime.png)
+![The decision funnel per strategy.](/docs/img/first-run-runtime.png)
 
 ## 8. Reading a backtest result
 
