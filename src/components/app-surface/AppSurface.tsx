@@ -267,22 +267,11 @@ function AppSurfaceImpl({
       {/* Every app can create a workflow — surface apps (no loops yet) included.
           Same placement (right after the nav) + style as the workflow-app
           "New workflow" button, so it reads identically across app types. */}
-      {/* Insights — admin only. The page existed with no entry point at all:
-          the route was registered and nothing anywhere linked to it, so it was
-          reachable only by typing the URL. It belongs HERE rather than in a
-          global admin menu because it is per-app — you are looking at the app,
-          so the question "how is this being used" is about the app in front of
-          you. Gated on role rather than route-guarded alone, so a non-admin is
-          never shown a link that would bounce them. */}
-      {isAdmin && (
-        <Link
-          to={`/studio/admin/apps/${encodeURIComponent(app)}/insights`}
-          title="Usage insights for this app — submissions, runs, and what people do on the page"
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-dashed border-border text-[12.5px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex-shrink-0"
-        >
-          <BarChart3 className="w-3.5 h-3.5" /> Insights
-        </Link>
-      )}
+      {/* Insights moved into the ⋯ menu (below) 2026-09-05 — it is an
+          occasional admin drill-down, not a primary action, and the strip was
+          carrying two dashed buttons + three icon buttons + the tabs. It stays
+          per-app (the question "how is this used" is about the app in front of
+          you), admin-gated so a non-admin never sees a link that would bounce. */}
       <Link
         to={`/studio/a/${encodeURIComponent(app)}/manage`}
         title="Create a workflow for this agent"
@@ -320,6 +309,18 @@ function AppSurfaceImpl({
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
+          {isAdmin && (
+            <DropdownMenuItem asChild>
+              <Link to={`/studio/admin/apps/${encodeURIComponent(app)}/insights`}
+                title="Usage insights for this app — submissions, runs, and what people do on the page">
+                <BarChart3 className="w-3.5 h-3.5" />
+                <span className="flex flex-col">
+                  <span>Insights</span>
+                  <span className="text-[11px] text-slate-400">usage, runs, arm rollup</span>
+                </span>
+              </Link>
+            </DropdownMenuItem>
+          )}
           {hasMd && (
             <DropdownMenuItem asChild>
               <Link to={editTo}>
