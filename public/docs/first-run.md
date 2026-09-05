@@ -5,6 +5,16 @@ end against production as a plain `role=user` account. Every step has a
 recorded result, and where something failed or misled it says so — this is a
 transcript, not a brochure.
 
+> **Changelog**
+> - **2026-09-05** — Rewritten for the **two-tab** app (Strategies · Workflows):
+>   the old Backtest / Forward test / Runtime / Experiments tabs are now loop
+>   *rows* on Workflows, and an experiment's arms render on the loop that feeds
+>   them (Metric & arms). Added §6b, the **Kol strategy** lane (a market-moving
+>   account's tweets parameterize a strategy; the backtest judges it).
+> - **2026-08-29** — Split the signal-producer tutorial into its own doc
+>   (*Producing your own signal*); recorded fresh-account timings.
+> - **2026-08-27** — First end-to-end walkthrough from a new `role=user` account.
+
 Assumes you are signed in.
 
 **How long this takes.** Most of it is reading. The machinery itself is quick —

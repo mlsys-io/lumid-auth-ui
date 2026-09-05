@@ -6,6 +6,17 @@ admin, not the author — because a walkthrough done as the owner hides exactly
 the failures a new user hits first. Timings and scores below are recorded from
 that run, not estimated.
 
+> **Changelog**
+> - **2026-09-05** — Rewritten for the **two-tab** app (Work · Workflows): the
+>   Results and Experiments tabs are gone — a run is a row on its loop
+>   (`interview` / `case_eval`), and `judge_panel_parity`'s arms render on the
+>   loop (Metric & arms). Corrections now also offer **Measure as arm** (test an
+>   edit over the casebook before adopting) and **Add to casebook** (stage a gap
+>   as a candidate case).
+> - **2026-08-28** — Clarified the invitation-code gate (client-side, so an
+>   API-only walkthrough never meets it).
+> - **2026-08-27** — First end-to-end walkthrough from a new `role=user` account.
+
 Budget about 15 minutes. You need two things: an account, and an **invitation
 code**.
 
