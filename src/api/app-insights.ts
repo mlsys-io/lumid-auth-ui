@@ -75,6 +75,16 @@ export interface AppInsights {
 		is_floor: boolean;
 		floor_note: string;
 	};
+	// Cross-tenant experiment ARM ACTIVITY — run counts only, never a verdict:
+	// per-arm results live in each tenant's own ledger, where the instrument
+	// guard applies. This block shipped in the backend (identity v0.5.315+)
+	// and had no renderer until 2026-09-05.
+	experiments?: {
+		by_arm: Array<{ arm: string; runs: number; failed: number; users: number }>;
+		by_experiment: InsightCount[];
+		total_runs: number;
+		note: string;
+	};
 	truncated: { submissions: boolean; runs: boolean; intents: boolean; row_cap: number };
 	backtests: {
 		total: number;

@@ -303,6 +303,39 @@ export default function AppInsightsPage() {
 				</Panel>
 			</div>
 
+			{/* Cross-tenant ARM ACTIVITY — counts, deliberately never a verdict.
+			    Per-arm RESULTS live in each tenant's own ledger, where the
+			    instrument guard applies; presenting a fleet mean here would
+			    aggregate ledgers that cannot be aggregated. */}
+			{data.experiments && data.experiments.total_runs > 0 ? (
+				<Panel
+					title="Experiment arms across the fleet"
+					note={data.experiments.note}
+				>
+					<div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+						<div>
+							<div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-slate-500">Runs by arm</div>
+							<div className="space-y-1.5">
+								{data.experiments.by_arm.map((a) => (
+									<div key={a.arm} className="flex items-center gap-3 text-sm">
+										<span className="w-40 truncate font-mono text-xs text-slate-700">{a.arm}</span>
+										<span className="tabular-nums text-slate-800">{a.runs} run{a.runs === 1 ? "" : "s"}</span>
+										<span className="tabular-nums text-xs text-slate-500">{a.users} user{a.users === 1 ? "" : "s"}</span>
+										{a.failed > 0 ? (
+											<span className="tabular-nums text-xs text-red-600">{a.failed} failed</span>
+										) : null}
+									</div>
+								))}
+							</div>
+						</div>
+						<div>
+							<div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-slate-500">Runs by experiment</div>
+							<BarList rows={data.experiments.by_experiment} empty="" />
+						</div>
+					</div>
+				</Panel>
+			) : null}
+
 			<Panel
 				title="Backtest honesty"
 				note="Whether a result can be quoted as performance. Presentable means ALL THREE axes came back real — prices, signals and settlement — so real prices cannot vouch for a constant signal."
