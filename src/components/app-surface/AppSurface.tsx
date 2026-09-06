@@ -221,7 +221,7 @@ function AppSurfaceImpl({
                 "px-2.5 py-1 rounded-lg text-[12px] transition-colors",
                 active
                   ? "bg-slate-800 text-white"
-                  : "text-slate-500 hover:text-slate-800 hover:bg-slate-100",
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100",
               ].join(" ")}
             >
               {n.label || n.surface}

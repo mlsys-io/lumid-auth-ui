@@ -350,7 +350,7 @@ function LinearTrajectory({ chain, metric, baseline, hib, pickedId, onFocus, onO
 							);
 						})}
 					</svg>
-					<div className="flex justify-between text-[10px] text-slate-400 tabular-nums mt-1">
+					<div className="flex justify-between text-[11px] text-slate-600 tabular-nums mt-1">
 						<span>{fmtWhen(first?.run_ts || first?.cycle_ts)} · {first && fmtScore(first.score as number)}</span>
 						<span>{fmtWhen(last?.run_ts || last?.cycle_ts)} · {last && fmtScore(last.score as number)}</span>
 					</div>
@@ -376,11 +376,11 @@ function LinearTrajectory({ chain, metric, baseline, hib, pickedId, onFocus, onO
 							{n.is_champion && <span title="champion — best so far"><Trophy className="w-3 h-3 text-gold-500 flex-shrink-0" /></span>}
 							{n.scored && n.score != null
 								? <span className="text-[11px] font-semibold tabular-nums text-slate-800">{fmtScore(n.score)}</span>
-								: <span className="text-[10px] uppercase tracking-wide text-slate-400" title={n.kind === "baseline" ? "baseline" : undefined}>{n.kind === "baseline" ? "start" : "—"}</span>}
+								: <span className="text-[11px] uppercase tracking-wide text-slate-600" title={n.kind === "baseline" ? "baseline" : undefined}>{n.kind === "baseline" ? "start" : "—"}</span>}
 							{!n.proposed && (
 								<span role="button" tabIndex={0}
 									onClick={(e) => { e.stopPropagation(); onMenu(e, n); }}
-									className="ml-0.5 p-0.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+									className="ml-0.5 p-0.5 rounded text-slate-600 hover:text-slate-700 hover:bg-slate-100"
 									title="More actions">
 									<MoreHorizontal className="w-3 h-3" />
 								</span>
@@ -539,17 +539,17 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 								<span className="flex-1" />
 								{n.model && <span title={`model — the LLM this run used (${n.model})`} className="flex-shrink-0 text-[8px] uppercase tracking-wide rounded px-1 border text-violet-700 bg-violet-50 border-violet-200 leading-[1.6]">{n.model}</span>}
 							</div>
-							<div className="flex items-center gap-1.5 mt-1 text-[10px] leading-none">
+							<div className="flex items-center gap-1.5 mt-1 text-[11px] leading-none">
 								{configLabel && <span className="text-slate-500 truncate max-w-[54px]" title={configLabel}>{configLabel}</span>}
-								{when && <span className="text-slate-400 tabular-nums">{when}</span>}
+								{when && <span className="text-slate-600 tabular-nums">{when}</span>}
 								{n.proposed ? (
-									<span className="text-[10px] uppercase tracking-wide text-gold-500">queued</span>
+									<span className="text-[11px] uppercase tracking-wide text-gold-500">queued</span>
 								) : n.scored && n.score != null ? (
 									<span className="tabular-nums text-slate-700 font-medium" title={`${traj?.metric || "score"} = ${fmtScore(n.score)} — this run's metric on the dataset`}>{fmtScore(n.score)}</span>
 								) : !isBase ? (
-									<span className="uppercase tracking-wide text-slate-400">not scored</span>
+									<span className="uppercase tracking-wide text-slate-600">not scored</span>
 								) : (
-									<span className="uppercase tracking-wide text-slate-400">start</span>
+									<span className="uppercase tracking-wide text-slate-600">start</span>
 								)}
 								{dParent != null && Math.abs(dParent) > 1e-6 && (
 									<span title="change vs the previous version (parent run)" className={cn("tabular-nums", dParent > 0 ? "text-gold-600" : "text-rose-500")}>
@@ -576,7 +576,7 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 									<button
 										type="button"
 										onClick={(e) => { e.stopPropagation(); openMenuRef.current(e, n); }}
-										className="p-0.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 pointer-events-auto nodrag"
+										className="p-0.5 rounded text-slate-600 hover:text-slate-700 hover:bg-slate-100 pointer-events-auto nodrag"
 										title="More actions — observe / improve this run"
 									>
 										<MoreHorizontal className="w-3.5 h-3.5" />
@@ -702,7 +702,7 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 	}, []);
 
 	if (loading)
-		return <div className="h-full flex items-center justify-center text-xs text-slate-400 rounded-xl border border-slate-200 bg-white"><Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading trajectory…</div>;
+		return <div className="h-full flex items-center justify-center text-xs text-slate-600 rounded-xl border border-slate-200 bg-white"><Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading trajectory…</div>;
 	if (!traj || (traj.nodes?.length ?? 0) === 0)
 		return (
 			<div className="h-full flex flex-col items-center justify-center gap-2 text-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-6">
@@ -710,12 +710,12 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 					<>
 						<Loader2 className="w-6 h-6 text-sky-500 animate-spin" />
 						<div className="text-sm text-slate-600">First run in progress…</div>
-						<div className="text-xs text-slate-400 max-w-xs">It’ll appear here as a node when it finishes.</div>
+						<div className="text-xs text-slate-600 max-w-xs">It’ll appear here as a node when it finishes.</div>
 					</>
 				) : (<>
 				<GitBranch className="w-6 h-6 text-slate-300" />
 				<div className="text-sm text-slate-500">No run trajectory yet.</div>
-				<div className="text-xs text-slate-400 max-w-xs">Each run becomes a node here — and when this workflow explores experiments, they branch into a tree with the best-so-far on the trunk.</div>
+				<div className="text-xs text-slate-600 max-w-xs">Each run becomes a node here — and when this workflow explores experiments, they branch into a tree with the best-so-far on the trunk.</div>
 				</>)}
 			</div>
 		);
@@ -736,7 +736,7 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 					{/* header rollup — trend + learning, at a glance */}
 					<div className="absolute top-0 left-0 right-0 z-10 flex items-center gap-2 px-3 py-2 bg-gradient-to-b from-white via-white/90 to-transparent pointer-events-none">
 						<span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wide flex-shrink-0" title="branching tree of experiments"><GitBranch className="w-3.5 h-3.5 text-gold-500" /> Run tree</span>
-						<span className="text-[10px] text-slate-300 normal-case tracking-normal truncate hidden xl:inline">click a run to link the panels · ⋯ for log, branch, compare</span>
+						<span className="text-[11px] text-slate-300 normal-case tracking-normal truncate hidden xl:inline">click a run to link the panels · ⋯ for log, branch, compare</span>
 						{headerRight && <div className="ml-auto flex-shrink-0 pointer-events-auto">{headerRight}</div>}
 					</div>
 
@@ -780,7 +780,7 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 					{mode !== "observe" && ((traj.has_variants && traj.metric) || champ?.score != null || totalLearned > 0) && (
 						<div className="absolute bottom-0 left-0 right-0 z-10 flex items-center justify-end gap-3 px-3 py-2 bg-gradient-to-t from-white via-white/90 to-transparent pointer-events-none">
 							{traj.has_variants && traj.metric && (
-								<span className="text-[11px] text-slate-400">{traj.nodes.filter((n) => n.kind !== "baseline").length} runs · <span className="font-mono text-slate-600">{traj.metric}</span>{traj.baseline != null && <> · start <span className="tabular-nums">{fmtScore(traj.baseline)}</span></>}</span>
+								<span className="text-[11px] text-slate-600">{traj.nodes.filter((n) => n.kind !== "baseline").length} runs · <span className="font-mono text-slate-600">{traj.metric}</span>{traj.baseline != null && <> · start <span className="tabular-nums">{fmtScore(traj.baseline)}</span></>}</span>
 							)}
 							{champ?.score != null && (
 								<span className="inline-flex items-center gap-1 text-[11px] text-gold-700"><Trophy className="w-3 h-3" /> best <span className="tabular-nums font-medium">{fmtScore(champ.score)}</span>{champ.delta_vs_baseline != null && Math.abs(champ.delta_vs_baseline) > 1e-6 && <span className="tabular-nums">({champ.delta_vs_baseline > 0 ? "+" : ""}{fmtScore(champ.delta_vs_baseline)})</span>}</span>
@@ -794,9 +794,9 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 							// Ghost/proposed node (or no shared-menu wiring): a minimal menu
 							// — branching a ghost materializes it (bespoke branchFrom).
 							<div className="fixed z-[80] min-w-[180px] rounded-lg border border-slate-200 bg-white shadow-xl py-1 animate-in fade-in zoom-in-95 duration-100" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
-								<div className="px-3 py-1 text-[10px] uppercase tracking-wide text-slate-400 truncate">{menuNodeLabel(menu.node)}</div>
+								<div className="px-3 py-1 text-[11px] uppercase tracking-wide text-slate-600 truncate">{menuNodeLabel(menu.node)}</div>
 								{!menu.node.proposed && (
-									<button onClick={() => openPipeline(menu.node)} className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50 text-left"><FlaskConical className="w-3.5 h-3.5 text-slate-400" /> Open pipeline</button>
+									<button onClick={() => openPipeline(menu.node)} className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50 text-left"><FlaskConical className="w-3.5 h-3.5 text-slate-600" /> Open pipeline</button>
 								)}
 								<button onClick={() => branchFrom(menu.node)} className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] font-medium text-gold-700 hover:bg-gold-50 text-left"><GitBranch className="w-3.5 h-3.5 text-gold-500" /> Branch out</button>
 							</div>
@@ -833,8 +833,8 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 								<div className="flex items-center gap-1.5">
 									{champ && picked.id === champ.id && <Trophy className="w-3.5 h-3.5 text-gold-500" />}
 									<span className="text-sm font-medium text-slate-900 flex-shrink-0" title="this run's version in the agent's history">{picked.agent_version || picked.label}</span>
-									{picked.model && <span title={`model — ${picked.model}`} className="flex-shrink-0 text-[9px] uppercase tracking-wide rounded-full px-1.5 py-0.5 border text-violet-700 bg-violet-50 border-violet-200">{picked.model}</span>}
-									{picked.data_version && <span title="dataset version this run was evaluated on" className="flex-shrink-0 text-[9px] font-mono rounded-full px-1.5 py-0.5 border text-sky-700 bg-sky-50 border-sky-200">{picked.data_version}</span>}
+									{picked.model && <span title={`model — ${picked.model}`} className="flex-shrink-0 text-[11px] uppercase tracking-wide rounded-full px-1.5 py-0.5 border text-violet-700 bg-violet-50 border-violet-200">{picked.model}</span>}
+									{picked.data_version && <span title="dataset version this run was evaluated on" className="flex-shrink-0 text-[11px] font-mono rounded-full px-1.5 py-0.5 border text-sky-700 bg-sky-50 border-sky-200">{picked.data_version}</span>}
 									<span className="flex-1" />
 									<button
 										onClick={() => askAboutRun(app, loop, picked.run_ts, `About this run (${picked.label})${picked.config ? ` with config ${JSON.stringify(picked.config)}` : ""}: what happened, and what would improve the goal?`)}
@@ -852,8 +852,8 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 					{picked?.config && Object.keys(picked.config).length > 0 && (
 						<div className="px-3 py-2 border-b border-slate-100 flex flex-wrap gap-1.5">
 							{Object.entries(picked.config).slice(0, 10).map(([k, v]) => (
-								<span key={k} className="inline-flex items-center gap-1 text-[10.5px] rounded-full bg-slate-50 border border-slate-200 px-2 py-0.5">
-									<span className="text-slate-400">{k.split(".").pop()?.replace(/_/g, " ")}</span>
+								<span key={k} className="inline-flex items-center gap-1 text-[11px] rounded-full bg-slate-50 border border-slate-200 px-2 py-0.5">
+									<span className="text-slate-600">{k.split(".").pop()?.replace(/_/g, " ")}</span>
 									<span className="text-slate-700 font-mono">{String(v)}</span>
 								</span>
 							))}
@@ -873,7 +873,7 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 							<div className="px-3 py-2 border-b border-slate-100 space-y-2 max-h-[42%] overflow-y-auto">
 								{sugg.length > 0 && (
 									<div className="rounded-lg border border-gold-200 bg-gold-50/40 p-2 space-y-1.5">
-										<div className="text-[10px] uppercase tracking-wide text-gold-700 font-semibold flex items-center gap-1"><Sparkles className="w-3 h-3" /> Advisor suggestions</div>
+										<div className="text-[11px] uppercase tracking-wide text-gold-700 font-semibold flex items-center gap-1"><Sparkles className="w-3 h-3" /> Advisor suggestions</div>
 										{sugg.map((s, i) => {
 											const o = s as { title?: string; detail?: string };
 											return (
@@ -881,8 +881,8 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 													<div className="text-slate-800 font-medium">{o.title}</div>
 													{o.detail && <div className="text-slate-500 leading-snug">{o.detail}</div>}
 													<div className="mt-0.5 flex gap-2">
-														<button onClick={() => branchFrom(picked!)} className="inline-flex items-center gap-1 text-[10.5px] text-gold-700 hover:text-gold-900"><GitBranch className="w-3 h-3" /> Branch this</button>
-														<button onClick={() => askAboutRun(app, loop, picked?.run_ts, `The advisor suggested: "${o.title}". ${o.detail || ""} How do I act on this to move the goal?`)} className="inline-flex items-center gap-1 text-[10.5px] text-gold-700 hover:text-gold-900"><MessageSquare className="w-3 h-3" /> Ask</button>
+														<button onClick={() => branchFrom(picked!)} className="inline-flex items-center gap-1 text-[11px] text-gold-700 hover:text-gold-900"><GitBranch className="w-3 h-3" /> Branch this</button>
+														<button onClick={() => askAboutRun(app, loop, picked?.run_ts, `The advisor suggested: "${o.title}". ${o.detail || ""} How do I act on this to move the goal?`)} className="inline-flex items-center gap-1 text-[11px] text-gold-700 hover:text-gold-900"><MessageSquare className="w-3 h-3" /> Ask</button>
 													</div>
 												</div>
 											);
@@ -900,7 +900,7 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 					})()}
 					<div className="flex-1 min-h-0 p-3 flex flex-col gap-2">
 						{cycleLoading ? (
-							<div className="h-full flex items-center justify-center text-xs text-slate-400"><Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading run…</div>
+							<div className="h-full flex items-center justify-center text-xs text-slate-600"><Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading run…</div>
 						) : definition ? (
 							view === "pipeline" ? (
 								<>
@@ -924,7 +924,7 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 								</>
 							) : null
 						) : (
-							<div className="h-full flex items-center justify-center text-xs text-slate-400">No pipeline declared.</div>
+							<div className="h-full flex items-center justify-center text-xs text-slate-600">No pipeline declared.</div>
 						)}
 					</div>
 				</div>

@@ -704,7 +704,9 @@ function ActionButton({ a, row, onDone, size = "sm" }: {
       setBusy(false);
     }
   };
-  const pad = size === "xs" ? "px-1.5 py-0.5 text-[11px]" : "px-2.5 py-1 text-[12px]";
+  // min-h-[24px]: WCAG 2.5.8 target minimum. These rendered 23px, which also
+  // made a row of them fiddly on a trackpad.
+  const pad = size === "xs" ? "px-2 py-1 text-[11px] min-h-[24px]" : "px-2.5 py-1 text-[12px] min-h-[24px]";
   const tone = danger
     ? "border-rose-200 text-rose-600 hover:bg-rose-50"
     : "border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-800";

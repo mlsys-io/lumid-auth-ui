@@ -33,15 +33,15 @@ function fmtV(v: number | null | undefined): string {
 
 function VerdictChip({ e }: { e: MeExperiment }) {
 	if (e.status === "concluded" || e.status === "archived")
-		return <span className="px-2 py-0.5 rounded-full text-[10px] border bg-slate-50 text-slate-500 border-slate-200">{e.status}</span>;
+		return <span className="px-2 py-0.5 rounded-full text-[11px] border bg-slate-50 text-slate-500 border-slate-200">{e.status}</span>;
 	if (e.criteria_met)
-		return <span className="px-2 py-0.5 rounded-full text-[10px] border bg-gold-50 text-gold-700 border-gold-200 font-medium">criteria met</span>;
+		return <span className="px-2 py-0.5 rounded-full text-[11px] border bg-gold-50 text-gold-700 border-gold-200 font-medium">criteria met</span>;
 	// "running" on an experiment with zero results claimed activity where
 	// there was none — an active declaration with no rows is collecting,
 	// not running.
 	if (!e.n_results)
-		return <span className="px-2 py-0.5 rounded-full text-[10px] border bg-slate-50 text-slate-500 border-slate-200">no results yet</span>;
-	return <span className="px-2 py-0.5 rounded-full text-[10px] border bg-violet-50 text-violet-700 border-violet-200">collecting</span>;
+		return <span className="px-2 py-0.5 rounded-full text-[11px] border bg-slate-50 text-slate-500 border-slate-200">no results yet</span>;
+	return <span className="px-2 py-0.5 rounded-full text-[11px] border bg-violet-50 text-violet-700 border-violet-200">collecting</span>;
 }
 
 function DeltaChip({ e }: { e: MeExperiment }) {
@@ -49,7 +49,7 @@ function DeltaChip({ e }: { e: MeExperiment }) {
 	const up = e.delta_pp >= 0;
 	return (
 		<span className={cn(
-			"inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] border font-medium",
+			"inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border font-medium",
 			up ? "bg-gold-50 text-gold-700 border-gold-200" : "bg-rose-50 text-rose-700 border-rose-200",
 		)}>
 			{up ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
@@ -95,7 +95,7 @@ function SeriesChart({ series }: { series: MeExperimentDetail["series"] }) {
 						stroke={SERIES_COLORS[si % SERIES_COLORS.length]} strokeWidth="1.5" />;
 				})}
 			</svg>
-			<div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-slate-500">
+			<div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500">
 				{series.map((s, si) => (
 					<span key={s.variant_id} className="inline-flex items-center gap-1">
 						<span className="w-2 h-2 rounded-full" style={{ background: SERIES_COLORS[si % SERIES_COLORS.length] }} />
@@ -143,7 +143,7 @@ function CasesTable({ app, expId, loop, cases }: { app: string; expId: string; l
 	};
 	return (
 		<>
-		<div className="text-[11px] text-slate-400 mb-1.5">
+		<div className="text-[11px] text-slate-600 mb-1.5">
 			{scored} of {total} case{total === 1 ? "" : "s"} scored{!totalKnown ? " so far" : ""}
 		</div>
 		<div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100 overflow-hidden">
@@ -153,17 +153,17 @@ function CasesTable({ app, expId, loop, cases }: { app: string; expId: string; l
 					<div key={c.case_id}>
 						<button type="button" onClick={() => openCase(c.case_id)}
 							className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50 transition-colors">
-							{open === c.case_id ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-300" />}
+							{open === c.case_id ? <ChevronDown className="w-3.5 h-3.5 text-slate-600" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-300" />}
 							<span className="text-xs font-medium text-slate-700 flex-1 truncate">{c.case_id}</span>
-							{reg && <span className="text-[9px] font-medium text-rose-600 bg-rose-50 border border-rose-200 rounded-full px-1.5">regressed</span>}
+							{reg && <span className="text-[11px] font-medium text-rose-600 bg-rose-50 border border-rose-200 rounded-full px-1.5">regressed</span>}
 							<span className="text-[11px] text-slate-500 tabular-nums">latest {fmtV(c.latest)}</span>
-							<span className="text-[10px] text-slate-400 tabular-nums">·&nbsp;{c.n} runs</span>
+							<span className="text-[11px] text-slate-600 tabular-nums">·&nbsp;{c.n} runs</span>
 							<Spark points={c.points} className={reg ? "text-rose-500" : undefined} />
 						</button>
 						{open === c.case_id && (
 							<div className="px-9 pb-2.5 pt-0.5">
 								{loading ? (
-									<div className="text-[11px] text-slate-400 flex items-center gap-1.5 py-1"><Loader2 className="w-3 h-3 animate-spin" />reading case…</div>
+									<div className="text-[11px] text-slate-600 flex items-center gap-1.5 py-1"><Loader2 className="w-3 h-3 animate-spin" />reading case…</div>
 								) : drill && Object.keys(drill).length > 0 ? (
 									<table className="text-[11px] w-full">
 										<tbody>
@@ -178,7 +178,7 @@ function CasesTable({ app, expId, loop, cases }: { app: string; expId: string; l
 										</tbody>
 									</table>
 								) : (
-									<div className="text-[11px] text-slate-400 italic py-1">No per-question rows for this case yet.</div>
+									<div className="text-[11px] text-slate-600 italic py-1">No per-question rows for this case yet.</div>
 								)}
 							</div>
 						)}
@@ -260,7 +260,7 @@ function ArmsBlock({ app, e }: { app: string; e: MeExperiment }) {
 	if (arms.length === 0) return null;
 	return (
 		<div>
-			<div className="text-[10px] uppercase tracking-wide font-semibold text-slate-400 mb-1.5">Declared arms</div>
+			<div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600 mb-1.5">Declared arms</div>
 			<div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-50">
 				{arms.map((a) => {
 					const id = String(a.id);
@@ -280,20 +280,20 @@ function ArmsBlock({ app, e }: { app: string; e: MeExperiment }) {
 							<div className="min-w-0 flex-1">
 								<div className="flex items-center gap-1.5">
 									<span className="text-[11px] font-mono text-slate-700 truncate">{id}</span>
-									{isBaseline && <span className="text-[9px] text-slate-400">baseline</span>}
+									{isBaseline && <span className="text-[11px] text-slate-600">baseline</span>}
 									{seen
-										? <span className="text-[9px] text-slate-400 tabular-nums">· {seen.n} run{seen.n === 1 ? "" : "s"}</span>
-										: <span className="text-[9px] text-violet-600">· never run</span>}
+										? <span className="text-[11px] text-slate-600 tabular-nums">· {seen.n} run{seen.n === 1 ? "" : "s"}</span>
+										: <span className="text-[11px] text-violet-600">· never run</span>}
 								</div>
-								{a.description && <div className="text-[10px] text-slate-400 truncate">{String(a.description)}</div>}
+								{a.description && <div className="text-[11px] text-slate-600 truncate">{String(a.description)}</div>}
 							</div>
 							{!runnable ? (
-								<span className="text-[10px] text-slate-400 whitespace-nowrap"
+								<span className="text-[11px] text-slate-600 whitespace-nowrap"
 									title="This arm declares no configuration to apply, so there is nothing to dispatch — it is measured from the runs you already make.">
 									measured passively
 								</span>
 							) : sent[id] ? (
-								<span className="text-[10px] text-emerald-600 whitespace-nowrap">
+								<span className="text-[11px] text-emerald-600 whitespace-nowrap">
 									{sent[id] === "chat" ? "in the chat →" : "queued ✓"}
 								</span>
 							) : (
@@ -307,7 +307,7 @@ function ArmsBlock({ app, e }: { app: string; e: MeExperiment }) {
 											? "This run needs a subject the button cannot know — the chat asks, then dispatches"
 											: `Runs one cycle of ${loop} with this arm applied`}
 									className={cn(
-										"px-2 py-1 rounded-md text-[10px] font-medium border whitespace-nowrap transition-colors",
+										"px-2 py-1 rounded-md text-[11px] font-medium border whitespace-nowrap transition-colors",
 										loop
 											? "border-violet-200 text-violet-700 bg-violet-50 hover:bg-violet-100"
 											: "border-slate-200 text-slate-300 bg-slate-50 cursor-not-allowed",
@@ -321,11 +321,11 @@ function ArmsBlock({ app, e }: { app: string; e: MeExperiment }) {
 				})}
 			</div>
 			{!loop && (
-				<div className="mt-1 text-[10px] text-amber-700">
+				<div className="mt-1 text-[11px] text-amber-700">
 					Attached to no workflow — declare it under a loop's <span className="font-mono">engine.experiment</span> before it can be dispatched.
 				</div>
 			)}
-			{err && <div className="mt-1 text-[10px] text-rose-600">{err}</div>}
+			{err && <div className="mt-1 text-[11px] text-rose-600">{err}</div>}
 		</div>
 	);
 }
@@ -354,8 +354,8 @@ export function ExperimentCard({ app, e, showApp = false }: { app: string; e: Me
 				<div className="flex items-center gap-2 flex-wrap">
 					<FlaskConical className="w-4 h-4 text-violet-500 flex-shrink-0" />
 					<span className="text-sm font-semibold text-slate-900">{e.id.replace(/_/g, " ")}</span>
-					{showApp && <span className="px-1.5 py-0.5 rounded text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200/60">{app}</span>}
-					<span className="px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide bg-slate-100 text-slate-500">{KIND_LABEL[e.kind] || e.kind}</span>
+					{showApp && <span className="px-1.5 py-0.5 rounded text-[11px] bg-indigo-50 text-indigo-700 border border-indigo-200/60">{app}</span>}
+					<span className="px-1.5 py-0.5 rounded text-[11px] uppercase tracking-wide bg-slate-100 text-slate-500">{KIND_LABEL[e.kind] || e.kind}</span>
 					<VerdictChip e={e} />
 					<DeltaChip e={e} />
 					{/* Arms live in the EXPANDED body; without this chip a collapsed
@@ -364,15 +364,15 @@ export function ExperimentCard({ app, e, showApp = false }: { app: string; e: Me
 					{(e.arms?.length ?? 0) > 0 && (() => {
 						const neverRun = (e.arms || []).filter((a) => !(e.variants || {})[String(a.id)]).length;
 						return (
-							<span className="px-1.5 py-0.5 rounded-full text-[10px] border bg-violet-50/60 text-violet-700 border-violet-200/60 tabular-nums">
+							<span className="px-1.5 py-0.5 rounded-full text-[11px] border bg-violet-50/60 text-violet-700 border-violet-200/60 tabular-nums">
 								{e.arms!.length} arm{e.arms!.length === 1 ? "" : "s"}{neverRun > 0 ? ` · ${neverRun} never run` : ""}
 							</span>
 						);
 					})()}
-					<span className="ml-auto text-[11px] text-slate-400 tabular-nums">{e.n_results} result{e.n_results === 1 ? "" : "s"}</span>
+					<span className="ml-auto text-[11px] text-slate-600 tabular-nums">{e.n_results} result{e.n_results === 1 ? "" : "s"}</span>
 				</div>
 				<div className="text-xs text-slate-600 mt-1">{e.hypothesis}</div>
-				<div className="text-[10px] text-slate-400 mt-0.5">
+				<div className="text-[11px] text-slate-600 mt-0.5">
 					measures <span className="font-medium text-slate-500">{metricName.replace(/_/g, " ") || "?"}</span> ({dir})
 					{e.dataset_id ? <> · over <span className="font-medium text-slate-500">{e.dataset_id}</span></> : null}
 					{e.loops?.length ? <> · fed by {e.loops.join(", ")}</> : null}
@@ -402,16 +402,16 @@ export function ExperimentCard({ app, e, showApp = false }: { app: string; e: Me
 							Declared, no results yet — they land here when {e.loops?.length ? <span className="font-medium">{e.loops.join(", ")}</span> : "an attached workflow"} next runs.
 						</div>
 					) : loading ? (
-						<div className="text-[11px] text-slate-400 flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" />loading results…</div>
+						<div className="text-[11px] text-slate-600 flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" />loading results…</div>
 					) : detail ? (
 						<>
 							{variants.length > 0 && (
 								<div>
-									<div className="text-[10px] uppercase tracking-wide font-semibold text-slate-400 mb-1.5">Experiments</div>
+									<div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600 mb-1.5">Experiments</div>
 									<div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
 										<table className="w-full text-[11px]">
 											<thead>
-												<tr className="text-left text-slate-400 border-b border-slate-100">
+												<tr className="text-left text-slate-600 border-b border-slate-100">
 													<th className="px-3 py-1.5 font-medium">experiment</th>
 													<th className="px-2 py-1.5 font-medium text-right">mean</th>
 													<th className="px-2 py-1.5 font-medium text-right">n</th>
@@ -423,12 +423,12 @@ export function ExperimentCard({ app, e, showApp = false }: { app: string; e: Me
 												{variants.sort((a, b) => (b[1].mean ?? 0) - (a[1].mean ?? 0)).map(([vid, agg]) => (
 													<tr key={vid} className={cn("border-b border-slate-50 last:border-0", vid === e.best_variant && "bg-gold-50/50")}>
 														<td className="px-3 py-1.5 text-slate-700 font-mono truncate max-w-[180px]">
-															{vid}{vid === e.best_variant && <span className="ml-1.5 text-[9px] text-gold-600 font-sans font-medium">best</span>}
-															{e.baseline === vid && <span className="ml-1.5 text-[9px] text-slate-400 font-sans">baseline</span>}
+															{vid}{vid === e.best_variant && <span className="ml-1.5 text-[11px] text-gold-600 font-sans font-medium">best</span>}
+															{e.baseline === vid && <span className="ml-1.5 text-[11px] text-slate-600 font-sans">baseline</span>}
 														</td>
 														<td className="px-2 py-1.5 text-right tabular-nums font-medium text-slate-800">{fmtV(agg.mean)}</td>
 														<td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{agg.n}</td>
-														<td className="px-2 py-1.5 text-right tabular-nums text-slate-400">{agg.stdev != null ? fmtV(agg.stdev) : "—"}</td>
+														<td className="px-2 py-1.5 text-right tabular-nums text-slate-600">{agg.stdev != null ? fmtV(agg.stdev) : "—"}</td>
 														<td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{fmtV(agg.last)}</td>
 													</tr>
 												))}
@@ -439,19 +439,19 @@ export function ExperimentCard({ app, e, showApp = false }: { app: string; e: Me
 							)}
 							{detail.series?.length > 0 && (
 								<div>
-									<div className="text-[10px] uppercase tracking-wide font-semibold text-slate-400 mb-1.5">{metricName.replace(/_/g, " ")} over time</div>
+									<div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600 mb-1.5">{metricName.replace(/_/g, " ")} over time</div>
 									<SeriesChart series={detail.series} />
 								</div>
 							)}
 							{detail.cases?.length > 0 && (
 								<div>
-									<div className="text-[10px] uppercase tracking-wide font-semibold text-slate-400 mb-1.5">Casebook — per-case score history</div>
+									<div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600 mb-1.5">Casebook — per-case score history</div>
 									<CasesTable app={app} expId={e.id} loop={e.loops?.[0]} cases={detail.cases} />
 								</div>
 							)}
 						</>
 					) : (
-						<div className="text-[11px] text-slate-400 italic">Couldn't load detail.</div>
+						<div className="text-[11px] text-slate-600 italic">Couldn't load detail.</div>
 					)}
 				</div>
 			)}

@@ -119,16 +119,16 @@ function CaseRow({ c, atTs, onSelect, onViewData, onContextMenu, selected }: { c
 							/* NOT scored in this run — show its last known score MUTED with a
 							   ·prev marker, so adjacent runs stay distinguishable without a
 							   wall of "not this run". */
-							<span className="flex-shrink-0 tabular-nums text-slate-400" title="carried from a previous run — this case wasn't scored in the selected run">
+							<span className="flex-shrink-0 tabular-nums text-slate-600" title="carried from a previous run — this case wasn't scored in the selected run">
 								<span className="text-[11px]">{fmtScore(last)}</span>
-								<span className="text-[9px] ml-0.5">·prev</span>
+								<span className="text-[11px] ml-0.5">·prev</span>
 							</span>
 						) : (
-							<span className="text-[10px] text-slate-400 italic flex-shrink-0">not yet scored</span>
+							<span className="text-[11px] text-slate-600 italic flex-shrink-0">not yet scored</span>
 						)}
 					</>
 				) : (
-					<span className="text-[10px] text-slate-400 italic flex-shrink-0">not yet scored</span>
+					<span className="text-[11px] text-slate-600 italic flex-shrink-0">not yet scored</span>
 				)}
 				{/* The redundant "view this case's data" icon was removed — the case
 				    detail (open it by clicking the score, or ⋯ → View data) already
@@ -155,7 +155,7 @@ function MetricEvolution({ series }: { series: CasebookMetricEvolution[] }) {
 	return (
 		<div>
 			<div className="text-[11px] font-medium text-slate-500 flex items-center gap-1.5 mb-1.5">
-				<TrendingUp className="w-3 h-3 text-slate-400" />
+				<TrendingUp className="w-3 h-3 text-slate-600" />
 				Metric trend
 			</div>
 			<div className="space-y-1">
@@ -246,12 +246,12 @@ export default function CasebookPanel({ app, loop, atTs, onSelectCase, onViewDat
 				    case row from the casebook endpoint), scored = rows with a score.
 				    Without it, a partial run reads as "nothing". */}
 				{cases.length > 0 && (
-					<div className="text-[11px] text-slate-400 mb-1.5">
+					<div className="text-[11px] text-slate-600 mb-1.5">
 						{scored} of {cases.length} case{cases.length === 1 ? "" : "s"} scored
 					</div>
 				)}
 				{cases.length === 0 ? (
-					<div className="flex items-center gap-2 text-[11px] text-slate-400">
+					<div className="flex items-center gap-2 text-[11px] text-slate-600">
 						<Loader2 className="w-3.5 h-3.5" />
 						No cases on disk yet — scores below come from past runs.
 					</div>
@@ -272,7 +272,7 @@ export default function CasebookPanel({ app, loop, atTs, onSelectCase, onViewDat
 									type="button"
 									onClick={() => setShowUnscored((v) => !v)}
 									title={unscoredOpen ? "Hide the not-yet-scored cases" : "Show the not-yet-scored cases"}
-									className="w-full flex items-center gap-1.5 rounded-lg border border-dashed border-slate-200 px-2.5 py-1.5 text-[11px] text-slate-400 hover:text-slate-600 hover:border-gold-200 transition-colors"
+									className="w-full flex items-center gap-1.5 rounded-lg border border-dashed border-slate-200 px-2.5 py-1.5 text-[11px] text-slate-600 hover:text-slate-600 hover:border-gold-200 transition-colors"
 								>
 									{unscoredOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
 									{unscoredOpen
@@ -298,7 +298,7 @@ export default function CasebookPanel({ app, loop, atTs, onSelectCase, onViewDat
 					>
 						<TrendingUp className="w-3.5 h-3.5 text-gold-500 flex-shrink-0" />
 						<span className="text-[12px] font-medium text-slate-700 flex-1">Metrics</span>
-						<span className="text-[10px] text-slate-400">{evo.length} tracked →</span>
+						<span className="text-[11px] text-slate-600">{evo.length} tracked →</span>
 					</button>
 				) : (
 					<MetricEvolution series={evo} />
