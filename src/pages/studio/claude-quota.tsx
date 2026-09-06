@@ -1253,12 +1253,12 @@ function PoolsPanel({ pools, onChanged, isSuper }: { pools: ClaudePool[]; onChan
 	const [busyId, setBusyId] = useState<string | null>(null);
 	// Per-pool inline feedback — replaces a bare alert() for delete failures
 	// (inconsistent with this file's own pauseErr/poolErr convention) and is
-	// also where toggleMode's server-returned `warning` (previously
+	// also where setMode's server-returned `warning` (previously
 	// discarded entirely) now actually reaches the operator.
 	const [rowMsg, setRowMsg] = useState<Record<string, string>>({});
 
-	const toggleMode = async (p: ClaudePool) => {
-		const next = p.mode === 'distributed' ? 'conservative' : 'distributed';
+	const setMode = async (p: ClaudePool, next: ClaudePool['mode']) => {
+		if (next === p.mode) return;
 		if (!window.confirm(
 			`Switch ${p.name} to ${next}?\n\n` +
 			(next === 'conservative'
@@ -1279,8 +1279,8 @@ function PoolsPanel({ pools, onChanged, isSuper }: { pools: ClaudePool[]; onChan
 		}
 	};
 
-	const toggleOnprem = async (p: ClaudePool) => {
-		const next = !onpremOn(p);
+	const setOnprem = async (p: ClaudePool, next: boolean) => {
+		if (next === onpremOn(p)) return;
 		if (!next && !window.confirm(
 			`Deny on-prem models to ${p.name}?\n\n` +
 			'Members will lose the self-hosted models (deepseek-v4-flash and the rest of the GB10 fleet). ' +
@@ -1293,6 +1293,27 @@ function PoolsPanel({ pools, onChanged, isSuper }: { pools: ClaudePool[]; onChan
 		setRowMsg((m) => ({ ...m, [p.id]: '' }));
 		try {
 			const { warning } = await adminUpdateClaudePool(p.id, { allow_onprem: next });
+			if (warning) setRowMsg((m) => ({ ...m, [p.id]: warning }));
+			onChanged();
+		} catch (e: any) {
+			setRowMsg((m) => ({ ...m, [p.id]: String(e?.response?.data?.message || e?.message || e) }));
+		} finally {
+			setBusyId(null);
+		}
+	};
+
+	const setOpenrouter = async (p: ClaudePool, next: boolean) => {
+		if (next === openrouterOn(p)) return;
+		if (next && !window.confirm(
+			`Enable externally billed models for ${p.name}?\n\n` +
+			'OpenRouter-served models (and kimi-k3) cost REAL MONEY per token, unlike the pooled ' +
+			'Anthropic subscriptions and the on-prem fleet. They are denied to every role by default; ' +
+			'this re-opens them for this pool only.',
+		)) return;
+		setBusyId(p.id);
+		setRowMsg((m) => ({ ...m, [p.id]: '' }));
+		try {
+			const { warning } = await adminUpdateClaudePool(p.id, { allow_openrouter: next });
 			if (warning) setRowMsg((m) => ({ ...m, [p.id]: warning }));
 			onChanged();
 		} catch (e: any) {
@@ -1348,36 +1369,56 @@ function PoolsPanel({ pools, onChanged, isSuper }: { pools: ClaudePool[]; onChan
 				{pools.map((p) => (
 					<div key={p.id} className="flex items-center gap-3 px-2.5 py-1.5">
 						<span className="w-32 shrink-0 truncate text-xs font-medium text-slate-800" title={p.id}>{p.name}</span>
-						<button
-							onClick={() => toggleMode(p)}
+						{/* Three independent axes, each a dropdown so the CURRENT value
+						    reads at a glance and the alternative is named rather than
+						    implied by a click. They are not variations of one setting:
+						    mode picks how pooled ANTHROPIC accounts are chosen, on-prem
+						    governs OUR OWN GPUs, openrouter governs EXTERNALLY BILLED
+						    models — and the last two default in opposite directions. */}
+						<select
+							value={p.mode}
+							onChange={(e) => setMode(p, e.target.value as ClaudePool['mode'])}
 							disabled={busyId === p.id}
-							title="Click to toggle mode"
-							className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium border transition disabled:opacity-50 ${
+							title="How pooled Anthropic accounts are chosen for this pool"
+							className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-medium transition disabled:opacity-50 ${
 								p.mode === 'conservative'
-									? 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'
-									: 'bg-sky-50 border-sky-200 text-sky-700 hover:bg-sky-100'
+									? 'bg-amber-50 border-amber-200 text-amber-700'
+									: 'bg-sky-50 border-sky-200 text-sky-700'
 							}`}
 						>
-							{p.mode}{p.mode === 'conservative' ? ` (ceiling ${fmtCeiling(p.conservative_ceiling)})` : ''}
-						</button>
-						{/* On-prem access — WHO MAY USE OUR OWN GPUs, orthogonal to mode
-						    (which only governs how pooled Anthropic accounts are picked).
-						    Rendered as a state, not a checkbox, so the denied case is
-						    visible at a glance across the whole list. */}
-						<button
-							onClick={() => toggleOnprem(p)}
+							<option value="distributed">distributed</option>
+							<option value="conservative">
+								conservative{p.mode === 'conservative' ? ` (ceiling ${fmtCeiling(p.conservative_ceiling)})` : ''}
+							</option>
+						</select>
+						<select
+							value={onpremOn(p) ? 'on' : 'off'}
+							onChange={(e) => setOnprem(p, e.target.value === 'on')}
 							disabled={busyId === p.id}
-							title={onpremOn(p)
-								? 'On-prem models (GB10 fleet) allowed for this pool — click to deny'
-								: 'On-prem models DENIED for this pool — click to allow'}
-							className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium border transition disabled:opacity-50 ${
+							title="On-prem models (the GB10 fleet: deepseek-v4-flash et al). Costs nothing marginal; open by default."
+							className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-medium transition disabled:opacity-50 ${
 								onpremOn(p)
-									? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
-									: 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'
+									? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+									: 'bg-rose-50 border-rose-200 text-rose-700'
 							}`}
 						>
-							on-prem {onpremOn(p) ? 'on' : 'off'}
-						</button>
+							<option value="on">on-prem: on</option>
+							<option value="off">on-prem: off</option>
+						</select>
+						<select
+							value={openrouterOn(p) ? 'on' : 'off'}
+							onChange={(e) => setOpenrouter(p, e.target.value === 'on')}
+							disabled={busyId === p.id}
+							title="Externally billed models (OpenRouter, kimi-k3, …). Real money; denied by default for every role."
+							className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-medium transition disabled:opacity-50 ${
+								openrouterOn(p)
+									? 'bg-violet-50 border-violet-200 text-violet-700'
+									: 'bg-slate-50 border-slate-200 text-slate-500'
+							}`}
+						>
+							<option value="off">openrouter: off</option>
+							<option value="on">openrouter: on</option>
+						</select>
 						<span className="shrink-0 text-[10px] text-slate-400">{p.account_count} account{p.account_count === 1 ? '' : 's'}</span>
 						<span className="shrink-0 text-[10px] text-slate-400">{p.member_count} member{p.member_count === 1 ? '' : 's'}</span>
 						{p.owner_email && (
@@ -1420,6 +1461,15 @@ function PoolsPanel({ pools, onChanged, isSuper }: { pools: ClaudePool[]; onChan
 // proxy handles with a *bool: only an explicit false is a denial.
 function onpremOn(p: ClaudePool): boolean {
 	return p.allow_onprem !== false;
+}
+
+// openrouterOn reads ClaudePool.allow_openrouter FAIL-CLOSED — the opposite of
+// onpremOn, and deliberately so. Both show today's behaviour when the backend
+// has no opinion, and those behaviours are opposites: on-prem is open to all,
+// externally billed models are denied to all. Rendering an unknown as "on"
+// would advertise a spend path that does not exist.
+function openrouterOn(p: ClaudePool): boolean {
+	return p.allow_openrouter === true;
 }
 
 // fmtCeiling renders ClaudePool.conservative_ceiling's three-way sentinel

@@ -677,6 +677,10 @@ export interface ClaudePool {
 	// ANTHROPIC accounts are chosen. Defaults true — on-prem is open to every
 	// role today, so anything else would be a silent revocation on migration.
 	allow_onprem?: boolean;
+	// Externally billed models (OpenRouter, kimi-k3). Defaults FALSE — the
+	// opposite of allow_onprem, because these cost real money and are denied
+	// to every role today.
+	allow_openrouter?: boolean;
 	account_count: number;
 	member_count: number;
 	created_at: string;
@@ -714,6 +718,10 @@ export async function adminUpdateClaudePool(
 		mode?: 'distributed' | 'conservative';
 		conservative_ceiling?: number;
 		allow_onprem?: boolean;
+	// Externally billed models (OpenRouter, kimi-k3). Defaults FALSE — the
+	// opposite of allow_onprem, because these cost real money and are denied
+	// to every role today.
+	allow_openrouter?: boolean;
 	},
 ): Promise<{ warning?: string }> {
 	const r = await apiClient.patch<DataResponse<{ warning?: string }>>(
