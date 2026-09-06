@@ -681,6 +681,8 @@ export interface ClaudePool {
 	// opposite of allow_onprem, because these cost real money and are denied
 	// to every role today.
 	allow_openrouter?: boolean;
+	// Fable tier. Defaults FALSE; changing it is super_admin-only server-side.
+	allow_fable?: boolean;
 	account_count: number;
 	member_count: number;
 	created_at: string;
@@ -723,10 +725,10 @@ export async function adminUpdateClaudePool(
 		mode?: 'distributed' | 'conservative';
 		conservative_ceiling?: number;
 		allow_onprem?: boolean;
-	// Externally billed models (OpenRouter, kimi-k3). Defaults FALSE — the
-	// opposite of allow_onprem, because these cost real money and are denied
-	// to every role today.
-	allow_openrouter?: boolean;
+		allow_openrouter?: boolean;
+		// super_admin-only server-side; a plain admin PATCHing this gets a 403
+		// naming the field, rather than a silently ignored write.
+		allow_fable?: boolean;
 	},
 ): Promise<{ warning?: string }> {
 	const r = await apiClient.patch<DataResponse<{ warning?: string }>>(

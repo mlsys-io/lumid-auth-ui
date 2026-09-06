@@ -1366,6 +1366,26 @@ function PoolsPanel({ pools, onChanged, isSuper }: { pools: ClaudePool[]; onChan
 		}
 	};
 
+	const setFable = async (p: ClaudePool, next: boolean) => {
+		if (next === fableOn(p)) return;
+		if (next && !window.confirm(
+			`Enable Fable for ${p.name}?\n\n` +
+			'Fable is the most expensive tier on the platform ($10/$50 per MTok against Opus $5/$25). ' +
+			'This lets members use it WITHOUT being made super_admin.',
+		)) return;
+		setBusyId(p.id);
+		setRowMsg((m) => ({ ...m, [p.id]: '' }));
+		try {
+			const { warning } = await adminUpdateClaudePool(p.id, { allow_fable: next });
+			if (warning) setRowMsg((m) => ({ ...m, [p.id]: warning }));
+			onChanged();
+		} catch (e: any) {
+			setRowMsg((m) => ({ ...m, [p.id]: String(e?.response?.data?.message || e?.message || e) }));
+		} finally {
+			setBusyId(null);
+		}
+	};
+
 	const deletePool = async (p: ClaudePool) => {
 		if (!window.confirm(`Delete pool ${p.name}? Its accounts and members will be reassigned to the default pool.`)) return;
 		setBusyId(p.id);
@@ -1462,6 +1482,31 @@ function PoolsPanel({ pools, onChanged, isSuper }: { pools: ClaudePool[]; onChan
 							<option value="off">openrouter: off</option>
 							<option value="on">openrouter: on</option>
 						</select>
+						{/* Fable — super_admin only, matching where the server puts the
+						    gate. A plain admin sees the state but gets no control, rather
+						    than one that would 403. This is what replaces "promote them
+						    to super_admin so they can use Fable". */}
+						{isSuper ? (
+							<select
+								value={fableOn(p) ? 'on' : 'off'}
+								onChange={(e) => setFable(p, e.target.value === 'on')}
+								disabled={busyId === p.id}
+								title="Fable tier ($10/$50 per MTok). super_admin keeps it by role; everyone else needs this grant."
+								className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-medium transition disabled:opacity-50 ${
+									fableOn(p)
+										? 'bg-fuchsia-50 border-fuchsia-200 text-fuchsia-700'
+										: 'bg-slate-50 border-slate-200 text-slate-500'
+								}`}
+							>
+								<option value="off">fable: off</option>
+								<option value="on">fable: on</option>
+							</select>
+						) : fableOn(p) ? (
+							<span className="shrink-0 rounded-full bg-fuchsia-50 border border-fuchsia-200 px-1.5 py-0.5 text-[10px] font-medium text-fuchsia-700"
+								title="Fable enabled (granting is super_admin only)">
+								fable: on
+							</span>
+						) : null}
 						<span className="shrink-0 text-[10px] text-slate-400">{p.account_count} account{p.account_count === 1 ? '' : 's'}</span>
 						<span className="shrink-0 text-[10px] text-slate-400">{p.member_count} member{p.member_count === 1 ? '' : 's'}</span>
 						{p.owner_email && (
@@ -1513,6 +1558,12 @@ function onpremOn(p: ClaudePool): boolean {
 // would advertise a spend path that does not exist.
 function openrouterOn(p: ClaudePool): boolean {
 	return p.allow_openrouter === true;
+}
+
+// fableOn reads ClaudePool.allow_fable FAIL-CLOSED, like openrouterOn. Fable
+// is the priciest tier on the platform and is super_admin-only to grant.
+function fableOn(p: ClaudePool): boolean {
+	return p.allow_fable === true;
 }
 
 // fmtCeiling renders ClaudePool.conservative_ceiling's three-way sentinel
