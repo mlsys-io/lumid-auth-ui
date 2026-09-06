@@ -672,6 +672,11 @@ export interface ClaudePool {
 	owner_sub?: string;
 	owner_email?: string;
 	conservative_ceiling: number;
+	// May this pool's members reach the SELF-HOSTED models (the GB10 fleet
+	// behind lumid-llm)? Orthogonal to mode/ceiling, which govern how pooled
+	// ANTHROPIC accounts are chosen. Defaults true — on-prem is open to every
+	// role today, so anything else would be a silent revocation on migration.
+	allow_onprem?: boolean;
 	account_count: number;
 	member_count: number;
 	created_at: string;
@@ -704,7 +709,12 @@ export async function adminCreateClaudePool(
 
 export async function adminUpdateClaudePool(
 	id: string,
-	patch: { name?: string; mode?: 'distributed' | 'conservative'; conservative_ceiling?: number },
+	patch: {
+		name?: string;
+		mode?: 'distributed' | 'conservative';
+		conservative_ceiling?: number;
+		allow_onprem?: boolean;
+	},
 ): Promise<{ warning?: string }> {
 	const r = await apiClient.patch<DataResponse<{ warning?: string }>>(
 		`/api/v1/admin/claude-pools/${encodeURIComponent(id)}`,

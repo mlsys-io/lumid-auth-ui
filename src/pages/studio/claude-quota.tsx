@@ -1279,6 +1279,29 @@ function PoolsPanel({ pools, onChanged, isSuper }: { pools: ClaudePool[]; onChan
 		}
 	};
 
+	const toggleOnprem = async (p: ClaudePool) => {
+		const next = !onpremOn(p);
+		if (!next && !window.confirm(
+			`Deny on-prem models to ${p.name}?\n\n` +
+			'Members will lose the self-hosted models (deepseek-v4-flash and the rest of the GB10 fleet). ' +
+			'Pooled Anthropic models are unaffected.\n\n' +
+			'Ordinary role=user members end up with NO usable model at all: their sonnet/haiku is rewritten ' +
+			'to deepseek before the model gate, and pooled Sonnet is admin-only. The server will name anyone ' +
+			'this strands.',
+		)) return;
+		setBusyId(p.id);
+		setRowMsg((m) => ({ ...m, [p.id]: '' }));
+		try {
+			const { warning } = await adminUpdateClaudePool(p.id, { allow_onprem: next });
+			if (warning) setRowMsg((m) => ({ ...m, [p.id]: warning }));
+			onChanged();
+		} catch (e: any) {
+			setRowMsg((m) => ({ ...m, [p.id]: String(e?.response?.data?.message || e?.message || e) }));
+		} finally {
+			setBusyId(null);
+		}
+	};
+
 	const deletePool = async (p: ClaudePool) => {
 		if (!window.confirm(`Delete pool ${p.name}? Its accounts and members will be reassigned to the default pool.`)) return;
 		setBusyId(p.id);
@@ -1337,6 +1360,24 @@ function PoolsPanel({ pools, onChanged, isSuper }: { pools: ClaudePool[]; onChan
 						>
 							{p.mode}{p.mode === 'conservative' ? ` (ceiling ${fmtCeiling(p.conservative_ceiling)})` : ''}
 						</button>
+						{/* On-prem access — WHO MAY USE OUR OWN GPUs, orthogonal to mode
+						    (which only governs how pooled Anthropic accounts are picked).
+						    Rendered as a state, not a checkbox, so the denied case is
+						    visible at a glance across the whole list. */}
+						<button
+							onClick={() => toggleOnprem(p)}
+							disabled={busyId === p.id}
+							title={onpremOn(p)
+								? 'On-prem models (GB10 fleet) allowed for this pool — click to deny'
+								: 'On-prem models DENIED for this pool — click to allow'}
+							className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium border transition disabled:opacity-50 ${
+								onpremOn(p)
+									? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+									: 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'
+							}`}
+						>
+							on-prem {onpremOn(p) ? 'on' : 'off'}
+						</button>
 						<span className="shrink-0 text-[10px] text-slate-400">{p.account_count} account{p.account_count === 1 ? '' : 's'}</span>
 						<span className="shrink-0 text-[10px] text-slate-400">{p.member_count} member{p.member_count === 1 ? '' : 's'}</span>
 						{p.owner_email && (
@@ -1368,6 +1409,17 @@ function PoolsPanel({ pools, onChanged, isSuper }: { pools: ClaudePool[]; onChan
 			</div>
 		</div>
 	);
+}
+
+// onpremOn reads ClaudePool.allow_onprem FAIL-OPEN.
+//
+// `undefined` means the identity server predates the field, not that the pool
+// is denied — a plain truthiness check would paint every pool red the moment
+// this UI shipped ahead of the backend, and an operator would "fix" it by
+// toggling, writing a denial that was never intended. Same rollout hazard the
+// proxy handles with a *bool: only an explicit false is a denial.
+function onpremOn(p: ClaudePool): boolean {
+	return p.allow_onprem !== false;
 }
 
 // fmtCeiling renders ClaudePool.conservative_ceiling's three-way sentinel
