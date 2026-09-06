@@ -690,6 +690,11 @@ export interface ClaudePoolMember {
 	user_sub: string;
 	email: string;
 	is_primary: boolean;
+	// Delegated pool-account management: may pause/resume THIS pool's accounts
+	// and reset THIS pool's members' usage clocks. Granting is super_admin
+	// only. Optional so an older backend reads as "not a manager" rather than
+	// undefined — the safe direction for a capability flag.
+	is_manager?: boolean;
 	added_at: string;
 }
 
@@ -729,6 +734,20 @@ export async function adminUpdateClaudePool(
 		patch,
 	);
 	return r.data.data;
+}
+
+// Grant/revoke delegated management of ONE pool's accounts. super_admin only
+// server-side; the caller must already be a member of the pool (management is
+// a property of a membership, so there is no row to hang it on otherwise).
+export async function adminSetClaudePoolManager(
+	poolId: string,
+	userSub: string,
+	isManager: boolean,
+): Promise<void> {
+	await apiClient.post(
+		`/api/v1/admin/claude-pools/${encodeURIComponent(poolId)}/members/${encodeURIComponent(userSub)}/manager`,
+		{ is_manager: isManager },
+	);
 }
 
 export async function adminDeleteClaudePool(id: string, force?: boolean): Promise<void> {

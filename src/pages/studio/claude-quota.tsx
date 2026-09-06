@@ -28,6 +28,7 @@ import {
 	adminAddClaudePoolMember,
 	adminRemoveClaudePoolMember,
 	adminSetClaudePoolPrimary,
+	adminSetClaudePoolManager,
 	fetchClaudeFieldBoxes,
 	fetchOpenRouterBalance,
 	fetchOnpremGpuStats,
@@ -1124,7 +1125,7 @@ function CreatePoolModal({ onClose, onCreated }: { onClose: () => void; onCreate
 	);
 }
 
-function PoolMembersModal({ pool, onClose }: { pool: ClaudePool; onClose: () => void }) {
+function PoolMembersModal({ pool, onClose, isSuper }: { pool: ClaudePool; onClose: () => void; isSuper: boolean }) {
 	const [members, setMembers] = useState<ClaudePoolMember[] | null>(null);
 	const [addInput, setAddInput] = useState('');
 	const [busy, setBusy] = useState(false);
@@ -1157,6 +1158,24 @@ function PoolMembersModal({ pool, onClose }: { pool: ClaudePool; onClose: () => 
 		setErr('');
 		try {
 			await adminRemoveClaudePoolMember(pool.id, userSub);
+			reload();
+		} catch (e: any) {
+			setErr(String(e?.response?.data?.message || e?.message || e));
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	const setManager = async (userSub: string, next: boolean) => {
+		if (next && !window.confirm(
+			'Grant management of this pool to this member?\n\n' +
+			"They will be able to pause and resume THIS pool's Claude accounts, and reset the usage " +
+			"clock for THIS pool's members. Nothing outside this pool, and no other admin powers.",
+		)) return;
+		setBusy(true);
+		setErr('');
+		try {
+			await adminSetClaudePoolManager(pool.id, userSub, next);
 			reload();
 		} catch (e: any) {
 			setErr(String(e?.response?.data?.message || e?.message || e));
@@ -1230,6 +1249,30 @@ function PoolMembersModal({ pool, onClose }: { pool: ClaudePool; onClose: () => 
 										make primary
 									</button>
 								)}
+								{/* Delegated management. super_admin only, matching where the
+								    server puts the grant — a plain admin sees the state but
+								    cannot change it, rather than a control that would 403. */}
+								{isSuper ? (
+									<select
+										value={m.is_manager ? 'yes' : 'no'}
+										onChange={(e) => setManager(m.user_sub, e.target.value === 'yes')}
+										disabled={busy}
+										title="Manage this pool's accounts: pause/resume them, and reset this pool's members' usage clocks"
+										className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-medium disabled:opacity-50 ${
+											m.is_manager
+												? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+												: 'bg-slate-50 border-slate-200 text-slate-500'
+										}`}
+									>
+										<option value="no">manager: no</option>
+										<option value="yes">manager: yes</option>
+									</select>
+								) : m.is_manager ? (
+									<span className="shrink-0 rounded-full bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700"
+										title="Manages this pool's accounts (granting is super_admin only)">
+										manager
+									</span>
+								) : null}
 								<button
 									onClick={() => remove(m.user_sub)}
 									disabled={busy}
@@ -1341,7 +1384,7 @@ function PoolsPanel({ pools, onChanged, isSuper }: { pools: ClaudePool[]; onChan
 			{showCreate && (
 				<CreatePoolModal onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); onChanged(); }} />
 			)}
-			{membersFor && <PoolMembersModal pool={membersFor} onClose={() => setMembersFor(null)} />}
+			{membersFor && <PoolMembersModal pool={membersFor} isSuper={isSuper} onClose={() => setMembersFor(null)} />}
 			<div className="flex items-center gap-2 mb-1.5">
 				<p className="text-xs font-medium text-slate-600">Pools</p>
 				<span className="text-[10px] text-slate-400 font-normal">

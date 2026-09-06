@@ -109,6 +109,7 @@ const RedeemInvite = lazy(() => import("./pages/auth/redeem-invite"));
 // the Apps landing.
 const Profile = lazy(() => import("./pages/account/profile"));
 const Tokens = lazy(() => import("./pages/account/tokens"));
+const ClaudePoolManage = lazy(() => import("./pages/account/claude-pool"));
 const FindataSQL = lazy(() => import("./pages/account/findata-sql"));
 const ConnectGoogle = lazy(() => import("./pages/account/connect-google"));
 const ConnectPowerAutomate = lazy(() => import("./pages/account/connect-power-automate"));
@@ -721,6 +722,13 @@ export default function App() {
                 reachable (back-compat) and redirect here. */}
             <Route path="account/profile"               element={<Profile />} />
             <Route path="account/tokens"                element={<Tokens />} />
+            {/* Delegated Claude-pool management. NO guard beyond /studio's
+                AuthGuard, deliberately: the capability is per (pool, user) and
+                lives server-side, so the page renders its own empty state for
+                the overwhelming majority who manage nothing. A role guard here
+                could only approximate it, and would be wrong in both
+                directions. */}
+            <Route path="account/claude-pool"           element={<ClaudePoolManage />} />
             <Route path="account/findata-sql"           element={<FindataSQL />} />
             <Route path="account/connect/google"        element={<ConnectGoogle />} />
             {/* /studio/manage = AdminOverview (cluster/users/audit operational hub).

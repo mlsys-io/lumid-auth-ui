@@ -31,6 +31,7 @@ import {
 	CalendarClock,
 	Loader2,
 	AlertCircle,
+	ShieldCheck,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
@@ -39,6 +40,7 @@ import { cn } from '../lib/utils';
 import { me } from '@/api/me';
 import { useAppNav, iconFor, type AppNavItem } from './useAppNav';
 import type { LucideIcon } from 'lucide-react';
+import { fetchClaudePoolManage } from '../api/claude-pool-manage';
 import { useRecentChats, RECENT_CHATS_INVALIDATE, type RecentChatItem } from './useRecentChats';
 import { writeAppChat } from './appChatMap';
 import { useStudioRefetch } from '@/hooks/useStudioRefetch';
@@ -443,6 +445,19 @@ export function StudioShell() {
 	const { user, logout } = useAuth();
 	const navigate = useNavigate();
 	const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+	// Delegated Claude-pool management is a per-(pool, user) grant, not a role,
+	// so the only way to know is to ask. One call per session, failing silently
+	// to "not a manager" — this decides whether a menu entry renders, and an
+	// identity blip must not surface as an error in the shell.
+	const [managesPool, setManagesPool] = useState(false);
+	useEffect(() => {
+		let live = true;
+		if (!user) { setManagesPool(false); return; }
+		fetchClaudePoolManage()
+			.then((r) => { if (live) setManagesPool(r.pools.length > 0); })
+			.catch(() => { if (live) setManagesPool(false); });
+		return () => { live = false; };
+	}, [user]);
 	// View mode: advanced (the default) renders the current Studio verbatim;
 	// simple hides the whole shell chrome and runs the chatbox full-bleed.
 	const { advanced } = useViewMode();
@@ -779,6 +794,20 @@ export function StudioShell() {
 									className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted">
 									<Shield className="w-3.5 h-3.5 text-muted-foreground" />
 									Management
+								</Link>
+							)}
+							{/* Delegated Claude-pool management. Shown ONLY to someone
+							    super_admin has actually named a manager — the capability
+							    is per (pool, user) server-side, so this is gated on the
+							    roster being non-empty rather than on any role. Most
+							    users manage nothing and never see this. */}
+							{managesPool && (
+								<Link to="/studio/account/claude-pool"
+									onClick={() => setMenuOpen(false)}
+									title="Pause your pool's Claude accounts, reset its members' usage clocks"
+									className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted">
+									<ShieldCheck className="w-3.5 h-3.5 text-muted-foreground" />
+									Claude pool
 								</Link>
 							)}
 							{/* Documentation — the in-shell index over every guide,
