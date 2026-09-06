@@ -1468,20 +1468,32 @@ function PoolsPanel({ pools, onChanged, isSuper }: { pools: ClaudePool[]; onChan
 							<option value="on">on-prem: on</option>
 							<option value="off">on-prem: off</option>
 						</select>
-						<select
-							value={openrouterOn(p) ? 'on' : 'off'}
-							onChange={(e) => setOpenrouter(p, e.target.value === 'on')}
-							disabled={busyId === p.id}
-							title="Externally billed models (OpenRouter, kimi-k3, …). Real money; denied by default for every role."
-							className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-medium transition disabled:opacity-50 ${
-								openrouterOn(p)
-									? 'bg-violet-50 border-violet-200 text-violet-700'
-									: 'bg-slate-50 border-slate-200 text-slate-500'
-							}`}
-						>
-							<option value="off">openrouter: off</option>
-							<option value="on">openrouter: on</option>
-						</select>
+						{/* OpenRouter — super_admin only, same as Fable below and for the
+						    same reason: both hand out spend. It shipped as an admin-level
+						    control, which let any admin re-open metered spend on the
+						    DEFAULT pool — the one holding every user. A plain admin now
+						    sees the state and no control, rather than one that 403s. */}
+						{isSuper ? (
+							<select
+								value={openrouterOn(p) ? 'on' : 'off'}
+								onChange={(e) => setOpenrouter(p, e.target.value === 'on')}
+								disabled={busyId === p.id}
+								title="Externally billed models (OpenRouter, kimi-k3, …). Real money; denied by default for every role. super_admin only."
+								className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-medium transition disabled:opacity-50 ${
+									openrouterOn(p)
+										? 'bg-violet-50 border-violet-200 text-violet-700'
+										: 'bg-slate-50 border-slate-200 text-slate-500'
+								}`}
+							>
+								<option value="off">openrouter: off</option>
+								<option value="on">openrouter: on</option>
+							</select>
+						) : openrouterOn(p) ? (
+							<span className="shrink-0 rounded-full bg-violet-50 border border-violet-200 px-1.5 py-0.5 text-[10px] font-medium text-violet-700"
+								title="Externally billed models enabled (granting is super_admin only)">
+								openrouter: on
+							</span>
+						) : null}
 						{/* Fable — super_admin only, matching where the server puts the
 						    gate. A plain admin sees the state but gets no control, rather
 						    than one that would 403. This is what replaces "promote them

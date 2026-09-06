@@ -679,7 +679,9 @@ export interface ClaudePool {
 	allow_onprem?: boolean;
 	// Externally billed models (OpenRouter, kimi-k3). Defaults FALSE — the
 	// opposite of allow_onprem, because these cost real money and are denied
-	// to every role today.
+	// to every role today. Changing it is super_admin-only server-side,
+	// alongside allow_fable: both hand out spend, and the default pool holds
+	// every user.
 	allow_openrouter?: boolean;
 	// Fable tier. Defaults FALSE; changing it is super_admin-only server-side.
 	allow_fable?: boolean;
