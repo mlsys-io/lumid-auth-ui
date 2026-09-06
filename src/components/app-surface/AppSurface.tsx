@@ -246,7 +246,20 @@ function AppSurfaceImpl({
   // the exact thing one homogeneous surface exists to prevent. The hook retries
   // on rAF until the node exists, which is how apps.tsx already claims its own
   // slot.
-  const stripSlot = usePortalTarget("topstrip-app-slot", !inlineChrome);
+  // ONE RULE, not per-app accident: inside the studio workspace the chrome is
+  // INLINE for every app; only a standalone surface portals into the strip.
+  //
+  // Measured 2026-09-06: quant-research rendered its tabs under the header and
+  // mbb-consultant rendered them in the top bar — two flagship apps, two
+  // navigations, which is what a homogeneous surface exists to prevent. The
+  // divergence came from WHICH branch mounted the surface (only one of them
+  // passes `inlineChrome`), i.e. from how much the app happened to declare —
+  // not from a decision anyone made. Keying on `embedded` makes it a property
+  // of the CONTEXT instead, and keeps the constraint that motivated inline
+  // chrome in the first place: in the workspace the strip is already carrying
+  // the app name and the workflow selector, so portaled tabs wrapped one per
+  // line.
+  const stripSlot = usePortalTarget("topstrip-app-slot", !inlineChrome && !embedded);
 
   // Share/publish actions — moved off the Manage page's "Share & publish" box
   // into this top "⋯" menu so the loop (pull upstream / publish / fork /
