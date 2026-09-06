@@ -204,7 +204,7 @@ function AppSurfaceImpl({
     if (!nav || nav.length === 0) return null;
     const current = surface || "home";
     return (
-      <div className="flex flex-wrap gap-1 min-w-0">
+      <div className="flex flex-wrap gap-1 min-w-0 flex-shrink-0">
         {nav.map((n) => {
           const active = n.surface === current;
           // Embedded in the workspace → switch surfaces WITHIN the middle panel
@@ -386,7 +386,7 @@ function AppSurfaceImpl({
           stripSlot,
         )
       : (
-        <div className="flex items-center gap-2 px-6 pt-3 pb-2 border-b border-slate-100 flex-shrink-0">
+        <div className="flex flex-wrap items-center gap-2 px-6 pt-3 pb-2 border-b border-slate-100 flex-shrink-0">
           {actionBarInner(hasMd, nav)}
         </div>
       );
