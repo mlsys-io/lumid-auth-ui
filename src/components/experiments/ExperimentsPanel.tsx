@@ -355,7 +355,7 @@ export function ExperimentCard({ app, e, showApp = false }: { app: string; e: Me
 					<FlaskConical className="w-4 h-4 text-violet-500 flex-shrink-0" />
 					<span className="text-sm font-semibold text-slate-900">{e.id.replace(/_/g, " ")}</span>
 					{showApp && <span className="px-1.5 py-0.5 rounded text-[11px] bg-indigo-50 text-indigo-700 border border-indigo-200/60">{app}</span>}
-					<span className="px-1.5 py-0.5 rounded text-[11px] uppercase tracking-wide bg-slate-100 text-slate-500">{KIND_LABEL[e.kind] || e.kind}</span>
+					<span className="px-1.5 py-0.5 rounded text-[11px] uppercase tracking-wide bg-slate-100 text-slate-700">{KIND_LABEL[e.kind] || e.kind}</span>
 					<VerdictChip e={e} />
 					<DeltaChip e={e} />
 					{/* Arms live in the EXPANDED body; without this chip a collapsed

@@ -568,7 +568,7 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 									<button
 										type="button"
 										onClick={(e) => { e.stopPropagation(); openPipelineRef.current(n); }}
-										className="inline-flex items-center p-0.5 text-sky-600 hover:text-sky-700 pointer-events-auto nodrag"
+										className="inline-flex items-center justify-center p-0.5 text-sky-600 hover:text-sky-700 pointer-events-auto nodrag relative before:absolute before:-inset-2 before:content-['']"
 										title="Open this run's pipeline (step-by-step)"
 									>
 										<Eye className="w-3 h-3" />
