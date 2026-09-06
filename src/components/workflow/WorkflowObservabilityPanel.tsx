@@ -196,9 +196,14 @@ function VersionDots({ app, loop, currentId, onPick }: {
 		const d = baseline != null ? (hib ? n.score - baseline : baseline - n.score) : 0;
 		return d > 1e-6 ? "bg-gold-400" : d < -1e-6 ? "bg-rose-500" : "bg-slate-400";
 	};
+	// An unscored run says "not scored", never "—": a dash next to a version
+	// reads as a broken metric binding, which is the exact confusion this
+	// surface was rebuilt to remove. The run-tree node already words it this
+	// way; the dot tooltip was the last place still showing the dash.
+	const scoreLabel = (v?: number | null) => (v == null ? "not scored" : fmt(v));
 	const label = (n: TrajectoryNode) => n.kind === "baseline"
-		? `baseline · ${fmt(baseline)}`
-		: `${n.agent_version || "run"}${n.model ? ` · ${n.model}` : ""} · ${fmt(n.score)}`;
+		? `baseline · ${scoreLabel(baseline)}`
+		: `${n.agent_version || "run"}${n.model ? ` · ${n.model}` : ""} · ${scoreLabel(n.score)}`;
 	// Cap the strip: show the baseline + the last 6 runs (and always the
 	// selected one); older runs collapse into a "+N" marker so the dots never
 	// crowd the title line.
@@ -227,7 +232,7 @@ function VersionDots({ app, loop, currentId, onPick }: {
 						)}
 						<button type="button" title={label(n)}
 							onClick={() => onPick?.({ cycleTs: n.cycle_ts, runTs: n.run_ts, label: n.agent_version || n.label, agentVersion: n.agent_version, dataVersion: n.data_version, metric: traj?.metric, score: n.score })}
-							className={cn("w-2 h-2 rounded-full transition-transform hover:scale-125", dotCls(n), sel && "ring-2 ring-sky-300 ring-offset-1")} />
+							className={cn("w-2 h-2 rounded-full transition-transform hover:scale-125 relative before:absolute before:-inset-2 before:content-['']", dotCls(n), sel && "ring-2 ring-sky-300 ring-offset-1")} />
 					</Fragment>
 				);
 			})}
