@@ -26,6 +26,7 @@ import {
 import { me, type MeAppSurface, MeApiError } from "@/api/me";
 import { setStudioSelection } from "@/components/StudioContext";
 import { useStudioRefetch } from "@/hooks/useStudioRefetch";
+import { usePortalTarget } from "@/hooks/usePortalTarget";
 import { LumidMarkdown } from "./LumidMarkdown";
 import { resolveNativeSurface } from "./native-registry";
 import { InAppSurfaceContext } from "./surfaceContext";
@@ -235,11 +236,17 @@ function AppSurfaceImpl({
   // "⋯" actions menu right. Edit / Manage / Advanced / Remove live in the menu.
   // When the shell's top strip exposes its slot, the whole row portals up
   // there — the strip sat empty on app surfaces while the tabs burned a row.
-  const [stripSlot, setStripSlot] = useState<HTMLElement | null>(null);
-  useEffect(() => {
-    if (inlineChrome) { setStripSlot(null); return; }
-    setStripSlot(document.getElementById("topstrip-app-slot"));
-  }, [inlineChrome]);
+  //
+  // usePortalTarget, not a one-shot getElementById: the lookup ran once on
+  // mount, so whether the tabs reached the strip depended on whether this
+  // surface mounted before or after TopStatusStrip painted the slot — a race
+  // decided by how much data the app loads. Measured 2026-09-06: mbb-consultant
+  // won it (tabs in the top bar) and quant-research lost it (tabs inline, below
+  // the header), so the two flagship apps shipped two different navigations —
+  // the exact thing one homogeneous surface exists to prevent. The hook retries
+  // on rAF until the node exists, which is how apps.tsx already claims its own
+  // slot.
+  const stripSlot = usePortalTarget("topstrip-app-slot", !inlineChrome);
 
   // Share/publish actions — moved off the Manage page's "Share & publish" box
   // into this top "⋯" menu so the loop (pull upstream / publish / fork /

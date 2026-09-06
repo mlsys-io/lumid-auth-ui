@@ -653,6 +653,21 @@ export default function WorkflowObservabilityPanel({
 		)}
 		{/* DATA/AGENTS rail + WORKFLOW card, side by side, BOUNDED to the screen
 		    fill height: the rail scrolls internally; the workflow card does not. */}
+		{/* METRIC & ARMS — the experiments THIS loop feeds, in place. A loop
+		    with a metric and a dataset is an experiment; its arms belong on
+		    the workflow that owns them, not on a separate Experiments page
+		    (that tab was this tier torn off one loop and given a page —
+		    rendering two inert cards while the loop's own runs sat
+		    unlabelled elsewhere). Renders nothing when the loop feeds no
+		    experiment: a plain workflow has Outputs only. */}
+		{loopExp && (
+			<section className="space-y-1.5">
+				<div className="text-[10px] uppercase tracking-wide font-semibold text-slate-400">Metric &amp; arms</div>
+				<Suspense fallback={null}>
+					<ExperimentsPanel app={app} loop={loop} quiet />
+				</Suspense>
+			</section>
+		)}
 		<div ref={fillRef} style={{ height: fillH }} className="flex flex-col lg:flex-row gap-3 items-stretch min-w-0 w-full">
 				{!caseFocus && (railOpen ? (
 					<div className="w-full lg:w-[30%] lg:min-w-[220px] lg:max-w-[380px] flex-shrink-0 flex flex-col min-h-0 max-h-[55vh] lg:max-h-none lg:h-full">
@@ -670,7 +685,7 @@ export default function WorkflowObservabilityPanel({
 							<div className="flex-shrink-0 px-2 pt-2">
 								{assetTab === "data" ? (
 									<div className="space-y-1">
-										<DatasetVersionBar datasets={wf.datasets_detail} fallbackRefs={(definition?.datasets?.length ? definition.datasets : wf.datasets) || []} />
+										<DatasetVersionBar datasets={wf.datasets_detail} scopeTo={wf.dataset_id} fallbackRefs={(definition?.datasets?.length ? definition.datasets : wf.datasets) || []} />
 										{/* The aggregate avg-score card was removed — the per-case curves /
 										    scores below (cut to the selected run's version) are what matter. */}
 									</div>
@@ -818,21 +833,6 @@ export default function WorkflowObservabilityPanel({
 			</div>
 			</div>
 		</div>
-			{/* METRIC & ARMS — the experiments THIS loop feeds, in place. A loop
-			    with a metric and a dataset is an experiment; its arms belong on
-			    the workflow that owns them, not on a separate Experiments page
-			    (that tab was this tier torn off one loop and given a page —
-			    rendering two inert cards while the loop's own runs sat
-			    unlabelled elsewhere). Renders nothing when the loop feeds no
-			    experiment: a plain workflow has Outputs only. */}
-			{loopExp && (
-				<section className="space-y-1.5">
-					<div className="text-[10px] uppercase tracking-wide font-semibold text-slate-400">Metric &amp; arms</div>
-					<Suspense fallback={null}>
-						<ExperimentsPanel app={app} loop={loop} quiet />
-					</Suspense>
-				</section>
-			)}
 
 			{/* Stage drill-down + free-text query on the selected run (Observe). */}
 			{selectedStage && tenantHasRuns && (
@@ -944,8 +944,23 @@ function AssetVersionRow({ label, name, href, version, title, asOf }: {
 // OWN independently-versioned xpio dataset repo (distinct from the agent repo),
 // so show repo + version with a link out. Falls back to listing loop-level
 // dataset refs when the app declares no top-level dataset repos.
-function DatasetVersionBar({ datasets, fallbackRefs }: { datasets?: MeDatasetRef[]; fallbackRefs?: string[] }) {
-	const list = (datasets || []).filter((d) => d.repo || d.id);
+//
+// `scopeTo` narrows the app's mounted repos to the ONE this loop actually runs
+// over. `datasets_detail` is app-level — every repo the bundle mounts — so the
+// backtest loop advertised both `tape_covered_v1` (its own subject set) and
+// `musk_tweets_v1` (kol_strategy's), on the one panel built to say what a run
+// was measured over. If the named dataset isn't among the mounted repos we show
+// them all rather than nothing: an unmatched id means the mount list is the
+// better answer, not that there is no data.
+function DatasetVersionBar({ datasets, fallbackRefs, scopeTo }: { datasets?: MeDatasetRef[]; fallbackRefs?: string[]; scopeTo?: string }) {
+	const all = (datasets || []).filter((d) => d.repo || d.id);
+	const scoped = scopeTo
+		? all.filter((d) => {
+			const repo = d.repo || d.id || "";
+			return repo === scopeTo || repo.split("/").pop() === scopeTo || d.id === scopeTo;
+		})
+		: [];
+	const list = scoped.length > 0 ? scoped : all;
 	if (list.length === 0) {
 		const refs = (fallbackRefs || []).filter(Boolean);
 		if (refs.length === 0) {

@@ -1197,6 +1197,16 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 						);
 						// Embedded → portal into the top strip beside the app name; the
 						// portal target may resolve a tick late, so fall back to inline.
+						//
+						// A NESTED overview renders no chrome at all. When an app mounts
+						// `lumid:native app-workflows` as a surface there are two
+						// AppOverviews on the page: the outer one owns the strip, the nested
+						// one is a panel inside it — and because the nested one cannot claim
+						// the strip it fell back to inline, so "Pick a workflow · 10
+						// workflows" appeared TWICE on quant-research's Workflows tab (top
+						// bar, then again in the panel). The outer chrome is the app's
+						// chrome; the nested panel just lists.
+						if (embedded && nestedInSurface) return null;
 						return embedded && appSlotTarget
 							? createPortal(<div className="flex items-center gap-2 min-w-0">{cluster}</div>, appSlotTarget)
 							: <div className="flex items-center gap-2 flex-wrap">{cluster}</div>;

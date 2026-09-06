@@ -978,6 +978,11 @@ export interface MeWorkflowRow {
   runs_recent?: SparkRun[];
   // experiments this workflow feeds (steps[].experiment / engine.experiment)
   experiment_ids?: string[];
+  // What this loop is scored ON (loops[].metrics.primary) and what it is
+  // scored OVER (its own dataset_id, else the attached experiment's).
+  // A loop with both is an experiment; with neither it is a plain workflow.
+  metric?: string;
+  dataset_id?: string;
   // The loop's declared objective (xpcloud.yaml loops[].goal) — what it's
   // chasing + the metrics it tracks. Drives the app-overview goal header.
   goal?: { primary: string; tracked?: string[] };

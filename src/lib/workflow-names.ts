@@ -35,7 +35,17 @@ export function humanizeLoop(loop: string): string {
 		cc_watcher: "Claude Code watcher",
 	};
 	if (map[loop]) return map[loop];
-	return loop.charAt(0).toUpperCase() + loop.slice(1).replace(/_/g, " ");
+	return restoreAcronyms(loop.charAt(0).toUpperCase() + loop.slice(1).replace(/_/g, " "));
+}
+
+// Sentence-casing a slug lowercases domain acronyms: `kol_strategy` became
+// "Kol strategy" on the trading app's workflow list. Restore the ones this
+// stack actually uses — whole words only, so "Kols" or "Aim" are untouched.
+const ACRONYMS = ["kol", "lqt", "pm", "ai", "ui", "api", "sql", "llm", "gpu", "etf", "pnl", "ohlc", "mbb", "vpin", "ofi"];
+const ACRONYM_RE = new RegExp(`\\b(${ACRONYMS.join("|")})\\b`, "gi");
+
+export function restoreAcronyms(s: string): string {
+	return s.replace(ACRONYM_RE, (m) => m.toUpperCase());
 }
 
 // Split a workflow slug ("<app>:<loop>") into its parts. The colon only
