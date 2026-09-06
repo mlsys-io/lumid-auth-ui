@@ -222,7 +222,7 @@ function VersionDots({ app, loop, currentId, onPick }: {
 					<Fragment key={n.id}>
 						{hidden > 0 && i === headCount && (
 							<button type="button" onClick={() => setExpanded(true)}
-								className="text-[10px] leading-none text-slate-400 hover:text-slate-700 px-0.5 tabular-nums cursor-pointer"
+								className="text-[11px] leading-none text-slate-500 hover:text-slate-700 px-1.5 py-1.5 min-h-[24px] inline-flex items-center tabular-nums cursor-pointer"
 								title={`show ${hidden} earlier run${hidden === 1 ? "" : "s"}`}>+{hidden}</button>
 						)}
 						<button type="button" title={label(n)}
@@ -662,7 +662,7 @@ export default function WorkflowObservabilityPanel({
 		    experiment: a plain workflow has Outputs only. */}
 		{loopExp && (
 			<section className="space-y-1.5">
-				<div className="text-[10px] uppercase tracking-wide font-semibold text-slate-400">Metric &amp; arms</div>
+				<div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">Metric &amp; arms</div>
 				<Suspense fallback={null}>
 					<ExperimentsPanel app={app} loop={loop} quiet />
 				</Suspense>
@@ -889,7 +889,7 @@ function Foldable({ title, defaultOpen, children }: { title: string; defaultOpen
 	return (
 		<div>
 			<button type="button" onClick={() => setOpen((o) => !o)}
-				className="w-full flex items-center gap-1 text-[10px] uppercase tracking-wide text-slate-400 font-semibold py-1 hover:text-slate-600 transition-colors">
+				className="w-full flex items-center gap-1 text-[11px] uppercase tracking-wide text-slate-500 font-semibold py-1 hover:text-slate-600 transition-colors">
 				<ChevronDown className={cn("w-3 h-3 transition-transform", !open && "-rotate-90")} /> {title}
 			</button>
 			{open && <div>{children}</div>}
@@ -931,11 +931,11 @@ function AssetVersionRow({ label, name, href, version, title, asOf }: {
 				<span className="text-[12px] font-mono font-semibold text-slate-800 truncate max-w-[12rem]" title={name}>{name}</span>
 			)}
 			{version ? (
-				<span className="text-[10px] uppercase tracking-wide rounded-full px-1.5 py-0.5 border text-slate-500 bg-white border-slate-200 font-mono">{version}</span>
+				<span className="text-[11px] uppercase tracking-wide rounded-full px-1.5 py-0.5 border text-slate-500 bg-white border-slate-200 font-mono">{version}</span>
 			) : (
-				<span className="text-[10px] uppercase tracking-wide rounded-full px-1.5 py-0.5 border text-slate-400 bg-slate-50 border-slate-200">versioned</span>
+				<span className="text-[11px] uppercase tracking-wide rounded-full px-1.5 py-0.5 border text-slate-500 bg-slate-50 border-slate-200">versioned</span>
 			)}
-			{asOf && <span className="ml-auto text-[10px] text-slate-400 truncate" title={`as of ${asOf}`}>as of {asOf}</span>}
+			{asOf && <span className="ml-auto text-[11px] text-slate-500 truncate" title={`as of ${asOf}`}>as of {asOf}</span>}
 		</div>
 	);
 }
@@ -964,13 +964,13 @@ function DatasetVersionBar({ datasets, fallbackRefs, scopeTo }: { datasets?: MeD
 	if (list.length === 0) {
 		const refs = (fallbackRefs || []).filter(Boolean);
 		if (refs.length === 0) {
-			return <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-400">No mounted dataset repo — this workflow reads live / external data.</div>;
+			return <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-500">No mounted dataset repo — this workflow reads live / external data.</div>;
 		}
 		return (
 			<div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
 				<div className="flex items-center gap-1.5 text-[12px] text-slate-600"><Database className="w-3.5 h-3.5 text-slate-400" /> Data sources</div>
 				<div className="flex flex-wrap gap-1.5 mt-1.5">
-					{refs.map((d) => (<span key={d} className="text-[10px] text-slate-500 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 font-mono truncate max-w-[12rem]" title={d}>{d}</span>))}
+					{refs.map((d) => (<span key={d} className="text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 font-mono truncate max-w-[12rem]" title={d}>{d}</span>))}
 				</div>
 			</div>
 		);
@@ -1000,10 +1000,10 @@ function AgentsRailContent({ agents, onOpenAgent, selectedAgent, hideHeader }: {
 	// Suppress the internal "Memory banks" label when a Foldable already titles it.
 	hideHeader?: boolean;
 }) {
-	if (!agents.length) return <div className="text-[11px] text-slate-400 italic py-1">No knowledge agents configured.</div>;
+	if (!agents.length) return <div className="text-[11px] text-slate-500 italic py-1">No knowledge agents configured.</div>;
 	return (
 		<div className="space-y-1 pt-1">
-			{!hideHeader && <div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1">Memory banks</div>}
+			{!hideHeader && <div className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold mb-1">Memory banks</div>}
 			{agents.map((a) => {
 				// No per-row "versioned" pill — the top bar owns versioning for the
 				// whole bundle; per-row badges are reserved for provenance.
@@ -1104,7 +1104,7 @@ function PromptsTuneCard({ app, onOpenPrompt, selectedPrompt }: {
 						</Link>
 					);
 				})}
-				{items.length === 0 && <div className="text-[11px] text-slate-400 italic">none</div>}
+				{items.length === 0 && <div className="text-[11px] text-slate-500 italic">none</div>}
 			</div>
 		</div>
 	);
@@ -1169,7 +1169,7 @@ function GoalHeader({ goal, app, loop, onSaved }: { goal?: { primary: string; tr
 
 	const editor = (
 		<PopoverContent align="end" className="w-80 space-y-2">
-			<div className="text-[10px] uppercase tracking-wide text-gold-700/70 font-semibold">Goal</div>
+			<div className="text-[11px] uppercase tracking-wide text-gold-700/70 font-semibold">Goal</div>
 			<textarea
 				value={draft}
 				onChange={(e) => setDraft(e.target.value)}
@@ -1190,7 +1190,7 @@ function GoalHeader({ goal, app, loop, onSaved }: { goal?: { primary: string; tr
 				</button>
 				<button type="button" onClick={() => setOpen(false)} disabled={saving}
 					className="px-2.5 py-1 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50">Cancel</button>
-				<span className="text-[10px] text-slate-400 hidden sm:inline">⌘↵ to save</span>
+				<span className="text-[11px] text-slate-500 hidden sm:inline">⌘↵ to save</span>
 			</div>
 		</PopoverContent>
 	);
@@ -1199,7 +1199,7 @@ function GoalHeader({ goal, app, loop, onSaved }: { goal?: { primary: string; tr
 		<Popover open={open} onOpenChange={setOpen}>
 			<div className="rounded-xl border border-gold-200/70 bg-gradient-to-br from-gold-50/80 to-white px-3 py-2.5 flex items-center gap-2 flex-wrap">
 				<Target className="w-4 h-4 text-gold-600 flex-shrink-0" />
-				<span className="text-[10px] uppercase tracking-wide text-gold-700/70 font-semibold flex-shrink-0" title={(goal?.tracked || []).join(" · ")}>Goal</span>
+				<span className="text-[11px] uppercase tracking-wide text-gold-700/70 font-semibold flex-shrink-0" title={(goal?.tracked || []).join(" · ")}>Goal</span>
 				{shown ? (
 					<>
 						<PopoverTrigger asChild>
@@ -1248,7 +1248,7 @@ function KVCard({ title, obj }: { title: string; obj: unknown }) {
 	if (!entries.length) return null;
 	return (
 		<div className="rounded-lg bg-white border border-slate-200/70 p-2">
-			<div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1">{title}</div>
+			<div className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold mb-1">{title}</div>
 			<div className="space-y-0.5">
 				{entries.map(([k, v]) => (
 					<div key={k} className="flex gap-2 text-[11px]">
@@ -1268,7 +1268,7 @@ function StageNote({ tone, children }: { tone: "ok" | "hold"; children: React.Re
 function StageProse({ label, text }: { label: string; text: string }) {
 	return (
 		<div>
-			<div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-0.5">{label}</div>
+			<div className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold mb-0.5">{label}</div>
 			<div className="text-[11px] text-slate-700 leading-snug whitespace-pre-wrap">{text.slice(0, 600)}</div>
 		</div>
 	);
@@ -1289,7 +1289,7 @@ function StageBody({ stage, detail }: { stage: LoopStageKey; detail: MeCycleDeta
 			if (files.observations) blocks.push(<KVCard key="o" title="What it sensed" obj={files.observations} />);
 			if (s.observe_gate) blocks.push(<StageNote key="g" tone={s.observe_gate.passed ? "ok" : "hold"}>{s.observe_gate.passed ? "Proceeded" : "Held"} — {s.observe_gate.reason || "evaluated the latest signals"}</StageNote>);
 			if (Array.isArray(s.observe_keys) && s.observe_keys.length)
-				blocks.push(<div key="k" className="flex flex-wrap gap-1">{s.observe_keys.slice(0, 12).map((it: unknown, i: number) => <span key={i} className="text-[10px] text-slate-600 bg-white border border-slate-200 rounded-full px-1.5 py-0.5">{String(it)}</span>)}</div>);
+				blocks.push(<div key="k" className="flex flex-wrap gap-1">{s.observe_keys.slice(0, 12).map((it: unknown, i: number) => <span key={i} className="text-[11px] text-slate-600 bg-white border border-slate-200 rounded-full px-1.5 py-0.5">{String(it)}</span>)}</div>);
 			break;
 		case "hypothesize": {
 			if (files.proposal) {
@@ -1340,7 +1340,7 @@ function StageBody({ stage, detail }: { stage: LoopStageKey; detail: MeCycleDeta
 		</ul>,
 	);
 
-	if (!blocks.length) return <div className="text-[11px] text-slate-400 italic">{STAGE_INFO[stage].role} — nothing recorded for this stage in this run.</div>;
+	if (!blocks.length) return <div className="text-[11px] text-slate-500 italic">{STAGE_INFO[stage].role} — nothing recorded for this stage in this run.</div>;
 	return <div className="space-y-2">{blocks}</div>;
 }
 
@@ -1372,7 +1372,7 @@ function RunFlow({ steps, active, onPick }: {
 								onClick={() => stg && onPick?.(stg)}
 								title={`${st.skill || st.step_id}${typeof st.duration_s === "number" ? ` · ${Math.round(st.duration_s)}s` : ""}${st.ok === false ? " · failed" : ""}`}
 								className={cn(
-									"flex-shrink-0 rounded-lg border px-2 py-1 text-[10px] leading-tight max-w-[110px] truncate transition-colors",
+									"flex-shrink-0 rounded-lg border px-2 py-1 text-[11px] leading-tight max-w-[110px] truncate transition-colors",
 									tone,
 									isActive && "ring-2 ring-gold-400/60",
 									!stg && "cursor-default",
@@ -1457,12 +1457,12 @@ function StageDetail({
 						<div className="flex items-center gap-1">
 							<button type="button" disabled={idx >= total - 1} onClick={() => setIdx((i) => Math.min(total - 1, i + 1))}
 								className="p-0.5 rounded disabled:opacity-30 enabled:hover:bg-gold-100 text-gold-700" title="older run"><ChevronLeft className="w-3.5 h-3.5" /></button>
-							<span className="text-[10px] text-slate-500 tabular-nums whitespace-nowrap" title={ts}>{cycleDate(ts)} · {idx + 1}/{total}</span>
+							<span className="text-[11px] text-slate-500 tabular-nums whitespace-nowrap" title={ts}>{cycleDate(ts)} · {idx + 1}/{total}</span>
 							<button type="button" disabled={idx <= 0} onClick={() => setIdx((i) => Math.max(0, i - 1))}
 								className="p-0.5 rounded disabled:opacity-30 enabled:hover:bg-gold-100 text-gold-700" title="newer run"><ChevronRight className="w-3.5 h-3.5" /></button>
 						</div>
 					)}
-					<button onClick={onClose} className="text-[11px] text-slate-400 hover:text-slate-700 ml-1">close</button>
+					<button onClick={onClose} className="text-[11px] text-slate-500 hover:text-slate-700 ml-1">close</button>
 				</div>
 			</div>
 
@@ -1477,7 +1477,7 @@ function StageDetail({
 					{(Object.keys(STAGE_INFO) as LoopStageKey[]).map((k) => (
 						<button key={k} type="button" onClick={() => onStageChange?.(k)}
 							className={cn(
-								"px-2 py-0.5 rounded-full text-[10px] border transition-colors",
+								"px-2 py-0.5 rounded-full text-[11px] border transition-colors",
 								k === stage
 									? "bg-gold-600 text-white border-gold-600"
 									: "bg-white text-slate-500 border-slate-200 hover:border-gold-300 hover:text-gold-700",
@@ -1490,7 +1490,7 @@ function StageDetail({
 
 			<div className="mt-2 min-h-[36px]">
 				{loading && !detail ? (
-					<div className="flex items-center gap-2 text-[11px] text-slate-400 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" />reading the run…</div>
+					<div className="flex items-center gap-2 text-[11px] text-slate-500 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" />reading the run…</div>
 				) : !detail ? (
 					<div className="text-xs text-slate-400 italic py-1">No run recorded yet for this workflow.</div>
 				) : (
@@ -1523,7 +1523,7 @@ function Section({
 		<section className="animate-in fade-in slide-in-from-top-1 duration-300" style={{ animationDelay: `${delay}ms`, animationFillMode: "both" }}>
 			<div className="flex items-center gap-1.5 mb-2">
 				<Icon className="w-3.5 h-3.5 text-slate-400" />
-				<h4 className="text-[11px] font-semibold tracking-[0.08em] uppercase text-slate-400">{title}</h4>
+				<h4 className="text-[11px] font-semibold tracking-[0.08em] uppercase text-slate-500">{title}</h4>
 			</div>
 			{children}
 		</section>

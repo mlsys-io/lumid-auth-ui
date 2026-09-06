@@ -212,7 +212,7 @@ function CollapsibleEdge(props: EdgeProps) {
 			<EdgeLabelRenderer>
 				<button
 					type="button"
-					className="nodrag nopan inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[10px] font-medium bg-white text-slate-500 border-slate-200 hover:border-gold-300 hover:text-gold-700 shadow-sm transition-colors"
+					className="nodrag nopan inline-flex items-center gap-0.5 rounded-full border px-2 py-1 min-h-[24px] text-[11px] font-medium bg-white text-slate-500 border-slate-200 hover:border-gold-300 hover:text-gold-700 shadow-sm transition-colors"
 					style={{ position: "absolute", transform: `translate(-50%,-50%) translate(${labelX}px,${labelY}px)`, pointerEvents: "all" }}
 					title={d.collapsed ? "Show the hidden cycles" : "Hide these cycles again"}
 					onClick={(e) => { e.stopPropagation(); if (d.anchorId) d.onToggle?.(d.anchorId); }}

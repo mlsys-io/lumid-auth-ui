@@ -717,7 +717,7 @@ function WorkflowSelect({ rows, selected, onSelect, onNew }: { rows: Row[]; sele
 					) : (
 						<span className="text-[13px] font-medium text-slate-500 truncate">Pick a workflow</span>
 					)}
-					<span className="text-[11px] text-slate-400 flex-shrink-0 hidden sm:inline">· {rows.length} workflows</span>
+					<span className="text-[11px] text-slate-500 flex-shrink-0 hidden sm:inline">· {rows.length} workflows</span>
 					<ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" />
 				</button>
 			</PopoverTrigger>
@@ -730,7 +730,7 @@ function WorkflowSelect({ rows, selected, onSelect, onNew }: { rows: Row[]; sele
 							<span className={wfDot(wf)} />
 							<span className="flex-1 min-w-0">
 								<span className="block text-[12.5px] font-medium text-slate-800 truncate">{loopLabel(wf.name, loop)}</span>
-								<span className="block text-[10.5px] text-slate-400 truncate">{wfSub(wf)}</span>
+								<span className="block text-[11px] text-slate-500 truncate">{wfSub(wf)}</span>
 							</span>
 							{/* Recent-run strip so run health is glanceable while switching
 							    (display-only here; the panel header has the clickable one). */}
@@ -814,7 +814,7 @@ function RuntimeStrip({ rows, identity, embedded }: { rows: Row[]; identity?: Ap
 	if (!chips.length) return null;
 
 	return (
-		<div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-slate-400">
+		<div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-slate-500">
 			{chips.map((c, i) => (
 				<span key={i} className="inline-flex items-center gap-1 min-w-0" title={c.title}>
 					<c.Icon className="w-3 h-3 flex-shrink-0 text-slate-400" />
@@ -1160,7 +1160,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 												<SlidersHorizontal className="w-3.5 h-3.5" />
 												<span className="flex flex-col">
 													<span>Manage agent</span>
-													<span className="text-[11px] text-slate-400">name, workflows, skills</span>
+													<span className="text-[11px] text-slate-500">name, workflows, skills</span>
 												</span>
 											</Link>
 										</DropdownMenuItem>
@@ -1244,7 +1244,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 									</div>
 								) : (
 									<div className="space-y-2">
-										<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-400 uppercase">Workflows</div>
+										<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-500 uppercase">Workflows</div>
 										<WorkflowList rows={rows} selected={null} onSelect={select} />
 									</div>
 								)}

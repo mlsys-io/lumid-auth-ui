@@ -216,6 +216,8 @@ export default function CaseBrowser({ config }: NativeSurfaceProps) {
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
+              type="search"
+              aria-label="Filter cases"
               placeholder={
                 cases ? `Filter ${cases.length} cases…` : "Loading cases…"
               }

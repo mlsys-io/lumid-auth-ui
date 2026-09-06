@@ -97,7 +97,7 @@ function Row({ loop, wf, active, onSelect }: WfListRow & { active: boolean; onSe
 						<RunSparkline spec={wf.run_spark} className="hidden xl:flex flex-shrink-0" />
 					) : null}
 				</div>
-				<div className="text-[10.5px] text-slate-400 mt-0.5 pl-4 truncate">
+				<div className="text-[11px] text-slate-500 mt-0.5 pl-4 truncate">
 					{describeSchedule(wf.trigger)}
 					{wf.enabled === false ? " · paused" : ""}
 					{wf.running ? " · running…" : ""}
@@ -109,12 +109,12 @@ function Row({ loop, wf, active, onSelect }: WfListRow & { active: boolean; onSe
 				{(wf.metric || wf.dataset_id) && (
 					<div className="mt-1 pl-4 flex items-center gap-1.5 flex-wrap">
 						{wf.metric && (
-							<span className="text-[9.5px] font-medium text-slate-600 bg-slate-100 border border-slate-200 rounded px-1.5 py-px">
+							<span className="text-[11px] font-medium text-slate-600 bg-slate-100 border border-slate-200 rounded px-1.5 py-px">
 								{wf.metric}
 							</span>
 						)}
 						{wf.dataset_id && (
-							<span className="text-[9.5px] font-mono text-slate-500 bg-white border border-slate-200 rounded px-1.5 py-px truncate max-w-[60%]">
+							<span className="text-[11px] font-mono text-slate-500 bg-white border border-slate-200 rounded px-1.5 py-px truncate max-w-[60%]">
 								{wf.dataset_id}
 							</span>
 						)}
@@ -151,7 +151,7 @@ export default function WorkflowList({ rows, selected, onSelect }: {
 					<button
 						type="button"
 						onClick={() => setShowPlumbing((v) => !v)}
-						className="w-full text-left text-[10.5px] text-slate-400 hover:text-slate-600 px-2.5 py-1 rounded-lg hover:bg-slate-50 transition-colors"
+						className="w-full text-left text-[11px] text-slate-500 hover:text-slate-800 px-2.5 py-1 rounded-lg hover:bg-slate-50 transition-colors"
 					>
 						{plumbingOpen ? "▾" : "▸"} {plumbing.length} scheduled ·{" "}
 						{plumbing.slice(0, 3).map(({ loop, wf }) => loopLabel(wf.name, loop)).join(", ")}
