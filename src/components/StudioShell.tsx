@@ -157,7 +157,7 @@ function NavItemView({ to, label, icon: Icon, end, badge, title }: NavItem) {
 					<span>{label}</span>
 					{badge != null && badge > 0 && (
 						<span
-							className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-gold-100 text-gold-700 text-[10px] font-semibold tabular-nums"
+							className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-gold-100 text-gold-700 text-[11px] font-semibold tabular-nums"
 							title={`${badge} awaiting you`}
 						>
 							{badge}
@@ -255,7 +255,7 @@ function RecentRow({ item, navigate, appIcon }: {
 			>
 				<Icon className="w-4 h-4 flex-shrink-0 text-foreground/45" />
 				<span className="flex-1 min-w-0 truncate">{middleTruncate(item.title || 'Untitled chat')}</span>
-				<span className="flex-shrink-0 text-[10px] text-muted-foreground/50 tabular-nums">
+				<span className="flex-shrink-0 text-[11px] text-muted-foreground/50 tabular-nums">
 					{compactAge(item.updatedAt)}
 				</span>
 			</button>
@@ -379,7 +379,7 @@ function AppFolder({
 					{installing && <Loader2 className="w-3 h-3 flex-shrink-0 animate-spin text-muted-foreground" />}
 					{failed && <AlertCircle className="w-3 h-3 flex-shrink-0 text-rose-500" />}
 					{badge != null && badge > 0 && (
-						<span className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-foreground/10 text-foreground/70">{badge}</span>
+						<span className="flex-shrink-0 text-[11px] px-1.5 py-0.5 rounded-full bg-foreground/10 text-foreground/70">{badge}</span>
 					)}
 				</button>
 				<button
@@ -749,11 +749,11 @@ export function StudioShell() {
 								{user?.username || user?.email?.split('@')[0] || 'there'}
 							</div>
 							{isAdmin ? (
-								<div className="text-[10px] text-muted-foreground truncate">
+								<div className="text-[11px] text-muted-foreground truncate">
 									{user?.role === 'super_admin' ? 'super admin' : 'admin'}
 								</div>
 							) : (
-								<div className="text-[10px] text-muted-foreground truncate">{user?.email}</div>
+								<div className="text-[11px] text-muted-foreground truncate">{user?.email}</div>
 							)}
 						</div>
 						<ChevronDown className={[

@@ -3280,7 +3280,7 @@ const MessageBubble = memo(function MessageBubble({
 								type="button"
 								onClick={onCorrect}
 								title="Mark this answer wrong and record a correction for review"
-								className="p-1 rounded text-[10px] text-muted-foreground hover:text-rose-600 hover:bg-rose-50"
+								className="p-1 min-h-[24px] min-w-[24px] inline-flex items-center justify-center rounded text-[11px] text-muted-foreground hover:text-rose-600 hover:bg-rose-50"
 							>
 								<ThumbsDown className="w-3 h-3" />
 							</button>
@@ -3290,7 +3290,7 @@ const MessageBubble = memo(function MessageBubble({
 								type="button"
 								onClick={onRegenerate}
 								title="Regenerate with current model + toggles"
-								className="p-1 rounded text-[10px] text-muted-foreground hover:text-gold-700 hover:bg-gold-50"
+								className="p-1 min-h-[24px] min-w-[24px] inline-flex items-center justify-center rounded text-[11px] text-muted-foreground hover:text-gold-700 hover:bg-gold-50"
 							>
 								<RotateCcw className="w-3 h-3" />
 							</button>
