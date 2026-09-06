@@ -3260,7 +3260,7 @@ const MessageBubble = memo(function MessageBubble({
 								}}
 								title={copied ? 'Copied' : 'Copy'}
 								className={[
-									'p-1 rounded text-[10px]',
+									'p-1 min-h-[24px] min-w-[24px] inline-flex items-center justify-center rounded text-[11px]',
 									copied
 										? 'text-gold-700 bg-gold-50'
 										: 'text-muted-foreground hover:text-foreground hover:bg-muted',
@@ -3301,7 +3301,7 @@ const MessageBubble = memo(function MessageBubble({
 								onClick={onSpeak}
 								title={isSpeaking ? 'Stop reading' : 'Read aloud'}
 								className={[
-									'p-1 rounded text-[10px]',
+									'p-1 min-h-[24px] min-w-[24px] inline-flex items-center justify-center rounded text-[11px]',
 									isSpeaking
 										? 'text-sky-700 bg-sky-50'
 										: 'text-muted-foreground hover:text-sky-700 hover:bg-sky-50',
@@ -3701,7 +3701,7 @@ function ModelChip({
 				onClick={() => setOpen((v) => !v)}
 				disabled={streaming}
 				className={[
-					'inline-flex items-center gap-1 pl-1.5 pr-1 py-0.5 rounded-full border text-[11px] transition-colors',
+					'inline-flex items-center gap-1 pl-1.5 pr-1 py-0.5 min-h-[24px] rounded-full border text-[11px] transition-colors',
 					open
 						? 'bg-muted border-foreground/25 text-foreground'
 						: 'bg-card border-border text-foreground/70 hover:text-foreground hover:border-foreground/25',
@@ -3782,7 +3782,7 @@ function WorkspaceChip({
 				type="button"
 				onClick={() => setOpen((v) => !v)}
 				className={[
-					'inline-flex items-center gap-1 pl-1.5 pr-1 py-0.5 rounded-full border text-[11px] transition-colors',
+					'inline-flex items-center gap-1 pl-1.5 pr-1 py-0.5 min-h-[24px] rounded-full border text-[11px] transition-colors',
 					open || active
 						? 'bg-muted border-foreground/25 text-foreground'
 						: 'bg-card border-border text-foreground/70 hover:text-foreground hover:border-foreground/25',
