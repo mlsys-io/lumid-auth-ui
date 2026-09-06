@@ -33,14 +33,14 @@ function fmtV(v: number | null | undefined): string {
 
 function VerdictChip({ e }: { e: MeExperiment }) {
 	if (e.status === "concluded" || e.status === "archived")
-		return <span className="px-2 py-0.5 rounded-full text-[11px] border bg-slate-50 text-slate-500 border-slate-200">{e.status}</span>;
+		return <span className="px-2 py-0.5 rounded-full text-[11px] border bg-slate-50 text-slate-700 border-slate-200">{e.status}</span>;
 	if (e.criteria_met)
 		return <span className="px-2 py-0.5 rounded-full text-[11px] border bg-gold-50 text-gold-700 border-gold-200 font-medium">criteria met</span>;
 	// "running" on an experiment with zero results claimed activity where
 	// there was none — an active declaration with no rows is collecting,
 	// not running.
 	if (!e.n_results)
-		return <span className="px-2 py-0.5 rounded-full text-[11px] border bg-slate-50 text-slate-500 border-slate-200">no results yet</span>;
+		return <span className="px-2 py-0.5 rounded-full text-[11px] border bg-slate-50 text-slate-700 border-slate-200">no results yet</span>;
 	return <span className="px-2 py-0.5 rounded-full text-[11px] border bg-violet-50 text-violet-700 border-violet-200">collecting</span>;
 }
 
@@ -95,7 +95,7 @@ function SeriesChart({ series }: { series: MeExperimentDetail["series"] }) {
 						stroke={SERIES_COLORS[si % SERIES_COLORS.length]} strokeWidth="1.5" />;
 				})}
 			</svg>
-			<div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500">
+			<div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-600">
 				{series.map((s, si) => (
 					<span key={s.variant_id} className="inline-flex items-center gap-1">
 						<span className="w-2 h-2 rounded-full" style={{ background: SERIES_COLORS[si % SERIES_COLORS.length] }} />
@@ -156,7 +156,7 @@ function CasesTable({ app, expId, loop, cases }: { app: string; expId: string; l
 							{open === c.case_id ? <ChevronDown className="w-3.5 h-3.5 text-slate-600" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-300" />}
 							<span className="text-xs font-medium text-slate-700 flex-1 truncate">{c.case_id}</span>
 							{reg && <span className="text-[11px] font-medium text-rose-600 bg-rose-50 border border-rose-200 rounded-full px-1.5">regressed</span>}
-							<span className="text-[11px] text-slate-500 tabular-nums">latest {fmtV(c.latest)}</span>
+							<span className="text-[11px] text-slate-600 tabular-nums">latest {fmtV(c.latest)}</span>
 							<span className="text-[11px] text-slate-600 tabular-nums">·&nbsp;{c.n} runs</span>
 							<Spark points={c.points} className={reg ? "text-rose-500" : undefined} />
 						</button>

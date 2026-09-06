@@ -887,7 +887,7 @@ function LumidTable({ body }: { body: Body }) {
     const authored =
       typeof body.empty === "string" && body.empty.trim() ? body.empty.trim() : null;
     const empty = (
-      <div className="text-[12px] text-slate-400">{authored ?? "No rows."}</div>
+      <div className="text-[12px] text-slate-600">{authored ?? "No rows."}</div>
     );
     if (!tableActions.length) return empty;
     return (
