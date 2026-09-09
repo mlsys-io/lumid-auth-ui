@@ -549,6 +549,13 @@ export const me = {
       cases?: string[];
       priority?: number;
       variants: Record<string, unknown>[];
+      // The STUDY these runs belong to (experiments[].id). Identity only sets
+      // payload["experiment"] from this field, so omitting it queues the arm
+      // with `experiment: null` and the run is never attributed to the study
+      // it was dispatched from. The chat tool dispatch_experiment_arm has
+      // always sent it; the panel button did not, which is why the two did NOT
+      // "land identically" despite ArmsBlock's comment saying they should.
+      experiment_id?: string;
       // The loop's own invocation args ({{ args.* }}) — the SUBJECT of the
       // run. An arm changes CONFIG; without a subject some loops run and
       // measure nothing (live failure: "strategy is empty"). Identity has

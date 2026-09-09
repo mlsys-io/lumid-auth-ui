@@ -240,6 +240,11 @@ function ArmsBlock({ app, e }: { app: string; e: MeExperiment }) {
 				variants: [{ ...overrides, arm: armId }],
 				branch_label: armId,
 				priority: 50,
+				// Attribute the run to THIS experiment, exactly as the chat's
+				// dispatch_experiment_arm does. Without it identity queues
+				// `experiment: null` and the arm's run is orphaned from the
+				// study — measured 2026-09-09 dispatching panel_median3.
+				experiment_id: e.id,
 			});
 			setSent((p) => ({ ...p, [armId]: r.intent_id }));
 			// Report what the runner did, not what we asked for — identity
