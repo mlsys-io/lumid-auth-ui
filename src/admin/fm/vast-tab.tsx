@@ -23,6 +23,22 @@ import { Age, SiteStrip, StatusPill, TabShell, useFanout } from "./shared";
 // loop is enforcing without reading a manifest. Display-only: the authoritative
 // values live in k8s-lift/vast-autoscaler/vast-autoscaler.yaml, and editing them
 // from here would need the same write path the note above is waiting on.
+
+// A registry row older than this is a GHOST: destroying a worker is not a graceful
+// unregister, so the row outlives the machine until its heartbeat TTL. Ghosts must be
+// excluded from every total — see the burn-rate note below for what including them did.
+const STALE_SEC = 300;
+
+// FlowMesh's `cost_per_hour` is NOT the vast.ai price. It is WORKER_COST_PER_HOUR, whose
+// default is 1.0, and nothing on this site sets it — every vast worker reports exactly
+// $1.000 regardless of what the machine actually costs (measured: real offers were
+// $0.16-$0.23/hr). Summing it produced a headline "Burn rate $2.000/hr" with a red
+// over-cap bar while the true fleet was 0 instances at $0.000/hr: a false overspend
+// alarm assembled from a default multiplied by ghosts. The authoritative price lives in
+// the vast.ai API, which the browser cannot reach, so this tab no longer claims to know
+// the spend — a missing number beats a confidently wrong one.
+const FM_DEFAULT_COST = 1;
+
 const CAPS = {
 	maxPerInstance: 0.35,
 	maxFleet: 1.0,
@@ -38,11 +54,21 @@ export default function VastTab() {
 		15_000,
 	);
 
-	const workers = useMemo(() => data?.items ?? [], [data]);
-	const burn = useMemo(
-		() => workers.reduce((a, w) => a + (w.cost_per_hour ?? w.hardware?.gpu?.cost_per_hour ?? 0), 0),
-		[workers],
+	const all = useMemo(() => data?.items ?? [], [data]);
+	const live = useMemo(
+		() => all.filter((w) => {
+			const age = secondsSince(w.last_seen);
+			return age !== null && age < STALE_SEC;
+		}),
+		[all],
 	);
+	const stale = useMemo(() => all.filter((w) => !live.includes(w)), [all, live]);
+	// Only report a cost when someone actually set one; the 1.0 default is not a price.
+	const priced = live.filter(
+		(w) => w.cost_per_hour != null && w.cost_per_hour !== FM_DEFAULT_COST,
+	);
+	const burn = priced.reduce((a, w) => a + (w.cost_per_hour ?? 0), 0);
+	const costKnown = priced.length === live.length && live.length > 0;
 	const pctFleet = Math.min(100, (burn / CAPS.maxFleet) * 100);
 
 	return (
@@ -59,25 +85,45 @@ export default function VastTab() {
 				<div className="rounded-lg border border-slate-200 bg-white p-4">
 					<p className="text-xs text-slate-500">Rented workers</p>
 					<p className="mt-1 text-2xl font-semibold text-slate-900">
-						{workers.length}
+						{live.length}
 						<span className="ml-1 text-sm font-normal text-slate-500">
 							/ {CAPS.maxInstances} cap
 						</span>
 					</p>
-					<p className="mt-1 text-xs text-slate-500">floor {CAPS.minInstances} — scales to zero</p>
+					<p className="mt-1 text-xs text-slate-500">
+						floor {CAPS.minInstances} — scales to zero
+						{stale.length > 0 && (
+							<span className="ml-1 text-amber-700">
+								· {stale.length} stale row{stale.length > 1 ? "s" : ""} excluded
+							</span>
+						)}
+					</p>
 				</div>
 				<div className="rounded-lg border border-slate-200 bg-white p-4">
 					<p className="text-xs text-slate-500">Burn rate</p>
-					<p className="mt-1 text-2xl font-semibold text-slate-900">
-						${burn.toFixed(3)}
-						<span className="ml-1 text-sm font-normal text-slate-500">/hr</span>
-					</p>
-					<div className="mt-2 h-1.5 w-full rounded bg-slate-100">
-						<div
-							className={`h-1.5 rounded ${pctFleet > 80 ? "bg-red-500" : "bg-emerald-500"}`}
-							style={{ width: `${pctFleet}%` }}
-						/>
-					</div>
+					{costKnown ? (
+						<>
+							<p className="mt-1 text-2xl font-semibold text-slate-900">
+								${burn.toFixed(3)}
+								<span className="ml-1 text-sm font-normal text-slate-500">/hr</span>
+							</p>
+							<div className="mt-2 h-1.5 w-full rounded bg-slate-100">
+								<div
+									className={`h-1.5 rounded ${pctFleet > 80 ? "bg-red-500" : "bg-emerald-500"}`}
+									style={{ width: `${pctFleet}%` }}
+								/>
+							</div>
+						</>
+					) : (
+						<>
+							<p className="mt-1 text-2xl font-semibold text-slate-400">—</p>
+							<p className="mt-1 text-xs text-slate-500">
+								{live.length === 0
+									? "nothing rented"
+									: "not reported by FlowMesh — vast.ai console is authoritative"}
+							</p>
+						</>
+					)}
 					<p className="mt-1 text-xs text-slate-500">cap ${CAPS.maxFleet.toFixed(2)}/hr fleet</p>
 				</div>
 				<div className="rounded-lg border border-slate-200 bg-white p-4">
@@ -90,7 +136,7 @@ export default function VastTab() {
 				</div>
 			</div>
 
-			{workers.length === 0 && !loading ? (
+			{all.length === 0 && !loading ? (
 				<div className="rounded-lg border border-slate-200 bg-white p-8 text-center">
 					<p className="text-sm font-medium text-slate-700">No rented capacity right now.</p>
 					<p className="mt-1 text-xs text-slate-500">
@@ -112,11 +158,19 @@ export default function VastTab() {
 							</tr>
 						</thead>
 						<tbody className="divide-y divide-slate-100">
-							{workers.map((w) => (
-								<tr key={w.id} className="hover:bg-slate-50">
+							{[...live, ...stale].map((w) => (
+								<tr
+									key={w.id}
+									className={`hover:bg-slate-50 ${stale.includes(w) ? "opacity-50" : ""}`}
+								>
 									<td className="px-3 py-2">
 										<div className="font-medium text-slate-900">{w.alias ?? w.id}</div>
-										<div className="font-mono text-xs text-slate-500">{w.id}</div>
+										<div className="font-mono text-xs text-slate-500">
+											{w.id}
+											{stale.includes(w) && (
+												<span className="ml-1 rounded bg-amber-50 px-1 text-amber-700">stale</span>
+											)}
+										</div>
 									</td>
 									<td className="px-3 py-2">
 										<StatusPill status={w.status} />
@@ -125,7 +179,9 @@ export default function VastTab() {
 										{w.hardware?.gpu?.devices?.[0]?.name ?? "—"}
 									</td>
 									<td className="px-3 py-2 text-xs">
-										{w.cost_per_hour != null ? `$${w.cost_per_hour.toFixed(3)}` : "—"}
+										{w.cost_per_hour != null && w.cost_per_hour !== FM_DEFAULT_COST
+											? `$${w.cost_per_hour.toFixed(3)}`
+											: "—"}
 									</td>
 									<td className="px-3 py-2 text-xs">
 										<Age seconds={secondsSince(w.last_seen)} />

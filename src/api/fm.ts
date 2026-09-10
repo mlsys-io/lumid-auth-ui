@@ -344,10 +344,28 @@ export function secondsSince(iso?: string | null): number | null {
 	return Math.max(0, Math.floor((Date.now() - t) / 1000));
 }
 
-/** Summed $/hr across workers that report a cost — the rented-fleet burn rate. */
-export function fleetCostPerHour(workers: FmWorker[]): number {
-	return workers.reduce(
-		(sum, w) => sum + (w.cost_per_hour ?? w.hardware?.gpu?.cost_per_hour ?? 0),
-		0,
-	);
+/**
+ * Summed $/hr across workers that report a REAL cost.
+ *
+ * `cost_per_hour` is FlowMesh's WORKER_COST_PER_HOUR, whose default is 1.0 — and on
+ * sites that never set it every worker reports exactly $1.000 regardless of what the
+ * machine costs. Summing it blindly produced a "$2.000/hr" headline for a fleet that
+ * was renting nothing. Workers reporting exactly the default are treated as unpriced,
+ * and the caller is told how many were counted so it can decline to show a total it
+ * cannot stand behind.
+ */
+const FM_DEFAULT_COST_PER_HOUR = 1;
+
+export function fleetCostPerHour(workers: FmWorker[]): { total: number; priced: number } {
+	const priced = workers.filter((w) => {
+		const c = w.cost_per_hour ?? w.hardware?.gpu?.cost_per_hour;
+		return c != null && c !== FM_DEFAULT_COST_PER_HOUR;
+	});
+	return {
+		total: priced.reduce(
+			(sum, w) => sum + (w.cost_per_hour ?? w.hardware?.gpu?.cost_per_hour ?? 0),
+			0,
+		),
+		priced: priced.length,
+	};
 }

@@ -30,14 +30,19 @@ export default function WorkersTab() {
 		);
 	}, [data, status]);
 
-	// Only workers that actually report a price contribute. Owned hardware
-	// reports none, so this is effectively the rented-fleet burn rate.
+	// `priced` counts workers whose cost is not FlowMesh's WORKER_COST_PER_HOUR default
+	// of 1.0. A total built from that default is a fabricated number — it once rendered
+	// "$2.000/hr" for a fleet renting nothing — so it is not shown at all.
 	const burn = useMemo(() => fleetCostPerHour(data?.items ?? []), [data]);
 
 	return (
 		<TabShell
 			title="Workers"
-			subtitle={`${data?.items.length ?? 0} worker(s) · ${burn > 0 ? `$${burn.toFixed(3)}/hr metered` : "no metered cost"}`}
+			subtitle={`${data?.items.length ?? 0} worker(s) · ${
+				burn.priced > 0
+					? `$${burn.total.toFixed(3)}/hr across ${burn.priced} priced worker(s)`
+					: "no per-worker cost reported"
+			}`}
 			loading={loading}
 			error={error}
 			onRefresh={refresh}
