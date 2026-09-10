@@ -286,6 +286,12 @@ export function bundleUrl(
  * `$effective_auth` promotes it back to an Authorization header, and `/fm/` is
  * configured with the upgrade headers and 3600s timeouts SSE needs.
  *
+ * ACCEPTED EXPOSURE: a token in a query string lands in nginx access logs. It is
+ * unavoidable for EventSource and matches the existing `flowmesh.ts` WebSocket
+ * precedent. It is tolerable only because this is a SHORT-LIVED session bearer
+ * minted per-session from /api/v1/session-bearer, never a PAT — do not "simplify"
+ * this by letting a user's pinned long-lived key flow through here.
+ *
  * Two failure modes the caller MUST handle rather than render as an error:
  *  - **404 "log stream not found"** — Redis log streams are bounded and expire
  *    `LOG_STREAM_TTL_SEC` after close, so an older task simply has none. Fall
