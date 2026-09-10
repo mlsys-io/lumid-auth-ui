@@ -220,7 +220,7 @@ const AppAdminAudit = lazy(() => import("./pages/app/admin-audit"));
 const AppAdminSetup = lazy(() => import("./pages/app/admin-setup"));
 // lum.id/fm dashboard — live federation (sites/nodes/workers/jobs/vast).
 // Reads mesh-federator directly via src/api/fm.ts, NOT the lumid_cluster mirror
-// that the legacy Registry tabs below still use.
+// that the legacy registry screens (now unlisted, still routed) still use.
 const FmSites = lazy(() => import("./admin/fm/sites-tab"));
 const FmNodes = lazy(() => import("./admin/fm/nodes-tab"));
 const FmWorkers = lazy(() => import("./admin/fm/workers-tab"));
@@ -862,15 +862,13 @@ export default function App() {
                 element={
                   <AdminSectionLayout
                     title="Infrastructure"
-                    subtitle="Live view of lum.id/fm — every federated mesh, its nodes, workers, jobs and rented GPU spend. The Registry tabs read the older lumid_cluster mirror, which lags by up to 4 minutes."
+                    subtitle="Live view of lum.id/fm — every federated mesh, its nodes, workers, jobs and rented GPU spend. The lumid_cluster mirror that used to back this page is retired; its legacy admin screens remain reachable at /studio/admin/cluster-registry."
                     tabs={[
                       { to: "/studio/admin/clusters", label: "Sites", end: true },
                       { to: "/studio/admin/fm/nodes", label: "Nodes" },
                       { to: "/studio/admin/fm/workers", label: "Workers" },
                       { to: "/studio/admin/fm/jobs", label: "Jobs" },
                       { to: "/studio/admin/fm/vast", label: "Vast" },
-                      { to: "/studio/admin/cluster-registry", label: "Registry" },
-                      { to: "/studio/admin/cluster-workers", label: "Registry workers" },
                       { to: "/studio/admin/billing", label: "Billing", requireSuperAdmin: true },
                       { to: "/studio/admin/workflow-review", label: "Reviews" },
                       { to: "/studio/admin/infra-setup", label: "Setup guide" },
@@ -888,6 +886,20 @@ export default function App() {
                 <Route path="fm/workers" element={<FmWorkers />} />
                 <Route path="fm/jobs" element={<FmJobs />} />
                 <Route path="fm/vast" element={<FmVast />} />
+                {/* RETIRED FROM NAVIGATION 2026-09-10, deliberately still ROUTED.
+                    The lumid_cluster mirror they read is retired (fm-registry-sync
+                    suspended) and the live fleet view is the /fm tabs above, so these
+                    no longer belong in the Infrastructure strip. They are NOT deleted,
+                    because they are the only UI for things with no /fm equivalent and
+                    with live backend dependents:
+                      - cluster_servers CRUD (servers tab) — claude-proxy's and
+                        claude-sandbox's /fm/c/<id> path reads those rows for the
+                        per-cluster operator key
+                      - cluster create/patch/delete, Runmesh vendor + commercial billing
+                      - worker cost / selling_price_per_hour editing
+                    Bootstrap-token minting is safe either way: /studio/admin/infra-setup
+                    ("Setup guide", still in the strip) mints them too.
+                    Reachable by direct URL; delete only after those move or die. */}
                 <Route path="cluster-registry" element={<AppAdminClusters />} />
                 <Route path="cluster-workers" element={<AppAdminClusterWorkers />} />
                 <Route path="suppliers" element={<RunmeshSuppliers />} />
