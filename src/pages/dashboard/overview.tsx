@@ -13,9 +13,6 @@ import {
 	ChevronRight,
 } from 'lucide-react';
 import {
-	listClusters,
-	listNodes,
-	listWorkers,
 	type Cluster,
 	type Node,
 	type Worker,
@@ -26,6 +23,8 @@ import {
 	type AdminUserRow,
 	type AuditEntry,
 } from '@/api/users';
+import { listNodes as fmListNodes, listWorkers as fmListWorkers } from "../../api/fm";
+import { fmNodesToNodes, fmWorkersToWorkers, sitesToClusters } from "./fm-adapter";
 import { isSessionExpired } from '@/api/client';
 
 // /studio/admin/ landing — operational snapshot for cluster owners.
@@ -54,21 +53,39 @@ export default function AdminOverview() {
 	useEffect(() => {
 		let cancelled = false;
 		(async () => {
-			const [cR, nR, wR, uR, aR] = await Promise.allSettled([
-				listClusters({ page_size: 200 }),
-				listNodes({ page_size: 500 }),
-				listWorkers({ page_size: 1000 }),
+			// Fleet inventory comes from the LIVE federation (`/fm`), not the
+			// lumid_cluster mirror these tiles used to read. The mirror is one
+			// site, refreshed by a CronJob every 4 minutes; `/fm` is every site,
+			// now. Users + audit still come from identity, which is their home.
+			//
+			// Read from the MERGED routes only. A per-site call carries the
+			// caller's own token and is entitlement-scoped, so an ordinary admin
+			// can get HTTP 200 with an empty array — which would render here as
+			// "the fleet is down" with nothing to explain it.
+			const [fnR, fwR, uR, aR] = await Promise.allSettled([
+				fmListNodes(),
+				fmListWorkers(),
 				listUsers({ page_size: 200 }),
 				listAudit({ page_size: 12 }),
 			]);
 			if (cancelled) return;
-			for (const r of [cR, nR, wR, uR, aR]) {
+			for (const r of [fnR, fwR, uR, aR]) {
 				if (r.status === 'rejected' && isSessionExpired(r.reason)) return;
 			}
+			// `sites[]` is the per-site reachability block from ?shape=full — the
+			// only thing that distinguishes "this mesh is unreachable" from "this
+			// mesh has no workers". Prefer the nodes fan-out's view, falling back
+			// to the workers one if nodes failed outright.
+			const siteStatuses =
+				fnR.status === 'fulfilled'
+					? fnR.value.sites
+					: fwR.status === 'fulfilled'
+						? fwR.value.sites
+						: null;
 			setSnap({
-				clusters: cR.status === 'fulfilled' ? cR.value.clusters : null,
-				nodes: nR.status === 'fulfilled' ? nR.value.nodes : null,
-				workers: wR.status === 'fulfilled' ? wR.value.workers : null,
+				clusters: siteStatuses ? sitesToClusters(siteStatuses) : null,
+				nodes: fnR.status === 'fulfilled' ? fmNodesToNodes(fnR.value.items) : null,
+				workers: fwR.status === 'fulfilled' ? fmWorkersToWorkers(fwR.value.items) : null,
 				users:
 					uR.status === 'fulfilled'
 						? { rows: uR.value.users, total: uR.value.total }
