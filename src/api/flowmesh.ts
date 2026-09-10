@@ -89,8 +89,8 @@ async function getBearer(forceRefresh = false): Promise<string | null> {
  * `?token=` query param that the FM Host accepts in addition to the
  * Authorization header.
  */
-export async function getFlowmeshBearer(): Promise<string | null> {
-	return getBearer();
+export async function getFlowmeshBearer(forceRefresh = false): Promise<string | null> {
+	return getBearer(forceRefresh);
 }
 
 function makeClient(): AxiosInstance {

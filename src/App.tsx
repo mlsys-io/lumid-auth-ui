@@ -218,6 +218,15 @@ const AppAdminUserDetail = lazy(() => import("./pages/app/admin-user-detail"));
 const AppAdminUsersMatrix = lazy(() => import("./pages/app/admin-users-matrix"));
 const AppAdminAudit = lazy(() => import("./pages/app/admin-audit"));
 const AppAdminSetup = lazy(() => import("./pages/app/admin-setup"));
+// lum.id/fm dashboard — live federation (sites/nodes/workers/jobs/vast).
+// Reads mesh-federator directly via src/api/fm.ts, NOT the lumid_cluster mirror
+// that the legacy Registry tabs below still use.
+const FmSites = lazy(() => import("./admin/fm/sites-tab"));
+const FmNodes = lazy(() => import("./admin/fm/nodes-tab"));
+const FmWorkers = lazy(() => import("./admin/fm/workers-tab"));
+const FmJobs = lazy(() => import("./admin/fm/jobs-tab"));
+const FmVast = lazy(() => import("./admin/fm/vast-tab"));
+
 // lumid_cluster admin — /app/admin/clusters/*
 const AppAdminClusters = lazy(() => import("./pages/app/admin-clusters"));
 const AppAdminClustersNew = lazy(() => import("./pages/app/admin-clusters-new"));
@@ -853,10 +862,15 @@ export default function App() {
                 element={
                   <AdminSectionLayout
                     title="Infrastructure"
-                    subtitle="Clusters, workers, billing, and workflow review — one admin surface for the compute layer. Suppliers are auto-mirrored from clusters; the standalone Suppliers tab is retired."
+                    subtitle="Live view of lum.id/fm — every federated mesh, its nodes, workers, jobs and rented GPU spend. The Registry tabs read the older lumid_cluster mirror, which lags by up to 4 minutes."
                     tabs={[
-                      { to: "/studio/admin/clusters", label: "Clusters", end: true },
-                      { to: "/studio/admin/cluster-workers", label: "Workers" },
+                      { to: "/studio/admin/clusters", label: "Sites", end: true },
+                      { to: "/studio/admin/fm/nodes", label: "Nodes" },
+                      { to: "/studio/admin/fm/workers", label: "Workers" },
+                      { to: "/studio/admin/fm/jobs", label: "Jobs" },
+                      { to: "/studio/admin/fm/vast", label: "Vast" },
+                      { to: "/studio/admin/cluster-registry", label: "Registry" },
+                      { to: "/studio/admin/cluster-workers", label: "Registry workers" },
                       { to: "/studio/admin/billing", label: "Billing", requireSuperAdmin: true },
                       { to: "/studio/admin/workflow-review", label: "Reviews" },
                       { to: "/studio/admin/infra-setup", label: "Setup guide" },
@@ -864,7 +878,17 @@ export default function App() {
                   />
                 }
               >
-                <Route path="clusters" element={<AppAdminClusters />} />
+                {/* `clusters` is now the LIVE federation landing (Sites). The legacy
+                    lumid_cluster registry list keeps its features — cluster CRUD,
+                    bootstrap tokens, vendor/commercial — at `cluster-registry`
+                    until Step 5 of the dashboard plan retires the mirror. Deleting
+                    it here would silently drop those with nothing replacing them. */}
+                <Route path="clusters" element={<FmSites />} />
+                <Route path="fm/nodes" element={<FmNodes />} />
+                <Route path="fm/workers" element={<FmWorkers />} />
+                <Route path="fm/jobs" element={<FmJobs />} />
+                <Route path="fm/vast" element={<FmVast />} />
+                <Route path="cluster-registry" element={<AppAdminClusters />} />
                 <Route path="cluster-workers" element={<AppAdminClusterWorkers />} />
                 <Route path="suppliers" element={<RunmeshSuppliers />} />
                 <Route path="supplier-nodes" element={<RunmeshSupplierNodes />} />
