@@ -53,7 +53,7 @@ If you would rather have it structured, `?shape=full` returns an object instead:
 }
 ```
 
-Federated today: `fm/api/v1/nodes`, `fm/api/v1/workers`, `ll/api/v1/workers`, **and per-worker
+Federated today: `fm/api/v1/nodes`, `fm/api/v1/workers`, `ll/api/v1/workers` (all **admin+** at the edge), **and per-worker
 retrieve** `GET /api/v1/workers/{id}` (added 2026-08-25 — see below). **Everything else — notably
 `POST /api/v1/workflows` (submit) — is proxied verbatim to the cloud and is unchanged.**
 
@@ -86,8 +86,8 @@ curl -s https://lum.id/fm/api/v1/nodes -H "Authorization: Bearer $PAT"
 #   -> 15 items: cloud 1, home 9, office 5
 
 # Narrow the fan-out — SAME response shape, so callers don't branch
-curl -s "https://lum.id/fm/api/v1/nodes?site=home"          # -> 9
-curl -s "https://lum.id/fm/api/v1/nodes?site=home,office"   # -> 14
+curl -s "https://lum.id/fm/api/v1/nodes?site=home" -H "Authorization: Bearer $PAT"          # -> 9
+curl -s "https://lum.id/fm/api/v1/nodes?site=home,office" -H "Authorization: Bearer $PAT"   # -> 14
 
 # Talk to ONE mesh directly — works for EVERY endpoint, not just the lists,
 # and returns that mesh's native shape (a bare array here)
@@ -193,6 +193,13 @@ and safe even when an LLM op's backend is offline. `run_lumilake_job` executes o
 not Lumilake-native `ops` workflows.)
 
 ### Raw HTTP — HALO optimize (verified)
+> **`/ll/api/v1/*` requires an ADMIN token as of 2026-09-12.** The whole prefix is behind
+> `auth_request /internal_admin_check` at the edge. It previously answered anonymously —
+> `GET /ll/api/v1/workers` returned the fleet inventory (hostnames, cores, RAM, GPUs, cached
+> models) to any caller with no credential — and closing that took the prefix with it. A personal
+> `lm_pat_live_*` belonging to a non-admin now gets **403** on the examples below.
+> `GET /ll/healthz` stays anonymous.
+
 `POST /ll/api/v1/jobs/preview` needs the **`Workflow-Format: yaml`** header, a **non-empty
 `inputs`**, and the native workflow under `data[]`:
 ```bash
