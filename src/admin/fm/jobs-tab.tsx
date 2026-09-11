@@ -1,12 +1,22 @@
-// Jobs — workflows merged across every site, with per-site task drill-in.
+// Jobs — workflows fanned out across every site, with per-site task drill-in.
 //
-// WHY THE SPLIT. /api/v1/workflows is federated, so the top table is one merged
-// call and every row is site-tagged. /api/v1/tasks is NOT federated and cannot
-// be: office's task list is 13.8 MB (814 rows each embedding the full raw_yaml)
-// against the federator's 4 MiB body cap, so the fan-out truncated mid-JSON and
-// that site silently contributed zero — a merged view that looked complete while
-// missing the busiest mesh. Tasks are therefore fetched per-site, only for the
-// workflow the operator actually opened.
+// CORRECTION 2026-09-11: this header used to say "/api/v1/workflows is federated,
+// so the top table is one merged call". That stopped being true when the path was
+// removed from FM_LIST_PATHS (it was serving 463 workflow records to anonymous
+// callers). The federator then fell through to its cloud-only passthrough, and
+// because cloud runs ZERO workers, every row it returned had failed for want of
+// one: 29 FAILED / 4 CANCELLED, rendered as the whole estate, while office was
+// sitting on 376 DONE. The tab reported a total outage on a healthy fleet.
+//
+// Both tables are therefore per-site now, for DIFFERENT reasons:
+//   workflows — client-side fan-out in listWorkflows(). Cheap (ids only, ~179 KB
+//               for all five sites) and it keeps the anonymous hole closed,
+//               because each call carries the caller's own token.
+//   tasks     — cannot be federated at all: office alone is 13.8 MB (814 rows
+//               each embedding the full raw_yaml) against the federator's 4 MiB
+//               body cap, so the fan-out truncated mid-JSON and that site
+//               silently contributed zero. Fetched only for the workflow the
+//               operator actually opened.
 
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";

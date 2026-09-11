@@ -129,10 +129,15 @@ export default function InfrastructureSetup() {
 					</CardDescription>
 				</CardHeader>
 				<CardContent className="space-y-3 text-sm">
-					<Link to="/studio/admin/clusters">
+					{/* The registry CRUD (create cluster, wire server roles, vendor rows)
+					    moved to `cluster-registry` on 2026-09-10, when `clusters` was
+					    repointed at the live /fm federation view (Sites). Linking to
+					    `clusters` here sends the reader to a page with no "New cluster"
+					    action at all, which reads as a broken guide. */}
+					<Link to="/studio/admin/cluster-registry">
 						<Button variant="outline" size="sm">
 							<Layers className="w-4 h-4 mr-1" />
-							Clusters → New cluster
+							Cluster registry → New cluster
 						</Button>
 					</Link>
 					<p className="text-xs text-muted-foreground">

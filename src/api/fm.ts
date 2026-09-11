@@ -233,8 +233,59 @@ export function listWorkers(sites?: string[]) {
 	return merged<FmWorker>("/api/v1/workers", sites);
 }
 
-export function listWorkflows(sites?: string[]) {
-	return merged<FmWorkflow>("/api/v1/workflows", sites);
+/**
+ * Workflows, fanned out PER SITE by this client — not by the federator.
+ *
+ * `/api/v1/workflows` is deliberately NOT in FM_LIST_PATHS: federating it exposed
+ * 463 workflow records to anonymous callers (the merged routes answer with the
+ * federator's own credential, so there is no caller token to check), and it was
+ * pulled back out on 2026-09-10. The federator therefore falls through to the
+ * cloud-only passthrough for this path.
+ *
+ * The consequence is not cosmetic. Cloud runs ZERO workers, so every cloud
+ * workflow fails for want of one: measured 2026-09-11, cloud was 29 FAILED /
+ * 4 CANCELLED while office held 376 DONE, vast 13, home 21, nus 3. A Jobs tab
+ * reading the passthrough shows an all-red estate that is in fact healthy.
+ *
+ * Fanning out here restores the fleet-wide answer without re-opening the
+ * anonymous hole, because these calls carry the CALLER's token and each site
+ * applies its own entitlement. It is affordable precisely where tasks are not:
+ * a workflow row carries ids only, no `raw_yaml` — all five sites total ~179 KB,
+ * against 13.8 MB for office's tasks alone.
+ *
+ * The roster comes from a genuinely federated path rather than a literal, so
+ * adding a site stays an env-only change on the federator (FEDERATOR_SITES).
+ */
+export async function listWorkflows(sites?: string[]): Promise<FmFanout<FmWorkflow>> {
+	const roster = sites?.length ? sites : (await listWorkers()).sites.map((s) => s.site);
+	const per = await Promise.all(
+		roster.map(async (site) => {
+			const t0 = Date.now();
+			try {
+				const r = await fm.get<FmWorkflow[]>(`/${site}/api/v1/workflows`);
+				const items = (r.data ?? []).map((w) => ({ ...w, site }));
+				return {
+					status: { site, ok: true, count: items.length, ms: Date.now() - t0 },
+					items,
+				};
+			} catch (e) {
+				// One unreachable site must not blank the others — report it in the
+				// strip and keep the rows we did get. That distinction is the whole
+				// reason `sites[]` exists.
+				return {
+					status: {
+						site,
+						ok: false,
+						count: 0,
+						ms: Date.now() - t0,
+						error: (e as Error)?.message || "unreachable",
+					},
+					items: [] as FmWorkflow[],
+				};
+			}
+		}),
+	);
+	return { items: per.flatMap((p) => p.items), sites: per.map((p) => p.status) };
 }
 
 /**
