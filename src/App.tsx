@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect } from "react";
+import { Boxes, ListChecks } from "lucide-react";
 import { Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
@@ -223,12 +224,7 @@ const AppAdminSetup = lazy(() => import("./pages/app/admin-setup"));
 const FmFleetRoute = lazy(() =>
   import("./admin/fm/routes").then((m) => ({ default: m.FleetRoute })),
 );
-const FmSshRoute = lazy(() =>
-  import("./admin/fm/routes").then((m) => ({ default: m.SshRoute })),
-);
 const FmJobs = lazy(() => import("./admin/fm/jobs-tab"));
-const FmVast = lazy(() => import("./admin/fm/vast-tab"));
-const FmSubmit = lazy(() => import("./admin/fm/submit-tab"));
 
 // lumid_cluster admin — /app/admin/clusters/*
 const AppAdminClusters = lazy(() => import("./pages/app/admin-clusters"));
@@ -697,12 +693,20 @@ export default function App() {
                 <AdminSectionLayout
                   title="Compute"
                   subtitle="The federated GPU fleet behind lum.id/fm — sites, nodes and workers in one tree, plus jobs, shells and rented capacity."
+                  // TWO tabs, down from five, because three of the five were not
+                  // places:
+                  //   Vast is a SITE — Fleet already lists its nodes and workers
+                  //     with every other site, so the tab re-listed the same rows
+                  //     and added only the rental economics, which now render on
+                  //     the vast site itself.
+                  //   SSH sessions are TASKS (task_type "ssh") — the same dataset
+                  //     Jobs already fans out, so SSH is a view, not a page.
+                  //   Submit is an ACTION — a tab you entered to do one thing and
+                  //     left. It is a button on Jobs that opens a dialog.
+                  // Their routes are kept as redirects below.
                   tabs={[
-                    { to: "/studio/compute", label: "Fleet", end: true },
-                    { to: "/studio/compute/jobs", label: "Jobs", requireAdmin: true },
-                    { to: "/studio/compute/ssh", label: "SSH", requireAdmin: true },
-                    { to: "/studio/compute/submit", label: "Submit", requireAdmin: true },
-                    { to: "/studio/compute/vast", label: "Vast", requireAdmin: true },
+                    { to: "/studio/compute", label: "Fleet", end: true, icon: Boxes },
+                    { to: "/studio/compute/jobs", label: "Jobs", requireAdmin: true, icon: ListChecks },
                     // Billing is NOT a tab here. It is account/finance, not fleet
                     // operations, and it was the only super_admin entry in a strip
                     // whose other tabs are admin+ — so for most admins it rendered a
@@ -721,30 +725,12 @@ export default function App() {
                   </AdminGuard>
                 }
               />
-              <Route
-                path="ssh"
-                element={
-                  <AdminGuard fallback="/studio/compute">
-                    <FmSshRoute />
-                  </AdminGuard>
-                }
-              />
-              <Route
-                path="submit"
-                element={
-                  <AdminGuard fallback="/studio/compute">
-                    <FmSubmit />
-                  </AdminGuard>
-                }
-              />
-              <Route
-                path="vast"
-                element={
-                  <AdminGuard fallback="/studio/compute">
-                    <FmVast />
-                  </AdminGuard>
-                }
-              />
+              {/* Absorbed into Fleet (vast) and Jobs (ssh, submit) on 2026-09-11.
+                  Kept as redirects — these were linked from the tab strip and are
+                  in people's history. */}
+              <Route path="ssh" element={<Navigate to="/studio/compute/jobs" replace />} />
+              <Route path="submit" element={<Navigate to="/studio/compute/jobs" replace />} />
+              <Route path="vast" element={<Navigate to="/studio/compute" replace />} />
               {/* The three tabs Fleet replaced. Kept as redirects, not deleted:
                   they were linked from the admin strip for months. */}
               <Route path="sites" element={<Navigate to="/studio/compute" replace />} />

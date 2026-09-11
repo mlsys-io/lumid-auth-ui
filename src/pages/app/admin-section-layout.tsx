@@ -1,3 +1,4 @@
+import type React from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 
@@ -5,6 +6,9 @@ type Tab = {
 	to: string;
 	label: string;
 	end?: boolean;
+	/** Optional leading icon. Lucide components take a className, so the tab
+	 *  strip sizes it rather than each caller guessing. */
+	icon?: React.ComponentType<{ className?: string }>;
 	/** Hide this tab unless the caller is a super_admin. Billing +
 	 *  accounting tabs use this to stay invisible to regular admins. */
 	requireSuperAdmin?: boolean;
@@ -68,7 +72,10 @@ export default function AdminSectionLayout({ title, subtitle, tabs }: Props) {
 							}`
 						}
 					>
-						{t.label}
+						<span className="inline-flex items-center gap-1.5">
+							{t.icon && <t.icon className="h-3.5 w-3.5" />}
+							{t.label}
+						</span>
 					</NavLink>
 				))}
 			</div>

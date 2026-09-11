@@ -30,6 +30,7 @@ import {
 	type FmWorker,
 } from "../../api/fm";
 import { Age, SiteBadge, SiteStrip, StatusPill, TabShell, useFanout } from "./shared";
+import VastEconomics from "./vast-economics";
 
 // A registry row outlives its machine — a destroy is not a graceful UNREGISTER —
 // so "present" is never the same question as "alive". Everything below judges on
@@ -184,6 +185,14 @@ export default function FleetTab({ isAdmin }: { isAdmin: boolean }) {
 									</span>
 								</div>
 							</div>
+							{/* Vast is a site, so its rental economics render HERE rather than
+							    in a tab of their own — the old Vast tab re-listed these same
+							    workers and added only the money. */}
+							{site === "vast" && (
+								<VastEconomics
+									workers={entries.flatMap((e) => e.workers)}
+								/>
+							)}
 							<table className="w-full text-sm">
 								<tbody className="divide-y divide-slate-100">
 									{entries.map((e) => {

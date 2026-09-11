@@ -52,7 +52,11 @@ spec:
 `,
 };
 
-export default function SubmitTab() {
+/**
+ * `embedded` drops the TabShell chrome: Submit is an ACTION, not a place — a tab
+ * you entered to do one thing and left — so it now opens as a dialog from Jobs.
+ */
+export default function SubmitTab({ embedded = false }: { embedded?: boolean } = {}) {
 	// Roster from a federated read: adding a site is an env change on the
 	// federator, and this picker follows it without a code edit.
 	const { data, loading, error, refresh } = useFanout(() => listWorkers(), 60_000);
@@ -90,13 +94,8 @@ export default function SubmitTab() {
 		}
 	}
 
-	return (
-		<TabShell
-			subtitle="Hand a workflow to one site. Cross-site runs are two submissions — there is no scheduler spanning sites."
-			loading={loading}
-			error={error}
-			onRefresh={refresh}
-		>
+	const content = (
+		<>
 			<SiteStrip sites={data?.sites ?? []} />
 
 			<div className="mb-3 flex flex-wrap items-end gap-3">
@@ -188,6 +187,19 @@ export default function SubmitTab() {
 					</p>
 				</div>
 			)}
+		</>
+	);
+
+	if (embedded) return content;
+
+	return (
+		<TabShell
+			subtitle="Hand a workflow to one site. Cross-site runs are two submissions — there is no scheduler spanning sites."
+			loading={loading}
+			error={error}
+			onRefresh={refresh}
+		>
+			{content}
 		</TabShell>
 	);
 }

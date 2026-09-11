@@ -7,7 +7,6 @@
 
 import { useAuth } from "../../hooks/useAuth";
 import FleetTab from "./fleet-tab";
-import SshTab from "./ssh-tab";
 
 function useIsAdmin(): boolean {
 	const { user } = useAuth();
@@ -18,6 +17,6 @@ export function FleetRoute() {
 	return <FleetTab isAdmin={useIsAdmin()} />;
 }
 
-export function SshRoute() {
-	return <SshTab isAdmin={useIsAdmin()} />;
-}
+// SshRoute is gone: SSH is a view inside Jobs now, not a route. jobs-tab renders
+// <SshTab isAdmin embedded /> — hardcoded true because Jobs is itself admin-only,
+// so there is no non-admin caller to scope down for.

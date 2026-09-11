@@ -30,7 +30,13 @@ function isActive(t: FmTask): boolean {
 	return Number.isNaN(ms) ? true : ms > Date.now();
 }
 
-export default function SshTab({ isAdmin }: { isAdmin: boolean }) {
+/**
+ * `embedded` renders the content WITHOUT its own TabShell, because SSH is no
+ * longer a tab — it is a filter inside Jobs. An SSH session IS a task
+ * (task_type "ssh"), so it was never a separate place, just a separate query
+ * over the same rows. Same prop pattern as pages/studio/portfolio.tsx.
+ */
+export default function SshTab({ isAdmin, embedded = false }: { isAdmin: boolean; embedded?: boolean }) {
 	const sites = isAdmin ? ADMIN_SITES : [PUBLIC_SITE];
 	const { data, loading, error, refresh } = useFanout<FmTask>(
 		() => fanoutForSites(sites, listTasksForSite),
@@ -49,15 +55,8 @@ export default function SshTab({ isAdmin }: { isAdmin: boolean }) {
 
 	const active = rows.filter(isActive);
 
-	return (
-		<TabShell
-			subtitle={`${active.length} active session(s) of ${rows.length} on record${
-				isAdmin ? " across every site" : " on home"
-			}. Refreshes every 30s.`}
-			loading={loading}
-			error={error}
-			onRefresh={refresh}
-		>
+	const content = (
+		<>
 			<SiteStrip sites={data?.sites ?? []} />
 
 			<div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
@@ -142,6 +141,21 @@ export default function SshTab({ isAdmin }: { isAdmin: boolean }) {
 					</tbody>
 				</table>
 			</div>
+		</>
+	);
+
+	if (embedded) return content;
+
+	return (
+		<TabShell
+			subtitle={`${active.length} active session(s) of ${rows.length} on record${
+				isAdmin ? " across every site" : " on home"
+			}. Refreshes every 30s.`}
+			loading={loading}
+			error={error}
+			onRefresh={refresh}
+		>
+			{content}
 		</TabShell>
 	);
 }
