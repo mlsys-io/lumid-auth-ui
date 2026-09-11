@@ -97,24 +97,25 @@ const TOP_NAV: NavItem[] = [
 	// Fleet is merged into "Manage apps" (/studio/apps/all) — no separate entry.
 	{ to: '/studio/data', label: 'Data', icon: Database, title: 'browse the data mesh — catalog + endpoint explorer' },
 	{ to: '/studio/library', label: 'Library', icon: Store, title: 'marketplace, skills, and experiments' },
-	// "Compute" replaced "Scheduled" here 2026-09-11 (operator request). Points at
-	// the LIVE federation landing (FmSites) — the merged view over every site's
-	// FlowMesh/Lumilake: cloud, home, office, vast and nus.
+	// "Compute" replaced "Scheduled" here 2026-09-11 (operator request).
 	//
-	// LABEL vs ROUTE diverge on purpose: the label is "Compute" (what the user is
-	// looking for) while the path stays /studio/admin/clusters (what the surface is
-	// called internally, and where FmSites is already mounted). Do not "fix" the
-	// label to match the URL — renaming the route would break the existing
-	// redirects into it, e.g. the `nodes` -> /studio/admin/clusters Navigate.
+	// Label, route and page heading now all say "Compute". They briefly did not:
+	// the row pointed at /studio/admin/clusters with a comment explaining that the
+	// divergence was deliberate. It stopped being tenable once the home fleet had
+	// to be readable by non-admins — everything under /studio/admin is inside
+	// <AdminGuard>, so the section moved to /studio/compute and the old paths are
+	// redirects.
 	//
-	// adminOnly because /studio/admin/* is AdminGuard-gated. Without the flag every
-	// non-admin would see a row that bounces them.
+	// NOT adminOnly, and that is the point: the home fleet is readable by any
+	// signed-in user while office, cloud, vast and NUS are admin+. The section
+	// gates per TAB instead of hiding the whole row, which would have left the
+	// public half unreachable from navigation.
 	//
 	// "Scheduled" (/studio/runs) is REMOVED FROM THE NAV ONLY — the route stays
 	// mounted and reachable: the top-bar "Right now" ticker and the Apps hero's
 	// "runs today" stat both link into it (see the note below this array), so its
 	// ROUTE_PREFETCH entry is deliberately kept too.
-	{ to: '/studio/admin/clusters', label: 'Compute', icon: Boxes, title: 'federated fleet — sites, nodes and workers across every mesh', adminOnly: true },
+	{ to: '/studio/compute', label: 'Compute', icon: Boxes, title: 'the GPU fleet — sites, nodes and workers across every mesh' },
 	// NO "Strategies" row here. Strategies are an LQT object, not a Studio-wide
 	// one: the surface belongs to the LQT app and is reached from inside it
 	// (the LQT app's own declared `strategies` surface, /studio/a/<app>/strategies
@@ -137,7 +138,7 @@ const ROUTE_PREFETCH: Record<string, () => Promise<unknown>> = {
 	"/studio/runs": () => import("@/pages/studio/runs"),
 	// Kept in step with the Compute nav row. Same specifier App.tsx lazy()-loads
 	// for FmSites, so Vite serves one chunk rather than duplicating it.
-	"/studio/admin/clusters": () => import("@/admin/fm/sites-tab"),
+	"/studio/compute": () => import("@/admin/fm/fleet-tab"),
 	"/studio/portfolio": () => import("@/pages/studio/portfolio"),
 };
 const prefetched = new Set<string>();

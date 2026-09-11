@@ -221,9 +221,12 @@ const AppAdminSetup = lazy(() => import("./pages/app/admin-setup"));
 // lum.id/fm dashboard — live federation (sites/nodes/workers/jobs/vast).
 // Reads mesh-federator directly via src/api/fm.ts, NOT the lumid_cluster mirror
 // that the legacy registry screens (now unlisted, still routed) still use.
-const FmSites = lazy(() => import("./admin/fm/sites-tab"));
-const FmNodes = lazy(() => import("./admin/fm/nodes-tab"));
-const FmWorkers = lazy(() => import("./admin/fm/workers-tab"));
+const FmFleetRoute = lazy(() =>
+  import("./admin/fm/routes").then((m) => ({ default: m.FleetRoute })),
+);
+const FmSshRoute = lazy(() =>
+  import("./admin/fm/routes").then((m) => ({ default: m.SshRoute })),
+);
 const FmJobs = lazy(() => import("./admin/fm/jobs-tab"));
 const FmVast = lazy(() => import("./admin/fm/vast-tab"));
 const FmSubmit = lazy(() => import("./admin/fm/submit-tab"));
@@ -670,6 +673,86 @@ export default function App() {
                 "Needs you" section. Was the drafts/audit feed (StudioInbox),
                 which doesn't fetch xpcloud messages — so operators never saw
                 posted questions. The drafts/audit feed lives at /studio/drafts. */}
+            {/* Compute — the fleet surface, deliberately OUTSIDE /studio/admin.
+                The home fleet is readable by ANY signed-in user; office, cloud,
+                vast and NUS are admin+. That cannot be expressed under
+                /studio/admin, whose whole subtree is inside <AdminGuard>.
+
+                Access is enforced in three places and they are not redundant:
+                  1. the tab strip hides what you cannot use (UX only);
+                  2. <AdminGuard> on each restricted child, so a DEEP LINK
+                     redirects instead of rendering an empty page;
+                  3. the edge — nginx auth_request on /fm/api/v1/ plus
+                     mesh-federator's per-site identity scoping — which is the
+                     only one that actually protects the data.
+                Fleet therefore asks for different URLs per role: see
+                listNodesForSite() in src/api/fm.ts.
+
+                SSH and Submit are admin+ even though the home fleet is public.
+                "Usable by anyone" was scoped by the later, more specific
+                instruction that Submit, Setup guide and Vast are admin+, and a
+                shell on a GPU box is a bigger grant than reading its status. */}
+            <Route
+              path="compute"
+              element={
+                <AdminSectionLayout
+                  title="Compute"
+                  subtitle="The federated GPU fleet behind lum.id/fm — sites, nodes and workers in one tree, plus jobs, shells and rented capacity."
+                  tabs={[
+                    { to: "/studio/compute", label: "Fleet", end: true },
+                    { to: "/studio/compute/jobs", label: "Jobs", requireAdmin: true },
+                    { to: "/studio/compute/ssh", label: "SSH", requireAdmin: true },
+                    { to: "/studio/compute/submit", label: "Submit", requireAdmin: true },
+                    { to: "/studio/compute/vast", label: "Vast", requireAdmin: true },
+                    {
+                      to: "/studio/admin/billing",
+                      label: "Billing",
+                      requireSuperAdmin: true,
+                    },
+                  ]}
+                />
+              }
+            >
+              <Route index element={<FmFleetRoute />} />
+              <Route
+                path="jobs"
+                element={
+                  <AdminGuard fallback="/studio/compute">
+                    <FmJobs />
+                  </AdminGuard>
+                }
+              />
+              <Route
+                path="ssh"
+                element={
+                  <AdminGuard fallback="/studio/compute">
+                    <FmSshRoute />
+                  </AdminGuard>
+                }
+              />
+              <Route
+                path="submit"
+                element={
+                  <AdminGuard fallback="/studio/compute">
+                    <FmSubmit />
+                  </AdminGuard>
+                }
+              />
+              <Route
+                path="vast"
+                element={
+                  <AdminGuard fallback="/studio/compute">
+                    <FmVast />
+                  </AdminGuard>
+                }
+              />
+              {/* The three tabs Fleet replaced. Kept as redirects, not deleted:
+                  they were linked from the admin strip for months. */}
+              <Route path="sites" element={<Navigate to="/studio/compute" replace />} />
+              <Route path="nodes" element={<Navigate to="/studio/compute" replace />} />
+              <Route path="workers" element={<Navigate to="/studio/compute" replace />} />
+            </Route>
+
             <Route path="inbox"                        element={<Inbox />} />
             <Route path="drafts"                       element={<StudioInbox />} />
             <Route path="account/inbox"                element={<Inbox />} />
@@ -867,76 +950,62 @@ export default function App() {
               {/* User detail lives outside the tab layout — it's drill-down, not peer. */}
               <Route path="users/:id" element={<AppAdminUserDetail />} />
 
-              {/* Infrastructure — unified GPU/compute admin surface. */}
+              {/* Compute MOVED to /studio/compute (2026-09-11).
+                  It left /studio/admin because that whole subtree is wrapped in
+                  <AdminGuard>, and the home fleet has to be readable by any
+                  signed-in user — a section cannot be partly public from inside a
+                  blanket guard. These redirects keep every existing link, bookmark
+                  and in-app reference working; do not delete them. */}
+              <Route path="clusters" element={<Navigate to="/studio/compute" replace />} />
+              <Route path="fm/nodes" element={<Navigate to="/studio/compute" replace />} />
+              <Route path="fm/workers" element={<Navigate to="/studio/compute" replace />} />
+              <Route path="fm/jobs" element={<Navigate to="/studio/compute/jobs" replace />} />
+              <Route path="fm/submit" element={<Navigate to="/studio/compute/submit" replace />} />
+              <Route path="fm/vast" element={<Navigate to="/studio/compute/vast" replace />} />
+              {/* The Setup GUIDE moved to /studio/docs/infrastructure-setup (Admin+).
+                  This route stays because the page is not only prose: it MINTS
+                  cluster bootstrap tokens (cluster picker + TTL + the one-line
+                  installer), which markdown cannot do. Redirecting it to the doc
+                  would have deleted a working capability while looking like a
+                  documentation move. The doc's step 3 links here. Off the nav by
+                  design — you arrive from the doc, at the moment you need a token. */}
+              <Route path="infra-setup" element={<AppAdminInfrastructureSetup />} />
+
+              {/* Legacy lumid_cluster registry — kept, still admin-only, and still
+                  OFF the navigation. The mirror it reads is retired
+                  (fm-registry-sync suspended) and the live view is /studio/compute,
+                  but these remain the only UI for things with live backend
+                  dependents and no /fm equivalent:
+                    - cluster_servers CRUD — claude-proxy's and claude-sandbox's
+                      /fm/c/<id> path reads those rows for the per-cluster operator key
+                    - cluster create/patch/delete, Runmesh vendor + commercial billing
+                    - worker cost / selling_price_per_hour editing
+                  Reachable by direct URL; delete only after those move or die. */}
               <Route
                 element={
-                  // Heading says "Compute" to match the sidebar entry that brings you
-                  // here (StudioShell.tsx). It read "Infrastructure" until 2026-09-11,
-                  // so the sidebar, the page heading and the URL each said something
-                  // different. The per-tab <h2> was dropped in the same change — the
-                  // tab bar below already names the current tab, and rendering both
-                  // stacked two headings with two blurbs on every page.
                   <AdminSectionLayout
-                    title="Compute"
-                    subtitle="Live view of lum.id/fm — every federated mesh, its nodes, workers, jobs and rented GPU spend. Legacy lumid_cluster admin screens remain at /studio/admin/cluster-registry."
-                    tabs={[
-                      { to: "/studio/admin/clusters", label: "Sites", end: true },
-                      { to: "/studio/admin/fm/nodes", label: "Nodes" },
-                      { to: "/studio/admin/fm/workers", label: "Workers" },
-                      { to: "/studio/admin/fm/jobs", label: "Jobs" },
-                      { to: "/studio/admin/fm/submit", label: "Submit" },
-                      { to: "/studio/admin/fm/vast", label: "Vast" },
-                      { to: "/studio/admin/billing", label: "Billing", requireSuperAdmin: true },
-                      // RETIRED FROM NAVIGATION 2026-09-11 at the operator's request
-                      // ("no use"). The route below is deliberately KEPT: the page is
-                      // NOT broken — GET /runmesh/workflow/review/list returns real rows
-                      // — so this is a usefulness decision, not a dead-surface cleanup,
-                      // and it should stay one URL away rather than be deleted.
-                      { to: "/studio/admin/infra-setup", label: "Setup guide" },
-                    ]}
+                    title="Cluster registry"
+                    subtitle="Legacy lumid_cluster admin. The live fleet view is Compute; these screens remain for cluster CRUD, bootstrap tokens and commercial fields, which have no /fm equivalent."
                   />
                 }
               >
-                {/* `clusters` is now the LIVE federation landing (Sites). The legacy
-                    lumid_cluster registry list keeps its features — cluster CRUD,
-                    bootstrap tokens, vendor/commercial — at `cluster-registry`
-                    until Step 5 of the dashboard plan retires the mirror. Deleting
-                    it here would silently drop those with nothing replacing them. */}
-                <Route path="clusters" element={<FmSites />} />
-                <Route path="fm/nodes" element={<FmNodes />} />
-                <Route path="fm/workers" element={<FmWorkers />} />
-                <Route path="fm/jobs" element={<FmJobs />} />
-                <Route path="fm/vast" element={<FmVast />} />
-                <Route path="fm/submit" element={<FmSubmit />} />
-                {/* RETIRED FROM NAVIGATION 2026-09-10, deliberately still ROUTED.
-                    The lumid_cluster mirror they read is retired (fm-registry-sync
-                    suspended) and the live fleet view is the /fm tabs above, so these
-                    no longer belong in the Infrastructure strip. They are NOT deleted,
-                    because they are the only UI for things with no /fm equivalent and
-                    with live backend dependents:
-                      - cluster_servers CRUD (servers tab) — claude-proxy's and
-                        claude-sandbox's /fm/c/<id> path reads those rows for the
-                        per-cluster operator key
-                      - cluster create/patch/delete, Runmesh vendor + commercial billing
-                      - worker cost / selling_price_per_hour editing
-                    Bootstrap-token minting is safe either way: /studio/admin/infra-setup
-                    ("Setup guide", still in the strip) mints them too.
-                    Reachable by direct URL; delete only after those move or die. */}
                 <Route path="cluster-registry" element={<AppAdminClusters />} />
                 <Route path="cluster-workers" element={<AppAdminClusterWorkers />} />
                 <Route path="suppliers" element={<RunmeshSuppliers />} />
                 <Route path="supplier-nodes" element={<RunmeshSupplierNodes />} />
-                <Route
-                  path="billing"
-                  element={
-                    <SuperAdminGuard>
-                      <RunmeshBilling />
-                    </SuperAdminGuard>
-                  }
-                />
                 <Route path="workflow-review" element={<RunmeshWorkflowReview />} />
-                <Route path="infra-setup" element={<AppAdminInfrastructureSetup />} />
               </Route>
+              {/* Billing keeps its /studio/admin URL — it is super_admin-only and has
+                  no public half, so it has no reason to move. The Compute strip links
+                  to it. */}
+              <Route
+                path="billing"
+                element={
+                  <SuperAdminGuard>
+                    <RunmeshBilling />
+                  </SuperAdminGuard>
+                }
+              />
               <Route
                 path="lumilake-workers"
                 element={

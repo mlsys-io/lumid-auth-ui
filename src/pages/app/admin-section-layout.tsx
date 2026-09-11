@@ -8,6 +8,17 @@ type Tab = {
 	/** Hide this tab unless the caller is a super_admin. Billing +
 	 *  accounting tabs use this to stay invisible to regular admins. */
 	requireSuperAdmin?: boolean;
+	/** Hide this tab unless the caller is admin or super_admin.
+	 *
+	 *  Needed because /studio/compute deliberately sits OUTSIDE <AdminGuard>: the
+	 *  home fleet is readable by any signed-in user, while Submit, SSH, Jobs and
+	 *  Vast stay admin+. Before this, "admin section" and "admin-only" were the
+	 *  same thing and a section could not be partly public.
+	 *
+	 *  This is UX, not access control. The real gates are nginx auth_request on
+	 *  /fm/api/v1/ plus mesh-federator's per-site identity scoping; hiding a tab
+	 *  hides the page, never the endpoint. */
+	requireAdmin?: boolean;
 };
 
 type Props = {
@@ -30,7 +41,10 @@ type Props = {
 export default function AdminSectionLayout({ title, subtitle, tabs }: Props) {
 	const { user } = useAuth();
 	const isSuperAdmin = user?.role === "super_admin";
-	const visible = tabs?.filter((t) => !t.requireSuperAdmin || isSuperAdmin);
+	const isAdmin = isSuperAdmin || user?.role === "admin";
+	const visible = tabs?.filter(
+		(t) => (!t.requireSuperAdmin || isSuperAdmin) && (!t.requireAdmin || isAdmin),
+	);
 	return (
 		<div>
 			<header className="mb-5">

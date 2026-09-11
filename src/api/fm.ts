@@ -140,6 +140,20 @@ export const FM_TERMINAL_TASK_STATUSES: ReadonlySet<string> = new Set([
 	"CANCELLED",
 ]);
 
+export interface FmSshInfo {
+	session_id?: string;
+	/** "forward" (through the site's relay) or a direct hop. */
+	mode?: string;
+	/** Relay-side address — what a user actually connects to. */
+	host?: string;
+	port?: number;
+	/** The worker-side address behind the relay; useful for debugging, not for users. */
+	directHost?: string;
+	directPort?: number;
+	username?: string;
+	expires_at?: string;
+}
+
 export interface FmTask {
 	task_id: string;
 	workflow_id: string;
@@ -168,6 +182,12 @@ export interface FmTask {
 	supplier_id?: string | null;
 	topic?: string | null;
 	raw_yaml?: string | null;
+	// SSH sessions publish their connection details through the task's own
+	// `latest_update`, not a dedicated endpoint — the worker calls
+	// emit_update(task_id, {"ssh": ...}) (worker/executors/ssh_executor.py). That
+	// is the ONLY place host/port/username/expiry appear, so the SSH surface reads
+	// tasks rather than some sessions API that does not exist.
+	latest_update?: { ssh?: FmSshInfo | null } | null;
 	next_retry_at?: number | string | null;
 	depends_on?: string[] | null;
 	pending_dependencies?: string[] | null;
@@ -331,6 +351,63 @@ export async function listWorkflows(sites?: string[]): Promise<FmFanout<FmWorkfl
  * So callers walk the sites they care about. Use `listWorkflows()` as the
  * cross-site index and fetch tasks for the sites actually on screen.
  */
+/**
+ * Per-site node/worker reads, for viewers who are NOT admins.
+ *
+ * Two different edge gates are in play and the difference is the whole reason
+ * these exist. `/fm/api/v1/…` — what `merged()` uses — carries
+ * `auth_request /internal_admin_check` in lum-id-landing.conf, so a regular user
+ * gets 403 from nginx before the federator is ever reached. The per-site prefix
+ * `/fm/<site>/…` has no edge gate; mesh-federator runs it with
+ * FEDERATOR_REQUIRE_SITE_AUTH=true, so it is authenticated but not admin-only
+ * and the rows come back scoped to the caller's identity.
+ *
+ * That is what lets the Compute fleet view show the HOME site to any signed-in
+ * user while every other site stays admin+. Do NOT "simplify" a non-admin path
+ * onto merged() — it will 403 at the edge, which reads like an outage.
+ */
+export async function listNodesForSite(site: string): Promise<FmNode[]> {
+	const r = await fm.get<FmNode[]>(`/${site}/api/v1/nodes`);
+	return (r.data ?? []).map((n) => ({ ...n, site }));
+}
+
+export async function listWorkersForSite(site: string): Promise<FmWorker[]> {
+	const r = await fm.get<FmWorker[]>(`/${site}/api/v1/workers`);
+	return (r.data ?? []).map((w) => ({ ...w, site }));
+}
+
+/** Shape a per-site read like a fan-out so the same components render both. */
+export async function fanoutForSites<T>(
+	sites: string[],
+	one: (site: string) => Promise<T[]>,
+): Promise<FmFanout<T>> {
+	const per = await Promise.all(
+		sites.map(async (site) => {
+			const t0 = Date.now();
+			try {
+				const items = await one(site);
+				return { items, status: { site, ok: true, count: items.length, ms: Date.now() - t0 } };
+			} catch (e: any) {
+				// A site that refuses must be VISIBLE as refused, not silently absent —
+				// an empty table and a 403 look identical otherwise.
+				return {
+					items: [] as T[],
+					status: {
+						site,
+						ok: false,
+						count: 0,
+						ms: Date.now() - t0,
+						error: String(e?.response?.status ?? "") === "403"
+							? "forbidden (admin only)"
+							: String(e?.message ?? e),
+					},
+				};
+			}
+		}),
+	);
+	return { items: per.flatMap((p) => p.items), sites: per.map((p) => p.status) };
+}
+
 export async function listTasksForSite(site: string): Promise<FmTask[]> {
 	const r = await fm.get<FmTask[]>(`/${site}/api/v1/tasks`);
 	return (r.data ?? []).map((t) => ({ ...t, site }));

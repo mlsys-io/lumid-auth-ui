@@ -121,7 +121,7 @@ export default function AdminOverview() {
 				</h2>
 				<div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
 					<AreaLink to="/studio/admin/users"        icon={Users}     label="People & access" hint="Users, roles, invitations, audit" />
-					<AreaLink to="/studio/admin/clusters"     icon={Server}    label="Infrastructure"  hint="Clusters, workers, billing, reviews" />
+					<AreaLink to="/studio/compute"     icon={Server}    label="Compute"         hint="Sites, nodes, workers, jobs and rented GPUs" />
 					<AreaLink to="/studio/admin/competitions" icon={LineChart} label="Lumid Market admin" hint="Competitions, markets, templates, jobs" />
 					<AreaLink to="/status/operations"         icon={Activity}  label="Operations status" hint="Stack health, resource + venue, bottomlines" />
 					<AreaLink to="/code"                     icon={Zap}       label="Claude quota"      hint="Org Claude Code usage — 5h / 7d limits" />
@@ -229,7 +229,7 @@ function StatTile({
 }
 
 function ClusterStat({ data }: { data: Cluster[] | null }) {
-	if (data === null) return <ErrorTile icon={Layers} label="Clusters" to="/studio/admin/clusters" />;
+	if (data === null) return <ErrorTile icon={Layers} label="Clusters" to="/studio/compute" />;
 	const active = data.filter((c) => c.status === 'active').length;
 	const pending = data.filter((c) => c.status === 'pending').length;
 	const disabled = data.filter((c) => c.status === 'disabled').length;
@@ -238,7 +238,7 @@ function ClusterStat({ data }: { data: Cluster[] | null }) {
 		<StatTile
 			icon={Layers}
 			label="Clusters"
-			to="/studio/admin/clusters"
+			to="/studio/compute"
 			primary={active}
 			primaryHint={`of ${data.length} total`}
 			secondary={
@@ -257,7 +257,7 @@ function ClusterStat({ data }: { data: Cluster[] | null }) {
 }
 
 function NodeStat({ data }: { data: Node[] | null }) {
-	if (data === null) return <ErrorTile icon={Server} label="Nodes" to="/studio/admin/clusters" />;
+	if (data === null) return <ErrorTile icon={Server} label="Nodes" to="/studio/compute" />;
 	const active = data.filter((n) => n.status === 'active').length;
 	const draining = data.filter((n) => n.status === 'draining').length;
 	const offline = data.filter((n) => n.status === 'offline').length;
@@ -274,7 +274,7 @@ function NodeStat({ data }: { data: Node[] | null }) {
 		<StatTile
 			icon={Server}
 			label="Nodes"
-			to="/studio/admin/clusters"
+			to="/studio/compute"
 			primary={active}
 			primaryHint={`of ${data.length} total`}
 			secondary={
@@ -294,7 +294,7 @@ function NodeStat({ data }: { data: Node[] | null }) {
 }
 
 function WorkerStat({ data }: { data: Worker[] | null }) {
-	if (data === null) return <ErrorTile icon={Cpu} label="Workers" to="/studio/admin/clusters" />;
+	if (data === null) return <ErrorTile icon={Cpu} label="Workers" to="/studio/compute" />;
 	const idle = data.filter((w) => w.status === 'idle').length;
 	const busy = data.filter((w) => w.status === 'busy').length;
 	const starting = data.filter((w) => w.status === 'starting').length;
@@ -317,7 +317,7 @@ function WorkerStat({ data }: { data: Worker[] | null }) {
 		<StatTile
 			icon={Cpu}
 			label="Workers"
-			to="/studio/admin/clusters"
+			to="/studio/compute"
 			primary={
 				<>
 					{live}

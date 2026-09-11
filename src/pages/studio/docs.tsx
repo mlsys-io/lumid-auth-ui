@@ -21,7 +21,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import 'github-markdown-css/github-markdown-light.css';
 import {
-	BookOpen, Zap, FileCode2, Activity, CandlestickChart, Compass, ArrowLeft, Loader2, Cpu, Database, TerminalSquare, Bot, GraduationCap,
+	BookOpen, Zap, FileCode2, Activity, CandlestickChart, Compass, ArrowLeft, Loader2, Cpu, Database, TerminalSquare, Bot, GraduationCap, Server,
 } from 'lucide-react';
 import StudioHow from './how';
 import { useAuth } from '../../hooks/useAuth';
@@ -171,6 +171,19 @@ const DOCS: DocEntry[] = [
 		group: 'Guides',
 		icon: TerminalSquare,
 		companion: { to: '/studio/docs/fm-ll-queries', label: 'FlowMesh queries' },
+	},
+	{
+		slug: 'infrastructure-setup',
+		title: 'Onboarding a GPU box (Admin+)',
+		description: 'The three layers a new node needs — registry, FlowMesh runtime, and self-heal — what happens automatically, and the failure modes where one layer is done and the other two are not.',
+		md: 'infrastructure-setup.md',
+		group: 'Runbooks',
+		icon: Server,
+		adminOnly: true,
+		// The bootstrap-token minter is a LIVE tool and cannot be markdown, so the
+		// page survives at /studio/admin/infra-setup and §3 links to it. Converting
+		// the guide without keeping that would have deleted a working capability.
+		companion: { to: '/studio/compute', label: 'Compute fleet' },
 	},
 	{
 		slug: 'operations',

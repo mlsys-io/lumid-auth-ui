@@ -181,7 +181,7 @@ export default function SubmitTab() {
 						A task can sit <code>PENDING</code> until a matching worker exists. On{" "}
 						<code>vast</code> that means renting one — the autoscaler reacts within a
 						minute, but the image pull takes 7-15 minutes. Track it in{" "}
-						<a href="/studio/admin/fm/jobs" className="text-indigo-600 hover:underline">
+						<a href="/studio/compute/jobs" className="text-indigo-600 hover:underline">
 							Jobs
 						</a>
 						, where you can also read the result.

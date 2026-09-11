@@ -10,7 +10,18 @@ import { Loading } from './ui/loading';
  * non-admins; unauth users get a return_to back to the page they
  * wanted.
  */
-export function AdminGuard({ children }: { children: ReactNode }) {
+export function AdminGuard({
+	children,
+	fallback = '/studio',
+}: {
+	children: ReactNode;
+	/** Where a signed-in non-admin is sent. Defaults to /studio.
+	 *
+	 *  /studio/compute overrides it: that section is partly public, so a
+	 *  non-admin deep-linking to its admin-only tab should land on the fleet
+	 *  view they CAN see, not be bounced out of the section entirely. */
+	fallback?: string;
+}) {
 	const { user, isLoading, isAuthenticated } = useAuth();
 	const location = useLocation();
 
@@ -21,7 +32,7 @@ export function AdminGuard({ children }: { children: ReactNode }) {
 		return <Navigate to={`/auth/login?return_to=${encodeURIComponent(here)}`} replace />;
 	}
 	if (user?.role !== 'admin' && user?.role !== 'super_admin') {
-		return <Navigate to="/studio" replace />;
+		return <Navigate to={fallback} replace />;
 	}
 	return <>{children}</>;
 }
