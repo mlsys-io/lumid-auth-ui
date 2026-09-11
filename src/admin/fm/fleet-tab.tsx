@@ -152,8 +152,19 @@ export default function FleetTab({ isAdmin }: { isAdmin: boolean }) {
 			</label>
 
 			{tree.length === 0 && !loading && (
-				<div className="rounded-lg border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
-					No nodes reachable.
+				<div className="rounded-lg border border-slate-200 bg-white p-8 text-center">
+					<p className="text-sm font-medium text-slate-700">No nodes to show.</p>
+					{/* "Empty" and "not allowed to see it" are the SAME RESPONSE on this
+					    surface — per-site reads answer 200 with an empty array when the
+					    caller owns nothing, which is exactly what a non-admin got before
+					    the federator's public-read grant existed. It read as an outage.
+					    If that ever regresses, say so here rather than implying the
+					    fleet is down. */}
+					<p className="mx-auto mt-1 max-w-prose text-xs text-slate-500">
+						{isAdmin
+							? "No site returned a node. Check the per-site status above — a site that errored is reported there, and an empty result from a healthy site means the mesh really has no nodes registered."
+							: "Either the home fleet is genuinely empty, or your account cannot read it. This is not necessarily an outage — the per-site status above shows which sites answered."}
+					</p>
 				</div>
 			)}
 
