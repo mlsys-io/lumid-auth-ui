@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import {
+	FM_DEFAULT_COST_PER_HOUR,
 	fleetCostPerHour,
 	listWorkers,
 	secondsSince,
@@ -112,7 +113,16 @@ export default function WorkersTab() {
 									</div>
 								</td>
 								<td className="px-3 py-2 text-xs">
-									{w.cost_per_hour != null ? `$${w.cost_per_hour.toFixed(3)}` : "—"}
+									{/* FlowMesh's `cost_per_hour` is WORKER_COST_PER_HOUR, whose default is
+									    1.0, and nothing on these sites sets it — so a raw render printed
+									    "$1.000" for EVERY worker, including rented vast boxes actually
+									    costing $0.206-$0.266/hr. That also contradicted this tab's own
+									    subtitle, which already discards the default via fleetCostPerHour().
+									    Same rule in both places: the default is not a price. The vast.ai
+									    console is authoritative for rented spend. */}
+									{w.cost_per_hour != null && w.cost_per_hour !== FM_DEFAULT_COST_PER_HOUR
+										? `$${w.cost_per_hour.toFixed(3)}`
+										: "—"}
 								</td>
 								<td className="px-3 py-2 text-xs">
 									<Age seconds={secondsSince(w.last_seen)} />

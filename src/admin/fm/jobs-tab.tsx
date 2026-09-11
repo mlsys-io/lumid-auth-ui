@@ -24,6 +24,7 @@ import { isSessionExpired } from "../../api/client";
 import {
 	FM_TERMINAL_TASK_STATUSES,
 	bundleUrl,
+	getResult,
 	listTasksForSite,
 	listWorkflows,
 	type FmTask,
@@ -43,6 +44,42 @@ export default function JobsTab() {
 	const [open, setOpen] = useState<FmWorkflow | null>(null);
 	const [tasks, setTasks] = useState<FmTask[] | null>(null);
 	const [tasksErr, setTasksErr] = useState<string | null>(null);
+
+	// Result viewer. Until now the ONLY way to see a task's output was the bundle
+	// download — `getResult()` existed in the client with zero callers, so an
+	// operator asking "where do I view results?" had no answer in the UI at all.
+	const [resultOf, setResultOf] = useState<string | null>(null);
+	const [result, setResult] = useState<string | null>(null);
+	const [resultErr, setResultErr] = useState<string | null>(null);
+	const [resultLoading, setResultLoading] = useState(false);
+
+	const viewResult = useCallback(async (site: string, taskId: string) => {
+		setResultOf(taskId);
+		setResult(null);
+		setResultErr(null);
+		setResultLoading(true);
+		try {
+			const r = await getResult<unknown>(site, taskId);
+			setResult(JSON.stringify(r, null, 2));
+		} catch (e) {
+			if (isSessionExpired(e)) return;
+			const msg = (e as Error)?.message || "unreadable";
+			// Two very different causes wear the same 404, and conflating them sends
+			// the reader to the wrong place:
+			//   - the site restarted: results live on the container filesystem with no
+			//     volume, while task metadata survives in Redis, so a DONE task can
+			//     legitimately have no result body (measured on `vast`, 2026-09-11);
+			//   - entitlement: per-site reads carry YOUR token, and a site you are not
+			//     entitled on answers empty rather than forbidden.
+			setResultErr(
+				/404|not found/i.test(msg)
+					? `No stored result for this task. Results are not persisted across a site restart (task metadata is, which is why the task still reads terminal). Original error: ${msg}`
+					: msg,
+			);
+		} finally {
+			setResultLoading(false);
+		}
+	}, []);
 
 	const rows = useMemo(() => {
 		const items = data?.items ?? [];
@@ -232,6 +269,23 @@ export default function JobsTab() {
 												>
 													Bundle
 												</a>
+												<button
+													type="button"
+													disabled={!terminal || !open.site}
+													onClick={() => open.site && viewResult(open.site, t.task_id)}
+													className={`ml-3 text-xs ${
+														terminal && open.site
+															? "text-indigo-600 hover:underline"
+															: "cursor-not-allowed text-slate-300"
+													}`}
+													title={
+														terminal
+															? "View the executor result inline"
+															: "Available once the task reaches a terminal state"
+													}
+												>
+													Result
+												</button>
 											</td>
 										</tr>
 									);
@@ -245,6 +299,41 @@ export default function JobsTab() {
 								)}
 							</tbody>
 						</table>
+					)}
+
+					{/* Result body, inline. Rendered raw rather than pretty-printed into
+					    fields: executor output is task-type-specific (an inference task
+					    returns items[]/usage, a training task something else entirely),
+					    so any fixed schema here would silently hide whatever it did not
+					    anticipate. The bundle link remains for artifacts and logs. */}
+					{resultOf && (
+						<div className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
+							<div className="mb-2 flex items-center justify-between">
+								<p className="text-xs font-medium text-slate-700">
+									Result · <span className="font-mono">{resultOf.slice(0, 24)}…</span>
+								</p>
+								<button
+									type="button"
+									onClick={() => {
+										setResultOf(null);
+										setResult(null);
+										setResultErr(null);
+									}}
+									className="text-xs text-slate-500 hover:text-slate-800"
+								>
+									Close
+								</button>
+							</div>
+							{resultLoading && <p className="text-xs text-slate-500">Loading…</p>}
+							{resultErr && (
+								<p className="whitespace-pre-wrap text-xs text-amber-700">{resultErr}</p>
+							)}
+							{result && (
+								<pre className="max-h-80 overflow-auto rounded bg-slate-50 p-2 text-xs leading-relaxed text-slate-800">
+									{result}
+								</pre>
+							)}
+						</div>
 					)}
 				</div>
 			)}

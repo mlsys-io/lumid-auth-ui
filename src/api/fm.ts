@@ -405,7 +405,7 @@ export function secondsSince(iso?: string | null): number | null {
  * and the caller is told how many were counted so it can decline to show a total it
  * cannot stand behind.
  */
-const FM_DEFAULT_COST_PER_HOUR = 1;
+export const FM_DEFAULT_COST_PER_HOUR = 1;
 
 export function fleetCostPerHour(workers: FmWorker[]): { total: number; priced: number } {
 	const priced = workers.filter((w) => {
