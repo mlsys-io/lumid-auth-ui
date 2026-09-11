@@ -271,11 +271,17 @@ function RecentRow({ item, navigate, appIcon }: {
 	);
 }
 
-// Per-list cap, applied AFTER grouping — "Recent" and each app folder each
-// get their own depth. 20, not 8: every debounced save fires
-// studio:recent-invalidate, so the open thread keeps bumping to the top and a
-// short list visibly pushes older rows off the end mid-session.
-const RECENT_PER_LIST = 20;
+// Cap on the "Recent" list (app folders are rendered elsewhere and are not
+// capped by this constant, despite what the previous comment implied — it is
+// read in exactly one place, RecentSection below).
+//
+// 10 as of 2026-09-11, at the operator's request, down from 20. The earlier
+// rationale for a longer list still holds and is worth keeping in view: every
+// debounced save fires studio:recent-invalidate, so the OPEN thread keeps
+// bumping to the top, and a shorter list visibly pushes older rows off the end
+// mid-session. What makes 10 tolerable is the "show all" toggle immediately
+// below — the cap is the default depth, not a hard limit on what is reachable.
+const RECENT_PER_LIST = 10;
 
 // The header is ALWAYS rendered once loaded — an absent section is
 // indistinguishable from a broken one, which is exactly how this first

@@ -155,6 +155,34 @@ export interface FmTask {
 	max_attempts: number;
 	error?: string | null;
 	site?: string;
+
+	// The list endpoint returns considerably more than the fields above, and the
+	// detail panel is the reason to type them. Optional throughout: these are
+	// populated by the server, not guaranteed, and a missing one must render as
+	// "—" rather than crash the row.
+	last_queue_ts?: number | null;
+	last_error?: string | null;
+	last_failed_worker?: string | null;
+	category?: string | null;
+	owner_id?: string | null;
+	supplier_id?: string | null;
+	topic?: string | null;
+	raw_yaml?: string | null;
+	next_retry_at?: number | string | null;
+	depends_on?: string[] | null;
+	pending_dependencies?: string[] | null;
+	/** Set when FlowMesh BATCHED this task into another's execution — same model +
+	 *  inference config yields the same merge_key. The parent's result carries
+	 *  this task's output under `children`, so a merged task legitimately has no
+	 *  result of its own and that is not a failure. */
+	merged_parent_id?: string | null;
+	merged_children?: string[] | null;
+	usages?: Array<{
+		started_at?: string;
+		finished_at?: string;
+		runtime_sec?: number;
+		hardware?: { gpu?: { devices?: Array<{ name?: string }> } };
+	}> | null;
 }
 
 // ---- client ----
@@ -366,6 +394,22 @@ export function bundleUrl(
 ): string {
 	const q = include.map((i) => `include=${encodeURIComponent(i)}`).join("&");
 	return `${FM_BASE}/${site}/api/v1/results/${encodeURIComponent(taskId)}/bundle?${q}`;
+}
+
+/**
+ * Archived logs for one task.
+ *
+ * The SSE stream below is TTL-bounded — it 404s with "log stream not found" once
+ * the window has passed — so anything older than that must come from here. This
+ * is the endpoint a detail view wants by default: a finished task's logs are
+ * history, not a stream.
+ */
+export async function getTaskLogs(site: string, taskId: string): Promise<string> {
+	const r = await fm.get(`/${site}/api/v1/results/${encodeURIComponent(taskId)}/logs`, {
+		responseType: "text",
+		transformResponse: [(d) => d],
+	});
+	return typeof r.data === "string" ? r.data : JSON.stringify(r.data, null, 2);
 }
 
 /**

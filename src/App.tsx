@@ -872,7 +872,11 @@ export default function App() {
                       { to: "/studio/admin/fm/submit", label: "Submit" },
                       { to: "/studio/admin/fm/vast", label: "Vast" },
                       { to: "/studio/admin/billing", label: "Billing", requireSuperAdmin: true },
-                      { to: "/studio/admin/workflow-review", label: "Reviews" },
+                      // RETIRED FROM NAVIGATION 2026-09-11 at the operator's request
+                      // ("no use"). The route below is deliberately KEPT: the page is
+                      // NOT broken — GET /runmesh/workflow/review/list returns real rows
+                      // — so this is a usefulness decision, not a dead-surface cleanup,
+                      // and it should stay one URL away rather than be deleted.
                       { to: "/studio/admin/infra-setup", label: "Setup guide" },
                     ]}
                   />

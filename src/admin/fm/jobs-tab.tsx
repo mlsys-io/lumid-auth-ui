@@ -25,6 +25,7 @@ import {
 	FM_TERMINAL_TASK_STATUSES,
 	bundleUrl,
 	getResult,
+	getTaskLogs,
 	listTasksForSite,
 	listWorkflows,
 	type FmTask,
@@ -38,6 +39,32 @@ function when(iso?: string): string {
 	return Number.isNaN(t) ? "—" : new Date(t).toLocaleString();
 }
 
+
+function Kv({ k, v }: { k: string; v: string }) {
+	return (
+		<p className="text-slate-600">
+			<span className="inline-block w-24 text-slate-500">{k}</span>
+			<span className="text-slate-800">{v}</span>
+		</p>
+	);
+}
+
+/** Epoch seconds -> local time, or an em dash. The API mixes null and absent. */
+function stamp(ts?: number | null): string {
+	if (ts == null) return "—";
+	return new Date(ts * 1000).toLocaleString();
+}
+
+/** Elapsed between two epoch-second stamps, rendered in the largest sensible unit. */
+function dur(a?: number | null, b?: number | null): string {
+	if (a == null || b == null) return "—";
+	const d = b - a;
+	if (d < 0) return "—";
+	if (d < 90) return `${d.toFixed(1)}s`;
+	if (d < 5400) return `${(d / 60).toFixed(1)}m`;
+	return `${(d / 3600).toFixed(2)}h`;
+}
+
 export default function JobsTab() {
 	const { data, loading, error, refresh } = useFanout<FmWorkflow>(() => listWorkflows(), 20_000);
 	const [status, setStatus] = useState("all");
@@ -48,6 +75,35 @@ export default function JobsTab() {
 	// Result viewer. Until now the ONLY way to see a task's output was the bundle
 	// download — `getResult()` existed in the client with zero callers, so an
 	// operator asking "where do I view results?" had no answer in the UI at all.
+	// Which task's detail panel is open, and which pane of it. "Overview" is the
+	// default because the question an operator actually arrives with is "what
+	// happened to this task" — timings, worker, attempts, error — not "show me the
+	// result blob".
+	const [detail, setDetail] = useState<FmTask | null>(null);
+	const [pane, setPane] = useState<"overview" | "yaml" | "logs" | "result">("overview");
+	const [logs, setLogs] = useState<string | null>(null);
+	const [logsErr, setLogsErr] = useState<string | null>(null);
+	const [logsLoading, setLogsLoading] = useState(false);
+
+	const loadLogs = useCallback(async (site: string, taskId: string) => {
+		setLogs(null);
+		setLogsErr(null);
+		setLogsLoading(true);
+		try {
+			setLogs(await getTaskLogs(site, taskId));
+		} catch (e) {
+			if (isSessionExpired(e)) return;
+			const msg = (e as Error)?.message || "unreadable";
+			setLogsErr(
+				/404|not found/i.test(msg)
+					? `No archived logs for this task. The live stream is TTL-bounded and logs are not persisted across a site restart. Original error: ${msg}`
+					: msg,
+			);
+		} finally {
+			setLogsLoading(false);
+		}
+	}, []);
+
 	const [resultOf, setResultOf] = useState<string | null>(null);
 	const [result, setResult] = useState<string | null>(null);
 	const [resultErr, setResultErr] = useState<string | null>(null);
@@ -271,6 +327,19 @@ export default function JobsTab() {
 												</a>
 												<button
 													type="button"
+													onClick={() => {
+														setDetail(t);
+														setPane("overview");
+														setLogs(null);
+														setLogsErr(null);
+													}}
+													className="ml-3 text-xs text-indigo-600 hover:underline"
+													title="Timings, worker, attempts, error, submitted YAML, logs"
+												>
+													Details
+												</button>
+												<button
+													type="button"
 													disabled={!terminal || !open.site}
 													onClick={() => open.site && viewResult(open.site, t.task_id)}
 													className={`ml-3 text-xs ${
@@ -299,6 +368,153 @@ export default function JobsTab() {
 								)}
 							</tbody>
 						</table>
+					)}
+
+					{/* Task detail. The drill-in table answers "which tasks", this answers
+					    "what happened to THIS one" — the question that previously had no
+					    answer anywhere in the UI short of curling the API by hand. */}
+					{detail && (
+						<div className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
+							<div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+								<p className="font-mono text-xs text-slate-800">{detail.task_id}</p>
+								<div className="flex items-center gap-2">
+									{(["overview", "yaml", "logs", "result"] as const).map((k) => (
+										<button
+											key={k}
+											type="button"
+											onClick={() => {
+												setPane(k);
+												if (k === "logs" && open.site && logs === null && !logsLoading) {
+													void loadLogs(open.site, detail.task_id);
+												}
+												if (k === "result" && open.site) {
+													void viewResult(open.site, detail.task_id);
+												}
+											}}
+											className={`rounded px-2 py-0.5 text-xs ${
+												pane === k
+													? "bg-indigo-50 text-indigo-700"
+													: "text-slate-600 hover:bg-slate-50"
+											}`}
+										>
+											{k}
+										</button>
+									))}
+									<button
+										type="button"
+										onClick={() => setDetail(null)}
+										className="text-xs text-slate-500 hover:text-slate-800"
+									>
+										Close
+									</button>
+								</div>
+							</div>
+
+							{pane === "overview" && (
+								<div className="space-y-2 text-xs">
+									<div className="grid gap-x-6 gap-y-1 sm:grid-cols-2">
+										<Kv k="Status" v={detail.status} />
+										<Kv k="Type" v={detail.task_type ?? "—"} />
+										<Kv k="Worker" v={detail.assigned_worker ?? "—"} />
+										<Kv k="Attempts" v={`${detail.attempts}/${detail.max_attempts}`} />
+										<Kv k="Site" v={detail.site ?? open.site ?? "—"} />
+										<Kv k="Topic" v={detail.topic ?? "—"} />
+									</div>
+
+									{/* Durations, not just stamps. "queued 0.0s, ran 348s" is the shape
+									    of the answer; four epoch floats are not. */}
+									<div className="mt-2 rounded bg-slate-50 p-2">
+										<p className="mb-1 font-medium text-slate-700">Timeline</p>
+										<div className="grid gap-x-6 gap-y-1 sm:grid-cols-2">
+											<Kv k="Submitted" v={stamp(detail.submitted_ts)} />
+											<Kv k="Dispatched" v={stamp(detail.dispatched_ts)} />
+											<Kv k="Started" v={stamp(detail.started_ts)} />
+											<Kv k="Finished" v={stamp(detail.finished_ts)} />
+											<Kv k="Queue wait" v={dur(detail.submitted_ts, detail.started_ts)} />
+											<Kv k="Run time" v={dur(detail.started_ts, detail.finished_ts)} />
+										</div>
+									</div>
+
+									{/* A merged task has NO result of its own — its output is nested under
+									    the parent's `children`. Without saying so, "no result" on a
+									    perfectly successful task reads as data loss. */}
+									{detail.merged_parent_id && (
+										<p className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-amber-800">
+											Batched into <span className="font-mono">{detail.merged_parent_id}</span> —
+											FlowMesh merges tasks sharing a model + inference config, so this task's
+											output lives under that parent's result, not its own.
+										</p>
+									)}
+									{!!detail.merged_children?.length && (
+										<p className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-slate-700">
+											Parent of {detail.merged_children.length} batched task(s); their outputs are
+											nested in this task's result.
+										</p>
+									)}
+
+									{(detail.last_error || detail.error) && (
+										<div className="rounded border border-red-200 bg-red-50 p-2">
+											<p className="mb-1 font-medium text-red-800">Error</p>
+											<pre className="max-h-40 overflow-auto whitespace-pre-wrap text-red-900">
+												{detail.last_error || detail.error}
+											</pre>
+											{detail.last_failed_worker && (
+												<p className="mt-1 text-red-700">
+													last failed on {detail.last_failed_worker}
+												</p>
+											)}
+										</div>
+									)}
+
+									{!!detail.usages?.length && (
+										<div className="rounded bg-slate-50 p-2">
+											<p className="mb-1 font-medium text-slate-700">Usage</p>
+											{detail.usages.map((u, i) => (
+												<p key={i} className="text-slate-700">
+													{u.runtime_sec != null ? `${u.runtime_sec.toFixed(1)}s` : "—"}
+													{" · "}
+													{u.hardware?.gpu?.devices?.map((d) => d.name).join(", ") || "no GPU"}
+												</p>
+											))}
+										</div>
+									)}
+								</div>
+							)}
+
+							{pane === "yaml" && (
+								<pre className="max-h-96 overflow-auto rounded bg-slate-50 p-2 text-xs text-slate-800">
+									{detail.raw_yaml || "The server did not return raw_yaml for this task."}
+								</pre>
+							)}
+
+							{pane === "logs" && (
+								<>
+									{logsLoading && <p className="text-xs text-slate-500">Loading…</p>}
+									{logsErr && (
+										<p className="whitespace-pre-wrap text-xs text-amber-700">{logsErr}</p>
+									)}
+									{logs && (
+										<pre className="max-h-96 overflow-auto rounded bg-slate-50 p-2 text-xs leading-relaxed text-slate-800">
+											{logs}
+										</pre>
+									)}
+								</>
+							)}
+
+							{pane === "result" && (
+								<>
+									{resultLoading && <p className="text-xs text-slate-500">Loading…</p>}
+									{resultErr && (
+										<p className="whitespace-pre-wrap text-xs text-amber-700">{resultErr}</p>
+									)}
+									{result && (
+										<pre className="max-h-96 overflow-auto rounded bg-slate-50 p-2 text-xs text-slate-800">
+											{result}
+										</pre>
+									)}
+								</>
+							)}
+						</div>
 					)}
 
 					{/* Result body, inline. Rendered raw rather than pretty-printed into
