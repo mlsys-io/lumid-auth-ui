@@ -548,15 +548,24 @@ export default function App() {
 
           {/* /status → /status/operations shorthand. */}
           <Route path="/status" element={<Navigate to="/status/operations" replace />} />
-          {/* Live operations status — super_admin only. Standalone page
-              (own layout), so it lives at the top level rather than inside
-              the studio shell. Companion doc at /docs/operations. */}
+          {/* Live operations status — ADMIN AND ABOVE (widened from super_admin
+              2026-09-11). Standalone page (own layout), so it lives at the top
+              level rather than inside the studio shell. Companion doc at
+              /docs/operations.
+
+              THIS GUARD IS UX ONLY — the real gate is the nginx auth_request on
+              `location /status` in deploy_infra/k8s-lift/nginx/lum-id-landing.conf.
+              Until 2026-09-11 that block had no auth_request at all, so the page
+              answered HTTP 200 to an anonymous fetch while this guard made it
+              *look* restricted: the SPA shell and every asset were public, and
+              only the rendered view was withheld. If you change who may see this
+              page, change BOTH layers or you have changed nothing. */}
           <Route
             path="/status/operations"
             element={
-              <SuperAdminGuard>
+              <AdminGuard>
                 <OperationsStatusPage />
-              </SuperAdminGuard>
+              </AdminGuard>
             }
           />
           {/* Claude Code quota dashboard — admin + super_admin, top-level /code */}
