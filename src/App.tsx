@@ -226,6 +226,7 @@ const FmNodes = lazy(() => import("./admin/fm/nodes-tab"));
 const FmWorkers = lazy(() => import("./admin/fm/workers-tab"));
 const FmJobs = lazy(() => import("./admin/fm/jobs-tab"));
 const FmVast = lazy(() => import("./admin/fm/vast-tab"));
+const FmSubmit = lazy(() => import("./admin/fm/submit-tab"));
 
 // lumid_cluster admin — /app/admin/clusters/*
 const AppAdminClusters = lazy(() => import("./pages/app/admin-clusters"));
@@ -868,6 +869,7 @@ export default function App() {
                       { to: "/studio/admin/fm/nodes", label: "Nodes" },
                       { to: "/studio/admin/fm/workers", label: "Workers" },
                       { to: "/studio/admin/fm/jobs", label: "Jobs" },
+                      { to: "/studio/admin/fm/submit", label: "Submit" },
                       { to: "/studio/admin/fm/vast", label: "Vast" },
                       { to: "/studio/admin/billing", label: "Billing", requireSuperAdmin: true },
                       { to: "/studio/admin/workflow-review", label: "Reviews" },
@@ -886,6 +888,7 @@ export default function App() {
                 <Route path="fm/workers" element={<FmWorkers />} />
                 <Route path="fm/jobs" element={<FmJobs />} />
                 <Route path="fm/vast" element={<FmVast />} />
+                <Route path="fm/submit" element={<FmSubmit />} />
                 {/* RETIRED FROM NAVIGATION 2026-09-10, deliberately still ROUTED.
                     The lumid_cluster mirror they read is retired (fm-registry-sync
                     suspended) and the live fleet view is the /fm tabs above, so these

@@ -308,6 +308,44 @@ export async function listTasksForSite(site: string): Promise<FmTask[]> {
 	return (r.data ?? []).map((t) => ({ ...t, site }));
 }
 
+/**
+ * Submit a workflow to ONE site.
+ *
+ * Per-site by necessity, not preference: there is no cross-site submit. Each site
+ * runs its own FlowMesh server, Redis and dispatcher, and worker ids are per-site
+ * (`wkr-18` exists on BOTH home and office), so no scheduler can place one task on
+ * office and another on vast. `POST /fm/api/v1/workflows` — the merged prefix — is
+ * refused (400): mesh-federator federates LIST reads only, and its own header says
+ * it must never be given write paths to fan out. Submitting to two sites means two
+ * calls, which is exactly what this does one site at a time.
+ *
+ * Unlike the merged reads, this carries the CALLER's token, so the target site
+ * applies its own authorization and entitlement — a submit cannot borrow the
+ * federator's credential.
+ *
+ * The body is raw YAML (`text/plain`); the endpoint also accepts `{"yaml": "..."}`
+ * as JSON. Returns the created workflow and its tasks, already dispatched or
+ * pending depending on whether a matching worker was free.
+ */
+export interface FmSubmitResult {
+	ok?: boolean;
+	workflow_id: string;
+	count?: number;
+	tasks: Array<{
+		task_id: string;
+		status: string;
+		assigned_worker: string | null;
+		topic?: string | null;
+	}>;
+}
+
+export async function submitWorkflow(site: string, yaml: string): Promise<FmSubmitResult> {
+	const r = await fm.post<FmSubmitResult>(`/${site}/api/v1/workflows`, yaml, {
+		headers: { "Content-Type": "text/plain" },
+	});
+	return r.data;
+}
+
 /** One task's executor result. Per-site: the caller's own entitlement applies. */
 export async function getResult<T = unknown>(site: string, taskId: string): Promise<T> {
 	const r = await fm.get<T>(`/${site}/api/v1/results/${encodeURIComponent(taskId)}`);
