@@ -110,8 +110,8 @@ interface SupplierSettlementForm {
 /**
  * Turn the backend's own failure code into something an operator can act on.
  *
- * The user-bill and supplier-settlement tabs delegate to an upstream billing API
- * at `https://kv.run:8000/flowmesh/api/v1/billing/*` — a base URL compiled into
+ * These tabs used to delegate to an upstream billing API at
+ * `https://kv.run:8000/flowmesh/api/v1/billing/*` — a base URL compiled into
  * CommonApiEnum, not configuration. That host refuses connections, and the API
  * exists NOWHERE in the current estate: no deployed FlowMesh site exposes a
  * `billing` path (checked cloud/home/office/vast), FlowMesh's own source has no
@@ -119,21 +119,29 @@ interface SupplierSettlementForm {
  * catch-all `{"code":404,"No endpoint"}`). It was served by the retired Runmesh
  * deployment and never migrated.
  *
- * The raw message that surfaced here was the literal string
- * `billingAllUser.submit.fail`, which reads like a missing translation key and
- * tells the reader nothing. Platform reconciliation is computed locally and is
- * unaffected, so the page is partly live — worth saying so rather than implying
- * billing as a whole is broken.
+ * SCOPE HAS NARROWED -- keep this accurate. As of runmesh-admin v0.5.7
+ * (2026-09-11) the user-consumption tab is aggregated LOCALLY from
+ * runmesh_user_transaction and returns real rows; platform reconciliation was
+ * always local. Verified live: `finance/userBill/list` and
+ * `finance/platformReconciliation/list` both HTTP 200 with data.
+ * `finance/supplierSettlement/list` is the ONLY one still on the dead upstream.
+ * The old copy told the reader that user bills were broken too, which stopped
+ * being true; an explanation that overstates the outage is its own defect.
+ *
+ * The raw message that surfaced here was a literal string like
+ * `billingSupplier.submit.fail`, which reads as a missing translation key and
+ * tells the reader nothing.
  */
 function explainBillingFailure(err: any, fallback: string): string {
 	const raw = String(err?.message ?? '');
 	if (/\.submit\.fail$/.test(raw)) {
 		return (
-			`Upstream billing API unavailable (${raw}). This tab is served by ` +
-			`https://kv.run:8000/flowmesh/api/v1/billing/*, which is not reachable and is not ` +
-			`provided by any FlowMesh site in the current estate — it belonged to the retired ` +
-			`Runmesh deployment. Platform reconciliation below is computed locally and still works. ` +
-			`Restoring this needs that billing service rebuilt or the feature retired; no config change fixes it.`
+			`Supplier settlement is unavailable (${raw}). It is the last tab still served by ` +
+			`https://kv.run:8000/flowmesh/api/v1/billing/*, which is unreachable and is provided by ` +
+			`no FlowMesh site in the current estate — it belonged to the retired Runmesh deployment. ` +
+			`User consumption and platform reconciliation are computed locally and are live. ` +
+			`Restoring this one needs a local supplier-cost source (only rented vast.ai capacity has a ` +
+			`real per-hour price today) or the feature retired; no config change fixes it.`
 		);
 	}
 	return raw || fallback;
