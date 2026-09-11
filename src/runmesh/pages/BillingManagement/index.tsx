@@ -106,6 +106,39 @@ interface SupplierSettlementForm {
   remark?: string;
 }
 
+
+/**
+ * Turn the backend's own failure code into something an operator can act on.
+ *
+ * The user-bill and supplier-settlement tabs delegate to an upstream billing API
+ * at `https://kv.run:8000/flowmesh/api/v1/billing/*` — a base URL compiled into
+ * CommonApiEnum, not configuration. That host refuses connections, and the API
+ * exists NOWHERE in the current estate: no deployed FlowMesh site exposes a
+ * `billing` path (checked cloud/home/office/vast), FlowMesh's own source has no
+ * such endpoint, and runmesh-admin does not serve it either (it answers the
+ * catch-all `{"code":404,"No endpoint"}`). It was served by the retired Runmesh
+ * deployment and never migrated.
+ *
+ * The raw message that surfaced here was the literal string
+ * `billingAllUser.submit.fail`, which reads like a missing translation key and
+ * tells the reader nothing. Platform reconciliation is computed locally and is
+ * unaffected, so the page is partly live — worth saying so rather than implying
+ * billing as a whole is broken.
+ */
+function explainBillingFailure(err: any, fallback: string): string {
+	const raw = String(err?.message ?? '');
+	if (/\.submit\.fail$/.test(raw)) {
+		return (
+			`Upstream billing API unavailable (${raw}). This tab is served by ` +
+			`https://kv.run:8000/flowmesh/api/v1/billing/*, which is not reachable and is not ` +
+			`provided by any FlowMesh site in the current estate — it belonged to the retired ` +
+			`Runmesh deployment. Platform reconciliation below is computed locally and still works. ` +
+			`Restoring this needs that billing service rebuilt or the feature retired; no config change fixes it.`
+		);
+	}
+	return raw || fallback;
+}
+
 export const BillingManagement: React.FC = () => {
   const location = useLocation();
   const { t } = useLanguage();
@@ -355,7 +388,7 @@ export const BillingManagement: React.FC = () => {
       }
     } catch (err: any) {
       console.error('Failed to load data:', err);
-      setError(err.message || t('billingAdmin.error.loadFailed'));
+      setError(explainBillingFailure(err, t('billingAdmin.error.loadFailed')));
       setStats({ totalRevenue: 0, supplierCost: 0, grossProfit: 0 });
       if (activeTab === 'user') {
         setUserBills([]);
