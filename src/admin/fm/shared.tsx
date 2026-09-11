@@ -51,8 +51,26 @@ export function useFanout<T>(
 	useEffect(() => {
 		void run();
 		if (!pollMs) return;
-		const h = window.setInterval(() => void run(), pollMs);
-		return () => window.clearInterval(h);
+		// Skip the tick while the tab is in the background. These pollers are not
+		// cheap any more: listWorkflows() fans out to EVERY site, and office alone
+		// is ~146 KB of workflow rows with no server-side pagination, so a
+		// forgotten background tab was re-pulling the whole federation on a timer
+		// for nothing. Mount and manual refresh are unaffected, and returning to
+		// the tab fires the visibilitychange listener below for an immediate
+		// catch-up, so the view is never stale on arrival.
+		const tick = () => {
+			if (typeof document !== "undefined" && document.hidden) return;
+			void run();
+		};
+		const h = window.setInterval(tick, pollMs);
+		const onVisible = () => {
+			if (typeof document !== "undefined" && !document.hidden) void run();
+		};
+		document.addEventListener("visibilitychange", onVisible);
+		return () => {
+			window.clearInterval(h);
+			document.removeEventListener("visibilitychange", onVisible);
+		};
 	}, [run, pollMs]);
 
 	return { data, loading, error, refresh: () => void run() };

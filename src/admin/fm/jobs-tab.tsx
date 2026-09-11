@@ -66,7 +66,12 @@ function dur(a?: number | null, b?: number | null): string {
 }
 
 export default function JobsTab() {
-	const { data, loading, error, refresh } = useFanout<FmWorkflow>(() => listWorkflows(), 20_000);
+	const { data, loading, error, refresh } = // 45s, not 20s: listWorkflows() is a per-site fan-out (5 requests, ~179 KB,
+	// office dominating at ~146 KB and growing -- FlowMesh list endpoints have no
+	// server-side pagination). At 20s that was ~537 KB/min per open tab for data
+	// that changes on the scale of a job, not a second. Manual refresh is always
+	// available, and the drill-in fetches on demand.
+	useFanout<FmWorkflow>(() => listWorkflows(), 45_000);
 	const [status, setStatus] = useState("all");
 	const [open, setOpen] = useState<FmWorkflow | null>(null);
 	const [tasks, setTasks] = useState<FmTask[] | null>(null);
