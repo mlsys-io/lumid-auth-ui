@@ -97,9 +97,15 @@ const TOP_NAV: NavItem[] = [
 	// Fleet is merged into "Manage apps" (/studio/apps/all) — no separate entry.
 	{ to: '/studio/data', label: 'Data', icon: Database, title: 'browse the data mesh — catalog + endpoint explorer' },
 	{ to: '/studio/library', label: 'Library', icon: Store, title: 'marketplace, skills, and experiments' },
-	// "Clusters" replaced "Scheduled" here 2026-09-11 (operator request). Points at
+	// "Compute" replaced "Scheduled" here 2026-09-11 (operator request). Points at
 	// the LIVE federation landing (FmSites) — the merged view over every site's
 	// FlowMesh/Lumilake: cloud, home, office, vast and nus.
+	//
+	// LABEL vs ROUTE diverge on purpose: the label is "Compute" (what the user is
+	// looking for) while the path stays /studio/admin/clusters (what the surface is
+	// called internally, and where FmSites is already mounted). Do not "fix" the
+	// label to match the URL — renaming the route would break the existing
+	// redirects into it, e.g. the `nodes` -> /studio/admin/clusters Navigate.
 	//
 	// adminOnly because /studio/admin/* is AdminGuard-gated. Without the flag every
 	// non-admin would see a row that bounces them.
@@ -108,7 +114,7 @@ const TOP_NAV: NavItem[] = [
 	// mounted and reachable: the top-bar "Right now" ticker and the Apps hero's
 	// "runs today" stat both link into it (see the note below this array), so its
 	// ROUTE_PREFETCH entry is deliberately kept too.
-	{ to: '/studio/admin/clusters', label: 'Clusters', icon: Boxes, title: 'federated fleet — sites, nodes and workers across every mesh', adminOnly: true },
+	{ to: '/studio/admin/clusters', label: 'Compute', icon: Boxes, title: 'federated fleet — sites, nodes and workers across every mesh', adminOnly: true },
 	// NO "Strategies" row here. Strategies are an LQT object, not a Studio-wide
 	// one: the surface belongs to the LQT app and is reached from inside it
 	// (the LQT app's own declared `strategies` surface, /studio/a/<app>/strategies
@@ -129,7 +135,7 @@ const ROUTE_PREFETCH: Record<string, () => Promise<unknown>> = {
 	"/studio/library": () => import("@/pages/studio/library-tabs"),
 	"/studio/data": () => import("@/pages/studio/data"),
 	"/studio/runs": () => import("@/pages/studio/runs"),
-	// Kept in step with the Clusters nav row. Same specifier App.tsx lazy()-loads
+	// Kept in step with the Compute nav row. Same specifier App.tsx lazy()-loads
 	// for FmSites, so Vite serves one chunk rather than duplicating it.
 	"/studio/admin/clusters": () => import("@/admin/fm/sites-tab"),
 	"/studio/portfolio": () => import("@/pages/studio/portfolio"),
