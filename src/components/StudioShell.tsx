@@ -28,7 +28,6 @@ import {
 	MessageSquare,
 	Bot,
 	Trash2,
-	CalendarClock,
 	Loader2,
 	AlertCircle,
 	ShieldCheck,
@@ -77,6 +76,11 @@ interface NavItem {
 	end?: boolean;
 	badge?: number; // count pill on the right (e.g. pending drafts on Inbox)
 	title?: string; // hover tooltip clarifying the surface
+	// Render only for role admin / super_admin. Needed because the destination may
+	// be behind AdminGuard: an unconditional row would advertise a surface that
+	// rejects most of the people who can see it, which reads as a broken app
+	// rather than as a permission boundary.
+	adminOnly?: boolean;
 }
 
 // Sidebar layout (post-refactor, 2026-05-29):
@@ -93,9 +97,18 @@ const TOP_NAV: NavItem[] = [
 	// Fleet is merged into "Manage apps" (/studio/apps/all) — no separate entry.
 	{ to: '/studio/data', label: 'Data', icon: Database, title: 'browse the data mesh — catalog + endpoint explorer' },
 	{ to: '/studio/library', label: 'Library', icon: Store, title: 'marketplace, skills, and experiments' },
-	// "Scheduled" — the claude.ai counterpart of our workflow/loop runs. Points
-	// at the unified runs surface (list/grid/gantt/calendar over every loop).
-	{ to: '/studio/runs', label: 'Scheduled', icon: CalendarClock, title: 'scheduled workflows and loop runs' },
+	// "Clusters" replaced "Scheduled" here 2026-09-11 (operator request). Points at
+	// the LIVE federation landing (FmSites) — the merged view over every site's
+	// FlowMesh/Lumilake: cloud, home, office, vast and nus.
+	//
+	// adminOnly because /studio/admin/* is AdminGuard-gated. Without the flag every
+	// non-admin would see a row that bounces them.
+	//
+	// "Scheduled" (/studio/runs) is REMOVED FROM THE NAV ONLY — the route stays
+	// mounted and reachable: the top-bar "Right now" ticker and the Apps hero's
+	// "runs today" stat both link into it (see the note below this array), so its
+	// ROUTE_PREFETCH entry is deliberately kept too.
+	{ to: '/studio/admin/clusters', label: 'Clusters', icon: Boxes, title: 'federated fleet — sites, nodes and workers across every mesh', adminOnly: true },
 	// NO "Strategies" row here. Strategies are an LQT object, not a Studio-wide
 	// one: the surface belongs to the LQT app and is reached from inside it
 	// (the LQT app's own declared `strategies` surface, /studio/a/<app>/strategies
@@ -116,6 +129,9 @@ const ROUTE_PREFETCH: Record<string, () => Promise<unknown>> = {
 	"/studio/library": () => import("@/pages/studio/library-tabs"),
 	"/studio/data": () => import("@/pages/studio/data"),
 	"/studio/runs": () => import("@/pages/studio/runs"),
+	// Kept in step with the Clusters nav row. Same specifier App.tsx lazy()-loads
+	// for FmSites, so Vite serves one chunk rather than duplicating it.
+	"/studio/admin/clusters": () => import("@/admin/fm/sites-tab"),
 	"/studio/portfolio": () => import("@/pages/studio/portfolio"),
 };
 const prefetched = new Set<string>();
@@ -671,7 +687,9 @@ export function StudioShell() {
 					>
 						<CirclePlus className="w-4 h-4 text-foreground/55" /> New chat
 					</button>
-					{TOP_NAV.map((item) => <NavItemView key={item.to} {...item} />)}
+					{TOP_NAV
+						.filter((item) => !item.adminOnly || isAdmin)
+						.map((item) => <NavItemView key={item.to} {...item} />)}
 					{/* NO Artifacts row here. Artifacts belong to a conversation, so
 					    the trigger lives with the conversation — the icon group at the
 					    top-right of the chatbox (StudioChat's `chromeEl`). In the rail
