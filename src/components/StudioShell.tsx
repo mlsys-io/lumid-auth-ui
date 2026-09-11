@@ -30,7 +30,7 @@ import {
 	Trash2,
 	Loader2,
 	AlertCircle,
-	ShieldCheck, Receipt,} from 'lucide-react';
+	ShieldCheck, Receipt, LayoutGrid,} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useViewMode } from './ViewModeProvider';
@@ -93,9 +93,16 @@ interface NavItem {
 // API tokens live in the bottom avatar menu; "How it works" is a quiet
 // footer docs link.
 const TOP_NAV: NavItem[] = [
-	// Fleet is merged into "Manage apps" (/studio/apps/all) — no separate entry.
+	// Order is Apps -> Data -> Compute (operator request 2026-09-12): what you
+	// build, what you build it on, what you run it with. Library sits after them
+	// as the browse-and-install surface rather than a daily destination.
+	//
+	// "Apps" points at /studio/apps, which App.tsx calls the My Apps spine (the
+	// old Intents/Today landings redirect into it). NOT /studio/apps/all — that is
+	// the plain grid, reached from the user menu as "Manage agents".
+	// Fleet is merged into that grid — no separate entry.
+	{ to: '/studio/apps', label: 'Apps', icon: LayoutGrid, title: 'your apps and agents' },
 	{ to: '/studio/data', label: 'Data', icon: Database, title: 'browse the data mesh — catalog + endpoint explorer' },
-	{ to: '/studio/library', label: 'Library', icon: Store, title: 'marketplace, skills, and experiments' },
 	// "Compute" replaced "Scheduled" here 2026-09-11 (operator request).
 	//
 	// Label, route and page heading now all say "Compute". They briefly did not:
@@ -115,6 +122,7 @@ const TOP_NAV: NavItem[] = [
 	// "runs today" stat both link into it (see the note below this array), so its
 	// ROUTE_PREFETCH entry is deliberately kept too.
 	{ to: '/studio/compute', label: 'Compute', icon: Boxes, title: 'the GPU fleet — sites, nodes and workers across every mesh' },
+	{ to: '/studio/library', label: 'Library', icon: Store, title: 'marketplace, skills, and experiments' },
 	// NO "Strategies" row here. Strategies are an LQT object, not a Studio-wide
 	// one: the surface belongs to the LQT app and is reached from inside it
 	// (the LQT app's own declared `strategies` surface, /studio/a/<app>/strategies
@@ -137,6 +145,8 @@ const ROUTE_PREFETCH: Record<string, () => Promise<unknown>> = {
 	"/studio/runs": () => import("@/pages/studio/runs"),
 	// Kept in step with the Compute nav row. Same specifier App.tsx lazy()-loads
 	// for FmSites, so Vite serves one chunk rather than duplicating it.
+	// The Apps row shares the workspace+apps chunks, which the fallback below
+	// already handles for /studio/apps* — no entry needed here.
 	"/studio/compute": () => import("@/admin/fm/fleet-tab"),
 	// /studio/portfolio is a REDIRECT into Manage apps now, so prefetching it
 	// would warm a chunk that route never renders. The component still ships —
