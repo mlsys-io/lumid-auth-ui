@@ -21,6 +21,9 @@ function Phase({ s }: { s: Sandbox }) {
 		s.phase === "Running" ? "bg-emerald-50 text-emerald-700 border-emerald-200"
 		: s.phase === "Queued" ? "bg-amber-50 text-amber-700 border-amber-200"
 		: s.phase === "Failed" ? "bg-rose-50 text-rose-700 border-rose-200"
+		// Terminating is its own state, not a failure: the user asked for this and
+		// it takes ~30s. Muted rather than red so it does not read as an error.
+		: s.phase === "Terminating" ? "bg-slate-100 text-slate-500 border-slate-200"
 		: "bg-slate-50 text-slate-600 border-slate-200";
 	return (
 		<span className={`rounded border px-1.5 py-0.5 text-xs ${tone}`} title={s.waiting_for ?? undefined}>
@@ -188,9 +191,14 @@ export default function SandboxesTab() {
 								<td className="px-3 py-2 text-xs text-slate-600">{s.node ?? "—"}</td>
 								<td className="px-3 py-2 text-xs text-slate-600">{expiresIn(s.expires_at)}</td>
 								<td className="px-3 py-2 text-right">
+									{/* Deleting twice is the natural thing to do when the row is still
+									    there after the first click, and the second one 404s. The row
+									    stays visible (so the shutdown is legible) but is not clickable. */}
 									<button onClick={() => onDelete(s)}
-										className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-rose-50 hover:text-rose-700">
-										Delete
+										disabled={s.phase === "Terminating"}
+										title={s.phase === "Terminating" ? "shutting down — this takes about 30s" : undefined}
+										className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 enabled:hover:bg-rose-50 enabled:hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40">
+										{s.phase === "Terminating" ? "Deleting…" : "Delete"}
 									</button>
 								</td>
 							</tr>
