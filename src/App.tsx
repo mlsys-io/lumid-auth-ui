@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from "react";
-import { Boxes, ListChecks } from "lucide-react";
+import { Boxes, ListChecks, TerminalSquare} from "lucide-react";
 import { Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
@@ -227,6 +227,7 @@ const ComputeSection = lazy(() => import("./admin/fm/compute-section"));
 const FmFleetRoute = lazy(() =>
   import("./admin/fm/routes").then((m) => ({ default: m.FleetRoute })),
 );
+const FmSandboxes = lazy(() => import("./admin/fm/sandboxes-tab"));
 const FmJobsRoute = lazy(() =>
   import("./admin/fm/routes").then((m) => ({ default: m.JobsRoute })),
 );
@@ -718,6 +719,10 @@ export default function App() {
                     // its own — hiding the tab would only hide a user's own work
                     // from them.
                     { to: "/studio/compute/jobs", label: "Jobs", icon: ListChecks },
+                    // Not requireAdmin: home is the fleet anyone may use, and
+                    // sandbox-control scopes everything to the caller (own
+                    // namespace, own quota, own keys, own home).
+                    { to: "/studio/compute/sandboxes", label: "Sandboxes", icon: TerminalSquare },
                     // Billing is NOT a tab here. It is account/finance, not fleet
                     // operations, and it was the only super_admin entry in a strip
                     // whose other tabs are admin+ — so for most admins it rendered a
@@ -729,6 +734,7 @@ export default function App() {
             >
               <Route index element={<FmFleetRoute />} />
               <Route path="jobs" element={<FmJobsRoute />} />
+              <Route path="sandboxes" element={<FmSandboxes />} />
               {/* Absorbed into Fleet (vast) and Jobs (ssh, submit) on 2026-09-11.
                   Kept as redirects — these were linked from the tab strip and are
                   in people's history. */}
