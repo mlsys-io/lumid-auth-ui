@@ -35,6 +35,7 @@ import {
 	type FmWorkflow,
 } from "../../api/fm";
 import { SiteBadge, SiteStrip, StatusPill, TabShell, useFanout } from "./shared";
+import { PUBLIC_SITE } from "./fleet-tab";
 
 function when(iso?: string): string {
 	if (!iso) return "—";
@@ -68,13 +69,28 @@ function dur(a?: number | null, b?: number | null): string {
 	return `${(d / 3600).toFixed(2)}h`;
 }
 
-export default function JobsTab() {
+/**
+ * Jobs is NOT admin-only. Access on this fleet is per worker/node, not per
+ * surface: you see your own work on the sites you can use, an admin sees
+ * everything everywhere. FlowMesh scopes rows by identity, so a non-admin's
+ * fan-out over `home` returns only their own workflows, tasks and SSH sessions.
+ *
+ * That is also why SSH belongs here rather than behind an admin gate — an SSH
+ * session is just a task of yours.
+ */
+export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 	const { data, loading, error, refresh } = // 45s, not 20s: listWorkflows() is a per-site fan-out (5 requests, ~179 KB,
 	// office dominating at ~146 KB and growing -- FlowMesh list endpoints have no
 	// server-side pagination). At 20s that was ~537 KB/min per open tab for data
 	// that changes on the scale of a job, not a second. Manual refresh is always
 	// available, and the drill-in fetches on demand.
-	useFanout<FmWorkflow>(() => listWorkflows(), 45_000);
+	// A non-admin must NOT fall through to listWorkflows()'s default roster: that
+	// derives the site list from the merged read, which nginx answers 403 for
+	// anyone below admin — the tab would show an error instead of their own jobs.
+	useFanout<FmWorkflow>(
+		() => listWorkflows(isAdmin ? undefined : [PUBLIC_SITE]),
+		45_000,
+	);
 	const [status, setStatus] = useState("all");
 	// SSH is a VIEW of this same dataset, not another page: a session is a task
 	// with task_type "ssh". It was a sibling tab, which meant two tabs fanning out
@@ -247,13 +263,13 @@ export default function JobsTab() {
 								<X className="h-4 w-4" />
 							</button>
 						</div>
-						<SubmitTab embedded />
+						<SubmitTab embedded isAdmin={isAdmin} />
 					</div>
 				</div>
 			)}
 
 			{view === "ssh" ? (
-				<SshTab isAdmin embedded />
+				<SshTab isAdmin={isAdmin} embedded />
 			) : (
 			<>
 			<div className="mb-3 flex gap-2">

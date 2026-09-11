@@ -7,6 +7,7 @@
 
 import { useAuth } from "../../hooks/useAuth";
 import FleetTab from "./fleet-tab";
+import JobsTab from "./jobs-tab";
 
 function useIsAdmin(): boolean {
 	const { user } = useAuth();
@@ -15,6 +16,10 @@ function useIsAdmin(): boolean {
 
 export function FleetRoute() {
 	return <FleetTab isAdmin={useIsAdmin()} />;
+}
+
+export function JobsRoute() {
+	return <JobsTab isAdmin={useIsAdmin()} />;
 }
 
 // SshRoute is gone: SSH is a view inside Jobs now, not a route. jobs-tab renders

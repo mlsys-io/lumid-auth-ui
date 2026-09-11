@@ -224,7 +224,9 @@ const AppAdminSetup = lazy(() => import("./pages/app/admin-setup"));
 const FmFleetRoute = lazy(() =>
   import("./admin/fm/routes").then((m) => ({ default: m.FleetRoute })),
 );
-const FmJobs = lazy(() => import("./admin/fm/jobs-tab"));
+const FmJobsRoute = lazy(() =>
+  import("./admin/fm/routes").then((m) => ({ default: m.JobsRoute })),
+);
 
 // lumid_cluster admin — /app/admin/clusters/*
 const AppAdminClusters = lazy(() => import("./pages/app/admin-clusters"));
@@ -706,7 +708,13 @@ export default function App() {
                   // Their routes are kept as redirects below.
                   tabs={[
                     { to: "/studio/compute", label: "Fleet", end: true, icon: Boxes },
-                    { to: "/studio/compute/jobs", label: "Jobs", requireAdmin: true, icon: ListChecks },
+                    // NOT requireAdmin. Access here is per worker/node, not per
+                    // surface: a user sees their own jobs and their own SSH
+                    // sessions on the fleet they can use, an admin sees all of it.
+                    // FlowMesh scopes rows by identity, so this needs no gate of
+                    // its own — hiding the tab would only hide a user's own work
+                    // from them.
+                    { to: "/studio/compute/jobs", label: "Jobs", icon: ListChecks },
                     // Billing is NOT a tab here. It is account/finance, not fleet
                     // operations, and it was the only super_admin entry in a strip
                     // whose other tabs are admin+ — so for most admins it rendered a
@@ -717,14 +725,7 @@ export default function App() {
               }
             >
               <Route index element={<FmFleetRoute />} />
-              <Route
-                path="jobs"
-                element={
-                  <AdminGuard fallback="/studio/compute">
-                    <FmJobs />
-                  </AdminGuard>
-                }
-              />
+              <Route path="jobs" element={<FmJobsRoute />} />
               {/* Absorbed into Fleet (vast) and Jobs (ssh, submit) on 2026-09-11.
                   Kept as redirects — these were linked from the tab strip and are
                   in people's history. */}

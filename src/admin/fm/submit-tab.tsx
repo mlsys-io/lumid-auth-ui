@@ -14,7 +14,14 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { isSessionExpired } from "../../api/client";
-import { listWorkers, submitWorkflow, type FmSubmitResult } from "../../api/fm";
+import {
+	fanoutForSites,
+	listWorkers,
+	listWorkersForSite,
+	submitWorkflow,
+	type FmSubmitResult,
+} from "../../api/fm";
+import { PUBLIC_SITE } from "./fleet-tab";
 import { SiteStrip, TabShell, useFanout } from "./shared";
 
 // Starters, not a schema. The GPU one pins `type: "RTX 5080"` because
@@ -56,13 +63,23 @@ spec:
  * `embedded` drops the TabShell chrome: Submit is an ACTION, not a place — a tab
  * you entered to do one thing and left — so it now opens as a dialog from Jobs.
  */
-export default function SubmitTab({ embedded = false }: { embedded?: boolean } = {}) {
+export default function SubmitTab({
+	embedded = false,
+	isAdmin = true,
+}: { embedded?: boolean; isAdmin?: boolean } = {}) {
 	// Roster from a federated read: adding a site is an env change on the
 	// federator, and this picker follows it without a code edit.
-	const { data, loading, error, refresh } = useFanout(() => listWorkers(), 60_000);
+	// The roster comes from a federated read so adding a site needs no code edit —
+	// but that read is admin-only at the edge, so a non-admin is given the one
+	// site they may use rather than an error. Submitting elsewhere is refused by
+	// nginx anyway; this just stops the picker offering what would 403.
+	const { data, loading, error, refresh } = useFanout(
+		() => (isAdmin ? listWorkers() : fanoutForSites([PUBLIC_SITE], listWorkersForSite)),
+		60_000,
+	);
 	const sites = useMemo(
-		() => (data?.sites ?? []).map((s) => s.site).sort(),
-		[data],
+		() => (isAdmin ? (data?.sites ?? []).map((s) => s.site).sort() : [PUBLIC_SITE]),
+		[data, isAdmin],
 	);
 	const [site, setSite] = useState("");
 	const [yaml, setYaml] = useState(TEMPLATES[Object.keys(TEMPLATES)[0]]);
