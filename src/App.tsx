@@ -55,7 +55,6 @@ const AppPromptsEditor   = lazy(() => import("./components/app-surface/AppPrompt
 // param-redirects into the owning app's panel. Runs stay as the
 // cross-app run index.
 const StudioRuns         = lazy(() => import("./pages/studio/runs"));
-const StudioPortfolio    = lazy(() => import("./pages/studio/portfolio"));
 // The caller's own LQT strategies + their runtime cycles, over /lqt/inspect/*.
 const StudioStrategies   = lazy(() => import("./pages/studio/strategies"));
 // Workstream E — skills as a first-class surface (inventory + health + discovery).
@@ -704,11 +703,11 @@ export default function App() {
                     { to: "/studio/compute/ssh", label: "SSH", requireAdmin: true },
                     { to: "/studio/compute/submit", label: "Submit", requireAdmin: true },
                     { to: "/studio/compute/vast", label: "Vast", requireAdmin: true },
-                    {
-                      to: "/studio/admin/billing",
-                      label: "Billing",
-                      requireSuperAdmin: true,
-                    },
+                    // Billing is NOT a tab here. It is account/finance, not fleet
+                    // operations, and it was the only super_admin entry in a strip
+                    // whose other tabs are admin+ — so for most admins it rendered a
+                    // gap. It now lives in the user menu (StudioShell), beside
+                    // Management and Claude pool. The route is unchanged.
                   ]}
                 />
               }
@@ -896,7 +895,14 @@ export default function App() {
                 land in a follow-up PR; both still work at their
                 original URLs and are just hidden from the sidebar. */}
             <Route path="runs"                         element={<StudioRuns />} />
-            <Route path="portfolio"                    element={<StudioPortfolio />} />
+            {/* Fleet had TWO addresses for one view. apps.tsx imports this very
+                component and renders <StudioPortfolio embedded /> as its "Fleet
+                rollup", and the sidebar already documents Fleet as "merged into
+                Manage apps — no separate entry" — but the standalone route stayed
+                mounted, so the merge was only half done and the same table lived at
+                two URLs. Nothing in the nav linked here; the redirect finishes it.
+                The component itself is KEPT and still does the work, embedded. */}
+            <Route path="portfolio"                    element={<Navigate to="/studio/apps/all" replace />} />
             <Route path="strategies"                   element={<StudioStrategies />} />
             <Route path="runs/:run_id"                 element={<StudioRunDetail />} />
             {/* Mind folded into each workflow's Insights panel. */}

@@ -30,8 +30,7 @@ import {
 	Trash2,
 	Loader2,
 	AlertCircle,
-	ShieldCheck,
-} from 'lucide-react';
+	ShieldCheck, Receipt,} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useViewMode } from './ViewModeProvider';
@@ -139,7 +138,9 @@ const ROUTE_PREFETCH: Record<string, () => Promise<unknown>> = {
 	// Kept in step with the Compute nav row. Same specifier App.tsx lazy()-loads
 	// for FmSites, so Vite serves one chunk rather than duplicating it.
 	"/studio/compute": () => import("@/admin/fm/fleet-tab"),
-	"/studio/portfolio": () => import("@/pages/studio/portfolio"),
+	// /studio/portfolio is a REDIRECT into Manage apps now, so prefetching it
+	// would warm a chunk that route never renders. The component still ships —
+	// apps.tsx embeds it — and the apps chunk is prefetched by the fallback below.
 };
 const prefetched = new Set<string>();
 function prefetchRoute(to: string) {
@@ -839,6 +840,20 @@ export function StudioShell() {
 									className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted">
 									<ShieldCheck className="w-3.5 h-3.5 text-muted-foreground" />
 									Claude pool
+								</Link>
+							)}
+							{/* Billing — moved out of the Compute tab strip 2026-09-11.
+							    It is account/finance rather than fleet operations, and it
+							    was the lone super_admin entry in a strip of admin+ tabs, so
+							    to every ordinary admin it read as a missing tab. super_admin
+							    only, matching the route's own SuperAdminGuard. */}
+							{user?.role === 'super_admin' && (
+								<Link to="/studio/admin/billing"
+									onClick={() => setMenuOpen(false)}
+									title="User consumption, platform reconciliation, supplier settlement"
+									className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted">
+									<Receipt className="w-3.5 h-3.5 text-muted-foreground" />
+									Billing
 								</Link>
 							)}
 							{/* Documentation — the in-shell index over every guide,
