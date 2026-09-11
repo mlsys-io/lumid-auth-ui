@@ -221,6 +221,9 @@ const AppAdminSetup = lazy(() => import("./pages/app/admin-setup"));
 // lum.id/fm dashboard — live federation (sites/nodes/workers/jobs/vast).
 // Reads mesh-federator directly via src/api/fm.ts, NOT the lumid_cluster mirror
 // that the legacy registry screens (now unlisted, still routed) still use.
+// Compute is the only admin section with a docked chat, so it wraps
+// AdminSectionLayout rather than every section growing a rail it does not want.
+const ComputeSection = lazy(() => import("./admin/fm/compute-section"));
 const FmFleetRoute = lazy(() =>
   import("./admin/fm/routes").then((m) => ({ default: m.FleetRoute })),
 );
@@ -692,7 +695,7 @@ export default function App() {
             <Route
               path="compute"
               element={
-                <AdminSectionLayout
+                <ComputeSection
                   title="Compute"
                   subtitle="The federated GPU fleet behind lum.id/fm — sites, nodes and workers in one tree, plus jobs, shells and rented capacity."
                   // TWO tabs, down from five, because three of the five were not

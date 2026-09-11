@@ -17,6 +17,10 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import ChatRail from "@/components/ChatRail";
+// The spine (/studio/apps with nothing selected) used to pass enabled={!!app},
+// so the ONE place a user lands before choosing an app had no assistance at all.
+// It now grounds on the generic Apps scope; a real app still wins.
+import { APPS_KEY } from "@/components/StudioChat";
 import { useAppNav } from "@/components/useAppNav";
 import { AppOverview } from "@/pages/studio/apps";
 
@@ -69,7 +73,7 @@ export default function StudioWorkspace() {
 
 			{/* RIGHT — grounded chat (side panel, collapsible; auto-hidden on narrow,
 			    where it takes over full width when opened). */}
-			<ChatRail groundApp={app} enabled={!!app} />
+			<ChatRail groundApp={app || APPS_KEY} />
 		</div>
 	);
 }

@@ -540,7 +540,8 @@ export function StudioShell() {
 	// the whole two-panel row mid-viewport — the rail then sits against the
 	// middle of the screen instead of the right edge, with dead space beside it.
 	const dataWorkspace = location.pathname.startsWith('/studio/data');
-	const fullBleed = appWorkspace || libWorkspace || dataWorkspace;
+	const computeWorkspace = location.pathname.startsWith('/studio/compute');
+	const fullBleed = appWorkspace || libWorkspace || dataWorkspace || computeWorkspace;
 	const wideMain = location.pathname.startsWith('/dashboard')
 		|| location.pathname.startsWith('/studio/a/')
 		|| location.pathname.startsWith('/studio/manage')

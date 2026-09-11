@@ -192,6 +192,21 @@ export const LIBRARY_KEY = 'lumid-library';
 // data_query / save_artifact tools it drives are platform tools, not app tools,
 // so nothing here depends on a bundle being installed.
 export const DATA_KEY = 'lumid-data-mesh';
+// Same reservation for the Apps SPINE (/studio/apps with no app selected) and for
+// /studio/compute. Both are first-party surfaces with a docked chat and no app in
+// the URL, so without a key they would save every thread untagged — unresumable
+// on re-entry and filed under "General" in history, which is exactly what the
+// per-context resume map exists to prevent.
+//
+// Neither has a bundle behind it. Their openers are hardcoded below, and their
+// chips are deliberately plain questions rather than tool-specific prompts: the
+// DATA_KEY chips can name data_catalog/data_query because those are platform
+// tools whose arguments were MEASURED against the live endpoint. Nothing
+// equivalent has been verified for fleet or app queries, and a chip that names a
+// tool it cannot drive produces an empty answer on the very first click — the
+// worst possible first impression of a new surface.
+export const APPS_KEY = 'lumid-apps';
+export const COMPUTE_KEY = 'lumid-compute';
 
 // Persisted transcript shape: { user_sub: string, messages: Message[] }.
 // Tagging with user_sub closes the "same browser tab, different user"
@@ -693,6 +708,12 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 		// under "General" — the exact failure the per-app resume map exists to
 		// prevent.
 		if (/^\/studio\/data(\/|$|\?)/.test(pathnameRef.current)) return DATA_KEY;
+		if (/^\/studio\/compute(\/|$|\?)/.test(pathnameRef.current)) return COMPUTE_KEY;
+		// The Apps SPINE only — /studio/apps/<app> is a real app and falls through
+		// to the match below, which must keep winning or a per-app thread would be
+		// filed under the generic Apps scope.
+		if (/^\/studio\/apps(\/|$|\?)/.test(pathnameRef.current)
+			&& !/^\/studio\/apps\/[^/?]+/.test(pathnameRef.current)) return APPS_KEY;
 		const m = pathnameRef.current.match(/^\/studio\/apps\/([^/?]+)/);
 		return m && m[1] !== 'all' ? decodeURIComponent(m[1]) : null;
 	};
@@ -1610,6 +1631,32 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 		// so the app context (sent with every turn) drives retrieval/routing.
 		setAgentId(''); setPersonaId('');
 		// Library context — no workflows; a marketplace/skills/experiments opener.
+		if (app === APPS_KEY) {
+			setStudioSelection(null);
+			setMessages((prev) => [...prev, {
+				role: 'assistant',
+				content: "Your **apps and agents**. Ask me what you have, what it has been doing, or what to run next.",
+				chips: [
+					{ label: 'what do I have?', prompt: 'List my installed apps and agents, and say in one line each what they are for and when they last did anything.' },
+					{ label: 'what ran recently?', prompt: 'What have my apps done in the last day or so? Call out anything that failed or produced nothing, and what you would look at first.' },
+					{ label: 'anything stuck?', prompt: 'Is any of my apps or scheduled work failing, stalled, or producing no output? Tell me which, and the most likely reason.' },
+				],
+			}]);
+			return;
+		}
+		if (app === COMPUTE_KEY) {
+			setStudioSelection(null);
+			setMessages((prev) => [...prev, {
+				role: 'assistant',
+				content: "The **compute fleet** — sites, nodes, workers, jobs and rented GPUs. Ask me what it is doing.",
+				chips: [
+					{ label: "what's running?", prompt: 'What is the compute fleet doing right now — which sites and workers are live, and what work is on them?' },
+					{ label: 'anything unhealthy?', prompt: 'Is anything in the fleet unhealthy, stale or idle that should not be? Judge liveness on heartbeat age rather than on a row existing, since a destroyed machine leaves its registry row behind.' },
+					{ label: 'what am I spending?', prompt: 'What is rented right now and what is it costing? Note that FlowMesh reports a default cost of 1.0 per worker when nobody set a real price, so do not report that as money.' },
+				],
+			}]);
+			return;
+		}
 		if (app === LIBRARY_KEY) {
 			setStudioSelection(null);
 			setMessages((prev) => [...prev, {
