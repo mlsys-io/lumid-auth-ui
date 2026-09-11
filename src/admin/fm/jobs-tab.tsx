@@ -176,7 +176,6 @@ export default function JobsTab() {
 
 	return (
 		<TabShell
-			title="Jobs"
 			subtitle={`${data?.items.length ?? 0} workflow(s) across the federation`}
 			loading={loading}
 			error={error}

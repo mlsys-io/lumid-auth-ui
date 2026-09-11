@@ -38,7 +38,6 @@ export default function WorkersTab() {
 
 	return (
 		<TabShell
-			title="Workers"
 			subtitle={`${data?.items.length ?? 0} worker(s) · ${
 				burn.priced > 0
 					? `$${burn.total.toFixed(3)}/hr across ${burn.priced} priced worker(s)`

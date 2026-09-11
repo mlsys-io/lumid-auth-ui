@@ -870,9 +870,15 @@ export default function App() {
               {/* Infrastructure — unified GPU/compute admin surface. */}
               <Route
                 element={
+                  // Heading says "Compute" to match the sidebar entry that brings you
+                  // here (StudioShell.tsx). It read "Infrastructure" until 2026-09-11,
+                  // so the sidebar, the page heading and the URL each said something
+                  // different. The per-tab <h2> was dropped in the same change — the
+                  // tab bar below already names the current tab, and rendering both
+                  // stacked two headings with two blurbs on every page.
                   <AdminSectionLayout
-                    title="Infrastructure"
-                    subtitle="Live view of lum.id/fm — every federated mesh, its nodes, workers, jobs and rented GPU spend. The lumid_cluster mirror that used to back this page is retired; its legacy admin screens remain reachable at /studio/admin/cluster-registry."
+                    title="Compute"
+                    subtitle="Live view of lum.id/fm — every federated mesh, its nodes, workers, jobs and rented GPU spend. Legacy lumid_cluster admin screens remain at /studio/admin/cluster-registry."
                     tabs={[
                       { to: "/studio/admin/clusters", label: "Sites", end: true },
                       { to: "/studio/admin/fm/nodes", label: "Nodes" },

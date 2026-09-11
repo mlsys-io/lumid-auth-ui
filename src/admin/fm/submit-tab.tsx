@@ -92,7 +92,6 @@ export default function SubmitTab() {
 
 	return (
 		<TabShell
-			title="Submit a job"
 			subtitle="Hand a workflow to one site. Cross-site runs are two submissions — there is no scheduler spanning sites."
 			loading={loading}
 			error={error}

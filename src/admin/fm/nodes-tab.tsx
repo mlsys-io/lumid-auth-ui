@@ -25,7 +25,6 @@ export default function NodesTab() {
 
 	return (
 		<TabShell
-			title="Nodes"
 			subtitle={`${data?.items.length ?? 0} node(s) across the federation`}
 			loading={loading}
 			error={error}

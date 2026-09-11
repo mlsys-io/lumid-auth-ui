@@ -73,7 +73,6 @@ export default function VastTab() {
 
 	return (
 		<TabShell
-			title="Vast — rented GPUs"
 			subtitle="Elastic capacity rented from vast.ai on demand and destroyed when idle. Refreshes every 15s."
 			loading={loading}
 			error={error}

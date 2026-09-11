@@ -160,6 +160,14 @@ export function StatusPill({ status }: { status: string }) {
 	return <span className={`rounded border px-1.5 py-0.5 text-xs ${tone}`}>{s}</span>;
 }
 
+// `title` is OPTIONAL and the fm tabs deliberately omit it. Every one of them
+// renders inside AdminSectionLayout, which already prints the section <h1> and a
+// tab bar that names+highlights the current tab — so a per-tab <h2> repeating that
+// label stacked TWO headings and TWO description paragraphs on every page
+// ("Infrastructure" over "Sites", each with its own blurb). The rest of the admin
+// tree never does this: admin-users.tsx and admin-audit.tsx render no heading at
+// all and rely on the section header. Keep it that way; the subtitle carries the
+// real information (refresh cadence, data caveats) and survives on its own line.
 export function TabShell({
 	title,
 	subtitle,
@@ -168,7 +176,7 @@ export function TabShell({
 	onRefresh,
 	children,
 }: {
-	title: string;
+	title?: string;
 	subtitle?: string;
 	loading: boolean;
 	error: string | null;
@@ -179,8 +187,10 @@ export function TabShell({
 		<section>
 			<div className="mb-4 flex items-start justify-between gap-4">
 				<div>
-					<h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-					{subtitle && <p className="mt-0.5 text-sm text-slate-600">{subtitle}</p>}
+					{title && <h2 className="text-lg font-semibold text-slate-900">{title}</h2>}
+					{subtitle && (
+						<p className={`text-sm text-slate-600 ${title ? "mt-0.5" : ""}`}>{subtitle}</p>
+					)}
 				</div>
 				<button
 					onClick={onRefresh}

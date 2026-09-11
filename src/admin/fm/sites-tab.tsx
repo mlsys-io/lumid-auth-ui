@@ -48,7 +48,6 @@ export default function SitesTab() {
 
 	return (
 		<TabShell
-			title="Sites"
 			subtitle="Live federation across every mesh behind lum.id/fm. Refreshes every 30s."
 			loading={loading}
 			error={nodes.error || workers.error}
