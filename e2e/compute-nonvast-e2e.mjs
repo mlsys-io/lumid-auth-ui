@@ -1,4 +1,6 @@
-// End-to-end walk of /studio/compute for the NON-VAST sites.
+// End-to-end walk of /studio/research-fleet for the NON-VAST sites.
+// (Renamed from /studio/compute 2026-09-13; the old path is a splat-preserving
+//  redirect, asserted below so the rename cannot silently break old links.)
 //
 // WHY THIS EXISTS. The compute surface was rebuilt to fan out per site: Sandboxes
 // used to talk to one hardcoded backend (`SBX_BASE = "/sbx"`, home only) and now
@@ -92,16 +94,26 @@ async function go(path, waitFor) {
 	await page.waitForTimeout(2500); // let the per-site fanout settle
 }
 
+// ── 0. the renamed paths still resolve from their OLD URLs ──────────────────
+console.log('\n[0] /studio/compute -> /studio/research-fleet redirect');
+await go('/studio/compute/jobs');
+const landed = page.url();
+if (/\/studio\/research-fleet\/jobs/.test(landed)) ok('old path redirects, subpath preserved');
+else bad(`old path did NOT redirect — landed on ${landed}`);
+
 // ── 1. Fleet ────────────────────────────────────────────────────────────────
-console.log('\n[1] /studio/compute (Fleet)');
-await go('/studio/compute');
+console.log('\n[1] /studio/research-fleet (Fleet)');
+await go('/studio/research-fleet');
 const fleetText = await page.textContent('body').catch(() => '');
-if (/compute/i.test(fleetText || '')) ok('Fleet renders'); else bad('Fleet did not render');
+// Keyed on the CURRENT heading. This asserted /compute/i until 2026-09-13, when the
+// page heading became "Research Fleet" — the rename would have turned this red for
+// the wrong reason, which is worse than no assertion.
+if (/research fleet/i.test(fleetText || '')) ok('Fleet renders'); else bad('Fleet did not render');
 await page.screenshot({ path: `${SHOTS}/1-fleet.png` }).catch(() => {});
 
 // ── 2. Sandboxes, per-site ──────────────────────────────────────────────────
-console.log('\n[2] /studio/compute/sandboxes (per-site fanout)');
-await go('/studio/compute/sandboxes');
+console.log('\n[2] /studio/research-fleet/sandboxes (per-site fanout)');
+await go('/studio/research-fleet/sandboxes');
 await page.screenshot({ path: `${SHOTS}/2-sandboxes.png`, fullPage: true }).catch(() => {});
 
 // ASSERT ON VISIBLE ELEMENTS, NOT body textContent.
@@ -149,8 +161,8 @@ for (const site of NOT_SANDBOX_SITES) {
 }
 
 // ── 3. Jobs ─────────────────────────────────────────────────────────────────
-console.log('\n[3] /studio/compute/jobs');
-await go('/studio/compute/jobs');
+console.log('\n[3] /studio/research-fleet/jobs');
+await go('/studio/research-fleet/jobs');
 const jobsText = (await page.textContent('body').catch(() => '')) || '';
 if (jobsText.length > 200) ok('Jobs renders'); else bad('Jobs did not render');
 await page.screenshot({ path: `${SHOTS}/3-jobs.png` }).catch(() => {});

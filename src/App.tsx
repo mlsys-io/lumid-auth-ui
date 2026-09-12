@@ -344,6 +344,29 @@ function DashboardAdminToStudio() {
   return <Navigate to={`/studio/admin/${tail}${loc.search}`} replace />;
 }
 
+// Route RENAMES 2026-09-13 (operator request): the nav labels became
+// "Data Warehouse" and "Research Fleet", and the paths now match them so label,
+// route, heading and destination all agree. These two keep every existing link,
+// bookmark and chat citation working — splat + query preserved, same shape as
+// DashboardAdminToStudio above.
+//
+// Do NOT delete them on the assumption "nothing links there any more": the old
+// paths were the canonical ones for months, they appear in saved chat threads and
+// in e2e scripts, and /studio/compute was itself already the redirect TARGET for
+// ~8 older paths (/studio/admin/clusters, fm/nodes, fm/workers, ssh, sites, …).
+// Those now point straight at /studio/research-fleet, so this is a safety net for
+// external links rather than an internal hop.
+function ComputeToResearchFleetRedirect() {
+  const tail = useParams()["*"] ?? "";
+  const loc = useLocation();
+  return <Navigate to={`/studio/research-fleet${tail ? `/${tail}` : ""}${loc.search}`} replace />;
+}
+
+function DataToDataWarehouseRedirect() {
+  const loc = useLocation();
+  return <Navigate to={`/studio/data-warehouse${loc.search}`} replace />;
+}
+
 // Phase 4 (app→agent): /studio/agents/:app → /studio/apps/:app, preserving the
 // query (e.g. ?selected=<loop>). Forward-compat for the canonical "agents"
 // surface while internal navigate() targets still point at /apps.
@@ -699,7 +722,7 @@ export default function App() {
                 instruction that Submit, Setup guide and Vast are admin+, and a
                 shell on a GPU box is a bigger grant than reading its status. */}
             <Route
-              path="compute"
+              path="research-fleet"
               element={
                 <ComputeSection
                   title="Research Fleet"
@@ -716,18 +739,18 @@ export default function App() {
                   //     left. It is a button on Jobs that opens a dialog.
                   // Their routes are kept as redirects below.
                   tabs={[
-                    { to: "/studio/compute", label: "Fleet", end: true, icon: Boxes },
+                    { to: "/studio/research-fleet", label: "Fleet", end: true, icon: Boxes },
                     // NOT requireAdmin. Access here is per worker/node, not per
                     // surface: a user sees their own jobs and their own SSH
                     // sessions on the fleet they can use, an admin sees all of it.
                     // FlowMesh scopes rows by identity, so this needs no gate of
                     // its own — hiding the tab would only hide a user's own work
                     // from them.
-                    { to: "/studio/compute/jobs", label: "Jobs", icon: ListChecks },
+                    { to: "/studio/research-fleet/jobs", label: "Jobs", icon: ListChecks },
                     // Not requireAdmin: home is the fleet anyone may use, and
                     // sandbox-control scopes everything to the caller (own
                     // namespace, own quota, own keys, own home).
-                    { to: "/studio/compute/sandboxes", label: "Sandboxes", icon: TerminalSquare },
+                    { to: "/studio/research-fleet/sandboxes", label: "Sandboxes", icon: TerminalSquare },
                     // Billing is NOT a tab here. It is account/finance, not fleet
                     // operations, and it was the only super_admin entry in a strip
                     // whose other tabs are admin+ — so for most admins it rendered a
@@ -743,14 +766,14 @@ export default function App() {
               {/* Absorbed into Fleet (vast) and Jobs (ssh, submit) on 2026-09-11.
                   Kept as redirects — these were linked from the tab strip and are
                   in people's history. */}
-              <Route path="ssh" element={<Navigate to="/studio/compute/jobs" replace />} />
-              <Route path="submit" element={<Navigate to="/studio/compute/jobs" replace />} />
-              <Route path="vast" element={<Navigate to="/studio/compute" replace />} />
+              <Route path="ssh" element={<Navigate to="/studio/research-fleet/jobs" replace />} />
+              <Route path="submit" element={<Navigate to="/studio/research-fleet/jobs" replace />} />
+              <Route path="vast" element={<Navigate to="/studio/research-fleet" replace />} />
               {/* The three tabs Fleet replaced. Kept as redirects, not deleted:
                   they were linked from the admin strip for months. */}
-              <Route path="sites" element={<Navigate to="/studio/compute" replace />} />
-              <Route path="nodes" element={<Navigate to="/studio/compute" replace />} />
-              <Route path="workers" element={<Navigate to="/studio/compute" replace />} />
+              <Route path="sites" element={<Navigate to="/studio/research-fleet" replace />} />
+              <Route path="nodes" element={<Navigate to="/studio/research-fleet" replace />} />
+              <Route path="workers" element={<Navigate to="/studio/research-fleet" replace />} />
             </Route>
 
             <Route path="inbox"                        element={<Inbox />} />
@@ -852,7 +875,12 @@ export default function App() {
                 Catalog is the federated data-lake viewer; Explorer runs any
                 allowlisted data-app's declared endpoints. Renders the native
                 components directly — no /me/apps/:app/ui round-trip. */}
-            <Route path="data"                         element={<StudioData />} />
+            <Route path="data-warehouse"               element={<StudioData />} />
+            {/* Old paths, renamed 2026-09-13. Splat-preserving so
+                /studio/compute/jobs and /studio/compute/sandboxes survive. */}
+            <Route path="compute/*"                    element={<ComputeToResearchFleetRedirect />} />
+            <Route path="compute"                      element={<ComputeToResearchFleetRedirect />} />
+            <Route path="data"                         element={<DataToDataWarehouseRedirect />} />
             {/* Library — Marketplace / Skills / Experiments as tabs under
                 one nav entry; the old top-level paths redirect in. */}
             <Route path="library"                      element={<StudioLibraryTabs />}>
@@ -963,12 +991,12 @@ export default function App() {
                   signed-in user — a section cannot be partly public from inside a
                   blanket guard. These redirects keep every existing link, bookmark
                   and in-app reference working; do not delete them. */}
-              <Route path="clusters" element={<Navigate to="/studio/compute" replace />} />
-              <Route path="fm/nodes" element={<Navigate to="/studio/compute" replace />} />
-              <Route path="fm/workers" element={<Navigate to="/studio/compute" replace />} />
-              <Route path="fm/jobs" element={<Navigate to="/studio/compute/jobs" replace />} />
-              <Route path="fm/submit" element={<Navigate to="/studio/compute/submit" replace />} />
-              <Route path="fm/vast" element={<Navigate to="/studio/compute/vast" replace />} />
+              <Route path="clusters" element={<Navigate to="/studio/research-fleet" replace />} />
+              <Route path="fm/nodes" element={<Navigate to="/studio/research-fleet" replace />} />
+              <Route path="fm/workers" element={<Navigate to="/studio/research-fleet" replace />} />
+              <Route path="fm/jobs" element={<Navigate to="/studio/research-fleet/jobs" replace />} />
+              <Route path="fm/submit" element={<Navigate to="/studio/research-fleet/submit" replace />} />
+              <Route path="fm/vast" element={<Navigate to="/studio/research-fleet/vast" replace />} />
               {/* The Setup GUIDE moved to /studio/docs/infrastructure-setup (Admin+).
                   This route stays because the page is not only prose: it MINTS
                   cluster bootstrap tokens (cluster picker + TTL + the one-line

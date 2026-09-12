@@ -17,7 +17,7 @@ Exit 0 = pass. Fold into the dogfood to catch Studio-UI regressions (sidebar
 
 ## compute-nonvast-e2e.mjs
 
-`/studio/compute` end-to-end for the **non-vast** sites (home, office, nus).
+`/studio/research-fleet` end-to-end for the **non-vast** sites (home, office, nus).
 Asserts the per-site fanout actually RENDERS — each site's SiteStrip badge and
 its entry in the create picker — plus that `vast` and `cloud` are *not* offered
 as sandbox sites (vast is a FlowMesh SSH task; cloud is the hub). Also watches

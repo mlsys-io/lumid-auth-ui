@@ -123,16 +123,25 @@ const TOP_NAV: NavItem[] = [
 	// Experiments and shows no apps at all. Label, route and destination now
 	// agree for this row, so the mislabel is gone rather than just renamed.
 	//
-	// LABELS AND HEADINGS ONLY — the ROUTES are unchanged (/studio/data,
-	// /studio/compute). That is a deliberate, known divergence: renaming the
-	// paths needs redirects from every existing link, and this file already
-	// carries the scar of a label/route mismatch (see the Compute note below).
-	// The user-visible strings were changed TOGETHER so nothing a reader sees
-	// disagrees: App.tsx's ComputeSection title, the dashboard AreaLink, and
-	// data.tsx's DataLakeViewer title all say the new names too. If the routes
-	// are ever renamed, those four places move as one.
+	// ROUTES RENAMED TOO (2026-09-13, same request): /studio/data ->
+	// /studio/data-warehouse and /studio/compute -> /studio/research-fleet. Label,
+	// route, page heading and destination now all agree for all three rows, which
+	// closes the divergence this file had carried twice (the Compute row's
+	// /studio/admin/clusters era, and the labels-only step earlier today).
+	//
+	// The old paths are splat-preserving redirects in App.tsx
+	// (ComputeToResearchFleetRedirect / DataToDataWarehouseRedirect) — keep them:
+	// /studio/compute was itself the redirect TARGET for ~8 older paths and appears
+	// in saved chat threads and e2e scripts.
+	//
+	// FIVE places had to move together, and a miss in any of them is quiet rather
+	// than loud: these labels, the `to:` values, the ROUTE_PREFETCH keys below, the
+	// fullBleed predicates (dataWorkspace/computeWorkspace — a miss there pins the
+	// chat rail to the middle of the viewport instead of the window edge), and
+	// StudioChat's virtual-scope regexes (a miss there saves threads UNTAGGED and
+	// unresumable). The thread-scope KEYS themselves are deliberately NOT renamed.
 	{ to: '/studio/library', label: 'Library', icon: Library, title: 'browse and install — marketplace, skills and experiments' },
-	{ to: '/studio/data', label: 'Data Warehouse', icon: Database, title: 'browse the data mesh — catalog + endpoint explorer' },
+	{ to: '/studio/data-warehouse', label: 'Data Warehouse', icon: Database, title: 'browse the data mesh — catalog + endpoint explorer' },
 	// "Compute" replaced "Scheduled" here 2026-09-11 (operator request).
 	//
 	// History worth keeping: the row once pointed at /studio/admin/clusters while
@@ -156,7 +165,7 @@ const TOP_NAV: NavItem[] = [
 	// mounted and reachable: the top-bar "Right now" ticker and the Apps hero's
 	// "runs today" stat both link into it (see the note below this array), so its
 	// ROUTE_PREFETCH entry is deliberately kept too.
-	{ to: '/studio/compute', label: 'Research Fleet', icon: Boxes, title: 'the GPU fleet — sites, nodes and workers across every mesh' },
+	{ to: '/studio/research-fleet', label: 'Research Fleet', icon: Boxes, title: 'the GPU fleet — sites, nodes and workers across every mesh' },
 	// NO "Library" row — merged into "Apps" above 2026-09-13. Same destination,
 	// one row. /studio/library* routes are untouched and still carry their own
 	// tab bar, so existing links and the marketplace CTA in AppSurface keep working.
@@ -178,13 +187,13 @@ const TOP_NAV: NavItem[] = [
 // Vite dedupes these dynamic imports with App.tsx's lazy() — same chunk.
 const ROUTE_PREFETCH: Record<string, () => Promise<unknown>> = {
 	"/studio/library": () => import("@/pages/studio/library-tabs"),
-	"/studio/data": () => import("@/pages/studio/data"),
+	"/studio/data-warehouse": () => import("@/pages/studio/data"),
 	"/studio/runs": () => import("@/pages/studio/runs"),
 	// Kept in step with the Compute nav row. Same specifier App.tsx lazy()-loads
 	// for FmSites, so Vite serves one chunk rather than duplicating it.
 	// The Apps row shares the workspace+apps chunks, which the fallback below
 	// already handles for /studio/apps* — no entry needed here.
-	"/studio/compute": () => import("@/admin/fm/fleet-tab"),
+	"/studio/research-fleet": () => import("@/admin/fm/fleet-tab"),
 	// /studio/portfolio is a REDIRECT into Manage apps now, so prefetching it
 	// would warm a chunk that route never renders. The component still ships —
 	// apps.tsx embeds it — and the apps chunk is prefetched by the fallback below.
@@ -579,8 +588,8 @@ export function StudioShell() {
 	// Without it the page falls to the default `max-w-5xl` branch, which boxes
 	// the whole two-panel row mid-viewport — the rail then sits against the
 	// middle of the screen instead of the right edge, with dead space beside it.
-	const dataWorkspace = location.pathname.startsWith('/studio/data');
-	const computeWorkspace = location.pathname.startsWith('/studio/compute');
+	const dataWorkspace = location.pathname.startsWith('/studio/data-warehouse');
+	const computeWorkspace = location.pathname.startsWith('/studio/research-fleet');
 	const fullBleed = appWorkspace || libWorkspace || dataWorkspace || computeWorkspace;
 	const wideMain = location.pathname.startsWith('/dashboard')
 		|| location.pathname.startsWith('/studio/a/')

@@ -143,7 +143,10 @@ export function buildViewingContext(
 	// chat). It matched none of the branches, so every turn from that page
 	// arrived as page:'other' and the agent had no idea the user was looking at
 	// the catalog it was being asked about.
-	} else if (pathname.startsWith('/studio/data')) {
+	} else if (pathname.startsWith('/studio/data-warehouse')
+		// the pre-2026-09-13 path too: it only renders a <Navigate replace>, but
+		// this runs during that frame and a miss shows the wrong section for a paint.
+		|| pathname.startsWith('/studio/data')) {
 		ctx.page = 'data';
 	} else if ((m = pathname.match(/^\/studio\/runs\/([^/]+)/))) {
 		ctx.page = 'run-detail';

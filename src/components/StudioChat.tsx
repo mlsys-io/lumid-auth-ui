@@ -707,8 +707,16 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 		// conversation could not be resumed on re-entry and turned up in history
 		// under "General" — the exact failure the per-app resume map exists to
 		// prevent.
-		if (/^\/studio\/data(\/|$|\?)/.test(pathnameRef.current)) return DATA_KEY;
-		if (/^\/studio\/compute(\/|$|\?)/.test(pathnameRef.current)) return COMPUTE_KEY;
+		// Both the NEW path and the pre-2026-09-13 one. The old paths only ever
+		// render a <Navigate replace>, but the chat reads pathnameRef during that
+		// frame; matching both means a mid-redirect render still resolves the right
+		// virtual scope instead of falling through and saving the thread UNTAGGED
+		// (which is unresumable — see lumid_ui/CLAUDE.md on virtual scopes).
+		// NOTE the KEYS are storage identifiers, not routes: DATA_KEY stays
+		// 'lumid-data-mesh' and COMPUTE_KEY stays 'lumid-compute' so existing saved
+		// threads keep resolving.
+		if (/^\/studio\/(data-warehouse|data)(\/|$|\?)/.test(pathnameRef.current)) return DATA_KEY;
+		if (/^\/studio\/(research-fleet|compute)(\/|$|\?)/.test(pathnameRef.current)) return COMPUTE_KEY;
 		// The Apps SPINE only — /studio/apps/<app> is a real app and falls through
 		// to the match below, which must keep winning or a per-app thread would be
 		// filed under the generic Apps scope.
