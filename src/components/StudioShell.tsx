@@ -660,6 +660,15 @@ export function StudioShell() {
 	const isNarrow = useIsNarrow(1024);
 	const [narrowNavOpen, setNarrowNavOpen] = useState(false);
 	useEffect(() => { if (!isNarrow) setNarrowNavOpen(false); }, [isNarrow]);
+	// Escape closes the mobile drawer. It is an overlay with a backdrop, so the
+	// usual dismissal affordances should both work; tablets with keyboards get the
+	// one that does not require aiming at a 40px target.
+	useEffect(() => {
+		if (!isNarrow || !narrowNavOpen) return;
+		const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setNarrowNavOpen(false); };
+		window.addEventListener('keydown', onKey);
+		return () => window.removeEventListener('keydown', onKey);
+	}, [isNarrow, narrowNavOpen]);
 	// Per-app workspace (/studio/apps/:app). The nav used to auto-hide here so
 	// the page read as just Observe + Chat, but hiding it on the one route where
 	// you most want to move between apps and conversations cost more than the
@@ -744,11 +753,39 @@ export function StudioShell() {
 			resizing && 'select-none cursor-ew-resize',
 		)}>
 			{/* Sidebar ─────────────────────────────────────────────── */}
+			{/* MOBILE: a real overlay drawer, not a narrower panel.
+			    Until 2026-09-13 this aside was always in-flow (`flex-shrink-0` with a
+			    pixel width) and <main> sat beside it. On a 390px phone a ~280px
+			    sidebar left main about 110px wide — and `sidebarWidth` is a
+			    user-resizable value persisted in localStorage, so a sidebar widened on
+			    a desktop could exceed the phone's viewport entirely and leave main at
+			    zero. On narrow it is now `fixed` (out of flow, so main keeps the full
+			    width) and width-capped to the VIEWPORT rather than the stored pixels. */}
+			{isNarrow && !sidebarHidden && (
+				<div
+					onClick={hideSidebar}
+					aria-hidden="true"
+					className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[1px]"
+				/>
+			)}
 			{!sidebarHidden && (
 			<aside
 				data-studio-picker-chrome="1"
-				style={{ width: sidebarWidth }}
-				className="relative flex flex-col h-screen flex-shrink-0 bg-sidebar border-r border-sidebar-border sticky top-0"
+				/* the stored pixel width is DESKTOP-only; on narrow the cap below wins */
+				style={isNarrow ? undefined : { width: sidebarWidth }}
+				/* Closing on navigation, scoped to <a> on purpose: NavLinks and the
+				   footer doc links render anchors, while the account control is a
+				   <button> that opens a submenu INSIDE the drawer — a blanket handler
+				   would dismiss the drawer exactly when you meant to open that menu. */
+				onClick={isNarrow ? (e) => {
+					if ((e.target as HTMLElement).closest('a[href]')) hideSidebar();
+				} : undefined}
+				className={cn(
+					'flex flex-col h-screen bg-sidebar border-r border-sidebar-border',
+					isNarrow
+						? 'fixed inset-y-0 left-0 z-50 w-[85vw] max-w-[320px] shadow-2xl'
+						: 'relative flex-shrink-0 sticky top-0',
+				)}
 			>
 				<div className="flex items-center justify-between pr-1.5">
 					<button onClick={newChat} title="New chat" className="px-4 py-4 flex items-baseline text-left flex-1 min-w-0">
@@ -953,7 +990,11 @@ export function StudioShell() {
 					)}
 				</div>
 
-				{/* Drag-to-resize handle on the right edge — double-click resets */}
+				{/* Drag-to-resize handle on the right edge — double-click resets.
+				    DESKTOP ONLY: on a touch drawer there is nothing to resize (the
+				    width is viewport-capped), and a 6px pointer-capturing strip along
+				    the drawer edge competes with the swipe/scroll gesture. */}
+				{!isNarrow && (
 				<div
 					onPointerDown={startResize}
 					onDoubleClick={resetSidebar}
@@ -970,6 +1011,7 @@ export function StudioShell() {
 						resizing && '!bg-foreground/40',
 					)} />
 				</div>
+				)}
 			</aside>
 			)}
 
