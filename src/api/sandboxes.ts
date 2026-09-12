@@ -65,9 +65,51 @@ export interface Sandbox {
 	site?: string;
 }
 
+/**
+ * What GPU a site actually has, and how many ONE sandbox may have.
+ *
+ * `max_per_sandbox` is the field that matters and the one `gpus_free` could never express.
+ * A sandbox is a single Pod, and a Pod runs on a single node — so the ceiling for one
+ * sandbox is `max(per-node GPUs)`, not the site total. Home has FOUR GPUs and a ceiling of
+ * ONE, because they sit one-per-machine in four separate minis. Rendering "4 free" next to a
+ * selector offering "2" told users they could have something that can never be scheduled.
+ *
+ * `model`/`memory_gb`/`driver` come from gpu-feature-discovery and are OPTIONAL: a site that
+ * does not run GFD reports counts only. Treat every one of them as possibly absent.
+ * `models`/`drivers` (plural) appear instead when the pool is NOT uniform — a mixed pool must
+ * not be described by one name.
+ */
+export interface GpuProfile {
+	total: number;
+	max_per_sandbox: number;
+	nodes: number;
+	model?: string;
+	models?: string[];
+	memory_gb?: number;
+	driver?: string;
+	drivers?: string[];
+}
+
 export interface SandboxList {
 	sandboxes: Sandbox[];
 	gpus_free: string;
+	/** Absent on a site whose GPU gate is shut (NUS), and on any site not yet upgraded. */
+	gpu?: GpuProfile;
+}
+
+// ---------------------------------------------------------------------------
+// PER-SITE GPU FACTS MUST NOT RIDE ON A SANDBOX ROW.
+// ---------------------------------------------------------------------------
+// `gpus_free` used to be read back off whichever row happened to carry it, which meant a user
+// with NO sandboxes saw nothing — precisely the person deciding what to rent. The envelope
+// carries this, not the rows, so it is stashed here as the list is flattened and read by site.
+// Refreshed by the same 20 s poll that drives the table; no extra request.
+export type SiteGpuInfo = GpuProfile & { gpus_free: string };
+
+const gpuProfiles = new Map<string, SiteGpuInfo>();
+
+export function gpuProfileForSite(site: string): SiteGpuInfo | undefined {
+	return gpuProfiles.get(site);
 }
 
 export interface CreateSandboxRequest {
@@ -130,6 +172,10 @@ export async function whoami(site = PUBLIC_SANDBOX_SITE): Promise<{ email: strin
 export async function listSandboxesForSite(site: string): Promise<Sandbox[]> {
 	const r = await sbx.get<SandboxList>(sbxUrl(site, "/api/sandboxes"));
 	const gpusFree = r.data?.gpus_free ?? "";
+	// Envelope-level, so it survives a site with zero sandboxes. See gpuProfiles above.
+	if (r.data?.gpu && typeof r.data.gpu.max_per_sandbox === "number") {
+		gpuProfiles.set(site, { ...r.data.gpu, gpus_free: gpusFree });
+	}
 	return (r.data?.sandboxes ?? []).map((s) => ({ ...s, site, gpus_free: s.gpus_free ?? gpusFree }));
 }
 

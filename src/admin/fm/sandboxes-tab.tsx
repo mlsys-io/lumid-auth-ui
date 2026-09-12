@@ -24,13 +24,14 @@
 // the app. The sites that serve shells through FlowMesh are the sites listed
 // below; everywhere else a shell is a sandbox.
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
 	PUBLIC_SANDBOX_SITE,
 	SANDBOX_SITES,
 	createSandbox,
 	deleteSandbox,
+	gpuProfileForSite,
 	isSshTaskActive,
 	listSandboxesForSite,
 	sandboxToShell,
@@ -122,7 +123,31 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 		[boxes.data, shells.data],
 	);
 
-	const gpusFree = (boxes.data?.items ?? []).find((s) => s.site === target)?.gpus_free ?? "";
+	// Read from the site envelope, NOT from a row: someone with no sandboxes is exactly the
+	// person choosing what to rent, and rows are empty for them.
+	const gpuInfo = gpuProfileForSite(target);
+	const gpusFree = gpuInfo?.gpus_free
+		|| ((boxes.data?.items ?? []).find((s) => s.site === target)?.gpus_free ?? "");
+
+	// THE SELECTOR MUST NOT OFFER WHAT CANNOT BE SCHEDULED.
+	// A sandbox is one Pod on one node, so the ceiling is max(per-node GPUs) — at home that is
+	// 1, against a site total of 4. Offering "2" produced a pod that sat unschedulable forever
+	// while the strip cheerfully read "4/4 GPUs free". Until a site answers with a profile we
+	// fall back to 1, which is the only count every GPU site is known to satisfy.
+	const maxGpu = gpuInfo ? gpuInfo.max_per_sandbox : 1;
+	const gpuOptions = Array.from({ length: maxGpu + 1 }, (_, i) => i);
+
+	// Clamp a stale selection when the user switches to a site with a lower ceiling, or the
+	// request goes out asking for a GPU count this site can never place.
+	useEffect(() => {
+		if (gpu > maxGpu) setGpu(maxGpu);
+	}, [maxGpu, gpu]);
+
+	const gpuLabel = gpuInfo?.model
+		? `${gpuInfo.model}${gpuInfo.memory_gb ? ` · ${gpuInfo.memory_gb} GB` : ""}`
+		: gpuInfo?.models?.length
+			? `${gpuInfo.models.length} GPU types`
+			: "";
 
 	async function onCreate() {
 		setBusy(true);
@@ -165,7 +190,13 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 		<TabShell
 			subtitle={`A shell with a home directory that outlives the container.${
 				isAdmin ? " Every site." : " On home."
-			}${gpusFree ? ` ${gpusFree} GPUs free on ${target}.` : ""} Refreshes every 20s.`}
+			}${gpusFree ? ` ${gpusFree} GPUs free on ${target}${gpuLabel ? ` (${gpuLabel})` : ""}.` : ""}${
+				// State the ceiling wherever it is below the site total, because "4 free" and
+				// "at most 1 per sandbox" are both true at home and only the pair is useful.
+				gpuInfo && gpuInfo.max_per_sandbox < gpuInfo.total
+					? ` Up to ${gpuInfo.max_per_sandbox} per sandbox — they sit one per machine.`
+					: ""
+			} Refreshes every 20s.`}
 			loading={boxes.loading || shells.loading}
 			error={boxes.error ?? shells.error}
 			onRefresh={refresh}
@@ -191,20 +222,23 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 							className="mt-1 block w-32 rounded-md border border-slate-300 px-2 py-1 text-sm" />
 					</label>
 					<label className="text-xs text-slate-600">
-						GPUs
+						GPUs{gpuLabel ? <span className="ml-1 text-slate-400">{gpuLabel}</span> : null}
 						<select value={gpu} onChange={(e) => setGpu(Number(e.target.value))}
 							className="mt-1 block rounded-md border border-slate-300 px-2 py-1 text-sm">
-							<option value={0}>none</option>
-							<option value={1}>1</option>
-							<option value={2}>2</option>
+							{gpuOptions.map((n) => (
+								<option key={n} value={n}>{n === 0 ? "none" : n}</option>
+							))}
 						</select>
 					</label>
 					<label className="text-xs text-slate-600">
 						Expires after
 						<select value={ttl} onChange={(e) => setTtl(Number(e.target.value))}
 							className="mt-1 block rounded-md border border-slate-300 px-2 py-1 text-sm">
+							{/* 24h is the ceiling, and sandbox-control enforces the same number
+							    (MAX_TTL_HOURS). Offering 3d here while the server refused it would
+							    be the GPU-selector bug again in a different field. */}
 							<option value={2}>2h</option><option value={8}>8h</option>
-							<option value={24}>24h</option><option value={72}>3d</option>
+							<option value={24}>24h</option>
 						</select>
 					</label>
 					<button onClick={onCreate} disabled={busy || !name}
