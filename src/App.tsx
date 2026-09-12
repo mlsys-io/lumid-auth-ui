@@ -702,7 +702,7 @@ export default function App() {
               path="compute"
               element={
                 <ComputeSection
-                  title="Compute"
+                  title="Research Fleet"
                   subtitle="The federated GPU fleet behind lum.id/fm — sites, nodes and workers in one tree, plus jobs, shells and rented capacity."
                   // TWO tabs, down from five, because three of the five were not
                   // places:

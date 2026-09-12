@@ -15,6 +15,7 @@ import {
 	CirclePlus,
 	PanelLeftClose,
 	PanelLeftOpen,
+	Library,
 	Database,
 	Settings,
 	Shield,
@@ -29,7 +30,7 @@ import {
 	Trash2,
 	Loader2,
 	AlertCircle,
-	ShieldCheck, Receipt, LayoutGrid,} from 'lucide-react';
+	ShieldCheck, Receipt,} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useViewMode } from './ViewModeProvider';
@@ -92,10 +93,11 @@ interface NavItem {
 // API tokens live in the bottom avatar menu; "How it works" is a quiet
 // footer docs link.
 const TOP_NAV: NavItem[] = [
-	// Order is Apps -> Data -> Compute (operator request 2026-09-12): what you
-	// build, what you build it on, what you run it with.
+	// Order is Library -> Data Warehouse -> Research Fleet (operator request
+	// 2026-09-12, renamed 2026-09-13): what you build, what you build it on, what
+	// you run it with.
 	//
-	// "Apps" POINTS AT /studio/library, AND THE SEPARATE "Library" ROW IS GONE
+	// THE ROW POINTS AT /studio/library, AND THE OLD SEPARATE "Library" ROW IS GONE
 	// (operator request 2026-09-13). Two things drove it:
 	//
 	//   1. /studio/apps does not show a list of apps — it renders StudioWorkspace,
@@ -115,14 +117,27 @@ const TOP_NAV: NavItem[] = [
 	// and from the docked chat. Every /studio/apps* route stays mounted — this is
 	// a NAV change only, which is why the /studio/apps ROUTE_PREFETCH fallback
 	// below is deliberately kept.
-	{ to: '/studio/library', label: 'Apps', icon: LayoutGrid, title: 'browse and install — marketplace, skills and experiments' },
-	{ to: '/studio/data', label: 'Data', icon: Database, title: 'browse the data mesh — catalog + endpoint explorer' },
+	// Renamed 2026-09-13: Apps -> "Library", Data -> "Data Warehouse",
+	// Compute -> "Research Fleet" (operator request). "Apps" had become actively
+	// WRONG rather than merely plain — the row opens Marketplace/Skills/
+	// Experiments and shows no apps at all. Label, route and destination now
+	// agree for this row, so the mislabel is gone rather than just renamed.
+	//
+	// LABELS AND HEADINGS ONLY — the ROUTES are unchanged (/studio/data,
+	// /studio/compute). That is a deliberate, known divergence: renaming the
+	// paths needs redirects from every existing link, and this file already
+	// carries the scar of a label/route mismatch (see the Compute note below).
+	// The user-visible strings were changed TOGETHER so nothing a reader sees
+	// disagrees: App.tsx's ComputeSection title, the dashboard AreaLink, and
+	// data.tsx's DataLakeViewer title all say the new names too. If the routes
+	// are ever renamed, those four places move as one.
+	{ to: '/studio/library', label: 'Library', icon: Library, title: 'browse and install — marketplace, skills and experiments' },
+	{ to: '/studio/data', label: 'Data Warehouse', icon: Database, title: 'browse the data mesh — catalog + endpoint explorer' },
 	// "Compute" replaced "Scheduled" here 2026-09-11 (operator request).
 	//
-	// Label, route and page heading now all say "Compute". They briefly did not:
-	// the row pointed at /studio/admin/clusters with a comment explaining that the
-	// divergence was deliberate. It stopped being tenable once the home fleet had
-	// to be readable by non-admins — everything under /studio/admin is inside
+	// History worth keeping: the row once pointed at /studio/admin/clusters while
+	// being labelled "Compute", with a comment calling the divergence deliberate.
+	// It stopped being tenable once the home fleet had to be readable by non-admins — everything under /studio/admin is inside
 	// <AdminGuard>, so the section moved to /studio/compute and the old paths are
 	// redirects.
 	//
@@ -131,11 +146,17 @@ const TOP_NAV: NavItem[] = [
 	// gates per TAB instead of hiding the whole row, which would have left the
 	// public half unreachable from navigation.
 	//
+	// CURRENT STATE after the 2026-09-13 rename: the label and the page heading
+	// both say "Research Fleet" (App.tsx ComputeSection title + the dashboard
+	// AreaLink), while the ROUTE is still /studio/compute. Label and heading agree;
+	// the path does not, and that is an accepted, documented gap rather than a
+	// rediscovered bug. Rename the path only together with redirects.
+	//
 	// "Scheduled" (/studio/runs) is REMOVED FROM THE NAV ONLY — the route stays
 	// mounted and reachable: the top-bar "Right now" ticker and the Apps hero's
 	// "runs today" stat both link into it (see the note below this array), so its
 	// ROUTE_PREFETCH entry is deliberately kept too.
-	{ to: '/studio/compute', label: 'Compute', icon: Boxes, title: 'the GPU fleet — sites, nodes and workers across every mesh' },
+	{ to: '/studio/compute', label: 'Research Fleet', icon: Boxes, title: 'the GPU fleet — sites, nodes and workers across every mesh' },
 	// NO "Library" row — merged into "Apps" above 2026-09-13. Same destination,
 	// one row. /studio/library* routes are untouched and still carry their own
 	// tab bar, so existing links and the marketplace CTA in AppSurface keep working.
@@ -204,7 +225,10 @@ function NavItemView({ to, label, icon: Icon, end, badge, title }: NavItem) {
 						'w-4 h-4 flex-shrink-0 transition-colors',
 						isActive ? 'text-foreground/80' : 'text-foreground/45 group-hover:text-foreground/70',
 					)} />
-					<span>{label}</span>
+					{/* min-w-0 + truncate: the sidebar is user-resizable (style={{width:
+					    sidebarWidth}}) and the labels became two words on 2026-09-13, so a
+					    bare <span> could overflow the rail at narrow widths. */}
+					<span className="min-w-0 truncate">{label}</span>
 					{badge != null && badge > 0 && (
 						<span
 							className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-gold-100 text-gold-700 text-[11px] font-semibold tabular-nums"

@@ -121,7 +121,7 @@ export default function AdminOverview() {
 				</h2>
 				<div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
 					<AreaLink to="/studio/admin/users"        icon={Users}     label="People & access" hint="Users, roles, invitations, audit" />
-					<AreaLink to="/studio/compute"     icon={Server}    label="Compute"         hint="Sites, nodes, workers, jobs and rented GPUs" />
+					<AreaLink to="/studio/compute"     icon={Server}    label="Research Fleet"   hint="Sites, nodes, workers, jobs and rented GPUs" />
 					<AreaLink to="/studio/admin/competitions" icon={LineChart} label="Lumid Market admin" hint="Competitions, markets, templates, jobs" />
 					<AreaLink to="/status/operations"         icon={Activity}  label="Operations status" hint="Stack health, resource + venue, bottomlines" />
 					<AreaLink to="/code"                     icon={Zap}       label="Claude quota"      hint="Org Claude Code usage — 5h / 7d limits" />

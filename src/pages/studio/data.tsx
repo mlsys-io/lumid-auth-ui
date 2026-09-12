@@ -80,7 +80,7 @@ export default function StudioData() {
 						{/* All stay MOUNTED across tab switches (hidden, not unmounted) so
 						    each keeps its loaded catalog + the session cache stays warm. */}
 						<div className={tab === "catalog" ? "h-full" : "hidden"}>
-							{seen.has("catalog") && <DataLakeViewer config={{ title: "Data" }} />}
+							{seen.has("catalog") && <DataLakeViewer config={{ title: "Data Warehouse" }} />}
 						</div>
 						<div className={tab === "explorer" ? "h-full" : "hidden"}>
 							{seen.has("explorer") && <DataAppBrowser config={{ data_app: "findata", data_app_label: "FinData" }} />}
