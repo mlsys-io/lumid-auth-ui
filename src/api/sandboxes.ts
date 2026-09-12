@@ -151,16 +151,34 @@ export async function syncKeys(site: string): Promise<{ user: string; keys_autho
  * What a user types to get in, per site. One port per site for everyone; the key
  * decides whose pod.
  *
- * `null` means the site has no published SSH entry point yet and the only way in
- * is `kubectl exec` — office has a sandbox-control but no gateway of its own, and
- * saying so is better than printing a command that cannot work.
+ * `null` means the site has no published SSH entry point and the only way in is
+ * `kubectl exec` — saying so is better than printing a command that cannot work.
+ *
+ * KEEP THIS IN STEP WITH ts-egress-sites.yaml. Every entry here is a socat
+ * sidecar plus a nodePort on the cloud `site-sshfwd` Service; if a port moves
+ * there and not here, the UI hands users a command that silently fails.
  */
 const SITE_SSH: Record<string, string | null> = {
 	// site-sshfwd nodePort 31223 -> socat -> home k3s 31223 -> sandbox-gateway sshd.
 	home: "ssh -p 31223 gw@lum.id",
 	// nus-waypoint's nus-gateway-ssh NodePort 31222 -> ssh -L -> the container-gateway.
 	nus: "ssh -p 31222 gw@lum.id",
-	office: null,
+	// CORRECTED 2026-09-13. This was `null`, with a comment claiming office had
+	// "a sandbox-control but no gateway of its own". That has not been true
+	// since office's gateway went in: lumid-sandboxes/sandbox-gateway-ssh is a
+	// nodePort 31226, relayed by socat-office-sbxssh (ts-egress-sites.yaml) to
+	// lum.id:31226, and verified end to end — `ssh-keyscan -p 31226 lum.id`
+	// answers, and the e2e suite runs its whole office matrix through it
+	// (deploy_infra k8s-lift/sandbox-control/e2e).
+	//
+	// The stale `null` told every office user their only option was kubectl,
+	// for a working SSH path. A wrong "this is impossible" is worse than a
+	// missing entry: nobody tries again.
+	//
+	// 31226 and not 31223: each socat here shares ONE pod, so two sites cannot
+	// both bind the same listener port. office is 31225/31226 (control/ssh),
+	// clear of home's 31223/31224.
+	office: "ssh -p 31226 gw@lum.id",
 };
 
 export function sshCommandForSite(site?: string): string | null {
