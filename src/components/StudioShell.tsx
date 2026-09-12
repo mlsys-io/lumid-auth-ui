@@ -15,7 +15,7 @@ import {
 	CirclePlus,
 	PanelLeftClose,
 	PanelLeftOpen,
-	Library,
+	Store,
 	Database,
 	Settings,
 	Shield,
@@ -93,9 +93,9 @@ interface NavItem {
 // API tokens live in the bottom avatar menu; "How it works" is a quiet
 // footer docs link.
 const TOP_NAV: NavItem[] = [
-	// Order is Library -> Data Warehouse -> Research Fleet (operator request
-	// 2026-09-12, renamed 2026-09-13): what you build, what you build it on, what
-	// you run it with.
+	// Order is Marketplace -> Data Warehouse -> Research Fleet (operator request
+	// 2026-09-12, renamed twice on 2026-09-13): what you build, what you build it
+	// on, what you run it with.
 	//
 	// THE ROW POINTS AT /studio/library, AND THE OLD SEPARATE "Library" ROW IS GONE
 	// (operator request 2026-09-13). Two things drove it:
@@ -117,8 +117,8 @@ const TOP_NAV: NavItem[] = [
 	// and from the docked chat. Every /studio/apps* route stays mounted — this is
 	// a NAV change only, which is why the /studio/apps ROUTE_PREFETCH fallback
 	// below is deliberately kept.
-	// Renamed 2026-09-13: Apps -> "Library", Data -> "Data Warehouse",
-	// Compute -> "Research Fleet" (operator request). "Apps" had become actively
+	// Renamed 2026-09-13: Apps -> "Library" -> "Marketplace", Data -> "Data
+	// Warehouse", Compute -> "Research Fleet" (operator request). "Apps" was actively
 	// WRONG rather than merely plain — the row opens Marketplace/Skills/
 	// Experiments and shows no apps at all. Label, route and destination now
 	// agree for this row, so the mislabel is gone rather than just renamed.
@@ -140,7 +140,23 @@ const TOP_NAV: NavItem[] = [
 	// chat rail to the middle of the viewport instead of the window edge), and
 	// StudioChat's virtual-scope regexes (a miss there saves threads UNTAGGED and
 	// unresumable). The thread-scope KEYS themselves are deliberately NOT renamed.
-	{ to: '/studio/library', label: 'Library', icon: Library, title: 'browse and install — marketplace, skills and experiments' },
+	// Label "Marketplace" (operator request 2026-09-13), icon back to Store.
+	//
+	// ROUTE STAYS /studio/library, and this is the one row where label and path do
+	// NOT match — deliberately, because /studio/marketplace is ALREADY TAKEN: it is
+	// a redirect into these tabs (App.tsx, alongside the skills/experiments ones),
+	// and the first TAB is itself "marketplace", so renaming the parent would give
+	// /studio/marketplace/marketplace. The divergence here is a nested-naming
+	// collision, not the drift the other two rows had.
+	//
+	// Recorded so the next person does not "fix" it: I flagged that this surface has
+	// NO commerce (zero price/cost/billing references in library.tsx, whose own
+	// header calls it an "install-only surface"), and that Experiments — explicitly
+	// "cross-app experiments, which hypotheses are winning anywhere?" — is your own
+	// results rather than anything for sale. The operator chose Marketplace with
+	// that known. The tidier end state, if it ever comes up: move Experiments out to
+	// the research side, rename this tab set, then parent and path can agree.
+	{ to: '/studio/library', label: 'Marketplace', icon: Store, title: 'browse and install — apps, skills and experiments' },
 	{ to: '/studio/data-warehouse', label: 'Data Warehouse', icon: Database, title: 'browse the data mesh — catalog + endpoint explorer' },
 	// "Compute" replaced "Scheduled" here 2026-09-11 (operator request).
 	//
@@ -166,9 +182,10 @@ const TOP_NAV: NavItem[] = [
 	// "runs today" stat both link into it (see the note below this array), so its
 	// ROUTE_PREFETCH entry is deliberately kept too.
 	{ to: '/studio/research-fleet', label: 'Research Fleet', icon: Boxes, title: 'the GPU fleet — sites, nodes and workers across every mesh' },
-	// NO "Library" row — merged into "Apps" above 2026-09-13. Same destination,
-	// one row. /studio/library* routes are untouched and still carry their own
-	// tab bar, so existing links and the marketplace CTA in AppSurface keep working.
+	// NO second row for this surface — what used to be the "Library" row IS the
+	// first row above, now labelled "Marketplace". One row, one destination.
+	// /studio/library* routes are untouched and still carry their own tab bar, so
+	// existing links and the marketplace CTA in AppSurface keep working.
 	// NO "Strategies" row here. Strategies are an LQT object, not a Studio-wide
 	// one: the surface belongs to the LQT app and is reached from inside it
 	// (the LQT app's own declared `strategies` surface, /studio/a/<app>/strategies
