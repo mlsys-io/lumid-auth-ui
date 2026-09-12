@@ -32,6 +32,7 @@ import {
 	createSandbox,
 	deleteSandbox,
 	gpuProfileForSite,
+	imagesForSite,
 	isSshTaskActive,
 	listSandboxesForSite,
 	sandboxToShell,
@@ -50,6 +51,9 @@ import { PUBLIC_SITE } from "./fleet-tab";
 const SSH_TASK_SITES = ["vast"];
 
 const EMPTY: FmFanout<FmTask> = { items: [], sites: [] };
+
+/** Sentinel for "I'll type my own" -- a real ref can never collide with it. */
+const CUSTOM_IMAGE = "__custom__";
 
 /** Live first — a running shell is the only row anyone is looking for. */
 function isLive(r: ComputeShell): boolean {
@@ -89,6 +93,11 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 	const [name, setName] = useState("dev");
 	const [gpu, setGpu] = useState(0);
 	const [ttl, setTtl] = useState(8);
+	// "" means "let the site choose". Kept distinct from a concrete ref so the default
+	// stays the SERVER's to change -- baking today's default in here is how a UI starts
+	// contradicting the service it talks to.
+	const [image, setImage] = useState("");
+	const [customImage, setCustomImage] = useState("");
 
 	const boxes = useFanout<Sandbox>(() => fanoutForSites(sites, listSandboxesForSite), 20_000);
 	const shells = useFanout<FmTask>(
@@ -143,6 +152,20 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 		if (gpu > maxGpu) setGpu(maxGpu);
 	}, [maxGpu, gpu]);
 
+	// The catalog is served per-site (see imagesForSite). Offer only entries matching the
+	// CPU/GPU choice: a CUDA image on a CPU sandbox is several GB of pull for libraries that
+	// cannot be used, and a slim CPU image on a GPU box has no CUDA runtime in it at all.
+	const siteImages = imagesForSite(target);
+	const imageChoices = (siteImages?.catalog ?? []).filter((c) => Boolean(c.gpu) === gpu > 0);
+	const siteDefaultImage = gpu > 0 ? siteImages?.default_gpu : siteImages?.default_cpu;
+
+	// Switching between CPU and GPU invalidates the selection -- the chosen ref is, by the
+	// filter above, the wrong kind now. Fall back to the site default rather than silently
+	// sending a CUDA image to a CPU sandbox.
+	useEffect(() => {
+		if (image && image !== CUSTOM_IMAGE && !imageChoices.some((c) => c.ref === image)) setImage("");
+	}, [gpu, image, imageChoices]);
+
 	const gpuLabel = gpuInfo?.model
 		? `${gpuInfo.model}${gpuInfo.memory_gb ? ` · ${gpuInfo.memory_gb} GB` : ""}`
 		: gpuInfo?.models?.length
@@ -152,7 +175,10 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 	async function onCreate() {
 		setBusy(true);
 		try {
-			await createSandbox(target, { name, gpu, ttl_hours: ttl });
+			const chosen = image === CUSTOM_IMAGE ? customImage.trim() : image;
+			// Omit the field entirely when empty: sandbox-control reads "absent" as
+			// "use this site's default", and an empty string is not the same thing.
+			await createSandbox(target, { name, gpu, ttl_hours: ttl, image: chosen || undefined });
 			toast.success(`creating ${name} on ${target}`);
 			boxes.refresh();
 		} catch (e: any) {
@@ -230,6 +256,31 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 							))}
 						</select>
 					</label>
+					<label className="text-xs text-slate-600">
+						Image
+						<select value={image} onChange={(e) => setImage(e.target.value)}
+							className="mt-1 block max-w-[17rem] rounded-md border border-slate-300 px-2 py-1 text-sm">
+							{/* Name the default rather than showing a blank: "site default" alone
+							    tells the user nothing about what they are about to boot. */}
+							<option value="">
+								{siteDefaultImage ? `site default — ${siteDefaultImage}` : "site default"}
+							</option>
+							{imageChoices.map((c) => (
+								<option key={c.ref} value={c.ref} title={c.note ?? c.ref}>
+									{c.label ?? c.ref}
+								</option>
+							))}
+							<option value={CUSTOM_IMAGE}>custom…</option>
+						</select>
+					</label>
+					{image === CUSTOM_IMAGE && (
+						<label className="text-xs text-slate-600">
+							Image ref
+							<input value={customImage} onChange={(e) => setCustomImage(e.target.value)}
+								placeholder="repo/name:tag"
+								className="mt-1 block w-64 rounded-md border border-slate-300 px-2 py-1 text-sm font-mono" />
+						</label>
+					)}
 					<label className="text-xs text-slate-600">
 						Expires after
 						<select value={ttl} onChange={(e) => setTtl(Number(e.target.value))}

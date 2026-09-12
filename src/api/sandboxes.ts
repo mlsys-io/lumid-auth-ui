@@ -95,6 +95,8 @@ export interface SandboxList {
 	gpus_free: string;
 	/** Absent on a site whose GPU gate is shut (NUS), and on any site not yet upgraded. */
 	gpu?: GpuProfile;
+	/** Absent on a site not yet running a build that serves a catalog. */
+	images?: SiteImages;
 }
 
 // ---------------------------------------------------------------------------
@@ -110,6 +112,33 @@ const gpuProfiles = new Map<string, SiteGpuInfo>();
 
 export function gpuProfileForSite(site: string): SiteGpuInfo | undefined {
 	return gpuProfiles.get(site);
+}
+
+/**
+ * The images a site offers, served by that site rather than hardcoded here.
+ *
+ * A shortlist, NOT an allowlist — sandbox-control still accepts any reference, so the "custom"
+ * escape hatch in the form is real. Sites answer for themselves because the right menu differs
+ * per site (a site with an arm64 node in its sandbox pool cannot offer the amd64-only PyTorch
+ * image), and because a table hardcoded in the UI is a table that silently goes stale.
+ */
+export interface ImageChoice {
+	ref: string;
+	label?: string;
+	gpu?: boolean;
+	note?: string;
+}
+
+export interface SiteImages {
+	catalog: ImageChoice[];
+	default_cpu: string;
+	default_gpu: string;
+}
+
+const siteImages = new Map<string, SiteImages>();
+
+export function imagesForSite(site: string): SiteImages | undefined {
+	return siteImages.get(site);
 }
 
 export interface CreateSandboxRequest {
@@ -176,6 +205,7 @@ export async function listSandboxesForSite(site: string): Promise<Sandbox[]> {
 	if (r.data?.gpu && typeof r.data.gpu.max_per_sandbox === "number") {
 		gpuProfiles.set(site, { ...r.data.gpu, gpus_free: gpusFree });
 	}
+	if (r.data?.images?.catalog?.length) siteImages.set(site, r.data.images);
 	return (r.data?.sandboxes ?? []).map((s) => ({ ...s, site, gpus_free: s.gpus_free ?? gpusFree }));
 }
 
