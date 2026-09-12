@@ -15,7 +15,6 @@ import {
 	CirclePlus,
 	PanelLeftClose,
 	PanelLeftOpen,
-	Store,
 	Database,
 	Settings,
 	Shield,
@@ -94,14 +93,29 @@ interface NavItem {
 // footer docs link.
 const TOP_NAV: NavItem[] = [
 	// Order is Apps -> Data -> Compute (operator request 2026-09-12): what you
-	// build, what you build it on, what you run it with. Library sits after them
-	// as the browse-and-install surface rather than a daily destination.
+	// build, what you build it on, what you run it with.
 	//
-	// "Apps" points at /studio/apps, which App.tsx calls the My Apps spine (the
-	// old Intents/Today landings redirect into it). NOT /studio/apps/all — that is
-	// the plain grid, reached from the user menu as "Manage agents".
-	// Fleet is merged into that grid — no separate entry.
-	{ to: '/studio/apps', label: 'Apps', icon: LayoutGrid, title: 'your apps and agents' },
+	// "Apps" POINTS AT /studio/library, AND THE SEPARATE "Library" ROW IS GONE
+	// (operator request 2026-09-13). Two things drove it:
+	//
+	//   1. /studio/apps does not show a list of apps — it renders StudioWorkspace,
+	//      which resolves `paramApp || localStorage[studio_featured_app] ||
+	//      installed[0]` and then redirects to /studio/apps/<that app>. So the row
+	//      always dived INTO one app; the operator saw it land on mbb-consultant.
+	//      Note the `installed[0]` fallback: this was never just stale
+	//      localStorage on one browser, every user got dropped inside some app.
+	//   2. Apps and Library were two rows competing to be the browse surface.
+	//
+	// So the row keeps the name people look for and opens the browse-and-install
+	// surface (Marketplace | Skills | Experiments tabs).
+	//
+	// WHAT THIS GIVES UP, deliberately: the library does NOT list your installed
+	// apps, so "my apps" has no nav row any more. It is still reached by the user
+	// menu's "Manage agents" (/studio/apps/all, the plain grid), by deep links,
+	// and from the docked chat. Every /studio/apps* route stays mounted — this is
+	// a NAV change only, which is why the /studio/apps ROUTE_PREFETCH fallback
+	// below is deliberately kept.
+	{ to: '/studio/library', label: 'Apps', icon: LayoutGrid, title: 'browse and install — marketplace, skills and experiments' },
 	{ to: '/studio/data', label: 'Data', icon: Database, title: 'browse the data mesh — catalog + endpoint explorer' },
 	// "Compute" replaced "Scheduled" here 2026-09-11 (operator request).
 	//
@@ -122,7 +136,9 @@ const TOP_NAV: NavItem[] = [
 	// "runs today" stat both link into it (see the note below this array), so its
 	// ROUTE_PREFETCH entry is deliberately kept too.
 	{ to: '/studio/compute', label: 'Compute', icon: Boxes, title: 'the GPU fleet — sites, nodes and workers across every mesh' },
-	{ to: '/studio/library', label: 'Library', icon: Store, title: 'marketplace, skills, and experiments' },
+	// NO "Library" row — merged into "Apps" above 2026-09-13. Same destination,
+	// one row. /studio/library* routes are untouched and still carry their own
+	// tab bar, so existing links and the marketplace CTA in AppSurface keep working.
 	// NO "Strategies" row here. Strategies are an LQT object, not a Studio-wide
 	// one: the surface belongs to the LQT app and is reached from inside it
 	// (the LQT app's own declared `strategies` surface, /studio/a/<app>/strategies
