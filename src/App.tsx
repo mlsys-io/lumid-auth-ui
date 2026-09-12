@@ -227,7 +227,12 @@ const ComputeSection = lazy(() => import("./admin/fm/compute-section"));
 const FmFleetRoute = lazy(() =>
   import("./admin/fm/routes").then((m) => ({ default: m.FleetRoute })),
 );
-const FmSandboxes = lazy(() => import("./admin/fm/sandboxes-tab"));
+// Through routes.tsx like Fleet and Jobs, not the bare tab: the tab needs to know
+// the caller's role to decide which sites to fan out to. It is still NOT gated —
+// home is readable by every signed-in user.
+const FmSandboxesRoute = lazy(() =>
+  import("./admin/fm/routes").then((m) => ({ default: m.SandboxesRoute })),
+);
 const FmJobsRoute = lazy(() =>
   import("./admin/fm/routes").then((m) => ({ default: m.JobsRoute })),
 );
@@ -734,7 +739,7 @@ export default function App() {
             >
               <Route index element={<FmFleetRoute />} />
               <Route path="jobs" element={<FmJobsRoute />} />
-              <Route path="sandboxes" element={<FmSandboxes />} />
+              <Route path="sandboxes" element={<FmSandboxesRoute />} />
               {/* Absorbed into Fleet (vast) and Jobs (ssh, submit) on 2026-09-11.
                   Kept as redirects — these were linked from the tab strip and are
                   in people's history. */}

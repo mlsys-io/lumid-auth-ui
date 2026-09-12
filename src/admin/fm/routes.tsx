@@ -8,6 +8,7 @@
 import { useAuth } from "../../hooks/useAuth";
 import FleetTab from "./fleet-tab";
 import JobsTab from "./jobs-tab";
+import SandboxesTab from "./sandboxes-tab";
 
 function useIsAdmin(): boolean {
 	const { user } = useAuth();
@@ -20,6 +21,15 @@ export function FleetRoute() {
 
 export function JobsRoute() {
 	return <JobsTab isAdmin={useIsAdmin()} />;
+}
+
+// isAdmin is a PROP, not a route gate — same shape as the two above, and the
+// difference matters. Gating the route would take the Sandboxes tab away from
+// every non-admin, and home is the site they are meant to use; sandbox-control
+// already scopes everything to the caller's own namespace, quota and keys. The
+// prop only decides WHICH SITES to ask for: home alone, or all of them.
+export function SandboxesRoute() {
+	return <SandboxesTab isAdmin={useIsAdmin()} />;
 }
 
 // SshRoute is gone: SSH is a view inside Jobs now, not a route. jobs-tab renders

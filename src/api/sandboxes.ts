@@ -1,4 +1,4 @@
-// Client for sandbox-control (home SSH sandboxes), served at lum.id/sbx/.
+// Client for sandbox-control — SSH sandboxes, now on every k8s sandbox site.
 //
 // Reuses the SAME flowmesh session-bearer fm.ts already mints: lum.id's
 // /oauth/userinfo does not check the audience, and sandbox-control introspects
@@ -7,25 +7,62 @@
 //
 // sandbox-control must SEE the caller's own token: it reads that user's SSH keys
 // AS them, so there is no service credential anywhere in this path and no way for
-// one user's request to touch another's keys.
+// one user's request to touch another's keys. That is also why the office/nus
+// routes go through mesh-federator rather than lumid_cluster's ClusterProxy —
+// the latter deliberately deletes the caller's Authorization and substitutes a
+// per-cluster operator key, which would provision as somebody else.
+//
+// ---------------------------------------------------------------------------
+// HOME IS `/sbx`, NOT `/sbx/home`. THIS IS NOT AN INCONSISTENCY TO TIDY.
+// ---------------------------------------------------------------------------
+// nginx serves the bare `/sbx/` location straight to home's sandbox-control with
+// NO auth_request, because home is the site any signed-in user may use and
+// sandbox-control authenticates every request itself. `^/sbx/(office|nus)/` is a
+// separate, admin-gated regex location that proxies to mesh-federator. So the
+// two shapes are two different access boundaries wearing one prefix — and
+// `/sbx/home/...` is NOT a route: it would fall through to the bare location and
+// reach home's service as the path `/home/api/...`, which 404s. Always build the
+// URL with sbxUrl().
 
-import axios, { type AxiosInstance } from "axios";
+import axios, { AxiosError, type AxiosInstance } from "axios";
 import { getFlowmeshBearer } from "./flowmesh";
+import type { FmSshInfo, FmTask } from "./fm";
 
 const SBX_BASE = "/sbx";
+
+/** The site whose sandboxes every signed-in user may use. */
+export const PUBLIC_SANDBOX_SITE = "home";
+
+/** Sites that run a sandbox-control. `vast` is deliberately absent — see ComputeShell. */
+export const SANDBOX_SITES = ["home", "office", "nus"];
+
+/**
+ * Request path for a site.
+ *
+ * home -> `/sbx/...` (public location), everything else -> `/sbx/<site>/...`
+ * (admin-gated, via mesh-federator).
+ */
+export function sbxUrl(site: string, path: string): string {
+	return site === PUBLIC_SANDBOX_SITE ? `${SBX_BASE}${path}` : `${SBX_BASE}/${site}${path}`;
+}
 
 export interface Sandbox {
 	name: string;
 	pod: string;
-	/** Running | Pending | Queued | Succeeded | Failed */
+	/** Running | Pending | Queued | Terminating | Succeeded | Failed */
 	phase: string;
 	node?: string | null;
+	image?: string | null;
 	gpu: number;
+	/** Epoch seconds, as a string — it is a pod annotation. */
 	expires_at?: string | null;
+	created?: string | null;
 	/** Set when phase is Queued — what the scheduler is waiting for. */
 	waiting_for?: string;
-	/** "free/total" across sandbox-capable nodes, when a GPU was asked for. */
+	/** "free/total" across sandbox-capable nodes, when the site reports one. */
 	gpus_free?: string;
+	/** Injected by this client so a merged list stays actionable. */
+	site?: string;
 }
 
 export interface SandboxList {
@@ -42,8 +79,10 @@ export interface CreateSandboxRequest {
 	ttl_hours?: number;
 }
 
-function client(): AxiosInstance {
-	const c = axios.create({ baseURL: SBX_BASE, timeout: 180_000 });
+function makeClient(): AxiosInstance {
+	// No baseURL: sbxUrl() builds the whole path, because the home/other split
+	// above is not expressible as one prefix.
+	const c = axios.create({ timeout: 180_000 });
 	c.interceptors.request.use(async (cfg) => {
 		const t = await getFlowmeshBearer();
 		if (t) {
@@ -52,32 +91,181 @@ function client(): AxiosInstance {
 		}
 		return cfg;
 	});
+	// Same single 401 retry fm.ts uses. A sandbox create can take tens of seconds
+	// (it waits out the caller's own terminating pods), which is long enough for a
+	// session bearer minted at page load to age out mid-request.
+	c.interceptors.response.use(
+		(res) => res,
+		async (err: AxiosError) => {
+			const cfg = err.config as (typeof err.config & { _retried?: boolean }) | undefined;
+			if (err.response?.status === 401 && cfg && !cfg._retried) {
+				cfg._retried = true;
+				const fresh = await getFlowmeshBearer(true);
+				if (fresh) {
+					cfg.headers = cfg.headers ?? {};
+					(cfg.headers as Record<string, string>).Authorization = `Bearer ${fresh}`;
+					return c.request(cfg);
+				}
+			}
+			return Promise.reject(err);
+		},
+	);
 	return c;
 }
 
-const sbx = client();
+const sbx = makeClient();
 
-export async function whoami(): Promise<{ email: string; user: string; admin: boolean }> {
-	return (await sbx.get("/api/whoami")).data;
+export async function whoami(site = PUBLIC_SANDBOX_SITE): Promise<{ email: string; user: string; admin: boolean }> {
+	return (await sbx.get(sbxUrl(site, "/api/whoami"))).data;
 }
 
-export async function listSandboxes(): Promise<SandboxList> {
-	const r = await sbx.get<SandboxList>("/api/sandboxes");
-	return { sandboxes: r.data?.sandboxes ?? [], gpus_free: r.data?.gpus_free ?? "" };
+/**
+ * One site's sandboxes, shaped for `fanoutForSites` (fm.ts).
+ *
+ * Returns the rows, not the envelope: the site's `gpus_free` is copied onto each
+ * row so nothing is lost by flattening. Rows are tagged with `site`, which is
+ * what makes a merged list actionable — a delete has to go back to the site it
+ * came from.
+ */
+export async function listSandboxesForSite(site: string): Promise<Sandbox[]> {
+	const r = await sbx.get<SandboxList>(sbxUrl(site, "/api/sandboxes"));
+	const gpusFree = r.data?.gpus_free ?? "";
+	return (r.data?.sandboxes ?? []).map((s) => ({ ...s, site, gpus_free: s.gpus_free ?? gpusFree }));
 }
 
-export async function createSandbox(req: CreateSandboxRequest): Promise<Sandbox> {
-	return (await sbx.post("/api/sandboxes", req)).data;
+export async function createSandbox(site: string, req: CreateSandboxRequest): Promise<Sandbox> {
+	return (await sbx.post(sbxUrl(site, "/api/sandboxes"), req)).data;
 }
 
-export async function deleteSandbox(name: string): Promise<void> {
-	await sbx.delete(`/api/sandboxes/${encodeURIComponent(name)}`);
+export async function deleteSandbox(site: string, name: string): Promise<void> {
+	await sbx.delete(sbxUrl(site, `/api/sandboxes/${encodeURIComponent(name)}`));
 }
 
-/** Re-mirror the caller's lum.id SSH keys into the gateway. */
-export async function syncKeys(): Promise<{ user: string; keys_authorized: number; hint?: string | null }> {
-	return (await sbx.post("/api/keys/sync")).data;
+/** Re-mirror the caller's lum.id SSH keys into that site's gateway. Per-site: each
+ *  site's gateway holds its own authorized_keys Secret. */
+export async function syncKeys(site: string): Promise<{ user: string; keys_authorized: number; hint?: string | null }> {
+	return (await sbx.post(sbxUrl(site, "/api/keys/sync"))).data;
 }
 
-/** What a user types to get in. One port for everyone; the key decides whose pod. */
-export const SSH_COMMAND = "ssh -p 31223 gw@lum.id";
+/**
+ * What a user types to get in, per site. One port per site for everyone; the key
+ * decides whose pod.
+ *
+ * `null` means the site has no published SSH entry point yet and the only way in
+ * is `kubectl exec` — office has a sandbox-control but no gateway of its own, and
+ * saying so is better than printing a command that cannot work.
+ */
+const SITE_SSH: Record<string, string | null> = {
+	// site-sshfwd nodePort 31223 -> socat -> home k3s 31223 -> sandbox-gateway sshd.
+	home: "ssh -p 31223 gw@lum.id",
+	// nus-waypoint's nus-gateway-ssh NodePort 31222 -> ssh -L -> the container-gateway.
+	nus: "ssh -p 31222 gw@lum.id",
+	office: null,
+};
+
+export function sshCommandForSite(site?: string): string | null {
+	return SITE_SSH[site ?? PUBLIC_SANDBOX_SITE] ?? null;
+}
+
+/** Back-compat: home's command, which is what every existing caller meant. */
+export const SSH_COMMAND = SITE_SSH.home as string;
+
+// ---------------------------------------------------------------------------
+// ONE ROW SHAPE FOR TWO SOURCES
+// ---------------------------------------------------------------------------
+// A shell on home/office/NUS is a k8s pod from sandbox-control. A shell on vast
+// is a FlowMesh SSH task — there is no sessions API, so its connection details
+// are published through the task's own `latest_update.ssh` by the worker
+// (worker/executors/ssh_executor.py: emit_update(task_id, {"ssh": …})).
+//
+// Those are two mechanisms and ONE user-facing concept. Rendering them as two
+// lists would make the user learn our plumbing, so both normalise to this.
+
+export type ShellKind = "sandbox" | "flowmesh-ssh";
+
+export interface ComputeShell {
+	/** Stable across polls and unique across sites. */
+	key: string;
+	site: string;
+	kind: ShellKind;
+	name: string;
+	/** Lowercased-vocabulary-free: whatever the source calls it. Render via a pill. */
+	state: string;
+	/** The command to type, or null when the source published none. */
+	connect: string | null;
+	/** Epoch MILLISECONDS, normalised from a pod annotation (epoch seconds, as a
+	 *  string) or a task's ISO timestamp. */
+	expiresAt: number | null;
+	/** null means "you" — the sandbox API only ever returns the caller's own. */
+	owner: string | null;
+	/** One line of context: why it is queued, which worker, which pod. */
+	detail: string | null;
+	gpu: number | null;
+	node: string | null;
+	/** Only set for kind "sandbox"; the delete button needs it. */
+	sandbox?: Sandbox;
+}
+
+function epochFromSeconds(v?: string | null): number | null {
+	if (!v) return null;
+	const n = Number(v);
+	return Number.isFinite(n) ? n * 1000 : null;
+}
+
+function epochFromIso(v?: string | null): number | null {
+	if (!v) return null;
+	const t = Date.parse(v);
+	return Number.isNaN(t) ? null : t;
+}
+
+export function sandboxToShell(s: Sandbox): ComputeShell {
+	const site = s.site ?? PUBLIC_SANDBOX_SITE;
+	return {
+		key: `${site}:${s.pod}`,
+		site,
+		kind: "sandbox",
+		name: s.name,
+		state: s.phase,
+		connect: sshCommandForSite(site),
+		expiresAt: epochFromSeconds(s.expires_at),
+		owner: null,
+		detail: s.phase === "Queued" ? [s.gpus_free && `${s.gpus_free} GPUs free.`, s.waiting_for]
+			.filter(Boolean).join(" ") || null : s.pod,
+		gpu: s.gpu || null,
+		node: s.node ?? null,
+		sandbox: s,
+	};
+}
+
+/** A FlowMesh SSH session is usable only while its task is live AND its lease has
+ *  not expired — the same test ssh-tab applies. */
+export function isSshTaskActive(t: FmTask): boolean {
+	if (!["RUNNING", "DISPATCHED", "PENDING", "QUEUED"].includes(String(t.status))) return false;
+	const exp = t.latest_update?.ssh?.expires_at;
+	if (!exp) return true;
+	const ms = Date.parse(exp);
+	return Number.isNaN(ms) ? true : ms > Date.now();
+}
+
+export function sshTaskToShell(t: FmTask): ComputeShell {
+	const s: FmSshInfo = t.latest_update?.ssh ?? {};
+	const site = t.site ?? "vast";
+	return {
+		key: `${site}:${t.task_id}`,
+		site,
+		kind: "flowmesh-ssh",
+		name: t.task_id.slice(0, 12),
+		state: String(t.status),
+		connect: s.host && s.port ? `ssh -p ${s.port} ${s.username ?? "flowmesh"}@${s.host}` : null,
+		expiresAt: epochFromIso(s.expires_at),
+		owner: t.owner_id ?? null,
+		detail: [t.assigned_worker, s.mode].filter(Boolean).join(" · ") || null,
+		gpu: null,
+		node: t.assigned_worker ?? null,
+	};
+}
+
+/** Only SSH tasks, only the ones this view should show. */
+export function sshTasksToShells(tasks: FmTask[]): ComputeShell[] {
+	return tasks.filter((t) => t.task_type === "ssh").map(sshTaskToShell);
+}
