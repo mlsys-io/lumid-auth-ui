@@ -163,6 +163,38 @@ with a pointer, not FAIL. Once populated, Polymarket/Kalshi liveness moves to li
 
 Domains: `lum.id`, `xp.io`, `lumid.market`, `runmesh.ai`, `lumilake.ai`, `lumid.trade`.
 
+### registry (Harbor at home + the per-site replicas)
+| Check | Surface | Threshold | Remediation | Cadence |
+|---|---|---|---|---|
+| harbor-home | `https://harbor.lum.id/v2/` | **401 or 200** — a 401 here is CORRECT, it means a working OCI registry demanding auth | SURFACE — Docker refuses a plain-HTTP registry, so a detached cert or a stale `kv.run` DDNS record breaks every push and pull, not just TLS | 15m |
+| replication:`<site>` | canary digest vs `harbor.lum.id` | `Docker-Content-Digest` MATCHES the source | SURFACE — a replica that stops syncing still answers pulls; only the digest reveals it is serving stale images. SKIP (not FAIL) when the canary is simply absent: onDemand replicas populate on first pull | 1h |
+
+Set `REGISTRY_REPLICAS=<name>=<base-url>,…` to enable the comparison; unset is a SKIP with a pointer.
+
+### sandbox (the per-site SSH sandbox control surface)
+| Check | Surface | Threshold | Remediation | Cadence |
+|---|---|---|---|---|
+| `<site>` | `/sbx/api/whoami` (home), `/sbx/<site>/api/whoami` (office, nus) | 401 or 2xx | SURFACE — a dead site must show as unreachable in the SiteStrip, never silently absent | 15m |
+
+**Distinguish the two 401s by BODY, not status.** sandbox-control answers ~33 B of JSON; nginx's
+admin gate answers ~179 B of HTML. Both mean healthy — home is public and app-gated, office and nus
+are admin-gated at the edge. Only a 5xx or a timeout is a fault. cloud is deliberately absent: it is
+the hub, not a site. vast uses FlowMesh SSH, not sandbox-control.
+
+### ci (the NUS ARC runner farm)
+| Check | Surface | Threshold | Remediation | Cadence |
+|---|---|---|---|---|
+| nus-runners | `kubectl -n arc-systems get pods` | every ARC listener Running | SURFACE — a DEPRECATED runner version fails SILENTLY: pods read Running, the listener says "assigned job", and the workflow sits queued forever with the reason ONLY in the runner pod's log | 1h |
+
+SKIP without a NUS kubeconfig.
+
+### vast (rented GPU spend)
+| Check | Surface | Threshold | Remediation | Cadence |
+|---|---|---|---|---|
+| cost | vast `/api/v0/instances/` | fleet `dph_total` under `VAST_MAX_DPH_FLEET` (default $1.00/h) | **SURFACE, never AUTO** — destroying someone's live box is a human decision. Note a DELETE answering HTTP 200 with `{"success": false}` is a REJECTED destroy, not a completed one: parse the body, never the status | 15m |
+
+SKIP without `VAST_API_KEY`.
+
 ### secrets (token/key validity)
 | Check | Surface | Threshold | Remediation | Cadence |
 |---|---|---|---|---|
