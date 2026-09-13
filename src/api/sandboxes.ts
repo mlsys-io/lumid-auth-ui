@@ -123,22 +123,41 @@ export interface DataSource {
 	label?: string;
 	note?: string;
 	hint?: string;
+	/**
+	 * How the caller authenticates to THIS source — and it genuinely differs.
+	 *
+	 * lumid-data takes the user's own PAT, so a query is attributable to a person.
+	 * findata and lqt come through anon-read gateways that inject a shared service
+	 * credential: no token needed, and the query is NOT attributable. That is a
+	 * real trade-off between two sources on the same screen, so it is rendered
+	 * rather than buried in a tooltip.
+	 */
+	auth?: string;
 }
 
 /**
- * A file dataset published to a site's shared read-only tier.
+ * A file dataset published to a site's shared tier.
  *
  * NOT selectable, and must not be rendered as a checkbox: `/datasets` is mounted
  * read-only into EVERY sandbox at the site, so there is nothing to opt into. The
  * value is knowing what is on the shelf BEFORE creating a box — the mount was
  * otherwise invisible until someone happened to `ls` it, which is how it sat
  * empty and unnoticed for weeks.
+ *
+ * It IS manageable, though, which is a different thing from selectable: a
+ * dataset can be published, added to and deleted through sandbox-control (the
+ * only holder of a writable handle to the tier). Sandboxes still mount it
+ * read-only — that protection is the reason the write path lives in the service.
  */
 export interface DatasetEntry {
 	name: string;
 	bytes?: number;
 	files?: number;
 	note?: string;
+	/** Publisher's username. `null` means operator-published — admin-only to change. */
+	owner?: string | null;
+	/** Whether THIS caller may modify it. Per-caller, so never cache it across users. */
+	can_edit?: boolean;
 }
 
 export interface SandboxList {
@@ -151,6 +170,8 @@ export interface SandboxList {
 	/** Absent on a site not yet running a build that serves sources. */
 	data_sources?: DataSource[];
 	datasets?: DatasetEntry[];
+	/** False where the site has no writable dataset tier (office has none today). */
+	datasets_writable?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -205,6 +226,81 @@ const siteDatasets = new Map<string, DatasetEntry[]>();
 
 export function datasetsForSite(site: string): DatasetEntry[] {
 	return siteDatasets.get(site) ?? [];
+}
+
+const siteDatasetsWritable = new Map<string, boolean>();
+
+/** Whether this site can be published to at all. Unknown → false: offering a
+ *  publish button that 501s is worse than not offering one. */
+export function datasetsWritableForSite(site: string): boolean {
+	return siteDatasetsWritable.get(site) ?? false;
+}
+
+// ---------------------------------------------------------------------------
+// DATASET MUTATIONS
+// ---------------------------------------------------------------------------
+// The tier is SHARED by every sandbox at the site and mounted read-only inside
+// them, so sandbox-control holds the only writable handle. These call it; there
+// is deliberately no path that writes the export directly.
+
+export interface DatasetLimits {
+	max_file_mb: number;
+	max_size_gb: number;
+	max_per_user: number;
+}
+
+export interface DatasetList {
+	datasets: DatasetEntry[];
+	writable: boolean;
+	limits: DatasetLimits;
+	mounted_at: string;
+}
+
+/** Fetch the dataset list on its own, so a publish shows up without waiting out
+ *  the 20 s sandbox poll. Also refreshes the per-site caches above. */
+export async function listDatasets(site: string): Promise<DatasetList> {
+	const r = await sbx.get<DatasetList>(sbxUrl(site, "/api/datasets"));
+	if (r.data?.datasets) siteDatasets.set(site, r.data.datasets);
+	if (typeof r.data?.writable === "boolean") siteDatasetsWritable.set(site, r.data.writable);
+	return r.data;
+}
+
+export async function createDataset(site: string, name: string, note: string): Promise<DatasetEntry> {
+	return (await sbx.post(sbxUrl(site, "/api/datasets"), { name, note })).data;
+}
+
+export async function deleteDataset(site: string, name: string): Promise<void> {
+	await sbx.delete(sbxUrl(site, `/api/datasets/${encodeURIComponent(name)}`));
+}
+
+/**
+ * Upload one file into a dataset.
+ *
+ * Raw body, NOT multipart: sandbox-control's image carries no `python-multipart`,
+ * and the service streams the body to disk so a large file never sits in its
+ * memory. `path` may contain slashes (a subdirectory); each segment is validated
+ * server-side against escaping the dataset.
+ *
+ * The 180 s client timeout applies here as everywhere, so this is for datasets
+ * assembled from ordinary files — not a bulk corpus transfer, which still wants
+ * `scp` to the NAS.
+ */
+export async function uploadDatasetFile(
+	site: string, name: string, path: string, file: Blob,
+): Promise<{ bytes: number }> {
+	const url = sbxUrl(site, `/api/datasets/${encodeURIComponent(name)}/files/`)
+		// Each SEGMENT is encoded, so a subdirectory survives as a path rather than
+		// arriving as one escaped filename containing %2F.
+		+ path.split("/").map(encodeURIComponent).join("/");
+	return (await sbx.put(url, file, {
+		headers: { "Content-Type": "application/octet-stream" },
+	})).data;
+}
+
+export async function deleteDatasetFile(site: string, name: string, path: string): Promise<void> {
+	const url = sbxUrl(site, `/api/datasets/${encodeURIComponent(name)}/files/`)
+		+ path.split("/").map(encodeURIComponent).join("/");
+	await sbx.delete(url);
 }
 
 export interface CreateSandboxRequest {
@@ -276,6 +372,9 @@ export async function listSandboxesForSite(site: string): Promise<Sandbox[]> {
 	if (r.data?.images?.catalog?.length) siteImages.set(site, r.data.images);
 	if (r.data?.data_sources) siteSources.set(site, r.data.data_sources);
 	if (r.data?.datasets) siteDatasets.set(site, r.data.datasets);
+	if (typeof r.data?.datasets_writable === "boolean") {
+		siteDatasetsWritable.set(site, r.data.datasets_writable);
+	}
 	return (r.data?.sandboxes ?? []).map((s) => ({ ...s, site, gpus_free: s.gpus_free ?? gpusFree }));
 }
 

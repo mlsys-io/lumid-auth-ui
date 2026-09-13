@@ -24,16 +24,20 @@
 // the app. The sites that serve shells through FlowMesh are the sites listed
 // below; everywhere else a shell is a sandbox.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
 	PUBLIC_SANDBOX_SITE,
 	SANDBOX_SITES,
 	USER_SANDBOX_SITES,
+	createDataset,
 	createSandbox,
+	deleteDataset,
 	deleteSandbox,
 	dataSourcesForSite,
 	datasetsForSite,
+	datasetsWritableForSite,
+	listDatasets,
 	gpuProfileForSite,
 	imagesForSite,
 	isSshTaskActive,
@@ -42,7 +46,10 @@ import {
 	sshCommandForSite,
 	sshTaskToShell,
 	syncKeys,
+	uploadDatasetFile,
 	type ComputeShell,
+	type DatasetEntry,
+	type DatasetLimits,
 	type Sandbox,
 } from "../../api/sandboxes";
 import { fanoutForSites, listTasksForSite, type FmFanout, type FmTask } from "../../api/fm";
@@ -138,6 +145,100 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 	const [newKey, setNewKey] = useState("");
 	const [newKeyTitle, setNewKeyTitle] = useState("");
 	const [keyBusy, setKeyBusy] = useState(false);
+
+	// DATASETS ARE MANAGEABLE HERE, not only listable. `/datasets` is mounted
+	// read-only inside every sandbox and stays that way -- one `rm -rf` in one box
+	// must not be able to destroy a corpus every other box depends on -- so the
+	// write path goes through sandbox-control, which holds the only writable
+	// handle to the shared tier. Before this, publishing meant having NAS root,
+	// and the documented route was "ask an operator".
+	const [dsOpen, setDsOpen] = useState(false);
+	const [dsBusy, setDsBusy] = useState(false);
+	const [dsName, setDsName] = useState("");
+	const [dsNote, setDsNote] = useState("");
+	// Which dataset a file picker is currently aimed at. One ref for the whole
+	// list: a hidden input per row is a lot of DOM for a button most rows never
+	// get.
+	const [dsUploadTo, setDsUploadTo] = useState("");
+	const [dsLimits, setDsLimits] = useState<DatasetLimits | null>(null);
+	const dsFileRef = useRef<HTMLInputElement | null>(null);
+	// Bumped after every mutation so the render reads the refreshed module cache.
+	// The 20 s sandbox poll also refills it, but waiting out a poll to see the
+	// thing you just uploaded reads as a failed upload.
+	const [dsTick, setDsTick] = useState(0);
+
+	const reloadDatasets = useCallback(async () => {
+		try {
+			const r = await listDatasets(target);
+			setDsLimits(r.limits ?? null);
+		} catch {
+			// A site with no dataset tier answers 404/501 here. Not an error worth
+			// showing: the panel simply has nothing to manage.
+		}
+		setDsTick((v) => v + 1);
+	}, [target]);
+
+	// Re-read when the site changes: datasets are per-site and NOT replicated, so
+	// office's list is a different shelf from home's.
+	useEffect(() => { if (dsOpen) void reloadDatasets(); }, [dsOpen, reloadDatasets]);
+
+	async function onCreateDataset() {
+		const n = dsName.trim().toLowerCase();
+		if (!n) return;
+		setDsBusy(true);
+		try {
+			await createDataset(target, n, dsNote.trim());
+			setDsName(""); setDsNote("");
+			await reloadDatasets();
+			toast.success(`published ${n} on ${target}`);
+		} catch (e: any) {
+			toast.error(e?.response?.data?.detail ?? `could not publish ${n}`);
+		} finally {
+			setDsBusy(false);
+		}
+	}
+
+	async function onUploadDatasetFiles(files: FileList | null) {
+		if (!files?.length || !dsUploadTo) return;
+		const into = dsUploadTo;
+		setDsBusy(true);
+		try {
+			// Sequential, not parallel: these go to one NFS export through one pod,
+			// and a fan-out of large PUTs buys nothing but a less legible failure.
+			for (const f of Array.from(files)) {
+				await uploadDatasetFile(target, into, f.name, f);
+			}
+			await reloadDatasets();
+			toast.success(`uploaded ${files.length} file(s) to ${into}`);
+		} catch (e: any) {
+			// A partial batch is possible and the message must not imply otherwise.
+			toast.error(e?.response?.data?.detail ?? `upload to ${into} failed — some files may have landed`);
+		} finally {
+			setDsBusy(false);
+			setDsUploadTo("");
+			if (dsFileRef.current) dsFileRef.current.value = "";
+		}
+	}
+
+	async function onDeleteDataset(d: DatasetEntry) {
+		// Type-the-name, not a yes/no. This deletes files on a SHARED export that
+		// has no snapshot and no undo, and the cost of a misclick is somebody
+		// else's corpus.
+		const typed = window.prompt(
+			`Delete dataset "${d.name}" and its ${d.files ?? 0} file(s) from ${target}? `
+			+ "This cannot be undone. Type the name to confirm:");
+		if (typed?.trim() !== d.name) return;
+		setDsBusy(true);
+		try {
+			await deleteDataset(target, d.name);
+			await reloadDatasets();
+			toast.success(`deleted ${d.name}`);
+		} catch (e: any) {
+			toast.error(e?.response?.data?.detail ?? `could not delete ${d.name}`);
+		} finally {
+			setDsBusy(false);
+		}
+	}
 
 	const loadKeys = useCallback(async () => {
 		try { setKeys(await listSshKeys()); } catch { setKeys([]); }
@@ -360,21 +461,52 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 						<label className="text-xs text-slate-600">
 							Image ref
 							<input value={customImage} onChange={(e) => setCustomImage(e.target.value)}
-								placeholder="repo/name:tag"
-								className="mt-1 block w-64 rounded-md border border-slate-300 px-2 py-1 text-sm font-mono" />
+								placeholder="harbor.lum.id/sandbox/name:tag"
+								className="mt-1 block w-72 rounded-md border border-slate-300 px-2 py-1 text-sm font-mono" />
+							{/* THE TWO THINGS THAT MAKE A CUSTOM REF FAIL, said before it does.
+							    Both surface as ImagePullBackOff minutes later, where neither
+							    cause is visible: a private Harbor project cannot be pulled at
+							    all (sandbox pods carry no pull secret and node trust pulls
+							    anonymously), and a wrong-arch image is a valid manifest that
+							    fails at exec. */}
+							<span className="mt-1 block max-w-xs font-normal leading-snug text-slate-400">
+								Ours is <code className="rounded bg-slate-50 px-1">harbor.lum.id/&lt;project&gt;/&lt;name&gt;:&lt;tag&gt;</code>{" "}
+								— the same ref at every site. Push with your lum.id login (
+								<a href="https://harbor.lum.id" target="_blank" rel="noreferrer"
+									className="text-indigo-600 hover:underline">harbor.lum.id</a>{" "}
+								→ User Profile → CLI secret). The project must be{" "}
+								<strong>public</strong> to be pullable here, and the image{" "}
+								<strong>linux/amd64</strong>.
+							</span>
 						</label>
 					)}
+					{/* MULTI-SELECT, AND THE CHOICE HAS TO BE LEGIBLE. This was one
+					    checkbox reading "Lumid Data" for a while, which made it look
+					    like a yes/no for "data" in general rather than a pick among
+					    stores — and the store it named is NOT the one holding market
+					    or prediction_markets. Each row therefore shows what the
+					    source actually holds and how it authenticates, because those
+					    are the two things that decide which one you want. Attaching
+					    several is normal: each injects its own variable. */}
 					{siteSources.length > 0 && (
 						<fieldset className="text-xs text-slate-600">
-							<legend className="mb-1">Data</legend>
-							<div className="flex flex-wrap items-center gap-2">
+							<legend className="mb-1">
+								Data <span className="text-slate-400">— attach live stores; nothing is copied or mounted</span>
+							</legend>
+							<div className="space-y-1">
 								{siteSources.map((d) => (
-									<label key={d.id} title={[d.note, d.hint].filter(Boolean).join(" — ")}
-										className="flex cursor-pointer items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1">
-										<input type="checkbox" checked={sources.includes(d.id)}
+									<label key={d.id}
+										className="flex cursor-pointer items-start gap-2 rounded-md border border-slate-300 bg-white px-2 py-1">
+										<input type="checkbox" className="mt-0.5" checked={sources.includes(d.id)}
 											onChange={(e) => setSources((v) =>
 												e.target.checked ? [...v, d.id] : v.filter((x) => x !== d.id))} />
-										{d.label ?? d.id}
+										<span className="min-w-0">
+											<span className="font-medium text-slate-700">{d.label ?? d.id}</span>
+											{d.note && <span className="text-slate-500"> {d.note}</span>}
+											{d.auth && (
+												<span className="block text-[11px] text-slate-400">{d.auth}</span>
+											)}
+										</span>
 									</label>
 								))}
 							</div>
@@ -419,9 +551,14 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 					    user with NO key -- because it re-reads an empty list. The count
 					    is on the button so "0 keys" is visible before you try to
 					    connect and fail. */}
+					<button onClick={() => setDsOpen((v) => !v)}
+						title={`Publish, add to or remove file datasets on ${target} — mounted read-only at /datasets in every sandbox there`}
+						className="ml-auto rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">
+						{siteDatasets.length ? `Datasets · ${siteDatasets.length}` : "Datasets"}
+					</button>
 					<button onClick={() => setKeysOpen((v) => !v)}
 						title="Add or remove the SSH keys that let you into your sandboxes"
-						className={`ml-auto rounded-md border px-3 py-1.5 text-sm ${
+						className={`rounded-md border px-3 py-1.5 text-sm ${
 							keys && keys.length === 0
 								? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
 								: "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
@@ -429,6 +566,96 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 						{keys === null ? "SSH keys" : keys.length === 0 ? "No SSH keys — add one" : `SSH keys · ${keys.length}`}
 					</button>
 				</div>
+
+				{dsOpen && (
+					<div className="mt-3 rounded-md border border-slate-200 bg-white p-3">
+						<div className="mb-2 text-xs text-slate-500">
+							Files for every sandbox on <strong>{target}</strong>, mounted read-only at{" "}
+							<code className="rounded bg-slate-50 px-1">/datasets</code>. Publishing happens here
+							because that mount stays read-only inside the sandboxes — so one careless{" "}
+							<code className="rounded bg-slate-50 px-1">rm</code> cannot take out a corpus
+							everyone else is using. Per site, not replicated.
+						</div>
+						{siteDatasets.length > 0 ? (
+							<ul className="mb-3 divide-y divide-slate-100">
+								{siteDatasets.map((d) => (
+									<li key={d.name} className="flex items-center gap-2 py-1 text-xs">
+										<span className="font-medium text-slate-800">{d.name}</span>
+										<span className="text-slate-400">
+											{d.files ?? 0} file(s) · {fmtBytes(d.bytes)}
+										</span>
+										{d.note && <span className="truncate text-slate-500">{d.note}</span>}
+										{/* Ownership is WHY a row has buttons or not, so it is shown
+										    rather than left to be inferred from their absence. */}
+										<span className="ml-auto shrink-0 text-slate-400">
+											{d.owner ?? "operator"}
+										</span>
+										{d.can_edit ? (
+											<>
+												<button disabled={dsBusy}
+													onClick={() => { setDsUploadTo(d.name); dsFileRef.current?.click(); }}
+													className="shrink-0 text-indigo-600 hover:text-indigo-800 disabled:opacity-50">
+													add files
+												</button>
+												<button disabled={dsBusy} onClick={() => void onDeleteDataset(d)}
+													className="shrink-0 text-slate-400 hover:text-red-600 disabled:opacity-50">
+													delete
+												</button>
+											</>
+										) : (
+											<span className="shrink-0 text-slate-300" title="Published by an operator — ask an operator to change it">
+												read-only
+											</span>
+										)}
+									</li>
+								))}
+							</ul>
+						) : (
+							<p className="mb-3 text-xs text-slate-500">
+								Nothing published on {target} yet. <code className="rounded bg-slate-50 px-1">ls /datasets</code>{" "}
+								in a sandbox there shows the same thing.
+							</p>
+						)}
+						{/* One input for the whole list, aimed by dsUploadTo. */}
+						<input ref={dsFileRef} type="file" multiple className="hidden"
+							onChange={(e) => void onUploadDatasetFiles(e.target.files)} />
+						{datasetsWritableForSite(target) ? (
+							<div className="flex flex-wrap items-end gap-2">
+								<label className="text-xs text-slate-600">
+									New dataset
+									<input value={dsName}
+										onChange={(e) => setDsName(e.target.value.toLowerCase())}
+										placeholder="my-corpus"
+										className="mt-1 block w-44 rounded-md border border-slate-300 px-2 py-1 font-mono text-xs" />
+								</label>
+								<label className="text-xs text-slate-600">
+									Description <span className="text-slate-400">(optional)</span>
+									<input value={dsNote} onChange={(e) => setDsNote(e.target.value)}
+										placeholder="what this holds"
+										className="mt-1 block w-64 max-w-full rounded-md border border-slate-300 px-2 py-1 text-sm" />
+								</label>
+								<button onClick={() => void onCreateDataset()} disabled={dsBusy || !dsName.trim()}
+									className="rounded-md border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50">
+									{dsBusy ? "working…" : "Publish"}
+								</button>
+							</div>
+						) : (
+							<p className="text-xs text-slate-500">
+								<strong>{target}</strong> has no writable dataset tier — the list above is
+								read-only here. Datasets are per-site, so publish on a site that has one.
+							</p>
+						)}
+						<p className="mt-2 text-xs text-slate-500">
+							Lowercase name: letters, digits, dot, dash, underscore.
+							{dsLimits && (
+								<> Limits: {dsLimits.max_file_mb} MB per file, {dsLimits.max_size_gb} GB per
+								dataset, {dsLimits.max_per_user} datasets each.</>
+							)}{" "}
+							For a bulk corpus, <code className="rounded bg-slate-50 px-1">scp</code> to the NAS
+							instead — this path goes through one pod.
+						</p>
+					</div>
+				)}
 
 				{keysOpen && (
 					<div className="mt-3 rounded-md border border-slate-200 bg-white p-3">

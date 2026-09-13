@@ -39,8 +39,8 @@ immediately, so it works the moment it is saved.
 | **Site** | `home` is open to every signed-in user. `office` and `nus` are admin+. |
 | **Name** | yours, per site. Re-creating the same name after a delete reuses your home directory. |
 | **GPUs** | see §4 — the ceiling is **per machine**, not per site. |
-| **Image** | pick from the site's list, or `custom…` for any reference. |
-| **Data** | attach a live source (FinData) — see §5. Nothing is mounted or copied. File datasets need no selection: `/datasets` is already mounted. |
+| **Image** | pick from the site's list, or `custom…` for any reference — including our own `harbor.lum.id/<project>/<name>:<tag>` (§8). |
+| **Data** | attach live stores — Lumid Data, FinData, LQT — see §5. Nothing is mounted or copied. File datasets need no selection: `/datasets` is already mounted. |
 | **Expires after** | max **24h**. The container goes; your home directory does not. |
 
 ---
@@ -60,7 +60,7 @@ Inside the gateway:
 sbx ls              list your sandboxes
 sbx enter [NAME]    shell into one
 sbx logs  NAME      its output
-sbx data            how to query FinData from a sandbox without copying it
+sbx data            how to query the attached stores without copying them
 ```
 
 Anything that is not `sbx ...` runs in your default sandbox, so `scp`, `rsync`
@@ -98,17 +98,30 @@ multi-node work needs a scheduler, not an SSH session.
 
 ## 5. Data — query it, do not copy it
 
-### FinData
+### Attach a store (or several)
 
-Tick **Data → FinData** at create. This **attaches** the warehouse: your sandbox
-gets `LUMID_DATA_URL` pointing at the live store. Nothing is mounted and nothing
-is copied.
+Tick them under **Data** at create. Each **attaches** a live store by injecting
+one environment variable. Nothing is mounted, nothing is copied, and attaching
+several is normal — they are different warehouses, not one setting.
 
-Run `sbx data` inside the sandbox for the full recipe. The short version:
+| Tick | You get | Holds | Auth |
+|---|---|---|---|
+| **Lumid Data** | `LUMID_DATA_URL` | reference, macro, events, regulatory, provenance, `robotics_demo`, `ukb_demo` | **your own PAT** |
+| **FinData** | `FINDATA_URL` | market, news, `prediction_markets`, ownership, fundamentals, estimates, raw | none — anon-read |
+| **LQT** | `LQT_DATA_URL` | LQT mailbox: strategies, results, telemetry, venue health | none — anon-read |
+
+**These are different stores, and picking the wrong one is the single most common
+confusion here.** `prediction_markets` lives in **FinData**, not Lumid Data —
+a query copied from the Studio SQL console into a Lumid-Data-only sandbox answers
+`relation … does not exist [42P01]`, which reads like a broken mount and is not.
+When in doubt, ask the store itself: `curl "$FINDATA_URL/catalog/schemas"`.
 
 ```bash
-export LUMID_PAT=…       # Account → Tokens, scope: lumid:read
+# FinData — no token needed, answers from every site
+curl "$FINDATA_URL/catalog/schemas"
 
+# Lumid Data — your own token
+export LUMID_PAT=…       # Account → Tokens, scope: lumid:read
 curl -H "Authorization: Bearer $LUMID_PAT" "$LUMID_DATA_URL/catalog/schemas"
 
 echo '{"sql":"SELECT * FROM reference.active_symbols LIMIT 20"}' > q.json
@@ -125,14 +138,13 @@ curl -X POST "$LUMID_DATA_URL/retrieve" \
 you were avoiding. A three-row query moves about 500 bytes; the table never
 leaves the server.
 
-You bring your own token on purpose — queries stay attributable to you, not to a
-shared sandbox identity.
+**Attribution differs, and it is worth knowing which you are using.** Lumid Data
+takes your own PAT, so every query is attributable to you. FinData and LQT come
+through anon-read gateways that supply a shared service credential: convenient,
+no token to manage, and **not** traceable to you. Reach for Lumid Data when that
+matters.
 
-> The **schemas differ by path**. A sandbox sees the store it is wired to; the
-> Studio SQL console reaches a different one and its sample query uses
-> `prediction_markets`, which a sandbox will answer with
-> `relation … does not exist [42P01]`. Trust `catalog/schemas` from *inside* the
-> sandbox over an example copied from elsewhere.
+Run `sbx data` inside the sandbox for the same recipe without leaving the shell.
 
 ### Datasets — `/datasets`
 
@@ -145,16 +157,19 @@ ls /datasets          # what this site has
 du -sh /datasets/*    # how big
 ```
 
-> **It is empty today** apart from a README. If `ls /datasets` shows nothing,
-> that is the honest answer and not a broken mount.
+**To publish one**, use **Datasets** on the Sandboxes tab: name it, then add
+files. It appears in every sandbox on that site immediately — no restart, no
+re-create, and no NAS access needed. You may delete or add to anything you
+published; datasets an operator published show as read-only to you.
 
-**To publish one**, copy it to the NAS under `_shared/datasets/<name>/`. It
-appears in every sandbox on that site immediately — no restart, no re-create.
-Ask an operator if you do not have NAS access.
+Limits per dataset: **512 MB** a file, **50 GB** total, **10 datasets** each. For
+a bulk corpus, `scp` to the NAS instead — the browser path goes through a single
+pod.
 
-**Read-only by design.** One careless `rm` in one sandbox must not be able to
-destroy a corpus everyone else depends on. If you need to write, copy what you
-need into your own `/home/<you>` first.
+**Still read-only inside the sandbox, deliberately.** One careless `rm` in one
+sandbox must not be able to destroy a corpus everyone else depends on, so writes
+go through Studio rather than through the mount. If you need to write, copy what
+you need into your own `/home/<you>` first.
 
 **Per site, not replicated.** `/datasets` on office is a different directory
 from `/datasets` on home; publishing to one does not publish to the other.
@@ -168,9 +183,9 @@ centralising them would trade real speed for disk that is not scarce.
 |  | `/datasets` | attached source (§ Data picker) |
 |---|---|---|
 | holds | files and directories | a live query endpoint |
-| how you get it | already mounted, read-only | tick it at create; injects env |
+| how you get it | already mounted, read-only; publish in Studio | tick it at create; injects env |
 | copies data? | the files are *stored* there | **no** — query runs server-side |
-| good for | corpora, checkpoints, extracts | FinData and other warehouses |
+| good for | corpora, checkpoints, extracts | FinData, Lumid Data, LQT |
 
 Rule of thumb: **if it is a table, query it; if it is a directory, mount it.**
 Do not copy a warehouse into `/datasets` to "have it locally" — it is stale the
@@ -212,6 +227,48 @@ ordinary dev files is a much larger problem than it looks.
 | `relation … does not exist [42P01]` | Right SQL, wrong store — check `catalog/schemas` from inside the sandbox. |
 | image pulls forever | A private registry the site cannot authenticate to; try a public one. |
 | your files vanished | You worked in `$HOME` (`/root`), not `/home/<you>`. §6. |
+
+---
+
+## 8. Your own image — `harbor.lum.id`
+
+The image list is a shortlist, not an allowlist. `custom…` takes any reference,
+including our own registry:
+
+```
+harbor.lum.id/<project>/<name>:<tag>
+```
+
+**The same reference works at every site.** Each node rewrites that name to
+whichever registry is closest to it — Harbor itself at home, the replica at office
+or NUS — so a pod spec stays portable and you never write a site-specific address.
+
+### Pushing
+
+Harbor authenticates against lum.id, so there is no separate account to request.
+
+```bash
+# 1. Sign in at https://harbor.lum.id with your lum.id account.
+# 2. Profile menu → User Profile → copy the CLI secret.
+#    (OIDC accounts cannot use a password for docker login — this is the substitute.)
+docker login harbor.lum.id -u <you> -p <cli-secret>
+
+# 3. amd64, because the sandbox pool is amd64.
+docker build --platform=linux/amd64 -t harbor.lum.id/<project>/<name>:v1 .
+docker push harbor.lum.id/<project>/<name>:v1
+```
+
+### Two things that make a pull fail
+
+Both surface as `ImagePullBackOff` minutes later, where neither cause is visible:
+
+- **The project must be public.** Sandbox pods carry no pull credential and the
+  nodes pull anonymously, so a private project cannot be pulled here at all — it
+  fails as though the tag did not exist. Mark the project public in Harbor, or
+  keep the image on a public registry.
+- **Wrong architecture.** A wrong-arch image is a *valid* manifest that fails at
+  exec, with a message that reads like a truncated download. Build
+  `--platform=linux/amd64`, or push a manifest list.
 
 ---
 
