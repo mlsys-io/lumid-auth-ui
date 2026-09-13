@@ -1299,9 +1299,22 @@ function fmtVal(v: unknown): string {
 function OutputsTier({ files, ts, hasRuns }:
 	{ files: Record<string, unknown>; ts: string | null; hasRuns: boolean }) {
 	const result = (files?.result ?? files?.results) as unknown;
+	// Render whatever the run ACTUALLY produced, not a fixed wish-list.
+	// Measured 2026-09-13 across every cycle dir in the estate: the only
+	// sidecars anyone writes are observations.json and proposal.json — 344 of
+	// each, and zero result.json. A hardcoded list of result/report/verdict/
+	// scorecard/analysis/summary_md therefore declared "no result artifact" for
+	// every app that has ever run, while the artifact sat right there. The
+	// preferred keys stay FIRST so the common case reads the same; anything
+	// else the cycle wrote follows, instead of being silently dropped.
+	const preferred = ["report", "verdict", "scorecard", "analysis", "summary_md"];
 	const extras: Array<[string, unknown]> = [];
-	for (const k of ["report", "verdict", "scorecard", "analysis", "summary_md"]) {
+	for (const k of preferred) {
 		if (files?.[k] != null) extras.push([k, files[k]]);
+	}
+	for (const k of Object.keys(files ?? {})) {
+		if (k === "result" || k === "results" || preferred.includes(k)) continue;
+		if (files[k] != null) extras.push([k, files[k]]);
 	}
 	const empty = result == null && extras.length === 0;
 	return (
