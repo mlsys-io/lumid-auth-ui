@@ -191,6 +191,34 @@ curl -s -X POST -H "Authorization: Bearer $LUMID_PAT" \
 
 ---
 
+## Data on a worker
+
+A worker is **not** a sandbox, and the storage differs. Check before you plan around it:
+
+| path | on a worker | on a sandbox |
+|---|---|---|
+| `/huggingface` | **yes** — node-local model cache, already warm | no |
+| `/datasets` | **no** | yes, read-only |
+| `/home/<you>` | **no** — nothing here survives the task | yes, network storage |
+
+**Nothing you write in an SSH session survives it.** There is no persistent home on a worker.
+Push results somewhere before the task ends — the task's own output destination, object storage,
+or `scp` back to your laptop. A shell that ends takes its filesystem with it.
+
+**Weights are already there.** `/huggingface` is the box's own cache, kept node-local because
+loading over NFS is markedly slower than local NVMe. A model another task has pulled is warm for
+yours.
+
+**Query FinData; do not copy it.** It answers over HTTP from the worker's own site at LAN
+latency — the query runs on the server and only your result comes back. The endpoint is
+site-specific; the recipe, token scope and catalog paths are in
+[Sandboxes](/studio/docs/sandboxes#5-data--query-it-do-not-copy-it), and are identical here.
+
+If you need a persistent home, a read-only corpus, or `/datasets`, you want a **sandbox**, not an
+SSH task.
+
+---
+
 ## Troubleshooting
 
 **`Container … exited (code 0) before SSH became ready`**
@@ -219,6 +247,8 @@ or switch that task to `proxy` mode.
 ---
 
 ## Related
+
+- [Sandboxes](/studio/docs/sandboxes) — persistent home, `/datasets`, and the GPU tier rules
 
 - **[FlowMesh & Lumilake queries](/studio/docs/fm-ll-queries)** — listing nodes and workers,
   submitting non-interactive workflows, the federated `/fm` surface.
