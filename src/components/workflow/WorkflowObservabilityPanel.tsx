@@ -52,6 +52,7 @@ import type { MeExperiment } from "@/api/me";
 const DatasetExplorer = lazy(() => import("@/components/workflow/DatasetExplorer"));
 const CasebookPanel = lazy(() => import("@/components/workflow/CasebookPanel"));
 const ExperimentsPanel = lazy(() => import("@/components/experiments/ExperimentsPanel"));
+const PromoteToExperiment = lazy(() => import("@/components/experiments/PromoteToExperiment"));
 // Edit an analyst/judge prompt IN the right canvas (not a route push), so
 // clicking a prompt in the Assets rail keeps the user in the workflow panel.
 const EmbeddedPromptEditor = lazy(() => import("@/components/app-surface/AppPromptsEditor").then((m) => ({ default: m.EmbeddedPromptEditor })));
@@ -665,14 +666,24 @@ export default function WorkflowObservabilityPanel({
 		    rendering two inert cards while the loop's own runs sat
 		    unlabelled elsewhere). Renders nothing when the loop feeds no
 		    experiment: a plain workflow has Outputs only. */}
-		{loopExp && (
-			<section className="space-y-1.5">
-				<div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">Metric &amp; arms</div>
-				<Suspense fallback={null}>
-					<ExperimentsPanel app={app} loop={loop} quiet />
-				</Suspense>
-			</section>
-		)}
+		{/* METRIC & ARMS, or the offer to create one.
+		    Previously this whole section vanished when the loop fed no
+		    experiment, so an app with none showed no trace of the concept and
+		    there was nowhere in the entire product to create one -- no write
+		    endpoint, no chat tool, and an empty state that told you to go and
+		    hand-edit `experiments:` in the app's config. Promotion belongs on
+		    the workflow that would own the experiment: that is where the
+		    question "did this change help?" is actually asked. */}
+		<section className="space-y-1.5">
+			<div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">
+				{loopExp ? "Metric & arms" : "Measurement"}
+			</div>
+			<Suspense fallback={null}>
+				{loopExp
+					? <ExperimentsPanel app={app} loop={loop} quiet />
+					: <PromoteToExperiment app={app} loop={loop} onCreated={() => loadLatestCycle(true)} />}
+			</Suspense>
+		</section>
 		{/* OUTPUTS — what the loop last PRODUCED, at loop level.
 		    The comment above has promised since it was written that "a plain
 		    workflow has Outputs only", and nothing ever rendered them: the

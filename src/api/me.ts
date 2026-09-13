@@ -889,6 +889,38 @@ export const me = {
   experiment: (app: string, id: string) =>
     call<MeExperimentDetail>(
       "GET", `/apps/${encodeURIComponent(app)}/experiments/${encodeURIComponent(id)}`),
+
+  // CREATE / EDIT an experiment. Until this existed there was no write path at
+  // all -- defining a metric or a case scope meant hand-editing .xpcloud.yaml
+  // AND .manifest.json, app_push, then per-tenant propagation. That is how
+  // quant-research shipped `real_tape_rate` against rows that only ever carried
+  // `real_tape`, reporting n=0 across 19 real runs while they piled up.
+  //
+  // Returns 202 + an intent id, NOT the finished object: identity mounts no
+  // tenant volume, so the scheduler applies the edit. Poll with waitForIntent,
+  // exactly as install does.
+  //
+  // The server enforces the rule that separates the two kinds of thing -- a
+  // metric AND a scope (dataset_id or cases[]) are both required, because a
+  // loop without them is a workflow, not an experiment.
+  upsertExperiment: (
+    app: string,
+    body: {
+      id: string;
+      loop: string;
+      metric: { name: string; higher_is_better?: boolean };
+      dataset_id?: string;
+      cases?: string[];
+      kind?: string;
+      description?: string;
+      hypothesis?: string;
+      success_criteria?: string;
+      min_samples?: number;
+      arms?: Record<string, unknown>[];
+    },
+  ) =>
+    call<{ intent_id: string; app: string; experiment: string; status: string }>(
+      "POST", `/apps/${encodeURIComponent(app)}/experiments`, body),
   experimentCase: (app: string, id: string, caseId: string) =>
     call<{ case_id: string; rows: MeExperimentRow[]; latest_by_question: Record<string, { ts: string; metrics: Record<string, number> }> }>(
       "GET", `/apps/${encodeURIComponent(app)}/experiments/${encodeURIComponent(id)}/case/${encodeURIComponent(caseId)}`),
