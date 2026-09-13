@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { toast } from 'sonner';
+import { deleteSshKey, listSshKeys, uploadSshKey, type SshKey } from '@/api/ssh-keys';
 import { AlertTriangle, Check, Copy, KeyRound, Mail, Plus, Shield, Trash2, Clock, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import {
@@ -100,6 +101,34 @@ export default function TokensPage() {
 					))}
 				</div>
 			)}
+
+			{/* SSH keys.
+			    ------------------------------------------------------------------
+			    THIS PAGE IS WHERE PEOPLE LOOK FOR CREDENTIALS. Until 2026-09-13 the
+			    only place to add an SSH key was a button inside Research Fleet ->
+			    Sandboxes, three levels from here and next to "Create sandbox" —
+			    nobody adding a key goes there. The observed result: a user creates a
+			    sandbox, it runs, and every connection is refused with
+			    `Permission denied (publickey)` with no surface anywhere telling them
+			    they have no key. Same client as the Sandboxes panel; both are live,
+			    because the contextual one is right when you are already provisioning
+			    and this one is right when you are setting up an account. */}
+			<div className="mt-8">
+				<div className="flex items-start justify-between mb-3">
+					<div>
+						<h2 className="text-lg font-semibold flex items-center gap-2">
+							<KeyRound className="w-4 h-4 text-indigo-500" />
+							SSH keys
+						</h2>
+						<p className="text-xs text-muted-foreground mt-0.5">
+							Public keys that let you into your sandboxes over{" "}
+							<code className="rounded bg-muted px-1">ssh gw@lum.id</code>. Without one,
+							a running sandbox still refuses every connection.
+						</p>
+					</div>
+				</div>
+				<SshKeysCard />
+			</div>
 
 			{/* OAuth scope grants — live state from /api/v1/identity/google-grants. */}
 			<div className="mt-8">
@@ -888,6 +917,96 @@ function formatRelative(ts: number): string {
 	if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
 	if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
 	return `${Math.floor(diff / 86400)}d ago`;
+}
+
+// ── SshKeysCard ───────────────────────────────────────────────────
+// Deliberately plain: list, add, remove. No sync button — syncing is a
+// per-site gateway concern and belongs on the Sandboxes tab, which does it
+// automatically on add. Here the question is only "does my account know my key".
+
+function SshKeysCard() {
+	const [keys, setKeys] = useState<SshKey[] | null>(null);
+	const [pub, setPub] = useState("");
+	const [label, setLabel] = useState("");
+	const [busy, setBusy] = useState(false);
+	const [err, setErr] = useState("");
+
+	const load = useCallback(async () => {
+		try { setKeys(await listSshKeys()); } catch { setKeys([]); }
+	}, []);
+	useEffect(() => { void load(); }, [load]);
+
+	async function add() {
+		const k = pub.trim();
+		setErr("");
+		// Catch the two common paste mistakes with a specific message rather than
+		// letting identity answer 400 "bad request".
+		if (k.startsWith("-----BEGIN")) {
+			setErr("That is a PRIVATE key. Paste the .pub file — it starts with ssh-ed25519 or ssh-rsa.");
+			return;
+		}
+		if (!/^(ssh-(rsa|ed25519|dss)|ecdsa-[a-z0-9-]+)\s+\S+/.test(k)) {
+			setErr("Not a public key. Run: cat ~/.ssh/id_ed25519.pub");
+			return;
+		}
+		setBusy(true);
+		try {
+			const comment = k.split(/\s+/)[2] ?? "";
+			await uploadSshKey({ title: label.trim() || comment || `key-${new Date().toISOString().slice(0, 10)}`, public_key: k });
+			setPub(""); setLabel("");
+			await load();
+		} catch (e: any) {
+			setErr(e?.response?.data?.message ?? "could not add that key");
+		} finally { setBusy(false); }
+	}
+
+	async function remove(k: SshKey) {
+		if (!confirm(`Delete SSH key "${k.title}"?\n\nAny machine using it loses access to your sandboxes.`)) return;
+		try { await deleteSshKey(k.id); await load(); } catch { setErr("could not remove that key"); }
+	}
+
+	return (
+		<div className="rounded-lg border p-4">
+			{keys === null ? (
+				<p className="text-xs text-muted-foreground">loading…</p>
+			) : keys.length === 0 ? (
+				<p className="mb-3 text-xs text-amber-700">
+					No SSH keys yet — sandboxes will refuse every connection until you add one.
+				</p>
+			) : (
+				<ul className="mb-3 space-y-1">
+					{keys.map((k) => (
+						<li key={k.id} className="flex items-center gap-2 text-xs">
+							<span className="font-medium">{k.title}</span>
+							<span className="font-mono text-muted-foreground truncate">{k.fingerprint}</span>
+							<button onClick={() => void remove(k)}
+								className="ml-auto text-muted-foreground hover:text-red-600">remove</button>
+						</li>
+					))}
+				</ul>
+			)}
+			<div className="flex flex-wrap items-end gap-2">
+				<label className="text-xs text-muted-foreground">
+					Public key
+					<input value={pub} onChange={(e) => setPub(e.target.value)}
+						placeholder="ssh-ed25519 AAAAC3... you@laptop"
+						className="mt-1 block w-[26rem] max-w-full rounded-md border px-2 py-1 font-mono text-xs" />
+				</label>
+				<label className="text-xs text-muted-foreground">
+					Label <span className="opacity-60">(optional)</span>
+					<input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="laptop"
+						className="mt-1 block w-28 rounded-md border px-2 py-1 text-sm" />
+				</label>
+				<Button size="sm" onClick={() => void add()} disabled={busy || !pub.trim()}>
+					{busy ? "adding…" : "Add key"}
+				</Button>
+			</div>
+			{err && <p className="mt-2 text-xs text-red-600">{err}</p>}
+			<p className="mt-2 text-xs text-muted-foreground">
+				Get it with <code className="rounded bg-muted px-1">cat ~/.ssh/id_ed25519.pub</code>.
+			</p>
+		</div>
+	);
 }
 
 // ── GoogleGrantCard ───────────────────────────────────────────────
