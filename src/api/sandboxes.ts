@@ -37,6 +37,23 @@ export const PUBLIC_SANDBOX_SITE = "home";
 export const SANDBOX_SITES = ["home", "office", "nus"];
 
 /**
+ * Sites a NON-ADMIN may use.
+ *
+ * office joined home on 2026-09-13. It was admin-only because the site gate was
+ * the only protection it had: with no per-GPU tier enforcement, opening office
+ * would have handed every signed-in account the two 47 GB RTX 6000 Adas the plan
+ * reserves for admin+. sandbox-control now enforces that tier itself — a user
+ * sees only the RTX 5080s and a non-admin's GPU pod carries a nodeAffinity that
+ * excludes reserved products — so the site gate is no longer carrying a
+ * capability grant.
+ *
+ * NUS stays admin-only: its GPU quota is deliberately shut (USER_GPU_QUOTA=0),
+ * and it has no public SSH entry point, so listing it for a user would offer a
+ * site they cannot actually use.
+ */
+export const USER_SANDBOX_SITES = ["home", "office"];
+
+/**
  * Request path for a site.
  *
  * home -> `/sbx/...` (public location), everything else -> `/sbx/<site>/...`

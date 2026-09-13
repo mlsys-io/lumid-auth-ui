@@ -29,6 +29,7 @@ import { toast } from "sonner";
 import {
 	PUBLIC_SANDBOX_SITE,
 	SANDBOX_SITES,
+	USER_SANDBOX_SITES,
 	createSandbox,
 	deleteSandbox,
 	dataSourcesForSite,
@@ -101,7 +102,9 @@ function expiresIn(ms: number | null): string {
 }
 
 export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
-	const sites = isAdmin ? SANDBOX_SITES : [PUBLIC_SITE];
+	// office is user-tier now; the GPU reservation is enforced in sandbox-control,
+	// not by hiding the site. NUS stays admin-only.
+	const sites = isAdmin ? SANDBOX_SITES : USER_SANDBOX_SITES;
 	const [target, setTarget] = useState(PUBLIC_SANDBOX_SITE);
 	const [busy, setBusy] = useState(false);
 	const [name, setName] = useState("dev");
