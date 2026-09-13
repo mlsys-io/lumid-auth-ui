@@ -219,6 +219,71 @@ SSH task.
 
 ---
 
+## Your own image — `harbor.lum.id`
+
+The default session image is SSH-ready: `ghcr.io/mlsys-io/flowmesh_ssh:<version>-cpu`
+(or `-gpu`), login user `flowmesh`. It is deliberately minimal — **no `python3`, no
+`nvcc`, no `curl`** — and you are **not root** in it, with no `sudo`, so `apt-get`
+is not an option at runtime. Anything you need has to be in the image.
+
+> A **sandbox** is the opposite: you are **root** there and `apt-get` works.
+> If you mainly need a box to install things in, use a sandbox, not an SSH task.
+
+### Build on top of the default
+
+Pinning an arbitrary image fails as `Container … exited (code 0) before SSH became
+ready`, because the executor expects an sshd plus an entrypoint honouring `SSH_USER`
+and `AUTHORIZED_KEYS`. Inherit it instead of re-implementing it:
+
+```dockerfile
+FROM ghcr.io/mlsys-io/flowmesh_ssh:latest-gpu    # or :latest-cpu
+
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends       python3 python3-pip curl git  && rm -rf /var/lib/apt/lists/*
+
+# Blackwell (sm_120) needs CUDA 12.8+/13.x wheels — cu121/cu124 builds report
+# `no kernel image is available` while cuda.is_available() still returns True.
+RUN pip3 install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cu130
+
+USER flowmesh        # leave the login user as the executor expects
+```
+
+### Push it
+
+```bash
+# harbor.lum.id → sign in with your lum.id account → User Profile → CLI secret.
+# OIDC accounts cannot docker login with a password; the CLI secret is the substitute.
+docker login harbor.lum.id -u <you> -p <cli-secret>
+
+docker build --platform=linux/amd64 -t harbor.lum.id/sandbox/my-ssh:v1 .
+docker push harbor.lum.id/sandbox/my-ssh:v1
+```
+
+Then set `spec.image: harbor.lum.id/sandbox/my-ssh:v1`.
+
+**The same reference works at every site** — each node rewrites `harbor.lum.id` to
+its own site's registry, so the spec stays portable.
+
+Two things that make a pull fail, both surfacing only as a pull error that names
+neither cause:
+
+- **The project must be public.** Workers and sandboxes pull anonymously; a private
+  Harbor project fails exactly like a tag that does not exist.
+- **`linux/amd64`.** A wrong-arch image is a *valid* manifest that fails at exec,
+  with a message that reads like a truncated download.
+
+### `/dev/shm` and PyTorch
+
+A session gets Docker's default **64 MB** `/dev/shm`, and
+`DataLoader(num_workers>0)` exhausts that immediately — it dies as `Bus error`
+(SIGBUS), which names no cause and reads like a driver fault. Until the worker
+sets `--shm-size`, use `num_workers=0` in an SSH task.
+
+**Sandboxes are already fixed** — `/dev/shm` there is half the pod's memory (8 GB
+on a 16 GB box), and `DataLoader(num_workers=4)` is verified working.
+
+---
+
 ## Troubleshooting
 
 **`Container … exited (code 0) before SSH became ready`**

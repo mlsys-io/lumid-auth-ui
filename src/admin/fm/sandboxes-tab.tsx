@@ -471,12 +471,11 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 							    fails at exec. */}
 							<span className="mt-1 block max-w-xs font-normal leading-snug text-slate-400">
 								Ours is <code className="rounded bg-slate-50 px-1">harbor.lum.id/&lt;project&gt;/&lt;name&gt;:&lt;tag&gt;</code>{" "}
-								— the same ref at every site. Push with your lum.id login (
-								<a href="https://harbor.lum.id" target="_blank" rel="noreferrer"
-									className="text-indigo-600 hover:underline">harbor.lum.id</a>{" "}
-								→ User Profile → CLI secret). The project must be{" "}
+								— the same ref at every site. The project must be{" "}
 								<strong>public</strong> to be pullable here, and the image{" "}
-								<strong>linux/amd64</strong>.
+								<strong>linux/amd64</strong>.{" "}
+								<a href="/studio/docs/flowmesh-ssh"
+									className="text-indigo-600 hover:underline">How to build and push →</a>
 							</span>
 						</label>
 					)}
@@ -714,7 +713,10 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 						</>
 					)}
 					Files under <code className="rounded bg-white px-1">/home</code> survive deleting a
-					sandbox (per site).
+					sandbox (per site).{" "}
+					<a className="text-indigo-600 hover:underline" href="/studio/docs/sandboxes">Sandbox guide</a>
+					{" · "}
+					<a className="text-indigo-600 hover:underline" href="/studio/docs/flowmesh-ssh">Build &amp; push your own image</a>
 				</p>
 			</div>
 
