@@ -31,6 +31,7 @@ import {
 	SANDBOX_SITES,
 	createSandbox,
 	deleteSandbox,
+	dataSourcesForSite,
 	gpuProfileForSite,
 	imagesForSite,
 	isSshTaskActive,
@@ -109,6 +110,10 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 	// "" means "let the site choose". Kept distinct from a concrete ref so the default
 	// stays the SERVER's to change -- baking today's default in here is how a UI starts
 	// contradicting the service it talks to.
+	// Attached data sources. NOT a dataset mount: selecting one injects the env a
+	// client needs to reach a live store, so the sandbox queries in place and
+	// copies nothing. Empty by default -- attaching is a deliberate act.
+	const [sources, setSources] = useState<string[]>([]);
 	const [image, setImage] = useState("");
 	const [customImage, setCustomImage] = useState("");
 	// SSH keys live here, not only in account settings. Without a key the whole
@@ -223,6 +228,7 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 	// The catalog is served per-site (see imagesForSite). Offer only entries matching the
 	// CPU/GPU choice: a CUDA image on a CPU sandbox is several GB of pull for libraries that
 	// cannot be used, and a slim CPU image on a GPU box has no CUDA runtime in it at all.
+	const siteSources = dataSourcesForSite(target);
 	const siteImages = imagesForSite(target);
 	const imageChoices = (siteImages?.catalog ?? []).filter((c) => Boolean(c.gpu) === gpu > 0);
 	const siteDefaultImage = gpu > 0 ? siteImages?.default_gpu : siteImages?.default_cpu;
@@ -249,7 +255,10 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 			const chosen = image === CUSTOM_IMAGE ? customImage.trim() : image;
 			// Omit the field entirely when empty: sandbox-control reads "absent" as
 			// "use this site's default", and an empty string is not the same thing.
-			await createSandbox(target, { name, gpu, ttl_hours: ttl, image: chosen || undefined });
+			await createSandbox(target, {
+				name, gpu, ttl_hours: ttl, image: chosen || undefined,
+				data_sources: sources.length ? sources : undefined,
+			});
 			toast.success(`creating ${name} on ${target}`);
 			boxes.refresh();
 		} catch (e: any) {
@@ -341,6 +350,22 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 								placeholder="repo/name:tag"
 								className="mt-1 block w-64 rounded-md border border-slate-300 px-2 py-1 text-sm font-mono" />
 						</label>
+					)}
+					{siteSources.length > 0 && (
+						<fieldset className="text-xs text-slate-600">
+							<legend className="mb-1">Data</legend>
+							<div className="flex flex-wrap items-center gap-2">
+								{siteSources.map((d) => (
+									<label key={d.id} title={[d.note, d.hint].filter(Boolean).join(" — ")}
+										className="flex cursor-pointer items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1">
+										<input type="checkbox" checked={sources.includes(d.id)}
+											onChange={(e) => setSources((v) =>
+												e.target.checked ? [...v, d.id] : v.filter((x) => x !== d.id))} />
+										{d.label ?? d.id}
+									</label>
+								))}
+							</div>
+						</fieldset>
 					)}
 					<label className="text-xs text-slate-600">
 						Expires after

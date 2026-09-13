@@ -90,6 +90,24 @@ export interface GpuProfile {
 	drivers?: string[];
 }
 
+/**
+ * A data source a sandbox can be ATTACHED to — not a dataset to copy.
+ *
+ * Selecting one injects the env a client needs to reach a live store; it mounts
+ * nothing and materialises nothing. FinData is a warehouse, so the useful thing
+ * is to run the query there and bring back a result, not to drag a corpus into
+ * the sandbox where it is stale on arrival and has lost its lineage.
+ *
+ * Served per-site: the address differs (home reaches the data primary on the
+ * LAN, office over the tailnet), so this is never hardcoded here.
+ */
+export interface DataSource {
+	id: string;
+	label?: string;
+	note?: string;
+	hint?: string;
+}
+
 export interface SandboxList {
 	sandboxes: Sandbox[];
 	gpus_free: string;
@@ -97,6 +115,8 @@ export interface SandboxList {
 	gpu?: GpuProfile;
 	/** Absent on a site not yet running a build that serves a catalog. */
 	images?: SiteImages;
+	/** Absent on a site not yet running a build that serves sources. */
+	data_sources?: DataSource[];
 }
 
 // ---------------------------------------------------------------------------
@@ -141,8 +161,16 @@ export function imagesForSite(site: string): SiteImages | undefined {
 	return siteImages.get(site);
 }
 
+const siteSources = new Map<string, DataSource[]>();
+
+export function dataSourcesForSite(site: string): DataSource[] {
+	return siteSources.get(site) ?? [];
+}
+
 export interface CreateSandboxRequest {
 	name: string;
+	/** Ids from dataSourcesForSite(). Attaching injects env only — no mount. */
+	data_sources?: string[];
 	image?: string;
 	cpu?: number;
 	memory_gi?: number;
@@ -206,6 +234,7 @@ export async function listSandboxesForSite(site: string): Promise<Sandbox[]> {
 		gpuProfiles.set(site, { ...r.data.gpu, gpus_free: gpusFree });
 	}
 	if (r.data?.images?.catalog?.length) siteImages.set(site, r.data.images);
+	if (r.data?.data_sources) siteSources.set(site, r.data.data_sources);
 	return (r.data?.sandboxes ?? []).map((s) => ({ ...s, site, gpus_free: s.gpus_free ?? gpusFree }));
 }
 
