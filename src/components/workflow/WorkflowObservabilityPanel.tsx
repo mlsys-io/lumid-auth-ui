@@ -313,6 +313,12 @@ export default function WorkflowObservabilityPanel({
 	const [anchorTs] = useState<string | null>(initialCycle || null);
 	const [summary, setSummary] = useState<CycleSummary | null>(cached0?.summary ?? null);
 	const [cycleFiles, setCycleFiles] = useState<Record<string, unknown>>({});
+	// DB-backed fallback. cycleFiles comes from cycleDetail, which reads the
+	// cycle dir off identity's disk — and identity mounts no tenant volume, so
+	// it is empty for every app and every user. Without this the Outputs tier
+	// below could never render anything at all.
+	const [dbOutputs, setDbOutputs] = useState<Record<string, unknown> | null>(null);
+	const [dbOutputTs, setDbOutputTs] = useState<string | null>(null);
 	const [lastError, setLastError] = useState<string | null>(null);
 	// Live running/event state — distinct from one-shot load motion.
 	const [optimisticRun, setOptimisticRun] = useState(false);
@@ -572,6 +578,18 @@ export default function WorkflowObservabilityPanel({
 	})();
 	const cyclesKnown = cycleList !== null;
 	const tenantHasRuns = (cycleList?.length ?? 0) > 0;
+	useEffect(() => {
+		let cancelled = false;
+		if (!app) return;
+		me.latestOutput(app, wf?.slug)
+			.then((d) => {
+				if (cancelled) return;
+				setDbOutputs((d?.outputs ?? null) as Record<string, unknown> | null);
+				setDbOutputTs(d?.run_ts ? String(d.run_ts) : null);
+			})
+			.catch(() => { /* absent output is a normal state, not an error */ });
+		return () => { cancelled = true; };
+	}, [app, wf?.slug]);
 	const liveRunning = (cycleList ?? []).some((c) => c.running);
 	const running = optimisticRun || liveRunning;
 	// Tell the chat's floating session box which workflow is selected + whether
@@ -695,7 +713,11 @@ export default function WorkflowObservabilityPanel({
 		    gate — no extra request. Always rendered, deliberately: for an
 		    experiment it sits under Metric & arms, and for a plain workflow it
 		    is the whole story. */}
-		<OutputsTier files={cycleFiles} ts={cycleTs} hasRuns={tenantHasRuns} />
+		<OutputsTier
+			files={Object.keys(cycleFiles).length ? cycleFiles : (dbOutputs ?? {})}
+			ts={Object.keys(cycleFiles).length ? cycleTs : dbOutputTs}
+			hasRuns={tenantHasRuns || dbOutputs != null}
+		/>
 		<div ref={fillRef} style={{ height: fillH }} className="flex flex-col lg:flex-row gap-3 items-stretch min-w-0 w-full">
 				{!caseFocus && (railOpen ? (
 					<div className="w-full lg:w-[30%] lg:min-w-[220px] lg:max-w-[380px] flex-shrink-0 flex flex-col min-h-0 max-h-[55vh] lg:max-h-none lg:h-full">

@@ -830,6 +830,19 @@ export const me = {
       `/cycles/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/${encodeURIComponent(ts)}`,
     ),
 
+  // ── Latest output (DB-backed) ───────────────────────────────────
+  // cycleDetail above, like cycle-log / /me/runs / /me/cycles, reads the cycle
+  // dir OFF DISK — and identity mounts no tenant volume, so for every app and
+  // every user those return empty. This one reads me_app_runs, which the
+  // scheduler self-reports into, and is the only path by which the Outputs tier
+  // can see an artifact at all.
+  latestOutput: (app: string, loop?: string) =>
+    call<MeLatestOutput>(
+      "GET",
+      `/apps/${encodeURIComponent(app)}/latest-output` +
+        (loop ? `?loop=${encodeURIComponent(loop)}` : ""),
+    ),
+
   // Run history for the branch/lineage tree (#16). Same endpoint the panel
   // already polls, but typed to carry the OPTIONAL lineage fields the backend
   // adds to each cycle's cycle.json (parent_run_id / branch_label / key_metric).
@@ -1189,6 +1202,12 @@ export interface MeCycleStep {
   prompt_preview?: string;
   error?: string;
   duration_s?: number;
+}
+export interface MeLatestOutput {
+  app: string; loop?: string; run_ts?: number; ok?: boolean;
+  duration_s?: number;
+  // The cycle's sidecar artifacts — same shape as MeCycleDetail.files.
+  outputs?: Record<string, unknown> | null;
 }
 export interface MeCycleDetail {
   app: string;
