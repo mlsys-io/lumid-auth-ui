@@ -36,11 +36,12 @@ immediately, so it works the moment it is saved.
 
 | field | what to know |
 |---|---|
-| **Site** | `home` is open to every signed-in user. `office` and `nus` are admin+. |
+| **Site** | `home` and `office` are open to every signed-in user. `nus` is admin+. |
 | **Name** | yours, per site. Re-creating the same name after a delete reuses your home directory. |
 | **GPUs** | see §4 — the ceiling is **per machine**, not per site. |
 | **Image** | pick from the site's list, or `custom…` for any reference — including our own `harbor.lum.id/<project>/<name>:<tag>` (§8). |
 | **Data** | attach live stores — Lumid Data, FinData, LQT — see §5. Nothing is mounted or copied. File datasets need no selection: `/datasets` is already mounted. |
+| **Ports** | publish up to **2** services on a real public TCP port — see §9. |
 | **Expires after** | max **24h**. The container goes; your home directory does not. |
 
 ---
@@ -225,7 +226,7 @@ ordinary dev files is a much larger problem than it looks.
 | `no sandboxes yet — create one` | Exactly that; not an error. |
 | sandbox stuck `Queued` | Waiting for a GPU. The row says what for. |
 | `relation … does not exist [42P01]` | Right SQL, wrong store — check `catalog/schemas` from inside the sandbox. |
-| image pulls forever | A **private** Harbor project — sandboxes pull anonymously. Make it public (§8). |
+| image pulls forever | A private Harbor project **on a site without per-user credentials** (office today). Works on home; see §8. |
 | `scp: Connection closed` | The image ships no `sftp-server`, which default scp needs. Use `scp -O`, or an image that has one. |
 | your files vanished | You worked in `$HOME` (`/root`), not `/home/<you>`. §6. |
 
@@ -263,19 +264,74 @@ docker push harbor.lum.id/<project>/<name>:v1
 
 Both surface as `ImagePullBackOff` minutes later, where neither cause is visible:
 
-- **The project must be public.** Sandbox pods carry no pull credential and the
-  nodes pull anonymously, so a private project cannot be pulled here at all — it
-  fails as though the tag did not exist. Mark the project public in Harbor, or
-  keep the image on a public registry.
+- **Private projects work on `home`, not yet on `office`.** Home mints you a
+  Harbor robot on your first sandbox and attaches it as a pull credential, so
+  `harbor.lum.id/sbx-<you>/…` pulls fine there. Office has no such credential yet
+  — a private project simply fails, identically to a tag that does not exist — so
+  use a public project for office, or push to home.
 - **Wrong architecture.** A wrong-arch image is a *valid* manifest that fails at
   exec, with a message that reads like a truncated download. Build
   `--platform=linux/amd64`, or push a manifest list.
 
 ---
 
+## 9. Publish a port
+
+A sandbox can expose up to **2** services on a real public TCP port — a web app,
+a notebook, a database, anything. Fill in the container ports under **Ports** at
+create; the site assigns the public ones and the row shows what you got.
+
+```
+Ports  [8888] [6006]        →  lum.id:31501 → 8888
+                               lum.id:31502 → 6006
+```
+
+Pools: `home` 31501-31516, `office` 31523-31538.
+
+**The pool is shared across the site, not per user.** Sixteen ports means eight
+sandboxes publishing two each, fleet-wide. Each one costs a load-balancer
+frontend against a hard cap of 100, which is why it is a fixed pool — a full
+pool is refused, with the free count, rather than queued. The form shows
+free/total before you choose. Deleting the sandbox releases its ports.
+
+Anything listening on that port inside the sandbox is then reachable from the
+internet, **with no authentication in front of it**. Do not publish something
+you would not put on a public IP.
+
+---
+
+## 10. Save a sandbox as an image
+
+Installed a pile of packages and want them next time? Save the sandbox to your
+own Harbor project and launch from it later.
+
+```
+Save → name it → harbor.lum.id/sbx-<you>/<name>:<tag>
+```
+
+It commits the running container and pushes it, so everything you installed —
+and anything outside `/home/<you>` that would otherwise be lost — comes back.
+
+- **20 GB limit**, checked *before* the push, so an over-sized save fails fast
+  rather than after a long transfer.
+- The image lands in **your own project**, private, reachable by your sandboxes
+  on `home`. Nobody else can push to it.
+- `home` only today. Office does not have it yet.
+
+Your home directory is untouched by this — it already survives a delete. Saving
+is for everything *else*: installed packages, system config, built artifacts
+outside `/home`.
+
+---
+
 ## Limits
 
 Per user, per site: **2 sandboxes**, **24h** TTL, **1 GPU** at home / **2** at
-office. The home directory has no enforced quota today — the PVC size is a
+office, **2 public ports** per sandbox, **20 GB** per saved image.
+
+The port pool is **shared across the whole site**, not per user — 16 ports, so
+8 sandboxes can publish 2 each at any one time. Every published port costs a
+load-balancer frontend against a hard cap, which is why it is a pool and why a
+full one is refused rather than queued. The home directory has no enforced quota today — the PVC size is a
 label, not a ceiling — so be considerate: one user filling the array takes down
 everyone's home at that site.

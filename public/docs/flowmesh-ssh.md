@@ -267,8 +267,10 @@ its own site's registry, so the spec stays portable.
 Two things that make a pull fail, both surfacing only as a pull error that names
 neither cause:
 
-- **The project must be public.** Workers and sandboxes pull anonymously; a private
-  Harbor project fails exactly like a tag that does not exist.
+- **For a WORKER the project must be public.** FlowMesh workers pull anonymously,
+  so a private Harbor project fails exactly like a tag that does not exist.
+  (Sandboxes on `home` are different — they get a per-user pull credential and
+  can use private projects. That does not extend to workers.)
 - **`linux/amd64`.** A wrong-arch image is a *valid* manifest that fails at exec,
   with a message that reads like a truncated download.
 
