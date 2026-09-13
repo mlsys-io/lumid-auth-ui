@@ -44,11 +44,33 @@ function isLive(lastSeen?: string | null): boolean {
 	return age !== null && age < STALE_SEC;
 }
 
+/** "NVIDIA RTX PRO 4000 Blackwell SFF Edition" -> "RTX PRO 4000 Blackwell".
+ *  The vendor prefix is constant across the fleet and the marketing suffixes
+ *  ("SFF Edition", "Generation") never distinguish two cards we own. This string
+ *  is repeated once per worker row, so its width is the column's width. */
+function shortGpu(name: string): string {
+	return name
+		.replace(/^NVIDIA\s+/i, "")
+		.replace(/\s+(SFF\s+)?Edition$/i, "")
+		.replace(/\s+Generation$/i, "")
+		.replace(/^GeForce\s+/i, "")
+		.trim();
+}
+
 function gpuLabel(w: FmWorker): string {
 	const d = w.hardware?.gpu?.devices;
 	if (!d?.length) return "—";
-	const name = d[0].name ?? "GPU";
+	const name = shortGpu(d[0].name ?? "GPU");
 	return d.length > 1 ? `${d.length}× ${name}` : name;
+}
+
+/** The one GPU label shared by every live worker at a site, or "" when mixed.
+ *  A site whose workers all run the same card should say so ONCE in its header
+ *  rather than repeating it down every row — at home that was the same 41-char
+ *  string five times. */
+function uniformGpu(workers: FmWorker[]): string {
+	const labels = new Set(workers.filter((w) => w.hardware?.gpu?.devices?.length).map(gpuLabel));
+	return labels.size === 1 ? [...labels][0] : "";
 }
 
 export default function FleetTab({ isAdmin }: { isAdmin: boolean }) {
@@ -175,6 +197,7 @@ export default function FleetTab({ isAdmin }: { isAdmin: boolean }) {
 						(a, e) => a + e.workers.filter((w) => isLive(w.last_seen)).length,
 						0,
 					);
+					const siteGpu = uniformGpu(entries.flatMap((e) => e.workers));
 					return (
 						<div key={site} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
 							<div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-2">
@@ -182,6 +205,7 @@ export default function FleetTab({ isAdmin }: { isAdmin: boolean }) {
 									<SiteBadge site={site} />
 									<span className="text-xs text-slate-500">
 										{entries.length} node(s) · {siteLive} live worker(s)
+										{siteGpu ? ` · ${siteGpu}` : ""}
 									</span>
 								</div>
 							</div>
@@ -237,7 +261,9 @@ export default function FleetTab({ isAdmin }: { isAdmin: boolean }) {
 																		{w.alias ?? w.id}
 																	</span>
 																	<span className="font-mono text-slate-500">{w.id}</span>
-																	<span className="text-slate-600">{gpuLabel(w)}</span>
+																	{gpuLabel(w) !== siteGpu && (
+																		<span className="text-slate-600">{gpuLabel(w)}</span>
+																	)}
 																	{/* The 1.0 default is WORKER_COST_PER_HOUR, not a price —
 																	    rendering it printed "$1.000" for boxes we own outright. */}
 																	{w.cost_per_hour != null &&
