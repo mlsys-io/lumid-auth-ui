@@ -144,6 +144,18 @@ const DOCS: DocEntry[] = [
 		hidden: true,
 	},
 	{
+		// Placed before findata-sql and flowmesh-ssh deliberately: this is the
+		// doc for the surface most people reach for first, and both of those
+		// read as follow-ups to it rather than the other way round.
+		slug: 'sandboxes',
+		title: 'Sandboxes — a shell on the fleet',
+		description: 'Rent a container on real hardware with a home directory that outlives it — SSH keys first, the per-machine GPU ceiling, querying FinData without copying it, and what survives a delete.',
+		md: 'sandboxes.md',
+		group: 'Guides',
+		icon: TerminalSquare,
+		companion: { to: '/studio/research-fleet/sandboxes', label: 'Rent a sandbox' },
+	},
+	{
 		slug: 'findata-sql',
 		title: 'FinData SQL access',
 		description: 'Query the FinData warehouse with real SQL — mint your own credential, psql/DBeaver/DuckDB, verify-full TLS, read-only guardrails, schema orientation.',
