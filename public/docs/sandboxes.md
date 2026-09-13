@@ -225,7 +225,8 @@ ordinary dev files is a much larger problem than it looks.
 | `no sandboxes yet — create one` | Exactly that; not an error. |
 | sandbox stuck `Queued` | Waiting for a GPU. The row says what for. |
 | `relation … does not exist [42P01]` | Right SQL, wrong store — check `catalog/schemas` from inside the sandbox. |
-| image pulls forever | A private registry the site cannot authenticate to; try a public one. |
+| image pulls forever | A **private** Harbor project — sandboxes pull anonymously. Make it public (§8). |
+| `scp: Connection closed` | The image ships no `sftp-server`, which default scp needs. Use `scp -O`, or an image that has one. |
 | your files vanished | You worked in `$HOME` (`/root`), not `/home/<you>`. §6. |
 
 ---
