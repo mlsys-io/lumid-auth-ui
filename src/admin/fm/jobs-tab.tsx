@@ -44,6 +44,36 @@ function when(iso?: string): string {
 }
 
 
+/** `wfl-23609256-4723-479b-b866-869c78d88a74` -> `wfl-23609256`. The suffix is a
+ *  UUID tail nobody reads; the full id stays in the row title and detail panel. */
+function shortId(id?: string): string {
+	if (!id) return "—";
+	const m = id.match(/^([a-z]+-[0-9a-f]{6,12})/i);
+	return m ? m[1] : id.length > 20 ? `${id.slice(0, 20)}…` : id;
+}
+
+/** Task detail worth a column only when it says something the status pill does not. */
+function taskNote(w: { task_ids?: unknown[]; failed_tasks?: unknown[] }): string {
+	const n = w.task_ids?.length ?? 0;
+	const f = w.failed_tasks?.length ?? 0;
+	if (f) return `${f}/${n} failed`;
+	return n > 1 ? `${n} tasks` : "";
+}
+
+/** "12/09/2026, 22:00:12" is two wrapped lines of mostly-constant digits. Relative
+ *  time answers the question people actually ask of a job list; the absolute stamp
+ *  is on the row title. */
+function ago(iso?: string): string {
+	if (!iso) return "—";
+	const t = Date.parse(iso);
+	if (Number.isNaN(t)) return "—";
+	const s = Math.max(0, (Date.now() - t) / 1000);
+	if (s < 90) return `${Math.round(s)}s ago`;
+	if (s < 5400) return `${Math.round(s / 60)}m ago`;
+	if (s < 172800) return `${Math.round(s / 3600)}h ago`;
+	return `${Math.round(s / 86400)}d ago`;
+}
+
 function Kv({ k, v }: { k: string; v: string }) {
 	return (
 		<p className="text-slate-600">
@@ -295,43 +325,47 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 							<th className="px-3 py-2">Site</th>
 							<th className="px-3 py-2">Workflow</th>
 							<th className="px-3 py-2">Status</th>
-							<th className="px-3 py-2">Tasks</th>
 							<th className="px-3 py-2">Submitted</th>
-							<th className="px-3 py-2" />
 						</tr>
 					</thead>
 					<tbody className="divide-y divide-slate-100">
+						{/* THE ROW IS THE BUTTON. There used to be a per-row "Tasks" button, which
+						    on a 46-workflow federation meant 46 of the page's 76 buttons all doing
+						    what clicking the row could do. Row-as-target is also the bigger hit
+						    area on a phone. */}
 						{rows.slice(0, 200).map((w) => (
-							<tr key={`${w.site}:${w.workflow_id}`} className="hover:bg-slate-50">
+							<tr
+								key={`${w.site}:${w.workflow_id}`}
+								onClick={() => void openWorkflow(w)}
+								title={`${w.workflow_id} — submitted ${when(w.submitted_at)}`}
+								className="cursor-pointer hover:bg-slate-50"
+							>
 								<td className="px-3 py-2">
 									<SiteBadge site={w.site} />
 								</td>
+								{/* A 36-char UUID wrapped onto two lines and made the widest column
+								    in the table. Nobody reads one; they match a prefix or copy it.
+								    Full id is in the row title and in the detail panel. */}
 								<td className="px-3 py-2 font-mono text-xs text-slate-700">
-									{w.workflow_id}
+									{shortId(w.workflow_id)}
 								</td>
-								<td className="px-3 py-2">
+								{/* Status and task counts were two columns saying one thing: a FAILED
+								    pill beside "1 (1 failed)". Merged — the count only earns space
+								    when there is more than one task or something failed. */}
+								<td className="px-3 py-2 whitespace-nowrap">
 									<StatusPill status={w.status} />
-								</td>
-								<td className="px-3 py-2 text-xs text-slate-600">
-									{w.task_ids?.length ?? 0}
-									{w.failed_tasks?.length ? (
-										<span className="ml-1 text-red-600">({w.failed_tasks.length} failed)</span>
+									{taskNote(w) ? (
+										<span className="ml-2 text-xs text-slate-500">{taskNote(w)}</span>
 									) : null}
 								</td>
-								<td className="px-3 py-2 text-xs text-slate-600">{when(w.submitted_at)}</td>
-								<td className="px-3 py-2 text-right">
-									<button
-										onClick={() => void openWorkflow(w)}
-										className="rounded border border-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
-									>
-										Tasks
-									</button>
+								<td className="px-3 py-2 text-xs whitespace-nowrap text-slate-600">
+									{ago(w.submitted_at)}
 								</td>
 							</tr>
 						))}
 						{!rows.length && !loading && (
 							<tr>
-								<td colSpan={6} className="px-3 py-8 text-center text-sm text-slate-500">
+								<td colSpan={4} className="px-3 py-8 text-center text-sm text-slate-500">
 									No workflows match.
 								</td>
 							</tr>

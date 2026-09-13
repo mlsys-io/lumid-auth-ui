@@ -43,6 +43,7 @@ import {
 	type Sandbox,
 } from "../../api/sandboxes";
 import { fanoutForSites, listTasksForSite, type FmFanout, type FmTask } from "../../api/fm";
+import { deleteSshKey, listSshKeys, uploadSshKey, type SshKey } from "../../api/ssh-keys";
 import { SiteBadge, SiteStrip, TabShell, useFanout } from "./shared";
 import { PUBLIC_SITE } from "./fleet-tab";
 
@@ -98,6 +99,61 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 	// contradicting the service it talks to.
 	const [image, setImage] = useState("");
 	const [customImage, setCustomImage] = useState("");
+	// SSH keys live here, not only in account settings. Without a key the whole
+	// tab is decorative: you can create a sandbox and then cannot get into it,
+	// which is exactly the dead end it produced in practice -- the gateway
+	// answers, offers its host key, and refuses with `Permission denied
+	// (publickey)`, which reads like a broken gateway rather than a missing key.
+	const [keys, setKeys] = useState<SshKey[] | null>(null);
+	const [keysOpen, setKeysOpen] = useState(false);
+	const [newKey, setNewKey] = useState("");
+	const [newKeyTitle, setNewKeyTitle] = useState("");
+	const [keyBusy, setKeyBusy] = useState(false);
+
+	const loadKeys = useCallback(async () => {
+		try { setKeys(await listSshKeys()); } catch { setKeys([]); }
+	}, []);
+	useEffect(() => { void loadKeys(); }, [loadKeys]);
+
+	async function onAddKey() {
+		const pub = newKey.trim();
+		// Validate here rather than letting identity 400: the paste is usually
+		// either a private key by mistake or a path, and both deserve a specific
+		// message instead of "bad request".
+		if (pub.startsWith("-----BEGIN")) {
+			toast.error("That is a PRIVATE key. Paste the .pub file instead — it starts with ssh-ed25519 or ssh-rsa.");
+			return;
+		}
+		if (!/^(ssh-(rsa|ed25519|dss)|ecdsa-[a-z0-9-]+)\s+\S+/.test(pub)) {
+			toast.error("Not a public key. Run: cat ~/.ssh/id_ed25519.pub");
+			return;
+		}
+		setKeyBusy(true);
+		try {
+			// Default the title to the key's own trailing comment (user@host),
+			// which is what people recognise, before falling back to a date.
+			const comment = pub.split(/\s+/)[2] ?? "";
+			await uploadSshKey({ title: newKeyTitle.trim() || comment || `key-${new Date().toISOString().slice(0, 10)}`, public_key: pub });
+			setNewKey(""); setNewKeyTitle("");
+			await loadKeys();
+			// Upload alone does NOT let you in -- the key still has to reach this
+			// site's gateway. Syncing here makes "added" mean "works".
+			await syncKeys(target);
+			toast.success(`Key added and synced to ${target} — try your ssh command now`);
+		} catch (e: any) {
+			toast.error(e?.response?.data?.message ?? "could not add that key");
+		} finally { setKeyBusy(false); }
+	}
+
+	async function onDeleteKey(k: SshKey) {
+		if (!confirm(`Delete SSH key "${k.title}"?\n\nAny machine using it loses access to your sandboxes.`)) return;
+		try {
+			await deleteSshKey(k.id);
+			await loadKeys();
+			await syncKeys(target);
+			toast.success("key removed");
+		} catch { toast.error("could not remove that key"); }
+	}
 
 	const boxes = useFanout<Sandbox>(() => fanoutForSites(sites, listSandboxesForSite), 20_000);
 	const shells = useFanout<FmTask>(
@@ -199,16 +255,6 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 		}
 	}
 
-	async function onSyncKeys() {
-		try {
-			const r = await syncKeys(target);
-			toast.success(r.keys_authorized
-				? `${r.keys_authorized} key(s) authorized on ${target}`
-				: "no SSH keys on your account yet — add one in account settings");
-		} catch (e: any) {
-			toast.error(e?.response?.data?.detail ?? "key sync failed");
-		}
-	}
 
 	const connectHint = sshCommandForSite(target);
 
@@ -296,12 +342,66 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 						className="rounded-md border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50">
 						{busy ? "creating…" : "Create sandbox"}
 					</button>
-					<button onClick={onSyncKeys}
-						title={`Re-read your SSH keys from your lum.id account into ${target}'s gateway`}
-						className="ml-auto rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">
-						Sync my SSH keys
+					{/* One control where there were two. "Sync my SSH keys" was the only
+					    key affordance here and it could not help the common case -- a
+					    user with NO key -- because it re-reads an empty list. The count
+					    is on the button so "0 keys" is visible before you try to
+					    connect and fail. */}
+					<button onClick={() => setKeysOpen((v) => !v)}
+						title="Add or remove the SSH keys that let you into your sandboxes"
+						className={`ml-auto rounded-md border px-3 py-1.5 text-sm ${
+							keys && keys.length === 0
+								? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
+								: "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+						}`}>
+						{keys === null ? "SSH keys" : keys.length === 0 ? "No SSH keys — add one" : `SSH keys · ${keys.length}`}
 					</button>
 				</div>
+
+				{keysOpen && (
+					<div className="mt-3 rounded-md border border-slate-200 bg-white p-3">
+						{keys?.length ? (
+							<ul className="mb-3 space-y-1">
+								{keys.map((k) => (
+									<li key={k.id} className="flex items-center gap-2 text-xs">
+										<span className="font-medium text-slate-800">{k.title}</span>
+										<span className="font-mono text-slate-500">{k.fingerprint}</span>
+										<button onClick={() => void onDeleteKey(k)}
+											className="ml-auto text-slate-400 hover:text-red-600">remove</button>
+									</li>
+								))}
+							</ul>
+						) : (
+							<p className="mb-3 text-xs text-amber-700">
+								You have no SSH keys, so every connection will be refused with
+								<code className="mx-1 rounded bg-amber-50 px-1">Permission denied (publickey)</code>
+								even when the sandbox is running.
+							</p>
+						)}
+						<div className="flex flex-wrap items-end gap-2">
+							<label className="text-xs text-slate-600">
+								Public key
+								<input value={newKey} onChange={(e) => setNewKey(e.target.value)}
+									placeholder="ssh-ed25519 AAAAC3... you@laptop"
+									className="mt-1 block w-[26rem] max-w-full rounded-md border border-slate-300 px-2 py-1 font-mono text-xs" />
+							</label>
+							<label className="text-xs text-slate-600">
+								Label <span className="text-slate-400">(optional)</span>
+								<input value={newKeyTitle} onChange={(e) => setNewKeyTitle(e.target.value)}
+									placeholder="laptop"
+									className="mt-1 block w-28 rounded-md border border-slate-300 px-2 py-1 text-sm" />
+							</label>
+							<button onClick={() => void onAddKey()} disabled={keyBusy || !newKey.trim()}
+								className="rounded-md border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50">
+								{keyBusy ? "adding…" : "Add key"}
+							</button>
+						</div>
+						<p className="mt-2 text-xs text-slate-500">
+							Get it with <code className="rounded bg-slate-50 px-1">cat ~/.ssh/id_ed25519.pub</code>.
+							Adding a key also syncs it to <strong>{target}</strong>, so it works immediately.
+						</p>
+					</div>
+				)}
 				<p className="mt-2 text-xs text-slate-500">
 					{connectHint ? (
 						<>

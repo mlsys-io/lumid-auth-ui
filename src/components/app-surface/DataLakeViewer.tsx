@@ -492,8 +492,16 @@ export default function DataLakeViewer({ config }: { config?: Record<string, unk
                     {c.loading ? "…" : c.error ? "offline" : `${c.schemas.length} schemas`}
                   </span>
                 </button>
+                {/* INDENT THE SCHEMAS UNDER THEIR DATABASE.
+                    This was a bare <div>, so a schema row started at exactly the
+                    same left edge as the database row above it (both x=249,
+                    measured). With a dozen schemas per instance and several
+                    instances stacked, nothing showed where one database ended and
+                    the next began -- the tree rendered as one flat list. The
+                    table level one step down already did this correctly; only
+                    this level was missing it. */}
                 {openInst[c.instance.id] && (
-                  <div>
+                  <div className="ml-3 border-l border-slate-200">
                     {c.loading ? (
                       <div className="px-2 py-1 text-[11px] text-slate-400">loading…</div>
                     ) : c.error ? (
