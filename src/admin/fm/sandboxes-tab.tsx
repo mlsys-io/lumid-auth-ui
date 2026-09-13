@@ -56,6 +56,18 @@ const EMPTY: FmFanout<FmTask> = { items: [], sites: [] };
 /** Sentinel for "I'll type my own" -- a real ref can never collide with it. */
 const CUSTOM_IMAGE = "__custom__";
 
+/** "NVIDIA RTX PRO 4000 Blackwell SFF Edition" -> "RTX PRO 4000 Blackwell".
+ *  Same rule fleet-tab applies: the vendor prefix and the marketing suffixes
+ *  never distinguish two cards in this fleet, and this sits inline in a form row. */
+function shortGpu(name: string): string {
+	return name
+		.replace(/^NVIDIA\s+/i, "")
+		.replace(/\s+(SFF\s+)?Edition$/i, "")
+		.replace(/\s+Generation$/i, "")
+		.replace(/^GeForce\s+/i, "")
+		.trim();
+}
+
 /** Live first — a running shell is the only row anyone is looking for. */
 function isLive(r: ComputeShell): boolean {
 	if (r.kind === "sandbox") return r.state === "Running" || r.state === "Queued" || r.state === "Pending";
@@ -222,8 +234,11 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 		if (image && image !== CUSTOM_IMAGE && !imageChoices.some((c) => c.ref === image)) setImage("");
 	}, [gpu, image, imageChoices]);
 
+	// Rendered beside the GPUs field and NOWHERE ELSE. It was also in the subtitle,
+	// so the same 41-char model name appeared twice on one screen -- added here
+	// earlier today, and the reason this tab read as cluttered.
 	const gpuLabel = gpuInfo?.model
-		? `${gpuInfo.model}${gpuInfo.memory_gb ? ` · ${gpuInfo.memory_gb} GB` : ""}`
+		? `${shortGpu(gpuInfo.model)}${gpuInfo.memory_gb ? ` · ${gpuInfo.memory_gb} GB` : ""}`
 		: gpuInfo?.models?.length
 			? `${gpuInfo.models.length} GPU types`
 			: "";
@@ -262,7 +277,7 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 		<TabShell
 			subtitle={`A shell with a home directory that outlives the container.${
 				isAdmin ? " Every site." : " On home."
-			}${gpusFree ? ` ${gpusFree} GPUs free on ${target}${gpuLabel ? ` (${gpuLabel})` : ""}.` : ""}${
+			}${gpusFree ? ` ${gpusFree} GPUs free on ${target}.` : ""}${
 				// State the ceiling wherever it is below the site total, because "4 free" and
 				// "at most 1 per sandbox" are both true at home and only the pair is useful.
 				gpuInfo && gpuInfo.max_per_sandbox < gpuInfo.total
@@ -405,9 +420,8 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 				<p className="mt-2 text-xs text-slate-500">
 					{connectHint ? (
 						<>
-							Connect with <code className="rounded bg-white px-1">{connectHint}</code> — one port per
-							site for everyone; your key decides which sandbox you land in. Add keys in your account
-							settings.{" "}
+							Connect with <code className="rounded bg-white px-1">{connectHint}</code> — your key
+							decides which sandbox you land in.{" "}
 						</>
 					) : (
 						<>
@@ -416,8 +430,7 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 						</>
 					)}
 					Files under <code className="rounded bg-white px-1">/home</code> survive deleting a
-					sandbox, and homes are <em>per site</em> — your home on office is a different directory
-					from your home on home.
+					sandbox (per site).
 				</p>
 			</div>
 
