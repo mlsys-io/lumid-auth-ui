@@ -80,6 +80,8 @@ export interface Sandbox {
 	gpus_free?: string;
 	/** Injected by this client so a merged list stays actionable. */
 	site?: string;
+	/** Public TCP ports this sandbox holds. Absent when it claimed none. */
+	ports?: SandboxPort[];
 }
 
 /**
@@ -160,6 +162,35 @@ export interface DatasetEntry {
 	can_edit?: boolean;
 }
 
+/**
+ * A public TCP port a sandbox has claimed from its site's pool.
+ *
+ * `connect` is built server-side on purpose: the public host differs per site
+ * and is NOT the in-cluster address, so a UI composing it from the node port
+ * would invent a string that does not resolve.
+ */
+export interface SandboxPort {
+	container_port: number;
+	node_port: number;
+	connect?: string;
+}
+
+/**
+ * The site's public-port pool.
+ *
+ * `free` is FLEET-WIDE for the site, not per-user: every published port costs a
+ * load-balancer frontend against a hard cap, so the pool is fixed and shared.
+ * That is why this rides the envelope and is rendered before anyone picks ports
+ * — a full pool has to be visible, not discovered at the refusal.
+ */
+export interface PortPool {
+	enabled: boolean;
+	pool_size?: number;
+	free?: number;
+	max_per_sandbox?: number;
+	host?: string;
+}
+
 export interface SandboxList {
 	sandboxes: Sandbox[];
 	gpus_free: string;
@@ -172,6 +203,8 @@ export interface SandboxList {
 	datasets?: DatasetEntry[];
 	/** False where the site has no writable dataset tier (office has none today). */
 	datasets_writable?: boolean;
+	/** Absent on a site not yet running a build that serves the pool. */
+	ports?: PortPool;
 }
 
 // ---------------------------------------------------------------------------
@@ -226,6 +259,14 @@ const siteDatasets = new Map<string, DatasetEntry[]>();
 
 export function datasetsForSite(site: string): DatasetEntry[] {
 	return siteDatasets.get(site) ?? [];
+}
+
+const sitePortPools = new Map<string, PortPool>();
+
+/** The site's port pool, or a disabled one. Unknown → disabled: offering a port
+ *  field that the server would 501 is worse than not offering it. */
+export function portPoolForSite(site: string): PortPool {
+	return sitePortPools.get(site) ?? { enabled: false };
 }
 
 const siteDatasetsWritable = new Map<string, boolean>();
@@ -307,6 +348,8 @@ export interface CreateSandboxRequest {
 	name: string;
 	/** Ids from dataSourcesForSite(). Attaching injects env only — no mount. */
 	data_sources?: string[];
+	/** Container ports to publish publicly. At most `max_per_sandbox` from the pool. */
+	ports?: number[];
 	image?: string;
 	cpu?: number;
 	memory_gi?: number;
@@ -375,6 +418,7 @@ export async function listSandboxesForSite(site: string): Promise<Sandbox[]> {
 	if (typeof r.data?.datasets_writable === "boolean") {
 		siteDatasetsWritable.set(site, r.data.datasets_writable);
 	}
+	if (r.data?.ports) sitePortPools.set(site, r.data.ports);
 	return (r.data?.sandboxes ?? []).map((s) => ({ ...s, site, gpus_free: s.gpus_free ?? gpusFree }));
 }
 
@@ -465,6 +509,8 @@ export interface ComputeShell {
 	detail: string | null;
 	gpu: number | null;
 	node: string | null;
+	/** Public TCP ports, sandbox-only — a FlowMesh SSH task publishes none. */
+	ports?: SandboxPort[] | null;
 	/** Only set for kind "sandbox"; the delete button needs it. */
 	sandbox?: Sandbox;
 }
@@ -496,6 +542,7 @@ export function sandboxToShell(s: Sandbox): ComputeShell {
 			.filter(Boolean).join(" ") || null : s.pod,
 		gpu: s.gpu || null,
 		node: s.node ?? null,
+		ports: s.ports ?? null,
 		sandbox: s,
 	};
 }

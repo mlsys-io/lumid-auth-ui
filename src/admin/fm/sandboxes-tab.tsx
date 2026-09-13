@@ -38,6 +38,7 @@ import {
 	datasetsForSite,
 	datasetsWritableForSite,
 	listDatasets,
+	portPoolForSite,
 	gpuProfileForSite,
 	imagesForSite,
 	isSshTaskActive,
@@ -133,6 +134,10 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 	// client needs to reach a live store, so the sandbox queries in place and
 	// copies nothing. Empty by default -- attaching is a deliberate act.
 	const [sources, setSources] = useState<string[]>([]);
+	// Container ports to publish on a real public TCP port. Empty by default:
+	// every claim spends a shared, capped load-balancer frontend, so publishing
+	// is a deliberate act rather than something a default turns on.
+	const [ports, setPorts] = useState<string[]>([]);
 	const [image, setImage] = useState("");
 	const [customImage, setCustomImage] = useState("");
 	// SSH keys live here, not only in account settings. Without a key the whole
@@ -341,6 +346,12 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 	// The catalog is served per-site (see imagesForSite). Offer only entries matching the
 	// CPU/GPU choice: a CUDA image on a CPU sandbox is several GB of pull for libraries that
 	// cannot be used, and a slim CPU image on a GPU box has no CUDA runtime in it at all.
+	const pool = portPoolForSite(target);
+	// Only real, in-range, de-duplicated numbers reach the request. sandbox-control
+	// validates all of this again — it has to, since the pool is shared — but
+	// refusing here keeps a typo from costing a create round-trip.
+	const wantedPorts = Array.from(new Set(
+		ports.map((p) => Number.parseInt(p, 10)).filter((n) => Number.isFinite(n) && n >= 1 && n <= 65535)));
 	const siteSources = dataSourcesForSite(target);
 	const siteDatasets = datasetsForSite(target);
 	const siteImages = imagesForSite(target);
@@ -372,6 +383,9 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 			await createSandbox(target, {
 				name, gpu, ttl_hours: ttl, image: chosen || undefined,
 				data_sources: sources.length ? sources : undefined,
+				// Blank boxes are not zeros. Filtered here so an untouched second
+				// field never becomes a request to publish port 0.
+				ports: wantedPorts.length ? wantedPorts : undefined,
 			});
 			toast.success(`creating ${name} on ${target}`);
 			boxes.refresh();
@@ -508,6 +522,38 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 										</span>
 									</label>
 								))}
+							</div>
+						</fieldset>
+					)}
+					{/* PUBLIC PORTS. Only rendered where the site actually publishes a
+					    pool — office has the code but no published pool, and offering a
+					    field there would produce a connect string resolving to nothing.
+					    Free/total is the SITE's, not yours: the pool is shared fleet-wide
+					    because each port costs a capped LB frontend, so a full pool has to
+					    be visible here rather than discovered at the refusal. */}
+					{pool.enabled && (
+						<fieldset className="text-xs text-slate-600">
+							<legend className="mb-1">
+								Public ports{" "}
+								<span className={pool.free === 0 ? "text-amber-600" : "text-slate-400"}>
+									— {pool.free ?? 0} of {pool.pool_size ?? 0} free at this site
+								</span>
+							</legend>
+							<div className="flex flex-wrap items-center gap-2">
+								{Array.from({ length: pool.max_per_sandbox ?? 2 }).map((_, i) => (
+									<input key={i} value={ports[i] ?? ""} inputMode="numeric"
+										onChange={(e) => setPorts((v) => {
+											const n = [...v]; n[i] = e.target.value.replace(/[^0-9]/g, ""); return n;
+										})}
+										placeholder={i === 0 ? "22" : "8888"}
+										disabled={(pool.free ?? 0) === 0}
+										className="w-24 rounded-md border border-slate-300 px-2 py-1 text-sm font-mono disabled:bg-slate-50" />
+								))}
+								<span className="text-slate-400">
+									{(pool.free ?? 0) === 0
+										? "pool full — delete a sandbox holding ports to free one"
+										: `reachable as ${pool.host ?? "lum.id"}:<assigned>`}
+								</span>
 							</div>
 						</fieldset>
 					)}
@@ -753,7 +799,20 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 										<div className="mt-0.5 max-w-xs text-xs text-amber-700">{r.detail}</div>
 									)}
 								</td>
-								<td className="px-3 py-2 font-mono text-xs text-slate-700">{r.connect ?? "—"}</td>
+								<td className="px-3 py-2 font-mono text-xs text-slate-700">
+									{r.connect ?? "—"}
+									{/* The assigned port is the ONLY way to reach a published
+									    service, and it is chosen by the server from a shared
+									    pool — so it has to be readable here, not just at create
+									    time in a response the user has already dismissed. */}
+									{r.ports?.map((p) => (
+										<span key={p.node_port} className="mt-0.5 block text-slate-500"
+											title={`container port ${p.container_port} published publicly`}>
+											{p.connect ?? `:${p.node_port}`}
+											<span className="text-slate-400"> → {p.container_port}</span>
+										</span>
+									))}
+								</td>
 								<td className="px-3 py-2 text-xs text-slate-600">{r.owner ?? "you"}</td>
 								<td className="px-3 py-2 text-xs text-slate-600">{expiresIn(r.expiresAt)}</td>
 								<td className="px-3 py-2 text-right">
