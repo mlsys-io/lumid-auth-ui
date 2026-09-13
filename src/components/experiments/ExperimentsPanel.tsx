@@ -39,6 +39,10 @@ function VerdictChip({ e }: { e: MeExperiment }) {
 	// "running" on an experiment with zero results claimed activity where
 	// there was none — an active declaration with no rows is collecting,
 	// not running.
+	// A metric that matches nothing is not "no results yet" — that phrasing
+	// reads as patience being the fix, and it is not.
+	if (!e.n_results && e.n_zero_reason)
+		return <span className="px-2 py-0.5 rounded-full text-[11px] border bg-amber-50 text-amber-800 border-amber-200 font-medium" title={e.n_zero_reason}>metric mismatch</span>;
 	if (!e.n_results)
 		return <span className="px-2 py-0.5 rounded-full text-[11px] border bg-slate-50 text-slate-700 border-slate-200">no results yet</span>;
 	return <span className="px-2 py-0.5 rounded-full text-[11px] border bg-violet-50 text-violet-700 border-violet-200">collecting</span>;
@@ -403,9 +407,28 @@ export function ExperimentCard({ app, e, showApp = false }: { app: string; e: Me
 					    is exactly the one worth offering to dispatch. */}
 					<ArmsBlock app={app} e={e} />
 					{e.n_results === 0 ? (
-						<div className="text-xs text-slate-500">
-							Declared, no results yet — they land here when {e.loops?.length ? <span className="font-medium">{e.loops.join(", ")}</span> : "an attached workflow"} next runs.
-						</div>
+						/* Two different zeroes. "Never ran" is a waiting message;
+						   "rows exist but carry other keys" is a BUG that no amount
+						   of waiting fixes, and telling them apart used to require
+						   reading results.jsonl by hand. */
+						e.n_zero_reason ? (
+							<div className="text-xs rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900">
+								<div className="font-medium">No results, and waiting will not help.</div>
+								<div className="mt-0.5">{e.n_zero_reason}</div>
+								{e.metric_keys_seen?.length ? (
+									<div className="mt-1.5 flex flex-wrap items-center gap-1">
+										<span className="text-[11px] text-amber-800">keys actually emitted:</span>
+										{e.metric_keys_seen.map((k) => (
+											<code key={k} className="px-1.5 py-0.5 rounded bg-white/70 border border-amber-200 text-[11px]">{k}</code>
+										))}
+									</div>
+								) : null}
+							</div>
+						) : (
+							<div className="text-xs text-slate-500">
+								Declared, no results yet — they land here when {e.loops?.length ? <span className="font-medium">{e.loops.join(", ")}</span> : "an attached workflow"} next runs.
+							</div>
+						)
 					) : loading ? (
 						<div className="text-[11px] text-slate-600 flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" />loading results…</div>
 					) : detail ? (

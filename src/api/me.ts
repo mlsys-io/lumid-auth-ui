@@ -1083,6 +1083,11 @@ export interface MeExperiment {
   metric_name?: string; benchmark_id?: string; baseline?: unknown;
   success_criteria?: string; min_samples?: number; loops?: string[];
   n_results: number; variants?: Record<string, MeExperimentVariantAgg>;
+  // The numeric metric keys the rows ACTUALLY carry, and why n is zero when it
+  // is. `n_results: 0` alone cannot distinguish "never ran" from "the declared
+  // metric name matches nothing the loop emits" — the shape that hid
+  // real_tape_rate for 19 runs across three tenants.
+  metric_keys_seen?: string[]; n_zero_reason?: string | null;
   best_variant?: string | null; baseline_value?: number | null;
   delta?: number | null; delta_pp?: number | null;
   criteria_met: boolean; criteria_reason?: string; verdict?: string;
