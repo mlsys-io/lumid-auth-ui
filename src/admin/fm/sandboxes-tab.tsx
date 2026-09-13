@@ -493,23 +493,35 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 							</span>
 						</label>
 					)}
-					{/* MULTI-SELECT, AND THE CHOICE HAS TO BE LEGIBLE. This was one
-					    checkbox reading "Lumid Data" for a while, which made it look
-					    like a yes/no for "data" in general rather than a pick among
-					    stores — and the store it named is NOT the one holding market
-					    or prediction_markets. Each row therefore shows what the
-					    source actually holds and how it authenticates, because those
-					    are the two things that decide which one you want. Attaching
-					    several is normal: each injects its own variable. */}
+					{/* A DROPDOWN, STILL MULTI-SELECT. Rendered as three stacked rows
+					    this was the tallest thing on the form; collapsed, it costs one
+					    line until you open it. What it must NOT become is a plain
+					    <select>: each source injects its OWN variable, so attaching
+					    several is normal, and a single-select would quietly reinstate
+					    the one-or-nothing picker this replaced.
+
+					    <details> rather than a popover: it is a real disclosure widget,
+					    keyboard-accessible and closable by the browser, with no open/close
+					    state to keep in sync. */}
 					{siteSources.length > 0 && (
-						<fieldset className="text-xs text-slate-600">
-							<legend className="mb-1">
-								Data <span className="text-slate-400">— attach live stores; nothing is copied or mounted</span>
-							</legend>
-							<div className="space-y-1">
+						<details className="text-xs text-slate-600">
+							<summary className="cursor-pointer select-none rounded-md border border-slate-300 bg-white px-2 py-1.5 marker:content-['']">
+								Data
+								<span className="ml-1 text-slate-400">
+									{sources.length === 0
+										? "— none attached"
+										: `— ${siteSources.filter((d) => sources.includes(d.id))
+												.map((d) => d.label ?? d.id).join(", ")}`}
+								</span>
+								<span className="ml-1 text-slate-300">▾</span>
+							</summary>
+							<div className="mt-1 space-y-1 rounded-md border border-slate-200 bg-white p-2">
+								<p className="text-[11px] text-slate-400">
+									Attaches a live store — nothing is copied or mounted. Pick any number.
+								</p>
 								{siteSources.map((d) => (
 									<label key={d.id}
-										className="flex cursor-pointer items-start gap-2 rounded-md border border-slate-300 bg-white px-2 py-1">
+										className="flex cursor-pointer items-start gap-2 rounded px-1 py-0.5 hover:bg-slate-50">
 										<input type="checkbox" className="mt-0.5" checked={sources.includes(d.id)}
 											onChange={(e) => setSources((v) =>
 												e.target.checked ? [...v, d.id] : v.filter((x) => x !== d.id))} />
@@ -523,7 +535,7 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 									</label>
 								))}
 							</div>
-						</fieldset>
+						</details>
 					)}
 					{/* PUBLIC PORTS. Only rendered where the site actually publishes a
 					    pool — office has the code but no published pool, and offering a
