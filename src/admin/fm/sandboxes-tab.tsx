@@ -124,6 +124,11 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 	const sites = isAdmin ? SANDBOX_SITES : USER_SANDBOX_SITES;
 	const [target, setTarget] = useState(PUBLIC_SANDBOX_SITE);
 	const [busy, setBusy] = useState(false);
+	// The create form lives in a dialog. It has grown to eight controls, and as a
+	// permanently-open panel it pushed the thing people actually come here for --
+	// the list of their running sandboxes -- below the fold. Creating is
+	// occasional; looking is constant.
+	const [createOpen, setCreateOpen] = useState(false);
 	const [name, setName] = useState("dev");
 	const [gpu, setGpu] = useState(0);
 	const [ttl, setTtl] = useState(8);
@@ -388,6 +393,11 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 				ports: wantedPorts.length ? wantedPorts : undefined,
 			});
 			toast.success(`creating ${name} on ${target}`);
+			// Close only on SUCCESS. A failed create keeps the dialog open with the
+			// values still in it -- the common failures here (name taken, pool full,
+			// GPU refused) are ones you fix by changing one field, and dropping the
+			// form would make the user retype everything to act on the message.
+			setCreateOpen(false);
 			boxes.refresh();
 		} catch (e: any) {
 			toast.error(e?.response?.data?.detail ?? `could not create the sandbox on ${target}`);
@@ -428,6 +438,41 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 			<SiteStrip sites={siteStatus} />
 
 			<div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+				{/* Toolbar. SSH keys and Datasets deliberately stay OUT of the create
+				    dialog: you need a key BEFORE creating anything, and a user with no
+				    key is exactly who must not have that control hidden behind a
+				    button labelled "New sandbox". */}
+				<div className="flex flex-wrap items-center gap-2">
+					<button onClick={() => setCreateOpen(true)}
+						className="rounded-md border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100">
+						New sandbox
+					</button>
+					<button onClick={() => setDsOpen((v) => !v)}
+						title={`Publish, add to or remove file datasets on ${target} — mounted read-only at /datasets in every sandbox there`}
+						className="ml-auto rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">
+						{siteDatasets.length ? `Datasets · ${siteDatasets.length}` : "Datasets"}
+					</button>
+					<button onClick={() => setKeysOpen((v) => !v)}
+						title="Add or remove the SSH keys that let you into your sandboxes"
+						className={`rounded-md border px-3 py-1.5 text-sm ${
+							keys && keys.length === 0
+								? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
+								: "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+						}`}>
+						{keys === null ? "SSH keys" : keys.length === 0 ? "No SSH keys — add one" : `SSH keys · ${keys.length}`}
+					</button>
+				</div>
+
+				{createOpen && (
+				<div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-4 sm:p-8"
+					onClick={() => setCreateOpen(false)}>
+				<div className="w-full max-w-2xl rounded-lg border border-slate-200 bg-white p-4 shadow-xl"
+					onClick={(e) => e.stopPropagation()}>
+				<div className="mb-3 flex items-center justify-between">
+					<h3 className="text-sm font-medium text-slate-800">New sandbox on {target}</h3>
+					<button onClick={() => setCreateOpen(false)}
+						className="text-slate-400 hover:text-slate-700" aria-label="Close">✕</button>
+				</div>
 				<div className="flex flex-wrap items-end gap-3">
 					{/* Only an admin picks a site; a non-admin has exactly one and a
 					    disabled select would just be furniture. */}
@@ -603,26 +648,10 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 						className="rounded-md border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50">
 						{busy ? "creating…" : "Create sandbox"}
 					</button>
-					{/* One control where there were two. "Sync my SSH keys" was the only
-					    key affordance here and it could not help the common case -- a
-					    user with NO key -- because it re-reads an empty list. The count
-					    is on the button so "0 keys" is visible before you try to
-					    connect and fail. */}
-					<button onClick={() => setDsOpen((v) => !v)}
-						title={`Publish, add to or remove file datasets on ${target} — mounted read-only at /datasets in every sandbox there`}
-						className="ml-auto rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">
-						{siteDatasets.length ? `Datasets · ${siteDatasets.length}` : "Datasets"}
-					</button>
-					<button onClick={() => setKeysOpen((v) => !v)}
-						title="Add or remove the SSH keys that let you into your sandboxes"
-						className={`rounded-md border px-3 py-1.5 text-sm ${
-							keys && keys.length === 0
-								? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
-								: "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-						}`}>
-						{keys === null ? "SSH keys" : keys.length === 0 ? "No SSH keys — add one" : `SSH keys · ${keys.length}`}
-					</button>
 				</div>
+				</div>
+				</div>
+				)}
 
 				{dsOpen && (
 					<div className="mt-3 rounded-md border border-slate-200 bg-white p-3">
