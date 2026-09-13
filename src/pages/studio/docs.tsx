@@ -149,7 +149,7 @@ const DOCS: DocEntry[] = [
 		// read as follow-ups to it rather than the other way round.
 		slug: 'sandboxes',
 		title: 'Sandboxes — a shell on the fleet',
-		description: 'Rent a container on real hardware with a home directory that outlives it — SSH keys first, the per-machine GPU ceiling, querying FinData without copying it, and what survives a delete.',
+		description: 'Rent a container on real hardware with a home directory that outlives it — SSH keys first, the per-machine GPU ceiling, datasets vs attached sources, querying FinData without copying it, and what survives a delete.',
 		md: 'sandboxes.md',
 		group: 'Guides',
 		icon: TerminalSquare,

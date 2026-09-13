@@ -40,7 +40,7 @@ immediately, so it works the moment it is saved.
 | **Name** | yours, per site. Re-creating the same name after a delete reuses your home directory. |
 | **GPUs** | see §4 — the ceiling is **per machine**, not per site. |
 | **Image** | pick from the site's list, or `custom…` for any reference. |
-| **Data** | attach FinData — see §5. Nothing is mounted or copied. |
+| **Data** | attach a live source (FinData) — see §5. Nothing is mounted or copied. File datasets need no selection: `/datasets` is already mounted. |
 | **Expires after** | max **24h**. The container goes; your home directory does not. |
 
 ---
@@ -134,15 +134,47 @@ shared sandbox identity.
 > `relation … does not exist [42P01]`. Trust `catalog/schemas` from *inside* the
 > sandbox over an example copied from elsewhere.
 
-### Files
+### Datasets — `/datasets`
 
-`/datasets` is a **read-only** mount for file corpora, shared by every sandbox
-at that site. Publish by copying to the NAS under `_shared/datasets/<name>/`; it
-appears in every sandbox immediately, no restart. Read-only by design: one
-careless `rm` must not destroy a corpus everyone depends on.
+For **files**: corpora, checkpoints, extracts — anything that is a directory
+rather than a query. It is mounted **read-only in every sandbox at that site**,
+so there is nothing to attach or select; it is simply there.
 
-Model weights are **not** kept there — each GPU box has its own `/huggingface`,
-because loading weights over NFS is markedly slower than from local NVMe.
+```bash
+ls /datasets          # what this site has
+du -sh /datasets/*    # how big
+```
+
+> **It is empty today** apart from a README. If `ls /datasets` shows nothing,
+> that is the honest answer and not a broken mount.
+
+**To publish one**, copy it to the NAS under `_shared/datasets/<name>/`. It
+appears in every sandbox on that site immediately — no restart, no re-create.
+Ask an operator if you do not have NAS access.
+
+**Read-only by design.** One careless `rm` in one sandbox must not be able to
+destroy a corpus everyone else depends on. If you need to write, copy what you
+need into your own `/home/<you>` first.
+
+**Per site, not replicated.** `/datasets` on office is a different directory
+from `/datasets` on home; publishing to one does not publish to the other.
+
+**Not a model cache.** Weights stay node-local in `/huggingface` on each GPU box
+on purpose — loading them over NFS is markedly slower than from local NVMe, so
+centralising them would trade real speed for disk that is not scarce.
+
+### Datasets vs attached sources — which do you want?
+
+|  | `/datasets` | attached source (§ Data picker) |
+|---|---|---|
+| holds | files and directories | a live query endpoint |
+| how you get it | already mounted, read-only | tick it at create; injects env |
+| copies data? | the files are *stored* there | **no** — query runs server-side |
+| good for | corpora, checkpoints, extracts | FinData and other warehouses |
+
+Rule of thumb: **if it is a table, query it; if it is a directory, mount it.**
+Do not copy a warehouse into `/datasets` to "have it locally" — it is stale the
+moment it lands and loses the lineage `/retrieve` gives you for free.
 
 ### Other stores
 
