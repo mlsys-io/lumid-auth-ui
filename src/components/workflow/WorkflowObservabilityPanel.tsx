@@ -673,6 +673,18 @@ export default function WorkflowObservabilityPanel({
 				</Suspense>
 			</section>
 		)}
+		{/* OUTPUTS — what the loop last PRODUCED, at loop level.
+		    The comment above has promised since it was written that "a plain
+		    workflow has Outputs only", and nothing ever rendered them: the
+		    result existed solely inside StageBody, reachable by opening the run
+		    tree, picking a run, then picking a stage. So a workflow WITHOUT a
+		    metric showed runs and nothing else, and the reasonable question
+		    "what did this produce?" had no answer on the page.
+		    Uses the latest cycle's files, already fetched above for the observe
+		    gate — no extra request. Always rendered, deliberately: for an
+		    experiment it sits under Metric & arms, and for a plain workflow it
+		    is the whole story. */}
+		<OutputsTier files={cycleFiles} ts={cycleTs} hasRuns={tenantHasRuns} />
 		<div ref={fillRef} style={{ height: fillH }} className="flex flex-col lg:flex-row gap-3 items-stretch min-w-0 w-full">
 				{!caseFocus && (railOpen ? (
 					<div className="w-full lg:w-[30%] lg:min-w-[220px] lg:max-w-[380px] flex-shrink-0 flex flex-col min-h-0 max-h-[55vh] lg:max-h-none lg:h-full">
@@ -1245,6 +1257,42 @@ function fmtVal(v: unknown): string {
 }
 
 // Compact key:value card for a plain object (one level; nested → JSON snippet).
+// OutputsTier — the latest run's final artifact, at loop level.
+//
+// `result` / `results` is the same key StageBody renders per-stage; hoisting it
+// here answers "what did this produce?" without a three-click drill. The run
+// timestamp is shown next to it on purpose: an output with no date reads as
+// current, and this one can be arbitrarily old if the loop has not run.
+function OutputsTier({ files, ts, hasRuns }:
+	{ files: Record<string, unknown>; ts: string | null; hasRuns: boolean }) {
+	const result = (files?.result ?? files?.results) as unknown;
+	const extras: Array<[string, unknown]> = [];
+	for (const k of ["report", "verdict", "scorecard", "analysis", "summary_md"]) {
+		if (files?.[k] != null) extras.push([k, files[k]]);
+	}
+	const empty = result == null && extras.length === 0;
+	return (
+		<section className="space-y-1.5">
+			<div className="flex items-baseline gap-2">
+				<div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">Outputs</div>
+				{ts && <span className="text-[10px] text-slate-400" title="the run this output came from">from run {ts}</span>}
+			</div>
+			{empty ? (
+				<div className="text-[11px] text-slate-500 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2">
+					{hasRuns
+						? "This loop's last run recorded no result artifact. Open a run to see its per-stage output."
+						: "No runs yet — run the workflow and its output appears here."}
+				</div>
+			) : (
+				<div className="space-y-2">
+					{result != null && <KVCard title="Result" obj={result} />}
+					{extras.map(([k, v]) => <KVCard key={k} title={k} obj={v} />)}
+				</div>
+			)}
+		</section>
+	);
+}
+
 function KVCard({ title, obj }: { title: string; obj: unknown }) {
 	if (!obj || typeof obj !== "object" || Array.isArray(obj)) return null;
 	const entries = Object.entries(obj as Record<string, unknown>)
