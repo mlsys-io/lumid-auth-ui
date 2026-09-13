@@ -125,6 +125,22 @@ export interface DataSource {
 	hint?: string;
 }
 
+/**
+ * A file dataset published to a site's shared read-only tier.
+ *
+ * NOT selectable, and must not be rendered as a checkbox: `/datasets` is mounted
+ * read-only into EVERY sandbox at the site, so there is nothing to opt into. The
+ * value is knowing what is on the shelf BEFORE creating a box — the mount was
+ * otherwise invisible until someone happened to `ls` it, which is how it sat
+ * empty and unnoticed for weeks.
+ */
+export interface DatasetEntry {
+	name: string;
+	bytes?: number;
+	files?: number;
+	note?: string;
+}
+
 export interface SandboxList {
 	sandboxes: Sandbox[];
 	gpus_free: string;
@@ -134,6 +150,7 @@ export interface SandboxList {
 	images?: SiteImages;
 	/** Absent on a site not yet running a build that serves sources. */
 	data_sources?: DataSource[];
+	datasets?: DatasetEntry[];
 }
 
 // ---------------------------------------------------------------------------
@@ -182,6 +199,12 @@ const siteSources = new Map<string, DataSource[]>();
 
 export function dataSourcesForSite(site: string): DataSource[] {
 	return siteSources.get(site) ?? [];
+}
+
+const siteDatasets = new Map<string, DatasetEntry[]>();
+
+export function datasetsForSite(site: string): DatasetEntry[] {
+	return siteDatasets.get(site) ?? [];
 }
 
 export interface CreateSandboxRequest {
@@ -252,6 +275,7 @@ export async function listSandboxesForSite(site: string): Promise<Sandbox[]> {
 	}
 	if (r.data?.images?.catalog?.length) siteImages.set(site, r.data.images);
 	if (r.data?.data_sources) siteSources.set(site, r.data.data_sources);
+	if (r.data?.datasets) siteDatasets.set(site, r.data.datasets);
 	return (r.data?.sandboxes ?? []).map((s) => ({ ...s, site, gpus_free: s.gpus_free ?? gpusFree }));
 }
 

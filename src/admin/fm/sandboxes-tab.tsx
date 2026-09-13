@@ -33,6 +33,7 @@ import {
 	createSandbox,
 	deleteSandbox,
 	dataSourcesForSite,
+	datasetsForSite,
 	gpuProfileForSite,
 	imagesForSite,
 	isSshTaskActive,
@@ -91,6 +92,14 @@ function StatePill({ r }: { r: ComputeShell }) {
 			{s}
 		</span>
 	);
+}
+
+function fmtBytes(n?: number): string {
+	if (!n) return "—";
+	const u = ["B", "KB", "MB", "GB", "TB"];
+	let i = 0, v = n;
+	while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+	return `${v < 10 && i > 0 ? v.toFixed(1) : Math.round(v)} ${u[i]}`;
 }
 
 function expiresIn(ms: number | null): string {
@@ -232,6 +241,7 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 	// CPU/GPU choice: a CUDA image on a CPU sandbox is several GB of pull for libraries that
 	// cannot be used, and a slim CPU image on a GPU box has no CUDA runtime in it at all.
 	const siteSources = dataSourcesForSite(target);
+	const siteDatasets = datasetsForSite(target);
 	const siteImages = imagesForSite(target);
 	const imageChoices = (siteImages?.catalog ?? []).filter((c) => Boolean(c.gpu) === gpu > 0);
 	const siteDefaultImage = gpu > 0 ? siteImages?.default_gpu : siteImages?.default_cpu;
@@ -369,6 +379,25 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 								))}
 							</div>
 						</fieldset>
+					)}
+					{/* Datasets are INFORMATIONAL, not selectable — they are already
+					    mounted read-only in every sandbox here. Rendering them as a
+					    checkbox would imply an opt-in that does not exist. */}
+					{siteDatasets.length > 0 && (
+						<div className="text-xs text-slate-600">
+							<div className="mb-1">
+								Datasets <span className="text-slate-400">at /datasets</span>
+							</div>
+							<div className="flex flex-wrap items-center gap-2">
+								{siteDatasets.map((d) => (
+									<span key={d.name}
+										title={`${d.note ?? d.name} — ${d.files ?? 0} file(s), ${fmtBytes(d.bytes)}`}
+										className="rounded-md border border-slate-200 bg-white px-2 py-1">
+										{d.name} <span className="text-slate-400">{fmtBytes(d.bytes)}</span>
+									</span>
+								))}
+							</div>
+						</div>
 					)}
 					<label className="text-xs text-slate-600">
 						Expires after
