@@ -29,18 +29,27 @@ await p.waitForTimeout(9000);
 const body = await p.evaluate(() => document.body.innerText);
 const fail = [];
 
-// Office's worker aliases come from real boxes; luyao0/1/2 are office nodes.
-const officeNodes = ['luyao0', 'luyao1', 'luyao2'].filter(n => body.includes(n));
-if (!body.toLowerCase().includes('office')) fail.push('no "office" site on the Fleet tab');
-if (officeNodes.length === 0)
-  fail.push('no office node alias (luyao0/1/2) rendered — office still shows as empty');
-
-// A site strip that lists office but renders zero rows is the exact regression.
-const zeroish = /office[^\n]*\b0\s+workers?\b/i.test(body);
-if (zeroish) fail.push('office still rendered as "0 workers"');
+// Worker aliases come from real boxes. Both sites run 0.1.9 enforcement now, so
+// both can regress to an empty fleet -- check each, not just the one that broke.
+const SITES = [
+  { site: 'office', nodes: ['luyao0', 'luyao1', 'luyao2'] },
+  { site: 'home', nodes: ['luyaomini1', 'luyaomini2', 'luyaomini3', 'luyaomini4', 'luyaomini5'] },
+];
+const seen = {};
+for (const { site, nodes } of SITES) {
+  if (!body.toLowerCase().includes(site)) fail.push(`no "${site}" site on the Fleet tab`);
+  const hit = nodes.filter(n => body.includes(n));
+  seen[site] = hit;
+  if (hit.length === 0)
+    fail.push(`no ${site} node alias (${nodes.join('/')}) rendered — ${site} shows as empty`);
+  // A site strip that lists the site but renders zero rows is the exact regression.
+  if (new RegExp(`${site}[^\\n]*\\b0\\s+workers?\\b`, 'i').test(body))
+    fail.push(`${site} still rendered as "0 workers"`);
+}
 
 await p.screenshot({ path: '/tmp/fleet-office.png', fullPage: false }).catch(() => {});
 await browser.close();
-console.log('office node aliases rendered:', officeNodes.join(', ') || '(none)');
-console.log(fail.length ? 'FAIL:\n  ' + fail.join('\n  ') : 'PASS — office workers render on the Fleet tab');
+for (const [site, hit] of Object.entries(seen))
+  console.log(`${site} node aliases rendered:`, hit.join(', ') || '(none)');
+console.log(fail.length ? 'FAIL:\n  ' + fail.join('\n  ') : 'PASS — home and office workers render on the Fleet tab');
 process.exit(fail.length ? 1 : 0);
