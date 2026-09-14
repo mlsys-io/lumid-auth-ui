@@ -61,6 +61,19 @@ const DOCS: DocEntry[] = [
 		companion: { to: '/studio/docs/coding', label: 'AI coding' },
 	},
 	{
+		// Placed after the two onboarding walkthroughs: it assumes you already
+		// have an app open, and it is the only doc that covers the WRITE side of
+		// the control plane (defining, adding an arm, dispatching) rather than
+		// reading a surface.
+		slug: 'experiments',
+		title: 'Workflows and experiments',
+		description: 'What separates a workflow from an experiment, how to define one, read its status, harvest a result, and drive the whole loop from the chatbox — define, run, inspect, discuss, dispatch. Includes a worked three-arm run and the caveats its verdict line does not carry.',
+		md: 'experiments.md',
+		group: 'Guides',
+		icon: Activity,
+		companion: { to: '/studio/apps/mbb-consultant?surface=experiments', label: 'Experiments tab' },
+	},
+	{
 		// Second on purpose: first-run gets you an account and a working chat;
 		// this is the first thing a consulting-cohort user actually DOES with it.
 		// Walked as a fresh role=user account, so it records the failures a
