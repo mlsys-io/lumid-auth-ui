@@ -387,3 +387,54 @@ Different subjects, different metric semantics, one set of rules: declare what
 you measure, declare what you measure it over, hold the instrument constant, and
 let the ledger say when it has enough. Neither experiment was told what a good
 result looks like — only what to record.
+
+---
+
+## Changelog
+
+- **1.1.0** (2026-09-14) — Significance, the lifecycle, and five corrections to
+  this page.
+
+  **Corrections, one of which was impossible to follow.** This page said
+  `kol_alpha` could not conclude because its baseline "has never run" and that
+  the fix was to run it. `current` declares nothing for a dispatch to vary, so
+  it *cannot* be run; § *A second worked example* now names the two honest
+  repairs. It also said the Experiments tab has a define form (it reads — you
+  create from a workflow row), that `52 results` counts rows in the ledger (it
+  counts rows carrying the **declared metric**), that an empty Outputs tier
+  means this tenant has not run the loop (per-step detail and transcripts are
+  not available on this deployment at all), and that the platform does not
+  compute significance.
+
+  **It computes significance now, and can withhold the verdict.** Every arm pair
+  carries a difference, a standard error and a 95% interval, on the new
+  `Δ vs best` column. When the best arm's interval against the baseline crosses
+  zero the winner is withheld and the card says why — the same thing the
+  comparability guard already did, for the same reason. Comparisons are
+  **paired** where the arms answered the same subjects, which on the worked
+  example cuts the standard error by about a third and changes one conclusion;
+  pairing is skipped where the arms share few subjects, because a paired test
+  over a small overlap discards the rest of the evidence.
+
+  **A criteria expression that can never be true is refused when you write it**,
+  instead of reporting "not met" forever. There are no function calls in
+  `success_criteria`: `abs(delta_pp) < 2` cannot be evaluated at all, and
+  neither can a mistyped `mean_<arm>`. The refusal names the arms that exist.
+  § *Writing success_criteria* has the full name vocabulary, which until now
+  lived only in two apps' YAML comments.
+
+  **Finishing an experiment is possible** (§ 6). `status: concluded | archived`
+  had always been read by the card and nothing could write it. Conclude,
+  archive, reopen, checkpoint, fork, remove an arm and revert are available from
+  the card's overflow menu and from the chatbox. A checkpoint **fences** rather
+  than deletes — and requires a reason.
+
+  **Rows that do not count are visible.** The results chip reads `3 of 14 rows`
+  when some carry no declared metric, with the keys they do carry in the
+  tooltip; previously only the all-zero case was explained, so a partial drop
+  was invisible. An arm that was dispatched and **kept failing** is now
+  distinguished from one that was never run.
+
+- **1.0.0** (2026-09-14) — First published: the loop from composing a workflow
+  through defining a metric and scope, dispatching arms, reading results and
+  discussing them in the chatbox, with two worked examples.
