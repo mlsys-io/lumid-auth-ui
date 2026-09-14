@@ -187,3 +187,78 @@ platform's:
   comparing gemma4 to qwen7b even with a third arm present and 4 points behind.
 
 An experiment reports what you declared. Reading it is still your job.
+
+---
+
+## A second worked example — a different shape entirely
+
+`kol_alpha` on `quant-research` asks whether a KOL-conditioned strategy
+parameterization survives recorded market history. Same machinery, and almost
+nothing else in common with the one above.
+
+![kol_alpha on the Experiments tab — collecting, 2 arms with 1 never run, 3 results.](/docs/img/experiments-kol.png)
+
+**Its metric is a gate, not a score.** `real_tape` is `1` or `0`: did this
+backtest replay real market history with all three axes real? *"Higher is
+better"* on a boolean means "more often honest", not "better PnL". An experiment
+is free to measure whether a result deserves to exist at all, and this one does
+that before anything measures how good it is.
+
+**Its workflow has two actions, and only one of them emits the metric.**
+`kol_strategy` runs `--action generate` to build and submit a strategy, then
+`--action poll` to resolve the claim once the backtest lands:
+
+| Action | Emits |
+|---|---|
+| `generate` | `generated`, `compiled`, `lean` |
+| `poll` | `real_tape`, `all_axes_real`, `prints_replayed` |
+
+### Why it says 3 results when the ledger holds 14
+
+Eleven of those rows came from `generate` and carry none of the declared metric,
+so `evaluate()` skips them. That is correct — and it is exactly the situation the
+**keys seen** list exists for. Ask the app and you get:
+
+```
+keys emitted: all_axes_real, compiled, generated, lean, prints_replayed, real_tape
+```
+
+Seeing `generated` and `compiled` sitting beside `real_tape` tells you the gap is
+*stage*, not a typo. A metric name that matched nothing at all would say so in
+the same breath.
+
+### Why it is not concluding
+
+Two reasons, both visible on the card:
+
+```
+success_criteria:  best_n >= 10 and delta_pp >= 0
+best_n = 3         2 arms · 1 never run
+```
+
+- **Not enough resolved polls.** Three rows carry `real_tape` — `1`, `0`, `0`,
+  a mean of 0.33. One backtest replayed 12,378 real prints; two replayed none.
+- **The baseline arm has never run.** `baseline: {arm: current}` names `current`,
+  the hand-submitted reference, and it has zero rows — so `delta_pp` has nothing
+  to subtract. A declared baseline that never runs makes a delta criterion
+  unreachable no matter how many rows the treatment arm collects.
+
+That second one is worth internalising. `2 arms · 1 never run` is not cosmetic:
+it is the reason the experiment cannot finish, stated on the card, and the fix is
+to run the baseline rather than to collect more of the arm you already have.
+
+### What the two examples have in common
+
+| | `analyst_local_gpu` | `kol_alpha` |
+|---|---|---|
+| Metric | a score, 0–1 | a gate, 0 or 1 |
+| Treatment | the analyst model | the parameterization |
+| Held constant | the judge panel | the backtest machinery |
+| Scope | `cases_v1` | `musk_tweets_v1` |
+| Dispatch | on demand, batched | `@trigger`, two actions |
+| State | criteria met, 78 rows | collecting, 3 of 10 |
+
+Different subjects, different metric semantics, one set of rules: declare what
+you measure, declare what you measure it over, hold the instrument constant, and
+let the ledger say when it has enough. Neither experiment was told what a good
+result looks like — only what to record.

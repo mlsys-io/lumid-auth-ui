@@ -43,12 +43,16 @@ gate('D3 direct slug renders', body, '/studio/docs/experiments');
 const imgs = await page.evaluate(() => Array.from(document.querySelectorAll('img'))
   .filter(i => i.src.includes('/docs/img/experiments-'))
   .map(i => ({ src: i.getAttribute('src'), w: i.naturalWidth })));
-gate('D4 all four screenshots load', imgs.length === 4 && imgs.every(i => i.w > 100),
+gate('D4 all five screenshots load', imgs.length === 5 && imgs.every(i => i.w > 100),
      imgs.map(i => `${i.src.split('/').pop()}:${i.w}px`).join(' ') || 'none found');
 
 // D5 — the worked example's numbers survived markdown
 gate('D5 worked example intact', await waitFor(/0\.497/) && await waitFor(/qwen14b_local/),
      'three-arm table rendered');
+
+// D7 — the second example, and the reason it cannot conclude
+gate('D7 kol example intact', await waitFor(/real_tape/) && await waitFor(/12,?378/),
+     'gate-metric example + prints replayed');
 
 // D6 — no 404s on any /docs/ asset
 gate('D6 no broken doc assets', bad.length === 0, bad.slice(0, 3).join(' ') || 'none');

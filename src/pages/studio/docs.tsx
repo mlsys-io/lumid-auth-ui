@@ -67,7 +67,7 @@ const DOCS: DocEntry[] = [
 		// reading a surface.
 		slug: 'experiments',
 		title: 'Workflows and experiments',
-		description: 'What separates a workflow from an experiment, how to define one, read its status, harvest a result, and drive the whole loop from the chatbox — define, run, inspect, discuss, dispatch. Includes a worked three-arm run and the caveats its verdict line does not carry.',
+		description: 'What separates a workflow from an experiment, how to define one, read its status, harvest a result, and drive the whole loop from the chatbox — define, run, inspect, discuss, dispatch. Two worked examples: a finished three-arm model comparison, and one that is deliberately NOT concluding, with the reasons readable off its card.',
 		md: 'experiments.md',
 		group: 'Guides',
 		icon: Activity,
