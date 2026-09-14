@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import apiClient from "@/api/client";
-import { me, MeApiError, type MeWorkflowRow, type MeCycleDetail, type LoopDefinition, type MeDatasetRef } from "@/api/me";
+import { me, MeApiError, patchLoopApplied, type MeWorkflowRow, type MeCycleDetail, type LoopDefinition, type MeDatasetRef } from "@/api/me";
 import { type AppIdentity } from "@/components/workflow/AppCard";
 import WorkflowCanvas, { type CanvasStepRef } from "@/components/workflow/WorkflowCanvas";
 import StepInspectorPanel from "@/components/workflow/StepInspectorPanel";
@@ -294,7 +294,12 @@ export default function WorkflowObservabilityPanel({
 		const target = !(wf.enabled !== false);
 		setBusy("toggle");
 		try {
-			await me.patchLoop(app, loop, { enabled: target });
+			// Wait for the scheduler to APPLY it: patchLoop now returns 202 with an
+			// intent id (identity mounts no tenant volume and cannot write the
+			// overrides file itself). Without the wait the optimistic value is
+			// overwritten by the next 20s poll reading the pre-patch state, which
+			// looks exactly like a save that silently failed.
+			await patchLoopApplied(app, loop, { enabled: target });
 			toast.success(target ? "Resumed" : "Paused");
 			onChanged?.();
 		} catch (e) {
@@ -1207,7 +1212,7 @@ function GoalHeader({ goal, app, loop, onSaved }: { goal?: { primary: string; tr
 		setSaving(true);
 		try {
 			const next = draft.trim();
-			await me.patchLoop(app, loop, { goal: next });
+			await patchLoopApplied(app, loop, { goal: next });
 			setOptimistic(next);
 			toast.success(next ? "Goal updated" : "Goal cleared");
 			setOpen(false);

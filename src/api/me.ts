@@ -473,7 +473,19 @@ export const me = {
     loop: string,
     body: { runtime?: "local" | "cloud"; schedule?: string; enabled?: boolean; goal?: string; model?: string },
   ) =>
-    call<{ app: string; loop: string; overrides: Record<string, unknown> }>(
+    // 202 + intent_id, not 200. Identity mounts no tenant volume, so it cannot
+    // write .user-overrides.yaml itself — it queues a `patch_loop` intent the
+    // scheduler applies. (Before that change this endpoint 404'd for every user
+    // on every call: pause, resume, schedule and goal-save alike.) `overrides`
+    // echoes what was REQUESTED so a caller can still render optimistically;
+    // await patchLoopApplied() when the next read has to reflect it.
+    call<{
+      app: string;
+      loop: string;
+      overrides: Record<string, unknown>;
+      intent_id?: string;
+      status?: string;
+    }>(
       "PATCH",
       `/loops/${encodeURIComponent(app)}/${encodeURIComponent(loop)}`,
       body,
@@ -1388,4 +1400,34 @@ export interface MeSkillCard {
   step_count?: number;
   source_url?: string;
   needs_secrets?: string[];
+}
+
+/**
+ * patchLoopApplied — PATCH a loop and wait for the scheduler to apply it.
+ *
+ * `me.patchLoop` returns 202 with an intent id: identity queues, the scheduler
+ * writes. A caller that renders the new value immediately and then refetches
+ * will read the OLD one until the intent drains, which looks exactly like a
+ * save that silently failed. Await this where the next read has to be true —
+ * pause/resume, schedule, goal — and keep the bare `patchLoop` for fire-and-
+ * forget.
+ *
+ * Throws the scheduler's own error when it refuses (an unknown loop name, an
+ * app that is not installed), so the caller can show what was actually wrong
+ * rather than a generic failure.
+ */
+export async function patchLoopApplied(
+  app: string,
+  loop: string,
+  body: Parameters<typeof me.patchLoop>[2],
+  opts: { timeoutMs?: number } = {},
+): Promise<Record<string, unknown>> {
+  const r = await me.patchLoop(app, loop, body);
+  if (!r.intent_id) return r.overrides ?? {};
+  const done = await waitForIntent(r.intent_id, { timeoutMs: opts.timeoutMs ?? 90_000 });
+  const result = (done.result ?? {}) as { ok?: boolean; error?: string; overrides?: Record<string, unknown> };
+  if (result.ok === false || result.error) {
+    throw new MeApiError(0, 1500, result.error || "the scheduler could not apply the change");
+  }
+  return result.overrides ?? r.overrides ?? {};
 }

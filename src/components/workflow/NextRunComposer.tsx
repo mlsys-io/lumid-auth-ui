@@ -21,7 +21,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { GitBranch, Loader2, X, Sparkles, Play, Trophy, Target, Layers, Clock, Save } from "lucide-react";
 import { toast } from "sonner";
-import { me, MeApiError, type NextAction } from "@/api/me";
+import { me, MeApiError, patchLoopApplied, type NextAction } from "@/api/me";
 import { fetchTrajectory, postTrajectorySignal, type Trajectory, type TrajectoryNode } from "@/api/trajectory";
 import { fetchCasebook, type CasebookCase } from "@/api/casebook";
 import SchedulePicker from "@/components/workflow/SchedulePicker";
@@ -98,7 +98,9 @@ export default function NextRunComposer({ app, loop, fromTs, fromLabel, schedule
 	const saveSchedule = async () => {
 		setSavingSched(true);
 		try {
-			await me.patchLoop(app, loop, { schedule: cron });
+			// Await the scheduler, not just the queue — a schedule that reads back
+			// unchanged is indistinguishable from one that failed to save.
+			await patchLoopApplied(app, loop, { schedule: cron });
 			toast.success(`Schedule set — ${describeSchedule(cron)}.`);
 			setSchedDirty(false);
 			onChanged?.();
