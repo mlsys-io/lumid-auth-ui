@@ -474,14 +474,23 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 						className="text-slate-400 hover:text-slate-700" aria-label="Close">✕</button>
 				</div>
 				<div className="flex flex-wrap items-end gap-3">
-					{/* Only an admin picks a site; a non-admin has exactly one and a
-					    disabled select would just be furniture. */}
-					{isAdmin && (
+					{/* Shown whenever the caller has more than one site to choose from --
+					    NOT gated on isAdmin. It used to be `isAdmin &&`, with the reason
+					    "a non-admin has exactly one". That stopped being true when nginx
+					    v67 moved office out of the admin-gated /sbx/ regex: a plain user
+					    now has home AND office (USER_SANDBOX_SITES), so the gate hid the
+					    only control that reaches office's RTX 5080s and left them stuck
+					    on home with no way to say otherwise.
+
+					    Options come from `sites`, not SANDBOX_SITES: the latter includes
+					    NUS, which is deliberately admin-only (USER_GPU_QUOTA=0), and
+					    offering a site the caller cannot use is worse than hiding it. */}
+					{sites.length > 1 && (
 						<label className="text-xs text-slate-600">
 							Site
 							<select value={target} onChange={(e) => setTarget(e.target.value)}
 								className="mt-1 block rounded-md border border-slate-300 px-2 py-1 text-sm">
-								{SANDBOX_SITES.map((s) => <option key={s} value={s}>{s}</option>)}
+								{sites.map((s) => <option key={s} value={s}>{s}</option>)}
 							</select>
 						</label>
 					)}
