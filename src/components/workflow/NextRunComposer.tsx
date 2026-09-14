@@ -22,6 +22,7 @@ import { createPortal } from "react-dom";
 import { GitBranch, Loader2, X, Sparkles, Play, Trophy, Target, Layers, Clock, Save } from "lucide-react";
 import { toast } from "sonner";
 import { me, MeApiError, patchLoopApplied, type NextAction } from "@/api/me";
+import { reportDispatchFailure } from "@/components/app-surface/directives";
 import { fetchTrajectory, postTrajectorySignal, type Trajectory, type TrajectoryNode } from "@/api/trajectory";
 import { fetchCasebook, type CasebookCase } from "@/api/casebook";
 import SchedulePicker from "@/components/workflow/SchedulePicker";
@@ -227,7 +228,7 @@ export default function NextRunComposer({ app, loop, isExperiment, fromTs, fromL
 					setBusy(false);
 					return;
 				}
-				const { requested } = await me.enqueueRuns(app, loop, {
+				const { requested, intent_id: fanIntent } = await me.enqueueRuns(app, loop, {
 					from_run_ts: parent,
 					branch_label: label,
 					criteria: criteriaExpr || undefined,
@@ -242,6 +243,7 @@ export default function NextRunComposer({ app, loop, isExperiment, fromTs, fromL
 				toast.success(
 					`${requested} ${noun}${requested === 1 ? "" : "s"} queued — they start as the runner picks them up.`,
 				);
+				void reportDispatchFailure(String(fanIntent ?? ""), loop);
 				onLaunched?.();
 				onClose();
 				return;
@@ -256,7 +258,7 @@ export default function NextRunComposer({ app, loop, isExperiment, fromTs, fromL
 					config: hasVariant ? variant : undefined,
 				});
 			}
-			await me.launchRun(app, loop, {
+			const launched = await me.launchRun(app, loop, {
 				from_run_ts: parent,
 				branch_label: label,
 				variant: hasVariant ? variant : undefined,
@@ -266,6 +268,12 @@ export default function NextRunComposer({ app, loop, isExperiment, fromTs, fromL
 				args: hasArgs ? runArgs : undefined,
 			});
 			toast.success(`${isExperiment ? "Experiment" : "Run"} queued — it'll appear in the run tree shortly.`);
+			// …and say so if it does NOT. The 202 means identity accepted it, not
+			// that the scheduler could start it: a dispatch that dies leaves the
+			// "queued" toast as the last word, which is indistinguishable from
+			// one that ran. This polls the intent in the background and reports
+			// the scheduler's own reason.
+			void reportDispatchFailure(String(launched?.job_id ?? ""), loop);
 			onLaunched?.();
 			onClose();
 		} catch (e) {

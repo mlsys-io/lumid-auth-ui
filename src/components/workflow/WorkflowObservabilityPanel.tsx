@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import apiClient from "@/api/client";
-import { me, MeApiError, patchLoopApplied, type MeWorkflowRow, type MeCycleDetail, type LoopDefinition, type MeDatasetRef } from "@/api/me";
+import { me, MeApiError, patchLoopApplied, type MeLatestOutput, type MeWorkflowRow, type MeCycleDetail, type LoopDefinition, type MeDatasetRef } from "@/api/me";
 import { type AppIdentity } from "@/components/workflow/AppCard";
 import WorkflowCanvas, { type CanvasStepRef } from "@/components/workflow/WorkflowCanvas";
 import StepInspectorPanel from "@/components/workflow/StepInspectorPanel";
@@ -323,6 +323,10 @@ export default function WorkflowObservabilityPanel({
 	// it is empty for every app and every user. Without this the Outputs tier
 	// below could never render anything at all.
 	const [dbOutputs, setDbOutputs] = useState<Record<string, unknown> | null>(null);
+	// Separate from dbOutputs: `outputs` is the cycle's ARTIFACT and feeds the
+	// Outputs tier, `events` is what the run SAID. Folding them would render an
+	// offer as an artifact key.
+	const [dbEvents, setDbEvents] = useState<MeLatestOutput["events"]>(null);
 	const [dbOutputTs, setDbOutputTs] = useState<string | null>(null);
 	const [lastError, setLastError] = useState<string | null>(null);
 	// Live running/event state — distinct from one-shot load motion.
@@ -576,7 +580,16 @@ export default function WorkflowObservabilityPanel({
 	}, [app, loop]);
 
 	const reviewQueue = Array.isArray(summary?.review_queue) ? summary!.review_queue! : [];
-	const offers = Array.isArray(summary?.offers) ? summary!.offers! : [];
+	// OFFERS NOW REACH HERE. They were computed once per cycle — "criteria met,
+	// conclude or promote the winner" — written to the cycle dir, and every
+	// renderer read that dir off a volume the API service does not mount. So the
+	// one proactive signal the platform produces was delivered nowhere, and this
+	// array was always empty. The run store carries them now; `dbOffers` is that
+	// path, and `summary.offers` still wins where the disk IS readable.
+	const dbOffers = dbEvents?.offers ?? [];
+	const offers = Array.isArray(summary?.offers) && summary!.offers!.length
+		? summary!.offers!
+		: dbOffers;
 	// Honesty: a run can report ok:true yet have per-step errors. Surface that
 	// instead of painting a clean "Healthy".
 	const stepErrs = Array.isArray(summary?.step_errors) ? summary!.step_errors!.length : 0;
@@ -598,6 +611,7 @@ export default function WorkflowObservabilityPanel({
 			.then((d) => {
 				if (cancelled) return;
 				setDbOutputs((d?.outputs ?? null) as Record<string, unknown> | null);
+				setDbEvents(d?.events ?? null);
 				setDbOutputTs(d?.run_ts ? String(d.run_ts) : null);
 			})
 			.catch(() => { /* absent output is a normal state, not an error */ });

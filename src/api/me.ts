@@ -928,6 +928,25 @@ export const me = {
   // The server enforces the rule that separates the two kinds of thing -- a
   // metric AND a scope (dataset_id or cases[]) are both required, because a
   // loop without them is a workflow, not an experiment.
+  /** conclude / archive / reopen / checkpoint / fork / remove_arm / delete / revert.
+   *
+   * Queued as an intent; the scheduler applies it. `status: concluded|archived`
+   * has been READ by the card since it was written with nothing able to write
+   * it, so an experiment that was finished stayed "collecting" forever — while
+   * the cycle hook emitted an offer naming the verb. */
+  experimentControl: (
+    app: string,
+    experiment: string,
+    body: {
+      op: "conclude" | "archive" | "reopen" | "checkpoint" | "fork" | "remove_arm" | "delete" | "revert";
+      reason?: string; new_id?: string; arm?: string; dataset_version?: string;
+    },
+  ) =>
+    call<{ intent_id: string; app: string; experiment: string; op: string; status: string }>(
+      "POST",
+      `/apps/${encodeURIComponent(app)}/experiments/${encodeURIComponent(experiment)}/control`,
+      body,
+    ),
   upsertExperiment: (
     app: string,
     body: {
@@ -1265,6 +1284,20 @@ export interface MeLatestOutput {
   duration_s?: number;
   // The cycle's sidecar artifacts — same shape as MeCycleDetail.files.
   outputs?: Record<string, unknown> | null;
+  /** What the run SAID, as opposed to what it measured.
+   *
+   * `offers` is the cycle's "criteria met — conclude or promote the winner"
+   * prompt, emitted exactly once on the flip. It was written to the cycle dir
+   * and every renderer read that dir off a volume the API service does not
+   * mount, so the one proactive signal the platform produces was delivered
+   * nowhere. `step_errors` is the text behind a failure, which FailureCard had
+   * no way to show. */
+  events?: {
+    offers?: Array<{ kind?: string; title?: string; detail?: string; experiment_id?: string }>;
+    step_errors?: string[];
+    outcome?: string;
+    reason?: string;
+  } | null;
 }
 export interface MeCycleDetail {
   app: string;

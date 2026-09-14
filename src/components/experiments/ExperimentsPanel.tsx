@@ -14,7 +14,7 @@ import { SpiralOverlay } from "@/components/BrandLoader";
 import {
 	FlaskConical, ChevronDown, ChevronRight, Loader2, TrendingUp, TrendingDown,
 } from "lucide-react";
-import { me, waitForIntent, type MeExperiment, type MeExperimentArm, type MeExperimentDetail, type MeExperimentCase } from "@/api/me";
+import { me, waitForIntent, MeApiError, type MeExperiment, type MeExperimentArm, type MeExperimentDetail, type MeExperimentCase } from "@/api/me";
 import { askOrStash } from "@/components/chat/askBus";
 import { fetchCasebook } from "@/api/casebook";
 import { cn } from "@/lib/utils";
@@ -76,6 +76,82 @@ function DeltaVsBest({ e, vid }: { e: MeExperiment; vid: string }) {
 			{d >= 0 ? "+" : ""}{fmtV(d)}
 			{!p.separated && <span className="ml-1 text-[10px]">ns</span>}
 		</td>
+	);
+}
+
+/** The lifecycle controls, as one menu.
+ *
+ * conclude / checkpoint / fork / revert existed only in chat: the card could
+ * READ `status: concluded|archived` and nothing could write it, so an
+ * experiment that was finished stayed "collecting" forever — while the cycle
+ * hook emitted an offer saying "Consider promoting the winning variant or
+ * concluding the experiment", naming an action no button could reach.
+ *
+ * One overflow, not a row of buttons: these are rare, deliberate acts and a
+ * card is not a toolbar.
+ */
+function ControlMenu({ app, e, onDone }: { app: string; e: MeExperiment; onDone: () => void }) {
+	const [open, setOpen] = useState(false);
+	const [busy, setBusy] = useState("");
+	const [err, setErr] = useState("");
+
+	const run = useCallback(async (op: Parameters<typeof me.experimentControl>[2]["op"], extra?: Record<string, string>) => {
+		setErr(""); setBusy(op);
+		try {
+			// A checkpoint FENCES every row measured so far out of the
+			// comparison — rows stay on disk, they stop counting. Asking for the
+			// reason here is not politeness: the two apps doing this by hand had
+			// to write paragraphs of YAML comments to make it readable later.
+			if (op === "checkpoint") {
+				const reason = window.prompt(
+					"Why? A checkpoint stops everything measured so far from counting toward the " +
+					"comparison (the rows stay). The reason is recorded beside them.");
+				if (!reason?.trim()) { setBusy(""); return; }
+				extra = { ...extra, reason: reason.trim() };
+			}
+			if (op === "fork") {
+				const id = window.prompt("New experiment id — the original is left untouched.");
+				if (!id?.trim()) { setBusy(""); return; }
+				extra = { ...extra, new_id: id.trim() };
+			}
+			const r = await me.experimentControl(app, e.id, { op, ...extra });
+			if (r.intent_id) await waitForIntent(r.intent_id, { timeoutMs: 60_000 });
+			setOpen(false); onDone();
+		} catch (ex) {
+			setErr(ex instanceof MeApiError ? ex.message : String(ex));
+		} finally { setBusy(""); }
+	}, [app, e.id, onDone]);
+
+	const terminal = e.status === "concluded" || e.status === "archived";
+	const items: Array<[string, string, () => void]> = terminal
+		? [["Reopen", "back to collecting", () => run("reopen")]]
+		: [
+			["Conclude", "done — record the verdict", () => run("conclude")],
+			["Archive", "done and out of the way", () => run("archive")],
+			["Checkpoint…", "fence the rows so far; they stay on disk", () => run("checkpoint")],
+			["Fork…", "same metric and scope, new arms, original untouched", () => run("fork")],
+		];
+	items.push(["Revert", "restore the definition before the last change", () => run("revert")]);
+
+	return (
+		<div className="relative">
+			<button type="button" aria-label="experiment controls"
+				onClick={(ev) => { ev.stopPropagation(); setOpen((o) => !o); }}
+				className="px-1.5 py-0.5 rounded text-slate-500 hover:bg-slate-100 hover:text-slate-700 leading-none">⋯</button>
+			{open && (
+				<div className="absolute right-0 z-20 mt-1 w-64 rounded-lg border border-slate-200 bg-white shadow-lg py-1"
+					onClick={(ev) => ev.stopPropagation()}>
+					{items.map(([label, hint, fn]) => (
+						<button key={label} type="button" disabled={!!busy} onClick={fn}
+							className="w-full text-left px-3 py-1.5 hover:bg-slate-50 disabled:opacity-50">
+							<div className="text-[12px] text-slate-800">{busy === label.toLowerCase().replace("…", "") ? "working…" : label}</div>
+							<div className="text-[11px] text-slate-500">{hint}</div>
+						</button>
+					))}
+					{err && <div className="px-3 py-1.5 text-[11px] text-rose-600">{err}</div>}
+				</div>
+			)}
+		</div>
 	);
 }
 
@@ -387,7 +463,7 @@ function ArmsBlock({ app, e }: { app: string; e: MeExperiment }) {
 	);
 }
 
-export function ExperimentCard({ app, e, showApp = false }: { app: string; e: MeExperiment; showApp?: boolean }) {
+export function ExperimentCard({ app, e, showApp = false, onChanged }: { app: string; e: MeExperiment; showApp?: boolean; onChanged?: () => void }) {
 	const [open, setOpen] = useState(false);
 	const [detail, setDetail] = useState<MeExperimentDetail | null>(null);
 	const [loading, setLoading] = useState(false);
@@ -440,6 +516,7 @@ export function ExperimentCard({ app, e, showApp = false }: { app: string; e: Me
 							? <>{e.n_results} of {e.n_rows_total} rows</>
 							: <>{e.n_results} result{e.n_results === 1 ? "" : "s"}</>}
 					</span>
+					<ControlMenu app={app} e={e} onDone={onChanged ?? (() => {})} />
 				</div>
 				<div className="text-xs text-slate-600 mt-1">{e.hypothesis}</div>
 				<div className="text-[11px] text-slate-600 mt-0.5">
@@ -601,6 +678,7 @@ export default function ExperimentsPanel({ app, loop, quiet = false }: {
 	app: string; loop?: string; quiet?: boolean;
 }) {
 	const [exps, setExps] = useState<MeExperiment[] | null>(null);
+	const [nonce, setNonce] = useState(0);
 	useEffect(() => {
 		let live = true;
 		const load = () => me.experiments(app)
@@ -609,7 +687,7 @@ export default function ExperimentsPanel({ app, loop, quiet = false }: {
 		load();
 		const id = window.setInterval(load, 30_000);
 		return () => { live = false; window.clearInterval(id); };
-	}, [app]);
+	}, [app, nonce]);
 
 	if (exps === null) {
 		if (quiet) return null;
@@ -628,7 +706,9 @@ export default function ExperimentsPanel({ app, loop, quiet = false }: {
 	}
 	return (
 		<div className="space-y-2.5">
-			{shown.map((e) => <ExperimentCard key={e.id} app={app} e={e} />)}
+			{shown.map((e) => (
+				<ExperimentCard key={e.id} app={app} e={e} onChanged={() => setNonce((n) => n + 1)} />
+			))}
 		</div>
 	);
 }

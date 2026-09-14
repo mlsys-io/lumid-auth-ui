@@ -595,7 +595,7 @@ async function runQaAction(a: ActionDef, row?: Record<string, unknown>): Promise
 const DISPATCH_POLL_MS = 2000;
 const DISPATCH_POLL_LIMIT = 12; // ~24s: covers the ~8s report with slack
 
-async function reportDispatchFailure(jobID: string, label: string): Promise<void> {
+export async function reportDispatchFailure(jobID: string, label: string): Promise<void> {
   if (!jobID) return;
   for (let i = 0; i < DISPATCH_POLL_LIMIT; i++) {
     await new Promise((r) => setTimeout(r, DISPATCH_POLL_MS));

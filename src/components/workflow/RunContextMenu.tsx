@@ -22,6 +22,7 @@ import {
 	Info, ArrowUpCircle, XCircle, Loader2, Clock,
 } from "lucide-react";
 import { toast } from "sonner";
+import { reportDispatchFailure } from "@/components/app-surface/directives";
 import { me, MeApiError } from "@/api/me";
 
 // What the menu was opened on. A run node has a ts; a case row has caseId/label
@@ -92,6 +93,20 @@ function Section({ label }: { label: string }) {
 	return (
 		<div className="mt-1 mb-0.5 px-3 pt-1 border-t border-slate-100 text-[9px] uppercase tracking-wide text-slate-300 font-semibold">{label}</div>
 	);
+}
+
+/** launchRun, then say so if the scheduler could not start it.
+ *
+ * The 202 means identity accepted the dispatch, not that it ran. A dispatch
+ * that dies leaves the success toast as the last word — indistinguishable from
+ * one that succeeded, which is the shape 28 tenants saw for weeks on the
+ * form-action path before reportDispatchFailure existed. These two callers
+ * never used it.
+ */
+async function launchAndReport(app: string, loop: string, body: Parameters<typeof me.launchRun>[2]) {
+	const r = await me.launchRun(app, loop, body);
+	void reportDispatchFailure(String(r?.job_id ?? ""), loop);
+	return r;
 }
 
 export default function RunContextMenu({
@@ -193,13 +208,13 @@ export default function RunContextMenu({
 							onClick={wired(() => actions.branchWithIntent!(target.ts!, target.label))} />
 					) : (
 						<Row icon={GitBranch} label="Branch out" tone="gold" busy={busy === "branch"} pending={pending["branch"]}
-							onClick={() => runtimeOp("branch", () => me.launchRun(actions.app, actions.loop, { from_run_ts: target.ts, branch_label: `branch of ${target.label}` }), "Branch queued — exploring from here.")} />
+							onClick={() => runtimeOp("branch", () => launchAndReport(actions.app, actions.loop, { from_run_ts: target.ts, branch_label: `branch of ${target.label}` }), "Branch queued — exploring from here.")} />
 					)}
 					<Row icon={GitCompare} tone="sky"
 						label={selectedForCompare.includes(target.ts!) ? "Remove from compare" : selectedForCompare.length >= 2 ? "Compare with… (replaces oldest)" : "Compare with…"}
 						onClick={() => { onToggleCompare(target.ts!); onClose(); }} />
 					<Row icon={RefreshCw} label="Re-run from here" busy={busy === "rerun"} pending={pending["rerun"]}
-						onClick={() => runtimeOp("rerun", () => me.launchRun(actions.app, actions.loop, { from_run_ts: target.ts }), "Re-running from this point…")} />
+						onClick={() => runtimeOp("rerun", () => launchAndReport(actions.app, actions.loop, { from_run_ts: target.ts }), "Re-running from this point…")} />
 					<Row icon={ArrowUpCircle} label="Promote to champion" tone="gold" sub="make this run the default config carried forward" busy={busy === "promote"} pending={pending["promote"]}
 						onClick={() => runtimeOp("promote", () => me.promoteRun(actions.app, target.ts!), "Promoted — this run is now the champion carried forward.")} />
 					<Row icon={XCircle} label="Discard this run" tone="danger" sub="drop its learning — not carried forward" busy={busy === "discard"} pending={pending["discard"]}
