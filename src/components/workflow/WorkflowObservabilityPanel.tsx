@@ -561,7 +561,15 @@ export default function WorkflowObservabilityPanel({
 				if (!live) return;
 				const list = experiments || [];
 				const attached = list.filter((e) => e.loops?.includes(loop));
-				setLoopExp(attached[0] ?? (list.length === 1 ? list[0] : null));
+				// ATTACHED ONLY. The `list.length === 1` fallback attached a
+				// single-experiment app's experiment to EVERY loop, so an
+				// unrelated plain workflow rendered another loop's "Metric &
+				// arms" — and, because PromoteToExperiment only renders when
+				// loopExp is null, lost its promote form. A second experiment
+				// could therefore never be created from the UI at all, which is
+				// exactly how analyst_local_gpu relates to judge_panel_parity:
+				// both feed case_eval, and only chat could have made the second.
+				setLoopExp(attached[0] ?? null);
 			})
 			.catch(() => { /* no metric badge */ });
 		return () => { live = false; };
@@ -909,7 +917,7 @@ export default function WorkflowObservabilityPanel({
 
 			{/* WS-5 — branch-with-intention dialog. */}
 			{branchFor && (
-				<NextRunComposer app={app} loop={loop} fromTs={branchFor.ts} fromLabel={branchFor.label} schedule={schedSeed}
+				<NextRunComposer app={app} loop={loop} isExperiment={!!loopExp} fromTs={branchFor.ts} fromLabel={branchFor.label} schedule={schedSeed}
 					onClose={() => setBranchFor(null)} onLaunched={() => { setOptimisticRun(true); window.setTimeout(() => setOptimisticRun(false), 120_000); }} onChanged={onChanged} />
 			)}
 

@@ -1117,6 +1117,51 @@ export interface MeExperiment {
   delta?: number | null; delta_pp?: number | null;
   criteria_met: boolean; criteria_reason?: string; verdict?: string;
   higher_is_better?: boolean; updated_at?: string;
+  // When the served state was last COMPUTED. evaluate() runs once per loop RUN,
+  // so a quiet experiment serves a number that is arbitrarily old with nothing
+  // to say so — measured 2026-09-09, a panel and a chat both quoted a four-day-
+  // old figure as current.
+  state_updated_at?: string;
+  // ── Rows the number did NOT count ──
+  // n_results counts rows carrying the DECLARED metric; n_rows_total counts the
+  // ledger. Only the n=0 case was ever explained, so a partial drop was
+  // invisible: 364 of 1,558 rows estate-wide carry no declared metric.
+  n_rows_total?: number;
+  rows_dropped?: number | null;
+  rows_out_of_scope?: number | null;
+  // ── Declaration vs ledger ──
+  // A group the experiment never declared keeps its mean and may not win;
+  // a declared arm with no rows is named so it can be offered.
+  undeclared_variants?: string[] | null;
+  arms_never_run?: string[] | null;
+  // ── The comparison ──
+  // Every arm pair with its interval. `paired` says the rows shared subjects
+  // (the estimator is chosen per pair by whichever has the smaller standard
+  // error); `n_for_80pct_power` is how many pairs it would take to resolve a
+  // difference this size, which is usually the number that argues against
+  // running more.
+  pairwise?: MeExperimentPair[] | null;
+  unit_dims?: string[] | null;
+  // Arms the winner is NOT separable from: their interval against it crosses
+  // zero. Rendered beside the verdict, never instead of the means.
+  not_separable_from?: string[] | null;
+  // What the run QUEUE knows and the ledger cannot: a failed run writes no row,
+  // so without this a dispatched arm that kept dying is indistinguishable from
+  // one that was never dispatched.
+  dispatch_failures?: {
+    total: number;
+    by_arm: Record<string, { failed: number; attempts: number; last_error?: string }>;
+  } | null;
+}
+export interface MeExperimentPair {
+  a: string; b: string;
+  delta: number; se: number; sd?: number | null;
+  t?: number | null; ci95?: [number, number] | null;
+  paired: boolean; n_pairs: number;
+  /** Common units that existed when the unpaired estimator won anyway. */
+  pairs_available?: number;
+  separated: boolean;
+  n_for_80pct_power?: number;
 }
 export interface MeExperimentRow {
   ts: string; cycle_ts?: string; variant_id: string;

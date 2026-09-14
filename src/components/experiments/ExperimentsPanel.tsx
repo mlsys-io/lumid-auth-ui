@@ -31,6 +31,54 @@ function fmtV(v: number | null | undefined): string {
 	return Math.abs(v) >= 100 ? v.toFixed(0) : Math.abs(v) >= 1 ? v.toFixed(2) : v.toFixed(3);
 }
 
+/** "4d" / "3h" / "just now" — how old the SERVED state is.
+ *
+ * evaluate() runs once per loop RUN, so a quiet experiment serves a number that
+ * is arbitrarily old and nothing said so. Measured 2026-09-09: a panel and a
+ * chat both quoted a four-day-old figure as current. */
+function ageOf(iso: string): string {
+	const t = Date.parse(iso);
+	if (!Number.isFinite(t)) return "";
+	const s = (Date.now() - t) / 1000;
+	if (s < 120) return "just now";
+	if (s < 3600) return `${Math.round(s / 60)}m ago`;
+	if (s < 86400) return `${Math.round(s / 3600)}h ago`;
+	return `${Math.round(s / 86400)}d ago`;
+}
+
+/** One arm's difference from the best arm, with its interval.
+ *
+ * Greyed when the interval crosses zero — that arm is NOT separable from the
+ * winner, and the doc had to say so in prose because the card could not. The
+ * tooltip carries what the number is made of: paired or not, how many units,
+ * and how many pairs it would take to resolve a difference this size (usually
+ * the number that argues against running more).
+ */
+function DeltaVsBest({ e, vid }: { e: MeExperiment; vid: string }) {
+	const best = e.best_variant;
+	if (!best || !e.pairwise?.length) return <td className="px-2 py-1.5 text-right text-slate-400">—</td>;
+	if (vid === best) return <td className="px-2 py-1.5 text-right text-slate-400">—</td>;
+	const direct = e.pairwise.find((p) => p.a === vid && p.b === best);
+	const flip = e.pairwise.find((p) => p.a === best && p.b === vid);
+	const p = direct ?? flip;
+	if (!p) return <td className="px-2 py-1.5 text-right text-slate-400">—</td>;
+	const sign = direct ? 1 : -1;
+	const d = p.delta * sign;
+	const ci = p.ci95 ? ([p.ci95[0] * sign, p.ci95[1] * sign].sort((x, y) => x - y) as [number, number]) : null;
+	const tip = [
+		ci ? `95% CI [${ci[0].toFixed(3)}, ${ci[1].toFixed(3)}]` : null,
+		p.paired ? `paired over ${p.n_pairs} shared units` : "unpaired" + (p.pairs_available ? ` (${p.pairs_available} shared units, but the unpaired estimate is tighter)` : ""),
+		p.separated ? null : "not separable from the best arm",
+		p.n_for_80pct_power && !p.separated ? `~${p.n_for_80pct_power} pairs would be needed to resolve a difference this size` : null,
+	].filter(Boolean).join(" · ");
+	return (
+		<td className={cn("px-2 py-1.5 text-right tabular-nums", p.separated ? "text-slate-700" : "text-slate-400")} title={tip}>
+			{d >= 0 ? "+" : ""}{fmtV(d)}
+			{!p.separated && <span className="ml-1 text-[10px]">ns</span>}
+		</td>
+	);
+}
+
 function VerdictChip({ e }: { e: MeExperiment }) {
 	if (e.status === "concluded" || e.status === "archived")
 		return <span className="px-2 py-0.5 rounded-full text-[11px] border bg-slate-50 text-slate-700 border-slate-200">{e.status}</span>;
@@ -378,7 +426,20 @@ export function ExperimentCard({ app, e, showApp = false }: { app: string; e: Me
 							</span>
 						);
 					})()}
-					<span className="ml-auto text-[11px] text-slate-600 tabular-nums">{e.n_results} result{e.n_results === 1 ? "" : "s"}</span>
+					{/* "266 of 285 rows" when some carried no declared metric. The
+					    drop was invisible: n_zero_reason only ever fired when EVERY
+					    row was dropped, and across the estate 364 of 1,558 rows do
+					    not count. Same chip, one more fact — not a new element. */}
+					<span
+						className="ml-auto text-[11px] text-slate-600 tabular-nums"
+						title={(e.rows_dropped && e.metric_keys_seen?.length)
+							? `${e.rows_dropped} row(s) carry no "${metricName}". Keys emitted: ${e.metric_keys_seen.join(", ")}`
+							: undefined}
+					>
+						{e.rows_dropped
+							? <>{e.n_results} of {e.n_rows_total} rows</>
+							: <>{e.n_results} result{e.n_results === 1 ? "" : "s"}</>}
+					</span>
 				</div>
 				<div className="text-xs text-slate-600 mt-1">{e.hypothesis}</div>
 				<div className="text-[11px] text-slate-600 mt-0.5">
@@ -389,10 +450,45 @@ export function ExperimentCard({ app, e, showApp = false }: { app: string; e: Me
 				{e.criteria_met && e.verdict && (
 					<div className="mt-1.5 text-[11px] text-gold-700 bg-gold-50/70 border border-gold-200 rounded-lg px-2 py-1">✓ {e.verdict}</div>
 				)}
+				{/* WHY IT IS NOT CONCLUDING — the sentence the backend already
+				    computes and the card threw away. "below min_samples (3/10)",
+				    "criteria expression unevaluable", "not separable — X leads Y
+				    by … but the interval crosses zero". Without it the card shows
+				    a state and no reason, and the reason is the only actionable
+				    half. One line, no new section; success_criteria rides in the
+				    tooltip rather than taking a row of its own. */}
+				{!e.criteria_met && e.criteria_reason && e.n_results > 0 && (
+					<div className="mt-1 text-[11px] text-slate-600 flex items-baseline gap-1.5">
+						<span className="text-slate-400 flex-shrink-0">why</span>
+						<span className="truncate" title={e.success_criteria ? `success_criteria: ${e.success_criteria}` : undefined}>
+							{e.criteria_reason}
+						</span>
+						{e.state_updated_at && (
+							<span className="ml-auto flex-shrink-0 text-slate-400 tabular-nums" title={`state computed ${e.state_updated_at}`}>
+								{ageOf(e.state_updated_at)}
+							</span>
+						)}
+					</div>
+				)}
+				{(e.not_separable_from?.length ?? 0) > 0 && e.best_variant && (
+					<div className="mt-1 text-[11px] text-amber-700">
+						leading, but not separable from {e.not_separable_from!.join(", ")}
+					</div>
+				)}
 			</button>
 
 			{open && (
 				<div className="border-t border-slate-100 px-4 py-3 space-y-3 bg-slate-50/40">
+					{(e.undeclared_variants?.length ?? 0) > 0 && (
+						<div className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-[11px] text-amber-900">
+							<span className="font-semibold">Rows from arms this experiment does not declare:</span>{" "}
+							{e.undeclared_variants!.map((v) => <code key={v} className="px-1 rounded bg-white/70 border border-amber-200 mx-0.5">{v}</code>)}
+							<div className="mt-0.5">
+								Their means are facts and stay below. They cannot win — "best" is a
+								claim about the arms the experiment declared.
+							</div>
+						</div>
+					)}
 					{/* Not-comparable is a fact about the INSTRUMENT and outranks
 					    any per-arm number below it, so it goes first. */}
 					{e.comparable === false && (
@@ -444,6 +540,13 @@ export function ExperimentCard({ app, e, showApp = false }: { app: string; e: Me
 													<th className="px-2 py-1.5 font-medium text-right">mean</th>
 													<th className="px-2 py-1.5 font-medium text-right">n</th>
 													<th className="px-2 py-1.5 font-medium text-right">stdev</th>
+													{/* THE PAIRWISE VIEW, as one column. best_variant is an
+													    argmax of means and said nothing about whether the
+													    winner is separable from the arm it beat — two arms
+													    0.001 apart with a stdev of 0.4 produced a confident
+													    verdict. No second table: the comparison belongs on
+													    the row it is about. */}
+													<th className="px-2 py-1.5 font-medium text-right" title="difference from the best arm, with a 95% interval">Δ vs best</th>
 													<th className="px-3 py-1.5 font-medium text-right">last</th>
 												</tr>
 											</thead>
@@ -457,6 +560,7 @@ export function ExperimentCard({ app, e, showApp = false }: { app: string; e: Me
 														<td className="px-2 py-1.5 text-right tabular-nums font-medium text-slate-800">{fmtV(agg.mean)}</td>
 														<td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{agg.n}</td>
 														<td className="px-2 py-1.5 text-right tabular-nums text-slate-600">{agg.stdev != null ? fmtV(agg.stdev) : "—"}</td>
+														<DeltaVsBest e={e} vid={vid} />
 														<td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{fmtV(agg.last)}</td>
 													</tr>
 												))}

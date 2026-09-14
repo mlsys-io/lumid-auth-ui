@@ -735,7 +735,7 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 				<div className="w-1/2 h-full relative">
 					{/* header rollup — trend + learning, at a glance */}
 					<div className="absolute top-0 left-0 right-0 z-10 flex items-center gap-2 px-3 py-2 bg-gradient-to-b from-white via-white/90 to-transparent pointer-events-none">
-						<span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wide flex-shrink-0" title="branching tree of experiments"><GitBranch className="w-3.5 h-3.5 text-gold-500" /> Run tree</span>
+						<span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wide flex-shrink-0" title="branching tree of runs"><GitBranch className="w-3.5 h-3.5 text-gold-500" /> Run tree</span>
 						<span className="text-[11px] text-slate-300 normal-case tracking-normal truncate hidden xl:inline">click a run to link the panels · ⋯ for log, branch, compare</span>
 						{headerRight && <div className="ml-auto flex-shrink-0 pointer-events-auto">{headerRight}</div>}
 					</div>

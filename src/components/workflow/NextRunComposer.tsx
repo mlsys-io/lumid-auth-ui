@@ -73,9 +73,17 @@ const ACTION_VERB: Record<string, string> = {
 	kickstart: "First run",
 };
 
-export default function NextRunComposer({ app, loop, fromTs, fromLabel, schedule, onClose, onLaunched, onChanged }: {
+export default function NextRunComposer({ app, loop, isExperiment, fromTs, fromLabel, schedule, onClose, onLaunched, onChanged }: {
 	app: string;
 	loop: string;
+	/** Whether this loop actually feeds an experiment.
+	 *
+	 * This dialog is the ONLY way to start a plain workflow, and it called every
+	 * run an "experiment" — button, toasts and all — to loops that have no
+	 * metric by design. PromoteToExperiment's own copy gets it right ("This
+	 * workflow has no metric, so it is not an experiment"); everything around it
+	 * contradicted that. */
+	isExperiment?: boolean;
 	fromTs?: string;       // the run to start from (lineage parent); default = champion
 	fromLabel?: string;
 	schedule?: string;     // the loop's current recurring cadence (cron / "@trigger")
@@ -232,7 +240,7 @@ export default function NextRunComposer({ app, loop, fromTs, fromLabel, schedule
 				// scheduler runs it. Claiming a completed count here is what the
 				// old contract did while queueing nothing at all.
 				toast.success(
-					`${requested} experiment${requested === 1 ? "" : "s"} queued — they start as the runner picks them up.`,
+					`${requested} ${noun}${requested === 1 ? "" : "s"} queued — they start as the runner picks them up.`,
 				);
 				onLaunched?.();
 				onClose();
@@ -257,7 +265,7 @@ export default function NextRunComposer({ app, loop, fromTs, fromLabel, schedule
 				cases: scopedCases,
 				args: hasArgs ? runArgs : undefined,
 			});
-			toast.success("Experiment queued — it'll appear in the run tree shortly.");
+			toast.success(`${isExperiment ? "Experiment" : "Run"} queued — it'll appear in the run tree shortly.`);
 			onLaunched?.();
 			onClose();
 		} catch (e) {
@@ -266,7 +274,10 @@ export default function NextRunComposer({ app, loop, fromTs, fromLabel, schedule
 	};
 
 	const parentNode = nodes.find((n) => n.run_ts === parent);
-	const launchLabel = tryMode === "fanout" ? "Queue experiments" : "Run experiment";
+	const noun = isExperiment ? "experiment" : "run";
+	const launchLabel = tryMode === "fanout"
+		? (isExperiment ? "Queue experiments" : "Queue runs")
+		: (isExperiment ? "Run experiment" : "Run now");
 	const LaunchIcon = busy ? Loader2 : tryMode === "fanout" ? Layers : Play;
 
 	return createPortal(
