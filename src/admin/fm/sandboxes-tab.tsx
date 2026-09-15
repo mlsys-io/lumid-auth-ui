@@ -55,7 +55,7 @@ import {
 } from "../../api/sandboxes";
 import { fanoutForSites, listTasksForSite, type FmFanout, type FmTask } from "../../api/fm";
 import { deleteSshKey, listSshKeys, uploadSshKey, type SshKey } from "../../api/ssh-keys";
-import { SiteBadge, SiteStrip, TabShell, useFanout } from "./shared";
+import { SiteBadge, SiteStrip, TabShell, shortGpu, useFanout } from "./shared";
 import { PUBLIC_SITE } from "./fleet-tab";
 
 /** Sites whose shells come from FlowMesh rather than sandbox-control. Admin-only:
@@ -66,18 +66,6 @@ const EMPTY: FmFanout<FmTask> = { items: [], sites: [] };
 
 /** Sentinel for "I'll type my own" -- a real ref can never collide with it. */
 const CUSTOM_IMAGE = "__custom__";
-
-/** "NVIDIA RTX PRO 4000 Blackwell SFF Edition" -> "RTX PRO 4000 Blackwell".
- *  Same rule fleet-tab applies: the vendor prefix and the marketing suffixes
- *  never distinguish two cards in this fleet, and this sits inline in a form row. */
-function shortGpu(name: string): string {
-	return name
-		.replace(/^NVIDIA\s+/i, "")
-		.replace(/\s+(SFF\s+)?Edition$/i, "")
-		.replace(/\s+Generation$/i, "")
-		.replace(/^GeForce\s+/i, "")
-		.trim();
-}
 
 /** Live first — a running shell is the only row anyone is looking for. */
 function isLive(r: ComputeShell): boolean {
@@ -131,6 +119,10 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 	const [createOpen, setCreateOpen] = useState(false);
 	const [name, setName] = useState("dev");
 	const [gpu, setGpu] = useState(0);
+	// WHICH card, "" = any. Separate from the count because they are different questions and
+	// only one of them had an answer before: a mixed site could say "give me 1 GPU" and got
+	// whichever node the scheduler liked, which at office means a 5080 five times in seven.
+	const [gpuProduct, setGpuProduct] = useState("");
 	const [ttl, setTtl] = useState(8);
 	// "" means "let the site choose". Kept distinct from a concrete ref so the default
 	// stays the SERVER's to change -- baking today's default in here is how a UI starts
@@ -339,7 +331,19 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 	// 1, against a site total of 4. Offering "2" produced a pod that sat unschedulable forever
 	// while the strip cheerfully read "4/4 GPUs free". Until a site answers with a profile we
 	// fall back to 1, which is the only count every GPU site is known to satisfy.
-	const maxGpu = gpuInfo ? gpuInfo.max_per_sandbox : 1;
+	// Served per-site and per-CALLER: a non-admin's list is filtered server-side, so what is
+	// here is already what this person may rent. Empty on a site not yet running a build that
+	// serves it, which falls back to the site-wide ceiling exactly as before.
+	const gpuProducts = gpuInfo?.products ?? [];
+	const chosenProduct = gpuProducts.find((p) => p.product === gpuProduct);
+
+	// THE CEILING FOLLOWS THE CARD, NOT THE SITE.
+	// The site-wide number is max() across every product — at office that is 2, true only of the
+	// RTX 6000 Ada, which sits two to a box. Leaving it site-wide while a 5080 is selected offers
+	// a 2-GPU pod that can never be scheduled: the same bug the site-wide ceiling itself fixed at
+	// the fleet level, one layer down. "Any" keeps the site-wide value, which is correct — with
+	// no card named, the best any node can do is still the best any node can do.
+	const maxGpu = chosenProduct ? chosenProduct.max_per_sandbox : (gpuInfo ? gpuInfo.max_per_sandbox : 1);
 	const gpuOptions = Array.from({ length: maxGpu + 1 }, (_, i) => i);
 
 	// Clamp a stale selection when the user switches to a site with a lower ceiling, or the
@@ -347,6 +351,14 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 	useEffect(() => {
 		if (gpu > maxGpu) setGpu(maxGpu);
 	}, [maxGpu, gpu]);
+
+	// Cards are per-site and the names do not overlap, so a selection carried across a site
+	// switch names nothing and would be sent as a product the target site would 400. Drop it
+	// whenever it stops matching something on offer — that covers the site switch and a card
+	// that goes away mid-session (a node drained, a driver skew taking it out of the pool).
+	useEffect(() => {
+		if (gpuProduct && !gpuProducts.some((p) => p.product === gpuProduct)) setGpuProduct("");
+	}, [gpuProduct, gpuProducts]);
 
 	// The catalog is served per-site (see imagesForSite). Offer only entries matching the
 	// CPU/GPU choice: a CUDA image on a CPU sandbox is several GB of pull for libraries that
@@ -373,10 +385,13 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 	// Rendered beside the GPUs field and NOWHERE ELSE. It was also in the subtitle,
 	// so the same 41-char model name appeared twice on one screen -- added here
 	// earlier today, and the reason this tab read as cluttered.
-	const gpuLabel = gpuInfo?.model
-		? `${shortGpu(gpuInfo.model)}${gpuInfo.memory_gb ? ` · ${gpuInfo.memory_gb} GB` : ""}`
-		: gpuInfo?.models?.length
-			? `${gpuInfo.models.length} GPU types`
+	// With a card selected the label describes THAT card; with a uniform pool it describes the
+	// only one there is. The old `${models.length} GPU types` branch is gone: it named a number
+	// nobody could act on, and the selector below now answers the question it was dodging.
+	const gpuLabel = chosenProduct
+		? `${shortGpu(chosenProduct.product)}${chosenProduct.memory_gb ? ` · ${chosenProduct.memory_gb} GB` : ""}`
+		: gpuInfo?.model
+			? `${shortGpu(gpuInfo.model)}${gpuInfo.memory_gb ? ` · ${gpuInfo.memory_gb} GB` : ""}`
 			: "";
 
 	async function onCreate() {
@@ -387,6 +402,9 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 			// "use this site's default", and an empty string is not the same thing.
 			await createSandbox(target, {
 				name, gpu, ttl_hours: ttl, image: chosen || undefined,
+				// Omitted when "any", same rule as `image`: the server reads absent as "no
+				// preference", and "" would be a product name matching no node.
+				gpu_product: gpu > 0 && gpuProduct ? gpuProduct : undefined,
 				data_sources: sources.length ? sources : undefined,
 				// Blank boxes are not zeros. Filtered here so an untouched second
 				// field never becomes a request to publish port 0.
@@ -508,6 +526,37 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 							))}
 						</select>
 					</label>
+					{/* WHICH CARD. Hidden unless there is a real choice to make: a CPU sandbox has
+					    no card, and a site with one product has nothing to pick — rendering a
+					    one-option select there is a control that can only be set to what it
+					    already says. Home is exactly that case and must stay unchanged.
+
+					    "Any" is the default and is NOT a worse answer: with no card named the
+					    scheduler uses the whole pool, which is what someone who does not care
+					    should get. Naming one narrows within what the caller may already have —
+					    the server resolves it against that same tier, so this can never widen
+					    access. */}
+					{gpu > 0 && gpuProducts.length > 1 && (
+						<label className="text-xs text-slate-600">
+							GPU model
+							<select value={gpuProduct} onChange={(e) => setGpuProduct(e.target.value)}
+								className="mt-1 block max-w-[17rem] rounded-md border border-slate-300 px-2 py-1 text-sm">
+								<option value="">any — whichever is free</option>
+								{gpuProducts.map((p) => (
+									<option key={p.product} value={p.product}
+										title={`${p.total} on ${p.nodes} machine(s); up to ${p.max_per_sandbox} per sandbox`}>
+										{shortGpu(p.product)}
+										{p.memory_gb ? ` · ${p.memory_gb} GB` : ""}
+										{` · ${p.max_per_sandbox} max`}
+										{/* Only ever true for an admin — a user's list is filtered
+										    server-side, not marked. It tells an admin which cards
+										    their users cannot see. */}
+										{p.reserved ? " · admin" : ""}
+									</option>
+								))}
+							</select>
+						</label>
+					)}
 					<label className="text-xs text-slate-600">
 						Image
 						<select value={image} onChange={(e) => setImage(e.target.value)}

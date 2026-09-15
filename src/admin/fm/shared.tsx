@@ -136,6 +136,27 @@ export function Age({ seconds }: { seconds: number | null }) {
 	return <span className={tone}>{label} ago</span>;
 }
 
+/**
+ * "NVIDIA RTX PRO 4000 Blackwell SFF Edition" -> "RTX PRO 4000 Blackwell".
+ *
+ * The vendor prefix is constant across the fleet and the marketing suffixes ("SFF Edition",
+ * "Generation") never distinguish two cards we own. Lives here because fleet-tab and
+ * sandboxes-tab each had a byte-identical private copy, and they must agree: the fleet table and
+ * the sandbox picker name the SAME cards, so a rule that drifts between them would show one
+ * machine under two names.
+ *
+ * Takes a plain string, not a worker or a profile — the two callers hold different shapes
+ * (`FmWorker.hardware.gpu.devices[].name` vs `GpuProfile.model`) and only the string is common.
+ */
+export function shortGpu(name: string): string {
+	return name
+		.replace(/^NVIDIA\s+/i, "")
+		.replace(/\s+(SFF\s+)?Edition$/i, "")
+		.replace(/\s+Generation$/i, "")
+		.replace(/^GeForce\s+/i, "")
+		.trim();
+}
+
 export function SiteBadge({ site }: { site?: string }) {
 	if (!site) return <span className="text-slate-400">—</span>;
 	return (

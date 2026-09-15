@@ -29,7 +29,7 @@ import {
 	type FmNode,
 	type FmWorker,
 } from "../../api/fm";
-import { Age, SiteBadge, SiteStrip, StatusPill, TabShell, useFanout } from "./shared";
+import { Age, SiteBadge, SiteStrip, StatusPill, TabShell, shortGpu, useFanout } from "./shared";
 import VastEconomics from "./vast-economics";
 
 // A registry row outlives its machine — a destroy is not a graceful UNREGISTER —
@@ -42,19 +42,6 @@ export const PUBLIC_SITE = "home";
 function isLive(lastSeen?: string | null): boolean {
 	const age = secondsSince(lastSeen ?? null);
 	return age !== null && age < STALE_SEC;
-}
-
-/** "NVIDIA RTX PRO 4000 Blackwell SFF Edition" -> "RTX PRO 4000 Blackwell".
- *  The vendor prefix is constant across the fleet and the marketing suffixes
- *  ("SFF Edition", "Generation") never distinguish two cards we own. This string
- *  is repeated once per worker row, so its width is the column's width. */
-function shortGpu(name: string): string {
-	return name
-		.replace(/^NVIDIA\s+/i, "")
-		.replace(/\s+(SFF\s+)?Edition$/i, "")
-		.replace(/\s+Generation$/i, "")
-		.replace(/^GeForce\s+/i, "")
-		.trim();
 }
 
 function gpuLabel(w: FmWorker): string {

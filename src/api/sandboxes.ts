@@ -107,6 +107,33 @@ export interface GpuProfile {
 	memory_gb?: number;
 	driver?: string;
 	drivers?: string[];
+	/** One entry per card the CALLER may rent. Absent on a site not yet serving it. */
+	products?: GpuProduct[];
+}
+
+/**
+ * One GPU model the caller may rent, and how many of it fit in ONE sandbox.
+ *
+ * `max_per_sandbox` is per PRODUCT and that is the point. The profile's site-wide ceiling is
+ * `max()` across every card, so at office it reads 2 — true only of the RTX 6000 Ada, which sits
+ * two-to-a-box. Offering 2 while a 5080 is selected promises a pod that can never be scheduled,
+ * which is the same bug the site-wide ceiling already fixed once at the fleet level.
+ *
+ * `reserved` marks a card an admin can have and a plain user cannot. It is only ever true in an
+ * admin's own answer — a user's list is FILTERED server-side, not marked — so it exists to tell
+ * an admin which cards their users cannot see, not to advertise a locked door.
+ */
+export interface GpuProduct {
+	/** Display name, e.g. "NVIDIA RTX 6000 Ada Generation". Send this back verbatim. */
+	product: string;
+	/** The raw `nvidia.com/gpu.product` label value. Informational; the server takes either. */
+	label: string;
+	nodes: number;
+	total: number;
+	max_per_sandbox: number;
+	/** null when the nodes carrying this card disagree about their memory. */
+	memory_gb?: number | null;
+	reserved?: boolean;
 }
 
 /**
@@ -354,6 +381,13 @@ export interface CreateSandboxRequest {
 	cpu?: number;
 	memory_gi?: number;
 	gpu?: number;
+	/**
+	 * WHICH card, from `GpuProfile.products[].product`. Omit for "any card I may have".
+	 *
+	 * Omit rather than sending "" — the server reads absent as "no preference", and an empty
+	 * string would be a product name that matches nothing.
+	 */
+	gpu_product?: string;
 	ttl_hours?: number;
 }
 
