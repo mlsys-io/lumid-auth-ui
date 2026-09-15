@@ -97,6 +97,23 @@ export interface ScopePreset {
 	scopes: Scope[];
 	/** { service: minLevel } — all must be satisfied by the caller. */
 	requires: Partial<Record<ScopeService | '*', ScopeLevel>>;
+	/**
+	 * When set, `scopes` is REBUILT from the server's service list at this level rather than
+	 * used as written. A preset that enumerates services is a second copy of a list the server
+	 * already owns, and it went stale the moment `findata` was added.
+	 */
+	fromServices?: ScopeLevel;
+}
+
+/**
+ * The scopes a preset actually grants, given what the server says exists.
+ *
+ * Falls back to the preset's literal list when the fetch has not landed, so the dialog is never
+ * empty — but once it has, the server's list wins.
+ */
+export function presetScopes(p: ScopePreset, g: GrantableScopes | null): Scope[] {
+	if (!p.fromServices || !g?.services?.length) return p.scopes;
+	return g.services.map((s) => `${s}:${p.fromServices}` as Scope);
 }
 
 export const SCOPE_PRESETS: ScopePreset[] = [
@@ -104,8 +121,12 @@ export const SCOPE_PRESETS: ScopePreset[] = [
 		id: 'readonly',
 		label: 'Read-only',
 		description: 'Observe every service you have access to. No writes.',
+		// Filled from the SERVER's service list at render time — see presetScopes().
+		// Mapping the local mirror here is what kept `findata:read` out of this
+		// preset for three weeks after identity started offering the service.
 		scopes: SCOPE_SERVICES.map((s) => `${s}:read`),
 		requires: { lumid: 'read' },
+		fromServices: 'read',
 	},
 	{
 		id: 'trading_bot',
@@ -140,11 +161,30 @@ export interface GrantablePool {
 	is_primary: boolean;
 }
 
+/**
+ * A capability tag this caller may mint, as the SERVER describes it.
+ *
+ * Capability scopes cannot be derived client-side: identity's parseScope splits on the FIRST
+ * colon, so `flowmesh:workflows:write` can never come out of the service x level matrix — it has
+ * to be an explicit control. The list of those controls used to be a hardcoded pair in
+ * tokens.tsx, which fell thirteen entries behind identity's allowlist and left
+ * `flowmesh:workflows:write` — the scope a token needs to run a job end to end — impossible to
+ * ask for. It is served now, already filtered by canGrant, so the page cannot offer something
+ * the mint would refuse and cannot fall behind again.
+ */
+export interface GrantableCapability {
+	scope: string;
+	label: string;
+	desc: string;
+}
+
 export interface GrantableScopes {
 	role: 'user' | 'admin';
 	services: ScopeService[];
 	matrix: Record<ScopeService, ScopeLevel>;
 	can_wildcard: boolean;
+	/** Absent when talking to an identity older than 2026-09-15; see CAP_SCOPES_FALLBACK. */
+	capabilities?: GrantableCapability[];
 	// The caller's own Claude pool memberships — each is grantable as a
 	// `claude-pool:<id>` scope (see identity's isClaudePoolScope). Absent /
 	// empty for a user in only their primary pool with nothing else to pick.

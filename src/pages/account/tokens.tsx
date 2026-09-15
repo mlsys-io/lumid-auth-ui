@@ -17,6 +17,7 @@ import {
 	canGrantPreset,
 	levelSatisfies,
 	SCOPE_PRESETS,
+	presetScopes,
 	SCOPE_SERVICES,
 	type PATInfo,
 	type Scope,
@@ -324,7 +325,10 @@ function MintDialog({
 
 	const scopes = useMemo<Scope[]>(() => {
 		if (mode === 'preset') {
-			return SCOPE_PRESETS.find((p) => p.id === preset)?.scopes ?? [];
+			// presetScopes(), not `.scopes`: a preset that enumerates services is a second
+			// copy of a list the server owns, and it went stale when `findata` was added.
+			const p = SCOPE_PRESETS.find((x) => x.id === preset);
+			return p ? presetScopes(p, grantable) : [];
 		}
 		const out: Scope[] = [];
 		if (customWildcard) out.push('*');
@@ -527,7 +531,13 @@ function MintDialog({
 // is no free-text scope field. That is how `lqt:strategy` came to be required
 // by step 3 of the published /docs/lqt-strategies instructions while being
 // impossible to obtain — the whole strategy funnel dead-ended on this array.
-const CAP_SCOPES = [
+// FALLBACK ONLY — the real list is served by identity as `grantable.capabilities`
+// (see GrantableCapability). This pair remains so the dialog still offers something
+// against an identity older than 2026-09-15, and because these two are the ones with
+// published docs pointing at them. Do NOT add to this array: adding a tag here instead
+// of to identity's capabilityCatalog is exactly how this list fell thirteen entries
+// behind the allowlist, leaving flowmesh:workflows:write impossible to ask for.
+const CAP_SCOPES_FALLBACK = [
 	{
 		id: 'claude:proxy',
 		label: 'Claude proxy',
@@ -648,12 +658,20 @@ function CustomScopePicker({
 				)}
 			</label>
 
-			{/* Capability scopes */}
+			{/* Capability scopes — SERVED, not hardcoded. Identity filters this list
+			    through canGrant before sending it, so everything rendered here is
+			    something this caller can actually mint; and a tag added to its
+			    allowlist shows up here on its own, which is the whole fix. Note
+			    these are the ONLY way to ask for a multi-colon scope: parseScope
+			    splits on the first colon, so the service x level matrix above
+			    structurally cannot produce `flowmesh:workflows:write`. */}
 			<div className="space-y-1.5">
 				<p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
 					Capability scopes
 				</p>
-				{CAP_SCOPES.map(({ id, label, desc }) => (
+				{(grantable?.capabilities?.map((c) => ({ id: c.scope, label: c.label, desc: c.desc }))
+					?? CAP_SCOPES_FALLBACK.map((c) => ({ id: c.id as string, label: c.label, desc: c.desc }))
+				).map(({ id, label, desc }) => (
 					<label key={id} className="flex items-start gap-2 cursor-pointer">
 						<input
 							type="checkbox"
