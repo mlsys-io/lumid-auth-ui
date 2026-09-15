@@ -343,8 +343,19 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 	// a 2-GPU pod that can never be scheduled: the same bug the site-wide ceiling itself fixed at
 	// the fleet level, one layer down. "Any" keeps the site-wide value, which is correct — with
 	// no card named, the best any node can do is still the best any node can do.
-	const maxGpu = chosenProduct ? chosenProduct.max_per_sandbox : (gpuInfo ? gpuInfo.max_per_sandbox : 1);
-	const gpuOptions = Array.from({ length: maxGpu + 1 }, (_, i) => i);
+	const gpuCeiling = chosenProduct ? chosenProduct.max_per_sandbox : (gpuInfo ? gpuInfo.max_per_sandbox : 1);
+
+	// POWERS OF TWO, NOT EVERY INTEGER: 0/1/2/4 on the H200s, 0/1/2 on the RTX 6000 Ada.
+	// Multi-GPU work in a sandbox is tensor-parallel, and a TP degree has to divide the model's
+	// attention heads evenly — 3 divides almost nothing anyone actually runs, so offering it
+	// offers a count that no framework here will load a model on. Same family of mistake as
+	// offering a count the scheduler cannot place: the pod would start and the job would not.
+	const gpuOptions = [0, ...[1, 2, 4, 8, 16].filter((n) => n <= gpuCeiling)];
+
+	// The largest count actually OFFERED, which is not always the ceiling — a hypothetical 3-GPU
+	// node offers 2. The clamp below has to snap to this, not to the ceiling, or it would set a
+	// value that is not in the list and the select would render blank.
+	const maxGpu = gpuOptions[gpuOptions.length - 1];
 
 	// Clamp a stale selection when the user switches to a site with a lower ceiling, or the
 	// request goes out asking for a GPU count this site can never place.
