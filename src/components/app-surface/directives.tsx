@@ -1028,7 +1028,13 @@ function LumidTable({ body }: { body: Body }) {
                         ? renderHrefCell(href, formatCell(getPath(row, c.key), c.type))
                         : formatCell(getPath(row, c.key), c.type)
                     }</>;
-                    return <td key={c.key} className="px-2.5 py-1.5 text-slate-700 align-top max-w-[260px] truncate">{cell}</td>;
+                    // `truncate` silently clips at 260px with no way to read the
+                    // rest — fine for an id, lossy for a column whose whole value
+                    // is a sentence (a not-presentable backtest's reason). Hover
+                    // shows the untruncated text.
+                    const raw = getPath(row, c.key);
+                    const full = raw === null || raw === undefined || typeof raw === "object" ? undefined : String(raw);
+                    return <td key={c.key} title={full} className="px-2.5 py-1.5 text-slate-700 align-top max-w-[260px] truncate">{cell}</td>;
                   })}
                   {rowActions.length > 0 && (
                     <td className="px-2.5 py-1.5 text-right whitespace-nowrap">

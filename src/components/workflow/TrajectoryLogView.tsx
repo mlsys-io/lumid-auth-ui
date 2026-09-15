@@ -17,6 +17,25 @@ import { cn } from "@/lib/utils";
 import RunLogSearch from "@/components/workflow/RunLogSearch";
 import { L } from "@/components/workflow/labels";
 
+// A deep link can carry either form of run id: the cycle-dir id every log/detail
+// surface parses ("20260906T105726Z"), or the run store's UNIX SECONDS, which is
+// what me://app-data?tool=runs reports as `run_ts` and what an app surface's
+// row_href therefore interpolates (`?cycle=1788663446`). Those never compared
+// equal, so opening a specific run from a table silently fell back to the NEWEST
+// run — which is how a submit and its poll became indistinguishable. Mirrors
+// runTsToCycleID in lumid_identity/internal/handler/me_cycle_db_fallback.go:
+// below ~1971 is not a unix second, so it is left alone rather than rendered
+// as a 1970 date.
+export function toCycleId(ts?: string): string {
+	if (!ts) return "";
+	if (/^[0-9]{8}T[0-9]{6}Z/.test(ts)) return ts;
+	if (/^[0-9]+(\.[0-9]+)?$/.test(ts)) {
+		const n = Math.floor(Number(ts));
+		if (n >= 31_536_000) return new Date(n * 1000).toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
+	}
+	return ts;
+}
+
 function fmtWhen(ts?: string): string {
 	if (!ts) return "";
 	let m = ts.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
@@ -92,6 +111,12 @@ export default function TrajectoryLogView({ app, loop, ts, onBack, backLabel }: 
 	const [idx, setIdx] = useState(0);
 	const [rows, setRows] = useState<CycleLogRow[] | null>(null);
 	const [running, setRunning] = useState(false);
+	// Why the transcript is empty, when the server knows. Identity already
+	// distinguishes "nothing was said" from "the cycle volume is unreachable"
+	// (unavailableReason on the cycle-log handler); this surface used to drop
+	// that field and render both as "No transcript for this run."
+	const [why, setWhy] = useState<string>("");
+	const [listFailed, setListFailed] = useState(false);
 	// WS-6 — a matched search row to scroll to + briefly highlight.
 	const [hlIndex, setHlIndex] = useState<number | null>(null);
 	const rowEls = useRef<Map<number, HTMLLIElement>>(new Map());
@@ -103,29 +128,68 @@ export default function TrajectoryLogView({ app, loop, ts, onBack, backLabel }: 
 
 	useEffect(() => {
 		let live = true;
+		// A BOUNDED wait. `rows === null` is the spinner, and a request that never
+		// settles (proxy hold, token refresh stall) leaves it there with nothing
+		// on screen to act on. After this, the view states what happened and
+		// names the run instead of spinning indefinitely.
+		let settled = false;
+		const timer = window.setTimeout(() => {
+			if (!live || settled) return;
+			setListFailed(true);
+			setCycles([]);
+		}, 15_000);
 		apiClient.get(`/api/v1/me/cycles?app=${encodeURIComponent(app)}&loop=${encodeURIComponent(loop)}&limit=20`)
 			.then((r) => {
 				const cs = ((r.data?.data?.cycles ?? []) as Array<{ ts: string }>)
 					.filter((c) => c.ts).sort((a, b) => b.ts.localeCompare(a.ts));
+				settled = true;
 				if (!live) return;
+				window.clearTimeout(timer);
+				setListFailed(false);
 				setCycles(cs);
-				const at = ts ? cs.findIndex((c) => c.ts === ts) : -1;
+				const want = toCycleId(ts);
+				const at = want ? cs.findIndex((c) => c.ts === want) : -1;
 				setIdx(at >= 0 ? at : 0);
 			})
-			.catch(() => { if (live) setCycles([]); });
-		return () => { live = false; };
+			.catch(() => {
+				settled = true;
+				if (!live) return;
+				window.clearTimeout(timer);
+				setListFailed(true);
+				setCycles([]);
+			});
+		return () => { live = false; window.clearTimeout(timer); };
 	}, [app, loop, ts]);
 
 	const curTs = cycles?.[idx]?.ts;
 	useEffect(() => {
-		if (!curTs) { setRows(curTs === undefined ? null : []); return; }
+		// `rows === null` means LOADING, and it is the only thing that renders the
+		// spinner — so it must be reachable only while something is actually in
+		// flight. The old guard mapped the no-cycle case (curTs === undefined) to
+		// null and the impossible empty-string case to [], which is backwards: an
+		// app whose /me/cycles came back empty — every app on a cloud pod before
+		// the run-store fallback landed, and any app still missing from it — sat
+		// on "Loading run transcript…" forever, with no timeout and no error.
+		if (cycles === null) { setRows(null); return; }   // list still loading
+		if (!curTs) {
+			setRows([]);
+			setWhy(listFailed
+				? "Couldn't load this loop's run list. The run may still exist — reopen the run tree and try again."
+				: "This loop has no recorded runs to read a transcript from.");
+			return;
+		}
 		let live = true;
 		setRows(null);
+		setWhy("");
 		fetchCycleConversation(app, loop, curTs)
-			.then((r) => { if (live) { setRows(r.rows); setRunning(r.running); } })
-			.catch(() => { if (live) setRows([]); });
+			.then((r) => { if (live) { setRows(r.rows); setRunning(r.running); setWhy(r.unavailable || ""); } })
+			.catch(() => {
+				if (!live) return;
+				setRows([]);
+				setWhy("Couldn't load this run's transcript.");
+			});
 		return () => { live = false; };
-	}, [app, loop, curTs]);
+	}, [app, loop, curTs, cycles, listFailed]);
 
 	const total = cycles?.length ?? 0;
 
@@ -163,7 +227,13 @@ export default function TrajectoryLogView({ app, loop, ts, onBack, backLabel }: 
 					<div className="h-full flex flex-col items-center justify-center gap-2 text-center text-slate-400">
 						<MessageSquare className="w-6 h-6 text-slate-300" />
 						<div className="text-sm text-slate-500">No transcript for this run.</div>
-						<div className="text-xs max-w-xs">This run didn't stream a conversation log — its step outputs are in the run's pipeline (open a node's "details").</div>
+						{/* The server's own reason when it has one — "nothing was said" and
+						    "the cycle volume is not mounted on this pod" are opposite facts
+						    that used to render as the same sentence. */}
+						<div className="text-xs max-w-xs">{why || "This run didn't stream a conversation log — its step outputs are in the run's pipeline (open a node's \"details\")."}</div>
+						{/* An identifier to quote in a bug report. Without it the empty
+						    state names nothing the reader can search for. */}
+						{curTs && <div className="text-[10px] font-mono text-slate-300 mt-1">{app} · {loop} · {curTs}</div>}
 					</div>
 				) : (
 					<ul className={cn("space-y-1.5")}>
