@@ -714,6 +714,27 @@ export default function ExperimentsPanel({ app, loop, quiet = false }: {
 	// surface, which offered no way to create an experiment at all.
 	const canCreate = !loop && !quiet;
 	if (shown.length === 0) {
+		// ON A LOOP, SAY SO — do not vanish.
+		//
+		// This returned null for a loop, reasoning that an empty state under the
+		// runs would be noise. But the workflow panel renders a "Metric & arms"
+		// HEADER above it unconditionally, so the real result was a titled EMPTY
+		// box. A user hit exactly that after deleting three experiments the loop
+		// still referenced (2026-09-16), with no way to tell a broken attachment
+		// from a loop that simply has no experiment.
+		//
+		// `quiet` still means silent — it is for the callers that render no
+		// header to leave stranded.
+		if (loop && !quiet) {
+			return (
+				<div className="rounded-lg border border-dashed border-slate-200 bg-white/60 px-3 py-2 text-[11px] text-slate-500">
+					This workflow is attached to an experiment, but none of the app's
+					experiments resolve to it — the attachment may still name one that was
+					deleted. Check <code className="text-[10.5px]">engine.experiment</code> in
+					the app config.
+				</div>
+			);
+		}
 		if (quiet || loop) return null;
 		return (
 			<div className="rounded-xl border border-dashed border-slate-200 bg-white/60 p-8 text-center">

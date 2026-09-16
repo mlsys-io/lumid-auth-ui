@@ -725,7 +725,17 @@ export default function WorkflowObservabilityPanel({
 			</div>
 			<Suspense fallback={null}>
 				{loopExp
-					? <ExperimentsPanel app={app} loop={loop} quiet />
+					// `quiet` is deliberately NOT passed here any more. It makes
+					// ExperimentsPanel render null when its loop filter comes up
+					// empty — but this header renders unconditionally, so the
+					// result is a titled, EMPTY box with no explanation. That is
+					// what a user saw after deleting three experiments while the
+					// loop still referenced them (2026-09-16): the section was
+					// there and nothing was in it, with nothing to act on.
+					//
+					// The panel now owns its own empty state, so whatever it does
+					// or does not find gets said under the heading that promised it.
+					? <ExperimentsPanel app={app} loop={loop} />
 					: <PromoteToExperiment app={app} loop={loop} onCreated={() => loadLatestCycle(true)} />}
 			</Suspense>
 		</section>
