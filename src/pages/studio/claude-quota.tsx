@@ -49,18 +49,24 @@ const USER_USAGE_REFRESH_MS = 2 * 60 * 1000; // 2 min auto-refresh for per-user 
 // label picked here routes that account's traffic — Messages API and OAuth
 // refresh — out through that box's own IP.
 //
+// `central` is NOT a field box: it is the reserved cluster-direct egress. An
+// account labelled `central` dispatches DIRECT from the cluster (sg-sin1), no
+// relay hop, and is the ONLY label that does. It is an explicit operator
+// choice — never a fallback and never an adoption target.
+//
 // MUST stay in sync with LUMID_CLAUDE_FIELD_RELAYS. A label with no matching
-// relay entry is not an error: claude-proxy's Director falls through to the
-// normal direct-to-Anthropic path on a lookup miss, so the account silently
-// behaves as if unlabeled. That is a quiet failure, which is exactly why this
-// list exists. "Other…" still allows a free-text label, so this is a UX
-// convenience (typo prevention), not a hard validation boundary.
+// relay entry is NOT silently direct: since claude-proxy v0.2.1 the Director
+// ADOPTS an unmatched label onto a hashed field box (relay ADOPT … never
+// cluster-direct). So the only ways an account egresses are a real box, or
+// `central`. "Other…" still allows a free-text label, but it will be adopted
+// onto a box, not served direct — this list is typo prevention, not a hard
+// validation boundary.
 //
 // Label is NOT the same axis as Pool (below): Label routes an account's
 // EGRESS NETWORK; Pool decides WHO MAY DRAW on it. An account has exactly
 // one of each, and the two are independent — a pool can freely mix labelled
 // and unlabelled accounts.
-const KNOWN_FIELD_BOXES = ['denmark', 'chicago', 'nyc', 'nightly-dk'];
+const KNOWN_FIELD_BOXES = ['denmark', 'chicago', 'nyc', 'nightly-dk', 'central'];
 
 function fmtTime(iso: string): string {
 	if (!iso || iso.startsWith('0001')) return '—';
@@ -315,7 +321,9 @@ function AccountRow({
 			{acc.label && (
 				<span
 					className="shrink-0 rounded-full bg-slate-100 border border-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-500"
-					title={`Field-box account — routes via the ${acc.label} relay`}
+					title={acc.label === 'central'
+						? 'Central account — egresses direct from the cluster, no relay hop'
+						: `Field-box account — routes via the ${acc.label} relay`}
 				>
 					{acc.label}
 				</span>
@@ -631,7 +639,8 @@ function FieldBoxPanel() {
 				<div className="rounded border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900">
 					<span className="font-medium">{fmtCount(degraded)} turns bypassed their field box.</span>{' '}
 					Those requests left from the cluster IP, not the box the account is labelled for —
-					check <code>LUMID_CLAUDE_FIELD_RELAYS</code> and the relay containers.
+					check <code>LUMID_CLAUDE_FIELD_RELAYS</code> and the relay containers. (Accounts on
+					<span className="font-mono"> central</span> egress from the cluster by design and are not counted here.)
 				</div>
 			)}
 
@@ -682,7 +691,8 @@ function FieldBoxPanel() {
 						{data.boxes.map((b) => {
 							const labelled = b.field_box !== '';
 							const idle = b.turns === 0;
-								const bad = labelled && b.not_via_relay > 0;
+								const isCentral = b.field_box === 'central';
+								const bad = labelled && !isCentral && b.not_via_relay > 0;
 							return (
 								<tr
 										key={b.field_box || '(direct)'}
@@ -737,6 +747,11 @@ function FieldBoxPanel() {
 											<span className="text-slate-400">no traffic</span>
 										) : !labelled ? (
 											<span className="text-slate-400">direct by design</span>
+										) : isCentral ? (
+											// central is cluster-direct by design — via_relay is always
+											// false, so "direct" is the honest neutral rendering, not a
+											// degradation flag.
+											<span className="text-slate-400">direct</span>
 										) : bad ? (
 											<span className="text-amber-600">
 												{fmtCount(b.via_relay)} relayed · {fmtCount(b.not_via_relay)} direct
@@ -819,7 +834,9 @@ function AddAccountModal({
 			const r = await adminAddClaudeToken(e, t, rt, lb, poolId !== 'default' ? poolId : undefined);
 			if (r.valid && r.stored) {
 				const extra = rt ? ' Auto-refresh enabled.' : '';
-				const boxNote = lb ? ` Tagged "${lb}" — routes via that field box's relay.` : '';
+				const boxNote = lb === 'central'
+					? ` Tagged "central" — egresses direct from the cluster, no relay hop.`
+					: (lb ? ` Tagged "${lb}" — routes via that field box's relay.` : '');
 				setMsg({ ok: true, text: `Token stored for ${r.email}.${extra}${boxNote} Quota will refresh within 5 min.` });
 				setTimeout(() => { onClose(); onAdded(); }, 1800);
 			} else if (!r.valid) {
@@ -910,7 +927,7 @@ rm -rf "$D"`}
 					</div>
 					<div>
 						<label className="block text-xs font-medium text-slate-600 mb-1">
-							Field box <span className="text-slate-400 font-normal">(optional)</span>
+							Egress <span className="text-slate-400 font-normal">(optional)</span>
 						</label>
 						<select
 							value={customLabel ? '__custom__' : label}
@@ -920,8 +937,9 @@ rm -rf "$D"`}
 							}}
 							className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gold-400"
 						>
-							<option value="">— none (normal pooled account) —</option>
-							{KNOWN_FIELD_BOXES.map((box) => {
+							<option value="">— none (adopts a field box automatically) —</option>
+							<option value="central">central — direct from the cluster (sg-sin1)</option>
+							{KNOWN_FIELD_BOXES.filter((b) => b !== 'central').map((box) => {
 								const usedBy = takenLabels?.[box];
 								return (
 									<option key={box} value={box}>
@@ -931,7 +949,14 @@ rm -rf "$D"`}
 							})}
 							<option value="__custom__">Other…</option>
 						</select>
-						{label && takenLabels?.[label] && !customLabel && (
+						{label === 'central' && (
+							<p className="text-[11px] text-amber-600 mt-1">
+								Egresses DIRECT from the shared cluster IP (sg-sin1) — no relay hop. This IP also carries the pool's
+								OAuth-refresh and quota-probe traffic, and several accounts on <span className="font-mono">central</span> are
+								mutually attributable in a way several accounts on one field box are not (the field boxes carry nothing else).
+							</p>
+						)}
+						{label && label !== 'central' && takenLabels?.[label] && !customLabel && (
 							<p className="text-[11px] text-slate-400 mt-1">
 								"{label}" is already used by {takenLabels[label]} — accounts sharing a field box present as one
 								client identity (same egress IP, same fingerprint), which is fine and often the point.
@@ -948,7 +973,8 @@ rm -rf "$D"`}
 							/>
 						)}
 						<p className="text-[11px] text-slate-400 mt-1">
-							Tags this account as belonging to a field box — its traffic routes through that box's relay instead of the pool's default network.
+							Tags this account's egress network. A field box routes through that box's relay; <span className="font-mono">central</span> egresses
+							direct from the cluster; "none" adopts a hashed field box automatically.
 						</p>
 					</div>
 					<div>
