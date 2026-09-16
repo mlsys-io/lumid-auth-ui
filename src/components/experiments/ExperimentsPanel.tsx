@@ -14,7 +14,7 @@ import { SpiralOverlay } from "@/components/BrandLoader";
 import {
 	FlaskConical, ChevronDown, ChevronRight, Loader2, TrendingUp, TrendingDown,
 } from "lucide-react";
-import { me, waitForIntent, MeApiError, type MeExperiment, type MeExperimentArm, type MeExperimentDetail, type MeExperimentCase } from "@/api/me";
+import { me, waitForIntent, MeApiError, type MeExperiment, type MeExperimentArm, type MeExperimentDetail, type MeExperimentCase, type MeRunRow } from "@/api/me";
 import { askOrStash } from "@/components/chat/askBus";
 import { fetchCasebook } from "@/api/casebook";
 import { cn } from "@/lib/utils";
@@ -80,6 +80,78 @@ function DeltaVsBest({ e, vid }: { e: MeExperiment; vid: string }) {
 	);
 }
 
+/** What the dispatched run actually DID.
+ *
+ * The surface used to stop at "queued ✓": dispatch was the last thing it ever
+ * reported, so a run that failed looked identical to one that succeeded. A user
+ * whose four runs all died reported it as "跑不起来" — won't run. They ran. Each
+ * recorded ok=0 with an exact error, in this service's own store, and no
+ * surface read it.
+ *
+ * Polls the run ledger for a run of this workflow started after we dispatched,
+ * and reports its state — including WHY, when it failed. Stops as soon as the
+ * run is terminal, and gives up quietly after ~12 minutes rather than polling
+ * forever: a cycle that has not started by then is a scheduler question, not
+ * something this badge can answer.
+ */
+function ArmRunStatus(
+	{ app, loop, sentAt, inChat }: { app: string; loop?: string; sentAt?: number; inChat?: boolean },
+) {
+	const [row, setRow] = useState<MeRunRow | null>(null);
+	const [gaveUp, setGaveUp] = useState(false);
+
+	useEffect(() => {
+		if (inChat || !loop || !sentAt) return;
+		let live = true;
+		let tries = 0;
+		const tick = () => {
+			if (!live) return;
+			tries += 1;
+			if (tries > 36) { setGaveUp(true); return; }   // ~12 min at 20s
+			me.listRuns({ workflow: `${app}:${loop}`, limit: 5 })
+				.then((r) => {
+					if (!live) return;
+					// The run we caused: this workflow, started at or after the
+					// dispatch. A few seconds of slack for clock skew between
+					// this browser and the runtime that stamps the cycle.
+					const mine = (r.runs || [])
+						.filter((x) => (x.started_at || 0) >= sentAt - 10)
+						.sort((a, b) => (b.started_at || 0) - (a.started_at || 0))[0];
+					if (mine) setRow(mine);
+					if (!mine || mine.state === "running") window.setTimeout(tick, 20_000);
+				})
+				.catch(() => { if (live) window.setTimeout(tick, 20_000); });
+		};
+		const t = window.setTimeout(tick, 4_000);
+		return () => { live = false; window.clearTimeout(t); };
+	}, [app, loop, sentAt, inChat]);
+
+	if (inChat) return <span className="text-[11px] text-emerald-600 whitespace-nowrap">in the chat →</span>;
+	if (!row) {
+		return (
+			<span className="text-[11px] text-slate-500 whitespace-nowrap"
+				title={gaveUp
+					? "Dispatched, but no run has appeared. The runner may be busy or the loop may not be picked up."
+					: "Dispatched. Waiting for the runner to start the cycle."}>
+				{gaveUp ? "queued — not started yet" : "queued…"}
+			</span>
+		);
+	}
+	if (row.state === "running") {
+		return <span className="text-[11px] text-violet-600 whitespace-nowrap">running…</span>;
+	}
+	if (row.state === "succeeded") {
+		return <span className="text-[11px] text-emerald-600 whitespace-nowrap">ran ✓</span>;
+	}
+	// THE PART THAT WAS MISSING. `reason` carries the cycle's own error.
+	return (
+		<span className="text-[11px] text-rose-600 whitespace-nowrap max-w-[220px] truncate"
+			title={row.reason || "The run failed; the cycle recorded no reason."}>
+			failed{row.reason ? ` — ${row.reason}` : ""}
+		</span>
+	);
+}
+
 /** The lifecycle controls, as one menu.
  *
  * conclude / checkpoint / fork / revert existed only in chat: the card could
@@ -136,9 +208,17 @@ function ControlMenu({ app, e, onDone }: { app: string; e: MeExperiment; onDone:
 
 	return (
 		<div className="relative">
+			{/* LABELLED, not a bare glyph. Fork/conclude/checkpoint/revert all
+			    live behind this control, and it rendered as an unadorned "⋯" —
+			    so a user looking for a way to fork an experiment reported that
+			    no such button existed, tried three times, and gave up
+			    (2026-09-15). The actions were there; nothing said so. */}
 			<button type="button" aria-label="experiment controls"
+				title="Conclude, archive, checkpoint, fork or revert this experiment"
 				onClick={(ev) => { ev.stopPropagation(); setOpen((o) => !o); }}
-				className="px-1.5 py-0.5 rounded text-slate-500 hover:bg-slate-100 hover:text-slate-700 leading-none">⋯</button>
+				className="px-1.5 py-0.5 rounded text-[11px] text-slate-500 hover:bg-slate-100 hover:text-slate-700 leading-none whitespace-nowrap">
+				Actions <span aria-hidden="true">⌄</span>
+			</button>
 			{open && (
 				<div className="absolute right-0 z-20 mt-1 w-64 rounded-lg border border-slate-200 bg-white shadow-lg py-1"
 					onClick={(ev) => ev.stopPropagation()}>
@@ -332,6 +412,7 @@ function CasesTable({ app, expId, loop, cases }: { app: string; expId: string; l
 function ArmsBlock({ app, e }: { app: string; e: MeExperiment }) {
 	const [busy, setBusy] = useState<string | null>(null);
 	const [sent, setSent] = useState<Record<string, string>>({});
+	const [sentAt, setSentAt] = useState<Record<string, number>>({});
 	const [err, setErr] = useState<string | null>(null);
 	const arms = e.arms || [];
 	// An experiment attached to no loop has nowhere to dispatch to. Say so
@@ -376,6 +457,8 @@ function ArmsBlock({ app, e }: { app: string; e: MeExperiment }) {
 				experiment_id: e.id,
 			});
 			setSent((p) => ({ ...p, [armId]: r.intent_id }));
+			// When we asked, so the poll can tell OUR run from the last one.
+			setSentAt((p) => ({ ...p, [armId]: Math.floor(Date.now() / 1000) }));
 			// Report what the runner did, not what we asked for — identity
 			// accepts the batch, the scheduler performs it.
 			waitForIntent(r.intent_id, { timeoutMs: 90_000 })
@@ -427,9 +510,15 @@ function ArmsBlock({ app, e }: { app: string; e: MeExperiment }) {
 									measured passively
 								</span>
 							) : sent[id] ? (
-								<span className="text-[11px] text-emerald-600 whitespace-nowrap">
-									{sent[id] === "chat" ? "in the chat →" : "queued ✓"}
-								</span>
+								/* WHAT THE RUN DID, not that we asked for one.
+								   This said "queued ✓" and stopped: dispatch was the
+								   last thing the surface ever reported, so a run that
+								   failed looked exactly like a run that succeeded, and
+								   a user whose four runs all died reported it as "跑不
+								   起来" (won't run). The failure was recorded the whole
+								   time — ok=0 with an error string — just never read. */
+								<ArmRunStatus app={app} loop={loop} sentAt={sentAt[id]}
+									inChat={sent[id] === "chat"} />
 							) : (
 								<button
 									type="button"
