@@ -152,10 +152,20 @@ function SessionLlmTurn({ r, defaultOpen }: { r: CycleLogRow; defaultOpen: boole
 import { entityCardFor } from './chat/entityCards';
 import AppSurfaceCard from './chat/AppSurfaceCard';
 import { CHAT_ID_KEY, readAppChatMap, writeAppChat, forgetChatId } from './appChatMap';
+import { ATTACH_BUDGET_BYTES, encodeBase64, prepareImage } from './chat/attachments';
 
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+// EVERYTHING RIDES IN ONE JSON BODY, and the server caps that body at 1.5 MiB
+// (chatStreamMaxBodyBytes, me_agent_stream.go — a deliberate OOM guard on the
+// auth authority). base64 costs 4/3, so the real ceiling for an attachment is
+// ~1.06 MiB, not the 5 MiB and 10 MiB this file used to advertise. Those
+// numbers were never achievable: the upload was refused AFTER the user had
+// waited through a full encode, and the resulting 400 often arrives as a
+// connection reset, which then triggers one silent whole-body retry.
+//
+// Images are downscaled to fit rather than refused (prepareImage). A document
+// cannot be, so its limit is now simply the truth.
 const MAX_TEXT_BYTES = 500 * 1024;
-const MAX_DOC_BYTES = 10 * 1024 * 1024;
+const MAX_DOC_BYTES = ATTACH_BUDGET_BYTES;
 
 // Binary document mime types we hand off to the server-side extractor
 // (poppler/pandoc/openpyxl). Match by exact mime OR by filename ext.
@@ -1113,27 +1123,32 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 				DOCUMENT_EXTS.some((ext) => lowerName.endsWith(ext));
 
 			if (isImage) {
-				if (f.size > MAX_IMAGE_BYTES) {
-					setAttachError(`${f.name}: image > ${Math.round(MAX_IMAGE_BYTES / 1024 / 1024)}MB`);
-					continue;
+				// Downscale rather than refuse, and encode off the main thread.
+				// The old path ran a per-byte String.fromCharCode loop over the
+				// whole file before btoa, which froze the tab AT PASTE TIME —
+				// before anything was sent, which is what users described.
+				try {
+					const img = await prepareImage(f);
+					if (img.note) setAttachError(`${f.name}: ${img.note}`);
+					next.push({
+						kind: 'image', name: f.name, mime: img.mime,
+						dataB64: img.dataB64, sizeBytes: img.sizeBytes,
+					});
+				} catch (err: any) {
+					setAttachError(`${f.name}: ${err?.message || 'could not attach image'}`);
 				}
-				const buf = await f.arrayBuffer();
-				// base64 encode (atob/btoa would corrupt binary)
-				const bytes = new Uint8Array(buf);
-				let bin = '';
-				for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-				const dataB64 = btoa(bin);
-				next.push({ kind: 'image', name: f.name, mime: f.type, dataB64, sizeBytes: f.size });
 			} else if (isDocument) {
 				if (f.size > MAX_DOC_BYTES) {
-					setAttachError(`${f.name}: document > ${Math.round(MAX_DOC_BYTES / 1024 / 1024)}MB`);
+					// Stated in KB because the real ceiling is ~1 MB, and
+					// rounding it to "0MB" or "1MB" was how the old message
+					// managed to be both wrong and unhelpful.
+					setAttachError(
+						`${f.name}: document is ${Math.round(f.size / 1024)}KB; the limit is ` +
+						`${Math.round(MAX_DOC_BYTES / 1024)}KB (it is sent inline with the message)`);
 					continue;
 				}
-				const buf = await f.arrayBuffer();
-				const bytes = new Uint8Array(buf);
-				let bin = '';
-				for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-				const dataB64 = btoa(bin);
+				// Off the main thread — same reason as images above.
+				const dataB64 = await encodeBase64(f);
 				// Best-effort mime fallback when the browser doesn't
 				// label the file (e.g. some old systems for .docx).
 				const mime = f.type || mimeFromExt(lowerName);

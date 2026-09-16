@@ -18,6 +18,7 @@ import { me, waitForIntent, MeApiError, type MeExperiment, type MeExperimentArm,
 import { askOrStash } from "@/components/chat/askBus";
 import { fetchCasebook } from "@/api/casebook";
 import { cn } from "@/lib/utils";
+import NewExperiment from "./NewExperiment";
 
 const KIND_LABEL: Record<string, string> = {
 	regression: "regression",
@@ -652,12 +653,26 @@ export function ExperimentCard({ app, e, showApp = false, onChanged }: { app: st
 									<SeriesChart series={detail.series} />
 								</div>
 							)}
-							{detail.cases?.length > 0 && (
+							{detail.cases?.length > 0 ? (
 								<div>
 									<div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600 mb-1.5">Casebook — per-case score history</div>
 									<CasesTable app={app} expId={e.id} loop={e.loops?.[0]} cases={detail.cases} />
 								</div>
-							)}
+							) : (e.n_results ?? 0) > 0 ? (
+								// WHY THERE IS NO CASE BREAKDOWN, rather than nothing at all.
+								//
+								// The per-case view needs rows carrying dims.case_id. record_result()
+								// takes that from the caller, so a loop recording only a metric
+								// produces rows with no subject — and this block simply vanished,
+								// leaving the per-arm means as the only thing on screen. A user who
+								// had just run six samples asked, reasonably, which six cases they
+								// were (2026-09-15). The honest answer is that the rows do not say.
+								<div className="rounded-lg border border-dashed border-slate-200 bg-white/60 px-3 py-2 text-[11px] text-slate-500">
+									No per-case breakdown: {e.n_results} result{e.n_results === 1 ? " row was" : " rows were"} recorded
+									without a case id, so which cases ran is not stored. A loop records one by passing
+									<code className="text-[10.5px]">dims.case_id</code> to record_result.
+								</div>
+							) : null}
 						</>
 					) : (
 						<div className="text-[11px] text-slate-600 italic">Couldn't load detail.</div>
@@ -694,18 +709,35 @@ export default function ExperimentsPanel({ app, loop, quiet = false }: {
 		return <div className="relative"><div className="h-20 rounded-xl bg-slate-100 animate-pulse" /><SpiralOverlay /></div>;
 	}
 	const shown = loop ? exps.filter((e) => e.loops?.includes(loop)) : exps;
+	// On a LOOP page the create affordance is PromoteToExperiment, which
+	// already sits there and knows its own loop. This is for the app-wide
+	// surface, which offered no way to create an experiment at all.
+	const canCreate = !loop && !quiet;
 	if (shown.length === 0) {
 		if (quiet || loop) return null;
 		return (
-			<div className="rounded-xl border border-dashed border-slate-200 bg-white/60 p-8 text-center text-sm text-slate-500">
-				No experiments declared. An experiment tests a hypothesis by running
-				variants over a dataset or casebook, measured by one metric — declare
-				one under <code className="text-[11px]">experiments:</code> in the app's config.
+			<div className="rounded-xl border border-dashed border-slate-200 bg-white/60 p-8 text-center">
+				<div className="text-sm text-slate-500">
+					No experiments declared. An experiment tests a hypothesis by running
+					variants over a dataset or casebook, measured by one metric.
+				</div>
+				{/* The old copy ended "declare one under `experiments:` in the app's
+				    config" — hand-edit YAML, app_push, propagate to every tenant.
+				    That instruction WAS this surface's only create path, and it is
+				    how a metric name nothing emits ships unnoticed. */}
+				<div className="mt-3 flex justify-center">
+					<NewExperiment app={app} onCreated={() => setNonce((n) => n + 1)} />
+				</div>
 			</div>
 		);
 	}
 	return (
 		<div className="space-y-2.5">
+			{canCreate && (
+				<div className="flex justify-end">
+					<NewExperiment app={app} onCreated={() => setNonce((n) => n + 1)} />
+				</div>
+			)}
 			{shown.map((e) => (
 				<ExperimentCard key={e.id} app={app} e={e} onChanged={() => setNonce((n) => n + 1)} />
 			))}
