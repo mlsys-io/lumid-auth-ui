@@ -40,7 +40,7 @@ no install, no PAT setup. Pick a **(Code)** model from the model picker:
 | Model | Who | Backed by |
 |---|---|---|
 | DeepSeek-V4-Flash (Lumid GPU) | everyone | In-house H100 NVL pair — **default**, no pool quota |
-| Qwen3.8-27B (Code · Lumid GPU) | everyone | In-house luyao1 RTX 5090, tier=0 — no pool quota, one physical tier |
+| Qwen3.8-27B (Code · Lumid GPU) | everyone | In-house luyao1 RTX 5090 (tier 0) + gmk + n5-max (tier 1) — no pool quota |
 | Claude Sonnet (Code) | admin+ | Account pool (your 4h/7d quota) |
 | Claude Opus (Code) | admin+ | Account pool |
 | Claude Fable 5 (Code) | super_admin | Account pool |
@@ -80,7 +80,8 @@ the same per-user [session recording](#session-recording) toggle — see below.)
 > Not a revival of Qwen3.6-35B: `qwen3.6-27b`/`qwen3.6-35b-a3b` and `glm-5.3-flash`
 > were purged fleet-wide the same day (`qwen3.6-27b` was the source of a real
 > OpenRouter cost-abuse incident — 102 of 147 requests in one window, from `user`
-> accounts). Qwen3.8-27B runs on luyao1's RTX 5090, tier=0, `SELF_HOSTED_MODELS`
+> accounts). Qwen3.8-27B runs on luyao1's RTX 5090 (tier 0) with two tier-1
+> replicas on the home segment, `SELF_HOSTED_MODELS`
 > on claude-proxy, and is open to every role — same footing as deepseek. See
 > [Non-Anthropic models](#non-anthropic-models-deepseek-and-qwen38-only).
 
@@ -118,17 +119,18 @@ model instead, subject to the [role table](#model-access-by-role) below.)
 
 > **About the `[1m]` suffix.** `deepseek-v4-flash` is architecturally trained up
 > to a 1M-token context window (YaRN-extended), but the deployed serving
-> config currently runs at a **512K-token ceiling** — the highest context
-> validated safe under real concurrent load on the current hardware (see
-> `k8s-lift/lumid-llm/lumid-llm.yaml` for the tuning history). Claude Code
+> config runs at a **512K-token ceiling on the H100 tier** — the highest context
+> validated safe under real concurrent load on that hardware (see
+> `k8s-lift/lumid-llm/lumid-llm.yaml` for the tuning history); the GB10 tier-1
+> replica serves 256K. Claude Code
 > appends a context-length marker to the model id it sends — e.g.
 > `deepseek-v4-flash[1m]` for a long-context session. The proxy strips this
 > `[1m]` suffix before routing, so the backend always sees the bare
 > `deepseek-v4-flash`. You never need to type it, and it is never forwarded to
 > the pool or the fleet — it is purely a client hint about the session's context
 > window. Just set `ANTHROPIC_MODEL=deepseek-v4-flash` (without the suffix);
-> requests are served up to the deployed 512K ceiling, not the full 1M the
-> architecture supports.
+> requests are served up to the deployed ceiling (512K on H100, 256K on GB10),
+> not the full 1M the architecture supports.
 
 ---
 
@@ -217,8 +219,8 @@ role. Requesting a model above your tier returns `403` with the required role �
 switch to an allowed model (e.g. `--model deepseek-v4-flash`) or ask an admin
 to raise your role. Unlisted Claude-base models are available to everyone.
 **Two** non-Anthropic models are enabled, both in-house and open to **all
-roles** — `deepseek-v4-flash` (default, multi-tier GB10 ladder) and
-`qwen3.8-27b` (luyao1 RTX 5090, one physical tier). There are no admin-only
+roles** — `deepseek-v4-flash` (default, H100 tier 0 + GB10 tier 1) and
+`qwen3.8-27b` (luyao1 tier 0 + gmk + n5-max tier 1). There are no admin-only
 vendor models (Kimi K3 / GLM-5.3-Flash / generic OpenRouter, and every
 `qwen3.6-*` id, were disabled — GLM and qwen3.6 as of 2026-09-01).
 
@@ -230,9 +232,9 @@ vendor models (Kimi K3 / GLM-5.3-Flash / generic OpenRouter, and every
 > is never forwarded to the pool or the self-hosted fleet — it is purely a
 > client hint about the session's context window. `deepseek-v4-flash` is
 > architecturally trained up to 1M tokens (YaRN-extended), but the deployed
-> serving config currently runs at a **512K-token ceiling** (with or without
-> the `[1m]` suffix) — the highest context validated safe under real
-> concurrent load on the current hardware.
+> serving config runs at a **512K-token ceiling on the H100 tier** (with or
+> without the `[1m]` suffix) — the highest context validated safe under real
+> concurrent load on that hardware; the GB10 tier-1 replica serves 256K.
 
 ### Non-Anthropic models (DeepSeek and Qwen3.8 only)
 
@@ -241,20 +243,24 @@ admin, super_admin) via the `lum.id/llm` relay, same PAT as the Claude pool:
 
 | Model flag | Backing | Context | Price (input/output per M tok) |
 |---|---|---|---|
-| `--model deepseek-v4-flash` | **In-house H100 NVL pair** | 512K | **free** — owned GPUs |
-| `--model qwen3.8-27b` | **In-house luyao1 RTX 5090** | 376K | **free** — owned GPU |
+| `--model deepseek-v4-flash` | **In-house H100 NVL pair** (tier 0) + GB10 pair (tier 1) | 512K (tier 0) / 256K (tier 1) | **free** — owned GPUs |
+| `--model qwen3.8-27b` | **In-house luyao1 RTX 5090** (tier 0) + gmk + n5-max (tier 1) | 376K (tier 0) / 214K (tier 1) | **free** — owned GPUs |
 
 > **OpenRouter is a bounded overflow, not the primary path, for either model.**
 > `deepseek-v4-flash` is served on our own **two H100 NVL GPUs** (tensor-parallel
 > pair) first — free at the margin, no metering, no data leaving the tailnet on
-> the common path. `qwen3.8-27b` is served on luyao1's RTX 5090 first (one
-> physical tier, not a multi-GPU ladder). Requests only spill to OpenRouter
+> the common path — with a GB10 tensor-parallel pair as tier 1. `qwen3.8-27b`
+> is served on luyao1's RTX 5090 first (tier 0), with two tier-1 replicas on
+> the home segment (gmk, a Ryzen AI MAX+ 395; and n5-max, the data-primary
+> box). Requests only spill to OpenRouter
 > (`deepseek/deepseek-v4-flash-0731` / `qwen/qwen3.8-27b`) when the in-house
 > backend is at its concurrency roof or a request runs long enough to trigger
-> the hedge — that overflow is metered. **512K context for deepseek** (below the
-> `[1m]` suffix's literal claim — see [Model selection](#model-selection) above
-> for why), **376K for qwen3.8-27b** (measured VRAM ceiling for 8 real parallel
-> slots on a single 32GB card, stress-tested clean). Deepseek is the one the
+> the hedge — that overflow is metered. **512K context for deepseek on the H100
+> tier** (below the `[1m]` suffix's literal claim — see
+> [Model selection](#model-selection) above for why), **376K for qwen3.8-27b on
+> luyao1** (measured VRAM ceiling for 8 real parallel slots on a single 32GB
+> card, stress-tested clean); the tier-1 replicas serve smaller contexts (256K
+> for deepseek on GB10, 214K for qwen on gmk/n5-max). Deepseek is the one the
 > Studio chatbox uses by default, and the one you should set as
 > `ANTHROPIC_MODEL`.
 
@@ -386,14 +392,25 @@ it throttles the heaviest legitimate work:
 
 | Role | 4h | 7d |
 |---|---|---|
-| `admin` / `super_admin` | **uncapped** | **uncapped** |
-| `user` | 2M | 20M |
+| `admin` / `super_admin` | 45M | 500M |
+| `user` | 45M | 500M |
 
-Set by `LUMID_QUOTA_CLAUDE_USER_{5H,7D}_TOKENS` (role `user`) and
-`LUMID_QUOTA_CLAUDE_{5H,7D}_TOKENS` (the default tier), both in the
-lumid-identity deployment manifest. The earlier figures documented here — a
-single global 15M/150M applying to everyone — were briefly live and are what
-caused operators to be throttled by a cohort-sized cap.
+**Nobody is exempt.** Admins were uncapped until 2026-08-24, when the
+exemption was removed: three of the four pooled accounts had been revoked on
+2026-08-21 (leaving one), ~25% of all Claude requests were being denied, and
+the two largest consumers were both admins drawing ~820M weighted units each
+over 7 days against a budget that did not exist. An exemption is only
+defensible while the resource is not scarce. The recovery path if a cap does
+misfire is the per-user window reset on [/code](/code) (`super_admin`-only),
+not an uncapped role.
+
+The caps are set by `LUMID_QUOTA_CLAUDE_USER_{5H,7D}_TOKENS` (role `user`)
+and `LUMID_QUOTA_CLAUDE_{5H,7D}_TOKENS` (the admin/super_admin tier), both in
+the lumid-identity deployment manifest. The env var names keep the `5H`
+suffix for continuity, but the short window itself is **4 hours** (the
+`LUMID_QUOTA_CLAUDE_SHORT_WINDOW` default); the earlier figures documented
+here — a single global 15M/150M applying to everyone — were briefly live and
+are what caused operators to be throttled by a cohort-sized cap.
 
 - When a window is exhausted the proxy returns `429` with the reason and
   Claude Code backs off; the window rolls continuously, so capacity returns
@@ -401,7 +418,7 @@ caused operators to be throttled by a cohort-sized cap.
 - Current per-user consumption is visible to admins on
   [/code](/code) under **Per-user pool usage**.
 - The pool quota applies to the **pooled Claude models only** — the DeepSeek
-  family runs on separate keys and never counts against the 15M/150M windows.
+  family runs on separate keys and never counts against the pool windows.
 
 ### Seeing your usage from the CLI
 
@@ -426,8 +443,8 @@ curl -fsSL https://lum.id/docs/quota.md -o ~/.claude/commands/quota.md
 ```
 lum.id/claude — your pool usage
 
-  4h  ████████████████████░░░░░░░░  71.0%   10.7M / 15.0M   resets in 1h36m
-  7d  ████████░░░░░░░░░░░░░░░░░░░░  31.2%   46.8M / 150M    resets in 52h59m
+  4h  ████████████████████░░░░░░░░  71.0%   31.9M / 45.0M   resets in 1h36m
+  7d  ████████░░░░░░░░░░░░░░░░░░░░  31.2%   156M / 500M    resets in 52h59m
 
   by model (7d)
     claude-sonnet-5                       7.10M
