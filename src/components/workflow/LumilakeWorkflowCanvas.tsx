@@ -35,12 +35,47 @@ export type HaloPlan = {
 	error?: string;
 };
 
+// Per-op execution state for a run overlay. Distinct from `HaloPlan`, which is
+// a PLAN (where an op would run); this is what actually happened.
+export type OpRunState = 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped';
+
+export type RunOverlay = Record<string, OpRunState>;
+
 type NodeData = {
 	label: string;
 	op: string;           // op type (FormatOp, LLMChatOp, InputOp, …)
 	subtitle: string;
 	worker?: string;      // HALO-assigned worker, if any
+	state?: OpRunState;   // live run state, if a run overlay was supplied
 };
+
+// Run state gets its OWN visual channel — an outline ring plus a dot — because
+// the border and background are already spent encoding op TYPE. Repainting
+// those for status would make a running LLMChatOp indistinguishable from a
+// DataRetrievalOp, trading one axis of information for another instead of
+// adding one.
+function stateRing(state?: OpRunState): string {
+	switch (state) {
+		case 'running': return 'ring-2 ring-sky-500 ring-offset-1';
+		case 'succeeded': return 'ring-1 ring-emerald-500';
+		case 'failed': return 'ring-2 ring-rose-500 ring-offset-1';
+		case 'skipped': return 'opacity-50';
+		default: return '';
+	}
+}
+
+function StateDot({ state }: { state?: OpRunState }) {
+	if (!state || state === 'pending') return null;
+	const cls =
+		state === 'running' ? 'bg-sky-500 animate-pulse'
+			: state === 'succeeded' ? 'bg-emerald-500'
+				: state === 'failed' ? 'bg-rose-500'
+					: 'bg-gray-400';
+	// title= rather than a visible label: at 210x60 the subtitle line is already
+	// carrying the model/mode, and a word like "succeeded" would crowd out the
+	// detail that makes the node worth reading.
+	return <span title={state} className={`h-2 w-2 flex-shrink-0 rounded-full ${cls}`} />;
+}
 
 const NODE_W = 210;
 const NODE_H = 60;
@@ -59,10 +94,13 @@ function opColor(op: string): string {
 
 function OpNode({ data }: NodeProps<Node<NodeData>>) {
 	return (
-		<div className={`flex h-full w-full flex-col justify-between rounded-lg border-2 p-2 text-left shadow-sm ${opColor(data.op)}`}>
+		<div className={`flex h-full w-full flex-col justify-between rounded-lg border-2 p-2 text-left shadow-sm ${opColor(data.op)} ${stateRing(data.state)}`}>
 			<Handle type="target" position={Position.Left} />
 			<Handle type="source" position={Position.Right} />
-			<div className="text-[11px] font-semibold text-gray-900 truncate">{data.label}</div>
+			<div className="flex items-center gap-1">
+				<StateDot state={data.state} />
+				<span className="text-[11px] font-semibold text-gray-900 truncate">{data.label}</span>
+			</div>
 			<div className="flex items-center justify-between gap-1 text-[9px] text-gray-500">
 				<span className="truncate">{data.subtitle}</span>
 				{data.worker && (
@@ -109,7 +147,7 @@ function workerByOp(plan?: HaloPlan, opIds: string[] = []): Record<string, strin
 	return out;
 }
 
-export function parseWorkflow(workflowYaml: string, plan?: HaloPlan): { nodes: Node[]; edges: Edge[]; error?: string } {
+export function parseWorkflow(workflowYaml: string, plan?: HaloPlan, runState?: RunOverlay): { nodes: Node[]; edges: Edge[]; error?: string } {
 	let wf: Parsed;
 	try { wf = (parseYaml(workflowYaml) || {}) as Parsed; }
 	catch (e) { return { nodes: [], edges: [], error: String((e as Error).message || e) }; }
@@ -141,6 +179,12 @@ export function parseWorkflow(workflowYaml: string, plan?: HaloPlan): { nodes: N
 			else if (inputSet.has(ref)) addEdge(`input:${ref}`, o.id);
 		}
 	}
+	// Animate only the edges FEEDING a currently-running op. Animating the whole
+	// graph would say "everything is moving"; animating the in-edges of the one
+	// running node points at where the run actually is.
+	if (runState) {
+		for (const e of edges) if (runState[e.target] === 'running') e.animated = true;
+	}
 	dagre.layout(g);
 
 	const nodes: Node[] = [];
@@ -162,14 +206,19 @@ export function parseWorkflow(workflowYaml: string, plan?: HaloPlan): { nodes: N
 			id: o.id, type: 'op',
 			position: { x: p.x - NODE_W / 2, y: p.y - NODE_H / 2 },
 			style: { width: NODE_W, height: NODE_H },
-			data: { label: o.id, op: o.op || 'Op', subtitle: opDetail(o), worker: wbo[o.id] },
+			data: { label: o.id, op: o.op || 'Op', subtitle: opDetail(o), worker: wbo[o.id], state: runState?.[o.id] },
 		});
 	}
 	return { nodes, edges };
 }
 
-export default function LumilakeWorkflowCanvas({ workflowYaml, plan }: { workflowYaml: string; plan?: HaloPlan }) {
-	const { nodes: initNodes, edges: initEdges, error } = useMemo(() => parseWorkflow(workflowYaml, plan), [workflowYaml, plan]);
+export default function LumilakeWorkflowCanvas(
+	{ workflowYaml, plan, runState }: { workflowYaml: string; plan?: HaloPlan; runState?: RunOverlay },
+) {
+	const { nodes: initNodes, edges: initEdges, error } = useMemo(
+		() => parseWorkflow(workflowYaml, plan, runState),
+		[workflowYaml, plan, runState],
+	);
 	const [nodes, setNodes, onNodesChange] = useNodesState(initNodes);
 	const [edges, setEdges, onEdgesChange] = useEdgesState(initEdges);
 	useEffect(() => { setNodes(initNodes); setEdges(initEdges); }, [initNodes, initEdges, setNodes, setEdges]);

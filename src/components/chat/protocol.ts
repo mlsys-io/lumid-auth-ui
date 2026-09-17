@@ -328,8 +328,16 @@ export function handleEvent(
 		// Tools arrive over the MCP wire as `mcp__lumid__optimize_workflow`; the
 		// panel dispatch keys on the bare name, so normalize first (was silently
 		// never matching → the DAG/HALO side panel never opened from chat).
+		// `run_lumilake_job` is here too, and its absence was the odd one out:
+		// it takes the SAME `workflow_yaml` arg and is the tool that actually
+		// EXECUTES a Lumilake job, so previewing a workflow drew its graph while
+		// really running one drew nothing. Its result is a job record rather than
+		// a HALO plan; that is harmless to pass as `plan` because the canvas reads
+		// `plan?.worker_assignment` optionally and simply renders no worker badges
+		// when it is absent.
 		const wfName = baseToolName(String(evt.name || ''));
-		if ((wfName === 'optimize_workflow' || wfName === 'run_workflow') && ok && evt.result) {
+		if ((wfName === 'optimize_workflow' || wfName === 'run_workflow'
+			|| wfName === 'run_lumilake_job') && ok && evt.result) {
 			const a = (evt.args && typeof evt.args === 'object')
 				? evt.args as Record<string, unknown>
 				: (() => { try { return JSON.parse(String(evt.args)); } catch { return {}; } })();
@@ -339,7 +347,11 @@ export function handleEvent(
 					detail: {
 						workflow_yaml: wfYaml,
 						plan: unwrapToolResult(evt.result),
-						title: wfName === 'run_workflow' ? 'Workflow run' : 'Workflow · HALO plan',
+						title: wfName === 'optimize_workflow'
+							? 'Workflow · HALO plan'
+							: wfName === 'run_lumilake_job'
+								? 'Lumilake job'
+								: 'Workflow run',
 					},
 				}));
 			}

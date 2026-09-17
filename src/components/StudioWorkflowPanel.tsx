@@ -14,14 +14,29 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Workflow as WorkflowIcon, X, Cpu, Clock } from 'lucide-react';
-import LumilakeWorkflowCanvas, { type HaloPlan } from './workflow/LumilakeWorkflowCanvas';
+import LumilakeWorkflowCanvas, { type HaloPlan, type RunOverlay } from './workflow/LumilakeWorkflowCanvas';
 
 const WIDTH_KEY = 'studio_workflow_panel_width_v1';
 const MIN_WIDTH = 360;
 const MAX_WIDTH = 900;
 const DEFAULT_WIDTH = 560;
 
-type WorkflowPayload = { workflow_yaml: string; plan?: HaloPlan; title?: string };
+// `run_state` is an OPTIONAL per-op execution overlay (opId -> pending |
+// running | succeeded | failed | skipped), distinct from `plan`, which says
+// where an op WOULD run rather than what happened.
+//
+// Nothing populates it yet, deliberately. `lumilake_job_status` does return a
+// `steps` map, but whether its keys are workflow op ids has not been confirmed
+// against a real job — and a wrong mapping here would paint confident,
+// plausible, wrong state onto the graph, which is worse than painting none.
+// Wire the producer once a real run's progress payload has been inspected; the
+// panel and canvas are ready for it.
+type WorkflowPayload = {
+	workflow_yaml: string;
+	plan?: HaloPlan;
+	title?: string;
+	run_state?: RunOverlay;
+};
 
 export function StudioWorkflowPanel() {
 	const [open, setOpen] = useState(false);
@@ -121,7 +136,7 @@ export function StudioWorkflowPanel() {
 			</header>
 			<div className="flex-1 min-h-0 overflow-hidden">
 				{wf?.workflow_yaml
-					? <LumilakeWorkflowCanvas workflowYaml={wf.workflow_yaml} plan={wf.plan} />
+					? <LumilakeWorkflowCanvas workflowYaml={wf.workflow_yaml} plan={wf.plan} runState={wf.run_state} />
 					: <div className="p-4 text-[12px] text-muted-foreground">No workflow to show yet — optimize or run one from chat.</div>}
 			</div>
 			{plan?.error && (
