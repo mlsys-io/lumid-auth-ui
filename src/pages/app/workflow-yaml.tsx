@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Code2, Loader2, LayoutGrid, Save, Upload } from 'lucide-react';
 
-import LumilakeEditor from '@/workflow/LumilakeEditor';
+import WorkflowEditor from '@/workflow/WorkflowEditor';
 
 import { Button } from '@/components/ui/button';
 import {

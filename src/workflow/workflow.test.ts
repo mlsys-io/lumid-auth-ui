@@ -17,6 +17,7 @@ import { applyOverlay, rootNodes } from "./model";
 import { layoutGraph, layoutKey } from "./layout";
 import { run as runDocChecks, caseCount as docCaseCount } from "./doc.test";
 import { run as runEditChecks, caseCount as editCaseCount } from "./edit.test";
+import { run as runFmChecks, caseCount as fmCaseCount } from "./flowmesh.test";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -330,7 +331,7 @@ check("isEmptyLoop is true only when nothing is declared", () => {
 export function run(): number {
 	// The document round-trip suite runs in the same process — it is the
 	// invariant everything else is built on, so it must never be skippable.
-	let failed = runDocChecks() + runEditChecks();
+	let failed = runDocChecks() + runEditChecks() + runFmChecks();
 	for (const c of checks) {
 		try {
 			c.run();
@@ -355,10 +356,10 @@ if (typeof describe === "function" && typeof it === "function") {
 	const proc = (globalThis as { process?: { exitCode?: number } }).process;
 	if (failed > 0) {
 		// eslint-disable-next-line no-console
-		console.error(`${failed} of ${checks.length + docCaseCount + editCaseCount} case(s) failed`);
+		console.error(`${failed} of ${checks.length + docCaseCount + editCaseCount + fmCaseCount} case(s) failed`);
 		if (proc) proc.exitCode = 1;
 	} else {
 		// eslint-disable-next-line no-console
-		console.log(`workflow core: all ${checks.length + docCaseCount + editCaseCount} cases passed`);
+		console.log(`workflow core: all ${checks.length + docCaseCount + editCaseCount + fmCaseCount} cases passed`);
 	}
 }

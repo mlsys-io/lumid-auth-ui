@@ -3,7 +3,7 @@
 // the app bundle; wf-dev.html is its only entry.
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
-import LumilakeEditor from "../LumilakeEditor";
+import WorkflowEditor from "../WorkflowEditor";
 import WorkflowCanvas from "../WorkflowCanvas";
 import { projectXpio } from "../adapters/xpio";
 import { parseLumilake } from "../adapters/lumilake";
@@ -48,12 +48,54 @@ const CYCLE = { ts: 1, steps: [
   { step_id: "analyze_papers", ok: false, duration_s: 1.2, error: "Quota exceeded\nat line 3" },
 ] } as never;
 
+const FM_SINGLE = `apiVersion: flowmesh/v1
+kind: SFTTask
+metadata:
+  name: tune-tinyllama
+spec:
+  taskType: sft
+  resources:
+    hardware: {cpu: 8, memory: 32GiB, gpu: {type: RTX 5080, count: 2}}
+  model:
+    source: {type: huggingface, identifier: TinyLlama/TinyLlama-1.1B-Chat-v1.0}
+  data:
+    dataset_name: openai/gsm8k
+    split: "train[:5%]"
+  training: {num_train_epochs: 2, batch_size: 4, bf16: true}
+  output:
+    destination: {type: local}
+    artifacts: [final_model]
+`;
+
+const FM_DAG = `apiVersion: flowmesh/v1
+kind: InferenceTask
+metadata:
+  name: dag-two-branch-demo
+spec:
+  taskType: inference
+  resources:
+    hardware: {cpu: 4, memory: 16GiB}
+  model:
+    source: {type: huggingface, identifier: TinyLlama/TinyLlama-1.1B-Chat-v1.0}
+  graph:
+    nodes:
+      - name: branch-a
+        spec: {taskType: inference, data: {type: list, items: ['a']}}
+      - name: branch-b
+        spec: {taskType: inference, data: {type: list, items: ['b']}}
+      - name: synthesis
+        dependsOn: [branch-a, branch-b]
+        spec: {taskType: inference, data: {type: graph_template}}
+`;
+
 function App() {
   const [yaml, setYaml] = useState(WF);
+  const [fm, setFm] = useState(FM_SINGLE);
+  const [fmDag, setFmDag] = useState(FM_DAG);
   return (
     <div style={{ padding: 16, display: "grid", gap: 16 }}>
       <section data-testid="editor" style={{ height: 520, border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden" }}>
-        <LumilakeEditor value={yaml} onChange={setYaml} />
+        <WorkflowEditor value={yaml} onChange={setYaml} />
       </section>
       <section data-testid="run-overlay">
         <WorkflowCanvas
@@ -65,7 +107,15 @@ function App() {
       <section data-testid="xpio">
         <WorkflowCanvas graph={projectXpio(LOOP, { cycle: CYCLE })} mode="view" />
       </section>
+      <section data-testid="fm-single" style={{ height: 620, border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden" }}>
+        <WorkflowEditor value={fm} onChange={setFm} />
+      </section>
+      <section data-testid="fm-dag" style={{ height: 420, border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden" }}>
+        <WorkflowEditor value={fmDag} onChange={setFmDag} />
+      </section>
       <pre data-testid="yaml-out" style={{ display: "none" }}>{yaml}</pre>
+      <pre data-testid="fm-out" style={{ display: "none" }}>{fm}</pre>
+      <pre data-testid="fmdag-out" style={{ display: "none" }}>{fmDag}</pre>
     </div>
   );
 }

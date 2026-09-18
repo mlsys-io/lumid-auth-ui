@@ -120,7 +120,7 @@ try {
 	// --- 5. selection opens the inspector -------------------------------------
 	await editor.locator(".react-flow__node-wf").filter({ hasText: "Reply" }).first().click();
 	await page.waitForTimeout(400);
-	const inspector = page.locator("aside").filter({ hasText: "Parameters" }).first();
+	const inspector = editor.locator("aside").filter({ hasText: "Parameters" }).first();
 	ok("clicking a node opens the inspector", await inspector.count() === 1);
 	const insText = await inspector.innerText();
 	ok("the inspector names the op kind", /LLMChatOp/.test(insText), insText.slice(0, 120));
@@ -155,16 +155,16 @@ try {
 	ok("the node card reflects the new value", cardTitles.some((t) => t?.includes("Qwen2.5-0.5B-Instruct")), cardTitles.join(" | "));
 
 	// --- 7. undo ---------------------------------------------------------------
-	await page.locator('button[title="Undo"]').click();
+	await editor.locator('button[title="Undo"]').click();
 	await page.waitForTimeout(400);
 	const afterUndo = await page.getByTestId("yaml-out").innerText();
 	ok("undo restores the previous model", afterUndo.includes("Qwen2.5-7B-Instruct") && !afterUndo.includes("0.5B"), "undo did not revert");
 
 	// --- 8. adding a node ------------------------------------------------------
 	const before = await editor.locator(".react-flow__node-wf > div").count();
-	await page.getByRole("button", { name: "Add" }).click();
+	await editor.getByRole("button", { name: "Add" }).click();
 	await page.waitForTimeout(250);
-	await page.getByRole("button", { name: /Message/ }).first().click();
+	await editor.getByRole("button", { name: /Message/ }).first().click();
 	await page.waitForTimeout(600);
 	const after = await editor.locator(".react-flow__node-wf > div").count();
 	ok("the add menu adds a node", after === before + 1, `${before} -> ${after}`);
@@ -172,12 +172,12 @@ try {
 	ok("a new node is wired up, not orphaned", /inputs:\s*\[/.test(yamlAfterAdd.split("MessageOp")[0].slice(-200)) || yamlAfterAdd.includes("- message"), "no inputs on the new op");
 
 	// --- 9. diagnostics --------------------------------------------------------
-	await page.locator('button[title="Toggle the YAML pane"]').click();
+	await editor.locator('button[title="Toggle the YAML pane"]').click();
 	await page.waitForTimeout(300);
-	const ta = page.locator("textarea").first();
+	const ta = editor.locator("textarea").first();
 	await ta.fill("ops:\n  - id: A\n    op: LLMChatOp\n    inputs: [DoesNotExist]\n");
 	await page.waitForTimeout(500);
-	await page.locator('button[title="Toggle the YAML pane"]').click();
+	await editor.locator('button[title="Toggle the YAML pane"]').click();
 	await page.waitForTimeout(600);
 	const editorText = await editor.innerText();
 	ok("a dangling reference surfaces as a visible problem", /DoesNotExist/.test(editorText) && /problem/i.test(editorText), editorText.slice(0, 200));
@@ -185,6 +185,49 @@ try {
 	await page.screenshot({ path: `${SHOTS}/02-diagnostics.png` });
 	await page.getByTestId("xpio").screenshot({ path: `${SHOTS}/03-xpio-bands.png` });
 	await page.getByTestId("run-overlay").screenshot({ path: `${SHOTS}/04-run-overlay.png` });
+
+	// --- 9b. FlowMesh: form-first, and the dialect is read from the bytes ------
+	const fm = page.getByTestId("fm-single");
+	const fmText = await fm.innerText();
+	ok("the dialect is detected from the document, not a column", /FlowMesh/.test(fmText), fmText.slice(0, 120));
+
+	// A single task is NOT a graph — 13 of the 15 kinds are one task, so the
+	// form gets the room and the canvas is reduced to a header strip.
+	const fmReal = await fm.locator(".react-flow__node-wf > div").count();
+	ok("a single task renders one real node plus its two endpoints", fmReal === 3, `got ${fmReal}`);
+	// The form sits in an overflow-y-auto panel, so innerText only returns what
+	// is above the fold. Read the section headings out of the DOM instead.
+	const fmSections = await fm.locator("aside h4").evaluateAll((els) => els.map((e) => e.textContent?.trim()));
+	ok("the spec form is shown without having to select anything",
+		fmSections.includes("Resources") && fmSections.includes("Training"), fmSections.join(", "));
+	ok("the kind's own blocks are present, and only those",
+		fmSections.includes("Model") && !fmSections.includes("LoRA"),
+		`SFT should show Model but not LoRA; got ${fmSections.join(", ")}`);
+	const fmBadges = await fm.locator(".react-flow__node-wf [title]").evaluateAll((els) => els.map((e) => e.getAttribute("title")));
+	ok("the GPU request shows its VALUE, not just a generic icon",
+		fmBadges.some((t) => t?.includes("RTX 5080x2")), fmBadges.join(" | "));
+
+	// Editing a nested spec field must reach the document.
+	const epochs = fm.locator('input[id="f-training-num_train_epochs"]');
+	ok("a nested training field is rendered", await epochs.count() === 1);
+	await epochs.fill("5");
+	await epochs.blur();
+	await page.waitForTimeout(600);
+	ok("editing a nested spec field writes through",
+		(await page.getByTestId("fm-out").innerText()).includes("num_train_epochs: 5"), "not written");
+
+	// --- 9c. FlowMesh DAG: dependsOn IS the edge set ---------------------------
+	const dag = page.getByTestId("fm-dag");
+	const dagNodes = await dag.locator(".react-flow__node-wf > div").count();
+	const dagEdges = await dag.locator(".react-flow__edge").count();
+	ok("spec.graph.nodes render as real nodes", dagNodes === 3, `got ${dagNodes}`);
+	ok("dependsOn renders as edges", dagEdges === 2, `got ${dagEdges}`);
+	const dagText = await dag.innerText();
+	ok("a graph document is NOT form-first", /3 nodes/.test(dagText), dagText.slice(0, 120));
+	ok("graph nodes inherit the shared model for their subtitle", /TinyLlama/.test(dagText), dagText.slice(0, 200));
+
+	await page.getByTestId("fm-single").screenshot({ path: `${SHOTS}/05-flowmesh-form.png` });
+	await page.getByTestId("fm-dag").screenshot({ path: `${SHOTS}/06-flowmesh-dag.png` });
 
 	// --- 10. no console errors -------------------------------------------------
 	const real = consoleErrors.filter((e) => !/favicon|ERR_CONNECTION|Download the React DevTools/i.test(e));

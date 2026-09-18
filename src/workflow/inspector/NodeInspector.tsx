@@ -40,11 +40,21 @@ interface Props {
 	onClose?: () => void;
 	/** Rendered inside the Run tab — today's StepInspectorPanel body slots here. */
 	runSlot?: React.ReactNode;
+	/**
+	 * "panel"  — the 320px right dock beside a graph (the default).
+	 * "full"   — the form IS the page. Used when the document is a single
+	 *            FlowMesh task: there is no graph to sit beside, so a narrow
+	 *            column with an empty half-screen to its right would be a panel
+	 *            pretending it still had a canvas for company.
+	 */
+	layout?: "panel" | "full";
 }
 
 export function NodeInspector({
 	node, registry, readOnly, lockReason, resourceOptions, onChangeParam, onRename, onClose, runSlot,
+	layout = "panel",
 }: Props) {
+	const full = layout === "full";
 	const spec = registry[specKey(node)];
 	const [tab, setTab] = useState<Tab>("params");
 	const [renaming, setRenaming] = useState(false);
@@ -58,7 +68,7 @@ export function NodeInspector({
 	const accent = ACCENT[accentOf(node.kind)];
 
 	return (
-		<aside className="flex h-full w-[320px] flex-col border-l border-slate-200 bg-white">
+		<aside className={full ? "flex h-full w-full flex-col bg-white" : "flex h-full w-[320px] flex-col border-l border-slate-200 bg-white"}>
 			<header className="flex items-start gap-2 border-b border-slate-100 px-3 py-2.5">
 				<span
 					className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md"
@@ -135,9 +145,9 @@ export function NodeInspector({
 				))}
 			</nav>
 
-			<div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+			<div className={full ? "min-h-0 flex-1 overflow-y-auto px-5 py-4" : "min-h-0 flex-1 overflow-y-auto px-3 py-3"}>
 				{tab === "params" && (
-					<div className="space-y-4">
+					<div className={full ? "max-w-3xl space-y-5" : "space-y-4"}>
 						{spec ? (
 							<>
 								<p className="text-[11px] leading-snug text-slate-500">{spec.summary}</p>
@@ -147,6 +157,7 @@ export function NodeInspector({
 									return (
 										<section key={section.title} className="space-y-3">
 											<h4 className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{section.title}</h4>
+											<div className={full ? "grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2" : "space-y-3"}>
 											{fields.map((f) => (
 												<FieldRow
 													key={f.path.join(".")}
@@ -158,6 +169,7 @@ export function NodeInspector({
 													onChange={(path, v) => onChangeParam?.(path, v)}
 												/>
 											))}
+											</div>
 										</section>
 									);
 								})}
