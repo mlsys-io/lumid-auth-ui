@@ -7,7 +7,8 @@ import { UserDashboard } from '@/runmesh/pages/user/UserDashboard';
  * Workflow Builder page at /dashboard.
  *
  * Two authoring modes:
- *   1. n8n canvas — visual DAG editor at /dashboard/n8n (N8nIntegration)
+ *   1. workflow canvas — the native editor (src/workflow/), which replaced
+ *      the n8n iframe at /dashboard/n8n
  *   2. YAML       — paste-or-upload at /dashboard/workflow/yaml
  *
  * Below the mode picker is the existing Runmesh UserDashboard — the

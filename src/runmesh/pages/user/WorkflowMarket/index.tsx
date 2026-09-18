@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
+import WorkflowPreview from '@/workflow/WorkflowPreview';
 import { useNavigate } from 'react-router-dom';
 import { Icons } from '@/runmesh/components/Icons';
 import {
@@ -109,47 +110,6 @@ export const WorkflowMarket: React.FC = () => {
     definitionJson: '{}', // 确保提供默认值
   });
 
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [iframeReady, setIframeReady] = useState(false);
-
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      try {
-        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-        if (data.command === 'previewPageReady') {
-          setIframeReady(true);
-        }
-      } catch {
-        // Not JSON or other message
-      }
-    };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, []);
-
-  useEffect(() => {
-    if (showReuseModal && iframeReady && reuseData.wf?.definitionJson && iframeRef.current) {
-      try {
-        const workflow = JSON.parse(reuseData.wf.definitionJson);
-        iframeRef.current.contentWindow?.postMessage(
-          {
-            command: 'previewWorkflow',
-            workflow,
-          },
-          '*',
-        );
-      } catch (e) {
-        console.error('Failed to parse workflow JSON:', e);
-      }
-    }
-  }, [showReuseModal, iframeReady, reuseData.wf?.definitionJson]);
-
-  // 当关闭弹窗时，重置 iframeReady
-  useEffect(() => {
-    if (!showReuseModal) {
-      setIframeReady(false);
-    }
-  }, [showReuseModal]);
 
   const categoryOptions = [
     { typeCode: '', typeName: t('workflowMarket.filter.all') },
@@ -706,7 +666,7 @@ export const WorkflowMarket: React.FC = () => {
       if (result) {
         // tipSuccess('应用已创建，正在跳转');
         setShowReuseModal(false);
-        navigate('/app/n8n/' + workflowId);
+        navigate(`/studio/workflows/new?from=${workflowId}`);
       }
     } catch (error) {
       console.error('复用创建工作流失败', error);
@@ -1021,21 +981,12 @@ export const WorkflowMarket: React.FC = () => {
                   <label className="block text-sm font-bold text-slate-700 mb-2">
                     {t('workflowMarket.reuse.preview')}
                   </label>
-                  <div className="w-full h-[400px] border border-slate-200 rounded-xl overflow-hidden bg-slate-50 relative">
-                    {!iframeReady && (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50 z-10">
-                        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-brand-600 mb-3"></div>
-                        <p className="text-sm text-slate-500 font-medium">
-                          {t('workflowMarket.reuse.loadingPreview')}
-                        </p>
-                      </div>
-                    )}
-                    <iframe
-                      ref={iframeRef}
-                      src={`${import.meta.env.VITE_N8N_URL}/workflow-preview`}
-                      className={`w-full h-full border-none transition-opacity duration-300 ${iframeReady ? 'opacity-100' : 'opacity-0'}`}
-                      title="Workflow Preview"
-                    />
+                  {/* Rendered natively. This was an iframe into VITE_N8N_URL,
+                      which has been returning 504 since the n8n container went
+                      away with the pre-Kubernetes lift — so the preview pane
+                      was a gateway-timeout box with a spinner in front of it. */}
+                  <div className="w-full h-[400px] border border-slate-200 rounded-xl overflow-hidden bg-slate-50">
+                    <WorkflowPreview definitionJson={reuseData.wf?.definitionJson} />
                   </div>
                 </div>
 

@@ -346,6 +346,21 @@ try {
 		ok("the anchor is intact before any edit", before.includes("&id001"), "fixture wrong");
 	}
 
+	// --- 9h. marketplace previews, which replaced a 504 iframe ---------------
+	const pv = page.getByTestId("previews");
+	for (const [id, chip] of [["lumilake", "Lumilake"], ["flowmesh", "FlowMesh"], ["n8n", "n8n"]]) {
+		const one = page.getByTestId(`preview-${id}`);
+		ok(`a ${id} definition previews natively`,
+			await one.locator(".react-flow__node-wf > div").count() > 0, `${id} drew nothing`);
+		ok(`the ${id} preview names its dialect`, (await one.innerText()).includes(chip), await one.innerText());
+	}
+	// definition_json has no schema discipline, so an empty row is ordinary.
+	const junk = page.getByTestId("preview-junk");
+	ok("an empty definition degrades to a sentence, not an error",
+		/no definition saved/.test(await junk.innerText()), await junk.innerText());
+	ok("a showcase preview carries no chrome", await pv.locator(".react-flow__controls").count() === 0);
+	await pv.screenshot({ path: `${SHOTS}/11-previews.png` });
+
 	// --- 10. no console errors -------------------------------------------------
 	const real = consoleErrors.filter((e) => !/favicon|ERR_CONNECTION|Download the React DevTools/i.test(e));
 	ok("no console errors", real.length === 0, real.slice(0, 3).join(" | "));

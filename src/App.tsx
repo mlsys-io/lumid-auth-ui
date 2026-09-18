@@ -183,10 +183,8 @@ const AppWorkflows = lazy(() => import("./pages/app/workflows"));
 // AppJobs (pages/dashboard/jobs) retired 2026-06-19 — /dashboard/jobs is
 // now a redirect to /studio/apps; the page file moved to deprecated/.
 const AppBilling = lazy(() => import("./pages/app/billing"));
-const AppWorkflowBuilder = lazy(() => import("./pages/app/workflow-builder"));
 const AppWorkflowDetail = lazy(() => import("./pages/app/workflow-detail"));
 const AppWorkflowYaml = lazy(() => import("./pages/app/workflow-yaml"));
-const AppN8n = lazy(() => import("./pages/app/n8n"));
 // AppProfile (Runmesh user profile) retired 2026-04-24 — the canonical
 // Profile tab at /dashboard/profile renders the identity-side Profile
 // component from /pages/account/profile.tsx.
@@ -775,6 +773,15 @@ export default function App() {
               <Route path="nodes" element={<Navigate to="/studio/research-fleet" replace />} />
               <Route path="workers" element={<Navigate to="/studio/research-fleet" replace />} />
             </Route>
+
+            {/* The workflow editor. Until now every pages/app/workflow-* page was
+                lazy-DECLARED and never rendered — AppWorkflows, AppWorkflowYaml,
+                AppWorkflowDetail, AppWorkflowBuilder and AppN8n each appeared
+                exactly once in this file, as an import — so the editor existed
+                and nothing could open it. Three live navigate() calls pointed at
+                /app/n8n, a route that was never registered either. */}
+            <Route path="workflows/new"                element={<AppWorkflowYaml />} />
+            <Route path="workflows"                    element={<AppWorkflows />} />
 
             <Route path="inbox"                        element={<Inbox />} />
             <Route path="drafts"                       element={<StudioInbox />} />

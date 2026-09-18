@@ -34,7 +34,7 @@ export const WorkflowDetail: React.FC = () => {
   // 点击流程预览跳转到 n8n 页面
   const handlePreviewClick = () => {
     if (workflowMarketItem?.workflowId) {
-      navigate(`/app/n8n/${workflowMarketItem.workflowId}`);
+      navigate(`/studio/workflows/new?from=${workflowMarketItem.workflowId}`);
     } else {
       console.warn('该工作流没有关联的 workflowId');
     }

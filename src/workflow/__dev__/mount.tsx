@@ -5,6 +5,7 @@ import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
 import WorkflowEditor from "../WorkflowEditor";
 import WorkflowCanvas from "../WorkflowCanvas";
+import WorkflowPreview from "../WorkflowPreview";
 import { projectXpio } from "../adapters/xpio";
 import { parseLumilake } from "../adapters/lumilake";
 import "../../index.css";
@@ -216,6 +217,15 @@ function App() {
       </section>
       <section data-testid="xpio-anchored" style={{ height: 420, border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden" }}>
         <WorkflowEditor value={anch} onChange={setAnch} />
+      </section>
+      {/* Marketplace thumbnails: the stored definition_json is unlabelled, so
+          each preview sniffs its own dialect. */}
+      <section data-testid="previews" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+        {([["lumilake", WF], ["flowmesh", FM_SINGLE], ["n8n", N8N_DOC], ["junk", "{}"]] as const).map(([k, v]) => (
+          <div key={k} data-testid={`preview-${k}`} style={{ height: 180, border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden" }}>
+            <WorkflowPreview definitionJson={v} />
+          </div>
+        ))}
       </section>
       <pre data-testid="anch-out" style={{ display: "none" }}>{anch}</pre>
       <pre data-testid="n8n-out" style={{ display: "none" }}>{n8n}</pre>

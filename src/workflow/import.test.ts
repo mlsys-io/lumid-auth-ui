@@ -9,6 +9,7 @@ import { parseN8n, scaffoldLumilake, flowmeshCoverage, FLOWMESH_ACCEPTED } from 
 import { parseDify, scaffoldFromDify } from "./import/dify";
 import { parseLumilake } from "./adapters/lumilake";
 import { detectFormat } from "./detect";
+import { graphFor } from "./preview";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -311,6 +312,32 @@ check("dify scaffold: the result is a valid Lumilake document", () => {
 check("detect distinguishes the two importable formats", () => {
 	eq(detectFormat(N8N).format, "n8n");
 	eq(detectFormat(DIFY).format, "dify");
+});
+
+// --- the marketplace preview -------------------------------------------------
+
+check("preview: every dialect a definition_json can hold is drawable", () => {
+	// The column is opaque LONGTEXT the Java never parses, so a preview has to
+	// sniff the bytes. Four dialects plus two kinds of nothing.
+	eq(graphFor('ops:\n  - id: A\n    op: MessageOp\n').label, "Lumilake");
+	eq(graphFor("apiVersion: flowmesh/v1\nkind: EchoTask\nspec: {taskType: echo}\n").label, "FlowMesh");
+	eq(graphFor("loops:\n  - name: a\n    steps: [{id: s}]\n").label, "xpio loop");
+	eq(graphFor('{"nodes":[],"connections":{}}').label, "n8n");
+	eq(graphFor('version: "0.7.0"\nworkflow: {graph: {nodes: []}}\n').label, "Dify");
+});
+
+check("preview: an empty or unrecognised row degrades, it does not throw", () => {
+	// This is an ordinary occurrence — definition_json has no schema discipline.
+	eq(graphFor("{}").graph, null, "the literal empty object");
+	eq(graphFor("").graph, null, "empty string");
+	eq(graphFor("just: a map\n").label, "unrecognised");
+	eq(graphFor("{{{ not parseable").graph, null, "garbage");
+});
+
+check("preview: a real document yields real nodes", () => {
+	const r = graphFor('ops:\n  - id: A\n    op: MessageOp\n  - id: B\n    op: FormatOp\n    inputs: [A]\n');
+	eq(r.graph?.nodes.length, 2);
+	eq(r.graph?.edges.length, 1);
 });
 
 export function run(): number {
