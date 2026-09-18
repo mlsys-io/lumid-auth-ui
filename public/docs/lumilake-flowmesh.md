@@ -105,10 +105,42 @@ The office lane is mixed: 1× RTX 6000 Ada (48 GB), 2× RTX 5090 (32 GB), 3× RT
 5080 (16 GB). A 9B model at FP16 is ~18 GB of weights before any KV cache, so it
 cannot run on a 16 GB card **even empty**.
 
-> **Known gap — FlowMesh matches *total* VRAM, not *free*.**
-> Setting a `gpu_memory` floor picks a card by its total capacity. If that card
-> is already busy, the job still OOMs, just on a bigger card. Measured twice on
-> 2026-09-18; see §6.
+**Put `hardware` at the TOP LEVEL of the request body.** It is a field of
+`JobSubmitRequest` (and `JobPreviewRequest`), beside `data` and `priority`:
+
+```json
+{ "data": [ { "workflow": "...", "inputs": {...}, "output_location": {...} } ],
+  "priority": "medium",
+  "hardware": { "gpu_memory": "40Gi" } }
+```
+
+`JobSubmitItem` carries only `workflow`, `inputs`, `output_location`,
+`input_batch_size` and `name`. **An entry-level `hardware` key is an extra field
+that pydantic drops without a 422** — the submit returns 200 and the floor
+simply never existed. Three runs were lost to exactly that: the dispatched tasks
+all carried the server default
+
+```yaml
+gpu: {type: any, count: 1, memory: 8Gi}
+```
+
+which matches every card in the fleet, so nothing was filtered and the 9B op
+landed on a 15.47 GiB RTX 5080 and OOM'd. Sent at the top level instead, the
+same job produced `memory: 40Gi` in the task spec and completed on the first
+attempt.
+
+> **Verify a constraint by reading it back, never by watching placement.**
+> `GET /fm/<site>/api/v1/tasks/<id>` → field `raw_yaml` → the per-node
+> `resources.hardware.gpu` block. Between two of the failed runs the op moved to
+> a different worker, which looks exactly like a floor taking effect; the next
+> run moved back, and the spec said `8Gi` throughout. Worker assignment varies
+> on its own. **200 does not mean "accepted" — it means nothing rejected it.**
+
+> **Still open — FlowMesh matches *total* VRAM, not *free*.**
+> A floor selects a card by capacity, so a busy card can still be chosen. This
+> never bit once the floor worked, because 40Gi leaves enough headroom that a
+> partly-occupied card still serves — but it is unfixed, and a tighter floor on
+> a contended card would hit it.
 
 ## 5. The worked example
 
@@ -216,10 +248,33 @@ to end, and the data-retrieval stages complete. An earlier full run produced 15
 records with per-episode normalization and captions confirmed against the actual
 JPEGs.
 
-The demo is **currently blocked** on GPU availability, not on the pipeline: the
-last two dispatched runs both OOM'd on already-occupied cards. Until FlowMesh
-matches free VRAM — or the office cards are freed — expect `job_failed` with the
-§6 signature.
+**The pipeline runs.** Four dispatched runs on 2026-09-18, and the fourth
+completed:
 
-The screenshots above therefore show the control plane, not a green run. That is
-deliberate; a screenshot of a passing run does not exist yet.
+| run | job | floor sent as | floor in the spec | outcome |
+|---|---|---|---|---|
+| 1 | `req-PCD5fVpw…` | — | `8Gi` | `job_failed` — OOM, wkr-110 (15.47 GiB) |
+| 2 | `req-barrvjbG…` | entry-level | `8Gi` | `job_failed` — OOM, wkr-120 |
+| 3 | `req-5vWAsYYD…` | entry-level | `8Gi` | `job_failed` — OOM, wkr-110 |
+| 4 | `req-5UgV3Qgd…` | **top level** | **`40Gi`** | **`curated`, 2 records, 183s** |
+
+Run 4: all 5 FlowMesh tasks `DONE` on wkr-111 / wkr-118, `metrics.records = 2`
+read back off the finished job.
+
+The diagnosis went through two wrong stops worth recording, because both looked
+convincing. First "the office cards are busy" — true, and not the cause. Then
+"the floor moved the work to a different card" — false; the next run moved back
+and the spec never changed. Run 3 was dispatched *after a GPU was freed*, which
+should have been the clean test, and failing anyway is what finally forced
+reading the dispatched spec instead of reasoning about placement.
+
+The actual defect was the request shape (§4), not the platform and not the
+hardware. **Freeing a card did not fix it and could not have** — with the
+constraint dropped, placement was unconstrained and a 16 GB card was always a
+legal target.
+
+Still outstanding: the full 15-episode run, which is what exercises the §5
+correctness checks (fifteen records, and episodes 0 and 1 normalizing
+*differently*). The screenshots above show the control plane; the surfaces are
+static markdown and do not render run output, so a "green run" is read from the
+cycle record and the job result, not from these pages.
