@@ -261,6 +261,45 @@ try {
 
 	await page.getByTestId("xpio-edit").screenshot({ path: `${SHOTS}/07-xpio-edit.png` });
 
+	// --- 9e. import: what you are about to lose, before you lose it -----------
+	const imp = page.getByTestId("n8n-import");
+	const impText = await imp.innerText();
+	ok("an n8n document is viewable, not hidden", await imp.locator(".react-flow__node-wf > div").count() === 5, "expected all 5 nodes drawn");
+	ok("and is plainly marked as never written back", /never written back/.test(impText), impText.slice(0, 200));
+
+	// An ai_languageModel edge is an ATTACHMENT — the model plugs into the chain
+	// node, it does not feed it data — so it must be drawn differently.
+	const impDash = await imp.locator(".react-flow__edge-path").evaluateAll(
+		(els) => els.map((e) => getComputedStyle(e).strokeDasharray));
+	ok("a model attachment is drawn dotted, not as a pipeline",
+		impDash.some((d) => d && d !== "none" && d.startsWith("2")), impDash.join(" | "));
+
+	await imp.getByRole("button", { name: /Import/ }).click();
+	await page.waitForTimeout(700);
+	// The dialog is the fixed overlay, not an ancestor N levels up from the
+	// heading — counting ancestors breaks the moment the markup nests differently.
+	const dialog = page.locator("div.fixed.inset-0.z-50").first();
+	const dlgText = await dialog.innerText();
+	ok("the dialog calls itself a starting point, not a translation", /starting point/.test(dlgText), dlgText.slice(0, 200));
+	// Case-insensitive: innerText reflects CSS text-transform, so a heading
+	// styled `uppercase` comes back as "NOT IMPORTED" whatever the source says.
+	ok("unmapped nodes are shown as ghosts with a reason",
+		/Slack/.test(dlgText) && /not imported/i.test(dlgText) && /No Lumilake op does this/.test(dlgText),
+		dlgText.slice(0, 400));
+	ok("credentials and expressions are called out before importing",
+		/credential/i.test(dlgText) && /expression/i.test(dlgText), dlgText.slice(0, 600));
+	ok("it reports what the REAL parser would accept, rather than guessing",
+		/3 of 5/.test(dlgText), dlgText.slice(0, 700));
+
+	await page.screenshot({ path: `${SHOTS}/08-import-dialog.png` });
+
+	await dialog.getByRole("button", { name: /^Import \d+ op/ }).click();
+	await page.waitForTimeout(800);
+	const imported = await page.getByTestId("n8n-out").innerText();
+	ok("importing replaces the document with valid Lumilake", /^name:/m.test(imported) && /ops:/.test(imported), imported.slice(0, 120));
+	ok("and the scaffold declares outputs, or the job fails server-side", /outputs:/.test(imported), imported.slice(0, 200));
+	ok("the editor now treats it as Lumilake", /Lumilake/.test(await imp.innerText()), "dialect not switched");
+
 	// --- 10. no console errors -------------------------------------------------
 	const real = consoleErrors.filter((e) => !/favicon|ERR_CONNECTION|Download the React DevTools/i.test(e));
 	ok("no console errors", real.length === 0, real.slice(0, 3).join(" | "));

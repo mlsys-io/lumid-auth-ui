@@ -18,7 +18,7 @@
 // performing rather than working.
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Code2, LayoutGrid, Plus, Redo2, Undo2 } from "lucide-react";
+import { Code2, Download, LayoutGrid, Plus, Redo2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import WorkflowCanvas from "./WorkflowCanvas";
 import { NodeInspector } from "./inspector/NodeInspector";
@@ -33,6 +33,9 @@ import { applyXpioEdit } from "./adapters/xpio.edit";
 import { LUMILAKE_REGISTRY } from "./registry/lumilake";
 import { FLOWMESH_REGISTRY } from "./registry/flowmesh";
 import { XPIO_REGISTRY } from "./registry/xpio";
+import { ImportDialog } from "./import/ImportDialog";
+import { parseN8n } from "./import/n8n";
+import { parseDify } from "./import/dify";
 import type { NodeRegistry } from "./registry/types";
 import type { WfCapabilities, WfEdit, WfEditResult, WfNodeKind, WfOverlay, WorkflowGraph } from "./model";
 import { emptyGraph } from "./model";
@@ -104,6 +107,7 @@ export default function WorkflowEditor({
 	const [text, setText] = useState(value);
 	const [selected, setSelected] = useState<string | null>(null);
 	const [showYaml, setShowYaml] = useState(false);
+	const [importing, setImporting] = useState(false);
 	const [, forceRender] = useState(0);
 
 	const doc = docRef.current;
@@ -144,6 +148,50 @@ export default function WorkflowEditor({
 
 	// Selecting a node in form-first mode is implicit: there is only one.
 	const inspected = selectedNode ?? (formFirst ? graph.nodes.find((n) => !n.synthetic) : undefined);
+
+	// n8n and Dify are import-only. They render — hiding a graph the user just
+	// pasted would be absurd — but every editing affordance is replaced by the
+	// one action that makes sense, because there is no serializer to write them
+	// back with.
+	if (detected.format === "n8n" || detected.format === "dify") {
+		const foreign = detected.format === "n8n" ? parseN8n(text) : parseDify(text);
+		return (
+			<div className="flex h-full min-h-0 flex-col" style={{ height }}>
+				<div className="flex items-center gap-2 border-b border-amber-100 bg-amber-50 px-3 py-2">
+					<Download size={13} className="flex-shrink-0 text-amber-600" />
+					<p className="min-w-0 flex-1 text-[11px] leading-snug text-amber-800">
+						This is {detected.format === "n8n" ? "an n8n" : "a Dify"} workflow. It can be viewed here and used as a
+						starting point, but it is never written back — Lumid has no {detected.format === "n8n" ? "n8n" : "Dify"} writer.
+					</p>
+					<button
+						type="button"
+						onClick={() => setImporting(true)}
+						className="flex-shrink-0 rounded-lg bg-slate-900 px-2.5 py-1 text-[11px] text-white transition-opacity hover:opacity-90"
+					>
+						Import…
+					</button>
+				</div>
+				<div className="min-h-0 flex-1">
+					<WorkflowCanvas graph={foreign} mode="view" height="100%" className="h-full w-full bg-[#FCFCFD]" />
+				</div>
+				{importing && (
+					<ImportDialog
+						text={text}
+						format={detected.format}
+						onCancel={() => setImporting(false)}
+						onImport={(yaml) => {
+							setImporting(false);
+							// Importing REPLACES the editor's document; undo history
+							// restarts, because a different document is not a patch.
+							docRef.current = WorkflowDoc.parse(yaml);
+							setText(yaml);
+							onChange?.(yaml);
+						}}
+					/>
+				)}
+			</div>
+		);
+	}
 
 	if (!adapter) {
 		return (

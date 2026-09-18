@@ -111,11 +111,30 @@ loops:
         required: false
 `;
 
+const N8N_DOC = JSON.stringify({
+  name: "research assistant",
+  nodes: [
+    { name: "When clicking Execute", type: "n8n-nodes-base.manualTrigger", parameters: {}, position: [0, 0] },
+    { name: "Prompt", type: "n8n-nodes-base.set", parameters: { mode: "raw", value: "Summarise {{ $json.text }}" }, position: [220, 0] },
+    { name: "Model", type: "@n8n/n8n-nodes-langchain.lmChatOpenAi", parameters: { model: "gpt-4o-mini" }, position: [220, 170],
+      credentials: { openAiApi: { id: "1", name: "key" } } },
+    { name: "Chain", type: "@n8n/n8n-nodes-langchain.chainLlm", parameters: { text: "Summarise this" }, position: [460, 0] },
+    { name: "Slack", type: "n8n-nodes-base.slack", parameters: { channel: "#general" }, position: [700, 0] },
+  ],
+  connections: {
+    "When clicking Execute": { main: [[{ node: "Prompt" }]] },
+    Prompt: { main: [[{ node: "Chain" }]] },
+    Model: { ai_languageModel: [[{ node: "Chain" }]] },
+    Chain: { main: [[{ node: "Slack" }]] },
+  },
+}, null, 2);
+
 function App() {
   const [yaml, setYaml] = useState(WF);
   const [fm, setFm] = useState(FM_SINGLE);
   const [fmDag, setFmDag] = useState(FM_DAG);
   const [xp, setXp] = useState(XPIO);
+  const [n8n, setN8n] = useState(N8N_DOC);
   return (
     <div style={{ padding: 16, display: "grid", gap: 16 }}>
       <section data-testid="editor" style={{ height: 520, border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden" }}>
@@ -140,6 +159,10 @@ function App() {
       <section data-testid="xpio-edit" style={{ height: 560, border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden" }}>
         <WorkflowEditor value={xp} onChange={setXp} />
       </section>
+      <section data-testid="n8n-import" style={{ height: 420, border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden" }}>
+        <WorkflowEditor value={n8n} onChange={setN8n} />
+      </section>
+      <pre data-testid="n8n-out" style={{ display: "none" }}>{n8n}</pre>
       <pre data-testid="xpio-out" style={{ display: "none" }}>{xp}</pre>
       <pre data-testid="yaml-out" style={{ display: "none" }}>{yaml}</pre>
       <pre data-testid="fm-out" style={{ display: "none" }}>{fm}</pre>
