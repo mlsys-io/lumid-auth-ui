@@ -556,8 +556,24 @@ function OnPremGpuPanel() {
 					>
 						<span className="font-medium">{b.label}</span>
 						<span className="opacity-60">·</span>
-						<span>{b.tok_s === null ? 'warming up…' : `${b.tok_s.toFixed(1)} tok/s`}</span>
-						{b.tok_s !== null && (
+						{/* UNHEALTHY OUTRANKS "no throughput yet". A dead backend and an idle
+						    one both have tok_s === null, so keying the text on tok_s alone
+						    printed "warming up…" over a backend the gateway had been failing
+						    to probe for 37 hours (GX10, 2026-09-17: vLLM EngineCore died on a
+						    tool-call structured-output request, container stayed Up, nothing
+						    bound :8090). "warming up…" reads as a wait -- it actively tells
+						    the operator NOT to investigate, which is the opposite of true,
+						    and it was the only thing this panel said about the outage. The
+						    rose chip and the title's UNHEALTHY were already correct; only
+						    this line lied, so the word is what changes. */}
+						<span className={b.healthy ? undefined : 'font-medium'}>
+							{!b.healthy
+								? 'unreachable'
+								: b.tok_s === null
+									? 'warming up…'
+									: `${b.tok_s.toFixed(1)} tok/s`}
+						</span>
+						{b.healthy && b.tok_s !== null && (
 							<>
 								<span className="opacity-60">·</span>
 								{/* Leads with concurrency (inflight / peak-in-5m), not qps --
