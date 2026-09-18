@@ -12,6 +12,7 @@
 
 import { parseLumilake, opDetail, workerByOp } from "./adapters/lumilake";
 import { projectXpio, stageOf, isEmptyLoop } from "./adapters/xpio";
+import { projectStepLog, stepIndexOf } from "./adapters/steplog";
 import { applyOverlay, rootNodes } from "./model";
 import { layoutGraph, layoutKey } from "./layout";
 
@@ -279,6 +280,39 @@ check("stageOf: cycle truth beats the name, and the name beats position", () => 
 	eq(stageOf("anything", 0, 4, "analyze"), "analyze", "cycle stage wins");
 	eq(stageOf("observe_papers", 3, 4), "observe", "name wins over position");
 	eq(stageOf("zzz", 0, 5), "observe", "position fallback");
+});
+
+// ---------------------------------------------------------------------------
+// step_log (a run, not a document)
+// ---------------------------------------------------------------------------
+
+check("steplog: linear order is the edge set", () => {
+	const g = projectStepLog([
+		{ id: "observe", ok: true, duration_s: 0.7, skill: "email/observe" },
+		{ id: "act", ok: false, duration_s: 1.2, error: "Quota exceeded" },
+	]);
+	eq(g.nodes.map((n) => n.label), ["observe", "act"]);
+	eq(g.edges.map((e) => `${e.source}->${e.target}`), ["step-0->step-1"]);
+});
+
+check("steplog: state is inferred from ok/skipped, not invented", () => {
+	const g = projectStepLog([{ ok: true }, { ok: false }, { skipped: true }, {}]);
+	eq(g.nodes.map((n) => n.status), ["succeeded", "failed", "skipped", "pending"]);
+});
+
+check("steplog: a run has no document, so nothing claims an edit path", () => {
+	const g = projectStepLog([{ id: "a", ok: true }]);
+	ok(g.nodes.every((n) => n.path.length === 0), "no edit anchors on a run");
+});
+
+check("steplog: the error text rides on the node", () => {
+	const g = projectStepLog([{ id: "act", ok: false, error: "Quota exceeded" }]);
+	eq(g.nodes[0].run?.error, "Quota exceeded");
+});
+
+check("steplog: node ids round-trip back to the raw entry index", () => {
+	eq(stepIndexOf("step-3"), 3);
+	eq(stepIndexOf("nonsense"), -1);
 });
 
 check("isEmptyLoop is true only when nothing is declared", () => {
