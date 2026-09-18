@@ -1,8 +1,7 @@
 // WorkflowCanvas — n8n-style node view of one workflow (loop).
 //
-// Structure comes from the loop's verbatim xpcloud.yaml declaration
-// (me.workflowDetail → LoopDefinition); the live overlay comes from a
-// selected run's cycle detail. Two honest shapes:
+// This file is now a THIN RENDERER. The two honest shapes it draws are decided
+// by src/workflow/adapters/xpio.ts, and their geometry by src/workflow/layout.ts:
 //
 //   Pattern A (runner-driven):  trigger → step → step → … → knowledge
 //     each step node = one skill call, colored by its five-stage band
@@ -13,51 +12,33 @@
 //     skills_invoked[] hang off DASHED edges        └─(declared)─ skill
 //     because the contract enforces no ordering for them.
 //
-// n8n ideas borrowed: typed nodes, per-node status badge on each
-// execution, click-node → data panel (StepInspectorPanel), execution
-// replay (the panel's ?cycle=<ts> selection drives this overlay).
+// n8n ideas borrowed: typed nodes, per-node status badge on each execution,
+// click-node → data panel (StepInspectorPanel), execution replay (the panel's
+// ?cycle=<ts> selection drives this overlay).
 //
 // modes: "observe" (interactive, controls, click-to-inspect) and
 // "showcase" (static, compact — marketplace cards + app surfaces).
+//
+// One behaviour change worth knowing about: the stage a node belongs to is now
+// computed ONCE, by the adapter, and stored on the node. The old code recomputed
+// it here from `nodes.indexOf(n)` — an index into an array that also held the
+// trigger and the already-unshifted band nodes — so a custom step name that fell
+// through to the positional heuristic could land in a band that disagreed with
+// the node's own stage label. Reading the stored value removes that mismatch
+// (and an O(n²) scan).
 
 import { useMemo } from "react";
 import { ReactFlow, Background, Controls, Position, type Node, type Edge } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { LoopDefinition, MeCycleDetail, MeCycleStep } from "@/api/me";
-import { LOOP_STAGES, type LoopStageKey } from "@/components/workflow/LoopOrbit";
-import { describeSchedule } from "@/lib/schedule";
-
-// State colors — shared with RunDagCanvas's palette.
-// Success/ok = brand GOLD (the whole site uses gold for healthy/ok, not green
-// — run dots, sparklines, status pills all do). Failed stays rose, running
-// stays sky (a transient state, matches the runs list).
-const STATE_BG: Record<string, string> = {
-	succeeded: "rgb(176 143 69)",  // gold-500
-	failed:    "rgb(225 29 72)",
-	running:   "rgb(14 165 233)",
-	declared:  "rgb(148 163 184)",
-	pending:   "rgb(203 213 225)",
-};
-const STATE_BORDER: Record<string, string> = {
-	succeeded: "rgb(150 119 58)",  // gold-600
-	failed:    "rgb(190 18 60)",
-	running:   "rgb(2 132 199)",
-	declared:  "rgb(148 163 184)",
-	pending:   "rgb(203 213 225)",
-};
-
-// Stage band tints (canvas backgrounds are subtle washes).
-const STAGE_TINT: Record<string, string> = {
-	observe:     "rgba(56, 189, 248, 0.07)",   // sky
-	hypothesize: "rgba(167, 139, 250, 0.08)",  // violet
-	act:         "rgba(251, 191, 36, 0.09)",   // amber
-	analyze:     "rgba(45, 212, 191, 0.08)",   // teal
-	learn:       "rgba(176, 143, 69, 0.10)",   // gold (banked outcome = on-brand)
-};
-const STAGE_LABEL_COLOR: Record<string, string> = {
-	observe: "rgb(2 132 199)", hypothesize: "rgb(124 58 237)", act: "rgb(180 83 9)",
-	analyze: "rgb(13 148 136)", learn: "rgb(123 98 48)",
-};
+import { LOOP_STAGES } from "@/components/workflow/LoopOrbit";
+import { projectXpio, isEmptyLoop } from "@/workflow/adapters/xpio";
+import { layoutGraph, LAYOUT_GEOMETRY } from "@/workflow/layout";
+import type { WfNode, WfStatus } from "@/workflow/model";
+import {
+	STATUS_COLOR, STATUS_BORDER, STAGE_TINT, STAGE_LABEL_COLOR,
+	GOLD_SOFT, EDGE_IDLE, edgeDash,
+} from "@/workflow/theme";
 
 export interface CanvasStepRef {
 	step_id: string;
@@ -78,257 +59,101 @@ interface Props {
 	onStepSelect?: (ref: CanvasStepRef) => void;
 }
 
-// Map a step id to its canonical stage. Cycle truth wins; otherwise
-// match canonical names; otherwise spread linearly (id order is the
-// contract's execution order for Pattern A).
-function stageOf(stepID: string, idx: number, total: number, cycleStage?: string): LoopStageKey | "other" {
-	if (cycleStage && LOOP_STAGES.some((s) => s.key === cycleStage)) return cycleStage as LoopStageKey;
-	const id = stepID.toLowerCase();
-	for (const s of LOOP_STAGES) {
-		if (id === s.key || id.startsWith(s.key) || id.includes(s.key)) return s.key;
-	}
-	// Heuristic position mapping keeps the band painting sensible for
-	// custom step names without lying about the name itself.
-	const slot = Math.min(LOOP_STAGES.length - 1, Math.floor((idx / Math.max(1, total)) * LOOP_STAGES.length));
-	return LOOP_STAGES[slot].key;
-}
-
-// Vertical layout — the pipeline flows top→bottom. NODE_W is the node
-// width; STEP_Y is the center-to-center vertical distance between stacked
-// nodes; NODE_H approximates a node's rendered height (for band sizing +
-// canvas height); GUTTER leaves a left column for the stage labels; COL_X
-// is the x of the main vertical column.
 const NODE_W = 196;
-const STEP_Y = 108;
 const NODE_H = 80;
-const GUTTER = 96;
-const COL_X = GUTTER + 18;
+const { GUTTER } = LAYOUT_GEOMETRY;
+
+const STAGE_LABELS = Object.fromEntries(LOOP_STAGES.map((s) => [s.key, s.label]));
 
 export default function WorkflowCanvas({ definition, cycle, running = false, mode = "observe", height: heightProp, onStepSelect }: Props) {
 	const showcase = mode === "showcase";
 
 	const { nodes, edges, contentH } = useMemo(() => {
+		const g = projectXpio(definition, { cycle, running, bands: !showcase });
+		const { positions, bands, contentH } = layoutGraph(g, { direction: "TB" });
+
 		const nodes: Node[] = [];
-		const edges: Edge[] = [];
-		const cycleByStep = new Map<string, MeCycleStep>();
-		for (const s of cycle?.steps || []) cycleByStep.set(s.step_id, s);
 
-		const stateOf = (cs?: MeCycleStep, declared = false): string => {
-			if (declared && !cs) return "declared";
-			if (!cs) return "pending";
-			if (cs.ok === false) return "failed";
-			return "succeeded";
-		};
-
-		const TOP = 16;
-		let y = TOP;
-
-		// Trigger node — cron or @trigger. Top of the vertical chain.
-		const schedule = definition.schedule || "";
-		nodes.push({
-			id: "trigger",
-			position: { x: COL_X, y },
-			data: {
-				label: (
-					<NodeLabel
-						title={schedule === "@trigger" || schedule === "" || schedule === "manual" ? "Manual trigger" : describeSchedule(schedule)}
-						subtitle="trigger"
-						state={running ? "running" : "succeeded"}
-					/>
-				),
-			},
-			sourcePosition: Position.Bottom,
-			targetPosition: Position.Top,
-			style: nodeStyle("trigger", running ? "running" : "pending"),
-		});
-		y += STEP_Y;
-
-		const patternA = (definition.steps?.length || 0) > 0;
-
-		if (patternA) {
-			const steps = definition.steps!;
-			steps.forEach((st, i) => {
-				const id = st.id || st.skill || `step-${i + 1}`;
-				const cs = cycleByStep.get(id);
-				const state = running && !cs ? "running" : stateOf(cs);
-				const stage = stageOf(id, i, steps.length, cs?.stage);
-				nodes.push({
-					id: `step:${id}`,
-					position: { x: COL_X, y },
-					data: {
-						label: (
-							<NodeLabel
-								title={id}
-								subtitle={st.skill || ""}
-								state={state}
-								duration={cs?.duration_s}
-								badges={{ experiment: !!st.experiment, knowledge: !!st.knowledge_agent }}
-								stage={stage}
-								summary={cs?.output_summary}
-								error={cs?.error}
-							/>
-						),
-					},
-					sourcePosition: Position.Bottom,
-					targetPosition: Position.Top,
-					style: nodeStyle(state, state),
-				});
-				edges.push({
-					id: `e:${i}`,
-					source: i === 0 ? "trigger" : `step:${steps[i - 1].id || steps[i - 1].skill || `step-${i}`}`,
-					target: `step:${id}`,
-					animated: running,
-					style: { stroke: "rgb(148 163 184)" },
-				});
-				y += STEP_Y;
-			});
-			// Knowledge sink off the learn end (bottom).
-			if (definition.knowledge_agent) {
-				nodes.push({
-					id: "knowledge",
-					position: { x: COL_X, y },
-					data: { label: <NodeLabel title={definition.knowledge_agent} subtitle="knowledge bank" state="succeeded" stage="learn" /> },
-					targetPosition: Position.Top,
-					style: nodeStyle("knowledge", "pending"),
-				});
-				const lastID = steps[steps.length - 1].id || steps[steps.length - 1].skill || `step-${steps.length}`;
-				edges.push({
-					id: "e:knowledge",
-					source: `step:${lastID}`,
-					target: "knowledge",
-					animated: running,
-					style: { stroke: "rgb(197 167 94)" },
-				});
-				y += STEP_Y;
-			}
-		} else {
-			// Pattern B — engine node, then declared-skill fan-out in rows below.
-			const engineLabel = definition.engine?.module || definition.engine?.type || "engine";
-			const engineState = running ? "running" : cycle ? (cycle.summary?.step_errors?.length || (cycle.summary as any)?.ok === false ? "failed" : "succeeded") : "pending";
+		// Bands first so they land BEHIND everything. They are real background
+		// elements with zIndex set as a node property (not inside style, which
+		// React Flow v12 does not honour reliably) and are never selectable.
+		for (const b of bands) {
+			const tint = STAGE_TINT[b.key];
+			if (!tint) continue;
 			nodes.push({
-				id: "engine",
-				position: { x: COL_X, y },
-				data: { label: <NodeLabel title={`command: ${engineLabel}`} subtitle={definition.engine?.experiment ? `experiment: ${definition.engine.experiment}` : "Pattern B engine"} state={engineState} badges={{ experiment: !!definition.engine?.experiment }} /> },
+				id: `band:${b.key}`,
+				position: { x: b.x, y: b.y },
+				data: { label: "" },
+				draggable: false,
+				selectable: false,
+				zIndex: -1,
+				style: {
+					width: b.width,
+					height: b.height,
+					background: tint,
+					border: "none",
+					borderRadius: 14,
+					pointerEvents: "none" as const,
+				},
+			});
+			nodes.push({
+				id: `bandlabel:${b.key}`,
+				position: { x: 2, y: b.y + b.height / 2 - 8 },
+				data: {
+					label: (
+						<div className="text-[10px] font-semibold uppercase tracking-wider text-right" style={{ color: STAGE_LABEL_COLOR[b.key] }}>
+							{STAGE_LABELS[b.key] ?? b.key}
+						</div>
+					),
+				},
+				draggable: false,
+				selectable: false,
+				zIndex: 0,
+				style: { width: GUTTER, background: "transparent", border: "none", pointerEvents: "none" as const },
+			});
+		}
+
+		for (const n of g.nodes) {
+			const p = positions.get(n.id);
+			if (!p) continue;
+			nodes.push({
+				id: n.id,
+				position: { x: p.x, y: p.y },
+				data: { label: <NodeLabel node={n} /> },
 				sourcePosition: Position.Bottom,
 				targetPosition: Position.Top,
-				style: nodeStyle("engine", engineState),
+				zIndex: 1,
+				style: nodeStyle(n.status ?? "pending"),
 			});
-			edges.push({ id: "e:t", source: "trigger", target: "engine", animated: running, style: { stroke: "rgb(148 163 184)" } });
-			y += STEP_Y;
-
-			const declared = definition.skills_invoked || [];
-			// Fan the declared skills into CENTERED rows below the engine (2 per
-			// row) so the graph reads top→bottom and stays symmetric — each row,
-			// including a partial last row, is centered under the engine column
-			// (a lone trailing node sits directly under the engine, not jammed to
-			// the left, which is what made odd counts look jagged).
-			const PER_ROW = 2;
-			const SKILL_GAP = 48;
-			const engineCenterX = COL_X + NODE_W / 2;
-			const total = declared.length;
-			const rowCount = Math.max(1, Math.ceil(total / PER_ROW));
-			const skillTop = y;
-			declared.forEach((sk, i) => {
-				const cs = cycleByStep.get(sk);
-				const state = stateOf(cs, true);
-				const row = Math.floor(i / PER_ROW);
-				const col = i % PER_ROW;
-				const inRow = row === rowCount - 1 ? total - row * PER_ROW : PER_ROW;
-				const rowW = inRow * NODE_W + (inRow - 1) * SKILL_GAP;
-				const rowStartX = engineCenterX - rowW / 2;
-				nodes.push({
-					id: `skill:${sk}`,
-					position: { x: rowStartX + col * (NODE_W + SKILL_GAP), y: skillTop + row * STEP_Y },
-					data: { label: <NodeLabel title={sk} subtitle={cs ? "" : "declared"} state={state} duration={cs?.duration_s} summary={cs?.output_summary} error={cs?.error} /> },
-					targetPosition: Position.Top,
-					style: nodeStyle(state, state),
-				});
-				edges.push({
-					id: `e:s${i}`,
-					source: "engine",
-					target: `skill:${sk}`,
-					// Orthogonal routing (down-then-across) keeps the fan-out tidy
-					// instead of bezier curves that cross at odd angles.
-					type: "smoothstep",
-					animated: false,
-					// Dashed "declared" edges — the canonical contract enforces
-					// NO ordering for skills_invoked[] in Pattern B; don't draw
-					// a pipeline that doesn't exist.
-					style: { stroke: "rgb(148 163 184)", strokeDasharray: cs ? undefined : "6 4" },
-					label: cs ? undefined : "declared",
-					labelStyle: { fontSize: 9, fill: "rgb(100 116 139)" },
-					labelBgStyle: { fill: "white", fillOpacity: 0.85 },
-				});
-			});
-			y = skillTop + rowCount * STEP_Y;
-			if (definition.knowledge_agent) {
-				nodes.push({
-					id: "knowledge",
-					position: { x: COL_X, y },
-					data: { label: <NodeLabel title={definition.knowledge_agent} subtitle="knowledge bank" state="succeeded" stage="learn" /> },
-					targetPosition: Position.Top,
-					style: nodeStyle("knowledge", "pending"),
-				});
-				edges.push({ id: "e:k", source: "engine", target: "knowledge", type: "smoothstep", animated: running, style: { stroke: "rgb(197 167 94)" } });
-				y += STEP_Y;
-			}
 		}
 
-		// Stage bands — horizontal stripes behind the Pattern A vertical
-		// pipeline, with the stage name in the left gutter (observe at the
-		// top, learn at the bottom — the five stages flow downward).
-		if (patternA && !showcase) {
-			const stageSpans = new Map<string, { minY: number; maxY: number }>();
-			for (const n of nodes) {
-				if (!n.id.startsWith("step:")) continue;
-				const idx = nodes.indexOf(n);
-				const stage = stageOf(n.id.slice(5), idx, nodes.length, cycleByStep.get(n.id.slice(5))?.stage);
-				const span = stageSpans.get(stage) || { minY: n.position.y, maxY: n.position.y };
-				span.minY = Math.min(span.minY, n.position.y);
-				span.maxY = Math.max(span.maxY, n.position.y);
-				stageSpans.set(stage, span);
-			}
-			for (const s of LOOP_STAGES) {
-				const span = stageSpans.get(s.key);
-				if (!span) continue;
-				// Stripe behind the column.
-				nodes.unshift({
-					id: `band:${s.key}`,
-					position: { x: COL_X - 14, y: span.minY - 10 },
-					data: { label: "" },
-					draggable: false,
-					selectable: false,
-					style: {
-						width: NODE_W + 28,
-						height: span.maxY - span.minY + NODE_H + 20,
-						background: STAGE_TINT[s.key],
-						border: "none",
-						borderRadius: 14,
-						zIndex: -1,
-						pointerEvents: "none" as const,
-					},
-				});
-				// Stage name in the left gutter, vertically centered on the band.
-				nodes.unshift({
-					id: `bandlabel:${s.key}`,
-					position: { x: 2, y: (span.minY + span.maxY) / 2 + NODE_H / 2 - 8 },
-					data: { label: <div className="text-[10px] font-semibold uppercase tracking-wider text-right" style={{ color: STAGE_LABEL_COLOR[s.key] }}>{s.label}</div> },
-					draggable: false,
-					selectable: false,
-					style: { width: GUTTER, background: "transparent", border: "none", zIndex: 0, pointerEvents: "none" as const },
-				});
-			}
-		}
+		const edges: Edge[] = g.edges.map((e) => {
+			const toSink = e.target === "knowledge";
+			return {
+				id: e.id,
+				source: e.source,
+				target: e.target,
+				// Orthogonal routing (down-then-across) keeps the fan-out tidy
+				// instead of bezier curves that cross at odd angles.
+				type: e.rel === "declared" || toSink ? "smoothstep" : undefined,
+				animated: running && e.rel !== "declared",
+				style: {
+					stroke: toSink ? GOLD_SOFT : EDGE_IDLE,
+					// Dashed "declared" edges — the canonical contract enforces NO
+					// ordering for skills_invoked[] in Pattern B; don't draw a
+					// pipeline that doesn't exist.
+					strokeDasharray: edgeDash(e.rel),
+				},
+				label: e.label,
+				labelStyle: { fontSize: 9, fill: "rgb(100 116 139)" },
+				labelBgStyle: { fill: "white", fillOpacity: 0.85 },
+			};
+		});
 
-		const maxY = nodes.reduce(
-			(m, n) => Math.max(m, n.position.y + (typeof n.style?.height === "number" ? (n.style.height as number) : NODE_H)),
-			0,
-		);
-		return { nodes, edges, contentH: maxY + TOP };
+		return { nodes, edges, contentH };
 	}, [definition, cycle, running, showcase]);
 
-	const empty = !definition.steps?.length && !definition.skills_invoked?.length && !definition.engine?.type && !definition.engine?.module;
-	if (empty) return null;
+	if (isEmptyLoop(definition)) return null;
 
 	// Height tracks the actual vertical content so fitView (capped at zoom 1)
 	// renders nodes at their native font size — text stays comparable to the
@@ -385,48 +210,46 @@ export default function WorkflowCanvas({ definition, cycle, running = false, mod
 	);
 }
 
-function nodeStyle(_kind: string, state: string): React.CSSProperties {
+function nodeStyle(status: WfStatus): React.CSSProperties {
 	return {
 		background: "white",
-		border: `2px solid ${STATE_BORDER[state] || "rgb(203 213 225)"}`,
+		border: `2px solid ${STATUS_BORDER[status] || STATUS_BORDER.pending}`,
 		borderRadius: 12,
 		padding: 0,
 		fontSize: 13,
 		fontWeight: 500,
-		boxShadow: state === "running" ? `0 0 0 4px ${STATE_BG.running}30` : "0 1px 2px rgba(15, 23, 42, 0.04)",
+		boxShadow: status === "running" ? `0 0 0 4px ${STATUS_COLOR.running}30` : "0 1px 2px rgba(15, 23, 42, 0.04)",
 		minWidth: NODE_W,
-		zIndex: 1,
 	};
 }
 
-function NodeLabel({ title, subtitle, state, duration, badges, stage, summary, error }: {
-	title: string;
-	subtitle?: string;
-	state: string;
-	duration?: number;
-	badges?: { experiment?: boolean; knowledge?: boolean };
-	stage?: string;
-	summary?: string;
-	error?: string;
-}) {
+function NodeLabel({ node }: { node: WfNode }) {
+	const status = node.status ?? "pending";
+	const stage = node.kind.family === "xpio-step" ? node.kind.stage : node.group;
 	// The run's per-step result, shown AS TEXT inside the node so the pipeline
 	// is self-explanatory without clicking (error wins over output summary).
-	const detail = error ? error.split("\n")[0] : summary;
+	const detail = node.run?.error ? node.run.error.split("\n")[0] : node.run?.summary;
+	const experiment = node.badges?.some((b) => b.kind === "experiment");
+	const knowledge = node.badges?.some((b) => b.kind === "knowledge");
 	return (
-		<div className="px-3 py-2 text-left" style={{ width: NODE_W }} data-pick-kind="cycle-step" data-pick-id={title}>
+		<div className="px-3 py-2 text-left" style={{ width: NODE_W }} data-pick-kind="cycle-step" data-pick-id={node.label}>
 			<div className="flex items-center gap-1.5">
-				<span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: STATE_BG[state] || STATE_BG.pending }} />
-				<span className="text-[13px] text-slate-900 truncate flex-1">{title}</span>
-				{badges?.experiment && <span title="runs an experiment" className="text-[11px]">🧪</span>}
-				{badges?.knowledge && <span title="writes to a knowledge bank" className="text-[11px]">🧠</span>}
+				<span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: STATUS_COLOR[status] }} />
+				<span className="text-[13px] text-slate-900 truncate flex-1">{node.label}</span>
+				{experiment && <span title="runs an experiment" className="text-[11px]">🧪</span>}
+				{knowledge && <span title="writes to a knowledge bank" className="text-[11px]">🧠</span>}
 			</div>
 			<div className="flex items-center gap-1.5 mt-0.5">
-				{subtitle && <span className="text-[11px] text-slate-500 truncate" style={{ maxWidth: 112 }}>{subtitle}</span>}
-				{duration !== undefined && <span className="text-[11px] text-slate-400 font-mono ml-auto">{duration.toFixed(1)}s</span>}
-				{stage && !subtitle && <span className="text-[10px] uppercase tracking-wide" style={{ color: STAGE_LABEL_COLOR[stage] || "rgb(148 163 184)" }}>{stage}</span>}
+				{node.subtitle && <span className="text-[11px] text-slate-500 truncate" style={{ maxWidth: 112 }}>{node.subtitle}</span>}
+				{node.run?.duration_s !== undefined && (
+					<span className="text-[11px] text-slate-400 font-mono ml-auto">{node.run.duration_s.toFixed(1)}s</span>
+				)}
+				{stage && !node.subtitle && (
+					<span className="text-[10px] uppercase tracking-wide" style={{ color: STAGE_LABEL_COLOR[stage] || "rgb(148 163 184)" }}>{stage}</span>
+				)}
 			</div>
 			{detail && (
-				<div className={`mt-1 text-[10px] leading-snug line-clamp-2 ${error ? "text-rose-600" : "text-slate-500"}`} title={detail}>
+				<div className={`mt-1 text-[10px] leading-snug line-clamp-2 ${node.run?.error ? "text-rose-600" : "text-slate-500"}`} title={detail}>
 					{detail}
 				</div>
 			)}

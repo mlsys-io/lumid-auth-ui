@@ -1,20 +1,20 @@
 // LumilakeWorkflowCanvas — renders a LUMILAKE-NATIVE workflow (name + inputs +
 // ops) as a React-Flow DAG, with an optional HALO optimizer overlay.
 //
-// Adapted from mlsys-io/lumilake.ui's canvas/FlowCanvas.tsx, but for the
-// Lumilake-native shape our MCP tools use (optimize_workflow / run_workflow):
-//   - each `op` -> a node (colored by op type),
-//   - each top-level `inputs:` key -> an InputOp source node,
-//   - EDGES are derived from each op's `inputs` list (an entry equal to another
-//     op's id is an upstream dep; an entry equal to a top-level input name binds
-//     that input). (lumilake.ui derives edges from `depends_on`; native uses
-//     `op.inputs`.)
-// The optional `plan` (optimize_workflow result) badges each op with the HALO
-// worker it was assigned to, best-effort matched (runtime node ids embed the
-// op id, e.g. `graph_0__llm_graph_0_Reply_38`).
+// This file is now a THIN RENDERER. The parsing that used to live here moved to
+// src/workflow/adapters/lumilake.ts and the positioning to src/workflow/layout.ts,
+// so the same graph can be drawn by other surfaces and — later — edited. What
+// remains here is the node component and the React Flow wiring.
 //
-// Self-contained: reuses @xyflow/react (already a dep) + @dagrejs/dagre; no
-// import from lumilake.ui's type system.
+// The public API is unchanged: workflowYaml / plan / runState in, plus the
+// `parseWorkflow` named export that StudioWorkflowPanel and the tests use.
+//
+// Run state gets its OWN visual channel — an outline ring plus a dot — because
+// the border and background are already spent encoding op TYPE. Repainting
+// those for status would make a running LLMChatOp indistinguishable from a
+// DataRetrievalOp, trading one axis of information for another instead of
+// adding one. (Status colours now come from workflow/theme.ts, which is also
+// where the old ring-emerald-500 got corrected to the site's gold.)
 
 import { useEffect, useMemo, useRef } from 'react';
 import {
@@ -22,79 +22,61 @@ import {
 	Handle, Position, type Edge, type Node, type NodeProps, type ReactFlowInstance,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import dagre from '@dagrejs/dagre';
-import { parse as parseYaml } from 'yaml';
+import { parseLumilake, type HaloPlan } from '@/workflow/adapters/lumilake';
+import { layoutGraph } from '@/workflow/layout';
+import { applyOverlay, type WfStatus } from '@/workflow/model';
+import { STATUS_COLOR, accentOf, edgeStroke, type AccentKey } from '@/workflow/theme';
 
-export type HaloPlan = {
-	selected_workers?: string[];
-	worker_assignment?: Record<string, string[]>;
-	runtime_graph_node_counts?: Record<string, number>;
-	merged_runtime_node_count?: number;
-	optimization_seconds?: number;
-	selection_seconds?: number;
-	error?: string;
-};
+export type { HaloPlan };
 
 // Per-op execution state for a run overlay. Distinct from `HaloPlan`, which is
 // a PLAN (where an op would run); this is what actually happened.
 export type OpRunState = 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped';
-
 export type RunOverlay = Record<string, OpRunState>;
 
 type NodeData = {
 	label: string;
-	op: string;           // op type (FormatOp, LLMChatOp, InputOp, …)
+	accent: AccentKey;
+	isInput: boolean;
 	subtitle: string;
-	worker?: string;      // HALO-assigned worker, if any
-	state?: OpRunState;   // live run state, if a run overlay was supplied
+	worker?: string;
+	state?: WfStatus;
 };
 
-// Run state gets its OWN visual channel — an outline ring plus a dot — because
-// the border and background are already spent encoding op TYPE. Repainting
-// those for status would make a running LLMChatOp indistinguishable from a
-// DataRetrievalOp, trading one axis of information for another instead of
-// adding one.
-function stateRing(state?: OpRunState): string {
+function stateRing(state?: WfStatus): string {
 	switch (state) {
 		case 'running': return 'ring-2 ring-sky-500 ring-offset-1';
-		case 'succeeded': return 'ring-1 ring-emerald-500';
-		case 'failed': return 'ring-2 ring-rose-500 ring-offset-1';
+		case 'succeeded': return 'ring-1 ring-[rgb(176_143_69)]';
+		case 'failed': return 'ring-2 ring-rose-600 ring-offset-1';
 		case 'skipped': return 'opacity-50';
 		default: return '';
 	}
 }
 
-function StateDot({ state }: { state?: OpRunState }) {
+function StateDot({ state }: { state?: WfStatus }) {
 	if (!state || state === 'pending') return null;
-	const cls =
-		state === 'running' ? 'bg-sky-500 animate-pulse'
-			: state === 'succeeded' ? 'bg-emerald-500'
-				: state === 'failed' ? 'bg-rose-500'
-					: 'bg-gray-400';
 	// title= rather than a visible label: at 210x60 the subtitle line is already
 	// carrying the model/mode, and a word like "succeeded" would crowd out the
 	// detail that makes the node worth reading.
-	return <span title={state} className={`h-2 w-2 flex-shrink-0 rounded-full ${cls}`} />;
+	return (
+		<span
+			title={state}
+			className={`h-2 w-2 flex-shrink-0 rounded-full ${state === 'running' ? 'animate-pulse' : ''}`}
+			style={{ background: STATUS_COLOR[state] }}
+		/>
+	);
 }
 
 const NODE_W = 210;
 const NODE_H = 60;
 
-// op type → accent color (Tailwind class fragments)
-function opColor(op: string): string {
-	if (op === 'InputOp') return 'border-slate-300 bg-slate-50';
-	if (op === 'LLMChatOp' || op === 'LLMOp') return 'border-purple-400 bg-purple-50';
-	if (op === 'LLMVisionOp') return 'border-pink-400 bg-pink-50';
-	if (op === 'ImageGenerationOp') return 'border-fuchsia-400 bg-fuchsia-50';
-	if (op === 'LambdaOp') return 'border-amber-400 bg-amber-50';
-	if (op === 'FormatOp' || op === 'MessageOp') return 'border-emerald-400 bg-emerald-50';
-	if (op === 'DataRetrievalOp' || op === 'DataOp') return 'border-blue-400 bg-blue-50';
-	return 'border-gray-300 bg-white';
-}
-
 function OpNode({ data }: NodeProps<Node<NodeData>>) {
+	const accent = data.isInput ? 'rgb(148 163 184)' : undefined;
 	return (
-		<div className={`flex h-full w-full flex-col justify-between rounded-lg border-2 p-2 text-left shadow-sm ${opColor(data.op)} ${stateRing(data.state)}`}>
+		<div
+			className={`flex h-full w-full flex-col justify-between overflow-hidden rounded-lg border bg-white p-2 pl-2.5 text-left shadow-sm border-slate-200 ${stateRing(data.state)}`}
+			style={{ borderLeft: `3px solid ${accent ?? ACCENT_CSS[data.accent]}` }}
+		>
 			<Handle type="target" position={Position.Left} />
 			<Handle type="source" position={Position.Right} />
 			<div className="flex items-center gap-1">
@@ -112,103 +94,62 @@ function OpNode({ data }: NodeProps<Node<NodeData>>) {
 }
 const nodeTypes = { op: OpNode };
 
-type ParsedOp = { id: string; op: string; inputs?: unknown; config?: unknown; template?: unknown; data_spec?: unknown; fn_name?: unknown };
-type Parsed = { name?: string; inputs?: Record<string, unknown>; ops?: ParsedOp[] };
+// Resolved once — accentOf returns a key, theme owns the values.
+const ACCENT_CSS: Record<AccentKey, string> = {
+	compute: 'rgb(139 92 246)', data: 'rgb(59 130 246)', serve: 'rgb(20 184 166)',
+	io: 'rgb(148 163 184)', util: 'rgb(16 185 129)', vision: 'rgb(236 72 153)',
+	image: 'rgb(217 70 239)', unknown: 'rgb(203 213 225)',
+};
 
-// A meaningful one-line detail for a node subtitle — the op's key parameter
-// (model / template / data mode / fn) rather than just repeating the op type
-// (which the node color + label already convey). This is what makes the graph
-// worth opening instead of an unlabeled box grid.
-function opDetail(o: ParsedOp): string {
-	const cfg = o.config && typeof o.config === 'object' ? (o.config as Record<string, unknown>) : undefined;
-	if (cfg?.model) return String(cfg.model);
-	if (o.op === 'FormatOp' && typeof o.template === 'string') return `"${o.template.slice(0, 30)}${o.template.length > 30 ? '…' : ''}"`;
-	if ((o.op === 'DataRetrievalOp' || o.op === 'DataOp') && o.data_spec && typeof o.data_spec === 'object') {
-		const d = o.data_spec as Record<string, unknown>;
-		const m = d.mode || d.type;
-		return m ? `data · ${String(m)}` : 'data';
-	}
-	if (o.op === 'LambdaOp' && o.fn_name) return `fn ${String(o.fn_name)}`;
-	return o.op || 'op';
-}
+/**
+ * Parse + lay out a Lumilake workflow into React Flow primitives.
+ *
+ * Kept as a named export because StudioWorkflowPanel imports it. It is now a
+ * shim over the adapter: parse -> overlay -> layout -> render primitives.
+ */
+export function parseWorkflow(
+	workflowYaml: string,
+	plan?: HaloPlan,
+	runState?: RunOverlay,
+): { nodes: Node[]; edges: Edge[]; error?: string } {
+	const parsed = parseLumilake(workflowYaml, plan);
+	// A YAML syntax error is the one diagnostic the caller renders specially.
+	const fatal = parsed.diagnostics.find((d) => d.level === 'error' && !d.node && !parsed.nodes.length);
+	if (fatal) return { nodes: [], edges: [], error: fatal.message };
 
-// Best-effort: map a HALO worker_assignment (worker -> [runtime node ids]) to op
-// ids by substring (runtime ids embed the op id). Returns opId -> worker.
-function workerByOp(plan?: HaloPlan, opIds: string[] = []): Record<string, string> {
-	const out: Record<string, string> = {};
-	const wa = plan?.worker_assignment;
-	if (!wa) return out;
-	for (const [worker, nodes] of Object.entries(wa)) {
-		for (const rn of nodes || []) {
-			const hit = opIds.find((id) => rn === id || rn.includes(`_${id}_`) || rn.includes(`_${id}`) || rn.endsWith(id));
-			if (hit && !out[hit]) out[hit] = worker;
-		}
-	}
-	return out;
-}
+	const g = applyOverlay(parsed, runState);
+	const { positions } = layoutGraph(g, { direction: 'LR' });
 
-export function parseWorkflow(workflowYaml: string, plan?: HaloPlan, runState?: RunOverlay): { nodes: Node[]; edges: Edge[]; error?: string } {
-	let wf: Parsed;
-	try { wf = (parseYaml(workflowYaml) || {}) as Parsed; }
-	catch (e) { return { nodes: [], edges: [], error: String((e as Error).message || e) }; }
-	const ops = Array.isArray(wf.ops) ? wf.ops : [];
-	const inputNames = wf.inputs && typeof wf.inputs === 'object' ? Object.keys(wf.inputs) : [];
-	const opIds = ops.map((o) => o.id).filter(Boolean);
-	const opIdSet = new Set(opIds);
-	const inputSet = new Set(inputNames);
-	const wbo = workerByOp(plan, opIds);
-
-	// dagre layout (LR)
-	const g = new dagre.graphlib.Graph();
-	g.setGraph({ rankdir: 'LR', nodesep: 22, ranksep: 60 });
-	g.setDefaultEdgeLabel(() => ({}));
-	for (const name of inputNames) g.setNode(`input:${name}`, { width: NODE_W, height: NODE_H });
-	for (const o of ops) if (o.id) g.setNode(o.id, { width: NODE_W, height: NODE_H });
-
-	const edges: Edge[] = [];
-	const addEdge = (src: string, tgt: string) => {
-		const id = `${src}->${tgt}`;
-		if (!edges.some((e) => e.id === id)) { edges.push({ id, source: src, target: tgt, animated: false }); g.setEdge(src, tgt); }
-	};
-	for (const o of ops) {
-		if (!o.id) continue;
-		const ins = Array.isArray(o.inputs) ? o.inputs : o.inputs != null ? [o.inputs] : [];
-		for (const raw of ins) {
-			const ref = String(raw);
-			if (opIdSet.has(ref)) addEdge(ref, o.id);
-			else if (inputSet.has(ref)) addEdge(`input:${ref}`, o.id);
-		}
-	}
-	// Animate only the edges FEEDING a currently-running op. Animating the whole
-	// graph would say "everything is moving"; animating the in-edges of the one
-	// running node points at where the run actually is.
-	if (runState) {
-		for (const e of edges) if (runState[e.target] === 'running') e.animated = true;
-	}
-	dagre.layout(g);
-
-	const nodes: Node[] = [];
-	for (const name of inputNames) {
-		const p = g.node(`input:${name}`);
-		const vals = wf.inputs?.[name];
-		const n = Array.isArray(vals) ? vals.length : vals != null ? 1 : 0;
-		nodes.push({
-			id: `input:${name}`, type: 'op',
-			position: { x: p.x - NODE_W / 2, y: p.y - NODE_H / 2 },
+	const nodes: Node[] = g.nodes.map((n) => {
+		const p = positions.get(n.id);
+		const worker = n.badges?.find((b) => b.kind === 'worker')?.label;
+		return {
+			id: n.id,
+			type: 'op',
+			position: { x: p?.x ?? 0, y: p?.y ?? 0 },
 			style: { width: NODE_W, height: NODE_H },
-			data: { label: name, op: 'InputOp', subtitle: `input · ${n} value${n === 1 ? '' : 's'}` },
-		});
-	}
-	for (const o of ops) {
-		if (!o.id) continue;
-		const p = g.node(o.id);
-		nodes.push({
-			id: o.id, type: 'op',
-			position: { x: p.x - NODE_W / 2, y: p.y - NODE_H / 2 },
-			style: { width: NODE_W, height: NODE_H },
-			data: { label: o.id, op: o.op || 'Op', subtitle: opDetail(o), worker: wbo[o.id], state: runState?.[o.id] },
-		});
-	}
+			data: {
+				label: n.label,
+				accent: accentOf(n.kind),
+				isInput: n.kind.family === 'io',
+				subtitle: n.subtitle ?? '',
+				worker,
+				state: n.status,
+			} satisfies NodeData,
+		};
+	});
+
+	const edges: Edge[] = g.edges.map((e) => ({
+		id: e.id,
+		source: e.source,
+		target: e.target,
+		// Animate only the edges FEEDING a currently-running op. Animating the
+		// whole graph would say "everything is moving"; animating the in-edges of
+		// the one running node points at where the run actually is.
+		animated: e.status === 'running',
+		style: { stroke: edgeStroke(e.rel, e.status) },
+	}));
+
 	return { nodes, edges };
 }
 
