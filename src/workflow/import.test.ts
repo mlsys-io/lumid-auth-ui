@@ -262,11 +262,45 @@ check("dify: a non-workflow document is rejected with a reason", () => {
 	ok(g.diagnostics.some((d) => d.level === "error" && /not a Dify workflow/.test(d.message)), "said why");
 });
 
+check("dify scaffold: a ghost card carries the PARSER's reason, not a generic one", () => {
+	// projectDify knows why an if-else cannot come across — it is control flow
+	// Dify runs itself. Falling back to the generic line threw that away at
+	// exactly the point the user reads it.
+	const r = scaffoldFromDify(parseDify(DIFY));
+	const ghost = r.dropped.find((d) => d.type === "if-else")!;
+	ok(!!ghost, "if-else is listed");
+	ok(/control flow/i.test(ghost.reason) && /redesigned/.test(ghost.reason), ghost.reason);
+});
+
 check("dify scaffold: flattened branches are called out", () => {
 	// Lumilake has no conditional, so an if-else becomes unconditional inputs.
 	const r = scaffoldFromDify(parseDify(DIFY));
 	ok(r.notes.some((n) => /branch/i.test(n) && /rebuil/i.test(n)), r.notes.join(" | "));
 	ok(r.notes.some((n) => /control-flow/i.test(n)), "control flow counted");
+});
+
+check("scaffold: the pipeline survives a dropped node in the middle", () => {
+	// Dify's graph is start -> llm -> if-else -> answer. Both start and if-else
+	// are dropped, so a naive scaffold emits two disconnected orphans: every
+	// part kept, the pipeline lost.
+	const r = scaffoldFromDify(parseDify(DIFY));
+	const g = parseLumilake(r.text);
+	eq(g.nodes.length, 2, "two ops survive");
+	ok(g.edges.some((e) => e.source === "summarise" && e.target === "reply"),
+		`the flow should bridge the dropped nodes; got ${g.edges.map((e) => `${e.source}->${e.target}`).join(",") || "no edges"}`);
+});
+
+check("scaffold: bridging is cycle-safe", () => {
+	const g = parseN8n(JSON.stringify({
+		nodes: [
+			{ name: "A", type: "n8n-nodes-base.set", parameters: {} },
+			{ name: "X", type: "n8n-nodes-base.slack", parameters: {} },
+			{ name: "Y", type: "n8n-nodes-base.slack", parameters: {} },
+		],
+		connections: { A: { main: [[{ node: "X" }]] }, X: { main: [[{ node: "Y" }]] }, Y: { main: [[{ node: "X" }]] } },
+	}));
+	scaffoldLumilake(g); // must terminate
+	ok(true, "did not hang on a cycle of dropped nodes");
 });
 
 check("dify scaffold: the result is a valid Lumilake document", () => {

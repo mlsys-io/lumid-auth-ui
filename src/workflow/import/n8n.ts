@@ -235,6 +235,29 @@ export interface ScaffoldResult {
 	notes: string[];
 }
 
+/**
+ * Walk back from `id` along data edges until a node that survived the mapping
+ * is found, stepping over the ones that did not. Cycle-safe.
+ */
+function upstreamsThrough(g: WorkflowGraph, id: string, kept: Map<string, string>): string[] {
+	const out: string[] = [];
+	const seen = new Set<string>([id]);
+	const stack = g.edges.filter((e) => e.target === id && e.rel !== "attach").map((e) => e.source);
+	while (stack.length) {
+		const cur = stack.pop()!;
+		if (seen.has(cur)) continue;
+		seen.add(cur);
+		if (kept.has(cur)) {
+			if (!out.includes(cur)) out.push(cur);
+			continue;
+		}
+		for (const e of g.edges) {
+			if (e.target === cur && e.rel !== "attach") stack.push(e.source);
+		}
+	}
+	return out;
+}
+
 /** A Lumilake op id: lowercase, underscores, unique. */
 function opId(name: string, taken: Set<string>): string {
 	const base = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "op";
@@ -267,12 +290,18 @@ export function scaffoldLumilake(g: WorkflowGraph): ScaffoldResult {
 	for (const n of g.nodes) {
 		if (n.kind.family !== "lumilake-op") {
 			const isProvider = n.group === "provider";
+			// Prefer the reason the PARSER already worked out. It knows why a
+			// particular node cannot come across — that an if-else is control flow
+			// Dify runs itself, for instance — and falling back to the generic
+			// line threw that away at exactly the point the user reads it.
+			const specific = g.diagnostics.find((d) => d.node === n.id && d.untranslatable)?.message;
 			dropped.push({
 				name: n.label,
 				type: n.kind.family === "unknown" ? n.kind.raw : n.kind.family,
 				reason: isProvider
 					? "A model provider, not a task. Its model was folded into the op it was attached to, so it does not become a node of its own."
-					: "No Lumilake op does this. Add a step by hand, or run the original through its own runtime.",
+					: specific
+						?? "No Lumilake op does this. Add a step by hand, or run the original through its own runtime.",
 			});
 			continue;
 		}
@@ -288,9 +317,14 @@ export function scaffoldLumilake(g: WorkflowGraph): ScaffoldResult {
 		const op = (n.kind as { op: string }).op;
 		// Only DATA edges become inputs. An attach edge is a model plugged into a
 		// chain node, which Lumilake expresses as config, not as a dependency.
-		const deps = g.edges
-			.filter((e) => e.target === n.id && e.rel === "data" && idOf.has(e.source))
-			.map((e) => idOf.get(e.source)!);
+		//
+		// Upstreams are resolved THROUGH dropped nodes. A Dify start node or an
+		// n8n manual trigger has no Lumilake equivalent, so A -> trigger -> B
+		// would otherwise leave A and B as two disconnected orphans — a scaffold
+		// that lost the pipeline while keeping all its parts. Bridging preserves
+		// the flow; where the bridge crosses control flow, the notes already say
+		// the logic needs rebuilding.
+		const deps = upstreamsThrough(g, n.id, idOf).map((src) => idOf.get(src)!);
 		lines.push(`  - id: ${id}`);
 		lines.push(`    op: ${op}`);
 		if (deps.length) lines.push(`    inputs: [${deps.join(", ")}]`);

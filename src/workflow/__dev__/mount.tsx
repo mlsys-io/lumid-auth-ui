@@ -129,12 +129,61 @@ const N8N_DOC = JSON.stringify({
   },
 }, null, 2);
 
+const DIFY_DOC = `version: "0.7.0"
+kind: app
+app:
+  name: summariser
+  mode: workflow
+workflow:
+  graph:
+    nodes:
+      - id: start1
+        type: custom
+        position: {x: 0, y: 0}
+        data: {type: start, title: Start, _hovering: false, selected: true}
+      - id: llm1
+        type: custom
+        position: {x: 280, y: 0}
+        data:
+          type: llm
+          title: Summarise
+          model: {name: gpt-4o-mini, provider: openai}
+          prompt_template: [{role: user, text: "Summarise {{#start1.query#}}"}]
+          _runningStatus: succeeded
+      - id: ifelse1
+        type: custom
+        position: {x: 560, y: 0}
+        data: {type: if-else, title: Long enough?}
+      - id: answer1
+        type: custom
+        position: {x: 840, y: 0}
+        data: {type: answer, title: Reply}
+    edges:
+      - {id: e1, source: start1, target: llm1, sourceHandle: source}
+      - {id: e2, source: llm1, target: ifelse1, sourceHandle: source}
+      - {id: e3, source: ifelse1, target: answer1, sourceHandle: "true"}
+`;
+
+// The 38% case: five of the thirteen installed apps carry anchors.
+const XPIO_ANCHORED = `name: mbb-ai
+loops:
+  - name: case_cycle
+    schedule: '@trigger'
+    engine: {type: command, module: cycle}
+    skills: &id001
+      - alignment
+      - answer
+    skills_invoked: *id001
+`;
+
 function App() {
   const [yaml, setYaml] = useState(WF);
   const [fm, setFm] = useState(FM_SINGLE);
   const [fmDag, setFmDag] = useState(FM_DAG);
   const [xp, setXp] = useState(XPIO);
   const [n8n, setN8n] = useState(N8N_DOC);
+  const [dify, setDify] = useState(DIFY_DOC);
+  const [anch, setAnch] = useState(XPIO_ANCHORED);
   return (
     <div style={{ padding: 16, display: "grid", gap: 16 }}>
       <section data-testid="editor" style={{ height: 520, border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden" }}>
@@ -162,6 +211,13 @@ function App() {
       <section data-testid="n8n-import" style={{ height: 420, border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden" }}>
         <WorkflowEditor value={n8n} onChange={setN8n} />
       </section>
+      <section data-testid="dify-import" style={{ height: 380, border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden" }}>
+        <WorkflowEditor value={dify} onChange={setDify} />
+      </section>
+      <section data-testid="xpio-anchored" style={{ height: 420, border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden" }}>
+        <WorkflowEditor value={anch} onChange={setAnch} />
+      </section>
+      <pre data-testid="anch-out" style={{ display: "none" }}>{anch}</pre>
       <pre data-testid="n8n-out" style={{ display: "none" }}>{n8n}</pre>
       <pre data-testid="xpio-out" style={{ display: "none" }}>{xp}</pre>
       <pre data-testid="yaml-out" style={{ display: "none" }}>{yaml}</pre>

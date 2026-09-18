@@ -300,6 +300,52 @@ try {
 	ok("and the scaffold declares outputs, or the job fails server-side", /outputs:/.test(imported), imported.slice(0, 200));
 	ok("the editor now treats it as Lumilake", /Lumilake/.test(await imp.innerText()), "dialect not switched");
 
+	// --- 9f. Dify, which carries the most traps ------------------------------
+	const dify = page.getByTestId("dify-import");
+	const difyText = await dify.innerText();
+	ok("a Dify app is recognised and viewable", /Dify workflow/.test(difyText), difyText.slice(0, 160));
+
+	const difyLabels = await dify.locator(".react-flow__node-wf > div .truncate").evaluateAll((els) => els.map((e) => e.textContent));
+	// data.title is the label; node.type is the literal "custom" on every node,
+	// so reading it would make all four identical.
+	ok("labels come from data.title, not the node's own type",
+		difyLabels.includes("Summarise") && difyLabels.includes("Long enough?") && !difyLabels.includes("custom"),
+		difyLabels.join(" | "));
+
+	// sourceHandle carries branch identity — an edge that drops it loses which
+	// branch it was.
+	const difyEdgeLabels = await dify.locator(".react-flow__edge-textwrapper, .react-flow__edge-text").allTextContents();
+	ok("a branch edge keeps the branch it came from", difyEdgeLabels.some((t) => /true/.test(t)), difyEdgeLabels.join(" | "));
+
+	await dify.getByRole("button", { name: /Import/ }).click();
+	await page.waitForTimeout(700);
+	const difyDlg = page.locator("div.fixed.inset-0.z-50").first();
+	const difyDlgText = await difyDlg.innerText();
+	ok("control flow is named as needing a redesign, not silently dropped",
+		/if-else/.test(difyDlgText) && /redesign/i.test(difyDlgText), difyDlgText.slice(0, 500));
+	ok("flattened branches are called out before importing",
+		/branch/i.test(difyDlgText) && /rebuil/i.test(difyDlgText), difyDlgText.slice(0, 700));
+	await page.screenshot({ path: `${SHOTS}/09-dify-import.png` });
+	await difyDlg.getByRole("button", { name: /Cancel/ }).click();
+	await page.waitForTimeout(300);
+
+	// --- 9g. the anchored xpio file — the 38% case ---------------------------
+	// Five of the thirteen installed apps carry anchors. A whole-file lock would
+	// refuse all of them; the guard is per-path, so the file opens and edits are
+	// refused only where the sharing actually is.
+	const anch = page.getByTestId("xpio-anchored");
+	ok("an anchored manifest still opens and renders",
+		await anch.locator(".react-flow__node-wf > div").count() >= 3,
+		"anchored file should not be blank");
+
+	await anch.locator(".react-flow__node-wf").filter({ hasText: "alignment" }).first().click();
+	await page.waitForTimeout(400);
+	const anchIns = anch.locator("aside").filter({ hasText: "Parameters" }).first();
+	if (await anchIns.count()) {
+		const before = await page.getByTestId("anch-out").innerText();
+		ok("the anchor is intact before any edit", before.includes("&id001"), "fixture wrong");
+	}
+
 	// --- 10. no console errors -------------------------------------------------
 	const real = consoleErrors.filter((e) => !/favicon|ERR_CONNECTION|Download the React DevTools/i.test(e));
 	ok("no console errors", real.length === 0, real.slice(0, 3).join(" | "));
