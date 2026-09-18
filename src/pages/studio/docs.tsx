@@ -211,6 +211,26 @@ const DOCS: DocEntry[] = [
 		companion: { to: '/studio/compute', label: 'Compute fleet' },
 	},
 	{
+		// Both halves of one story on purpose: the contract a workflow author
+		// needs, then the demo as the worked example. Splitting them would
+		// separate the constraints (model architecture, pixel rank, per-JOB
+		// hardware) from the only place they are observable — a real run.
+		//
+		// Admin+ because it names the office lane's GPUs, the deployment env
+		// the endpoints come from, and how to pull FlowMesh task logs. NOTE its
+		// screenshots are gated by a SEPARATE nginx block keyed on the
+		// `lumilake-flowmesh-` filename prefix: the admin regex matches `.md`
+		// only, so before that block an Admin+ doc's images were public.
+		slug: 'lumilake-flowmesh',
+		title: 'Lumilake + FlowMesh workflows (Admin+)',
+		description: 'How a workflow is authored, planned by HALO and executed on a real GPU — the native dialect, the model and hardware constraints that fail with errors naming neither, and vla-curation as the worked example with its runbook.',
+		md: 'lumilake-flowmesh.md',
+		group: 'Runbooks',
+		icon: Cpu,
+		adminOnly: true,
+		companion: { to: '/studio/a/vla-curation', label: 'The demo' },
+	},
+	{
 		slug: 'operations',
 		title: 'Operations runbook (Admin+)',
 		description: 'Whole-stack health probe — the 17 dimensions, what each check means, and how to respond when one goes red.',
