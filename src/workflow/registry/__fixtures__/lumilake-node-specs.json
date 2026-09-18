@@ -1,0 +1,15 @@
+{
+  "_source": "lumilake_node_specs MCP tool, captured 2026-09-18",
+  "_howToRefresh": "Run the lumilake_node_specs MCP tool and paste its `ops` array here, then run `npm run check:catalog`.",
+  "ops": [
+    { "op": "DataRetrievalOp", "required": ["data_spec"] },
+    { "op": "FormatOp", "required": ["template", "format_kwargs"] },
+    { "op": "LambdaOp", "required": ["fn_name", "code"] },
+    { "op": "LLMChatOp", "required": ["messages", "config"] },
+    { "op": "LLMVisionOp", "required": ["messages", "config"] },
+    { "op": "EmbeddingOp", "required": ["config"] },
+    { "op": "ImageGenerationOp", "required": ["config"] },
+    { "op": "MessageOp", "required": [] },
+    { "op": "DataOp", "required": [] }
+  ]
+}

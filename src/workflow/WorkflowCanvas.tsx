@@ -21,14 +21,14 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
 	Background, BackgroundVariant, MiniMap, ReactFlow, ReactFlowProvider,
-	type Edge, type Node, type ReactFlowInstance,
+	type Connection, type Edge, type Node, type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { WfNodeCard, type WfCardData } from "./nodes/WfNodeCard";
 import { StageBand, StageLabel } from "./nodes/StageBand";
 import { CanvasControls, DiagnosticsStrip } from "./nodes/CanvasChrome";
 import { layoutGraph, layoutKey, LAYOUT_GEOMETRY } from "./layout";
-import { applyOverlay, type WfNode, type WfOverlay, type WorkflowGraph } from "./model";
+import { applyOverlay, type WfEdit, type WfNode, type WfOverlay, type WorkflowGraph } from "./model";
 import { ACCENT, CANVAS_DOT, CANVAS_GRID, accentOf, edgeDash, edgeStroke, edgeWidth } from "./theme";
 
 export type CanvasMode = "view" | "edit" | "run" | "showcase";
@@ -47,6 +47,14 @@ export interface WorkflowCanvasProps {
 	chrome?: { minimap?: boolean; controls?: boolean; background?: boolean; diagnostics?: boolean };
 	className?: string;
 	emptyState?: React.ReactNode;
+	/**
+	 * Edit mode only. The canvas NEVER mutates anything itself — it reports
+	 * intent and the caller applies it to the document, which is what keeps the
+	 * document the single source of truth.
+	 */
+	onEdit?: (edit: WfEdit) => void;
+	/** Adapter-supplied. False for xpio, whose contract has no drawable edge. */
+	canConnect?: boolean;
 }
 
 const nodeTypes = { wf: WfNodeCard, band: StageBand, bandlabel: StageLabel };
@@ -54,8 +62,10 @@ const nodeTypes = { wf: WfNodeCard, band: StageBand, bandlabel: StageLabel };
 function WorkflowCanvasInner({
 	graph, overlay, mode = "view", density = "comfortable", height: heightProp,
 	selection, onSelectionChange, onNodeDoubleClick, chrome, className, emptyState,
+	onEdit, canConnect = false,
 }: WorkflowCanvasProps) {
 	const showcase = mode === "showcase";
+	const editing = mode === "edit";
 	const rf = useRef<ReactFlowInstance | null>(null);
 	// Focus-by-dimming: hovering a node drops everything outside its immediate
 	// neighbourhood to 30%. This is what makes a 40-node graph readable, and it
@@ -113,8 +123,8 @@ function WorkflowCanvasInner({
 				type: "wf",
 				position: { x: p.x, y: p.y },
 				selected: selection === n.id,
-				draggable: false,
-				connectable: false,
+				draggable: editing,
+				connectable: editing && canConnect,
 				selectable: !showcase,
 				zIndex: 1,
 				data: {
@@ -126,7 +136,7 @@ function WorkflowCanvasInner({
 			});
 		}
 		return out;
-	}, [g.nodes, laid, density, selection, showcase, neighbourhood]);
+	}, [g.nodes, laid, density, selection, showcase, neighbourhood, editing, canConnect]);
 
 	const edges = useMemo<Edge[]>(
 		() => g.edges.map((e) => {
@@ -198,13 +208,26 @@ function WorkflowCanvasInner({
 				fitView={showcase}
 				fitViewOptions={{ padding: showcase ? 0.1 : 0.12, maxZoom: 1, minZoom: showcase ? 0.2 : 0.4 }}
 				proOptions={{ hideAttribution: true }}
-				nodesDraggable={false}
-				nodesConnectable={false}
+				nodesDraggable={editing}
+				nodesConnectable={editing && canConnect}
 				elementsSelectable={!showcase}
-				zoomOnScroll={false}
+				// Edit mode is full-bleed so it owns the wheel; a canvas embedded in
+				// a scrolling page that eats the wheel is React Flow's worst default.
+				zoomOnScroll={editing}
 				zoomOnDoubleClick={!showcase}
-				panOnScroll={!showcase}
+				panOnScroll={!showcase && !editing}
 				panOnDrag={!showcase}
+				deleteKeyCode={editing ? ["Backspace", "Delete"] : null}
+				onConnect={editing && canConnect && onEdit ? (c: Connection) => {
+					if (!c.source || !c.target) return;
+					onEdit({ t: "connect", source: c.source, target: c.target });
+				} : undefined}
+				onNodesDelete={editing && onEdit ? (deleted) => {
+					for (const n of deleted) if (n.type === "wf") onEdit({ t: "removeNode", id: n.id });
+				} : undefined}
+				onEdgesDelete={editing && onEdit ? (deleted) => {
+					for (const e of deleted) onEdit({ t: "disconnect", edge: e.id });
+				} : undefined}
 				onNodeMouseEnter={showcase ? undefined : (_e, n) => { if (n.type === "wf") setHovered(n.id); }}
 				onNodeMouseLeave={showcase ? undefined : () => setHovered(null)}
 				onNodeClick={showcase ? undefined : (_e, n) => {
