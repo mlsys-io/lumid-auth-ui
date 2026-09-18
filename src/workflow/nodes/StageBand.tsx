@@ -11,7 +11,7 @@
 
 import { memo } from "react";
 import type { NodeProps, Node } from "@xyflow/react";
-import { STAGE_TINT, STAGE_LABEL_COLOR } from "../theme";
+import { STAGE_TINT, STAGE_LABEL_COLOR, withAlpha } from "../theme";
 
 export interface StageBandData extends Record<string, unknown> {
 	stage: string;
@@ -29,7 +29,7 @@ function StageBandImpl({ data }: NodeProps<Node<StageBandData>>) {
 				width: data.width,
 				height: data.height,
 				background: STAGE_TINT[data.stage] ?? "transparent",
-				borderTop: `1px solid ${color}26`,
+				borderTop: `1px solid ${withAlpha(color, 0.15)}`,
 			}}
 		/>
 	);

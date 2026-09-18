@@ -18,7 +18,7 @@
 // page that eats the wheel is the worst default React Flow has; edit mode is
 // full-bleed, so there it owns the wheel.
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	Background, BackgroundVariant, MiniMap, ReactFlow, ReactFlowProvider,
 	type Connection, type Edge, type Node, type ReactFlowInstance,
@@ -67,12 +67,14 @@ function WorkflowCanvasInner({
 	const showcase = mode === "showcase";
 	const editing = mode === "edit";
 	const rf = useRef<ReactFlowInstance | null>(null);
+	const wrap = useRef<HTMLDivElement | null>(null);
 	// Focus-by-dimming: hovering a node drops everything outside its immediate
 	// neighbourhood to 30%. This is what makes a 40-node graph readable, and it
 	// is the cheapest legibility win on the canvas.
 	const [hovered, setHovered] = useState<string | null>(null);
 
 	const g = useMemo(() => applyOverlay(graph, overlay), [graph, overlay]);
+	const vertical = g.direction === "TB";
 
 	// The memo key MUST be structural. Keying on the graph object re-runs dagre
 	// whenever a parameter changes and slides nodes out from under the cursor.
@@ -130,13 +132,14 @@ function WorkflowCanvasInner({
 				data: {
 					node: n,
 					density,
+					direction: g.direction,
 					dimmed: neighbourhood ? !neighbourhood.has(n.id) : false,
 					interactive: !showcase,
 				} satisfies WfCardData,
 			});
 		}
 		return out;
-	}, [g.nodes, laid, density, selection, showcase, neighbourhood, editing, canConnect]);
+	}, [g.nodes, g.direction, laid, density, selection, showcase, neighbourhood, editing, canConnect]);
 
 	const edges = useMemo<Edge[]>(
 		() => g.edges.map((e) => {
@@ -173,9 +176,34 @@ function WorkflowCanvasInner({
 		[g.edges, neighbourhood],
 	);
 
+	// Refit when the canvas itself changes size. Without this, opening the
+	// inspector narrows the pane and the right-hand nodes slide underneath it —
+	// the graph looks truncated at exactly the moment the user asked to inspect
+	// it. Debounced, because a drag-resize fires this continuously.
+	useEffect(() => {
+		const el = wrap.current;
+		if (!el || showcase) return;
+		let t: ReturnType<typeof setTimeout> | undefined;
+		let first = true;
+		const obs = new ResizeObserver(() => {
+			// The observer fires once on attach; that pass is the initial layout,
+			// which onInit has already framed.
+			if (first) { first = false; return; }
+			if (t) clearTimeout(t);
+			t = setTimeout(() => {
+				rf.current?.fitView({ padding: 0.12, minZoom: vertical ? 1 : 0.4, maxZoom: 1, duration: 200 });
+				if (vertical) {
+					const vp = rf.current?.getViewport();
+					if (vp) rf.current?.setViewport({ ...vp, y: 8 });
+				}
+			}, 120);
+		});
+		obs.observe(el);
+		return () => { if (t) clearTimeout(t); obs.disconnect(); };
+	}, [showcase, vertical]);
+
 	if (!g.nodes.length) return emptyState ?? null;
 
-	const vertical = g.direction === "TB";
 	const showMinimap = chrome?.minimap ?? (!showcase && g.nodes.length > 12);
 	const showControls = chrome?.controls ?? !showcase;
 	const showBackground = chrome?.background ?? true;
@@ -186,7 +214,7 @@ function WorkflowCanvasInner({
 	const height = heightProp ?? (showcase ? 200 : Math.min(Math.max(220, laid.contentH + 24), 760));
 
 	return (
-		<div className={className ?? "rounded-xl border border-slate-200 bg-[#FCFCFD]"} style={{ height }}>
+		<div ref={wrap} className={className ?? "rounded-xl border border-slate-200 bg-[#FCFCFD]"} style={{ height }}>
 			<ReactFlow
 				nodes={nodes}
 				edges={edges}

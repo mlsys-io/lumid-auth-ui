@@ -75,6 +75,25 @@ export const SELECTED_RING = "ring-2 ring-[rgb(176_143_69)] ring-offset-2";
 // Type — the accent channel
 // ---------------------------------------------------------------------------
 
+/**
+ * Add an alpha channel to one of the colours in this file.
+ *
+ * Every colour here is written in the space-separated `rgb(r g b)` form, which
+ * is what Tailwind arbitrary values want. Appending a hex alpha to that — the
+ * habit that works on `#rrggbb` — produces `rgb(14 165 233)22`, which is
+ * INVALID CSS. That is worse than it sounds: an invalid entry in a
+ * comma-separated `box-shadow` list invalidates the whole declaration, so a
+ * running node silently lost its ring AND its base shadow. tsc and the unit
+ * tests cannot see this; only a browser can, and one did.
+ */
+export function withAlpha(color: string, alpha: number): string {
+	const m = /^rgb\(([^)]+)\)$/.exec(color.trim());
+	if (m) return `rgb(${m[1]} / ${alpha})`;
+	// Already rgba(), a hex, or a named colour — leave it alone rather than
+	// produce something subtly broken.
+	return color;
+}
+
 export type AccentKey =
 	| "compute" | "data" | "serve" | "io" | "util" | "vision" | "image" | "unknown";
 

@@ -22,7 +22,7 @@ import { stringify as toYaml } from "yaml";
 import { FieldRow } from "./FieldRow";
 import { iconFor } from "../icons";
 import type { WfNode } from "../model";
-import { ACCENT, accentOf, STATUS_COLOR } from "../theme";
+import { ACCENT, accentOf, STATUS_COLOR, withAlpha } from "../theme";
 import type { NodeRegistry, Params } from "../registry/types";
 import { unmodelledKeys, validateParams, visibleFields } from "../registry/types";
 
@@ -62,7 +62,7 @@ export function NodeInspector({
 			<header className="flex items-start gap-2 border-b border-slate-100 px-3 py-2.5">
 				<span
 					className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md"
-					style={{ background: `${accent}1a`, color: accent }}
+					style={{ background: withAlpha(accent, 0.1), color: accent }}
 				>
 					<Icon size={14} />
 				</span>

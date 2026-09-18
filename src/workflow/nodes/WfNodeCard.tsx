@@ -20,11 +20,18 @@ import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
 import { motion } from "framer-motion";
 import { iconFor, BADGE_ICON } from "../icons";
 import type { WfNode, WfStatus } from "../model";
-import { ACCENT, STATUS_COLOR, accentOf } from "../theme";
+import { ACCENT, STATUS_COLOR, accentOf, withAlpha } from "../theme";
 
 export interface WfCardData extends Record<string, unknown> {
 	node: WfNode;
 	density: "comfortable" | "compact";
+	/**
+	 * Which way the graph flows. Handle orientation MUST follow this rather than
+	 * the node's family: keying it off the family gave an xpio trigger (family
+	 * "io") left/right handles inside a top-to-bottom pipeline, so its edge left
+	 * the card sideways and looped back around to the node directly beneath it.
+	 */
+	direction: "LR" | "TB";
 	/** Dim everything that is not the hovered/selected neighbourhood. */
 	dimmed?: boolean;
 	interactive?: boolean;
@@ -48,7 +55,7 @@ function statusRingStyle(status: WfStatus | undefined, selected: boolean): React
 	const rings: string[] = [];
 	switch (status) {
 		case "running":
-			rings.push(`0 0 0 2px ${STATUS_COLOR.running}`, `0 0 0 6px ${STATUS_COLOR.running}22`);
+			rings.push(`0 0 0 2px ${STATUS_COLOR.running}`, `0 0 0 6px ${withAlpha(STATUS_COLOR.running, 0.13)}`);
 			break;
 		case "succeeded":
 			rings.push(`0 0 0 1px ${STATUS_COLOR.succeeded}`);
@@ -66,7 +73,7 @@ function statusRingStyle(status: WfStatus | undefined, selected: boolean): React
 }
 
 function WfNodeCardImpl({ data, selected }: NodeProps<Node<WfCardData>>) {
-	const { node, density, dimmed, interactive } = data;
+	const { node, density, dimmed, interactive, direction } = data;
 	const Icon = iconFor(node.kind);
 	const accent = ACCENT[accentOf(node.kind)];
 	const size = CARD_SIZE[density];
@@ -103,14 +110,14 @@ function WfNodeCardImpl({ data, selected }: NodeProps<Node<WfCardData>>) {
 			{node.inputs.length > 0 && (
 				<Handle
 					type="target"
-					position={node.kind.family === "xpio-step" || node.kind.family === "xpio-engine" ? Position.Top : Position.Left}
+					position={direction === "TB" ? Position.Top : Position.Left}
 					className="!h-2 !w-2 !rounded-[3px] !border-2 !border-slate-300 !bg-white !opacity-0 transition-opacity group-hover:!opacity-100"
 				/>
 			)}
 			{node.outputs.length > 0 && (
 				<Handle
 					type="source"
-					position={node.kind.family === "xpio-step" || node.kind.family === "xpio-engine" ? Position.Bottom : Position.Right}
+					position={direction === "TB" ? Position.Bottom : Position.Right}
 					className="!h-2 !w-2 !rounded-[3px] !border-2 !border-slate-300 !bg-white !opacity-0 transition-opacity group-hover:!opacity-100"
 				/>
 			)}
@@ -119,7 +126,7 @@ function WfNodeCardImpl({ data, selected }: NodeProps<Node<WfCardData>>) {
 				<span
 					aria-hidden
 					className="flex h-[22px] w-[22px] flex-shrink-0 items-center justify-center rounded-md"
-					style={{ background: `${accent}1a`, color: accent }}
+					style={{ background: withAlpha(accent, 0.1), color: accent }}
 				>
 					<Icon size={14} strokeWidth={2} />
 				</span>

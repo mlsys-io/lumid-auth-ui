@@ -1,0 +1,73 @@
+// Dev-only mount for browser testing the workflow canvas + inspector in
+// isolation, without the app's auth and routing in the way. Not referenced by
+// the app bundle; wf-dev.html is its only entry.
+import { StrictMode, useState } from "react";
+import { createRoot } from "react-dom/client";
+import LumilakeEditor from "../LumilakeEditor";
+import WorkflowCanvas from "../WorkflowCanvas";
+import { projectXpio } from "../adapters/xpio";
+import { parseLumilake } from "../adapters/lumilake";
+import "../../index.css";
+
+const WF = `name: hello-world
+inputs:
+  Name: ["world"]
+outputs:
+  - name: reply
+    ref: Reply
+ops:
+  - id: Greeting
+    op: FormatOp
+    inputs: [Name]
+    template: "Hello, {name}!"
+    format_kwargs: {name: Name}
+  - id: Reply
+    op: LLMChatOp
+    inputs: [Greeting]
+    messages:
+      - {role: user, content: Greeting}
+    config: {model: Qwen/Qwen2.5-7B-Instruct, max_tokens: 64}
+  - id: Shout
+    op: LambdaOp
+    inputs: [Reply]
+    fn_name: shout
+    code: "def shout(inputs):\\n    (x,) = inputs\\n    return x.upper()"
+`;
+
+const LOOP = {
+  name: "daily_digest", schedule: "20 4 * * *", knowledge_agent: "research-digest-analyst",
+  steps: [
+    { id: "observe_papers", skill: "arxiv/fetch" },
+    { id: "analyze_papers", skill: "analyze_papers", experiment: "e1" },
+    { id: "learn_ingest", skill: "learn/ingest_memories", knowledge_agent: "bank" },
+  ],
+};
+
+const CYCLE = { ts: 1, steps: [
+  { step_id: "observe_papers", ok: true, duration_s: 0.7, output_summary: "15 papers" },
+  { step_id: "analyze_papers", ok: false, duration_s: 1.2, error: "Quota exceeded\nat line 3" },
+] } as never;
+
+function App() {
+  const [yaml, setYaml] = useState(WF);
+  return (
+    <div style={{ padding: 16, display: "grid", gap: 16 }}>
+      <section data-testid="editor" style={{ height: 520, border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden" }}>
+        <LumilakeEditor value={yaml} onChange={setYaml} />
+      </section>
+      <section data-testid="run-overlay">
+        <WorkflowCanvas
+          graph={parseLumilake(WF)}
+          overlay={{ "input:Name": "succeeded", Greeting: "succeeded", Reply: "running" }}
+          mode="run" height={280}
+        />
+      </section>
+      <section data-testid="xpio">
+        <WorkflowCanvas graph={projectXpio(LOOP, { cycle: CYCLE })} mode="view" />
+      </section>
+      <pre data-testid="yaml-out" style={{ display: "none" }}>{yaml}</pre>
+    </div>
+  );
+}
+
+createRoot(document.getElementById("root")!).render(<StrictMode><App /></StrictMode>);

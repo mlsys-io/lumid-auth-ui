@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "test:blocks": "node --experimental-strip-types e2e/blocks-replay.mjs",
     "test:workflow": "node scripts/test-workflow.mjs",
-    "check:catalog": "node scripts/check-catalog.mjs"
+    "check:catalog": "node scripts/check-catalog.mjs",
+    "test:canvas": "node e2e/workflow-canvas-check.mjs"
   },
   "dependencies": {
     "@dagrejs/dagre": "^1.1.8",
