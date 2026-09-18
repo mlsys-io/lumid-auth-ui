@@ -72,7 +72,7 @@ function statusRingStyle(status: WfStatus | undefined, selected: boolean): React
 	return { boxShadow: rings.join(", ") };
 }
 
-function WfNodeCardImpl({ data, selected }: NodeProps<Node<WfCardData>>) {
+function WfNodeCardImpl({ data, selected, isConnectable }: NodeProps<Node<WfCardData>>) {
 	const { node, density, dimmed, interactive, direction } = data;
 	const Icon = iconFor(node.kind);
 	const accent = ACCENT[accentOf(node.kind)];
@@ -107,9 +107,18 @@ function WfNodeCardImpl({ data, selected }: NodeProps<Node<WfCardData>>) {
 
 			{/* Handles are invisible until the node is hovered: a canvas peppered
 			    with grey dots looks unfinished, and in view mode they do nothing. */}
+			{/*
+			  isConnectable MUST be forwarded. React Flow hands it to the custom
+			  node and expects the node to pass it on; a Handle that does not
+			  receive it defaults to connectable, so xpio — whose contract has no
+			  drawable edge at all — was offering drag handles it would then
+			  refuse. That is the exact "scissors the contract forbids" failure
+			  the adapter comment warns about, arriving through the renderer.
+			*/}
 			{node.inputs.length > 0 && (
 				<Handle
 					type="target"
+					isConnectable={isConnectable}
 					position={direction === "TB" ? Position.Top : Position.Left}
 					className="!h-2 !w-2 !rounded-[3px] !border-2 !border-slate-300 !bg-white !opacity-0 transition-opacity group-hover:!opacity-100"
 				/>
@@ -117,6 +126,7 @@ function WfNodeCardImpl({ data, selected }: NodeProps<Node<WfCardData>>) {
 			{node.outputs.length > 0 && (
 				<Handle
 					type="source"
+					isConnectable={isConnectable}
 					position={direction === "TB" ? Position.Bottom : Position.Right}
 					className="!h-2 !w-2 !rounded-[3px] !border-2 !border-slate-300 !bg-white !opacity-0 transition-opacity group-hover:!opacity-100"
 				/>

@@ -167,14 +167,15 @@ check("every edit is undoable, back to the exact original bytes", () => {
 	eq(doc.toString(), SRC, "byte-exact return to the source");
 });
 
-check("a locked document refuses every edit and changes nothing", () => {
+check("an anchor elsewhere in the file does NOT block an unrelated edit", () => {
+	// The guard is per-path. A shared `skills` anchor has nothing to do with an
+	// op's `op:` field, and refusing that edit would refuse 38% of real apps.
 	const src = "skills: &a\n  - x\nalias: *a\nops:\n  - id: A\n    op: MessageOp\n";
 	const doc = WorkflowDoc.parse(src);
-	const graph = parseLumilake(src);
-	const r = applyLumilakeEdit(doc, graph, { t: "setParam", node: "A", key: ["op"], value: "FormatOp" });
-	eq(r.ok, false, "refused");
-	ok(!r.ok && r.reason.includes("anchors"), "explains why");
-	eq(doc.toString(), src, "untouched");
+	const r = applyLumilakeEdit(doc, parseLumilake(src), { t: "setParam", node: "A", key: ["op"], value: "FormatOp" });
+	eq(r.ok, true, "allowed");
+	ok(doc.toString().includes("op: FormatOp"), "and it landed");
+	ok(doc.toString().includes("&a"), "the anchor is untouched");
 });
 
 check("an edit naming a node that is not there is refused, not silently dropped", () => {

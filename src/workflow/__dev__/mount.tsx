@@ -88,10 +88,34 @@ spec:
         spec: {taskType: inference, data: {type: graph_template}}
 `;
 
+const XPIO = `name: lumid-research-digest
+kind: autoresearch
+loops:
+  - name: daily_digest
+    schedule: '20 4 * * *'
+    knowledge_agent: research-digest-analyst
+    steps:
+      - id: observe_papers
+        stage: observe
+        skill: arxiv/fetch
+        args: {query: 'cat:cs.LG', max_results: 15}
+        required: true
+      - id: analyze_papers
+        stage: analyze
+        skill: analyze_papers
+        experiment: e1
+        required: true
+      - id: learn_ingest
+        stage: learn
+        skill: learn/ingest_memories
+        required: false
+`;
+
 function App() {
   const [yaml, setYaml] = useState(WF);
   const [fm, setFm] = useState(FM_SINGLE);
   const [fmDag, setFmDag] = useState(FM_DAG);
+  const [xp, setXp] = useState(XPIO);
   return (
     <div style={{ padding: 16, display: "grid", gap: 16 }}>
       <section data-testid="editor" style={{ height: 520, border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden" }}>
@@ -113,6 +137,10 @@ function App() {
       <section data-testid="fm-dag" style={{ height: 420, border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden" }}>
         <WorkflowEditor value={fmDag} onChange={setFmDag} />
       </section>
+      <section data-testid="xpio-edit" style={{ height: 560, border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden" }}>
+        <WorkflowEditor value={xp} onChange={setXp} />
+      </section>
+      <pre data-testid="xpio-out" style={{ display: "none" }}>{xp}</pre>
       <pre data-testid="yaml-out" style={{ display: "none" }}>{yaml}</pre>
       <pre data-testid="fm-out" style={{ display: "none" }}>{fm}</pre>
       <pre data-testid="fmdag-out" style={{ display: "none" }}>{fmDag}</pre>

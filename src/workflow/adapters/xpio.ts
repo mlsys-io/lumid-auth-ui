@@ -20,6 +20,7 @@
 // Lifted from components/workflow/WorkflowCanvas.tsx, with one bug fixed —
 // see stageOf below.
 
+import { parse as parseYaml } from "yaml";
 import { LOOP_STAGES, type LoopStageKey } from "@/components/workflow/LoopOrbit";
 import type { LoopDefinition, MeCycleDetail, MeCycleStep } from "@/api/me";
 import { describeSchedule } from "@/lib/schedule";
@@ -95,6 +96,13 @@ export interface ProjectXpioOpts {
 	running?: boolean;
 	/** Omit the stage bands (showcase thumbnails do). */
 	bands?: boolean;
+	/**
+	 * Where this loop lives in the document, so node.path points at the real
+	 * thing. A `.xpcloud.yaml` holds MANY loops — lumid-research-digest has one,
+	 * mbb-ai has two — and an edit rooted at `steps[0]` instead of
+	 * `loops[1].steps[0]` would silently rewrite a different loop.
+	 */
+	pathPrefix?: (string | number)[];
 }
 
 /**
@@ -105,7 +113,8 @@ export interface ProjectXpioOpts {
  * stack a column with stage bands or fan out beneath an engine.
  */
 export function projectXpio(def: LoopDefinition, opts: ProjectXpioOpts = {}): WorkflowGraph {
-	const { cycle, running = false, bands = true } = opts;
+	const { cycle, running = false, bands = true, pathPrefix = [] } = opts;
+	const at = (...rest: (string | number)[]) => [...pathPrefix, ...rest];
 	const g = emptyGraph("xpio", def.name || "");
 	g.direction = "TB";
 
@@ -123,7 +132,7 @@ export function projectXpio(def: LoopDefinition, opts: ProjectXpioOpts = {}): Wo
 		label: manual ? "Manual trigger" : describeSchedule(schedule),
 		subtitle: "trigger",
 		params: { schedule },
-		path: ["schedule"],
+		path: at("schedule"),
 		inputs: [],
 		outputs: [{ id: "out", kind: "control" }],
 		status: running ? "running" : "succeeded",
@@ -147,7 +156,7 @@ export function projectXpio(def: LoopDefinition, opts: ProjectXpioOpts = {}): Wo
 				label: id,
 				subtitle: st.skill || "",
 				params: { ...st },
-				path: ["steps", i],
+				path: at("steps", i),
 				inputs: [{ id: "in", kind: "control" }],
 				outputs: [{ id: "out", kind: "control" }],
 				group: stage,
@@ -180,7 +189,7 @@ export function projectXpio(def: LoopDefinition, opts: ProjectXpioOpts = {}): Wo
 			label: `command: ${engineLabel}`,
 			subtitle: def.engine?.experiment ? `experiment: ${def.engine.experiment}` : "Pattern B engine",
 			params: { ...(def.engine || {}) },
-			path: ["engine"],
+			path: at("engine"),
 			inputs: [{ id: "in", kind: "control" }],
 			outputs: [{ id: "out", kind: "control" }],
 			status: engineStatus,
@@ -196,7 +205,7 @@ export function projectXpio(def: LoopDefinition, opts: ProjectXpioOpts = {}): Wo
 				label: sk,
 				subtitle: cs ? "" : "declared",
 				params: { skill: sk },
-				path: ["skills_invoked", i],
+				path: at("skills_invoked", i),
 				inputs: [{ id: "in", kind: "control" }],
 				outputs: [],
 				status: statusOf(cs, true, running),
@@ -220,7 +229,7 @@ export function projectXpio(def: LoopDefinition, opts: ProjectXpioOpts = {}): Wo
 			label: def.knowledge_agent,
 			subtitle: "knowledge bank",
 			params: { knowledge_agent: def.knowledge_agent },
-			path: ["knowledge_agent"],
+			path: at("knowledge_agent"),
 			inputs: [{ id: "in", kind: "data" }],
 			outputs: [],
 			group: "learn",
@@ -249,4 +258,67 @@ export function isEmptyLoop(def: LoopDefinition): boolean {
 		&& !def.skills_invoked?.length
 		&& !def.engine?.type
 		&& !def.engine?.module;
+}
+
+
+// ---------------------------------------------------------------------------
+// Parsing a document
+// ---------------------------------------------------------------------------
+
+export interface XpioManifest {
+	name?: string;
+	display_name?: string;
+	loops?: LoopDefinition[];
+	[k: string]: unknown;
+}
+
+/**
+ * Locate a loop inside whatever was handed to us.
+ *
+ * Three shapes reach this code and all three are legitimate: a whole
+ * `.xpcloud.yaml` with a `loops[]` array, a single loop lifted out of one, and
+ * (from `me.workflowDetail`) a parsed object with no text behind it at all.
+ * Returns the loop plus the path prefix an edit must be rooted at.
+ */
+export function locateLoop(
+	doc: XpioManifest | LoopDefinition,
+	which?: string | number,
+): { loop: LoopDefinition; prefix: (string | number)[]; loops: string[] } {
+	const loops = (doc as XpioManifest).loops;
+	if (Array.isArray(loops) && loops.length) {
+		const names = loops.map((l, i) => l?.name || `loop ${i + 1}`);
+		let idx = 0;
+		if (typeof which === "number") idx = which;
+		else if (typeof which === "string") {
+			const found = loops.findIndex((l) => l?.name === which);
+			if (found >= 0) idx = found;
+		}
+		idx = Math.max(0, Math.min(loops.length - 1, idx));
+		return { loop: loops[idx] ?? {}, prefix: ["loops", idx], loops: names };
+	}
+	// A bare loop: the document IS the loop, so edits are rooted at its top.
+	return { loop: doc as LoopDefinition, prefix: [], loops: [] };
+}
+
+export function parseXpio(text: string, which?: string | number, opts: ProjectXpioOpts = {}): WorkflowGraph {
+	let doc: XpioManifest;
+	try {
+		doc = (parseYaml(text) || {}) as XpioManifest;
+	} catch (e) {
+		const g = emptyGraph("xpio");
+		g.diagnostics = [{ level: "error", message: String((e as Error).message || e) }];
+		return g;
+	}
+	const { loop, prefix, loops } = locateLoop(doc, which);
+	const g = projectXpio(loop, { ...opts, pathPrefix: prefix });
+	g.meta = { ...g.meta, app: doc.name ?? doc.display_name, loops, loopPath: prefix };
+	if (isEmptyLoop(loop)) {
+		g.diagnostics.push({
+			level: "warning",
+			message: loops.length
+				? `Loop "${loop.name ?? "?"}" declares neither steps[] nor an engine, so it has nothing to run.`
+				: "This document declares no loop — expected `loops:` or a loop's own `steps:` / `engine:`.",
+		});
+	}
+	return g;
 }

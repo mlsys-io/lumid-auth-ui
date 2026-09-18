@@ -105,15 +105,47 @@ check("undo is bounded and never underflows", () => {
 	eq(d.undo(), false, "underflow is a no-op, not a throw");
 });
 
-check("anchors lock the document instead of corrupting it", () => {
-	// This shape is real: mbb-ai's .xpcloud.yaml has skills: &id001 with
-	// skills_invoked: *id001. Writing through the alias would rewrite both.
-	const src = "skills: &id001\n  - alignment\n  - answer\nskills_invoked: *id001\n";
-	const d = WorkflowDoc.parse(src);
-	ok(!d.editable, "locked");
-	eq(d.lock?.reason, "anchors");
-	eq(d.setIn(["skills", 0], "nope"), false, "a write is refused");
-	eq(d.toString(), src, "and changes nothing");
+// This shape is real and common: mbb-ai's .xpcloud.yaml has `skills: &id001`
+// with `skills_invoked: *id001`. FIVE of the thirteen installed apps use
+// anchors, so refusing to edit the whole file would refuse 38% of them —
+// including loops that never touch the anchor. The guard is per-path.
+const ANCHORED = `loops:
+  - name: a
+    skills: &id001
+      - alignment
+    skills_invoked: *id001
+  - name: b
+    steps:
+      - id: s1
+`;
+
+check("anchors: writing AT an anchor whose alias is used elsewhere is refused", () => {
+	const d = WorkflowDoc.parse(ANCHORED);
+	ok(d.editable, "the file as a whole is still editable");
+	ok(!!d.aliasRiskAt(["loops", 0, "skills"]), "risk reported");
+	eq(d.setIn(["loops", 0, "skills", 0], "nope"), false, "write refused");
+	eq(d.toString(), ANCHORED, "and nothing changed");
+});
+
+check("anchors: writing AT an alias is refused", () => {
+	const d = WorkflowDoc.parse(ANCHORED);
+	ok(!!d.aliasRiskAt(["loops", 0, "skills_invoked"]), "risk reported");
+	eq(d.setIn(["loops", 0, "skills_invoked", 0], "nope"), false, "refused");
+});
+
+check("anchors: an UNRELATED part of the same file stays editable", () => {
+	// This is the whole point of scoping the guard.
+	const d = WorkflowDoc.parse(ANCHORED);
+	eq(d.aliasRiskAt(["loops", 1, "steps"]), null, "no risk on the other loop");
+	ok(d.setIn(["loops", 1, "steps", 0, "id"], "renamed"), "write allowed");
+	ok(d.toString().includes("id: renamed"), "and it landed");
+	ok(d.toString().includes("&id001"), "the anchor is untouched");
+});
+
+check("anchors: an anchor nobody references is not a hazard", () => {
+	const d = WorkflowDoc.parse("a: &unused\n  - x\nb:\n  - y\n");
+	eq(d.aliasRiskAt(["a"]), null, "no alias points at it, so editing it is safe");
+	ok(d.setIn(["a", 0], "changed"), "allowed");
 });
 
 check("a multi-document stream is locked, not silently truncated", () => {

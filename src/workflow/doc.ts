@@ -31,12 +31,21 @@
 // node. There is deliberately NO code path anywhere that rebuilds a document
 // from a WorkflowGraph.
 //
-// ANCHORS ARE A TRAP. `setIn` through an alias mutates the shared anchor, so
-// an edit to one node silently rewrites another. `.xpcloud.yaml` uses them
-// today — mbb-ai has `skills: &id001` / `skills_invoked: *id001` — so a
-// document containing anchors, or more than one document in the stream, is
-// marked structurally read-only and the UI offers only the YAML tab. Twenty
-// lines here saves a very bad week.
+// ANCHORS ARE A TRAP, BUT A LOCAL ONE. `setIn` through an alias mutates the
+// shared anchor, so an edit in one place silently rewrites another. This
+// started as a whole-document lock, which was safe and far too blunt: FIVE OF
+// THIRTEEN real apps use anchors in their .xpcloud.yaml (mbb-ai has
+// `skills: &id001` with `skills_invoked: *id001`), so a whole-file lock would
+// refuse to edit 38% of them — including loops that never touch the anchor.
+//
+// The guard is now per-path, and refuses exactly two things:
+//   - writing AT or UNDER an alias, which would follow it to the anchor;
+//   - writing at or under an anchor whose alias is used OUTSIDE the path, which
+//     would change that other place too.
+// An anchor elsewhere in the file is somebody else's business.
+//
+// A multi-document stream is still a whole-file lock: there is no way to write
+// one back without dropping everything after the first `---`.
 
 import { Document, isAlias, isCollection, parseAllDocuments, parseDocument } from "yaml";
 
@@ -122,14 +131,6 @@ export class WorkflowDoc {
 		for (const e of doc.errors) issues.push({ level: "error", message: e.message });
 		for (const w of doc.warnings) issues.push({ level: "warning", message: w.message });
 
-		if (!lock && hasAlias(doc)) {
-			lock = {
-				reason: "anchors",
-				detail:
-					"This file uses YAML anchors (&x / *x). Editing a value through an alias would silently rewrite every other place that anchor is used, so structural editing is disabled — the YAML tab still works.",
-			};
-		}
-
 		return new WorkflowDoc(doc, text, lock, issues);
 	}
 
@@ -200,6 +201,61 @@ export class WorkflowDoc {
 		return this.doc.getIn(path, true);
 	}
 
+	/**
+	 * Why writing at `path` would be unsafe, or null when it is fine.
+	 *
+	 * Two distinct hazards, and both are about the SAME value existing in two
+	 * places at once — an alias we would follow into somebody else's data, or an
+	 * anchor somebody else is reading out of ours.
+	 */
+	aliasRiskAt(path: (string | number)[]): string | null {
+		// ANCESTORS MATTER AS MUCH AS DESCENDANTS. Writing to `skills[0]` is as
+		// dangerous as writing to `skills` when the anchor sits on `skills` — the
+		// shared node is the one being mutated either way. So every prefix of the
+		// path is checked, not just its endpoint.
+		for (let i = 0; i <= path.length; i++) {
+			const prefix = path.slice(0, i);
+			let node: unknown;
+			try {
+				node = prefix.length ? this.doc.getIn(prefix, true) : this.doc.contents;
+			} catch {
+				// getIn throws when the path runs INTO a scalar or an alias — which
+				// is itself the signal that something on the way is not a collection.
+				return "That path runs through a YAML alias or a scalar, so it cannot be edited safely here.";
+			}
+			if (node == null) continue;
+
+			if (isAlias(node)) {
+				return "This value is a YAML alias (*x). Editing it would rewrite the anchor it points at, and every other place that anchor is used.";
+			}
+			const anchor = (node as { anchor?: string }).anchor;
+			if (anchor && aliasNamesOutside(this.doc.contents, node).has(anchor)) {
+				return `This value carries the anchor &${anchor}, which is referenced elsewhere in the file (*${anchor}). Editing it would change that other place too.`;
+			}
+		}
+
+		// And an alias anywhere UNDER the path: writing there would follow it.
+		let target: unknown;
+		try {
+			target = path.length ? this.doc.getIn(path, true) : this.doc.contents;
+		} catch {
+			return null;
+		}
+		if (target != null && containsAlias(target)) {
+			return "This value contains a YAML alias (*x). Editing it would rewrite the anchor it points at.";
+		}
+		const defined = anchorsIn(target);
+		if (defined.size) {
+			const used = aliasNamesOutside(this.doc.contents, target);
+			for (const name of defined) {
+				if (used.has(name)) {
+					return `This value carries the anchor &${name}, which is referenced elsewhere in the file (*${name}). Editing it would change that other place too.`;
+				}
+			}
+		}
+		return null;
+	}
+
 	setIn(path: (string | number)[], value: unknown): boolean {
 		// No-op detection compares VALUES, not text. Text comparison cannot work
 		// here: on a still-pristine document the re-emitted form differs from the
@@ -207,6 +263,7 @@ export class WorkflowDoc {
 		// look like a change and bury the user's real last edit under a
 		// formatting-only undo entry.
 		if (!this.editable) return false;
+		if (this.aliasRiskAt(path)) return false;
 		const current = this.doc.getIn(path);
 		if (sameScalarish(current, value)) return true;
 		return this.mutate((d) => {
@@ -215,12 +272,14 @@ export class WorkflowDoc {
 	}
 
 	deleteIn(path: (string | number)[]): boolean {
+		if (this.aliasRiskAt(path)) return false;
 		return this.mutate((d) => {
 			d.deleteIn(path);
 		});
 	}
 
 	addIn(path: (string | number)[], value: unknown): boolean {
+		if (this.aliasRiskAt(path)) return false;
 		return this.mutate((d) => {
 			d.addIn(path, d.createNode(value));
 		});
@@ -228,6 +287,7 @@ export class WorkflowDoc {
 
 	/** Move an item within a sequence, preserving every other entry's node. */
 	reorderIn(path: (string | number)[], from: number, to: number): boolean {
+		if (this.aliasRiskAt(path)) return false;
 		return this.mutate((d) => {
 			const seq = d.getIn(path, true);
 			if (!isCollection(seq) || !Array.isArray((seq as { items?: unknown[] }).items)) return;
@@ -240,31 +300,55 @@ export class WorkflowDoc {
 	}
 }
 
-/** Depth-first scan for an alias anywhere in the document. */
-function hasAlias(doc: Document): boolean {
+/**
+ * Walk a node tree. `visit` from `yaml` would be tidier but is typed awkwardly
+ * across versions; an explicit walk keeps this dependency-version-proof. Map
+ * entries are {key, value} pairs rather than nodes, hence the second branch.
+ */
+function walkNodes(node: unknown, fn: (n: unknown) => void): void {
+	if (node == null || typeof node !== "object") return;
+	fn(node);
+	const items = (node as { items?: unknown[] }).items;
+	if (!Array.isArray(items)) return;
+	for (const it of items) {
+		const pair = it as { key?: unknown; value?: unknown };
+		if (pair && typeof pair === "object" && ("key" in pair || "value" in pair)) {
+			walkNodes(pair.key, fn);
+			walkNodes(pair.value, fn);
+		} else {
+			walkNodes(it, fn);
+		}
+	}
+}
+
+/** Is there an alias at or under this node? */
+function containsAlias(node: unknown): boolean {
 	let found = false;
-	// `visit` would be tidier, but it is typed awkwardly across yaml versions;
-	// an explicit walk keeps this dependency-version-proof.
-	const walk = (node: unknown): void => {
-		if (found || node == null || typeof node !== "object") return;
-		if (isAlias(node)) {
-			found = true;
-			return;
-		}
-		const items = (node as { items?: unknown[] }).items;
-		if (Array.isArray(items)) {
-			for (const it of items) {
-				walk(it);
-				if (found) return;
-				// Map entries are { key, value } pairs rather than nodes.
-				const pair = it as { key?: unknown; value?: unknown };
-				if (pair && typeof pair === "object" && ("key" in pair || "value" in pair)) {
-					walk(pair.key);
-					walk(pair.value);
-				}
-			}
-		}
-	};
-	walk(doc.contents);
+	walkNodes(node, (n) => { if (isAlias(n)) found = true; });
 	return found;
+}
+
+/** Anchor names defined at or under this node. */
+function anchorsIn(node: unknown): Set<string> {
+	const out = new Set<string>();
+	walkNodes(node, (n) => {
+		const a = (n as { anchor?: string }).anchor;
+		if (a) out.add(a);
+	});
+	return out;
+}
+
+/** Alias names used anywhere in `root` that is NOT inside `subtree`. */
+function aliasNamesOutside(root: unknown, subtree: unknown): Set<string> {
+	const inside = new Set<unknown>();
+	walkNodes(subtree, (n) => inside.add(n));
+	const out = new Set<string>();
+	walkNodes(root, (n) => {
+		if (inside.has(n)) return;
+		if (isAlias(n)) {
+			const src = (n as { source?: string }).source;
+			if (src) out.add(src);
+		}
+	});
+	return out;
 }

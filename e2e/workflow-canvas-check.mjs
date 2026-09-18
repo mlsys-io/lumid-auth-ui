@@ -229,6 +229,38 @@ try {
 	await page.getByTestId("fm-single").screenshot({ path: `${SHOTS}/05-flowmesh-form.png` });
 	await page.getByTestId("fm-dag").screenshot({ path: `${SHOTS}/06-flowmesh-dag.png` });
 
+	// --- 9d. xpio: the dialect with NO drawable edge ---------------------------
+	const xp = page.getByTestId("xpio-edit");
+	const xpText = await xp.innerText();
+	ok("an xpcloud manifest is detected as an xpio loop", /xpio loop/.test(xpText), xpText.slice(0, 120));
+
+	// steps[] is ordered, so the order IS the edge set and there is nothing to
+	// draw. The canvas must not offer handles it would then refuse to honour.
+	const xpHandles = await xp.locator(".react-flow__handle.connectable").count();
+	ok("no connectable handles are offered, because there is no edge to draw", xpHandles === 0, `got ${xpHandles}`);
+
+	await xp.locator(".react-flow__node-wf").filter({ hasText: "analyze_papers" }).first().click();
+	await page.waitForTimeout(400);
+	const xpIns = xp.locator("aside").filter({ hasText: "Parameters" }).first();
+	const xpInsText = await xpIns.innerText();
+	ok("a step opens the step schema", /Step/.test(xpInsText) && /Skill/.test(xpInsText), xpInsText.slice(0, 160));
+	ok("the id hint warns that renaming orphans past cycles",
+		/history|orphan/i.test(xpInsText), xpInsText.slice(0, 300));
+
+	// An edit must land in the right loop, at the right index.
+	const skillInput = xpIns.locator('input[id="f-skill"]');
+	ok("the skill field is rendered", await skillInput.count() === 1);
+	await skillInput.fill("analyze_v2");
+	await skillInput.blur();
+	await page.waitForTimeout(600);
+	const xpOut = await page.getByTestId("xpio-out").innerText();
+	ok("the edit reaches the loop inside the manifest", xpOut.includes("skill: analyze_v2"), "not written");
+	ok("and the manifest around it is intact",
+		xpOut.includes("name: lumid-research-digest") && xpOut.includes("loops:") && xpOut.includes("arxiv/fetch"),
+		"surrounding document damaged");
+
+	await page.getByTestId("xpio-edit").screenshot({ path: `${SHOTS}/07-xpio-edit.png` });
+
 	// --- 10. no console errors -------------------------------------------------
 	const real = consoleErrors.filter((e) => !/favicon|ERR_CONNECTION|Download the React DevTools/i.test(e));
 	ok("no console errors", real.length === 0, real.slice(0, 3).join(" | "));

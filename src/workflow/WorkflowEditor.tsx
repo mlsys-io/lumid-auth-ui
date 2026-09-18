@@ -28,8 +28,11 @@ import { parseLumilake, LUMILAKE_CAPABILITIES, LUMILAKE_OPS, type HaloPlan } fro
 import { applyLumilakeEdit } from "./adapters/lumilake.edit";
 import { parseFlowMesh, isFormFirst, FLOWMESH_CAPABILITIES, FLOWMESH_KINDS } from "./adapters/flowmesh";
 import { applyFlowMeshEdit } from "./adapters/flowmesh.edit";
+import { parseXpio, XPIO_CAPABILITIES } from "./adapters/xpio";
+import { applyXpioEdit } from "./adapters/xpio.edit";
 import { LUMILAKE_REGISTRY } from "./registry/lumilake";
 import { FLOWMESH_REGISTRY } from "./registry/flowmesh";
+import { XPIO_REGISTRY } from "./registry/xpio";
 import type { NodeRegistry } from "./registry/types";
 import type { WfCapabilities, WfEdit, WfEditResult, WfNodeKind, WfOverlay, WorkflowGraph } from "./model";
 import { emptyGraph } from "./model";
@@ -69,6 +72,18 @@ const ADAPTERS: Partial<Record<string, Adapter>> = {
 		kindOf: (kind) => ({ family: "flowmesh-task", taskType: kind }),
 		labelOf: (kind) => FLOWMESH_REGISTRY[kind]?.label ?? kind,
 		summaryOf: (kind) => FLOWMESH_REGISTRY[kind]?.summary ?? kind,
+	},
+	xpio: {
+		label: "xpio loop",
+		parse: (text) => parseXpio(text),
+		apply: applyXpioEdit,
+		capabilities: XPIO_CAPABILITIES,
+		registry: XPIO_REGISTRY,
+		// One entry, because a loop has one kind of thing you add: a step.
+		palette: ["step"],
+		kindOf: () => ({ family: "xpio-step", stage: "observe" }),
+		labelOf: () => "Step",
+		summaryOf: () => "One skill call, appended to steps[].",
 	},
 };
 
