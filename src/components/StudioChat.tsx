@@ -14,7 +14,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
 import { CONNECT_ROUTE } from './studio/starters';
-import { ThumbsDown, ChevronRight, MessageSquarePlus, Send, Trash2, Loader2, Bot, User, Square, Globe, Telescope, Brain, ChevronDown, Paperclip, X, FileText, FileJson, Image as ImageIcon, Plus, Copy, RotateCcw, Mic, Volume2, Code2, Boxes, Download, ArrowLeft, Crosshair, Lock, Cpu, Maximize2, Minimize2, AlertTriangle , GraduationCap } from 'lucide-react';
+import { ThumbsDown, ChevronRight, MessageSquarePlus, Send, Trash2, Loader2, Bot, User, Square, Globe, Telescope, Brain, ChevronDown, Paperclip, X, FileText, FileJson, Image as ImageIcon, Plus, Copy, RotateCcw, Mic, Volume2, Code2, Boxes, Download, ArrowLeft, Crosshair, Lock, Cpu, Maximize2, Minimize2, AlertTriangle , GraduationCap, ClipboardList } from 'lucide-react';
 import {
 	buildViewingContext,
 	subscribeStudioPickedTarget,
@@ -35,7 +35,7 @@ import { useClickOutside } from '@/hooks/useClickOutside';
 import AssemblyCard from './workflow/AssemblyCard';
 import type { Attachment, WireAttachment, Message, ToolCall, Block } from './chat/types';
 import { readChatStream, withLastAssistant } from './chat/protocol';
-import { claudeToolView, QuietToolPill } from './chat/toolViews';
+import { claudeToolView, QuietToolPill, PlanPanel, isPlanFileWrite } from './chat/toolViews';
 import { blocksOf, failPendingTools, clearApproval, markApproval, pushNotice, stripForPersist } from './chat/blocks';
 import { BlockView, EntityCardBlock } from './chat/blockViews';
 import { Appear, Collapse, StreamCaret, JumpToLatest, ThinkingDots, Working, useMotionOK, AnimatePresence } from './chat/motion';
@@ -277,7 +277,10 @@ const COLLAPSE_KEY = 'studio_chat_collapsed_v1';
 const MODEL_KEY = 'studio_chat_model_v1';
 // Slash command palette — shorthand prompts for common LumidOS operations.
 // Typing "/" at the start of input triggers filtering on this list.
-const SLASH_COMMANDS = [
+const SLASH_COMMANDS: { label: string; template?: string; arms?: 'plan' }[] = [
+	// The only entry that is not a prompt template: it arms the NEXT turn to run
+	// under the CLI's read-only plan mode instead of inserting text.
+	{ label: '/plan',                     arms: 'plan' },
 	{ label: '/loops',                    template: 'List all scheduled loops.' },
 	{ label: '/xp ask [query]',           template: 'Search my knowledge base: ' },
 	{ label: '/xp status',               template: 'Show knowledge base status.' },
@@ -366,7 +369,7 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 	const groundedAppRef = useRef<string>('');
 	const [messages, setMessages] = useState<Message[]>(() => loadTranscript(userSub, chatScope));
 	const [input, setInput] = useState('');
-	const [slashSuggestions, setSlashSuggestions] = useState<{ label: string; template: string }[]>([]);
+	const [slashSuggestions, setSlashSuggestions] = useState<typeof SLASH_COMMANDS>([]);
 	const [slashIdx, setSlashIdx] = useState(0);
 	// Queued messages — sends typed while a turn is streaming get
 	// stashed here and dispatched FIFO when streaming completes.
@@ -385,6 +388,9 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 		ctxOverride?: Partial<ViewingContext>;
 		modelOverride?: string;
 		toolChoice?: string;
+		// Captured when the user hit send, not when the queue drains — the
+		// toggle is one-shot and will already be off by then.
+		plan?: boolean;
 	};
 	const [messageQueue, setMessageQueue] = useState<QueuedMessage[]>([]);
 	// Embedded session viewer — a running/selected cycle's conversation rendered
@@ -504,6 +510,13 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 	// (measured across gemma and Sonnet). Off for administrative asks like
 	// "list my cases" or "run the workflow".
 	const [askApp, setAskApp] = useState<boolean>(true);
+	// Plan mode arms exactly ONE turn and then disarms itself.
+	//
+	// Not persisted, unlike think/mode above, and that is the whole design: the
+	// way out of a plan is a turn that is NOT a plan, so a sticky toggle would
+	// leave "Approve & implement" dispatching another read-only turn and the
+	// user unable to tell why nothing ever happens.
+	const [planNext, setPlanNext] = useState<boolean>(false);
 	// Interview mode — WHO sits in which seat for this conversation.
 	//   train_ai : the AI answers, you interview it   (default)
 	//   free     : open question, no case, no ground truth
@@ -1439,6 +1452,11 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 		// lumid-identity). Used by "Correct this", where routing to the app's
 		// feedback path is the user's stated intent, not the model's guess.
 		toolChoice?: string,
+		// Run THIS turn under the CLI's read-only plan mode. Explicitly a
+		// parameter and never read from planNext inside: the queue drain and
+		// programmatic callers ("Correct this", studio:ask) share this path and
+		// must not silently inherit a planning turn.
+		plan?: boolean,
 	) => {
 		// Returns whether the turn was actually DISPATCHED. A silent early
 		// return is fine for the composer (the text stays in the box, so the
@@ -1563,6 +1581,10 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 								? { tool_choice: toolChoice }
 								: askAppRef.current && (workspaceApp() || currentAppRef.current)
 									? { tool_choice: 'app_answer' } : {}),
+							// Read-only planning turn. Identity forwards this only on the
+							// claude-code lane and allowlists it; omitted means today's
+							// behaviour everywhere.
+							...(plan ? { permission_mode: 'plan' } : {}),
 						}),
 						signal: ctrl.signal,
 					});
@@ -2072,23 +2094,71 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 	// send() — user-initiated dispatch from the input. Reads input
 	// + attachments state, validates, then either enqueues (if a
 	// turn is in flight) or hands off to dispatchTurn.
+	// Applying a slash suggestion. Extracted because there are TWO entry points
+	// — Enter/Tab on the highlighted row and onMouseDown on it — and they must
+	// not disagree about what an entry does.
+	const applySlash = useCallback((c: (typeof SLASH_COMMANDS)[number]) => {
+		if (c.arms === 'plan') {
+			// Arms the next turn instead of expanding a template, and clears the
+			// composer so "/plan" is never sent as a literal message.
+			setPlanNext(true);
+			setInput('');
+		} else {
+			setInput(c.template ?? '');
+		}
+		setSlashSuggestions([]);
+	}, []);
+
+	// A decision on a plan, taken as the NEXT turn rather than mid-turn.
+	//
+	// The plan text is inlined VERBATIM, not referenced. Two independent reasons,
+	// both measured: the plan lives in a tool block, and the sandbox's fallback
+	// path (when a lost checkpoint degrades --resume to a fresh session) inlines
+	// only messages[].content — so "implement the plan above" can arrive with no
+	// plan anywhere in context. And the transcript at that point contains a
+	// REFUSED attempt to leave plan mode, which reads like the user rejected it,
+	// so the model tends to re-plan unless told plainly that it was approved.
+	const handlePlanAction = useCallback((
+		action: 'approve' | 'revise',
+		comment: string,
+		plan: string,
+	) => {
+		const note = comment ? `\n\n${comment}` : '';
+		if (action === 'approve') {
+			void dispatchTurn(
+				`The plan below is approved. Implement it now.${note}\n\n---\n${plan}`,
+				[], undefined, undefined, undefined, undefined, false,
+			);
+		} else {
+			void dispatchTurn(
+				`Revise the plan below — do not implement it yet.${note || '\n\nRework it.'}\n\n---\n${plan}`,
+				[], undefined, undefined, undefined, undefined, true,
+			);
+		}
+	}, [dispatchTurn]);
+
 	const send = useCallback(() => {
 		const text = input.trim();
 		if (!text) return;
 		if (streaming) {
-			// Stash for FIFO dispatch after the current turn finishes.
-			setMessageQueue((q) => [...q, { text, attachments: [...attachments] }]);
+			// Stash for FIFO dispatch after the current turn finishes. The plan
+			// intent rides WITH the message: the toggle is one-shot and will have
+			// disarmed long before the queue drains.
+			setMessageQueue((q) => [...q, { text, attachments: [...attachments], plan: planNext }]);
+			setPlanNext(false);
 			setInput('');
 			setAttachments([]);
 			setAttachError('');
 			return;
 		}
 		const staged = attachments;
+		const plan = planNext;
+		setPlanNext(false);
 		setInput('');
 		setAttachments([]);
 		setAttachError('');
-		void dispatchTurn(text, staged);
-	}, [input, streaming, attachments, dispatchTurn]);
+		void dispatchTurn(text, staged, undefined, undefined, undefined, undefined, plan);
+	}, [input, streaming, attachments, dispatchTurn, planNext]);
 
 	// Queue processor — after each streaming turn settles, dispatch the head.
 	//
@@ -2129,7 +2199,7 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 		void (async () => {
 			try {
 				const sent = await dispatchTurn(head.text, head.attachments, undefined,
-					head.ctxOverride, head.modelOverride, head.toolChoice);
+					head.ctxOverride, head.modelOverride, head.toolChoice, head.plan);
 				if (sent) {
 					setMessageQueue((q) => q.slice(1));
 					queueRetriesRef.current = 0;
@@ -2530,6 +2600,7 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 							onSpeak={m.role === 'assistant' && m.content && typeof window !== 'undefined' && 'speechSynthesis' in window ? () => toggleSpeak(i, m.content) : undefined}
 							isSpeaking={speakingIdx === i}
 							onToolApprove={handleToolApprove}
+							onPlanAction={handlePlanAction}
 						/>
 							</Fragment>
 						))}
@@ -2806,6 +2877,28 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 										))}
 									</>
 								)}
+								{/* Plan first — only on the lane where it is REAL. On the chat
+								    lane there is no CLI to enforce read-only, and a toggle that
+								    silently does nothing is worse than an absent one. */}
+								{isCodeModel(model) && (
+									<>
+										<div className="h-px bg-muted my-1 mx-2" />
+										<button
+											type="button"
+											onClick={() => setPlanNext((v) => !v)}
+											className={[
+												'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] transition-colors',
+												planNext
+													? 'bg-violet-50 text-violet-700'
+													: 'text-foreground hover:bg-muted/60',
+											].join(' ')}
+										>
+											<ClipboardList className={['w-3.5 h-3.5', planNext ? 'text-violet-600' : 'text-muted-foreground'].join(' ')} />
+											<span className="font-medium flex-1 text-left">Plan first</span>
+											{planNext && <span className="w-1.5 h-1.5 rounded-full bg-violet-500" />}
+										</button>
+									</>
+								)}
 								<div className="h-px bg-muted my-1 mx-2" />
 								<button
 									type="button"
@@ -2889,9 +2982,7 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 									}
 									if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
 										e.preventDefault();
-										const chosen = slashSuggestions[slashIdx];
-										setInput(chosen.template);
-										setSlashSuggestions([]);
+										applySlash(slashSuggestions[slashIdx]);
 										return;
 									}
 									if (e.key === 'Escape') {
@@ -2974,13 +3065,15 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 										].join(' ')}
 										onMouseDown={(e) => {
 											e.preventDefault();
-											setInput(s.template);
-											setSlashSuggestions([]);
+											applySlash(s);
 										}}
 									>
 										<span className="text-gold-700 font-semibold">{s.label}</span>
-										{s.label !== s.template && (
+										{s.template && s.label !== s.template && (
 											<span className="text-muted-foreground ml-2 truncate">{s.template.slice(s.label.length)}</span>
+										)}
+										{s.arms === 'plan' && (
+											<span className="text-muted-foreground ml-2 truncate">read-only turn — propose before changing anything</span>
 										)}
 									</button>
 								))}
@@ -3129,6 +3222,7 @@ const MessageBubble = memo(function MessageBubble({
 	onSpeak,
 	isSpeaking,
 	onToolApprove,
+	onPlanAction,
 }: {
 	m: Message;
 	streaming?: boolean;
@@ -3138,6 +3232,7 @@ const MessageBubble = memo(function MessageBubble({
 	onSpeak?: () => void;
 	isSpeaking?: boolean;
 	onToolApprove?: (approvalId: string, approved: boolean, always?: boolean, tool?: string) => void;
+	onPlanAction?: (action: 'approve' | 'revise', comment: string, plan: string) => void;
 }) {
 	const isUser = m.role === 'user';
 	const [copied, setCopied] = useState(false);
@@ -3173,7 +3268,7 @@ const MessageBubble = memo(function MessageBubble({
 		renderTool: (t: ToolCall, onApprove?: (approved: boolean, always?: boolean) => void) => {
 			const row = (
 				<div className={['mt-1 flex flex-col', isUser ? 'items-end' : 'items-start'].join(' ')}>
-					<ToolChip t={t} onApprove={onApprove} />
+					<ToolChip t={t} onApprove={onApprove} onPlanAction={onPlanAction} />
 				</div>
 			);
 			return t.pending && !t.approvalRequired ? <Working>{row}</Working> : row;
@@ -3544,7 +3639,11 @@ function ThinkingBlock({ thinking, done, elapsedMs, tokens }: { thinking: string
 // install_app). Pending state shows a spinner instead of ✓/✗ until the
 // tool_call event lands. Destructive tools show Allow/Deny buttons when
 // approvalRequired=true.
-function ToolChip({ t, onApprove }: { t: ToolCall; onApprove?: (approved: boolean, always?: boolean) => void }) {
+function ToolChip({ t, onApprove, onPlanAction }: {
+	t: ToolCall;
+	onApprove?: (approved: boolean, always?: boolean) => void;
+	onPlanAction?: (action: 'approve' | 'revise', comment: string, plan: string) => void;
+}) {
 	const [argsOpen, setArgsOpen] = useState(false);
 	const [ccExpanded, setCcExpanded] = useState(false);
 	// Simple mode hushes the low-level mechanics: Claude Code tool views
@@ -3559,7 +3658,21 @@ function ToolChip({ t, onApprove }: { t: ToolCall; onApprove?: (approved: boolea
 	// block carries the meaning), drop the redundant pill entirely — this must
 	// run BEFORE the CCView branch, else mcp__ tools show a stray "Worked on
 	// it" QuietToolPill above their card.
+	// A plan turn's plan is a Write into the CLI's plans directory, and it is the
+	// one card the user is meant to READ and act on. It therefore dispatches
+	// ahead of BOTH hiding branches below — the entity-card drop and the
+	// Simple-mode QuietToolPill collapse — because Simple is the default view
+	// and either one would reduce a plan to "Worked on it".
+	if (onPlanAction && isPlanFileWrite(t)) {
+		return <PlanPanel t={t} onAction={onPlanAction} />;
+	}
 	if (!advanced && !t.pending && t.ok && !t.approvalRequired && entityCardFor(t)) return null;
+	// NOTE: a tool carrying approvalRequired loses its rich view here and falls
+	// through to the generic chip, which is what draws the Allow/Deny buttons.
+	// That is correct today (approval only ever reaches platform/MCP tools, never
+	// CLI ones) but it is a trap for any future same-turn approval on a CLI tool:
+	// the richer the view, the more certainly it would be discarded exactly when
+	// the user needs it. The plan branch above sidesteps it deliberately.
 	const CCView = !t.approvalRequired ? claudeToolView(t.name) : null;
 	if (CCView) {
 		if (!advanced && !ccExpanded) return <QuietToolPill t={t} onExpand={() => setCcExpanded(true)} />;
