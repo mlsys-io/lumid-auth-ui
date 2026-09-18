@@ -361,6 +361,16 @@ export function handleEvent(
 		// where it happened and never pollutes m.content (which is the wire
 		// history the next turn replays).
 		setMessages((prev) => withLastAssistant(prev, (m) => B.pushNotice(m, 'error', friendlyChatError(evt.message))));
+	} else if (evt.type === 'permission_mode') {
+		// The sandbox echoes the posture the turn ACTUALLY ran under. It decodes
+		// its request body without rejecting unknown fields, so an older image
+		// accepts permission_mode, ignores it, and returns a healthy 200 — a turn
+		// with full write access behind a "plan" badge. Only a mismatch is worth
+		// the user's attention; a match is the silent normal case.
+		if (evt.requested === 'plan' && evt.mode !== 'plan') {
+			setMessages((prev) => withLastAssistant(prev, (m) => B.pushNotice(m, 'error',
+				'Plan mode was requested but the sandbox ran this turn unrestricted — it may have changed files. Reload and try again; if it repeats, the sandbox image predates plan mode.')));
+		}
 	} else if (evt.type === 'notice' && evt.message) {
 		// Operator-facing note attached to the turn (admin/super_admin only).
 		// Was emitted by the server and silently dropped here.

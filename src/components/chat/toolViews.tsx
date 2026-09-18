@@ -432,7 +432,105 @@ function NotebookView({ t }: { t: ToolCall }) {
 	);
 }
 
-// ── ExitPlanMode — the plan awaiting approval ───────────────────────────────
+// ── Plan mode ───────────────────────────────────────────────────────────────
+//
+// In a plan turn the CLI writes its plan to its OWN plans directory and blocks
+// every write to the workspace. That Write is therefore the plan: its `content`
+// argument is the document, and it reaches us through the ordinary tool_start
+// path with no backend work at all.
+//
+// It is NOT ExitPlanMode. That tool is disabled in headless mode on this CLI
+// line — the model attempts it and gets "No such tool available", and its input
+// is `{}` — so PlanView below renders nothing useful and is kept only against
+// the day it comes back. Measured on 2.1.276; see the sandbox BUILD.md
+// event-shape contract before assuming either way after a CLI bump.
+const PLAN_FILE_RE = /(^|\/)\.claude\/plans\/[^/]+\.md$/;
+
+export function isPlanFileWrite(t: ToolCall): boolean {
+	return t.name === 'Write' && PLAN_FILE_RE.test(str(t.args?.file_path));
+}
+
+// PlanPanel — the plan, and the two ways out of it.
+//
+// Deliberately NOT collapsible and never reduced to a quiet pill: this is the
+// one tool card in a plan turn that the user is expected to read and act on,
+// and a plan hidden behind a chevron is a plan nobody reads.
+export function PlanPanel({
+	t,
+	onAction,
+}: {
+	t: ToolCall;
+	onAction: (action: 'approve' | 'revise', comment: string, plan: string) => void;
+}) {
+	const [comment, setComment] = useState('');
+	const [sent, setSent] = useState<'approve' | 'revise' | null>(null);
+	const plan = str(t.args?.content);
+
+	// While the Write is still streaming its args we have a partial document —
+	// show it, but don't offer to act on half a plan.
+	const ready = !t.pending && !!plan;
+
+	const act = (action: 'approve' | 'revise') => {
+		if (sent) return; // one decision per plan; the buttons stay for the record
+		setSent(action);
+		onAction(action, comment.trim(), plan);
+	};
+
+	return (
+		<div className="max-w-full w-full text-[11px] rounded-lg border border-violet-200 bg-violet-50/40 overflow-hidden">
+			<div className="flex items-center gap-1.5 px-2.5 py-1.5 border-b border-violet-200/70">
+				<ClipboardList className="w-3.5 h-3.5 text-violet-600 shrink-0" />
+				<span className="font-medium text-violet-900">Plan</span>
+				<span className="text-violet-700/60">— read-only turn, nothing was changed</span>
+				<span className="ml-auto"><StatusDot t={t} /></span>
+			</div>
+
+			<div className="px-3 py-2 text-[11.5px] leading-relaxed whitespace-pre-wrap break-words max-h-[420px] overflow-y-auto text-zinc-800">
+				{plan || <span className="opacity-60">writing the plan…</span>}
+			</div>
+
+			{ready && (
+				<div className="px-2.5 pb-2.5 pt-1 border-t border-violet-200/70">
+					{sent ? (
+						<div className="text-[11px] text-violet-800/80 py-1">
+							{sent === 'approve'
+								? 'Approved — implementing.'
+								: 'Sent back for changes.'}
+						</div>
+					) : (
+						<>
+							<textarea
+								value={comment}
+								onChange={(e) => setComment(e.target.value)}
+								rows={2}
+								placeholder="Optional note — what to change, or what to skip"
+								className="w-full resize-y rounded-md border border-violet-200 bg-white/70 px-2 py-1.5 text-[11.5px] outline-none focus:border-violet-400 placeholder:text-violet-900/35"
+							/>
+							<div className="flex items-center gap-2 mt-1.5">
+								<button
+									type="button"
+									onClick={() => act('approve')}
+									className="px-2.5 py-1 rounded-md bg-violet-600 text-white text-[11.5px] font-medium hover:bg-violet-700 transition-colors"
+								>
+									Approve &amp; implement
+								</button>
+								<button
+									type="button"
+									onClick={() => act('revise')}
+									className="px-2.5 py-1 rounded-md border border-violet-300 text-violet-800 text-[11.5px] hover:bg-violet-100 transition-colors"
+								>
+									Request changes
+								</button>
+							</div>
+						</>
+					)}
+				</div>
+			)}
+		</div>
+	);
+}
+
+// ── ExitPlanMode — vestigial on this CLI line, see the note above ───────────
 function PlanView({ t }: { t: ToolCall }) {
 	const [open, toggle] = useAutoCollapse(t.pending, !t.ok && !t.pending);
 	const plan = str(t.args?.plan);
