@@ -103,17 +103,37 @@ try {
 		[...new Set(handlePos)].join(", "));
 
 	// --- 4b. focus by dimming --------------------------------------------------
-	// Hovering a node drops everything OUTSIDE its immediate neighbourhood. The
-	// neighbourhood is the node plus whatever it is directly wired to, in both
-	// directions — dimming a node that feeds the hovered one would be worse than
-	// not dimming at all.
-	await editor.locator(".react-flow__node-wf").filter({ hasText: "Reply" }).first().hover();
+	// SELECTING a node drops everything outside its immediate neighbourhood --
+	// the node plus whatever it is directly wired to, both directions, since
+	// dimming a node that feeds the selected one is worse than not dimming.
+	//
+	// This keyed off HOVER until v0.5.427. Every mouse move re-animated every
+	// node, which is what "the canvas is flickering" turned out to be: sweeping
+	// across nodes produced 27 distinct opacity states, 24 of 70 samples caught
+	// mid-animation. Selection is a discrete event, so it settles. Keep it that
+	// way -- if this ever goes back to hover, the flicker comes back with it.
+	await editor.locator(".react-flow__node-wf").filter({ hasText: "Reply" }).first().click();
 	await page.waitForTimeout(450);
 	const dimmed = await nodes.evaluateAll((els) => els.map((e) => ({
 		label: e.querySelector(".truncate")?.textContent, o: getComputedStyle(e).opacity,
 	})));
 	const byLabel = Object.fromEntries(dimmed.map((d) => [d.label, d.o]));
-	ok("hovering dims only what is NOT connected", byLabel["Name"] === "0.3", JSON.stringify(byLabel));
+	ok("selecting dims only what is NOT connected", byLabel["Name"] === "0.3", JSON.stringify(byLabel));
+
+	// The flicker guard proper: hovering a DIFFERENT node must not change any
+	// opacity, because hover no longer drives dimming at all.
+	const opac = () => nodes.evaluateAll((els) => els.map((e) => getComputedStyle(e).opacity).join(","));
+	const beforeHover = await opac();
+	await editor.locator(".react-flow__node-wf").filter({ hasText: "Shout" }).first().hover();
+	await page.waitForTimeout(400);
+	ok("hovering changes no opacity (flicker guard)", (await opac()) === beforeHover,
+		`${beforeHover} -> ${await opac()}`);
+
+	// Clear the selection this section introduced: it opens the inspector, and
+	// the next assertions expect the canvas in its resting state.
+	await editor.locator(".react-flow__pane").first().click({ position: { x: 8, y: 8 } });
+	await page.waitForTimeout(350);
+
 	ok("the node feeding the hovered one stays bright", byLabel["Greeting"] === "1", JSON.stringify(byLabel));
 	ok("the node it feeds stays bright", byLabel["Shout"] === "1", JSON.stringify(byLabel));
 
@@ -364,6 +384,73 @@ try {
 	// --- 10. no console errors -------------------------------------------------
 	const real = consoleErrors.filter((e) => !/favicon|ERR_CONNECTION|Download the React DevTools/i.test(e));
 	ok("no console errors", real.length === 0, real.slice(0, 3).join(" | "));
+
+	// --- N. the wheel belongs to the page ------------------------------------
+	// Shipped broken twice. v0.5.426 fixed the editor and I called it done;
+	// view/run canvases still ate the wheel because React Flow has TWO wheel
+	// paths and preventScrolling is only read by one of them (panOnScroll
+	// installs a handler that always preventDefault + stopImmediatePropagation).
+	// Assert on EVERY pane, not just the editor's — a per-mode prop is exactly
+	// what a single-canvas check cannot see.
+	await page.evaluate(() => { document.scrollingElement.scrollTop = 0; });
+	await page.waitForTimeout(200);
+	const panes = await page.$$(".react-flow__pane");
+	ok("harness exposes canvases in several modes", panes.length >= 4, `got ${panes.length}`);
+	let trapped = [];
+	for (let i = 0; i < panes.length; i++) {
+		const box = await panes[i].boundingBox();
+		if (!box || box.width < 200 || box.height < 120) continue;
+		await panes[i].scrollIntoViewIfNeeded();
+		await page.waitForTimeout(250);
+		const bb = await panes[i].boundingBox();
+		const doc = () => page.evaluate(() => document.scrollingElement.scrollTop);
+		const room = await page.evaluate(() => {
+			const d = document.scrollingElement;
+			return d.scrollHeight - d.clientHeight - d.scrollTop;
+		});
+		if (room < 120) continue; // at the page bottom there is nothing to scroll
+		const before = await doc();
+		await page.mouse.move(bb.x + bb.width / 2, bb.y + Math.min(bb.height / 2, 160));
+		// defaultPrevented on a listener at document tells us whether React Flow
+		// swallowed it; a swallowed event never arrives at all.
+		await page.evaluate(() => {
+			window.__wheelSeen = [];
+			window.__wl = (e) => window.__wheelSeen.push(e.defaultPrevented);
+			document.addEventListener("wheel", window.__wl, { passive: true });
+		});
+		await page.mouse.wheel(0, 240);
+		await page.waitForTimeout(350);
+		const moved = (await doc()) - before;
+		const seen = await page.evaluate(() => {
+			document.removeEventListener("wheel", window.__wl);
+			return window.__wheelSeen;
+		});
+		if (moved <= 0 || seen.length === 0 || seen.some(Boolean)) {
+			trapped.push(`pane#${i} scrolled ${moved}px, wheel@document=${JSON.stringify(seen)}`);
+		}
+	}
+	ok("every canvas lets the wheel scroll the page", trapped.length === 0, trapped.join("; "));
+
+	// ...but ctrl+wheel must still zoom, or the canvas becomes un-navigable.
+	{
+		const pane = (await page.$$(".react-flow__pane"))[0];
+		await pane.scrollIntoViewIfNeeded();
+		await page.waitForTimeout(250);
+		const bb = await pane.boundingBox();
+		const k = async () => page.evaluate((el) => {
+			const v = el.closest(".react-flow").querySelector(".react-flow__viewport");
+			return getComputedStyle(v).transform;
+		}, pane);
+		const a = await k();
+		await page.mouse.move(bb.x + bb.width / 2, bb.y + Math.min(bb.height / 2, 160));
+		await page.keyboard.down("Control");
+		await page.mouse.wheel(0, -240);
+		await page.keyboard.up("Control");
+		await page.waitForTimeout(400);
+		const b2 = await k();
+		ok("ctrl+wheel still zooms", a !== b2, `transform unchanged: ${a}`);
+	}
+
 } catch (e) {
 	failures.push(`threw: ${e.message}`);
 	console.log(`  ✗ threw: ${e.message}`);
