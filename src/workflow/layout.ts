@@ -11,11 +11,16 @@
 //
 // POSITIONS NEVER ENTER A NATIVE DOCUMENT. None of the three dialects we
 // author has x/y and none should grow one: a diff full of coordinate churn
-// makes a YAML file unreviewable. A manual drag is a local nudge persisted per
-// workflow in localStorage; "Auto-layout" clears it. Imported graphs (n8n,
-// Dify) DO carry authored positions, which we honour by seeding that same
-// local store — so an import opens looking like it did in the tool it came
-// from, without the coordinates ever reaching a document we write.
+// makes a YAML file unreviewable.
+//
+// NOT BUILT (this paragraph used to be written as though it were, in the
+// present tense, and a user-facing doc was written from it): there is no
+// persistence for a manual drag. localStorage appears nowhere in src/workflow.
+// A drag lives in React Flow's own state until the layout is recomputed or the
+// page reloads, and the authored positions on an imported n8n/Dify graph are
+// read but then discarded by re-layout. If that is wanted, it is a feature to
+// add -- a "wf:pos:<slug>" store plus an Auto-layout button that clears it --
+// not behaviour to describe.
 
 import dagre from "@dagrejs/dagre";
 import type { WorkflowGraph } from "./model";
