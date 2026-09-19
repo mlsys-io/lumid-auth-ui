@@ -15,9 +15,14 @@
 // wrong, but it would make every later "change the model" edit a multi-node
 // operation.
 //
-// Promotion is ONE undoable step and the caller confirms it first: it rewrites
-// the shape of a file the user may have hand-written, and a silent restructure
-// is the kind of thing that destroys trust in an editor permanently.
+// Promotion is ONE undoable step. It rewrites the shape of a file the user may
+// have hand-written, and a silent restructure is the kind of thing that
+// destroys trust in an editor permanently -- so it SHOULD be confirmed first.
+//
+// It is not. This comment previously asserted "the caller confirms it first"
+// in the present tense; no caller does, and there is no confirm anywhere in
+// src/workflow. Undo is the only thing standing behind it today. Either add
+// the prompt or keep this accurate -- do not let the comment do the work.
 
 import type { WorkflowDoc } from "../doc";
 import type { WfEdit, WfEditResult, WorkflowGraph } from "../model";
@@ -110,7 +115,7 @@ export function applyFlowMeshEdit(doc: WorkflowDoc, graph: WorkflowGraph, edit: 
 				return refuse("Only FlowMesh task kinds can be added to a flowmesh/v1 document.");
 			}
 			// Adding a second node to a single-task document restructures it. One
-			// step, undoable, and the caller has already confirmed.
+			// step and undoable -- but NOT confirmed; see the header note.
 			if (!isGraph) promoteToGraph(doc);
 			const kind = edit.kind.taskType;
 			const name = edit.id || freshName(doc, kind);

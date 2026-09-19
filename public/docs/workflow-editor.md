@@ -166,10 +166,11 @@ Add a `spec.graph` and it becomes a real DAG:
 
 ![A FlowMesh spec with spec.graph: two branches fanning into a synthesis node, each card showing its requested hardware.](/docs/img/workflow-flowmesh.png)
 
-Each card shows what that node asked the scheduler for. Going from a single
-task to a graph rewrites `spec:` into `spec.graph.nodes[]` — that is a real
-change to your document, so it is an explicit, confirmed, undoable step rather
-than something that happens because you dragged a second node in.
+Each card shows what that node asked the scheduler for. Adding a second node to
+a single-task spec rewrites `spec:` into `spec.graph.nodes[]`. That is a real
+change to the shape of your document and it currently happens **without asking**
+— it is applied as one step, so a single undo reverses it, but there is no
+confirmation prompt. Check the YAML view after adding your second node.
 
 ---
 
@@ -214,10 +215,12 @@ to become a Lumid workflow.
   code-shaped fields there for now.
 - **Expressions are not translated on import** (above). Topology and prompts
   come across; the plumbing between them does not.
-- **Positions are not stored in your document.** Layout is computed. Dragging a
-  node is remembered in your browser, not written into the file — so a workflow
-  in git does not carry one person's canvas arrangement. Imported n8n and Dify
-  graphs seed those local positions from the original, so they open looking
-  like they did in the tool they came from.
+- **Positions are not stored in your document, or anywhere else.** Layout is
+  computed from the graph every time. Dragging a node moves it for as long as
+  the canvas is open; nothing is written to the file, and nothing survives a
+  reload. A workflow in git therefore never carries one person's canvas
+  arrangement — which is the point — but it also means an imported n8n or Dify
+  graph is re-laid out rather than opening in the arrangement it had in the
+  tool it came from.
 - **No credentials manager, no expression language, no webhook registry.** They
   are not missing pending work; they are outside what this is.
