@@ -30,7 +30,15 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
 // Console errors are findings, not noise: a React key warning or a failed
 // dynamic import is exactly the class of bug a build cannot catch.
 const consoleErrors = [];
-page.on("console", (m) => { if (m.type() === "error") consoleErrors.push(m.text()); });
+page.on("console", (m) => {
+	if (m.type() !== "error") return;
+	// Append the URL. A failed subresource logs the generic text "Failed to load
+	// resource: the server responded with a status of 404" and puts the URL in
+	// location(), so recording only text() gives you an unlocatable failure --
+	// and it silently defeated the favicon filter below, which greps the text.
+	const url = m.location?.()?.url;
+	consoleErrors.push(url ? `${m.text()}  [${url}]` : m.text());
+});
 page.on("pageerror", (e) => consoleErrors.push(`pageerror: ${e.message}`));
 
 try {
