@@ -68,7 +68,18 @@ export function NodeInspector({
 	const accent = ACCENT[accentOf(node.kind)];
 
 	return (
-		<aside className={full ? "flex h-full w-full flex-col bg-white" : "flex h-full w-[320px] flex-col border-l border-slate-200 bg-white"}>
+		// Below `sm` the dock becomes a full-screen sheet. Docked, it is 320px
+		// wide — which on a 390px phone leaves the canvas THIRTY-SIX PIXELS, so
+		// the graph is technically present and practically invisible. Nothing
+		// overflows and nothing errors, which is exactly why this needs saying
+		// in a class list rather than being left to look fine in a test.
+		<aside
+			className={
+				full
+					? "flex h-full w-full flex-col bg-white"
+					: "flex h-full w-[320px] flex-col border-l border-slate-200 bg-white max-sm:absolute max-sm:inset-0 max-sm:z-20 max-sm:w-full max-sm:border-l-0"
+			}
+		>
 			<header className="flex items-start gap-2 border-b border-slate-100 px-3 py-2.5">
 				<span
 					className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md"
