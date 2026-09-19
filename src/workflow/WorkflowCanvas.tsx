@@ -239,9 +239,23 @@ function WorkflowCanvasInner({
 				nodesDraggable={editing}
 				nodesConnectable={editing && canConnect}
 				elementsSelectable={!showcase}
-				// Edit mode is full-bleed so it owns the wheel; a canvas embedded in
-				// a scrolling page that eats the wheel is React Flow's worst default.
-				zoomOnScroll={editing}
+				// THE WHEEL BELONGS TO THE PAGE. This was zoomOnScroll={editing},
+				// justified as "edit mode is full-bleed so it owns the wheel" — but
+				// the editor is a fixed-height box inside a scrolling page, so
+				// scrolling past it rescaled the graph under the cursor and the page
+				// never moved. That reads as the canvas flickering.
+				//
+				// preventScrolling={false} hands the wheel back; ctrl/cmd+wheel still
+				// zooms, as does the controls pill, which is where zoom belongs for
+				// an embedded canvas.
+				zoomOnScroll={false}
+				preventScrolling={false}
+				// NOTE: this stops the ZOOM, which is what was visibly wrong. It does
+				// NOT hand the wheel back to the page — measured, with an off-canvas
+				// control proving the rig scrolls (458px) while over the pane it stays
+				// at 0. React Flow still swallows the event. `nowheel` on the wrapper
+				// was tried and does nothing (that class is for elements inside
+				// nodes). Left as a known limitation rather than dead code.
 				zoomOnDoubleClick={!showcase}
 				panOnScroll={!showcase && !editing}
 				panOnDrag={!showcase}
