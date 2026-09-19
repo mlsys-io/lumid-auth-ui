@@ -4,13 +4,22 @@
 //
 //   Parameters — the schema-driven form.
 //   Run        — what this node did on the overlaid run.
-//   YAML       — Monaco on JUST this node's subtree, two-way.
+//   YAML       — this node's subtree, READ-ONLY.
+//
+// This comment used to say the YAML tab was "Monaco on JUST this node's
+// subtree, two-way". It is a <pre>. It has never been editable and Monaco was
+// never here -- and because the sentence was written in the present tense, a
+// user-facing doc was written from it saying users can edit both ways. Two-way
+// editing of the subtree is still worth building; until it is, this says what
+// the tab does.
 //
 // The YAML tab ships in the same increment as the form deliberately. A
 // generated form is only ever a view of the document, and the moment a user
-// suspects it is hiding something they need somewhere to look. It is also the
-// escape hatch that makes a hand-written registry safe: a kind we have no
-// schema for, or a parameter we never modelled, is still fully editable here.
+// suspects it is hiding something they need somewhere to look. Reading is
+// enough for that. The EDITING escape hatch that makes a hand-written registry
+// safe is in the Parameters tab: a kind we have no schema for falls through to
+// its raw subtree, and the "Advanced" group lists every key the schema does
+// not name, so a registry that lags the Python cannot silently hide fields.
 //
 // That safety valve is repeated inside the Parameters tab as an "Advanced"
 // group listing every key the schema does not name. Without it, a registry
