@@ -98,13 +98,13 @@ export default function AppWorkflowYaml() {
 	};
 
 	return (
-		<div className="max-w-3xl">
+		<div className="max-w-6xl">
 			<header className="mb-5">
-				<h1 className="text-2xl font-semibold text-slate-900">New workflow — YAML</h1>
+				<h1 className="text-2xl font-semibold text-slate-900">New workflow</h1>
 				<p className="mt-1 text-sm text-slate-600">
-					Paste a YAML (or JSON) workflow definition, or upload a file.
-					Saved workflows show up in the Workflow Builder list and can
-					be submitted to Runmesh or Lumilake from there.
+					Lay the workflow out on the canvas, or switch to YAML and write
+					it directly — they are the same document. Saved workflows can be
+					submitted to Runmesh or Lumilake.
 				</p>
 			</header>
 
@@ -112,8 +112,9 @@ export default function AppWorkflowYaml() {
 				<CardHeader>
 					<CardTitle>Workflow definition</CardTitle>
 					<CardDescription>
-						Plain text. n8n JSON export, Lumid YAML, or any other format
-						the backend knows — no shape enforced here.
+						Lumilake ops, a FlowMesh spec, or an xpio loop — the dialect is
+						read from the document itself. n8n and Dify exports can be
+						imported, and are never written back.
 					</CardDescription>
 				</CardHeader>
 				<CardContent className="space-y-3">
