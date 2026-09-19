@@ -4,7 +4,6 @@ import { ProtectedRoute } from "../components/ProtectedRoute";
 import { Dashboard } from "../pages/Dashboard";
 import { Login } from "../pages/Login";
 import LumidSSO from "../pages/Login/LumidSSO";
-import { LowCode } from "../pages/LowCode";
 import { SQL } from "../pages/SQL";
 import { Python } from "../pages/Python";
 import { Modelling } from "../pages/Modelling";
@@ -46,10 +45,6 @@ export const router = createBrowserRouter([
       {
         path: "dashboard",
         element: <Dashboard />,
-      },
-      {
-        path: "low-code",
-        element: <LowCode />,
       },
       {
         path: "sql",

@@ -1,5 +1,5 @@
 // StudioWorkflowPanel — right-edge pop-up drawer that visualizes a Lumilake
-// workflow as a DAG (LumilakeWorkflowCanvas), with the HALO optimizer overlay.
+// workflow as a DAG (the generic workflow canvas), with the HALO optimizer overlay.
 //
 // Driven by the same CustomEvent-bus pattern as StudioArtifactPanel:
 //   - window CustomEvent('studio:workflow-open', { detail: { workflow_yaml, plan, title } })
@@ -14,7 +14,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Workflow as WorkflowIcon, X, Cpu, Clock } from 'lucide-react';
-import LumilakeWorkflowCanvas, { type HaloPlan, type RunOverlay } from './workflow/LumilakeWorkflowCanvas';
+import WorkflowCanvas from '@/workflow/WorkflowCanvas';
+import { parseLumilake, type HaloPlan } from '@/workflow/adapters/lumilake';
+import type { WfOverlay as RunOverlay } from '@/workflow/model';
 
 const WIDTH_KEY = 'studio_workflow_panel_width_v1';
 const MIN_WIDTH = 360;
@@ -136,7 +138,13 @@ export function StudioWorkflowPanel() {
 			</header>
 			<div className="flex-1 min-h-0 overflow-hidden">
 				{wf?.workflow_yaml
-					? <LumilakeWorkflowCanvas workflowYaml={wf.workflow_yaml} plan={wf.plan} runState={wf.run_state} />
+					? <WorkflowCanvas
+							graph={parseLumilake(wf.workflow_yaml, wf.plan)}
+							overlay={wf.run_state}
+							mode={wf.run_state ? 'run' : 'view'}
+							height="100%"
+							className="h-full w-full overflow-hidden bg-[#FCFCFD]"
+						/>
 					: <div className="p-4 text-[12px] text-muted-foreground">No workflow to show yet — optimize or run one from chat.</div>}
 			</div>
 			{plan?.error && (

@@ -553,7 +553,7 @@ export const UserDashboard: React.FC = () => {
   const handleCreateBlank = useCallback(async () => {
     try {
       clearTransferData(); // 创建空白应用前，强制清空可能的残留传输数据
-      navigate('/app/n8n/?create=true');
+      navigate('/studio/workflows/new');
     } catch (error) {
       console.error(' 创建应用失败', error);
       showToast({
@@ -568,7 +568,7 @@ export const UserDashboard: React.FC = () => {
   // 点击应用卡片（功能2：获取应用详情）
   const handleAppClick = useCallback(
     (app: WorkflowItem) => {
-      navigate(`/app/n8n/${app.workflowId}`);
+      navigate(`/studio/workflows/new?from=${app.workflowId}`);
     },
     [navigate],
   );
@@ -881,7 +881,7 @@ export const UserDashboard: React.FC = () => {
           });
           setShowImportModal(false);
           await reloadWithFilters();
-          navigate('/app/n8n/' + workflowId);
+          navigate(`/studio/workflows/new?from=${workflowId}`);
         }
       } catch (error) {
         console.error(' 导入应用失败', error);

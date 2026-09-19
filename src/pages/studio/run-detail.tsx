@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import { me, MeApiError, type MeRunDetail } from "@/api/me";
 import { setStudioSelection } from "@/components/StudioContext";
 import AskAbout from "@/components/AskAbout";
-import RunDagCanvas from "@/components/RunDagCanvas";
+import RunDagCanvas from "@/components/workflow/RunDagCanvas";
 
 interface StepLogEntry {
 	id?: string;

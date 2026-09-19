@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, Save, Upload } from 'lucide-react';
+import { Code2, Loader2, LayoutGrid, Save, Upload } from 'lucide-react';
+
+import WorkflowEditor from '@/workflow/WorkflowEditor';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -22,12 +24,37 @@ import { createWorkflow } from '@/runmesh/api/user/workflow';
  * definition, name it, and save into the same /runmesh/workflows store
  * the rest of the app reads from.
  */
+// The old placeholder advertised `apiVersion: lumid/v1` with `spec.stages`,
+// which is not a format FlowMesh or Lumilake accepts — FlowMesh's router takes
+// only `native` and `n8n`, and Lumilake's native shape is the ops graph below.
+const LUMILAKE_PLACEHOLDER = `name: hello-world
+inputs:
+  Name: ["world"]
+outputs:
+  - name: reply
+    ref: Reply
+ops:
+  - id: Greeting
+    op: FormatOp
+    inputs: [Name]
+    template: "Hello, {name}!"
+    format_kwargs: {name: Name}
+  - id: Reply
+    op: LLMChatOp
+    inputs: [Greeting]
+    messages:
+      - {role: system, content: "Reply in one short sentence."}
+      - {role: user, content: Greeting}
+    config: {model: Qwen/Qwen2.5-7B-Instruct, max_tokens: 64, temperature: 0.2}
+`;
+
 export default function AppWorkflowYaml() {
 	const nav = useNavigate();
 	const [name, setName] = useState('');
 	const [description, setDescription] = useState('');
 	const [body, setBody] = useState('');
 	const [err, setErr] = useState('');
+	const [design, setDesign] = useState(false);
 	const [busy, setBusy] = useState(false);
 	const fileRef = useRef<HTMLInputElement>(null);
 
