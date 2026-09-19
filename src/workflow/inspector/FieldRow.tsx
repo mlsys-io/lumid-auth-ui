@@ -13,14 +13,12 @@
 // actually deployed. Until a loader is wired it degrades to a text input with
 // suggestions, which is honest — it never pretends to have validated.
 
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { parse as parseYaml } from "yaml";
 import type { Field, Params } from "../registry/types";
 import { getAt } from "../registry/types";
-
-const MonacoEditor = lazy(() => import("@monaco-editor/react"));
 
 const DEBOUNCE_MS = 300;
 
@@ -176,62 +174,80 @@ function Control({
 }
 
 /**
- * A `code` field. Monaco is lazy — it is a large chunk and most inspector
- * sessions never open one — with a mono textarea as the fallback, which also
- * means the panel still works if the chunk fails to load.
+ * A `code` field: a mono textarea that commits on blur.
+ *
+ * This WAS Monaco, lazily imported. It never worked in production and the
+ * failure was invisible from here: @monaco-editor/react does not bundle
+ * Monaco, it fetches it at runtime from cdn.jsdelivr.net, and our CSP is
+ * `script-src 'self'`. The chunk loaded (so Suspense resolved and the old
+ * "fallback" never showed), then Monaco's own loader was blocked and the box
+ * sat on its internal "Loading..." forever. tsc and the build were clean
+ * throughout, because nothing is wrong until the browser makes that request.
+ *
+ * A textarea is what the rest of this app edits YAML in, it is what the page's
+ * own YAML view uses, and it costs nothing at runtime. Highlighting in a 140px
+ * box is not worth a 5MB dependency or a hole in the CSP. If Monaco comes
+ * back, it must be SELF-HOSTED -- `loader.config()` pointed at our own origin
+ * -- and verified in a browser against the deployed CSP, not in a dev server
+ * that has none.
  */
 function CodeField({
 	id, field, value, readOnly, onCommit,
-}: { id: string; field: Field; value: unknown; readOnly?: boolean; onCommit: (v: string) => void }) {
+}: { id: string; field: Field; value: unknown; readOnly?: boolean; onCommit: (v: unknown) => void }) {
+	// A code field may be editing a STRING (a prompt, a snippet) or a STRUCTURE
+	// serialised for display (`messages`, a list of {role, content}). Those need
+	// different commits, and getting it wrong writes a string where the document
+	// wants a list.
+	//
+	// The old version always committed the raw text. `list` and `keyValue` right
+	// above both parse their text back first; `code` never did. Nobody hit it
+	// because the editor it lived in could not load at all (see the note above),
+	// so the field was unreachable rather than merely wrong.
+	const structured = value != null && typeof value !== "string";
 	const text = typeof value === "string" ? value : value == null ? "" : toYamlish(value);
 	const [local, setLocal] = useState(text);
+	const [parseError, setParseError] = useState<string | null>(null);
 	const last = useRef(text);
 	useEffect(() => {
 		if (text !== last.current) {
 			last.current = text;
 			setLocal(text);
+			setParseError(null);
 		}
 	}, [text]);
 
+	const commit = (raw: string) => {
+		if (!structured) { setParseError(null); onCommit(raw); return; }
+		// Display is JSON, so try that first; accept YAML too, since the document
+		// is YAML and pasting a fragment of it is the obvious thing to do.
+		for (const parse of [JSON.parse, parseYaml] as ((t: string) => unknown)[]) {
+			try {
+				const v = parse(raw);
+				if (v !== undefined) { setParseError(null); onCommit(v); return; }
+			} catch { /* try the next one */ }
+		}
+		// REFUSE rather than write. Committing the raw text here would replace a
+		// list with a string and the failure would surface much later, at run time.
+		setParseError("Not valid JSON or YAML — not saved. Fix the text or click away and back to restore.");
+	};
+
 	return (
-		<div className="overflow-hidden rounded-md border border-slate-200">
-			<Suspense
-				fallback={
-					<div className="flex h-[120px] items-center justify-center gap-2 bg-slate-50 text-[11px] text-slate-400">
-						<Loader2 className="h-3 w-3 animate-spin" /> loading editor…
-					</div>
-				}
-			>
-				<MonacoEditor
-					height={140}
-					language={field.language ?? "yaml"}
-					value={local}
-					options={{
-						readOnly,
-						minimap: { enabled: false },
-						lineNumbers: "off",
-						fontSize: 12,
-						scrollBeyondLastLine: false,
-						folding: false,
-						renderLineHighlight: "none",
-						overviewRulerLanes: 0,
-						scrollbar: { vertical: "auto", horizontalScrollbarSize: 8, verticalScrollbarSize: 8 },
-						padding: { top: 8, bottom: 8 },
-					}}
-					onChange={(v) => {
-						setLocal(v ?? "");
-						last.current = v ?? "";
-					}}
-					onMount={(editor) => {
-						// Commit on blur rather than per keystroke: a code field is
-						// edited in bursts, and one undo entry per character would
-						// make undo useless.
-						editor.onDidBlurEditorText(() => onCommit(editor.getValue()));
-					}}
-				/>
-			</Suspense>
-			<span className="sr-only" id={id} />
-		</div>
+		<>
+			<Textarea
+				id={id}
+				disabled={readOnly}
+				spellCheck={false}
+				value={local}
+				rows={8}
+				aria-label={field.label}
+				onChange={(e) => { setLocal(e.target.value); last.current = e.target.value; }}
+				// Commit on blur, not per keystroke: a code field is edited in bursts,
+				// and one undo entry per character would make undo useless.
+				onBlur={() => commit(local)}
+				className={`resize-y font-mono text-[11px] leading-relaxed${parseError ? " border-rose-300" : ""}`}
+			/>
+			{parseError && <p className="mt-1 text-[10px] leading-snug text-rose-600">{parseError}</p>}
+		</>
 	);
 }
 

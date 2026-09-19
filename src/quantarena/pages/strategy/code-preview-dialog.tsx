@@ -6,7 +6,7 @@ import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { toast } from 'sonner';
 import { Save, X, Download } from 'lucide-react';
-import Editor from '@monaco-editor/react';
+import { Textarea } from '../../components/ui/textarea';
 import { editStrategyCode, exportStrategyCode, ApiError } from '../../api';
 
 interface CodePreviewDialogProps {
@@ -133,32 +133,28 @@ export function CodePreviewDialog({
 					/>
 				</div>
 
+				{/*
+				  This was a Monaco editor. It NEVER loaded in production, so this
+				  dialog -- the only way to edit a strategy's code and save a new
+				  version -- showed a spinner forever and nobody could use it.
+				  @monaco-editor/react does not bundle Monaco; it fetches it from
+				  cdn.jsdelivr.net at runtime, and lum.id sends
+				  `script-src 'self'`. Nothing failed at build time, so the break
+				  was invisible to tsc, to the bundler, and to anyone not opening
+				  this dialog on the deployed site.
+
+				  A mono textarea is a downgrade from a syntax-highlighted Python
+				  editor, and it is an enormous upgrade on an editor that does not
+				  exist. Restoring highlighting means SELF-HOSTING Monaco and
+				  verifying it in a browser against the deployed CSP.
+				*/}
 				<div className="flex-1 min-h-0 border rounded-md overflow-hidden">
-					<Editor
-						height="100%"
-						defaultLanguage="python"
+					<Textarea
 						value={editorCode}
-						onChange={(value) => setEditorCode(value || '')}
-						theme="vs-dark"
-						options={{
-							readOnly: false,
-							minimap: { enabled: true },
-							fontSize: 14,
-							lineNumbers: 'on',
-							scrollBeyondLastLine: false,
-							automaticLayout: true,
-							tabSize: 4,
-							wordWrap: 'on',
-							renderWhitespace: 'selection',
-							bracketPairColorization: {
-								enabled: true,
-							},
-						}}
-						loading={
-							<div className="flex items-center justify-center h-full">
-								<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-							</div>
-						}
+						onChange={(e) => setEditorCode(e.target.value)}
+						spellCheck={false}
+						aria-label="Strategy code"
+						className="h-full w-full resize-none rounded-none border-0 font-mono text-[13px] leading-relaxed focus-visible:ring-0"
 					/>
 				</div>
 

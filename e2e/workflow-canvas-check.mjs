@@ -159,6 +159,64 @@ try {
 
 	await page.screenshot({ path: `${SHOTS}/01-editor-inspector.png`, fullPage: false });
 
+	// --- 5b. code fields, and the two bugs under them -------------------------
+	// This field type was unreachable in production for its whole life: it was a
+	// Monaco editor, @monaco-editor/react fetches Monaco from cdn.jsdelivr.net at
+	// runtime, and lum.id sends `script-src 'self'`. tsc, the bundler and every
+	// test here were clean the entire time, because nothing is wrong until a
+	// browser makes that request. Assert on the RENDERED control, not the import.
+	{
+		// Restore this block's own preconditions. Earlier sections leave the
+		// editor in whatever mode they finished in, and if that is the YAML pane
+		// there are no nodes to click -- which fails as a 30s timeout naming the
+		// node, not the mode, and reads like the node disappeared.
+		await editor.scrollIntoViewIfNeeded();
+		const backToCanvas = editor.getByRole("button", { name: /^Canvas$/ });
+		if (await backToCanvas.count()) { await backToCanvas.first().click(); await page.waitForTimeout(600); }
+		await editor.locator(".react-flow__node-wf").first().waitFor({ timeout: 10000 });
+
+		const insp = editor.locator("aside").filter({ hasText: "Parameters" }).first();
+		// Clicking a node that is ALREADY selected closes the inspector, and the
+		// previous section leaves one selected. Clear first, then select, so this
+		// block does not depend on which node the section before it left open.
+		await editor.locator(".react-flow__pane").first().click({ position: { x: 8, y: 8 } });
+		await page.waitForTimeout(400);
+		await editor.locator(".react-flow__node-wf").filter({ hasText: "Reply" }).first().click();
+		await page.waitForTimeout(900);
+		await insp.waitFor({ timeout: 10000 });
+		ok("no CDN-loaded editor anywhere", (await page.$$(".monaco-editor")).length === 0);
+		ok("the inspector is not stuck loading", !/Loading\.\.\./.test(await insp.innerText()));
+		const ta = insp.locator("textarea");
+		ok("a code field renders an editable control", await ta.count() > 0);
+
+		// Commit an EXPLICIT new value. Never str.replace against text you have
+		// not proved is present: a non-matching replace returns the input
+		// unchanged, the field never changes, and the assertion then passes or
+		// fails on nothing. That mistake shipped once as v0.5.424 and was made
+		// again while writing this very test.
+		const before = await ta.first().inputValue();
+		const MARK = "zzmark-" + Date.now();
+		const edited = JSON.stringify([{ role: "system", content: MARK }, { role: "user", content: "Greeting" }], null, 2);
+		ok("the test's edit is actually a change", edited !== before);
+		await ta.first().fill(edited);
+		await ta.first().blur();
+		await page.waitForTimeout(700);
+		await editor.getByRole("button", { name: /^YAML$/ }).first().click();
+		await page.waitForTimeout(700);
+		const doc = await page.evaluate(() => {
+			const all = [...document.querySelectorAll("textarea,pre")].map((e) => e.value ?? e.textContent ?? "");
+			return all.find((v) => /ops:/.test(v) && /LLMChatOp/.test(v)) || "";
+		});
+		ok("the document is observable", doc.length > 0);
+		// The second bug: `list` and `keyValue` parse their text back before
+		// writing; `code` committed the raw string, so a structured field would
+		// have been replaced by a JSON string. Only reachable once Monaco was gone.
+		ok("a structured code edit lands as a LIST, not a string",
+			doc.includes(MARK) && /role:\s*system/.test(doc) && !/messages:\s*["']/.test(doc));
+		await editor.getByRole("button", { name: /^Canvas$/ }).first().click();
+		await page.waitForTimeout(500);
+	}
+
 	// --- 6. an edit reaches the document --------------------------------------
 	const modelInput = inspector.locator('input[id="f-config-model"]');
 	ok("the model field is a resource picker input", await modelInput.count() === 1);
@@ -449,6 +507,53 @@ try {
 		await page.waitForTimeout(400);
 		const b2 = await k();
 		ok("ctrl+wheel still zooms", a !== b2, `transform unchanged: ${a}`);
+	}
+
+
+	// --- N+1. promotion is confirmed, not silent ------------------------------
+	// flowmesh.edit.ts asserted "the caller confirms it first" for two releases.
+	// No caller did. Adding a second node silently rewrote `spec:` into
+	// `spec.graph.nodes[]` in a file the user may have hand-written.
+	{
+		const fm = page.getByTestId("fm-single");
+		await fm.scrollIntoViewIfNeeded();
+		await page.waitForTimeout(500);
+		const specOf = () => page.evaluate(() => {
+			const all = [...document.querySelectorAll("textarea,pre")].map((e) => e.value ?? e.textContent ?? "");
+			return all.find((v) => /apiVersion:\s*flowmesh\/v1/.test(v) && /SFTTask|tune-tinyllama/.test(v)) || "";
+		});
+		await fm.getByRole("button", { name: /^YAML$/ }).first().click();
+		await page.waitForTimeout(600);
+		const before = await specOf();
+		ok("the single-task spec starts without a graph", before.length > 0 && !/graph:/.test(before));
+		await fm.getByRole("button", { name: /^Canvas$/ }).first().click();
+		await page.waitForTimeout(600);
+
+		const addTask = async () => {
+			await fm.getByRole("button", { name: /Add/ }).first().click();
+			await page.waitForTimeout(500);
+			const item = page.locator("button,[role=option],li").filter({ hasText: /inference/i }).first();
+			if (await item.count()) await item.click();
+			await page.waitForTimeout(600);
+		};
+		await addTask();
+		ok("adding a second task ASKS first", await page.locator("text=Restructure this spec?").count() > 0);
+		await page.getByRole("button", { name: /^Cancel$/ }).first().click();
+		await page.waitForTimeout(500);
+		await fm.getByRole("button", { name: /^YAML$/ }).first().click();
+		await page.waitForTimeout(600);
+		ok("declining leaves the document byte-identical", (await specOf()) === before);
+		await fm.getByRole("button", { name: /^Canvas$/ }).first().click();
+		await page.waitForTimeout(500);
+
+		await addTask();
+		const go = page.getByRole("button", { name: /Restructure and add/ }).first();
+		if (await go.count()) await go.click();
+		await page.waitForTimeout(800);
+		await fm.getByRole("button", { name: /^YAML$/ }).first().click();
+		await page.waitForTimeout(700);
+		const after = await specOf();
+		ok("accepting promotes to spec.graph.nodes[]", /graph:/.test(after) && /nodes:/.test(after));
 	}
 
 } catch (e) {

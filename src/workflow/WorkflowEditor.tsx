@@ -132,8 +132,23 @@ export default function WorkflowEditor({
 		forceRender((n) => n + 1);
 	}, [onChange]);
 
+	// Adding a second node to a single-task FlowMesh spec rewrites `spec:` into
+	// `spec.graph.nodes[]`. flowmesh.edit.ts has always said "the caller confirms
+	// it first"; no caller did, so it happened silently to a file the user may
+	// have hand-written. This is that confirmation. It asks ONCE per editor
+	// session -- after the shape has changed there is nothing left to warn about.
+	const [pendingPromote, setPendingPromote] = useState<WfEdit | null>(null);
+	const promotedRef = useRef(false);
+
 	const runEdit = useCallback((edit: WfEdit) => {
 		if (!adapter) return;
+		if (
+			edit.t === "addNode" && formFirst && !promotedRef.current &&
+			detected.format === "flowmesh"
+		) {
+			setPendingPromote(edit);
+			return;
+		}
 		const r = adapter.apply(docRef.current, graph, edit);
 		if (!r.ok) {
 			// A refusal is information: the adapter is saying what this dialect's
@@ -144,7 +159,7 @@ export default function WorkflowEditor({
 		sync();
 		if (edit.t === "removeNode" && selected === edit.id) setSelected(null);
 		if (edit.t === "renameNode") setSelected(edit.to);
-	}, [adapter, graph, selected, sync]);
+	}, [adapter, graph, selected, sync, formFirst, detected.format]);
 
 	// Selecting a node in form-first mode is implicit: there is only one.
 	const inspected = selectedNode ?? (formFirst ? graph.nodes.find((n) => !n.synthetic) : undefined);
@@ -305,6 +320,46 @@ export default function WorkflowEditor({
 					/>
 				)}
 			</div>
+
+			{pendingPromote && (
+				<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6">
+					<div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
+						<h2 className="text-sm font-medium text-slate-900">Restructure this spec?</h2>
+						<p className="mt-2 text-[12px] leading-relaxed text-slate-600">
+							A FlowMesh spec with one task keeps its settings directly under{" "}
+							<span className="font-mono text-[11px]">spec:</span>. Holding a second task
+							means moving them into{" "}
+							<span className="font-mono text-[11px]">spec.graph.nodes[]</span>, with the
+							current task as the first node.
+						</p>
+						<p className="mt-2 text-[12px] leading-relaxed text-slate-600">
+							Nothing is lost and one undo reverses it — but it does change the shape of
+							your document, so it is worth knowing before it happens.
+						</p>
+						<div className="mt-4 flex justify-end gap-2">
+							<button
+								type="button"
+								onClick={() => setPendingPromote(null)}
+								className="rounded-lg px-3 py-1.5 text-[12px] text-slate-600 hover:bg-slate-100"
+							>
+								Cancel
+							</button>
+							<button
+								type="button"
+								onClick={() => {
+									const edit = pendingPromote;
+									setPendingPromote(null);
+									promotedRef.current = true;
+									runEdit(edit);
+								}}
+								className="rounded-lg bg-slate-900 px-3 py-1.5 text-[12px] text-white transition-opacity hover:opacity-90"
+							>
+								Restructure and add
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 }

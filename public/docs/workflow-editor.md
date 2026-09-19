@@ -123,7 +123,9 @@ schema for is still editable rather than a dead end.
 **Run** — that node's last run: duration, output, error. Present only when a
 run overlay is loaded.
 
-**YAML** — the document, scoped to *this node*, editable both ways.
+**YAML** — the document, scoped to *this node*, read-only. It is there so you
+can see exactly what the form is writing; edit in the form, or in the page's
+YAML view.
 
 ---
 
@@ -167,10 +169,10 @@ Add a `spec.graph` and it becomes a real DAG:
 ![A FlowMesh spec with spec.graph: two branches fanning into a synthesis node, each card showing its requested hardware.](/docs/img/workflow-flowmesh.png)
 
 Each card shows what that node asked the scheduler for. Adding a second node to
-a single-task spec rewrites `spec:` into `spec.graph.nodes[]`. That is a real
-change to the shape of your document and it currently happens **without asking**
-— it is applied as one step, so a single undo reverses it, but there is no
-confirmation prompt. Check the YAML view after adding your second node.
+a single-task spec rewrites `spec:` into `spec.graph.nodes[]`, which is a real
+change to the shape of your document — so it **asks first**, once, and says what
+it is about to do. Decline and the file is left byte-identical; accept and it is
+one step, so a single undo reverses it.
 
 ---
 
@@ -208,11 +210,13 @@ to become a Lumid workflow.
 
 ## Known limits
 
-- **Code fields do not render right now.** Fields that use the embedded code
-  editor show *"Loading…"* and never resolve, because the editor is fetched
-  from a CDN our Content-Security-Policy blocks. Every other field type works,
-  and the node's YAML tab and the page's YAML view are both unaffected — edit
-  code-shaped fields there for now.
+- **Code fields are plain text, not a syntax-highlighted editor.** They were a
+  full editor that never once loaded in production — it fetches itself from a
+  CDN our Content-Security-Policy blocks, so the box sat on *"Loading…"*
+  forever. They are now a mono textarea that works. A field holding a
+  structure (`messages`, say) accepts JSON or YAML and tells you if what you
+  typed is neither, rather than saving something the runtime will choke on
+  later.
 - **Expressions are not translated on import** (above). Topology and prompts
   come across; the plumbing between them does not.
 - **Positions are not stored in your document, or anywhere else.** Layout is
