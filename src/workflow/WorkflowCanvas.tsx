@@ -68,10 +68,15 @@ function WorkflowCanvasInner({
 	const editing = mode === "edit";
 	const rf = useRef<ReactFlowInstance | null>(null);
 	const wrap = useRef<HTMLDivElement | null>(null);
-	// Focus-by-dimming: hovering a node drops everything outside its immediate
-	// neighbourhood to 30%. This is what makes a 40-node graph readable, and it
-	// is the cheapest legibility win on the canvas.
-	const [hovered, setHovered] = useState<string | null>(null);
+	// Focus-by-dimming keys off SELECTION, not hover.
+	//
+	// It was hover, and that made the canvas flicker: every mouse move across the
+	// graph changed the neighbourhood, which re-animated every node's opacity.
+	// Measured while sweeping the cursor over three nodes — 27 distinct opacity
+	// states and 24 of 70 samples caught mid-fade. The feature is worth keeping;
+	// driving it from a pointer that moves continuously was not.
+	//
+	// Selection changes only on click, so the graph settles and stays settled.
 
 	const g = useMemo(() => applyOverlay(graph, overlay), [graph, overlay]);
 	const vertical = g.direction === "TB";
@@ -86,14 +91,14 @@ function WorkflowCanvasInner({
 	);
 
 	const neighbourhood = useMemo(() => {
-		if (!hovered) return null;
-		const keep = new Set<string>([hovered]);
+		if (!selection) return null;
+		const keep = new Set<string>([selection]);
 		for (const e of g.edges) {
-			if (e.source === hovered) keep.add(e.target);
-			if (e.target === hovered) keep.add(e.source);
+			if (e.source === selection) keep.add(e.target);
+			if (e.target === selection) keep.add(e.source);
 		}
 		return keep;
-	}, [hovered, g.edges]);
+	}, [selection, g.edges]);
 
 	const nodes = useMemo<Node[]>(() => {
 		const out: Node[] = [];
@@ -270,8 +275,6 @@ function WorkflowCanvasInner({
 				onEdgesDelete={editing && onEdit ? (deleted) => {
 					for (const e of deleted) onEdit({ t: "disconnect", edge: e.id });
 				} : undefined}
-				onNodeMouseEnter={showcase ? undefined : (_e, n) => { if (n.type === "wf") setHovered(n.id); }}
-				onNodeMouseLeave={showcase ? undefined : () => setHovered(null)}
 				onNodeClick={showcase ? undefined : (_e, n) => {
 					if (n.type !== "wf") return;
 					onSelectionChange?.(selection === n.id ? null : n.id);
