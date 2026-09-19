@@ -21,7 +21,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import 'github-markdown-css/github-markdown-light.css';
 import {
-	BookOpen, Zap, FileCode2, Activity, CandlestickChart, Compass, ArrowLeft, Loader2, Cpu, Database, TerminalSquare, Bot, GraduationCap, Server,
+	BookOpen, Zap, FileCode2, Activity, CandlestickChart, Compass, ArrowLeft, Loader2, Cpu, Database, TerminalSquare, Bot, GraduationCap, Server, Workflow,
 } from 'lucide-react';
 import StudioHow from './how';
 import { useAuth } from '../../hooks/useAuth';
@@ -72,6 +72,19 @@ const DOCS: DocEntry[] = [
 		group: 'Guides',
 		icon: Activity,
 		companion: { to: '/studio/apps/mbb-consultant?surface=experiments', label: 'Experiments tab' },
+	},
+	{
+		// Sits next to 'experiments' on purpose: that doc covers what a workflow
+		// IS and how to measure one; this covers the surface you build it on.
+		// Placed after it because the canvas makes more sense once you know what
+		// a loop and an arm are.
+		slug: 'workflow-editor',
+		title: 'The workflow canvas',
+		description: 'One canvas for all five workflow dialects — Lumilake ops, FlowMesh specs, xpio loops, and n8n/Dify imports. What each edge style means, what the canvas refuses to write and why, and what the importer drops.',
+		md: 'workflow-editor.md',
+		group: 'Guides',
+		icon: Workflow,
+		companion: { to: '/studio/workflows/new', label: 'New workflow' },
 	},
 	{
 		// Second on purpose: first-run gets you an account and a working chat;
