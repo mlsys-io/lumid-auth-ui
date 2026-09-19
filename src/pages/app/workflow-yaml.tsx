@@ -54,7 +54,10 @@ export default function AppWorkflowYaml() {
 	const [description, setDescription] = useState('');
 	const [body, setBody] = useState('');
 	const [err, setErr] = useState('');
-	const [design, setDesign] = useState(false);
+	// The canvas is the DEFAULT: this route is "new workflow", and landing on a
+	// raw textarea with the editor hidden behind a button is how the canvas
+	// shipped invisible the first time.
+	const [design, setDesign] = useState(true);
 	const [busy, setBusy] = useState(false);
 	const fileRef = useRef<HTMLInputElement>(null);
 
@@ -142,24 +145,42 @@ export default function AppWorkflowYaml() {
 								onChange={onFile}
 								className="hidden"
 							/>
-							<Button
-								type="button"
-								variant="outline"
-								size="sm"
-								onClick={() => fileRef.current?.click()}
-							>
-								<Upload className="w-3.5 h-3.5 mr-1.5" />
-								Upload file
-							</Button>
+							<div className="flex items-center gap-2">
+								<Button
+									type="button"
+									variant="outline"
+									size="sm"
+									onClick={() => setDesign((v) => !v)}
+									title={design ? 'Edit the YAML directly' : 'Lay this out on a canvas'}
+								>
+									{design ? <Code2 className="w-3.5 h-3.5 mr-1.5" /> : <LayoutGrid className="w-3.5 h-3.5 mr-1.5" />}
+									{design ? 'YAML' : 'Design'}
+								</Button>
+								<Button
+									type="button"
+									variant="outline"
+									size="sm"
+									onClick={() => fileRef.current?.click()}
+								>
+									<Upload className="w-3.5 h-3.5 mr-1.5" />
+									Upload file
+								</Button>
+							</div>
 						</div>
-						<Textarea
-							id="wfbody"
-							value={body}
-							onChange={(e) => setBody(e.target.value)}
-							placeholder={`apiVersion: lumid/v1\nkind: Workflow\nmetadata:\n  name: example\nspec:\n  stages: {}`}
-							rows={18}
-							className="font-mono text-xs"
-						/>
+						{design ? (
+							<div className="h-[560px] overflow-hidden rounded-md border border-slate-200">
+								<WorkflowEditor value={body || LUMILAKE_PLACEHOLDER} onChange={setBody} />
+							</div>
+						) : (
+							<Textarea
+								id="wfbody"
+								value={body}
+								onChange={(e) => setBody(e.target.value)}
+								placeholder={LUMILAKE_PLACEHOLDER}
+								rows={18}
+								className="font-mono text-xs"
+							/>
+						)}
 					</div>
 					{err && <div className="text-xs text-red-600">{err}</div>}
 					<div className="flex items-center gap-2">
