@@ -255,14 +255,18 @@ function WorkflowCanvasInner({
 				// an embedded canvas.
 				zoomOnScroll={false}
 				preventScrolling={false}
-				// NOTE: this stops the ZOOM, which is what was visibly wrong. It does
-				// NOT hand the wheel back to the page — measured, with an off-canvas
-				// control proving the rig scrolls (458px) while over the pane it stays
-				// at 0. React Flow still swallows the event. `nowheel` on the wrapper
-				// was tried and does nothing (that class is for elements inside
-				// nodes). Left as a known limitation rather than dead code.
+				// preventScrolling is only honoured on ONE of React Flow's two wheel
+				// paths. With panOnScroll it installs createPanOnScrollHandler, which
+				// never reads preventScrolling and always calls preventDefault +
+				// stopImmediatePropagation — so view/run canvases ate the wheel and
+				// the page under them would not scroll. Hence panOnScroll={false}
+				// below: every mode now takes the zoom-on-scroll path, where
+				// preventScrolling={false} returns without preventDefault.
 				zoomOnDoubleClick={!showcase}
-				panOnScroll={!showcase && !editing}
+				// NEVER true: see the preventScrolling note above. Two-finger panning
+				// is not worth a canvas that traps the page scroll. Pan by dragging
+				// the pane; zoom with ctrl/cmd+wheel or the controls pill.
+				panOnScroll={false}
 				panOnDrag={!showcase}
 				deleteKeyCode={editing ? ["Backspace", "Delete"] : null}
 				onConnect={editing && canConnect && onEdit ? (c: Connection) => {
