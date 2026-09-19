@@ -24,11 +24,63 @@ jobs:
         # the Runmesh-FrontEnd merge in 2026-04.
         run: npm install --legacy-peer-deps --no-audit --no-fund
 
-      - name: Type-check
-        # Pre-existing tsc errors in matrix.tsx / submit-workflow.tsx /
-        # sonner.tsx / env.tsx are tracked but don't gate CI yet. Strict
-        # mode comes when those are cleaned up.
-        run: npx tsc --noEmit || true
+      - name: Type-check (baseline ratchet)
+        # This was `npx tsc --noEmit || true`, which is a type check with the
+        # result thrown away -- which is how 98 errors accumulated without
+        # anyone deciding to accept them. The guard fails on error 99 and also
+        # fails if the count DROPS, so a cleanup has to lower the baseline and
+        # cannot be silently undone later.
+        run: node scripts/tsc-guard.mjs
+
+      - name: Unit tests
+        # 162 assertions over the workflow model, adapters and round-trip.
+        # These existed and had never run in CI.
+        run: npm run test:workflow
+
+      - name: Catalog conformance
+        run: npm run check:catalog
 
       - name: Build
         run: npm run build
+
+  canvas:
+    name: Workflow canvas (browser)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start the dev harness
+        # The suite drives src/workflow/__dev__/mount.tsx, which vite serves at
+        # /auth/wf-dev.html. It is NOT a build input, so `vite preview` cannot
+        # serve it -- this needs the dev server.
+        run: |
+          npx vite --port 5199 --strictPort > /tmp/vite.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf -o /dev/null http://localhost:5199/auth/wf-dev.html && exit 0
+            sleep 1
+          done
+          echo "dev server never came up:"; cat /tmp/vite.log; exit 1
+
+      - name: Canvas + inspector suite
+        # 95 assertions. Covers the things tsc and the bundler structurally
+        # cannot see: whether a node renders, whether an edit reaches the
+        # document, whether the wheel scrolls the page, and whether the code
+        # field is an editable control or a permanent spinner.
+        run: npm run test:canvas
+        env:
+          WF_URL: http://localhost:5199/auth/wf-dev.html
+
+      - name: Harness log on failure
+        if: failure()
+        run: cat /tmp/vite.log
