@@ -56,6 +56,16 @@ export function detectFormat(text: string, hint?: WfAnyFormat): DetectResult {
 	if (apiVersion?.startsWith("flowmesh/")) {
 		return { format: "flowmesh", confidence: 1, why: `apiVersion: ${apiVersion}` };
 	}
+	// DO NOT tighten this to require the flowmesh/ prefix. `apiVersion: lumid/v1`
+	// is a real in-tree convention -- it is what admin/clusters/submit-tab.tsx and
+	// quantarena/create-job-dialog.tsx hand users as their default template, and
+	// what three e2e scripts submit. It works because FlowMesh does not validate
+	// the field at all: `_WorkflowRootInput.apiVersion` is `Any | None` in
+	// /app/src/server/task/parser.py, and nothing compares it to a literal.
+	// Verified 2026-09-19 against the running flowmesh-host by validating both
+	// documents through TaskEnvelopeTemplate: `lumid/v1` + `kind: Task` ACCEPTED,
+	// `flowmesh/v1` ACCEPTED. What is actually rejected is `kind: Workflow` with
+	// `spec.stages` -- a shape this repo no longer emits anywhere.
 	if (apiVersion && doc.kind && doc.spec) {
 		return { format: "flowmesh", confidence: 0.8, why: "apiVersion + kind + spec, though not the flowmesh/ prefix." };
 	}
