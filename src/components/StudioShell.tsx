@@ -611,7 +611,10 @@ export function StudioShell() {
 	const wideMain = location.pathname.startsWith('/dashboard')
 		|| location.pathname.startsWith('/studio/a/')
 		|| location.pathname.startsWith('/studio/manage')
-		|| location.pathname === '/studio/apps/all';
+		|| location.pathname === '/studio/apps/all'
+		// The workflow editor holds a canvas; the default max-w-5xl column left
+		// it cramped in half the viewport with dead space beside it.
+		|| location.pathname.startsWith('/studio/workflows');
 	// Bridge lum.id → Runmesh auth store (numeric sys_user.user_id) for the
 	// ported Runmesh admin pages now hosted in this shell. Ported from AppLayout.
 	const setRunmeshUser = useAuthStore((s) => s.setUser);
