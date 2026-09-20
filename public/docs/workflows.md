@@ -354,6 +354,15 @@ nothing else in common with the one above.
 
 ![kol_alpha on the Experiments tab — collecting, 2 arms with 1 never run, 3 results.](/docs/img/experiments-kol.png)
 
+> **Measured 2026-09-20 — the card no longer reads this way.** `kol_alpha` now
+> reports `results_total: 0`, `n_rows_total: 0` and `arms_never_run: [current,
+> musk_v1]`, and `kol_strategy` has no rows at all in the run store. The rows
+> the rest of this section reads off — 14 in the ledger, 3 carrying
+> `real_tape` — are gone, and re-running the arms is what would bring them
+> back. The walkthrough below is kept because the *shape* it teaches is the
+> point: a partial metric drop is the common case and the hardest to see. Read
+> it as a worked example, not as what you will find on the card today.
+
 **Its metric is a gate, not a score.** `real_tape` is `1` or `0`: did this
 backtest replay real market history with all three axes real? *"Higher is
 better"* on a boolean means "more often honest", not "better PnL". An experiment
@@ -472,9 +481,13 @@ document and stops being an n8n one.
 
 ## 10. Open one
 
-**Studio → Workflows → New**, or go straight to
-[`/studio/workflows/new`](/studio/workflows/new). Paste or upload a definition,
-or start from the example that is already in the box.
+Go to [`/studio/workflows/new`](/studio/workflows/new), or press **New
+workflow** on any app's **Workflows** or **Experiments** surface. Paste or
+upload a definition, or start from the example that is already in the box.
+
+There is no *Studio → Workflows → New* path: the sidebar has no Workflows
+entry, and `/studio/workflows` is the **Workflow Market** — shared templates to
+import, not your own workflows and not a place to create one.
 
 **Design** and **YAML** are two views of one document. Switching between them
 does not convert anything — there is nothing to convert.

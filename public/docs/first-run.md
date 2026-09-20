@@ -7,7 +7,10 @@ transcript, not a brochure.
 
 > **Changelog**
 > - **2026-09-20** — Folded the AI Consulting walkthrough in as **§10**, so both
->   cohort tracks live on one onboarding page.
+>   cohort tracks live on one onboarding page. Also: **Experiments** and
+>   **Proposals** are tabs again — the 2026-09-05 note below says they became
+>   loop rows, and that has since been reversed. Quant Research now has four
+>   tabs, as §3 describes; the older entry is left as it was written.
 > - **2026-09-05** — Rewritten for the **two-tab** app (Strategies · Workflows):
 >   the old Backtest / Forward test / Runtime / Experiments tabs are now loop
 >   *rows* on Workflows, and an experiment's arms render on the loop that feeds
@@ -106,9 +109,9 @@ Strategies live in an **app**, and a new account has none installed — the
 sidebar entry does not exist until you add it. This is the step most people
 miss, because anyone who has been here a while already has it.
 
-Go to **[Library → Marketplace](https://lum.id/studio/library/marketplace)**,
-find **Quant Research**, and install it. It is public, so nothing needs
-approving.
+Open **[Marketplace](https://lum.id/studio/library/marketplace)** in the
+sidebar, find **Quant Research**, and install it. It is public, so nothing
+needs approving.
 
 Afterwards it appears in the sidebar with **four tabs**:
 
