@@ -73,6 +73,12 @@ export interface Sandbox {
 	gpu: number;
 	/** Epoch seconds, as a string — it is a pod annotation. */
 	expires_at?: string | null;
+	/** Epoch seconds (as a string), stamped by sandbox-control each sweep in which
+	 *  the box was seen working OR could not be observed. Absent = never probed
+	 *  (CPU sandboxes are not). */
+	last_active?: string | null;
+	idle_evict_sec?: number | null;
+	idle_evict_enabled?: boolean | null;
 	created?: string | null;
 	/** Set when phase is Queued — what the scheduler is waiting for. */
 	waiting_for?: string;
@@ -545,6 +551,14 @@ export interface ComputeShell {
 	node: string | null;
 	/** Public TCP ports, sandbox-only — a FlowMesh SSH task publishes none. */
 	ports?: SandboxPort[] | null;
+	/** Epoch MILLISECONDS of the last sweep that saw this box busy, or could not
+	 *  tell. null when idle is not tracked for this row (CPU boxes, SSH tasks). */
+	lastActive?: number | null;
+	/** Seconds of observed inactivity after which a GPU box may be reclaimed. */
+	idleEvictSec?: number | null;
+	/** False means the rule is being REPORTED but not enforced — the UI must say
+	 *  so, or it promises a reclaim that will not happen. */
+	idleEvictEnabled?: boolean | null;
 	/** Only set for kind "sandbox"; the delete button needs it. */
 	sandbox?: Sandbox;
 }
@@ -571,6 +585,9 @@ export function sandboxToShell(s: Sandbox): ComputeShell {
 		state: s.phase,
 		connect: sshCommandForSite(site),
 		expiresAt: epochFromSeconds(s.expires_at),
+		lastActive: epochFromSeconds(s.last_active),
+		idleEvictSec: s.idle_evict_sec ?? null,
+		idleEvictEnabled: s.idle_evict_enabled ?? null,
 		owner: null,
 		detail: s.phase === "Queued" ? [s.gpus_free && `${s.gpus_free} GPUs free.`, s.waiting_for]
 			.filter(Boolean).join(" ") || null : s.pod,

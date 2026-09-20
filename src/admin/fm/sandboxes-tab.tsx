@@ -98,6 +98,30 @@ function fmtBytes(n?: number): string {
 	return `${v < 10 && i > 0 ? v.toFixed(1) : Math.round(v)} ${u[i]}`;
 }
 
+/** "idle 22m" / "reclaim in 8m" / "" when idle is not tracked for this row.
+ *
+ *  A GPU nobody is using is the most expensive idle thing in the fleet, so an
+ *  unused GPU sandbox becomes reclaimable after `idleEvictSec` of observed
+ *  inactivity. `lastActive` is refreshed by sandbox-control on every sweep in
+ *  which the box was busy OR could not be observed -- so an unreachable box
+ *  looks permanently active here, which is deliberate: it is never reclaimed on
+ *  a reading we did not get.
+ *
+ *  When the rule is not being enforced this says so. Showing a countdown for a
+ *  reclaim that will not happen would be worse than showing nothing. */
+function idleLabel(r: ComputeShell): { text: string; warn: boolean } | null {
+	if (!r.gpu || r.lastActive == null || !r.idleEvictSec) return null;
+	const idleSecs = Math.floor((Date.now() - r.lastActive) / 1000);
+	if (idleSecs < 60) return null;
+	const mins = (n: number) => (n >= 60 ? `${Math.floor(n / 60)}h` : `${n}m`);
+	const left = r.idleEvictSec - idleSecs;
+	if (!r.idleEvictEnabled) {
+		return { text: `idle ${mins(Math.floor(idleSecs / 60))} · not enforced`, warn: false };
+	}
+	if (left <= 0) return { text: "idle — reclaimable now", warn: true };
+	return { text: `idle ${mins(Math.floor(idleSecs / 60))} · reclaim in ${mins(Math.ceil(left / 60))}`, warn: left < 600 };
+}
+
 function expiresIn(ms: number | null): string {
 	if (ms === null) return "—";
 	const secs = Math.floor((ms - Date.now()) / 1000);
@@ -924,7 +948,17 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 									))}
 								</td>
 								<td className="px-3 py-2 text-xs text-slate-600">{r.owner ?? "you"}</td>
-								<td className="px-3 py-2 text-xs text-slate-600">{expiresIn(r.expiresAt)}</td>
+								<td className="px-3 py-2 text-xs text-slate-600">
+									{expiresIn(r.expiresAt)}
+									{(() => {
+										const idle = idleLabel(r);
+										return idle ? (
+											<div className={`mt-0.5 text-[11px] ${idle.warn ? "text-amber-600" : "text-slate-400"}`}>
+												{idle.text}
+											</div>
+										) : null;
+									})()}
+								</td>
 								<td className="px-3 py-2 text-right">
 									{r.kind === "sandbox" ? (
 										/* Deleting twice is the natural thing to do when the row is still
