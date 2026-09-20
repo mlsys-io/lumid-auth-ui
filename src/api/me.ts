@@ -763,6 +763,29 @@ export const me = {
   // Workflow = supertype across xpio scheduled loops + n8n visual
   // DAGs. The kind field disambiguates; the rest of the schema is
   // shared. Backed by /me/workflows + /me/runs aggregators.
+  // A compute job's status, for the workflow canvas.
+  //
+  // The browser cannot reach Lumilake directly: /ll/<site>/ wants a PAT, this
+  // SPA carries a session, and session-bearer rejects PATs. identity proxies
+  // it read-only (GET /me/compute/jobs/:site/:job_id).
+  //
+  // `terminal` comes from the SERVER so every caller agrees what "done" means —
+  // a poller that decides for itself eventually decides differently.
+  //
+  // `progress.<phase>` is JOB-level, not per-op: measured on a real completed
+  // job, the keys are queuing / query parsing / data probing / execution /
+  // outputs, and the workflow's op ids appear nowhere. Do not try to paint
+  // these onto graph nodes.
+  computeJob: (site: string, jobId: string) =>
+    call<{
+      job_id: string;
+      site: string;
+      status: string;
+      terminal: boolean;
+      error?: unknown;
+      progress?: Record<string, { completed?: boolean; details?: unknown }>;
+    }>("GET", `/compute/jobs/${encodeURIComponent(site)}/${encodeURIComponent(jobId)}`),
+
   listWorkflows: (kind?: "scheduled" | "visual") =>
     call<{ workflows: MeWorkflowRow[]; count: number; as_of: string }>(
       "GET",
