@@ -13,7 +13,7 @@
 // layout surgery — it overlays the workspace, like a slide-in inspector.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Workflow as WorkflowIcon, X, Cpu, Clock } from 'lucide-react';
+import { Workflow as WorkflowIcon, X, Cpu, Clock, Hash } from 'lucide-react';
 import WorkflowCanvas from '@/workflow/WorkflowCanvas';
 import { parseLumilake, type HaloPlan } from '@/workflow/adapters/lumilake';
 import type { WfOverlay as RunOverlay } from '@/workflow/model';
@@ -27,14 +27,29 @@ const DEFAULT_WIDTH = 560;
 // running | succeeded | failed | skipped), distinct from `plan`, which says
 // where an op WOULD run rather than what happened.
 //
-// Nothing populates it yet, deliberately. `lumilake_job_status` does return a
-// `steps` map, but whether its keys are workflow op ids has not been confirmed
-// against a real job — and a wrong mapping here would paint confident,
-// plausible, wrong state onto the graph, which is worse than painting none.
-// Wire the producer once a real run's progress payload has been inspected; the
-// panel and canvas are ready for it.
+// MEASURED 2026-09-20, settling the question this comment used to leave open:
+// `lumilake_job_status`'s `steps` keys are NOT op ids. They are five fixed
+// JOB-LIFECYCLE phases — queuing / query parsing / data probing / execution /
+// outputs — while the workflow's ops are its own ids (for vla_curation:
+// "Episode Frames", "Keyframe", "Caption", "Normalized Instruction"). Checked
+// against a real completed job (req-5UgV3Qgdqb6shnethiQhCt); the other two
+// surfaces give no more: /jobs/{id}/workflows came back EMPTY and
+// batch_progress was zeroed.
+//
+// So per-op state is NOT DERIVABLE from this API, and no mapping will make it
+// so. `run_state` stays unpopulated — not because the producer is unwritten,
+// but because the data does not exist. Painting confident, plausible, wrong
+// state onto a graph is worse than painting none.
+//
+// The honest surface is JOB-LEVEL: the phase, and the id needed to re-query it.
+// That needs a browser-reachable status endpoint, which does not exist today —
+// there is no `lumilake` route in identity's router and nothing in api/me.ts —
+// so this panel shows what the tool call already returned and no more.
 type WorkflowPayload = {
 	workflow_yaml: string;
+	/** The run this graph belongs to. Without it the panel cannot address,
+	 *  re-query, or even name the job it is drawing. */
+	job_id?: string;
 	plan?: HaloPlan;
 	title?: string;
 	run_state?: RunOverlay;
@@ -120,13 +135,23 @@ export function StudioWorkflowPanel() {
 					<div className="text-[13px] font-semibold text-foreground truncate">
 						{wf?.title || 'Workflow'}
 					</div>
-					{plan && !plan.error && (
+					{(wf?.job_id || (plan && !plan.error)) && (
 						<div className="flex items-center gap-2 text-[10px] text-muted-foreground">
 							{workers.length > 0 && (
 								<span className="inline-flex items-center gap-0.5"><Cpu className="w-3 h-3" />{workers.length} worker{workers.length === 1 ? '' : 's'}</span>
 							)}
 							{optMs != null && (
 								<span className="inline-flex items-center gap-0.5"><Clock className="w-3 h-3" />{optMs} ms optimize</span>
+							)}
+							{/* Shown in FULL and selectable. Every job id recorded in the
+							    runbook so far is truncated with an ellipsis and therefore
+							    cannot be re-queried — a run you cannot look up is a run
+							    you cannot learn from. */}
+							{wf?.job_id && (
+								<span className="inline-flex items-center gap-0.5 font-mono select-all"
+									title="Job id — select to copy; re-query with lumilake_job_status">
+									<Hash className="w-3 h-3" />{wf.job_id}
+								</span>
 							)}
 						</div>
 					)}

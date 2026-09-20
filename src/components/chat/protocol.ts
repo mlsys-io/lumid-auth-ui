@@ -343,9 +343,17 @@ export function handleEvent(
 				: (() => { try { return JSON.parse(String(evt.args)); } catch { return {}; } })();
 			const wfYaml = typeof a.workflow_yaml === 'string' ? a.workflow_yaml : '';
 			if (wfYaml.trim()) {
+				// Keep the job id. The payload used to carry only the YAML and
+				// the raw result, so the panel could draw a run it had no way to
+				// ADDRESS — no re-query, no polling, and nothing to show a user
+				// who wants to look the run up later. The demo doc records four
+				// job ids all truncated with an ellipsis for exactly this reason.
+				const res = unwrapToolResult(evt.result) as Record<string, unknown> | undefined;
+				const jobId = res && typeof res.job_id === 'string' ? res.job_id : undefined;
 				window.dispatchEvent(new CustomEvent('studio:workflow-open', {
 					detail: {
 						workflow_yaml: wfYaml,
+						job_id: jobId,
 						plan: unwrapToolResult(evt.result),
 						title: wfName === 'optimize_workflow'
 							? 'Workflow · HALO plan'
