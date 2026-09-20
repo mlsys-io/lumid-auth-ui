@@ -65,39 +65,42 @@ const DOCS: DocEntry[] = [
 		// have an app open, and it is the only doc that covers the WRITE side of
 		// the control plane (defining, adding an arm, dispatching) rather than
 		// reading a surface.
-		slug: 'experiments',
+		//
+		// Absorbed the former `workflow-editor` page (2026-09-20). They were always
+		// one story split in two — what a workflow IS and how to measure it, then
+		// the surface you build it on — and the old entry said so in this comment.
+		slug: 'workflows',
 		title: 'Workflows and experiments',
-		description: 'What separates a workflow from an experiment, how to define one, read its status, harvest a result, and drive the whole loop from the chatbox — define, run, inspect, discuss, dispatch. Two worked examples: a finished three-arm model comparison, and one that is deliberately NOT concluding, with the reasons readable off its card.',
-		md: 'experiments.md',
+		description: 'What separates a workflow from an experiment, how to define one, read its status, harvest a result, and drive the whole loop from the chatbox. Then the canvas you build one on: all five dialects, what each edge style means, and what the importer drops. Two worked examples, one of them deliberately NOT concluding.',
+		md: 'workflows.md',
 		group: 'Guides',
 		icon: Activity,
 		companion: { to: '/studio/apps/mbb-consultant?surface=experiments', label: 'Experiments tab' },
 	},
 	{
-		// Sits next to 'experiments' on purpose: that doc covers what a workflow
-		// IS and how to measure one; this covers the surface you build it on.
-		// Placed after it because the canvas makes more sense once you know what
-		// a loop and an arm are.
+		// RETIRED 2026-09-20 — merged into `workflows`. Kept as a hidden alias,
+		// not deleted: for a markdown doc the ENTRY IS THE ROUTE, so removing it
+		// 404s every link already in the wild. Same pattern as the `deepseek`
+		// alias below.
 		slug: 'workflow-editor',
 		title: 'The workflow canvas',
-		description: 'One canvas for all five workflow dialects — Lumilake ops, FlowMesh specs, xpio loops, and n8n/Dify imports. What each edge style means, what the canvas refuses to write and why, and what the importer drops.',
-		md: 'workflow-editor.md',
+		description: 'Merged into /studio/docs/workflows.',
+		md: 'workflows.md',
 		group: 'Guides',
 		icon: Workflow,
-		companion: { to: '/studio/workflows/new', label: 'New workflow' },
+		hidden: true,
 	},
 	{
-		// Second on purpose: first-run gets you an account and a working chat;
-		// this is the first thing a consulting-cohort user actually DOES with it.
-		// Walked as a fresh role=user account, so it records the failures a
-		// non-owner hits rather than the ones the author remembers.
+		// RETIRED 2026-09-20 — folded into `first-run` as the AI Consulting
+		// track. Hidden alias rather than a deletion: the entry IS the route for a
+		// markdown doc, and first-run.md itself linked here.
 		slug: 'mbb-consultant',
 		title: 'AI Consulting Onboarding',
-		description: 'Install the app, pick a mode and a case, get scored against real ground truth, and turn a wrong answer into a correction that sticks. Recorded from one live run, timings included.',
-		md: 'mbb-consultant.md',
+		description: 'Folded into /studio/docs/first-run.',
+		md: 'first-run.md',
 		group: 'Guides',
 		icon: GraduationCap,
-		companion: { to: '/studio/apps/mbb-consultant', label: 'Open the app' },
+		hidden: true,
 	},
 	{
 		// slug is 'coding', not 'deepseek': the page is about AI coding as a
@@ -194,12 +197,21 @@ const DOCS: DocEntry[] = [
 		companion: { to: '/studio/account/findata-sql', label: 'Mint a credential' },
 	},
 	{
+		// RETIRED 2026-09-20 — merged into `compute`, which is Admin+. That is
+		// not a demotion: /fm and /ll are BOTH admin-gated at the edge (a
+		// non-admin PAT measured 403 on each), so this page's "a normal user
+		// PAT is enough" premise was false and every example under its
+		// "verified" heading was unrunnable for the audience it addressed. The
+		// genuinely public half — the chatbox/MCP path and the per-caller
+		// /me/compute/jobs routes — moved to `workflows`, not behind the gate.
 		slug: 'fm-ll-queries',
 		title: 'FlowMesh & Lumilake queries',
-		description: 'Example compute queries for the two pillars — chatbox prompts, MCP tools, and raw proxy HTTP. List workers, submit jobs, HALO-optimize & run workflows.',
-		md: 'fm-ll-example-queries.md',
+		description: 'Merged into /studio/docs/compute.',
+		md: 'lumilake-flowmesh.md',
 		group: 'Guides',
 		icon: Cpu,
+		adminOnly: true,
+		hidden: true,
 	},
 	{
 		slug: 'flowmesh-ssh',
@@ -208,7 +220,7 @@ const DOCS: DocEntry[] = [
 		md: 'flowmesh-ssh.md',
 		group: 'Guides',
 		icon: TerminalSquare,
-		companion: { to: '/studio/docs/fm-ll-queries', label: 'FlowMesh queries' },
+		companion: { to: '/studio/docs/compute', label: 'Running jobs on the fleet' },
 	},
 	{
 		slug: 'infrastructure-setup',
@@ -234,14 +246,37 @@ const DOCS: DocEntry[] = [
 		// screenshots are gated by a SEPARATE nginx block keyed on the
 		// `lumilake-flowmesh-` filename prefix: the admin regex matches `.md`
 		// only, so before that block an Admin+ doc's images were public.
-		slug: 'lumilake-flowmesh',
-		title: 'Lumilake + FlowMesh workflows (Admin+)',
-		description: 'How a workflow is authored, planned by HALO and executed on a real GPU — the native dialect, the model and hardware constraints that fail with errors naming neither, and vla-curation as the worked example with its runbook.',
+		// RENAMED to `compute` 2026-09-20, absorbing the retired `fm-ll-queries`.
+		//
+		// The FILE deliberately keeps its old name. The nginx Admin+ gate is a
+		// filename regex (`^/docs/(…|lumilake-flowmesh)\.md$`, plus a second
+		// block for its images), and `adminOnly` here only hides the card and
+		// redirects the reader route — it does not protect the asset. Renaming
+		// the .md would serve this page to anyone who guessed the new filename.
+		//
+		// That is not hypothetical: this gate already shipped broken once, by
+		// bumping one of lumid-landing's TWO ConfigMap volumes while the other
+		// still served the old config — Argo read Synced/Healthy and anonymous
+		// curl still returned 200. Not worth re-opening for a tidier filename.
+		slug: 'compute',
+		title: 'Running jobs on the fleet (Admin+)',
+		description: 'FlowMesh and Lumilake end to end: the surface and who can call it, the native workflow dialect, the model and hardware constraints that fail with errors naming neither, how to read a running job, and vla-curation as the worked example with its runbook.',
 		md: 'lumilake-flowmesh.md',
 		group: 'Runbooks',
 		icon: Cpu,
 		adminOnly: true,
 		companion: { to: '/studio/a/vla-curation', label: 'The demo' },
+	},
+	{
+		// Back-compat alias for the pre-rename slug.
+		slug: 'lumilake-flowmesh',
+		title: 'Lumilake + FlowMesh workflows (Admin+)',
+		description: 'Renamed to /studio/docs/compute.',
+		md: 'lumilake-flowmesh.md',
+		group: 'Runbooks',
+		icon: Cpu,
+		adminOnly: true,
+		hidden: true,
 	},
 	{
 		slug: 'operations',
