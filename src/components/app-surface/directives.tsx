@@ -1660,6 +1660,71 @@ function LumidColumns({ body }: { body: Body }) {
 }
 
 // lumid:workflow — showcase the app's pipeline as a node canvas (D2).
+// ```lumid:compute-workflow``` — the app's DECLARED compute DAG.
+//
+// Distinct from ```lumid:workflow``` directly above, and the distinction is the
+// whole point: that one renders a LOOP DEFINITION (me.workflowDetail → steps[]
+// / engine / skills_invoked) and overlays a cycle. This one renders the
+// Lumilake-native `ops:` GRAPH the loop submits — a different object, with real
+// edges, from workflows/<name>.yaml in the bundle.
+//
+// Until now that graph was viewable only from chat: LumilakeWorkflowCanvas
+// mounts from StudioWorkflowPanel on a tool-call event, so a published DAG
+// rendered only if a human happened to ask chat to optimize it.
+//
+//   ```lumid:compute-workflow
+//   name: vla_curation   # optional when the app declares exactly one
+//   app: vla-curation    # optional; defaults to the surface's app
+//   ```
+function LumidComputeWorkflow({ body }: { body: Body }) {
+  const routeParams = useRouteParams();
+  const app = String(body.app ?? routeParams.app ?? "");
+  const want = String(body.name ?? "");
+  const [yaml, setYaml] = useState<string | null>(null);
+  const [err, setErr] = useState<string>("");
+  const [Canvas, setCanvas] = useState<React.ComponentType<any> | null>(null);
+  const [parse, setParse] = useState<((y: string) => any) | null>(null);
+
+  useEffect(() => {
+    // Lazy: surfaces without this directive never pay for xyflow.
+    import("@/components/workflow/WorkflowCanvas").then((m) => setCanvas(() => m.default));
+    import("@/workflow/adapters/lumilake").then((m) => setParse(() => m.parseLumilake));
+  }, []);
+
+  useEffect(() => {
+    if (!app) return;
+    let live = true;
+    resolveSource(`me://app-data?app=${encodeURIComponent(app)}&tool=workflows`)
+      .then((d: any) => {
+        if (!live) return;
+        const list = (d?.workflows ?? []) as Array<{ name: string; yaml: string }>;
+        if (!list.length) { setErr("this app declares no compute workflow"); return; }
+        const hit = want ? list.find((w) => w.name === want) : list[0];
+        if (!hit) { setErr(`no workflow named ${want}`); return; }
+        setYaml(hit.yaml);
+      })
+      .catch((e) => { if (live) setErr(String(e?.message || e)); });
+    return () => { live = false; };
+  }, [app, want]);
+
+  // An empty state, not an error box: most apps declare no compute DAG, and a
+  // missing graph is ordinary rather than broken.
+  if (err) return <div className="text-[11px] text-muted-foreground py-2">{err}</div>;
+  if (!yaml || !Canvas || !parse) return <div className="text-[11px] text-muted-foreground py-2">Loading graph…</div>;
+  let graph: any;
+  try {
+    graph = parse(yaml);
+  } catch (e) {
+    return <div className="text-[11px] text-muted-foreground py-2">graph unreadable: {String((e as Error)?.message || e)}</div>;
+  }
+  return (
+    <div className="my-2 rounded border border-border overflow-hidden" style={{ height: 320 }}>
+      <Canvas graph={graph} />
+    </div>
+  );
+}
+
+
 // Renders the loop's declared structure (read-only, compact); set
 // `cycle: latest` to overlay the most recent run's per-step statuses.
 //
@@ -1760,6 +1825,7 @@ const WIDGETS: Record<string, (p: { body: Body }) => React.ReactElement> = {
   columns: LumidColumns,
   "search-table": LumidSearchTable,
   workflow: LumidWorkflow,
+  "compute-workflow": LumidComputeWorkflow,
   ask: LumidAsk,
 };
 
