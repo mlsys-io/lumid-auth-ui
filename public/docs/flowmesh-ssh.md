@@ -317,6 +317,6 @@ or switch that task to `proxy` mode.
 
 - [Sandboxes](/studio/docs/sandboxes) — persistent home, `/datasets`, and the GPU tier rules
 
-- **[FlowMesh & Lumilake queries](/studio/docs/fm-ll-queries)** — listing nodes and workers,
+- **[Running jobs on the fleet](/studio/docs/compute)** — listing nodes and workers,
   submitting non-interactive workflows, the federated `/fm` surface.
 - **[Operations runbook](/studio/docs/operations)** — what to do when a site looks unhealthy.
