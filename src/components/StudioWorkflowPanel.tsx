@@ -15,8 +15,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Workflow as WorkflowIcon, X, Cpu, Clock, Hash } from 'lucide-react';
-import WorkflowCanvas from '@/workflow/WorkflowCanvas';
-import { parseLumilake, type HaloPlan } from '@/workflow/adapters/lumilake';
+import WorkflowEditor from '@/workflow/WorkflowEditor';
+import type { HaloPlan } from '@/workflow/adapters/lumilake';
 import type { WfOverlay as RunOverlay } from '@/workflow/model';
 
 const WIDTH_KEY = 'studio_workflow_panel_width_v1';
@@ -354,12 +354,30 @@ export function StudioWorkflowPanel() {
 			)}
 			<div className="flex-1 min-h-0 overflow-hidden">
 				{wf?.workflow_yaml
-					? <WorkflowCanvas
-							graph={parseLumilake(wf.workflow_yaml, wf.plan)}
+					// The SAME surface the workflow UI uses, read-only — not a second
+					// viewer that happens to look like it. WorkflowEditor wraps the
+					// very WorkflowCanvas this panel used to mount directly, so the
+					// graph is unchanged; what it adds is the whole reason to stop
+					// duplicating it:
+					//
+					//   * a YAML / Canvas toggle, so a run can be read as text
+					//     without leaving the drawer;
+					//   * DIALECT DETECTION. The bare canvas is Lumilake-only, so a
+					//     FlowMesh or xpio workflow opened from chat drew nothing;
+					//   * an UnknownDialect fallback that renders the text and SAYS
+					//     why it could not be drawn. The bare canvas failed silent:
+					//     a malformed workflow produced an empty drawer, no message
+					//     and no console error.
+					//
+					// Its YAML pane is a plain <textarea>, not Monaco — which
+					// matters here, because Monaco fetches itself from a CDN our CSP
+					// blocks and would have sat on "Loading…" forever.
+					? <WorkflowEditor
+							value={wf.workflow_yaml}
+							plan={wf.plan}
 							overlay={wf.run_state}
-							mode={wf.run_state ? 'run' : 'view'}
+							readOnly
 							height="100%"
-							className="h-full w-full overflow-hidden bg-[#FCFCFD]"
 						/>
 					: <div className="p-4 text-[12px] text-muted-foreground">No workflow to show yet — optimize or run one from chat.</div>}
 			</div>
