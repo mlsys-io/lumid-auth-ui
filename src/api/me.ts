@@ -786,6 +786,30 @@ export const me = {
       progress?: Record<string, { completed?: boolean; details?: unknown }>;
     }>("GET", `/compute/jobs/${encodeURIComponent(site)}/${encodeURIComponent(jobId)}`),
 
+  // The other jobs from the SAME run. With N arms fanned out over one graph
+  // there are N jobs against one canvas, and the panel only ever holds the one
+  // a chat tool call returned. Gated identically to computeJob: the siblings of
+  // a job you own, 404 for one you do not.
+  //
+  // `arm` can be absent — a single-job run has none — and a switcher must show
+  // the job id rather than an empty label when it is.
+  computeJobSiblings: (site: string, jobId: string) =>
+    call<{
+      app?: string;
+      loop?: string;
+      run_ts?: number;
+      jobs: Array<{
+        job_id: string;
+        site: string;
+        arm?: string;
+        /** HALO placement, op -> worker. Absent when nobody previewed. */
+        workers?: Record<string, string>;
+      }>;
+    }>(
+      "GET",
+      `/compute/jobs/${encodeURIComponent(site)}/${encodeURIComponent(jobId)}/siblings`,
+    ),
+
   listWorkflows: (kind?: "scheduled" | "visual") =>
     call<{ workflows: MeWorkflowRow[]; count: number; as_of: string }>(
       "GET",

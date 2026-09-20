@@ -110,9 +110,34 @@ export function StudioWorkflowPanel() {
 		progress?: Record<string, { completed?: boolean | number; eta_seconds?: number }>;
 	}>(null);
 	const [jobErr, setJobErr] = useState<string>("");
+	// The run's other jobs, and which one is being drawn.
+	//
+	// A fan-out is N jobs against ONE graph, and the panel is handed exactly one
+	// of them — whatever the chat tool call returned. `sel` is the job actually
+	// polled; it starts as the given one and moves when a user picks an arm.
+	const [sibs, setSibs] = useState<Array<{
+		job_id: string; site: string; arm?: string; workers?: Record<string, string>;
+	}>>([]);
+	const [sel, setSel] = useState<{ job_id: string; site: string } | null>(null);
 	useEffect(() => {
-		const id = wf?.job_id;
-		const site = wf?.site;
+		// Reset on a NEW run, not on every render: leaving the previous run's
+		// selection in place would poll one run while drawing another's graph.
+		setSel(wf?.job_id && wf?.site ? { job_id: wf.job_id, site: wf.site } : null);
+		setSibs([]);
+		if (!wf?.job_id || !wf?.site) return;
+		let live = true;
+		(async () => {
+			try {
+				const { me } = await import("@/api/me");
+				const r = await me.computeJobSiblings(wf.site!, wf.job_id!);
+				if (live && Array.isArray(r.jobs) && r.jobs.length > 1) setSibs(r.jobs);
+			} catch { /* a run of one, or an older server: no switcher, same panel */ }
+		})();
+		return () => { live = false; };
+	}, [wf?.job_id, wf?.site]);
+	useEffect(() => {
+		const id = sel?.job_id ?? wf?.job_id;
+		const site = sel?.site ?? wf?.site;
 		// No site means no addressable job: the endpoint is site-scoped, and
 		// guessing one polls a Lumilake that never saw this run.
 		if (!id || !site) { setJob(null); setJobErr(""); return; }
@@ -148,7 +173,7 @@ export function StudioWorkflowPanel() {
 		};
 		void tick();
 		return () => { live = false; if (timer) clearTimeout(timer); };
-	}, [wf?.job_id, wf?.site]);
+	}, [sel?.job_id, sel?.site, wf?.job_id, wf?.site]);
 
 	// pointer-drag resize from the left edge (drawer is on the right)
 	const startResize = useCallback((e: React.PointerEvent) => {
@@ -235,6 +260,46 @@ export function StudioWorkflowPanel() {
 					<X className="w-4 h-4" />
 				</button>
 			</header>
+			{/* The arm switcher. Only when there IS a fan-out — one job needs no
+			    chooser, and a control that never has a second option is noise.
+			
+			    It names the arm it is drawing. An unlabelled overlay across
+			    parallel arms is worse than none: four runs and no way to tell
+			    which the canvas is showing. Falls back to a short job id when a
+			    run carries no arm, rather than rendering an empty chip. */}
+			{sibs.length > 1 && (
+				<div className="px-3 pb-1 flex flex-wrap items-center gap-1 text-[10px]">
+					<span className="opacity-60">arm:</span>
+					{sibs.map((j) => {
+						const on = j.job_id === (sel?.job_id ?? wf?.job_id);
+						const uniq = Array.from(new Set(Object.values(j.workers || {})));
+						return (
+							<button key={`${j.site}/${j.job_id}`}
+								onClick={() => setSel({ job_id: j.job_id, site: j.site })}
+								title={`${j.job_id} on ${j.site}${uniq.length ? ` — ${uniq.join(", ")}` : ""}`}
+								className={`px-1.5 py-0.5 rounded border ${on
+									? "border-gold-400 bg-gold-50 text-gold-800 dark:bg-gold-900/30 dark:text-gold-200"
+									: "border-border text-muted-foreground hover:bg-muted"}`}>
+								{j.arm || j.job_id.slice(0, 10)}
+								{/* WHERE it landed. With N arms on one fleet this is the
+								    difference between "it is slow" and "three arms queued
+								    behind one card" — so distinct workers are shown, not
+								    the op count. */}
+								{uniq.length > 0 && (
+									<span className="opacity-60"> · {uniq.length === 1
+										? uniq[0] : `${uniq.length} workers`}</span>
+								)}
+							</button>
+						);
+					})}
+					{/* Same site for every arm is the common case; say so only when it
+					    is NOT, because a fan-out split across sites explains a latency
+					    difference that would otherwise look like the arm. */}
+					{new Set(sibs.map((j) => j.site)).size > 1 && (
+						<span className="opacity-60">· split across sites</span>
+					)}
+				</div>
+			)}
 			{(job?.progress || jobErr) && (
 				<div className="px-3 pb-1 text-[10px] text-muted-foreground">
 					{jobErr ? (
