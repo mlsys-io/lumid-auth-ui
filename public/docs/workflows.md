@@ -123,7 +123,7 @@ tenants before it existed.
 
 Open a workflow row to see what a run produced.
 
-![A workflow's detail: Metric & arms, the Outputs tier, and the run tree.](/docs/img/experiments-workflows.png)
+![KOL strategy's detail: kol_alpha under Metric & arms with its `why below min_samples (4/10)`, the Outputs tier reporting that the last run recorded no artifact, and the run tree.](/docs/img/experiments-workflows.png)
 
 - **Metric & arms** — the experiment this loop feeds, in place, so a result is
   never in only one of the two tabs.
@@ -352,16 +352,12 @@ An experiment reports what you declared. Reading it is still your job.
 parameterization survives recorded market history. Same machinery, and almost
 nothing else in common with the one above.
 
-![kol_alpha on the Experiments tab — collecting, 2 arms with 1 never run, 3 results.](/docs/img/experiments-kol.png)
+![kol_alpha on the Experiments tab — collecting, 2 arms with 1 never run, 4 results.](/docs/img/experiments-kol.png)
 
-> **Measured 2026-09-20 — the card no longer reads this way.** `kol_alpha` now
-> reports `results_total: 0`, `n_rows_total: 0` and `arms_never_run: [current,
-> musk_v1]`, and `kol_strategy` has no rows at all in the run store. The rows
-> the rest of this section reads off — 14 in the ledger, 3 carrying
-> `real_tape` — are gone, and re-running the arms is what would bring them
-> back. The walkthrough below is kept because the *shape* it teaches is the
-> point: a partial metric drop is the common case and the hardest to see. Read
-> it as a worked example, not as what you will find on the card today.
+The counts below are from a cohort measured **2026-09-21**; an earlier cohort
+this section was written against had been lost, and re-running `musk_v1`
+rebuilt it. Expect your own numbers to differ — what is stable is the *shape*,
+and the shape is the lesson.
 
 **Its metric is a gate, not a score.** `real_tape` is `1` or `0`: did this
 backtest replay real market history with all three axes real? *"Higher is
@@ -378,12 +374,12 @@ that before anything measures how good it is.
 | `generate` | `generated`, `compiled`, `lean` |
 | `poll` | `real_tape`, `all_axes_real`, `prints_replayed` |
 
-### Why it says 3 results when the ledger holds 14
+### Why the results count is below the row count
 
-Eleven of those rows came from `generate` and carry none of the declared metric,
-so `evaluate()` skips them. That is correct — and the card says it now: the
-results chip reads **`3 of 14 rows`**, and hovering it lists the keys those rows
-do carry. Until recently only the *all*-zero case was explained, so a partial
+Only `poll` emits the declared metric, so every `generate` row carries none of
+it and `evaluate()` skips them. That is correct — and the card says so: the
+results chip reads **`4 of 7 rows`** on the cohort above, and hovering it lists
+the keys the dropped rows *do* carry. Until recently only the *all*-zero case was explained, so a partial
 drop like this one was invisible; across the estate 364 of 1,558 rows are in
 that position. Ask the app and you get the same list:
 
@@ -401,11 +397,16 @@ Two reasons, both visible on the card:
 
 ```
 success_criteria:  best_n >= 10 and delta_pp >= 0
-best_n = 3         2 arms · 1 never run
+best_n = 4         2 arms · 1 never run
 ```
 
-- **Not enough resolved polls.** Three rows carry `real_tape` — `1`, `0`, `0`,
-  a mean of 0.33. One backtest replayed 12,378 real prints; two replayed none.
+- **Not enough resolved polls.** Four rows carry `real_tape`, all of them `0` —
+  a mean of 0.00, and the card says `below min_samples (4/10)`. None of these
+  backtests replayed recorded prints at all, which is the metric doing its job:
+  it is a gate on whether a result deserves to exist, and right now it is
+  answering no. That is a finding about the strategy's symbol and window
+  choice, not a fault in the experiment — and it is the exact question
+  `backtest_evidence` exists to isolate.
 - **The baseline arm cannot run.** `baseline: {arm: current}` names `current`,
   the hand-submitted reference, and `current` declares nothing but an id and a
   description — there is no configuration for a dispatch to vary, which is why
@@ -580,8 +581,10 @@ schema's own help. Required fields are marked. An unknown node kind falls back
 to editing that node's YAML subtree directly, so a node type we do not have a
 schema for is still editable rather than a dead end.
 
-**Run** — that node's last run: duration, output, error. Present only when a
-run overlay is loaded.
+**Run** — that node's last run: duration, output, error. The tab is always
+there; without a run overlay it says *"This node has not run in the selected
+cycle."* rather than disappearing, so a node you expected results for tells you
+it has none instead of silently offering one tab fewer.
 
 **YAML** — the document, scoped to *this node*, read-only. It is there so you
 can see exactly what the form is writing; edit in the form, or in the page's

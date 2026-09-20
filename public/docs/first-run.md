@@ -499,7 +499,7 @@ row.
 
 Backtest results — read the three labels *before* the P&L, every time:
 
-![Workflows → Backtest: the run tree, its datasets (musk_tweets_v1, tape_covered_v1), and Metric & arms below.](/docs/img/first-run-backtest-result-2.png)
+![Workflows → Backtest: Metric & arms at the top (both experiments this loop feeds), the Outputs tier, its dataset tape_covered_v1, and the run tree.](/docs/img/first-run-backtest-result-2.png)
 
 Forward-test scorecards from the live paper arm:
 
@@ -509,7 +509,7 @@ And the **Analyze** loop, which is the decision funnel rather than P&L —
 proposed, submitted, rejected, and the top reject reason. This is where you
 look when a strategy is registered but nothing is happening:
 
-![Workflows → Analyze: the decision funnel — proposed, submitted, rejected, and the top reason.](/docs/img/first-run-runtime-2.png)
+![Workflows → Analyze: a loop with no metric, so the card says it is not an experiment and offers to make it one. Its datasets, its Outputs tier, and one run on the tree.](/docs/img/first-run-runtime-2.png)
 
 ## 8. Reading a backtest result
 
