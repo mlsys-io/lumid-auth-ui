@@ -494,6 +494,30 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 
 	const connectHint = sshCommandForSite(target);
 
+	// The GPU reclaim rule, stated on the page rather than only in the per-row
+	// tooltip. The tooltip needs a row that is ALREADY idle before it says
+	// anything, so the one moment you could still act on the rule is the one
+	// moment it is invisible.
+	//
+	// Read off the rows rather than hardcoded, because the policy is per-site
+	// and the sites genuinely differ: home enforces, office reports only. A
+	// fixed sentence would be a lie on one of them. No GPU row on this site
+	// means we have not been told the policy, and we say nothing rather than
+	// guess.
+	const idlePolicy = (() => {
+		const row = rows.find(
+			(r) => r.site === target && r.gpu && r.idleEvictSec,
+		);
+		if (!row?.idleEvictSec) return null;
+		const mins = Math.round(row.idleEvictSec / 60);
+		return {
+			enforced: !!row.idleEvictEnabled,
+			text: row.idleEvictEnabled
+				? `Unused GPU sandboxes here are reclaimed after ${mins}m idle.`
+				: `Idle GPU sandboxes here are reported after ${mins}m but not reclaimed.`,
+		};
+	})();
+
 	return (
 		<TabShell
 			subtitle={`A shell with a home directory that outlives the container.${
@@ -510,6 +534,17 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 			onRefresh={refresh}
 		>
 			<SiteStrip sites={siteStatus} />
+
+			{idlePolicy ? (
+				<p className="mb-3 text-xs text-slate-500">
+					{idlePolicy.text}{" "}
+					<span className="text-slate-400">
+						An open shell session, a tmux or screen session (even detached), GPU
+						activity or CPU activity all count as in use — and a box we cannot
+						read is never reclaimed.
+					</span>
+				</p>
+			) : null}
 
 			<div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
 				{/* Toolbar. SSH keys and Datasets deliberately stay OUT of the create
