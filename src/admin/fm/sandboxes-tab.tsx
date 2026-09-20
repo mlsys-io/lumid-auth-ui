@@ -108,18 +108,39 @@ function fmtBytes(n?: number): string {
  *  a reading we did not get.
  *
  *  When the rule is not being enforced this says so. Showing a countdown for a
- *  reclaim that will not happen would be worse than showing nothing. */
-function idleLabel(r: ComputeShell): { text: string; warn: boolean } | null {
+ *  reclaim that will not happen would be worse than showing nothing.
+ *
+ *  Every label carries `hint`, because a countdown the reader cannot act on is
+ *  only half the message: it says the box will go without saying what would
+ *  keep it. The four signals below are the ones sandbox-control actually ORs,
+ *  kept in step with `_pod_is_active` -- an open session is detected as a
+ *  process holding a controlling TTY, NOT as a connection to port 22, because
+ *  the gateway bridges in with `kubectl exec -it` and no sandbox pod runs an
+ *  sshd for a socket to land on. */
+function idleLabel(r: ComputeShell): { text: string; warn: boolean; hint: string } | null {
 	if (!r.gpu || r.lastActive == null || !r.idleEvictSec) return null;
 	const idleSecs = Math.floor((Date.now() - r.lastActive) / 1000);
 	if (idleSecs < 60) return null;
 	const mins = (n: number) => (n >= 60 ? `${Math.floor(n / 60)}h` : `${n}m`);
 	const left = r.idleEvictSec - idleSecs;
+	const keeps =
+		"Counts as in use: an open shell session, a tmux or screen session (even detached), " +
+		"GPU activity, or CPU activity. Checked every couple of minutes; a box we cannot read " +
+		"always counts as in use and is never reclaimed on a missing reading.";
 	if (!r.idleEvictEnabled) {
-		return { text: `idle ${mins(Math.floor(idleSecs / 60))} · not enforced`, warn: false };
+		return {
+			text: `idle ${mins(Math.floor(idleSecs / 60))} · not enforced`,
+			warn: false,
+			hint: `Idle reclaim is not enforced at this site, so nothing will be reclaimed. ${keeps}`,
+		};
 	}
-	if (left <= 0) return { text: "idle — reclaimable now", warn: true };
-	return { text: `idle ${mins(Math.floor(idleSecs / 60))} · reclaim in ${mins(Math.ceil(left / 60))}`, warn: left < 600 };
+	const after = `Unused GPU sandboxes are reclaimed after ${mins(Math.floor(r.idleEvictSec / 60))} idle. ${keeps}`;
+	if (left <= 0) return { text: "idle — reclaimable now", warn: true, hint: after };
+	return {
+		text: `idle ${mins(Math.floor(idleSecs / 60))} · reclaim in ${mins(Math.ceil(left / 60))}`,
+		warn: left < 600,
+		hint: after,
+	};
 }
 
 function expiresIn(ms: number | null): string {
@@ -953,7 +974,9 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 									{(() => {
 										const idle = idleLabel(r);
 										return idle ? (
-											<div className={`mt-0.5 text-[11px] ${idle.warn ? "text-amber-600" : "text-slate-400"}`}>
+											<div
+												className={`mt-0.5 cursor-help text-[11px] ${idle.warn ? "text-amber-600" : "text-slate-400"}`}
+												title={idle.hint}>
 												{idle.text}
 											</div>
 										) : null;
