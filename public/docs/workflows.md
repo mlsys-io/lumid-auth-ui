@@ -135,6 +135,27 @@ Open a workflow row to see what a run produced.
 - **Run tree** — each run as a node with its score and delta. `NOT SCORED` is a
   real state, not a gap.
 
+### Reading a run's arms on the canvas
+
+When a run fanned out, the workflow panel offers one chip per arm above the
+graph. The chip names the **arm** and where it landed — `baseline · 2 workers`,
+`variant · w-5090-3` — and picking one re-points the status and the phase strip
+at that arm's job, so what you are reading always matches what is selected.
+
+![The workflow panel drawing one arm of a two-arm run: the arm chips with their
+worker placement, the job's status, and the five job-level lifecycle
+phases](/docs/img/workflows-panel-arms.png)
+
+Two details that are deliberate rather than cosmetic. The chips appear **only**
+when there is more than one job — a chooser that never has a second option is
+noise. And `· split across sites` shows only when the arms really are split,
+because that is the case where a latency difference is the fleet rather than
+the arm.
+
+The strip below them is labelled **job phases** for a reason: those five are
+the job's lifecycle, not your graph's ops. See *There is no per-op state to
+read*, below.
+
 ### Reading a run's arms over the API
 
 The run tree shows this tenant's runs. The arms of a single **compute** run —
