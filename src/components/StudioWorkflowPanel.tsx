@@ -50,6 +50,9 @@ type WorkflowPayload = {
 	/** The run this graph belongs to. Without it the panel cannot address,
 	 *  re-query, or even name the job it is drawing. */
 	job_id?: string;
+	/** Which site ran it. The status endpoint is site-scoped, and an un-sited
+	 *  guess would poll a Lumilake that never saw this job. */
+	site?: string;
 	plan?: HaloPlan;
 	title?: string;
 	run_state?: RunOverlay;
@@ -85,6 +88,64 @@ export function StudioWorkflowPanel() {
 			window.removeEventListener('studio:workflow-panel-toggle', onToggle);
 		};
 	}, []);
+
+
+	// Poll job-level progress while the run is live.
+	//
+	// The panel used to be one-shot: it was filled by a completed tool call and
+	// then never updated, so a job that took twenty minutes showed the frame
+	// from its first second for the whole run.
+	//
+	// JOB-LEVEL, NOT PER-OP, and the distinction is load-bearing. Measured on a
+	// real completed job: `progress` keys are five fixed lifecycle phases
+	// (queuing / query parsing / data probing / execution / outputs) and the
+	// workflow's op ids appear nowhere — /jobs/{id}/workflows came back empty
+	// and batch_progress was zeroed. There is no per-op state to be had, so
+	// `run_state` stays unset rather than being fabricated from phases that
+	// mean something else.
+	const [job, setJob] = useState<null | {
+		status: string; terminal: boolean; progress?: Record<string, { completed?: boolean }>;
+	}>(null);
+	const [jobErr, setJobErr] = useState<string>("");
+	useEffect(() => {
+		const id = wf?.job_id;
+		const site = wf?.site;
+		// No site means no addressable job: the endpoint is site-scoped, and
+		// guessing one polls a Lumilake that never saw this run.
+		if (!id || !site) { setJob(null); setJobErr(""); return; }
+		let live = true;
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		let fails = 0;
+		const tick = async () => {
+			try {
+				const { me } = await import("@/api/me");
+				const r = await me.computeJob(site, id);
+				if (!live) return;
+				setJob({ status: r.status, terminal: r.terminal, progress: r.progress });
+				setJobErr(""); fails = 0;
+				// Stop on terminal. `terminal` is the SERVER's answer, not a
+				// status string matched here — two places deciding what "done"
+				// means eventually disagree, and the loser spins forever.
+				if (!r.terminal) timer = setTimeout(tick, 5000);
+			} catch (e) {
+				if (!live) return;
+				// Say it — an unconfigured endpoint returns a 503 naming the env
+				// var it wants, and that message is more useful on screen than a
+				// bar that never moves.
+				setJobErr(String((e as Error)?.message || e).slice(0, 160));
+				// ...but keep polling through a blip. The first version stopped
+				// dead on any error, so a single transient 502 — from a service
+				// this stack restarts routinely — ended the poll for the rest of
+				// the session and left a half-finished job looking frozen.
+				// Bounded so a genuinely dead endpoint does not retry forever:
+				// give up after 5 consecutive failures, backing off as it goes.
+				fails += 1;
+				if (fails < 5) timer = setTimeout(tick, 5000 * fails);
+			}
+		};
+		void tick();
+		return () => { live = false; if (timer) clearTimeout(timer); };
+	}, [wf?.job_id, wf?.site]);
 
 	// pointer-drag resize from the left edge (drawer is on the right)
 	const startResize = useCallback((e: React.PointerEvent) => {
@@ -153,6 +214,16 @@ export function StudioWorkflowPanel() {
 									<Hash className="w-3 h-3" />{wf.job_id}
 								</span>
 							)}
+							{job && (
+								<span className="inline-flex items-center gap-0.5"
+									title={job.terminal ? "final" : "polling every 5s"}>
+									<span className={`inline-block w-1.5 h-1.5 rounded-full ${
+										job.status === "completed" ? "bg-emerald-500"
+										: job.status === "failed" || job.status === "cancelled" ? "bg-rose-500"
+										: "bg-amber-500 animate-pulse"}`} />
+									{job.status}
+								</span>
+							)}
 						</div>
 					)}
 				</div>
@@ -161,6 +232,26 @@ export function StudioWorkflowPanel() {
 					<X className="w-4 h-4" />
 				</button>
 			</header>
+			{(job?.progress || jobErr) && (
+				<div className="px-3 pb-1 text-[10px] text-muted-foreground">
+					{jobErr ? (
+						<span className="text-rose-500">{jobErr}</span>
+					) : (
+						<span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+							{/* Labelled JOB phases, deliberately. These are the five
+							    lifecycle steps the server reports; they are NOT the
+							    graph's ops, and showing them beside the canvas
+							    without saying so would invite exactly that reading. */}
+							<span className="opacity-60">job phases:</span>
+							{Object.entries(job?.progress || {}).map(([k, v]) => (
+								<span key={k} className={v?.completed ? "text-emerald-600" : "opacity-50"}>
+									{v?.completed ? "✓" : "·"} {k}
+								</span>
+							))}
+						</span>
+					)}
+				</div>
+			)}
 			<div className="flex-1 min-h-0 overflow-hidden">
 				{wf?.workflow_yaml
 					? <WorkflowCanvas

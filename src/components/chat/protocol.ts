@@ -350,10 +350,19 @@ export function handleEvent(
 				// job ids all truncated with an ellipsis for exactly this reason.
 				const res = unwrapToolResult(evt.result) as Record<string, unknown> | undefined;
 				const jobId = res && typeof res.job_id === 'string' ? res.job_id : undefined;
+				// And the SITE, because a job id alone is not an address. Every
+				// Lumilake read route is /ll/<site>/-scoped and cloud/home/office
+				// are three separate services behind mesh-federator; asking the
+				// wrong one returns a clean "not found" indistinguishable from a
+				// job that never existed. Older tool builds omit it — then the
+				// panel simply does not poll, which is exactly what it did
+				// before, rather than guessing a site and polling the wrong one.
+				const site = res && typeof res.site === 'string' ? res.site : undefined;
 				window.dispatchEvent(new CustomEvent('studio:workflow-open', {
 					detail: {
 						workflow_yaml: wfYaml,
 						job_id: jobId,
+						site,
 						plan: unwrapToolResult(evt.result),
 						title: wfName === 'optimize_workflow'
 							? 'Workflow · HALO plan'
