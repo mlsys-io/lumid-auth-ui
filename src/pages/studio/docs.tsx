@@ -78,6 +78,24 @@ const DOCS: DocEntry[] = [
 		companion: { to: '/studio/apps/mbb-consultant?surface=experiments', label: 'Experiments tab' },
 	},
 	{
+		// RETIRED 2026-09-20 — this page WAS `experiments`; it absorbed
+		// `workflow-editor` and now lives at `workflows`.
+		//
+		// The alias exists because the rename dropped the old slug entirely,
+		// which 404s every bookmark and every external link to
+		// /studio/docs/experiments. The four other retirements got an alias;
+		// this one was a RENAME and so quietly did not, which is the easier
+		// mistake to make and the harder one to notice — nothing inside the
+		// repo linked to it, so no internal check caught it.
+		slug: 'experiments',
+		title: 'Workflows and experiments',
+		description: 'Moved to /studio/docs/workflows.',
+		md: 'workflows.md',
+		group: 'Guides',
+		icon: Activity,
+		hidden: true,
+	},
+	{
 		// RETIRED 2026-09-20 — merged into `workflows`. Kept as a hidden alias,
 		// not deleted: for a markdown doc the ENTRY IS THE ROUTE, so removing it
 		// 404s every link already in the wild. Same pattern as the `deepseek`
