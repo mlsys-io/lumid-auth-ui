@@ -104,7 +104,10 @@ export function StudioWorkflowPanel() {
 	// `run_state` stays unset rather than being fabricated from phases that
 	// mean something else.
 	const [job, setJob] = useState<null | {
-		status: string; terminal: boolean; progress?: Record<string, { completed?: boolean }>;
+		status: string; terminal: boolean;
+		// `completed` is a BOOLEAN on a phase and a COUNT on batch_progress.
+		// The two are distinguished at render, not assumed away here.
+		progress?: Record<string, { completed?: boolean | number; eta_seconds?: number }>;
 	}>(null);
 	const [jobErr, setJobErr] = useState<string>("");
 	useEffect(() => {
@@ -243,11 +246,24 @@ export function StudioWorkflowPanel() {
 							    graph's ops, and showing them beside the canvas
 							    without saying so would invite exactly that reading. */}
 							<span className="opacity-60">job phases:</span>
-							{Object.entries(job?.progress || {}).map(([k, v]) => (
-								<span key={k} className={v?.completed ? "text-emerald-600" : "opacity-50"}>
-									{v?.completed ? "✓" : "·"} {k}
-								</span>
-							))}
+							{/* Only entries whose `completed` is a BOOLEAN are phases. Measured
+							    on a real job, `progress` also carries `batch_progress`, whose
+							    `completed` is a COUNT of finished batches — so rendering every
+							    key painted it as a sixth phase, ticked green the moment one
+							    batch landed. A count is not a state. */}
+							{Object.entries(job?.progress || {})
+								.filter(([, v]) => typeof v?.completed === "boolean")
+								.map(([k, v]) => (
+									<span key={k} className={v.completed ? "text-emerald-600" : "opacity-50"}>
+										{v.completed ? "✓" : "·"} {k}
+									</span>
+								))}
+							{/* batch_progress is real progress, just not a phase — and it
+							    carries the only ETA this API offers. */}
+							{typeof job?.progress?.batch_progress?.eta_seconds === "number" && !job.terminal && (
+								<span className="opacity-70">~{Math.max(0, Math.round(
+									job.progress.batch_progress.eta_seconds))}s left</span>
+							)}
 						</span>
 					)}
 				</div>
