@@ -13,6 +13,7 @@
 // layout surgery — it overlays the workspace, like a slide-in inspector.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Workflow as WorkflowIcon, X, Cpu, Clock, Hash } from 'lucide-react';
 import WorkflowCanvas from '@/workflow/WorkflowCanvas';
 import { parseLumilake, type HaloPlan } from '@/workflow/adapters/lumilake';
@@ -203,7 +204,25 @@ export function StudioWorkflowPanel() {
 	const workers = plan?.selected_workers || [];
 	const optMs = plan?.optimization_seconds != null ? Math.round(plan.optimization_seconds * 1000) : null;
 
-	return (
+	// PORTALLED TO document.body, and that is load-bearing rather than tidy.
+	//
+	// This component is mounted inside StudioChat's <header>, beside the toggle
+	// button that opens it. That header is `sticky z-10`, which creates a
+	// STACKING CONTEXT — so the drawer's z-40 was scoped INSIDE z-10 and could
+	// never beat the chat column's z-20, a sibling context. The comment below
+	// states the intent ("z-40 keeps it above chat content") and the mount
+	// position silently defeated it.
+	//
+	// The drawer stayed VISIBLE throughout, because the chat column is
+	// transparent there — so this never looked broken. It just swallowed every
+	// click: measured with elementFromPoint at the arm chips' centre, the
+	// topmost element was the chat column, not the button. Visibility is not
+	// hit-testing, and only a click test could tell them apart.
+	//
+	// A portal escapes ancestor stacking entirely, which is what a
+	// `position: fixed` overlay needs — moving the mount point would fix it
+	// today and re-break the moment anything above it gains a z-index.
+	return createPortal((
 		<aside
 			// Slide-in inspector on the right edge. Starts BELOW the sticky top bar
 			// (min-h-[64px] = top-16) instead of top-0/h-screen, so it no longer
@@ -348,5 +367,5 @@ export function StudioWorkflowPanel() {
 				<div className="px-3 py-2 border-t border-border text-[11px] text-rose-600 flex-shrink-0">optimizer: {plan.error}</div>
 			)}
 		</aside>
-	);
+	), document.body);
 }
