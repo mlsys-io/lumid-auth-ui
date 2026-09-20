@@ -1682,12 +1682,32 @@ function LumidComputeWorkflow({ body }: { body: Body }) {
   const want = String(body.name ?? "");
   const [yaml, setYaml] = useState<string | null>(null);
   const [err, setErr] = useState<string>("");
-  const [Canvas, setCanvas] = useState<React.ComponentType<any> | null>(null);
-  const [parse, setParse] = useState<((y: string) => any) | null>(null);
+  // TYPED, not `any`. The wrong-import crash above type-checked cleanly only
+  // because this was `ComponentType<any>`: both files default-export a
+  // component, so `any` made two incompatible prop contracts interchangeable.
+  // Naming the graph type means the next mistake is a compile error rather
+  // than a blank app page.
+  type GraphCanvas = React.ComponentType<{
+    graph: import("@/workflow/model").WorkflowGraph;
+    height?: string | number;
+    className?: string;
+  }>;
+  const [Canvas, setCanvas] = useState<GraphCanvas | null>(null);
+  const [parse, setParse] =
+    useState<((y: string) => import("@/workflow/model").WorkflowGraph) | null>(null);
 
   useEffect(() => {
     // Lazy: surfaces without this directive never pay for xyflow.
-    import("@/components/workflow/WorkflowCanvas").then((m) => setCanvas(() => m.default));
+    //
+    // "@/workflow/WorkflowCanvas", NOT "@/components/workflow/WorkflowCanvas".
+    // Two different components share that filename: this one is controlled and
+    // takes a parsed `graph`, the other takes a LOOP DEFINITION and
+    // dereferences `definition.steps`. Importing the wrong one handed it a
+    // graph, left `definition` undefined, and crashed the whole app page with
+    // "Cannot read properties of undefined (reading 'name')" — the surface did
+    // not degrade, it took the page down. tsc did not catch it because both
+    // default-export a component and the props were passed through `any`.
+    import("@/workflow/WorkflowCanvas").then((m) => setCanvas(() => m.default));
     import("@/workflow/adapters/lumilake").then((m) => setParse(() => m.parseLumilake));
   }, []);
 
