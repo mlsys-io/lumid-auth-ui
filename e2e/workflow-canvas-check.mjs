@@ -578,3 +578,20 @@ if (failures.length) {
 	for (const f of failures) console.log(`  - ${f}`);
 	process.exitCode = 1;
 }
+
+// How many assertions actually RAN. Without this the suite is green whenever
+// `failures` is empty -- including when it collapsed after three of them, which
+// is precisely the shape that let a page ship with no canvas on it (v0.5.424):
+// a check that cannot reach its subject reports success, not failure.
+//
+// Raise this when you add assertions. It is a ratchet, not a target.
+const EXPECTED_MIN_ASSERTIONS = 90;
+const ran = pass + failures.length;
+if (ran < EXPECTED_MIN_ASSERTIONS) {
+	console.log(
+		`\nONLY ${ran} assertions ran, expected at least ${EXPECTED_MIN_ASSERTIONS}. ` +
+		"The suite did not get far enough to be meaningful -- treat this as a " +
+		"failure even though nothing it managed to check went wrong.",
+	);
+	process.exitCode = 1;
+}
