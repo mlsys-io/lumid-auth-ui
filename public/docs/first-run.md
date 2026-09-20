@@ -7,7 +7,10 @@ transcript, not a brochure.
 
 > **Changelog**
 > - **2026-09-20** — Folded the AI Consulting walkthrough in as **§10**, so both
->   cohort tracks live on one onboarding page.
+>   cohort tracks live on one onboarding page. Also: **Experiments** and
+>   **Proposals** are tabs again — the 2026-09-05 note below says they became
+>   loop rows, and that has since been reversed. Quant Research now has four
+>   tabs, as §3 describes; the older entry is left as it was written.
 > - **2026-09-05** — Rewritten for the **two-tab** app (Strategies · Workflows):
 >   the old Backtest / Forward test / Runtime / Experiments tabs are now loop
 >   *rows* on Workflows, and an experiment's arms render on the loop that feeds
@@ -106,9 +109,9 @@ Strategies live in an **app**, and a new account has none installed — the
 sidebar entry does not exist until you add it. This is the step most people
 miss, because anyone who has been here a while already has it.
 
-Go to **[Library → Marketplace](https://lum.id/studio/library/marketplace)**,
-find **Quant Research**, and install it. It is public, so nothing needs
-approving.
+Open **[Marketplace](https://lum.id/studio/library/marketplace)** in the
+sidebar, find **Quant Research**, and install it. It is public, so nothing
+needs approving.
 
 Afterwards it appears in the sidebar with **four tabs**:
 
@@ -496,7 +499,7 @@ row.
 
 Backtest results — read the three labels *before* the P&L, every time:
 
-![Workflows → Backtest: the run tree, its datasets (musk_tweets_v1, tape_covered_v1), and Metric & arms below.](/docs/img/first-run-backtest-result-2.png)
+![Workflows → Backtest: Metric & arms at the top (both experiments this loop feeds), the Outputs tier, its dataset tape_covered_v1, and the run tree.](/docs/img/first-run-backtest-result-2.png)
 
 Forward-test scorecards from the live paper arm:
 
@@ -506,7 +509,7 @@ And the **Analyze** loop, which is the decision funnel rather than P&L —
 proposed, submitted, rejected, and the top reject reason. This is where you
 look when a strategy is registered but nothing is happening:
 
-![Workflows → Analyze: the decision funnel — proposed, submitted, rejected, and the top reason.](/docs/img/first-run-runtime-2.png)
+![Workflows → Analyze: a loop with no metric, so the card says it is not an experiment and offers to make it one. Its datasets, its Outputs tier, and one run on the tree.](/docs/img/first-run-runtime-2.png)
 
 ## 8. Reading a backtest result
 
