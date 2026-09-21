@@ -120,7 +120,7 @@ Afterwards it appears in the sidebar with **four tabs**:
 | **Strategies** | everything you have registered — start here. Deploy, and each row's actions run a Backtest / Forward test / Discuss |
 | **Workflows** | every loop the app runs, one row each — Backtest, Forward test, Analyze, and the tweet-driven Kol strategy. Open a row for its runs |
 | **Experiments** | the status surface for arms: which arm is ahead, on how many samples, and whether the verdict is being withheld. See [Workflows & experiments](/studio/docs/workflows) |
-| **Proposals** | candidate experiments staged for you to accept or reject. Nothing here has run yet — accepting one is what turns a proposal into arms on **Experiments** |
+| **Proposals** | what several planners suggested running next, each with a verdict on whether it would actually collect rows. It is a **reading** surface — there is no accept button. You turn one into a real experiment by declaring it: the **Measurement** form on a Workflows row, or ask the rail to define it (*"declare the mcp_probe_checked proposal as an experiment"*) |
 
 There is deliberately no separate Backtest / Forward / Runtime tab: those are
 loops, so they live as rows on **Workflows**. Open a run from any row to see

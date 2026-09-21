@@ -49,6 +49,15 @@ Two guards fire at define time, and both refuse rather than warn:
 | the metric | *"a loop WITHOUT a metric is a workflow, not an experiment"* |
 | the scope | *"a threshold counted over an undefined population cannot be interpreted"* |
 
+**A Proposals candidate is held to the same two guards.** It used to be held to
+only one of them: a candidate with no `dataset_id` and no `cases` verdicted
+`will_collect` — "nothing found that would stop this recording rows" — and then
+hit the scope guard the moment anyone tried to declare it. Measured 2026-09-21,
+and the scope had to be invented by reading sibling experiments. A verdict that
+calls a suggestion actionable when it cannot be accepted is worse than no
+verdict, so a scope-less candidate now reads `will_be_invisible` with *no
+dataset_id, cases or fixture* as the reason.
+
 A third guard **warns** instead. If an arm names a model the gateway does not
 serve, you are told at define time:
 
@@ -123,7 +132,7 @@ tenants before it existed.
 
 Open a workflow row to see what a run produced.
 
-![KOL strategy's detail: kol_alpha under Metric & arms with its `why below min_samples (4/10)`, the Outputs tier reporting that the last run recorded no artifact, and the run tree.](/docs/img/experiments-workflows.png)
+![KOL strategy's detail: kol_alpha under Metric & arms with its `why below min_samples (6/10)`, the Outputs tier reporting that the last run recorded no artifact, and the run tree.](/docs/img/experiments-workflows.png)
 
 - **Metric & arms** — the experiment this loop feeds, in place, so a result is
   never in only one of the two tabs.
@@ -352,7 +361,7 @@ An experiment reports what you declared. Reading it is still your job.
 parameterization survives recorded market history. Same machinery, and almost
 nothing else in common with the one above.
 
-![kol_alpha on the Experiments tab — collecting, 2 arms with 1 never run, 4 results.](/docs/img/experiments-kol.png)
+![kol_alpha on the Experiments tab — collecting, 2 arms with 1 never run, 6 results.](/docs/img/experiments-kol.png)
 
 The counts below are from a cohort measured **2026-09-21**; an earlier cohort
 this section was written against had been lost, and re-running `musk_v1`
@@ -378,7 +387,7 @@ that before anything measures how good it is.
 
 Only `poll` emits the declared metric, so every `generate` row carries none of
 it and `evaluate()` skips them. That is correct — and the card says so: the
-results chip reads **`4 of 7 rows`** on the cohort above, and hovering it lists
+results chip reads **`6 of 12 rows`** on the cohort above, and hovering it lists
 the keys the dropped rows *do* carry. Until recently only the *all*-zero case was explained, so a partial
 drop like this one was invisible; across the estate 364 of 1,558 rows are in
 that position. Ask the app and you get the same list:
@@ -397,11 +406,11 @@ Two reasons, both visible on the card:
 
 ```
 success_criteria:  best_n >= 10 and delta_pp >= 0
-best_n = 4         2 arms · 1 never run
+best_n = 6         2 arms · 1 never run
 ```
 
-- **Not enough resolved polls.** Four rows carry `real_tape`, all of them `0` —
-  a mean of 0.00, and the card says `below min_samples (4/10)`. None of these
+- **Not enough resolved polls.** Six rows carry `real_tape`, all of them `0` —
+  a mean of 0.00, and the card says `below min_samples (6/10)`. None of these
   backtests replayed recorded prints at all, which is the metric doing its job:
   it is a gate on whether a result deserves to exist, and right now it is
   answering no. That is a finding about the strategy's symbol and window
