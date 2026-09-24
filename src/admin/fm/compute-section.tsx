@@ -20,13 +20,20 @@ import AdminSectionLayout from "../../pages/app/admin-section-layout";
 
 type Props = React.ComponentProps<typeof AdminSectionLayout>;
 
+// Own open/closed key, same reasoning as the groundApp comment above: without
+// it this rail shares ChatRail's default (WS_CHAT_OPEN_KEY) with every
+// /studio/apps/* workspace page, so closing (or opening) chat here silently
+// flips the persisted state an app page reads on its next mount, and vice
+// versa. /studio/data avoids this the same way (see data.tsx's CHAT_OPEN_KEY).
+const COMPUTE_CHAT_OPEN_KEY = "studio_compute_chat_open";
+
 export default function ComputeSection(props: Props) {
 	return (
 		<div className="flex min-h-0 flex-1">
 			<div className="min-w-0 flex-1 overflow-y-auto px-6 py-6">
 				<AdminSectionLayout {...props} />
 			</div>
-			<ChatRail groundApp={COMPUTE_KEY} />
+			<ChatRail groundApp={COMPUTE_KEY} openKey={COMPUTE_CHAT_OPEN_KEY} />
 		</div>
 	);
 }
