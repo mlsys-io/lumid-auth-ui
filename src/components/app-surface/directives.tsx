@@ -28,6 +28,13 @@ import { me, ME_BASE } from "@/api/me";
 import apiClient from "@/api/client";
 import { cn, formatCurrency, formatPercentage } from "@/lib/utils";
 import { bearerHeader } from "@/api/session-bearer";
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter,
+} from "@/components/ui/alert-dialog";
+import {
+  Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
+} from "@/components/ui/select";
 
 // ── URL-param injection ─────────────────────────────────────────────────────
 //
@@ -342,6 +349,27 @@ function getPath(obj: unknown, path?: unknown): unknown {
   );
 }
 
+/**
+ * A column's own value, or — if that's null/missing/empty and the column
+ * declares `fallback_template` — a string derived from sibling row fields.
+ * The fallback is only used when EVERY `{dot.path}` token in the template
+ * resolves to a real value; a template with one missing input renders no
+ * better than the blank it was meant to replace, so we leave it blank
+ * rather than emit a half sentence ("prices=undefined, signals=...").
+ */
+function resolveCell(row: Record<string, unknown>, c: ColDef): unknown {
+  const own = getPath(row, c.key);
+  if (own != null && own !== "") return own;
+  if (!c.fallback_template) return own;
+  let complete = true;
+  const derived = c.fallback_template.replace(/\{([^}]+)\}/g, (_, path: string) => {
+    const v = getPath(row, path);
+    if (v == null || v === "") { complete = false; return ""; }
+    return String(v);
+  });
+  return complete ? derived : own;
+}
+
 // `pollSec > 0` re-fetches the source on that interval (bypassing the cache),
 // pausing while the tab is hidden — this is how a declarative table becomes a
 // live feed (e.g. an Ongoing-competition activity stream / leaderboard) without
@@ -458,6 +486,13 @@ type ColDef = {
   // Optional explicit low→high ordering for a CATEGORICAL column (see the sort
   // comparator in LumidTable). Values not listed sort last.
   order?: unknown[];
+  // Derive this column's text from SIBLING fields on the same row when its
+  // own value is null/missing — e.g. an older row that never got a computed
+  // "why" field can still be explained from the raw axes it DOES carry.
+  // `{dot.path}` tokens are substituted from the row; if ANY token itself
+  // resolves to null/missing, the template is not used (falls through to the
+  // normal "—" empty rendering — nothing to honestly derive, so don't guess).
+  fallback_template?: string;
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -532,6 +567,32 @@ function isExternalHref(h: string): boolean { return /^https?:\/\//i.test(h); }
 // hides the control unless the caller's role qualifies (so admin bulk-reset
 // only shows for admins). This is what lets a leaderboard reset / activity
 // refresh live in declarative config instead of a bespoke native component.
+// A row action's pre-submit input — the row-action counterpart of the
+// standalone `lumid:form` widget's fields, but scoped to one button instead
+// of a whole section. A row action with `fields` never fires on click: it
+// opens a small dialog first, and the collected values are interpolated into
+// `run_loop.args` the same way row columns are (`{key}`), a chosen field
+// winning over a same-named row column.
+type ActionFieldOption = { value: string; label?: string };
+type ActionField = {
+  key: string;
+  label?: string;
+  type?: "select" | "text";
+  options?: ActionFieldOption[];
+  // `type: text` only — a handful of known-good values offered via <datalist>
+  // without forcing the field closed to a fixed set the way `select` does.
+  // E.g. one deliberate non-real value (SYNTH) alongside free entry of a real
+  // ticker, so the field doesn't need a hardcoded, decaying list of instrument
+  // ids (tape-covered symbols roll off in ~7 days — see
+  // reference_backtest_tickers_decay_in_7_days.md) just to offer a hint.
+  suggestions?: string[];
+  placeholder?: string;
+  default?: string;
+  required?: boolean;
+  // One line of context under the field — e.g. why this list is what it is.
+  help?: string;
+};
+
 type ActionDef = {
   label: string;
   // ask — send an interpolated prompt into the chat rail instead of calling an
@@ -550,10 +611,21 @@ type ActionDef = {
   // counterpart of the section-level `action` widget's run_loop intent. Same
   // one intent path and the same audit story; the row supplies the arguments.
   run_loop?: { app?: string; loop: string; args?: Record<string, unknown> };
+  // fields — collect these BEFORE run_loop fires, in a dialog with the
+  // `confirm` text as its prompt (or a generic "Confirm {label}" if unset).
+  // A row action declaring fields never uses window.confirm — the dialog IS
+  // the confirmation step, with real inputs instead of a bare yes/no.
+  fields?: ActionField[];
   qa_post?: string;
   qa_delete?: string;
   confirm?: string;
   success?: string;
+  // success_empty — used instead of `success` when a placeholder `success`
+  // references resolves to an empty string (e.g. `{symbol}` when the field
+  // was left blank on purpose, for a server-side auto-pick). Templates here
+  // don't support conditionals, so this is the minimal branch: two strings
+  // instead of one, picked by whether the field was actually filled in.
+  success_empty?: string;
   gate?: string;          // "admin" | "super_admin"
   variant?: string;       // "danger" → destructive styling
 };
@@ -624,10 +696,66 @@ function ActionButton({ a, row, onDone, size = "sm" }: {
   const appFromRoute = useRouteParams().app;
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
+  const [fieldsOpen, setFieldsOpen] = useState(false);
   if (!roleAllows(role, a.gate)) return null;
   const danger = a.variant === "danger";
+  // Shared by the plain click path and the fields-dialog submit path. `extra`
+  // — the dialog's collected values, keyed by field `key` — is interpolated
+  // the same way row columns are, and WINS on a key collision: a field the
+  // surface author put in front of the user is a more current answer than
+  // whatever the row happened to carry.
+  const fireRunLoop = async (extra?: Record<string, string>) => {
+    if (!a.run_loop?.loop) return;
+    const merged: Record<string, unknown> = { ...(row ?? {}), ...(extra ?? {}) };
+    const interpVal = (v: unknown) =>
+      typeof v === "string"
+        ? v.replace(/\{([^}]+)\}/g, (_, k) => String(merged[k] ?? ""))
+        : v;
+    const args = Object.fromEntries(
+      Object.entries(a.run_loop.args ?? {}).map(([k, v]) => [k, interpVal(v)]),
+    );
+    const queued = await me.runLoopNow(
+      String(a.run_loop.app ?? appFromRoute ?? ""), String(a.run_loop.loop), args,
+    );
+    // `success_empty` — pick it over `success` when every placeholder the
+    // `success` template references resolved to "" in `merged` (a field
+    // deliberately left blank, e.g. "auto-pick" for an optional symbol).
+    // Empty on a key `merged` doesn't even have counts as empty too, so a
+    // template referencing a field that was never asked for doesn't
+    // accidentally trip this branch into always firing.
+    const successTemplate = (() => {
+      if (!a.success_empty || !a.success) return a.success ?? `Triggered ${a.run_loop.loop}`;
+      const placeholders = Array.from(a.success.matchAll(/\{([^}]+)\}/g)).map((m) => m[1]);
+      const allBlank = placeholders.length > 0 &&
+        placeholders.every((k) => !String(merged[k] ?? "").trim());
+      return allBlank ? a.success_empty : a.success;
+    })();
+    const base = interpVal(successTemplate) as string;
+    // The job id is the only receipt the user gets at submit time — the real
+    // claim id doesn't exist until the worker picks it up (it shows up later
+    // in the row's own `Claim` column). Silence here is exactly QR-01: a
+    // click that gives no id and no feedback to reference if it goes missing.
+    const jobId = String(queued?.job_id ?? "");
+    toast.success(jobId ? `${base} (job ${jobId})` : base);
+    // Fire-and-forget: the toast is already up, and this only ever ADDS an
+    // error if the dispatch actually failed.
+    void reportDispatchFailure(jobId, String(a.run_loop.loop));
+    onDone?.();
+  };
   const run = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    // A row action with `fields` collects them in a dialog instead of firing
+    // immediately — the dialog IS the confirmation, so `confirm` becomes its
+    // prompt rather than a second window.confirm on top of it.
+    if (a.fields?.length) {
+      recordInteraction({
+        app: (a.run_loop?.app as string) || appFromRoute || "",
+        action: "row_action", widget: "table",
+        target: String(a.label ?? a.run_loop?.loop ?? "action"),
+      });
+      setFieldsOpen(true);
+      return;
+    }
     if (a.confirm && !window.confirm(a.confirm)) return;
     // The action's LABEL, never the row. A row can carry a strategy id, a
     // name, whatever the surface author put in it — none of that belongs in
@@ -678,21 +806,7 @@ function ActionButton({ a, row, onDone, size = "sm" }: {
     setBusy(true);
     try {
       if (a.run_loop?.loop) {
-        const interpVal = (v: unknown) =>
-          typeof v === "string" && row
-            ? v.replace(/\{([^}]+)\}/g, (_, k) => String(row[k] ?? ""))
-            : v;
-        const args = Object.fromEntries(
-          Object.entries(a.run_loop.args ?? {}).map(([k, v]) => [k, interpVal(v)]),
-        );
-        const queued = await me.runLoopNow(
-          String(a.run_loop.app ?? appFromRoute ?? ""), String(a.run_loop.loop), args,
-        );
-        toast.success(a.success ?? `Triggered ${a.run_loop.loop}`);
-        // Fire-and-forget: the toast is already up, and this only ever ADDS an
-        // error if the dispatch actually failed.
-        void reportDispatchFailure(String(queued?.job_id ?? ""), String(a.run_loop.loop));
-        onDone?.();
+        await fireRunLoop();
         return;
       }
       await runQaAction(a, row);
@@ -711,10 +825,121 @@ function ActionButton({ a, row, onDone, size = "sm" }: {
     ? "border-rose-200 text-rose-600 hover:bg-rose-50"
     : "border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-800";
   return (
-    <button onClick={run} disabled={busy}
-      className={cn("inline-flex items-center rounded-md border bg-white transition-colors disabled:opacity-50", pad, tone)}>
-      {busy ? "…" : a.label}
-    </button>
+    <>
+      <button onClick={run} disabled={busy}
+        className={cn("inline-flex items-center rounded-md border bg-white transition-colors disabled:opacity-50", pad, tone)}>
+        {busy ? "…" : a.label}
+      </button>
+      {a.fields?.length ? (
+        <ActionFieldsDialog
+          a={a} row={row} open={fieldsOpen}
+          onCancel={() => setFieldsOpen(false)}
+          onSubmit={async (values) => {
+            setFieldsOpen(false);
+            setBusy(true);
+            try {
+              await fireRunLoop(values);
+            } catch (err) {
+              toast.error(String((err as Error)?.message ?? err));
+            } finally {
+              setBusy(false);
+            }
+          }}
+        />
+      ) : null}
+    </>
+  );
+}
+
+// The dialog a `fields`-bearing row action opens instead of firing on click.
+// Deliberately small: one select/text input per field, a Cancel and a
+// Submit — this is QR-01's "pick a real instrument, or explicitly confirm
+// SYNTH" made generic rather than one-off wiring for a single button.
+function ActionFieldsDialog({ a, row, open, onCancel, onSubmit }: {
+  a: ActionDef; row?: Record<string, unknown>; open: boolean;
+  onCancel: () => void; onSubmit: (values: Record<string, string>) => void;
+}) {
+  const fields = a.fields ?? [];
+  // One stable prefix for this dialog instance's <datalist> ids — several
+  // rows on the same table each mount their own ActionFieldsDialog, so a
+  // bare `f.key` would collide across rows and every list would show
+  // whichever row rendered last.
+  const idPrefix = useId();
+  const interp = (s: string) =>
+    row ? s.replace(/\{([^}]+)\}/g, (_, k) => String(row[k] ?? "")) : s;
+  const initial = () => Object.fromEntries(
+    fields.map((f) => [f.key, f.default ?? f.options?.[0]?.value ?? ""]),
+  );
+  const [values, setValues] = useState<Record<string, string>>(initial);
+  // Re-seed defaults each time the dialog opens for a (possibly different) row
+  // — otherwise the second row's dialog would still show the first row's pick.
+  useEffect(() => { if (open) setValues(initial()); }, [open, row]);
+  const missing = fields.some((f) => f.required !== false && !values[f.key]);
+  return (
+    <AlertDialog open={open} onOpenChange={(o) => { if (!o) onCancel(); }}>
+      <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{a.confirm ? interp(a.confirm) : `Confirm ${a.label}`}</AlertDialogTitle>
+          <AlertDialogDescription>
+            This dispatches immediately on Submit — there is no further confirmation step.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <div className="space-y-3">
+          {fields.map((f) => (
+            <div key={f.key} className="space-y-1">
+              <label className="text-[12px] font-medium text-slate-700">{f.label ?? f.key}</label>
+              {f.type === "text" ? (
+                <>
+                  <input
+                    type="text"
+                    value={values[f.key] ?? ""}
+                    placeholder={f.placeholder}
+                    list={f.suggestions?.length ? `${idPrefix}-${f.key}` : undefined}
+                    onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+                    className="w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[12px]"
+                  />
+                  {f.suggestions?.length ? (
+                    <datalist id={`${idPrefix}-${f.key}`}>
+                      {f.suggestions.map((s) => <option key={s} value={s} />)}
+                    </datalist>
+                  ) : null}
+                </>
+              ) : (
+                <Select
+                  value={values[f.key] ?? ""}
+                  onValueChange={(v) => setValues((cur) => ({ ...cur, [f.key]: v }))}
+                >
+                  <SelectTrigger className="w-full text-[12px]">
+                    <SelectValue placeholder={f.placeholder ?? "Select…"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(f.options ?? []).map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label ?? o.value}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {f.help && <p className="text-[11px] text-slate-400">{f.help}</p>}
+            </div>
+          ))}
+        </div>
+        <AlertDialogFooter>
+          <button
+            onClick={onCancel}
+            className="inline-flex items-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-[12px] text-slate-600 hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onSubmit(values)}
+            disabled={missing}
+            className="inline-flex items-center rounded-md border border-gold-300 bg-gold-500 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-gold-600 disabled:opacity-50"
+          >
+            Submit
+          </button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
@@ -960,7 +1185,7 @@ function LumidTable({ body }: { body: Body }) {
                   {statCols.map((c) => (
                     <div key={c.key} className="flex justify-between text-[12px]">
                       <span className="text-slate-500">{c.label ?? c.key}</span>
-                      <span className="font-medium text-slate-700">{formatCell(getPath(row, c.key), c.type)}</span>
+                      <span className="font-medium text-slate-700">{formatCell(resolveCell(row, c), c.type)}</span>
                     </div>
                   ))}
                 </div>
@@ -1023,17 +1248,17 @@ function LumidTable({ body }: { body: Body }) {
               return (
                 <tr key={i} className={trCls} onClick={href ? () => goHref(href) : undefined}>
                   {columns.map((c, ci) => {
+                    const cellValue = resolveCell(row, c);
                     const cell = <>{
                       href && ci === 0
-                        ? renderHrefCell(href, formatCell(getPath(row, c.key), c.type))
-                        : formatCell(getPath(row, c.key), c.type)
+                        ? renderHrefCell(href, formatCell(cellValue, c.type))
+                        : formatCell(cellValue, c.type)
                     }</>;
                     // `truncate` silently clips at 260px with no way to read the
                     // rest — fine for an id, lossy for a column whose whole value
                     // is a sentence (a not-presentable backtest's reason). Hover
                     // shows the untruncated text.
-                    const raw = getPath(row, c.key);
-                    const full = raw === null || raw === undefined || typeof raw === "object" ? undefined : String(raw);
+                    const full = cellValue === null || cellValue === undefined || typeof cellValue === "object" ? undefined : String(cellValue);
                     return <td key={c.key} title={full} className="px-2.5 py-1.5 text-slate-700 align-top max-w-[260px] truncate">{cell}</td>;
                   })}
                   {rowActions.length > 0 && (
