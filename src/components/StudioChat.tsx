@@ -35,13 +35,12 @@ import { useClickOutside } from '@/hooks/useClickOutside';
 import AssemblyCard from './workflow/AssemblyCard';
 import type { Attachment, WireAttachment, Message, ToolCall, Block } from './chat/types';
 import { readChatStream, withLastAssistant } from './chat/protocol';
-import { claudeToolView, QuietToolPill, PlanPanel, isPlanFileWrite } from './chat/toolViews';
+import { claudeToolView, PlanPanel, isPlanFileWrite } from './chat/toolViews';
 import { blocksOf, failPendingTools, clearApproval, markApproval, pushNotice, stripForPersist } from './chat/blocks';
 import { BlockView, EntityCardBlock } from './chat/blockViews';
 import { Appear, Collapse, StreamCaret, JumpToLatest, ThinkingDots, Working, useMotionOK, AnimatePresence } from './chat/motion';
 import { TurnStatsFooter, type TurnStats } from './claude/TurnStats';
 import { SessionStrip } from './claude/SessionStrip';
-import { useViewMode } from './ViewModeProvider';
 import { fetchCycleConversation, type CycleLogRow } from '@/api/trajectory';
 
 // Map a running/finished cycle's session timeline (LLM turns + stage/tool
@@ -324,10 +323,6 @@ type ChatMode = '' | 'search' | 'deep_research';
 
 export function StudioChat({ docked = false, groundApp, threadId }: { docked?: boolean; groundApp?: string | null; threadId?: string } = {}) {
 	const location = useLocation();
-	// View mode: in simple (default) mode the chat runs "clean" — engineer
-	// telemetry (cost/tokens/session), the slash palette, and the model picker
-	// are hidden. `verbose` is the advanced-mode signal these gate on.
-	const { advanced: verbose } = useViewMode();
 	// `id` is the user_sub on the UserInfo shape from /api/v1/user; used
 	// to tag the persisted transcript so it can't leak across accounts.
 	const { user } = useAuth();
@@ -1563,7 +1558,6 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 							// and a missing tool degrades an answer silently rather than
 							// erroring, so a default-on version of this flag would be an
 							// invisible regression for every other caller.
-							...(!verbose ? { simple: true } : {}),
 							...(think ? { think: true } : {}),
 							...(personaId ? { persona_id: personaId } : agentId ? { agent_id: agentId } : {}),
 							...(wsRepo ? { xpio_repo: wsRepo } : {}),
@@ -2532,7 +2526,7 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 							    externals (kimi/glm), which are recorded +
 							    cost-metered. false only for the lumid-llm-backed
 							    entries (qwen). */}
-							{verbose && model.startsWith('claude-code') && m.role === 'assistant' && i === lastAssistantIdx && (
+							{model.startsWith('claude-code') && m.role === 'assistant' && i === lastAssistantIdx && (
 								<div className="pl-[38px]">
 									<SessionStrip
 										session={claudeSession}
@@ -2607,7 +2601,7 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 						{/* Turn telemetry from the Claude Code `result` event —
 						    cost, wall/API duration, time-to-first-token, steps and
 						    the cache hit split. Attached to the finished reply. */}
-						{verbose && turnStats && !streaming && messages[messages.length - 1]?.role === 'assistant' && (
+						{turnStats && !streaming && messages[messages.length - 1]?.role === 'assistant' && (
 							<div className="pl-[38px]"><TurnStatsFooter s={turnStats} /></div>
 						)}
 					</div>
@@ -2958,7 +2952,7 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 							onChange={(e) => {
 								const v = e.target.value;
 								setInput(v);
-								if (verbose && v.startsWith('/')) {
+								if (v.startsWith('/')) {
 									const q = v.toLowerCase();
 									const matches = SLASH_COMMANDS.filter((c) => c.label.toLowerCase().startsWith(q));
 									setSlashSuggestions(matches);
@@ -3122,7 +3116,6 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 					    The pool-quota pill used to sit here; it was noise in the
 					    composer and the same numbers live on lum.id/code. */}
 					<div className="order-3 flex-1 min-w-[8px]" />
-					{verbose && (
 					<div className="order-4 flex-shrink-0 flex items-center gap-1">
 						{/* The "Context · N" chip (WorkspaceChip) used to sit here. Removed
 						    from the composer: it exposed xpio repo / FlowMesh cluster /
@@ -3140,7 +3133,6 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 							groundApp={groundApp}
 						/>
 					</div>
-					)}
 					<button
 						type="submit"
 						disabled={!input.trim()}
@@ -3236,8 +3228,6 @@ const MessageBubble = memo(function MessageBubble({
 }) {
 	const isUser = m.role === 'user';
 	const [copied, setCopied] = useState(false);
-	// Simple mode coalesces a run of finished tool steps into one calm line.
-	const { advanced } = useViewMode();
 	const showActions = !streaming && (onCopy || onRegenerate || onSpeak);
 
 	// Blocks in ARRIVAL order. Legacy messages (persisted threads, the
@@ -3343,7 +3333,7 @@ const MessageBubble = memo(function MessageBubble({
 				    be forced FIRST; it now lands where compose_workflow
 				    actually completed. The original anti-flicker reason still
 				    holds because blocks only ever append. */}
-				{groupQuietBlocks(blocks, !advanced && !streaming).map((unit, i) => {
+				{groupQuietBlocks(blocks, false).map((unit, i) => {
 					if (unit.kind === 'group') {
 						return (
 							<Appear key={unit.blocks[0].id}>
@@ -3645,28 +3635,16 @@ function ToolChip({ t, onApprove, onPlanAction }: {
 	onPlanAction?: (action: 'approve' | 'revise', comment: string, plan: string) => void;
 }) {
 	const [argsOpen, setArgsOpen] = useState(false);
-	const [ccExpanded, setCcExpanded] = useState(false);
-	// Simple mode hushes the low-level mechanics: Claude Code tool views
-	// (terminal blocks, diffs, checklists, raw JSON) collapse to one calm
-	// QuietToolPill the user can click to expand. Advanced shows them verbatim.
-	const { advanced } = useViewMode();
 	// Claude Code tool names (Bash, Edit, TodoWrite, …) arrive verbatim from
 	// the claude-sandbox stream and get claude.ai/code-style rich views.
 	// Approval never applies to them (the CLI runs its own tools), so the
 	// dispatch is safe ahead of the approval branch below.
-	// Simple mode: if this tool renders its own entity card (a separate 'card'
-	// block carries the meaning), drop the redundant pill entirely — this must
-	// run BEFORE the CCView branch, else mcp__ tools show a stray "Worked on
-	// it" QuietToolPill above their card.
 	// A plan turn's plan is a Write into the CLI's plans directory, and it is the
 	// one card the user is meant to READ and act on. It therefore dispatches
-	// ahead of BOTH hiding branches below — the entity-card drop and the
-	// Simple-mode QuietToolPill collapse — because Simple is the default view
-	// and either one would reduce a plan to "Worked on it".
+	// ahead of the entity-card drop below.
 	if (onPlanAction && isPlanFileWrite(t)) {
 		return <PlanPanel t={t} onAction={onPlanAction} />;
 	}
-	if (!advanced && !t.pending && t.ok && !t.approvalRequired && entityCardFor(t)) return null;
 	// NOTE: a tool carrying approvalRequired loses its rich view here and falls
 	// through to the generic chip, which is what draws the Allow/Deny buttons.
 	// That is correct today (approval only ever reaches platform/MCP tools, never
@@ -3675,14 +3653,8 @@ function ToolChip({ t, onApprove, onPlanAction }: {
 	// the user needs it. The plan branch above sidesteps it deliberately.
 	const CCView = !t.approvalRequired ? claudeToolView(t.name) : null;
 	if (CCView) {
-		if (!advanced && !ccExpanded) return <QuietToolPill t={t} onExpand={() => setCcExpanded(true)} />;
 		return <CCView t={t} />;
 	}
-	// In Simple mode, when this tool renders its own entity card (chart,
-	// leaderboard, app surface, list…), the card carries the meaning — so drop
-	// the redundant tool-name pill above it. Keep the pill while pending or on
-	// failure so progress and errors stay visible.
-	if (!advanced && !t.pending && t.ok && entityCardFor(t)) return null;
 	const Icon =
 		t.name === 'web_search' ? Globe
 		: t.name === 'deep_research' ? Telescope

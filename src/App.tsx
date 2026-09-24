@@ -3,7 +3,6 @@ import { Boxes, ListChecks, TerminalSquare} from "lucide-react";
 import { Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
-import { ViewModeProvider } from "./components/ViewModeProvider";
 import { AuthGuard, defaultLandingPath } from "./components/auth-guard";
 import { AdminGuard } from "./components/admin-guard";
 import BrandLoader from "./components/BrandLoader";
@@ -670,9 +669,7 @@ export default function App() {
             path="/studio"
             element={
               <AuthGuard requireAuth={true}>
-                <ViewModeProvider>
-                  <StudioShell />
-                </ViewModeProvider>
+                <StudioShell />
               </AuthGuard>
             }
           >

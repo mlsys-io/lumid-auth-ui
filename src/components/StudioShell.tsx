@@ -33,7 +33,6 @@ import {
 	ShieldCheck, Receipt,} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { useViewMode } from './ViewModeProvider';
 import { cn } from '../lib/utils';
 import { me } from '@/api/me';
 import { useAppNav, iconFor, type AppNavItem } from './useAppNav';
@@ -564,10 +563,6 @@ export function StudioShell() {
 			.catch(() => { if (live) setManagesPool(false); });
 		return () => { live = false; };
 	}, [user]);
-	// View mode: advanced (the default) renders the current Studio verbatim;
-	// simple hides the whole shell chrome and runs the chatbox full-bleed.
-	const { advanced } = useViewMode();
-	const simple = !advanced;
 	const { width: sidebarWidth, resizing, startResize, reset: resetSidebar } = useSidebarWidth();
 	// App-driven nav: every installed app, grouped by section.
 	const appNav = useAppNav();
@@ -643,9 +638,6 @@ export function StudioShell() {
 
 	const [menuOpen, setMenuOpen] = useState(false);
 	const menuRef = useRef<HTMLDivElement>(null);
-	// Simple-mode header account dropdown (the sidebar user menu is hidden there).
-	const [acctOpen, setAcctOpen] = useState(false);
-	const acctRef = useRef<HTMLDivElement>(null);
 
 	// Sidebar collapse — the resize control lives at the sidebar's top-right and
 	// is always visible (when collapsed it moves to the header's far left).
@@ -705,7 +697,6 @@ export function StudioShell() {
 	useEffect(() => {
 		const onClick = (e: MouseEvent) => {
 			if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
-			if (!acctRef.current?.contains(e.target as Node)) setAcctOpen(false);
 		};
 		document.addEventListener('mousedown', onClick);
 		return () => document.removeEventListener('mousedown', onClick);
@@ -1040,37 +1031,6 @@ export function StudioShell() {
 						</button>
 					)}
 					<TopStatusStrip />
-					<div className="ml-auto flex items-center gap-2 flex-shrink-0">
-						{/* Account — only when the sidebar (which carries the user
-						    menu) is hidden, so we never show two account entries. */}
-						{simple && sidebarHidden && (
-							<div ref={acctRef} className="relative">
-								<button
-									onClick={() => setAcctOpen((o) => !o)}
-									title={user?.username || 'Account'}
-									className="w-8 h-8 rounded-full bg-foreground text-background flex items-center justify-center text-xs font-semibold"
-								>
-									{(user?.username || user?.email || '?').slice(0, 1).toUpperCase()}
-								</button>
-								{acctOpen && (
-									<div className="absolute right-0 mt-1.5 w-44 rounded-lg border border-border bg-popover shadow-lg py-1 z-20 text-sm">
-										<button onClick={() => { setAcctOpen(false); navigate('/studio/settings'); }} className="w-full text-left px-3 py-1.5 hover:bg-muted flex items-center gap-2">
-											<Settings className="w-3.5 h-3.5" /> Settings
-										</button>
-										{/* Documentation also lives here: this dropdown only
-										    renders when the sidebar is hidden, which is exactly
-										    when the sidebar user menu carrying it is unreachable. */}
-										<button onClick={() => { setAcctOpen(false); navigate('/studio/docs'); }} className="w-full text-left px-3 py-1.5 hover:bg-muted flex items-center gap-2">
-											<BookOpen className="w-3.5 h-3.5" /> Documentation
-										</button>
-										<button onClick={onLogout} className="w-full text-left px-3 py-1.5 hover:bg-muted flex items-center gap-2 text-muted-foreground">
-											<LogOut className="w-3.5 h-3.5" /> Sign out
-										</button>
-									</div>
-								)}
-							</div>
-						)}
-					</div>
 				</header>
 
 				{/* Workspace. /studio = the chat as the main surface (claude.ai
