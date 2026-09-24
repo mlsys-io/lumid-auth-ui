@@ -579,6 +579,13 @@ type ActionField = {
   label?: string;
   type?: "select" | "text";
   options?: ActionFieldOption[];
+  // `type: text` only — a handful of known-good values offered via <datalist>
+  // without forcing the field closed to a fixed set the way `select` does.
+  // E.g. one deliberate non-real value (SYNTH) alongside free entry of a real
+  // ticker, so the field doesn't need a hardcoded, decaying list of instrument
+  // ids (tape-covered symbols roll off in ~7 days — see
+  // reference_backtest_tickers_decay_in_7_days.md) just to offer a hint.
+  suggestions?: string[];
   placeholder?: string;
   default?: string;
   required?: boolean;
@@ -613,6 +620,12 @@ type ActionDef = {
   qa_delete?: string;
   confirm?: string;
   success?: string;
+  // success_empty — used instead of `success` when a placeholder `success`
+  // references resolves to an empty string (e.g. `{symbol}` when the field
+  // was left blank on purpose, for a server-side auto-pick). Templates here
+  // don't support conditionals, so this is the minimal branch: two strings
+  // instead of one, picked by whether the field was actually filled in.
+  success_empty?: string;
   gate?: string;          // "admin" | "super_admin"
   variant?: string;       // "danger" → destructive styling
 };
@@ -704,7 +717,20 @@ function ActionButton({ a, row, onDone, size = "sm" }: {
     const queued = await me.runLoopNow(
       String(a.run_loop.app ?? appFromRoute ?? ""), String(a.run_loop.loop), args,
     );
-    const base = interpVal(a.success ?? `Triggered ${a.run_loop.loop}`) as string;
+    // `success_empty` — pick it over `success` when every placeholder the
+    // `success` template references resolved to "" in `merged` (a field
+    // deliberately left blank, e.g. "auto-pick" for an optional symbol).
+    // Empty on a key `merged` doesn't even have counts as empty too, so a
+    // template referencing a field that was never asked for doesn't
+    // accidentally trip this branch into always firing.
+    const successTemplate = (() => {
+      if (!a.success_empty || !a.success) return a.success ?? `Triggered ${a.run_loop.loop}`;
+      const placeholders = Array.from(a.success.matchAll(/\{([^}]+)\}/g)).map((m) => m[1]);
+      const allBlank = placeholders.length > 0 &&
+        placeholders.every((k) => !String(merged[k] ?? "").trim());
+      return allBlank ? a.success_empty : a.success;
+    })();
+    const base = interpVal(successTemplate) as string;
     // The job id is the only receipt the user gets at submit time — the real
     // claim id doesn't exist until the worker picks it up (it shows up later
     // in the row's own `Claim` column). Silence here is exactly QR-01: a
@@ -834,6 +860,11 @@ function ActionFieldsDialog({ a, row, open, onCancel, onSubmit }: {
   onCancel: () => void; onSubmit: (values: Record<string, string>) => void;
 }) {
   const fields = a.fields ?? [];
+  // One stable prefix for this dialog instance's <datalist> ids — several
+  // rows on the same table each mount their own ActionFieldsDialog, so a
+  // bare `f.key` would collide across rows and every list would show
+  // whichever row rendered last.
+  const idPrefix = useId();
   const interp = (s: string) =>
     row ? s.replace(/\{([^}]+)\}/g, (_, k) => String(row[k] ?? "")) : s;
   const initial = () => Object.fromEntries(
@@ -858,13 +889,21 @@ function ActionFieldsDialog({ a, row, open, onCancel, onSubmit }: {
             <div key={f.key} className="space-y-1">
               <label className="text-[12px] font-medium text-slate-700">{f.label ?? f.key}</label>
               {f.type === "text" ? (
-                <input
-                  type="text"
-                  value={values[f.key] ?? ""}
-                  placeholder={f.placeholder}
-                  onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
-                  className="w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[12px]"
-                />
+                <>
+                  <input
+                    type="text"
+                    value={values[f.key] ?? ""}
+                    placeholder={f.placeholder}
+                    list={f.suggestions?.length ? `${idPrefix}-${f.key}` : undefined}
+                    onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+                    className="w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[12px]"
+                  />
+                  {f.suggestions?.length ? (
+                    <datalist id={`${idPrefix}-${f.key}`}>
+                      {f.suggestions.map((s) => <option key={s} value={s} />)}
+                    </datalist>
+                  ) : null}
+                </>
               ) : (
                 <Select
                   value={values[f.key] ?? ""}
