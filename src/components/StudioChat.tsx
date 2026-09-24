@@ -744,6 +744,20 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 		return m && m[1] !== 'all' ? decodeURIComponent(m[1]) : null;
 	};
 
+	// DATA_KEY / COMPUTE_KEY / APPS_KEY / LIBRARY_KEY are virtual scope keys —
+	// they exist so workspaceApp() can tag and resume threads on surfaces that
+	// have no real app behind them (see the reservations above each constant).
+	// They are NOT names the app registry knows. Treating one as "an app is in
+	// context" forces app_answer / app_feedback with a context the backend can
+	// never ground: on /studio/data-warehouse, buildViewingContext sets
+	// page:'data' and never touches ctx.app, so "Ask the app" (on by default)
+	// sent tool_choice:'app_answer' with an empty context.app on every general
+	// data-mesh question — surfaced as the dead "no app in context — a
+	// correction has to say which app it is about" tool card. Same failure
+	// shape on /studio/compute and the /studio/apps list.
+	const isRealApp = (key: string | null): key is string =>
+		!!key && key !== DATA_KEY && key !== COMPUTE_KEY && key !== APPS_KEY && key !== LIBRARY_KEY;
+
 	// Persist selected model.
 	useEffect(() => {
 		try {
@@ -1470,6 +1484,13 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 		// re-sent stale page notes on every history replay). The backend
 		// renders this into a per-request system block.
 		const context = buildViewingContext(location.pathname, location.search, ctxOverride);
+		// "Ask the app" is only meaningful when a REAL app is in context — see
+		// isRealApp for why workspaceApp()/currentAppRef.current alone are not
+		// enough (they also carry the data-mesh/compute/apps-list virtual scope
+		// keys). Computed once here so both the request's `context.app` fallback
+		// and the `tool_choice` gate below agree.
+		const groundedAskApp = workspaceApp() || currentAppRef.current;
+		const forceAppAnswer = !toolChoice && askAppRef.current && isRealApp(groundedAskApp);
 		// A newly-picked case replaces the remembered one; turns that carry none
 		// inherit it.
 		if (ctxOverride && typeof ctxOverride.case_id === 'string' && ctxOverride.case_id) {
@@ -1538,6 +1559,13 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 										...(context.case_id || caseIdRef.current
 											? { case_id: (context.case_id as string) || caseIdRef.current }
 											: {}),
+										// Carry the app EXPLICITLY when we're about to force
+										// app_answer and the URL alone didn't already set it
+										// (e.g. a loaded thread for a real app while sitting on
+										// the /studio/apps list) — same reasoning as "Correct
+										// this" below: the forced-tool path grounds on
+										// context.app and errors without it.
+										...(forceAppAnswer && !context.app ? { app: groundedAskApp as string } : {}),
 									}
 								: context,
 							// Per-turn model override (e.g. a grounded "Ask about this
@@ -1573,7 +1601,7 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 							// intent beats inferring it.
 							...(toolChoice
 								? { tool_choice: toolChoice }
-								: askAppRef.current && (workspaceApp() || currentAppRef.current)
+								: forceAppAnswer
 									? { tool_choice: 'app_answer' } : {}),
 							// Read-only planning turn. Identity forwards this only on the
 							// claude-code lane and allowlists it; omitted means today's
@@ -2538,6 +2566,7 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 							)}
 							<MessageBubble
 							m={m}
+							docked={docked}
 							streaming={streaming && i === messages.length - 1 && m.role === 'assistant'}
 							onCopy={m.role === 'assistant' && m.content ? () => copyMessage(m.content) : undefined}
 							onRegenerate={m.role === 'assistant' && !streaming && i > 0 && messages[i - 1]?.role === 'user' ? () => regenerate(i) : undefined}
@@ -3208,6 +3237,7 @@ function QuietGroup({ members, render }: { members: Block[]; render: (b: Block) 
 const MessageBubble = memo(function MessageBubble({
 	m,
 	streaming,
+	docked,
 	onCopy,
 	onRegenerate,
 	onCorrect,
@@ -3218,6 +3248,10 @@ const MessageBubble = memo(function MessageBubble({
 }: {
 	m: Message;
 	streaming?: boolean;
+	// Rail-only: hushes finished tool mechanics into one "Worked through N
+	// steps" line (see groupQuietBlocks below). The standalone /studio home
+	// chat keeps the full Claude-Code-style trace of every step.
+	docked?: boolean;
 	onCopy?: () => void;
 	onRegenerate?: () => void;
 	onCorrect?: () => void;
@@ -3332,8 +3366,22 @@ const MessageBubble = memo(function MessageBubble({
 				    NOTE a deliberate behavior change: the AssemblyCard used to
 				    be forced FIRST; it now lands where compose_workflow
 				    actually completed. The original anti-flicker reason still
-				    holds because blocks only ever append. */}
-				{groupQuietBlocks(blocks, false).map((unit, i) => {
+				    holds because blocks only ever append.
+				    Quiet-grouping is docked-only: this used to read
+				    `!advanced && !streaming`, but `advanced` had been
+				    hardcoded true ever since the Simple/Advanced chip was
+				    pulled from the header (3ebd80b formalized that as dead
+				    code), so grouping was unreachable everywhere. A rail
+				    turn that explores files and dead ends (Bash/Read/Glob
+				    misses, a 404) rendered every one of those steps as a
+				    full terminal/diff card — indistinguishable from the
+				    actual answer. Restore hushing for the rail, where an
+				    app-scoped user wants the result, not the trace; leave
+				    the standalone /studio home chat fully verbose, matching
+				    its Claude-Code-console character. Wait for the turn to
+				    finish (!streaming) so the group boundary doesn't jitter
+				    as new blocks arrive mid-stream. */}
+				{groupQuietBlocks(blocks, !!docked && !streaming).map((unit, i) => {
 					if (unit.kind === 'group') {
 						return (
 							<Appear key={unit.blocks[0].id}>
