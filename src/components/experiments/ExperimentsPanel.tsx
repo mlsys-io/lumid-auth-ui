@@ -782,7 +782,7 @@ export function ExperimentCard({ app, e, showApp = false, onChanged }: { app: st
 								// were (2026-09-15). The honest answer is that the rows do not say.
 								<div className="rounded-lg border border-dashed border-slate-200 bg-white/60 px-3 py-2 text-[11px] text-slate-500">
 									No per-case breakdown: {e.n_results} result{e.n_results === 1 ? " row was" : " rows were"} recorded
-									without a case id, so which cases ran is not stored. A loop records one by passing
+									without a case id, so which cases ran is not stored. A loop records one by passing{" "}
 									<code className="text-[10.5px]">dims.case_id</code> to record_result.
 								</div>
 							) : null}
