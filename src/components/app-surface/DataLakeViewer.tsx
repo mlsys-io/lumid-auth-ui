@@ -32,8 +32,8 @@ function FreshnessPill({ f }: { f?: InstanceCatalog["freshness"] }) {
   if (!f) return null;
   const cell = (n: number, cls: string, title: string) =>
     n > 0 ? (
-      <span className={`px-1 rounded ${cls}`} title={title}>
-        {n}
+      <span className={`px-1 rounded ${cls}`} title={`${n} ${title}`}>
+        {n} {title}
       </span>
     ) : null;
   return (

@@ -25,7 +25,7 @@ const SECTIONS: Section[] = [
 	{ id: 'tokens',    icon: Key,    title: 'API tokens',       description: 'Personal access tokens for CLI and integrations.' },
 	{ id: 'oauth',     icon: Lock,   title: 'Connected services', description: 'Google, Slack, GitHub, and other OAuth grants.' },
 	{ id: 'secrets',   icon: Lock,   title: 'Agent secrets',    description: 'API keys your installed agents need (per agent, per key).' },
-	{ id: 'privacy',   icon: Shield, title: 'Privacy & sharing', description: 'Per-agent auto-publish toggles and data exports.' },
+	{ id: 'privacy',   icon: Shield, title: 'Privacy & sharing', description: 'What your AI keeps private and what it may publish.' },
 	{ id: 'chat',      icon: MessageSquare, title: 'Chat & navigation', description: 'How opening something from a list behaves.' },
 	// APPENDED, not inserted: the entries above are addressed positionally
 	// (SECTIONS[5] is Chat & navigation), so inserting shifts every card below.
@@ -359,8 +359,7 @@ function SecretsSection() {
 				</ul>
 			)}
 			<div className="mt-3 text-xs text-slate-500">
-				Per-app secret editing lives at <code className="font-mono">/me/apps/&lt;app&gt;/secrets</code>
-				(API surface; UI in a follow-up).
+				To edit an app's secrets, open the app and choose <span className="font-medium">⋯ → Manage agent</span>.
 			</div>
 		</SectionCard>
 	);
@@ -372,7 +371,6 @@ function PrivacySection() {
 			<div className="text-sm space-y-2">
 				<p className="text-slate-600">
 					By default the watcher bank stays local; assistant + philosophy banks can publish.
-					Per-agent toggle below — saves to <code className="font-mono text-xs">.user-overrides.yaml</code>.
 				</p>
 				<Link to="/studio/knowledge" className="text-xs text-gold-700 hover:underline inline-flex items-center gap-1">
 					Open Knowledge to see what your AI knows <ExternalLink className="w-3 h-3" />

@@ -607,7 +607,14 @@ export default function WorkflowObservabilityPanel({
 	useEffect(() => {
 		let cancelled = false;
 		if (!app) return;
-		me.latestOutput(app, wf?.slug)
+		// The endpoint takes the BARE loop name. `wf.slug` is qualified
+		// ("quant-research:forward_test"), which the server answers with 400
+		// "invalid loop" — and the catch below read that as "no artifact", so
+		// every app's Outputs tier said "recorded no result artifact" (found
+		// 2026-09-25 on mbb-consultant and quant-research).
+		const slug = wf?.slug ?? "";
+		const bareLoop = slug.startsWith(`${app}:`) ? slug.slice(app.length + 1) : slug;
+		me.latestOutput(app, bareLoop || undefined)
 			.then((d) => {
 				if (cancelled) return;
 				setDbOutputs((d?.outputs ?? null) as Record<string, unknown> | null);

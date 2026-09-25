@@ -774,7 +774,15 @@ function ActionButton({ a, row, onDone, size = "sm" }: {
       setFieldsOpen(true);
       return;
     }
-    if (a.confirm && !window.confirm(a.confirm)) return;
+    // Interpolate {field} from the row, as the fields dialog's title and `ask`
+    // already do. The raw template went to window.confirm, so a researcher
+    // read "Submit a backtest for {name}?" (found 2026-09-25).
+    if (a.confirm) {
+      const prompt = row
+        ? a.confirm.replace(/\{([^}]+)\}/g, (_, k) => String(row[k] ?? ""))
+        : a.confirm;
+      if (!window.confirm(prompt)) return;
+    }
     // The action's LABEL, never the row. A row can carry a strategy id, a
     // name, whatever the surface author put in it — none of that belongs in
     // an analytics event, and the label alone answers "which button do people
@@ -1084,7 +1092,7 @@ function LumidTable({ body }: { body: Body }) {
       type="button"
       onClick={() => setShowHidden((v) => !v)}
       className="text-[11px] text-slate-400 hover:text-slate-600 underline decoration-dotted underline-offset-2 shrink-0"
-      title="Rows hidden by this surface's hide_when rules (test fixtures, seeded demos)"
+      title="Test and demo rows (fixtures, backtest records) are hidden by default — click to show them"
     >
       {showHidden
         ? `hide ${hiddenRows.length} fixture${hiddenRows.length === 1 ? "" : "s"}`
@@ -1660,6 +1668,10 @@ function FormFieldInput({ f, vals, setVals }: {
           id={fid}
           value={String(vals[f.key] ?? "")}
           placeholder={f.placeholder}
+          // `required` was set on <input> only, so a required code box (e.g. a
+          // strategy body) submitted empty; 8 rows because it holds code.
+          required={f.required}
+          rows={8}
           onChange={(e) => setVals((v) => ({ ...v, [f.key]: e.target.value }))}
           className="rounded-md border border-slate-200 px-2.5 py-1.5 text-sm font-mono resize-y min-h-[60px] focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400"
         />

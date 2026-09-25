@@ -11,7 +11,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Boxes, Copy, Download, Loader2, Trash2 } from 'lucide-react';
+import { ArrowLeft, FileStack, Copy, Download, Loader2, Trash2 } from 'lucide-react';
 import { ArtifactView, ArtifactKindIcon, artifactDownload, type ArtifactKind } from './ArtifactView';
 
 // ArtifactIconButton — full artifact panel embedded in a popover
@@ -200,12 +200,13 @@ export function ArtifactIconButton({ align = 'right', variant = 'icon' }: { alig
 					type="button"
 					onClick={() => setOpen((v) => !v)}
 					title={rows.length > 0 ? `Artifacts (${rows.length})` : 'Artifacts'}
+					aria-label="Artifacts"
 					className={[
 						'group w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
 						open ? 'bg-black/[0.06] text-foreground font-medium' : 'text-foreground/60 hover:bg-black/[0.04] hover:text-foreground',
 					].join(' ')}
 				>
-					<Boxes className={['w-4 h-4 flex-shrink-0 transition-colors', open ? 'text-foreground/80' : 'text-foreground/45 group-hover:text-foreground/70'].join(' ')} />
+					<FileStack className={['w-4 h-4 flex-shrink-0 transition-colors', open ? 'text-foreground/80' : 'text-foreground/45 group-hover:text-foreground/70'].join(' ')} />
 					<span>Artifacts</span>
 					{rows.length > 0 && (
 						<span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-gold-100 text-gold-700 text-[10px] font-semibold tabular-nums">
@@ -218,12 +219,13 @@ export function ArtifactIconButton({ align = 'right', variant = 'icon' }: { alig
 				type="button"
 				onClick={() => setOpen((v) => !v)}
 				title={rows.length > 0 ? `Artifacts (${rows.length})` : 'Artifacts'}
+				aria-label="Artifacts"
 				className={[
 					'relative p-1.5 rounded-md transition-colors',
 					open ? 'text-gold-700 bg-gold-50' : 'text-muted-foreground hover:text-gold-700 hover:bg-gold-50',
 				].join(' ')}
 			>
-				<Boxes className="w-3.5 h-3.5" />
+				<FileStack className="w-3.5 h-3.5" />
 				{rows.length > 0 && (
 					<span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-1 rounded-full bg-gold-500 text-white text-[8.5px] font-bold flex items-center justify-center ring-2 ring-white leading-none">
 						{rows.length > 99 ? '99+' : rows.length}
@@ -250,7 +252,7 @@ export function ArtifactIconButton({ align = 'right', variant = 'icon' }: { alig
 								<ArrowLeft className="w-3.5 h-3.5" />
 							</button>
 						) : (
-							<Boxes className="w-4 h-4 text-gold-600 flex-shrink-0" />
+							<FileStack className="w-4 h-4 text-gold-600 flex-shrink-0" />
 						)}
 						<div className="flex-1 min-w-0">
 							<div className="text-[12.5px] font-semibold text-foreground truncate">

@@ -908,7 +908,7 @@ export function StudioShell() {
 								onClick={() => setMenuOpen(false)}
 								className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted">
 								<Boxes className="w-3.5 h-3.5 text-muted-foreground" />
-								Manage agents
+								My apps &amp; runs
 							</Link>
 							<Link to="/studio/inbox"
 								onClick={() => setMenuOpen(false)}

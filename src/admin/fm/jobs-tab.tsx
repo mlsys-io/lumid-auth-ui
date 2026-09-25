@@ -262,10 +262,14 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 				</button>
 				<button
 					onClick={() => setSubmitOpen(true)}
-					className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-indigo-300 bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100"
+					// Raw-YAML submission is the power path — workflows normally run
+					// from their app. Quiet styling so it stops reading as the page's
+					// primary action; the dialog behind it is unchanged.
+					title="Submit a raw workflow YAML to one site"
+					className="ml-auto inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-slate-500 hover:bg-slate-50 hover:text-slate-800"
 				>
 					<Plus className="h-3.5 w-3.5" />
-					Submit a workflow
+					Advanced: submit YAML
 				</button>
 			</div>
 

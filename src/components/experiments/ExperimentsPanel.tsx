@@ -9,7 +9,7 @@
 // logs"), and a per-case drill of per-question latest scores.
 // Honest empty states; no synthetic data, ever.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { SpiralOverlay } from "@/components/BrandLoader";
 import {
 	FlaskConical, ChevronDown, ChevronRight, Loader2, TrendingUp, TrendingDown,
@@ -167,6 +167,22 @@ function ControlMenu({ app, e, onDone }: { app: string; e: MeExperiment; onDone:
 	const [open, setOpen] = useState(false);
 	const [busy, setBusy] = useState("");
 	const [err, setErr] = useState("");
+	// Close on Escape or a click outside. Without these the menu stayed open
+	// until its own button was clicked again (found 2026-09-25).
+	const wrapRef = useRef<HTMLDivElement>(null);
+	useEffect(() => {
+		if (!open) return;
+		const onDown = (ev: MouseEvent) => {
+			if (wrapRef.current && !wrapRef.current.contains(ev.target as Node)) setOpen(false);
+		};
+		const onKey = (ev: KeyboardEvent) => { if (ev.key === "Escape") setOpen(false); };
+		document.addEventListener("mousedown", onDown);
+		document.addEventListener("keydown", onKey);
+		return () => {
+			document.removeEventListener("mousedown", onDown);
+			document.removeEventListener("keydown", onKey);
+		};
+	}, [open]);
 
 	const run = useCallback(async (op: Parameters<typeof me.experimentControl>[2]["op"], extra?: Record<string, string>) => {
 		setErr(""); setBusy(op);
@@ -182,6 +198,14 @@ function ControlMenu({ app, e, onDone }: { app: string; e: MeExperiment; onDone:
 				if (!reason?.trim()) { setBusy(""); return; }
 				extra = { ...extra, reason: reason.trim() };
 			}
+			// Conclude / archive / revert act on the first click, and none is
+			// trivially undone from here — ask once, like checkpoint and fork do.
+			const confirmText: Record<string, string> = {
+				conclude: `Conclude "${e.id}" and record its verdict now?`,
+				archive: `Archive "${e.id}"? It stops collecting and leaves the list.`,
+				revert: `Revert "${e.id}" to its definition before the last change?`,
+			};
+			if (confirmText[op] && !window.confirm(confirmText[op])) { setBusy(""); return; }
 			if (op === "fork") {
 				const id = window.prompt("New experiment id — the original is left untouched.");
 				if (!id?.trim()) { setBusy(""); return; }
@@ -207,7 +231,7 @@ function ControlMenu({ app, e, onDone }: { app: string; e: MeExperiment; onDone:
 	items.push(["Revert", "restore the definition before the last change", () => run("revert")]);
 
 	return (
-		<div className="relative">
+		<div className="relative" ref={wrapRef}>
 			{/* LABELLED, not a bare glyph. Fork/conclude/checkpoint/revert all
 			    live behind this control, and it rendered as an unadorned "⋯" —
 			    so a user looking for a way to fork an experiment reported that
