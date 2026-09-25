@@ -533,9 +533,14 @@ function StatusBadge({ value }: { value: string }) {
  * (Strategies hides `e2e_` / `smoke_` / `verify-` / `probe-` prefixes) hit this
  * on a fresh account, which is exactly when the authored text matters most.
  */
-function filteredEmptyText(query: string, body: Record<string, unknown>): string {
+function filteredEmptyText(query: string, body: Record<string, unknown>, hidden = 0): string {
   const q = query.trim();
   if (q) return `No rows match \u201C${q}\u201D.`;
+  // Every row was hidden by a rule. The authored "No strategies yet" alone
+  // contradicted the stat above it ("24 your strategies") — say where they went.
+  if (hidden > 0) {
+    return `Only test and demo rows so far — ${hidden} hidden (click \u201C${hidden} hidden\u201D to show them).`;
+  }
   const authored =
     typeof body.empty === "string" && body.empty.trim() ? body.empty.trim() : null;
   return authored ?? "No rows.";
@@ -1197,7 +1202,7 @@ function LumidTable({ body }: { body: Body }) {
         {tableActions.length > 0 && <ActionBar actions={tableActions} onDone={refetch} />}
         {searchBox}
         {sortedRows.length === 0 && (
-          <div className="text-[12px] text-slate-400">{filteredEmptyText(query, body)}</div>
+          <div className="text-[12px] text-slate-400">{filteredEmptyText(query, body, showHidden ? 0 : hiddenRows.length)}</div>
         )}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {sortedRows.slice(0, 60).map((row, i) => {
@@ -1250,7 +1255,7 @@ function LumidTable({ body }: { body: Body }) {
       )}
       {searchBox}
       {sortedRows.length === 0 ? (
-        <div className="text-[12px] text-slate-400">{filteredEmptyText(query, body)}</div>
+        <div className="text-[12px] text-slate-400">{filteredEmptyText(query, body, showHidden ? 0 : hiddenRows.length)}</div>
       ) : (
       <div className="overflow-x-auto rounded-lg border border-slate-200">
         <table className="min-w-full text-[12px] border-collapse">
