@@ -361,7 +361,7 @@ An experiment reports what you declared. Reading it is still your job.
 parameterization survives recorded market history. Same machinery, and almost
 nothing else in common with the one above.
 
-![kol_alpha on the Experiments tab — collecting, 2 arms with 1 never run, 6 results.](/docs/img/experiments-kol.png)
+![kol_alpha (shown as "kol alpha") on the Experiments tab — collecting, 3 arms with 2 never run, 6 results.](/docs/img/experiments-kol.png)
 
 The counts below are from a cohort measured **2026-09-21**; an earlier cohort
 this section was written against had been lost, and re-running `musk_v1`
@@ -406,7 +406,7 @@ Two reasons, both visible on the card:
 
 ```
 success_criteria:  best_n >= 10 and delta_pp >= 0
-best_n = 6         2 arms · 1 never run
+best_n = 6         3 arms · 2 never run
 ```
 
 - **Not enough resolved polls.** Six rows carry `real_tape`, all of them `0` —
@@ -416,32 +416,25 @@ best_n = 6         2 arms · 1 never run
   answering no. That is a finding about the strategy's symbol and window
   choice, not a fault in the experiment — and it is the exact question
   `backtest_evidence` exists to isolate.
-- **The baseline arm cannot run.** `baseline: {arm: current}` names `current`,
-  the hand-submitted reference, and `current` declares nothing but an id and a
-  description — there is no configuration for a dispatch to vary, which is why
-  the panel marks it **measured passively** rather than offering a button. So
-  `delta_pp` is never bound, and the criterion cannot be satisfied however many
-  rows `musk_v1` collects.
+- **The paired arms have not caught up.** The three arms are `current` (the
+  same KOL generator with the tweet signal removed — the static
+  parameterization the hypothesis names), `musk_v1` (a keyword-rule lean over the
+  tweets), and
+  `musk_llm_scored` (the same tweets, the lean scored by a model on the fleet).
+  `current` used to declare nothing but an id, so no dispatch could vary it and
+  `delta_pp` was never bound. It is now submitted **automatically in the same
+  `kol_strategy` fire, on the same instrument**, as the treatment — each pair
+  differs only in whether the tweets conditioned the parameters. Rows written
+  before that change carry no pair, which is why this cohort still shows
+  `current` as never run.
 
-**This is not fixed by running the baseline.** An earlier version of this page
-said it was, and that advice was impossible to follow. Defining an experiment
-in this shape now warns at define time — *"success_criteria needs a delta
-against baseline `current`, but that arm declares no configuration beyond
-id/description"* — and the same sentence appears on the card as the reason it is
-not concluding.
-
-There are two honest repairs, and which one is right is a question about the
-experiment, not the platform:
-
-1. **Make the arm change the run.** Have the command read the arm's config, with
-   `current` meaning *no KOL conditioning* — the static parameterization the
-   hypothesis actually names. The baseline becomes dispatchable and the delta
-   criterion works as written.
-2. **Drop the delta.** Accept it as a one-armed gate measurement:
-   `best_n >= 10` on `real_tape` alone, no reference arm. Less work, still
-   truthful, but it answers a narrower question than the hypothesis states.
-
-Four other live experiments carry the same shape. It is a class, not a typo.
+**Defining an experiment whose baseline cannot vary still warns** at define
+time — *"success_criteria needs a delta against baseline `current`, but that arm
+declares no configuration beyond id/description"* — and the card repeats it as
+the reason it is not concluding. The repair `kol_alpha` took (make the baseline
+arm change the run) is the general one; the alternative is to drop the delta and
+accept a one-armed gate (`best_n >= 10` on `real_tape` alone), which is
+truthful but answers a narrower question.
 
 ### What the two examples have in common
 

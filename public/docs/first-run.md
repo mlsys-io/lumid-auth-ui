@@ -41,10 +41,12 @@ sitting; what you will not have is a forward-test scorecard.
 
 ## 1. Mint your first token — in the browser
 
-Go to **<https://lum.id/studio/account/tokens>** and click **Mint your first
-token**.
+Go to **<https://lum.id/studio/account/tokens>** and click **New token** (on a
+brand-new account the empty list also offers **Mint your first token** — same
+dialog). Tokens your apps create for themselves are folded under **Created
+automatically by your apps**; you do not need to manage those by hand.
 
-![The Personal Access Tokens page, before any token exists.](/docs/img/first-run-mint-token.png)
+![The Personal Access Tokens page with the New token button; app-created tokens folded into one row.](/docs/img/first-run-mint-token.png)
 
 Give it the scopes you need; for the researcher path that is:
 
@@ -480,7 +482,7 @@ The honest boundary matters: **a tweet is never a signal.** Only `vpin`,
 *how hard*. The number that comes back is a backtest verdict on recorded
 prints, with the same three honesty axes as every other run — not a narrative.
 
-Open **Experiments → kol_alpha** for the arms; **Workflows → Kol strategy**
+Open **Experiments → kol alpha** for the arms; **Workflows → Kol strategy**
 is where the loop that feeds them runs. The `musk_v1` arm is
 one-click (it is self-sufficient — it has the tweet slice and picks its own
 tape-covered symbol); `current` is a passive reference. `real_tape` reads the
