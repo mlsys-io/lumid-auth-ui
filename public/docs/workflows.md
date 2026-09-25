@@ -144,6 +144,42 @@ Open a workflow row to see what a run produced.
 - **Run tree** — each run as a node with its score and delta. `NOT SCORED` is a
   real state, not a gap.
 
+### Some arms need a subject, and dispatch refuses without one
+
+An arm supplies **configuration**. Some loops also need a **subject** — which
+strategy, which case — and the dispatcher cannot know it. An app says so by
+declaring `dispatch.ask` on the experiment:
+
+```yaml
+dispatch:
+  ask: >
+    Which strategy should this arm backtest? Dispatch with args.strategy_id
+    (or args.strategy carrying a raw body). The arm picks the symbol; the
+    strategy is the subject.
+```
+
+When that is present, **every** dispatch path refuses until a subject is
+supplied, and hands the app's own question back:
+
+```
+400  this arm needs a subject before it can run — Which strategy should this
+     arm backtest? … Supply it as `args` (the loop's own invocation args) or
+     `cases`.
+```
+
+Supply it as `args` (the loop's `{{ args.* }}`) or as `cases` for a case-scoped
+loop. An experiment that declares no `ask` is unaffected — one-click arms stay
+one click.
+
+**Why the refusal matters more than it sounds.** Without a subject some loops
+run, fail, and record a row anyway — `"strategy is empty — pass raw .lqts
+source or a JSON payload"`. That row then sits in the ledger looking like
+evidence the arm was tried. A refusal is cheaper than a result that lies.
+
+The check lives on the **server** (`POST …/loops/:loop/enqueue`), not in the
+panel or the chat tool. Both of those had it first and both are clients; a
+caller going straight to the API got a `202` and a junk row until 2026-09-21.
+
 ### Reading a run's arms on the canvas
 
 When a run fanned out, the workflow panel offers one chip per arm above the
@@ -422,6 +458,36 @@ best_n = 6         2 arms · 1 never run
   the panel marks it **measured passively** rather than offering a button. So
   `delta_pp` is never bound, and the criterion cannot be satisfied however many
   rows `musk_v1` collects.
+
+### The obvious fix was tried, and it did not work
+
+`real_tape` is a gate on symbol choice, so the obvious move is the arm built
+for exactly that: `backtest_evidence`'s `tape_covered`, which resolves symbols
+from `tape_covered_v1` instead of the tweet slice. It had never run. Dispatched
+2026-09-21 with a strategy as its subject, it submitted, resolved, and came
+back:
+
+```
+expected_replay:  pg_tape          ← what the dispatch predicted
+replay:           synthetic_lcg    ← what actually happened
+prints_replayed:  0
+presentable_as_performance: false
+```
+
+**So symbol policy alone is not sufficient.** The arm whose entire job is
+picking a tape-covered instrument still landed on synthetic tape. That is a
+real result and it narrows the question usefully: not *"does the strategy pick
+bad symbols"* but *"why did a symbol selected because it has prints replay zero
+of them"* — a stale `tape_covered_v1` snapshot, or a replay-window mismatch in
+the worker.
+
+Two things here are worth copying in any app that measures something it can
+fail to measure. The run stores `expected_replay` **beside** the actual
+`replay`, so the disagreement is itself the finding rather than another silent
+zero. And it reports `realized_pnl_ticks: 824940` next to
+`presentable_as_performance: false` with a note not to present it — a system
+that emitted that number without the flag is how a synthetic result becomes a
+slide.
 
 **This is not fixed by running the baseline.** An earlier version of this page
 said it was, and that advice was impossible to follow. Defining an experiment
