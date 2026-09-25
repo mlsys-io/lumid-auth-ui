@@ -131,13 +131,13 @@ export default function StudioPortfolio({ embedded = false }: { embedded?: boole
 			<div className="flex items-center justify-between gap-3">
 				<div className="min-w-0">
 					{embedded ? (
-						<div className="flex items-center gap-1.5 text-sm font-semibold text-slate-900"><Boxes className="w-4 h-4 text-gold-500" /> Fleet</div>
+						<div className="flex items-center gap-1.5 text-sm font-semibold text-slate-900"><Boxes className="w-4 h-4 text-gold-500" /> My apps &amp; runs</div>
 					) : (
 						<>
 							<Link to="/studio/apps" className="inline-flex items-center text-sm text-slate-500 hover:text-slate-900 gap-1">
 								<ChevronLeft className="w-4 h-4" /> My Agents
 							</Link>
-							<h1 className="text-lg font-semibold text-slate-900 mt-1">Fleet</h1>
+							<h1 className="text-lg font-semibold text-slate-900 mt-1">My apps &amp; runs</h1>
 						</>
 					)}
 					<p className="text-[12px] text-slate-400">

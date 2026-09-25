@@ -13,7 +13,7 @@ import { recordInteraction } from "@/api/interactions";
 import { useAuth } from "@/hooks/useAuth";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { MoreHorizontal, Pencil, Plus, Settings, SlidersHorizontal, Sparkles, Trash2, DownloadCloud, UploadCloud, Loader2, BarChart3 } from "lucide-react";
+import { MoreHorizontal, Pencil, Settings, SlidersHorizontal, Sparkles, Trash2, DownloadCloud, UploadCloud, Loader2, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
 import apiClient from "@/api/client";
 import {
@@ -281,43 +281,20 @@ function AppSurfaceImpl({
     } finally { setShareBusy(null); }
   };
 
-  const actionBarInner = (hasMd: boolean, nav?: { surface: string; label?: string }[]) => (
+  // ONE CHROME ROW, ONE MENU (2026-09-25). Inside the studio workspace
+  // (`embedded`) the header above already carries the app's "⋯" — Edit,
+  // Manage, Advanced, Pull, Publish, Insights, Remove — so this row is ONLY the
+  // tabs; it used to repeat that menu plus bare Pull / Publish icons and a
+  // "+ New workflow" button (the workflow selector keeps its own "+ New
+  // workflow"). Standalone (/studio/a/:app/:surface, no header) keeps a single
+  // "⋯" that now holds Pull and Publish too; creating a workflow is "Manage
+  // agent". Nothing is removed — every action has exactly one home per screen.
+  const actionBarInner = (hasMd: boolean, nav?: { surface: string; label?: string }[]) =>
+    embedded ? (
+      <>{surfaceTabs(nav)}</>
+    ) : (
     <>
       {surfaceTabs(nav)}
-      {/* Every app can create a workflow — surface apps (no loops yet) included.
-          Same placement (right after the nav) + style as the workflow-app
-          "New workflow" button, so it reads identically across app types. */}
-      {/* Insights moved into the ⋯ menu (below) 2026-09-05 — it is an
-          occasional admin drill-down, not a primary action, and the strip was
-          carrying two dashed buttons + three icon buttons + the tabs. It stays
-          per-app (the question "how is this used" is about the app in front of
-          you), admin-gated so a non-admin never sees a link that would bounce. */}
-      <Link
-        to={`/studio/a/${encodeURIComponent(app)}/manage`}
-        title="Create a workflow for this agent"
-        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-dashed border-border text-[12.5px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex-shrink-0"
-      >
-        <Plus className="w-3.5 h-3.5" /> New workflow
-      </Link>
-      {/* Pull / publish — toolbar icon buttons (fork + propose live in xpio). */}
-      <button
-        onClick={() => shareAction("pull", "update", {}, () => "Update queued — upstream changes merge in ~a minute (your edits are preserved).")}
-        disabled={!!shareBusy}
-        title="Pull updates — merge the latest upstream version (your local edits are preserved)"
-        aria-label="Pull updates"
-        className="inline-flex items-center justify-center w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:border-slate-300 shadow-sm transition-all flex-shrink-0 disabled:opacity-40"
-      >
-        {shareBusy === "pull" ? <Loader2 className="w-4 h-4 animate-spin" /> : <DownloadCloud className="w-4 h-4" />}
-      </button>
-      <button
-        onClick={() => shareAction("publish", "publish", {}, () => "Publish queued — your repo updates in ~a minute.")}
-        disabled={!!shareBusy}
-        title="Publish changes — push your local changes to your xp.io repo (version auto-bumps)"
-        aria-label="Publish changes"
-        className="inline-flex items-center justify-center w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:border-slate-300 shadow-sm transition-all flex-shrink-0 disabled:opacity-40"
-      >
-        {shareBusy === "publish" ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
-      </button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
@@ -349,11 +326,11 @@ function AppSurfaceImpl({
             </DropdownMenuItem>
           )}
           <DropdownMenuItem asChild>
-            <Link to={`/studio/a/${encodeURIComponent(app)}/manage`} title="name, workflows, skills">
+            <Link to={`/studio/a/${encodeURIComponent(app)}/manage`} title="create workflows, rename, skills">
               <SlidersHorizontal className="w-3.5 h-3.5" />
               <span className="flex flex-col">
                 <span>Manage agent</span>
-                <span className="text-[11px] text-slate-400">name, workflows, skills</span>
+                <span className="text-[11px] text-slate-400">new workflow, name, skills</span>
               </span>
             </Link>
           </DropdownMenuItem>
@@ -361,6 +338,30 @@ function AppSurfaceImpl({
             <Link to={configTo}>
               <Settings className="w-3.5 h-3.5" /> Advanced (YAML)
             </Link>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            disabled={!!shareBusy}
+            onSelect={() => shareAction("pull", "update", {}, () => "Update queued — upstream changes merge in ~a minute (your edits are preserved).")}
+          >
+            {shareBusy === "pull" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <DownloadCloud className="w-3.5 h-3.5" />}
+            <span className="flex flex-col">
+              <span>Pull updates</span>
+              <span className="text-[11px] text-slate-400">merge the latest version; your edits stay</span>
+            </span>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={!!shareBusy}
+            onSelect={() => {
+              if (!window.confirm(`Publish your local changes to ${app}'s repo? The version bumps and anyone who installed it can pull them.`)) return;
+              void shareAction("publish", "publish", {}, () => "Publish queued — your repo updates in ~a minute.");
+            }}
+          >
+            {shareBusy === "publish" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
+            <span className="flex flex-col">
+              <span>Publish changes…</span>
+              <span className="text-[11px] text-slate-400">push your edits to the app&apos;s repo</span>
+            </span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem

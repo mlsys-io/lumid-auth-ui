@@ -34,10 +34,13 @@ const SqlConsole = lazy(() => import("@/components/app-surface/SqlConsole"));
 type Tab = "catalog" | "explorer" | "query";
 const TABS: { id: Tab; label: string; icon: typeof Database }[] = [
 	{ id: "catalog", label: "Catalog", icon: Database },
-	{ id: "explorer", label: "Explorer", icon: TableProperties },
 	// Query runs ad-hoc SELECT through the same path chat's data_query uses.
-	// Last in the row on purpose: Catalog is how you find out what to query.
+	// After Catalog on purpose: Catalog is how you find out what to query.
 	{ id: "query", label: "Query", icon: Terminal },
+	// The raw data-app endpoint browser. Last and labelled as such: it lists
+	// HTTP routes, not datasets, and read as a second catalog when it sat
+	// second.
+	{ id: "explorer", label: "API endpoints", icon: TableProperties },
 ];
 
 // Its own open/closed preference, so hiding the chat on an app workspace

@@ -17,34 +17,12 @@ const STORAGE_KEY = 'studio:refinements-v1';
 const TS_KEY = 'studio:refinements-published-at';
 export const REFINEMENTS_EVENT = 'studio:refinements-changed';
 
-const SEED: Refinement[] = [
-	{
-		id: 'family-voice',
-		name: 'Family voice — casual register',
-		version: 'v3 · forked from canonical v2',
-		refinedAt: '2h ago',
-		source: 'from Aunt Mei reply rejection',
-		status: 'local',
-	},
-	{
-		id: 'meeting-prep-prior-brief',
-		name: 'Meeting prep · prefer 24h-prior brief',
-		version: 'v2 · forked from canonical v1',
-		refinedAt: '2d ago',
-		source: 'from over-eager prep rejection',
-		status: 'published',
-		publishedTo: 1,
-	},
-	{
-		id: 'vendor-quote-guard',
-		name: 'Vendor-quote guardrail',
-		version: 'v4 · forked from canonical v3',
-		refinedAt: '1w ago',
-		source: 'from care-coordination rejection',
-		status: 'published',
-		publishedTo: 2,
-	},
-];
+// No seed (2026-09-25). This store is browser-local with no backend, and it
+// used to be SEEDED with invented records ("Family voice … from Aunt Mei reply
+// rejection", "Vendor-quote guardrail · Published") that every real user's
+// Marketplace showed as their own history. A demo fixture presented as data;
+// only what the user actually does here is listed now.
+const SEED: Refinement[] = [];
 
 export function loadRefinements(): Refinement[] {
 	try {

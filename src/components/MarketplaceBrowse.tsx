@@ -291,7 +291,9 @@ export default function MarketplaceBrowse() {
 		{ id: "agents",      label: "Memory",      count: agents?.length ?? null },
 		{ id: "skills",      label: "Skills",      count: skills?.length ?? null },
 		{ id: "datasets",    label: "Datasets",    count: datasets?.length ?? null },
-		{ id: "refinements", label: "Refinements", count: null },
+		// "Refinements" tab removed 2026-09-25: it listed only the seeded demo
+		// records in src/lib/refinements.ts (no backend behind it). The view is
+		// kept below for when refinements get a real store.
 	];
 
 	return (

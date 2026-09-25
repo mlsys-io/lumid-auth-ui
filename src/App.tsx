@@ -734,7 +734,8 @@ export default function App() {
                   //     left. It is a button on Jobs that opens a dialog.
                   // Their routes are kept as redirects below.
                   tabs={[
-                    { to: "/studio/research-fleet", label: "Fleet", end: true, icon: Boxes },
+                    // "Nodes & workers", not "Fleet": the page is already titled Research Fleet.
+                    { to: "/studio/research-fleet", label: "Nodes & workers", end: true, icon: Boxes },
                     // NOT requireAdmin. Access here is per worker/node, not per
                     // surface: a user sees their own jobs and their own SSH
                     // sessions on the fleet they can use, an admin sees all of it.

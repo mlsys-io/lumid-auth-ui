@@ -3262,7 +3262,10 @@ const MessageBubble = memo(function MessageBubble({
 }) {
 	const isUser = m.role === 'user';
 	const [copied, setCopied] = useState(false);
-	const showActions = !streaming && (onCopy || onRegenerate || onSpeak);
+	// App openers (the only messages carrying `chips`) are canned text, not a
+	// model answer — Copy / Mark wrong / Read aloud on them read as feedback
+	// on something nobody generated.
+	const showActions = !streaming && !m.chips && (onCopy || onRegenerate || onSpeak);
 
 	// Blocks in ARRIVAL order. Legacy messages (persisted threads, the
 	// studio:notify note, app-opener turns, xpio cycle rows) have no `blocks`,

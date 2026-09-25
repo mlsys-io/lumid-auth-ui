@@ -39,6 +39,52 @@ import { updateInvitationCode } from '../../api/auth';
  * foreground the Runmesh-identity framing without screaming it at
  * the user.
  */
+// Tokens the platform mints on the user's behalf (an app intent needing a
+// credential) are named "<purpose> (…, auto)". One account had 98 of them
+// above its 2 hand-made tokens, so the ones the user actually manages were
+// buried. They stay listed — revocable and auditable — behind a fold.
+const isAutoMinted = (t: PATInfo) => /\bauto\)\s*$/.test(t.name);
+
+function TokenList({ tokens, onRevoke, onAudit }: {
+	tokens: PATInfo[];
+	onRevoke: (t: PATInfo) => void;
+	onAudit: (t: PATInfo) => void;
+}) {
+	const [showAuto, setShowAuto] = useState(false);
+	const mine = tokens.filter((t) => !isAutoMinted(t));
+	const auto = tokens.filter(isAutoMinted);
+	const rows = (list: PATInfo[]) => list.map((t, i) => (
+		<TokenRow
+			key={t.id}
+			token={t}
+			isLast={i === list.length - 1}
+			onRevoke={() => onRevoke(t)}
+			onAudit={() => onAudit(t)}
+		/>
+	));
+	return (
+		<div className="space-y-3">
+			{mine.length > 0 && (
+				<div className="border border-gray-200 rounded-xl overflow-hidden bg-white">{rows(mine)}</div>
+			)}
+			{auto.length > 0 && (
+				<div className="border border-gray-200 rounded-xl overflow-hidden bg-white">
+					<button
+						type="button"
+						onClick={() => setShowAuto((v) => !v)}
+						aria-expanded={showAuto}
+						className="w-full flex items-center justify-between px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50"
+					>
+						<span>Created automatically by your apps ({auto.length})</span>
+						<span className="text-xs text-gray-400">{showAuto ? 'Hide' : 'Show'}</span>
+					</button>
+					{showAuto && <div className="border-t border-gray-100">{rows(auto)}</div>}
+				</div>
+			)}
+		</div>
+	);
+}
+
 export default function TokensPage() {
 	const [tokens, setTokens] = useState<PATInfo[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -90,17 +136,7 @@ export default function TokensPage() {
 					</Button>
 				</div>
 			) : (
-				<div className="border border-gray-200 rounded-xl overflow-hidden bg-white">
-					{tokens.map((t, i) => (
-						<TokenRow
-							key={t.id}
-							token={t}
-							isLast={i === tokens.length - 1}
-							onRevoke={() => setConfirmRevoke(t)}
-							onAudit={() => setAuditFor(t)}
-						/>
-					))}
-				</div>
+				<TokenList tokens={tokens} onRevoke={setConfirmRevoke} onAudit={setAuditFor} />
 			)}
 
 			{/* SSH keys.

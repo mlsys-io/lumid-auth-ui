@@ -185,7 +185,14 @@ export default function AppSecretsSection({
 	// Declared secret fields (schema) + any set-but-undeclared keys (rotate/remove).
 	const declared = (schema ?? []).filter((f) => f.secret !== false && f.key);
 	const declaredKeys = new Set(declared.map((f) => f.key));
-	const extras = rows.filter((r) => !declaredKeys.has(r.key)).map((r) => r.key);
+	// `__`-prefixed keys are the PLATFORM's own per-app caches (e.g. the
+	// brokered compute credential, `__lumilake_compute_pat_cache`), written by
+	// identity, not by the user. Listing one — with its masked value — directly
+	// under "never shown again" read as a leaked secret to a researcher
+	// (2026-09-25). They stay stored and working; they are just not user-editable.
+	const extras = rows
+		.filter((r) => !declaredKeys.has(r.key) && !r.key.startsWith("__"))
+		.map((r) => r.key);
 
 	const Field = ({ f }: { f: ConfigField }) => (
 		<div className="rounded-lg border border-slate-200 p-3">

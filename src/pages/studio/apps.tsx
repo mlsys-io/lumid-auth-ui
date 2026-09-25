@@ -15,7 +15,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ChevronRight, ChevronDown, Check, ArrowRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2, Inbox, Loader2, RotateCcw, X, Plus, MoreHorizontal, SlidersHorizontal, Settings, Pencil, Cpu, Cloud, Workflow, Clock, Database } from "lucide-react";
+import { ChevronRight, ChevronDown, Check, ArrowRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2, Inbox, Loader2, RotateCcw, X, Plus, MoreHorizontal, SlidersHorizontal, Settings, Pencil, Cpu, Cloud, Workflow, Clock, Database, DownloadCloud, UploadCloud, BarChart3 } from "lucide-react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -31,6 +31,7 @@ import apiClient from "@/api/client";
 import { iconFor, APP_NAV_INVALIDATE } from "@/components/useAppNav";
 import { setStudioSelection } from "@/components/StudioContext";
 import { usePortalTarget } from "@/hooks/usePortalTarget";
+import { useAuth } from "@/hooks/useAuth";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { TONES, workflowTone } from "@/lib/tones";
 import { describeSchedule } from "@/lib/schedule";
@@ -956,6 +957,8 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 
 	// Pull / publish — toolbar buttons (fork + propose happen in xpio, not here).
 	const [shareBusy, setShareBusy] = useState<null | "pull" | "publish">(null);
+	const { user: authUser } = useAuth();
+	const isAdmin = authUser?.role === "admin" || authUser?.role === "super_admin";
 	// Pull/publish push the AGENT (app) repo — the buttons now live in the
 	// workflow panel header (passed down via onShare); shareAction stays here.
 	const shareAction = async (kind: "pull" | "publish", path: string, okMsg: string) => {
@@ -1149,7 +1152,20 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 											<MoreHorizontal className="w-4 h-4" />
 										</button>
 									</DropdownMenuTrigger>
-									<DropdownMenuContent align="end" className="w-52">
+									<DropdownMenuContent align="end" className="w-56">
+										{/* THE ONE APP MENU (2026-09-25). The embedded surface used to
+										    carry a second, near-identical "⋯" plus bare Pull / Publish
+										    icons and a "+ New workflow" button, and the open workflow
+										    panel hoisted another Pull / Publish pair — up to three copies
+										    of the same actions on one screen. Everything lives here now;
+										    "+ New workflow" stays in the workflow selector. */}
+										{isAdmin && (
+											<DropdownMenuItem asChild>
+												<Link to={`/studio/admin/apps/${encodeURIComponent(app)}/insights`} title="Usage insights for this app">
+													<BarChart3 className="w-3.5 h-3.5" /> Insights
+												</Link>
+											</DropdownMenuItem>
+										)}
 										<DropdownMenuItem asChild>
 											<Link to={`/studio/a/${encodeURIComponent(app)}/edit`} title="Edit this page (surface markdown / layout)">
 												<Pencil className="w-3.5 h-3.5" /> Edit this page
@@ -1168,6 +1184,30 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 											<Link to={`/studio/a/${encodeURIComponent(app)}/config`}>
 												<Settings className="w-3.5 h-3.5" /> Advanced (YAML)
 											</Link>
+										</DropdownMenuItem>
+										<DropdownMenuSeparator />
+										<DropdownMenuItem
+											disabled={!!shareBusy}
+											onSelect={() => shareAction("pull", "update", "Update queued — upstream changes merge in ~a minute (your edits are preserved).")}
+										>
+											{shareBusy === "pull" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <DownloadCloud className="w-3.5 h-3.5" />}
+											<span className="flex flex-col">
+												<span>Pull updates</span>
+												<span className="text-[11px] text-slate-500">merge the latest version; your edits stay</span>
+											</span>
+										</DropdownMenuItem>
+										<DropdownMenuItem
+											disabled={!!shareBusy}
+											onSelect={() => {
+												if (!window.confirm(`Publish your local changes to ${appTitle(app)}'s repo? The version bumps and anyone who installed it can pull them.`)) return;
+												void shareAction("publish", "publish", "Publish queued — your repo updates in ~a minute.");
+											}}
+										>
+											{shareBusy === "publish" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
+											<span className="flex flex-col">
+												<span>Publish changes…</span>
+												<span className="text-[11px] text-slate-500">push your edits to the app&apos;s repo</span>
+											</span>
 										</DropdownMenuItem>
 										{/* Delete THIS workflow (one loop) — folded in here so the top
 										    strip has a single "⋯" instead of two adjacent ones (the
@@ -1255,10 +1295,6 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 									<WorkflowObservabilityPanel
 										app={app} loop={selectedRow.loop} wf={selectedRow.wf} loopHealth={selectedRow.lh}
 										identity={identity}
-										onShare={(action) => action === "pull"
-											? shareAction("pull", "update", "Update queued — upstream changes merge in ~a minute (your edits are preserved).")
-											: shareAction("publish", "publish", "Publish queued — your repo updates in ~a minute.")}
-										shareBusy={shareBusy}
 										onChanged={load}
 										initialCycle={(effSelected === (selected ?? initialLoop)) ? initialCycle : null}
 										canDelete={isTenantApp && rows.length > 1}
