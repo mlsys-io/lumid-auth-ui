@@ -441,11 +441,26 @@ const PendingLine = ({ token }: { token: string }) => (
 
 type Body = Record<string, unknown>;
 
+// `unavailable_path:` — a field in the SAME source response naming why a
+// section could not be read (e.g. `rejected_unavailable` beside `rejected` on
+// me://strategies). Without it an empty array is indistinguishable from "none":
+// on 2026-09-25 quant-research's Rejected panel said "Nothing rejected —
+// everything you submitted compiled" and the stat said 0 while the read had in
+// fact timed out on every call. A reason present means "we could not look",
+// which the widget must say instead of the author's empty copy or a false 0.
+function unavailableReason(data: unknown, body: Body): string | null {
+  const p = body.unavailable_path;
+  if (typeof p !== "string" || !p.trim()) return null;
+  const v = getPath(data, p);
+  return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+
 function LumidStat({ body }: { body: Body }) {
   const { data, loading, error, pending } = useSource(body.source as string | undefined);
   if (pending) return <PendingLine token={pending} />;
   if (loading) return <Loading />;
   if (error) return <ErrLine msg={error} />;
+  const unavailable = unavailableReason(data, body);
   let base = getPath(data, body.path as string | undefined);
   // row_match: when the base is an ARRAY, select the first row whose `key`
   // field (stringified) equals `value`, then `body.value` reads from that row.
@@ -465,7 +480,7 @@ function LumidStat({ body }: { body: Body }) {
   // format (pct = decimal-returns percentage, currency) + optional prefix/
   // suffix — only when the value is non-null; null still renders "—".
   let display = "—";
-  if (value != null) {
+  if (value != null && !unavailable) {
     const n = Number(value);
     if (body.format === "pct" && isFinite(n)) display = formatPercentage(n);
     else if (body.format === "currency" && isFinite(n)) display = formatCurrency(n);
@@ -474,7 +489,10 @@ function LumidStat({ body }: { body: Body }) {
     if (typeof body.suffix === "string") display = display + body.suffix;
   }
   return (
-    <div className="inline-flex flex-col rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 min-w-[120px]">
+    <div
+      className="inline-flex flex-col rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 min-w-[120px]"
+      title={unavailable ? `Unavailable: ${unavailable}` : undefined}
+    >
       <span className="text-2xl font-semibold text-slate-900 tabular-nums">{display}</span>
       <span className="text-[11px] uppercase tracking-wide text-slate-500 mt-0.5">{String(body.label ?? "")}</span>
     </div>
@@ -1111,7 +1129,12 @@ function LumidTable({ body }: { body: Body }) {
     // nothing about what to do.
     const authored =
       typeof body.empty === "string" && body.empty.trim() ? body.empty.trim() : null;
-    const empty = (
+    const unavailable = unavailableReason(data, body);
+    const empty = unavailable ? (
+      <div className="text-[12px] text-amber-700" role="status" title={unavailable}>
+        Couldn&apos;t load this right now, so this may not be empty. Try again in a moment.
+      </div>
+    ) : (
       <div className="text-[12px] text-slate-600">{authored ?? "No rows."}</div>
     );
     if (!tableActions.length) return empty;
