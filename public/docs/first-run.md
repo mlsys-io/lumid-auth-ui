@@ -530,14 +530,28 @@ A result with **no** `replay` field is treated as not-real by rule. A real tape
 driving fabricated signals produces a number whose genuine half vouches for its
 fake half — that is exactly how a synthetic result gets mistaken for an edge.
 
-**Two things that decide whether your strategy can ever score `real`:**
+**Four things that decide whether your strategy can ever score `real`:**
 
 * **Only three signal names are published**: `vpin`, `ofi_z`,
   `outcome_forecast`. A strategy reading any other name can never beat
   `signals: static`, however well written. Check before you choose.
+* **A published name is not enough; the instrument needs signal history long
+  enough to replay.** The backtest replays only the stretch where every signal
+  your strategy reads already has a value. If fewer than 200 trades fall in
+  that stretch, the run says `signals: static`. Signals are published for the
+  dozen most-traded instruments of the last hour, so an hourly contract usually
+  has them only for its final 10–45 minutes. Leave the symbol blank and the
+  backtest picks an instrument that clears this bar (as of 2026-09-25).
+* **Know your units.** `ofi_z` is a z-score stored ×1000, and a decimal
+  threshold is read ×10,000. So `threshold: 0.15` means *ofi_z above 1.5
+  standard deviations*, not 15%. `vpin` runs 0 to 1 the ordinary way, so `0.8`
+  means 0.8.
 * **Settlement is binary.** These are event contracts: YES pays 1.00, NO pays
   0.00. A position sitting at 0.90 is worth *zero* if it resolves the other way,
-  which is why marking to the last price can be badly wrong.
+  which is why marking to the last price can be badly wrong. The outcome is
+  fetched from the venue about 15 minutes after the market closes. A contract
+  that closed more recently than that replays `settlement: mark_to_market`
+  until it arrives.
 
 **A real one, field by field.** This is `bt_vpin_3axis`, a run that was real on
 all three axes when it was taken (**2026-08-28**). It is a transcript, not a
@@ -637,7 +651,10 @@ headline number is describing a coin flip.
 
 **Expect your first real run to take no trades.** Two current backtests are real
 on all three axes across ~7,500 recorded prints and made **zero** trades — the
-signal never crossed the threshold. That is a result, not a breakage. Do not
+signal never crossed the threshold. That is a result, not a breakage. It
+happened again on 2026-09-25: `ofi_momentum_v1` ran real on all three axes over
+11,166 prints, and its 1.5σ threshold was never reached, because `ofi_z` stayed
+within about ±1σ while the market traded. Do not
 tune the threshold against the same window you score on; the number that
 produces is guaranteed to look good and guaranteed to mean nothing.
 
