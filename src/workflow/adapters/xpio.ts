@@ -112,6 +112,19 @@ export interface ProjectXpioOpts {
  * differ in the middle and in `layout`, which tells the renderer whether to
  * stack a column with stage bands or fan out beneath an engine.
  */
+/**
+ * A loop may declare one experiment or several (`experiment: [a, b]` — the
+ * quant-research backtest loop feeds backtest_evidence AND backtest_performance).
+ * The badge and subtitle were built from the raw value, so an ARRAY reached
+ * WfNodeCard as a badge label and `label.toLowerCase()` threw: every Backtest
+ * run's pipeline replaced the page with "g.label.toLowerCase is not a function"
+ * (reported 2026-09-22 and again 2026-09-25). Always hand the canvas a string.
+ */
+export function experimentLabel(v: unknown): string {
+	if (Array.isArray(v)) return v.map((x) => String(x)).join(", ");
+	return v == null ? "" : String(v);
+}
+
 export function projectXpio(def: LoopDefinition, opts: ProjectXpioOpts = {}): WorkflowGraph {
 	const { cycle, running = false, bands = true, pathPrefix = [] } = opts;
 	const at = (...rest: (string | number)[]) => [...pathPrefix, ...rest];
@@ -148,7 +161,7 @@ export function projectXpio(def: LoopDefinition, opts: ProjectXpioOpts = {}): Wo
 			const cs = cycleByStep.get(id);
 			const stage = stageOf(id, i, steps.length, cs?.stage);
 			const badges: WfBadge[] = [];
-			if (st.experiment) badges.push({ kind: "experiment", label: String(st.experiment), title: "runs an experiment" });
+			if (st.experiment) badges.push({ kind: "experiment", label: experimentLabel(st.experiment), title: "runs an experiment" });
 			if (st.knowledge_agent) badges.push({ kind: "knowledge", label: String(st.knowledge_agent), title: "writes to a knowledge bank" });
 			nodes.push({
 				id: `step:${id}`,
@@ -182,12 +195,12 @@ export function projectXpio(def: LoopDefinition, opts: ProjectXpioOpts = {}): Wo
 				? (summary?.step_errors?.length || summary?.ok === false ? "failed" : "succeeded")
 				: "pending";
 		const badges: WfBadge[] = [];
-		if (def.engine?.experiment) badges.push({ kind: "experiment", label: def.engine.experiment, title: "runs an experiment" });
+		if (def.engine?.experiment) badges.push({ kind: "experiment", label: experimentLabel(def.engine.experiment), title: "runs an experiment" });
 		nodes.push({
 			id: "engine",
 			kind: { family: "xpio-engine" },
 			label: `command: ${engineLabel}`,
-			subtitle: def.engine?.experiment ? `experiment: ${def.engine.experiment}` : "Pattern B engine",
+			subtitle: def.engine?.experiment ? `experiment: ${experimentLabel(def.engine.experiment)}` : "Pattern B engine",
 			params: { ...(def.engine || {}) },
 			path: at("engine"),
 			inputs: [{ id: "in", kind: "control" }],

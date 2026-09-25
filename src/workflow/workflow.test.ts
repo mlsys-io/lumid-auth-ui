@@ -252,6 +252,21 @@ check("xpio Pattern B: declared skills hang off UNORDERED dashed edges", () => {
 	ok(declared.every((e) => e.label === "declared"), "labelled honestly");
 });
 
+check("xpio: a loop feeding SEVERAL experiments renders string labels", () => {
+	// quant-research's backtest declares experiment: [backtest_evidence,
+	// backtest_performance]; the raw array used to reach WfNodeCard and crash
+	// the route on label.toLowerCase().
+	const g = projectXpio({
+		name: "backtest",
+		engine: { type: "command", module: "backtest", experiment: ["backtest_evidence", "backtest_performance"] as never },
+	});
+	const eng = g.nodes.find((n) => n.id === "engine")!;
+	const badge = eng.badges?.find((b) => b.kind === "experiment");
+	eq(typeof badge?.label, "string", "badge label is a string");
+	eq(badge?.label, "backtest_evidence, backtest_performance");
+	eq(eng.subtitle, "experiment: backtest_evidence, backtest_performance");
+});
+
 check("xpio: a run overlay turns declared skills into real results", () => {
 	const g = projectXpio(
 		{ engine: { module: "cycle" }, skills_invoked: ["a"] },

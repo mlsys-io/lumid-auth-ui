@@ -148,17 +148,21 @@ function WfNodeCardImpl({ data, selected, isConnectable }: NodeProps<Node<WfCard
 					// information away: the icon's only label was the generic
 					// "requested hardware", so `RTX 5080x2` appeared nowhere at all.
 					// Badges whose label merely repeats their kind stay icon-only.
-					const carriesValue = b.label && b.label.toLowerCase() !== b.kind;
+					// Coerce: a badge built from spec data can carry a non-string (an
+					// array of experiments, a number). One bad label must not take
+					// the whole route down with it.
+					const label = b.label == null ? "" : String(b.label);
+					const carriesValue = label !== "" && label.toLowerCase() !== b.kind;
 					if (!BIcon) return null;
 					return (
 						<span
 							key={b.kind}
-							title={b.title ? `${b.title}: ${b.label}` : b.label}
+							title={b.title ? `${b.title}: ${label}` : label}
 							className="flex min-w-0 flex-shrink-0 items-center gap-0.5 text-slate-400"
 						>
 							<BIcon size={12} aria-label={b.title ?? b.kind} />
 							{carriesValue && !compact && (
-								<span className="max-w-[72px] truncate font-mono text-[9px] leading-none">{b.label}</span>
+								<span className="max-w-[72px] truncate font-mono text-[9px] leading-none">{label}</span>
 							)}
 						</span>
 					);
