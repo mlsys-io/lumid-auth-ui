@@ -514,6 +514,8 @@ export async function fetchOpenRouterBalance(): Promise<OpenRouterBalanceResp> {
 // drained between two dashboard polls (~12-15s apart) is still visible.
 // Both are null only before the first sample lands (mirrors tok_s).
 export interface OnpremGpuBackendStats {
+	/** Pool model id the backend serves (lumid-llm >= llm-df8cc54; absent on older gateways). */
+	model?: string;
 	label: string;
 	url: string;
 	tier: number;

@@ -555,6 +555,10 @@ function OnPremGpuPanel() {
 						} · tok/s and completions/s can look contradictory when requests are individually slow: tokens flow steadily while few requests FINISH per second. inflight (below) is concurrency, not a rate.`}
 					>
 						<span className="font-medium">{b.label}</span>
+						{/* Which model the box serves: the panel is one flat row across
+						    deepseek, qwen3.8 and qwen3-vl, so a name alone ("luyao1-gpu1")
+						    did not say what it runs. */}
+						{b.model && <span className="opacity-70">{b.model}</span>}
 						<span className="opacity-60">·</span>
 						{/* UNHEALTHY OUTRANKS "no throughput yet". A dead backend and an idle
 						    one both have tok_s === null, so keying the text on tok_s alone
