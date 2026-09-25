@@ -14,7 +14,25 @@
 import { useEffect, useMemo, useState } from "react";
 import { bearerHeader } from "@/api/session-bearer";
 
-type Param = { name: string; in: "path" | "query"; required?: boolean; type?: string };
+// A 4xx body is often structured: `{detail: [{loc, msg}]}` (validation) or
+// `{detail: {...}}`. Interpolating it printed "422 [object Object]"; render the
+// messages a person can act on ("limit: value out of range …").
+function describeError(body: any, raw: string): string {
+  const d = body?.error ?? body?.detail ?? body?.message;
+  if (typeof d === "string") return d;
+  if (Array.isArray(d)) {
+    return d.map((x: any) => {
+      if (typeof x === "string") return x;
+      const where = Array.isArray(x?.loc) ? x.loc.filter((l: unknown) => l !== "query" && l !== "path" && l !== "body").join(".") : "";
+      const msg = x?.msg ?? x?.message ?? JSON.stringify(x);
+      return where ? `${where}: ${msg}` : String(msg);
+    }).join("; ");
+  }
+  if (d && typeof d === "object") return String(d.msg ?? d.message ?? JSON.stringify(d));
+  return raw.slice(0, 200);
+}
+
+type Param = { name: string; in: "path" | "query"; required?: boolean; type?: string; min?: number; max?: number };
 // kind: how the endpoint is consumed. The platform's OpenAPI doc carries no
 // structured marker for this, so we classify from the operation summary/
 // description ("WebSocket upgrade…", "Server-Sent Events…"). ws/sse endpoints
@@ -44,6 +62,8 @@ function parseOpenApi(doc: any): Endpoint[] {
         in: p.in === "path" ? "path" : "query",
         required: !!p.required || p.in === "path",
         type: p.schema?.type,
+        min: typeof p.schema?.minimum === "number" ? p.schema.minimum : undefined,
+        max: typeof p.schema?.maximum === "number" ? p.schema.maximum : undefined,
       }));
       // Group by first path segment (e.g. /fundamentals/{symbol} → fundamentals).
       const seg = path.split("/").filter(Boolean)[0] || "misc";
@@ -173,6 +193,16 @@ export default function DataAppBrowser({ config }: { config?: Record<string, unk
     if (!selected) return;
     const missing = selected.params.filter((p) => p.in === "path" && !(vals[p.name] || "").trim());
     if (missing.length) { setRunErr(`required: ${missing.map((p) => p.name).join(", ")}`); return; }
+    // The spec declares numeric ranges (limit: 1..5000); say so before the
+    // round-trip rather than after it.
+    for (const p of selected.params) {
+      const raw = (vals[p.name] || "").trim();
+      if (!raw || (p.min === undefined && p.max === undefined)) continue;
+      const n = Number(raw);
+      if (!Number.isFinite(n)) { setRunErr(`${p.name} must be a number`); return; }
+      if (p.min !== undefined && n < p.min) { setRunErr(`${p.name} must be ≥ ${p.min}`); return; }
+      if (p.max !== undefined && n > p.max) { setRunErr(`${p.name} must be ≤ ${p.max}`); return; }
+    }
     setRunning(true); setRunErr(""); setResult(null); setResultText(null);
     try {
       const auth = await bearerHeader();
@@ -180,7 +210,7 @@ export default function DataAppBrowser({ config }: { config?: Record<string, unk
       const raw = await r.text();
       let body: any = null;
       try { body = JSON.parse(raw); } catch { /* non-JSON — handled below */ }
-      if (!r.ok) throw new Error(`${r.status} ${body?.error || body?.detail || raw.slice(0, 200)}`.trim());
+      if (!r.ok) throw new Error(`${r.status} ${describeError(body, raw)}`.trim());
       if (body !== null) setResult(body);
       else setResultText({ ctype: r.headers.get("content-type") || "unknown", text: raw.slice(0, 20_000) });
     } catch (e: any) {
