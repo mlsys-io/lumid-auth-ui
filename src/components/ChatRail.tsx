@@ -9,7 +9,7 @@
 // the panel itself plus the panel toggle, portaled into the top strip's right
 // cluster (`topstrip-ws-right`) so the surface keeps a single header row.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { PanelRightClose, MessageSquare } from "lucide-react";
 import { StudioChat } from "@/components/StudioChat";
@@ -33,6 +33,10 @@ const MAX_WIDTH = 720;
 const DEFAULT_WIDTH = 460;
 
 export const WS_CHAT_OPEN_KEY = "studio_ws_chat_open";
+
+// Events StudioChat handles that mean "show me the chat". Each must open the
+// rail when it is hidden, or the click that sent it does nothing.
+const CHAT_EVENTS = ["studio:new-app-chat", "studio:open-chat", "studio:open-session"] as const;
 
 export default function ChatRail({
 	groundApp,
@@ -64,6 +68,35 @@ export default function ChatRail({
 	useEffect(() => { if (!isNarrow) setNarrowChatOpen(false); }, [isNarrow]);
 	const chatVisible = enabled && (isNarrow ? narrowChatOpen : chatOpen);
 	const toggleChat = () => { if (isNarrow) setNarrowChatOpen((v) => !v); else setChatOpen((v) => !v); };
+
+	// Events addressed to the docked chat — "New chat in <app>" and a Recent
+	// row on the page you are already on both dispatch one instead of
+	// navigating — were silently dropped while the rail was hidden: StudioChat
+	// is not mounted then, so nothing listens. Reported 2026-09-22 as "New chat
+	// did not open a composer; selecting the conversation did not reopen it".
+	// Open the rail, hold the event, and replay it once StudioChat is mounted.
+	const pendingRef = useRef<Event | null>(null);
+	const visibleRef = useRef(chatVisible);
+	visibleRef.current = chatVisible;
+	useEffect(() => {
+		if (!enabled) return;
+		const onChatEvent = (e: Event) => {
+			if (visibleRef.current || pendingRef.current) return;
+			const d = (e as CustomEvent).detail;
+			pendingRef.current = new CustomEvent(e.type, { detail: d });
+			if (isNarrow) setNarrowChatOpen(true); else setChatOpen(true);
+		};
+		for (const t of CHAT_EVENTS) window.addEventListener(t, onChatEvent);
+		return () => { for (const t of CHAT_EVENTS) window.removeEventListener(t, onChatEvent); };
+	}, [enabled, isNarrow]);
+	// Child effects run before the parent's, so StudioChat's listeners are
+	// attached by the time this fires for the commit that mounted it.
+	useEffect(() => {
+		if (!chatVisible || !pendingRef.current) return;
+		const ev = pendingRef.current;
+		pendingRef.current = null;
+		window.dispatchEvent(ev);
+	}, [chatVisible]);
 
 	// Chat-panel toggle lives in the top strip (single header row).
 	const chatTarget = usePortalTarget("topstrip-ws-right", enabled);
