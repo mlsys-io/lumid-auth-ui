@@ -361,18 +361,23 @@ An experiment reports what you declared. Reading it is still your job.
 parameterization survives recorded market history. Same machinery, and almost
 nothing else in common with the one above.
 
-![kol_alpha (shown as "kol alpha") on the Experiments tab — collecting, 3 arms with 2 never run, 6 results.](/docs/img/experiments-kol.png)
+![kol_alpha (shown as "kol alpha") on the Experiments tab of an install whose state predates the metric change — collecting, 3 arms with 2 never run, 6 results, still labelled "measures real tape".](/docs/img/experiments-kol.png)
 
-The counts below are from a cohort measured **2026-09-21**; an earlier cohort
-this section was written against had been lost, and re-running `musk_v1`
-rebuilt it. Expect your own numbers to differ — what is stable is the *shape*,
-and the shape is the lesson.
+**Its metric changed on 2026-09-26, and why is the first lesson.** Until then
+it measured `real_tape`: `1` or `0`, did this backtest replay real market
+history. While real tape was rare that was the right question. Once every
+backtest replayed real tape, every arm scored `1.0`, and the verdict became
+*"no separable winner"* by construction: **a metric every arm maxes is a gate,
+not a measure.** It now measures `realized_pnl_ticks`, the PnL of the
+strategy on the settled replay, and keeps `real_tape` as the gate:
 
-**Its metric is a gate, not a score.** `real_tape` is `1` or `0`: did this
-backtest replay real market history with all three axes real? *"Higher is
-better"* on a boolean means "more often honest", not "better PnL". An experiment
-is free to measure whether a result deserves to exist at all, and this one does
-that before anything measures how good it is.
+- the poll writes `realized_pnl_ticks` **only** on a claim whose three axes are
+  all real. A row filter cannot do this, because `evaluate()` has none — the
+  gate is the metric's absence;
+- a real replay that placed no order scores **`0`**. Not trading is the
+  strategy's outcome on that tape, not a missing value;
+- the rows moved to a new partition, `attributed_v3`, so nothing measured
+  under the old metric is averaged with the new one.
 
 **Its workflow has two actions, and only one of them emits the metric.**
 `kol_strategy` runs `--action generate` to build and submit a strategy, then
@@ -381,60 +386,49 @@ that before anything measures how good it is.
 | Action | Emits |
 |---|---|
 | `generate` | `generated`, `compiled`, `lean` |
-| `poll` | `real_tape`, `all_axes_real`, `prints_replayed` |
+| `poll` | `real_tape`, `all_axes_real`, `prints_replayed`, and on an all-axes-real claim `realized_pnl_ticks`, `filled_lots`, `total_actions` |
 
 ### Why the results count is below the row count
 
-Only `poll` emits the declared metric, so every `generate` row carries none of
-it and `evaluate()` skips them. That is correct — and the card says so: the
-results chip reads **`6 of 12 rows`** on the cohort above, and hovering it lists
-the keys the dropped rows *do* carry. Until recently only the *all*-zero case was explained, so a partial
-drop like this one was invisible; across the estate 364 of 1,558 rows are in
-that position. Ask the app and you get the same list:
+Only the poll of an all-axes-real claim emits the declared metric, so every
+`generate` row — and every poll of a partly synthetic replay — carries none of
+it, and `evaluate()` skips them. The card says so: the results chip reads
+**`N of M rows`**, and hovering it lists the keys the dropped rows *do* carry.
+Ask the app and you get the same list:
 
 ```
-keys emitted: all_axes_real, compiled, generated, lean, prints_replayed, real_tape
+keys emitted: all_axes_real, compiled, filled_lots, generated, lean, prints_replayed, real_tape, realized_pnl_ticks, total_actions
 ```
 
-Seeing `generated` and `compiled` sitting beside `real_tape` tells you the gap is
-*stage*, not a typo. A metric name that matched nothing at all would say so in
-the same breath.
+Seeing `generated` and `compiled` beside `realized_pnl_ticks` tells you the gap
+is *stage*, not a typo. A metric name that matched nothing at all would say so
+in the same breath.
 
 ### Why it is not concluding
 
-Two reasons, both visible on the card:
-
 ```
-success_criteria:  best_n >= 10 and delta_pp >= 0
-best_n = 6         3 arms · 2 never run
+success_criteria:  best_n >= 10 and baseline_n >= 10 and delta > 0
 ```
 
-- **Not enough resolved polls.** Six rows carry `real_tape`, all of them `0` —
-  a mean of 0.00, and the card says `below min_samples (6/10)`. None of these
-  backtests replayed recorded prints at all, which is the metric doing its job:
-  it is a gate on whether a result deserves to exist, and right now it is
-  answering no. That is a finding about the strategy's symbol and window
-  choice, not a fault in the experiment — and it is the exact question
-  `backtest_evidence` exists to isolate.
-- **The paired arms have not caught up.** The three arms are `current` (the
-  same KOL generator with the tweet signal removed — the static
-  parameterization the hypothesis names), `musk_v1` (a keyword-rule lean over the
-  tweets), and
-  `musk_llm_scored` (the same tweets, the lean scored by a model on the fleet).
-  `current` used to declare nothing but an id, so no dispatch could vary it and
-  `delta_pp` was never bound. It is now submitted **automatically in the same
-  `kol_strategy` fire, on the same instrument**, as the treatment — each pair
-  differs only in whether the tweets conditioned the parameters. Rows written
-  before that change carry no pair, which is why this cohort still shows
-  `current` as never run.
+Measured on the operator's install on **2026-09-26**: all three arms run on
+every fire — `current` (the same KOL generator with the tweet signal removed,
+submitted automatically in the same fire and on the same instrument),
+`musk_v1` (a keyword-rule lean) and `musk_llm_scored` (the lean scored by a
+model on the fleet). Ten rows carry the metric, and **every one is `0.0`**:
+none of the replays placed an order. So the verdict is "no separable winner",
+and this time that is a true statement about the data, not an artefact of the
+metric.
 
-**Defining an experiment whose baseline cannot vary still warns** at define
-time — *"success_criteria needs a delta against baseline `current`, but that arm
-declares no configuration beyond id/description"* — and the card repeats it as
-the reason it is not concluding. The repair `kol_alpha` took (make the baseline
-arm change the run) is the general one; the alternative is to drop the delta and
-accept a one-armed gate (`best_n >= 10` on `real_tape` alone), which is
-truthful but answers a narrower question.
+Why nothing trades is a finding about the **tape**, not the experiment. The
+strategies fire on `ofi_z`, and a strike's recorded signals only cover the
+minutes in which it ranked among the instruments the signal producer covers.
+Coverage was widened from 12 to 40 instruments on 2026-09-26, but the replays
+still draw from a snapshot of strikes recorded before that. Expect the first
+non-zero PnL once the snapshot is refreshed with later strikes.
+
+**If your card still says "measures real tape"**, your install's experiment
+state was computed before the change and has not been re-evaluated since. It
+updates the next time the loop runs on your install.
 
 ### What the two examples have in common
 
@@ -697,6 +691,12 @@ to become a Lumid workflow.
 ---
 
 ## Changelog
+
+- **1.3.0** (2026-09-26) — `kol_alpha` measures realized PnL. Its old metric,
+  `real_tape`, scored `1.0` on every arm once real tape was routine, so it
+  could never name a winner; § *A second worked example* now explains the
+  change, the all-axes-real gate, why the results count sits below the row
+  count, and why every current row is `0.0`.
 
 - **1.2.0** (2026-09-20) — One page. *Workflows and experiments* and *The
   workflow canvas* were always one story told twice — what a workflow is and how
