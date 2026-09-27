@@ -1222,6 +1222,8 @@ export interface MeExperiment {
   // No loop can feed this experiment (no dispatch.loop, not under any loop's
   // engine.experiment) — its 0 results are permanent until the spec changes.
   unfed?: boolean; unfed_reason?: string;
+  // A loop feeds it, but that loop never ran or failed every recent run.
+  starved?: boolean; starved_reason?: string;
   // ── Rows the number did NOT count ──
   // n_results counts rows carrying the DECLARED metric; n_rows_total counts the
   // ledger. Only the n=0 case was ever explained, so a partial drop was

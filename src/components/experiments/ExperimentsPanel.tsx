@@ -643,6 +643,11 @@ export function ExperimentCard({ app, e, showApp = false, onChanged }: { app: st
 						Nothing can record into this experiment yet — {e.unfed_reason || "no loop feeds it"}.
 					</div>
 				)}
+				{e.starved && !e.unfed && (
+					<div className="mt-1.5 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1">
+						Its loop is not recording — {e.starved_reason || "the loop that feeds it has not run"}.
+					</div>
+				)}
 				{e.state_stale && (
 					<div className="mt-1.5 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1">
 						State predates the current metric (it measured {(e.state_metric || "another metric").replace(/_/g, " ")}) — updates on this experiment's next run.
