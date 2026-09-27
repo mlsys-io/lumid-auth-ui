@@ -102,6 +102,34 @@ An arm id that already exists **replaces** that arm; any other id appends. Two
 arms sharing an id would be averaged together, so replacing is the only sane
 reading of a repeat.
 
+### Arms that run without you
+
+A scheduled fire passes **no arguments**, so a loop whose arms template their
+subject (`{{ args.doc_current | default('…') }}`) re-scores the one default on
+every fire. That measures the scorer's noise, not the arms. Two loop settings
+fix it; `doc-readability`'s `score_docs` uses both:
+
+```yaml
+schedule: '17 */6 * * *'
+rotate_args:            # an unattended fire takes the next row of a frozen slice
+  source: data/seed/doc_pages_v1.json
+  every_secs: 21600     # one row per 6-hour slot
+  map: {doc_current: excerpt, doc_rewritten: rewritten}
+engine:
+  arms_concurrency: 1   # one arm in flight at a time
+```
+
+- **`rotate_args`** picks row *floor(now / every_secs) mod N* of a dataset
+  inside the bundle and maps its fields to the arm arguments. Arguments you pass
+  yourself always win. The chosen row is recorded on the run.
+- **`arms_concurrency`** caps how many arms are in flight. The fleet does not
+  reserve GPU memory across jobs, so two arms of one GPU workflow can land on
+  the same card. Measured 2026-09-27: two 7B arms on one 24 GB worker, and the
+  arm that loaded second failed on every fire, whatever its text. With `1` the
+  arms run one after the other and still share one run, one instrument
+  fingerprint and one harvest. Leave it unset when each arm fits beside the
+  others.
+
 ---
 
 ## 2. View status
@@ -691,6 +719,10 @@ to become a Lumid workflow.
 ---
 
 ## Changelog
+
+- **1.4.0** (2026-09-27) — § *Arms that run without you*: `rotate_args` (a
+  scheduled fire walks a frozen slice) and `engine.arms_concurrency` (arms that
+  would not fit on one GPU together), with the failure that prompted it.
 
 - **1.3.0** (2026-09-26) — `kol_alpha` measures realized PnL. Its old metric,
   `real_tape`, scored `1.0` on every arm once real tape was routine, so it
