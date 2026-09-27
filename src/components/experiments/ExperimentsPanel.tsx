@@ -638,6 +638,11 @@ export function ExperimentCard({ app, e, showApp = false, onChanged }: { app: st
 					{e.dataset_id ? <> · over <span className="font-medium text-slate-500">{e.dataset_id}</span></> : null}
 					{e.loops?.length ? <> · fed by {e.loops.join(", ")}</> : null}
 				</div>
+				{e.state_stale && (
+					<div className="mt-1.5 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1">
+						State predates the current metric (it measured {(e.state_metric || "another metric").replace(/_/g, " ")}) — updates on this experiment's next run.
+					</div>
+				)}
 				{e.criteria_met && e.verdict && (
 					<div className="mt-1.5 text-[11px] text-gold-700 bg-gold-50/70 border border-gold-200 rounded-lg px-2 py-1">✓ {e.verdict}</div>
 				)}
