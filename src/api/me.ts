@@ -418,7 +418,9 @@ export const me = {
       ),
     ),
   generateAppUI: (app: string) =>
-    call<{ markdown: string; path: string }>("POST", `/apps/${encodeURIComponent(app)}/ui/generate`),
+    ownerWriteApplied(
+      call<{ markdown: string; path: string } & QueuedWrite>("POST", `/apps/${encodeURIComponent(app)}/ui/generate`),
+    ),
 
   // ── App prompts (Tune / WS-7) ───────────────────────────────────────
   // The analyst & judge prompt files (`prompts/*.md`) an app runs on. They
@@ -462,8 +464,10 @@ export const me = {
         `?q=${encodeURIComponent(q)}${type ? `&type=${encodeURIComponent(type)}` : ""}`,
     ),
   deleteLoop: (app: string, loop: string) =>
-    call<{ app: string; removed_loop: string; remaining: number; note: string }>(
-      "DELETE", `/apps/${encodeURIComponent(app)}/loops/${encodeURIComponent(loop)}`),
+    ownerWriteApplied(
+      call<{ app: string; removed_loop: string; remaining: number; note: string } & QueuedWrite>(
+        "DELETE", `/apps/${encodeURIComponent(app)}/loops/${encodeURIComponent(loop)}`),
+    ),
   getIntent: (id: string) =>
     call<MeIntentResult>("GET", `/intents/${encodeURIComponent(id)}`),
   // Kind-aware marketplace actions — skills are IMPORTED by apps (not
@@ -591,18 +595,22 @@ export const me = {
   // POST /me/apps/:app/runs/:ts/promote — mark this run/branch's learning as
   //   KEPT (its memories/config become the champion lineage going forward).
   promoteRun: (app: string, ts: string, note?: string) =>
-    call<{ app: string; ts: string; state: string }>(
-      "POST",
-      `/apps/${encodeURIComponent(app)}/runs/${encodeURIComponent(ts)}/promote`,
-      note ? { note } : {},
+    ownerWriteApplied(
+      call<{ app: string; ts: string; state: string } & QueuedWrite>(
+        "POST",
+        `/apps/${encodeURIComponent(app)}/runs/${encodeURIComponent(ts)}/promote`,
+        note ? { note } : {},
+      ),
     ),
   // POST /me/apps/:app/runs/:ts/discard — mark this run/branch's learning as
   //   DROPPED (its memories/config are not carried forward).
   discardRun: (app: string, ts: string, note?: string) =>
-    call<{ app: string; ts: string; state: string }>(
-      "POST",
-      `/apps/${encodeURIComponent(app)}/runs/${encodeURIComponent(ts)}/discard`,
-      note ? { note } : {},
+    ownerWriteApplied(
+      call<{ app: string; ts: string; state: string } & QueuedWrite>(
+        "POST",
+        `/apps/${encodeURIComponent(app)}/runs/${encodeURIComponent(ts)}/discard`,
+        note ? { note } : {},
+      ),
     ),
   stopLoop: (app: string, loop: string) =>
     call<{ loop: string; stopped_cycle: string }>(
@@ -621,8 +629,16 @@ export const me = {
   // Workstream F — cross-app experiments aggregate.
   experimentsAll: () => call<{ experiments: Array<MeExperiment & { app: string }>; count: number }>("GET", "/experiments"),
   // Offer lifecycle rides the generic cycle-feedback writer.
+  // The server binds `ts` (required) and a -1/0/+1 `rating`; this sent only
+  // `cycle_ts` + `kind`, so every call was a 400 the caller swallowed.
   cycleFeedback: (body: { app: string; loop: string; cycle_ts: string; output_id?: string; kind: string; note?: string; label?: string }) =>
-    call<Record<string, unknown>>("POST", "/cycles/feedback", body),
+    ownerWriteApplied(
+      call<Record<string, unknown> & QueuedWrite>("POST", "/cycles/feedback", {
+        ...body,
+        ts: body.cycle_ts,
+        rating: body.kind === "adopt_offer" ? 1 : body.kind.startsWith("dismiss") ? -1 : 0,
+      }),
+    ),
 
   skills: () => call<{ skills: MeSkillRow[]; count: number }>("GET", "/skills"),
   skillsDiscover: () => call<{ cards: MeSkillCard[] }>("GET", "/skills/discover"),
@@ -685,10 +701,12 @@ export const me = {
       step_instructions?: string;
     },
   ) =>
-    call<{ outbox_ref: string; decision: string; state: string }>(
-      "POST",
-      `/cycles/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/${encodeURIComponent(ts)}/review`,
-      body,
+    ownerWriteApplied(
+      call<{ outbox_ref: string; decision: string; state: string } & QueuedWrite>(
+        "POST",
+        `/cycles/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/${encodeURIComponent(ts)}/review`,
+        body,
+      ),
     ),
 
   // Drafts queue
@@ -860,10 +878,12 @@ export const me = {
   runDetail: (runId: string) =>
     call<MeRunDetail>("GET", `/runs/${encodeURIComponent(runId)}`),
   runMark: (runId: string, state: "succeeded" | "failed", note?: string) =>
-    call<{ run_id: string; new_state: string; note: string }>(
-      "POST",
-      `/runs/${encodeURIComponent(runId)}/mark`,
-      { state, note },
+    ownerWriteApplied(
+      call<{ run_id: string; new_state: string; note: string } & QueuedWrite>(
+        "POST",
+        `/runs/${encodeURIComponent(runId)}/mark`,
+        { state, note },
+      ),
     ),
 
   // ── Mind / Improve surface (W4) ─────────────────────────────────
@@ -1499,8 +1519,9 @@ export function streamRuns(
   return () => ctl.abort();
 }
 
-// An owner write (prompt / config / surface) answered 202: identity mounts no
-// tenant volume, so it queues an `app_file_write` intent and the scheduler
+// An owner write (prompt / config / surface, and the actions that touch the
+// install: delete loop, generate UI, review, feedback, run marks) answered 202:
+// identity mounts no tenant volume, so it queues an intent and the scheduler
 // writes the file. Only on-prem identities that can see the disk still answer
 // 200 with the write done.
 type QueuedWrite = { queued?: boolean; intent_id?: string; status?: string };
@@ -1524,7 +1545,7 @@ async function ownerWriteApplied<T extends QueuedWrite & { sha?: string }>(req: 
     throw new MeApiError(409, 1409, data.error || "this file changed since you loaded it — reload, then reapply your edit");
   }
   if (env.ok === false || env.error || data.error) {
-    throw new MeApiError(0, 1500, env.error || data.error || "the scheduler could not save the file");
+    throw new MeApiError(0, 1500, env.error || data.error || "the scheduler could not apply the change");
   }
   return { ...r, sha: data.sha ?? r.sha, status: "applied" };
 }
