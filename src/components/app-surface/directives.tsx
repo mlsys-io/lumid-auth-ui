@@ -916,12 +916,22 @@ function ActionFieldsDialog({ a, row, open, onCancel, onSubmit }: {
           </AlertDialogDescription>
         </AlertDialogHeader>
         <div className="space-y-3">
-          {fields.map((f) => (
+          {fields.map((f) => {
+            // Each control is NAMED by its label and DESCRIBED by its help: the
+            // label had no htmlFor, so screen readers and getByLabel saw an
+            // unnamed input in every app's action dialog (found 2026-09-27).
+            const inputId = `${idPrefix}-${f.key}-input`;
+            const helpId = f.help ? `${idPrefix}-${f.key}-help` : undefined;
+            const req = f.required !== false;
+            return (
             <div key={f.key} className="space-y-1">
-              <label className="text-[12px] font-medium text-slate-700">{f.label ?? f.key}</label>
+              <label htmlFor={inputId} className="text-[12px] font-medium text-slate-700">{f.label ?? f.key}</label>
               {f.type === "text" ? (
                 <>
                   <input
+                    id={inputId}
+                    aria-required={req}
+                    aria-describedby={helpId}
                     type="text"
                     value={values[f.key] ?? ""}
                     placeholder={f.placeholder}
@@ -940,7 +950,7 @@ function ActionFieldsDialog({ a, row, open, onCancel, onSubmit }: {
                   value={values[f.key] ?? ""}
                   onValueChange={(v) => setValues((cur) => ({ ...cur, [f.key]: v }))}
                 >
-                  <SelectTrigger className="w-full text-[12px]">
+                  <SelectTrigger id={inputId} aria-required={req} aria-describedby={helpId} className="w-full text-[12px]">
                     <SelectValue placeholder={f.placeholder ?? "Select…"} />
                   </SelectTrigger>
                   <SelectContent>
@@ -950,9 +960,10 @@ function ActionFieldsDialog({ a, row, open, onCancel, onSubmit }: {
                   </SelectContent>
                 </Select>
               )}
-              {f.help && <p className="text-[11px] text-slate-400">{f.help}</p>}
+              {f.help && <p id={helpId} className="text-[11px] text-slate-400">{f.help}</p>}
             </div>
-          ))}
+            );
+          })}
         </div>
         <AlertDialogFooter>
           <button
