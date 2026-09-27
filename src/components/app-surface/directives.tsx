@@ -1274,13 +1274,16 @@ function LumidTable({ body }: { body: Body }) {
                   </th>
                 );
               })}
-              {rowActions.length > 0 && <th className="px-2.5 py-1.5 text-right font-semibold text-slate-700">Actions</th>}
+              {/* Pinned to the right edge: a wide table (the strategy detail's
+                  registration table at 1500px) scrolled its actions off-screen,
+                  so the only controls on the row were the ones you could not see. */}
+              {rowActions.length > 0 && <th className="sticky right-0 z-[1] bg-slate-50 px-2.5 py-1.5 text-right font-semibold text-slate-700 shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.15)]">Actions</th>}
             </tr>
           </thead>
           <tbody>
             {sortedRows.slice(0, 200).map((row, i) => {
               const href = rowHref ? rowHref(row) : "";
-              const trCls = "border-b border-slate-100 last:border-b-0" + (href ? " hover:bg-slate-50 cursor-pointer" : "");
+              const trCls = "group border-b border-slate-100 last:border-b-0" + (href ? " hover:bg-slate-50 cursor-pointer" : "");
               return (
                 <tr key={i} className={trCls} onClick={href ? () => goHref(href) : undefined}>
                   {columns.map((c, ci) => {
@@ -1298,7 +1301,7 @@ function LumidTable({ body }: { body: Body }) {
                     return <td key={c.key} title={full} className="px-2.5 py-1.5 text-slate-700 align-top max-w-[260px] truncate">{cell}</td>;
                   })}
                   {rowActions.length > 0 && (
-                    <td className="px-2.5 py-1.5 text-right whitespace-nowrap">
+                    <td className={cn("sticky right-0 z-[1] bg-white px-2.5 py-1.5 text-right whitespace-nowrap shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.15)]", href && "group-hover:bg-slate-50")}>
                       <span className="inline-flex gap-1.5 justify-end" onClick={(e) => e.stopPropagation()}>
                         {rowActions.map((a, ai) => <ActionButton key={ai} a={a} row={row} onDone={refetch} size="xs" />)}
                       </span>

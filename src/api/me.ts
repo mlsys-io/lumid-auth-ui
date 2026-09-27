@@ -1188,6 +1188,12 @@ export interface MeExperiment {
   // to say so — measured 2026-09-09, a panel and a chat both quoted a four-day-
   // old figure as current.
   state_updated_at?: string;
+  // The served state was computed under a metric the spec no longer declares
+  // (identity marks it; verdict fields are withheld until the next run).
+  state_stale?: boolean; state_metric?: string;
+  // No loop can feed this experiment (no dispatch.loop, not under any loop's
+  // engine.experiment) — its 0 results are permanent until the spec changes.
+  unfed?: boolean; unfed_reason?: string;
   // ── Rows the number did NOT count ──
   // n_results counts rows carrying the DECLARED metric; n_rows_total counts the
   // ledger. Only the n=0 case was ever explained, so a partial drop was
