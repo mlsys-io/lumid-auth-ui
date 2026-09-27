@@ -426,17 +426,27 @@ against your own rows:
 
 | what you want | what you say |
 |---|---|
-| run one | *Backtest `ofi_z_momentum` on a currently active BTC market — pick one with recent volume.* |
+| run one | *Backtest `ofi_z_momentum` — let it pick the instrument.* |
 | the verdict | *Poll my backtest results — is the last one done, and are all three axes real?* |
 | live paper | *What is `ofi_z_momentum` doing on the forward arm? Any scorecards yet?* |
 | the funnel | *Analyse `ofi_z_momentum` — proposed, submitted, rejected, and why.* |
 | stop it | *Disable `ofi_z_momentum`.* |
 
-**Name the instrument, in the form or in the sentence.** Left blank, the
-consumer defaults the symbol to `SYNTH` — a generator, not a market — and you
-get a `synthetic_lcg` run that looks like a result and is not one. It is
-labelled, never hidden, but it is easier not to spend the five minutes. This
-bites the same way in chat: say which market you mean.
+**Leave the instrument blank, or name one that has already settled.** Blank
+is the recommended path: the *Backtest* dialog's **Instrument** field is
+optional, and left empty the backtest picks from `tape_covered_v1`, a snapshot
+of markets that have **settled** and whose recorded signals cover enough of the
+replay to be real on all three axes. In chat, say *let it pick*.
+
+If you name one yourself, pick a market that **closed at least 20 minutes ago
+and within the last 7 days**. An open market, or one that closed in the last
+~15 minutes, can only be marked to its last price: the replay comes back
+`settlement: mark_to_market`, which is never presentable as performance. It is
+labelled, never hidden, but it is easier not to spend the five minutes. (A
+brand-new account that named a live BTC market on 2026-09-27 got exactly this.)
+
+A real replay that places **no orders** is a valid result, not a failure: the
+strategy looked at real signals and chose not to trade (§8).
 
 **Where chat genuinely helps is the refusal.** Submits are at least five minutes
 apart and at most one may be open; a breach is *refused*, not queued. Chat reads
@@ -559,7 +569,8 @@ fake half — that is exactly how a synthetic result gets mistaken for an edge.
 all three axes when it was taken (**2026-08-28**). It is a transcript, not a
 recipe: its instrument settled in August and has since aged out of the 7-day
 replay window, so re-running that exact ticker today returns `synthetic_lcg`.
-Read it for the field shapes; pick your own live instrument.
+Read it for the field shapes; for your own run, leave the instrument blank so
+the backtest picks one that has settled (§6).
 
 ```json
 {
