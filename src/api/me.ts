@@ -393,7 +393,9 @@ export const me = {
   // Write xpcloud.yaml — server validates YAML; 409 (ret_code 1409) when the
   // file changed since the read that produced baseSha.
   updateAppConfig: (app: string, yaml: string, baseSha?: string) =>
-    call<{ ok: boolean; bytes: number; sha?: string }>("PUT", `/apps/${encodeURIComponent(app)}/config`, { yaml, base_sha: baseSha }),
+    ownerWriteApplied(
+      call<{ ok: boolean; bytes: number; sha?: string } & QueuedWrite>("PUT", `/apps/${encodeURIComponent(app)}/config`, { yaml, base_sha: baseSha }),
+    ),
   // Publish the app bundle to its xp.io repo — commits the current prompts/
   // config/UI edits and auto-bumps semver (app_push). Versions the "tuning".
   publishApp: (app: string, body?: { commit_message?: string; summary?: string }) =>
@@ -408,10 +410,12 @@ export const me = {
     surface: string | undefined,
     payload: { markdown?: string; spec?: string; baseSha?: string },
   ) =>
-    call<{ ok: boolean; path: string; bytes: number; sha?: string; format?: "page" }>(
-      "PUT",
-      `/apps/${encodeURIComponent(app)}/ui${surface ? "/" + encodeURIComponent(surface) : ""}`,
-      { markdown: payload.markdown, spec: payload.spec, base_sha: payload.baseSha, surface },
+    ownerWriteApplied(
+      call<{ ok: boolean; path: string; bytes: number; sha?: string; format?: "page" } & QueuedWrite>(
+        "PUT",
+        `/apps/${encodeURIComponent(app)}/ui${surface ? "/" + encodeURIComponent(surface) : ""}`,
+        { markdown: payload.markdown, spec: payload.spec, base_sha: payload.baseSha, surface },
+      ),
     ),
   generateAppUI: (app: string) =>
     call<{ markdown: string; path: string }>("POST", `/apps/${encodeURIComponent(app)}/ui/generate`),
@@ -432,16 +436,20 @@ export const me = {
   // Write a prompt — always to the tenant's OWN bundle (a shared one becomes a
   // local override). baseSha = optimistic lock (1409 on stale).
   updateAppPrompt: (app: string, name: string, content: string, baseSha?: string) =>
-    call<{ saved: boolean; sha: string }>(
-      "PUT",
-      `/apps/${encodeURIComponent(app)}/prompts/${encodeURIComponent(name)}`,
-      { content, base_sha: baseSha },
+    ownerWriteApplied(
+      call<{ saved: boolean; sha: string } & QueuedWrite>(
+        "PUT",
+        `/apps/${encodeURIComponent(app)}/prompts/${encodeURIComponent(name)}`,
+        { content, base_sha: baseSha },
+      ),
     ),
   // Revert a local override back to the shared copy.
   resetAppPrompt: (app: string, name: string) =>
-    call<{ reverted: boolean }>(
-      "DELETE",
-      `/apps/${encodeURIComponent(app)}/prompts/${encodeURIComponent(name)}`,
+    ownerWriteApplied(
+      call<{ reverted: boolean } & QueuedWrite>(
+        "DELETE",
+        `/apps/${encodeURIComponent(app)}/prompts/${encodeURIComponent(name)}`,
+      ),
     ),
 
   // ── Run-log search (Run log / Stages, WS-6) ─────────────────────────
@@ -1489,6 +1497,36 @@ export function streamRuns(
     }
   })();
   return () => ctl.abort();
+}
+
+// An owner write (prompt / config / surface) answered 202: identity mounts no
+// tenant volume, so it queues an `app_file_write` intent and the scheduler
+// writes the file. Only on-prem identities that can see the disk still answer
+// 200 with the write done.
+type QueuedWrite = { queued?: boolean; intent_id?: string; status?: string };
+
+/**
+ * ownerWriteApplied — resolve an owner write only once it has LANDED.
+ *
+ * Callers render "Saved" and re-read on resolve, so resolving on the 202 would
+ * show the old text back to the user — a save that looks silently lost. A
+ * scheduler-side conflict (someone else's edit since the read) is rethrown as
+ * the same 409/1409 the direct path raises, so the editors' reload-and-reapply
+ * handling needs no change.
+ */
+async function ownerWriteApplied<T extends QueuedWrite & { sha?: string }>(req: Promise<T>): Promise<T> {
+  const r = await req;
+  if (!r.intent_id) return r;
+  const done = await waitForIntent(r.intent_id, { timeoutMs: 90_000 });
+  const env = (done.result ?? {}) as { ok?: boolean; error?: string; data?: Record<string, unknown> };
+  const data = (env.data ?? {}) as { conflict?: boolean; error?: string; sha?: string };
+  if (data.conflict) {
+    throw new MeApiError(409, 1409, data.error || "this file changed since you loaded it — reload, then reapply your edit");
+  }
+  if (env.ok === false || env.error || data.error) {
+    throw new MeApiError(0, 1500, env.error || data.error || "the scheduler could not save the file");
+  }
+  return { ...r, sha: data.sha ?? r.sha, status: "applied" };
 }
 
 // Poll helper — convenience for intent completion.
