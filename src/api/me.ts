@@ -1417,6 +1417,15 @@ export interface MeCycleDetail {
     [k: string]: unknown;
   };
   steps: MeCycleStep[];
+  // The cycle's outcome, by the run store's rule (no step errors and cycle.json
+  // not ok:false) — so it agrees with the run list. summary.ok carries the same
+  // value; summary.ok_as_written keeps what cycle.json said when it differed.
+  ok?: boolean;
+  // "scheduler" when identity had the scheduler read the owner's cycle dir.
+  source?: string;
+  running?: boolean;
+  // Why the per-step detail could not be read (not "the run did nothing").
+  unavailable?: string;
   // Sidecar artifacts written as standalone files (observations, proposal,
   // result, patterns, …) — the real per-stage content for apps that don't
   // inline everything into cycle.json. Keyed by filename (no extension).
