@@ -301,8 +301,8 @@ export const Register = memo(function Register({ onSwitchToLogin, onRegisterSucc
 							<div className="space-y-4">
 								{/* Username */}
 								<div className="space-y-1.5">
-									<div className="flex items-center gap-3">
-										<Label htmlFor="username" className="w-32 text-sm font-medium text-right">
+									<div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+										<Label htmlFor="username" className="text-sm font-medium sm:w-32 sm:shrink-0 sm:text-right">
 											Username
 										</Label>
 										<div className="relative flex-1">
@@ -320,13 +320,13 @@ export const Register = memo(function Register({ onSwitchToLogin, onRegisterSucc
 										</div>
 									</div>
 									{usernameValidation.error && (
-										<p className="text-xs text-destructive flex items-center gap-1 ml-[calc(8rem+0.75rem)]">
+										<p className="text-xs text-destructive flex items-center gap-1 sm:ml-[calc(8rem+0.75rem)]">
 											<AlertCircle className="w-3 h-3" />
 											{usernameValidation.error}
 										</p>
 									)}
 									{!usernameValidation.error && (
-										<p className="text-xs text-muted-foreground ml-[calc(8rem+0.75rem)]">
+										<p className="text-xs text-muted-foreground sm:ml-[calc(8rem+0.75rem)]">
 											3-64 characters
 										</p>
 									)}
@@ -334,8 +334,8 @@ export const Register = memo(function Register({ onSwitchToLogin, onRegisterSucc
 
 								{/* Email */}
 								<div className="space-y-1.5">
-									<div className="flex items-center gap-3">
-										<Label htmlFor="register-email" className="w-32 text-sm font-medium text-right">
+									<div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+										<Label htmlFor="register-email" className="text-sm font-medium sm:w-32 sm:shrink-0 sm:text-right">
 											Email
 										</Label>
 										<div className="relative flex-1">
@@ -353,7 +353,7 @@ export const Register = memo(function Register({ onSwitchToLogin, onRegisterSucc
 										</div>
 									</div>
 									{emailValidation.error && (
-										<p className="text-xs text-destructive flex items-center gap-1 ml-[calc(8rem+0.75rem)]">
+										<p className="text-xs text-destructive flex items-center gap-1 sm:ml-[calc(8rem+0.75rem)]">
 											<AlertCircle className="w-3 h-3" />
 											{emailValidation.error}
 										</p>
@@ -362,10 +362,10 @@ export const Register = memo(function Register({ onSwitchToLogin, onRegisterSucc
 
 								{/* Verification Code */}
 								<div className="space-y-1.5">
-									<div className="flex items-center gap-3">
+									<div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
 										<Label
 											htmlFor="verification-code"
-											className="w-32 text-sm font-medium text-right"
+											className="text-sm font-medium sm:w-32 sm:shrink-0 sm:text-right"
 										>
 											Verification Code
 										</Label>
@@ -403,17 +403,17 @@ export const Register = memo(function Register({ onSwitchToLogin, onRegisterSucc
 											</Button>
 										</div>
 									</div>
-									<p className="text-xs text-muted-foreground ml-[calc(8rem+0.75rem)]">
+									<p className="text-xs text-muted-foreground sm:ml-[calc(8rem+0.75rem)]">
 										A 6-digit code will be sent to your email
 									</p>
 								</div>
 
 								{/* Invitation Code */}
 								<div className="space-y-1.5">
-									<div className="flex items-center gap-3">
+									<div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
 										<Label
 											htmlFor="invitation-code"
-											className="w-32 text-sm font-medium text-right"
+											className="text-sm font-medium sm:w-32 sm:shrink-0 sm:text-right"
 										>
 											Invitation Code
 										</Label>
@@ -435,8 +435,8 @@ export const Register = memo(function Register({ onSwitchToLogin, onRegisterSucc
 
 								{/* Password */}
 								<div className="space-y-1.5">
-									<div className="flex items-center gap-3">
-										<Label htmlFor="new-password" className="w-32 text-sm font-medium text-right">
+									<div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+										<Label htmlFor="new-password" className="text-sm font-medium sm:w-32 sm:shrink-0 sm:text-right">
 											Password
 										</Label>
 										<div className="relative flex-1">
@@ -469,7 +469,7 @@ export const Register = memo(function Register({ onSwitchToLogin, onRegisterSucc
 										</div>
 									</div>
 									{password && (
-										<div className="ml-[calc(8rem+0.75rem)] space-y-1">
+										<div className="sm:ml-[calc(8rem+0.75rem)] space-y-1">
 											<div className="flex items-center justify-between text-xs">
 												<span className="text-muted-foreground">Strength:</span>
 												<span className={`font-medium ${passwordValidation.strengthTextColor}`}>
@@ -486,10 +486,10 @@ export const Register = memo(function Register({ onSwitchToLogin, onRegisterSucc
 
 								{/* Confirm Password */}
 								<div className="space-y-1.5">
-									<div className="flex items-center gap-3">
+									<div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
 										<Label
 											htmlFor="confirm-password"
-											className="w-32 text-sm font-medium text-right"
+											className="text-sm font-medium sm:w-32 sm:shrink-0 sm:text-right"
 										>
 											Confirm Password
 										</Label>
@@ -526,7 +526,7 @@ export const Register = memo(function Register({ onSwitchToLogin, onRegisterSucc
 							</div>
 
 							{passwordValidation.error && (
-								<p className="text-sm text-destructive flex items-center gap-1 ml-[calc(8rem+0.75rem)]">
+								<p className="text-sm text-destructive flex items-center gap-1 sm:ml-[calc(8rem+0.75rem)]">
 									<AlertCircle className="w-3 h-3" />
 									{passwordValidation.error}
 								</p>
