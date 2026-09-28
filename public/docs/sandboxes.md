@@ -5,7 +5,7 @@ You get it from the browser, reach it over SSH, and keep your files when you
 delete it.
 
 **Studio → Research Fleet → Sandboxes**, or the API — everything the page does is an HTTP
-call you can make yourself (§11).
+call you can make yourself (§12).
 
 ---
 
@@ -87,6 +87,7 @@ that machine.** The site total is not the limit.
 |---|---|---|
 | **home** | 5 × RTX PRO 4000 Blackwell 24 GB | **1** — one per mini |
 | **office** | 3 × RTX 5080 16 GB (+ 2 × RTX 6000 Ada 48 GB, admin+) | **1** (admins: 2 — one box holds both Adas) |
+| **nus** (admin+) | 4 × H200 NVL 141 GB, all in one machine | **4** — see §11 |
 
 So "5 GPUs free on home" and "at most 1 per sandbox" are both true. The form
 only offers what the site can actually place; asking for more is refused with
@@ -333,9 +334,39 @@ outside `/home`.
 
 ---
 
-## 11. API — rent, query, stop and operate
+## 11. NUS — the H200 cluster (admin+)
 
-Everything above is plain HTTP against `sandbox-control`, the service behind the
+A third site on the NUS campus InfiniBand segment. **Admin+ only**: the site is gated at the edge
+and the GPU quota for other users is zero.
+
+| | |
+|---|---|
+| **GPUs** | 4 × **H200 NVL 141 GB** in one machine (`s0`). Each card is rented on its own — one box can hold 1, 2 or all 4, and several boxes can share the machine. |
+| **Shared with researchers** | s0 is also used directly by campus researchers. A card is only offered when *nothing* is using it; when their jobs hold cards, the list says `busy outside Kubernetes` and those cards are skipped. |
+| **CPUs** | CPU sandboxes (1 / 2 / 4 / 8 cores) land on s0 or on `h0`. h0's 2 × H100 serve `lum.id/llm` permanently and are **never** rentable — a CPU box there cannot see them. |
+| **Account** | Your lum.id email must be **onboarded** (mapped to a NUS user name). Otherwise every call answers `403 not onboarded` — ask an operator. |
+| **Home** | `/home/<you>` — 100 GiB on the NUS storage array, survives delete like everywhere else. |
+| **Models** | `/models` — the shared model store, **read-only**, mounted in every box. Load weights from here instead of downloading them again. |
+| **Scratch** | `/scratch` — fast local NVMe, per user, *not* backed up. |
+| **Images** | `harbor.lum.id/…` references work unchanged; the site pulls them from its own replica. |
+| **Limits** | 4 GPUs and 8 sandboxes per admin; GPU boxes up to 128 cores / 512 GiB; 24h TTL. |
+
+**Getting a shell.** NUS has **no public SSH gateway yet** — `ssh -p … gw@lum.id` does not reach it.
+Create, list and delete through the page or the API (§12, base `https://lum.id/sbx/nus/api`); for a
+shell today, an operator reaches the box on the NUS cluster directly.
+
+```bash
+T=…            # an admin session token or an admin PAT with scope '*'
+curl -s -H "Authorization: Bearer $T" https://lum.id/sbx/nus/api/sandboxes | jq '.gpu.products'
+curl -s -X POST -H "Authorization: Bearer $T" -H 'content-type: application/json' \
+  https://lum.id/sbx/nus/api/sandboxes -d '{"name":"train","gpu":2,"cpu":16,"memory_gi":64,"ttl_hours":8}'
+```
+
+---
+
+## 12. API — rent, query, stop and operate
+
+Everything in this guide is plain HTTP against `sandbox-control`, the service behind the
 page. Use it from a script, a notebook, CI, or an agent.
 
 ### Base URL per site
@@ -344,7 +375,7 @@ page. Use it from a script, a notebook, CI, or an agent.
 |---|---|---|
 | **home** | `https://lum.id/sbx/api` | any signed-in user |
 | **office** | `https://lum.id/sbx/office/api` | any signed-in user |
-| **nus** | `https://lum.id/sbx/nus/api` | admin+ |
+| **nus** | `https://lum.id/sbx/nus/api` | admin+ (§11) |
 
 Note the shape: home is `/sbx/api`, **not** `/sbx/home/api` — that path does not
 exist and answers 404.
