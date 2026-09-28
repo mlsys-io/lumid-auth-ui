@@ -118,9 +118,8 @@ name.
 
 ![A case selected under AI interviews you: its client facts, four hidden questions, and the Interview me button.](/docs/img/first-run-mbb-interview-me.png)
 
-*The rail's greeting says "press Start"; the button is labelled **Interview me**
-in this mode (**Start case** for AI answers a case, **Ask a question** for Ask
-anything). They are the same control.*
+*The button's label follows the mode: **Interview me** here, **Start case** for
+AI answers a case, **Ask a question** for Ask anything.*
 
 ## Work it in the chat
 
