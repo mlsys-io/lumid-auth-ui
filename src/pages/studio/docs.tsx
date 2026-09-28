@@ -61,6 +61,19 @@ const DOCS: DocEntry[] = [
 		companion: { to: '/studio/docs/coding', label: 'AI coding' },
 	},
 	{
+		// Its own guide again (2026-09-28). It was folded into `first-run` as §10 on
+		// 2026-09-20, which made the Quant Research page carry both cohort tracks;
+		// split back out so each track reads end to end on its own page. The slug
+		// never went away (it was a hidden alias), so old links keep working.
+		slug: 'mbb-consultant',
+		title: 'AI Consulting Onboarding',
+		description: 'Scored case interviews in the MBB Consultant app, walked end to end as a plain user account — the invitation code, installing the app, picking a mode, reading your score against the answer key, and staging corrections.',
+		md: 'mbb-consultant.md',
+		group: 'Guides',
+		icon: GraduationCap,
+		companion: { to: '/studio/apps/mbb-consultant', label: 'MBB Consultant' },
+	},
+	{
 		// Placed after the two onboarding walkthroughs: it assumes you already
 		// have an app open, and it is the only doc that covers the WRITE side of
 		// the control plane (defining, adding an arm, dispatching) rather than
@@ -106,18 +119,6 @@ const DOCS: DocEntry[] = [
 		md: 'workflows.md',
 		group: 'Guides',
 		icon: Workflow,
-		hidden: true,
-	},
-	{
-		// RETIRED 2026-09-20 — folded into `first-run` as the AI Consulting
-		// track. Hidden alias rather than a deletion: the entry IS the route for a
-		// markdown doc, and first-run.md itself linked here.
-		slug: 'mbb-consultant',
-		title: 'AI Consulting Onboarding',
-		description: 'Folded into /studio/docs/first-run.',
-		md: 'first-run.md',
-		group: 'Guides',
-		icon: GraduationCap,
 		hidden: true,
 	},
 	{
