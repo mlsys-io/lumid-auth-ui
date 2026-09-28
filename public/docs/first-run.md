@@ -702,19 +702,20 @@ rather than assembling it yourself:
 > honesty axes, how many took zero trades, and what is the outcome breakdown?
 > Then tell me which of them are mine.*
 
-![The chat reading the results feed through lqt_mailbox_read to answer.](/docs/img/first-run-chat-analytics.png)
+![The chat's answer: which results are yours, and that none replayed real tape yet.](/docs/img/first-run-chat-analytics.png)
 
-*The chips are the tools it ran in this turn — `lqt_mailbox_read` against `results`,
-`strategies` and `stats`. The chat is not guessing from the page, it is
-querying. **Read the scope, though: those three feeds are platform-wide.**
-`/xpio/results` carries no tenant column at all, and the `stats` and
-`strategies` feeds reach the platform through a shared service token — so a
-count from any of them describes everyone, not you. Two things are genuinely
-yours: the **Strategies table**, scoped server-side to your account id, and
-anything from **`analyze`**, which reads the tenant-scoped observation plane. If
-a number matters, ask which of the two it came from. Analysis over more than a
-handful of runs takes it a minute or two, which the transcript shows honestly
-rather than hiding.*
+*The chips above the answer (scrolled off here) are the tools it ran in this
+turn, and the one doing the work is `app_read` on
+`me://app-data?app=quant-research&tool=runs&loop=backtest` — **your own** run
+feed, filtered to backtests, the same source the Workflows surface renders. It
+then reads `me://strategies` to tell which results trace back to a strategy you
+registered. The chat is not guessing from the page, it is querying. **Read the
+scope, though:** if it also reaches for `lqt_mailbox_read` `results` or
+`strategies`, those are platform-wide feeds covering every tenant and are
+operators-only — for anyone else they refuse, and the answer should come from
+your own feed instead. If a number matters, ask which source it came from. A
+turn like this runs a dozen reads and takes a minute or two, which the
+transcript shows honestly rather than hiding.*
 
 Things worth asking it, all of which it can actually answer:
 
