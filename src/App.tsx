@@ -779,6 +779,11 @@ export default function App() {
                 and nothing could open it. Three live navigate() calls pointed at
                 /app/n8n, a route that was never registered either. */}
             <Route path="workflows/new"                element={<AppWorkflowYaml />} />
+            {/* Your OWN saved workflows, with their state, and the one place they
+                can be run. The editor used to save and navigate to /dashboard (a
+                redirect to /studio), and the only listing (/studio/workflows) is the
+                PUBLISHED market — so a saved draft appeared nowhere (FLB-QR-05). */}
+            <Route path="workflows/mine"               element={<AppRunmeshSubmit />} />
             <Route path="workflows"                    element={<AppWorkflows />} />
 
             <Route path="inbox"                        element={<Inbox />} />

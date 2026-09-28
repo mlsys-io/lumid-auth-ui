@@ -84,12 +84,16 @@ export default function AppWorkflowYaml() {
 		// text as definitionJson (the column is generic, not JSON-enforced).
 		setBusy(true);
 		try {
-			await createWorkflow({
+			const id = await createWorkflow({
 				name: name.trim(),
 				description: description.trim() || undefined,
 				definitionJson: body,
 			});
-			nav('/dashboard');
+			// Land on the saved workflow itself. This used to go to /dashboard —
+			// a redirect to /studio — so a save looked like it went nowhere, and
+			// the draft was listed on no page (/studio/workflows shows only the
+			// published market).
+			nav(`/studio/workflows/mine?id=${encodeURIComponent(String(id ?? ''))}&saved=1`);
 		} catch (e: unknown) {
 			setErr(e instanceof Error ? e.message : 'save failed');
 		} finally {

@@ -1,4 +1,5 @@
 import { ExternalLink } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { WorkflowMarket } from '@/runmesh/pages/user/WorkflowMarket';
 
 export default function AppWorkflows() {
@@ -26,6 +27,20 @@ export default function AppWorkflows() {
 						<ExternalLink className="w-3 h-3" />
 					</a>
 				</div>
+			</div>
+
+			{/* The market below lists PUBLISHED workflows only — a workflow you
+			    just saved is a private draft and never appears in it. */}
+			<div className="mb-6 flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4">
+				<div className="text-sm text-slate-700">
+					<div className="font-semibold text-slate-900">My workflows</div>
+					<div className="text-xs text-slate-500">
+						Drafts you saved (private until published) — open to see their state and run them.
+					</div>
+				</div>
+				<Link to="/studio/workflows/mine" className="text-sm font-medium text-indigo-600 hover:text-indigo-800">
+					Open my workflows →
+				</Link>
 			</div>
 
 			<WorkflowMarket />
