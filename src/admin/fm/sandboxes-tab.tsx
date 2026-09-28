@@ -353,7 +353,10 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 	const refresh = useCallback(() => {
 		boxes.refresh();
 		shells.refresh();
-	}, [boxes, shells]);
+		// The admin table too: after a create or delete it would otherwise trail the list above by
+		// up to its 30s poll, showing a sandbox that is gone (or missing one that exists).
+		everyone.refresh();
+	}, [boxes, shells, everyone]);
 
 	const rows = useMemo(() => {
 		// A task list is history as well as state, so filter BEFORE mapping: only
