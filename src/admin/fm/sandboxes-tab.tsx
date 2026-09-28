@@ -44,6 +44,7 @@ import {
 	imagesForSite,
 	isSshTaskActive,
 	listSandboxesForSite,
+	listAllSandboxesForSite,
 	sandboxToShell,
 	sshCommandForSite,
 	sshTaskToShell,
@@ -53,6 +54,7 @@ import {
 	type DatasetEntry,
 	type DatasetLimits,
 	type Sandbox,
+	type AdminSandbox,
 } from "../../api/sandboxes";
 import { fanoutForSites, listTasksForSite, type FmFanout, type FmTask } from "../../api/fm";
 import { deleteSshKey, listSshKeys, uploadSshKey, type SshKey } from "../../api/ssh-keys";
@@ -337,6 +339,12 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 	}
 
 	const boxes = useFanout<Sandbox>(() => fanoutForSites(sites, listSandboxesForSite), 20_000);
+	// EVERYONE'S sandboxes, admin+ only. The list above is per-caller by design (a user sees their
+	// own); an operator deciding who holds which GPU needs the whole site, renter included.
+	const everyone = useFanout<AdminSandbox>(
+		() => (isAdmin ? fanoutForSites(sites, listAllSandboxesForSite) : Promise.resolve({ items: [], sites: [] })),
+		30_000,
+	);
 	const shells = useFanout<FmTask>(
 		() => (isAdmin ? fanoutForSites(SSH_TASK_SITES, listTasksForSite) : Promise.resolve(EMPTY)),
 		20_000,
@@ -1080,6 +1088,65 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 					</tbody>
 				</table>
 			</div>
+
+			{isAdmin && (
+				<div className="mt-6">
+					<div className="mb-2 flex items-baseline justify-between">
+						<h3 className="text-sm font-semibold text-slate-800">
+							All sandboxes <span className="font-normal text-slate-500">— every user, every site (admin+)</span>
+						</h3>
+						<span className="text-xs text-slate-500">
+							{(everyone.data?.items ?? []).length} running or queued
+							{(everyone.data?.sites ?? []).filter((x) => !x.ok).map((x) => (
+								<span key={x.site} className="ml-2 text-amber-700" title={x.error ?? undefined}>{x.site}: unreadable</span>
+							))}
+						</span>
+					</div>
+					<div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+						<table className="w-full text-sm">
+							<thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+								<tr>
+									<th className="px-3 py-2">Site</th>
+									<th className="px-3 py-2">Rented by</th>
+									<th className="px-3 py-2">Sandbox</th>
+									<th className="px-3 py-2">State</th>
+									<th className="px-3 py-2">Size</th>
+									<th className="px-3 py-2">Expires in</th>
+								</tr>
+							</thead>
+							<tbody className="divide-y divide-slate-100">
+								{(everyone.data?.items ?? []).map((b) => (
+									<tr key={`${b.site}/${b.namespace}/${b.pod}`} className="hover:bg-slate-50">
+										<td className="px-3 py-2"><SiteBadge site={b.site ?? ""} /></td>
+										<td className="px-3 py-2">
+											<div className="text-slate-900">{b.email ?? <span className="text-slate-400">unknown</span>}</div>
+											<div className="font-mono text-xs text-slate-500">{b.user}</div>
+										</td>
+										<td className="px-3 py-2">
+											<div className="font-medium text-slate-900">{b.name}</div>
+											<div className="font-mono text-xs text-slate-500">{b.node ?? "unscheduled"}</div>
+										</td>
+										<td className="px-3 py-2 text-xs text-slate-700">{b.phase}</td>
+										<td className="px-3 py-2 text-xs text-slate-700">
+											{b.cpu ?? "?"} CPU · {b.memory ?? "?"}{b.gpu ? ` · ${b.gpu} GPU` : ""}
+										</td>
+										<td className="px-3 py-2 text-xs text-slate-600">
+											{expiresIn(b.expires_at ? Number(b.expires_at) * 1000 : null)}
+										</td>
+									</tr>
+								))}
+								{!(everyone.data?.items ?? []).length && !everyone.loading && (
+									<tr>
+										<td colSpan={6} className="px-3 py-6 text-center text-sm text-slate-500">
+											No sandboxes on any site right now.
+										</td>
+									</tr>
+								)}
+							</tbody>
+						</table>
+					</div>
+				</div>
+			)}
 		</TabShell>
 	);
 }
