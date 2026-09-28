@@ -39,6 +39,7 @@ import {
 	datasetsWritableForSite,
 	listDatasets,
 	portPoolForSite,
+	cpuForSite,
 	gpuProfileForSite,
 	imagesForSite,
 	isSshTaskActive,
@@ -164,6 +165,9 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 	const [createOpen, setCreateOpen] = useState(false);
 	const [name, setName] = useState("dev");
 	const [gpu, setGpu] = useState(0);
+	// CPU cores for a CPU sandbox, from the site's published menu (cpuForSite). 2 matches the
+	// server's own default, so an untouched form asks for what it always got.
+	const [cpu, setCpu] = useState(2);
 	// WHICH card, "" = any. Separate from the count because they are different questions and
 	// only one of them had an answer before: a mixed site could say "give me 1 GPU" and got
 	// whichever node the scheduler liked, which at office means a 5080 five times in seven.
@@ -420,6 +424,17 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 	// CPU/GPU choice: a CUDA image on a CPU sandbox is several GB of pull for libraries that
 	// cannot be used, and a slim CPU image on a GPU box has no CUDA runtime in it at all.
 	const pool = portPoolForSite(target);
+	// CPU SIZE — a CPU sandbox only. The menu is the SITE's answer, not a table in the UI:
+	// sandbox-control refuses any other count (400), so offering one here would be a control
+	// that can only produce an error. No menu published (older server) → no control, no cpu sent.
+	const cpuInfo = cpuForSite(target);
+	const cpuOptions = cpuInfo?.sizes ?? [];
+	useEffect(() => {
+		if (cpuOptions.length && !cpuOptions.includes(cpu)) setCpu(cpuOptions.includes(2) ? 2 : cpuOptions[0]);
+	}, [cpuOptions, cpu]);
+	// Memory follows cores at 4 GiB each — the 2-core / 8 GiB ratio every sandbox had before
+	// sizes existed — capped at the site's ceiling.
+	const cpuMemoryGi = cpuInfo ? Math.min(cpu * 4, cpuInfo.max_memory_gi) : undefined;
 	// Only real, in-range, de-duplicated numbers reach the request. sandbox-control
 	// validates all of this again — it has to, since the pool is shared — but
 	// refusing here keeps a typo from costing a create round-trip.
@@ -458,6 +473,9 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 			// "use this site's default", and an empty string is not the same thing.
 			await createSandbox(target, {
 				name, gpu, ttl_hours: ttl, image: chosen || undefined,
+				// Only for a CPU sandbox, and only when the site published a menu: a GPU box keeps
+				// the server's defaults, and an older server gets exactly the request it always did.
+				...(gpu === 0 && cpuOptions.length ? { cpu, memory_gi: cpuMemoryGi } : {}),
 				// Omitted when "any", same rule as `image`: the server reads absent as "no
 				// preference", and "" would be a product name matching no node.
 				gpu_product: gpu > 0 && gpuProduct ? gpuProduct : undefined,
@@ -617,6 +635,19 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 							))}
 						</select>
 					</label>
+					{gpu === 0 && cpuOptions.length > 0 && (
+						<label className="text-xs text-slate-600">
+							CPU cores
+							<select value={cpu} onChange={(e) => setCpu(Number(e.target.value))}
+								className="mt-1 block rounded-md border border-slate-300 px-2 py-1 text-sm">
+								{cpuOptions.map((n) => (
+									<option key={n} value={n}>
+										{n} {n === 1 ? "core" : "cores"} · {Math.min(n * 4, cpuInfo?.max_memory_gi ?? n * 4)} GiB
+									</option>
+								))}
+							</select>
+						</label>
+					)}
 					{/* WHICH CARD. Hidden unless there is a real choice to make: a CPU sandbox has
 					    no card, and a site with one product has nothing to pick — rendering a
 					    one-option select there is a control that can only be set to what it
