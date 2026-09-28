@@ -321,6 +321,14 @@ const isCodeModel = (id: string) => id.startsWith('claude-code');
 // Mutually-exclusive tool-forcing modes. '' = let the agent decide.
 type ChatMode = '' | 'search' | 'deep_research';
 
+// The case browser's mode names (CaseBrowser ModeId) → this rail's interview
+// modes. Same three seats, two vocabularies.
+const CASE_MODE_TO_CHAT: Record<string, 'coach' | 'train_ai' | 'free'> = {
+	interview: 'coach',
+	benchmark: 'train_ai',
+	practice: 'free',
+};
+
 export function StudioChat({ docked = false, groundApp, threadId }: { docked?: boolean; groundApp?: string | null; threadId?: string } = {}) {
 	const location = useLocation();
 	// `id` is the user_sub on the UserInfo shape from /api/v1/user; used
@@ -1495,6 +1503,18 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 		// inherit it.
 		if (ctxOverride && typeof ctxOverride.case_id === 'string' && ctxOverride.case_id) {
 			caseIdRef.current = ctxOverride.case_id;
+		}
+		// The Work tab's case browser launches a mode (interview | benchmark |
+		// practice), and the body below sends `mode: interviewModeRef.current` —
+		// so the browser's choice was overwritten by this rail's own default
+		// (train_ai) on the very turn that pressed "Interview me", and on every
+		// turn after. The server then gave the AI the interviewee seat and never
+		// scored the user's answers. Adopt the launched mode as the rail's mode,
+		// so it rides every later turn of the conversation too.
+		const launchedMode = ctxOverride?.mode ? CASE_MODE_TO_CHAT[ctxOverride.mode] : undefined;
+		if (launchedMode) {
+			interviewModeRef.current = launchedMode;
+			setInterviewMode(launchedMode);
 		}
 		// One attachment → wire mapping, used for both the current turn and prior
 		// turns' history. Returns null when the heavy body was already dropped
