@@ -851,7 +851,9 @@ function ActionButton({ a, row, onDone, size = "sm" }: {
   };
   // min-h-[24px]: WCAG 2.5.8 target minimum. These rendered 23px, which also
   // made a row of them fiddly on a trackpad.
-  const pad = size === "xs" ? "px-2 py-1 text-[11px] min-h-[24px]" : "px-2.5 py-1 text-[12px] min-h-[24px]";
+  // xs buttons live in the table's actions cell, which now wraps BETWEEN
+  // buttons; nowrap keeps "Poll result" from also breaking inside one.
+  const pad = size === "xs" ? "px-2 py-1 text-[11px] min-h-[24px] whitespace-nowrap" : "px-2.5 py-1 text-[12px] min-h-[24px]";
   const tone = danger
     ? "border-rose-200 text-rose-600 hover:bg-rose-50"
     : "border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-800";
@@ -1280,7 +1282,7 @@ function LumidTable({ body }: { body: Body }) {
                 return (
                   <th key={c.key}
                     onClick={sortable ? () => toggleSort(c.key) : undefined}
-                    className={cn("px-2.5 py-1.5 text-left font-semibold text-slate-700", sortable && "cursor-pointer select-none hover:text-slate-900")}>
+                    className={cn("px-2.5 py-1.5 text-left font-semibold text-slate-700 whitespace-nowrap", sortable && "cursor-pointer select-none hover:text-slate-900")}>
                     <span className="inline-flex items-center gap-1">
                       {c.label ?? c.key}
                       {sortable && <span className={cn("text-[10px]", sort?.key === c.key ? "text-gold-600" : "text-slate-400")}>{sortIcon(c.key)}</span>}
@@ -1315,8 +1317,14 @@ function LumidTable({ body }: { body: Body }) {
                     return <td key={c.key} title={full} className="px-2.5 py-1.5 text-slate-700 align-top max-w-[260px] truncate">{cell}</td>;
                   })}
                   {rowActions.length > 0 && (
-                    <td className={cn("sticky right-0 z-[1] bg-white px-2.5 py-1.5 text-right whitespace-nowrap shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.15)]", href && "group-hover:bg-slate-50")}>
-                      <span className="inline-flex gap-1.5 justify-end" onClick={(e) => e.stopPropagation()}>
+                    // The buttons WRAP rather than forcing one line. Five of them
+                    // (quant-research's strategies: Backtest … Discuss) made the
+                    // table wider than the card, and this sticky cell then sat on
+                    // top of the last data columns — "Compiled" read "Compi" and
+                    // "Updated" vanished at 1500px. Wrapping only kicks in when the
+                    // row would otherwise overflow; a narrow table keeps one line.
+                    <td className={cn("sticky right-0 z-[1] bg-white px-2.5 py-1.5 text-right align-top shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.15)]", href && "group-hover:bg-slate-50")}>
+                      <span className="inline-flex flex-wrap gap-1.5 justify-end" onClick={(e) => e.stopPropagation()}>
                         {rowActions.map((a, ai) => <ActionButton key={ai} a={a} row={row} onDone={refetch} size="xs" />)}
                       </span>
                     </td>

@@ -12,7 +12,7 @@
 // what the real parser would accept, and running the original is offered as
 // the thing to do when fidelity matters.
 
-import { useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { AlertTriangle, ArrowRight, Ghost, Info, X } from "lucide-react";
 import WorkflowCanvas from "../WorkflowCanvas";
 import { parseN8n, scaffoldLumilake, flowmeshCoverage, type N8nDoc } from "./n8n";
@@ -40,6 +40,18 @@ export function ImportDialog({ text, format, onCancel, onImport }: Props) {
 	);
 	const result = useMemo(() => parseLumilake(scaffold.text), [scaffold.text]);
 	const [showYaml, setShowYaml] = useState(false);
+	const titleId = useId();
+
+	// Escape cancels, same as the X and the Cancel button. Listening on window
+	// rather than the dialog element because focus usually stays on whatever
+	// opened the import (the paste target) — nothing inside here takes it.
+	useEffect(() => {
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === "Escape") onCancel();
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, [onCancel]);
 
 	// What FlowMesh's own parser would make of this, if submitted directly —
 	// reported rather than reimplemented.
@@ -56,11 +68,13 @@ export function ImportDialog({ text, format, onCancel, onImport }: Props) {
 	const nothingMapped = scaffold.mapped.length === 0;
 
 	return (
-		<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6">
+		// role/aria-modal/aria-labelledby: without them a screen reader announces
+		// nothing when this opens and keeps reading the editor underneath it.
+		<div role="dialog" aria-modal="true" aria-labelledby={titleId} className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6">
 			<div className="flex h-full max-h-[760px] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
 				<header className="flex items-start gap-3 border-b border-slate-100 px-5 py-3.5">
 					<div className="min-w-0 flex-1">
-						<h2 className="text-[15px] font-medium text-slate-900">
+						<h2 id={titleId} className="text-[15px] font-medium text-slate-900">
 							Import from {format === "n8n" ? "n8n" : "Dify"}
 						</h2>
 						<p className="mt-0.5 text-[11px] leading-snug text-slate-500">
