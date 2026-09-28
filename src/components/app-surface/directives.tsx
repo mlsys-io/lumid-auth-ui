@@ -902,9 +902,12 @@ function ActionFieldsDialog({ a, row, open, onCancel, onSubmit }: {
     fields.map((f) => [f.key, f.default ?? f.options?.[0]?.value ?? ""]),
   );
   const [values, setValues] = useState<Record<string, string>>(initial);
-  // Re-seed defaults each time the dialog opens for a (possibly different) row
-  // — otherwise the second row's dialog would still show the first row's pick.
-  useEffect(() => { if (open) setValues(initial()); }, [open, row]);
+  // Re-seed defaults each time the dialog OPENS. Keyed on `open` alone: a
+  // polled table (`poll: 30`) hands every row a fresh object on each refetch,
+  // so depending on `row` wiped whatever the user had typed mid-dialog — the
+  // "Window ends" date cleared itself (FLB-QR-02). Each row mounts its own
+  // dialog, so a different row's pick can't leak in without `row` here.
+  useEffect(() => { if (open) setValues(initial()); }, [open]);
   const missing = fields.some((f) => f.required !== false && !values[f.key]);
   return (
     <AlertDialog open={open} onOpenChange={(o) => { if (!o) onCancel(); }}>
