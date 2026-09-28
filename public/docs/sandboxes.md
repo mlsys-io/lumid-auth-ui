@@ -4,7 +4,8 @@ A sandbox is a container on real hardware with a home directory that outlives it
 You get it from the browser, reach it over SSH, and keep your files when you
 delete it.
 
-**Studio → Research Fleet → Sandboxes.**
+**Studio → Research Fleet → Sandboxes**, or the API — everything the page does is an HTTP
+call you can make yourself (§11).
 
 ---
 
@@ -38,6 +39,7 @@ immediately, so it works the moment it is saved.
 |---|---|
 | **Site** | `home` and `office` are open to every signed-in user. `nus` is admin+. |
 | **Name** | yours, per site. Re-creating the same name after a delete reuses your home directory. |
+| **CPU cores** | a CPU sandbox comes in **1, 2, 4 or 8** cores, with 4 GiB of memory per core. Any other size is refused. |
 | **GPUs** | see §4 — the ceiling is **per machine**, not per site. |
 | **Image** | pick from the site's list, or `custom…` for any reference — including our own `harbor.lum.id/<project>/<name>:<tag>` (§8). |
 | **Data** | attach live stores — Lumid Data, FinData, LQT — see §5. Nothing is mounted or copied. File datasets need no selection: `/datasets` is already mounted. |
@@ -84,11 +86,18 @@ that machine.** The site total is not the limit.
 | site | GPUs | most in ONE sandbox |
 |---|---|---|
 | **home** | 5 × RTX PRO 4000 Blackwell 24 GB | **1** — one per mini |
-| **office** | 2 × RTX 6000 Ada 47 GB + 3 × RTX 5080 | **2** — one box holds both Adas |
+| **office** | 3 × RTX 5080 16 GB (+ 2 × RTX 6000 Ada 48 GB, admin+) | **1** (admins: 2 — one box holds both Adas) |
 
 So "5 GPUs free on home" and "at most 1 per sandbox" are both true. The form
 only offers what the site can actually place; asking for more is refused with
 the reason rather than accepted and left queued forever.
+
+**Each GPU is rented on its own.** A card is offered only when nothing is using
+it — including work started outside Studio, which the scheduler cannot see. A
+machine with one card busy still rents you its idle one; a card someone else is
+using is never handed to you. If a card goes busy in the moment between the list
+and your create, the create is refused with *"GPU usage just changed — try again
+in a minute"* rather than risking it.
 
 Need more GPUs than one machine has? That is a **FlowMesh job**, not a shell —
 multi-node work needs a scheduler, not an SSH session.
@@ -324,10 +333,163 @@ outside `/home`.
 
 ---
 
+## 11. API — rent, query, stop and operate
+
+Everything above is plain HTTP against `sandbox-control`, the service behind the
+page. Use it from a script, a notebook, CI, or an agent.
+
+### Base URL per site
+
+| site | base | who |
+|---|---|---|
+| **home** | `https://lum.id/sbx/api` | any signed-in user |
+| **office** | `https://lum.id/sbx/office/api` | any signed-in user |
+| **nus** | `https://lum.id/sbx/nus/api` | admin+ |
+
+Note the shape: home is `/sbx/api`, **not** `/sbx/home/api` — that path does not
+exist and answers 404.
+
+### Token
+
+A lum.id personal access token (**Account → Tokens**) in `Authorization: Bearer`.
+
+- **Reading** — listing your sandboxes, quota, datasets — works with **any** active token.
+- **Renting and stopping** needs the scope **Sandboxes — create and delete**
+  (`sandbox:sandboxes:write`). Any user can mint it. Without it a create or delete
+  answers `403 "this personal access token is read-only here …"` — the token is
+  fine, it just was not minted for writing.
+
+```bash
+export LUMID_PAT=lm_pat_…            # with sandbox:sandboxes:write
+SBX=https://lum.id/sbx/api           # home; office: https://lum.id/sbx/office/api
+H="Authorization: Bearer $LUMID_PAT"
+```
+
+A revoked token keeps working for up to **60 seconds** — the service caches each
+token's answer for a minute.
+
+### Query — what is there, and what can I rent
+
+```bash
+curl -s -H "$H" $SBX/whoami          # {"email", "user", "admin"}
+curl -s -H "$H" $SBX/sandboxes | jq
+```
+
+`GET /sandboxes` returns your rows **and** everything you need to decide what to
+create — so a script never hardcodes a site's hardware:
+
+| field | what it tells you |
+|---|---|
+| `sandboxes[]` | your sandboxes: `name`, `phase` (`Running`, `Pending`, `Queued`, `Terminating`, …), `node`, `image`, `gpu`, `expires_at` (epoch seconds), `created`; a queued GPU row also has `waiting_for` |
+| `cpu.sizes` | the core counts a CPU sandbox may have here (`[1, 2, 4, 8]`) |
+| `gpu.products[]` | each card: `product`, `max_per_sandbox`, `memory_gb`, `rentable_now`, `free_now`, `busy_reason` |
+| `images` | the site's image shortlist and its CPU / GPU defaults |
+| `data_sources`, `datasets` | what you can attach (§5) |
+| `ports` | the public-port pool: `enabled`, `pool_size`, `free` (§9) |
+
+`GET /quota` shows your namespace's `used` and `hard` limits.
+
+### Rent
+
+```bash
+# CPU: 4 cores, 16 GiB, 8 hours
+curl -s -X POST -H "$H" -H 'content-type: application/json' $SBX/sandboxes \
+  -d '{"name":"dev","cpu":4,"memory_gi":16,"ttl_hours":8}'
+
+# GPU: one card, a named product, a data source, one public port
+curl -s -X POST -H "$H" -H 'content-type: application/json' $SBX/sandboxes \
+  -d '{"name":"train","gpu":1,"gpu_product":"NVIDIA GeForce RTX 5080",
+       "data_sources":["findata"],"ports":[8888],"ttl_hours":4}'
+```
+
+| field | default | notes |
+|---|---|---|
+| `name` | `dev` | lowercase letter first, then letters, digits, `-`; up to 20 |
+| `cpu` | `2` | CPU sandbox: one of `cpu.sizes` |
+| `memory_gi` | `8` | the page sends 4 × cores |
+| `gpu` | `0` | at most the card's `max_per_sandbox` |
+| `gpu_product` | any | a `gpu.products[].product`; omit for "any card I may have" |
+| `image` | site default | any reference, including `harbor.lum.id/…` (§8) |
+| `ttl_hours` | `8` | max 24 |
+| `data_sources` | `[]` | ids from `data_sources` |
+| `ports` | `[]` | container ports to publish (§9) |
+
+Answer: `200 {"name", "pod", "image", "gpus_free"}`. The pod then takes a few
+seconds (longer on a first pull of a large image) to reach `Running` — poll
+`GET /sandboxes` until its `phase` says so.
+
+Refusals say why, and are worth handling rather than retrying blindly:
+
+| status | meaning |
+|---|---|
+| `400` | a CPU size not in `cpu.sizes`, or more GPUs than one machine holds |
+| `403` | read-only token; or a GPU reserved for admins |
+| `409` | no GPU free right now (with the reason and counts), a name you already have, or you are at your sandbox limit |
+| `422` | a field out of range — the body names it |
+
+### Stop
+
+```bash
+curl -s -X DELETE -H "$H" $SBX/sandboxes/dev
+# {"deleted": "dev", "home_kept": "home-<you>"}
+```
+
+The container goes; `/home/<you>` stays (§6). A sandbox you do not stop is
+removed when its `ttl_hours` run out.
+
+### Operate — run things inside it
+
+Commands run over the **SSH gateway**, with the key on your account (§1) — not
+over HTTP:
+
+```bash
+ssh -p 31223 gw@lum.id 'nvidia-smi; cd /home/$USER && python train.py'   # home
+ssh -p 31226 gw@lum.id 'sbx ls'                                          # office
+ssh -p 31223 gw@lum.id 'sbx logs sbx-<you>-dev'
+scp -O -P 31223 data.csv gw@lum.id:/home/<you>/
+```
+
+A one-shot command runs in your **first sandbox alphabetically** — keep one
+sandbox per site when scripting, or you may be running in the wrong box (§3).
+
+After adding a key through the API rather than the page, push it to the gateway:
+
+```bash
+curl -s -X POST -H "$H" $SBX/keys/sync     # {"keys_authorized": N}
+```
+
+### Save, datasets
+
+| call | does |
+|---|---|
+| `POST /sandboxes/{name}/save` `{"image":"myenv","tag":"v1"}` | commit the sandbox to `harbor.lum.id/sbx-<you>/myenv:v1` (§10, home) |
+| `GET /sandboxes/{name}/save` | that save's progress |
+| `GET /datasets` | datasets at this site |
+| `POST /datasets` `{"name": …, "note": …}` | create one you own |
+| `PUT /datasets/{name}/files/{path}` | upload a file (request body = the file) |
+| `DELETE /datasets/{name}/files/{path}`, `DELETE /datasets/{name}` | remove a file / the dataset |
+
+### The fleet itself
+
+Which machines and workers exist, per site, for any signed-in token:
+
+```bash
+curl -s -H "$H" https://lum.id/fm/home/api/v1/nodes
+curl -s -H "$H" https://lum.id/fm/office/api/v1/workers
+```
+
+Reading other people's jobs is not part of this; a token sees its own.
+
+Machine-readable schema (OpenAPI): `https://lum.id/sbx/openapi.json` for home,
+`https://lum.id/sbx/office/openapi.json` for office (send your token for office).
+
+---
+
 ## Limits
 
-Per user, per site: **2 sandboxes**, **24h** TTL, **1 GPU** at home / **2** at
-office, **2 public ports** per sandbox, **20 GB** per saved image.
+Per user, per site: **2 sandboxes**, **24h** TTL, **1 GPU** per sandbox (office
+admins: 2), CPU sandboxes of **1 / 2 / 4 / 8** cores, **2 public ports** per
+sandbox, **20 GB** per saved image.
 
 The port pool is **shared across the whole site**, not per user — 16 ports, so
 8 sandboxes can publish 2 each at any one time. Every published port costs a
