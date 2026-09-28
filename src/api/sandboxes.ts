@@ -238,6 +238,8 @@ export interface SandboxList {
 	datasets_writable?: boolean;
 	/** Absent on a site not yet running a build that serves the pool. */
 	ports?: PortPool;
+	/** CPU-sandbox size menu; absent on older servers. See SiteCpuInfo. */
+	cpu?: SiteCpuInfo;
 }
 
 // ---------------------------------------------------------------------------
@@ -300,6 +302,24 @@ const sitePortPools = new Map<string, PortPool>();
  *  field that the server would 501 is worse than not offering it. */
 export function portPoolForSite(site: string): PortPool {
 	return sitePortPools.get(site) ?? { enabled: false };
+}
+
+/**
+ * The CPU-sandbox menu a site publishes (`cpu` on GET /api/sandboxes). `sizes` is the fixed set of
+ * core counts a CPU sandbox may have there (1/2/4/8 since 2026-09-28); empty means any size up to
+ * `max_cpu`. Absent entirely on an older sandbox-control — the form then sends no cpu at all and
+ * the server's default applies, rather than guessing a menu the server might refuse.
+ */
+export interface SiteCpuInfo {
+	sizes: number[];
+	max_cpu: number;
+	max_memory_gi: number;
+}
+
+const siteCpu = new Map<string, SiteCpuInfo>();
+
+export function cpuForSite(site: string): SiteCpuInfo | undefined {
+	return siteCpu.get(site);
 }
 
 const siteDatasetsWritable = new Map<string, boolean>();
@@ -459,6 +479,7 @@ export async function listSandboxesForSite(site: string): Promise<Sandbox[]> {
 		siteDatasetsWritable.set(site, r.data.datasets_writable);
 	}
 	if (r.data?.ports) sitePortPools.set(site, r.data.ports);
+	if (r.data?.cpu && Array.isArray(r.data.cpu.sizes)) siteCpu.set(site, r.data.cpu);
 	return (r.data?.sandboxes ?? []).map((s) => ({ ...s, site, gpus_free: s.gpus_free ?? gpusFree }));
 }
 
