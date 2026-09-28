@@ -13,6 +13,39 @@
 // (already auth-gated + tenant-scoped on the server) and the anon-read
 // `/findata-cloud/*` proxy — never arbitrary URLs. Unknown directive types
 // fall back to a labelled code block (graceful degradation).
+//
+// ── strategy-workspace additions (contract) ───────────────────────────────
+//
+//   source  me://strategies/<id>   one strategy (GET /me/strategies/:id);
+//           credential fields (spec_json, auth, *pat*, *token*) are stripped.
+//
+//   widget  code:  {source, path, language?, empty?, title?}
+//           Read-only text of ONE field; never dumps an object.
+//
+//   row/table action `fields[]`:
+//     type: select | text | textarea
+//     default: "{field}" | "{field|bump}" | literal      (row-interpolated)
+//     default_from: {source: "me://strategies/{strategy_id}", path: source}
+//     options_from: {source, path, value, label?}        (select only)
+//
+//   run_loop.await:
+//     await:
+//       intent: true
+//       claim_path: command_engine.claim_id            # or …claims[].claim_id
+//       then_poll:
+//         loop: backtest
+//         args: {action: poll, claim_id: "{claim_id}"}
+//         every_s: 20        # floored at 20
+//         max_s: 600         # capped at 3600
+//         done_when: "results[claim_id={claim_id}].claim_status in (done,failed)"
+//       show: verdict        # or compare
+//       title: "Backtest — {name}"      # optional
+//       axes: [{key, label, real: [..]}] # optional; default replay/signals/settlement
+//     Renders under the table (state survives the dialog and refetches).
+//
+//   table selection:  selectable: 2   (+ optional row_key)
+//     table `actions[]` entry with `uses_selection: true` runs on the checked
+//     rows; each `{field}` is the rows' values comma-joined.
 
 import { createContext, useContext, useId, useCallback, useMemo, Suspense, useEffect, useState, type ReactNode } from "react";
 import { askOrStash } from "@/components/chat/askBus";
@@ -35,6 +68,9 @@ import {
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from "@/components/ui/select";
+import { interpolateTemplate, mergeSelection } from "./await-run";
+import { type AwaitCfg, startTrackedRun } from "./await-driver";
+import { AwaitPanels } from "./AwaitPanels";
 
 // ── URL-param injection ─────────────────────────────────────────────────────
 //
@@ -159,6 +195,13 @@ export async function resolveSource(spec: string, force = false): Promise<unknow
         rows = rows.filter((r) => String(r.strategy_id ?? "") === cStrategy);
       }
       data = { chats: rows };
+    } else if (/^strategies\/[^/?]+$/.test(p)) {
+      // me://strategies/<id> — ONE strategy (GET /me/strategies/:id), for a
+      // detail page's code view and a redeploy dialog's `default_from`. Same
+      // tenant scoping as the list: the id is looked up under the session's
+      // own user, so another tenant's id 404s.
+      const sid = decodeURIComponent(p.slice("strategies/".length));
+      data = redactStrategy(await me.strategy(sid));
     } else if (p === "strategies" || p.startsWith("strategies?")) {
       // me://strategies[?strategy_id=<id>] — the caller's own LQT strategies.
       // Scoped server-side to the session's user id (an LQT tenant IS a lum.id
@@ -338,6 +381,28 @@ export async function resolveSource(spec: string, force = false): Promise<unknow
   }
   _cache.set(spec, { data, exp: Date.now() + CACHE_TTL });
   return data;
+}
+
+/** A single-strategy read with the credential-bearing fields removed.
+ *
+ * Until identity ships the redacted shape, GET /me/strategies/:id returns
+ * `spec_json` — the raw deploy spec, which embeds `auth.pat`. Nothing in a
+ * surface may render it, and a `table` with no `columns:` renders every key,
+ * so it is dropped HERE, before any widget can see it, rather than trusted to
+ * each widget. `source` (the DSL) is the field surfaces read; when the API
+ * does not provide it yet it is simply absent and widgets show their empty
+ * text. An `{strategy: {...}}` envelope is unwrapped. */
+function redactStrategy(raw: unknown): Record<string, unknown> {
+  let o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  if (o.strategy && typeof o.strategy === "object" && o.strategy_id == null) {
+    o = o.strategy as Record<string, unknown>;
+  }
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(o)) {
+    if (k === "spec_json" || k === "spec" || k === "auth" || /(^|_)pat($|_)|token|secret|password/i.test(k)) continue;
+    out[k] = v;
+  }
+  return out;
 }
 
 /** Dot-path getter. "" / "." / [] returns the root. */
@@ -600,8 +665,15 @@ type ActionFieldOption = { value: string; label?: string };
 type ActionField = {
   key: string;
   label?: string;
-  type?: "select" | "text";
+  // `textarea` — multi-line, monospace (a program body). Wraps; 12 rows.
+  type?: "select" | "text" | "textarea";
   options?: ActionFieldOption[];
+  // `type: select` — options read from an allowlisted source when the dialog
+  // opens, e.g. two "Strategy A/B" pickers over me://strategies:
+  //   options_from: { source: me://strategies, path: strategies,
+  //                   value: strategy_id, label: name }
+  // Static `options` (if any) are listed first.
+  options_from?: { source: string; path?: string; value: string; label?: string };
   // `type: text` only — a handful of known-good values offered via <datalist>
   // without forcing the field closed to a fixed set the way `select` does.
   // E.g. one deliberate non-real value (SYNTH) alongside free entry of a real
@@ -610,7 +682,15 @@ type ActionField = {
   // reference_backtest_tickers_decay_in_7_days.md) just to offer a hint.
   suggestions?: string[];
   placeholder?: string;
+  // Interpolated from the ROW when the dialog opens: `{field}`, dotted
+  // `{a.b}`, and filters `{field|bump}` (semver patch bump; non-semver gets
+  // `.1` appended), `{field|trim}`. A field the row lacks renders "".
   default?: string;
+  // Fetch the default when the dialog opens — for a value list rows do not
+  // carry (a strategy's source is not on me://strategies rows). `source` takes
+  // `{field}` from the row; a non-text result leaves `default` in place.
+  //   default_from: { source: "me://strategies/{strategy_id}", path: source }
+  default_from?: { source: string; path?: string };
   required?: boolean;
   // One line of context under the field — e.g. why this list is what it is.
   help?: string;
@@ -633,7 +713,20 @@ type ActionDef = {
   // run_loop — trigger an app loop with row-interpolated args, the per-row
   // counterpart of the section-level `action` widget's run_loop intent. Same
   // one intent path and the same audit story; the row supplies the arguments.
-  run_loop?: { app?: string; loop: string; args?: Record<string, unknown> };
+  //
+  // `await` — follow the dispatched cycle to a verdict ON THE PAGE instead of
+  // leaving the user to click "Poll result": wait for the cycle, read the claim
+  // id(s) at `claim_path`, re-dispatch `then_poll` (≥20s apart, ≤max_s) until
+  // `done_when` holds for each claim, then render a verdict panel (`show:
+  // verdict`) or a side-by-side table (`show: compare`) under the table. See
+  // await-driver.ts for the full contract.
+  run_loop?: { app?: string; loop: string; args?: Record<string, unknown>; await?: AwaitCfg };
+  // Table-level action only: run on the table's CHECKED rows (`selectable: N`
+  // on the table) instead of one row. Each `{field}` becomes the selected
+  // rows' values comma-joined in selection order. Disabled until
+  // `min_selected` (default: the table's `selectable`) rows are checked.
+  uses_selection?: boolean;
+  min_selected?: number;
   // fields — collect these BEFORE run_loop fires, in a dialog with the
   // `confirm` text as its prompt (or a generic "Confirm {label}" if unset).
   // A row action declaring fields never uses window.confirm — the dialog IS
@@ -712,8 +805,13 @@ export async function reportDispatchFailure(jobID: string, label: string): Promi
   }
 }
 
-function ActionButton({ a, row, onDone, size = "sm" }: {
+function ActionButton({ a, row: rowProp, onDone, size = "sm", scope = "", selection, minSelected = 0 }: {
   a: ActionDef; row?: Record<string, unknown>; onDone?: () => void; size?: "sm" | "xs";
+  // The widget this button belongs to — where an `await` verdict renders.
+  scope?: string;
+  // The table's checked rows, for a `uses_selection` action.
+  selection?: Record<string, unknown>[];
+  minSelected?: number;
 }) {
   const role = useContext(AuthContext)?.user?.role ?? "user";
   const appFromRoute = useRouteParams().app;
@@ -721,6 +819,13 @@ function ActionButton({ a, row, onDone, size = "sm" }: {
   const [busy, setBusy] = useState(false);
   const [fieldsOpen, setFieldsOpen] = useState(false);
   if (!roleAllows(role, a.gate)) return null;
+  // A selection action runs on the checked rows, merged into one row whose
+  // every field is the rows' values comma-joined — so `{strategy_id}` in its
+  // args reads "a,b" and everything else (confirm, success) works unchanged.
+  const selRows = a.uses_selection ? selection ?? [] : undefined;
+  const row = selRows ? mergeSelection(selRows) : rowProp;
+  const needSel = selRows ? Math.max(1, Number(a.min_selected) || minSelected || 1) : 0;
+  const selShort = !!selRows && selRows.length < needSel;
   const danger = a.variant === "danger";
   // Shared by the plain click path and the fields-dialog submit path. `extra`
   // — the dialog's collected values, keyed by field `key` — is interpolated
@@ -730,10 +835,11 @@ function ActionButton({ a, row, onDone, size = "sm" }: {
   const fireRunLoop = async (extra?: Record<string, string>) => {
     if (!a.run_loop?.loop) return;
     const merged: Record<string, unknown> = { ...(row ?? {}), ...(extra ?? {}) };
+    // `{field}`, `{a.b}` and `{field|bump}` — the same interpolation the
+    // dialog's defaults use, so a redeploy can send `version: "{version}"`
+    // (the dialog's bumped value) or bump inline.
     const interpVal = (v: unknown) =>
-      typeof v === "string"
-        ? v.replace(/\{([^}]+)\}/g, (_, k) => String(merged[k] ?? ""))
-        : v;
+      typeof v === "string" ? interpolateTemplate(v, merged) : v;
     const args = Object.fromEntries(
       Object.entries(a.run_loop.args ?? {}).map(([k, v]) => [k, interpVal(v)]),
     );
@@ -760,9 +866,25 @@ function ActionButton({ a, row, onDone, size = "sm" }: {
     // click that gives no id and no feedback to reference if it goes missing.
     const jobId = String(queued?.job_id ?? "");
     toast.success(jobId ? `${base} (job ${jobId})` : base);
-    // Fire-and-forget: the toast is already up, and this only ever ADDS an
-    // error if the dispatch actually failed.
-    void reportDispatchFailure(jobId, String(a.run_loop.loop));
+    const awaitCfg = a.run_loop.await;
+    if (awaitCfg && jobId) {
+      // Followed on the page: the tracked run reads the same intent, so it
+      // reports a failed dispatch itself (in the panel, with the reason).
+      const defTitle = `${a.label}${merged.name ? ` — ${String(merged.name)}` : ""}`;
+      startTrackedRun({
+        scope,
+        title: awaitCfg.title ? interpolateTemplate(awaitCfg.title, merged) : defTitle,
+        app: String(a.run_loop.app ?? appFromRoute ?? ""),
+        jobId,
+        cfg: awaitCfg,
+        rows: selRows ?? (rowProp ? [rowProp] : []),
+        baseVars: merged,
+      });
+    } else {
+      // Fire-and-forget: the toast is already up, and this only ever ADDS an
+      // error if the dispatch actually failed.
+      void reportDispatchFailure(jobId, String(a.run_loop.loop));
+    }
     onDone?.();
   };
   const run = async (e: React.MouseEvent) => {
@@ -783,9 +905,7 @@ function ActionButton({ a, row, onDone, size = "sm" }: {
     // already do. The raw template went to window.confirm, so a researcher
     // read "Submit a backtest for {name}?" (found 2026-09-25).
     if (a.confirm) {
-      const prompt = row
-        ? a.confirm.replace(/\{([^}]+)\}/g, (_, k) => String(row[k] ?? ""))
-        : a.confirm;
+      const prompt = row ? interpolateTemplate(a.confirm, row) : a.confirm;
       if (!window.confirm(prompt)) return;
     }
     // The action's LABEL, never the row. A row can carry a strategy id, a
@@ -859,9 +979,10 @@ function ActionButton({ a, row, onDone, size = "sm" }: {
     : "border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-800";
   return (
     <>
-      <button onClick={run} disabled={busy}
+      <button onClick={run} disabled={busy || selShort}
+        title={selShort ? `Check ${needSel} row${needSel === 1 ? "" : "s"} in the table first` : undefined}
         className={cn("inline-flex items-center rounded-md border bg-white transition-colors disabled:opacity-50", pad, tone)}>
-        {busy ? "…" : a.label}
+        {busy ? "…" : selRows ? `${a.label} (${selRows.length}/${needSel})` : a.label}
       </button>
       {a.fields?.length ? (
         <ActionFieldsDialog
@@ -898,22 +1019,81 @@ function ActionFieldsDialog({ a, row, open, onCancel, onSubmit }: {
   // bare `f.key` would collide across rows and every list would show
   // whichever row rendered last.
   const idPrefix = useId();
-  const interp = (s: string) =>
-    row ? s.replace(/\{([^}]+)\}/g, (_, k) => String(row[k] ?? "")) : s;
+  const interp = (s: string) => (row ? interpolateTemplate(s, row) : s);
+  // `default` is a row template (`{version|bump}`, `{source}`), not a literal.
   const initial = () => Object.fromEntries(
-    fields.map((f) => [f.key, f.default ?? f.options?.[0]?.value ?? ""]),
+    fields.map((f) => [
+      f.key,
+      f.default != null ? interpolateTemplate(f.default, row) : f.options?.[0]?.value ?? "",
+    ]),
   );
   const [values, setValues] = useState<Record<string, string>>(initial);
+  // Per-field async state for default_from / options_from.
+  const [loadingKeys, setLoadingKeys] = useState<Record<string, boolean>>({});
+  const [fieldNote, setFieldNote] = useState<Record<string, string>>({});
+  const [dynOptions, setDynOptions] = useState<Record<string, ActionFieldOption[]>>({});
   // Re-seed defaults each time the dialog OPENS. Keyed on `open` alone: a
   // polled table (`poll: 30`) hands every row a fresh object on each refetch,
   // so depending on `row` wiped whatever the user had typed mid-dialog — the
   // "Window ends" date cleared itself (FLB-QR-02). Each row mounts its own
   // dialog, so a different row's pick can't leak in without `row` here.
-  useEffect(() => { if (open) setValues(initial()); }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    const seed = initial();
+    setValues(seed);
+    setFieldNote({});
+    let live = true;
+    for (const f of fields) {
+      if (f.default_from?.source) {
+        const src = interpolateTemplate(f.default_from.source, row);
+        setLoadingKeys((m) => ({ ...m, [f.key]: true }));
+        // force: a redeploy must start from the CURRENT body, not a 30s-old one.
+        resolveSource(src, true)
+          .then((d) => {
+            if (!live) return;
+            const v = getPath(d, f.default_from?.path);
+            if (typeof v === "string" && v !== "") {
+              // Only if the user has not started typing over the default.
+              setValues((cur) => (cur[f.key] === seed[f.key] ? { ...cur, [f.key]: v } : cur));
+            } else {
+              setFieldNote((n) => ({ ...n, [f.key]: "The current value is not available from the API — starting from the default." }));
+            }
+          })
+          .catch((e) => {
+            if (live) setFieldNote((n) => ({ ...n, [f.key]: `Could not load the current value (${String(e?.message ?? e)}).` }));
+          })
+          .finally(() => { if (live) setLoadingKeys((m) => ({ ...m, [f.key]: false })); });
+      }
+      if (f.type === "select" && f.options_from?.source) {
+        const of = f.options_from;
+        resolveSource(interpolateTemplate(of.source, row))
+          .then((d) => {
+            if (!live) return;
+            const list = getPath(d, of.path);
+            const opts = (Array.isArray(list) ? list : [])
+              .filter((r): r is Record<string, unknown> => !!r && typeof r === "object")
+              .map((r) => ({
+                value: String(getPath(r, of.value) ?? ""),
+                label: String(getPath(r, of.label ?? of.value) ?? getPath(r, of.value) ?? ""),
+              }))
+              .filter((o) => o.value !== "");
+            setDynOptions((m) => ({ ...m, [f.key]: opts }));
+          })
+          .catch(() => { if (live) setDynOptions((m) => ({ ...m, [f.key]: [] })); });
+      }
+    }
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
   const missing = fields.some((f) => f.required !== false && !values[f.key]);
+  const stillLoading = Object.values(loadingKeys).some(Boolean);
   return (
     <AlertDialog open={open} onOpenChange={(o) => { if (!o) onCancel(); }}>
-      <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+      <AlertDialogContent
+        onClick={(e) => e.stopPropagation()}
+        // A program body needs width; scroll inside rather than off-screen.
+        className={fields.some((f) => f.type === "textarea") ? "sm:max-w-3xl max-h-[90vh] overflow-y-auto" : undefined}
+      >
         <AlertDialogHeader>
           <AlertDialogTitle>{a.confirm ? interp(a.confirm) : `Confirm ${a.label}`}</AlertDialogTitle>
           <AlertDialogDescription>
@@ -931,7 +1111,20 @@ function ActionFieldsDialog({ a, row, open, onCancel, onSubmit }: {
             return (
             <div key={f.key} className="space-y-1">
               <label htmlFor={inputId} className="text-[12px] font-medium text-slate-700">{f.label ?? f.key}</label>
-              {f.type === "text" ? (
+              {f.type === "textarea" ? (
+                <textarea
+                  id={inputId}
+                  aria-required={req}
+                  aria-describedby={helpId}
+                  value={values[f.key] ?? ""}
+                  placeholder={loadingKeys[f.key] ? "Loading current value…" : f.placeholder}
+                  disabled={!!loadingKeys[f.key]}
+                  rows={12}
+                  spellCheck={false}
+                  onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+                  className="w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[12px] font-mono leading-relaxed whitespace-pre-wrap break-words resize-y min-h-[120px] disabled:opacity-60"
+                />
+              ) : f.type === "text" ? (
                 <>
                   <input
                     id={inputId}
@@ -959,13 +1152,14 @@ function ActionFieldsDialog({ a, row, open, onCancel, onSubmit }: {
                     <SelectValue placeholder={f.placeholder ?? "Select…"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {(f.options ?? []).map((o) => (
+                    {[...(f.options ?? []), ...(dynOptions[f.key] ?? [])].map((o) => (
                       <SelectItem key={o.value} value={o.value}>{o.label ?? o.value}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               )}
               {f.help && <p id={helpId} className="text-[11px] text-slate-400">{f.help}</p>}
+              {fieldNote[f.key] && <p className="text-[11px] text-amber-700" role="status">{fieldNote[f.key]}</p>}
             </div>
             );
           })}
@@ -979,7 +1173,7 @@ function ActionFieldsDialog({ a, row, open, onCancel, onSubmit }: {
           </button>
           <button
             onClick={() => onSubmit(values)}
-            disabled={missing}
+            disabled={missing || stillLoading}
             className="inline-flex items-center rounded-md border border-gold-300 bg-gold-500 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-gold-600 disabled:opacity-50"
           >
             Submit
@@ -1008,6 +1202,14 @@ function LumidTable({ body }: { body: Body }) {
   // key, instant as you type. Use search-table for search; use search_keys to
   // find a row in a list you already have.
   const [query, setQuery] = useState("");
+  // `selectable: N` — a checkbox column; at most N rows can be checked, and
+  // table-level actions with `uses_selection: true` run on them. Keyed by a
+  // row VALUE (`row_key:`, else id / strategy_id / key / name) so a polled
+  // refetch, which hands back new row objects, keeps the checks.
+  const [selected, setSelected] = useState<string[]>([]);
+  // Where this table's awaited runs render. Stable across refetches and
+  // re-renders; two tables on a page differ by source/path/title.
+  const scope = `table|${String(body.source ?? "")}|${String(body.path ?? "")}|${String(body.title ?? "")}`;
 
   const cols = (body.columns as ColDef[] | undefined) ?? [];
   const searchKeys = Array.isArray(body.search_keys)
@@ -1145,6 +1347,22 @@ function LumidTable({ body }: { body: Body }) {
 
   const tableActions = (body.actions as ActionDef[] | undefined)?.filter((a) => a && a.label) ?? [];
   const rowActions = (body.row_actions as ActionDef[] | undefined)?.filter((a) => a && a.label) ?? [];
+  const selectMax = Math.max(0, Math.floor(Number(body.selectable) || 0));
+  const rowKeyField = typeof body.row_key === "string" && body.row_key
+    ? body.row_key
+    : ["id", "strategy_id", "key", "name"].find((k) => rowArr.some((r) => r?.[k] != null && r[k] !== "")) ?? "";
+  const rowKeyOf = (r: Record<string, unknown>) => (rowKeyField ? String(getPath(r, rowKeyField) ?? "") : "");
+  const selectedRows = selected
+    .map((k) => rowArr.find((r) => rowKeyOf(r) === k))
+    .filter((r): r is Record<string, unknown> => !!r);
+  const toggleSelected = (k: string) =>
+    setSelected((cur) => (cur.includes(k) ? cur.filter((x) => x !== k) : cur.length >= selectMax ? cur : [...cur, k]));
+  const selectOn = selectMax > 0 && !!rowKeyField;
+  const panels = <AwaitPanels scope={scope} />;
+  const actionBar = (
+    <ActionBar actions={tableActions} onDone={refetch} scope={scope}
+      selection={selectOn ? selectedRows : undefined} minSelected={selectMax} />
+  );
 
   if (rowArr.length === 0) {
     // Still show table-level actions (e.g. an admin "Reset all") even with no
@@ -1166,11 +1384,12 @@ function LumidTable({ body }: { body: Body }) {
     ) : (
       <div className="text-[12px] text-slate-600">{authored ?? "No rows."}</div>
     );
-    if (!tableActions.length) return empty;
+    if (!tableActions.length) return <>{empty}{panels}</>;
     return (
       <div className="space-y-2">
-        <ActionBar actions={tableActions} onDone={refetch} />
+        {actionBar}
         {empty}
+        {panels}
       </div>
     );
   }
@@ -1215,7 +1434,7 @@ function LumidTable({ body }: { body: Body }) {
     const statCols = columns.filter((c) => c !== titleCol && c !== badgeCol);
     return (
       <div className="space-y-2">
-        {tableActions.length > 0 && <ActionBar actions={tableActions} onDone={refetch} />}
+        {tableActions.length > 0 && actionBar}
         {searchBox}
         {sortedRows.length === 0 && (
           <div className="text-[12px] text-slate-400">{filteredEmptyText(query, body, showHidden ? 0 : hiddenRows.length)}</div>
@@ -1243,13 +1462,14 @@ function LumidTable({ body }: { body: Body }) {
                 </div>
                 {rowActions.length > 0 && (
                   <div className="flex gap-1.5 mt-2 pt-2 border-t border-slate-100">
-                    {rowActions.map((a, ai) => <ActionButton key={ai} a={a} row={row} onDone={refetch} size="xs" />)}
+                    {rowActions.map((a, ai) => <ActionButton key={ai} a={a} row={row} onDone={refetch} size="xs" scope={scope} />)}
                   </div>
                 )}
               </div>
             );
           })}
         </div>
+        {panels}
       </div>
     );
   }
@@ -1261,7 +1481,7 @@ function LumidTable({ body }: { body: Body }) {
     <div className="space-y-2">
       {(tableActions.length > 0 || pollSec > 0) && (
         <div className="flex items-center gap-2">
-          {tableActions.length > 0 && <ActionBar actions={tableActions} onDone={refetch} />}
+          {tableActions.length > 0 && actionBar}
           {pollSec > 0 && (
             <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-gold-600">
               <span className="w-1.5 h-1.5 rounded-full bg-gold-500 animate-pulse" /> Live
@@ -1277,6 +1497,11 @@ function LumidTable({ body }: { body: Body }) {
         <table className="min-w-full text-[12px] border-collapse">
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
+              {selectOn && (
+                <th className="w-8 px-2 py-1.5 text-left font-normal text-[10px] text-slate-400 whitespace-nowrap" title={`Check up to ${selectMax}`}>
+                  {selected.length}/{selectMax}
+                </th>
+              )}
               {columns.map((c) => {
                 const sortable = isSortable(c);
                 return (
@@ -1302,6 +1527,24 @@ function LumidTable({ body }: { body: Body }) {
               const trCls = "group border-b border-slate-100 last:border-b-0" + (href ? " hover:bg-slate-50 cursor-pointer" : "");
               return (
                 <tr key={i} className={trCls} onClick={href ? () => goHref(href) : undefined}>
+                  {selectOn && (() => {
+                    const k = rowKeyOf(row);
+                    const on = !!k && selected.includes(k);
+                    const full = !on && selected.length >= selectMax;
+                    return (
+                      <td className="w-8 px-2 py-1.5 align-top" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={on}
+                          disabled={!k || full}
+                          onChange={() => k && toggleSelected(k)}
+                          aria-label={`Select ${String(row.name ?? k)}`}
+                          title={full ? `At most ${selectMax} — uncheck one first` : undefined}
+                          className="h-3.5 w-3.5 accent-gold-600 cursor-pointer disabled:cursor-not-allowed"
+                        />
+                      </td>
+                    );
+                  })()}
                   {columns.map((c, ci) => {
                     const cellValue = resolveCell(row, c);
                     const cell = <>{
@@ -1325,7 +1568,7 @@ function LumidTable({ body }: { body: Body }) {
                     // row would otherwise overflow; a narrow table keeps one line.
                     <td className={cn("sticky right-0 z-[1] bg-white px-2.5 py-1.5 text-right align-top shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.15)]", href && "group-hover:bg-slate-50")}>
                       <span className="inline-flex flex-wrap gap-1.5 justify-end" onClick={(e) => e.stopPropagation()}>
-                        {rowActions.map((a, ai) => <ActionButton key={ai} a={a} row={row} onDone={refetch} size="xs" />)}
+                        {rowActions.map((a, ai) => <ActionButton key={ai} a={a} row={row} onDone={refetch} size="xs" scope={scope} />)}
                       </span>
                     </td>
                   )}
@@ -1336,18 +1579,25 @@ function LumidTable({ body }: { body: Body }) {
         </table>
       </div>
       )}
+      {panels}
     </div>
   );
 }
 
 // Table-level action row (e.g. an admin "Reset all"). Buttons self-hide by gate.
-function ActionBar({ actions, onDone }: { actions: ActionDef[]; onDone?: () => void }) {
+function ActionBar({ actions, onDone, scope, selection, minSelected }: {
+  actions: ActionDef[]; onDone?: () => void; scope?: string;
+  selection?: Record<string, unknown>[]; minSelected?: number;
+}) {
   const role = useContext(AuthContext)?.user?.role ?? "user";
   const visible = actions.filter((a) => roleAllows(role, a.gate));
   if (!visible.length) return null;
   return (
     <div className="flex flex-wrap gap-1.5">
-      {visible.map((a, i) => <ActionButton key={i} a={a} onDone={onDone} />)}
+      {visible.map((a, i) => (
+        <ActionButton key={i} a={a} onDone={onDone} scope={scope}
+          selection={a.uses_selection ? selection ?? [] : undefined} minSelected={minSelected} />
+      ))}
     </div>
   );
 }
@@ -1429,6 +1679,67 @@ function LumidList({ body }: { body: Body }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+// lumid:code — one TEXT field of a source, shown read-only as code.
+//
+//   ```lumid:code
+//   title: Source
+//   source: me://strategies/{strategy_id}
+//   path: source            # required: the field to show
+//   language: lqts          # optional, a label only (no highlighting)
+//   empty: No source recorded for this strategy.
+//   ```
+//
+// Only a string (or number) at `path` is rendered. An object or array there
+// is NOT dumped as JSON — this widget exists to show a program body, and a
+// whole response object is exactly what must never land on screen by
+// accident (a strategy's raw spec carries a credential). Long lines wrap;
+// Copy puts the exact text on the clipboard.
+function LumidCode({ body }: { body: Body }) {
+  const { data, loading, error, pending } = useSource(body.source as string | undefined);
+  const [copied, setCopied] = useState(false);
+  if (pending) return <PendingLine token={pending} />;
+  if (loading) return <Loading />;
+  if (error) return <ErrLine msg={error} />;
+  const path = typeof body.path === "string" ? body.path : "";
+  const v = path ? getPath(data, path) : typeof data === "string" ? data : undefined;
+  const text = typeof v === "string" ? v : typeof v === "number" ? String(v) : "";
+  const emptyText = typeof body.empty === "string" && body.empty.trim() ? body.empty.trim() : "Nothing to show.";
+  if (!text.trim()) {
+    const why = v != null && typeof v === "object"
+      ? " (the field is not text, so it is not shown)"
+      : !path ? " (this block needs a `path:`)" : "";
+    return <div className="text-[12px] text-slate-500">{emptyText}{why}</div>;
+  }
+  const lang = typeof body.language === "string" ? body.language : "";
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error("Could not copy — select the text instead.");
+    }
+  };
+  return (
+    <div className="relative rounded-md border border-slate-200 bg-slate-50">
+      <div className="flex items-center justify-between px-2.5 py-1 border-b border-slate-200 text-[11px] text-slate-500">
+        <span className="font-mono">{lang}</span>
+        <button
+          type="button"
+          onClick={copy}
+          aria-label="Copy to clipboard"
+          className="inline-flex items-center rounded border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-600 hover:bg-slate-100 min-h-[24px]"
+        >
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      <pre className="m-0 max-h-[480px] overflow-auto p-3 text-[12px] leading-relaxed font-mono text-slate-800 whitespace-pre-wrap break-words">
+        <code>{text}</code>
+      </pre>
+    </div>
   );
 }
 
@@ -2137,6 +2448,7 @@ const WIDGETS: Record<string, (p: { body: Body }) => React.ReactElement> = {
   workflow: LumidWorkflow,
   "compute-workflow": LumidComputeWorkflow,
   ask: LumidAsk,
+  code: LumidCode,
 };
 
 /** Returns true for fenced-block classNames that are Lumid directives. */

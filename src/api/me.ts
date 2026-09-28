@@ -352,6 +352,12 @@ export const me = {
     reason?: string;
     scan_failures?: number;
   }>("GET", "/strategies"),
+  // One strategy by registry id — GET /me/strategies/:id, tenant-scoped the
+  // same way. Carries `source` (the DSL) once identity ships it; today's
+  // response may instead carry `spec_json`, which embeds a credential and is
+  // stripped by the me://strategies/<id> resolver before any widget sees it.
+  strategy: (id: string) =>
+    call<Record<string, unknown>>("GET", `/strategies/${encodeURIComponent(id)}`),
 
   // FinData SQL — self-service warehouse credentials.
   //
