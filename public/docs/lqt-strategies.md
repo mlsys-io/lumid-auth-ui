@@ -201,22 +201,22 @@ Rules: a signal may reference earlier signals but not itself or a later one (com
 | `signal_mid("name")` | scalar (ticks) | that signal's published mid price (fail-loud if absent) |
 | `signal_conf("name")` | scalar (bps) | that signal's confidence, in basis points |
 | `params.<name>` | scalar | a declared parameter |
-| `ctx("...")` | scalar / bool | runtime context — see below |
+| `ctx("...")` | scalar | runtime context — see below (flags read as `0`/`1`) |
 
 **Platform signals** (`signal("name")`): named values your LQT deployment publishes into the `lqt.signals` table (via a `signal.publish` producer) for strategies to consume. The set is **open / deployment-defined** — any lowercase name a producer has published is readable; there is no fixed enum. Currently deployed signal names include `outcome_forecast`, `ofi_z`, `vpin` — but which are live is specific to your deployment. Discover them by asking your operator (or, with DB access, `SELECT DISTINCT signal_name FROM lqt.signals`), or just compute your own inline signals, which need no setup.
 
 Each signal row carries three fields the accessors read: `signal("x")` → the score, `signal_conf("x")` → confidence in basis points, `signal_mid("x")` → the producer's mid snapshot (**fails loud if the producer didn't publish a mid** — only use it for signals you know carry one).
 
-**`ctx(...)` context reads** (all fail-safe with documented defaults):
+**`ctx(...)` context reads** (all fail-safe with documented defaults). Every `ctx(...)` is a **scalar** — the yes/no ones read `0` or `1`, not `true`/`false` — so a guard must compare it: write `when ctx("instrument_tradable") > 0 { ... }`, not `when ctx("instrument_tradable") { ... }` (rejected: `expected bool, found scalar`).
 
 | Call | Returns | Absent default |
 |---|---|---|
 | `ctx("mid_staleness_s")` | seconds since the mid last updated | `i64::MAX` (fail-closed) |
 | `ctx("time_to_resolution_s")` | seconds until the market resolves | `i64::MAX` |
-| `ctx("oracle_settled")` | bool — has the oracle settled? | `false` |
-| `ctx("instrument_tradable")` | bool | `false` |
-| `ctx("tenant_active")` | bool | — |
-| `ctx("kill_global_engaged")` / `ctx("kill_tenant_engaged")` | bool — kill-switch state | — |
+| `ctx("oracle_settled")` | `0`/`1` — has the oracle settled? | `0` |
+| `ctx("instrument_tradable")` | `0`/`1` | `1` |
+| `ctx("tenant_active")` | `0`/`1` | `1` |
+| `ctx("kill_global_engaged")` / `ctx("kill_tenant_engaged")` | `0`/`1` — kill-switch state | `0` |
 
 **Bounded NegRisk cross-instrument** (for multi-outcome baskets in the same equivalence class):
 
@@ -229,7 +229,7 @@ Each signal row carries three fields the accessors read: `signal("x")` → the s
 
 ### 3.5 `when` rules, guards, branching
 
-A guard is a **boolean** expression. `when signal("x") > 0 { ... }` is valid; a bare scalar guard (`when signal("x") { }`) is rejected.
+A guard is a **boolean** expression. `when signal("x") > 0 { ... }` is valid; a bare scalar guard (`when signal("x") { }`) is rejected with `expected bool, found scalar`. The same holds for anything that *means* yes/no but is a number — `ctx("...")` flags and your own `signal` definitions (e.g. `signal observation_gate = ...`): compare them (`> 0`, `== 1`). Combine conditions with `&&` / `||` after comparing each one: `when observation_gate > 0 && ctx("instrument_tradable") > 0 { ... }`.
 
 ```lqts
 # Independent rules — each fires on its own:
