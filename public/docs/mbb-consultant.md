@@ -147,12 +147,16 @@ was asking for market sizing — market size and growth, top producers and share
 average margins, target segments. It scored **0 out of 13 keypoints**, correctly.
 The judge is not grading eloquence.
 
+![A scored answer in the chat: the judge panel covered 10 of 13 keypoints on Q1 (2 judges), then the interviewer moves to Q2. The counter on the left reads Turns scored.](/docs/img/mbb-chat-scored.png)
+
 ## Read your score
 
 Open **Workflows → interview** (or **case_eval** for a batch) to see what ran, on
 which case, what it scored, and whether it was backed by ground truth.
 
 ![The Workflows tab: the interview and case_eval loops, each with its metric and case set.](/docs/img/mbb-workflows.png)
+
+![The interview loop's run tree: each answered turn carries its score (0.54, 0.38); turns that only opened a case or asked for facts show Not scored.](/docs/img/mbb-interview-runs.png)
 
 **Read the `Mode` column first.**
 
