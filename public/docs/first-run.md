@@ -6,6 +6,9 @@ recorded result, and where something failed or misled it says so — this is a
 transcript, not a brochure.
 
 > **Changelog**
+> - **2026-09-28** — Button names as the product shows them: Marketplace's
+>   **Add to my account** (was "install" / **Install**), and **Interview me** to
+>   start an MBB session (was **Start**, which does not exist). Each is now checked.
 > - **2026-09-20** — Folded the AI Consulting walkthrough in as **§10**, so both
 >   cohort tracks live on one onboarding page. Also: **Experiments** and
 >   **Proposals** are tabs again — the 2026-09-05 note below says they became
@@ -112,8 +115,9 @@ sidebar entry does not exist until you add it. This is the step most people
 miss, because anyone who has been here a while already has it.
 
 Open **[Marketplace](https://lum.id/studio/library/marketplace)** in the
-sidebar, find **Quant Research**, and install it. It is public, so nothing
-needs approving.
+sidebar, find **Quant Research**, and click **Add to my account**. It is
+public, so nothing needs approving; once added, the button reads **Added ·
+Open**.
 
 Afterwards it appears in the sidebar with **four tabs**:
 
@@ -797,7 +801,7 @@ Either route works:
 
 - **New account** — the onboarding page's *Consulting & research* card installs
   it and drops you straight into it.
-- **Any account** — Marketplace → search `mbb-consultant` → **Install**.
+- **Any account** — Marketplace → search `mbb-consultant` → **Add to my account**.
 
 Give it 10–20 seconds. It is ready when the app appears in your sidebar under
 **Research** and its Overview page renders a case browser.
@@ -833,7 +837,8 @@ is asking whom, and it is the single choice that changes the whole session.
 | **Ask anything** | Your own question, no case file. Same analyst, same rubric. | Your consulting question | **Indicative only — no ground truth** |
 
 Pick **AI interviews you** for your first session. It is the one that scores
-*you*, which is what most people came for. Press **Start** — that opens the chat
+*you*, which is what most people came for. Pick a case, then press **Interview
+me** — that opens the chat
 already grounded in the case, so you do not paste anything or repeat the case
 name.
 
