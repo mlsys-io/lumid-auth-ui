@@ -18,7 +18,90 @@ import { me, waitForIntent, MeApiError, type MeExperiment, type MeExperimentArm,
 import { askOrStash } from "@/components/chat/askBus";
 import { fetchCasebook } from "@/api/casebook";
 import { cn } from "@/lib/utils";
+import { Link, useSearchParams } from "react-router-dom";
+import { runPath, runRowHref, workflowPath } from "@/lib/run-routes";
+import { cycleStatus } from "@/lib/runStatus";
 import NewExperiment from "./NewExperiment";
+
+// An arm's runs, read from the loop's cycle list: each cycle carries the
+// `branch_label` it was dispatched under, which IS the arm id. This is what
+// lets an arm row link to the runs that fed it — before, the only path from
+// "tape_covered · 3 runs" to those three runs was reading timestamps by eye.
+type RunRef = { n: number; latest: string; latestOk?: boolean };
+type ArmRuns = { all: RunRef | null; arms: Record<string, RunRef> };
+// One cycle-list read per app:loop per 30s, however many cards ask for it.
+const armRunsCache = new Map<string, { at: number; p: Promise<ArmRuns> }>();
+function loadArmRuns(app: string, loop: string): Promise<ArmRuns> {
+	const key = `${app} ${loop}`;
+	const hit = armRunsCache.get(key);
+	if (hit && Date.now() - hit.at < 30_000) return hit.p;
+	const p = me.cyclesList(app, loop, 200).then(({ cycles }) => {
+		const out: ArmRuns = { all: null, arms: {} };
+		const add = (cur: RunRef | null | undefined, ts: string, ok: boolean): RunRef => {
+			if (!cur) return { n: 1, latest: ts, latestOk: ok };
+			cur.n += 1;
+			if (ts > cur.latest) { cur.latest = ts; cur.latestOk = ok; }
+			return cur;
+		};
+		for (const c of cycles || []) {
+			if (!c.ts) continue;
+			const ok = cycleStatus(c).status === "succeeded";
+			out.all = add(out.all, c.ts, ok);
+			if (c.branch_label) out.arms[c.branch_label] = add(out.arms[c.branch_label], c.ts, ok);
+		}
+		return out;
+	});
+	armRunsCache.set(key, { at: Date.now(), p });
+	p.catch(() => armRunsCache.delete(key));
+	return p;
+}
+function useArmRuns(app: string, loop: string): ArmRuns | null {
+	const [m, setM] = useState<ArmRuns | null>(null);
+	useEffect(() => {
+		if (!loop) { setM({ all: null, arms: {} }); return; }
+		let live = true;
+		loadArmRuns(app, loop)
+			.then((r) => { if (live) setM(r); })
+			.catch(() => { if (live) setM({ all: null, arms: {} }); });
+		return () => { live = false; };
+	}, [app, loop]);
+	return m;
+}
+// The loop an experiment's runs come from: the declared dispatch loop when it
+// is attached, else the first attached loop (same rule as ArmsBlock).
+function expLoop(e: MeExperiment): string {
+	const hinted = e.dispatch?.loop;
+	return (hinted && e.loops?.includes(hinted) ? hinted : e.loops?.[0]) || "";
+}
+
+/** The runs behind an experiment, always visible on the card (outside the
+ *  collapse): the workflow page, one link per arm filtered to it, and the
+ *  latest run. */
+function ExperimentRunLinks({ app, e }: { app: string; e: MeExperiment }) {
+	const loop = expLoop(e);
+	const runs = useArmRuns(app, loop);
+	if (!loop) return null;
+	const armIds = [...new Set([...(e.arms || []).map((a) => String(a.id)), ...Object.keys(runs?.arms || {})])];
+	return (
+		<div className="flex items-center gap-x-2.5 gap-y-1 flex-wrap px-4 pb-2.5 -mt-1 text-[11px]">
+			<Link to={workflowPath(app, loop)} className="text-gold-700 hover:underline font-medium" title={`The ${loop} workflow's runs`}>
+				Runs of {loop}{runs?.all ? ` (${runs.all.n})` : ""} →
+			</Link>
+			{armIds.map((id) => (
+				<Link key={id} to={workflowPath(app, loop, { arm: id })} className="font-mono text-slate-600 hover:text-slate-900 hover:underline"
+					title={`Runs dispatched as arm "${id}"`}>
+					{id}{runs?.arms[id] ? ` · ${runs.arms[id].n}` : " · 0"}
+				</Link>
+			))}
+			{runs?.all && (
+				<Link to={runPath(app, loop, runs.all.latest)} className={cn("hover:underline", runs.all.latestOk ? "text-slate-600" : "text-rose-600")}
+					title="Open the latest run of this workflow">
+					latest run{runs.all.latestOk ? "" : " (failed)"}
+				</Link>
+			)}
+		</div>
+	);
+}
 
 const KIND_LABEL: Record<string, string> = {
 	regression: "regression",
@@ -97,6 +180,7 @@ function DeltaVsBest({ e, vid }: { e: MeExperiment; vid: string }) {
 function ArmRunStatus(
 	{ app, loop, sentAt, inChat }: { app: string; loop?: string; sentAt?: number; inChat?: boolean },
 ) {
+	// "ran ✓" / "failed" are links to THE run they report on.
 	const [row, setRow] = useState<MeRunRow | null>(null);
 	const [gaveUp, setGaveUp] = useState(false);
 
@@ -141,14 +225,14 @@ function ArmRunStatus(
 		return <span className="text-[11px] text-violet-600 whitespace-nowrap">running…</span>;
 	}
 	if (row.state === "succeeded") {
-		return <span className="text-[11px] text-emerald-600 whitespace-nowrap">ran ✓</span>;
+		return <Link to={runRowHref(row.run_id)} className="text-[11px] text-emerald-600 whitespace-nowrap hover:underline" title="Open this run">ran ✓</Link>;
 	}
 	// THE PART THAT WAS MISSING. `reason` carries the cycle's own error.
 	return (
-		<span className="text-[11px] text-rose-600 whitespace-nowrap max-w-[220px] truncate"
+		<Link to={runRowHref(row.run_id)} className="text-[11px] text-rose-600 whitespace-nowrap max-w-[220px] truncate hover:underline"
 			title={row.reason || "The run failed; the cycle recorded no reason."}>
 			failed{row.reason ? ` — ${row.reason}` : ""}
-		</span>
+		</Link>
 	);
 }
 
@@ -444,13 +528,13 @@ function ArmsBlock({ app, e }: { app: string; e: MeExperiment }) {
 	// one experiment, the declaration's dispatch.loop picks the one that is
 	// self-sufficient for a button (it must still be ATTACHED — a hint naming
 	// a foreign loop is ignored, matching resolveExperimentArm server-side).
-	const hinted = e.dispatch?.loop;
-	const loop = (hinted && e.loops?.includes(hinted) ? hinted : e.loops?.[0]) || "";
+	const loop = expLoop(e);
 	// dispatch.ask means the run needs a SUBJECT this button cannot know
 	// (which strategy, which case). The surface shows; the chat acts — hand
 	// the dispatch to the rail with the app's own question instead of firing
 	// a run that returns "strategy is empty" and measures nothing.
 	const needsSubject = !!e.dispatch?.ask;
+	const armRuns = useArmRuns(app, loop)?.arms;
 
 	const run = useCallback(async (armId: string, cfg: MeExperimentArm) => {
 		if (!loop) return;
@@ -527,6 +611,23 @@ function ArmsBlock({ app, e }: { app: string; e: MeExperiment }) {
 										: <span className="text-[11px] text-violet-600">· never run</span>}
 								</div>
 								{a.description && <div className="text-[11px] text-slate-600 truncate">{String(a.description)}</div>}
+								{/* THE RUNS THAT FED THIS ARM — the workflow page filtered to it,
+								    and its latest run. */}
+								{loop && (
+									<div className="flex items-center gap-2 mt-0.5 text-[11px]">
+										<Link to={workflowPath(app, loop, { arm: id })} className="text-gold-700 hover:underline"
+											title={`The ${loop} runs dispatched as arm "${id}"`}>
+											{armRuns?.[id] ? `${armRuns[id].n} run${armRuns[id].n === 1 ? "" : "s"} of ${loop} →` : `runs of ${loop} →`}
+										</Link>
+										{armRuns?.[id] && (
+											<Link to={runPath(app, loop, armRuns[id].latest)}
+												className={cn("hover:underline", armRuns[id].latestOk ? "text-slate-600" : "text-rose-600")}
+												title="Open this arm's latest run">
+												latest run{armRuns[id].latestOk ? "" : " (failed)"}
+											</Link>
+										)}
+									</div>
+								)}
 							</div>
 							{!runnable ? (
 								<span className="text-[11px] text-slate-600 whitespace-nowrap"
@@ -578,18 +679,28 @@ function ArmsBlock({ app, e }: { app: string; e: MeExperiment }) {
 }
 
 export function ExperimentCard({ app, e, showApp = false, onChanged }: { app: string; e: MeExperiment; showApp?: boolean; onChanged?: () => void }) {
-	const [open, setOpen] = useState(false);
+	// Which card is open is URL state (?exp=<id>), so an opened experiment is a
+	// link and survives a reload.
+	const [params, setParams] = useSearchParams();
+	const open = params.get("exp") === e.id;
+	const setOpen = (v: boolean) => {
+		const sp = new URLSearchParams(params);
+		if (v) sp.set("exp", e.id); else sp.delete("exp");
+		setParams(sp, { replace: true });
+	};
 	const [detail, setDetail] = useState<MeExperimentDetail | null>(null);
 	const [loading, setLoading] = useState(false);
-	const toggle = useCallback(async () => {
-		const next = !open;
-		setOpen(next);
-		if (next && !detail) {
-			setLoading(true);
-			try { setDetail(await me.experiment(app, e.id)); } catch { /* keep card */ }
-			setLoading(false);
-		}
+	useEffect(() => {
+		if (!open || detail) return;
+		let live = true;
+		setLoading(true);
+		me.experiment(app, e.id)
+			.then((d) => { if (live) setDetail(d); })
+			.catch(() => { /* keep card */ })
+			.finally(() => { if (live) setLoading(false); });
+		return () => { live = false; };
 	}, [open, detail, app, e.id]);
+	const toggle = () => setOpen(!open);
 
 	const metricName = e.metric_name || e.metric?.name || "";
 	const dir = (e.higher_is_better ?? e.metric?.higher_is_better ?? true) ? "higher is better" : "lower is better";
@@ -682,6 +793,7 @@ export function ExperimentCard({ app, e, showApp = false, onChanged }: { app: st
 					</div>
 				)}
 			</button>
+			<ExperimentRunLinks app={app} e={e} />
 
 			{open && (
 				<div className="border-t border-slate-100 px-4 py-3 space-y-3 bg-slate-50/40">
@@ -760,7 +872,9 @@ export function ExperimentCard({ app, e, showApp = false, onChanged }: { app: st
 												{variants.sort((a, b) => (b[1].mean ?? 0) - (a[1].mean ?? 0)).map(([vid, agg]) => (
 													<tr key={vid} className={cn("border-b border-slate-50 last:border-0", vid === e.best_variant && "bg-gold-50/50")}>
 														<td className="px-3 py-1.5 text-slate-700 font-mono truncate max-w-[180px]">
-															{vid}{vid === e.best_variant && <span className="ml-1.5 text-[11px] text-gold-600 font-sans font-medium">best</span>}
+															{e.loops?.[0]
+																? <Link to={workflowPath(app, e.dispatch?.loop && e.loops.includes(e.dispatch.loop) ? e.dispatch.loop : e.loops[0], { arm: vid })} className="hover:underline" title={`Runs of arm "${vid}"`}>{vid}</Link>
+																: vid}{vid === e.best_variant && <span className="ml-1.5 text-[11px] text-gold-600 font-sans font-medium">best</span>}
 															{e.baseline === vid && <span className="ml-1.5 text-[11px] text-slate-600 font-sans">baseline</span>}
 														</td>
 														<td className="px-2 py-1.5 text-right tabular-nums font-medium text-slate-800">{fmtV(agg.mean)}</td>

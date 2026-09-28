@@ -22,6 +22,8 @@ import { run as runXpioChecks, caseCount as xpioCaseCount } from "./xpio.test";
 import { run as runImportChecks, caseCount as importCaseCount } from "./import.test";
 import { run as runCycleIdChecks, caseCount as cycleIdCaseCount } from "@/lib/cycle-id.test";
 import { run as runAwaitChecks, caseCount as awaitCaseCount } from "@/components/app-surface/await-run.test";
+import { run as runRunStatusChecks, caseCount as runStatusCaseCount } from "@/lib/runStatus.test";
+import { run as runRouteChecks, caseCount as routeCaseCount } from "@/lib/run-routes.test";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -350,7 +352,7 @@ check("isEmptyLoop is true only when nothing is declared", () => {
 export function run(): number {
 	// The document round-trip suite runs in the same process — it is the
 	// invariant everything else is built on, so it must never be skippable.
-	let failed = runDocChecks() + runEditChecks() + runFmChecks() + runXpioChecks() + runImportChecks() + runCycleIdChecks() + runAwaitChecks();
+	let failed = runDocChecks() + runEditChecks() + runFmChecks() + runXpioChecks() + runImportChecks() + runCycleIdChecks() + runAwaitChecks() + runRunStatusChecks() + runRouteChecks();
 	for (const c of checks) {
 		try {
 			c.run();
@@ -375,10 +377,10 @@ if (typeof describe === "function" && typeof it === "function") {
 	const proc = (globalThis as { process?: { exitCode?: number } }).process;
 	if (failed > 0) {
 		// eslint-disable-next-line no-console
-		console.error(`${failed} of ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount + cycleIdCaseCount + awaitCaseCount} case(s) failed`);
+		console.error(`${failed} of ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount + cycleIdCaseCount + awaitCaseCount + runStatusCaseCount + routeCaseCount} case(s) failed`);
 		if (proc) proc.exitCode = 1;
 	} else {
 		// eslint-disable-next-line no-console
-		console.log(`workflow core: all ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount + cycleIdCaseCount + awaitCaseCount} cases passed`);
+		console.log(`workflow core: all ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount + cycleIdCaseCount + awaitCaseCount + runStatusCaseCount + routeCaseCount} cases passed`);
 	}
 }

@@ -8,6 +8,7 @@
 // (connect Google, missing skill, …) keep their own row, because
 // their CTA differs. Renders nothing when everything is healthy.
 
+import { workflowPath } from "@/lib/run-routes";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, ArrowRight, MessagesSquare } from "lucide-react";
@@ -53,7 +54,7 @@ export default function NeedsAttentionRail({ loops }: { loops: LoopHealth[] }) {
 			node: (
 				<li key={`s:${l.app}:${l.loop}`} className="flex items-center gap-2 min-w-0">
 					<Link
-						to={`/studio/apps/${encodeURIComponent(l.app)}?selected=${encodeURIComponent(l.loop)}`}
+						to={workflowPath(l.app, l.loop)}
 						className="text-[11.5px] font-medium text-slate-700 hover:text-slate-900 transition-colors truncate flex-shrink-0 max-w-[220px]"
 					>
 						{appTitle(l.app)} · {loopLabel(undefined, l.loop)}
@@ -84,7 +85,7 @@ export default function NeedsAttentionRail({ loops }: { loops: LoopHealth[] }) {
 			node: (
 				<li key={`g:${app}`} className="flex items-center gap-2 min-w-0">
 					<Link
-						to={`/studio/apps/${encodeURIComponent(app)}?selected=${encodeURIComponent(ls[0].loop)}`}
+						to={workflowPath(app, ls[0].loop)}
 						className="text-[11.5px] font-medium text-slate-700 hover:text-slate-900 transition-colors flex-shrink-0"
 					>
 						{appTitle(app)}
@@ -104,7 +105,7 @@ export default function NeedsAttentionRail({ loops }: { loops: LoopHealth[] }) {
 						<MessagesSquare className="w-3 h-3" />Diagnose
 					</button>
 					<Link
-						to={`/studio/apps/${encodeURIComponent(app)}?selected=${encodeURIComponent(ls[0].loop)}`}
+						to={workflowPath(app, ls[0].loop)}
 						className="text-slate-400 hover:text-slate-700 transition-colors flex-shrink-0"
 						title={`Open ${appTitle(app)}`}
 					>

@@ -113,9 +113,10 @@ export interface ViewingContext {
 }
 
 /**
- * Derive the ViewingContext from the current location. `search` is the
- * query string (location.search) — ?selected=<loop> and &cycle=<ts>
- * carry the open observability panel on /studio/apps/:app.
+ * Derive the ViewingContext from the current location. A workflow and a run
+ * are addresses — /studio/apps/:app/w/:loop[/r/:runId] (lib/run-routes.ts);
+ * the older query form (?selected=<loop>&cycle=<ts>) is still read for the
+ * one frame before it redirects.
  * `override` (from a studio:ask event) wins field-by-field.
  */
 export function buildViewingContext(
@@ -130,10 +131,11 @@ export function buildViewingContext(
 	if ((m = pathname.match(/^\/studio\/apps\/([^/]+)/))) {
 		ctx.page = 'app';
 		ctx.app = decodeURIComponent(m[1]);
-		const sel = q.get('selected');
-		if (sel) ctx.loop = sel;
-		const cy = q.get('cycle');
-		if (cy && ctx.app && sel) ctx.cycle = { app: ctx.app, loop: sel, ts: cy };
+		const wm = pathname.match(/^\/studio\/apps\/[^/]+\/w\/([^/]+)(?:\/r\/([^/]+))?/);
+		const sel = wm ? decodeURIComponent(wm[1]) : q.get('selected');
+		if (sel && sel !== '__overview__') ctx.loop = sel;
+		const cy = wm ? (wm[2] ? decodeURIComponent(wm[2]) : null) : q.get('cycle');
+		if (cy && ctx.app && ctx.loop) ctx.cycle = { app: ctx.app, loop: ctx.loop, ts: cy };
 	} else if (pathname.startsWith('/studio/apps')) {
 		ctx.page = 'apps';
 	} else if ((m = pathname.match(/^\/studio\/a\/([^/]+)/))) {

@@ -20,12 +20,14 @@
 //     A row with no runs now says nothing there.
 
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { type MeWorkflowRow } from "@/api/me";
 import RunSparkline from "@/components/RunSparkline";
 import { loopLabel } from "@/lib/workflow-names";
 import { describeSchedule, parseSchedule } from "@/lib/schedule";
 import { TONES, workflowTone } from "@/lib/tones";
 import { cn } from "@/lib/utils";
+import { RUN_STATUS_LABEL } from "@/lib/runStatus";
 
 export type WfListRow = { loop: string; wf: MeWorkflowRow };
 
@@ -72,24 +74,22 @@ function relTime(ts?: number): string {
 	return `${Math.round(h / 24)}d ago`;
 }
 
-function Row({ loop, wf, active, onSelect }: WfListRow & { active: boolean; onSelect: (l: string) => void }) {
-	return (
-		<li>
-			<button
-				type="button"
-				onClick={() => onSelect(loop)}
-				className={cn(
-					"w-full text-left rounded-lg border px-2.5 py-2 transition-colors",
-					active ? "border-gold-300 bg-gold-50/50" : "border-slate-200 bg-white hover:bg-slate-50",
-				)}
-			>
+function Row({ loop, wf, active, onSelect, href }: WfListRow & { active: boolean; onSelect: (l: string) => void; href?: string }) {
+	const cls = cn(
+		"block w-full text-left rounded-lg border px-2.5 py-2 transition-colors",
+		active ? "border-gold-300 bg-gold-50/50" : "border-slate-200 bg-white hover:bg-slate-50",
+	);
+	// A row is a LINK when the host can name the workflow's address, so it can
+	// be opened in a new tab and reads as navigation to assistive tech.
+	const body = (
+		<>
 				<div className="flex items-center gap-2 min-w-0">
 					<span className={cn("w-2 h-2 rounded-full flex-shrink-0", dotOf(wf))} />
 					<span className="text-[12.5px] font-medium text-slate-800 truncate flex-1">
 						{loopLabel(wf.name, loop)}
 					</span>
 					{wf.last_run_ok === false && wf.enabled !== false && (
-						<span className="text-[9px] font-medium text-rose-600 bg-rose-50 border border-rose-200 rounded-full px-1.5 flex-shrink-0">failed</span>
+						<span className="text-[9px] font-medium text-rose-600 bg-rose-50 border border-rose-200 rounded-full px-1.5 flex-shrink-0" title="last run failed">{RUN_STATUS_LABEL.failed.toLowerCase()}</span>
 					)}
 					{/* Only render the sparkline when there ARE runs — an empty one
 					    drew a dash that read as a broken metric binding. */}
@@ -120,15 +120,23 @@ function Row({ loop, wf, active, onSelect }: WfListRow & { active: boolean; onSe
 						)}
 					</div>
 				)}
-			</button>
+		</>
+	);
+	return (
+		<li>
+			{href
+				? <Link to={href} className={cls} onClick={(e) => { if (!e.metaKey && !e.ctrlKey && !e.shiftKey && e.button === 0) { e.preventDefault(); onSelect(loop); } }}>{body}</Link>
+				: <button type="button" onClick={() => onSelect(loop)} className={cls}>{body}</button>}
 		</li>
 	);
 }
 
-export default function WorkflowList({ rows, selected, onSelect }: {
+export default function WorkflowList({ rows, selected, onSelect, hrefFor }: {
 	rows: WfListRow[];
 	selected: string | null;
 	onSelect: (loop: string) => void;
+	/** The workflow page's address — rows render as links when given. */
+	hrefFor?: (loop: string) => string;
 }) {
 	const [showPlumbing, setShowPlumbing] = useState(false);
 	const primary = sortWorkflowRows(rows.filter((r) => !isPlumbing(r.wf)));
@@ -143,7 +151,7 @@ export default function WorkflowList({ rows, selected, onSelect }: {
 			    "failed" badge, so the count was redundant. */}
 			<ul className="space-y-1">
 				{primary.map(({ loop, wf }) => (
-					<Row key={loop} loop={loop} wf={wf} active={selected === loop} onSelect={onSelect} />
+					<Row key={loop} loop={loop} wf={wf} active={selected === loop} onSelect={onSelect} href={hrefFor?.(loop)} />
 				))}
 			</ul>
 			{plumbing.length > 0 && (
@@ -160,7 +168,7 @@ export default function WorkflowList({ rows, selected, onSelect }: {
 					{plumbingOpen && (
 						<ul className="space-y-1 mt-1">
 							{plumbing.map(({ loop, wf }) => (
-								<Row key={loop} loop={loop} wf={wf} active={selected === loop} onSelect={onSelect} />
+								<Row key={loop} loop={loop} wf={wf} active={selected === loop} onSelect={onSelect} href={hrefFor?.(loop)} />
 							))}
 						</ul>
 					)}

@@ -14,7 +14,8 @@
 
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { legacyAppQueryTarget, workflowPath } from "@/lib/run-routes";
 import { ChevronRight, ChevronDown, Check, ArrowRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2, Inbox, Loader2, RotateCcw, X, Plus, MoreHorizontal, SlidersHorizontal, Settings, Pencil, Cpu, Cloud, Workflow, Clock, Database, DownloadCloud, UploadCloud, BarChart3 } from "lucide-react";
 import {
 	DropdownMenu,
@@ -845,9 +846,13 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 	// pills. The depth guard stops it rendering the surface; it must also stop it
 	// claiming the strip.
 	const appSlotTarget = usePortalTarget("topstrip-wf-slot", !!embedded && !nestedInSurface);
-	const [params, setParams] = useSearchParams();
-	const selected = params.get("selected");
-	const initialCycle = params.get("cycle"); // deep-link anchor → open that run
+	const [params] = useSearchParams();
+	const location = useLocation();
+	// A workflow and a run are addresses now (/studio/apps/:app/w/:loop[/r/:runId],
+	// lib/run-routes.ts). The old ?selected=<loop>&cycle=<ts> query form is
+	// redirected into them below; `selected` still carries ?selected=__overview__.
+	const { loop: routeLoop, runId: routeRunId } = useParams<{ loop?: string; runId?: string }>();
+	const selected = routeLoop || params.get("selected");
 
 	// "About this app" — the app's own summary, folded into the overview.
 	const [about, setAbout] = useState<string>(() => aboutCache.get(app) ?? "");
@@ -914,20 +919,13 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 
 	// Master–detail selection: there is ALWAYS a selected workflow (the
 	// detail column never goes empty), so selecting never deselects.
-	const select = (loop: string) => {
-		const sp = new URLSearchParams(params);
-		sp.set("selected", loop);
-		setParams(sp, { replace: true });
-		// Mobile: the detail renders below the list — bring it into view.
-		window.setTimeout(() => document.getElementById("wf-detail")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
-	};
+	// Selecting a workflow NAVIGATES (pushes history) to its page, so Back
+	// returns to the list it was picked from — including the app's own
+	// Workflows tab, whose nested overview calls this too.
+	const select = (loop: string) => navigate(workflowPath(app, loop));
 	// Show the app-level overview LIST — the "Overview" tab (opt-in; the panel
 	// is the default view).
-	const selectOverview = () => {
-		const sp = new URLSearchParams(params);
-		sp.set("selected", OVERVIEW_SEL);
-		setParams(sp, { replace: true });
-	};
+	const selectOverview = () => navigate(`/studio/apps/${encodeURIComponent(app)}?selected=${OVERVIEW_SEL}`);
 
 	// App-level delete is offered for every app: the uninstall intent now
 	// archives operator-shared apps (e.g. auto-quant) too — it resolves the
@@ -986,11 +984,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 			await me.deleteLoop(app, loop);
 			toast.success(`Removed workflow "${label}"`);
 			rowsCache.delete(app);
-			if (selected === loop) {
-				const sp = new URLSearchParams(params);
-				sp.delete("selected");
-				setParams(sp, { replace: true });
-			}
+			if (selected === loop) navigate(`/studio/apps/${encodeURIComponent(app)}`, { replace: true });
 			await load();
 		} catch (e) {
 			toast.error(`Delete failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -1029,6 +1023,23 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 	const validInitial = initialLoop && rows?.some((r) => r.loop === initialLoop) ? initialLoop : null;
 	const effSelected = overviewMode ? null : (validSelected ?? validInitial ?? freshestLoop);
 	const selectedRow = rows?.find((r) => r.loop === effSelected) ?? null;
+
+	// OLD ADDRESSES → NEW. `?selected=<loop>[&cycle=<ts>]` was the only way to
+	// name a workflow or a run, and every older surface (chat cards, saved
+	// threads, the top-strip ticker, app row_hrefs) still emits it. Replace, not
+	// push: the old URL is not a page anyone should come Back to. Only the
+	// OUTERMOST overview redirects — a nested one (an app surface mounting
+	// `app-workflows`) sees the same URL and would race it.
+	//
+	// A workflow app with NOTHING chosen lands on its freshest workflow (the
+	// historical default); that landing is now its address too, so the page a
+	// reader sees is always the page a reload restores.
+	useEffect(() => {
+		if (nestedInSurface || routeLoop) return;
+		const legacy = legacyAppQueryTarget(app, location.search);
+		if (legacy) { navigate(legacy, { replace: true }); return; }
+		if (!selected && !overviewMode && effSelected) navigate(workflowPath(app, effSelected), { replace: true });
+	}, [nestedInSurface, routeLoop, app, location.search, selected, overviewMode, effSelected, navigate]);
 
 	return (
 		<div className="space-y-5">
@@ -1285,7 +1296,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 								) : (
 									<div className="space-y-2">
 										<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-500 uppercase">Workflows</div>
-										<WorkflowList rows={rows} selected={null} onSelect={select} />
+										<WorkflowList rows={rows} selected={null} onSelect={select} hrefFor={(l) => workflowPath(app, l)} />
 									</div>
 								)}
 							</div>
@@ -1296,7 +1307,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 										app={app} loop={selectedRow.loop} wf={selectedRow.wf} loopHealth={selectedRow.lh}
 										identity={identity}
 										onChanged={load}
-										initialCycle={(effSelected === (selected ?? initialLoop)) ? initialCycle : null}
+										runId={routeLoop && effSelected === routeLoop ? (routeRunId ?? null) : null}
 										canDelete={isTenantApp && rows.length > 1}
 										onDelete={() => delLoop(selectedRow.loop, loopLabel(selectedRow.wf.name, selectedRow.loop))}
 									/>

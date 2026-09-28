@@ -1,3 +1,4 @@
+import { runPath } from "@/lib/run-routes";
 // effects — declarative maps from tool names to their UI side effects.
 //
 //   TOOL_EFFECTS: tool → data scopes it invalidates. When a mutating
@@ -138,7 +139,7 @@ export function toolLink(name: string, result?: Record<string, unknown>, args?: 
 		case 'cycle_detail': {
 			const ts = String(result.ts || result.cycle_ts || '');
 			return appName && loop && ts
-				? { to: `/studio/apps/${encodeURIComponent(appName)}?selected=${encodeURIComponent(loop)}&cycle=${encodeURIComponent(ts)}`, label: 'Open run' }
+				? { to: runPath(appName, loop, ts), label: 'Open run' }
 				: undefined;
 		}
 		case 'app_detail':
