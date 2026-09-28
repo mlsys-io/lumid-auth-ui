@@ -10,7 +10,12 @@
 //   • view trajectory log  — wired: parent opens TrajectoryLogView at this ts
 //   • explain score        — wired: parent opens the provenance view
 //   • pin / annotate       — wired: parent's annotate hook (chat-grounded)
-//   • promote / discard     — RUNTIME (me.promoteRun / me.discardRun)
+//   • promote / discard     — RUNTIME (me.promoteRun / me.discardRun). These CHANGE
+//                             the run's standing, so they sit apart in a separated
+//                             "Change this run" section at the bottom and need a
+//                             second click to confirm ("Discard — click again to
+//                             confirm"). They used to sit right under "View run
+//                             log", one mis-click from dropping a run's learning.
 //
 // RUNTIME items render even when the backend isn't ready: a 404/501 (MeApiError)
 // is caught and shown as a "runtime coming" toast, and the item is visually
@@ -126,6 +131,9 @@ export default function RunContextMenu({
 	// won't work yet. Keyed by op name.
 	const [pending, setPending] = useState<Record<string, boolean>>({});
 	const [busy, setBusy] = useState<string | null>(null);
+	// Two-step confirm for the state-changing ops: the first click ARMS the item
+	// (its label turns into the confirm prompt), the second fires it.
+	const [armed, setArmed] = useState<null | "promote" | "discard">(null);
 	const isRun = target.kind === "run" && !!target.ts;
 
 	// Keep the menu on-screen: measure it and clamp into the viewport (flips up /
@@ -215,11 +223,37 @@ export default function RunContextMenu({
 						onClick={() => { onToggleCompare(target.ts!); onClose(); }} />
 					<Row icon={RefreshCw} label="Re-run from here" busy={busy === "rerun"} pending={pending["rerun"]}
 						onClick={() => runtimeOp("rerun", () => launchAndReport(actions.app, actions.loop, { from_run_ts: target.ts }), "Re-running from this point…")} />
-					<Row icon={ArrowUpCircle} label="Promote to champion" tone="gold" sub="make this run the default config carried forward" busy={busy === "promote"} pending={pending["promote"]}
-						onClick={() => runtimeOp("promote", () => me.promoteRun(actions.app, target.ts!), "Promoted — this run is now the champion carried forward.")} />
-					<Row icon={XCircle} label="Discard this run" tone="danger" sub="drop its learning — not carried forward" busy={busy === "discard"} pending={pending["discard"]}
-						onClick={() => runtimeOp("discard", () => me.discardRun(actions.app, target.ts!), "Discarded — this run's learning won't carry forward.")} />
 				</>
+			)}
+
+			{/* ── CHANGE THIS RUN — state-changing, kept apart + confirm-gated ── */}
+			{isRun && mode !== "observe" && (
+				<div className="mt-2 bg-slate-50/60 pb-0.5">
+					<Section label="Change this run" />
+					<Row icon={ArrowUpCircle}
+						label={armed === "promote" ? "Promote — click again to confirm" : "Promote to champion"}
+						tone="gold"
+						sub={armed === "promote" ? "this run's config becomes the default carried forward" : "make this run the default config carried forward"}
+						busy={busy === "promote"} pending={pending["promote"]}
+						onClick={() => {
+							if (armed !== "promote") { setArmed("promote"); return; }
+							setArmed(null);
+							runtimeOp("promote", () => me.promoteRun(actions.app, target.ts!), "Promoted — this run is now the champion carried forward.");
+						}} />
+					<Row icon={XCircle}
+						label={armed === "discard" ? "Discard — click again to confirm" : "Discard this run"}
+						tone="danger"
+						sub={armed === "discard" ? "its learning will not be carried forward" : "drop its learning — not carried forward"}
+						busy={busy === "discard"} pending={pending["discard"]}
+						onClick={() => {
+							if (armed !== "discard") { setArmed("discard"); return; }
+							setArmed(null);
+							runtimeOp("discard", () => me.discardRun(actions.app, target.ts!), "Discarded — this run's learning won't carry forward.");
+						}} />
+					{armed && (
+						<button onClick={() => setArmed(null)} className="w-full px-3 py-1 text-[11px] text-slate-500 hover:text-slate-800 text-left">Cancel</button>
+					)}
+				</div>
 			)}
 		</div>
 	);

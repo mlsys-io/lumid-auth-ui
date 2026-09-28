@@ -11,6 +11,8 @@
 //   { ret_code: number, message: string, data: any }
 // We unwrap `.data` on success and throw on non-2xx or non-zero ret_code.
 
+import { toCycleId } from "@/lib/cycle-id";
+
 export const ME_BASE =
   // Vite-inlined env. In prod (lum.id deploy) and xp.io/go deploy both
   // call lum.id since that's where lumid-identity lives.
@@ -911,10 +913,15 @@ export const me = {
   // review queue) + staged steps. Keyed by the cycle dir-id carried in
   // MeWorkflowRow.runs_recent[].ts — that's what makes sparkline dots
   // addressable.
+  //
+  // `ts` may also be the run store's UNIX SECONDS (run-tree nodes carry
+  // `run_ts` in that form); the endpoint only resolves the dir-id, so it is
+  // normalised HERE rather than at each of the ~8 call sites — one of which
+  // (TrajectoryGraph "Open pipeline") forgot and 404'd.
   cycleDetail: (app: string, loop: string, ts: string) =>
     call<MeCycleDetail>(
       "GET",
-      `/cycles/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/${encodeURIComponent(ts)}`,
+      `/cycles/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/${encodeURIComponent(toCycleId(ts))}`,
     ),
 
   // ── Latest output (DB-backed) ───────────────────────────────────

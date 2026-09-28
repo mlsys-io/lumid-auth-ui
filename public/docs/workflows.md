@@ -511,8 +511,9 @@ workflow** on any app's **Workflows** or **Experiments** surface. Paste or
 upload a definition, or start from the example that is already in the box.
 
 There is no *Studio → Workflows → New* path: the sidebar has no Workflows
-entry, and `/studio/workflows` is the **Workflow Market** — shared templates to
-import, not your own workflows and not a place to create one.
+entry. `/studio/workflows` takes you to your apps, and
+[`/studio/workflows/market`](/studio/workflows/market) is the **Workflow Market** —
+shared templates to import, not your own workflows and not a place to create one.
 
 **Design** and **YAML** are two views of one document. Switching between them
 does not convert anything — there is nothing to convert.

@@ -12,7 +12,7 @@
 // shared apps ("Healthy · ran 2d ago" next to an empty runs list) — when
 // the cycles list is empty this card says "Not run yet", full stop.
 
-import { Fragment, lazy, Suspense, useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import {
@@ -35,7 +35,8 @@ import { parseSchedule } from "@/lib/schedule";
 import { loopLabel } from "@/lib/workflow-names";
 import FailureCard from "@/components/workflow/FailureCard";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import TrajectoryGraph, { type TrajectoryVersion } from "@/components/workflow/TrajectoryGraph";
+import { toCycleId } from "@/lib/cycle-id";
+import TrajectoryGraph, { type TrajectoryVersion, type RunOutcomes, treeShowsScores, runOutcomeLabel } from "@/components/workflow/TrajectoryGraph";
 import { fetchTrajectory, type Trajectory, type TrajectoryNode } from "@/api/trajectory";
 import { useStudioRefetch } from "@/hooks/useStudioRefetch";
 import { usePortalTarget } from "@/hooks/usePortalTarget";
@@ -167,8 +168,9 @@ function navReducer(stack: ViewFrame[], action: NavAction): ViewFrame[] {
 // up one-for-one with its nodes: baseline, v1, v2, … in order. Each dot is
 // colored by trend vs baseline and clicking it pins that version. Replaces the
 // old loop-health RunSparkline, whose runs didn't correspond to the tree.
-function VersionDots({ app, loop, currentId, onPick }: {
+function VersionDots({ app, loop, currentId, onPick, outcomes }: {
 	app: string; loop: string; currentId?: string; onPick?: (v: TrajectoryVersion) => void;
+	outcomes?: RunOutcomes;
 }) {
 	const [traj, setTraj] = useState<Trajectory | null>(null);
 	const [expanded, setExpanded] = useState(false); // "+N" click → show the full strip
@@ -201,10 +203,19 @@ function VersionDots({ app, loop, currentId, onPick }: {
 	// reads as a broken metric binding, which is the exact confusion this
 	// surface was rebuilt to remove. The run-tree node already words it this
 	// way; the dot tooltip was the last place still showing the dash.
+	//
+	// Except on a loop that records no per-run score at all (command loops such
+	// as backtest / analyze): there every run was "not scored", which says
+	// nothing. Show the run's outcome + duration instead (same rule as the
+	// run-tree node, treeShowsScores / runOutcomeLabel in TrajectoryGraph).
+	const showsScores = treeShowsScores(traj);
 	const scoreLabel = (v?: number | null) => (v == null ? "not scored" : fmt(v));
+	const runLabel = (n: TrajectoryNode) => n.score != null ? fmt(n.score)
+		: showsScores ? "not scored"
+		: runOutcomeLabel(n, outcomes);
 	const label = (n: TrajectoryNode) => n.kind === "baseline"
 		? `baseline · ${scoreLabel(baseline)}`
-		: `${n.agent_version || "run"}${n.model ? ` · ${n.model}` : ""} · ${scoreLabel(n.score)}`;
+		: [n.agent_version || "run", n.model, runLabel(n)].filter(Boolean).join(" · ");
 	// Cap the strip: show the baseline + the last 6 runs (and always the
 	// selected one); older runs collapse into a "+N" marker so the dots never
 	// crowd the title line.
@@ -315,7 +326,17 @@ export default function WorkflowObservabilityPanel({
 	// null = still loading; [] = confirmed zero tenant runs.
 	const [cycleList, setCycleList] = useState<Array<{ ts: string; ok?: boolean; running?: boolean; duration_s?: number; cost_usd?: number; total_tokens?: number }> | null>(null);
 	// Deep-link anchor (?cycle=…) — the run the pipeline/inspector overlays.
-	const [anchorTs] = useState<string | null>(initialCycle || null);
+	// Follows the URL: it used to be read ONCE into state, so a second deep link
+	// into an already-mounted panel (same app, new ?cycle=) changed nothing.
+	// Normalised to the cycle-dir id at the source: an app surface's row_href
+	// interpolates the run store's unix seconds (`?cycle=1788663446`), which the
+	// raw /me/cycles/:ts fetches and StageDetail's matching below don't parse.
+	const [anchorTs, setAnchorTs] = useState<string | null>(toCycleId(initialCycle) || null);
+	// Set whenever a deep link arrives; the scroll effect below consumes it once
+	// the stage detail has actually mounted (it is gated on tenantHasRuns, which
+	// is unknown until /me/cycles answers — scrolling earlier hit a null ref).
+	const deepScrollRef = useRef<boolean>(!!initialCycle);
+	const prevInitialCycle = useRef<string | null>(initialCycle || null);
 	const [summary, setSummary] = useState<CycleSummary | null>(cached0?.summary ?? null);
 	const [cycleFiles, setCycleFiles] = useState<Record<string, unknown>>({});
 	// DB-backed fallback. cycleFiles comes from cycleDetail, which reads the
@@ -335,14 +356,31 @@ export default function WorkflowObservabilityPanel({
 	// Arriving with a ?cycle anchor opens the Learn stage (the run's outcome)
 	// on that cycle, so "Open full cycle" lands on real content immediately.
 	const [selectedStage, setSelectedStage] = useState<LoopStageKey | null>(initialCycle ? "learn" : null);
+	useEffect(() => {
+		const next = initialCycle || null;
+		if (next === prevInitialCycle.current) return;
+		prevInitialCycle.current = next;
+		setAnchorTs(toCycleId(next) || null);
+		if (next) { setSelectedStage("learn"); deepScrollRef.current = true; }
+	}, [initialCycle]);
 	const [stageQ, setStageQ] = useState("");
 	const prevTsRef = useRef<string | null>(null);
 	// Run inspector lives full-width below the Runs/Data grid; scroll it into
 	// view when a run is opened so the click doesn't feel like nothing happened.
 	const inspectorRef = useRef<HTMLDivElement | null>(null);
+	// (tenantHasRuns is declared further down; read via cycleList here.)
+	const stageMounted = !!selectedStage && (cycleList?.length ?? 0) > 0;
 	useEffect(() => {
-		if (selectedStage) inspectorRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-	}, [selectedStage, anchorTs]);
+		if (!stageMounted || !inspectorRef.current) return;
+		if (deepScrollRef.current) {
+			// A ?cycle= deep link lands on the stage detail, which sits below the
+			// run tree + rail (below the fold even at 1800px). Bring its top in.
+			deepScrollRef.current = false;
+			inspectorRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+			return;
+		}
+		inspectorRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+	}, [selectedStage, anchorTs, stageMounted]);
 	// Canvas (n8n-style node view): the loop's declared structure +
 	// the selected run's per-step overlay + the click-a-node inspector.
 	const [definition, setDefinition] = useState<LoopDefinition | null>(null);
@@ -477,11 +515,11 @@ export default function WorkflowObservabilityPanel({
 			// minutes after the cycle and doesn't match the dir MeCycleDetail
 			// looks up. Mismatch was the "cycle not found" + empty offers bug.
 			const list = await apiClient.get(
-				`/api/v1/me/cycles?app=${encodeURIComponent(app)}&loop=${encodeURIComponent(loop)}&limit=20`,
+				`/api/v1/me/cycles?app=${encodeURIComponent(app)}&loop=${encodeURIComponent(loop)}&limit=50`,
 			);
 			const cycles = (list.data?.data?.cycles ?? []) as Array<{ ts: string; ok?: boolean; running?: boolean; duration_s?: number }>;
 			cycles.sort((a, b) => (b.ts || "").localeCompare(a.ts || ""));
-			setCycleList(cycles.slice(0, 30));
+			setCycleList(cycles.slice(0, 50));
 			const ts = cycles[0]?.ts;
 			if (!ts) { setCycleTs(null); setSummary(null); cycleCache.set(cacheKey, { ts: null, summary: null }); return; }
 			// A newer cycle than last poll → a run just landed: flash it.
@@ -603,6 +641,18 @@ export default function WorkflowObservabilityPanel({
 		return owner ? `${owner}/${app}` : undefined;
 	})();
 	const cyclesKnown = cycleList !== null;
+	// Outcome + duration per run (cycle-dir id → row) for the run tree / version
+	// dots on loops that record no per-run score.
+	// Keyed on a content signature, not the array: the 20s poll replaces
+	// cycleList every time, and an identity change here would rebuild every
+	// run-tree node even when nothing moved.
+	const outcomesSig = JSON.stringify((cycleList ?? []).map((c) => [c.ts, c.ok, c.running, c.duration_s]));
+	const runOutcomes = useMemo<RunOutcomes>(() => {
+		const m: RunOutcomes = {};
+		for (const [ts, ok, running, duration_s] of JSON.parse(outcomesSig) as Array<[string, boolean | undefined, boolean | undefined, number | undefined]>)
+			if (ts) m[ts] = { ok: ok ?? undefined, running: running ?? undefined, duration_s: duration_s ?? undefined };
+		return m;
+	}, [outcomesSig]);
 	const tenantHasRuns = (cycleList?.length ?? 0) > 0;
 	useEffect(() => {
 		let cancelled = false;
@@ -826,7 +876,7 @@ export default function WorkflowObservabilityPanel({
 			{(() => {
 				const controls = (
 					<div className="flex items-center gap-1.5 flex-wrap min-w-0">
-						<VersionDots app={app} loop={loop} currentId={version?.runTs || version?.cycleTs} onPick={pinVersion} />
+						<VersionDots app={app} loop={loop} currentId={version?.runTs || version?.cycleTs} onPick={pinVersion} outcomes={runOutcomes} />
 						<span className="w-px h-5 bg-slate-200 mx-0.5" aria-hidden />
 						{onShare && assetTab !== "data" && (
 							<>
@@ -920,6 +970,7 @@ export default function WorkflowObservabilityPanel({
 							mode="improve" headerRight={statusChip}
 							onShowLog={(ts) => openLog({ runTs: ts, cycleTs: ts, label: cycleDate(ts) || ts })}
 							actions={menuActions}
+							outcomes={runOutcomes} selectTs={anchorTs}
 							selectedForCompare={compareSel} onToggleCompare={toggleCompare} />
 					)}
 					</div>

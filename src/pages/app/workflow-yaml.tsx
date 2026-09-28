@@ -91,7 +91,7 @@ export default function AppWorkflowYaml() {
 			});
 			// Land on the saved workflow itself. This used to go to /dashboard —
 			// a redirect to /studio — so a save looked like it went nowhere, and
-			// the draft was listed on no page (/studio/workflows shows only the
+			// the draft was listed on no page (/studio/workflows/market shows only the
 			// published market).
 			nav(`/studio/workflows/mine?id=${encodeURIComponent(String(id ?? ''))}&saved=1`);
 		} catch (e: unknown) {

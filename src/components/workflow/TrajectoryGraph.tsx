@@ -38,6 +38,7 @@ import StepInspectorPanel from "@/components/workflow/StepInspectorPanel";
 import { ReviewQueue, OffersPanel, type ReviewItem, type CompoundOffer } from "@/pages/studio/inspector";
 import { useStudioRefetch } from "@/hooks/useStudioRefetch";
 import { cn } from "@/lib/utils";
+import { toCycleId } from "@/lib/cycle-id";
 
 // Ground the Studio chatbox on a run / step / variant and (optionally) ask.
 // The chat picks up the context override at send time (StudioChat studio:ask).
@@ -72,6 +73,9 @@ function fmtScore(v?: number): string {
 }
 // Run timestamp → "Jun 12, 23:20" (full ts, 24h) or "Jun 11" (day-bucketed).
 function fmtWhen(ts?: string): string | null {
+	// Run-store nodes carry run_ts as UNIX SECONDS, which neither pattern below
+	// parses — those nodes rendered with no time at all. Normalise first.
+	ts = toCycleId(ts);
 	if (!ts) return null;
 	let m = ts.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
 	if (m) return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]))
@@ -80,6 +84,42 @@ function fmtWhen(ts?: string): string | null {
 	if (m) return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]))
 		.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 	return null;
+}
+
+// What a run looked like when the loop gives it no per-run score: its outcome
+// (from /me/cycles, keyed by cycle-dir id) and its wall time. Command loops
+// (quant-research backtest / analyze, …) never emit a per-run metric, and a
+// tree of "NOT SCORED" nodes told the reader nothing — worse, it read as a
+// broken metric binding. "not scored" is kept only where the tree DOES show
+// scores and this particular run lacks one (see treeShowsScores).
+export type RunOutcome = { ok?: boolean; running?: boolean; duration_s?: number };
+export type RunOutcomes = Record<string, RunOutcome>;
+
+export function fmtDuration(s?: number | null): string | null {
+	if (s == null || !Number.isFinite(s) || s < 0) return null;
+	if (s < 60) return `${Math.max(1, Math.round(s))} s`;
+	const m = Math.floor(s / 60), r = Math.round(s % 60);
+	if (m < 60) return r ? `${m}m ${r}s` : `${m}m`;
+	const h = Math.floor(m / 60);
+	return m % 60 ? `${h}h ${m % 60}m` : `${h}h`;
+}
+
+/** True when the tree carries real per-run scores (so an unscored run is the
+ *  exception worth flagging as "not scored"). */
+export function treeShowsScores(traj: Trajectory | null | undefined): boolean {
+	if (!traj) return false;
+	if (traj.has_variants && traj.metric) return true;
+	return (traj.nodes || []).some((n) => n.kind !== "baseline" && n.scored && n.score != null);
+}
+
+/** "succeeded · 23 s" / "failed · 4m 3s" / "running" / "23 s" / null. */
+export function runOutcomeLabel(n: { run_ts?: string; cycle_ts?: string; duration_s?: number }, outcomes?: RunOutcomes): string | null {
+	const o = outcomes?.[toCycleId(n.run_ts || n.cycle_ts)];
+	if (o?.running) return "running";
+	const dur = fmtDuration(n.duration_s ?? o?.duration_s);
+	const word = o?.ok === true ? "succeeded" : o?.ok === false ? "failed" : null;
+	if (word && dur) return `${word} · ${dur}`;
+	return word || dur;
 }
 
 // A meaningful menu/header label for a node — its version (+ model), falling
@@ -395,7 +435,7 @@ function LinearTrajectory({ chain, metric, baseline, hib, pickedId, onFocus, onO
 
 export interface TrajectoryVersion { cycleTs?: string; runTs?: string; label: string; ts?: string; agentVersion?: string; dataVersion?: string; metric?: string; score?: number }
 
-function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, actions, selectedForCompare, onToggleCompare, mode = "improve", headerRight }: {
+function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, actions, selectedForCompare, onToggleCompare, mode = "improve", headerRight, outcomes, selectTs }: {
 	app: string; loop: string; definition?: LoopDefinition | null;
 	onSelectVersion?: (v: TrajectoryVersion | null) => void;
 	running?: boolean;
@@ -411,6 +451,10 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 	mode?: "observe" | "improve";
 	/** Rendered at the right of the "Run tree" header (e.g. the run-state chip). */
 	headerRight?: ReactNode;
+	/** Per-run outcome/duration keyed by cycle-dir id — shown on nodes of loops without a per-run score. */
+	outcomes?: RunOutcomes;
+	/** Deep-link (?cycle=) — select + highlight this run's node, same as clicking it. Either id form. */
+	selectTs?: string | null;
 }) {
 	const [traj, setTraj] = useState<Trajectory | null>(null);
 	const [signals, setSignals] = useState<TrajectorySignal[]>([]);
@@ -477,6 +521,7 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 	const { model, byId } = useMemo(() => buildModel(traj, signals), [traj, signals]);
 	const hib = traj?.higher_is_better !== false;
 	const baseline = traj?.baseline ?? null;
+	const showsScores = useMemo(() => treeShowsScores(traj), [traj]);
 
 	// Set after openPipeline is defined; the node's "details" link calls it
 	// (the node label is built above openPipeline, so it can't reference it
@@ -546,8 +591,20 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 									<span className="text-[11px] uppercase tracking-wide text-gold-500">queued</span>
 								) : n.scored && n.score != null ? (
 									<span className="tabular-nums text-slate-700 font-medium" title={`${traj?.metric || "score"} = ${fmtScore(n.score)} — this run's metric on the dataset`}>{fmtScore(n.score)}</span>
+								) : !isBase && showsScores ? (
+									<span className="uppercase tracking-wide text-slate-600" title={`this run has no ${traj?.metric || "score"} — other runs in this tree do`}>not scored</span>
 								) : !isBase ? (
-									<span className="uppercase tracking-wide text-slate-600">not scored</span>
+									(() => {
+										const out = runOutcomeLabel(n, outcomes);
+										if (!out) return null; // only a time is known — `when` above already shows it
+										const failed = out.startsWith("failed");
+										return (
+											<span className={cn("tabular-nums truncate", failed ? "text-rose-600" : "text-slate-600")}
+												title={`${out} — this loop records no per-run score`}>
+												{out.replace("succeeded", "ok")}
+											</span>
+										);
+									})()
 								) : (
 									<span className="uppercase tracking-wide text-slate-600">start</span>
 								)}
@@ -634,7 +691,7 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 			});
 		}
 		return { nodes, edges };
-	}, [model, byId, baseline, hib, picked, traj, expanded, toggleExpand]);
+	}, [model, byId, baseline, hib, picked, traj, expanded, toggleExpand, showsScores, outcomes]);
 
 	const openPipeline = useCallback((tn: GNode) => {
 		setPicked(tn);
@@ -662,6 +719,22 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 		setPicked(tn);
 		onSelectVersion?.({ cycleTs: tn.cycle_ts, runTs: tn.run_ts, label: tn.label, agentVersion: tn.agent_version, dataVersion: tn.data_version, metric: traj?.metric, score: tn.score });
 	}, [onSelectVersion, traj]);
+
+	// Deep link (?cycle=<ts>): select that run's node exactly as a click would
+	// (highlight + link the side panels). Applied once per distinct selectTs, so
+	// a later click on another node is not yanked back on the next refetch. The
+	// node's run_ts is unix seconds on run-store trees and the link usually
+	// carries the dir-id, so both sides go through toCycleId.
+	const appliedSelectRef = useRef<string | null>(null);
+	useEffect(() => {
+		const want = toCycleId(selectTs || "");
+		if (!want) { appliedSelectRef.current = null; return; }
+		if (appliedSelectRef.current === want || !traj) return;
+		const hit = model.find((n) => !n.proposed && (toCycleId(n.run_ts) === want || toCycleId(n.cycle_ts) === want));
+		if (!hit) return;
+		appliedSelectRef.current = want;
+		focusRun(hit);
+	}, [selectTs, traj, model, focusRun]);
 
 	const branchFrom = useCallback(async (tn: GNode) => {
 		setMenu(null);
@@ -933,7 +1006,7 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 	);
 }
 
-export default function TrajectoryGraph({ app, loop, definition, onSelectVersion, running, onShowLog, actions, selectedForCompare, onToggleCompare, mode = "improve", headerRight }: {
+export default function TrajectoryGraph({ app, loop, definition, onSelectVersion, running, onShowLog, actions, selectedForCompare, onToggleCompare, mode = "improve", headerRight, outcomes, selectTs }: {
 	app: string; loop: string; definition?: LoopDefinition | null;
 	onSelectVersion?: (v: TrajectoryVersion | null) => void;
 	running?: boolean;
@@ -944,10 +1017,12 @@ export default function TrajectoryGraph({ app, loop, definition, onSelectVersion
 	/** observe = read-only watching (no branch/compare/promote); improve = experiment. */
 	mode?: "observe" | "improve";
 	headerRight?: ReactNode;
+	outcomes?: RunOutcomes;
+	selectTs?: string | null;
 }) {
 	// No shared ReactFlowProvider: the trajectory <ReactFlow> and the pipeline
 	// pane's WorkflowCanvas <ReactFlow> must each own an isolated store —
 	// otherwise interacting with the pipeline clobbers the trajectory's nodes
 	// (and the tree vanishes on return). Each bare <ReactFlow> self-stores.
-	return <Inner app={app} loop={loop} definition={definition} onSelectVersion={onSelectVersion} running={running} onShowLog={onShowLog} actions={actions} selectedForCompare={selectedForCompare} onToggleCompare={onToggleCompare} mode={mode} headerRight={headerRight} />;
+	return <Inner app={app} loop={loop} definition={definition} onSelectVersion={onSelectVersion} running={running} onShowLog={onShowLog} actions={actions} selectedForCompare={selectedForCompare} onToggleCompare={onToggleCompare} mode={mode} headerRight={headerRight} outcomes={outcomes} selectTs={selectTs} />;
 }

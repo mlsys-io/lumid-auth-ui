@@ -21,6 +21,7 @@ import {
 import { AddSkillToAppDialog } from "@/components/studio/AddSkillToAppDialog";
 import { SubscribeAgentDialog } from "@/components/studio/SubscribeAgentDialog";
 import { me } from "@/api/me";
+import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import { GradientIcon } from "@/components/studio/GradientIcon";
 import { AppMetaChips } from "@/components/studio/MetaChips";
@@ -33,6 +34,22 @@ import {
 } from "@/lib/refinements";
 import { parse as parseYaml } from "yaml";
 import { resolveSpecPath } from "@/lib/manifestPaths";
+
+// ── Hidden-for-users catalog entries ──────────────────────────────
+// Product decision 2026-09-28: Quant Research is the SINGLE quant path for
+// role=user. The legacy quant apps below stay published (existing installs and
+// admin/ops work depend on them) but are not offered to ordinary users in the
+// Marketplace, so a new user can't pick the superseded path. Admins
+// (admin / super_admin) still see them. Matched on the repo `name`; a trailing
+// "*" is a prefix match (auto-quant forks/variants: auto-quant-v2, …).
+// This is presentation only — the repos remain installable by direct link.
+const HIDDEN_FOR_USERS: readonly string[] = [
+	"auto-quant*",   // "Auto Quant" — superseded by quant-research
+	"lumid-market",  // "Lumid Market" — superseded by quant-research
+];
+function hiddenForUsers(name: string): boolean {
+	return HIDDEN_FOR_USERS.some((p) => p.endsWith("*") ? name.startsWith(p.slice(0, -1)) : name === p);
+}
 
 // ── Kind metadata (mirrors xp.io kindMeta) ────────────────────────
 
@@ -155,9 +172,15 @@ export default function MarketplaceBrowse() {
 	const [action, setAction] = useState<PendingAction | null>(null);
 	const [err, setErr] = useState<string | null>(null);
 
+	const { user } = useAuth();
+	const isAdmin = user?.role === "admin" || user?.role === "super_admin";
+
 	useEffect(() => {
+		// The cache holds the UNFILTERED catalog; the role filter is applied on
+		// the way out so an admin/user switch in one tab never serves the wrong set.
+		const forRole = (rows: RepoCard[]) => isAdmin ? rows : rows.filter((r) => !hiddenForUsers(r.name));
 		const apply = (c: CatalogCache) => {
-			setApps(c.apps); setWorkflows(c.workflows); setAgents(c.agents);
+			setApps(forRole(c.apps)); setWorkflows(forRole(c.workflows)); setAgents(c.agents);
 			setStrategies(c.strategies); setSkills(c.skills); setDatasets(c.datasets);
 		};
 		// Fresh cache → paint instantly, no network.
@@ -224,7 +247,7 @@ export default function MarketplaceBrowse() {
 		me.listApps()
 			.then((r) => setInstalledNames(new Set((r.apps ?? []).filter((a) => (a.status ?? "ready") === "ready").map((a) => a.name))))
 			.catch(() => {});
-	}, []);
+	}, [isAdmin]);
 
 	// Optimistic + background: fire the install intent and hand off to My Apps,
 	// where the card shows "installing" (from the server-side intent merge) and
