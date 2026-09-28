@@ -73,6 +73,8 @@ Either route works:
   it and drops you straight into it.
 - **Any account** — Marketplace → search `mbb-consultant` → **Add to my account**.
 
+![The Marketplace filtered to mbb: MBB Consultant already added (Added · Open).](/docs/img/mbb-marketplace.png)
+
 Give it 10–20 seconds. It is ready when the app appears in your sidebar under
 **Your Apps** and its **Work** tab renders a case browser.
 
@@ -95,6 +97,8 @@ Same split as every app: a run is a row on its loop, an arm is a row on
 **Experiments**. A run tells you what one execution did; an experiment tells you
 whether an arm is actually ahead.
 
+![The Experiments tab: judge panel parity and analyst local gpu, each with its arms and result count.](/docs/img/mbb-experiments.png)
+
 ---
 
 ## Pick a mode, then a case
@@ -108,7 +112,7 @@ is asking whom, and it is the single choice that changes the whole session.
 | **AI answers a case** | The analyst works the case. You play the interviewer. | `next question`, or what the answer got wrong | Against that case's ground truth |
 | **Ask anything** | Your own question, no case file. Same analyst, same rubric. | Your consulting question | **Indicative only — no ground truth** |
 
-![The Work tab: the three modes, the case list, and the selected case's opening.](/docs/img/first-run-mbb-modes.png)
+![The Work tab: the three modes above the case list.](/docs/img/mbb-modes.png)
 
 Pick **AI interviews you** for your first session. It is the one that scores
 *you*, which is what most people came for. Pick a case, then press **Interview
@@ -116,7 +120,7 @@ me** — that opens the chat
 already grounded in the case, so you do not paste anything or repeat the case
 name.
 
-![A case selected under AI interviews you: its client facts, four hidden questions, and the Interview me button.](/docs/img/first-run-mbb-interview-me.png)
+![A case selected under AI interviews you: its client facts, four hidden questions, and the Interview me button.](/docs/img/mbb-interview-me.png)
 
 *The button's label follows the mode: **Interview me** here, **Start case** for
 AI answers a case, **Ask a question** for Ask anything.*
@@ -125,6 +129,8 @@ AI answers a case, **Ask a question** for Ask anything.*
 
 Every reply ends by telling you the next move, so you can read and respond
 without learning a command set. Three things work in any mode:
+
+![Interview me opened the chat grounded in the case; the AI gives the brief and asks for your framework.](/docs/img/mbb-chat-start.png)
 
 - `scorecard` — the running table of every turn you have been scored on
 - `next question` — move on
@@ -145,6 +151,8 @@ The judge is not grading eloquence.
 
 Open **Workflows → interview** (or **case_eval** for a batch) to see what ran, on
 which case, what it scored, and whether it was backed by ground truth.
+
+![The Workflows tab: the interview and case_eval loops, each with its metric and case set.](/docs/img/mbb-workflows.png)
 
 **Read the `Mode` column first.**
 
@@ -181,6 +189,8 @@ split cost before volume`. That stages a draft into the review queue on the
 you can **Measure as arm** (test the edit over the casebook before adopting it,
 and read the result on **Experiments**) or **Add to casebook** (stage the gap as
 a candidate case).
+
+![The review queue on the Work tab, empty until you stage a correction.](/docs/img/mbb-review-queue.png)
 
 Two kinds land in that queue, and the *Kind* column tells them apart:
 
