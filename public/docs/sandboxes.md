@@ -343,6 +343,7 @@ and the GPU quota for other users is zero.
 |---|---|
 | **GPUs** | 4 × **H200 NVL 141 GB** in one machine (`s0`). Each card is rented on its own — one box can hold 1, 2 or all 4, and several boxes can share the machine. |
 | **Shared with researchers** | s0 is also used directly by campus researchers. A card is only offered when *nothing* is using it; when their jobs hold cards, the list says `busy outside Kubernetes` and those cards are skipped. |
+| **Multi-GPU** | The 4 cards have **no NVLink** — they talk over PCIe, and one of them sits on the other CPU socket. Measured NCCL all-reduce bus bandwidth: **~37 GB/s** across 2 cards, **~19 GB/s** across 4 (per card: ~740 bf16 TFLOPS, 111 GiB usable of 139). Fine for data-parallel training; tensor-parallel inference across cards will be communication-bound. |
 | **CPUs** | CPU sandboxes (1 / 2 / 4 / 8 cores) land on s0 or on `h0`. h0's 2 × H100 serve `lum.id/llm` permanently and are **never** rentable — a CPU box there cannot see them. |
 | **Account** | Your lum.id email must be **onboarded** (mapped to a NUS user name). Otherwise every call answers `403 not onboarded` — ask an operator. |
 | **Home** | `/home/<you>` — 100 GiB on the NUS storage array, survives delete like everywhere else. |
