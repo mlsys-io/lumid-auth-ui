@@ -422,7 +422,7 @@ Refusals say why, and are worth handling rather than retrying blindly:
 
 | status | meaning |
 |---|---|
-| `400` | a CPU size not in `cpu.sizes`, or more GPUs than one machine holds |
+| `400` | an invalid name, a CPU size not in `cpu.sizes`, or more GPUs than one machine holds |
 | `403` | read-only token; or a GPU reserved for admins |
 | `409` | no GPU free right now (with the reason and counts), a name you already have, or you are at your sandbox limit |
 | `422` | a field out of range — the body names it |
@@ -480,8 +480,9 @@ curl -s -H "$H" https://lum.id/fm/office/api/v1/workers
 
 Reading other people's jobs is not part of this; a token sees its own.
 
-Machine-readable schema (OpenAPI): `https://lum.id/sbx/openapi.json` for home,
-`https://lum.id/sbx/office/openapi.json` for office (send your token for office).
+Interactive reference: **`https://lum.id/sbx/api/docs`** (home). The OpenAPI schema itself is at
+`https://lum.id/sbx/api/openapi.json` — for office, `https://lum.id/sbx/office/api/openapi.json`,
+with your token.
 
 ---
 
