@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Check, Loader2, Send } from 'lucide-react';
 
 import { Button } from './ui/button';
@@ -29,6 +29,26 @@ import { createSchedule } from '@/runmesh/api/user/scheduleApi';
 
 type Target = 'runmesh';
 
+/**
+ * Where a saved workflow stands. Saving never publishes: a new workflow is a
+ * private draft, runnable here by its owner, and reaches the marketplace only
+ * through review. `publishStatus` codes as the Runmesh owner view uses them
+ * (UserDashboard getPublishBadgeMap): 3 draft, 0 in review, 1 published,
+ * 2 rejected. Unknown/absent reads as a draft — it is not published.
+ */
+export function workflowState(publishStatus?: string): { label: string; cls: string; hint: string } {
+	switch (publishStatus) {
+		case '1':
+			return { label: 'Published', cls: 'bg-green-50 text-green-700 border-green-200', hint: 'listed in the workflow marketplace' };
+		case '0':
+			return { label: 'In review', cls: 'bg-yellow-50 text-yellow-700 border-yellow-200', hint: 'submitted for marketplace review; still runnable by you' };
+		case '2':
+			return { label: 'Rejected', cls: 'bg-red-50 text-red-700 border-red-200', hint: 'marketplace review rejected it; still runnable by you' };
+		default:
+			return { label: 'Draft', cls: 'bg-blue-50 text-blue-700 border-blue-200', hint: 'private to you; runnable here, not listed in the marketplace' };
+	}
+}
+
 interface Props {
 	target: Target;
 	title?: string;
@@ -45,6 +65,9 @@ interface Props {
  */
 export function SubmitWorkflow({ target, title, onSuccessPath }: Props) {
 	const nav = useNavigate();
+	const [params] = useSearchParams();
+	const wantId = params.get('id') || '';
+	const justSaved = params.get('saved') === '1';
 	const [workflows, setWorkflows] = useState<WorkflowItem[] | null>(null);
 	const [err, setErr] = useState<string>('');
 
@@ -59,7 +82,14 @@ export function SubmitWorkflow({ target, title, onSuccessPath }: Props) {
 		getWorkflowList({ pageNum: 1, pageSize: 100, onlyMine: true })
 			.then((p) => {
 				const rows = (p as { rows?: WorkflowItem[]; list?: WorkflowItem[] } | null | undefined);
-				setWorkflows(rows?.rows || rows?.list || []);
+				const list = rows?.rows || rows?.list || [];
+				setWorkflows(list);
+				// ?id= — arriving from a save: preselect it so it is visibly THE
+				// workflow just saved, not one card among many.
+				if (wantId) {
+					const hit = list.find((w) => String(w.workflowId || w.id) === wantId);
+					if (hit) setSelected(hit);
+				}
 			})
 			.catch((e: unknown) => {
 				const msg = e instanceof Error ? e.message : String(e);
@@ -68,7 +98,7 @@ export function SubmitWorkflow({ target, title, onSuccessPath }: Props) {
 				setLoadErr(msg || 'failed to load workflows');
 				setWorkflows([]);
 			});
-	}, []);
+	}, [wantId]);
 
 	useEffect(() => {
 		if (!runName && selected) {
@@ -118,15 +148,23 @@ export function SubmitWorkflow({ target, title, onSuccessPath }: Props) {
 		<div className="grid lg:grid-cols-[1fr_28rem] gap-6">
 			{/* Workflow picker */}
 			<div>
+				{justSaved && (
+					<div className="mb-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+						Saved{wantId ? <> as workflow <b>#{wantId}</b></> : null} — a private <b>Draft</b>.
+						It is selected below: set inputs and submit to run it.
+					</div>
+				)}
 				<div className="mb-3 text-sm text-slate-600">
-					Pick a workflow you've built. Not sure which one?{' '}
+					Your saved workflows. Saving never publishes: a new workflow is a
+					private <b>Draft</b> you can run from here; it reaches the marketplace
+					only after review. These are Runmesh workflows — an app's own loops
+					(e.g. Quant Research) are listed in that app's Manage tab instead.{' '}
 					<a
-						href="/dashboard"
+						href="/studio/workflows/new"
 						className="text-indigo-600 hover:underline"
 					>
-						Back to the Workflow Builder
+						New workflow
 					</a>
-					.
 				</div>
 				{workflows === null ? (
 					<div className="py-10 text-center text-sm text-slate-400">loading…</div>
@@ -148,7 +186,7 @@ export function SubmitWorkflow({ target, title, onSuccessPath }: Props) {
 						<CardContent className="py-8 text-center text-sm text-slate-500">
 							No workflows yet.{' '}
 							<a
-								href="/dashboard"
+								href="/studio/workflows/new"
 								className="text-indigo-600 hover:underline"
 							>
 								Build one
@@ -181,8 +219,17 @@ export function SubmitWorkflow({ target, title, onSuccessPath }: Props) {
 											{w.description}
 										</div>
 									)}
-									<div className="mt-1 text-[11px] text-slate-400">
-										{w.typeName || w.type || 'workflow'}
+									<div className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-400">
+										{(() => {
+											const st = workflowState(w.publishStatus);
+											return (
+												<span title={st.hint} className={`inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-medium ${st.cls}`}>
+													{st.label}
+												</span>
+											);
+										})()}
+										<span>#{id}</span>
+										<span>· {w.typeName || w.type || 'workflow'}</span>
 									</div>
 								</button>
 							);
