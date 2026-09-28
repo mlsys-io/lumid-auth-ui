@@ -359,6 +359,7 @@ gateway speaks `ctl` rather than `sbx`:
 
 ```
 ctl ls                 your boxes at NUS
+ctl new NAME [--gpu N] [--cpu N] [--mem N] [--ttl H]    create one (GPU: admins, see below)
 ctl enter NAME         shell into one
 ctl rm NAME            delete one
 ctl logs NAME          its output
@@ -369,11 +370,13 @@ Anything that is not `ctl …` runs in your **default** box (a 2-core CPU box, c
 so `ssh -p 31222 gw@lum.id '<command>'`, `scp -O -P 31222` and `rsync -e 'ssh -p 31222'` work as
 on the other sites.
 
-**Create GPU boxes in the page or the API, then `ctl enter` them.** An SSH session is never an
-admin session, and the H200s are admin-only, so `ctl new --gpu N` is refused; create it with an
-admin login (Studio, or the API below) and it is enterable over SSH straight away:
+**GPU boxes over SSH are for admins.** The H200s are admin-only, and an SSH session counts as admin
+when your NUS user belongs to an account on the site's admin list. Then `ctl new` takes `--gpu`
+directly; anyone else creates GPU boxes in the page or the API. Either way, enter it with `-t` —
+an interactive shell needs a TTY:
 
 ```bash
+ssh -p 31222 gw@lum.id 'ctl new train --gpu 1 --cpu 8 --mem 32 --ttl 8'
 ssh -t -p 31222 gw@lum.id 'ctl enter train'      # -t: an interactive shell needs a TTY
 ```
 
