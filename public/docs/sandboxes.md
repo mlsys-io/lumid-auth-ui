@@ -53,6 +53,7 @@ immediately, so it works the moment it is saved.
 ```bash
 ssh -p 31223 gw@lum.id          # home
 ssh -p 31226 gw@lum.id          # office
+ssh -p 31222 gw@lum.id          # nus (admin+) — its commands are `ctl …`, see §11
 ```
 
 One port per site for everyone — **your key decides whose sandbox you land in**.
@@ -352,9 +353,29 @@ and the GPU quota for other users is zero.
 | **Images** | `harbor.lum.id/…` references work unchanged; the site pulls them from its own replica. |
 | **Limits** | 4 GPUs and 8 sandboxes per admin; GPU boxes up to 128 cores / 512 GiB; 24h TTL. |
 
-**Getting a shell.** NUS has **no public SSH gateway yet** — `ssh -p … gw@lum.id` does not reach it.
-Create, list and delete through the page or the API (§12, base `https://lum.id/sbx/nus/api`); for a
-shell today, an operator reaches the box on the NUS cluster directly.
+**Getting a shell — `ssh -p 31222 gw@lum.id`.** Same key rules as the other sites (§1): your lum.id
+key, pushed to NUS when you create a sandbox there or with `POST /sbx/nus/api/keys/sync`. The NUS
+gateway speaks `ctl` rather than `sbx`:
+
+```
+ctl ls                 your boxes at NUS
+ctl enter NAME         shell into one
+ctl rm NAME            delete one
+ctl logs NAME          its output
+ctl quota              what you are using
+```
+
+Anything that is not `ctl …` runs in your **default** box (a 2-core CPU box, created on first use),
+so `ssh -p 31222 gw@lum.id '<command>'`, `scp -O -P 31222` and `rsync -e 'ssh -p 31222'` work as
+on the other sites.
+
+**Create GPU boxes in the page or the API, then `ctl enter` them.** An SSH session is never an
+admin session, and the H200s are admin-only, so `ctl new --gpu N` is refused; create it with an
+admin login (Studio, or the API below) and it is enterable over SSH straight away:
+
+```bash
+ssh -t -p 31222 gw@lum.id 'ctl enter train'      # -t: an interactive shell needs a TTY
+```
 
 ```bash
 T=…            # an admin session token or an admin PAT with scope '*'
