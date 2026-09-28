@@ -97,6 +97,10 @@ const Callback = lazy(() => import("./pages/auth/callback").then((m) => ({ defau
 const ForgotPassword = lazy(() => import("./pages/auth/forgot-password"));
 const ResetPassword = lazy(() => import("./pages/auth/reset-password"));
 const XpioAutoresearchDoc = lazy(() => import("./pages/docs/xpio-autoresearch"));
+// Public Quant Research Quickstart — linked from the logged-out landing.
+const QuantQuickstartDoc = lazy(() => import("./pages/docs/quant-quickstart"));
+// Logged-out landing at "/" (GOALS.md §6.14). Logged-in visitors never load it.
+const Landing = lazy(() => import("./pages/landing/landing"));
 const PluginImageCdDoc = lazy(() => import("./pages/docs/plugin-image-cd"));
 const LqtStrategiesDoc = lazy(() => import("./pages/docs/lqt-strategies"));
 const OperationsDoc = lazy(() => import("./pages/docs/operations"));
@@ -415,10 +419,12 @@ function Spinner() {
 // <Navigate to="/auth/login">, and the AuthGuard on /auth/login would
 // then bounce already-authed users to /dashboard — landing every
 // regular user on the admin shell even though they wanted /app.
-function RoleHome() {
+function RoleHome({ publicLanding = false }: { publicLanding?: boolean }) {
   const { isLoading, isAuthenticated, user } = useAuth();
   if (isLoading) return <Spinner />;
-  if (!isAuthenticated) return <Navigate to="/auth/login" replace />;
+  // Bare "/" shows a logged-out visitor what Lumid is (GOALS.md §6.14, J1);
+  // every other unmatched path keeps bouncing to the login form.
+  if (!isAuthenticated) return publicLanding ? <Landing /> : <Navigate to="/auth/login" replace />;
   return <Navigate to={defaultLandingPath(user?.role)} replace />;
 }
 
@@ -428,9 +434,9 @@ function RoleHome() {
 // Vite tree-shakes the unused branch from each bundle.
 const IS_GO_BUNDLE =
   (import.meta.env.VITE_ROUTER_BASE_PATH || "").replace(/\/$/, "") === "/go";
-function RootEntry() {
+function RootEntry({ publicLanding = false }: { publicLanding?: boolean }) {
   if (IS_GO_BUNDLE) return <Go />;
-  return <RoleHome />;
+  return <RoleHome publicLanding={publicLanding} />;
 }
 
 // Deploy watcher — a long-lived SPA tab never refetches index.html, so after a
@@ -525,12 +531,25 @@ export default function App() {
               </AuthGuard>
             }
           />
+          {/* /auth/signup is the name people (and the landing) use for sign-up.
+              It used to fall through to the "*" catch-all, which sent a
+              logged-out visitor to the LOGIN form. Same page, same guard as
+              /auth/register — no redirect, so ?code=<invite> survives. */}
+          <Route
+            path="/auth/signup"
+            element={
+              <AuthGuard requireAuth={false}>
+                <RegisterPage />
+              </AuthGuard>
+            }
+          />
           <Route path="/auth/callback" element={<Callback />} />
           <Route path="/auth/forgot-password" element={<ForgotPassword />} />
           <Route path="/auth/reset-password" element={<ResetPassword />} />
           {/* Public docs — anyone browsing app repos before forking
               should be able to read the canonical xpio contract. */}
           <Route path="/docs/xpio-autoresearch" element={<XpioAutoresearchDoc />} />
+          <Route path="/docs/quant-quickstart" element={<QuantQuickstartDoc />} />
           {/* Internal ops runbook (GHCR repos, deploy topology) — AUTH REQUIRED,
               unlike the public xpio contract above. */}
           <Route
@@ -1210,14 +1229,16 @@ export default function App() {
               the unauth case by rendering <RoleHome>, which then reads
               user.role and Navigates to /app (user) or /dashboard
               (admin). Unauthed users fall to <RoleHome>'s unauth branch
-              and bounce to /auth/login. This replaces the previous
+              — on bare "/" that renders the public <Landing> (GOALS.md
+              §6.14), on any other unmatched path it bounces to
+              /auth/login. This replaces the previous
               two-hop /→/auth/login→/dashboard which would land regular
               users on the admin shell. */}
           {/* /go-composer — also reachable from the lum.id bundle so the
               landing CTA can deep-link. Same component renders here and
               at root of the /go bundle (see RootEntry above). */}
           <Route path="/go-composer" element={<Go />} />
-          <Route path="/" element={<RootEntry />} />
+          <Route path="/" element={<RootEntry publicLanding />} />
           <Route path="*" element={<RootEntry />} />
         </Routes>
       </Suspense>
