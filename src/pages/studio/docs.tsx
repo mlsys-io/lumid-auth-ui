@@ -21,7 +21,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import 'github-markdown-css/github-markdown-light.css';
 import {
-	BookOpen, Zap, FileCode2, Activity, CandlestickChart, Compass, ArrowLeft, Loader2, Cpu, Database, TerminalSquare, Bot, GraduationCap, Server, Workflow,
+	BookOpen, Zap, FileCode2, Activity, CandlestickChart, Compass, ArrowLeft, Loader2, Cpu, Database, TerminalSquare, Bot, GraduationCap, Server, Workflow, Rocket,
 } from 'lucide-react';
 import StudioHow from './how';
 import { useAuth } from '../../hooks/useAuth';
@@ -50,7 +50,20 @@ interface DocEntry {
 
 const DOCS: DocEntry[] = [
 	{
-		// First on the list on purpose: it is the only doc that assumes you have
+		// First on the list (2026-09-28): the undergrad persona walk found no
+		// primer, no glossary and no worked good result anywhere a new user
+		// looks — first-run is 800 lines and opens with a changelog. This is the
+		// short path; first-run stays the long, evidenced one.
+		slug: 'quant-quickstart',
+		title: 'Quant Research Quickstart',
+		description: 'Your first strategy in about 15 minutes, no trading experience needed: what a prediction-market contract is, the words you will meet, five steps, three real results and how to read them, and a checklist for "is it any good?".',
+		md: 'quant-quickstart.md',
+		group: 'Guides',
+		icon: Rocket,
+		companion: { to: '/studio/apps/quant-research', label: 'Quant Research' },
+	},
+	{
+		// Second, after the quickstart: it is the only doc that assumes you have
 		// never logged in, and every other Guide here reads better after it.
 		slug: 'first-run',
 		title: 'Quant Research Onboarding',

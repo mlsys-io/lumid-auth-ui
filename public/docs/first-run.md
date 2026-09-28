@@ -6,25 +6,10 @@ has its own guide: [AI Consulting Onboarding](/studio/docs/mbb-consultant).
 Every step has a recorded result, and where something failed or misled it says
 so — this is a transcript, not a brochure.
 
-> **Changelog**
-> - **2026-09-28** — The AI Consulting track moved to its own page,
->   [AI Consulting Onboarding](/studio/docs/mbb-consultant); this page is the
->   Quant Research track only. Also: button names as the product shows them —
->   Marketplace's **Add to my account** (was "install" / **Install**). Each is
->   now checked.
-> - **2026-09-20** — Folded the AI Consulting walkthrough in as **§10**, so both
->   cohort tracks live on one onboarding page. Also: **Experiments** and
->   **Proposals** are tabs again — the 2026-09-05 note below says they became
->   loop rows, and that has since been reversed. Quant Research now has four
->   tabs, as §3 describes; the older entry is left as it was written.
-> - **2026-09-05** — Rewritten for the **two-tab** app (Strategies · Workflows):
->   the old Backtest / Forward test / Runtime / Experiments tabs are now loop
->   *rows* on Workflows, and an experiment's arms render on the loop that feeds
->   them (Metric & arms). Added §6b, the **Kol strategy** lane (a market-moving
->   account's tweets parameterize a strategy; the backtest judges it).
-> - **2026-08-29** — Split the signal-producer tutorial into its own doc
->   (*Producing your own signal*); recorded fresh-account timings.
-> - **2026-08-27** — First end-to-end walkthrough from a new `role=user` account.
+> **New to trading?** Read the [Quant Research Quickstart](/studio/docs/quant-quickstart)
+> first: a two-page primer, the words you will meet, five steps and three real
+> results. This page is the long path, with every step's recorded evidence. Its
+> changelog is at the end.
 
 Assumes you are signed in.
 
@@ -796,21 +781,32 @@ Everything below is at **<https://lum.id/studio/docs>**.
 | [Producing your own signal](/studio/docs/lqt-signals) | when the signal you need does not exist yet — an LLM producer, end to end |
 | [AI coding](/studio/docs/coding) | the model you are on, what "unlimited" means, the one timeout that matters |
 | [FinData SQL access](/studio/docs/findata-sql) | a warehouse seat, if chat-based queries stop being enough |
-| [Running jobs on the fleet](/studio/docs/compute) | FlowMesh + Lumilake, for operators (Admin+) |
 | [Workflows & experiments](/studio/docs/workflows) | what a workflow is, how to measure one, and the canvas you build it on |
 | [AI Consulting Onboarding](/studio/docs/mbb-consultant) | the other cohort track: scored case interviews in the MBB Consultant app |
-
-**In the repo**, deeper than this page goes:
-
-* `docs/researcher-onboarding/` — the research cycle, the promotion gates, the
-  signal contract, and how to submit progress.
-* `docs/dsl/SYNTAX.md` — the strategy language reference.
-* `python/lqt_research/signals/` — real signal implementations to model yours on.
-
----
 
 ## If something here is wrong
 
 This document is a transcript of a real run. If a step behaves differently for
 you, that is a finding and it is worth reporting — a walkthrough that has
 drifted from the system is how the next twenty people lose an afternoon.
+
+## Changelog
+
+- **2026-09-28** — The AI Consulting track moved to its own page,
+  [AI Consulting Onboarding](/studio/docs/mbb-consultant); this page is the
+  Quant Research track only. Also: button names as the product shows them —
+  Marketplace's **Add to my account** (was "install" / **Install**). Each is
+  now checked.
+- **2026-09-20** — Folded the AI Consulting walkthrough in as **§10**, so both
+  cohort tracks live on one onboarding page. Also: **Experiments** and
+  **Proposals** are tabs again — the 2026-09-05 note below says they became
+  loop rows, and that has since been reversed. Quant Research now has four
+  tabs, as §3 describes; the older entry is left as it was written.
+- **2026-09-05** — Rewritten for the **two-tab** app (Strategies · Workflows):
+  the old Backtest / Forward test / Runtime / Experiments tabs are now loop
+  *rows* on Workflows, and an experiment's arms render on the loop that feeds
+  them (Metric & arms). Added §6b, the **Kol strategy** lane (a market-moving
+  account's tweets parameterize a strategy; the backtest judges it).
+- **2026-08-29** — Split the signal-producer tutorial into its own doc
+  (*Producing your own signal*); recorded fresh-account timings.
+- **2026-08-27** — First end-to-end walkthrough from a new `role=user` account.
