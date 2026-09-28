@@ -21,6 +21,7 @@ import AskAbout from "@/components/AskAbout";
 import FailureCard from "@/components/workflow/FailureCard";
 import StepInspectorPanel from "@/components/workflow/StepInspectorPanel";
 import TrajectoryLogView from "@/components/workflow/TrajectoryLogView";
+import RunChildren from "@/components/workflow/RunChildren";
 import { RunCompareView } from "@/components/workflow/BranchTreeView";
 import { cycleStatus, runStatus, runStatusTitle, RUN_STATUS_LABEL, RUN_STATUS_TONE, RUN_STATUSES, type RunStatus, type RunStatusInfo } from "@/lib/runStatus";
 import { runPath, type RunPane } from "@/lib/run-routes";
@@ -406,6 +407,9 @@ export function RunDetail({
 							})}
 						</ol>
 					)}
+					{/* The fleet jobs this run launched → their FlowMesh workflows.
+					    Renders nothing when the run recorded none. */}
+					<RunChildren jobs={detail?.compute_jobs} />
 					{/* The five-stage view (observe → learn) of the same run — what
 					    the run SENSED / PROPOSED / LEARNED, for runs whose substance
 					    lives in the cycle summary rather than in step outputs. */}

@@ -818,6 +818,8 @@ export const me = {
       terminal: boolean;
       error?: unknown;
       progress?: Record<string, { completed?: boolean; details?: unknown }>;
+      /** FlowMesh workflow(s) the job dispatched (best-effort; may be empty). */
+      workflows?: Array<{ workflow_id: string; status?: string }>;
     }>("GET", `/compute/jobs/${encodeURIComponent(site)}/${encodeURIComponent(jobId)}`),
 
   // The other jobs from the SAME run. With N arms fanned out over one graph
@@ -1443,6 +1445,19 @@ export interface MeCycleDetail {
   // result, patterns, …) — the real per-stage content for apps that don't
   // inline everything into cycle.json. Keyed by filename (no extension).
   files?: Record<string, unknown>;
+  /** The fleet compute jobs this run self-reported (Lumilake job id + site,
+   *  plus the arm when it fanned out) — the caller's own run-store row. `[]`
+   *  when it ran none; absent on an identity that predates the field. */
+  compute_jobs?: MeRunComputeJob[];
+}
+
+/** One Lumilake job a run launched. Address = (site, job_id). */
+export interface MeRunComputeJob {
+  job_id: string;
+  site: string;
+  arm?: string;
+  /** HALO placement, op -> worker. */
+  workers?: Record<string, string>;
 }
 
 // The loop declaration verbatim from xpcloud.yaml (rawLoop in

@@ -18,7 +18,8 @@
 //               silently contributed zero. Fetched only for the workflow the
 //               operator actually opened.
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { Plus, TerminalSquare, X } from "lucide-react";
 import SshTab from "./ssh-tab";
 import SubmitTab from "./submit-tab";
@@ -36,6 +37,48 @@ import {
 } from "../../api/fm";
 import { SiteBadge, SiteStrip, StatusPill, TabShell, useFanout } from "./shared";
 import { PUBLIC_SITE } from "./fleet-tab";
+import { me } from "../../api/me";
+import { lumilakeReqIdOfTasks } from "../../lib/fleet-provenance";
+import { runPath } from "../../lib/run-routes";
+import { toCycleId } from "../../lib/cycle-id";
+
+/** Who launched a FlowMesh workflow, as far as the platform RECORDED it. */
+type Provenance =
+	| { kind: "loading" }
+	| { kind: "run"; app: string; loop: string; runTs: number }
+	| { kind: "none"; why: string };
+
+/** Unix seconds -> "Sep 28, 3:50 PM" in the reader's zone. */
+function runWhen(runTs: number): string {
+	const d = new Date(runTs * 1000);
+	return Number.isNaN(d.getTime())
+		? String(runTs)
+		: d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+/** "Submitted by: <app> › <loop> › run <time>" — a real link, or "not recorded".
+ *  Never guessed: only a (site, req-id) pair identity maps to one of the
+ *  caller's OWN recorded runs becomes a link. */
+function SubmittedBy({ p }: { p: Provenance }) {
+	return (
+		<p className="mt-0.5 text-xs text-slate-600">
+			<span className="text-slate-500">Submitted by: </span>
+			{p.kind === "loading" ? (
+				<span className="text-slate-400">reading…</span>
+			) : p.kind === "run" ? (
+				<Link
+					to={runPath(p.app, p.loop, toCycleId(p.runTs))}
+					className="font-medium text-indigo-700 hover:underline"
+					title="The Studio run that launched this workflow"
+				>
+					{p.app} › {p.loop} › run {runWhen(p.runTs)}
+				</Link>
+			) : (
+				<span className="text-slate-500" title={p.why}>not recorded</span>
+			)}
+		</p>
+	);
+}
 
 function when(iso?: string): string {
 	if (!iso) return "—";
@@ -128,7 +171,37 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 	const [view, setView] = useState<"workflows" | "ssh">("workflows");
 	// Submit is an ACTION. A tab you entered to do one thing and left is a button.
 	const [submitOpen, setSubmitOpen] = useState(false);
-	const [open, setOpen] = useState<FmWorkflow | null>(null);
+	// The open workflow and task live in the URL (?site=&workflow=&task=), so a
+	// drill-in can be linked (a run page's "Children" links here) and survives
+	// a reload. They used to be React state, and a reload dropped the reader
+	// back on the bare table.
+	const [sp, setSp] = useSearchParams();
+	const openSite = sp.get("site") || "";
+	const openWf = sp.get("workflow") || "";
+	const openTask = sp.get("task") || "";
+	const setQuery = useCallback(
+		(patch: Record<string, string | null | undefined>) => {
+			setSp((prev) => {
+				const next = new URLSearchParams(prev);
+				for (const [k, v] of Object.entries(patch)) {
+					if (v) next.set(k, v);
+					else next.delete(k);
+				}
+				return next;
+			});
+		},
+		[setSp],
+	);
+	const open = useMemo<{ workflow_id: string; site?: string } | null>(
+		() => (openWf ? { workflow_id: openWf, site: openSite || undefined } : null),
+		[openWf, openSite],
+	);
+	const setOpen = useCallback(
+		(wf: { workflow_id: string; site?: string } | null) =>
+			setQuery(wf ? { site: wf.site || null, workflow: wf.workflow_id, task: null } : { site: null, workflow: null, task: null }),
+		[setQuery],
+	);
+	const drillRef = useRef<HTMLDivElement | null>(null);
 	const [tasks, setTasks] = useState<FmTask[] | null>(null);
 	const [tasksErr, setTasksErr] = useState<string | null>(null);
 
@@ -139,11 +212,22 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 	// default because the question an operator actually arrives with is "what
 	// happened to this task" — timings, worker, attempts, error — not "show me the
 	// result blob".
-	const [detail, setDetail] = useState<FmTask | null>(null);
+	const detail = useMemo(
+		() => (openTask ? (tasks?.find((t) => t.task_id === openTask) ?? null) : null),
+		[tasks, openTask],
+	);
+	const setDetail = useCallback((t: FmTask | null) => setQuery({ task: t ? t.task_id : null }), [setQuery]);
 	const [pane, setPane] = useState<"overview" | "yaml" | "logs" | "result">("overview");
 	const [logs, setLogs] = useState<string | null>(null);
 	const [logsErr, setLogsErr] = useState<string | null>(null);
 	const [logsLoading, setLogsLoading] = useState(false);
+	// A different task (by click, back/forward or a deep link) starts on its
+	// overview with no stale logs from the previous one.
+	useEffect(() => {
+		setPane("overview");
+		setLogs(null);
+		setLogsErr(null);
+	}, [openTask]);
 
 	const loadLogs = useCallback(async (site: string, taskId: string) => {
 		setLogs(null);
@@ -203,31 +287,81 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 		return [...filtered].sort((a, b) => (b.submitted_at ?? "").localeCompare(a.submitted_at ?? ""));
 	}, [data, status]);
 
-	const openWorkflow = useCallback(async (wf: FmWorkflow) => {
-		setOpen(wf);
+	const openWorkflow = useCallback(
+		(wf: FmWorkflow) => {
+			setOpen(wf);
+			// The drill-in sits above the table; bring it into view when opened
+			// from a row further down.
+			requestAnimationFrame(() => drillRef.current?.scrollIntoView({ block: "nearest" }));
+		},
+		[setOpen],
+	);
+
+	// Tasks follow the URL, so a deep link / reload loads them too.
+	useEffect(() => {
 		setTasks(null);
 		setTasksErr(null);
-		if (!wf.site) {
+		if (!openWf) return;
+		if (!openSite) {
 			// No site tag means the row came from the cloud-only passthrough rather
 			// than a fan-out — we cannot know which mesh owns its tasks.
 			setTasksErr("This workflow has no site tag, so its tasks cannot be located.");
 			return;
 		}
-		try {
-			const all = await listTasksForSite(wf.site);
-			setTasks(all.filter((t) => t.workflow_id === wf.workflow_id));
-		} catch (e) {
-			if (isSessionExpired(e)) return;
-			// A per-site read carries the CALLER's token and is entitlement-scoped:
-			// an empty or refused response means "you may not see this", never
-			// "there is nothing here". Say so rather than rendering an empty table.
-			const msg = e instanceof Error ? e.message : "request failed";
-			setTasksErr(
-				`Could not read tasks from site "${wf.site}" (${msg}). Per-site reads use your own credential — an empty result may mean your token is not entitled on that mesh.`,
-			);
-			toast.error(`tasks: ${msg}`);
+		let live = true;
+		listTasksForSite(openSite)
+			.then((all) => {
+				if (live) setTasks(all.filter((t) => t.workflow_id === openWf));
+			})
+			.catch((e) => {
+				if (!live || isSessionExpired(e)) return;
+				// A per-site read carries the CALLER's token and is entitlement-scoped:
+				// an empty or refused response means "you may not see this", never
+				// "there is nothing here". Say so rather than rendering an empty table.
+				const msg = e instanceof Error ? e.message : "request failed";
+				setTasksErr(
+					`Could not read tasks from site "${openSite}" (${msg}). Per-site reads use your own credential — an empty result may mean your token is not entitled on that mesh.`,
+				);
+				toast.error(`tasks: ${msg}`);
+			});
+		return () => {
+			live = false;
+		};
+	}, [openSite, openWf]);
+
+	// Which Studio run launched this workflow. Lumilake names every workflow it
+	// submits `lumilake-<req-id>`; identity maps (site, req-id) to the caller's
+	// own recorded run. Anything short of that resolves to "not recorded".
+	const reqId = useMemo(() => lumilakeReqIdOfTasks(tasks, openTask), [tasks, openTask]);
+	const [prov, setProv] = useState<Provenance>({ kind: "loading" });
+	useEffect(() => {
+		if (!openWf || tasks === null) {
+			setProv(tasksErr ? { kind: "none", why: "tasks unreadable" } : { kind: "loading" });
+			return;
 		}
-	}, []);
+		if (!reqId || !openSite) {
+			setProv({ kind: "none", why: "this workflow does not name a Lumilake job" });
+			return;
+		}
+		let live = true;
+		setProv({ kind: "loading" });
+		me.computeJobSiblings(openSite, reqId)
+			.then((r) => {
+				if (!live) return;
+				if (r.app && r.loop && typeof r.run_ts === "number" && r.run_ts > 0) {
+					setProv({ kind: "run", app: r.app, loop: r.loop, runTs: r.run_ts });
+				} else {
+					// Owned but claimed from chat, not reported by a run.
+					setProv({ kind: "none", why: `Lumilake job ${reqId} was not reported by a Studio run` });
+				}
+			})
+			.catch(() => {
+				if (live) setProv({ kind: "none", why: `Lumilake job ${reqId}: no run of yours recorded it` });
+			});
+		return () => {
+			live = false;
+		};
+	}, [openWf, openSite, tasks, tasksErr, reqId]);
 
 	return (
 		<TabShell
@@ -322,76 +456,17 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 				))}
 			</div>
 
-			<div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-				<table className="w-full text-sm">
-					<thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
-						<tr>
-							<th className="px-3 py-2">Site</th>
-							<th className="px-3 py-2">Workflow</th>
-							<th className="px-3 py-2">Status</th>
-							<th className="px-3 py-2">Submitted</th>
-						</tr>
-					</thead>
-					<tbody className="divide-y divide-slate-100">
-						{/* THE ROW IS THE BUTTON. There used to be a per-row "Tasks" button, which
-						    on a 46-workflow federation meant 46 of the page's 76 buttons all doing
-						    what clicking the row could do. Row-as-target is also the bigger hit
-						    area on a phone. */}
-						{rows.slice(0, 200).map((w) => (
-							<tr
-								key={`${w.site}:${w.workflow_id}`}
-								onClick={() => void openWorkflow(w)}
-								title={`${w.workflow_id} — submitted ${when(w.submitted_at)}`}
-								className="cursor-pointer hover:bg-slate-50"
-							>
-								<td className="px-3 py-2">
-									<SiteBadge site={w.site} />
-								</td>
-								{/* A 36-char UUID wrapped onto two lines and made the widest column
-								    in the table. Nobody reads one; they match a prefix or copy it.
-								    Full id is in the row title and in the detail panel. */}
-								<td className="px-3 py-2 font-mono text-xs text-slate-700">
-									{shortId(w.workflow_id)}
-								</td>
-								{/* Status and task counts were two columns saying one thing: a FAILED
-								    pill beside "1 (1 failed)". Merged — the count only earns space
-								    when there is more than one task or something failed. */}
-								<td className="px-3 py-2 whitespace-nowrap">
-									<StatusPill status={w.status} />
-									{taskNote(w) ? (
-										<span className="ml-2 text-xs text-slate-500">{taskNote(w)}</span>
-									) : null}
-								</td>
-								<td className="px-3 py-2 text-xs whitespace-nowrap text-slate-600">
-									{ago(w.submitted_at)}
-								</td>
-							</tr>
-						))}
-						{!rows.length && !loading && (
-							<tr>
-								<td colSpan={4} className="px-3 py-8 text-center text-sm text-slate-500">
-									No workflows match.
-								</td>
-							</tr>
-						)}
-					</tbody>
-				</table>
-				{rows.length > 200 && (
-					<p className="border-t border-slate-100 px-3 py-2 text-xs text-slate-500">
-						Showing 200 of {rows.length}. FlowMesh list endpoints have no server-side
-						pagination, so the full set is already in memory — narrow with the filters above.
-					</p>
-				)}
-			</div>
-
+			{/* The drill-in sits ABOVE the table: below a 200-row table it was never on
+			    screen, and its first line is who launched the workflow. */}
 			{open && (
-				<div className="mt-6 rounded-lg border border-slate-200 bg-white p-4">
+				<div ref={drillRef} className="mb-4 scroll-mt-4 rounded-lg border border-slate-200 bg-white p-4">
 					<div className="mb-3 flex items-center justify-between">
 						<div>
 							<h3 className="font-semibold text-slate-900">
 								Tasks · <span className="font-mono text-sm">{open.workflow_id}</span>
 							</h3>
 							<p className="text-xs text-slate-500">site {open.site ?? "unknown"}</p>
+							<SubmittedBy p={prov} />
 						</div>
 						<button
 							onClick={() => setOpen(null)}
@@ -684,6 +759,68 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 					)}
 				</div>
 			)}
+			<div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+				<table className="w-full text-sm">
+					<thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+						<tr>
+							<th className="px-3 py-2">Site</th>
+							<th className="px-3 py-2">Workflow</th>
+							<th className="px-3 py-2">Status</th>
+							<th className="px-3 py-2">Submitted</th>
+						</tr>
+					</thead>
+					<tbody className="divide-y divide-slate-100">
+						{/* THE ROW IS THE BUTTON. There used to be a per-row "Tasks" button, which
+						    on a 46-workflow federation meant 46 of the page's 76 buttons all doing
+						    what clicking the row could do. Row-as-target is also the bigger hit
+						    area on a phone. */}
+						{rows.slice(0, 200).map((w) => (
+							<tr
+								key={`${w.site}:${w.workflow_id}`}
+								onClick={() => void openWorkflow(w)}
+								title={`${w.workflow_id} — submitted ${when(w.submitted_at)}`}
+								className="cursor-pointer hover:bg-slate-50"
+							>
+								<td className="px-3 py-2">
+									<SiteBadge site={w.site} />
+								</td>
+								{/* A 36-char UUID wrapped onto two lines and made the widest column
+								    in the table. Nobody reads one; they match a prefix or copy it.
+								    Full id is in the row title and in the detail panel. */}
+								<td className="px-3 py-2 font-mono text-xs text-slate-700">
+									{shortId(w.workflow_id)}
+								</td>
+								{/* Status and task counts were two columns saying one thing: a FAILED
+								    pill beside "1 (1 failed)". Merged — the count only earns space
+								    when there is more than one task or something failed. */}
+								<td className="px-3 py-2 whitespace-nowrap">
+									<StatusPill status={w.status} />
+									{taskNote(w) ? (
+										<span className="ml-2 text-xs text-slate-500">{taskNote(w)}</span>
+									) : null}
+								</td>
+								<td className="px-3 py-2 text-xs whitespace-nowrap text-slate-600">
+									{ago(w.submitted_at)}
+								</td>
+							</tr>
+						))}
+						{!rows.length && !loading && (
+							<tr>
+								<td colSpan={4} className="px-3 py-8 text-center text-sm text-slate-500">
+									No workflows match.
+								</td>
+							</tr>
+						)}
+					</tbody>
+				</table>
+				{rows.length > 200 && (
+					<p className="border-t border-slate-100 px-3 py-2 text-xs text-slate-500">
+						Showing 200 of {rows.length}. FlowMesh list endpoints have no server-side
+						pagination, so the full set is already in memory — narrow with the filters above.
+					</p>
+				)}
+			</div>
+
 			</>
 			)}
 		</TabShell>
