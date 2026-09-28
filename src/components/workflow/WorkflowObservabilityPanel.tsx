@@ -1483,7 +1483,14 @@ function StageBody({ stage, detail }: { stage: LoopStageKey; detail: MeCycleDeta
 		</ul>,
 	);
 
-	if (!blocks.length) return <div className="text-[11px] text-slate-600 italic">{STAGE_INFO[stage].role} — nothing recorded for this stage in this run.</div>;
+	if (!blocks.length) {
+		// "Nothing recorded" and "could not be read" mean opposite things: one
+		// is the run's answer, the other is ours. identity says which in
+		// `unavailable` (me_cycle_read_intent.go) — render it, not the former.
+		if (detail.unavailable && !(detail.steps || []).length)
+			return <div className="text-[11px] text-amber-700" role="status" title={detail.unavailable}>{detail.unavailable}</div>;
+		return <div className="text-[11px] text-slate-600 italic">{STAGE_INFO[stage].role} — nothing recorded for this stage in this run.</div>;
+	}
 	return <div className="space-y-2">{blocks}</div>;
 }
 
