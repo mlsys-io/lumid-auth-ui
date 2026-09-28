@@ -7,6 +7,12 @@
 // — none of that may lose a backtest that is still running. A widget reads the
 // store by `scope` (the table it belongs to) and renders whatever is there.
 //
+// The store is also PERSISTED (localStorage, per viewer) and resumed on load.
+// Measured 2026-09-28 with the undergrad persona: a reader who clicked
+// Backtest and then navigated away or reloaded lost the only thing polling
+// their claim — user tenants have no scheduled poll — so the verdict never
+// arrived anywhere, not even on the strategy page.
+//
 // Pure pieces (interpolation, done_when, verdict) are in await-run.ts so they
 // can be unit tested without a browser.
 
@@ -75,7 +81,19 @@ export type TrackedRun = {
 
 let runs: TrackedRun[] = [];
 const listeners = new Set<() => void>();
-const emit = () => { for (const l of listeners) l(); };
+// The args each run was started with, so a resumed run can keep polling.
+const argsById: Record<string, StartArgs> = {};
+const STORE_KEY = "lumid.await.runs.v1";
+// Resume a run only this long after it started; a verdict older than that is
+// on the strategy page already, or its claim has expired.
+const RESUME_WINDOW_MS = 60 * 60 * 1000;
+function save() {
+	try {
+		const keep = runs.filter((r) => argsById[r.id]).map((r) => ({ run: r, args: argsById[r.id] }));
+		localStorage.setItem(STORE_KEY, JSON.stringify(keep));
+	} catch { /* private mode / quota: the in-memory store still works */ }
+}
+const emit = () => { save(); for (const l of listeners) l(); };
 const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l); }; };
 const MAX_KEPT = 12;
 
@@ -86,6 +104,7 @@ function update(id: string, patch: Partial<TrackedRun> | ((r: TrackedRun) => Par
 
 export function dismissRun(id: string) {
 	runs = runs.filter((r) => r.id !== id);
+	delete argsById[id];
 	emit();
 }
 
@@ -150,6 +169,7 @@ export function startTrackedRun(a: StartArgs): string {
 		phase: "queued", jobId: a.jobId, startedAt: Date.now(), polls: 0, claims: [],
 		message: "Queued — waiting for the cycle to start.",
 	};
+	argsById[id] = a;
 	runs = [run, ...runs].slice(0, MAX_KEPT);
 	emit();
 	void drive(id, a).catch((e) => update(id, { phase: "failed", error: String((e as Error)?.message ?? e) }));
@@ -209,6 +229,13 @@ async function drive(id: string, a: StartArgs) {
 	}));
 	const matched = block.matched && typeof block.matched === "object" ? (block.matched as Obj) : undefined;
 	update(id, { claims, matched });
+	await pollClaims(id, a, claims);
+}
+
+/** Step 3 on its own, so a run resumed after a reload re-enters here with the
+ *  claims it already knows instead of re-reading a finished intent. */
+async function pollClaims(id: string, a: StartArgs, claims: ClaimState[]) {
+	const { cfg } = a;
 	const poll = cfg.then_poll;
 	if (!poll?.loop || claims.every((c) => c.done)) {
 		update(id, { phase: "done", message: poll?.loop ? "No claim to poll." : "Claimed." });
@@ -277,9 +304,31 @@ async function drive(id: string, a: StartArgs) {
 		update(id, {
 			phase: "timeout",
 			message: `Still running after ${maxS}s — stopped polling so it does not burn cycles. ` +
-				`Use Poll result later (claim ${unresolved.map((c) => c.claim_id).join(", ")}).`,
+				`Use Check pending results later (claim ${unresolved.map((c) => c.claim_id).join(", ")}).`,
 		});
 	} else {
 		update(id, { phase: "done", message: undefined });
 	}
 }
+
+// ── resume after a reload ─────────────────────────────────────────────────
+
+function resume() {
+	let saved: { run: TrackedRun; args: StartArgs }[] = [];
+	try { saved = JSON.parse(localStorage.getItem(STORE_KEY) || "[]"); } catch { return; }
+	const now = Date.now();
+	const fresh = saved.filter((x) => x?.run?.id && x.args && now - Number(x.run.startedAt || 0) < RESUME_WINDOW_MS);
+	for (const { run, args } of fresh) argsById[run.id] = args;
+	runs = fresh.map((x) => x.run).slice(0, MAX_KEPT);
+	for (const r of runs) {
+		const a = argsById[r.id];
+		const fail = (e: unknown) => update(r.id, { phase: "failed", error: String((e as Error)?.message ?? e) });
+		if (r.phase === "queued" || r.phase === "running") void drive(r.id, a).catch(fail);
+		else if (r.phase === "polling") {
+			update(r.id, { message: "Resumed after reload — polling again." });
+			void pollClaims(r.id, a, r.claims).catch(fail);
+		}
+	}
+	emit();
+}
+if (typeof window !== "undefined") resume();
