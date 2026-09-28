@@ -373,11 +373,14 @@ function AgentsToAppsRedirect() {
   return <Navigate to={`/studio/apps/${encodeURIComponent(app)}${loc.search}`} replace />;
 }
 
-// /studio/workflows → /studio/apps, PRESERVING the query (?compose=1
-// must reach the apps page's composer host).
+// /studio/workflows → /studio/apps, PRESERVING the query. ?compose=1 must
+// reach the composer host, which is /studio/apps/all (apps.tsx reads it);
+// /studio/apps is StudioWorkspace, which self-redirects and drops the query
+// (see InboxZeroState in pages/studio/inbox.tsx).
 function WorkflowsListRedirect() {
   const loc = useLocation();
-  return <Navigate to={`/studio/apps${loc.search}`} replace />;
+  const compose = new URLSearchParams(loc.search).get("compose") === "1";
+  return <Navigate to={`/studio/apps${compose ? "/all" : ""}${loc.search}`} replace />;
 }
 
 // /studio/workflows/:slug (slug = "<app>:<loop>") folded into the
@@ -781,10 +784,18 @@ export default function App() {
             <Route path="workflows/new"                element={<AppWorkflowYaml />} />
             {/* Your OWN saved workflows, with their state, and the one place they
                 can be run. The editor used to save and navigate to /dashboard (a
-                redirect to /studio), and the only listing (/studio/workflows) is the
+                redirect to /studio), and the only listing (/studio/workflows/market) is the
                 PUBLISHED market — so a saved draft appeared nowhere (FLB-QR-05). */}
             <Route path="workflows/mine"               element={<AppRunmeshSubmit />} />
-            <Route path="workflows"                    element={<AppWorkflows />} />
+            {/* The PUBLISHED workflow market (Runmesh templates to import). It was
+                mounted at the bare `workflows` path, which was ALSO declared
+                below as WorkflowsListRedirect — two routes for one path, so
+                whichever was declared first silently won and the other was dead
+                code. For role=user the apps page is the one place workflows
+                live (2026-09-28), so bare /studio/workflows is the redirect and
+                the market keeps its own distinct address here. Static
+                `workflows/market` outranks `workflows/:slug`. */}
+            <Route path="workflows/market"             element={<AppWorkflows />} />
 
             <Route path="inbox"                        element={<Inbox />} />
             <Route path="drafts"                       element={<StudioInbox />} />
@@ -867,8 +878,13 @@ export default function App() {
             <Route path="account/findata-sql"           element={<FindataSQL />} />
             <Route path="account/connect/google"        element={<ConnectGoogle />} />
             {/* /studio/manage = AdminOverview (cluster/users/audit operational hub).
-                Claude Code quota lives at the top-level /code route (admin+). */}
-            <Route path="manage" element={<AdminGuard><AdminOverview /></AdminGuard>} />
+                Claude Code quota lives at the top-level /code route (admin+).
+                The sidebar's "Management" entry is admin-only, but "manage" is
+                the word a role=user reaches for (and old links carry), and the
+                default AdminGuard fallback bounced them to the chat home — which
+                read as a broken page. A non-admin lands on the thing they CAN
+                manage: their apps ("My apps & runs", /studio/apps/all). */}
+            <Route path="manage" element={<AdminGuard fallback="/studio/apps/all"><AdminOverview /></AdminGuard>} />
             <Route path="admin-overview" element={<AdminGuard><AdminOverview /></AdminGuard>} />
             <Route path="admin/apps/:app/insights" element={<AdminGuard><AppInsights /></AdminGuard>} />
             {/* Sidebar consolidation 2026-05-25: skills merged into the
@@ -926,7 +942,8 @@ export default function App() {
             <Route path="agents/all"                   element={<Navigate to="/studio/apps/all" replace />} />
             <Route path="agents/:app"                  element={<AgentsToAppsRedirect />} />
             {/* Workflows folded into the per-app overview; list redirects,
-                detail pages stay reachable via deep-link. */}
+                detail pages stay reachable via deep-link. The only `workflows`
+                list route — the market moved to workflows/market above. */}
             <Route path="workflows"                    element={<WorkflowsListRedirect />} />
             <Route path="workflows/:slug"              element={<WorkflowSlugRedirect />} />
             {/* Runs + Mind kept reachable for back-compat and direct

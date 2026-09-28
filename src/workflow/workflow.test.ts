@@ -20,6 +20,7 @@ import { run as runEditChecks, caseCount as editCaseCount } from "./edit.test";
 import { run as runFmChecks, caseCount as fmCaseCount } from "./flowmesh.test";
 import { run as runXpioChecks, caseCount as xpioCaseCount } from "./xpio.test";
 import { run as runImportChecks, caseCount as importCaseCount } from "./import.test";
+import { run as runCycleIdChecks, caseCount as cycleIdCaseCount } from "@/lib/cycle-id.test";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -348,7 +349,7 @@ check("isEmptyLoop is true only when nothing is declared", () => {
 export function run(): number {
 	// The document round-trip suite runs in the same process — it is the
 	// invariant everything else is built on, so it must never be skippable.
-	let failed = runDocChecks() + runEditChecks() + runFmChecks() + runXpioChecks() + runImportChecks();
+	let failed = runDocChecks() + runEditChecks() + runFmChecks() + runXpioChecks() + runImportChecks() + runCycleIdChecks();
 	for (const c of checks) {
 		try {
 			c.run();
@@ -373,10 +374,10 @@ if (typeof describe === "function" && typeof it === "function") {
 	const proc = (globalThis as { process?: { exitCode?: number } }).process;
 	if (failed > 0) {
 		// eslint-disable-next-line no-console
-		console.error(`${failed} of ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount} case(s) failed`);
+		console.error(`${failed} of ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount + cycleIdCaseCount} case(s) failed`);
 		if (proc) proc.exitCode = 1;
 	} else {
 		// eslint-disable-next-line no-console
-		console.log(`workflow core: all ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount} cases passed`);
+		console.log(`workflow core: all ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount + cycleIdCaseCount} cases passed`);
 	}
 }

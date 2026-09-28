@@ -17,24 +17,11 @@ import { cn } from "@/lib/utils";
 import RunLogSearch from "@/components/workflow/RunLogSearch";
 import { L } from "@/components/workflow/labels";
 
-// A deep link can carry either form of run id: the cycle-dir id every log/detail
-// surface parses ("20260906T105726Z"), or the run store's UNIX SECONDS, which is
-// what me://app-data?tool=runs reports as `run_ts` and what an app surface's
-// row_href therefore interpolates (`?cycle=1788663446`). Those never compared
-// equal, so opening a specific run from a table silently fell back to the NEWEST
-// run — which is how a submit and its poll became indistinguishable. Mirrors
-// runTsToCycleID in lumid_identity/internal/handler/me_cycle_db_fallback.go:
-// below ~1971 is not a unix second, so it is left alone rather than rendered
-// as a 1970 date.
-export function toCycleId(ts?: string): string {
-	if (!ts) return "";
-	if (/^[0-9]{8}T[0-9]{6}Z/.test(ts)) return ts;
-	if (/^[0-9]+(\.[0-9]+)?$/.test(ts)) {
-		const n = Math.floor(Number(ts));
-		if (n >= 31_536_000) return new Date(n * 1000).toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
-	}
-	return ts;
-}
+// A deep link can carry either form of run id (cycle-dir id or unix seconds);
+// toCycleId normalises both. It lives in @/lib/cycle-id so me.cycleDetail can
+// use it; re-exported here for existing importers.
+export { toCycleId } from "@/lib/cycle-id";
+import { toCycleId } from "@/lib/cycle-id";
 
 function fmtWhen(ts?: string): string {
 	if (!ts) return "";
