@@ -483,6 +483,27 @@ export async function listSandboxesForSite(site: string): Promise<Sandbox[]> {
 	return (r.data?.sandboxes ?? []).map((s) => ({ ...s, site, gpus_free: s.gpus_free ?? gpusFree }));
 }
 
+/** A sandbox row as the ADMIN view returns it: every renter's, with who and how big. */
+export interface AdminSandbox extends Sandbox {
+	namespace: string;
+	/** Unix-style user the sandbox belongs to (the namespace suffix). */
+	user: string;
+	/** The renter's lum.id email; null when the site cannot say (never a guess). */
+	email: string | null;
+	/** Kubernetes quantities as requested, e.g. "4" and "16Gi". */
+	cpu: string | null;
+	memory: string | null;
+}
+
+/**
+ * Every sandbox at a site, and who rented it — admin+ only (`GET /api/admin/sandboxes`).
+ * A non-admin gets 403 from the service itself; the tab only calls this for admins.
+ */
+export async function listAllSandboxesForSite(site: string): Promise<AdminSandbox[]> {
+	const r = await sbx.get<{ sandboxes: AdminSandbox[] }>(sbxUrl(site, "/api/admin/sandboxes"));
+	return (r.data?.sandboxes ?? []).map((b) => ({ ...b, site }));
+}
+
 export async function createSandbox(site: string, req: CreateSandboxRequest): Promise<Sandbox> {
 	return (await sbx.post(sbxUrl(site, "/api/sandboxes"), req)).data;
 }
