@@ -30,11 +30,12 @@ import {
 	Trash2,
 	Loader2,
 	AlertCircle,
-	ShieldCheck, Receipt,} from 'lucide-react';
+	ShieldCheck, Receipt, History,} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
 import { me } from '@/api/me';
+import { runRowHref } from '@/lib/run-routes';
 import { useAppNav, iconFor, type AppNavItem } from './useAppNav';
 import type { LucideIcon } from 'lucide-react';
 import { fetchClaudePoolManage } from '../api/claude-pool-manage';
@@ -176,11 +177,15 @@ const TOP_NAV: NavItem[] = [
 	// the path does not, and that is an accepted, documented gap rather than a
 	// rediscovered bug. Rename the path only together with redirects.
 	//
-	// "Scheduled" (/studio/runs) is REMOVED FROM THE NAV ONLY — the route stays
-	// mounted and reachable: the top-bar "Right now" ticker and the Apps hero's
-	// "runs today" stat both link into it (see the note below this array), so its
-	// ROUTE_PREFETCH entry is deliberately kept too.
+	// "Scheduled" (/studio/runs) was removed from the nav here on 2026-09-11 and
+	// restored as "Runs" below on 2026-09-28 (see that row).
 	{ to: '/studio/research-fleet', label: 'Research Fleet', icon: Boxes, title: 'the GPU fleet — sites, nodes and workers across every mesh' },
+	// "Runs" is BACK in the nav (2026-09-28). It was dropped as "Scheduled" on
+	// 2026-09-11 on the theory that the Apps hero and the "Right now" ticker
+	// link into it — but a reader measured on 2026-09-28 could not find it at
+	// all, and it is the one page that lists every run across every workflow.
+	// Its rows open the run page (/studio/apps/:app/w/:loop/r/:runId).
+	{ to: '/studio/runs', label: 'Runs', icon: History, title: 'every run of every workflow — open one to see its steps' },
 	// NO second row for this surface — what used to be the "Library" row IS the
 	// first row above, now labelled "Marketplace". One row, one destination.
 	// /studio/library* routes are untouched and still carry their own tab bar, so
@@ -265,6 +270,54 @@ function NavItemView({ to, label, icon: Icon, end, badge, title }: NavItem) {
 				</>
 			)}
 		</NavLink>
+	);
+}
+
+// The Runs row, plus a "N failed" pill when runs failed in the last 24h. The
+// pill is its OWN link — to the newest failed run's page, where its error is —
+// and sits beside the row rather than inside it (a link inside a link is not
+// valid markup and reads as one control to assistive tech). A reader measured
+// 2026-09-28 had no path at all from /studio to a failed run's error: the
+// failure ticker lives in the top strip, which the chat home does not show.
+const RUNS_FAILED_KEY = 'studio_runs_failed_pill_v1';
+function RunsNavRow({ item }: { item: NavItem }) {
+	// Last answer is remembered per browser: /me/runs can take seconds, and a
+	// pill that pops in late reads as the rail rearranging itself.
+	const [failed, setFailed] = useState<{ n: number; href: string } | null>(() => {
+		try { return JSON.parse(localStorage.getItem(RUNS_FAILED_KEY) || 'null'); } catch { return null; }
+	});
+	useEffect(() => {
+		let live = true;
+		const load = () => {
+			const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+			me.listRuns({ state: 'failed', since, limit: 50 })
+				.then((r) => {
+					if (!live) return;
+					const runs = [...(r.runs || [])].sort((a, b) => (b.started_at || 0) - (a.started_at || 0));
+					const next = runs.length ? { n: runs.length, href: runRowHref(runs[0].run_id) } : null;
+					setFailed(next);
+					try { localStorage.setItem(RUNS_FAILED_KEY, JSON.stringify(next)); } catch { /* private mode */ }
+				})
+				.catch(() => { /* no pill on a failed read — the row still works */ });
+		};
+		load();
+		const id = window.setInterval(() => { if (document.visibilityState !== 'hidden') load(); }, 120_000);
+		return () => { live = false; window.clearInterval(id); };
+	}, []);
+	return (
+		<div className="relative">
+			<NavItemView {...item} />
+			{failed && (
+				<Link
+					to={failed.href}
+					className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center h-[18px] px-1.5 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-[11px] font-medium tabular-nums hover:bg-rose-100"
+					title="Open the most recent failed run"
+					aria-label={`${failed.n} failed in the last 24 hours — open the latest failed run`}
+				>
+					{failed.n} failed
+				</Link>
+			)}
+		</div>
 	);
 }
 
@@ -805,7 +858,9 @@ export function StudioShell() {
 					</button>
 					{TOP_NAV
 						.filter((item) => !item.adminOnly || isAdmin)
-						.map((item) => <NavItemView key={item.to} {...item} />)}
+						.map((item) => item.to === '/studio/runs'
+							? <RunsNavRow key={item.to} item={item} />
+							: <NavItemView key={item.to} {...item} />)}
 					{/* NO Artifacts row here. Artifacts belong to a conversation, so
 					    the trigger lives with the conversation — the icon group at the
 					    top-right of the chatbox (StudioChat's `chromeEl`). In the rail

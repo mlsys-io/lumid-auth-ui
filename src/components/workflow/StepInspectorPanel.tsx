@@ -11,7 +11,7 @@ import AskAbout from "@/components/AskAbout";
 import { StatusBadge } from "@/components/ui/status-badge";
 
 export default function StepInspectorPanel({
-	step, app, loop, ts, onClose,
+	step, app, loop, ts, onClose, defaultShowOutput = false, closeLabel,
 }: {
 	step: CanvasStepRef;
 	app: string;
@@ -19,8 +19,13 @@ export default function StepInspectorPanel({
 	/** Selected run's timestamp (overlay source); empty when none. */
 	ts?: string;
 	onClose: () => void;
+	/** Open the full output on mount — the run page's expanded step is there
+	 *  precisely to show it, so hiding it behind a second click defeats it. */
+	defaultShowOutput?: boolean;
+	/** Accessible label for the close control (the run page uses "Collapse step"). */
+	closeLabel?: string;
 }) {
-	const [showOutput, setShowOutput] = useState(false);
+	const [showOutput, setShowOutput] = useState(defaultShowOutput);
 	const cs = step.cycleStep;
 	const failed = cs?.ok === false;
 
@@ -44,7 +49,7 @@ export default function StepInspectorPanel({
 						context={{ app, loop, ...(ts ? { cycle: { app, loop, ts } } : {}) }}
 						label="Ask about this step"
 					/>
-					<button onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+					<button onClick={onClose} aria-label={closeLabel || "Close"} title={closeLabel || "Close"} className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
 						<X className="w-3.5 h-3.5" />
 					</button>
 				</div>

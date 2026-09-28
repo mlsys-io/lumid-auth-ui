@@ -11,6 +11,7 @@
 // Used inside RunSparkline's hover/pin popover, so it's compact (w-72) and
 // caches nothing itself — the parent caches by ts to keep re-hovers instant.
 
+import { runPath } from "@/lib/run-routes";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -185,7 +186,7 @@ export default function CycleCard({
 		onOpenFull?.();
 		// The inspector is merged into the app panel; deep-link straight to the
 		// loop with this cycle anchored (the panel opens a stage on that run).
-		navigate(`/studio/apps/${encodeURIComponent(app)}?selected=${encodeURIComponent(loop)}&cycle=${encodeURIComponent(ts)}`);
+		navigate(runPath(app, loop, ts));
 	};
 
 	return (

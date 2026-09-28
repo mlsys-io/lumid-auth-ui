@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect } from "react";
+import { legacyCycleTarget, legacyWorkflowSlugTarget } from "@/lib/run-routes";
 import { Boxes, ListChecks, TerminalSquare} from "lucide-react";
 import { Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -383,23 +384,17 @@ function WorkflowsListRedirect() {
   return <Navigate to={`/studio/apps${compose ? "/all" : ""}${loc.search}`} replace />;
 }
 
-// /studio/workflows/:slug (slug = "<app>:<loop>") folded into the
-// per-app observability panel; deep links land there with the loop open.
+// /studio/workflows/:slug (slug = "<app>:<loop>") → the workflow page.
 function WorkflowSlugRedirect() {
   const { slug = "" } = useParams();
-  const i = slug.indexOf(":");
-  const app = i > 0 ? slug.slice(0, i) : slug;
-  const loop = i > 0 ? slug.slice(i + 1) : "";
-  return <Navigate to={`/studio/apps/${app}${loop ? `?selected=${encodeURIComponent(loop)}` : ""}`} replace />;
+  return <Navigate to={legacyWorkflowSlugTarget(slug)} replace />;
 }
 
-// The standalone cycle inspector merged into the app-overview panel
-// (per-stage content + cycle stepper). Old /studio/(intents|today)/cycle/...
-// deep links land on the app's panel with that loop open.
+// The standalone cycle inspector became the run page. Old
+// /studio/(intents|today)/cycle/:app/:loop/:ts deep links land on that run.
 function CycleRedirect() {
   const { app = "", loop = "", ts = "" } = useParams();
-  const cyc = ts ? `&cycle=${encodeURIComponent(ts)}` : "";
-  return <Navigate to={`/studio/apps/${encodeURIComponent(app)}?selected=${encodeURIComponent(loop)}${cyc}`} replace />;
+  return <Navigate to={legacyCycleTarget(app, loop, ts)} replace />;
 }
 
 // Redirect dashboard quant/* routes to their Studio equivalents.
@@ -932,6 +927,12 @@ export default function App() {
             <Route path="apps"                         element={<StudioWorkspace />} />
             <Route path="apps/all"                     element={<StudioApps />} />
             <Route path="apps/:app"                    element={<StudioWorkspace />} />
+            {/* A workflow and one of its runs are ADDRESSES (lib/run-routes.ts):
+                the run page, the expanded step and its pane all live in the URL,
+                so a run can be linked and survives a reload. Same workspace
+                element, so the docked chat stays mounted across them. */}
+            <Route path="apps/:app/w/:loop"            element={<StudioWorkspace />} />
+            <Route path="apps/:app/w/:loop/r/:runId"   element={<StudioWorkspace />} />
             {/* Phase 4 (app→agent, docs/architecture/unified-components.md):
                 the canonical surface is "agents". Forward-compat aliases route
                 /studio/agents* → the existing /studio/apps* views so canonical

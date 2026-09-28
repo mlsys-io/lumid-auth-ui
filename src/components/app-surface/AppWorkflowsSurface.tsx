@@ -22,6 +22,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { me, type MeWorkflowRow } from "@/api/me";
 import WorkflowList from "@/components/workflow/WorkflowList";
+import { workflowPath } from "@/lib/run-routes";
 import { AppOverview } from "@/pages/studio/apps";
 
 function IncludedAppRows({ app }: { app: string }) {
@@ -43,7 +44,8 @@ function IncludedAppRows({ app }: { app: string }) {
 			<WorkflowList
 				rows={rows.map((wf) => ({ loop: wf.name, wf }))}
 				selected={null}
-				onSelect={(loop) => navigate(`/studio/apps/${encodeURIComponent(app)}?selected=${encodeURIComponent(loop)}`)}
+				onSelect={(loop) => navigate(workflowPath(app, loop))}
+				hrefFor={(loop) => workflowPath(app, loop)}
 			/>
 		</section>
 	);

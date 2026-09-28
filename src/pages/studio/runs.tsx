@@ -1,7 +1,13 @@
-// /studio/runs — the unified runs surface (W1).
+// /studio/runs — the unified runs surface (W1). Titled "Runs" (it said "Jobs"
+// while the breadcrumb said "Activity" — one page, three names).
 //
-// Four views via top toggle:
-//   List      — Prefect-style table (default).
+// A row opens THE RUN (its page, /studio/apps/:app/w/:loop/r/:runId, for a
+// scheduled cycle; /studio/runs/:run_id for anything else). Asking the chat
+// about it is the secondary button. ?state=, ?view= and ?days= are in the URL.
+//
+// Views via top toggle:
+//   Index     — the list (default).
+//   List      — Prefect-style table.
 //   Grid      — cross-workflow Airflow grid.
 //   Gantt     — per-run time bars (good for "stuck" detection).
 //   Calendar  — heatmap of day × hour.
@@ -10,7 +16,7 @@
 // page subscribes on mount and updates the rows in place.
 
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Filter, RefreshCw, ChevronLeft, BarChart3 } from "lucide-react";
 import { me, streamRuns, MeApiError, type MeRunRow } from "@/api/me";
 import AirflowGrid, { type GridCell, type GridState } from "@/components/AirflowGrid";
@@ -20,16 +26,14 @@ import IndexList, { type IndexRow } from "@/components/studio/IndexList";
 import { askRun } from "@/lib/grounded-asks";
 import { appTitle } from "@/components/workflow/AppCard";
 import { loopLabel } from "@/lib/workflow-names";
-import { type ToneKey } from "@/lib/tones";
+import { TONES } from "@/lib/tones";
+import { runStatus, runStatusTitle, RUN_STATUS_LABEL, RUN_STATUS_TONE } from "@/lib/runStatus";
+import { runRowHref } from "@/lib/run-routes";
 import { useStudioRefetch } from "@/hooks/useStudioRefetch";
 
 // "index" is the default claude-style list (→ chat); the other four are the
 // power "Timeline" views kept as an escape hatch behind the toggle.
 type View = "index" | "list" | "grid" | "gantt" | "calendar";
-
-const RUN_TONE: Record<string, ToneKey> = {
-	succeeded: "ok", failed: "failing", running: "running", skipped: "idle", canceled: "idle",
-};
 
 function loopOfRun(r: MeRunRow): string | undefined {
 	if (r.app && r.workflow_slug?.startsWith(r.app + ":")) return r.workflow_slug.slice(r.app.length + 1);
@@ -46,26 +50,28 @@ function relSec(tsSec?: number): string {
 	return `${Math.floor(diff / 86400)}d ago`;
 }
 
-// Scheduled runs open inside the owning app's observability panel (the
-// one per-app inspector, with the pipeline canvas anchored on that run);
-// visual/n8n runs keep the standalone per-run page.
-function runHref(runID: string): string {
-	const parts = runID.split(":");
-	if (parts[0] === "scheduled" && parts.length >= 4) {
-		const [, app, loop, ts] = parts;
-		return `/studio/apps/${encodeURIComponent(app)}?selected=${encodeURIComponent(loop)}&cycle=${encodeURIComponent(ts)}`;
-	}
-	return `/studio/runs/${encodeURIComponent(runID)}`;
-}
+// Where a run row opens — the run page (lib/run-routes.ts).
+const runHref = runRowHref;
+
+const VIEWS: View[] = ["index", "list", "grid", "gantt", "calendar"];
 
 export default function StudioRuns() {
 	const navigate = useNavigate();
-	const [view, setView] = useState<View>("index");
-	// Honor ?state=failed deep links (the attention rail's "+N more").
-	const [stateFilter, setStateFilter] = useState<string>(
-		() => new URLSearchParams(window.location.search).get("state") || "",
-	);
-	const [windowDays, setWindowDays] = useState<number>(1);
+	// View, state filter and window are URL state (?view=&state=&days=), so a
+	// filtered list is a link and survives a reload. ?state=failed is also what
+	// the attention rail's "+N more" links to.
+	const [params, setParams] = useSearchParams();
+	const setParam = (k: string, v: string | null) => {
+		const sp = new URLSearchParams(params);
+		if (v == null || v === "") sp.delete(k); else sp.set(k, v);
+		setParams(sp, { replace: true });
+	};
+	const view: View = (VIEWS as string[]).includes(params.get("view") || "") ? (params.get("view") as View) : "index";
+	const setView = (v: View) => setParam("view", v === "index" ? null : v);
+	const stateFilter = params.get("state") || "";
+	const setStateFilter = (v: string) => setParam("state", v || null);
+	const windowDays = Math.max(1, Math.min(30, parseInt(params.get("days") || "1", 10) || 1));
+	const setWindowDays = (n: number) => setParam("days", n === 1 ? null : String(n));
 	const [runs, setRuns] = useState<MeRunRow[] | null>(null);
 	const [err, setErr] = useState<string | null>(null);
 
@@ -112,15 +118,19 @@ export default function StudioRuns() {
 		const shown = (runs || []).slice(0, INDEX_CAP);
 		const rows: IndexRow[] = shown.map((r) => {
 			const loop = loopOfRun(r);
+			const st = runStatus(r.state);
 			return {
 				id: r.run_id,
 				title: loopLabel(r.name, loop || r.workflow_slug),
-				tone: RUN_TONE[r.state] || "idle",
-				statusLabel: r.state,
+				tone: RUN_STATUS_TONE[st.status],
+				statusLabel: RUN_STATUS_LABEL[st.status].toLowerCase() + (st.recovered ? " · recovered" : ""),
+				statusTitle: runStatusTitle(st),
 				meta: [r.app ? appTitle(r.app) : "", relSec(r.started_at), r.duration_s ? `${r.duration_s.toFixed(1)}s` : ""]
 					.filter(Boolean).join(" · "),
 				ask: askRun({ run_id: r.run_id, app: r.app, loop, name: r.name, workflow_slug: r.workflow_slug }),
-				detailsHref: runHref(r.run_id),
+				// The row opens the RUN; asking about it is the secondary button.
+				navTo: runHref(r.run_id),
+				askVisible: true,
 			} as IndexRow;
 		});
 		const toolbar = (
@@ -136,6 +146,17 @@ export default function StudioRuns() {
 					<option value="failed">Failed</option>
 					<option value="running">Running</option>
 					<option value="skipped">Skipped</option>
+				</select>
+				<select
+					value={windowDays}
+					onChange={(e) => setWindowDays(Number(e.target.value))}
+					className="text-xs bg-transparent border-0 focus:outline-none cursor-pointer text-foreground"
+					aria-label="Time window"
+				>
+					<option value={1}>Last 24h</option>
+					<option value={7}>Last 7 days</option>
+					<option value={14}>Last 14 days</option>
+					<option value={30}>Last 30 days</option>
 				</select>
 				<span className="ml-auto inline-flex items-center gap-2">
 					<button onClick={load} className="inline-flex items-center gap-1 hover:text-foreground" title="Refresh">
@@ -153,7 +174,7 @@ export default function StudioRuns() {
 		);
 		return (
 			<IndexList
-				title="Jobs"
+				title="Runs"
 				rows={rows}
 				search={rows.length > 6}
 				searchPlaceholder="Search runs…"
@@ -344,17 +365,11 @@ function RunsCrossGrid({ runs, onCellClick }: { runs: MeRunRow[]; onCellClick: (
 }
 
 function StateChip({ state }: { state: string }) {
-	const cfg: Record<string, { label: string; className: string }> = {
-		succeeded: { label: "succeeded", className: "bg-gold-50 text-gold-800 border-gold-200" },
-		failed:    { label: "failed",    className: "bg-rose-50 text-rose-800 border-rose-200" },
-		running:   { label: "running",   className: "bg-gold-50 text-gold-800 border-gold-200" },
-		skipped:   { label: "skipped",   className: "bg-slate-50 text-slate-600 border-slate-200" },
-		canceled:  { label: "canceled",  className: "bg-slate-50 text-slate-600 border-slate-200" },
-	};
-	const c = cfg[state] || { label: state, className: "bg-slate-100 text-slate-700 border-slate-200" };
+	const st = runStatus(state);
+	const t = TONES[RUN_STATUS_TONE[st.status]];
 	return (
-		<span className={["text-[10px] px-2 py-0.5 rounded-full border font-medium", c.className].join(" ")}>
-			{c.label}
+		<span title={runStatusTitle(st)} className={["text-[10px] px-2 py-0.5 rounded-full border font-medium", t.bg, t.text, t.border].join(" ")}>
+			{RUN_STATUS_LABEL[st.status].toLowerCase()}
 		</span>
 	);
 }

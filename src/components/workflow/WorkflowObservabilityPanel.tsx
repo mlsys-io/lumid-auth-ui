@@ -14,26 +14,21 @@
 
 import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
-	Play, Pause, Loader2, Save, AlertCircle, Target,
-	ChevronLeft, ChevronRight, ChevronDown, Trash2,
-	Database, Sparkles, Pencil, Activity, Square,
-	Eye, FlaskConical, ArrowLeft,
-	PanelLeftClose, PanelLeftOpen, FileText, BarChart3, MoreHorizontal,
-	Brain, Scale, GitBranch, DownloadCloud, UploadCloud,
+	Play, Pause, Loader2, Save, AlertCircle, Target, ChevronLeft, ChevronRight, ChevronDown, Database, Pencil, Square, FileText, BarChart3, Brain, Scale, GitBranch, DownloadCloud, UploadCloud,
 } from "lucide-react";
 import { toast } from "sonner";
 import apiClient from "@/api/client";
 import { me, MeApiError, patchLoopApplied, type MeLatestOutput, type MeWorkflowRow, type MeCycleDetail, type LoopDefinition, type MeDatasetRef } from "@/api/me";
-import { type AppIdentity } from "@/components/workflow/AppCard";
-import WorkflowCanvas, { type CanvasStepRef } from "@/components/workflow/WorkflowCanvas";
-import StepInspectorPanel from "@/components/workflow/StepInspectorPanel";
+import { appTitle, type AppIdentity } from "@/components/workflow/AppCard";
+import { RunsTable, RunDetail, runLocalTime, type RunRow } from "@/components/workflow/RunsMasterDetail";
+import { workflowPath, runPath, canonicalRunId, type RunPane } from "@/lib/run-routes";
+import { cycleStatus, type RunStatus } from "@/lib/runStatus";
 import { type LoopStageKey } from "@/components/workflow/LoopOrbit";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { parseSchedule } from "@/lib/schedule";
 import { loopLabel } from "@/lib/workflow-names";
-import FailureCard from "@/components/workflow/FailureCard";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { toCycleId } from "@/lib/cycle-id";
 import TrajectoryGraph, { type TrajectoryVersion, type RunOutcomes, treeShowsScores, runOutcomeLabel } from "@/components/workflow/TrajectoryGraph";
@@ -65,14 +60,9 @@ import {
 } from "@/pages/studio/inspector";
 import { cn } from "@/lib/utils";
 
-// The goal always shows full-width at the top; Runs and Data switch via the
-// left tab rail. "Pipeline" is NOT a tab — it's how a selected run is drawn
-// inside Runs (Pipeline = the representation of a run).
-type DetailTab = "runs" | "dataset";
-const TABS: Array<{ key: DetailTab; label: string; icon: React.ComponentType<{ className?: string }> }> = [
-	{ key: "runs", label: "Runs", icon: Activity },
-	{ key: "dataset", label: "Data", icon: Database },
-];
+// The workflow page's tabs (?tab=). Runs is the default and is not written to
+// the URL; the others are views of the workflow as a whole.
+export type WorkflowTab = "runs" | "experiments" | "lineage" | "data";
 
 export interface LoopHealth {
 	app: string;
@@ -253,7 +243,7 @@ function VersionDots({ app, loop, currentId, onPick, outcomes }: {
 }
 
 export default function WorkflowObservabilityPanel({
-	app, loop, wf, loopHealth, onChanged, initialCycle, canDelete, onDelete, identity,
+	app, loop, wf, loopHealth, onChanged, runId: routeRunId, canDelete, onDelete, identity,
 	onShare, shareBusy,
 }: {
 	app: string;
@@ -268,9 +258,9 @@ export default function WorkflowObservabilityPanel({
 	shareBusy?: string | null;
 	// App version/publish state (for the Tune tab's versioning header).
 	identity?: AppIdentity;
-	// Deep-link anchor (?cycle=<ts>) — when set (e.g. CycleCard "Open full
-	// cycle"), auto-open a stage on that run instead of waiting for a click.
-	initialCycle?: string | null;
+	// The run this page is ABOUT — the :runId of /studio/apps/:app/w/:loop/r/:runId
+	// (lib/run-routes.ts). null on the workflow page: the latest run is shown.
+	runId?: string | null;
 	// Per-loop delete (tenant apps, >1 loop) — lives in the card header now
 	// that the master list rows are minimal.
 	canDelete?: boolean;
@@ -324,19 +314,36 @@ export default function WorkflowObservabilityPanel({
 	const cached0 = cycleCache.get(cacheKey);
 	const [cycleTs, setCycleTs] = useState<string | null>(cached0?.ts ?? null);
 	// null = still loading; [] = confirmed zero tenant runs.
-	const [cycleList, setCycleList] = useState<Array<{ ts: string; ok?: boolean; running?: boolean; duration_s?: number; cost_usd?: number; total_tokens?: number }> | null>(null);
-	// Deep-link anchor (?cycle=…) — the run the pipeline/inspector overlays.
-	// Follows the URL: it used to be read ONCE into state, so a second deep link
-	// into an already-mounted panel (same app, new ?cycle=) changed nothing.
-	// Normalised to the cycle-dir id at the source: an app surface's row_href
-	// interpolates the run store's unix seconds (`?cycle=1788663446`), which the
-	// raw /me/cycles/:ts fetches and StageDetail's matching below don't parse.
-	const [anchorTs, setAnchorTs] = useState<string | null>(toCycleId(initialCycle) || null);
-	// Set whenever a deep link arrives; the scroll effect below consumes it once
-	// the stage detail has actually mounted (it is gated on tenantHasRuns, which
-	// is unknown until /me/cycles answers — scrolling earlier hit a null ref).
-	const deepScrollRef = useRef<boolean>(!!initialCycle);
-	const prevInitialCycle = useRef<string | null>(initialCycle || null);
+	const [cycleList, setCycleList] = useState<RunRow[] | null>(null);
+	// ── The page's URL state ─────────────────────────────────────────
+	// Everything a reader can point at lives in the address: which run
+	// (:runId), which step is expanded and its pane (?step=&pane=), the compare
+	// partner (?compare=), the workflow tab (?tab=) and the runs-table filters
+	// (?outcome=&arm=&sort=). It used to be React state, so none of it survived
+	// a reload or could be linked (measured 2026-09-28).
+	const navigate = useNavigate();
+	const [search, setSearch] = useSearchParams();
+	const runIdParam = routeRunId ? toCycleId(routeRunId) : null;
+	// Unix seconds in the URL (the run store's form) → the cycle-dir id.
+	useEffect(() => {
+		const canon = routeRunId ? canonicalRunId(routeRunId) : null;
+		if (canon) navigate(runPath(app, loop, canon, Object.fromEntries(search.entries())), { replace: true });
+	}, [routeRunId, app, loop, search, navigate]);
+	const qTab = (search.get("tab") || "runs") as WorkflowTab;
+	const qStep = search.get("step");
+	const qPane: RunPane = search.get("pane") === "log" ? "log" : "output";
+	const qCompare = search.get("compare") ? toCycleId(search.get("compare")) : null;
+	const qOutcome = (search.get("outcome") || "") as RunStatus | "";
+	const qArm = search.get("arm") || "";
+	const qSortAsc = search.get("sort") === "asc";
+	// Patch the query in place (a filter / pane change is not a new page).
+	const patchQuery = useCallback((patch: Record<string, string | null | undefined>, push = false) => {
+		const sp = new URLSearchParams(search);
+		for (const [k, v] of Object.entries(patch)) { if (v == null || v === "") sp.delete(k); else sp.set(k, v); }
+		setSearch(sp, { replace: !push });
+	}, [search, setSearch]);
+	// The anchor every run-scoped view reads (lineage selection, log default).
+	const anchorTs = runIdParam;
 	const [summary, setSummary] = useState<CycleSummary | null>(cached0?.summary ?? null);
 	const [cycleFiles, setCycleFiles] = useState<Record<string, unknown>>({});
 	// DB-backed fallback. cycleFiles comes from cycleDetail, which reads the
@@ -349,51 +356,21 @@ export default function WorkflowObservabilityPanel({
 	// offer as an artifact key.
 	const [dbEvents, setDbEvents] = useState<MeLatestOutput["events"]>(null);
 	const [dbOutputTs, setDbOutputTs] = useState<string | null>(null);
-	const [lastError, setLastError] = useState<string | null>(null);
 	// Live running/event state — distinct from one-shot load motion.
 	const [optimisticRun, setOptimisticRun] = useState(false);
 	const [justRan, setJustRan] = useState(false);
-	// Arriving with a ?cycle anchor opens the Learn stage (the run's outcome)
-	// on that cycle, so "Open full cycle" lands on real content immediately.
-	const [selectedStage, setSelectedStage] = useState<LoopStageKey | null>(initialCycle ? "learn" : null);
-	useEffect(() => {
-		const next = initialCycle || null;
-		if (next === prevInitialCycle.current) return;
-		prevInitialCycle.current = next;
-		setAnchorTs(toCycleId(next) || null);
-		if (next) { setSelectedStage("learn"); deepScrollRef.current = true; }
-	}, [initialCycle]);
-	const [stageQ, setStageQ] = useState("");
 	const prevTsRef = useRef<string | null>(null);
-	// Run inspector lives full-width below the Runs/Data grid; scroll it into
-	// view when a run is opened so the click doesn't feel like nothing happened.
-	const inspectorRef = useRef<HTMLDivElement | null>(null);
-	// (tenantHasRuns is declared further down; read via cycleList here.)
-	const stageMounted = !!selectedStage && (cycleList?.length ?? 0) > 0;
-	useEffect(() => {
-		if (!stageMounted || !inspectorRef.current) return;
-		if (deepScrollRef.current) {
-			// A ?cycle= deep link lands on the stage detail, which sits below the
-			// run tree + rail (below the fold even at 1800px). Bring its top in.
-			deepScrollRef.current = false;
-			inspectorRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-			return;
-		}
-		inspectorRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
-	}, [selectedStage, anchorTs, stageMounted]);
 	// Canvas (n8n-style node view): the loop's declared structure +
 	// the selected run's per-step overlay + the click-a-node inspector.
 	const [definition, setDefinition] = useState<LoopDefinition | null>(null);
+	// The run page's optional five-stage view (StageDetail): which stage, and
+	// its free-text ask box.
+	const [stageKey, setStageKey] = useState<LoopStageKey>("observe");
+	const [stageQ, setStageQ] = useState("");
 	const [canvasCycle, setCanvasCycle] = useState<MeCycleDetail | null>(null);
-	const [canvasStep, setCanvasStep] = useState<CanvasStepRef | null>(null);
-	// Which tab the detail pane shows. Runs is the spine, so it opens by default.
-	const [tab, setTab] = useState<DetailTab>("runs");
 	// ── Mode + view stack (WS-1/WS-3) ─────────────────────────────────
 	// The three disentangled concerns. Observe = default. Tune is a thin tab
 	// that links out to the prompt + config editors (their own routes).
-	// The "Cases & data" rail can collapse (the fixed 30% column cramped the
-	// tree on small screens). Stacks vertically below lg.
-	const [railOpen, setRailOpen] = useState(true);
 	// Which asset tab the rail shows. Data and Agents are DIFFERENT xpio assets
 	// (a dataset repo vs an agent repo), each independently versioned — so they
 	// are two top tabs, not collapsible groups in one box.
@@ -469,11 +446,6 @@ export default function WorkflowObservabilityPanel({
 		window.addEventListener("keydown", k);
 		return () => { window.removeEventListener("click", h); window.removeEventListener("keydown", k); };
 	}, [caseMenu]);
-	// Which run the Runs tab draws as a pipeline. null = follow the latest run;
-	// clicking an older run in the list pins it here.
-	const [selectedRunTs, setSelectedRunTs] = useState<string | null>(null);
-	// Runs picked for side-by-side comparison (2-5). >=2 swaps the pipeline for the compare table.
-	const [compareTs, setCompareTs] = useState<string[]>([]);
 	// Size the Pipeline canvas / Data list to fill the screen: measure the
 	// fill wrapper's top and stretch it to the bottom of the viewport. The
 	// studio shell scrolls (flex-1 overflow-y-auto), so the wrapper is
@@ -502,7 +474,7 @@ export default function WorkflowObservabilityPanel({
 		const ro = new ResizeObserver(() => measure());
 		if (headerRef.current) ro.observe(headerRef.current);
 		return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", measure); ro.disconnect(); };
-	}, [tab, summary, wf.goal]);
+	}, [qTab, summary, wf.goal]);
 
 	// force=true refetches the latest cycle's detail even when the newest ts is
 	// unchanged (used after acting on a review, where the same cycle's summary
@@ -517,7 +489,7 @@ export default function WorkflowObservabilityPanel({
 			const list = await apiClient.get(
 				`/api/v1/me/cycles?app=${encodeURIComponent(app)}&loop=${encodeURIComponent(loop)}&limit=50`,
 			);
-			const cycles = (list.data?.data?.cycles ?? []) as Array<{ ts: string; ok?: boolean; running?: boolean; duration_s?: number }>;
+			const cycles = (list.data?.data?.cycles ?? []) as RunRow[];
 			cycles.sort((a, b) => (b.ts || "").localeCompare(a.ts || ""));
 			setCycleList(cycles.slice(0, 50));
 			const ts = cycles[0]?.ts;
@@ -543,16 +515,13 @@ export default function WorkflowObservabilityPanel({
 			setSummary(sum);
 			setCycleFiles((detail?.files ?? {}) as Record<string, unknown>);
 			cycleCache.set(cacheKey, { ts, summary: sum });
-			// canvasCycle (the run drawn as a pipeline) is owned by the overlay
-			// effect below, keyed on the selected run — not set here.
-			// #4 — surface "why red": the first failing step's error.
-			const steps = (detail?.steps ?? []) as Array<{ skill?: string; step_id?: string; error?: string }>;
-			const firstErr = steps.find((s) => s.error);
-			setLastError(firstErr ? `${firstErr.skill || firstErr.step_id || "step"}: ${String(firstErr.error)}` : null);
+			// canvasCycle (the selected run's detail) is owned by the selection
+			// effect below, keyed on the selected run — not set here. A failed
+			// run's error is on the run itself now (RunDetail), not a page banner.
 		} catch {
 			/* keep any cached summary on transient error */
 		}
-	}, [app, loop, cacheKey, anchorTs]);
+	}, [app, loop, cacheKey]);
 
 	// Poll while the panel is open so the loop visibly advances — new runs,
 	// fresh offers, resolved approvals appear without a manual refresh. Pause
@@ -571,25 +540,60 @@ export default function WorkflowObservabilityPanel({
 	useEffect(() => {
 		let live = true;
 		setDefinition(null);
-		setCanvasStep(null);
 		me.workflowDetail(`${app}:${loop}`)
 			.then((r) => { if (live) setDefinition((r.definition || null) as LoopDefinition | null); })
 			.catch(() => { /* no declaration → canvas hides itself */ });
 		return () => { live = false; };
 	}, [app, loop]);
 
-	// canvasCycle = the run currently drawn as a pipeline. The selected run is
-	// the deep-link anchor, else the run pinned in the Runs list, else the
-	// latest. One fetch per selection change — the overlay effect owns it.
-	const overlayTs = anchorTs || selectedRunTs || cycleTs;
+	// The SELECTED run: the one the URL names, else the newest run that passes
+	// the table's filters (so /w/:loop?arm=x opens x's latest run), else the
+	// newest run. One detail fetch per selection change.
+	const defaultRunTs = useMemo(() => {
+		const list = cycleList ?? [];
+		const match = list.find((c) => (!qOutcome || cycleStatus(c).status === qOutcome) && (!qArm || c.branch_label === qArm));
+		return match?.ts ?? (qOutcome || qArm ? null : list[0]?.ts ?? cycleTs) ?? null;
+	}, [cycleList, qOutcome, qArm, cycleTs]);
+	const overlayTs = runIdParam || defaultRunTs;
+	const [detailLoading, setDetailLoading] = useState(false);
+	// Which run `canvasCycle` belongs to — so switching runs never shows the
+	// previous run's steps under the new run's header while the fetch is out.
+	const [canvasFor, setCanvasFor] = useState<string | null>(null);
 	useEffect(() => {
-		if (!overlayTs) { setCanvasCycle(null); return; }
+		if (!overlayTs) { setCanvasCycle(null); setCanvasFor(null); return; }
 		let live = true;
-		apiClient.get(`/api/v1/me/cycles/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/${encodeURIComponent(overlayTs)}`)
-			.then((r: any) => { if (live) setCanvasCycle((r.data?.data ?? null) as MeCycleDetail | null); })
-			.catch(() => { if (live) setCanvasCycle(null); });
+		setDetailLoading(true);
+		// me.cycleDetail normalises the id (unix seconds → cycle-dir id).
+		me.cycleDetail(app, loop, overlayTs)
+			.then((d) => { if (live) { setCanvasCycle(d); setCanvasFor(overlayTs); setDetailLoading(false); } })
+			.catch(() => { if (live) { setCanvasCycle(null); setCanvasFor(overlayTs); setDetailLoading(false); } });
 		return () => { live = false; };
 	}, [app, loop, overlayTs]);
+
+	// The run tree — for the table's metric column and to decide whether the
+	// Lineage tab has anything to show (a loop only branches when some run has
+	// more than one child). One shared fetch (fetchTrajectory dedupes in flight).
+	const [traj, setTraj] = useState<Trajectory | null>(null);
+	const loadTraj = useCallback(() => {
+		let live = true;
+		fetchTrajectory(app, loop).then((t) => { if (live) setTraj(t); }).catch(() => { if (live) setTraj(null); });
+		return () => { live = false; };
+	}, [app, loop]);
+	useEffect(() => loadTraj(), [loadTraj]);
+	useStudioRefetch(["runs", "cycles"], loadTraj);
+	const runScores = useMemo(() => {
+		const m: Record<string, number> = {};
+		for (const n of traj?.nodes ?? []) {
+			const id = toCycleId(n.cycle_ts || n.run_ts);
+			if (id && typeof n.score === "number" && n.scored !== false) m[id] = n.score;
+		}
+		return m;
+	}, [traj]);
+	const branches = useMemo(() => {
+		const kids = new Map<string, number>();
+		for (const n of traj?.nodes ?? []) if (n.parent_id) kids.set(n.parent_id, (kids.get(n.parent_id) ?? 0) + 1);
+		return [...kids.values()].some((k) => k > 1);
+	}, [traj]);
 
 	// #15 — the experiment attached to THIS loop, for the goal metric badge.
 	// Match generically: an experiment whose loops[] includes this loop; if the
@@ -684,10 +688,7 @@ export default function WorkflowObservabilityPanel({
 	}, [app, loop, running]);
 	const h = health(wf, tenantHasRuns || !cyclesKnown);
 	const lastRan = whenLastFromCycle(cycleList?.[0]?.ts);
-	const onDemand = parseSchedule(wf.trigger).kind === "trigger";
 
-	// Whether a pipeline is declared (drives the Pipeline column's content).
-	const hasPipeline = !!(definition && (definition.steps?.length || definition.skills_invoked?.length || definition.engine?.type || definition.engine?.module));
 
 	// #17 — the shared context-menu action set. Wires the items that have a
 	// destination already (view data / log / explain score / annotate / compare)
@@ -697,9 +698,10 @@ export default function WorkflowObservabilityPanel({
 	const menuActions: RunMenuActions = {
 		app, loop,
 		// Focus a run: pin it as the version the left casebook + right panels read.
+		// Focus a run: open its page (it is an address now, not a pinned state).
 		focusRun: (ts: string) => {
-			setSelectedRunTs(ts);
 			pinVersion({ runTs: ts, cycleTs: ts, label: cycleDate(ts) || ts });
+			navigate(runPath(app, loop, ts));
 		},
 		// View data: a case → its raw JSON + provenance (CaseContentViewer); a run
 		// → pin that run's version and show the data it's scored on (MetricsView).
@@ -746,137 +748,76 @@ export default function WorkflowObservabilityPanel({
 		</span>
 	);
 
+	// The run page's "Change this run" menu — the same RunContextMenu (and its
+	// two-step confirm for Promote / Discard) the lineage tree uses, with the
+	// observe items pointed at this page's own panes.
+	const [runMenu, setRunMenu] = useState<{ x: number; y: number } | null>(null);
+	useEffect(() => {
+		if (!runMenu) return;
+		const h = () => setRunMenu(null);
+		const k = (e: KeyboardEvent) => { if (e.key === "Escape") setRunMenu(null); };
+		window.addEventListener("click", h);
+		window.addEventListener("keydown", k);
+		return () => { window.removeEventListener("click", h); window.removeEventListener("keydown", k); };
+	}, [runMenu]);
+	const runPageActions: RunMenuActions = {
+		app, loop,
+		viewLog: (ts?: string) => navigate(runPath(app, loop, ts || overlayTs || "", { pane: "log" })),
+		branchWithIntent: (ts: string, label: string) => setBranchFor({ ts, label }),
+	};
+
+	const appLabel = identity?.label || appTitle(app);
+	const wfLabel = loopLabel(wf.name, loop);
+	const selectedRow = (cycleList ?? []).find((c) => c.ts === overlayTs) ?? null;
+	// Query every runs-table link carries, so filters survive picking a run.
+	const carryQuery = { outcome: qOutcome || undefined, arm: qArm || undefined, sort: qSortAsc ? "asc" : undefined };
+	// Tabs are addresses too. Runs keeps the page you are on (a run stays
+	// selected); the others are views of the WORKFLOW, so they open on it.
+	const tabHref = (t: WorkflowTab) => t === "runs"
+		? (runIdParam ? runPath(app, loop, runIdParam, carryQuery) : workflowPath(app, loop, carryQuery))
+		: workflowPath(app, loop, { tab: t });
+	const TABS: Array<{ key: WorkflowTab; label: string }> = [
+		{ key: "runs", label: "Runs" },
+		{ key: "experiments", label: loopExp ? "Experiments" : "Measurement" },
+		{ key: "lineage", label: "Lineage" },
+		{ key: "data", label: "Data" },
+	];
+
+	// The canvas views pushed from the lineage tree / data rail (log, compare,
+	// metrics, a case, a prompt, a memory bank). `base` is what shows when
+	// nothing is pushed.
+	const canvas = (base: React.ReactNode) => (
+		compareSel.length === 2 ? (
+			<RunCompareView app={app} loop={loop} tsA={compareSel[0]} tsB={compareSel[1]} onBack={() => setCompareSel([])} />
+		) : logFocus ? (
+			<TrajectoryLogView app={app} loop={loop} ts={version?.runTs || version?.cycleTs || anchorTs || undefined} onBack={backToTree} backLabel="Back" />
+		) : promptFocus ? (
+			<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-4"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading prompt…</div>}>
+				<EmbeddedPromptEditor app={app} name={promptFocus.name} onBack={backToTree} onChangedSource={onChanged} />
+			</Suspense>
+		) : memoryFocus ? (
+			<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-4"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading memories…</div>}>
+				<EmbeddedAgentBank agentId={memoryFocus.agentId} onBack={backToTree} />
+			</Suspense>
+		) : caseDataFocus ? (
+			<CaseContentViewer app={app} loop={loop} expId={loopExp?.id} caseId={caseDataFocus.id} caseLabel={caseDataFocus.label} atTs={version?.runTs || version?.cycleTs} onBack={backToTree} />
+		) : metricsFocus ? (
+			<MetricsView app={app} loop={loop} atTs={version?.runTs || version?.cycleTs} onBack={backToTree} />
+		) : base
+	);
+
 	return (
 		<ErrorBoundary resetKey={`${app}:${loop}`}>
-		<div className="space-y-4 animate-in fade-in duration-300">
-		{/* GOAL row — above the two panels, full width. headerRef rides here so the
-		    fill region below re-measures when the goal area grows/shrinks. */}
-		<div ref={headerRef} className="flex items-center gap-3 flex-wrap">
-			<div className="min-w-0 flex-1">
-				<GoalHeader goal={wf.goal} app={app} loop={loop} onSaved={onChanged} />
-			</div>
-		</div>
-		{!running && wf.last_run_ok === false && lastError && tenantHasRuns && (
-			<FailureCard error={lastError} app={app} loop={loop} />
-		)}
-		{/* DATA/AGENTS rail + WORKFLOW card, side by side, BOUNDED to the screen
-		    fill height: the rail scrolls internally; the workflow card does not. */}
-		{/* METRIC & ARMS — the experiments THIS loop feeds, in place. A loop
-		    with a metric and a dataset is an experiment; its arms belong on
-		    the workflow that owns them, not on a separate Experiments page
-		    (that tab was this tier torn off one loop and given a page —
-		    rendering two inert cards while the loop's own runs sat
-		    unlabelled elsewhere). Renders nothing when the loop feeds no
-		    experiment: a plain workflow has Outputs only. */}
-		{/* METRIC & ARMS, or the offer to create one.
-		    Previously this whole section vanished when the loop fed no
-		    experiment, so an app with none showed no trace of the concept and
-		    there was nowhere in the entire product to create one -- no write
-		    endpoint, no chat tool, and an empty state that told you to go and
-		    hand-edit `experiments:` in the app's config. Promotion belongs on
-		    the workflow that would own the experiment: that is where the
-		    question "did this change help?" is actually asked. */}
-		<section className="space-y-1.5">
-			<div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">
-				{loopExp ? "Metric & arms" : "Measurement"}
-			</div>
-			<Suspense fallback={null}>
-				{loopExp
-					// `quiet` is deliberately NOT passed here any more. It makes
-					// ExperimentsPanel render null when its loop filter comes up
-					// empty — but this header renders unconditionally, so the
-					// result is a titled, EMPTY box with no explanation. That is
-					// what a user saw after deleting three experiments while the
-					// loop still referenced them (2026-09-16): the section was
-					// there and nothing was in it, with nothing to act on.
-					//
-					// The panel now owns its own empty state, so whatever it does
-					// or does not find gets said under the heading that promised it.
-					? <ExperimentsPanel app={app} loop={loop} />
-					: <PromoteToExperiment app={app} loop={loop} onCreated={() => loadLatestCycle(true)} />}
-			</Suspense>
-		</section>
-		{/* OUTPUTS — what the loop last PRODUCED, at loop level.
-		    The comment above has promised since it was written that "a plain
-		    workflow has Outputs only", and nothing ever rendered them: the
-		    result existed solely inside StageBody, reachable by opening the run
-		    tree, picking a run, then picking a stage. So a workflow WITHOUT a
-		    metric showed runs and nothing else, and the reasonable question
-		    "what did this produce?" had no answer on the page.
-		    Uses the latest cycle's files, already fetched above for the observe
-		    gate — no extra request. Always rendered, deliberately: for an
-		    experiment it sits under Metric & arms, and for a plain workflow it
-		    is the whole story. */}
-		<OutputsTier
-			files={Object.keys(cycleFiles).length ? cycleFiles : (dbOutputs ?? {})}
-			ts={Object.keys(cycleFiles).length ? cycleTs : dbOutputTs}
-			hasRuns={tenantHasRuns || dbOutputs != null}
-		/>
-		<div ref={fillRef} style={{ height: fillH }} className="flex flex-col lg:flex-row gap-3 items-stretch min-w-0 w-full">
-				{!caseFocus && (railOpen ? (
-					<div className="w-full lg:w-[30%] lg:min-w-[220px] lg:max-w-[380px] flex-shrink-0 flex flex-col min-h-0 max-h-[55vh] lg:max-h-none lg:h-full">
-						<div className="flex-1 min-h-0 rounded-xl border border-slate-200 bg-slate-50/40 flex flex-col overflow-hidden">
-							{/* Two tabs — Data and Agents are SEPARATE xpio repos (a dataset
-							    repo and an agent repo), each independently versioned. No
-							    "Assets/Metrics/Log" header line — the tabs are the top; Metrics
-							    lives in the right panel and Log is per-run in the trajectory. */}
-							<div className="flex items-stretch flex-shrink-0 border-b border-slate-100 bg-white">
-								<AssetTab active={assetTab === "data"} onClick={() => setAssetTab("data")} icon={Database} label="Data" />
-								<AssetTab active={assetTab === "agents"} onClick={() => setAssetTab("agents")} icon={Brain} label="Agents" />
-								<button onClick={() => setRailOpen(false)} title="Hide the assets panel" className="px-2.5 flex items-center text-slate-300 hover:text-slate-600 transition-colors"><PanelLeftClose className="w-3.5 h-3.5" /></button>
-							</div>
-							{/* Per-tab version bar — each asset is its own versioned xpio repo. */}
-							<div className="flex-shrink-0 px-2 pt-2">
-								{assetTab === "data" ? (
-									<div className="space-y-1">
-										<DatasetVersionBar datasets={wf.datasets_detail} scopeTo={wf.dataset_id} fallbackRefs={(definition?.datasets?.length ? definition.datasets : wf.datasets) || []} />
-										{/* The aggregate avg-score card was removed — the per-case curves /
-										    scores below (cut to the selected run's version) are what matter. */}
-									</div>
-								) : (
-									<TuneVersionBar app={app} identity={identity} repo={agentRepo}
-										selectedAgentVersion={version?.agentVersion}
-										restingAgentVersion={wf.agent_version}
-										asOf={version ? cycleDate(version.runTs || version.cycleTs) : undefined} />
-								)}
-							</div>
-							<div className="flex-1 min-h-0 overflow-y-auto p-2">
-								{assetTab === "data" ? (
-									<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading data…</div>}>
-										<CasebookPanel app={app} loop={loop} atTs={version?.runTs || version?.cycleTs}
-											onSelectCase={(c) => openCaseData(c)} selectedCaseId={caseFocus?.id || caseDataFocus?.id}
-											onViewData={(c) => openCaseData(c)}
-											onContextMenuCase={(c, e) => { e.preventDefault(); setCaseMenu({ x: e.clientX, y: e.clientY, target: { kind: "case", caseId: c.id, label: c.label } }); }}
-											showMetrics={false} />
-									</Suspense>
-								) : (
-									<div className="space-y-3 pt-1">
-										<Foldable title="Memory banks" defaultOpen>
-											<AgentsRailContent agents={wf.memory_agents || []} onOpenAgent={openAgent} selectedAgent={memoryFocus?.agentId} hideHeader />
-										</Foldable>
-										<Foldable title="Prompts" defaultOpen>
-											<PromptsTuneCard app={app} onOpenPrompt={openPrompt} selectedPrompt={promptFocus?.name} />
-										</Foldable>
-										<Link to={`/studio/a/${encodeURIComponent(app)}/config`} className="block text-[11px] text-gold-700 hover:underline">Open app config (xpcloud.yaml) →</Link>
-									</div>
-								)}
-							</div>
-						</div>
-					</div>
-				) : (
-					<button onClick={() => setRailOpen(true)} title="Show the assets rail" className="flex-shrink-0 self-start inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-[11px] text-slate-600 hover:text-slate-800 hover:border-slate-300 transition-colors"><PanelLeftOpen className="w-3.5 h-3.5" /> Assets</button>
-				))}
-			{/* WORKFLOW card — bordered box bounded to the row height; the run tree
-			    fills it and does NOT scroll the page. */}
-			<div className="flex-1 min-w-0 rounded-xl border border-slate-200 bg-white flex flex-col overflow-hidden">
+		<div className="space-y-3 animate-in fade-in duration-300">
 			{/* RUN CONTROLS — hoisted onto the workflow-selector line (top strip):
-			    status chip · version dots · pull/publish · plan-next · pause · delete.
-			    The workflow name itself is the selector, so it's not repeated here.
-			    Falls back to an inline row if the portal slot isn't mounted yet. */}
+			    version dots · pull/publish · plan-next · pause. Falls back to an
+			    inline row if the portal slot isn't mounted yet. */}
 			{(() => {
 				const controls = (
 					<div className="flex items-center gap-1.5 flex-wrap min-w-0">
-						<VersionDots app={app} loop={loop} currentId={version?.runTs || version?.cycleTs} onPick={pinVersion} outcomes={runOutcomes} />
+						<VersionDots app={app} loop={loop} currentId={version?.runTs || version?.cycleTs || overlayTs || undefined}
+							onPick={(v) => { pinVersion(v); const ts = v.cycleTs || v.runTs; if (ts) navigate(runPath(app, loop, ts)); }}
+							outcomes={runOutcomes} />
 						<span className="w-px h-5 bg-slate-200 mx-0.5" aria-hidden />
 						{onShare && assetTab !== "data" && (
 							<>
@@ -913,81 +854,201 @@ export default function WorkflowObservabilityPanel({
 							{busy === "toggle" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : enabled ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
 							{enabled ? "Pause" : "Resume"}
 						</button>
-						{/* The per-workflow "Delete workflow" action moved into the app-actions
-						    "⋯" menu (apps.tsx) so the top strip shows a single ⋯, not two
-						    adjacent ones. onDelete/canDelete are still accepted for API
-						    compatibility but no longer render a second menu here. */}
 					</div>
 				);
 				return wfControlsTarget ? createPortal(controls, wfControlsTarget) : <div className="flex flex-wrap items-center gap-2">{controls}</div>;
 			})()}
 
-			{/* ── TUNE — inspect/edit the agent prompts + app config. ── */}
-			{/* ── ONE PANEL: assets rail (collapsible groups) + run canvas. No
-			    Observe/Improve/Tune modes — the rail holds cases & data, agents,
-			    and prompts/tuning; the canvas is the runs (read + experiment). ── */}
-			<div className="flex-1 min-h-0 flex">
-				<div className="flex-1 min-w-0 min-h-0 relative overflow-hidden">
-					{/* Metrics + full Evaluation log — overlaid INTO the workflow
-					    (trajectory) panel's top-right, only on the base view; each opens
-					    in place with its own Back. The log is the run's full transcript. */}
-					{compareSel.length !== 2 && !logFocus && !promptFocus && !memoryFocus && !caseDataFocus && !metricsFocus && !caseFocus && (
-						<div className="absolute bottom-9 right-2 z-20 flex flex-col items-end gap-1.5">
-							<button onClick={() => openMetrics()} title={`${L.metrics.text} — ${L.metrics.tip}`}
-								className="inline-flex items-center justify-center w-9 h-9 rounded-lg border text-slate-500 bg-white/90 backdrop-blur border-slate-200 hover:border-gold-200 hover:text-gold-700 transition-colors shadow-sm">
-								<BarChart3 className="w-4 h-4" />
-							</button>
-							{/* Evaluation-log button removed — it duplicated the run log already
-							    reachable from each run (node ⋯ → View run log / the run's pipeline). */}
-						</div>
-					)}
-					{/* Compare is a two-pick action; show a hint once one run is picked. */}
-					{compareSel.length === 1 && (
-						<div className="absolute bottom-2 left-2 z-20 inline-flex items-center gap-2 text-[11px] rounded-full px-2.5 py-1 border bg-sky-50 border-sky-200 text-sky-700 shadow-sm">
-							1 run selected — pick another run’s ⋯ → “Compare with…”
-							<button onClick={() => setCompareSel([])} className="text-sky-500 hover:text-sky-800 underline">clear</button>
-						</div>
-					)}
-					<div className="h-full min-h-0">
-					{compareSel.length === 2 ? (
-						<RunCompareView app={app} loop={loop} tsA={compareSel[0]} tsB={compareSel[1]} onBack={() => setCompareSel([])} />
-					) : logFocus ? (
-						<TrajectoryLogView app={app} loop={loop} ts={version?.runTs || version?.cycleTs || anchorTs || selectedRunTs || undefined} onBack={backToTree} backLabel="Run tree" />
-					) : promptFocus ? (
-						<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-4"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading prompt…</div>}>
-							<EmbeddedPromptEditor app={app} name={promptFocus.name} onBack={backToTree} onChangedSource={onChanged} />
-						</Suspense>
-					) : memoryFocus ? (
-						<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-4"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading memories…</div>}>
-							<EmbeddedAgentBank agentId={memoryFocus.agentId} onBack={backToTree} />
-						</Suspense>
-					) : caseDataFocus ? (
-						<CaseContentViewer app={app} loop={loop} expId={loopExp?.id} caseId={caseDataFocus.id} caseLabel={caseDataFocus.label} atTs={version?.runTs || version?.cycleTs} onBack={backToTree} />
-					) : metricsFocus ? (
-						<MetricsView app={app} loop={loop} atTs={version?.runTs || version?.cycleTs} onBack={backToTree} />
-					) : (
-						<TrajectoryGraph app={app} loop={loop} definition={definition} onSelectVersion={pinVersion} running={running}
-							mode="improve" headerRight={statusChip}
-							onShowLog={(ts) => openLog({ runTs: ts, cycleTs: ts, label: cycleDate(ts) || ts })}
-							actions={menuActions}
-							outcomes={runOutcomes} selectTs={anchorTs}
-							selectedForCompare={compareSel} onToggleCompare={toggleCompare} />
-					)}
-					</div>
+			{/* BREADCRUMB + TABS. The breadcrumb is real links — App › Workflow ›
+			    Run — so the way back is visible on the page, not only in history. */}
+			<div ref={headerRef} className="space-y-1.5">
+				<div className="flex items-center gap-2 flex-wrap min-w-0">
+					<nav aria-label="Breadcrumb" className="min-w-0">
+						<ol className="flex items-center gap-1 text-[12px] text-slate-500 flex-wrap">
+							<li><Link to={`/studio/apps/${encodeURIComponent(app)}`} className="hover:text-slate-900 hover:underline">{appLabel}</Link></li>
+							<li aria-hidden><ChevronRight className="w-3 h-3" /></li>
+							<li>
+								<Link to={workflowPath(app, loop)} aria-current={runIdParam ? undefined : "page"}
+									className={cn("hover:underline", runIdParam ? "hover:text-slate-900" : "text-slate-900 font-medium")}>{wfLabel}</Link>
+							</li>
+							{runIdParam && (
+								<>
+									<li aria-hidden><ChevronRight className="w-3 h-3" /></li>
+									<li><Link to={runPath(app, loop, runIdParam)} aria-current="page" className="text-slate-900 font-medium hover:underline">Run {runLocalTime(runIdParam)}</Link></li>
+								</>
+							)}
+						</ol>
+					</nav>
+					{statusChip}
+				</div>
+				<div role="tablist" aria-label="Workflow views" className="flex items-center gap-1 border-b border-slate-200">
+					{TABS.map((t) => {
+						const active = qTab === t.key;
+						return (
+							<Link key={t.key} to={tabHref(t.key)} role="tab" aria-selected={active}
+								className={cn("px-2.5 py-1.5 text-[12px] -mb-px border-b-2 transition-colors",
+									active ? "border-gold-500 text-slate-900 font-medium" : "border-transparent text-slate-500 hover:text-slate-800")}>
+								{t.label}{t.key === "runs" && cycleList ? <span className="ml-1 text-[10px] text-slate-400 tabular-nums">{cycleList.length}</span> : null}
+							</Link>
+						);
+					})}
 				</div>
 			</div>
-			</div>
-		</div>
 
-			{/* Stage drill-down + free-text query on the selected run (Observe). */}
-			{selectedStage && tenantHasRuns && (
-				<div ref={inspectorRef}>
-					<StageDetail app={app} loop={loop} stage={selectedStage} initialTs={anchorTs || selectedRunTs || undefined} onStageChange={(k) => setSelectedStage(k)} q={stageQ} setQ={setStageQ} onClose={() => setSelectedStage(null)} />
+			{/* ── RUNS (default) — master–detail: the runs table left, the selected
+			    run's step timeline right, both above the fold at 1440×900. ── */}
+			{qTab === "runs" && (
+				<div ref={fillRef} className="flex flex-wrap gap-3 items-start min-w-0">
+					<div className="flex-[1_1_350px] min-w-0 max-w-full 2xl:max-w-[460px] flex flex-col" style={{ height: Math.min(fillH, 40 + 38 * Math.max(3, (cycleList?.length ?? 3)) + 40) }}>
+						<RunsTable app={app} loop={loop} cycles={cycleList} scores={runScores} metricName={traj?.metric || wf.metric}
+							selectedId={overlayTs} outcome={qOutcome} arm={qArm} sortAsc={qSortAsc}
+							onFilter={(p) => patchQuery(p)} carryQuery={carryQuery} />
+					</div>
+					<div className="flex-[999_1_350px] min-w-0">
+						<RunDetail app={app} loop={loop} runId={overlayTs} detail={canvasFor === overlayTs ? canvasCycle : null}
+							loading={detailLoading} listRow={selectedRow} cycles={cycleList ?? []}
+							step={qStep} pane={qPane} compare={qCompare}
+							onQuery={(p) => {
+								// On the workflow page the run is implicit; any run-scoped
+								// state makes it explicit, so the URL names the run it is about.
+								if (!runIdParam && overlayTs) {
+									const sp = new URLSearchParams(search);
+									for (const [k, v] of Object.entries(p)) { if (v == null || v === "") sp.delete(k); else sp.set(k, v); }
+									navigate(runPath(app, loop, overlayTs, Object.fromEntries(sp.entries())));
+								} else patchQuery(p);
+							}}
+							onRerun={() => overlayTs && setBranchFor({ ts: overlayTs, label: `run ${runLocalTime(overlayTs)}` })}
+							menu={(x, y) => window.setTimeout(() => setRunMenu({ x, y }), 0)}
+							renderStages={(ts) => (
+								<StageDetail app={app} loop={loop} stage={stageKey} initialTs={ts} onStageChange={setStageKey} q={stageQ} setQ={setStageQ} onClose={() => setStageKey("observe")} />
+							)}
+						/>
+					</div>
 				</div>
 			)}
 
-			{/* The visible ⋯ / right-click menu for a casebook case row (the run
-			    tree owns its own internal menu). One shared menu component. */}
+			{/* ── EXPERIMENTS — the goal, the metric & arms this loop feeds, and
+			    what it last produced. ── */}
+			{qTab === "experiments" && (
+				<div className="space-y-4">
+					<GoalHeader goal={wf.goal} app={app} loop={loop} onSaved={onChanged} />
+					{/* METRIC & ARMS, or the offer to create one. A loop with a metric and
+					    a dataset is an experiment; its arms belong on the workflow that
+					    owns them. Without one, promotion is offered here — that is where
+					    "did this change help?" is asked. */}
+					<section className="space-y-1.5">
+						<div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">
+							{loopExp ? "Metric & arms" : "Measurement"}
+						</div>
+						<Suspense fallback={null}>
+							{loopExp
+								? <ExperimentsPanel app={app} loop={loop} />
+								: <PromoteToExperiment app={app} loop={loop} onCreated={() => loadLatestCycle(true)} />}
+						</Suspense>
+					</section>
+					{/* OUTPUTS — what the loop last PRODUCED, at loop level. */}
+					<OutputsTier
+						files={Object.keys(cycleFiles).length ? cycleFiles : (dbOutputs ?? {})}
+						ts={Object.keys(cycleFiles).length ? cycleTs : dbOutputTs}
+						hasRuns={tenantHasRuns || dbOutputs != null}
+					/>
+				</div>
+			)}
+
+			{/* ── LINEAGE — the run tree, only when the loop actually branches. A
+			    straight chain drawn as a graph was a v1…v22 column that said less
+			    than the Runs table. ── */}
+			{qTab === "lineage" && (
+				traj === null ? (
+					<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading the run tree…</div>
+				) : !branches && compareSel.length !== 2 && !logFocus && !metricsFocus ? (
+					<div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-6 text-[12px] text-slate-600">
+						This workflow&apos;s runs form a straight line — see <Link to={tabHref("runs")} className="text-gold-700 hover:underline">Runs</Link>.
+					</div>
+				) : (
+					<div ref={fillRef} style={{ height: fillH }} className="rounded-xl border border-slate-200 bg-white overflow-hidden relative min-w-0">
+						{compareSel.length === 1 && (
+							<div className="absolute bottom-2 left-2 z-20 inline-flex items-center gap-2 text-[11px] rounded-full px-2.5 py-1 border bg-sky-50 border-sky-200 text-sky-700 shadow-sm">
+								1 run selected — pick another run’s ⋯ → “Compare with…”
+								<button onClick={() => setCompareSel([])} className="text-sky-500 hover:text-sky-800 underline">clear</button>
+							</div>
+						)}
+						{canvas(
+							<TrajectoryGraph app={app} loop={loop} definition={definition} onSelectVersion={pinVersion} running={running}
+								mode="improve"
+								onShowLog={(ts) => openLog({ runTs: ts, cycleTs: ts, label: cycleDate(ts) || ts })}
+								actions={menuActions}
+								outcomes={runOutcomes} selectTs={overlayTs}
+								selectedForCompare={compareSel} onToggleCompare={toggleCompare} />,
+						)}
+					</div>
+				)
+			)}
+
+			{/* ── DATA — the assets rail (dataset cases · agents: memory banks +
+			    prompts) and whatever was opened from it. ── */}
+			{qTab === "data" && (
+				<div ref={fillRef} style={{ height: fillH }} className="flex flex-col lg:flex-row gap-3 items-stretch min-w-0 w-full">
+					<div className="w-full lg:w-[34%] lg:min-w-[240px] lg:max-w-[400px] flex-shrink-0 flex flex-col min-h-0 max-h-[55vh] lg:max-h-none lg:h-full">
+						<div className="flex-1 min-h-0 rounded-xl border border-slate-200 bg-slate-50/40 flex flex-col overflow-hidden">
+							{/* Data and Agents are SEPARATE xpio repos (a dataset repo and an
+							    agent repo), each independently versioned. */}
+							<div className="flex items-stretch flex-shrink-0 border-b border-slate-100 bg-white">
+								<AssetTab active={assetTab === "data"} onClick={() => setAssetTab("data")} icon={Database} label="Data" />
+								<AssetTab active={assetTab === "agents"} onClick={() => setAssetTab("agents")} icon={Brain} label="Agents" />
+							</div>
+							<div className="flex-shrink-0 px-2 pt-2">
+								{assetTab === "data" ? (
+									<DatasetVersionBar datasets={wf.datasets_detail} scopeTo={wf.dataset_id} fallbackRefs={(definition?.datasets?.length ? definition.datasets : wf.datasets) || []} />
+								) : (
+									<TuneVersionBar app={app} identity={identity} repo={agentRepo}
+										selectedAgentVersion={version?.agentVersion}
+										restingAgentVersion={wf.agent_version}
+										asOf={version ? cycleDate(version.runTs || version.cycleTs) : undefined} />
+								)}
+							</div>
+							<div className="flex-1 min-h-0 overflow-y-auto p-2">
+								{assetTab === "data" ? (
+									<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading data…</div>}>
+										<CasebookPanel app={app} loop={loop} atTs={version?.runTs || version?.cycleTs}
+											onSelectCase={(c) => openCaseData(c)} selectedCaseId={caseFocus?.id || caseDataFocus?.id}
+											onViewData={(c) => openCaseData(c)}
+											onContextMenuCase={(c, e) => { e.preventDefault(); setCaseMenu({ x: e.clientX, y: e.clientY, target: { kind: "case", caseId: c.id, label: c.label } }); }}
+											showMetrics={false} />
+									</Suspense>
+								) : (
+									<div className="space-y-3 pt-1">
+										<Foldable title="Memory banks" defaultOpen>
+											<AgentsRailContent agents={wf.memory_agents || []} onOpenAgent={openAgent} selectedAgent={memoryFocus?.agentId} hideHeader />
+										</Foldable>
+										<Foldable title="Prompts" defaultOpen>
+											<PromptsTuneCard app={app} onOpenPrompt={openPrompt} selectedPrompt={promptFocus?.name} />
+										</Foldable>
+										<Link to={`/studio/a/${encodeURIComponent(app)}/config`} className="block text-[11px] text-gold-700 hover:underline">Open app config (xpcloud.yaml) →</Link>
+									</div>
+								)}
+							</div>
+						</div>
+					</div>
+					<div className="flex-1 min-w-0 min-h-0 rounded-xl border border-slate-200 bg-white overflow-hidden relative">
+						{!logFocus && !promptFocus && !memoryFocus && !caseDataFocus && !metricsFocus && (
+							<button onClick={() => openMetrics()} title={`${L.metrics.text} — ${L.metrics.tip}`}
+								className="absolute top-2 right-2 z-20 inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] text-slate-600 bg-white border-slate-200 hover:border-gold-200 hover:text-gold-700 transition-colors shadow-sm">
+								<BarChart3 className="w-3.5 h-3.5" /> {L.metrics.text}
+							</button>
+						)}
+						<div className="h-full min-h-0">
+							{canvas(
+								<div className="h-full flex items-center justify-center text-[12px] text-slate-500 px-6 text-center">
+									Pick a case, a memory bank or a prompt on the left to open it here.
+								</div>,
+							)}
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* The visible ⋯ / right-click menu for a casebook case row. */}
 			{caseMenu && createPortal(
 				<RunContextMenu
 					x={caseMenu.x} y={caseMenu.y} target={caseMenu.target} actions={menuActions}
@@ -996,8 +1057,21 @@ export default function WorkflowObservabilityPanel({
 				/>,
 				document.body,
 			)}
+			{/* "Change this run" on the run page. */}
+			{runMenu && overlayTs && createPortal(
+				<RunContextMenu
+					x={runMenu.x} y={runMenu.y}
+					target={{ kind: "run", ts: overlayTs, label: `Run ${runLocalTime(overlayTs)}` }}
+					actions={runPageActions}
+					selectedForCompare={qCompare ? [qCompare] : []}
+					onToggleCompare={(ts) => patchQuery({ compare: ts === qCompare ? null : ts })}
+					onClose={() => setRunMenu(null)}
+					onAfterRuntimeOp={() => loadLatestCycle(true)}
+				/>,
+				document.body,
+			)}
 
-			{/* WS-5 — branch-with-intention dialog. */}
+			{/* WS-5 — branch-with-intention dialog (also the run page's Re-run…). */}
 			{branchFor && (
 				<NextRunComposer app={app} loop={loop} isExperiment={!!loopExp} fromTs={branchFor.ts} fromLabel={branchFor.label} schedule={schedSeed}
 					onClose={() => setBranchFor(null)} onLaunched={() => { setOptimisticRun(true); window.setTimeout(() => setOptimisticRun(false), 120_000); }} onChanged={onChanged} />

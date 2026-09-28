@@ -12,6 +12,7 @@
 // always populated, removes the duplicate, and means new pages just
 // register one row in PAGE_META below.
 
+import { workflowPath } from "@/lib/run-routes";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -88,8 +89,8 @@ const PAGE_META: Array<{
 	{
 		pattern: /^\/studio\/runs/,
 		icon: ActivityIcon,
-		title: "Jobs",
-		subtitle: "Your recent runs — open any to ask about it.",
+		title: "Runs",
+		subtitle: "Every run of every workflow — open one to see its steps.",
 		iconTone: "text-gold-600",
 	},
 	{
@@ -182,10 +183,10 @@ function deriveCrumbs(pathname: string): Array<{ label: string; to: string }> {
 	// identity, so the top bar shows no "My Apps / <app>" crumb (was printed
 	// twice). /apps/all (the grid) keeps no crumb either.
 	const m2 = pathname.match(/^\/studio\/runs\/([^/]+)/);
-	if (m2) return [{ label: "Activity", to: "/studio/runs" }];
+	if (m2) return [{ label: "Runs", to: "/studio/runs" }];
 	// Cycle inspector is reached from an app's workflow panel.
 	const m3 = pathname.match(/^\/studio\/(?:intents|today)\/cycle\/([^/]+)\/([^/]+)\/[^/]+/);
-	if (m3) return [{ label: "My Agents", to: "/studio/apps" }, { label: appTitle(decodeURIComponent(m3[1])), to: `/studio/apps/${m3[1]}?selected=${m3[2]}` }];
+	if (m3) return [{ label: "My Agents", to: "/studio/apps" }, { label: appTitle(decodeURIComponent(m3[1])), to: workflowPath(decodeURIComponent(m3[1]), decodeURIComponent(m3[2])) }];
 	// T13 — /studio/intents/:slug shows the autoresearch detail panel.
 	// Match it AFTER the cycle regex so the cycle path isn't shadowed.
 	const m3b = pathname.match(/^\/studio\/intents\/[^/]+/);
@@ -268,11 +269,11 @@ export default function TopStatusStrip() {
 				const wfs = (wfR.value.workflows || []).filter((w) => inScope(w.app));
 				for (const w of wfs.filter((w) => w.enabled !== false && w.last_run_ok === false)) {
 					const loop = loopOf(w);
-					next.push({ key: w.slug, tone: "failing", icon: AlertTriangle, text: `${appTitle(w.app || "")} · ${loopLabel(w.name, loop)} failing`, action: "diagnose", to: `/studio/apps/${encodeURIComponent(w.app || "")}?selected=${encodeURIComponent(loop)}` });
+					next.push({ key: w.slug, tone: "failing", icon: AlertTriangle, text: `${appTitle(w.app || "")} · ${loopLabel(w.name, loop)} failing`, action: "diagnose", to: workflowPath(w.app || "", loop) });
 				}
 				for (const w of wfs.filter((w) => w.running)) {
 					const loop = loopOf(w);
-					next.push({ key: w.slug, tone: "running", icon: Activity, text: `${appTitle(w.app || "")} · ${loopLabel(w.name, loop)} running`, action: "watch", to: `/studio/apps/${encodeURIComponent(w.app || "")}?selected=${encodeURIComponent(loop)}` });
+					next.push({ key: w.slug, tone: "running", icon: Activity, text: `${appTitle(w.app || "")} · ${loopLabel(w.name, loop)} running`, action: "watch", to: workflowPath(w.app || "", loop) });
 				}
 			}
 			if (draftsCount > 0) {

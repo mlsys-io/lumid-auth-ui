@@ -43,6 +43,8 @@ export interface IndexRow {
 	tone?: ToneKey;
 	/** Short status word shown right-aligned, colored by tone. */
 	statusLabel?: string;
+	/** Tooltip for the status word (e.g. what the source system said). */
+	statusTitle?: string;
 	/** Light grouping label (e.g. the app's ui.sidebar.section). */
 	section?: string;
 	/** The grounded prompt fired on click — the conversational interface. */
@@ -54,6 +56,8 @@ export interface IndexRow {
 	 *  hover "ask" affordance. Apps use this so a row click lands on the
 	 *  overview, not the conversation. */
 	navTo?: string;
+	/** With navTo: show the "ask" button always, not only on hover. */
+	askVisible?: boolean;
 }
 
 /** Fire a grounded ask into the chat, honoring the landing preference. */
@@ -96,7 +100,7 @@ function Row({ row }: { row: IndexRow }) {
 				{row.meta && <div className="text-[11.5px] text-muted-foreground truncate">{row.meta}</div>}
 			</div>
 			{row.statusLabel && (
-				<span className={`text-[11px] shrink-0 ${tone ? tone.text : 'text-muted-foreground'}`}>
+				<span className={`text-[11px] shrink-0 ${tone ? tone.text : 'text-muted-foreground'}`} title={row.statusTitle}>
 					{row.statusLabel}
 				</span>
 			)}
@@ -106,10 +110,12 @@ function Row({ row }: { row: IndexRow }) {
 				<button
 					type="button"
 					onClick={(e) => { e.stopPropagation(); fireAsk(row.ask); }}
-					className="shrink-0 inline-flex items-center gap-0.5 text-[11px] text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground transition-all"
+					className={row.askVisible
+						? "shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-md border border-border text-[11px] text-muted-foreground hover:text-foreground hover:bg-background transition-colors"
+						: "shrink-0 inline-flex items-center gap-0.5 text-[11px] text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground transition-all"}
 					title="Ask the AI about this"
 				>
-					ask <MessageSquare className="w-3 h-3" />
+					{row.askVisible ? <>Ask <MessageSquare className="w-3 h-3" /></> : <>ask <MessageSquare className="w-3 h-3" /></>}
 				</button>
 			) : row.detailsHref ? (
 				<Link

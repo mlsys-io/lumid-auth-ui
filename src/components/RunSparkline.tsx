@@ -16,6 +16,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { SparkRun } from "@/api/me";
 import CycleCard from "@/components/workflow/CycleCard";
+import { runStatus, runStatusTitle } from "@/lib/runStatus";
 
 interface Props {
 	spec: string;
@@ -34,13 +35,9 @@ const SQ_CLASS: Record<string, string> = {
 	".": "bg-gold-400 animate-pulse",
 };
 
-const STATE_LABEL: Record<string, string> = {
-	o: "succeeded",
-	r: "recovered (self-healed via retry)",
-	x: "failed",
-	_: "skipped",
-	".": "running",
-};
+// Tooltip words come from the ONE run-status vocabulary (lib/runStatus), so a
+// dot says "Failed" here and on the run page alike; the raw char stays in it.
+const STATE_LABEL = (c: string) => runStatusTitle(runStatus(c));
 
 export function RunSparkline({ spec, className, runs, app, loop }: Props) {
 	// Event motion (not load): when the spec changes — a new run landed —
@@ -91,7 +88,7 @@ export function RunSparkline({ spec, className, runs, app, loop }: Props) {
 					<span
 						key={i}
 						className={["w-1.5 h-3 rounded-sm transition-transform hover:scale-125", changed && i === chars.length - 1 ? "spark-pop" : "", SQ_CLASS[c] || "bg-slate-200"].join(" ")}
-						title={STATE_LABEL[c] || c}
+						title={STATE_LABEL(c)}
 					/>
 				))}
 			</div>
@@ -125,9 +122,9 @@ export function RunSparkline({ spec, className, runs, app, loop }: Props) {
 					<button
 						key={i}
 						type="button"
-						aria-label={`run ${i + 1}: ${STATE_LABEL[c] || c}${isPinned ? " (selected)" : ""}`}
+						aria-label={`run ${i + 1}: ${STATE_LABEL(c)}${isPinned ? " (selected)" : ""}`}
 						aria-pressed={isPinned}
-						title={STATE_LABEL[c] || c}
+						title={STATE_LABEL(c)}
 						onMouseEnter={(e) => { cancelClose(); setHover({ idx: i, rect: e.currentTarget.getBoundingClientRect() }); }}
 						onClick={(e) => {
 							e.stopPropagation();
