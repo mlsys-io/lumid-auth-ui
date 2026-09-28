@@ -689,7 +689,8 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 
 							{pane === "yaml" && (
 								<pre className="max-h-96 overflow-auto rounded bg-slate-50 p-2 text-xs text-slate-800">
-									{detail.raw_yaml || "The server did not return raw_yaml for this task."}
+									{/* FlowMesh returns the spec as `source` now; `raw_yaml` on older servers. */}
+									{detail.raw_yaml || detail.source || "The server did not return the YAML for this task."}
 								</pre>
 							)}
 

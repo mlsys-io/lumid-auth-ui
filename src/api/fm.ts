@@ -182,6 +182,14 @@ export interface FmTask {
 	supplier_id?: string | null;
 	topic?: string | null;
 	raw_yaml?: string | null;
+	// The task spec as text (`source`) and structured (`task`), plus the graph
+	// node it executes. For a Lumilake-submitted task the names carry the
+	// Lumilake job id (lumilake-exec-<x>:request_<req-id>_…) — see
+	// lib/fleet-provenance.ts.
+	source?: string | null;
+	task?: { metadata?: { name?: string; owner?: string } } | null;
+	graph_node_name?: string | null;
+	local_name?: string | null;
 	// SSH sessions publish their connection details through the task's own
 	// `latest_update`, not a dedicated endpoint — the worker calls
 	// emit_update(task_id, {"ssh": ...}) (worker/executors/ssh_executor.py). That

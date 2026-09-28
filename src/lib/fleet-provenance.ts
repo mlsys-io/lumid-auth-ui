@@ -16,37 +16,74 @@
 // lumid_identity/internal/handler/me_compute_job.go — anything identity would
 // reject is not worth asking it about).
 const REQ_ID = "req-[A-Za-z0-9]{6,64}";
-const NAME_RE = new RegExp(`^lumilake-(${REQ_ID})$`);
-// `name: lumilake-req-…` on its own line, optionally quoted. Anchored to a
+// The shapes a Lumilake-submitted task's NAME takes. Measured on the home mesh
+// 2026-09-28 (30 tasks, all Lumilake): metadata.name is
+//   lumilake-exec-<exec-id>:request_<req-id>_graph_0_<hash>_…
+// and graph_node_name / local_name are the part after the colon. The bare
+// `lumilake-<req-id>` form is kept for workflows submitted whole.
+const NAME_RES = [
+	new RegExp(`^lumilake-(${REQ_ID})$`),
+	new RegExp(`^lumilake-exec-[A-Za-z0-9]+:request_(${REQ_ID})_`),
+	new RegExp(`^request_(${REQ_ID})_`),
+];
+// `name: …` on its own line of a task's YAML, optionally quoted. Anchored to a
 // `name:` key rather than matching the token anywhere: a YAML that merely
 // MENTIONS another job (an env var, a comment, an input path) must not be read
 // as having been submitted by it.
-const YAML_NAME_RE = new RegExp(`^\\s*name:\\s*["']?lumilake-(${REQ_ID})["']?\\s*(?:#.*)?$`, "m");
+const YAML_NAME_RE = /^\s*name:\s*["']?([^"'\s#]+)["']?\s*(?:#.*)?$/gm;
+
+function reqIdOfName(n: unknown): string | null {
+	if (typeof n !== "string") return null;
+	const v = n.trim();
+	for (const re of NAME_RES) {
+		const m = v.match(re);
+		if (m) return m[1];
+	}
+	return null;
+}
+
+function reqIdOfYaml(y: unknown): string | null {
+	if (typeof y !== "string" || !y) return null;
+	for (const m of y.matchAll(YAML_NAME_RE)) {
+		const id = reqIdOfName(m[1]);
+		if (id) return id;
+	}
+	return null;
+}
+
+const nameOf = (o: unknown): unknown =>
+	o && typeof o === "object" ? (o as { name?: unknown }).name : undefined;
+
+/** A FlowMesh task, as far as provenance needs it. FlowMesh returns the task
+ *  spec both structured (`task`) and as text (`source`; `raw_yaml` on older
+ *  servers). */
+export interface TaskNaming {
+	raw_yaml?: string | null;
+	source?: unknown;
+	task?: unknown;
+	metadata?: unknown;
+	name?: unknown;
+	graph_node_name?: unknown;
+	local_name?: unknown;
+}
 
 /** The Lumilake job id a FlowMesh task names as its submitter, or null.
- *  Reads a structured `metadata.name` / `name` first, then the task's
- *  raw_yaml. Never guesses: no match is null. */
-export function lumilakeReqIdOfTask(task: {
-	raw_yaml?: string | null;
-	name?: unknown;
-	metadata?: unknown;
-} | null | undefined): string | null {
+ *  Structured names first (task.metadata.name, metadata.name, the graph node
+ *  name), then a `name:` key in the task's YAML. Never guesses: no match is
+ *  null. */
+export function lumilakeReqIdOfTask(task: TaskNaming | null | undefined): string | null {
 	if (!task) return null;
-	const meta = task.metadata && typeof task.metadata === "object" ? (task.metadata as { name?: unknown }) : null;
-	for (const n of [meta?.name, task.name]) {
-		if (typeof n === "string") {
-			const m = n.trim().match(NAME_RE);
-			if (m) return m[1];
-		}
+	const spec = task.task && typeof task.task === "object" ? (task.task as { metadata?: unknown }) : null;
+	for (const n of [nameOf(spec?.metadata), nameOf(task.metadata), task.name, task.graph_node_name, task.local_name]) {
+		const id = reqIdOfName(n);
+		if (id) return id;
 	}
-	const y = typeof task.raw_yaml === "string" ? task.raw_yaml : "";
-	const m = y.match(YAML_NAME_RE);
-	return m ? m[1] : null;
+	return reqIdOfYaml(task.source) ?? reqIdOfYaml(task.raw_yaml);
 }
 
 /** The first task (in order) that names its Lumilake submitter, preferring
  *  `preferTaskId` when that task names one. */
-export function lumilakeReqIdOfTasks<T extends { task_id: string; raw_yaml?: string | null }>(
+export function lumilakeReqIdOfTasks<T extends TaskNaming & { task_id: string }>(
 	tasks: readonly T[] | null | undefined, preferTaskId?: string | null,
 ): string | null {
 	if (!tasks?.length) return null;

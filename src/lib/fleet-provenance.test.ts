@@ -54,6 +54,22 @@ check("fleet jobs path", () => {
 	eq(fleetJobsPath("home", "wfl-1234", "tsk-9"), "/studio/research-fleet/jobs?site=home&workflow=wfl-1234&task=tsk-9");
 	eq(fleetJobsPath("", null), "/studio/research-fleet/jobs");
 });
+// Real shapes, from the home mesh 2026-09-28.
+const EXEC = "lumilake-exec-XwW5xjAY3iN6zq4kqCNpk6:request_req-YUhbW4P6FTmFsXqBUPAh79_graph_0_5bc9cd30_e7b5abd9__llm_graph_0_Answer_1499";
+check("real FlowMesh task: structured task.metadata.name (exec:request_<req>_…)", () =>
+	eq(lumilakeReqIdOfTask({ task: { metadata: { name: EXEC, owner: "lumilake" } } }), "req-YUhbW4P6FTmFsXqBUPAh79"));
+check("real FlowMesh task: graph_node_name / local_name", () => {
+	eq(lumilakeReqIdOfTask({ graph_node_name: "request_req-YUhbW4P6FTmFsXqBUPAh79_graph_0_x" }), "req-YUhbW4P6FTmFsXqBUPAh79");
+	eq(lumilakeReqIdOfTask({ local_name: "request_req-YUhbW4P6FTmFsXqBUPAh79_graph_0_x" }), "req-YUhbW4P6FTmFsXqBUPAh79");
+});
+check("real FlowMesh task: `source` YAML with the exec:request name", () =>
+	eq(lumilakeReqIdOfTask({ source: `apiVersion: mloc/v1\nkind: InferenceTask\nmetadata:\n  name: lumilake-exec-XwW5xjAY3iN6zq4kqCNpk6\n  owner: lumilake\n` }), null));
+check("source YAML carrying the full exec:request name", () =>
+	eq(lumilakeReqIdOfTask({ source: `metadata:\n  name: ${EXEC}\n` }), "req-YUhbW4P6FTmFsXqBUPAh79"));
+check("an exec id alone is not a job id (identity keys jobs by req-)", () => {
+	eq(lumilakeReqIdOfTask({ name: "lumilake-exec-XwW5xjAY3iN6zq4kqCNpk6" }), null);
+	eq(lumilakeReqIdOfTask({ graph_node_name: "request_exec-XwW5xjAY3_graph" }), null);
+});
 check("short job id", () => {
 	eq(shortJobId("req-FQ89FpUz6jnoyYyyjoPxxX"), "req-FQ89FpUz…");
 	eq(shortJobId("req-abc123"), "req-abc123");
