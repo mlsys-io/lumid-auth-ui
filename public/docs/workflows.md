@@ -160,7 +160,7 @@ tenants before it existed.
 
 Open a workflow row to see what a run produced.
 
-![KOL strategy's detail: kol_alpha under Metric & arms with its `why below min_samples (6/10)`, the Outputs tier reporting that the last run recorded no artifact, and the run tree.](/docs/img/experiments-workflows.png)
+![KOL strategy's detail: kol_alpha under Metric & arms flagged `metric mismatch` with its state predating the current metric, the Outputs tier reporting that the last run recorded no artifact, and the run tree.](/docs/img/experiments-workflows.png)
 
 - **Metric & arms** — the experiment this loop feeds, in place, so a result is
   never in only one of the two tabs.
@@ -280,7 +280,7 @@ The same chat that reads the experiment can change it. The loop is:
 **define → run → inspect → discuss → dispatch the next arm** — and every step of
 it is reachable in words.
 
-![Adding an arm from chat: the request, the tool call, and the confirmation.](/docs/img/experiments-chat-controlplane.png)
+![Adding an arm from chat: the request, the add_experiment_arm call, and the Allow / Always / Deny prompt it waits on before writing.](/docs/img/experiments-chat-controlplane.png)
 
 | Say | Reaches |
 |---|---|
@@ -389,7 +389,7 @@ An experiment reports what you declared. Reading it is still your job.
 parameterization survives recorded market history. Same machinery, and almost
 nothing else in common with the one above.
 
-![kol_alpha (shown as "kol alpha") on the Experiments tab of an install whose state predates the metric change — collecting, 3 arms with 2 never run, 6 results, still labelled "measures real tape".](/docs/img/experiments-kol.png)
+![kol_alpha (shown as "kol alpha") on the Experiments tab of an install whose state predates the metric change — `metric mismatch`, 3 arms never run, 0 results, and the card naming the keys its runs actually emitted.](/docs/img/experiments-kol.png)
 
 **Its metric changed on 2026-09-26, and why is the first lesson.** Until then
 it measured `real_tape`: `1` or `0`, did this backtest replay real market
@@ -677,9 +677,9 @@ claim the model is a step in the pipeline.
 
 **Import…** converts it, and the dialog says exactly what you are getting:
 
-![The import dialog: four of five n8n nodes not imported, each with the reason; credential and attachment warnings; and what FlowMesh's own parser would accept if you submitted the original instead.](/docs/img/workflow-import-dialog.png)
+![The import dialog: three of five n8n nodes not imported, each with the reason; credential and attachment warnings; and what FlowMesh's own parser would accept if you submitted the original instead.](/docs/img/workflow-import-dialog.png)
 
-This dialog is deliberately unflattering. Four of five nodes did not come
+This dialog is deliberately unflattering. Three of five nodes did not come
 across, and each one says why — including the one that is *not* a loss
 (`OpenAI Chat Model` is a model provider, so it was folded into the op it was
 attached to rather than becoming an orphan node).

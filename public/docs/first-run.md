@@ -119,6 +119,8 @@ sidebar, find **Quant Research**, and click **Add to my account**. It is
 public, so nothing needs approving; once added, the button reads **Added ·
 Open**.
 
+![The Marketplace: Quant Research and MBB Consultant already added (Added · Open); the others still offer Add to my account.](/docs/img/first-run-marketplace.png)
+
 Afterwards it appears in the sidebar with **four tabs**:
 
 | tab | what it shows |
@@ -328,7 +330,7 @@ to **submit** the strategy, not to print one:
 > is above 0.15, with the threshold and size as params. Name it
 > `ofi_z_momentum_v1`.*
 
-![The chatbox returning a compilable .lqts strategy.](/docs/img/first-run-chat-strategy.png)
+![The chatbox drafting the .lqts and pausing on Allow / Always / Deny before it submits anything.](/docs/img/first-run-chat-strategy.png)
 
 **You will be asked to approve it.** Submitting is a write, so the chat pauses
 on an **Allow / Always / Deny** prompt and the turn blocks until you click.
@@ -519,7 +521,7 @@ Backtest results — read the three labels *before* the P&L, every time:
 
 Forward-test scorecards from the live paper arm:
 
-![Workflows → Forward test: the paper arm's reads.](/docs/img/first-run-forward-result-2.png)
+![Workflows → Forward test: no metric, so the card offers to make it an experiment; the Outputs tier, its two datasets, and runs that are NOT SCORED.](/docs/img/first-run-forward-result-2.png)
 
 And the **Analyze** loop, which is the decision funnel rather than P&L —
 proposed, submitted, rejected, and the top reject reason. This is where you
@@ -699,7 +701,7 @@ rather than assembling it yourself:
 
 ![The chat reading the results feed through lqt_mailbox_read to answer.](/docs/img/first-run-chat-analytics.png)
 
-*The chips are the tools running —`lqt_mailbox_read` against `results`,
+*The chips are the tools it ran in this turn — `lqt_mailbox_read` against `results`,
 `strategies` and `stats`. The chat is not guessing from the page, it is
 querying. **Read the scope, though: those three feeds are platform-wide.**
 `/xpio/results` carries no tenant column at all, and the `stats` and
@@ -804,7 +806,7 @@ Either route works:
 - **Any account** — Marketplace → search `mbb-consultant` → **Add to my account**.
 
 Give it 10–20 seconds. It is ready when the app appears in your sidebar under
-**Research** and its Overview page renders a case browser.
+**Your Apps** and its **Work** tab renders a case browser.
 
 *If the app says ready but every tab errors "app not found", it was installed
 under a bare name rather than its full `owner/name` slug, and the platform could
@@ -827,7 +829,7 @@ whether an arm is actually ahead.
 
 ### Pick a mode, then a case
 
-The Overview page is a case browser. Choose the mode **first** — it decides who
+The **Work** tab is a case browser. Choose the mode **first** — it decides who
 is asking whom, and it is the single choice that changes the whole session.
 
 | Mode | What happens | What you type | How it scores |
@@ -836,11 +838,19 @@ is asking whom, and it is the single choice that changes the whole session.
 | **AI answers a case** | The analyst works the case. You play the interviewer. | `next question`, or what the answer got wrong | Against that case's ground truth |
 | **Ask anything** | Your own question, no case file. Same analyst, same rubric. | Your consulting question | **Indicative only — no ground truth** |
 
+![The Work tab: the three modes, the case list, and the selected case's opening.](/docs/img/first-run-mbb-modes.png)
+
 Pick **AI interviews you** for your first session. It is the one that scores
 *you*, which is what most people came for. Pick a case, then press **Interview
 me** — that opens the chat
 already grounded in the case, so you do not paste anything or repeat the case
 name.
+
+![A case selected under AI interviews you: its client facts, four hidden questions, and the Interview me button.](/docs/img/first-run-mbb-interview-me.png)
+
+*The rail's greeting says "press Start"; the button is labelled **Interview me**
+in this mode (**Start case** for AI answers a case, **Ask a question** for Ask
+anything). They are the same control.*
 
 ### Work it in the chat
 
