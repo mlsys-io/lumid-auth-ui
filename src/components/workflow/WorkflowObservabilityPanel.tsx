@@ -778,7 +778,7 @@ export default function WorkflowObservabilityPanel({
 		: workflowPath(app, loop, { tab: t });
 	const TABS: Array<{ key: WorkflowTab; label: string }> = [
 		{ key: "runs", label: "Runs" },
-		{ key: "experiments", label: loopExp ? "Experiments" : "Measurement" },
+		{ key: "experiments", label: loopExp ? "Study" : "Measurement" },
 		{ key: "lineage", label: "Lineage" },
 		{ key: "data", label: "Data" },
 	];
