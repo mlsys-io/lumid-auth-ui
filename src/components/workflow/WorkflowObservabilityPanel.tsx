@@ -898,7 +898,12 @@ export default function WorkflowObservabilityPanel({
 			{/* ── RUNS (default) — master–detail: the runs table left, the selected
 			    run's step timeline right, both above the fold at 1440×900. ── */}
 			{qTab === "runs" && (
-				<div ref={fillRef} className="flex flex-wrap gap-3 items-start min-w-0">
+				<div ref={fillRef} className="flex flex-wrap-reverse gap-3 items-end min-w-0">
+					{/* wrap-REVERSE: side by side when both fit; when they cannot (a 1280px
+				    screen with the chat rail open leaves ~576px), the RUN goes on top and
+				    the table below — with plain wrap the whole runs table sat above the
+				    run and its step output started ~1000px down (persona J8, 2026-09-29).
+				    Under wrap-reverse the cross axis flips, so items-end aligns tops. */}
 					<div className="flex-[0_0_320px] min-w-0 max-w-full 2xl:flex-[0_0_400px] flex flex-col" style={{ height: Math.min(fillH, 40 + 38 * Math.max(3, (cycleList?.length ?? 3)) + 40) }}>
 						<RunsTable app={app} loop={loop} cycles={cycleList} scores={runScores} metricName={traj?.metric || wf.metric}
 							selectedId={overlayTs} outcome={qOutcome} arm={qArm} sortAsc={qSortAsc}
