@@ -396,7 +396,7 @@ export function RunDetail({
 													<StepInspectorPanel
 														step={{ step_id: id, skill: st.skill && st.skill !== id ? st.skill : undefined, cycleStep: st }}
 														app={app} loop={loop} ts={runId}
-														defaultShowOutput closeLabel="Collapse step"
+														defaultShowOutput closeLabel="Collapse step" embedded
 														onClose={() => onQuery({ step: "none", pane: null })}
 													/>
 												)}

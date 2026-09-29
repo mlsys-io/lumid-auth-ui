@@ -24,6 +24,7 @@ import { run as runCycleIdChecks, caseCount as cycleIdCaseCount } from "@/lib/cy
 import { run as runAwaitChecks, caseCount as awaitCaseCount } from "@/components/app-surface/await-run.test";
 import { run as runRunStatusChecks, caseCount as runStatusCaseCount } from "@/lib/runStatus.test";
 import { run as runRouteChecks, caseCount as routeCaseCount } from "@/lib/run-routes.test";
+import { run as runChunkChecks, caseCount as chunkCaseCount } from "@/lib/lazy-with-reload.test";
 import { run as runFleetProvChecks, caseCount as fleetProvCaseCount } from "@/lib/fleet-provenance.test";
 
 type Check = { name: string; run: () => void };
@@ -353,7 +354,7 @@ check("isEmptyLoop is true only when nothing is declared", () => {
 export function run(): number {
 	// The document round-trip suite runs in the same process — it is the
 	// invariant everything else is built on, so it must never be skippable.
-	let failed = runDocChecks() + runEditChecks() + runFmChecks() + runXpioChecks() + runImportChecks() + runCycleIdChecks() + runAwaitChecks() + runRunStatusChecks() + runRouteChecks() + runFleetProvChecks();
+	let failed = runDocChecks() + runEditChecks() + runFmChecks() + runXpioChecks() + runImportChecks() + runCycleIdChecks() + runAwaitChecks() + runRunStatusChecks() + runRouteChecks() + runFleetProvChecks() + runChunkChecks();
 	for (const c of checks) {
 		try {
 			c.run();
@@ -378,10 +379,10 @@ if (typeof describe === "function" && typeof it === "function") {
 	const proc = (globalThis as { process?: { exitCode?: number } }).process;
 	if (failed > 0) {
 		// eslint-disable-next-line no-console
-		console.error(`${failed} of ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount + cycleIdCaseCount + awaitCaseCount + runStatusCaseCount + routeCaseCount + fleetProvCaseCount} case(s) failed`);
+		console.error(`${failed} of ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount + cycleIdCaseCount + awaitCaseCount + runStatusCaseCount + routeCaseCount + fleetProvCaseCount + chunkCaseCount} case(s) failed`);
 		if (proc) proc.exitCode = 1;
 	} else {
 		// eslint-disable-next-line no-console
-		console.log(`workflow core: all ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount + cycleIdCaseCount + awaitCaseCount + runStatusCaseCount + routeCaseCount + fleetProvCaseCount} cases passed`);
+		console.log(`workflow core: all ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount + cycleIdCaseCount + awaitCaseCount + runStatusCaseCount + routeCaseCount + fleetProvCaseCount + chunkCaseCount} cases passed`);
 	}
 }
