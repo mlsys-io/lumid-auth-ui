@@ -67,7 +67,7 @@ function nodeLabel(n: TrajectoryNode): string {
 }
 const ACTION_VERB: Record<string, string> = {
 	run_more: "Run more samples",
-	try_variant: "Try a variant",
+	try_variant: "Try an experiment",
 	score_remaining: "Score remaining cases",
 	promote: "Promote the winner",
 	calibrate: "Re-calibrate",
@@ -337,7 +337,7 @@ export default function NextRunComposer({ app, loop, isExperiment, fromTs, fromL
 
 						{/* Change (intention) */}
 						<div>
-							<label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">What should this attempt change?</label>
+							<label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">What should this experiment change?</label>
 							<textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3}
 								placeholder="e.g. weight recent earnings more heavily; try a stricter judge rubric… (leave blank to just re-run)"
 								onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); launchNow(); } }}
@@ -350,7 +350,7 @@ export default function NextRunComposer({ app, loop, isExperiment, fromTs, fromL
 							<textarea value={overridesText} onChange={(e) => setOverridesText(e.target.value)} rows={2}
 								placeholder={"one per line, e.g.\nmodel = claude\ntemperature = 0.3"}
 								className="mt-1 w-full font-mono text-[12px] text-slate-800 leading-snug rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-gold-300 resize-none" />
-							<div className="mt-0.5 text-[10px] text-slate-400">Becomes the attempt's variant. Numbers / true / false are coerced.</div>
+							<div className="mt-0.5 text-[10px] text-slate-400">Becomes part of the experiment's config. Numbers / true / false are coerced.</div>
 						</div>
 
 						{/* An arm changes CONFIG; the run still needs a SUBJECT — the
@@ -362,7 +362,7 @@ export default function NextRunComposer({ app, loop, isExperiment, fromTs, fromL
 							<textarea value={argsText} onChange={(e) => setArgsText(e.target.value)} rows={2}
 								placeholder={"one per line, e.g.\nstrategy_id = mom_30m_1788…\ncases = 3"}
 								className="mt-1 w-full font-mono text-[12px] text-slate-800 leading-snug rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-gold-300 resize-none" />
-							<div className="mt-0.5 text-[10px] text-slate-400">Passed as the loop's own invocation args (<span className="font-mono">args.*</span>), not the variant.</div>
+							<div className="mt-0.5 text-[10px] text-slate-400">Passed as the loop's own invocation args (<span className="font-mono">args.*</span>), not the experiment's config.</div>
 						</div>
 
 						{/* Phase B — Evaluate / success criteria */}
@@ -419,7 +419,7 @@ export default function NextRunComposer({ app, loop, isExperiment, fromTs, fromL
 									))}
 									<div className="flex items-center gap-3">
 										<button type="button" onClick={() => setVariantRows((rows) => [...rows, ""])}
-											className="text-[11px] text-gold-700 hover:text-gold-900 underline decoration-dotted">+ add variant</button>
+											className="text-[11px] text-gold-700 hover:text-gold-900 underline decoration-dotted">+ add setting</button>
 										<input value={priorityText} onChange={(e) => setPriorityText(e.target.value)} inputMode="numeric"
 											placeholder="priority"
 											className="w-20 text-[12px] text-slate-800 rounded-lg border border-slate-200 bg-white px-2 py-0.5 focus:outline-none focus:ring-2 focus:ring-gold-300" />
@@ -459,7 +459,7 @@ export default function NextRunComposer({ app, loop, isExperiment, fromTs, fromL
 								<div className="flex-1 min-w-0 space-y-1.5">
 									<SchedulePicker value={cron} disabled={savingSched} onChange={(c) => { setCron(c); setSchedDirty(true); }} />
 									<div className="flex items-center gap-2">
-										<span className="text-[10px] text-slate-400">{describeSchedule(cron)} · separate from “Run attempt” (which runs once now).</span>
+										<span className="text-[10px] text-slate-400">{describeSchedule(cron)} · separate from “Run experiment” (which runs once now).</span>
 										{schedDirty && (
 											<button onClick={saveSchedule} disabled={savingSched}
 												className="ml-auto inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-lg bg-gold-500 text-white hover:bg-gold-600 disabled:opacity-50 flex-shrink-0">

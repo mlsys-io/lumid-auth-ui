@@ -946,7 +946,7 @@ export default function WorkflowObservabilityPanel({
 					    "did this change help?" is asked. */}
 					<section className="space-y-1.5">
 						<div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">
-							{loopExp ? "Metric & arms" : "Measurement"}
+							{loopExp ? "Metric & experiments" : "Measurement"}
 						</div>
 						<Suspense fallback={null}>
 							{loopExp

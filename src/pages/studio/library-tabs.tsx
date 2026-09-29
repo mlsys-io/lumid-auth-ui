@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 const TABS = [
 	{ to: "/studio/library/marketplace", label: "Marketplace", icon: Store },
 	{ to: "/studio/library/skills", label: "Skills", icon: Puzzle },
-	{ to: "/studio/library/experiments", label: "Experiments", icon: FlaskConical },
+	{ to: "/studio/library/experiments", label: "Studies", icon: FlaskConical },
 ];
 
 export default function StudioLibraryTabs() {
