@@ -1,4 +1,11 @@
-// NewExperiment — create an experiment from the Experiments surface.
+// NewExperiment — define a STUDY from the Experiments surface, and optionally
+// run it in the same step.
+//
+// GLOSSARY.md (LumidOS): a study compares experiments on one metric; an
+// experiment is one configured run. The form used to create an empty entry
+// and say "Add arms after creating", which left a study with nothing to
+// compare until someone found a second control — so the experiments are named
+// here, and "Run" defines and queues them in one call (me.defineStudy).
 //
 // The write endpoint and a form for it already existed. PromoteToExperiment
 // (me.upsertExperiment) has shipped since the two-tab review — but its ONLY
@@ -32,6 +39,8 @@ export default function NewExperiment(
 	const [metric, setMetric] = useState("");
 	const [scopeKind, setScopeKind] = useState<"dataset" | "cases">("dataset");
 	const [scope, setScope] = useState("");
+	const [experiments, setExperiments] = useState("baseline");
+	const [samples, setSamples] = useState(1);
 	const [busy, setBusy] = useState(false);
 	const [err, setErr] = useState<string | null>(null);
 	const [done, setDone] = useState<string | null>(null);
@@ -62,20 +71,24 @@ export default function NewExperiment(
 		return i >= 0 ? slug.slice(i + 1) : slug;
 	}
 
-	const ready = id.trim() !== "" && loop !== "" && metric.trim() !== "" && scope.trim() !== "";
+	const expIds = experiments.split(/[\n,]/).map((x) => x.trim()).filter(Boolean);
+	const ready = id.trim() !== "" && loop !== "" && metric.trim() !== "" && scope.trim() !== ""
+		&& expIds.length > 0;
 
-	async function submit() {
+	async function submit(run: boolean) {
 		if (!ready) return;
 		setBusy(true); setErr(null);
 		try {
-			const r = await me.upsertExperiment(app, {
+			const r = await me.defineStudy(app, {
 				id: id.trim(),
-				loop,
+				workflow: loop,
 				metric: { name: metric.trim(), higher_is_better: true },
+				experiments: expIds.map((x) => ({ id: x })),
+				samples,
 				...(scopeKind === "dataset"
 					? { dataset_id: scope.trim() }
 					: { cases: scope.split(",").map((c) => c.trim()).filter(Boolean) }),
-			});
+			}, run);
 			// 202 + an intent: the scheduler applies it. Report what the RUNNER
 			// did, not that the queue accepted it — a queue acknowledgement read
 			// as success is what kept users re-issuing a define that had in fact
@@ -86,16 +99,17 @@ export default function NewExperiment(
 				setErr(String(out.error || "the scheduler refused it"));
 				return;
 			}
-			// Warnings are the model-abstention guard: a seat that resolves
-			// nowhere does not error, it abstains, and the panel shrinks
-			// silently. Say them rather than showing a bare tick.
-			const warns = (out.warnings as string[]) || [];
-			setDone(warns.length ? `created — ${warns.join(" · ")}` : `created ${id.trim()}`);
-			setId(""); setMetric(""); setScope("");
+			// Define-time warnings (a check that could not run, a model that
+			// resolves nowhere) and the scheduler's own. Say them rather than
+			// showing a bare tick.
+			const warns = [...(r.warnings || []), ...((out.warnings as string[]) || [])];
+			const what = run ? `defined ${id.trim()} and queued ${expIds.length * samples} run(s)` : `defined ${id.trim()}`;
+			setDone(warns.length ? `${what} — ${warns.join(" · ")}` : what);
+			setId(""); setMetric(""); setScope(""); setExperiments("baseline"); setSamples(1);
 			onCreated?.();
 			window.setTimeout(() => { setDone(null); setOpen(false); }, 2500);
 		} catch (e: any) {
-			setErr(e?.message || "could not create the experiment");
+			setErr(e?.message || "could not define the study");
 		} finally {
 			setBusy(false);
 		}
@@ -108,14 +122,14 @@ export default function NewExperiment(
 				className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white
 					px-2.5 py-1.5 text-[12px] font-medium text-slate-700 hover:bg-slate-50"
 			>
-				<Plus className="h-3.5 w-3.5" /> New experiment
+				<Plus className="h-3.5 w-3.5" /> New study
 			</button>
 		);
 	}
 
 	return (
 		<div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
-			<div className="text-[12px] font-medium text-slate-700">New experiment</div>
+			<div className="text-[12px] font-medium text-slate-700">New study</div>
 
 			<input
 				value={id} onChange={(e) => setId(e.target.value)}
@@ -128,7 +142,7 @@ export default function NewExperiment(
 				className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-[12px]"
 			>
 				<option value="">
-					{loops === null ? "loading workflows…" : "workflow it attaches to…"}
+					{loops === null ? "loading workflows…" : "workflow each experiment runs…"}
 				</option>
 				{(loops || []).map((w) => (
 					<option key={w.slug} value={loopOf(w.slug)}>{w.name}</option>
@@ -138,7 +152,7 @@ export default function NewExperiment(
 			{/* Both required, and the reasons are not interchangeable. */}
 			<input
 				value={metric} onChange={(e) => setMetric(e.target.value)}
-				placeholder="metric — a loop with no metric is a workflow, not an experiment"
+				placeholder="metric — the number the workflow reports, which the study compares"
 				className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-[12px]"
 			/>
 
@@ -156,10 +170,24 @@ export default function NewExperiment(
 					className="flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-[12px]"
 				/>
 			</div>
+			<textarea
+				value={experiments} onChange={(e) => setExperiments(e.target.value)}
+				rows={2}
+				placeholder="experiments to compare, one per line — baseline, warm_start"
+				className="w-full rounded-lg border border-slate-200 px-2 py-1.5 font-mono text-[12px]"
+			/>
+			<label className="flex items-center gap-2 text-[11px] text-slate-600">
+				Runs per experiment
+				<input
+					type="number" min={1} max={20} value={samples}
+					onChange={(e) => setSamples(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
+					className="w-16 rounded-lg border border-slate-200 px-2 py-1 text-[12px]"
+				/>
+			</label>
 			<div className="text-[10.5px] text-slate-500">
-				Scope is required: min_samples counted over an undefined population cannot be
-				interpreted. Success criteria are optional — leave them off to just collect
-				results and look for patterns. Add arms after creating.
+				Scope is required: a sample count over an undefined population cannot be
+				interpreted. The workflow and the metric it reports are checked before
+				anything runs. Configure an experiment further on its card after defining.
 			</div>
 
 			{err && <div className="text-[11px] text-rose-600">{err}</div>}
@@ -167,11 +195,20 @@ export default function NewExperiment(
 
 			<div className="flex gap-1.5">
 				<button
-					disabled={!ready || busy} onClick={submit}
+					disabled={!ready || busy} onClick={() => void submit(true)}
 					className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-2.5 py-1.5
 						text-[12px] font-medium text-white disabled:opacity-40"
+					title="Define the study and run every experiment"
 				>
-					{busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Create
+					{busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Run
+				</button>
+				<button
+					disabled={!ready || busy} onClick={() => void submit(false)}
+					className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[12px] text-slate-700
+						hover:bg-slate-50 disabled:opacity-40"
+					title="Define the study without running it"
+				>
+					Define
 				</button>
 				<button
 					onClick={() => { setOpen(false); setErr(null); }}

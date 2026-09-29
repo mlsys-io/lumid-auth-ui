@@ -652,8 +652,10 @@ function ArmsBlock({ app, e }: { app: string; e: MeExperiment }) {
 									title={!loop
 										? "This experiment is attached to no workflow, so there is nowhere to dispatch it"
 										: needsSubject
-											? "This run needs a subject the button cannot know — the chat asks, then dispatches"
-											: `Runs one cycle of ${loop} with this arm applied`}
+											? "This run needs a subject the button cannot know — the chat asks for it, then runs it"
+											: seen
+												? `Runs one more cycle of ${loop} with this experiment's config`
+												: `Runs one cycle of ${loop} with this experiment's config`}
 									className={cn(
 										"px-2 py-1 rounded-md text-[11px] font-medium border whitespace-nowrap transition-colors",
 										loop
@@ -661,7 +663,10 @@ function ArmsBlock({ app, e }: { app: string; e: MeExperiment }) {
 											: "border-slate-200 text-slate-300 bg-slate-50 cursor-not-allowed",
 									)}
 								>
-									{busy === id ? "queueing…" : needsSubject ? "Run via chat" : seen ? "Run 1 more" : "Run this arm"}
+									{/* One verb (LumidOS VERBS.md): the title says what
+									    this Run will do — ask in chat first when the run
+									    needs a subject, or add one more run. */}
+									{busy === id ? "queueing…" : "Run"}
 								</button>
 							)}
 						</div>
