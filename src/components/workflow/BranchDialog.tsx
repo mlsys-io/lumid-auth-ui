@@ -1,7 +1,7 @@
-// BranchDialog — branch with intention (WS-5). The "Branch… / Run attempt"
+// BranchDialog — branch with intention (WS-5). The "Branch… / Run experiment"
 // action opens this small modal so a branch carries a DIRECTIVE instead of an
 // empty config:
-//   • free-text "what should this attempt explore?" → the trajectory signal's
+//   • free-text "what should this experiment explore?" → the trajectory signal's
 //     `note` (the proposer reads it as the exploration directive)
 //   • optional config overrides (key=value lines) → the run `variant`
 //
@@ -88,31 +88,31 @@ export default function BranchDialog({ app, loop, fromTs, fromLabel, onClose, on
 				onClick={(e) => e.stopPropagation()}>
 				<div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100">
 					<GitBranch className="w-4 h-4 text-gold-600" />
-					<div className="text-sm font-semibold text-slate-900">New attempt</div>
+					<div className="text-sm font-semibold text-slate-900">New experiment</div>
 					<span className="text-[11px] text-slate-400 truncate">from {fromLabel}</span>
 					<button onClick={onClose} className="ml-auto p-1 rounded hover:bg-slate-100 text-slate-400"><X className="w-4 h-4" /></button>
 				</div>
 				<div className="p-4 space-y-3">
 					<div>
-						<label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">What should this attempt explore?</label>
+						<label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">What should this experiment explore?</label>
 						<textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} autoFocus
 							placeholder="e.g. weight recent earnings more heavily; try a stricter judge rubric…"
 							onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(); } }}
 							className="mt-1 w-full text-[13px] text-slate-800 leading-snug rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-gold-300 resize-none" />
-						<div className="mt-0.5 text-[10px] text-slate-400">The agent reads this as its direction for the next attempt.</div>
+						<div className="mt-0.5 text-[10px] text-slate-400">The agent reads this as its direction for the next experiment.</div>
 					</div>
 					<details>
 						<summary className="text-[11px] font-medium text-slate-500 cursor-pointer hover:text-slate-700">Config overrides (optional)</summary>
 						<textarea value={overridesText} onChange={(e) => setOverridesText(e.target.value)} rows={3}
 							placeholder={"one per line, e.g.\ntemperature = 0.3\nmax_candidates = 5"}
 							className="mt-1.5 w-full font-mono text-[12px] text-slate-800 leading-snug rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-gold-300 resize-none" />
-						<div className="mt-0.5 text-[10px] text-slate-400">Becomes the attempt's variant. Numbers / true / false are coerced.</div>
+						<div className="mt-0.5 text-[10px] text-slate-400">Becomes part of the experiment's config. Numbers / true / false are coerced.</div>
 					</details>
 				</div>
 				<div className="flex items-center gap-2 px-4 py-3 border-t border-slate-100">
 					<button onClick={submit} disabled={busy}
 						className={cn("inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-gold-500 text-white hover:bg-gold-600 disabled:opacity-50")}>
-						{busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <GitBranch className="w-3.5 h-3.5" />} Run attempt
+						{busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <GitBranch className="w-3.5 h-3.5" />} Run experiment
 					</button>
 					<button onClick={onClose} disabled={busy}
 						className="px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50">Cancel</button>

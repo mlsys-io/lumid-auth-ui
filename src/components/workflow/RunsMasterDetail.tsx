@@ -135,10 +135,10 @@ export function RunsTable({
 				</label>
 				{arms.length > 0 && (
 					<label className="inline-flex items-center gap-1 text-[11px] text-slate-500">
-						<span className="sr-only">Filter by arm</span>
+						<span className="sr-only">Filter by experiment</span>
 						<select value={arm} onChange={(e) => onFilter({ arm: e.target.value || null })}
 							className="text-[11px] bg-white border border-slate-200 rounded-md px-1 py-0.5 text-slate-700 max-w-[120px]">
-							<option value="">All arms</option>
+							<option value="">All experiments</option>
 							{arms.map((a) => <option key={a} value={a}>{a}</option>)}
 							{arm && !arms.includes(arm) && <option value={arm}>{arm}</option>}
 						</select>
@@ -165,7 +165,7 @@ export function RunsTable({
 								<th className="px-1 py-1.5 font-medium">Outcome</th>
 								<th className="px-1 py-1.5 font-medium text-right" title="Duration">Dur.</th>
 								<th className="px-1 py-1.5 font-medium text-right" title={metricName ? `metric: ${metricName}` : undefined}>Metric</th>
-								<th className="px-1 py-1.5 font-medium">Arm</th>
+								<th className="px-1 py-1.5 font-medium">Experiment</th>
 								{hasTrigger && <th className="px-1 py-1.5 font-medium">Trigger</th>}
 							</tr>
 						</thead>
@@ -285,7 +285,7 @@ export function RunDetail({
 					<span className="text-[11px] text-slate-500">{runAgo(runId)}</span>
 					<span className="text-[11px] text-slate-500 tabular-nums" title="duration">· {fmtDur(duration)}</span>
 					{listRow?.branch_label && (
-						<span className="text-[11px] font-mono text-slate-600 bg-slate-50 border border-slate-200 rounded px-1.5" title="arm / branch">{listRow.branch_label}</span>
+						<span className="text-[11px] font-mono text-slate-600 bg-slate-50 border border-slate-200 rounded px-1.5" title="experiment / branch">{listRow.branch_label}</span>
 					)}
 					<span className="ml-auto text-[10px] font-mono text-slate-400" title="run id (cycle dir)">{runId}</span>
 				</div>

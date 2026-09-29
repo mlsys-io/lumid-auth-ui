@@ -103,7 +103,7 @@ const PAGE_META: Array<{
 	{
 		pattern: /^\/studio\/library\/experiments/,
 		icon: Store,
-		title: "Experiments",
+		title: "Studies",
 		subtitle: "Hypotheses your agents are testing, across every agent.",
 		iconTone: "text-gold-600",
 	},

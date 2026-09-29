@@ -59,7 +59,7 @@ export default function PromoteToExperiment(
 			// RUNNER did rather than claiming success on the queue accepting it.
 			const res = await waitForIntent(r.intent_id, { timeoutMs: 90_000 });
 			const out = (res.result || {}) as Record<string, unknown>;
-			if (out.ok === false) { setErr(String(out.error || "could not define the experiment")); return; }
+			if (out.ok === false) { setErr(String(out.error || "could not define the study")); return; }
 			const warns = (out.warnings as string[]) || [];
 			setDone(warns.length ? warns.join(" · ") : "defined");
 			onCreated?.();
@@ -74,13 +74,11 @@ export default function PromoteToExperiment(
 		return (
 			<div className="rounded-xl border border-dashed border-slate-200 bg-white/60 px-3 py-2.5 flex items-center justify-between gap-3">
 				<div className="text-[11px] text-slate-500 leading-relaxed">
-					This workflow has no metric, so it is not an experiment — it runs, and
-					its output is above. Give it a metric and a case scope to start
-					measuring whether a change helps.
+					This workflow has no metric, so nothing compares its runs — it runs, and its output is above. Give it a metric and a case scope to start a study of whether a change helps.
 				</div>
 				<button type="button" onClick={() => setOpen(true)}
 					className="flex-shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-slate-50">
-					<FlaskConical className="w-3.5 h-3.5" /> Make it an experiment
+					<FlaskConical className="w-3.5 h-3.5" /> Start a study
 				</button>
 			</div>
 		);
@@ -89,7 +87,7 @@ export default function PromoteToExperiment(
 	return (
 		<div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2.5">
 			<div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">
-				Define an experiment on {loop}
+				Define a study on {loop}
 			</div>
 			<div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
 				<label className="text-[11px] text-slate-600 space-y-1">

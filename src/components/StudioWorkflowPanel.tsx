@@ -288,7 +288,7 @@ export function StudioWorkflowPanel() {
 			    run carries no arm, rather than rendering an empty chip. */}
 			{sibs.length > 1 && (
 				<div className="px-3 pb-1 flex flex-wrap items-center gap-1 text-[10px]">
-					<span className="opacity-60">arm:</span>
+					<span className="opacity-60">experiment:</span>
 					{sibs.map((j) => {
 						const on = j.job_id === (sel?.job_id ?? wf?.job_id);
 						const uniq = Array.from(new Set(Object.values(j.workers || {})));

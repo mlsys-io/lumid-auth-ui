@@ -78,12 +78,12 @@ export default function StudioExperiments() {
 
 	return (
 		<IndexList
-			title="Experiments"
+			title="Studies"
 			rows={indexRows}
 			search={indexRows.length > 6}
-			searchPlaceholder="Search experiments…"
+			searchPlaceholder="Search studies…"
 			toolbar={toolbar}
-			empty="Agents declare experiments (hypothesis × variants × a metric); results accumulate as workflows run. Ask what experiments could help your agents."
+			empty="Agents declare studies (a hypothesis, the experiments that test it, one metric); results accumulate as workflows run. Ask what studies could help your agents."
 		/>
 	);
 }
