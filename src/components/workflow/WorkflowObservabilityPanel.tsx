@@ -899,12 +899,15 @@ export default function WorkflowObservabilityPanel({
 			    run's step timeline right, both above the fold at 1440×900. ── */}
 			{qTab === "runs" && (
 				<div ref={fillRef} className="flex flex-wrap gap-3 items-start min-w-0">
-					<div className="flex-[1_1_350px] min-w-0 max-w-full 2xl:max-w-[460px] flex flex-col" style={{ height: Math.min(fillH, 40 + 38 * Math.max(3, (cycleList?.length ?? 3)) + 40) }}>
+					<div className="flex-[0_0_320px] min-w-0 max-w-full 2xl:flex-[0_0_400px] flex flex-col" style={{ height: Math.min(fillH, 40 + 38 * Math.max(3, (cycleList?.length ?? 3)) + 40) }}>
 						<RunsTable app={app} loop={loop} cycles={cycleList} scores={runScores} metricName={traj?.metric || wf.metric}
 							selectedId={overlayTs} outcome={qOutcome} arm={qArm} sortAsc={qSortAsc}
 							onFilter={(p) => patchQuery(p)} carryQuery={carryQuery} />
 					</div>
-					<div className="flex-[999_1_350px] min-w-0">
+					{/* The table is a fixed 320px (400px on very wide screens) and the run
+					    takes the rest: with both at flex-basis 350px the run's step output
+					    sat in ~350px beside the chat rail. Below 700px they stack. */}
+					<div className="flex-[1_1_380px] min-w-0">
 						<RunDetail app={app} loop={loop} runId={overlayTs} detail={canvasFor === overlayTs ? canvasCycle : null}
 							loading={detailLoading} listRow={selectedRow} cycles={cycleList ?? []}
 							step={qStep} pane={qPane} compare={qCompare}

@@ -11,7 +11,7 @@ import AskAbout from "@/components/AskAbout";
 import { StatusBadge } from "@/components/ui/status-badge";
 
 export default function StepInspectorPanel({
-	step, app, loop, ts, onClose, defaultShowOutput = false, closeLabel,
+	step, app, loop, ts, onClose, defaultShowOutput = false, closeLabel, embedded = false,
 }: {
 	step: CanvasStepRef;
 	app: string;
@@ -24,17 +24,21 @@ export default function StepInspectorPanel({
 	defaultShowOutput?: boolean;
 	/** Accessible label for the close control (the run page uses "Collapse step"). */
 	closeLabel?: string;
+	/** Inside a step row that already shows the step's name and status: drop
+	 *  the duplicate title/status and the nested card chrome (the run page
+	 *  showed "engine_command · Succeeded" twice, one above the other). */
+	embedded?: boolean;
 }) {
 	const [showOutput, setShowOutput] = useState(defaultShowOutput);
 	const cs = step.cycleStep;
 	const failed = cs?.ok === false;
 
 	return (
-		<div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-150">
+		<div className={embedded ? "space-y-2.5" : "rounded-xl border border-slate-200 bg-white p-3 space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-150"}>
 			<div className="flex items-center gap-2">
-				<span className="text-[13px] font-semibold text-slate-900 truncate">{step.step_id}</span>
-				{step.skill && <span className="text-[10.5px] text-slate-500 font-mono truncate">{step.skill}</span>}
-				{cs ? (
+				{!embedded && <span className="text-[13px] font-semibold text-slate-900 truncate">{step.step_id}</span>}
+				{!embedded && step.skill && <span className="text-[10.5px] text-slate-500 font-mono truncate">{step.skill}</span>}
+				{embedded ? null : cs ? (
 					<StatusBadge tone={failed ? "failing" : "ok"} label={failed ? "Failed" : "Succeeded"} />
 				) : step.declared ? (
 					<StatusBadge tone="idle" label="Declared (Pattern B — no per-step trace)" />

@@ -1,4 +1,7 @@
-import { lazy, Suspense, useEffect } from "react";
+import { Suspense, useEffect } from "react";
+// Every page is lazy-loaded; a canary rollout can leave a page asking for a
+// chunk its pod does not have. lazyWithReload retries, then reloads once.
+import { lazyWithReload as lazy } from "@/lib/lazy-with-reload";
 import { legacyCycleTarget, legacyWorkflowSlugTarget } from "@/lib/run-routes";
 import { Boxes, ListChecks, TerminalSquare} from "lucide-react";
 import { Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
