@@ -346,11 +346,11 @@ and the GPU quota for other users is zero.
 | **Shared with researchers** | s0 is also used directly by campus researchers. A card is only offered when *nothing* is using it; when their jobs hold cards, the list says `busy outside Kubernetes` and those cards are skipped. |
 | **Multi-GPU** | The 4 cards have **no NVLink** — they talk over PCIe, and one of them sits on the other CPU socket. Measured NCCL all-reduce bus bandwidth: **~37 GB/s** across 2 cards, **~19 GB/s** across 4 (per card: ~740 bf16 TFLOPS, 111 GiB usable of 139). Fine for data-parallel training; tensor-parallel inference across cards will be communication-bound. |
 | **CPUs** | CPU sandboxes (1 / 2 / 4 / 8 cores) land on s0 or on `h0`. h0's 2 × H100 serve `lum.id/llm` permanently and are **never** rentable — a CPU box there cannot see them. |
-| **Account** | Your lum.id email must be **onboarded** (mapped to a NUS user name). Otherwise every call answers `403 not onboarded` — ask an operator. |
+| **Account** | **Automatic.** Your first call gives you a NUS user name derived from your email (e.g. `alice@x.com` → `alice`; a short suffix is added if the name is taken, and it is never one of the campus researchers' logins on s0/h0). `GET /sbx/nus/api/whoami` shows it. **Already have a login on s0/h0?** Ask an operator to map your email to it *before* your first sandbox — otherwise you get a second, derived name with its own `/home`. |
 | **Home** | `/home/<you>` — 100 GiB on the NUS storage array, survives delete like everywhere else. |
 | **Models** | `/models` — the shared model store, **read-only**, mounted in every box. Load weights from here instead of downloading them again. |
 | **Scratch** | `/scratch` — fast local NVMe, per user, *not* backed up. |
-| **Images** | `harbor.lum.id/…` references work unchanged; the site pulls them from its own replica. |
+| **Images** | `harbor.lum.id/…` references work unchanged; the site pulls them from its own replica. NUS also has its own registry, **`registry.lum.id`** — see below. |
 | **Limits** | 4 GPUs and 8 sandboxes per admin; GPU boxes up to 128 cores / 512 GiB; 24h TTL. |
 
 **Getting a shell — `ssh -p 31222 gw@lum.id`.** Same key rules as the other sites (§1): your lum.id
@@ -386,6 +386,22 @@ curl -s -H "Authorization: Bearer $T" https://lum.id/sbx/nus/api/sandboxes | jq 
 curl -s -X POST -H "Authorization: Bearer $T" -H 'content-type: application/json' \
   https://lum.id/sbx/nus/api/sandboxes -d '{"name":"train","gpu":2,"cpu":16,"memory_gi":64,"ttl_hours":8}'
 ```
+
+**NUS's own registry — `registry.lum.id`.** Images pushed here live on the NUS storage array, so a
+multi-GB image does not cross the WAN when a box starts. Push rights are per user and granted by an
+operator (not automatic yet): they give you a password for your NUS user name, and you can push to
+`registry.lum.id/<your-nus-user>/…` only. Every request needs the login — there is no anonymous
+access from the internet.
+
+```bash
+docker login registry.lum.id -u <your-nus-user>                  # the password the operator gave you
+docker build --platform linux/amd64 -t registry.lum.id/<your-nus-user>/train:v1 .
+docker push registry.lum.id/<your-nus-user>/train:v1
+# then create a NUS box with "image": "registry.lum.id/<your-nus-user>/train:v1"
+```
+
+`401` on `docker login` means the user name or password is wrong; `403` on push means you are
+pushing outside `<your-nus-user>/` (or have not been granted push rights).
 
 ---
 
