@@ -1,4 +1,4 @@
-// Submit — hand a workflow to ONE site.
+// Run — hand a workflow to ONE site, through the fleet API (api/fleet.ts).
 //
 // WHY A SITE PICKER AND NOT "THE MESH". There is no cross-site submit and there
 // cannot be one today: each site runs its own FlowMesh server, Redis and
@@ -14,13 +14,8 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { isSessionExpired } from "../../api/client";
-import {
-	fanoutForSites,
-	listWorkers,
-	listWorkersForSite,
-	submitWorkflow,
-	type FmSubmitResult,
-} from "../../api/fm";
+import { fanoutForSites, listWorkers, listWorkersForSite } from "../../api/fm";
+import { fleet, type FleetJob } from "../../api/fleet";
 import { PUBLIC_SITE } from "./fleet-tab";
 import { SiteStrip, TabShell, useFanout } from "./shared";
 
@@ -84,7 +79,7 @@ export default function SubmitTab({
 	const [site, setSite] = useState("");
 	const [yaml, setYaml] = useState(TEMPLATES[Object.keys(TEMPLATES)[0]]);
 	const [busy, setBusy] = useState(false);
-	const [result, setResult] = useState<FmSubmitResult | null>(null);
+	const [result, setResult] = useState<FleetJob | null>(null);
 	const [failed, setFailed] = useState<string | null>(null);
 
 	const chosen = site || sites[0] || "";
@@ -98,14 +93,16 @@ export default function SubmitTab({
 		setResult(null);
 		setFailed(null);
 		try {
-			const r = await submitWorkflow(chosen, yaml);
+			// Through the fleet API, so the run is recorded as yours and shows up
+			// under "Your runs" with one id and one status vocabulary.
+			const r = await fleet.run({ workflow: yaml, site: chosen, format: "flowmesh" });
 			setResult(r);
-			toast.success(`Submitted to ${chosen}`);
+			toast.success(`Running on ${chosen}`);
 		} catch (e) {
 			if (isSessionExpired(e)) return;
-			// A submit carries YOUR token and the site authorizes it itself, so a
-			// refusal here is about entitlement on that mesh — not a federator fault.
-			setFailed((e as Error)?.message || "submit failed");
+			// The run goes upstream as YOU and the site authorizes it itself, so a
+			// refusal here is about entitlement on that site — not a federator fault.
+			setFailed((e as Error)?.message || "run failed");
 		} finally {
 			setBusy(false);
 		}
@@ -149,7 +146,7 @@ export default function SubmitTab({
 					disabled={busy || !chosen}
 					className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm text-white disabled:opacity-50"
 				>
-					{busy ? "Submitting…" : "Submit"}
+					{busy ? "Starting…" : "Run"}
 				</button>
 			</div>
 
@@ -169,36 +166,19 @@ export default function SubmitTab({
 
 			{result && (
 				<div className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-sm">
-					<p className="text-xs text-slate-500">Submitted to {chosen}</p>
-					<p className="mt-1 font-mono text-xs text-slate-800">{result.workflow_id}</p>
-					<table className="mt-2 w-full text-xs">
-						<thead className="text-left text-slate-500">
-							<tr>
-								<th className="py-1">Task</th>
-								<th className="py-1">Status</th>
-								<th className="py-1">Worker</th>
-							</tr>
-						</thead>
-						<tbody>
-							{(result.tasks ?? []).map((t) => (
-								<tr key={t.task_id} className="border-t border-slate-100">
-									<td className="py-1 font-mono">{t.task_id}</td>
-									<td className="py-1">{t.status}</td>
-									<td className="py-1">{t.assigned_worker ?? "—"}</td>
-								</tr>
-							))}
-						</tbody>
-					</table>
+					<p className="text-xs text-slate-500">Running on {chosen}</p>
+					<p className="mt-1 font-mono text-xs text-slate-800">{result.id}</p>
+					<p className="mt-1 text-xs text-slate-600">Status: {result.status}</p>
 					{/* PENDING is normal on an elastic site, not a failure: vast starts at
 					    zero workers and the autoscaler rents on demand, but boot is
 					    dominated by a 14.1 GB image pull (7-15 min). Saying so here stops
 					    a correct queue from reading as a stuck job. */}
 					<p className="mt-2 text-xs text-slate-500">
-						A task can sit <code>PENDING</code> until a matching worker exists. On{" "}
+						A run can sit <code>queued</code> until a matching worker exists. On{" "}
 						<code>vast</code> that means renting one — the autoscaler reacts within a
-						minute, but the image pull takes 7-15 minutes. Track it in{" "}
-						<a href="/studio/compute/jobs" className="text-indigo-600 hover:underline">
-							Jobs
+						minute, but the image pull takes 7-15 minutes. Track it under{" "}
+						<a href="/studio/research-fleet/jobs" className="text-indigo-600 hover:underline">
+							Your runs
 						</a>
 						, where you can also read the result.
 					</p>

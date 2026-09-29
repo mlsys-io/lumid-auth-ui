@@ -118,6 +118,12 @@ function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   return doCall<T>(method, path, body);
 }
 
+/** An uncached /api/v1/me call, for clients kept in their own module
+ *  (api/fleet.ts). Same envelope, auth and 429 cooldown as everything here. */
+export function meRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
+  return doCall<T>(method, path, body);
+}
+
 async function doCall<T>(
   method: string,
   path: string,
@@ -1037,6 +1043,33 @@ export const me = {
       `/apps/${encodeURIComponent(app)}/experiments/${encodeURIComponent(experiment)}/control`,
       body,
     ),
+  // A study (experiments compared on one metric) defined — and with run=true
+  // run — in one call. The runs travel inside the same intent, so they cannot
+  // be queued before the definition exists. 422 carries data.errors[] listing
+  // every define-time problem (unknown workflow, metric it does not report…).
+  defineStudy: (
+    agent: string,
+    body: {
+      id: string;
+      workflow: string;
+      metric: { name: string; higher_is_better?: boolean };
+      experiments: Array<{ id: string; [k: string]: unknown }>;
+      dataset_id?: string;
+      cases?: string[];
+      min_samples?: number;
+      success_criteria?: string;
+      samples?: number;
+    },
+    run = false,
+  ) =>
+    call<{
+      intent_id: string;
+      study: string;
+      status: string;
+      experiments: Array<{ id: string; runs_queued?: number }>;
+      warnings: string[];
+    }>("POST", `/agents/${encodeURIComponent(agent)}/studies${run ? "?run=1" : ""}`, body),
+
   upsertExperiment: (
     app: string,
     body: {

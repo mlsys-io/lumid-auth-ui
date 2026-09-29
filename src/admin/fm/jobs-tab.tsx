@@ -22,6 +22,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Plus, TerminalSquare, X } from "lucide-react";
 import SshTab from "./ssh-tab";
+import MyRuns from "./my-runs";
 import SubmitTab from "./submit-tab";
 import { toast } from "sonner";
 import { isSessionExpired } from "../../api/client";
@@ -168,7 +169,9 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 	// SSH is a VIEW of this same dataset, not another page: a session is a task
 	// with task_type "ssh". It was a sibling tab, which meant two tabs fanning out
 	// tasks across the same sites to show overlapping rows.
-	const [view, setView] = useState<"workflows" | "ssh">("workflows");
+	// "mine" first: most people come here to find a run they started, and the
+	// fleet-wide workflow list is the operator's view of the same machines.
+	const [view, setView] = useState<"mine" | "workflows" | "ssh">("mine");
 	// Submit is an ACTION. A tab you entered to do one thing and left is a button.
 	const [submitOpen, setSubmitOpen] = useState(false);
 	// The open workflow and task live in the URL (?site=&workflow=&task=), so a
@@ -374,6 +377,16 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 
 			<div className="mb-3 flex flex-wrap items-center gap-2">
 				<button
+					onClick={() => setView("mine")}
+					className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs ${
+						view === "mine"
+							? "border-indigo-300 bg-indigo-50 text-indigo-700"
+							: "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+					}`}
+				>
+					Your runs
+				</button>
+				<button
 					onClick={() => setView("workflows")}
 					className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs ${
 						view === "workflows"
@@ -399,11 +412,11 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 					// Raw-YAML submission is the power path — workflows normally run
 					// from their app. Quiet styling so it stops reading as the page's
 					// primary action; the dialog behind it is unchanged.
-					title="Submit a raw workflow YAML to one site"
+					title="Run a raw workflow YAML on one site"
 					className="ml-auto inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-slate-500 hover:bg-slate-50 hover:text-slate-800"
 				>
 					<Plus className="h-3.5 w-3.5" />
-					Advanced: submit YAML
+					Advanced: run YAML
 				</button>
 			</div>
 
@@ -418,9 +431,9 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 					>
 						<div className="mb-3 flex items-start justify-between gap-4">
 							<div>
-								<h3 className="text-base font-semibold text-slate-900">Submit a workflow</h3>
+								<h3 className="text-base font-semibold text-slate-900">Run a workflow</h3>
 								<p className="mt-0.5 text-xs text-slate-500">
-									One site per submission — there is no scheduler spanning sites.
+									One site per run — there is no scheduler spanning sites.
 								</p>
 							</div>
 							<button
@@ -436,7 +449,9 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 				</div>
 			)}
 
-			{view === "ssh" ? (
+			{view === "mine" ? (
+				<MyRuns />
+			) : view === "ssh" ? (
 				<SshTab isAdmin={isAdmin} embedded />
 			) : (
 			<>

@@ -123,7 +123,7 @@ const LUMILAKE_ACCENT: Record<string, AccentKey> = {
 	InputOp: "io",
 };
 
-// FlowMesh's 15 kinds collapse into FOUR buckets on purpose. Fifteen hues is
+// FlowMesh's 16 kinds collapse into FOUR buckets on purpose. Sixteen hues is
 // noise, not information — the kind name is already on the node.
 const FLOWMESH_ACCENT: Record<string, AccentKey> = {
 	InferenceTask: "compute",
@@ -139,6 +139,7 @@ const FLOWMESH_ACCENT: Record<string, AccentKey> = {
 	DataProfilingTask: "data",
 	ServeTask: "serve",
 	APITask: "serve",
+	PythonTask: "util",
 	SSHTask: "util",
 	EchoTask: "util",
 };

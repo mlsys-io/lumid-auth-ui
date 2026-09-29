@@ -280,10 +280,22 @@ check("every kind has a schema, and none is empty", () => {
 });
 
 check("kinds that load no model do not show a Model block", () => {
-	for (const kind of ["APITask", "SSHTask", "EchoTask"]) {
+	for (const kind of ["APITask", "PythonTask", "SSHTask", "EchoTask"]) {
 		ok(!FLOWMESH_REGISTRY[kind].sections.some((s) => s.title === "Model"), `${kind} should not ask for a model`);
 	}
 	ok(FLOWMESH_REGISTRY.SFTTask.sections.some((s) => s.title === "Model"), "SFT needs one");
+});
+
+check("a Python step is a python task with a working starter function", () => {
+	ok(TASK_TYPE_OF.PythonTask === "python", "PythonTask must carry taskType python");
+	ok(toKind("python") === "PythonTask", "taskType python must read back as PythonTask");
+	const fields = FLOWMESH_REGISTRY.PythonTask.sections.flatMap((s) => s.fields);
+	const code = fields.find((f) => f.path.join(".") === "code");
+	ok(!!code && code.type === "code" && code.language === "python", "code is a python code field");
+	ok(typeof code?.default === "string" && (code.default as string).includes("def main("), "the starter defines main");
+	const entry = fields.find((f) => f.path.join(".") === "entrypoint");
+	ok(entry?.validate?.("main", { code: "def main(inputs):\n    return 1" }) === undefined, "matching entrypoint passes");
+	ok(!!entry?.validate?.("run", { code: "def main(inputs):\n    return 1" }), "a missing def is flagged");
 });
 
 check("LoRA gets its own block; a plain SFT does not", () => {

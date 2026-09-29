@@ -156,6 +156,48 @@ const SSH: Section = {
 	],
 };
 
+const PYTHON_TEMPLATE = `def main(inputs):
+    # inputs: {stage name: directory} for each connected step;
+    # read <dir>/results.json. Return anything JSON-serialisable.
+    return {"rows": 0, "metrics": {"score": 0.0}}
+`;
+
+const PYTHON: Section = {
+	title: "Python",
+	fields: [
+		{
+			path: ["code"], label: "Code", type: "code", language: "python", required: true,
+			default: PYTHON_TEMPLATE,
+			hint: "Runs in its own container with no network, as an unprivileged user. The return value becomes the step's result.",
+		},
+		{
+			path: ["entrypoint"], label: "Function", type: "text", default: "main",
+			hint: "Called with {stage: directory} for each connected step, or with nothing if it takes no arguments.",
+			validate: (v, p) => {
+				const code = str(p, ["code"]);
+				const fn = typeof v === "string" && v ? v : "main";
+				return code && !code.includes(`def ${fn}`) ? `The code defines no \`def ${fn}\`.` : undefined;
+			},
+		},
+		{
+			path: ["emits"], label: "Metrics it reports", type: "list",
+			hint: "One per line. Return {\"metrics\": {...}}; the step fails if a listed metric is missing, so an experiment never records a silent zero.",
+		},
+		{ path: ["timeoutSeconds"], label: "Timeout (s)", type: "number", min: 1, max: 3600, default: 600 },
+		{
+			path: ["image"], label: "Image", type: "text", placeholder: "python:3.12-slim",
+			hint: "Must provide python3. Bake dependencies in here to run offline.",
+		},
+		{
+			path: ["network"], label: "Network", type: "enum", default: "none",
+			options: [{ value: "none", label: "None" }, { value: "bridge", label: "Isolated bridge" }],
+			hint: "Requirements are pip-installed, so they need the bridge.",
+		},
+		{ path: ["requirements"], label: "Requirements", type: "list", hint: "pip specifiers, one per line — numpy==2.1.0" },
+		{ path: ["env"], label: "Environment", type: "keyValue" },
+	],
+};
+
 const AGENT: Section = {
 	title: "Agent",
 	fields: [
@@ -187,12 +229,13 @@ const EXTRA: Record<string, Section[]> = {
 	AgentTask: [AGENT, INFERENCE_DATA],
 	ServeTask: [SERVE],
 	APITask: [API],
+	PythonTask: [PYTHON],
 	SSHTask: [SSH],
 	EchoTask: [INFERENCE_DATA],
 };
 
 /** Kinds that do not load a model, so the Model block would be noise. */
-const NO_MODEL = new Set(["APITask", "SSHTask", "EchoTask", "DataProfilingTask"]);
+const NO_MODEL = new Set(["APITask", "PythonTask", "SSHTask", "EchoTask", "DataProfilingTask"]);
 
 const SUMMARY: Record<string, string> = {
 	InferenceTask: "Run a model over a batch of prompts.",
@@ -208,6 +251,7 @@ const SUMMARY: Record<string, string> = {
 	DataProfilingTask: "Profile a dataset without training anything.",
 	ServeTask: "Hold a model resident and serve it.",
 	APITask: "Call an external HTTP API as a workflow step.",
+	PythonTask: "Run your own Python function as a step, in its own container.",
 	SSHTask: "Run a shell command on the worker.",
 	EchoTask: "Return the input unchanged — the cheapest way to prove a path works.",
 };
