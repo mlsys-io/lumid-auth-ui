@@ -62,7 +62,7 @@ export function SubscribeAgentDialog({
 						<BookOpen className="w-4 h-4 text-pink-500" /> Subscribe to {agentLabel}
 					</DialogTitle>
 					<DialogDescription className="text-[12.5px]">
-						Knowledge agents aren&apos;t installed — their published memories are
+						Memories aren&apos;t installed — their published memories are
 						synced into your knowledge graph. Re-subscribing later pulls only
 						what&apos;s new.
 					</DialogDescription>

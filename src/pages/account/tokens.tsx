@@ -1133,7 +1133,7 @@ function GoogleGrantCard({ onChange }: { onChange?: () => void }) {
 						<div className="font-medium text-sm">Google · Gmail + Calendar</div>
 						<div className="text-xs text-muted-foreground mt-0.5">
 							Not connected. Required by the <code>personal-agent</code> xpio
-							app's morning_brief + hourly_triage loops. Single click, no
+							app's morning_brief + hourly_triage workflows. Single click, no
 							per-user OAuth-app registration.
 						</div>
 					</div>

@@ -89,7 +89,7 @@ export function StrategyGrid({ strategies, onPromote }: StrategyGridProps) {
 			<div className="rounded-xl border border-dashed border-gray-200 p-12 text-center">
 				<p className="text-sm text-muted-foreground mb-1 font-medium">No strategies yet</p>
 				<p className="text-xs text-muted-foreground">
-					Declare strategies in <code className="bg-gray-100 px-1 rounded">xpcloud.yaml::strategies[]</code> and run a cycle.
+					Declare strategies in <code className="bg-gray-100 px-1 rounded">xpcloud.yaml::strategies[]</code> and run it.
 				</p>
 			</div>
 		);

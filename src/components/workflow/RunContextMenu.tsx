@@ -183,7 +183,7 @@ export default function RunContextMenu({
 			{/* ── OBSERVE — inspect what happened ── */}
 			<Section label="Observe" />
 			{isRun && actions.openPipeline && (
-				<Row icon={FlaskConical} label="Open pipeline" onClick={wired(() => actions.openPipeline!(target.ts))} />
+				<Row icon={FlaskConical} label="Open steps" onClick={wired(() => actions.openPipeline!(target.ts))} />
 			)}
 			{/* View data: CASE rows only (opens the case's data + score provenance).
 			    For a run, "Explain score" below covers the metric view — they were

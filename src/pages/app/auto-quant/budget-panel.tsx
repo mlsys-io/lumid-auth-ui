@@ -24,7 +24,7 @@ export function BudgetPanel({ budget, cap }: BudgetPanelProps) {
 			<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
 				<StatCard
 					icon={<Cpu className="w-4 h-4" />}
-					label="Est. cycles today"
+					label="Est. runs today"
 					value={String(budget.estimated_daily_calls)}
 				/>
 				<StatCard
@@ -67,10 +67,10 @@ export function BudgetPanel({ budget, cap }: BudgetPanelProps) {
 				</div>
 			)}
 
-			{/* Per-loop breakdown */}
+			{/* Per-workflow breakdown */}
 			<div>
 				<div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-					Per-loop breakdown
+					Per-workflow breakdown
 				</div>
 				<div className="rounded border border-gray-200 overflow-hidden">
 					<table className="w-full text-xs">
@@ -95,7 +95,7 @@ export function BudgetPanel({ budget, cap }: BudgetPanelProps) {
 					</table>
 				</div>
 				<div className="text-[10px] text-muted-foreground mt-2">
-					Cost model: ~2,000 tokens/cycle at $0.015/1k tokens. Actual spend varies by model + prompt length.
+					Cost model: ~2,000 tokens/run at $0.015/1k tokens. Actual spend varies by model + prompt length.
 					Connect live telemetry in Wave 3 for precise accounting.
 				</div>
 			</div>

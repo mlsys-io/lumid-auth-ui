@@ -75,6 +75,8 @@ const STARTER_PROMPTS: { label: string; prompt: string }[] = [
 
 // After an agent response, infer 2-3 sensible follow-ups from which
 // tool was last called. Server-agnostic — pure client-side rules.
+// Keyed by the IMPLEMENTING tool name: identity resolves a canonical call
+// (workflow_run, run_get, …) to it before emitting tool_call.
 const TOOL_FOLLOWUPS: Record<string, string[]> = {
   list_apps:           ["Run a one-shot now",    "Install something new",         "What's each one for?"],
   list_recent_cycles:  ["Show the latest result", "Rate the most recent one",     "Run another now"],
@@ -82,9 +84,9 @@ const TOOL_FOLLOWUPS: Record<string, string[]> = {
   list_marketplace:    ["Install one of these",  "Show me what's trending",       "What's similar to what I have?"],
   install_app:         ["Run a one-shot now",    "What does it do?",              "List my agents"],
   uninstall_app:       ["What's left installed?", "Install something else",       "What should I run now?"],
-  give_feedback:       ["What's next?",          "Show cycles waiting for review", "Run a new cycle"],
-  run_loop_now:        ["Show me the result when it's done", "What else can I run?", "List recent cycles"],
-  subscribe_to_bank:   ["What memories did I just inherit?", "Run a cycle to use them", "Search my knowledge"],
+  give_feedback:       ["What's next?",          "Show runs waiting for review", "Run it again"],
+  run_loop_now:        ["Show me the result when it's done", "What else can I run?", "List recent runs"],
+  subscribe_to_bank:   ["What memories did I just inherit?", "Run a workflow to use them", "Search my knowledge"],
 };
 const DEFAULT_FOLLOWUPS = ["What can you do?", "Show me what I have", "What's next?"];
 

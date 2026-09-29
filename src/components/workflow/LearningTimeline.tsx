@@ -59,7 +59,7 @@ export default function LearningTimeline({ agents }: { agents: string[] }) {
 	}, [agents.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	if (data === null) return <div className="h-12 rounded-lg bg-slate-100 animate-pulse" />;
-	if (!agents.length) return <div className="text-xs text-slate-400 italic">No knowledge agents configured for this app.</div>;
+	if (!agents.length) return <div className="text-xs text-slate-400 italic">No memories configured for this app.</div>;
 	if (data.total === 0) return <div className="text-xs text-slate-400 italic">Nothing banked yet — learnings appear as the workflows run and reflect.</div>;
 
 	return (

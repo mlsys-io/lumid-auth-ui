@@ -238,7 +238,7 @@ function Review({ drafted, schedule, setSchedule, installing, onInstall, onBack 
 		<div className="space-y-4">
 			<div className="rounded-lg bg-gold-50 border border-gold-200 px-3 py-2 text-xs text-gold-900 flex items-start gap-2">
 				<Check className="w-3.5 h-3.5 mt-0.5" />
-				<div><span className="font-medium">Bot assembled.</span> {steps.length} steps across the observe→learn loop{drafted.mode === "paper" ? " · paper mode" : ""}. Review + install.</div>
+				<div><span className="font-medium">Bot assembled.</span> {steps.length} steps across the observe→learn stages{drafted.mode === "paper" ? " · paper mode" : ""}. Review + install.</div>
 			</div>
 
 			{drafted.goal?.primary && (
@@ -290,7 +290,7 @@ function Installed({ slug }: { slug: string }) {
 	return (
 		<div className="py-10 text-center space-y-3">
 			<div className="inline-flex w-14 h-14 rounded-2xl bg-gold-100 text-gold-600 items-center justify-center animate-in zoom-in duration-300"><Check className="w-7 h-7" /></div>
-			<div className="text-sm font-medium text-slate-900">{slug} is live — running its first cycle.</div>
+			<div className="text-sm font-medium text-slate-900">{slug} is live — running its first run.</div>
 			<div className="text-xs text-slate-500">Taking you to its dashboard…</div>
 		</div>
 	);

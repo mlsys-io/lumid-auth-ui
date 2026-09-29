@@ -396,7 +396,7 @@ export function RunCompareView({ app, loop, tsA, tsB, onBack }: {
 				) : keys.length === 0 ? (
 					<div className="h-full flex flex-col items-center justify-center gap-2 text-center text-slate-400">
 						<div className="text-sm text-slate-500">No numeric metrics recorded on either run.</div>
-						<div className="text-xs max-w-xs">These runs didn't log comparable metrics — open each run's pipeline to inspect its steps.</div>
+						<div className="text-xs max-w-xs">These runs didn't log comparable metrics — open each run's steps to inspect them.</div>
 					</div>
 				) : (
 					<table className="w-full text-[12px]">

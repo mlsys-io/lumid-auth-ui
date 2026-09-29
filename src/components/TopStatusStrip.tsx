@@ -375,7 +375,7 @@ export default function TopStatusStrip() {
 				    so the app identity + workflow selector don't get crushed. */}
 				<span className="hidden lg:inline-flex">{loaded && <RightNowTicker items={items} />}</span>
 				{/* "live" heartbeat — sits just left of the chat toggle. */}
-				<span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground" title="Live — your loops run in the background">
+				<span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground" title="Live — your workflows run in the background">
 					<span className="w-1.5 h-1.5 rounded-full bg-gold-500 heartbeat" />
 					<span className="hidden sm:inline">live{(() => { const a = Math.max(0, Math.floor((Date.now() - refreshedAt) / 1000)); return a < 3 ? "" : a < 60 ? ` · ${a}s ago` : ` · ${Math.floor(a / 60)}m ago`; })()}</span>
 				</span>

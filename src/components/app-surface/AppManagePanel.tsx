@@ -285,7 +285,7 @@ export default function AppManagePanel() {
 					</button>
 				</div>
 				{loops.length === 0 ? (
-					<p className="text-[12px] text-slate-400">No workflows yet. A workflow is a scheduled loop of skill steps — create one and the scheduler runs it automatically.</p>
+					<p className="text-[12px] text-slate-400">No workflows yet. A workflow is a scheduled sequence of skill steps — create one and the scheduler runs it automatically.</p>
 				) : (
 					<div className="divide-y divide-slate-100 rounded-lg border border-slate-200">
 						{loops.map((l, i) => (
@@ -572,7 +572,7 @@ function NewWorkflowDialog({
 						<CalendarClock className="w-4 h-4 text-gold-600" /> New workflow
 					</DialogTitle>
 					<DialogDescription className="text-[12.5px]">
-						A scheduled loop of skill steps. It lands in this app&apos;s <code className="text-[11px]">xpcloud.yaml</code> and the scheduler picks it up automatically.
+						A scheduled sequence of skill steps. It lands in this app&apos;s <code className="text-[11px]">xpcloud.yaml</code> and the scheduler picks it up automatically.
 					</DialogDescription>
 				</DialogHeader>
 				<div className="space-y-3">
