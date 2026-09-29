@@ -230,7 +230,7 @@ export function SysResearchTile({ loops }: Props) {
 				<span>
 					<code>auto-sysresearch</code> — NL-to-SQL variant search.{' '}
 					<Link to={`/studio/apps/${APP_NAME}`} className="text-indigo-600 underline">
-						all cycles →
+						all runs →
 					</Link>
 				</span>
 			</div>

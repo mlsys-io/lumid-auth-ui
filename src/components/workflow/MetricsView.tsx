@@ -140,7 +140,7 @@ export default function MetricsView({ app, loop, atTs, onBack }: {
 				{series === null ? (
 					<div className="h-full flex items-center justify-center text-xs text-slate-400"><Loader2 className="w-4 h-4 animate-spin mr-2" /> Discovering metrics…</div>
 				) : series.length === 0 ? (
-					<div className="h-full flex flex-col items-center justify-center gap-2 text-center text-slate-400"><TrendingUp className="w-6 h-6 text-slate-300" /><div className="text-sm text-slate-500">No metric history yet.</div><div className="text-xs max-w-xs">Metrics appear here once this workflow logs numeric scores in its cycles or experiments.</div></div>
+					<div className="h-full flex flex-col items-center justify-center gap-2 text-center text-slate-400"><TrendingUp className="w-6 h-6 text-slate-300" /><div className="text-sm text-slate-500">No metric history yet.</div><div className="text-xs max-w-xs">Metrics appear here once this workflow logs numeric scores in its runs or experiments.</div></div>
 				) : (
 					<div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
 						{series.map((s) => {

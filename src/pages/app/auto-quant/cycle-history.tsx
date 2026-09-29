@@ -53,7 +53,7 @@ export function CycleHistory({ loops, strategyName }: CycleHistoryProps) {
 	if (cycles.length === 0) {
 		return (
 			<div className="rounded border border-dashed border-gray-200 p-6 text-center text-xs text-muted-foreground">
-				No cycle history yet for strategy <strong>{strategyName}</strong>. Run a cycle first.
+				No run history yet for strategy <strong>{strategyName}</strong>. Run it first.
 			</div>
 		);
 	}

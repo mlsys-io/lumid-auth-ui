@@ -89,7 +89,7 @@ export default function AutoQuantPage() {
 						Auto-Quant
 					</h1>
 					<p className="text-sm text-muted-foreground mt-0.5">
-						Automated trading research. Loops run on a schedule; strategies evolve through paper → semi → live.
+						Automated trading research. Workflows run on a schedule; strategies evolve through paper → semi → live.
 					</p>
 				</div>
 				<div className="flex items-center gap-2">

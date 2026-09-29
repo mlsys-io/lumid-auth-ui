@@ -5,7 +5,7 @@
 // Shows:
 //  • Full lifecycle history (date promoted to each stage)
 //  • Backtest/paper/live history table (Wave 3: from dedicated endpoint)
-//  • Loops that evaluate this strategy
+//  • Workflows that evaluate this strategy
 //  • Trader-bank memories tagged with strategy_name=<name> (Wave 3)
 //  • Contributor card (upstream xp.io signals)
 
@@ -148,7 +148,7 @@ export default function StrategyDetailPage() {
 				<div>
 					<div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
 						<BookOpen className="w-3.5 h-3.5" />
-						Loops that evaluate this strategy ({relatedLoops.length})
+						Workflows that evaluate this strategy ({relatedLoops.length})
 					</div>
 					<div className="flex flex-wrap gap-1.5">
 						{relatedLoops.map((l) => (
@@ -163,11 +163,11 @@ export default function StrategyDetailPage() {
 			{/* Cycle history */}
 			<div>
 				<div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-					Cycle history (latest per loop)
+					Run history (latest per workflow)
 				</div>
 				<CycleHistory loops={relatedLoops} strategyName={name || ""} />
 				<div className="text-[10px] text-muted-foreground mt-2">
-					Full per-cycle history (score + features trace + viz thumbnails) will be available in Wave 3 via a dedicated history endpoint.
+					Full per-run history (score + features trace + viz thumbnails) will be available in Wave 3 via a dedicated history endpoint.
 				</div>
 			</div>
 		</div>

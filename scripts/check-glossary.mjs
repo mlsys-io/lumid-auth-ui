@@ -22,6 +22,7 @@ import { build } from "esbuild";
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join, relative, resolve, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { createRequire } from "node:module";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const baselinePath = join(root, "scripts/glossary-baseline.json");
@@ -50,33 +51,69 @@ try {
 const terms = Object.keys(RETIRED_TERMS).sort((a, b) => b.length - a.length);
 const termRe = new RegExp(`\\b(${terms.map((t) => t.replace(/ /g, "\\s+")).join("|")})\\b`, "gi");
 
-// User-visible prose: JSX text between tags, and prose-bearing attributes.
-const jsxTextRe = />([^<>{}]*[A-Za-z][^<>{}]*)</g;
-const attrRe = /\b(?:title|label|placeholder|aria-label|description)=(?:"([^"]*)"|'([^']*)'|\{`([^`$]*)`\})/g;
+// User-visible prose, found by PARSING, not by regex: a regex over `>…<` also
+// matched TypeScript generics (`useState<Loop | null>(null)` read as JSX text),
+// which both grandfathered code as copy and could fail a clean change. The TS
+// compiler (already a dev dependency) gives the real JsxText nodes and the
+// string values of the prose-bearing attributes.
+const require = createRequire(import.meta.url);
+const ts = require("typescript");
+const PROSE_ATTRS = new Set(["title", "label", "placeholder", "aria-label", "description"]);
+
+function proseIn(file, src) {
+	const out = [];
+	const sf = ts.createSourceFile(file, src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+	const literal = (n) =>
+		n && (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) ? n.text : null;
+	// Text inside <code>/<kbd>/<pre> names a literal — a spec key such as
+	// `loops[]` — and must keep the spelling the file uses; so must a
+	// `backtick span` in prose.
+	const CODE_TAGS = new Set(["code", "kbd", "pre"]);
+	const inCode = (n) => {
+		const el = n.parent;
+		return !!el && ts.isJsxElement(el) && CODE_TAGS.has(el.openingElement.tagName.getText(sf));
+	};
+	const prose = (t) => t.replace(/`[^`]*`/g, " ");
+	const visit = (n) => {
+		if (ts.isJsxText(n)) {
+			if (n.text.trim() && !inCode(n)) out.push(prose(n.text));
+		} else if (ts.isJsxAttribute(n) && PROSE_ATTRS.has(n.name.getText(sf))) {
+			const init = n.initializer;
+			const text = literal(init) ?? (init && ts.isJsxExpression(init) ? literal(init.expression) : null);
+			if (text) out.push(prose(text));
+		}
+		ts.forEachChild(n, visit);
+	};
+	visit(sf);
+	return out;
+}
 
 async function* walk(d) {
 	for (const e of await readdir(d, { withFileTypes: true })) {
+		// pages/deprecated/ is dead code (no importer; App.tsx records the move),
+		// so nothing in it can reach a screen.
 		if (e.name === "node_modules" || e.name.startsWith(".") || e.name === "__fixtures__") continue;
+		if (relative(root, join(d, e.name)) === join("src", "pages", "deprecated")) continue;
 		const p = join(d, e.name);
 		if (e.isDirectory()) yield* walk(p);
 		else if (e.name.endsWith(".tsx") && !e.name.includes(".test.")) yield p;
 	}
 }
 
-function hitsIn(src) {
+function hitsIn(file, src) {
 	const hits = [];
-	const scan = (text) => {
-		for (const m of text.matchAll(termRe)) hits.push({ word: m[1].toLowerCase().replace(/\s+/g, " "), text: text.trim() });
-	};
-	for (const m of src.matchAll(jsxTextRe)) scan(m[1]);
-	for (const m of src.matchAll(attrRe)) scan(m[1] ?? m[2] ?? m[3] ?? "");
+	for (const text of proseIn(file, src)) {
+		for (const m of text.matchAll(termRe)) {
+			hits.push({ word: m[1].toLowerCase().replace(/\s+/g, " "), text: text.trim().replace(/\s+/g, " ") });
+		}
+	}
 	return hits;
 }
 
 const counts = {};
 const detail = {};
 for await (const file of walk(join(root, "src"))) {
-	const hits = hitsIn(await readFile(file, "utf8"));
+	const hits = hitsIn(file, await readFile(file, "utf8"));
 	if (!hits.length) continue;
 	const rel = relative(root, file);
 	counts[rel] = hits.length;

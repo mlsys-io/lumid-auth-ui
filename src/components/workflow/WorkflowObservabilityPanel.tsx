@@ -1227,7 +1227,7 @@ function AgentsRailContent({ agents, onOpenAgent, selectedAgent, hideHeader }: {
 	// Suppress the internal "Memory banks" label when a Foldable already titles it.
 	hideHeader?: boolean;
 }) {
-	if (!agents.length) return <div className="text-[11px] text-slate-600 italic py-1">No knowledge agents configured.</div>;
+	if (!agents.length) return <div className="text-[11px] text-slate-600 italic py-1">No memories configured.</div>;
 	return (
 		<div className="space-y-1 pt-1">
 			{!hideHeader && <div className="text-[11px] uppercase tracking-wide text-slate-600 font-semibold mb-1">Memory banks</div>}

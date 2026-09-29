@@ -184,7 +184,7 @@ export function NewWorkflowFlow({ open, onClose }: Props) {
 				<header className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200">
 					<div>
 						<h2 className="font-semibold text-slate-900">New workflow</h2>
-						<p className="text-xs text-slate-500">State the goal, point at your data, and we assemble the pipeline.</p>
+						<p className="text-xs text-slate-500">State the goal, point at your data, and we assemble the workflow.</p>
 					</div>
 					<button onClick={() => !busy && onClose()} className="p-1.5 text-slate-400 hover:text-slate-700 rounded">
 						<X className="w-4 h-4" />
@@ -291,7 +291,7 @@ function PrimaryNav({ step, goalReady, composing, draft, onNext, onCompose, onTo
 	if (step === "data") {
 		return (
 			<button onClick={onCompose} disabled={composing} className={base}>
-				{composing ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Assembling…</> : <><Sparkles className="w-3.5 h-3.5" />Assemble pipeline</>}
+				{composing ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Assembling…</> : <><Sparkles className="w-3.5 h-3.5" />Assemble workflow</>}
 			</button>
 		);
 	}
@@ -333,7 +333,7 @@ function GoalStep({ name, setName, objective, setObjective, metrics, setMetrics 
 			</div>
 			<div>
 				<label className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Metrics to optimize <span className="text-slate-300 normal-case tracking-normal">· optional</span></label>
-				<p className="text-[11px] text-slate-400 mt-0.5">What gets better each cycle? Add one per row.</p>
+				<p className="text-[11px] text-slate-400 mt-0.5">What gets better each run? Add one per row.</p>
 				<div className="mt-1.5 space-y-1.5">
 					{metrics.map((m, i) => (
 						<div key={i} className="flex items-center gap-2">
@@ -416,7 +416,7 @@ function DataStep({ casebook, setCasebook, dataNote, setDataNote }: {
 					</div>
 					<div className="min-w-0">
 						<div className="text-sm font-medium text-slate-900">Start empty / external data</div>
-						<div className="text-[11px] text-slate-500">The workflow will gather or fetch its own data each cycle.</div>
+						<div className="text-[11px] text-slate-500">The workflow will gather or fetch its own data each run.</div>
 					</div>
 					{isEmpty && <Check className="w-4 h-4 text-gold-600 ml-auto flex-shrink-0" />}
 				</div>
@@ -493,7 +493,7 @@ function PipelineStep({ composing, draft, onCompose }: {
 	if (composing && !draft) {
 		return (
 			<div className="py-12 text-center space-y-2">
-				<div className="inline-flex items-center gap-2 text-sm text-slate-600"><Loader2 className="w-4 h-4 animate-spin text-gold-500" />Assembling your pipeline…</div>
+				<div className="inline-flex items-center gap-2 text-sm text-slate-600"><Loader2 className="w-4 h-4 animate-spin text-gold-500" />Assembling your workflow…</div>
 				<div className="text-[11px] text-slate-400">Searching the xp.io skill catalog and matching skills to your goal.</div>
 			</div>
 		);
@@ -501,9 +501,9 @@ function PipelineStep({ composing, draft, onCompose }: {
 	if (!draft) {
 		return (
 			<div className="py-12 text-center space-y-3">
-				<div className="text-[13px] text-slate-500">No pipeline yet.</div>
+				<div className="text-[13px] text-slate-500">No workflow yet.</div>
 				<button onClick={onCompose} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-gradient-to-br from-gold-500 to-gold-600 text-white hover:from-gold-400 hover:to-gold-500 active:scale-95 transition-all shadow-sm shadow-gold-200">
-					<Sparkles className="w-3.5 h-3.5" />Assemble pipeline
+					<Sparkles className="w-3.5 h-3.5" />Assemble workflow
 				</button>
 			</div>
 		);
@@ -578,7 +578,7 @@ function CreateStep({ draft, schedule, setSchedule, creating, created, onCreate 
 		return (
 			<div className="py-12 text-center space-y-3">
 				<div className="inline-flex w-14 h-14 rounded-2xl bg-gold-100 text-gold-600 items-center justify-center animate-in zoom-in duration-300"><Check className="w-7 h-7" /></div>
-				<div className="text-sm font-medium text-slate-900">{draft.slug.replace(/-draft$/, "")} is live — running its first cycle.</div>
+				<div className="text-sm font-medium text-slate-900">{draft.slug.replace(/-draft$/, "")} is live — starting its first run.</div>
 				<div className="text-xs text-slate-500">Taking you to its dashboard…</div>
 			</div>
 		);

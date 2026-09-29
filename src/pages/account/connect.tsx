@@ -64,7 +64,7 @@ export default function ConnectPage() {
 				</div>
 				<h1 className="text-3xl font-bold mt-1">Install LumidOS on your machine</h1>
 				<p className="text-sm text-muted-foreground mt-2 max-w-2xl">
-					LumidOS is the platform this portal runs on — agents, research loops, scheduler,
+					LumidOS is the platform this portal runs on — agents, research workflows, scheduler,
 					knowledge graph. Install it locally and you can do AI quant research (and more) from
 					Claude Code or your own scripts, without the web UI. LQA stays a convenience layer,
 					not a requirement.

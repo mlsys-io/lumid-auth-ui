@@ -41,7 +41,7 @@ export default function WorkflowCanvasSurface({ config }: NativeSurfaceProps) {
 	}, [app, loop, wantLatest]);
 
 	if (!loop) return <div className="text-sm text-slate-500 italic">workflow-canvas needs a `loop` in its config.</div>;
-	if (!def) return <div className="text-sm text-slate-400 italic">Loading pipeline…</div>;
+	if (!def) return <div className="text-sm text-slate-400 italic">Loading workflow…</div>;
 	return (
 		<div className="space-y-2">
 			<WorkflowCanvas definition={def} cycle={cycle} onStepSelect={setStep} />

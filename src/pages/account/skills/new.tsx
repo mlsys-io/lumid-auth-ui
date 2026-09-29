@@ -256,7 +256,7 @@ export default function SkillsNewPage() {
 				</div>
 
 				<div>
-					<Label>Target loops</Label>
+					<Label>Target workflows</Label>
 					<div className="flex flex-wrap items-center gap-1.5 p-2 border border-slate-200 rounded-md bg-white">
 						{targetLoops.map((t, i) => (
 							<Badge key={i} variant="secondary" className="gap-1">

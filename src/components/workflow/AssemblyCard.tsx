@@ -153,7 +153,7 @@ export default function AssemblyCard({ draft }: { draft: ComposedDraft }) {
 		return (
 			<div className="mt-2 w-full rounded-2xl border border-gold-200 bg-gradient-to-br from-gold-50 to-white px-4 py-5 text-center space-y-2 animate-in fade-in zoom-in-95 duration-300">
 				<div className="inline-flex w-11 h-11 rounded-2xl bg-gold-100 text-gold-600 items-center justify-center"><Check className="w-6 h-6" /></div>
-				<div className="text-sm font-medium text-slate-900">{draft.slug.replace(/-draft$/, "")} is live — running its first cycle.</div>
+				<div className="text-sm font-medium text-slate-900">{draft.slug.replace(/-draft$/, "")} is live — starting its first run.</div>
 				<div className="text-xs text-slate-500">Taking you to its dashboard…</div>
 			</div>
 		);

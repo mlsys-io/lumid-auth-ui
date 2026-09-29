@@ -480,7 +480,7 @@ export const me = {
   deleteLoop: (app: string, loop: string) =>
     ownerWriteApplied(
       call<{ app: string; removed_loop: string; remaining: number; note: string } & QueuedWrite>(
-        "DELETE", `/apps/${encodeURIComponent(app)}/loops/${encodeURIComponent(loop)}`),
+        "DELETE", `/agents/${encodeURIComponent(app)}/workflows/${encodeURIComponent(loop)}`),
     ),
   getIntent: (id: string) =>
     call<MeIntentResult>("GET", `/intents/${encodeURIComponent(id)}`),
@@ -513,13 +513,13 @@ export const me = {
       status?: string;
     }>(
       "PATCH",
-      `/loops/${encodeURIComponent(app)}/${encodeURIComponent(loop)}`,
+      `/agents/${encodeURIComponent(app)}/workflows/${encodeURIComponent(loop)}`,
       body,
     ),
   runLoopNow: (app: string, loop: string, args?: Record<string, unknown>) =>
     call<{ job_id: string; state: string }>(
       "POST",
-      `/loops/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/run`,
+      `/agents/${encodeURIComponent(app)}/workflows/${encodeURIComponent(loop)}/run`,
       { args },
     ),
 
@@ -559,13 +559,13 @@ export const me = {
   ) =>
     call<{ job_id: string; state: string }>(
       "POST",
-      // The unified run-now/fork route is /me/loops/:app/:loop/run (MeLoopRunNow,
-      // which reads from_run_ts/variant/branch_label). The old /apps/.../loops/...
-      // path 404'd — which made Branch + Re-run silently fail.
-      `/loops/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/run`,
+      // The run-now/fork route: /me/agents/:agent/workflows/:workflow/run
+      // (mode now → MeLoopRunNow, which reads from_run_ts/variant/branch_label).
+      `/agents/${encodeURIComponent(app)}/workflows/${encodeURIComponent(loop)}/run`,
       body,
     ),
-  // POST /me/apps/:app/loops/:loop/enqueue — fan out MANY runs at once. Each
+  // POST /me/agents/:agent/workflows/:workflow/run {mode: "queue"} — fan out
+  // MANY runs at once. Each
   // entry in `variants[]` becomes a queued run that forks from `from_run_ts`,
   // sharing `branch_label` / `criteria` / `priority`.
   //
@@ -603,33 +603,35 @@ export const me = {
   ) =>
     call<{ intent_id: string; requested: number; state: string }>(
       "POST",
-      `/apps/${encodeURIComponent(app)}/loops/${encodeURIComponent(loop)}/enqueue`,
-      body,
+      `/agents/${encodeURIComponent(app)}/workflows/${encodeURIComponent(loop)}/run`,
+      { ...body, mode: "queue" },
     ),
-  // POST /me/apps/:app/runs/:ts/promote — mark this run/branch's learning as
-  //   KEPT (its memories/config become the champion lineage going forward).
-  promoteRun: (app: string, ts: string, note?: string) =>
+  // POST /me/runs/:run_id/feedback {verdict: "promote"} — mark this
+  //   run/branch's learning as KEPT (its memories/config become the champion
+  //   lineage going forward). The workflow part of the id may be empty.
+  promoteRun: (app: string, ts: string, note?: string, loop = "") =>
     ownerWriteApplied(
       call<{ app: string; ts: string; state: string } & QueuedWrite>(
         "POST",
-        `/apps/${encodeURIComponent(app)}/runs/${encodeURIComponent(ts)}/promote`,
-        note ? { note } : {},
+        `/runs/${encodeURIComponent(`scheduled:${app}:${loop}:${ts}`)}/feedback`,
+        { verdict: "promote", note },
       ),
     ),
-  // POST /me/apps/:app/runs/:ts/discard — mark this run/branch's learning as
-  //   DROPPED (its memories/config are not carried forward).
-  discardRun: (app: string, ts: string, note?: string) =>
+  // POST /me/runs/:run_id/feedback {verdict: "discard"} — mark this
+  //   run/branch's learning as DROPPED (its memories/config are not carried
+  //   forward).
+  discardRun: (app: string, ts: string, note?: string, loop = "") =>
     ownerWriteApplied(
       call<{ app: string; ts: string; state: string } & QueuedWrite>(
         "POST",
-        `/apps/${encodeURIComponent(app)}/runs/${encodeURIComponent(ts)}/discard`,
-        note ? { note } : {},
+        `/runs/${encodeURIComponent(`scheduled:${app}:${loop}:${ts}`)}/feedback`,
+        { verdict: "discard", note },
       ),
     ),
   stopLoop: (app: string, loop: string) =>
     call<{ loop: string; stopped_cycle: string }>(
       "POST",
-      `/loops/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/stop`,
+      `/agents/${encodeURIComponent(app)}/workflows/${encodeURIComponent(loop)}/cancel`,
     ),
   loopsHealth: () => call<{ apps: MeAppHealth[] }>("GET", "/loops/health"),
 
@@ -897,8 +899,8 @@ export const me = {
     ownerWriteApplied(
       call<{ run_id: string; new_state: string; note: string } & QueuedWrite>(
         "POST",
-        `/runs/${encodeURIComponent(runId)}/mark`,
-        { state, note },
+        `/runs/${encodeURIComponent(runId)}/feedback`,
+        { verdict: state, note },
       ),
     ),
 

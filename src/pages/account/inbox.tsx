@@ -147,7 +147,7 @@ export default function InboxPage() {
 					</Button>
 				</div>
 				<p className="text-sm text-muted-foreground">
-					Messages from your autoresearch loops. Approve/Reject drafts inline; the next cycle picks up your reply.
+					Messages from your agents' workflows. Approve/Reject drafts inline; the next run picks up your reply.
 				</p>
 			</header>
 
@@ -187,7 +187,7 @@ export default function InboxPage() {
 					<div className="text-xs mt-2">
 						If you don&apos;t have any apps with{" "}
 						<code className="bg-red-100 px-1 rounded">inbox_publish.enabled: true</code>{" "}
-						in their xpcloud.yaml yet, the inbox will be empty until a cycle posts here.
+						in their xpcloud.yaml yet, the inbox will be empty until a run posts here.
 					</div>
 				</div>
 			)}
@@ -204,7 +204,7 @@ export default function InboxPage() {
 						</span>
 					</h2>
 					<p className="text-xs text-muted-foreground mb-3">
-						Decisions your AI is unsure about + pending drafts. Reply and the next cycle ingests your guidance.
+						Decisions your AI is unsure about + pending drafts. Reply and the next run ingests your guidance.
 					</p>
 					<div className="space-y-3">
 						{attention.map((m) => (
@@ -240,7 +240,7 @@ function EmptyState() {
 			<InboxIcon className="w-10 h-10 text-gray-300 mx-auto mb-3" />
 			<p className="font-semibold text-gray-700 mb-1">No messages yet</p>
 			<p className="text-sm text-muted-foreground mb-4">
-				Configure <code className="bg-gray-100 px-1 rounded text-xs">inbox_publish:</code> in your app&apos;s xpcloud.yaml. Each cycle will post a message here.
+				Configure <code className="bg-gray-100 px-1 rounded text-xs">inbox_publish:</code> in your app&apos;s xpcloud.yaml. Each run will post a message here.
 			</p>
 			<Link
 				to="/studio/apps"
@@ -605,7 +605,7 @@ function DraftActions({
 						<div key={d.draft_id} className="flex items-center gap-2 text-xs text-muted-foreground italic">
 							<code className="bg-gray-100 px-1 rounded">{d.draft_id.slice(0, 8)}</code>
 							{d.skill_id && <> {d.skill_id}</>}
-							<span>— {stamp === "approve" ? "✓ approved" : "✗ rejected"}, next cycle</span>
+							<span>— {stamp === "approve" ? "✓ approved" : "✗ rejected"}, next run</span>
 						</div>
 					);
 				}
@@ -675,7 +675,7 @@ function QuestionReply({
 			<Input
 				value={body}
 				onChange={(e) => setBody(e.target.value)}
-				placeholder="Type a free-form answer; the loop ingests it as a memory in the role agent."
+				placeholder="Type a free-form answer; the workflow ingests it as a memory in the role agent."
 				className="text-sm"
 				disabled={submitting}
 			/>
@@ -693,7 +693,7 @@ function QuestionReply({
 // ── CycleSummaryStepInstructions (Theme F.x) ───────────────────────
 //
 // For cycle_summary messages that include step_recap[], renders a per-step
-// textarea labeled "Nudge next cycle". On "Send replies", POSTs each
+// textarea labeled "Nudge the next run". On "Send replies", POSTs each
 // non-empty textarea as a step_instructions reply. A persist checkbox
 // promotes the scope to "persist" (xpcloud.yaml).
 function CycleSummaryStepInstructions({
@@ -746,7 +746,7 @@ function CycleSummaryStepInstructions({
 		<div className="mt-4 pt-3 border-t border-gray-100">
 			<div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
 				<Sparkles className="w-3 h-3" />
-				Per-step nudges for next cycle
+				Per-step nudges for the next run
 				{queued != null && (
 					<span className="ml-1 px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-medium">
 						{queued} queued
@@ -786,7 +786,7 @@ function CycleSummaryStepInstructions({
 							onChange={(e) =>
 								setInstructions((prev) => ({ ...prev, [step.step_id]: e.target.value }))
 							}
-							placeholder={`Nudge next cycle (e.g. "be 20% more conservative on drawdown gate")`}
+							placeholder={`Nudge the next run (e.g. "be 20% more conservative on drawdown gate")`}
 							className="w-full text-xs rounded border border-gray-200 px-2 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white"
 							rows={2}
 							disabled={submitting}
