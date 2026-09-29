@@ -57,11 +57,11 @@ export interface FlowMeshDoc {
 	spec?: FlowMeshSpec;
 }
 
-/** The fifteen kinds, as offered in the add palette. */
+/** The sixteen kinds, as offered in the add palette. */
 export const FLOWMESH_KINDS = [
 	"InferenceTask", "AgentTask", "TrainingTask", "SFTTask", "LoRASFTTask", "OmniTask",
 	"EmbeddingTask", "DiffusersTask", "ImageClassificationTask", "RetrievalTask",
-	"DataProfilingTask", "ServeTask", "APITask", "SSHTask", "EchoTask",
+	"DataProfilingTask", "ServeTask", "APITask", "PythonTask", "SSHTask", "EchoTask",
 ] as const;
 
 /** kind -> the taskType a new node should carry. They are not the same string. */
@@ -70,7 +70,7 @@ export const TASK_TYPE_OF: Record<string, string> = {
 	LoRASFTTask: "lora_sft", OmniTask: "omni_text", EmbeddingTask: "embedding",
 	DiffusersTask: "diffusion", ImageClassificationTask: "image_classification_training",
 	RetrievalTask: "rag", DataProfilingTask: "data_profiling", ServeTask: "serve",
-	APITask: "api", SSHTask: "ssh", EchoTask: "echo",
+	APITask: "api", PythonTask: "python", SSHTask: "ssh", EchoTask: "echo",
 };
 
 /**

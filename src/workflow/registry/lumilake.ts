@@ -149,8 +149,8 @@ const FormatOp: NodeSpec = {
 const LambdaOp: NodeSpec = {
 	key: "LambdaOp",
 	family: "lumilake-op",
-	label: "Lambda",
-	summary: "Run a small pure Python function over the inputs, on CPU.",
+	label: "Python (per row)",
+	summary: "Apply a Python function to each row of its inputs. Read by an LLM it runs inline; otherwise it is its own isolated step.",
 	subtitleFrom: (p) => {
 		const fn = str(p, ["fn_name"]);
 		return fn ? `fn ${fn}` : "LambdaOp";

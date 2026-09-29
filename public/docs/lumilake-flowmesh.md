@@ -217,10 +217,21 @@ rows for one slice fails the job with `Output length mismatch: expected=1 got=3`
 which is why the example's SQL op selects a single representative keyframe
 rather than all three.
 
-An output's source must be an `LLMOp` or a `DataRetrievalOp`. A terminal
-`LambdaOp` cannot be an output at all (`OutputOp '<name>' input must be an LLMOp
-or DataRetrievalOp (got LambdaOp)`) — so assemble final artifacts in your app's
-own code, not in a code string inside the YAML.
+An output's source is an `LLMOp`, a `DataRetrievalOp`, or a terminal
+`LambdaOp`. A terminal `LambdaOp` (one no LLM reads) runs as its own **Python
+step**: a FlowMesh `python` task in its own container, with no network, as an
+unprivileged user, 600 s timeout, its function applied once per row. This needs
+a Lumilake server and FlowMesh workers that support the `python` task type. An
+older deployment rejects the workflow with `OutputOp '<name>' input must be an
+LLMOp or DataRetrievalOp (got LambdaOp)`. On one of those, assemble final
+artifacts in your app's own code.
+
+For Python that is more than a per-row transform (whole files, packages,
+metrics for an experiment), use a **Python step** in a FlowMesh compute graph
+(`taskType: python`). It receives `{stage: directory}` for each connected step,
+and its return value becomes the result. `{"metrics": {...}}` in that value is
+what an experiment records, and any name listed under `emits:` must be present,
+or the step fails.
 
 The op catalog is `DataOp`, `DataRetrievalOp`, `EmbeddingOp`, `FormatOp`,
 `ImageGenerationOp`, `LLMChatOp`, `LLMVisionOp`, `LambdaOp`, `MessageOp` — but

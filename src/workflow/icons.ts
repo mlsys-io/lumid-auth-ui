@@ -39,6 +39,7 @@ const FLOWMESH_ICON: Record<string, LucideIcon> = {
 	DataProfilingTask: Database,
 	ServeTask: Server,
 	APITask: Radio,
+	PythonTask: Code2,
 	SSHTask: Terminal,
 	EchoTask: MessageSquare,
 };
