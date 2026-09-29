@@ -40,6 +40,11 @@ jobs:
       - name: Catalog conformance
         run: npm run check:catalog
 
+      - name: Glossary ratchet
+        # No NEW retired word (cycle, loop, variant, arm, knowledge agent, …)
+        # reaches the screen; see src/lib/glossary.ts.
+        run: npm run check:glossary
+
       - name: Build
         run: npm run build
 
