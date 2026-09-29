@@ -17,6 +17,7 @@
 // strip. Drawing one box with two stubs as though it were a DAG is a canvas
 // performing rather than working.
 
+import RunOnFleet from "./RunOnFleet";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Code2, Download, LayoutGrid, Plus, Redo2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
@@ -247,6 +248,12 @@ export default function WorkflowEditor({
 				<button type="button" className={btn} onClick={() => setShowYaml((v) => !v)} title="Toggle the YAML pane">
 					{showYaml ? <LayoutGrid size={13} /> : <Code2 size={13} />} {showYaml ? "Canvas" : "YAML"}
 				</button>
+				{(detected.format === "flowmesh" || detected.format === "lumilake") && !readOnly && (
+					<>
+						<span className="mx-1 h-4 w-px bg-slate-200" />
+						<RunOnFleet yaml={text} format={detected.format} disabled={errorCount > 0} className={btn} />
+					</>
+				)}
 				<div className="ml-auto flex items-center gap-2 text-[10px] text-slate-400">
 					<span className="rounded bg-slate-100 px-1.5 py-0.5 font-medium text-slate-500" title={detected.why}>
 						{adapter.label}

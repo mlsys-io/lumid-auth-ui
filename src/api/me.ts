@@ -118,6 +118,12 @@ function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   return doCall<T>(method, path, body);
 }
 
+/** An uncached /api/v1/me call, for clients kept in their own module
+ *  (api/fleet.ts). Same envelope, auth and 429 cooldown as everything here. */
+export function meRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
+  return doCall<T>(method, path, body);
+}
+
 async function doCall<T>(
   method: string,
   path: string,
