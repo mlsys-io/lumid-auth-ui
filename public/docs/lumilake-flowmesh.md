@@ -1,10 +1,10 @@
 # Compute: Lumilake + FlowMesh
 
 **(Admin+)** How work reaches a GPU on this stack — what the two compute pillars
-own, how you reach them, how a Lumilake workflow is authored, planned and
+own, how you reach them, how a Lumilake compute graph is authored, planned and
 executed, and what breaks along the way. The worked example is `vla-curation`, a
 demo that turns raw robot episodes into a VLA training manifest, but the
-contract in §4–§6 applies to any workflow you write.
+contract in §4–§6 applies to any compute graph you write.
 
 The raw `/fm` and `/ll` endpoints on this page are **admin-only at the edge**.
 §2 has the read path a normal user gets instead.
@@ -25,11 +25,11 @@ One run crosses four systems, and each owns exactly one thing:
 | execution | **FlowMesh** | dispatching tasks to GPU workers and running them |
 | identity | **lum.id** | who may submit, and to which object prefix |
 
-The important consequence: **a workflow file contains no addresses.** The data
+The important consequence: **a compute graph file contains no addresses.** The data
 endpoint and bearer come from the *Lumilake server's* environment
 (`LUMID_DATA_URL`, `LUMID_DATA_TOKEN`, and the worker's own
-`LUMID_DATA_WORKER_URL`). Re-pointing a workflow at a different data instance is
-a deployment change, never a workflow edit.
+`LUMID_DATA_WORKER_URL`). Re-pointing a compute graph at a different data instance is
+a deployment change, never a compute graph edit.
 
 ## 2. Reaching the fleet
 
@@ -41,11 +41,15 @@ a deployment change, never a workflow edit.
 > **`run_workflow` is the FlowMesh tool, not the Lumilake one.** It runs
 > FlowMesh task specs. The Lumilake executor is **`run_lumilake_job`**. Older
 > notes list `run_workflow` under Lumilake and tell you to use it to execute a
-> native `ops` workflow; that call will not run your workflow.
+> native `ops` compute graph; that call will not run your compute graph. Both
+> are superseded today by the unified `job_run` — `POST /api/v1/me/fleet/jobs`
+> — which runs either dialect; the tool-specific split above is what the
+> deployed MCP server still answers to.
 
-`optimize_workflow` **plans only** — it produces the HALO worker assignment and
-does not execute the ops, so it is fast and safe even when an LLM op's backend
-is offline. `run_lumilake_job` submits, waits and returns the result.
+`optimize_workflow` (today's `job_run(dry_run=True)`) **plans only** — it
+produces the HALO worker assignment and does not execute the ops, so it is
+fast and safe even when an LLM op's backend is offline. `run_lumilake_job`
+(today's `job_run`) submits, waits and returns the result.
 `output_location` must be `{type: s3, prefix: …}` or `{type: db, table, column}`;
 the deployed server rejects `inline` and `http` with a 422.
 
@@ -63,7 +67,7 @@ with it. Earlier notes claimed the proxy injects an operator token for bare
 `/fm` and `/ll` so a normal user PAT reaches the shared fleet. **It does not.**
 Every raw-HTTP example below needs an admin credential.
 
-One credential covers all three sites — there is no per-site mesh key. It just
+One credential covers all three sites — there is no per-site key. It just
 has to be an admin one.
 
 ### The read path a normal user has
@@ -90,21 +94,22 @@ directly can still drive Lumilake through them. Prompts that route:
 
 - "List the FlowMesh workers and their status."
 - "Submit an echo job with the items `["hello","world"]` and show me the result."
-- "Optimize this workflow and show me the HALO worker assignment." (paste the YAML)
-- "Run this workflow and give me the output text."
-- "What ops can I use in a Lumilake workflow, and what fields does `LLMChatOp` need?"
+- "Optimize this compute graph and show me the HALO worker assignment." (paste the YAML)
+- "Run this compute graph and give me the output text."
+- "What ops can I use in a Lumilake compute graph, and what fields does `LLMChatOp` need?"
 
-A successful `optimize_workflow` / `run_lumilake_job` also pops the **workflow
-DAG side panel** in Studio (React-Flow graph, HALO worker badges) — see
+A successful `optimize_workflow` / `run_lumilake_job` (today's `job_run`, with
+or without `dry_run=True`) also pops the **compute graph side panel** in
+Studio (React-Flow graph, HALO worker badges) — see
 `lumid_ui`'s `StudioWorkflowPanel`. Phrasing matters for dispatch; see §8.
 
 ## 3. Sites and federation
 
-`cloud`, `home` and `office` are three separate meshes behind mesh-federator.
+`cloud`, `home` and `office` are three separate sites behind mesh-federator.
 `/fm` and `/ll` fan out to all three and merge; `/fm/<site>/…` talks to exactly
 one. Before federation these bases proxied only to the **cloud** control plane,
 which is why they once reported a single FlowMesh node and zero Lumilake workers
-while the on-prem meshes held the rest.
+while the on-prem sites held the rest.
 
 The list endpoints still return a **JSON array** — the same contract as before,
 merged, with each record carrying an extra `site` field. Existing callers keep
@@ -150,7 +155,7 @@ curl -s https://lum.id/ll/office/api/v1/workers -H "Authorization: Bearer $ADMIN
 ```
 
 Use `?site=` when you want the federated shape with fewer sites. Use
-`/fm/<site>/…` when you want to *operate* on one mesh — inspect a node, pull a
+`/fm/<site>/…` when you want to *operate* on one site — inspect a node, pull a
 task's logs, or reach an endpoint the federator does not merge.
 
 ### Per-worker retrieve fans out too
@@ -173,7 +178,7 @@ curl -s  https://lum.id/fm/api/v1/workers/wkr-nonexistent -H "Authorization: Bea
 
 Worker ids are globally unique (`wkr-NNN`), so the first site that answers is
 the owning site. Lumilake's orchestrator is pointed at the populated **office**
-site (`/fm/office`) so list + retrieve + submit all reach a mesh that actually
+site (`/fm/office`) so list + retrieve + submit all reach a site that actually
 has workers.
 
 ### Two things a site will trip you on
@@ -187,7 +192,7 @@ has workers.
   exactly like a job that never submitted. Carry the site alongside the id
   everywhere, which is why the `/me/compute` routes in §2 take it in the path.
 
-## 4. The workflow contract
+## 4. The compute graph contract
 
 Write **Lumilake-native** YAML: `name` + `inputs` + `ops` + `outputs`.
 
@@ -198,7 +203,7 @@ server and does not render in Studio's canvas.** If you started from those
 examples, you are writing a file that will be rejected at submit. Four
 differences matter:
 
-1. **There is no `InputOp`.** Workflow inputs are the top-level `inputs:` map,
+1. **There is no `InputOp`.** A compute graph's inputs are the top-level `inputs:` map,
    referenced by name from an op's `inputs:` list.
 2. **`outputs:` is required.** Without it the job fails `Missing output for
    workflow`. `path:` within an output is optional.
@@ -209,7 +214,7 @@ differences matter:
 > `outputs:` block names *which* op results are the job's outputs;
 > `output_location` on the submit item says *where* they are written. Notes that
 > describe output as "captured by `output_location`" omit half the contract, and
-> a workflow written from them runs every op and then fails `Missing output for
+> a compute graph written from them runs every op and then fails `Missing output for
 > workflow`.
 
 Every declared output must yield **exactly one row per slice**. Returning three
@@ -222,7 +227,7 @@ An output's source is an `LLMOp`, a `DataRetrievalOp`, or a terminal
 step**: a FlowMesh `python` task in its own container, with no network, as an
 unprivileged user, 600 s timeout, its function applied once per row. This needs
 a Lumilake server and FlowMesh workers that support the `python` task type. An
-older deployment rejects the workflow with `OutputOp '<name>' input must be an
+older deployment rejects the compute graph with `OutputOp '<name>' input must be an
 LLMOp or DataRetrievalOp (got LambdaOp)`. On one of those, assemble final
 artifacts in your app's own code.
 
@@ -239,7 +244,7 @@ treat that as orientation, not a contract. **Author from `lumilake_node_specs()`
 and `lumilake_workflow_schema()`**, which are field-by-field and track the
 deployed server; an op shape copied from a stale doc will 422.
 
-### A minimal workflow (`hello-world.yaml`)
+### A minimal compute graph (`hello-world.yaml`)
 
 ```yaml
 name: hello-world
@@ -266,9 +271,10 @@ ops:
 `model`. An op's `inputs[]` entry references either another op's `id` — an
 upstream edge — or a top-level input name; there is no separate edges list.
 
-To plan it without executing, `POST /ll/api/v1/jobs/preview` needs the
-**`Workflow-Format: yaml`** header and a **non-empty `inputs`** (a missing
-header or empty inputs → `422 inputs is required`):
+To plan it without executing (the `job_run(dry_run=True)` path), `POST
+/ll/api/v1/jobs/preview` needs the **`Workflow-Format: yaml`** header and a
+**non-empty `inputs`** (a missing header or empty inputs → `422 inputs is
+required`):
 
 ```bash
 curl -s https://lum.id/ll/api/v1/jobs/preview \
@@ -284,8 +290,8 @@ It returns the HALO plan — `selected_workers`, `worker_assignment`,
 ### FlowMesh tasks are a different dialect
 
 A FlowMesh task spec is `stages[]` with a `taskType`, and it is what
-`submit_workflow` / `run_workflow` take. Note `data.type: list` + `data.items`,
-**not** `data.messages`:
+`submit_workflow` / `run_workflow` (today unified as `job_run`) take. Note
+`data.type: list` + `data.items`, **not** `data.messages`:
 
 ```yaml
 name: echo-smoke
@@ -333,7 +339,7 @@ validation, so it surfaces as a *schema* error and reads like a contract bug.
 **Override `max_model_len` per op — the 8192 is a server default, not your
 model.** Lumilake pins `max_model_len=8192` **fleet-wide, as a server default
 applied to every op**. It is not a property of the model you chose and it is not
-the office lane's choice, so a workflow on `home` or `cloud` is affected
+the office lane's choice, so a job on `home` or `cloud` is affected
 identically. When the model derives a *smaller* maximum than that default —
 `llava-1.5` derives 4096 — vLLM refuses to start and reports `Failed to
 initialize vLLM after trying tensor_parallel_size candidates [1]`, which reads
@@ -345,7 +351,7 @@ is prepended. Repeating it writes to `<prefix>/<prefix>/…` **and the job still
 reports `completed`**, so the only symptom is output that is not where you
 declared it.
 
-## 6. Hardware — the part that is not in your workflow
+## 6. Hardware — the part that is not in your compute graph
 
 `HardwareRequirements` (`cpu`, `memory`, `gpu`, `gpu_memory`) hangs off the job
 submit item, **not off an op**. There is no per-op hardware field. A floor you

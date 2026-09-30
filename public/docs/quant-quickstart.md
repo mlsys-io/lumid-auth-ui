@@ -38,12 +38,12 @@ based on the price and on a few published **signals**.
 | **Real on all three axes** | The backtest used real recorded **prices**, real recorded **signals**, and the contract's real **settlement**. Anything less is labelled and is not a performance number |
 | **Lot** | One contract |
 | **Tick** | The price unit: 0 to 10000 is 0% to 100% |
-| **Workflow / run** | A job the app runs (for example Backtest) and one execution of it |
-| **Experiment / arm** | A comparison the app runs for you, and one side of it. You can ignore these at first |
+| **Workflow / run** | Something the agent does on a schedule or on request (for example Backtest), and one execution of it |
+| **Study / experiment** | A comparison the agent runs for you, and one side of it. You can ignore these at first |
 
 ## 3. Five steps
 
-1. **Add the app.** Open **Marketplace**, find **Quant Research**, click
+1. **Add the agent.** Open **Marketplace**, find **Quant Research**, click
    **Add to my account**, then open it from **Your Apps** in the sidebar.
 2. **Deploy your first strategy.** On the **Strategies** tab, scroll to
    **Deploy a strategy**. Put `my_first_ofi` in the name field and paste this
@@ -59,13 +59,13 @@ based on the price and on a few published **signals**.
    ```
 
    It says: when buyers are more aggressive than usual by 1.5 standard
-   deviations, buy 50 contracts at the middle price. It is the app's
+   deviations, buy 50 contracts at the middle price. It is the agent's
    `ofi_momentum_v1` sample, which has traded on real recorded history.
    Click **Deploy**. It appears under **Your strategies** once it compiles;
    if it does not compile, it appears under **Rejected submissions** with the
    compiler's reason.
 3. **Backtest it.** On its row click **Backtest**. Leave the instrument blank:
-   the app picks a contract that has real recorded prices, signals and a
+   the agent picks a contract that has real recorded prices, signals and a
    settlement.
 4. **Get the result.** About a minute later, click **Poll result** on the same
    row. The verdict appears on the strategy's own page (click the row).
@@ -82,11 +82,11 @@ positive, and deploy it"*, then *"Backtest it, let it pick the market"*, then
 All three are recorded backtests of `ofi_momentum_v1` from 26–28 September
 2026.
 
-**A. Not real.** `replay: synthetic_lcg` or `signals: static`. The app could
+**A. Not real.** `replay: synthetic_lcg` or `signals: static`. The agent could
 not replay real history (no recorded trades for that contract, or a signal
 your strategy reads has no history there). The numbers are moved under
 `synthetic` and marked `presentable_as_performance: false`. **Do not quote
-them.** Leave the instrument blank so the app picks a covered contract, and
+them.** Leave the instrument blank so the agent picks a covered contract, and
 read only the three published signals.
 
 **B. Real, zero trades.** `KXMLBTOTAL-26SEP251840TBPHI-7`: 1,408 recorded

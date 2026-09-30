@@ -2,6 +2,20 @@
 
 Status: stable (2026-05-09). Workflow alias added 2026-05-25 (W1.1). Vocabulary unified 2026-06-24 (U1 — see below). The canonical contract every xpio app should target. The runtime is `sdk/apps/app_runner.py`. This doc cites file:line for every claim so it stays anchored when the runner evolves.
 
+## Terms
+
+Keys stay literal; in prose they read as today's product words:
+
+| Spec key / term | Product word |
+|---|---|
+| `loops[]` entry | workflow |
+| cycle | run |
+| `experiments[]` entry / `studies[]` entry (the comparison) | study |
+| arm / `studies[].experiments[]` entry | experiment |
+| `memory_agents` | memory |
+
+Both spec forms are read (`experiments[].arms[]` and `studies[].experiments[]`); the Studio and `POST /me/agents/:agent/studies` still write the `experiments[].arms[]` form.
+
 ## Unified vocabulary (U1, the run axis)
 
 xpio's concepts are sound, but one idea had 2–3 names across the docs, the code, and the UI. The whole
@@ -69,16 +83,16 @@ workflows:
 
 The runner reads the union from `_coalesce_workflow_entries(manifest)` in `sdk/apps/app_runner.py`; scheduler discovery does the same in `sdk/scheduling/xpio_scheduler.py::_discover_loops_from_root`. Existing apps need no migration. The alias enables marketplace + composer + Studio surfaces to consistently say "workflow" without touching app source.
 
-## What is an autoresearch loop
+## What is an autoresearch workflow
 
-An xpio autoresearch loop is a periodic, observable, learnable workflow that fits one of two engine patterns. The five logical stages — **observe → hypothesize → act → analyze → learn** — appear in both, but the *engine* differs.
+An xpio autoresearch workflow is periodic, observable, and learnable, and fits one of two engine patterns. The five logical stages — **observe → hypothesize → act → analyze → learn** — appear in both, but the *engine* differs.
 
 | Pattern | Engine | When to use | Reference |
 |---|---|---|---|
 | **A — runner-driven** | `app_runner.cycle()` walks `loops[].steps[]` in order | Each step is a single skill call with a clean input/output contract | `personal-agent` |
 | **B — command-driven** | `app_runner.cycle()` imports `commands/<verb>.py` and runs it; the verb implements the flow internally | Parallel fan-out, conditional retries, idempotency gating, or per-record dynamic skill loading | `mbb-ai`, `eventx` |
 
-Both patterns get the same post-cycle hooks: `_run_auto_publish()` (privacy contract) and `_post_inbox_message()` (human-in-the-loop). Both appear in the dashboard's `/admin/loops` tile. The choice of pattern is local to the app, not visible to the operator.
+Both patterns get the same post-run hooks: `_run_auto_publish()` (privacy contract) and `_post_inbox_message()` (human-in-the-loop). Both appear in the dashboard's `/admin/loops` tile. The choice of pattern is local to the app, not visible to the operator.
 
 ## The five stages
 
@@ -98,7 +112,7 @@ Every kind=app bundle MUST have an `xpcloud.yaml` at the bundle root. `app_runne
 
 Install-time precedence (2026-06-11): when BOTH files declare a unified field (`skill_imports`, `loops`, `datasets`, `roles`, `benchmarks`, `human_inbox`, `approval_policy`, `experiments`) **or `version`**, `xpcloud.yaml` wins — a stale legacy `manifest.json`/`manifest.yaml` can no longer redirect skill imports or misreport the installed version. Keep both files in sync anyway (`app_push` bumps both); the mirror exists for static indexers only.
 
-List-field tolerance: `skills_invoked[]` and `datasets[]` entries may be bare strings **or** objects (`{skill:|name:|id:, …}`). Consumers must accept both — the reference Go reader (`lumid_identity` `flexStrings`) coerces objects to their `skill`/`name`/`id` field. A strict string-list reader hides the whole loop from the UI while the scheduler happily runs it.
+List-field tolerance: `skills_invoked[]` and `datasets[]` entries may be bare strings **or** objects (`{skill:|name:|id:, …}`). Consumers must accept both — the reference Go reader (`lumid_identity` `flexStrings`) coerces objects to their `skill`/`name`/`id` field. A strict string-list reader hides the whole workflow from the UI while the scheduler happily runs it.
 
 ```yaml
 # Identity
@@ -326,7 +340,7 @@ fenced-block directives** that become live, data-bound widgets:
 | ` ```lumid:list ` | a list of cards | same |
 | ` ```lumid:action ` | a button (`open`/`run_loop`/`install_app`) | `me://*` POST |
 | ` ```lumid:iframe ` | a sandboxed iframe | same-origin proxy allowlist only |
-| ` ```lumid:workflow ` | the loop's pipeline as a node canvas (n8n-style; body: `loop:`, optional `cycle: latest` to overlay the latest run's per-step statuses) | `me://workflows/*`, `me://cycles/*` |
+| ` ```lumid:workflow ` | the workflow's pipeline as a node canvas (n8n-style; body: `loop:`, optional `cycle: latest` to overlay the latest run's per-step statuses) | `me://workflows/*`, `me://cycles/*` |
 | ` ```lumid:ask ` | prompt chips that route into the Studio chat rail with this app as structured grounding (body: `prompts: [...]`, optional `loop:`) | — (dispatches `studio:ask`) |
 
 **`lumid:form` conventions.** Fields support `type: password`, `advanced: true`
@@ -352,7 +366,7 @@ path-traversal guard (stays inside the bundle, `.md`-only, ≤256 KB).
 
 See `~/.xp/apps/auto-quant/ui/home.md` for a reference surface.
 
-## Pattern A — runner-driven loop
+## Pattern A — runner-driven workflow
 
 The runner walks `steps[]` in order. Each step is one skill call; outputs flow into `prev_outputs` so later steps can reference earlier ones.
 
@@ -392,10 +406,10 @@ loops:
 ```
 
 **Step contract** (`_run_explicit_steps()`, `app_runner.py`):
-- `id` (required): unique within the loop; outputs land in `prev_outputs[id]`.
+- `id` (required): unique within the workflow; outputs land in `prev_outputs[id]`.
 - `skill` (required): resolves via `_load_skill_module()`. Sub-paths (`claude_code/scan_sessions`) translate slashes to dots (`skills.claude_code.scan_sessions`).
-- `knowledge_agent` (optional): falls back to the loop's `knowledge_agent`, then the role's `memory_agent`. Top-k memories from this agent are rendered as `prior_knowledge` and injected into the skill's context.
-- `required: true` (optional): abort the cycle on this step's failure. Default = continue.
+- `knowledge_agent` (optional): falls back to the workflow's `knowledge_agent`, then the role's `memory_agent`. Top-k memories from it are rendered as `prior_knowledge` and injected into the skill's context.
+- `required: true` (optional): abort the run on this step's failure. Default = continue.
 - `args: {}` (optional): static kwargs forwarded into `mod.run(**args)`. **Static args always override auto-wired values.**
 - `instructions: |` (optional): **per-step operator instructions** — plain-English text that the runner splices into the skill's prompt as an OPERATOR INSTRUCTIONS block. Backwards-compat: when absent, no block is injected and old apps work unchanged. See the Per-step operator instructions section below.
 - `stage` (optional): one of `observe | hypothesize | act | analyze | learn`. Used by the runner for auto-wiring and the no-setup short-circuit.
@@ -412,13 +426,13 @@ loops:
 | `backtest` | Output of first `stage: act, substage: pre-flight` step |
 | `risk_decision` / `risk` | Output of first `stage: act, substage: risk-gate` step |
 | `fill` | Output of first `stage: act` step with no substage |
-| `loop_name` | The loop's `name` field |
-| `contest_id` | Contest ID from the cycle invocation |
+| `loop_name` | The workflow's `name` field |
+| `contest_id` | Contest ID from the run invocation |
 | `mode` | `loops[].mode` (default `paper`) |
 
 Unknown kwargs the skill doesn't declare are silently dropped, so adding new auto-wired params is backwards-compatible.
 
-**No-setup short-circuit.** After a `stage: hypothesize` step completes successfully, if `out["proposal"]["verdict"]` is not `"propose"` or `"route"`, the runner stops the cycle immediately, sets `summary.outcome = "no_setup"`, and skips all remaining steps. This mirrors the same guard in the legacy (non-steps) cycle path.
+**No-setup short-circuit.** After a `stage: hypothesize` step completes successfully, if `out["proposal"]["verdict"]` is not `"propose"` or `"route"`, the runner stops the run immediately, sets `summary.outcome = "no_setup"`, and skips all remaining steps. This mirrors the same guard in the legacy (non-steps) run path.
 
 **Skill `run()` signatures.** Two patterns both work:
 
@@ -442,12 +456,12 @@ In both patterns `context["prior_knowledge"]` is the rendered memory block, `con
 
 ## Per-step operator instructions (Theme F)
 
-Any step in any xpio loop can carry an `instructions:` field. The runner resolves the effective instructions for each step from **four scopes in priority order** (most-specific wins):
+Any step in any xpio workflow can carry an `instructions:` field. The runner resolves the effective instructions for each step from **four scopes in priority order** (most-specific wins):
 
 | Scope | Source | Lifetime | Example |
 |---|---|---|---|
-| **Per-cycle (CLI)** | `--instructions-for <step_id> "<text>"` on `cycle` command | One cycle only | "Be extra-conservative; month-end." |
-| **Per-step (loop default)** | `xpcloud.yaml::loops[].steps[].instructions` | Until edited | "Bias toward mean-reversion in low-vol regime." |
+| **Per-run (CLI)** | `--instructions-for <step_id> "<text>"` on `cycle` command | One run only | "Be extra-conservative; month-end." |
+| **Per-step (workflow default)** | `xpcloud.yaml::loops[].steps[].instructions` | Until edited | "Bias toward mean-reversion in low-vol regime." |
 | **Per strategy** | `xpcloud.yaml::strategies[].text` (auto-quant Theme C) | Until strategy changes | "Buy when RSI<30 and ret_5d<-2σ." |
 | **Forever** | `data/established_facts.md` (Method D, v0.4.5) | Until deleted | "FOMC days have 70bps higher VIX baseline." |
 
@@ -533,7 +547,7 @@ lumid app auto-quant cycle momentum_research \
   --instructions-for risk_gate "be 20% more conservative" --persist
 ```
 
-`--instructions-for` accepts multiple instances. Without `--persist`, the instruction is recorded in `prompt_audit.jsonl` but xpcloud.yaml is not modified. With `--persist`, the instruction is written into the step's `instructions:` field in xpcloud.yaml so every future cycle applies it until cleared.
+`--instructions-for` accepts multiple instances. Without `--persist`, the instruction is recorded in `prompt_audit.jsonl` but xpcloud.yaml is not modified. With `--persist`, the instruction is written into the step's `instructions:` field in xpcloud.yaml so every future run applies it until cleared.
 
 ### Related paths
 
@@ -541,9 +555,9 @@ lumid app auto-quant cycle momentum_research \
 - `strategies[].text` (auto-quant): per-strategy rules baked into the propose prompt.
 - Inbox reply kind `step_instructions` (Theme F.x, future): dashboard-driven per-step nudges that flow through the same mechanism.
 
-## Pattern B — command-driven loop
+## Pattern B — command-driven workflow
 
-The loop's `engine` field tells the runner to import `commands/<module>.py` and call `<module>.run(argv=[...])` instead of walking `steps[]`. The verb IS the engine; `steps[]` (if present) is documentation only.
+The workflow's `engine` field tells the runner to import `commands/<module>.py` and call `<module>.run(argv=[...])` instead of walking `steps[]`. The verb IS the engine; `steps[]` (if present) is documentation only.
 
 ```yaml
 loops:
@@ -568,7 +582,7 @@ loops:
 **Engine contract** (`_run_command_engine()`, `app_runner.py:925-1010`):
 - `engine.type: command` — branches off the steps[] path.
 - `engine.module` — `commands/<module>.py`; must expose `def run(argv: list[str]) -> dict`.
-- `engine.args[]` — `{{ args.<key> }}` and `{{ contest_id }}` placeholders are expanded by `_expand_engine_args()` from the cycle invocation.
+- `engine.args[]` — `{{ args.<key> }}` and `{{ contest_id }}` placeholders are expanded by `_expand_engine_args()` from the run invocation.
 - The verb's return dict lands in `summary["command_engine"]`. `summary["ok"]` mirrors `out.get("ok")`.
 - After the verb returns, the runner still fires `_run_auto_publish()` and `_post_inbox_message()` — privacy + inbox stay consistent across patterns.
 
@@ -577,9 +591,9 @@ loops:
 - Conditional retries (mbb-ai's info-release re-prompt, `cycle.py:426`).
 - Idempotency gating on persistent state (eventx's `_step_done()`, `run.py:34-55`, skipping pipeline stages whose output table has rows).
 - Per-record dynamic skill loading (eventx's `skills/<task>.py` auto-load, `cycle.py:67-73`).
-- Anything that would generate >20 `steps[]` entries per loop.
+- Anything that would generate >20 `steps[]` entries per workflow.
 
-If your loop fits 3-7 sequential skill calls with no special control flow, use Pattern A. Pattern B trades declarative clarity for capability.
+If your workflow fits 3-7 sequential skill calls with no special control flow, use Pattern A. Pattern B trades declarative clarity for capability.
 
 ## LLM calls — no API key required
 
@@ -662,25 +676,25 @@ Earlier sources win — explicit local Python overrides always beat shared looku
 
 ## Privacy contract — `auto_publish.memories[]`
 
-`_run_auto_publish()` (`app_runner.py:325-414`) walks the `auto_publish.memories[]` allowlist after every cycle and pushes new entries from each listed agent's bank to xpcloud. **Agents not on this list never publish.** Used by personal-agent to keep the watcher bank (raw transcript fragments + diff excerpts) local-only forever, while the philosopher bank (distilled principles) syncs cross-machine.
+`_run_auto_publish()` (`app_runner.py:325-414`) walks the `auto_publish.memories[]` allowlist after every run and pushes new entries from each listed memory to xpcloud. **Memories not on this list never publish.** Used by personal-agent to keep the watcher memory (raw transcript fragments + diff excerpts) local-only forever, while the philosopher memory (distilled principles) syncs cross-machine.
 
-To prove the contract: probe `https://xp.io/api/v1/repos/<owner>/<bank-name>` after a cycle. Listed agents → 200; unlisted → 404. Step 10 of any app's verification run should include this probe.
+To prove the contract: probe `https://xp.io/api/v1/repos/<owner>/<bank-name>` after a run. Listed memories → 200; unlisted → 404. Step 10 of any app's verification run should include this probe.
 
-`auto_publish.skills.enabled` and `.artifacts.enabled` default to `false`; opt in to publish skill drafts or per-cycle artifacts (rare — most apps keep these local because they may carry PII).
+`auto_publish.skills.enabled` and `.artifacts.enabled` default to `false`; opt in to publish skill drafts or per-run artifacts (rare — most apps keep these local because they may carry PII).
 
 ## Memory read + write — closing the loop
 
-A cycle has two halves: **read** (inject prior memories into each step's prompt) and **write** (persist new memories from step outputs back into the bank). Both are needed for Level-1 compounding (cycle outputs → bank → next cycle's prompt).
+A run has two halves: **read** (inject prior memories into each step's prompt) and **write** (persist new memories from step outputs back into memory). Both are needed for Level-1 compounding (run outputs → memory → next run's prompt).
 
 ### Read — `render_prior_knowledge` (`sdk/skills/knowledge_inject.py`)
 
-`_run_explicit_steps()` calls `render_prior_knowledge(agent_id, question, k=5)` before each step and assigns the result to `context["prior_knowledge"]`. The agent is resolved in priority order: step's `knowledge_agent` → loop's `knowledge_agent` → role's `memory_agent`. Resolution path: `AgenticKG.get_agent(agent_id)` first, with a filesystem fallback to `KnowledgeAgent.load(~/.xp/kg/agents/<id>/)` for banks that exist on disk but aren't registered in `kg_config.json`. Returns `""` on any retrieval error so cycles never break.
+`_run_explicit_steps()` calls `render_prior_knowledge(agent_id, question, k=5)` before each step and assigns the result to `context["prior_knowledge"]`. The memory is resolved in priority order: step's `knowledge_agent` → workflow's `knowledge_agent` → role's `memory_agent`. Resolution path: `AgenticKG.get_agent(agent_id)` first, with a filesystem fallback to `KnowledgeAgent.load(~/.xp/kg/agents/<id>/)` for memories that exist on disk but aren't registered in `kg_config.json`. Returns `""` on any retrieval error so runs never break.
 
 The renderer handles both legacy and current `agent.answer()` return shapes (`{answer: str, sources: list, ...}` from `xp/agent.py:114` is the current shape).
 
 ### Write — `auto_draft` (`sdk/apps/app_runner.py:_maybe_draft_memory_from_step`)
 
-Opt-in. When `auto_draft.enabled: true`, after each successful step in `steps[]` the runner queues a `MemoryDraft` via `skill_authoring.draft_memory()` into the primary role's `memory_agent` bank. Drafts land at `~/.xp/kg/agents/<agent>/.drafts/<draft_id>.json` and **do not enter the bank until the operator approves them** through the inbox flow (`_pull_inbox_replies` dispatches `memory_apply` on approve, `discard_memory_draft` on reject).
+Opt-in. When `auto_draft.enabled: true`, after each successful step in `steps[]` the runner queues a `MemoryDraft` via `skill_authoring.draft_memory()` into the primary role's `memory_agent`. Drafts land at `~/.xp/kg/agents/<agent>/.drafts/<draft_id>.json` and **do not enter memory until the operator approves them** through the inbox flow (`_pull_inbox_replies` dispatches `memory_apply` on approve, `discard_memory_draft` on reject).
 
 | Field | Purpose | Default |
 |---|---|---|
@@ -691,22 +705,22 @@ Opt-in. When `auto_draft.enabled: true`, after each successful step in `steps[]`
 | `skip_skills` | Skill ids to exclude (e.g. renderers) | `[]` |
 | `skip_stages` | `observe\|hypothesize\|act\|analyze\|learn` to exclude | `[]` |
 
-Failures (no role, no agent, empty output, draft library unavailable) are non-fatal — they land in `step_log[].memory_draft` for visibility and the cycle continues.
+Failures (no role, no memory, empty output, draft library unavailable) are non-fatal — they land in `step_log[].memory_draft` for visibility and the run continues.
 
 Pattern B (`engine: command`) verbs are NOT auto-hooked here; they should call `draft_memory()` themselves where appropriate.
 
-Interaction with `auto_publish`: drafts that get approved enter the bank → next cycle's `_run_auto_publish` pushes them to xpcloud IF the agent is on the allowlist. So enabling `auto_draft` on a `*-watcher` bank is still safe — drafts stay local forever even after approval, because the agent isn't on `auto_publish.memories[]`.
+Interaction with `auto_publish`: drafts that get approved enter memory → next run's `_run_auto_publish` pushes them to xpcloud IF the memory is on the allowlist. So enabling `auto_draft` on a `*-watcher` memory is still safe — drafts stay local forever even after approval, because the memory isn't on `auto_publish.memories[]`.
 
 ## Inbox publish + reply
 
-`_post_inbox_message()` (`app_runner.py:597-729`) posts a `kind: cycle_summary` (or `kind: question`) message to the user's lum.id inbox after every cycle when `inbox_publish.enabled: true`. The summary fields (drafts_pending, flags, questions_pending, etc.) are listed in `include[]`.
+`_post_inbox_message()` (`app_runner.py:597-729`) posts a `kind: cycle_summary` (or `kind: question`) message to the user's lum.id inbox after every run when `inbox_publish.enabled: true`. The summary fields (drafts_pending, flags, questions_pending, etc.) are listed in `include[]`.
 
-`_pull_inbox_replies()` (`app_runner.py:732+`) runs at the START of every cycle. It:
+`_pull_inbox_replies()` (`app_runner.py:732+`) runs at the START of every run. It:
 1. GETs `/api/v1/inbox/replies?app=<app>&unprocessed_only=true` from xpcloud.
-2. Dispatches each reply by kind — `approve` → `apply_skill_or_memory`; `reject` → discard; `<text>` → ingest as a memory in the asking agent.
-3. POSTs `/inbox/replies/<id>/processed` so the next cycle doesn't re-fire it.
+2. Dispatches each reply by kind — `approve` → `apply_skill_or_memory`; `reject` → discard; `<text>` → ingest as an entry in the asking memory.
+3. POSTs `/inbox/replies/<id>/processed` so the next run doesn't re-fire it.
 
-Loops opt into the inbox via `inbox_publish.enabled: true`. Apps that don't opt in (most of auto-quant) skip both publish and pull silently.
+Workflows opt into the inbox via `inbox_publish.enabled: true`. Apps that don't opt in (most of auto-quant) skip both publish and pull silently.
 
 ## Approval policy
 
@@ -720,11 +734,11 @@ Match keys: `kind: {skill, memory}`, `path_match: glob`, `source: "<agent_patter
 
 ## Optimization loop — goal, decision advisor, branch control (observe → decide → steer)
 
-The whole point of a loop is to move the user's **goal**. The runner makes the *decide* and *steer* steps canonical so every app inherits them — no app-specific code.
+The whole point of a workflow is to move the user's **goal**. The runner makes the *decide* and *steer* steps canonical so every app inherits them — no app-specific code.
 
-**Goal** — declared per loop as `goal: {primary: "<plain-English objective>", tracked: [<metric names>]}` (already in use). The *quantitative* progress comes from the attached experiment (`steps[].experiment` / `engine.experiment` → the runtime ledger's metric vs baseline/criteria); `goal.primary` is the human framing the advisor reasons against.
+**Goal** — declared per workflow as `goal: {primary: "<plain-English objective>", tracked: [<metric names>]}` (already in use). The *quantitative* progress comes from the attached study (`steps[].experiment` / `engine.experiment` → the runtime ledger's metric vs baseline/criteria); `goal.primary` is the human framing the advisor reasons against.
 
-**Decision advisor** (optional) — a periodic, goal-directed pass declared per loop:
+**Decision advisor** (optional) — a periodic, goal-directed pass declared per workflow:
 
 ```yaml
 loops:
@@ -739,7 +753,7 @@ loops:
       proposal_approval: stage     # auto | stage | force (defaults to stage)
 ```
 
-After a cycle, `_run_improvement_advisor()` (in `app_runner.py`, gated by `enabled` + `run_every_cycles`) reads the run's signals (recent cycle metrics + `step_errors`) and the attached experiment progress (`summary["experiments"]`) against `goal.primary`, then emits a short verdict — **`status: improving|stalled|regressed`, `what_broke`, and ≤3 `suggestions`** — written to `data/cycles/<loop>/<ts>/suggestions.json`. Each suggestion is appended to `summary["offers"]` as `kind: "improvement"`, so it rides the **existing offers + `approval_policy` + inbox-reply channel** (no new surface). An approved suggestion edits `xpcloud.yaml` and ships through the normal `app_push` semver auto-bump — versioning is unchanged.
+After a run, `_run_improvement_advisor()` (in `app_runner.py`, gated by `enabled` + `run_every_cycles`) reads the run's signals (recent run metrics + `step_errors`) and the attached study's progress (`summary["experiments"]`) against `goal.primary`, then emits a short verdict — **`status: improving|stalled|regressed`, `what_broke`, and ≤3 `suggestions`** — written to `data/cycles/<loop>/<ts>/suggestions.json`. Each suggestion is appended to `summary["offers"]` as `kind: "improvement"`, so it rides the **existing offers + `approval_policy` + inbox-reply channel** (no new surface). An approved suggestion edits `xpcloud.yaml` and ships through the normal `app_push` semver auto-bump — versioning is unchanged.
 
 **Branch control (steer)** — a human (right-click "branch from here") or the advisor ("branch this") appends a record to `data/control/signals.jsonl`:
 
@@ -748,27 +762,27 @@ After a cycle, `_run_improvement_advisor()` (in `app_runner.py`, gated by `enabl
  "config":{…variant overrides…},"note":"…","by":"<sub>","status":"pending"}
 ```
 
-Pre-cycle, `_consume_branch_signals()` drains pending `branch` records for the loop, flips them `pending→consumed`, and exposes the variant specs three ways — `summary["branch_signals"]`, `data/cycles/<loop>/<ts>/branch_variants.json`, and the `LUMID_BRANCH_VARIANTS` env — so a Pattern B engine or a variant proposer can seed the next run from them. Generic across both engine patterns.
+Pre-run, `_consume_branch_signals()` drains pending `branch` records for the workflow, flips them `pending→consumed`, and exposes the experiment specs three ways — `summary["branch_signals"]`, `data/cycles/<loop>/<ts>/branch_variants.json`, and the `LUMID_BRANCH_VARIANTS` env — so a Pattern B engine or an experiment proposer can seed the next run from them. Generic across both engine patterns.
 
-**Data of record (new, blessed):** `data/control/signals.jsonl` (append-only branch signals; runner flips status) and the per-cycle `suggestions.json` + `branch_variants.json` artifacts. The advisor produces *offers*, never a parallel ledger.
+**Data of record (new, blessed):** `data/control/signals.jsonl` (append-only branch signals; runner flips status) and the per-run `suggestions.json` + `branch_variants.json` artifacts. The advisor produces *offers*, never a parallel ledger.
 
 ## Scheduler discovery
 
-`xpio_scheduler.discover_loops()` (`sdk/scheduling/xpio_scheduler.py:96+`) walks `~/.xp/apps/*/` and reads loops in this priority:
+`xpio_scheduler.discover_loops()` (`sdk/scheduling/xpio_scheduler.py:96+`) walks `~/.xp/apps/*/` and reads workflows in this priority:
 
 1. `xpcloud.yaml::loops[]` — preferred, runtime source.
 2. `manifest.json::loops[]` — fallback for legacy apps.
-3. `autoresearch.yaml::name+schedule` — single-loop ops/xpio-ops shape.
+3. `autoresearch.yaml::name+schedule` — single-workflow ops/xpio-ops shape.
 
-The daemon converts each loop's `schedule` (cron / `*/Nh` / `@trigger`) into an APScheduler trigger. `@trigger` loops never auto-run; they only fire on `/lumid app <name> cycle --loop <name>`. Pattern B loops use the same trigger — the daemon doesn't care which engine the cycle eventually invokes.
+The daemon converts each workflow's `schedule` (cron / `*/Nh` / `@trigger`) into an APScheduler trigger. `@trigger` workflows never auto-run; they only fire on `/lumid app <name> cycle --loop <name>`. Pattern B workflows use the same trigger — the daemon doesn't care which engine the run eventually invokes.
 
-State persists at `~/.lumilake/scheduler/xpio_state.json` (per-loop `{last_run_ts, last_ok, consecutive_failures, last_duration_s}`). The dashboard's `/admin/loops` endpoint joins this with `xpcloud.yaml::loops[]` to render the operations tile.
+State persists at `~/.lumilake/scheduler/xpio_state.json` (per-workflow `{last_run_ts, last_ok, consecutive_failures, last_duration_s}`). The dashboard's `/admin/loops` endpoint joins this with `xpcloud.yaml::loops[]` to render the operations tile.
 
 ## Forking
 
 `fork_of: "<owner_sub>/<name>"` (or `null`) declares ancestry. `app_install --as <local_name>` clones the upstream bundle into `~/.xp/apps/<local_name>/` and sets `fork_of` automatically. The fork inherits the privacy contract — `auto_publish.memories[]` is copied verbatim — but each user diverges prompts, memories, and skills per fork.
 
-Cross-machine memory transfer: `xp pull <other_user>/<their-philosophy-bank>` seeds your bank with someone else's distilled principles. Same Git-backed mechanism that ships skill imports.
+Cross-machine memory transfer: `xp pull <other_user>/<their-philosophy-bank>` seeds your memory with someone else's distilled principles. Same Git-backed mechanism that ships skill imports.
 
 ## App-CI gates (`sdk/ops/app_ci.py:442-449`)
 
@@ -787,24 +801,24 @@ The publish pipeline runs 6 gates against every app bundle. They define the mini
 
 ## Reference apps
 
-| App | Pattern | Loops | What it demonstrates |
+| App | Pattern | Workflows | What it demonstrates |
 |---|---|---|---|
-| **personal-agent** | A | 4 (morning_brief, hourly_triage, cc_watcher, weekly_reflection) | Three-role multi-agent KG (assistant/watcher/philosopher), full privacy contract (watcher omitted from `auto_publish.memories[]`), inbox-question dialog, runner-driven steps[] |
+| **personal-agent** | A | 4 (morning_brief, hourly_triage, cc_watcher, weekly_reflection) | Three-role multi-memory KG (assistant/watcher/philosopher), full privacy contract (watcher omitted from `auto_publish.memories[]`), inbox-question dialog, runner-driven steps[] |
 | **auto-quant** | A | 10 (momentum_research, mean_reversion_research, crypto_autoinsight_research, crypto_lqa_research, regime_detector, competitor_observer, gpt_baseline_crypto, sonnet_baseline_crypto, gpt_auto_crypto, sonnet_auto_crypto) | Interval scheduling (`*/12h`), live mode with `--confirm-live`, observe → propose → backtest → risk-gate → place_order → journal flow |
 | **mbb-ai** | B | 2 (case_cycle, regression_sweep) | Parallel fan-out (N-judge), conditional retry (info_release re-prompt), deterministic triangulation columns, ≥3-recurrence learn step closing the loop into bandit retrieval |
-| **eventx** | B | 1 per registered task (e.g. consulting_market_match) | Pipeline DAG with idempotency gating on output table row counts, per-record dynamic skill loading, SQLite-backed cycle metrics |
-| **auto-sysresearch** | B | 1 (benchmark, @trigger) | `benchmarks[]` first-class schema, three-tier variant search space (component + policy + params), Docker container lifecycle via `container_dispatch`, 20-query NL-to-SQL eval with in-process SQLite. Fork by swapping `system/` and updating `benchmarks[]` + `variant_schema`. |
+| **eventx** | B | 1 per registered task (e.g. consulting_market_match) | Pipeline DAG with idempotency gating on output table row counts, per-record dynamic skill loading, SQLite-backed run metrics |
+| **auto-sysresearch** | B | 1 (benchmark, @trigger) | `benchmarks[]` first-class schema, three-tier experiment search space (component + policy + params), Docker container lifecycle via `container_dispatch`, 20-query NL-to-SQL eval with in-process SQLite. Fork by swapping `system/` and updating `benchmarks[]` + `variant_schema`. |
 
 ## Documentation-only `steps[]` for Pattern B
 
-For Pattern B loops, `steps[]` and `skills_invoked[]` exist for two reasons:
+For Pattern B workflows, `steps[]` and `skills_invoked[]` exist for two reasons:
 
 1. **`prompts_referenced` CI gate** reads them to confirm every prompt card is wired to a skill.
 2. **Dashboard `/admin/loops`** renders them so an operator expanding a row sees what the engine actually does.
 
-The runner does NOT enforce step ordering on Pattern B — `engine.module` is the truth. Honest declaration matters: list every skill the verb invokes, including the ones not in any loop's `steps[]` ordered list. mbb-ai's `case_cycle` declares 18 `skills_invoked[]` (vs the 7 steps the manifest used to list); eventx's `consulting_market_match` declares 8.
+The runner does NOT enforce step ordering on Pattern B — `engine.module` is the truth. Honest declaration matters: list every skill the verb invokes, including the ones not in any workflow's `steps[]` ordered list. mbb-ai's `case_cycle` declares 18 `skills_invoked[]` (vs the 7 steps the manifest used to list); eventx's `consulting_market_match` declares 8.
 
-## Running loops manually
+## Running workflows manually
 
 ```bash
 # Run one loop once (on-demand, bypasses the scheduler)
@@ -817,22 +831,22 @@ lumid research run <loop_name> --cycles 3 --interval 60
 lumid research run crypto_autoinsight_research
 ```
 
-`lumid research run` resolves the loop name to its parent app by scanning
+`lumid research run` resolves the workflow name to its parent app by scanning
 `~/.xp/apps/*/xpcloud.yaml`, then dispatches `app_runner.cycle(app, loop)` for each
-requested cycle. This is identical to what the scheduler fires on cron trigger —
-`_run_auto_publish()` runs after every cycle, so insights.md and memory banks update
+requested run. This is identical to what the scheduler fires on cron trigger —
+`_run_auto_publish()` runs after every run, so insights.md and memories update
 correctly.
 
 ## Deferred work via `submit_jobs`
 
-The inline cycle is fast enough for live trading, but heavier work (long backtests, GPU inference, daily LLM-driven memos) should be dispatched as a job and either picked up later or fired on a recurring schedule. The opt-in `submit_jobs` skill family lives at `sdk/skills/submit_jobs/`:
+The inline run is fast enough for live trading, but heavier work (long backtests, GPU inference, daily LLM-driven memos) should be dispatched as a job and either picked up later or fired on a recurring schedule. The opt-in `submit_jobs` skill family lives at `sdk/skills/submit_jobs/`:
 
 | Skill | When | Backend |
 |---|---|---|
 | `submit_jobs.flowmesh` | GPU inference, training fans, deep backtests | `POST kv.run:8000/flowmesh` |
 | `submit_jobs.lumilake` | HALO-optimised DAGs, multi-stage ETL | `POST lum.id/lumilake-api` |
-| `submit_jobs.cron` | Recurring shell command OR recurring `claude -p` prompt | the same `lumid-scheduler` daemon that runs xpio loops |
-| `submit_jobs.get_result(job_id, wait=False)` | Read result back (cross-cycle or in-cycle) | reads `~/.lumilake/jobs.jsonl` ledger |
+| `submit_jobs.cron` | Recurring shell command OR recurring `claude -p` prompt | the same `lumid-scheduler` daemon that runs xpio workflows |
+| `submit_jobs.get_result(job_id, wait=False)` | Read result back (cross-run or in-run) | reads `~/.lumilake/jobs.jsonl` ledger |
 
 ### `submit_jobs.cron` — two modes, one queue
 
@@ -853,7 +867,7 @@ Fire path (`sdk/scheduling/cron_executor.py:145`): prompt mode invokes `claude -
 
 ### Daemon lifecycle (matters for fresh users)
 
-The `lumid-scheduler` daemon stays alive at startup even when there are zero xpio loops AND the cron queue is empty — a fresh-install user always hits this. The intent: the user submits later, the daemon should still be there. `SIGHUP` forces an immediate `refresh()` so just-submitted jobs fire without waiting for the next 600 s tick. Submissions still arrive (and get picked up) on the next refresh tick if the daemon is restarting.
+The `lumid-scheduler` daemon stays alive at startup even when there are zero xpio workflows AND the cron queue is empty — a fresh-install user always hits this. The intent: the user submits later, the daemon should still be there. `SIGHUP` forces an immediate `refresh()` so just-submitted jobs fire without waiting for the next 600 s tick. Submissions still arrive (and get picked up) on the next refresh tick if the daemon is restarting.
 
 The unified ledger at `~/.lumilake/jobs.jsonl` is the single read source for `/dashboard/jobs` and the place to debug from. State transitions: `scheduled → running → succeeded | failed`.
 
@@ -878,4 +892,4 @@ The unified ledger at `~/.lumilake/jobs.jsonl` is the single read source for `/d
 
 - **Auto-port tool** (`/lumid app upgrade <name>`) for converting old-shape manifests to canonical xpcloud.yaml.
 - **Pattern A enhancements** for replacing some Pattern B engines: `step.parallel: true` (replace mbb-ai's fan-out), `step.skip_if_table_has_rows: <name>` (replace eventx's idempotency gates).
-- **Cross-app meta-loops** (e.g. one loop that invokes another app's loop). Currently every loop is single-app.
+- **Cross-app meta-workflows** (e.g. one workflow that invokes another app's workflow). Currently every workflow is single-app.

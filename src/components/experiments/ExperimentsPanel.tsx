@@ -89,7 +89,7 @@ function ExperimentRunLinks({ app, e }: { app: string; e: MeExperiment }) {
 			</Link>
 			{armIds.map((id) => (
 				<Link key={id} to={workflowPath(app, loop, { arm: id })} className="font-mono text-slate-600 hover:text-slate-900 hover:underline"
-					title={`Runs dispatched as arm "${id}"`}>
+					title={`Runs of experiment "${id}"`}>
 					{id}{runs?.arms[id] ? ` · ${runs.arms[id].n}` : " · 0"}
 				</Link>
 			))}
@@ -616,7 +616,7 @@ function ArmsBlock({ app, e }: { app: string; e: MeExperiment }) {
 								{loop && (
 									<div className="flex items-center gap-2 mt-0.5 text-[11px]">
 										<Link to={workflowPath(app, loop, { arm: id })} className="text-gold-700 hover:underline"
-											title={`The ${loop} runs dispatched as arm "${id}"`}>
+											title={`The ${loop} runs of experiment "${id}"`}>
 											{armRuns?.[id] ? `${armRuns[id].n} run${armRuns[id].n === 1 ? "" : "s"} of ${loop} →` : `runs of ${loop} →`}
 										</Link>
 										{armRuns?.[id] && (

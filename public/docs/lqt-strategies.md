@@ -362,7 +362,7 @@ curl -X POST "https://lum.id/lqt/submit/lqt_inbox" \
 - **Success** → your strategy is registered under your tenant (`program_hash` set) and starts running paper.
 - **Compile failure** → a reject-ack whose reason is the compiler's verbatim diagnostic, e.g. `compile failed: <line/column + reason>`. Fix and resubmit the same `strategy_id`.
 
-So the loop is: `POST` → `200 ok` (queued) → confirm via `GET /xpio/strategies` (or read the `strategy.ack` on your outbox — see [§5](#5--after-you-submit)). To catch errors *before* submitting, validate locally with the CLI ([§4.3](#43-optional-compile-offline-first)).
+So the sequence is: `POST` → `200 ok` (queued) → confirm via `GET /xpio/strategies` (or read the `strategy.ack` on your outbox — see [§5](#5--after-you-submit)). To catch errors *before* submitting, validate locally with the CLI ([§4.3](#43-optional-compile-offline-first)).
 
 Leaving `region_scope` out runs your strategy in the default paper lane. You never need to set it to run paper.
 
