@@ -346,8 +346,8 @@ and the GPU quota for other users is zero.
 | **Shared with researchers** | s0 is also used directly by campus researchers. A card is only offered when *nothing* is using it; when their jobs hold cards, the list says `busy outside Kubernetes` and those cards are skipped. |
 | **Multi-GPU** | The 4 cards have **no NVLink** — they talk over PCIe, and one of them sits on the other CPU socket. Measured NCCL all-reduce bus bandwidth: **~37 GB/s** across 2 cards, **~19 GB/s** across 4 (per card: ~740 bf16 TFLOPS, 111 GiB usable of 139). Fine for data-parallel training; tensor-parallel inference across cards will be communication-bound. |
 | **CPUs** | CPU sandboxes (1 / 2 / 4 / 8 cores) land on s0 or on `h0`. h0's 2 × H100 serve `lum.id/llm` permanently and are **never** rentable — a CPU box there cannot see them. |
-| **Account** | **Automatic.** Your first call gives you a NUS user name derived from your email (e.g. `alice@x.com` → `alice`; a short suffix is added if the name is taken, and it is never one of the campus researchers' logins on s0/h0). `GET /sbx/nus/api/whoami` shows it. **Already have a login on s0/h0?** Ask an operator to map your email to it *before* your first sandbox — otherwise you get a second, derived name with its own `/home`. |
-| **Home** | `/home/<you>` — 100 GiB on the NUS storage array, survives delete like everywhere else. |
+| **Account** | **Automatic, and you can pick the name.** Before your first sandbox, choose your NUS user name in the create dialog (or `POST /sbx/nus/api/username {"name": "ada"}`). It is fixed once set. If you don't choose, you get one derived from your email (e.g. `alice@x.com` → `alice`, with a short suffix if taken). No name can be one of the campus logins on s0/h0. `GET /sbx/nus/api/username` shows your name and what you can still change. **Already have a login on s0/h0?** Use it instead: in the dialog, **Already have a login…? Use it instead** (or `POST /sbx/nus/api/username/claim {"name": "<login>"}`) gives you a one-line command. Run it on s0 or h0 while logged in as that login, then press **Verify** (`POST …/claim/verify`). |
+| **Home** | `/home/<you>` — 100 GiB on the NUS storage array, survives delete like everywhere else. **If your account is linked to an s0/h0 login** (claimed, or mapped by an operator), your box uses your **real host `/home`** instead: the one you see when you SSH to that host. s0 and h0 have *different* homes, so pick one with `"host": "h0"` / `"s0"` (dialog: **Home**; SSH: `ctl new NAME --host s0`). Such a box runs on that host **as your own login**, not root: no `apt install`, same as your normal login there. `"home": "volume"` (or `--home volume`) gives you the 100 GiB volume instead. |
 | **Models** | `/models` — the shared model store, **read-only**, mounted in every box. Load weights from here instead of downloading them again. |
 | **Scratch** | `/scratch` — fast local NVMe, per user, *not* backed up. |
 | **Images** | `harbor.lum.id/…` references work unchanged; the site pulls them from its own replica. NUS also has its own registry, **`registry.lum.id`** — see below. |
@@ -359,7 +359,7 @@ gateway speaks `ctl` rather than `sbx`:
 
 ```
 ctl ls                 your boxes at NUS
-ctl new NAME [--gpu N] [--cpu N] [--mem N] [--ttl H]    create one (GPU: admins, see below)
+ctl new NAME [--gpu N] [--cpu N] [--mem N] [--ttl H] [--host h0|s0] [--home volume]   create one (GPU: admins, see below)
 ctl enter NAME         shell into one
 ctl rm NAME            delete one
 ctl logs NAME          its output
