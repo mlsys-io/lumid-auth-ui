@@ -15,14 +15,14 @@ Assumes you are signed in.
 
 **How long this takes.** Most of it is reading. The machinery itself is quick —
 measured end to end on 2026-08-29 with a brand-new account: mint a token and
-install the app in under 20 seconds, deploy a strategy and see it compile in
+install the agent in under 20 seconds, deploy a strategy and see it compile in
 about 10 more, and a backtest that named a real instrument settled in **14–60
 seconds**.
 
 Two things are genuinely slower and neither is a fault. Backtest submissions are
 capped at **one at a time, five minutes apart**, so the second run waits even
 though the first was quick; and a **forward test needs hours of live paper**
-before its numbers mean anything — it banks one observation per cycle and wants
+before its numbers mean anything — it banks one observation per run and wants
 30 of them before it will report a ratio at all.
 
 So plan the first sitting around the deploy. You will have a verdict in the same
@@ -96,9 +96,9 @@ the spawn again. This is expected and is not your prompt.
 
 ---
 
-## 3. Install the Quant Research app
+## 3. Install the Quant Research agent
 
-Strategies live in an **app**, and a new account has none installed — the
+Strategies live in an **agent**, and a new account has none installed — the
 sidebar entry does not exist until you add it. This is the step most people
 miss, because anyone who has been here a while already has it.
 
@@ -114,17 +114,17 @@ Afterwards it appears in the sidebar with **four tabs**:
 | tab | what it shows |
 |---|---|
 | **Strategies** | everything you have registered — start here. Deploy, and each row's actions run a Backtest / Forward test / Discuss |
-| **Workflows** | every loop the app runs, one row each — Backtest, Forward test, Analyze, and the tweet-driven Kol strategy. Open a row for its runs |
-| **Experiments** | the status surface for arms: which arm is ahead, on how many samples, and whether the verdict is being withheld. See [Workflows & experiments](/studio/docs/workflows) |
+| **Workflows** | every workflow the agent runs, one row each — Backtest, Forward test, Analyze, and the tweet-driven Kol strategy. Open a row for its runs |
+| **Experiments** | the status surface for studies: which experiment is ahead, on how many samples, and whether the verdict is being withheld. See [Workflows & experiments](/studio/docs/workflows) |
 | **Proposals** | what several planners suggested running next, each with a verdict on whether it would actually collect rows. It is a **reading** surface — there is no accept button. You turn one into a real experiment by declaring it: the **Measurement** form on a Workflows row, or ask the rail to define it (*"declare the mcp_probe_checked proposal as an experiment"*) |
 
 There is deliberately no separate Backtest / Forward / Runtime tab: those are
-loops, so they live as rows on **Workflows**. Open a run from any row to see
+workflows, so they live as rows on **Workflows**. Open a run from any row to see
 exactly what it produced — its honesty labels (prices / signals / settlement),
 the claim, the PnL split.
 
 If your sidebar says **LQT Strategies** rather than **Quant Research**, you are
-on the app's pre-rename card: it labels the backtest *(registers)* — which is
+on the agent's pre-rename card: it labels the backtest *(registers)* — which is
 wrong, submitting is a dry run — and its assistant has no copy of the `.lqts`
 reference, so it will invent syntax. Install **Quant Research** from the
 Marketplace and use that one.
@@ -138,7 +138,7 @@ not a failure — you have not registered anything yet.*
 
 ---
 
-*You now have the app and a way to ask about the data. The next step is the
+*You now have the agent and a way to ask about the data. The next step is the
 point of both: turning something you noticed into a strategy you can test.*
 
 ---
@@ -402,27 +402,27 @@ Both are row actions on your strategy. They answer different questions.
 |---|---|---|
 | **Backtest** | replays recorded market history | *would this have worked?* |
 | **Poll result** | fetches the verdict of that replay | — |
-| **Forward test** | reads the live-paper arm's scorecards | *does it work now, against a book that pushes back?* |
+| **Forward test** | reads the live-paper lane's scorecards | *does it work now, against a book that pushes back?* |
 
 **Backtest is two clicks, not one.** *Backtest* submits and returns immediately
 with a claim id; *Poll result* fetches the verdict later, usually minutes
 later. Nothing is wrong if the first click shows no numbers.
 
 **Forward test has no start button.** Your strategy forward-tests from the
-moment it deploys — the action *reads* what the paper arm has published. Zero
+moment it deploys — the action *reads* what the paper lane has published. Zero
 scorecards means it has not published yet, not that it failed.
 
 ### Or just ask for it
 
-Every one of these is also a chat tool, so you can run the whole loop in
-sentences instead of forms. The app declares them; the chat calls them as you,
+Every one of these is also a chat tool, so you can run the whole process in
+sentences instead of forms. The agent declares them; the chat calls them as you,
 against your own rows:
 
 | what you want | what you say |
 |---|---|
 | run one | *Backtest `ofi_z_momentum` — let it pick the instrument.* |
 | the verdict | *Poll my backtest results — is the last one done, and are all three axes real?* |
-| live paper | *What is `ofi_z_momentum` doing on the forward arm? Any scorecards yet?* |
+| live paper | *What is `ofi_z_momentum` doing on the forward lane? Any scorecards yet?* |
 | the funnel | *Analyse `ofi_z_momentum` — proposed, submitted, rejected, and why.* |
 | stop it | *Disable `ofi_z_momentum`.* |
 
@@ -460,11 +460,11 @@ itself `signals: static`. The result reports `tape_window_secs`,
 That clipping is also why a backtest cannot reach back before **2026-08-25**
 with real signals: `lqt.signal_history` started filling then.
 
-**Forward test reports risk over cycles, not prints.** A scorecard is a snapshot
-per cycle — fills, buy/sell split, `net_usd`, `fees_usd`, `net_ev_bps`,
-markouts. The cumulative arm folds those into an equity curve and reports a
+**Forward test reports risk over runs, not prints.** A scorecard is a snapshot
+per run — fills, buy/sell split, `net_usd`, `fees_usd`, `net_ev_bps`,
+markouts. The cumulative view folds those into an equity curve and reports a
 Sharpe and a max drawdown on the `risk_cumulative` line. It banks **one
-observation per cycle**, so it needs 30 cycles before reporting a ratio at all —
+observation per run**, so it needs 30 runs before reporting a ratio at all —
 at a 5-minute cadence that is two and a half hours of live paper. Below that
 you get `sharpe_undefined` and a drawdown, which is the honest pair.
 
@@ -474,7 +474,7 @@ profitable, because an unclosed position has not been tested by anything yet.
 
 ## 6b. Let a KOL's tweets pick the parameterization
 
-There is a fourth loop on **Workflows**: **Kol strategy**. It reads a frozen
+There is a fourth workflow on **Workflows**: **Kol strategy**. It reads a frozen
 slice of a market-moving account's tweets (Elon Musk, in `musk_tweets_v1`),
 scores a momentum-vs-caution lean, and from that lean *parameterizes* a
 strategy — a momentum lean trades `ofi_z` breakouts, a caution lean trades
@@ -486,36 +486,36 @@ The honest boundary matters: **a tweet is never a signal.** Only `vpin`,
 *how hard*. The number that comes back is a backtest verdict on recorded
 prints, with the same three honesty axes as every other run — not a narrative.
 
-Open **Experiments → kol alpha** for the arms; **Workflows → Kol strategy**
-is where the loop that feeds them runs. The `musk_v1` arm is
+Open **Experiments → kol alpha** for the experiments; **Workflows → Kol strategy**
+is where the workflow that feeds them runs. The `musk_v1` experiment is
 one-click (it is self-sufficient — it has the tweet slice and picks its own
 tape-covered symbol); `current` is a passive reference. `real_tape` reads the
 fraction of runs that replayed recorded prints rather than falling back to
-synthetic. Or in chat: *"run the musk_v1 arm, then poll it."*
+synthetic. Or in chat: *"run the musk_v1 experiment, then poll it."*
 
 ---
 
 ## 7. View the results
 
-Runs are on **Workflows**: pick a loop, read its runs, open any run for what
-it produced. Arms and verdicts are on **Experiments** — a run tells you what
-one execution did, an experiment tells you whether an arm is actually ahead
+Runs are on **Workflows**: pick a workflow, read its runs, open any run for what
+it produced. Studies and their verdicts are on **Experiments** — a run tells you what
+one execution did, a study tells you whether an experiment is actually ahead
 and on how many samples. The per-strategy views hang off each **Strategies**
 row.
 
 Backtest results — read the three labels *before* the P&L, every time:
 
-![Workflows → Backtest: Metric & arms at the top (both experiments this loop feeds), the Outputs tier, its dataset tape_covered_v1, and the run tree.](/docs/img/first-run-backtest-result-2.png)
+![Workflows → Backtest: Metric & experiments at the top (both studies this workflow feeds), the Outputs tier, its dataset tape_covered_v1, and the run tree.](/docs/img/first-run-backtest-result-2.png)
 
-Forward-test scorecards from the live paper arm:
+Forward-test scorecards from the live paper lane:
 
 ![Workflows → Forward test: no metric, so the card offers to make it an experiment; the Outputs tier, its two datasets, and runs that are NOT SCORED.](/docs/img/first-run-forward-result-2.png)
 
-And the **Analyze** loop, which is the decision funnel rather than P&L —
+And the **Analyze** workflow, which is the decision funnel rather than P&L —
 proposed, submitted, rejected, and the top reject reason. This is where you
 look when a strategy is registered but nothing is happening:
 
-![Workflows → Analyze: a loop with no metric, so the card says it is not an experiment and offers to make it one. Its datasets, its Outputs tier, and one run on the tree.](/docs/img/first-run-runtime-2.png)
+![Workflows → Analyze: a workflow with no metric, so the card offers to start a study. Its datasets, its Outputs tier, and one run on the tree.](/docs/img/first-run-runtime-2.png)
 
 ## 8. Reading a backtest result
 
@@ -666,7 +666,7 @@ tune the threshold against the same window you score on; the number that
 produces is guaranteed to look good and guaranteed to mean nothing.
 
 **Forward test is live paper, and it does not start anything.** A strategy
-forward-tests from the moment it deploys; the action *reads* the paper arm's
+forward-tests from the moment it deploys; the action *reads* the paper lane's
 scorecards. Zero scorecards means it has not published yet, not that it failed.
 
 ---
@@ -711,8 +711,8 @@ Things worth asking it, all of which it can actually answer:
 * *Chart Sharpe against trade count across all my runs — is the best one just
   the thinnest?*
 
-**What it can plot, and what it cannot.** A *forward* run publishes one
-scorecard per cycle, so a series of them is a real time series and charts as
+**What it can plot, and what it cannot.** Each forward-test run publishes one
+scorecard, so a series of them is a real time series and charts as
 one. A *backtest* publishes only its end state — the axes, the counts, and the
 scalars including `sharpe` and `max_drawdown_ticks`. The step-by-step equity
 curve is computed inside the worker and never leaves it, so asking for "the
@@ -738,7 +738,7 @@ the registry row. The assistant saying it updated your strategy is not
 evidence; a new hash is. An unchanged hash after an "update" means the DSL
 never recompiled.
 
-That loop — formulate, deploy, backtest, read, discuss, revise — is the job.
+That process — formulate, deploy, backtest, read, discuss, revise — is the job.
 Everything above it is setup you do once.
 
 **One backtest at a time, 300 seconds apart.** A second submission while one
@@ -782,7 +782,7 @@ Everything below is at **<https://lum.id/studio/docs>**.
 | [AI coding](/studio/docs/coding) | the model you are on, what "unlimited" means, the one timeout that matters |
 | [FinData SQL access](/studio/docs/findata-sql) | a warehouse seat, if chat-based queries stop being enough |
 | [Workflows & experiments](/studio/docs/workflows) | what a workflow is, how to measure one, and the canvas you build it on |
-| [AI Consulting Onboarding](/studio/docs/mbb-consultant) | the other cohort track: scored case interviews in the MBB Consultant app |
+| [AI Consulting Onboarding](/studio/docs/mbb-consultant) | the other cohort track: scored case interviews in the MBB Consultant agent |
 
 ## If something here is wrong
 

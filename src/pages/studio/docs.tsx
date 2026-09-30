@@ -96,8 +96,8 @@ const DOCS: DocEntry[] = [
 		// one story split in two — what a workflow IS and how to measure it, then
 		// the surface you build it on — and the old entry said so in this comment.
 		slug: 'workflows',
-		title: 'Workflows and experiments',
-		description: 'What separates a workflow from an experiment, how to define one, read its status, harvest a result, and drive the whole loop from the chatbox. Then the canvas you build one on: all five dialects, what each edge style means, and what the importer drops. Two worked examples, one of them deliberately NOT concluding.',
+		title: 'Workflows and studies',
+		description: 'What separates a workflow from a study, how to define one, read its status, harvest a result, and drive the whole process from the chatbox. Then the canvas you build one on: all five dialects, what each edge style means, and what the importer drops. Two worked examples, one of them deliberately NOT concluding.',
 		md: 'workflows.md',
 		group: 'Guides',
 		icon: Activity,
@@ -114,7 +114,7 @@ const DOCS: DocEntry[] = [
 		// mistake to make and the harder one to notice — nothing inside the
 		// repo linked to it, so no internal check caught it.
 		slug: 'experiments',
-		title: 'Workflows and experiments',
+		title: 'Workflows and studies',
 		description: 'Moved to /studio/docs/workflows.',
 		md: 'workflows.md',
 		group: 'Guides',

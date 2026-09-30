@@ -1,10 +1,10 @@
 # AI Consulting Onboarding
 
 The path from a new account to a scored case interview in the **MBB
-Consultant** app, walked end to end as a plain `role=user` account. Here the
+Consultant** agent, walked end to end as a plain `role=user` account. Here the
 unit of work is a case interview rather than a strategy, and what gets measured
 is an *answer* against a fixed answer key. Same account and chat as the
-[Quant Research onboarding](/studio/docs/first-run), a different app; a cohort
+[Quant Research onboarding](/studio/docs/first-run), a different agent; a cohort
 usually runs both.
 
 > **Changelog**
@@ -75,10 +75,10 @@ Either route works:
 
 ![The Marketplace filtered to mbb: MBB Consultant already added (Added · Open).](/docs/img/mbb-marketplace.png)
 
-Give it 10–20 seconds. It is ready when the app appears in your sidebar under
+Give it 10–20 seconds. It is ready when the agent appears in your sidebar under
 **Your Apps** and its **Work** tab renders a case browser.
 
-*If the app says ready but every tab errors "app not found", it was installed
+*If the agent says ready but every tab errors "app not found", it was installed
 under a bare name rather than its full `owner/name` slug, and the platform could
 not work out whose bundle to fetch. Uninstall and reinstall from the
 Marketplace, which always sends the qualified slug. Both the onboarding and
@@ -90,14 +90,14 @@ Afterwards it appears with **three tabs**:
 | tab | what it shows |
 |---|---|
 | **Work** | pick a mode and a case — start here. Also the review queue where your corrections wait |
-| **Workflows** | the `interview` and `case_eval` loops, one row each. Open a row for its runs: which case, what it scored, whether ground truth was behind it |
-| **Experiments** | the status surface for arms: which arm is ahead, on how many samples, and whether the verdict is being withheld. `judge_panel_parity` lives here, and so does anything you raise with **Measure as arm** |
+| **Workflows** | the `interview` and `case_eval` workflows, one row each. Open a row for its runs: which case, what it scored, whether ground truth was behind it |
+| **Experiments** | the status surface for studies: which experiment is ahead, on how many samples, and whether the verdict is being withheld. `judge_panel_parity` lives here, and so does anything you raise with **Measure as arm** |
 
-Same split as every app: a run is a row on its loop, an arm is a row on
-**Experiments**. A run tells you what one execution did; an experiment tells you
-whether an arm is actually ahead.
+Same split as every agent: a run is a row on its workflow, a study is a row on
+**Experiments**. A run tells you what one execution did; a study tells you
+whether one of its experiments is actually ahead.
 
-![The Experiments tab: judge panel parity and analyst local gpu, each with its arms and result count.](/docs/img/mbb-experiments.png)
+![The Experiments tab: judge panel parity and analyst local gpu, each with its experiments and result count.](/docs/img/mbb-experiments.png)
 
 ---
 
@@ -137,7 +137,7 @@ without learning a command set. Three things work in any mode:
 - `wrong — …` — stage a correction (below)
 
 Ask for facts you need. In a real case interview you are expected to ask; the
-interviewer releases a fact when your answer reaches for it, and this app
+interviewer releases a fact when your answer reaches for it, and this agent
 follows the same rule.
 
 **Answer the question that was asked.** The most common way a first session goes
@@ -154,9 +154,9 @@ The judge is not grading eloquence.
 Open **Workflows → interview** (or **case_eval** for a batch) to see what ran, on
 which case, what it scored, and whether it was backed by ground truth.
 
-![The Workflows tab: the interview and case_eval loops, each with its metric and case set.](/docs/img/mbb-workflows.png)
+![The Workflows tab: the interview and case_eval workflows, each with its metric and case set.](/docs/img/mbb-workflows.png)
 
-![The interview loop's run tree: each answered turn carries its score (0.54, 0.38); turns that only opened a case or asked for facts show Not scored.](/docs/img/mbb-interview-runs.png)
+![The interview workflow's run tree: each answered turn carries its score (0.54, 0.38); turns that only opened a case or asked for facts show Not scored.](/docs/img/mbb-interview-runs.png)
 
 **Read the `Mode` column first.**
 
@@ -164,7 +164,7 @@ which case, what it scored, and whether it was backed by ground truth.
   means something.
 - `open` — there was no answer key, so the score is indicative only.
 
-**Never average the two together.** The app deliberately shows them side by side
+**Never average the two together.** The agent deliberately shows them side by side
 rather than summing them, and a combined "average score" across both is not a
 measurement of anything. If you asked an open question, the reply carries a
 caveat saying there is no ground truth behind the number — that caveat is not
@@ -190,7 +190,8 @@ faster and costs you the reply.
 When an answer is wrong, say so in the chat: `wrong — the issue tree should
 split cost before volume`. That stages a draft into the review queue on the
 **Work** tab. Nothing is applied while it sits there — and beside **Approve**
-you can **Measure as arm** (test the edit over the casebook before adopting it,
+you can **Measure on judge_panel_parity** (test the edit as an experiment over the
+casebook before adopting it,
 and read the result on **Experiments**) or **Add to casebook** (stage the gap as
 a candidate case).
 
@@ -212,11 +213,11 @@ Two things worth knowing before you approve:
 
 - Approval hands the work to the scheduler. It lands within a minute or two,
   not instantly.
-- A card edit is a local change to *your* installed copy. Updating the app later
+- A card edit is a local change to *your* installed copy. Updating the agent later
   takes upstream's version of that prompt and backs yours up under
   `.app-update-backup/`. Recoverable, not permanent.
 
-The badge on the app's sidebar row is this queue. An empty queue means there is
+The badge on the agent's sidebar row is this queue. An empty queue means there is
 nothing waiting on you — not that nothing is happening.
 
 ## What is not yours to change
@@ -229,9 +230,9 @@ Three things, and all of them are intentional:
   bumps its version, and your copy mounts that dataset read-only. So the
   casebook grows through the review gate rather than through a local edit. Two
   copies of the answer key is how two people quietly stop being comparable.
-- **Change which models judge you.** The panel is set by the app's own config.
+- **Change which models judge you.** The panel is set by the agent's own config.
 - **See anyone else's turns.** Runs, review and your corrections are scoped to
-  your account. A correction you approve shapes *your* copy of the app.
+  your account. A correction you approve shapes *your* copy of the agent.
 
 ---
 
@@ -239,7 +240,7 @@ Three things, and all of them are intentional:
 
 | doc | why you would open it |
 |---|---|
-| [Workflows & experiments](/studio/docs/workflows) | what **Measure as arm** actually runs, and how to read the Experiments tab |
+| [Workflows & experiments](/studio/docs/workflows) | what **Measure on judge_panel_parity** actually runs, and how to read the Experiments tab |
 | [Quant Research onboarding](/studio/docs/first-run) | the other cohort track: writing, deploying and testing a trading strategy |
 | [AI coding](/studio/docs/coding) | the model you are on, what "unlimited" means, the one timeout that matters |
 
