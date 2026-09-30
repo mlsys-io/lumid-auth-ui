@@ -644,16 +644,22 @@ export const me = {
   // Workstream E — skills as a first-class surface.
   // Workstream F — cross-app experiments aggregate.
   experimentsAll: () => call<{ experiments: Array<MeExperiment & { app: string }>; count: number }>("GET", "/experiments"),
-  // Offer lifecycle rides the generic cycle-feedback writer.
-  // The server binds `ts` (required) and a -1/0/+1 `rating`; this sent only
-  // `cycle_ts` + `kind`, so every call was a 400 the caller swallowed.
+  // Offer lifecycle rides the run-feedback verb: POST /me/runs/:run_id/feedback
+  // {verdict: good|bad|neutral} (was /cycles/feedback, which took a -1/0/+1
+  // `rating`). The extra fields (kind, label, output_id) pass through.
   cycleFeedback: (body: { app: string; loop: string; cycle_ts: string; output_id?: string; kind: string; note?: string; label?: string }) =>
     ownerWriteApplied(
-      call<Record<string, unknown> & QueuedWrite>("POST", "/cycles/feedback", {
-        ...body,
-        ts: body.cycle_ts,
-        rating: body.kind === "adopt_offer" ? 1 : body.kind.startsWith("dismiss") ? -1 : 0,
-      }),
+      call<Record<string, unknown> & QueuedWrite>(
+        "POST",
+        `/runs/${encodeURIComponent(`scheduled:${body.app}:${body.loop}:${body.cycle_ts}`)}/feedback`,
+        {
+          verdict: body.kind === "adopt_offer" ? "good" : body.kind.startsWith("dismiss") ? "bad" : "neutral",
+          note: body.note,
+          kind: body.kind,
+          label: body.label,
+          output_id: body.output_id,
+        },
+      ),
     ),
 
   skills: () => call<{ skills: MeSkillRow[]; count: number }>("GET", "/skills"),
@@ -696,6 +702,8 @@ export const me = {
     }>("GET", "/today"),
 
   // ── Review queue (human checkpoint) ─────────────────────────────
+  // POST /me/runs/:run_id/feedback {verdict: <decision>} (was
+  // /cycles/:app/:loop/:ts/review).
   // Each held item in summary.review_queue awaits a human decision
   // before the engine continues. The reply rides the same approve/edit
   // path the inbox/draft machinery uses; the backend consumes:
@@ -720,8 +728,8 @@ export const me = {
     ownerWriteApplied(
       call<{ outbox_ref: string; decision: string; state: string } & QueuedWrite>(
         "POST",
-        `/cycles/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/${encodeURIComponent(ts)}/review`,
-        body,
+        `/runs/${encodeURIComponent(`scheduled:${app}:${loop}:${ts}`)}/feedback`,
+        { ...body, verdict: body.decision },
       ),
     ),
 
