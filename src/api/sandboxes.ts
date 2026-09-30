@@ -70,6 +70,8 @@ export interface Sandbox {
 	phase: string;
 	node?: string | null;
 	image?: string | null;
+	/** "host:<alias>" = the owner's real /home on that host; "volume" = the sandbox volume. */
+	home?: string | null;
 	gpu: number;
 	/** Epoch seconds, as a string — it is a pod annotation. */
 	expires_at?: string | null;
@@ -415,6 +417,63 @@ export interface CreateSandboxRequest {
 	 */
 	gpu_product?: string;
 	ttl_hours?: number;
+	/**
+	 * Where /home comes from. "host" = your real /home on an s0/h0 host (only when your login
+	 * there is linked to your account; see UsernameInfo.host_homes), "volume" = the sandbox
+	 * volume. Omit for the server's default: the host home when you have one, else the volume.
+	 */
+	home?: "auto" | "host" | "volume";
+	/** Which host's /home, by alias ("h0", "s0"). Different directories on different machines. */
+	host?: string;
+}
+
+/**
+ * Your sandbox username at a site, and what you can still do about it.
+ *
+ * `source`: mapped (the operator linked it) | claimed (you proved an s0/h0 login) | chosen |
+ * derived (from your email) | new (nothing created yet — you may still choose).
+ */
+export interface UsernameInfo {
+	user: string;
+	source: string;
+	can_choose: boolean;
+	can_claim: boolean;
+	/** Hosts whose real /home your boxes can mount. */
+	host_homes: string[];
+	hosts: string[];
+}
+
+export interface ClaimStart {
+	name: string;
+	hosts: string[];
+	file: string;
+	command: string;
+	next: string;
+}
+
+/** null when the site's sandbox-control predates usernames (404) — show nothing then. */
+export async function getUsername(site: string): Promise<UsernameInfo | null> {
+	try {
+		return (await sbx.get<UsernameInfo>(sbxUrl(site, "/api/username"))).data;
+	} catch (e: any) {
+		if (e?.response?.status === 404) return null;
+		throw e;
+	}
+}
+
+/** Pick your username before your first sandbox. Fixed afterwards. */
+export async function chooseUsername(site: string, name: string): Promise<{ user: string; source: string }> {
+	return (await sbx.post(sbxUrl(site, "/api/username"), { name })).data;
+}
+
+/** Start claiming an existing host login: returns the command to run on the host as that login. */
+export async function startClaim(site: string, name: string): Promise<ClaimStart> {
+	return (await sbx.post(sbxUrl(site, "/api/username/claim"), { name })).data;
+}
+
+/** Finish a claim once the code is in ~<name>/.lumid-claim on one of the hosts. */
+export async function verifyClaim(site: string, name: string): Promise<{ user: string; verified_on: string; hint: string }> {
+	return (await sbx.post(sbxUrl(site, "/api/username/claim/verify"), { name })).data;
 }
 
 function makeClient(): AxiosInstance {

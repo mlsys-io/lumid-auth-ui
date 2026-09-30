@@ -32,6 +32,12 @@ import {
 	USER_SANDBOX_SITES,
 	createDataset,
 	createSandbox,
+	chooseUsername,
+	getUsername,
+	startClaim,
+	verifyClaim,
+	type ClaimStart,
+	type UsernameInfo,
 	deleteDataset,
 	deleteSandbox,
 	dataSourcesForSite,
@@ -165,6 +171,18 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 	// the list of their running sandboxes -- below the fold. Creating is
 	// occasional; looking is constant.
 	const [createOpen, setCreateOpen] = useState(false);
+	// WHO YOU ARE AT THE TARGET SITE. Per site: home and NUS name the same person differently.
+	// null = the site predates usernames (or has not answered), and nothing below renders.
+	const [ident, setIdent] = useState<UsernameInfo | null>(null);
+	// A username to pick before the first box (only offered while ident.can_choose).
+	const [wantUser, setWantUser] = useState("");
+	// Claiming an existing host login: the login typed, then the server's instructions.
+	const [claimName, setClaimName] = useState("");
+	const [claim, setClaim] = useState<ClaimStart | null>(null);
+	const [claimBusy, setClaimBusy] = useState(false);
+	// Which /home: "" = the server's default (your host home when you have one), a host alias,
+	// or "volume" for the sandbox volume.
+	const [homeChoice, setHomeChoice] = useState("");
 	const [name, setName] = useState("dev");
 	const [gpu, setGpu] = useState(0);
 	// CPU cores for a CPU sandbox, from the site's published menu (cpuForSite). 2 matches the
@@ -476,9 +494,46 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 			? `${shortGpu(gpuInfo.model)}${gpuInfo.memory_gb ? ` · ${gpuInfo.memory_gb} GB` : ""}`
 			: "";
 
+	const reloadIdent = useCallback(async () => {
+		try { setIdent(await getUsername(target)); } catch { setIdent(null); }
+	}, [target]);
+	useEffect(() => {
+		if (!createOpen) return;
+		setClaim(null); setHomeChoice("");
+		void reloadIdent();
+	}, [createOpen, reloadIdent]);
+
+	async function onStartClaim() {
+		setClaimBusy(true);
+		try {
+			setClaim(await startClaim(target, claimName.trim().toLowerCase()));
+		} catch (e: any) {
+			toast.error(e?.response?.data?.detail ?? "could not start the claim");
+		} finally { setClaimBusy(false); }
+	}
+
+	async function onVerifyClaim() {
+		setClaimBusy(true);
+		try {
+			const r = await verifyClaim(target, claim?.name ?? claimName.trim().toLowerCase());
+			toast.success(`you are now ${r.user} on ${target} (verified on ${r.verified_on})`);
+			setClaim(null); setClaimName(""); setWantUser("");
+			await reloadIdent();
+		} catch (e: any) {
+			toast.error(e?.response?.data?.detail ?? "claim not verified");
+		} finally { setClaimBusy(false); }
+	}
+
 	async function onCreate() {
 		setBusy(true);
 		try {
+			// A chosen username is set FIRST, and only once: the create that follows then lands
+			// in that name's namespace. A refusal here (taken, a host login) stops before any box.
+			if (ident?.can_choose && wantUser.trim()) {
+				await chooseUsername(target, wantUser.trim().toLowerCase());
+				setWantUser("");
+				await reloadIdent();
+			}
 			const chosen = image === CUSTOM_IMAGE ? customImage.trim() : image;
 			// Omit the field entirely when empty: sandbox-control reads "absent" as
 			// "use this site's default", and an empty string is not the same thing.
@@ -491,6 +546,10 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 				// preference", and "" would be a product name matching no node.
 				gpu_product: gpu > 0 && gpuProduct ? gpuProduct : undefined,
 				data_sources: sources.length ? sources : undefined,
+				// Omitted = the server's default (host home when you have one). "volume" opts out;
+				// an alias picks which host's /home — they are different directories.
+				...(homeChoice === "volume" ? { home: "volume" as const }
+					: homeChoice ? { home: "host" as const, host: homeChoice } : {}),
 				// Blank boxes are not zeros. Filtered here so an untouched second
 				// field never becomes a request to publish port 0.
 				ports: wantedPorts.length ? wantedPorts : undefined,
@@ -637,6 +696,38 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 						<input value={name} onChange={(e) => setName(e.target.value)}
 							className="mt-1 block w-32 rounded-md border border-slate-300 px-2 py-1 text-sm" />
 					</label>
+					{/* USERNAME. Offered only before the first box at a site that allows choosing, and
+					    fixed once set — the server refuses a second choice, so the field disappears
+					    rather than inviting one. Blank keeps the name the site derived. */}
+					{ident?.can_choose && (
+						<label className="text-xs text-slate-600">
+							Username <span className="text-slate-400">(once)</span>
+							<input value={wantUser} onChange={(e) => setWantUser(e.target.value)}
+								placeholder={ident.user}
+								className="mt-1 block w-36 rounded-md border border-slate-300 px-2 py-1 text-sm font-mono" />
+						</label>
+					)}
+					{ident && !ident.can_choose && (
+						<span className="self-center text-xs text-slate-500">
+							you are <code className="rounded bg-slate-50 px-1">{ident.user}</code> on {target}
+						</span>
+					)}
+					{/* WHICH /home. Only for a host login linked to this account: those homes are
+					    real directories on s0/h0, different per host, and the box runs on that host
+					    as the login's own uid. */}
+					{ident && ident.host_homes.length > 0 && (
+						<label className="text-xs text-slate-600">
+							Home
+							<select value={homeChoice} onChange={(e) => setHomeChoice(e.target.value)}
+								className="mt-1 block rounded-md border border-slate-300 px-2 py-1 text-sm">
+								<option value="">your /home on {ident.host_homes[0]}</option>
+								{ident.host_homes.slice(1).map((h) => (
+									<option key={h} value={h}>your /home on {h}</option>
+								))}
+								<option value="volume">sandbox volume</option>
+							</select>
+						</label>
+					)}
 					<label className="text-xs text-slate-600">
 						GPUs{gpuLabel ? <span className="ml-1 text-slate-400">{gpuLabel}</span> : null}
 						<select value={gpu} onChange={(e) => setGpu(Number(e.target.value))}
@@ -840,6 +931,45 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 						{busy ? "creating…" : "Create sandbox"}
 					</button>
 				</div>
+				{/* CLAIM AN EXISTING HOST LOGIN — the alternative to choosing a name, for someone who
+				    already has an account on this site's hosts. Proof, not a form: the code has to
+				    appear in that login's own home, which only its owner (or root) can arrange. */}
+				{ident?.can_claim && (
+					<details className="mt-3 text-xs text-slate-600">
+						<summary className="cursor-pointer select-none text-indigo-600">
+							Already have a login on {ident.hosts.join(" / ")}? Use it instead
+						</summary>
+						<div className="mt-2 space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
+							<div className="flex flex-wrap items-end gap-2">
+								<label>
+									Login
+									<input value={claimName} onChange={(e) => setClaimName(e.target.value)}
+										className="mt-1 block w-36 rounded-md border border-slate-300 px-2 py-1 text-sm font-mono" />
+								</label>
+								<button onClick={() => void onStartClaim()} disabled={claimBusy || !claimName.trim()}
+									className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-100 disabled:opacity-50">
+									Get code
+								</button>
+							</div>
+							{claim && (
+								<div className="space-y-2">
+									<div>
+										Log in to {claim.hosts.join(" or ")} as <code>{claim.name}</code> and run:
+									</div>
+									<pre className="overflow-x-auto rounded bg-white p-2 font-mono text-[11px] text-slate-800">{claim.command}</pre>
+									<button onClick={() => void onVerifyClaim()} disabled={claimBusy}
+										className="rounded-md border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50">
+										{claimBusy ? "checking…" : "Verify"}
+									</button>
+									<div className="text-slate-400">
+										Then your sandboxes here use your real /home on that host, and run as {claim.name}.
+										Delete <code>~/.lumid-claim</code> afterwards.
+									</div>
+								</div>
+							)}
+						</div>
+					</details>
+				)}
 				</div>
 				</div>
 				)}
