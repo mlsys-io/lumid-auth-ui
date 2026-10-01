@@ -62,20 +62,22 @@ Inside the gateway:
 
 ```
 sbx ls              list your sandboxes
-sbx enter [NAME]    shell into one
+sbx enter [NAME]    shell into one (no NAME: your newest running one)
 sbx logs  NAME      its output
 sbx data            how to query the attached stores without copying them
 ```
 
-Anything that is not `sbx ...` runs in your default sandbox, so `scp`, `rsync`
-and `ssh gw@lum.id '<command>'` keep working.
+Anything that is not `sbx ...` runs in your **newest running sandbox**, so `scp`, `rsync`
+and `ssh gw@lum.id '<command>'` keep working. When you have more than one, the gateway says
+which it picked on stderr (`entering your newest sandbox: …`), which leaves `scp`/`rsync` output
+untouched.
 
-> **One sandbox per site is the comfortable number.** A one-shot
-> `ssh gw@lum.id '<cmd>'` goes to your *first* sandbox alphabetically, and there
-> is no non-interactive way to target one by name. With two boxes up, a command
-> you believe is running on the GPU one may be running on the other. This is not
-> theoretical: it once produced a confident, entirely fictitious report of a
-> fleet-wide GPU outage, because every probe had run in the wrong container.
+> **With two boxes up, know which one a command lands in.** A one-shot
+> `ssh gw@lum.id '<cmd>'` goes to your *newest running* sandbox, and there is no
+> non-interactive way to target an older one by name — use `sbx enter NAME` for that. A command
+> you believe is running on the GPU box may otherwise be running on the other. This is not
+> theoretical: it once produced a confident, entirely fictitious report of a fleet-wide GPU
+> outage, because every probe had run in the wrong container.
 
 ---
 
@@ -236,6 +238,8 @@ ordinary dev files is a much larger problem than it looks.
 | `Permission denied (publickey)` | No SSH key on your account. §1. |
 | `no sandboxes yet — create one` | Exactly that; not an error. |
 | sandbox stuck `Queued` | Waiting for a GPU. The row says what for. |
+| sandbox `Pending` for minutes | Its node is pulling the image for the first time. The site defaults (`python:3.11`, the PyTorch runtime, `ubuntu:22.04`) are kept cached on every node and start in seconds; a custom or `-devel` image pulls on first use. |
+| `ssh` landed in a different box than you expected | No `NAME` means your **newest running** sandbox. `sbx ls` (NUS: `ctl ls`) lists yours; `sbx enter NAME` (NUS: `ctl enter NAME`) picks one. |
 | `relation … does not exist [42P01]` | Right SQL, wrong store — check `catalog/schemas` from inside the sandbox. |
 | image pulls forever | A private Harbor project **on a site without per-user credentials** (office today). Works on home; see §8. |
 | `scp: Connection closed` | The image ships no `sftp-server`, which default scp needs. Use `scp -O`, or an image that has one. |
@@ -366,9 +370,11 @@ ctl logs NAME          its output
 ctl quota              what you are using
 ```
 
-Anything that is not `ctl …` runs in your **default** box (a 2-core CPU box, created on first use),
-so `ssh -p 31222 gw@lum.id '<command>'`, `scp -O -P 31222` and `rsync -e 'ssh -p 31222'` work as
-on the other sites.
+Anything that is not `ctl …` runs in your **default** box if you have one, otherwise in your
+**newest running** box — so a box you just created in the page is where a plain
+`ssh -p 31222 gw@lum.id` lands. A 2-core `default` box is created only when you have **no running
+box at all**. `ssh -p 31222 gw@lum.id '<command>'`, `scp -O -P 31222` and
+`rsync -e 'ssh -p 31222'` work as on the other sites.
 
 **GPU boxes over SSH are for admins.** The H200s are admin-only, and an SSH session counts as admin
 when your NUS user belongs to an account on the site's admin list. Then `ctl new` takes `--gpu`
@@ -487,8 +493,9 @@ curl -s -X POST -H "$H" -H 'content-type: application/json' $SBX/sandboxes \
 | `ports` | `[]` | container ports to publish (§9) |
 
 Answer: `200 {"name", "pod", "image", "gpus_free"}`. The pod then takes a few
-seconds (longer on a first pull of a large image) to reach `Running` — poll
-`GET /sandboxes` until its `phase` says so.
+seconds to reach `Running` — poll `GET /sandboxes` until its `phase` says so. The site's default
+images are cached on every node; a custom or `-devel` image is pulled on first use, which can take
+minutes for a large one.
 
 Refusals say why, and are worth handling rather than retrying blindly:
 
@@ -521,8 +528,9 @@ ssh -p 31223 gw@lum.id 'sbx logs sbx-<you>-dev'
 scp -O -P 31223 data.csv gw@lum.id:/home/<you>/
 ```
 
-A one-shot command runs in your **first sandbox alphabetically** — keep one
-sandbox per site when scripting, or you may be running in the wrong box (§3).
+A one-shot command runs in your **newest running sandbox** — when scripting against
+an older one, keep one sandbox per site or delete the newer one first, or you may be running in the
+wrong box (§3).
 
 After adding a key through the API rather than the page, push it to the gateway:
 
