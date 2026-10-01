@@ -222,6 +222,55 @@ check("a new Python node starts with the starter code, not an empty required fie
 	eq(added?.params.entrypoint, "main");
 });
 
+const PY_SINGLE = `apiVersion: flowmesh/v1
+kind: PythonTask
+metadata:
+  name: solo
+spec:
+  taskType: python
+  entrypoint: main
+  emits: [x]
+  timeoutSeconds: 30
+  code: |
+    def main():
+        return {"metrics": {"x": 1}}
+  resources:
+    hardware: {cpu: 1}
+`;
+
+check("a new Echo node has the data its executor requires", () => {
+	const doc = WorkflowDoc.parse(STAGES);
+	applyFlowMeshEdit(doc, parseFlowMesh(STAGES), {
+		t: "addNode", id: "", kind: { family: "flowmesh-task", taskType: "EchoTask" }, after: "score",
+	});
+	const added = parseFlowMesh(doc.toString()).nodes.find((n) => n.id === "echo");
+	eq(added?.params.data, { type: "list", items: ["hello"] });
+});
+
+check("promoting an SSH task carries its command into the node", () => {
+	const src = "apiVersion: flowmesh/v1\nkind: SSHTask\nmetadata: {name: s}\nspec:\n  taskType: ssh\n  command: echo hi\n  workdir: /tmp\n";
+	const doc = WorkflowDoc.parse(src);
+	applyFlowMeshEdit(doc, parseFlowMesh(src), { t: "addNode", id: "", kind: { family: "flowmesh-task", taskType: "EchoTask" }, after: "s" });
+	const js = doc.toJS<{ spec: Record<string, unknown> & { graph: { nodes: Array<{ spec: Record<string, unknown> }> } } }>();
+	eq(js.spec.graph.nodes[0].spec, { taskType: "ssh", command: "echo hi", workdir: "/tmp" });
+	ok(js.spec.command === undefined, "no orphaned command");
+});
+
+check("promoting a single Python task carries its code into the node", () => {
+	const doc = WorkflowDoc.parse(PY_SINGLE);
+	const r = applyFlowMeshEdit(doc, parseFlowMesh(PY_SINGLE), {
+		t: "addNode", id: "", kind: { family: "flowmesh-task", taskType: "EchoTask" }, after: "solo",
+	});
+	eq(r.ok, true);
+	const js = doc.toJS<{ spec: Record<string, unknown> & { graph: { nodes: Array<{ name: string; spec: Record<string, unknown> }> } } }>();
+	const first = js.spec.graph.nodes[0].spec;
+	ok(typeof first.code === "string" && (first.code as string).includes("def main"), `code moved into the node: ${JSON.stringify(first)}`);
+	eq(first.emits, ["x"], "emits moved");
+	eq(first.entrypoint, "main", "entrypoint moved");
+	ok(js.spec.code === undefined, "no orphaned top-level code");
+	ok(js.spec.resources !== undefined, "shared resources stay shared");
+});
+
 // --- editing -----------------------------------------------------------------
 
 const dagDoc = () => {
