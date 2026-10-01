@@ -27,6 +27,9 @@ export default function RunOnFleet({
 	const [phase, setPhase] = useState<"idle" | "validating" | "starting">("idle");
 	const [job, setJob] = useState<FleetJob | null>(null);
 	const [problem, setProblem] = useState<string | null>(null);
+	// Why the run failed: the failing step and its error, so a user's own
+	// traceback is on the canvas rather than three pages away in the logs.
+	const [failure, setFailure] = useState<string | null>(null);
 	const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
 	useEffect(() => () => clearTimeout(timer.current), []);
@@ -37,6 +40,9 @@ export default function RunOnFleet({
 			try {
 				const s = await fleet.status(id);
 				setJob((j) => (j ? { ...j, status: s.status, terminal: s.terminal } : j));
+				if (s.status === "failed" && s.error) {
+					setFailure(`${s.failed_step ? `${s.failed_step}: ` : ""}${String(s.error)}`);
+				}
 				if (!s.terminal) follow(id);
 			} catch {
 				follow(id); // a missed poll is not a failed job
@@ -46,6 +52,7 @@ export default function RunOnFleet({
 
 	const run = async () => {
 		setProblem(null);
+		setFailure(null);
 		setJob(null);
 		try {
 			setPhase("validating");
@@ -97,6 +104,11 @@ export default function RunOnFleet({
 				>
 					{job.status} · {job.id}
 				</a>
+			)}
+			{failure && (
+				<span className="max-w-[28rem] truncate font-mono text-[10px] text-rose-600" title={failure}>
+					{failure}
+				</span>
 			)}
 			{problem && (
 				<span className="max-w-[28rem] truncate text-[10px] text-rose-600" title={problem}>

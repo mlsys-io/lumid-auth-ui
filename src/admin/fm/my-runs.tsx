@@ -6,7 +6,7 @@
 // ones seen; a job that is still going is refreshed while this view is open.
 
 import { useCallback, useEffect, useState } from "react";
-import { fleet, type FleetJob, type FleetJobResult, type FleetStatus } from "../../api/fleet";
+import { failedSteps, fleet, type FleetJob, type FleetJobResult, type FleetStatus } from "../../api/fleet";
 
 const TONE: Record<FleetStatus, string> = {
 	queued: "bg-slate-100 text-slate-600",
@@ -128,6 +128,12 @@ export default function MyRuns() {
 						<p className="text-slate-500">Loading…</p>
 					) : (
 						<>
+							{failedSteps(open.result.outputs).map((o) => (
+								<p key={o.task_id ?? o.name} className="mb-1 whitespace-pre-wrap font-mono text-[11px] text-rose-700">
+									{o.name ? `${o.name} failed: ` : "Failed: "}
+									{o.error}
+								</p>
+							))}
 							{Object.keys(open.result.metrics ?? {}).length > 0 && (
 								<p className="mb-1 text-slate-700">
 									Metrics:{" "}

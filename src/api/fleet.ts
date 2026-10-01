@@ -28,9 +28,28 @@ export interface FleetJob {
 
 export interface FleetJobStatus extends FleetJob {
 	native_status: string;
+	/** Why a failed job failed — on a FlowMesh graph, its first failed step's error. */
 	error?: unknown;
+	/** The step that failed first (FlowMesh graphs). */
+	failed_step?: string;
 	progress?: Record<string, unknown>;
 	tasks?: number;
+}
+
+/** A step's entry in a result view: its result, or why it has none. */
+export interface FleetStepOutput {
+	task_id?: string;
+	name?: string;
+	result?: unknown;
+	error?: string;
+}
+
+/** The steps of a result that failed, with their reasons. */
+export function failedSteps(outputs: unknown): FleetStepOutput[] {
+	if (!Array.isArray(outputs)) return [];
+	return outputs.filter(
+		(o): o is FleetStepOutput => !!o && typeof o === "object" && typeof (o as FleetStepOutput).error === "string",
+	);
 }
 
 export interface FleetJobResult {
