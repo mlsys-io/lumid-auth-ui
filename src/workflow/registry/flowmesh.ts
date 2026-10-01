@@ -157,11 +157,12 @@ const SSH: Section = {
 };
 
 const PYTHON_TEMPLATE = `def main(inputs):
-    # inputs: {stage name: directory} for each connected step;
-    # read <dir>/results.json. Return anything JSON-serialisable.
-    return {"rows": 0, "metrics": {"score": 0.0}}
+    # Each connected step arrives by name: inputs["prepare"].output is its
+    # output, .artifacts its files. Or take the step itself as a parameter:
+    # def main(prepare). Return anything JSON-serialisable; numbers under
+    # "metrics" are what an experiment records.
+    return {"metrics": {"score": 0.0}}
 `;
-
 const PYTHON: Section = {
 	title: "Python",
 	fields: [
@@ -172,7 +173,7 @@ const PYTHON: Section = {
 		},
 		{
 			path: ["entrypoint"], label: "Function", type: "text", default: "main",
-			hint: "Called with {stage: directory} for each connected step, or with nothing if it takes no arguments.",
+			hint: "A parameter named after a connected step receives that step's output; a parameter named inputs receives every step; **kwargs takes the rest. Called with nothing if it takes no arguments.",
 			validate: (v, p) => {
 				const code = str(p, ["code"]);
 				const fn = typeof v === "string" && v ? v : "main";
@@ -292,6 +293,20 @@ export const FLOWMESH_REGISTRY: NodeRegistry = {
 	"io.input": IO_INPUT,
 	"io.output": IO_OUTPUT,
 };
+
+/**
+ * What a node of this kind starts with when added to a graph, so a new node
+ * is never a blank form demanding its required fields. Only kinds with a
+ * required field that has a usable default need an entry.
+ */
+export function seedTaskSpec(kind: string): Record<string, unknown> {
+	switch (kind) {
+		case "PythonTask":
+			return { entrypoint: "main", code: PYTHON_TEMPLATE };
+		default:
+			return {};
+	}
+}
 
 /** A minimal valid document for a new FlowMesh workflow. */
 export function seedFlowMeshDoc(kind = "EchoTask", name = "new-task"): string {

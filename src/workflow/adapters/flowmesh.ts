@@ -26,7 +26,9 @@
 // has a topology it does not have.
 //
 // When `spec.graph` IS present, the nodes are real and `dependsOn` is the edge
-// set. The top-level spec stays the shared configuration — model, resources and
+// set. `spec.stages` is the same list under the name the FlowMesh docs teach
+// (`kind: Workflow`) — {name, dependsOn, spec} per entry — so both spellings
+// project identically; see nodeListPath. The top-level spec stays the shared configuration — model, resources and
 // output live there and each node's spec carries only what varies, which is
 // exactly how the shipped examples are written.
 
@@ -48,6 +50,7 @@ interface FlowMeshSpec {
 	data?: Record<string, unknown>;
 	output?: Record<string, unknown>;
 	graph?: { nodes?: GraphNode[] };
+	stages?: GraphNode[];
 	[k: string]: unknown;
 }
 export interface FlowMeshDoc {
@@ -163,14 +166,16 @@ export function projectFlowMesh(doc: FlowMeshDoc): WorkflowGraph {
 		diagnostics.push({ level: "error", message: "No kind — FlowMesh cannot route this document to an executor." });
 	}
 
-	const graphNodes = spec.graph?.nodes;
-	const isGraph = Array.isArray(graphNodes) && graphNodes.length > 0;
+	const listPath = nodeListPath(doc);
+	const where = listPath.slice(1).join(".");
+	const graphNodes = (listPath[1] === "stages" ? spec.stages : spec.graph?.nodes) ?? [];
+	const isGraph = graphNodes.length > 0;
 
 	if (isGraph) {
 		const names = new Set(graphNodes.map((n) => n?.name).filter(Boolean) as string[]);
 		graphNodes.forEach((n, i) => {
 			if (!n?.name) {
-				diagnostics.push({ level: "error", message: `spec.graph.nodes[${i}] has no name — nothing can depend on it.` });
+				diagnostics.push({ level: "error", message: `spec.${where}[${i}] has no name — nothing can depend on it.` });
 				return;
 			}
 			const badges = [];
@@ -182,7 +187,7 @@ export function projectFlowMesh(doc: FlowMeshDoc): WorkflowGraph {
 				label: n.name,
 				subtitle: specDetail(n.spec, spec),
 				params: { ...(n.spec ?? {}) },
-				path: ["spec", "graph", "nodes", i, "spec"],
+				path: [...listPath, i, "spec"],
 				inputs: [{ id: "in", kind: "data" }],
 				outputs: [{ id: "out", kind: "data" }],
 				badges: badges.length ? badges : undefined,
@@ -192,7 +197,7 @@ export function projectFlowMesh(doc: FlowMeshDoc): WorkflowGraph {
 					diagnostics.push({
 						level: "error",
 						node: n.name,
-						message: `dependsOn "${dep}" names no node in spec.graph.`,
+						message: `dependsOn "${dep}" names no node in spec.${where}.`,
 					});
 					continue;
 				}
@@ -266,8 +271,17 @@ function dataLabel(data: Record<string, unknown>): string {
 
 /** True when this document is a real DAG rather than one task with endpoints. */
 export function isGraphForm(doc: FlowMeshDoc): boolean {
-	const n = doc.spec?.graph?.nodes;
-	return Array.isArray(n) && n.length > 0;
+	const s = doc.spec;
+	return (Array.isArray(s?.stages) && s.stages.length > 0) || (Array.isArray(s?.graph?.nodes) && s.graph.nodes.length > 0);
+}
+
+/**
+ * Where this document keeps its node list. `spec.stages` when it has one,
+ * otherwise `spec.graph.nodes` — the form a single task is promoted into.
+ */
+export function nodeListPath(doc: FlowMeshDoc): (string | number)[] {
+	const st = doc.spec?.stages;
+	return Array.isArray(st) && st.length > 0 ? ["spec", "stages"] : ["spec", "graph", "nodes"];
 }
 
 /**

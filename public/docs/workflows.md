@@ -676,15 +676,21 @@ Start from any FlowMesh graph (here a one-node one: an `echo` stage named
 
 Pick **Python**. On a one-task spec it first asks to restructure into
 `spec.graph.nodes[]` (see above); accept, and the new node arrives connected
-after the one you had. Select it and fill in the form:
+after the one you had. A graph already written as `spec.stages` (the form the
+FlowMesh docs use) opens as one node per stage, and the new node is added to
+`spec.stages`. The node starts with a working `main` function; select it and
+make it yours:
 
 ![The python node selected after prepare. Its form: Code (a main function reading prepare's items and returning a mean_words metric), Function main, and the note that it runs in its own container with no network.](/docs/img/workflow-python-form.png)
 
 - **Code** — the function and anything it needs. **Function** names the one to
   call (default `main`).
 - **Inputs** — each connected step is passed to your function by its name, so
-  `def main(prepare)` receives `prepare`, and `prepare["items"]` is that step's
-  output items. A function that takes no arguments is called with none.
+  `def main(prepare)` receives `prepare`'s output, and `prepare["items"]` is
+  that step's output items. A parameter named `inputs` receives every connected
+  step instead, as `inputs["prepare"]` with `.output` and an `.artifacts`
+  directory for its files; `**kwargs` takes whatever no other parameter did. A
+  function that takes no arguments is called with none.
 - **Metrics it reports** — one per line. Return `{"metrics": {...}}`: the step
   **fails** if a metric listed here is missing, so a study never records a silent
   zero. This is how a Python step feeds a study's metric.
