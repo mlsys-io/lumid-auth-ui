@@ -33,7 +33,7 @@ export default function NewExperiment(
 	{ app, onCreated }: { app: string; onCreated?: () => void },
 ) {
 	const [open, setOpen] = useState(false);
-	const [loops, setLoops] = useState<{ slug: string; name: string }[] | null>(null);
+	const [loops, setLoops] = useState<{ slug: string; name: string; engine?: string }[] | null>(null);
 	const [loop, setLoop] = useState("");
 	const [id, setId] = useState("");
 	const [metric, setMetric] = useState("");
@@ -56,7 +56,7 @@ export default function NewExperiment(
 				const mine = (r.workflows || [])
 					.filter((w: MeWorkflowRow) => w.app === app)
 					.map((w: MeWorkflowRow) => ({
-						slug: w.slug, name: w.name || w.slug.split(":")[1] || w.slug,
+						slug: w.slug, name: w.name || w.slug.split(":")[1] || w.slug, engine: w.engine,
 					}));
 				setLoops(mine);
 				if (mine.length === 1) setLoop(loopOf(mine[0].slug));
@@ -72,7 +72,11 @@ export default function NewExperiment(
 	}
 
 	const expIds = experiments.split(/[\n,]/).map((x) => x.trim()).filter(Boolean);
-	const ready = id.trim() !== "" && loop !== "" && metric.trim() !== "" && scope.trim() !== ""
+	// A workflow that runs a compute graph runs the same graph every time, so its
+	// runs are the population and it needs no scope (engine is "type[:module]").
+	const picked = (loops || []).find((l) => loopOf(l.slug) === loop);
+	const computeGraph = ["flowmesh", "lumilake"].includes((picked?.engine || "").split(":")[0]);
+	const ready = id.trim() !== "" && loop !== "" && metric.trim() !== "" && (computeGraph || scope.trim() !== "")
 		&& expIds.length > 0;
 
 	async function submit(run: boolean) {
@@ -85,9 +89,11 @@ export default function NewExperiment(
 				metric: { name: metric.trim(), higher_is_better: true },
 				experiments: expIds.map((x) => ({ id: x })),
 				samples,
-				...(scopeKind === "dataset"
-					? { dataset_id: scope.trim() }
-					: { cases: scope.split(",").map((c) => c.trim()).filter(Boolean) }),
+				...(scope.trim() === ""
+					? {}
+					: scopeKind === "dataset"
+						? { dataset_id: scope.trim() }
+						: { cases: scope.split(",").map((c) => c.trim()).filter(Boolean) }),
 			}, run);
 			// 202 + an intent: the scheduler applies it. Report what the RUNNER
 			// did, not that the queue accepted it — a queue acknowledgement read
@@ -185,8 +191,10 @@ export default function NewExperiment(
 				/>
 			</label>
 			<div className="text-[10.5px] text-slate-500">
-				Scope is required: a sample count over an undefined population cannot be
-				interpreted. The workflow and the metric it reports are checked before
+				{computeGraph
+					? "Scope is optional here: this workflow runs a compute graph, so its runs are the population."
+					: "Scope is required: a sample count over an undefined population cannot be interpreted."}{" "}
+				The workflow and the metric it reports are checked before
 				anything runs. Configure an experiment further on its card after defining.
 			</div>
 
