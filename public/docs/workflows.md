@@ -662,6 +662,55 @@ change to the shape of your document — so it **asks first**, once, and says wh
 it is about to do. Decline and the file is left byte-identical; accept and it is
 one step, so a single undo reverses it.
 
+### A Python step
+
+A **Python** node runs your own function as a step of the graph, in its own
+container: no network unless you ask for one, an unprivileged user, and only
+what you give it. It is the way to put code of your own between the stages
+FlowMesh already has.
+
+Start from any FlowMesh graph (here a one-node one: an `echo` stage named
+`prepare` that emits two sentences). Click **Add** and search for "python":
+
+![The Add palette on a FlowMesh canvas, searched for "python": one entry, Python — run your own Python function as a step.](/docs/img/workflow-python-add.png)
+
+Pick **Python**. On a one-task spec it first asks to restructure into
+`spec.graph.nodes[]` (see above); accept, and the new node arrives connected
+after the one you had. Select it and fill in the form:
+
+![The python node selected after prepare. Its form: Code (a main function reading prepare's items and returning a mean_words metric), Function main, and the note that it runs in its own container with no network.](/docs/img/workflow-python-form.png)
+
+- **Code** — the function and anything it needs. **Function** names the one to
+  call (default `main`).
+- **Inputs** — each connected step is passed to your function by its name, so
+  `def main(prepare)` receives `prepare`, and `prepare["items"]` is that step's
+  output items. A function that takes no arguments is called with none.
+- **Metrics it reports** — one per line. Return `{"metrics": {...}}`: the step
+  **fails** if a metric listed here is missing, so a study never records a silent
+  zero. This is how a Python step feeds a study's metric.
+- **Timeout**, **Image** (`python:3.12-slim` by default), **Network**
+  (`none` by default), **Requirements** (installed with pip, so they need
+  network: bridge — or bake them into the image to run offline),
+  **Environment**, and **Resources**.
+
+Then press **Run** on the toolbar. It validates the graph, runs it on Research
+Fleet as you, and shows the run's status beside the button:
+
+![After Run: the toolbar reads "succeeded · home:fm:wfl-…", the run's id on Research Fleet.](/docs/img/workflow-python-run.png)
+
+The status links to **Research Fleet → Jobs → Your runs**, where **Result**
+shows every step's output and, first, the metrics your Python step reported:
+
+![Research Fleet → Jobs, the run's Result: "Metrics: mean_words = 4.5", then each step's output.](/docs/img/workflow-python-result.png)
+
+The same graph runs without the canvas: `POST /api/v1/me/fleet/jobs` (or
+`job_run` from the SDK / MCP) takes the YAML, and `GET …/fleet/jobs/<id>?view=result`
+returns the same `metrics`.
+
+**On a Lumilake graph** the node is **Python (per row)**: a function applied to
+each row of its inputs. Read by an LLM step it runs inline; otherwise it runs as
+its own isolated Python step, with `timeout_s` and `memory_mb` as its limits.
+
 ---
 
 ## 16. Importing from n8n or Dify
