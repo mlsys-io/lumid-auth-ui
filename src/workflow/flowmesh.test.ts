@@ -167,6 +167,61 @@ check("adding a second task promotes automatically, then appends", () => {
 	eq(g.edges.map((e) => `${e.source}->${e.target}`), ["main->echo"], "wired to what it was dropped after");
 });
 
+const STAGES = `apiVersion: flowmesh/v1
+kind: Workflow
+metadata:
+  name: two-stage
+spec:
+  stages:
+    - name: prepare
+      spec:
+        taskType: echo
+        data:
+          type: list
+          items: [the quick brown fox]
+    - name: score
+      dependsOn: [prepare]
+      spec:
+        taskType: python
+        code: |
+          def main(prepare):
+              return {"metrics": {"n": 1}}
+`;
+
+check("spec.stages projects exactly like spec.graph.nodes", () => {
+	const g = parseFlowMesh(STAGES);
+	eq(g.nodes.map((n) => n.id), ["prepare", "score"]);
+	eq(g.edges.map((e) => `${e.source}->${e.target}`), ["prepare->score"]);
+	eq(g.nodes[1].path, ["spec", "stages", 1, "spec"], "edits land in the stage's own spec");
+	eq(g.nodes[1].kind, { family: "flowmesh-task", taskType: "PythonTask" });
+	ok(isGraphForm(WorkflowDoc.parse(STAGES).toJS()), "a stages document is a graph");
+	ok(!isFormFirst(g), "two stages are graph-first");
+});
+
+check("edits on a spec.stages document stay in spec.stages", () => {
+	const doc = WorkflowDoc.parse(STAGES);
+	eq(applyFlowMeshEdit(doc, parseFlowMesh(STAGES), {
+		t: "addNode", id: "", kind: { family: "flowmesh-task", taskType: "EchoTask" }, after: "score",
+	}).ok, true);
+	applyFlowMeshEdit(doc, parseFlowMesh(doc.toString()), { t: "setParam", node: "prepare", key: ["data", "items"], value: ["x"] });
+	applyFlowMeshEdit(doc, parseFlowMesh(doc.toString()), { t: "renameNode", id: "prepare", to: "load" });
+	const js = doc.toJS<{ spec: { graph?: unknown; stages: Array<{ name: string; dependsOn?: string[]; spec: { data?: { items: string[] } } }> } }>();
+	ok(js.spec.graph === undefined, "no spec.graph was invented beside spec.stages");
+	eq(js.spec.stages.map((s) => s.name), ["load", "score", "echo"]);
+	eq(js.spec.stages[1].dependsOn, ["load"], "rename rewrote dependsOn");
+	eq(js.spec.stages[0].spec.data?.items, ["x"]);
+});
+
+check("a new Python node starts with the starter code, not an empty required field", () => {
+	const doc = WorkflowDoc.parse(STAGES);
+	applyFlowMeshEdit(doc, parseFlowMesh(STAGES), {
+		t: "addNode", id: "", kind: { family: "flowmesh-task", taskType: "PythonTask" }, after: "score",
+	});
+	const added = parseFlowMesh(doc.toString()).nodes.find((n) => n.id === "python");
+	ok(typeof added?.params.code === "string" && (added.params.code as string).includes("def main("), "code is seeded");
+	eq(added?.params.entrypoint, "main");
+});
+
 // --- editing -----------------------------------------------------------------
 
 const dagDoc = () => {

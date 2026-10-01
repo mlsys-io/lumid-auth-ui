@@ -16,17 +16,17 @@
 // operation.
 //
 // Promotion is ONE undoable step. It rewrites the shape of a file the user may
-// have hand-written, and a silent restructure is the kind of thing that
-// destroys trust in an editor permanently -- so it SHOULD be confirmed first.
+// have hand-written, so WorkflowEditor asks first ("Restructure this spec?"),
+// once per editor session; this function itself does not prompt.
 //
-// It is not. This comment previously asserted "the caller confirms it first"
-// in the present tense; no caller does, and there is no confirm anywhere in
-// src/workflow. Undo is the only thing standing behind it today. Either add
-// the prompt or keep this accurate -- do not let the comment do the work.
+// A document already written with `spec.stages` (the form the FlowMesh docs
+// teach) is a graph too: every structural edit stays in `spec.stages` and
+// never invents a `spec.graph` beside it.
 
 import type { WorkflowDoc } from "../doc";
 import type { WfEdit, WfEditResult, WorkflowGraph } from "../model";
-import { TASK_TYPE_OF, type FlowMeshDoc } from "./flowmesh";
+import { TASK_TYPE_OF, isGraphForm, nodeListPath, type FlowMeshDoc } from "./flowmesh";
+import { seedTaskSpec } from "../registry/flowmesh";
 
 const refuse = (reason: string): WfEditResult => ({ ok: false, reason });
 
@@ -35,7 +35,12 @@ const NODE_LOCAL = ["data", "taskType"] as const;
 
 function graphNodes(doc: WorkflowDoc): Array<{ name?: string; dependsOn?: unknown }> {
 	const js = doc.toJS<FlowMeshDoc>();
-	return js.spec?.graph?.nodes ?? [];
+	return (nodeListPath(js)[1] === "stages" ? js.spec?.stages : js.spec?.graph?.nodes) ?? [];
+}
+
+/** spec.stages or spec.graph.nodes — whichever list this document keeps. */
+function listPath(doc: WorkflowDoc): (string | number)[] {
+	return nodeListPath(doc.toJS<FlowMeshDoc>());
 }
 
 function indexOf(doc: WorkflowDoc, name: string): number {
@@ -64,7 +69,7 @@ function freshName(doc: WorkflowDoc, kind: string): string {
  */
 export function promoteToGraph(doc: WorkflowDoc, firstName = "main"): boolean {
 	const js = doc.toJS<FlowMeshDoc>();
-	if (!js.spec || js.spec.graph?.nodes?.length) return false;
+	if (!js.spec || isGraphForm(js)) return false;
 
 	const nodeSpec: Record<string, unknown> = {};
 	for (const k of NODE_LOCAL) {
@@ -88,7 +93,7 @@ export function applyFlowMeshEdit(doc: WorkflowDoc, graph: WorkflowGraph, edit: 
 		return refuse(doc.lock?.detail ?? "This document cannot be edited structurally.");
 	}
 	const js = doc.toJS<FlowMeshDoc>();
-	const isGraph = !!js.spec?.graph?.nodes?.length;
+	const isGraph = isGraphForm(js);
 
 	switch (edit.t) {
 		case "setParam": {
@@ -97,16 +102,16 @@ export function applyFlowMeshEdit(doc: WorkflowDoc, graph: WorkflowGraph, edit: 
 			if (edit.node === "__output") { doc.setIn(["spec", "output", ...edit.key], edit.value); return { ok: true }; }
 			if (!isGraph) { doc.setIn(["spec", ...edit.key], edit.value); return { ok: true }; }
 			const i = indexOf(doc, edit.node);
-			if (i < 0) return refuse(`No node "${edit.node}" in spec.graph.`);
-			doc.setIn(["spec", "graph", "nodes", i, "spec", ...edit.key], edit.value);
+			if (i < 0) return refuse(`No node "${edit.node}" in this workflow.`);
+			doc.setIn([...listPath(doc), i, "spec", ...edit.key], edit.value);
 			return { ok: true };
 		}
 
 		case "unsetParam": {
 			if (!isGraph) { doc.deleteIn(["spec", ...edit.key]); return { ok: true }; }
 			const i = indexOf(doc, edit.node);
-			if (i < 0) return refuse(`No node "${edit.node}" in spec.graph.`);
-			doc.deleteIn(["spec", "graph", "nodes", i, "spec", ...edit.key]);
+			if (i < 0) return refuse(`No node "${edit.node}" in this workflow.`);
+			doc.deleteIn([...listPath(doc), i, "spec", ...edit.key]);
 			return { ok: true };
 		}
 
@@ -121,10 +126,10 @@ export function applyFlowMeshEdit(doc: WorkflowDoc, graph: WorkflowGraph, edit: 
 			const name = edit.id || freshName(doc, kind);
 			if (indexOf(doc, name) >= 0) return refuse(`"${name}" is already taken.`);
 			const after = edit.after && indexOf(doc, edit.after) >= 0 ? [edit.after] : undefined;
-			doc.addIn(["spec", "graph", "nodes"], {
+			doc.addIn(listPath(doc), {
 				name,
 				...(after ? { dependsOn: after } : {}),
-				spec: { taskType: TASK_TYPE_OF[kind] ?? "inference" },
+				spec: { taskType: TASK_TYPE_OF[kind] ?? "inference", ...seedTaskSpec(kind) },
 			});
 			return { ok: true };
 		}
@@ -132,12 +137,12 @@ export function applyFlowMeshEdit(doc: WorkflowDoc, graph: WorkflowGraph, edit: 
 		case "removeNode": {
 			if (!isGraph) return refuse("A single-task document has one task; remove it by deleting the file.");
 			const i = indexOf(doc, edit.id);
-			if (i < 0) return refuse(`No node "${edit.id}" in spec.graph.`);
+			if (i < 0) return refuse(`No node "${edit.id}" in this workflow.`);
 			// Strip dependsOn references first, exactly as Lumilake does: deleting
 			// the node first would leave survivors pointing at a name that is gone.
 			stripDeps(doc, edit.id);
 			const after = indexOf(doc, edit.id);
-			doc.deleteIn(["spec", "graph", "nodes", after < 0 ? i : after]);
+			doc.deleteIn([...listPath(doc), after < 0 ? i : after]);
 			return { ok: true };
 		}
 
@@ -150,8 +155,8 @@ export function applyFlowMeshEdit(doc: WorkflowDoc, graph: WorkflowGraph, edit: 
 			}
 			if (indexOf(doc, edit.to) >= 0) return refuse(`"${edit.to}" is already taken.`);
 			const i = indexOf(doc, edit.id);
-			if (i < 0) return refuse(`No node "${edit.id}" in spec.graph.`);
-			doc.setIn(["spec", "graph", "nodes", i, "name"], edit.to);
+			if (i < 0) return refuse(`No node "${edit.id}" in this workflow.`);
+			doc.setIn([...listPath(doc), i, "name"], edit.to);
 			rewriteDeps(doc, edit.id, edit.to);
 			return { ok: true };
 		}
@@ -159,14 +164,14 @@ export function applyFlowMeshEdit(doc: WorkflowDoc, graph: WorkflowGraph, edit: 
 		case "connect": {
 			if (!isGraph) return refuse("Add a second task first — a single-task document has nothing to connect.");
 			const ti = indexOf(doc, edit.target);
-			if (ti < 0) return refuse(`No node "${edit.target}" in spec.graph.`);
-			if (indexOf(doc, edit.source) < 0) return refuse(`No node "${edit.source}" in spec.graph.`);
+			if (ti < 0) return refuse(`No node "${edit.target}" in this workflow.`);
+			if (indexOf(doc, edit.source) < 0) return refuse(`No node "${edit.source}" in this workflow.`);
 			const deps = depsOf(doc, ti);
 			if (deps.includes(edit.source)) return refuse("Already connected.");
 			if (wouldCycle(graph, edit.source, edit.target)) {
 				return refuse(`That would make a cycle: ${edit.target} already feeds ${edit.source}.`);
 			}
-			doc.setIn(["spec", "graph", "nodes", ti, "dependsOn"], [...deps, edit.source]);
+			doc.setIn([...listPath(doc), ti, "dependsOn"], [...deps, edit.source]);
 			return { ok: true };
 		}
 
@@ -174,17 +179,17 @@ export function applyFlowMeshEdit(doc: WorkflowDoc, graph: WorkflowGraph, edit: 
 			const e = graph.edges.find((x) => x.id === edit.edge);
 			if (!e) return refuse("No such connection.");
 			const ti = indexOf(doc, e.target);
-			if (ti < 0) return refuse(`No node "${e.target}" in spec.graph.`);
+			if (ti < 0) return refuse(`No node "${e.target}" in this workflow.`);
 			const deps = depsOf(doc, ti).filter((d) => d !== e.source);
-			doc.setIn(["spec", "graph", "nodes", ti, "dependsOn"], deps);
+			doc.setIn([...listPath(doc), ti, "dependsOn"], deps);
 			return { ok: true };
 		}
 
 		case "reorder": {
 			if (!isGraph) return refuse("Nothing to reorder in a single-task document.");
 			const i = indexOf(doc, edit.id);
-			if (i < 0) return refuse(`No node "${edit.id}" in spec.graph.`);
-			doc.reorderIn(["spec", "graph", "nodes"], i, edit.index);
+			if (i < 0) return refuse(`No node "${edit.id}" in this workflow.`);
+			doc.reorderIn(listPath(doc), i, edit.index);
 			return { ok: true };
 		}
 
@@ -198,7 +203,7 @@ function stripDeps(doc: WorkflowDoc, name: string): void {
 		if (!n || n.name === name) return;
 		const deps = Array.isArray(n.dependsOn) ? n.dependsOn.map(String) : n.dependsOn != null ? [String(n.dependsOn)] : [];
 		const kept = deps.filter((d) => d !== name);
-		if (kept.length !== deps.length) doc.setIn(["spec", "graph", "nodes", i, "dependsOn"], kept);
+		if (kept.length !== deps.length) doc.setIn([...listPath(doc), i, "dependsOn"], kept);
 	});
 }
 
@@ -207,7 +212,7 @@ function rewriteDeps(doc: WorkflowDoc, from: string, to: string): void {
 		if (!n) return;
 		const deps = Array.isArray(n.dependsOn) ? n.dependsOn.map(String) : n.dependsOn != null ? [String(n.dependsOn)] : [];
 		if (!deps.includes(from)) return;
-		doc.setIn(["spec", "graph", "nodes", i, "dependsOn"], deps.map((d) => (d === from ? to : d)));
+		doc.setIn([...listPath(doc), i, "dependsOn"], deps.map((d) => (d === from ? to : d)));
 	});
 }
 
