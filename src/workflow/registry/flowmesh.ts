@@ -303,9 +303,32 @@ export function seedTaskSpec(kind: string): Record<string, unknown> {
 	switch (kind) {
 		case "PythonTask":
 			return { entrypoint: "main", code: PYTHON_TEMPLATE };
+		case "EchoTask":
+			// The echo executor refuses a task without spec.data.
+			return { data: { type: "list", items: ["hello"] } };
 		default:
 			return {};
 	}
+}
+
+/**
+ * Kinds whose own fields ARE the task — the code to run, the command, the
+ * request — rather than settings a graph's nodes could share. Promoting such a
+ * single task into a graph must move these into the first node, or the node is
+ * left with nothing to run and the payload stranded at the top of `spec`.
+ */
+const OWN_PAYLOAD: Record<string, { section: Section; also?: string[] }> = {
+	PythonTask: { section: PYTHON, also: ["inputs", "pythonOutput"] },
+	SSHTask: { section: SSH },
+	APITask: { section: API },
+};
+
+/** Top-level spec keys that belong to the node, not the graph, for this kind. */
+export function nodeLocalKeys(kind: string): string[] {
+	const own = OWN_PAYLOAD[kind];
+	if (!own) return [];
+	const keys = own.section.fields.map((f) => String(f.path[0]));
+	return [...new Set([...keys, ...(own.also ?? [])])];
 }
 
 /** A minimal valid document for a new FlowMesh workflow. */

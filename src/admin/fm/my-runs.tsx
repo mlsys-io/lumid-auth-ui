@@ -98,7 +98,8 @@ export default function MyRuns() {
 								{j.created_at ? new Date(j.created_at).toLocaleString() : "—"}
 							</td>
 							<td className="px-3 py-2 text-right whitespace-nowrap">
-								{j.status === "succeeded" && (
+								{/* A failed run has a result too: which step failed, and why. */}
+								{(j.status === "succeeded" || j.status === "failed") && (
 									<button className="text-indigo-600 hover:underline" onClick={() => void showResult(j.id)}>
 										Result
 									</button>

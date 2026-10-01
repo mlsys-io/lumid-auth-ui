@@ -25,8 +25,8 @@
 
 import type { WorkflowDoc } from "../doc";
 import type { WfEdit, WfEditResult, WorkflowGraph } from "../model";
-import { TASK_TYPE_OF, isGraphForm, nodeListPath, type FlowMeshDoc } from "./flowmesh";
-import { seedTaskSpec } from "../registry/flowmesh";
+import { TASK_TYPE_OF, isGraphForm, nodeListPath, toKind, type FlowMeshDoc } from "./flowmesh";
+import { nodeLocalKeys, seedTaskSpec } from "../registry/flowmesh";
 
 const refuse = (reason: string): WfEditResult => ({ ok: false, reason });
 
@@ -71,8 +71,14 @@ export function promoteToGraph(doc: WorkflowDoc, firstName = "main"): boolean {
 	const js = doc.toJS<FlowMeshDoc>();
 	if (!js.spec || isGraphForm(js)) return false;
 
+	// Per-node keys move down: always `data` and `taskType`, plus — for a kind
+	// whose own fields are the task (Python's code, SSH's command, API's
+	// request) — those fields too. Leaving them up top strands the payload and
+	// gives the node nothing to run.
+	const kind = toKind(String(js.kind ?? js.spec.taskType ?? ""));
+	const local = [...NODE_LOCAL, ...nodeLocalKeys(kind)];
 	const nodeSpec: Record<string, unknown> = {};
-	for (const k of NODE_LOCAL) {
+	for (const k of local) {
 		if (js.spec[k] !== undefined) nodeSpec[k] = js.spec[k];
 	}
 	// taskType is both shared default and node-local; keep it in both places so
@@ -83,8 +89,11 @@ export function promoteToGraph(doc: WorkflowDoc, firstName = "main"): boolean {
 
 	return doc.mutate((d) => {
 		d.setIn(["spec", "graph", "nodes"], d.createNode([{ name: firstName, spec: nodeSpec }]));
-		// `data` moves; everything else that was shared stays shared.
-		if (js.spec?.data !== undefined) d.deleteIn(["spec", "data"]);
+		// What moved is removed from the top; everything shared stays shared.
+		// taskType stays too (see above).
+		for (const k of local) {
+			if (k !== "taskType" && js.spec?.[k] !== undefined) d.deleteIn(["spec", k]);
+		}
 	});
 }
 
