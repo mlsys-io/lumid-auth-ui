@@ -12,9 +12,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SpiralOverlay } from "@/components/BrandLoader";
 import {
-	FlaskConical, ChevronDown, ChevronRight, Loader2, TrendingUp, TrendingDown,
+	FlaskConical, ChevronDown, ChevronRight, Loader2, TrendingUp, TrendingDown, AlertTriangle,
 } from "lucide-react";
-import { me, waitForIntent, MeApiError, type MeExperiment, type MeExperimentArm, type MeExperimentDetail, type MeExperimentCase, type MeRunRow } from "@/api/me";
+import { me, waitForIntent, MeApiError, type MeExperiment, type MeStudyDefinition, type MeExperimentArm, type MeExperimentDetail, type MeExperimentCase, type MeRunRow } from "@/api/me";
 import { askOrStash } from "@/components/chat/askBus";
 import { fetchCasebook } from "@/api/casebook";
 import { cn } from "@/lib/utils";
@@ -939,11 +939,12 @@ export default function ExperimentsPanel({ app, loop, quiet = false }: {
 	app: string; loop?: string; quiet?: boolean;
 }) {
 	const [exps, setExps] = useState<MeExperiment[] | null>(null);
+	const [defs, setDefs] = useState<MeStudyDefinition[]>([]);
 	const [nonce, setNonce] = useState(0);
 	useEffect(() => {
 		let live = true;
 		const load = () => me.experiments(app)
-			.then((r) => { if (live) setExps(r.experiments || []); })
+			.then((r) => { if (live) { setExps(r.experiments || []); setDefs(r.definitions || []); } })
 			.catch(() => { if (live) setExps([]); });
 		load();
 		const id = window.setInterval(load, 30_000);
@@ -955,6 +956,8 @@ export default function ExperimentsPanel({ app, loop, quiet = false }: {
 		return <div className="relative"><div className="h-20 rounded-xl bg-slate-100 animate-pulse" /><SpiralOverlay /></div>;
 	}
 	const shown = loop ? exps.filter((e) => e.loops?.includes(loop)) : exps;
+	const pending = loop ? defs.filter((d) => !d.workflow || d.workflow === loop) : defs;
+	const notices = pending.length > 0 && !quiet ? <StudyDefinitionNotices defs={pending} /> : null;
 	// On a LOOP page the create affordance is PromoteToExperiment, which
 	// already sits there and knows its own loop. This is for the app-wide
 	// surface, which offered no way to create an experiment at all.
@@ -971,6 +974,7 @@ export default function ExperimentsPanel({ app, loop, quiet = false }: {
 		//
 		// `quiet` still means silent — it is for the callers that render no
 		// header to leave stranded.
+		if (notices) return notices;
 		if (loop && !quiet) {
 			return (
 				<div className="rounded-lg border border-dashed border-slate-200 bg-white/60 px-3 py-2 text-[11px] text-slate-500">
@@ -998,6 +1002,7 @@ export default function ExperimentsPanel({ app, loop, quiet = false }: {
 	}
 	return (
 		<div className="space-y-2.5">
+			{notices}
 			{canCreate && (
 				<div className="flex justify-end">
 					<NewExperiment app={app} onCreated={() => setNonce((n) => n + 1)} />
@@ -1005,6 +1010,27 @@ export default function ExperimentsPanel({ app, loop, quiet = false }: {
 			)}
 			{shown.map((e) => (
 				<ExperimentCard key={e.id} app={app} e={e} onChanged={() => setNonce((n) => n + 1)} />
+			))}
+		</div>
+	);
+}
+
+// Studies that are not studies yet: a definition still on its way to the
+// scheduler, or one it refused. The define call answers before the scheduler
+// applies it, so without this a refused study simply never appeared.
+function StudyDefinitionNotices({ defs }: { defs: MeStudyDefinition[] }) {
+	return (
+		<div className="space-y-1.5">
+			{defs.map((d) => d.status === "failed" ? (
+				<div key={d.intent_id} className="flex items-start gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] text-rose-800">
+					<AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" />
+					<span>Study <span className="font-semibold">{d.id}</span> was not defined: {d.error}</span>
+				</div>
+			) : (
+				<div key={d.intent_id} className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white/70 px-3 py-2 text-[11px] text-slate-600">
+					<Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+					<span>Study <span className="font-semibold">{d.id}</span> is being defined…</span>
+				</div>
 			))}
 		</div>
 	);

@@ -1014,8 +1014,11 @@ export const me = {
   // `events` maps a cycle dir-id → a discrete event (learn|fix|bug|analyze)
   // for the curve overlay.
   // Experiments — hypothesis × variants × dataset/casebook × metric.
+  // `definitions`: studies whose definition is still on its way to the
+  // scheduler, or that it refused (with its reason). Without them a refused
+  // study looked exactly like a slow one.
   experiments: (app: string) =>
-    call<{ experiments: MeExperiment[]; count: number }>(
+    call<{ experiments: MeExperiment[]; count: number; definitions?: MeStudyDefinition[] }>(
       "GET", `/apps/${encodeURIComponent(app)}/experiments`),
   experiment: (app: string, id: string) =>
     call<MeExperimentDetail>(
@@ -1235,6 +1238,15 @@ export interface MeExperimentArm {
   description?: string;
   [k: string]: unknown; // the arm's config overrides (judge_panel, prompts, …)
 }
+export interface MeStudyDefinition {
+  id: string;
+  workflow?: string;
+  status: "defining" | "failed" | "defined";
+  error?: string;
+  intent_id: string;
+  at: string;
+}
+
 export interface MeExperiment {
   id: string; hypothesis: string; kind: "explore" | "arms" | "regression";
   status: string; dataset_id?: string;
