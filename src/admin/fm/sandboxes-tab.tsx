@@ -63,6 +63,9 @@ import {
 	type AdminSandbox,
 } from "../../api/sandboxes";
 import { fanoutForSites, listTasksForSite, type FmFanout, type FmTask } from "../../api/fm";
+
+// Filtered server-side: an unfiltered task list is refused (see listTasksForSite).
+const SSH_TASKS = { task_type: "ssh" } as const;
 import { deleteSshKey, listSshKeys, uploadSshKey, type SshKey } from "../../api/ssh-keys";
 import { SiteBadge, SiteStrip, TabShell, shortGpu, useFanout } from "./shared";
 import { PUBLIC_SITE } from "./fleet-tab";
@@ -364,7 +367,7 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 		30_000,
 	);
 	const shells = useFanout<FmTask>(
-		() => (isAdmin ? fanoutForSites(SSH_TASK_SITES, listTasksForSite) : Promise.resolve(EMPTY)),
+		() => (isAdmin ? fanoutForSites(SSH_TASK_SITES, (site) => listTasksForSite(site, SSH_TASKS)) : Promise.resolve(EMPTY)),
 		20_000,
 	);
 

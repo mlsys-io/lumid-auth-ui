@@ -416,8 +416,17 @@ export async function fanoutForSites<T>(
 	return { items: per.flatMap((p) => p.items), sites: per.map((p) => p.status) };
 }
 
-export async function listTasksForSite(site: string): Promise<FmTask[]> {
-	const r = await fm.get<FmTask[]>(`/${site}/api/v1/tasks`);
+/** Server-side filters for a per-site task list (FlowMesh pushes these down). */
+export type FmTaskFilter = { workflow_id?: string; task_type?: string; status?: string };
+
+/**
+ * Always pass a filter. An unfiltered task list makes FlowMesh (v0.1.11) serialise
+ * every task on the site — it ignores `limit` — which OOM-killed home's flowmesh-host
+ * on 2026-10-16; mesh-federator now answers it with 400 `unfiltered_task_list`
+ * (vast/vast2 excepted).
+ */
+export async function listTasksForSite(site: string, filter: FmTaskFilter): Promise<FmTask[]> {
+	const r = await fm.get<FmTask[]>(`/${site}/api/v1/tasks`, { params: filter });
 	return (r.data ?? []).map((t) => ({ ...t, site }));
 }
 

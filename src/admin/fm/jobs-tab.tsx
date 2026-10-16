@@ -312,7 +312,7 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 			return;
 		}
 		let live = true;
-		listTasksForSite(openSite)
+		listTasksForSite(openSite, { workflow_id: openWf })
 			.then((all) => {
 				if (live) setTasks(all.filter((t) => t.workflow_id === openWf));
 			})

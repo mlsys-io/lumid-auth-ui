@@ -12,6 +12,9 @@
 
 import { useMemo } from "react";
 import { listTasksForSite, fanoutForSites, secondsSince, type FmTask } from "../../api/fm";
+
+// Filtered server-side: an unfiltered task list is refused (see listTasksForSite).
+const SSH_TASKS = { task_type: "ssh" } as const;
 import { Age, SiteBadge, SiteStrip, StatusPill, TabShell, useFanout } from "./shared";
 import { PUBLIC_SITE } from "./fleet-tab";
 
@@ -39,7 +42,7 @@ function isActive(t: FmTask): boolean {
 export default function SshTab({ isAdmin, embedded = false }: { isAdmin: boolean; embedded?: boolean }) {
 	const sites = isAdmin ? ADMIN_SITES : [PUBLIC_SITE];
 	const { data, loading, error, refresh } = useFanout<FmTask>(
-		() => fanoutForSites(sites, listTasksForSite),
+		() => fanoutForSites(sites, (site) => listTasksForSite(site, SSH_TASKS)),
 		30_000,
 	);
 
