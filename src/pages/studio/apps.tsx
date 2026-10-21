@@ -15,7 +15,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { legacyAppQueryTarget, workflowPath } from "@/lib/run-routes";
+import { legacyAppQueryTarget, routeLoopMissing, workflowPath } from "@/lib/run-routes";
 import { ChevronRight, ChevronDown, Check, ArrowRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2, Inbox, Loader2, RotateCcw, X, Plus, MoreHorizontal, SlidersHorizontal, Settings, Pencil, Cpu, Cloud, Workflow, Clock, Database, DownloadCloud, UploadCloud, BarChart3 } from "lucide-react";
 import {
 	DropdownMenu,
@@ -1021,7 +1021,13 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 	const overviewMode = selected ? selected === OVERVIEW_SEL : (!!identity?.hasSurface || !!urlSurface);
 	const validSelected = selected && rows?.some((r) => r.loop === selected) ? selected : null;
 	const validInitial = initialLoop && rows?.some((r) => r.loop === initialLoop) ? initialLoop : null;
-	const effSelected = overviewMode ? null : (validSelected ?? validInitial ?? freshestLoop);
+	// A /w/:loop address that names no workflow of this app is NOT a request
+	// for the freshest one. Falling back kept the URL while rendering another
+	// workflow's header, breadcrumb and runs — /w/qa_custom_analyze_20261006/r/…
+	// showed Harvest outbox (LQ-20261006-04). Say it is not here instead.
+	const missingLoop = !overviewMode && routeLoopMissing(routeLoop, rows ? rows.map((r) => r.loop) : null)
+		? routeLoop! : null;
+	const effSelected = overviewMode || missingLoop ? null : (validSelected ?? validInitial ?? freshestLoop);
 	const selectedRow = rows?.find((r) => r.loop === effSelected) ?? null;
 
 	// OLD ADDRESSES → NEW. `?selected=<loop>[&cycle=<ts>]` was the only way to
@@ -1302,6 +1308,9 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 							</div>
 						) : (
 							<div id="wf-detail" className="min-w-0">
+								{missingLoop && (
+									<WorkflowNotFound app={app} loop={missingLoop} runId={routeRunId ?? null} />
+								)}
 								{selectedRow && (
 									<WorkflowObservabilityPanel
 										app={app} loop={selectedRow.loop} wf={selectedRow.wf} loopHealth={selectedRow.lh}
@@ -1318,6 +1327,33 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 				</div>
 			)}
 
+		</div>
+	);
+}
+
+// The honest answer for an address the app's workflow list does not contain.
+// The usual reason is not a typo: the loop was added to the install and later
+// dropped (an app update replaces a user-edited spec, backing it up under
+// .app-update-backup/), so global Runs still lists its old runs.
+function WorkflowNotFound({ app, loop, runId }: { app: string; loop: string; runId: string | null }) {
+	return (
+		<div role="alert" className="rounded-xl border border-amber-200 bg-amber-50/60 p-5 space-y-2">
+			<div className="flex items-center gap-2 text-sm font-medium text-slate-900">
+				<AlertTriangle className="w-4 h-4 text-amber-600" />
+				Workflow not found
+			</div>
+			<p className="text-[13px] text-slate-600">
+				<span className="font-mono">{appTitle(app)}</span> has no workflow named{" "}
+				<span className="font-mono">{loop}</span>
+				{runId ? <>, so run <span className="font-mono">{runId}</span> can&apos;t be shown here</> : null}.
+				It may have been removed from this agent&apos;s configuration (an update replaces an
+				edited spec and backs up your copy), or the link is wrong.
+			</p>
+			<div className="flex gap-3 text-[12.5px]">
+				<Link to={`/studio/apps/${encodeURIComponent(app)}`} className="text-slate-700 underline hover:text-slate-900">All workflows</Link>
+				<Link to={`/studio/a/${encodeURIComponent(app)}/manage`} className="text-slate-700 underline hover:text-slate-900">Manage agent</Link>
+				<Link to="/studio/runs" className="text-slate-700 underline hover:text-slate-900">Runs</Link>
+			</div>
 		</div>
 	);
 }

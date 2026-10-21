@@ -12,7 +12,7 @@
 // the marketplace's "Add to app…") rather than a bare yaml edit.
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { parseDocument, YAMLSeq } from "yaml";
 import { toast } from "sonner";
 import {
@@ -20,6 +20,7 @@ import {
 	CalendarClock, BookOpen, Database, Search, ArrowLeft,
 } from "lucide-react";
 import { me, MeApiError, waitForIntent } from "@/api/me";
+import { runNowOutcome, workflowPath } from "@/lib/run-routes";
 import { bearerHeader } from "@/api/session-bearer";
 import AppSecretsSection, { type ConfigField } from "./AppSecretsSection";
 import {
@@ -199,13 +200,43 @@ export default function AppManagePanel() {
 	};
 
 	const [runningLoop, setRunningLoop] = useState<string | null>(null);
+	// Run now = a queued run_loop intent. "Triggered" alone left the user with
+	// no run id and no way to find the run among hundreds in global Runs — and
+	// no word when the scheduler REFUSED it (a loop the install no longer has
+	// fails ~5s later with "not in manifest.loops[]"; LQ-20261006-04). Follow
+	// the intent: link the run it produced, or show the scheduler's error.
+	const navigate = useNavigate();
 	const runNow = async (name: string) => {
 		setRunningLoop(name);
+		let jobId = "";
 		try {
-			await me.runLoopNow(app, name);
-			toast.success(`Triggered ${name} — watch My Jobs / the app page for the run.`);
+			const q = await me.runLoopNow(app, name);
+			jobId = String(q?.job_id ?? "");
+			toast.message(`Queued ${name}…`, { description: jobId ? `job ${jobId.slice(0, 8)}` : undefined });
 		} catch (e) {
 			toast.error(String((e as Error)?.message ?? e));
+			setRunningLoop(null);
+			return;
+		}
+		try {
+			if (!jobId) return;
+			const done = await waitForIntent(jobId, { everyMs: 2500, timeoutMs: 180_000 });
+			const o = runNowOutcome(app, name, done);
+			if (o.state === "failed") {
+				toast.error(`${name} did not run: ${o.error}`, { duration: 15_000 });
+			} else if (o.state === "ok") {
+				const href = o.href;
+				toast.success(`${name} finished${o.runId ? ` — run ${o.runId}` : ""}`, {
+					description: o.outcome,
+					duration: 15_000,
+					action: href ? { label: "Open run", onClick: () => navigate(href) } : undefined,
+				});
+			}
+		} catch {
+			toast.message(`${name} is still running`, {
+				description: `job ${jobId.slice(0, 8)} — it will appear on the workflow page when it finishes.`,
+				action: { label: "Open workflow", onClick: () => navigate(workflowPath(app, name)) },
+			});
 		} finally {
 			setRunningLoop(null);
 		}

@@ -91,3 +91,46 @@ export function canonicalRunId(runId: string): string | null {
 	const c = toCycleId(runId);
 	return c && c !== runId ? c : null;
 }
+
+/** Does a /w/:loop address name a workflow this app does not have?
+ *  `loops` is null while the list is still loading — never "missing" then.
+ *  The app page used to fall back to the FRESHEST workflow for an unknown
+ *  loop, keeping the URL while rendering another workflow's header and runs
+ *  (LQ-20261006-04: …/w/qa_custom_analyze_20261006/r/… rendered Harvest
+ *  outbox). An address that resolves nowhere must say so instead. */
+export function routeLoopMissing(routeLoop: string | null | undefined, loops: readonly string[] | null): boolean {
+	if (!routeLoop || loops === null) return false;
+	return !loops.includes(routeLoop);
+}
+
+export type RunNowOutcome =
+	| { state: "pending" }
+	| { state: "ok"; runId: string | null; href: string | null; outcome?: string }
+	| { state: "failed"; error: string };
+
+/** What a run-now (`run_loop` intent) came to, from GET /me/intents/:id.
+ *  The run id is the cycle dir's basename — the same id the run page and
+ *  global Runs address it by — so the toast can link straight to the run
+ *  instead of saying "watch My Jobs". */
+export function runNowOutcome(
+	app: string, loop: string,
+	intent: { status?: string; result?: Record<string, unknown> } | null | undefined,
+): RunNowOutcome {
+	if (!intent || intent.status !== "completed") return { state: "pending" };
+	const env = (intent.result ?? {}) as Record<string, unknown>;
+	const data = (env.data && typeof env.data === "object" ? env.data : {}) as Record<string, unknown>;
+	if (env.ok === false || data.ok === false) {
+		const raw = String(env.error ?? data.error ?? "").trim();
+		return { state: "failed", error: (raw.split(/[\r\n]/)[0] || "the run failed").slice(0, 400) };
+	}
+	const dir = String(data.cycle_dir ?? "").replace(/\/+$/, "");
+	const base = dir ? dir.slice(dir.lastIndexOf("/") + 1) : "";
+	const runId = base ? toCycleId(base) : "";
+	const ranLoop = typeof data.loop === "string" && data.loop ? data.loop : loop;
+	return {
+		state: "ok",
+		runId: runId || null,
+		href: runId ? runPath(app, ranLoop, runId) : null,
+		outcome: typeof data.outcome === "string" ? data.outcome : undefined,
+	};
+}
