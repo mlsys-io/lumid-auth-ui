@@ -90,6 +90,36 @@ export interface Sandbox {
 	site?: string;
 	/** Public TCP ports this sandbox holds. Absent when it claimed none. */
 	ports?: SandboxPort[];
+	/** WHY the sandbox is not working -- present only when it is not (Failed, a
+	 *  stuck Pending, a node that stopped answering). Kubernetes' own words:
+	 *  `StartError`, `ImagePullBackOff`, `OOMKilled`, `Evicted`, `NodeLost`,
+	 *  `NodeUnreachable`. `phase` is unchanged; these are additive. */
+	reason?: string;
+	/** The verbatim kubelet/runtime message behind `reason`. */
+	message?: string;
+	/** A plain-language reading of `reason`/`message`, when the cause is recognised.
+	 *  Never a replacement for `message` -- show both. */
+	hint?: string;
+	/** The container whose state explains it. */
+	container?: SandboxContainerState;
+	/** Newest Warning events for the pod (about an hour of history at most). */
+	events?: SandboxEvent[];
+}
+
+export interface SandboxContainerState {
+	container: string;
+	state: "waiting" | "terminated";
+	reason: string;
+	message: string;
+	exit_code?: number;
+}
+
+export interface SandboxEvent {
+	reason: string;
+	message: string;
+	count: number;
+	/** ISO timestamp. */
+	at: string;
 }
 
 /**
@@ -676,6 +706,23 @@ function epochFromIso(v?: string | null): number | null {
 	return Number.isNaN(t) ? null : t;
 }
 
+/**
+ * The one-line context under a sandbox's state pill.
+ *
+ * A Failed (or unreachable) sandbox used to show a bare red pill and the pod name, because the
+ * API returned nothing more. It now says what Kubernetes recorded, so the person is not left to
+ * guess whether to retry, resize or ask an operator.
+ */
+export function sandboxDetail(s: Sandbox): string | null {
+	if (s.phase === "Queued") {
+		return [s.gpus_free && `${s.gpus_free} GPUs free.`, s.waiting_for].filter(Boolean).join(" ") || null;
+	}
+	if (s.reason) {
+		return [s.reason, s.hint ?? s.message].filter(Boolean).join(" - ");
+	}
+	return s.pod;
+}
+
 export function sandboxToShell(s: Sandbox): ComputeShell {
 	const site = s.site ?? PUBLIC_SANDBOX_SITE;
 	return {
@@ -690,8 +737,7 @@ export function sandboxToShell(s: Sandbox): ComputeShell {
 		idleEvictSec: s.idle_evict_sec ?? null,
 		idleEvictEnabled: s.idle_evict_enabled ?? null,
 		owner: null,
-		detail: s.phase === "Queued" ? [s.gpus_free && `${s.gpus_free} GPUs free.`, s.waiting_for]
-			.filter(Boolean).join(" ") || null : s.pod,
+		detail: sandboxDetail(s),
 		gpu: s.gpu || null,
 		node: s.node ?? null,
 		ports: s.ports ?? null,

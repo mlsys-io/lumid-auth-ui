@@ -102,6 +102,35 @@ function StatePill({ r }: { r: ComputeShell }) {
 	);
 }
 
+function FailureNote({ s }: { s: Sandbox }) {
+	const failed = s.phase === "Failed";
+	return (
+		<div className={`mt-1 max-w-sm text-xs ${failed ? "text-rose-700" : "text-amber-700"}`}>
+			<div>
+				<span className="font-medium">{s.reason}</span>
+				{s.hint ? ` - ${s.hint}` : ""}
+			</div>
+			{(s.message || s.events?.length) && (
+				<details className="mt-0.5 text-slate-600">
+					<summary className="cursor-pointer select-none">technical details</summary>
+					{s.message && <pre className="mt-1 whitespace-pre-wrap break-words font-mono text-[11px]">{s.message}</pre>}
+					{s.container && (
+						<div className="mt-1 font-mono text-[11px]">
+							container {s.container.container}: {s.container.state} {s.container.reason}
+							{s.container.exit_code != null ? ` (exit ${s.container.exit_code})` : ""}
+						</div>
+					)}
+					{s.events?.map((e, i) => (
+						<div key={i} className="mt-1 font-mono text-[11px]">
+							{e.at.slice(11, 19)}Z {e.reason}{e.count > 1 ? ` x${e.count}` : ""}: {e.message}
+						</div>
+					))}
+				</details>
+			)}
+		</div>
+	);
+}
+
 function fmtBytes(n?: number): string {
 	if (!n) return "—";
 	const u = ["B", "KB", "MB", "GB", "TB"];
@@ -1163,6 +1192,11 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 									{(r.state === "Queued" || r.state === "Pending") && r.detail && (
 										<div className="mt-0.5 max-w-xs text-xs text-amber-700">{r.detail}</div>
 									)}
+									{/* A sandbox that is not working says WHY. Without this a Failed
+									    one was a red pill and nothing else (reported 2026-10-12). The
+									    raw kubelet message sits in a disclosure: it is evidence, and
+									    long. */}
+									{r.kind === "sandbox" && r.sandbox?.reason && <FailureNote s={r.sandbox} />}
 								</td>
 								<td className="px-3 py-2 font-mono text-xs text-slate-700">
 									{r.connect ?? "—"}
