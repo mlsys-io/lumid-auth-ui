@@ -3,6 +3,7 @@
 import {
 	workflowPath, runPath, parseScheduledRunId, runRowHref, legacyAppQueryTarget,
 	legacyCycleTarget, legacyWorkflowSlugTarget, canonicalRunId,
+	routeLoopMissing, runNowOutcome,
 } from "./run-routes";
 
 type Check = { name: string; run: () => void };
@@ -53,6 +54,42 @@ check("legacy cycle route", () => {
 check("legacy workflow slug", () => {
 	eq(legacyWorkflowSlugTarget("qr:backtest"), "/studio/apps/qr/w/backtest");
 	eq(legacyWorkflowSlugTarget("qr"), "/studio/apps/qr");
+});
+
+check("route loop missing: only once the list is loaded, and only for an unknown loop", () => {
+	const loops = ["analyze", "harvest_outbox"];
+	eq(routeLoopMissing("qa_custom_analyze_20261006", loops), true, "unknown loop");
+	eq(routeLoopMissing("analyze", loops), false, "known loop");
+	eq(routeLoopMissing("qa_custom_analyze_20261006", null), false, "still loading");
+	eq(routeLoopMissing(undefined, loops), false, "no loop in the route");
+	eq(routeLoopMissing("x", []), true, "empty list");
+});
+check("run-now outcome: pending until completed", () => {
+	eq(runNowOutcome("qr", "analyze", { status: "pending" }).state, "pending");
+	eq(runNowOutcome("qr", "analyze", null).state, "pending");
+});
+check("run-now outcome: completed run links to its cycle dir", () => {
+	const o = runNowOutcome("quant-research", "qa_custom_analyze_20261006", {
+		status: "completed",
+		result: { ok: true, data: { ok: true, loop: "qa_custom_analyze_20261006", outcome: "3 strategy(ies)",
+			cycle_dir: "/home/luyao/.tenants/da5/.xp/agents/quant-research/.lumid/cycles/qa_custom_analyze_20261006/20261006T143610Z" } },
+	});
+	if (o.state !== "ok") throw new Error("state " + o.state);
+	eq(o.runId, "20261006T143610Z", "runId");
+	eq(o.href, "/studio/apps/quant-research/w/qa_custom_analyze_20261006/r/20261006T143610Z", "href");
+});
+check("run-now outcome: the scheduler's error surfaces", () => {
+	const o = runNowOutcome("qr", "qa_custom_analyze_20261006", {
+		status: "completed",
+		result: { ok: false, data: {}, error: "ValueError: loop 'qa_custom_analyze_20261006' not in manifest.loops[]/workflows[]\ntrace" },
+	});
+	if (o.state !== "failed") throw new Error("state " + o.state);
+	eq(o.error, "ValueError: loop 'qa_custom_analyze_20261006' not in manifest.loops[]/workflows[]", "error");
+});
+check("run-now outcome: ok without a cycle dir has no link", () => {
+	const o = runNowOutcome("qr", "analyze", { status: "completed", result: { ok: true, data: {} } });
+	if (o.state !== "ok") throw new Error("state " + o.state);
+	eq(o.href, null, "href");
 });
 
 export function run(): number {
