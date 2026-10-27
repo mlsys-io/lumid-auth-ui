@@ -1372,7 +1372,7 @@ function PoolsPanel({ pools, onChanged, isSuper }: { pools: ClaudePool[]; onChan
 		if (next === onpremOn(p)) return;
 		if (!next && !window.confirm(
 			`Deny on-prem models to ${p.name}?\n\n` +
-			'Members will lose the self-hosted models (deepseek-v4-flash and the rest of the GB10 fleet). ' +
+			'Members will lose the self-hosted models (deepseek-v4.1-flash on the NUS H200s, qwen3.8-27b and the rest of the on-prem fleet). ' +
 			'Pooled Anthropic models are unaffected.\n\n' +
 			'Ordinary role=user members end up with NO usable model at all: their sonnet/haiku is rewritten ' +
 			'to deepseek before the model gate, and pooled Sonnet is admin-only. The server will name anyone ' +
@@ -1504,7 +1504,7 @@ function PoolsPanel({ pools, onChanged, isSuper }: { pools: ClaudePool[]; onChan
 							value={onpremOn(p) ? 'on' : 'off'}
 							onChange={(e) => setOnprem(p, e.target.value === 'on')}
 							disabled={busyId === p.id}
-							title="On-prem models (the GB10 fleet: deepseek-v4-flash et al). Costs nothing marginal; open by default."
+							title="On-prem models (deepseek-v4.1-flash on the NUS H200s, qwen3.8-27b et al). Costs nothing marginal; open by default."
 							className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-medium transition disabled:opacity-50 ${
 								onpremOn(p)
 									? 'bg-emerald-50 border-emerald-200 text-emerald-700'
@@ -1763,8 +1763,8 @@ function UserUsageSection({
 					<span
 						className="text-[10px] text-emerald-600/80"
 						title={
-							'What the GB10-served share WOULD have cost on OpenRouter, at the rate the overflow actually pays ' +
-							'($0.04/M in, $0.08/M out — the cheapest endpoint, not the top-level list price). ' +
+							'What the on-prem-served share WOULD have cost on OpenRouter. deepseek-v4.1-flash is booked at ' +
+							'$0.14/M in, $0.42/M out (a listed-price endpoint; the overflow provider is not yet observed). ' +
 							'The range is real: deepseek reports its whole prompt as input_tokens, so the high end charges every ' +
 							'token at full input price, while a buyer would get prefix-cache reads at 1/5. Our local hit rate is ~97%, ' +
 							'so the truth sits nearer the low end. This is avoided spend, never an invoice.'
