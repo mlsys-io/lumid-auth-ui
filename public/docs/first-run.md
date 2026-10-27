@@ -83,7 +83,7 @@ casual browsing.*
 
 You do not need a token, a scope, or a model choice. The platform mints a
 `claude:proxy` token for you behind the scenes on your first turn and keeps it
-fresh. Your model is **`deepseek-v4-flash`** and it is unlimited — it runs on
+fresh. Your model is **`deepseek-v4.1-flash`** and it is unlimited — it runs on
 our own GPUs, so there is no per-call cost to ration. The picker also offers
 **`qwen3.8-27b`**, also in-house (luyao1 RTX 5090) and open to everyone. The
 metered lanes (Claude) are held for admin accounts, so you cannot spend a

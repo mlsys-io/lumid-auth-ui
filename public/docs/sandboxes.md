@@ -90,7 +90,7 @@ that machine.** The site total is not the limit.
 |---|---|---|
 | **home** | 5 × RTX PRO 4000 Blackwell 24 GB | **1** — one per mini |
 | **office** | 3 × RTX 5080 16 GB (+ 2 × RTX 6000 Ada 48 GB, admin+) | **1** (admins: 2 — one box holds both Adas) |
-| **nus** (admin+) | 4 × H200 NVL 141 GB, all in one machine | **4** — see §11 |
+| **nus** (admin+) | 2 × H100 NVL 94 GB, in one machine (`h0`) | **2** — see §11 |
 
 So "5 GPUs free on home" and "at most 1 per sandbox" are both true. The form
 only offers what the site can actually place; asking for more is refused with
@@ -339,23 +339,23 @@ outside `/home`.
 
 ---
 
-## 11. NUS — the H200 cluster (admin+)
+## 11. NUS — the H100 site (admin+)
 
 A third site on the NUS campus InfiniBand segment. **Admin+ only**: the site is gated at the edge
 and the GPU quota for other users is zero.
 
 | | |
 |---|---|
-| **GPUs** | 4 × **H200 NVL 141 GB** in one machine (`s0`). Each card is rented on its own — one box can hold 1, 2 or all 4, and several boxes can share the machine. |
-| **Shared with researchers** | s0 is also used directly by campus researchers. A card is only offered when *nothing* is using it; when their jobs hold cards, the list says `busy outside Kubernetes` and those cards are skipped. |
-| **Multi-GPU** | The 4 cards have **no NVLink** — they talk over PCIe, and one of them sits on the other CPU socket. Measured NCCL all-reduce bus bandwidth: **~37 GB/s** across 2 cards, **~19 GB/s** across 4 (per card: ~740 bf16 TFLOPS, 111 GiB usable of 139). Fine for data-parallel training; tensor-parallel inference across cards will be communication-bound. |
-| **CPUs** | CPU sandboxes (1 / 2 / 4 / 8 cores) land on s0 or on `h0`. h0's 2 × H100 serve `lum.id/llm` permanently and are **never** rentable — a CPU box there cannot see them. |
+| **GPUs** | 2 × **H100 NVL 94 GB** in one machine (`h0`). Each card is rented on its own — one box can hold 1 or both, and two boxes can share the machine. **Changed 2026-10-27:** s0's 4 × H200 are no longer rentable — they serve `deepseek-v4.1-flash` for `lum.id/llm` — and h0's H100s, which used to serve, took their place. |
+| **Only empty cards** | A card is only offered when *nothing* is using it (read from the device itself, not just Kubernetes); a card held by anything else shows `busy outside Kubernetes` and is skipped. |
+| **Multi-GPU** | A 2-card box gets both H100s of one machine. Their interconnect has not been benchmarked for sandboxes yet — measure NCCL bandwidth before relying on tensor-parallel scaling. |
+| **CPUs** | CPU sandboxes (1 / 2 / 4 / 8 cores) land on `h0` (s0 is reserved for serving since 2026-10-27). A CPU box cannot see the GPUs. |
 | **Account** | **Automatic, and you can pick the name.** Before your first sandbox, choose your NUS user name in the create dialog (or `POST /sbx/nus/api/username {"name": "ada"}`). It is fixed once set. If you don't choose, you get one derived from your email (e.g. `alice@x.com` → `alice`, with a short suffix if taken). No name can be one of the campus logins on s0/h0. `GET /sbx/nus/api/username` shows your name and what you can still change. **Already have a login on s0/h0?** Use it instead: in the dialog, **Already have a login…? Use it instead** (or `POST /sbx/nus/api/username/claim {"name": "<login>"}`) gives you a one-line command. Run it on s0 or h0 while logged in as that login, then press **Verify** (`POST …/claim/verify`). |
-| **Home** | `/home/<you>` — 100 GiB on the NUS storage array, survives delete like everywhere else. **If your account is linked to an s0/h0 login** (claimed, or mapped by an operator), your box uses your **real host `/home`** instead: the one you see when you SSH to that host. s0 and h0 have *different* homes, so pick one with `"host": "h0"` / `"s0"` (dialog: **Home**; SSH: `ctl new NAME --host s0`). Such a box runs on that host **as your own login**, not root: no `apt install`, same as your normal login there. `"home": "volume"` (or `--home volume`) gives you the 100 GiB volume instead. |
+| **Home** | `/home/<you>` — 100 GiB on the NUS storage array, survives delete like everywhere else. **If your account is linked to an s0/h0 login** (claimed, or mapped by an operator), your box uses your **real host `/home`** instead: the one you see when you SSH to that host. s0 and h0 have *different* homes; boxes now run on h0, so this means your **h0** login's home (`"host": "h0"`, dialog: **Home**; SSH: `ctl new NAME --host h0`). An s0-home box (`--host s0`) is no longer schedulable. Such a box runs on that host **as your own login**, not root: no `apt install`, same as your normal login there. `"home": "volume"` (or `--home volume`) gives you the 100 GiB volume instead. |
 | **Models** | `/models` — the shared model store, **read-only**, mounted in every box. Load weights from here instead of downloading them again. |
 | **Scratch** | `/scratch` — fast local NVMe, per user, *not* backed up. |
 | **Images** | `harbor.lum.id/…` references work unchanged; the site pulls them from its own replica. NUS also has its own registry, **`registry.lum.id`** — see below. |
-| **Limits** | 4 GPUs and 8 sandboxes per admin; GPU boxes up to 128 cores / 512 GiB; 24h TTL. |
+| **Limits** | 2 GPUs (all the site has) and 8 sandboxes per admin; 24h TTL. |
 
 **Getting a shell — `ssh -p 31222 gw@lum.id`.** Same key rules as the other sites (§1): your lum.id
 key, pushed to NUS when you create a sandbox there or with `POST /sbx/nus/api/keys/sync`. The NUS
@@ -363,7 +363,7 @@ gateway speaks `ctl` rather than `sbx`:
 
 ```
 ctl ls                 your boxes at NUS
-ctl new NAME [--gpu N] [--cpu N] [--mem N] [--ttl H] [--host h0|s0] [--home volume]   create one (GPU: admins, see below)
+ctl new NAME [--gpu N] [--cpu N] [--mem N] [--ttl H] [--host h0] [--home volume]   create one (GPU: admins, see below)
 ctl enter NAME         shell into one
 ctl rm NAME            delete one
 ctl logs NAME          its output
@@ -376,7 +376,7 @@ Anything that is not `ctl …` runs in your **default** box if you have one, oth
 box at all**. `ssh -p 31222 gw@lum.id '<command>'`, `scp -O -P 31222` and
 `rsync -e 'ssh -p 31222'` work as on the other sites.
 
-**GPU boxes over SSH are for admins.** The H200s are admin-only, and an SSH session counts as admin
+**GPU boxes over SSH are for admins.** The H100s are admin-only, and an SSH session counts as admin
 when your NUS user belongs to an account on the site's admin list. Then `ctl new` takes `--gpu`
 directly; anyone else creates GPU boxes in the page or the API. Either way, enter it with `-t` —
 an interactive shell needs a TTY:

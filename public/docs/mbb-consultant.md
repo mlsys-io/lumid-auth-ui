@@ -37,7 +37,7 @@ browser.*
 ## Chat — nothing to configure
 
 The chat needs no token, scope or model choice: the platform mints what it
-needs on your first turn. Your model is **`deepseek-v4-flash`**, unlimited on
+needs on your first turn. Your model is **`deepseek-v4.1-flash`**, unlimited on
 our own GPUs; see [AI coding](/studio/docs/coding) for what that does and does
 not mean.
 

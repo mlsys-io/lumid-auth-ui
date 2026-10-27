@@ -525,7 +525,7 @@ is the §6 gap, not a model-size problem.
 - **Two model-id namespaces — do not mix them.** A Lumilake `LLMChatOp` runs as
   a FlowMesh **vLLM** task that loads weights from HuggingFace, so its
   `config.model` is a **HuggingFace id** (`Qwen/Qwen2.5-7B-Instruct`,
-  `Qwen/Qwen2.5-0.5B-Instruct`). Hand it a mesh alias like `deepseek-v4-flash`
+  `Qwen/Qwen2.5-0.5B-Instruct`). Hand it a mesh alias like `deepseek-v4.1-flash`
   and the task fails with `not a valid model identifier on huggingface.co`. The
   lumid-llm mesh (`/llm`, OpenAI-compatible) takes **gateway keys** instead, and
   `GET /llm/v1/models` is the live list — read it rather than trusting any

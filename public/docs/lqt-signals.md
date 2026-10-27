@@ -63,7 +63,7 @@ r = httpx.post(
     "https://lum.id/llm/v1/chat/completions",
     headers={"Authorization": f"Bearer {os.environ['LUMID_PAT']}"},
     json={
-        "model": "deepseek-v4-flash",
+        "model": "deepseek-v4.1-flash",
         "messages": [
             {"role": "system",
              "content": "Score how much this post moves the market toward YES. "
