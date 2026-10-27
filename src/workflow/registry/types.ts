@@ -31,7 +31,8 @@ export type FieldType =
 	| "code"      // Monaco — prompts, lambda bodies, SQL, templates
 	| "keyValue"  // Record<string, string> — args, env, format_kwargs
 	| "list"      // string[] — inputs, symbols, skills
-	| "resource"; // async options: models, workers, datasets, skills
+	| "resource"  // async options: models, workers, datasets, skills
+	| "blobs";    // {uri, mountPath}[] — uploaded files (lumid-data /me/blobs)
 
 export type Params = Record<string, unknown>;
 
