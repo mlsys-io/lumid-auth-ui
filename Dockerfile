@@ -36,7 +36,7 @@ RUN apk add --no-cache brotli && \
 # Brotli-enabled nginx (ngx_brotli built in) so brotli_static can serve the .br
 # files; falls back to gzip_static, then on-the-fly. Same /usr/share/nginx/html
 # + conf.d layout as the stock image.
-FROM --platform=linux/amd64 fholzer/nginx-brotli:v1.26.2
+FROM --platform=linux/amd64 fholzer/nginx-brotli:v1.28.3
 ARG BASE_PATH=/auth/
 ENV BASE_PATH=$BASE_PATH
 COPY --from=builder /app/dist /usr/share/nginx/html
