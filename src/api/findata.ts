@@ -365,14 +365,35 @@ export const findata = {
   newsStats: () => call<NewsCategoryStats>("/news/stats"),
 
   // Prediction markets (Polymarket + Kalshi, /prediction-markets/*)
-  pmEvents: (params: { q?: string; status?: "open" | "closed" | "all"; limit?: number } = {}) => {
+  pmEvents: (params: { q?: string; status?: "open" | "closed" | "all"; category?: string; limit?: number; offset?: number } = {}) => {
     const qs = new URLSearchParams();
     // Server bug: ?status=open without q= returns 500. Always send q= so the
     // server's query builder has the required param. kv.run bug filed 2026-05-30.
     qs.set("q", params.q ?? "");
     if (params.status) qs.set("status", params.status);
+    // A slug from pmCategories() or any raw Polymarket tag slug. Never send it
+    // empty: an empty value is a present filter that matches nothing.
+    if (params.category) qs.set("category", params.category);
     qs.set("limit", String(params.limit ?? 50));
+    if (params.offset) qs.set("offset", String(params.offset));
     return call<PmEventRow[]>(`/prediction-markets/events?${qs}`);
+  },
+  // The category vocabulary shared by both venues (findata ddl/31).
+  pmCategories: () => call<PmCategoryRow[]>("/prediction-markets/categories"),
+  // Kalshi categorises SERIES, not markets — browse series, then drill in.
+  pmKalshiSeries: (params: { category?: string; q?: string; limit?: number; offset?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.category) qs.set("category", params.category);
+    if (params.q) qs.set("q", params.q);
+    qs.set("limit", String(params.limit ?? 100));
+    if (params.offset) qs.set("offset", String(params.offset));
+    return call<PmKalshiSeriesRow[]>(`/prediction-markets/kalshi/series?${qs}`);
+  },
+  pmKalshiSeriesMarkets: (ticker: string, params: { status?: "open" | "closed" | "all"; limit?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.status) qs.set("status", params.status);
+    qs.set("limit", String(params.limit ?? 100));
+    return call<PmKalshiMarketRow[]>(`/prediction-markets/kalshi/series/${encodeURIComponent(ticker)}/markets?${qs}`);
   },
   pmSearch: (q: string, params: { venue?: "polymarket" | "kalshi"; status?: "open" | "closed" | "all"; limit?: number } = {}) => {
     const qs = new URLSearchParams({ q });
@@ -751,12 +772,45 @@ export interface PmEventRow {
   event_id: string;
   slug: string;
   title: string;
+  // Legacy Polymarket field — '' on ~99% of rows. Use `categories`.
   category: string;
+  // Canonical category slugs (see PmCategoryRow); null when none match.
+  categories?: string[] | null;
   total_volume: number | null;
   active: boolean | null;
   closed: boolean | null;
   start_date: string | null;
   end_date: string | null;
+}
+
+export interface PmCategoryRow {
+  slug: string;          // what ?category= takes
+  label: string;
+  kalshi: string;        // Kalshi's own category text
+  polymarket: string[];  // Polymarket tag slugs that map to it
+}
+
+export interface PmKalshiSeriesRow {
+  ticker: string;
+  title: string;
+  category: string | null;
+  category_slug: string | null;
+  frequency: string | null;
+}
+
+export interface PmKalshiMarketRow {
+  ticker: string;
+  event_ticker: string;
+  title: string;
+  status: string;
+  yes_sub_title: string | null;
+  yes_bid: number | null;
+  yes_ask: number | null;
+  last_price: number | null;
+  volume_24h: number | null;
+  close_time: string | null;
+  category: string | null;
+  category_slug: string | null;
 }
 
 export interface PmMarketRow {

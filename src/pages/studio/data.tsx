@@ -1,7 +1,8 @@
 // /studio/data — a first-party SYSTEM app (like Library), not a marketplace
-// install. One quiet "Data" destination with three tabs:
+// install. One quiet "Data" destination with four tabs:
 //   • Catalog  — the federated data-lake viewer (schemas/tables/samples/
 //                lineage/freshness across findata, lumid-data, lqt-data).
+//   • Prediction markets — Polymarket + Kalshi browsed by category.
 //   • Explorer — the generic data-app endpoint browser (point at any
 //                allowlisted data-app, run its declared endpoints).
 //   • Query    — ad-hoc SELECT through the same path chat's data_query uses.
@@ -22,7 +23,7 @@
 // asking about stays on screen while you ask.
 
 import { lazy, Suspense, useState } from "react";
-import { Database, TableProperties, Terminal } from "lucide-react";
+import { Database, TableProperties, Terminal, TrendingUp } from "lucide-react";
 import ChatRail from "@/components/ChatRail";
 import { DATA_KEY } from "@/components/StudioChat";
 import { cn } from "@/lib/utils";
@@ -30,10 +31,14 @@ import { cn } from "@/lib/utils";
 const DataLakeViewer = lazy(() => import("@/components/app-surface/DataLakeViewer"));
 const DataAppBrowser = lazy(() => import("@/components/app-surface/DataAppBrowser"));
 const SqlConsole = lazy(() => import("@/components/app-surface/SqlConsole"));
+const PredictionMarketsBrowser = lazy(() => import("@/components/app-surface/PredictionMarketsBrowser"));
 
-type Tab = "catalog" | "explorer" | "query";
+type Tab = "catalog" | "markets" | "explorer" | "query";
 const TABS: { id: Tab; label: string; icon: typeof Database }[] = [
 	{ id: "catalog", label: "Catalog", icon: Database },
+	// Polymarket + Kalshi by category — a dataset view, so it sits with Catalog
+	// rather than with the raw routes.
+	{ id: "markets", label: "Prediction markets", icon: TrendingUp },
 	// Query runs ad-hoc SELECT through the same path chat's data_query uses.
 	// After Catalog on purpose: Catalog is how you find out what to query.
 	{ id: "query", label: "Query", icon: Terminal },
@@ -84,6 +89,9 @@ export default function StudioData() {
 						    each keeps its loaded catalog + the session cache stays warm. */}
 						<div className={tab === "catalog" ? "h-full" : "hidden"}>
 							{seen.has("catalog") && <DataLakeViewer config={{ title: "Data Warehouse" }} />}
+						</div>
+						<div className={tab === "markets" ? "h-full" : "hidden"}>
+							{seen.has("markets") && <PredictionMarketsBrowser />}
 						</div>
 						<div className={tab === "explorer" ? "h-full" : "hidden"}>
 							{seen.has("explorer") && <DataAppBrowser config={{ data_app: "findata", data_app_label: "FinData" }} />}
