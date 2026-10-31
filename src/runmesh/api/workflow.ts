@@ -76,8 +76,9 @@ export const getWorkflowDetail = (workflowId: number | string) =>
 /**
  * 创建应用/工作流
  */
+// Returns the whole created entity, not a scalar id (`R.ok(insertWorkflow(bo))`).
 export const createWorkflow = (data: Partial<WorkflowItem>) =>
-  http.post<number>('/runmesh/workflows', data);
+  http.post<WorkflowItem>('/runmesh/workflows', data);
 
 /**
  * 更新应用/工作流

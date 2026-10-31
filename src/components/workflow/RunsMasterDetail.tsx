@@ -86,7 +86,7 @@ export function RunStatusChip({ info, className, compact }: { info: RunStatusInf
 export type RunRow = MeCycleListItem & { trigger?: string };
 
 export function RunsTable({
-	app, loop, cycles, scores, metricName, selectedId, outcome, arm, sortAsc,
+	app, loop, cycles, scores, metricName, scoresError, scoresLoading, selectedId, outcome, arm, sortAsc,
 	onFilter, carryQuery,
 }: {
 	app: string; loop: string;
@@ -94,6 +94,10 @@ export function RunsTable({
 	/** cycle-dir id → the run's metric value (trajectory score / key_metric). */
 	scores: Record<string, number>;
 	metricName?: string;
+	/** Why the score map is unavailable — set when the trajectory fetch FAILED. */
+	scoresError?: string | null;
+	/** The score map is still in flight (trajectory not back yet). */
+	scoresLoading?: boolean;
 	selectedId: string | null;
 	outcome: RunStatus | "";
 	arm: string;
@@ -118,6 +122,47 @@ export function RunsTable({
 		if (typeof km === "number") return km;
 		if (km && typeof km === "object" && typeof km.value === "number") return km.value;
 		return undefined;
+	};
+
+	// The Metric cell used one label — `no metric` — for three different
+	// situations, and only one of them means the run was not measured:
+	//
+	//   · the score map did not load  → the platform may well have a value
+	//   · the score map has no entry  → the run genuinely was not scored
+	//   · it loaded and has the value → render it
+	//
+	// Reporting the first as the second is what made a working core test read
+	// as unmeasured. Each state now names itself, and every one carries the
+	// declared metric name in its tooltip.
+	const metricCell = (c: RunRow, mv: number | undefined) => {
+		// The row's own record outranks the loop-level name: when the run
+		// stored `primary_metric`, that name is the one it was measured on.
+		const km = c.key_metric;
+		const rowName = km && typeof km === "object" && typeof km.name === "string" ? km.name : undefined;
+		const named = rowName || metricName;
+		const namedHint = named ? ` (${named})` : "";
+		if (mv != null) {
+			return (
+				<span className="text-slate-800 font-medium" title={named ? `${named}: ${fmtNum(mv)}` : undefined}>
+					{fmtNum(mv)}
+				</span>
+			);
+		}
+		if (scoresLoading) {
+			return <span className="text-[10px] text-slate-300" title={`Reading the run tree for the declared metric${namedHint}…`}>…</span>;
+		}
+		if (scoresError) {
+			return (
+				<span className="text-[10px] text-amber-600" title={`Couldn't load the run tree — ${scoresError}. This does not mean the run went unmeasured; reload to retry.`}>
+					unavailable
+				</span>
+			);
+		}
+		return (
+			<span className="text-[10px] text-slate-400" title={named ? `This run recorded no ${named} value.` : "This run recorded no metric value."}>
+				not scored
+			</span>
+		);
 	};
 
 	return (
@@ -189,7 +234,7 @@ export function RunsTable({
 										<td className="px-1 py-1.5"><RunStatusChip info={cycleStatus(c)} compact /></td>
 										<td className="px-1 py-1.5 text-right tabular-nums text-slate-600 whitespace-nowrap">{fmtDur(c.duration_s)}</td>
 										<td className="px-1 py-1.5 text-right tabular-nums whitespace-nowrap">
-											{mv != null ? <span className="text-slate-800 font-medium">{fmtNum(mv)}</span> : <span className="text-[10px] text-slate-400">no metric</span>}
+											{metricCell(c, mv)}
 										</td>
 										<td className="px-1 py-1.5 text-slate-600 font-mono" title={c.branch_label || undefined}><span className="block truncate max-w-[64px]">{c.branch_label || ""}</span></td>
 										{hasTrigger && <td className="px-1 py-1.5 text-slate-500">{c.trigger || ""}</td>}

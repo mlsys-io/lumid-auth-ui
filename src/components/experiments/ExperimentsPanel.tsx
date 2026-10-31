@@ -354,8 +354,14 @@ function VerdictChip({ e }: { e: MeExperiment }) {
 	// not running.
 	// A metric that matches nothing is not "no results yet" — that phrasing
 	// reads as patience being the fix, and it is not.
+	//
+	// And a zero with a reason is not always a MISMATCH: when the loop ran,
+	// succeeded, and recorded no row at all (backend `unrecorded`), the
+	// declared name is right and patience is still not the fix. Both are
+	// amber and both carry the reason on hover; only the label differs, so
+	// the badge never claims a diagnosis the server did not make.
 	if (!e.n_results && e.n_zero_reason)
-		return <span className="px-2 py-0.5 rounded-full text-[11px] border bg-amber-50 text-amber-800 border-amber-200 font-medium" title={e.n_zero_reason}>metric mismatch</span>;
+		return <span className="px-2 py-0.5 rounded-full text-[11px] border bg-amber-50 text-amber-800 border-amber-200 font-medium" title={e.n_zero_reason}>{e.unrecorded ? "measures it, records nothing" : "metric mismatch"}</span>;
 	if (!e.n_results)
 		return <span className="px-2 py-0.5 rounded-full text-[11px] border bg-slate-50 text-slate-700 border-slate-200">no results yet</span>;
 	return <span className="px-2 py-0.5 rounded-full text-[11px] border bg-violet-50 text-violet-700 border-violet-200">collecting</span>;
@@ -831,7 +837,9 @@ export function ExperimentCard({ app, e, showApp = false, onChanged }: { app: st
 						   reading results.jsonl by hand. */
 						e.n_zero_reason ? (
 							<div className="text-xs rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900">
-								<div className="font-medium">No results, and waiting will not help.</div>
+								<div className="font-medium">
+									{e.unrecorded ? "The loop ran and measured it, but recorded no result." : "No results, and waiting will not help."}
+								</div>
 								<div className="mt-0.5">{e.n_zero_reason}</div>
 								{e.metric_keys_seen?.length ? (
 									<div className="mt-1.5 flex flex-wrap items-center gap-1">
