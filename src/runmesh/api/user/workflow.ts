@@ -75,9 +75,15 @@ export const getWorkflowDetail = (workflowId: number | string) =>
 
 /**
  * 创建应用/工作流
+ *
+ * The response is the whole created entity, not a scalar id —
+ * `RunmeshWorkflowController.add()` returns `R.ok(insertWorkflow(bo))` and
+ * `unwrap()` hands back that object. Typing it as `number` made the compiler
+ * accept an id-shaped use of an entity, which is how `String(id)` reached the
+ * URL as `[object Object]`. Callers must read `.workflowId`.
  */
 export const createWorkflow = (data: Partial<WorkflowItem>) =>
-  http.post<number>('/runmesh/workflows', data);
+  http.post<WorkflowItem>('/runmesh/workflows', data);
 
 /**
  * 更新应用/工作流

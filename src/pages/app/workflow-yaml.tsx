@@ -84,16 +84,25 @@ export default function AppWorkflowYaml() {
 		// text as definitionJson (the column is generic, not JSON-enforced).
 		setBusy(true);
 		try {
-			const id = await createWorkflow({
+			const created = await createWorkflow({
 				name: name.trim(),
 				description: description.trim() || undefined,
 				definitionJson: body,
 			});
+			// The POST returns the whole created entity, not a scalar id
+			// (`R.ok(insertWorkflow(bo))` — axios's unwrap hands back that
+			// object). String() on it used to put `[object Object]` in the URL,
+			// which then matched no row on the next page and left Submit
+			// disabled, because the page selects by exact id.
+			const id = created?.workflowId ?? created?.id ?? '';
+			if (!id) {
+				throw new Error('Saved, but the server returned no workflow id.');
+			}
 			// Land on the saved workflow itself. This used to go to /dashboard —
 			// a redirect to /studio — so a save looked like it went nowhere, and
 			// the draft was listed on no page (/studio/workflows/market shows only the
 			// published market).
-			nav(`/studio/workflows/mine?id=${encodeURIComponent(String(id ?? ''))}&saved=1`);
+			nav(`/studio/workflows/mine?id=${encodeURIComponent(String(id))}&saved=1`);
 		} catch (e: unknown) {
 			setErr(e instanceof Error ? e.message : 'save failed');
 		} finally {
