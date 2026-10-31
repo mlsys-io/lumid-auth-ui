@@ -1277,6 +1277,12 @@ export interface MeExperiment {
   // metric name matches nothing the loop emits" — the shape that hid
   // real_tape_rate for 19 runs across three tenants.
   metric_keys_seen?: string[]; n_zero_reason?: string | null;
+  // The zero is neither "never ran" nor "metric mismatch": a feeding loop ran
+  // and SUCCEEDED, the state was recomputed after it, and the ledger is still
+  // empty because the loop never calls experiments.record_result. Its own flag
+  // because the badge labels n_zero_reason "metric mismatch" by default, and
+  // here the declared name is right — the loop just does not record.
+  unrecorded?: boolean;
   best_variant?: string | null; baseline_value?: number | null;
   delta?: number | null; delta_pp?: number | null;
   criteria_met: boolean; criteria_reason?: string; verdict?: string;
