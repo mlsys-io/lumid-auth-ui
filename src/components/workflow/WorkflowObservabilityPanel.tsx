@@ -574,9 +574,21 @@ export default function WorkflowObservabilityPanel({
 	// Lineage tab has anything to show (a loop only branches when some run has
 	// more than one child). One shared fetch (fetchTrajectory dedupes in flight).
 	const [traj, setTraj] = useState<Trajectory | null>(null);
+	// Why the run tree is missing, when it is. Collapsing the failure into
+	// `traj = null` made "the fetch failed" and "this loop has no scored runs"
+	// render identically — the Runs table said `no metric` for both, which
+	// reads as "the run was not measured" even for a run the backend had
+	// already scored. Keep the reason so the table can name it.
+	const [trajError, setTrajError] = useState<string | null>(null);
 	const loadTraj = useCallback(() => {
 		let live = true;
-		fetchTrajectory(app, loop).then((t) => { if (live) setTraj(t); }).catch(() => { if (live) setTraj(null); });
+		fetchTrajectory(app, loop)
+			.then((t) => { if (live) { setTraj(t); setTrajError(null); } })
+			.catch((e: unknown) => {
+				if (!live) return;
+				setTraj(null);
+				setTrajError(e instanceof Error && e.message ? e.message : "couldn't load the run tree");
+			});
 		return () => { live = false; };
 	}, [app, loop]);
 	useEffect(() => loadTraj(), [loadTraj]);
@@ -906,6 +918,7 @@ export default function WorkflowObservabilityPanel({
 				    Under wrap-reverse the cross axis flips, so items-end aligns tops. */}
 					<div className="flex-[0_0_320px] min-w-0 max-w-full 2xl:flex-[0_0_400px] flex flex-col" style={{ height: Math.min(fillH, 40 + 38 * Math.max(3, (cycleList?.length ?? 3)) + 40) }}>
 						<RunsTable app={app} loop={loop} cycles={cycleList} scores={runScores} metricName={traj?.metric || wf.metric}
+							scoresError={trajError} scoresLoading={traj === null && trajError === null}
 							selectedId={overlayTs} outcome={qOutcome} arm={qArm} sortAsc={qSortAsc}
 							onFilter={(p) => patchQuery(p)} carryQuery={carryQuery} />
 					</div>
