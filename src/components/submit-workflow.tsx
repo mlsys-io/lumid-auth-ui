@@ -25,7 +25,7 @@ import {
 	getWorkflowList,
 	type WorkflowItem,
 } from '@/runmesh/api/user/workflow';
-import { createSchedule } from '@/runmesh/api/user/scheduleApi';
+import { activateSchedule, createSchedule } from '@/runmesh/api/user/scheduleApi';
 
 type Target = 'runmesh';
 
@@ -59,9 +59,14 @@ interface Props {
  * Pick-an-existing-workflow + configure-params + submit to Runmesh.
  *
  * Runmesh has no first-party run-now endpoint, so submission is a
- * one-shot schedule (maxExecutions=1, intervalSeconds=1) that the
- * scheduler picks up immediately. The Lumilake target lives in
- * `submit-lumilake-job.tsx` and consumes the n8n JSON directly.
+ * one-shot schedule (maxExecutions=1, intervalSeconds=1). A create only
+ * persists status=CREATED and the scheduler loads ACTIVE rows exclusively,
+ * so the second call is what actually runs it: without the activate, the
+ * row sits CREATED with next_trigger_at NULL forever. Every "Run workflow"
+ * submit between 2026-10-06 and 2026-10-30 left exactly that — 21 of 21
+ * schedules in runmesh_workflow_schedule, none of which ever fired. The
+ * Lumilake target lives in `submit-lumilake-job.tsx` and consumes the n8n
+ * JSON directly.
  */
 export function SubmitWorkflow({ target, title, onSuccessPath }: Props) {
 	const nav = useNavigate();
@@ -128,13 +133,33 @@ export function SubmitWorkflow({ target, title, onSuccessPath }: Props) {
 		}
 		setBusy(true);
 		try {
-			await createSchedule({
+			const sched = await createSchedule({
 				workflowId: String(selected.workflowId || selected.id),
 				scheduleName: runName || undefined,
 				intervalSeconds: 1,
 				maxExecutions: 1,
 				remark: `one-shot submit · priority=${priority}`,
 			});
+			// Create leaves the row CREATED; only activate puts it in the
+			// scheduler's ACTIVE query and sets next_trigger_at. The id is
+			// declared number here but Runmesh serializes Longs past 2^53 as
+			// strings (BigNumberSerializer), so it is usually a string at
+			// runtime — the template-literal URL is correct either way.
+			const scheduleId = sched?.scheduleId;
+			if (scheduleId == null) {
+				setErr('The schedule was created but Runmesh returned no id for it; check Schedules.');
+				return;
+			}
+			try {
+				await activateSchedule(scheduleId);
+			} catch (e: unknown) {
+				const msg = e instanceof Error ? e.message : String(e);
+				setErr(
+					`Schedule #${scheduleId} was created but could not be started (${msg}). ` +
+						`Start it from Schedules to run it.`,
+				);
+				return;
+			}
 			nav(onSuccessPath || `/dashboard/jobs/${target}`);
 		} catch (e: unknown) {
 			const msg = e instanceof Error ? e.message : 'submission failed';
