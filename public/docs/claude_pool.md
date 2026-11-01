@@ -40,7 +40,7 @@ no install, no PAT setup. Pick a **(Code)** model from the model picker:
 | Model | Who | Backed by |
 |---|---|---|
 | DeepSeek-V4.1-Flash (Lumid GPU) | everyone | In-house 4× H200 NVL (NUS) — **default**, no pool quota |
-| Qwen3.8-27B (Code · Lumid GPU) | everyone | In-house luyao1 RTX 5090 (tier 0) + gmk + n5-max (tier 1) — no pool quota |
+| Qwen3.8-27B (Code · Lumid GPU) | everyone | In-house luyao1 2× RTX 5090 (tier 0) + gmk + n5-max (tier 1) — no pool quota |
 | Claude Sonnet (Code) | admin+ | Account pool (your 4h/7d quota) |
 | Claude Opus (Code) | admin+ | Account pool |
 | Claude Fable 5 (Code) | super_admin | Account pool |
@@ -80,7 +80,7 @@ the same per-user [session recording](#session-recording) toggle — see below.)
 > Not a revival of Qwen3.6-35B: `qwen3.6-27b`/`qwen3.6-35b-a3b` and `glm-5.3-flash`
 > were purged fleet-wide the same day (`qwen3.6-27b` was the source of a real
 > OpenRouter cost-abuse incident — 102 of 147 requests in one window, from `user`
-> accounts). Qwen3.8-27B runs on luyao1's RTX 5090 (tier 0) with two tier-1
+> accounts). Qwen3.8-27B runs on luyao1's two RTX 5090s (tier 0) with two tier-1
 > replicas on the home segment, `SELF_HOSTED_MODELS`
 > on claude-proxy, and is open to every role — same footing as deepseek. See
 > [Non-Anthropic models](#non-anthropic-models-deepseek-and-qwen38-only).
@@ -219,7 +219,7 @@ switch to an allowed model (e.g. `--model deepseek-v4.1-flash`) or ask an admin
 to raise your role. Unlisted Claude-base models are available to everyone.
 **Two** non-Anthropic models are enabled, both in-house and open to **all
 roles** — `deepseek-v4.1-flash` (default, NUS 4× H200) and
-`qwen3.8-27b` (luyao1 tier 0 + gmk + n5-max tier 1). There are no admin-only
+`qwen3.8-27b` (luyao1 2× RTX 5090 tier 0 + gmk + n5-max tier 1). There are no admin-only
 vendor models (Kimi K3 / GLM-5.3-Flash / generic OpenRouter, and every
 `qwen3.6-*` id, were disabled — GLM and qwen3.6 as of 2026-09-01).
 
@@ -240,21 +240,22 @@ admin, super_admin) via the `lum.id/llm` relay, same PAT as the Claude pool:
 | Model flag | Backing | Context | Price (input/output per M tok) |
 |---|---|---|---|
 | `--model deepseek-v4.1-flash` | **In-house 4× H200 NVL** (NUS, vLLM tensor-parallel) | 1M | **free** — owned GPUs |
-| `--model qwen3.8-27b` | **In-house luyao1 RTX 5090** (tier 0) + gmk + n5-max (tier 1) | 376K (tier 0) / 214K (tier 1) | **free** — owned GPUs |
+| `--model qwen3.8-27b` | **In-house luyao1 2× RTX 5090** (tier 0) + gmk + n5-max (tier 1) | 214K | **free** — owned GPUs |
 
 > **OpenRouter is a bounded overflow, not the primary path, for either model.**
 > `deepseek-v4.1-flash` is served on our own **four H200 NVL GPUs** (one
 > tensor-parallel server at NUS) first — free at the margin, no metering, no data
 > leaving the tailnet on the common path. `qwen3.8-27b`
-> is served on luyao1's RTX 5090 first (tier 0), with two tier-1 replicas on
-> the home segment (gmk, a Ryzen AI MAX+ 395; and n5-max, the data-primary
-> box). Requests only spill to OpenRouter
+> is served on luyao1's two RTX 5090s first (tier 0, one replica per card), with two
+> tier-1 replicas on the home segment (gmk, a Ryzen AI MAX+ 395; and n5-max, the
+> data-primary box). Requests only spill to OpenRouter
 > (the matching OpenRouter DeepSeek-V4.1-Flash / `qwen/qwen3.8-27b`) when the
 > in-house backend is at its concurrency roof (24 concurrent requests for
 > deepseek) or a request runs long enough to trigger the hedge — that overflow is
-> metered. **1M context for deepseek**, **376K for qwen3.8-27b on
-> luyao1** (measured VRAM ceiling for 8 real parallel slots on a single 32GB
-> card, stress-tested clean); qwen's tier-1 replicas serve 214K (gmk/n5-max). Deepseek is the one the
+> metered. **1M context for deepseek.** Every `qwen3.8-27b` backend serves
+> **214K**, verified on all four, and the parity is deliberate: one id with two
+> different limits would let a request succeed or be rejected depending on which
+> replica the pool picked. Deepseek is the one the
 > Studio chatbox uses by default, and the one you should set as
 > `ANTHROPIC_MODEL`.
 

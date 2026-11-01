@@ -490,9 +490,9 @@ function fmtCount(n: number): string {
 	return String(n);
 }
 
-// OnPremGpuPanel — live tok/s + QPS per on-prem GPU backend (h100/GX10/s0
-// CPU, all serving deepseek-v4-flash), rolling window computed by lumid-llm
-// itself off its existing 5s /metrics scrape.
+// OnPremGpuPanel — live tok/s + QPS per on-prem GPU backend (NUS s0 serving
+// deepseek-v4.1-flash, luyao1/gmk/n5-max serving qwen3.8-27b), rolling window
+// computed by lumid-llm itself off its existing 5s /metrics scrape.
 //
 // Self-contained (own fetch, own error state) for the same reason as
 // FieldBoxPanel below: a lumid-llm hiccup must blank only this strip, not the
@@ -1951,7 +1951,7 @@ function UserUsageSection({
 									    reader. The window-scoped unit figure follows, tagged with how far
 									    into its window it is, because those two numbers can differ by
 									    several times over and the difference is invisible otherwise. */}
-									{/* POOL usage: claude-* only. deepseek runs on our own GB10 and the
+									{/* POOL usage: claude-* only. deepseek runs on our own H200s and the
 									    cap exempts it, so folding it in overstated what the shared pool
 									    bore — 26% of one user's headline on 2026-08-24. Non-pool volume
 									    is still visible, in the provider chips to the left. */}

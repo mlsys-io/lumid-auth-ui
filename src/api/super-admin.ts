@@ -452,7 +452,7 @@ export interface ClaudeUserUsageResp {
 	// 2026-08-11 — a hardcoded label silently lies the next time it moves.
 	// The five_hour_* keys keep their historical names for wire compatibility.
 	short_window_label?: string;
-	// ON-PREM SAVINGS — the GB10-served share valued at what it WOULD have cost
+	// ON-PREM SAVINGS — the in-house-served share valued at what it WOULD have cost
 	// to buy. Not new measurement: usage_events already prices non-Anthropic
 	// models at their metered rate rather than at zero, and the provider split
 	// separates the local id from the overflow id.
@@ -493,8 +493,8 @@ export async function fetchOpenRouterBalance(): Promise<OpenRouterBalanceResp> {
 }
 
 // ── On-prem GPU throughput ─────────────────────────────────────────────
-// Live tok/s + QPS per on-prem GPU backend (h100/GX10/s0 CPU + luyao1,
-// deepseek-v4-flash and qwen3.8-27b), computed over a rolling window by
+// Live tok/s + QPS per on-prem GPU backend (NUS s0 for deepseek-v4.1-flash,
+// luyao1/gmk/n5-max for qwen3.8-27b), computed over a rolling window by
 // lumid-llm itself (reuses its existing 5s /metrics scrape, no new upstream
 // poll) and passed through here with a short server-side cache. tok_s/qps
 // are null until the backend has been sampled twice in the window ("warming
@@ -674,7 +674,7 @@ export interface ClaudePool {
 	owner_sub?: string;
 	owner_email?: string;
 	conservative_ceiling: number;
-	// May this pool's members reach the SELF-HOSTED models (the GB10 fleet
+	// May this pool's members reach the SELF-HOSTED models (the in-house fleet
 	// behind lumid-llm)? Orthogonal to mode/ceiling, which govern how pooled
 	// ANTHROPIC accounts are chosen. Defaults true — on-prem is open to every
 	// role today, so anything else would be a silent revocation on migration.

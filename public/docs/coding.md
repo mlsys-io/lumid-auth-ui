@@ -5,9 +5,9 @@ pool, so neither spends Anthropic quota.
 
 | | `deepseek-v4.1-flash` | `qwen3.8-27b` |
 |---|---|---|
-| runs on | our 4× H200 NVL server (NUS) | luyao1 RTX 5090 (tier 0) + home replicas (tier 1) |
+| runs on | our 4× H200 NVL server (NUS) | luyao1 2× RTX 5090 (tier 0) + home replicas (tier 1) |
 | daily budget | **unlimited** | no pool quota |
-| context | **1M** (1,048,576 tokens) | 376K (tier 0) / 214K (tier 1) |
+| context | **1M** (1,048,576 tokens) | 214K |
 | speed | ~100 tok/s per stream, even at 1M context | fast on short prompts |
 
 **`deepseek-v4.1-flash` is unlimited.** No token budget, no rolling window, no
@@ -15,7 +15,8 @@ waiting for a slot. It runs on our own H200s, so it costs nothing at the margin.
 It is the default — use it unless you specifically want a second opinion.
 
 **`qwen3.8-27b`** is the second in-house model: a smaller dense model on our own
-RTX 5090s. Pick it for a different model's take on a problem.
+RTX 5090s. Pick it for a different model's take on a problem. Its context is
+**214K**, not 1M — keep whole-repo-context work on deepseek.
 
 The Claude account pool is **admin+ only**. If you find a doc, a dashboard or a
 runbook talking about 4h/7d quota windows, per-user token caps or homing onto
