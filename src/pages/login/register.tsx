@@ -253,7 +253,7 @@ export const Register = memo(function Register({ onSwitchToLogin, onRegisterSucc
 	const { categories } = passwordValidation.getCategories(password);
 	const isPasswordValid = passwordValidation.validate(password).valid;
 	const isFormValid =
-		username && email && password && confirmPassword && verificationCode && isPasswordValid && invitationCode;
+		username && email && password && confirmPassword && verificationCode && isPasswordValid; // invitation code is optional
 
 	return (
 		<div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
@@ -416,13 +416,14 @@ export const Register = memo(function Register({ onSwitchToLogin, onRegisterSucc
 											className="text-sm font-medium sm:w-32 sm:shrink-0 sm:text-right"
 										>
 											Invitation Code
+											<span className="ml-1 font-normal text-muted-foreground">(optional)</span>
 										</Label>
 										<div className="relative flex-1">
 											<Ticket className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
 											<Input
 												id="invitation-code"
 												type="text"
-												placeholder="Enter invitation code"
+												placeholder="Optional — only if you were given one"
 												value={invitationCode}
 												onChange={(e) => setInvitationCode(e.target.value)}
 												className="pl-10 h-9"

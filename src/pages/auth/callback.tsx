@@ -95,14 +95,8 @@ export function AuthCallback() {
 			// backend, so the `PUT /api/v1/user/invitation-code` request
 			// the dialog issues authenticates via cookie. We just
 			// haven't told the AuthProvider about the user yet.
-			if (!u.invitation_code) {
-				setPendingUserInfo(u);
-				setShowInvitationDialog(true);
-				// Stash the token so handleInvitationCodeSuccess can
-				// fall back to it if the backend echoes a different one.
-				sessionStorage.setItem('pending_oauth_token', response.token);
-				return; // keep status=loading until the dialog resolves
-			}
+			// Registration is open (2026-11-01): a fresh Google account signs in
+			// without being asked for an invitation code (the dialog is no longer popped).
 
 			login(response.token, u);
 			setStatus('success');
