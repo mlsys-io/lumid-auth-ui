@@ -286,8 +286,10 @@ function RegisterPage() {
   const navigate = useNavigate();
   return (
     <Register
-      onSwitchToLogin={() => navigate("/auth/login")}
-      onRegisterSuccess={() => navigate("/auth/login")}
+      // Keep ?return_to across login <-> register: a new person who arrived from an
+      // OAuth client (e.g. runmesh.ai) must land back there after signing up.
+      onSwitchToLogin={() => navigate(`/auth/login${window.location.search}`)}
+      onRegisterSuccess={() => navigate(`/auth/login${window.location.search}`)}
     />
   );
 }

@@ -281,7 +281,7 @@ export function Login({ onLogin }: LoginProps) {
 						type="button"
 						variant="link"
 						className="p-0 h-auto font-semibold cursor-pointer"
-						onClick={() => navigate('/auth/register')}
+						onClick={() => navigate(`/auth/register${window.location.search}`)}
 						disabled={loading}
 					>
 						Sign Up

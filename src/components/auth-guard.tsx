@@ -2,55 +2,23 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import React from 'react';
 import BrandLoader from './BrandLoader';
+import { isOAuthContinuation, isSafeReturnTo } from '../lib/return-to';
+
+// Re-exported: callback.tsx, redeem-invite.tsx and connect-google.tsx import them from here.
+export { isOAuthContinuation, isSafeReturnTo };
 
 interface AuthGuardProps {
 	children: React.ReactNode;
 	requireAuth?: boolean;
 }
 
-/** Whitelist for ?return_to=... values.
- *
- * We previously allowed any `http(s)://` URL, which is an open-redirect
- * vector: an attacker can craft `/auth/login?return_to=https://evil/`
- * and use it in a phishing link. Only same-origin *paths* under our
- * known product surfaces are honored; external URLs and
- * protocol-relative (`//evil.com`) URLs are rejected.
- *
- * Kept loose enough for legitimate cross-domain bounces via
- * `window.location.replace` back to lum.id's own subpaths — but not to
- * any arbitrary host. Export so `pages/auth/callback.tsx` can share
- * the exact same check.
- */
-export function isSafeReturnTo(raw: string | null | undefined): raw is string {
-	if (!raw) return false;
-	// Reject protocol-relative URLs that browsers treat as absolute.
-	if (raw.startsWith('//')) return false;
-	// Reject fully-qualified URLs to any origin other than our own.
-	if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) {
-		try {
-			const u = new URL(raw);
-			if (u.origin !== window.location.origin) return false;
-			// Same-origin absolute — collapse to path for Navigate.
-			return (
-				u.pathname.startsWith('/studio') ||
-					u.pathname.startsWith('/app') ||
-				u.pathname.startsWith('/dashboard') ||
-				u.pathname.startsWith('/account') ||
-				u.pathname === '/'
-			);
-		} catch {
-			return false;
-		}
+/** Go to a vetted return_to. Server paths need a real navigation; SPA paths don't. */
+export function goReturnTo(raw: string, navigate: (to: string, opts?: { replace?: boolean }) => void) {
+	if (isOAuthContinuation(raw)) {
+		window.location.replace(raw);
+		return;
 	}
-	// Plain paths — must start with a known safe prefix.
-	return (
-		raw.startsWith('/studio') ||
-		raw.startsWith('/app') ||
-		raw.startsWith('/dashboard') ||
-		raw.startsWith('/account') ||
-		raw.startsWith('/onboarding') ||
-		raw === '/'
-	);
+	navigate(raw, { replace: true });
 }
 
 /** Role-aware default landing path.
@@ -148,6 +116,11 @@ export function AuthGuard({ children, requireAuth = true }: AuthGuardProps) {
 		// default (`/app` for regular users, `/dashboard` for admins)
 		// so phishy external URLs can't use /auth/login as a bounce.
 		const returnTo = new URLSearchParams(location.search).get('return_to');
+		if (isOAuthContinuation(returnTo)) {
+			// Served by identity, not the SPA: a <Navigate> would stay client-side.
+			window.location.replace(returnTo!);
+			return <BrandLoader />;
+		}
 		if (isSafeReturnTo(returnTo)) {
 			return <Navigate to={returnTo} replace />;
 		}

@@ -5,7 +5,7 @@ import { Button } from '../../components/ui/button';
 import { RefreshCw, AlertCircle, CheckCircle } from 'lucide-react';
 import { googleLogin, ApiError } from '../../api';
 import { useAuth } from '../../hooks/useAuth';
-import { isSafeReturnTo, decodeOAuthState, defaultLandingPath } from '../../components/auth-guard';
+import { isSafeReturnTo, decodeOAuthState, defaultLandingPath, goReturnTo } from '../../components/auth-guard';
 import { toast } from 'sonner';
 import InvitationCodeDialog from './invitation-code-dialog';
 import type { UserInfo } from '../../api';
@@ -113,7 +113,7 @@ export function AuthCallback() {
 			// default Studio surface. External URLs were rejected at decode
 			// time so the callback can't be used as an open redirect.
 			setTimeout(() => {
-				navigate(returnToRef.current || defaultLandingPath(u.role));
+				goReturnTo(returnToRef.current || defaultLandingPath(u.role), navigate);
 			}, 500);
 		} catch (err) {
 			console.error('OAuth callback error:', err);
@@ -163,7 +163,7 @@ export function AuthCallback() {
 		toast.success('Signed in with Google');
 
 		setTimeout(() => {
-			navigate(returnToRef.current || defaultLandingPath(refreshed.role));
+			goReturnTo(returnToRef.current || defaultLandingPath(refreshed.role), navigate);
 		}, 500);
 	};
 
