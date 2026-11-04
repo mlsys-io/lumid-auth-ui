@@ -196,6 +196,21 @@ const PYTHON: Section = {
 		},
 		{ path: ["requirements"], label: "Requirements", type: "list", hint: "pip specifiers, one per line — numpy==2.1.0" },
 		{ path: ["env"], label: "Environment", type: "keyValue" },
+		{
+			path: ["blobs"], label: "Files", type: "blobs",
+			hint: "Upload once, read at the path in every run — no network needed. Private to your account.",
+		},
+		{
+			path: ["blobAuth", "lumid_data_url"], label: "Files: data URL", type: "text",
+			placeholder: "https://lum.id/data",
+			when: (p) => Array.isArray(p.blobs) && p.blobs.length > 0,
+		},
+		{
+			path: ["blobAuth", "lumid_data_token"], label: "Files: access token", type: "text",
+			placeholder: "lm_pat_live_…",
+			hint: "A PAT of the account that uploaded the files; the worker fetches them with it. Saved with the workflow — use a dedicated PAT.",
+			when: (p) => Array.isArray(p.blobs) && p.blobs.length > 0,
+		},
 	],
 };
 
