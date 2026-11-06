@@ -32,6 +32,11 @@ import {
 	fetchClaudeFieldBoxes,
 	fetchOpenRouterBalance,
 	fetchOnpremGpuStats,
+	fetchSocKeys,
+	adminAddSocKey,
+	adminDeleteSocKey,
+	adminResetSocKey,
+	type SocKeysResp,
 	type ClaudeFieldBoxResp,
 	type ClaudeQuotaAccount,
 	type ClaudeUserUsageResp,
@@ -601,6 +606,145 @@ function OnPremGpuPanel() {
 					<span className="text-[11px] text-slate-400">No on-prem GPU backends configured.</span>
 				)}
 			</div>
+		</section>
+	);
+}
+
+// SocKeysPanel — pooled NUS SoC LLM gateway keys (SOCLAAS_API_KEY).
+//
+// Each SoC key is personal with a DAILY usage limit; claude-proxy rotates
+// across every active key for the SoC-routed models (SOC_DeepSeek_V4.1_flash)
+// and benches one until the next reset when it reports its limit. Importing
+// more keys = more daily capacity. Keys are verified against the gateway
+// before they are stored, stored encrypted, and never shown back.
+function SocKeysPanel() {
+	const [data, setData] = useState<SocKeysResp | null>(null);
+	const [err, setErr] = useState('');
+	const [key, setKey] = useState('');
+	const [label, setLabel] = useState('');
+	const [busy, setBusy] = useState(false);
+	const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+	const load = useCallback(() => {
+		fetchSocKeys()
+			.then((d) => { setData(d); setErr(''); })
+			.catch((e: any) => setErr(String(e?.response?.data?.message || e?.message || e)));
+	}, []);
+	useEffect(() => {
+		load();
+		const t = setInterval(load, 60000);
+		return () => clearInterval(t);
+	}, [load]);
+
+	const add = async () => {
+		if (!key.trim()) return;
+		setBusy(true);
+		setMsg(null);
+		try {
+			const r = await adminAddSocKey(key.trim(), label.trim());
+			setMsg({ ok: true, text: r.created ? 'Key verified and added to the pool.' : 'Key was already pooled — refreshed and re-enabled.' });
+			setKey('');
+			setLabel('');
+			load();
+		} catch (e: any) {
+			setMsg({ ok: false, text: String(e?.response?.data?.message || e?.message || e) });
+		} finally {
+			setBusy(false);
+		}
+	};
+	const del = async (id: number) => {
+		if (!window.confirm('Remove this SoC key from the pool?')) return;
+		try { await adminDeleteSocKey(id); load(); } catch (e: any) { setErr(String(e?.response?.data?.message || e?.message || e)); }
+	};
+	const reset = async (id: number) => {
+		try { await adminResetSocKey(id); load(); } catch (e: any) { setErr(String(e?.response?.data?.message || e?.message || e)); }
+	};
+
+	const statusCls = (s: string) =>
+		s === 'active' ? 'text-emerald-700' : s === 'benched' ? 'text-amber-700' : 'text-rose-600';
+
+	return (
+		<section className="space-y-2">
+			<h2 className="text-sm font-medium text-slate-800">
+				SoC API keys
+				<span className="ml-2 text-[11px] font-normal text-slate-400">
+					{data ? `${data.active} active of ${data.total}` : '…'} · serves <code>SOC_DeepSeek_V4.1_flash</code> ·
+					each key has a daily limit; the proxy rotates across all active keys
+				</span>
+			</h2>
+
+			<div className="flex flex-wrap items-center gap-2">
+				<input
+					type="password"
+					autoComplete="off"
+					value={key}
+					onChange={(e) => setKey(e.target.value)}
+					placeholder="SOCLAAS_API_KEY (clsk_…)"
+					className="w-72 rounded border border-slate-300 px-2 py-1 text-[11px] font-mono"
+				/>
+				<input
+					value={label}
+					onChange={(e) => setLabel(e.target.value)}
+					placeholder="label (optional, e.g. whose key)"
+					className="w-48 rounded border border-slate-300 px-2 py-1 text-[11px]"
+				/>
+				<button
+					onClick={add}
+					disabled={busy || !key.trim()}
+					className="inline-flex items-center gap-1 rounded bg-slate-800 px-2.5 py-1 text-[11px] text-white disabled:opacity-40"
+				>
+					{busy ? <Loader2 size={12} className="animate-spin" /> : <UserPlus size={12} />} Import key
+				</button>
+				<span className="text-[11px] text-slate-400">
+					Get one at <a href="https://soclaas-portal.comp.nus.edu.sg/" target="_blank" rel="noreferrer" className="hover:underline">soclaas-portal</a> (NUS network).
+				</span>
+			</div>
+			{msg && <div className={`text-[11px] ${msg.ok ? 'text-emerald-700' : 'text-rose-600'}`}>{msg.text}</div>}
+			{err && <div className="text-[11px] text-rose-500">SoC keys unavailable: {err}</div>}
+
+			{data && data.keys.length > 0 && (
+				<div className="rounded border border-slate-200 overflow-hidden">
+					<table className="w-full text-[11px]">
+						<thead className="bg-slate-50 text-slate-500">
+							<tr>
+								<th className="text-left font-medium px-2.5 py-1">Key</th>
+								<th className="text-left font-medium px-2.5 py-1">Label</th>
+								<th className="text-left font-medium px-2.5 py-1">Imported by</th>
+								<th className="text-left font-medium px-2.5 py-1">Status</th>
+								<th className="text-left font-medium px-2.5 py-1">Last used</th>
+								<th className="px-2.5 py-1" />
+							</tr>
+						</thead>
+						<tbody>
+							{data.keys.map((k) => (
+								<tr key={k.id} className="border-t border-slate-100">
+									<td className="px-2.5 py-1 font-mono text-slate-600">#{k.id} {k.key_hint}</td>
+									<td className="px-2.5 py-1">{k.label || '—'}</td>
+									<td className="px-2.5 py-1 text-slate-500">{k.owner_email || '—'}</td>
+									<td className={`px-2.5 py-1 ${statusCls(k.status)}`} title={k.bench_reason || ''}>
+										{k.status}
+										{k.status === 'benched' && k.bench_until ? ` · back in ${fmtTime(k.bench_until)}` : ''}
+										{k.status === 'dead' ? ' · re-import to restore' : ''}
+									</td>
+									<td className="px-2.5 py-1 text-slate-500">
+										{k.last_used_at ? new Date(k.last_used_at).toLocaleString() : '—'}
+									</td>
+									<td className="px-2.5 py-1 text-right whitespace-nowrap">
+										{k.status !== 'active' && (
+											<button onClick={() => reset(k.id)} title="Clear bench" className="mr-2 text-slate-400 hover:text-slate-700">
+												<RotateCcw size={12} />
+											</button>
+										)}
+										<button onClick={() => del(k.id)} title="Remove" className="text-slate-400 hover:text-rose-600">
+											<Trash2 size={12} />
+										</button>
+									</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			)}
 		</section>
 	);
 }
@@ -2449,6 +2593,9 @@ export default function StudioClaudeQuota() {
 			{/* Per-field-box traffic + relay health. Self-contained (own fetch)
 			    so a field-box outage can't blank the quota page above it. */}
 			<FieldBoxPanel />
+
+			{/* Pooled NUS SoC LLM gateway keys. Self-contained (own fetch). */}
+			<SocKeysPanel />
 
 			{userUsage && <UserUsageSection usage={userUsage} countdown={countdown} onReset={loadUserUsage} isSuper={isSuper} pools={pools} />}
 

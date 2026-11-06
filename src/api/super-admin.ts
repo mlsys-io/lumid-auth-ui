@@ -982,3 +982,46 @@ export async function fetchClaudeFieldBoxes(hours = 24): Promise<ClaudeFieldBoxR
 	);
 	return r.data.data;
 }
+
+// ── SoC LLM gateway key pool (NUS soclaas) ──────────────────────────────────
+// Pooled SOCLAAS_API_KEYs; claude-proxy rotates across them for the SoC-routed
+// models (e.g. SOC_DeepSeek_V4.1_flash) and benches a key at its daily limit.
+
+export interface SocKey {
+	id: number;
+	key_hint: string;
+	label: string;
+	owner_email: string;
+	status: 'active' | 'benched' | 'dead';
+	bench_until?: string;
+	bench_reason?: string;
+	last_used_at?: string;
+	created_at: string;
+}
+
+export interface SocKeysResp {
+	keys: SocKey[];
+	total: number;
+	active: number;
+}
+
+export async function fetchSocKeys(): Promise<SocKeysResp> {
+	const r = await apiClient.get<DataResponse<SocKeysResp>>('/api/v1/admin/soc-keys');
+	return r.data.data;
+}
+
+export async function adminAddSocKey(key: string, label?: string): Promise<{ id: number; created: boolean }> {
+	const r = await apiClient.post<DataResponse<{ id: number; created: boolean }>>('/api/v1/admin/soc-keys', {
+		key,
+		label: label || '',
+	});
+	return r.data.data;
+}
+
+export async function adminDeleteSocKey(id: number): Promise<void> {
+	await apiClient.delete(`/api/v1/admin/soc-keys/${id}`);
+}
+
+export async function adminResetSocKey(id: number): Promise<void> {
+	await apiClient.post(`/api/v1/admin/soc-keys/${id}/reset`);
+}
