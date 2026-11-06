@@ -677,8 +677,11 @@ function SocTkps({ usage }: { usage: SocUsageResp }) {
 				{cards.length === 0 && <span className="text-[11px] text-slate-400">Idle in the last 5 min.</span>}
 				{live && (
 					<div className="basis-full text-[10px] tabular-nums text-slate-500">
-						{Object.values(live.streams).reduce((a, b) => a + b, 0)} streams on {live.busy_keys.length} key
-						{live.busy_keys.length === 1 ? '' : 's'} ·{' '}
+						{(() => {
+							const n = Object.values(live.streams).reduce((a, b) => a + b, 0);
+							return `${n} stream${n === 1 ? '' : 's'} on ${live.busy_keys.length} key${live.busy_keys.length === 1 ? '' : 's'}`;
+						})()}{' '}
+						·{' '}
 						<span className={live.waiting > 0 ? 'text-amber-700 font-medium' : ''}>{live.waiting} waiting for a free key</span>
 						{live.source === 'local' && <span className="text-amber-700"> · Redis down: one replica only</span>}
 					</div>
@@ -798,7 +801,7 @@ function SocKeysPanel() {
 			<h2 className="text-sm font-medium text-slate-800">
 				SoC API keys
 				<span className="ml-2 text-[11px] font-normal text-slate-400">
-					{data ? `${data.active} active of ${data.total}` : '…'} · serves <code>SOC_DeepSeek_V4.1_flash</code> ·
+					{data ? `${data.active} active of ${data.total}` : '…'} · lumid-llm tier 0 for <code>deepseek-v4.1-flash</code>, <code>qwen3.8-27b</code>, <code>qwen3.8-flash-next</code> · one request per key ·
 					each key has a daily limit; the proxy rotates across all active keys
 				</span>
 			</h2>
