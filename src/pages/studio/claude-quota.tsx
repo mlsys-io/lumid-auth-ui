@@ -36,7 +36,9 @@ import {
 	adminAddSocKey,
 	adminDeleteSocKey,
 	adminResetSocKey,
+	fetchSocUsage,
 	type SocKeysResp,
+	type SocUsageResp,
 	type ClaudeFieldBoxResp,
 	type ClaudeQuotaAccount,
 	type ClaudeUserUsageResp,
@@ -610,6 +612,75 @@ function OnPremGpuPanel() {
 	);
 }
 
+// SocTkps — SoC relay throughput. Tiles are the last 5 complete minutes per
+// model: aggregate output tok/s (out tokens / 300 s), per-stream decode tok/s
+// (out tokens / generation seconds), avg TTFT over streaming requests. The bar
+// chart is aggregate output tok/s per minute over the last hour, stacked by model.
+const SOC_MODEL_COLORS = ['#0f766e', '#b45309', '#4338ca', '#be123c'];
+
+function SocTkps({ usage }: { usage: SocUsageResp }) {
+	const models = Array.from(new Set(usage.series.map((p) => p.model))).sort();
+	const color = (m: string) => SOC_MODEL_COLORS[Math.max(0, models.indexOf(m)) % SOC_MODEL_COLORS.length];
+	const byMinute = new Map<string, Map<string, number>>();
+	for (const p of usage.series) {
+		const row = byMinute.get(p.minute) || new Map<string, number>();
+		row.set(p.model, (row.get(p.model) || 0) + p.out_tokens / 60);
+		byMinute.set(p.minute, row);
+	}
+	const end = Math.floor(Date.now() / 60000) * 60000;
+	const bins = Array.from({ length: usage.minutes }, (_, i) => new Date(end - (usage.minutes - 1 - i) * 60000));
+	const keyOf = (d: Date) => Array.from(byMinute.keys()).find((k) => new Date(k).getTime() === d.getTime());
+	const stacks = bins.map((d) => {
+		const k = keyOf(d);
+		return { d, vals: k ? byMinute.get(k)! : new Map<string, number>() };
+	});
+	const max = Math.max(1, ...stacks.map((s) => Array.from(s.vals.values()).reduce((a, b) => a + b, 0)));
+	const W = 600, H = 70, bw = W / bins.length;
+
+	if (usage.series.length === 0) {
+		return <div className="text-[11px] text-slate-400">No SoC traffic in the last {usage.minutes} min.</div>;
+	}
+	return (
+		<div className="space-y-1.5">
+			<div className="flex flex-wrap gap-2">
+				{usage.summary.map((s) => (
+					<div key={s.model} className="rounded border border-slate-200 px-2.5 py-1.5 text-[11px]">
+						<div className="flex items-center gap-1.5 font-medium text-slate-700">
+							<span className="inline-block h-2 w-2 rounded-sm" style={{ background: color(s.model) }} />
+							{s.model}
+						</div>
+						<div className="mt-0.5 flex gap-3 tabular-nums text-slate-600">
+							<span title="Output tokens / 300 s, last 5 min"><b className="text-slate-900">{s.agg_out_tps.toFixed(1)}</b> tok/s</span>
+							<span title="Per-stream decode speed: output tokens / generation time"><b className="text-slate-900">{s.stream_tps.toFixed(1)}</b> tok/s/stream</span>
+							<span title="Average time to first token (streaming requests)">TTFT {s.avg_ttft_ms > 0 ? `${(s.avg_ttft_ms / 1000).toFixed(2)}s` : '—'}</span>
+							<span>{s.requests} req{s.errors > 0 ? <span className="text-rose-600"> · {s.errors} err</span> : null}</span>
+						</div>
+					</div>
+				))}
+				{usage.summary.length === 0 && <span className="text-[11px] text-slate-400">Idle in the last 5 min.</span>}
+			</div>
+			<svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-[600px]" style={{ height: 70 }} role="img" aria-label="SoC output tokens per second, last hour">
+				{stacks.map((s, i) => {
+					let y = H;
+					return (
+						<g key={i}>
+							<title>{`${s.d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}  ` + Array.from(s.vals.entries()).map(([m, v]) => `${m} ${v.toFixed(1)} tok/s`).join(' · ')}</title>
+							{models.map((m) => {
+								const v = s.vals.get(m) || 0;
+								if (v <= 0) return null;
+								const h = Math.max(1, (v / max) * (H - 2));
+								y -= h;
+								return <rect key={m} x={i * bw + 0.5} y={y} width={Math.max(1, bw - 1)} height={h} fill={color(m)} />;
+							})}
+						</g>
+					);
+				})}
+			</svg>
+			<div className="text-[10px] text-slate-400">output tok/s per minute, last {usage.minutes} min · peak {max.toFixed(1)} tok/s</div>
+		</div>
+	);
+}
+
 // SocKeysPanel — pooled NUS SoC LLM gateway keys (SOCLAAS_API_KEY).
 //
 // Each SoC key is personal with a DAILY usage limit; claude-proxy rotates
@@ -624,17 +695,21 @@ function SocKeysPanel() {
 	const [label, setLabel] = useState('');
 	const [busy, setBusy] = useState(false);
 	const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+	const [usage, setUsage] = useState<SocUsageResp | null>(null);
 
 	const load = useCallback(() => {
 		fetchSocKeys()
 			.then((d) => { setData(d); setErr(''); })
 			.catch((e: any) => setErr(String(e?.response?.data?.message || e?.message || e)));
+		// TKPS is best-effort: an older identity without the route just hides it.
+		fetchSocUsage(60).then(setUsage).catch(() => setUsage(null));
 	}, []);
 	useEffect(() => {
 		load();
-		const t = setInterval(load, 60000);
+		const t = setInterval(load, 30000);
 		return () => clearInterval(t);
 	}, [load]);
+	const todayByKey = new Map((usage?.keys_today || []).map((k) => [k.key_id, k]));
 
 	const add = async () => {
 		if (!key.trim()) return;
@@ -672,6 +747,8 @@ function SocKeysPanel() {
 					each key has a daily limit; the proxy rotates across all active keys
 				</span>
 			</h2>
+
+			{usage && <SocTkps usage={usage} />}
 
 			<div className="flex flex-wrap items-center gap-2">
 				<input
@@ -711,6 +788,8 @@ function SocKeysPanel() {
 								<th className="text-left font-medium px-2.5 py-1">Label</th>
 								<th className="text-left font-medium px-2.5 py-1">Imported by</th>
 								<th className="text-left font-medium px-2.5 py-1">Status</th>
+								<th className="text-right font-medium px-2.5 py-1" title="Since 00:00 SGT (the assumed daily-limit reset)">Req today</th>
+								<th className="text-right font-medium px-2.5 py-1" title="Input / output tokens since 00:00 SGT">Tokens today</th>
 								<th className="text-left font-medium px-2.5 py-1">Last used</th>
 								<th className="px-2.5 py-1" />
 							</tr>
@@ -725,6 +804,10 @@ function SocKeysPanel() {
 										{k.status}
 										{k.status === 'benched' && k.bench_until ? ` · back in ${fmtTime(k.bench_until)}` : ''}
 										{k.status === 'dead' ? ' · re-import to restore' : ''}
+									</td>
+									<td className="px-2.5 py-1 text-right tabular-nums">{fmtCount(todayByKey.get(k.id)?.requests ?? 0)}</td>
+									<td className="px-2.5 py-1 text-right tabular-nums text-slate-600">
+										{fmtCount(todayByKey.get(k.id)?.in_tokens ?? 0)} / {fmtCount(todayByKey.get(k.id)?.out_tokens ?? 0)}
 									</td>
 									<td className="px-2.5 py-1 text-slate-500">
 										{k.last_used_at ? new Date(k.last_used_at).toLocaleString() : '—'}

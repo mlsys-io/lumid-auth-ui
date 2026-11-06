@@ -1025,3 +1025,39 @@ export async function adminDeleteSocKey(id: number): Promise<void> {
 export async function adminResetSocKey(id: number): Promise<void> {
 	await apiClient.post(`/api/v1/admin/soc-keys/${id}/reset`);
 }
+
+export interface SocUsagePoint {
+	minute: string;
+	model: string;
+	requests: number;
+	errors: number;
+	streams: number;
+	in_tokens: number;
+	out_tokens: number;
+	gen_ms: number;
+	ttft_ms: number;
+}
+
+export interface SocUsageSummary {
+	model: string;
+	requests: number;
+	errors: number;
+	in_tokens: number;
+	out_tokens: number;
+	agg_out_tps: number;
+	stream_tps: number;
+	avg_ttft_ms: number;
+	window_minutes: number;
+}
+
+export interface SocUsageResp {
+	series: SocUsagePoint[];
+	summary: SocUsageSummary[];
+	keys_today: { key_id: number; requests: number; errors: number; in_tokens: number; out_tokens: number }[];
+	minutes: number;
+}
+
+export async function fetchSocUsage(minutes = 60): Promise<SocUsageResp> {
+	const r = await apiClient.get<DataResponse<SocUsageResp>>(`/api/v1/admin/soc-keys/usage?minutes=${minutes}`);
+	return r.data.data;
+}
