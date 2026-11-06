@@ -641,15 +641,16 @@ function SocTkps({ usage }: { usage: SocUsageResp }) {
 		return <div className="text-[11px] text-slate-400">No SoC traffic in the last {usage.minutes} min.</div>;
 	}
 	return (
-		<div className="space-y-1.5">
-			<div className="flex flex-wrap gap-2">
+		<div className="flex flex-col gap-2 lg:flex-row lg:items-stretch">
+			{/* Model cards (last 5 min) on the left; the hour histogram fills the rest of the row. */}
+			<div className="flex flex-wrap content-start gap-2 lg:max-w-[55%]">
 				{usage.summary.map((s) => (
 					<div key={s.model} className="rounded border border-slate-200 px-2.5 py-1.5 text-[11px]">
 						<div className="flex items-center gap-1.5 font-medium text-slate-700">
 							<span className="inline-block h-2 w-2 rounded-sm" style={{ background: color(s.model) }} />
 							{s.model}
 						</div>
-						<div className="mt-0.5 flex gap-3 tabular-nums text-slate-600">
+						<div className="mt-0.5 flex flex-wrap gap-x-3 tabular-nums text-slate-600">
 							<span title="Output tokens / 300 s, last 5 min"><b className="text-slate-900">{s.agg_out_tps.toFixed(1)}</b> tok/s</span>
 							<span title="Per-stream decode speed: output tokens / generation time"><b className="text-slate-900">{s.stream_tps.toFixed(1)}</b> tok/s/stream</span>
 							<span title="Average time to first token (streaming requests)">TTFT {s.avg_ttft_ms > 0 ? `${(s.avg_ttft_ms / 1000).toFixed(2)}s` : '—'}</span>
@@ -659,24 +660,47 @@ function SocTkps({ usage }: { usage: SocUsageResp }) {
 				))}
 				{usage.summary.length === 0 && <span className="text-[11px] text-slate-400">Idle in the last 5 min.</span>}
 			</div>
-			<svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-[600px]" style={{ height: 70 }} role="img" aria-label="SoC output tokens per second, last hour">
-				{stacks.map((s, i) => {
-					let y = H;
-					return (
-						<g key={i}>
-							<title>{`${s.d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}  ` + Array.from(s.vals.entries()).map(([m, v]) => `${m} ${v.toFixed(1)} tok/s`).join(' · ')}</title>
-							{models.map((m) => {
-								const v = s.vals.get(m) || 0;
-								if (v <= 0) return null;
-								const h = Math.max(1, (v / max) * (H - 2));
-								y -= h;
-								return <rect key={m} x={i * bw + 0.5} y={y} width={Math.max(1, bw - 1)} height={h} fill={color(m)} />;
-							})}
-						</g>
-					);
-				})}
-			</svg>
-			<div className="text-[10px] text-slate-400">output tok/s per minute, last {usage.minutes} min · peak {max.toFixed(1)} tok/s</div>
+			<div className="min-w-0 flex-1 rounded border border-slate-200 px-2.5 py-1.5">
+				<div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-slate-500">
+					<span className="font-medium text-slate-600">output tok/s per minute</span>
+					{models.map((m) => (
+						<span key={m} className="inline-flex items-center gap-1">
+							<span className="inline-block h-2 w-2 rounded-sm" style={{ background: color(m) }} />
+							{m}
+						</span>
+					))}
+					<span className="ml-auto tabular-nums">peak {max.toFixed(1)}</span>
+				</div>
+				<svg
+					viewBox={`0 0 ${W} ${H}`}
+					preserveAspectRatio="none"
+					className="mt-1 block w-full"
+					style={{ height: 64 }}
+					role="img"
+					aria-label={`SoC output tokens per second, last ${usage.minutes} minutes`}
+				>
+					<line x1={0} y1={H - 0.5} x2={W} y2={H - 0.5} stroke="#cbd5e1" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+					{stacks.map((s, i) => {
+						let y = H;
+						return (
+							<g key={i}>
+								<title>{`${s.d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}  ` + Array.from(s.vals.entries()).map(([m, v]) => `${m} ${v.toFixed(1)} tok/s`).join(' · ')}</title>
+								{models.map((m) => {
+									const v = s.vals.get(m) || 0;
+									if (v <= 0) return null;
+									const h = Math.max(1, (v / max) * (H - 2));
+									y -= h;
+									return <rect key={m} x={i * bw + 0.5} y={y} width={Math.max(1, bw - 1)} height={h} fill={color(m)} />;
+								})}
+							</g>
+						);
+					})}
+				</svg>
+				<div className="flex justify-between text-[10px] tabular-nums text-slate-400">
+					<span>−{usage.minutes}m</span>
+					<span>now</span>
+				</div>
+			</div>
 		</div>
 	);
 }
@@ -710,6 +734,13 @@ function SocKeysPanel() {
 		return () => clearInterval(t);
 	}, [load]);
 	const todayByKey = new Map((usage?.keys_today || []).map((k) => [k.key_id, k]));
+	// key_id 0 = claude-proxy's fallback key (Secret claude-proxy-env SOC_DEEPSEEK_KEY), used only
+	// while the pool has no usable key. Its traffic is real, so it gets its own row + the total.
+	const fallbackToday = todayByKey.get(0);
+	const totalToday = (usage?.keys_today || []).reduce(
+		(a, k) => ({ requests: a.requests + k.requests, in: a.in + k.in_tokens, out: a.out + k.out_tokens }),
+		{ requests: 0, in: 0, out: 0 },
+	);
 
 	const add = async () => {
 		if (!key.trim()) return;
@@ -780,7 +811,7 @@ function SocKeysPanel() {
 			{err && <div className="text-[11px] text-rose-500">SoC keys unavailable: {err}</div>}
 
 			{data && data.keys.length > 0 && (
-				<div className="rounded border border-slate-200 overflow-hidden">
+				<div className="rounded border border-slate-200 overflow-x-auto">
 					<table className="w-full text-[11px]">
 						<thead className="bg-slate-50 text-slate-500">
 							<tr>
@@ -824,6 +855,25 @@ function SocKeysPanel() {
 									</td>
 								</tr>
 							))}
+							{fallbackToday && (
+								<tr className="border-t border-slate-100 text-slate-500">
+									<td className="px-2.5 py-1 font-mono">#0 fallback</td>
+									<td className="px-2.5 py-1" colSpan={3}>proxy env key — used only when the pool has no usable key</td>
+									<td className="px-2.5 py-1 text-right tabular-nums">{fmtCount(fallbackToday.requests)}</td>
+									<td className="px-2.5 py-1 text-right tabular-nums">
+										{fmtCount(fallbackToday.in_tokens)} / {fmtCount(fallbackToday.out_tokens)}
+									</td>
+									<td className="px-2.5 py-1" colSpan={2} />
+								</tr>
+							)}
+							<tr className="border-t border-slate-200 bg-slate-50 font-medium text-slate-700">
+								<td className="px-2.5 py-1" colSpan={4}>Total today (since 00:00 SGT)</td>
+								<td className="px-2.5 py-1 text-right tabular-nums">{fmtCount(totalToday.requests)}</td>
+								<td className="px-2.5 py-1 text-right tabular-nums">
+									{fmtCount(totalToday.in)} / {fmtCount(totalToday.out)}
+								</td>
+								<td className="px-2.5 py-1" colSpan={2} />
+							</tr>
 						</tbody>
 					</table>
 				</div>
