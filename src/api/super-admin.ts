@@ -1050,7 +1050,16 @@ export interface SocUsageSummary {
 	window_minutes: number;
 }
 
+export interface SocRelayLive {
+	streams: Record<string, number>; // in-flight requests per model right now (cluster-wide)
+	busy_keys: number[]; // pool key ids holding a request (0 = proxy fallback key)
+	waiting: number; // requests queued for a free key (one in-flight request per key)
+	source: 'redis' | 'local';
+	observed_at: string;
+}
+
 export interface SocUsageResp {
+	live?: SocRelayLive | null;
 	series: SocUsagePoint[];
 	summary: SocUsageSummary[];
 	keys_today: { key_id: number; requests: number; errors: number; in_tokens: number; out_tokens: number }[];

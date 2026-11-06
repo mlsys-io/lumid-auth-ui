@@ -619,7 +619,15 @@ function OnPremGpuPanel() {
 const SOC_MODEL_COLORS = ['#0f766e', '#b45309', '#4338ca', '#be123c'];
 
 function SocTkps({ usage }: { usage: SocUsageResp }) {
-	const models = Array.from(new Set(usage.series.map((p) => p.model))).sort();
+	const live = usage.live || null;
+	// A model streaming right now gets a card even with no completed request in the 5-min window.
+	const cards = [
+		...usage.summary,
+		...Object.keys(live?.streams || {})
+			.filter((m) => (live!.streams[m] || 0) > 0 && !usage.summary.some((s) => s.model === m))
+			.map((m) => ({ model: m, requests: 0, errors: 0, in_tokens: 0, out_tokens: 0, agg_out_tps: 0, stream_tps: 0, avg_ttft_ms: 0, window_minutes: 5 })),
+	];
+	const models = Array.from(new Set([...usage.series.map((p) => p.model), ...cards.map((c) => c.model)])).sort();
 	const color = (m: string) => SOC_MODEL_COLORS[Math.max(0, models.indexOf(m)) % SOC_MODEL_COLORS.length];
 	const byMinute = new Map<string, Map<string, number>>();
 	for (const p of usage.series) {
@@ -637,18 +645,26 @@ function SocTkps({ usage }: { usage: SocUsageResp }) {
 	const max = Math.max(1, ...stacks.map((s) => Array.from(s.vals.values()).reduce((a, b) => a + b, 0)));
 	const W = 600, H = 70, bw = W / bins.length;
 
-	if (usage.series.length === 0) {
+	if (usage.series.length === 0 && cards.length === 0) {
 		return <div className="text-[11px] text-slate-400">No SoC traffic in the last {usage.minutes} min.</div>;
 	}
 	return (
 		<div className="flex flex-col gap-2 lg:flex-row lg:items-stretch">
 			{/* Model cards (last 5 min) on the left; the hour histogram fills the rest of the row. */}
 			<div className="flex flex-wrap content-start gap-2 lg:max-w-[55%]">
-				{usage.summary.map((s) => (
+				{cards.map((s) => (
 					<div key={s.model} className="rounded border border-slate-200 px-2.5 py-1.5 text-[11px]">
 						<div className="flex items-center gap-1.5 font-medium text-slate-700">
 							<span className="inline-block h-2 w-2 rounded-sm" style={{ background: color(s.model) }} />
 							{s.model}
+							{live && (
+								<span
+									className={`ml-auto pl-2 tabular-nums font-normal ${(live.streams[s.model] || 0) > 0 ? 'text-emerald-700' : 'text-slate-400'}`}
+									title="Requests in flight on SoC right now (each holds one key)"
+								>
+									● {live.streams[s.model] || 0} live
+								</span>
+							)}
 						</div>
 						<div className="mt-0.5 flex flex-wrap gap-x-3 tabular-nums text-slate-600">
 							<span title="Output tokens / 300 s, last 5 min"><b className="text-slate-900">{s.agg_out_tps.toFixed(1)}</b> tok/s</span>
@@ -658,7 +674,15 @@ function SocTkps({ usage }: { usage: SocUsageResp }) {
 						</div>
 					</div>
 				))}
-				{usage.summary.length === 0 && <span className="text-[11px] text-slate-400">Idle in the last 5 min.</span>}
+				{cards.length === 0 && <span className="text-[11px] text-slate-400">Idle in the last 5 min.</span>}
+				{live && (
+					<div className="basis-full text-[10px] tabular-nums text-slate-500">
+						{Object.values(live.streams).reduce((a, b) => a + b, 0)} streams on {live.busy_keys.length} key
+						{live.busy_keys.length === 1 ? '' : 's'} ·{' '}
+						<span className={live.waiting > 0 ? 'text-amber-700 font-medium' : ''}>{live.waiting} waiting for a free key</span>
+						{live.source === 'local' && <span className="text-amber-700"> · Redis down: one replica only</span>}
+					</div>
+				)}
 			</div>
 			<div className="min-w-0 flex-1 rounded border border-slate-200 px-2.5 py-1.5">
 				<div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-slate-500">
@@ -833,6 +857,7 @@ function SocKeysPanel() {
 									<td className="px-2.5 py-1 text-slate-500">{k.owner_email || '—'}</td>
 									<td className={`px-2.5 py-1 ${statusCls(k.status)}`} title={k.bench_reason || ''}>
 										{k.status}
+										{k.status === 'active' && usage?.live?.busy_keys.includes(k.id) ? <span className="text-emerald-700"> · busy</span> : null}
 										{k.status === 'benched' && k.bench_until ? ` · back in ${fmtTime(k.bench_until)}` : ''}
 										{k.status === 'dead' ? ' · re-import to restore' : ''}
 									</td>
