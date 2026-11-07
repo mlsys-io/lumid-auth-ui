@@ -2763,7 +2763,6 @@ export default function StudioClaudeQuota() {
 						<OpenRouterBalancePanel />
 						{accounts && accounts.length > 0 && <SummaryBar accounts={accounts} />}
 					</div>
-					<ThroughputPanel />
 					<section className="space-y-2">
 						<h2 className="text-sm font-medium text-slate-800">
 							Claude pool accounts
@@ -2807,6 +2806,7 @@ export default function StudioClaudeQuota() {
 							</div>
 						) : null}
 					</section>
+					<ThroughputPanel />
 				</>
 			)}
 
