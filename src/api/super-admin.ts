@@ -1075,7 +1075,9 @@ export async function fetchSocUsage(minutes = 60): Promise<SocUsageResp> {
 
 // Anthropic-pool throughput (claude-proxy per-minute metering), same series/summary
 // shape as fetchSocUsage so the panel renders both with one component.
-export async function fetchClaudeModelUsage(minutes = 60): Promise<SocUsageResp> {
-	const r = await apiClient.get<DataResponse<SocUsageResp>>(`/api/v1/admin/model-usage?source=claude&minutes=${minutes}`);
+export async function fetchModelUsage(source: 'claude' | 'onprem', minutes = 60): Promise<SocUsageResp> {
+	const r = await apiClient.get<DataResponse<SocUsageResp>>(`/api/v1/admin/model-usage?source=${source}&minutes=${minutes}`);
 	return r.data.data;
 }
+
+export const fetchClaudeModelUsage = (minutes = 60) => fetchModelUsage('claude', minutes);

@@ -31,20 +31,18 @@ import {
 	adminSetClaudePoolManager,
 	fetchClaudeFieldBoxes,
 	fetchOpenRouterBalance,
-	fetchOnpremGpuStats,
 	fetchSocKeys,
 	adminAddSocKey,
 	adminDeleteSocKey,
 	adminResetSocKey,
 	fetchSocUsage,
-	fetchClaudeModelUsage,
+	fetchModelUsage,
 	type SocKeysResp,
 	type SocUsageResp,
 	type ClaudeFieldBoxResp,
 	type ClaudeQuotaAccount,
 	type ClaudeUserUsageResp,
 	type OpenRouterBalanceResp,
-	type OnpremGpuStatsResp,
 	type ClaudePool,
 	type ClaudePoolMember,
 } from '@/api/super-admin';
@@ -498,258 +496,144 @@ function fmtCount(n: number): string {
 	return String(n);
 }
 
-// OnPremGpuPanel — live tok/s + QPS per on-prem GPU backend (NUS s0 serving
-// deepseek-v4.1-flash, luyao1/gmk/n5-max serving qwen3.8-27b), rolling window
-// computed by lumid-llm itself off its existing 5s /metrics scrape.
-//
-// Self-contained (own fetch, own error state) for the same reason as
-// FieldBoxPanel below: a lumid-llm hiccup must blank only this strip, not the
-// pool-quota sections above it. Polls its OWN faster interval rather than the
-// page-level USER_USAGE_REFRESH_MS (2min) — a "live" throughput number on a
-// 2-minute refresh reads as broken, not slow.
-const ONPREM_GPU_REFRESH_MS = 12 * 1000;
-
-const HIDDEN_ONPREM_BACKEND = (b: { url: string; label: string }) =>
-	b.url.includes('claude-proxy-soc') || b.label === 'gmk-vl';
-
-function OnPremGpuPanel({ embedded = false }: { embedded?: boolean } = {}) {
-	const [data, setData] = useState<OnpremGpuStatsResp | null>(null);
-	const [err, setErr] = useState('');
-
-	useEffect(() => {
-		let alive = true;
-		const load = () => {
-			fetchOnpremGpuStats()
-				.then((d) => { if (alive) { setData(d); setErr(''); } })
-				.catch((e) => { if (alive) setErr(String(e)); });
-		};
-		load();
-		const id = setInterval(load, ONPREM_GPU_REFRESH_MS);
-		return () => { alive = false; clearInterval(id); };
-	}, []);
-
-	if (err) return <div className="text-[11px] text-rose-500">On-prem GPU stats unavailable: {err}</div>;
-	if (!data) return <div className="text-[11px] text-slate-400">Loading on-prem GPU stats…</div>;
-	if (!data.available) {
-		// Graceful degrade from the server (lumid-llm unreachable, credential
-		// missing) — a real, named reason, not a blank panel that reads as "no
-		// GPUs configured".
-		return (
-			<div className="text-[11px] text-slate-400">
-				On-prem GPU stats unavailable{data.error ? `: ${data.error}` : ''}.
-			</div>
-		);
-	}
-
-	const windowLabel = data.window_seconds
-		? data.window_seconds >= 60 ? `${Math.round(data.window_seconds / 60)}m` : `${data.window_seconds}s`
-		: '5m';
-	// Not on-prem GPUs, so not shown here: the SoC relay (claude-proxy-soc, lumid-llm's tier 0 for
-	// deepseek/qwen — its throughput is in the Throughput panel) and gmk-vl (operator, 2026-11-07).
-	const backends = (data.backends ?? []).filter((b) => !HIDDEN_ONPREM_BACKEND(b));
-
-	return (
-		<section className="space-y-2">
-			{embedded ? (
-				<div className="text-[11px] font-medium text-slate-600">
-					On-prem GPUs (lumid-llm backends)
-					<span className="ml-2 font-normal text-slate-400">tok/s · qps ({windowLabel} rolling)</span>
-				</div>
-			) : (
-				<h2 className="text-sm font-medium text-slate-800">
-					On-prem GPU throughput
-					<span className="ml-2 text-[11px] font-normal text-slate-400">
-						tok/s · qps ({windowLabel} rolling)
-					</span>
-				</h2>
-			)}
-			<div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-				{backends.map((b) => (
-					<span
-						key={b.url}
-						className={`inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 text-[10px] tabular-nums ${
-							b.healthy ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-rose-50 text-rose-600 border border-rose-100'
-						}`}
-						title={`${b.url} · tier ${b.tier}${b.queue_depth >= 0 ? ` · engine queue ${b.queue_depth}` : ''}${!b.healthy ? ' · UNHEALTHY' : ''}${
-							b.qps !== null ? ` · ${b.qps.toFixed(2)} completions/s (5m avg)` : b.tok_s !== null ? ' · this backend exposes no request-completion counter (llama.cpp), completions/s is not measurable' : ''
-						} · tok/s and completions/s can look contradictory when requests are individually slow: tokens flow steadily while few requests FINISH per second. inflight (below) is concurrency, not a rate.`}
-					>
-						<span className="font-medium">{b.label}</span>
-						{/* Which model the box serves: the panel is one flat row across
-						    deepseek, qwen3.8 and qwen3-vl, so a name alone ("luyao1-gpu1")
-						    did not say what it runs. */}
-						{b.model && <span className="opacity-70">{b.model}</span>}
-						<span className="opacity-60">·</span>
-						{/* UNHEALTHY OUTRANKS "no throughput yet". A dead backend and an idle
-						    one both have tok_s === null, so keying the text on tok_s alone
-						    printed "warming up…" over a backend the gateway had been failing
-						    to probe for 37 hours (GX10, 2026-09-17: vLLM EngineCore died on a
-						    tool-call structured-output request, container stayed Up, nothing
-						    bound :8090). "warming up…" reads as a wait -- it actively tells
-						    the operator NOT to investigate, which is the opposite of true,
-						    and it was the only thing this panel said about the outage. The
-						    rose chip and the title's UNHEALTHY were already correct; only
-						    this line lied, so the word is what changes. */}
-						<span className={b.healthy ? undefined : 'font-medium'}>
-							{!b.healthy
-								? 'unreachable'
-								: b.tok_s === null
-									? 'warming up…'
-									: `${b.tok_s.toFixed(1)} tok/s`}
-						</span>
-						{b.healthy && b.tok_s !== null && (
-							<>
-								<span className="opacity-60">·</span>
-								{/* Leads with concurrency (inflight / peak-in-5m), not qps --
-								    qps (completions/s) reads as contradictory next to a healthy
-								    tok/s when requests are individually slow: few finish per
-								    second even though tokens are flowing the whole time one is
-								    running. inflight answers "how many at once, was there a
-								    burst" directly, and unlike qps it's measurable for every
-								    backend dialect (gateway-side counter, not scraped). */}
-								<span>
-									{b.inflight} inflight
-									{b.peak_inflight_5m !== null && b.peak_inflight_5m > b.inflight
-										? ` (peak ${b.peak_inflight_5m}/5m)`
-										: ''}
-								</span>
-							</>
-						)}
-					</span>
-				))}
-				{backends.length === 0 && (
-					<span className="text-[11px] text-slate-400">No on-prem GPU backends configured.</span>
-				)}
-			</div>
-		</section>
-	);
-}
-
-// SocTkps — SoC relay throughput. Tiles are the last 5 complete minutes per
-// model: aggregate output tok/s (out tokens / 300 s), per-stream decode tok/s
-// (out tokens / generation seconds), avg TTFT over streaming requests. The bar
-// chart is aggregate output tok/s per minute over the last hour, stacked by model.
+// ThroughputSource — one serving path (Claude pool, SoC gateway, on-prem GPUs) in one shape:
+// a per-model table for the last 5 complete minutes (live requests, aggregate output tok/s,
+// per-stream decode tok/s, TTFT) beside the hour of output tok/s per minute, stacked by model.
 const SOC_MODEL_COLORS = ['#0f766e', '#b45309', '#4338ca', '#be123c'];
 
-function SocTkps({ usage, title }: { usage: SocUsageResp; title?: string }) {
+function ThroughputSource({ usage, title }: { usage: SocUsageResp; title: string }) {
 	const live = usage.live || null;
 	const keyed = !!live && Array.isArray(live.busy_keys);
-	// A model streaming right now gets a card even with no completed request in the 5-min window.
-	const cards = [
+	const liveOf = (m: string) => (live?.streams?.[m] ?? 0) as number;
+	// One row per model seen in the 5-min summary or streaming right now.
+	const rows = [
 		...usage.summary,
 		...Object.keys(live?.streams || {})
-			.filter((m) => (live!.streams[m] || 0) > 0 && !usage.summary.some((s) => s.model === m))
+			.filter((m) => liveOf(m) > 0 && !usage.summary.some((s) => s.model === m))
 			.map((m) => ({ model: m, requests: 0, errors: 0, in_tokens: 0, out_tokens: 0, agg_out_tps: 0, stream_tps: 0, avg_ttft_ms: 0, window_minutes: 5 })),
 	];
-	const models = Array.from(new Set([...usage.series.map((p) => p.model), ...cards.map((c) => c.model)])).sort();
+	// Idle = nothing live and (almost) no output in the window: collapsed to a count.
+	const isIdle = (r: { model: string; agg_out_tps: number }) => liveOf(r.model) === 0 && r.agg_out_tps < 0.5;
+	const active = rows.filter((r) => !isIdle(r)).sort((x, y) => y.agg_out_tps - x.agg_out_tps);
+	const idle = rows.filter(isIdle).map((r) => r.model);
+
+	const models = Array.from(new Set([...usage.series.map((p) => p.model), ...rows.map((c) => c.model)])).sort();
 	const color = (m: string) => SOC_MODEL_COLORS[Math.max(0, models.indexOf(m)) % SOC_MODEL_COLORS.length];
-	const byMinute = new Map<string, Map<string, number>>();
+	const byMinute = new Map<number, Map<string, number>>();
 	for (const p of usage.series) {
-		const row = byMinute.get(p.minute) || new Map<string, number>();
+		const t = new Date(p.minute).getTime();
+		const row = byMinute.get(t) || new Map<string, number>();
 		row.set(p.model, (row.get(p.model) || 0) + p.out_tokens / 60);
-		byMinute.set(p.minute, row);
+		byMinute.set(t, row);
 	}
 	const end = Math.floor(Date.now() / 60000) * 60000;
-	const bins = Array.from({ length: usage.minutes }, (_, i) => new Date(end - (usage.minutes - 1 - i) * 60000));
-	const keyOf = (d: Date) => Array.from(byMinute.keys()).find((k) => new Date(k).getTime() === d.getTime());
-	const stacks = bins.map((d) => {
-		const k = keyOf(d);
-		return { d, vals: k ? byMinute.get(k)! : new Map<string, number>() };
-	});
+	const bins = Array.from({ length: usage.minutes }, (_, i) => end - (usage.minutes - 1 - i) * 60000);
+	const stacks = bins.map((t) => ({ t, vals: byMinute.get(t) || new Map<string, number>() }));
 	const max = Math.max(1, ...stacks.map((s) => Array.from(s.vals.values()).reduce((a, b) => a + b, 0)));
 	const W = 600, H = 70, bw = W / bins.length;
+	const totalLive = Object.values(live?.streams || {}).reduce((a: number, b) => a + (b as number), 0);
 
-	if (usage.series.length === 0 && cards.length === 0) {
-		return (
-			<div className="text-[11px] text-slate-400">
-				{title ? <span className="font-medium text-slate-600">{title}: </span> : null}no traffic in the last {usage.minutes} min.
-			</div>
-		);
-	}
 	return (
 		<div className="space-y-1">
-		{title && <div className="text-[11px] font-medium text-slate-600">{title}</div>}
-		<div className="flex flex-col gap-2 lg:flex-row lg:items-stretch">
-			{/* Model cards (last 5 min) on the left; the hour histogram fills the rest of the row. */}
-			<div className="flex flex-wrap content-start gap-2 lg:max-w-[55%]">
-				{cards.map((s) => (
-					<div key={s.model} className="rounded border border-slate-200 px-2.5 py-1.5 text-[11px]">
-						<div className="flex items-center gap-1.5 font-medium text-slate-700">
-							<span className="inline-block h-2 w-2 rounded-sm" style={{ background: color(s.model) }} />
-							{s.model}
-							{live && (
-								<span
-									className={`ml-auto pl-2 tabular-nums font-normal ${(live.streams[s.model] || 0) > 0 ? 'text-emerald-700' : 'text-slate-400'}`}
-									title="Requests in flight on SoC right now (each holds one key)"
-								>
-									● {live.streams[s.model] || 0} live
-								</span>
-							)}
-						</div>
-						<div className="mt-0.5 flex flex-wrap gap-x-3 tabular-nums text-slate-600">
-							<span title="Output tokens / 300 s, last 5 min"><b className="text-slate-900">{s.agg_out_tps.toFixed(1)}</b> tok/s</span>
-							<span title="Per-stream decode speed: output tokens / generation time"><b className="text-slate-900">{s.stream_tps.toFixed(1)}</b> tok/s/stream</span>
-							<span title="Average time to first token (streaming requests)">TTFT {s.avg_ttft_ms > 0 ? `${(s.avg_ttft_ms / 1000).toFixed(2)}s` : '—'}</span>
-							<span>{s.requests} req{s.errors > 0 ? <span className="text-rose-600"> · {s.errors} err</span> : null}</span>
-						</div>
-					</div>
-				))}
-				{cards.length === 0 && <span className="text-[11px] text-slate-400">Idle in the last 5 min.</span>}
-				{live && keyed && (
-					<div className="basis-full text-[10px] tabular-nums text-slate-500">
-						{(() => {
-							const n = Object.values(live.streams).reduce((a, b) => a + b, 0);
-							return `${n} stream${n === 1 ? '' : 's'} on ${live.busy_keys.length} key${live.busy_keys.length === 1 ? '' : 's'}`;
-						})()}
-						{live.per_key_max ? ` (max ${live.per_key_max}/key)` : ''}{' '}
-						·{' '}
-						<span className={live.waiting > 0 ? 'text-amber-700 font-medium' : ''}>{live.waiting} waiting for a free key</span>
+			<div className="flex flex-wrap items-baseline gap-x-2 text-[11px]">
+				<span className="font-medium text-slate-700">{title}</span>
+				{live && (
+					<span className="tabular-nums text-slate-500">
+						<span className={totalLive > 0 ? 'text-emerald-700' : ''}>● {totalLive} live</span>
+						{keyed && (
+							<>
+								{' '}on {live.busy_keys.length} key{live.busy_keys.length === 1 ? '' : 's'}
+								{live.per_key_max ? ` (max ${live.per_key_max}/key)` : ''} ·{' '}
+								<span className={live.waiting > 0 ? 'text-amber-700 font-medium' : ''}>{live.waiting} waiting</span>
+							</>
+						)}
 						{live.source === 'local' && <span className="text-amber-700"> · Redis down: one replica only</span>}
-					</div>
+					</span>
 				)}
 			</div>
-			<div className="min-w-0 flex-1 rounded border border-slate-200 px-2.5 py-1.5">
-				<div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-slate-500">
-					<span className="font-medium text-slate-600">output tok/s per minute</span>
-					{models.map((m) => (
-						<span key={m} className="inline-flex items-center gap-1">
-							<span className="inline-block h-2 w-2 rounded-sm" style={{ background: color(m) }} />
-							{m}
-						</span>
-					))}
-					<span className="ml-auto tabular-nums">peak {max.toFixed(1)}</span>
+			<div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+				<div className="overflow-x-auto rounded border border-slate-200">
+					<table className="w-full text-[11px] tabular-nums">
+						<thead className="bg-slate-50 text-slate-500">
+							<tr>
+								<th className="px-2 py-1 text-left font-medium">Model</th>
+								<th className="px-2 py-1 text-right font-medium" title="Requests in flight right now">Live</th>
+								<th className="px-2 py-1 text-right font-medium" title="Output tokens / 300 s, last 5 min">tok/s</th>
+								<th className="px-2 py-1 text-right font-medium" title="Output tokens / generation time (per stream)">tok/s/stream</th>
+								<th className="px-2 py-1 text-right font-medium" title="Average time to first token (streaming requests)">TTFT</th>
+							</tr>
+						</thead>
+						<tbody>
+							{active.map((r) => (
+								<tr key={r.model} className="border-t border-slate-100">
+									<td className="px-2 py-1">
+										<span className="mr-1.5 inline-block h-2 w-2 rounded-sm align-middle" style={{ background: color(r.model) }} />
+										<span className="text-slate-700">{r.model}</span>
+										{r.errors > 0 && <span className="ml-1 text-rose-600">· {r.errors} err</span>}
+									</td>
+									<td className={`px-2 py-1 text-right ${liveOf(r.model) > 0 ? 'text-emerald-700' : 'text-slate-400'}`}>{liveOf(r.model)}</td>
+									<td className="px-2 py-1 text-right font-medium text-slate-900">{r.agg_out_tps.toFixed(1)}</td>
+									<td className="px-2 py-1 text-right text-slate-700">{r.stream_tps > 0 ? r.stream_tps.toFixed(1) : '—'}</td>
+									<td className="px-2 py-1 text-right text-slate-600">{r.avg_ttft_ms > 0 ? `${(r.avg_ttft_ms / 1000).toFixed(2)}s` : '—'}</td>
+								</tr>
+							))}
+							{active.length === 0 && (
+								<tr className="border-t border-slate-100">
+									<td className="px-2 py-1 text-slate-400" colSpan={5}>Idle in the last 5 min.</td>
+								</tr>
+							)}
+							{idle.length > 0 && (
+								<tr className="border-t border-slate-100">
+									<td className="px-2 py-1 text-[10px] text-slate-400" colSpan={5} title={idle.join(', ')}>
+										+{idle.length} idle: {idle.join(', ')}
+									</td>
+								</tr>
+							)}
+						</tbody>
+					</table>
 				</div>
-				<svg
-					viewBox={`0 0 ${W} ${H}`}
-					preserveAspectRatio="none"
-					className="mt-1 block w-full"
-					style={{ height: 64 }}
-					role="img"
-					aria-label={`SoC output tokens per second, last ${usage.minutes} minutes`}
-				>
-					<line x1={0} y1={H - 0.5} x2={W} y2={H - 0.5} stroke="#cbd5e1" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-					{stacks.map((s, i) => {
-						let y = H;
-						return (
-							<g key={i}>
-								<title>{`${s.d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}  ` + Array.from(s.vals.entries()).map(([m, v]) => `${m} ${v.toFixed(1)} tok/s`).join(' · ')}</title>
-								{models.map((m) => {
-									const v = s.vals.get(m) || 0;
-									if (v <= 0) return null;
-									const h = Math.max(1, (v / max) * (H - 2));
-									y -= h;
-									return <rect key={m} x={i * bw + 0.5} y={y} width={Math.max(1, bw - 1)} height={h} fill={color(m)} />;
-								})}
-							</g>
-						);
-					})}
-				</svg>
-				<div className="flex justify-between text-[10px] tabular-nums text-slate-400">
-					<span>−{usage.minutes}m</span>
-					<span>now</span>
+				<div className="flex min-w-0 flex-col rounded border border-slate-200 px-2.5 py-1.5">
+					<div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-slate-500">
+						<span className="font-medium text-slate-600">output tok/s per minute</span>
+						{models.map((m) => (
+							<span key={m} className="inline-flex items-center gap-1">
+								<span className="inline-block h-2 w-2 rounded-sm" style={{ background: color(m) }} />
+								{m}
+							</span>
+						))}
+						<span className="ml-auto tabular-nums">peak {max.toFixed(1)}</span>
+					</div>
+					<svg
+						viewBox={`0 0 ${W} ${H}`}
+						preserveAspectRatio="none"
+						className="mt-1 block w-full flex-1"
+						style={{ minHeight: 56 }}
+						role="img"
+						aria-label={`${title}: output tokens per second, last ${usage.minutes} minutes`}
+					>
+						<line x1={0} y1={H - 0.5} x2={W} y2={H - 0.5} stroke="#cbd5e1" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+						{stacks.map((s, i) => {
+							let y = H;
+							return (
+								<g key={i}>
+									<title>{`${new Date(s.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}  ` + Array.from(s.vals.entries()).map(([m, v]) => `${m} ${v.toFixed(1)} tok/s`).join(' · ')}</title>
+									{models.map((m) => {
+										const v = s.vals.get(m) || 0;
+										if (v <= 0) return null;
+										const h = Math.max(1, (v / max) * (H - 2));
+										y -= h;
+										return <rect key={m} x={i * bw + 0.5} y={y} width={Math.max(1, bw - 1)} height={h} fill={color(m)} />;
+									})}
+								</g>
+							);
+						})}
+					</svg>
+					<div className="flex justify-between text-[10px] tabular-nums text-slate-400">
+						<span>−{usage.minutes}m</span>
+						<span>now</span>
+					</div>
 				</div>
 			</div>
-		</div>
 		</div>
 	);
 }
@@ -759,13 +643,25 @@ function SocTkps({ usage, title }: { usage: SocUsageResp; title?: string }) {
 // deepseek/qwen), and the on-prem GPU backends. Self-contained (own fetches and
 // poll) so a slow source can't blank the page; each source hides on its own failure.
 function ThroughputPanel() {
-	const [claudeUsage, setClaudeUsage] = useState<SocUsageResp | null>(null);
-	const [socUsage, setSocUsage] = useState<SocUsageResp | null>(null);
+	const [claude, setClaude] = useState<SocUsageResp | null>(null);
+	const [soc, setSoc] = useState<SocUsageResp | null>(null);
+	const [onprem, setOnprem] = useState<SocUsageResp | null>(null);
 	const load = useCallback(() => {
-		fetchClaudeModelUsage(60)
-			.then((u) => setClaudeUsage({ ...u, live: u.live ? ({ streams: (u.live as any).streams || {} } as any) : null }))
-			.catch(() => setClaudeUsage(null));
-		fetchSocUsage(60).then(setSocUsage).catch(() => setSocUsage(null));
+		fetchModelUsage('claude', 60).then(setClaude).catch(() => setClaude(null));
+		fetchSocUsage(60).then(setSoc).catch(() => setSoc(null));
+		fetchModelUsage('onprem', 60)
+			.then((u) => {
+				// gmk-vl is hidden by operator request (2026-11-07), like the old on-prem panel.
+				const keep = (m: string) => m !== 'gmk-vl';
+				const streams = Object.fromEntries(Object.entries(u.live?.streams || {}).filter(([m]) => keep(m)));
+				setOnprem({
+					...u,
+					series: u.series.filter((p) => keep(p.model)),
+					summary: u.summary.filter((p) => keep(p.model)),
+					live: u.live ? ({ ...u.live, streams } as any) : null,
+				});
+			})
+			.catch(() => setOnprem(null));
 	}, []);
 	useEffect(() => {
 		load();
@@ -773,23 +669,16 @@ function ThroughputPanel() {
 		return () => clearInterval(t);
 	}, [load]);
 	return (
-		<section className="space-y-2">
+		<section className="space-y-3">
 			<h2 className="text-sm font-medium text-slate-800">
 				Throughput
 				<span className="ml-2 text-[11px] font-normal text-slate-400">
-					last 5 min per model · live streams · output tok/s per minute over the last hour
+					last 5 min per model · live requests · output tok/s per minute over the last hour
 				</span>
 			</h2>
-			{claudeUsage && <SocTkps usage={claudeUsage} title="Claude pool (Anthropic accounts)" />}
-			{socUsage && (
-				<SocTkps
-					usage={socUsage}
-					title={`SoC gateway — lumid-llm tier 0 for deepseek-v4.1-flash, qwen3.8-27b, qwen3.8-flash-next${
-						socUsage.live?.per_key_max ? ` · up to ${socUsage.live.per_key_max} requests per key` : ''
-					}`}
-				/>
-			)}
-			<OnPremGpuPanel embedded />
+			{claude && <ThroughputSource usage={claude} title="Claude pool (Anthropic accounts)" />}
+			{soc && <ThroughputSource usage={soc} title="SoC gateway (lumid-llm tier 0)" />}
+			{onprem && <ThroughputSource usage={onprem} title="On-prem GPUs (lumid-llm backends)" />}
 		</section>
 	);
 }
@@ -1029,8 +918,8 @@ function FieldBoxPanel() {
 				</div>
 			)}
 
-			<div className="rounded border border-slate-200 overflow-hidden">
-				<table className="w-full text-[11px]">
+			<div className="rounded border border-slate-200 overflow-x-auto">
+				<table className="w-full min-w-[640px] text-[11px]">
 					<thead className="bg-slate-50 text-slate-500">
 						<tr>
 							<th className="text-left  font-medium px-2.5 py-1">Box</th>
@@ -1151,7 +1040,9 @@ function FieldBoxPanel() {
 					</tbody>
 				</table>
 			</div>
-			<p className="text-[10px] text-slate-400">
+			<details className="text-[10px] text-slate-400">
+				<summary className="cursor-pointer select-none hover:text-slate-600">What these columns mean</summary>
+				<p className="mt-1">
 				Users read <span className="font-mono">homed/active</span>: homed is who is assigned to the
 				box's account right now (the balancing number, not windowed); active is who actually routed
 				through it in the window. Active overlaps between boxes because leases rotate, and misses
@@ -1164,7 +1055,8 @@ function FieldBoxPanel() {
 				{data.signal_since
 					? ` Routing verified for turns since ${new Date(data.signal_since).toLocaleString()}.`
 					: ' Routing verification has no data yet.'}
-			</p>
+				</p>
+			</details>
 		</section>
 	);
 }
@@ -2636,6 +2528,21 @@ function SummaryBar({ accounts }: { accounts: ClaudeQuotaAccount[] }) {
 }
 
 export default function StudioClaudeQuota() {
+	const [tab, setTab] = useState<'overview' | 'users'>(() => {
+		try {
+			return localStorage.getItem('code.tab') === 'users' ? 'users' : 'overview';
+		} catch {
+			return 'overview';
+		}
+	});
+	const pickTab = (t: 'overview' | 'users') => {
+		setTab(t);
+		try {
+			localStorage.setItem('code.tab', t);
+		} catch {
+			/* storage unavailable: tab just isn't remembered */
+		}
+	};
 	// /code is AdminGuard (admin + super_admin); the reset endpoint is
 	// RequireSuperAdmin. Gate the reset controls on the stricter of the two.
 	const { user } = useAuth();
@@ -2717,7 +2624,7 @@ export default function StudioClaudeQuota() {
 					pools={pools}
 				/>
 			)}
-			<header className="flex items-center justify-between">
+			<header className="flex flex-wrap items-center justify-between gap-2">
 				<div>
 					<h1 className="text-base font-medium flex items-center gap-2">
 						<Zap className="w-4 h-4 text-gold-600" />
@@ -2727,7 +2634,7 @@ export default function StudioClaudeQuota() {
 						Live 5h / 7d quota across all org accounts.
 					</p>
 				</div>
-				<div className="flex items-center gap-3">
+				<div className="flex flex-wrap items-center gap-3">
 					{lastFetch && (
 						<span className="text-[11px] text-slate-400">
 							updated {fmtTs(lastFetch.toISOString())}
@@ -2751,75 +2658,98 @@ export default function StudioClaudeQuota() {
 				</div>
 			</header>
 
+			{/* Two tabs: what the serving paths are doing (Overview) vs who/what is
+			    in the pool (Users / Keys). The choice is remembered per browser. */}
+			<div className="flex gap-1 border-b border-slate-200 text-xs" role="tablist">
+				{([['overview', 'Overview'], ['users', 'Users / Keys']] as const).map(([id, label]) => (
+					<button
+						key={id}
+						role="tab"
+						aria-selected={tab === id}
+						onClick={() => pickTab(id)}
+						className={`-mb-px border-b-2 px-3 py-1.5 font-medium transition ${
+							tab === id ? 'border-gold-600 text-slate-900' : 'border-transparent text-slate-500 hover:text-slate-800'
+						}`}
+					>
+						{label}
+					</button>
+				))}
+			</div>
+
 			{error ? (
 				<div className="text-sm rounded border border-rose-200 bg-rose-50 text-rose-800 px-3 py-2">
 					{error}
 				</div>
-			) : accounts === null ? (
-				<div className="text-sm text-slate-500 italic flex items-center gap-2">
-					<Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…
-				</div>
-			) : accounts.length === 0 ? (
+			) : null}
+
+			{tab === 'overview' && (
 				<>
-					{/* OpenRouter credit — still useful with no pooled accounts. */}
-					<OpenRouterBalancePanel />
-					<ThroughputPanel />
-					<div className="rounded-lg border border-slate-200 bg-white p-6 text-center">
-						<CheckCircle className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-						<p className="text-sm text-slate-500">
-							No accounts have connected a Claude token yet.
-						</p>
-						<p className="text-xs text-slate-400 mt-1">
-							Click "Add account" above and paste each user's Claude Code OAuth token.
-						</p>
-					</div>
-				</>
-			) : (
-				<>
-					{/* Top row: OpenRouter credit + pooled-account health side by side.
-					    Both are one-glance status figures; pairing them reclaims the
-					    vertical space two stacked cards would eat. */}
+					{/* One-glance status: OpenRouter credit + pooled-account health side by side. */}
 					<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 						<OpenRouterBalancePanel />
-						<SummaryBar accounts={accounts} />
+						{accounts && accounts.length > 0 && <SummaryBar accounts={accounts} />}
 					</div>
-					{/* Throughput up top: Claude pool, SoC gateway, on-prem GPUs. */}
 					<ThroughputPanel />
-					<div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100">
-						{accounts.map((a) => (
-							<AccountRow
-								key={a.email}
-								acc={a}
-								pools={pools}
-								onDelete={(email) => setAccounts((prev) => prev?.filter((x) => x.email !== email) ?? [])}
-								onReAdd={(email) => { setReAddEmail(email); setShowAdd(true); }}
-								// AdminClaudeQuota fans out live Anthropic probes and can take
-								// seconds, so patch the row optimistically first — otherwise the
-								// pill appears to lag the click — then refetch for the truth.
-								onChanged={() => {
-									setAccounts((prev) => prev?.map((x) => x.email === a.email
-										? { ...x, draining_since: x.draining_since ? undefined : new Date().toISOString() }
-										: x) ?? []);
-									load(true);
-								}}
-								onPoolChanged={() => { load(true); loadPools(); }}
-							/>
-						))}
-					</div>
+					{/* Per-field-box traffic + relay health. Self-contained (own fetch). */}
+					<FieldBoxPanel />
 				</>
 			)}
 
-			{/* Per-field-box traffic + relay health. Self-contained (own fetch)
-			    so a field-box outage can't blank the quota page above it. */}
-			<FieldBoxPanel />
+			{tab === 'users' && (
+				<>
+					<section className="space-y-2">
+						<h2 className="text-sm font-medium text-slate-800">
+							Claude pool accounts
+							{accounts && (
+								<span className="ml-2 text-[11px] font-normal text-slate-400">
+									{accounts.length} account{accounts.length === 1 ? '' : 's'} · add with "Add account" above
+								</span>
+							)}
+						</h2>
+						{accounts === null && !error ? (
+							<div className="text-sm text-slate-500 italic flex items-center gap-2">
+								<Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…
+							</div>
+						) : accounts && accounts.length === 0 ? (
+							<div className="rounded-lg border border-slate-200 bg-white p-6 text-center">
+								<CheckCircle className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+								<p className="text-sm text-slate-500">No accounts have connected a Claude token yet.</p>
+								<p className="text-xs text-slate-400 mt-1">Click "Add account" above and paste each user's Claude Code OAuth token.</p>
+							</div>
+						) : accounts ? (
+							<div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100">
+								{accounts.map((a) => (
+									<AccountRow
+										key={a.email}
+										acc={a}
+										pools={pools}
+										onDelete={(email) => setAccounts((prev) => prev?.filter((x) => x.email !== email) ?? [])}
+										onReAdd={(email) => { setReAddEmail(email); setShowAdd(true); }}
+										// AdminClaudeQuota fans out live Anthropic probes and can take
+										// seconds, so patch the row optimistically first — otherwise the
+										// pill appears to lag the click — then refetch for the truth.
+										onChanged={() => {
+											setAccounts((prev) => prev?.map((x) => x.email === a.email
+												? { ...x, draining_since: x.draining_since ? undefined : new Date().toISOString() }
+												: x) ?? []);
+											load(true);
+										}}
+										onPoolChanged={() => { load(true); loadPools(); }}
+									/>
+								))}
+							</div>
+						) : null}
+					</section>
 
-			{/* Pooled NUS SoC LLM gateway keys (management; throughput is in ThroughputPanel). */}
-			<SocKeysPanel />
+					{/* Pooled NUS SoC LLM gateway keys (management; throughput is on Overview). */}
+					<SocKeysPanel />
 
-			{/* Pools sit right above the per-user table they govern. */}
-			{accounts && accounts.length > 0 && pools.length > 0 && <PoolsPanel pools={pools} onChanged={loadPools} isSuper={isSuper} />}
+					{/* Pools sit right above the per-user table they govern. */}
+					{accounts && accounts.length > 0 && pools.length > 0 && <PoolsPanel pools={pools} onChanged={loadPools} isSuper={isSuper} />}
 
-			{userUsage && <UserUsageSection usage={userUsage} countdown={countdown} onReset={loadUserUsage} isSuper={isSuper} pools={pools} />}
+					{userUsage && <UserUsageSection usage={userUsage} countdown={countdown} onReset={loadUserUsage} isSuper={isSuper} pools={pools} />}
+				</>
+			)}
 
 			<p className="text-[11px] text-slate-400">
 				Setup + full guide: <a href="/docs/claude" className="text-gold-700 hover:underline">/docs/claude</a>.
