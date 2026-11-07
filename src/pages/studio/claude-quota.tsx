@@ -496,6 +496,17 @@ function fmtCount(n: number): string {
 	return String(n);
 }
 
+// niceCeil rounds an axis max up to 1/2/2.5/5 x 10^n so tick labels read cleanly.
+function niceCeil(v: number): number {
+	const p = Math.pow(10, Math.floor(Math.log10(v)));
+	for (const m of [1, 2, 2.5, 5, 10]) if (v <= m * p) return m * p;
+	return 10 * p;
+}
+
+function fmtTps(v: number): string {
+	return v >= 1000 ? `${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : v >= 10 ? v.toFixed(0) : v.toFixed(1);
+}
+
 // ThroughputSource — one serving path (Claude pool, SoC gateway, on-prem GPUs) in one shape:
 // a per-model table for the last 5 complete minutes (live requests, aggregate output tok/s,
 // per-stream decode tok/s, TTFT) beside the hour of output tok/s per minute, stacked by model.
@@ -526,11 +537,25 @@ function ThroughputSource({ usage, title }: { usage: SocUsageResp; title: string
 		row.set(p.model, (row.get(p.model) || 0) + p.out_tokens / 60);
 		byMinute.set(t, row);
 	}
+	// Longer windows are grouped so the chart stays ~60 bars; each bar is the AVERAGE
+	// output tok/s over its bucket (so the y-axis means the same thing at every window).
+	const bucketMin = Math.max(1, Math.round(usage.minutes / 60));
 	const end = Math.floor(Date.now() / 60000) * 60000;
-	const bins = Array.from({ length: usage.minutes }, (_, i) => end - (usage.minutes - 1 - i) * 60000);
-	const stacks = bins.map((t) => ({ t, vals: byMinute.get(t) || new Map<string, number>() }));
-	const max = Math.max(1, ...stacks.map((s) => Array.from(s.vals.values()).reduce((a, b) => a + b, 0)));
-	const W = 600, H = 70, bw = W / bins.length;
+	const nBins = Math.ceil(usage.minutes / bucketMin);
+	const stacks = Array.from({ length: nBins }, (_, i) => {
+		const start = end - (nBins - i) * bucketMin * 60000 + 60000;
+		const vals = new Map<string, number>();
+		for (let k = 0; k < bucketMin; k++) {
+			const row = byMinute.get(start + k * 60000);
+			if (!row) continue;
+			row.forEach((v, m) => vals.set(m, (vals.get(m) || 0) + v / bucketMin));
+		}
+		return { t: start, vals };
+	});
+	const peak = Math.max(0, ...stacks.map((s) => Array.from(s.vals.values()).reduce((a, b) => a + b, 0)));
+	const max = niceCeil(Math.max(1, peak));
+	const W = 600, H = 70, bw = W / stacks.length;
+	const windowLabel = usage.minutes >= 1440 ? `${usage.minutes / 1440}d` : usage.minutes >= 60 ? `${usage.minutes / 60}h` : `${usage.minutes}m`;
 	const totalLive = Object.values(live?.streams || {}).reduce((a: number, b) => a + (b as number), 0);
 
 	return (
@@ -601,22 +626,33 @@ function ThroughputSource({ usage, title }: { usage: SocUsageResp; title: string
 								{m}
 							</span>
 						))}
-						<span className="ml-auto tabular-nums">peak {max.toFixed(1)}</span>
+						<span className="ml-auto tabular-nums">
+							peak {peak.toFixed(1)}
+							{bucketMin > 1 ? ` · ${bucketMin}-min avg bars` : ''}
+						</span>
+					</div>
+					<div className="mt-1 flex flex-1 gap-1" style={{ minHeight: 56 }}>
+					{/* y-axis: HTML, not SVG text, so it isn't stretched by preserveAspectRatio="none" */}
+					<div className="flex w-8 shrink-0 flex-col justify-between text-right text-[9px] leading-none tabular-nums text-slate-400">
+						<span>{fmtTps(max)}</span>
+						<span>{fmtTps(max / 2)}</span>
+						<span>0</span>
 					</div>
 					<svg
 						viewBox={`0 0 ${W} ${H}`}
 						preserveAspectRatio="none"
-						className="mt-1 block w-full flex-1"
-						style={{ minHeight: 56 }}
+						className="block w-full flex-1"
 						role="img"
-						aria-label={`${title}: output tokens per second, last ${usage.minutes} minutes`}
+						aria-label={`${title}: output tokens per second, last ${windowLabel}`}
 					>
+						<line x1={0} y1={0.5} x2={W} y2={0.5} stroke="#eef2f7" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+						<line x1={0} y1={H / 2} x2={W} y2={H / 2} stroke="#eef2f7" strokeWidth={1} vectorEffect="non-scaling-stroke" />
 						<line x1={0} y1={H - 0.5} x2={W} y2={H - 0.5} stroke="#cbd5e1" strokeWidth={1} vectorEffect="non-scaling-stroke" />
 						{stacks.map((s, i) => {
 							let y = H;
 							return (
 								<g key={i}>
-									<title>{`${new Date(s.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}  ` + Array.from(s.vals.entries()).map(([m, v]) => `${m} ${v.toFixed(1)} tok/s`).join(' · ')}</title>
+									<title>{`${new Date(s.t).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}  ` + Array.from(s.vals.entries()).map(([m, v]) => `${m} ${v.toFixed(1)} tok/s`).join(' · ')}</title>
 									{models.map((m) => {
 										const v = s.vals.get(m) || 0;
 										if (v <= 0) return null;
@@ -628,8 +664,10 @@ function ThroughputSource({ usage, title }: { usage: SocUsageResp; title: string
 							);
 						})}
 					</svg>
-					<div className="flex justify-between text-[10px] tabular-nums text-slate-400">
-						<span>−{usage.minutes}m</span>
+					</div>
+					<div className="flex justify-between pl-9 text-[10px] tabular-nums text-slate-400">
+						<span>−{windowLabel}</span>
+						<span>−{usage.minutes >= 120 ? `${Math.round(usage.minutes / 120)}h` : `${Math.round(usage.minutes / 2)}m`}</span>
 						<span>now</span>
 					</div>
 				</div>
@@ -642,14 +680,36 @@ function ThroughputSource({ usage, title }: { usage: SocUsageResp; title: string
 // the Anthropic account pool, the NUS SoC gateway (lumid-llm tier 0 for
 // deepseek/qwen), and the on-prem GPU backends. Self-contained (own fetches and
 // poll) so a slow source can't blank the page; each source hides on its own failure.
+const THROUGHPUT_WINDOWS = [
+	[60, '1h'],
+	[360, '6h'],
+	[1440, '24h'],
+] as const;
+
 function ThroughputPanel() {
+	const [minutes, setMinutes] = useState<number>(() => {
+		try {
+			const v = Number(localStorage.getItem('code.throughputMinutes'));
+			return THROUGHPUT_WINDOWS.some(([m]) => m === v) ? v : 60;
+		} catch {
+			return 60;
+		}
+	});
+	const pickMinutes = (m: number) => {
+		setMinutes(m);
+		try {
+			localStorage.setItem('code.throughputMinutes', String(m));
+		} catch {
+			/* not remembered */
+		}
+	};
 	const [claude, setClaude] = useState<SocUsageResp | null>(null);
 	const [soc, setSoc] = useState<SocUsageResp | null>(null);
 	const [onprem, setOnprem] = useState<SocUsageResp | null>(null);
 	const load = useCallback(() => {
-		fetchModelUsage('claude', 60).then(setClaude).catch(() => setClaude(null));
-		fetchSocUsage(60).then(setSoc).catch(() => setSoc(null));
-		fetchModelUsage('onprem', 60)
+		fetchModelUsage('claude', minutes).then(setClaude).catch(() => setClaude(null));
+		fetchSocUsage(minutes).then(setSoc).catch(() => setSoc(null));
+		fetchModelUsage('onprem', minutes)
 			.then((u) => {
 				// gmk-vl is hidden by operator request (2026-11-07), like the old on-prem panel.
 				const keep = (m: string) => m !== 'gmk-vl';
@@ -662,7 +722,7 @@ function ThroughputPanel() {
 				});
 			})
 			.catch(() => setOnprem(null));
-	}, []);
+	}, [minutes]);
 	useEffect(() => {
 		load();
 		const t = setInterval(load, 30000);
@@ -670,12 +730,26 @@ function ThroughputPanel() {
 	}, [load]);
 	return (
 		<section className="space-y-3">
-			<h2 className="text-sm font-medium text-slate-800">
-				Throughput
-				<span className="ml-2 text-[11px] font-normal text-slate-400">
-					last 5 min per model · live requests · output tok/s per minute over the last hour
-				</span>
-			</h2>
+			<div className="flex flex-wrap items-center justify-between gap-2">
+				<h2 className="text-sm font-medium text-slate-800">
+					Throughput
+					<span className="ml-2 text-[11px] font-normal text-slate-400">
+						table: last 5 min · chart: output tok/s
+					</span>
+				</h2>
+				<div className="inline-flex overflow-hidden rounded border border-slate-200 text-[11px]" role="group" aria-label="Chart window">
+					{THROUGHPUT_WINDOWS.map(([m, label]) => (
+						<button
+							key={m}
+							onClick={() => pickMinutes(m)}
+							aria-pressed={minutes === m}
+							className={`px-2 py-0.5 tabular-nums ${minutes === m ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+						>
+							{label}
+						</button>
+					))}
+				</div>
+			</div>
 			{claude && <ThroughputSource usage={claude} title="Claude pool (Anthropic accounts)" />}
 			{soc && <ThroughputSource usage={soc} title="SoC gateway (lumid-llm tier 0)" />}
 			{onprem && <ThroughputSource usage={onprem} title="On-prem GPUs (lumid-llm backends)" />}
