@@ -42,6 +42,7 @@ import {
 	type ClaudeFieldBoxResp,
 	type ClaudeQuotaAccount,
 	type ClaudeUserUsageResp,
+	type ClaudeUserUsage,
 	type OpenRouterBalanceResp,
 	type ClaudePool,
 	type ClaudePoolMember,
@@ -2016,6 +2017,36 @@ function fmtReset(iso?: string): string {
 // (env-tunable, 4h since 2026-08-11) and is deliberately NOT the same thing
 // as the 5h window in the account table above, which is Anthropic's own
 // rate-limit window for the pooled subscription. They drift out of phase.
+function fmtUnits(n: number): string {
+	if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
+	if (n >= 1e6) return `${(n / 1e6).toFixed(n >= 1e8 ? 0 : 1)}M`;
+	if (n >= 1e3) return `${(n / 1e3).toFixed(0)}k`;
+	return String(n);
+}
+
+// OpusCapChip — the per-admin Opus cap (identity, role=admin). Shown beside the
+// "uncapped" pool badge because for admins this is the cap that actually bites:
+// over either window, Opus requests are refused (429 with a reset time) while
+// Sonnet keeps working. Same weighted units and windows as the gate.
+function OpusCapChip({ u, shortWin }: { u: ClaudeUserUsage; shortWin: string }) {
+	const s5 = u.opus_five_hour_tokens ?? 0, l5 = u.opus_five_hour_limit ?? 0;
+	const s7 = u.opus_seven_day_tokens ?? 0, l7 = u.opus_seven_day_limit ?? 0;
+	const p5 = l5 > 0 ? (s5 / l5) * 100 : 0, p7 = l7 > 0 ? (s7 / l7) * 100 : 0;
+	const worst = Math.max(p5, p7);
+	const tone = u.opus_exhausted || worst >= 100
+		? 'border-rose-300 bg-rose-50 text-rose-700'
+		: worst >= 80 ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-violet-200 bg-violet-50 text-violet-700';
+	return (
+		<span
+			className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] tabular-nums ${tone}`}
+			title={`Opus cap (admin): ${s5.toLocaleString()} / ${l5.toLocaleString()} units (${shortWin}) · ${s7.toLocaleString()} / ${l7.toLocaleString()} (7d). ${u.opus_exhausted ? 'LIMIT REACHED — Opus requests are refused until the window resets; Sonnet still works.' : 'Over either window, Opus is refused until it resets; Sonnet keeps working.'}`}
+		>
+			Opus {fmtUnits(s5)}/{fmtUnits(l5)} · {fmtUnits(s7)}/{fmtUnits(l7)}
+			{u.opus_exhausted && <span className="ml-1 font-semibold">limit reached</span>}
+		</span>
+	);
+}
+
 function UserUsageSection({
 	usage,
 	countdown,
@@ -2125,6 +2156,14 @@ function UserUsageSection({
 				</p>
 				<span className="text-[10px] text-slate-400 font-normal">
 					caps: {capTiers} (pooled Claude only — deepseek is counted but not limited)
+					{(usage.opus_admin_seven_day_tokens ?? 0) > 0 && (
+						<>
+							{' · '}
+							<span className="text-violet-700" title="Admins (not super_admin) have an Opus-only cap inside the pool. Over it, Opus requests are refused with a clear 429; Sonnet keeps working.">
+								admin Opus cap: {fmtUnits(usage.opus_admin_five_hour_tokens ?? 0)} / {shortWin} · {fmtUnits(usage.opus_admin_seven_day_tokens ?? 0)} / 7d
+							</span>
+						</>
+					)}
 					{' · '}<span title="Quota units are price-weighted: a cache READ counts 0.1x, a 5m cache write 1.25x, a 1h write 2x; sonnet 0.6x, haiku 0.2x, non-Claude 0.1x. A Claude Code turn is mostly cache-read, so units run ~10x below raw tokens. Raw tokens are shown alongside.">units ≠ tokens</span>
 					{' · '}users with a <code className="font-mono text-[10px]">claude:proxy</code> PAT appear even at 0 usage
 				</span>
@@ -2240,6 +2279,7 @@ function UserUsageSection({
 									{resetShort && <span className={`text-[10px] tabular-nums ${windowText(shortPct, 'short')}`} title={`4h window resets ${u.five_hour_reset ?? ''}`}>{resetShort}</span>}
 									{resetWeek && <span className={`text-[10px] tabular-nums ${windowText(weekPct, 'week')}`} title={`7d window resets ${u.seven_day_reset ?? ''}`}>{resetWeek}</span>}
 								</div>}
+								{(u.opus_seven_day_limit ?? 0) > 0 && <OpusCapChip u={u} shortWin={shortWin} />}
 								{usesPool && <ResetWindowButtons isSuper={isSuper} email={u.email} shortLabel={shortWin} onDone={onReset} />}
 								<span className="shrink-0 text-[10px] text-slate-400">{fmtTs(u.last_ts)}</span>
 							</div>
