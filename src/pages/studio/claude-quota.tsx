@@ -37,6 +37,7 @@ import {
 	adminDeleteSocKey,
 	adminResetSocKey,
 	fetchSocUsage,
+	fetchClaudeModelUsage,
 	type SocKeysResp,
 	type SocUsageResp,
 	type ClaudeFieldBoxResp,
@@ -618,8 +619,9 @@ function OnPremGpuPanel() {
 // chart is aggregate output tok/s per minute over the last hour, stacked by model.
 const SOC_MODEL_COLORS = ['#0f766e', '#b45309', '#4338ca', '#be123c'];
 
-function SocTkps({ usage }: { usage: SocUsageResp }) {
+function SocTkps({ usage, title }: { usage: SocUsageResp; title?: string }) {
 	const live = usage.live || null;
+	const keyed = !!live && Array.isArray(live.busy_keys);
 	// A model streaming right now gets a card even with no completed request in the 5-min window.
 	const cards = [
 		...usage.summary,
@@ -646,9 +648,15 @@ function SocTkps({ usage }: { usage: SocUsageResp }) {
 	const W = 600, H = 70, bw = W / bins.length;
 
 	if (usage.series.length === 0 && cards.length === 0) {
-		return <div className="text-[11px] text-slate-400">No SoC traffic in the last {usage.minutes} min.</div>;
+		return (
+			<div className="text-[11px] text-slate-400">
+				{title ? <span className="font-medium text-slate-600">{title}: </span> : null}no traffic in the last {usage.minutes} min.
+			</div>
+		);
 	}
 	return (
+		<div className="space-y-1">
+		{title && <div className="text-[11px] font-medium text-slate-600">{title}</div>}
 		<div className="flex flex-col gap-2 lg:flex-row lg:items-stretch">
 			{/* Model cards (last 5 min) on the left; the hour histogram fills the rest of the row. */}
 			<div className="flex flex-wrap content-start gap-2 lg:max-w-[55%]">
@@ -675,10 +683,14 @@ function SocTkps({ usage }: { usage: SocUsageResp }) {
 					</div>
 				))}
 				{cards.length === 0 && <span className="text-[11px] text-slate-400">Idle in the last 5 min.</span>}
-				{live && (
+				{live && keyed && (
 					<div className="basis-full text-[10px] tabular-nums text-slate-500">
-						{Object.values(live.streams).reduce((a, b) => a + b, 0)} streams on {live.busy_keys.length} key
-						{live.busy_keys.length === 1 ? '' : 's'} ·{' '}
+						{(() => {
+							const n = Object.values(live.streams).reduce((a, b) => a + b, 0);
+							return `${n} stream${n === 1 ? '' : 's'} on ${live.busy_keys.length} key${live.busy_keys.length === 1 ? '' : 's'}`;
+						})()}
+						{live.per_key_max ? ` (max ${live.per_key_max}/key)` : ''}{' '}
+						·{' '}
 						<span className={live.waiting > 0 ? 'text-amber-700 font-medium' : ''}>{live.waiting} waiting for a free key</span>
 						{live.source === 'local' && <span className="text-amber-700"> · Redis down: one replica only</span>}
 					</div>
@@ -726,6 +738,7 @@ function SocTkps({ usage }: { usage: SocUsageResp }) {
 				</div>
 			</div>
 		</div>
+		</div>
 	);
 }
 
@@ -744,6 +757,7 @@ function SocKeysPanel() {
 	const [busy, setBusy] = useState(false);
 	const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 	const [usage, setUsage] = useState<SocUsageResp | null>(null);
+	const [claudeUsage, setClaudeUsage] = useState<SocUsageResp | null>(null);
 
 	const load = useCallback(() => {
 		fetchSocKeys()
@@ -751,6 +765,10 @@ function SocKeysPanel() {
 			.catch((e: any) => setErr(String(e?.response?.data?.message || e?.message || e)));
 		// TKPS is best-effort: an older identity without the route just hides it.
 		fetchSocUsage(60).then(setUsage).catch(() => setUsage(null));
+		// Claude pool: same shape; live = claude_streams from the relay status.
+		fetchClaudeModelUsage(60)
+			.then((u) => setClaudeUsage({ ...u, live: u.live ? ({ streams: (u.live as any).streams || {} } as any) : null }))
+			.catch(() => setClaudeUsage(null));
 	}, []);
 	useEffect(() => {
 		load();
@@ -796,14 +814,29 @@ function SocKeysPanel() {
 	return (
 		<section className="space-y-2">
 			<h2 className="text-sm font-medium text-slate-800">
-				SoC API keys
+				Throughput
 				<span className="ml-2 text-[11px] font-normal text-slate-400">
-					{data ? `${data.active} active of ${data.total}` : '…'} · serves <code>SOC_DeepSeek_V4.1_flash</code> ·
-					each key has a daily limit; the proxy rotates across all active keys
+					last 5 min per model · live streams · output tok/s per minute over the last hour
 				</span>
 			</h2>
 
-			{usage && <SocTkps usage={usage} />}
+			{claudeUsage && <SocTkps usage={claudeUsage} title="Claude pool (Anthropic accounts)" />}
+
+			{usage && (
+				<SocTkps
+					usage={usage}
+					title={`SoC gateway — lumid-llm tier 0 for deepseek-v4.1-flash, qwen3.8-27b, qwen3.8-flash-next${
+						usage.live?.per_key_max ? ` · up to ${usage.live.per_key_max} requests per key` : ''
+					}`}
+				/>
+			)}
+
+			<div className="pt-1 text-[11px] font-medium text-slate-600">
+				SoC API keys
+				<span className="ml-2 font-normal text-slate-400">
+					{data ? `${data.active} active of ${data.total}` : '…'} · each key has a daily limit; the proxy rotates across all active keys
+				</span>
+			</div>
 
 			<div className="flex flex-wrap items-center gap-2">
 				<input
