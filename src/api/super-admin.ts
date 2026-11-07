@@ -1053,7 +1053,9 @@ export interface SocUsageSummary {
 export interface SocRelayLive {
 	streams: Record<string, number>; // in-flight requests per model right now (cluster-wide)
 	busy_keys: number[]; // pool key ids holding a request (0 = proxy fallback key)
-	waiting: number; // requests queued for a free key (one in-flight request per key)
+	waiting: number; // requests queued for a free key
+	per_key_max?: number; // SOC_KEY_MAX_INFLIGHT: requests one key may carry at once
+	claude_streams?: Record<string, number>; // Anthropic-pool requests in flight per model
 	source: 'redis' | 'local';
 	observed_at: string;
 }
@@ -1068,5 +1070,12 @@ export interface SocUsageResp {
 
 export async function fetchSocUsage(minutes = 60): Promise<SocUsageResp> {
 	const r = await apiClient.get<DataResponse<SocUsageResp>>(`/api/v1/admin/soc-keys/usage?minutes=${minutes}`);
+	return r.data.data;
+}
+
+// Anthropic-pool throughput (claude-proxy per-minute metering), same series/summary
+// shape as fetchSocUsage so the panel renders both with one component.
+export async function fetchClaudeModelUsage(minutes = 60): Promise<SocUsageResp> {
+	const r = await apiClient.get<DataResponse<SocUsageResp>>(`/api/v1/admin/model-usage?source=claude&minutes=${minutes}`);
 	return r.data.data;
 }
