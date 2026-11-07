@@ -509,6 +509,9 @@ function fmtCount(n: number): string {
 // 2-minute refresh reads as broken, not slow.
 const ONPREM_GPU_REFRESH_MS = 12 * 1000;
 
+const HIDDEN_ONPREM_BACKEND = (b: { url: string; label: string }) =>
+	b.url.includes('claude-proxy-soc') || b.label === 'gmk-vl';
+
 function OnPremGpuPanel() {
 	const [data, setData] = useState<OnpremGpuStatsResp | null>(null);
 	const [err, setErr] = useState('');
@@ -541,7 +544,9 @@ function OnPremGpuPanel() {
 	const windowLabel = data.window_seconds
 		? data.window_seconds >= 60 ? `${Math.round(data.window_seconds / 60)}m` : `${data.window_seconds}s`
 		: '5m';
-	const backends = data.backends ?? [];
+	// Not on-prem GPUs, so not shown here: the SoC relay (claude-proxy-soc, lumid-llm's tier 0 for
+	// deepseek/qwen — its throughput is in the Throughput panel) and gmk-vl (operator, 2026-11-07).
+	const backends = (data.backends ?? []).filter((b) => !HIDDEN_ONPREM_BACKEND(b));
 
 	return (
 		<section className="space-y-2">
