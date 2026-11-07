@@ -2764,13 +2764,6 @@ export default function StudioClaudeQuota() {
 						{accounts && accounts.length > 0 && <SummaryBar accounts={accounts} />}
 					</div>
 					<ThroughputPanel />
-					{/* Per-field-box traffic + relay health. Self-contained (own fetch). */}
-					<FieldBoxPanel />
-				</>
-			)}
-
-			{tab === 'users' && (
-				<>
 					<section className="space-y-2">
 						<h2 className="text-sm font-medium text-slate-800">
 							Claude pool accounts
@@ -2814,6 +2807,11 @@ export default function StudioClaudeQuota() {
 							</div>
 						) : null}
 					</section>
+				</>
+			)}
+
+			{tab === 'users' && (
+				<>
 
 					{/* Pooled NUS SoC LLM gateway keys (management; throughput is on Overview). */}
 					<SocKeysPanel />
@@ -2822,6 +2820,9 @@ export default function StudioClaudeQuota() {
 					{accounts && accounts.length > 0 && pools.length > 0 && <PoolsPanel pools={pools} onChanged={loadPools} isSuper={isSuper} />}
 
 					{userUsage && <UserUsageSection usage={userUsage} countdown={countdown} onReset={loadUserUsage} isSuper={isSuper} pools={pools} />}
+
+					{/* Per-field-box traffic + relay health (which box each user's account egresses through). */}
+					<FieldBoxPanel />
 				</>
 			)}
 
