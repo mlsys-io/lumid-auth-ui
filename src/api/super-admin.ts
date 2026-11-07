@@ -393,6 +393,13 @@ export interface ClaudeUserUsage {
 	claude_seven_day_tokens?: number;
 	claude_five_hour_pct?: number;
 	claude_seven_day_pct?: number;
+	// Per-admin Opus cap (role=admin; limits 0 = not capped). Same windows and
+	// weighted units as the gate that refuses Opus when opus_exhausted.
+	opus_five_hour_tokens?: number;
+	opus_seven_day_tokens?: number;
+	opus_five_hour_limit?: number;
+	opus_seven_day_limit?: number;
+	opus_exhausted?: boolean;
 	cost_cents_7d: number;
 	requests_7d: number;
 	last_ts: string;
@@ -452,6 +459,9 @@ export interface ClaudeUserUsageResp {
 	// 2026-08-11 — a hardcoded label silently lies the next time it moves.
 	// The five_hour_* keys keep their historical names for wire compatibility.
 	short_window_label?: string;
+	// Per-admin Opus cap (role=admin), weighted units; absent on older servers.
+	opus_admin_five_hour_tokens?: number;
+	opus_admin_seven_day_tokens?: number;
 	// ON-PREM SAVINGS — the in-house-served share valued at what it WOULD have cost
 	// to buy. Not new measurement: usage_events already prices non-Anthropic
 	// models at their metered rate rather than at zero, and the provider split
