@@ -512,7 +512,7 @@ const ONPREM_GPU_REFRESH_MS = 12 * 1000;
 const HIDDEN_ONPREM_BACKEND = (b: { url: string; label: string }) =>
 	b.url.includes('claude-proxy-soc') || b.label === 'gmk-vl';
 
-function OnPremGpuPanel() {
+function OnPremGpuPanel({ embedded = false }: { embedded?: boolean } = {}) {
 	const [data, setData] = useState<OnpremGpuStatsResp | null>(null);
 	const [err, setErr] = useState('');
 
@@ -550,12 +550,19 @@ function OnPremGpuPanel() {
 
 	return (
 		<section className="space-y-2">
-			<h2 className="text-sm font-medium text-slate-800">
-				On-prem GPU throughput
-				<span className="ml-2 text-[11px] font-normal text-slate-400">
-					tok/s · qps ({windowLabel} rolling)
-				</span>
-			</h2>
+			{embedded ? (
+				<div className="text-[11px] font-medium text-slate-600">
+					On-prem GPUs (lumid-llm backends)
+					<span className="ml-2 font-normal text-slate-400">tok/s · qps ({windowLabel} rolling)</span>
+				</div>
+			) : (
+				<h2 className="text-sm font-medium text-slate-800">
+					On-prem GPU throughput
+					<span className="ml-2 text-[11px] font-normal text-slate-400">
+						tok/s · qps ({windowLabel} rolling)
+					</span>
+				</h2>
+			)}
 			<div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
 				{backends.map((b) => (
 					<span
@@ -747,6 +754,46 @@ function SocTkps({ usage, title }: { usage: SocUsageResp; title?: string }) {
 	);
 }
 
+// ThroughputPanel — what every serving path is doing right now, in one place:
+// the Anthropic account pool, the NUS SoC gateway (lumid-llm tier 0 for
+// deepseek/qwen), and the on-prem GPU backends. Self-contained (own fetches and
+// poll) so a slow source can't blank the page; each source hides on its own failure.
+function ThroughputPanel() {
+	const [claudeUsage, setClaudeUsage] = useState<SocUsageResp | null>(null);
+	const [socUsage, setSocUsage] = useState<SocUsageResp | null>(null);
+	const load = useCallback(() => {
+		fetchClaudeModelUsage(60)
+			.then((u) => setClaudeUsage({ ...u, live: u.live ? ({ streams: (u.live as any).streams || {} } as any) : null }))
+			.catch(() => setClaudeUsage(null));
+		fetchSocUsage(60).then(setSocUsage).catch(() => setSocUsage(null));
+	}, []);
+	useEffect(() => {
+		load();
+		const t = setInterval(load, 30000);
+		return () => clearInterval(t);
+	}, [load]);
+	return (
+		<section className="space-y-2">
+			<h2 className="text-sm font-medium text-slate-800">
+				Throughput
+				<span className="ml-2 text-[11px] font-normal text-slate-400">
+					last 5 min per model · live streams · output tok/s per minute over the last hour
+				</span>
+			</h2>
+			{claudeUsage && <SocTkps usage={claudeUsage} title="Claude pool (Anthropic accounts)" />}
+			{socUsage && (
+				<SocTkps
+					usage={socUsage}
+					title={`SoC gateway — lumid-llm tier 0 for deepseek-v4.1-flash, qwen3.8-27b, qwen3.8-flash-next${
+						socUsage.live?.per_key_max ? ` · up to ${socUsage.live.per_key_max} requests per key` : ''
+					}`}
+				/>
+			)}
+			<OnPremGpuPanel embedded />
+		</section>
+	);
+}
+
 // SocKeysPanel — pooled NUS SoC LLM gateway keys (SOCLAAS_API_KEY).
 //
 // Each SoC key is personal with a DAILY usage limit; claude-proxy rotates
@@ -762,7 +809,6 @@ function SocKeysPanel() {
 	const [busy, setBusy] = useState(false);
 	const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 	const [usage, setUsage] = useState<SocUsageResp | null>(null);
-	const [claudeUsage, setClaudeUsage] = useState<SocUsageResp | null>(null);
 
 	const load = useCallback(() => {
 		fetchSocKeys()
@@ -770,10 +816,6 @@ function SocKeysPanel() {
 			.catch((e: any) => setErr(String(e?.response?.data?.message || e?.message || e)));
 		// TKPS is best-effort: an older identity without the route just hides it.
 		fetchSocUsage(60).then(setUsage).catch(() => setUsage(null));
-		// Claude pool: same shape; live = claude_streams from the relay status.
-		fetchClaudeModelUsage(60)
-			.then((u) => setClaudeUsage({ ...u, live: u.live ? ({ streams: (u.live as any).streams || {} } as any) : null }))
-			.catch(() => setClaudeUsage(null));
 	}, []);
 	useEffect(() => {
 		load();
@@ -819,29 +861,12 @@ function SocKeysPanel() {
 	return (
 		<section className="space-y-2">
 			<h2 className="text-sm font-medium text-slate-800">
-				Throughput
+				SoC API keys
 				<span className="ml-2 text-[11px] font-normal text-slate-400">
-					last 5 min per model · live streams · output tok/s per minute over the last hour
+					{data ? `${data.active} active of ${data.total}` : '…'} · each key has a daily limit; the proxy rotates across all active keys
+					{usage?.live?.per_key_max ? ` · up to ${usage.live.per_key_max} requests per key` : ''}
 				</span>
 			</h2>
-
-			{claudeUsage && <SocTkps usage={claudeUsage} title="Claude pool (Anthropic accounts)" />}
-
-			{usage && (
-				<SocTkps
-					usage={usage}
-					title={`SoC gateway — lumid-llm tier 0 for deepseek-v4.1-flash, qwen3.8-27b, qwen3.8-flash-next${
-						usage.live?.per_key_max ? ` · up to ${usage.live.per_key_max} requests per key` : ''
-					}`}
-				/>
-			)}
-
-			<div className="pt-1 text-[11px] font-medium text-slate-600">
-				SoC API keys
-				<span className="ml-2 font-normal text-slate-400">
-					{data ? `${data.active} active of ${data.total}` : '…'} · each key has a daily limit; the proxy rotates across all active keys
-				</span>
-			</div>
 
 			<div className="flex flex-wrap items-center gap-2">
 				<input
@@ -2738,6 +2763,7 @@ export default function StudioClaudeQuota() {
 				<>
 					{/* OpenRouter credit — still useful with no pooled accounts. */}
 					<OpenRouterBalancePanel />
+					<ThroughputPanel />
 					<div className="rounded-lg border border-slate-200 bg-white p-6 text-center">
 						<CheckCircle className="w-8 h-8 text-slate-300 mx-auto mb-2" />
 						<p className="text-sm text-slate-500">
@@ -2757,7 +2783,8 @@ export default function StudioClaudeQuota() {
 						<OpenRouterBalancePanel />
 						<SummaryBar accounts={accounts} />
 					</div>
-					{pools.length > 0 && <PoolsPanel pools={pools} onChanged={loadPools} isSuper={isSuper} />}
+					{/* Throughput up top: Claude pool, SoC gateway, on-prem GPUs. */}
+					<ThroughputPanel />
 					<div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100">
 						{accounts.map((a) => (
 							<AccountRow
@@ -2782,16 +2809,15 @@ export default function StudioClaudeQuota() {
 				</>
 			)}
 
-			{/* On-prem GPU throughput. Self-contained (own fetch, own faster poll)
-			    so a lumid-llm hiccup can't blank the quota page above it. */}
-			<OnPremGpuPanel />
-
 			{/* Per-field-box traffic + relay health. Self-contained (own fetch)
 			    so a field-box outage can't blank the quota page above it. */}
 			<FieldBoxPanel />
 
-			{/* Pooled NUS SoC LLM gateway keys. Self-contained (own fetch). */}
+			{/* Pooled NUS SoC LLM gateway keys (management; throughput is in ThroughputPanel). */}
 			<SocKeysPanel />
+
+			{/* Pools sit right above the per-user table they govern. */}
+			{accounts && accounts.length > 0 && pools.length > 0 && <PoolsPanel pools={pools} onChanged={loadPools} isSuper={isSuper} />}
 
 			{userUsage && <UserUsageSection usage={userUsage} countdown={countdown} onReset={loadUserUsage} isSuper={isSuper} pools={pools} />}
 
