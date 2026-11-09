@@ -1072,8 +1072,14 @@ export interface SocRelayLive {
 
 export interface SocUsageResp {
 	live?: SocRelayLive | null;
-	series: SocUsagePoint[];
-	summary: SocUsageSummary[];
+	// NULLABLE ON THE WIRE, despite what this used to say. The server builds both
+	// from a query result into a Go slice that starts nil; with no matching rows
+	// encoding/json emits `null`, not `[]`. An empty window is ordinary — a quiet
+	// pool, or the metering ingest being down — so every consumer must normalise
+	// (`u.series ?? []`) before .map/.filter. Declaring these non-null is what let
+	// a null crash the whole /code page on 2026-11-09; see ThroughputSource.
+	series: SocUsagePoint[] | null;
+	summary: SocUsageSummary[] | null;
 	keys_today: { key_id: number; requests: number; errors: number; in_tokens: number; out_tokens: number }[];
 	minutes: number;
 }
