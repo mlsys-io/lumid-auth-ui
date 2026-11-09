@@ -517,11 +517,25 @@ function ThroughputSource({ usage, title }: { usage: SocUsageResp; title: string
 	const live = usage.live || null;
 	const keyed = !!live && Array.isArray(live.busy_keys);
 	const liveOf = (m: string) => (live?.streams?.[m] ?? 0) as number;
+	// NORMALISE THE ARRAYS BEFORE ANY .map. Go serialises a nil slice as JSON
+	// `null`, not `[]`, and the server builds these from a query that returns no
+	// rows whenever the window is empty — which is exactly what a quiet pool, or
+	// a paused metering ingest, looks like. Un-guarded, `usage.series.map(...)`
+	// threw "Cannot read properties of null (reading 'map')" during render, and
+	// because this component mounts as soon as its fetch resolves, that crashed
+	// the WHOLE /code page to a blank screen — not just this panel. Measured
+	// 2026-11-09: claude-proxy metering stopped at 04:24 UTC, the 1h window went
+	// empty, `series` came back null, and lum.id/code rendered 0 characters.
+	// The SocUsageResp type says `series: SocUsagePoint[]`, which is what let
+	// this ship; the wire truth is nullable. Normalise here rather than trusting
+	// the type, so this panel degrades to "idle" instead of taking the page down.
+	const series = usage.series ?? [];
+	const summary = usage.summary ?? [];
 	// One row per model seen in the 5-min summary or streaming right now.
 	const rows = [
-		...usage.summary,
+		...summary,
 		...Object.keys(live?.streams || {})
-			.filter((m) => liveOf(m) > 0 && !usage.summary.some((s) => s.model === m))
+			.filter((m) => liveOf(m) > 0 && !summary.some((s) => s.model === m))
 			.map((m) => ({ model: m, requests: 0, errors: 0, in_tokens: 0, out_tokens: 0, agg_out_tps: 0, stream_tps: 0, avg_ttft_ms: 0, window_minutes: 5 })),
 	];
 	// Idle = nothing live and (almost) no output in the window: collapsed to a count.
@@ -529,10 +543,10 @@ function ThroughputSource({ usage, title }: { usage: SocUsageResp; title: string
 	const active = rows.filter((r) => !isIdle(r)).sort((x, y) => y.agg_out_tps - x.agg_out_tps);
 	const idle = rows.filter(isIdle).map((r) => r.model);
 
-	const models = Array.from(new Set([...usage.series.map((p) => p.model), ...rows.map((c) => c.model)])).sort();
+	const models = Array.from(new Set([...series.map((p) => p.model), ...rows.map((c) => c.model)])).sort();
 	const color = (m: string) => SOC_MODEL_COLORS[Math.max(0, models.indexOf(m)) % SOC_MODEL_COLORS.length];
 	const byMinute = new Map<number, Map<string, number>>();
-	for (const p of usage.series) {
+	for (const p of series) {
 		const t = new Date(p.minute).getTime();
 		const row = byMinute.get(t) || new Map<string, number>();
 		row.set(p.model, (row.get(p.model) || 0) + p.out_tokens / 60);
@@ -717,8 +731,11 @@ function ThroughputPanel() {
 				const streams = Object.fromEntries(Object.entries(u.live?.streams || {}).filter(([m]) => keep(m)));
 				setOnprem({
 					...u,
-					series: u.series.filter((p) => keep(p.model)),
-					summary: u.summary.filter((p) => keep(p.model)),
+					// Same nil-slice-as-null trap as ThroughputSource. Without the
+					// guard a null here rejects this handler and the on-prem panel
+					// silently blanks (the network request itself succeeded).
+					series: (u.series ?? []).filter((p) => keep(p.model)),
+					summary: (u.summary ?? []).filter((p) => keep(p.model)),
 					live: u.live ? ({ ...u.live, streams } as any) : null,
 				});
 			})

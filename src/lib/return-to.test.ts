@@ -27,6 +27,38 @@ check("SPA prefixes unchanged, and they are not server navigations", () => {
 	}
 });
 
+// Regression, 2026-11-09. nginx 302s a logged-out /code visitor to
+// /auth/login?return_to=/code; this check rejected it, so AuthGuard silently fell
+// through to /studio and /code was unreachable after signing in. Verified in a
+// browser: /code -> /auth/login?return_to=/code -> /studio.
+check("top-level SPA routes nginx proxies to lumid-ui survive the sign-in round trip", () => {
+	for (const ok of [
+		"/code",
+		"/status",
+		"/status/operations",
+		"/claude-sessions",
+		"/explore",
+		"/code?tab=users",
+	]) {
+		eq(isSafeReturnTo(ok), true, ok);
+	}
+	// Absolute same-origin form, which the OAuth callback path produces. The
+	// origin is passed explicitly because the suite runs under bare Node, where
+	// `window.location.origin` does not exist.
+	eq(isSafeReturnTo("https://lum.id/code", "https://lum.id"), true, "absolute /code");
+	eq(isSafeReturnTo("https://evil.example/code", "https://lum.id"), false, "cross-origin /code");
+});
+
+check("/quota is NOT a return_to — nginx 301s it to /code, so it would loop", () => {
+	eq(isSafeReturnTo("/quota"), false, "/quota");
+});
+
+check("path-prefix matching never leaks a sibling route", () => {
+	for (const bad of ["/codex", "/statuses", "/explore-elsewhere", "/claude-sessions2", "/working"]) {
+		eq(isSafeReturnTo(bad), false, bad);
+	}
+});
+
 export function run(): number {
 	let failed = 0;
 	for (const c of checks) {
