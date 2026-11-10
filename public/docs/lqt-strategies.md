@@ -2,7 +2,7 @@
 
 **A complete reference for strategy researchers.** Write a trading strategy in the LQT DSL, submit it with your lum.id token, and it runs **shadow/paper** against live prediction markets (Polymarket + Kalshi). As a normal user, your strategies always run shadow/paper — no real orders are ever placed.
 
-> **Doc version 1.0.4** · updated 2026-08-23 · audience: **strategy researcher** (normal user role). See the [changelog](#changelog) at the end.
+> **Doc version 1.1.0** · updated 2026-11-10 · audience: **strategy researcher** (normal user role). See the [changelog](#changelog) at the end.
 
 This page is self-contained: everything needed to author a valid `.lqts` strategy and submit it over HTTP is here, grounded in the compiler and gateway source.
 
@@ -19,6 +19,7 @@ This page is self-contained: everything needed to author a valid `.lqts` strateg
    - [Reading context — accessors](#34-reading-context--accessors)
    - [`when` rules, guards, branching](#35-when-rules-guards-branching)
    - [Actions — `buy` / `sell`](#36-actions--buy--sell)
+     - [How a fill is priced](#how-a-fill-is-priced)
    - [Expressions — operators, builtins, types](#37-expressions--operators-builtins-types)
    - [Numbers & the tick scale](#38-numbers--the-tick-scale)
    - [Limits & what is not supported](#39-limits--what-is-not-supported)
@@ -269,6 +270,45 @@ when signal("a") > 0.5 {
 }
 ```
 
+#### How a fill is priced
+
+A proposal's `@ <price>` is part of the simulation, not decoration. Three fill models exist, and
+the backtest picks one per run:
+
+| Model | A **limit** action fills at | A **market** action fills at |
+|---|---|---|
+| **`AtLimitOrMid`** *(default)* | **the limit price you named** | the mid |
+| `AtMid` | the mid — **the limit is ignored** | the mid |
+| `AtExecutable` | the far touch — **the limit is ignored** | the far touch: a Buy lifts the ask, a Sell hits the bid |
+
+`AtLimitOrMid` is the default because it is the only model that uses the price you wrote. Be aware
+of what it does and does not claim: it fills you **at your limit, in full**, without asking whether
+the market ever traded there. `buy 50 lots @ 4800` on a contract printing 5 020 fills at 4 800 — a
+price nobody was offering. So treat a limit result as *"if I had been filled at my price"*, not as
+a claim about fill probability. Modelling that is the open item, not something this model does.
+
+`AtExecutable` is the opposite bracket: it ignores your limit and charges the full half-spread
+(falling back to the mid only when the book has nothing on the side you would cross), so a result
+under it is a taker's worst case. Running the same strategy under both bounds the fill assumption
+instead of resting on one.
+
+Select a model per backtest with the `fill_model` argument (`atlimitormid`, `atmid`,
+`atexecutable`); a deployment can set a default with **`LQT_BACKTEST_FILL_MODEL`**. The result
+receipt records which model ran in **`fill_model`** and where the choice came from in
+**`fill_model_source`** (`claim` / `env` / `default`, or `default_unrecognised` — a misspelt model
+name falls back to the default *visibly* rather than silently discarding the request).
+
+**Backtests recorded at a different `harness_version` are not comparable.** The fill price feeds
+realized PnL and every metric derived from it, and the default model changed at version 3. Older
+results stay exactly as recorded — they are labelled, not rewritten.
+
+> **A limit is only as informative as the tape's spread.** When the replay has stored two-sided
+> quotes for the window, `market.bid` and `market.ask` are real distinct prices. When it has only
+> prints, there is no bid and no ask to read, so `market.bid`, `market.ask` and `mid` all resolve
+> to the last print and any limit written as one of them lands there. The receipt's `book` field
+> says which you got: `recorded` or `trade_derived`. On a print-only tape a **literal** limit
+> (`@ 4800`) still fills at 4 800.
+
 ### 3.7 Expressions — operators, builtins, types
 
 **Numeric builtins** (usable anywhere an expression is — conditions, sizes, prices):
@@ -505,6 +545,7 @@ strategy trend_with_stop {
 
 ## Changelog
 
+- **1.1.0** (2026-11-10) — **A limit order now fills at its limit.** Before this, the backtest worker hardcoded mid-price fills, so `@ market.bid`, `@ market.ask` and `@ mid` produced identical results (reported by a student as "backtests ignore my limit price"). New **How a fill is priced** (under §3.6) documents the three models — `AtLimitOrMid` (new default), `AtMid`, `AtExecutable` — the per-run `fill_model` argument, the `LQT_BACKTEST_FILL_MODEL` deployment override, and the `fill_model` / `fill_model_source` receipt fields. Results from `harness_version` < 3 are **not comparable** to new ones. Also states plainly what the default does not model: it fills you at your price without checking the market ever traded there, and on a print-only tape `market.bid` / `market.ask` collapse onto the last print.
 - **1.0.4** (2026-08-23) — Corrected the results host: `/xpio/*` reads are served from `lumid.trade` (or `lum.id/lqt-mailbox/xpio/…`), **not** `lum.id`, where they 302 to the login page. Step 3's `lqt:strategy` scope is now selectable in the Tokens UI — previously identity granted it but nothing in the UI could request it, so this doc asked for a PAT that could not be minted.
 - **1.0.3** (2026-07-20) — Corrected submit endpoint: self-serve path is `POST https://lum.id/lqt/submit/lqt_inbox`; PAT required in both `Authorization` header and `payload.auth.pat`. Compile is async — confirm via `GET /xpio/strategies`.
 - **1.0.2** (2026-07-19) — Documented results reading: `GET /xpio/strategies` (registered strategies), `strategy.inspect` mailbox topic (cycle rollup), `GET /xpio/results` (raw outbox). Per-tenant scope server-injected from PAT.

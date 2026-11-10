@@ -132,8 +132,13 @@ next one.
   reads any other name compiles, but its backtests can never be real.
 - **Backtests replay the last 7 days**, and a contract must have settled
   before its result counts.
-- **A few backtests at a time**: at most 3 open, spaced a few minutes apart.
-  If one is refused, the answer says how long to wait.
+- **Your limit price is used.** A `@ <price>` fills at the price you named;
+  omitting it fills at the mid. Read that as *"if I had been filled at my
+  price"* — it does not claim the market ever traded there. The result
+  receipt says which model ran (`fill_model`), and results from an older
+  `harness_version` are not comparable to new ones.
+- **A few backtests at a time**: at most 3 open, and 10 seconds between
+  submits. If one is refused, the answer says how long to wait.
 - **Disable is not an instant stop**: a running paper box keeps a strategy
   until it restarts.
 
