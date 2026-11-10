@@ -31,6 +31,7 @@ import {
 } from "../../api/fm";
 import { Age, SiteBadge, SiteStrip, StatusPill, TabShell, shortGpu, useFanout } from "./shared";
 import VastEconomics from "./vast-economics";
+import CpuSandboxPanel, { hasCpuSandboxes } from "./cpu-sandbox-panel";
 
 // A registry row outlives its machine — a destroy is not a graceful UNREGISTER —
 // so "present" is never the same question as "alive". Everything below judges on
@@ -203,6 +204,14 @@ export default function FleetTab({ isAdmin }: { isAdmin: boolean }) {
 								<VastEconomics
 									workers={entries.flatMap((e) => e.workers)}
 								/>
+							)}
+							{/* A CPU sandbox is not a FlowMesh worker, so nothing above
+							    represents it — h0 and the NUS storage head rent CPU
+							    capacity that appears in no worker list at all. Rendered
+							    for every site that runs a sandbox-control; `vast` and
+							    `cloud` have none to talk to. */}
+							{hasCpuSandboxes(site) && (
+								<CpuSandboxPanel site={site} isAdmin={isAdmin} />
 							)}
 							<table className="w-full text-sm">
 								<tbody className="divide-y divide-slate-100">
