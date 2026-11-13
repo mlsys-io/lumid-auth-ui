@@ -2,7 +2,7 @@
 
 **A complete reference for strategy researchers.** Write a trading strategy in the LQT DSL, submit it with your lum.id token, and it runs **shadow/paper** against live prediction markets (Polymarket + Kalshi). As a normal user, your strategies always run shadow/paper — no real orders are ever placed, and the live evidence you get back is the **decision funnel** (proposed / submitted / rejected) — not fills or PnL. Use `backtest` for PnL.
 
-> **Doc version 1.1.1** · updated 2026-11-11 · audience: **strategy researcher** (normal user role). See the [changelog](#changelog) at the end.
+> **Doc version 1.1.2** · updated 2026-11-12 · audience: **strategy researcher** (normal user role). See the [changelog](#changelog) at the end.
 
 This page is self-contained: everything needed to author a valid `.lqts` strategy and submit it over HTTP is here, grounded in the compiler and gateway source.
 
@@ -350,7 +350,7 @@ Sign in at [lum.id](https://lum.id) → **Account → Tokens** and mint a Person
 
 ### 4.2 Submit
 
-`POST https://lum.id/lqt/submit/lqt_inbox`, authenticated with your PAT. This is the **self-serve submission** endpoint: your PAT's `lqt:strategy` scope authorises the write, a background worker compiles your DSL and registers it under your tenant, and it starts running paper.
+`POST https://lum.id/lqt/submit/lqt_inbox`, authenticated with your PAT. This is the **self-serve submission** endpoint: your PAT's `lqt:strategy` scope authorises the write, a background worker compiles your DSL and registers it under your tenant. **Registration is not the same as running** — see [§5](#5--after-you-submit) for what produces cycles.
 
 The body is a **records envelope** carrying one `strategy.deploy` message. Your PAT goes **both** in the `Authorization` header (scope check) **and** in `payload.auth.pat` (the per-strategy owner credential — this is what the runtime verifies and what attributes the strategy to your tenant; a submission without it is rejected).
 
@@ -399,12 +399,12 @@ curl -X POST "https://lum.id/lqt/submit/lqt_inbox" \
 
 **Compilation is asynchronous — `200 ok` means *queued*, not *compiled*.** The endpoint durably records the `strategy.deploy` message; a background worker then compiles your `.lqts` and either registers it or rejects it. Confirm the outcome by listing your strategies (`GET /xpio/strategies`, [§5](#5--after-you-submit)) — a registered strategy appears there with a non-empty `program_hash` — or by reading the **`strategy.ack`** on your outbox:
 
-- **Success** → your strategy is registered under your tenant (`program_hash` set) and starts running paper.
+- **Success** → your strategy is registered under your tenant (`program_hash` set). Registration does not by itself start cycles; a running multi-strategy lane has to hold your region (see [§5](#5--after-you-submit)).
 - **Compile failure** → a reject-ack whose reason is the compiler's verbatim diagnostic, e.g. `compile failed: <line/column + reason>`. Fix and resubmit the same `strategy_id`.
 
 So the sequence is: `POST` → `200 ok` (queued) → confirm via `GET /xpio/strategies` (or read the `strategy.ack` on your outbox — see [§5](#5--after-you-submit)). To catch errors *before* submitting, validate locally with the CLI ([§4.3](#43-optional-compile-offline-first)).
 
-Leaving `region_scope` out runs your strategy in the default paper lane. You never need to set it to run paper.
+Leaving `region_scope` out puts your strategy on the default lane (`eu-west-1`). That lane is live and evaluates every strategy it is given, so leaving this blank is the normal choice — but read [§5](#5--after-you-submit) before assuming a given strategy is producing results.
 
 ### 4.3 Optional: compile offline first
 
@@ -422,7 +422,7 @@ The hex from `compile` is exactly what you'd send as `program_hex`.
 
 ## 5 · After you submit
 
-- **It runs shadow — decision funnel only, no fills, no PnL.** Your strategy evaluates against live market data on a recurring cycle and records what it *would* do: `n_proposed`, `n_submitted`, `n_rejected`, and the reject reasons. It places **no real orders**, and it does **not** produce fills or PnL — a shadow lane has no book to fill against. **For PnL, use `backtest`**, which replays recorded prices; a forward PnL needs a `pg_paper` lane, which is an operator deploy, not a chat command.
+- **It runs shadow — decision funnel only, no fills, no PnL.** Your strategy evaluates against live market data on a recurring cycle and records what it *would* do: `n_proposed`, `n_submitted`, `n_rejected`, and the reject reasons. It places **no real orders**, and it does **not** produce fills or PnL — a shadow lane has no book to fill against. **For PnL, use `backtest`**, which replays recorded prices; a forward PnL needs a `pg_paper` lane, which is an operator deploy, not a chat command. Being loaded is also not the same as producing a scorecard: an evaluation can fail, most often because a signal your bytecode names was never published — the platform now logs `decision_runtime.dsl_named_signals_absent` naming the missing set, once per cycle. A strategy whose gates read signals nobody publishes stays unarmed however correct its DSL is.
 - **It's isolated to you.** Row-level security scopes every strategy, position, and result to your tenant. You can't see or affect anyone else's strategies, and they can't see yours.
 - **Resubmitting updates it.** POST the same `strategy_id` with new `dsl`/`version` to replace the running version in place (an UPSERT on `(tenant, strategy_id)`); the runtime picks up the change on its next refresh. **The id has to be the same string.** Leave it blank and the app derives one from `name@version`, so resubmitting the same name and version updates that strategy — but a *different* name or version is a *different* strategy, and you will see it listed separately.
 - **Iterate freely.** Because it is paper and deterministic, you can tune params and rules and resubmit as often as you like with zero financial risk. (What you get back is the decision funnel; PnL comes from `backtest`.)
@@ -545,6 +545,7 @@ strategy trend_with_stop {
 
 ## Changelog
 
+- **1.1.2** (2026-11-12) — **Registering a strategy is not the same as running it.** §4.2 and the compile-ack note said a successful submission "starts running paper"; it does not — a multi-strategy lane has to hold your region. The default (`eu-west-1`) is live, but that is a property of the deployment, not of your submission. §5 now also says that being *loaded* is not the same as producing a scorecard: an evaluation fails if a signal your bytecode names was never published, and the runtime logs the missing set (`decision_runtime.dsl_named_signals_absent`).
 - **1.1.1** (2026-11-11) — Two corrections from a user report. (1) **Shadow has no PnL.** The doc promised the lane records "proposals, would-be fills, and PnL"; a shadow lane has no book to fill against, and the scorecard carries exactly three metrics (`n_proposed` / `n_submitted` / `n_rejected`). §1, §2 and §5 now say the decision funnel is the live evidence and `backtest` is where PnL comes from. (2) **Resubmit needs the same id string.** The UPSERT is on `(tenant, strategy_id)`; a blank id used to mint a fresh UUID per submit, so "resubmitting updates it" was false by default. The app now derives `name@version` when the id is blank, and the doc states that a different name or version is a different strategy.
 - **1.1.0** (2026-11-10) — **A limit order now fills at its limit.** Before this, the backtest worker hardcoded mid-price fills, so `@ market.bid`, `@ market.ask` and `@ mid` produced identical results (reported by a student as "backtests ignore my limit price"). New **How a fill is priced** (under §3.6) documents the three models — `AtLimitOrMid` (new default), `AtMid`, `AtExecutable` — the per-run `fill_model` argument, the `LQT_BACKTEST_FILL_MODEL` deployment override, and the `fill_model` / `fill_model_source` receipt fields. Results from `harness_version` < 3 are **not comparable** to new ones. Also states plainly what the default does not model: it fills you at your price without checking the market ever traded there, and on a print-only tape `market.bid` / `market.ask` collapse onto the last print.
 - **1.0.4** (2026-08-23) — Corrected the results host: `/xpio/*` reads are served from `lumid.trade` (or `lum.id/lqt-mailbox/xpio/…`), **not** `lum.id`, where they 302 to the login page. Step 3's `lqt:strategy` scope is now selectable in the Tokens UI — previously identity granted it but nothing in the UI could request it, so this doc asked for a PAT that could not be minted.
