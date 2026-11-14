@@ -166,8 +166,8 @@ export default function Setup() {
 							<strong>Scopes</strong> on Personal Access Tokens refine access
 							for programmatic clients (bots, CI, the Lumid CLI). Grant them
 							when the user mints a PAT from{" "}
-							<Link to="/account/connect" className="text-indigo-600 hover:underline">
-								/account/connect
+							<Link to="/studio/account/tokens" className="text-indigo-600 hover:underline">
+								Access Tokens
 							</Link>
 							; they show up in this user's access matrix.
 						</p>
