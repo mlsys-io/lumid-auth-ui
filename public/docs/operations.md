@@ -161,7 +161,7 @@ with a pointer, not FAIL. Once populated, Polymarket/Kalshi liveness moves to li
 |---|---|---|---|---|
 | `<domain>` | `curl` each public domain through the edge | 2xx/3xx | SURFACE (DNS / edge / cert — see reference_spaceship_dns) | 15m |
 
-Domains: `lum.id`, `xp.io`, `lumid.market`, `runmesh.ai`, `lumilake.ai`, `lumid.trade`.
+Domains: `lum.id`, `xp.io`, `runmesh.ai`, `lumilake.ai`, `lumid.trade`.
 
 ### registry (Harbor at home + the per-site replicas)
 | Check | Surface | Threshold | Remediation | Cadence |

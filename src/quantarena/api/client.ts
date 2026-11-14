@@ -22,17 +22,18 @@ import type { ErrorResponse } from './types';
 // new server-side work is needed when AUTH_MODE=introspect is on
 // (Phase 5 default).
 //
-// Base URL is `https://lumid.market/backend` — that's the path
-// trading-nginx prefix-strips and forwards to the QA Go backend on
-// :9988. Hitting `https://lumid.market/api/v1/…` directly would be
-// served by the QA frontend SPA (which 405s on POST/OPTIONS). The
-// existing QA frontend uses the same `/backend/` prefix, so the
-// migrated pages keep their `/api/v1/…` URLs unchanged. Override via
-// `VITE_LQA_API_URL` for local dev (e.g. http://localhost:9988).
+// Base URL is `/market` — same origin. The `quantarena-market`
+// Ingress (deploy_infra k8s-lift/qa-backend/market-ingress.yaml)
+// routes `lum.id/market/api/…` to the QA Go backend on :9988, so the
+// migrated pages keep their `/api/v1/…` URLs unchanged. Until
+// 2026-11-14 this defaulted to `https://lumid.market/backend`, which
+// on Kubernetes was served by the QA frontend SPA (HTML, never the
+// API) and whose domain then lapsed. Override via `VITE_LQA_API_URL`
+// for local dev (e.g. http://localhost:9988).
 
 const BASE_URL =
 	(import.meta.env.VITE_LQA_API_URL as string | undefined) ||
-	'https://lumid.market/backend';
+	'/market';
 
 export class ApiError extends Error {
 	ret_code: number;

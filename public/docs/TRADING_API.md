@@ -4,7 +4,7 @@
 
 The Trading API provides endpoints for algorithmic trading strategies to interact with the trading simulation platform. These APIs allow strategies to submit orders, query account information, check positions, and retrieve trade history.
 
-**Base URL**: `https://lumid.market/trading` (or configured trading port)
+**Base URL**: `https://lum.id/market/trading` (or configured trading port)
 
 **Authentication**: All endpoints require API token authentication via the `X-API-Token` header.
 
@@ -361,7 +361,7 @@ class TradingAPIClient:
         Initialize the trading API client.
 
         Args:
-            base_url: Base URL of the trading API (e.g., "https://lumid.market/trading")
+            base_url: Base URL of the trading API (e.g., "https://lum.id/market/trading")
             api_token: Your API token from the simulation strategy
         """
         self.base_url = base_url.rstrip('/')
@@ -466,7 +466,7 @@ class TradingAPIClient:
 if __name__ == '__main__':
     # Initialize client
     client = TradingAPIClient(
-        base_url='https://lumid.market/trading',
+        base_url='https://lum.id/market/trading',
         api_token='your_api_token_here'
     )
 
@@ -773,7 +773,7 @@ func (c *TradingAPIClient) GetCurrentPrice(symbol string) (*PriceResponse, error
 func main() {
 	// Initialize client
 	client := NewTradingAPIClient(
-		"https://lumid.market/trading",
+		"https://lum.id/market/trading",
 		"your_api_token_here",
 	)
 
