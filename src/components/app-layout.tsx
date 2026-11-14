@@ -302,11 +302,10 @@ const LQA_NAV: NavItem[] = [
 	{ to: '/dashboard/quant/strategy', label: 'Backtest', icon: Code2 },
 ];
 
-// LQA's user-facing landing lives at lumid.market (separate React app).
-// Rendered as an external link at the top of the section so it's the
-// obvious gateway out of the lum.id shell into the trading product.
+// LQA's user-facing landing. lumid.market lapsed (2026-11); QuantArena
+// now lives under lum.id/market, which lands on the competitions page.
 const LQA_LANDING: ExternalNavItem = {
-	href: 'https://lumid.market/',
+	href: '/market',
 	label: 'Lumid Market home',
 	icon: Trophy,
 };

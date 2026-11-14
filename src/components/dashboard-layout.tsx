@@ -63,7 +63,7 @@ interface AppEntry {
 }
 
 const APPS: AppEntry[] = [
-	{ name: 'QuantArena', url: 'https://lumid.market/backend/api/v1/auth/lumid-sso/start?return_to=/strategy', icon: TrendingUp },
+	{ name: 'QuantArena', url: '/dashboard/quant/strategy', icon: TrendingUp },
 	{ name: 'Runmesh', url: 'https://runmesh.ai/', icon: Workflow },
 	{ name: 'Lumilake', url: 'https://lumilake.ai/sso/lumid', icon: Database },
 ];

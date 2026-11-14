@@ -21,28 +21,27 @@ const DIRECT_SNIPPETS: Snippet[] = [
 		id: 'd-get-positions',
 		title: 'Read account positions',
 		lang: 'bash',
-		code: `curl https://lumid.market/trading/api/v1/account \\
+		code: `curl https://lum.id/market/trading/api/custom/trading/account \\
   -H "X-API-Token: Bearer <strategy_token>"`,
 	},
 	{
 		id: 'd-place-trade',
 		title: 'Place a market order',
 		lang: 'bash',
-		code: `curl -X POST https://lumid.market/trading/api/v1/orders \\
+		code: `curl -X POST https://lum.id/market/trading/api/custom/trading/order \\
   -H "X-API-Token: Bearer <strategy_token>" \\
   -H "Content-Type: application/json" \\
   -d '{
     "symbol": "BTCUSD",
     "direction": "Buy",
-    "quantity": 0.1,
-    "order_type": "Market"
+    "volume": 0.1
   }'`,
 	},
 	{
 		id: 'd-leaderboard',
 		title: 'Check competition leaderboard',
 		lang: 'bash',
-		code: `curl "https://lumid.market/backend/api/v1/dashboard/leaderboard/<competition_id>"`,
+		code: `curl "https://lum.id/market/api/v1/dashboard/leaderboard/<competition_id>"`,
 	},
 ];
 
