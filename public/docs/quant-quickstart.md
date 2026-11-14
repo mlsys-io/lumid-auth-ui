@@ -137,7 +137,7 @@ next one.
   price"* — it does not claim the market ever traded there. The result
   receipt says which model ran (`fill_model`), and results from an older
   `harness_version` are not comparable to new ones.
-- **A few backtests at a time**: at most 3 open, and 10 seconds between
+- **A few backtests at a time**: at most 5 open, and 10 seconds between
   submits. If one is refused, the answer says how long to wait.
 - **Disable is not an instant stop**: a running paper box keeps a strategy
   until it restarts.
