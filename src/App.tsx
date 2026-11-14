@@ -124,10 +124,9 @@ const ConnectMicrosoft = lazy(() => import("./pages/account/connect-microsoft"))
 const Inbox = lazy(() => import("./pages/account/inbox"));
 const SkillsNew = lazy(() => import("./pages/account/skills/new"));
 const MemoryNew = lazy(() => import("./pages/account/memory/new"));
-// Connect (OAuth account linking) dropped from the sidebar 2026-04-24;
-// page file kept on disk at /pages/account/connect.tsx but no longer
-// routed. Re-add import + route + tab entry if/when OAuth linking is
-// needed again.
+// The unrouted /pages/account/connect.tsx ("Install LumidOS" — the
+// `curl lumid.market/install.sh` one-liner) was deleted 2026-11-15 when the
+// Lumid CLI installer was retired along with the lumid.market domain.
 const AdminInvitations = lazy(() => import("./pages/account/admin-invitations"));
 // AdminOverview — operational snapshot landing at /dashboard/admin/.
 // Replaces the Runmesh-ported AdminDashboard (revenue/success metrics

@@ -4,7 +4,6 @@ import {
 	LayoutDashboard,
 	User as UserIcon,
 	Key,
-	Terminal,
 	Shield,
 	ExternalLink,
 	LogOut,
@@ -53,7 +52,6 @@ const ACCOUNT_NAV: NavItem[] = [
 	{ to: '/dashboard', label: 'Overview', icon: LayoutDashboard, end: true },
 	{ to: '/dashboard/profile', label: 'Profile', icon: UserIcon },
 	{ to: '/dashboard/tokens', label: 'Access Tokens', icon: Key },
-	{ to: '/dashboard/connect', label: 'Install LumidOS', icon: Terminal },
 ];
 
 interface AppEntry {
