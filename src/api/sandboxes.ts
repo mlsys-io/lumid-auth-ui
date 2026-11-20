@@ -593,6 +593,68 @@ export async function listAllSandboxesForSite(site: string): Promise<AdminSandbo
 	return (r.data?.sandboxes ?? []).map((b) => ({ ...b, site }));
 }
 
+// ---------------------------------------------------------------------------
+// CPU SANDBOX FACTS, PER SITE — for surfaces that are not the sandbox table.
+// ---------------------------------------------------------------------------
+// A CPU sandbox asks for a core count from a fixed menu (`CPU_SIZES`), so "what
+// can I get here" is a property of the SITE and is answerable without naming a
+// single pod. That is the usable half of "capacity" at a site whose nodes are not
+// FlowMesh workers: h0 and the storage head rent CPU sandboxes and appear in no
+// worker list at all.
+//
+// WHAT THIS IS NOT: measured headroom. `GET /api/sandboxes` publishes the menu and
+// nothing else about CPU — the cluster reports GPU capacity per node but has no
+// equivalent for CPU, and /api/admin/usage skips any node without an
+// `nvidia.com/gpu` capacity (main.py's `if not cap: continue`), so a CPU-only node
+// is invisible there. Do not render this as "free cores".
+export interface CpuBoxRow {
+	name: string;
+	phase: string;
+	/** Kubernetes quantities as requested, e.g. "4" and "16Gi". Admin view only. */
+	cpu: string | null;
+	memory: string | null;
+	user?: string;
+	email?: string | null;
+}
+
+export interface CpuSiteFacts {
+	/** The menu this site publishes; null when the server predates it. */
+	menu: SiteCpuInfo | null;
+	/** CPU sandboxes (gpu === 0). Admin: every renter's. Non-admin: the caller's own. */
+	boxes: CpuBoxRow[];
+	/** True when `boxes` is the whole site rather than only the caller's. */
+	siteWide: boolean;
+}
+
+/**
+ * One site's CPU-sandbox menu and its CPU sandboxes.
+ *
+ * Admins get the site-wide count from `/api/admin/sandboxes`; everyone else gets
+ * their own rows, because the per-caller endpoint is the only one they may read
+ * — and saying "3 running" from a per-caller list would read as site capacity.
+ */
+export async function cpuFactsForSite(site: string, isAdmin: boolean): Promise<CpuSiteFacts> {
+	const mine = await listSandboxesForSite(site);   // also stashes the menu (siteCpu)
+	const menu = cpuForSite(site) ?? null;
+	if (isAdmin) {
+		const all = await listAllSandboxesForSite(site);
+		return {
+			menu,
+			siteWide: true,
+			boxes: all
+				.filter((b) => !b.gpu)
+				.map((b) => ({ name: b.name, phase: b.phase, cpu: b.cpu, memory: b.memory, user: b.user, email: b.email })),
+		};
+	}
+	return {
+		menu,
+		siteWide: false,
+		boxes: mine
+			.filter((b) => !b.gpu)
+			.map((b) => ({ name: b.name, phase: b.phase, cpu: null, memory: null })),
+	};
+}
+
 export async function createSandbox(site: string, req: CreateSandboxRequest): Promise<Sandbox> {
 	return (await sbx.post(sbxUrl(site, "/api/sandboxes"), req)).data;
 }
