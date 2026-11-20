@@ -17,6 +17,8 @@ import { useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { parse as parseYaml } from "yaml";
+import { Upload, X } from "lucide-react";
+import { meBlobs } from "@/api/meBlobs";
 import type { Field, Params } from "../registry/types";
 import { getAt } from "../registry/types";
 
@@ -138,6 +140,9 @@ function Control({
 					onCommit={(raw) => set(raw.split("\n").map((s) => s.trim()).filter(Boolean))}
 				/>
 			);
+
+		case "blobs":
+			return <BlobsField value={value} readOnly={readOnly} onCommit={set} />;
 
 		case "keyValue":
 			return (
@@ -341,4 +346,100 @@ function toYamlish(v: unknown): string {
 	} catch {
 		return String(v);
 	}
+}
+
+interface BlobEntry {
+	uri: string;
+	mountPath: string;
+	name?: string;
+}
+
+function asBlobs(v: unknown): BlobEntry[] {
+	if (!Array.isArray(v)) return [];
+	return v.filter(
+		(e): e is BlobEntry =>
+			!!e && typeof e === "object" && typeof (e as BlobEntry).uri === "string" && typeof (e as BlobEntry).mountPath === "string",
+	);
+}
+
+const shortSha = (uri: string) => uri.replace("lumid://blob/sha256/", "").slice(0, 12);
+
+/**
+ * A python node's `blobs`: files uploaded to lumid-data (POST /data/me/blobs)
+ * as the signed-in account, each placed read-only at its mount path. Only the
+ * uri and path go into the spec — the stored `name` is display-only and
+ * stripped before commit, since the FlowMesh spec is strict.
+ */
+function BlobsField({ value, readOnly, onCommit }: { value: unknown; readOnly?: boolean; onCommit: (v: unknown) => void }) {
+	const entries = asBlobs(value);
+	const [busy, setBusy] = useState(false);
+	const [err, setErr] = useState("");
+	const fileRef = useRef<HTMLInputElement>(null);
+	const commit = (next: BlobEntry[]) =>
+		onCommit(next.length ? next.map(({ uri, mountPath }) => ({ uri, mountPath })) : undefined);
+
+	const onPick = async (files: FileList | null) => {
+		if (!files?.length) return;
+		setBusy(true);
+		setErr("");
+		try {
+			const added: BlobEntry[] = [];
+			for (const f of Array.from(files)) {
+				const b = await meBlobs.upload(f);
+				added.push({ uri: b.uri, mountPath: `/mnt/blobs/${f.name.replace(/[^A-Za-z0-9._-]/g, "_")}`, name: f.name });
+			}
+			commit([...entries, ...added]);
+		} catch (e) {
+			setErr(e instanceof Error ? e.message : "upload failed");
+		} finally {
+			setBusy(false);
+			if (fileRef.current) fileRef.current.value = "";
+		}
+	};
+
+	return (
+		<div className="space-y-1.5">
+			{entries.map((e, i) => (
+				<div key={`${e.uri}:${i}`} className="flex items-center gap-1.5">
+					<span className="font-mono text-[10px] text-slate-500 w-24 shrink-0 truncate" title={e.uri}>
+						{shortSha(e.uri)}
+					</span>
+					<Input
+						className="h-7 text-[11px] font-mono"
+						disabled={readOnly}
+						defaultValue={e.mountPath}
+						onBlur={(ev) => {
+							const p = ev.target.value.trim();
+							if (p && p !== e.mountPath) commit(entries.map((x, j) => (j === i ? { ...x, mountPath: p } : x)));
+						}}
+					/>
+					{!readOnly && (
+						<button
+							type="button"
+							aria-label="Remove file"
+							className="p-1 text-slate-400 hover:text-rose-600"
+							onClick={() => commit(entries.filter((_, j) => j !== i))}
+						>
+							<X className="w-3.5 h-3.5" />
+						</button>
+					)}
+				</div>
+			))}
+			{!readOnly && (
+				<>
+					<input ref={fileRef} type="file" multiple className="hidden" onChange={(ev) => void onPick(ev.target.files)} />
+					<button
+						type="button"
+						disabled={busy}
+						onClick={() => fileRef.current?.click()}
+						className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+					>
+						<Upload className="w-3.5 h-3.5" />
+						{busy ? "Uploading…" : "Upload file"}
+					</button>
+				</>
+			)}
+			{err && <p className="text-[10px] leading-snug text-rose-600">{err}</p>}
+		</div>
+	);
 }
