@@ -72,9 +72,11 @@ export function StrandAvatar({
 }) {
 	const { tint, figure, strands, rotate } = strandSeed(slug);
 	const f = FIGURES[figure];
-	// Radius tracks size: a 16px sidebar glyph is nearly a circle-square, a
-	// 40px card avatar is a soft 10px tile.
+	// Radius tracks size: a 40px card avatar is a soft 10px tile. At rail sizes
+	// (<= 20px) a tinted tile shrinks to a coloured dot that fights the paper,
+	// so small glyphs drop the tile and draw bare, slightly heavier strands.
 	const radius = Math.max(4, Math.round(size * 0.26));
+	const bare = size <= 20;
 	return (
 		<span
 			className={cn("inline-flex shrink-0 items-center justify-center", className)}
@@ -82,21 +84,21 @@ export function StrandAvatar({
 				width: size,
 				height: size,
 				borderRadius: radius,
-				background: tint.bg,
-				boxShadow: `inset 0 0 0 1px ${tint.ring}`,
+				background: bare ? undefined : tint.bg,
+				boxShadow: bare ? undefined : `inset 0 0 0 1px ${tint.ring}`,
 			}}
 			title={title}
 			aria-hidden={title ? undefined : true}
 			data-palette-ok=""
 		>
-			<svg viewBox="0 0 24 24" width={size * 0.72} height={size * 0.72} fill="none" strokeLinecap="round">
+			<svg viewBox="0 0 24 24" width={size * (bare ? 1 : 0.72)} height={size * (bare ? 1 : 0.72)} fill="none" strokeLinecap="round">
 				<g transform={`rotate(${rotate} 12 12)`}>
 					{Array.from({ length: strands }, (_, k) => (
 						<path
 							key={k}
 							d={f(k, strands)}
 							stroke={k === Math.floor(strands / 2) ? tint.stroke : tint.hi}
-							strokeWidth={size <= 20 ? 1.6 : 1.35}
+							strokeWidth={bare ? 1.9 : 1.35}
 							opacity={k === Math.floor(strands / 2) ? 1 : 0.85}
 						/>
 					))}

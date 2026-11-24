@@ -3,21 +3,21 @@
 // installed apps: that nav list duplicated the left sidebar (which already
 // lists every app and switches on click), so it was redundant.
 
-import { useAppNav, iconFor } from '@/components/useAppNav';
+import { useAppNav } from '@/components/useAppNav';
+import { StrandAvatar } from '@/components/illustrations/StrandAvatar';
 import { appTitle } from '@/components/workflow/AppCard';
 
 export default function AppSwitcher({ app }: { app: string }) {
 	const appNav = useAppNav();
 	const items = appNav.flatMap((s) => s.items.map((it) => ({ ...it, section: s.section })));
 	const current = items.find((it) => it.app === app);
-	const CurIcon = iconFor(current?.icon);
 
 	return (
 		<div className="inline-flex items-center gap-2 px-2 py-1.5 max-w-[280px]">
-			<span className="w-7 h-7 rounded-lg bg-gold-50 text-gold-600 flex items-center justify-center flex-shrink-0">
-				<CurIcon className="w-4 h-4" />
-			</span>
-			<span className="font-semibold text-read text-foreground truncate">{current?.label || appTitle(app)}</span>
+			{/* Lumen: the app's StrandAvatar — the same glyph it wears in the rail,
+			    its Recent threads and its Library card. */}
+			<StrandAvatar slug={app} size={28} />
+			<span className="font-semibold text-body text-ink-900 truncate">{current?.label || appTitle(app)}</span>
 		</div>
 	);
 }

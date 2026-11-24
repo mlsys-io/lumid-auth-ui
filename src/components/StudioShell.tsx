@@ -13,6 +13,7 @@ import ErrorBoundary from './ErrorBoundary';
 import {
 	Boxes,
 	CirclePlus,
+	Plus,
 	PanelLeftClose,
 	PanelLeftOpen,
 	Store,
@@ -31,13 +32,15 @@ import {
 	Loader2,
 	AlertCircle,
 	ShieldCheck, Receipt, History,} from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
 import { me } from '@/api/me';
 import { runRowHref } from '@/lib/run-routes';
 import { useAppNav, iconFor, type AppNavItem } from './useAppNav';
 import type { LucideIcon } from 'lucide-react';
+import { StrandMark } from '@/components/illustrations/StrandMark';
+import { StrandAvatar } from '@/components/illustrations/StrandAvatar';
 import { fetchClaudePoolManage } from '../api/claude-pool-manage';
 import { useRecentChats, RECENT_CHATS_INVALIDATE, type RecentChatItem } from './useRecentChats';
 import { writeAppChat } from './appChatMap';
@@ -232,6 +235,27 @@ function prefetchRoute(to: string) {
 	fn?.().catch(() => prefetched.delete(norm));
 }
 
+// The bronze bar that marks the active top-nav row. ONE element that slides
+// between rows (CSS transform, no framer-motion — the shell is in the eager
+// chunk) instead of a bar per row that blinks off and on. It measures the row
+// NavLink marked aria-current, so it follows the router, not local state.
+function useActiveIndicator(pathname: string) {
+	const navRef = useRef<HTMLElement | null>(null);
+	const [bar, setBar] = useState<{ y: number; h: number } | null>(null);
+	useLayoutEffect(() => {
+		const nav = navRef.current;
+		const el = nav?.querySelector<HTMLElement>('[data-nav-item][aria-current="page"]');
+		if (!nav || !el) return setBar(null);
+		// Measure against the NAV, not offsetParent: the Runs row sits inside its
+		// own `relative` wrapper (for the "N failed" pill), so offsetTop was ~0.
+		const n = nav.getBoundingClientRect();
+		const r = el.getBoundingClientRect();
+		const y = r.top - n.top + nav.scrollTop;
+		setBar({ y: y + r.height * 0.22, h: r.height * 0.56 });
+	}, [pathname]);
+	return { navRef, bar };
+}
+
 function NavItemView({ to, label, icon: Icon, end, badge, title }: NavItem) {
 	return (
 		<NavLink
@@ -240,14 +264,18 @@ function NavItemView({ to, label, icon: Icon, end, badge, title }: NavItem) {
 			title={title}
 			onMouseEnter={() => prefetchRoute(to)}
 			onFocus={() => prefetchRoute(to)}
+			// Lumen: warm ink washes (black/6% read grey on the cream rail); the
+			// active row is marked by the sliding bronze bar in <nav> (see
+			// useActiveIndicator), found via data-nav-item + aria-current.
 			className={({ isActive }) =>
 				cn(
-					'group flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors relative',
+					'group flex items-center gap-3 px-3 py-2 rounded-lg text-body transition-colors duration-120 relative',
 					isActive
-						? 'bg-black/[0.06] text-foreground font-medium'
-						: 'text-ink-700 hover:bg-black/[0.04] hover:text-foreground',
+						? 'bg-ink-100/80 text-ink-900 font-medium'
+						: 'text-ink-700 hover:bg-ink-100/60 hover:text-ink-900',
 				)
 			}
+			data-nav-item=""
 		>
 			{({ isActive }) => (
 				<>
@@ -358,14 +386,15 @@ function middleTruncate(s: string, max = 30): string {
 	return `${s.slice(0, head)}…${s.slice(s.length - (max - 1 - head))}`;
 }
 
-function RecentRow({ item, navigate, appIcon }: {
+function RecentRow({ item, navigate }: {
 	item: RecentChatItem;
 	navigate: (to: string) => void;
-	appIcon?: LucideIcon;
 }) {
-	// The app's OWN icon carries the grouping now the list is flat, so each app
-	// stays visually distinct without a folder per app.
-	const Icon = appIcon || (item.kind === 'agent' ? Bot : MessageSquare);
+	// The app's glyph carries the grouping now the list is flat, so each app
+	// stays visually distinct without a folder per app. Lumen: the SAME
+	// StrandAvatar the app wears in "Your Apps" and the Library, so a thread
+	// and its app read as a pair; app-less threads get a quiet chat glyph.
+	const Icon = item.kind === 'agent' ? Bot : MessageSquare;
 	const open = () => {
 		const target = item.app ? `/studio/apps/${encodeURIComponent(item.app)}` : '/studio';
 		if (window.location.pathname === target) {
@@ -403,11 +432,16 @@ function RecentRow({ item, navigate, appIcon }: {
 			<button
 				onClick={open}
 				title={`${item.title || 'Untitled chat'} · ${formatRelative(item.updatedAt)}`}
-				className="flex-1 min-w-0 flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-ink-700 hover:bg-black/[0.04] hover:text-foreground transition-colors text-left"
+				className="flex-1 min-w-0 flex items-center gap-2.5 pl-3 pr-2 py-[7px] rounded-lg text-body text-ink-700 hover:bg-ink-100/60 hover:text-ink-900 transition-colors duration-120 text-left"
 			>
-				<Icon className="w-4 h-4 flex-shrink-0 text-ink-600" />
+				{item.app
+					? <StrandAvatar slug={item.app} size={16} />
+					: <Icon className="w-4 h-4 flex-shrink-0 text-ink-500" />}
 				<span className="flex-1 min-w-0 truncate">{middleTruncate(item.title || 'Untitled chat')}</span>
-				<span className="flex-shrink-0 text-micro text-ink-600 tabular-nums">
+				{/* The age and the delete control SHARE one slot: the age hides
+				    while the row is hovered/focused and the trash takes its
+				    place. They used to overlap ("now🗑"). */}
+				<span className="w-6 flex-shrink-0 text-right text-micro text-ink-600 tabular-nums transition-opacity duration-120 group-hover:opacity-0 group-focus-within:opacity-0">
 					{compactAge(item.updatedAt)}
 				</span>
 			</button>
@@ -415,9 +449,9 @@ function RecentRow({ item, navigate, appIcon }: {
 				onClick={del}
 				title="Delete conversation"
 				aria-label="Delete conversation"
-				className="absolute right-1 p-1 rounded-md opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-brick-600 hover:bg-brick-50 transition-all"
+				className="absolute right-1.5 p-1 rounded-md opacity-0 group-hover:opacity-100 focus-visible:opacity-100 text-ink-500 hover:text-brick-600 hover:bg-brick-50 transition-opacity duration-120"
 			>
-				<Trash2 className="w-3 h-3" />
+				<Trash2 className="w-3.5 h-3.5" />
 			</button>
 		</div>
 	);
@@ -444,24 +478,51 @@ const RECENT_PER_LIST = 10;
 // place. Before this split, "Recent" mixed both and an app's threads were
 // only reachable by scrolling a global list that other apps kept pushing
 // them off of.
-function RecentSection({ items, loaded, navigate, iconForApp }: {
+// Recent, grouped by age — Today / Previous 7 days / Older — so a long list
+// has landmarks. Grouping applies to what is SHOWN (the cap still holds).
+function ageGroup(value: string | number | null | undefined): 'Today' | 'Previous 7 days' | 'Older' {
+	const ms = typeof value === 'number' ? value : Date.parse(String(value ?? ''));
+	if (!isFinite(ms)) return 'Older';
+	const start = new Date();
+	start.setHours(0, 0, 0, 0);
+	if (ms >= start.getTime()) return 'Today';
+	if (ms >= start.getTime() - 6 * 86400_000) return 'Previous 7 days';
+	return 'Older';
+}
+
+function RecentSection({ items, loaded, navigate }: {
 	items: RecentChatItem[];
 	loaded: boolean;
 	navigate: (to: string) => void;
-	iconForApp: (app?: string | null) => LucideIcon | undefined;
 }) {
 	const [showAll, setShowAll] = useState(false);
 	if (!loaded) return null;
 	const shown = showAll ? items : items.slice(0, RECENT_PER_LIST);
+	const groups: Array<{ label: string; rows: RecentChatItem[] }> = [];
+	for (const it of shown) {
+		const g = ageGroup(it.updatedAt);
+		if (groups[groups.length - 1]?.label !== g) groups.push({ label: g, rows: [] });
+		groups[groups.length - 1].rows.push(it);
+	}
+	// The age groups ARE the section headings (one header per block, not a
+	// "Recent" label with a second label under it). A single block keeps the
+	// plain "Recent".
 	return (
 		<div>
-			<SectionLabel>Recent</SectionLabel>
 			{items.length === 0 ? (
-				<div className="px-3 py-2 text-xs text-ink-600">No conversations yet</div>
+				<>
+					<SectionLabel>Recent</SectionLabel>
+					<div className="px-3 py-2 text-meta text-ink-600">No conversations yet</div>
+				</>
 			) : (
 				<>
-					{shown.map((item) => (
-						<RecentRow key={item.id} item={item} navigate={navigate} appIcon={iconForApp(item.app)} />
+					{groups.map((g, gi) => (
+						<div key={g.label + gi}>
+							<SectionLabel>{groups.length > 1 ? g.label : 'Recent'}</SectionLabel>
+							{g.rows.map((item) => (
+								<RecentRow key={item.id} item={item} navigate={navigate} />
+							))}
+						</div>
 					))}
 					{items.length > shown.length && (
 						<button
@@ -493,7 +554,6 @@ function AppFolder({
 	const to = `/studio/apps/${encodeURIComponent(item.app)}`;
 	const active = location.pathname === to;
 	// Seed with the slug so an app that declares no icon still gets its own.
-	const Icon = iconFor(item.icon, item.app);
 	const installing = item.status === 'installing';
 	const failed = item.status === 'failed';
 
@@ -521,30 +581,31 @@ function AppFolder({
 	return (
 		<div>
 			<div className={cn(
-				'group relative flex items-center rounded-lg transition-colors',
-				active ? 'bg-black/[0.06]' : 'hover:bg-black/[0.04]',
+				'group relative flex items-center rounded-lg transition-colors duration-120',
+				active ? 'bg-ink-100/80' : 'hover:bg-ink-100/60',
 			)}>
 				<button
 					onClick={() => navigate(to)}
 					title={failed ? `${item.label} — install failed` : item.label}
 					className={cn(
-						'flex-1 min-w-0 flex items-center gap-2 pl-3 pr-2 py-2 text-sm text-left',
-						active ? 'text-foreground font-medium' : 'text-ink-800 hover:text-foreground',
+						'flex-1 min-w-0 flex items-center gap-2.5 pl-3 pr-2 py-2 text-body text-left',
+						active ? 'text-ink-900 font-medium' : 'text-ink-800 hover:text-ink-900',
 					)}
 				>
-					<Icon className="w-4 h-4 flex-shrink-0 text-ink-600" />
+					{/* Same glyph as the app's Library card and its Recent threads. */}
+					<StrandAvatar slug={item.app} size={18} />
 					<span className="flex-1 min-w-0 truncate">{item.label}</span>
 					{installing && <Loader2 className="w-3 h-3 flex-shrink-0 animate-spin text-muted-foreground" />}
 					{failed && <AlertCircle className="w-3 h-3 flex-shrink-0 text-brick-600" />}
 					{badge != null && badge > 0 && (
-						<span className="flex-shrink-0 text-micro px-1.5 py-0.5 rounded-full bg-foreground/10 text-ink-800">{badge}</span>
+						<span className="flex-shrink-0 inline-flex min-w-[18px] h-[18px] items-center justify-center px-1 rounded-full bg-gold-100 text-gold-800 text-micro font-semibold tabular-nums transition-opacity group-hover:opacity-0">{badge}</span>
 					)}
 				</button>
 				<button
 					onClick={newAppChat}
 					title={`New chat in ${item.label}`}
 					aria-label={`New chat in ${item.label}`}
-					className="absolute right-1 p-1 rounded-md opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground hover:bg-black/[0.06] transition-all"
+					className="absolute right-1.5 p-1 rounded-md opacity-0 group-hover:opacity-100 focus-visible:opacity-100 text-ink-500 hover:text-ink-900 hover:bg-ink-200/60 transition-opacity duration-120"
 				>
 					<CirclePlus className="w-3.5 h-3.5" />
 				</button>
@@ -643,7 +704,15 @@ export function StudioShell() {
 	// Main page = the chat home (centered chat, height-locked). The app pages
 	// are the full-bleed 3-panel workspace (its own panels own padding/scroll).
 	// /studio/apps/all is the plain grid → neither.
-	const chatHome = location.pathname === '/studio';
+	// /studio/chat/:id renders the same chat as /studio, so it needs the same
+	// height-locked layout. It used to fall to the default `max-w-5xl` branch:
+	// boxed mid-viewport, and the page (not the transcript) scrolled.
+	const chatHome = location.pathname === '/studio' || location.pathname.startsWith('/studio/chat/');
+	const { navRef, bar } = useActiveIndicator(location.pathname);
+	// Section-entry motion is keyed on the top-level SECTION, never the full
+	// path: /studio/apps/:app/w/:loop and the library tabs keep the same page
+	// mounted (and a docked chat mid-stream) as their sub-path changes.
+	const section = location.pathname.split('/')[2] || 'home';
 	const appWorkspace = location.pathname === '/studio/apps'
 		|| (/^\/studio\/apps\/[^/]+/.test(location.pathname) && location.pathname !== '/studio/apps/all');
 	// The Library carries its own docked chat (same 2-panel as the app
@@ -812,7 +881,7 @@ export function StudioShell() {
 				<div
 					onClick={hideSidebar}
 					aria-hidden="true"
-					className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[1px]"
+					className="fixed inset-0 z-40 bg-ink-950/30 backdrop-blur-[2px] animate-in fade-in-0 duration-180"
 				/>
 			)}
 			{!sidebarHidden && (
@@ -830,31 +899,39 @@ export function StudioShell() {
 				className={cn(
 					'flex flex-col h-screen bg-sidebar border-r border-sidebar-border',
 					isNarrow
-						? 'fixed inset-y-0 left-0 z-50 w-[85vw] max-w-[320px] shadow-2xl'
+						? 'fixed inset-y-0 left-0 z-50 w-[85vw] max-w-[320px] shadow-e3 animate-in slide-in-from-left duration-240 ease-lumen'
 						: 'relative flex-shrink-0 sticky top-0',
 				)}
 			>
 				<div className="flex items-center justify-between pr-1.5">
-					<button onClick={newChat} title="New chat" className="px-4 py-4 flex items-baseline text-left flex-1 min-w-0">
-						<span className="font-display text-title font-semibold tracking-tight text-foreground truncate">Lumid Studio</span>
+					<button onClick={newChat} title="New chat" className="pl-4 pr-2 py-4 flex items-center gap-2 text-left flex-1 min-w-0">
+						<StrandMark size={22} className="-mt-0.5" />
+						<span className="font-display text-title font-semibold tracking-tight text-ink-900 truncate">Lumid Studio</span>
 					</button>
 					<button
 						onClick={hideSidebar}
 						title="Collapse sidebar"
 						aria-label="Collapse sidebar"
-						className="flex-shrink-0 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-black/[0.05] transition-colors"
+						className="flex-shrink-0 p-1.5 rounded-md text-ink-500 hover:text-ink-900 hover:bg-ink-200/60 transition-colors"
 					>
 						<PanelLeftClose className="w-4 h-4" />
 					</button>
 				</div>
 
-				<nav className="flex-1 overflow-y-auto px-2 py-3 space-y-px">
-					{/* Primary action — a quiet claude-style row, not a button. */}
+				<nav ref={navRef} className="relative flex-1 overflow-y-auto px-2 pt-1 pb-3 space-y-px">
+					{/* The sliding bronze bar marking the active top-nav row. */}
+					<span
+						aria-hidden
+						className="pointer-events-none absolute left-[3px] top-0 w-[3px] rounded-full bg-gold-500 transition-[transform,height,opacity] duration-240 ease-lumen"
+						style={{ transform: `translateY(${bar?.y ?? 0}px)`, height: bar?.h ?? 0, opacity: bar ? 1 : 0 }}
+					/>
+					{/* Primary action. Lumen: a real (paper) button — the one thing on
+					    the rail that CREATES rather than navigates, so it reads as one. */}
 					<button
 						onClick={newChat}
-						className="w-full mb-1 flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-foreground hover:bg-black/[0.04] transition-colors"
+						className="lumen-press w-full mb-2 flex items-center gap-2.5 px-3 h-9 rounded-lg border border-border bg-card text-body font-medium text-ink-900 shadow-e1 hover:border-ink-300 hover:bg-ink-50 transition-colors duration-120"
 					>
-						<CirclePlus className="w-4 h-4 text-ink-700" /> New chat
+						<Plus className="w-4 h-4 text-ink-600" /> New chat
 					</button>
 					{TOP_NAV
 						.filter((item) => !item.adminOnly || isAdmin)
@@ -870,7 +947,7 @@ export function StudioShell() {
 					{/* Recent — app-LESS threads only. Anything grounded in an app
 					    lives under that app's folder below, so "New chat" above and
 					    the app folders are siblings, not a hierarchy. */}
-					<RecentSection items={allChats} loaded={chatsLoaded} navigate={navigate} iconForApp={iconForApp} />
+					<RecentSection items={allChats} loaded={chatsLoaded} navigate={navigate} />
 					{/* Installed apps — EVERY installed app gets a folder here
 					    (ui.sidebar is an optional label/icon override, not the
 					    admission price), each expanding to its own conversations.
@@ -931,12 +1008,12 @@ export function StudioShell() {
 					<button
 						onClick={() => setMenuOpen((v) => !v)}
 						className={[
-							'w-full px-1.5 py-1.5 rounded-lg flex items-center gap-2 min-w-0 transition-colors group',
-							menuOpen ? 'bg-black/[0.06]' : 'hover:bg-black/[0.04]',
+							'w-full px-1.5 py-1.5 rounded-lg flex items-center gap-2 min-w-0 transition-colors duration-120 group',
+							menuOpen ? 'bg-ink-100/80' : 'hover:bg-ink-100/60',
 						].join(' ')}
 						title="Account menu"
 					>
-						<div className="w-7 h-7 rounded-full bg-foreground text-background flex items-center justify-center text-xs font-semibold flex-shrink-0">
+						<div className="w-7 h-7 rounded-full bg-ink-900 text-ink-50 flex items-center justify-center text-caption font-semibold flex-shrink-0 ring-2 ring-sidebar">
 							{(user?.email?.[0] || '?').toUpperCase()}
 						</div>
 						<div className="flex-1 min-w-0 text-left">
@@ -958,36 +1035,36 @@ export function StudioShell() {
 					</button>
 
 					{menuOpen && (
-						<div className="absolute left-3 right-3 bottom-full mb-1 rounded-xl border border-border bg-card shadow-lg py-1 z-30">
+						<div className="absolute left-3 right-3 bottom-full mb-1.5 rounded-xl border border-border bg-popover shadow-e2 p-1 z-30 animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-1 duration-150 origin-bottom">
 							<Link to="/studio/apps/all"
 								onClick={() => setMenuOpen(false)}
-								className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted">
-								<Boxes className="w-3.5 h-3.5 text-muted-foreground" />
+								className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-body text-ink-800 hover:bg-ink-100/70 hover:text-ink-900 transition-colors duration-120">
+								<Boxes className="w-4 h-4 text-ink-500" />
 								My apps &amp; runs
 							</Link>
 							<Link to="/studio/inbox"
 								onClick={() => setMenuOpen(false)}
-								className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted">
-								<Inbox className="w-3.5 h-3.5 text-muted-foreground" />
+								className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-body text-ink-800 hover:bg-ink-100/70 hover:text-ink-900 transition-colors duration-120">
+								<Inbox className="w-4 h-4 text-ink-500" />
 								Inbox
 							</Link>
 							<Link to="/studio/settings"
 								onClick={() => setMenuOpen(false)}
-								className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted">
-								<Settings className="w-3.5 h-3.5 text-muted-foreground" />
+								className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-body text-ink-800 hover:bg-ink-100/70 hover:text-ink-900 transition-colors duration-120">
+								<Settings className="w-4 h-4 text-ink-500" />
 								Settings
 							</Link>
 							<Link to="/studio/account/tokens"
 								onClick={() => setMenuOpen(false)}
-								className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted">
-								<Key className="w-3.5 h-3.5 text-muted-foreground" />
+								className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-body text-ink-800 hover:bg-ink-100/70 hover:text-ink-900 transition-colors duration-120">
+								<Key className="w-4 h-4 text-ink-500" />
 								API tokens
 							</Link>
 							{isAdmin && (
 								<Link to="/studio/manage"
 									onClick={() => setMenuOpen(false)}
-									className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted">
-									<Shield className="w-3.5 h-3.5 text-muted-foreground" />
+									className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-body text-ink-800 hover:bg-ink-100/70 hover:text-ink-900 transition-colors duration-120">
+									<Shield className="w-4 h-4 text-ink-500" />
 									Management
 								</Link>
 							)}
@@ -1000,8 +1077,8 @@ export function StudioShell() {
 								<Link to="/studio/account/claude-pool"
 									onClick={() => setMenuOpen(false)}
 									title="Pause your pool's Claude accounts, reset its members' usage clocks"
-									className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted">
-									<ShieldCheck className="w-3.5 h-3.5 text-muted-foreground" />
+									className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-body text-ink-800 hover:bg-ink-100/70 hover:text-ink-900 transition-colors duration-120">
+									<ShieldCheck className="w-4 h-4 text-ink-500" />
 									Claude pool
 								</Link>
 							)}
@@ -1014,8 +1091,8 @@ export function StudioShell() {
 								<Link to="/studio/admin/billing"
 									onClick={() => setMenuOpen(false)}
 									title="User consumption, platform reconciliation, supplier settlement"
-									className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted">
-									<Receipt className="w-3.5 h-3.5 text-muted-foreground" />
+									className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-body text-ink-800 hover:bg-ink-100/70 hover:text-ink-900 transition-colors duration-120">
+									<Receipt className="w-4 h-4 text-ink-500" />
 									Billing
 								</Link>
 							)}
@@ -1025,13 +1102,14 @@ export function StudioShell() {
 							<Link to="/studio/docs"
 								onClick={() => setMenuOpen(false)}
 								title="Guides, contracts, and runbooks"
-								className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted">
-								<BookOpen className="w-3.5 h-3.5 text-muted-foreground" />
+								className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-body text-ink-800 hover:bg-ink-100/70 hover:text-ink-900 transition-colors duration-120">
+								<BookOpen className="w-4 h-4 text-ink-500" />
 								Documentation
 							</Link>
+							<div className="my-1 h-px bg-border" role="separator" />
 							<button
 								onClick={onLogout}
-								className="w-full flex items-center gap-2 px-3 py-2 text-sm text-brick-700 hover:bg-brick-50 border-t border-border/60 mt-1 pt-2">
+								className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-body text-brick-700 hover:bg-brick-50 transition-colors duration-120">
 								<LogOut className="w-3.5 h-3.5" />
 								Sign out
 							</button>
@@ -1050,14 +1128,14 @@ export function StudioShell() {
 					title="Drag to resize · double-click to reset"
 					className={cn(
 						'absolute top-0 right-0 z-30 h-full w-1.5 cursor-ew-resize group/resize',
-						'hover:bg-black/5 transition-colors',
-						resizing && 'bg-black/10',
+						'hover:bg-ink-200/40 transition-colors',
+						resizing && 'bg-ink-200/60',
 					)}
 				>
 					<span className={cn(
 						'absolute right-0 top-0 h-full w-px transition-colors',
-						'bg-transparent group-hover/resize:bg-foreground/30',
-						resizing && '!bg-foreground/40',
+						'bg-transparent group-hover/resize:bg-gold-400',
+						resizing && '!bg-gold-500',
 					)} />
 				</div>
 				)}
@@ -1072,7 +1150,7 @@ export function StudioShell() {
 			<div className={cn('flex-1 flex flex-col min-w-0', (chatHome || fullBleed) && 'h-screen overflow-hidden')}>
 				{/* Top bar — page header lives in TopStatusStrip; account
 				    surfaces moved to the sidebar user menu. */}
-				<header data-studio-picker-chrome="1" className="min-h-[64px] py-2.5 bg-background/85 backdrop-blur-md border-b border-border sticky top-0 z-10 flex items-center px-3 sm:px-6 gap-2 sm:gap-4">
+				<header data-studio-picker-chrome="1" className="min-h-[56px] py-2 bg-background/85 backdrop-blur-md border-b border-border/80 sticky top-0 z-10 flex items-center px-3 sm:px-6 gap-2 sm:gap-4">
 					{/* When the sidebar is collapsed, its expand control lives here at
 					    the header's far left — so the resize icon is always visible. */}
 					{sidebarHidden && (
@@ -1080,7 +1158,7 @@ export function StudioShell() {
 							onClick={showSidebar}
 							title="Show sidebar"
 							aria-label="Show sidebar"
-							className="flex-shrink-0 -ml-1 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+							className="flex-shrink-0 -ml-1 p-1.5 rounded-md text-ink-500 hover:text-ink-900 hover:bg-ink-100 transition-colors"
 						>
 							<PanelLeftOpen className="w-4 h-4" />
 						</button>
@@ -1091,8 +1169,8 @@ export function StudioShell() {
 				{/* Workspace. /studio = the chat as the main surface (claude.ai
 				    layout): a flex column pinned to the viewport so the
 				    transcript scrolls internally and the composer stays low. */}
-				<main className={cn(
-					'flex-1 w-full',
+				<main key={section} className={cn(
+					'flex-1 w-full animate-lumen-rise',
 					chatHome
 						? 'flex flex-col min-h-0 px-6 pb-4'  // centered chat home (unchanged main page)
 						: fullBleed
