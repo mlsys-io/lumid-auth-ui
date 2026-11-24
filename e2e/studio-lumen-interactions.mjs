@@ -14,6 +14,7 @@
 //   activity  /studio/runs: 7-day default, Needs fixing in words, Open run
 //   wf header schedule chip in words · Run now · ⋯ grouped This workflow / This app
 //   run page  the answer leads (Succeeded in… / Failed after… + reason), no raw codes
+//   research  app map: experiments → versions; click dims the rest and flows the path
 //   filters   Segmented radios on the Timeline view switch state (aria-checked)
 //   docs      index card -> reader (skeleton -> article) -> back
 //   sessions  /claude-sessions search narrows and clears
@@ -291,6 +292,35 @@ await section('run page answer', async () => {
 	assert(!/\b[a-z]+_[a-z_]+\b/.test(shown), `no snake_case codes in the answer (${(shown.match(/\b[a-z]+_[a-z_]+\b/) || [''])[0]})`);
 	const card = await page.locator('main').innerText();
 	assert(!/\bengine_command\b/.test(card) && !/^Outcome:/m.test(card), 'no "engine_command" / "Outcome:" strip on the run page');
+	await page.close();
+});
+
+// ── Research map: experiments as a tree, click lights the path ────────────
+await section('research map', async () => {
+	const page = await desk.ctx.newPage();
+	const APP = process.env.MAP_APP || 'quant-research';
+	await page.goto(`${BASE}/studio/apps/${APP}`, { waitUntil: 'domcontentloaded' });
+	const map = page.locator('section[aria-label="Research"]');
+	try { await map.waitFor({ timeout: 40000 }); } catch { note(`no Research map on ${APP} — set MAP_APP`); await page.close(); return; }
+	const exps = map.locator('.react-flow__node-experiment');
+	await exps.first().waitFor({ timeout: 15000 });
+	const n = await exps.count();
+	assert(n > 0 && await map.locator('.react-flow__node-version').count() > 0, `tree shows experiments (${n}) and their versions`);
+	// Only OUR status line — the question above it is the app's own words.
+	const status = (await exps.first().innerText()).split('\n').slice(-1)[0];
+	assert(!/comparable|instrument|\barms?\b|n_results/.test(status), `experiment status speaks in words ("${status}")`);
+	await exps.nth(Math.min(1, n - 1)).click();
+	await page.waitForTimeout(700);
+	const dimmed = await map.locator('.react-flow__node .opacity-40').count();
+	assert(dimmed > 0, `clicking a card dims what is off its path (${dimmed} dimmed)`);
+	assert(await map.locator('.research-edge-flow').count() > 0, 'the selected path flows');
+	assert(await map.getByText(/^Measures:|^Done when:/).count() > 0 || await map.getByText(/Not started yet|Can't|Winning|leads|Collecting/).count() > 0, 'the selected experiment is explained below the map');
+	const appr = map.locator('section[aria-label="For your approval"]');
+	await appr.waitFor({ timeout: 8000 }).catch(() => {});
+	if (await appr.count()) {
+		const t = await appr.innerText();
+		assert(/Try:/.test(t) && /Cost:/.test(t) && /Go ahead/.test(t) && /Not now/.test(t), 'approval card: Try / Cost / Go ahead / Not now');
+	} else note('no suggestions on this app — approval card not exercised');
 	await page.close();
 });
 

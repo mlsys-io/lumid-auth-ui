@@ -56,6 +56,7 @@ import LoopOrbit, { type LoopMode, type LoopStageKey } from "@/components/workfl
 // charts (recharts → vendor-charts) that only the per-app overview renders.
 // They load on demand when an overview actually mounts them.
 const AppActivityBand = lazy(() => import("@/components/activity/AppActivityBand"));
+const ResearchMap = lazy(() => import("@/components/research/ResearchMap"));
 const WorkflowObservabilityPanel = lazy(() => import("@/components/workflow/WorkflowObservabilityPanel"));
 const WorkflowList = lazy(() => import("@/components/workflow/WorkflowList"));
 // Markdown renderer (named export) for the per-app Overview story copy.
@@ -1252,6 +1253,11 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 								{/* Running now / Needs fixing for THIS app — empty when healthy. */}
 								{!nestedInSurface && (
 									<Suspense fallback={null}><AppActivityBand app={app} /></Suspense>
+								)}
+								{/* What the app is exploring, as a tree: experiments → versions,
+								    suggestions to approve. Renders nothing for an app with neither. */}
+								{!nestedInSurface && (
+									<Suspense fallback={null}><ResearchMap app={app} /></Suspense>
 								)}
 								{(identity?.hasSurface || !!urlSurface) && !nestedInSurface ? (
 									// The app DECLARED a page — that wins. Previously the surface

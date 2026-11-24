@@ -17,6 +17,7 @@ import { plainCause, fmtDuration } from "@/lib/activity";
 const ACRONYMS: Record<string, string> = {
 	ttft: "TTFT", tpot: "TPOT", e2e: "E2E", kv: "KV", vram: "VRAM", pnl: "PnL", api: "API", llm: "LLM",
 	gpu: "GPU", cpu: "CPU", id: "ID", url: "URL", ofi: "OFI", vpin: "VPIN", rag: "RAG", sla: "SLA", qps: "QPS",
+	kol: "KOL", mbb: "MBB", dag: "DAG",
 };
 // Longest first: "_tok_s" must win over "_s".
 const UNITS: Array<[RegExp, string]> = [
