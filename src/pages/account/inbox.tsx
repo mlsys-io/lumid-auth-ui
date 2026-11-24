@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useContext, useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
@@ -27,7 +27,10 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Segmented } from "@/components/ui/segmented";
+import { AuthContext } from "@/hooks/useAuth";
+import { appTitle } from "@/components/workflow/AppCard";
+import { useWorkflowFeed, FeedCard, feedItemMs, type FeedItem } from "@/pages/studio/inbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 // Radix Select forbids an empty-string item value; this stands in for "all".
@@ -37,59 +40,69 @@ import { EmptyState as LumenEmpty } from "@/components/ui/empty-state";
 import { EmptyInbox, ErrorFrayed } from "@/components/illustrations/scenes";
 
 /**
- * /account/inbox — real two-way message store between autoresearch
- * loops and the human reviewer.
+ * /studio/inbox — the one Inbox.
  *
- * Phase 1 (read-only display):  the loop posts a structured message
- * via xpcloud's POST /inbox/message after each cycle. This page polls
- * GET /inbox/messages and shows them.
+ * Two sources, one list:
+ *   - agent messages: xpcloud's two-way store (GET /inbox-api/inbox/messages,
+ *     the lm_session cookie forwarded as a Bearer by nginx). Questions, flags
+ *     and drafts to approve can be answered inline; the loop picks the reply
+ *     up on its next run (_pull_inbox_replies). Cycle summaries are activity.
+ *   - the workflow feed (pages/studio/inbox.tsx): pending email drafts,
+ *     platform notices, today's cycle outcomes, the external-API audit.
  *
- * Phase 2 (replies flow back):  for `cycle_summary` and `draft_pending`
- * messages, the user can Approve / Reject each draft inline. For
- * `question` messages, a textarea lets the user reply with prose.
- * Replies POST to /inbox/{id}/reply; the local cycle pulls them on
- * its next entry via _pull_inbox_replies and dispatches accordingly:
- *   approve → skill_apply / memory_apply
- *   reject  → discard_skill_draft / discard_memory_draft
- *   text    → xp_ingest into the role agent
- *
- * Auth is the lm_session cookie — nginx proxies /inbox-api/* to
- * xpcloud and forwards the cookie value as a Bearer token, so
- * xpcloud's resolve_user introspects via lum.id.
+ * This used to be two pages — Inbox here and "Drafts" at /studio/drafts, each
+ * with its own filters. One filter row now: Needs you · Activity (· Audit for
+ * admins), plus an agent picker once more than one agent posts.
  */
+type View = "needs" | "activity" | "audit";
+
+const ATTENTION_KINDS = "question,flag,draft_pending";
+
+// Legacy ?filter= values from the old Drafts page, and ?view=.
+function viewFromParams(sp: URLSearchParams): View | null {
+	const v = sp.get("view") || sp.get("filter");
+	if (v === "needs" || v === "drafts" || v === "notices") return "needs";
+	if (v === "activity") return "activity";
+	if (v === "audit") return "audit";
+	return null;
+}
+
+type Row =
+	| { key: string; ms: number; app: string; msg: InboxMessage }
+	| { key: string; ms: number; app: string; feed: FeedItem };
+
 export default function InboxPage() {
+	const [searchParams] = useSearchParams();
+	const [picked, setPicked] = useState<View | null>(() => viewFromParams(searchParams));
 	const [appFilter, setAppFilter] = useState("");
-	const [unreadOnly, setUnreadOnly] = useState(false);
 	const [messages, setMessages] = useState<InboxMessage[]>([]);
-	// "Needs you" — attention-needed kinds fetched SEPARATELY (kind filter) so
-	// questions/flags/drafts surface above the routine cycle_summary flood
-	// (the recent-100 feed is ~all digests; an escalation would never appear).
+	// Attention kinds are fetched SEPARATELY so a question or draft surfaces
+	// even when the recent-100 feed is all cycle digests.
 	const [attention, setAttention] = useState<InboxMessage[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
-	const [unread, setUnread] = useState(0);
-	const ATTENTION_KINDS = "question,flag,draft_pending";
+	const feed = useWorkflowFeed();
+	const role = useContext(AuthContext)?.user?.role;
+	const isAdmin = role === "admin" || role === "super_admin";
 
 	const refresh = async () => {
+		feed.load();
 		try {
 			const [resp, att] = await Promise.all([
-				listInboxMessages({ app: appFilter || undefined, unread_only: unreadOnly, limit: 100 }),
-				listInboxMessages({ app: appFilter || undefined, kind: ATTENTION_KINDS, limit: 50 }),
+				listInboxMessages({ limit: 100 }),
+				listInboxMessages({ kind: ATTENTION_KINDS, limit: 50 }),
 			]);
 			setMessages(resp.messages);
-			setUnread(resp.unread);
 			setAttention(att.messages);
 			setError(null);
 		} catch (e: unknown) {
-			const msg = e instanceof Error ? e.message : String(e);
-			setError(msg);
+			setError(e instanceof Error ? e.message : String(e));
 		} finally {
 			setLoading(false);
 		}
 	};
 
 	useEffect(() => {
-		setLoading(true);
 		let cancelled = false;
 		let timer: ReturnType<typeof setTimeout> | null = null;
 		// Adaptive poll: 30s on success, exponential backoff up to 5min on
@@ -99,12 +112,11 @@ export default function InboxPage() {
 			let ok = true;
 			try {
 				const [resp, att] = await Promise.all([
-					listInboxMessages({ app: appFilter || undefined, unread_only: unreadOnly, limit: 100 }),
-					listInboxMessages({ app: appFilter || undefined, kind: ATTENTION_KINDS, limit: 50 }),
+					listInboxMessages({ limit: 100 }),
+					listInboxMessages({ kind: ATTENTION_KINDS, limit: 50 }),
 				]);
 				if (cancelled) return;
 				setMessages(resp.messages);
-				setUnread(resp.unread);
 				setAttention(att.messages);
 				setError(null);
 			} catch (e: unknown) {
@@ -122,39 +134,62 @@ export default function InboxPage() {
 			cancelled = true;
 			if (timer) clearTimeout(timer);
 		};
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [appFilter, unreadOnly]);
-
-	const apps = useMemo(
-		() => Array.from(new Set(messages.map((m) => m.app))).sort(),
-		[messages],
-	);
+	}, []);
 
 	const onSeen = async (id: string) => {
 		try {
 			await markSeen(id);
-			setMessages((prev) =>
-				prev.map((m) => (m.id === id ? { ...m, seen_at: Date.now() / 1000 } : m)),
-			);
+			const seen = (m: InboxMessage) => (m.id === id ? { ...m, seen_at: Date.now() / 1000 } : m);
+			setMessages((prev) => prev.map(seen));
+			setAttention((prev) => prev.map(seen));
 		} catch (e) {
 			toast.error(`Mark seen failed: ${String(e)}`);
 		}
 	};
 
+	// Sort both sources into the three views.
+	const rows = useMemo(() => {
+		const out: Record<View, Row[]> = { needs: [], activity: [], audit: [] };
+		const attIds = new Set(attention.map((m) => m.id));
+		const msgRow = (m: InboxMessage): Row => ({ key: `m:${m.id}`, ms: m.posted_at * 1000, app: m.app, msg: m });
+		for (const m of attention) out.needs.push(msgRow(m));
+		for (const m of messages) if (!attIds.has(m.id) && !ATTENTION_KINDS.includes(m.kind)) out.activity.push(msgRow(m));
+		// A cycle outcome from the feed repeats an app's own cycle summary, so
+		// the feed's cycles count only for agents that don't post messages.
+		const posting = new Set(messages.map((m) => m.app));
+		for (const f of feed.items ?? []) {
+			const app = f.kind === "draft" || f.kind === "cycle" ? f.app : "";
+			const row: Row = { key: `f:${f.id}`, ms: feedItemMs(f), app, feed: f };
+			if (f.kind === "draft") out.needs.push(row);
+			else if (f.kind === "notice") (f.noticeKind === "brief" ? out.activity : out.needs).push(row);
+			else if (f.kind === "cycle") { if (!posting.has(f.app)) out.activity.push(row); }
+			else if (f.kind === "audit" && isAdmin) out.audit.push(row);
+		}
+		for (const v of Object.values(out)) v.sort((x, y) => y.ms - x.ms);
+		return out;
+	}, [messages, attention, feed.items, isAdmin]);
+
+	const view: View = picked ?? (rows.needs.length > 0 ? "needs" : "activity");
+	const apps = useMemo(
+		() => Array.from(new Set(rows[view].map((r) => r.app).filter(Boolean))).sort(),
+		[rows, view],
+	);
+	const shown = appFilter ? rows[view].filter((r) => r.app === appFilter) : rows[view];
+	const firstLoad = loading && feed.items === null;
+	const nothingAtAll = !firstLoad && rows.needs.length + rows.activity.length + rows.audit.length === 0;
+
+	const views = [
+		{ value: "needs" as const, label: "Needs you", count: rows.needs.length || undefined },
+		{ value: "activity" as const, label: "Activity" },
+		...(isAdmin && rows.audit.length > 0 ? [{ value: "audit" as const, label: "Audit" }] : []),
+	];
+
 	return (
 		<div className="max-w-4xl mx-auto px-6 pb-12">
-			{/* Lumen: the page owns its title (the top strip no longer repeats
-			    it — TopStatusStrip ownHeader); filters are the shared primitives
-			    instead of a native <select> and checkbox. */}
 			<PageHeader
 				className="pt-2"
-				title={
-					<span className="inline-flex items-center gap-3">
-						Inbox
-						{unread > 0 && <Badge variant="attention" className="font-sans">{unread} unread</Badge>}
-					</span>
-				}
-				subtitle="Messages from your agents' workflows. Approve or reject drafts inline; the next run picks up your reply."
+				title="Inbox"
+				subtitle="What your agents need from you, and what they did. Reply inline; the next run picks it up."
 				actions={
 					<Button variant="ghost" size="sm" onClick={refresh}>
 						<RefreshCw className="w-3.5 h-3.5" /> Refresh
@@ -162,97 +197,63 @@ export default function InboxPage() {
 				}
 			/>
 
-			<div className="flex flex-wrap items-center gap-4 mb-5">
-				<Select value={appFilter || ALL_APPS} onValueChange={(v) => setAppFilter(v === ALL_APPS ? "" : v)}>
-					<SelectTrigger size="sm" className="w-56" aria-label="Filter by app">
-						<SelectValue />
-					</SelectTrigger>
-					<SelectContent>
-						<SelectItem value={ALL_APPS}>All agents</SelectItem>
-						{apps.map((a) => (
-							<SelectItem key={a} value={a}>{a}</SelectItem>
-						))}
-					</SelectContent>
-				</Select>
-				<label className="flex items-center gap-2 text-body text-ink-700 cursor-pointer select-none">
-					<Checkbox checked={unreadOnly} onCheckedChange={(v) => setUnreadOnly(v === true)} />
-					Unread only
-				</label>
-			</div>
-
-			{loading && messages.length === 0 && !error && (
-				// Skeleton cards in the feed's own shape.
+			{firstLoad ? (
 				<div className="space-y-3" role="status" aria-label="Loading inbox">
 					{[0, 1, 2].map((i) => <Skeleton key={i} className="h-[88px] rounded-xl" />)}
 				</div>
-			)}
-
-			{error && (
-				// Lumen ErrorState: says what didn't load, offers Retry, keeps the
-				// raw message behind "Details", and only claims the session ended
-				// if the app's own session check also fails (this panel talks to
-				// xpcloud through /inbox-api, which can refuse on its own).
-				<ErrorState
-					className="mb-4"
-					error={new Error(error)}
-					what="your inbox"
-					art={<ErrorFrayed />}
-					onRetry={refresh}
-					hint={<>Apps post here once their <code className="rounded bg-ink-100 px-1 text-caption">inbox_publish.enabled: true</code> is set and a run completes.</>}
+			) : nothingAtAll && error ? (
+				<ErrorState error={new Error(error)} what="your inbox" art={<ErrorFrayed />} onRetry={refresh} />
+			) : nothingAtAll ? (
+				<LumenEmpty
+					art={<EmptyInbox />}
+					title="All caught up"
+					body="When an agent has a question, a draft or a result for you, it lands here."
+					actionLabel="Open your agents"
+					to="/studio/apps/all"
 				/>
-			)}
-
-			{/* Needs you — attention-needed messages (questions/flags/drafts),
-			    surfaced above the routine cycle_summary activity feed. */}
-			{attention.length > 0 && (
-				<section className="mb-6">
-					<h2 className="text-sm font-semibold text-ember-900 flex items-center gap-2 mb-2">
-						<MessageSquare className="w-4 h-4 text-ember-600" />
-						Needs you
-						<span className="bg-ember-100 text-ember-900 px-2 py-0.5 rounded-full text-xs">
-							{attention.length}
-						</span>
-					</h2>
-					<p className="text-xs text-muted-foreground mb-3">
-						Decisions your AI is unsure about + pending drafts. Reply and the next run ingests your guidance.
-					</p>
-					<div className="space-y-3">
-						{attention.map((m) => (
-							<MessageCard key={`att:${m.id}`} message={m} onSeen={() => onSeen(m.id)} onAction={refresh} />
-						))}
-					</div>
-				</section>
-			)}
-
-			{!loading && !error && messages.length === 0 && attention.length === 0 && (
-				<EmptyState />
-			)}
-
-			{messages.length > 0 && (
+			) : (
 				<>
-					{attention.length > 0 && (
-						<h2 className="text-sm font-semibold text-muted-foreground mb-2">Recent activity</h2>
-					)}
-					<div className="space-y-3">
-						{messages.map((m) => (
-							<MessageCard key={m.id} message={m} onSeen={() => onSeen(m.id)} onAction={refresh} />
-						))}
+					{/* The one filter row. */}
+					<div className="flex flex-wrap items-center gap-3 mb-5">
+						<Segmented aria-label="Show" value={view} onChange={(v) => { setPicked(v); setAppFilter(""); }} options={views} />
+						{apps.length > 1 && (
+							<Select value={appFilter || ALL_APPS} onValueChange={(v) => setAppFilter(v === ALL_APPS ? "" : v)}>
+								<SelectTrigger size="sm" className="w-48" aria-label="Filter by agent">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value={ALL_APPS}>All agents</SelectItem>
+									{apps.map((a) => <SelectItem key={a} value={a}>{appTitle(a)}</SelectItem>)}
+								</SelectContent>
+							</Select>
+						)}
 					</div>
+
+					{error && (
+						<p className="mb-4 text-caption text-ink-600">
+							Agent messages didn't load, so this list may be incomplete.{" "}
+							<button type="button" onClick={refresh} className="text-gold-700 hover:underline">Try again</button>
+						</p>
+					)}
+
+					{shown.length === 0 ? (
+						<p className="py-10 text-center text-body text-ink-600">
+							{view === "needs" ? "Nothing needs you right now." : "Nothing here yet."}
+						</p>
+					) : (
+						<ul className="space-y-3">
+							{shown.map((r) => (
+								<li key={r.key}>
+									{"msg" in r
+										? <MessageCard message={r.msg} onSeen={() => onSeen(r.msg.id)} onAction={refresh} />
+										: <FeedCard item={r.feed} busy={feed.busy} onDraftAction={feed.onDraftAction} />}
+								</li>
+							))}
+						</ul>
+					)}
 				</>
 			)}
 		</div>
-	);
-}
-
-function EmptyState() {
-	return (
-		<LumenEmpty
-			art={<EmptyInbox />}
-			title="All caught up"
-			body={<>Nothing is waiting for you. Apps post here once <code className="rounded bg-ink-100 px-1 text-caption">inbox_publish:</code> is set in their xpcloud.yaml — each run leaves a message.</>}
-			actionLabel="Open your apps"
-			to="/studio/apps"
-		/>
 	);
 }
 

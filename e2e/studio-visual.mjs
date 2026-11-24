@@ -51,7 +51,7 @@ const ROUTES = [
 	['runs', '/studio/runs', { phone: true }],
 	['knowledge', '/studio/knowledge'],
 	['inbox', '/studio/inbox'],
-	['drafts', '/studio/drafts'],
+	['inbox-needs', '/studio/inbox?view=needs'],
 	['apps-all', '/studio/apps/all'],
 	['app-mbb', '/studio/apps/mbb-consultant', { phone: true }],
 	['strategies', '/studio/strategies'],
