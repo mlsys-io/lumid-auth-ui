@@ -210,7 +210,7 @@ export default function CasebookPanel({ app, loop, atTs, onSelectCase, onViewDat
 		return () => { live = false; };
 	}, [app, loop]);
 
-	if (book === null) return <div className="h-16 rounded-lg bg-ink-100 animate-pulse" />;
+	if (book === null) return <div className="h-16 rounded-lg lumen-skeleton" />;
 
 	const cases = book.cases ?? [];
 	const evo = book.metrics_evolution ?? [];

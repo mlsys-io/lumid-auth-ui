@@ -10,6 +10,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { bearerHeader } from "@/api/session-bearer";
 import { SpiralOverlay } from "@/components/BrandLoader";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
+import { ErrorFrayed, NoMatches, WelcomeApps } from "@/components/illustrations/scenes";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -285,12 +289,6 @@ export default function MarketplaceBrowse() {
 
 	const openInstalled = (appName: string) => isPublic ? requireLogin() : navigate(`/studio/a/${encodeURIComponent(appName)}`);
 
-	if (err) return (
-		<div className="rounded-xl border border-brick-200 bg-brick-50/40 p-6 text-sm text-brick-800">
-			Couldn&apos;t load the catalog: {err}
-		</div>
-	);
-
 	// Top tag counts for the active tab
 	const topTags = useMemo(() => {
 		const sourceMap: Record<Tab, { tags?: string[] }[] | null> = {
@@ -318,6 +316,13 @@ export default function MarketplaceBrowse() {
 		// records in src/lib/refinements.ts (no backend behind it). The view is
 		// kept below for when refinements get a real store.
 	];
+
+	// AFTER every hook (this used to return before the topTags useMemo, so a
+	// failed load changed the hook count and React threw instead of rendering
+	// the error).
+	if (err) return (
+		<ErrorState error={new Error(err)} what="the catalog" art={<ErrorFrayed />} onRetry={() => location.reload()} />
+	);
 
 	return (
 		<div className="space-y-3">
@@ -505,17 +510,17 @@ function RepoGrid({
 	}, [repos, query, sort, activeTag]);
 
 	if (repos === null) return (
-		<div className="relative">
+		<div className="relative" role="status" aria-label="Loading the catalog">
 			<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-				{[0,1,2,3,4,5].map((i) => <div key={i} className="h-28 rounded-lg bg-ink-100 animate-pulse" />)}
+				{[0,1,2,3,4,5].map((i) => <Skeleton key={i} className="h-[196px] rounded-xl" />)}
 			</div>
 			<SpiralOverlay />
 		</div>
 	);
-	if (filtered.length === 0) return (
-		<div className="rounded-lg border border-dashed border-ink-200 p-10 text-center text-sm text-ink-600">
-			{query || activeTag ? "No matches. Try a different query or clear the filter." : "No items available."}
-		</div>
+	if (filtered.length === 0) return (query || activeTag) ? (
+		<EmptyState art={<NoMatches />} title="No matches" body="Try a different word, or clear the tag filter to see everything." />
+	) : (
+		<EmptyState art={<WelcomeApps />} title="Nothing published here yet" body="When apps of this kind are published to the marketplace, they appear here to add in one click." />
 	);
 
 	return (
@@ -705,17 +710,15 @@ function SkillsGrid({
 	}, [skills, query, activeTag]);
 
 	if (skills === null) return (
-		<div className="relative">
+		<div className="relative" role="status" aria-label="Loading skills">
 			<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-				{[0,1,2,3].map((i) => <div key={i} className="h-24 rounded-lg bg-ink-100 animate-pulse" />)}
+				{[0,1,2,3].map((i) => <Skeleton key={i} className="h-36 rounded-xl" />)}
 			</div>
 			<SpiralOverlay />
 		</div>
 	);
 	if (filtered.length === 0) return (
-		<div className="rounded-lg border border-dashed border-ink-200 p-10 text-center text-sm text-ink-600">
-			No skills match.
-		</div>
+		<EmptyState art={<NoMatches />} title="No skills match" body="Try a different word, or clear the tag filter." />
 	);
 
 	return (

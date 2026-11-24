@@ -963,7 +963,7 @@ export default function ExperimentsPanel({ app, loop, quiet = false }: {
 
 	if (exps === null) {
 		if (quiet) return null;
-		return <div className="relative"><div className="h-20 rounded-xl bg-ink-100 animate-pulse" /><SpiralOverlay /></div>;
+		return <div className="relative"><div className="h-20 rounded-xl lumen-skeleton" /><SpiralOverlay /></div>;
 	}
 	const shown = loop ? exps.filter((e) => e.loops?.includes(loop)) : exps;
 	const pending = loop ? defs.filter((d) => !d.workflow || d.workflow === loop) : defs;

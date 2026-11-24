@@ -436,7 +436,7 @@ export function Skeleton({ lines = 3 }: { lines?: number }) {
   return (
     <div className="space-y-2" aria-hidden="true">
       {Array.from({ length: lines }, (_, i) => (
-        <div key={i} className="h-10 rounded bg-ink-100 animate-pulse" />
+        <div key={i} className="h-10 rounded lumen-skeleton" />
       ))}
     </div>
   );

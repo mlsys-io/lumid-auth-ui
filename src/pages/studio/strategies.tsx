@@ -33,6 +33,7 @@ import {
 	type LqtStrategy, type LqtCycle,
 } from "@/api/lqt";
 import { cn } from "@/lib/utils";
+import { EmptyStudies } from "@/components/illustrations/scenes";
 
 function rel(iso?: string | null): string {
 	if (!iso) return "—";
@@ -118,7 +119,7 @@ function StrategyDetail({ s, onBack }: { s: LqtStrategy; onBack: () => void }) {
 				<div className="rounded-lg border border-brick-200 bg-brick-50 px-3 py-2 text-sm text-brick-900">{err}</div>
 			)}
 
-			{cycles === null && !err && <div className="h-24 rounded-xl bg-ink-100 animate-pulse" />}
+			{cycles === null && !err && <div className="h-24 rounded-xl lumen-skeleton" />}
 
 			{cycles !== null && cycles.length === 0 && (
 				<div className="rounded-lg border border-ink-200 px-4 py-6 text-center text-sm text-ink-600">
@@ -227,8 +228,8 @@ export default function StudioStrategies({ embedded = false }: { embedded?: bool
 
 	if (rows === null && !err) {
 		return wrap(<>
-			<div className="h-8 w-48 rounded bg-ink-100 animate-pulse" />
-			<div className="h-64 rounded-xl bg-ink-100 animate-pulse" />
+			<div className="h-8 w-48 rounded lumen-skeleton" />
+			<div className="h-64 rounded-xl lumen-skeleton" />
 		</>);
 	}
 
@@ -263,8 +264,9 @@ export default function StudioStrategies({ embedded = false }: { embedded?: bool
 		)}
 
 		{rows !== null && rows.length === 0 && !err && (
-			<div className="rounded-lg border border-ink-200 px-4 py-10 text-center">
-				<div className="text-sm text-ink-900 font-medium">No strategies yet</div>
+			<div className="animate-lumen-rise rounded-xl border border-dashed border-ink-200 bg-ink-50/50 px-4 py-10 text-center">
+				<div className="mx-auto mb-4 w-36 text-ink-300"><EmptyStudies /></div>
+				<div className="text-title text-ink-900 font-medium">No strategies yet</div>
 				<p className="text-sm text-ink-600 mt-1 max-w-md mx-auto">
 					Strategies are written in the LQT DSL and submitted with a PAT carrying the{" "}
 					<code>lqt:strategy</code> scope. They run paper against live prediction markets —

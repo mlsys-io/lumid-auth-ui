@@ -14,6 +14,7 @@ import { askExperiment } from "@/lib/grounded-asks";
 import { appTitle } from "@/components/workflow/AppCard";
 import { type ToneKey } from "@/lib/tones";
 import { cn } from "@/lib/utils";
+import { EmptyStudies } from "@/components/illustrations/scenes";
 
 type Row = MeExperiment & { app: string };
 
@@ -83,6 +84,9 @@ export default function StudioExperiments() {
 			search={indexRows.length > 6}
 			searchPlaceholder="Search studies…"
 			toolbar={toolbar}
+			loading={rows === null}
+			emptyArt={<EmptyStudies />}
+			emptyTitle="No studies yet"
 			empty="Agents declare studies (a hypothesis, the experiments that test it, one metric); results accumulate as workflows run. Ask what studies could help your agents."
 		/>
 	);
