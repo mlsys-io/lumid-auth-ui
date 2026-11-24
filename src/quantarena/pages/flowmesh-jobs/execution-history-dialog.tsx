@@ -49,7 +49,7 @@ export const ExecutionHistoryDialog = ({ open, onOpenChange, jobId, jobName }: E
 
 				{!loading && executions.length === 0 && (
 					<div className="flex flex-col items-center justify-center py-12 text-center">
-						<Clock className="w-10 h-10 text-muted-foreground/40 mb-3" />
+						<Clock className="w-10 h-10 text-ink-600 mb-3" />
 						<p className="text-sm text-muted-foreground">No executions yet. The job will run on its next scheduled time.</p>
 					</div>
 				)}

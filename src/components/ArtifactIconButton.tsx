@@ -203,10 +203,10 @@ export function ArtifactIconButton({ align = 'right', variant = 'icon' }: { alig
 					aria-label="Artifacts"
 					className={[
 						'group w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
-						open ? 'bg-black/[0.06] text-foreground font-medium' : 'text-foreground/60 hover:bg-black/[0.04] hover:text-foreground',
+						open ? 'bg-black/[0.06] text-foreground font-medium' : 'text-ink-700 hover:bg-black/[0.04] hover:text-foreground',
 					].join(' ')}
 				>
-					<FileStack className={['w-4 h-4 flex-shrink-0 transition-colors', open ? 'text-foreground/80' : 'text-foreground/45 group-hover:text-foreground/70'].join(' ')} />
+					<FileStack className={['w-4 h-4 flex-shrink-0 transition-colors', open ? 'text-ink-800' : 'text-ink-600 group-hover:text-ink-800'].join(' ')} />
 					<span>Artifacts</span>
 					{rows.length > 0 && (
 						<span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-gold-100 text-gold-700 text-[10px] font-semibold tabular-nums">

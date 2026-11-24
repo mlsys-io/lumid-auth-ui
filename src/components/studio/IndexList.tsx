@@ -207,7 +207,7 @@ export default function IndexList({
 					{groups.map(([section, sectionRows]) => (
 						<div key={section || '_'}>
 							{section && (
-								<div className="px-3 mb-0.5 text-[11px] font-medium tracking-wide text-foreground/45 uppercase">{section}</div>
+								<div className="px-3 mb-0.5 text-[11px] font-medium tracking-wide text-ink-600 uppercase">{section}</div>
 							)}
 							<div className="divide-y divide-border/60">
 								{sectionRows.map((r) => <Row key={r.id} row={r} />)}

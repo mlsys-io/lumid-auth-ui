@@ -2888,7 +2888,7 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 										    reads as the assistant losing the plot, so a switch starts
 										    a fresh thread. */}
 										<div className="h-px bg-muted my-1 mx-2" />
-										<div className="px-2.5 pt-1 pb-0.5 text-[10px] uppercase tracking-wide text-muted-foreground/70">
+										<div className="px-2.5 pt-1 pb-0.5 text-[10px] uppercase tracking-wide text-ink-600">
 											Interview mode
 										</div>
 										{([
@@ -3192,7 +3192,7 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 						className={[
 							'order-6 relative h-8 w-8 flex items-center justify-center rounded-full transition-all flex-shrink-0',
 							!input.trim()
-								? 'bg-muted text-muted-foreground/50 cursor-not-allowed'
+								? 'bg-muted text-ink-600 cursor-not-allowed'
 								: 'bg-primary text-primary-foreground hover:bg-primary/85 active:scale-95 shadow-sm',
 						].join(' ')}
 					>
@@ -3329,7 +3329,7 @@ const MessageBubble = memo(function MessageBubble({
 			// user messages and plain chat answers.
 			if (!isUser && agentic) {
 				return (
-					<div className="max-w-full text-[13.5px] leading-relaxed text-left px-1 mt-2 first:mt-0 text-foreground/90">
+					<div className="max-w-full text-[13.5px] leading-relaxed text-left px-1 mt-2 first:mt-0 text-ink-900">
 						<ChatMarkdown>{text}</ChatMarkdown>
 						{streaming && !done && <StreamCaret />}
 					</div>
@@ -3924,7 +3924,7 @@ function ModelChip({
 					'inline-flex items-center gap-1 pl-1.5 pr-1 py-0.5 min-h-[24px] rounded-full border text-[11px] transition-colors',
 					open
 						? 'bg-muted border-foreground/25 text-foreground'
-						: 'bg-card border-border text-foreground/70 hover:text-foreground hover:border-foreground/25',
+						: 'bg-card border-border text-ink-800 hover:text-foreground hover:border-foreground/25',
 					streaming ? 'opacity-50 cursor-not-allowed' : '',
 				].join(' ')}
 				title="Choose the AI model"
@@ -4005,7 +4005,7 @@ function WorkspaceChip({
 					'inline-flex items-center gap-1 pl-1.5 pr-1 py-0.5 min-h-[24px] rounded-full border text-[11px] transition-colors',
 					open || active
 						? 'bg-muted border-foreground/25 text-foreground'
-						: 'bg-card border-border text-foreground/70 hover:text-foreground hover:border-foreground/25',
+						: 'bg-card border-border text-ink-800 hover:text-foreground hover:border-foreground/25',
 				].join(' ')}
 				title="Working context — xpio repo, FlowMesh cluster, lumid-data app"
 			>

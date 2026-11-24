@@ -109,12 +109,20 @@ function audit() {
 		const { h, s } = hsl(c);
 		return h >= 190 && h <= 290 && s > 0.15 && !ALLOW.has(key(c));
 	};
+	// Effective ground: composite every translucent background up the tree
+	// over the page colour (a bg-gold-50/40 chip is NOT pure gold-50).
 	const bgOf = (el) => {
+		const layers = [];
 		for (let e = el; e; e = e.parentElement) {
 			const c = parse(getComputedStyle(e).backgroundColor);
-			if (c && c.a > 0.5) return c;
+			if (c && c.a > 0) {
+				layers.push(c);
+				if (c.a >= 0.999) break;
+			}
 		}
-		return { r: 255, g: 255, b: 255, a: 1 };
+		let out = parse(getComputedStyle(document.body).backgroundColor) || { r: 255, g: 255, b: 255, a: 1 };
+		for (const c of layers.reverse()) out = { r: c.r * c.a + out.r * (1 - c.a), g: c.g * c.a + out.g * (1 - c.a), b: c.b * c.a + out.b * (1 - c.a), a: 1 };
+		return out;
 	};
 	const vis = (el) => {
 		const r = el.getBoundingClientRect();
@@ -138,9 +146,14 @@ function audit() {
 		if (direct) {
 			const fs = parseFloat(cs.fontSize);
 			sizes.set(fs, (sizes.get(fs) || 0) + 1);
-			const fg = parse(cs.color);
-			if (fg && fg.a > 0.5) {
-				const r = ratio(fg, bgOf(el));
+			const fg0 = parse(cs.color);
+			if (fg0 && fg0.a > 0.05) {
+				// Blend translucent text over its ground: `text-foreground/60`
+				// is a lighter colour than its rgb() channels say.
+				const bg = bgOf(el);
+				const o = fg0.a * (Number(cs.opacity) || 1);
+				const fg = { r: fg0.r * o + bg.r * (1 - o), g: fg0.g * o + bg.g * (1 - o), b: fg0.b * o + bg.b * (1 - o), a: 1 };
+				const r = ratio(fg, bg);
 				const large = fs >= 24 || (fs >= 18.66 && Number(cs.fontWeight) >= 700);
 				if (r < (large ? 3 : 4.5)) low.push(`${r.toFixed(2)} ${cs.color} ${fs}px | ${label}`);
 			}

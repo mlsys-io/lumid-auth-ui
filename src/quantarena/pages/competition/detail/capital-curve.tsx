@@ -115,7 +115,7 @@ export default function CapitalCurve({ competitionId, status }: Props) {
 	if (error || rows.length === 0) {
 		return (
 			<div className="flex flex-col items-center justify-center h-64 gap-3">
-				<TrendingUp className="w-10 h-10 text-muted-foreground/40" />
+				<TrendingUp className="w-10 h-10 text-ink-600" />
 				<p className="text-sm text-muted-foreground">
 					{error || 'No chart data yet — check back after the first cycle runs.'}
 				</p>

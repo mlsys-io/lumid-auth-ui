@@ -390,7 +390,7 @@ function DocIndex() {
 								className="group rounded-lg border border-slate-200 bg-white p-3.5 hover:border-gold-300 hover:shadow-sm transition"
 							>
 								<div className="flex items-center gap-2 mb-1">
-									<d.icon className="w-4 h-4 text-foreground/45 group-hover:text-gold-600 transition-colors" />
+									<d.icon className="w-4 h-4 text-ink-600 group-hover:text-gold-600 transition-colors" />
 									<span className="text-sm font-medium text-slate-800">{d.title}</span>
 								</div>
 								<p className="text-xs text-slate-500 leading-relaxed">{d.description}</p>
@@ -409,7 +409,7 @@ function DocIndex() {
 							className="group rounded-lg border border-slate-200 bg-white p-3.5 hover:border-gold-300 hover:shadow-sm transition"
 						>
 							<div className="flex items-center gap-2 mb-1">
-								<r.icon className="w-4 h-4 text-foreground/45 group-hover:text-gold-600 transition-colors" />
+								<r.icon className="w-4 h-4 text-ink-600 group-hover:text-gold-600 transition-colors" />
 								<span className="text-sm font-medium text-slate-800">{r.label}</span>
 							</div>
 							<p className="text-xs text-slate-500 leading-relaxed">{r.description}</p>

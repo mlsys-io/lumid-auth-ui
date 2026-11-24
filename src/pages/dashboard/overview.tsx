@@ -178,7 +178,7 @@ function AreaLink({
 				<div className="text-sm font-medium truncate">{label}</div>
 				<div className="text-xs text-muted-foreground truncate">{hint}</div>
 			</div>
-			<ChevronRight className="w-4 h-4 shrink-0 text-muted-foreground/40 group-hover:text-indigo-500" />
+			<ChevronRight className="w-4 h-4 shrink-0 text-ink-600 group-hover:text-indigo-500" />
 		</Link>
 	);
 }

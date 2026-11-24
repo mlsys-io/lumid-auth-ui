@@ -55,7 +55,7 @@ function Card({ title, rows, more }: { title: string; rows: React.ReactNode[]; m
 	if (rows.length === 0) return null;
 	return (
 		<div className="max-w-md rounded-xl border border-border bg-card shadow-sm overflow-hidden text-left">
-			<div className="px-3 pt-2 pb-1 text-[10.5px] tracking-[0.08em] font-medium text-foreground/45 uppercase">{title}</div>
+			<div className="px-3 pt-2 pb-1 text-[10.5px] tracking-[0.08em] font-medium text-ink-600 uppercase">{title}</div>
 			<div className="divide-y divide-border/70">{rows}</div>
 			{more && more > 0 ? (
 				<div className="px-3 py-1.5 text-[11px] text-muted-foreground">+{more} more</div>
@@ -162,7 +162,7 @@ function lumilakeJobCard(r: Record<string, any>): React.ReactNode {
 	// Terminal run_lumilake_job carries outputs — summarize inline.
 	if (r.outputs != null) {
 		const txt = typeof r.outputs === 'string' ? r.outputs : JSON.stringify(r.outputs);
-		rows.push(<Row key="o"><span className="text-[12px] text-foreground/80 line-clamp-2 break-words">{txt.slice(0, 200)}</span></Row>);
+		rows.push(<Row key="o"><span className="text-[12px] text-ink-800 line-clamp-2 break-words">{txt.slice(0, 200)}</span></Row>);
 	}
 	if (jid) rows.push(<Row key="id"><span className="font-mono text-[10.5px] text-muted-foreground">{jid.slice(0, 22)}</span></Row>);
 	return <Card title="Lumilake job" rows={rows} />;
@@ -174,7 +174,7 @@ function lumilakeResultCard(r: Record<string, any>): React.ReactNode {
 	if (r.status === 'not_ready') return <Card title="Lumilake result" rows={[<Row key="n"><span className="text-[12px] text-muted-foreground">Not ready — job still running</span></Row>]} />;
 	const out = r.outputs;
 	const txt = out == null ? '(no output)' : (typeof out === 'string' ? out : JSON.stringify(out, null, 0));
-	return <Card title="Lumilake result" rows={[<Row key="o"><span className="text-[12px] text-foreground/85 whitespace-pre-wrap break-words line-clamp-6">{txt.slice(0, 500)}</span></Row>]} />;
+	return <Card title="Lumilake result" rows={[<Row key="o"><span className="text-[12px] text-ink-900 whitespace-pre-wrap break-words line-clamp-6">{txt.slice(0, 500)}</span></Row>]} />;
 }
 
 // Lumilake job trace → critical-path / provenance card (best-effort).
@@ -202,11 +202,11 @@ function workflowLogsCard(r: Record<string, any>): React.ReactNode {
 	const lines: any[] = Array.isArray(r.lines) ? r.lines : [];
 	if (lines.length === 0) return <Card title="Workflow logs" rows={[<Row key="n"><span className="text-[12px] text-muted-foreground">No log lines yet</span></Row>]} />;
 	const shown = lines.slice(-8);
-	const tone = (lvl: string) => lvl === 'ERROR' ? 'text-rose-600' : lvl === 'WARNING' ? 'text-amber-600' : 'text-foreground/75';
+	const tone = (lvl: string) => lvl === 'ERROR' ? 'text-rose-600' : lvl === 'WARNING' ? 'text-amber-600' : 'text-ink-800';
 	const rows = shown.map((l, i) => (
 		<Row key={`l${i}`}>
 			<span className={`font-mono text-[11px] truncate ${tone(String(l.level || '').toUpperCase())}`}>
-				<span className="text-muted-foreground/70">{String(l.level || '').slice(0, 4)}</span> {String(l.message ?? '').slice(0, 160)}
+				<span className="text-ink-600">{String(l.level || '').slice(0, 4)}</span> {String(l.message ?? '').slice(0, 160)}
 			</span>
 		</Row>
 	));

@@ -245,7 +245,7 @@ function NavItemView({ to, label, icon: Icon, end, badge, title }: NavItem) {
 					'group flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors relative',
 					isActive
 						? 'bg-black/[0.06] text-foreground font-medium'
-						: 'text-foreground/60 hover:bg-black/[0.04] hover:text-foreground',
+						: 'text-ink-700 hover:bg-black/[0.04] hover:text-foreground',
 				)
 			}
 		>
@@ -253,7 +253,7 @@ function NavItemView({ to, label, icon: Icon, end, badge, title }: NavItem) {
 				<>
 					<Icon className={cn(
 						'w-4 h-4 flex-shrink-0 transition-colors',
-						isActive ? 'text-foreground/80' : 'text-foreground/45 group-hover:text-foreground/70',
+						isActive ? 'text-ink-800' : 'text-ink-600 group-hover:text-ink-800',
 					)} />
 					{/* min-w-0 + truncate: the sidebar is user-resizable (style={{width:
 					    sidebarWidth}}) and the labels became two words on 2026-09-13, so a
@@ -403,11 +403,11 @@ function RecentRow({ item, navigate, appIcon }: {
 			<button
 				onClick={open}
 				title={`${item.title || 'Untitled chat'} · ${formatRelative(item.updatedAt)}`}
-				className="flex-1 min-w-0 flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-foreground/60 hover:bg-black/[0.04] hover:text-foreground transition-colors text-left"
+				className="flex-1 min-w-0 flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-ink-700 hover:bg-black/[0.04] hover:text-foreground transition-colors text-left"
 			>
-				<Icon className="w-4 h-4 flex-shrink-0 text-foreground/45" />
+				<Icon className="w-4 h-4 flex-shrink-0 text-ink-600" />
 				<span className="flex-1 min-w-0 truncate">{middleTruncate(item.title || 'Untitled chat')}</span>
-				<span className="flex-shrink-0 text-[11px] text-muted-foreground/50 tabular-nums">
+				<span className="flex-shrink-0 text-[11px] text-ink-600 tabular-nums">
 					{compactAge(item.updatedAt)}
 				</span>
 			</button>
@@ -457,7 +457,7 @@ function RecentSection({ items, loaded, navigate, iconForApp }: {
 		<div>
 			<SectionLabel>Recent</SectionLabel>
 			{items.length === 0 ? (
-				<div className="px-3 py-2 text-xs text-muted-foreground/70">No conversations yet</div>
+				<div className="px-3 py-2 text-xs text-ink-600">No conversations yet</div>
 			) : (
 				<>
 					{shown.map((item) => (
@@ -529,15 +529,15 @@ function AppFolder({
 					title={failed ? `${item.label} — install failed` : item.label}
 					className={cn(
 						'flex-1 min-w-0 flex items-center gap-2 pl-3 pr-2 py-2 text-sm text-left',
-						active ? 'text-foreground font-medium' : 'text-foreground/70 hover:text-foreground',
+						active ? 'text-foreground font-medium' : 'text-ink-800 hover:text-foreground',
 					)}
 				>
-					<Icon className="w-4 h-4 flex-shrink-0 text-foreground/45" />
+					<Icon className="w-4 h-4 flex-shrink-0 text-ink-600" />
 					<span className="flex-1 min-w-0 truncate">{item.label}</span>
 					{installing && <Loader2 className="w-3 h-3 flex-shrink-0 animate-spin text-muted-foreground" />}
 					{failed && <AlertCircle className="w-3 h-3 flex-shrink-0 text-rose-500" />}
 					{badge != null && badge > 0 && (
-						<span className="flex-shrink-0 text-[11px] px-1.5 py-0.5 rounded-full bg-foreground/10 text-foreground/70">{badge}</span>
+						<span className="flex-shrink-0 text-[11px] px-1.5 py-0.5 rounded-full bg-foreground/10 text-ink-800">{badge}</span>
 					)}
 				</button>
 				<button
@@ -854,7 +854,7 @@ export function StudioShell() {
 						onClick={newChat}
 						className="w-full mb-1 flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-foreground hover:bg-black/[0.04] transition-colors"
 					>
-						<CirclePlus className="w-4 h-4 text-foreground/55" /> New chat
+						<CirclePlus className="w-4 h-4 text-ink-700" /> New chat
 					</button>
 					{TOP_NAV
 						.filter((item) => !item.adminOnly || isAdmin)

@@ -341,7 +341,7 @@ export default function TopStatusStrip() {
 						<nav className="flex items-center gap-1 text-[11px] text-muted-foreground mb-0.5">
 							{crumbs.map((c, i) => (
 								<span key={i} className="inline-flex items-center gap-1 min-w-0">
-									{i > 0 && <ChevronRight className="w-3 h-3 text-muted-foreground/60 flex-shrink-0" />}
+									{i > 0 && <ChevronRight className="w-3 h-3 text-ink-600 flex-shrink-0" />}
 									<Link to={c.to} className="hover:text-foreground transition-colors truncate">
 										{c.label}
 									</Link>
@@ -408,7 +408,7 @@ function RightNowTicker({ items }: { items: TickerItem[] }) {
 			title={`Right now — ${it.text}`}
 			className="group inline-flex items-center gap-2 min-w-0 max-w-[260px] sm:max-w-[340px] px-2.5 py-1 rounded-full border border-border bg-card hover:bg-muted transition-colors"
 		>
-			<span className="text-[10.5px] uppercase tracking-[0.08em] font-semibold text-muted-foreground/70 shrink-0 hidden lg:inline">Now</span>
+			<span className="text-[10.5px] uppercase tracking-[0.08em] font-semibold text-ink-600 shrink-0 hidden lg:inline">Now</span>
 			{/* keyed so it re-mounts (and re-animates) on each flip */}
 			<span key={`${it.key}-${i}`} className="inline-flex items-center gap-1.5 min-w-0 animate-in fade-in slide-in-from-bottom-1 duration-300">
 				<Icon className={["w-3.5 h-3.5 shrink-0", t.icon].join(" ")} />
@@ -416,7 +416,7 @@ function RightNowTicker({ items }: { items: TickerItem[] }) {
 				<span className={["text-[11px] font-medium shrink-0", t.text].join(" ")}>{it.action}</span>
 			</span>
 			{items.length > 1 && (
-				<span className="text-[10.5px] text-muted-foreground/60 tabular-nums shrink-0">{i + 1}/{items.length}</span>
+				<span className="text-[10.5px] text-ink-600 tabular-nums shrink-0">{i + 1}/{items.length}</span>
 			)}
 		</Link>
 	);
