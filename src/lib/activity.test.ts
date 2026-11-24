@@ -1,6 +1,6 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
 import type { MeRunRow } from "@/api/me";
-import { groupActivity, plainCause, fmtDuration, fmtTypical, progressOf, isOverdue, loopOfRun, workflowStatusLine, nextFireSec, dirIdToSec, fmtAgo } from "./activity";
+import { groupActivity, plainCause, fmtDuration, fmtTypical, progressOf, isOverdue, loopOfRun, workflowStatusLine, nextFireSec, dirIdToSec, fmtAgo, fmtSince, failingSentence } from "./activity";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -111,9 +111,9 @@ check("status: never ran / first run going", () => {
 });
 check("status: last ok, ignoring the running one", () => {
 	const l = workflowStatusLine([cyc("20261124T141800Z", undefined, true), cyc("20261124T140800Z", true)], NOW);
-	eq(l.tone, "ok"); eq(l.text, "Last run succeeded 12m ago · took 51s");
+	eq(l.tone, "ok"); eq(l.text, "Latest run succeeded 12m ago · took 51s");
 });
-check("status: one failure", () => eq(workflowStatusLine([cyc("20261124T140800Z", false), cyc("20261124T130800Z", true)], NOW).text, "Last run failed 12m ago"));
+check("status: one failure", () => eq(workflowStatusLine([cyc("20261124T140800Z", false), cyc("20261124T130800Z", true)], NOW).text, "Latest run failed 12m ago"));
 check("status: a streak after a success", () => {
 	const l = workflowStatusLine([cyc("20261124T140800Z", false), cyc("20261123T140800Z", false), cyc("20261122T140800Z", false), cyc("20261121T140800Z", true)], NOW);
 	eq(l.tone, "failing"); if (!/^Failing since .+ · 3 runs in a row$/.test(l.text)) throw new Error(l.text); eq(l.runId, "20261124T140800Z");
@@ -121,6 +121,15 @@ check("status: a streak after a success", () => {
 check("status: every loaded run failed", () => {
 	const l = workflowStatusLine([cyc("20261124T140800Z", false), cyc("20261122T110800Z", false)], NOW);
 	eq(l.text, "The last 2 runs all failed");
+});
+check("a streak that began today says today", () => {
+	const now = Date.UTC(2026, 10, 24, 14, 20) ;
+	if (!/today$/.test(fmtSince(now / 1000 - 3600, now))) throw new Error(fmtSince(now / 1000 - 3600, now));
+});
+check("one sentence for a failing streak", () => {
+	const f = { count: 90, sinceSec: Date.UTC(2026, 10, 18) / 1000, coversWindow: true, cause: "", rawReason: "", latestRunId: "" };
+	eq(failingSentence(f, "since 18 Nov"), "Every run since 18 Nov failed (90)");
+	if (!/^Failing since .+ · 3 runs in a row$/.test(failingSentence({ ...f, count: 3, coversWindow: false }, ""))) throw new Error("streak");
 });
 check("next fire: hourly at :07", () => {
 	eq(nextFireSec("7 * * * *", NOW), Date.UTC(2026, 10, 24, 15, 7) / 1000);

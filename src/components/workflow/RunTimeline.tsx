@@ -75,7 +75,7 @@ export default function RunTimeline({ events, app, running }: { events: MeRunSte
 							<span className="text-caption font-medium text-ink-900">{r.name}</span>
 							{r.kind && <span className="ml-1.5 text-nano text-ink-600">{r.kind}</span>}
 							{!r.ok && <span className="sr-only"> failed</span>}
-							{r.summary && <span className={cn("block text-micro leading-snug truncate", r.ok ? "text-ink-600" : "text-brick-700")} title={r.summary}>{r.summary}</span>}
+							{r.summary && <span className={cn("block text-micro leading-snug line-clamp-2", r.ok ? "text-ink-600" : "text-brick-700")} title={r.summary}>{r.summary}</span>}
 						</span>
 						<span className="text-micro text-ink-600 tabular-nums">{r.running ? "running" : r.duration}</span>
 					</li>

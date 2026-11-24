@@ -26,7 +26,7 @@ import { me, type MeExperiment, type MeExperimentDetail } from "@/api/me";
 import EvolutionChart, { type EvoSeries } from "@/components/research/EvolutionChart";
 import ApprovalCard, { readNotNow, writeNotNow } from "@/components/research/ApprovalCard";
 import {
-	buildResearchTree, criteriaInWords, experimentStatus, humanId, mapSummary, pathTo, versionsOf,
+	buildResearchTree, comparabilityNote, criteriaInWords, experimentStatus, humanId, mapSummary, pathTo, versionsOf,
 	type MapNode, type Proposal, type Tone, type VersionInfo,
 } from "@/lib/research-map";
 import { humanMetric } from "@/lib/run-answer";
@@ -89,7 +89,9 @@ function useWide(): boolean {
 // ── nodes ─────────────────────────────────────────────────────────────────
 
 const SIZE: Record<MapNode["kind"], { w: number; h: number }> = {
-	app: { w: 200, h: 64 }, experiment: { w: 260, h: 92 }, version: { w: 220, h: 64 }, suggested: { w: 240, h: 72 },
+	// Real rendered heights (title + 2-line question + 2-line status), not
+	// minimums: dagre spaces by these, and short ones made cards overlap.
+	app: { w: 200, h: 64 }, experiment: { w: 260, h: 118 }, version: { w: 220, h: 72 }, suggested: { w: 240, h: 80 },
 };
 
 interface NodeData extends Record<string, unknown> {
@@ -227,7 +229,7 @@ const edgeTypes = { research: ResearchEdge };
 
 function layout(nodes: MapNode[], edges: Array<{ source: string; target: string }>) {
 	const g = new dagre.graphlib.Graph();
-	g.setGraph({ rankdir: "LR", nodesep: 14, ranksep: 64, marginx: 8, marginy: 8 });
+	g.setGraph({ rankdir: "LR", nodesep: 18, ranksep: 64, marginx: 8, marginy: 8 });
 	g.setDefaultEdgeLabel(() => ({}));
 	for (const n of nodes) g.setNode(n.id, { width: SIZE[n.kind].w, height: SIZE[n.kind].h });
 	for (const e of edges) g.setEdge(e.source, e.target);
@@ -374,6 +376,7 @@ function ExperimentDetail({ app, e }: { app: string; e: MeExperiment }) {
 				{q && <div className="text-meta text-ink-700">{q}</div>}
 			</div>
 			<div className={cn("flex items-center gap-1.5 text-meta font-medium", TONE_TEXT[st.tone])}><span className={dot(st.tone)} />{st.text}</div>
+			{comparabilityNote(e) && <div className="text-caption text-ink-700">{comparabilityNote(e)}</div>}
 			<dl className="grid gap-1 text-caption">
 				{e.hypothesis && e.hypothesis !== q && <div><dt className="inline text-ink-600">Expecting: </dt><dd className="inline text-ink-800">{e.hypothesis}</dd></div>}
 				{m && <div><dt className="inline text-ink-600">Measures: </dt><dd className="inline text-ink-800">{m.label}{m.unit ? ` (${m.unit})` : ""} — {e.higher_is_better === false || e.metric?.higher_is_better === false ? "lower" : "higher"} is better</dd></div>}
