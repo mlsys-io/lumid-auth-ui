@@ -20,6 +20,8 @@ import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Loader2, MoreHorizontal,
 import type { MeCycleDetail, MeCycleListItem, MeCycleStep } from "@/api/me";
 import AskAbout from "@/components/AskAbout";
 import RunAnswerCard from "@/components/workflow/RunAnswerCard";
+import RunTimeline from "@/components/workflow/RunTimeline";
+import { timelineWorthShowing } from "@/lib/run-timeline";
 import { stepFailed, stepLabel, stepLine, humanMetric } from "@/lib/run-answer";
 import StepInspectorPanel from "@/components/workflow/StepInspectorPanel";
 import TrajectoryLogView from "@/components/workflow/TrajectoryLogView";
@@ -378,6 +380,13 @@ export function RunDetail({
 				</div>
 			) : (
 				<div className="p-2">
+					{/* The runner's own step timeline (events), when it reported one
+					    worth more than the single command step listed below. */}
+					{timelineWorthShowing(detail?.events) && (
+						<div className="pb-3 mb-2 border-b border-ink-100">
+							<RunTimeline events={detail!.events!} app={loop} running={!!(detail?.running || listRow?.running)} />
+						</div>
+					)}
 					<div className="flex items-center gap-2 px-1 pb-1.5">
 						<h3 className="text-micro uppercase tracking-wide font-semibold text-ink-600">Steps</h3>
 						<span className="text-micro text-ink-600">{steps.length ? `${steps.length} recorded` : ""}</span>

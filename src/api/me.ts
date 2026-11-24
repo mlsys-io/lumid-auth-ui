@@ -1458,6 +1458,16 @@ export interface MeLatestOutput {
     reason?: string;
   } | null;
 }
+export interface MeRunStepEvent {
+  step_id: string;
+  stage?: "observe" | "hypothesize" | "act" | "analyze" | "learn" | null;
+  kind?: "llm" | "tool" | "stage" | "command";
+  started_at?: number | null; // epoch seconds
+  ended_at?: number | null;
+  ok: boolean;
+  summary?: string;
+}
+
 export interface MeCycleDetail {
   app: string;
   loop: string;
@@ -1510,6 +1520,11 @@ export interface MeCycleDetail {
    *  plus the arm when it fanned out) — the caller's own run-store row. `[]`
    *  when it ran none; absent on an identity that predates the field. */
   compute_jobs?: MeRunComputeJob[];
+  // The per-step timeline the runner self-reported (identity v0.5.476+):
+  // one entry per step, in order. Absent when the run reported none.
+  events?: MeRunStepEvent[];
+  // "run_store" when `steps` were built from `events` (no cycle dir readable).
+  steps_source?: string;
 }
 
 /** One Lumilake job a run launched. Address = (site, job_id). */
