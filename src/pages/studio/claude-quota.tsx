@@ -10,7 +10,10 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '../../hooks/useAuth';
-import { RefreshCw, Zap, AlertTriangle, CheckCircle, Loader2, UserPlus, X, Trash2, RotateCcw } from 'lucide-react';
+import { StandaloneFrame } from '@/components/studio/StandaloneFrame';
+import { PageHeader } from '@/components/ui/page-header';
+import { Button } from '@/components/ui/button';
+import { RefreshCw, AlertTriangle, CheckCircle, Loader2, UserPlus, X, Trash2, RotateCcw } from 'lucide-react';
 import {
 	fetchClaudeQuota,
 	fetchClaudeUserUsage,
@@ -2734,7 +2737,8 @@ export default function StudioClaudeQuota() {
 	}, [load, loadUserUsage, loadPools]);
 
 	return (
-		<div className="space-y-3 max-w-5xl mx-auto">
+		<StandaloneFrame>
+		<div className="space-y-4">
 			{showAdd && (
 				<AddAccountModal
 					onClose={() => { setShowAdd(false); setReAddEmail(undefined); }}
@@ -2756,51 +2760,41 @@ export default function StudioClaudeQuota() {
 					pools={pools}
 				/>
 			)}
-			<header className="flex flex-wrap items-center justify-between gap-2">
-				<div>
-					<h1 className="text-read font-medium flex items-center gap-2">
-						<Zap className="w-4 h-4 text-gold-600" />
-						Token Dashboard
-					</h1>
-					<p className="text-xs text-ink-600 mt-0.5">
-						Live 5h / 7d quota across all org accounts.
-					</p>
-				</div>
-				<div className="flex flex-wrap items-center gap-3">
-					{lastFetch && (
-						<span className="text-micro text-ink-600">
-							updated {fmtTs(lastFetch.toISOString())}
-						</span>
-					)}
-					<button
-						onClick={() => { setReAddEmail(undefined); setShowAdd(true); }}
-						className="inline-flex items-center gap-1.5 rounded-md border border-gold-300 bg-gold-50 px-2.5 py-1.5 text-xs font-medium text-gold-800 hover:bg-gold-100 transition"
-					>
-						<UserPlus className="w-3.5 h-3.5" />
-						Add account
-					</button>
-					<button
-						onClick={() => load()}
-						disabled={loading}
-						className="inline-flex items-center gap-1.5 text-xs text-ink-600 hover:text-gold-700 transition disabled:opacity-50"
-					>
-						<RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-						refresh
-					</button>
-				</div>
-			</header>
+			<PageHeader
+				className="pb-0"
+				title="Token dashboard"
+				subtitle="Live 5h / 7d quota across all org accounts."
+				actions={
+					<>
+						{lastFetch && (
+							<span className="text-caption tabular-nums text-ink-600">
+								Updated {fmtTs(lastFetch.toISOString())}
+							</span>
+						)}
+						<Button variant="secondary" size="sm" onClick={() => load()} disabled={loading}>
+							<RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+							Refresh
+						</Button>
+						<Button variant="accent" size="sm" onClick={() => { setReAddEmail(undefined); setShowAdd(true); }}>
+							<UserPlus className="w-3.5 h-3.5" />
+							Add account
+						</Button>
+					</>
+				}
+			/>
 
 			{/* Two tabs: what the serving paths are doing (Overview) vs who/what is
-			    in the pool (Users / Keys). The choice is remembered per browser. */}
-			<div className="flex gap-1 border-b border-ink-200 text-xs" role="tablist">
+			    in the pool (Users / Keys). The choice is remembered per browser.
+			    Lumen: the same underline tabs PageHeader draws for routed views. */}
+			<div className="-mt-1 mb-2 flex gap-6 border-b border-border" role="tablist">
 				{([['overview', 'Overview'], ['users', 'Users / Keys']] as const).map(([id, label]) => (
 					<button
 						key={id}
 						role="tab"
 						aria-selected={tab === id}
 						onClick={() => pickTab(id)}
-						className={`-mb-px border-b-2 px-3 py-1.5 font-medium transition ${
-							tab === id ? 'border-gold-600 text-ink-900' : 'border-transparent text-ink-600 hover:text-ink-800'
+						className={`relative -mb-px border-b-2 pb-2.5 pt-3 text-body font-medium transition-colors duration-180 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
+							tab === id ? 'border-gold-500 text-ink-900' : 'border-transparent text-ink-600 hover:border-ink-300 hover:text-ink-900'
 						}`}
 					>
 						{label}
@@ -2890,5 +2884,6 @@ export default function StudioClaudeQuota() {
 				Mint a <code className="font-mono bg-ink-100 px-1 rounded">claude:proxy</code> PAT at <a href="/dashboard/tokens" className="text-gold-700 hover:underline">/dashboard/tokens</a>.
 			</p>
 		</div>
+		</StandaloneFrame>
 	);
 }

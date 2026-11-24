@@ -21,11 +21,16 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import 'github-markdown-css/github-markdown-light.css';
 import {
-	BookOpen, Zap, FileCode2, Activity, CandlestickChart, Compass, ArrowLeft, Loader2, Cpu, Database, TerminalSquare, Bot, GraduationCap, Server, Workflow, Rocket,
+	ArrowUpRight, Zap, FileCode2, Activity, CandlestickChart, Compass, ArrowLeft, Cpu, Database, TerminalSquare, Bot, GraduationCap, Server, Workflow, Rocket,
 } from 'lucide-react';
 import StudioHow from './how';
 import { useAuth } from '../../hooks/useAuth';
 import { Loading } from '../../components/ui/loading';
+import { PageHeader } from '@/components/ui/page-header';
+import { Skeleton } from '@/components/ui/skeleton';
+import { ErrorState } from '@/components/ui/error-state';
+import { EmptyState } from '@/components/ui/empty-state';
+import { ErrorFrayed, NotFound } from '@/components/illustrations/scenes';
 
 interface DocEntry {
 	slug: string;
@@ -368,51 +373,53 @@ function DocIndex() {
 	const { user } = useAuth();
 	const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
 	const visible = INDEXED.filter((d) => !d.adminOnly || isAdmin);
+	// Lumen: the shared PageHeader (serif title) over eyebrowed groups of
+	// lifting cards — the icon-and-sans heading sat centred and a size below
+	// every other page title.
+	const card = 'lumen-lift group flex flex-col rounded-[12px] border border-border bg-card p-4 shadow-e1 transition-[border-color,box-shadow,transform] duration-180 hover:border-gold-300 hover:shadow-e2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40';
 	return (
-		<div className="max-w-3xl mx-auto px-6 py-8">
-			<header className="mb-6">
-				<h1 className="text-title font-medium flex items-center gap-2">
-					<BookOpen className="w-4 h-4 text-gold-600" />
-					Documentation
-				</h1>
-				<p className="text-xs text-ink-600 mt-1">
-					Guides, contracts, and runbooks for the Lumid platform.
-				</p>
-			</header>
+		<div className="max-w-[1120px]">
+			<PageHeader
+				className="pt-2"
+				title="Documentation"
+				subtitle="Guides, contracts, and runbooks for the Lumid platform."
+			/>
 			{GROUPS.filter((g) => visible.some((d) => d.group === g)).map((g) => (
-				<section key={g} className="mb-6">
-					<h2 className="text-micro font-medium text-muted-foreground uppercase tracking-wide mb-2">{g}</h2>
-					<div className="grid gap-2 sm:grid-cols-2">
-						{visible.filter((d) => d.group === g).map((d) => (
+				<section key={g} className="mb-8">
+					<h2 className="eyebrow mb-3">{g}</h2>
+					<div className="grid gap-3 sm:grid-cols-2">
+						{visible.filter((d) => d.group === g).map((d, i) => (
 							<Link
 								key={d.slug}
 								to={`/studio/docs/${d.slug}`}
-								className="group rounded-lg border border-ink-200 bg-card p-3.5 hover:border-gold-300 hover:shadow-sm transition"
+								className={card}
+								style={{ animationDelay: `${Math.min(i, 7) * 40}ms` }}
 							>
-								<div className="flex items-center gap-2 mb-1">
-									<d.icon className="w-4 h-4 text-ink-600 group-hover:text-gold-600 transition-colors" />
-									<span className="text-sm font-medium text-ink-800">{d.title}</span>
+								<div className="mb-1.5 flex items-center gap-2.5">
+									<span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] bg-ink-100 text-ink-600 transition-colors duration-180 group-hover:bg-gold-50 group-hover:text-gold-700">
+										<d.icon className="h-4 w-4" />
+									</span>
+									<span className="text-body font-medium text-ink-900">{d.title}</span>
 								</div>
-								<p className="text-xs text-ink-600 leading-relaxed">{d.description}</p>
+								<p className="text-meta text-ink-600 text-pretty">{d.description}</p>
 							</Link>
 						))}
 					</div>
 				</section>
 			))}
-			<section className="mb-6">
-				<h2 className="text-micro font-medium text-muted-foreground uppercase tracking-wide mb-2">Resources</h2>
-				<div className="grid gap-2 sm:grid-cols-2">
+			<section className="mb-8">
+				<h2 className="eyebrow mb-3">Resources</h2>
+				<div className="grid gap-3 sm:grid-cols-2">
 					{RESOURCES.map((r) => (
-						<a
-							key={r.href}
-							href={r.href}
-							className="group rounded-lg border border-ink-200 bg-card p-3.5 hover:border-gold-300 hover:shadow-sm transition"
-						>
-							<div className="flex items-center gap-2 mb-1">
-								<r.icon className="w-4 h-4 text-ink-600 group-hover:text-gold-600 transition-colors" />
-								<span className="text-sm font-medium text-ink-800">{r.label}</span>
+						<a key={r.href} href={r.href} className={card}>
+							<div className="mb-1.5 flex items-center gap-2.5">
+								<span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] bg-ink-100 text-ink-600 transition-colors duration-180 group-hover:bg-gold-50 group-hover:text-gold-700">
+									<r.icon className="h-4 w-4" />
+								</span>
+								<span className="font-mono text-meta font-medium text-ink-900">{r.label}</span>
+								<ArrowUpRight className="ml-auto h-3.5 w-3.5 text-ink-500 transition-transform duration-180 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" aria-hidden />
 							</div>
-							<p className="text-xs text-ink-600 leading-relaxed">{r.description}</p>
+							<p className="text-meta text-ink-600 text-pretty">{r.description}</p>
 						</a>
 					))}
 				</div>
@@ -424,6 +431,7 @@ function DocIndex() {
 function DocReader({ doc }: { doc: DocEntry }) {
 	const [markdown, setMarkdown] = useState('');
 	const [error, setError] = useState('');
+	const [attempt, setAttempt] = useState(0);
 
 	useEffect(() => {
 		setMarkdown('');
@@ -432,33 +440,36 @@ function DocReader({ doc }: { doc: DocEntry }) {
 			.then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.text(); })
 			.then(setMarkdown)
 			.catch((e) => setError(String(e)));
-	}, [doc.md]);
+	}, [doc.md, attempt]);
 
 	return (
-		<div className="max-w-4xl mx-auto px-6 py-6">
-			<div className="text-xs text-muted-foreground mb-4 flex items-center justify-between gap-3">
-				<Link to="/studio/docs" className="inline-flex items-center gap-1 text-ink-600 hover:text-gold-700">
-					<ArrowLeft className="w-3.5 h-3.5" /> All docs
+		<div className="max-w-[880px] pt-2">
+			<div className="mb-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border pb-3 text-meta">
+				<Link to="/studio/docs" className="group inline-flex items-center gap-1.5 rounded text-ink-600 transition-colors hover:text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
+					<ArrowLeft className="h-3.5 w-3.5 transition-transform duration-180 group-hover:-translate-x-0.5" /> All docs
 				</Link>
-				<span className="flex items-center gap-3">
+				<span className="flex items-center gap-4">
 					{doc.companion && (
-						<Link to={doc.companion.to} className="text-gold-700 hover:underline">
+						<Link to={doc.companion.to} className="font-medium text-gold-700 hover:text-gold-800">
 							{doc.companion.label} →
 						</Link>
 					)}
-					<a href={`/docs/${doc.md}`} download className="text-gold-700 hover:underline">
-						Download .md →
+					<a href={`/docs/${doc.md}`} download className="font-medium text-gold-700 hover:text-gold-800">
+						Download .md
 					</a>
 				</span>
 			</div>
 			{error ? (
-				<div className="rounded border border-ember-300 bg-ember-50 p-4 text-sm text-ember-900">
-					<div className="font-medium mb-1">Doc unavailable</div>
-					<div className="text-xs">This documentation is temporarily unavailable ({error}). Please try again in a moment.</div>
-				</div>
+				<ErrorState error={new Error(error)} what="this doc" art={<ErrorFrayed />} onRetry={() => setAttempt((n) => n + 1)} />
 			) : !markdown ? (
-				<div className="text-sm text-ink-600 italic flex items-center gap-2">
-					<Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…
+				<div className="space-y-3" aria-busy="true" aria-label="Loading doc">
+					<Skeleton className="h-8 w-2/3 rounded" />
+					<Skeleton className="h-4 w-full rounded" />
+					<Skeleton className="h-4 w-11/12 rounded" />
+					<Skeleton className="h-4 w-4/5 rounded" />
+					<Skeleton className="mt-6 h-6 w-1/3 rounded" />
+					<Skeleton className="h-4 w-full rounded" />
+					<Skeleton className="h-4 w-3/4 rounded" />
 				</div>
 			) : (
 				<article className="markdown-body docs-md" style={{ background: 'transparent' }}>
@@ -497,8 +508,8 @@ export default function StudioDocs() {
 	// inside the docs chrome so it reads as part of the same collection.
 	if (slug === 'how') {
 		return (
-			<div className="max-w-4xl mx-auto px-6 py-6">
-				<Link to="/studio/docs" className="inline-flex items-center gap-1 text-xs text-ink-600 hover:text-gold-700 mb-4">
+			<div className="max-w-[880px] pt-2">
+				<Link to="/studio/docs" className="mb-4 inline-flex items-center gap-1.5 text-meta text-ink-600 hover:text-ink-900">
 					<ArrowLeft className="w-3.5 h-3.5" /> All docs
 				</Link>
 				<StudioHow />
@@ -508,9 +519,13 @@ export default function StudioDocs() {
 	const doc = slug ? DOCS.find((d) => d.slug === slug) : undefined;
 	if (slug && !doc) {
 		return (
-			<div className="max-w-3xl mx-auto px-6 py-8 text-sm text-ink-600">
-				Unknown doc "{slug}". <Link to="/studio/docs" className="text-gold-700 hover:underline">Back to all docs</Link>.
-			</div>
+			<EmptyState
+				art={<NotFound />}
+				title="There's no doc by that name"
+				body={<>Nothing is filed under “{slug}”. It may have been renamed.</>}
+				actionLabel="Back to all docs"
+				to="/studio/docs"
+			/>
 		);
 	}
 	return doc ? <DocReader doc={doc} /> : <DocIndex />;

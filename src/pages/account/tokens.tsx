@@ -28,6 +28,9 @@ import {
 	type MintPATResponse,
 } from '../../api/identity';
 import { isSessionExpired } from '../../api/client';
+import { PageHeader } from '@/components/ui/page-header';
+import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 import { updateInvitationCode } from '../../api/auth';
 
 /**
@@ -106,35 +109,34 @@ export default function TokensPage() {
 	}, []);
 
 	return (
-		<div className="max-w-5xl mx-auto p-6 space-y-4">
-			<div className="flex items-start justify-between">
-				<div>
-					<h1 className="text-h2 font-bold flex items-center gap-2">
-						<KeyRound className="w-5 h-5 text-plum-600" />
-						Personal Access Tokens
-					</h1>
-					<p className="text-sm text-muted-foreground mt-1">
-						Your LumidOS credential. Works here in LQA, in Claude Code via MCP, and in any
-						LumidOS app — AI quant research and beyond. Scope each token to exactly what it needs.
-					</p>
-				</div>
-				<Button onClick={() => setMintOpen(true)} className="gap-2">
-					<Plus className="w-4 h-4" /> New token
-				</Button>
-			</div>
+		<div className="max-w-[1120px] space-y-4">
+			{/* Lumen: the shared serif PageHeader (was a bold 24px sans with a plum
+			    key, a different title voice from every other Studio page). */}
+			<PageHeader
+				className="pt-2 pb-2"
+				title="Personal access tokens"
+				subtitle="Your LumidOS credential. Works here in LQA, in Claude Code via MCP, and in any LumidOS app — AI quant research and beyond. Scope each token to exactly what it needs."
+				actions={
+					<Button onClick={() => setMintOpen(true)}>
+						<Plus className="w-4 h-4" /> New token
+					</Button>
+				}
+			/>
 
 			<AccessCodeRedeemer />
 
 			{loading ? (
-				<div className="text-sm text-ink-600 py-6">Loading…</div>
-			) : tokens.length === 0 ? (
-				<div className="border border-dashed border-ink-200 rounded-xl p-8 text-center">
-					<KeyRound className="w-8 h-8 text-ink-600 mx-auto mb-2" />
-					<p className="text-sm text-ink-600">No tokens yet.</p>
-					<Button onClick={() => setMintOpen(true)} className="mt-3 gap-2">
-						<Plus className="w-4 h-4" /> Mint your first token
-					</Button>
+				<div className="space-y-2" aria-busy="true" aria-label="Loading tokens">
+					{[0, 1].map((i) => <Skeleton key={i} className="h-[68px] w-full rounded-[12px]" />)}
 				</div>
+			) : tokens.length === 0 ? (
+				<EmptyState
+					icon={KeyRound}
+					title="No tokens yet"
+					body="Mint one to use LumidOS from Claude Code, the CLI, or your own scripts."
+					actionLabel="Mint your first token"
+					onAction={() => setMintOpen(true)}
+				/>
 			) : (
 				<TokenList tokens={tokens} onRevoke={setConfirmRevoke} onAudit={setAuditFor} />
 			)}
@@ -150,14 +152,13 @@ export default function TokensPage() {
 			    they have no key. Same client as the Sandboxes panel; both are live,
 			    because the contextual one is right when you are already provisioning
 			    and this one is right when you are setting up an account. */}
-			<div className="mt-8">
+			<div className="pt-8">
 				<div className="flex items-start justify-between mb-3">
 					<div>
-						<h2 className="text-title font-semibold flex items-center gap-2">
-							<KeyRound className="w-4 h-4 text-plum-600" />
+						<h2 className="font-display text-h3 font-medium text-ink-900">
 							SSH keys
 						</h2>
-						<p className="text-xs text-muted-foreground mt-0.5">
+						<p className="text-meta text-ink-600 mt-0.5">
 							Public keys that let you into your sandboxes over{" "}
 							<code className="rounded bg-muted px-1">ssh gw@lum.id</code>. Without one,
 							a running sandbox still refuses every connection.
@@ -168,14 +169,13 @@ export default function TokensPage() {
 			</div>
 
 			{/* OAuth scope grants — live state from /api/v1/identity/google-grants. */}
-			<div className="mt-8">
+			<div className="pt-8">
 				<div className="flex items-start justify-between mb-3">
 					<div>
-						<h2 className="text-title font-semibold flex items-center gap-2">
-							<Mail className="w-4 h-4 text-plum-600" />
+						<h2 className="font-display text-h3 font-medium text-ink-900">
 							OAuth grants
 						</h2>
-						<p className="text-xs text-muted-foreground mt-0.5">
+						<p className="text-meta text-ink-600 mt-0.5">
 							Upstream service tokens scoped to lumid-owned OAuth clients.
 							Stored encrypted server-side; the local CLI mints short-lived
 							access tokens on demand.
@@ -1020,44 +1020,48 @@ function SshKeysCard() {
 	}
 
 	return (
-		<div className="rounded-lg border p-4">
+		<div className="rounded-[12px] border border-border bg-card p-5 shadow-e1">
 			{keys === null ? (
-				<p className="text-xs text-muted-foreground">loading…</p>
+				<div className="mb-4 space-y-2" aria-busy="true"><Skeleton className="h-4 w-2/3 rounded" /></div>
 			) : keys.length === 0 ? (
-				<p className="mb-3 text-xs text-ember-700">
+				<p className="mb-4 flex items-start gap-2 rounded-[8px] bg-ember-50 px-3 py-2 text-meta text-ember-800">
+					<AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ember-700" aria-hidden />
 					No SSH keys yet — sandboxes will refuse every connection until you add one.
 				</p>
 			) : (
-				<ul className="mb-3 space-y-1">
+				<ul className="mb-4 divide-y divide-ink-100">
 					{keys.map((k) => (
-						<li key={k.id} className="flex items-center gap-2 text-xs">
-							<span className="font-medium">{k.title}</span>
-							<span className="font-mono text-muted-foreground truncate">{k.fingerprint}</span>
-							<button onClick={() => void remove(k)}
-								className="ml-auto text-muted-foreground hover:text-brick-600">remove</button>
+						<li key={k.id} className="flex items-center gap-3 py-2 text-meta first:pt-0">
+							<KeyRound className="h-3.5 w-3.5 shrink-0 text-ink-500" aria-hidden />
+							<span className="font-medium text-ink-900">{k.title}</span>
+							<span className="min-w-0 truncate font-mono text-caption text-ink-600">{k.fingerprint}</span>
+							<Button variant="ghost" size="sm" onClick={() => void remove(k)}
+								className="ml-auto text-ink-600 hover:bg-brick-50 hover:text-brick-700">Remove</Button>
 						</li>
 					))}
 				</ul>
 			)}
-			<div className="flex flex-wrap items-end gap-2">
-				<label className="text-xs text-muted-foreground">
-					Public key
-					<input value={pub} onChange={(e) => setPub(e.target.value)}
+			<div className="flex flex-wrap items-end gap-3">
+				<div className="min-w-0 flex-1 basis-80">
+					<Label htmlFor="ssh-pub" className="text-meta font-medium text-ink-700">Public key</Label>
+					<Input id="ssh-pub" value={pub} onChange={(e) => setPub(e.target.value)}
 						placeholder="ssh-ed25519 AAAAC3... you@laptop"
-						className="mt-1 block w-[26rem] max-w-full rounded-md border px-2 py-1 font-mono text-xs" />
-				</label>
-				<label className="text-xs text-muted-foreground">
-					Label <span className="font-normal text-ink-600">(optional)</span>
-					<input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="laptop"
-						className="mt-1 block w-28 rounded-md border px-2 py-1 text-sm" />
-				</label>
-				<Button size="sm" onClick={() => void add()} disabled={busy || !pub.trim()}>
-					{busy ? "adding…" : "Add key"}
+						className="mt-1.5 font-mono text-meta" />
+				</div>
+				<div className="w-36">
+					<Label htmlFor="ssh-label" className="text-meta font-medium text-ink-700">
+						Label <span className="font-normal text-ink-600">(optional)</span>
+					</Label>
+					<Input id="ssh-label" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="laptop"
+						className="mt-1.5" />
+				</div>
+				<Button onClick={() => void add()} disabled={busy || !pub.trim()}>
+					{busy ? "Adding…" : "Add key"}
 				</Button>
 			</div>
-			{err && <p className="mt-2 text-xs text-brick-600">{err}</p>}
-			<p className="mt-2 text-xs text-muted-foreground">
-				Get it with <code className="rounded bg-muted px-1">cat ~/.ssh/id_ed25519.pub</code>.
+			{err && <p role="alert" className="mt-2 text-meta text-brick-700">{err}</p>}
+			<p className="mt-3 text-meta text-ink-600">
+				Get it with <code className="rounded bg-ink-100 px-1 font-mono text-caption text-ink-800">cat ~/.ssh/id_ed25519.pub</code>.
 			</p>
 		</div>
 	);
