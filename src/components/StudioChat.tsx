@@ -2495,7 +2495,10 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 					atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
 					if (atBottomRef.current !== atBottom) setAtBottom(atBottomRef.current);
 				}}
-				className={messages.length === 0
+				// Docked + empty still takes the rail's height, so the composer sits at
+				// the bottom where it will be once a conversation starts (the opener
+				// message used to fill this space).
+				className={messages.length === 0 && !docked
 					? 'flex-none px-4 pb-4'
 					: 'flex-1 overflow-y-auto px-4 py-4 scroll-smooth'}
 			>
