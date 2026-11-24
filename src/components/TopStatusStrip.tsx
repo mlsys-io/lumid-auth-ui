@@ -332,13 +332,13 @@ export default function TopStatusStrip() {
 				</div>
 			) : (
 			<div className="min-w-0 flex items-start gap-2.5">
-				{Icon && (
-					<Icon className={["w-5 h-5 flex-shrink-0 mt-0.5", meta?.iconTone || ""].join(" ")} />
-				)}
+				{/* Lumen: one quiet ink icon for every page (the per-page bronze tint
+				    made the strip's corner shout on every route). */}
+				{Icon && <Icon className="w-[18px] h-[18px] flex-shrink-0 mt-0.5 text-ink-500" />}
 				<div className="min-w-0">
 					{/* Breadcrumb above the title on detail routes */}
 					{crumbs.length > 0 && (
-						<nav className="flex items-center gap-1 text-micro text-muted-foreground mb-0.5">
+						<nav className="flex items-center gap-1 text-caption text-ink-600 mb-0.5">
 							{crumbs.map((c, i) => (
 								<span key={i} className="inline-flex items-center gap-1 min-w-0">
 									{i > 0 && <ChevronRight className="w-3 h-3 text-ink-600 flex-shrink-0" />}
@@ -349,11 +349,11 @@ export default function TopStatusStrip() {
 							))}
 						</nav>
 					)}
-					<h1 className="text-read font-semibold text-foreground truncate leading-tight">
+					<h1 className="text-body font-semibold text-ink-900 truncate leading-tight">
 						{detailLeaf ?? meta?.title ?? ""}
 					</h1>
 					{meta?.subtitle && !detailLeaf && (
-						<p className="text-micro text-muted-foreground mt-0.5 truncate hidden md:block">
+						<p className="text-caption text-ink-600 mt-0.5 truncate hidden md:block">
 							{meta.subtitle}
 						</p>
 					)}
@@ -375,8 +375,9 @@ export default function TopStatusStrip() {
 				    so the app identity + workflow selector don't get crushed. */}
 				<span className="hidden lg:inline-flex">{loaded && <RightNowTicker items={items} />}</span>
 				{/* "live" heartbeat — sits just left of the chat toggle. */}
-				<span className="inline-flex items-center gap-1.5 text-micro text-muted-foreground" title="Live — your workflows run in the background">
-					<span className="w-1.5 h-1.5 rounded-full bg-gold-500 heartbeat" />
+				<span className="inline-flex items-center gap-1.5 text-micro text-ink-600" title="Live — your workflows run in the background">
+					{/* Breathes (Lumen) rather than the old lub-dub heartbeat. */}
+					<span className="w-1.5 h-1.5 rounded-full bg-gold-500 animate-lumen-breathe" />
 					<span className="hidden sm:inline">live{(() => { const a = Math.max(0, Math.floor((Date.now() - refreshedAt) / 1000)); return a < 3 ? "" : a < 60 ? ` · ${a}s ago` : ` · ${Math.floor(a / 60)}m ago`; })()}</span>
 				</span>
 				{/* Workspace's chat-panel toggle portals here — kept the TOP-MOST RIGHT. */}
@@ -406,11 +407,11 @@ function RightNowTicker({ items }: { items: TickerItem[] }) {
 		<Link
 			to={it.to}
 			title={`Right now — ${it.text}`}
-			className="group inline-flex items-center gap-2 min-w-0 max-w-[260px] sm:max-w-[340px] px-2.5 py-1 rounded-full border border-border bg-card hover:bg-muted transition-colors"
+			className="group inline-flex items-center gap-2 min-w-0 max-w-[260px] sm:max-w-[360px] h-8 px-3 rounded-full border border-border bg-card shadow-e1 hover:border-ink-300 transition-colors duration-120 overflow-hidden"
 		>
-			<span className="text-micro uppercase tracking-[0.08em] font-semibold text-ink-600 shrink-0 hidden lg:inline">Now</span>
-			{/* keyed so it re-mounts (and re-animates) on each flip */}
-			<span key={`${it.key}-${i}`} className="inline-flex items-center gap-1.5 min-w-0 animate-in fade-in slide-in-from-bottom-1 duration-300">
+			<span className="text-nano uppercase tracking-[0.08em] font-semibold text-ink-600 shrink-0 hidden lg:inline">Now</span>
+			{/* keyed so it re-mounts (and rolls up) on each advance */}
+			<span key={`${it.key}-${i}`} className="inline-flex items-center gap-1.5 min-w-0 animate-lumen-roll">
 				<Icon className={["w-3.5 h-3.5 shrink-0", t.icon].join(" ")} />
 				<span className="truncate text-caption text-foreground">{it.text}</span>
 				<span className={["text-micro font-medium shrink-0", t.text].join(" ")}>{it.action}</span>
