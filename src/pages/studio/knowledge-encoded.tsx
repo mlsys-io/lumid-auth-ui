@@ -10,6 +10,7 @@ import { Brain, ArrowRight } from 'lucide-react';
 import apiClient from '@/api/client';
 import { Gem, Sparkles } from 'lucide-react';
 import { StatTile } from '@/components/ui/stat-tile';
+import { PageHeader } from '@/components/ui/page-header';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ErrorState } from '@/components/ui/error-state';
@@ -143,6 +144,7 @@ export default function StudioKnowledgeEncoded() {
 
 	return (
 		<div className="max-w-4xl mx-auto px-1 py-2 space-y-6">
+			<PageHeader className="pt-2 pb-0" title="Knowledge" subtitle="What's been encoded — yours, audited, portable." />
 			{/* Metrics — real */}
 			<div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
 				{/* Lumen StatTile: the numbers count up as they arrive. */}

@@ -25,6 +25,13 @@ import {
 	type StepRecap,
 } from "../../api/inbox";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/ui/page-header";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+// Radix Select forbids an empty-string item value; this stands in for "all".
+const ALL_APPS = "__all__";
 import { ErrorState } from "@/components/ui/error-state";
 import { EmptyState as LumenEmpty } from "@/components/ui/empty-state";
 import { EmptyInbox, ErrorFrayed } from "@/components/illustrations/scenes";
@@ -135,45 +142,40 @@ export default function InboxPage() {
 	};
 
 	return (
-		<div className="max-w-4xl mx-auto p-6">
-			<header className="mb-6">
-				<div className="flex items-center justify-between mb-2">
-					<h1 className="text-h2 font-bold flex items-center gap-2">
-						<InboxIcon className="w-6 h-6" /> Inbox
-						{unread > 0 && (
-							<span className="text-sm font-normal bg-ember-100 text-ember-900 px-2 py-0.5 rounded-full">
-								{unread} unread
-							</span>
-						)}
-					</h1>
+		<div className="max-w-4xl mx-auto px-6 pb-12">
+			{/* Lumen: the page owns its title (the top strip no longer repeats
+			    it — TopStatusStrip ownHeader); filters are the shared primitives
+			    instead of a native <select> and checkbox. */}
+			<PageHeader
+				className="pt-2"
+				title={
+					<span className="inline-flex items-center gap-3">
+						Inbox
+						{unread > 0 && <Badge variant="attention" className="font-sans">{unread} unread</Badge>}
+					</span>
+				}
+				subtitle="Messages from your agents' workflows. Approve or reject drafts inline; the next run picks up your reply."
+				actions={
 					<Button variant="ghost" size="sm" onClick={refresh}>
-						<RefreshCw className="w-4 h-4 mr-1" /> Refresh
+						<RefreshCw className="w-3.5 h-3.5" /> Refresh
 					</Button>
-				</div>
-				<p className="text-sm text-muted-foreground">
-					Messages from your agents' workflows. Approve/Reject drafts inline; the next run picks up your reply.
-				</p>
-			</header>
+				}
+			/>
 
-			<div className="flex items-center gap-3 mb-4 text-sm">
-				<Label htmlFor="app-filter" className="text-muted-foreground">App:</Label>
-				<select
-					id="app-filter"
-					value={appFilter}
-					onChange={(e) => setAppFilter(e.target.value)}
-					className="border rounded px-2 py-1 text-sm"
-				>
-					<option value="">All agents</option>
-					{apps.map((a) => (
-						<option key={a} value={a}>{a}</option>
-					))}
-				</select>
-				<label className="flex items-center gap-1 text-muted-foreground">
-					<input
-						type="checkbox"
-						checked={unreadOnly}
-						onChange={(e) => setUnreadOnly(e.target.checked)}
-					/>
+			<div className="flex flex-wrap items-center gap-4 mb-5">
+				<Select value={appFilter || ALL_APPS} onValueChange={(v) => setAppFilter(v === ALL_APPS ? "" : v)}>
+					<SelectTrigger size="sm" className="w-56" aria-label="Filter by app">
+						<SelectValue />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value={ALL_APPS}>All agents</SelectItem>
+						{apps.map((a) => (
+							<SelectItem key={a} value={a}>{a}</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+				<label className="flex items-center gap-2 text-body text-ink-700 cursor-pointer select-none">
+					<Checkbox checked={unreadOnly} onCheckedChange={(v) => setUnreadOnly(v === true)} />
 					Unread only
 				</label>
 			</div>

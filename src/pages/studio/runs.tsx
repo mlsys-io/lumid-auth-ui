@@ -33,6 +33,8 @@ import { useStudioRefetch } from "@/hooks/useStudioRefetch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { EmptyRuns } from "@/components/illustrations/scenes";
+import { Segmented } from "@/components/ui/segmented";
+import { Button } from "@/components/ui/button";
 
 // "index" is the default claude-style list (→ chat); the other four are the
 // power "Timeline" views kept as an escape hatch behind the toggle.
@@ -136,42 +138,42 @@ export default function StudioRuns() {
 				askVisible: true,
 			} as IndexRow;
 		});
+		// Lumen: the filters are Segmented controls (they NARROW one list);
+		// Refresh + Timeline are quiet buttons on the right.
 		const toolbar = (
-			<div className="flex items-center gap-2 text-xs text-muted-foreground">
-				<Filter className="w-3 h-3" />
-				<select
-					value={stateFilter}
-					onChange={(e) => setStateFilter(e.target.value)}
-					className="text-xs bg-transparent border-0 focus:outline-none cursor-pointer text-foreground"
-				>
-					<option value="">All states</option>
-					<option value="succeeded">Succeeded</option>
-					<option value="failed">Failed</option>
-					<option value="running">Running</option>
-					<option value="skipped">Skipped</option>
-				</select>
-				<select
-					value={windowDays}
-					onChange={(e) => setWindowDays(Number(e.target.value))}
-					className="text-xs bg-transparent border-0 focus:outline-none cursor-pointer text-foreground"
+			<div className="flex flex-wrap items-center gap-2">
+				<Segmented
+					size="sm"
+					aria-label="Run state"
+					value={stateFilter || "all"}
+					onChange={(v) => setStateFilter(v === "all" ? "" : v)}
+					options={[
+						{ value: "all", label: "All" },
+						{ value: "succeeded", label: "Succeeded" },
+						{ value: "failed", label: "Failed" },
+						{ value: "running", label: "Running" },
+						{ value: "skipped", label: "Skipped" },
+					]}
+				/>
+				<Segmented
+					size="sm"
 					aria-label="Time window"
-				>
-					<option value={1}>Last 24h</option>
-					<option value={7}>Last 7 days</option>
-					<option value={14}>Last 14 days</option>
-					<option value={30}>Last 30 days</option>
-				</select>
-				<span className="ml-auto inline-flex items-center gap-2">
-					<button onClick={load} className="inline-flex items-center gap-1 hover:text-foreground" title="Refresh">
-						<RefreshCw className="w-3 h-3" /> Refresh
-					</button>
-					<button
-						onClick={() => setView("grid")}
-						className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-border hover:bg-muted text-foreground"
-						title="Cross-run timeline views (grid / gantt / calendar)"
-					>
-						<BarChart3 className="w-3 h-3" /> Timeline
-					</button>
+					value={String(windowDays)}
+					onChange={(v) => setWindowDays(Number(v))}
+					options={[
+						{ value: "1", label: "24h" },
+						{ value: "7", label: "7d" },
+						{ value: "14", label: "14d" },
+						{ value: "30", label: "30d" },
+					]}
+				/>
+				<span className="ml-auto inline-flex items-center gap-1.5">
+					<Button variant="ghost" size="sm" onClick={load} title="Refresh">
+						<RefreshCw className="w-3.5 h-3.5" /> Refresh
+					</Button>
+					<Button variant="secondary" size="sm" onClick={() => setView("grid")} title="Cross-run timeline views (grid / gantt / calendar)">
+						<BarChart3 className="w-3.5 h-3.5" /> Timeline
+					</Button>
 				</span>
 			</div>
 		);
@@ -199,44 +201,47 @@ export default function StudioRuns() {
 	return (
 		<div className="max-w-[980px] mx-auto w-full space-y-4 px-1 py-2">
 			<div className="flex items-center gap-2 flex-wrap">
-				<button
-					onClick={() => setView("index")}
-					className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs border border-border hover:bg-muted text-foreground"
-				>
-					<ChevronLeft className="w-3 h-3" /> Back to list
-				</button>
-				<span className="mx-1 h-4 w-px bg-border" />
-				<ViewTab active={view === "list"}     onClick={() => setView("list")}     label="List" />
-				<ViewTab active={view === "grid"}     onClick={() => setView("grid")}     label="Grid" />
-				<ViewTab active={view === "gantt"}    onClick={() => setView("gantt")}    label="Gantt" />
-				<ViewTab active={view === "calendar"} onClick={() => setView("calendar")} label="Calendar" />
+				<Button variant="ghost" size="sm" onClick={() => setView("index")}>
+					<ChevronLeft className="w-3.5 h-3.5" /> Back to list
+				</Button>
+				<Segmented
+					size="sm"
+					aria-label="Timeline view"
+					value={view}
+					onChange={(v) => setView(v as View)}
+					options={[
+						{ value: "list", label: "List" },
+						{ value: "grid", label: "Grid" },
+						{ value: "gantt", label: "Gantt" },
+						{ value: "calendar", label: "Calendar" },
+					]}
+				/>
+				<Segmented
+					size="sm"
+					aria-label="Run state"
+					value={stateFilter || "all"}
+					onChange={(v) => setStateFilter(v === "all" ? "" : v)}
+					options={[
+						{ value: "all", label: "All" },
+						{ value: "succeeded", label: "Succeeded" },
+						{ value: "failed", label: "Failed" },
+						{ value: "running", label: "Running" },
+					]}
+				/>
+				<Segmented
+					size="sm"
+					aria-label="Time window"
+					value={String(windowDays)}
+					onChange={(v) => setWindowDays(Number(v))}
+					options={[
+						{ value: "1", label: "24h" },
+						{ value: "7", label: "7d" },
+						{ value: "14", label: "14d" },
+						{ value: "30", label: "30d" },
+					]}
+				/>
 
-				<div className="ml-3 flex items-center gap-1 text-xs text-ink-600">
-					<Filter className="w-3 h-3" />
-					<select
-						value={stateFilter}
-						onChange={(e) => setStateFilter(e.target.value)}
-						className="text-xs bg-transparent border-0 focus:outline-none cursor-pointer"
-					>
-						<option value="">All states</option>
-						<option value="succeeded">Succeeded</option>
-						<option value="failed">Failed</option>
-						<option value="running">Running</option>
-						<option value="skipped">Skipped</option>
-					</select>
-					<select
-						value={windowDays}
-						onChange={(e) => setWindowDays(Number(e.target.value))}
-						className="text-xs bg-transparent border-0 focus:outline-none cursor-pointer ml-1"
-					>
-						<option value={1}>Last 24h</option>
-						<option value={7}>Last 7 days</option>
-						<option value={14}>Last 14 days</option>
-						<option value={30}>Last 30 days</option>
-					</select>
-				</div>
-
-				<div className="ml-auto text-xs text-ink-600">
+				<div className="ml-auto text-caption tabular-nums text-ink-600">
 					{runs?.length ?? 0} runs
 				</div>
 			</div>
