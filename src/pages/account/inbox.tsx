@@ -1,11 +1,10 @@
 import { useContext, useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { toast } from "sonner";
 import {
-	Inbox as InboxIcon,
 	Bot,
 	User,
 	Sparkles,
@@ -26,7 +25,6 @@ import {
 } from "../../api/inbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/ui/page-header";
-import { Badge } from "@/components/ui/badge";
 import { Segmented } from "@/components/ui/segmented";
 import { AuthContext } from "@/hooks/useAuth";
 import { appTitle } from "@/components/workflow/AppCard";

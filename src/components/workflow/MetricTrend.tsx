@@ -199,7 +199,6 @@ export function EventCurve({ t, events, height = 60, app, loop }: { t: Trend; ev
 		const cur = fmtMetric(t.label, vals[anomaly]);
 		window.dispatchEvent(new CustomEvent("studio:ask", { detail: {
 			prompt: `Investigate ${app} / ${loop} at run ${ts}: "${t.label}" went from ${prev} to ${cur} — the worst regression on its curve. Walk me through what that run did, what it learned, and what went wrong. Use run_detail and the memories it learned, with specifics.`,
-			autosend: true,
 		} }));
 	};
 

@@ -17,7 +17,9 @@ async function cardTest(label, prompt, titleText, ms=180000){
     await page.goto(`${BASE}/studio`,{waitUntil:'domcontentloaded',timeout:45000});
     await page.waitForSelector('textarea, [contenteditable="true"]',{timeout:30000}).catch(()=>{});
     await page.waitForTimeout(1500);
-    await page.evaluate(p=>window.dispatchEvent(new CustomEvent('studio:ask',{detail:{prompt:p,autosend:true,model:'claude-code-sonnet'}})), prompt);
+    // An ask pre-fills the composer (and carries its model); the user sends.
+    await page.evaluate(p=>window.dispatchEvent(new CustomEvent('studio:ask',{detail:{prompt:p,model:'claude-code-sonnet'}})), prompt);
+    await page.getByRole('button',{name:'Send message'}).click({timeout:10000});
     const el=await page.waitForSelector(`text=${titleText}`,{timeout:ms}).catch(()=>null);
     assert(!!el, `${label}: "${titleText}" card rendered`);
     if(el){ const txt=await page.evaluate(e=>{let n=e;for(let i=0;i<4&&n.parentElement;i++)n=n.parentElement;return n.textContent||'';},el);

@@ -28,7 +28,7 @@ export interface FailureTriage {
 		label: string;
 		/** Navigate… */
 		to?: string;
-		/** …or hand to the chat rail (studio:ask, autosend). */
+		/** …or hand to the chat rail (studio:ask; pre-fills the composer). */
 		ask?: string;
 	};
 }

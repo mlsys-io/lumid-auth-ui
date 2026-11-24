@@ -56,8 +56,9 @@ src/pages/
                            connect + connect-google (Gmail/Calendar wizard), admin hub,
                            admin-invitations
   dashboard/               super-admin.tsx — the 5-section operational dashboard
-  studio/                  THE app surface. Chat-first "Simple mode" is the default;
-                           "Advanced" (the older Studio) is behind a toggle
+  studio/                  THE app surface: a chat-first shell (one mode — the
+                           Simple/Advanced toggle is gone; engineer details such
+                           as the model chip and turn telemetry are admin-only)
   onboarding/, status/, docs/, app/, app-revamp/, deprecated/, Go.tsx
   docs/xpio-autoresearch.tsx   renders public/docs/xpio_autoresearch_canonical.md.
                            PUBLIC route — NO AuthGuard, deliberately, so anonymous
@@ -156,10 +157,15 @@ derive from it. Don't add a hex anywhere else — `npm run check:palette` ratche
   `/studio/library` and `/studio/data` are the current members; full-bleed panels own their own
   padding.
 - **Not every docked chat is grounded on an installed app.** `StudioChat` takes a `groundApp`
-  slug, but `LIBRARY_KEY` and `DATA_KEY` are *virtual* scopes with hardcoded openers in
-  `emitAppOpener` — no bundle behind them. That works only because the tools those chats drive
-  (`data_catalog`, `data_query`, `save_artifact`) are platform tools; an app-declared tool would
-  need a real install. A new virtual scope also needs a `workspaceApp()` branch, or its threads
+  slug, but `LIBRARY_KEY`, `DATA_KEY`, `APPS_KEY` and `COMPUTE_KEY` (`src/lib/chat-scopes.ts`) are
+  *virtual* scopes — no bundle behind them and no opener (the composer placeholder names the
+  place). That works only because the tools those chats drive (`data_catalog`, `data_query`,
+  `save_artifact`) are platform tools; an app-declared tool would need a real install. A new
+  virtual scope also needs a `workspaceApp()` branch and a `threadHome()` entry, or its threads
   save untagged and can't be resumed.
-- **Studio Simple mode is UIUX-only** over an unchanged engine. If a change to Simple mode
+- **Every `studio:ask` pre-fills the composer; the user presses send.** `autosend` is ignored
+  (one behaviour since 2026-11). The ask's `context`/`model` ride to that send. Where no chat is
+  mounted, the shell parks the ask on `chat/askBus.ts` (mount counter, not a path list) and goes
+  to `/studio`, whose chat drains it.
+- **Studio is UIUX-only** over an unchanged engine. If a change to Studio
   requires an engine change, that's a signal to reconsider the change.

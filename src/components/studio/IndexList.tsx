@@ -11,9 +11,8 @@
 // read as one continuous surface.
 //
 // Each row carries an `ask` (prompt + optional ViewingContext). On click,
-// fireAsk() reads the landing preference and dispatches `studio:ask` with
-// autosend set accordingly — the existing StudioShell→StudioChat bridge
-// handles navigation + (auto-send | pre-fill). The dense detail surfaces of
+// fireAsk() dispatches `studio:ask`; the chat pre-fills the prompt and the
+// user sends it (StudioShell parks it first when no chat is mounted). The dense detail surfaces of
 // old (observability panels, run inspectors, install drawers) survive as a
 // quiet hover-only "details →" escape hatch via `detailsHref`.
 
@@ -28,7 +27,6 @@ import type { LucideIcon } from 'lucide-react';
 import { TONES, type ToneKey } from '@/lib/tones';
 import type { ViewingContext } from '@/components/StudioContext';
 import { setStudioSelection, type StudioSelectionKind } from '@/components/StudioContext';
-import { getLandingPref } from '@/lib/landing-pref';
 
 export interface IndexAsk {
 	prompt: string;
@@ -64,16 +62,13 @@ export interface IndexRow {
 	askVisible?: boolean;
 }
 
-/** Fire a grounded ask into the chat, honoring the landing preference. */
+/** Fire a grounded ask into the chat: it pre-fills; the user sends. */
 export function fireAsk(ask: IndexAsk): void {
-	const autosend = getLandingPref() === 'ask';
-	if (!autosend && ask.selection) {
-		// Ready-to-type: set the page selection so the chat surfaces a context
-		// chip while the user edits the pre-filled prompt.
-		setStudioSelection({ ...ask.selection });
-	}
+	// Set the page selection so the chat shows a context chip while the user
+	// reviews the pre-filled prompt.
+	if (ask.selection) setStudioSelection({ ...ask.selection });
 	window.dispatchEvent(new CustomEvent('studio:ask', {
-		detail: { prompt: ask.prompt, autosend, context: ask.context },
+		detail: { prompt: ask.prompt, context: ask.context },
 	}));
 }
 

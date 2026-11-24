@@ -24,7 +24,7 @@ export function EmptyState({
 	actionLabel?: string;
 	/** Navigate on action. */
 	to?: string;
-	/** Or: prompt the chat rail on action (studio:ask, autosend). */
+	/** Or: prompt the chat rail on action (studio:ask; pre-fills the composer). */
 	ask?: string;
 	/** Or: run a handler. */
 	onAction?: () => void;
@@ -75,7 +75,7 @@ export function EmptyState({
 					) : ask ? (
 						<button
 							type="button"
-							onClick={() => window.dispatchEvent(new CustomEvent("studio:ask", { detail: { prompt: ask, autosend: true } }))}
+							onClick={() => window.dispatchEvent(new CustomEvent("studio:ask", { detail: { prompt: ask } }))}
 							className={btn}
 						>
 							<MessagesSquare className="w-3.5 h-3.5 text-ink-500" />

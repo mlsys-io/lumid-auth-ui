@@ -992,7 +992,6 @@ function ActionButton({ a, row: rowProp, onDone, size = "sm", scope = "", select
       // stash on mount. Same app, same selection, one navigation.
       const detail = {
         prompt: interp(a.ask),
-        autosend: true,
         context: {
           page: "app-surface",
           ...(appFromRoute ? { app: appFromRoute } : {}),
@@ -2474,7 +2473,6 @@ function LumidAsk({ body }: { body: Body }) {
             window.dispatchEvent(new CustomEvent("studio:ask", {
               detail: {
                 prompt: p,
-                autosend: true,
                 context: { page: "app-surface", ...(app ? { app } : {}), ...(loop ? { loop } : {}) },
               },
             }))

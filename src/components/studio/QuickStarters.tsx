@@ -21,7 +21,7 @@ export function QuickStarters({ heading = 'Quick starters' }: { heading?: string
 	const caps = useCapabilities();
 	const navigate = useNavigate();
 	const dispatch = (prompt: string) =>
-		window.dispatchEvent(new CustomEvent('studio:ask', { detail: { prompt, autosend: true } }));
+		window.dispatchEvent(new CustomEvent('studio:ask', { detail: { prompt } }));
 
 	// Show the three lead starters, runnable ones first so the default view is
 	// immediately actionable; unmet ones render "locked" → connect page.

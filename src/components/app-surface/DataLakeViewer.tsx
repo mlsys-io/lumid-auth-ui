@@ -26,6 +26,7 @@ import {
   type SampleResult,
 } from "@/api/dataLake";
 import { EmptyState } from "@/components/ui/empty-state";
+import { useAuth } from "@/hooks/useAuth";
 import { PickATable } from "@/components/illustrations/scenes";
 
 // ── Small shared bits ────────────────────────────────────────────────────────
@@ -395,6 +396,10 @@ function SchemaNode({
 export default function DataLakeViewer({ config }: { config?: Record<string, unknown> }) {
   const title = String(config?.title ?? "Data Lake");
   const [cat, setCat] = useState<InstanceCatalog[]>([]);
+  // Per-instance freshness counts are an engineer detail (admins only); an
+  // instance that is offline is shown to everyone, since its tables are gone.
+  const role = useAuth().user?.role;
+  const isAdmin = role === "admin" || role === "super_admin";
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
   const [sel, setSel] = useState<Selection | null>(null);
@@ -453,7 +458,7 @@ export default function DataLakeViewer({ config }: { config?: Record<string, unk
           </div>
         </div>
         <div className="flex flex-wrap gap-3">
-          {cat.map((c) => (
+          {cat.filter((c) => isAdmin || c.error).map((c) => (
             <div key={c.instance.id} className="flex items-center gap-1.5 text-micro">
               <span className={c.error ? "text-brick-600" : "text-ink-600 font-medium"}>
                 {c.instance.label}

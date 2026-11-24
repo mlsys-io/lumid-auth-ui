@@ -46,7 +46,6 @@ function askAboutRun(app: string, loop: string, ts: string | undefined, prompt: 
 	window.dispatchEvent(new CustomEvent("studio:ask", {
 		detail: {
 			prompt,
-			autosend: true,
 			// Grounded observability queries need the me_agent data tools, which
 			// only fire on a tool-capable provider. Hint kvrun-minimax; the
 			// backend re-checks the role (degrades to the role default — also

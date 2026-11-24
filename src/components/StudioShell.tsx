@@ -9,10 +9,10 @@
 // no per-page nav reimplementation.
 
 import { Link, NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { isChatMounted, stashAsk } from "@/components/chat/askBus";
 import ErrorBoundary from './ErrorBoundary';
 import {
 	Boxes,
-	CirclePlus,
 	Plus,
 	PanelLeftClose,
 	PanelLeftOpen,
@@ -23,7 +23,6 @@ import {
 	BookOpen,
 	LogOut,
 	ChevronDown,
-	ChevronRight,
 	Key,
 	Inbox,
 	MessageSquare,
@@ -44,7 +43,6 @@ import { threadHome, isVirtualScope, scopeLabel, LIBRARY_KEY, DATA_KEY, COMPUTE_
 import { StrandAvatar } from '@/components/illustrations/StrandAvatar';
 import { fetchClaudePoolManage } from '../api/claude-pool-manage';
 import { useRecentChats, RECENT_CHATS_INVALIDATE, type RecentChatItem } from './useRecentChats';
-import { writeAppChat } from './appChatMap';
 import { useStudioRefetch } from '@/hooks/useStudioRefetch';
 import { useIsNarrow } from '@/hooks/useIsNarrow';
 import { useCollapse } from '@/hooks/useCollapse';
@@ -59,10 +57,6 @@ import { httpUser } from '../runmesh/utils/axios';
 // Phase S6a — persistent chat sidebar. AI is the primary interface
 // for Studio; webforms in the main workspace area become the
 // precision channel beside it.
-// Mouse-picker overlay — sits at the document root so it can capture
-// pointer events globally when the user clicks the Crosshair in the
-// chat. Inactive (renders null) until startStudioPicking() is called.
-import StudioPicker from './StudioPicker';
 // StudioArtifactPanel — used to live here as a left-rail drawer.
 // Moved into the chat header right group on 2026-05-29; rendered as
 // a popover anchored to the ArtifactIconButton in StudioChat. The
@@ -575,27 +569,9 @@ function AppFolder({
 	const installing = item.status === 'installing';
 	const failed = item.status === 'failed';
 
-	// Fresh thread inside this app: drop the app's resume pointer FIRST, then
-	// land on it. openAppInChat() resumes readAppChatMap()[app] when present,
-	// so without the clear this would just reopen the previous conversation —
-	// the exact bug that made per-app chat feel single-threaded.
-	const newAppChat = (e: React.MouseEvent) => {
-		e.stopPropagation();
-		writeAppChat(item.app, null);
-		// A queued row-click stash would otherwise load that thread on arrival
-		// and undo the fresh start.
-		try { sessionStorage.removeItem('studio_open_chat_v1'); } catch { /* ignore */ }
-		if (window.location.pathname === to) {
-			// Already in the app: nothing remounts and the app is already
-			// grounded, so only the dedicated event forces a new thread.
-			window.dispatchEvent(new CustomEvent('studio:new-app-chat', { detail: { app: item.app } }));
-		} else {
-			// Arriving fresh: the cleared resume pointer above is enough —
-			// grounding starts a new thread because there's nothing to resume.
-			navigate(to);
-		}
-	};
-
+	// A new conversation in an app starts from the docked chat's own "New
+	// conversation" button; the hover-only ⊕ that used to sit here was a third
+	// way to do the same thing (2026-11).
 	return (
 		<div>
 			<div className={cn(
@@ -616,16 +592,8 @@ function AppFolder({
 					{installing && <Loader2 className="w-3 h-3 flex-shrink-0 animate-spin text-muted-foreground" />}
 					{failed && <AlertCircle className="w-3 h-3 flex-shrink-0 text-brick-600" />}
 					{badge != null && badge > 0 && (
-						<span className="flex-shrink-0 inline-flex min-w-[18px] h-[18px] items-center justify-center px-1 rounded-full bg-gold-100 text-gold-800 text-micro font-semibold tabular-nums transition-opacity group-hover:opacity-0">{badge}</span>
+						<span className="flex-shrink-0 inline-flex min-w-[18px] h-[18px] items-center justify-center px-1 rounded-full bg-gold-100 text-gold-800 text-micro font-semibold tabular-nums">{badge}</span>
 					)}
-				</button>
-				<button
-					onClick={newAppChat}
-					title={`New chat in ${item.label}`}
-					aria-label={`New chat in ${item.label}`}
-					className="absolute right-1.5 p-1 rounded-md opacity-0 group-hover:opacity-100 focus-visible:opacity-100 text-ink-500 hover:text-ink-900 hover:bg-ink-200/60 transition-opacity duration-120"
-				>
-					<CirclePlus className="w-3.5 h-3.5" />
 				</button>
 			</div>
 		</div>
@@ -858,21 +826,30 @@ export function StudioShell() {
 		}
 	};
 
-	// studio:ask bridge — the chat is mounted on /studio (home) AND on every app
-	// workspace page (the docked right panel). When it's mounted, its OWN
-	// listener handles the ask in place — so we must NOT navigate (doing so on an
-	// app page yanked the user off the workspace, e.g. clicking an opener chip
-	// made the middle panel vanish). Only stash+navigate from pages WITHOUT a
-	// chat (Library, Jobs, …), where StudioChat consumes the stash on mount.
+	// Keys nothing reads any more (2026-11): the hidden agent/persona and
+	// workspace picks (sent with every turn until then), Show thinking, and
+	// the ask-vs-type preference. Drop them once so they don't linger.
 	useEffect(() => {
-		const chatIsMounted = (path: string) =>
-			path === '/studio' ||
-			(/^\/studio\/apps\/[^/]+/.test(path) && path !== '/studio/apps/all');
+		try {
+			for (const k of [
+				'studio_chat_agent_v1', 'studio_chat_persona_v1',
+				'studio_chat_ws_repo_v1', 'studio_chat_ws_cluster_v1', 'studio_chat_ws_data_v1',
+				'studio_chat_think_v1', 'studio_land_pref_v1',
+			]) localStorage.removeItem(k);
+		} catch { /* private mode */ }
+	}, []);
+
+	// studio:ask bridge. Where a chat is mounted (home, app workspaces,
+	// /studio/data …) its own listener takes the ask in place. Elsewhere, park
+	// it on the ask bus and go to /studio, whose chat drains it on mount. The
+	// mount counter is the source of truth — a path list here used to miss
+	// pages that do dock a chat and navigated away from them.
+	useEffect(() => {
 		const onAsk = (e: Event) => {
-			if (chatIsMounted(window.location.pathname)) return; // local chat handles it
+			if (isChatMounted()) return;
 			const detail = (e as CustomEvent).detail;
 			if (!detail?.prompt) return;
-			try { sessionStorage.setItem('studio_pending_ask_v1', JSON.stringify(detail)); } catch { /* ignore */ }
+			stashAsk(detail);
 			navigate('/studio');
 		};
 		window.addEventListener('studio:ask', onAsk as EventListener);
@@ -922,10 +899,12 @@ export function StudioShell() {
 				)}
 			>
 				<div className="flex items-center justify-between pr-1.5">
-					<button onClick={newChat} title="New chat" className="pl-4 pr-2 py-4 flex items-center gap-2 text-left flex-1 min-w-0">
+					{/* The wordmark goes home; it doesn't start a chat. "New chat"
+					    below and the docked chat's own button are the two ways. */}
+					<Link to="/studio" title="Lumid Studio home" className="pl-4 pr-2 py-4 flex items-center gap-2 text-left flex-1 min-w-0">
 						<StrandMark size={22} className="-mt-0.5" />
 						<span className="font-display text-title font-semibold tracking-tight text-ink-900 truncate">Lumid Studio</span>
-					</button>
+					</Link>
 					<button
 						onClick={hideSidebar}
 						title="Collapse sidebar"
@@ -1206,9 +1185,6 @@ export function StudioShell() {
 			    (see StudioChat.tsx::ArtifactIconButton). Removed
 			    from the layout so the workspace reclaims the width. */}
 
-			{/* Mouse-picker overlay (no-op until armed). Mounted here
-			    so it can layer above the workspace + chat. */}
-			<StudioPicker />
 		</div>
 		</EnterpriseTipProvider>
 		</LanguageProvider>

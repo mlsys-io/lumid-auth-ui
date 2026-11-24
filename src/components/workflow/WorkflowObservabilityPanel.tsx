@@ -1750,7 +1750,6 @@ function StageDetail({
 		window.dispatchEvent(new CustomEvent("studio:ask", {
 			detail: {
 				prompt: `On ${app} / ${loop} — the ${info.label} stage${ts ? ` (run ${cycleDate(ts)})` : ""}: ${t}`,
-				autosend: true,
 				context: { app, loop, ...(ts ? { cycle: { app, loop, ts } } : {}) },
 			},
 		}));

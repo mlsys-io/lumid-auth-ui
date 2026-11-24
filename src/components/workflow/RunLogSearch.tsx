@@ -58,7 +58,6 @@ export default function RunLogSearch({ app, loop, ts, onJump, compact }: {
 		window.dispatchEvent(new CustomEvent("studio:ask", {
 			detail: {
 				prompt: `In the run log for ${app} / ${loop}${ts ? ` (run ${ts})` : ""}, explain this ${m.event || "event"}${m.field ? ` (${m.field})` : ""}: ${m.snippet || ""}`,
-				autosend: true,
 				context: { app, loop, ...(ts ? { cycle: { app, loop, ts } } : {}) },
 			},
 		}));
