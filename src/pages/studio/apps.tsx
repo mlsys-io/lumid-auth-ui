@@ -16,12 +16,13 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { legacyAppQueryTarget, routeLoopMissing, workflowPath } from "@/lib/run-routes";
-import { ChevronRight, ChevronDown, Check, ArrowRight, Boxes, Sparkles, AlertTriangle, Trash2, Loader2, RotateCcw, X, Plus, MoreHorizontal, SlidersHorizontal, Settings, Pencil, Cpu, Cloud, Workflow, Clock, Database, DownloadCloud, UploadCloud, BarChart3 } from "lucide-react";
+import { ChevronRight, ChevronDown, Check, ArrowRight, Boxes, Sparkles, AlertTriangle, Trash2, Loader2, RotateCcw, X, Plus, MoreHorizontal, SlidersHorizontal, Settings, Pencil, Cpu, Cloud, Workflow, Clock, Database, DownloadCloud, UploadCloud, BarChart3, GitBranch, FlaskConical } from "lucide-react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuSeparator,
+	DropdownMenuLabel,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SpiralOverlay } from "@/components/BrandLoader";
@@ -637,7 +638,7 @@ interface Row { loop: string; wf: MeWorkflowRow; lh?: LoopHealth }
 
 const wfDot = (wf: MeWorkflowRow) => cn("w-2 h-2 rounded-full flex-shrink-0", TONES[workflowTone(wf)].dot);
 const wfSub = (wf: MeWorkflowRow) =>
-	`${describeSchedule(wf.trigger)}${wf.enabled === false ? " · paused" : ""}${wf.running ? " · running…" : (wf.last_run_ok === false && wf.enabled !== false ? " · failed" : "")}`;
+	`${describeSchedule(wf.trigger)}${wf.enabled === false ? " · paused" : ""}${wf.running ? " · running now" : (wf.last_run_ok === false && wf.enabled !== false ? " · last run failed" : "")}`;
 
 // WorkflowSelect — the workflow list consolidated into a dropdown. The trigger
 // shows the active workflow (status dot + name + count); the popover lists all
@@ -651,20 +652,22 @@ function WorkflowSelect({ rows, selected, onSelect, onNew }: { rows: Row[]; sele
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger asChild>
-				<button className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-ink-200 bg-card hover:bg-ink-50 transition-colors max-w-full min-w-0">
+				<button aria-label={cur ? `Workflow: ${loopLabel(cur.wf.name, cur.loop)} — switch` : "Pick a workflow"}
+					className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-ink-200 bg-card hover:bg-ink-50 transition-colors max-w-full min-w-0 flex-shrink-0 sm:flex-shrink">
 					{cur ? (
 						<>
 							<span className={wfDot(cur.wf)} />
-							<span className="text-meta font-medium text-ink-800 truncate">{loopLabel(cur.wf.name, cur.loop)}</span>
+							{/* Phones: dot + chevron only — the breadcrumb below names it. */}
+							<span className="text-meta font-medium text-ink-800 truncate hidden sm:inline">{loopLabel(cur.wf.name, cur.loop)}</span>
 						</>
 					) : (
 						<span className="text-meta font-medium text-ink-600 truncate">Pick a workflow</span>
 					)}
-					<span className="text-micro text-ink-600 flex-shrink-0 hidden sm:inline">· {rows.length} workflows</span>
 					<ChevronDown className="w-4 h-4 text-ink-600 flex-shrink-0" />
 				</button>
 			</PopoverTrigger>
-			<PopoverContent align="start" className="w-72 p-1 max-h-[60vh] overflow-y-auto">
+			<PopoverContent align="start" className="w-80 p-1 max-h-[60vh] overflow-y-auto">
+				<div className="eyebrow px-2.5 pt-1.5 pb-1">{rows.length} workflow{rows.length === 1 ? "" : "s"} in this app</div>
 				{rows.map(({ loop, wf }) => {
 					const active = loop === cur?.loop;
 					return (
@@ -896,6 +899,20 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 
 	// Pull / publish — toolbar buttons (fork + propose happen in xpio, not here).
 	const [shareBusy, setShareBusy] = useState<null | "pull" | "publish">(null);
+	// The open workflow's rarer actions (⋯ → "This workflow") are owned by
+	// the workflow panel; reach it by event. It tells us back whether an
+	// experiment already runs there (so "Start an experiment…" can hide).
+	const wfAction = (loop: string, action: "plan" | "schedule" | "experiment") =>
+		window.dispatchEvent(new CustomEvent("studio:wf-action", { detail: { loop, action } }));
+	const [wfHasExperiment, setWfHasExperiment] = useState(false);
+	useEffect(() => {
+		const h = (e: Event) => {
+			const d = (e as CustomEvent<{ app?: string; hasExperiment?: boolean }>).detail;
+			if (d?.app === app) setWfHasExperiment(!!d.hasExperiment);
+		};
+		window.addEventListener("studio:workflow-selected", h);
+		return () => window.removeEventListener("studio:workflow-selected", h);
+	}, [app]);
 	const { user: authUser } = useAuth();
 	const isAdmin = authUser?.role === "admin" || authUser?.role === "super_admin";
 	// Pull/publish push the AGENT (app) repo — the buttons now live in the
@@ -1098,7 +1115,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 								)}
 								{/* Slot: the open workflow panel hoists its run controls (status ·
 								    version dots · pull/publish · plan-next · pause) onto this line. */}
-								<span id="topstrip-wf-controls" className="flex items-center gap-1.5 flex-wrap min-w-0" />
+								<span id="topstrip-wf-controls" className="flex items-center gap-1.5 flex-shrink-0" />
 							{/* App actions ("⋯") — Manage / Advanced / Remove. Workflow apps
 								    were missing this; only surface apps (AppSurface) had it. */}
 								<DropdownMenu>
@@ -1110,47 +1127,64 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 											<MoreHorizontal className="w-4 h-4" />
 										</button>
 									</DropdownMenuTrigger>
-									<DropdownMenuContent align="end" className="w-56">
-										{/* THE ONE APP MENU (2026-09-25). The embedded surface used to
-										    carry a second, near-identical "⋯" plus bare Pull / Publish
-										    icons and a "+ New workflow" button, and the open workflow
-										    panel hoisted another Pull / Publish pair — up to three copies
-										    of the same actions on one screen. Everything lives here now;
-										    "+ New workflow" stays in the workflow selector. */}
-										{isAdmin && (
-											<DropdownMenuItem asChild>
-												<Link to={`/studio/admin/apps/${encodeURIComponent(app)}/insights`} title="Usage insights for this app">
-													<BarChart3 className="w-3.5 h-3.5" /> Insights
-												</Link>
-											</DropdownMenuItem>
+									<DropdownMenuContent align="end" className="w-64">
+										{/* THE ONE MENU, in two labelled groups so every item says what
+										    it acts on. (The embedded surface and the workflow panel each
+										    used to carry their own near-identical copy.) "+ New workflow"
+										    stays in the workflow picker. */}
+										{!overviewMode && selectedRow && (
+											<>
+												<DropdownMenuLabel className="eyebrow px-2 pt-1.5 pb-1">This workflow</DropdownMenuLabel>
+												<DropdownMenuItem onSelect={() => wfAction(selectedRow.loop, "plan")}>
+													<GitBranch className="w-3.5 h-3.5" />
+													<span className="flex flex-col">
+														<span>Run with changes…</span>
+														<span className="text-micro text-ink-600">another version, some cases, several at once</span>
+													</span>
+												</DropdownMenuItem>
+												<DropdownMenuItem onSelect={() => wfAction(selectedRow.loop, "schedule")}>
+													<Clock className="w-3.5 h-3.5" /> Change schedule…
+												</DropdownMenuItem>
+												{!wfHasExperiment && (
+													<DropdownMenuItem onSelect={() => wfAction(selectedRow.loop, "experiment")}>
+														<FlaskConical className="w-3.5 h-3.5" />
+														<span className="flex flex-col">
+															<span>Start an experiment…</span>
+															<span className="text-micro text-ink-600">compare versions on a score</span>
+														</span>
+													</DropdownMenuItem>
+												)}
+												<DropdownMenuItem
+													onSelect={() => delLoop(selectedRow.loop, loopLabel(selectedRow.wf.name, selectedRow.loop))}
+													className="text-brick-600 focus:text-brick-700 focus:bg-brick-50"
+												>
+													<Trash2 className="w-3.5 h-3.5" /> Delete workflow…
+												</DropdownMenuItem>
+												<DropdownMenuSeparator />
+											</>
 										)}
+										<DropdownMenuLabel className="eyebrow px-2 pt-1.5 pb-1">This app</DropdownMenuLabel>
 										<DropdownMenuItem asChild>
-											<Link to={`/studio/a/${encodeURIComponent(app)}/edit`} title="Edit this page (surface markdown / layout)">
+											<Link to={`/studio/a/${encodeURIComponent(app)}/edit`}>
 												<Pencil className="w-3.5 h-3.5" /> Edit this page
 											</Link>
 										</DropdownMenuItem>
 										<DropdownMenuItem asChild>
-											<Link to={`/studio/a/${encodeURIComponent(app)}/manage`} title="name, workflows, skills">
+											<Link to={`/studio/a/${encodeURIComponent(app)}/manage`}>
 												<SlidersHorizontal className="w-3.5 h-3.5" />
 												<span className="flex flex-col">
-													<span>Manage agent</span>
+													<span>Manage app</span>
 													<span className="text-micro text-ink-600">name, workflows, skills</span>
 												</span>
 											</Link>
 										</DropdownMenuItem>
-										<DropdownMenuItem asChild>
-											<Link to={`/studio/a/${encodeURIComponent(app)}/config`}>
-												<Settings className="w-3.5 h-3.5" /> Advanced (YAML)
-											</Link>
-										</DropdownMenuItem>
-										<DropdownMenuSeparator />
 										<DropdownMenuItem
 											disabled={!!shareBusy}
 											onSelect={() => shareAction("pull", "update", "Update queued — upstream changes merge in ~a minute (your edits are preserved).")}
 										>
 											{shareBusy === "pull" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <DownloadCloud className="w-3.5 h-3.5" />}
 											<span className="flex flex-col">
-												<span>Pull updates</span>
+												<span>Get updates</span>
 												<span className="text-micro text-ink-600">merge the latest version; your edits stay</span>
 											</span>
 										</DropdownMenuItem>
@@ -1167,19 +1201,17 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 												<span className="text-micro text-ink-600">push your edits to the app&apos;s repo</span>
 											</span>
 										</DropdownMenuItem>
-										{/* Delete THIS workflow (one loop) — folded in here so the top
-										    strip has a single "⋯" instead of two adjacent ones (the
-										    open workflow panel used to hoist its own delete menu). */}
-										{!overviewMode && selectedRow && (
-											<>
-												<DropdownMenuSeparator />
-												<DropdownMenuItem
-													onSelect={() => delLoop(selectedRow.loop, loopLabel(selectedRow.wf.name, selectedRow.loop))}
-													className="text-brick-600 focus:text-brick-700 focus:bg-brick-50"
-												>
-													<Trash2 className="w-3.5 h-3.5" /> Delete workflow
-												</DropdownMenuItem>
-											</>
+										<DropdownMenuItem asChild>
+											<Link to={`/studio/a/${encodeURIComponent(app)}/config`}>
+												<Settings className="w-3.5 h-3.5" /> Settings (YAML)
+											</Link>
+										</DropdownMenuItem>
+										{isAdmin && (
+											<DropdownMenuItem asChild>
+												<Link to={`/studio/admin/apps/${encodeURIComponent(app)}/insights`}>
+													<BarChart3 className="w-3.5 h-3.5" /> Usage insights
+												</Link>
+											</DropdownMenuItem>
 										)}
 										<DropdownMenuSeparator />
 										<DropdownMenuItem
@@ -1187,7 +1219,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 											onSelect={() => del()}
 											className="text-brick-600 focus:text-brick-700 focus:bg-brick-50"
 										>
-											<Trash2 className="w-3.5 h-3.5" /> {deleting ? "Removing…" : "Remove agent…"}
+											<Trash2 className="w-3.5 h-3.5" /> {deleting ? "Removing…" : "Remove app…"}
 										</DropdownMenuItem>
 									</DropdownMenuContent>
 								</DropdownMenu>

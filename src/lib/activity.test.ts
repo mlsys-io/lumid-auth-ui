@@ -1,6 +1,6 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
 import type { MeRunRow } from "@/api/me";
-import { groupActivity, plainCause, fmtDuration, fmtTypical, progressOf, isOverdue, loopOfRun } from "./activity";
+import { groupActivity, plainCause, fmtDuration, fmtTypical, progressOf, isOverdue, loopOfRun, workflowStatusLine, nextFireSec, dirIdToSec, fmtAgo } from "./activity";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -91,6 +91,39 @@ check("apps: running first, then failing, then recent; app filter", () => {
 	const rows = [mk("a", "x", "succeeded"), mk("b", "y", "failed"), mk("c", "z", "running")];
 	eq(groupActivity(rows).apps.map((a) => a.app), ["c", "b", "a"]);
 	eq(groupActivity(rows, { app: "b" }).apps.map((a) => a.app), ["b"]);
+});
+
+// ── workflow page: the status line and the next scheduled run ──
+const NOW = Date.UTC(2026, 10, 24, 14, 20, 0) / 1000; // 24 Nov 14:20Z
+const cyc = (ts: string, ok?: boolean, running?: boolean) => ({ ts, ok, running, duration_s: 51 });
+check("dir-id parses to epoch", () => eq(dirIdToSec("20261124T141039Z"), Date.UTC(2026, 10, 24, 14, 10, 39) / 1000));
+check("fmtAgo", () => { eq(fmtAgo(NOW - 30, NOW), "just now"); eq(fmtAgo(NOW - 720, NOW), "12m ago"); eq(fmtAgo(NOW - 3 * 86400, NOW), "3d ago"); });
+check("status: never ran / first run going", () => {
+	eq(workflowStatusLine([], NOW).text, "Hasn't run yet");
+	eq(workflowStatusLine([cyc("20261124T141000Z", undefined, true)], NOW).text, "First run in progress");
+});
+check("status: last ok, ignoring the running one", () => {
+	const l = workflowStatusLine([cyc("20261124T141800Z", undefined, true), cyc("20261124T140800Z", true)], NOW);
+	eq(l.tone, "ok"); eq(l.text, "Last run succeeded 12m ago · took 51s");
+});
+check("status: one failure", () => eq(workflowStatusLine([cyc("20261124T140800Z", false), cyc("20261124T130800Z", true)], NOW).text, "Last run failed 12m ago"));
+check("status: a streak after a success", () => {
+	const l = workflowStatusLine([cyc("20261124T140800Z", false), cyc("20261123T140800Z", false), cyc("20261122T140800Z", false), cyc("20261121T140800Z", true)], NOW);
+	eq(l.tone, "failing"); if (!/^Failing since .+ · 3 runs in a row$/.test(l.text)) throw new Error(l.text); eq(l.runId, "20261124T140800Z");
+});
+check("status: every loaded run failed", () => {
+	const l = workflowStatusLine([cyc("20261124T140800Z", false), cyc("20261122T110800Z", false)], NOW);
+	eq(l.text, "The last 2 runs all failed");
+});
+check("next fire: hourly at :07", () => {
+	eq(nextFireSec("7 * * * *", NOW), Date.UTC(2026, 10, 24, 15, 7) / 1000);
+	eq(nextFireSec("30 * * * *", NOW), Date.UTC(2026, 10, 24, 14, 30) / 1000);
+	eq(nextFireSec("@hourly", NOW), Date.UTC(2026, 10, 24, 15, 0) / 1000);
+});
+check("next fire: every 10 min", () => eq(nextFireSec("*/10 * * * *", NOW + 60), Date.UTC(2026, 10, 24, 14, 30) / 1000));
+check("next fire: timezone-dependent schedules give no time", () => {
+	eq(nextFireSec("5 */2 * * *", NOW), null); eq(nextFireSec("7 13 * * *", NOW), null);
+	eq(nextFireSec("@trigger", NOW), null); eq(nextFireSec("*/7 * * * *", NOW), null);
 });
 
 export function run(): number {
