@@ -187,6 +187,18 @@ const DOCS: DocEntry[] = [
 		companion: { to: '/studio/strategies', label: 'Your strategies' },
 	},
 	{
+		// Moved out of the quant-research app's Data tab 2026-11-24: a 94-line
+		// reference manual (replay axes, venues, signal publishing, retention,
+		// fee model) inside a tab. The tab keeps a summary and links here.
+		slug: 'lqt-backtest-data',
+		title: 'Backtest data',
+		description: 'What a backtest can replay: venues and instrument ids, recorded signals, the replay window, fees and book, and how to get new data recorded.',
+		md: 'lqt-backtest-data.md',
+		group: 'Guides',
+		icon: Database,
+		companion: { to: '/studio/apps/quant-research?surface=data', label: 'Quant Research' },
+	},
+	{
 		// Split out of first-run 2026-08-29: 138 lines of producer tutorial that
 		// arrived before the reader had deployed anything. It is the natural
 		// SECOND project, so it reads better as its own page with a pointer left
