@@ -14,7 +14,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
 import { CONNECT_ROUTE } from './studio/starters';
-import { ThumbsDown, ChevronRight, MessageSquarePlus, Send, Trash2, Loader2, Bot, User, Square, Globe, Telescope, Brain, ChevronDown, Paperclip, X, FileText, FileJson, Image as ImageIcon, Plus, Copy, RotateCcw, Mic, Volume2, Code2, Boxes, Download, ArrowLeft, Crosshair, Lock, Cpu, Maximize2, Minimize2, AlertTriangle , GraduationCap, ClipboardList } from 'lucide-react';
+import { Check, ThumbsDown, ChevronRight, MessageSquarePlus, Send, Trash2, Loader2, Bot, User, Square, Globe, Telescope, Brain, ChevronDown, Paperclip, X, FileText, FileJson, Image as ImageIcon, Plus, Copy, RotateCcw, Mic, Volume2, Code2, Boxes, Download, ArrowLeft, Crosshair, Lock, Cpu, Maximize2, Minimize2, AlertTriangle , GraduationCap, ClipboardList } from 'lucide-react';
 import {
 	buildViewingContext,
 	subscribeStudioPickedTarget,
@@ -73,6 +73,7 @@ function sessionRowsToMessages(rows: CycleLogRow[]): Message[] {
 import { ChatHero } from './chat/ChatEmptyState';
 import { StudioWorkflowPanel } from './StudioWorkflowPanel';
 import { Workflow as WorkflowIcon } from 'lucide-react';
+import { StrandMark } from '@/components/illustrations/StrandMark';
 // Parse an AI turn's raw output into something readable: tenant cycles emit
 // machine JSON (often a single unformatted line), sometimes inside a ```json
 // fence or after a thinking preamble. Pull the JSON out and pretty-print it;
@@ -2340,16 +2341,17 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 			    the conversation's other controls rather than being a standing
 			    destination in the shell rail. The popover anchors here and
 			    opens downward; nothing else about the panel changed. */}
-			<ArtifactIconButton />
+			<ArtifactIconButton labeled={!docked} />
 			{/* Workflow-viz side panel toggle. Auto-opens when an optimize_workflow/
 			    run_workflow tool completes (chat/protocol.ts); this button re-opens
 			    it. The panel itself (a fixed right drawer) is mounted below. */}
 			<button
 				onClick={() => window.dispatchEvent(new CustomEvent('studio:workflow-panel-toggle'))}
 				title="Workflow" aria-label="Workflow visualization"
-				className="p-1.5 rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-muted"
+				className={['inline-flex items-center gap-1.5 h-8 rounded-md text-caption font-medium transition-colors duration-120 text-ink-600 hover:text-ink-900 hover:bg-ink-100', docked ? 'px-1.5' : 'px-2'].join(' ')}
 			>
-				<WorkflowIcon className="w-4 h-4" />
+				<WorkflowIcon className="w-3.5 h-3.5" />
+				{!docked && <span className="hidden xl:inline">Workflow</span>}
 			</button>
 			<StudioWorkflowPanel />
 			{/* The Conversations picker moved to the shell's left sidebar
@@ -2788,7 +2790,7 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 						// outline. (Was focus-within:border-foreground/25 — near-black.)
 						dragOver
 							? 'border-coral border-dashed ring-2 ring-coral/20'
-							: 'border-border shadow-sm focus-within:border-ring focus-within:ring-4 focus-within:ring-ring/15 focus-within:shadow-md',
+							: 'border-border shadow-e1 focus-within:border-ring/70 focus-within:ring-4 focus-within:ring-ring/15 focus-within:shadow-e2',
 					].join(' ')}
 				>
 					<input
@@ -3191,9 +3193,11 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 							: 'Send'}
 						className={[
 							'order-6 relative h-8 w-8 flex items-center justify-center rounded-full transition-all flex-shrink-0',
+							// Lumen: the send button warms to bronze the moment there is
+							// something to send — the composer's one brand moment.
 							!input.trim()
-								? 'bg-muted text-ink-600 cursor-not-allowed'
-								: 'bg-primary text-primary-foreground hover:bg-primary/85 active:scale-95 shadow-sm',
+								? 'bg-ink-100 text-ink-500 cursor-not-allowed'
+								: 'bg-gold-700 text-white hover:bg-gold-800 active:scale-95 shadow-e1',
 						].join(' ')}
 					>
 						<Send className="w-3.5 h-3.5" />
@@ -3327,9 +3331,16 @@ const MessageBubble = memo(function MessageBubble({
 		renderText: (text: string, done?: boolean) => {
 			// Light narration on agentic assistant turns; keep the bubble for
 			// user messages and plain chat answers.
-			if (!isUser && agentic) {
+			// Lumen: EVERY assistant answer is flowing reading text now, not
+			// just agentic narration — a card around prose made the transcript
+			// a stack of boxes and capped the measure. Reading size: 15px in the
+			// main chat, 14px in the docked rail (was 13px everywhere).
+			if (!isUser) {
 				return (
-					<div className="max-w-full text-meta leading-relaxed text-left px-1 mt-2 first:mt-0 text-ink-900">
+					<div className={[
+						'max-w-[68ch] text-left px-0.5 mt-2 first:mt-0 text-ink-900',
+						docked ? 'text-body' : 'text-read',
+					].join(' ')}>
 						<ChatMarkdown>{text}</ChatMarkdown>
 						{streaming && !done && <StreamCaret />}
 					</div>
@@ -3337,15 +3348,11 @@ const MessageBubble = memo(function MessageBubble({
 			}
 			return (
 				<div className={[
-					'inline-block max-w-full text-meta rounded-2xl px-3.5 py-2.5 leading-relaxed text-left shadow-sm mt-2 first:mt-0',
-					isUser
-						? 'bg-primary text-primary-foreground rounded-tr-md'
-						: 'bg-card text-foreground border border-border rounded-tl-md',
+					'inline-block max-w-[85%] rounded-[18px] rounded-tr-md px-4 py-2.5 text-left shadow-e1 mt-2 first:mt-0',
+					'bg-primary text-primary-foreground',
+					docked ? 'text-body' : 'text-read',
 				].join(' ')}>
-					{isUser
-						? <div className="whitespace-pre-wrap break-words">{text}</div>
-						: <ChatMarkdown>{text}</ChatMarkdown>}
-					{!isUser && streaming && !done && <StreamCaret />}
+					<div className="whitespace-pre-wrap break-words">{text}</div>
 				</div>
 			);
 		},
@@ -3373,15 +3380,20 @@ const MessageBubble = memo(function MessageBubble({
 	};
 
 	return (
-		<Appear className={['group flex gap-2.5', isUser ? 'flex-row-reverse' : ''].join(' ')}>
-			<div className={[
-				'w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm',
-				isUser
-					? 'bg-gradient-to-br from-ink-300 to-ink-400 text-white'
-					: 'bg-gradient-to-br from-gold-400 to-gold-600 text-white shadow-gold-100',
-			].join(' ')}>
-				{isUser ? <User className="w-3.5 h-3.5" /> : <Bot className="w-3.5 h-3.5" />}
-			</div>
+		<Appear className={['group flex gap-3', isUser ? 'flex-row-reverse' : ''].join(' ')}>
+			{/* Lumen: the assistant IS the strand mark — and it shows its work:
+			    while the turn streams, a glint runs along the strands. The user
+			    is a quiet ink disc, so the answer (not the chrome) carries the
+			    colour. */}
+			{isUser ? (
+				<div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-1 bg-ink-100 text-ink-600 ring-1 ring-ink-200/70">
+					<User className="w-3.5 h-3.5" />
+				</div>
+			) : (
+				<div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 bg-card ring-1 ring-border shadow-e1">
+					<StrandMark size={17} state={streaming ? 'thinking' : 'idle'} />
+				</div>
+			)}
 			<div className={['min-w-0 flex-1', isUser ? 'text-right' : ''].join(' ')}>
 				{/* Blocks in arrival order. Text→tool→text now renders as it
 				    happened instead of all text above all tools, and a
@@ -3443,15 +3455,13 @@ const MessageBubble = memo(function MessageBubble({
 				)}
 				{/* Pre-first-token placeholder — bubble-level, see noTextYet. */}
 				{noTextYet && streaming && !m.composed && (
-					<div className={[
-						'inline-block max-w-full rounded-2xl px-3.5 py-2.5 shadow-sm mt-2',
-						'bg-card text-foreground border border-border rounded-tl-md',
-					].join(' ')}>
-						<span className="inline-flex gap-1 items-center">
-							<span className="w-1.5 h-1.5 bg-gold-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
-							<span className="w-1.5 h-1.5 bg-gold-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
-							<span className="w-1.5 h-1.5 bg-gold-400 rounded-full animate-bounce" />
-						</span>
+					// Lumen: a shimmer of the text that's coming (three lines of
+					// the warm sheen) instead of three bouncing dots — it holds
+					// the answer's place, so nothing jumps when tokens land.
+					<div className="mt-2.5 max-w-[68ch] space-y-2" role="status" aria-label="Writing a reply">
+						<div className="lumen-skeleton h-3 w-[72%] rounded-full" />
+						<div className="lumen-skeleton h-3 w-[88%] rounded-full" />
+						<div className="lumen-skeleton h-3 w-[46%] rounded-full" />
 					</div>
 				)}
 				{!isUser && !streaming && m.content && connectHintFor(m.content) && (
@@ -3744,20 +3754,22 @@ function ToolChip({ t, onApprove, onPlanAction }: {
 					t.approvalRequired
 						? 'bg-gold-50/80 border-gold-300 text-gold-900'
 						: t.pending
-							? 'bg-lagoon-50/80 border-lagoon-200 text-lagoon-800'
+							? 'lumen-sweep bg-lagoon-50/80 border-lagoon-200 text-lagoon-800'
 							: t.ok
 								? 'bg-gold-50/80 border-gold-200 text-gold-800'
 								: 'bg-brick-50/80 border-brick-200 text-brick-800',
 				].join(' ')}>
+					{/* SVG marks, not ⚠/✓/✗ text glyphs (font-dependent, off-baseline). */}
 					{t.approvalRequired
-						? <span className="text-nano">⚠</span>
+						? <AlertTriangle className="w-3 h-3" />
 						: t.pending
 							? <Loader2 className="w-3 h-3 animate-spin" />
 							: Icon
 								? <Icon className="w-3 h-3" />
-								: <span className="text-nano">{t.ok ? '✓' : '✗'}</span>}
+								: t.ok ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
 					<span className="font-mono font-medium">{t.name}</span>
-					{t.summary && <span className="opacity-70 truncate max-w-[180px]">· {t.summary}</span>}
+					{/* Full-strength colour, lighter weight: opacity-70 here was 3.6:1. */}
+					{t.summary && <span className="font-normal truncate max-w-[180px]">· {t.summary}</span>}
 					{hasArgs && !t.approvalRequired && !t.pending && (
 						<button
 							onClick={() => setArgsOpen(!argsOpen)}

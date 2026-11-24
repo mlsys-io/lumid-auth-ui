@@ -17,10 +17,10 @@
 //   fontSizes   distinct computed font sizes among elements carrying text.
 //   overflowX   document wider than the viewport (phone only matters).
 //
-// NAVIGATION ONLY. This script must never click into a thread, send a turn or
-// toggle anything: opening a Recent thread re-saves it (retitles it and bumps
-// its timestamp) on whatever account the PAT belongs to. Thread views are
-// captured by URL from THREAD_ID, a thread created for the purpose.
+// READ-ONLY. Every non-GET request from the browser is aborted (see mk()), and
+// the script never clicks: opening a Recent thread re-saves it (retitles it
+// and bumps its timestamp) on whatever account the PAT belongs to. With writes
+// blocked, a thread can be captured by URL (THREAD_ID) without touching it.
 //
 // Auth: LUMID_PASSWORD (+LUMID_EMAIL) -> real lm_session cookie; otherwise
 // LUMID_PAT as a bearer header, which the Studio pages honour.
@@ -181,6 +181,13 @@ const host = new URL(BASE).hostname;
 const mk = async (viewport, anon) => {
 	const ctx = await browser.newContext({ viewport, deviceScaleFactor: 1, extraHTTPHeaders: anon ? {} : headers });
 	if (cookie && !anon) await ctx.addCookies([{ name: 'lm_session', value: cookie, domain: `.${host.replace(/^nightly\./, '')}`, path: '/', httpOnly: true, secure: true }]);
+	// READ-ONLY by construction: the page may not write anything. Opening a
+	// thread re-saves it (retitle + timestamp bump) and polls can POST; abort
+	// every non-GET so a capture can never mutate the account it browses.
+	await ctx.route('**/*', (route) => {
+		const m = route.request().method();
+		return m === 'GET' || m === 'HEAD' || m === 'OPTIONS' ? route.continue() : route.abort();
+	});
 	return ctx;
 };
 const desk = await mk({ width: 1440, height: 900 });
