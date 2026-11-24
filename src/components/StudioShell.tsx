@@ -193,7 +193,7 @@ const TOP_NAV: NavItem[] = [
 	// Inbox in the rail (2026-11-24) with the pending-drafts count — this is the
 	// ONE place that says "something needs you". It replaces the top strip's
 	// rotating "NOW · N drafts need your review" ticker on every page.
-	{ to: '/studio/inbox', label: 'Inbox', icon: Inbox, title: 'drafts waiting for you, run notices and the audit trail' },
+	{ to: '/studio/inbox', label: 'Inbox', icon: Inbox, title: 'questions, drafts and results from your agents' },
 	// NO second row for this surface — what used to be the "Library" row IS the
 	// first row above, now labelled "Marketplace". One row, one destination.
 	// /studio/library* routes are untouched and still carry their own tab bar, so

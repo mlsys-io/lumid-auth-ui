@@ -37,7 +37,6 @@ const StudioShell      = lazy(() => import("./components/StudioShell"));
 const StudioChatHome   = lazy(() => import("./pages/studio/chat"));
 const StudioIntents    = lazy(() => import("./pages/studio/intents"));
 // Phase S5+ — real inbox (no longer a placeholder).
-const StudioInbox      = lazy(() => import("./pages/studio/inbox"));
 // Library page removed — the marketplace lives on xp.io. Old in-app
 // paths bounce there via XpioRedirect.
 function XpioRedirect() {
@@ -716,11 +715,9 @@ export default function App() {
             <Route path="today/cycle/:app/:loop/:ts"    element={<CycleRedirect />} />
             {/* T13 — per-intent detail panel; dispatched by intent.body.kind. */}
             <Route path="intents/:intentId"             element={<StudioIntentDetail />} />
-            {/* Inbox = the canonical xpcloud message inbox (cycle digests +
-                AI-unsure "question" escalations + draft_pending), with the
-                "Needs you" section. Was the drafts/audit feed (StudioInbox),
-                which doesn't fetch xpcloud messages — so operators never saw
-                posted questions. The drafts/audit feed lives at /studio/drafts. */}
+            {/* Inbox = the one inbox: xpcloud agent messages (questions, flags,
+                drafts to approve, cycle digests) merged with the workflow feed
+                (email drafts, notices, cycle outcomes, admin audit). */}
             {/* Compute — the fleet surface, deliberately OUTSIDE /studio/admin.
                 The home fleet is readable by ANY signed-in user; office, cloud,
                 vast and NUS are admin+. That cannot be expressed under
@@ -819,7 +816,8 @@ export default function App() {
             <Route path="workflows/market"             element={<AppWorkflows />} />
 
             <Route path="inbox"                        element={<Inbox />} />
-            <Route path="drafts"                       element={<StudioInbox />} />
+            {/* Drafts merged into the one Inbox (2026-11). */}
+            <Route path="drafts"                       element={<Navigate to="/studio/inbox?view=needs" replace />} />
             <Route path="account/inbox"                element={<Inbox />} />
             {/* lumid-market competition section — now PURE config surfaces.
                 Each route mounts AppSurface with an explicit named surface

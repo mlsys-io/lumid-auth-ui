@@ -205,10 +205,13 @@ await section('Inbox: unexpected response', async () => {
 	await page.route('**/inbox-api/messages*', (route) =>
 		route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><html><body>spa</body></html>' }));
 	await page.goto(`${BASE}/studio/inbox`, { waitUntil: 'domcontentloaded' });
-	const alert = page.getByRole('alert').filter({ hasText: /Couldn.t load|isn.t available/ });
+	// With nothing else to show it is the full ErrorState; when the workflow
+	// feed (drafts, notices) has items, a one-line notice above them.
+	const alert = page.getByRole('alert').filter({ hasText: /Couldn.t load|isn.t available/ })
+		.or(page.getByText(/Agent messages didn.t load/));
 	const ok = await alert.first().waitFor({ timeout: 20000 }).then(() => true).catch(() => false);
 	const crashed = await page.getByText('This page hit a snag').count();
-	assert(ok && crashed === 0, `HTML-200 from /inbox-api renders ErrorState, not the crash boundary (crash=${crashed})`);
+	assert(ok && crashed === 0, `HTML-200 from /inbox-api says so (ErrorState or notice), not the crash boundary (crash=${crashed})`);
 	await page.close();
 });
 

@@ -1,26 +1,18 @@
-// /studio/inbox — Phase S5+ unified feed.
+// Workflow feed pieces for the one Inbox (/studio/inbox, pages/account/inbox.tsx).
 //
-// One chronological list of everything that needs (or wants) the
-// user's attention: pending drafts the AI proposed, recent cycle
-// outcomes (incl. failures), external API calls the AI made on
-// the user's behalf, and platform notices (quota paused, free tier
-// reached, etc.).
-//
-// No new backend — aggregates three existing endpoints:
+// This was its own page, "Drafts" (/studio/drafts), with a five-chip filter
+// row — an inbox beside the Inbox. The two merged in 2026-11; /studio/drafts
+// now redirects. What lives here is the feed it aggregated from three existing
+// endpoints, and its cards:
 //   - /me/drafts                       (pending drafts to approve)
 //   - /me/today                        (headlines + cycle history)
 //   - /me/audit?kind=external_api      (read-only audit trail)
-//
-// Filter chips switch which kinds are visible; the underlying feed
-// stays sorted newest-first across types so the user sees a true
-// timeline rather than per-source columns.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
 	Mail, CheckCircle2, AlertCircle, Send, X, Edit2,
-	Sparkles, Loader2, ChevronRight, RefreshCw, Lock,
-	Plus, Filter as FilterIcon,
+	Sparkles, Loader2, ChevronRight, Lock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { me, MeApiError } from '@/api/me';
@@ -29,13 +21,9 @@ import { setStudioSelection } from '@/components/StudioContext';
 import { useStudioRefetch } from '@/hooks/useStudioRefetch';
 import { IntentFeedbackRow } from '@/components/IntentFeedbackRow';
 import { AXIS_META } from '@/lib/demo-intents';
-import { EmptyInbox } from "@/components/illustrations/scenes";
-import { PageHeader } from '@/components/ui/page-header';
-import { Button } from '@/components/ui/button';
+import { appTitle } from '@/components/workflow/AppCard';
 
-type Filter = 'all' | 'drafts' | 'activity' | 'audit' | 'notices';
-
-type FeedItem =
+export type FeedItem =
 	| {
 			kind: 'draft';
 			id: string;
@@ -72,57 +60,19 @@ type FeedItem =
 			noticeKind: 'quota_paused' | 'brief' | 'cycle_failed';
 	  };
 
-const FILTERS: { id: Filter; label: string; matches: (k: FeedItem['kind']) => boolean }[] = [
-	{ id: 'all',      label: 'All',       matches: () => true },
-	{ id: 'drafts',   label: 'Drafts',    matches: (k) => k === 'draft' },
-	{ id: 'activity', label: 'Activity',  matches: (k) => k === 'cycle' },
-	{ id: 'notices',  label: 'Notices',   matches: (k) => k === 'notice' },
-	{ id: 'audit',    label: 'Audit',     matches: (k) => k === 'audit' },
-];
+/** Epoch ms for sorting a feed item against inbox messages. */
+export function feedItemMs(i: FeedItem): number {
+	const t = Date.parse(i.ts);
+	return Number.isNaN(t) ? 0 : t;
+}
 
-export default function StudioInbox() {
-	const [searchParams, setSearchParams] = useSearchParams();
-	// "Your AI" tab retired — knowledge has its own nav entry at
-	// /studio/knowledge. If somebody still has a bookmarked ?tab=your-ai
-	// URL, strip the param + send them to /studio/knowledge implicitly
-	// (we just drop the param here; the StudioKnowledge surface lives
-	// at the dedicated route now).
-	useEffect(() => {
-		if (searchParams.has('tab')) {
-			setSearchParams((sp) => {
-				const next = new URLSearchParams(sp);
-				next.delete('tab');
-				return next;
-			}, { replace: true });
-		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, []);
-
+/** The workflow feed: pending drafts, cycle outcomes, platform notices and
+ *  the external-API audit trail. Polls every 30 s while the tab is visible. */
+export function useWorkflowFeed() {
 	const [items, setItems] = useState<FeedItem[] | null>(null);
-	// Honor ?filter=drafts (and the other Filter ids) so "See all in Inbox"
-	// on the Intents page lands the user on the right tab. Falls back to
-	// 'all' for unknown values.
-	const initialFilter = (() => {
-		const f = searchParams.get('filter') as Filter | null;
-		return f === 'drafts' || f === 'activity' || f === 'audit' || f === 'notices' || f === 'all'
-			? f : 'all';
-	})();
-	const [filter, setFilter] = useState<Filter>(initialFilter);
 	const [busy, setBusy] = useState<Record<string, boolean>>({});
-	const [refreshing, setRefreshing] = useState(false);
-	const [lastRefresh, setLastRefresh] = useState<number>(Date.now());
-	const [, setTick] = useState(0);
-
-	// Tick so the "Updated Xs ago" chip counts up between auto-refreshes.
-	// 15s (was 5s) — re-rendering this view every 5s is needless churn; the
-	// relative-time chip reads the same to a human at 15s granularity.
-	useEffect(() => {
-		const t = window.setInterval(() => setTick((x) => x + 1), 15_000);
-		return () => window.clearInterval(t);
-	}, []);
 
 	const load = useCallback(async () => {
-		setRefreshing(true);
 		const [drafts, today, audit] = await Promise.allSettled([
 			me.listDrafts({ state: 'pending' }),
 			me.today(),
@@ -146,7 +96,6 @@ export default function StudioInbox() {
 				});
 			}
 		}
-
 
 		if (today.status === 'fulfilled') {
 			for (const c of today.value.cycles) {
@@ -189,69 +138,29 @@ export default function StudioInbox() {
 
 		// De-dup defensively (drafts can also surface as notices etc.).
 		const seen = new Set<string>();
-		const unique = next.filter((i) => {
+		setItems(next.filter((i) => {
 			if (seen.has(i.id)) return false;
 			seen.add(i.id);
 			return true;
-		});
-		unique.sort((a, b) => (b.ts || '').localeCompare(a.ts || ''));
-		setItems(unique);
-		setRefreshing(false);
-		setLastRefresh(Date.now());
+		}));
 	}, []);
 
 	useEffect(() => { load(); }, [load]);
 	// Chat→page bus: draft sends/edits/dismissals from chat reflect immediately.
 	useStudioRefetch(["drafts"], load);
 
-	// Auto-refresh — every 30s while the tab is visible. Pauses while the
-	// tab is hidden so we don't burn the rate limit on background users.
-	// Refreshes immediately when the user comes back to the tab. The AI
-	// is doing things in the background; the feed should feel alive.
+	// Auto-refresh every 30 s while the tab is visible; refresh at once on return.
 	useEffect(() => {
 		let timer: number | null = null;
-		const tick = () => { load(); };
-		const start = () => {
-			if (timer != null) return;
-			timer = window.setInterval(tick, 30_000);
-		};
-		const stop = () => {
-			if (timer != null) { window.clearInterval(timer); timer = null; }
-		};
+		const start = () => { if (timer == null) timer = window.setInterval(load, 30_000); };
+		const stop = () => { if (timer != null) { window.clearInterval(timer); timer = null; } };
 		const onVisibility = () => {
-			if (document.visibilityState === 'visible') {
-				load();
-				start();
-			} else {
-				stop();
-			}
+			if (document.visibilityState === 'visible') { load(); start(); } else stop();
 		};
 		start();
 		document.addEventListener('visibilitychange', onVisibility);
-		return () => {
-			stop();
-			document.removeEventListener('visibilitychange', onVisibility);
-		};
+		return () => { stop(); document.removeEventListener('visibilitychange', onVisibility); };
 	}, [load]);
-
-	const visible = useMemo(() => {
-		if (!items) return [];
-		const f = FILTERS.find((x) => x.id === filter)!;
-		return items.filter((i) => f.matches(i.kind));
-	}, [items, filter]);
-
-	const counts = useMemo(() => {
-		const out: Record<Filter, number> = { all: 0, drafts: 0, activity: 0, audit: 0, notices: 0 };
-		if (!items) return out;
-		for (const i of items) {
-			out.all++;
-			if (i.kind === 'draft') out.drafts++;
-			if (i.kind === 'cycle') out.activity++;
-			if (i.kind === 'audit') out.audit++;
-			if (i.kind === 'notice') out.notices++;
-		}
-		return out;
-	}, [items]);
 
 	const onDraftAction = async (
 		draftId: string, action: 'send' | 'dismiss' | 'edit', body?: string,
@@ -274,180 +183,21 @@ export default function StudioInbox() {
 		}
 	};
 
-	return (
-		<div className="space-y-4">
-			{/* Inbox = a pure feed. The "Your AI" tab was retired — the
-			    Knowledge surface has its own nav entry at /studio/knowledge. */}
-			{/* Lumen: a real page title (this route had none — the strip had no
-			    entry for /studio/drafts), with freshness + Refresh as actions. */}
-			<PageHeader
-				className="pt-2 pb-1"
-				title="Drafts"
-				subtitle="Replies and summaries your workflows drafted for you — send, edit or dismiss."
-				actions={
-					<>
-						<span className="hidden md:inline text-caption text-ink-600" title={`Last refreshed at ${new Date(lastRefresh).toLocaleTimeString()}`}>
-							{refreshing ? "Updating…" : `Updated ${secondsAgo(lastRefresh)}`}
-						</span>
-						<Button variant="secondary" size="sm" onClick={load} disabled={refreshing}>
-							<RefreshCw className={refreshing ? "w-3.5 h-3.5 animate-spin" : "w-3.5 h-3.5"} /> Refresh
-						</Button>
-					</>
-				}
-			/>
-
-			<InboxFeedBody
-				items={items}
-				filter={filter}
-				setFilter={setFilter}
-				counts={counts}
-				visible={visible}
-				busy={busy}
-				onDraftAction={onDraftAction}
-			/>
-		</div>
-	);
+	return { items, load, busy, onDraftAction };
 }
 
-function InboxFeedBody({
-	items, filter, setFilter, counts, visible, busy, onDraftAction,
+/** One feed item, rendered by kind. */
+export function FeedCard({
+	item, busy, onDraftAction,
 }: {
-	items: FeedItem[] | null;
-	filter: Filter;
-	setFilter: (f: Filter) => void;
-	counts: Record<Filter, number>;
-	visible: FeedItem[];
+	item: FeedItem;
 	busy: Record<string, boolean>;
 	onDraftAction: (id: string, action: 'send' | 'edit' | 'dismiss', body?: string) => Promise<void>;
 }) {
-	return (
-		<div className="space-y-4">
-
-			<nav className="flex items-center gap-1.5 flex-wrap">
-				{FILTERS.map((f) => {
-					const active = filter === f.id;
-					const n = counts[f.id];
-					return (
-						<button
-							key={f.id}
-							onClick={() => setFilter(f.id)}
-							className={[
-								'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs transition-colors',
-								active
-									? 'bg-ink-900 text-white shadow-sm'
-									: 'bg-card border border-ink-200 text-ink-700 hover:bg-ink-50 hover:border-ink-300',
-							].join(' ')}
-						>
-							{f.label}
-							{n > 0 && (
-								<span className={['text-nano', active ? 'text-white/70' : 'text-ink-600'].join(' ')}>
-									{n}
-								</span>
-							)}
-						</button>
-					);
-				})}
-			</nav>
-
-			{items === null && (
-				<div className="text-sm text-ink-600 italic inline-flex items-center gap-1.5">
-					<Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…
-				</div>
-			)}
-
-			{items !== null && visible.length === 0 && (
-				items.length === 0
-					? <InboxZeroState />
-					: <FilterEmptyState filter={filter} onReset={() => setFilter('all')} />
-			)}
-
-			<ul className="space-y-2">
-				{visible.map((item) => (
-					<li key={item.id}>
-						{item.kind === 'draft'  && <DraftCard item={item}  busy={!!busy[item.id.slice(6)]} onAction={(a, body) => onDraftAction(item.id.slice(6), a, body)} />}
-						{item.kind === 'cycle'  && <CycleCard item={item} />}
-						{item.kind === 'audit'  && <AuditCard item={item} />}
-						{item.kind === 'notice' && <NoticeCard item={item} />}
-					</li>
-				))}
-			</ul>
-		</div>
-	);
-}
-
-// ── Empty states ───────────────────────────────────────────────────
-
-// InboxZeroState — the user has *nothing* in their inbox. This is a
-// genuine inbox-zero moment, not a filter quirk. Treat as a calm
-// celebration plus a nudge toward the natural next step (a workflow
-// that produces drafts the user can act on).
-function InboxZeroState() {
-	const openComposer = () => {
-		// The ?compose=1 host is /studio/apps/all (pages/studio/apps.tsx reads
-		// the param and opens NewWorkflowFlow).
-		//
-		// This used to point at /studio/workflows?compose=1 and the button did
-		// NOTHING. WorkflowsListRedirect does forward the query — its comment
-		// still says "?compose=1 must reach the apps page's composer host" — but
-		// the host moved out from under it: /studio/apps is StudioWorkspace,
-		// which never reads the param and then self-redirects to
-		// /studio/apps/<app> with no search string, dropping it. So the redirect
-		// was faithful and the destination had changed, which is why nothing
-		// looked broken from either side.
-		window.location.href = '/studio/apps/all?compose=1';
-	};
-	const askAgent = () => {
-		window.dispatchEvent(new CustomEvent('studio:ask', {
-			detail: { prompt: 'What kind of workflow would fit my day?', autosend: true },
-		}));
-	};
-	return (
-		<div className="animate-lumen-rise rounded-2xl border border-border bg-card py-10 px-6 text-center shadow-e1">
-			{/* Lumen: the strands settling into a tray — a calm picture of
-			    "everything is in", not a checkmark badge. */}
-			<div className="mx-auto mb-4 w-40 text-ink-300"><EmptyInbox /></div>
-			<div className="text-title font-medium text-ink-900">Inbox zero.</div>
-			<p className="text-body text-ink-600 mt-1.5 max-w-md mx-auto text-pretty">
-				When your workflows produce something for you — a draft, a
-				summary, a heads-up — it lands here for review.
-			</p>
-			<div className="flex items-center justify-center gap-2 mt-5">
-				<button
-					onClick={openComposer}
-					className="lumen-press inline-flex items-center gap-1.5 px-3 h-8 text-meta font-medium rounded-md bg-primary text-primary-foreground hover:bg-ink-800 transition-colors shadow-e1"
-				>
-					<Plus className="w-3.5 h-3.5" />
-					New workflow
-				</button>
-				<button
-					onClick={askAgent}
-					className="lumen-press inline-flex items-center gap-1.5 px-3 h-8 text-meta font-medium rounded-md border border-border bg-card text-ink-800 hover:border-ink-300 hover:bg-ink-50 transition-colors shadow-e1"
-				>
-					<Sparkles className="w-3.5 h-3.5 text-gold-600" />
-					Ask for ideas
-				</button>
-			</div>
-		</div>
-	);
-}
-
-// FilterEmptyState — items exist but none match the current filter.
-// Quieter than InboxZero; the obvious action is to clear the filter.
-function FilterEmptyState({ filter, onReset }: { filter: Filter; onReset: () => void }) {
-	return (
-		<div className="rounded-xl border border-dashed border-ink-200 bg-card/60 py-8 px-6 text-center">
-			<FilterIcon className="w-5 h-5 mx-auto text-ink-600" />
-			<div className="text-sm text-ink-700 mt-2.5">
-				Nothing in <span className="font-medium">{filter}</span> right now.
-			</div>
-			<button
-				onClick={onReset}
-				className="mt-3 text-xs text-gold-700 hover:text-gold-800 hover:underline transition-colors"
-			>
-				Show everything
-			</button>
-		</div>
-	);
+	if (item.kind === 'draft') return <DraftCard item={item} busy={!!busy[item.id.slice(6)]} onAction={(a, body) => onDraftAction(item.id.slice(6), a, body)} />;
+	if (item.kind === 'cycle') return <CycleCard item={item} />;
+	if (item.kind === 'audit') return <AuditCard item={item} />;
+	return <NoticeCard item={item} />;
 }
 
 // ── Card primitives ────────────────────────────────────────────────
@@ -567,7 +317,7 @@ function DraftCard({
 				ts={item.ts}
 				pick={draftPick}
 				title={item.subject}
-				sub={<>To <span className="font-medium text-ink-700">{item.to}</span> · {item.app}</>}
+				sub={item.to ? <>To <span className="font-medium text-ink-700">{item.to}</span> · {appTitle(item.app)}</> : appTitle(item.app)}
 				body={
 					<textarea
 						value={text}
@@ -599,7 +349,7 @@ function DraftCard({
 			ts={item.ts}
 			pick={draftPick}
 			title={item.subject}
-			sub={<>To <span className="font-medium text-ink-700">{item.to}</span> · {item.app}</>}
+			sub={item.to ? <>To <span className="font-medium text-ink-700">{item.to}</span> · {appTitle(item.app)}</> : appTitle(item.app)}
 			body={<div className="whitespace-pre-wrap line-clamp-4">{item.body || '(empty)'}</div>}
 			actions={
 				<>
@@ -728,15 +478,6 @@ function NoticeCard({ item }: { item: Extract<FeedItem, { kind: 'notice' }> }) {
 
 // Cycle-ts shape is YYYYMMDDTHHMMSS (15 chars, no separators) — convert
 // to ISO for the timeline sorter.
-// secondsAgo — compact relative-time for the auto-refresh chip.
-function secondsAgo(ms: number): string {
-	const s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
-	if (s < 5) return 'just now';
-	if (s < 60) return `${s}s ago`;
-	if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-	return `${Math.floor(s / 3600)}h ago`;
-}
-
 function cycleTsToIso(ts: string): string {
 	const m = ts.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})$/);
 	if (!m) return new Date().toISOString();
