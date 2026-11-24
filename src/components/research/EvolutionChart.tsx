@@ -15,14 +15,18 @@ import { cn } from "@/lib/utils";
 const STROKE = ["stroke-chart-1", "stroke-chart-2", "stroke-chart-3", "stroke-chart-4", "stroke-chart-5", "stroke-chart-6", "stroke-chart-7", "stroke-chart-8"];
 const FILL = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5", "bg-chart-6", "bg-chart-7", "bg-chart-8"];
 
-export interface EvoSeries { id: string; label: string; points: Array<{ ts: string; v: number }>; inferred?: boolean }
+export interface EvoSeries { id: string; label: string; points: Array<{ ts: string; v: number; n?: number }>; inferred?: boolean }
 
 interface Line { id: string; label: string; ci: number; pts: Array<{ t: number; avg: number; n: number }> }
 
 const W = 640, H = 220, PAD_R = 108, PAD_T = 12, PAD_B = 26;
 
-function runningAverages(points: Array<{ ts: string; v: number }>): Array<{ t: number; avg: number; n: number }> {
-	const sorted = points.map((p) => ({ t: Date.parse(p.ts), v: p.v })).filter((p) => isFinite(p.t) && isFinite(p.v)).sort((a, b) => a.t - b.t);
+/** Raw results → running averages; or, when the server already sent running
+ *  means (series_kind "running_mean", the scheduler's own state.history),
+ *  take them as they are — averaging a mean again would bend the line. */
+function runningAverages(points: Array<{ ts: string; v: number; n?: number }>, alreadyMeans: boolean): Array<{ t: number; avg: number; n: number }> {
+	const sorted = points.map((p) => ({ t: Date.parse(p.ts), v: p.v, n: p.n })).filter((p) => isFinite(p.t) && isFinite(p.v)).sort((a, b) => a.t - b.t);
+	if (alreadyMeans) return sorted.map((p, i) => ({ t: p.t, avg: p.v, n: p.n ?? i + 1 }));
 	let sum = 0;
 	return sorted.map((p, i) => { sum += p.v; return { t: p.t, avg: sum / (i + 1), n: i + 1 }; });
 }
@@ -39,16 +43,18 @@ function niceTicks(lo: number, hi: number, n = 4): number[] {
 
 const day = (t: number) => new Date(t).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 
-export default function EvolutionChart({ series, metricKey, unit, higherIsBetter = true, comparable = true, unlabelledRuns = 0 }: {
+export default function EvolutionChart({ series, metricKey, unit, higherIsBetter = true, comparable = true, unlabelledRuns = 0, alreadyMeans = false }: {
 	series: EvoSeries[]; metricKey: string; unit: string; higherIsBetter?: boolean;
+	/** The points are already each version's average so far (series_kind "running_mean"). */
+	alreadyMeans?: boolean;
 	/** false = the versions were measured differently; the lines are drawn but must not be read against each other. */
 	comparable?: boolean;
 	/** Results whose run named no version — left off the chart, and said so. */
 	unlabelledRuns?: number;
 }) {
 	const lines: Line[] = useMemo(() => series
-		.map((s, i) => ({ id: s.id, label: s.label, ci: i % 8, pts: runningAverages(s.points) }))
-		.filter((l) => l.pts.length > 0), [series]);
+		.map((s, i) => ({ id: s.id, label: s.label, ci: i % 8, pts: runningAverages(s.points, alreadyMeans) }))
+		.filter((l) => l.pts.length > 0), [series, alreadyMeans]);
 	const [hoverT, setHoverT] = useState<number | null>(null);
 	const clipId = `evo-clip-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
 	const svgRef = useRef<SVGSVGElement>(null);

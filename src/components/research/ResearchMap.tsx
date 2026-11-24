@@ -323,16 +323,21 @@ function MapCanvas({ app, exps, proposals, selected, onSelect, grow }: {
 
 // The experiment's results over time (detail endpoint; identity v0.5.474
 // serves cloud apps from the run store). Cached per experiment.
-const seriesCache = new Map<string, MeExperimentDetail["series"]>();
+type SeriesData = { series: MeExperimentDetail["series"]; runningMean: boolean };
+const seriesCache = new Map<string, SeriesData>();
 function useSeries(app: string, id: string) {
 	const key = `${app}:${id}`;
-	const [s, setS] = useState<MeExperimentDetail["series"] | null>(() => seriesCache.get(key) ?? null);
+	const [s, setS] = useState<SeriesData | null>(() => seriesCache.get(key) ?? null);
 	useEffect(() => {
 		let live = true;
 		setS(seriesCache.get(key) ?? null);
 		me.experiment(app, id)
-			.then((d) => { const v = d.series || []; seriesCache.set(key, v); if (live) setS(v); })
-			.catch(() => { if (live) setS((cur) => cur ?? []); });
+			.then((d) => {
+				const v = { series: d.series || [], runningMean: (d as { series_kind?: string }).series_kind === "running_mean" };
+				seriesCache.set(key, v);
+				if (live) setS(v);
+			})
+			.catch(() => { if (live) setS((cur) => cur ?? { series: [], runningMean: false }); });
 		return () => { live = false; };
 	}, [app, id, key]);
 	return s;
@@ -340,7 +345,8 @@ function useSeries(app: string, id: string) {
 
 function ExperimentDetail({ app, e }: { app: string; e: MeExperiment }) {
 	const st = experimentStatus(e);
-	const series = useSeries(app, e.id);
+	const seriesData = useSeries(app, e.id);
+	const series = seriesData?.series ?? null;
 	const versions = versionsOf(e);
 	// Lines in DECLARED version order, so colours follow the version. A series
 	// the server only GUESSED a version for (arm_inferred: runs that named none,
@@ -377,7 +383,7 @@ function ExperimentDetail({ app, e }: { app: string; e: MeExperiment }) {
 				<div className="h-24 lumen-skeleton rounded-lg" role="status" aria-label="Loading how it evolved" />
 			) : evo.some((x) => x.points.length > 1) && metric ? (
 				<EvolutionChart series={evo} metricKey={metric} unit={m?.unit ?? ""} higherIsBetter={!(e.higher_is_better === false || e.metric?.higher_is_better === false)}
-					comparable={e.comparable !== false} unlabelledRuns={unlabelledRuns} />
+					comparable={e.comparable !== false} unlabelledRuns={unlabelledRuns} alreadyMeans={!!seriesData?.runningMean} />
 			) : null}
 			<ul className="space-y-1">
 				{versions.map((v) => (
