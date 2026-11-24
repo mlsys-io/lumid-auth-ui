@@ -1,5 +1,19 @@
 import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { extendTailwindMerge } from 'tailwind-merge';
+
+// tailwind-merge must be TOLD about the Lumen scale (tailwind.config.ts
+// fontSize / boxShadow). Unregistered, it reads `text-body` as a text COLOUR
+// and `shadow-e1` as a shadow colour, so `cn('text-body', 'text-ink-700')`
+// silently dropped the size (and vice versa). Keep these lists in step with
+// the config.
+const twMerge = extendTailwindMerge({
+	extend: {
+		theme: {
+			text: ['nano', 'micro', 'caption', 'meta', 'body', 'read', 'title', 'h1', 'h2', 'h3'],
+			shadow: ['e1', 'e2', 'e3'],
+		},
+	},
+});
 
 export function cn(...inputs: ClassValue[]) {
 	return twMerge(clsx(inputs));

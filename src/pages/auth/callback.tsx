@@ -167,8 +167,8 @@ export function AuthCallback() {
 				return (
 					<div className="text-center space-y-4">
 						<div className="flex justify-center">
-							<div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
-								<RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
+							<div className="w-16 h-16 bg-gold-50 rounded-full flex items-center justify-center">
+								<RefreshCw className="w-8 h-8 text-gold-600 animate-spin" />
 							</div>
 						</div>
 						<div>
@@ -216,10 +216,10 @@ export function AuthCallback() {
 
 	return (
 		<>
-			<div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+			<div className="min-h-screen flex items-center justify-center lumen-paper bg-background">
 				<div className="absolute inset-0 bg-grid-pattern opacity-5" />
 
-				<Card className="w-full max-w-md mx-4 shadow-xl border-0 bg-white/80 backdrop-blur-sm">
+				<Card className="w-full max-w-md mx-4 rounded-2xl border border-border bg-card shadow-e3">
 					<CardHeader className="pb-4" />
 					<CardContent className="pb-8">{renderContent()}</CardContent>
 				</Card>

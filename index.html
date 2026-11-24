@@ -10,6 +10,16 @@
          a (often brief) loading state appears, instead of losing the fetch race. -->
     <link rel="preload" as="image" href="/auth/spiral.png" />
     <title>Lumid Studio</title>
+    <!-- Lumen: stamp the Studio surface BEFORE first paint so the scoped font,
+         radius and focus ring (globals.css html[data-surface="studio"]) don't
+         flash in after hydration. useStudioSurface() keeps it in sync on SPA
+         navigation; keep this prefix list in step with src/hooks/useStudioSurface.ts. -->
+    <script>
+      (function () {
+        var p = location.pathname;
+        if (/^\/(studio|code|claude-sessions|explore|auth)(\/|$)/.test(p)) document.documentElement.setAttribute("data-surface", "studio");
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

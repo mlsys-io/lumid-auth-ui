@@ -41,11 +41,11 @@ export default function ForgotPassword() {
 	}
 
 	return (
-		<div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 px-4">
-			<Card className="w-full max-w-md shadow-xl border-0 bg-white/80 backdrop-blur-sm">
+		<div className="min-h-screen flex items-center justify-center lumen-paper bg-background px-4">
+			<Card className="w-full max-w-md rounded-2xl border border-border bg-card shadow-e3">
 				<CardHeader className="space-y-1 pb-6">
 					<div className="flex justify-center mb-2">
-						<div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg shadow-md">
+						<div className="p-2 bg-ink-900 rounded-lg shadow-e1">
 							<BrainCircuit className="w-7 h-7 text-white" />
 						</div>
 					</div>
@@ -120,7 +120,7 @@ export default function ForgotPassword() {
 					<div className="mt-6 text-center">
 						<Link
 							to="/auth/login"
-							className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-indigo-600"
+							className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-ink-900"
 						>
 							<ArrowLeft className="w-3 h-3" />
 							Back to sign in

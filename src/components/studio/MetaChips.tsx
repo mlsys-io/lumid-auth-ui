@@ -6,11 +6,14 @@ import { cn } from "@/lib/utils";
 
 type Tone = "slate" | "amber" | "emerald" | "indigo";
 
+// Keys are legacy colour names (callers pass them); values are Lumen tones:
+// slate -> ink (neutral), amber -> gold (stars/highlight), emerald -> gold
+// (ok — healthy is gold by design), indigo -> plum (knowledge).
 const TONE: Record<Tone, string> = {
-	slate: "border-slate-200 bg-slate-50 text-slate-600",
+	slate: "border-ink-200 bg-ink-50 text-ink-600",
 	amber: "border-gold-200 bg-gold-50 text-gold-700",
 	emerald: "border-gold-200 bg-gold-50 text-gold-700",
-	indigo: "border-indigo-200 bg-indigo-50 text-indigo-700",
+	indigo: "border-plum-200 bg-plum-50 text-plum-700",
 };
 
 export interface Chip {

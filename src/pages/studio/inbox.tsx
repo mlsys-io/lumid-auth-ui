@@ -471,18 +471,19 @@ function FeedRow({
 	pick?: { kind: string; id: string; label: string; affordances?: string };
 }) {
 	const toneCls = {
+		// Legacy colour keys -> Lumen tones (src/lib/tones.ts).
 		emerald: 'border-gold-200 bg-gold-50/40 hover:border-gold-300',
-		slate:   'border-slate-200 bg-white hover:border-slate-300',
-		amber:   'border-gold-200 bg-gold-50/40 hover:border-gold-300',
-		rose:    'border-rose-200 bg-rose-50/40 hover:border-rose-300',
-		indigo:  'border-indigo-200 bg-indigo-50/30 hover:border-indigo-300',
+		slate:   'border-border bg-card hover:border-ink-300',
+		amber:   'border-ember-200 bg-ember-50/40 hover:border-ember-300',
+		rose:    'border-brick-200 bg-brick-50/40 hover:border-brick-300',
+		indigo:  'border-plum-200 bg-plum-50/30 hover:border-plum-300',
 	}[tone];
 	const iconCls = {
 		emerald: 'text-gold-600',
-		slate:   'text-slate-500',
-		amber:   'text-gold-600',
-		rose:    'text-rose-600',
-		indigo:  'text-indigo-600',
+		slate:   'text-ink-500',
+		amber:   'text-ember-600',
+		rose:    'text-brick-600',
+		indigo:  'text-plum-600',
 	}[tone];
 	const pickAttrs = pick
 		? {
