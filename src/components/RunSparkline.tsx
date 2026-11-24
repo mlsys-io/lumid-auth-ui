@@ -28,11 +28,14 @@ interface Props {
 }
 
 const SQ_CLASS: Record<string, string> = {
+	// Lumen tones (src/lib/tones.ts): ok gold, recovered = attention (ember),
+	// failed brick, idle ink, running lagoon. "recovered" and "running" used to
+	// be indistinguishable from a clean success.
 	o: "bg-gold-400",
-	r: "bg-gold-400",   // recovered: succeeded only via retry/fallback (self-healed)
-	x: "bg-rose-500",
-	_: "bg-slate-300",
-	".": "bg-gold-400 animate-pulse",
+	r: "bg-ember-400",  // recovered: succeeded only via retry/fallback (self-healed)
+	x: "bg-brick-500",
+	_: "bg-ink-300",
+	".": "bg-lagoon-400 animate-pulse",
 };
 
 // Tooltip words come from the ONE run-status vocabulary (lib/runStatus), so a

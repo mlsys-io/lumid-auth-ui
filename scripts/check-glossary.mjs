@@ -58,7 +58,9 @@ const termRe = new RegExp(`\\b(${terms.map((t) => t.replace(/ /g, "\\s+")).join(
 // string values of the prose-bearing attributes.
 const require = createRequire(import.meta.url);
 const ts = require("typescript");
-const PROSE_ATTRS = new Set(["title", "label", "placeholder", "aria-label", "description"]);
+// body / actionLabel / hint / subtitle: the copy props of EmptyState, ErrorState and
+// PageHeader (Lumen, 2026-11) — their whole job is on-screen prose.
+const PROSE_ATTRS = new Set(["title", "label", "placeholder", "aria-label", "description", "body", "actionLabel", "hint", "subtitle"]);
 
 function proseIn(file, src) {
 	const out = [];

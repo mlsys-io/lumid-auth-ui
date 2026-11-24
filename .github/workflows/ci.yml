@@ -45,6 +45,16 @@ jobs:
         # reaches the screen; see src/lib/glossary.ts.
         run: npm run check:glossary
 
+      - name: Studio palette ratchet
+        # Lumen: no NEW raw palette class / arbitrary px size / hex literal in
+        # the Studio scope (scripts/studio-scope.mjs derives it from the route
+        # import graph). See lumid_ui/CLAUDE.md § Design system.
+        run: npm run check:palette
+
+      - name: Palette contrast
+        # Every Lumen text pairing in src/styles/palette.json meets WCAG AA.
+        run: npm run check:contrast
+
       - name: Build
         run: npm run build
 

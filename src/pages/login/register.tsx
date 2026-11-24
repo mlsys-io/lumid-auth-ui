@@ -4,6 +4,7 @@ import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Progress } from '../../components/ui/progress';
 import { Card, CardContent, CardHeader } from '../../components/ui/card';
+import { StrandMark } from '../../components/illustrations/StrandMark';
 import { Avatar, AvatarFallback, AvatarImage } from '../../components/ui/avatar';
 import { toast } from 'sonner';
 import {
@@ -256,12 +257,13 @@ export const Register = memo(function Register({ onSwitchToLogin, onRegisterSucc
 		username && email && password && confirmPassword && verificationCode && isPasswordValid; // invitation code is optional
 
 	return (
-		<div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
+		<div className="min-h-screen lumen-paper bg-background flex items-center justify-center">
 			<div className="container mx-auto px-4 py-8">
-				<Card className="w-full max-w-2xl mx-auto shadow-lg border border-gray-200 bg-white">
+				<Card className="w-full max-w-2xl mx-auto rounded-2xl border border-border bg-card shadow-e3">
 					<CardHeader className="pt-6">
 						<div className="text-center space-y-2">
-							<h1 className="text-3xl font-bold">Create Account</h1>
+							<StrandMark size={40} state="draw" className="mx-auto mb-3" />
+						<h1 className="font-display text-h1 font-medium text-ink-900">Create Account</h1>
 							<p className="text-muted-foreground">Create your Lumid account to get started</p>
 						</div>
 					</CardHeader>

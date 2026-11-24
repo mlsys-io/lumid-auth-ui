@@ -3,13 +3,15 @@
 
 import { cn } from "@/lib/utils";
 
+// Legacy colour keys -> Lumen tones (see src/lib/tones.ts). amber used to
+// render the same gold as emerald, so "needs attention" read as "healthy".
 const TONE: Record<string, string> = {
 	emerald: "text-gold-700",
-	slate: "text-slate-700",
-	indigo: "text-indigo-700",
-	rose: "text-rose-700",
-	amber: "text-gold-700",
-	sky: "text-sky-700",
+	slate: "text-ink-800",
+	indigo: "text-plum-700",
+	rose: "text-brick-700",
+	amber: "text-ember-700",
+	sky: "text-lagoon-700",
 };
 
 export function SummaryCard({
@@ -22,12 +24,12 @@ export function SummaryCard({
 	className?: string;
 }) {
 	return (
-		<div className={cn("rounded-lg border border-slate-200 bg-white px-4 py-3", className)}>
-			<div className="text-xs text-slate-500 uppercase tracking-wide">{label}</div>
-			<div className={cn("mt-1 text-2xl font-semibold tabular-nums truncate", TONE[tone])} title={value}>
+		<div className={cn("rounded-xl border border-border bg-card px-4 py-3 shadow-e1", className)}>
+			<div className="eyebrow">{label}</div>
+			<div className={cn("mt-1 text-h2 font-semibold tabular-nums truncate", TONE[tone])} title={value}>
 				{value}
 			</div>
-			{hint && <div className="mt-0.5 text-xs text-slate-400 truncate">{hint}</div>}
+			{hint && <div className="mt-0.5 text-caption text-ink-600 truncate">{hint}</div>}
 		</div>
 	);
 }

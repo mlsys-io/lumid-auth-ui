@@ -4,6 +4,7 @@ import { Suspense, useEffect } from "react";
 import { lazyWithReload as lazy } from "@/lib/lazy-with-reload";
 import { legacyCycleTarget, legacyWorkflowSlugTarget } from "@/lib/run-routes";
 import { Boxes, ListChecks, TerminalSquare} from "lucide-react";
+import { useStudioSurface } from "@/hooks/useStudioSurface";
 import { Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
@@ -513,6 +514,8 @@ function useDeployWatch() {
 }
 
 export default function App() {
+  // Lumen: keep html[data-surface="studio"] in step with the route.
+  useStudioSurface();
   useDeployWatch();
   return (
     <AuthProvider>

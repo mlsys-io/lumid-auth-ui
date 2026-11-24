@@ -1,7 +1,7 @@
 // StatusBadge — the one way to render a health/status chip.
 // Takes either a loops-health `status` string or an explicit tone.
 
-import { TONES, TONE_LABEL, statusTone, type ToneKey } from "@/lib/tones";
+import { ACTIONABLE, TONES, TONE_LABEL, statusTone, type ToneKey } from "@/lib/tones";
 import { cn } from "@/lib/utils";
 
 export function StatusBadge({
@@ -19,19 +19,23 @@ export function StatusBadge({
 }) {
 	const key: ToneKey = tone ?? statusTone(status);
 	const t = TONES[key];
+	// Failing / attention carry a glyph so the state never rests on colour
+	// alone (ember vs brick is the hardest pair for protan/deutan readers).
+	const glyph = ACTIONABLE.has(key);
 	return (
 		<span
 			className={cn(
-				"inline-flex items-center gap-1.5 px-2 py-0.5 text-[11px] rounded-full border",
-				t.bg, t.text, t.border, className,
+				"inline-flex items-center gap-1.5 px-2 py-0.5 text-micro font-medium rounded-full border",
+				t.bg, t.text, t.border, (pulse || key === "running") && "lumen-sweep", className,
 			)}
 		>
-			<span className="relative inline-flex">
-				<span className={cn("w-1.5 h-1.5 rounded-full", t.dot)} />
-				{pulse && (
-					<span className={cn("absolute inset-0 w-1.5 h-1.5 rounded-full animate-ping opacity-75", t.dot)} />
-				)}
-			</span>
+			{glyph ? (
+				<t.Icon className={cn("w-3 h-3 -ml-0.5", t.icon)} aria-hidden />
+			) : (
+				<span className="relative inline-flex">
+					<span className={cn("w-1.5 h-1.5 rounded-full", t.dot, pulse && "animate-lumen-breathe")} />
+				</span>
+			)}
 			{label ?? TONE_LABEL[key]}
 		</span>
 	);

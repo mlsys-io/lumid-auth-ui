@@ -4,6 +4,7 @@ import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Card, CardContent, CardHeader } from '../../components/ui/card';
+import { StrandMark } from '../../components/illustrations/StrandMark';
 import { Separator } from '../../components/ui/separator';
 import { toast } from 'sonner';
 import { Eye, EyeOff, Mail, Lock, AlertCircle, RefreshCw } from 'lucide-react';
@@ -182,7 +183,7 @@ export function Login({ onLogin }: LoginProps) {
 							<Separator className="w-full" />
 						</div>
 						<div className="relative flex justify-center text-xs uppercase">
-							<span className="bg-background px-2 text-muted-foreground">Or continue with email</span>
+							<span className="bg-card px-2 text-ink-600">Or continue with email</span>
 						</div>
 					</div>
 				</>
@@ -260,7 +261,7 @@ export function Login({ onLogin }: LoginProps) {
 							type="button"
 							variant="link"
 							size="sm"
-							className="p-0 h-auto text-xs text-muted-foreground hover:text-indigo-600"
+							className="p-0 h-auto text-xs text-muted-foreground hover:text-ink-900"
 							onClick={() => navigate('/auth/forgot-password')}
 							disabled={loading}
 							tabIndex={-1}
@@ -293,7 +294,7 @@ export function Login({ onLogin }: LoginProps) {
 						<Separator className="w-full" />
 					</div>
 					<div className="relative flex justify-center text-xs uppercase">
-						<span className="bg-background px-2 text-muted-foreground">Or</span>
+						<span className="bg-card px-2 text-ink-600">Or</span>
 					</div>
 				</div>
 
@@ -302,13 +303,12 @@ export function Login({ onLogin }: LoginProps) {
 	);
 
 	return (
-		<div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-			<div className="absolute inset-0 bg-grid-pattern opacity-5" />
-
-			<Card className="w-full max-w-md mx-4 shadow-xl border-0 bg-white/80 backdrop-blur-sm">
+		<div className="min-h-screen flex items-center justify-center lumen-paper bg-background">
+			<Card className="w-full max-w-md mx-4 rounded-2xl border border-border bg-card shadow-e3">
 				<CardHeader className="space-y-1 pb-6">
 					<div className="text-center space-y-2">
-						<h1 className="text-3xl font-bold">Welcome Back</h1>
+						<StrandMark size={40} state="draw" className="mx-auto mb-3" />
+						<h1 className="font-display text-h1 font-medium text-ink-900">Welcome Back</h1>
 						<p className="text-muted-foreground">Sign in to your Lumid account</p>
 					</div>
 				</CardHeader>

@@ -36,12 +36,13 @@ interface Props {
 }
 
 const STATE_CLASS: Record<GridState, string> = {
+	// Lumen tones (src/lib/tones.ts). Running used to share succeeded's gold.
 	succeeded: "bg-gold-400 hover:bg-gold-500",
-	failed:    "bg-rose-500 hover:bg-rose-600",
-	running:   "bg-gold-400 hover:bg-gold-500 animate-pulse",
-	skipped:   "bg-slate-300 hover:bg-slate-400",
-	canceled:  "bg-slate-400 hover:bg-slate-500",
-	empty:     "bg-slate-100 hover:bg-slate-200",
+	failed:    "bg-brick-500 hover:bg-brick-600",
+	running:   "bg-lagoon-400 hover:bg-lagoon-500 animate-pulse",
+	skipped:   "bg-ink-300 hover:bg-ink-400",
+	canceled:  "bg-ink-400 hover:bg-ink-500",
+	empty:     "bg-ink-100 hover:bg-ink-200",
 };
 
 export function AirflowGrid({ rows, columns, cells, onCellClick, emptyText }: Props) {
