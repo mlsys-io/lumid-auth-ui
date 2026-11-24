@@ -292,6 +292,14 @@ await section('run page answer', async () => {
 	assert(!/\b[a-z]+_[a-z_]+\b/.test(shown), `no snake_case codes in the answer (${(shown.match(/\b[a-z]+_[a-z_]+\b/) || [''])[0]})`);
 	const card = await page.locator('main').innerText();
 	assert(!/\bengine_command\b/.test(card) && !/^Outcome:/m.test(card), 'no "engine_command" / "Outcome:" strip on the run page');
+	const tl = page.locator('section[aria-label="What this run did, step by step"]');
+	if (await tl.count()) {
+		const cells = tl.locator('[aria-label="Steps by stage"] button');
+		assert(await cells.count() > 0, 'step timeline: one cell per step, under stage labels');
+		await cells.first().click();
+		await page.waitForTimeout(300);
+		assert(await tl.locator('li.bg-gold-50').count() === 1, 'clicking a cell highlights its step in the timeline');
+	} else note('this run reported no step timeline (events) — timeline not exercised');
 	await page.close();
 });
 
