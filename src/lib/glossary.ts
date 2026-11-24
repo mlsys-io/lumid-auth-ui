@@ -24,10 +24,10 @@ export const NOUNS = {
 	memory: "a knowledge asset (a bank) and its entries",
 	dataset: "the data an experiment runs over",
 	item: "one record of a dataset",
-	// run (U1)
-	experiment: "one configured run of a workflow over a dataset — the unit you run and compare",
-	run: "one execution of an experiment",
-	study: "experiments compared on one metric over one dataset",
+	// run (round 3, 2026-11-24 — "Novix's look, Lumid's clarity")
+	experiment: "a question an app is answering by comparing versions on one metric",
+	version: "one setup an experiment tries (the engine calls it an arm or variant)",
+	run: "one execution of a workflow",
 	// compute
 	"compute graph": "a FlowMesh or Lumilake DAG built on the canvas; may contain Python steps",
 	job: "a compute graph run on Research Fleet",
@@ -42,12 +42,21 @@ export const RETIRED_TERMS: Record<string, string> = {
 	loops: "workflows",
 	pipeline: "workflow",
 	pipelines: "workflows",
-	variant: "experiment",
-	variants: "experiments",
-	attempt: "experiment",
-	attempts: "experiments",
-	arm: "experiment",
-	arms: "experiments",
+	// An arm/variant is one VERSION an experiment tries; the experiment is the
+	// question (it used to be called a "study", which nobody could explain).
+	variant: "version",
+	variants: "versions",
+	attempt: "version",
+	attempts: "versions",
+	arm: "version",
+	arms: "versions",
+	study: "experiment",
+	studies: "experiments",
+	// Plain words for verdicts and history (round 3).
+	champion: "winning version",
+	champions: "winning versions",
+	"not separable": "can't tell apart yet",
+	lineage: "changes tried",
 	"knowledge agent": "memory",
 	"knowledge agents": "memories",
 	mesh: "site",

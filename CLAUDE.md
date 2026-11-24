@@ -129,6 +129,55 @@ derive from it. Don't add a hex anywhere else — `npm run check:palette` ratche
   off-palette, contrast, font-size count and 390px overflow per route; `design-dev.html` is the
   no-auth gallery of tokens, primitives and Strands.
 
+## Novix's look, Lumid's clarity (round 3, 2026-11-24)
+
+Borrow Novix's visual effects and motion freely; never its obscurity. **Every element answers a
+question a real user of a real app asks, in plain words, without hover or legend, with one
+obvious next action. No modes, no unexplained counters.** Don't strip a visual to get
+simplicity — label it.
+
+| Surface | The question it answers | Where |
+|---|---|---|
+| Activity (`/studio/runs`) + app home band | Is anything running? Is anything broken? | `components/activity/`, `lib/activity.ts` |
+| Workflow header | When does it run? Run it now. (⋯ = "This workflow" / "This app") | `ScheduleChip.tsx`, `WorkflowObservabilityPanel.tsx` |
+| Run page | Did it work? If not, where and why? | `RunAnswerCard.tsx` + `lib/run-answer.ts`, `RunTimeline.tsx` + `lib/run-timeline.ts` |
+| Research map (app home) | What is it exploring, what came from what, what's next? | `components/research/`, `lib/research-map.ts` |
+| Experiment detail / evolution chart | Which version wins? Can I trust it yet? Is it improving? | `ResearchMap.tsx` `ExperimentDetail`, `EvolutionChart.tsx` |
+
+- **Two things to manage:** a **workflow** is a job that repeats — you *operate* it (header).
+  An **experiment** is a question the *app* is answering by comparing **versions** — it
+  belongs to the app (experiments span workflows: `kol_alpha` feeds from two), so it lives on
+  the app's Research map, not as a tab on every workflow. Workflow tabs: Runs · Data, plus
+  "Experiment" only where one runs and "Changes tried" only where runs branched.
+- **Vocabulary** (`src/lib/glossary.ts`, enforced by `check:glossary`): experiment (the
+  question) · version (was arm / variant / attempt) · run · "winning" not champion · "can't
+  tell apart yet" not "not separable" · "changes tried" not lineage · Cancel, not Stop.
+- **Words come from pure, tested functions**, never inline: `plainCause()` (raw errors →
+  "Server error (HTTP 500)"), `runAnswer()`, `experimentStatus()`, `criteriaInWords()`,
+  `workflowStatusLine()`. A raw code or snake_case reaching the screen is a bug.
+- **Honesty over completeness**: say "since 18 Nov (the newest 500)" when a list is capped;
+  don't draw a series the server only guessed a version for; when versions were measured
+  differently, say the lines can't be read against each other.
+- **Motion** (all CSS, all in the `prefers-reduced-motion` block): live dot breathing
+  (`animate-lumen-breathe`), text shine 2.4s (`.lumen-shine`), working dots 1.2s with
+  200/400ms offsets (`.lumen-dots`), once-per-session hero entrance blur 8px / rise 16px /
+  600ms (`.lumen-hero-in`, `useOncePerSession`), research-map edges draw in
+  (`.research-edge-draw`, pathLength=100) and the selected path flows
+  (`.research-edge-flow`), evolution lines draw once (`.evo-line-draw`). Motion signals
+  live / changed / selected — never decoration.
+
+### Where runs live
+
+- `/studio/runs` = **Activity**: Running now · Needs fixing (one row per broken *workflow*, not
+  per failed run) · All workflows grouped by app. `?app=` filters; `?view=list|grid|gantt|calendar`
+  is the Timeline; `?state=` opens the list. Feed: `useRunsFeed` (`/me/runs`, ~6 s, 500-row
+  cap → stale-while-revalidate from sessionStorage, `truncated` said in words) + the
+  `/me/runs/stream` SSE.
+- The app home shows the same blocks for that app (`AppActivityBand`, renders nothing when
+  healthy) and the Research map.
+- Sidebar: "N failing" counts failing *workflows*; an app row breathes while it has a run
+  going (`useShellActivity`, one 2-min poll for the shell).
+
 ## The things that trip people up
 
 - **Auth is enforced twice, and both layers matter.** `AuthGuard`/`AdminGuard` in the SPA are UX;

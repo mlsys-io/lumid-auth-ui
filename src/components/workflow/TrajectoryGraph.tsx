@@ -412,7 +412,7 @@ function LinearTrajectory({ chain, metric, baseline, hib, pickedId, onFocus, onO
 							)}>
 							<span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: t.dot }} />
 							<span className="text-micro text-ink-600 tabular-nums">{fmtWhen(n.run_ts || n.cycle_ts) || n.label}</span>
-							{n.is_champion && <span title="champion — best so far"><Trophy className="w-3 h-3 text-gold-500 flex-shrink-0" /></span>}
+							{n.is_champion && <span title="winning version — best so far"><Trophy className="w-3 h-3 text-gold-500 flex-shrink-0" /></span>}
 							{n.scored && n.score != null
 								? <span className="text-micro font-semibold tabular-nums text-ink-800">{fmtScore(n.score)}</span>
 								: <span className="text-micro uppercase tracking-wide text-ink-600" title={n.kind === "baseline" ? "baseline" : undefined}>{n.kind === "baseline" ? "start" : "—"}</span>}

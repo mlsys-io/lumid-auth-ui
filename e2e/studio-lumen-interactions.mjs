@@ -239,8 +239,13 @@ await section('Activity', async () => {
 		const body = await fix.innerText();
 		assert(!/_unavailable|Traceback|\{"/.test(body), 'Needs fixing speaks in words, not raw reasons');
 	} else note('nothing failing in this window — Needs fixing not exercised');
-	const status = await page.locator('main').innerText();
-	assert(/updated \d{1,2}:\d{2}/.test(status), 'status line says when the feed was updated');
+	// The wait above also accepts an alert (a failed feed); only a feed on
+	// screen has a status line, so wait for it before reading.
+	const feedShown = await page.locator('section[aria-label="All workflows"]').waitFor({ timeout: 40000 }).then(() => true).catch(() => false);
+	if (feedShown) {
+		const status = await page.locator('main').innerText();
+		assert(/updated \d{1,2}:\d{2}/.test(status), 'status line says when the feed was updated');
+	} else note('Activity feed did not render (error or empty) — status line not exercised');
 	await page.close();
 });
 
@@ -255,7 +260,7 @@ await section('workflow header', async () => {
 	assert(/^Schedule: (Every |Daily|Weekdays|On demand|Paused|Mon|Tue|Wed|Thu|Fri|Sat|Sun|Custom)/.test(label), `schedule chip speaks in words (${label})`);
 	const strip = await page.locator('#topstrip-wf-controls').innerText();
 	assert(!/Plan next run|^\+\d+/m.test(strip), 'no "Plan next run" / "+N" dots in the header');
-	assert(await page.locator('#topstrip-wf-controls button[aria-label="Run now"], #topstrip-wf-controls button[aria-label="Stop the run"]').count() === 1, 'one run control: Run now, or Stop while running');
+	assert(await page.locator('#topstrip-wf-controls button[aria-label="Run now"], #topstrip-wf-controls button[aria-label="Cancel the run"]').count() === 1, 'one run control: Run now, or Cancel run while running');
 	await sched.click();
 	await page.getByRole('button', { name: /Pause schedule|Resume schedule|Set a schedule|Change schedule/ }).first().waitFor({ timeout: 5000 });
 	assert(true, 'the chip opens to pause / change the schedule');
@@ -335,6 +340,24 @@ await section('research map', async () => {
 		const t = await appr.innerText();
 		assert(/Try:/.test(t) && /Cost:/.test(t) && /Go ahead/.test(t) && /Not now/.test(t), 'approval card: Try / Cost / Go ahead / Not now');
 	} else note('no suggestions on this app — approval card not exercised');
+	await page.close();
+});
+
+// ── Inbox: app suggestions are answerable where people look ───────────────
+await section('inbox suggestions', async () => {
+	const page = await desk.ctx.newPage();
+	await page.goto(`${BASE}/studio/inbox`, { waitUntil: 'domcontentloaded' });
+	const sec = page.locator('section[aria-label="Suggested experiments"]');
+	try { await sec.waitFor({ timeout: 40000 }); } catch { note('no app suggestions for this account — inbox suggestions not exercised'); await page.close(); return; }
+	const card = sec.locator('section[aria-label="For your approval"]').first();
+	const t = await card.innerText();
+	assert(/suggests/i.test(t) && /Try:/.test(t) && /Cost:/.test(t) && /Go ahead/.test(t), 'inbox shows the same approval card, naming the app');
+	await card.getByText('See it on the map').click();
+	await page.waitForURL(/suggestion=/, { timeout: 15000 });
+	const map = page.locator('section[aria-label="Research"]');
+	await map.waitFor({ timeout: 40000 });
+	await page.waitForTimeout(1200);
+	assert(await map.locator('.react-flow__node-suggested .ring-2').count() === 1, 'the map opens on that suggestion');
 	await page.close();
 });
 

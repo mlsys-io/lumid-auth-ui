@@ -1,3 +1,6 @@
+import ApprovalCard from "@/components/research/ApprovalCard";
+import { useSuggestions } from "@/components/research/useSuggestions";
+import type { Proposal } from "@/lib/research-map";
 import { useContext, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "../../components/ui/button";
@@ -80,6 +83,10 @@ export default function InboxPage() {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const feed = useWorkflowFeed();
+	// What apps suggest trying next — the same approval cards as each app's
+	// Research map, so a suggestion can be answered from here.
+	const sugg = useSuggestions();
+	const nSugg = (sugg.items ?? []).reduce((a, x) => a + x.list.length, 0);
 	const role = useContext(AuthContext)?.user?.role;
 	const isAdmin = role === "admin" || role === "super_admin";
 
@@ -167,17 +174,17 @@ export default function InboxPage() {
 		return out;
 	}, [messages, attention, feed.items, isAdmin]);
 
-	const view: View = picked ?? (rows.needs.length > 0 ? "needs" : "activity");
+	const view: View = picked ?? (rows.needs.length + nSugg > 0 ? "needs" : "activity");
 	const apps = useMemo(
 		() => Array.from(new Set(rows[view].map((r) => r.app).filter(Boolean))).sort(),
 		[rows, view],
 	);
 	const shown = appFilter ? rows[view].filter((r) => r.app === appFilter) : rows[view];
 	const firstLoad = loading && feed.items === null;
-	const nothingAtAll = !firstLoad && rows.needs.length + rows.activity.length + rows.audit.length === 0;
+	const nothingAtAll = !firstLoad && rows.needs.length + rows.activity.length + rows.audit.length + nSugg === 0;
 
 	const views = [
-		{ value: "needs" as const, label: "Needs you", count: rows.needs.length || undefined },
+		{ value: "needs" as const, label: "Needs you", count: rows.needs.length + nSugg || undefined },
 		{ value: "activity" as const, label: "Activity" },
 		...(isAdmin && rows.audit.length > 0 ? [{ value: "audit" as const, label: "Audit" }] : []),
 	];
@@ -234,7 +241,15 @@ export default function InboxPage() {
 						</p>
 					)}
 
-					{shown.length === 0 ? (
+					{view === "needs" && (sugg.items ?? []).filter((x) => !appFilter || x.app === appFilter).length > 0 && (
+						<section aria-label="Suggested experiments" className="space-y-3 mb-5">
+							{(sugg.items ?? []).filter((x) => !appFilter || x.app === appFilter).map((x) => (
+								<InboxSuggestion key={x.app} app={x.app} list={x.list} onDone={(id) => sugg.dismiss(x.app, id)} />
+							))}
+						</section>
+					)}
+
+					{shown.length === 0 && !(view === "needs" && nSugg > 0) ? (
 						<p className="py-10 text-center text-body text-ink-600">
 							{view === "needs" ? "Nothing needs you right now." : "Nothing here yet."}
 						</p>
@@ -253,6 +268,12 @@ export default function InboxPage() {
 			)}
 		</div>
 	);
+}
+
+// One app's suggestions as the shared approval card, paged within the app.
+function InboxSuggestion({ app, list, onDone }: { app: string; list: Proposal[]; onDone: (id: string) => void }) {
+	const [i, setI] = useState(0);
+	return <ApprovalCard app={app} list={list} index={Math.min(i, list.length - 1)} onIndex={setI} onDone={onDone} showApp />;
 }
 
 function MessageCard({

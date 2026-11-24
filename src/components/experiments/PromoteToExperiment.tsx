@@ -74,11 +74,11 @@ export default function PromoteToExperiment(
 		return (
 			<div className="rounded-xl border border-dashed border-ink-200 bg-card/60 px-3 py-2.5 flex items-center justify-between gap-3">
 				<div className="text-micro text-ink-600 leading-relaxed">
-					This workflow has no metric, so nothing compares its runs — it runs, and its output is above. Give it a metric and a case scope to start a study of whether a change helps.
+					This workflow has no metric, so nothing compares its runs — it runs, and its output is above. Give it a metric and a case scope to start an experiment: try versions of it and see whether a change helps.
 				</div>
 				<button type="button" onClick={() => setOpen(true)}
 					className="flex-shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-ink-300 bg-card px-2.5 py-1.5 text-micro font-medium text-ink-700 hover:bg-ink-50">
-					<FlaskConical className="w-3.5 h-3.5" /> Start a study
+					<FlaskConical className="w-3.5 h-3.5" /> Start an experiment
 				</button>
 			</div>
 		);
@@ -87,7 +87,7 @@ export default function PromoteToExperiment(
 	return (
 		<div className="rounded-xl border border-ink-200 bg-card p-3 space-y-2.5">
 			<div className="text-micro uppercase tracking-wide font-semibold text-ink-600">
-				Define a study on {loop}
+				Start an experiment on {loop}
 			</div>
 			<div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
 				<label className="text-micro text-ink-600 space-y-1">

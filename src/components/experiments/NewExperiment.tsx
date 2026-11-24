@@ -128,14 +128,14 @@ export default function NewExperiment(
 				className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-card
 					px-2.5 py-1.5 text-caption font-medium text-ink-700 hover:bg-ink-50"
 			>
-				<Plus className="h-3.5 w-3.5" /> New study
+				<Plus className="h-3.5 w-3.5" /> New experiment
 			</button>
 		);
 	}
 
 	return (
 		<div className="rounded-xl border border-ink-200 bg-card p-3 space-y-2">
-			<div className="text-caption font-medium text-ink-700">New study</div>
+			<div className="text-caption font-medium text-ink-700">New experiment</div>
 
 			<input
 				value={id} onChange={(e) => setId(e.target.value)}
@@ -158,7 +158,7 @@ export default function NewExperiment(
 			{/* Both required, and the reasons are not interchangeable. */}
 			<input
 				value={metric} onChange={(e) => setMetric(e.target.value)}
-				placeholder="metric — the number the workflow reports, which the study compares"
+				placeholder="metric — the number the workflow reports, which the experiment compares across versions"
 				className="w-full rounded-lg border border-ink-200 px-2 py-1.5 text-caption"
 			/>
 
@@ -206,7 +206,7 @@ export default function NewExperiment(
 					disabled={!ready || busy} onClick={() => void submit(true)}
 					className="inline-flex items-center gap-1.5 rounded-lg bg-ink-900 px-2.5 py-1.5
 						text-caption font-medium text-white disabled:opacity-40"
-					title="Define the study and run every experiment"
+					title="Define the experiment and run every version"
 				>
 					{busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Run
 				</button>
@@ -214,7 +214,7 @@ export default function NewExperiment(
 					disabled={!ready || busy} onClick={() => void submit(false)}
 					className="rounded-lg border border-ink-200 px-2.5 py-1.5 text-caption text-ink-700
 						hover:bg-ink-50 disabled:opacity-40"
-					title="Define the study without running it"
+					title="Define the experiment without running it"
 				>
 					Define
 				</button>

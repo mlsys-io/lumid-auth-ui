@@ -76,7 +76,7 @@ export default function MyRuns() {
 					<tr>
 						<th className="px-3 py-2">Job</th>
 						<th className="px-3 py-2">Status</th>
-						<th className="px-3 py-2">Study · experiment</th>
+						<th className="px-3 py-2">Experiment · version</th>
 						<th className="px-3 py-2">Started</th>
 						<th className="px-3 py-2" />
 					</tr>
