@@ -12,7 +12,7 @@
 // shared apps ("Healthy · ran 2d ago" next to an empty runs list) — when
 // the cycles list is empty this card says "Not run yet", full stop.
 
-import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { Fragment, lazy, Suspense, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -59,6 +59,7 @@ import {
 	type CycleSummary,
 } from "@/pages/studio/inspector";
 import { cn } from "@/lib/utils";
+import { AuthContext } from "@/hooks/useAuth";
 
 // The workflow page's tabs (?tab=). Runs is the default and is not written to
 // the URL; the others are views of the workflow as a whole.
@@ -80,7 +81,7 @@ export interface LoopHealth {
 // Health chip — one honest read of "how's this workflow doing". hasRuns
 // is the TENANT cycles truth: without any tenant run, operator-scoped
 // wf.last_run_* must not paint a state ("Healthy · ran 2d ago" lie).
-function health(wf: MeWorkflowRow, hasRuns: boolean): { label: string; cls: string; dot: string } {
+function health(wf: MeWorkflowRow, hasRuns: boolean, lastCycleTs?: string): { label: string; cls: string; dot: string } {
 	if (wf.enabled === false) return { label: "Paused", cls: "text-ink-600 bg-ink-50 border-ink-200", dot: "bg-ink-300" };
 	if (!hasRuns) return { label: "Not run yet", cls: "text-ink-600 bg-ink-50 border-ink-200", dot: "bg-ink-300" };
 	// Failing = last run failed (fresh journal truth). consecutive_failures
@@ -90,8 +91,17 @@ function health(wf: MeWorkflowRow, hasRuns: boolean): { label: string; cls: stri
 		return { label: "Needs attention", cls: "text-brick-700 bg-brick-50 border-brick-200", dot: "bg-brick-500" };
 	if (wf.last_run_recovered)
 		return { label: "Recovered", cls: "text-gold-700 bg-gold-50 border-gold-200", dot: "bg-gold-500" };
-	if (wf.last_run_ok === true) return { label: "Healthy", cls: "text-gold-700 bg-gold-50 border-gold-200", dot: "bg-gold-500" };
+	// "Healthy · 79d ago" called a workflow that had not run in months healthy.
+	// A clean last run only counts as Healthy while it is recent.
+	if (wf.last_run_ok === true && cycleAgeDays(lastCycleTs) <= 7)
+		return { label: "Healthy", cls: "text-gold-700 bg-gold-50 border-gold-200", dot: "bg-gold-500" };
 	return { label: "Idle", cls: "text-ink-600 bg-ink-50 border-ink-200", dot: "bg-ink-300" };
+}
+
+function cycleAgeDays(ts?: string): number {
+	const m = ts?.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
+	if (!m) return 0; // unknown age: do not demote on missing data
+	return (Date.now() - Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6])) / 86_400_000;
 }
 
 // "ran 5m ago" from the newest tenant cycle DIR id (the single source of
@@ -266,6 +276,8 @@ export default function WorkflowObservabilityPanel({
 	canDelete?: boolean;
 	onDelete?: () => void;
 }) {
+	const authRole = useContext(AuthContext)?.user?.role;
+	const isAdminRole = authRole === 'admin' || authRole === 'super_admin';
 
 	// ── Controls (run-now / pause-resume / edit cron) ──────────────
 	const [busy, setBusy] = useState<null | "run" | "toggle" | "save">(null);
@@ -698,7 +710,7 @@ export default function WorkflowObservabilityPanel({
 	useEffect(() => {
 		window.dispatchEvent(new CustomEvent("studio:workflow-selected", { detail: { app, loop, running } }));
 	}, [app, loop, running]);
-	const h = health(wf, tenantHasRuns || !cyclesKnown);
+	const h = health(wf, tenantHasRuns || !cyclesKnown, cycleList?.[0]?.ts);
 	const lastRan = whenLastFromCycle(cycleList?.[0]?.ts);
 
 
@@ -827,10 +839,14 @@ export default function WorkflowObservabilityPanel({
 			{(() => {
 				const controls = (
 					<div className="flex items-center gap-1.5 flex-wrap min-w-0">
+						{/* Run-version dots are an operator's view (the runs list carries
+						    the same history for everyone else). */}
+						{isAdminRole && <>
 						<VersionDots app={app} loop={loop} currentId={version?.runTs || version?.cycleTs || overlayTs || undefined}
 							onPick={(v) => { pinVersion(v); const ts = v.cycleTs || v.runTs; if (ts) navigate(runPath(app, loop, ts)); }}
 							outcomes={runOutcomes} />
 						<span className="w-px h-5 bg-ink-200 mx-0.5" aria-hidden />
+						</>}
 						{onShare && assetTab !== "data" && (
 							<>
 								<button onClick={() => onShare("pull")} disabled={!!shareBusy}

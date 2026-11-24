@@ -13,7 +13,7 @@ export default function AppSwitcher({ app }: { app: string }) {
 	const current = items.find((it) => it.app === app);
 
 	return (
-		<div className="inline-flex items-center gap-2 px-2 py-1.5 max-w-[280px]">
+		<div className="inline-flex min-w-0 items-center gap-2 px-2 py-1.5 max-w-[280px]">
 			{/* Lumen: the app's StrandAvatar — the same glyph it wears in the rail,
 			    its Recent threads and its Library card. */}
 			<StrandAvatar slug={app} size={28} />

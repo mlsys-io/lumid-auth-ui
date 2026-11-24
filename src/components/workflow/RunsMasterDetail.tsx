@@ -13,9 +13,10 @@
 // Pure presentation: the host (WorkflowObservabilityPanel) owns the data calls
 // (cycle list, cycle detail, trajectory) and the URL.
 
-import { useMemo, useState } from "react";
+import { useContext, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, GitCompare, Loader2, MoreHorizontal, RefreshCw, ScrollText, FileJson, Layers } from "lucide-react";
+import { AuthContext } from "@/hooks/useAuth";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Loader2, MoreHorizontal, RefreshCw, ScrollText, FileJson, Layers } from "lucide-react";
 import type { MeCycleDetail, MeCycleListItem, MeCycleStep } from "@/api/me";
 import AskAbout from "@/components/AskAbout";
 import FailureCard from "@/components/workflow/FailureCard";
@@ -294,6 +295,8 @@ export function RunDetail({
 	/** The five-stage view of this run (StageDetail, owned by the host). */
 	renderStages?: (runId: string) => React.ReactNode;
 }) {
+	const authRole = useContext(AuthContext)?.user?.role;
+	const isAdminRole = authRole === 'admin' || authRole === 'super_admin';
 	const [showStages, setShowStages] = useState(false);
 	if (!runId) {
 		return (
@@ -309,7 +312,6 @@ export function RunDetail({
 	const msgs = runMessages(detail);
 	const steps = detail?.steps || [];
 	const duration = listRow?.duration_s ?? (typeof detail?.summary?.duration_s === "number" ? detail.summary.duration_s as number : undefined);
-	const others = cycles.filter((c) => c.ts !== runId);
 	// Which step is open. The URL wins (?step=<id>, or ?step=none after a
 	// collapse); without one, a run with a single step opens it and a failed
 	// run opens its first failed step — the output / error is what the reader
@@ -342,15 +344,6 @@ export function RunDetail({
 						title="Plan a new run starting from this one (nothing starts until you confirm)">
 						<RefreshCw className="w-3 h-3" /> Re-run…
 					</button>
-					<label className="inline-flex items-center gap-1 text-micro text-ink-600 border border-ink-200 rounded-lg pl-2 pr-1 py-0.5 bg-card">
-						<GitCompare className="w-3 h-3 text-lagoon-600" />
-						<span className="sr-only">Compare with</span>
-						<select value={compare || ""} onChange={(e) => onQuery({ compare: e.target.value || null })}
-							className="text-micro bg-transparent py-0.5 max-w-[150px]" aria-label="Compare with another run">
-							<option value="">Compare with…</option>
-							{others.slice(0, 50).map((c) => <option key={c.ts} value={c.ts}>{runLocalTime(c.ts)}{c.branch_label ? ` · ${c.branch_label}` : ""}</option>)}
-						</select>
-					</label>
 					<AskAbout
 						label="Ask about this run"
 						prompt={failed
@@ -359,16 +352,12 @@ export function RunDetail({
 						context={{ app, loop, cycle: { app, loop, ts: runId } }}
 						className="py-1"
 					/>
-					<button type="button" onClick={() => onQuery(pane === "log" && !openStep ? { pane: null } : { pane: "log", step: "none" })}
-						className={cn("inline-flex items-center gap-1 px-2 py-1 text-micro rounded-lg border",
-							pane === "log" && !openStep ? "border-plum-300 bg-plum-50 text-plum-800" : "border-ink-200 bg-card text-ink-600 hover:bg-ink-50")}>
-						<ScrollText className="w-3 h-3" /> Run log
-					</button>
 					<button type="button"
 						onClick={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); menu(r.left, r.bottom + 4); }}
-						className="ml-auto inline-flex items-center gap-1 px-2 py-1 text-micro rounded-lg border border-ink-200 bg-card text-ink-600 hover:bg-ink-50"
-						title="Promote, discard, branch — state-changing actions, each confirmed">
-						<MoreHorizontal className="w-3 h-3" /> Change this run
+						className="ml-auto inline-flex items-center px-1.5 py-1 text-micro rounded-lg border border-ink-200 bg-card text-ink-600 hover:bg-ink-50"
+						aria-label="More: compare, promote, discard, branch"
+						title="Compare with another run, promote, discard, branch — each confirmed">
+						<MoreHorizontal className="w-3.5 h-3.5" />
 					</button>
 				</div>
 				{msgs.outcome && (
@@ -396,12 +385,18 @@ export function RunDetail({
 					<div className="flex items-center gap-2 px-1 pb-1.5">
 						<h3 className="text-micro uppercase tracking-wide font-semibold text-ink-600">Steps</h3>
 						<span className="text-micro text-ink-600">{steps.length ? `${steps.length} recorded` : ""}</span>
+						<button type="button" onClick={() => onQuery({ pane: "log", step: "none" })}
+							className="ml-auto inline-flex items-center gap-1 text-micro text-ink-600 hover:text-ink-900">
+							<ScrollText className="w-3 h-3" /> Run log
+						</button>
 					</div>
 					{loading && !detail ? (
 						<div className="flex items-center gap-2 text-micro text-ink-600 px-1 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Reading the run…</div>
 					) : steps.length === 0 ? (
 						<div className="text-micro text-ink-600 px-1 py-1">
-							{detail?.unavailable || "This run recorded no per-step trace."} The <button type="button" className="underline" onClick={() => onQuery({ pane: "log", step: "none" })}>run log</button> has what it said.
+							{/* The scheduler's reason ("app not installed for this user") is
+							    an operator detail: keep it in the tooltip, say it plainly. */}
+							<span title={detail?.unavailable || undefined}>Step details aren't available for this run.</span> The <button type="button" className="underline" onClick={() => onQuery({ pane: "log", step: "none" })}>run log</button> has what it said.
 						</div>
 					) : (
 						<ol className="space-y-1">
@@ -458,7 +453,7 @@ export function RunDetail({
 					{/* The five-stage view (observe → learn) of the same run — what
 					    the run SENSED / PROPOSED / LEARNED, for runs whose substance
 					    lives in the cycle summary rather than in step outputs. */}
-					{renderStages && <button type="button" onClick={() => setShowStages((v) => !v)}
+					{renderStages && isAdminRole && <button type="button" onClick={() => setShowStages((v) => !v)}
 						className="mt-2 inline-flex items-center gap-1 text-micro text-ink-600 hover:text-ink-800 px-1">
 						<Layers className="w-3 h-3" /> {showStages ? "Hide" : "Show"} by stage (observe → learn)
 					</button>}
