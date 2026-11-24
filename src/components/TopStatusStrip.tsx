@@ -13,35 +13,15 @@
 // register one row in PAGE_META below.
 
 import { workflowPath } from "@/lib/run-routes";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
-	FileText, Activity, AlertTriangle, ChevronRight,
+	ChevronRight,
 	Sparkles, Inbox as InboxIcon,
 	Store, Brain, Settings, Shield, Activity as ActivityIcon, Boxes, ListChecks, LayoutDashboard,
 } from "lucide-react";
-import { me, type MeWorkflowRow } from "@/api/me";
-import { RUNNING_APPS } from "@/lib/demo";
 import { appTitle } from "@/components/workflow/AppCard";
 import AppSwitcher from "@/components/studio/AppSwitcher";
-import { TONES, type ToneKey } from "@/lib/tones";
-import { loopLabel } from "@/lib/workflow-names";
-import { useStudioRefetch } from "@/hooks/useStudioRefetch";
-
-// One actionable item for the top-bar "Right now" ticker.
-interface TickerItem { key: string; tone: ToneKey; icon: React.ComponentType<{ className?: string }>; text: string; action: string; to: string }
-
-function loopOf(w: MeWorkflowRow): string {
-	const app = w.app || "";
-	if (app && w.slug.startsWith(app + ":")) return w.slug.slice(app.length + 1);
-	const i = w.slug.indexOf(":");
-	return i >= 0 ? w.slug.slice(i + 1) : w.slug;
-}
-
-// Same scope filter as the My Apps page: count only the user's own apps,
-// not operator-shared ones that listWorkflows() also returns — otherwise the
-// header's failing count diverges from the hero/cards (the "3 vs 1" bug).
-const inScope = (app?: string) => !app || (RUNNING_APPS as readonly string[]).includes(app);
 
 // Per-route page identity. Subtitle is short — top-bar height is bounded.
 const PAGE_META: Array<{
@@ -222,18 +202,6 @@ function detailLeafFor(pathname: string): string | null {
 
 export default function TopStatusStrip() {
 	const location = useLocation();
-	const [items, setItems] = useState<TickerItem[]>([]);
-	const [loaded, setLoaded] = useState(false);
-	const [refreshedAt, setRefreshedAt] = useState(() => Date.now());
-	const [, forceTick] = useState(0);
-	// Ticker so the "live · updated Ns ago" stays current. 10s (was 1s) — a
-	// per-second re-render of the always-mounted header is needless churn;
-	// "Ns ago" granularity to 10s reads the same to a human.
-	useEffect(() => {
-		const id = window.setInterval(() => forceTick((x) => x + 1), 10_000);
-		return () => window.clearInterval(id);
-	}, []);
-
 	const meta = useMemo(() => deriveMeta(location.pathname), [location.pathname]);
 	const crumbs = useMemo(() => deriveCrumbs(location.pathname), [location.pathname]);
 	// On an app workspace page the in-page AppSwitcher already shows the app
@@ -265,67 +233,6 @@ export default function TopStatusStrip() {
 	// "Run" title. Surface it so the header reads naturally.
 	const detailLeaf = useMemo(() => detailLeafFor(location.pathname), [location.pathname]);
 
-	const load = async () => {
-		try {
-			const [wfR, drafts] = await Promise.allSettled([
-				me.listWorkflows(),
-				me.listDrafts({ state: "pending" }),
-			]);
-			let draftsCount = 0;
-			if (drafts.status === "fulfilled") {
-				draftsCount = drafts.value.drafts.length;
-			}
-			// Build the "Right now" ticker items (failing → running → drafts).
-			// failing/running use the same scope + definitions as the app cards
-			// (last_run_ok===false, excluding paused; running = cycle in-flight).
-			const next: TickerItem[] = [];
-			if (wfR.status === "fulfilled") {
-				const wfs = (wfR.value.workflows || []).filter((w) => inScope(w.app));
-				for (const w of wfs.filter((w) => w.enabled !== false && w.last_run_ok === false)) {
-					const loop = loopOf(w);
-					next.push({ key: w.slug, tone: "failing", icon: AlertTriangle, text: `${appTitle(w.app || "")} · ${loopLabel(w.name, loop)} failing`, action: "diagnose", to: workflowPath(w.app || "", loop) });
-				}
-				for (const w of wfs.filter((w) => w.running)) {
-					const loop = loopOf(w);
-					next.push({ key: w.slug, tone: "running", icon: Activity, text: `${appTitle(w.app || "")} · ${loopLabel(w.name, loop)} running`, action: "watch", to: workflowPath(w.app || "", loop) });
-				}
-			}
-			if (draftsCount > 0) {
-				// Reads as one sentence with the action appended: "6 drafts need your
-			// review · open". The previous pairing rendered "…awaiting you review",
-			// which looks like a grammar slip rather than text + button.
-			next.push({ key: "drafts", tone: "ok", icon: FileText, text: `${draftsCount} draft${draftsCount === 1 ? "" : "s"} need${draftsCount === 1 ? "s" : ""} your review`, action: "open", to: "/studio/inbox" });
-			}
-			setItems(next);
-			setRefreshedAt(Date.now());
-			setLoaded(true);
-		} catch {
-			setLoaded(true);
-		}
-	};
-
-	// Chat→page bus: pills update right after a chat-tool mutation.
-	useStudioRefetch(["drafts", "workflows", "loops", "runs", "cycles"], load);
-
-	useEffect(() => {
-		load();
-		let timer: number | null = window.setInterval(load, 60_000);
-		const onVisibility = () => {
-			if (document.visibilityState === "visible") {
-				load();
-				if (timer == null) timer = window.setInterval(load, 60_000);
-			} else if (timer != null) {
-				window.clearInterval(timer);
-				timer = null;
-			}
-		};
-		document.addEventListener("visibilitychange", onVisibility);
-		return () => {
-			if (timer != null) window.clearInterval(timer);
-			document.removeEventListener("visibilitychange", onVisibility);
-		};
-	}, []);
-
 	// Empty top-right is fine — pills only render when there's actually
 	// something for the user to act on. Removed the "● All clear" chip
 	// (2026-05-25 design review) since silence is the right signal.
@@ -340,7 +247,10 @@ export default function TopStatusStrip() {
 			    takes the "App" place (the app name shown once, here in the strip).
 			    The workspace's left-panel toggle portals into the slot before it. */}
 			{isAppWorkspace ? (
-				<div className="flex items-center gap-1 min-w-0">
+				// shrink-0 + a cap: the app name keeps its own width. With min-w-0 it
+				// was squeezed below its text and the workflow slot's "Overview"
+				// button was drawn on top of it ("Venue Link Matcher" overprinted).
+				<div className="flex items-center gap-1 flex-shrink-0 max-w-[34%]">
 					<span id="topstrip-ws-left" className="flex items-center" />
 					<AppSwitcher app={appSlug} />
 				</div>
@@ -394,20 +304,15 @@ export default function TopStatusStrip() {
 			    stacked their children on top of each other, so a click landed on
 			    whichever happened to be above. Separate nodes lay out side by side. */}
 			<div id="topstrip-app-slot" className="flex items-center gap-2 min-w-0 flex-1" />
-			<div id="topstrip-wf-slot" className="flex items-center gap-2 flex-shrink-0" />
+			<div id="topstrip-wf-slot" className="flex items-center gap-2 min-w-0 overflow-hidden" />
 
 			{/* Right — a steady "live" heartbeat (the surface is alive; loops
 			    run in the background) + status pills (only when non-zero). */}
 			<div className="flex items-center gap-2 flex-shrink-0">
-				{/* The "Right now" ticker is secondary — hide it on narrow viewports
-				    so the app identity + workflow selector don't get crushed. */}
-				<span className="hidden lg:inline-flex">{loaded && <RightNowTicker items={items} />}</span>
-				{/* "live" heartbeat — sits just left of the chat toggle. */}
-				<span className="inline-flex items-center gap-1.5 text-micro text-ink-600" title="Live — your workflows run in the background">
-					{/* Breathes (Lumen) rather than the old lub-dub heartbeat. */}
-					<span className="w-1.5 h-1.5 rounded-full bg-gold-500 animate-lumen-breathe" />
-					<span className="hidden sm:inline">live{(() => { const a = Math.max(0, Math.floor((Date.now() - refreshedAt) / 1000)); return a < 3 ? "" : a < 60 ? ` · ${a}s ago` : ` · ${Math.floor(a / 60)}m ago`; })()}</span>
-				</span>
+				{/* Simplified 2026-11-24: no rotating "NOW" ticker and no "live"
+				    heartbeat. The ticker repeated what the rail already shows (the
+				    Inbox count, the Runs "N failed" pill) on every page; the
+				    heartbeat only said the page was polling. */}
 				{/* Workspace's chat-panel toggle portals here — kept the TOP-MOST RIGHT. */}
 				<span id="topstrip-ws-right" className="flex items-center" />
 			</div>
@@ -415,39 +320,4 @@ export default function TopStatusStrip() {
 	);
 }
 
-// RightNowTicker — the live digest as a single flipping line in the top-right.
-// Shows ONE actionable item at a time (failing → running → drafts), auto-
-// advancing every 4s with a quiet flip-in; each is a link to the relevant
-// place. Replaces the old static count pills.
-function RightNowTicker({ items }: { items: TickerItem[] }) {
-	const [i, setI] = useState(0);
-	useEffect(() => { setI(0); }, [items.length]);
-	useEffect(() => {
-		if (items.length <= 1) return;
-		const id = window.setInterval(() => setI((x) => (x + 1) % items.length), 4000);
-		return () => window.clearInterval(id);
-	}, [items.length]);
-	if (items.length === 0) return null;
-	const it = items[Math.min(i, items.length - 1)];
-	const t = TONES[it.tone];
-	const Icon = it.icon;
-	return (
-		<Link
-			to={it.to}
-			title={`Right now — ${it.text}`}
-			className="group inline-flex items-center gap-2 min-w-0 max-w-[260px] sm:max-w-[360px] h-8 px-3 rounded-full border border-border bg-card shadow-e1 hover:border-ink-300 transition-colors duration-120 overflow-hidden"
-		>
-			<span className="text-nano uppercase tracking-[0.08em] font-semibold text-ink-600 shrink-0 hidden lg:inline">Now</span>
-			{/* keyed so it re-mounts (and rolls up) on each advance */}
-			<span key={`${it.key}-${i}`} className="inline-flex items-center gap-1.5 min-w-0 animate-lumen-roll">
-				<Icon className={["w-3.5 h-3.5 shrink-0", t.icon].join(" ")} />
-				<span className="truncate text-caption text-foreground">{it.text}</span>
-				<span className={["text-micro font-medium shrink-0", t.text].join(" ")}>{it.action}</span>
-			</span>
-			{items.length > 1 && (
-				<span className="text-micro text-ink-600 tabular-nums shrink-0">{i + 1}/{items.length}</span>
-			)}
-		</Link>
-	);
-}
 

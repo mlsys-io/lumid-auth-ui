@@ -190,6 +190,10 @@ const TOP_NAV: NavItem[] = [
 	// all, and it is the one page that lists every run across every workflow.
 	// Its rows open the run page (/studio/apps/:app/w/:loop/r/:runId).
 	{ to: '/studio/runs', label: 'Runs', icon: History, title: 'every run of every workflow — open one to see its steps' },
+	// Inbox in the rail (2026-11-24) with the pending-drafts count — this is the
+	// ONE place that says "something needs you". It replaces the top strip's
+	// rotating "NOW · N drafts need your review" ticker on every page.
+	{ to: '/studio/inbox', label: 'Inbox', icon: Inbox, title: 'drafts waiting for you, run notices and the audit trail' },
 	// NO second row for this surface — what used to be the "Library" row IS the
 	// first row above, now labelled "Marketplace". One row, one destination.
 	// /studio/library* routes are untouched and still carry their own tab bar, so
@@ -951,7 +955,7 @@ export function StudioShell() {
 						.filter((item) => !item.adminOnly || isAdmin)
 						.map((item) => item.to === '/studio/runs'
 							? <RunsNavRow key={item.to} item={item} />
-							: <NavItemView key={item.to} {...item} />)}
+							: <NavItemView key={item.to} {...item} badge={item.to === '/studio/inbox' ? draftCount : item.badge} />)}
 					{/* NO Artifacts row here. Artifacts belong to a conversation, so
 					    the trigger lives with the conversation — the icon group at the
 					    top-right of the chatbox (StudioChat's `chromeEl`). In the rail
