@@ -8,7 +8,9 @@
 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { User, Key, Lock, Shield, ExternalLink, Loader2, MessageSquare, Database } from 'lucide-react';
+import { User, Key, Lock, Shield, ArrowRight, MessageSquare, Database, PlugZap } from 'lucide-react';
+import { PageHeader } from '@/components/ui/page-header';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/hooks/useAuth';
 import apiClient from '@/api/client';
 import { useLandingPref } from '@/lib/landing-pref';
@@ -23,7 +25,7 @@ type Section = {
 const SECTIONS: Section[] = [
 	{ id: 'profile',   icon: User,   title: 'Profile',          description: 'Your email, display name, and account basics.' },
 	{ id: 'tokens',    icon: Key,    title: 'API tokens',       description: 'Personal access tokens for CLI and integrations.' },
-	{ id: 'oauth',     icon: Lock,   title: 'Connected services', description: 'Google, Slack, GitHub, and other OAuth grants.' },
+	{ id: 'oauth',     icon: PlugZap,   title: 'Connected services', description: 'Google, Slack, GitHub, and other OAuth grants.' },
 	{ id: 'secrets',   icon: Lock,   title: 'Agent secrets',    description: 'API keys your installed agents need (per agent, per key).' },
 	{ id: 'privacy',   icon: Shield, title: 'Privacy & sharing', description: 'What your AI keeps private and what it may publish.' },
 	{ id: 'chat',      icon: MessageSquare, title: 'Chat & navigation', description: 'How opening something from a list behaves.' },
@@ -35,15 +37,24 @@ const SECTIONS: Section[] = [
 export default function StudioSettings() {
 	const { user } = useAuth();
 	return (
-		<div className="space-y-4">
-			{/* Title + subtitle render in the StudioShell top-bar (TopStatusStrip). */}
-			<ProfileSection email={user?.email ?? ''} role={user?.role ?? ''} />
-			<TokensSection />
-			<WarehouseSection />
-			<OAuthSection />
-			<SecretsSection />
-			<PrivacySection />
-			<ChatNavSection />
+		<div>
+			<PageHeader
+				className="pt-2"
+				title="Settings"
+				subtitle="Account, tokens, connected services, and privacy — all in one place."
+			/>
+			{/* Lumen: two-column settings groups (label left, controls right) separated
+			    by hairlines — the boxed card-per-section with a bronze icon tile read as
+			    seven equal alarms. The page's own header replaces the strip title. */}
+			<div className="divide-y divide-border border-t border-border">
+				<ProfileSection email={user?.email ?? ''} role={user?.role ?? ''} />
+				<TokensSection />
+				<OAuthSection />
+				<SecretsSection />
+				<WarehouseSection />
+				<PrivacySection />
+				<ChatNavSection />
+			</div>
 		</div>
 	);
 }
@@ -59,27 +70,30 @@ function ChatNavSection() {
 	];
 	return (
 		<SectionCard {...SECTIONS[5]}>
-			<div className="space-y-2">
-				<div className="text-xs text-ink-600 mb-1">When I open something from a list:</div>
+			<div className="space-y-2" role="radiogroup" aria-labelledby="landing-pref-label">
+				<div className="mb-1 text-meta text-ink-600" id="landing-pref-label">When I open something from a list:</div>
 				{options.map((o) => (
 					<button
 						key={o.v}
 						type="button"
+						role="radio"
+						aria-checked={pref === o.v}
 						onClick={() => setPref(o.v)}
 						className={[
-							'w-full text-left flex items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors',
-							pref === o.v ? 'border-gold-300 bg-gold-50/60' : 'border-ink-200 hover:bg-ink-50',
+							'lumen-press w-full text-left flex items-start gap-3 rounded-[8px] border px-3 py-2.5 transition-colors duration-180 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
+							pref === o.v ? 'border-gold-300 bg-gold-50/60' : 'border-ink-200 hover:border-ink-300 hover:bg-ink-50',
 						].join(' ')}
 					>
 						<span className={[
 							'mt-0.5 w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center',
-							pref === o.v ? 'border-gold-500' : 'border-ink-300',
+							'transition-colors duration-180',
+							pref === o.v ? 'border-gold-600' : 'border-ink-400',
 						].join(' ')}>
-							{pref === o.v && <span className="w-2 h-2 rounded-full bg-gold-500" />}
+							{pref === o.v && <span className="w-2 h-2 rounded-full bg-gold-600 animate-in zoom-in-50 fade-in duration-180" />}
 						</span>
 						<span className="min-w-0">
-							<span className="block text-sm font-medium text-ink-800">{o.title}</span>
-							<span className="block text-xs text-ink-600 mt-0.5">{o.desc}</span>
+							<span className="block text-body font-medium text-ink-900">{o.title}</span>
+							<span className="block text-meta text-ink-600 mt-0.5">{o.desc}</span>
 						</span>
 					</button>
 				))}
@@ -92,40 +106,51 @@ function SectionCard({
 	id, icon: Icon, title, description, children,
 }: Section & { children: React.ReactNode }) {
 	return (
-		<section id={id} className="rounded-lg border border-ink-200 bg-card p-4">
-			<header className="flex items-start justify-between gap-3 mb-3">
-				<div className="flex items-start gap-3 min-w-0">
-					<div className="w-9 h-9 rounded-lg bg-gold-50 text-gold-600 flex items-center justify-center flex-shrink-0">
-						<Icon className="w-4 h-4" />
-					</div>
-					<div className="min-w-0">
-						<h2 className="font-medium text-sm">{title}</h2>
-						<p className="text-xs text-ink-600 mt-0.5">{description}</p>
-					</div>
-				</div>
+		<section id={id} className="grid gap-4 py-7 md:grid-cols-[minmax(0,260px)_minmax(0,1fr)] md:gap-10 scroll-mt-20">
+			<header className="min-w-0">
+				<h2 className="flex items-center gap-2 text-title font-medium text-ink-900">
+					<Icon className="h-4 w-4 shrink-0 text-ink-500" aria-hidden />
+					{title}
+				</h2>
+				<p className="mt-1 text-meta text-ink-600 text-pretty">{description}</p>
 			</header>
-			<div className="pl-12">{children}</div>
+			<div className="min-w-0 max-w-[640px] rounded-[12px] border border-border bg-card p-5 shadow-e1">{children}</div>
 		</section>
 	);
+}
+
+/** Internal hop to the page that does the heavy lifting. */
+function GoLink({ to, children }: { to: string; children: React.ReactNode }) {
+	return (
+		<Link
+			to={to}
+			className="group inline-flex items-center gap-1 rounded text-meta font-medium text-gold-700 hover:text-gold-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+		>
+			{children}
+			<ArrowRight className="h-3.5 w-3.5 transition-transform duration-180 group-hover:translate-x-0.5" aria-hidden />
+		</Link>
+	);
+}
+
+function LineSkeleton({ w = 'w-48' }: { w?: string }) {
+	return <Skeleton className={`h-4 ${w} rounded`} />;
 }
 
 function ProfileSection({ email, role }: { email: string; role: string }) {
 	return (
 		<SectionCard {...SECTIONS[0]}>
-			<dl className="grid grid-cols-2 gap-2 text-sm">
-				<dt className="text-ink-600">Email</dt>
-				<dd className="font-mono text-xs">{email}</dd>
-				<dt className="text-ink-600">Role</dt>
+			<dl className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-x-4 gap-y-3 text-body">
+				<dt className="text-meta text-ink-600">Email</dt>
+				<dd className="truncate font-mono text-meta text-ink-900">{email || <LineSkeleton />}</dd>
+				<dt className="text-meta text-ink-600">Role</dt>
 				<dd>
-					<span className="px-2 py-0.5 rounded-full text-nano tracking-wide bg-ink-100 text-ink-700">
+					<span className="inline-flex rounded-full bg-ink-100 px-2 py-0.5 text-caption font-medium text-ink-700">
 						{role || 'user'}
 					</span>
 				</dd>
 			</dl>
-			<div className="mt-3">
-				<Link to="/account/profile" className="text-xs text-gold-700 hover:underline inline-flex items-center gap-1">
-					Edit profile <ExternalLink className="w-3 h-3" />
-				</Link>
+			<div className="mt-4 border-t border-ink-100 pt-3">
+				<GoLink to="/account/profile">Edit profile</GoLink>
 			</div>
 		</SectionCard>
 	);
@@ -159,13 +184,11 @@ function WarehouseSection() {
 
 	return (
 		<SectionCard {...SECTIONS[6]}>
-			<div className="text-sm">
+			<div className="text-body text-ink-800">
 				{err ? (
 					<span className="text-ink-600">Could not load warehouse status.</span>
 				) : st === null ? (
-					<span className="text-ink-600 italic inline-flex items-center gap-1">
-						<Loader2 className="w-3 h-3 animate-spin" /> Checking…
-					</span>
+					<LineSkeleton w="w-64" />
 				) : active ? (
 					<>Active credential for <strong>{st.role}</strong>.</>
 				) : canMint ? (
@@ -179,14 +202,12 @@ function WarehouseSection() {
 			    dead end wearing the clothes of an action. */}
 			{canMint && (
 				<div className="mt-3">
-					<Link to="/studio/account/findata-sql" className="text-xs text-gold-700 hover:underline inline-flex items-center gap-1">
-						{active ? 'Rotate / revoke credential' : 'Mint a credential'} <ExternalLink className="w-3 h-3" />
-					</Link>
+					<GoLink to="/studio/account/findata-sql">{active ? 'Rotate / revoke credential' : 'Mint a credential'}</GoLink>
 				</div>
 			)}
 			{/* Everyone else gets the honest framing: you do not need this to use
 			    the data, only to point your own client at it. */}
-			<div className="mt-2 text-xs text-ink-600">
+			<div className="mt-3 text-meta text-ink-600">
 				Not needed to explore the data — Data and chat query as you, with no credential.
 			</div>
 		</SectionCard>
@@ -205,17 +226,15 @@ function TokensSection() {
 	}, []);
 	return (
 		<SectionCard {...SECTIONS[1]}>
-			<div className="text-sm">
+			<div className="text-body text-ink-800">
 				{n === null ? (
-					<span className="text-ink-600 italic inline-flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Counting tokens…</span>
+					<LineSkeleton />
 				) : (
-					<>You have <strong>{n}</strong> active token{n === 1 ? '' : 's'}.</>
+					<>You have <strong className="font-semibold tabular-nums text-ink-900">{n}</strong> active token{n === 1 ? '' : 's'}.</>
 				)}
 			</div>
-			<div className="mt-3">
-				<Link to="/studio/account/tokens" className="text-xs text-gold-700 hover:underline inline-flex items-center gap-1">
-					Mint / revoke tokens <ExternalLink className="w-3 h-3" />
-				</Link>
+			<div className="mt-4 border-t border-ink-100 pt-3">
+				<GoLink to="/studio/account/tokens">Mint or revoke tokens</GoLink>
 			</div>
 		</SectionCard>
 	);
@@ -237,18 +256,16 @@ function ConnectionRow({
 	connectLabel: string;
 }) {
 	return (
-		<div className="flex items-center justify-between gap-3 py-2">
-			<div className="text-sm flex items-center gap-2 min-w-0">
+		<div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-3 first:pt-0 last:pb-0">
+			<div className="flex min-w-0 items-center gap-2.5">
 				<span className={[
-					'w-2 h-2 rounded-full inline-block shrink-0',
-					connected ? 'bg-gold-500' : 'bg-ink-300',
-				].join(' ')} />
-				<span className="font-medium">{label}</span>
-				<span className="text-ink-600 truncate">{detail}</span>
+					'inline-block h-2 w-2 shrink-0 rounded-full',
+					connected ? 'bg-gold-500 ring-4 ring-gold-100' : 'bg-ink-300',
+				].join(' ')} aria-hidden />
+				<span className="text-body font-medium text-ink-900">{label}</span>
+				<span className="truncate text-meta text-ink-600">{detail}</span>
 			</div>
-			<Link to={href} className="text-xs text-gold-700 hover:underline inline-flex items-center gap-1 shrink-0">
-				{connected ? manageLabel : connectLabel} <ExternalLink className="w-3 h-3" />
-			</Link>
+			<GoLink to={href}>{connected ? manageLabel : connectLabel}</GoLink>
 		</div>
 	);
 }
@@ -341,24 +358,22 @@ function SecretsSection() {
 	return (
 		<SectionCard {...SECTIONS[3]}>
 			{counts === null ? (
-				<div className="text-sm text-ink-600 italic inline-flex items-center gap-1">
-					<Loader2 className="w-3 h-3 animate-spin" /> Loading secrets…
-				</div>
+				<div className="space-y-2.5"><LineSkeleton w="w-full" /><LineSkeleton w="w-3/4" /></div>
 			) : Object.keys(counts).length === 0 ? (
-				<div className="text-sm text-ink-600 italic">No apps installed yet.</div>
+				<div className="text-body text-ink-600">No apps installed yet.</div>
 			) : (
-				<ul className="space-y-1 text-sm">
+				<ul className="divide-y divide-ink-100">
 					{Object.entries(counts).map(([app, n]) => (
-						<li key={app} className="flex items-center justify-between">
-							<span className="font-mono text-xs">{app}</span>
-							<span className="text-ink-600 text-xs">
+						<li key={app} className="flex items-center justify-between py-2 first:pt-0">
+							<span className="font-mono text-meta text-ink-800">{app}</span>
+							<span className={n ? 'text-meta tabular-nums text-ink-800' : 'text-meta tabular-nums text-ink-600'}>
 								{n} secret{n === 1 ? '' : 's'}
 							</span>
 						</li>
 					))}
 				</ul>
 			)}
-			<div className="mt-3 text-xs text-ink-600">
+			<div className="mt-4 border-t border-ink-100 pt-3 text-meta text-ink-600">
 				To edit an app's secrets, open the app and choose <span className="font-medium">⋯ → Manage agent</span>.
 			</div>
 		</SectionCard>
@@ -368,13 +383,11 @@ function SecretsSection() {
 function PrivacySection() {
 	return (
 		<SectionCard {...SECTIONS[4]}>
-			<div className="text-sm space-y-2">
-				<p className="text-ink-600">
-					By default the watcher bank stays local; assistant + philosophy banks can publish.
-				</p>
-				<Link to="/studio/knowledge" className="text-xs text-gold-700 hover:underline inline-flex items-center gap-1">
-					Open Knowledge to see what your AI knows <ExternalLink className="w-3 h-3" />
-				</Link>
+			<p className="text-body text-ink-700 text-pretty">
+				By default the watcher bank stays local; assistant + philosophy banks can publish.
+			</p>
+			<div className="mt-4 border-t border-ink-100 pt-3">
+				<GoLink to="/studio/knowledge">Open Knowledge to see what your AI knows</GoLink>
 			</div>
 		</SectionCard>
 	);

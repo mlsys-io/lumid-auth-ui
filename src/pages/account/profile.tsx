@@ -14,6 +14,7 @@ import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '../../components/ui/avatar';
 import { ApiError } from '../../api';
+import { PageHeader } from '@/components/ui/page-header';
 import { updateProfile, changePassword } from '../../api/profile';
 
 // /account/profile — self-service profile editing + password change.
@@ -100,20 +101,19 @@ export default function Profile() {
 
 	return (
 		<>
-			<header className="mb-6">
-				<h1 className="text-h2 font-semibold">Profile</h1>
-				<p className="text-sm text-muted-foreground mt-1">
-					Your display name and avatar across every Lumid app — plus a password change.
-				</p>
-			</header>
-			<section className="grid gap-6 md:grid-cols-2">
-					<Card className="border-0 shadow-md bg-card/80 backdrop-blur-sm">
+			<PageHeader
+				className="pt-2"
+				title="Profile"
+				subtitle="Your display name and avatar across every Lumid app — plus a password change."
+			/>
+			<section className="grid max-w-[1120px] gap-5 md:grid-cols-2 md:items-start">
+					<Card className="gap-5 rounded-[12px] border-border bg-card shadow-e1">
 						<CardHeader>
-							<CardTitle className="flex items-center gap-2 text-read">
-								<UserIcon className="w-4 h-4 text-plum-600" />
+							<CardTitle className="flex items-center gap-2 text-title font-medium text-ink-900">
+								<UserIcon className="w-4 h-4 text-ink-500" aria-hidden />
 								Profile
 							</CardTitle>
-							<CardDescription>
+							<CardDescription className="text-meta text-ink-600">
 								Your display name and avatar across every Lumid app.
 							</CardDescription>
 						</CardHeader>
@@ -121,7 +121,7 @@ export default function Profile() {
 							<div className="flex items-center gap-4">
 								<Avatar className="w-16 h-16">
 									<AvatarImage src={avatar || user.avatar || undefined} />
-									<AvatarFallback className="bg-gradient-to-br from-plum-500 to-plum-600 text-white">
+									<AvatarFallback className="bg-ink-900 font-display text-h3 text-ink-50">
 										{initial}
 									</AvatarFallback>
 								</Avatar>
@@ -150,7 +150,7 @@ export default function Profile() {
 							<div className="space-y-1">
 								<Label>Email</Label>
 								<Input value={user.email} disabled />
-								<p className="text-xs text-muted-foreground">
+								<p className="text-caption text-ink-600">
 									Email is your canonical identifier and cannot be changed here.
 								</p>
 							</div>
@@ -195,13 +195,13 @@ export default function Profile() {
 						</CardContent>
 					</Card>
 
-					<Card className="border-0 shadow-md bg-card/80 backdrop-blur-sm">
+					<Card className="gap-5 rounded-[12px] border-border bg-card shadow-e1">
 						<CardHeader>
-							<CardTitle className="flex items-center gap-2 text-read">
-								<Lock className="w-4 h-4 text-plum-600" />
+							<CardTitle className="flex items-center gap-2 text-title font-medium text-ink-900">
+								<Lock className="w-4 h-4 text-ink-500" aria-hidden />
 								Password
 							</CardTitle>
-							<CardDescription>
+							<CardDescription className="text-meta text-ink-600">
 								Changing your password signs out every other device immediately.
 							</CardDescription>
 						</CardHeader>
@@ -227,7 +227,7 @@ export default function Profile() {
 									disabled={savingPwd}
 									autoComplete="new-password"
 								/>
-								<p className="text-xs text-muted-foreground">At least 8 characters.</p>
+								<p className="text-caption text-ink-600">At least 8 characters.</p>
 							</div>
 							<div className="space-y-1">
 								<Label htmlFor="confirm-pw">Confirm new password</Label>

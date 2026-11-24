@@ -817,3 +817,38 @@ html[data-surface="studio"] ::selection {
  * scrollbar with the outer shell. */
 .app-main .min-h-screen,
 .app-main .h-screen { min-height: 100%; height: auto; }
+
+/* ── Docs reader (Lumen) ───────────────────────────────────────────────────
+   github-markdown-css hard-codes GitHub's cool greys (#1f2328/#59636e/#d1d9e0),
+   blue links (#0969da) and system fonts. Two-class specificity re-points it at
+   the palette and the Studio type scale for /studio/docs/:slug only. */
+.markdown-body.docs-md {
+	font-family: inherit;
+	font-size: 15px;
+	line-height: 1.7;
+	color: rgb(54 47 36);
+}
+.markdown-body.docs-md :is(h1, h2, h3) {
+	font-family: "Source Serif 4 Variable", Georgia, ui-serif, serif;
+	font-weight: 500;
+	color: rgb(34 28 19);
+	border-bottom-color: rgb(231 223 208);
+	letter-spacing: -0.005em;
+}
+.markdown-body.docs-md h1 { font-size: 32px; line-height: 40px; }
+.markdown-body.docs-md h2 { font-size: 24px; line-height: 32px; margin-top: 2.25rem; }
+.markdown-body.docs-md h3 { font-size: 20px; line-height: 28px; }
+.markdown-body.docs-md :is(h4, h5, h6) { color: rgb(34 28 19); }
+.markdown-body.docs-md a { color: rgb(123 98 48); text-decoration: underline; text-decoration-color: rgb(123 98 48 / 0.35); text-underline-offset: 0.2em; }
+.markdown-body.docs-md a:hover { text-decoration-color: currentColor; }
+.markdown-body.docs-md hr { background-color: rgb(231 223 208); height: 1px; }
+.markdown-body.docs-md blockquote { color: rgb(110 100 82); border-left-color: rgb(211 200 180); }
+.markdown-body.docs-md :is(table th, table td) { border-color: rgb(231 223 208); }
+.markdown-body.docs-md table tr { background-color: transparent; border-top-color: rgb(231 223 208); }
+.markdown-body.docs-md table tr:nth-child(2n) { background-color: rgb(250 248 244); }
+.markdown-body.docs-md table th { background-color: rgb(243 239 231); color: rgb(34 28 19); font-weight: 600; }
+.markdown-body.docs-md :is(code, tt) { background-color: rgb(243 239 231); color: rgb(54 47 36); border-radius: 4px; }
+.markdown-body.docs-md pre { background-color: rgb(243 239 231); border: 1px solid rgb(231 223 208); border-radius: 10px; color: rgb(54 47 36); }
+.markdown-body.docs-md pre code { background: transparent; }
+.markdown-body.docs-md kbd { color: rgb(54 47 36); background-color: rgb(250 248 244); border-color: rgb(211 200 180); box-shadow: inset 0 -1px 0 rgb(211 200 180); }
+.markdown-body.docs-md :is(.markdown-alert, .anchor, .octicon) { color: inherit; }

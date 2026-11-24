@@ -57,6 +57,7 @@ const ROUTES = [
 	['strategies', '/studio/strategies'],
 	['settings', '/studio/settings'],
 	['docs', '/studio/docs'],
+	['docs-reader', '/studio/docs/workflows'],
 	['account-profile', '/studio/account/profile'],
 	['account-tokens', '/studio/account/tokens'],
 	['code', '/code'],
@@ -204,7 +205,15 @@ for (const [name, path, opts = {}] of ROUTES) {
 		const errs = [];
 		page.on('pageerror', (e) => errs.push(String(e).slice(0, 160)));
 		try {
-			await page.goto(BASE + path, { waitUntil: 'domcontentloaded', timeout: 45000 });
+			// A 5xx here is the edge (nginx 502 mid-rollout), not the page: retry,
+			// then FAIL the route. Auditing the error page scored nginx's black
+			// "502 Bad Gateway" as two contrast failures and blocked a release.
+			let resp = await page.goto(BASE + path, { waitUntil: 'domcontentloaded', timeout: 45000 });
+			for (let t = 0; t < 3 && resp && resp.status() >= 500; t++) {
+				await page.waitForTimeout(20000);
+				resp = await page.goto(BASE + path, { waitUntil: 'domcontentloaded', timeout: 45000 });
+			}
+			if (resp && resp.status() >= 500) throw new Error(`HTTP ${resp.status()} from the edge`);
 			await page.waitForTimeout(WAIT);
 			await page.screenshot({ path: `${OUT}/${name}-${vp}.png` });
 			const a = await page.evaluate(audit);

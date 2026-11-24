@@ -12,7 +12,9 @@
 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Shield, Users, RefreshCw, Server, ExternalLink, Loader2, Activity } from 'lucide-react';
+import { Shield, Users, RefreshCw, Server, ArrowRight, Activity } from 'lucide-react';
+import { PageHeader } from '@/components/ui/page-header';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
 	fetchTenants,        type TenantsResp,
 	fetchLoops,          type LoopsResp,
@@ -33,30 +35,30 @@ export default function StudioAdmin() {
 	const [tab, setTab] = useState<Tab>('tenants');
 	return (
 		<div className="space-y-4">
-			<header className="flex items-baseline justify-between">
-				<div>
-					<h1 className="text-title font-medium flex items-center gap-2">
-						<Shield className="w-5 h-5 text-gold-600" />
-						Admin
-					</h1>
-					<p className="text-sm text-ink-600 mt-0.5">
-						Operator surfaces — folded into Studio. Full dashboard
-						with cert / backup / telemetry tiles lives at
-						<Link to="/studio/super-admin" className="ml-1 text-gold-700 hover:underline">
-							/studio/super-admin <ExternalLink className="inline w-3 h-3" />
+			<PageHeader
+				className="pt-2 pb-1"
+				eyebrow="Operator only"
+				title="Admin"
+				subtitle={
+					<>
+						Operator surfaces, folded into Studio. The full dashboard with cert, backup and telemetry tiles is{' '}
+						<Link to="/studio/super-admin" className="group inline-flex items-center gap-0.5 font-medium text-gold-700 hover:text-gold-800">
+							super-admin <ArrowRight className="h-3 w-3 transition-transform duration-180 group-hover:translate-x-0.5" />
 						</Link>
-					</p>
-				</div>
-				<Link
-					to="/status/operations"
-					className="shrink-0 inline-flex items-center gap-1.5 rounded-md border border-gold-300 bg-gold-50 px-3 py-1.5 text-sm font-medium text-gold-800 hover:bg-gold-100"
-				>
-					<Activity className="w-4 h-4" />
-					Operations status
-				</Link>
-			</header>
+					</>
+				}
+				actions={
+					<Link
+						to="/status/operations"
+						className="lumen-press inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-card px-3 text-body font-medium text-ink-800 shadow-e1 transition-colors duration-120 hover:border-ink-300 hover:bg-ink-50"
+					>
+						<Activity className="w-4 h-4 text-ink-500" />
+						Operations status
+					</Link>
+				}
+			/>
 
-			<nav className="border-b border-ink-200 flex items-center gap-1">
+			<nav className="border-b border-border flex items-center gap-6" aria-label="Admin sections">
 				{TABS.map((t) => {
 					const Icon = t.icon;
 					const active = tab === t.id;
@@ -65,9 +67,9 @@ export default function StudioAdmin() {
 							key={t.id}
 							onClick={() => setTab(t.id)}
 							className={[
-								'inline-flex items-center gap-1.5 px-3 py-2 text-sm border-b-2 transition-colors -mb-px',
+								'inline-flex items-center gap-1.5 pb-2.5 pt-1 text-body font-medium border-b-2 transition-colors duration-180 -mb-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
 								active
-									? 'border-gold-500 text-gold-700 font-medium'
+									? 'border-gold-500 text-ink-900'
 									: 'border-transparent text-ink-600 hover:text-ink-900 hover:border-ink-300',
 							].join(' ')}
 						>
@@ -136,7 +138,7 @@ function TenantsTab() {
 							</tr>
 						))}
 						{rows.length === 0 && (
-							<tr><td colSpan={7} className="px-3 py-6 text-center text-sm text-ink-600 italic">No tenants yet.</td></tr>
+							<tr><td colSpan={7} className="px-3 py-8 text-center text-body text-ink-600">No tenants yet.</td></tr>
 						)}
 					</tbody>
 				</table>
@@ -281,7 +283,7 @@ function StatCard({ label, value, hint, tone = 'default' }: {
 
 function ErrorBox({ children }: { children: React.ReactNode }) {
 	return (
-		<div className="text-sm rounded border border-brick-200 bg-brick-50 text-brick-800 px-3 py-2">
+		<div role="alert" className="text-meta rounded-[10px] border border-brick-200 bg-brick-50 text-brick-800 px-3 py-2">
 			{children}
 		</div>
 	);
@@ -289,8 +291,9 @@ function ErrorBox({ children }: { children: React.ReactNode }) {
 
 function Loading() {
 	return (
-		<div className="text-sm text-ink-600 italic flex items-center gap-2">
-			<Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…
+		<div className="space-y-2" aria-busy="true" aria-label="Loading">
+			<Skeleton className="h-9 w-full rounded-[8px]" />
+			{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-7 w-full rounded" />)}
 		</div>
 	);
 }

@@ -148,6 +148,7 @@ const PAGE_META: Array<{
 	},
 	{
 		pattern: /^\/studio\/settings/,
+		ownHeader: true,
 		icon: Settings,
 		title: "Settings",
 		subtitle: "Account, tokens, connected services, and privacy — all in one place.",
@@ -155,6 +156,7 @@ const PAGE_META: Array<{
 	},
 	{
 		pattern: /^\/studio\/admin/,
+		ownHeader: true,
 		icon: Shield,
 		title: "Admin",
 		subtitle: "Operator-only.",

@@ -4,7 +4,7 @@
 // signed-in (private repos you own). Mounted at /studio/r/:owner/:name (authed)
 // and /explore/r/:owner/:name (public).
 import { useEffect, useMemo, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useLocation } from "react-router-dom";
 import { FileText, Folder, GitPullRequest, ChevronRight, Star, Download, Boxes } from "lucide-react";
 import {
 	getRepo, listBranches, getTree, getBlob, listPulls, getPullDiff, getProvenance,
@@ -13,9 +13,12 @@ import {
 import { LumidMarkdown } from "@/components/app-surface/LumidMarkdown";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
+import { NotFound } from "@/components/illustrations/scenes";
 
 export default function StudioRepo() {
 	const { owner = "", name = "" } = useParams();
+	const location = useLocation();
 	const [repo, setRepo] = useState<Repo | null>(null);
 	const [prov, setProv] = useState<{ verified?: boolean | null; fork_of?: string } | null>(null);
 	const [ref, setRef] = useState("main");
@@ -30,7 +33,17 @@ export default function StudioRepo() {
 		return () => { live = false; };
 	}, [owner, name]);
 
-	if (notFound) return <div className="max-w-3xl mx-auto px-4 py-16 text-center text-body text-muted-foreground">Repo <span className="font-mono">{owner}/{name}</span> not found (or private).</div>;
+	if (notFound) return (
+		<div className="max-w-[920px] mx-auto px-4 py-10">
+			<EmptyState
+				art={<NotFound />}
+				title="This repo isn't here"
+				body={<><span className="font-mono text-ink-800">{owner}/{name}</span> doesn't exist, or it's private to its owner.</>}
+				actionLabel="Browse the marketplace"
+				to={location.pathname.startsWith('/explore') ? '/explore' : '/studio/library/marketplace'}
+			/>
+		</div>
+	);
 	if (!repo) return (
 		<div className="max-w-[920px] mx-auto px-4 py-8 space-y-4" role="status" aria-label="Loading repository">
 			<Skeleton className="h-8 w-64 rounded-lg" />
