@@ -5,8 +5,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { me, streamRuns, MeApiError, type MeRunRow } from "@/api/me";
 import { useStudioRefetch } from "@/hooks/useStudioRefetch";
 
-/** /me/runs returns at most this many rows and no cursor past them. */
+/** One /me/runs page. Since identity v0.5.477 the response carries a
+ *  keyset `next_cursor` + `has_more`, so a window can be read past it. */
 export const RUNS_CAP = 500;
+/** How many rows the feed reads at most (4 pages): enough for a 30-day
+ *  window on today's busiest tenant; past it the page says "the newest N". */
+export const FEED_MAX = 2000;
 
 const cacheKey = (days: number, state = "") => `studio_runs_feed_v1:${days}${state ? `:${state}` : ""}`;
 /** The Activity feed this session already loaded, if any (no request). */
@@ -19,14 +23,18 @@ function readCache(days: number, state = ""): { runs: MeRunRow[]; asOf: number }
 
 /** /me/runs for the last `days`, kept live by the /me/runs/stream SSE.
  *
- *  /me/runs takes ~6 s (measured 2026-11-24, any window size), so the last
- *  answer this session is shown at once and refreshed behind it — a 6-second
- *  skeleton on every visit read as "broken". `truncated` is true when the
- *  window held more runs than the API returns (it caps at 500, no cursor). */
+ *  The last answer this session is shown at once and refreshed behind it
+ *  (until identity v0.5.477 the endpoint took ~6 s on every call, waiting on
+ *  a decommissioned n8n; now ~0.15 s). The window is read page by page with
+ *  the keyset cursor, up to FEED_MAX rows; `truncated` is true when the
+ *  window still held more. */
 export function useRunsFeed(days: number, state = "") {
 	const [runs, setRuns] = useState<MeRunRow[] | null>(() => readCache(days, state)?.runs ?? null);
 	const [err, setErr] = useState<string | null>(null);
 	const [asOf, setAsOf] = useState<number>(() => readCache(days, state)?.asOf ?? 0);
+	// The window held more runs than the feed read (FEED_MAX). Before
+	// v0.5.477 there was no cursor, so a full first page meant "capped".
+	const [truncated, setTruncated] = useState<boolean>(() => (readCache(days, state)?.runs.length ?? 0) >= RUNS_CAP);
 
 	// /me/runs takes ~6 s, so switching the window mid-load leaves two requests
 	// in flight; only the newest may land, or 30 days of runs show under "24h".
@@ -37,10 +45,22 @@ export function useRunsFeed(days: number, state = "") {
 			const since = new Date(Date.now() - days * 86_400_000).toISOString();
 			// A state filter goes to the SERVER: filtering the newest 500 runs of
 			// every state in the browser drops older matches past the cap.
-			const r = await me.listRuns({ since, limit: RUNS_CAP, ...(state ? { state } : {}) });
+			let r = await me.listRuns({ since, limit: RUNS_CAP, ...(state ? { state } : {}) });
 			if (mine !== reqId.current) return;
-			const rows = r.runs || [];
-			setRuns(rows);
+			const rows = [...(r.runs || [])];
+			// The first page shows at once; older pages are appended behind it.
+			setRuns(rows.slice());
+			let more = !!r.has_more && !!r.next_cursor;
+			while (more && rows.length < FEED_MAX) {
+				r = await me.listRuns({ since, limit: RUNS_CAP, cursor: r.next_cursor, ...(state ? { state } : {}) });
+				if (mine !== reqId.current) return;
+				const page = r.runs || [];
+				if (page.length === 0) break;
+				rows.push(...page);
+				setRuns(rows.slice());
+				more = !!r.has_more && !!r.next_cursor;
+			}
+			setTruncated(more);
 			setErr(null);
 			const t = Date.now();
 			setAsOf(t);
@@ -75,7 +95,7 @@ export function useRunsFeed(days: number, state = "") {
 				setRuns((prev) => {
 					if (!prev) return [evt.run];
 					const i = prev.findIndex((r) => r.run_id === evt.run.run_id);
-					if (i === -1) return [evt.run, ...prev].slice(0, 500);
+					if (i === -1) return [evt.run, ...prev].slice(0, FEED_MAX);
 					const next = [...prev];
 					next[i] = evt.run;
 					return next;
@@ -86,7 +106,7 @@ export function useRunsFeed(days: number, state = "") {
 		return () => stop();
 	}, []);
 
-	return { runs, err, asOf, reload: load, truncated: (runs?.length ?? 0) >= RUNS_CAP };
+	return { runs, err, asOf, reload: load, truncated };
 }
 
 /** Seconds since epoch, re-rendered every `ms` while the tab is visible. Off

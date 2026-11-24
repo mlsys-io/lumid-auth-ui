@@ -15,9 +15,8 @@ export interface ShellActivity {
 }
 
 const KEY = "studio_shell_activity_v1";
-// /me/runs costs the server ~6 s, so the shell asks every 2 min (as the old
-// "N failed" pill did) and only for 3 days — enough to see each workflow's
-// latest run.
+// One poll for the whole shell, every 2 min, over 3 days — enough to see each
+// workflow's latest run. (/me/runs was ~6 s per call until identity v0.5.477.)
 const POLL_MS = 120_000;
 
 let state: ShellActivity | null = (() => {

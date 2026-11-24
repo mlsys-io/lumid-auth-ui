@@ -170,8 +170,9 @@ simplicity — label it.
 
 - `/studio/runs` = **Activity**: Running now · Needs fixing (one row per broken *workflow*, not
   per failed run) · All workflows grouped by app. `?app=` filters; `?view=list|grid|gantt|calendar`
-  is the Timeline; `?state=` opens the list. Feed: `useRunsFeed` (`/me/runs`, ~6 s, 500-row
-  cap → stale-while-revalidate from sessionStorage, `truncated` said in words) + the
+  is the Timeline; `?state=` opens the list. Feed: `useRunsFeed` (`/me/runs`, ~0.15 s since
+  identity v0.5.477; 500-row pages read with the keyset `next_cursor` up to `FEED_MAX`;
+  stale-while-revalidate from sessionStorage; `truncated` said in words) + the
   `/me/runs/stream` SSE.
 - The app home shows the same blocks for that app (`AppActivityBand`, renders nothing when
   healthy) and the Research map.

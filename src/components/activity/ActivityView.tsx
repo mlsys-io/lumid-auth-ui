@@ -222,7 +222,7 @@ export function ActivityView({ runs, app, days, entrance = false, compact = fals
 	const nWf = act.apps.reduce((s, a) => s + a.workflows.length, 0);
 	const updated = asOf ? new Date(asOf).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : "";
 	// What the loaded runs actually cover — "in the last 7 days" is a lie when
-	// the API returned only the newest 500.
+	// the feed read only the newest rows of the window (FEED_MAX).
 	const oldest = runs.reduce((m, r) => (r.started_at && r.started_at < m ? r.started_at : m), Infinity);
 	const span = truncated && isFinite(oldest)
 		? `since ${fmtSince(oldest)}`
