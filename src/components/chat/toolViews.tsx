@@ -9,7 +9,7 @@
 // in-house snake_case tools keep their existing chip).
 
 import { useState, useEffect, useRef, type ReactElement } from 'react';
-import { Loader2, ChevronDown, Terminal, FileText, FilePen, Search, ListTodo, Globe, Bot, NotebookPen, ClipboardList, Zap, Plug, Wrench } from 'lucide-react';
+import { CheckCircle2, Circle, Loader2, ChevronDown, Terminal, FileText, FilePen, Search, ListTodo, Globe, Bot, NotebookPen, ClipboardList, Zap, Plug, Wrench } from 'lucide-react';
 import type { ToolCall } from './types';
 import { Collapse } from './motion';
 
@@ -355,8 +355,14 @@ function TodoView({ t }: { t: ToolCall }) {
 			<div className="mt-0.5 ml-4 flex flex-col gap-0.5">
 				{todos.map((td, i) => (
 					<div key={i} className="inline-flex items-start gap-1.5">
-						<span className="text-nano mt-0.5 select-none">
-							{td.status === 'completed' ? '✅' : td.status === 'in_progress' ? '🔄' : '⬜'}
+						{/* SVG marks, not emoji: emoji render in the OS's colours and
+						    sizes, which broke the warm palette and the baseline. */}
+						<span className="mt-[3px] shrink-0 select-none" aria-label={(td.status ?? 'pending').replace('_', ' ')}>
+							{td.status === 'completed'
+								? <CheckCircle2 className="w-3 h-3 text-gold-600" />
+								: td.status === 'in_progress'
+									? <Loader2 className="w-3 h-3 text-lagoon-600 animate-spin" />
+									: <Circle className="w-3 h-3 text-ink-400" />}
 						</span>
 						<span className={td.status === 'completed' ? 'line-through opacity-60' : ''}>
 							{td.status === 'in_progress' && td.activeForm ? td.activeForm : td.content}

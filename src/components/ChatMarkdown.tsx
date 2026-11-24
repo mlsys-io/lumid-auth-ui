@@ -27,17 +27,17 @@ const components: Components = {
 	// Headings — chat is conversational, so we deflate visual weight
 	// vs a docs page. h1 stays prominent but smaller than block-text;
 	// h2/h3 read as section labels inside the bubble.
-	h1: ({ children }) => <h1 className="text-read font-semibold mt-3 first:mt-0 mb-1 text-ink-900">{children}</h1>,
-	h2: ({ children }) => <h2 className="text-body font-semibold mt-2.5 first:mt-0 mb-1 text-ink-900">{children}</h2>,
-	h3: ({ children }) => <h3 className="text-meta font-semibold mt-2 first:mt-0 mb-0.5 text-ink-800">{children}</h3>,
-	h4: ({ children }) => <h4 className="text-meta font-semibold mt-2 first:mt-0 mb-0.5 text-ink-700">{children}</h4>,
+	h1: ({ children }) => <h1 className="text-[1.2em] leading-snug font-semibold mt-5 first:mt-0 mb-2 text-ink-900">{children}</h1>,
+	h2: ({ children }) => <h2 className="text-[1.1em] leading-snug font-semibold mt-4 first:mt-0 mb-1.5 text-ink-900">{children}</h2>,
+	h3: ({ children }) => <h3 className="font-semibold mt-3.5 first:mt-0 mb-1 text-ink-900">{children}</h3>,
+	h4: ({ children }) => <h4 className="font-semibold mt-3 first:mt-0 mb-1 text-ink-700">{children}</h4>,
 
-	p: ({ children }) => <p className="leading-relaxed mb-2 last:mb-0">{children}</p>,
+	p: ({ children }) => <p className="leading-[1.65] mb-3 last:mb-0">{children}</p>,
 
 	// Lists — tighter than the default browser margins; the bubble is narrow.
-	ul: ({ children }) => <ul className="list-disc pl-5 my-2 first:mt-0 last:mb-0 space-y-1">{children}</ul>,
-	ol: ({ children }) => <ol className="list-decimal pl-5 my-2 first:mt-0 last:mb-0 space-y-1">{children}</ol>,
-	li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+	ul: ({ children }) => <ul className="list-disc marker:text-gold-500 pl-5 my-3 first:mt-0 last:mb-0 space-y-1.5">{children}</ul>,
+	ol: ({ children }) => <ol className="list-decimal marker:text-ink-500 marker:tabular-nums pl-5 my-3 first:mt-0 last:mb-0 space-y-1.5">{children}</ol>,
+	li: ({ children }) => <li className="leading-[1.6] pl-0.5">{children}</li>,
 
 	// Inline + block code. The `inline` prop check used to work in v8;
 	// in v9 we read the `node` position instead — anything inside a
@@ -51,14 +51,14 @@ const components: Components = {
 		const isBlock = /\n/.test(text) || (className && className.startsWith('language-'));
 		if (isBlock) {
 			return (
-				<pre className="my-2 first:mt-0 last:mb-0 -mx-1 px-3 py-2.5 rounded-lg bg-ink-900 text-ink-100 text-caption leading-relaxed overflow-x-auto">
+				<pre className="my-3 first:mt-0 last:mb-0 px-3.5 py-3 rounded-xl bg-ink-900 text-ink-100 text-[0.82em] leading-relaxed overflow-x-auto shadow-e1">
 					<code className={className} {...rest}>{children}</code>
 				</pre>
 			);
 		}
 		// Inline code — subtle gray pill so it's distinct from surrounding text.
 		return (
-			<code className="px-1.5 py-0.5 rounded text-caption font-mono bg-ink-100 text-ink-800 border border-ink-200/60">
+			<code className="px-1.5 py-[1px] rounded-md text-[0.86em] font-mono bg-ink-100 text-ink-800 border border-ink-200/60">
 				{children}
 			</code>
 		);
@@ -69,8 +69,8 @@ const components: Components = {
 	// Tables — GFM. Wrap in a scrollable container so wide tables
 	// don't bust the bubble width.
 	table: ({ children }) => (
-		<div className="my-2 first:mt-0 last:mb-0 -mx-1 overflow-x-auto rounded-lg border border-ink-200">
-			<table className="min-w-full text-caption border-collapse">{children}</table>
+		<div className="my-3 first:mt-0 last:mb-0 overflow-x-auto rounded-xl border border-border bg-card shadow-e1">
+			<table className="min-w-full text-[0.88em] tabular-nums border-collapse">{children}</table>
 		</div>
 	),
 	thead: ({ children }) => <thead className="bg-ink-50 border-b border-ink-200">{children}</thead>,
@@ -82,7 +82,7 @@ const components: Components = {
 	// Blockquote — subtle left-bar treatment, mirrors the agent's
 	// "quoting back" voice.
 	blockquote: ({ children }) => (
-		<blockquote className="my-2 first:mt-0 last:mb-0 pl-3 border-l-2 border-gold-300 text-ink-600 italic">
+		<blockquote className="my-3 first:mt-0 last:mb-0 pl-3.5 border-l-2 border-gold-400 text-ink-700">
 			{children}
 		</blockquote>
 	),

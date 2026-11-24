@@ -9,6 +9,7 @@
 // which is present on every page — so it's no longer duplicated here.
 
 import { useMemo } from 'react';
+import { StrandMark } from '@/components/illustrations/StrandMark';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { buildViewingContext, type ViewingContext } from '@/components/StudioContext';
@@ -29,14 +30,20 @@ export function ChatHero() {
 	const h = new Date().getHours();
 	const tod = h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening';
 	return (
-		<div className="text-center select-none">
-			{/* Golden spiral brand mark. */}
-			<img src="/auth/spiral.png" alt="Lumid" className="mx-auto mb-3 h-11 w-auto select-none" draggable={false} />
-
-			<h1 className="font-display text-h2 font-medium tracking-tight text-foreground">
+		<div className="relative text-center select-none">
+			{/* Lumen: a faint bronze glow + paper grain behind the greeting,
+			    feathered out with a radial mask so it has no edge. CSS only. */}
+			<div
+				aria-hidden
+				className="lumen-paper pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[360px] w-[640px] max-w-[100vw] -translate-x-1/2 -translate-y-[58%]"
+				style={{ maskImage: 'radial-gradient(closest-side, black 30%, transparent)', WebkitMaskImage: 'radial-gradient(closest-side, black 30%, transparent)' }}
+			/>
+			{/* The strand mark draws itself in, once, on arrival. */}
+			<StrandMark size={52} state="draw" className="mx-auto mb-4" title="Lumid" />
+			<h1 className="font-display text-h1 font-medium text-ink-900 animate-lumen-rise [animation-delay:120ms]">
 				Good {tod}{name ? `, ${name}` : ''}
 			</h1>
-			<p className="mt-1.5 text-meta text-muted-foreground">
+			<p className="mt-2 text-body text-ink-600 animate-lumen-rise [animation-delay:200ms]">
 				I can see this page — ask anything in plain English.
 			</p>
 		</div>

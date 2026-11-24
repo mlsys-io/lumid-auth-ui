@@ -36,7 +36,7 @@ const PANEL_W = 420;
 const PANEL_MAX_H = 512; // 32rem, the old max-h-[32rem]
 const GAP = 8;
 
-export function ArtifactIconButton({ align = 'right', variant = 'icon' }: { align?: 'left' | 'right'; variant?: 'icon' | 'sidebar' }) {
+export function ArtifactIconButton({ align = 'right', variant = 'icon', labeled = false }: { align?: 'left' | 'right'; variant?: 'icon' | 'sidebar'; /** Show the word beside the icon on wide screens (the home chat's top strip). */ labeled?: boolean }) {
 	const [open, setOpen] = useState(false);
 	const anchorRef = useRef<HTMLDivElement>(null);
 	const panelRef = useRef<HTMLDivElement>(null);
@@ -221,11 +221,15 @@ export function ArtifactIconButton({ align = 'right', variant = 'icon' }: { alig
 				title={rows.length > 0 ? `Artifacts (${rows.length})` : 'Artifacts'}
 				aria-label="Artifacts"
 				className={[
-					'relative p-1.5 rounded-md transition-colors',
-					open ? 'text-gold-700 bg-gold-50' : 'text-muted-foreground hover:text-gold-700 hover:bg-gold-50',
+					'relative inline-flex items-center gap-1.5 h-8 rounded-md transition-colors duration-120 text-caption font-medium',
+					labeled ? 'px-2' : 'px-1.5',
+					open ? 'text-gold-800 bg-gold-50' : 'text-ink-600 hover:text-ink-900 hover:bg-ink-100',
 				].join(' ')}
 			>
 				<FileStack className="w-3.5 h-3.5" />
+				{/* An unlabeled icon pair in the corner was a guessing game; the
+				    word shows wherever there is room for it. */}
+				{labeled && <span className="hidden xl:inline">Artifacts</span>}
 				{rows.length > 0 && (
 					<span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-1 rounded-full bg-gold-700 text-white text-nano font-bold flex items-center justify-center ring-2 ring-white leading-none">
 						{rows.length > 99 ? '99+' : rows.length}
