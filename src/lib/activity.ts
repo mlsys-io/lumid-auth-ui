@@ -299,3 +299,77 @@ export function fmtSince(sec: number, now = Date.now()): string {
 	}
 	return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
+
+/** "just now", "12m ago", "3h ago", "2d ago". */
+export function fmtAgo(sec: number, now = Date.now() / 1000): string {
+	const d = Math.max(0, now - sec);
+	if (d < 60) return "just now";
+	if (d < 3600) return `${Math.floor(d / 60)}m ago`;
+	if (d < 86400) return `${Math.floor(d / 3600)}h ago`;
+	return `${Math.floor(d / 86400)}d ago`;
+}
+
+/** Cycle dir-id "20261124T141039Z" → epoch seconds (null if it isn't one). */
+export function dirIdToSec(id?: string | null): number | null {
+	const m = (id || "").match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
+	if (!m) return null;
+	return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) / 1000;
+}
+
+/** The workflow page's one-line answer to "is it working?", from its run list
+ *  (newest first). `tone` picks the icon and colour; the text stands alone. */
+export interface WorkflowStatusLine {
+	tone: "failing" | "ok" | "none";
+	text: string;
+	/** The run to open for the failing case (the newest failed one). */
+	runId?: string;
+}
+
+export function workflowStatusLine(
+	cycles: Array<{ ts: string; ok?: boolean; running?: boolean; duration_s?: number }>,
+	now = Date.now() / 1000,
+): WorkflowStatusLine {
+	const done = cycles.filter((c) => !c.running && c.ok !== undefined);
+	if (done.length === 0) return { tone: "none", text: cycles.length ? "First run in progress" : "Hasn't run yet" };
+	const last = done[0];
+	const lastSec = dirIdToSec(last.ts);
+	if (last.ok) {
+		const dur = fmtDuration(last.duration_s);
+		return { tone: "ok", text: `Last run succeeded${lastSec ? ` ${fmtAgo(lastSec, now)}` : ""}${dur ? ` · took ${dur}` : ""}` };
+	}
+	let n = 0;
+	while (n < done.length && done[n].ok === false) n++;
+	const oldest = dirIdToSec(done[n - 1].ts);
+	const since = oldest ? fmtSince(oldest, now * 1000) : "";
+	if (n === 1) return { tone: "failing", text: `Last run failed${lastSec ? ` ${fmtAgo(lastSec, now)}` : ""}`, runId: last.ts };
+	// The streak reaches the end of what was LOADED (the page asks for the
+	// newest 50): its true start is unknown, so no "since" date — Activity
+	// (which reads further back) would otherwise disagree with this page.
+	if (n === done.length) return { tone: "failing", text: `The last ${n} runs all failed`, runId: last.ts };
+	return { tone: "failing", text: `Failing${since ? ` since ${since}` : ""} · ${n} runs in a row`, runId: last.ts };
+}
+
+/** When a cron next fires, in epoch seconds — ONLY for schedules whose next
+ *  time does not depend on the scheduler's timezone (America/Los_Angeles,
+ *  never the viewer's): "M * * * *" and "*\/N * * * *" with N dividing 60.
+ *  Anything else returns null and the UI says no time rather than a wrong one. */
+export function nextFireSec(cron: string | undefined, now = Date.now() / 1000): number | null {
+	const raw = (cron || "").trim().replace(/\s+/g, " ");
+	let m = raw.match(/^(\d{1,2}) \* \* \* \*$/);
+	if (raw === "@hourly") m = ["", "0"] as unknown as RegExpMatchArray;
+	if (m) {
+		const minute = +m[1];
+		if (minute > 59) return null;
+		const hourStart = Math.floor(now / 3600) * 3600;
+		const t = hourStart + minute * 60;
+		return t > now ? t : t + 3600;
+	}
+	m = raw.match(/^\*\/(\d{1,2}) \* \* \* \*$/) || raw.match(/^\*\/(\d{1,2})m$/i);
+	if (m) {
+		const n = +m[1];
+		if (!n || 60 % n !== 0) return null;
+		const step = n * 60;
+		return (Math.floor(now / step) + 1) * step;
+	}
+	return null;
+}

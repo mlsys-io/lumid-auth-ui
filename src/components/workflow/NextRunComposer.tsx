@@ -294,7 +294,7 @@ export default function NextRunComposer({ app, loop, isExperiment, fromTs, fromL
 				{/* header (fixed) */}
 				<div className="flex items-center gap-2 px-4 py-3 border-b border-ink-100 flex-shrink-0">
 					<GitBranch className="w-4 h-4 text-gold-600 flex-shrink-0" />
-					<div className="text-sm font-semibold text-ink-900 flex-shrink-0">Plan next run</div>
+					<div className="text-sm font-semibold text-ink-900 flex-shrink-0">Run with changes</div>
 					{parentNode && <span className="text-micro text-ink-600 truncate">· from {parentNode.agent_version || nodeLabel(parentNode)}</span>}
 					<button onClick={onClose} className="ml-auto p-1 rounded hover:bg-ink-100 text-ink-600 flex-shrink-0"><X className="w-4 h-4" /></button>
 				</div>

@@ -2,7 +2,7 @@
 // master–detail workflows page (AppOverview renders the list; this is the
 // right-hand card for the selected workflow).
 //
-// Reads top-down: header (title + health + Plan next run / Stop / Pause) →
+// Reads top-down: header (workflow · schedule chip · Run now / Stop · ⋯) →
 // runs (clickable, newest first; click opens the per-run stage inspector)
 // → goal trends → schedule (preset picker, cron only under Advanced) →
 // insights (one sentence + deltas) → suggested improvements.
@@ -12,11 +12,11 @@
 // shared apps ("Healthy · ran 2d ago" next to an empty runs list) — when
 // the cycles list is empty this card says "Not run yet", full stop.
 
-import { Fragment, lazy, Suspense, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
-	Play, Pause, Loader2, Save, AlertCircle, Target, ChevronLeft, ChevronRight, ChevronDown, Database, Pencil, Square, FileText, BarChart3, Brain, Scale, GitBranch, DownloadCloud, UploadCloud,
+	Play, Loader2, Save, AlertCircle, AlertTriangle, CheckCircle2, CircleDashed, Target, ChevronLeft, ChevronRight, ChevronDown, Database, Pencil, Square, FileText, BarChart3, Brain, Scale, GitBranch,
 } from "lucide-react";
 import { toast } from "sonner";
 import apiClient from "@/api/client";
@@ -31,8 +31,8 @@ import { parseSchedule } from "@/lib/schedule";
 import { loopLabel } from "@/lib/workflow-names";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { toCycleId } from "@/lib/cycle-id";
-import TrajectoryGraph, { type TrajectoryVersion, type RunOutcomes, treeShowsScores, runOutcomeLabel } from "@/components/workflow/TrajectoryGraph";
-import { fetchTrajectory, type Trajectory, type TrajectoryNode } from "@/api/trajectory";
+import TrajectoryGraph, { type TrajectoryVersion, type RunOutcomes } from "@/components/workflow/TrajectoryGraph";
+import { fetchTrajectory, type Trajectory } from "@/api/trajectory";
 import { useStudioRefetch } from "@/hooks/useStudioRefetch";
 import { usePortalTarget } from "@/hooks/usePortalTarget";
 import MetricsView from "@/components/workflow/MetricsView";
@@ -41,6 +41,12 @@ import TrajectoryLogView from "@/components/workflow/TrajectoryLogView";
 import { RunCompareView } from "@/components/workflow/BranchTreeView";
 import RunContextMenu, { type RunMenuActions, type RunMenuTarget } from "@/components/workflow/RunContextMenu";
 import NextRunComposer from "@/components/workflow/NextRunComposer";
+import ScheduleChip, { type WfActionDetail } from "@/components/workflow/ScheduleChip";
+import { reportDispatchFailure } from "@/components/app-surface/directives";
+import { workflowStatusLine, dirIdToSec, fmtDuration, fmtTypical, isOverdue } from "@/lib/activity";
+import { useNowSec } from "@/components/activity/hooks";
+import { WorkingDots } from "@/components/activity/ActivityView";
+import { StatusDot } from "@/components/ui/status-badge";
 import { L, VIEW_LABELS } from "@/components/workflow/labels";
 import type { MeExperiment } from "@/api/me";
 // Datasets the workflow works on — heavy (table/preview), so lazy-load it and
@@ -78,45 +84,7 @@ export interface LoopHealth {
 	last_errors?: Array<{ step?: string; skill?: string; error: string }>;
 }
 
-// Health chip — one honest read of "how's this workflow doing". hasRuns
-// is the TENANT cycles truth: without any tenant run, operator-scoped
-// wf.last_run_* must not paint a state ("Healthy · ran 2d ago" lie).
-function health(wf: MeWorkflowRow, hasRuns: boolean, lastCycleTs?: string): { label: string; cls: string; dot: string } {
-	if (wf.enabled === false) return { label: "Paused", cls: "text-ink-600 bg-ink-50 border-ink-200", dot: "bg-ink-300" };
-	if (!hasRuns) return { label: "Not run yet", cls: "text-ink-600 bg-ink-50 border-ink-200", dot: "bg-ink-300" };
-	// Failing = last run failed (fresh journal truth). consecutive_failures
-	// (scheduler-state) can lag a recovered run, so it must not drive red —
-	// keep counts and dots/health on the same single predicate.
-	if (wf.last_run_ok === false)
-		return { label: "Needs attention", cls: "text-brick-700 bg-brick-50 border-brick-200", dot: "bg-brick-500" };
-	if (wf.last_run_recovered)
-		return { label: "Recovered", cls: "text-gold-700 bg-gold-50 border-gold-200", dot: "bg-gold-500" };
-	// "Healthy · 79d ago" called a workflow that had not run in months healthy.
-	// A clean last run only counts as Healthy while it is recent.
-	if (wf.last_run_ok === true && cycleAgeDays(lastCycleTs) <= 7)
-		return { label: "Healthy", cls: "text-gold-700 bg-gold-50 border-gold-200", dot: "bg-gold-500" };
-	return { label: "Idle", cls: "text-ink-600 bg-ink-50 border-ink-200", dot: "bg-ink-300" };
-}
 
-function cycleAgeDays(ts?: string): number {
-	const m = ts?.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
-	if (!m) return 0; // unknown age: do not demote on missing data
-	return (Date.now() - Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6])) / 86_400_000;
-}
-
-// "ran 5m ago" from the newest tenant cycle DIR id (the single source of
-// run-state truth) — never from operator-scoped wf.last_run_ts.
-function whenLastFromCycle(ts?: string): string {
-	if (!ts) return "";
-	const m = ts.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
-	if (!m) return "";
-	const t = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
-	const s = (Date.now() - t) / 1000;
-	if (s < 60) return "ran just now";
-	if (s < 3600) return `ran ${Math.floor(s / 60)}m ago`;
-	if (s < 86400) return `ran ${Math.floor(s / 3600)}h ago`;
-	return `ran ${Math.floor(s / 86400)}d ago`;
-}
 
 // Cache the latest-cycle summary per (app:loop) for instant re-open.
 const cycleCache = new Map<string, { ts: string | null; summary: CycleSummary | null }>();
@@ -163,109 +131,42 @@ function navReducer(stack: ViewFrame[], action: NavAction): ViewFrame[] {
 	}
 }
 
-// VersionDots — the compact run-tree version strip shown by the workflow title.
-// Driven by the SAME source as the run tree (the trajectory), so the dots line
-// up one-for-one with its nodes: baseline, v1, v2, … in order. Each dot is
-// colored by trend vs baseline and clicking it pins that version. Replaces the
-// old loop-health RunSparkline, whose runs didn't correspond to the tree.
-function VersionDots({ app, loop, currentId, onPick, outcomes }: {
-	app: string; loop: string; currentId?: string; onPick?: (v: TrajectoryVersion) => void;
-	outcomes?: RunOutcomes;
+// RunningNow — the header while a run is going: "Running 1m 20s · usually
+// ~51s", ember once it is clearly overdue, and Stop beside it. Clicking the
+// pill opens the live session (as the old "Running… show logs" chip did).
+function RunningNow({ startedSec, typicalS, busy, onStop, onOpen }: {
+	startedSec: number | null; typicalS?: number; busy: boolean; onStop: () => void; onOpen: () => void;
 }) {
-	const [traj, setTraj] = useState<Trajectory | null>(null);
-	const [expanded, setExpanded] = useState(false); // "+N" click → show the full strip
-	const load = useCallback(() => {
-		let live = true;
-		fetchTrajectory(app, loop).then((t) => { if (live) setTraj(t); }).catch(() => {});
-		return () => { live = false; };
-	}, [app, loop]);
-	useEffect(() => load(), [load]);
-	useStudioRefetch(["runs", "cycles", "loops", "workflows"], load);
-
-	const nodes = traj?.nodes ?? [];
-	if (nodes.length === 0) return null;
-	const baseline = traj?.baseline ?? null;
-	const hib = traj?.higher_is_better !== false;
-	const fmt = (v?: number | null) => v == null ? "—" : (v >= -1 && v <= 1 ? `${Math.round(v * 100)}%` : Number.isInteger(v) ? String(v) : String(+v.toFixed(3)));
-	const verN = (n: TrajectoryNode) => parseInt((n.agent_version || "").replace(/\D/g, "")) || 0;
-	const ordered = [...nodes].sort((a, b) => {
-		if (a.kind === "baseline") return -1;
-		if (b.kind === "baseline") return 1;
-		return verN(a) - verN(b);
-	});
-	const dotCls = (n: TrajectoryNode) => {
-		if (n.kind === "baseline") return "bg-ink-400";
-		if (!n.scored || n.score == null) return "bg-ink-300";
-		const d = baseline != null ? (hib ? n.score - baseline : baseline - n.score) : 0;
-		return d > 1e-6 ? "bg-gold-400" : d < -1e-6 ? "bg-brick-500" : "bg-ink-400";
-	};
-	// An unscored run says "not scored", never "—": a dash next to a version
-	// reads as a broken metric binding, which is the exact confusion this
-	// surface was rebuilt to remove. The run-tree node already words it this
-	// way; the dot tooltip was the last place still showing the dash.
-	//
-	// Except on a loop that records no per-run score at all (command loops such
-	// as backtest / analyze): there every run was "not scored", which says
-	// nothing. Show the run's outcome + duration instead (same rule as the
-	// run-tree node, treeShowsScores / runOutcomeLabel in TrajectoryGraph).
-	const showsScores = treeShowsScores(traj);
-	const scoreLabel = (v?: number | null) => (v == null ? "not scored" : fmt(v));
-	const runLabel = (n: TrajectoryNode) => n.score != null ? fmt(n.score)
-		: showsScores ? "not scored"
-		: runOutcomeLabel(n, outcomes);
-	const label = (n: TrajectoryNode) => n.kind === "baseline"
-		? `baseline · ${scoreLabel(baseline)}`
-		: [n.agent_version || "run", n.model, runLabel(n)].filter(Boolean).join(" · ");
-	// Cap the strip: show the baseline + the last 6 runs (and always the
-	// selected one); older runs collapse into a "+N" marker so the dots never
-	// crowd the title line.
-	const MAX_RUNS = 6;
-	const headCount = ordered.length > 0 && ordered[0].kind === "baseline" ? 1 : 0;
-	let shown = ordered, hidden = 0;
-	const rest = ordered.slice(headCount);
-	if (!expanded && rest.length > MAX_RUNS) {
-		const head = ordered.slice(0, headCount);
-		let tail = rest.slice(-MAX_RUNS);
-		const selNode = currentId ? rest.find((n) => n.run_ts === currentId || n.cycle_ts === currentId) : undefined;
-		if (selNode && !tail.includes(selNode)) tail = [selNode, ...tail].slice(-MAX_RUNS);
-		hidden = rest.length - tail.length;
-		shown = [...head, ...tail];
-	}
+	const now = useNowSec(startedSec != null);
+	const elapsed = startedSec != null ? Math.max(0, now - startedSec) : null;
+	const late = elapsed != null && isOverdue(elapsed, typicalS);
 	return (
-		<span className="inline-flex items-center gap-1 flex-nowrap" title="run-tree versions — baseline, v1, v2, …">
-			{shown.map((n, i) => {
-				const sel = !!currentId && (n.run_ts === currentId || n.cycle_ts === currentId);
-				return (
-					<Fragment key={n.id}>
-						{hidden > 0 && i === headCount && (
-							<button type="button" onClick={() => setExpanded(true)}
-								className="text-micro leading-none text-ink-600 hover:text-ink-700 px-1.5 py-1.5 min-h-[24px] inline-flex items-center tabular-nums cursor-pointer"
-								title={`show ${hidden} earlier run${hidden === 1 ? "" : "s"}`}>+{hidden}</button>
-						)}
-						<button type="button" title={label(n)}
-							onClick={() => onPick?.({ cycleTs: n.cycle_ts, runTs: n.run_ts, label: n.agent_version || n.label, agentVersion: n.agent_version, dataVersion: n.data_version, metric: traj?.metric, score: n.score })}
-							className={cn("w-2 h-2 rounded-full transition-transform hover:scale-125 relative before:absolute before:-inset-2 before:content-['']", dotCls(n), sel && "ring-2 ring-lagoon-300 ring-offset-1")} />
-					</Fragment>
-				);
-			})}
+		<span className="inline-flex items-center gap-1.5 flex-shrink-0">
+			<button type="button" onClick={onOpen} title="Open the running session"
+				className={cn("inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg border text-caption transition-colors",
+					late ? "border-ember-200 bg-ember-50 hover:bg-ember-100" : "border-lagoon-200 bg-lagoon-50 hover:bg-lagoon-100")}>
+				<StatusDot tone={late ? "attention" : "running"} pulse />
+				<span className={cn("font-medium hidden sm:inline", late ? "text-ember-700" : "lumen-shine")}>{late ? "Taking longer" : "Running"}</span>
+				{!late && <span className="hidden sm:inline-flex"><WorkingDots /></span>}
+				{elapsed != null && <span className="font-mono tabular-nums text-ink-700">{fmtDuration(elapsed)}</span>}
+				{typicalS && <span className="text-ink-600 hidden md:inline">· usually {fmtTypical(typicalS)}</span>}
+			</button>
+			<button type="button" onClick={onStop} disabled={busy} title="Stop the run at its next step" aria-label="Stop the run"
+				className="inline-flex items-center gap-1.5 h-8 px-2.5 text-caption font-medium rounded-lg border border-brick-200 bg-card text-brick-700 hover:bg-brick-50 lumen-press disabled:opacity-50 transition-colors">
+				{busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Square className="w-3.5 h-3.5" />}<span className="hidden sm:inline">Stop</span>
+			</button>
 		</span>
 	);
 }
 
 export default function WorkflowObservabilityPanel({
 	app, loop, wf, loopHealth, onChanged, runId: routeRunId, canDelete, onDelete, identity,
-	onShare, shareBusy,
 }: {
 	app: string;
 	loop: string;
 	wf: MeWorkflowRow;
 	loopHealth?: LoopHealth;
 	onChanged?: () => void;
-	// Pull / publish the AGENT (app) repo — lifted up from the apps.tsx toolbar
-	// into this header (left of Run/Stop). The owner runs shareAction(); this
-	// panel only renders the buttons + reflects its busy state.
-	onShare?: (action: "pull" | "publish") => void;
-	shareBusy?: string | null;
 	// App version/publish state (for the Tune tab's versioning header).
 	identity?: AppIdentity;
 	// The run this page is ABOUT — the :runId of /studio/apps/:app/w/:loop/r/:runId
@@ -291,30 +192,29 @@ export default function WorkflowObservabilityPanel({
 	// (Per-workflow model picker removed — the model is chosen per run in the
 	// Plan-next composer's Config overrides, which is where it actually matters.)
 
-	// Run-now is now launched from the Plan-next-run composer (the header's
-	// "Plan next run" button), which owns scope/branch/criteria/schedule.
+	// Run now = one click, no dialog: the workflow runs as configured. Running
+	// it WITH a change (a branch, a version, a case subset, a fan-out) is the
+	// composer, under the app menu's "Run with changes…".
+	const runNow = async () => {
+		setBusy("run");
+		try {
+			const launched = await me.launchRun(app, loop, {});
+			toast.success("Started — it shows in Runs in a moment.");
+			// 202 = identity accepted it, not that the scheduler could start it;
+			// this reports the scheduler's own reason if the dispatch dies.
+			void reportDispatchFailure(String(launched?.job_id ?? ""), loop);
+			setOptimisticRun(true);
+			window.setTimeout(() => setOptimisticRun(false), 120_000);
+		} catch (e) {
+			toast.error(`Couldn't start it: ${e instanceof MeApiError ? e.message : String(e)}`);
+		} finally { setBusy(null); }
+	};
 	const stopRun = async () => {
 		setBusy("run");
 		try {
 			await me.stopLoop(app, loop);
 			setOptimisticRun(false);
 			toast.success("Stopping — the run will halt at its next step.");
-		} catch (e) {
-			toast.error(`Failed: ${e instanceof MeApiError ? e.message : String(e)}`);
-		} finally { setBusy(null); }
-	};
-	const toggle = async () => {
-		const target = !(wf.enabled !== false);
-		setBusy("toggle");
-		try {
-			// Wait for the scheduler to APPLY it: patchLoop now returns 202 with an
-			// intent id (identity mounts no tenant volume and cannot write the
-			// overrides file itself). Without the wait the optimistic value is
-			// overwritten by the next 20s poll reading the pre-patch state, which
-			// looks exactly like a save that silently failed.
-			await patchLoopApplied(app, loop, { enabled: target });
-			toast.success(target ? "Resumed" : "Paused");
-			onChanged?.();
 		} catch (e) {
 			toast.error(`Failed: ${e instanceof MeApiError ? e.message : String(e)}`);
 		} finally { setBusy(null); }
@@ -668,7 +568,6 @@ export default function WorkflowObservabilityPanel({
 		const owner = (wf.datasets_detail || []).map((d) => d.repo).find(Boolean)?.split("/")[0];
 		return owner ? `${owner}/${app}` : undefined;
 	})();
-	const cyclesKnown = cycleList !== null;
 	// Outcome + duration per run (cycle-dir id → row) for the run tree / version
 	// dots on loops that record no per-run score.
 	// Keyed on a content signature, not the array: the 20s poll replaces
@@ -704,14 +603,21 @@ export default function WorkflowObservabilityPanel({
 	}, [app, wf?.slug]);
 	const liveRunning = (cycleList ?? []).some((c) => c.running);
 	const running = optimisticRun || liveRunning;
+	// For the header's "Running 1m 20s · usually ~51s": when the live run
+	// started (its cycle dir-id), and this workflow's typical successful run.
+	const runningSince = dirIdToSec((cycleList ?? []).find((c) => c.running)?.ts) ?? null;
+	const typicalS = useMemo(() => {
+		const ds = (cycleList ?? []).filter((c) => c.ok && (c.duration_s ?? 0) > 0).map((c) => c.duration_s as number).sort((a, b) => a - b);
+		return ds.length >= 2 ? ds[Math.floor(ds.length / 2)] : undefined;
+	}, [cycleList]);
+	// "Is it working?" in one sentence — replaces the "Needs attention" chip.
+	const statusLine = cycleList ? workflowStatusLine(cycleList) : null;
 	// Tell the chat's floating session box which workflow is selected + whether
 	// it's running, so an open box re-binds to its live run or closes (never
 	// shows a stale workflow's run). Re-fires when `running` flips.
 	useEffect(() => {
-		window.dispatchEvent(new CustomEvent("studio:workflow-selected", { detail: { app, loop, running } }));
-	}, [app, loop, running]);
-	const h = health(wf, tenantHasRuns || !cyclesKnown, cycleList?.[0]?.ts);
-	const lastRan = whenLastFromCycle(cycleList?.[0]?.ts);
+		window.dispatchEvent(new CustomEvent("studio:workflow-selected", { detail: { app, loop, running, hasExperiment: !!loopExp } }));
+	}, [app, loop, running, loopExp]);
 
 
 	// #17 — the shared context-menu action set. Wires the items that have a
@@ -745,32 +651,36 @@ export default function WorkflowObservabilityPanel({
 		branchWithIntent: (ts: string, label: string) => setBranchFor({ ts, label }),
 	};
 
-	// Run-state chip — rendered inside the TrajectoryGraph's own "Run tree"
-	// header (passed as headerRight), so there's a single run-tree label.
-	const statusChip = (
-		<span className="inline-flex items-center gap-1.5">
-			{running ? (
-				<button type="button"
-					onClick={() => window.dispatchEvent(new CustomEvent("studio:open-session", { detail: { app, loop, ts: "latest" } }))}
-					title="Open the running session conversation"
-					className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-micro font-medium transition hover:brightness-95", h.cls, justRan && "value-pop")}>
-					<span className={cn("w-1.5 h-1.5 rounded-full running-glow", h.dot)} />
-					Running… <span className="font-normal opacity-70 underline decoration-dotted">show logs</span>
-				</button>
-			) : (
-				<span className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-micro font-medium", h.cls, justRan && "value-pop")}>
-					<span className={cn("w-1.5 h-1.5 rounded-full", h.dot)} />
-					{h.label}
-					{lastRan && <span className="font-normal opacity-70">· {lastRan.replace(/^ran /, "")}</span>}
-				</span>
-			)}
-			{!running && stepErrs > 0 && wf.last_run_ok !== false && (
+	// "Is it working?" — one sentence beside the breadcrumb, in words, with an
+	// icon so it never depends on colour: "Failing since 22 Nov · 90 runs in
+	// a row", "Last run succeeded 12m ago · took 51s". Running and paused are
+	// said by the header controls (the running pill, the schedule chip).
+	const statusChip = statusLine ? (
+		<span className={cn("inline-flex items-center gap-1.5 text-caption min-w-0", justRan && "value-pop")} role="status">
+			{statusLine.tone === "failing" ? <AlertTriangle className="w-3.5 h-3.5 text-brick-600 flex-shrink-0" aria-hidden />
+				: statusLine.tone === "ok" ? <CheckCircle2 className="w-3.5 h-3.5 text-gold-600 flex-shrink-0" aria-hidden />
+				: <CircleDashed className="w-3.5 h-3.5 text-ink-500 flex-shrink-0" aria-hidden />}
+			<span className={statusLine.tone === "failing" ? "text-brick-700" : "text-ink-700"}>{statusLine.text}</span>
+			{statusLine.tone === "ok" && stepErrs > 0 && (
 				<span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-ember-200 bg-ember-50 text-ember-700 text-micro font-medium" title="The last run completed but some steps errored">
 					<AlertCircle className="w-3 h-3" />{stepErrs} step error{stepErrs === 1 ? "" : "s"}
 				</span>
 			)}
 		</span>
-	);
+	) : null;
+
+	// The app menu (⋯, apps.tsx) holds this workflow's rarer actions; it
+	// reaches the panel by event because the panel owns their state.
+	useEffect(() => {
+		const h = (e: Event) => {
+			const d = (e as CustomEvent<WfActionDetail>).detail;
+			if (d?.loop !== loop) return;
+			if (d.action === "plan") setBranchFor({ label: "next run" });
+			if (d.action === "experiment") navigate(workflowPath(app, loop, { tab: "experiments" }));
+		};
+		window.addEventListener("studio:wf-action", h);
+		return () => window.removeEventListener("studio:wf-action", h);
+	}, [app, loop, navigate]);
 
 	// The run page's "Change this run" menu — the same RunContextMenu (and its
 	// two-step confirm for Promote / Discard) the lineage tree uses, with the
@@ -800,10 +710,18 @@ export default function WorkflowObservabilityPanel({
 	const tabHref = (t: WorkflowTab) => t === "runs"
 		? (runIdParam ? runPath(app, loop, runIdParam, carryQuery) : workflowPath(app, loop, carryQuery))
 		: workflowPath(app, loop, { tab: t });
+	// Tabs answer questions this workflow actually has. "Study"/"Measurement"
+	// and "Lineage" were shown on every workflow — mostly empty ("a straight
+	// line"), and nobody could say what they were for. Now:
+	//   Runs · Data                      always
+	//   Experiment                       only when an experiment runs here
+	//   Changes tried                    only when runs actually branched
+	// The tab routes stay valid (old links, and ⋯ → "Start an experiment…"
+	// opens ?tab=experiments to offer one) — only the tab bar hides them.
 	const TABS: Array<{ key: WorkflowTab; label: string }> = [
 		{ key: "runs", label: "Runs" },
-		{ key: "experiments", label: loopExp ? "Study" : "Measurement" },
-		{ key: "lineage", label: "Lineage" },
+		...(loopExp || qTab === "experiments" ? [{ key: "experiments" as const, label: loopExp ? "Experiment" : "Start an experiment" }] : []),
+		...(branches || qTab === "lineage" ? [{ key: "lineage" as const, label: "Changes tried" }] : []),
 		{ key: "data", label: "Data" },
 	];
 
@@ -833,55 +751,27 @@ export default function WorkflowObservabilityPanel({
 	return (
 		<ErrorBoundary resetKey={`${app}:${loop}`}>
 		<div className="space-y-3 animate-in fade-in duration-300">
-			{/* RUN CONTROLS — hoisted onto the workflow-selector line (top strip):
-			    version dots · pull/publish · plan-next · pause. Falls back to an
-			    inline row if the portal slot isn't mounted yet. */}
+			{/* RUN CONTROLS — hoisted onto the workflow-selector line (top strip).
+			    Three questions, one control each: when does it run (schedule chip),
+			    run it now (or: it is running — for how long — Stop), and the app
+			    menu (⋯, owned by apps.tsx) for everything else. The version dots,
+			    "+N" and Pull/Publish icons that sat here are gone: the dots were an
+			    unlabelled copy of the runs list and Pull/Publish already live in ⋯. */}
 			{(() => {
 				const controls = (
-					<div className="flex items-center gap-1.5 flex-wrap min-w-0">
-						{/* Run-version dots are an operator's view (the runs list carries
-						    the same history for everyone else). */}
-						{isAdminRole && <>
-						<VersionDots app={app} loop={loop} currentId={version?.runTs || version?.cycleTs || overlayTs || undefined}
-							onPick={(v) => { pinVersion(v); const ts = v.cycleTs || v.runTs; if (ts) navigate(runPath(app, loop, ts)); }}
-							outcomes={runOutcomes} />
-						<span className="w-px h-5 bg-ink-200 mx-0.5" aria-hidden />
-						</>}
-						{onShare && assetTab !== "data" && (
-							<>
-								<button onClick={() => onShare("pull")} disabled={!!shareBusy}
-									title="Pull agent updates — merge the latest upstream version (your local edits are preserved)"
-									aria-label="Pull agent updates"
-									className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-ink-200 bg-card text-ink-600 hover:text-ink-800 hover:border-ink-300 disabled:opacity-40 transition-colors">
-									{shareBusy === "pull" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <DownloadCloud className="w-3.5 h-3.5" />}
-								</button>
-								<button onClick={() => onShare("publish")} disabled={!!shareBusy}
-									title="Publish the agent — push your local changes to your xp.io repo (version auto-bumps)"
-									aria-label="Publish agent changes"
-									className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-ink-200 bg-card text-ink-600 hover:text-ink-800 hover:border-ink-300 disabled:opacity-40 transition-colors">
-									{shareBusy === "publish" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
-								</button>
-							</>
-						)}
+					<div className="flex items-center gap-1.5 flex-shrink-0">
+						<ScheduleChip app={app} loop={loop} trigger={wf.trigger || loopHealth?.schedule || ""} enabled={enabled} onChanged={onChanged} />
 						{running ? (
-							<button onClick={stopRun} disabled={busy === "run"}
-								className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-brick-500 text-white hover:bg-brick-600 active:scale-95 disabled:opacity-50 transition-all shadow-sm">
-								{busy === "run" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Square className="w-3.5 h-3.5" />}
-								Stop
-							</button>
+							<RunningNow startedSec={runningSince} typicalS={typicalS} busy={busy === "run"} onStop={stopRun}
+								onOpen={() => window.dispatchEvent(new CustomEvent("studio:open-session", { detail: { app, loop, ts: "latest" } }))} />
 						) : (
-							<button onClick={() => setBranchFor({ label: "next run" })} disabled={!!busy}
-								title="Plan the next run — branch · change · criteria · fan-out · case scope · schedule"
-								className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-gold-700 text-white hover:bg-gold-800 active:scale-95 disabled:opacity-50 transition-all shadow-sm shadow-gold-100">
+							<button onClick={runNow} disabled={!!busy}
+								title="Run this workflow now, as it is configured" aria-label="Run now"
+								className="inline-flex items-center gap-1.5 h-8 px-2 sm:px-3 text-caption font-medium rounded-lg bg-gold-700 text-white hover:bg-gold-800 lumen-press disabled:opacity-50 transition-colors shadow-e1 flex-shrink-0">
 								{busy === "run" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
-								Plan next run
+								<span className="hidden sm:inline">Run now</span>
 							</button>
 						)}
-						<button onClick={toggle} disabled={!!busy} title={enabled ? "Pause this workflow's schedule" : "Resume this workflow's schedule"}
-							className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border border-ink-200 bg-card text-ink-600 hover:bg-ink-50 disabled:opacity-50">
-							{busy === "toggle" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : enabled ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-							{enabled ? "Pause" : "Resume"}
-						</button>
 					</div>
 				);
 				return wfControlsTarget ? createPortal(controls, wfControlsTarget) : <div className="flex flex-wrap items-center gap-2">{controls}</div>;
@@ -1455,7 +1345,7 @@ function GoalHeader({ goal, app, loop, onSaved }: { goal?: { primary: string; tr
 		<Popover open={open} onOpenChange={setOpen}>
 			<div className="rounded-xl border border-gold-200/70 bg-gradient-to-br from-gold-50/80 to-white px-3 py-2.5 flex items-center gap-2 flex-wrap">
 				<Target className="w-4 h-4 text-gold-600 flex-shrink-0" />
-				<span className="text-micro uppercase tracking-wide text-gold-700/70 font-semibold flex-shrink-0" title={(goal?.tracked || []).join(" · ")}>Goal</span>
+				<span className="text-micro uppercase tracking-wide text-gold-700/70 font-semibold flex-shrink-0" title={(goal?.tracked || []).join(" · ")}>Aiming for</span>
 				{shown ? (
 					<>
 						<PopoverTrigger asChild>
@@ -1469,7 +1359,7 @@ function GoalHeader({ goal, app, loop, onSaved }: { goal?: { primary: string; tr
 					</>
 				) : (
 					<PopoverTrigger asChild>
-						<button type="button" className="text-meta text-gold-700/80 hover:text-gold-700 font-medium transition-colors flex-shrink-0 min-h-[24px] inline-flex items-center">+ Set a goal</button>
+						<button type="button" className="text-meta text-gold-700/80 hover:text-gold-700 font-medium transition-colors flex-shrink-0 min-h-[24px] inline-flex items-center">+ Say what this should achieve</button>
 					</PopoverTrigger>
 				)}
 			</div>

@@ -11,7 +11,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { AlertTriangle, ArrowRight } from "lucide-react";
 import type { MeRunRow } from "@/api/me";
 import {
-	groupActivity, fmtDuration, fmtTypical, fmtSince, progressOf, isOverdue,
+	groupActivity, fmtDuration, fmtTypical, fmtSince, fmtAgo, progressOf, isOverdue,
 	type RunningItem, type WorkflowActivity, type AppActivity,
 } from "@/lib/activity";
 import { runRowHref, workflowPath } from "@/lib/run-routes";
@@ -27,13 +27,7 @@ import { useNowSec } from "./hooks";
 const title = (wf: WorkflowActivity) => loopLabel(wf.name, wf.loop);
 const appName = (app: string) => (app ? appTitle(app) : "Other");
 
-function ago(sec: number, now: number): string {
-	const d = Math.max(0, now - sec);
-	if (d < 60) return "just now";
-	if (d < 3600) return `${Math.floor(d / 60)}m ago`;
-	if (d < 86400) return `${Math.floor(d / 3600)}h ago`;
-	return `${Math.floor(d / 86400)}d ago`;
-}
+const ago = fmtAgo;
 
 function money(cents: number): string {
 	if (!cents) return "";

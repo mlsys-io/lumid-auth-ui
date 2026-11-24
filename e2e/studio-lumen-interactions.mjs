@@ -12,6 +12,7 @@
 //   motion    prefers-reduced-motion: rise/lift stop, loaders become a fade
 //   error     a 500 renders ErrorState; Retry recovers without a reload
 //   activity  /studio/runs: 7-day default, Needs fixing in words, Open run
+//   wf header schedule chip in words · Run now · ⋯ grouped This workflow / This app
 //   filters   Segmented radios on the Timeline view switch state (aria-checked)
 //   docs      index card -> reader (skeleton -> article) -> back
 //   sessions  /claude-sessions search narrows and clears
@@ -238,6 +239,40 @@ await section('Activity', async () => {
 	} else note('nothing failing in this window — Needs fixing not exercised');
 	const status = await page.locator('main').innerText();
 	assert(/updated \d{1,2}:\d{2}/.test(status), 'status line says when the feed was updated');
+	await page.close();
+});
+
+// ── workflow header: when it runs · run now · one grouped menu ────────────
+await section('workflow header', async () => {
+	const page = await desk.ctx.newPage();
+	const WF = process.env.WF_PATH || '/studio/apps/quant-research/w/backtest';
+	await page.goto(`${BASE}${WF}`, { waitUntil: 'domcontentloaded' });
+	const sched = page.locator('button[aria-label^="Schedule: "]');
+	try { await sched.waitFor({ timeout: 30000 }); } catch { note(`no workflow at ${WF} for this account — set WF_PATH`); await page.close(); return; }
+	const label = await sched.getAttribute('aria-label');
+	assert(/^Schedule: (Every |Daily|Weekdays|On demand|Paused|Mon|Tue|Wed|Thu|Fri|Sat|Sun|Custom)/.test(label), `schedule chip speaks in words (${label})`);
+	const strip = await page.locator('#topstrip-wf-controls').innerText();
+	assert(!/Plan next run|^\+\d+/m.test(strip), 'no "Plan next run" / "+N" dots in the header');
+	assert(await page.locator('#topstrip-wf-controls button[aria-label="Run now"], #topstrip-wf-controls button[aria-label="Stop the run"]').count() === 1, 'one run control: Run now, or Stop while running');
+	await sched.click();
+	await page.getByRole('button', { name: /Pause schedule|Resume schedule|Set a schedule|Change schedule/ }).first().waitFor({ timeout: 5000 });
+	assert(true, 'the chip opens to pause / change the schedule');
+	await page.keyboard.press('Escape');
+	await page.locator('button[aria-label="App actions"]').click();
+	const menu = page.getByRole('menu');
+	await menu.waitFor({ timeout: 5000 });
+	const mt = await menu.innerText();
+	assert(/This workflow/i.test(mt) && /This app/i.test(mt), 'menu says what each group acts on (This workflow / This app)');
+	assert(/Run with changes/.test(mt) && !/\bagent\b/i.test(mt), 'menu: "Run with changes…", and "app" not "agent"');
+	await menu.getByText('Run with changes…').click();
+	const dlg = page.getByText('Run with changes', { exact: true });
+	await dlg.waitFor({ timeout: 5000 });
+	assert(await dlg.isVisible(), 'menu → Run with changes opens the composer');
+	await page.keyboard.press('Escape');
+	await page.getByRole('button', { name: 'Cancel' }).last().click().catch(() => {});
+	await page.waitForTimeout(300);
+	const tabs = await page.locator('[role=tablist][aria-label="Workflow views"] [role=tab]').allInnerTexts();
+	assert(!tabs.some((t) => /Study|Measurement|Lineage/.test(t)), `tabs are plain (${tabs.map((t) => t.replace(/\d+/g, '').trim()).join(' · ')})`);
 	await page.close();
 });
 

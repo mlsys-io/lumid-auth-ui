@@ -212,7 +212,7 @@ export default function RunContextMenu({
 					{/* Branch WITH INTENTION (WS-5) — opens the dialog when wired; else
 					    falls back to the bare runtime branch so the contract still works. */}
 					{actions.branchWithIntent ? (
-						<Row icon={GitBranch} label="Plan next run…" tone="gold" sub="branch from here · change · run or schedule"
+						<Row icon={GitBranch} label="Run with changes…" tone="gold" sub="start from this run, change something, run it"
 							onClick={wired(() => actions.branchWithIntent!(target.ts!, target.label))} />
 					) : (
 						<Row icon={GitBranch} label="Branch out" tone="gold" busy={busy === "branch"} pending={pending["branch"]}
