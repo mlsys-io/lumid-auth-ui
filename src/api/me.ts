@@ -898,6 +898,10 @@ export const me = {
       count: number;
       total: number;
       next_cursor: string;
+      // identity v0.5.477+: more rows past next_cursor (keyset paging), and
+      // each source's outcome (journal / store / n8n → ok | timeout | …).
+      has_more?: boolean;
+      sources?: Record<string, string>;
       as_of: string;
     }>("GET", q ? `/runs?${q}` : "/runs");
   },
