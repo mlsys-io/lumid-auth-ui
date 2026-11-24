@@ -76,6 +76,19 @@ check("answer: a fast failure with no reason says so", () =>
 	eq(runAnswer({ ok: false, steps: [], summary: {} } as unknown as MeCycleDetail, { durationS: 0.723 }).sentence, "No reason was recorded"));
 check("answer: nothing loaded yet, list row says running", () => eq(runAnswer(null, { running: true }).tone, "running"));
 check("answer: list says failed, detail not loaded — no invented reason", () => eq(runAnswer(null, { ok: false, durationS: 62 }), { tone: "failed", headline: "Failed after 1m 02s", sentence: "" }));
+check("counts that contain 'rate' are not rates", () => eq(fmtMetricValue(1, "", "proposals_generated"), "1"));
+check("equal counts without a unit both stay", () => {
+	const d = { ok: true, summary: { metrics: { cases_total: 12, cases_passed: 12 } } } as unknown as MeCycleDetail;
+	eq(runMetrics(d).map((m) => m.key), ["cases_total", "cases_passed"]);
+});
+check("a step-only error is the raw text triage sees", () => {
+	const d = { ok: false, steps: [{ step_id: "analyst", ok: false, error: "ModuleNotFoundError: No module named 'skills.analyst'" }], summary: {} } as unknown as MeCycleDetail;
+	const a = runAnswer(d);
+	eq(a.raw, "ModuleNotFoundError: No module named 'skills.analyst'");
+	eq(a.sentence, "App error: No module named 'skills.analyst'");
+});
+check("summary.step_errors is a reason too", () =>
+	eq(runAnswer({ ok: false, steps: [], summary: { step_errors: [{ step: "x", error: "HTTP Error 503: Service Unavailable" }] } } as unknown as MeCycleDetail).sentence, "Service unavailable (HTTP 503)"));
 check("vs usual", () => {
 	eq(vsUsual(22.4, [20, 20, 20]), { text: "+12% vs usual", better: true });
 	eq(vsUsual(700, [800, 800, 800], false), { text: "-12% vs usual", better: true });

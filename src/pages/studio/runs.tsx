@@ -46,7 +46,9 @@ export default function StudioRuns() {
 		if (v == null || v === "") sp.delete(k); else sp.set(k, v);
 		setParams(sp, { replace: true });
 	};
-	const view: View = (VIEWS as string[]).includes(params.get("view") || "") ? (params.get("view") as View) : "index";
+	// `?state=` (e.g. the rail's "+N more failed") asks for a run LIST, which
+	// only the Timeline views render — open the list rather than ignore it.
+	const view: View = (VIEWS as string[]).includes(params.get("view") || "") ? (params.get("view") as View) : params.get("state") ? "list" : "index";
 	const setView = (v: View) => setParam("view", v === "index" ? null : v);
 	const stateFilter = params.get("state") || "";
 	const setStateFilter = (v: string) => setParam("state", v || null);
@@ -54,7 +56,7 @@ export default function StudioRuns() {
 	const setWindowDays = (n: number) => setParam("days", n === DEFAULT_DAYS ? null : String(n));
 	const appFilter = params.get("app") || "";
 
-	const { runs, err, asOf, reload, truncated } = useRunsFeed(windowDays);
+	const { runs, err, asOf, reload, truncated } = useRunsFeed(windowDays, view === "index" ? "" : stateFilter);
 	const entrance = useOncePerSession("activity");
 
 	const windowControl = (
@@ -152,11 +154,14 @@ export default function StudioRuns() {
 				/>
 				{windowControl}
 				<div className="ml-auto text-caption tabular-nums text-ink-600">
-					{shown.length} runs
+					{/* At the 500-row cap the window holds more than is shown — say so. */}
+					{shown.length} runs{truncated && runs?.length ? ` · the newest ${runs.length} in this window` : ""}
 				</div>
 			</div>
 
-			{runs === null ? (
+			{runs === null && err ? (
+				<ErrorState error={new Error(err)} onRetry={reload} />
+			) : runs === null ? (
 				<div className="space-y-2" role="status" aria-label="Loading runs">
 					{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-10 rounded-lg" />)}
 				</div>

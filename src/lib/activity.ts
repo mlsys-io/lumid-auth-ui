@@ -239,16 +239,6 @@ export function plainCause(reason?: string | null): string {
 	const every = s.match(/^every arm failed:\s*(.*)$/i);
 	if (every) { prefix = "Every version failed: "; s = every[1].replace(/^\{\s*['"][^'"]+['"]\s*:\s*['"]?/, ""); }
 
-	// "<context>: HTTP Error 503: Service Unavailable" / "HTTP 500: {json}"
-	const http = s.match(/^(.*?)(?:HTTP(?: Error)?\s*|\()(\d{3})\b/i);
-	if (http && HTTP_WORDS[http[2]]) {
-		const ctx = http[1].replace(/[:\s(]+$/, "").replace(/^\w+(Error|Exception):\s*/, "");
-		const words = `${HTTP_WORDS[http[2]].toLowerCase()} (HTTP ${http[2]})`;
-		return clip(withPrefix(prefix, ctx ? `${sentence(ctx)}: ${words}` : sentence(words)));
-	}
-
-	if (/timed? ?out|TimeoutError|deadline exceeded/i.test(s)) return prefix + "Timed out";
-
 	// "commands/x.py exited with status 2: <usage>; x: error: <msg> — <hint>"
 	// (argparse and friends): the part after "error:" is the reason.
 	const exited = s.match(/exited with (?:status|code) (\d+)/i);
@@ -256,6 +246,19 @@ export function plainCause(reason?: string | null): string {
 		const msg = s.match(/\berror:\s*([^—\n]+)/i)?.[1]?.trim().replace(/[.;]$/, "");
 		return clip(withPrefix(prefix, msg ? `App error: ${msg}` : `The app's command stopped (exit ${exited[1]})`));
 	}
+
+	// "<context>: HTTP Error 503: Service Unavailable" / "HTTP 500: {json}"
+	// The paren form only as "(500):" — a bare "(404 duplicate keys)" is a count.
+	const http = s.match(/^(.*?)(?:HTTP(?: Error)?\s*(\d{3})\b|\((\d{3})\)\s*:)/i);
+	const code = http ? (http[2] || http[3]) : "";
+	if (http && HTTP_WORDS[code]) {
+		const ctx = http[1].replace(/[:\s(]+$/, "").replace(/^\w+(Error|Exception):\s*/, "");
+		const words = `${HTTP_WORDS[code].toLowerCase()} (HTTP ${code})`;
+		return clip(withPrefix(prefix, ctx ? `${sentence(ctx)}: ${words}` : sentence(words)));
+	}
+
+	if (/(?<![-\w])(timed? ?out|TimeoutError|deadline exceeded)/i.test(s)) return prefix + "Timed out";
+
 
 	// A bare snake_case outcome ("backend_unavailable").
 	if (/^[a-z]+(_[a-z]+)+$/.test(s)) return withPrefix(prefix, sentence(s.replace(/_/g, " ")));
