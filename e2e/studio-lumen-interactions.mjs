@@ -303,11 +303,21 @@ if (SKIP_CHAT) {
 	}, null, { timeout: 120000 }).then(() => true).catch(() => false);
 	assert(answered, 'assistant answer lands ("OK")');
 	await page.screenshot({ path: `${SHOTS}/chat-answer.png` });
-	const id = page.url().match(/\/studio\/chat\/([^/?#]+)/)?.[1];
-	if (id) {
-		const del = await page.evaluate(async (cid) => (await fetch('/api/v1/me/chats/' + encodeURIComponent(cid), { method: 'DELETE', credentials: 'include' })).status, id);
-		note(`cleanup: DELETE thread ${id} -> ${del}`);
-	} else note('cleanup: thread id not in URL — delete it by hand from Recent');
+	// Clean up by TITLE, not URL: the composer keeps /studio while a fresh
+	// thread streams, and the save is debounced, so the id may never reach the
+	// address bar (or the thread may never persist at all).
+	await page.waitForTimeout(4000);
+	const removed = await page.evaluate(async (needle) => {
+		const r = await fetch('/api/v1/me/chats?limit=20', { credentials: 'include' });
+		const j = await r.json().catch(() => ({}));
+		const d = j?.data ?? j;
+		const rows = Array.isArray(d) ? d : (d?.chats ?? []);
+		const hits = rows.filter((c) => (c.title || '').includes(needle) || (c.preview || '').includes(needle));
+		const out = [];
+		for (const c of hits) out.push(`${c.id}:${(await fetch('/api/v1/me/chats/' + encodeURIComponent(c.id), { method: 'DELETE', credentials: 'include' })).status}`);
+		return out;
+	}, 'Reply with exactly the word');
+	note(removed.length ? `cleanup: deleted ${removed.join(', ')}` : 'cleanup: the test thread was not persisted — nothing to delete');
 	await page.close();
 });
 
