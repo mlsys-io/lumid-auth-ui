@@ -50,7 +50,7 @@ export class ErrorBoundary extends Component<Props, State> {
           Something on this page errored. The rest of Studio still works — reload the page or head back to the chat.
         </p>
         {this.state.message && (
-          <p className="mt-2 text-[11px] text-muted-foreground/70 font-mono break-words">{this.state.message.slice(0, 200)}</p>
+          <p className="mt-2 text-[11px] text-ink-600 font-mono break-words">{this.state.message.slice(0, 200)}</p>
         )}
         <div className="mt-4 flex items-center justify-center gap-2">
           <button

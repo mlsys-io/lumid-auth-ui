@@ -374,7 +374,7 @@ export default function DatasetsMarketsPage() {
 				<TrendingUp className="w-4 h-4 text-primary" />
 				<div className="text-sm font-semibold text-foreground">Markets</div>
 				<span className="text-xs text-muted-foreground hidden lg:inline">{visible.hint}</span>
-				<span className="ml-auto text-[10px] text-muted-foreground/70">loaded {fmtAgo(loadedAt)}</span>
+				<span className="ml-auto text-[10px] text-ink-600">loaded {fmtAgo(loadedAt)}</span>
 				<div className="text-[10px] text-muted-foreground font-mono">kv.run:5000 · markets-wide</div>
 			</div>
 

@@ -110,7 +110,7 @@ function WatchlistEditor({
         }}
         placeholder="+ ticker"
         size={draft.length > 4 ? draft.length + 2 : 6}
-        className="rounded border border-dashed border-border bg-transparent px-2 py-0.5 text-xs font-mono uppercase placeholder:text-muted-foreground/70 focus:border-primary focus:bg-background focus:outline-none"
+        className="rounded border border-dashed border-border bg-transparent px-2 py-0.5 text-xs font-mono uppercase placeholder:text-ink-600 focus:border-primary focus:bg-background focus:outline-none"
       />
       {draft && (
         <button onClick={() => { onAdd(draft.trim()); setDraft(""); }}
@@ -254,7 +254,7 @@ function MergedFeed({ watchlist, current }: { watchlist: string[]; current: stri
           {visible.length}{visible.length !== items.length && ` / ${items.length}`} articles ·{" "}
           {current === "all" ? "cross-roster" : current} · last 14 days
         </span>
-        <span className="text-muted-foreground/70 text-[10px]">loaded {fmtAgo(loadedAt)}</span>
+        <span className="text-ink-600 text-[10px]">loaded {fmtAgo(loadedAt)}</span>
         <button onClick={refresh} disabled={loading}
           className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded border border-border hover:bg-accent disabled:opacity-50">
           <RefreshCw className={cn("w-3 h-3", loading && "animate-spin")} /> Refresh
@@ -415,7 +415,7 @@ function NewsStatsBanner() {
       <span className={cn("px-2 py-0.5 rounded-full border font-medium", freshCls)} title={newestIso ?? ""}>
         newest · {freshLabel}
       </span>
-      <span className="text-muted-foreground/70">|</span>
+      <span className="text-ink-600">|</span>
       <span>Last 7d:</span>
       <span><span className="font-mono font-semibold text-foreground">{fmtNumber(total7d, { abbreviate: true, decimals: 1 })}</span> total</span>
       {sorted.map((r) => (

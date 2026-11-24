@@ -198,10 +198,10 @@ export default function CaseBrowser({ config }: NativeSurfaceProps) {
                 {/* The decisive line: what YOU type. Whether you answer or ask
                     flips between modes, and getting it wrong wastes the first
                     turns of a session. */}
-                <div className="mt-2 text-[12px] text-foreground/70 leading-snug">
+                <div className="mt-2 text-[12px] text-ink-800 leading-snug">
                   <span className="text-muted-foreground">You type: </span>{m.youType}
                 </div>
-                <div className="mt-1.5 text-[11px] text-muted-foreground/80">{m.scoring}</div>
+                <div className="mt-1.5 text-[11px] text-ink-600">{m.scoring}</div>
               </button>
             );
           })}
@@ -294,7 +294,7 @@ export default function CaseBrowser({ config }: NativeSurfaceProps) {
                     <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1">
                       Opening
                     </div>
-                    <p className="text-[13px] text-foreground/90 leading-relaxed whitespace-pre-wrap">
+                    <p className="text-[13px] text-ink-900 leading-relaxed whitespace-pre-wrap">
                       {detail.opening_prompt}
                     </p>
                   </div>
@@ -310,7 +310,7 @@ export default function CaseBrowser({ config }: NativeSurfaceProps) {
                         typeof v === "string" || typeof v === "number" ? (
                           <div key={k} className="flex gap-2">
                             <dt className="text-muted-foreground shrink-0">{k.replace(/_/g, " ")}</dt>
-                            <dd className="text-foreground/90 min-w-0">{String(v)}</dd>
+                            <dd className="text-ink-900 min-w-0">{String(v)}</dd>
                           </div>
                         ) : null,
                       )}
@@ -348,11 +348,11 @@ export default function CaseBrowser({ config }: NativeSurfaceProps) {
                           <li key={qq.q_id} className="text-[13px]">
                             <span className="text-muted-foreground">{qq.q_id}</span>
                             {qq.type && (
-                              <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-foreground/10 text-foreground/70">
+                              <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-foreground/10 text-ink-800">
                                 {qq.type}
                               </span>
                             )}
-                            <div className="text-foreground/90">{qq.question_text}</div>
+                            <div className="text-ink-900">{qq.question_text}</div>
                           </li>
                         ))}
                       </ol>
@@ -389,7 +389,7 @@ export default function CaseBrowser({ config }: NativeSurfaceProps) {
         <span className="text-[12px] text-muted-foreground">
           {activeMode.needsCase && !selected
             ? "Pick a case first."
-            : <>Opens the chat · then you type <span className="text-foreground/70">{activeMode.youType}</span></>}
+            : <>Opens the chat · then you type <span className="text-ink-800">{activeMode.youType}</span></>}
         </span>
       </div>
     </div>

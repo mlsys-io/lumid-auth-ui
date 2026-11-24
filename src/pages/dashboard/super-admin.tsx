@@ -191,7 +191,7 @@ export default function SuperAdminDashboard() {
 			{/* Build provenance — what commit of this bundle is actually
 			    running (code↔running-binary drift gap). Baked at build time
 			    via vite `define` (__BUILD_COMMIT__ / __BUILD_TIME__). */}
-			<p className="text-[10px] text-muted-foreground/60 text-right">
+			<p className="text-[10px] text-ink-600 text-right">
 				build {__BUILD_COMMIT__} · {__BUILD_TIME__}
 			</p>
 		</div>

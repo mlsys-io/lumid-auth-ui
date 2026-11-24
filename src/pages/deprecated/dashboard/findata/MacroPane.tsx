@@ -132,7 +132,7 @@ function CotSymbolPicker({ symbol, onChange }: { symbol: string; onChange: (s: s
         onBlur={apply}
         size={6}
         placeholder="custom"
-        className="rounded border border-dashed border-border bg-transparent px-2 py-0.5 text-xs font-mono uppercase placeholder:text-muted-foreground/70 focus:border-primary focus:bg-background focus:outline-none"
+        className="rounded border border-dashed border-border bg-transparent px-2 py-0.5 text-xs font-mono uppercase placeholder:text-ink-600 focus:border-primary focus:bg-background focus:outline-none"
       />
     </div>
   );

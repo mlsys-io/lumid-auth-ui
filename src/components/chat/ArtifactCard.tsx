@@ -66,7 +66,7 @@ export function ArtifactCard({ id, title }: { id: string; title?: string }) {
 	return (
 		<div className="max-w-lg rounded-xl border border-border bg-card shadow-sm overflow-hidden">
 			<div className="flex items-center gap-1.5 px-3 pt-2 pb-1">
-				<span className="text-[11px] font-medium text-foreground/70 truncate flex-1">{art.title || title || 'Artifact'}</span>
+				<span className="text-[11px] font-medium text-ink-800 truncate flex-1">{art.title || title || 'Artifact'}</span>
 				<a
 					href="/studio"
 					title="Open in Artifacts panel"

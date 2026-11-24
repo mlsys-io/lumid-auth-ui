@@ -75,7 +75,7 @@ export function TurnStatsFooter({ s }: { s: TurnStats }) {
 			{shown.map(([label, value, title]) => (
 				<span key={label} title={title} className="inline-flex items-center gap-1">
 					<span className="opacity-60">{label}</span>
-					<span className="text-foreground/70">{value}</span>
+					<span className="text-ink-800">{value}</span>
 				</span>
 			))}
 		</div>

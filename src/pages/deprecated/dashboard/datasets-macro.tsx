@@ -63,7 +63,7 @@ export default function DatasetsMacroPage() {
         <span className="text-xs text-muted-foreground hidden lg:inline">
           Treasury rates · econ calendar · indicators · IPOs · M&A · FDA · symbol changes · COT
         </span>
-        <span className="ml-auto text-[10px] text-muted-foreground/70">loaded {fmtAgo(loadedAt)}</span>
+        <span className="ml-auto text-[10px] text-ink-600">loaded {fmtAgo(loadedAt)}</span>
         <button onClick={refresh}
           className="flex items-center gap-1 px-2 py-0.5 text-xs rounded border border-border hover:bg-accent">
           <RefreshCw className="w-3 h-3" /> Refresh

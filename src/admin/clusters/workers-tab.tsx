@@ -282,7 +282,7 @@ export default function WorkersTab({ workers, nodes, onChange }: Props) {
 													{n ? (
 														<>
 															<div className="text-sm">{n.hostname}</div>
-															<div className="text-xs text-muted-foreground/80">
+															<div className="text-xs text-ink-600">
 																{n.gpu_type || n.address || "—"}
 															</div>
 														</>
@@ -301,7 +301,7 @@ export default function WorkersTab({ workers, nodes, onChange }: Props) {
 													</span>
 												</td>
 												<td className="py-2 px-2 font-mono text-xs text-muted-foreground">
-													{w.version ? w.version : <span className="text-muted-foreground/50">—</span>}
+													{w.version ? w.version : <span className="text-ink-600">—</span>}
 												</td>
 												<td className="py-2 px-2 text-right">
 													<PriceCell
