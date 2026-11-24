@@ -80,7 +80,7 @@ export default function StudioExperiments() {
 	return (
 		<IndexList
 			showTitle={false}
-			title="Studies"
+			title="Experiments"
 			rows={indexRows}
 			search={indexRows.length > 6}
 			searchPlaceholder="Search studies…"

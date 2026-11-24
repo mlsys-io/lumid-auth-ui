@@ -292,7 +292,7 @@ function ControlMenu({ app, e, onDone }: { app: string; e: MeExperiment; onDone:
 			};
 			if (confirmText[op] && !window.confirm(confirmText[op])) { setBusy(""); return; }
 			if (op === "fork") {
-				const id = window.prompt("New study id — the original is left untouched.");
+				const id = window.prompt("New experiment id — the original is left untouched.");
 				if (!id?.trim()) { setBusy(""); return; }
 				extra = { ...extra, new_id: id.trim() };
 			}

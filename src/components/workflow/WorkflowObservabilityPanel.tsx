@@ -151,9 +151,9 @@ function RunningNow({ startedSec, typicalS, busy, onStop, onOpen }: {
 				{elapsed != null && <span className="font-mono tabular-nums text-ink-700">{fmtDuration(elapsed)}</span>}
 				{typicalS && <span className="text-ink-600 hidden md:inline">· usually {fmtTypical(typicalS)}</span>}
 			</button>
-			<button type="button" onClick={onStop} disabled={busy} title="Stop the run at its next step" aria-label="Stop the run"
+			<button type="button" onClick={onStop} disabled={busy} title="Cancel this run at its next step" aria-label="Cancel the run"
 				className="inline-flex items-center gap-1.5 h-8 px-2.5 text-caption font-medium rounded-lg border border-brick-200 bg-card text-brick-700 hover:bg-brick-50 lumen-press disabled:opacity-50 transition-colors">
-				{busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Square className="w-3.5 h-3.5" />}<span className="hidden sm:inline">Stop</span>
+				{busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Square className="w-3.5 h-3.5" />}<span className="hidden sm:inline">Cancel run</span>
 			</button>
 		</span>
 	);
