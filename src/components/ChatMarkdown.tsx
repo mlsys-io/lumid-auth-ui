@@ -27,10 +27,10 @@ const components: Components = {
 	// Headings — chat is conversational, so we deflate visual weight
 	// vs a docs page. h1 stays prominent but smaller than block-text;
 	// h2/h3 read as section labels inside the bubble.
-	h1: ({ children }) => <h1 className="text-[15px] font-semibold mt-3 first:mt-0 mb-1 text-slate-900">{children}</h1>,
-	h2: ({ children }) => <h2 className="text-[14px] font-semibold mt-2.5 first:mt-0 mb-1 text-slate-900">{children}</h2>,
-	h3: ({ children }) => <h3 className="text-[13.5px] font-semibold mt-2 first:mt-0 mb-0.5 text-slate-800">{children}</h3>,
-	h4: ({ children }) => <h4 className="text-[13px] font-semibold mt-2 first:mt-0 mb-0.5 text-slate-700">{children}</h4>,
+	h1: ({ children }) => <h1 className="text-read font-semibold mt-3 first:mt-0 mb-1 text-ink-900">{children}</h1>,
+	h2: ({ children }) => <h2 className="text-body font-semibold mt-2.5 first:mt-0 mb-1 text-ink-900">{children}</h2>,
+	h3: ({ children }) => <h3 className="text-meta font-semibold mt-2 first:mt-0 mb-0.5 text-ink-800">{children}</h3>,
+	h4: ({ children }) => <h4 className="text-meta font-semibold mt-2 first:mt-0 mb-0.5 text-ink-700">{children}</h4>,
 
 	p: ({ children }) => <p className="leading-relaxed mb-2 last:mb-0">{children}</p>,
 
@@ -51,14 +51,14 @@ const components: Components = {
 		const isBlock = /\n/.test(text) || (className && className.startsWith('language-'));
 		if (isBlock) {
 			return (
-				<pre className="my-2 first:mt-0 last:mb-0 -mx-1 px-3 py-2.5 rounded-lg bg-slate-900 text-slate-100 text-[12px] leading-relaxed overflow-x-auto">
+				<pre className="my-2 first:mt-0 last:mb-0 -mx-1 px-3 py-2.5 rounded-lg bg-ink-900 text-ink-100 text-caption leading-relaxed overflow-x-auto">
 					<code className={className} {...rest}>{children}</code>
 				</pre>
 			);
 		}
 		// Inline code — subtle gray pill so it's distinct from surrounding text.
 		return (
-			<code className="px-1.5 py-0.5 rounded text-[12px] font-mono bg-slate-100 text-slate-800 border border-slate-200/60">
+			<code className="px-1.5 py-0.5 rounded text-caption font-mono bg-ink-100 text-ink-800 border border-ink-200/60">
 				{children}
 			</code>
 		);
@@ -69,20 +69,20 @@ const components: Components = {
 	// Tables — GFM. Wrap in a scrollable container so wide tables
 	// don't bust the bubble width.
 	table: ({ children }) => (
-		<div className="my-2 first:mt-0 last:mb-0 -mx-1 overflow-x-auto rounded-lg border border-slate-200">
-			<table className="min-w-full text-[12px] border-collapse">{children}</table>
+		<div className="my-2 first:mt-0 last:mb-0 -mx-1 overflow-x-auto rounded-lg border border-ink-200">
+			<table className="min-w-full text-caption border-collapse">{children}</table>
 		</div>
 	),
-	thead: ({ children }) => <thead className="bg-slate-50 border-b border-slate-200">{children}</thead>,
+	thead: ({ children }) => <thead className="bg-ink-50 border-b border-ink-200">{children}</thead>,
 	tbody: ({ children }) => <tbody>{children}</tbody>,
-	tr: ({ children }) => <tr className="border-b border-slate-100 last:border-b-0">{children}</tr>,
-	th: ({ children }) => <th className="px-2.5 py-1.5 text-left font-semibold text-slate-700">{children}</th>,
-	td: ({ children }) => <td className="px-2.5 py-1.5 text-slate-700 align-top">{children}</td>,
+	tr: ({ children }) => <tr className="border-b border-ink-100 last:border-b-0">{children}</tr>,
+	th: ({ children }) => <th className="px-2.5 py-1.5 text-left font-semibold text-ink-700">{children}</th>,
+	td: ({ children }) => <td className="px-2.5 py-1.5 text-ink-700 align-top">{children}</td>,
 
 	// Blockquote — subtle left-bar treatment, mirrors the agent's
 	// "quoting back" voice.
 	blockquote: ({ children }) => (
-		<blockquote className="my-2 first:mt-0 last:mb-0 pl-3 border-l-2 border-gold-300 text-slate-600 italic">
+		<blockquote className="my-2 first:mt-0 last:mb-0 pl-3 border-l-2 border-gold-300 text-ink-600 italic">
 			{children}
 		</blockquote>
 	),
@@ -111,12 +111,12 @@ const components: Components = {
 			src={src}
 			alt={alt}
 			loading="lazy"
-			className="my-2 first:mt-0 last:mb-0 max-w-full max-h-80 rounded-lg border border-slate-200 object-contain bg-white"
+			className="my-2 first:mt-0 last:mb-0 max-w-full max-h-80 rounded-lg border border-ink-200 object-contain bg-card"
 		/>
 	),
 
 	// HR — visible separator inside a bubble.
-	hr: () => <hr className="my-3 border-slate-200" />,
+	hr: () => <hr className="my-3 border-ink-200" />,
 
 	// Emphasis colors that read on white (assistant) — user bubble
 	// (dark background) inherits white text via the wrapper, so we
@@ -190,7 +190,7 @@ export const ChatMarkdown = memo(function ChatMarkdown({ children, dark }: Props
 			'[&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_.katex-display]:py-1 [&_.katex-display]:my-2',
 			// The dark variant flips code/table backgrounds so they stay
 			// legible on the user-bubble dark background.
-			dark ? '[&_code]:bg-slate-800 [&_code]:text-slate-100 [&_code]:border-slate-700 [&_blockquote]:text-slate-200 [&_blockquote]:border-gold-400 [&_a]:text-gold-300 [&_a]:decoration-gold-500/60 [&_hr]:border-slate-700 [&_table]:border-slate-700 [&_thead]:bg-slate-800 [&_thead]:border-slate-700 [&_tr]:border-slate-800 [&_th]:text-slate-200 [&_td]:text-slate-200' : '',
+			dark ? '[&_code]:bg-ink-800 [&_code]:text-ink-100 [&_code]:border-ink-700 [&_blockquote]:text-ink-200 [&_blockquote]:border-gold-400 [&_a]:text-gold-300 [&_a]:decoration-gold-500/60 [&_hr]:border-ink-700 [&_table]:border-ink-700 [&_thead]:bg-ink-800 [&_thead]:border-ink-700 [&_tr]:border-ink-800 [&_th]:text-ink-200 [&_td]:text-ink-200' : '',
 		].join(' ')}>
 			{/* skipHtml is defense-in-depth, NOT the current protection: react-markdown
 			    9.x already ignores raw HTML unless rehype-raw is added, and default

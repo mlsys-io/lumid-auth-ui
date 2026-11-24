@@ -60,7 +60,7 @@ function parseChips(yaml: string): ConfigChip[] {
   if (loops > 0) chips.push({ label: "loops", value: String(loops), accent: "text-gold-700 bg-gold-50 border-gold-200" });
   if (sidebarLabel)   chips.push({ label: "sidebar label",   value: sidebarLabel });
   if (sidebarSection) chips.push({ label: "sidebar section", value: sidebarSection });
-  if (sidebarShow === "false") chips.push({ label: "sidebar", value: "hidden", accent: "text-slate-500 bg-slate-50 border-slate-200" });
+  if (sidebarShow === "false") chips.push({ label: "sidebar", value: "hidden", accent: "text-ink-600 bg-ink-50 border-ink-200" });
 
   return chips;
 }
@@ -148,12 +148,12 @@ export function AppConfigEditor() {
   // (UI generation lives on the page view, not here — xpcloud.yaml is app
   // config, the page is generated/edited from /studio/a/:app.)
 
-  if (loading) return <div className="p-8 text-sm text-slate-400">Loading {app}…</div>;
+  if (loading) return <div className="p-8 text-sm text-ink-600">Loading {app}…</div>;
   if (loadError) {
     return (
       <div className="p-8">
-        <div className="text-sm text-rose-600">Couldn't load config.</div>
-        <div className="mt-1 text-xs text-slate-400">{loadError}</div>
+        <div className="text-sm text-brick-600">Couldn't load config.</div>
+        <div className="mt-1 text-xs text-ink-600">{loadError}</div>
       </div>
     );
   }
@@ -161,23 +161,23 @@ export function AppConfigEditor() {
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-2.5 border-b border-slate-200 bg-white flex-shrink-0">
+      <div className="flex items-center gap-3 px-4 py-2.5 border-b border-ink-200 bg-card flex-shrink-0">
         <Link
           to={backTo}
-          className="text-[12px] text-slate-500 hover:text-slate-800 flex items-center gap-1"
+          className="text-caption text-ink-600 hover:text-ink-800 flex items-center gap-1"
         >
           ← {app}
         </Link>
-        <span className="text-slate-300">/</span>
-        <span className="flex items-center gap-1.5 text-[13px] font-medium text-slate-800">
-          <Settings className="w-3.5 h-3.5 text-slate-400" />
+        <span className="text-ink-600">/</span>
+        <span className="flex items-center gap-1.5 text-meta font-medium text-ink-800">
+          <Settings className="w-3.5 h-3.5 text-ink-600" />
           xpcloud.yaml
         </span>
 
         <div className="ml-auto flex items-center gap-2">
           <button
             onClick={handleCancel}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 text-[12px] text-slate-600 hover:bg-slate-50 transition-colors"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-ink-200 text-caption text-ink-600 hover:bg-ink-50 transition-colors"
           >
             <X className="w-3.5 h-3.5" /> Cancel
           </button>
@@ -185,10 +185,10 @@ export function AppConfigEditor() {
             onClick={handleSave}
             disabled={saving || !dirty}
             className={cn(
-              "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all",
+              "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-caption font-medium transition-all",
               dirty && !saving
-                ? "bg-gold-500 text-white hover:bg-gold-600 shadow-sm shadow-gold-100"
-                : "bg-slate-100 text-slate-400 cursor-not-allowed",
+                ? "bg-gold-700 text-white hover:bg-gold-800 shadow-sm shadow-gold-100"
+                : "bg-ink-100 text-ink-600 cursor-not-allowed",
             )}
           >
             {saving ? "Saving…" : <><Save className="w-3.5 h-3.5" /> Save</>}
@@ -198,16 +198,16 @@ export function AppConfigEditor() {
 
       {/* Parsed field chips */}
       {chips.length > 0 && (
-        <div className="flex items-center flex-wrap gap-1.5 px-4 py-2 border-b border-slate-100 bg-slate-50/60 flex-shrink-0">
+        <div className="flex items-center flex-wrap gap-1.5 px-4 py-2 border-b border-ink-100 bg-ink-50/60 flex-shrink-0">
           {chips.map((ch) => (
             <span
               key={ch.label}
               className={cn(
-                "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border",
-                ch.accent ?? "text-slate-600 bg-white border-slate-200",
+                "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-micro border",
+                ch.accent ?? "text-ink-600 bg-card border-ink-200",
               )}
             >
-              <span className="text-slate-400">{ch.label}</span>
+              <span className="text-ink-600">{ch.label}</span>
               <span className="font-medium">{ch.value}</span>
             </span>
           ))}
@@ -215,7 +215,7 @@ export function AppConfigEditor() {
       )}
 
       {/* YAML warning banner */}
-      <div className="flex items-center gap-2 px-4 py-2 bg-gold-50 border-b border-gold-100 text-[11px] text-gold-700 flex-shrink-0">
+      <div className="flex items-center gap-2 px-4 py-2 bg-gold-50 border-b border-gold-100 text-micro text-gold-700 flex-shrink-0">
         <AlertTriangle className="w-3 h-3 flex-shrink-0" />
         Editing xpcloud.yaml directly. Invalid YAML will be rejected on save. Changes take effect immediately for UI/sidebar; loop schedule changes require a scheduler restart.
       </div>
@@ -225,12 +225,12 @@ export function AppConfigEditor() {
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         spellCheck={false}
-        className="flex-1 w-full font-mono text-[13px] leading-relaxed p-4 resize-none border-0 focus:outline-none bg-white text-slate-800"
+        className="flex-1 w-full font-mono text-meta leading-relaxed p-4 resize-none border-0 focus:outline-none bg-card text-ink-800"
       />
 
       {/* Footer */}
-      <div className="flex items-center px-4 py-1.5 border-t border-slate-100 bg-white flex-shrink-0">
-        <span className="text-[11px] text-slate-400 tabular-nums">
+      <div className="flex items-center px-4 py-1.5 border-t border-ink-100 bg-card flex-shrink-0">
+        <span className="text-micro text-ink-600 tabular-nums">
           {draft.length.toLocaleString()} chars · {new Blob([draft]).size.toLocaleString()} bytes / 64 KB
         </span>
       </div>

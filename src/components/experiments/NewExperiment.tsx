@@ -125,8 +125,8 @@ export default function NewExperiment(
 		return (
 			<button
 				onClick={() => setOpen(true)}
-				className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white
-					px-2.5 py-1.5 text-[12px] font-medium text-slate-700 hover:bg-slate-50"
+				className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-card
+					px-2.5 py-1.5 text-caption font-medium text-ink-700 hover:bg-ink-50"
 			>
 				<Plus className="h-3.5 w-3.5" /> New study
 			</button>
@@ -134,18 +134,18 @@ export default function NewExperiment(
 	}
 
 	return (
-		<div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
-			<div className="text-[12px] font-medium text-slate-700">New study</div>
+		<div className="rounded-xl border border-ink-200 bg-card p-3 space-y-2">
+			<div className="text-caption font-medium text-ink-700">New study</div>
 
 			<input
 				value={id} onChange={(e) => setId(e.target.value)}
 				placeholder="id — e.g. judge_panel_parity_test"
-				className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-[12px]"
+				className="w-full rounded-lg border border-ink-200 px-2 py-1.5 text-caption"
 			/>
 
 			<select
 				value={loop} onChange={(e) => setLoop(e.target.value)}
-				className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-[12px]"
+				className="w-full rounded-lg border border-ink-200 px-2 py-1.5 text-caption"
 			>
 				<option value="">
 					{loops === null ? "loading workflows…" : "workflow each experiment runs…"}
@@ -159,13 +159,13 @@ export default function NewExperiment(
 			<input
 				value={metric} onChange={(e) => setMetric(e.target.value)}
 				placeholder="metric — the number the workflow reports, which the study compares"
-				className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-[12px]"
+				className="w-full rounded-lg border border-ink-200 px-2 py-1.5 text-caption"
 			/>
 
 			<div className="flex gap-1.5">
 				<select
 					value={scopeKind} onChange={(e) => setScopeKind(e.target.value as "dataset" | "cases")}
-					className="rounded-lg border border-slate-200 px-2 py-1.5 text-[12px]"
+					className="rounded-lg border border-ink-200 px-2 py-1.5 text-caption"
 				>
 					<option value="dataset">dataset</option>
 					<option value="cases">cases</option>
@@ -173,24 +173,24 @@ export default function NewExperiment(
 				<input
 					value={scope} onChange={(e) => setScope(e.target.value)}
 					placeholder={scopeKind === "dataset" ? "cases_v1" : "Case_001, Case_002"}
-					className="flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-[12px]"
+					className="flex-1 rounded-lg border border-ink-200 px-2 py-1.5 text-caption"
 				/>
 			</div>
 			<textarea
 				value={experiments} onChange={(e) => setExperiments(e.target.value)}
 				rows={2}
 				placeholder="experiments to compare, one per line — baseline, warm_start"
-				className="w-full rounded-lg border border-slate-200 px-2 py-1.5 font-mono text-[12px]"
+				className="w-full rounded-lg border border-ink-200 px-2 py-1.5 font-mono text-caption"
 			/>
-			<label className="flex items-center gap-2 text-[11px] text-slate-600">
+			<label className="flex items-center gap-2 text-micro text-ink-600">
 				Runs per experiment
 				<input
 					type="number" min={1} max={20} value={samples}
 					onChange={(e) => setSamples(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
-					className="w-16 rounded-lg border border-slate-200 px-2 py-1 text-[12px]"
+					className="w-16 rounded-lg border border-ink-200 px-2 py-1 text-caption"
 				/>
 			</label>
-			<div className="text-[10.5px] text-slate-500">
+			<div className="text-micro text-ink-600">
 				{computeGraph
 					? "Scope is optional here: this workflow runs a compute graph, so its runs are the population."
 					: "Scope is required: a sample count over an undefined population cannot be interpreted."}{" "}
@@ -198,29 +198,29 @@ export default function NewExperiment(
 				anything runs. Configure an experiment further on its card after defining.
 			</div>
 
-			{err && <div className="text-[11px] text-rose-600">{err}</div>}
-			{done && <div className="text-[11px] text-emerald-700">{done}</div>}
+			{err && <div className="text-micro text-brick-600">{err}</div>}
+			{done && <div className="text-micro text-gold-700">{done}</div>}
 
 			<div className="flex gap-1.5">
 				<button
 					disabled={!ready || busy} onClick={() => void submit(true)}
-					className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-2.5 py-1.5
-						text-[12px] font-medium text-white disabled:opacity-40"
+					className="inline-flex items-center gap-1.5 rounded-lg bg-ink-900 px-2.5 py-1.5
+						text-caption font-medium text-white disabled:opacity-40"
 					title="Define the study and run every experiment"
 				>
 					{busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Run
 				</button>
 				<button
 					disabled={!ready || busy} onClick={() => void submit(false)}
-					className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[12px] text-slate-700
-						hover:bg-slate-50 disabled:opacity-40"
+					className="rounded-lg border border-ink-200 px-2.5 py-1.5 text-caption text-ink-700
+						hover:bg-ink-50 disabled:opacity-40"
 					title="Define the study without running it"
 				>
 					Define
 				</button>
 				<button
 					onClick={() => { setOpen(false); setErr(null); }}
-					className="rounded-lg px-2.5 py-1.5 text-[12px] text-slate-600 hover:bg-slate-50"
+					className="rounded-lg px-2.5 py-1.5 text-caption text-ink-600 hover:bg-ink-50"
 				>
 					Cancel
 				</button>

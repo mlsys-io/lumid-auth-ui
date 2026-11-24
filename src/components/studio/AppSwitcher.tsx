@@ -17,7 +17,7 @@ export default function AppSwitcher({ app }: { app: string }) {
 			<span className="w-7 h-7 rounded-lg bg-gold-50 text-gold-600 flex items-center justify-center flex-shrink-0">
 				<CurIcon className="w-4 h-4" />
 			</span>
-			<span className="font-semibold text-[15px] text-foreground truncate">{current?.label || appTitle(app)}</span>
+			<span className="font-semibold text-read text-foreground truncate">{current?.label || appTitle(app)}</span>
 		</div>
 	);
 }

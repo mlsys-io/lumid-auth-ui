@@ -252,7 +252,7 @@ function CollapsibleEdge(props: EdgeProps) {
 			<EdgeLabelRenderer>
 				<button
 					type="button"
-					className="nodrag nopan inline-flex items-center gap-0.5 rounded-full border px-2 py-1 min-h-[24px] text-[11px] font-medium bg-white text-slate-500 border-slate-200 hover:border-gold-300 hover:text-gold-700 shadow-sm transition-colors"
+					className="nodrag nopan inline-flex items-center gap-0.5 rounded-full border px-2 py-1 min-h-[24px] text-micro font-medium bg-card text-ink-600 border-ink-200 hover:border-gold-300 hover:text-gold-700 shadow-sm transition-colors"
 					style={{ position: "absolute", transform: `translate(-50%,-50%) translate(${labelX}px,${labelY}px)`, pointerEvents: "all" }}
 					title={d.collapsed ? "Show the hidden cycles" : "Hide these cycles again"}
 					onClick={(e) => { e.stopPropagation(); if (d.anchorId) d.onToggle?.(d.anchorId); }}
@@ -365,13 +365,13 @@ function LinearTrajectory({ chain, metric, baseline, hib, pickedId, onFocus, onO
 	const first = scored[0], last = scored[scored.length - 1];
 	return (
 		<div className="h-full w-full overflow-y-auto px-3 pt-9 pb-3 flex flex-col gap-3">
-			<div className="text-[11px] text-slate-500">
+			<div className="text-micro text-ink-600">
 				Straight-line run tree · {scored.length} scored {scored.length === 1 ? "run" : "runs"}
-				{metric && <> · <span className="font-mono text-slate-600">{metric}</span></>}
+				{metric && <> · <span className="font-mono text-ink-600">{metric}</span></>}
 				{baseline != null && <> · <span title="baseline">starting point</span> <span className="tabular-nums">{fmtScore(baseline)}</span></>}
 			</div>
 			{scored.length >= 2 && (
-				<div className="rounded-lg border border-slate-200/70 bg-white p-2 flex-shrink-0">
+				<div className="rounded-lg border border-ink-200/70 bg-card p-2 flex-shrink-0">
 					<svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full" style={{ height: 150 }}>
 						{baseline != null && (
 							<line x1={padL} x2={W - padR} y1={py(baseline)} y2={py(baseline)} stroke="rgb(148 163 184)" strokeDasharray="6 5" strokeWidth="1" vectorEffect="non-scaling-stroke" />
@@ -390,7 +390,7 @@ function LinearTrajectory({ chain, metric, baseline, hib, pickedId, onFocus, onO
 							);
 						})}
 					</svg>
-					<div className="flex justify-between text-[11px] text-slate-600 tabular-nums mt-1">
+					<div className="flex justify-between text-micro text-ink-600 tabular-nums mt-1">
 						<span>{fmtWhen(first?.run_ts || first?.cycle_ts)} · {first && fmtScore(first.score as number)}</span>
 						<span>{fmtWhen(last?.run_ts || last?.cycle_ts)} · {last && fmtScore(last.score as number)}</span>
 					</div>
@@ -409,18 +409,18 @@ function LinearTrajectory({ chain, metric, baseline, hib, pickedId, onFocus, onO
 							title="click to focus · double-click for the pipeline · ⋯ for actions"
 							className={cn(
 								"inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-left transition-colors",
-								sel ? "border-sky-400 ring-1 ring-sky-200 bg-sky-50/40" : "border-slate-200 bg-white hover:bg-slate-50",
+								sel ? "border-lagoon-400 ring-1 ring-lagoon-200 bg-lagoon-50/40" : "border-ink-200 bg-card hover:bg-ink-50",
 							)}>
 							<span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: t.dot }} />
-							<span className="text-[11px] text-slate-600 tabular-nums">{fmtWhen(n.run_ts || n.cycle_ts) || n.label}</span>
+							<span className="text-micro text-ink-600 tabular-nums">{fmtWhen(n.run_ts || n.cycle_ts) || n.label}</span>
 							{n.is_champion && <span title="champion — best so far"><Trophy className="w-3 h-3 text-gold-500 flex-shrink-0" /></span>}
 							{n.scored && n.score != null
-								? <span className="text-[11px] font-semibold tabular-nums text-slate-800">{fmtScore(n.score)}</span>
-								: <span className="text-[11px] uppercase tracking-wide text-slate-600" title={n.kind === "baseline" ? "baseline" : undefined}>{n.kind === "baseline" ? "start" : "—"}</span>}
+								? <span className="text-micro font-semibold tabular-nums text-ink-800">{fmtScore(n.score)}</span>
+								: <span className="text-micro uppercase tracking-wide text-ink-600" title={n.kind === "baseline" ? "baseline" : undefined}>{n.kind === "baseline" ? "start" : "—"}</span>}
 							{!n.proposed && (
 								<span role="button" tabIndex={0}
 									onClick={(e) => { e.stopPropagation(); onMenu(e, n); }}
-									className="ml-0.5 p-0.5 rounded text-slate-600 hover:text-slate-700 hover:bg-slate-100"
+									className="ml-0.5 p-0.5 rounded text-ink-600 hover:text-ink-700 hover:bg-ink-100"
 									title="More actions">
 									<MoreHorizontal className="w-3 h-3" />
 								</span>
@@ -575,41 +575,41 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 						<div className="group relative px-2 py-1 text-left w-full h-full flex flex-col justify-center overflow-hidden">
 							<div className="flex items-center gap-1">
 								<span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: t.dot }} />
-								<span className={cn("text-[11px] font-semibold flex-shrink-0 leading-none", n.proposed ? "text-gold-700 italic" : isBase ? "text-slate-500" : "text-slate-800")}
+								<span className={cn("text-micro font-semibold flex-shrink-0 leading-none", n.proposed ? "text-gold-700 italic" : isBase ? "text-ink-600" : "text-ink-800")}
 									title={isBase ? "starting point — the score before any run" : `version ${primary} — this run's place in the agent's history`}>{primary}</span>
 								{/* data version (e.g. v0.7.6) is omitted on the node — constant across runs; shown in the drill-in header + Data panel. */}
 								<span className="flex-1" />
-								{n.needs_decision && <span title="needs a decision — suggestions or held actions" className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0 animate-pulse" />}
+								{n.needs_decision && <span title="needs a decision — suggestions or held actions" className="w-1.5 h-1.5 rounded-full bg-ember-500 flex-shrink-0 animate-pulse" />}
 								{isBest && <span title="best run — highest score in this tree"><Trophy className="w-2.5 h-2.5 text-gold-500 flex-shrink-0" /></span>}
 								<span className="flex-1" />
-								{n.model && <span title={`model — the LLM this run used (${n.model})`} className="flex-shrink-0 text-[8px] uppercase tracking-wide rounded px-1 border text-violet-700 bg-violet-50 border-violet-200 leading-[1.6]">{n.model}</span>}
+								{n.model && <span title={`model — the LLM this run used (${n.model})`} className="flex-shrink-0 text-nano uppercase tracking-wide rounded px-1 border text-plum-700 bg-plum-50 border-plum-200 leading-[1.6]">{n.model}</span>}
 							</div>
-							<div className="flex items-center gap-1.5 mt-1 text-[11px] leading-none">
-								{configLabel && <span className="text-slate-500 truncate max-w-[54px]" title={configLabel}>{configLabel}</span>}
-								{when && <span className="text-slate-600 tabular-nums">{when}</span>}
+							<div className="flex items-center gap-1.5 mt-1 text-micro leading-none">
+								{configLabel && <span className="text-ink-600 truncate max-w-[54px]" title={configLabel}>{configLabel}</span>}
+								{when && <span className="text-ink-600 tabular-nums">{when}</span>}
 								{n.proposed ? (
-									<span className="text-[11px] uppercase tracking-wide text-gold-500">queued</span>
+									<span className="text-micro uppercase tracking-wide text-gold-700">queued</span>
 								) : n.scored && n.score != null ? (
-									<span className="tabular-nums text-slate-700 font-medium" title={`${traj?.metric || "score"} = ${fmtScore(n.score)} — this run's metric on the dataset`}>{fmtScore(n.score)}</span>
+									<span className="tabular-nums text-ink-700 font-medium" title={`${traj?.metric || "score"} = ${fmtScore(n.score)} — this run's metric on the dataset`}>{fmtScore(n.score)}</span>
 								) : !isBase && showsScores ? (
-									<span className="uppercase tracking-wide text-slate-600" title={`this run has no ${traj?.metric || "score"} — other runs in this tree do`}>not scored</span>
+									<span className="uppercase tracking-wide text-ink-600" title={`this run has no ${traj?.metric || "score"} — other runs in this tree do`}>not scored</span>
 								) : !isBase ? (
 									(() => {
 										const out = runOutcomeLabel(n, outcomes);
 										if (!out) return null; // only a time is known — `when` above already shows it
 										const failed = out.startsWith("failed");
 										return (
-											<span className={cn("tabular-nums truncate", failed ? "text-rose-600" : "text-slate-600")}
+											<span className={cn("tabular-nums truncate", failed ? "text-brick-600" : "text-ink-600")}
 												title={`${out} — this loop records no per-run score`}>
 												{out.replace("succeeded", "ok")}
 											</span>
 										);
 									})()
 								) : (
-									<span className="uppercase tracking-wide text-slate-600">start</span>
+									<span className="uppercase tracking-wide text-ink-600">start</span>
 								)}
 								{dParent != null && Math.abs(dParent) > 1e-6 && (
-									<span title="change vs the previous version (parent run)" className={cn("tabular-nums", dParent > 0 ? "text-gold-600" : "text-rose-500")}>
+									<span title="change vs the previous version (parent run)" className={cn("tabular-nums", dParent > 0 ? "text-gold-600" : "text-brick-600")}>
 										{dParent > 0 ? "+" : ""}{fmtScore(dParent)}
 									</span>
 								)}
@@ -621,11 +621,11 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 								)}
 							</div>
 							{!n.proposed && (
-								<div className="absolute bottom-0.5 right-1 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 rounded shadow-sm px-0.5 pointer-events-auto">
+								<div className="absolute bottom-0.5 right-1 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-card/95 rounded shadow-sm px-0.5 pointer-events-auto">
 									<button
 										type="button"
 										onClick={(e) => { e.stopPropagation(); openPipelineRef.current(n); }}
-										className="inline-flex items-center justify-center p-0.5 text-sky-600 hover:text-sky-700 pointer-events-auto nodrag relative before:absolute before:-inset-2 before:content-['']"
+										className="inline-flex items-center justify-center p-0.5 text-lagoon-600 hover:text-lagoon-700 pointer-events-auto nodrag relative before:absolute before:-inset-2 before:content-['']"
 										title="Open this run's pipeline (step-by-step)"
 									>
 										<Eye className="w-3 h-3" />
@@ -633,7 +633,7 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 									<button
 										type="button"
 										onClick={(e) => { e.stopPropagation(); openMenuRef.current(e, n); }}
-										className="p-0.5 rounded text-slate-600 hover:text-slate-700 hover:bg-slate-100 pointer-events-auto nodrag"
+										className="p-0.5 rounded text-ink-600 hover:text-ink-700 hover:bg-ink-100 pointer-events-auto nodrag"
 										title="More actions — observe / improve this run"
 									>
 										<MoreHorizontal className="w-3.5 h-3.5" />
@@ -775,20 +775,20 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 	}, []);
 
 	if (loading)
-		return <div className="h-full flex items-center justify-center text-xs text-slate-600 rounded-xl border border-slate-200 bg-white"><Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading trajectory…</div>;
+		return <div className="h-full flex items-center justify-center text-xs text-ink-600 rounded-xl border border-ink-200 bg-card"><Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading trajectory…</div>;
 	if (!traj || (traj.nodes?.length ?? 0) === 0)
 		return (
-			<div className="h-full flex flex-col items-center justify-center gap-2 text-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-6">
+			<div className="h-full flex flex-col items-center justify-center gap-2 text-center rounded-xl border border-dashed border-ink-200 bg-ink-50/50 p-6">
 				{running ? (
 					<>
-						<Loader2 className="w-6 h-6 text-sky-500 animate-spin" />
-						<div className="text-sm text-slate-600">First run in progress…</div>
-						<div className="text-xs text-slate-600 max-w-xs">It’ll appear here as a node when it finishes.</div>
+						<Loader2 className="w-6 h-6 text-lagoon-600 animate-spin" />
+						<div className="text-sm text-ink-600">First run in progress…</div>
+						<div className="text-xs text-ink-600 max-w-xs">It’ll appear here as a node when it finishes.</div>
 					</>
 				) : (<>
-				<GitBranch className="w-6 h-6 text-slate-300" />
-				<div className="text-sm text-slate-500">No run trajectory yet.</div>
-				<div className="text-xs text-slate-600 max-w-xs">Each run becomes a node here — and when this workflow explores experiments, they branch into a tree with the best-so-far on the trunk.</div>
+				<GitBranch className="w-6 h-6 text-ink-600" />
+				<div className="text-sm text-ink-600">No run trajectory yet.</div>
+				<div className="text-xs text-ink-600 max-w-xs">Each run becomes a node here — and when this workflow explores experiments, they branch into a tree with the best-so-far on the trunk.</div>
 				</>)}
 			</div>
 		);
@@ -799,7 +799,7 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 
 
 	return (
-		<div className="relative h-full rounded-xl border border-slate-200 bg-white overflow-hidden">
+		<div className="relative h-full rounded-xl border border-ink-200 bg-card overflow-hidden">
 			<div
 				className="flex h-full w-[200%]"
 				style={{ transform: view === "pipeline" ? "translateX(-50%)" : "translateX(0)", transition: "transform .55s cubic-bezier(0.22,1,0.36,1)" }}
@@ -808,8 +808,8 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 				<div className="w-1/2 h-full relative">
 					{/* header rollup — trend + learning, at a glance */}
 					<div className="absolute top-0 left-0 right-0 z-10 flex items-center gap-2 px-3 py-2 bg-gradient-to-b from-white via-white/90 to-transparent pointer-events-none">
-						<span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wide flex-shrink-0" title="branching tree of runs"><GitBranch className="w-3.5 h-3.5 text-gold-500" /> Run tree</span>
-						<span className="text-[11px] text-slate-300 normal-case tracking-normal truncate hidden xl:inline">click a run to link the panels · ⋯ for log, branch, compare</span>
+						<span className="inline-flex items-center gap-1.5 text-micro font-semibold text-ink-600 uppercase tracking-wide flex-shrink-0" title="branching tree of runs"><GitBranch className="w-3.5 h-3.5 text-gold-500" /> Run tree</span>
+						<span className="text-micro text-ink-600 normal-case tracking-normal truncate hidden xl:inline">click a run to link the panels · ⋯ for log, branch, compare</span>
 						{headerRight && <div className="ml-auto flex-shrink-0 pointer-events-auto">{headerRight}</div>}
 					</div>
 
@@ -853,12 +853,12 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 					{mode !== "observe" && ((traj.has_variants && traj.metric) || champ?.score != null || totalLearned > 0) && (
 						<div className="absolute bottom-0 left-0 right-0 z-10 flex items-center justify-end gap-3 px-3 py-2 bg-gradient-to-t from-white via-white/90 to-transparent pointer-events-none">
 							{traj.has_variants && traj.metric && (
-								<span className="text-[11px] text-slate-600">{traj.nodes.filter((n) => n.kind !== "baseline").length} runs · <span className="font-mono text-slate-600">{traj.metric}</span>{traj.baseline != null && <> · start <span className="tabular-nums">{fmtScore(traj.baseline)}</span></>}</span>
+								<span className="text-micro text-ink-600">{traj.nodes.filter((n) => n.kind !== "baseline").length} runs · <span className="font-mono text-ink-600">{traj.metric}</span>{traj.baseline != null && <> · start <span className="tabular-nums">{fmtScore(traj.baseline)}</span></>}</span>
 							)}
 							{champ?.score != null && (
-								<span className="inline-flex items-center gap-1 text-[11px] text-gold-700"><Trophy className="w-3 h-3" /> best <span className="tabular-nums font-medium">{fmtScore(champ.score)}</span>{champ.delta_vs_baseline != null && Math.abs(champ.delta_vs_baseline) > 1e-6 && <span className="tabular-nums">({champ.delta_vs_baseline > 0 ? "+" : ""}{fmtScore(champ.delta_vs_baseline)})</span>}</span>
+								<span className="inline-flex items-center gap-1 text-micro text-gold-700"><Trophy className="w-3 h-3" /> best <span className="tabular-nums font-medium">{fmtScore(champ.score)}</span>{champ.delta_vs_baseline != null && Math.abs(champ.delta_vs_baseline) > 1e-6 && <span className="tabular-nums">({champ.delta_vs_baseline > 0 ? "+" : ""}{fmtScore(champ.delta_vs_baseline)})</span>}</span>
 							)}
-							{totalLearned > 0 && <span className="inline-flex items-center gap-1 text-[11px] text-gold-600"><Sparkles className="w-3 h-3" /> {totalLearned} learned</span>}
+							{totalLearned > 0 && <span className="inline-flex items-center gap-1 text-micro text-gold-700"><Sparkles className="w-3 h-3" /> {totalLearned} learned</span>}
 						</div>
 					)}
 
@@ -866,12 +866,12 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 						(menu.node.proposed || !actions || !(menu.node.run_ts || menu.node.cycle_ts)) ? (
 							// Ghost/proposed node (or no shared-menu wiring): a minimal menu
 							// — branching a ghost materializes it (bespoke branchFrom).
-							<div className="fixed z-[80] min-w-[180px] rounded-lg border border-slate-200 bg-white shadow-xl py-1 animate-in fade-in zoom-in-95 duration-100" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
-								<div className="px-3 py-1 text-[11px] uppercase tracking-wide text-slate-600 truncate">{menuNodeLabel(menu.node)}</div>
+							<div className="fixed z-[80] min-w-[180px] rounded-lg border border-ink-200 bg-card shadow-xl py-1 animate-in fade-in zoom-in-95 duration-100" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
+								<div className="px-3 py-1 text-micro uppercase tracking-wide text-ink-600 truncate">{menuNodeLabel(menu.node)}</div>
 								{!menu.node.proposed && (
-									<button onClick={() => openPipeline(menu.node)} className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50 text-left"><FlaskConical className="w-3.5 h-3.5 text-slate-600" /> Open pipeline</button>
+									<button onClick={() => openPipeline(menu.node)} className="w-full flex items-center gap-2 px-3 py-1.5 text-caption text-ink-700 hover:bg-ink-50 text-left"><FlaskConical className="w-3.5 h-3.5 text-ink-600" /> Open pipeline</button>
 								)}
-								<button onClick={() => branchFrom(menu.node)} className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] font-medium text-gold-700 hover:bg-gold-50 text-left"><GitBranch className="w-3.5 h-3.5 text-gold-500" /> Branch out</button>
+								<button onClick={() => branchFrom(menu.node)} className="w-full flex items-center gap-2 px-3 py-1.5 text-caption font-medium text-gold-700 hover:bg-gold-50 text-left"><GitBranch className="w-3.5 h-3.5 text-gold-500" /> Branch out</button>
 							</div>
 						) : (
 							// Real run node: the SINGLE shared menu — Trajectory's own items
@@ -898,36 +898,36 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 				</div>
 
 				{/* ── PANE 2 · the selected run's pipeline ── */}
-				<div className="w-1/2 h-full flex flex-col bg-white">
-					<div className="flex items-start gap-2 px-3 py-2.5 border-b border-slate-100">
-						<button onClick={() => { setView("tree"); setCanvasStep(null); }} className="flex-shrink-0 inline-flex items-center gap-1 text-[12px] text-slate-500 hover:text-slate-900 px-2 py-1 -ml-1 rounded-lg hover:bg-slate-100 transition-colors"><ArrowLeft className="w-3.5 h-3.5" /> Run tree</button>
+				<div className="w-1/2 h-full flex flex-col bg-card">
+					<div className="flex items-start gap-2 px-3 py-2.5 border-b border-ink-100">
+						<button onClick={() => { setView("tree"); setCanvasStep(null); }} className="flex-shrink-0 inline-flex items-center gap-1 text-caption text-ink-600 hover:text-ink-900 px-2 py-1 -ml-1 rounded-lg hover:bg-ink-100 transition-colors"><ArrowLeft className="w-3.5 h-3.5" /> Run tree</button>
 						{picked && (
 							<div className="min-w-0 flex-1">
 								<div className="flex items-center gap-1.5">
 									{champ && picked.id === champ.id && <Trophy className="w-3.5 h-3.5 text-gold-500" />}
-									<span className="text-sm font-medium text-slate-900 flex-shrink-0" title="this run's version in the agent's history">{picked.agent_version || picked.label}</span>
-									{picked.model && <span title={`model — ${picked.model}`} className="flex-shrink-0 text-[11px] uppercase tracking-wide rounded-full px-1.5 py-0.5 border text-violet-700 bg-violet-50 border-violet-200">{picked.model}</span>}
-									{picked.data_version && <span title="dataset version this run was evaluated on" className="flex-shrink-0 text-[11px] font-mono rounded-full px-1.5 py-0.5 border text-sky-700 bg-sky-50 border-sky-200">{picked.data_version}</span>}
+									<span className="text-sm font-medium text-ink-900 flex-shrink-0" title="this run's version in the agent's history">{picked.agent_version || picked.label}</span>
+									{picked.model && <span title={`model — ${picked.model}`} className="flex-shrink-0 text-micro uppercase tracking-wide rounded-full px-1.5 py-0.5 border text-plum-700 bg-plum-50 border-plum-200">{picked.model}</span>}
+									{picked.data_version && <span title="dataset version this run was evaluated on" className="flex-shrink-0 text-micro font-mono rounded-full px-1.5 py-0.5 border text-lagoon-700 bg-lagoon-50 border-lagoon-200">{picked.data_version}</span>}
 									<span className="flex-1" />
 									<button
 										onClick={() => askAboutRun(app, loop, picked.run_ts, `About this run (${picked.label})${picked.config ? ` with config ${JSON.stringify(picked.config)}` : ""}: what happened, and what would improve the goal?`)}
 										title="Ask the assistant about this run"
-										className="flex-shrink-0 inline-flex items-center gap-1 text-[11px] text-gold-700 bg-gold-50 border border-gold-200 rounded-full px-2 py-0.5 hover:bg-gold-100 transition-colors"
+										className="flex-shrink-0 inline-flex items-center gap-1 text-micro text-gold-700 bg-gold-50 border border-gold-200 rounded-full px-2 py-0.5 hover:bg-gold-100 transition-colors"
 									><MessageSquare className="w-3 h-3" /> Ask</button>
 								</div>
-								<div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-0.5 text-[11px] text-slate-500">
-									{picked.scored && picked.score != null && <span className="tabular-nums">{traj.metric || "score"}: <span className="text-slate-700 font-medium">{fmtScore(picked.score)}</span></span>}
-									{picked.delta_vs_baseline != null && Math.abs(picked.delta_vs_baseline) > 1e-6 && <span className={cn("tabular-nums", picked.delta_vs_baseline > 0 ? "text-gold-600" : "text-rose-500")}>{picked.delta_vs_baseline > 0 ? "+" : ""}{fmtScore(picked.delta_vs_baseline)} vs base</span>}
+								<div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-0.5 text-micro text-ink-600">
+									{picked.scored && picked.score != null && <span className="tabular-nums">{traj.metric || "score"}: <span className="text-ink-700 font-medium">{fmtScore(picked.score)}</span></span>}
+									{picked.delta_vs_baseline != null && Math.abs(picked.delta_vs_baseline) > 1e-6 && <span className={cn("tabular-nums", picked.delta_vs_baseline > 0 ? "text-gold-600" : "text-brick-600")}>{picked.delta_vs_baseline > 0 ? "+" : ""}{fmtScore(picked.delta_vs_baseline)} vs base</span>}
 								</div>
 							</div>
 						)}
 					</div>
 					{picked?.config && Object.keys(picked.config).length > 0 && (
-						<div className="px-3 py-2 border-b border-slate-100 flex flex-wrap gap-1.5">
+						<div className="px-3 py-2 border-b border-ink-100 flex flex-wrap gap-1.5">
 							{Object.entries(picked.config).slice(0, 10).map(([k, v]) => (
-								<span key={k} className="inline-flex items-center gap-1 text-[11px] rounded-full bg-slate-50 border border-slate-200 px-2 py-0.5">
-									<span className="text-slate-600">{k.split(".").pop()?.replace(/_/g, " ")}</span>
-									<span className="text-slate-700 font-mono">{String(v)}</span>
+								<span key={k} className="inline-flex items-center gap-1 text-micro rounded-full bg-ink-50 border border-ink-200 px-2 py-0.5">
+									<span className="text-ink-600">{k.split(".").pop()?.replace(/_/g, " ")}</span>
+									<span className="text-ink-700 font-mono">{String(v)}</span>
 								</span>
 							))}
 						</div>
@@ -943,19 +943,19 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 						const other = allOffers.filter((o) => (o as { kind?: string }).kind !== "improvement");
 						if (!rq.length && !allOffers.length) return null;
 						return (
-							<div className="px-3 py-2 border-b border-slate-100 space-y-2 max-h-[42%] overflow-y-auto">
+							<div className="px-3 py-2 border-b border-ink-100 space-y-2 max-h-[42%] overflow-y-auto">
 								{sugg.length > 0 && (
 									<div className="rounded-lg border border-gold-200 bg-gold-50/40 p-2 space-y-1.5">
-										<div className="text-[11px] uppercase tracking-wide text-gold-700 font-semibold flex items-center gap-1"><Sparkles className="w-3 h-3" /> Advisor suggestions</div>
+										<div className="text-micro uppercase tracking-wide text-gold-700 font-semibold flex items-center gap-1"><Sparkles className="w-3 h-3" /> Advisor suggestions</div>
 										{sugg.map((s, i) => {
 											const o = s as { title?: string; detail?: string };
 											return (
-												<div key={i} className="text-[11.5px]">
-													<div className="text-slate-800 font-medium">{o.title}</div>
-													{o.detail && <div className="text-slate-500 leading-snug">{o.detail}</div>}
+												<div key={i} className="text-caption">
+													<div className="text-ink-800 font-medium">{o.title}</div>
+													{o.detail && <div className="text-ink-600 leading-snug">{o.detail}</div>}
 													<div className="mt-0.5 flex gap-2">
-														<button onClick={() => branchFrom(picked!)} className="inline-flex items-center gap-1 text-[11px] text-gold-700 hover:text-gold-900"><GitBranch className="w-3 h-3" /> Branch this</button>
-														<button onClick={() => askAboutRun(app, loop, picked?.run_ts, `The advisor suggested: "${o.title}". ${o.detail || ""} How do I act on this to move the goal?`)} className="inline-flex items-center gap-1 text-[11px] text-gold-700 hover:text-gold-900"><MessageSquare className="w-3 h-3" /> Ask</button>
+														<button onClick={() => branchFrom(picked!)} className="inline-flex items-center gap-1 text-micro text-gold-700 hover:text-gold-900"><GitBranch className="w-3 h-3" /> Branch this</button>
+														<button onClick={() => askAboutRun(app, loop, picked?.run_ts, `The advisor suggested: "${o.title}". ${o.detail || ""} How do I act on this to move the goal?`)} className="inline-flex items-center gap-1 text-micro text-gold-700 hover:text-gold-900"><MessageSquare className="w-3 h-3" /> Ask</button>
 													</div>
 												</div>
 											);
@@ -973,7 +973,7 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 					})()}
 					<div className="flex-1 min-h-0 p-3 flex flex-col gap-2">
 						{cycleLoading ? (
-							<div className="h-full flex items-center justify-center text-xs text-slate-600"><Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading run…</div>
+							<div className="h-full flex items-center justify-center text-xs text-ink-600"><Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading run…</div>
 						) : definition ? (
 							view === "pipeline" ? (
 								<>
@@ -990,14 +990,14 @@ function Inner({ app, loop, definition, onSelectVersion, running, onShowLog, act
 											/>
 											<button
 												onClick={() => askAboutRun(app, loop, picked?.run_ts, `In this run, the step "${canvasStep.step_id}"${canvasStep.skill ? ` (skill ${canvasStep.skill})` : ""}: explain its input/output and whether it helped the goal.`, canvasStep.step_id)}
-												className="mt-1 inline-flex items-center gap-1 text-[11px] text-gold-700 hover:text-gold-900"
+												className="mt-1 inline-flex items-center gap-1 text-micro text-gold-700 hover:text-gold-900"
 											><MessageSquare className="w-3 h-3" /> Ask about this step</button>
 										</div>
 									)}
 								</>
 							) : null
 						) : (
-							<div className="h-full flex items-center justify-center text-xs text-slate-600">No pipeline declared.</div>
+							<div className="h-full flex items-center justify-center text-xs text-ink-600">No pipeline declared.</div>
 						)}
 					</div>
 				</div>

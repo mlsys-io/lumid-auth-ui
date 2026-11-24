@@ -44,55 +44,55 @@ export default function VastEconomics({ workers }: { workers: FmWorker[] }) {
 	const pctFleet = Math.min(100, (burn / CAPS.maxFleet) * 100);
 
 	return (
-		<div className="border-t border-slate-200 bg-amber-50/30 px-3 py-3">
+		<div className="border-t border-ink-200 bg-ember-50/30 px-3 py-3">
 			<div className="grid gap-3 sm:grid-cols-3">
 				<div>
-					<p className="text-xs text-slate-500">Rented workers</p>
-					<p className="mt-0.5 text-lg font-semibold text-slate-900">
+					<p className="text-xs text-ink-600">Rented workers</p>
+					<p className="mt-0.5 text-title font-semibold text-ink-900">
 						{live.length}
-						<span className="ml-1 text-xs font-normal text-slate-500">
+						<span className="ml-1 text-xs font-normal text-ink-600">
 							/ {CAPS.maxInstances} cap
 						</span>
 					</p>
-					<p className="text-xs text-slate-500">
+					<p className="text-xs text-ink-600">
 						floor {CAPS.minInstances} — scales to zero
 						{stale > 0 && (
-							<span className="ml-1 text-amber-700">
+							<span className="ml-1 text-ember-700">
 								· {stale} stale row{stale > 1 ? "s" : ""} excluded
 							</span>
 						)}
 					</p>
 				</div>
 				<div>
-					<p className="text-xs text-slate-500">Burn rate</p>
+					<p className="text-xs text-ink-600">Burn rate</p>
 					{costKnown ? (
 						<>
-							<p className="mt-0.5 text-lg font-semibold text-slate-900">
+							<p className="mt-0.5 text-title font-semibold text-ink-900">
 								${burn.toFixed(3)}
-								<span className="ml-1 text-xs font-normal text-slate-500">/hr</span>
+								<span className="ml-1 text-xs font-normal text-ink-600">/hr</span>
 							</p>
-							<div className="mt-1 h-1.5 w-full rounded bg-slate-200">
+							<div className="mt-1 h-1.5 w-full rounded bg-ink-200">
 								<div
-									className={`h-1.5 rounded ${pctFleet > 80 ? "bg-red-500" : "bg-emerald-500"}`}
+									className={`h-1.5 rounded ${pctFleet > 80 ? "bg-brick-500" : "bg-gold-500"}`}
 									style={{ width: `${pctFleet}%` }}
 								/>
 							</div>
 						</>
 					) : (
 						<>
-							<p className="mt-0.5 text-lg font-semibold text-slate-400">—</p>
-							<p className="text-xs text-slate-500">
+							<p className="mt-0.5 text-title font-semibold text-ink-600">—</p>
+							<p className="text-xs text-ink-600">
 								{live.length === 0
 									? "nothing rented"
 									: "not reported — the vast.ai console is authoritative"}
 							</p>
 						</>
 					)}
-					<p className="text-xs text-slate-500">cap ${CAPS.maxFleet.toFixed(2)}/hr fleet</p>
+					<p className="text-xs text-ink-600">cap ${CAPS.maxFleet.toFixed(2)}/hr fleet</p>
 				</div>
 				<div>
-					<p className="text-xs text-slate-500">Autoscaler policy</p>
-					<ul className="mt-0.5 space-y-0.5 text-xs text-slate-600">
+					<p className="text-xs text-ink-600">Autoscaler policy</p>
+					<ul className="mt-0.5 space-y-0.5 text-xs text-ink-600">
 						<li>≤ ${CAPS.maxPerInstance.toFixed(2)}/hr per instance</li>
 						<li>idle {CAPS.idleTtlSec / 60} min → destroy</li>
 						<li>{CAPS.gpu} only</li>
@@ -100,7 +100,7 @@ export default function VastEconomics({ workers }: { workers: FmWorker[] }) {
 				</div>
 			</div>
 			{live.length === 0 && (
-				<p className="mt-2 text-xs text-slate-500">
+				<p className="mt-2 text-xs text-ink-600">
 					No rented capacity right now — the normal idle state. The floor is zero, so an idle
 					day costs nothing but the in-cluster supervisor; queue GPU work and the autoscaler
 					rents within a minute.

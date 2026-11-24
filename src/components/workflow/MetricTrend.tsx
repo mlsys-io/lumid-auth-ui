@@ -10,13 +10,15 @@
 import { useEffect, useRef, useState } from "react";
 import { TrendingUp, TrendingDown, Minus, Sparkles } from "lucide-react";
 import { me, type MeMetricSeries } from "@/api/me";
+import { ink, gold, brick, lagoon, plum, chart } from "@/styles/palette";
 
 // Discrete events overlaid on the trajectory.
 export const EVENT_META: Record<string, { color: string; label: string }> = {
-	learn: { color: "#B08F45", label: "learned" },
-	fix: { color: "#B08F45", label: "self-healed" },
-	bug: { color: "#e11d48", label: "error" },
-	analyze: { color: "#6366f1", label: "analysis" },
+	learn: { color: gold["500"], label: "learned" },
+	// self-healed was the same gold as learned; lagoon tells them apart.
+	fix: { color: lagoon["500"], label: "self-healed" },
+	bug: { color: brick["500"], label: "error" },
+	analyze: { color: plum["500"], label: "analysis" },
 };
 
 const lower = (s: string) => s.toLowerCase();
@@ -107,7 +109,7 @@ export function Sparkline({ values, color, w = 64, h = 20 }: { values: number[];
 	);
 }
 
-const COLOR = { up: "#B08F45", down: "#e11d48", flat: "#94a3b8" };
+const COLOR = { up: gold["500"], down: brick["500"], flat: ink["400"] };
 function trendColor(t: Trend) { return t.improved === null ? COLOR.flat : t.improved ? COLOR.up : COLOR.down; }
 
 // One metric as a featured cell: value + delta + sparkline.
@@ -118,16 +120,16 @@ export function MetricTrendCell({ t, n }: { t: Trend; n: number }) {
 	return (
 		<div className="min-w-0">
 			<div className="flex items-baseline gap-1.5">
-				<span className="text-[15px] font-semibold text-slate-900 tabular-nums leading-none">{fmtMetric(t.label, t.last)}</span>
-				<span className="inline-flex items-center gap-0.5 text-[10px]" style={{ color: col }}>
+				<span className="text-read font-semibold text-ink-900 tabular-nums leading-none">{fmtMetric(t.label, t.last)}</span>
+				<span className="inline-flex items-center gap-0.5 text-nano" style={{ color: col }}>
 					<Icon className="w-3 h-3" />{deltaTxt}
 				</span>
 			</div>
 			<div className="flex items-center gap-1.5 mt-1">
 				<Sparkline values={t.values} color={col} />
-				<span className="text-[9px] text-slate-400">{n}×</span>
+				<span className="text-nano text-ink-600">{n}×</span>
 			</div>
-			<div className="text-[10px] text-slate-400 mt-0.5 truncate" title={t.label}>{t.label}</div>
+			<div className="text-nano text-ink-600 mt-0.5 truncate" title={t.label}>{t.label}</div>
 		</div>
 	);
 }
@@ -226,9 +228,9 @@ export function EventCurve({ t, events, height = 60, app, loop }: { t: Trend; ev
 								{/* Glow ring pulses via CSS opacity (compositor-friendly, smooth)
 								    instead of SMIL animating `r` (which forces per-frame repaints
 								    and stutters under any main-thread work). */}
-								<circle className="animate-pulse" cx={x(anomaly)} cy={y(vals[anomaly])} r="8" fill="#e11d48" opacity="0.18" />
+								<circle className="animate-pulse" cx={x(anomaly)} cy={y(vals[anomaly])} r="8" fill={brick["500"]} opacity="0.18" />
 								<circle cx={x(anomaly)} cy={y(vals[anomaly])} r="9" fill="transparent" />
-								<circle cx={x(anomaly)} cy={y(vals[anomaly])} r="4" fill="#e11d48" stroke="white" strokeWidth="1.5" />
+								<circle cx={x(anomaly)} cy={y(vals[anomaly])} r="4" fill={brick["500"]} stroke="white" strokeWidth="1.5" />
 							</g>
 						)}
 					</svg>
@@ -238,7 +240,7 @@ export function EventCurve({ t, events, height = 60, app, loop }: { t: Trend; ev
 					if (!m) return null;
 					const left = Math.min(Math.max(x(m.i), 40), W - 40);
 					return (
-						<div className="absolute z-10 -translate-x-1/2 pointer-events-none rounded-md bg-slate-900 text-white text-[10px] px-2 py-1 shadow-lg whitespace-nowrap"
+						<div className="absolute z-10 -translate-x-1/2 pointer-events-none rounded-md bg-ink-900 text-white text-nano px-2 py-1 shadow-lg whitespace-nowrap"
 							style={{ left, top: Math.max(0, y(m.p.v) - 34) }}>
 							<span className="font-medium" style={{ color: EVENT_META[m.kind!]?.color }}>{EVENT_META[m.kind!]?.label}</span>
 							{" · "}{fmtMetric(t.label, m.p.v)}{" · "}{cycleDate(m.p.ts)}
@@ -249,7 +251,7 @@ export function EventCurve({ t, events, height = 60, app, loop }: { t: Trend; ev
 			{kindsPresent.length > 0 && (
 				<div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
 					{kindsPresent.map((k) => (
-						<span key={k} className="inline-flex items-center gap-1 text-[9px] text-slate-400">
+						<span key={k} className="inline-flex items-center gap-1 text-nano text-ink-600">
 							<span className="w-1.5 h-1.5 rounded-full" style={{ background: EVENT_META[k!]?.color }} />{EVENT_META[k!]?.label}
 						</span>
 					))}
@@ -267,9 +269,9 @@ function FeaturedMetric({ t, events, n, app, loop }: { t: Trend; events: Record<
 	return (
 		<div className="w-full">
 			<div className="flex items-baseline gap-2">
-				<span className="text-[20px] font-semibold text-slate-900 tabular-nums leading-none">{fmtMetric(t.label, t.last)}</span>
-				<span className="inline-flex items-center gap-0.5 text-[11px]" style={{ color: col }}><Icon className="w-3.5 h-3.5" />{deltaTxt}</span>
-				<span className="text-[11px] text-slate-400">{t.label} · {n} runs</span>
+				<span className="text-h3 font-semibold text-ink-900 tabular-nums leading-none">{fmtMetric(t.label, t.last)}</span>
+				<span className="inline-flex items-center gap-0.5 text-micro" style={{ color: col }}><Icon className="w-3.5 h-3.5" />{deltaTxt}</span>
+				<span className="text-micro text-ink-600">{t.label} · {n} runs</span>
 			</div>
 			<div className="mt-1.5"><EventCurve t={t} events={events} app={app} loop={loop} /></div>
 		</div>
@@ -328,7 +330,7 @@ export function TrendRow({ series, events, tracked, app, loop }: { series: MeMet
 									"text-left rounded-lg px-2 py-1 transition-colors " +
 									(active
 										? "bg-gold-50/70 ring-1 ring-gold-200"
-										: "hover:bg-slate-50 ring-1 ring-transparent")
+										: "hover:bg-ink-50 ring-1 ring-transparent")
 								}
 							>
 								<MetricTrendCell t={t} n={countOf(t)} />
@@ -368,7 +370,7 @@ export function CardMetrics({ app, loops, tracked }: { app: string; loops: strin
 	const trends = pickTrends(best, tracked, 2);
 	if (!trends.length) return null;
 	return (
-		<div className="pt-2 mt-1 border-t border-slate-100 flex items-center gap-3">
+		<div className="pt-2 mt-1 border-t border-ink-100 flex items-center gap-3">
 			{/* column-aligned metric rows: label · curve · value · delta —
 			    the prose "X improving over N runs" beside them repeated the
 			    delta arrow in words; scrubbed 2026-06-12. */}
@@ -378,10 +380,10 @@ export function CardMetrics({ app, loops, tracked }: { app: string; loops: strin
 					const Icon = t.improved === null ? Minus : t.improved ? TrendingUp : TrendingDown;
 					return (
 						<div key={t.label} className="flex items-center gap-2">
-							<span className="text-[10px] text-slate-400 w-[84px] truncate flex-shrink-0 text-right">{t.label}</span>
+							<span className="text-nano text-ink-600 w-[84px] truncate flex-shrink-0 text-right">{t.label}</span>
 							<Sparkline values={t.values} color={col} w={52} h={15} />
-							<span className="text-[12px] font-semibold text-slate-800 tabular-nums w-11 text-right">{fmtMetric(t.label, t.last)}</span>
-							<span className="inline-flex items-center justify-end gap-0.5 text-[10px] w-[52px]" style={{ color: col }}><Icon className="w-3 h-3 flex-shrink-0" />{deltaLabel(t)}</span>
+							<span className="text-caption font-semibold text-ink-800 tabular-nums w-11 text-right">{fmtMetric(t.label, t.last)}</span>
+							<span className="inline-flex items-center justify-end gap-0.5 text-nano w-[52px]" style={{ color: col }}><Icon className="w-3 h-3 flex-shrink-0" />{deltaLabel(t)}</span>
 						</div>
 					);
 				})}
@@ -412,10 +414,10 @@ export function CardMetricTrend({ app, loop }: { app: string; loop: string }) {
 	const deltaTxt = trend.improved === null ? "steady" : `${trend.last - trend.first > 0 ? "+" : ""}${fmtMetric(trend.label, trend.last - trend.first)}`;
 	return (
 		<div className="flex items-center gap-1.5" title={`${trend.label} over ${count} runs`}>
-			<span className="text-[10px] text-slate-400 truncate max-w-[72px]">{trend.label}</span>
+			<span className="text-nano text-ink-600 truncate max-w-[72px]">{trend.label}</span>
 			<Sparkline values={trend.values} color={col} w={44} h={14} />
-			<span className="text-[11px] font-semibold text-slate-700 tabular-nums">{fmtMetric(trend.label, trend.last)}</span>
-			<span className="inline-flex items-center gap-0.5 text-[9px]" style={{ color: col }}><Icon className="w-2.5 h-2.5" />{deltaTxt}</span>
+			<span className="text-micro font-semibold text-ink-700 tabular-nums">{fmtMetric(trend.label, trend.last)}</span>
+			<span className="inline-flex items-center gap-0.5 text-nano" style={{ color: col }}><Icon className="w-2.5 h-2.5" />{deltaTxt}</span>
 		</div>
 	);
 }

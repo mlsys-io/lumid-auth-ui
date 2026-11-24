@@ -52,21 +52,21 @@ export function AirflowGrid({ rows, columns, cells, onCellClick, emptyText }: Pr
 	);
 	if (!hasContent) {
 		return (
-			<div className="rounded-xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500">
+			<div className="rounded-xl border border-dashed border-ink-200 bg-card px-4 py-6 text-center text-sm text-ink-600">
 				{emptyText || "No runs yet — this grid will fill in as your workflow executes."}
 			</div>
 		);
 	}
 
 	return (
-		<div className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-3">
+		<div className="overflow-x-auto rounded-xl border border-ink-200 bg-card p-3">
 			<div className="inline-block">
 				{/* Column header row — timestamps rotated 90° for density */}
 				<div className="flex items-end gap-px ml-32 mb-1.5">
 					{columns.map((c) => (
 						<div
 							key={c}
-							className="w-4 text-[9px] text-slate-400 font-mono whitespace-nowrap"
+							className="w-4 text-nano text-ink-600 font-mono whitespace-nowrap"
 							style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
 							title={c}
 						>
@@ -76,7 +76,7 @@ export function AirflowGrid({ rows, columns, cells, onCellClick, emptyText }: Pr
 				</div>
 				{rows.map((row) => (
 					<div key={row} className="flex items-center gap-px mb-px">
-						<div className="w-32 text-xs text-slate-700 pr-2 truncate" title={row}>
+						<div className="w-32 text-xs text-ink-700 pr-2 truncate" title={row}>
 							{row}
 						</div>
 						{columns.map((col) => {
@@ -98,7 +98,7 @@ export function AirflowGrid({ rows, columns, cells, onCellClick, emptyText }: Pr
 					</div>
 				))}
 				{/* Legend */}
-				<div className="mt-3 flex items-center gap-3 text-[10px] text-slate-500">
+				<div className="mt-3 flex items-center gap-3 text-nano text-ink-600">
 					<Legend state="succeeded" label="Succeeded" />
 					<Legend state="failed" label="Failed" />
 					<Legend state="running" label="Running" />

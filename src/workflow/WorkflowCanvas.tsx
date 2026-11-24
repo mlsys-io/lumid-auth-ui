@@ -29,7 +29,7 @@ import { StageBand, StageLabel } from "./nodes/StageBand";
 import { CanvasControls, DiagnosticsStrip } from "./nodes/CanvasChrome";
 import { layoutGraph, layoutKey, LAYOUT_GEOMETRY } from "./layout";
 import { applyOverlay, type WfEdit, type WfNode, type WfOverlay, type WorkflowGraph } from "./model";
-import { ACCENT, CANVAS_DOT, CANVAS_GRID, accentOf, edgeDash, edgeStroke, edgeWidth } from "./theme";
+import { ACCENT, CANVAS_DOT, CANVAS_GRID, EDGE_LABEL, accentOf, edgeDash, edgeStroke, edgeWidth } from "./theme";
 
 export type CanvasMode = "view" | "edit" | "run" | "showcase";
 
@@ -169,7 +169,7 @@ function WorkflowCanvasInner({
 					transition: "opacity 140ms ease",
 				},
 				label: e.label,
-				labelStyle: { fontSize: 9, fill: "rgb(100 116 139)" },
+				labelStyle: { fontSize: 9, fill: EDGE_LABEL },
 				labelBgStyle: { fill: "white", fillOpacity: 0.85 },
 				labelBgPadding: [4, 2] as [number, number],
 				labelBgBorderRadius: 4,
@@ -219,7 +219,7 @@ function WorkflowCanvasInner({
 	const height = heightProp ?? (showcase ? 200 : Math.min(Math.max(220, laid.contentH + 24), 760));
 
 	return (
-		<div ref={wrap} className={className ?? "rounded-xl border border-slate-200 bg-[#FCFCFD]"} style={{ height }}>
+		<div ref={wrap} className={className ?? "rounded-xl border border-ink-200 bg-card"} style={{ height }}>
 			<ReactFlow
 				nodes={nodes}
 				edges={edges}
@@ -301,7 +301,7 @@ function WorkflowCanvasInner({
 					<MiniMap
 						pannable
 						zoomable
-						className="!rounded-lg !border !border-slate-200 !bg-white/80 !backdrop-blur"
+						className="!rounded-lg !border !border-ink-200 !bg-card/80 !backdrop-blur"
 						maskColor="rgba(15, 23, 42, 0.06)"
 						nodeColor={(n) => {
 							const found = g.nodes.find((x) => x.id === n.id);

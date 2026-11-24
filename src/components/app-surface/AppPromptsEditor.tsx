@@ -69,24 +69,24 @@ export function AppPromptsEditor() {
 	return (
 		<div className="flex flex-col h-full min-h-0">
 			{/* Header */}
-			<div className="flex items-center gap-3 px-4 py-2.5 border-b border-slate-200 bg-white flex-shrink-0">
-				<Link to={`/studio/apps/${encodeURIComponent(app)}`} className="text-[12px] text-slate-500 hover:text-slate-800 flex items-center gap-1">← {app}</Link>
-				<span className="text-slate-300">/</span>
-				<span className="flex items-center gap-1.5 text-[13px] font-medium text-slate-800">
-					<FileText className="w-3.5 h-3.5 text-slate-400" /> Prompts
+			<div className="flex items-center gap-3 px-4 py-2.5 border-b border-ink-200 bg-card flex-shrink-0">
+				<Link to={`/studio/apps/${encodeURIComponent(app)}`} className="text-caption text-ink-600 hover:text-ink-800 flex items-center gap-1">← {app}</Link>
+				<span className="text-ink-600">/</span>
+				<span className="flex items-center gap-1.5 text-meta font-medium text-ink-800">
+					<FileText className="w-3.5 h-3.5 text-ink-600" /> Prompts
 				</span>
-				<span className="ml-auto text-[11px] text-slate-400">The analyst &amp; judge instructions this app runs on</span>
+				<span className="ml-auto text-micro text-ink-600">The analyst &amp; judge instructions this app runs on</span>
 			</div>
 
 			<div className="flex flex-1 min-h-0">
 				{/* List rail */}
-				<div className="w-60 flex-shrink-0 border-r border-slate-200 bg-slate-50/60 overflow-y-auto">
+				<div className="w-60 flex-shrink-0 border-r border-ink-200 bg-ink-50/60 overflow-y-auto">
 					{listError ? (
-						<div className="p-4 text-xs text-rose-600">{listError}</div>
+						<div className="p-4 text-xs text-brick-600">{listError}</div>
 					) : prompts === null ? (
-						<div className="p-4 text-xs text-slate-400 flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…</div>
+						<div className="p-4 text-xs text-ink-600 flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…</div>
 					) : prompts.length === 0 ? (
-						<div className="p-4 text-xs text-slate-400">This app declares no editable prompts.</div>
+						<div className="p-4 text-xs text-ink-600">This app declares no editable prompts.</div>
 					) : (
 						<div className="py-2">
 							<PromptGroup title="Analyst" icon={Brain} items={groups.analyst} selected={selected} onSelect={setSelected} />
@@ -101,7 +101,7 @@ export function AppPromptsEditor() {
 					{selected ? (
 						<PromptPane key={selected} app={app} name={selected} onChangedSource={loadList} />
 					) : (
-						<div className="h-full flex items-center justify-center text-sm text-slate-400">Select a prompt to edit.</div>
+						<div className="h-full flex items-center justify-center text-sm text-ink-600">Select a prompt to edit.</div>
 					)}
 				</div>
 			</div>
@@ -116,14 +116,14 @@ function PromptGroup({ title, icon: Icon, items, selected, onSelect }: {
 	if (!items.length) return null;
 	return (
 		<div className="mb-2">
-			<div className="px-3 py-1 flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-slate-400 font-semibold">
+			<div className="px-3 py-1 flex items-center gap-1.5 text-nano uppercase tracking-wide text-ink-600 font-semibold">
 				<Icon className="w-3 h-3" /> {title}
 			</div>
 			{items.map((p) => (
 				<button key={p.name} onClick={() => onSelect(p.name)}
 					className={cn(
-						"w-full flex items-center gap-2 px-3 py-1.5 text-left text-[12px] transition-colors",
-						selected === p.name ? "bg-gold-50 text-gold-800" : "text-slate-700 hover:bg-slate-100",
+						"w-full flex items-center gap-2 px-3 py-1.5 text-left text-caption transition-colors",
+						selected === p.name ? "bg-gold-50 text-gold-800" : "text-ink-700 hover:bg-ink-100",
 					)}>
 					<span className="flex-1 truncate" title={p.name}>{prettyName(p.name)}</span>
 					<SourceBadge source={p.source} />
@@ -135,9 +135,9 @@ function PromptGroup({ title, icon: Icon, items, selected, onSelect }: {
 
 function SourceBadge({ source }: { source: "local" | "shared" }) {
 	return source === "local" ? (
-		<span title="A local override in this app's own bundle — editable." className="text-[9px] uppercase tracking-wide rounded px-1 py-0.5 bg-gold-100 text-gold-700 border border-gold-200">local</span>
+		<span title="A local override in this app's own bundle — editable." className="text-nano uppercase tracking-wide rounded px-1 py-0.5 bg-gold-100 text-gold-700 border border-gold-200">local</span>
 	) : (
-		<span title="Inherited read-only from a shared skill — editing creates a local override." className="text-[9px] uppercase tracking-wide rounded px-1 py-0.5 bg-slate-100 text-slate-500 border border-slate-200">shared</span>
+		<span title="Inherited read-only from a shared skill — editing creates a local override." className="text-nano uppercase tracking-wide rounded px-1 py-0.5 bg-ink-100 text-ink-600 border border-ink-200">shared</span>
 	);
 }
 
@@ -150,10 +150,10 @@ export function EmbeddedPromptEditor({ app, name, onBack, onChangedSource }: {
 	app: string; name: string; onBack?: () => void; onChangedSource?: () => void;
 }) {
 	return (
-		<div className="flex flex-col h-full min-h-0 rounded-xl border border-slate-200 bg-white overflow-hidden">
+		<div className="flex flex-col h-full min-h-0 rounded-xl border border-ink-200 bg-card overflow-hidden">
 			{onBack && (
-				<div className="flex items-center px-3 py-1.5 border-b border-slate-100 flex-shrink-0">
-					<button onClick={onBack} className="inline-flex items-center gap-1 text-[12px] text-slate-500 hover:text-slate-900 transition-colors">
+				<div className="flex items-center px-3 py-1.5 border-b border-ink-100 flex-shrink-0">
+					<button onClick={onBack} className="inline-flex items-center gap-1 text-caption text-ink-600 hover:text-ink-900 transition-colors">
 						<ArrowLeft className="w-3.5 h-3.5" /> Run tree
 					</button>
 				</div>
@@ -236,47 +236,47 @@ function PromptPane({ app, name, onChangedSource }: { app: string; name: string;
 		} finally { setReverting(false); }
 	}, [app, name, load, onChangedSource]);
 
-	if (loading) return <div className="p-8 text-sm text-slate-400 flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Loading {prettyName(name)}…</div>;
-	if (loadError) return <div className="p-8"><div className="text-sm text-rose-600">Couldn't load prompt.</div><div className="mt-1 text-xs text-slate-400">{loadError}</div></div>;
+	if (loading) return <div className="p-8 text-sm text-ink-600 flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Loading {prettyName(name)}…</div>;
+	if (loadError) return <div className="p-8"><div className="text-sm text-brick-600">Couldn't load prompt.</div><div className="mt-1 text-xs text-ink-600">{loadError}</div></div>;
 
 	const bytes = new Blob([draft]).size;
 
 	return (
 		<div className="flex flex-col h-full min-h-0">
 			{/* Toolbar */}
-			<div className="flex items-center gap-2 px-4 py-2 border-b border-slate-200 bg-white flex-shrink-0">
-				<span className="text-[13px] font-medium text-slate-800 flex items-center gap-1.5">
-					<FileText className="w-3.5 h-3.5 text-slate-400" /> {prettyName(name)}
+			<div className="flex items-center gap-2 px-4 py-2 border-b border-ink-200 bg-card flex-shrink-0">
+				<span className="text-meta font-medium text-ink-800 flex items-center gap-1.5">
+					<FileText className="w-3.5 h-3.5 text-ink-600" /> {prettyName(name)}
 				</span>
 				<SourceBadge source={source} />
 				<div className="ml-auto flex items-center gap-2">
 					{/* Switch between editing and rendered preview — one view at a time. */}
-					<div className="inline-flex rounded-lg border border-slate-200 overflow-hidden">
+					<div className="inline-flex rounded-lg border border-ink-200 overflow-hidden">
 						<button onClick={() => setMode("edit")} title="Edit"
-							className={cn("inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] transition-colors",
-								mode === "edit" ? "bg-slate-100 text-slate-800" : "text-slate-500 hover:bg-slate-50")}>
+							className={cn("inline-flex items-center gap-1.5 px-2.5 py-1.5 text-caption transition-colors",
+								mode === "edit" ? "bg-ink-100 text-ink-800" : "text-ink-600 hover:bg-ink-50")}>
 							<Pencil className="w-3.5 h-3.5" /> Edit
 						</button>
 						<button onClick={() => setMode("preview")} title="Preview"
-							className={cn("inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] border-l border-slate-200 transition-colors",
-								mode === "preview" ? "bg-slate-100 text-slate-800" : "text-slate-500 hover:bg-slate-50")}>
+							className={cn("inline-flex items-center gap-1.5 px-2.5 py-1.5 text-caption border-l border-ink-200 transition-colors",
+								mode === "preview" ? "bg-ink-100 text-ink-800" : "text-ink-600 hover:bg-ink-50")}>
 							<Eye className="w-3.5 h-3.5" /> Preview
 						</button>
 					</div>
 					{source === "local" && (
 						<button onClick={handleRevert} disabled={reverting} title="Revert to the shared copy"
-							className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 text-[12px] text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">
+							className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-ink-200 text-caption text-ink-600 hover:bg-ink-50 transition-colors disabled:opacity-50">
 							{reverting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />} Revert
 						</button>
 					)}
 					<button onClick={() => { if (!dirty || window.confirm("Discard unsaved changes?")) setDraft(original ?? ""); }}
 						disabled={!dirty}
-						className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 text-[12px] text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-40">
+						className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-ink-200 text-caption text-ink-600 hover:bg-ink-50 transition-colors disabled:opacity-40">
 						<X className="w-3.5 h-3.5" /> Reset
 					</button>
 					<button onClick={handleSave} disabled={saving || !dirty}
-						className={cn("inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all",
-							dirty && !saving ? "bg-gold-500 text-white hover:bg-gold-600 shadow-sm shadow-gold-100" : "bg-slate-100 text-slate-400 cursor-not-allowed")}>
+						className={cn("inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-caption font-medium transition-all",
+							dirty && !saving ? "bg-gold-700 text-white hover:bg-gold-800 shadow-sm shadow-gold-100" : "bg-ink-100 text-ink-600 cursor-not-allowed")}>
 						{saving ? "Saving…" : <><Save className="w-3.5 h-3.5" /> Save</>}
 					</button>
 				</div>
@@ -284,14 +284,14 @@ function PromptPane({ app, name, onChangedSource }: { app: string; name: string;
 
 			{/* Shared → local override banner */}
 			{source === "shared" && (
-				<div className="flex items-start gap-2 px-4 py-2 bg-gold-50 border-b border-gold-200 text-[12px] text-gold-800 flex-shrink-0">
+				<div className="flex items-start gap-2 px-4 py-2 bg-gold-50 border-b border-gold-200 text-caption text-gold-800 flex-shrink-0">
 					<AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
 					This prompt is inherited <strong>read-only from a shared skill</strong>. Saving creates an
 					independent <strong>local copy</strong> in this app's bundle — the shared skill file is never changed.
 				</div>
 			)}
 			{source === "local" && (
-				<div className="flex items-start gap-2 px-4 py-2 bg-sky-50 border-b border-sky-200 text-[12px] text-sky-800 flex-shrink-0">
+				<div className="flex items-start gap-2 px-4 py-2 bg-lagoon-50 border-b border-lagoon-200 text-caption text-lagoon-800 flex-shrink-0">
 					<Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
 					Local override — this copy overrides the shared one when the app runs. Revert to drop it.
 				</div>
@@ -302,7 +302,7 @@ function PromptPane({ app, name, onChangedSource }: { app: string; name: string;
 				{mode === "edit" ? (
 					<textarea value={draft} onChange={(e) => setDraft(e.target.value)} spellCheck={false}
 						placeholder="Write the prompt (markdown) here…"
-						className="flex-1 w-full font-mono text-[13px] leading-relaxed p-4 resize-none border-0 focus:outline-none bg-white text-slate-800 placeholder:text-slate-300" />
+						className="flex-1 w-full font-mono text-meta leading-relaxed p-4 resize-none border-0 focus:outline-none bg-card text-ink-800 placeholder:text-ink-500" />
 				) : (
 					<div className="flex-1 overflow-y-auto">
 						<div className="px-6 py-4"><LumidMarkdown source={draft || "_Nothing to preview yet._"} /></div>
@@ -311,8 +311,8 @@ function PromptPane({ app, name, onChangedSource }: { app: string; name: string;
 			</div>
 
 			{/* Footer */}
-			<div className="flex items-center px-4 py-1.5 border-t border-slate-100 bg-white flex-shrink-0">
-				<span className="text-[11px] tabular-nums text-slate-400">{draft.length.toLocaleString()} chars · {bytes.toLocaleString()} bytes</span>
+			<div className="flex items-center px-4 py-1.5 border-t border-ink-100 bg-card flex-shrink-0">
+				<span className="text-micro tabular-nums text-ink-600">{draft.length.toLocaleString()} chars · {bytes.toLocaleString()} bytes</span>
 			</div>
 		</div>
 	);

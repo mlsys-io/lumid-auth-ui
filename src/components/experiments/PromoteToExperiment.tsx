@@ -72,12 +72,12 @@ export default function PromoteToExperiment(
 
 	if (!open) {
 		return (
-			<div className="rounded-xl border border-dashed border-slate-200 bg-white/60 px-3 py-2.5 flex items-center justify-between gap-3">
-				<div className="text-[11px] text-slate-500 leading-relaxed">
+			<div className="rounded-xl border border-dashed border-ink-200 bg-card/60 px-3 py-2.5 flex items-center justify-between gap-3">
+				<div className="text-micro text-ink-600 leading-relaxed">
 					This workflow has no metric, so nothing compares its runs — it runs, and its output is above. Give it a metric and a case scope to start a study of whether a change helps.
 				</div>
 				<button type="button" onClick={() => setOpen(true)}
-					className="flex-shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-slate-50">
+					className="flex-shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-ink-300 bg-card px-2.5 py-1.5 text-micro font-medium text-ink-700 hover:bg-ink-50">
 					<FlaskConical className="w-3.5 h-3.5" /> Start a study
 				</button>
 			</div>
@@ -85,26 +85,26 @@ export default function PromoteToExperiment(
 	}
 
 	return (
-		<div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2.5">
-			<div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">
+		<div className="rounded-xl border border-ink-200 bg-card p-3 space-y-2.5">
+			<div className="text-micro uppercase tracking-wide font-semibold text-ink-600">
 				Define a study on {loop}
 			</div>
 			<div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-				<label className="text-[11px] text-slate-600 space-y-1">
+				<label className="text-micro text-ink-600 space-y-1">
 					<span>Name</span>
 					<input value={id} onChange={(e) => setId(e.target.value)}
 						placeholder="judge_panel_parity"
-						className="w-full rounded-md border border-slate-300 px-2 py-1 text-[12px]" />
+						className="w-full rounded-md border border-ink-300 px-2 py-1 text-caption" />
 				</label>
-				<label className="text-[11px] text-slate-600 space-y-1">
+				<label className="text-micro text-ink-600 space-y-1">
 					<span>Metric — must be a key this loop emits</span>
 					<input value={metric} onChange={(e) => setMetric(e.target.value)}
 						placeholder="avg_question_score"
-						className="w-full rounded-md border border-slate-300 px-2 py-1 text-[12px]" />
+						className="w-full rounded-md border border-ink-300 px-2 py-1 text-caption" />
 				</label>
 			</div>
 			<div className="space-y-1">
-				<div className="flex items-center gap-3 text-[11px] text-slate-600">
+				<div className="flex items-center gap-3 text-micro text-ink-600">
 					<span>Scope</span>
 					{(["dataset", "cases"] as const).map((k) => (
 						<label key={k} className="inline-flex items-center gap-1 cursor-pointer">
@@ -115,20 +115,20 @@ export default function PromoteToExperiment(
 				</div>
 				<input value={scope} onChange={(e) => setScope(e.target.value)}
 					placeholder={scopeKind === "dataset" ? "cases_v1" : "Case_002, Case_019"}
-					className="w-full rounded-md border border-slate-300 px-2 py-1 text-[12px]" />
-				<div className="text-[10px] text-slate-400">
+					className="w-full rounded-md border border-ink-300 px-2 py-1 text-caption" />
+				<div className="text-nano text-ink-600">
 					Required: a threshold counted over an undefined population cannot be interpreted.
 				</div>
 			</div>
-			{err && <div className="text-[11px] text-rose-600">{err}</div>}
-			{done && <div className="text-[11px] text-emerald-700">{done}</div>}
+			{err && <div className="text-micro text-brick-600">{err}</div>}
+			{done && <div className="text-micro text-gold-700">{done}</div>}
 			<div className="flex items-center gap-2">
 				<button type="button" disabled={!ready || busy} onClick={submit}
-					className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-white disabled:opacity-40">
+					className="inline-flex items-center gap-1.5 rounded-lg bg-ink-900 px-3 py-1.5 text-micro font-medium text-white disabled:opacity-40">
 					{busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />} Define
 				</button>
 				<button type="button" onClick={() => setOpen(false)}
-					className="text-[11px] text-slate-500 hover:text-slate-700">Cancel</button>
+					className="text-micro text-ink-600 hover:text-ink-700">Cancel</button>
 			</div>
 		</div>
 	);

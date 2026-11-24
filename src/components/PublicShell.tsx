@@ -9,10 +9,10 @@ export default function PublicShell() {
 	return (
 		<div className="min-h-screen flex flex-col bg-background">
 			<header className="flex items-center justify-between px-4 h-12 border-b border-border shrink-0">
-				<Link to="/" className="font-display text-[15px] font-semibold text-foreground">Lumid</Link>
+				<Link to="/" className="font-display text-read font-semibold text-foreground">Lumid</Link>
 				<div className="flex items-center gap-2">
-					<Link to="/explore" className="text-[13px] text-muted-foreground hover:text-foreground">Marketplace</Link>
-					<Link to="/auth/login" className="text-[13px] px-3 py-1.5 rounded-lg bg-gold-500 text-white hover:bg-gold-600 transition-colors">Sign in</Link>
+					<Link to="/explore" className="text-meta text-muted-foreground hover:text-foreground">Marketplace</Link>
+					<Link to="/auth/login" className="text-meta px-3 py-1.5 rounded-lg bg-gold-700 text-white hover:bg-gold-800 transition-colors">Sign in</Link>
 				</div>
 			</header>
 			<main className="flex-1 min-h-0 overflow-y-auto">

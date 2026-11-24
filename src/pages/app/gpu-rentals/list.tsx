@@ -43,17 +43,17 @@ const POLL_MS = 10_000;
 function statusBadge(s: TaskStatus | "LOST" | "UNKNOWN"): string {
 	switch (s) {
 		case "DONE":
-			return "bg-gray-100 text-gray-700 border-gray-200";
+			return "bg-ink-100 text-ink-700 border-ink-200";
 		case "DISPATCHED":
 			return "bg-gold-100 text-gold-800 border-gold-200";
 		case "PENDING":
 			return "bg-gold-100 text-gold-800 border-gold-200";
 		case "FAILED":
-			return "bg-red-100 text-red-800 border-red-200";
+			return "bg-brick-100 text-brick-800 border-brick-200";
 		case "CANCELLED":
-			return "bg-slate-200 text-slate-700 border-slate-300";
+			return "bg-ink-200 text-ink-700 border-ink-300";
 		default:
-			return "bg-gray-100 text-gray-700 border-gray-200";
+			return "bg-ink-100 text-ink-700 border-ink-200";
 	}
 }
 
@@ -171,7 +171,7 @@ export default function GpuRentalsList({ config }: { config?: Record<string, unk
 		<>
 			<header className="flex items-center gap-2 mb-6">
 				{!hideHeader && <Server className="w-5 h-5 text-gold-600" />}
-				{!hideHeader && <h1 className="text-2xl font-semibold">{cfgTitle}</h1>}
+				{!hideHeader && <h1 className="text-h2 font-semibold">{cfgTitle}</h1>}
 				{!hideHeader && (
 					<span className="text-sm text-muted-foreground ml-2">{cfgSubtitle}</span>
 				)}
@@ -194,9 +194,9 @@ export default function GpuRentalsList({ config }: { config?: Record<string, unk
 				</div>
 			</header>
 
-			<Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm">
+			<Card className="border-0 shadow-md bg-card/80 backdrop-blur-sm">
 				<CardHeader>
-					<CardTitle className="text-base">
+					<CardTitle className="text-read">
 						{hasAny
 							? `${rows.length} rental${rows.length === 1 ? "" : "s"} on this device`
 							: "No rentals yet"}
@@ -263,7 +263,7 @@ function RentalRow({
 			<td className="py-2 px-2">
 				<Link
 					to={`/studio/a/lumid-gpu-rentals/${encodeURIComponent(row.rental.task_id)}`}
-					className="text-indigo-600 hover:underline font-medium"
+					className="text-plum-600 hover:underline font-medium"
 				>
 					{row.rental.name}
 				</Link>
@@ -276,7 +276,7 @@ function RentalRow({
 					{spec.gpu > 0 ? (
 						<Zap className="w-3.5 h-3.5 text-gold-500" />
 					) : (
-						<Cpu className="w-3.5 h-3.5 text-slate-500" />
+						<Cpu className="w-3.5 h-3.5 text-ink-600" />
 					)}
 					{spec.gpu > 0
 						? `${spec.gpu}× GPU${spec.gpuMemoryGb ? ` ${spec.gpuMemoryGb}GB` : ""}`
@@ -289,7 +289,7 @@ function RentalRow({
 			</td>
 			<td className="py-2 px-2">
 				{row.error ? (
-					<span className="text-xs text-red-600">err: {row.error}</span>
+					<span className="text-xs text-brick-600">err: {row.error}</span>
 				) : (
 					<span
 						className={cn(
@@ -316,7 +316,7 @@ function RentalRow({
 						<Button
 							size="sm"
 							variant="ghost"
-							className="text-red-600 hover:bg-red-50"
+							className="text-brick-600 hover:bg-brick-50"
 							onClick={onCancel}
 							title="Cancel rental"
 						>
@@ -327,7 +327,7 @@ function RentalRow({
 					<Button
 						size="sm"
 						variant="ghost"
-						className="text-slate-500"
+						className="text-ink-600"
 						onClick={onCleanup}
 						title="Remove from list"
 					>

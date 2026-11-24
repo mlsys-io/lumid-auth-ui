@@ -32,7 +32,7 @@ export function QuickStarters({ heading = 'Quick starters' }: { heading?: string
 
 	return (
 		<div className="space-y-3">
-			<div className="text-[11px] tracking-[0.08em] font-medium text-slate-400">
+			<div className="text-micro tracking-[0.08em] font-medium text-ink-600">
 				{heading}
 			</div>
 
@@ -59,7 +59,7 @@ export function FreshUserHero({ name }: { name: string }) {
 	return (
 		<div className="space-y-5">
 			{/* Hero — greeting + single primary ask */}
-			<section className="rounded-2xl border border-slate-200/70 bg-gradient-to-br from-gold-50 via-white to-sky-50/40 p-6">
+			<section className="rounded-2xl border border-ink-200/70 bg-gradient-to-br from-gold-50 via-white to-lagoon-50/40 p-6">
 				<div className="flex items-start gap-3">
 					<div className="relative flex-shrink-0">
 						<div className="absolute inset-0 bg-gold-400/30 blur-md rounded-full" />
@@ -68,10 +68,10 @@ export function FreshUserHero({ name }: { name: string }) {
 						</div>
 					</div>
 					<div className="flex-1 min-w-0">
-						<h2 className="text-xl font-medium text-slate-900 tracking-tight">
+						<h2 className="text-h3 font-medium text-ink-900 tracking-tight">
 							{name ? `Welcome, ${name}.` : 'Welcome.'}
 						</h2>
-						<p className="text-sm text-slate-600 mt-1 leading-relaxed">
+						<p className="text-sm text-ink-600 mt-1 leading-relaxed">
 							Lumid runs apps for you in the background — a daily brief, email triage,
 							anything you can describe. Pick a starter below, or tell us what you want.
 						</p>
@@ -85,7 +85,7 @@ export function FreshUserHero({ name }: { name: string }) {
 			<div className="text-center pt-1">
 				<Link
 					to="/studio/marketplace"
-					className="inline-flex items-center gap-1 text-[12px] text-slate-400 hover:text-slate-700 transition-colors"
+					className="inline-flex items-center gap-1 text-caption text-ink-600 hover:text-ink-700 transition-colors"
 				>
 					Or browse the marketplace
 					<ArrowRight className="w-3 h-3" />
@@ -107,8 +107,8 @@ function DescribeCard({ onClick }: { onClick: () => void }) {
 				<MessagesSquare className="w-4 h-4" />
 			</div>
 			<div className="flex-1 min-w-0">
-				<div className="font-medium text-slate-900 text-[13px] leading-tight">Describe what you want</div>
-				<div className="text-[11px] text-slate-500 mt-0.5 leading-relaxed line-clamp-2">
+				<div className="font-medium text-ink-900 text-meta leading-tight">Describe what you want</div>
+				<div className="text-micro text-ink-600 mt-0.5 leading-relaxed line-clamp-2">
 					Tell the AI in your words — it composes, installs, and schedules it.
 				</div>
 			</div>
@@ -123,10 +123,10 @@ function StarterCard({ s, index = 0, locked = null, onClick }: {
 	const Icon = s.icon;
 	const tones: Record<Starter['tone'], { bg: string; iconBg: string; iconText: string; border: string }> = {
 		amber:  { bg: 'hover:bg-gold-50/60',  iconBg: 'bg-gold-100',  iconText: 'text-gold-700',  border: 'hover:border-gold-200' },
-		rose:   { bg: 'hover:bg-rose-50/60',   iconBg: 'bg-rose-100',   iconText: 'text-rose-700',   border: 'hover:border-rose-200' },
-		sky:    { bg: 'hover:bg-sky-50/60',    iconBg: 'bg-sky-100',    iconText: 'text-sky-700',    border: 'hover:border-sky-200' },
-		violet: { bg: 'hover:bg-violet-50/60', iconBg: 'bg-violet-100', iconText: 'text-violet-700', border: 'hover:border-violet-200' },
-		indigo: { bg: 'hover:bg-indigo-50/60', iconBg: 'bg-indigo-100', iconText: 'text-indigo-700', border: 'hover:border-indigo-200' },
+		rose:   { bg: 'hover:bg-brick-50/60',   iconBg: 'bg-brick-100',   iconText: 'text-brick-700',   border: 'hover:border-brick-200' },
+		sky:    { bg: 'hover:bg-lagoon-50/60',    iconBg: 'bg-lagoon-100',    iconText: 'text-lagoon-700',    border: 'hover:border-lagoon-200' },
+		violet: { bg: 'hover:bg-plum-50/60', iconBg: 'bg-plum-100', iconText: 'text-plum-700', border: 'hover:border-plum-200' },
+		indigo: { bg: 'hover:bg-plum-50/60', iconBg: 'bg-plum-100', iconText: 'text-plum-700', border: 'hover:border-plum-200' },
 	};
 	const t = tones[s.tone];
 	const connectLabel = locked === 'google' ? 'Connect Google to unlock' : locked === 'microsoft' ? 'Connect Microsoft to unlock' : '';
@@ -136,27 +136,27 @@ function StarterCard({ s, index = 0, locked = null, onClick }: {
 			style={staggerDelay(index)}
 			className={[
 				STAGGER_CLASS,
-				'group rounded-xl border bg-white p-3 text-left transition-all duration-200',
+				'group rounded-xl border bg-card p-3 text-left transition-all duration-200',
 				'flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 active:scale-[0.98]',
-				locked ? 'border-slate-200/70 opacity-90' : 'border-slate-200',
-				locked ? 'hover:border-slate-300' : t.bg + ' ' + t.border,
+				locked ? 'border-ink-200/70 opacity-90' : 'border-ink-200',
+				locked ? 'hover:border-ink-300' : t.bg + ' ' + t.border,
 			].join(' ')}
 		>
 			<div className={[
 				'w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-105',
-				locked ? 'bg-slate-100 text-slate-400' : t.iconBg + ' ' + t.iconText,
+				locked ? 'bg-ink-100 text-ink-600' : t.iconBg + ' ' + t.iconText,
 			].join(' ')}>
 				{locked ? <Lock className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
 			</div>
 			<div className="flex-1 min-w-0">
-				<div className="font-medium text-slate-900 text-[13px] leading-tight">{s.title}</div>
+				<div className="font-medium text-ink-900 text-meta leading-tight">{s.title}</div>
 				{locked ? (
-					<div className="text-[11px] text-gold-600 mt-0.5 leading-relaxed">{connectLabel}</div>
+					<div className="text-micro text-gold-700 mt-0.5 leading-relaxed">{connectLabel}</div>
 				) : (
-					<div className="text-[11px] text-slate-500 mt-0.5 leading-relaxed line-clamp-2">{s.subtitle}</div>
+					<div className="text-micro text-ink-600 mt-0.5 leading-relaxed line-clamp-2">{s.subtitle}</div>
 				)}
 			</div>
-			<ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-600 transition-colors flex-shrink-0 mt-1" />
+			<ArrowRight className="w-3.5 h-3.5 text-ink-600 group-hover:text-ink-600 transition-colors flex-shrink-0 mt-1" />
 		</button>
 	);
 }

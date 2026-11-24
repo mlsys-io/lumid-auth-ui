@@ -240,11 +240,11 @@ export function StudioWorkflowPanel() {
 			<header className="flex items-center gap-2 px-3 py-2 border-b border-border flex-shrink-0">
 				<WorkflowIcon className="w-4 h-4 text-gold-600" />
 				<div className="min-w-0 flex-1">
-					<div className="text-[13px] font-semibold text-foreground truncate">
+					<div className="text-meta font-semibold text-foreground truncate">
 						{wf?.title || 'Workflow'}
 					</div>
 					{(wf?.job_id || (plan && !plan.error)) && (
-						<div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+						<div className="flex items-center gap-2 text-nano text-muted-foreground">
 							{workers.length > 0 && (
 								<span className="inline-flex items-center gap-0.5"><Cpu className="w-3 h-3" />{workers.length} worker{workers.length === 1 ? '' : 's'}</span>
 							)}
@@ -265,9 +265,9 @@ export function StudioWorkflowPanel() {
 								<span className="inline-flex items-center gap-0.5"
 									title={job.terminal ? "final" : "polling every 5s"}>
 									<span className={`inline-block w-1.5 h-1.5 rounded-full ${
-										job.status === "completed" ? "bg-emerald-500"
-										: job.status === "failed" || job.status === "cancelled" ? "bg-rose-500"
-										: "bg-amber-500 animate-pulse"}`} />
+										job.status === "completed" ? "bg-gold-500"
+										: job.status === "failed" || job.status === "cancelled" ? "bg-brick-500"
+										: "bg-ember-500 animate-pulse"}`} />
 									{job.status}
 								</span>
 							)}
@@ -287,7 +287,7 @@ export function StudioWorkflowPanel() {
 			    which the canvas is showing. Falls back to a short job id when a
 			    run carries no arm, rather than rendering an empty chip. */}
 			{sibs.length > 1 && (
-				<div className="px-3 pb-1 flex flex-wrap items-center gap-1 text-[10px]">
+				<div className="px-3 pb-1 flex flex-wrap items-center gap-1 text-nano">
 					<span className="opacity-60">experiment:</span>
 					{sibs.map((j) => {
 						const on = j.job_id === (sel?.job_id ?? wf?.job_id);
@@ -320,9 +320,9 @@ export function StudioWorkflowPanel() {
 				</div>
 			)}
 			{(job?.progress || jobErr) && (
-				<div className="px-3 pb-1 text-[10px] text-muted-foreground">
+				<div className="px-3 pb-1 text-nano text-muted-foreground">
 					{jobErr ? (
-						<span className="text-rose-500">{jobErr}</span>
+						<span className="text-brick-600">{jobErr}</span>
 					) : (
 						<span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
 							{/* Labelled JOB phases, deliberately. These are the five
@@ -338,7 +338,7 @@ export function StudioWorkflowPanel() {
 							{Object.entries(job?.progress || {})
 								.filter(([, v]) => typeof v?.completed === "boolean")
 								.map(([k, v]) => (
-									<span key={k} className={v.completed ? "text-emerald-600" : "opacity-50"}>
+									<span key={k} className={v.completed ? "text-gold-700" : "opacity-50"}>
 										{v.completed ? "✓" : "·"} {k}
 									</span>
 								))}
@@ -379,10 +379,10 @@ export function StudioWorkflowPanel() {
 							readOnly
 							height="100%"
 						/>
-					: <div className="p-4 text-[12px] text-muted-foreground">No workflow to show yet — optimize or run one from chat.</div>}
+					: <div className="p-4 text-caption text-muted-foreground">No workflow to show yet — optimize or run one from chat.</div>}
 			</div>
 			{plan?.error && (
-				<div className="px-3 py-2 border-t border-border text-[11px] text-rose-600 flex-shrink-0">optimizer: {plan.error}</div>
+				<div className="px-3 py-2 border-t border-border text-micro text-brick-600 flex-shrink-0">optimizer: {plan.error}</div>
 			)}
 		</aside>
 	), document.body);

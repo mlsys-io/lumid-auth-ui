@@ -29,8 +29,8 @@ export default function StudioRepo() {
 		return () => { live = false; };
 	}, [owner, name]);
 
-	if (notFound) return <div className="max-w-3xl mx-auto px-4 py-16 text-center text-[14px] text-muted-foreground">Repo <span className="font-mono">{owner}/{name}</span> not found (or private).</div>;
-	if (!repo) return <div className="max-w-3xl mx-auto px-4 py-16 text-center text-[13px] text-muted-foreground">Loading…</div>;
+	if (notFound) return <div className="max-w-3xl mx-auto px-4 py-16 text-center text-body text-muted-foreground">Repo <span className="font-mono">{owner}/{name}</span> not found (or private).</div>;
+	if (!repo) return <div className="max-w-3xl mx-auto px-4 py-16 text-center text-meta text-muted-foreground">Loading…</div>;
 
 	return (
 		<div className="max-w-[920px] mx-auto w-full px-4 py-6">
@@ -39,18 +39,18 @@ export default function StudioRepo() {
 				<Boxes className="w-5 h-5 mt-1 text-gold-500 shrink-0" />
 				<div className="min-w-0 flex-1">
 					<div className="flex items-center gap-2 flex-wrap">
-						<h1 className="font-display text-[22px] font-medium tracking-tight text-foreground truncate">{repo.display_name || repo.name}</h1>
-						{repo.kind && <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded border border-slate-200 bg-slate-50 text-slate-600">{repo.kind}</span>}
-						{repo.version && <span className="text-[11px] text-muted-foreground font-mono">v{repo.version}</span>}
+						<h1 className="font-display text-h2 font-medium tracking-tight text-foreground truncate">{repo.display_name || repo.name}</h1>
+						{repo.kind && <span className="text-nano uppercase tracking-wide px-1.5 py-0.5 rounded border border-ink-200 bg-ink-50 text-ink-600">{repo.kind}</span>}
+						{repo.version && <span className="text-micro text-muted-foreground font-mono">v{repo.version}</span>}
 					</div>
-					{repo.summary && <p className="text-[13px] text-muted-foreground mt-1">{repo.summary}</p>}
-					<div className="flex items-center gap-3 mt-1.5 text-[11px] text-muted-foreground">
+					{repo.summary && <p className="text-meta text-muted-foreground mt-1">{repo.summary}</p>}
+					<div className="flex items-center gap-3 mt-1.5 text-micro text-muted-foreground">
 						<span className="font-mono">{owner.slice(0, 8)}/{name}</span>
 						{(repo.stars ?? 0) > 0 && <span className="inline-flex items-center gap-0.5"><Star className="w-3 h-3" />{repo.stars}</span>}
 						{(repo.downloads ?? 0) > 0 && <span className="inline-flex items-center gap-0.5"><Download className="w-3 h-3" />{repo.downloads}</span>}
 						{prov?.fork_of && <span title={`fork provenance: ${prov.verified ? "git-verified" : "unverified"}`}>fork of <span className="font-mono">{prov.fork_of.split("/")[1]}</span> {prov.verified ? "✓" : "(unverified)"}</span>}
 					</div>
-					<div className="mt-2 text-[11px] text-muted-foreground">
+					<div className="mt-2 text-micro text-muted-foreground">
 						Clone: <code className="font-mono bg-muted px-1 py-0.5 rounded">git clone https://xp.io/{owner}/{name}.git</code>
 					</div>
 				</div>
@@ -60,8 +60,8 @@ export default function StudioRepo() {
 			<div className="flex items-center gap-1.5 border-b border-border mb-3">
 				{(["files", "pulls"] as const).map((t) => (
 					<button key={t} onClick={() => setTab(t)}
-						className={cn("inline-flex items-center gap-1.5 px-3 py-1.5 text-[12.5px] font-medium border-b-2 -mb-px transition-colors",
-							tab === t ? "border-gold-400 text-gold-900" : "border-transparent text-slate-500 hover:text-slate-800")}>
+						className={cn("inline-flex items-center gap-1.5 px-3 py-1.5 text-meta font-medium border-b-2 -mb-px transition-colors",
+							tab === t ? "border-gold-400 text-gold-900" : "border-transparent text-ink-600 hover:text-ink-800")}>
 						{t === "files" ? <FileText className="w-3.5 h-3.5" /> : <GitPullRequest className="w-3.5 h-3.5" />}
 						{t === "files" ? "Files" : "Pull requests"}
 					</button>
@@ -100,7 +100,7 @@ function FilesTab({ owner, name, refName }: { owner: string; name: string; refNa
 	return (
 		<div>
 			{/* Breadcrumb */}
-			<div className="flex items-center gap-1 text-[12px] mb-2 flex-wrap">
+			<div className="flex items-center gap-1 text-caption mb-2 flex-wrap">
 				<button onClick={() => { setPath(""); setBlob(null); setBlobPath(null); }} className="text-gold-700 hover:underline">{name}</button>
 				{crumbs.map((c, i) => (
 					<span key={i} className="flex items-center gap-1">
@@ -114,14 +114,14 @@ function FilesTab({ owner, name, refName }: { owner: string; name: string; refNa
 			{blob ? (
 				blobPath?.toLowerCase().endsWith(".md")
 					? <div className="border border-border rounded-lg p-4 bg-card"><LumidMarkdown source={blob.content} /></div>
-					: <pre className="border border-border rounded-lg p-3 bg-muted/40 overflow-x-auto text-[12px] font-mono leading-relaxed whitespace-pre">{blob.content}</pre>
+					: <pre className="border border-border rounded-lg p-3 bg-muted/40 overflow-x-auto text-caption font-mono leading-relaxed whitespace-pre">{blob.content}</pre>
 			) : (
 				<div className="border border-border rounded-lg divide-y divide-border/60">
-					{entries === null && <div className="px-3 py-6 text-center text-[12px] text-muted-foreground">Loading…</div>}
-					{entries?.length === 0 && <div className="px-3 py-6 text-center text-[12px] text-muted-foreground">Empty.</div>}
+					{entries === null && <div className="px-3 py-6 text-center text-caption text-muted-foreground">Loading…</div>}
+					{entries?.length === 0 && <div className="px-3 py-6 text-center text-caption text-muted-foreground">Empty.</div>}
 					{sorted.map((e) => (
 						<button key={e.name} onClick={() => e.type === "tree" ? setPath(path ? `${path}/${e.name}` : e.name) : openFile(e.name)}
-							className="w-full flex items-center gap-2 px-3 py-2 text-[13px] hover:bg-muted transition-colors text-left">
+							className="w-full flex items-center gap-2 px-3 py-2 text-meta hover:bg-muted transition-colors text-left">
 							{e.type === "tree" ? <Folder className="w-4 h-4 text-gold-500 shrink-0" /> : <FileText className="w-4 h-4 text-muted-foreground shrink-0" />}
 							<span className="truncate">{e.name}</span>
 						</button>
@@ -145,28 +145,28 @@ function PullsTab({ owner, name }: { owner: string; name: string }) {
 		return () => { live = false; };
 	}, [owner, name, sel]);
 
-	const tone = (s: PR["state"]) => s === "merged" ? "text-violet-700" : s === "closed" ? "text-slate-500" : "text-emerald-700";
+	const tone = (s: PR["state"]) => s === "merged" ? "text-plum-700" : s === "closed" ? "text-ink-600" : "text-gold-700";
 
-	if (pulls === null) return <div className="px-3 py-6 text-center text-[12px] text-muted-foreground">Loading…</div>;
-	if (pulls.length === 0) return <div className="px-3 py-6 text-center text-[12px] text-muted-foreground">No pull requests.</div>;
+	if (pulls === null) return <div className="px-3 py-6 text-center text-caption text-muted-foreground">Loading…</div>;
+	if (pulls.length === 0) return <div className="px-3 py-6 text-center text-caption text-muted-foreground">No pull requests.</div>;
 	return (
 		<div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-3">
 			<div className="border border-border rounded-lg divide-y divide-border/60 h-fit">
 				{pulls.map((p) => (
 					<button key={p.number} onClick={() => setSel(p.number)}
 						className={cn("w-full text-left px-3 py-2 hover:bg-muted transition-colors", sel === p.number && "bg-muted")}>
-						<div className="flex items-center gap-2"><span className="text-[12px] font-mono text-muted-foreground">#{p.number}</span><span className={cn("text-[10px] uppercase", tone(p.state))}>{p.state}</span></div>
-						<div className="text-[13px] truncate">{p.title}</div>
+						<div className="flex items-center gap-2"><span className="text-caption font-mono text-muted-foreground">#{p.number}</span><span className={cn("text-nano uppercase", tone(p.state))}>{p.state}</span></div>
+						<div className="text-meta truncate">{p.title}</div>
 					</button>
 				))}
 			</div>
 			<div>
-				{sel == null ? <div className="px-3 py-6 text-[12px] text-muted-foreground">Select a pull request.</div>
-					: diff === null ? <div className="px-3 py-6 text-[12px] text-muted-foreground">Loading diff…</div>
+				{sel == null ? <div className="px-3 py-6 text-caption text-muted-foreground">Select a pull request.</div>
+					: diff === null ? <div className="px-3 py-6 text-caption text-muted-foreground">Loading diff…</div>
 						: (
 							<div>
-								<div className="text-[11px] text-muted-foreground mb-2">{diff.files.length} file(s) · <span className="font-mono">{diff.base_sha.slice(0, 7)}…{diff.head_sha.slice(0, 7)}</span></div>
-								<pre className="border border-border rounded-lg p-3 bg-muted/40 overflow-x-auto text-[11.5px] font-mono leading-relaxed whitespace-pre">{diff.unified_diff || "(no textual diff)"}</pre>
+								<div className="text-micro text-muted-foreground mb-2">{diff.files.length} file(s) · <span className="font-mono">{diff.base_sha.slice(0, 7)}…{diff.head_sha.slice(0, 7)}</span></div>
+								<pre className="border border-border rounded-lg p-3 bg-muted/40 overflow-x-auto text-caption font-mono leading-relaxed whitespace-pre">{diff.unified_diff || "(no textual diff)"}</pre>
 							</div>
 						)}
 			</div>

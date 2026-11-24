@@ -23,7 +23,8 @@ const buttonVariants = cva(
 				primary: PRIMARY,
 				default: PRIMARY,
 				// Bronze — brand moments only (one per view, e.g. "Install").
-				accent: 'bg-gold-600 text-white shadow-e1 hover:bg-gold-700 active:bg-gold-800',
+				// gold-700: white on gold-600 is only 3.9:1 (scripts/check-contrast.mjs).
+				accent: 'bg-gold-700 text-white shadow-e1 hover:bg-gold-800 active:bg-gold-900',
 				secondary: SECONDARY,
 				outline: SECONDARY,
 				ghost: 'text-ink-700 hover:bg-ink-100 hover:text-ink-900',

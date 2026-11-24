@@ -62,20 +62,20 @@ function runWhen(runTs: number): string {
  *  caller's OWN recorded runs becomes a link. */
 function SubmittedBy({ p }: { p: Provenance }) {
 	return (
-		<p className="mt-0.5 text-xs text-slate-600">
-			<span className="text-slate-500">Submitted by: </span>
+		<p className="mt-0.5 text-xs text-ink-600">
+			<span className="text-ink-600">Submitted by: </span>
 			{p.kind === "loading" ? (
-				<span className="text-slate-400">reading…</span>
+				<span className="text-ink-600">reading…</span>
 			) : p.kind === "run" ? (
 				<Link
 					to={runPath(p.app, p.loop, toCycleId(p.runTs))}
-					className="font-medium text-indigo-700 hover:underline"
+					className="font-medium text-plum-700 hover:underline"
 					title="The Studio run that launched this workflow"
 				>
 					{p.app} › {p.loop} › run {runWhen(p.runTs)}
 				</Link>
 			) : (
-				<span className="text-slate-500" title={p.why}>not recorded</span>
+				<span className="text-ink-600" title={p.why}>not recorded</span>
 			)}
 		</p>
 	);
@@ -120,9 +120,9 @@ function ago(iso?: string): string {
 
 function Kv({ k, v }: { k: string; v: string }) {
 	return (
-		<p className="text-slate-600">
-			<span className="inline-block w-24 text-slate-500">{k}</span>
-			<span className="text-slate-800">{v}</span>
+		<p className="text-ink-600">
+			<span className="inline-block w-24 text-ink-600">{k}</span>
+			<span className="text-ink-800">{v}</span>
 		</p>
 	);
 }
@@ -380,8 +380,8 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 					onClick={() => setView("mine")}
 					className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs ${
 						view === "mine"
-							? "border-indigo-300 bg-indigo-50 text-indigo-700"
-							: "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+							? "border-plum-300 bg-plum-50 text-plum-700"
+							: "border-ink-200 bg-card text-ink-600 hover:bg-ink-50"
 					}`}
 				>
 					Your runs
@@ -390,8 +390,8 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 					onClick={() => setView("workflows")}
 					className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs ${
 						view === "workflows"
-							? "border-indigo-300 bg-indigo-50 text-indigo-700"
-							: "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+							? "border-plum-300 bg-plum-50 text-plum-700"
+							: "border-ink-200 bg-card text-ink-600 hover:bg-ink-50"
 					}`}
 				>
 					Workflows
@@ -400,8 +400,8 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 					onClick={() => setView("ssh")}
 					className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs ${
 						view === "ssh"
-							? "border-indigo-300 bg-indigo-50 text-indigo-700"
-							: "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+							? "border-plum-300 bg-plum-50 text-plum-700"
+							: "border-ink-200 bg-card text-ink-600 hover:bg-ink-50"
 					}`}
 				>
 					<TerminalSquare className="h-3.5 w-3.5" />
@@ -413,7 +413,7 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 					// from their app. Quiet styling so it stops reading as the page's
 					// primary action; the dialog behind it is unchanged.
 					title="Run a raw workflow YAML on one site"
-					className="ml-auto inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-slate-500 hover:bg-slate-50 hover:text-slate-800"
+					className="ml-auto inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-ink-600 hover:bg-ink-50 hover:text-ink-800"
 				>
 					<Plus className="h-3.5 w-3.5" />
 					Advanced: run YAML
@@ -422,23 +422,23 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 
 			{submitOpen && (
 				<div
-					className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-6"
+					className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink-900/40 p-6"
 					onClick={() => setSubmitOpen(false)}
 				>
 					<div
-						className="w-full max-w-3xl rounded-lg border border-slate-200 bg-white p-5 shadow-xl"
+						className="w-full max-w-3xl rounded-lg border border-ink-200 bg-card p-5 shadow-xl"
 						onClick={(e) => e.stopPropagation()}
 					>
 						<div className="mb-3 flex items-start justify-between gap-4">
 							<div>
-								<h3 className="text-base font-semibold text-slate-900">Run a workflow</h3>
-								<p className="mt-0.5 text-xs text-slate-500">
+								<h3 className="text-read font-semibold text-ink-900">Run a workflow</h3>
+								<p className="mt-0.5 text-xs text-ink-600">
 									One site per run — there is no scheduler spanning sites.
 								</p>
 							</div>
 							<button
 								onClick={() => setSubmitOpen(false)}
-								className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+								className="rounded p-1 text-ink-600 hover:bg-ink-100 hover:text-ink-700"
 								aria-label="Close"
 							>
 								<X className="h-4 w-4" />
@@ -462,8 +462,8 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 						onClick={() => setStatus(s)}
 						className={`rounded-md border px-2.5 py-1 text-xs ${
 							status === s
-								? "border-indigo-300 bg-indigo-50 text-indigo-700"
-								: "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+								? "border-plum-300 bg-plum-50 text-plum-700"
+								: "border-ink-200 bg-card text-ink-600 hover:bg-ink-50"
 						}`}
 					>
 						{s}
@@ -474,32 +474,32 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 			{/* The drill-in sits ABOVE the table: below a 200-row table it was never on
 			    screen, and its first line is who launched the workflow. */}
 			{open && (
-				<div ref={drillRef} className="mb-4 scroll-mt-4 rounded-lg border border-slate-200 bg-white p-4">
+				<div ref={drillRef} className="mb-4 scroll-mt-4 rounded-lg border border-ink-200 bg-card p-4">
 					<div className="mb-3 flex items-center justify-between">
 						<div>
-							<h3 className="font-semibold text-slate-900">
+							<h3 className="font-semibold text-ink-900">
 								Tasks · <span className="font-mono text-sm">{open.workflow_id}</span>
 							</h3>
-							<p className="text-xs text-slate-500">site {open.site ?? "unknown"}</p>
+							<p className="text-xs text-ink-600">site {open.site ?? "unknown"}</p>
 							<SubmittedBy p={prov} />
 						</div>
 						<button
 							onClick={() => setOpen(null)}
-							className="rounded border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
+							className="rounded border border-ink-200 px-2 py-1 text-xs text-ink-600 hover:bg-ink-50"
 						>
 							Close
 						</button>
 					</div>
 
 					{tasksErr ? (
-						<p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+						<p className="rounded border border-ember-200 bg-ember-50 px-3 py-2 text-sm text-ember-800">
 							{tasksErr}
 						</p>
 					) : !tasks ? (
-						<p className="text-sm text-slate-500">Loading tasks…</p>
+						<p className="text-sm text-ink-600">Loading tasks…</p>
 					) : (
 						<table className="w-full text-sm">
-							<thead className="text-left text-xs uppercase text-slate-500">
+							<thead className="text-left text-xs uppercase text-ink-600">
 								<tr>
 									<th className="py-1">Task</th>
 									<th className="py-1">Status</th>
@@ -509,7 +509,7 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 									<th className="py-1" />
 								</tr>
 							</thead>
-							<tbody className="divide-y divide-slate-100">
+							<tbody className="divide-y divide-ink-100">
 								{tasks.map((t) => {
 									const terminal = FM_TERMINAL_TASK_STATUSES.has(t.status);
 									return (
@@ -518,13 +518,13 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 											<td className="py-1.5">
 												<StatusPill status={t.status} />
 											</td>
-											<td className="py-1.5 text-xs text-slate-600">
+											<td className="py-1.5 text-xs text-ink-600">
 												{t.assigned_worker ?? "—"}
 											</td>
 											<td className="py-1.5 text-xs">
 												{t.attempts}/{t.max_attempts}
 											</td>
-											<td className="py-1.5 text-xs text-red-700">
+											<td className="py-1.5 text-xs text-brick-700">
 												{t.error ? t.error.slice(0, 60) : ""}
 											</td>
 											<td className="py-1.5 text-right">
@@ -535,8 +535,8 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 													href={terminal && open.site ? bundleUrl(open.site, t.task_id) : undefined}
 													className={`text-xs ${
 														terminal && open.site
-															? "text-indigo-600 hover:underline"
-															: "cursor-not-allowed text-slate-300"
+															? "text-plum-600 hover:underline"
+															: "cursor-not-allowed text-ink-600"
 													}`}
 													title={
 														terminal
@@ -554,7 +554,7 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 														setLogs(null);
 														setLogsErr(null);
 													}}
-													className="ml-3 text-xs text-indigo-600 hover:underline"
+													className="ml-3 text-xs text-plum-600 hover:underline"
 													title="Timings, worker, attempts, error, submitted YAML, logs"
 												>
 													Details
@@ -565,8 +565,8 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 													onClick={() => open.site && viewResult(open.site, t.task_id)}
 													className={`ml-3 text-xs ${
 														terminal && open.site
-															? "text-indigo-600 hover:underline"
-															: "cursor-not-allowed text-slate-300"
+															? "text-plum-600 hover:underline"
+															: "cursor-not-allowed text-ink-600"
 													}`}
 													title={
 														terminal
@@ -582,7 +582,7 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 								})}
 								{!tasks.length && (
 									<tr>
-										<td colSpan={6} className="py-4 text-center text-xs text-slate-500">
+										<td colSpan={6} className="py-4 text-center text-xs text-ink-600">
 											No tasks returned for this workflow.
 										</td>
 									</tr>
@@ -595,9 +595,9 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 					    "what happened to THIS one" — the question that previously had no
 					    answer anywhere in the UI short of curling the API by hand. */}
 					{detail && (
-						<div className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
+						<div className="mt-4 rounded-lg border border-ink-200 bg-card p-3">
 							<div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-								<p className="font-mono text-xs text-slate-800">{detail.task_id}</p>
+								<p className="font-mono text-xs text-ink-800">{detail.task_id}</p>
 								<div className="flex items-center gap-2">
 									{(["overview", "yaml", "logs", "result"] as const).map((k) => (
 										<button
@@ -614,8 +614,8 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 											}}
 											className={`rounded px-2 py-0.5 text-xs ${
 												pane === k
-													? "bg-indigo-50 text-indigo-700"
-													: "text-slate-600 hover:bg-slate-50"
+													? "bg-plum-50 text-plum-700"
+													: "text-ink-600 hover:bg-ink-50"
 											}`}
 										>
 											{k}
@@ -624,7 +624,7 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 									<button
 										type="button"
 										onClick={() => setDetail(null)}
-										className="text-xs text-slate-500 hover:text-slate-800"
+										className="text-xs text-ink-600 hover:text-ink-800"
 									>
 										Close
 									</button>
@@ -644,8 +644,8 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 
 									{/* Durations, not just stamps. "queued 0.0s, ran 348s" is the shape
 									    of the answer; four epoch floats are not. */}
-									<div className="mt-2 rounded bg-slate-50 p-2">
-										<p className="mb-1 font-medium text-slate-700">Timeline</p>
+									<div className="mt-2 rounded bg-ink-50 p-2">
+										<p className="mb-1 font-medium text-ink-700">Timeline</p>
 										<div className="grid gap-x-6 gap-y-1 sm:grid-cols-2">
 											<Kv k="Submitted" v={stamp(detail.submitted_ts)} />
 											<Kv k="Dispatched" v={stamp(detail.dispatched_ts)} />
@@ -660,27 +660,27 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 									    the parent's `children`. Without saying so, "no result" on a
 									    perfectly successful task reads as data loss. */}
 									{detail.merged_parent_id && (
-										<p className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-amber-800">
+										<p className="rounded border border-ember-200 bg-ember-50 px-2 py-1 text-ember-800">
 											Batched into <span className="font-mono">{detail.merged_parent_id}</span> —
 											FlowMesh merges tasks sharing a model + inference config, so this task's
 											output lives under that parent's result, not its own.
 										</p>
 									)}
 									{!!detail.merged_children?.length && (
-										<p className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-slate-700">
+										<p className="rounded border border-ink-200 bg-ink-50 px-2 py-1 text-ink-700">
 											Parent of {detail.merged_children.length} batched task(s); their outputs are
 											nested in this task's result.
 										</p>
 									)}
 
 									{(detail.last_error || detail.error) && (
-										<div className="rounded border border-red-200 bg-red-50 p-2">
-											<p className="mb-1 font-medium text-red-800">Error</p>
-											<pre className="max-h-40 overflow-auto whitespace-pre-wrap text-red-900">
+										<div className="rounded border border-brick-200 bg-brick-50 p-2">
+											<p className="mb-1 font-medium text-brick-800">Error</p>
+											<pre className="max-h-40 overflow-auto whitespace-pre-wrap text-brick-900">
 												{detail.last_error || detail.error}
 											</pre>
 											{detail.last_failed_worker && (
-												<p className="mt-1 text-red-700">
+												<p className="mt-1 text-brick-700">
 													last failed on {detail.last_failed_worker}
 												</p>
 											)}
@@ -688,10 +688,10 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 									)}
 
 									{!!detail.usages?.length && (
-										<div className="rounded bg-slate-50 p-2">
-											<p className="mb-1 font-medium text-slate-700">Usage</p>
+										<div className="rounded bg-ink-50 p-2">
+											<p className="mb-1 font-medium text-ink-700">Usage</p>
 											{detail.usages.map((u, i) => (
-												<p key={i} className="text-slate-700">
+												<p key={i} className="text-ink-700">
 													{u.runtime_sec != null ? `${u.runtime_sec.toFixed(1)}s` : "—"}
 													{" · "}
 													{u.hardware?.gpu?.devices?.map((d) => d.name).join(", ") || "no GPU"}
@@ -703,7 +703,7 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 							)}
 
 							{pane === "yaml" && (
-								<pre className="max-h-96 overflow-auto rounded bg-slate-50 p-2 text-xs text-slate-800">
+								<pre className="max-h-96 overflow-auto rounded bg-ink-50 p-2 text-xs text-ink-800">
 									{/* FlowMesh returns the spec as `source` now; `raw_yaml` on older servers. */}
 									{detail.raw_yaml || detail.source || "The server did not return the YAML for this task."}
 								</pre>
@@ -711,12 +711,12 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 
 							{pane === "logs" && (
 								<>
-									{logsLoading && <p className="text-xs text-slate-500">Loading…</p>}
+									{logsLoading && <p className="text-xs text-ink-600">Loading…</p>}
 									{logsErr && (
-										<p className="whitespace-pre-wrap text-xs text-amber-700">{logsErr}</p>
+										<p className="whitespace-pre-wrap text-xs text-ember-700">{logsErr}</p>
 									)}
 									{logs && (
-										<pre className="max-h-96 overflow-auto rounded bg-slate-50 p-2 text-xs leading-relaxed text-slate-800">
+										<pre className="max-h-96 overflow-auto rounded bg-ink-50 p-2 text-xs leading-relaxed text-ink-800">
 											{logs}
 										</pre>
 									)}
@@ -725,12 +725,12 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 
 							{pane === "result" && (
 								<>
-									{resultLoading && <p className="text-xs text-slate-500">Loading…</p>}
+									{resultLoading && <p className="text-xs text-ink-600">Loading…</p>}
 									{resultErr && (
-										<p className="whitespace-pre-wrap text-xs text-amber-700">{resultErr}</p>
+										<p className="whitespace-pre-wrap text-xs text-ember-700">{resultErr}</p>
 									)}
 									{result && (
-										<pre className="max-h-96 overflow-auto rounded bg-slate-50 p-2 text-xs text-slate-800">
+										<pre className="max-h-96 overflow-auto rounded bg-ink-50 p-2 text-xs text-ink-800">
 											{result}
 										</pre>
 									)}
@@ -745,9 +745,9 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 					    so any fixed schema here would silently hide whatever it did not
 					    anticipate. The bundle link remains for artifacts and logs. */}
 					{resultOf && (
-						<div className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
+						<div className="mt-4 rounded-lg border border-ink-200 bg-card p-3">
 							<div className="mb-2 flex items-center justify-between">
-								<p className="text-xs font-medium text-slate-700">
+								<p className="text-xs font-medium text-ink-700">
 									Result · <span className="font-mono">{resultOf.slice(0, 24)}…</span>
 								</p>
 								<button
@@ -757,17 +757,17 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 										setResult(null);
 										setResultErr(null);
 									}}
-									className="text-xs text-slate-500 hover:text-slate-800"
+									className="text-xs text-ink-600 hover:text-ink-800"
 								>
 									Close
 								</button>
 							</div>
-							{resultLoading && <p className="text-xs text-slate-500">Loading…</p>}
+							{resultLoading && <p className="text-xs text-ink-600">Loading…</p>}
 							{resultErr && (
-								<p className="whitespace-pre-wrap text-xs text-amber-700">{resultErr}</p>
+								<p className="whitespace-pre-wrap text-xs text-ember-700">{resultErr}</p>
 							)}
 							{result && (
-								<pre className="max-h-80 overflow-auto rounded bg-slate-50 p-2 text-xs leading-relaxed text-slate-800">
+								<pre className="max-h-80 overflow-auto rounded bg-ink-50 p-2 text-xs leading-relaxed text-ink-800">
 									{result}
 								</pre>
 							)}
@@ -775,9 +775,9 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 					)}
 				</div>
 			)}
-			<div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+			<div className="overflow-x-auto rounded-lg border border-ink-200 bg-card">
 				<table className="w-full text-sm">
-					<thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+					<thead className="bg-ink-50 text-left text-xs uppercase text-ink-600">
 						<tr>
 							<th className="px-3 py-2">Site</th>
 							<th className="px-3 py-2">Workflow</th>
@@ -785,7 +785,7 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 							<th className="px-3 py-2">Submitted</th>
 						</tr>
 					</thead>
-					<tbody className="divide-y divide-slate-100">
+					<tbody className="divide-y divide-ink-100">
 						{/* THE ROW IS THE BUTTON. There used to be a per-row "Tasks" button, which
 						    on a 46-workflow federation meant 46 of the page's 76 buttons all doing
 						    what clicking the row could do. Row-as-target is also the bigger hit
@@ -795,7 +795,7 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 								key={`${w.site}:${w.workflow_id}`}
 								onClick={() => void openWorkflow(w)}
 								title={`${w.workflow_id} — submitted ${when(w.submitted_at)}`}
-								className="cursor-pointer hover:bg-slate-50"
+								className="cursor-pointer hover:bg-ink-50"
 							>
 								<td className="px-3 py-2">
 									<SiteBadge site={w.site} />
@@ -803,7 +803,7 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 								{/* A 36-char UUID wrapped onto two lines and made the widest column
 								    in the table. Nobody reads one; they match a prefix or copy it.
 								    Full id is in the row title and in the detail panel. */}
-								<td className="px-3 py-2 font-mono text-xs text-slate-700">
+								<td className="px-3 py-2 font-mono text-xs text-ink-700">
 									{shortId(w.workflow_id)}
 								</td>
 								{/* Status and task counts were two columns saying one thing: a FAILED
@@ -812,17 +812,17 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 								<td className="px-3 py-2 whitespace-nowrap">
 									<StatusPill status={w.status} />
 									{taskNote(w) ? (
-										<span className="ml-2 text-xs text-slate-500">{taskNote(w)}</span>
+										<span className="ml-2 text-xs text-ink-600">{taskNote(w)}</span>
 									) : null}
 								</td>
-								<td className="px-3 py-2 text-xs whitespace-nowrap text-slate-600">
+								<td className="px-3 py-2 text-xs whitespace-nowrap text-ink-600">
 									{ago(w.submitted_at)}
 								</td>
 							</tr>
 						))}
 						{!rows.length && !loading && (
 							<tr>
-								<td colSpan={4} className="px-3 py-8 text-center text-sm text-slate-500">
+								<td colSpan={4} className="px-3 py-8 text-center text-sm text-ink-600">
 									No workflows match.
 								</td>
 							</tr>
@@ -830,7 +830,7 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 					</tbody>
 				</table>
 				{rows.length > 200 && (
-					<p className="border-t border-slate-100 px-3 py-2 text-xs text-slate-500">
+					<p className="border-t border-ink-100 px-3 py-2 text-xs text-ink-600">
 						Showing 200 of {rows.length}. FlowMesh list endpoints have no server-side
 						pagination, so the full set is already in memory — narrow with the filters above.
 					</p>

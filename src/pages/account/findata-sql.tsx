@@ -111,7 +111,7 @@ export default function FindataSQL() {
 	return (
 		<div className="mx-auto max-w-3xl space-y-6 p-6">
 			<header className="space-y-1">
-				<h1 className="flex items-center gap-2 text-xl font-semibold">
+				<h1 className="flex items-center gap-2 text-h3 font-semibold">
 					<Database className="h-5 w-5" /> FinData SQL
 				</h1>
 				<p className="text-sm text-muted-foreground">
@@ -209,9 +209,9 @@ export default function FindataSQL() {
 			)}
 
 			{minted && (
-				<section className="space-y-3 rounded-lg border border-amber-500/50 bg-amber-500/5 p-4">
+				<section className="space-y-3 rounded-lg border border-ember-500/50 bg-ember-500/5 p-4">
 					<h2 className="flex items-center gap-2 font-medium">
-						<AlertTriangle className="h-4 w-4 text-amber-600" />
+						<AlertTriangle className="h-4 w-4 text-ember-600" />
 						Copy this now — it will not be shown again
 					</h2>
 					<Field label="Password" value={minted.password} mono onCopy={copy} copied={copied} />
@@ -313,7 +313,7 @@ function Notice({
 	return (
 		<div
 			className={`flex items-start gap-2 rounded-lg border p-4 text-sm ${
-				tone === 'warn' ? 'border-amber-500/50 bg-amber-500/5' : 'bg-muted/40'
+				tone === 'warn' ? 'border-ember-500/50 bg-ember-500/5' : 'bg-muted/40'
 			}`}
 		>
 			<span className="mt-0.5 shrink-0">{icon}</span>

@@ -67,46 +67,46 @@ export function AddSkillToAppDialog({
 		<Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
 			<DialogContent className="max-w-md">
 				<DialogHeader>
-					<DialogTitle className="flex items-center gap-2 text-[15px]">
-						<Puzzle className="w-4 h-4 text-violet-500" /> Add {skillLabel} to an agent
+					<DialogTitle className="flex items-center gap-2 text-read">
+						<Puzzle className="w-4 h-4 text-plum-600" /> Add {skillLabel} to an agent
 					</DialogTitle>
-					<DialogDescription className="text-[12.5px]">
+					<DialogDescription className="text-meta">
 						Skills aren&apos;t installed standalone — they&apos;re imported by an agent
-						(<code className="text-[11px]">skill_imports</code>). Pick which of your
+						(<code className="text-micro">skill_imports</code>). Pick which of your
 						agents should use this skill.
 					</DialogDescription>
 				</DialogHeader>
 
 				{phase === "done" ? (
 					<div className="space-y-3">
-						<div className="rounded-lg border border-gold-200 bg-gold-50 px-3 py-2.5 text-[13px] text-gold-800 flex items-center gap-2">
+						<div className="rounded-lg border border-gold-200 bg-gold-50 px-3 py-2.5 text-meta text-gold-800 flex items-center gap-2">
 							<Check className="w-4 h-4 flex-shrink-0" /> {doneNote}
 						</div>
 						<Link
 							to={`/studio/a/${encodeURIComponent(target)}/config`}
 							onClick={onClose}
-							className="inline-flex items-center gap-1.5 text-[12.5px] text-gold-700 hover:underline"
+							className="inline-flex items-center gap-1.5 text-meta text-gold-700 hover:underline"
 						>
 							View {target}&apos;s config <ArrowRight className="w-3.5 h-3.5" />
 						</Link>
 					</div>
 				) : apps === null ? (
-					<div className="py-6 text-center text-sm text-slate-400"><Loader2 className="w-4 h-4 animate-spin inline mr-2" />Loading your agents…</div>
+					<div className="py-6 text-center text-sm text-ink-600"><Loader2 className="w-4 h-4 animate-spin inline mr-2" />Loading your agents…</div>
 				) : apps.length === 0 ? (
-					<div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-[12.5px] text-slate-600">
+					<div className="rounded-lg border border-ink-200 bg-ink-50 px-3 py-3 text-meta text-ink-600">
 						You don&apos;t have any installed agents yet. Install an agent first — then
 						come back and add this skill to it.
 					</div>
 				) : (
 					<div className="space-y-3">
-						<div className="max-h-56 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-100">
+						<div className="max-h-56 overflow-y-auto rounded-lg border border-ink-200 divide-y divide-ink-100">
 							{apps.map((a) => (
-								<label key={a.name} className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer text-[13px] transition-colors ${target === a.name ? "bg-violet-50 text-violet-900" : "hover:bg-slate-50 text-slate-700"}`}>
+								<label key={a.name} className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer text-meta transition-colors ${target === a.name ? "bg-plum-50 text-plum-900" : "hover:bg-ink-50 text-ink-700"}`}>
 									<input
 										type="radio" name="target-app" value={a.name}
 										checked={target === a.name}
 										onChange={() => setTarget(a.name)}
-										className="accent-violet-600"
+										className="accent-plum-600"
 									/>
 									<span className="truncate">{a.name}</span>
 								</label>
@@ -115,7 +115,7 @@ export function AddSkillToAppDialog({
 						<button
 							onClick={submit}
 							disabled={!target || phase === "working"}
-							className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 transition-all"
+							className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-plum-600 text-white hover:bg-plum-700 disabled:opacity-50 transition-all"
 						>
 							{phase === "working" ? <><Loader2 className="w-4 h-4 animate-spin" /> Adding…</> : <>Add to {target || "agent"}</>}
 						</button>

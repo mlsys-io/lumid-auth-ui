@@ -174,7 +174,7 @@ export default function CaseBrowser({ config }: NativeSurfaceProps) {
     <div className="space-y-5">
       {/* 1. Mode — the first decision, because it changes what the case is FOR. */}
       <div>
-        <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-2">
+        <div className="text-micro font-medium uppercase tracking-wide text-muted-foreground mb-2">
           Choose a mode
         </div>
         <div className="grid gap-2 sm:grid-cols-3">
@@ -194,14 +194,14 @@ export default function CaseBrowser({ config }: NativeSurfaceProps) {
                 ].join(" ")}
               >
                 <div className="text-sm font-medium text-foreground">{m.label}</div>
-                <div className="mt-1 text-[12px] text-muted-foreground leading-snug">{m.blurb}</div>
+                <div className="mt-1 text-caption text-muted-foreground leading-snug">{m.blurb}</div>
                 {/* The decisive line: what YOU type. Whether you answer or ask
                     flips between modes, and getting it wrong wastes the first
                     turns of a session. */}
-                <div className="mt-2 text-[12px] text-ink-800 leading-snug">
+                <div className="mt-2 text-caption text-ink-800 leading-snug">
                   <span className="text-muted-foreground">You type: </span>{m.youType}
                 </div>
-                <div className="mt-1.5 text-[11px] text-ink-600">{m.scoring}</div>
+                <div className="mt-1.5 text-micro text-ink-600">{m.scoring}</div>
               </button>
             );
           })}
@@ -221,14 +221,14 @@ export default function CaseBrowser({ config }: NativeSurfaceProps) {
               placeholder={
                 cases ? `Filter ${cases.length} cases…` : "Loading cases…"
               }
-              className="w-full mb-2 px-3 py-2 text-[13px] rounded-lg border border-border bg-transparent"
+              className="w-full mb-2 px-3 py-2 text-meta rounded-lg border border-border bg-transparent"
             />
             <div className="max-h-[26rem] overflow-y-auto rounded-lg border border-border divide-y divide-border">
               {cases === null && (
-                <div className="p-3 text-[12px] text-muted-foreground italic">Loading…</div>
+                <div className="p-3 text-caption text-muted-foreground italic">Loading…</div>
               )}
               {cases !== null && shown.length === 0 && (
-                <div className="p-3 text-[12px] text-muted-foreground italic">
+                <div className="p-3 text-caption text-muted-foreground italic">
                   {cases.length === 0
                     ? "No cases available for this app yet."
                     : "No case matches that filter."}
@@ -246,8 +246,8 @@ export default function CaseBrowser({ config }: NativeSurfaceProps) {
                       on ? "bg-foreground/[0.06]" : "hover:bg-foreground/[0.03]",
                     ].join(" ")}
                   >
-                    <div className="text-[13px] text-foreground truncate">{c.label || c.id}</div>
-                    <div className="text-[11px] text-muted-foreground truncate">
+                    <div className="text-meta text-foreground truncate">{c.label || c.id}</div>
+                    <div className="text-micro text-muted-foreground truncate">
                       {[fieldStr(c, "industry"), fieldStr(c, "difficulty")].filter(Boolean).join(" · ")}
                     </div>
                   </button>
@@ -259,20 +259,20 @@ export default function CaseBrowser({ config }: NativeSurfaceProps) {
           {/* 3. The case itself — the thing you could never read before. */}
           <div className="min-w-0">
             {!selected && (
-              <div className="text-[13px] text-muted-foreground italic">
+              <div className="text-meta text-muted-foreground italic">
                 Pick a case to read it before you start.
               </div>
             )}
             {selected && detailErr && (
-              <div className="text-[13px] text-muted-foreground italic">
+              <div className="text-meta text-muted-foreground italic">
                 Couldn't load that case.
               </div>
             )}
             {selected && !detail && !detailErr && (
-              <div className="text-[13px] text-muted-foreground italic">Loading case…</div>
+              <div className="text-meta text-muted-foreground italic">Loading case…</div>
             )}
             {detail && detail.unavailable && (
-              <div className="text-[13px] text-muted-foreground italic">
+              <div className="text-meta text-muted-foreground italic">
                 This case isn't readable from here yet.
               </div>
             )}
@@ -282,7 +282,7 @@ export default function CaseBrowser({ config }: NativeSurfaceProps) {
                   <div className="text-sm font-medium text-foreground">
                     {detail.source?.title || detail.id}
                   </div>
-                  <div className="text-[11px] text-muted-foreground">
+                  <div className="text-micro text-muted-foreground">
                     {[detail.industry, detail.topic, detail.difficulty,
                       detail.expected_duration_minutes ? `${detail.expected_duration_minutes} min` : "",
                     ].filter(Boolean).join(" · ")}
@@ -291,10 +291,10 @@ export default function CaseBrowser({ config }: NativeSurfaceProps) {
 
                 {detail.opening_prompt && (
                   <div>
-                    <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1">
+                    <div className="text-micro font-medium uppercase tracking-wide text-muted-foreground mb-1">
                       Opening
                     </div>
-                    <p className="text-[13px] text-ink-900 leading-relaxed whitespace-pre-wrap">
+                    <p className="text-meta text-ink-900 leading-relaxed whitespace-pre-wrap">
                       {detail.opening_prompt}
                     </p>
                   </div>
@@ -302,10 +302,10 @@ export default function CaseBrowser({ config }: NativeSurfaceProps) {
 
                 {detail.client_context && Object.keys(detail.client_context).length > 0 && (
                   <div>
-                    <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1">
+                    <div className="text-micro font-medium uppercase tracking-wide text-muted-foreground mb-1">
                       Client
                     </div>
-                    <dl className="text-[13px] space-y-0.5">
+                    <dl className="text-meta space-y-0.5">
                       {Object.entries(detail.client_context).map(([k, v]) =>
                         typeof v === "string" || typeof v === "number" ? (
                           <div key={k} className="flex gap-2">
@@ -328,10 +328,10 @@ export default function CaseBrowser({ config }: NativeSurfaceProps) {
                 {detail.questions && detail.questions.length > 0 && (
                   mode === "interview" ? (
                     <div>
-                      <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1">
+                      <div className="text-micro font-medium uppercase tracking-wide text-muted-foreground mb-1">
                         Questions
                       </div>
-                      <p className="text-[13px] text-muted-foreground">
+                      <p className="text-meta text-muted-foreground">
                         {detail.questions.length} questions
                         {" — "}
                         {detail.questions.map((qq) => qq.type).filter(Boolean).join(", ")}.
@@ -340,15 +340,15 @@ export default function CaseBrowser({ config }: NativeSurfaceProps) {
                     </div>
                   ) : (
                     <div>
-                      <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1">
+                      <div className="text-micro font-medium uppercase tracking-wide text-muted-foreground mb-1">
                         Questions ({detail.questions.length})
                       </div>
                       <ol className="space-y-1.5">
                         {detail.questions.map((qq) => (
-                          <li key={qq.q_id} className="text-[13px]">
+                          <li key={qq.q_id} className="text-meta">
                             <span className="text-muted-foreground">{qq.q_id}</span>
                             {qq.type && (
-                              <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-foreground/10 text-ink-800">
+                              <span className="ml-1.5 text-nano px-1.5 py-0.5 rounded-full bg-foreground/10 text-ink-800">
                                 {qq.type}
                               </span>
                             )}
@@ -386,7 +386,7 @@ export default function CaseBrowser({ config }: NativeSurfaceProps) {
         </button>
         {/* Restate the input at the moment of committing — the mode card may
             have scrolled out of view behind a 50-case list. */}
-        <span className="text-[12px] text-muted-foreground">
+        <span className="text-caption text-muted-foreground">
           {activeMode.needsCase && !selected
             ? "Pick a case first."
             : <>Opens the chat · then you type <span className="text-ink-800">{activeMode.youType}</span></>}

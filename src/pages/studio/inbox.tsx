@@ -277,13 +277,13 @@ export default function StudioInbox() {
 			{/* Inbox = a pure feed. The "Your AI" tab was retired — the
 			    Knowledge surface has its own nav entry at /studio/knowledge. */}
 			<div className="flex items-center justify-end gap-2">
-				<span className="hidden md:inline text-[11px] text-slate-400" title={`Last refreshed at ${new Date(lastRefresh).toLocaleTimeString()}`}>
+				<span className="hidden md:inline text-micro text-ink-600" title={`Last refreshed at ${new Date(lastRefresh).toLocaleTimeString()}`}>
 					{refreshing ? "Updating…" : `Updated ${secondsAgo(lastRefresh)}`}
 				</span>
 				<button
 					onClick={load}
 					disabled={refreshing}
-					className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded border border-slate-200 hover:bg-slate-50 text-slate-700 disabled:opacity-50 transition-colors"
+					className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded border border-ink-200 hover:bg-ink-50 text-ink-700 disabled:opacity-50 transition-colors"
 				>
 					<RefreshCw className={[
 						"w-3 h-3 transition-transform",
@@ -336,13 +336,13 @@ function InboxFeedBody({
 							className={[
 								'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs transition-colors',
 								active
-									? 'bg-slate-900 text-white shadow-sm'
-									: 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300',
+									? 'bg-ink-900 text-white shadow-sm'
+									: 'bg-card border border-ink-200 text-ink-700 hover:bg-ink-50 hover:border-ink-300',
 							].join(' ')}
 						>
 							{f.label}
 							{n > 0 && (
-								<span className={['text-[10px]', active ? 'text-white/70' : 'text-slate-500'].join(' ')}>
+								<span className={['text-nano', active ? 'text-white/70' : 'text-ink-600'].join(' ')}>
 									{n}
 								</span>
 							)}
@@ -352,7 +352,7 @@ function InboxFeedBody({
 			</nav>
 
 			{items === null && (
-				<div className="text-sm text-slate-500 italic inline-flex items-center gap-1.5">
+				<div className="text-sm text-ink-600 italic inline-flex items-center gap-1.5">
 					<Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…
 				</div>
 			)}
@@ -408,22 +408,22 @@ function InboxZeroState() {
 			<div className="w-14 h-14 mx-auto rounded-2xl bg-gold-100/60 flex items-center justify-center mb-4 shadow-inner shadow-gold-50">
 				<CheckCircle2 className="w-7 h-7 text-gold-600" />
 			</div>
-			<div className="text-base font-medium text-slate-900">Inbox zero.</div>
-			<p className="text-sm text-slate-600 mt-1.5 max-w-md mx-auto leading-relaxed">
+			<div className="text-read font-medium text-ink-900">Inbox zero.</div>
+			<p className="text-sm text-ink-600 mt-1.5 max-w-md mx-auto leading-relaxed">
 				When your workflows produce something for you — a draft, a
 				summary, a heads-up — it lands here for review.
 			</p>
 			<div className="flex items-center justify-center gap-2 mt-5">
 				<button
 					onClick={openComposer}
-					className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-gold-500 text-white hover:bg-gold-600 transition-colors shadow-sm shadow-gold-100"
+					className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-gold-700 text-white hover:bg-gold-800 transition-colors shadow-sm shadow-gold-100"
 				>
 					<Plus className="w-3.5 h-3.5" />
 					New workflow
 				</button>
 				<button
 					onClick={askAgent}
-					className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
+					className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-ink-200 text-ink-700 hover:bg-ink-50 transition-colors"
 				>
 					<Sparkles className="w-3.5 h-3.5 text-gold-600" />
 					Ask for ideas
@@ -437,9 +437,9 @@ function InboxZeroState() {
 // Quieter than InboxZero; the obvious action is to clear the filter.
 function FilterEmptyState({ filter, onReset }: { filter: Filter; onReset: () => void }) {
 	return (
-		<div className="rounded-xl border border-dashed border-slate-200 bg-white/60 py-8 px-6 text-center">
-			<FilterIcon className="w-5 h-5 mx-auto text-slate-400" />
-			<div className="text-sm text-slate-700 mt-2.5">
+		<div className="rounded-xl border border-dashed border-ink-200 bg-card/60 py-8 px-6 text-center">
+			<FilterIcon className="w-5 h-5 mx-auto text-ink-600" />
+			<div className="text-sm text-ink-700 mt-2.5">
 				Nothing in <span className="font-medium">{filter}</span> right now.
 			</div>
 			<button
@@ -499,20 +499,20 @@ function FeedRow({
 				<Icon className={['w-4 h-4 mt-0.5 flex-shrink-0', iconCls].join(' ')} />
 				<div className="min-w-0 flex-1">
 					<div className="flex items-baseline justify-between gap-3">
-						<div className="text-sm font-medium text-slate-900 truncate">{title}</div>
+						<div className="text-sm font-medium text-ink-900 truncate">{title}</div>
 						<div className="flex items-center gap-2 flex-shrink-0">
 							{feedback && (
 								<span className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
 									{feedback}
 								</span>
 							)}
-							<div className="text-[11px] text-slate-500 tabular-nums">
+							<div className="text-micro text-ink-600 tabular-nums">
 								{formatRelative(ts)}
 							</div>
 						</div>
 					</div>
-					{sub && <div className="text-xs text-slate-500 mt-0.5">{sub}</div>}
-					{body && <div className="mt-2 text-sm text-slate-700 leading-relaxed">{body}</div>}
+					{sub && <div className="text-xs text-ink-600 mt-0.5">{sub}</div>}
+					{body && <div className="mt-2 text-sm text-ink-700 leading-relaxed">{body}</div>}
 					{(actions || link) && (
 						<div className="mt-2.5 flex items-center justify-end gap-2 flex-wrap">
 							{link && (
@@ -569,24 +569,24 @@ function DraftCard({
 				ts={item.ts}
 				pick={draftPick}
 				title={item.subject}
-				sub={<>To <span className="font-medium text-slate-700">{item.to}</span> · {item.app}</>}
+				sub={<>To <span className="font-medium text-ink-700">{item.to}</span> · {item.app}</>}
 				body={
 					<textarea
 						value={text}
 						onChange={(e) => setText(e.target.value)}
 						rows={6}
-						className="w-full text-sm border border-slate-300 rounded p-2 font-sans"
+						className="w-full text-sm border border-ink-300 rounded p-2 font-sans"
 					/>
 				}
 				actions={
 					<>
 						<button onClick={() => setEditing(false)}
-							className="px-3 py-1 text-xs rounded border border-slate-200 bg-white hover:bg-slate-50">
+							className="px-3 py-1 text-xs rounded border border-ink-200 bg-card hover:bg-ink-50">
 							Cancel
 						</button>
 						<button onClick={() => { onAction('edit', text); setEditing(false); }}
 							disabled={busy}
-							className="px-3 py-1 text-xs rounded bg-gold-500 text-white hover:bg-gold-600 disabled:opacity-50">
+							className="px-3 py-1 text-xs rounded bg-gold-700 text-white hover:bg-gold-800 disabled:opacity-50">
 							Save
 						</button>
 					</>
@@ -601,7 +601,7 @@ function DraftCard({
 			ts={item.ts}
 			pick={draftPick}
 			title={item.subject}
-			sub={<>To <span className="font-medium text-slate-700">{item.to}</span> · {item.app}</>}
+			sub={<>To <span className="font-medium text-ink-700">{item.to}</span> · {item.app}</>}
 			body={<div className="whitespace-pre-wrap line-clamp-4">{item.body || '(empty)'}</div>}
 			actions={
 				<>
@@ -610,11 +610,11 @@ function DraftCard({
 						{busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />} Send
 					</button>
 					<button onClick={() => setEditing(true)} disabled={busy}
-						className="inline-flex items-center gap-1 px-3 py-1 text-xs rounded border border-slate-200 hover:bg-slate-50 disabled:opacity-50">
+						className="inline-flex items-center gap-1 px-3 py-1 text-xs rounded border border-ink-200 hover:bg-ink-50 disabled:opacity-50">
 						<Edit2 className="w-3 h-3" /> Edit
 					</button>
 					<button onClick={() => onAction('dismiss')} disabled={busy} title="Dismiss"
-						className="inline-flex items-center px-2 py-1 text-xs rounded border border-slate-200 hover:bg-slate-50 disabled:opacity-50">
+						className="inline-flex items-center px-2 py-1 text-xs rounded border border-ink-200 hover:bg-ink-50 disabled:opacity-50">
 						<X className="w-3 h-3" />
 					</button>
 				</>
@@ -650,7 +650,7 @@ function CycleCard({ item }: { item: Extract<FeedItem, { kind: 'cycle' }> }) {
 				item.skipReason ? (
 					<span className="text-xs text-gold-800">{item.skipReason}</span>
 				) : item.lastError ? (
-					<span className="text-xs text-rose-800 font-mono truncate block">{item.lastError.slice(0, 200)}</span>
+					<span className="text-xs text-brick-800 font-mono truncate block">{item.lastError.slice(0, 200)}</span>
 				) : undefined
 			}
 			// Successful cycles get the 👍/✏️/👎 row so the user can
@@ -713,14 +713,14 @@ function NoticeCard({ item }: { item: Extract<FeedItem, { kind: 'notice' }> }) {
 			sub={
 				axis ? (
 					<span className="inline-flex items-center gap-1.5">
-						<span className={`inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-medium ${axis.tone}`}>
+						<span className={`inline-flex items-center px-1.5 py-0.5 rounded border text-nano font-medium ${axis.tone}`}>
 							{axis.label}
 						</span>
-						<span className="text-slate-500">{axis.phrase}</span>
+						<span className="text-ink-600">{axis.phrase}</span>
 					</span>
 				) : undefined
 			}
-			body={item.detail ? <span className="text-sm text-slate-600">{item.detail}</span> : undefined}
+			body={item.detail ? <span className="text-sm text-ink-600">{item.detail}</span> : undefined}
 			link={item.noticeKind === 'quota_paused' ? { to: '/studio/settings#secrets', label: 'Upgrade' } : undefined}
 		/>
 	);

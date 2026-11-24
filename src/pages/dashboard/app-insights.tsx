@@ -37,12 +37,12 @@ function Stat({
 	tone?: 'plain' | 'warn' | 'bad';
 }) {
 	const colour =
-		tone === 'bad' ? 'text-red-600' : tone === 'warn' ? 'text-amber-600' : 'text-slate-900 dark:text-slate-100';
+		tone === 'bad' ? 'text-brick-600' : tone === 'warn' ? 'text-ember-600' : 'text-ink-900 dark:text-ink-100';
 	return (
-		<div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4">
-			<div className="text-xs uppercase tracking-wide text-slate-500">{label}</div>
-			<div className={`mt-1 text-2xl font-semibold ${colour}`}>{value}</div>
-			{sub ? <div className="mt-1 text-xs text-slate-500">{sub}</div> : null}
+		<div className="rounded-lg border border-ink-200 dark:border-ink-700 p-4">
+			<div className="text-xs uppercase tracking-wide text-ink-600">{label}</div>
+			<div className={`mt-1 text-h2 font-semibold ${colour}`}>{value}</div>
+			{sub ? <div className="mt-1 text-xs text-ink-600">{sub}</div> : null}
 		</div>
 	);
 }
@@ -51,7 +51,7 @@ function Stat({
  *  the reject histogram is the one panel people will quote a number from. */
 function BarList({ rows, empty }: { rows: InsightCount[]; empty: string }) {
 	if (!rows || rows.length === 0) {
-		return <div className="text-sm text-slate-500 py-3">{empty}</div>;
+		return <div className="text-sm text-ink-600 py-3">{empty}</div>;
 	}
 	const max = Math.max(...rows.map((r) => r.count), 1);
 	return (
@@ -59,13 +59,13 @@ function BarList({ rows, empty }: { rows: InsightCount[]; empty: string }) {
 			{rows.map((r) => (
 				<div key={r.key} className="flex items-center gap-3">
 					<div className="w-8 shrink-0 text-right text-sm tabular-nums font-medium">{r.count}</div>
-					<div className="h-5 flex-1 rounded bg-slate-100 dark:bg-slate-800 overflow-hidden">
+					<div className="h-5 flex-1 rounded bg-ink-100 dark:bg-ink-800 overflow-hidden">
 						<div
-							className="h-full rounded bg-[#96773A]/70"
+							className="h-full rounded bg-gold-600/70"
 							style={{ width: `${Math.max(2, (r.count / max) * 100)}%` }}
 						/>
 					</div>
-					<div className="w-1/2 shrink-0 truncate font-mono text-xs text-slate-600 dark:text-slate-300" title={r.key}>
+					<div className="w-1/2 shrink-0 truncate font-mono text-xs text-ink-600 dark:text-ink-600" title={r.key}>
 						{r.key}
 					</div>
 				</div>
@@ -84,9 +84,9 @@ function Panel({
 	children: React.ReactNode;
 }) {
 	return (
-		<section className="rounded-xl border border-slate-200 dark:border-slate-700 p-5">
-			<h2 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-200">{title}</h2>
-			{note ? <div className="mt-1 mb-3 text-xs text-slate-500">{note}</div> : <div className="mb-3" />}
+		<section className="rounded-xl border border-ink-200 dark:border-ink-700 p-5">
+			<h2 className="text-sm font-semibold uppercase tracking-wide text-ink-700 dark:text-ink-200">{title}</h2>
+			{note ? <div className="mt-1 mb-3 text-xs text-ink-600">{note}</div> : <div className="mb-3" />}
 			{children}
 		</section>
 	);
@@ -124,14 +124,14 @@ export default function AppInsightsPage() {
 
 	if (loading && !data) {
 		return (
-			<div className="flex items-center gap-2 p-8 text-slate-500">
+			<div className="flex items-center gap-2 p-8 text-ink-600">
 				<Loader2 className="h-4 w-4 animate-spin" /> Loading insights for {app}…
 			</div>
 		);
 	}
 	if (err) {
 		return (
-			<div className="m-6 rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 p-4 text-sm text-red-700 dark:text-red-300">
+			<div className="m-6 rounded-lg border border-brick-300 bg-brick-50 dark:bg-brick-900/30 p-4 text-sm text-brick-700 dark:text-brick-600">
 				<AlertTriangle className="mr-2 inline h-4 w-4" />
 				{err}
 			</div>
@@ -150,8 +150,8 @@ export default function AppInsightsPage() {
 		<div className="mx-auto max-w-6xl space-y-6 p-6">
 			<header className="flex flex-wrap items-center justify-between gap-3">
 				<div>
-					<h1 className="text-xl font-semibold">{data.app} — user insights</h1>
-					<p className="text-xs text-slate-500">
+					<h1 className="text-h3 font-semibold">{data.app} — user insights</h1>
+					<p className="text-xs text-ink-600">
 						{data.aliases.length > 1 ? <>history also filed under {data.aliases.filter((a) => a !== data.app).join(', ')} · </> : null}
 						generated {new Date(data.generated_at).toLocaleString()}
 					</p>
@@ -163,8 +163,8 @@ export default function AppInsightsPage() {
 							onClick={() => setParams({ days: String(d) })}
 							className={`rounded px-2.5 py-1 text-xs ${
 								d === days
-									? 'bg-[#96773A] text-white'
-									: 'border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300'
+									? 'bg-gold-700 text-white'
+									: 'border border-ink-300 dark:border-ink-600 text-ink-600 dark:text-ink-600'
 							}`}
 						>
 							{d}d
@@ -172,7 +172,7 @@ export default function AppInsightsPage() {
 					))}
 					<button
 						onClick={() => setParams({ days: String(days) })}
-						className="ml-1 rounded border border-slate-300 dark:border-slate-600 p-1.5 text-slate-500"
+						className="ml-1 rounded border border-ink-300 dark:border-ink-600 p-1.5 text-ink-600"
 						title="Refresh"
 					>
 						<RefreshCcw className="h-3.5 w-3.5" />
@@ -181,7 +181,7 @@ export default function AppInsightsPage() {
 			</header>
 
 			{inert ? (
-				<div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-3 text-sm text-amber-800 dark:text-amber-200">
+				<div className="rounded-lg border border-ember-300 bg-ember-50 dark:bg-ember-900/30 p-3 text-sm text-ember-800 dark:text-ember-200">
 					<AlertTriangle className="mr-2 inline h-4 w-4" />
 					<strong>This app looks inert.</strong> Last recorded run{' '}
 					{data.runs.newest_run_ts ? `${humanAge(data.runs.stale_seconds)} ago` : 'never'}. Numbers below describe
@@ -240,12 +240,12 @@ export default function AppInsightsPage() {
 				<Panel title="Attempts before first success" note="Users who never got there are counted separately, not as a large number that would drag this toward a fake answer.">
 					<BarList rows={f.attempts_to_first_deploy} empty="Nobody has deployed in this window." />
 					{f.users_never_deployed > 0 ? (
-						<div className="mt-3 text-xs text-slate-500">
+						<div className="mt-3 text-xs text-ink-600">
 							{f.users_never_deployed} user(s) submitted and never deployed — excluded from the buckets above.
 						</div>
 					) : null}
 					{f.users_outcome_unknown > 0 ? (
-						<div className="mt-3 text-xs text-amber-600">
+						<div className="mt-3 text-xs text-ember-600">
 							{f.users_outcome_unknown} user(s) have no recorded outcome at all — their submissions predate
 							verdict recording, so whether they succeeded is not knowable from this data.
 						</div>
@@ -265,7 +265,7 @@ export default function AppInsightsPage() {
 						empty="No submissions in this window."
 					/>
 					{f.verdict_ms_p50 ? (
-						<div className="mt-3 text-xs text-slate-500">
+						<div className="mt-3 text-xs text-ink-600">
 							Time to verdict — p50 {f.verdict_ms_p50} ms · p95 {f.verdict_ms_p95} ms
 						</div>
 					) : null}
@@ -280,7 +280,7 @@ export default function AppInsightsPage() {
 					<BarList rows={data.runs.by_loop} empty="No runs recorded in this window." />
 					{data.runs.failures_by_loop.length > 0 ? (
 						<div className="mt-4">
-							<div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-red-600">Failures by loop</div>
+							<div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-brick-600">Failures by loop</div>
 							<BarList rows={data.runs.failures_by_loop} empty="" />
 						</div>
 					) : null}
@@ -291,10 +291,10 @@ export default function AppInsightsPage() {
 					{data.intents.total > 0 ? (
 						<>
 							<div className="mt-4">
-								<div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-slate-500">Outcome</div>
+								<div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-ink-600">Outcome</div>
 								<BarList rows={data.intents.by_status} empty="" />
 							</div>
-							<div className="mt-3 text-xs text-slate-500">
+							<div className="mt-3 text-xs text-ink-600">
 								Queue wait p50 {data.intents.queue_ms_p50} ms · p95 {data.intents.queue_ms_p95} ms · run p50{' '}
 								{data.intents.run_ms_p50} ms · p95 {data.intents.run_ms_p95} ms
 							</div>
@@ -314,22 +314,22 @@ export default function AppInsightsPage() {
 				>
 					<div className="grid grid-cols-1 gap-6 md:grid-cols-2">
 						<div>
-							<div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-slate-500">Runs by arm</div>
+							<div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-ink-600">Runs by arm</div>
 							<div className="space-y-1.5">
 								{data.experiments.by_arm.map((a) => (
 									<div key={a.arm} className="flex items-center gap-3 text-sm">
-										<span className="w-40 truncate font-mono text-xs text-slate-700">{a.arm}</span>
-										<span className="tabular-nums text-slate-800">{a.runs} run{a.runs === 1 ? "" : "s"}</span>
-										<span className="tabular-nums text-xs text-slate-500">{a.users} user{a.users === 1 ? "" : "s"}</span>
+										<span className="w-40 truncate font-mono text-xs text-ink-700">{a.arm}</span>
+										<span className="tabular-nums text-ink-800">{a.runs} run{a.runs === 1 ? "" : "s"}</span>
+										<span className="tabular-nums text-xs text-ink-600">{a.users} user{a.users === 1 ? "" : "s"}</span>
 										{a.failed > 0 ? (
-											<span className="tabular-nums text-xs text-red-600">{a.failed} failed</span>
+											<span className="tabular-nums text-xs text-brick-600">{a.failed} failed</span>
 										) : null}
 									</div>
 								))}
 							</div>
 						</div>
 						<div>
-							<div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-slate-500">Runs by experiment</div>
+							<div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-ink-600">Runs by experiment</div>
 							<BarList rows={data.experiments.by_experiment} empty="" />
 						</div>
 					</div>
@@ -343,11 +343,11 @@ export default function AppInsightsPage() {
 				{data.backtests && data.backtests.total > 0 ? (
 					<div className="grid gap-4 md:grid-cols-2">
 						<div>
-							<div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-slate-500">Verdict</div>
+							<div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-ink-600">Verdict</div>
 							<BarList rows={data.backtests.by_verdict} empty="" />
 						</div>
 						<div>
-							<div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-slate-500">Tape provenance</div>
+							<div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-ink-600">Tape provenance</div>
 							<BarList
 								rows={data.backtests.by_tape}
 								empty="No run recorded which tape it replayed."
@@ -355,12 +355,12 @@ export default function AppInsightsPage() {
 						</div>
 					</div>
 				) : (
-					<div className="text-sm text-slate-500">No backtest runs in this window.</div>
+					<div className="text-sm text-ink-600">No backtest runs in this window.</div>
 				)}
 				{/* "Unlabelled" is its own bucket on purpose: a run that recorded no
 				    axes is not the same as one that recorded them and failed the
 				    test, and folding the two would overstate how much is known. */}
-				<div className="mt-3 text-xs text-slate-500">
+				<div className="mt-3 text-xs text-ink-600">
 					Runs carrying no axis labels are counted as <em>unlabelled</em>, never as not-presentable —
 					absent and false are different claims.
 				</div>
@@ -373,22 +373,22 @@ export default function AppInsightsPage() {
 				{data.interactions && data.interactions.total > 0 ? (
 					<div className="grid gap-4 md:grid-cols-2">
 						<div>
-							<div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-slate-500">By action</div>
+							<div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-ink-600">By action</div>
 							<BarList rows={data.interactions.by_action} empty="" />
 						</div>
 						<div>
-							<div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-slate-500">Surfaces opened</div>
+							<div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-ink-600">Surfaces opened</div>
 							<BarList rows={data.interactions.by_surface} empty="No surface views yet." />
 						</div>
 					</div>
 				) : (
-					<div className="text-sm text-slate-500">
+					<div className="text-sm text-ink-600">
 						Nothing captured in this window. Interaction capture was added recently, so an empty panel
 						here means <em>no data yet</em> — not that nobody visited.
 					</div>
 				)}
 				{data.interactions && data.interactions.total > 0 ? (
-					<div className="mt-3 text-xs text-slate-500">{data.interactions.users} distinct visitor(s)</div>
+					<div className="mt-3 text-xs text-ink-600">{data.interactions.users} distinct visitor(s)</div>
 				) : null}
 			</Panel>
 
@@ -405,22 +405,22 @@ export default function AppInsightsPage() {
 			>
 				<div className="flex gap-8 text-sm">
 					<div>
-						<span className="text-2xl font-semibold">≥{data.chats.total}</span>{' '}
-						<span className="text-slate-500">threads</span>
+						<span className="text-h2 font-semibold">≥{data.chats.total}</span>{' '}
+						<span className="text-ink-600">threads</span>
 					</div>
 					<div>
-						<span className="text-2xl font-semibold">≥{data.chats.users}</span>{' '}
-						<span className="text-slate-500">users</span>
+						<span className="text-h2 font-semibold">≥{data.chats.users}</span>{' '}
+						<span className="text-ink-600">users</span>
 					</div>
 				</div>
 			</Panel>
 
 			{data.caveats?.length ? (
-				<footer className="rounded-lg border border-slate-200 dark:border-slate-700 p-4">
-					<div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+				<footer className="rounded-lg border border-ink-200 dark:border-ink-700 p-4">
+					<div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-600">
 						How to read this
 					</div>
-					<ul className="list-disc space-y-0.5 pl-5 text-xs text-slate-500">
+					<ul className="list-disc space-y-0.5 pl-5 text-xs text-ink-600">
 						{data.caveats.map((c) => (
 							<li key={c}>{c}</li>
 						))}

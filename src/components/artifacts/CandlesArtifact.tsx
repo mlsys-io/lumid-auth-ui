@@ -16,6 +16,7 @@
 // vite.config.ts.
 
 import { useEffect, useRef, useState } from 'react';
+import { ink, gold, brick, lagoon, plum, chart } from "@/styles/palette";
 
 type Bar = {
 	time: string | number;
@@ -76,23 +77,24 @@ export default function CandlesArtifact({ spec }: { spec: string }) {
 					height: 300,
 					layout: {
 						background: { color: 'transparent' },
-						textColor: '#475569',
+						textColor: ink['600'],
 						fontSize: 11,
 					},
 					grid: {
-						vertLines: { color: '#eef2f7' },
-						horzLines: { color: '#eef2f7' },
+						vertLines: { color: ink['100'] },
+						horzLines: { color: ink['100'] },
 					},
-					rightPriceScale: { borderColor: '#cbd5e1' },
-					timeScale: { borderColor: '#cbd5e1', timeVisible: false },
+					rightPriceScale: { borderColor: ink['200'] },
+					timeScale: { borderColor: ink['200'], timeVisible: false },
 					crosshair: { mode: lw.CrosshairMode.Magnet },
 					localization: { locale: 'en-US' },
 				});
 
 				const candles = chart.addSeries(lw.CandlestickSeries, {
-					upColor: '#2fa36b', downColor: '#e0518a',
-					borderUpColor: '#2fa36b', borderDownColor: '#e0518a',
-					wickUpColor: '#2fa36b', wickDownColor: '#e0518a',
+					// Up = moss (chart-8), down = brick: the market convention, in Lumen hues.
+					upColor: chart[7], downColor: brick['500'],
+					borderUpColor: chart[7], borderDownColor: brick['500'],
+					wickUpColor: chart[7], wickDownColor: brick['500'],
 				});
 				candles.setData(bars.map(({ time, open, high, low, close }) => ({ time, open, high, low, close })));
 
@@ -135,7 +137,7 @@ export default function CandlesArtifact({ spec }: { spec: string }) {
 	}, [spec]);
 
 	if (error) {
-		return <div className="text-rose-600 text-[11.5px] whitespace-pre-wrap break-words">{error}</div>;
+		return <div className="text-brick-600 text-caption whitespace-pre-wrap break-words">{error}</div>;
 	}
 	return <div ref={hostRef} className="w-full" />;
 }

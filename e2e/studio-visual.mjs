@@ -114,7 +114,11 @@ function audit() {
 	const bgOf = (el) => {
 		const layers = [];
 		for (let e = el; e; e = e.parentElement) {
-			const c = parse(getComputedStyle(e).backgroundColor);
+			const st = getComputedStyle(e);
+			// A gradient/image ground can't be judged from colours; skip the
+			// element rather than measure it against the page behind it.
+			if (st.backgroundImage && st.backgroundImage !== "none") return null;
+			const c = parse(st.backgroundColor);
 			if (c && c.a > 0) {
 				layers.push(c);
 				if (c.a >= 0.999) break;
@@ -143,7 +147,8 @@ function audit() {
 			const c = parse(cs[prop]);
 			if (cool(c)) { off.push(`${prop} ${cs[prop]} | ${label}`); break; }
 		}
-		if (direct) {
+		// Decorative glyphs (aria-hidden) are not text a reader must read.
+		if (direct && !el.closest('[aria-hidden="true"]')) {
 			const fs = parseFloat(cs.fontSize);
 			sizes.set(fs, (sizes.get(fs) || 0) + 1);
 			const fg0 = parse(cs.color);
@@ -151,6 +156,7 @@ function audit() {
 				// Blend translucent text over its ground: `text-foreground/60`
 				// is a lighter colour than its rgb() channels say.
 				const bg = bgOf(el);
+				if (!bg) continue;
 				const o = fg0.a * (Number(cs.opacity) || 1);
 				const fg = { r: fg0.r * o + bg.r * (1 - o), g: fg0.g * o + bg.g * (1 - o), b: fg0.b * o + bg.b * (1 - o), a: 1 };
 				const r = ratio(fg, bg);

@@ -73,8 +73,8 @@ function NoticeView({ level, text, detail }: { level: 'error' | 'info'; text: st
 	const err = level === 'error';
 	return (
 		<Appear className={[
-			'mt-2 flex items-start gap-1.5 px-2.5 py-1.5 rounded-lg border text-[12px]',
-			err ? 'border-rose-200 bg-rose-50/70 text-rose-900' : 'border-border bg-muted/50 text-muted-foreground',
+			'mt-2 flex items-start gap-1.5 px-2.5 py-1.5 rounded-lg border text-caption',
+			err ? 'border-brick-200 bg-brick-50/70 text-brick-900' : 'border-border bg-muted/50 text-muted-foreground',
 		].join(' ')}>
 			{err ? <AlertTriangle className="w-3.5 h-3.5 mt-px flex-shrink-0" />
 				: text.toLowerCase().includes('compact')
@@ -144,25 +144,25 @@ function SubagentBlockView(props: BlockViewProps & { b: SubagentBlock; depth: nu
 
 	return (
 		<div className={['mt-2 border-l-2 pl-2.5', depth > 0 ? 'ml-1' : '',
-			running ? 'border-indigo-300' : b.status === 'ok' ? 'border-indigo-200/70' : 'border-rose-300',
+			running ? 'border-plum-300' : b.status === 'ok' ? 'border-plum-200/70' : 'border-brick-300',
 		].join(' ')}>
 			<button
 				type="button"
 				onClick={() => { touched.current = true; setOpen((v) => !v); }}
-				className="group/sa w-full flex items-center gap-1.5 text-left text-[12px] text-muted-foreground hover:text-foreground transition-colors"
+				className="group/sa w-full flex items-center gap-1.5 text-left text-caption text-muted-foreground hover:text-foreground transition-colors"
 			>
 				<Chevron open={open} className="flex-shrink-0 opacity-70" />
-				<Bot className="w-3.5 h-3.5 flex-shrink-0 text-indigo-500" />
+				<Bot className="w-3.5 h-3.5 flex-shrink-0 text-plum-600" />
 				<span className="font-medium text-foreground truncate">{label}</span>
 				{b.subagentType && (
-					<span className="flex-shrink-0 px-1.5 py-px rounded-full bg-indigo-50 text-indigo-700 text-[10px] border border-indigo-200">
+					<span className="flex-shrink-0 px-1.5 py-px rounded-full bg-plum-50 text-plum-700 text-nano border border-plum-200">
 						{b.subagentType}
 					</span>
 				)}
 				<span className="flex-shrink-0 ml-auto flex items-center gap-1.5">
 					{running
-						? <Loader2 className="w-3 h-3 animate-spin text-indigo-600" />
-						: <span className={['text-[10px]', b.status === 'ok' ? 'text-emerald-600' : 'text-rose-600'].join(' ')}>
+						? <Loader2 className="w-3 h-3 animate-spin text-plum-600" />
+						: <span className={['text-nano', b.status === 'ok' ? 'text-gold-700' : 'text-brick-600'].join(' ')}>
 							{b.status === 'ok' ? '✓' : '✗'}
 						</span>}
 				</span>
@@ -170,8 +170,8 @@ function SubagentBlockView(props: BlockViewProps & { b: SubagentBlock; depth: nu
 
 			{meta && (
 				running
-					? <Working className="mt-0.5 ml-[18px] text-[10px] text-muted-foreground tabular-nums">{meta}</Working>
-					: <div className="mt-0.5 ml-[18px] text-[10px] text-muted-foreground tabular-nums">{meta}</div>
+					? <Working className="mt-0.5 ml-[18px] text-nano text-muted-foreground tabular-nums">{meta}</Working>
+					: <div className="mt-0.5 ml-[18px] text-nano text-muted-foreground tabular-nums">{meta}</div>
 			)}
 
 			<Collapse open={open} className="ml-[18px]">
@@ -181,7 +181,7 @@ function SubagentBlockView(props: BlockViewProps & { b: SubagentBlock; depth: nu
 							<button
 								type="button"
 								onClick={() => setShowPrompt((v) => !v)}
-								className="mt-1 text-[10px] text-muted-foreground hover:text-foreground underline decoration-dotted"
+								className="mt-1 text-nano text-muted-foreground hover:text-foreground underline decoration-dotted"
 							>
 								{showPrompt ? 'hide prompt' : 'prompt'}
 							</button>
@@ -197,7 +197,7 @@ function SubagentBlockView(props: BlockViewProps & { b: SubagentBlock; depth: nu
 
 			{/* Visible even when collapsed — this is the answer the parent consumed. */}
 			{!running && summary && (
-				<div className="mt-1 ml-[18px] flex items-start gap-1 text-[12px] text-muted-foreground">
+				<div className="mt-1 ml-[18px] flex items-start gap-1 text-caption text-muted-foreground">
 					<span className="flex-shrink-0 opacity-60">⎿</span>
 					<span className="min-w-0 break-words line-clamp-3">{summary}</span>
 				</div>

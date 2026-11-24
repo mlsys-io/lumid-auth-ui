@@ -92,7 +92,7 @@ function WfNodeCardImpl({ data, selected, isConnectable }: NodeProps<Node<WfCard
 			animate={{ opacity: dimmed ? 0.3 : 1, scale: 1 }}
 			transition={{ duration: 0.18, ease: "easeOut" }}
 			className={[
-				"group relative flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white text-left",
+				"group relative flex flex-col overflow-hidden rounded-xl border border-ink-200 bg-card text-left",
 				"transition-[transform,box-shadow] duration-[120ms]",
 				interactive ? "hover:-translate-y-px hover:shadow-md cursor-pointer" : "",
 				status === "skipped" ? "opacity-55 grayscale" : "",
@@ -120,7 +120,7 @@ function WfNodeCardImpl({ data, selected, isConnectable }: NodeProps<Node<WfCard
 					type="target"
 					isConnectable={isConnectable}
 					position={direction === "TB" ? Position.Top : Position.Left}
-					className="!h-2 !w-2 !rounded-[3px] !border-2 !border-slate-300 !bg-white !opacity-0 transition-opacity group-hover:!opacity-100"
+					className="!h-2 !w-2 !rounded-[3px] !border-2 !border-ink-300 !bg-card !opacity-0 transition-opacity group-hover:!opacity-100"
 				/>
 			)}
 			{node.outputs.length > 0 && (
@@ -128,7 +128,7 @@ function WfNodeCardImpl({ data, selected, isConnectable }: NodeProps<Node<WfCard
 					type="source"
 					isConnectable={isConnectable}
 					position={direction === "TB" ? Position.Bottom : Position.Right}
-					className="!h-2 !w-2 !rounded-[3px] !border-2 !border-slate-300 !bg-white !opacity-0 transition-opacity group-hover:!opacity-100"
+					className="!h-2 !w-2 !rounded-[3px] !border-2 !border-ink-300 !bg-card !opacity-0 transition-opacity group-hover:!opacity-100"
 				/>
 			)}
 
@@ -140,7 +140,7 @@ function WfNodeCardImpl({ data, selected, isConnectable }: NodeProps<Node<WfCard
 				>
 					<Icon size={14} strokeWidth={2} />
 				</span>
-				<span className="min-w-0 flex-1 truncate text-[13px] font-medium text-slate-900">{node.label}</span>
+				<span className="min-w-0 flex-1 truncate text-meta font-medium text-ink-900">{node.label}</span>
 				{marks.map((b) => {
 					const BIcon = BADGE_ICON[b.kind];
 					// A badge whose label carries a VALUE (a GPU request, a dataset)
@@ -158,11 +158,11 @@ function WfNodeCardImpl({ data, selected, isConnectable }: NodeProps<Node<WfCard
 						<span
 							key={b.kind}
 							title={b.title ? `${b.title}: ${label}` : label}
-							className="flex min-w-0 flex-shrink-0 items-center gap-0.5 text-slate-400"
+							className="flex min-w-0 flex-shrink-0 items-center gap-0.5 text-ink-600"
 						>
 							<BIcon size={12} aria-label={b.title ?? b.kind} />
 							{carriesValue && !compact && (
-								<span className="max-w-[72px] truncate font-mono text-[9px] leading-none">{label}</span>
+								<span className="max-w-[72px] truncate font-mono text-nano leading-none">{label}</span>
 							)}
 						</span>
 					);
@@ -180,14 +180,14 @@ function WfNodeCardImpl({ data, selected, isConnectable }: NodeProps<Node<WfCard
 				<div className="flex items-baseline gap-2 px-3 pb-2 pl-3.5">
 					{node.subtitle && (
 						<span
-							className={`min-w-0 flex-1 truncate text-[11px] text-slate-500 ${isIdentifier(node.subtitle) ? "font-mono" : ""}`}
+							className={`min-w-0 flex-1 truncate text-micro text-ink-600 ${isIdentifier(node.subtitle) ? "font-mono" : ""}`}
 							title={node.subtitle}
 						>
 							{node.subtitle}
 						</span>
 					)}
 					{node.run?.duration_s !== undefined && (
-						<span className="ml-auto flex-shrink-0 font-mono text-[11px] tabular-nums text-slate-400">
+						<span className="ml-auto flex-shrink-0 font-mono text-micro tabular-nums text-ink-600">
 							{node.run.duration_s.toFixed(1)}s
 						</span>
 					)}
@@ -198,7 +198,7 @@ function WfNodeCardImpl({ data, selected, isConnectable }: NodeProps<Node<WfCard
 			    self-explanatory without clicking each box. Error wins over summary. */}
 			{!compact && detail && (
 				<div
-					className={`border-t border-slate-100 px-3 py-1.5 pl-3.5 text-[10px] leading-snug ${node.run?.error ? "text-rose-600" : "text-slate-500"}`}
+					className={`border-t border-ink-100 px-3 py-1.5 pl-3.5 text-nano leading-snug ${node.run?.error ? "text-brick-600" : "text-ink-600"}`}
 					style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
 					title={detail}
 				>
@@ -208,7 +208,7 @@ function WfNodeCardImpl({ data, selected, isConnectable }: NodeProps<Node<WfCard
 
 			{!compact && worker && (
 				<div className="flex items-center gap-1 px-3 pb-2 pl-3.5">
-					<span className="rounded bg-slate-900 px-1 py-0.5 font-mono text-[9px] text-white" title={worker.title}>
+					<span className="rounded bg-ink-900 px-1 py-0.5 font-mono text-nano text-white" title={worker.title}>
 						{worker.label}
 					</span>
 				</div>

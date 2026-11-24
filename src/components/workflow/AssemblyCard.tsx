@@ -153,8 +153,8 @@ export default function AssemblyCard({ draft }: { draft: ComposedDraft }) {
 		return (
 			<div className="mt-2 w-full rounded-2xl border border-gold-200 bg-gradient-to-br from-gold-50 to-white px-4 py-5 text-center space-y-2 animate-in fade-in zoom-in-95 duration-300">
 				<div className="inline-flex w-11 h-11 rounded-2xl bg-gold-100 text-gold-600 items-center justify-center"><Check className="w-6 h-6" /></div>
-				<div className="text-sm font-medium text-slate-900">{draft.slug.replace(/-draft$/, "")} is live — starting its first run.</div>
-				<div className="text-xs text-slate-500">Taking you to its dashboard…</div>
+				<div className="text-sm font-medium text-ink-900">{draft.slug.replace(/-draft$/, "")} is live — starting its first run.</div>
+				<div className="text-xs text-ink-600">Taking you to its dashboard…</div>
 			</div>
 		);
 	}
@@ -163,17 +163,17 @@ export default function AssemblyCard({ draft }: { draft: ComposedDraft }) {
 	const stageIdx = phase === "search" ? 0 : phase === "matching" ? 1 : 2;
 
 	return (
-		<div ref={rootRef} className="mt-2 w-full rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-1 duration-300">
+		<div ref={rootRef} className="mt-2 w-full rounded-2xl border border-ink-200 bg-card shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-1 duration-300">
 			{/* Header */}
-			<div className="px-4 py-2.5 border-b border-slate-100 flex items-center gap-2 bg-gradient-to-r from-gold-50/70 to-white">
+			<div className="px-4 py-2.5 border-b border-ink-100 flex items-center gap-2 bg-gradient-to-r from-gold-50/70 to-white">
 				<div className="w-7 h-7 rounded-lg bg-gold-100 text-gold-700 flex items-center justify-center flex-shrink-0">
 					{draft.kind === "trading" ? <TrendingUp className="w-4 h-4" /> : <Package className="w-4 h-4" />}
 				</div>
 				<div className="min-w-0 flex-1">
-					<div className="text-[13px] font-semibold text-slate-900 leading-tight">
+					<div className="text-meta font-semibold text-ink-900 leading-tight">
 						{done ? "Workflow assembled" : "Assembling your workflow"}
 					</div>
-					<div className="text-[11px] text-slate-500 truncate">
+					<div className="text-micro text-ink-600 truncate">
 						resolved live from the xp.io knowledge graph
 					</div>
 				</div>
@@ -216,7 +216,7 @@ export default function AssemblyCard({ draft }: { draft: ComposedDraft }) {
 				{done && trace?.verify && trace.verify.length > 0 && (
 					<div className="space-y-1.5 animate-in fade-in duration-300">
 						<SectionLabel n={3} text="Verify" />
-						<div className="rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
+						<div className="rounded-xl border border-ink-200 divide-y divide-ink-100 overflow-hidden">
 							{trace.verify.map((v, i) => <VerifyRowView key={i} v={v} />)}
 						</div>
 					</div>
@@ -227,17 +227,17 @@ export default function AssemblyCard({ draft }: { draft: ComposedDraft }) {
 					<div className="space-y-3 pt-1 animate-in fade-in duration-300">
 						{draft.goal?.primary && (
 							<div className="rounded-xl border border-gold-200/70 bg-gradient-to-br from-gold-50/80 to-white px-3 py-2">
-								<div className="text-[10px] uppercase tracking-wide text-gold-700/70 font-semibold">Goal</div>
-								<div className="text-[12.5px] text-slate-800 font-medium">{draft.goal.primary}</div>
-								{draft.goal.tracked && <div className="text-[10px] text-slate-400 mt-0.5">tracks {draft.goal.tracked.join(" · ")}</div>}
+								<div className="text-nano uppercase tracking-wide text-gold-700/70 font-semibold">Goal</div>
+								<div className="text-meta text-ink-800 font-medium">{draft.goal.primary}</div>
+								{draft.goal.tracked && <div className="text-nano text-ink-600 mt-0.5">tracks {draft.goal.tracked.join(" · ")}</div>}
 							</div>
 						)}
 						<div>
-							<div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1.5 flex items-center gap-1"><Clock className="w-3 h-3" />Schedule</div>
+							<div className="text-nano uppercase tracking-wide text-ink-600 font-semibold mb-1.5 flex items-center gap-1"><Clock className="w-3 h-3" />Schedule</div>
 							<div className="flex flex-wrap gap-1.5">
 								{SCHEDULES.map((s) => (
 									<button key={s.cron} onClick={() => setSchedule(s.cron)}
-										className={`text-[11px] rounded-full px-2.5 py-1 border transition-colors ${schedule === s.cron ? "bg-gold-500 text-white border-gold-500" : "bg-white text-slate-600 border-slate-200 hover:border-gold-300"}`}>
+										className={`text-micro rounded-full px-2.5 py-1 border transition-colors ${schedule === s.cron ? "bg-gold-700 text-white border-gold-500" : "bg-card text-ink-600 border-ink-200 hover:border-gold-300"}`}>
 										{s.label}
 									</button>
 								))}
@@ -264,19 +264,19 @@ function Stepper({ idx }: { idx: number }) {
 		{ icon: CircleCheck, label: "Verify" },
 	];
 	return (
-		<div className="px-4 py-2.5 flex items-center gap-1 border-b border-slate-100 bg-slate-50/40">
+		<div className="px-4 py-2.5 flex items-center gap-1 border-b border-ink-100 bg-ink-50/40">
 			{stages.map((s, i) => {
 				const Icon = s.icon;
 				const state = i < idx ? "done" : i === idx ? "active" : "todo";
 				return (
 					<div key={s.label} className="flex items-center gap-1 flex-1 last:flex-none">
 						<div className={[
-							"flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-medium transition-colors",
-							state === "done" ? "text-gold-700" : state === "active" ? "text-gold-700 bg-gold-100" : "text-slate-400",
+							"flex items-center gap-1.5 px-2 py-1 rounded-lg text-micro font-medium transition-colors",
+							state === "done" ? "text-gold-700" : state === "active" ? "text-gold-700 bg-gold-100" : "text-ink-600",
 						].join(" ")}>
 							<span className={[
-								"w-4 h-4 rounded-full flex items-center justify-center text-[9px]",
-								state === "todo" ? "bg-slate-200 text-slate-500" : "bg-gold-500 text-white",
+								"w-4 h-4 rounded-full flex items-center justify-center text-nano",
+								state === "todo" ? "bg-ink-200 text-ink-600" : "bg-gold-700 text-white",
 							].join(" ")}>
 								{state === "done" ? <Check className="w-2.5 h-2.5" /> : i + 1}
 							</span>
@@ -284,7 +284,7 @@ function Stepper({ idx }: { idx: number }) {
 							<Icon className="w-3 h-3 sm:hidden" />
 						</div>
 						{i < stages.length - 1 && (
-							<div className={["flex-1 h-px mx-0.5", i < idx ? "bg-gold-300" : "bg-slate-200"].join(" ")} />
+							<div className={["flex-1 h-px mx-0.5", i < idx ? "bg-gold-300" : "bg-ink-200"].join(" ")} />
 						)}
 					</div>
 				);
@@ -295,8 +295,8 @@ function Stepper({ idx }: { idx: number }) {
 
 function SectionLabel({ n, text }: { n: number; text: string }) {
 	return (
-		<div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-slate-400 font-semibold">
-			<span className="w-3.5 h-3.5 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center text-[8px] not-italic">{n}</span>
+		<div className="flex items-center gap-1.5 text-nano uppercase tracking-wide text-ink-600 font-semibold">
+			<span className="w-3.5 h-3.5 rounded-full bg-ink-200 text-ink-600 flex items-center justify-center text-nano not-italic">{n}</span>
 			{text}
 		</div>
 	);
@@ -309,23 +309,23 @@ function SearchPanel({ trace, active, query }: { trace?: AssemblyTrace; active: 
 	return (
 		<div className="space-y-1.5">
 			<SectionLabel n={1} text="Search the xp.io skill catalog" />
-			<div className={["rounded-xl border px-3 py-2 transition-colors", active ? "border-gold-200 bg-gold-50/40" : "border-slate-200 bg-white"].join(" ")}>
-				<div className="flex items-center gap-1.5 text-[11px]">
-					{active ? <Loader2 className="w-3.5 h-3.5 text-gold-500 animate-spin" /> : <Search className="w-3.5 h-3.5 text-slate-400" />}
-					<code className="text-[10.5px] text-slate-500">{s?.endpoint || "xp.io · /api/v1/skills/suggest"}</code>
-					{s?.scorer && <span className="text-[9px] rounded-full px-1.5 py-px bg-slate-100 border border-slate-200 text-slate-500">{s.scorer}</span>}
+			<div className={["rounded-xl border px-3 py-2 transition-colors", active ? "border-gold-200 bg-gold-50/40" : "border-ink-200 bg-card"].join(" ")}>
+				<div className="flex items-center gap-1.5 text-micro">
+					{active ? <Loader2 className="w-3.5 h-3.5 text-gold-500 animate-spin" /> : <Search className="w-3.5 h-3.5 text-ink-600" />}
+					<code className="text-micro text-ink-600">{s?.endpoint || "xp.io · /api/v1/skills/suggest"}</code>
+					{s?.scorer && <span className="text-nano rounded-full px-1.5 py-px bg-ink-100 border border-ink-200 text-ink-600">{s.scorer}</span>}
 				</div>
-				<div className="text-[12.5px] text-slate-700 mt-1 truncate">“{s?.query || query || "…"}”</div>
+				<div className="text-meta text-ink-700 mt-1 truncate">“{s?.query || query || "…"}”</div>
 				{hits.length > 0 ? (
 					<div className="flex flex-wrap gap-1 mt-1.5">
 						{hits.map((h, i) => (
-							<span key={i} className="text-[10px] rounded-full px-1.5 py-px bg-white border border-slate-200 text-slate-600">
+							<span key={i} className="text-nano rounded-full px-1.5 py-px bg-card border border-ink-200 text-ink-600">
 								{h.name}{typeof h.score === "number" ? ` · ${h.score}` : ""}
 							</span>
 						))}
 					</div>
 				) : s?.note ? (
-					<div className="text-[11px] text-slate-500 mt-1.5 leading-snug">{s.note}</div>
+					<div className="text-micro text-ink-600 mt-1.5 leading-snug">{s.note}</div>
 				) : null}
 			</div>
 		</div>
@@ -338,8 +338,8 @@ function SearchingRow({ query }: { query: string }) {
 		<div className="flex items-center gap-2.5 rounded-lg border border-gold-200 bg-gold-50/40 px-3 py-2">
 			<Search className="w-3.5 h-3.5 text-gold-500 flex-shrink-0 animate-pulse" />
 			<div className="min-w-0 flex-1">
-				<div className="text-[11px] text-gold-700/80">resolving against fork parent → imports</div>
-				<div className="text-[12.5px] text-slate-700 font-medium truncate">“{query}”</div>
+				<div className="text-micro text-gold-700/80">resolving against fork parent → imports</div>
+				<div className="text-meta text-ink-700 font-medium truncate">“{query}”</div>
 			</div>
 			<div className="flex gap-0.5 flex-shrink-0">
 				<span className="w-1 h-1 rounded-full bg-gold-400 animate-bounce [animation-delay:-0.3s]" />
@@ -356,24 +356,24 @@ function MatchedRow({ s, label }: { s: AssemblyStep; label: string }) {
 	const resolved = s.resolved !== false && !!s.resolved_repo;
 	const repo = repoShort(s.resolved_repo) || s.source;
 	return (
-		<div className="flex items-start gap-2.5 rounded-lg border border-slate-200 bg-white px-3 py-2">
-			<span className={`mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0 ${isRisk ? "bg-gold-500" : resolved ? "bg-gold-500" : "bg-slate-300"}`} />
+		<div className="flex items-start gap-2.5 rounded-lg border border-ink-200 bg-card px-3 py-2">
+			<span className={`mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0 ${isRisk ? "bg-gold-500" : resolved ? "bg-gold-500" : "bg-ink-300"}`} />
 			<div className="min-w-0 flex-1">
 				<div className="flex items-center gap-1.5 flex-wrap">
-					<span className="text-[13px] font-medium text-slate-800">{label}</span>
-					<span className="text-[9px] uppercase tracking-wide rounded-full px-1.5 py-px border border-slate-200 text-slate-500">{s.stage}</span>
-					{isRisk && <span className="inline-flex items-center gap-0.5 text-[9px] text-gold-700"><Shield className="w-3 h-3" />risk officer</span>}
+					<span className="text-meta font-medium text-ink-800">{label}</span>
+					<span className="text-nano uppercase tracking-wide rounded-full px-1.5 py-px border border-ink-200 text-ink-600">{s.stage}</span>
+					{isRisk && <span className="inline-flex items-center gap-0.5 text-nano text-gold-700"><Shield className="w-3 h-3" />risk officer</span>}
 				</div>
 				{/* Provenance — the "drawing" of where it came from */}
-				<div className="flex items-center gap-1 mt-1 text-[10.5px] min-w-0">
+				<div className="flex items-center gap-1 mt-1 text-micro min-w-0">
 					{resolved ? (
 						<>
 							<span className="inline-flex items-center gap-0.5 rounded px-1.5 py-px bg-gold-50 border border-gold-200 text-gold-700 flex-shrink-0">
 								<Package className="w-2.5 h-2.5" />{repo}
 							</span>
-							<ArrowRight className="w-3 h-3 text-slate-300 flex-shrink-0" />
-							<code className="text-slate-500 truncate">{s.resolved_path}</code>
-							{s.resolved_sha && <span className="text-slate-300 flex-shrink-0">@{s.resolved_sha}</span>}
+							<ArrowRight className="w-3 h-3 text-ink-600 flex-shrink-0" />
+							<code className="text-ink-600 truncate">{s.resolved_path}</code>
+							{s.resolved_sha && <span className="text-ink-600 flex-shrink-0">@{s.resolved_sha}</span>}
 						</>
 					) : (
 						<span className="inline-flex items-center gap-1 text-gold-600">
@@ -382,7 +382,7 @@ function MatchedRow({ s, label }: { s: AssemblyStep; label: string }) {
 						</span>
 					)}
 				</div>
-				{s.why && <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">{s.why}</div>}
+				{s.why && <div className="text-micro text-ink-600 mt-0.5 leading-snug">{s.why}</div>}
 			</div>
 			{resolved
 				? <Check className="w-3.5 h-3.5 text-gold-500 flex-shrink-0 mt-0.5" />
@@ -396,16 +396,16 @@ function VerifyRowView({ v }: { v: VerifyRow }) {
 		? { Icon: Check, c: "text-gold-600", bg: "bg-gold-50" }
 		: v.status === "warn"
 			? { Icon: AlertTriangle, c: "text-gold-600", bg: "bg-gold-50" }
-			: { Icon: XIcon, c: "text-rose-600", bg: "bg-rose-50" };
+			: { Icon: XIcon, c: "text-brick-600", bg: "bg-brick-50" };
 	const Icon = tone.Icon;
 	return (
-		<div className="flex items-start gap-2.5 px-3 py-2 bg-white">
+		<div className="flex items-start gap-2.5 px-3 py-2 bg-card">
 			<span className={`mt-0.5 w-4 h-4 rounded-full ${tone.bg} ${tone.c} flex items-center justify-center flex-shrink-0`}>
 				<Icon className="w-2.5 h-2.5" />
 			</span>
 			<div className="min-w-0 flex-1">
-				<div className="text-[12px] font-medium text-slate-800">{v.check}</div>
-				<div className="text-[11px] text-slate-500 leading-snug">{v.detail}</div>
+				<div className="text-caption font-medium text-ink-800">{v.check}</div>
+				<div className="text-micro text-ink-600 leading-snug">{v.detail}</div>
 			</div>
 		</div>
 	);

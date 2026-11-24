@@ -27,8 +27,8 @@ export function AxisChips({
 	// roomier with hover-revealed latest label).
 	const pillBase =
 		variant === 'compact'
-			? 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[10px] font-medium'
-			: 'inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px] font-medium';
+			? 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-nano font-medium'
+			: 'inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-micro font-medium';
 	return (
 		<div className={variant === 'compact' ? 'flex items-center gap-1 flex-wrap' : 'flex items-center gap-1.5 flex-wrap'}>
 			{movements.map((m) => {

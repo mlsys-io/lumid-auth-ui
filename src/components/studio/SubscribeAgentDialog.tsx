@@ -58,10 +58,10 @@ export function SubscribeAgentDialog({
 		<Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
 			<DialogContent className="max-w-md">
 				<DialogHeader>
-					<DialogTitle className="flex items-center gap-2 text-[15px]">
-						<BookOpen className="w-4 h-4 text-pink-500" /> Subscribe to {agentLabel}
+					<DialogTitle className="flex items-center gap-2 text-read">
+						<BookOpen className="w-4 h-4 text-plum-600" /> Subscribe to {agentLabel}
 					</DialogTitle>
-					<DialogDescription className="text-[12.5px]">
+					<DialogDescription className="text-meta">
 						Memories aren&apos;t installed — their published memories are
 						synced into your knowledge graph. Re-subscribing later pulls only
 						what&apos;s new.
@@ -70,13 +70,13 @@ export function SubscribeAgentDialog({
 
 				{phase === "done" ? (
 					<div className="space-y-3">
-						<div className="rounded-lg border border-gold-200 bg-gold-50 px-3 py-2.5 text-[13px] text-gold-800 flex items-center gap-2">
+						<div className="rounded-lg border border-gold-200 bg-gold-50 px-3 py-2.5 text-meta text-gold-800 flex items-center gap-2">
 							<Check className="w-4 h-4 flex-shrink-0" /> {doneNote}
 						</div>
 						<Link
 							to="/studio/knowledge"
 							onClick={onClose}
-							className="inline-flex items-center gap-1.5 text-[12.5px] text-gold-700 hover:underline"
+							className="inline-flex items-center gap-1.5 text-meta text-gold-700 hover:underline"
 						>
 							Open your knowledge <ArrowRight className="w-3.5 h-3.5" />
 						</Link>
@@ -84,25 +84,25 @@ export function SubscribeAgentDialog({
 				) : (
 					<div className="space-y-3">
 						<label className="block">
-							<span className="text-[11.5px] text-slate-500 block mb-1">Sync into local agent</span>
+							<span className="text-caption text-ink-600 block mb-1">Sync into local agent</span>
 							<input
 								type="text" value={target} onChange={(e) => setTarget(e.target.value)}
-								className="w-full px-2.5 py-1.5 text-[13px] rounded-lg border border-slate-200 bg-white font-mono focus:outline-none focus:ring-2 focus:ring-pink-400/20 focus:border-pink-400"
+								className="w-full px-2.5 py-1.5 text-meta rounded-lg border border-ink-200 bg-card font-mono focus:outline-none focus:ring-2 focus:ring-plum-400/20 focus:border-plum-400"
 							/>
-							<span className="text-[10.5px] text-slate-400 mt-1 block">
+							<span className="text-micro text-ink-600 mt-1 block">
 								New id creates a fresh agent; an existing id merges (idempotent).
 							</span>
 						</label>
 						<button
 							onClick={submit}
 							disabled={phase === "working" || !target.trim()}
-							className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-pink-600 text-white hover:bg-pink-700 disabled:opacity-50 transition-all"
+							className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-plum-600 text-white hover:bg-plum-700 disabled:opacity-50 transition-all"
 						>
 							{phase === "working" ? <><Loader2 className="w-4 h-4 animate-spin" /> Syncing…</> : <>Subscribe</>}
 						</button>
-						<details className="text-[11px] text-slate-400">
-							<summary className="cursor-pointer select-none hover:text-slate-600">CLI alternative</summary>
-							<pre className="mt-1.5 px-2 py-1.5 rounded bg-slate-50 border border-slate-200 text-[10.5px] text-slate-600 overflow-x-auto">{cli}</pre>
+						<details className="text-micro text-ink-600">
+							<summary className="cursor-pointer select-none hover:text-ink-600">CLI alternative</summary>
+							<pre className="mt-1.5 px-2 py-1.5 rounded bg-ink-50 border border-ink-200 text-micro text-ink-600 overflow-x-auto">{cli}</pre>
 						</details>
 					</div>
 				)}

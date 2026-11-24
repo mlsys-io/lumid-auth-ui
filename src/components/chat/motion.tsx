@@ -112,7 +112,7 @@ export function JumpToLatest({ onClick }: { onClick: () => void }) {
 		<button
 			type="button"
 			onClick={onClick}
-			className="pointer-events-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-card/95 backdrop-blur-sm shadow-md text-[11.5px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors active:scale-95"
+			className="pointer-events-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-card/95 backdrop-blur-sm shadow-md text-caption text-muted-foreground hover:text-foreground hover:bg-muted transition-colors active:scale-95"
 		>
 			<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
 				<line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" />

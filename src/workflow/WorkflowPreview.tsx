@@ -27,8 +27,8 @@ export default function WorkflowPreview({ definitionJson, height = "100%", class
 
 	if (!graph || !graph.nodes.length) {
 		return (
-			<div className={className ?? "flex h-full w-full items-center justify-center bg-slate-50 px-6 text-center"}>
-				<p className="text-[12px] leading-relaxed text-slate-400">
+			<div className={className ?? "flex h-full w-full items-center justify-center bg-ink-50 px-6 text-center"}>
+				<p className="text-caption leading-relaxed text-ink-600">
 					{label === "empty"
 						? "This workflow has no definition saved yet."
 						: `Nothing to draw — the stored definition is ${label}.`}
@@ -44,9 +44,9 @@ export default function WorkflowPreview({ definitionJson, height = "100%", class
 				mode="showcase"
 				height={height}
 				density="compact"
-				className={className ?? "h-full w-full bg-[#FCFCFD]"}
+				className={className ?? "h-full w-full bg-card"}
 			/>
-			<span className="pointer-events-none absolute right-2 top-2 rounded bg-white/85 px-1.5 py-0.5 text-[9px] font-medium text-slate-500 backdrop-blur">
+			<span className="pointer-events-none absolute right-2 top-2 rounded bg-card/85 px-1.5 py-0.5 text-nano font-medium text-ink-600 backdrop-blur">
 				{label}
 			</span>
 		</div>

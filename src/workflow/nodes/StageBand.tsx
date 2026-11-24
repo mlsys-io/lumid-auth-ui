@@ -11,7 +11,7 @@
 
 import { memo } from "react";
 import type { NodeProps, Node } from "@xyflow/react";
-import { STAGE_TINT, STAGE_LABEL_COLOR, withAlpha } from "../theme";
+import { EDGE_IDLE, STAGE_TINT, STAGE_LABEL_COLOR, withAlpha } from "../theme";
 
 export interface StageBandData extends Record<string, unknown> {
 	stage: string;
@@ -21,7 +21,7 @@ export interface StageBandData extends Record<string, unknown> {
 }
 
 function StageBandImpl({ data }: NodeProps<Node<StageBandData>>) {
-	const color = STAGE_LABEL_COLOR[data.stage] ?? "rgb(148 163 184)";
+	const color = STAGE_LABEL_COLOR[data.stage] ?? EDGE_IDLE;
 	return (
 		<div
 			className="pointer-events-none rounded-2xl"
@@ -43,10 +43,10 @@ export interface StageLabelData extends Record<string, unknown> {
 }
 
 function StageLabelImpl({ data }: NodeProps<Node<StageLabelData>>) {
-	const color = STAGE_LABEL_COLOR[data.stage] ?? "rgb(148 163 184)";
+	const color = STAGE_LABEL_COLOR[data.stage] ?? EDGE_IDLE;
 	return (
 		<div className="pointer-events-none flex items-center justify-end gap-1.5" style={{ width: data.width }}>
-			<span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color }}>
+			<span className="text-nano font-semibold uppercase tracking-wider" style={{ color }}>
 				{data.label}
 			</span>
 			{/* A 2px tick makes the band legible as a legend even when the tint

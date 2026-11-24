@@ -289,14 +289,14 @@ export default function NextRunComposer({ app, loop, isExperiment, fromTs, fromL
 	const LaunchIcon = busy ? Loader2 : tryMode === "fanout" ? Layers : Play;
 
 	return createPortal(
-		<div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/30 backdrop-blur-sm animate-in fade-in duration-150" onClick={onClose}>
-			<div className="w-[460px] max-w-[94vw] h-[600px] max-h-[90vh] flex flex-col rounded-xl border border-slate-200 bg-white shadow-2xl animate-in zoom-in-95 duration-150" onClick={(e) => e.stopPropagation()}>
+		<div className="fixed inset-0 z-[90] flex items-center justify-center bg-ink-900/30 backdrop-blur-sm animate-in fade-in duration-150" onClick={onClose}>
+			<div className="w-[460px] max-w-[94vw] h-[600px] max-h-[90vh] flex flex-col rounded-xl border border-ink-200 bg-card shadow-2xl animate-in zoom-in-95 duration-150" onClick={(e) => e.stopPropagation()}>
 				{/* header (fixed) */}
-				<div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 flex-shrink-0">
+				<div className="flex items-center gap-2 px-4 py-3 border-b border-ink-100 flex-shrink-0">
 					<GitBranch className="w-4 h-4 text-gold-600 flex-shrink-0" />
-					<div className="text-sm font-semibold text-slate-900 flex-shrink-0">Plan next run</div>
-					{parentNode && <span className="text-[11px] text-slate-400 truncate">· from {parentNode.agent_version || nodeLabel(parentNode)}</span>}
-					<button onClick={onClose} className="ml-auto p-1 rounded hover:bg-slate-100 text-slate-400 flex-shrink-0"><X className="w-4 h-4" /></button>
+					<div className="text-sm font-semibold text-ink-900 flex-shrink-0">Plan next run</div>
+					{parentNode && <span className="text-micro text-ink-600 truncate">· from {parentNode.agent_version || nodeLabel(parentNode)}</span>}
+					<button onClick={onClose} className="ml-auto p-1 rounded hover:bg-ink-100 text-ink-600 flex-shrink-0"><X className="w-4 h-4" /></button>
 				</div>
 
 				{/* body — fixed-size popout: this scrolls, header/footer stay put */}
@@ -304,14 +304,14 @@ export default function NextRunComposer({ app, loop, isExperiment, fromTs, fromL
 						{/* Suggested (recommender) */}
 						{suggestions.length > 0 && (
 							<div className="rounded-lg border border-gold-200 bg-gold-50/50 p-2.5 space-y-1.5">
-								<div className="text-[10px] uppercase tracking-wide text-gold-700 font-semibold flex items-center gap-1"><Sparkles className="w-3 h-3" /> Suggested</div>
+								<div className="text-nano uppercase tracking-wide text-gold-700 font-semibold flex items-center gap-1"><Sparkles className="w-3 h-3" /> Suggested</div>
 								{suggestions.slice(0, 2).map((a, i) => (
-									<div key={i} className="flex items-start gap-2 text-[11.5px]">
+									<div key={i} className="flex items-start gap-2 text-caption">
 										<div className="min-w-0 flex-1">
-											<span className="font-medium text-slate-800">{ACTION_VERB[a.action] || a.action}</span>
-											<span className="text-slate-500"> — {a.reason}</span>
+											<span className="font-medium text-ink-800">{ACTION_VERB[a.action] || a.action}</span>
+											<span className="text-ink-600"> — {a.reason}</span>
 										</div>
-										<button onClick={() => applySuggestion(a)} className="flex-shrink-0 text-[10.5px] text-gold-700 hover:text-gold-900 underline decoration-dotted">Use</button>
+										<button onClick={() => applySuggestion(a)} className="flex-shrink-0 text-micro text-gold-700 hover:text-gold-900 underline decoration-dotted">Use</button>
 									</div>
 								))}
 							</div>
@@ -319,9 +319,9 @@ export default function NextRunComposer({ app, loop, isExperiment, fromTs, fromL
 
 						{/* Start from */}
 						<div>
-							<label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Start from</label>
+							<label className="text-micro font-semibold uppercase tracking-wide text-ink-600">Start from</label>
 							<select value={parent || ""} onChange={(e) => setParent(e.target.value || undefined)}
-								className="mt-1 w-full text-[13px] text-slate-800 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-gold-300">
+								className="mt-1 w-full text-meta text-ink-800 rounded-lg border border-ink-200 bg-card px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-gold-300">
 								<option value="">Fresh (no parent)</option>
 								{nodes.slice().reverse().map((n) => (
 									<option key={n.run_ts} value={n.run_ts}>
@@ -329,7 +329,7 @@ export default function NextRunComposer({ app, loop, isExperiment, fromTs, fromL
 									</option>
 								))}
 							</select>
-							<div className="mt-0.5 text-[10px] text-slate-400 flex items-center gap-1">
+							<div className="mt-0.5 text-nano text-ink-600 flex items-center gap-1">
 								{parentNode && champion && parentNode.run_ts === champion.run_ts && <Trophy className="w-3 h-3 text-gold-500" />}
 								{parent ? <>continues from {fromLabel && parent === fromTs ? fromLabel : nodeLabel(parentNode || ({} as TrajectoryNode))}</> : "starts a new lineage"}
 							</div>
@@ -337,20 +337,20 @@ export default function NextRunComposer({ app, loop, isExperiment, fromTs, fromL
 
 						{/* Change (intention) */}
 						<div>
-							<label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">What should this experiment change?</label>
+							<label className="text-micro font-semibold uppercase tracking-wide text-ink-600">What should this experiment change?</label>
 							<textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3}
 								placeholder="e.g. weight recent earnings more heavily; try a stricter judge rubric… (leave blank to just re-run)"
 								onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); launchNow(); } }}
-								className="mt-1 w-full text-[13px] text-slate-800 leading-snug rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-gold-300 resize-none" />
-							<div className="mt-0.5 text-[10px] text-slate-400">Any change forks a new branch; blank = a plain re-run of the selected start.</div>
+								className="mt-1 w-full text-meta text-ink-800 leading-snug rounded-lg border border-ink-200 bg-card px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-gold-300 resize-none" />
+							<div className="mt-0.5 text-nano text-ink-600">Any change forks a new branch; blank = a plain re-run of the selected start.</div>
 						</div>
 
 						<div>
-							<label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Config overrides <span className="normal-case font-normal text-slate-300">(optional)</span></label>
+							<label className="text-micro font-semibold uppercase tracking-wide text-ink-600">Config overrides <span className="normal-case font-normal text-ink-600">(optional)</span></label>
 							<textarea value={overridesText} onChange={(e) => setOverridesText(e.target.value)} rows={2}
 								placeholder={"one per line, e.g.\nmodel = claude\ntemperature = 0.3"}
-								className="mt-1 w-full font-mono text-[12px] text-slate-800 leading-snug rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-gold-300 resize-none" />
-							<div className="mt-0.5 text-[10px] text-slate-400">Becomes part of the experiment's config. Numbers / true / false are coerced.</div>
+								className="mt-1 w-full font-mono text-caption text-ink-800 leading-snug rounded-lg border border-ink-200 bg-card px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-gold-300 resize-none" />
+							<div className="mt-0.5 text-nano text-ink-600">Becomes part of the experiment's config. Numbers / true / false are coerced.</div>
 						</div>
 
 						{/* An arm changes CONFIG; the run still needs a SUBJECT — the
@@ -358,35 +358,35 @@ export default function NextRunComposer({ app, loop, isExperiment, fromTs, fromL
 						    dispatched variant with no subject runs cleanly and measures
 						    nothing ("strategy is empty", observed twice live). */}
 						<div>
-							<label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Run args <span className="normal-case font-normal text-slate-300">(the loop's subject — optional)</span></label>
+							<label className="text-micro font-semibold uppercase tracking-wide text-ink-600">Run args <span className="normal-case font-normal text-ink-600">(the loop's subject — optional)</span></label>
 							<textarea value={argsText} onChange={(e) => setArgsText(e.target.value)} rows={2}
 								placeholder={"one per line, e.g.\nstrategy_id = mom_30m_1788…\ncases = 3"}
-								className="mt-1 w-full font-mono text-[12px] text-slate-800 leading-snug rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-gold-300 resize-none" />
-							<div className="mt-0.5 text-[10px] text-slate-400">Passed as the loop's own invocation args (<span className="font-mono">args.*</span>), not the experiment's config.</div>
+								className="mt-1 w-full font-mono text-caption text-ink-800 leading-snug rounded-lg border border-ink-200 bg-card px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-gold-300 resize-none" />
+							<div className="mt-0.5 text-nano text-ink-600">Passed as the loop's own invocation args (<span className="font-mono">args.*</span>), not the experiment's config.</div>
 						</div>
 
 						{/* Phase B — Evaluate / success criteria */}
 						<div>
-							<label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 flex items-center gap-1">
-								<Target className="w-3 h-3" /> Success criteria <span className="normal-case font-normal text-slate-300">(optional)</span>
+							<label className="text-micro font-semibold uppercase tracking-wide text-ink-600 flex items-center gap-1">
+								<Target className="w-3 h-3" /> Success criteria <span className="normal-case font-normal text-ink-600">(optional)</span>
 							</label>
 							<div className="mt-1 space-y-2">
 								<select value={criteriaKey} onChange={(e) => setCriteriaKey(e.target.value)}
-									className="w-full text-[13px] text-slate-800 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-gold-300">
+									className="w-full text-meta text-ink-800 rounded-lg border border-ink-200 bg-card px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-gold-300">
 									{CRITERIA_PRESETS.map((p) => (<option key={p.key} value={p.key}>{p.label}</option>))}
 								</select>
 								{criteriaKey === "custom" && (
 									<input value={criteriaCustom} onChange={(e) => setCriteriaCustom(e.target.value)}
 										placeholder="e.g. delta_pp >= 0 and n >= 20"
-										className="w-full font-mono text-[12px] text-slate-800 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-gold-300" />
+										className="w-full font-mono text-caption text-ink-800 rounded-lg border border-ink-200 bg-card px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-gold-300" />
 								)}
 								{criteriaExpr && (
-									<div className="text-[10px] text-slate-400 font-mono">criteria: {criteriaExpr}</div>
+									<div className="text-nano text-ink-600 font-mono">criteria: {criteriaExpr}</div>
 								)}
-								<label className={cn("flex items-center gap-2 text-[12px]", criteriaExpr ? "text-slate-700" : "text-slate-300")}>
+								<label className={cn("flex items-center gap-2 text-caption", criteriaExpr ? "text-ink-700" : "text-ink-600")}>
 									<input type="checkbox" checked={autoPromote} disabled={!criteriaExpr}
 										onChange={(e) => setAutoPromote(e.target.checked)}
-										className="rounded border-slate-300 text-gold-500 focus:ring-gold-300" />
+										className="rounded border-ink-300 text-gold-500 focus:ring-gold-300" />
 									Auto-promote if criteria met
 								</label>
 							</div>
@@ -394,13 +394,13 @@ export default function NextRunComposer({ app, loop, isExperiment, fromTs, fromL
 
 						{/* Try / Evaluate on / When — compact one-line rows (label + segmented
 						    toggle); each row's expansion (variants / cases / time) sits below. */}
-						<div className="space-y-2 pt-1 border-t border-slate-100">
+						<div className="space-y-2 pt-1 border-t border-ink-100">
 							{/* Try (single / fan-out) */}
 							<div className="flex items-center gap-2">
-								<span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 w-[88px] flex-shrink-0">Try</span>
+								<span className="text-micro font-semibold uppercase tracking-wide text-ink-600 w-[88px] flex-shrink-0">Try</span>
 								<div className="inline-flex items-center gap-1">
-									<button type="button" onClick={() => setTryMode("single")} className={cn("px-2 py-0.5 rounded-md text-[11px] font-medium border", tryMode === "single" ? "bg-gold-50 text-gold-700 border-gold-200" : "text-slate-500 border-slate-200 hover:bg-slate-50")}>Single</button>
-									<button type="button" onClick={() => setTryMode("fanout")} className={cn("px-2 py-0.5 rounded-md text-[11px] font-medium border", tryMode === "fanout" ? "bg-gold-50 text-gold-700 border-gold-200" : "text-slate-500 border-slate-200 hover:bg-slate-50")}>Fan-out</button>
+									<button type="button" onClick={() => setTryMode("single")} className={cn("px-2 py-0.5 rounded-md text-micro font-medium border", tryMode === "single" ? "bg-gold-50 text-gold-700 border-gold-200" : "text-ink-600 border-ink-200 hover:bg-ink-50")}>Single</button>
+									<button type="button" onClick={() => setTryMode("fanout")} className={cn("px-2 py-0.5 rounded-md text-micro font-medium border", tryMode === "fanout" ? "bg-gold-50 text-gold-700 border-gold-200" : "text-ink-600 border-ink-200 hover:bg-ink-50")}>Fan-out</button>
 								</div>
 							</div>
 							{tryMode === "fanout" && (
@@ -410,41 +410,41 @@ export default function NextRunComposer({ app, loop, isExperiment, fromTs, fromL
 											<textarea value={row} rows={2}
 												onChange={(e) => setVariantRows((rows) => rows.map((r, j) => (j === i ? e.target.value : r)))}
 												placeholder={`variant ${i + 1}, one per line, e.g.\nmodel = claude`}
-												className="flex-1 font-mono text-[12px] text-slate-800 leading-snug rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-gold-300 resize-none" />
+												className="flex-1 font-mono text-caption text-ink-800 leading-snug rounded-lg border border-ink-200 bg-card px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-gold-300 resize-none" />
 											{variantRows.length > 1 && (
 												<button type="button" onClick={() => setVariantRows((rows) => rows.filter((_, j) => j !== i))}
-													className="mt-1 p-1 rounded hover:bg-slate-100 text-slate-400"><X className="w-3.5 h-3.5" /></button>
+													className="mt-1 p-1 rounded hover:bg-ink-100 text-ink-600"><X className="w-3.5 h-3.5" /></button>
 											)}
 										</div>
 									))}
 									<div className="flex items-center gap-3">
 										<button type="button" onClick={() => setVariantRows((rows) => [...rows, ""])}
-											className="text-[11px] text-gold-700 hover:text-gold-900 underline decoration-dotted">+ add setting</button>
+											className="text-micro text-gold-700 hover:text-gold-900 underline decoration-dotted">+ add setting</button>
 										<input value={priorityText} onChange={(e) => setPriorityText(e.target.value)} inputMode="numeric"
 											placeholder="priority"
-											className="w-20 text-[12px] text-slate-800 rounded-lg border border-slate-200 bg-white px-2 py-0.5 focus:outline-none focus:ring-2 focus:ring-gold-300" />
+											className="w-20 text-caption text-ink-800 rounded-lg border border-ink-200 bg-card px-2 py-0.5 focus:outline-none focus:ring-2 focus:ring-gold-300" />
 									</div>
 								</div>
 							)}
 
 							{/* Evaluate on (full / subset) */}
 							<div className="flex items-center gap-2">
-								<span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 w-[88px] flex-shrink-0">Evaluate on</span>
+								<span className="text-micro font-semibold uppercase tracking-wide text-ink-600 w-[88px] flex-shrink-0">Evaluate on</span>
 								<div className="inline-flex items-center gap-1">
-									<button type="button" onClick={() => setScope("full")} className={cn("px-2 py-0.5 rounded-md text-[11px] font-medium border", scope === "full" ? "bg-gold-50 text-gold-700 border-gold-200" : "text-slate-500 border-slate-200 hover:bg-slate-50")}>Full</button>
-									<button type="button" onClick={() => setScope("subset")} className={cn("px-2 py-0.5 rounded-md text-[11px] font-medium border", scope === "subset" ? "bg-gold-50 text-gold-700 border-gold-200" : "text-slate-500 border-slate-200 hover:bg-slate-50")}>Subset{scope === "subset" && pickedCases.size > 0 ? ` (${pickedCases.size})` : ""}</button>
+									<button type="button" onClick={() => setScope("full")} className={cn("px-2 py-0.5 rounded-md text-micro font-medium border", scope === "full" ? "bg-gold-50 text-gold-700 border-gold-200" : "text-ink-600 border-ink-200 hover:bg-ink-50")}>Full</button>
+									<button type="button" onClick={() => setScope("subset")} className={cn("px-2 py-0.5 rounded-md text-micro font-medium border", scope === "subset" ? "bg-gold-50 text-gold-700 border-gold-200" : "text-ink-600 border-ink-200 hover:bg-ink-50")}>Subset{scope === "subset" && pickedCases.size > 0 ? ` (${pickedCases.size})` : ""}</button>
 								</div>
 							</div>
 							{scope === "subset" && (
 								<div className="pl-[96px]">
 									{cases.length === 0 ? (
-										<div className="text-[11px] text-slate-400">{casesLoaded ? "No cases found for this loop." : "Loading cases…"}</div>
+										<div className="text-micro text-ink-600">{casesLoaded ? "No cases found for this loop." : "Loading cases…"}</div>
 									) : (
-										<div className="max-h-32 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-100">
+										<div className="max-h-32 overflow-y-auto rounded-lg border border-ink-200 divide-y divide-ink-100">
 											{cases.map((c) => (
-												<label key={c.id} className="flex items-center gap-2 px-2.5 py-1 text-[12px] text-slate-700 hover:bg-slate-50 cursor-pointer">
+												<label key={c.id} className="flex items-center gap-2 px-2.5 py-1 text-caption text-ink-700 hover:bg-ink-50 cursor-pointer">
 													<input type="checkbox" checked={pickedCases.has(c.id)} onChange={() => toggleCase(c.id)}
-														className="rounded border-slate-300 text-gold-500 focus:ring-gold-300" />
+														className="rounded border-ink-300 text-gold-500 focus:ring-gold-300" />
 													<span className="truncate">{c.label || c.id}</span>
 												</label>
 											))}
@@ -455,14 +455,14 @@ export default function NextRunComposer({ app, loop, isExperiment, fromTs, fromL
 
 							{/* Recurring schedule (cadence) — moved here from the workflow header. */}
 							<div className="flex items-start gap-2">
-								<span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 w-[88px] flex-shrink-0 pt-1 inline-flex items-center gap-1"><Clock className="w-3 h-3" /> Schedule</span>
+								<span className="text-micro font-semibold uppercase tracking-wide text-ink-600 w-[88px] flex-shrink-0 pt-1 inline-flex items-center gap-1"><Clock className="w-3 h-3" /> Schedule</span>
 								<div className="flex-1 min-w-0 space-y-1.5">
 									<SchedulePicker value={cron} disabled={savingSched} onChange={(c) => { setCron(c); setSchedDirty(true); }} />
 									<div className="flex items-center gap-2">
-										<span className="text-[10px] text-slate-400">{describeSchedule(cron)} · separate from “Run experiment” (which runs once now).</span>
+										<span className="text-nano text-ink-600">{describeSchedule(cron)} · separate from “Run experiment” (which runs once now).</span>
 										{schedDirty && (
 											<button onClick={saveSchedule} disabled={savingSched}
-												className="ml-auto inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-lg bg-gold-500 text-white hover:bg-gold-600 disabled:opacity-50 flex-shrink-0">
+												className="ml-auto inline-flex items-center gap-1 px-2 py-1 text-micro font-medium rounded-lg bg-gold-700 text-white hover:bg-gold-800 disabled:opacity-50 flex-shrink-0">
 												{savingSched ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />} Save
 											</button>
 										)}
@@ -473,13 +473,13 @@ export default function NextRunComposer({ app, loop, isExperiment, fromTs, fromL
 				</div>
 
 				{/* footer (fixed) */}
-				<div className="flex items-center gap-2 px-4 py-3 border-t border-slate-100 flex-shrink-0">
+				<div className="flex items-center gap-2 px-4 py-3 border-t border-ink-100 flex-shrink-0">
 					<button onClick={launchNow} disabled={busy}
-						className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-gold-500 text-white hover:bg-gold-600 disabled:opacity-50">
+						className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-gold-700 text-white hover:bg-gold-800 disabled:opacity-50">
 						<LaunchIcon className={cn("w-3.5 h-3.5", busy && "animate-spin")} /> {launchLabel}
 					</button>
-					<button onClick={onClose} disabled={busy} className="px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50">Cancel</button>
-					<span className="ml-auto text-[10px] text-slate-400 hidden sm:inline">⌘↵ to run</span>
+					<button onClick={onClose} disabled={busy} className="px-3 py-1.5 text-xs rounded-lg border border-ink-200 bg-card hover:bg-ink-50 disabled:opacity-50">Cancel</button>
+					<span className="ml-auto text-nano text-ink-600 hidden sm:inline">⌘↵ to run</span>
 				</div>
 			</div>
 		</div>,

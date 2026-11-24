@@ -219,25 +219,25 @@ export function AppSurfaceEditor() {
           <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-gold-400 to-gold-500 text-white flex items-center justify-center shadow-sm animate-pulse">
             <Sparkles className="w-5 h-5" />
           </div>
-          <div className="text-sm font-medium text-slate-800">Generating your app page…</div>
-          <div className="text-xs text-slate-400 max-w-xs">Designing a page for <span className="font-mono">{app}</span> from its config + skills.</div>
+          <div className="text-sm font-medium text-ink-800">Generating your app page…</div>
+          <div className="text-xs text-ink-600 max-w-xs">Designing a page for <span className="font-mono">{app}</span> from its config + skills.</div>
           <Link
             to={`/studio/a/${encodeURIComponent(app)}`}
-            className="mt-1 text-[12px] text-slate-500 hover:text-slate-800 underline underline-offset-2"
+            className="mt-1 text-caption text-ink-600 hover:text-ink-800 underline underline-offset-2"
           >
             Cancel and go to the app
           </Link>
         </div>
       );
     }
-    return <div className="p-8 text-sm text-slate-400">Loading {app}…</div>;
+    return <div className="p-8 text-sm text-ink-600">Loading {app}…</div>;
   }
 
   if (loadError) {
     return (
       <div className="p-8">
-        <div className="text-sm text-rose-600">Couldn't load surface.</div>
-        <div className="mt-1 text-xs text-slate-400">{loadError}</div>
+        <div className="text-sm text-brick-600">Couldn't load surface.</div>
+        <div className="mt-1 text-xs text-ink-600">{loadError}</div>
       </div>
     );
   }
@@ -247,23 +247,23 @@ export function AppSurfaceEditor() {
   if (isNative) {
     return (
       <div className="p-8 max-w-xl">
-        <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <Info className="w-4 h-4 text-slate-500 mt-0.5 flex-shrink-0" />
-          <div className="text-sm text-slate-700 leading-relaxed">
+        <div className="flex items-start gap-3 rounded-xl border border-ink-200 bg-ink-50 p-4">
+          <Info className="w-4 h-4 text-ink-600 mt-0.5 flex-shrink-0" />
+          <div className="text-sm text-ink-700 leading-relaxed">
             <p className="font-medium mb-1">Native surface</p>
             <p>
               This app renders a built-in component. To enable markdown
               customization, add the following to the app's{" "}
-              <code className="text-[12px] bg-white border border-slate-200 rounded px-1">xpcloud.yaml</code>:
+              <code className="text-caption bg-card border border-ink-200 rounded px-1">xpcloud.yaml</code>:
             </p>
-            <pre className="mt-2 text-[12px] bg-white border border-slate-200 rounded p-2 overflow-x-auto">{`ui:
+            <pre className="mt-2 text-caption bg-card border border-ink-200 rounded p-2 overflow-x-auto">{`ui:
   surface:
     markdown: "ui/home.md"`}</pre>
           </div>
         </div>
         <Link
           to={backTo}
-          className="mt-4 inline-flex items-center gap-1.5 text-sm text-gold-600 hover:text-gold-700"
+          className="mt-4 inline-flex items-center gap-1.5 text-sm text-gold-700 hover:text-gold-700"
         >
           ← Back to {app}
         </Link>
@@ -276,16 +276,16 @@ export function AppSurfaceEditor() {
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-2.5 border-b border-slate-200 bg-white flex-shrink-0">
+      <div className="flex items-center gap-3 px-4 py-2.5 border-b border-ink-200 bg-card flex-shrink-0">
         <Link
           to={backTo}
-          className="text-[12px] text-slate-500 hover:text-slate-800 flex items-center gap-1"
+          className="text-caption text-ink-600 hover:text-ink-800 flex items-center gap-1"
         >
           ← {app}
         </Link>
-        <span className="text-slate-300">/</span>
-        <span className="flex items-center gap-1.5 text-[13px] font-medium text-slate-800">
-          <Pencil className="w-3.5 h-3.5 text-slate-400" />
+        <span className="text-ink-600">/</span>
+        <span className="flex items-center gap-1.5 text-meta font-medium text-ink-800">
+          <Pencil className="w-3.5 h-3.5 text-ink-600" />
           {surface || "home"}
         </span>
 
@@ -293,7 +293,7 @@ export function AppSurfaceEditor() {
           {/* Preview toggle */}
           <button
             onClick={() => setShowPreview((v) => !v)}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 text-[12px] text-slate-600 hover:bg-slate-50 transition-colors"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-ink-200 text-caption text-ink-600 hover:bg-ink-50 transition-colors"
             title={showPreview ? "Hide preview" : "Show preview"}
           >
             {showPreview ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
@@ -305,7 +305,7 @@ export function AppSurfaceEditor() {
           {wantGenerate && (
             <button
               onClick={() => navigate(`/studio/a/${encodeURIComponent(app)}`)}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 text-[12px] text-slate-600 hover:bg-slate-50 transition-colors"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-ink-200 text-caption text-ink-600 hover:bg-ink-50 transition-colors"
             >
               Use as-is →
             </button>
@@ -317,7 +317,7 @@ export function AppSurfaceEditor() {
               onClick={handleRegenerate}
               disabled={generating}
               title="Regenerate this page with AI"
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gold-200 text-[12px] text-gold-700 hover:bg-gold-50 transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gold-200 text-caption text-gold-700 hover:bg-gold-50 transition-colors disabled:opacity-50"
             >
               {generating
                 ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating…</>
@@ -329,7 +329,7 @@ export function AppSurfaceEditor() {
           {/* Cancel */}
           <button
             onClick={handleCancel}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 text-[12px] text-slate-600 hover:bg-slate-50 transition-colors"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-ink-200 text-caption text-ink-600 hover:bg-ink-50 transition-colors"
           >
             <X className="w-3.5 h-3.5" /> Cancel
           </button>
@@ -339,10 +339,10 @@ export function AppSurfaceEditor() {
             onClick={handleSave}
             disabled={saving || !dirty}
             className={cn(
-              "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all",
+              "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-caption font-medium transition-all",
               dirty && !saving
-                ? "bg-gold-500 text-white hover:bg-gold-600 shadow-sm shadow-gold-100"
-                : "bg-slate-100 text-slate-400 cursor-not-allowed",
+                ? "bg-gold-700 text-white hover:bg-gold-800 shadow-sm shadow-gold-100"
+                : "bg-ink-100 text-ink-600 cursor-not-allowed",
             )}
           >
             {saving
@@ -355,7 +355,7 @@ export function AppSurfaceEditor() {
 
       {/* Page-spec banner — the textarea holds the structured spec */}
       {isPageSpec && (
-        <div className="flex items-start gap-2 px-4 py-2 bg-sky-50 border-b border-sky-200 text-[12px] text-sky-800 flex-shrink-0">
+        <div className="flex items-start gap-2 px-4 py-2 bg-lagoon-50 border-b border-lagoon-200 text-caption text-lagoon-800 flex-shrink-0">
           <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
           This is a <strong>structured page spec</strong> (title / intro / sections / widgets in YAML).
           The page is generated from it deterministically — the preview shows the result. Saves are
@@ -365,7 +365,7 @@ export function AppSurfaceEditor() {
 
       {/* Fork template banner */}
       {isTemplate && (
-        <div className="flex items-start gap-2 px-4 py-2 bg-gold-50 border-b border-gold-200 text-[12px] text-gold-800 flex-shrink-0">
+        <div className="flex items-start gap-2 px-4 py-2 bg-gold-50 border-b border-gold-200 text-caption text-gold-800 flex-shrink-0">
           <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
           This surface inherits from a shared template. Saving will create an
           independent copy in this app's <code>ui/home.md</code> and detach it
@@ -376,13 +376,13 @@ export function AppSurfaceEditor() {
       {/* Editor body */}
       <div className="flex flex-1 min-h-0">
         {/* Textarea */}
-        <div className={cn("flex flex-col min-h-0", showPreview ? "w-1/2 border-r border-slate-200" : "w-full")}>
+        <div className={cn("flex flex-col min-h-0", showPreview ? "w-1/2 border-r border-ink-200" : "w-full")}>
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             spellCheck={false}
             placeholder={`# ${app}\n\nWrite your surface markdown here…\n\n\`\`\`lumid:stat\nsource: me://today\nlabel: Today's runs\n\`\`\``}
-            className="flex-1 w-full font-mono text-[13px] leading-relaxed p-4 resize-none border-0 focus:outline-none bg-white text-slate-800 placeholder:text-slate-300"
+            className="flex-1 w-full font-mono text-meta leading-relaxed p-4 resize-none border-0 focus:outline-none bg-card text-ink-800 placeholder:text-ink-500"
           />
         </div>
 
@@ -399,12 +399,12 @@ export function AppSurfaceEditor() {
       </div>
 
       {/* Footer: byte counter */}
-      <div className="flex items-center px-4 py-1.5 border-t border-slate-100 bg-white flex-shrink-0">
-        <span className={cn("text-[11px] tabular-nums", bytes > maxBytes * 0.9 ? "text-gold-600" : "text-slate-400")}>
+      <div className="flex items-center px-4 py-1.5 border-t border-ink-100 bg-card flex-shrink-0">
+        <span className={cn("text-micro tabular-nums", bytes > maxBytes * 0.9 ? "text-gold-600" : "text-ink-600")}>
           {draft.length.toLocaleString()} chars · {bytes.toLocaleString()} bytes / 256 KB
         </span>
         {bytes > maxBytes && (
-          <span className="ml-2 text-[11px] text-rose-600 font-medium">
+          <span className="ml-2 text-micro text-brick-600 font-medium">
             Over limit — save will be rejected
           </span>
         )}

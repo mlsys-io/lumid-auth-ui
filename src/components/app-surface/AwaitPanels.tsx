@@ -20,19 +20,19 @@ function Stepper({ phase }: { phase: Phase }) {
 	const at = PHASES.indexOf(phase);
 	const final = at < 0;
 	return (
-		<ol className="flex items-center gap-1 text-[10px] uppercase tracking-wide" aria-label="Progress">
+		<ol className="flex items-center gap-1 text-nano uppercase tracking-wide" aria-label="Progress">
 			{[...PHASES, "done" as Phase].map((p, i) => {
 				const reached = final ? true : i <= at;
 				const current = final ? p === "done" : i === at;
 				const label = p === "done" && final ? PHASE_LABEL[phase] : PHASE_LABEL[p];
 				const tone =
-					current && phase === "failed" ? "text-rose-700 font-semibold"
-					: current && phase === "timeout" ? "text-amber-700 font-semibold"
+					current && phase === "failed" ? "text-brick-700 font-semibold"
+					: current && phase === "timeout" ? "text-ember-700 font-semibold"
 					: current ? "text-gold-700 font-semibold"
-					: reached ? "text-slate-500" : "text-slate-300";
+					: reached ? "text-ink-600" : "text-ink-600";
 				return (
 					<li key={p} className={cn("inline-flex items-center gap-1", tone)} aria-current={current ? "step" : undefined}>
-						{i > 0 && <span className="text-slate-300">→</span>}
+						{i > 0 && <span className="text-ink-600">→</span>}
 						{current && !final && <span className="w-1.5 h-1.5 rounded-full bg-gold-500 animate-pulse" />}
 						{label}
 					</li>
@@ -53,7 +53,7 @@ function Axes({ v }: { v: Verdict }) {
 				<span key={a.label} title={axisTitle(a)}>
 					{i > 0 && ", "}
 					{a.label}{" "}
-					<span className={a.real === true ? "text-emerald-700" : a.real === false ? "text-rose-600" : "text-slate-400"}>
+					<span className={a.real === true ? "text-gold-700" : a.real === false ? "text-brick-600" : "text-ink-600"}>
 						{mark(a)}
 					</span>
 				</span>
@@ -72,8 +72,8 @@ function claimVerdict(c: ClaimState, run: TrackedRun): Verdict | null {
 function VerdictBlock({ c, run }: { c: ClaimState; run: TrackedRun }) {
 	const v = claimVerdict(c, run);
 	const head = (
-		<div className="text-[11px] text-slate-500">
-			{c.label && c.label !== c.claim_id ? <span className="font-medium text-slate-700">{c.label} · </span> : null}
+		<div className="text-micro text-ink-600">
+			{c.label && c.label !== c.claim_id ? <span className="font-medium text-ink-700">{c.label} · </span> : null}
 			claim <span className="font-mono">{c.claim_id || "—"}</span>
 			{v?.claim_status ? <> · {v.claim_status}</> : null}
 		</div>
@@ -82,7 +82,7 @@ function VerdictBlock({ c, run }: { c: ClaimState; run: TrackedRun }) {
 		return (
 			<div className="space-y-0.5">
 				{head}
-				<div className={cn("text-[12px]", c.error ? "text-rose-600" : "text-slate-400")}>
+				<div className={cn("text-caption", c.error ? "text-brick-600" : "text-ink-600")}>
 					{c.error ? `Error: ${c.error}` : c.done ? "Resolved without a result row." : "Waiting for the claim to resolve…"}
 				</div>
 			</div>
@@ -91,23 +91,23 @@ function VerdictBlock({ c, run }: { c: ClaimState; run: TrackedRun }) {
 	return (
 		<div className="space-y-1">
 			{head}
-			<div className="text-[12px] text-slate-800">
+			<div className="text-caption text-ink-800">
 				<span className="font-medium">{v.symbol || "—"}</span>
-				{v.window ? <span className="text-slate-500"> · {v.window}</span> : null}
+				{v.window ? <span className="text-ink-600"> · {v.window}</span> : null}
 			</div>
-			<div className="text-[12px] text-slate-700"><Axes v={v} /></div>
+			<div className="text-caption text-ink-700"><Axes v={v} /></div>
 			{v.presentable ? (
-				<div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[12px] text-slate-700 tabular-nums">
+				<div className="flex flex-wrap gap-x-4 gap-y-0.5 text-caption text-ink-700 tabular-nums">
 					<span>Actions <b>{num(v.total_actions)}</b></span>
 					<span>Filled lots <b>{num(v.filled_lots)}</b></span>
 					<span>Realized PnL <b>{num(v.realized_pnl_ticks)}</b> ticks</span>
 				</div>
 			) : (
-				<div className="text-[12px] text-amber-800">
+				<div className="text-caption text-ember-800">
 					Not a performance number{v.note ? ` — ${v.note}` : "."}
 				</div>
 			)}
-			{(v.error || c.error) && <div className="text-[12px] text-rose-600">Error: {v.error || c.error}</div>}
+			{(v.error || c.error) && <div className="text-caption text-brick-600">Error: {v.error || c.error}</div>}
 		</div>
 	);
 }
@@ -126,7 +126,7 @@ function CompareTable({ run }: { run: TrackedRun }) {
 				const a = v?.axes[i];
 				if (!a) return "";
 				return (
-					<span title={axisTitle(a)} className={a.real === true ? "text-emerald-700" : a.real === false ? "text-rose-600" : "text-slate-400"}>
+					<span title={axisTitle(a)} className={a.real === true ? "text-gold-700" : a.real === false ? "text-brick-600" : "text-ink-600"}>
 						{mark(a)} {a.value || ""}
 					</span>
 				);
@@ -137,37 +137,37 @@ function CompareTable({ run }: { run: TrackedRun }) {
 		{ label: "PnL (ticks)", cell: ({ v }) => (v ? (v.presentable ? num(v.realized_pnl_ticks) : "n/a") : "") },
 		{
 			label: "Presentable",
-			cell: ({ v }) => (v ? (v.presentable ? <span className="text-emerald-700 font-medium">yes</span> : <span className="text-amber-800">no</span>) : ""),
+			cell: ({ v }) => (v ? (v.presentable ? <span className="text-gold-700 font-medium">yes</span> : <span className="text-ember-800">no</span>) : ""),
 		},
 		{
 			label: "Why",
-			cell: ({ c, v }) => (v ? (v.error || c.error ? <span className="text-rose-600">{v.error || c.error}</span> : v.presentable ? "" : v.note) : ""),
+			cell: ({ c, v }) => (v ? (v.error || c.error ? <span className="text-brick-600">{v.error || c.error}</span> : v.presentable ? "" : v.note) : ""),
 		},
 	];
 	return (
-		<div className="overflow-x-auto rounded border border-slate-200">
-			<table className="min-w-full text-[12px] border-collapse">
-				<thead className="bg-slate-50 border-b border-slate-200">
+		<div className="overflow-x-auto rounded border border-ink-200">
+			<table className="min-w-full text-caption border-collapse">
+				<thead className="bg-ink-50 border-b border-ink-200">
 					<tr>
-						<th className="px-2.5 py-1.5 text-left font-semibold text-slate-500" />
+						<th className="px-2.5 py-1.5 text-left font-semibold text-ink-600" />
 						{cols.map(({ c }, i) => (
-							<th key={i} className="px-2.5 py-1.5 text-left font-semibold text-slate-700">{c.label || c.claim_id || `#${i + 1}`}</th>
+							<th key={i} className="px-2.5 py-1.5 text-left font-semibold text-ink-700">{c.label || c.claim_id || `#${i + 1}`}</th>
 						))}
 					</tr>
 				</thead>
 				<tbody>
 					{rows.map((r) => (
-						<tr key={r.label} className="border-b border-slate-100 last:border-b-0">
-							<th scope="row" className="px-2.5 py-1 text-left font-medium text-slate-500 whitespace-nowrap align-top">{r.label}</th>
+						<tr key={r.label} className="border-b border-ink-100 last:border-b-0">
+							<th scope="row" className="px-2.5 py-1 text-left font-medium text-ink-600 whitespace-nowrap align-top">{r.label}</th>
 							{cols.map((x, i) => (
-								<td key={i} className="px-2.5 py-1 text-slate-700 align-top max-w-[320px] break-words">{r.cell(x)}</td>
+								<td key={i} className="px-2.5 py-1 text-ink-700 align-top max-w-[320px] break-words">{r.cell(x)}</td>
 							))}
 						</tr>
 					))}
 				</tbody>
 			</table>
 			{run.matched && (
-				<div className="px-2.5 py-1 text-[11px] text-slate-400 border-t border-slate-100">
+				<div className="px-2.5 py-1 text-micro text-ink-600 border-t border-ink-100">
 					Matched config: {String(run.matched.symbol ?? "—")}
 					{run.matched.symbol_source ? ` (${String(run.matched.symbol_source)})` : ""}
 					{run.matched.until ? ` · until ${String(run.matched.until)}` : ""}
@@ -183,26 +183,26 @@ function RunCard({ run }: { run: TrackedRun }) {
 		<div
 			className={cn(
 				"rounded-lg border p-3 space-y-2",
-				run.phase === "failed" ? "border-rose-200 bg-rose-50/40"
-				: run.phase === "timeout" ? "border-amber-200 bg-amber-50/40"
-				: "border-slate-200 bg-white",
+				run.phase === "failed" ? "border-brick-200 bg-brick-50/40"
+				: run.phase === "timeout" ? "border-ember-200 bg-ember-50/40"
+				: "border-ink-200 bg-card",
 			)}
 			role="status"
 			aria-live="polite"
 		>
 			<div className="flex items-start justify-between gap-2">
 				<div className="space-y-0.5 min-w-0">
-					<div className="text-[12px] font-medium text-slate-800 truncate">{run.title}</div>
+					<div className="text-caption font-medium text-ink-800 truncate">{run.title}</div>
 					<Stepper phase={run.phase} />
 				</div>
-				<div className="flex items-center gap-2 shrink-0 text-[10px] text-slate-400">
+				<div className="flex items-center gap-2 shrink-0 text-nano text-ink-600">
 					{run.jobId && <span className="font-mono" title="Dispatch job id">job {run.jobId.slice(0, 8)}</span>}
 					{run.polls > 0 && <span>{run.polls} poll{run.polls === 1 ? "" : "s"}</span>}
 					{finished && (
 						<button
 							type="button"
 							onClick={() => dismissRun(run.id)}
-							className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] text-slate-500 hover:bg-slate-100 min-h-[24px]"
+							className="rounded border border-ink-200 bg-card px-1.5 py-0.5 text-micro text-ink-600 hover:bg-ink-100 min-h-[24px]"
 							aria-label="Dismiss this result"
 						>
 							Dismiss
@@ -210,13 +210,13 @@ function RunCard({ run }: { run: TrackedRun }) {
 					)}
 				</div>
 			</div>
-			{run.error && <div className="text-[12px] text-rose-700">{run.error}</div>}
-			{run.message && <div className="text-[11px] text-slate-500">{run.message}</div>}
+			{run.error && <div className="text-caption text-brick-700">{run.error}</div>}
+			{run.message && <div className="text-micro text-ink-600">{run.message}</div>}
 			{run.claims.length > 0 && (
 				run.show === "compare"
 					? <CompareTable run={run} />
 					: (
-						<div className="space-y-2 divide-y divide-slate-100">
+						<div className="space-y-2 divide-y divide-ink-100">
 							{run.claims.map((c, i) => <div key={i} className={i ? "pt-2" : ""}><VerdictBlock c={c} run={run} /></div>)}
 						</div>
 					)

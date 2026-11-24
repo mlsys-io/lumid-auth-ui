@@ -278,18 +278,18 @@ export default function CaseContentViewer({ app, loop, expId, caseId, caseLabel,
 	}, [fileText]);
 
 	return (
-		<div className="h-full flex flex-col rounded-xl border border-slate-200 bg-white overflow-hidden animate-in fade-in duration-200">
-			<div className="flex items-start gap-2 px-3 py-2.5 border-b border-slate-100">
-				<button onClick={onBack} className="flex-shrink-0 inline-flex items-center gap-1 text-[12px] text-slate-500 hover:text-slate-900 px-2 py-1 -ml-1 rounded-lg hover:bg-slate-100 transition-colors"><ArrowLeft className="w-3.5 h-3.5" /> Run tree</button>
+		<div className="h-full flex flex-col rounded-xl border border-ink-200 bg-card overflow-hidden animate-in fade-in duration-200">
+			<div className="flex items-start gap-2 px-3 py-2.5 border-b border-ink-100">
+				<button onClick={onBack} className="flex-shrink-0 inline-flex items-center gap-1 text-caption text-ink-600 hover:text-ink-900 px-2 py-1 -ml-1 rounded-lg hover:bg-ink-100 transition-colors"><ArrowLeft className="w-3.5 h-3.5" /> Run tree</button>
 				<div className="min-w-0 flex-1">
 					<div className="flex items-center gap-1.5">
-						<FileJson className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-						<span className="text-sm font-medium text-slate-900 truncate" title={caseId}>{caseLabel}</span>
+						<FileJson className="w-3.5 h-3.5 text-ink-600 flex-shrink-0" />
+						<span className="text-sm font-medium text-ink-900 truncate" title={caseId}>{caseLabel}</span>
 						{typeof headline === "number" && (
-							<span className="ml-auto text-[13px] font-semibold tabular-nums text-gold-700">{fmtScore(headline)}</span>
+							<span className="ml-auto text-meta font-semibold tabular-nums text-gold-700">{fmtScore(headline)}</span>
 						)}
 					</div>
-					<div className="text-[11px] text-slate-400 mt-0.5">the case data + how its aggregate score is computed</div>
+					<div className="text-micro text-ink-600 mt-0.5">the case data + how its aggregate score is computed</div>
 				</div>
 			</div>
 
@@ -298,38 +298,38 @@ export default function CaseContentViewer({ app, loop, expId, caseId, caseLabel,
 				    score across the case's runs; falls back to the case aggregate
 				    when there are no per-question rows (non-experiment apps). */}
 				<section>
-					<div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1 flex items-center gap-1.5">
+					<div className="text-nano uppercase tracking-wide text-ink-600 font-semibold mb-1 flex items-center gap-1.5">
 						<TrendingUp className="w-3 h-3 text-gold-500" /> Score trajectory
-						<span className="normal-case tracking-normal text-slate-300 font-normal">over runs</span>
+						<span className="normal-case tracking-normal text-ink-600 font-normal">over runs</span>
 					</div>
 					{/* The CASE score over runs — "what happened before". The headline
 					    metric (avg_question_score) per run, oldest → newest. */}
 					{values.length >= 2 ? (
-						<div className="flex items-center gap-3 rounded-lg border border-slate-200/70 bg-white px-3 py-2">
+						<div className="flex items-center gap-3 rounded-lg border border-ink-200/70 bg-card px-3 py-2">
 							<Sparkline values={values} />
-							<div className="text-[11px] text-slate-500">
-								<span className="tabular-nums text-slate-700 font-medium">{fmtScore(values[0])}</span> → <span className="tabular-nums text-slate-700 font-medium">{fmtScore(values[values.length - 1])}</span>
-								<span className="text-slate-400"> · {values.length} runs</span>
+							<div className="text-micro text-ink-600">
+								<span className="tabular-nums text-ink-700 font-medium">{fmtScore(values[0])}</span> → <span className="tabular-nums text-ink-700 font-medium">{fmtScore(values[values.length - 1])}</span>
+								<span className="text-ink-600"> · {values.length} runs</span>
 							</div>
 						</div>
 					) : values.length === 1 ? (
-						<div className="flex items-center gap-3 rounded-lg border border-slate-200/70 bg-white px-3 py-2">
+						<div className="flex items-center gap-3 rounded-lg border border-ink-200/70 bg-card px-3 py-2">
 							<Sparkline values={values} />
-							<div className="text-[11px] text-slate-500">Scored once — <span className="tabular-nums font-medium text-slate-700">{fmtScore(values[0])}</span> · no trend yet (one run)</div>
+							<div className="text-micro text-ink-600">Scored once — <span className="tabular-nums font-medium text-ink-700">{fmtScore(values[0])}</span> · no trend yet (one run)</div>
 						</div>
 					) : (
-						<div className="text-[11px] text-slate-400 italic">{book === undefined ? "loading…" : "Not scored yet."}</div>
+						<div className="text-micro text-ink-600 italic">{book === undefined ? "loading…" : "Not scored yet."}</div>
 					)}
 					{/* Per-question curves — only when a question has >1 run, so single-run
 					    cases don't show a wall of "1 run" rows. */}
 					{perQ.series.some((s) => s.values.length >= 2) && (
-						<div className="mt-1.5 rounded-lg border border-slate-200/70 bg-white overflow-hidden divide-y divide-slate-50">
-							<div className="px-3 py-1 text-[10px] uppercase tracking-wide text-slate-400 font-semibold">per question</div>
+						<div className="mt-1.5 rounded-lg border border-ink-200/70 bg-card overflow-hidden divide-y divide-ink-50">
+							<div className="px-3 py-1 text-nano uppercase tracking-wide text-ink-600 font-semibold">per question</div>
 							{perQ.series.filter((s) => s.values.length >= 2).map((s) => (
 								<div key={s.q} className="flex items-center gap-3 px-3 py-1.5">
-									<span className="text-[11px] font-mono text-slate-500 w-14 flex-shrink-0 truncate" title={s.q}>{s.q}</span>
+									<span className="text-micro font-mono text-ink-600 w-14 flex-shrink-0 truncate" title={s.q}>{s.q}</span>
 									<Sparkline values={s.values} />
-									<span className="ml-auto text-[11px] text-slate-500 tabular-nums flex-shrink-0"><span className="text-slate-700 font-medium">{fmtScore(s.values[0])}</span> → <span className="text-slate-700 font-medium">{fmtScore(s.values[s.values.length - 1])}</span><span className="text-slate-400"> · {s.values.length}</span></span>
+									<span className="ml-auto text-micro text-ink-600 tabular-nums flex-shrink-0"><span className="text-ink-700 font-medium">{fmtScore(s.values[0])}</span> → <span className="text-ink-700 font-medium">{fmtScore(s.values[s.values.length - 1])}</span><span className="text-ink-600"> · {s.values.length}</span></span>
 								</div>
 							))}
 						</div>
@@ -338,28 +338,28 @@ export default function CaseContentViewer({ app, loop, expId, caseId, caseLabel,
 
 				{/* 2 · SCORE PROVENANCE — per-question breakdown that averages to the headline */}
 				<section>
-					<div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1 flex items-center gap-1.5"><ListChecks className="w-3 h-3 text-violet-500" /> Score provenance</div>
+					<div className="text-nano uppercase tracking-wide text-ink-600 font-semibold mb-1 flex items-center gap-1.5"><ListChecks className="w-3 h-3 text-plum-600" /> Score provenance</div>
 					{byQ === null && logRows === null ? (
-						<div className="text-[11px] text-slate-400 flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> reading per-question scores…</div>
+						<div className="text-micro text-ink-600 flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> reading per-question scores…</div>
 					) : provenance.rows.length === 0 ? (
-						<div className="text-[11px] text-slate-400 italic">No per-question breakdown recorded — this case's score isn't a multi-part aggregate yet.</div>
+						<div className="text-micro text-ink-600 italic">No per-question breakdown recorded — this case's score isn't a multi-part aggregate yet.</div>
 					) : (
-						<div className="rounded-lg border border-slate-200/70 bg-white overflow-hidden">
+						<div className="rounded-lg border border-ink-200/70 bg-card overflow-hidden">
 							{provenance.avg != null && (
-								<div className="flex items-center gap-2 px-3 py-1.5 bg-violet-50/50 border-b border-slate-100 text-[11px]">
-									<span className="text-slate-500">{provenance.perRun ? `${provenance.metricLabel.replace(/_/g, " ")} across ${provenance.rows.length} runs` : `avg of ${provenance.rows.length} ${provenance.metricLabel.replace(/_/g, " ")}`}</span>
-									<span className="ml-auto tabular-nums font-semibold text-slate-800">= {fmtScore(provenance.avg)}</span>
+								<div className="flex items-center gap-2 px-3 py-1.5 bg-plum-50/50 border-b border-ink-100 text-micro">
+									<span className="text-ink-600">{provenance.perRun ? `${provenance.metricLabel.replace(/_/g, " ")} across ${provenance.rows.length} runs` : `avg of ${provenance.rows.length} ${provenance.metricLabel.replace(/_/g, " ")}`}</span>
+									<span className="ml-auto tabular-nums font-semibold text-ink-800">= {fmtScore(provenance.avg)}</span>
 									{typeof headline === "number" && Math.abs(headline - provenance.avg) > 0.01 && (
-										<span className="text-[10px] text-slate-400" title="headline differs — weighted or computed on a different run">(headline {fmtScore(headline)})</span>
+										<span className="text-nano text-ink-600" title="headline differs — weighted or computed on a different run">(headline {fmtScore(headline)})</span>
 									)}
 								</div>
 							)}
-							<table className="w-full text-[11px]">
+							<table className="w-full text-micro">
 								<tbody>
 									{provenance.rows.map((r) => (
-										<tr key={r.question} className="border-t border-slate-50 first:border-0">
-											<td className="px-3 py-1.5 text-slate-500 font-mono truncate max-w-[200px]" title={r.question}>{r.question}</td>
-											<td className="px-3 py-1.5 text-right tabular-nums font-medium text-slate-800">{fmtScore(r.score)}</td>
+										<tr key={r.question} className="border-t border-ink-50 first:border-0">
+											<td className="px-3 py-1.5 text-ink-600 font-mono truncate max-w-[200px]" title={r.question}>{r.question}</td>
+											<td className="px-3 py-1.5 text-right tabular-nums font-medium text-ink-800">{fmtScore(r.score)}</td>
 										</tr>
 									))}
 								</tbody>
@@ -372,17 +372,17 @@ export default function CaseContentViewer({ app, loop, expId, caseId, caseLabel,
 				    triangulated scores + cited evidence + regressions), rendered from
 				    the interview_report.md. The complete, decomposed record. */}
 				<section>
-					<div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1 flex items-center gap-1.5">
-						<FileText className="w-3 h-3 text-violet-500" /> Full evaluation report
-						<span className="normal-case tracking-normal text-slate-300 font-normal">the entire log for this case</span>
+					<div className="text-nano uppercase tracking-wide text-ink-600 font-semibold mb-1 flex items-center gap-1.5">
+						<FileText className="w-3 h-3 text-plum-600" /> Full evaluation report
+						<span className="normal-case tracking-normal text-ink-600 font-normal">the entire log for this case</span>
 					</div>
 					{report === undefined ? (
-						<div className="text-[11px] text-slate-400 flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> loading the evaluation report…</div>
+						<div className="text-micro text-ink-600 flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> loading the evaluation report…</div>
 					) : report === null ? (
-						<div className="text-[11px] text-slate-400 italic">No evaluation report for this run — it didn't write a per-case interview report.</div>
+						<div className="text-micro text-ink-600 italic">No evaluation report for this run — it didn't write a per-case interview report.</div>
 					) : (
-						<div className="rounded-lg border border-slate-200/70 bg-white px-3 py-2 max-h-[420px] overflow-auto prose prose-sm max-w-none prose-headings:mt-2 prose-headings:mb-1 prose-table:text-[11px]">
-							<Suspense fallback={<div className="text-[11px] text-slate-400">rendering…</div>}>
+						<div className="rounded-lg border border-ink-200/70 bg-card px-3 py-2 max-h-[420px] overflow-auto prose prose-sm max-w-none prose-headings:mt-2 prose-headings:mb-1 prose-table:text-micro">
+							<Suspense fallback={<div className="text-micro text-ink-600">rendering…</div>}>
 								<LumidMarkdown source={report.content} />
 							</Suspense>
 						</div>
@@ -395,26 +395,26 @@ export default function CaseContentViewer({ app, loop, expId, caseId, caseLabel,
 						onClick={loadFile}
 						disabled={path === null}
 						className={cn(
-							"w-full flex items-center gap-1.5 text-[10px] uppercase tracking-wide font-semibold mb-1",
-							path === null ? "text-slate-300 cursor-default" : "text-slate-400 hover:text-slate-600",
+							"w-full flex items-center gap-1.5 text-nano uppercase tracking-wide font-semibold mb-1",
+							path === null ? "text-ink-600 cursor-default" : "text-ink-600 hover:text-ink-600",
 						)}
 					>
 						<ChevronRight className={cn("w-3 h-3 transition-transform", rawOpen && "rotate-90")} />
 						<FileJson className="w-3 h-3" /> Raw case data
-						{path === null && <span className="ml-1 normal-case tracking-normal text-slate-300">(no seed file — live-data case)</span>}
+						{path === null && <span className="ml-1 normal-case tracking-normal text-ink-600">(no seed file — live-data case)</span>}
 						{path === undefined && <Loader2 className="ml-1 w-3 h-3 animate-spin" />}
 					</button>
 					{rawOpen && path && (
-						<div className="rounded-lg border border-slate-200/70 bg-slate-50/50 px-2.5 py-2">
+						<div className="rounded-lg border border-ink-200/70 bg-ink-50/50 px-2.5 py-2">
 							{fileLoading && prettyRaw == null ? (
-								<div className="flex items-center gap-2 text-[11px] text-slate-400"><Loader2 className="w-3.5 h-3.5 animate-spin" /> reading {path}…</div>
+								<div className="flex items-center gap-2 text-micro text-ink-600"><Loader2 className="w-3.5 h-3.5 animate-spin" /> reading {path}…</div>
 							) : prettyRaw != null ? (
 								<>
-									<div className="text-[10px] text-slate-400 font-mono truncate mb-1" title={path}>{path}</div>
-									<pre className="text-[11px] font-mono text-slate-700 whitespace-pre-wrap max-h-80 overflow-auto">{prettyRaw.slice(0, 12000)}</pre>
+									<div className="text-nano text-ink-600 font-mono truncate mb-1" title={path}>{path}</div>
+									<pre className="text-micro font-mono text-ink-700 whitespace-pre-wrap max-h-80 overflow-auto">{prettyRaw.slice(0, 12000)}</pre>
 								</>
 							) : (
-								<div className="text-[11px] text-slate-400 italic">Couldn't read this file.</div>
+								<div className="text-micro text-ink-600 italic">Couldn't read this file.</div>
 							)}
 						</div>
 					)}

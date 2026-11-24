@@ -20,14 +20,14 @@ interface ControlsProps {
 export function CanvasControls({ position = "bottom-left", onAutoLayout }: ControlsProps) {
 	const rf = useReactFlow();
 	const btn =
-		"flex h-7 w-7 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(176_143_69)]";
+		"flex h-7 w-7 items-center justify-center rounded-lg text-ink-600 transition-colors hover:bg-ink-100 hover:text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-500";
 	return (
 		<Panel position={position}>
 			<motion.div
 				initial={{ opacity: 0, y: 6 }}
 				animate={{ opacity: 1, y: 0 }}
 				transition={{ duration: 0.2, ease: "easeOut" }}
-				className="flex items-center gap-0.5 rounded-xl border border-slate-200 bg-white/90 p-1 shadow-sm backdrop-blur"
+				className="flex items-center gap-0.5 rounded-xl border border-ink-200 bg-card/90 p-1 shadow-sm backdrop-blur"
 			>
 				<button type="button" className={btn} onClick={() => rf.zoomOut({ duration: 160 })} title="Zoom out" aria-label="Zoom out">
 					<Minus size={14} />
@@ -67,8 +67,8 @@ export function DiagnosticsStrip({ diagnostics }: { diagnostics: WfDiagnostic[] 
 				initial={{ opacity: 0, y: -6 }}
 				animate={{ opacity: 1, y: 0 }}
 				transition={{ duration: 0.2, ease: "easeOut" }}
-				className={`max-w-[320px] rounded-xl border px-2.5 py-1.5 text-[11px] shadow-sm backdrop-blur ${
-					bad ? "border-rose-200 bg-rose-50/90 text-rose-700" : "border-amber-200 bg-amber-50/90 text-amber-800"
+				className={`max-w-[320px] rounded-xl border px-2.5 py-1.5 text-micro shadow-sm backdrop-blur ${
+					bad ? "border-brick-200 bg-brick-50/90 text-brick-700" : "border-ember-200 bg-ember-50/90 text-ember-800"
 				}`}
 			>
 				<div className="mb-0.5 flex items-center gap-1.5 font-medium">

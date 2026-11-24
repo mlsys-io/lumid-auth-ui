@@ -3,7 +3,7 @@
 // This file exists because three canvases disagreed about what "succeeded"
 // looks like. RunDagCanvas had `succeeded: "rgb(16 185 129)"` with the comment
 // `// gold-500` (it is emerald) and `running: "rgb(245 158 11)"` also commented
-// `// gold-500` (it is amber); LumilakeWorkflowCanvas used ring-emerald-500;
+// `// gold-500` (it is amber); LumilakeWorkflowCanvas used ring-gold-500;
 // only WorkflowCanvas used the actual brand gold. Same product, same state,
 // three colours — so status colour is defined once, here, and imported.
 //
@@ -21,34 +21,47 @@
 // a future dark pass is a one-file change.
 
 import type { WfStatus, WfNodeKind } from "./model";
+import { ink, gold, brick, lagoon, plum, ember, chart } from "@/styles/palette";
+
+/** `#rrggbb` -> the space-separated `rgb(r g b)` form every colour here uses. */
+function rgb(hex: string): string {
+	const n = (i: number) => parseInt(hex.slice(i, i + 2), 16);
+	return `rgb(${n(1)} ${n(3)} ${n(5)})`;
+}
+/** `#rrggbb` + alpha -> `rgba(r, g, b, a)` (stage tints). */
+function rgba(hex: string, a: number): string {
+	const n = (i: number) => parseInt(hex.slice(i, i + 2), 16);
+	return `rgba(${n(1)}, ${n(3)}, ${n(5)}, ${a})`;
+}
 
 // ---------------------------------------------------------------------------
 // Status — the site-wide language
 // ---------------------------------------------------------------------------
 
 // Healthy/ok is brand GOLD, not green. The whole site does this already: run
-// dots, sparklines and status pills are gold. Running is sky (a transient
-// state, matching the runs list); failed is rose.
-export const GOLD = "rgb(176 143 69)";        // gold-500 — the brand accent
-export const GOLD_DEEP = "rgb(150 119 58)";   // gold-600 — borders on gold
-export const GOLD_SOFT = "rgb(197 167 94)";   // gold-400 — traced executed path
+// dots, sparklines and status pills are gold. Running is lagoon (a transient
+// state, matching the runs list); failed is brick. All values come from
+// src/styles/palette.json (Lumen) — the same tones as src/lib/tones.ts.
+export const GOLD = rgb(gold["500"]);        // the brand accent
+export const GOLD_DEEP = rgb(gold["600"]);   // borders on gold
+export const GOLD_SOFT = rgb(gold["400"]);   // traced executed path
 
 export const STATUS_COLOR: Record<WfStatus, string> = {
 	succeeded: GOLD,
-	failed: "rgb(225 29 72)",      // rose-600
-	running: "rgb(14 165 233)",    // sky-500
-	skipped: "rgb(148 163 184)",   // slate-400
-	declared: "rgb(148 163 184)",
-	pending: "rgb(203 213 225)",   // slate-300
+	failed: rgb(brick["600"]),
+	running: rgb(lagoon["500"]),
+	skipped: rgb(ink["400"]),
+	declared: rgb(ink["400"]),
+	pending: rgb(ink["300"]),
 };
 
 export const STATUS_BORDER: Record<WfStatus, string> = {
 	succeeded: GOLD_DEEP,
-	failed: "rgb(190 18 60)",
-	running: "rgb(2 132 199)",
-	skipped: "rgb(148 163 184)",
-	declared: "rgb(148 163 184)",
-	pending: "rgb(203 213 225)",
+	failed: rgb(brick["700"]),
+	running: rgb(lagoon["600"]),
+	skipped: rgb(ink["400"]),
+	declared: rgb(ink["400"]),
+	pending: rgb(ink["300"]),
 };
 
 /**
@@ -59,17 +72,17 @@ export const STATUS_BORDER: Record<WfStatus, string> = {
  */
 export function statusRing(status?: WfStatus): string {
 	switch (status) {
-		case "running":   return "ring-2 ring-sky-500 ring-offset-1";
-		case "succeeded": return "ring-1 ring-[rgb(176_143_69)]";
-		case "failed":    return "ring-2 ring-rose-600 ring-offset-1";
+		case "running":   return "ring-2 ring-lagoon-500 ring-offset-1";
+		case "succeeded": return "ring-1 ring-gold-500";
+		case "failed":    return "ring-2 ring-brick-600 ring-offset-1";
 		case "skipped":   return "opacity-50 grayscale";
-		case "declared":  return "ring-1 ring-dashed ring-slate-300";
+		case "declared":  return "ring-1 ring-dashed ring-ink-300";
 		default:          return "";
 	}
 }
 
 /** Selection is gold and offset, so it reads as distinct from every status ring. */
-export const SELECTED_RING = "ring-2 ring-[rgb(176_143_69)] ring-offset-2";
+export const SELECTED_RING = "ring-2 ring-gold-500 ring-offset-2";
 
 // ---------------------------------------------------------------------------
 // Type — the accent channel
@@ -97,16 +110,21 @@ export function withAlpha(color: string, alpha: number): string {
 export type AccentKey =
 	| "compute" | "data" | "serve" | "io" | "util" | "vision" | "image" | "unknown";
 
-/** Raw accent values, for the node's left rail and icon tint. */
+/**
+ * Raw accent values, for the node's left rail and icon tint. Node TYPE is a
+ * categorical channel, so it draws from the validated chart palette (Lumen
+ * chart-1…8), never from the status tones: a violet "compute" rail must not
+ * be mistaken for a state.
+ */
 export const ACCENT: Record<AccentKey, string> = {
-	compute: "rgb(139 92 246)",   // violet-500  — LLM, training, inference
-	data:    "rgb(59 130 246)",   // blue-500    — retrieval, datasets
-	serve:   "rgb(20 184 166)",   // teal-500    — serve, API
-	io:      "rgb(148 163 184)",  // slate-400   — inputs, triggers, sinks
-	util:    "rgb(16 185 129)",   // emerald-500 — format, message, lambda
-	vision:  "rgb(236 72 153)",   // pink-500
-	image:   "rgb(217 70 239)",   // fuchsia-500
-	unknown: "rgb(203 213 225)",  // slate-300   — imported, unmapped
+	compute: rgb(chart[6]),   // violet      — LLM, training, inference
+	data:    rgb(chart[4]),   // blue        — retrieval, datasets
+	serve:   rgb(chart[0]),   // teal        — serve, API
+	io:      rgb(ink["400"]), // neutral     — inputs, triggers, sinks
+	util:    rgb(chart[7]),   // moss        — format, message, lambda
+	vision:  rgb(chart[2]),   // rose
+	image:   rgb(chart[5]),   // terracotta
+	unknown: rgb(ink["300"]), // imported, unmapped
 };
 
 const LUMILAKE_ACCENT: Record<string, AccentKey> = {
@@ -165,27 +183,28 @@ export function accentColor(kind: WfNodeKind): string {
 // ---------------------------------------------------------------------------
 
 export const STAGE_TINT: Record<string, string> = {
-	observe:     "rgba(56, 189, 248, 0.07)",   // sky
-	hypothesize: "rgba(167, 139, 250, 0.08)",  // violet
-	act:         "rgba(251, 191, 36, 0.09)",   // amber
-	analyze:     "rgba(45, 212, 191, 0.08)",   // teal
-	learn:       "rgba(176, 143, 69, 0.10)",   // gold — a banked outcome is on-brand
+	observe:     rgba(lagoon["400"], 0.08),
+	hypothesize: rgba(plum["400"], 0.08),
+	act:         rgba(ember["400"], 0.09),
+	analyze:     rgba(chart[7], 0.08),          // moss
+	learn:       rgba(gold["500"], 0.10),       // gold — a banked outcome is on-brand
 };
 
+// Band labels sit on their tint: the 700 step clears 4.5:1 there.
 export const STAGE_LABEL_COLOR: Record<string, string> = {
-	observe: "rgb(2 132 199)",
-	hypothesize: "rgb(124 58 237)",
-	act: "rgb(180 83 9)",
-	analyze: "rgb(13 148 136)",
-	learn: "rgb(123 98 48)",
+	observe: rgb(lagoon["700"]),
+	hypothesize: rgb(plum["700"]),
+	act: rgb(ember["700"]),
+	analyze: "rgb(66 104 40)",                  // moss, darkened for text
+	learn: rgb(gold["700"]),
 };
 
 // ---------------------------------------------------------------------------
 // Edges — the relation channel
 // ---------------------------------------------------------------------------
 
-export const EDGE_IDLE = "rgb(148 163 184)";   // slate-400
-export const EDGE_MUTED = "rgb(203 213 225)";  // slate-300 — input bindings
+export const EDGE_IDLE = rgb(ink["400"]);
+export const EDGE_MUTED = rgb(ink["300"]);   // input bindings
 
 /**
  * Edge stroke by relation and status. The executed path is traced in GOLD
@@ -217,8 +236,9 @@ export function edgeDash(rel: string): string | undefined {
 // Canvas chrome
 // ---------------------------------------------------------------------------
 
-export const CANVAS_DOT = "rgb(226 232 240)";   // slate-200
-export const CANVAS_GRID = "rgb(241 245 249)";  // slate-100 — the major grid
+export const CANVAS_DOT = rgb(ink["200"]);
+export const CANVAS_GRID = rgb(ink["100"]);  // the major grid
+export const EDGE_LABEL = rgb(ink["600"]);   // edge label text (>= 4.5:1 on paper)
 
 /**
  * Emitted onto the canvas root so edge SVGs and node cards read from the same

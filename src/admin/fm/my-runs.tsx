@@ -9,11 +9,11 @@ import { useCallback, useEffect, useState } from "react";
 import { failedSteps, fleet, type FleetJob, type FleetJobResult, type FleetStatus } from "../../api/fleet";
 
 const TONE: Record<FleetStatus, string> = {
-	queued: "bg-slate-100 text-slate-600",
-	running: "bg-indigo-50 text-indigo-700",
-	succeeded: "bg-emerald-50 text-emerald-700",
-	failed: "bg-rose-50 text-rose-700",
-	canceled: "bg-slate-100 text-slate-500",
+	queued: "bg-ink-100 text-ink-600",
+	running: "bg-plum-50 text-plum-700",
+	succeeded: "bg-gold-50 text-gold-700",
+	failed: "bg-brick-50 text-brick-700",
+	canceled: "bg-ink-100 text-ink-600",
 };
 
 export default function MyRuns() {
@@ -59,20 +59,20 @@ export default function MyRuns() {
 		}
 	};
 
-	if (problem) return <p className="text-xs text-rose-600">{problem}</p>;
-	if (!jobs) return <p className="text-xs text-slate-500">Loading your runs…</p>;
+	if (problem) return <p className="text-xs text-brick-600">{problem}</p>;
+	if (!jobs) return <p className="text-xs text-ink-600">Loading your runs…</p>;
 	if (jobs.length === 0) {
 		return (
-			<p className="text-xs text-slate-500">
+			<p className="text-xs text-ink-600">
 				No runs yet. Run a compute graph from the workflow editor, or with{" "}
 				<code>job_run</code> from chat.
 			</p>
 		);
 	}
 	return (
-		<div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+		<div className="overflow-x-auto rounded-lg border border-ink-200 bg-card">
 			<table className="w-full text-xs">
-				<thead className="bg-slate-50 text-left text-slate-500">
+				<thead className="bg-ink-50 text-left text-ink-600">
 					<tr>
 						<th className="px-3 py-2">Job</th>
 						<th className="px-3 py-2">Status</th>
@@ -83,30 +83,30 @@ export default function MyRuns() {
 				</thead>
 				<tbody>
 					{jobs.map((j) => (
-						<tr key={j.id} className="border-t border-slate-100 align-top">
+						<tr key={j.id} className="border-t border-ink-100 align-top">
 							<td className="px-3 py-2">
-								<div className="font-mono text-slate-800">{j.id}</div>
-								{j.name && <div className="text-slate-500">{j.name}</div>}
+								<div className="font-mono text-ink-800">{j.id}</div>
+								{j.name && <div className="text-ink-600">{j.name}</div>}
 							</td>
 							<td className="px-3 py-2">
 								<span className={`rounded px-1.5 py-0.5 ${TONE[j.status]}`}>{j.status}</span>
 							</td>
-							<td className="px-3 py-2 text-slate-600">
+							<td className="px-3 py-2 text-ink-600">
 								{[j.labels?.study, j.labels?.experiment].filter(Boolean).join(" · ") || "—"}
 							</td>
-							<td className="px-3 py-2 text-slate-500">
+							<td className="px-3 py-2 text-ink-600">
 								{j.created_at ? new Date(j.created_at).toLocaleString() : "—"}
 							</td>
 							<td className="px-3 py-2 text-right whitespace-nowrap">
 								{/* A failed run has a result too: which step failed, and why. */}
 								{(j.status === "succeeded" || j.status === "failed") && (
-									<button className="text-indigo-600 hover:underline" onClick={() => void showResult(j.id)}>
+									<button className="text-plum-600 hover:underline" onClick={() => void showResult(j.id)}>
 										Result
 									</button>
 								)}
 								{!j.terminal && (
 									<button
-										className="ml-2 text-slate-500 hover:text-slate-800"
+										className="ml-2 text-ink-600 hover:text-ink-800"
 										onClick={() => void fleet.cancel(j.id).then(load)}
 									>
 										Cancel
@@ -118,30 +118,30 @@ export default function MyRuns() {
 				</tbody>
 			</table>
 			{open && (
-				<div className="border-t border-slate-200 bg-slate-50 p-3">
-					<div className="mb-1 flex justify-between text-[11px] text-slate-500">
+				<div className="border-t border-ink-200 bg-ink-50 p-3">
+					<div className="mb-1 flex justify-between text-micro text-ink-600">
 						<span className="font-mono">{open.id}</span>
-						<button onClick={() => setOpen(null)} className="hover:text-slate-800">Close</button>
+						<button onClick={() => setOpen(null)} className="hover:text-ink-800">Close</button>
 					</div>
 					{open.error ? (
-						<p className="text-rose-600">{open.error}</p>
+						<p className="text-brick-600">{open.error}</p>
 					) : !open.result ? (
-						<p className="text-slate-500">Loading…</p>
+						<p className="text-ink-600">Loading…</p>
 					) : (
 						<>
 							{failedSteps(open.result.outputs).map((o) => (
-								<p key={o.task_id ?? o.name} className="mb-1 whitespace-pre-wrap font-mono text-[11px] text-rose-700">
+								<p key={o.task_id ?? o.name} className="mb-1 whitespace-pre-wrap font-mono text-micro text-brick-700">
 									{o.name ? `${o.name} failed: ` : "Failed: "}
 									{o.error}
 								</p>
 							))}
 							{Object.keys(open.result.metrics ?? {}).length > 0 && (
-								<p className="mb-1 text-slate-700">
+								<p className="mb-1 text-ink-700">
 									Metrics:{" "}
 									{Object.entries(open.result.metrics).map(([k, v]) => `${k} = ${v}`).join(", ")}
 								</p>
 							)}
-							<pre className="max-h-72 overflow-auto rounded bg-white p-2 text-[11px]">
+							<pre className="max-h-72 overflow-auto rounded bg-card p-2 text-micro">
 								{JSON.stringify(open.result.outputs, null, 2)}
 							</pre>
 						</>

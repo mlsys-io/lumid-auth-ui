@@ -104,7 +104,7 @@ function ResultTable({ data }: { data: unknown }) {
         ? [data]
         : [];
   if (!rows.length) {
-    return <pre className="text-[11px] bg-slate-50 border border-slate-200 rounded p-2 overflow-auto max-h-[420px]">{JSON.stringify(data, null, 2)}</pre>;
+    return <pre className="text-micro bg-ink-50 border border-ink-200 rounded p-2 overflow-auto max-h-[420px]">{JSON.stringify(data, null, 2)}</pre>;
   }
   const cols = Array.from(rows.slice(0, 50).reduce((s: Set<string>, r) => {
     if (r && typeof r === "object") Object.keys(r).forEach((k) => s.add(k));
@@ -112,20 +112,20 @@ function ResultTable({ data }: { data: unknown }) {
   }, new Set<string>())).slice(0, 12);
   const cell = (v: unknown) => (v == null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v));
   return (
-    <div className="overflow-auto max-h-[480px] border border-slate-200 rounded">
-      <table className="w-full text-[11px]">
-        <thead className="bg-slate-100 sticky top-0">
-          <tr>{cols.map((c) => <th key={c} className="text-left px-2 py-1 font-medium text-slate-600">{c}</th>)}</tr>
+    <div className="overflow-auto max-h-[480px] border border-ink-200 rounded">
+      <table className="w-full text-micro">
+        <thead className="bg-ink-100 sticky top-0">
+          <tr>{cols.map((c) => <th key={c} className="text-left px-2 py-1 font-medium text-ink-600">{c}</th>)}</tr>
         </thead>
         <tbody>
           {rows.slice(0, 200).map((r, i) => (
-            <tr key={i} className="odd:bg-white even:bg-slate-50">
+            <tr key={i} className="odd:bg-card even:bg-ink-50">
               {cols.map((c) => <td key={c} className="px-2 py-1 align-top truncate max-w-[220px]" title={cell(r?.[c])}>{cell(r?.[c])}</td>)}
             </tr>
           ))}
         </tbody>
       </table>
-      <div className="text-[10px] text-slate-400 px-2 py-1">{rows.length} row(s){rows.length > 200 ? " (showing 200)" : ""}</div>
+      <div className="text-nano text-ink-600 px-2 py-1">{rows.length} row(s){rows.length > 200 ? " (showing 200)" : ""}</div>
     </div>
   );
 }
@@ -223,14 +223,14 @@ export default function DataAppBrowser({ config }: { config?: Record<string, unk
   return (
     <div className="flex gap-4 h-[640px]">
       {/* Left: endpoint catalog */}
-      <div className="w-[320px] flex-shrink-0 flex flex-col border border-slate-200 rounded">
-        <div className="p-2 border-b border-slate-200 space-y-1">
+      <div className="w-[320px] flex-shrink-0 flex flex-col border border-ink-200 rounded">
+        <div className="p-2 border-b border-ink-200 space-y-1">
           {sources.length > 0 ? (
             <select
               value={dataApp}
               onChange={(e) => { setDataApp(e.target.value); setSelected(null); setResult(null); setRunErr(""); }}
               title={current?.description}
-              className="w-full text-[12px] px-1.5 py-1 border border-slate-300 rounded bg-white text-slate-700"
+              className="w-full text-caption px-1.5 py-1 border border-ink-300 rounded bg-card text-ink-700"
             >
               {/* Keep an entry for a configured id missing from the registry so
                   the select isn't silently wrong (it'll 404 on fetch instead). */}
@@ -238,27 +238,27 @@ export default function DataAppBrowser({ config }: { config?: Record<string, unk
               {sources.map((s) => <option key={s.id} value={s.id}>{s.label || s.id}</option>)}
             </select>
           ) : (
-            <div className="text-[12px] font-medium text-slate-700">{label}</div>
+            <div className="text-caption font-medium text-ink-700">{label}</div>
           )}
-          {current?.description && <div className="text-[10px] text-slate-400 leading-snug">{current.description}</div>}
-          <div className="text-[11px] text-slate-500">{endpoints.length} endpoints</div>
+          {current?.description && <div className="text-nano text-ink-600 leading-snug">{current.description}</div>}
+          <div className="text-micro text-ink-600">{endpoints.length} endpoints</div>
           <input
             value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="filter endpoints…"
-            className="w-full text-[12px] px-2 py-1 border border-slate-300 rounded"
+            className="w-full text-caption px-2 py-1 border border-ink-300 rounded"
           />
         </div>
         <div className="overflow-auto flex-1">
-          {loadErr && <div className="p-2 text-[11px] text-red-600">catalog error: {loadErr}</div>}
+          {loadErr && <div className="p-2 text-micro text-brick-600">catalog error: {loadErr}</div>}
           {groups.map(([g, eps]) => (
             <div key={g}>
-              <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400 bg-slate-50 sticky top-0">{g}</div>
+              <div className="px-2 py-1 text-nano uppercase tracking-wide text-ink-600 bg-ink-50 sticky top-0">{g}</div>
               {eps.map((ep) => (
                 <button key={ep.method + ep.path} onClick={() => pick(ep)}
-                  className={["w-full text-left px-2 py-1 text-[11px] font-mono hover:bg-violet-50 truncate",
-                    selected?.path === ep.path ? "bg-violet-100 text-violet-800" : "text-slate-600"].join(" ")}
+                  className={["w-full text-left px-2 py-1 text-micro font-mono hover:bg-plum-50 truncate",
+                    selected?.path === ep.path ? "bg-plum-100 text-plum-800" : "text-ink-600"].join(" ")}
                   title={ep.path}>
                   {ep.kind !== "rest" && (
-                    <span className="inline-block mr-1 px-1 rounded text-[9px] font-sans font-semibold bg-gold-100 text-gold-700 align-middle">
+                    <span className="inline-block mr-1 px-1 rounded text-nano font-sans font-semibold bg-gold-100 text-gold-700 align-middle">
                       {ep.kind.toUpperCase()}
                     </span>
                   )}
@@ -273,56 +273,56 @@ export default function DataAppBrowser({ config }: { config?: Record<string, unk
       {/* Right: params + result */}
       <div className="flex-1 flex flex-col min-w-0">
         {!selected ? (
-          <div className="text-[12px] text-slate-400 p-4">Pick an endpoint to query {label}. Fill any parameters, then Run.</div>
+          <div className="text-caption text-ink-600 p-4">Pick an endpoint to query {label}. Fill any parameters, then Run.</div>
         ) : (
           <>
-            <div className="font-mono text-[12px] text-slate-700 mb-1">{selected.method} {selected.path}</div>
-            {selected.summary && <div className="text-[11px] text-slate-500 mb-2">{selected.summary}</div>}
+            <div className="font-mono text-caption text-ink-700 mb-1">{selected.method} {selected.path}</div>
+            {selected.summary && <div className="text-micro text-ink-600 mb-2">{selected.summary}</div>}
             {selected.kind !== "rest" ? (
               // Streaming endpoints aren't runnable by a one-shot fetch — show
               // how to consume them instead of a Run that can only 400.
-              <div className="rounded border border-gold-200 bg-gold-50 p-3 text-[12px] text-gold-800 space-y-1.5 max-w-xl">
+              <div className="rounded border border-gold-200 bg-gold-50 p-3 text-caption text-gold-800 space-y-1.5 max-w-xl">
                 {selected.kind === "sse" ? (
                   <>
                     <div className="font-medium">Streaming endpoint (Server-Sent Events)</div>
                     <div>Consume it with an EventSource against the same-origin proxy:</div>
-                    <pre className="text-[11px] bg-white border border-gold-200 rounded p-2 overflow-x-auto text-slate-700">{`new EventSource("${proxyBase(dataApp)}${selected.path}")`}</pre>
+                    <pre className="text-micro bg-card border border-gold-200 rounded p-2 overflow-x-auto text-ink-700">{`new EventSource("${proxyBase(dataApp)}${selected.path}")`}</pre>
                   </>
                 ) : (
                   <>
                     <div className="font-medium">WebSocket endpoint</div>
                     <div>Browsers can&apos;t open WS through this panel — connect a WS client directly to the data service (bearer auth via header or first message):</div>
-                    <pre className="text-[11px] bg-white border border-gold-200 rounded p-2 overflow-x-auto text-slate-700">{`wss://<data-service-host>${selected.path}`}</pre>
+                    <pre className="text-micro bg-card border border-gold-200 rounded p-2 overflow-x-auto text-ink-700">{`wss://<data-service-host>${selected.path}`}</pre>
                   </>
                 )}
               </div>
             ) : (
             <>
             <div className="flex flex-wrap gap-2 mb-2">
-              {selected.params.length === 0 && <span className="text-[11px] text-slate-400">no parameters</span>}
+              {selected.params.length === 0 && <span className="text-micro text-ink-600">no parameters</span>}
               {selected.params.map((p) => (
-                <label key={p.name} className="text-[11px] text-slate-600 flex flex-col">
-                  <span>{p.name}{p.in === "path" ? " *" : ""} <span className="text-slate-300">{p.type || p.in}</span></span>
+                <label key={p.name} className="text-micro text-ink-600 flex flex-col">
+                  <span>{p.name}{p.in === "path" ? " *" : ""} <span className="text-ink-600">{p.type || p.in}</span></span>
                   <input
                     value={vals[p.name] ?? ""} onChange={(e) => setVals((v) => ({ ...v, [p.name]: e.target.value }))}
                     placeholder={p.in === "path" ? "(required)" : ""}
-                    className="text-[12px] px-2 py-1 border border-slate-300 rounded w-40"
+                    className="text-caption px-2 py-1 border border-ink-300 rounded w-40"
                   />
                 </label>
               ))}
             </div>
             <div className="mb-2">
               <button onClick={run} disabled={running}
-                className="text-[12px] px-3 py-1 rounded bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50">
+                className="text-caption px-3 py-1 rounded bg-plum-600 text-white hover:bg-plum-700 disabled:opacity-50">
                 {running ? "Running…" : "Run"}
               </button>
-              {runErr && <span className="ml-2 text-[11px] text-red-600">{runErr}</span>}
+              {runErr && <span className="ml-2 text-micro text-brick-600">{runErr}</span>}
             </div>
             {result != null && <ResultTable data={result} />}
             {resultText && (
               <div>
-                <div className="text-[10px] text-slate-400 mb-1">non-JSON response ({resultText.ctype})</div>
-                <pre className="text-[11px] bg-slate-50 border border-slate-200 rounded p-2 overflow-auto max-h-[420px] whitespace-pre-wrap">{resultText.text}</pre>
+                <div className="text-nano text-ink-600 mb-1">non-JSON response ({resultText.ctype})</div>
+                <pre className="text-micro bg-ink-50 border border-ink-200 rounded p-2 overflow-auto max-h-[420px] whitespace-pre-wrap">{resultText.text}</pre>
               </div>
             )}
             </>

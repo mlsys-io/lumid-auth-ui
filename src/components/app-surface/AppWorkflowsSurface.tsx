@@ -38,7 +38,7 @@ function IncludedAppRows({ app }: { app: string }) {
 	if (rows.length === 0) return null;
 	return (
 		<section className="mt-6 space-y-1.5 px-1">
-			<div className="text-[10px] uppercase tracking-wide font-semibold text-slate-400">
+			<div className="text-nano uppercase tracking-wide font-semibold text-ink-600">
 				{app.replace(/-/g, " ")} — related workflows
 			</div>
 			<WorkflowList

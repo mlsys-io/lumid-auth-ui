@@ -209,7 +209,7 @@ export function ArtifactIconButton({ align = 'right', variant = 'icon' }: { alig
 					<FileStack className={['w-4 h-4 flex-shrink-0 transition-colors', open ? 'text-ink-800' : 'text-ink-600 group-hover:text-ink-800'].join(' ')} />
 					<span>Artifacts</span>
 					{rows.length > 0 && (
-						<span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-gold-100 text-gold-700 text-[10px] font-semibold tabular-nums">
+						<span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-gold-100 text-gold-700 text-nano font-semibold tabular-nums">
 							{rows.length > 99 ? '99+' : rows.length}
 						</span>
 					)}
@@ -227,7 +227,7 @@ export function ArtifactIconButton({ align = 'right', variant = 'icon' }: { alig
 			>
 				<FileStack className="w-3.5 h-3.5" />
 				{rows.length > 0 && (
-					<span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-1 rounded-full bg-gold-500 text-white text-[8.5px] font-bold flex items-center justify-center ring-2 ring-white leading-none">
+					<span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-1 rounded-full bg-gold-700 text-white text-nano font-bold flex items-center justify-center ring-2 ring-white leading-none">
 						{rows.length > 99 ? '99+' : rows.length}
 					</span>
 				)}
@@ -255,10 +255,10 @@ export function ArtifactIconButton({ align = 'right', variant = 'icon' }: { alig
 							<FileStack className="w-4 h-4 text-gold-600 flex-shrink-0" />
 						)}
 						<div className="flex-1 min-w-0">
-							<div className="text-[12.5px] font-semibold text-foreground truncate">
+							<div className="text-meta font-semibold text-foreground truncate">
 								{selected ? selected.title : 'Artifacts'}
 							</div>
-							<div className="text-[10.5px] text-muted-foreground truncate">
+							<div className="text-micro text-muted-foreground truncate">
 								{selected
 									? `${selected.kind}${selected.language ? ' · ' + selected.language : ''} · ${selected.content.length} chars`
 									: `${rows.length} saved`}
@@ -289,7 +289,7 @@ export function ArtifactIconButton({ align = 'right', variant = 'icon' }: { alig
 									type="button"
 									onClick={() => deleteOne(selected.id)}
 									title="Delete"
-									className="p-1.5 rounded-md text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition-colors"
+									className="p-1.5 rounded-md text-muted-foreground hover:text-brick-600 hover:bg-brick-50 transition-colors"
 								>
 									<Trash2 className="w-3.5 h-3.5" />
 								</button>
@@ -302,12 +302,12 @@ export function ArtifactIconButton({ align = 'right', variant = 'icon' }: { alig
 						{!selected && (
 							<>
 								{loading && (
-									<div className="px-3 py-3 text-[11px] text-muted-foreground flex items-center gap-1.5">
+									<div className="px-3 py-3 text-micro text-muted-foreground flex items-center gap-1.5">
 										<Loader2 className="w-3 h-3 animate-spin" /> Loading…
 									</div>
 								)}
 								{!loading && rows.length === 0 && (
-									<div className="px-3 py-4 text-[11.5px] text-muted-foreground italic leading-snug">
+									<div className="px-3 py-4 text-caption text-muted-foreground italic leading-snug">
 										No artifacts yet. The agent saves long-form output here when you ask — research briefs, code listings, anything worth keeping.
 									</div>
 								)}
@@ -320,12 +320,12 @@ export function ArtifactIconButton({ align = 'right', variant = 'icon' }: { alig
 									>
 										<div className="flex items-center gap-1.5">
 											<KindIcon k={r.kind} />
-											<span className="text-[12.5px] font-medium text-foreground truncate flex-1">{r.title}</span>
-											<span className="text-[10px] text-muted-foreground font-mono flex-shrink-0">
+											<span className="text-meta font-medium text-foreground truncate flex-1">{r.title}</span>
+											<span className="text-nano text-muted-foreground font-mono flex-shrink-0">
 												{Math.round(r.bytes / 1024)}KB
 											</span>
 										</div>
-										<div className="flex items-center gap-1 mt-0.5 text-[10px] text-muted-foreground">
+										<div className="flex items-center gap-1 mt-0.5 text-nano text-muted-foreground">
 											<span>{r.kind}</span>
 											{r.language && <span>· {r.language}</span>}
 											{r.source_tool && <span>· {r.source_tool}</span>}
@@ -336,12 +336,12 @@ export function ArtifactIconButton({ align = 'right', variant = 'icon' }: { alig
 							</>
 						)}
 						{selectedLoading && (
-							<div className="px-3 py-3 text-[11px] text-muted-foreground flex items-center gap-1.5">
+							<div className="px-3 py-3 text-micro text-muted-foreground flex items-center gap-1.5">
 								<Loader2 className="w-3 h-3 animate-spin" /> Loading…
 							</div>
 						)}
 						{selected && !selectedLoading && (
-							<div className="px-3 py-2.5 text-[12.5px]">
+							<div className="px-3 py-2.5 text-meta">
 								<ArtifactView kind={selected.kind} content={selected.content} title={selected.title} language={selected.language} />
 							</div>
 						)}

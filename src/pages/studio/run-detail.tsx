@@ -62,8 +62,8 @@ export default function StudioRunDetail() {
 		return () => setStudioSelection(null);
 	}, [detail?.app, detail?.loop, run_id]);
 
-	if (err) return <div className="space-y-4"><BackLink detail={null} /><div className="text-rose-700 text-sm">{err}</div></div>;
-	if (!detail) return <div className="space-y-4"><BackLink detail={null} /><div className="text-sm text-slate-500 italic">Loading…</div></div>;
+	if (err) return <div className="space-y-4"><BackLink detail={null} /><div className="text-brick-700 text-sm">{err}</div></div>;
+	if (!detail) return <div className="space-y-4"><BackLink detail={null} /><div className="text-sm text-ink-600 italic">Loading…</div></div>;
 
 	const steps = normalizeSteps(detail.steps);
 	const summary = detail.summary as Record<string, any> | null;
@@ -75,11 +75,11 @@ export default function StudioRunDetail() {
 
 			<header className="flex items-baseline justify-between">
 				<div>
-					<h1 className="text-lg font-medium flex items-center gap-2">
+					<h1 className="text-title font-medium flex items-center gap-2">
 						<Activity className="w-5 h-5 text-gold-600" />
 						{detail.app && detail.loop ? `${detail.app} / ${detail.loop}` : run_id}
 					</h1>
-					<p className="text-sm text-slate-500 mt-0.5 font-mono">
+					<p className="text-sm text-ink-600 mt-0.5 font-mono">
 						run · {run_id}
 					</p>
 				</div>
@@ -97,13 +97,13 @@ export default function StudioRunDetail() {
 			</header>
 
 			{summary && (
-				<div className="rounded-xl border border-slate-200 bg-white px-4 py-3 flex items-center gap-6 text-sm">
+				<div className="rounded-xl border border-ink-200 bg-card px-4 py-3 flex items-center gap-6 text-sm">
 					<MetaItem label="state">
 						{summary.ok === false || (Array.isArray(stepErrors) && stepErrors.length > 0)
-							? <span className="text-rose-700 font-medium">failed</span>
+							? <span className="text-brick-700 font-medium">failed</span>
 							: summary.ok === true
 								? <span className="text-gold-700 font-medium">succeeded</span>
-								: <span className="text-slate-600">{String(summary.state || "—")}</span>
+								: <span className="text-ink-600">{String(summary.state || "—")}</span>
 						}
 					</MetaItem>
 					{typeof summary.duration_s === "number" && (
@@ -129,11 +129,11 @@ export default function StudioRunDetail() {
 			{/* Step errors panel — surfaced even without an explicit click
 			    because failed runs benefit from the at-a-glance summary */}
 			{Array.isArray(stepErrors) && stepErrors.length > 0 && (
-				<section className="rounded-xl border border-rose-200 bg-rose-50/40 p-4">
-					<h3 className="font-medium text-rose-900 text-sm mb-2">Step errors</h3>
+				<section className="rounded-xl border border-brick-200 bg-brick-50/40 p-4">
+					<h3 className="font-medium text-brick-900 text-sm mb-2">Step errors</h3>
 					<ul className="space-y-1.5 text-xs">
 						{(stepErrors as any[]).map((e, i) => (
-							<li key={i} className="font-mono text-rose-800 bg-white rounded px-2 py-1.5 border border-rose-100">
+							<li key={i} className="font-mono text-brick-800 bg-card rounded px-2 py-1.5 border border-brick-100">
 								<strong>{e.step || e.id || `step ${i + 1}`}:</strong> {String(e.error || e.message || JSON.stringify(e))}
 							</li>
 						))}
@@ -143,7 +143,7 @@ export default function StudioRunDetail() {
 
 			{/* Cycle dir hint for the user */}
 			{detail.cycle_dir && (
-				<p className="text-[11px] text-slate-400 font-mono">{detail.cycle_dir}</p>
+				<p className="text-micro text-ink-600 font-mono">{detail.cycle_dir}</p>
 			)}
 		</div>
 	);
@@ -157,17 +157,17 @@ function BackLink({ detail }: { detail?: MeRunDetail | null }) {
 		? `${detail.app}:${detail.loop}`
 		: undefined;
 	return (
-		<nav className="inline-flex items-center gap-1 text-sm text-slate-600">
-			<Link to="/studio/runs" className="hover:text-slate-900 inline-flex items-center gap-1">
+		<nav className="inline-flex items-center gap-1 text-sm text-ink-600">
+			<Link to="/studio/runs" className="hover:text-ink-900 inline-flex items-center gap-1">
 				<ArrowLeft className="w-3.5 h-3.5" />
 				Runs
 			</Link>
 			{workflowSlug && (
 				<>
-					<span className="text-slate-300">/</span>
+					<span className="text-ink-600">/</span>
 					<Link
 						to={`/studio/workflows/${encodeURIComponent(workflowSlug)}`}
-						className="hover:text-slate-900"
+						className="hover:text-ink-900"
 					>
 						{detail?.loop}
 					</Link>
@@ -180,7 +180,7 @@ function BackLink({ detail }: { detail?: MeRunDetail | null }) {
 function MetaItem({ label, children }: { label: string; children: React.ReactNode }) {
 	return (
 		<div>
-			<div className="text-[10px] tracking-wider text-slate-400">{label}</div>
+			<div className="text-nano tracking-wider text-ink-600">{label}</div>
 			<div className="text-sm">{children}</div>
 		</div>
 	);
@@ -222,7 +222,7 @@ function RunActions({ detail, onChanged }: { detail: MeRunDetail; onChanged: () 
 			<button
 				onClick={handleRerun}
 				disabled={!canRerun}
-				className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-gold-500 text-white hover:bg-gold-600 disabled:opacity-40 transition-colors"
+				className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-gold-700 text-white hover:bg-gold-800 disabled:opacity-40 transition-colors"
 				title={canRerun ? "Re-run this workflow now" : "Re-run is only available for scheduled workflows"}
 			>
 				<Play className="w-3.5 h-3.5" /> Re-run
@@ -230,7 +230,7 @@ function RunActions({ detail, onChanged }: { detail: MeRunDetail; onChanged: () 
 			<button
 				onClick={() => handleMark("succeeded")}
 				disabled={!canMark}
-				className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-gold-200 bg-white text-gold-800 hover:bg-gold-50 disabled:opacity-40 transition-colors"
+				className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-gold-200 bg-card text-gold-800 hover:bg-gold-50 disabled:opacity-40 transition-colors"
 				title="Override this run's state to succeeded — writes a manual_mark journal entry"
 			>
 				<Check className="w-3.5 h-3.5" /> Mark succeeded
@@ -238,7 +238,7 @@ function RunActions({ detail, onChanged }: { detail: MeRunDetail; onChanged: () 
 			<button
 				onClick={() => handleMark("failed")}
 				disabled={!canMark}
-				className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-rose-200 bg-white text-rose-700 hover:bg-rose-50 disabled:opacity-40 transition-colors"
+				className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-brick-200 bg-card text-brick-700 hover:bg-brick-50 disabled:opacity-40 transition-colors"
 				title="Override this run's state to failed — writes a manual_mark journal entry"
 			>
 				<X className="w-3.5 h-3.5" /> Mark failed
@@ -250,13 +250,13 @@ function RunActions({ detail, onChanged }: { detail: MeRunDetail; onChanged: () 
 function StepInspector({ step, onClose }: { step: StepLogEntry; onClose: () => void }) {
 	const state = step.skipped ? "skipped" : step.ok === false ? "failed" : step.ok === true ? "succeeded" : "—";
 	return (
-		<div className="rounded-xl border border-slate-200 bg-white">
-			<div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5">
+		<div className="rounded-xl border border-ink-200 bg-card">
+			<div className="flex items-center justify-between border-b border-ink-100 px-4 py-2.5">
 				<div className="text-sm font-medium">
 					{step.id || step.name || step.skill || "step"}
-					<span className="ml-2 text-[10px] tracking-wide text-slate-500">{state}</span>
+					<span className="ml-2 text-nano tracking-wide text-ink-600">{state}</span>
 				</div>
-				<button onClick={onClose} className="text-slate-400 hover:text-slate-700 text-xs">close</button>
+				<button onClick={onClose} className="text-ink-600 hover:text-ink-700 text-xs">close</button>
 			</div>
 			<div className="p-4 space-y-3 text-xs">
 				{step.duration_s !== undefined && (
@@ -264,23 +264,23 @@ function StepInspector({ step, onClose }: { step: StepLogEntry; onClose: () => v
 				)}
 				{step.skill && <KeyValue k="skill" v={step.skill} />}
 				{step.error && (
-					<div className="font-mono text-[11px] bg-rose-50 text-rose-800 border border-rose-200 rounded p-2 whitespace-pre-wrap">
+					<div className="font-mono text-micro bg-brick-50 text-brick-800 border border-brick-200 rounded p-2 whitespace-pre-wrap">
 						{step.error}
 					</div>
 				)}
 				{step.stdout && (
 					<Collapsible label="stdout">
-						<pre className="font-mono text-[11px] bg-slate-900 text-slate-100 rounded p-2 overflow-x-auto whitespace-pre-wrap">{step.stdout}</pre>
+						<pre className="font-mono text-micro bg-ink-900 text-ink-100 rounded p-2 overflow-x-auto whitespace-pre-wrap">{step.stdout}</pre>
 					</Collapsible>
 				)}
 				{step.stderr && (
 					<Collapsible label="stderr">
-						<pre className="font-mono text-[11px] bg-slate-900 text-gold-200 rounded p-2 overflow-x-auto whitespace-pre-wrap">{step.stderr}</pre>
+						<pre className="font-mono text-micro bg-ink-900 text-gold-200 rounded p-2 overflow-x-auto whitespace-pre-wrap">{step.stderr}</pre>
 					</Collapsible>
 				)}
 				<details>
-					<summary className="text-slate-500 cursor-pointer">raw step record</summary>
-					<pre className="mt-2 font-mono text-[10px] bg-slate-50 text-slate-700 rounded p-2 overflow-x-auto">{JSON.stringify(step, null, 2)}</pre>
+					<summary className="text-ink-600 cursor-pointer">raw step record</summary>
+					<pre className="mt-2 font-mono text-nano bg-ink-50 text-ink-700 rounded p-2 overflow-x-auto">{JSON.stringify(step, null, 2)}</pre>
 				</details>
 			</div>
 		</div>
@@ -290,8 +290,8 @@ function StepInspector({ step, onClose }: { step: StepLogEntry; onClose: () => v
 function KeyValue({ k, v }: { k: string; v: string }) {
 	return (
 		<div className="flex items-center gap-2">
-			<span className="text-slate-500 font-mono">{k}</span>
-			<span className="text-slate-800">{v}</span>
+			<span className="text-ink-600 font-mono">{k}</span>
+			<span className="text-ink-800">{v}</span>
 		</div>
 	);
 }
@@ -299,7 +299,7 @@ function KeyValue({ k, v }: { k: string; v: string }) {
 function Collapsible({ label, children }: { label: string; children: React.ReactNode }) {
 	return (
 		<details>
-			<summary className="text-slate-500 cursor-pointer">{label}</summary>
+			<summary className="text-ink-600 cursor-pointer">{label}</summary>
 			<div className="mt-1.5">{children}</div>
 		</details>
 	);

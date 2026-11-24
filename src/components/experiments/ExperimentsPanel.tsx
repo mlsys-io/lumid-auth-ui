@@ -22,6 +22,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { runPath, runRowHref, workflowPath } from "@/lib/run-routes";
 import { cycleStatus } from "@/lib/runStatus";
 import NewExperiment from "./NewExperiment";
+import { ink, gold, brick, lagoon, plum, chart } from "@/styles/palette";
 
 // An arm's runs, read from the loop's cycle list: each cycle carries the
 // `branch_label` it was dispatched under, which IS the arm id. This is what
@@ -83,18 +84,18 @@ function ExperimentRunLinks({ app, e }: { app: string; e: MeExperiment }) {
 	if (!loop) return null;
 	const armIds = [...new Set([...(e.arms || []).map((a) => String(a.id)), ...Object.keys(runs?.arms || {})])];
 	return (
-		<div className="flex items-center gap-x-2.5 gap-y-1 flex-wrap px-4 pb-2.5 -mt-1 text-[11px]">
+		<div className="flex items-center gap-x-2.5 gap-y-1 flex-wrap px-4 pb-2.5 -mt-1 text-micro">
 			<Link to={workflowPath(app, loop)} className="text-gold-700 hover:underline font-medium" title={`The ${loop} workflow's runs`}>
 				Runs of {loop}{runs?.all ? ` (${runs.all.n})` : ""} →
 			</Link>
 			{armIds.map((id) => (
-				<Link key={id} to={workflowPath(app, loop, { arm: id })} className="font-mono text-slate-600 hover:text-slate-900 hover:underline"
+				<Link key={id} to={workflowPath(app, loop, { arm: id })} className="font-mono text-ink-600 hover:text-ink-900 hover:underline"
 					title={`Runs of experiment "${id}"`}>
 					{id}{runs?.arms[id] ? ` · ${runs.arms[id].n}` : " · 0"}
 				</Link>
 			))}
 			{runs?.all && (
-				<Link to={runPath(app, loop, runs.all.latest)} className={cn("hover:underline", runs.all.latestOk ? "text-slate-600" : "text-rose-600")}
+				<Link to={runPath(app, loop, runs.all.latest)} className={cn("hover:underline", runs.all.latestOk ? "text-ink-600" : "text-brick-600")}
 					title="Open the latest run of this workflow">
 					latest run{runs.all.latestOk ? "" : " (failed)"}
 				</Link>
@@ -140,12 +141,12 @@ function ageOf(iso: string): string {
  */
 function DeltaVsBest({ e, vid }: { e: MeExperiment; vid: string }) {
 	const best = e.best_variant;
-	if (!best || !e.pairwise?.length) return <td className="px-2 py-1.5 text-right text-slate-400">—</td>;
-	if (vid === best) return <td className="px-2 py-1.5 text-right text-slate-400">—</td>;
+	if (!best || !e.pairwise?.length) return <td className="px-2 py-1.5 text-right text-ink-600">—</td>;
+	if (vid === best) return <td className="px-2 py-1.5 text-right text-ink-600">—</td>;
 	const direct = e.pairwise.find((p) => p.a === vid && p.b === best);
 	const flip = e.pairwise.find((p) => p.a === best && p.b === vid);
 	const p = direct ?? flip;
-	if (!p) return <td className="px-2 py-1.5 text-right text-slate-400">—</td>;
+	if (!p) return <td className="px-2 py-1.5 text-right text-ink-600">—</td>;
 	const sign = direct ? 1 : -1;
 	const d = p.delta * sign;
 	const ci = p.ci95 ? ([p.ci95[0] * sign, p.ci95[1] * sign].sort((x, y) => x - y) as [number, number]) : null;
@@ -156,9 +157,9 @@ function DeltaVsBest({ e, vid }: { e: MeExperiment; vid: string }) {
 		p.n_for_80pct_power && !p.separated ? `~${p.n_for_80pct_power} pairs would be needed to resolve a difference this size` : null,
 	].filter(Boolean).join(" · ");
 	return (
-		<td className={cn("px-2 py-1.5 text-right tabular-nums", p.separated ? "text-slate-700" : "text-slate-400")} title={tip}>
+		<td className={cn("px-2 py-1.5 text-right tabular-nums", p.separated ? "text-ink-700" : "text-ink-600")} title={tip}>
 			{d >= 0 ? "+" : ""}{fmtV(d)}
-			{!p.separated && <span className="ml-1 text-[10px]">ns</span>}
+			{!p.separated && <span className="ml-1 text-nano">ns</span>}
 		</td>
 	);
 }
@@ -210,10 +211,10 @@ function ArmRunStatus(
 		return () => { live = false; window.clearTimeout(t); };
 	}, [app, loop, sentAt, inChat]);
 
-	if (inChat) return <span className="text-[11px] text-emerald-600 whitespace-nowrap">in the chat →</span>;
+	if (inChat) return <span className="text-micro text-gold-700 whitespace-nowrap">in the chat →</span>;
 	if (!row) {
 		return (
-			<span className="text-[11px] text-slate-500 whitespace-nowrap"
+			<span className="text-micro text-ink-600 whitespace-nowrap"
 				title={gaveUp
 					? "Dispatched, but no run has appeared. The runner may be busy or the loop may not be picked up."
 					: "Dispatched. Waiting for the runner to start the cycle."}>
@@ -222,14 +223,14 @@ function ArmRunStatus(
 		);
 	}
 	if (row.state === "running") {
-		return <span className="text-[11px] text-violet-600 whitespace-nowrap">running…</span>;
+		return <span className="text-micro text-plum-600 whitespace-nowrap">running…</span>;
 	}
 	if (row.state === "succeeded") {
-		return <Link to={runRowHref(row.run_id)} className="text-[11px] text-emerald-600 whitespace-nowrap hover:underline" title="Open this run">ran ✓</Link>;
+		return <Link to={runRowHref(row.run_id)} className="text-micro text-gold-700 whitespace-nowrap hover:underline" title="Open this run">ran ✓</Link>;
 	}
 	// THE PART THAT WAS MISSING. `reason` carries the cycle's own error.
 	return (
-		<Link to={runRowHref(row.run_id)} className="text-[11px] text-rose-600 whitespace-nowrap max-w-[220px] truncate hover:underline"
+		<Link to={runRowHref(row.run_id)} className="text-micro text-brick-600 whitespace-nowrap max-w-[220px] truncate hover:underline"
 			title={row.reason || "The run failed; the cycle recorded no reason."}>
 			failed{row.reason ? ` — ${row.reason}` : ""}
 		</Link>
@@ -324,20 +325,20 @@ function ControlMenu({ app, e, onDone }: { app: string; e: MeExperiment; onDone:
 			<button type="button" aria-label="study controls"
 				title="Conclude, archive, checkpoint, fork or revert this study"
 				onClick={(ev) => { ev.stopPropagation(); setOpen((o) => !o); }}
-				className="px-1.5 py-0.5 rounded text-[11px] text-slate-500 hover:bg-slate-100 hover:text-slate-700 leading-none whitespace-nowrap">
+				className="px-1.5 py-0.5 rounded text-micro text-ink-600 hover:bg-ink-100 hover:text-ink-700 leading-none whitespace-nowrap">
 				Actions <span aria-hidden="true">⌄</span>
 			</button>
 			{open && (
-				<div className="absolute right-0 z-20 mt-1 w-64 rounded-lg border border-slate-200 bg-white shadow-lg py-1"
+				<div className="absolute right-0 z-20 mt-1 w-64 rounded-lg border border-ink-200 bg-card shadow-lg py-1"
 					onClick={(ev) => ev.stopPropagation()}>
 					{items.map(([label, hint, fn]) => (
 						<button key={label} type="button" disabled={!!busy} onClick={fn}
-							className="w-full text-left px-3 py-1.5 hover:bg-slate-50 disabled:opacity-50">
-							<div className="text-[12px] text-slate-800">{busy === label.toLowerCase().replace("…", "") ? "working…" : label}</div>
-							<div className="text-[11px] text-slate-500">{hint}</div>
+							className="w-full text-left px-3 py-1.5 hover:bg-ink-50 disabled:opacity-50">
+							<div className="text-caption text-ink-800">{busy === label.toLowerCase().replace("…", "") ? "working…" : label}</div>
+							<div className="text-micro text-ink-600">{hint}</div>
 						</button>
 					))}
-					{err && <div className="px-3 py-1.5 text-[11px] text-rose-600">{err}</div>}
+					{err && <div className="px-3 py-1.5 text-micro text-brick-600">{err}</div>}
 				</div>
 			)}
 		</div>
@@ -346,9 +347,9 @@ function ControlMenu({ app, e, onDone }: { app: string; e: MeExperiment; onDone:
 
 function VerdictChip({ e }: { e: MeExperiment }) {
 	if (e.status === "concluded" || e.status === "archived")
-		return <span className="px-2 py-0.5 rounded-full text-[11px] border bg-slate-50 text-slate-700 border-slate-200">{e.status}</span>;
+		return <span className="px-2 py-0.5 rounded-full text-micro border bg-ink-50 text-ink-700 border-ink-200">{e.status}</span>;
 	if (e.criteria_met)
-		return <span className="px-2 py-0.5 rounded-full text-[11px] border bg-gold-50 text-gold-700 border-gold-200 font-medium">criteria met</span>;
+		return <span className="px-2 py-0.5 rounded-full text-micro border bg-gold-50 text-gold-700 border-gold-200 font-medium">criteria met</span>;
 	// "running" on an experiment with zero results claimed activity where
 	// there was none — an active declaration with no rows is collecting,
 	// not running.
@@ -361,10 +362,10 @@ function VerdictChip({ e }: { e: MeExperiment }) {
 	// amber and both carry the reason on hover; only the label differs, so
 	// the badge never claims a diagnosis the server did not make.
 	if (!e.n_results && e.n_zero_reason)
-		return <span className="px-2 py-0.5 rounded-full text-[11px] border bg-amber-50 text-amber-800 border-amber-200 font-medium" title={e.n_zero_reason}>{e.unrecorded ? "measures it, records nothing" : "metric mismatch"}</span>;
+		return <span className="px-2 py-0.5 rounded-full text-micro border bg-ember-50 text-ember-800 border-ember-200 font-medium" title={e.n_zero_reason}>{e.unrecorded ? "measures it, records nothing" : "metric mismatch"}</span>;
 	if (!e.n_results)
-		return <span className="px-2 py-0.5 rounded-full text-[11px] border bg-slate-50 text-slate-700 border-slate-200">no results yet</span>;
-	return <span className="px-2 py-0.5 rounded-full text-[11px] border bg-violet-50 text-violet-700 border-violet-200">collecting</span>;
+		return <span className="px-2 py-0.5 rounded-full text-micro border bg-ink-50 text-ink-700 border-ink-200">no results yet</span>;
+	return <span className="px-2 py-0.5 rounded-full text-micro border bg-plum-50 text-plum-700 border-plum-200">collecting</span>;
 }
 
 function DeltaChip({ e }: { e: MeExperiment }) {
@@ -372,8 +373,8 @@ function DeltaChip({ e }: { e: MeExperiment }) {
 	const up = e.delta_pp >= 0;
 	return (
 		<span className={cn(
-			"inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border font-medium",
-			up ? "bg-gold-50 text-gold-700 border-gold-200" : "bg-rose-50 text-rose-700 border-rose-200",
+			"inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-micro border font-medium",
+			up ? "bg-gold-50 text-gold-700 border-gold-200" : "bg-brick-50 text-brick-700 border-brick-200",
 		)}>
 			{up ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
 			best vs baseline {e.delta_pp >= 0 ? "+" : ""}{e.delta_pp.toFixed(1)}pp
@@ -399,7 +400,8 @@ function Spark({ points, className }: { points: Array<{ ts: string; v: number }>
 }
 
 // Multi-variant line chart over result timestamps.
-const SERIES_COLORS = ["#B08F45", "#6366f1", "#B08F45", "#ef4444", "#0ea5e9", "#a855f7"];
+// Lumen categorical series (the old list repeated gold for series 1 and 3).
+const SERIES_COLORS = chart;
 function SeriesChart({ series }: { series: MeExperimentDetail["series"] }) {
 	const all = series.flatMap((s) => s.points.map((p) => p.v));
 	if (all.length < 2) return null;
@@ -418,7 +420,7 @@ function SeriesChart({ series }: { series: MeExperimentDetail["series"] }) {
 						stroke={SERIES_COLORS[si % SERIES_COLORS.length]} strokeWidth="1.5" />;
 				})}
 			</svg>
-			<div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-600">
+			<div className="flex flex-wrap gap-x-3 gap-y-1 text-micro text-ink-600">
 				{series.map((s, si) => (
 					<span key={s.variant_id} className="inline-flex items-center gap-1">
 						<span className="w-2 h-2 rounded-full" style={{ background: SERIES_COLORS[si % SERIES_COLORS.length] }} />
@@ -466,34 +468,34 @@ function CasesTable({ app, expId, loop, cases }: { app: string; expId: string; l
 	};
 	return (
 		<>
-		<div className="text-[11px] text-slate-600 mb-1.5">
+		<div className="text-micro text-ink-600 mb-1.5">
 			{scored} of {total} case{total === 1 ? "" : "s"} scored{!totalKnown ? " so far" : ""}
 		</div>
-		<div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100 overflow-hidden">
+		<div className="rounded-lg border border-ink-200 bg-card divide-y divide-ink-100 overflow-hidden">
 			{cases.map((c) => {
 				const reg = (c.delta_vs_prev ?? 0) < 0;
 				return (
 					<div key={c.case_id}>
 						<button type="button" onClick={() => openCase(c.case_id)}
-							className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50 transition-colors">
-							{open === c.case_id ? <ChevronDown className="w-3.5 h-3.5 text-slate-600" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-300" />}
-							<span className="text-xs font-medium text-slate-700 flex-1 truncate">{c.case_id}</span>
-							{reg && <span className="text-[11px] font-medium text-rose-600 bg-rose-50 border border-rose-200 rounded-full px-1.5">regressed</span>}
-							<span className="text-[11px] text-slate-600 tabular-nums">latest {fmtV(c.latest)}</span>
-							<span className="text-[11px] text-slate-600 tabular-nums">·&nbsp;{c.n} runs</span>
-							<Spark points={c.points} className={reg ? "text-rose-500" : undefined} />
+							className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-ink-50 transition-colors">
+							{open === c.case_id ? <ChevronDown className="w-3.5 h-3.5 text-ink-600" /> : <ChevronRight className="w-3.5 h-3.5 text-ink-600" />}
+							<span className="text-xs font-medium text-ink-700 flex-1 truncate">{c.case_id}</span>
+							{reg && <span className="text-micro font-medium text-brick-600 bg-brick-50 border border-brick-200 rounded-full px-1.5">regressed</span>}
+							<span className="text-micro text-ink-600 tabular-nums">latest {fmtV(c.latest)}</span>
+							<span className="text-micro text-ink-600 tabular-nums">·&nbsp;{c.n} runs</span>
+							<Spark points={c.points} className={reg ? "text-brick-600" : undefined} />
 						</button>
 						{open === c.case_id && (
 							<div className="px-9 pb-2.5 pt-0.5">
 								{loading ? (
-									<div className="text-[11px] text-slate-600 flex items-center gap-1.5 py-1"><Loader2 className="w-3 h-3 animate-spin" />reading case…</div>
+									<div className="text-micro text-ink-600 flex items-center gap-1.5 py-1"><Loader2 className="w-3 h-3 animate-spin" />reading case…</div>
 								) : drill && Object.keys(drill).length > 0 ? (
-									<table className="text-[11px] w-full">
+									<table className="text-micro w-full">
 										<tbody>
 											{Object.entries(drill).sort(([a], [b]) => a.localeCompare(b)).map(([q, d]) => (
-												<tr key={q} className="border-t border-slate-100 first:border-0">
-													<td className="py-1 pr-3 text-slate-500 font-mono">{q}</td>
-													<td className="py-1 text-slate-700 tabular-nums">
+												<tr key={q} className="border-t border-ink-100 first:border-0">
+													<td className="py-1 pr-3 text-ink-600 font-mono">{q}</td>
+													<td className="py-1 text-ink-700 tabular-nums">
 														{Object.entries(d.metrics).map(([k, v]) => `${k.replace(/_/g, " ")} ${fmtV(v)}`).join(" · ")}
 													</td>
 												</tr>
@@ -501,7 +503,7 @@ function CasesTable({ app, expId, loop, cases }: { app: string; expId: string; l
 										</tbody>
 									</table>
 								) : (
-									<div className="text-[11px] text-slate-600 italic py-1">No per-question rows for this case yet.</div>
+									<div className="text-micro text-ink-600 italic py-1">No per-question rows for this case yet.</div>
 								)}
 							</div>
 						)}
@@ -591,8 +593,8 @@ function ArmsBlock({ app, e }: { app: string; e: MeExperiment }) {
 	if (arms.length === 0) return null;
 	return (
 		<div>
-			<div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600 mb-1.5">Experiments</div>
-			<div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-50">
+			<div className="text-micro uppercase tracking-wide font-semibold text-ink-600 mb-1.5">Experiments</div>
+			<div className="rounded-lg border border-ink-200 bg-card divide-y divide-ink-50">
 				{arms.map((a) => {
 					const id = String(a.id);
 					const seen = (e.variants || {})[id];
@@ -610,24 +612,24 @@ function ArmsBlock({ app, e }: { app: string; e: MeExperiment }) {
 						<div key={id} className="flex items-center gap-2 px-3 py-2">
 							<div className="min-w-0 flex-1">
 								<div className="flex items-center gap-1.5">
-									<span className="text-[11px] font-mono text-slate-700 truncate">{id}</span>
-									{isBaseline && <span className="text-[11px] text-slate-600">baseline</span>}
+									<span className="text-micro font-mono text-ink-700 truncate">{id}</span>
+									{isBaseline && <span className="text-micro text-ink-600">baseline</span>}
 									{seen
-										? <span className="text-[11px] text-slate-600 tabular-nums">· {seen.n} run{seen.n === 1 ? "" : "s"}</span>
-										: <span className="text-[11px] text-violet-600">· never run</span>}
+										? <span className="text-micro text-ink-600 tabular-nums">· {seen.n} run{seen.n === 1 ? "" : "s"}</span>
+										: <span className="text-micro text-plum-600">· never run</span>}
 								</div>
-								{a.description && <div className="text-[11px] text-slate-600 truncate">{String(a.description)}</div>}
+								{a.description && <div className="text-micro text-ink-600 truncate">{String(a.description)}</div>}
 								{/* THE RUNS THAT FED THIS ARM — the workflow page filtered to it,
 								    and its latest run. */}
 								{loop && (
-									<div className="flex items-center gap-2 mt-0.5 text-[11px]">
+									<div className="flex items-center gap-2 mt-0.5 text-micro">
 										<Link to={workflowPath(app, loop, { arm: id })} className="text-gold-700 hover:underline"
 											title={`The ${loop} runs of experiment "${id}"`}>
 											{armRuns?.[id] ? `${armRuns[id].n} run${armRuns[id].n === 1 ? "" : "s"} of ${loop} →` : `runs of ${loop} →`}
 										</Link>
 										{armRuns?.[id] && (
 											<Link to={runPath(app, loop, armRuns[id].latest)}
-												className={cn("hover:underline", armRuns[id].latestOk ? "text-slate-600" : "text-rose-600")}
+												className={cn("hover:underline", armRuns[id].latestOk ? "text-ink-600" : "text-brick-600")}
 												title="Open this experiment's latest run">
 												latest run{armRuns[id].latestOk ? "" : " (failed)"}
 											</Link>
@@ -636,7 +638,7 @@ function ArmsBlock({ app, e }: { app: string; e: MeExperiment }) {
 								)}
 							</div>
 							{!runnable ? (
-								<span className="text-[11px] text-slate-600 whitespace-nowrap"
+								<span className="text-micro text-ink-600 whitespace-nowrap"
 									title="This experiment declares no configuration to apply, so there is nothing to dispatch — it is measured from the runs you already make.">
 									measured passively
 								</span>
@@ -663,10 +665,10 @@ function ArmsBlock({ app, e }: { app: string; e: MeExperiment }) {
 												? `Runs one more cycle of ${loop} with this experiment's config`
 												: `Runs one cycle of ${loop} with this experiment's config`}
 									className={cn(
-										"px-2 py-1 rounded-md text-[11px] font-medium border whitespace-nowrap transition-colors",
+										"px-2 py-1 rounded-md text-micro font-medium border whitespace-nowrap transition-colors",
 										loop
-											? "border-violet-200 text-violet-700 bg-violet-50 hover:bg-violet-100"
-											: "border-slate-200 text-slate-300 bg-slate-50 cursor-not-allowed",
+											? "border-plum-200 text-plum-700 bg-plum-50 hover:bg-plum-100"
+											: "border-ink-200 text-ink-600 bg-ink-50 cursor-not-allowed",
 									)}
 								>
 									{/* One verb (LumidOS VERBS.md): the title says what
@@ -680,11 +682,11 @@ function ArmsBlock({ app, e }: { app: string; e: MeExperiment }) {
 				})}
 			</div>
 			{!loop && (
-				<div className="mt-1 text-[11px] text-amber-700">
+				<div className="mt-1 text-micro text-ember-700">
 					Attached to no workflow — declare it under a loop's <span className="font-mono">engine.experiment</span> before it can be dispatched.
 				</div>
 			)}
-			{err && <div className="mt-1 text-[11px] text-rose-600">{err}</div>}
+			{err && <div className="mt-1 text-micro text-brick-600">{err}</div>}
 		</div>
 	);
 }
@@ -718,13 +720,13 @@ export function ExperimentCard({ app, e, showApp = false, onChanged }: { app: st
 	const variants = Object.entries(e.variants || {});
 
 	return (
-		<div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-			<button type="button" onClick={toggle} className="w-full text-left px-4 py-3 hover:bg-slate-50/60 transition-colors">
+		<div className="rounded-xl border border-ink-200 bg-card overflow-hidden">
+			<button type="button" onClick={toggle} className="w-full text-left px-4 py-3 hover:bg-ink-50/60 transition-colors">
 				<div className="flex items-center gap-2 flex-wrap">
-					<FlaskConical className="w-4 h-4 text-violet-500 flex-shrink-0" />
-					<span className="text-sm font-semibold text-slate-900">{e.id.replace(/_/g, " ")}</span>
-					{showApp && <span className="px-1.5 py-0.5 rounded text-[11px] bg-indigo-50 text-indigo-700 border border-indigo-200/60">{app}</span>}
-					<span className="px-1.5 py-0.5 rounded text-[11px] uppercase tracking-wide bg-slate-100 text-slate-700">{KIND_LABEL[e.kind] || e.kind}</span>
+					<FlaskConical className="w-4 h-4 text-plum-600 flex-shrink-0" />
+					<span className="text-sm font-semibold text-ink-900">{e.id.replace(/_/g, " ")}</span>
+					{showApp && <span className="px-1.5 py-0.5 rounded text-micro bg-plum-50 text-plum-700 border border-plum-200/60">{app}</span>}
+					<span className="px-1.5 py-0.5 rounded text-micro uppercase tracking-wide bg-ink-100 text-ink-700">{KIND_LABEL[e.kind] || e.kind}</span>
 					<VerdictChip e={e} />
 					<DeltaChip e={e} />
 					{/* Arms live in the EXPANDED body; without this chip a collapsed
@@ -733,7 +735,7 @@ export function ExperimentCard({ app, e, showApp = false, onChanged }: { app: st
 					{(e.arms?.length ?? 0) > 0 && (() => {
 						const neverRun = (e.arms || []).filter((a) => !(e.variants || {})[String(a.id)]).length;
 						return (
-							<span className="px-1.5 py-0.5 rounded-full text-[11px] border bg-violet-50/60 text-violet-700 border-violet-200/60 tabular-nums">
+							<span className="px-1.5 py-0.5 rounded-full text-micro border bg-plum-50/60 text-plum-700 border-plum-200/60 tabular-nums">
 								{e.arms!.length} experiment{e.arms!.length === 1 ? "" : "s"}{neverRun > 0 ? ` · ${neverRun} never run` : ""}
 							</span>
 						);
@@ -743,7 +745,7 @@ export function ExperimentCard({ app, e, showApp = false, onChanged }: { app: st
 					    row was dropped, and across the estate 364 of 1,558 rows do
 					    not count. Same chip, one more fact — not a new element. */}
 					<span
-						className="ml-auto text-[11px] text-slate-600 tabular-nums"
+						className="ml-auto text-micro text-ink-600 tabular-nums"
 						title={(e.rows_dropped && e.metric_keys_seen?.length)
 							? `${e.rows_dropped} row(s) carry no "${metricName}". Keys emitted: ${e.metric_keys_seen.join(", ")}`
 							: undefined}
@@ -754,29 +756,29 @@ export function ExperimentCard({ app, e, showApp = false, onChanged }: { app: st
 					</span>
 					<ControlMenu app={app} e={e} onDone={onChanged ?? (() => {})} />
 				</div>
-				<div className="text-xs text-slate-600 mt-1">{e.hypothesis}</div>
-				<div className="text-[11px] text-slate-600 mt-0.5">
-					measures <span className="font-medium text-slate-500">{metricName.replace(/_/g, " ") || "?"}</span> ({dir})
-					{e.dataset_id ? <> · over <span className="font-medium text-slate-500">{e.dataset_id}</span></> : null}
+				<div className="text-xs text-ink-600 mt-1">{e.hypothesis}</div>
+				<div className="text-micro text-ink-600 mt-0.5">
+					measures <span className="font-medium text-ink-600">{metricName.replace(/_/g, " ") || "?"}</span> ({dir})
+					{e.dataset_id ? <> · over <span className="font-medium text-ink-600">{e.dataset_id}</span></> : null}
 					{e.loops?.length ? <> · fed by {e.loops.join(", ")}</> : null}
 				</div>
 				{e.unfed && (
-					<div className="mt-1.5 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1">
+					<div className="mt-1.5 text-micro text-ember-800 bg-ember-50 border border-ember-200 rounded-lg px-2 py-1">
 						Nothing can record into this study yet — {e.unfed_reason || "no loop feeds it"}.
 					</div>
 				)}
 				{e.starved && !e.unfed && (
-					<div className="mt-1.5 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1">
+					<div className="mt-1.5 text-micro text-ember-800 bg-ember-50 border border-ember-200 rounded-lg px-2 py-1">
 						Its loop is not recording — {e.starved_reason || "the loop that feeds it has not run"}.
 					</div>
 				)}
 				{e.state_stale && (
-					<div className="mt-1.5 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1">
+					<div className="mt-1.5 text-micro text-ember-800 bg-ember-50 border border-ember-200 rounded-lg px-2 py-1">
 						State predates the current metric (it measured {(e.state_metric || "another metric").replace(/_/g, " ")}) — updates on this study's next run.
 					</div>
 				)}
 				{e.criteria_met && e.verdict && (
-					<div className="mt-1.5 text-[11px] text-gold-700 bg-gold-50/70 border border-gold-200 rounded-lg px-2 py-1">✓ {e.verdict}</div>
+					<div className="mt-1.5 text-micro text-gold-700 bg-gold-50/70 border border-gold-200 rounded-lg px-2 py-1">✓ {e.verdict}</div>
 				)}
 				{/* WHY IT IS NOT CONCLUDING — the sentence the backend already
 				    computes and the card threw away. "below min_samples (3/10)",
@@ -786,20 +788,20 @@ export function ExperimentCard({ app, e, showApp = false, onChanged }: { app: st
 				    half. One line, no new section; success_criteria rides in the
 				    tooltip rather than taking a row of its own. */}
 				{!e.criteria_met && e.criteria_reason && e.n_results > 0 && (
-					<div className="mt-1 text-[11px] text-slate-600 flex items-baseline gap-1.5">
-						<span className="text-slate-400 flex-shrink-0">why</span>
+					<div className="mt-1 text-micro text-ink-600 flex items-baseline gap-1.5">
+						<span className="text-ink-600 flex-shrink-0">why</span>
 						<span className="truncate" title={e.success_criteria ? `success_criteria: ${e.success_criteria}` : undefined}>
 							{e.criteria_reason}
 						</span>
 						{e.state_updated_at && (
-							<span className="ml-auto flex-shrink-0 text-slate-400 tabular-nums" title={`state computed ${e.state_updated_at}`}>
+							<span className="ml-auto flex-shrink-0 text-ink-600 tabular-nums" title={`state computed ${e.state_updated_at}`}>
 								{ageOf(e.state_updated_at)}
 							</span>
 						)}
 					</div>
 				)}
 				{(e.not_separable_from?.length ?? 0) > 0 && e.best_variant && (
-					<div className="mt-1 text-[11px] text-amber-700">
+					<div className="mt-1 text-micro text-ember-700">
 						leading, but not separable from {e.not_separable_from!.join(", ")}
 					</div>
 				)}
@@ -807,11 +809,11 @@ export function ExperimentCard({ app, e, showApp = false, onChanged }: { app: st
 			<ExperimentRunLinks app={app} e={e} />
 
 			{open && (
-				<div className="border-t border-slate-100 px-4 py-3 space-y-3 bg-slate-50/40">
+				<div className="border-t border-ink-100 px-4 py-3 space-y-3 bg-ink-50/40">
 					{(e.undeclared_variants?.length ?? 0) > 0 && (
-						<div className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-[11px] text-amber-900">
+						<div className="rounded-lg border border-ember-200 bg-ember-50/70 px-3 py-2 text-micro text-ember-900">
 							<span className="font-semibold">Rows from experiments this study does not declare:</span>{" "}
-							{e.undeclared_variants!.map((v) => <code key={v} className="px-1 rounded bg-white/70 border border-amber-200 mx-0.5">{v}</code>)}
+							{e.undeclared_variants!.map((v) => <code key={v} className="px-1 rounded bg-card/70 border border-ember-200 mx-0.5">{v}</code>)}
 							<div className="mt-0.5">
 								Their means are facts and stay below. They cannot win — "best" is a claim about the experiments the study declared.
 							</div>
@@ -820,7 +822,7 @@ export function ExperimentCard({ app, e, showApp = false, onChanged }: { app: st
 					{/* Not-comparable is a fact about the INSTRUMENT and outranks
 					    any per-arm number below it, so it goes first. */}
 					{e.comparable === false && (
-						<div className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
+						<div className="text-micro text-ember-800 bg-ember-50 border border-ember-200 rounded-lg px-2 py-1.5">
 							<span className="font-medium">Not a verdict.</span> These experiments were measured under{" "}
 							{e.instruments ?? "several"} different instruments
 							{e.compare_within?.length ? <> (<span className="font-mono">{e.compare_within.join(", ")}</span>)</> : null}
@@ -836,36 +838,36 @@ export function ExperimentCard({ app, e, showApp = false, onChanged }: { app: st
 						   of waiting fixes, and telling them apart used to require
 						   reading results.jsonl by hand. */
 						e.n_zero_reason ? (
-							<div className="text-xs rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900">
+							<div className="text-xs rounded-lg border border-ember-200 bg-ember-50 px-3 py-2 text-ember-900">
 								<div className="font-medium">
 									{e.unrecorded ? "The loop ran and measured it, but recorded no result." : "No results, and waiting will not help."}
 								</div>
 								<div className="mt-0.5">{e.n_zero_reason}</div>
 								{e.metric_keys_seen?.length ? (
 									<div className="mt-1.5 flex flex-wrap items-center gap-1">
-										<span className="text-[11px] text-amber-800">keys actually emitted:</span>
+										<span className="text-micro text-ember-800">keys actually emitted:</span>
 										{e.metric_keys_seen.map((k) => (
-											<code key={k} className="px-1.5 py-0.5 rounded bg-white/70 border border-amber-200 text-[11px]">{k}</code>
+											<code key={k} className="px-1.5 py-0.5 rounded bg-card/70 border border-ember-200 text-micro">{k}</code>
 										))}
 									</div>
 								) : null}
 							</div>
 						) : (
-							<div className="text-xs text-slate-500">
+							<div className="text-xs text-ink-600">
 								Declared, no results yet — they land here when {e.loops?.length ? <span className="font-medium">{e.loops.join(", ")}</span> : "an attached workflow"} next runs.
 							</div>
 						)
 					) : loading ? (
-						<div className="text-[11px] text-slate-600 flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" />loading results…</div>
+						<div className="text-micro text-ink-600 flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" />loading results…</div>
 					) : detail ? (
 						<>
 							{variants.length > 0 && (
 								<div>
-									<div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600 mb-1.5">Experiments</div>
-									<div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
-										<table className="w-full text-[11px]">
+									<div className="text-micro uppercase tracking-wide font-semibold text-ink-600 mb-1.5">Experiments</div>
+									<div className="rounded-lg border border-ink-200 bg-card overflow-hidden">
+										<table className="w-full text-micro">
 											<thead>
-												<tr className="text-left text-slate-600 border-b border-slate-100">
+												<tr className="text-left text-ink-600 border-b border-ink-100">
 													<th className="px-3 py-1.5 font-medium">experiment</th>
 													<th className="px-2 py-1.5 font-medium text-right">mean</th>
 													<th className="px-2 py-1.5 font-medium text-right">n</th>
@@ -882,18 +884,18 @@ export function ExperimentCard({ app, e, showApp = false, onChanged }: { app: st
 											</thead>
 											<tbody>
 												{variants.sort((a, b) => (b[1].mean ?? 0) - (a[1].mean ?? 0)).map(([vid, agg]) => (
-													<tr key={vid} className={cn("border-b border-slate-50 last:border-0", vid === e.best_variant && "bg-gold-50/50")}>
-														<td className="px-3 py-1.5 text-slate-700 font-mono truncate max-w-[180px]">
+													<tr key={vid} className={cn("border-b border-ink-50 last:border-0", vid === e.best_variant && "bg-gold-50/50")}>
+														<td className="px-3 py-1.5 text-ink-700 font-mono truncate max-w-[180px]">
 															{e.loops?.[0]
 																? <Link to={workflowPath(app, e.dispatch?.loop && e.loops.includes(e.dispatch.loop) ? e.dispatch.loop : e.loops[0], { arm: vid })} className="hover:underline" title={`Runs of arm "${vid}"`}>{vid}</Link>
-																: vid}{vid === e.best_variant && <span className="ml-1.5 text-[11px] text-gold-600 font-sans font-medium">best</span>}
-															{e.baseline === vid && <span className="ml-1.5 text-[11px] text-slate-600 font-sans">baseline</span>}
+																: vid}{vid === e.best_variant && <span className="ml-1.5 text-micro text-gold-700 font-sans font-medium">best</span>}
+															{e.baseline === vid && <span className="ml-1.5 text-micro text-ink-600 font-sans">baseline</span>}
 														</td>
-														<td className="px-2 py-1.5 text-right tabular-nums font-medium text-slate-800">{fmtV(agg.mean)}</td>
-														<td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{agg.n}</td>
-														<td className="px-2 py-1.5 text-right tabular-nums text-slate-600">{agg.stdev != null ? fmtV(agg.stdev) : "—"}</td>
+														<td className="px-2 py-1.5 text-right tabular-nums font-medium text-ink-800">{fmtV(agg.mean)}</td>
+														<td className="px-2 py-1.5 text-right tabular-nums text-ink-600">{agg.n}</td>
+														<td className="px-2 py-1.5 text-right tabular-nums text-ink-600">{agg.stdev != null ? fmtV(agg.stdev) : "—"}</td>
 														<DeltaVsBest e={e} vid={vid} />
-														<td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{fmtV(agg.last)}</td>
+														<td className="px-3 py-1.5 text-right tabular-nums text-ink-600">{fmtV(agg.last)}</td>
 													</tr>
 												))}
 											</tbody>
@@ -903,13 +905,13 @@ export function ExperimentCard({ app, e, showApp = false, onChanged }: { app: st
 							)}
 							{detail.series?.length > 0 && (
 								<div>
-									<div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600 mb-1.5">{metricName.replace(/_/g, " ")} over time</div>
+									<div className="text-micro uppercase tracking-wide font-semibold text-ink-600 mb-1.5">{metricName.replace(/_/g, " ")} over time</div>
 									<SeriesChart series={detail.series} />
 								</div>
 							)}
 							{detail.cases?.length > 0 ? (
 								<div>
-									<div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600 mb-1.5">Casebook — per-case score history</div>
+									<div className="text-micro uppercase tracking-wide font-semibold text-ink-600 mb-1.5">Casebook — per-case score history</div>
 									<CasesTable app={app} expId={e.id} loop={e.loops?.[0]} cases={detail.cases} />
 								</div>
 							) : (e.n_results ?? 0) > 0 ? (
@@ -921,15 +923,15 @@ export function ExperimentCard({ app, e, showApp = false, onChanged }: { app: st
 								// leaving the per-arm means as the only thing on screen. A user who
 								// had just run six samples asked, reasonably, which six cases they
 								// were (2026-09-15). The honest answer is that the rows do not say.
-								<div className="rounded-lg border border-dashed border-slate-200 bg-white/60 px-3 py-2 text-[11px] text-slate-500">
+								<div className="rounded-lg border border-dashed border-ink-200 bg-card/60 px-3 py-2 text-micro text-ink-600">
 									No per-case breakdown: {e.n_results} result{e.n_results === 1 ? " row was" : " rows were"} recorded
 									without a case id, so which cases ran is not stored. A loop records one by passing{" "}
-									<code className="text-[10.5px]">dims.case_id</code> to record_result.
+									<code className="text-micro">dims.case_id</code> to record_result.
 								</div>
 							) : null}
 						</>
 					) : (
-						<div className="text-[11px] text-slate-600 italic">Couldn't load detail.</div>
+						<div className="text-micro text-ink-600 italic">Couldn't load detail.</div>
 					)}
 				</div>
 			)}
@@ -961,7 +963,7 @@ export default function ExperimentsPanel({ app, loop, quiet = false }: {
 
 	if (exps === null) {
 		if (quiet) return null;
-		return <div className="relative"><div className="h-20 rounded-xl bg-slate-100 animate-pulse" /><SpiralOverlay /></div>;
+		return <div className="relative"><div className="h-20 rounded-xl bg-ink-100 animate-pulse" /><SpiralOverlay /></div>;
 	}
 	const shown = loop ? exps.filter((e) => e.loops?.includes(loop)) : exps;
 	const pending = loop ? defs.filter((d) => !d.workflow || d.workflow === loop) : defs;
@@ -985,17 +987,17 @@ export default function ExperimentsPanel({ app, loop, quiet = false }: {
 		if (notices) return notices;
 		if (loop && !quiet) {
 			return (
-				<div className="rounded-lg border border-dashed border-slate-200 bg-white/60 px-3 py-2 text-[11px] text-slate-500">
+				<div className="rounded-lg border border-dashed border-ink-200 bg-card/60 px-3 py-2 text-micro text-ink-600">
 					This workflow is attached to a study, but none of the agent's studies resolve to it — the attachment may still name one that was
-					deleted. Check <code className="text-[10.5px]">engine.experiment</code> in
+					deleted. Check <code className="text-micro">engine.experiment</code> in
 					the app config.
 				</div>
 			);
 		}
 		if (quiet || loop) return null;
 		return (
-			<div className="rounded-xl border border-dashed border-slate-200 bg-white/60 p-8 text-center">
-				<div className="text-sm text-slate-500">
+			<div className="rounded-xl border border-dashed border-ink-200 bg-card/60 p-8 text-center">
+				<div className="text-sm text-ink-600">
 					No studies declared. A study tests a hypothesis by comparing experiments over a dataset or casebook, measured by one metric.
 				</div>
 				{/* The old copy ended "declare one under `experiments:` in the app's
@@ -1030,12 +1032,12 @@ function StudyDefinitionNotices({ defs }: { defs: MeStudyDefinition[] }) {
 	return (
 		<div className="space-y-1.5">
 			{defs.map((d) => d.status === "failed" ? (
-				<div key={d.intent_id} className="flex items-start gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] text-rose-800">
+				<div key={d.intent_id} className="flex items-start gap-1.5 rounded-lg border border-brick-200 bg-brick-50 px-3 py-2 text-micro text-brick-800">
 					<AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" />
 					<span>Study <span className="font-semibold">{d.id}</span> was not defined: {d.error}</span>
 				</div>
 			) : (
-				<div key={d.intent_id} className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white/70 px-3 py-2 text-[11px] text-slate-600">
+				<div key={d.intent_id} className="flex items-center gap-1.5 rounded-lg border border-ink-200 bg-card/70 px-3 py-2 text-micro text-ink-600">
 					<Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
 					<span>Study <span className="font-semibold">{d.id}</span> is being defined…</span>
 				</div>

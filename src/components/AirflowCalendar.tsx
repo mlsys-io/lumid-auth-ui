@@ -34,26 +34,26 @@ export function AirflowCalendar({ runs, days = 14, onCellClick }: Props) {
 
 	if (runs.length === 0) {
 		return (
-			<div className="rounded-xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500">
+			<div className="rounded-xl border border-dashed border-ink-200 bg-card px-4 py-6 text-center text-sm text-ink-600">
 				No runs in the window — try widening the date range.
 			</div>
 		);
 	}
 
 	return (
-		<div className="rounded-xl border border-slate-200 bg-white p-4 overflow-x-auto">
+		<div className="rounded-xl border border-ink-200 bg-card p-4 overflow-x-auto">
 			<div className="inline-block">
 				{/* Hour-of-day header */}
 				<div className="flex items-end ml-24 mb-1.5">
 					{Array.from({ length: 24 }, (_, h) => (
-						<div key={h} className="w-5 text-[9px] text-slate-400 font-mono text-center">
+						<div key={h} className="w-5 text-nano text-ink-600 font-mono text-center">
 							{h % 6 === 0 ? h : ""}
 						</div>
 					))}
 				</div>
 				{dayKeys.map((day) => (
 					<div key={day} className="flex items-center mb-px">
-						<div className="w-24 text-[11px] text-slate-600 font-mono pr-2 truncate" title={day}>
+						<div className="w-24 text-micro text-ink-600 font-mono pr-2 truncate" title={day}>
 							{formatDayLabel(day)}
 						</div>
 						{Array.from({ length: 24 }, (_, h) => {
@@ -62,7 +62,7 @@ export function AirflowCalendar({ runs, days = 14, onCellClick }: Props) {
 								<button
 									key={h}
 									title={`${day} ${pad2(h)}:00 — ${c.ok} ok, ${c.fail} failed`}
-									className="w-5 h-5 rounded-sm hover:ring-2 hover:ring-slate-900/30 transition-all"
+									className="w-5 h-5 rounded-sm hover:ring-2 hover:ring-ink-900/30 transition-all"
 									style={{ background: cellColor(c, maxCount) }}
 									onClick={() => onCellClick?.(day, h)}
 									disabled={(c.ok || 0) + (c.fail || 0) === 0}
@@ -71,7 +71,7 @@ export function AirflowCalendar({ runs, days = 14, onCellClick }: Props) {
 						})}
 					</div>
 				))}
-				<div className="mt-3 flex items-center gap-3 text-[10px] text-slate-500">
+				<div className="mt-3 flex items-center gap-3 text-nano text-ink-600">
 					<span className="inline-flex items-center gap-1">
 						<span className="w-2.5 h-2.5 rounded-sm bg-gold-100" />
 						light
@@ -81,11 +81,11 @@ export function AirflowCalendar({ runs, days = 14, onCellClick }: Props) {
 						many ok
 					</span>
 					<span className="inline-flex items-center gap-1">
-						<span className="w-2.5 h-2.5 rounded-sm bg-rose-300" />
+						<span className="w-2.5 h-2.5 rounded-sm bg-brick-300" />
 						some failures
 					</span>
 					<span className="inline-flex items-center gap-1">
-						<span className="w-2.5 h-2.5 rounded-sm bg-rose-600" />
+						<span className="w-2.5 h-2.5 rounded-sm bg-brick-600" />
 						many failures
 					</span>
 				</div>

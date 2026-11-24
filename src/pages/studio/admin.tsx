@@ -35,11 +35,11 @@ export default function StudioAdmin() {
 		<div className="space-y-4">
 			<header className="flex items-baseline justify-between">
 				<div>
-					<h1 className="text-lg font-medium flex items-center gap-2">
+					<h1 className="text-title font-medium flex items-center gap-2">
 						<Shield className="w-5 h-5 text-gold-600" />
 						Admin
 					</h1>
-					<p className="text-sm text-slate-500 mt-0.5">
+					<p className="text-sm text-ink-600 mt-0.5">
 						Operator surfaces — folded into Studio. Full dashboard
 						with cert / backup / telemetry tiles lives at
 						<Link to="/studio/super-admin" className="ml-1 text-gold-700 hover:underline">
@@ -56,7 +56,7 @@ export default function StudioAdmin() {
 				</Link>
 			</header>
 
-			<nav className="border-b border-slate-200 flex items-center gap-1">
+			<nav className="border-b border-ink-200 flex items-center gap-1">
 				{TABS.map((t) => {
 					const Icon = t.icon;
 					const active = tab === t.id;
@@ -68,7 +68,7 @@ export default function StudioAdmin() {
 								'inline-flex items-center gap-1.5 px-3 py-2 text-sm border-b-2 transition-colors -mb-px',
 								active
 									? 'border-gold-500 text-gold-700 font-medium'
-									: 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300',
+									: 'border-transparent text-ink-600 hover:text-ink-900 hover:border-ink-300',
 							].join(' ')}
 						>
 							<Icon className="w-4 h-4" />
@@ -102,12 +102,12 @@ function TenantsTab() {
 	const active = rows.filter((t) => t.apps > 0 || t.cycles_today > 0);
 	return (
 		<div className="space-y-2">
-			<div className="text-xs text-slate-500">
+			<div className="text-xs text-ink-600">
 				{active.length} active · {rows.length} total · sorted by cycles today
 			</div>
-			<div className="rounded-lg border border-slate-200 bg-white overflow-x-auto">
+			<div className="rounded-lg border border-ink-200 bg-card overflow-x-auto">
 				<table className="w-full text-sm">
-					<thead className="bg-slate-50 text-left text-xs text-slate-600 tracking-wide">
+					<thead className="bg-ink-50 text-left text-xs text-ink-600 tracking-wide">
 						<tr>
 							<th className="px-3 py-2 font-medium">Email</th>
 							<th className="px-3 py-2 font-medium w-20">Agents</th>
@@ -118,25 +118,25 @@ function TenantsTab() {
 							<th className="px-3 py-2 font-medium">Joined</th>
 						</tr>
 					</thead>
-					<tbody className="divide-y divide-slate-100">
+					<tbody className="divide-y divide-ink-100">
 						{rows.slice(0, 50).map((t) => (
-							<tr key={t.sub} className="hover:bg-slate-50/60">
+							<tr key={t.sub} className="hover:bg-ink-50/60">
 								<td className="px-3 py-1.5 font-mono text-xs">
 									{t.email}
 									{t.role !== 'user' && (
-										<span className="ml-2 text-[10px] tracking-wide text-gold-700">{t.role}</span>
+										<span className="ml-2 text-nano tracking-wide text-gold-700">{t.role}</span>
 									)}
 								</td>
 								<td className="px-3 py-1.5 text-xs">{t.apps}</td>
-								<td className="px-3 py-1.5 text-xs text-slate-600 tabular-nums">{t.storage_mb.toFixed(1)} MB</td>
+								<td className="px-3 py-1.5 text-xs text-ink-600 tabular-nums">{t.storage_mb.toFixed(1)} MB</td>
 								<td className="px-3 py-1.5 text-xs tabular-nums">{t.cycles_today}/100</td>
-								<td className="px-3 py-1.5 text-xs tabular-nums text-slate-600">{(t.llm_tokens_today/1000).toFixed(0)}K</td>
-								<td className="px-3 py-1.5 text-xs tabular-nums text-slate-600">{t.gmail_today}</td>
-								<td className="px-3 py-1.5 text-xs text-slate-500">{new Date(t.created_at).toISOString().slice(0, 10)}</td>
+								<td className="px-3 py-1.5 text-xs tabular-nums text-ink-600">{(t.llm_tokens_today/1000).toFixed(0)}K</td>
+								<td className="px-3 py-1.5 text-xs tabular-nums text-ink-600">{t.gmail_today}</td>
+								<td className="px-3 py-1.5 text-xs text-ink-600">{new Date(t.created_at).toISOString().slice(0, 10)}</td>
 							</tr>
 						))}
 						{rows.length === 0 && (
-							<tr><td colSpan={7} className="px-3 py-6 text-center text-sm text-slate-500 italic">No tenants yet.</td></tr>
+							<tr><td colSpan={7} className="px-3 py-6 text-center text-sm text-ink-600 italic">No tenants yet.</td></tr>
 						)}
 					</tbody>
 				</table>
@@ -162,12 +162,12 @@ function LoopsTab() {
 	const failing = loops.filter((l) => (l.consecutive_failures ?? 0) > 0);
 	return (
 		<div className="space-y-3">
-			<div className="text-xs text-slate-500">
+			<div className="text-xs text-ink-600">
 				{loops.length} loops · {failing.length} failing
 			</div>
-			<div className="rounded-lg border border-slate-200 bg-white overflow-x-auto">
+			<div className="rounded-lg border border-ink-200 bg-card overflow-x-auto">
 				<table className="w-full text-sm">
-					<thead className="bg-slate-50 text-left text-xs text-slate-600 tracking-wide">
+					<thead className="bg-ink-50 text-left text-xs text-ink-600 tracking-wide">
 						<tr>
 							<th className="px-3 py-2 font-medium">Agent / Loop</th>
 							<th className="px-3 py-2 font-medium w-32">Schedule</th>
@@ -175,22 +175,22 @@ function LoopsTab() {
 							<th className="px-3 py-2 font-medium w-24">State</th>
 						</tr>
 					</thead>
-					<tbody className="divide-y divide-slate-100">
+					<tbody className="divide-y divide-ink-100">
 						{[...loops].sort((a, b) => (b.consecutive_failures ?? 0) - (a.consecutive_failures ?? 0)).slice(0, 60).map((l, i) => (
-							<tr key={`${l.app}:${l.loop}:${i}`} className="hover:bg-slate-50/60">
+							<tr key={`${l.app}:${l.loop}:${i}`} className="hover:bg-ink-50/60">
 								<td className="px-3 py-1.5">
 									<div className="text-xs font-medium">{l.loop}</div>
-									<div className="text-[10px] text-slate-500 font-mono">{l.app}</div>
+									<div className="text-nano text-ink-600 font-mono">{l.app}</div>
 								</td>
-								<td className="px-3 py-1.5 text-xs font-mono text-slate-600">{l.schedule ?? '—'}</td>
-								<td className="px-3 py-1.5 text-xs text-slate-500">{l.last_run_ts ? new Date(l.last_run_ts).toISOString().slice(0,16).replace('T',' ') : '—'}</td>
+								<td className="px-3 py-1.5 text-xs font-mono text-ink-600">{l.schedule ?? '—'}</td>
+								<td className="px-3 py-1.5 text-xs text-ink-600">{l.last_run_ts ? new Date(l.last_run_ts).toISOString().slice(0,16).replace('T',' ') : '—'}</td>
 								<td className="px-3 py-1.5 text-xs">
 									{(l.consecutive_failures ?? 0) > 0 ? (
-										<span className="text-rose-700">{l.consecutive_failures} fail{l.consecutive_failures === 1 ? '' : 's'}</span>
+										<span className="text-brick-700">{l.consecutive_failures} fail{l.consecutive_failures === 1 ? '' : 's'}</span>
 									) : l.enabled ? (
 										<span className="text-gold-700">on</span>
 									) : (
-										<span className="text-slate-500">off</span>
+										<span className="text-ink-600">off</span>
 									)}
 								</td>
 							</tr>
@@ -214,23 +214,23 @@ function BuildTab() {
 	if (!data) return <Loading />;
 	return (
 		<div className="space-y-3">
-			<div className="text-xs text-slate-500">
+			<div className="text-xs text-ink-600">
 				{data.services?.length ?? 0} services · snapshot age {data.snapshot_age}m
 			</div>
-			<div className="rounded-lg border border-slate-200 bg-white overflow-x-auto">
+			<div className="rounded-lg border border-ink-200 bg-card overflow-x-auto">
 				<table className="w-full text-sm">
-					<thead className="bg-slate-50 text-left text-xs text-slate-600 tracking-wide">
+					<thead className="bg-ink-50 text-left text-xs text-ink-600 tracking-wide">
 						<tr>
 							<th className="px-3 py-2 font-medium">Service</th>
 							<th className="px-3 py-2 font-medium w-32">Image</th>
 							<th className="px-3 py-2 font-medium w-20">State</th>
 						</tr>
 					</thead>
-					<tbody className="divide-y divide-slate-100">
+					<tbody className="divide-y divide-ink-100">
 						{(data.services ?? []).slice(0, 40).map((s: any, i: number) => (
-							<tr key={`${s.name}-${i}`} className="hover:bg-slate-50/60">
+							<tr key={`${s.name}-${i}`} className="hover:bg-ink-50/60">
 								<td className="px-3 py-1.5 font-mono text-xs">{s.name}</td>
-								<td className="px-3 py-1.5 text-xs text-slate-600">{s.image ?? '—'}</td>
+								<td className="px-3 py-1.5 text-xs text-ink-600">{s.image ?? '—'}</td>
 								<td className="px-3 py-1.5 text-xs">{s.state ?? '—'}</td>
 							</tr>
 						))}
@@ -268,20 +268,20 @@ function StatCard({ label, value, hint, tone = 'default' }: {
 		default: '',
 		good:    'text-gold-700',
 		warn:    'text-gold-700',
-		bad:     'text-rose-700',
+		bad:     'text-brick-700',
 	}[tone];
 	return (
-		<div className="rounded-lg border border-slate-200 bg-white p-4">
-			<div className="text-xs tracking-wide text-slate-500">{label}</div>
-			<div className={['text-2xl font-medium mt-1', toneCls].join(' ')}>{value}</div>
-			{hint && <div className="text-xs text-slate-500 mt-1">{hint}</div>}
+		<div className="rounded-lg border border-ink-200 bg-card p-4">
+			<div className="text-xs tracking-wide text-ink-600">{label}</div>
+			<div className={['text-h2 font-medium mt-1', toneCls].join(' ')}>{value}</div>
+			{hint && <div className="text-xs text-ink-600 mt-1">{hint}</div>}
 		</div>
 	);
 }
 
 function ErrorBox({ children }: { children: React.ReactNode }) {
 	return (
-		<div className="text-sm rounded border border-rose-200 bg-rose-50 text-rose-800 px-3 py-2">
+		<div className="text-sm rounded border border-brick-200 bg-brick-50 text-brick-800 px-3 py-2">
 			{children}
 		</div>
 	);
@@ -289,7 +289,7 @@ function ErrorBox({ children }: { children: React.ReactNode }) {
 
 function Loading() {
 	return (
-		<div className="text-sm text-slate-500 italic flex items-center gap-2">
+		<div className="text-sm text-ink-600 italic flex items-center gap-2">
 			<Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…
 		</div>
 	);

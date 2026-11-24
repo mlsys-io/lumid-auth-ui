@@ -218,10 +218,10 @@ function AppSurfaceImpl({
               key={n.surface}
               to={to}
               className={[
-                "px-2.5 py-1 rounded-lg text-[12px] transition-colors",
+                "px-2.5 py-1 rounded-lg text-caption transition-colors",
                 active
-                  ? "bg-slate-800 text-white"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100",
+                  ? "bg-ink-800 text-white"
+                  : "text-ink-600 hover:text-ink-900 hover:bg-ink-100",
               ].join(" ")}
             >
               {n.label || n.surface}
@@ -298,7 +298,7 @@ function AppSurfaceImpl({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
-            className="inline-flex items-center justify-center w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:border-slate-300 shadow-sm transition-all flex-shrink-0"
+            className="inline-flex items-center justify-center w-7 h-7 rounded-lg border border-ink-200 bg-card text-ink-600 hover:text-ink-800 hover:border-ink-300 shadow-sm transition-all flex-shrink-0"
             title="Agent actions"
             aria-label="Agent actions"
           >
@@ -313,7 +313,7 @@ function AppSurfaceImpl({
                 <BarChart3 className="w-3.5 h-3.5" />
                 <span className="flex flex-col">
                   <span>Insights</span>
-                  <span className="text-[11px] text-slate-400">usage, runs, arm rollup</span>
+                  <span className="text-micro text-ink-600">usage, runs, arm rollup</span>
                 </span>
               </Link>
             </DropdownMenuItem>
@@ -330,7 +330,7 @@ function AppSurfaceImpl({
               <SlidersHorizontal className="w-3.5 h-3.5" />
               <span className="flex flex-col">
                 <span>Manage agent</span>
-                <span className="text-[11px] text-slate-400">new workflow, name, skills</span>
+                <span className="text-micro text-ink-600">new workflow, name, skills</span>
               </span>
             </Link>
           </DropdownMenuItem>
@@ -347,7 +347,7 @@ function AppSurfaceImpl({
             {shareBusy === "pull" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <DownloadCloud className="w-3.5 h-3.5" />}
             <span className="flex flex-col">
               <span>Pull updates</span>
-              <span className="text-[11px] text-slate-400">merge the latest version; your edits stay</span>
+              <span className="text-micro text-ink-600">merge the latest version; your edits stay</span>
             </span>
           </DropdownMenuItem>
           <DropdownMenuItem
@@ -360,14 +360,14 @@ function AppSurfaceImpl({
             {shareBusy === "publish" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
             <span className="flex flex-col">
               <span>Publish changes…</span>
-              <span className="text-[11px] text-slate-400">push your edits to the app&apos;s repo</span>
+              <span className="text-micro text-ink-600">push your edits to the app&apos;s repo</span>
             </span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
             disabled={removing}
             onSelect={() => removeApp()}
-            className="text-rose-600 focus:text-rose-700 focus:bg-rose-50"
+            className="text-brick-600 focus:text-brick-700 focus:bg-brick-50"
           >
             <Trash2 className="w-3.5 h-3.5" /> {removing ? "Removing…" : "Remove agent…"}
           </DropdownMenuItem>
@@ -380,14 +380,14 @@ function AppSurfaceImpl({
       ? createPortal(
           <div className="flex items-center gap-3 min-w-0 flex-1">
             {title && (
-              <h1 className="text-[15px] font-semibold text-slate-900 truncate leading-tight flex-shrink min-w-0">{title}</h1>
+              <h1 className="text-read font-semibold text-ink-900 truncate leading-tight flex-shrink min-w-0">{title}</h1>
             )}
             {actionBarInner(hasMd, nav)}
           </div>,
           stripSlot,
         )
       : (
-        <div className="flex flex-wrap items-center gap-2 px-6 pt-3 pb-2 border-b border-slate-100 flex-shrink-0">
+        <div className="flex flex-wrap items-center gap-2 px-6 pt-3 pb-2 border-b border-ink-100 flex-shrink-0">
           {actionBarInner(hasMd, nav)}
         </div>
       );
@@ -405,7 +405,7 @@ function AppSurfaceImpl({
   }, [stripSlot, headerTitle]);
 
   if (state.loading) {
-    return <div className="p-8 text-sm text-slate-400">Loading {app}…</div>;
+    return <div className="p-8 text-sm text-ink-600">Loading {app}…</div>;
   }
 
   if (state.notInstalled) {
@@ -413,18 +413,18 @@ function AppSurfaceImpl({
       <div className="flex flex-col">
         {actionBar(false)}
         <div className="px-6 py-6 max-w-lg">
-          <div className="rounded-xl border border-slate-200 bg-white p-5">
-            <div className="text-sm font-medium text-slate-800">
+          <div className="rounded-xl border border-ink-200 bg-card p-5">
+            <div className="text-sm font-medium text-ink-800">
               No app called &ldquo;{app}&rdquo;
             </div>
-            <p className="mt-1.5 text-[12px] text-slate-500 leading-relaxed">
+            <p className="mt-1.5 text-caption text-ink-600 leading-relaxed">
               Either the name is misspelled, or it is not installed on your account.
               Deliberately no <strong>Generate a page</strong> here — that would author a
               new app over a name you probably just mistyped.
             </p>
             <Link
               to="/studio/library/marketplace"
-              className="mt-3 inline-flex items-center gap-1.5 px-3 py-2 text-[13px] font-medium rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition"
+              className="mt-3 inline-flex items-center gap-1.5 px-3 py-2 text-meta font-medium rounded-lg border border-ink-200 text-ink-700 hover:bg-ink-50 transition"
             >
               Browse the marketplace
             </Link>
@@ -439,17 +439,17 @@ function AppSurfaceImpl({
       <div className="flex flex-col">
         {actionBar(false)}
         <div className="px-6 py-6 max-w-lg">
-          <div className="rounded-xl border border-slate-200 bg-white p-5">
-            <div className="flex items-center gap-2 text-slate-800">
+          <div className="rounded-xl border border-ink-200 bg-card p-5">
+            <div className="flex items-center gap-2 text-ink-800">
               <Sparkles className="w-4 h-4 text-gold-500" />
               <span className="text-sm font-medium">No page yet for this agent</span>
             </div>
-            <p className="mt-1.5 text-[12px] text-slate-500 leading-relaxed">
+            <p className="mt-1.5 text-caption text-ink-600 leading-relaxed">
               Generate one automatically from the agent&apos;s config + skills — you can tweak it before saving. Or author it by hand from <strong>Edit</strong>.
             </p>
             <Link
               to={`${editTo}&generate=1`}
-              className="mt-3 inline-flex items-center gap-1.5 px-3 py-2 text-[13px] font-medium rounded-lg bg-gradient-to-br from-gold-500 to-gold-600 text-white shadow-sm shadow-gold-100 hover:from-gold-600 hover:to-gold-700 transition"
+              className="mt-3 inline-flex items-center gap-1.5 px-3 py-2 text-meta font-medium rounded-lg bg-gradient-to-br from-gold-500 to-gold-600 text-white shadow-sm shadow-gold-100 hover:from-gold-600 hover:to-gold-700 transition"
             >
               <Sparkles className="w-3.5 h-3.5" />
               Generate a page
@@ -465,8 +465,8 @@ function AppSurfaceImpl({
       <div className="flex flex-col">
         {actionBar(false)}
         <div className="px-6 py-4">
-          <div className="text-sm text-rose-600">Couldn&apos;t load this agent&apos;s surface.</div>
-          <div className="mt-1 text-xs text-slate-400">{state.error}</div>
+          <div className="text-sm text-brick-600">Couldn&apos;t load this agent&apos;s surface.</div>
+          <div className="mt-1 text-xs text-ink-600">{state.error}</div>
         </div>
       </div>
     );
@@ -514,11 +514,11 @@ function AppSurfaceImpl({
         {actionBar(false, state.data.nav, stripTitle)}
         <div className="px-2 py-2">
           {Native ? (
-            <Suspense fallback={<div className="p-8 text-sm text-slate-400">Loading…</div>}>
+            <Suspense fallback={<div className="p-8 text-sm text-ink-600">Loading…</div>}>
               <Native config={state.data.config} />
             </Suspense>
           ) : (
-            <div className="px-4 text-sm text-rose-600">Unknown native surface: {native}</div>
+            <div className="px-4 text-sm text-brick-600">Unknown native surface: {native}</div>
           )}
         </div>
       </div>

@@ -42,24 +42,24 @@ export class ErrorBoundary extends Component<Props, State> {
     if (!this.state.hasError) return this.props.children;
     return (
       <div className="max-w-md mx-auto mt-[12vh] px-4 text-center">
-        <div className="inline-flex items-center justify-center w-11 h-11 rounded-xl bg-rose-50 text-rose-600 mb-3">
+        <div className="inline-flex items-center justify-center w-11 h-11 rounded-xl bg-brick-50 text-brick-600 mb-3">
           <AlertTriangle className="w-5 h-5" />
         </div>
-        <h2 className="font-display text-xl font-medium text-foreground tracking-tight">This page hit a snag</h2>
-        <p className="mt-1.5 text-[13px] text-muted-foreground">
+        <h2 className="font-display text-h3 font-medium text-foreground tracking-tight">This page hit a snag</h2>
+        <p className="mt-1.5 text-meta text-muted-foreground">
           Something on this page errored. The rest of Studio still works — reload the page or head back to the chat.
         </p>
         {this.state.message && (
-          <p className="mt-2 text-[11px] text-ink-600 font-mono break-words">{this.state.message.slice(0, 200)}</p>
+          <p className="mt-2 text-micro text-ink-600 font-mono break-words">{this.state.message.slice(0, 200)}</p>
         )}
         <div className="mt-4 flex items-center justify-center gap-2">
           <button
             onClick={() => window.location.reload()}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-[13px] hover:bg-primary/85 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-meta hover:bg-primary/85 transition-colors"
           >
             <RotateCcw className="w-3.5 h-3.5" /> Reload
           </button>
-          <Link to="/studio" className="px-3 py-1.5 rounded-full border border-border text-[13px] text-foreground hover:bg-muted transition-colors">
+          <Link to="/studio" className="px-3 py-1.5 rounded-full border border-border text-meta text-foreground hover:bg-muted transition-colors">
             Back to chat
           </Link>
         </div>

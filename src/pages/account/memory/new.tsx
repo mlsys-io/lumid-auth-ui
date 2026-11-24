@@ -101,8 +101,8 @@ export default function MemoryNewPage() {
 						<ArrowLeft className="inline w-3 h-3 mr-0.5" /> Inbox
 					</Link>
 				</div>
-				<h1 className="text-2xl font-bold flex items-center gap-2">
-					<Brain className="w-5 h-5 text-emerald-500" />
+				<h1 className="text-h2 font-bold flex items-center gap-2">
+					<Brain className="w-5 h-5 text-gold-700" />
 					New memory ingest
 				</h1>
 				<p className="text-sm text-muted-foreground mt-1">
@@ -110,14 +110,14 @@ export default function MemoryNewPage() {
 					retrieved memories at hypothesize-time; bad memories decay, good ones
 					reinforce. The web form generates a CLI command — the LumidOS CLI
 					writes to{' '}
-					<code className="px-1 py-0.5 bg-slate-100 rounded text-[12px]">
+					<code className="px-1 py-0.5 bg-ink-100 rounded text-caption">
 						~/.xp/kg/agents/&lt;agent&gt;/.drafts/
 					</code>
 					 (the agent id is resolved from the app's xpcloud.yaml roles).
 				</p>
 			</div>
 
-			<div className="space-y-4 bg-white border border-slate-200 rounded-xl p-5">
+			<div className="space-y-4 bg-card border border-ink-200 rounded-xl p-5">
 				<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 					<div>
 						<Label htmlFor="app">Agent</Label>
@@ -157,7 +157,7 @@ export default function MemoryNewPage() {
 								))}
 							</SelectContent>
 						</Select>
-						<p className="text-[11px] text-muted-foreground mt-1">
+						<p className="text-micro text-muted-foreground mt-1">
 							{MEMORY_TYPES.find((t) => t.value === type)?.hint}
 						</p>
 					</div>
@@ -172,7 +172,7 @@ export default function MemoryNewPage() {
 						onChange={(e) => setContent(e.target.value)}
 						placeholder="A sentence or paragraph the persona should remember. Concrete > abstract."
 					/>
-					<p className="text-[11px] text-muted-foreground mt-1">
+					<p className="text-micro text-muted-foreground mt-1">
 						Will be retrieved verbatim by xp.io at hypothesize-time. Concrete,
 						question-anchored memories beat generic principles.
 					</p>
@@ -180,13 +180,13 @@ export default function MemoryNewPage() {
 
 				<div>
 					<Label>Tags</Label>
-					<div className="flex flex-wrap items-center gap-1.5 p-2 border border-slate-200 rounded-md">
+					<div className="flex flex-wrap items-center gap-1.5 p-2 border border-ink-200 rounded-md">
 						{tags.map((t, i) => (
 							<Badge key={i} variant="secondary" className="gap-1">
 								{t}
 								<button
 									type="button"
-									className="hover:text-red-500"
+									className="hover:text-brick-600"
 									onClick={() => setTags(tags.filter((_, idx) => idx !== i))}
 								>
 									<X className="w-3 h-3" />
@@ -206,7 +206,7 @@ export default function MemoryNewPage() {
 							placeholder={tags.length ? '' : 'add tags (Enter / comma to commit)'}
 						/>
 					</div>
-					<p className="text-[11px] text-muted-foreground mt-1">
+					<p className="text-micro text-muted-foreground mt-1">
 						Used by the bandit's retrieval filter. Examples:{' '}
 						<code>opening</code>, <code>router</code>, <code>calibration</code>.
 					</p>
@@ -223,7 +223,7 @@ export default function MemoryNewPage() {
 				</div>
 
 				{blocking.length > 0 && (
-					<div className="flex gap-2 p-3 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-900">
+					<div className="flex gap-2 p-3 bg-ember-50 border border-ember-200 rounded-md text-sm text-ember-900">
 						<AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
 						<ul className="space-y-0.5">
 							{blocking.map((e) => (
@@ -260,14 +260,14 @@ export default function MemoryNewPage() {
 						)}
 					</Button>
 				</div>
-				<pre className="p-4 bg-slate-900 text-slate-100 rounded-md text-[12px] leading-5 overflow-x-auto whitespace-pre">
+				<pre className="p-4 bg-ink-900 text-ink-100 rounded-md text-caption leading-5 overflow-x-auto whitespace-pre">
 					{blocking.length > 0
 						? '# Fix the validation issues above to generate the command.'
 						: command}
 				</pre>
-				<p className="text-[11px] text-muted-foreground">
+				<p className="text-micro text-muted-foreground">
 					Then run{' '}
-					<code className="px-1 py-0.5 bg-slate-100 rounded">
+					<code className="px-1 py-0.5 bg-ink-100 rounded">
 						lumid memory_apply --agent &lt;resolved-agent&gt; --draft-id
 						&lt;id&gt;
 					</code>{' '}

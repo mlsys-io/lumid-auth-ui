@@ -35,18 +35,18 @@ function OverviewBody({ app }: { app: string }) {
 			.catch(() => { if (live) setWfs([]); });
 		return () => { live = false; };
 	}, [app]);
-	if (wfs === null) return <div className="text-[12px] text-muted-foreground py-2 flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…</div>;
-	if (wfs.length === 0) return <div className="text-[12px] text-muted-foreground py-1">No workflows yet — ask me to set one up.</div>;
+	if (wfs === null) return <div className="text-caption text-muted-foreground py-2 flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…</div>;
+	if (wfs.length === 0) return <div className="text-caption text-muted-foreground py-1">No workflows yet — ask me to set one up.</div>;
 	return (
 		<div className="divide-y divide-border/60">
 			{wfs.map((w) => {
 				const loop = w.app && w.slug.startsWith(w.app + ':') ? w.slug.slice(w.app.length + 1) : w.slug;
 				const tone = TONES[workflowTone(w)];
 				return (
-					<div key={w.slug} className="flex items-center gap-2.5 py-1.5 text-[12.5px]">
+					<div key={w.slug} className="flex items-center gap-2.5 py-1.5 text-meta">
 						<span className={`w-2 h-2 rounded-full shrink-0 ${tone.dot}`} />
 						<span className="flex-1 min-w-0 truncate text-foreground">{loopLabel(w.name, loop)}</span>
-						<span className="text-[10.5px] text-muted-foreground shrink-0">{w.trigger || ''}{w.last_run_ts ? ` · ${relSec(w.last_run_ts)}` : ''}</span>
+						<span className="text-micro text-muted-foreground shrink-0">{w.trigger || ''}{w.last_run_ts ? ` · ${relSec(w.last_run_ts)}` : ''}</span>
 					</div>
 				);
 			})}
@@ -109,10 +109,10 @@ export default function AppSurfaceCard({ app, surface }: { app: string; surface?
 	return (
 		<div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden max-w-full">
 			<div className="flex items-center gap-2 px-3 py-2 border-b border-border/70">
-				<span className="text-[13px] font-medium text-foreground flex-1 truncate">{appTitle(app)}</span>
+				<span className="text-meta font-medium text-foreground flex-1 truncate">{appTitle(app)}</span>
 				<Link
 					to={fullHref}
-					className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+					className="inline-flex items-center gap-0.5 text-micro text-muted-foreground hover:text-foreground transition-colors"
 					title="Open the full page"
 				>
 					open full view <ArrowUpRight className="w-3 h-3" />
@@ -120,7 +120,7 @@ export default function AppSurfaceCard({ app, surface }: { app: string; surface?
 			</div>
 			<div className="px-3 py-3">
 				{state.loading ? (
-					<div className="flex items-center gap-2 text-[12px] text-muted-foreground py-4">
+					<div className="flex items-center gap-2 text-caption text-muted-foreground py-4">
 						<Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading {appTitle(app)}…
 					</div>
 				) : state.noSurface ? (
@@ -128,15 +128,15 @@ export default function AppSurfaceCard({ app, surface }: { app: string; surface?
 					// of a dead end, so opening a loop app in chat is useful.
 					<OverviewBody app={app} />
 				) : state.error ? (
-					<div className="text-[12px] text-rose-600 py-2">Couldn’t load this app’s surface. <Link to={fullHref} className="underline">Open full view →</Link></div>
+					<div className="text-caption text-brick-600 py-2">Couldn’t load this app’s surface. <Link to={fullHref} className="underline">Open full view →</Link></div>
 				) : state.data?.native ? (
 					// Interactive native surface (terminal/SSH/logs) — not embeddable
 					// in chat; the agent reports status and links to the full view.
-					<div className="text-[12px] text-muted-foreground py-2">
+					<div className="text-caption text-muted-foreground py-2">
 						This is an interactive view. <Link to={fullHref} className="text-coral hover:underline">Open it full-screen →</Link>
 					</div>
 				) : state.data?.markdown ? (
-					<div className="lumid-surface-in-chat text-[13px]">
+					<div className="lumid-surface-in-chat text-meta">
 						<LumidMarkdown
 							source={stripH1(state.data.markdown)}
 							params={configParams(state.data.config)}
@@ -144,7 +144,7 @@ export default function AppSurfaceCard({ app, surface }: { app: string; surface?
 						/>
 					</div>
 				) : (
-					<div className="text-[12px] text-muted-foreground py-2">This app declares no surface content.</div>
+					<div className="text-caption text-muted-foreground py-2">This app declares no surface content.</div>
 				)}
 			</div>
 		</div>

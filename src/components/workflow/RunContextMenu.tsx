@@ -73,22 +73,22 @@ type RowProps = {
 function Row({ icon: Icon, label, onClick, tone = "default", pending, busy, title, sub }: RowProps) {
 	const toneCls =
 		tone === "gold" ? "text-gold-700 hover:bg-gold-50"
-			: tone === "sky" ? "text-sky-700 hover:bg-sky-50"
-				: tone === "danger" ? "text-rose-600 hover:bg-rose-50"
-					: "text-slate-700 hover:bg-slate-50";
+			: tone === "sky" ? "text-lagoon-700 hover:bg-lagoon-50"
+				: tone === "danger" ? "text-brick-600 hover:bg-brick-50"
+					: "text-ink-700 hover:bg-ink-50";
 	return (
 		<button
 			onClick={onClick}
 			disabled={busy}
 			title={title}
-			className={`w-full flex items-start gap-2 px-3 py-1.5 text-[12px] text-left transition-colors disabled:opacity-60 ${toneCls}`}
+			className={`w-full flex items-start gap-2 px-3 py-1.5 text-caption text-left transition-colors disabled:opacity-60 ${toneCls}`}
 		>
 			{busy ? <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0 mt-0.5" /> : <Icon className="w-3.5 h-3.5 flex-shrink-0 opacity-70 mt-0.5" />}
 			<span className="flex-1 min-w-0">
 				<span className="block">{label}</span>
-				{sub && <span className="block text-[10px] text-slate-400 leading-tight font-normal">{sub}</span>}
+				{sub && <span className="block text-nano text-ink-600 leading-tight font-normal">{sub}</span>}
 			</span>
-			{pending && <Clock className="w-3 h-3 text-slate-300 flex-shrink-0 mt-0.5" />}
+			{pending && <Clock className="w-3 h-3 text-ink-600 flex-shrink-0 mt-0.5" />}
 		</button>
 	);
 }
@@ -96,7 +96,7 @@ function Row({ icon: Icon, label, onClick, tone = "default", pending, busy, titl
 // A section divider+label so the menu's items split into Observe vs Improve.
 function Section({ label }: { label: string }) {
 	return (
-		<div className="mt-1 mb-0.5 px-3 pt-1 border-t border-slate-100 text-[9px] uppercase tracking-wide text-slate-300 font-semibold">{label}</div>
+		<div className="mt-1 mb-0.5 px-3 pt-1 border-t border-ink-100 text-nano uppercase tracking-wide text-ink-600 font-semibold">{label}</div>
 	);
 }
 
@@ -174,11 +174,11 @@ export default function RunContextMenu({
 	return (
 		<div
 			ref={menuRef}
-			className="fixed z-[80] min-w-[208px] max-h-[80vh] overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-xl py-1 animate-in fade-in zoom-in-95 duration-100"
+			className="fixed z-[80] min-w-[208px] max-h-[80vh] overflow-y-auto rounded-lg border border-ink-200 bg-card shadow-xl py-1 animate-in fade-in zoom-in-95 duration-100"
 			style={{ left: pos.left, top: pos.top }}
 			onClick={(e) => e.stopPropagation()}
 		>
-			<div className="px-3 py-1 text-[10px] uppercase tracking-wide text-slate-400 truncate">{target.label}</div>
+			<div className="px-3 py-1 text-nano uppercase tracking-wide text-ink-600 truncate">{target.label}</div>
 
 			{/* ── OBSERVE — inspect what happened ── */}
 			<Section label="Observe" />
@@ -228,7 +228,7 @@ export default function RunContextMenu({
 
 			{/* ── CHANGE THIS RUN — state-changing, kept apart + confirm-gated ── */}
 			{isRun && mode !== "observe" && (
-				<div className="mt-2 bg-slate-50/60 pb-0.5">
+				<div className="mt-2 bg-ink-50/60 pb-0.5">
 					<Section label="Change this run" />
 					<Row icon={ArrowUpCircle}
 						label={armed === "promote" ? "Promote — click again to confirm" : "Promote to champion"}
@@ -251,7 +251,7 @@ export default function RunContextMenu({
 							runtimeOp("discard", () => me.discardRun(actions.app, target.ts!), "Discarded — this run's learning won't carry forward.");
 						}} />
 					{armed && (
-						<button onClick={() => setArmed(null)} className="w-full px-3 py-1 text-[11px] text-slate-500 hover:text-slate-800 text-left">Cancel</button>
+						<button onClick={() => setArmed(null)} className="w-full px-3 py-1 text-micro text-ink-600 hover:text-ink-800 text-left">Cancel</button>
 					)}
 				</div>
 			)}

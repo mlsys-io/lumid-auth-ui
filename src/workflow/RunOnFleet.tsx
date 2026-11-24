@@ -14,11 +14,11 @@ import { fleet, type FleetJob, type FleetStatus } from "@/api/fleet";
 const POLL_MS = 4000;
 
 const TONE: Record<FleetStatus, string> = {
-	queued: "bg-slate-100 text-slate-600",
-	running: "bg-indigo-50 text-indigo-700",
-	succeeded: "bg-emerald-50 text-emerald-700",
-	failed: "bg-rose-50 text-rose-700",
-	canceled: "bg-slate-100 text-slate-500",
+	queued: "bg-ink-100 text-ink-600",
+	running: "bg-plum-50 text-plum-700",
+	succeeded: "bg-gold-50 text-gold-700",
+	failed: "bg-brick-50 text-brick-700",
+	canceled: "bg-ink-100 text-ink-600",
 };
 
 export default function RunOnFleet({
@@ -99,19 +99,19 @@ export default function RunOnFleet({
 			{job && (
 				<a
 					href="/studio/research-fleet/jobs"
-					className={`rounded px-1.5 py-0.5 font-mono text-[10px] ${TONE[job.status]}`}
+					className={`rounded px-1.5 py-0.5 font-mono text-nano ${TONE[job.status]}`}
 					title={`${job.id} — open in Research Fleet`}
 				>
 					{job.status} · {job.id}
 				</a>
 			)}
 			{failure && (
-				<span className="max-w-[28rem] truncate font-mono text-[10px] text-rose-600" title={failure}>
+				<span className="max-w-[28rem] truncate font-mono text-nano text-brick-600" title={failure}>
 					{failure}
 				</span>
 			)}
 			{problem && (
-				<span className="max-w-[28rem] truncate text-[10px] text-rose-600" title={problem}>
+				<span className="max-w-[28rem] truncate text-nano text-brick-600" title={problem}>
 					{problem}
 				</span>
 			)}

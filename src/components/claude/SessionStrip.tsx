@@ -43,12 +43,12 @@ function CapChip({ caps }: { caps: Caps }) {
 				</span>
 			</button>
 			{open && (
-				<div className="absolute bottom-full left-0 mb-1 z-30 w-64 max-h-64 overflow-y-auto rounded-lg border border-border bg-popover shadow-lg p-2.5 text-[11px] space-y-2 text-foreground">
+				<div className="absolute bottom-full left-0 mb-1 z-30 w-64 max-h-64 overflow-y-auto rounded-lg border border-border bg-popover shadow-lg p-2.5 text-micro space-y-2 text-foreground">
 					{!!agents.length && (
 						<div>
 							<div className="font-medium mb-0.5 flex items-center gap-1"><Bot className="w-3 h-3" /> sub-agents</div>
 							<div className="flex flex-wrap gap-1">{agents.map((a) => (
-								<span key={a} className="px-1.5 py-px rounded bg-indigo-50 text-indigo-700 border border-indigo-100">{a}</span>
+								<span key={a} className="px-1.5 py-px rounded bg-plum-50 text-plum-700 border border-plum-100">{a}</span>
 							))}</div>
 						</div>
 					)}
@@ -87,9 +87,9 @@ export function SessionStrip({
 	// noise on every fresh turn (removed 2026-07-26 by operator request).
 	if (!session) return null;
 	return (
-		<div className="flex items-center gap-2 flex-wrap px-1 pb-1 text-[11px]">
-			<span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-indigo-200 bg-indigo-50/70 text-indigo-800">
-				<Circle className="w-2 h-2 fill-indigo-500 text-indigo-500" />
+		<div className="flex items-center gap-2 flex-wrap px-1 pb-1 text-micro">
+			<span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-plum-200 bg-plum-50/70 text-plum-800">
+				<Circle className="w-2 h-2 fill-plum-500 text-plum-600" />
 				<span className="font-mono" title="Claude Code session backing this thread — reopening the thread later resumes it">
 					session {session.slice(0, 8)}
 				</span>

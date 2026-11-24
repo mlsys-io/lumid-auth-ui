@@ -258,45 +258,45 @@ export default function AppManagePanel() {
 	};
 
 	if (loadErr) {
-		return <div className="p-8 text-sm text-rose-600">Couldn&apos;t load {app}: {loadErr}</div>;
+		return <div className="p-8 text-sm text-brick-600">Couldn&apos;t load {app}: {loadErr}</div>;
 	}
 	if (yamlText == null) {
-		return <div className="p-8 text-sm text-slate-400"><Loader2 className="w-4 h-4 animate-spin inline mr-2" />Loading {app}…</div>;
+		return <div className="p-8 text-sm text-ink-600"><Loader2 className="w-4 h-4 animate-spin inline mr-2" />Loading {app}…</div>;
 	}
 
 	return (
 		<div className="px-6 py-4 max-w-3xl space-y-5">
 			{/* Header */}
 			<div className="flex items-center gap-3">
-				<Link to={`/studio/a/${encodeURIComponent(app)}`} className="text-[12px] text-slate-500 hover:text-slate-800 inline-flex items-center gap-1">
+				<Link to={`/studio/a/${encodeURIComponent(app)}`} className="text-caption text-ink-600 hover:text-ink-800 inline-flex items-center gap-1">
 					<ArrowLeft className="w-3.5 h-3.5" /> {app}
 				</Link>
-				<span className="text-slate-300">/</span>
-				<span className="text-[13px] font-medium text-slate-800">Manage</span>
+				<span className="text-ink-600">/</span>
+				<span className="text-meta font-medium text-ink-800">Manage</span>
 				{readOnly && (
-					<span className="ml-auto text-[11px] px-2 py-0.5 rounded-full bg-gold-50 text-gold-700 border border-gold-200">
+					<span className="ml-auto text-micro px-2 py-0.5 rounded-full bg-gold-50 text-gold-700 border border-gold-200">
 						operator-shared — read-only (install your own copy to edit)
 					</span>
 				)}
 			</div>
 
 			{/* Rename — drives the My Apps card + sidebar label */}
-			<section className="rounded-xl border border-slate-200 bg-white p-4 space-y-2">
-				<div className="flex items-center gap-1.5 text-[13px] font-medium text-slate-800">
-					<Pencil className="w-3.5 h-3.5 text-slate-400" /> Name
+			<section className="rounded-xl border border-ink-200 bg-card p-4 space-y-2">
+				<div className="flex items-center gap-1.5 text-meta font-medium text-ink-800">
+					<Pencil className="w-3.5 h-3.5 text-ink-600" /> Name
 				</div>
-				<p className="text-[11.5px] text-slate-500">Shown on the My Agents card and the sidebar. The install id (<code className="text-[10.5px]">{app}</code>) doesn&apos;t change.</p>
+				<p className="text-caption text-ink-600">Shown on the My Agents card and the sidebar. The install id (<code className="text-micro">{app}</code>) doesn&apos;t change.</p>
 				<div className="flex gap-2">
 					<input
 						value={effectiveName}
 						onChange={(e) => setNameDraft(e.target.value)}
 						disabled={readOnly || saving}
-						className="flex-1 px-2.5 py-1.5 text-[13px] rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400 disabled:bg-slate-50"
+						className="flex-1 px-2.5 py-1.5 text-meta rounded-lg border border-ink-200 bg-card focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400 disabled:bg-ink-50"
 					/>
 					<button
 						onClick={saveRename}
 						disabled={!renameDirty || readOnly || saving}
-						className="px-3 py-1.5 rounded-lg text-[12.5px] font-medium bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-40 transition-all"
+						className="px-3 py-1.5 rounded-lg text-meta font-medium bg-ink-900 text-white hover:bg-ink-700 disabled:opacity-40 transition-all"
 					>
 						{saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Rename"}
 					</button>
@@ -304,29 +304,29 @@ export default function AppManagePanel() {
 			</section>
 
 			{/* Workflows */}
-			<section className="rounded-xl border border-slate-200 bg-white p-4 space-y-2.5">
-				<div className="flex items-center gap-1.5 text-[13px] font-medium text-slate-800">
-					<CalendarClock className="w-3.5 h-3.5 text-slate-400" /> Workflows
+			<section className="rounded-xl border border-ink-200 bg-card p-4 space-y-2.5">
+				<div className="flex items-center gap-1.5 text-meta font-medium text-ink-800">
+					<CalendarClock className="w-3.5 h-3.5 text-ink-600" /> Workflows
 					<button
 						onClick={() => setWfFormOpen(true)}
 						disabled={readOnly}
-						className="ml-auto inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[12px] font-medium bg-gold-700 text-white hover:bg-gold-800 disabled:opacity-40 transition-all"
+						className="ml-auto inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-caption font-medium bg-gold-700 text-white hover:bg-gold-800 disabled:opacity-40 transition-all"
 					>
 						<Plus className="w-3 h-3" /> New workflow
 					</button>
 				</div>
 				{loops.length === 0 ? (
-					<p className="text-[12px] text-slate-400">No workflows yet. A workflow is a scheduled sequence of skill steps — create one and the scheduler runs it automatically.</p>
+					<p className="text-caption text-ink-600">No workflows yet. A workflow is a scheduled sequence of skill steps — create one and the scheduler runs it automatically.</p>
 				) : (
-					<div className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+					<div className="divide-y divide-ink-100 rounded-lg border border-ink-200">
 						{loops.map((l, i) => (
 							<div key={i} className="flex items-center gap-3 px-3 py-2">
 								<div className="flex-1 min-w-0">
-									<div className="text-[13px] text-slate-800 font-medium truncate">{l.name || `loop-${i}`}</div>
-									<div className="text-[11px] text-slate-400 font-mono">
+									<div className="text-meta text-ink-800 font-medium truncate">{l.name || `loop-${i}`}</div>
+									<div className="text-micro text-ink-600 font-mono">
 										{l.schedule || "—"}
-										{Array.isArray(l.skills) && l.skills.length > 0 && <span className="ml-2 text-slate-300">· {l.skills.length} skill{l.skills.length > 1 ? "s" : ""}</span>}
-										{Array.isArray(l.steps) && l.steps.length > 0 && <span className="ml-2 text-slate-300">· {l.steps.length} step{l.steps.length > 1 ? "s" : ""}</span>}
+										{Array.isArray(l.skills) && l.skills.length > 0 && <span className="ml-2 text-ink-600">· {l.skills.length} skill{l.skills.length > 1 ? "s" : ""}</span>}
+										{Array.isArray(l.steps) && l.steps.length > 0 && <span className="ml-2 text-ink-600">· {l.steps.length} step{l.steps.length > 1 ? "s" : ""}</span>}
 									</div>
 								</div>
 								<select
@@ -334,7 +334,7 @@ export default function AppManagePanel() {
 									onChange={(e) => setLoopModel(l.name || "", e.target.value)}
 									disabled={readOnly || saving || !l.name}
 									title="Which model this workflow's runtime uses"
-									className="text-[11px] rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-slate-600 disabled:opacity-40 max-w-[140px]"
+									className="text-micro rounded-lg border border-ink-200 bg-card px-1.5 py-1 text-ink-600 disabled:opacity-40 max-w-[140px]"
 								>
 									{WORKFLOW_MODELS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
 								</select>
@@ -342,7 +342,7 @@ export default function AppManagePanel() {
 									onClick={() => runNow(l.name || "")}
 									disabled={!l.name || runningLoop === l.name}
 									title="Run now"
-									className="p-1.5 rounded-lg text-slate-400 hover:text-gold-700 hover:bg-gold-50 disabled:opacity-40 transition-colors"
+									className="p-1.5 rounded-lg text-ink-600 hover:text-gold-700 hover:bg-gold-50 disabled:opacity-40 transition-colors"
 								>
 									{runningLoop === l.name ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
 								</button>
@@ -350,7 +350,7 @@ export default function AppManagePanel() {
 									onClick={() => removeWorkflow(l.name || "")}
 									disabled={!l.name || readOnly}
 									title="Remove workflow"
-									className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-40 transition-colors"
+									className="p-1.5 rounded-lg text-ink-600 hover:text-brick-600 hover:bg-brick-50 disabled:opacity-40 transition-colors"
 								>
 									<Trash2 className="w-4 h-4" />
 								</button>
@@ -361,32 +361,32 @@ export default function AppManagePanel() {
 			</section>
 
 			{/* Skills */}
-			<section className="rounded-xl border border-slate-200 bg-white p-4 space-y-2.5">
-				<div className="flex items-center gap-1.5 text-[13px] font-medium text-slate-800">
-					<Puzzle className="w-3.5 h-3.5 text-slate-400" /> Imported skills
+			<section className="rounded-xl border border-ink-200 bg-card p-4 space-y-2.5">
+				<div className="flex items-center gap-1.5 text-meta font-medium text-ink-800">
+					<Puzzle className="w-3.5 h-3.5 text-ink-600" /> Imported skills
 					<button
 						onClick={() => setPickerOpen(true)}
 						disabled={readOnly}
-						className="ml-auto inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[12px] font-medium bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-40 transition-all"
+						className="ml-auto inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-caption font-medium bg-plum-600 text-white hover:bg-plum-700 disabled:opacity-40 transition-all"
 					>
 						<Plus className="w-3 h-3" /> Import skill…
 					</button>
 				</div>
 				{skillImports.length === 0 ? (
-					<p className="text-[12px] text-slate-400">No imported skills. Imports pull shared skill repos into this app — its workflows can then call them.</p>
+					<p className="text-caption text-ink-600">No imported skills. Imports pull shared skill repos into this app — its workflows can then call them.</p>
 				) : (
-					<div className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+					<div className="divide-y divide-ink-100 rounded-lg border border-ink-200">
 						{skillImports.map((s, i) => {
 							const repo = importRepoOf(s);
 							const ver = typeof s === "object" ? s.version : undefined;
 							return (
 								<div key={i} className="flex items-center gap-3 px-3 py-2">
-									<XpioRef ref={repo} className="flex-1 min-w-0 font-mono text-[12px] text-violet-700 truncate">{repo}{ver ? <span className="text-slate-400"> @ {ver}</span> : null}</XpioRef>
+									<XpioRef ref={repo} className="flex-1 min-w-0 font-mono text-caption text-plum-700 truncate">{repo}{ver ? <span className="text-ink-600"> @ {ver}</span> : null}</XpioRef>
 									<button
 										onClick={() => removeImport(repo)}
 										disabled={readOnly}
 										title="Remove import"
-										className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-40 transition-colors"
+										className="p-1.5 rounded-lg text-ink-600 hover:text-brick-600 hover:bg-brick-50 disabled:opacity-40 transition-colors"
 									>
 										<Trash2 className="w-4 h-4" />
 									</button>
@@ -398,27 +398,27 @@ export default function AppManagePanel() {
 			</section>
 
 			{/* Credentials — pure-UI secret entry driven by xpcloud.yaml config_schema */}
-			<section className="rounded-xl border border-slate-200 bg-white p-4">
+			<section className="rounded-xl border border-ink-200 bg-card p-4">
 				<AppSecretsSection app={app} schema={(js?.config_schema as ConfigField[] | undefined) ?? undefined} />
 			</section>
 
 			{/* Knowledge + datasets — read-only context */}
 			{(memoryAgents.length > 0 || datasets.length > 0) && (
-				<section className="rounded-xl border border-slate-200 bg-white p-4 space-y-2">
-					<div className="text-[13px] font-medium text-slate-800">Also part of this app</div>
+				<section className="rounded-xl border border-ink-200 bg-card p-4 space-y-2">
+					<div className="text-meta font-medium text-ink-800">Also part of this app</div>
 					{memoryAgents.length > 0 && (
-						<div className="text-[12px] text-slate-600 flex items-start gap-1.5">
-							<BookOpen className="w-3.5 h-3.5 text-pink-400 mt-0.5 flex-shrink-0" />
-							<span>Memory: {memoryAgents.map((a) => { const s = typeof a === "string" ? a : JSON.stringify(a); return <Link key={s} to={`/studio/knowledge/${encodeURIComponent(s)}`} title={`Open the ${s} memory bank`} className="text-[11px] mr-1.5 font-mono text-pink-700 hover:underline">{s}</Link>; })}</span>
+						<div className="text-caption text-ink-600 flex items-start gap-1.5">
+							<BookOpen className="w-3.5 h-3.5 text-plum-600 mt-0.5 flex-shrink-0" />
+							<span>Memory: {memoryAgents.map((a) => { const s = typeof a === "string" ? a : JSON.stringify(a); return <Link key={s} to={`/studio/knowledge/${encodeURIComponent(s)}`} title={`Open the ${s} memory bank`} className="text-micro mr-1.5 font-mono text-plum-700 hover:underline">{s}</Link>; })}</span>
 						</div>
 					)}
 					{datasets.length > 0 && (
-						<div className="text-[12px] text-slate-600 flex items-start gap-1.5">
+						<div className="text-caption text-ink-600 flex items-start gap-1.5">
 							<Database className="w-3.5 h-3.5 text-gold-400 mt-0.5 flex-shrink-0" />
-							<span>Datasets: {datasets.map((d, i) => { const s = String(d.repo || d.id || ""); return <XpioRef key={i} ref={s} className="text-[11px] mr-1.5 font-mono text-gold-700">{s}</XpioRef>; })}</span>
+							<span>Datasets: {datasets.map((d, i) => { const s = String(d.repo || d.id || ""); return <XpioRef key={i} ref={s} className="text-micro mr-1.5 font-mono text-gold-700">{s}</XpioRef>; })}</span>
 						</div>
 					)}
-					<p className="text-[11px] text-slate-400">Edit these in <Link to={`/studio/a/${encodeURIComponent(app)}/config`} className="underline">Config</Link> (raw xpcloud.yaml).</p>
+					<p className="text-micro text-ink-600">Edit these in <Link to={`/studio/a/${encodeURIComponent(app)}/config`} className="underline">Config</Link> (raw xpcloud.yaml).</p>
 				</section>
 			)}
 
@@ -522,40 +522,40 @@ function SkillPickerDialog({
 		<Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
 			<DialogContent className="max-w-lg">
 				<DialogHeader>
-					<DialogTitle className="flex items-center gap-2 text-[15px]">
-						<Puzzle className="w-4 h-4 text-violet-500" /> Import a skill into {app}
+					<DialogTitle className="flex items-center gap-2 text-read">
+						<Puzzle className="w-4 h-4 text-plum-600" /> Import a skill into {app}
 					</DialogTitle>
-					<DialogDescription className="text-[12.5px]">
-						Adds the skill to <code className="text-[11px]">skill_imports</code> and pulls its files — workflows can then call it.
+					<DialogDescription className="text-meta">
+						Adds the skill to <code className="text-micro">skill_imports</code> and pulls its files — workflows can then call it.
 					</DialogDescription>
 				</DialogHeader>
 				<div className="relative">
-					<Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+					<Search className="w-3.5 h-3.5 text-ink-600 absolute left-2.5 top-1/2 -translate-y-1/2" />
 					<input
 						value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Search skills…"
-						className="w-full pl-8 pr-3 py-1.5 text-[13px] rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-400/20 focus:border-violet-400"
+						className="w-full pl-8 pr-3 py-1.5 text-meta rounded-lg border border-ink-200 focus:outline-none focus:ring-2 focus:ring-plum-400/20 focus:border-plum-400"
 					/>
 				</div>
 				{items === null ? (
-					<div className="py-6 text-center text-sm text-slate-400"><Loader2 className="w-4 h-4 animate-spin inline mr-2" />Loading catalog…</div>
+					<div className="py-6 text-center text-sm text-ink-600"><Loader2 className="w-4 h-4 animate-spin inline mr-2" />Loading catalog…</div>
 				) : (
-					<div className="max-h-72 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-100">
-						{filtered.length === 0 && <div className="px-3 py-4 text-[12px] text-slate-400">No skills match.</div>}
+					<div className="max-h-72 overflow-y-auto rounded-lg border border-ink-200 divide-y divide-ink-100">
+						{filtered.length === 0 && <div className="px-3 py-4 text-caption text-ink-600">No skills match.</div>}
 						{filtered.map((s) => {
 							const already = existing.includes(s.slug);
 							return (
 								<div key={s.slug} className="flex items-center gap-3 px-3 py-2">
 									<div className="flex-1 min-w-0">
-										<div className="text-[13px] text-slate-800 truncate">{s.label}</div>
-										<div className="text-[10.5px] text-slate-400 font-mono truncate">{s.slug}</div>
+										<div className="text-meta text-ink-800 truncate">{s.label}</div>
+										<div className="text-micro text-ink-600 font-mono truncate">{s.slug}</div>
 									</div>
 									{already ? (
-										<span className="text-[11px] text-gold-600 inline-flex items-center gap-1 flex-shrink-0"><Check className="w-3 h-3" /> imported</span>
+										<span className="text-micro text-gold-700 inline-flex items-center gap-1 flex-shrink-0"><Check className="w-3 h-3" /> imported</span>
 									) : (
 										<button
 											onClick={() => add(s)}
 											disabled={busySlug !== null}
-											className="px-2.5 py-1 rounded-md text-[11.5px] font-medium bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 flex-shrink-0 transition-all"
+											className="px-2.5 py-1 rounded-md text-caption font-medium bg-plum-600 text-white hover:bg-plum-700 disabled:opacity-50 flex-shrink-0 transition-all"
 										>
 											{busySlug === s.slug ? <Loader2 className="w-3 h-3 animate-spin" /> : "Import"}
 										</button>
@@ -599,58 +599,58 @@ function NewWorkflowDialog({
 		<Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
 			<DialogContent className="max-w-md">
 				<DialogHeader>
-					<DialogTitle className="flex items-center gap-2 text-[15px]">
+					<DialogTitle className="flex items-center gap-2 text-read">
 						<CalendarClock className="w-4 h-4 text-gold-600" /> New workflow
 					</DialogTitle>
-					<DialogDescription className="text-[12.5px]">
-						A scheduled sequence of skill steps. It lands in this app&apos;s <code className="text-[11px]">xpcloud.yaml</code> and the scheduler picks it up automatically.
+					<DialogDescription className="text-meta">
+						A scheduled sequence of skill steps. It lands in this app&apos;s <code className="text-micro">xpcloud.yaml</code> and the scheduler picks it up automatically.
 					</DialogDescription>
 				</DialogHeader>
 				<div className="space-y-3">
 					<label className="block">
-						<span className="text-[11.5px] text-slate-500 block mb-1">Name</span>
+						<span className="text-caption text-ink-600 block mb-1">Name</span>
 						<input
 							value={name} onChange={(e) => setName(e.target.value)} placeholder="morning_brief"
-							className="w-full px-2.5 py-1.5 text-[13px] rounded-lg border border-slate-200 font-mono focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400"
+							className="w-full px-2.5 py-1.5 text-meta rounded-lg border border-ink-200 font-mono focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400"
 						/>
-						{slug && slug !== name && <span className="text-[10.5px] text-slate-400 mt-0.5 block">saved as <code>{slug}</code></span>}
-						{nameClash && <span className="text-[10.5px] text-rose-600 mt-0.5 block">a workflow with this name already exists</span>}
+						{slug && slug !== name && <span className="text-micro text-ink-600 mt-0.5 block">saved as <code>{slug}</code></span>}
+						{nameClash && <span className="text-micro text-brick-600 mt-0.5 block">a workflow with this name already exists</span>}
 					</label>
 					<label className="block">
-						<span className="text-[11.5px] text-slate-500 block mb-1">Schedule</span>
+						<span className="text-caption text-ink-600 block mb-1">Schedule</span>
 						{!customCron ? (
 							<div className="flex gap-2">
 								<select
 									value={schedule} onChange={(e) => setSchedule(e.target.value)}
-									className="flex-1 px-2 py-1.5 text-[13px] rounded-lg border border-slate-200 bg-white"
+									className="flex-1 px-2 py-1.5 text-meta rounded-lg border border-ink-200 bg-card"
 								>
 									{SCHEDULE_PRESETS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
 								</select>
-								<button onClick={() => setCustomCron(true)} className="text-[11px] text-slate-500 hover:text-slate-800 underline">custom cron</button>
+								<button onClick={() => setCustomCron(true)} className="text-micro text-ink-600 hover:text-ink-800 underline">custom cron</button>
 							</div>
 						) : (
 							<input
 								value={schedule} onChange={(e) => setSchedule(e.target.value)} placeholder="0 8 * * *"
-								className="w-full px-2.5 py-1.5 text-[13px] rounded-lg border border-slate-200 font-mono focus:outline-none focus:ring-2 focus:ring-gold-400/20"
+								className="w-full px-2.5 py-1.5 text-meta rounded-lg border border-ink-200 font-mono focus:outline-none focus:ring-2 focus:ring-gold-400/20"
 							/>
 						)}
 					</label>
 					<label className="block">
-						<span className="text-[11.5px] text-slate-500 block mb-1">Skill steps <span className="text-slate-400">(comma-separated, run in order)</span></span>
+						<span className="text-caption text-ink-600 block mb-1">Skill steps <span className="text-ink-600">(comma-separated, run in order)</span></span>
 						<input
 							value={skillsText} onChange={(e) => setSkillsText(e.target.value)}
 							placeholder="observe/fetch, analyze/summarize"
-							className="w-full px-2.5 py-1.5 text-[12.5px] rounded-lg border border-slate-200 font-mono focus:outline-none focus:ring-2 focus:ring-gold-400/20"
+							className="w-full px-2.5 py-1.5 text-meta rounded-lg border border-ink-200 font-mono focus:outline-none focus:ring-2 focus:ring-gold-400/20"
 						/>
 						{suggestedSkills.length > 0 && (
-							<span className="text-[10.5px] text-slate-400 mt-1 block">imported skill repos: {suggestedSkills.join(", ")}</span>
+							<span className="text-micro text-ink-600 mt-1 block">imported skill repos: {suggestedSkills.join(", ")}</span>
 						)}
 					</label>
 					<label className="block">
-						<span className="text-[11.5px] text-slate-500 block mb-1">Goal <span className="text-slate-400">(optional, shown on the app page)</span></span>
+						<span className="text-caption text-ink-600 block mb-1">Goal <span className="text-ink-600">(optional, shown on the app page)</span></span>
 						<input
 							value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="Summarize overnight market moves"
-							className="w-full px-2.5 py-1.5 text-[13px] rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-gold-400/20"
+							className="w-full px-2.5 py-1.5 text-meta rounded-lg border border-ink-200 focus:outline-none focus:ring-2 focus:ring-gold-400/20"
 						/>
 					</label>
 					<button

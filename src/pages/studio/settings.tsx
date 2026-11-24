@@ -60,7 +60,7 @@ function ChatNavSection() {
 	return (
 		<SectionCard {...SECTIONS[5]}>
 			<div className="space-y-2">
-				<div className="text-xs text-slate-500 mb-1">When I open something from a list:</div>
+				<div className="text-xs text-ink-600 mb-1">When I open something from a list:</div>
 				{options.map((o) => (
 					<button
 						key={o.v}
@@ -68,18 +68,18 @@ function ChatNavSection() {
 						onClick={() => setPref(o.v)}
 						className={[
 							'w-full text-left flex items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors',
-							pref === o.v ? 'border-gold-300 bg-gold-50/60' : 'border-slate-200 hover:bg-slate-50',
+							pref === o.v ? 'border-gold-300 bg-gold-50/60' : 'border-ink-200 hover:bg-ink-50',
 						].join(' ')}
 					>
 						<span className={[
 							'mt-0.5 w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center',
-							pref === o.v ? 'border-gold-500' : 'border-slate-300',
+							pref === o.v ? 'border-gold-500' : 'border-ink-300',
 						].join(' ')}>
 							{pref === o.v && <span className="w-2 h-2 rounded-full bg-gold-500" />}
 						</span>
 						<span className="min-w-0">
-							<span className="block text-sm font-medium text-slate-800">{o.title}</span>
-							<span className="block text-xs text-slate-500 mt-0.5">{o.desc}</span>
+							<span className="block text-sm font-medium text-ink-800">{o.title}</span>
+							<span className="block text-xs text-ink-600 mt-0.5">{o.desc}</span>
 						</span>
 					</button>
 				))}
@@ -92,7 +92,7 @@ function SectionCard({
 	id, icon: Icon, title, description, children,
 }: Section & { children: React.ReactNode }) {
 	return (
-		<section id={id} className="rounded-lg border border-slate-200 bg-white p-4">
+		<section id={id} className="rounded-lg border border-ink-200 bg-card p-4">
 			<header className="flex items-start justify-between gap-3 mb-3">
 				<div className="flex items-start gap-3 min-w-0">
 					<div className="w-9 h-9 rounded-lg bg-gold-50 text-gold-600 flex items-center justify-center flex-shrink-0">
@@ -100,7 +100,7 @@ function SectionCard({
 					</div>
 					<div className="min-w-0">
 						<h2 className="font-medium text-sm">{title}</h2>
-						<p className="text-xs text-slate-500 mt-0.5">{description}</p>
+						<p className="text-xs text-ink-600 mt-0.5">{description}</p>
 					</div>
 				</div>
 			</header>
@@ -113,11 +113,11 @@ function ProfileSection({ email, role }: { email: string; role: string }) {
 	return (
 		<SectionCard {...SECTIONS[0]}>
 			<dl className="grid grid-cols-2 gap-2 text-sm">
-				<dt className="text-slate-500">Email</dt>
+				<dt className="text-ink-600">Email</dt>
 				<dd className="font-mono text-xs">{email}</dd>
-				<dt className="text-slate-500">Role</dt>
+				<dt className="text-ink-600">Role</dt>
 				<dd>
-					<span className="px-2 py-0.5 rounded-full text-[10px] tracking-wide bg-slate-100 text-slate-700">
+					<span className="px-2 py-0.5 rounded-full text-nano tracking-wide bg-ink-100 text-ink-700">
 						{role || 'user'}
 					</span>
 				</dd>
@@ -161,9 +161,9 @@ function WarehouseSection() {
 		<SectionCard {...SECTIONS[6]}>
 			<div className="text-sm">
 				{err ? (
-					<span className="text-slate-500">Could not load warehouse status.</span>
+					<span className="text-ink-600">Could not load warehouse status.</span>
 				) : st === null ? (
-					<span className="text-slate-500 italic inline-flex items-center gap-1">
+					<span className="text-ink-600 italic inline-flex items-center gap-1">
 						<Loader2 className="w-3 h-3 animate-spin" /> Checking…
 					</span>
 				) : active ? (
@@ -171,7 +171,7 @@ function WarehouseSection() {
 				) : canMint ? (
 					<>No credential yet for <strong>{st.role}</strong>.</>
 				) : (
-					<span className="text-slate-500">{st.reason ?? 'Not available on this account.'}</span>
+					<span className="text-ink-600">{st.reason ?? 'Not available on this account.'}</span>
 				)}
 			</div>
 			{/* Only offered when it would actually work. Sending an un-entitled
@@ -186,7 +186,7 @@ function WarehouseSection() {
 			)}
 			{/* Everyone else gets the honest framing: you do not need this to use
 			    the data, only to point your own client at it. */}
-			<div className="mt-2 text-xs text-slate-500">
+			<div className="mt-2 text-xs text-ink-600">
 				Not needed to explore the data — Data and chat query as you, with no credential.
 			</div>
 		</SectionCard>
@@ -207,7 +207,7 @@ function TokensSection() {
 		<SectionCard {...SECTIONS[1]}>
 			<div className="text-sm">
 				{n === null ? (
-					<span className="text-slate-500 italic inline-flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Counting tokens…</span>
+					<span className="text-ink-600 italic inline-flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Counting tokens…</span>
 				) : (
 					<>You have <strong>{n}</strong> active token{n === 1 ? '' : 's'}.</>
 				)}
@@ -241,10 +241,10 @@ function ConnectionRow({
 			<div className="text-sm flex items-center gap-2 min-w-0">
 				<span className={[
 					'w-2 h-2 rounded-full inline-block shrink-0',
-					connected ? 'bg-gold-500' : 'bg-slate-300',
+					connected ? 'bg-gold-500' : 'bg-ink-300',
 				].join(' ')} />
 				<span className="font-medium">{label}</span>
-				<span className="text-slate-500 truncate">{detail}</span>
+				<span className="text-ink-600 truncate">{detail}</span>
 			</div>
 			<Link to={href} className="text-xs text-gold-700 hover:underline inline-flex items-center gap-1 shrink-0">
 				{connected ? manageLabel : connectLabel} <ExternalLink className="w-3 h-3" />
@@ -279,7 +279,7 @@ function OAuthSection() {
 
 	return (
 		<SectionCard {...SECTIONS[2]}>
-			<div className="divide-y divide-slate-100">
+			<div className="divide-y divide-ink-100">
 				<ConnectionRow
 					label="Google"
 					connected={googleConnected}
@@ -341,24 +341,24 @@ function SecretsSection() {
 	return (
 		<SectionCard {...SECTIONS[3]}>
 			{counts === null ? (
-				<div className="text-sm text-slate-500 italic inline-flex items-center gap-1">
+				<div className="text-sm text-ink-600 italic inline-flex items-center gap-1">
 					<Loader2 className="w-3 h-3 animate-spin" /> Loading secrets…
 				</div>
 			) : Object.keys(counts).length === 0 ? (
-				<div className="text-sm text-slate-500 italic">No apps installed yet.</div>
+				<div className="text-sm text-ink-600 italic">No apps installed yet.</div>
 			) : (
 				<ul className="space-y-1 text-sm">
 					{Object.entries(counts).map(([app, n]) => (
 						<li key={app} className="flex items-center justify-between">
 							<span className="font-mono text-xs">{app}</span>
-							<span className="text-slate-500 text-xs">
+							<span className="text-ink-600 text-xs">
 								{n} secret{n === 1 ? '' : 's'}
 							</span>
 						</li>
 					))}
 				</ul>
 			)}
-			<div className="mt-3 text-xs text-slate-500">
+			<div className="mt-3 text-xs text-ink-600">
 				To edit an app's secrets, open the app and choose <span className="font-medium">⋯ → Manage agent</span>.
 			</div>
 		</SectionCard>
@@ -369,7 +369,7 @@ function PrivacySection() {
 	return (
 		<SectionCard {...SECTIONS[4]}>
 			<div className="text-sm space-y-2">
-				<p className="text-slate-600">
+				<p className="text-ink-600">
 					By default the watcher bank stays local; assistant + philosophy banks can publish.
 				</p>
 				<Link to="/studio/knowledge" className="text-xs text-gold-700 hover:underline inline-flex items-center gap-1">

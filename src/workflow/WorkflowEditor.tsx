@@ -173,22 +173,22 @@ export default function WorkflowEditor({
 		const foreign = detected.format === "n8n" ? parseN8n(text) : parseDify(text);
 		return (
 			<div className="flex h-full min-h-0 flex-col" style={{ height }}>
-				<div className="flex items-center gap-2 border-b border-amber-100 bg-amber-50 px-3 py-2">
-					<Download size={13} className="flex-shrink-0 text-amber-600" />
-					<p className="min-w-0 flex-1 text-[11px] leading-snug text-amber-800">
+				<div className="flex items-center gap-2 border-b border-ember-100 bg-ember-50 px-3 py-2">
+					<Download size={13} className="flex-shrink-0 text-ember-600" />
+					<p className="min-w-0 flex-1 text-micro leading-snug text-ember-800">
 						This is {detected.format === "n8n" ? "an n8n" : "a Dify"} workflow. It can be viewed here and used as a
 						starting point, but it is never written back — Lumid has no {detected.format === "n8n" ? "n8n" : "Dify"} writer.
 					</p>
 					<button
 						type="button"
 						onClick={() => setImporting(true)}
-						className="flex-shrink-0 rounded-lg bg-slate-900 px-2.5 py-1 text-[11px] text-white transition-opacity hover:opacity-90"
+						className="flex-shrink-0 rounded-lg bg-ink-900 px-2.5 py-1 text-micro text-white transition-opacity hover:opacity-90"
 					>
 						Import…
 					</button>
 				</div>
 				<div className="min-h-0 flex-1">
-					<WorkflowCanvas graph={foreign} mode="view" height="100%" className="h-full w-full bg-[#FCFCFD]" />
+					<WorkflowCanvas graph={foreign} mode="view" height="100%" className="h-full w-full bg-card" />
 				</div>
 				{importing && (
 					<ImportDialog
@@ -221,12 +221,12 @@ export default function WorkflowEditor({
 		);
 	}
 
-	const btn = "flex h-7 items-center gap-1 rounded-lg px-2 text-[11px] text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40 disabled:hover:bg-transparent";
+	const btn = "flex h-7 items-center gap-1 rounded-lg px-2 text-micro text-ink-600 transition-colors hover:bg-ink-100 hover:text-ink-900 disabled:opacity-40 disabled:hover:bg-transparent";
 	const errorCount = graph.diagnostics.filter((d) => d.level === "error").length;
 
 	return (
 		<div className="flex h-full min-h-0 flex-col" style={{ height }}>
-			<div className="flex items-center gap-1 border-b border-slate-200 bg-white px-2 py-1.5">
+			<div className="flex items-center gap-1 border-b border-ink-200 bg-card px-2 py-1.5">
 				<AddMenu
 					disabled={!editable}
 					adapter={adapter}
@@ -237,28 +237,28 @@ export default function WorkflowEditor({
 						after: selected ?? graph.nodes.filter((n) => !n.synthetic).slice(-1)[0]?.id,
 					})}
 				/>
-				<span className="mx-1 h-4 w-px bg-slate-200" />
+				<span className="mx-1 h-4 w-px bg-ink-200" />
 				<button type="button" className={btn} disabled={!doc.canUndo} onClick={() => { doc.undo(); sync(); }} title="Undo">
 					<Undo2 size={13} /> Undo
 				</button>
 				<button type="button" className={btn} disabled={!doc.canRedo} onClick={() => { doc.redo(); sync(); }} title="Redo">
 					<Redo2 size={13} /> Redo
 				</button>
-				<span className="mx-1 h-4 w-px bg-slate-200" />
+				<span className="mx-1 h-4 w-px bg-ink-200" />
 				<button type="button" className={btn} onClick={() => setShowYaml((v) => !v)} title="Toggle the YAML pane">
 					{showYaml ? <LayoutGrid size={13} /> : <Code2 size={13} />} {showYaml ? "Canvas" : "YAML"}
 				</button>
 				{(detected.format === "flowmesh" || detected.format === "lumilake") && !readOnly && (
 					<>
-						<span className="mx-1 h-4 w-px bg-slate-200" />
+						<span className="mx-1 h-4 w-px bg-ink-200" />
 						<RunOnFleet yaml={text} format={detected.format} disabled={errorCount > 0} className={btn} />
 					</>
 				)}
-				<div className="ml-auto flex items-center gap-2 text-[10px] text-slate-400">
-					<span className="rounded bg-slate-100 px-1.5 py-0.5 font-medium text-slate-500" title={detected.why}>
+				<div className="ml-auto flex items-center gap-2 text-nano text-ink-600">
+					<span className="rounded bg-ink-100 px-1.5 py-0.5 font-medium text-ink-600" title={detected.why}>
 						{adapter.label}
 					</span>
-					{errorCount > 0 && <span className="text-rose-600">{errorCount} problem{errorCount === 1 ? "" : "s"}</span>}
+					{errorCount > 0 && <span className="text-brick-600">{errorCount} problem{errorCount === 1 ? "" : "s"}</span>}
 					<span>{graph.nodes.filter((n) => !n.synthetic).length} node{graph.nodes.filter((n) => !n.synthetic).length === 1 ? "" : "s"}</span>
 				</div>
 			</div>
@@ -277,7 +277,7 @@ export default function WorkflowEditor({
 								setText(e.target.value);
 								onChange?.(e.target.value);
 							}}
-							className="h-full w-full resize-none border-0 bg-[#FCFCFD] p-3 font-mono text-[11px] leading-relaxed text-slate-700 focus:outline-none"
+							className="h-full w-full resize-none border-0 bg-card p-3 font-mono text-micro leading-relaxed text-ink-700 focus:outline-none"
 						/>
 					) : (
 						<WorkflowCanvas
@@ -290,8 +290,8 @@ export default function WorkflowEditor({
 							density={formFirst ? "compact" : "comfortable"}
 							chrome={formFirst ? { minimap: false, controls: false, diagnostics: true } : undefined}
 							className={formFirst
-								? "w-full shrink-0 border-b border-slate-200 bg-[#FCFCFD]"
-								: "h-full w-full bg-[#FCFCFD]"}
+								? "w-full shrink-0 border-b border-ink-200 bg-card"
+								: "h-full w-full bg-card"}
 							selection={selected}
 							onSelectionChange={setSelected}
 							onEdit={runEdit}
@@ -299,7 +299,7 @@ export default function WorkflowEditor({
 						/>
 					)}
 					{formFirst && !showYaml && inspected && (
-						<div className="min-h-0 flex-1 overflow-y-auto bg-white">
+						<div className="min-h-0 flex-1 overflow-y-auto bg-card">
 							<NodeInspector
 								node={inspected}
 								registry={adapter.registry}
@@ -329,17 +329,17 @@ export default function WorkflowEditor({
 			</div>
 
 			{pendingPromote && (
-				<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6">
-					<div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
-						<h2 className="text-sm font-medium text-slate-900">Restructure this spec?</h2>
-						<p className="mt-2 text-[12px] leading-relaxed text-slate-600">
+				<div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 p-6">
+					<div className="w-full max-w-md rounded-xl bg-card p-5 shadow-xl">
+						<h2 className="text-sm font-medium text-ink-900">Restructure this spec?</h2>
+						<p className="mt-2 text-caption leading-relaxed text-ink-600">
 							A FlowMesh spec with one task keeps its settings directly under{" "}
-							<span className="font-mono text-[11px]">spec:</span>. Holding a second task
+							<span className="font-mono text-micro">spec:</span>. Holding a second task
 							means moving them into{" "}
-							<span className="font-mono text-[11px]">spec.graph.nodes[]</span>, with the
+							<span className="font-mono text-micro">spec.graph.nodes[]</span>, with the
 							current task as the first node.
 						</p>
-						<p className="mt-2 text-[12px] leading-relaxed text-slate-600">
+						<p className="mt-2 text-caption leading-relaxed text-ink-600">
 							Nothing is lost and one undo reverses it — but it does change the shape of
 							your document, so it is worth knowing before it happens.
 						</p>
@@ -347,7 +347,7 @@ export default function WorkflowEditor({
 							<button
 								type="button"
 								onClick={() => setPendingPromote(null)}
-								className="rounded-lg px-3 py-1.5 text-[12px] text-slate-600 hover:bg-slate-100"
+								className="rounded-lg px-3 py-1.5 text-caption text-ink-600 hover:bg-ink-100"
 							>
 								Cancel
 							</button>
@@ -359,7 +359,7 @@ export default function WorkflowEditor({
 									promotedRef.current = true;
 									runEdit(edit);
 								}}
-								className="rounded-lg bg-slate-900 px-3 py-1.5 text-[12px] text-white transition-opacity hover:opacity-90"
+								className="rounded-lg bg-ink-900 px-3 py-1.5 text-caption text-white transition-opacity hover:opacity-90"
 							>
 								Restructure and add
 							</button>
@@ -381,7 +381,7 @@ function UnknownDialect({
 }: { text: string; why: string; readOnly?: boolean; onChange: (t: string) => void; height: number | string }) {
 	return (
 		<div className="flex h-full min-h-0 flex-col" style={{ height }}>
-			<div className="border-b border-amber-100 bg-amber-50 px-3 py-2 text-[11px] leading-snug text-amber-800">
+			<div className="border-b border-ember-100 bg-ember-50 px-3 py-2 text-micro leading-snug text-ember-800">
 				Not a workflow dialect this editor knows, so it is shown as plain text. {why}
 			</div>
 			<textarea
@@ -389,7 +389,7 @@ function UnknownDialect({
 				readOnly={readOnly}
 				spellCheck={false}
 				onChange={(e) => onChange(e.target.value)}
-				className="min-h-0 flex-1 resize-none border-0 bg-[#FCFCFD] p-3 font-mono text-[11px] leading-relaxed text-slate-700 focus:outline-none"
+				className="min-h-0 flex-1 resize-none border-0 bg-card p-3 font-mono text-micro leading-relaxed text-ink-700 focus:outline-none"
 			/>
 		</div>
 	);
@@ -407,20 +407,20 @@ function AddMenu({
 				type="button"
 				disabled={disabled}
 				onClick={() => setOpen((v) => !v)}
-				className="flex h-7 items-center gap-1 rounded-lg bg-slate-900 px-2 text-[11px] text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+				className="flex h-7 items-center gap-1 rounded-lg bg-ink-900 px-2 text-micro text-white transition-opacity hover:opacity-90 disabled:opacity-40"
 			>
 				<Plus size={13} /> Add
 			</button>
 			{open && !disabled && (
 				<>
 					<div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-					<div className="absolute left-0 top-8 z-20 w-64 rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+					<div className="absolute left-0 top-8 z-20 w-64 rounded-xl border border-ink-200 bg-card p-1 shadow-lg">
 						<input
 							autoFocus
 							value={q}
 							onChange={(e) => setQ(e.target.value)}
 							placeholder={`Search ${adapter.label}…`}
-							className="mb-1 h-7 w-full rounded-md border border-slate-200 px-2 text-[11px] focus:outline-none focus:ring-1 focus:ring-[rgb(176_143_69)]"
+							className="mb-1 h-7 w-full rounded-md border border-ink-200 px-2 text-micro focus:outline-none focus:ring-1 focus:ring-gold-500"
 						/>
 						<div className="max-h-64 overflow-y-auto">
 							{hits.map((entry) => (
@@ -428,13 +428,13 @@ function AddMenu({
 									key={entry}
 									type="button"
 									onClick={() => { onPick(entry); setOpen(false); setQ(""); }}
-									className="flex w-full flex-col items-start rounded-md px-2 py-1 text-left hover:bg-slate-50"
+									className="flex w-full flex-col items-start rounded-md px-2 py-1 text-left hover:bg-ink-50"
 								>
-									<span className="text-[11px] text-slate-900">{adapter.labelOf(entry)}</span>
-									<span className="line-clamp-1 text-[10px] text-slate-400">{adapter.summaryOf(entry)}</span>
+									<span className="text-micro text-ink-900">{adapter.labelOf(entry)}</span>
+									<span className="line-clamp-1 text-nano text-ink-600">{adapter.summaryOf(entry)}</span>
 								</button>
 							))}
-							{!hits.length && <p className="px-2 py-2 text-[11px] text-slate-400">Nothing matches "{q}".</p>}
+							{!hits.length && <p className="px-2 py-2 text-micro text-ink-600">Nothing matches "{q}".</p>}
 						</div>
 					</div>
 				</>

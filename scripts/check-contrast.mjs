@@ -36,8 +36,13 @@ for (const [name, s] of Object.entries({ gold, ember, brick, lagoon, plum })) {
 	// Dots / icons (500/600) on paper must be visible: 3:1.
 	checks.push([`${name}-600 (icon) on background`, s[600], surface.background, 3]);
 }
-// Primary button: paper text on ink.
+// Filled controls: paper/white text on their fill.
 checks.push(["background on ink-900 (primary button)", surface.background, ink[900], 4.5]);
+checks.push(["white on gold-700 (accent button)", "#FFFFFF", gold[700], 4.5]);
+checks.push(["white on brick-600 (destructive button)", "#FFFFFF", brick[600], 4.5]);
+checks.push(["white on lagoon-600 (info fill)", "#FFFFFF", lagoon[600], 4.5]);
+// Small gold TEXT must be 700 (gold-600 is 3.9:1 on paper).
+checks.push(["gold-700 on card", gold[700], surface.card, 4.5]);
 
 let fail = 0;
 for (const [label, fg, bg, min] of checks) {

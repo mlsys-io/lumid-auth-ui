@@ -338,7 +338,7 @@ export default function TopStatusStrip() {
 				<div className="min-w-0">
 					{/* Breadcrumb above the title on detail routes */}
 					{crumbs.length > 0 && (
-						<nav className="flex items-center gap-1 text-[11px] text-muted-foreground mb-0.5">
+						<nav className="flex items-center gap-1 text-micro text-muted-foreground mb-0.5">
 							{crumbs.map((c, i) => (
 								<span key={i} className="inline-flex items-center gap-1 min-w-0">
 									{i > 0 && <ChevronRight className="w-3 h-3 text-ink-600 flex-shrink-0" />}
@@ -349,11 +349,11 @@ export default function TopStatusStrip() {
 							))}
 						</nav>
 					)}
-					<h1 className="text-[15px] font-semibold text-foreground truncate leading-tight">
+					<h1 className="text-read font-semibold text-foreground truncate leading-tight">
 						{detailLeaf ?? meta?.title ?? ""}
 					</h1>
 					{meta?.subtitle && !detailLeaf && (
-						<p className="text-[11px] text-muted-foreground mt-0.5 truncate hidden md:block">
+						<p className="text-micro text-muted-foreground mt-0.5 truncate hidden md:block">
 							{meta.subtitle}
 						</p>
 					)}
@@ -375,7 +375,7 @@ export default function TopStatusStrip() {
 				    so the app identity + workflow selector don't get crushed. */}
 				<span className="hidden lg:inline-flex">{loaded && <RightNowTicker items={items} />}</span>
 				{/* "live" heartbeat — sits just left of the chat toggle. */}
-				<span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground" title="Live — your workflows run in the background">
+				<span className="inline-flex items-center gap-1.5 text-micro text-muted-foreground" title="Live — your workflows run in the background">
 					<span className="w-1.5 h-1.5 rounded-full bg-gold-500 heartbeat" />
 					<span className="hidden sm:inline">live{(() => { const a = Math.max(0, Math.floor((Date.now() - refreshedAt) / 1000)); return a < 3 ? "" : a < 60 ? ` · ${a}s ago` : ` · ${Math.floor(a / 60)}m ago`; })()}</span>
 				</span>
@@ -408,15 +408,15 @@ function RightNowTicker({ items }: { items: TickerItem[] }) {
 			title={`Right now — ${it.text}`}
 			className="group inline-flex items-center gap-2 min-w-0 max-w-[260px] sm:max-w-[340px] px-2.5 py-1 rounded-full border border-border bg-card hover:bg-muted transition-colors"
 		>
-			<span className="text-[10.5px] uppercase tracking-[0.08em] font-semibold text-ink-600 shrink-0 hidden lg:inline">Now</span>
+			<span className="text-micro uppercase tracking-[0.08em] font-semibold text-ink-600 shrink-0 hidden lg:inline">Now</span>
 			{/* keyed so it re-mounts (and re-animates) on each flip */}
 			<span key={`${it.key}-${i}`} className="inline-flex items-center gap-1.5 min-w-0 animate-in fade-in slide-in-from-bottom-1 duration-300">
 				<Icon className={["w-3.5 h-3.5 shrink-0", t.icon].join(" ")} />
-				<span className="truncate text-[12px] text-foreground">{it.text}</span>
-				<span className={["text-[11px] font-medium shrink-0", t.text].join(" ")}>{it.action}</span>
+				<span className="truncate text-caption text-foreground">{it.text}</span>
+				<span className={["text-micro font-medium shrink-0", t.text].join(" ")}>{it.action}</span>
 			</span>
 			{items.length > 1 && (
-				<span className="text-[10.5px] text-ink-600 tabular-nums shrink-0">{i + 1}/{items.length}</span>
+				<span className="text-micro text-ink-600 tabular-nums shrink-0">{i + 1}/{items.length}</span>
 			)}
 		</Link>
 	);

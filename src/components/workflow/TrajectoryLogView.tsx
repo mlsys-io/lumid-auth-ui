@@ -46,31 +46,31 @@ function LogRow({ r, highlighted, rowRef }: { r: CycleLogRow; highlighted?: bool
 	const hl = highlighted ? "ring-2 ring-gold-400/70" : "";
 	if (ev === "llm") {
 		return (
-			<li ref={rowRef} className={cn("rounded-lg border border-slate-200/70 bg-white px-3 py-2 space-y-1.5", hl)}>
-				<div className="flex items-center gap-1.5 text-[10px] text-slate-400">
-					<Cpu className="w-3 h-3 text-violet-500" />
+			<li ref={rowRef} className={cn("rounded-lg border border-ink-200/70 bg-card px-3 py-2 space-y-1.5", hl)}>
+				<div className="flex items-center gap-1.5 text-nano text-ink-600">
+					<Cpu className="w-3 h-3 text-plum-600" />
 					<span className="uppercase tracking-wide font-semibold">{r.model || "llm"}</span>
 					{r.variant_id && <span className="font-mono">· {r.variant_id}</span>}
 					{r.stage && <span>· {r.stage}</span>}
-					{r.partial && <span className="text-amber-500">· streaming…</span>}
+					{r.partial && <span className="text-ember-600">· streaming…</span>}
 					<span className="ml-auto tabular-nums">{fmtWhen(r.ts)}</span>
 				</div>
 				{r.prompt && (
 					<div>
-						<div className="text-[9px] uppercase tracking-wide text-slate-400 mb-0.5">prompt</div>
-						<div className="text-[11px] text-slate-600 leading-snug whitespace-pre-wrap break-words">{String(r.prompt).slice(0, 2000)}</div>
+						<div className="text-nano uppercase tracking-wide text-ink-600 mb-0.5">prompt</div>
+						<div className="text-micro text-ink-600 leading-snug whitespace-pre-wrap break-words">{String(r.prompt).slice(0, 2000)}</div>
 					</div>
 				)}
 				{r.thinking && (
 					<div>
-						<div className="text-[9px] uppercase tracking-wide text-slate-400 mb-0.5">thinking</div>
-						<div className="text-[11px] text-slate-400 italic leading-snug whitespace-pre-wrap break-words">{String(r.thinking).slice(0, 1200)}</div>
+						<div className="text-nano uppercase tracking-wide text-ink-600 mb-0.5">thinking</div>
+						<div className="text-micro text-ink-600 italic leading-snug whitespace-pre-wrap break-words">{String(r.thinking).slice(0, 1200)}</div>
 					</div>
 				)}
 				{r.response && (
 					<div>
-						<div className="text-[9px] uppercase tracking-wide text-gold-600 mb-0.5">response</div>
-						<div className="text-[11px] text-slate-700 leading-snug whitespace-pre-wrap break-words">{String(r.response).slice(0, 3000)}</div>
+						<div className="text-nano uppercase tracking-wide text-gold-700 mb-0.5">response</div>
+						<div className="text-micro text-ink-700 leading-snug whitespace-pre-wrap break-words">{String(r.response).slice(0, 3000)}</div>
 					</div>
 				)}
 			</li>
@@ -80,12 +80,12 @@ function LogRow({ r, highlighted, rowRef }: { r: CycleLogRow; highlighted?: bool
 	const Icon = ev === "stage" ? Layers : ev === "branch" ? Bot : MessageSquare;
 	const text = r.note || r.status || r.stage || r.event || "event";
 	return (
-		<li ref={rowRef} className={cn("flex items-center gap-2 px-3 py-1.5 text-[11px] text-slate-500 rounded-lg", hl)}>
-			<Icon className="w-3 h-3 text-slate-400 flex-shrink-0" />
-			<span className="uppercase tracking-wide text-[9px] text-slate-400 font-semibold">{r.event || "event"}</span>
+		<li ref={rowRef} className={cn("flex items-center gap-2 px-3 py-1.5 text-micro text-ink-600 rounded-lg", hl)}>
+			<Icon className="w-3 h-3 text-ink-600 flex-shrink-0" />
+			<span className="uppercase tracking-wide text-nano text-ink-600 font-semibold">{r.event || "event"}</span>
 			<span className="truncate" title={text}>{text}</span>
-			{r.stage && r.event !== "stage" && <span className="text-slate-300">· {r.stage}</span>}
-			<span className="ml-auto tabular-nums text-slate-300">{fmtWhen(r.ts)}</span>
+			{r.stage && r.event !== "stage" && <span className="text-ink-600">· {r.stage}</span>}
+			<span className="ml-auto tabular-nums text-ink-600">{fmtWhen(r.ts)}</span>
 		</li>
 	);
 }
@@ -181,46 +181,46 @@ export default function TrajectoryLogView({ app, loop, ts, onBack, backLabel }: 
 	const total = cycles?.length ?? 0;
 
 	return (
-		<div className="h-full flex flex-col rounded-xl border border-slate-200 bg-white overflow-hidden animate-in fade-in duration-200">
-			<div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-100">
-				<button onClick={onBack} className="flex-shrink-0 inline-flex items-center gap-1 text-[12px] text-slate-500 hover:text-slate-900 px-2 py-1 -ml-1 rounded-lg hover:bg-slate-100 transition-colors"><ArrowLeft className="w-3.5 h-3.5" /> {backLabel || L.runTree.text}</button>
+		<div className="h-full flex flex-col rounded-xl border border-ink-200 bg-card overflow-hidden animate-in fade-in duration-200">
+			<div className="flex items-center gap-2 px-3 py-2.5 border-b border-ink-100">
+				<button onClick={onBack} className="flex-shrink-0 inline-flex items-center gap-1 text-caption text-ink-600 hover:text-ink-900 px-2 py-1 -ml-1 rounded-lg hover:bg-ink-100 transition-colors"><ArrowLeft className="w-3.5 h-3.5" /> {backLabel || L.runTree.text}</button>
 				<div className="flex items-center gap-1.5 min-w-0">
-					<MessageSquare className="w-3.5 h-3.5 text-violet-500 flex-shrink-0" />
-					<span className="text-sm font-medium text-slate-900" title={L.runLog.tip}>{L.runLog.text}</span>
-					{running && <span className="inline-flex items-center gap-1 text-[10px] text-sky-600"><span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse" /> live</span>}
+					<MessageSquare className="w-3.5 h-3.5 text-plum-600 flex-shrink-0" />
+					<span className="text-sm font-medium text-ink-900" title={L.runLog.tip}>{L.runLog.text}</span>
+					{running && <span className="inline-flex items-center gap-1 text-nano text-lagoon-600"><span className="w-1.5 h-1.5 rounded-full bg-lagoon-500 animate-pulse" /> live</span>}
 				</div>
 				{total > 0 && (
 					<div className="ml-auto flex items-center gap-1 flex-shrink-0">
 						<button type="button" disabled={idx >= total - 1} onClick={() => setIdx((i) => Math.min(total - 1, i + 1))}
-							className="p-0.5 rounded disabled:opacity-30 enabled:hover:bg-slate-100 text-slate-500" title="older run"><ChevronLeft className="w-3.5 h-3.5" /></button>
-						<span className="text-[10px] text-slate-500 tabular-nums whitespace-nowrap" title={curTs}>{cycleDate(curTs)} · {idx + 1}/{total}</span>
+							className="p-0.5 rounded disabled:opacity-30 enabled:hover:bg-ink-100 text-ink-600" title="older run"><ChevronLeft className="w-3.5 h-3.5" /></button>
+						<span className="text-nano text-ink-600 tabular-nums whitespace-nowrap" title={curTs}>{cycleDate(curTs)} · {idx + 1}/{total}</span>
 						<button type="button" disabled={idx <= 0} onClick={() => setIdx((i) => Math.max(0, i - 1))}
-							className="p-0.5 rounded disabled:opacity-30 enabled:hover:bg-slate-100 text-slate-500" title="newer run"><ChevronRight className="w-3.5 h-3.5" /></button>
+							className="p-0.5 rounded disabled:opacity-30 enabled:hover:bg-ink-100 text-ink-600" title="newer run"><ChevronRight className="w-3.5 h-3.5" /></button>
 					</div>
 				)}
 			</div>
 
 			{/* WS-6 — grep this run's transcript + errors. */}
 			{curTs && (
-				<div className="px-3 py-2 border-b border-slate-100 flex-shrink-0">
+				<div className="px-3 py-2 border-b border-ink-100 flex-shrink-0">
 					<RunLogSearch app={app} loop={loop} ts={curTs} onJump={(i) => jumpTo(i)} compact />
 				</div>
 			)}
 
 			<div className="flex-1 min-h-0 overflow-y-auto p-3">
 				{rows === null ? (
-					<div className="h-full flex items-center justify-center text-xs text-slate-400"><Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading run transcript…</div>
+					<div className="h-full flex items-center justify-center text-xs text-ink-600"><Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading run transcript…</div>
 				) : rows.length === 0 ? (
-					<div className="h-full flex flex-col items-center justify-center gap-2 text-center text-slate-400">
-						<MessageSquare className="w-6 h-6 text-slate-300" />
-						<div className="text-sm text-slate-500">No transcript for this run.</div>
+					<div className="h-full flex flex-col items-center justify-center gap-2 text-center text-ink-600">
+						<MessageSquare className="w-6 h-6 text-ink-600" />
+						<div className="text-sm text-ink-600">No transcript for this run.</div>
 						{/* The server's own reason when it has one — "nothing was said" and
 						    "the cycle volume is not mounted on this pod" are opposite facts
 						    that used to render as the same sentence. */}
 						<div className="text-xs max-w-xs">{why || "This run didn't stream a conversation log — its step outputs are in the run's pipeline (open a node's \"details\")."}</div>
 						{/* An identifier to quote in a bug report. Without it the empty
 						    state names nothing the reader can search for. */}
-						{curTs && <div className="text-[10px] font-mono text-slate-300 mt-1">{app} · {loop} · {curTs}</div>}
+						{curTs && <div className="text-nano font-mono text-ink-600 mt-1">{app} · {loop} · {curTs}</div>}
 					</div>
 				) : (
 					<ul className={cn("space-y-1.5")}>

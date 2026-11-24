@@ -151,10 +151,10 @@ export default function ConnectMicrosoftPage() {
 	return (
 		<div className="max-w-2xl mx-auto p-6 space-y-6">
 			<div>
-				<div className="text-xs font-medium text-indigo-500 uppercase tracking-widest">
+				<div className="text-xs font-medium text-plum-600 uppercase tracking-widest">
 					Microsoft 365 · Outlook + Calendar
 				</div>
-				<h1 className="text-3xl font-bold mt-1">Connect Outlook + Calendar</h1>
+				<h1 className="text-h1 font-bold mt-1">Connect Outlook + Calendar</h1>
 				<p className="text-sm text-muted-foreground mt-2">
 					Connects your Microsoft 365 (Outlook + Calendar) to Lumid via Microsoft Graph using
 					Microsoft&apos;s pre-registered Graph PowerShell SDK client. <strong>No Azure AD app
@@ -175,8 +175,8 @@ export default function ConnectMicrosoftPage() {
 			{grant === null ? (
 				<div className="text-sm text-muted-foreground italic">Loading…</div>
 			) : grant.state === 'connected' ? (
-				<div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 space-y-1">
-					<div className="font-medium text-emerald-700">✓ Connected</div>
+				<div className="rounded-lg border border-gold-500/30 bg-gold-500/10 p-4 space-y-1">
+					<div className="font-medium text-gold-700">✓ Connected</div>
 					<div className="text-sm text-muted-foreground">
 						{grant.display_name || grant.user_principal_name}
 						{grant.user_principal_name && grant.display_name && (
@@ -194,19 +194,19 @@ export default function ConnectMicrosoftPage() {
 					</div>
 				</div>
 			) : grant.state === 'revoked' ? (
-				<div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm">
+				<div className="rounded-md border border-ember-500/30 bg-ember-500/10 px-4 py-3 text-sm">
 					Previously connected but revoked. Reconnect to enable.
 				</div>
 			) : (
-				<div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+				<div className="rounded-md border border-ink-200 bg-ink-50 px-4 py-3 text-sm text-ink-700">
 					Not connected yet.
 				</div>
 			)}
 
 			{/* Device-code prompt — shown only while a flow is in flight */}
 			{pending && (
-				<div className="rounded-lg border-2 border-emerald-400/60 bg-emerald-50/40 p-5 space-y-3">
-					<div className="text-xs font-semibold uppercase tracking-wide text-emerald-800">
+				<div className="rounded-lg border-2 border-gold-400/60 bg-gold-50/40 p-5 space-y-3">
+					<div className="text-xs font-semibold uppercase tracking-wide text-gold-800">
 						Step 1 · Authenticate at Microsoft
 					</div>
 					<ol className="text-sm space-y-2 list-decimal pl-5">
@@ -216,7 +216,7 @@ export default function ConnectMicrosoftPage() {
 								href={pending.verification_uri}
 								target="_blank"
 								rel="noreferrer"
-								className="text-emerald-700 hover:underline font-medium"
+								className="text-gold-700 hover:underline font-medium"
 							>
 								{pending.verification_uri}
 							</a>
@@ -226,16 +226,16 @@ export default function ConnectMicrosoftPage() {
 							Enter this code:{' '}
 							<button
 								onClick={copyCode}
-								className="font-mono font-bold text-lg bg-white border border-emerald-300 rounded px-3 py-1 hover:bg-emerald-50 transition-colors"
+								className="font-mono font-bold text-title bg-card border border-gold-300 rounded px-3 py-1 hover:bg-gold-50 transition-colors"
 							>
 								{pending.user_code}
 							</button>
-							{copied && <span className="ml-2 text-xs text-emerald-700">copied</span>}
+							{copied && <span className="ml-2 text-xs text-gold-700">copied</span>}
 						</li>
 						<li>Complete your normal corporate sign-in (MFA + Conditional Access apply)</li>
 						<li>Click <strong>Accept</strong> on the Microsoft Graph PowerShell consent screen</li>
 					</ol>
-					<div className="flex items-center gap-3 pt-2 border-t border-emerald-200">
+					<div className="flex items-center gap-3 pt-2 border-t border-gold-200">
 						<div className="text-xs text-muted-foreground flex-1">
 							{pollStatus === 'pending' || pollStatus === '' ? (
 								<>Waiting for you to finish at Microsoft…</>
