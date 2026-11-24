@@ -67,7 +67,14 @@ export async function listInboxMessages(
 	params: ListMessagesParams = {},
 ): Promise<ListMessagesResponse> {
 	const { data } = await inboxClient.get("/messages", { params });
-	return data;
+	// An unrouted /inbox-api (nightly.lum.id) answers with the SPA's index.html
+	// and a 200, so `data.messages` was undefined and the page crashed on
+	// `messages.map` into the error boundary. Reject any body that is not the
+	// inbox shape so the page shows its ErrorState instead.
+	if (!data || typeof data !== "object" || !Array.isArray((data as ListMessagesResponse).messages)) {
+		throw new Error("The inbox service returned an unexpected response.");
+	}
+	return { ...(data as ListMessagesResponse), unread: (data as ListMessagesResponse).unread ?? 0 };
 }
 
 /** POST /api/v1/inbox/{id}/seen — mark a message as read. */

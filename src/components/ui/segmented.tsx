@@ -32,11 +32,30 @@ export function Segmented<T extends string>({
 		if (!root || !el) return setThumb(null);
 		setThumb({ x: el.offsetLeft, w: el.offsetWidth });
 	}, [value, options.length]);
+	// WAI-ARIA radio group: one tab stop (the checked option), arrows/Home/End
+	// move AND select — a filter that only answered the mouse was a dead end
+	// for keyboard users, and outline-none left its focus invisible.
+	const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+		const i = options.findIndex((o) => o.value === value);
+		const last = options.length - 1;
+		const next =
+			e.key === "ArrowRight" || e.key === "ArrowDown" ? (i >= last ? 0 : i + 1)
+			: e.key === "ArrowLeft" || e.key === "ArrowUp" ? (i <= 0 ? last : i - 1)
+			: e.key === "Home" ? 0
+			: e.key === "End" ? last
+			: -1;
+		if (next < 0) return;
+		e.preventDefault();
+		const v = options[next].value;
+		onChange(v);
+		ref.current?.querySelector<HTMLElement>(`[data-value="${CSS.escape(v)}"]`)?.focus();
+	};
 	return (
 		<div
 			ref={ref}
 			role="radiogroup"
 			aria-label={ariaLabel}
+			onKeyDown={onKeyDown}
 			className={cn(
 				"relative inline-flex items-center rounded-lg bg-ink-100/80 p-[3px]",
 				size === "sm" ? "h-8" : "h-9",
@@ -58,11 +77,12 @@ export function Segmented<T extends string>({
 						type="button"
 						role="radio"
 						aria-checked={on}
+						tabIndex={on || (!options.some((x) => x.value === value) && o === options[0]) ? 0 : -1}
 						data-value={o.value}
 						title={o.title}
 						onClick={() => onChange(o.value)}
 						className={cn(
-							"relative z-[1] inline-flex h-full items-center gap-1.5 rounded-md px-3 font-medium outline-none transition-colors duration-180",
+							"relative z-[1] inline-flex h-full items-center gap-1.5 rounded-md px-3 font-medium outline-none transition-colors duration-180 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-1 focus-visible:ring-offset-ink-100",
 							size === "sm" ? "text-caption" : "text-meta",
 							on ? "text-foreground" : "text-ink-600 hover:text-ink-900",
 						)}

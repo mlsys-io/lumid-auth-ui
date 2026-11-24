@@ -2,30 +2,21 @@
 //   1. Working-context ("Context") chip sits to the LEFT of the model chip.
 //   2. The Crosshair "pick a UI element" selector is REMOVED.
 //   3. The "what should I do" starter chips are REMOVED from the empty state.
-// Env: LUMID_BASE (default https://lum.id), LUMID_EMAIL, LUMID_PASSWORD.
+// Env: LUMID_BASE (default https://lum.id), LUMID_EMAIL + LUMID_PASSWORD or LUMID_PAT.
 
 import { chromium } from 'playwright';
+import { launchBrowser } from './_browser.mjs';
+import { authContext } from './_auth.mjs';
 
 const BASE  = process.env.LUMID_BASE  || 'https://lum.id';
-const EMAIL = process.env.LUMID_EMAIL || 'admin@lum.id';
-const PW    = process.env.LUMID_PASSWORD;
-if (!PW) { console.error('LUMID_PASSWORD required'); process.exit(2); }
 
 const fails = [];
 const assert = (cond, msg) => { console.log(`${cond ? 'PASS' : 'FAIL'}  ${msg}`); if (!cond) fails.push(msg); };
 
-const loginRes = await fetch(`${BASE}/api/v1/login`, {
-  method: 'POST', headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ email: EMAIL, password: PW }),
-});
-assert(loginRes.status === 200, `login ${EMAIL} → 200 (got ${loginRes.status})`);
-const m = (loginRes.headers.get('set-cookie') || '').match(/lm_session=([^;]+)/);
-assert(!!m, 'lm_session cookie issued');
-if (!m) process.exit(1);
-
-const b = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
-const ctx = await b.newContext();
-await ctx.addCookies([{ name: 'lm_session', value: m[1], domain: '.lum.id', path: '/', httpOnly: true, secure: true, sameSite: 'Lax' }]);
+// lm_session via LUMID_PASSWORD, else LUMID_PAT (see _auth.mjs).
+const b = await launchBrowser(chromium);
+const { ctx, mode, who } = await authContext(b, BASE);
+console.log(`NOTE  auth=${mode} (${who})`);
 const page = await ctx.newPage();
 
 // ADVANCED mode, deliberately. Simple mode is the default now and it hides

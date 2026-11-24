@@ -86,6 +86,48 @@ npm run typecheck
 npm run test:blocks    # e2e/blocks-replay.mjs
 ```
 
+## Design system (Lumen) — Studio, `/code`, `/claude-sessions`, `/explore`, `/auth`
+
+Warm editorial, light only. **Source of truth: `src/styles/palette.json`** (typed via
+`src/styles/palette.ts`); Tailwind, `globals.css` channels, `src/workflow/theme.ts` and charts all
+derive from it. Don't add a hex anywhere else — `npm run check:palette` ratchets it.
+
+- **Scoping.** Font (Inter) and radius apply only under `html[data-surface="studio"]`, stamped by
+  an inline script in `index.html` (first paint) and kept in sync by `useStudioSurface()` for
+  `/studio /code /claude-sessions /explore /auth`. Ported trees, LQT and QuantArena keep their look.
+- **Colour.** Ink scale replaces slate/gray/zinc. Status = `src/lib/tones.ts`: ok **gold**,
+  running **lagoon**, failing **brick**, attention **ember**, idle ink, knowledge **plum** — each
+  tone carries an icon; never signal by colour alone. Text ≥ 4.5:1 on paper *and* `muted`:
+  body text is `ink-600`+, status text uses the `-700` step, white-on-gold needs `gold-700`.
+  `npm run check:contrast` asserts the pairs. Charts use `chart-1…8` (validated CVD-safe), in order.
+- **Alpha on tokens works** (`bg-card/80`, `ring-ring/40`): tokens are `rgb(var(--x-rgb) / α)`.
+  Before 2026-11 these silently emitted no CSS. A translucent *text* class can fail contrast —
+  prefer a solid ink step.
+- **Type scale** (no `text-[Npx]`): `nano 10 · micro 11 · caption 12 · meta 13 · body 14 ·
+  read 15 · title 17 · h3 20 · h2 24 · h1 32` (h1–h3 in `font-display` serif). Uppercase kickers
+  use `.eyebrow`. `cn()` is `extendTailwindMerge`-configured for these keys and `shadow-e1/e2/e3`
+  — a plain tailwind-merge would drop `text-body` next to a colour class.
+- **Primitives** (`src/components/ui/`): `Button` (primary ink · accent gold-700 · secondary ·
+  ghost · destructive brick · link; `default`/`outline` are aliases), `Badge` tones,
+  `PageHeader` (serif title + subtitle + actions + underline tabs), `PageContainer`, `Segmented`,
+  `EmptyState`, `ErrorState` (401/403 probes the session before saying "signed out"),
+  `Skeleton` (`.lumen-skeleton`), `StatTile`, `DataTable`, `StatusBadge`.
+  Pages in the default `<main>` use `<PageHeader className="pt-2">` and set `ownHeader: true` in
+  `TopStatusStrip`'s `PAGE_META`, or the title renders twice.
+- **Illustration: Strands** (`src/components/illustrations/`): `StrandMark` (the logo; `idle |
+  draw | thinking`), `StrandAvatar` (hashed app glyph, warm tints only), scenes for empty/error
+  states. 160×120 grid, 1.5px round strokes, ink-300 + one bronze strand.
+- **Motion is CSS** (`lumen-rise`, `.lumen-lift`, `.lumen-press`, `.lumen-sweep`, `strand-*`,
+  `tailwindcss-animate` for Radix overlays). framer-motion stays in the lazy chat/canvas chunks.
+  Every new animation class must be added to the `prefers-reduced-motion` block in `globals.css`
+  (loaders become a fade, never a freeze).
+- **Codemod**: `node scripts/codemod-studio-tokens.mjs` is idempotent — rerun it after rebasing
+  a branch that predates Lumen instead of hand-resolving class conflicts.
+- **Verify visually**: `vite.live.config.ts` renders local source on lum.id data (needs
+  `VITE_API_BASE_URL` + `VITE_ME_API_BASE`); `e2e/studio-visual.mjs` (read-only) reports
+  off-palette, contrast, font-size count and 390px overflow per route; `design-dev.html` is the
+  no-auth gallery of tokens, primitives and Strands.
+
 ## The things that trip people up
 
 - **Auth is enforced twice, and both layers matter.** `AuthGuard`/`AdminGuard` in the SPA are UX;

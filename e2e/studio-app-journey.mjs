@@ -9,36 +9,24 @@
 //
 // Prereqs: `npm i playwright` + a system Chrome (google-chrome-stable);
 //   playwright's own chromium download is unreliable in some sandboxes.
-// Env: LUMID_BASE (default https://lum.id), LUMID_EMAIL, LUMID_PASSWORD, APP.
+// Env: LUMID_BASE (default https://lum.id), LUMID_EMAIL + LUMID_PASSWORD or LUMID_PAT, APP.
 // Exit 0 = all assertions pass; non-zero = a regression.
 
 import { chromium } from 'playwright';
 import { launchBrowser } from './_browser.mjs';
+import { authContext } from './_auth.mjs';
 
 const BASE  = process.env.LUMID_BASE  || 'https://lum.id';
-const EMAIL = process.env.LUMID_EMAIL || 'admin@lum.id';
-const PW    = process.env.LUMID_PASSWORD;
 const APP   = process.env.APP || 'venue-link-matcher';
-if (!PW) { console.error('LUMID_PASSWORD required'); process.exit(2); }
 
 const fails = [];
 const assert = (cond, msg) => { console.log(`${cond ? 'PASS' : 'FAIL'}  ${msg}`); if (!cond) fails.push(msg); };
 
-// 1. Log in via the REST API → capture lm_session (avoids scripting the form).
-const loginRes = await fetch(`${BASE}/api/v1/login`, {
-  method: 'POST', headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ email: EMAIL, password: PW }),
-});
-assert(loginRes.status === 200, `login ${EMAIL} → 200 (got ${loginRes.status})`);
-const setCookie = loginRes.headers.get('set-cookie') || '';
-const m = setCookie.match(/lm_session=([^;]+)/);
-assert(!!m, 'lm_session cookie issued');
-if (!m) process.exit(1);
-
-// 2. Drive the page.
+// 1-2. Authenticated browser: lm_session via LUMID_PASSWORD, else LUMID_PAT
+// (see _auth.mjs).
 const b = await launchBrowser(chromium);
-const ctx = await b.newContext();
-await ctx.addCookies([{ name: 'lm_session', value: m[1], domain: '.lum.id', path: '/', httpOnly: true, secure: true, sameSite: 'Lax' }]);
+const { ctx, mode, who } = await authContext(b, BASE);
+console.log(`NOTE  auth=${mode} (${who})`);
 const page = await ctx.newPage();
 const api404 = [];
 page.on('response', r => { const u = r.url(); if (u.includes('/api/v1/me/') && r.status() === 404) api404.push(u.replace(BASE, '')); });

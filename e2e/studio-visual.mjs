@@ -216,6 +216,11 @@ for (const [name, path, opts = {}] of ROUTES) {
 			if (resp && resp.status() >= 500) throw new Error(`HTTP ${resp.status()} from the edge`);
 			await page.waitForTimeout(WAIT);
 			await page.screenshot({ path: `${OUT}/${name}-${vp}.png` });
+			// A render crash lands in the ErrorBoundary, which is a perfectly
+			// on-palette, high-contrast page — the pixel audit scored the crashed
+			// Inbox as clean for two releases. Fail the route instead.
+			const crash = await page.locator('text=This page hit a snag').count();
+			if (crash) throw new Error(`render crash: ${(await page.locator('code, pre').first().innerText().catch(() => '')).slice(0, 120)}`);
 			const a = await page.evaluate(audit);
 			report[`${name}-${vp}`] = { url: page.url(), ...a, pageErrors: errs };
 			console.log(`${name.padEnd(16)} ${vp.padEnd(5)} off=${String(a.offPalette).padStart(3)} contrast=${String(a.contrast).padStart(3)} sizes=${a.fontSizes.length} overflow=${a.overflowX ? 'YES' : 'no'}${errs.length ? ` errors=${errs.length}` : ''}`);
