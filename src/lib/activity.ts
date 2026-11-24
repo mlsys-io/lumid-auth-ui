@@ -249,6 +249,14 @@ export function plainCause(reason?: string | null): string {
 
 	if (/timed? ?out|TimeoutError|deadline exceeded/i.test(s)) return prefix + "Timed out";
 
+	// "commands/x.py exited with status 2: <usage>; x: error: <msg> — <hint>"
+	// (argparse and friends): the part after "error:" is the reason.
+	const exited = s.match(/exited with (?:status|code) (\d+)/i);
+	if (exited) {
+		const msg = s.match(/\berror:\s*([^—\n]+)/i)?.[1]?.trim().replace(/[.;]$/, "");
+		return clip(withPrefix(prefix, msg ? `App error: ${msg}` : `The app's command stopped (exit ${exited[1]})`));
+	}
+
 	// A bare snake_case outcome ("backend_unavailable").
 	if (/^[a-z]+(_[a-z]+)+$/.test(s)) return withPrefix(prefix, sentence(s.replace(/_/g, " ")));
 
@@ -259,9 +267,10 @@ export function plainCause(reason?: string | null): string {
 	return clip(withPrefix(prefix, sentence(plurals(s))));
 }
 
-/** "51s", "1m 40s", "2h 05m". */
+/** "723ms", "51s", "1m 40s", "2h 05m". */
 export function fmtDuration(sec?: number | null): string {
 	if (sec == null || !isFinite(sec) || sec < 0) return "";
+	if (sec < 1) return `${Math.round(sec * 1000)}ms`;
 	const s = Math.round(sec);
 	if (s < 60) return `${s}s`;
 	const m = Math.floor(s / 60);

@@ -213,11 +213,11 @@ export default function TrajectoryLogView({ app, loop, ts, onBack, backLabel }: 
 				) : rows.length === 0 ? (
 					<div className="h-full flex flex-col items-center justify-center gap-2 text-center text-ink-600">
 						<MessageSquare className="w-6 h-6 text-ink-600" />
-						<div className="text-sm text-ink-600">No transcript for this run.</div>
+						<div className="text-sm text-ink-600">No log for this run</div>
 						{/* The server's own reason when it has one — "nothing was said" and
 						    "the cycle volume is not mounted on this pod" are opposite facts
 						    that used to render as the same sentence. */}
-						<div className="text-xs max-w-xs">{why || "This run didn't stream a conversation log — its step outputs are in the run's pipeline (open a node's \"details\")."}</div>
+						<div className="text-xs max-w-xs">{why || "This run kept no conversation log. What it did and found is in the run's answer and steps."}</div>
 						{/* An identifier to quote in a bug report. Without it the empty
 						    state names nothing the reader can search for. */}
 						{curTs && <div className="text-nano font-mono text-ink-600 mt-1">{app} · {loop} · {curTs}</div>}

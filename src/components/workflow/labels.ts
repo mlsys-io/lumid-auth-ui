@@ -39,7 +39,7 @@ export const L = {
 	runs: { text: "runs", tip: "experiment runs (cycles)" } as Label,
 	// The within-run transcript (one term for what used to be Conversation /
 	// Transcript / Trajectory log).
-	runLog: { text: "Evaluation", tip: "the run's evaluation record — the within-run transcript (analyst↔judge turns + step/stage events)" } as Label,
+	runLog: { text: "Run log", tip: "what the run said and did, in order — its conversation and step events, when it kept them" } as Label,
 	// The data the goal is scored on.
 	casesAndData: { text: "Cases & data", tip: "the cases + datasets the goal is scored on" } as Label,
 	// The metric scores view (resolves the old "Data" button → Metrics collision).

@@ -13,6 +13,7 @@
 //   error     a 500 renders ErrorState; Retry recovers without a reload
 //   activity  /studio/runs: 7-day default, Needs fixing in words, Open run
 //   wf header schedule chip in words · Run now · ⋯ grouped This workflow / This app
+//   run page  the answer leads (Succeeded in… / Failed after… + reason), no raw codes
 //   filters   Segmented radios on the Timeline view switch state (aria-checked)
 //   docs      index card -> reader (skeleton -> article) -> back
 //   sessions  /claude-sessions search narrows and clears
@@ -273,6 +274,23 @@ await section('workflow header', async () => {
 	await page.waitForTimeout(300);
 	const tabs = await page.locator('[role=tablist][aria-label="Workflow views"] [role=tab]').allInnerTexts();
 	assert(!tabs.some((t) => /Study|Measurement|Lineage/.test(t)), `tabs are plain (${tabs.map((t) => t.replace(/\d+/g, '').trim()).join(' · ')})`);
+	await page.close();
+});
+
+// ── run page: the answer first, in words ─────────────────────────────────
+await section('run page answer', async () => {
+	const page = await desk.ctx.newPage();
+	const WF = process.env.WF_PATH || '/studio/apps/quant-research/w/backtest';
+	await page.goto(`${BASE}${WF}`, { waitUntil: 'domcontentloaded' });
+	const ans = page.locator('section[aria-label="What this run did"]');
+	try { await ans.waitFor({ timeout: 40000 }); } catch { note(`no run answer at ${WF} — set WF_PATH`); await page.close(); return; }
+	await page.waitForTimeout(1500);
+	const t = await ans.innerText();
+	assert(/^(Succeeded|Failed|Running|Outcome not recorded)/.test(t.trim()), `the answer leads ("${t.split('\n')[0]}")`);
+	const shown = t.split(/Show the raw error|Hide the raw error/)[0];
+	assert(!/\b[a-z]+_[a-z_]+\b/.test(shown), `no snake_case codes in the answer (${(shown.match(/\b[a-z]+_[a-z_]+\b/) || [''])[0]})`);
+	const card = await page.locator('main').innerText();
+	assert(!/\bengine_command\b/.test(card) && !/^Outcome:/m.test(card), 'no "engine_command" / "Outcome:" strip on the run page');
 	await page.close();
 });
 

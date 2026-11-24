@@ -34,6 +34,10 @@ check("exception class is noise", () =>
 check("plain text passes, capitalised", () =>
 	eq(plainCause("nothing to answer: pass question= or case=+q="), "Nothing to answer: pass question= or case=+q="));
 check("empty", () => eq(plainCause(""), "No reason recorded"));
+check("argparse exit: the error part", () =>
+	eq(plainCause("commands/simulate.py exited with status 2: [--seed SEED]; simulate: error: unrecognized arguments: --from-run 1795529333 — per-run arg(s) are not declared"), "App error: unrecognized arguments: --from-run 1795529333"));
+check("exit with no error text", () => eq(plainCause("commands/x.py exited with status 137"), "The app's command stopped (exit 137)"));
+check("sub-second durations", () => eq(fmtDuration(0.723), "723ms"));
 check("long text is clipped at a word", () => {
 	const s = plainCause("x ".repeat(80) + "end");
 	if (!s.endsWith("…") || s.length > 92) throw new Error(s);
