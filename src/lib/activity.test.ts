@@ -37,6 +37,9 @@ check("empty", () => eq(plainCause(""), "No reason recorded"));
 check("argparse exit: the error part", () =>
 	eq(plainCause("commands/simulate.py exited with status 2: [--seed SEED]; simulate: error: unrecognized arguments: --from-run 1795529333 — per-run arg(s) are not declared"), "App error: unrecognized arguments: --from-run 1795529333"));
 check("exit with no error text", () => eq(plainCause("commands/x.py exited with status 137"), "The app's command stopped (exit 137)"));
+check("argparse usage listing --timeout is not a timeout", () =>
+	eq(plainCause("commands/sim.py exited with status 2: usage: sim [--timeout T]; sim: error: unrecognized arguments: --from-run 1"), "App error: unrecognized arguments: --from-run 1"));
+check("a parenthesised count is not an HTTP code", () => eq(plainCause("dedupe failed (404 duplicate keys)"), "Dedupe failed (404 duplicate keys)"));
 check("sub-second durations", () => eq(fmtDuration(0.723), "723ms"));
 check("long text is clipped at a word", () => {
 	const s = plainCause("x ".repeat(80) + "end");

@@ -163,7 +163,7 @@ export function WorkflowRow({ wf, now }: { wf: WorkflowActivity; now: number }) 
 				</div>
 			</div>
 			{/* The strip's dots open their run's card; keep those clicks off the row. */}
-			<div onClick={(e) => e.stopPropagation()} className="justify-self-end">
+			<div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} className="justify-self-end">
 				<RunSparkline spec={wf.spark} runs={wf.app ? wf.sparkRuns : undefined} app={wf.app || undefined} loop={wf.loop} />
 			</div>
 			<div className="hidden sm:block text-micro text-ink-600 text-right tabular-nums">

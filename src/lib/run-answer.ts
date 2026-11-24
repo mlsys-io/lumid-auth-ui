@@ -46,7 +46,7 @@ export function humanMetric(key: string): MetricName {
 /** A value with its unit, rounded for reading: 22.4 tok/s, 709.7 ms, 85%. */
 export function fmtMetricValue(v: number, unit: string, key = ""): string {
 	// A rate in [0,1] with no unit reads as a share.
-	if (!unit && /rate|ratio|share|accuracy|precision|recall/.test(key) && v >= 0 && v <= 1) return `${Math.round(v * 1000) / 10}%`;
+	if (!unit && /(^|_)(rate|ratio|share|accuracy|precision|recall)(_|$)/.test(key) && v >= 0 && v <= 1) return `${Math.round(v * 1000) / 10}%`;
 	const abs = Math.abs(v);
 	const n = Number.isInteger(v) ? v.toLocaleString() : abs >= 100 ? (Math.round(v * 10) / 10).toLocaleString() : abs >= 1 ? String(Math.round(v * 100) / 100) : String(+v.toPrecision(3));
 	if (!unit) return n;
@@ -91,15 +91,17 @@ export function runMetrics(d: MeCycleDetail | null, max = 8): RunMetric[] {
 	const primary = primaryMetricKey(d);
 	const keys = Object.keys(m).filter((k) => typeof m[k] === "number" && isFinite(m[k] as number) && !NOT_A_FINDING.test(k));
 	const ordered = primary ? [primary, ...keys.filter((k) => k !== primary)] : keys;
-	// Two names for one number (throughput_tok_s == goodput_tok_s == objective)
-	// are shown once.
-	const seen = new Set<number>();
+	const seen = new Set<string>();
 	const out: RunMetric[] = [];
 	for (const k of ordered) {
 		const v = m[k] as number;
-		if (k !== primary && seen.has(v) && v !== 0 && v !== 1) continue;
-		seen.add(v);
 		const { label, unit } = humanMetric(k);
+		// Two names for ONE measurement (goodput_tok_s == throughput_tok_s) share
+		// a unit; equal counts without one (cases_total == cases_passed) are
+		// different facts and both stay.
+		const sig = `${unit}|${v}`;
+		if (unit && k !== primary && seen.has(sig)) continue;
+		seen.add(sig);
 		out.push({ key: k, label, unit, value: v, text: fmtMetricValue(v, unit, k) });
 		if (out.length >= max) break;
 	}
@@ -126,6 +128,12 @@ export function stepLabel(st: MeCycleStep): string {
 	}
 	const words = id.replace(/[_-]+/g, " ").trim();
 	return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** A failed step's own error text, unreworded. */
+export function rawStepError(st: MeCycleStep): string | undefined {
+	const inner = (st.output as Record<string, unknown> | undefined)?.out as Record<string, unknown> | undefined;
+	return st.error || (typeof inner?.error === "string" ? inner.error : undefined);
 }
 
 /** One line under the step name: the failure in words, or what it said. */
@@ -167,10 +175,17 @@ export function runAnswer(d: MeCycleDetail | null, opts: { ok?: boolean; running
 		// loaded: say nothing about the reason yet rather than "none recorded".
 		if (!d) return { tone: "failed", headline: dur ? `Failed after ${dur}` : "Failed", sentence: "" };
 		const err = typeof s.error === "string" ? s.error : s.error != null ? JSON.stringify(s.error) : undefined;
-		const stepErr = (d?.steps || []).map((st) => (stepFailed(st) ? stepLine(st) : "")).find(Boolean);
+		// The raw text, wherever the run recorded it: the run's error, a failed
+		// step's own error, or summary.step_errors[0]. Triage reads THIS, not
+		// the reworded sentence ("ModuleNotFoundError" must reach the triage).
+		const failedStep = (d?.steps || []).find((st) => stepFailed(st));
+		const stepRaw = failedStep ? rawStepError(failedStep) : undefined;
+		const se = Array.isArray(s.step_errors) && s.step_errors.length ? s.step_errors[0] as unknown : undefined;
+		const seRaw = se == null ? undefined : typeof se === "string" ? se : typeof (se as { error?: unknown }).error === "string" ? (se as { error: string }).error : JSON.stringify(se);
+		const raw = err || stepRaw || seRaw;
 		const outcome = typeof s.outcome === "string" && !QUIET_OUTCOMES.has(s.outcome) ? s.outcome : "";
-		const sentence = err ? plainCause(err) : stepErr || (outcome ? plainCause(outcome) : "No reason was recorded");
-		return { tone: "failed", headline: dur ? `Failed after ${dur}` : "Failed", sentence, raw: err || undefined };
+		const sentence = raw ? plainCause(raw) : outcome ? plainCause(outcome) : (failedStep && stepLine(failedStep)) || "No reason was recorded";
+		return { tone: "failed", headline: dur ? `Failed after ${dur}` : "Failed", sentence, raw: raw || undefined };
 	}
 	if (ok === true) {
 		const said = typeof m.summary === "string" ? m.summary : typeof s.insight === "string" ? s.insight : "";
