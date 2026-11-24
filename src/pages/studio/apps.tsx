@@ -16,7 +16,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { legacyAppQueryTarget, routeLoopMissing, workflowPath } from "@/lib/run-routes";
-import { ChevronRight, ChevronDown, Check, ArrowRight, Boxes, Sparkles, Wrench, Brain, Activity, AlertTriangle, Trash2, Inbox, Loader2, RotateCcw, X, Plus, MoreHorizontal, SlidersHorizontal, Settings, Pencil, Cpu, Cloud, Workflow, Clock, Database, DownloadCloud, UploadCloud, BarChart3 } from "lucide-react";
+import { ChevronRight, ChevronDown, Check, ArrowRight, Boxes, Sparkles, AlertTriangle, Trash2, Loader2, RotateCcw, X, Plus, MoreHorizontal, SlidersHorizontal, Settings, Pencil, Cpu, Cloud, Workflow, Clock, Database, DownloadCloud, UploadCloud, BarChart3 } from "lucide-react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -39,7 +39,8 @@ import { describeSchedule } from "@/lib/schedule";
 import { Skeleton, humanizeLoop, loopLabel } from "@/pages/app-revamp/loops";
 import { QuickStarters } from "@/components/studio/QuickStarters";
 import NewWorkflowFlow from "@/components/workflow/NewWorkflowFlow";
-import StudioPortfolio from "@/pages/studio/portfolio";
+import { FleetTotals, costByApp, fmtUSD } from "@/pages/studio/portfolio";
+import { fetchPortfolio, type Portfolio } from "@/api/portfolio";
 import AppCard, { appTitle, type AppIdentity } from "@/components/workflow/AppCard";
 import type { LoopHealth } from "@/components/workflow/WorkflowObservabilityPanel";
 import NeedsAttentionRail from "@/components/workflow/NeedsAttentionRail";
@@ -63,7 +64,6 @@ const LumidMarkdown = lazy(() => import("@/components/app-surface/LumidMarkdown"
 // CTA when the app has none yet.
 const AppSurface = lazy(() => import("@/components/app-surface/AppSurface"));
 import { RUNNING_APPS } from "@/lib/demo";
-import { useCountUp } from "@/lib/use-count-up";
 import { useStudioRefetch } from "@/hooks/useStudioRefetch";
 import { cn } from "@/lib/utils";
 
@@ -131,7 +131,6 @@ function describeCycle(c: TodayCycle): string {
 //  My Apps home
 // ══════════════════════════════════════════════════════════════════
 
-interface Hero { apps: number; workflows: number; runsToday: number; selfHeals: number; memories: number; failing: number; inbox: number }
 
 // A card for a UI-surface app (no loops/workflows) — Data Exploration,
 // Lumid Market, etc. Opens the app's declared surface; operator-shared
@@ -251,7 +250,8 @@ function AppsHome() {
 	// app slug → ui.sidebar.section, so the index can group apps the same
 	// way the sidebar does (Compute / Research / Trading / …).
 	const [sections, setSections] = useState<Map<string, string>>(new Map());
-	const [hero, setHero] = useState<Hero | null>(null);
+	// 30-day fleet rollup: totals strip + each app's cost in its row.
+	const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
 	const navigate = useNavigate();
 	const appsRef = useRef<HTMLDivElement>(null);
 	// Aggregate loop state for the big LoopOrbit banner on the intent page.
@@ -282,15 +282,14 @@ function AppsHome() {
 	}, []);
 
 	const load = useCallback(async () => {
-			const [wfR, lhR, todayR, agentsR, appsR, draftsR] = await Promise.allSettled([
+			const [wfR, lhR, todayR, portR, appsR] = await Promise.allSettled([
 				// scheduled-only: app cards group xpio loops by app; n8n visual
 				// rows have no app, so fetching them just adds the n8n round-trip.
 				me.listWorkflows("scheduled"),
 				me.loopsHealth(),
 				me.today(),
-				apiClient.get("/api/v1/me/knowledge/agents"),
+				fetchPortfolio(),
 				me.listApps(),
-				me.listDrafts({ state: "pending" }),
 			]);
 
 			// A failed poll (network blip, token refresh, slow backend) must NOT
@@ -320,7 +319,6 @@ function AppsHome() {
 			}
 			setByApp(m);
 
-			let uiCount = 0;
 			// UI-surface apps: declare a `ui:` block but aren't already
 			// represented by a workflow card (no loops). These are the
 			// Data Exploration / Market surfaces — show them so "My Apps"
@@ -340,7 +338,6 @@ function AppsHome() {
 				// Dedup by name (an app can surface in both tenant + operator roots).
 				const byName = new Map<string, MeAppCard>();
 				for (const a of ua) if (!byName.has(a.name) || a.tenant) byName.set(a.name, a);
-				uiCount = byName.size;
 				setUiApps([...byName.values()].sort((a, b) => a.name.localeCompare(b.name)));
 
 				// Optimistic install cards: server merges this user's in-flight /
@@ -443,24 +440,7 @@ function AppsHome() {
 			setIdentity(im);
 			setSections(sm);
 
-			let runsToday = 0;
-			if (todayR.status === "fulfilled") {
-				const start = new Date(); start.setHours(0, 0, 0, 0);
-				const ms = start.getTime();
-				for (const c of todayR.value.cycles) {
-					const t = Date.parse(cycleTsToIso(c.ts));
-					if (!isNaN(t) && t >= ms) runsToday++;
-				}
-			}
-			let memories = 0;
-			if (agentsR.status === "fulfilled") {
-				const ags = agentsR.value.data?.data?.agents || [];
-				memories = ags.reduce((n: number, a: { memory_count?: number }) => n + (a.memory_count || 0), 0);
-			}
-			const failing = wfs.filter((w) => w.last_run_ok === false).length;
-			const selfHeals = wfs.reduce((n, w) => n + (w.run_spark || "").split("").filter((c) => c === "r").length, 0);
-			const inbox = draftsR.status === "fulfilled" ? (draftsR.value.drafts?.length || 0) : 0;
-			setHero({ apps: m.size + uiCount, workflows: wfs.length, runsToday, selfHeals, memories, failing, inbox });
+			if (portR.status === "fulfilled") setPortfolio(portR.value);
 
 			// Loop-event detection → drives the orbit banner. Running if any
 			// cycle is mid-flight; a newer cycle ts than last poll = an event.
@@ -554,6 +534,7 @@ function AppsHome() {
 	// chat (askApp); the old observability panel stays one click away via the
 	// hover-only "details →" link.
 	const SECTION_ORDER = ["Needs attention", "Compute", "Research", "Trading", "Knowledge", "Agents"];
+	const cost30 = costByApp(portfolio);
 	const appRows: IndexRow[] = apps.map((a) => {
 		const rows = byApp.get(a) || [];
 		const failing = rows.filter((w) => w.enabled !== false && w.last_run_ok === false).length;
@@ -564,7 +545,8 @@ function AppsHome() {
 		const statusLabel = failing > 0 ? `${failing}× failing` : running ? "running" : ran ? "healthy" : "idle";
 		const count = rows.length;
 		const when = relSec(lastTs);
-		const meta = [`${count} workflow${count === 1 ? "" : "s"}`, when].filter(Boolean).join(" · ");
+		const spent = cost30.get(a) || 0;
+		const meta = [`${count} workflow${count === 1 ? "" : "s"}`, when, spent > 0 ? `${fmtUSD(spent)} in 30 days` : ""].filter(Boolean).join(" · ");
 		return {
 			id: a,
 			title: identity.get(a)?.label || appTitle(a),
@@ -619,11 +601,13 @@ function AppsHome() {
 				</div>
 			) : (
 				<div className="panel-in-left" ref={appsRef}>
-					{/* Fleet rollup — the cross-workflow health/cost/learning view,
-					    merged into Manage apps so there's one place for the fleet. */}
-					<div className="max-w-[760px] mx-auto w-full px-1 mb-5">
-						<StudioPortfolio embedded />
-					</div>
+					{/* Fleet totals — only the numbers that aren't zero. The apps
+					    themselves are listed once, in the index below. */}
+					{portfolio && (
+						<div className="max-w-[760px] mx-auto w-full px-1 mb-5">
+							<FleetTotals totals={portfolio.totals} />
+						</div>
+					)}
 					{/* In-flight / failed installs stay as action-bearing cards above
 					    the index (retry / dismiss aren't list-row affordances). */}
 					{pendingApps.length > 0 && (
@@ -649,43 +633,6 @@ function AppsHome() {
 			)}
 		</>
 	);
-}
-
-// Compact top stat bar — a single thin row of inline, clickable stats
-// (numbers consolidated to the top), including a failing count.
-function HeroBar({ h, onApps }: { h: Hero; onApps: () => void }) {
-	return (
-		<div className="flex items-center flex-wrap gap-x-1 gap-y-1 -ml-2">
-			<StatChip icon={Boxes} value={h.apps} label="agents" tone="text-ink-600" onClick={onApps} />
-			<StatChip icon={Activity} value={h.workflows} label="workflows" tone="text-ink-600" onClick={onApps} />
-			<StatChip icon={Sparkles} value={h.runsToday} label="runs today" tone="text-ink-600" to="/studio/runs" />
-			{h.selfHeals > 0 && <StatChip icon={Wrench} value={h.selfHeals} label="auto-recovered" tone="text-ink-600" title="workflows that recovered from a failed run on their own" onClick={onApps} />}
-			<StatChip icon={Brain} value={h.memories} label="learned" tone="text-ink-600" title="insights your agents saved from recent runs" to="/studio/knowledge" />
-			{/* failing count intentionally absent — the attention rail below
-			    IS the failure surface (top-strip pill covers other pages). */}
-			<StatChip icon={Inbox} value={h.inbox} label="inbox" tone="text-ink-600" to="/studio/inbox" />
-		</div>
-	);
-}
-
-function StatChip({
-	icon: Icon, value, label, tone, title, to, onClick,
-}: {
-	icon: React.ComponentType<{ className?: string }>;
-	value: number; label: string; tone: string; title?: string; to?: string; onClick?: () => void;
-}) {
-	const shown = Math.round(useCountUp(value));
-	const inner = (
-		<>
-			<Icon className={cn("w-3.5 h-3.5", tone)} />
-			<span className="font-semibold text-ink-800 tabular-nums">{shown}</span>
-			<span className="text-ink-600">{label}</span>
-		</>
-	);
-	const cls = "inline-flex items-center gap-1.5 text-caption rounded-lg px-2 py-1 hover:bg-ink-100/70 transition-colors";
-	if (onClick) return <button type="button" onClick={onClick} title={title} className={cls}>{inner}</button>;
-	if (to) return <Link to={to} title={title} className={cls}>{inner}</Link>;
-	return <div className={cls} title={title}>{inner}</div>;
 }
 
 // ══════════════════════════════════════════════════════════════════

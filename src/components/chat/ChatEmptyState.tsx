@@ -8,7 +8,7 @@
 // The live "Right now" digest moved to the top-bar ticker (TopStatusStrip),
 // which is present on every page — so it's no longer duplicated here.
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { StrandMark } from '@/components/illustrations/StrandMark';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -19,8 +19,20 @@ import { loopLabel } from '@/lib/workflow-names';
 const fire = (prompt: string, context?: Partial<ViewingContext>) =>
 	window.dispatchEvent(new CustomEvent('studio:ask', { detail: { prompt, autosend: true, context } }));
 
+// The mark draws itself once per browser session; after that it is simply
+// there. Drawing on every visit to the home chat was motion with nothing to say.
+const DRAWN_KEY = 'studio_hero_drawn_v1';
+function firstHeroThisSession(): boolean {
+	try {
+		if (sessionStorage.getItem(DRAWN_KEY)) return false;
+		sessionStorage.setItem(DRAWN_KEY, '1');
+		return true;
+	} catch { return false; }
+}
+
 // ChatHero — the greeting block above the composer card.
 export function ChatHero() {
+	const [draw] = useState(firstHeroThisSession);
 	const { user } = useAuth();
 	const name = useMemo(() => {
 		const raw = user?.username || user?.email?.split('@')[0] || '';
@@ -38,8 +50,8 @@ export function ChatHero() {
 				className="lumen-paper pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[360px] w-[640px] max-w-[100vw] -translate-x-1/2 -translate-y-[58%]"
 				style={{ maskImage: 'radial-gradient(closest-side, black 30%, transparent)', WebkitMaskImage: 'radial-gradient(closest-side, black 30%, transparent)' }}
 			/>
-			{/* The strand mark draws itself in, once, on arrival. */}
-			<StrandMark size={52} state="draw" className="mx-auto mb-4" title="Lumid" />
+			{/* The strand mark draws itself in once per session (see DRAWN_KEY). */}
+			<StrandMark size={52} state={draw ? 'draw' : 'idle'} className="mx-auto mb-4" title="Lumid" />
 			<h1 className="font-display text-h1 font-medium text-ink-900 animate-lumen-rise [animation-delay:120ms]">
 				Good {tod}{name ? `, ${name}` : ''}
 			</h1>

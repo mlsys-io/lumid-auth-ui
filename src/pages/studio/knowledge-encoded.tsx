@@ -145,13 +145,20 @@ export default function StudioKnowledgeEncoded() {
 	return (
 		<div className="max-w-4xl mx-auto px-1 py-2 space-y-6">
 			<PageHeader className="pt-2 pb-0" title="Knowledge" subtitle="What's been encoded — yours, audited, portable." />
-			{/* Metrics — real */}
-			<div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-				{/* Lumen StatTile: the numbers count up as they arrive. */}
-				<StatTile label="Memories" value={totalMemories} hint={`across ${agents.length} agents`} icon={Sparkles} />
-				<StatTile label="Knowledge agents" value={agents.length} hint="with accumulated memory" icon={Brain} />
-				<StatTile label="Distilled (recent)" value={distilled} hint="principles + patterns" icon={Gem} />
-			</div>
+			{/* Nothing learned yet: one empty state, no row of zero tiles. */}
+			{totalMemories === 0 ? (
+				<EmptyState
+					art={<EmptyKnowledge />}
+					title="Nothing learned yet"
+					body="Memories land here as your workflows run — each one a pattern, a principle or a fix your agents can reuse."
+				/>
+			) : (
+				<div className={`grid grid-cols-1 gap-3 ${distilled > 0 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+					<StatTile label="Memories" value={totalMemories} hint={`across ${agents.length} agents`} icon={Sparkles} />
+					<StatTile label="Knowledge agents" value={agents.length} hint="with accumulated memory" icon={Brain} />
+					{distilled > 0 && <StatTile label="Distilled (recent)" value={distilled} hint="principles + patterns" icon={Gem} />}
+				</div>
+			)}
 
 			{/* Distribution by kind + a themes word cloud (over a sample) */}
 			{corpus.length > 0 && (
@@ -190,15 +197,10 @@ export default function StudioKnowledgeEncoded() {
 			)}
 
 			{/* Recently learned — real */}
+			{recent.length > 0 && (
 			<section>
-				<div className="eyebrow mb-2">Recently learned — captured from real runs</div>
-				{recent.length === 0 ? (
-					<EmptyState
-						art={<EmptyKnowledge />}
-						title="Nothing learned yet"
-						body="Memories land here as your workflows run — each one a pattern, a principle or a fix your agents can reuse."
-					/>
-				) : (
+				<div className="eyebrow mb-2">Recently learned</div>
+				{(
 					<ul className="space-y-2">
 						{recent.map((m, i) => (
 							<li key={m.id || i} className="rounded-lg border border-ink-200/70 bg-card px-4 py-3">
@@ -221,8 +223,10 @@ export default function StudioKnowledgeEncoded() {
 					</ul>
 				)}
 			</section>
+			)}
 
 			{/* Browse the agents */}
+			{agents.length > 0 && (
 			<section>
 				<div className="text-micro tracking-[0.06em] text-ink-600 mb-2">Knowledge agents</div>
 				<div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -239,16 +243,7 @@ export default function StudioKnowledgeEncoded() {
 					))}
 				</div>
 			</section>
-		</div>
-	);
-}
-
-function Tile({ label, value, ctx, neutral }: { label: string; value: string; ctx: string; neutral?: boolean }) {
-	return (
-		<div className="rounded-lg border border-ink-200/70 bg-ink-50 px-4 py-3">
-			<div className="text-caption text-ink-600">{label}</div>
-			<div className="mt-1 text-h2 font-medium text-ink-900 leading-none tracking-tight">{value}</div>
-			<div className={`mt-1.5 text-micro ${neutral ? 'text-ink-600' : 'text-gold-700'}`}>{ctx}</div>
+			)}
 		</div>
 	);
 }

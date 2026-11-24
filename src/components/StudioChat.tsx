@@ -71,7 +71,6 @@ function sessionRowsToMessages(rows: CycleLogRow[]): Message[] {
 }
 import { ChatHero } from './chat/ChatEmptyState';
 import { StudioWorkflowPanel } from './StudioWorkflowPanel';
-import { Workflow as WorkflowIcon } from 'lucide-react';
 import { StrandMark } from '@/components/illustrations/StrandMark';
 // Parse an AI turn's raw output into something readable: tenant cycles emit
 // machine JSON (often a single unformatted line), sometimes inside a ```json
@@ -2289,17 +2288,9 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 			    destination in the shell rail. The popover anchors here and
 			    opens downward; nothing else about the panel changed. */}
 			<ArtifactIconButton labeled={!docked} />
-			{/* Workflow-viz side panel toggle. Auto-opens when an optimize_workflow/
-			    run_workflow tool completes (chat/protocol.ts); this button re-opens
-			    it. The panel itself (a fixed right drawer) is mounted below. */}
-			<button
-				onClick={() => window.dispatchEvent(new CustomEvent('studio:workflow-panel-toggle'))}
-				title="Workflow" aria-label="Workflow visualization"
-				className={['inline-flex items-center gap-1.5 h-8 rounded-md text-caption font-medium transition-colors duration-120 text-ink-600 hover:text-ink-900 hover:bg-ink-100', docked ? 'px-1.5' : 'px-2'].join(' ')}
-			>
-				<WorkflowIcon className="w-3.5 h-3.5" />
-				{!docked && <span className="hidden xl:inline">Workflow</span>}
-			</button>
+			{/* The workflow drawer opens from the inline result card's "Open full
+			    graph" (chat/entityCards.tsx). Its chrome button went 2026-11: before
+			    a workflow existed it opened an empty drawer. */}
 			<StudioWorkflowPanel />
 			{/* The Conversations picker moved to the shell's left sidebar
 			    ("Recent") on 2026-08-10 — one list, always visible, instead of
@@ -2476,11 +2467,13 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 			    chrome renders inline at the top of the chat column, so the session
 			    picker is always available. */}
 			{!docked && stripSlot && createPortal(chromeEl, stripSlot)}
-			{docked && (
+			{/* An empty docked chat has no conversation to act on, so no icon row. */}
+			{docked && messages.length > 0 && (
 				<div className="flex items-center justify-end gap-0.5 px-2 pt-1.5 pb-1 flex-shrink-0">
 					{chromeEl}
 				</div>
 			)}
+			{docked && messages.length === 0 && <StudioWorkflowPanel />}
 
 			<div
 				ref={transcriptRef}

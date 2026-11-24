@@ -37,6 +37,16 @@ const PAGE_META: Array<{
 	ownHeader?: boolean;
 }> = [
 	{
+		// The inventory — matched before the per-app rule, which would read
+		// "all" as an app slug and title it "Agent". The page's list carries
+		// its own "Agents" heading.
+		pattern: /^\/studio\/apps\/all\/?$/,
+		icon: Boxes,
+		title: "Agents",
+		iconTone: "text-gold-600",
+		ownHeader: true,
+	},
+	{
 		pattern: /^\/studio\/apps\/[^/]+/,
 		icon: Boxes,
 		title: "Agent",
