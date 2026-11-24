@@ -9,6 +9,7 @@
 // logs"), and a per-case drill of per-question latest scores.
 // Honest empty states; no synthetic data, ever.
 
+import { comparabilityNote } from "@/lib/research-map";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SpiralOverlay } from "@/components/BrandLoader";
 import {
@@ -107,8 +108,18 @@ function ExperimentRunLinks({ app, e }: { app: string; e: MeExperiment }) {
 const KIND_LABEL: Record<string, string> = {
 	regression: "regression",
 	explore: "exploration",
-	arms: "A/B experiments",
+	arms: "compares versions",
 };
+
+/** The engine's criteria_reason in words: "below min_samples (12/20)" →
+ *  "Needs more results: 12 of 20". Anything unrecognised passes through. */
+function criteriaReasonInWords(r: string): string {
+	const below = r.match(/below min_samples \((\d+)\/(\d+)\)/);
+	if (below) return `Needs more results: ${below[1]} of ${below[2]}`;
+	if (/^no success_criteria declared/.test(r)) return "No rule for when it is done";
+	if (/unevaluable/.test(r)) return "Its done-when rule can't be checked (unknown name)";
+	return r;
+}
 
 function fmtV(v: number | null | undefined): string {
 	if (v == null || Number.isNaN(v)) return "—";
@@ -153,7 +164,7 @@ function DeltaVsBest({ e, vid }: { e: MeExperiment; vid: string }) {
 	const tip = [
 		ci ? `95% CI [${ci[0].toFixed(3)}, ${ci[1].toFixed(3)}]` : null,
 		p.paired ? `paired over ${p.n_pairs} shared units` : "unpaired" + (p.pairs_available ? ` (${p.pairs_available} shared units, but the unpaired estimate is tighter)` : ""),
-		p.separated ? null : "not separable from the best experiment",
+		p.separated ? null : "can't tell apart yet from the best version",
 		p.n_for_80pct_power && !p.separated ? `~${p.n_for_80pct_power} pairs would be needed to resolve a difference this size` : null,
 	].filter(Boolean).join(" · ");
 	return (
@@ -322,8 +333,8 @@ function ControlMenu({ app, e, onDone }: { app: string; e: MeExperiment; onDone:
 			    so a user looking for a way to fork an experiment reported that
 			    no such button existed, tried three times, and gave up
 			    (2026-09-15). The actions were there; nothing said so. */}
-			<button type="button" aria-label="study controls"
-				title="Conclude, archive, checkpoint, fork or revert this study"
+			<button type="button" aria-label="experiment controls"
+				title="Conclude, archive, checkpoint, fork or revert this experiment"
 				onClick={(ev) => { ev.stopPropagation(); setOpen((o) => !o); }}
 				className="px-1.5 py-0.5 rounded text-micro text-ink-600 hover:bg-ink-100 hover:text-ink-700 leading-none whitespace-nowrap">
 				Actions <span aria-hidden="true">⌄</span>
@@ -593,7 +604,7 @@ function ArmsBlock({ app, e }: { app: string; e: MeExperiment }) {
 	if (arms.length === 0) return null;
 	return (
 		<div>
-			<div className="text-micro uppercase tracking-wide font-semibold text-ink-600 mb-1.5">Experiments</div>
+			<div className="text-micro uppercase tracking-wide font-semibold text-ink-600 mb-1.5">Versions</div>
 			<div className="rounded-lg border border-ink-200 bg-card divide-y divide-ink-50">
 				{arms.map((a) => {
 					const id = String(a.id);
@@ -630,7 +641,7 @@ function ArmsBlock({ app, e }: { app: string; e: MeExperiment }) {
 										{armRuns?.[id] && (
 											<Link to={runPath(app, loop, armRuns[id].latest)}
 												className={cn("hover:underline", armRuns[id].latestOk ? "text-ink-600" : "text-brick-600")}
-												title="Open this experiment's latest run">
+												title="Open this version's latest run">
 												latest run{armRuns[id].latestOk ? "" : " (failed)"}
 											</Link>
 										)}
@@ -639,7 +650,7 @@ function ArmsBlock({ app, e }: { app: string; e: MeExperiment }) {
 							</div>
 							{!runnable ? (
 								<span className="text-micro text-ink-600 whitespace-nowrap"
-									title="This experiment declares no configuration to apply, so there is nothing to dispatch — it is measured from the runs you already make.">
+									title="This version declares no configuration to apply, so there is nothing to run — it is measured from the runs you already make.">
 									measured passively
 								</span>
 							) : sent[id] ? (
@@ -683,7 +694,7 @@ function ArmsBlock({ app, e }: { app: string; e: MeExperiment }) {
 			</div>
 			{!loop && (
 				<div className="mt-1 text-micro text-ember-700">
-					Attached to no workflow — declare it under a loop's <span className="font-mono">engine.experiment</span> before it can be dispatched.
+					Attached to no workflow — name it in a workflow's <span className="font-mono">engine.experiment</span> before it can run.
 				</div>
 			)}
 			{err && <div className="mt-1 text-micro text-brick-600">{err}</div>}
@@ -736,7 +747,7 @@ export function ExperimentCard({ app, e, showApp = false, onChanged }: { app: st
 						const neverRun = (e.arms || []).filter((a) => !(e.variants || {})[String(a.id)]).length;
 						return (
 							<span className="px-1.5 py-0.5 rounded-full text-micro border bg-plum-50/60 text-plum-700 border-plum-200/60 tabular-nums">
-								{e.arms!.length} experiment{e.arms!.length === 1 ? "" : "s"}{neverRun > 0 ? ` · ${neverRun} never run` : ""}
+								{e.arms!.length} version{e.arms!.length === 1 ? "" : "s"}{neverRun > 0 ? ` · ${neverRun} never run` : ""}
 							</span>
 						);
 					})()}
@@ -764,17 +775,17 @@ export function ExperimentCard({ app, e, showApp = false, onChanged }: { app: st
 				</div>
 				{e.unfed && (
 					<div className="mt-1.5 text-micro text-ember-800 bg-ember-50 border border-ember-200 rounded-lg px-2 py-1">
-						Nothing can record into this study yet — {e.unfed_reason || "no loop feeds it"}.
+						Nothing can record into this experiment yet — {e.unfed_reason || "no workflow feeds it"}.
 					</div>
 				)}
 				{e.starved && !e.unfed && (
 					<div className="mt-1.5 text-micro text-ember-800 bg-ember-50 border border-ember-200 rounded-lg px-2 py-1">
-						Its loop is not recording — {e.starved_reason || "the loop that feeds it has not run"}.
+						Its workflow is not recording — {e.starved_reason || "the workflow that feeds it has not run"}.
 					</div>
 				)}
 				{e.state_stale && (
 					<div className="mt-1.5 text-micro text-ember-800 bg-ember-50 border border-ember-200 rounded-lg px-2 py-1">
-						State predates the current metric (it measured {(e.state_metric || "another metric").replace(/_/g, " ")}) — updates on this study's next run.
+						State predates the current metric (it measured {(e.state_metric || "another metric").replace(/_/g, " ")}) — updates on this experiment's next run.
 					</div>
 				)}
 				{e.criteria_met && e.verdict && (
@@ -790,8 +801,11 @@ export function ExperimentCard({ app, e, showApp = false, onChanged }: { app: st
 				{!e.criteria_met && e.criteria_reason && e.n_results > 0 && (
 					<div className="mt-1 text-micro text-ink-600 flex items-baseline gap-1.5">
 						<span className="text-ink-600 flex-shrink-0">why</span>
-						<span className="truncate" title={e.success_criteria ? `success_criteria: ${e.success_criteria}` : undefined}>
-							{e.criteria_reason}
+						{/* The engine's reason is written for operators ("not comparable —
+						    5 distinct instruments across 1 arms on analyst"); say it in
+						    words, keep the original in the tooltip. */}
+						<span className="line-clamp-2" title={[e.criteria_reason, e.success_criteria ? `success_criteria: ${e.success_criteria}` : ""].filter(Boolean).join(" · ")}>
+							{comparabilityNote(e) ?? criteriaReasonInWords(e.criteria_reason)}
 						</span>
 						{e.state_updated_at && (
 							<span className="ml-auto flex-shrink-0 text-ink-600 tabular-nums" title={`state computed ${e.state_updated_at}`}>
@@ -802,7 +816,7 @@ export function ExperimentCard({ app, e, showApp = false, onChanged }: { app: st
 				)}
 				{(e.not_separable_from?.length ?? 0) > 0 && e.best_variant && (
 					<div className="mt-1 text-micro text-ember-700">
-						leading, but not separable from {e.not_separable_from!.join(", ")}
+						leading, but can't tell apart yet from {e.not_separable_from!.join(", ")}
 					</div>
 				)}
 			</button>
@@ -812,10 +826,10 @@ export function ExperimentCard({ app, e, showApp = false, onChanged }: { app: st
 				<div className="border-t border-ink-100 px-4 py-3 space-y-3 bg-ink-50/40">
 					{(e.undeclared_variants?.length ?? 0) > 0 && (
 						<div className="rounded-lg border border-ember-200 bg-ember-50/70 px-3 py-2 text-micro text-ember-900">
-							<span className="font-semibold">Rows from experiments this study does not declare:</span>{" "}
+							<span className="font-semibold">Results from versions this experiment does not declare:</span>{" "}
 							{e.undeclared_variants!.map((v) => <code key={v} className="px-1 rounded bg-card/70 border border-ember-200 mx-0.5">{v}</code>)}
 							<div className="mt-0.5">
-								Their means are facts and stay below. They cannot win — "best" is a claim about the experiments the study declared.
+								Their averages are facts and stay below. They cannot win — "best" is a claim about the versions the experiment declared.
 							</div>
 						</div>
 					)}
@@ -863,12 +877,12 @@ export function ExperimentCard({ app, e, showApp = false, onChanged }: { app: st
 						<>
 							{variants.length > 0 && (
 								<div>
-									<div className="text-micro uppercase tracking-wide font-semibold text-ink-600 mb-1.5">Experiments</div>
+									<div className="text-micro uppercase tracking-wide font-semibold text-ink-600 mb-1.5">Versions</div>
 									<div className="rounded-lg border border-ink-200 bg-card overflow-hidden">
 										<table className="w-full text-micro">
 											<thead>
 												<tr className="text-left text-ink-600 border-b border-ink-100">
-													<th className="px-3 py-1.5 font-medium">experiment</th>
+													<th className="px-3 py-1.5 font-medium">version</th>
 													<th className="px-2 py-1.5 font-medium text-right">mean</th>
 													<th className="px-2 py-1.5 font-medium text-right">n</th>
 													<th className="px-2 py-1.5 font-medium text-right">stdev</th>
@@ -878,7 +892,7 @@ export function ExperimentCard({ app, e, showApp = false, onChanged }: { app: st
 													    0.001 apart with a stdev of 0.4 produced a confident
 													    verdict. No second table: the comparison belongs on
 													    the row it is about. */}
-													<th className="px-2 py-1.5 font-medium text-right" title="difference from the best experiment, with a 95% interval">Δ vs best</th>
+													<th className="px-2 py-1.5 font-medium text-right" title="difference from the best version, with a 95% interval">Δ vs best</th>
 													<th className="px-3 py-1.5 font-medium text-right">last</th>
 												</tr>
 											</thead>
@@ -925,7 +939,7 @@ export function ExperimentCard({ app, e, showApp = false, onChanged }: { app: st
 								// were (2026-09-15). The honest answer is that the rows do not say.
 								<div className="rounded-lg border border-dashed border-ink-200 bg-card/60 px-3 py-2 text-micro text-ink-600">
 									No per-case breakdown: {e.n_results} result{e.n_results === 1 ? " row was" : " rows were"} recorded
-									without a case id, so which cases ran is not stored. A loop records one by passing{" "}
+									without a case id, so which cases ran is not stored. A workflow records one by passing{" "}
 									<code className="text-micro">dims.case_id</code> to record_result.
 								</div>
 							) : null}
@@ -988,7 +1002,7 @@ export default function ExperimentsPanel({ app, loop, quiet = false }: {
 		if (loop && !quiet) {
 			return (
 				<div className="rounded-lg border border-dashed border-ink-200 bg-card/60 px-3 py-2 text-micro text-ink-600">
-					This workflow is attached to a study, but none of the agent's studies resolve to it — the attachment may still name one that was
+					This workflow is attached to an experiment, but none of the app's experiments match it — the attachment may still name one that was
 					deleted. Check <code className="text-micro">engine.experiment</code> in
 					the app config.
 				</div>
@@ -998,7 +1012,7 @@ export default function ExperimentsPanel({ app, loop, quiet = false }: {
 		return (
 			<div className="rounded-xl border border-dashed border-ink-200 bg-card/60 p-8 text-center">
 				<div className="text-sm text-ink-600">
-					No studies declared. A study tests a hypothesis by comparing experiments over a dataset or casebook, measured by one metric.
+					No experiments yet. An experiment tests a hypothesis by comparing versions over a dataset or casebook, measured by one number.
 				</div>
 				{/* The old copy ended "declare one under `experiments:` in the app's
 				    config" — hand-edit YAML, app_push, propagate to every tenant.
@@ -1034,12 +1048,12 @@ function StudyDefinitionNotices({ defs }: { defs: MeStudyDefinition[] }) {
 			{defs.map((d) => d.status === "failed" ? (
 				<div key={d.intent_id} className="flex items-start gap-1.5 rounded-lg border border-brick-200 bg-brick-50 px-3 py-2 text-micro text-brick-800">
 					<AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" />
-					<span>Study <span className="font-semibold">{d.id}</span> was not defined: {d.error}</span>
+					<span>Experiment <span className="font-semibold">{d.id}</span> was not set up: {d.error}</span>
 				</div>
 			) : (
 				<div key={d.intent_id} className="flex items-center gap-1.5 rounded-lg border border-ink-200 bg-card/70 px-3 py-2 text-micro text-ink-600">
 					<Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-					<span>Study <span className="font-semibold">{d.id}</span> is being defined…</span>
+					<span>Experiment <span className="font-semibold">{d.id}</span> is being set up…</span>
 				</div>
 			))}
 		</div>
