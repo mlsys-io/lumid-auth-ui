@@ -851,7 +851,8 @@ html[data-surface="studio"] ::selection {
 .markdown-body.docs-md table tr { background-color: transparent; border-top-color: rgb(231 223 208); }
 .markdown-body.docs-md table tr:nth-child(2n) { background-color: rgb(250 248 244); }
 .markdown-body.docs-md table th { background-color: rgb(243 239 231); color: rgb(34 28 19); font-weight: 600; }
-.markdown-body.docs-md :is(code, tt) { background-color: rgb(243 239 231); color: rgb(54 47 36); border-radius: 4px; }
+.markdown-body.docs-md :is(code, tt) { background-color: rgb(243 239 231); color: rgb(54 47 36); border-radius: 4px; font-size: 13px; }
+.markdown-body.docs-md pre, .markdown-body.docs-md pre code { font-size: 13px; }
 .markdown-body.docs-md pre { background-color: rgb(243 239 231); border: 1px solid rgb(231 223 208); border-radius: 10px; color: rgb(54 47 36); }
 .markdown-body.docs-md pre code { background: transparent; }
 .markdown-body.docs-md kbd { color: rgb(54 47 36); background-color: rgb(250 248 244); border-color: rgb(211 200 180); box-shadow: inset 0 -1px 0 rgb(211 200 180); }
