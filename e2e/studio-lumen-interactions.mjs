@@ -197,6 +197,21 @@ await section('ErrorState retry', async () => {
 	await page.close();
 });
 
+// ── Inbox survives a non-inbox response ──────────────────────────────────
+await section('Inbox: unexpected response', async () => {
+	const page = await desk.ctx.newPage();
+	// nightly.lum.id does not route /inbox-api: it answers with the SPA's HTML
+	// and a 200. That used to crash the page into the error boundary.
+	await page.route('**/inbox-api/messages*', (route) =>
+		route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><html><body>spa</body></html>' }));
+	await page.goto(`${BASE}/studio/inbox`, { waitUntil: 'domcontentloaded' });
+	const alert = page.getByRole('alert').filter({ hasText: /Couldn.t load|isn.t available/ });
+	const ok = await alert.first().waitFor({ timeout: 20000 }).then(() => true).catch(() => false);
+	const crashed = await page.getByText('This page hit a snag').count();
+	assert(ok && crashed === 0, `HTML-200 from /inbox-api renders ErrorState, not the crash boundary (crash=${crashed})`);
+	await page.close();
+});
+
 // ── Segmented filters ────────────────────────────────────────────────────
 await section('Runs segmented filters', async () => {
 	const page = await desk.ctx.newPage();
