@@ -19,7 +19,8 @@ import { AuthContext } from "@/hooks/useAuth";
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Loader2, MoreHorizontal, RefreshCw, ScrollText, FileJson, Layers } from "lucide-react";
 import type { MeCycleDetail, MeCycleListItem, MeCycleStep } from "@/api/me";
 import AskAbout from "@/components/AskAbout";
-import FailureCard from "@/components/workflow/FailureCard";
+import RunAnswerCard from "@/components/workflow/RunAnswerCard";
+import { stepFailed, stepLabel, stepLine, humanMetric } from "@/lib/run-answer";
 import StepInspectorPanel from "@/components/workflow/StepInspectorPanel";
 import TrajectoryLogView from "@/components/workflow/TrajectoryLogView";
 import RunChildren from "@/components/workflow/RunChildren";
@@ -149,6 +150,10 @@ export function RunsTable({
 				</span>
 			);
 		}
+		// A failed run has no score because it failed — "not scored" beside
+		// "Failed" read as a second, unexplained problem. A dash, and the why
+		// is on the run's own page.
+		if (c.ok === false) return <span className="text-nano text-ink-600" title="Failed runs aren't scored — open the run for the reason">—</span>;
 		if (scoresLoading) {
 			return <span className="text-nano text-ink-600" title={`Reading the run tree for the declared metric${namedHint}…`}>…</span>;
 		}
@@ -165,6 +170,12 @@ export function RunsTable({
 			</span>
 		);
 	};
+	// The column says WHAT it measures: "Goodput (tok/s)", not "Metric".
+	const metricHead = (() => {
+		if (!metricName) return "Metric";
+		const { label, unit } = humanMetric(metricName);
+		return unit ? `${label} (${unit})` : label;
+	})();
 
 	return (
 		<div className="flex flex-col min-h-0 h-full rounded-xl border border-ink-200 bg-card overflow-hidden">
@@ -210,7 +221,7 @@ export function RunsTable({
 								</th>
 								<th className="px-1 py-1.5 font-medium">Outcome</th>
 								<th className="px-1 py-1.5 font-medium text-right" title="Duration">Dur.</th>
-								<th className="px-1 py-1.5 font-medium text-right" title={metricName ? `metric: ${metricName}` : undefined}>Metric</th>
+								<th className="px-1 py-1.5 font-medium text-right max-w-[7rem] truncate" title={metricName ? `metric: ${metricName}` : undefined}>{metricHead}</th>
 								<th className="px-1 py-1.5 font-medium">Experiment</th>
 								{hasTrigger && <th className="px-1 py-1.5 font-medium">Trigger</th>}
 							</tr>
@@ -263,16 +274,6 @@ export function stepSummary(st: MeCycleStep): string {
 	return st.ok === false ? "failed — no error recorded" : "no output recorded";
 }
 
-/** The run's own error / outcome text, from whatever the cycle recorded. */
-function runMessages(d: MeCycleDetail | null): { outcome?: string; error?: string } {
-	if (!d) return {};
-	const s = (d.summary || {}) as Record<string, unknown>;
-	const outcome = typeof s.outcome === "string" && !["ran", "no_change", "awaiting_review", "no_setup"].includes(s.outcome) ? s.outcome : undefined;
-	const firstStepErr = (d.steps || []).find((x) => x.error)?.error;
-	const stepErrs = Array.isArray(s.step_errors) && s.step_errors.length ? JSON.stringify(s.step_errors[0]) : undefined;
-	const err = typeof s.error === "string" ? s.error : s.error != null ? JSON.stringify(s.error) : undefined;
-	return { outcome, error: err || firstStepErr || stepErrs };
-}
 
 export function RunDetail({
 	app, loop, runId, detail, loading, listRow, cycles, step, pane, compare,
@@ -309,17 +310,17 @@ export function RunDetail({
 		? runStatus("running")
 		: cycleStatus({ ok: detail?.ok ?? listRow?.ok, running: false });
 	const failed = info.status === "failed";
-	const msgs = runMessages(detail);
 	const steps = detail?.steps || [];
 	const duration = listRow?.duration_s ?? (typeof detail?.summary?.duration_s === "number" ? detail.summary.duration_s as number : undefined);
 	// Which step is open. The URL wins (?step=<id>, or ?step=none after a
-	// collapse); without one, a run with a single step opens it and a failed
-	// run opens its first failed step — the output / error is what the reader
-	// came for, so a second click to reveal it is a click wasted.
+	// collapse); otherwise see defaultStep below.
 	const stepIdOf = (st: MeCycleStep, i: number) => st.step_id || st.skill || `step ${i + 1}`;
-	const defaultStep = steps.length === 1
-		? stepIdOf(steps[0], 0)
-		: (() => { const i = steps.findIndex((x) => x.ok === false); return i >= 0 ? stepIdOf(steps[i], i) : null; })();
+	// The answer card now says what the run did / why it failed, so a lone
+	// step no longer auto-opens its raw JSON; a FAILED step among several
+	// still opens, since which one broke is the next question.
+	const defaultStep = steps.length > 1
+		? (() => { const i = steps.findIndex((x) => stepFailed(x)); return i >= 0 ? stepIdOf(steps[i], i) : null; })()
+		: null;
 	const openStep = step === "none" ? null : (step ?? defaultStep);
 
 	return (
@@ -332,7 +333,7 @@ export function RunDetail({
 					<span className="text-micro text-ink-600">{runAgo(runId)}</span>
 					<span className="text-micro text-ink-600 tabular-nums" title="duration">· {fmtDur(duration)}</span>
 					{listRow?.branch_label && (
-						<span className="text-micro font-mono text-ink-600 bg-ink-50 border border-ink-200 rounded px-1.5" title="experiment / branch">{listRow.branch_label}</span>
+						<span className="text-micro font-mono text-ink-600 bg-ink-50 border border-ink-200 rounded px-1.5" title="the version this run tried">version {listRow.branch_label}</span>
 					)}
 					<span className="ml-auto text-nano font-mono text-ink-600" title="run id (cycle dir)">{runId}</span>
 				</div>
@@ -360,15 +361,10 @@ export function RunDetail({
 						<MoreHorizontal className="w-3.5 h-3.5" />
 					</button>
 				</div>
-				{msgs.outcome && (
-					<div className={cn("rounded-lg border px-2.5 py-1.5 text-micro",
-						failed ? "border-brick-200 bg-brick-50/70 text-brick-900" : "border-ink-200 bg-ink-50 text-ink-700")}>
-						<span className="font-semibold">Outcome:</span> {msgs.outcome}
-					</div>
-				)}
-				{/* The failure, triaged (what kind of error, what to do), raw text
-				    one click away — the same card the old page banner used. */}
-				{failed && msgs.error && <FailureCard error={msgs.error} app={app} loop={loop} />}
+				{/* THE ANSWER — did it work, what did it find, or why not; the raw
+				    error one click away. Replaces the "Outcome: <snake_case>" strip
+				    and the generic failure card. */}
+				<RunAnswerCard app={app} loop={loop} runId={runId} detail={detail} listRow={listRow} cycles={cycles} durationS={duration} />
 			</div>
 
 			{/* BODY — compare, the run log, or the step timeline. */}
@@ -403,7 +399,8 @@ export function RunDetail({
 							{steps.map((st, i) => {
 								const id = stepIdOf(st, i);
 								const open = openStep === id;
-								const sInfo = st.ok === false ? runStatus("failed") : runStatus("succeeded");
+								const sInfo = stepFailed(st) ? runStatus("failed") : runStatus("succeeded");
+								const line = stepLine(st);
 								return (
 									<li key={`${id}-${i}`} className={cn("rounded-lg border", open ? "border-gold-300" : "border-ink-200")}>
 										<button type="button" aria-expanded={open}
@@ -411,10 +408,10 @@ export function RunDetail({
 											className="w-full text-left flex items-center gap-2 px-2 py-1.5 hover:bg-ink-50 rounded-lg">
 											{open ? <ChevronDown className="w-3.5 h-3.5 text-ink-600 flex-shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-ink-600 flex-shrink-0" />}
 											<span className="text-nano text-ink-600 tabular-nums w-4 text-right flex-shrink-0">{i + 1}</span>
-											<span className="font-mono text-caption text-ink-900 flex-shrink-0">{id}</span>
+											<span className="text-caption font-medium text-ink-900 flex-shrink-0" title={id}>{stepLabel(st)}</span>
 											<RunStatusChip info={sInfo} className="flex-shrink-0" />
 											{st.duration_s != null && <span className="text-micro text-ink-600 tabular-nums flex-shrink-0">{fmtDur(st.duration_s)}</span>}
-											<span className={cn("text-micro truncate min-w-0", st.ok === false ? "text-brick-700" : "text-ink-600")}>{stepSummary(st)}</span>
+											<span className={cn("text-micro truncate min-w-0", stepFailed(st) ? "text-brick-700" : "text-ink-600")}>{line}</span>
 										</button>
 										{open && (
 											<div className="px-2 pb-2 space-y-1.5">
