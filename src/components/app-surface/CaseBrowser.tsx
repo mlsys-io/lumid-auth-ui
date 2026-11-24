@@ -188,9 +188,10 @@ export default function CaseBrowser({ config }: NativeSurfaceProps) {
                 aria-pressed={on}
                 className={[
                   "text-left rounded-xl border p-3 transition-colors",
+                  // Lumen: selection is bronze (the grey ink film read as disabled).
                   on
-                    ? "border-foreground/30 bg-foreground/[0.05]"
-                    : "border-border hover:bg-foreground/[0.02]",
+                    ? "border-gold-400 bg-gold-50/70 shadow-e1 ring-1 ring-gold-300/60"
+                    : "border-border bg-card hover:border-ink-300 hover:bg-ink-50/60",
                 ].join(" ")}
               >
                 <div className="text-sm font-medium text-foreground">{m.label}</div>
@@ -243,7 +244,7 @@ export default function CaseBrowser({ config }: NativeSurfaceProps) {
                     onClick={() => setSelected(c.id)}
                     className={[
                       "w-full text-left px-3 py-2 transition-colors",
-                      on ? "bg-foreground/[0.06]" : "hover:bg-foreground/[0.03]",
+                      on ? "bg-ink-100/60" : "hover:bg-ink-100/60",
                     ].join(" ")}
                   >
                     <div className="text-meta text-foreground truncate">{c.label || c.id}</div>
@@ -348,7 +349,7 @@ export default function CaseBrowser({ config }: NativeSurfaceProps) {
                           <li key={qq.q_id} className="text-meta">
                             <span className="text-muted-foreground">{qq.q_id}</span>
                             {qq.type && (
-                              <span className="ml-1.5 text-nano px-1.5 py-0.5 rounded-full bg-foreground/10 text-ink-800">
+                              <span className="ml-1.5 text-nano px-1.5 py-0.5 rounded-full bg-ink-100 text-ink-800">
                                 {qq.type}
                               </span>
                             )}
@@ -375,7 +376,7 @@ export default function CaseBrowser({ config }: NativeSurfaceProps) {
             "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
             canStart
               ? "bg-foreground text-background hover:opacity-90"
-              : "bg-foreground/10 text-muted-foreground cursor-not-allowed",
+              : "bg-ink-100 text-muted-foreground cursor-not-allowed",
           ].join(" ")}
         >
           {activeMode.id === "interview"

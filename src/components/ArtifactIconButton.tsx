@@ -203,7 +203,7 @@ export function ArtifactIconButton({ align = 'right', variant = 'icon', labeled 
 					aria-label="Artifacts"
 					className={[
 						'group w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
-						open ? 'bg-black/[0.06] text-foreground font-medium' : 'text-ink-700 hover:bg-black/[0.04] hover:text-foreground',
+						open ? 'bg-ink-100/60 text-foreground font-medium' : 'text-ink-700 hover:bg-ink-100/60 hover:text-foreground',
 					].join(' ')}
 				>
 					<FileStack className={['w-4 h-4 flex-shrink-0 transition-colors', open ? 'text-ink-800' : 'text-ink-600 group-hover:text-ink-800'].join(' ')} />

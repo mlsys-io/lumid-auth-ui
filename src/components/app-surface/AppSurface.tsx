@@ -476,7 +476,12 @@ function AppSurfaceImpl({
 
   // Header extraction only applies when we can portal it up — without the
   // slot the markdown renders untouched (embedded mounts).
-  const header = stripSlot && markdown ? splitSurfaceHeader(markdown) : { body: markdown ?? "" };
+  // Embedded in the app workspace, the header above already names the app
+  // (AppSwitcher), so a LEADING `# Title` would say it twice in a row — drop
+  // just that line and let the intro paragraph lead. (Lumen, 2026-11.)
+  const header = stripSlot && markdown
+    ? splitSurfaceHeader(markdown)
+    : { body: embedded ? (markdown ?? "").replace(/^\s*# [^\n]*\n+/, "") : (markdown ?? "") };
 
   // Prefer markdown when present (even for apps that also declare a native key).
   // The markdown surface is the public harness showcase; the native component

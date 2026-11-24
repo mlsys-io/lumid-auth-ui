@@ -2468,7 +2468,7 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 					className={sessionExpanded ? 'fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-8 bg-ink-900/40 backdrop-blur-sm duration-150' : 'contents'}
 					onClick={sessionExpanded ? (e) => { if (e.target === e.currentTarget) setSessionExpanded(false); } : undefined}
 				>
-				<div className={['flex flex-col rounded-2xl border border-ink-200/70 bg-card/95 backdrop-blur-sm overflow-hidden ring-1 ring-black/5 duration-200', sessionExpanded ? 'w-full max-w-3xl h-[82vh] shadow-2xl shadow-ink-900/30' : 'absolute left-3 right-3 top-3 z-40 h-1/3 max-h-[38%] shadow-[0_12px_40px_-8px_rgba(15,23,42,0.28)]'].join(' ')}>
+				<div className={['flex flex-col rounded-2xl border border-ink-200/70 bg-card/95 backdrop-blur-sm overflow-hidden ring-1 ring-ink-900/5 duration-200', sessionExpanded ? 'w-full max-w-3xl h-[82vh] shadow-2xl shadow-ink-900/30' : 'absolute left-3 right-3 top-3 z-40 h-1/3 max-h-[38%] shadow-[0_12px_40px_-8px_rgba(15,23,42,0.28)]'].join(' ')}>
 					<div className="flex items-center gap-2 px-3.5 py-2 border-b border-ink-100 flex-shrink-0 bg-gradient-to-b from-ink-50/80 to-transparent">
 						<span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-plum-100 text-plum-600 flex-shrink-0"><Bot className="w-3.5 h-3.5" /></span>
 						<span className="text-meta font-medium text-ink-900 truncate">Session · {session.loop}</span>
@@ -2787,7 +2787,7 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 					className={[
 						'flex flex-wrap items-center gap-1 rounded-2xl border bg-card px-2.5 pt-2 pb-2 transition-all duration-150',
 						// Elegant focus: a soft sage ring + lift, never a hard black
-						// outline. (Was focus-within:border-foreground/25 — near-black.)
+						// outline. (Was focus-within:border-ink-300 — near-black.)
 						dragOver
 							? 'border-coral border-dashed ring-2 ring-coral/20'
 							: 'border-border shadow-e1 focus-within:border-ring/70 focus-within:ring-4 focus-within:ring-ring/15 focus-within:shadow-e2',
@@ -3444,7 +3444,7 @@ const MessageBubble = memo(function MessageBubble({
 				{isUser && m.attachments && m.attachments.length > 0 && (
 					<div className="mt-1.5 flex flex-wrap gap-1.5 justify-end">
 						{m.attachments.map((a, ai) => (
-							<span key={ai} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-primary/10 text-primary text-micro max-w-[220px]">
+							<span key={ai} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-ink-100 text-primary text-micro max-w-[220px]">
 								{a.kind === 'image' ? <ImageIcon className="w-3 h-3 flex-shrink-0" />
 									: a.kind === 'document' ? <FileText className="w-3 h-3 flex-shrink-0" />
 										: <Paperclip className="w-3 h-3 flex-shrink-0" />}
@@ -3935,8 +3935,8 @@ function ModelChip({
 				className={[
 					'inline-flex items-center gap-1 pl-1.5 pr-1 py-0.5 min-h-[24px] rounded-full border text-micro transition-colors',
 					open
-						? 'bg-muted border-foreground/25 text-foreground'
-						: 'bg-card border-border text-ink-800 hover:text-foreground hover:border-foreground/25',
+						? 'bg-muted border-ink-300 text-foreground'
+						: 'bg-card border-border text-ink-800 hover:text-foreground hover:border-ink-300',
 					streaming ? 'opacity-50 cursor-not-allowed' : '',
 				].join(' ')}
 				title="Choose the AI model"
@@ -4006,7 +4006,7 @@ function WorkspaceChip({
 	const [open, setOpen] = useState(false);
 	const ref = useClickOutside(open, () => setOpen(false));
 	const active = [repo, cluster, dataApp].filter(Boolean).length;
-	const sel = 'w-full text-caption rounded-lg border border-border bg-card px-2 py-1 text-foreground focus:outline-none focus:border-foreground/25';
+	const sel = 'w-full text-caption rounded-lg border border-border bg-card px-2 py-1 text-foreground focus:outline-none focus:border-ink-300';
 	const hdr = 'text-nano font-semibold uppercase tracking-wide text-muted-foreground mb-1';
 	return (
 		<div ref={ref} className="relative">
@@ -4016,8 +4016,8 @@ function WorkspaceChip({
 				className={[
 					'inline-flex items-center gap-1 pl-1.5 pr-1 py-0.5 min-h-[24px] rounded-full border text-micro transition-colors',
 					open || active
-						? 'bg-muted border-foreground/25 text-foreground'
-						: 'bg-card border-border text-ink-800 hover:text-foreground hover:border-foreground/25',
+						? 'bg-muted border-ink-300 text-foreground'
+						: 'bg-card border-border text-ink-800 hover:text-foreground hover:border-ink-300',
 				].join(' ')}
 				title="Working context — xpio repo, FlowMesh cluster, lumid-data app"
 			>

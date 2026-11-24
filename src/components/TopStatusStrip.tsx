@@ -50,6 +50,11 @@ const PAGE_META: Array<{
 	title: string;
 	subtitle?: string;
 	iconTone: string; // text color class for the icon
+	/** The page renders its own PageHeader (serif title + subtitle). The strip
+	 *  then shows only breadcrumbs + live status — the title said twice was
+	 *  the most visible "this looks unfinished" tell. document.title still
+	 *  uses `title`. */
+	ownHeader?: boolean;
 }> = [
 	{
 		pattern: /^\/studio\/apps\/[^/]+/,
@@ -95,6 +100,7 @@ const PAGE_META: Array<{
 	},
 	{
 		pattern: /^\/studio\/library\/skills/,
+		ownHeader: true,
 		icon: Store,
 		title: "Skills",
 		subtitle: "The capabilities your agents import — health, versions, who uses what.",
@@ -102,6 +108,7 @@ const PAGE_META: Array<{
 	},
 	{
 		pattern: /^\/studio\/library\/experiments/,
+		ownHeader: true,
 		icon: Store,
 		title: "Studies",
 		subtitle: "Hypotheses your agents are testing, across every agent.",
@@ -109,6 +116,7 @@ const PAGE_META: Array<{
 	},
 	{
 		pattern: /^\/studio\/(library|marketplace)/,
+		ownHeader: true,
 		icon: Store,
 		title: "Library",
 		subtitle: "Marketplace, skills, and experiments — pull in, refine, publish back.",
@@ -170,6 +178,7 @@ function deriveMeta(pathname: string) {
 			title,
 			subtitle: undefined as string | undefined,
 			iconTone: "text-muted-foreground",
+			ownHeader: false,
 		};
 	}
 	return null;
@@ -330,6 +339,20 @@ export default function TopStatusStrip() {
 					<span id="topstrip-ws-left" className="flex items-center" />
 					<AppSwitcher app={appSlug} />
 				</div>
+			) : meta?.ownHeader ? (
+			// The page carries its own title; keep only the trail (if any).
+			<div className="min-w-0">
+				{crumbs.length > 0 && (
+					<nav className="flex items-center gap-1 text-caption text-ink-600">
+						{crumbs.map((c, i) => (
+							<span key={i} className="inline-flex items-center gap-1 min-w-0">
+								{i > 0 && <ChevronRight className="w-3 h-3 text-ink-600 flex-shrink-0" />}
+								<Link to={c.to} className="hover:text-ink-900 transition-colors truncate">{c.label}</Link>
+							</span>
+						))}
+					</nav>
+				)}
+			</div>
 			) : (
 			<div className="min-w-0 flex items-start gap-2.5">
 				{/* Lumen: one quiet ink icon for every page (the per-page bronze tint
