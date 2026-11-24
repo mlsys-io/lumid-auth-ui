@@ -751,6 +751,10 @@ html[data-surface="studio"] ::selection {
 	.strand-draw path[data-draw] { stroke-dashoffset: 0; }
 	.strand-think path[data-glint] { animation: none; opacity: 0; }
 	.lumen-sweep::after { display: none; }
+	/* Hover nudges (arrows sliding 2px, cards lifting) are movement too. State
+	   changes keep their colour transitions; only the travel goes. */
+	[class*="group-hover:translate"], [class*="group-hover:-translate"],
+	[class*="hover:-translate-y"], .lumen-lift:hover { transform: none !important; }
 }
 
 /* =======================================================================
