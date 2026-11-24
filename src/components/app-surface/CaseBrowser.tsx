@@ -20,6 +20,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { me, type MeCasebookCase, type MeCasebookCaseDetail } from "@/api/me";
 import type { NativeSurfaceProps } from "./native-registry";
+import { Segmented } from "@/components/ui/segmented";
 
 type ModeId = "practice" | "benchmark" | "interview";
 
@@ -27,6 +28,8 @@ type Mode = {
   id: ModeId;
   label: string;
   blurb: string;
+  /** The one line shown under the mode switch: your role, what you type, how it's scored. */
+  hint: string;
   /**
    * What the USER types once the chat opens. The single most useful thing to
    * know before choosing, and it is genuinely different per mode: in Benchmark
@@ -66,6 +69,7 @@ const MODES: Mode[] = [
     blurb: "The analyst works a real casebook case. You play the interviewer.",
     youType: "“next question”, or what the answer got wrong",
     scoring: "Scored against that case's ground truth",
+    hint: "You're the interviewer: type “next question”, or say what the answer got wrong. Scored against the case's answer key.",
     needsCase: true,
     prompt: (id) =>
       `Let's work case ${id}. I'm the interviewer — give me the opening, then ` +
@@ -77,6 +81,7 @@ const MODES: Mode[] = [
     blurb: "Roles reversed — the AI poses the case and scores your answers.",
     youType: "your answer — and ask for any facts you need",
     scoring: "Scored against that case's ground truth",
+    hint: "You're the candidate: answer, and ask for any facts you need. Scored against the case's answer key.",
     needsCase: true,
     // States the role explicitly. The app's default posture is the opposite,
     // and procedure.md's Interviewer-mode section keys off exactly this.
@@ -90,6 +95,7 @@ const MODES: Mode[] = [
     blurb: "Your own question, no case file. Same analyst voice, same rubric.",
     youType: "your consulting question",
     scoring: "Indicative only — no ground truth",
+    hint: "Ask your own consulting question. The score is indicative only; there's no answer key.",
     needsCase: false,
     // Does NOT pretend a question was already asked — it invites one. The old
     // wording ("I'd like to ask an open question") left the agent with nothing
@@ -174,39 +180,17 @@ export default function CaseBrowser({ config }: NativeSurfaceProps) {
     <div className="space-y-5">
       {/* 1. Mode — the first decision, because it changes what the case is FOR. */}
       <div>
-        <div className="text-micro font-medium uppercase tracking-wide text-muted-foreground mb-2">
-          Choose a mode
-        </div>
-        <div className="grid gap-2 sm:grid-cols-3">
-          {MODES.map((m) => {
-            const on = m.id === mode;
-            return (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => setMode(m.id)}
-                aria-pressed={on}
-                className={[
-                  "text-left rounded-xl border p-3 transition-colors",
-                  // Lumen: selection is bronze (the grey ink film read as disabled).
-                  on
-                    ? "border-gold-400 bg-gold-50/70 shadow-e1 ring-1 ring-gold-300/60"
-                    : "border-border bg-card hover:border-ink-300 hover:bg-ink-50/60",
-                ].join(" ")}
-              >
-                <div className="text-sm font-medium text-foreground">{m.label}</div>
-                <div className="mt-1 text-caption text-muted-foreground leading-snug">{m.blurb}</div>
-                {/* The decisive line: what YOU type. Whether you answer or ask
-                    flips between modes, and getting it wrong wastes the first
-                    turns of a session. */}
-                <div className="mt-2 text-caption text-ink-800 leading-snug">
-                  <span className="text-muted-foreground">You type: </span>{m.youType}
-                </div>
-                <div className="mt-1.5 text-micro text-ink-600">{m.scoring}</div>
-              </button>
-            );
-          })}
-        </div>
+        {/* Simplified 2026-11-24: three four-line cards became one switch plus
+            ONE line for the chosen mode. That line keeps the decisive part —
+            your role and what you type — because getting it backwards wastes
+            the first turns of a session. */}
+        <Segmented
+          aria-label="Mode"
+          value={mode}
+          onChange={(v) => setMode(v as ModeId)}
+          options={MODES.map((m) => ({ value: m.id, label: m.label }))}
+        />
+        <p className="mt-2 text-meta text-ink-700 text-pretty">{activeMode.hint}</p>
       </div>
 
       {/* 2. Case — hidden entirely for the mode that doesn't use one, rather
