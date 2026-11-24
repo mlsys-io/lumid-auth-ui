@@ -19,8 +19,9 @@ import {
 	type CasebookMetricEvolution,
 } from "@/api/casebook";
 import { cn } from "@/lib/utils";
+import { ink, gold, brick, lagoon, plum, chart } from "@/styles/palette";
 
-const COLOR = { up: "#B08F45", down: "#e11d48", flat: "#94a3b8" };
+const COLOR = { up: gold["500"], down: brick["500"], flat: ink["400"] };
 
 const lower = (s: string) => s.toLowerCase();
 // Lower-is-better metrics (cost/latency/error) flip the "good" direction.
@@ -83,16 +84,16 @@ function CaseRow({ c, atTs, onSelect, onViewData, onContextMenu, selected }: { c
 			title="View this case's label → metric mapping log · right-click for actions"
 			className={cn(
 				"rounded-lg border px-2.5 py-1.5 cursor-pointer transition-colors",
-				selected ? "border-gold-300 bg-gold-50/60 ring-1 ring-gold-200" : "border-slate-200/70 bg-white hover:border-gold-200 hover:bg-gold-50/30",
+				selected ? "border-gold-300 bg-gold-50/60 ring-1 ring-gold-200" : "border-ink-200/70 bg-card hover:border-gold-200 hover:bg-gold-50/30",
 			)}
 		>
 			<div className="flex items-center gap-2">
 				<span
-					className={cn("w-2 h-2 rounded-full flex-shrink-0", !hasAny && "border border-slate-300")}
+					className={cn("w-2 h-2 rounded-full flex-shrink-0", !hasAny && "border border-ink-300")}
 					style={{ background: dotColor }}
 					title={!hasAny ? "not yet scored" : runScore === undefined ? "not scored in the selected run" : good ? "above baseline" : delta < 0 ? "below baseline" : "flat"}
 				/>
-				<span className="text-[12px] font-medium text-slate-700 truncate flex-1" title={c.id}>
+				<span className="text-caption font-medium text-ink-700 truncate flex-1" title={c.id}>
 					{c.label}
 				</span>
 				{hasAny ? (
@@ -110,7 +111,7 @@ function CaseRow({ c, atTs, onSelect, onViewData, onContextMenu, selected }: { c
 								type="button"
 								onClick={onViewData ? (e) => { e.stopPropagation(); onViewData(); } : undefined}
 								title="See how this score is computed (per-question breakdown)"
-								className="text-[12px] font-semibold tabular-nums hover:underline decoration-dotted"
+								className="text-caption font-semibold tabular-nums hover:underline decoration-dotted"
 								style={{ color }}
 							>
 								{fmtScore(runScore)}
@@ -119,16 +120,16 @@ function CaseRow({ c, atTs, onSelect, onViewData, onContextMenu, selected }: { c
 							/* NOT scored in this run — show its last known score MUTED with a
 							   ·prev marker, so adjacent runs stay distinguishable without a
 							   wall of "not this run". */
-							<span className="flex-shrink-0 tabular-nums text-slate-600" title="carried from a previous run — this case wasn't scored in the selected run">
-								<span className="text-[11px]">{fmtScore(last)}</span>
-								<span className="text-[11px] ml-0.5">·prev</span>
+							<span className="flex-shrink-0 tabular-nums text-ink-600" title="carried from a previous run — this case wasn't scored in the selected run">
+								<span className="text-micro">{fmtScore(last)}</span>
+								<span className="text-micro ml-0.5">·prev</span>
 							</span>
 						) : (
-							<span className="text-[11px] text-slate-600 italic flex-shrink-0">not yet scored</span>
+							<span className="text-micro text-ink-600 italic flex-shrink-0">not yet scored</span>
 						)}
 					</>
 				) : (
-					<span className="text-[11px] text-slate-600 italic flex-shrink-0">not yet scored</span>
+					<span className="text-micro text-ink-600 italic flex-shrink-0">not yet scored</span>
 				)}
 				{/* The redundant "view this case's data" icon was removed — the case
 				    detail (open it by clicking the score, or ⋯ → View data) already
@@ -139,7 +140,7 @@ function CaseRow({ c, atTs, onSelect, onViewData, onContextMenu, selected }: { c
 						type="button"
 						onClick={(e) => { e.stopPropagation(); onContextMenu(e); }}
 						title="More actions"
-						className="flex-shrink-0 text-slate-300 hover:text-slate-700 transition-colors"
+						className="flex-shrink-0 text-ink-600 hover:text-ink-700 transition-colors"
 					>
 						<MoreHorizontal className="w-3.5 h-3.5" />
 					</button>
@@ -154,8 +155,8 @@ function MetricEvolution({ series }: { series: CasebookMetricEvolution[] }) {
 	if (series.length === 0) return null;
 	return (
 		<div>
-			<div className="text-[11px] font-medium text-slate-500 flex items-center gap-1.5 mb-1.5">
-				<TrendingUp className="w-3 h-3 text-slate-600" />
+			<div className="text-micro font-medium text-ink-600 flex items-center gap-1.5 mb-1.5">
+				<TrendingUp className="w-3 h-3 text-ink-600" />
 				Metric trend
 			</div>
 			<div className="space-y-1">
@@ -166,11 +167,11 @@ function MetricEvolution({ series }: { series: CasebookMetricEvolution[] }) {
 					const color = delta === 0 ? COLOR.flat : good ? COLOR.up : COLOR.down;
 					return (
 						<div key={s.metric} className="flex items-center gap-2">
-							<span className="text-[11px] text-slate-600 flex-1 truncate" title={s.metric}>
+							<span className="text-micro text-ink-600 flex-1 truncate" title={s.metric}>
 								{s.metric}
 							</span>
 							<Sparkline values={vals} color={color} />
-							<span className="text-[11px] tabular-nums" style={{ color }}>
+							<span className="text-micro tabular-nums" style={{ color }}>
 								{fmtScore(vals[vals.length - 1])}
 							</span>
 						</div>
@@ -209,7 +210,7 @@ export default function CasebookPanel({ app, loop, atTs, onSelectCase, onViewDat
 		return () => { live = false; };
 	}, [app, loop]);
 
-	if (book === null) return <div className="h-16 rounded-lg bg-slate-100 animate-pulse" />;
+	if (book === null) return <div className="h-16 rounded-lg bg-ink-100 animate-pulse" />;
 
 	const cases = book.cases ?? [];
 	const evo = book.metrics_evolution ?? [];
@@ -219,9 +220,9 @@ export default function CasebookPanel({ app, loop, atTs, onSelectCase, onViewDat
 	// eval-set — point the user at the trajectory on the right.
 	if (cases.length === 0 && evo.length === 0) {
 		return (
-			<div className="text-xs text-slate-500 leading-relaxed">
+			<div className="text-xs text-ink-600 leading-relaxed">
 				No fixed eval-set — this workflow reads{" "}
-				<span className="font-medium text-slate-700">live / external data</span> (market feeds,
+				<span className="font-medium text-ink-700">live / external data</span> (market feeds,
 				a mailbox, a warehouse). Its metrics are scored on each run's outputs; pick a run in the
 				trajectory to see what it produced.
 			</div>
@@ -246,12 +247,12 @@ export default function CasebookPanel({ app, loop, atTs, onSelectCase, onViewDat
 				    case row from the casebook endpoint), scored = rows with a score.
 				    Without it, a partial run reads as "nothing". */}
 				{cases.length > 0 && (
-					<div className="text-[11px] text-slate-600 mb-1.5">
+					<div className="text-micro text-ink-600 mb-1.5">
 						{scored} of {cases.length} case{cases.length === 1 ? "" : "s"} scored
 					</div>
 				)}
 				{cases.length === 0 ? (
-					<div className="flex items-center gap-2 text-[11px] text-slate-600">
+					<div className="flex items-center gap-2 text-micro text-ink-600">
 						<Loader2 className="w-3.5 h-3.5" />
 						No cases on disk yet — scores below come from past runs.
 					</div>
@@ -272,7 +273,7 @@ export default function CasebookPanel({ app, loop, atTs, onSelectCase, onViewDat
 									type="button"
 									onClick={() => setShowUnscored((v) => !v)}
 									title={unscoredOpen ? "Hide the not-yet-scored cases" : "Show the not-yet-scored cases"}
-									className="w-full flex items-center gap-1.5 rounded-lg border border-dashed border-slate-200 px-2.5 py-1.5 text-[11px] text-slate-600 hover:text-slate-600 hover:border-gold-200 transition-colors"
+									className="w-full flex items-center gap-1.5 rounded-lg border border-dashed border-ink-200 px-2.5 py-1.5 text-micro text-ink-600 hover:text-ink-600 hover:border-gold-200 transition-colors"
 								>
 									{unscoredOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
 									{unscoredOpen
@@ -293,12 +294,12 @@ export default function CasebookPanel({ app, loop, atTs, onSelectCase, onViewDat
 						title="View metric trends"
 						className={cn(
 							"w-full text-left rounded-lg border px-2.5 py-2 cursor-pointer transition-colors flex items-center gap-2",
-							metricsSelected ? "border-gold-300 bg-gold-50/60 ring-1 ring-gold-200" : "border-slate-200/70 bg-white hover:border-gold-200 hover:bg-gold-50/30",
+							metricsSelected ? "border-gold-300 bg-gold-50/60 ring-1 ring-gold-200" : "border-ink-200/70 bg-card hover:border-gold-200 hover:bg-gold-50/30",
 						)}
 					>
 						<TrendingUp className="w-3.5 h-3.5 text-gold-500 flex-shrink-0" />
-						<span className="text-[12px] font-medium text-slate-700 flex-1">Metrics</span>
-						<span className="text-[11px] text-slate-600">{evo.length} tracked →</span>
+						<span className="text-caption font-medium text-ink-700 flex-1">Metrics</span>
+						<span className="text-micro text-ink-600">{evo.length} tracked →</span>
 					</button>
 				) : (
 					<MetricEvolution series={evo} />

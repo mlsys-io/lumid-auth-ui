@@ -71,7 +71,7 @@ export function TurnStatsFooter({ s }: { s: TurnStats }) {
 	if (!shown.length) return null;
 
 	return (
-		<div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[10px] text-muted-foreground tabular-nums">
+		<div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-nano text-muted-foreground tabular-nums">
 			{shown.map(([label, value, title]) => (
 				<span key={label} title={title} className="inline-flex items-center gap-1">
 					<span className="opacity-60">{label}</span>

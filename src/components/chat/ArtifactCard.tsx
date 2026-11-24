@@ -50,14 +50,14 @@ export function ArtifactCard({ id, title }: { id: string; title?: string }) {
 
 	if (missing) {
 		return (
-			<div className="max-w-md rounded-xl border border-border bg-card shadow-sm px-3 py-2 text-[12px] text-muted-foreground">
+			<div className="max-w-md rounded-xl border border-border bg-card shadow-sm px-3 py-2 text-caption text-muted-foreground">
 				Saved to artifacts{title ? ` — “${title}”` : ''}. Open the Artifacts panel to view it.
 			</div>
 		);
 	}
 	if (!art) {
 		return (
-			<div className="max-w-md rounded-xl border border-border bg-card shadow-sm px-3 py-2 text-[12px] text-muted-foreground flex items-center gap-2">
+			<div className="max-w-md rounded-xl border border-border bg-card shadow-sm px-3 py-2 text-caption text-muted-foreground flex items-center gap-2">
 				<Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading artifact…
 			</div>
 		);
@@ -66,11 +66,11 @@ export function ArtifactCard({ id, title }: { id: string; title?: string }) {
 	return (
 		<div className="max-w-lg rounded-xl border border-border bg-card shadow-sm overflow-hidden">
 			<div className="flex items-center gap-1.5 px-3 pt-2 pb-1">
-				<span className="text-[11px] font-medium text-ink-800 truncate flex-1">{art.title || title || 'Artifact'}</span>
+				<span className="text-micro font-medium text-ink-800 truncate flex-1">{art.title || title || 'Artifact'}</span>
 				<a
 					href="/studio"
 					title="Open in Artifacts panel"
-					className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+					className="p-1 rounded text-ink-600 hover:text-ink-700 hover:bg-ink-100 transition-colors"
 				>
 					<ExternalLink className="w-3.5 h-3.5" />
 				</a>

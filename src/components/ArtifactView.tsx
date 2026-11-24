@@ -27,6 +27,7 @@ import {
 	CandlestickChart, Table2, AreaChart as AreaChartIcon, TrendingUp,
 } from 'lucide-react';
 import { ChatMarkdown } from './ChatMarkdown';
+import { ink, gold, brick, lagoon, plum, chart } from "@/styles/palette";
 
 const VegaArtifact = lazy(() => import('./artifacts/VegaArtifact'));
 const CandlesArtifact = lazy(() => import('./artifacts/CandlesArtifact'));
@@ -40,7 +41,7 @@ export type ArtifactKind =
 // jump once vega resolves.
 function RichFallback() {
 	return (
-		<div className="w-full flex items-center justify-center text-[11.5px] text-slate-400"
+		<div className="w-full flex items-center justify-center text-caption text-ink-600"
 			style={{ height: 280 }}>
 			Loading chart…
 		</div>
@@ -58,20 +59,20 @@ export function ArtifactView({ kind, content, title, language }: {
 			return <ChatMarkdown>{content}</ChatMarkdown>;
 		case 'code':
 			return (
-				<pre className="bg-slate-50 border border-slate-200 rounded-lg p-2 text-[11.5px] overflow-x-auto">
+				<pre className="bg-ink-50 border border-ink-200 rounded-lg p-2 text-caption overflow-x-auto">
 					<code>{content}</code>
 				</pre>
 			);
 		case 'json':
 			return (
-				<pre className="bg-slate-50 border border-slate-200 rounded-lg p-2 text-[11.5px] overflow-x-auto">
+				<pre className="bg-ink-50 border border-ink-200 rounded-lg p-2 text-caption overflow-x-auto">
 					<code>{prettyJson(content)}</code>
 				</pre>
 			);
 		case 'image':
 			return (
 				<a href={content} target="_blank" rel="noreferrer">
-					<img src={content} alt={title || 'image'} className="max-w-full rounded-lg border border-slate-200" />
+					<img src={content} alt={title || 'image'} className="max-w-full rounded-lg border border-ink-200" />
 				</a>
 			);
 		case 'audio':
@@ -91,29 +92,29 @@ export function ArtifactView({ kind, content, title, language }: {
 		case 'pdf':
 			return (
 				<embed src={content} type="application/pdf"
-					className="w-full rounded-lg border border-slate-200" style={{ height: '70vh' }} />
+					className="w-full rounded-lg border border-ink-200" style={{ height: '70vh' }} />
 			);
 		case 'tradingview':
 			return <TradingViewArtifact url={content} title={title} />;
 		default:
-			return <div className="whitespace-pre-wrap break-words text-slate-700">{content}</div>;
+			return <div className="whitespace-pre-wrap break-words text-ink-700">{content}</div>;
 	}
 }
 
 export function ArtifactKindIcon({ kind }: { kind: ArtifactKind }) {
 	switch (kind) {
 		case 'markdown': return <FileText className="w-3.5 h-3.5 text-gold-600 flex-shrink-0" />;
-		case 'code':     return <Code2 className="w-3.5 h-3.5 text-sky-600 flex-shrink-0" />;
+		case 'code':     return <Code2 className="w-3.5 h-3.5 text-lagoon-600 flex-shrink-0" />;
 		case 'json':     return <FileJson className="w-3.5 h-3.5 text-gold-600 flex-shrink-0" />;
-		case 'image':    return <ImageIcon className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />;
-		case 'audio':    return <AudioLines className="w-3.5 h-3.5 text-violet-600 flex-shrink-0" />;
-		case 'chart':    return <BarChart3 className="w-3.5 h-3.5 text-sky-600 flex-shrink-0" />;
-		case 'vega':     return <AreaChartIcon className="w-3.5 h-3.5 text-sky-600 flex-shrink-0" />;
-		case 'candles':  return <CandlestickChart className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />;
-		case 'table':    return <Table2 className="w-3.5 h-3.5 text-indigo-600 flex-shrink-0" />;
-		case 'pdf':      return <FileType2 className="w-3.5 h-3.5 text-rose-600 flex-shrink-0" />;
-		case 'tradingview': return <TrendingUp className="w-3.5 h-3.5 text-teal-600 flex-shrink-0" />;
-		default:         return <FileText className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />;
+		case 'image':    return <ImageIcon className="w-3.5 h-3.5 text-gold-700 flex-shrink-0" />;
+		case 'audio':    return <AudioLines className="w-3.5 h-3.5 text-plum-600 flex-shrink-0" />;
+		case 'chart':    return <BarChart3 className="w-3.5 h-3.5 text-lagoon-600 flex-shrink-0" />;
+		case 'vega':     return <AreaChartIcon className="w-3.5 h-3.5 text-lagoon-600 flex-shrink-0" />;
+		case 'candles':  return <CandlestickChart className="w-3.5 h-3.5 text-gold-700 flex-shrink-0" />;
+		case 'table':    return <Table2 className="w-3.5 h-3.5 text-plum-600 flex-shrink-0" />;
+		case 'pdf':      return <FileType2 className="w-3.5 h-3.5 text-brick-600 flex-shrink-0" />;
+		case 'tradingview': return <TrendingUp className="w-3.5 h-3.5 text-lagoon-600 flex-shrink-0" />;
+		default:         return <FileText className="w-3.5 h-3.5 text-ink-600 flex-shrink-0" />;
 	}
 }
 
@@ -144,7 +145,8 @@ export function artifactDownload(kind: ArtifactKind, content: string, title: str
 	setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 100);
 }
 
-const CHART_COLORS = ['#2f6feb', '#e8912d', '#2fa36b', '#a05de8', '#e0518a', '#12a3b4'];
+// Lumen categorical series (validated order; never cycle — see palette.ts).
+const CHART_COLORS = chart;
 
 function ChartArtifact({ spec }: { spec: string }) {
 	let parsed: {
@@ -156,7 +158,7 @@ function ChartArtifact({ spec }: { spec: string }) {
 	try {
 		parsed = JSON.parse(spec);
 	} catch {
-		return <div className="text-rose-600 text-[11.5px]">Invalid chart spec (not JSON)</div>;
+		return <div className="text-brick-600 text-caption">Invalid chart spec (not JSON)</div>;
 	}
 	const data = Array.isArray(parsed.data) ? parsed.data : [];
 	const xKey = parsed.xKey || 'name';
@@ -165,13 +167,13 @@ function ChartArtifact({ spec }: { spec: string }) {
 			? parsed.series
 			: Object.keys(data[0] || {}).filter((k) => k !== xKey).map((key) => ({ key }));
 	if (!data.length || !series.length) {
-		return <div className="text-slate-500 text-[11.5px]">No chart data</div>;
+		return <div className="text-ink-600 text-caption">No chart data</div>;
 	}
 	const kind = parsed.type || 'line';
 	const color = (i: number, c?: string) => c || CHART_COLORS[i % CHART_COLORS.length];
 	const common = (
 		<>
-			<CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+			<CartesianGrid strokeDasharray="3 3" stroke={ink["200"]} />
 			<XAxis dataKey={xKey} tick={{ fontSize: 11 }} />
 			<YAxis tick={{ fontSize: 11 }} />
 			<Tooltip />
@@ -223,7 +225,7 @@ function TradingViewArtifact({ url, title }: { url: string; title?: string }) {
 	}
 	if (!TV_ALLOWED_HOSTS.includes(host)) {
 		return (
-			<div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-500">
+			<div className="rounded-lg border border-ink-200 bg-ink-50 px-3 py-2 text-caption text-ink-600">
 				TradingView widget blocked — not a recognized TradingView embed URL.
 			</div>
 		);
@@ -232,7 +234,7 @@ function TradingViewArtifact({ url, title }: { url: string; title?: string }) {
 		<iframe
 			src={trimmed}
 			title={title || 'TradingView'}
-			className="w-full rounded-lg border border-slate-200"
+			className="w-full rounded-lg border border-ink-200"
 			style={{ height: 400, border: 0 }}
 			sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"
 			loading="lazy"

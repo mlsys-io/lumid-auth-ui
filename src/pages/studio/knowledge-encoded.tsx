@@ -24,13 +24,13 @@ type Memory = {
 const KIND_COLORS: Record<string, string> = {
 	principle:     'bg-gold-50 text-gold-700 border-gold-200',
 	recipe:        'bg-gold-50 text-gold-700 border-gold-200',
-	pattern:       'bg-indigo-50 text-indigo-700 border-indigo-200',
-	fact:          'bg-slate-50 text-slate-700 border-slate-200',
+	pattern:       'bg-plum-50 text-plum-700 border-plum-200',
+	fact:          'bg-ink-50 text-ink-700 border-ink-200',
 	correction:    'bg-gold-50 text-gold-700 border-gold-200',
-	anti_pattern:  'bg-rose-50 text-rose-700 border-rose-200',
+	anti_pattern:  'bg-brick-50 text-brick-700 border-brick-200',
 	cc_correction: 'bg-gold-50 text-gold-700 border-gold-200',
-	cc_decision:   'bg-sky-50 text-sky-700 border-sky-200',
-	cc_override:   'bg-violet-50 text-violet-700 border-violet-200',
+	cc_decision:   'bg-lagoon-50 text-lagoon-700 border-lagoon-200',
+	cc_override:   'bg-plum-50 text-plum-700 border-plum-200',
 };
 
 function rel(ts?: string): string {
@@ -45,8 +45,8 @@ function rel(ts?: string): string {
 }
 
 function badgeCls(kind?: string): string {
-	const c = KIND_COLORS[(kind || '').toLowerCase()] || 'bg-slate-50 text-slate-600 border-slate-200';
-	return `text-[10px] uppercase tracking-wide rounded-full px-1.5 py-px border ${c}`;
+	const c = KIND_COLORS[(kind || '').toLowerCase()] || 'bg-ink-50 text-ink-600 border-ink-200';
+	return `text-nano uppercase tracking-wide rounded-full px-1.5 py-px border ${c}`;
 }
 
 export default function StudioKnowledgeEncoded() {
@@ -104,8 +104,8 @@ export default function StudioKnowledgeEncoded() {
 		return Object.entries(freq).filter(([, n]) => n > 1).sort((a, b) => b[1] - a[1]).slice(0, 30);
 	}, [corpus]);
 
-	if (error) return <div className="max-w-4xl mx-auto px-1 py-2 text-sm text-rose-600">{error}</div>;
-	if (agents === null) return <div className="max-w-4xl mx-auto px-1 py-2 text-sm text-slate-500 italic">Loading…</div>;
+	if (error) return <div className="max-w-4xl mx-auto px-1 py-2 text-sm text-brick-600">{error}</div>;
+	if (agents === null) return <div className="max-w-4xl mx-auto px-1 py-2 text-sm text-ink-600 italic">Loading…</div>;
 
 	const totalMemories = agents.reduce((n, a) => n + (a.memory_count || 0), 0);
 	const distilled = recent.filter((m) => ['principle', 'recipe', 'pattern'].includes((m.kind || '').toLowerCase())).length;
@@ -122,28 +122,28 @@ export default function StudioKnowledgeEncoded() {
 			{/* Distribution by kind + a themes word cloud (over a sample) */}
 			{corpus.length > 0 && (
 				<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-					<section className="rounded-lg border border-slate-200/70 bg-white px-4 py-3">
-						<div className="text-[11px] tracking-[0.06em] text-slate-400 mb-2">By kind</div>
+					<section className="rounded-lg border border-ink-200/70 bg-card px-4 py-3">
+						<div className="text-micro tracking-[0.06em] text-ink-600 mb-2">By kind</div>
 						<div className="space-y-1.5">
 							{kindDist.map(([k, n]) => {
 								const pct = Math.round((n / corpus.length) * 100);
 								return (
 									<div key={k} className="flex items-center gap-2">
 										<span className={badgeCls(k)}>{k}</span>
-										<div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
+										<div className="flex-1 h-2 rounded-full bg-ink-100 overflow-hidden">
 											<div className="h-full rounded-full bg-gold-400 transition-all" style={{ width: `${Math.max(4, pct)}%` }} />
 										</div>
-										<span className="text-[10px] text-slate-400 tabular-nums w-6 text-right">{n}</span>
+										<span className="text-nano text-ink-600 tabular-nums w-6 text-right">{n}</span>
 									</div>
 								);
 							})}
 						</div>
 					</section>
-					<section className="rounded-lg border border-slate-200/70 bg-white px-4 py-3">
-						<div className="text-[11px] tracking-[0.06em] text-slate-400 mb-2">Themes</div>
+					<section className="rounded-lg border border-ink-200/70 bg-card px-4 py-3">
+						<div className="text-micro tracking-[0.06em] text-ink-600 mb-2">Themes</div>
 						<div className="flex flex-wrap gap-x-2.5 gap-y-1 items-baseline">
 							{words.length === 0 ? (
-								<span className="text-xs text-slate-400 italic">building as memories accrue…</span>
+								<span className="text-xs text-ink-600 italic">building as memories accrue…</span>
 							) : words.map(([w, n]) => {
 								const max = words[0][1];
 								const size = 11 + Math.round((n / max) * 12);
@@ -157,26 +157,26 @@ export default function StudioKnowledgeEncoded() {
 
 			{/* Recently learned — real */}
 			<section>
-				<div className="text-[11px] tracking-[0.06em] text-slate-400 mb-2">Recently learned — captured from real runs</div>
+				<div className="text-micro tracking-[0.06em] text-ink-600 mb-2">Recently learned — captured from real runs</div>
 				{recent.length === 0 ? (
-					<div className="text-sm text-slate-500 italic">
+					<div className="text-sm text-ink-600 italic">
 						Nothing learned yet — memories land here as your workflows run.
 					</div>
 				) : (
 					<ul className="space-y-2">
 						{recent.map((m, i) => (
-							<li key={m.id || i} className="rounded-lg border border-slate-200/70 bg-white px-4 py-3">
+							<li key={m.id || i} className="rounded-lg border border-ink-200/70 bg-card px-4 py-3">
 								<div className="flex items-center gap-2">
 									<span className={badgeCls(m.kind)}>{m.kind || 'memory'}</span>
 									{(m.recurrence || 0) > 1 && (
-										<span className="text-[10px] text-slate-500">seen ×{m.recurrence}</span>
+										<span className="text-nano text-ink-600">seen ×{m.recurrence}</span>
 									)}
-									<span className="text-[10px] text-slate-400 ml-auto">{rel(m.created_at)}</span>
+									<span className="text-nano text-ink-600 ml-auto">{rel(m.created_at)}</span>
 								</div>
-								<div className="text-sm text-slate-800 mt-1 leading-snug">{m.content}</div>
+								<div className="text-sm text-ink-800 mt-1 leading-snug">{m.content}</div>
 								<Link
 									to={`/studio/knowledge/${encodeURIComponent(m.agent || '')}`}
-									className="text-[11px] text-slate-400 hover:text-slate-700 mt-1 inline-flex items-center gap-1"
+									className="text-micro text-ink-600 hover:text-ink-700 mt-1 inline-flex items-center gap-1"
 								>
 									{m.agent} <ArrowRight className="w-3 h-3" />
 								</Link>
@@ -188,17 +188,17 @@ export default function StudioKnowledgeEncoded() {
 
 			{/* Browse the agents */}
 			<section>
-				<div className="text-[11px] tracking-[0.06em] text-slate-400 mb-2">Knowledge agents</div>
+				<div className="text-micro tracking-[0.06em] text-ink-600 mb-2">Knowledge agents</div>
 				<div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
 					{[...agents].sort((a, b) => (b.memory_count || 0) - (a.memory_count || 0)).map((a) => (
 						<Link
 							key={a.id}
 							to={`/studio/knowledge/${encodeURIComponent(a.id)}`}
-							className="rounded-lg border border-slate-200/70 bg-white px-3 py-2 flex items-center gap-2 hover:border-slate-300 transition-colors"
+							className="rounded-lg border border-ink-200/70 bg-card px-3 py-2 flex items-center gap-2 hover:border-ink-300 transition-colors"
 						>
-							<Brain className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-							<span className="text-sm text-slate-800 truncate flex-1">{a.id}</span>
-							<span className="text-[11px] text-slate-400">{a.memory_count}</span>
+							<Brain className="w-3.5 h-3.5 text-ink-600 flex-shrink-0" />
+							<span className="text-sm text-ink-800 truncate flex-1">{a.id}</span>
+							<span className="text-micro text-ink-600">{a.memory_count}</span>
 						</Link>
 					))}
 				</div>
@@ -209,10 +209,10 @@ export default function StudioKnowledgeEncoded() {
 
 function Tile({ label, value, ctx, neutral }: { label: string; value: string; ctx: string; neutral?: boolean }) {
 	return (
-		<div className="rounded-lg border border-slate-200/70 bg-[#f7f7f5] px-4 py-3">
-			<div className="text-[12px] text-slate-500">{label}</div>
-			<div className="mt-1 text-[22px] font-medium text-slate-900 leading-none tracking-tight">{value}</div>
-			<div className={`mt-1.5 text-[11px] ${neutral ? 'text-slate-500' : 'text-gold-700'}`}>{ctx}</div>
+		<div className="rounded-lg border border-ink-200/70 bg-ink-50 px-4 py-3">
+			<div className="text-caption text-ink-600">{label}</div>
+			<div className="mt-1 text-h2 font-medium text-ink-900 leading-none tracking-tight">{value}</div>
+			<div className={`mt-1.5 text-micro ${neutral ? 'text-ink-600' : 'text-gold-700'}`}>{ctx}</div>
 		</div>
 	);
 }

@@ -107,6 +107,25 @@ export function alphaText(line) {
 	return { out, n };
 }
 
+// Gold is the brand bronze, but gold-600 TEXT is 3.9:1 and white on a
+// gold-500/600 fill is 3.1-3.9:1. In a class string that is clearly text
+// (carries a size token), gold text steps up to 700; a solid gold fill under
+// white text steps up to 700 (hover -> 800). Icons (no size token) keep 600.
+const SIZE_TOKEN = /(?<![\w-])text-(?:nano|micro|caption|meta|body|read|title|xs|sm)(?![\w-])/;
+function goldText(line) {
+	let n = 0;
+	const out = line.replace(/(["'`])([^"'`]*)\1/g, (whole, q, cls) => {
+		let c = cls;
+		if (SIZE_TOKEN.test(c)) c = c.replace(/(?<![\w-])((?:[a-z0-9-]+:)*)text-gold-(?:400|500|600)(?![\w-])/g, (_m, v) => (n++, `${v}text-gold-700`));
+		if (/(?<![\w-])text-white(?![\w-])/.test(c)) {
+			c = c.replace(/(?<![\w-:])bg-gold-(?:400|500|600)(?![\w-])/g, () => (n++, "bg-gold-700"));
+			c = c.replace(/(?<![\w-])hover:bg-gold-(?:500|600|700)(?![\w-])/g, () => (n++, "hover:bg-gold-800"));
+		}
+		return c === cls ? whole : q + c + q;
+	});
+	return { out, n };
+}
+
 export function transform(src, { alphaOnly = false } = {}) {
 	let changed = 0;
 	const out = src.split("\n").map((line) => {
@@ -114,7 +133,9 @@ export function transform(src, { alphaOnly = false } = {}) {
 		const a = alphaText(line);
 		changed += a.n;
 		if (alphaOnly) return a.out;
-		let l = a.out.replace(CLASS, (_m, variants, util, fam, step, alpha) => {
+		const g = goldText(a.out);
+		changed += g.n;
+		let l = g.out.replace(CLASS, (_m, variants, util, fam, step, alpha) => {
 			changed++;
 			const t = FAM[fam];
 			return `${variants}${util}-${t}-${mapStep(t, step, util, variants)}${alpha}`;

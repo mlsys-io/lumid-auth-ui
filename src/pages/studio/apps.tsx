@@ -165,21 +165,21 @@ function SurfaceAppCard({ app, onOpen, onRemoved }: {
 	return (
 		<button
 			type="button" onClick={onOpen}
-			className="group text-left rounded-xl border border-slate-200/80 bg-white px-4 py-3.5 hover:shadow-md hover:shadow-slate-200/60 hover:border-slate-300 transition-all hover:-translate-y-0.5 flex items-center gap-3"
+			className="group text-left rounded-xl border border-ink-200/80 bg-card px-4 py-3.5 hover:shadow-md hover:shadow-ink-200/60 hover:border-ink-300 transition-all hover:-translate-y-0.5 flex items-center gap-3"
 		>
 			<div className="w-9 h-9 shrink-0 rounded-lg bg-gold-50 text-gold-600 flex items-center justify-center">
 				<Icon className="w-[18px] h-[18px]" />
 			</div>
 			<div className="min-w-0 flex-1">
-				<div className="text-[14px] font-medium text-slate-900 truncate">{label}</div>
-				<div className="text-[12px] text-slate-400 truncate">
+				<div className="text-body font-medium text-ink-900 truncate">{label}</div>
+				<div className="text-caption text-ink-600 truncate">
 					{section ? `${section} · ` : ""}{app.tenant ? "installed" : "shared"}
 				</div>
 			</div>
-			<ArrowRight className="w-4 h-4 shrink-0 text-slate-300 group-hover:text-gold-600 transition-colors" />
+			<ArrowRight className="w-4 h-4 shrink-0 text-ink-600 group-hover:text-gold-600 transition-colors" />
 			<span
 				role="button" tabIndex={0} onClick={remove}
-				className="shrink-0 p-1.5 rounded-md text-slate-300 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-50 opacity-0 group-hover:opacity-100 transition-opacity"
+				className="shrink-0 p-1.5 rounded-md text-ink-600 hover:text-brick-600 hover:bg-brick-50 disabled:opacity-50 opacity-0 group-hover:opacity-100 transition-opacity"
 				aria-label={`Remove ${label}`} aria-disabled={busy}
 			>
 				<Trash2 className="w-3.5 h-3.5" />
@@ -199,17 +199,17 @@ function PendingAppCard({ app, onRetry, onDismiss }: {
 	return (
 		<div className={cn(
 			"rounded-xl border px-4 py-3.5 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2",
-			failed ? "border-rose-200 bg-rose-50/40" : "border-slate-200/70 bg-white",
+			failed ? "border-brick-200 bg-brick-50/40" : "border-ink-200/70 bg-card",
 		)}>
 			<div className={cn(
 				"w-9 h-9 shrink-0 rounded-lg border flex items-center justify-center",
-				failed ? "bg-rose-50 border-rose-200 text-rose-500" : "bg-slate-50 border-slate-200 text-gold-500",
+				failed ? "bg-brick-50 border-brick-200 text-brick-600" : "bg-ink-50 border-ink-200 text-gold-500",
 			)}>
 				{failed ? <AlertTriangle className="w-[18px] h-[18px]" /> : <Loader2 className="w-[18px] h-[18px] animate-spin" />}
 			</div>
 			<div className="min-w-0 flex-1">
-				<div className="text-[14px] font-medium text-slate-900 truncate">{label}</div>
-				<div className={cn("text-[12px] truncate", failed ? "text-rose-600" : "text-slate-400")}>
+				<div className="text-body font-medium text-ink-900 truncate">{label}</div>
+				<div className={cn("text-caption truncate", failed ? "text-brick-600" : "text-ink-600")}>
 					{failed ? (app.error || "install failed") : "Setting up — first run starts automatically (~30s)"}
 				</div>
 			</div>
@@ -217,13 +217,13 @@ function PendingAppCard({ app, onRetry, onDismiss }: {
 				<>
 					<button
 						type="button" onClick={onRetry}
-						className="shrink-0 inline-flex items-center gap-1 text-[12px] rounded-md px-2 py-1 text-gold-700 hover:bg-gold-50 transition-colors"
+						className="shrink-0 inline-flex items-center gap-1 text-caption rounded-md px-2 py-1 text-gold-700 hover:bg-gold-50 transition-colors"
 					>
 						<RotateCcw className="w-3.5 h-3.5" /> Retry
 					</button>
 					<button
 						type="button" onClick={onDismiss}
-						className="shrink-0 p-1.5 rounded-md text-slate-300 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+						className="shrink-0 p-1.5 rounded-md text-ink-600 hover:text-ink-600 hover:bg-ink-100 transition-colors"
 						aria-label={`Dismiss ${label}`}
 					>
 						<X className="w-3.5 h-3.5" />
@@ -537,7 +537,7 @@ function AppsHome() {
 	if (byApp === null) {
 		return (
 			<div className="relative space-y-6">
-				<div className="h-20 rounded-xl bg-slate-100 animate-pulse" />
+				<div className="h-20 rounded-xl bg-ink-100 animate-pulse" />
 				<Skeleton lines={3} />
 				<SpiralOverlay />
 			</div>
@@ -610,7 +610,7 @@ function AppsHome() {
 								<Sparkles className="w-5 h-5" />
 							</div>
 							<div>
-								<h2 className="font-display text-xl font-medium text-foreground tracking-tight">Set up your first agent.</h2>
+								<h2 className="font-display text-h3 font-medium text-foreground tracking-tight">Set up your first agent.</h2>
 								<p className="text-sm text-muted-foreground mt-1">Pick a starter and your AI assembles an agent — schedules its workflows and runs them for you. Progress lives here.</p>
 							</div>
 						</div>
@@ -656,14 +656,14 @@ function AppsHome() {
 function HeroBar({ h, onApps }: { h: Hero; onApps: () => void }) {
 	return (
 		<div className="flex items-center flex-wrap gap-x-1 gap-y-1 -ml-2">
-			<StatChip icon={Boxes} value={h.apps} label="agents" tone="text-slate-400" onClick={onApps} />
-			<StatChip icon={Activity} value={h.workflows} label="workflows" tone="text-slate-400" onClick={onApps} />
-			<StatChip icon={Sparkles} value={h.runsToday} label="runs today" tone="text-slate-400" to="/studio/runs" />
-			{h.selfHeals > 0 && <StatChip icon={Wrench} value={h.selfHeals} label="auto-recovered" tone="text-slate-400" title="workflows that recovered from a failed run on their own" onClick={onApps} />}
-			<StatChip icon={Brain} value={h.memories} label="learned" tone="text-slate-400" title="insights your agents saved from recent runs" to="/studio/knowledge" />
+			<StatChip icon={Boxes} value={h.apps} label="agents" tone="text-ink-600" onClick={onApps} />
+			<StatChip icon={Activity} value={h.workflows} label="workflows" tone="text-ink-600" onClick={onApps} />
+			<StatChip icon={Sparkles} value={h.runsToday} label="runs today" tone="text-ink-600" to="/studio/runs" />
+			{h.selfHeals > 0 && <StatChip icon={Wrench} value={h.selfHeals} label="auto-recovered" tone="text-ink-600" title="workflows that recovered from a failed run on their own" onClick={onApps} />}
+			<StatChip icon={Brain} value={h.memories} label="learned" tone="text-ink-600" title="insights your agents saved from recent runs" to="/studio/knowledge" />
 			{/* failing count intentionally absent — the attention rail below
 			    IS the failure surface (top-strip pill covers other pages). */}
-			<StatChip icon={Inbox} value={h.inbox} label="inbox" tone="text-slate-400" to="/studio/inbox" />
+			<StatChip icon={Inbox} value={h.inbox} label="inbox" tone="text-ink-600" to="/studio/inbox" />
 		</div>
 	);
 }
@@ -678,11 +678,11 @@ function StatChip({
 	const inner = (
 		<>
 			<Icon className={cn("w-3.5 h-3.5", tone)} />
-			<span className="font-semibold text-slate-800 tabular-nums">{shown}</span>
-			<span className="text-slate-400">{label}</span>
+			<span className="font-semibold text-ink-800 tabular-nums">{shown}</span>
+			<span className="text-ink-600">{label}</span>
 		</>
 	);
-	const cls = "inline-flex items-center gap-1.5 text-[12px] rounded-lg px-2 py-1 hover:bg-slate-100/70 transition-colors";
+	const cls = "inline-flex items-center gap-1.5 text-caption rounded-lg px-2 py-1 hover:bg-ink-100/70 transition-colors";
 	if (onClick) return <button type="button" onClick={onClick} title={title} className={cls}>{inner}</button>;
 	if (to) return <Link to={to} title={title} className={cls}>{inner}</Link>;
 	return <div className={cls} title={title}>{inner}</div>;
@@ -710,17 +710,17 @@ function WorkflowSelect({ rows, selected, onSelect, onNew }: { rows: Row[]; sele
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger asChild>
-				<button className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors max-w-full min-w-0">
+				<button className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-ink-200 bg-card hover:bg-ink-50 transition-colors max-w-full min-w-0">
 					{cur ? (
 						<>
 							<span className={wfDot(cur.wf)} />
-							<span className="text-[13px] font-medium text-slate-800 truncate">{loopLabel(cur.wf.name, cur.loop)}</span>
+							<span className="text-meta font-medium text-ink-800 truncate">{loopLabel(cur.wf.name, cur.loop)}</span>
 						</>
 					) : (
-						<span className="text-[13px] font-medium text-slate-500 truncate">Pick a workflow</span>
+						<span className="text-meta font-medium text-ink-600 truncate">Pick a workflow</span>
 					)}
-					<span className="text-[11px] text-slate-500 flex-shrink-0 hidden sm:inline">· {rows.length} workflows</span>
-					<ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" />
+					<span className="text-micro text-ink-600 flex-shrink-0 hidden sm:inline">· {rows.length} workflows</span>
+					<ChevronDown className="w-4 h-4 text-ink-600 flex-shrink-0" />
 				</button>
 			</PopoverTrigger>
 			<PopoverContent align="start" className="w-72 p-1 max-h-[60vh] overflow-y-auto">
@@ -731,8 +731,8 @@ function WorkflowSelect({ rows, selected, onSelect, onNew }: { rows: Row[]; sele
 							className={cn("w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left transition-colors", active ? "bg-gold-50" : "hover:bg-muted")}>
 							<span className={wfDot(wf)} />
 							<span className="flex-1 min-w-0">
-								<span className="block text-[12.5px] font-medium text-slate-800 truncate">{loopLabel(wf.name, loop)}</span>
-								<span className="block text-[11px] text-slate-500 truncate">{wfSub(wf)}</span>
+								<span className="block text-meta font-medium text-ink-800 truncate">{loopLabel(wf.name, loop)}</span>
+								<span className="block text-micro text-ink-600 truncate">{wfSub(wf)}</span>
 							</span>
 							{/* Recent-run strip so run health is glanceable while switching
 							    (display-only here; the panel header has the clickable one). */}
@@ -742,9 +742,9 @@ function WorkflowSelect({ rows, selected, onSelect, onNew }: { rows: Row[]; sele
 				})}
 				{onNew && (
 					<>
-						<div className="my-1 border-t border-slate-100" />
+						<div className="my-1 border-t border-ink-100" />
 						<button type="button" onClick={() => { setOpen(false); onNew(); }}
-							className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left text-[12.5px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+							className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left text-meta font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
 							<Plus className="w-3.5 h-3.5 flex-shrink-0" /> New workflow
 						</button>
 					</>
@@ -816,10 +816,10 @@ function RuntimeStrip({ rows, identity, embedded }: { rows: Row[]; identity?: Ap
 	if (!chips.length) return null;
 
 	return (
-		<div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-slate-500">
+		<div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-micro text-ink-600">
 			{chips.map((c, i) => (
 				<span key={i} className="inline-flex items-center gap-1 min-w-0" title={c.title}>
-					<c.Icon className="w-3 h-3 flex-shrink-0 text-slate-400" />
+					<c.Icon className="w-3 h-3 flex-shrink-0 text-ink-600" />
 					<span className="truncate max-w-[14rem]">{c.label}</span>
 				</span>
 			))}
@@ -1050,7 +1050,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 	return (
 		<div className="space-y-5">
 			{!embedded && (
-				<Link to="/studio/apps" className="inline-flex items-center text-sm text-slate-500 hover:text-slate-900 gap-1">
+				<Link to="/studio/apps" className="inline-flex items-center text-sm text-ink-600 hover:text-ink-900 gap-1">
 					<ChevronRight className="w-4 h-4 rotate-180" /> My Agents
 				</Link>
 			)}
@@ -1064,8 +1064,8 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 						<Boxes className="w-5 h-5" />
 					</div>
 					<div className="min-w-0">
-						<h1 className="text-lg font-semibold text-slate-900">{identity?.label || appTitle(app)}</h1>
-						<div className="text-xs text-slate-400 font-mono mt-0.5">
+						<h1 className="text-title font-semibold text-ink-900">{identity?.label || appTitle(app)}</h1>
+						<div className="text-xs text-ink-600 font-mono mt-0.5">
 							{app}{identity?.version ? ` · v${identity.version}` : ""}{identity?.published ? " · published" : ""}
 						</div>
 					</div>
@@ -1074,7 +1074,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 						onClick={del}
 						disabled={deleting}
 						title="Delete this agent — archives it (recoverable) and removes it from your agents"
-						className="ml-auto flex-shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-colors disabled:opacity-50"
+						className="ml-auto flex-shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-2.5 py-1.5 text-xs font-medium text-ink-600 hover:text-brick-600 hover:border-brick-200 hover:bg-brick-50 transition-colors disabled:opacity-50"
 					>
 						<Trash2 className="w-3.5 h-3.5" />
 						{deleting ? "Deleting…" : "Delete"}
@@ -1111,7 +1111,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 				// (observed on quant-research 2026-09-04, ~9 deep). Inside a
 				// surface, an empty row set renders the honest empty state instead.
 				nestedInSurface ? (
-					<div className="text-sm text-slate-500 px-1 py-2">
+					<div className="text-sm text-ink-600 px-1 py-2">
 						No workflows discovered for this app yet — they appear here once
 						the scheduler reports them (or after the first run).
 					</div>
@@ -1146,8 +1146,8 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 										onClick={selectOverview}
 										title="App overview — every workflow at a glance"
 										className={cn(
-											"px-2.5 py-1 rounded-lg text-[12px] flex-shrink-0 transition-colors",
-											overviewMode ? "bg-slate-800 text-white" : "text-slate-500 hover:text-slate-800 hover:bg-slate-100",
+											"px-2.5 py-1 rounded-lg text-caption flex-shrink-0 transition-colors",
+											overviewMode ? "bg-ink-800 text-white" : "text-ink-600 hover:text-ink-800 hover:bg-ink-100",
 										)}
 									>Overview</button>
 								)}
@@ -1163,7 +1163,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 								<DropdownMenu>
 									<DropdownMenuTrigger asChild>
 										<button
-											className="inline-flex items-center justify-center w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:border-slate-300 shadow-sm transition-all flex-shrink-0"
+											className="inline-flex items-center justify-center w-7 h-7 rounded-lg border border-ink-200 bg-card text-ink-600 hover:text-ink-800 hover:border-ink-300 shadow-sm transition-all flex-shrink-0"
 											title="App actions" aria-label="App actions"
 										>
 											<MoreHorizontal className="w-4 h-4" />
@@ -1193,7 +1193,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 												<SlidersHorizontal className="w-3.5 h-3.5" />
 												<span className="flex flex-col">
 													<span>Manage agent</span>
-													<span className="text-[11px] text-slate-500">name, workflows, skills</span>
+													<span className="text-micro text-ink-600">name, workflows, skills</span>
 												</span>
 											</Link>
 										</DropdownMenuItem>
@@ -1210,7 +1210,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 											{shareBusy === "pull" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <DownloadCloud className="w-3.5 h-3.5" />}
 											<span className="flex flex-col">
 												<span>Pull updates</span>
-												<span className="text-[11px] text-slate-500">merge the latest version; your edits stay</span>
+												<span className="text-micro text-ink-600">merge the latest version; your edits stay</span>
 											</span>
 										</DropdownMenuItem>
 										<DropdownMenuItem
@@ -1223,7 +1223,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 											{shareBusy === "publish" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
 											<span className="flex flex-col">
 												<span>Publish changes…</span>
-												<span className="text-[11px] text-slate-500">push your edits to the app&apos;s repo</span>
+												<span className="text-micro text-ink-600">push your edits to the app&apos;s repo</span>
 											</span>
 										</DropdownMenuItem>
 										{/* Delete THIS workflow (one loop) — folded in here so the top
@@ -1234,7 +1234,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 												<DropdownMenuSeparator />
 												<DropdownMenuItem
 													onSelect={() => delLoop(selectedRow.loop, loopLabel(selectedRow.wf.name, selectedRow.loop))}
-													className="text-rose-600 focus:text-rose-700 focus:bg-rose-50"
+													className="text-brick-600 focus:text-brick-700 focus:bg-brick-50"
 												>
 													<Trash2 className="w-3.5 h-3.5" /> Delete workflow
 												</DropdownMenuItem>
@@ -1244,7 +1244,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 										<DropdownMenuItem
 											disabled={deleting}
 											onSelect={() => del()}
-											className="text-rose-600 focus:text-rose-700 focus:bg-rose-50"
+											className="text-brick-600 focus:text-brick-700 focus:bg-brick-50"
 										>
 											<Trash2 className="w-3.5 h-3.5" /> {deleting ? "Removing…" : "Remove agent…"}
 										</DropdownMenuItem>
@@ -1301,7 +1301,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 									</div>
 								) : (
 									<div className="space-y-2">
-										<div className="text-[11px] tracking-[0.08em] font-semibold text-slate-500 uppercase">Workflows</div>
+										<div className="text-micro tracking-[0.08em] font-semibold text-ink-600 uppercase">Workflows</div>
 										<WorkflowList rows={rows} selected={null} onSelect={select} hrefFor={(l) => workflowPath(app, l)} />
 									</div>
 								)}
@@ -1337,22 +1337,22 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 // .app-update-backup/), so global Runs still lists its old runs.
 function WorkflowNotFound({ app, loop, runId }: { app: string; loop: string; runId: string | null }) {
 	return (
-		<div role="alert" className="rounded-xl border border-amber-200 bg-amber-50/60 p-5 space-y-2">
-			<div className="flex items-center gap-2 text-sm font-medium text-slate-900">
-				<AlertTriangle className="w-4 h-4 text-amber-600" />
+		<div role="alert" className="rounded-xl border border-ember-200 bg-ember-50/60 p-5 space-y-2">
+			<div className="flex items-center gap-2 text-sm font-medium text-ink-900">
+				<AlertTriangle className="w-4 h-4 text-ember-600" />
 				Workflow not found
 			</div>
-			<p className="text-[13px] text-slate-600">
+			<p className="text-meta text-ink-600">
 				<span className="font-mono">{appTitle(app)}</span> has no workflow named{" "}
 				<span className="font-mono">{loop}</span>
 				{runId ? <>, so run <span className="font-mono">{runId}</span> can&apos;t be shown here</> : null}.
 				It may have been removed from this agent&apos;s configuration (an update replaces an
 				edited spec and backs up your copy), or the link is wrong.
 			</p>
-			<div className="flex gap-3 text-[12.5px]">
-				<Link to={`/studio/apps/${encodeURIComponent(app)}`} className="text-slate-700 underline hover:text-slate-900">All workflows</Link>
-				<Link to={`/studio/a/${encodeURIComponent(app)}/manage`} className="text-slate-700 underline hover:text-slate-900">Manage agent</Link>
-				<Link to="/studio/runs" className="text-slate-700 underline hover:text-slate-900">Runs</Link>
+			<div className="flex gap-3 text-meta">
+				<Link to={`/studio/apps/${encodeURIComponent(app)}`} className="text-ink-700 underline hover:text-ink-900">All workflows</Link>
+				<Link to={`/studio/a/${encodeURIComponent(app)}/manage`} className="text-ink-700 underline hover:text-ink-900">Manage agent</Link>
+				<Link to="/studio/runs" className="text-ink-700 underline hover:text-ink-900">Runs</Link>
 			</div>
 		</div>
 	);

@@ -52,15 +52,15 @@ function statusBadge(s: TaskStatus | "UNKNOWN"): string {
 	switch (s) {
 		case "DONE":
 		case "CANCELLED":
-			return "bg-slate-100 text-slate-700 border-slate-200";
+			return "bg-ink-100 text-ink-700 border-ink-200";
 		case "DISPATCHED":
 			return "bg-gold-100 text-gold-800 border-gold-200";
 		case "PENDING":
 			return "bg-gold-100 text-gold-800 border-gold-200";
 		case "FAILED":
-			return "bg-red-100 text-red-800 border-red-200";
+			return "bg-brick-100 text-brick-800 border-brick-200";
 		default:
-			return "bg-gray-100 text-gray-700 border-gray-200";
+			return "bg-ink-100 text-ink-700 border-ink-200";
 	}
 }
 
@@ -271,8 +271,8 @@ export default function GpuRentalDetail() {
 						GPU rentals
 					</Button>
 				</Link>
-				<Server className="w-5 h-5 text-indigo-600" />
-				<h1 className="text-2xl font-semibold">
+				<Server className="w-5 h-5 text-plum-600" />
+				<h1 className="text-h2 font-semibold">
 					{localRental?.name || (loading ? "Loading…" : "Rental")}
 				</h1>
 				{task && (
@@ -299,7 +299,7 @@ export default function GpuRentalDetail() {
 						<Button
 							variant="outline"
 							size="sm"
-							className="text-red-600 hover:bg-red-50"
+							className="text-brick-600 hover:bg-brick-50"
 							onClick={() => setCancelOpen(true)}
 						>
 							<Trash2 className="w-4 h-4 mr-1" />
@@ -309,7 +309,7 @@ export default function GpuRentalDetail() {
 						<Button
 							variant="outline"
 							size="sm"
-							className="text-slate-600"
+							className="text-ink-600"
 							onClick={onCleanup}
 						>
 							<Trash2 className="w-4 h-4 mr-1" />
@@ -320,7 +320,7 @@ export default function GpuRentalDetail() {
 			</header>
 
 			{loadError && !task && (
-				<Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm">
+				<Card className="border-0 shadow-md bg-card/80 backdrop-blur-sm">
 					<CardContent className="py-12 text-center">
 						<p className="text-sm text-muted-foreground mb-2">
 							Couldn't reach this rental: <code>{loadError}</code>
@@ -335,9 +335,9 @@ export default function GpuRentalDetail() {
 			{task && (
 				<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 					{/* Status card */}
-					<Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm lg:col-span-1">
+					<Card className="border-0 shadow-md bg-card/80 backdrop-blur-sm lg:col-span-1">
 						<CardHeader>
-							<CardTitle className="text-base">
+							<CardTitle className="text-read">
 								Status: {statusLabel(task.status)}
 							</CardTitle>
 							<CardDescription>
@@ -399,7 +399,7 @@ export default function GpuRentalDetail() {
 								}
 							/>
 							{balanceWarning && (
-								<p className="text-xs text-red-700">
+								<p className="text-xs text-brick-700">
 									Balance won't cover the remaining TTL at this rate.{" "}
 									<Link
 										to="/studio/account/billing"
@@ -414,10 +414,10 @@ export default function GpuRentalDetail() {
 					</Card>
 
 					{/* Connect card */}
-					<Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm lg:col-span-2">
+					<Card className="border-0 shadow-md bg-card/80 backdrop-blur-sm lg:col-span-2">
 						<CardHeader>
-							<CardTitle className="text-base flex items-center gap-2">
-								<Terminal className="w-4 h-4 text-indigo-600" />
+							<CardTitle className="text-read flex items-center gap-2">
+								<Terminal className="w-4 h-4 text-plum-600" />
 								Connect
 							</CardTitle>
 							<CardDescription>
@@ -434,7 +434,7 @@ export default function GpuRentalDetail() {
 											<div className="text-xs text-muted-foreground mb-1 flex items-center justify-between">
 												<span>{v.label}</span>
 												{v.needs && (
-													<span className="text-[11px] text-slate-400">
+													<span className="text-micro text-ink-600">
 														needs: {v.needs}
 													</span>
 												)}
@@ -444,8 +444,8 @@ export default function GpuRentalDetail() {
 													className={cn(
 														"flex-1 text-xs p-3 rounded-md overflow-x-auto whitespace-pre-wrap break-all font-mono",
 														i === 0
-															? "bg-slate-900 text-slate-100"
-															: "bg-slate-50 border border-slate-200 text-slate-800",
+															? "bg-ink-900 text-ink-100"
+															: "bg-ink-50 border border-ink-200 text-ink-800",
 													)}
 												>
 													{v.command}
@@ -472,11 +472,11 @@ export default function GpuRentalDetail() {
 					</Card>
 
 					{/* Logs */}
-					<Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm lg:col-span-3">
+					<Card className="border-0 shadow-md bg-card/80 backdrop-blur-sm lg:col-span-3">
 						<CardHeader>
 							<div className="flex items-center justify-between flex-wrap gap-2">
 								<div>
-									<CardTitle className="text-base">Logs</CardTitle>
+									<CardTitle className="text-read">Logs</CardTitle>
 									<CardDescription>
 										Live stream from FlowMesh. Last 500 lines kept in memory.
 									</CardDescription>
@@ -494,10 +494,10 @@ export default function GpuRentalDetail() {
 						<CardContent>
 							<div
 								ref={logContainerRef}
-								className="max-h-[360px] overflow-y-auto font-mono text-xs bg-slate-900 text-slate-100 rounded-md p-3"
+								className="max-h-[360px] overflow-y-auto font-mono text-xs bg-ink-900 text-ink-100 rounded-md p-3"
 							>
 								{logs.length === 0 ? (
-									<p className="text-slate-400">
+									<p className="text-ink-600">
 										{isTerminal
 											? "(no logs — task is in a terminal state)"
 											: logState === "ended"
@@ -512,7 +512,7 @@ export default function GpuRentalDetail() {
 									logs.map((l, i) => (
 										<div key={i} className="whitespace-pre-wrap break-all">
 											{l.ts && (
-												<span className="text-slate-500 mr-2">{l.ts}</span>
+												<span className="text-ink-600 mr-2">{l.ts}</span>
 											)}
 											{l.level && (
 												<span className="text-gold-300 mr-2">[{l.level}]</span>

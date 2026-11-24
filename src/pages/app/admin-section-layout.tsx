@@ -52,13 +52,13 @@ export default function AdminSectionLayout({ title, subtitle, tabs }: Props) {
 	return (
 		<div>
 			<header className="mb-5">
-				<h1 className="text-2xl font-semibold text-slate-900">{title}</h1>
+				<h1 className="text-h2 font-semibold text-ink-900">{title}</h1>
 				{subtitle && (
-					<p className="mt-1 text-sm text-slate-600">{subtitle}</p>
+					<p className="mt-1 text-sm text-ink-600">{subtitle}</p>
 				)}
 			</header>
 			{visible && visible.length > 0 && (
-			<div className="mb-6 border-b border-slate-200 flex gap-5 overflow-x-auto">
+			<div className="mb-6 border-b border-ink-200 flex gap-5 overflow-x-auto">
 				{visible.map((t) => (
 					<NavLink
 						key={t.to}
@@ -67,8 +67,8 @@ export default function AdminSectionLayout({ title, subtitle, tabs }: Props) {
 						className={({ isActive }) =>
 							`pb-2.5 text-sm border-b-2 transition-colors whitespace-nowrap ${
 								isActive
-									? "text-slate-900 border-indigo-500 font-medium"
-									: "text-slate-500 border-transparent hover:text-slate-800"
+									? "text-ink-900 border-plum-500 font-medium"
+									: "text-ink-600 border-transparent hover:text-ink-800"
 							}`
 						}
 					>

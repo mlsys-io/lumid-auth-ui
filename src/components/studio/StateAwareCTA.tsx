@@ -30,13 +30,13 @@ export function StateAwareCTA({
 			);
 		case "installing":
 			return (
-				<button disabled className={cn(base, "border border-slate-200 bg-slate-50 text-slate-500 cursor-wait", className)}>
+				<button disabled className={cn(base, "border border-ink-200 bg-ink-50 text-ink-600 cursor-wait", className)}>
 					<Loader2 className="w-3.5 h-3.5 animate-spin" /> Setting up…
 				</button>
 			);
 		case "failed":
 			return (
-				<button onClick={onAction} className={cn(base, "border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100", className)}>
+				<button onClick={onAction} className={cn(base, "border border-brick-300 bg-brick-50 text-brick-700 hover:bg-brick-100", className)}>
 					<AlertCircle className="w-3.5 h-3.5" /> Couldn't add · Retry
 				</button>
 			);

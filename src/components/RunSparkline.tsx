@@ -80,7 +80,7 @@ export function RunSparkline({ spec, className, runs, app, loop }: Props) {
 	}, [pinned]);
 
 	if (!spec) {
-		return <span className={["text-[10px] text-slate-300", className].filter(Boolean).join(" ")}>—</span>;
+		return <span className={["text-nano text-ink-600", className].filter(Boolean).join(" ")}>—</span>;
 	}
 	const chars = spec.split("");
 
@@ -90,7 +90,7 @@ export function RunSparkline({ spec, className, runs, app, loop }: Props) {
 				{chars.map((c, i) => (
 					<span
 						key={i}
-						className={["w-1.5 h-3 rounded-sm transition-transform hover:scale-125", changed && i === chars.length - 1 ? "spark-pop" : "", SQ_CLASS[c] || "bg-slate-200"].join(" ")}
+						className={["w-1.5 h-3 rounded-sm transition-transform hover:scale-125", changed && i === chars.length - 1 ? "spark-pop" : "", SQ_CLASS[c] || "bg-ink-200"].join(" ")}
 						title={STATE_LABEL(c)}
 					/>
 				))}
@@ -138,10 +138,10 @@ export function RunSparkline({ spec, className, runs, app, loop }: Props) {
 							"rounded-sm transition-all cursor-pointer hover:scale-150",
 							// pinned = clearly selected: taller, emerald ring, lifted above neighbors
 							isPinned ? "w-2 h-4 scale-110 ring-2 ring-gold-600 ring-offset-1 ring-offset-white relative z-10"
-								: isHover ? "w-1.5 h-3 scale-150 ring-1 ring-slate-400 ring-offset-1"
+								: isHover ? "w-1.5 h-3 scale-150 ring-1 ring-ink-400 ring-offset-1"
 								: "w-1.5 h-3",
 							changed && i === chars.length - 1 ? "spark-pop" : "",
-							SQ_CLASS[c] || "bg-slate-200",
+							SQ_CLASS[c] || "bg-ink-200",
 						].join(" ")}
 					/>
 				);

@@ -96,23 +96,23 @@ export function SiteStrip({ sites }: { sites: FmSiteStatus[] }) {
 						title={s.error ? `${s.site}: ${s.error}` : `${s.site}: ${s.count} row(s) in ${s.ms}ms`}
 						className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs ${
 							s.ok
-								? "border-slate-200 bg-white text-slate-700"
-								: "border-red-200 bg-red-50 text-red-700"
+								? "border-ink-200 bg-card text-ink-700"
+								: "border-brick-200 bg-brick-50 text-brick-700"
 						}`}
 					>
 						<span
 							className={`inline-block h-1.5 w-1.5 rounded-full ${
-								s.ok ? "bg-emerald-500" : "bg-red-500"
+								s.ok ? "bg-gold-500" : "bg-brick-500"
 							}`}
 						/>
 						<span className="font-medium">{s.site}</span>
-						<span className="text-slate-400">{s.ok ? s.count : "—"}</span>
-						{s.ok && <span className="text-slate-300">{s.ms}ms</span>}
+						<span className="text-ink-600">{s.ok ? s.count : "—"}</span>
+						{s.ok && <span className="text-ink-600">{s.ms}ms</span>}
 					</span>
 				))}
 			</div>
 			{down.length > 0 && (
-				<p className="mt-2 text-xs text-red-700">
+				<p className="mt-2 text-xs text-brick-700">
 					{down.length === 1 ? "Site" : "Sites"}{" "}
 					<strong>{down.map((d) => d.site).join(", ")}</strong> did not answer — rows below
 					are incomplete, not empty. {down[0].error && <em>({down[0].error})</em>}
@@ -124,9 +124,9 @@ export function SiteStrip({ sites }: { sites: FmSiteStatus[] }) {
 
 /** Relative age with a staleness colour. Nodes/workers heartbeat continuously. */
 export function Age({ seconds }: { seconds: number | null }) {
-	if (seconds === null) return <span className="text-slate-400">—</span>;
+	if (seconds === null) return <span className="text-ink-600">—</span>;
 	const tone =
-		seconds < 120 ? "text-emerald-600" : seconds < 600 ? "text-amber-600" : "text-red-600";
+		seconds < 120 ? "text-gold-700" : seconds < 600 ? "text-ember-600" : "text-brick-600";
 	const label =
 		seconds < 90
 			? `${seconds}s`
@@ -158,9 +158,9 @@ export function shortGpu(name: string): string {
 }
 
 export function SiteBadge({ site }: { site?: string }) {
-	if (!site) return <span className="text-slate-400">—</span>;
+	if (!site) return <span className="text-ink-600">—</span>;
 	return (
-		<span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-700">
+		<span className="rounded bg-ink-100 px-1.5 py-0.5 text-xs font-medium text-ink-700">
 			{site}
 		</span>
 	);
@@ -170,14 +170,14 @@ export function StatusPill({ status }: { status: string }) {
 	const s = status.toUpperCase();
 	const tone =
 		s === "IDLE" || s === "DONE"
-			? "bg-emerald-50 text-emerald-700 border-emerald-200"
+			? "bg-gold-50 text-gold-700 border-gold-200"
 			: s === "BUSY" || s === "DISPATCHED" || s === "RUNNING"
-				? "bg-blue-50 text-blue-700 border-blue-200"
+				? "bg-lagoon-50 text-lagoon-700 border-lagoon-200"
 				: s === "PENDING" || s === "STARTING"
-					? "bg-amber-50 text-amber-700 border-amber-200"
+					? "bg-ember-50 text-ember-700 border-ember-200"
 					: s === "FAILED"
-						? "bg-red-50 text-red-700 border-red-200"
-						: "bg-slate-50 text-slate-600 border-slate-200";
+						? "bg-brick-50 text-brick-700 border-brick-200"
+						: "bg-ink-50 text-ink-600 border-ink-200";
 	return <span className={`rounded border px-1.5 py-0.5 text-xs ${tone}`}>{s}</span>;
 }
 
@@ -208,21 +208,21 @@ export function TabShell({
 		<section>
 			<div className="mb-4 flex items-start justify-between gap-4">
 				<div>
-					{title && <h2 className="text-lg font-semibold text-slate-900">{title}</h2>}
+					{title && <h2 className="text-title font-semibold text-ink-900">{title}</h2>}
 					{subtitle && (
-						<p className={`text-sm text-slate-600 ${title ? "mt-0.5" : ""}`}>{subtitle}</p>
+						<p className={`text-sm text-ink-600 ${title ? "mt-0.5" : ""}`}>{subtitle}</p>
 					)}
 				</div>
 				<button
 					onClick={onRefresh}
 					disabled={loading}
-					className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+					className="rounded-md border border-ink-200 bg-card px-3 py-1.5 text-sm text-ink-700 hover:bg-ink-50 disabled:opacity-50"
 				>
 					{loading ? "Refreshing…" : "Refresh"}
 				</button>
 			</div>
 			{error && (
-				<div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+				<div className="mb-4 rounded-md border border-brick-200 bg-brick-50 px-3 py-2 text-sm text-brick-700">
 					{error}
 				</div>
 			)}

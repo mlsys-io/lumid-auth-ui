@@ -47,6 +47,7 @@ import {
 	type ClaudePool,
 	type ClaudePoolMember,
 } from '@/api/super-admin';
+import { ink, gold, brick, lagoon, plum, chart } from "@/styles/palette";
 
 const USER_USAGE_REFRESH_MS = 2 * 60 * 1000; // 2 min auto-refresh for per-user section
 
@@ -96,13 +97,13 @@ function fmtTs(iso: string): string {
 
 function SeverityDot({ severity }: { severity: string }) {
 	const cls =
-		severity === 'critical' ? 'bg-rose-500' :
-		severity === 'warning'  ? 'bg-amber-400' :
+		severity === 'critical' ? 'bg-brick-500' :
+		severity === 'warning'  ? 'bg-ember-400' :
 		// 'none' = no cap applies (admin/super_admin). Deliberately NOT green:
 		// green claims "healthy, plenty of headroom", which is a measurement, and
 		// there is nothing being measured. Slate reads as not-applicable.
-		severity === 'none'     ? 'bg-slate-300' :
-		'bg-emerald-400';
+		severity === 'none'     ? 'bg-ink-300' :
+		'bg-gold-400';
 	return <span className={`inline-block w-2 h-2 rounded-full ${cls} shrink-0`} />;
 }
 
@@ -123,10 +124,10 @@ function SeverityDot({ severity }: { severity: string }) {
 // rather than usageSeverity's.
 function severityText(pct: number, severity: string, window: 'short' | 'week'): string {
 	const short = window === 'short';
-	if (severity === 'critical') return short ? 'text-rose-500' : 'text-rose-700';
-	if (severity === 'warning') return short ? 'text-amber-500' : 'text-amber-700';
+	if (severity === 'critical') return short ? 'text-brick-600' : 'text-brick-700';
+	if (severity === 'warning') return short ? 'text-ember-600' : 'text-ember-700';
 	if (pct > 60) return short ? 'text-gold-500' : 'text-gold-700';
-	return short ? 'text-emerald-500' : 'text-emerald-700';
+	return short ? 'text-gold-700' : 'text-gold-700';
 }
 
 // Text runs a step darker than its fill at both ends — a 10px glyph needs more
@@ -135,22 +136,22 @@ function severityText(pct: number, severity: string, window: 'short' | 'week'): 
 function windowText(pct: number, window: 'short' | 'week'): string {
 	const short = window === 'short';
 	switch (usageSeverity(pct)) {
-		case 'critical': return short ? 'text-rose-500' : 'text-rose-700';
-		case 'warning': return short ? 'text-amber-500' : 'text-amber-700';
+		case 'critical': return short ? 'text-brick-600' : 'text-brick-700';
+		case 'warning': return short ? 'text-ember-600' : 'text-ember-700';
 	}
 	if (pct > 60) return short ? 'text-gold-500' : 'text-gold-700';
-	return short ? 'text-emerald-500' : 'text-emerald-700';
+	return short ? 'text-gold-700' : 'text-gold-700';
 }
 
 function MiniBar({ pct, severity, window = 'short', w = 'w-16' }: { pct: number; severity: string; window?: 'short' | 'week'; w?: string }) {
 	const short = window === 'short';
 	const fill =
-		severity === 'critical' ? (short ? 'bg-rose-400' : 'bg-rose-600') :
-		severity === 'warning'  ? (short ? 'bg-amber-300' : 'bg-amber-500') :
+		severity === 'critical' ? (short ? 'bg-brick-400' : 'bg-brick-600') :
+		severity === 'warning'  ? (short ? 'bg-ember-300' : 'bg-ember-500') :
 		pct > 60                ? (short ? 'bg-gold-300' : 'bg-gold-500') :
-		(short ? 'bg-emerald-300' : 'bg-emerald-500');
+		(short ? 'bg-gold-300' : 'bg-gold-500');
 	return (
-		<div className={`${w} h-1 rounded-full bg-slate-100 overflow-hidden`}>
+		<div className={`${w} h-1 rounded-full bg-ink-100 overflow-hidden`}>
 			<div className={`h-full rounded-full ${fill}`} style={{ width: `${Math.min(100, pct)}%` }} />
 		</div>
 	);
@@ -205,11 +206,11 @@ function MiniBar({ pct, severity, window = 'short', w = 'w-16' }: { pct: number;
 function windowFill(pct: number, window: 'short' | 'week'): string {
 	const short = window === 'short';
 	switch (usageSeverity(pct)) {
-		case 'critical': return short ? 'bg-rose-400' : 'bg-rose-600';
-		case 'warning': return short ? 'bg-amber-300' : 'bg-amber-500';
+		case 'critical': return short ? 'bg-brick-400' : 'bg-brick-600';
+		case 'warning': return short ? 'bg-ember-300' : 'bg-ember-500';
 	}
 	if (pct > 60) return short ? 'bg-gold-300' : 'bg-gold-500';
-	return short ? 'bg-emerald-300' : 'bg-emerald-500';
+	return short ? 'bg-gold-300' : 'bg-gold-500';
 }
 
 function StackedBar({ shortPct, weekPct }: { shortPct: number; weekPct: number }) {
@@ -220,7 +221,7 @@ function StackedBar({ shortPct, weekPct }: { shortPct: number; weekPct: number }
 	const shortW = Math.min(50, shortPct / 2);
 	const weekW = Math.min(50, weekPct / 2);
 	return (
-		<div className="w-20 h-1 rounded-full bg-slate-100 overflow-hidden flex shrink-0"
+		<div className="w-20 h-1 rounded-full bg-ink-100 overflow-hidden flex shrink-0"
 			title={`${shortPct.toFixed(0)}% of the 4h cap (left) · ${weekPct.toFixed(0)}% of the 7d cap (right) — colour is pressure, not window`}>
 			<div className={`h-full rounded-l-full ${shortFill}`} style={{ width: `${shortW}%` }} />
 			<div className="flex-1" />
@@ -316,18 +317,18 @@ function AccountRow({
 	));
 
 	return (
-		<div className="flex items-center gap-3 px-2.5 py-1.5 rounded border border-transparent hover:border-slate-200 hover:bg-slate-50 transition-colors min-w-0">
+		<div className="flex items-center gap-3 px-2.5 py-1.5 rounded border border-transparent hover:border-ink-200 hover:bg-ink-50 transition-colors min-w-0">
 			<SeverityDot severity={acc.severity} />
 
 			{/* email */}
-			<span className="w-44 shrink-0 truncate text-xs font-medium text-slate-800" title={acc.email}>
+			<span className="w-44 shrink-0 truncate text-xs font-medium text-ink-800" title={acc.email}>
 				{acc.email}
 			</span>
 
 			{/* field-box label */}
 			{acc.label && (
 				<span
-					className="shrink-0 rounded-full bg-slate-100 border border-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-500"
+					className="shrink-0 rounded-full bg-ink-100 border border-ink-200 px-1.5 py-0.5 text-nano font-medium text-ink-600"
 					title={acc.label === 'central'
 						? 'Central account — egresses direct from the cluster, no relay hop'
 						: `Field-box account — routes via the ${acc.label} relay`}
@@ -343,7 +344,7 @@ function AccountRow({
 				onChange={(e) => handlePoolChange(e.target.value)}
 				disabled={movingPool || pools.length === 0}
 				title="Claude pool — moving this changes who may draw on this account and runs placement immediately"
-				className="shrink-0 rounded-full bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700 disabled:opacity-50"
+				className="shrink-0 rounded-full bg-plum-50 border border-plum-200 px-1.5 py-0.5 text-nano font-medium text-plum-700 disabled:opacity-50"
 			>
 				{pools.map((p) => (
 					<option key={p.id} value={p.id}>{p.name}</option>
@@ -354,7 +355,7 @@ function AccountRow({
 			    still serving the people on it — it is winding down on purpose. */}
 			{paused && (
 				<span
-					className="shrink-0 rounded-full bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[10px] font-medium text-amber-700"
+					className="shrink-0 rounded-full bg-ember-50 border border-ember-200 px-1.5 py-0.5 text-nano font-medium text-ember-700"
 					title={
 						`PAUSED by an operator${acc.drain_reason ? ` — ${acc.drain_reason}` : ''}\n` +
 						`since ${acc.draining_since}\n\n` +
@@ -369,41 +370,41 @@ function AccountRow({
 
 			{/* 5h bar */}
 			<div className="flex items-center gap-1.5 shrink-0">
-				<span className="text-[10px] text-slate-400 w-4">5h</span>
+				<span className="text-nano text-ink-600 w-4">5h</span>
 				<MiniBar pct={acc.five_hour_pct ?? 0} severity={acc.severity} window="short" />
-				<span className={`text-[10px] font-mono w-8 text-right ${severityText(acc.five_hour_pct ?? 0, acc.severity, 'short')}`}>{Math.round(acc.five_hour_pct ?? 0)}%</span>
-				<span className={`text-[10px] w-12 ${severityText(acc.five_hour_pct ?? 0, acc.severity, 'short')}`}>↺{fmtTime(acc.five_hour_reset)}</span>
+				<span className={`text-nano font-mono w-8 text-right ${severityText(acc.five_hour_pct ?? 0, acc.severity, 'short')}`}>{Math.round(acc.five_hour_pct ?? 0)}%</span>
+				<span className={`text-nano w-12 ${severityText(acc.five_hour_pct ?? 0, acc.severity, 'short')}`}>↺{fmtTime(acc.five_hour_reset)}</span>
 			</div>
 
 			{/* 7d bar */}
 			<div className="flex items-center gap-1.5 shrink-0">
-				<span className="text-[10px] text-slate-400 w-4">7d</span>
+				<span className="text-nano text-ink-600 w-4">7d</span>
 				<MiniBar pct={acc.seven_day_pct ?? 0} severity={acc.severity} window="week" />
-				<span className={`text-[10px] font-mono w-8 text-right ${severityText(acc.seven_day_pct ?? 0, acc.severity, 'week')}`}>{Math.round(acc.seven_day_pct ?? 0)}%</span>
-				<span className={`text-[10px] w-14 ${severityText(acc.seven_day_pct ?? 0, acc.severity, 'week')}`}>↺{fmtTime(acc.seven_day_reset)}</span>
+				<span className={`text-nano font-mono w-8 text-right ${severityText(acc.seven_day_pct ?? 0, acc.severity, 'week')}`}>{Math.round(acc.seven_day_pct ?? 0)}%</span>
+				<span className={`text-nano w-14 ${severityText(acc.seven_day_pct ?? 0, acc.severity, 'week')}`}>↺{fmtTime(acc.seven_day_reset)}</span>
 			</div>
 
 			{/* error / stale / re-add */}
 			{acc.error ? (
 				<span className="flex items-center gap-1.5 flex-1 min-w-0">
-					<span className="text-[10px] text-rose-500 truncate" title={acc.revoke_reason || acc.error}>
+					<span className="text-nano text-brick-600 truncate" title={acc.revoke_reason || acc.error}>
 						{acc.revoked
 							? 'Family revoked — re-add with a fresh claude auth login'
 							: isAuthError ? 'Token expired' : acc.error}
 					</span>
 					<button
 						onClick={() => onReAdd(acc.email)}
-						className="shrink-0 text-[10px] text-rose-600 underline hover:text-rose-800 whitespace-nowrap"
+						className="shrink-0 text-nano text-brick-600 underline hover:text-brick-800 whitespace-nowrap"
 					>
 						re-add
 					</button>
 				</span>
 			) : acc.stale ? (
 				<span className="flex items-center gap-1.5 flex-1 min-w-0">
-					<span className="text-[10px] text-amber-500">stale</span>
+					<span className="text-nano text-ember-600">stale</span>
 					<button
 						onClick={() => onReAdd(acc.email)}
-						className="shrink-0 text-[10px] text-slate-400 underline hover:text-slate-600 whitespace-nowrap"
+						className="shrink-0 text-nano text-ink-600 underline hover:text-ink-600 whitespace-nowrap"
 					>
 						re-add
 					</button>
@@ -412,7 +413,7 @@ function AccountRow({
 				<span className="flex items-center gap-1.5 flex-1 min-w-0">
 					<button
 						onClick={() => onReAdd(acc.email)}
-						className="shrink-0 text-[10px] text-slate-300 underline hover:text-slate-500 whitespace-nowrap"
+						className="shrink-0 text-nano text-ink-600 underline hover:text-ink-600 whitespace-nowrap"
 					>
 						re-add
 					</button>
@@ -420,7 +421,7 @@ function AccountRow({
 			)}
 
 			{/* timestamp */}
-			<span className="shrink-0 text-[10px] text-slate-400">{fmtTs(acc.ts)}</span>
+			<span className="shrink-0 text-nano text-ink-600">{fmtTs(acc.ts)}</span>
 
 			{/* delete */}
 			{/* Pause / Resume. Sits before the destructive delete so the reversible
@@ -433,10 +434,10 @@ function AccountRow({
 				<button
 					onClick={togglePause}
 					disabled={pausing}
-					className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium transition disabled:opacity-50 ${
+					className={`shrink-0 rounded px-1.5 py-0.5 text-nano font-medium transition disabled:opacity-50 ${
 						paused
-							? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
-							: 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
+							? 'bg-gold-50 text-gold-700 border border-gold-200 hover:bg-gold-100'
+							: 'bg-ember-50 text-ember-700 border border-ember-200 hover:bg-ember-100'
 					}`}
 					title={paused
 						? 'Resume: start taking new sessions again'
@@ -446,26 +447,26 @@ function AccountRow({
 				</button>
 			)}
 			{pauseErr && (
-				<span className="shrink-0 max-w-40 truncate text-[10px] text-rose-500" title={pauseErr}>{pauseErr}</span>
+				<span className="shrink-0 max-w-40 truncate text-nano text-brick-600" title={pauseErr}>{pauseErr}</span>
 			)}
 			{poolErr && (
-				<span className="shrink-0 max-w-40 truncate text-[10px] text-rose-500" title={poolErr}>pool move failed: {poolErr}</span>
+				<span className="shrink-0 max-w-40 truncate text-nano text-brick-600" title={poolErr}>pool move failed: {poolErr}</span>
 			)}
 
 			{confirming ? (
 				<div className="shrink-0 flex items-center gap-1">
 					<button onClick={handleDelete} disabled={deleting}
-						className="rounded bg-rose-600 px-1.5 py-0.5 text-[10px] font-medium text-white hover:bg-rose-700 disabled:opacity-50 transition">
+						className="rounded bg-brick-600 px-1.5 py-0.5 text-nano font-medium text-white hover:bg-brick-700 disabled:opacity-50 transition">
 						{deleting ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : 'rm'}
 					</button>
 					<button onClick={() => setConfirming(false)} disabled={deleting}
-						className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-500 hover:bg-slate-100 disabled:opacity-50 transition">
+						className="rounded border border-ink-200 px-1.5 py-0.5 text-nano text-ink-600 hover:bg-ink-100 disabled:opacity-50 transition">
 						×
 					</button>
 				</div>
 			) : (
 				<button onClick={() => setConfirming(true)}
-					className="shrink-0 text-slate-300 hover:text-rose-400 transition" title="Remove">
+					className="shrink-0 text-ink-600 hover:text-brick-600 transition" title="Remove">
 					<Trash2 className="w-3 h-3" />
 				</button>
 			)}
@@ -511,7 +512,7 @@ function fmtTps(v: number): string {
 // ThroughputSource — one serving path (Claude pool, SoC gateway, on-prem GPUs) in one shape:
 // a per-model table for the last 5 complete minutes (live requests, aggregate output tok/s,
 // per-stream decode tok/s, TTFT) beside the hour of output tok/s per minute, stacked by model.
-const SOC_MODEL_COLORS = ['#0f766e', '#b45309', '#4338ca', '#be123c'];
+const SOC_MODEL_COLORS = chart.slice(0, 4);
 
 function ThroughputSource({ usage, title }: { usage: SocUsageResp; title: string }) {
 	const live = usage.live || null;
@@ -575,26 +576,26 @@ function ThroughputSource({ usage, title }: { usage: SocUsageResp; title: string
 
 	return (
 		<div className="space-y-1">
-			<div className="flex flex-wrap items-baseline gap-x-2 text-[11px]">
-				<span className="font-medium text-slate-700">{title}</span>
+			<div className="flex flex-wrap items-baseline gap-x-2 text-micro">
+				<span className="font-medium text-ink-700">{title}</span>
 				{live && (
-					<span className="tabular-nums text-slate-500">
-						<span className={totalLive > 0 ? 'text-emerald-700' : ''}>● {totalLive} live</span>
+					<span className="tabular-nums text-ink-600">
+						<span className={totalLive > 0 ? 'text-gold-700' : ''}>● {totalLive} live</span>
 						{keyed && (
 							<>
 								{' '}on {live.busy_keys.length} key{live.busy_keys.length === 1 ? '' : 's'}
 								{live.per_key_max ? ` (max ${live.per_key_max}/key)` : ''} ·{' '}
-								<span className={live.waiting > 0 ? 'text-amber-700 font-medium' : ''}>{live.waiting} waiting</span>
+								<span className={live.waiting > 0 ? 'text-ember-700 font-medium' : ''}>{live.waiting} waiting</span>
 							</>
 						)}
-						{live.source === 'local' && <span className="text-amber-700"> · Redis down: one replica only</span>}
+						{live.source === 'local' && <span className="text-ember-700"> · Redis down: one replica only</span>}
 					</span>
 				)}
 			</div>
 			<div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
-				<div className="overflow-x-auto rounded border border-slate-200">
-					<table className="w-full text-[11px] tabular-nums">
-						<thead className="bg-slate-50 text-slate-500">
+				<div className="overflow-x-auto rounded border border-ink-200">
+					<table className="w-full text-micro tabular-nums">
+						<thead className="bg-ink-50 text-ink-600">
 							<tr>
 								<th className="px-2 py-1 text-left font-medium">Model</th>
 								<th className="px-2 py-1 text-right font-medium" title="Requests in flight right now">Live</th>
@@ -605,26 +606,26 @@ function ThroughputSource({ usage, title }: { usage: SocUsageResp; title: string
 						</thead>
 						<tbody>
 							{active.map((r) => (
-								<tr key={r.model} className="border-t border-slate-100">
+								<tr key={r.model} className="border-t border-ink-100">
 									<td className="px-2 py-1">
 										<span className="mr-1.5 inline-block h-2 w-2 rounded-sm align-middle" style={{ background: color(r.model) }} />
-										<span className="text-slate-700">{r.model}</span>
-										{r.errors > 0 && <span className="ml-1 text-rose-600">· {r.errors} err</span>}
+										<span className="text-ink-700">{r.model}</span>
+										{r.errors > 0 && <span className="ml-1 text-brick-600">· {r.errors} err</span>}
 									</td>
-									<td className={`px-2 py-1 text-right ${liveOf(r.model) > 0 ? 'text-emerald-700' : 'text-slate-400'}`}>{liveOf(r.model)}</td>
-									<td className="px-2 py-1 text-right font-medium text-slate-900">{r.agg_out_tps.toFixed(1)}</td>
-									<td className="px-2 py-1 text-right text-slate-700">{r.stream_tps > 0 ? r.stream_tps.toFixed(1) : '—'}</td>
-									<td className="px-2 py-1 text-right text-slate-600">{r.avg_ttft_ms > 0 ? `${(r.avg_ttft_ms / 1000).toFixed(2)}s` : '—'}</td>
+									<td className={`px-2 py-1 text-right ${liveOf(r.model) > 0 ? 'text-gold-700' : 'text-ink-600'}`}>{liveOf(r.model)}</td>
+									<td className="px-2 py-1 text-right font-medium text-ink-900">{r.agg_out_tps.toFixed(1)}</td>
+									<td className="px-2 py-1 text-right text-ink-700">{r.stream_tps > 0 ? r.stream_tps.toFixed(1) : '—'}</td>
+									<td className="px-2 py-1 text-right text-ink-600">{r.avg_ttft_ms > 0 ? `${(r.avg_ttft_ms / 1000).toFixed(2)}s` : '—'}</td>
 								</tr>
 							))}
 							{active.length === 0 && (
-								<tr className="border-t border-slate-100">
-									<td className="px-2 py-1 text-slate-400" colSpan={5}>Idle in the last 5 min.</td>
+								<tr className="border-t border-ink-100">
+									<td className="px-2 py-1 text-ink-600" colSpan={5}>Idle in the last 5 min.</td>
 								</tr>
 							)}
 							{idle.length > 0 && (
-								<tr className="border-t border-slate-100">
-									<td className="px-2 py-1 text-[10px] text-slate-400" colSpan={5} title={idle.join(', ')}>
+								<tr className="border-t border-ink-100">
+									<td className="px-2 py-1 text-nano text-ink-600" colSpan={5} title={idle.join(', ')}>
 										+{idle.length} idle: {idle.join(', ')}
 									</td>
 								</tr>
@@ -632,9 +633,9 @@ function ThroughputSource({ usage, title }: { usage: SocUsageResp; title: string
 						</tbody>
 					</table>
 				</div>
-				<div className="flex min-w-0 flex-col rounded border border-slate-200 px-2.5 py-1.5">
-					<div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-slate-500">
-						<span className="font-medium text-slate-600">output tok/s per minute</span>
+				<div className="flex min-w-0 flex-col rounded border border-ink-200 px-2.5 py-1.5">
+					<div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-nano text-ink-600">
+						<span className="font-medium text-ink-600">output tok/s per minute</span>
 						{models.map((m) => (
 							<span key={m} className="inline-flex items-center gap-1">
 								<span className="inline-block h-2 w-2 rounded-sm" style={{ background: color(m) }} />
@@ -648,7 +649,7 @@ function ThroughputSource({ usage, title }: { usage: SocUsageResp; title: string
 					</div>
 					<div className="mt-1 flex flex-1 gap-1" style={{ minHeight: 56 }}>
 					{/* y-axis: HTML, not SVG text, so it isn't stretched by preserveAspectRatio="none" */}
-					<div className="flex w-8 shrink-0 flex-col justify-between text-right text-[9px] leading-none tabular-nums text-slate-400">
+					<div className="flex w-8 shrink-0 flex-col justify-between text-right text-nano leading-none tabular-nums text-ink-600">
 						<span>{fmtTps(max)}</span>
 						<span>{fmtTps(max / 2)}</span>
 						<span>0</span>
@@ -660,9 +661,9 @@ function ThroughputSource({ usage, title }: { usage: SocUsageResp; title: string
 						role="img"
 						aria-label={`${title}: output tokens per second, last ${windowLabel}`}
 					>
-						<line x1={0} y1={0.5} x2={W} y2={0.5} stroke="#eef2f7" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-						<line x1={0} y1={H / 2} x2={W} y2={H / 2} stroke="#eef2f7" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-						<line x1={0} y1={H - 0.5} x2={W} y2={H - 0.5} stroke="#cbd5e1" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+						<line x1={0} y1={0.5} x2={W} y2={0.5} stroke={ink["100"]} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+						<line x1={0} y1={H / 2} x2={W} y2={H / 2} stroke={ink["100"]} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+						<line x1={0} y1={H - 0.5} x2={W} y2={H - 0.5} stroke={ink["300"]} strokeWidth={1} vectorEffect="non-scaling-stroke" />
 						{stacks.map((s, i) => {
 							let y = H;
 							return (
@@ -680,7 +681,7 @@ function ThroughputSource({ usage, title }: { usage: SocUsageResp; title: string
 						})}
 					</svg>
 					</div>
-					<div className="flex justify-between pl-9 text-[10px] tabular-nums text-slate-400">
+					<div className="flex justify-between pl-9 text-nano tabular-nums text-ink-600">
 						<span>−{windowLabel}</span>
 						<span>−{usage.minutes >= 120 ? `${Math.round(usage.minutes / 120)}h` : `${Math.round(usage.minutes / 2)}m`}</span>
 						<span>now</span>
@@ -749,19 +750,19 @@ function ThroughputPanel() {
 	return (
 		<section className="space-y-3">
 			<div className="flex flex-wrap items-center justify-between gap-2">
-				<h2 className="text-sm font-medium text-slate-800">
+				<h2 className="text-sm font-medium text-ink-800">
 					Throughput
-					<span className="ml-2 text-[11px] font-normal text-slate-400">
+					<span className="ml-2 text-micro font-normal text-ink-600">
 						table: last 5 min · chart: output tok/s
 					</span>
 				</h2>
-				<div className="inline-flex overflow-hidden rounded border border-slate-200 text-[11px]" role="group" aria-label="Chart window">
+				<div className="inline-flex overflow-hidden rounded border border-ink-200 text-micro" role="group" aria-label="Chart window">
 					{THROUGHPUT_WINDOWS.map(([m, label]) => (
 						<button
 							key={m}
 							onClick={() => pickMinutes(m)}
 							aria-pressed={minutes === m}
-							className={`px-2 py-0.5 tabular-nums ${minutes === m ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+							className={`px-2 py-0.5 tabular-nums ${minutes === m ? 'bg-ink-800 text-white' : 'bg-card text-ink-600 hover:bg-ink-50'}`}
 						>
 							{label}
 						</button>
@@ -837,13 +838,13 @@ function SocKeysPanel() {
 	};
 
 	const statusCls = (s: string) =>
-		s === 'active' ? 'text-emerald-700' : s === 'benched' ? 'text-amber-700' : 'text-rose-600';
+		s === 'active' ? 'text-gold-700' : s === 'benched' ? 'text-ember-700' : 'text-brick-600';
 
 	return (
 		<section className="space-y-2">
-			<h2 className="text-sm font-medium text-slate-800">
+			<h2 className="text-sm font-medium text-ink-800">
 				SoC API keys
-				<span className="ml-2 text-[11px] font-normal text-slate-400">
+				<span className="ml-2 text-micro font-normal text-ink-600">
 					{data ? `${data.active} active of ${data.total}` : '…'} · each key has a daily limit; the proxy rotates across all active keys
 					{usage?.live?.per_key_max ? ` · up to ${usage.live.per_key_max} requests per key` : ''}
 				</span>
@@ -856,32 +857,32 @@ function SocKeysPanel() {
 					value={key}
 					onChange={(e) => setKey(e.target.value)}
 					placeholder="SOCLAAS_API_KEY (clsk_…)"
-					className="w-72 rounded border border-slate-300 px-2 py-1 text-[11px] font-mono"
+					className="w-72 rounded border border-ink-300 px-2 py-1 text-micro font-mono"
 				/>
 				<input
 					value={label}
 					onChange={(e) => setLabel(e.target.value)}
 					placeholder="label (optional, e.g. whose key)"
-					className="w-48 rounded border border-slate-300 px-2 py-1 text-[11px]"
+					className="w-48 rounded border border-ink-300 px-2 py-1 text-micro"
 				/>
 				<button
 					onClick={add}
 					disabled={busy || !key.trim()}
-					className="inline-flex items-center gap-1 rounded bg-slate-800 px-2.5 py-1 text-[11px] text-white disabled:opacity-40"
+					className="inline-flex items-center gap-1 rounded bg-ink-800 px-2.5 py-1 text-micro text-white disabled:opacity-40"
 				>
 					{busy ? <Loader2 size={12} className="animate-spin" /> : <UserPlus size={12} />} Import key
 				</button>
-				<span className="text-[11px] text-slate-400">
+				<span className="text-micro text-ink-600">
 					Get one at <a href="https://soclaas-portal.comp.nus.edu.sg/" target="_blank" rel="noreferrer" className="hover:underline">soclaas-portal</a> (NUS network).
 				</span>
 			</div>
-			{msg && <div className={`text-[11px] ${msg.ok ? 'text-emerald-700' : 'text-rose-600'}`}>{msg.text}</div>}
-			{err && <div className="text-[11px] text-rose-500">SoC keys unavailable: {err}</div>}
+			{msg && <div className={`text-micro ${msg.ok ? 'text-gold-700' : 'text-brick-600'}`}>{msg.text}</div>}
+			{err && <div className="text-micro text-brick-600">SoC keys unavailable: {err}</div>}
 
 			{data && data.keys.length > 0 && (
-				<div className="rounded border border-slate-200 overflow-x-auto">
-					<table className="w-full text-[11px]">
-						<thead className="bg-slate-50 text-slate-500">
+				<div className="rounded border border-ink-200 overflow-x-auto">
+					<table className="w-full text-micro">
+						<thead className="bg-ink-50 text-ink-600">
 							<tr>
 								<th className="text-left font-medium px-2.5 py-1">Key</th>
 								<th className="text-left font-medium px-2.5 py-1">Label</th>
@@ -895,37 +896,37 @@ function SocKeysPanel() {
 						</thead>
 						<tbody>
 							{data.keys.map((k) => (
-								<tr key={k.id} className="border-t border-slate-100">
-									<td className="px-2.5 py-1 font-mono text-slate-600">#{k.id} {k.key_hint}</td>
+								<tr key={k.id} className="border-t border-ink-100">
+									<td className="px-2.5 py-1 font-mono text-ink-600">#{k.id} {k.key_hint}</td>
 									<td className="px-2.5 py-1">{k.label || '—'}</td>
-									<td className="px-2.5 py-1 text-slate-500">{k.owner_email || '—'}</td>
+									<td className="px-2.5 py-1 text-ink-600">{k.owner_email || '—'}</td>
 									<td className={`px-2.5 py-1 ${statusCls(k.status)}`} title={k.bench_reason || ''}>
 										{k.status}
-										{k.status === 'active' && usage?.live?.busy_keys.includes(k.id) ? <span className="text-emerald-700"> · busy</span> : null}
+										{k.status === 'active' && usage?.live?.busy_keys.includes(k.id) ? <span className="text-gold-700"> · busy</span> : null}
 										{k.status === 'benched' && k.bench_until ? ` · back in ${fmtTime(k.bench_until)}` : ''}
 										{k.status === 'dead' ? ' · re-import to restore' : ''}
 									</td>
 									<td className="px-2.5 py-1 text-right tabular-nums">{fmtCount(todayByKey.get(k.id)?.requests ?? 0)}</td>
-									<td className="px-2.5 py-1 text-right tabular-nums text-slate-600">
+									<td className="px-2.5 py-1 text-right tabular-nums text-ink-600">
 										{fmtCount(todayByKey.get(k.id)?.in_tokens ?? 0)} / {fmtCount(todayByKey.get(k.id)?.out_tokens ?? 0)}
 									</td>
-									<td className="px-2.5 py-1 text-slate-500">
+									<td className="px-2.5 py-1 text-ink-600">
 										{k.last_used_at ? new Date(k.last_used_at).toLocaleString() : '—'}
 									</td>
 									<td className="px-2.5 py-1 text-right whitespace-nowrap">
 										{k.status !== 'active' && (
-											<button onClick={() => reset(k.id)} title="Clear bench" className="mr-2 text-slate-400 hover:text-slate-700">
+											<button onClick={() => reset(k.id)} title="Clear bench" className="mr-2 text-ink-600 hover:text-ink-700">
 												<RotateCcw size={12} />
 											</button>
 										)}
-										<button onClick={() => del(k.id)} title="Remove" className="text-slate-400 hover:text-rose-600">
+										<button onClick={() => del(k.id)} title="Remove" className="text-ink-600 hover:text-brick-600">
 											<Trash2 size={12} />
 										</button>
 									</td>
 								</tr>
 							))}
 							{fallbackToday && (
-								<tr className="border-t border-slate-100 text-slate-500">
+								<tr className="border-t border-ink-100 text-ink-600">
 									<td className="px-2.5 py-1 font-mono">#0 fallback</td>
 									<td className="px-2.5 py-1" colSpan={3}>proxy env key — used only when the pool has no usable key</td>
 									<td className="px-2.5 py-1 text-right tabular-nums">{fmtCount(fallbackToday.requests)}</td>
@@ -935,7 +936,7 @@ function SocKeysPanel() {
 									<td className="px-2.5 py-1" colSpan={2} />
 								</tr>
 							)}
-							<tr className="border-t border-slate-200 bg-slate-50 font-medium text-slate-700">
+							<tr className="border-t border-ink-200 bg-ink-50 font-medium text-ink-700">
 								<td className="px-2.5 py-1" colSpan={4}>Total today (since 00:00 SGT)</td>
 								<td className="px-2.5 py-1 text-right tabular-nums">{fmtCount(totalToday.requests)}</td>
 								<td className="px-2.5 py-1 text-right tabular-nums">
@@ -974,17 +975,17 @@ function FieldBoxPanel() {
 		return () => { alive = false; };
 	}, [hours]);
 
-	if (err) return <div className="text-[11px] text-rose-500">Field-box traffic unavailable: {err}</div>;
-	if (!data) return <div className="text-[11px] text-slate-400">Loading field-box traffic…</div>;
+	if (err) return <div className="text-micro text-brick-600">Field-box traffic unavailable: {err}</div>;
+	if (!data) return <div className="text-micro text-ink-600">Loading field-box traffic…</div>;
 
 	const degraded = data.totals.degraded_turns;
 
 	return (
 		<section className="space-y-2">
 			<div className="flex items-center justify-between">
-				<h2 className="text-sm font-medium text-slate-800">
+				<h2 className="text-sm font-medium text-ink-800">
 					Field-box traffic
-					<span className="ml-2 text-[11px] font-normal text-slate-400">
+					<span className="ml-2 text-micro font-normal text-ink-600">
 						{fmtCount(data.totals.homed_users)} users placed ·{' '}
 						{fmtCount(data.totals.active_users)} active ·{' '}
 						{fmtBytes(data.totals.request_bytes + data.totals.response_bytes)} over {data.window_hours}h
@@ -993,7 +994,7 @@ function FieldBoxPanel() {
 				<select
 					value={hours}
 					onChange={(e) => setHours(Number(e.target.value))}
-					className="rounded border border-slate-300 px-1.5 py-0.5 text-[11px]"
+					className="rounded border border-ink-300 px-1.5 py-0.5 text-micro"
 				>
 					<option value={1}>1h</option>
 					<option value={24}>24h</option>
@@ -1002,7 +1003,7 @@ function FieldBoxPanel() {
 			</div>
 
 			{degraded > 0 && (
-				<div className="rounded border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900">
+				<div className="rounded border border-ember-300 bg-ember-50 px-2.5 py-1.5 text-micro text-ember-900">
 					<span className="font-medium">{fmtCount(degraded)} turns bypassed their field box.</span>{' '}
 					Those requests left from the cluster IP, not the box the account is labelled for —
 					check <code>LUMID_CLAUDE_FIELD_RELAYS</code> and the relay containers. (Accounts on
@@ -1010,9 +1011,9 @@ function FieldBoxPanel() {
 				</div>
 			)}
 
-			<div className="rounded border border-slate-200 overflow-x-auto">
-				<table className="w-full min-w-[640px] text-[11px]">
-					<thead className="bg-slate-50 text-slate-500">
+			<div className="rounded border border-ink-200 overflow-x-auto">
+				<table className="w-full min-w-[640px] text-micro">
+					<thead className="bg-ink-50 text-ink-600">
 						<tr>
 							<th className="text-left  font-medium px-2.5 py-1">Box</th>
 							{/* Users before the byte columns on purpose: rebalancing is
@@ -1052,7 +1053,7 @@ function FieldBoxPanel() {
 					</thead>
 					<tbody>
 						{data.boxes.length === 0 && (
-							<tr><td colSpan={7} className="px-2.5 py-2 text-slate-400">No recorded turns in this window.</td></tr>
+							<tr><td colSpan={7} className="px-2.5 py-2 text-ink-600">No recorded turns in this window.</td></tr>
 						)}
 						{data.boxes.map((b) => {
 							const labelled = b.field_box !== '';
@@ -1062,13 +1063,13 @@ function FieldBoxPanel() {
 							return (
 								<tr
 										key={b.field_box || '(direct)'}
-										className={`border-t border-slate-100 ${idle ? 'opacity-60' : ''}`}
+										className={`border-t border-ink-100 ${idle ? 'opacity-60' : ''}`}
 									>
-									<td className="px-2.5 py-1 font-medium text-slate-800">
-										{b.field_box || <span className="text-slate-400">(direct)</span>}
+									<td className="px-2.5 py-1 font-medium text-ink-800">
+										{b.field_box || <span className="text-ink-600">(direct)</span>}
 										{b.fingerprint && (
 											<span
-												className="ml-1.5 rounded bg-slate-100 px-1 py-0.5 font-mono text-[9px] font-normal text-slate-500 cursor-default"
+												className="ml-1.5 rounded bg-ink-100 px-1 py-0.5 font-mono text-nano font-normal text-ink-600 cursor-default"
 												title={
 													`${b.fingerprint.user_agent}\n` +
 													`${b.fingerprint.os}/${b.fingerprint.arch} · ${b.fingerprint.runtime}\n` +
@@ -1084,20 +1085,20 @@ function FieldBoxPanel() {
 										)}
 									</td>
 									<td
-										className={`px-2.5 py-1 text-right font-mono ${b.homed_users > 0 ? 'text-slate-800' : 'text-slate-400'}`}
+										className={`px-2.5 py-1 text-right font-mono ${b.homed_users > 0 ? 'text-ink-800' : 'text-ink-600'}`}
 										title={
 											`${b.homed_users} user(s) homed on this box's account (current placement) · ` +
 											`${b.active_users} distinct user(s) actually routed through it in this window`
 										}
 									>
 										{fmtCount(b.homed_users)}
-										<span className="ml-1 font-normal text-slate-400">/{fmtCount(b.active_users)}</span>
+										<span className="ml-1 font-normal text-ink-600">/{fmtCount(b.active_users)}</span>
 									</td>
-									<td className="px-2.5 py-1 text-right font-mono text-slate-600">{fmtBytes(b.request_bytes)}</td>
-									<td className="px-2.5 py-1 text-right font-mono text-slate-600">{fmtBytes(b.response_bytes)}</td>
-									<td className="px-2.5 py-1 text-right font-mono text-slate-600">{fmtCount(b.turns)}</td>
+									<td className="px-2.5 py-1 text-right font-mono text-ink-600">{fmtBytes(b.request_bytes)}</td>
+									<td className="px-2.5 py-1 text-right font-mono text-ink-600">{fmtBytes(b.response_bytes)}</td>
+									<td className="px-2.5 py-1 text-right font-mono text-ink-600">{fmtCount(b.turns)}</td>
 									<td
-										className="px-2.5 py-1 text-right font-mono text-slate-500"
+										className="px-2.5 py-1 text-right font-mono text-ink-600"
 										title={
 											'Recorded turns only, raw input+output, no cache, no model weighting — ' +
 											'not comparable to the per-user token figures below.'
@@ -1110,20 +1111,20 @@ function FieldBoxPanel() {
 											// A configured box with no turns in this window. Must NOT
 											// render "all relayed" — that would be a health claim about
 											// traffic that never happened.
-											<span className="text-slate-400">no traffic</span>
+											<span className="text-ink-600">no traffic</span>
 										) : !labelled ? (
-											<span className="text-slate-400">direct by design</span>
+											<span className="text-ink-600">direct by design</span>
 										) : isCentral ? (
 											// central is cluster-direct by design — via_relay is always
 											// false, so "direct" is the honest neutral rendering, not a
 											// degradation flag.
-											<span className="text-slate-400">direct</span>
+											<span className="text-ink-600">direct</span>
 										) : bad ? (
-											<span className="text-amber-600">
+											<span className="text-ember-600">
 												{fmtCount(b.via_relay)} relayed · {fmtCount(b.not_via_relay)} direct
 											</span>
 										) : (
-											<span className="text-emerald-600">all relayed</span>
+											<span className="text-gold-700">all relayed</span>
 										)}
 									</td>
 								</tr>
@@ -1132,8 +1133,8 @@ function FieldBoxPanel() {
 					</tbody>
 				</table>
 			</div>
-			<details className="text-[10px] text-slate-400">
-				<summary className="cursor-pointer select-none hover:text-slate-600">What these columns mean</summary>
+			<details className="text-nano text-ink-600">
+				<summary className="cursor-pointer select-none hover:text-ink-600">What these columns mean</summary>
 				<p className="mt-1">
 				Users read <span className="font-mono">homed/active</span>: homed is who is assigned to the
 				box's account right now (the balancing number, not windowed); active is who actually routed
@@ -1222,32 +1223,32 @@ function AddAccountModal({
 
 	return (
 		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-			<div className="w-full max-w-md rounded-xl border border-slate-200 bg-white shadow-lg p-5 mx-4">
+			<div className="w-full max-w-md rounded-xl border border-ink-200 bg-card shadow-lg p-5 mx-4">
 				<div className="flex items-center justify-between mb-4">
-					<h2 className="font-semibold text-slate-800 flex items-center gap-2">
+					<h2 className="font-semibold text-ink-800 flex items-center gap-2">
 						<UserPlus className="w-4 h-4 text-gold-600" />
 						Connect Claude account
 					</h2>
-					<button onClick={onClose} className="text-slate-400 hover:text-slate-700">
+					<button onClick={onClose} className="text-ink-600 hover:text-ink-700">
 						<X className="w-4 h-4" />
 					</button>
 				</div>
-				<p className="text-xs text-slate-500 mb-2">
+				<p className="text-xs text-ink-600 mb-2">
 					Mint the token in a <strong>throwaway HOME</strong>, so your own Claude session is
 					never touched and no second copy is left behind. Run this whole block:
 				</p>
-				<ol className="text-xs text-slate-600 space-y-1.5 mb-3 list-none">
-					<li><span className="font-mono bg-slate-100 px-1 rounded mr-1">1</span> Paste the block — it signs in as the target user inside a temporary directory</li>
-					<li><span className="font-mono bg-slate-100 px-1 rounded mr-1">2</span> Copy both tokens from the output into the fields below</li>
-					<li><span className="font-mono bg-slate-100 px-1 rounded mr-1">3</span> The directory is deleted on the last line — nothing to undo, nothing to log out of</li>
+				<ol className="text-xs text-ink-600 space-y-1.5 mb-3 list-none">
+					<li><span className="font-mono bg-ink-100 px-1 rounded mr-1">1</span> Paste the block — it signs in as the target user inside a temporary directory</li>
+					<li><span className="font-mono bg-ink-100 px-1 rounded mr-1">2</span> Copy both tokens from the output into the fields below</li>
+					<li><span className="font-mono bg-ink-100 px-1 rounded mr-1">3</span> The directory is deleted on the last line — nothing to undo, nothing to log out of</li>
 				</ol>
-				<pre className="text-[11px] font-mono bg-slate-900 text-emerald-300 rounded px-3 py-2 mb-1 select-all overflow-x-auto">
+				<pre className="text-micro font-mono bg-ink-900 text-gold-700 rounded px-3 py-2 mb-1 select-all overflow-x-auto">
 {`D=$(mktemp -d)
 HOME=$D claude auth login
 HOME=$D node -e "const c=JSON.parse(require('fs').readFileSync(process.env.HOME+'/.claude/.credentials.json','utf8')).claudeAiOauth;console.log('access:',c.accessToken,'\\nrefresh:',c.refreshToken)"
 rm -rf "$D"`}
 				</pre>
-				<div className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded px-2.5 py-2 mb-3">
+				<div className="text-xs text-brick-700 bg-brick-50 border border-brick-200 rounded px-2.5 py-2 mb-3">
 					<strong>Never run <code className="font-mono">claude auth logout</code> for a pooled account.</strong>{" "}
 					Logout revokes the token family on Anthropic's side, destroying the credential you just
 					copied — an account added on 2026-08-15 died 3 minutes later this way. Equally, never mint
@@ -1256,47 +1257,47 @@ rm -rf "$D"`}
 					copy dies hours later (this killed two more accounts). Discarding is safe; revoking and
 					sharing are not.
 				</div>
-				<p className="text-xs text-slate-400 mb-4">
-					Access token starts with <code className="font-mono bg-slate-100 px-1 rounded">sk-ant-oat01-</code>.
+				<p className="text-xs text-ink-600 mb-4">
+					Access token starts with <code className="font-mono bg-ink-100 px-1 rounded">sk-ant-oat01-</code>.
 					Adding the refresh token enables <strong>auto-renewal</strong> when the access token expires.
 					The pool must be the <strong>only</strong> holder of this credential.
 				</p>
 				<div className="space-y-3">
 					<div>
-						<label className="block text-xs font-medium text-slate-600 mb-1">User email</label>
+						<label className="block text-xs font-medium text-ink-600 mb-1">User email</label>
 						<input
 							type="email"
 							value={email}
 							onChange={(e) => setEmail(e.target.value)}
 							placeholder="user@example.com"
-							className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gold-400"
+							className="w-full rounded border border-ink-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gold-400"
 						/>
 					</div>
 					<div>
-						<label className="block text-xs font-medium text-slate-600 mb-1">Claude OAuth access token</label>
+						<label className="block text-xs font-medium text-ink-600 mb-1">Claude OAuth access token</label>
 						<input
 							type="password"
 							value={token}
 							onChange={(e) => setToken(e.target.value)}
 							placeholder="sk-ant-oat01-…"
-							className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-gold-400"
+							className="w-full rounded border border-ink-300 px-2.5 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-gold-400"
 						/>
 					</div>
 					<div>
-						<label className="block text-xs font-medium text-slate-600 mb-1">
-							Refresh token <span className="text-slate-400 font-normal">(optional — enables auto-renewal)</span>
+						<label className="block text-xs font-medium text-ink-600 mb-1">
+							Refresh token <span className="text-ink-600 font-normal">(optional — enables auto-renewal)</span>
 						</label>
 						<input
 							type="password"
 							value={refreshToken}
 							onChange={(e) => setRefreshToken(e.target.value)}
 							placeholder="paste refresh token here…"
-							className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-gold-400"
+							className="w-full rounded border border-ink-300 px-2.5 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-gold-400"
 						/>
 					</div>
 					<div>
-						<label className="block text-xs font-medium text-slate-600 mb-1">
-							Egress <span className="text-slate-400 font-normal">(optional)</span>
+						<label className="block text-xs font-medium text-ink-600 mb-1">
+							Egress <span className="text-ink-600 font-normal">(optional)</span>
 						</label>
 						<select
 							value={customLabel ? '__custom__' : label}
@@ -1304,7 +1305,7 @@ rm -rf "$D"`}
 								if (e.target.value === '__custom__') { setCustomLabel(true); setLabel(''); }
 								else { setCustomLabel(false); setLabel(e.target.value); }
 							}}
-							className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gold-400"
+							className="w-full rounded border border-ink-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gold-400"
 						>
 							<option value="">— none (adopts a field box automatically) —</option>
 							<option value="central">central — direct from the cluster (sg-sin1)</option>
@@ -1319,14 +1320,14 @@ rm -rf "$D"`}
 							<option value="__custom__">Other…</option>
 						</select>
 						{label === 'central' && (
-							<p className="text-[11px] text-amber-600 mt-1">
+							<p className="text-micro text-ember-600 mt-1">
 								Egresses DIRECT from the shared cluster IP (sg-sin1) — no relay hop. This IP also carries the pool's
 								OAuth-refresh and quota-probe traffic, and several accounts on <span className="font-mono">central</span> are
 								mutually attributable in a way several accounts on one field box are not (the field boxes carry nothing else).
 							</p>
 						)}
 						{label && label !== 'central' && takenLabels?.[label] && !customLabel && (
-							<p className="text-[11px] text-slate-400 mt-1">
+							<p className="text-micro text-ink-600 mt-1">
 								"{label}" is already used by {takenLabels[label]} — accounts sharing a field box present as one
 								client identity (same egress IP, same fingerprint), which is fine and often the point.
 							</p>
@@ -1338,21 +1339,21 @@ rm -rf "$D"`}
 								onChange={(e) => setLabel(e.target.value)}
 								placeholder="new field-box label"
 								autoFocus
-								className="w-full mt-2 rounded border border-slate-300 px-2.5 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-gold-400"
+								className="w-full mt-2 rounded border border-ink-300 px-2.5 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-gold-400"
 							/>
 						)}
-						<p className="text-[11px] text-slate-400 mt-1">
+						<p className="text-micro text-ink-600 mt-1">
 							Tags this account's egress network. A field box routes through that box's relay; <span className="font-mono">central</span> egresses
 							direct from the cluster; "none" adopts a hashed field box automatically.
 						</p>
 					</div>
 					<div>
-						<label className="block text-xs font-medium text-slate-600 mb-1">Pool</label>
+						<label className="block text-xs font-medium text-ink-600 mb-1">Pool</label>
 						<select
 							value={poolId}
 							onChange={(e) => setPoolId(e.target.value)}
 							disabled={pools.length === 0}
-							className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gold-400 disabled:opacity-50"
+							className="w-full rounded border border-ink-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gold-400 disabled:opacity-50"
 						>
 							{pools.length === 0
 								? <option value={poolId}>loading pools…</option>
@@ -1360,26 +1361,26 @@ rm -rf "$D"`}
 									<option key={p.id} value={p.id}>{p.name}</option>
 								))}
 						</select>
-						<p className="text-[11px] text-slate-400 mt-1">
+						<p className="text-micro text-ink-600 mt-1">
 							Who may draw on this account — a different axis from the field box above (that's egress routing, this is access).
 						</p>
 					</div>
 					{msg && (
-						<div className={`text-xs rounded px-2.5 py-2 ${msg.ok ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' : 'bg-rose-50 border border-rose-200 text-rose-800'}`}>
+						<div className={`text-xs rounded px-2.5 py-2 ${msg.ok ? 'bg-gold-50 border border-gold-200 text-gold-800' : 'bg-brick-50 border border-brick-200 text-brick-800'}`}>
 							{msg.text}
 						</div>
 					)}
 					<div className="flex justify-end gap-2 pt-1">
 						<button
 							onClick={onClose}
-							className="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-800 transition"
+							className="px-3 py-1.5 text-sm text-ink-600 hover:text-ink-800 transition"
 						>
 							Cancel
 						</button>
 						<button
 							onClick={submit}
 							disabled={busy}
-							className="inline-flex items-center gap-1.5 rounded-md bg-gold-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-gold-700 disabled:opacity-50 transition"
+							className="inline-flex items-center gap-1.5 rounded-md bg-gold-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-gold-800 disabled:opacity-50 transition"
 						>
 							{busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
 							Connect
@@ -1439,42 +1440,42 @@ function CreatePoolModal({ onClose, onCreated }: { onClose: () => void; onCreate
 
 	return (
 		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-			<div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white shadow-lg p-5 mx-4">
+			<div className="w-full max-w-sm rounded-xl border border-ink-200 bg-card shadow-lg p-5 mx-4">
 				<div className="flex items-center justify-between mb-4">
-					<h2 className="font-semibold text-slate-800">New pool</h2>
-					<button onClick={onClose} className="text-slate-400 hover:text-slate-700">
+					<h2 className="font-semibold text-ink-800">New pool</h2>
+					<button onClick={onClose} className="text-ink-600 hover:text-ink-700">
 						<X className="w-4 h-4" />
 					</button>
 				</div>
 				<div className="space-y-3">
 					<div>
-						<label className="block text-xs font-medium text-slate-600 mb-1">
-							ID <span className="text-slate-400 font-normal">(slug, immutable — used in PAT scopes)</span>
+						<label className="block text-xs font-medium text-ink-600 mb-1">
+							ID <span className="text-ink-600 font-normal">(slug, immutable — used in PAT scopes)</span>
 						</label>
 						<input
 							type="text"
 							value={id}
 							onChange={(e) => setId(e.target.value)}
 							placeholder="eu-overflow"
-							className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-gold-400"
+							className="w-full rounded border border-ink-300 px-2.5 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-gold-400"
 						/>
 					</div>
 					<div>
-						<label className="block text-xs font-medium text-slate-600 mb-1">Name</label>
+						<label className="block text-xs font-medium text-ink-600 mb-1">Name</label>
 						<input
 							type="text"
 							value={name}
 							onChange={(e) => setName(e.target.value)}
 							placeholder="EU Overflow"
-							className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gold-400"
+							className="w-full rounded border border-ink-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gold-400"
 						/>
 					</div>
 					<div>
-						<label className="block text-xs font-medium text-slate-600 mb-1">Mode</label>
+						<label className="block text-xs font-medium text-ink-600 mb-1">Mode</label>
 						<select
 							value={mode}
 							onChange={(e) => setMode(e.target.value as 'distributed' | 'conservative')}
-							className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gold-400"
+							className="w-full rounded border border-ink-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gold-400"
 						>
 							<option value="distributed">distributed — spread load across every account</option>
 							<option value="conservative">conservative — fill accounts one at a time</option>
@@ -1482,8 +1483,8 @@ function CreatePoolModal({ onClose, onCreated }: { onClose: () => void; onCreate
 					</div>
 					{mode === 'conservative' && (
 						<div>
-							<label className="block text-xs font-medium text-slate-600 mb-1">
-								Ceiling <span className="text-slate-400 font-normal">(users/account safety backstop — blank/0 = default, -1 = no limit)</span>
+							<label className="block text-xs font-medium text-ink-600 mb-1">
+								Ceiling <span className="text-ink-600 font-normal">(users/account safety backstop — blank/0 = default, -1 = no limit)</span>
 							</label>
 							<input
 								type="number"
@@ -1492,23 +1493,23 @@ function CreatePoolModal({ onClose, onCreated }: { onClose: () => void; onCreate
 								value={ceiling}
 								onChange={(e) => setCeiling(e.target.value)}
 								placeholder="blank = default"
-								className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gold-400"
+								className="w-full rounded border border-ink-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gold-400"
 							/>
 						</div>
 					)}
 					{msg && (
-						<div className="text-xs rounded px-2.5 py-2 bg-rose-50 border border-rose-200 text-rose-800">
+						<div className="text-xs rounded px-2.5 py-2 bg-brick-50 border border-brick-200 text-brick-800">
 							{msg.text}
 						</div>
 					)}
 					<div className="flex justify-end gap-2 pt-1">
-						<button onClick={onClose} className="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-800 transition">
+						<button onClick={onClose} className="px-3 py-1.5 text-sm text-ink-600 hover:text-ink-800 transition">
 							Cancel
 						</button>
 						<button
 							onClick={submit}
 							disabled={busy}
-							className="inline-flex items-center gap-1.5 rounded-md bg-gold-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-gold-700 disabled:opacity-50 transition"
+							className="inline-flex items-center gap-1.5 rounded-md bg-gold-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-gold-800 disabled:opacity-50 transition"
 						>
 							{busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
 							Create
@@ -1594,10 +1595,10 @@ function PoolMembersModal({ pool, onClose, isSuper }: { pool: ClaudePool; onClos
 
 	return (
 		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-			<div className="w-full max-w-md rounded-xl border border-slate-200 bg-white shadow-lg p-5 mx-4">
+			<div className="w-full max-w-md rounded-xl border border-ink-200 bg-card shadow-lg p-5 mx-4">
 				<div className="flex items-center justify-between mb-4">
-					<h2 className="font-semibold text-slate-800">{pool.name} — members</h2>
-					<button onClick={onClose} className="text-slate-400 hover:text-slate-700">
+					<h2 className="font-semibold text-ink-800">{pool.name} — members</h2>
+					<button onClick={onClose} className="text-ink-600 hover:text-ink-700">
 						<X className="w-4 h-4" />
 					</button>
 				</div>
@@ -1607,39 +1608,39 @@ function PoolMembersModal({ pool, onClose, isSuper }: { pool: ClaudePool; onClos
 						value={addInput}
 						onChange={(e) => setAddInput(e.target.value)}
 						placeholder="user email or sub"
-						className="flex-1 rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gold-400"
+						className="flex-1 rounded border border-ink-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gold-400"
 					/>
 					<button
 						onClick={add}
 						disabled={busy || !addInput.trim()}
-						className="shrink-0 rounded-md bg-gold-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-gold-700 disabled:opacity-50 transition"
+						className="shrink-0 rounded-md bg-gold-700 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-gold-800 disabled:opacity-50 transition"
 					>
 						Add
 					</button>
 				</div>
-				{err && <p className="text-xs text-rose-600 mb-2">{err}</p>}
-				<div className="rounded-lg border border-slate-200 divide-y divide-slate-100 max-h-80 overflow-y-auto">
+				{err && <p className="text-xs text-brick-600 mb-2">{err}</p>}
+				<div className="rounded-lg border border-ink-200 divide-y divide-ink-100 max-h-80 overflow-y-auto">
 					{members === null ? (
-						<div className="p-3 text-xs text-slate-400 flex items-center gap-2">
+						<div className="p-3 text-xs text-ink-600 flex items-center gap-2">
 							<Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…
 						</div>
 					) : members.length === 0 ? (
-						<div className="p-3 text-xs text-slate-400">No members yet.</div>
+						<div className="p-3 text-xs text-ink-600">No members yet.</div>
 					) : (
 						members.map((m) => (
 							<div key={m.user_sub} className="flex items-center gap-2 px-2.5 py-1.5">
-								<span className="flex-1 min-w-0 truncate text-xs text-slate-700" title={m.email}>
+								<span className="flex-1 min-w-0 truncate text-xs text-ink-700" title={m.email}>
 									{m.email}
 								</span>
 								{m.is_primary ? (
-									<span className="shrink-0 rounded-full bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700">
+									<span className="shrink-0 rounded-full bg-plum-50 border border-plum-200 px-1.5 py-0.5 text-nano font-medium text-plum-700">
 										primary
 									</span>
 								) : (
 									<button
 										onClick={() => setPrimary(m.user_sub)}
 										disabled={busy}
-										className="shrink-0 text-[10px] text-slate-400 underline hover:text-slate-600 disabled:opacity-50"
+										className="shrink-0 text-nano text-ink-600 underline hover:text-ink-600 disabled:opacity-50"
 									>
 										make primary
 									</button>
@@ -1653,17 +1654,17 @@ function PoolMembersModal({ pool, onClose, isSuper }: { pool: ClaudePool; onClos
 										onChange={(e) => setManager(m.user_sub, e.target.value === 'yes')}
 										disabled={busy}
 										title="Manage this pool's accounts: pause/resume them, and reset this pool's members' usage clocks"
-										className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-medium disabled:opacity-50 ${
+										className={`shrink-0 rounded-full border px-1.5 py-0.5 text-nano font-medium disabled:opacity-50 ${
 											m.is_manager
-												? 'bg-indigo-50 border-indigo-200 text-indigo-700'
-												: 'bg-slate-50 border-slate-200 text-slate-500'
+												? 'bg-plum-50 border-plum-200 text-plum-700'
+												: 'bg-ink-50 border-ink-200 text-ink-600'
 										}`}
 									>
 										<option value="no">manager: no</option>
 										<option value="yes">manager: yes</option>
 									</select>
 								) : m.is_manager ? (
-									<span className="shrink-0 rounded-full bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700"
+									<span className="shrink-0 rounded-full bg-plum-50 border border-plum-200 px-1.5 py-0.5 text-nano font-medium text-plum-700"
 										title="Manages this pool's accounts (granting is super_admin only)">
 										manager
 									</span>
@@ -1671,7 +1672,7 @@ function PoolMembersModal({ pool, onClose, isSuper }: { pool: ClaudePool; onClos
 								<button
 									onClick={() => remove(m.user_sub)}
 									disabled={busy}
-									className="shrink-0 text-slate-400 hover:text-rose-600 disabled:opacity-50"
+									className="shrink-0 text-ink-600 hover:text-brick-600 disabled:opacity-50"
 									title="Remove from this pool"
 								>
 									<X className="w-3 h-3" />
@@ -1801,14 +1802,14 @@ function PoolsPanel({ pools, onChanged, isSuper }: { pools: ClaudePool[]; onChan
 			)}
 			{membersFor && <PoolMembersModal pool={membersFor} isSuper={isSuper} onClose={() => setMembersFor(null)} />}
 			<div className="flex items-center gap-2 mb-1.5">
-				<p className="text-xs font-medium text-slate-600">Pools</p>
-				<span className="text-[10px] text-slate-400 font-normal">
+				<p className="text-xs font-medium text-ink-600">Pools</p>
+				<span className="text-nano text-ink-600 font-normal">
 					who may draw on which accounts — orthogonal to field boxes (egress routing)
 				</span>
 				{isSuper && (
 					<button
 						onClick={() => setShowCreate(true)}
-						className="ml-auto inline-flex items-center gap-1 rounded-md border border-gold-300 bg-gold-50 px-2 py-1 text-[10px] font-medium text-gold-800 hover:bg-gold-100 transition"
+						className="ml-auto inline-flex items-center gap-1 rounded-md border border-gold-300 bg-gold-50 px-2 py-1 text-nano font-medium text-gold-800 hover:bg-gold-100 transition"
 					>
 						<UserPlus className="w-3 h-3" />
 						New pool
@@ -1816,17 +1817,17 @@ function PoolsPanel({ pools, onChanged, isSuper }: { pools: ClaudePool[]; onChan
 				)}
 				{!isSuper && (
 					<span
-						className="ml-auto text-[10px] text-slate-400"
+						className="ml-auto text-nano text-ink-600"
 						title="Creating a pool grants a new named slice of subscription budget — that's super_admin-only, same as reset-window. Everything else on this panel (mode, membership, deletion) is plain admin."
 					>
 						new pool: super_admin only
 					</span>
 				)}
 			</div>
-			<div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100">
+			<div className="rounded-lg border border-ink-200 bg-card divide-y divide-ink-100">
 				{pools.map((p) => (
 					<div key={p.id} className="flex items-center gap-3 px-2.5 py-1.5">
-						<span className="w-32 shrink-0 truncate text-xs font-medium text-slate-800" title={p.id}>{p.name}</span>
+						<span className="w-32 shrink-0 truncate text-xs font-medium text-ink-800" title={p.id}>{p.name}</span>
 						{/* Three independent axes, each a dropdown so the CURRENT value
 						    reads at a glance and the alternative is named rather than
 						    implied by a click. They are not variations of one setting:
@@ -1838,10 +1839,10 @@ function PoolsPanel({ pools, onChanged, isSuper }: { pools: ClaudePool[]; onChan
 							onChange={(e) => setMode(p, e.target.value as ClaudePool['mode'])}
 							disabled={busyId === p.id}
 							title="How pooled Anthropic accounts are chosen for this pool"
-							className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-medium transition disabled:opacity-50 ${
+							className={`shrink-0 rounded-full border px-1.5 py-0.5 text-nano font-medium transition disabled:opacity-50 ${
 								p.mode === 'conservative'
-									? 'bg-amber-50 border-amber-200 text-amber-700'
-									: 'bg-sky-50 border-sky-200 text-sky-700'
+									? 'bg-ember-50 border-ember-200 text-ember-700'
+									: 'bg-lagoon-50 border-lagoon-200 text-lagoon-700'
 							}`}
 						>
 							<option value="distributed">distributed</option>
@@ -1854,10 +1855,10 @@ function PoolsPanel({ pools, onChanged, isSuper }: { pools: ClaudePool[]; onChan
 							onChange={(e) => setOnprem(p, e.target.value === 'on')}
 							disabled={busyId === p.id}
 							title="On-prem models (deepseek-v4.1-flash on the NUS H200s, qwen3.8-27b et al). Costs nothing marginal; open by default."
-							className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-medium transition disabled:opacity-50 ${
+							className={`shrink-0 rounded-full border px-1.5 py-0.5 text-nano font-medium transition disabled:opacity-50 ${
 								onpremOn(p)
-									? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-									: 'bg-rose-50 border-rose-200 text-rose-700'
+									? 'bg-gold-50 border-gold-200 text-gold-700'
+									: 'bg-brick-50 border-brick-200 text-brick-700'
 							}`}
 						>
 							<option value="on">on-prem: on</option>
@@ -1874,17 +1875,17 @@ function PoolsPanel({ pools, onChanged, isSuper }: { pools: ClaudePool[]; onChan
 								onChange={(e) => setOpenrouter(p, e.target.value === 'on')}
 								disabled={busyId === p.id}
 								title="Externally billed models (OpenRouter, kimi-k3, …). Real money; denied by default for every role. super_admin only."
-								className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-medium transition disabled:opacity-50 ${
+								className={`shrink-0 rounded-full border px-1.5 py-0.5 text-nano font-medium transition disabled:opacity-50 ${
 									openrouterOn(p)
-										? 'bg-violet-50 border-violet-200 text-violet-700'
-										: 'bg-slate-50 border-slate-200 text-slate-500'
+										? 'bg-plum-50 border-plum-200 text-plum-700'
+										: 'bg-ink-50 border-ink-200 text-ink-600'
 								}`}
 							>
 								<option value="off">openrouter: off</option>
 								<option value="on">openrouter: on</option>
 							</select>
 						) : openrouterOn(p) ? (
-							<span className="shrink-0 rounded-full bg-violet-50 border border-violet-200 px-1.5 py-0.5 text-[10px] font-medium text-violet-700"
+							<span className="shrink-0 rounded-full bg-plum-50 border border-plum-200 px-1.5 py-0.5 text-nano font-medium text-plum-700"
 								title="Externally billed models enabled (granting is super_admin only)">
 								openrouter: on
 							</span>
@@ -1899,42 +1900,42 @@ function PoolsPanel({ pools, onChanged, isSuper }: { pools: ClaudePool[]; onChan
 								onChange={(e) => setFable(p, e.target.value === 'on')}
 								disabled={busyId === p.id}
 								title="Fable tier ($10/$50 per MTok). super_admin keeps it by role; everyone else needs this grant."
-								className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-medium transition disabled:opacity-50 ${
+								className={`shrink-0 rounded-full border px-1.5 py-0.5 text-nano font-medium transition disabled:opacity-50 ${
 									fableOn(p)
-										? 'bg-fuchsia-50 border-fuchsia-200 text-fuchsia-700'
-										: 'bg-slate-50 border-slate-200 text-slate-500'
+										? 'bg-plum-50 border-plum-200 text-plum-700'
+										: 'bg-ink-50 border-ink-200 text-ink-600'
 								}`}
 							>
 								<option value="off">fable: off</option>
 								<option value="on">fable: on</option>
 							</select>
 						) : fableOn(p) ? (
-							<span className="shrink-0 rounded-full bg-fuchsia-50 border border-fuchsia-200 px-1.5 py-0.5 text-[10px] font-medium text-fuchsia-700"
+							<span className="shrink-0 rounded-full bg-plum-50 border border-plum-200 px-1.5 py-0.5 text-nano font-medium text-plum-700"
 								title="Fable enabled (granting is super_admin only)">
 								fable: on
 							</span>
 						) : null}
-						<span className="shrink-0 text-[10px] text-slate-400">{p.account_count} account{p.account_count === 1 ? '' : 's'}</span>
-						<span className="shrink-0 text-[10px] text-slate-400">{p.member_count} member{p.member_count === 1 ? '' : 's'}</span>
+						<span className="shrink-0 text-nano text-ink-600">{p.account_count} account{p.account_count === 1 ? '' : 's'}</span>
+						<span className="shrink-0 text-nano text-ink-600">{p.member_count} member{p.member_count === 1 ? '' : 's'}</span>
 						{p.owner_email && (
-							<span className="shrink-0 text-[10px] text-slate-400 truncate" title="Owner (attribution only)">
+							<span className="shrink-0 text-nano text-ink-600 truncate" title="Owner (attribution only)">
 								owner: {p.owner_email}
 							</span>
 						)}
 						<button
 							onClick={() => setMembersFor(p)}
-							className="shrink-0 ml-auto text-[10px] text-slate-500 underline hover:text-slate-700"
+							className="shrink-0 ml-auto text-nano text-ink-600 underline hover:text-ink-700"
 						>
 							manage members
 						</button>
 						{rowMsg[p.id] && (
-							<span className="shrink-0 max-w-52 truncate text-[10px] text-amber-600" title={rowMsg[p.id]}>{rowMsg[p.id]}</span>
+							<span className="shrink-0 max-w-52 truncate text-nano text-ember-600" title={rowMsg[p.id]}>{rowMsg[p.id]}</span>
 						)}
 						{p.id !== 'default' && (
 							<button
 								onClick={() => deletePool(p)}
 								disabled={busyId === p.id}
-								className="shrink-0 text-slate-400 hover:text-rose-600 disabled:opacity-50"
+								className="shrink-0 text-ink-600 hover:text-brick-600 disabled:opacity-50"
 								title="Delete pool (reassigns accounts/members to default)"
 							>
 								<Trash2 className="w-3 h-3" />
@@ -2051,11 +2052,11 @@ function OpusCapChip({ u, shortWin }: { u: ClaudeUserUsage; shortWin: string }) 
 	const p5 = l5 > 0 ? (s5 / l5) * 100 : 0, p7 = l7 > 0 ? (s7 / l7) * 100 : 0;
 	const worst = Math.max(p5, p7);
 	const tone = u.opus_exhausted || worst >= 100
-		? 'border-rose-300 bg-rose-50 text-rose-700'
-		: worst >= 80 ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-violet-200 bg-violet-50 text-violet-700';
+		? 'border-brick-300 bg-brick-50 text-brick-700'
+		: worst >= 80 ? 'border-ember-300 bg-ember-50 text-ember-800' : 'border-plum-200 bg-plum-50 text-plum-700';
 	return (
 		<span
-			className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] tabular-nums ${tone}`}
+			className={`shrink-0 rounded border px-1.5 py-0.5 text-nano tabular-nums ${tone}`}
 			title={`Opus cap (admin): ${s5.toLocaleString()} / ${l5.toLocaleString()} units (${shortWin}) · ${s7.toLocaleString()} / ${l7.toLocaleString()} (7d). ${u.opus_exhausted ? 'LIMIT REACHED — Opus requests are refused until the window resets; Sonnet still works.' : 'Over either window, Opus is refused until it resets; Sonnet keeps working.'}`}
 		>
 			Opus {fmtUnits(s5)}/{fmtUnits(l5)} · {fmtUnits(s7)}/{fmtUnits(l7)}
@@ -2135,12 +2136,12 @@ function UserUsageSection({
 	return (
 		<div>
 			{savMax != null && savMax > 0 && (
-				<div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded border border-emerald-100 bg-emerald-50 px-2.5 py-1.5">
-					<span className="text-[11px] font-medium text-emerald-700">
+				<div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded border border-gold-100 bg-gold-50 px-2.5 py-1.5">
+					<span className="text-micro font-medium text-gold-700">
 						Saved by on-prem (7d): {usd(savMin ?? Math.round(savMax / 5))}–{usd(savMax)}
 					</span>
 					<span
-						className="text-[10px] text-emerald-600/80"
+						className="text-nano text-gold-700/80"
 						title={
 							'What the on-prem-served share WOULD have cost on OpenRouter. deepseek-v4.1-flash is booked at ' +
 							'$0.14/M in, $0.42/M out (a listed-price endpoint; the overflow provider is not yet observed). ' +
@@ -2152,12 +2153,12 @@ function UserUsageSection({
 						range, not an estimate — why?
 					</span>
 					{orSpend != null && (
-						<span className="text-[10px] text-slate-500 ml-auto">
+						<span className="text-nano text-ink-600 ml-auto">
 							actually spent on OpenRouter overflow:{' '}
-							<span className="tabular-nums font-medium text-violet-600">{usd(orSpend)}</span>
+							<span className="tabular-nums font-medium text-plum-600">{usd(orSpend)}</span>
 							{savMin != null && orSpend > savMin && (
 								<span
-									className="ml-1 text-amber-600"
+									className="ml-1 text-ember-600"
 									title="Overflow is costing more than the low estimate of what on-prem is saving. That is a signal to chase spill volume, not to add hardware."
 								>
 									· exceeds low estimate
@@ -2168,21 +2169,21 @@ function UserUsageSection({
 				</div>
 			)}
 			<div className="flex items-center gap-2 mb-1.5">
-				<p className="text-xs font-medium text-slate-600">
+				<p className="text-xs font-medium text-ink-600">
 					Per-user pool usage
 				</p>
-				<span className="text-[10px] text-slate-400 font-normal">
+				<span className="text-nano text-ink-600 font-normal">
 					caps: {capTiers} (pooled Claude only — deepseek is counted but not limited)
 					{(usage.opus_admin_seven_day_tokens ?? 0) > 0 && (
 						<>
 							{' · '}
-							<span className="text-violet-700" title="Admins (not super_admin) have an Opus-only cap inside the pool. Over it, Opus requests are refused with a clear 429; Sonnet keeps working.">
+							<span className="text-plum-700" title="Admins (not super_admin) have an Opus-only cap inside the pool. Over it, Opus requests are refused with a clear 429; Sonnet keeps working.">
 								admin Opus cap: {fmtUnits(usage.opus_admin_five_hour_tokens ?? 0)} / {shortWin} · {fmtUnits(usage.opus_admin_seven_day_tokens ?? 0)} / 7d
 							</span>
 						</>
 					)}
 					{' · '}<span title="Quota units are price-weighted: a cache READ counts 0.1x, a 5m cache write 1.25x, a 1h write 2x; sonnet 0.6x, haiku 0.2x, non-Claude 0.1x. A Claude Code turn is mostly cache-read, so units run ~10x below raw tokens. Raw tokens are shown alongside.">units ≠ tokens</span>
-					{' · '}users with a <code className="font-mono text-[10px]">claude:proxy</code> PAT appear even at 0 usage
+					{' · '}users with a <code className="font-mono text-nano">claude:proxy</code> PAT appear even at 0 usage
 				</span>
 				<span className="ml-auto shrink-0 flex items-center gap-2">
 					{pools.length > 1 && (
@@ -2190,7 +2191,7 @@ function UserUsageSection({
 							value={poolFilter}
 							onChange={(e) => setPoolFilter(e.target.value)}
 							title="Filter this table to one pool"
-							className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-500"
+							className="rounded border border-ink-200 bg-card px-1.5 py-0.5 text-nano text-ink-600"
 						>
 							<option value="">all pools</option>
 							{pools.map((p) => (
@@ -2199,10 +2200,10 @@ function UserUsageSection({
 						</select>
 					)}
 					<ResetAllButton isSuper={isSuper} userCount={usage.users.length} shortLabel={shortWin} onDone={onReset} />
-					<span className="text-[10px] text-slate-400 tabular-nums">↺ {cdText}</span>
+					<span className="text-nano text-ink-600 tabular-nums">↺ {cdText}</span>
 				</span>
 			</div>
-			<div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100">
+			<div className="rounded-lg border border-ink-200 bg-card divide-y divide-ink-100">
 				{visibleUsers.map((u) => {
 					// Bars reflect POOLED CLAUDE ONLY — the gate exempts
 					// deepseek/on-prem and OpenRouter from the cap, so drawing
@@ -2244,12 +2245,12 @@ function UserUsageSection({
 						<div key={u.email} className="px-2.5 py-1.5 min-w-0">
 							<div className="flex items-center gap-3">
 								<SeverityDot severity={sev} />
-								<span className="flex-1 min-w-0 truncate text-xs font-medium text-slate-800" title={u.email}>
+								<span className="flex-1 min-w-0 truncate text-xs font-medium text-ink-800" title={u.email}>
 									{u.email}
 								</span>
 								{u.primary_pool && (
 									<span
-										className="shrink-0 rounded-full bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700"
+										className="shrink-0 rounded-full bg-plum-50 border border-plum-200 px-1.5 py-0.5 text-nano font-medium text-plum-700"
 										title={
 											(u.pools && u.pools.length > 1)
 												? `Primary pool: ${u.primary_pool}. Also a member of: ${u.pools.filter((p) => p !== u.primary_pool).join(', ')}`
@@ -2260,7 +2261,7 @@ function UserUsageSection({
 									</span>
 								)}
 								{!usesPool && (
-									<span className="shrink-0 text-[10px] text-slate-400 italic"
+									<span className="shrink-0 text-nano text-ink-600 italic"
 										title="Role `user`: sonnet/haiku is served by the in-house deepseek, so this account never draws on the Claude pool. No window, no cap, nothing to reset.">
 										not pooled
 									</span>
@@ -2269,13 +2270,13 @@ function UserUsageSection({
 									? `${u.email} is admin/super_admin — UNCAPPED. The server sends a math.MaxInt32 sentinel as the cap so enforcement needs no per-role branch; a percentage of it would be meaningless, so none is shown. Actual draw: ${(u.claude_five_hour_tokens ?? u.five_hour_tokens).toLocaleString()} quota units (${shortWin}) · ${(u.claude_seven_day_tokens ?? u.seven_day_tokens).toLocaleString()} (7d).`
 									: `${(u.claude_five_hour_tokens ?? u.five_hour_tokens).toLocaleString()} pooled-Claude QUOTA UNITS (${shortWin}) · ${(u.claude_seven_day_tokens ?? u.seven_day_tokens).toLocaleString()} (7d) — price-weighted, not raw tokens`}>
 									{uncapped ? (
-										<span className="text-[10px] font-medium text-slate-400 tabular-nums">uncapped</span>
+										<span className="text-nano font-medium text-ink-600 tabular-nums">uncapped</span>
 									) : (
 										<>
 											<StackedBar shortPct={shortPct} weekPct={weekPct} />
-											<span className="text-[10px] font-mono tabular-nums">
+											<span className="text-nano font-mono tabular-nums">
 												<span className={windowText(shortPct, 'short')}>{fmtPct(shortPct)}</span>
-												<span className="text-slate-300">·</span>
+												<span className="text-ink-600">·</span>
 												<span className={windowText(weekPct, 'week')}>{fmtPct(weekPct)}</span>
 											</span>
 											{/* The badge is what a glance sees — a low % right after the 7d
@@ -2284,7 +2285,7 @@ function UserUsageSection({
 											    huge. The detail line already carries this via winAge; without
 											    it here too, the one number people actually glance at is the
 											    misleading one. */}
-											{winAge && <span className="text-[9px] text-slate-400 tabular-nums">({winAge})</span>}
+											{winAge && <span className="text-nano text-ink-600 tabular-nums">({winAge})</span>}
 										</>
 									)}
 									{/* Each clock carries the colour of the window it belongs to — the same
@@ -2293,12 +2294,12 @@ function UserUsageSection({
 									    means pressure. Which clock is which is carried by order (4h then 7d)
 									    and the tooltip, exactly as the bar halves are carried by left and
 									    right. */}
-									{resetShort && <span className={`text-[10px] tabular-nums ${windowText(shortPct, 'short')}`} title={`4h window resets ${u.five_hour_reset ?? ''}`}>{resetShort}</span>}
-									{resetWeek && <span className={`text-[10px] tabular-nums ${windowText(weekPct, 'week')}`} title={`7d window resets ${u.seven_day_reset ?? ''}`}>{resetWeek}</span>}
+									{resetShort && <span className={`text-nano tabular-nums ${windowText(shortPct, 'short')}`} title={`4h window resets ${u.five_hour_reset ?? ''}`}>{resetShort}</span>}
+									{resetWeek && <span className={`text-nano tabular-nums ${windowText(weekPct, 'week')}`} title={`7d window resets ${u.seven_day_reset ?? ''}`}>{resetWeek}</span>}
 								</div>}
 								{(u.opus_seven_day_limit ?? 0) > 0 && <OpusCapChip u={u} shortWin={shortWin} />}
 								{usesPool && <ResetWindowButtons isSuper={isSuper} email={u.email} shortLabel={shortWin} onDone={onReset} />}
-								<span className="shrink-0 text-[10px] text-slate-400">{fmtTs(u.last_ts)}</span>
+								<span className="shrink-0 text-nano text-ink-600">{fmtTs(u.last_ts)}</span>
 							</div>
 							{/* SECOND LINE — usage detail.
 							    Everything below used to sit on line 1 alongside the identity,
@@ -2317,7 +2318,7 @@ function UserUsageSection({
 								    units are what the cap is enforced against. The fallback is
 								    labelled "units" too -- it IS the weighted figure, and
 								    calling it "tok" is exactly the bug. */}
-								<span className="text-[10px] text-slate-400 tabular-nums whitespace-nowrap"
+								<span className="text-nano text-ink-600 tabular-nums whitespace-nowrap"
 									title={u.trailing_7d_tokens != null
 										? `TRUE rolling windows (anchor-independent):\n`
 											+ `  4h pool: ${(u.trailing_4h_claude_tokens ?? u.trailing_4h_tokens ?? 0).toLocaleString()} tok\n`
@@ -2344,17 +2345,17 @@ function UserUsageSection({
 									    bore — 26% of one user's headline on 2026-08-24. Non-pool volume
 									    is still visible, in the provider chips to the left. */}
 									{poolTok != null
-										? <>{fmtTokens(poolTok)} tok<span className="text-slate-400">/7d</span></>
+										? <>{fmtTokens(poolTok)} tok<span className="text-ink-600">/7d</span></>
 										: null}
-									<span className="text-slate-300"> · </span>
+									<span className="text-ink-600"> · </span>
 									{/* Claude-only weighted, so this figure and the BAR beside it are the
 									    same population. They were not: the printed number was all-models
 									    while the bar was claude-only, and for suzhengy that read 102.5M
 									    next to a bar drawn from 19.8M — a 5.2x disagreement between two
 									    numbers touching each other on the same row. */}
 									{fmtTokens(u.claude_seven_day_tokens ?? u.seven_day_tokens)} units
-									{winAge && <span className="text-slate-400"> ({winAge})</span>}
-									<span className="text-slate-300"> · </span>{u.trailing_7d_requests ?? u.requests_7d} req
+									{winAge && <span className="text-ink-600"> ({winAge})</span>}
+									<span className="text-ink-600"> · </span>{u.trailing_7d_requests ?? u.requests_7d} req
 								</span>
 								{/* Color-coded provider subtotals fill the middle gap — Claude
 								    slate, onprem emerald, OpenRouter violet (mirror modelRoute).
@@ -2365,18 +2366,18 @@ function UserUsageSection({
 										const v = u.providers![p];
 										if (!v || v.tokens_7d <= 0) return null;
 										const cls =
-											p === 'claude' ? 'bg-slate-100 text-slate-500' :
-											p === 'onprem' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
-											'bg-violet-50 text-violet-600 border border-violet-100';
+											p === 'claude' ? 'bg-ink-100 text-ink-600' :
+											p === 'onprem' ? 'bg-gold-50 text-gold-700 border border-gold-100' :
+											'bg-plum-50 text-plum-600 border border-plum-100';
 										const lbl =
 											p === 'claude' ? 'Claude' :
 											p === 'onprem' ? 'onprem' : 'OpenRouter';
 										return (
-											<span key={p} className={`px-1.5 py-px rounded text-[9px] tabular-nums whitespace-nowrap ${cls}`}
+											<span key={p} className={`px-1.5 py-px rounded text-nano tabular-nums whitespace-nowrap ${cls}`}
 												title={`${v.tokens_7d.toLocaleString()} raw tokens (input+output+cache — the SAME basis for every provider, so Claude and deepseek are comparable)`
 													+ (v.weighted_tokens_7d != null ? ` · ${v.weighted_tokens_7d.toLocaleString()} quota units` : '')}>
 												{lbl}
-												<span className="text-slate-400"> · {fmtTokens(v.tokens_7d)}</span>
+												<span className="text-ink-600"> · {fmtTokens(v.tokens_7d)}</span>
 											</span>
 										);
 									})}
@@ -2439,15 +2440,15 @@ function ResetAllButton({ isSuper, userCount, shortLabel, onDone }: { isSuper: b
 		return (
 			<span className="inline-flex items-center gap-1.5">
 			{done && (
-				<span className="text-[10px] text-emerald-700" title="rows affected, reported by the server">
+				<span className="text-nano text-gold-700" title="rows affected, reported by the server">
 					reset {done.reset} {done.window}
 				</span>
 			)}
 			<button
 				type="button"
 				onClick={() => setOpen(true)}
-				className="inline-flex items-center gap-1 rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5
-					text-[10px] font-medium text-amber-800 hover:bg-amber-100 transition"
+				className="inline-flex items-center gap-1 rounded border border-ember-300 bg-ember-50 px-1.5 py-0.5
+					text-nano font-medium text-ember-800 hover:bg-ember-100 transition"
 				title={`Reset the quota clock for all ${userCount} users`}
 			>
 				<RotateCcw className="w-2.5 h-2.5" />
@@ -2458,8 +2459,8 @@ function ResetAllButton({ isSuper, userCount, shortLabel, onDone }: { isSuper: b
 	}
 
 	return (
-		<span className="inline-flex items-center gap-1.5 rounded border border-amber-300 bg-amber-50 px-2 py-1">
-			<span className="text-[10px] text-amber-900">
+		<span className="inline-flex items-center gap-1.5 rounded border border-ember-300 bg-ember-50 px-2 py-1">
+			<span className="text-nano text-ember-900">
 				reset <strong>all {userCount}</strong> users:
 			</span>
 			{(['short', 'weekly', 'both'] as const).map((w) => (
@@ -2467,8 +2468,8 @@ function ResetAllButton({ isSuper, userCount, shortLabel, onDone }: { isSuper: b
 					key={w}
 					type="button"
 					onClick={() => setWin(w)}
-					className={`rounded px-1 py-0.5 text-[10px] font-medium transition ${
-						win === w ? 'bg-amber-600 text-white' : 'text-amber-800 hover:bg-amber-100'
+					className={`rounded px-1 py-0.5 text-nano font-medium transition ${
+						win === w ? 'bg-ember-600 text-white' : 'text-ember-800 hover:bg-ember-100'
 					}`}
 				>
 					{w === 'short' ? shortLabel : w === 'weekly' ? '7d' : 'both'}
@@ -2478,26 +2479,26 @@ function ResetAllButton({ isSuper, userCount, shortLabel, onDone }: { isSuper: b
 				value={typed}
 				onChange={(e) => setTyped(e.target.value)}
 				placeholder={`type "${phrase}"`}
-				className="w-28 rounded border border-amber-300 px-1 py-0.5 text-[10px] font-mono
-					focus:outline-none focus:border-amber-500"
+				className="w-28 rounded border border-ember-300 px-1 py-0.5 text-nano font-mono
+					focus:outline-none focus:border-ember-500"
 			/>
 			<button
 				type="button"
 				onClick={() => void run()}
 				disabled={!armed || busy}
-				className="rounded bg-amber-600 px-1.5 py-0.5 text-[10px] font-medium text-white
-					hover:bg-amber-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+				className="rounded bg-ember-600 px-1.5 py-0.5 text-nano font-medium text-white
+					hover:bg-ember-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
 			>
 				{busy ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : 'confirm'}
 			</button>
 			<button
 				type="button"
 				onClick={() => { setOpen(false); setTyped(''); setErr(null); }}
-				className="text-[10px] text-amber-700 hover:text-amber-900"
+				className="text-nano text-ember-700 hover:text-ember-900"
 			>
 				cancel
 			</button>
-			{err && <span className="text-[10px] text-red-600 max-w-[10rem] truncate" title={err}>{err}</span>}
+			{err && <span className="text-nano text-brick-600 max-w-[10rem] truncate" title={err}>{err}</span>}
 		</span>
 	);
 }
@@ -2558,7 +2559,7 @@ function ResetWindowButtons({
 	if (!isSuper) return null;
 	return (
 		<span className="flex items-center gap-1 shrink-0">
-			<span className="text-[10px] text-slate-400">reset</span>
+			<span className="text-nano text-ink-600">reset</span>
 			{(['short', 'weekly'] as const).map((win) => {
 				const label = win === 'short' ? shortLabel : '7d';
 				return (
@@ -2568,8 +2569,8 @@ function ResetWindowButtons({
 						onClick={() => void run(win)}
 						disabled={busy !== null}
 						title={`Reset this user's ${label} quota window`}
-						className="inline-flex items-center gap-0.5 rounded border border-indigo-200 bg-indigo-50/60 px-1.5 py-0.5
-							text-[10px] font-medium text-indigo-700 hover:bg-indigo-100 hover:border-indigo-300
+						className="inline-flex items-center gap-0.5 rounded border border-plum-200 bg-plum-50/60 px-1.5 py-0.5
+							text-nano font-medium text-plum-700 hover:bg-plum-100 hover:border-plum-300
 							disabled:opacity-40 disabled:cursor-not-allowed transition"
 					>
 						{busy === win ? (
@@ -2582,7 +2583,7 @@ function ResetWindowButtons({
 				);
 			})}
 			{err && (
-				<span className="text-[10px] text-red-600 max-w-[10rem] truncate" title={err}>
+				<span className="text-nano text-brick-600 max-w-[10rem] truncate" title={err}>
 					{err}
 				</span>
 			)}
@@ -2610,32 +2611,32 @@ function OpenRouterBalancePanel() {
 	if (!data) return null;
 
 	return (
-		<div className="rounded-lg border border-violet-200 bg-violet-50/50 px-3 py-2">
+		<div className="rounded-lg border border-plum-200 bg-plum-50/50 px-3 py-2">
 			<div className="flex items-center gap-2">
-				<span className="text-xs font-medium text-slate-700">OpenRouter balance</span>
-				<span className="ml-auto shrink-0 font-mono text-xs text-violet-800">
+				<span className="text-xs font-medium text-ink-700">OpenRouter balance</span>
+				<span className="ml-auto shrink-0 font-mono text-xs text-plum-800">
 					{data.available ? (
-						<>${data.balance_usd.toFixed(2)} <span className="text-slate-400 font-normal">credit</span>{data.usage_usd > 0 ? <> · ${data.usage_usd.toFixed(2)} <span className="text-slate-400 font-normal">used</span></> : ''}</>
+						<>${data.balance_usd.toFixed(2)} <span className="text-ink-600 font-normal">credit</span>{data.usage_usd > 0 ? <> · ${data.usage_usd.toFixed(2)} <span className="text-ink-600 font-normal">used</span></> : ''}</>
 					) : (
-						<span className="text-slate-400 text-[11px] font-normal">not configured</span>
+						<span className="text-ink-600 text-micro font-normal">not configured</span>
 					)}
 				</span>
 			</div>
 			{data.available && data.total_credits > 0 && (
 				<>
-					<div className="mt-1.5 h-1 rounded-full bg-violet-100 overflow-hidden">
+					<div className="mt-1.5 h-1 rounded-full bg-plum-100 overflow-hidden">
 						<div
-							className="h-full rounded-full bg-violet-500"
+							className="h-full rounded-full bg-plum-500"
 							style={{ width: `${Math.max(2, Math.min(100, (data.balance_usd / data.total_credits) * 100))}%` }}
 						/>
 					</div>
-					<p className="mt-1 text-[10px] text-slate-400">
+					<p className="mt-1 text-nano text-ink-600">
 						{fmtPct((data.balance_usd / data.total_credits) * 100)} of ${data.total_credits.toFixed(2)} credit remaining
 					</p>
 				</>
 			)}
 			{data.error && (
-				<p className="mt-1 text-[10px] text-slate-400">{data.error}</p>
+				<p className="mt-1 text-nano text-ink-600">{data.error}</p>
 			)}
 		</div>
 	);
@@ -2646,13 +2647,13 @@ function SummaryBar({ accounts }: { accounts: ClaudeQuotaAccount[] }) {
 	const warning  = accounts.filter((a) => a.severity === 'warning').length;
 	const healthy  = accounts.length - critical - warning;
 	return (
-		<div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-			<div className="text-xs font-medium text-slate-700">Pooled accounts</div>
-			<div className="flex items-center gap-4 text-xs text-slate-500 mt-0.5">
-				{critical > 0 && <span className="text-rose-600 font-medium">{critical} critical</span>}
-				{warning  > 0 && <span className="text-amber-600 font-medium">{warning} warning</span>}
-				<span className="text-emerald-600">{healthy} healthy</span>
-				<span className="text-slate-300">/ {accounts.length} total</span>
+		<div className="rounded-lg border border-ink-200 bg-card px-3 py-2">
+			<div className="text-xs font-medium text-ink-700">Pooled accounts</div>
+			<div className="flex items-center gap-4 text-xs text-ink-600 mt-0.5">
+				{critical > 0 && <span className="text-brick-600 font-medium">{critical} critical</span>}
+				{warning  > 0 && <span className="text-ember-600 font-medium">{warning} warning</span>}
+				<span className="text-gold-700">{healthy} healthy</span>
+				<span className="text-ink-600">/ {accounts.length} total</span>
 			</div>
 		</div>
 	);
@@ -2757,17 +2758,17 @@ export default function StudioClaudeQuota() {
 			)}
 			<header className="flex flex-wrap items-center justify-between gap-2">
 				<div>
-					<h1 className="text-base font-medium flex items-center gap-2">
+					<h1 className="text-read font-medium flex items-center gap-2">
 						<Zap className="w-4 h-4 text-gold-600" />
 						Token Dashboard
 					</h1>
-					<p className="text-xs text-slate-400 mt-0.5">
+					<p className="text-xs text-ink-600 mt-0.5">
 						Live 5h / 7d quota across all org accounts.
 					</p>
 				</div>
 				<div className="flex flex-wrap items-center gap-3">
 					{lastFetch && (
-						<span className="text-[11px] text-slate-400">
+						<span className="text-micro text-ink-600">
 							updated {fmtTs(lastFetch.toISOString())}
 						</span>
 					)}
@@ -2781,7 +2782,7 @@ export default function StudioClaudeQuota() {
 					<button
 						onClick={() => load()}
 						disabled={loading}
-						className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-gold-700 transition disabled:opacity-50"
+						className="inline-flex items-center gap-1.5 text-xs text-ink-600 hover:text-gold-700 transition disabled:opacity-50"
 					>
 						<RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
 						refresh
@@ -2791,7 +2792,7 @@ export default function StudioClaudeQuota() {
 
 			{/* Two tabs: what the serving paths are doing (Overview) vs who/what is
 			    in the pool (Users / Keys). The choice is remembered per browser. */}
-			<div className="flex gap-1 border-b border-slate-200 text-xs" role="tablist">
+			<div className="flex gap-1 border-b border-ink-200 text-xs" role="tablist">
 				{([['overview', 'Overview'], ['users', 'Users / Keys']] as const).map(([id, label]) => (
 					<button
 						key={id}
@@ -2799,7 +2800,7 @@ export default function StudioClaudeQuota() {
 						aria-selected={tab === id}
 						onClick={() => pickTab(id)}
 						className={`-mb-px border-b-2 px-3 py-1.5 font-medium transition ${
-							tab === id ? 'border-gold-600 text-slate-900' : 'border-transparent text-slate-500 hover:text-slate-800'
+							tab === id ? 'border-gold-600 text-ink-900' : 'border-transparent text-ink-600 hover:text-ink-800'
 						}`}
 					>
 						{label}
@@ -2808,7 +2809,7 @@ export default function StudioClaudeQuota() {
 			</div>
 
 			{error ? (
-				<div className="text-sm rounded border border-rose-200 bg-rose-50 text-rose-800 px-3 py-2">
+				<div className="text-sm rounded border border-brick-200 bg-brick-50 text-brick-800 px-3 py-2">
 					{error}
 				</div>
 			) : null}
@@ -2821,26 +2822,26 @@ export default function StudioClaudeQuota() {
 						{accounts && accounts.length > 0 && <SummaryBar accounts={accounts} />}
 					</div>
 					<section className="space-y-2">
-						<h2 className="text-sm font-medium text-slate-800">
+						<h2 className="text-sm font-medium text-ink-800">
 							Claude pool accounts
 							{accounts && (
-								<span className="ml-2 text-[11px] font-normal text-slate-400">
+								<span className="ml-2 text-micro font-normal text-ink-600">
 									{accounts.length} account{accounts.length === 1 ? '' : 's'} · add with "Add account" above
 								</span>
 							)}
 						</h2>
 						{accounts === null && !error ? (
-							<div className="text-sm text-slate-500 italic flex items-center gap-2">
+							<div className="text-sm text-ink-600 italic flex items-center gap-2">
 								<Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…
 							</div>
 						) : accounts && accounts.length === 0 ? (
-							<div className="rounded-lg border border-slate-200 bg-white p-6 text-center">
-								<CheckCircle className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-								<p className="text-sm text-slate-500">No accounts have connected a Claude token yet.</p>
-								<p className="text-xs text-slate-400 mt-1">Click "Add account" above and paste each user's Claude Code OAuth token.</p>
+							<div className="rounded-lg border border-ink-200 bg-card p-6 text-center">
+								<CheckCircle className="w-8 h-8 text-ink-600 mx-auto mb-2" />
+								<p className="text-sm text-ink-600">No accounts have connected a Claude token yet.</p>
+								<p className="text-xs text-ink-600 mt-1">Click "Add account" above and paste each user's Claude Code OAuth token.</p>
 							</div>
 						) : accounts ? (
-							<div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100">
+							<div className="rounded-lg border border-ink-200 bg-card divide-y divide-ink-100">
 								{accounts.map((a) => (
 									<AccountRow
 										key={a.email}
@@ -2883,10 +2884,10 @@ export default function StudioClaudeQuota() {
 				</>
 			)}
 
-			<p className="text-[11px] text-slate-400">
+			<p className="text-micro text-ink-600">
 				Setup + full guide: <a href="/docs/claude" className="text-gold-700 hover:underline">/docs/claude</a>.
 				Recorded sessions: <a href="/claude-sessions" className="text-gold-700 hover:underline">/claude-sessions</a>.
-				Mint a <code className="font-mono bg-slate-100 px-1 rounded">claude:proxy</code> PAT at <a href="/dashboard/tokens" className="text-gold-700 hover:underline">/dashboard/tokens</a>.
+				Mint a <code className="font-mono bg-ink-100 px-1 rounded">claude:proxy</code> PAT at <a href="/dashboard/tokens" className="text-gold-700 hover:underline">/dashboard/tokens</a>.
 			</p>
 		</div>
 	);

@@ -32,12 +32,12 @@ function fmtTs(iso: string): string {
 }
 
 function Json({ value }: { value: unknown }) {
-	if (value === null || value === undefined) return <span className="text-slate-400 text-xs italic">none</span>;
+	if (value === null || value === undefined) return <span className="text-ink-600 text-xs italic">none</span>;
 	let text: string;
 	if (typeof value === 'string') text = value;
 	else text = JSON.stringify(value, null, 2);
 	return (
-		<pre className="text-[11px] font-mono bg-slate-900 text-slate-200 rounded px-3 py-2 overflow-x-auto max-h-96 overflow-y-auto whitespace-pre-wrap break-words">
+		<pre className="text-micro font-mono bg-ink-900 text-ink-200 rounded px-3 py-2 overflow-x-auto max-h-96 overflow-y-auto whitespace-pre-wrap break-words">
 			{text}
 		</pre>
 	);
@@ -83,9 +83,9 @@ function ResponseView({ response, stream }: { response: unknown; stream: boolean
 	// bytes > 127 with U+FFFD. The first byte of gzip magic (0x1f) is still intact.
 	if (typeof response === 'string' && response.charCodeAt(0) === 0x1f) {
 		return (
-			<div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+			<div className="text-micro text-ember-700 bg-ember-50 border border-ember-200 rounded px-3 py-2">
 				Compressed recording (pre-v0.1.5 proxy) — raw bytes not displayable.
-				<button onClick={() => setShowRaw((v) => !v)} className="ml-2 underline text-amber-600">
+				<button onClick={() => setShowRaw((v) => !v)} className="ml-2 underline text-ember-600">
 					{showRaw ? 'hide' : 'show raw'}
 				</button>
 				{showRaw && <Json value={response} />}
@@ -100,25 +100,25 @@ function ResponseView({ response, stream }: { response: unknown; stream: boolean
 			return (
 				<div className="space-y-2">
 					{parsed.thinking && (
-						<div className="rounded border border-indigo-100 bg-indigo-50">
+						<div className="rounded border border-plum-100 bg-plum-50">
 							<button
 								onClick={() => setShowThinking((v) => !v)}
-								className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-[10px] text-indigo-600 hover:bg-indigo-100"
+								className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-nano text-plum-600 hover:bg-plum-100"
 							>
 								<span className="font-medium">thinking block</span>
 								<span className="ml-auto opacity-60">{showThinking ? '▲' : '▼'}</span>
 							</button>
 							{showThinking && (
-								<pre className="text-[11px] font-mono bg-indigo-900 text-indigo-200 rounded-b px-3 py-2 overflow-x-auto max-h-72 overflow-y-auto whitespace-pre-wrap break-words">
+								<pre className="text-micro font-mono bg-plum-900 text-plum-200 rounded-b px-3 py-2 overflow-x-auto max-h-72 overflow-y-auto whitespace-pre-wrap break-words">
 									{parsed.thinking}
 								</pre>
 							)}
 						</div>
 					)}
-					<pre className="text-[11px] font-mono bg-slate-900 text-slate-200 rounded px-3 py-2 overflow-x-auto max-h-96 overflow-y-auto whitespace-pre-wrap break-words">
-						{parsed.text || <span className="text-slate-500 italic">(no text blocks)</span>}
+					<pre className="text-micro font-mono bg-ink-900 text-ink-200 rounded px-3 py-2 overflow-x-auto max-h-96 overflow-y-auto whitespace-pre-wrap break-words">
+						{parsed.text || <span className="text-ink-600 italic">(no text blocks)</span>}
 					</pre>
-					<button onClick={() => setShowRaw((v) => !v)} className="text-[10px] text-slate-400 hover:text-slate-700">
+					<button onClick={() => setShowRaw((v) => !v)} className="text-nano text-ink-600 hover:text-ink-700">
 						{showRaw ? 'hide raw SSE ▲' : 'show raw SSE ▼'}
 					</button>
 					{showRaw && <Json value={response} />}
@@ -133,39 +133,39 @@ function ResponseView({ response, stream }: { response: unknown; stream: boolean
 function TurnBlock({ turn }: { turn: ClaudeSessionDetail['turns'][number] }) {
 	const [open, setOpen] = useState(false);
 	return (
-		<div className="rounded border border-slate-200">
+		<div className="rounded border border-ink-200">
 			<button
 				onClick={() => setOpen((o) => !o)}
-				className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-50"
+				className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-ink-50"
 			>
-				<ChevronRight className={`w-3.5 h-3.5 text-slate-400 transition-transform ${open ? 'rotate-90' : ''}`} />
-				<span className="text-xs font-medium text-slate-700">turn {turn.turn_index + 1}</span>
-				<span className="text-[10px] text-slate-400">{turn.model}</span>
-				{turn.stream && <span className="text-[10px] bg-slate-100 text-slate-500 px-1 rounded">SSE</span>}
+				<ChevronRight className={`w-3.5 h-3.5 text-ink-600 transition-transform ${open ? 'rotate-90' : ''}`} />
+				<span className="text-xs font-medium text-ink-700">turn {turn.turn_index + 1}</span>
+				<span className="text-nano text-ink-600">{turn.model}</span>
+				{turn.stream && <span className="text-nano bg-ink-100 text-ink-600 px-1 rounded">SSE</span>}
 				{turn.tool_use_count > 0 && (
-					<span className="text-[10px] bg-indigo-50 text-indigo-500 px-1 rounded">{turn.tool_use_count} tool</span>
+					<span className="text-nano bg-plum-50 text-plum-600 px-1 rounded">{turn.tool_use_count} tool</span>
 				)}
-				<span className="ml-auto text-[10px] font-mono text-slate-500">
+				<span className="ml-auto text-nano font-mono text-ink-600">
 					{turn.input_tokens}in / {turn.output_tokens}out · {turn.duration_ms}ms
 				</span>
-				{turn.truncated && <span className="text-[10px] text-amber-500">truncated</span>}
+				{turn.truncated && <span className="text-nano text-ember-600">truncated</span>}
 			</button>
 			{open && (
 				<div className="px-3 pb-3 space-y-2">
 					<div>
-						<div className="text-[10px] uppercase tracking-wide text-slate-400 mb-1">
+						<div className="text-nano uppercase tracking-wide text-ink-600 mb-1">
 							new messages this turn
 						</div>
 						<Json value={turn.new_messages} />
 					</div>
 					<div>
-						<div className="text-[10px] uppercase tracking-wide text-slate-400 mb-1">
+						<div className="text-nano uppercase tracking-wide text-ink-600 mb-1">
 							request params (system / tools / sampling)
 						</div>
 						<Json value={turn.request_meta} />
 					</div>
 					<div>
-						<div className="text-[10px] uppercase tracking-wide text-slate-400 mb-1">response</div>
+						<div className="text-nano uppercase tracking-wide text-ink-600 mb-1">response</div>
 						<ResponseView response={turn.response} stream={turn.stream} />
 					</div>
 				</div>
@@ -296,11 +296,11 @@ export default function StudioClaudeSessions() {
 		<div className="space-y-3 max-w-5xl mx-auto">
 			<header className="flex items-center justify-between">
 				<div>
-					<h1 className="text-base font-medium flex items-center gap-2">
+					<h1 className="text-read font-medium flex items-center gap-2">
 						<MessageSquare className="w-4 h-4 text-gold-600" />
 						Claude pool sessions
 					</h1>
-					<p className="text-xs text-slate-400 mt-0.5">
+					<p className="text-xs text-ink-600 mt-0.5">
 						Conversations recorded through <code className="font-mono">lum.id/claude</code> — full context, tools, and responses.
 					</p>
 				</div>
@@ -308,50 +308,50 @@ export default function StudioClaudeSessions() {
 					{recording !== null && (
 						<button
 							onClick={toggleRecording}
-							className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-900"
+							className="inline-flex items-center gap-1.5 text-xs text-ink-600 hover:text-ink-900"
 							title="Recording is on by default; turn it off to stop storing your sessions."
 						>
-							<Circle className={`w-3 h-3 ${recording ? 'fill-emerald-500 text-emerald-500' : 'fill-slate-300 text-slate-300'}`} />
+							<Circle className={`w-3 h-3 ${recording ? 'fill-gold-500 text-gold-700' : 'fill-ink-300 text-ink-600'}`} />
 							recording {recording ? 'on' : 'off'}
 						</button>
 					)}
 					{canAdmin && (
 						<button
 							onClick={() => { setSelected(null); setSearch(''); setUserFilter(''); setAdmin((a) => !a); }}
-							className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition ${admin ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+							className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition ${admin ? 'border-plum-300 bg-plum-50 text-plum-700' : 'border-ink-200 text-ink-600 hover:bg-ink-50'}`}
 						>
 							<Shield className="w-3.5 h-3.5" />
 							{admin ? 'all users' : 'my sessions'}
 						</button>
 					)}
 					<button onClick={load} disabled={loading}
-						className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-gold-700 disabled:opacity-50">
+						className="inline-flex items-center gap-1.5 text-xs text-ink-600 hover:text-gold-700 disabled:opacity-50">
 						<RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> refresh
 					</button>
 				</div>
 			</header>
 
 			{error && (
-				<div className="text-sm rounded border border-rose-200 bg-rose-50 text-rose-800 px-3 py-2">{error}</div>
+				<div className="text-sm rounded border border-brick-200 bg-brick-50 text-brick-800 px-3 py-2">{error}</div>
 			)}
 
 			{/* Search + user filter */}
 			<div className="flex items-center gap-2">
 				<div className="relative flex-1 max-w-sm">
-					<Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+					<Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-600 pointer-events-none" />
 					<input
 						type="text"
 						value={search}
 						onChange={(e) => setSearch(e.target.value)}
 						placeholder="Search title, model…"
-						className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-slate-300 bg-white"
+						className="w-full pl-8 pr-3 py-1.5 text-xs border border-ink-200 rounded-md focus:outline-none focus:ring-1 focus:ring-ink-300 bg-card"
 					/>
 				</div>
 				{admin && userOptions.length > 0 && (
 					<select
 						value={userFilter}
 						onChange={(e) => setUserFilter(e.target.value)}
-						className="text-xs border border-slate-200 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-slate-300 max-w-[200px] truncate"
+						className="text-xs border border-ink-200 rounded-md px-2 py-1.5 bg-card focus:outline-none focus:ring-1 focus:ring-ink-300 max-w-[200px] truncate"
 					>
 						<option value="">All users</option>
 						{userOptions.map((u) => (
@@ -362,7 +362,7 @@ export default function StudioClaudeSessions() {
 				{(search || userFilter) && (
 					<button
 						onClick={() => { setSearch(''); setUserFilter(''); }}
-						className="text-xs text-slate-400 hover:text-slate-700"
+						className="text-xs text-ink-600 hover:text-ink-700"
 					>
 						clear
 					</button>
@@ -371,13 +371,13 @@ export default function StudioClaudeSessions() {
 
 			<div className="grid grid-cols-1 md:grid-cols-[minmax(0,340px)_1fr] gap-4">
 				{/* session list */}
-				<div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100 max-h-[70vh] overflow-y-auto">
+				<div className="rounded-lg border border-ink-200 bg-card divide-y divide-ink-100 max-h-[70vh] overflow-y-auto">
 					{filtered === null ? (
-						<div className="p-4 text-sm text-slate-500 flex items-center gap-2">
+						<div className="p-4 text-sm text-ink-600 flex items-center gap-2">
 							<Loader2 className="w-3.5 h-3.5 animate-spin" /> loading…
 						</div>
 					) : filtered.length === 0 ? (
-						<div className="p-6 text-center text-sm text-slate-500">
+						<div className="p-6 text-center text-sm text-ink-600">
 							{sessions?.length === 0
 								? "No recorded sessions yet. Use the pool from your terminal and they'll appear here."
 								: 'No sessions match your filter.'}
@@ -386,13 +386,13 @@ export default function StudioClaudeSessions() {
 						filtered.map((s) => (
 							<div
 								key={s.conv_key}
-								className={`group flex items-start gap-1 px-3 py-2 hover:bg-slate-50 border-l-2 transition-colors ${selected?.session.conv_key === s.conv_key ? 'bg-gold-50 border-gold-400' : 'border-transparent'}`}
+								className={`group flex items-start gap-1 px-3 py-2 hover:bg-ink-50 border-l-2 transition-colors ${selected?.session.conv_key === s.conv_key ? 'bg-gold-50 border-gold-400' : 'border-transparent'}`}
 							>
 								<button onClick={() => openSession(s.conv_key)} className="flex-1 min-w-0 text-left">
-									<div className="text-xs font-medium text-slate-800 truncate">{s.title || '(untitled)'}</div>
-									<div className="text-[10px] text-slate-400 flex items-center gap-2 mt-0.5">
+									<div className="text-xs font-medium text-ink-800 truncate">{s.title || '(untitled)'}</div>
+									<div className="text-nano text-ink-600 flex items-center gap-2 mt-0.5">
 										{(s.user_email || s.user_sub) && (
-											<span className="truncate max-w-[130px] text-slate-500 font-medium">{s.user_email || s.user_sub}</span>
+											<span className="truncate max-w-[130px] text-ink-600 font-medium">{s.user_email || s.user_sub}</span>
 										)}
 										<span>{s.model}</span>
 										<span>{s.turn_count} turns</span>
@@ -402,7 +402,7 @@ export default function StudioClaudeSessions() {
 								</button>
 								<button
 									onClick={() => removeSession(s.conv_key)}
-									className="shrink-0 mt-0.5 text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition"
+									className="shrink-0 mt-0.5 text-ink-600 hover:text-brick-600 opacity-0 group-hover:opacity-100 transition"
 									title="Delete session"
 								>
 									<Trash2 className="w-3.5 h-3.5" />
@@ -415,14 +415,14 @@ export default function StudioClaudeSessions() {
 				{/* detail */}
 				<div className="min-w-0">
 					{detailLoading ? (
-						<div className="p-4 text-sm text-slate-500 flex items-center gap-2">
+						<div className="p-4 text-sm text-ink-600 flex items-center gap-2">
 							<Loader2 className="w-3.5 h-3.5 animate-spin" /> loading transcript…
 						</div>
 					) : selected ? (
 						<div className="space-y-2">
 							<div className="flex items-center justify-between gap-2">
-								<div className="text-xs text-slate-500 min-w-0">
-									<span className="font-medium text-slate-700">{selected.session.title || '(untitled)'}</span>
+								<div className="text-xs text-ink-600 min-w-0">
+									<span className="font-medium text-ink-700">{selected.session.title || '(untitled)'}</span>
 									{' · '}{selected.session.model}{' · '}{selected.session.turn_count} turns{' · '}
 									{fmtTokens(selected.session.input_tokens)} in / {fmtTokens(selected.session.output_tokens)} out
 									{selected.session.tool_use_count > 0 && ` · ${selected.session.tool_use_count} tool calls`}
@@ -452,7 +452,7 @@ export default function StudioClaudeSessions() {
 										}
 									}}
 									disabled={downloading}
-									className="shrink-0 inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800 border border-slate-200 rounded px-2 py-1 disabled:opacity-50"
+									className="shrink-0 inline-flex items-center gap-1 text-xs text-ink-600 hover:text-ink-800 border border-ink-200 rounded px-2 py-1 disabled:opacity-50"
 									title="Download the FULL session as JSON"
 								>
 									{downloading
@@ -467,13 +467,13 @@ export default function StudioClaudeSessions() {
 										type="button"
 										onClick={loadEarlier}
 										disabled={loadingEarlier}
-										className="inline-flex items-center gap-1.5 border border-slate-200 rounded px-2.5 py-1 text-slate-600 hover:text-slate-900 hover:bg-slate-50 disabled:opacity-50"
+										className="inline-flex items-center gap-1.5 border border-ink-200 rounded px-2.5 py-1 text-ink-600 hover:text-ink-900 hover:bg-ink-50 disabled:opacity-50"
 									>
 										{loadingEarlier
 											? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> loading…</>
 											: <>Load earlier turns</>}
 									</button>
-									<span className="text-slate-400">
+									<span className="text-ink-600">
 										showing {selected.turns.length} of {selected.total_turns ?? selected.turns.length}
 										{selected.remaining ? ` · ${selected.remaining} older` : ''}
 									</span>
@@ -482,7 +482,7 @@ export default function StudioClaudeSessions() {
 							{selected.turns.map((t) => <TurnBlock key={t.turn_index} turn={t} />)}
 						</div>
 					) : (
-						<div className="p-6 text-center text-sm text-slate-400 border border-dashed border-slate-200 rounded-lg">
+						<div className="p-6 text-center text-sm text-ink-600 border border-dashed border-ink-200 rounded-lg">
 							Select a session to view its full transcript.
 						</div>
 					)}

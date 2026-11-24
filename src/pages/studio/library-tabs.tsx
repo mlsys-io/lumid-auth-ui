@@ -35,10 +35,10 @@ export default function StudioLibraryTabs() {
 									to={to}
 									className={({ isActive }) =>
 										cn(
-											"inline-flex items-center gap-1.5 px-3 py-1.5 text-[12.5px] font-medium rounded-lg border transition-colors",
+											"inline-flex items-center gap-1.5 px-3 py-1.5 text-meta font-medium rounded-lg border transition-colors",
 											isActive
 												? "border-gold-300 bg-gold-50 text-gold-900"
-												: "border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-800",
+												: "border-ink-200 bg-card text-ink-600 hover:bg-ink-50 hover:text-ink-800",
 										)
 									}
 								>

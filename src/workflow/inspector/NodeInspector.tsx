@@ -85,11 +85,11 @@ export function NodeInspector({
 		<aside
 			className={
 				full
-					? "flex h-full w-full flex-col bg-white"
-					: "flex h-full w-[320px] flex-col border-l border-slate-200 bg-white max-sm:absolute max-sm:inset-0 max-sm:z-20 max-sm:w-full max-sm:border-l-0"
+					? "flex h-full w-full flex-col bg-card"
+					: "flex h-full w-[320px] flex-col border-l border-ink-200 bg-card max-sm:absolute max-sm:inset-0 max-sm:z-20 max-sm:w-full max-sm:border-l-0"
 			}
 		>
-			<header className="flex items-start gap-2 border-b border-slate-100 px-3 py-2.5">
+			<header className="flex items-start gap-2 border-b border-ink-100 px-3 py-2.5">
 				<span
 					className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md"
 					style={{ background: withAlpha(accent, 0.1), color: accent }}
@@ -101,7 +101,7 @@ export function NodeInspector({
 						<input
 							autoFocus
 							defaultValue={node.label}
-							className="w-full rounded border border-slate-200 px-1 py-0.5 text-[13px] font-medium"
+							className="w-full rounded border border-ink-200 px-1 py-0.5 text-meta font-medium"
 							onBlur={(e) => { setRenaming(false); if (e.target.value !== node.label) onRename(e.target.value); }}
 							onKeyDown={(e) => {
 								if (e.key === "Enter") (e.target as HTMLInputElement).blur();
@@ -113,14 +113,14 @@ export function NodeInspector({
 							type="button"
 							disabled={!onRename || readOnly}
 							onClick={() => setRenaming(true)}
-							className="max-w-full truncate text-left text-[13px] font-medium text-slate-900 disabled:cursor-default"
+							className="max-w-full truncate text-left text-meta font-medium text-ink-900 disabled:cursor-default"
 							title={onRename && !readOnly ? "Rename" : node.label}
 						>
 							{node.label}
 						</button>
 					)}
-					<div className="flex items-center gap-1.5 text-[10px] text-slate-400">
-						<span className="rounded bg-slate-100 px-1 py-px font-mono">{specKey(node)}</span>
+					<div className="flex items-center gap-1.5 text-nano text-ink-600">
+						<span className="rounded bg-ink-100 px-1 py-px font-mono">{specKey(node)}</span>
 						{node.status && node.status !== "pending" && (
 							<span className="inline-flex items-center gap-1">
 								<span className="h-1.5 w-1.5 rounded-full" style={{ background: STATUS_COLOR[node.status] }} />
@@ -130,20 +130,20 @@ export function NodeInspector({
 					</div>
 				</div>
 				{onClose && (
-					<button type="button" onClick={onClose} aria-label="Close" className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+					<button type="button" onClick={onClose} aria-label="Close" className="rounded p-1 text-ink-600 hover:bg-ink-100 hover:text-ink-700">
 						<X size={14} />
 					</button>
 				)}
 			</header>
 
 			{lockReason && (
-				<div className="flex items-start gap-1.5 border-b border-amber-100 bg-amber-50 px-3 py-2 text-[10px] leading-snug text-amber-800">
+				<div className="flex items-start gap-1.5 border-b border-ember-100 bg-ember-50 px-3 py-2 text-nano leading-snug text-ember-800">
 					<Lock size={11} className="mt-px flex-shrink-0" />
 					<span>{lockReason}</span>
 				</div>
 			)}
 
-			<nav className="flex gap-0.5 border-b border-slate-100 px-2 pt-1.5">
+			<nav className="flex gap-0.5 border-b border-ink-100 px-2 pt-1.5">
 				{([
 					["params", "Parameters"],
 					["run", "Run"],
@@ -153,13 +153,13 @@ export function NodeInspector({
 						key={k}
 						type="button"
 						onClick={() => setTab(k)}
-						className={`rounded-t px-2 py-1 text-[11px] transition-colors ${
-							tab === k ? "border-b-2 border-[rgb(176_143_69)] font-medium text-slate-900" : "text-slate-500 hover:text-slate-800"
+						className={`rounded-t px-2 py-1 text-micro transition-colors ${
+							tab === k ? "border-b-2 border-gold-500 font-medium text-ink-900" : "text-ink-600 hover:text-ink-800"
 						}`}
 					>
 						{label}
 						{k === "params" && errors.length > 0 && (
-							<span className="ml-1 text-rose-500">{errors.length}</span>
+							<span className="ml-1 text-brick-600">{errors.length}</span>
 						)}
 					</button>
 				))}
@@ -170,13 +170,13 @@ export function NodeInspector({
 					<div className={full ? "max-w-3xl space-y-5" : "space-y-4"}>
 						{spec ? (
 							<>
-								<p className="text-[11px] leading-snug text-slate-500">{spec.summary}</p>
+								<p className="text-micro leading-snug text-ink-600">{spec.summary}</p>
 								{spec.sections.map((section) => {
 									const fields = section.fields.filter((f) => !f.when || f.when(params));
 									if (!fields.length) return null;
 									return (
 										<section key={section.title} className="space-y-3">
-											<h4 className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{section.title}</h4>
+											<h4 className="text-nano font-semibold uppercase tracking-wider text-ink-600">{section.title}</h4>
 											<div className={full ? "grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2" : "space-y-3"}>
 											{fields.map((f) => (
 												<FieldRow
@@ -197,8 +197,8 @@ export function NodeInspector({
 						) : (
 							// No schema for this kind. Say so and hand over the raw
 							// subtree rather than showing an empty panel.
-							<div className="flex items-start gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2 py-2 text-[10px] leading-snug text-slate-600">
-								<AlertTriangle size={11} className="mt-px flex-shrink-0 text-amber-500" />
+							<div className="flex items-start gap-1.5 rounded-md border border-ink-200 bg-ink-50 px-2 py-2 text-nano leading-snug text-ink-600">
+								<AlertTriangle size={11} className="mt-px flex-shrink-0 text-ember-600" />
 								<span>
 									No parameter schema for <span className="font-mono">{specKey(node)}</span> yet — edit it on the YAML tab, where nothing is hidden.
 								</span>
@@ -207,10 +207,10 @@ export function NodeInspector({
 
 						{extras.length > 0 && (
 							<Advanced count={extras.length}>
-								<pre className="whitespace-pre-wrap break-words rounded bg-slate-50 p-2 font-mono text-[10px] text-slate-600">
+								<pre className="whitespace-pre-wrap break-words rounded bg-ink-50 p-2 font-mono text-nano text-ink-600">
 									{safeYaml(Object.fromEntries(extras.map((k) => [k, params[k]])))}
 								</pre>
-								<p className="mt-1 text-[10px] leading-snug text-slate-400">
+								<p className="mt-1 text-nano leading-snug text-ink-600">
 									Set on this node but not described by its schema. Kept exactly as written — edit on the YAML tab.
 								</p>
 							</Advanced>
@@ -221,37 +221,37 @@ export function NodeInspector({
 				{tab === "run" && (
 					runSlot ?? (
 						node.run || node.status ? (
-							<dl className="space-y-2 text-[11px]">
+							<dl className="space-y-2 text-micro">
 								<Row label="status">{node.status ?? "—"}</Row>
 								<Row label="duration">{node.run?.duration_s !== undefined ? `${node.run.duration_s.toFixed(2)}s` : "—"}</Row>
 								{node.run?.error && (
 									<div>
-										<dt className="text-[10px] uppercase tracking-wide text-slate-400">error</dt>
-										<dd className="mt-0.5 whitespace-pre-wrap break-words rounded bg-rose-50 p-2 font-mono text-[10px] text-rose-700">{node.run.error}</dd>
+										<dt className="text-nano uppercase tracking-wide text-ink-600">error</dt>
+										<dd className="mt-0.5 whitespace-pre-wrap break-words rounded bg-brick-50 p-2 font-mono text-nano text-brick-700">{node.run.error}</dd>
 									</div>
 								)}
 								{node.run?.summary && (
 									<div>
-										<dt className="text-[10px] uppercase tracking-wide text-slate-400">output</dt>
-										<dd className="mt-0.5 whitespace-pre-wrap break-words rounded bg-slate-50 p-2 font-mono text-[10px] text-slate-600">{node.run.summary}</dd>
+										<dt className="text-nano uppercase tracking-wide text-ink-600">output</dt>
+										<dd className="mt-0.5 whitespace-pre-wrap break-words rounded bg-ink-50 p-2 font-mono text-nano text-ink-600">{node.run.summary}</dd>
 									</div>
 								)}
 							</dl>
 						) : (
-							<p className="text-[11px] text-slate-400">This node has not run in the selected cycle.</p>
+							<p className="text-micro text-ink-600">This node has not run in the selected cycle.</p>
 						)
 					)
 				)}
 
 				{tab === "yaml" && (
-					<pre className="whitespace-pre-wrap break-words rounded bg-slate-50 p-2 font-mono text-[10px] leading-relaxed text-slate-700">
+					<pre className="whitespace-pre-wrap break-words rounded bg-ink-50 p-2 font-mono text-nano leading-relaxed text-ink-700">
 						{safeYaml(params)}
 					</pre>
 				)}
 			</div>
 
 			{errors.length > 0 && tab === "params" && (
-				<footer className="border-t border-rose-100 bg-rose-50 px-3 py-1.5 text-[10px] text-rose-700">
+				<footer className="border-t border-brick-100 bg-brick-50 px-3 py-1.5 text-nano text-brick-700">
 					{errors.length} field{errors.length === 1 ? "" : "s"} need attention before this will run.
 				</footer>
 			)}
@@ -262,8 +262,8 @@ export function NodeInspector({
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
 	return (
 		<div className="flex items-baseline justify-between gap-2">
-			<dt className="text-[10px] uppercase tracking-wide text-slate-400">{label}</dt>
-			<dd className="font-mono text-[11px] text-slate-700">{children}</dd>
+			<dt className="text-nano uppercase tracking-wide text-ink-600">{label}</dt>
+			<dd className="font-mono text-micro text-ink-700">{children}</dd>
 		</div>
 	);
 }
@@ -275,7 +275,7 @@ function Advanced({ count, children }: { count: number; children: React.ReactNod
 			<button
 				type="button"
 				onClick={() => setOpen((v) => !v)}
-				className="flex w-full items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-600"
+				className="flex w-full items-center gap-1 text-nano font-semibold uppercase tracking-wider text-ink-600 hover:text-ink-600"
 			>
 				<ChevronDown size={11} className={`transition-transform ${open ? "" : "-rotate-90"}`} />
 				Advanced ({count})

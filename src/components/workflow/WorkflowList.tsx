@@ -77,7 +77,7 @@ function relTime(ts?: number): string {
 function Row({ loop, wf, active, onSelect, href }: WfListRow & { active: boolean; onSelect: (l: string) => void; href?: string }) {
 	const cls = cn(
 		"block w-full text-left rounded-lg border px-2.5 py-2 transition-colors",
-		active ? "border-gold-300 bg-gold-50/50" : "border-slate-200 bg-white hover:bg-slate-50",
+		active ? "border-gold-300 bg-gold-50/50" : "border-ink-200 bg-card hover:bg-ink-50",
 	);
 	// A row is a LINK when the host can name the workflow's address, so it can
 	// be opened in a new tab and reads as navigation to assistive tech.
@@ -85,11 +85,11 @@ function Row({ loop, wf, active, onSelect, href }: WfListRow & { active: boolean
 		<>
 				<div className="flex items-center gap-2 min-w-0">
 					<span className={cn("w-2 h-2 rounded-full flex-shrink-0", dotOf(wf))} />
-					<span className="text-[12.5px] font-medium text-slate-800 truncate flex-1">
+					<span className="text-meta font-medium text-ink-800 truncate flex-1">
 						{loopLabel(wf.name, loop)}
 					</span>
 					{wf.last_run_ok === false && wf.enabled !== false && (
-						<span className="text-[9px] font-medium text-rose-600 bg-rose-50 border border-rose-200 rounded-full px-1.5 flex-shrink-0" title="last run failed">{RUN_STATUS_LABEL.failed.toLowerCase()}</span>
+						<span className="text-nano font-medium text-brick-600 bg-brick-50 border border-brick-200 rounded-full px-1.5 flex-shrink-0" title="last run failed">{RUN_STATUS_LABEL.failed.toLowerCase()}</span>
 					)}
 					{/* Only render the sparkline when there ARE runs — an empty one
 					    drew a dash that read as a broken metric binding. */}
@@ -97,7 +97,7 @@ function Row({ loop, wf, active, onSelect, href }: WfListRow & { active: boolean
 						<RunSparkline spec={wf.run_spark} className="hidden xl:flex flex-shrink-0" />
 					) : null}
 				</div>
-				<div className="text-[11px] text-slate-500 mt-0.5 pl-4 truncate">
+				<div className="text-micro text-ink-600 mt-0.5 pl-4 truncate">
 					{describeSchedule(wf.trigger)}
 					{wf.enabled === false ? " · paused" : ""}
 					{wf.running ? " · running…" : ""}
@@ -109,12 +109,12 @@ function Row({ loop, wf, active, onSelect, href }: WfListRow & { active: boolean
 				{(wf.metric || wf.dataset_id) && (
 					<div className="mt-1 pl-4 flex items-center gap-1.5 flex-wrap">
 						{wf.metric && (
-							<span className="text-[11px] font-medium text-slate-600 bg-slate-100 border border-slate-200 rounded px-1.5 py-px">
+							<span className="text-micro font-medium text-ink-600 bg-ink-100 border border-ink-200 rounded px-1.5 py-px">
 								{wf.metric}
 							</span>
 						)}
 						{wf.dataset_id && (
-							<span className="text-[11px] font-mono text-slate-500 bg-white border border-slate-200 rounded px-1.5 py-px truncate max-w-[60%]">
+							<span className="text-micro font-mono text-ink-600 bg-card border border-ink-200 rounded px-1.5 py-px truncate max-w-[60%]">
 								{wf.dataset_id}
 							</span>
 						)}
@@ -159,7 +159,7 @@ export default function WorkflowList({ rows, selected, onSelect, hrefFor }: {
 					<button
 						type="button"
 						onClick={() => setShowPlumbing((v) => !v)}
-						className="w-full text-left text-[11px] text-slate-500 hover:text-slate-800 px-2.5 py-1 rounded-lg hover:bg-slate-50 transition-colors"
+						className="w-full text-left text-micro text-ink-600 hover:text-ink-800 px-2.5 py-1 rounded-lg hover:bg-ink-50 transition-colors"
 					>
 						{plumbingOpen ? "▾" : "▸"} {plumbing.length} scheduled ·{" "}
 						{plumbing.slice(0, 3).map(({ loop, wf }) => loopLabel(wf.name, loop)).join(", ")}

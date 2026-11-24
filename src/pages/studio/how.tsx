@@ -27,8 +27,8 @@ export default function StudioHow() {
 		<div className="max-w-4xl mx-auto px-1 py-2 space-y-6">
 			{/* Header */}
 			<header>
-				<h1 className="text-xl font-medium text-slate-900 tracking-tight">How Lumid works</h1>
-				<p className="text-sm text-slate-600 mt-1 leading-relaxed max-w-2xl">
+				<h1 className="text-h3 font-medium text-ink-900 tracking-tight">How Lumid works</h1>
+				<p className="text-sm text-ink-600 mt-1 leading-relaxed max-w-2xl">
 					Every app runs the same loop: you say what you want; Lumid <strong>assembles</strong> it,
 					then <strong>adapts &amp; improves</strong> it — more valuable every run.
 				</p>
@@ -42,16 +42,16 @@ export default function StudioHow() {
 
 			{/* Use-case switcher */}
 			<div className="flex items-center gap-2 flex-wrap">
-				<span className="text-[11px] tracking-[0.08em] font-medium text-slate-400 mr-1">Walk a use case</span>
+				<span className="text-micro tracking-[0.08em] font-medium text-ink-600 mr-1">Walk a use case</span>
 				{USE_CASES.map((u, i) => (
 					<button
 						key={u.id}
 						onClick={() => setSel(i)}
 						className={cn(
-							'px-3 py-1.5 rounded-lg text-[12px] border transition-all',
+							'px-3 py-1.5 rounded-lg text-caption border transition-all',
 							i === sel
 								? 'bg-gold-50 border-gold-200 text-gold-900 font-medium shadow-sm'
-								: 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-900',
+								: 'bg-card border-ink-200 text-ink-600 hover:border-ink-300 hover:text-ink-900',
 						)}
 					>
 						{u.persona}
@@ -60,9 +60,9 @@ export default function StudioHow() {
 			</div>
 
 			{/* The goal being walked */}
-			<div className="rounded-2xl border border-slate-200/70 bg-gradient-to-br from-slate-50 via-white to-slate-50 p-4">
-				<div className="text-[11px] text-slate-400 mb-0.5">the goal</div>
-				<div className="text-[15px] text-slate-900 font-medium leading-snug">“{intent.title}”</div>
+			<div className="rounded-2xl border border-ink-200/70 bg-gradient-to-br from-ink-50 via-white to-ink-50 p-4">
+				<div className="text-micro text-ink-600 mb-0.5">the goal</div>
+				<div className="text-read text-ink-900 font-medium leading-snug">“{intent.title}”</div>
 			</div>
 
 			{/* Stage 1 — Assemble */}
@@ -95,9 +95,9 @@ function GlossaryStrip() {
 	return (
 		<div className="flex flex-wrap gap-2">
 			{GLOSSARY.map(([term, def]) => (
-				<div key={term} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12px] leading-snug">
-					<span className="font-medium text-slate-900">{term}</span>
-					<span className="text-slate-500"> — {def}</span>
+				<div key={term} className="rounded-lg border border-ink-200 bg-card px-3 py-1.5 text-caption leading-snug">
+					<span className="font-medium text-ink-900">{term}</span>
+					<span className="text-ink-600"> — {def}</span>
 				</div>
 			))}
 		</div>
@@ -112,37 +112,37 @@ function Flywheel() {
 		{ icon: Sparkles, label: 'Adapt & improve', sub: 'autoresearch · align', tone: 'sky' as const },
 	];
 	return (
-		<div className="rounded-2xl border border-slate-200/70 bg-white p-4">
+		<div className="rounded-2xl border border-ink-200/70 bg-card p-4">
 			<div className="flex items-stretch gap-2">
 				{nodes.map((nd, i) => (
 					<div key={nd.label} className="flex items-stretch gap-2 flex-1">
 						<div className={cn(
 							'flex-1 rounded-xl border px-3 py-3 flex flex-col items-center text-center gap-1.5',
 							nd.tone === 'emerald' && 'border-gold-200 bg-gold-50/50',
-							nd.tone === 'sky' && 'border-sky-200 bg-sky-50/50',
-							nd.tone === 'indigo' && 'border-indigo-200 bg-indigo-50/50',
-							nd.tone === 'muted' && 'border-dashed border-slate-200 bg-slate-50/40',
+							nd.tone === 'sky' && 'border-lagoon-200 bg-lagoon-50/50',
+							nd.tone === 'indigo' && 'border-plum-200 bg-plum-50/50',
+							nd.tone === 'muted' && 'border-dashed border-ink-200 bg-ink-50/40',
 						)}>
 							<div className={cn(
 								'w-8 h-8 rounded-lg flex items-center justify-center',
 								nd.tone === 'emerald' && 'bg-gold-100 text-gold-700',
-								nd.tone === 'sky' && 'bg-sky-100 text-sky-700',
-								nd.tone === 'indigo' && 'bg-indigo-100 text-indigo-700',
-								nd.tone === 'muted' && 'bg-slate-100 text-slate-400',
+								nd.tone === 'sky' && 'bg-lagoon-100 text-lagoon-700',
+								nd.tone === 'indigo' && 'bg-plum-100 text-plum-700',
+								nd.tone === 'muted' && 'bg-ink-100 text-ink-600',
 							)}>
 								<nd.icon className="w-4 h-4" />
 							</div>
 							<div className="flex items-center gap-1.5">
-								<span className="text-[10px] tabular-nums text-slate-400">{i + 1}</span>
-								<span className={cn('text-[13px] font-medium', nd.tone === 'muted' ? 'text-slate-500' : 'text-slate-900')}>{nd.label}</span>
+								<span className="text-nano tabular-nums text-ink-600">{i + 1}</span>
+								<span className={cn('text-meta font-medium', nd.tone === 'muted' ? 'text-ink-600' : 'text-ink-900')}>{nd.label}</span>
 							</div>
-							<div className="text-[10px] text-slate-400 leading-tight">{nd.sub}</div>
+							<div className="text-nano text-ink-600 leading-tight">{nd.sub}</div>
 							{nd.tone === 'muted' && (
-								<span className="text-[9px] uppercase tracking-wide text-slate-400 border border-slate-200 rounded-full px-1.5 py-px mt-0.5">exploring</span>
+								<span className="text-nano uppercase tracking-wide text-ink-600 border border-ink-200 rounded-full px-1.5 py-px mt-0.5">exploring</span>
 							)}
 						</div>
 						{i < nodes.length - 1 && (
-							<div className="flex items-center text-slate-300"><ArrowRight className="w-4 h-4" /></div>
+							<div className="flex items-center text-ink-600"><ArrowRight className="w-4 h-4" /></div>
 						)}
 					</div>
 				))}
@@ -162,25 +162,25 @@ function StagePanel({
 }) {
 	return (
 		<section className={cn(
-			'rounded-2xl border bg-white overflow-hidden',
-			open ? 'border-dashed border-slate-200' : 'border-slate-200/70',
+			'rounded-2xl border bg-card overflow-hidden',
+			open ? 'border-dashed border-ink-200' : 'border-ink-200/70',
 		)}>
 			<div className="px-4 pt-3.5 pb-3 flex items-start gap-3">
 				<div className={cn(
 					'w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0',
 					tone === 'emerald' && 'bg-gold-100 text-gold-700',
-					tone === 'sky' && 'bg-sky-100 text-sky-700',
-					tone === 'indigo' && 'bg-indigo-100 text-indigo-700',
-					tone === 'muted' && 'bg-slate-100 text-slate-400',
+					tone === 'sky' && 'bg-lagoon-100 text-lagoon-700',
+					tone === 'indigo' && 'bg-plum-100 text-plum-700',
+					tone === 'muted' && 'bg-ink-100 text-ink-600',
 				)}>
 					<Icon className="w-4 h-4" />
 				</div>
 				<div className="flex-1 min-w-0">
 					<div className="flex items-center gap-2">
-						<span className="text-[11px] tabular-nums text-slate-400">Stage {n}</span>
-						<h2 className={cn('text-[15px] font-medium', tone === 'muted' ? 'text-slate-500' : 'text-slate-900')}>{label}</h2>
+						<span className="text-micro tabular-nums text-ink-600">Stage {n}</span>
+						<h2 className={cn('text-read font-medium', tone === 'muted' ? 'text-ink-600' : 'text-ink-900')}>{label}</h2>
 					</div>
-					<p className="text-[12px] text-slate-500 mt-0.5 leading-relaxed">{caption}</p>
+					<p className="text-caption text-ink-600 mt-0.5 leading-relaxed">{caption}</p>
 				</div>
 			</div>
 			<div className="px-4 pb-4">{children}</div>
@@ -191,7 +191,7 @@ function StagePanel({
 function StepArrow() {
 	return (
 		<div className="flex justify-center -my-3 relative z-[1]">
-			<div className="w-7 h-7 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-300">
+			<div className="w-7 h-7 rounded-full bg-card border border-ink-200 flex items-center justify-center text-ink-600">
 				<ArrowDown className="w-3.5 h-3.5" />
 			</div>
 		</div>
@@ -205,30 +205,30 @@ function AssembleBody({ assembly }: { assembly: AssemblyPiece[] }) {
 	const ai = assembly.filter((p) => p.source === 'ai').length;
 	return (
 		<div className="space-y-2.5">
-			<div className="flex items-center gap-3 text-[11px] text-slate-500">
-				<span className="inline-flex items-center gap-1"><Package className="w-3.5 h-3.5 text-slate-400" />{ws} from your workspace</span>
+			<div className="flex items-center gap-3 text-micro text-ink-600">
+				<span className="inline-flex items-center gap-1"><Package className="w-3.5 h-3.5 text-ink-600" />{ws} from your workspace</span>
 				<span className="inline-flex items-center gap-1"><Wand2 className="w-3.5 h-3.5 text-gold-500" />{ai} generated by AI</span>
 			</div>
 			<div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
 				{assembly.map((p) => (
-					<div key={p.name} className="rounded-lg border border-slate-200/70 bg-white px-3 py-2 flex items-start gap-2.5">
+					<div key={p.name} className="rounded-lg border border-ink-200/70 bg-card px-3 py-2 flex items-start gap-2.5">
 						<div className={cn(
 							'w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0',
-							p.source === 'ai' ? 'bg-gold-50 text-gold-600' : 'bg-slate-100 text-slate-500',
+							p.source === 'ai' ? 'bg-gold-50 text-gold-600' : 'bg-ink-100 text-ink-600',
 						)}>
 							{p.source === 'ai' ? <Wand2 className="w-3.5 h-3.5" /> : <Package className="w-3.5 h-3.5" />}
 						</div>
 						<div className="flex-1 min-w-0">
 							<div className="flex items-center gap-1.5">
-								<span className="text-[13px] font-medium text-slate-900 leading-tight">{p.name}</span>
+								<span className="text-meta font-medium text-ink-900 leading-tight">{p.name}</span>
 								<span className={cn(
-									'text-[9px] uppercase tracking-wide rounded-full px-1.5 py-px border',
+									'text-nano uppercase tracking-wide rounded-full px-1.5 py-px border',
 									p.source === 'ai'
 										? 'text-gold-700 bg-gold-50 border-gold-100'
-										: 'text-slate-500 bg-slate-50 border-slate-200',
+										: 'text-ink-600 bg-ink-50 border-ink-200',
 								)}>{p.source === 'ai' ? 'AI' : 'workspace'}</span>
 							</div>
-							{p.role && <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">{p.role}</div>}
+							{p.role && <div className="text-micro text-ink-600 mt-0.5 leading-snug">{p.role}</div>}
 						</div>
 					</div>
 				))}
@@ -248,10 +248,10 @@ function AdaptBody({ intent }: { intent: DemoIntent }) {
 			{deltas.length > 0 && (
 				<div className="flex flex-wrap gap-2">
 					{deltas.map((s) => (
-						<div key={s.label} className="rounded-lg border border-sky-100 bg-sky-50/40 px-3 py-1.5">
-							<div className="text-[10px] text-slate-500">{s.label}</div>
-							<div className="text-[14px] font-medium text-slate-900 leading-none mt-0.5">{s.value}</div>
-							<div className="text-[10px] text-gold-700 mt-0.5 inline-flex items-center gap-0.5">
+						<div key={s.label} className="rounded-lg border border-lagoon-100 bg-lagoon-50/40 px-3 py-1.5">
+							<div className="text-nano text-ink-600">{s.label}</div>
+							<div className="text-body font-medium text-ink-900 leading-none mt-0.5">{s.value}</div>
+							<div className="text-nano text-gold-700 mt-0.5 inline-flex items-center gap-0.5">
 								<TrendingUp className="w-3 h-3" />{s.delta}
 							</div>
 						</div>
@@ -260,15 +260,15 @@ function AdaptBody({ intent }: { intent: DemoIntent }) {
 			)}
 
 			{/* What it learned — narrative bullets tagged by axis */}
-			<div className="text-[11px] text-slate-400 leading-snug">
+			<div className="text-micro text-ink-600 leading-snug">
 				Each improvement is tagged by what it tuned — its axis:
 			</div>
 			<ul className="space-y-1.5">
 				{narrative.map((b, i) => {
 					const meta = AXIS_META[b.axis];
 					return (
-						<li key={i} className="flex items-start gap-2.5 text-[13px] text-slate-700">
-							<span className={cn('mt-0.5 inline-flex items-center px-1.5 py-0.5 rounded-md border text-[10px] font-medium flex-shrink-0', meta?.tone)}>
+						<li key={i} className="flex items-start gap-2.5 text-meta text-ink-700">
+							<span className={cn('mt-0.5 inline-flex items-center px-1.5 py-0.5 rounded-md border text-nano font-medium flex-shrink-0', meta?.tone)}>
 								{meta?.label ?? b.axis}
 							</span>
 							<span className="flex-1 min-w-0 leading-snug">{b.text}</span>
@@ -280,7 +280,7 @@ function AdaptBody({ intent }: { intent: DemoIntent }) {
 			{intent.detail && (
 				<Link
 					to={`/studio/intents/${intent.id}`}
-					className="inline-flex items-center gap-1 text-[12px] text-gold-700 hover:text-gold-800 hover:underline"
+					className="inline-flex items-center gap-1 text-caption text-gold-700 hover:text-gold-800 hover:underline"
 				>
 					See the full adaptation <ArrowRight className="w-3.5 h-3.5" />
 				</Link>
@@ -309,15 +309,15 @@ interface CompoundOffer {
 const OFFER_KIND_META: Record<CompoundOffer['kind'], { label: string; icon: React.ComponentType<{ className?: string }>; tone: string; iconTone: string }> = {
 	knowledge: { label: 'extra knowledge', icon: Lightbulb, tone: 'border-gold-200 bg-gold-50/40',   iconTone: 'bg-gold-100 text-gold-700' },
 	skill:     { label: 'a skill',         icon: Wand2,     tone: 'border-gold-200 bg-gold-50/40', iconTone: 'bg-gold-100 text-gold-700' },
-	workflow:  { label: 'a workflow',      icon: Workflow,  tone: 'border-indigo-200 bg-indigo-50/40',   iconTone: 'bg-indigo-100 text-indigo-700' },
-	experiment: { label: 'an experiment verdict', icon: Lightbulb, tone: 'border-violet-200 bg-violet-50/40', iconTone: 'bg-violet-100 text-violet-700' },
+	workflow:  { label: 'a workflow',      icon: Workflow,  tone: 'border-plum-200 bg-plum-50/40',   iconTone: 'bg-plum-100 text-plum-700' },
+	experiment: { label: 'an experiment verdict', icon: Lightbulb, tone: 'border-plum-200 bg-plum-50/40', iconTone: 'bg-plum-100 text-plum-700' },
 };
 
 function CompoundBody({ intent }: { intent: DemoIntent }) {
 	const offers = illustrativeOffers(intent);
 	return (
 		<div className="space-y-3">
-			<div className="text-[11px] text-slate-500 leading-relaxed">
+			<div className="text-micro text-ink-600 leading-relaxed">
 				When a similar spot comes up again, Lumid recalls what compounded and
 				offers it inline — <span className="italic">&ldquo;this looks like a prior occurrence — last time this worked — do this.&rdquo;</span>
 			</div>
@@ -333,20 +333,20 @@ function CompoundBody({ intent }: { intent: DemoIntent }) {
 							</div>
 							<div className="flex-1 min-w-0">
 								<div className="flex items-center gap-1.5 flex-wrap">
-									<span className="text-[13px] font-medium text-slate-900 leading-tight">{o.title}</span>
-									<span className="text-[9px] uppercase tracking-wide rounded-full px-1.5 py-px border border-indigo-100 bg-indigo-50 text-indigo-700">
+									<span className="text-meta font-medium text-ink-900 leading-tight">{o.title}</span>
+									<span className="text-nano uppercase tracking-wide rounded-full px-1.5 py-px border border-plum-100 bg-plum-50 text-plum-700">
 										offer · {meta.label}
 									</span>
 								</div>
 								{o.trigger && (
-									<div className="text-[10px] text-slate-500 mt-0.5">
+									<div className="text-nano text-ink-600 mt-0.5">
 										recalled from {o.trigger.kind} <span className="font-mono">{o.trigger.key}</span>
 										{o.trigger.count > 1 && <> · seen ×{o.trigger.count}</>}
 									</div>
 								)}
-								{o.detail && <div className="text-[11px] text-slate-600 mt-0.5 leading-snug">{o.detail}</div>}
+								{o.detail && <div className="text-micro text-ink-600 mt-0.5 leading-snug">{o.detail}</div>}
 								{o.action?.schedule && (
-									<div className="text-[10px] text-indigo-700 mt-1 inline-flex items-center gap-1">
+									<div className="text-nano text-plum-700 mt-1 inline-flex items-center gap-1">
 										<ChevronRight className="w-3 h-3" />
 										one-tap: {o.action.type}
 										<span className="font-mono">· {o.action.schedule}</span>
@@ -360,7 +360,7 @@ function CompoundBody({ intent }: { intent: DemoIntent }) {
 
 			<Link
 				to="/studio/knowledge"
-				className="inline-flex items-center gap-1 text-[12px] text-indigo-700 hover:text-indigo-800 hover:underline"
+				className="inline-flex items-center gap-1 text-caption text-plum-700 hover:text-plum-800 hover:underline"
 			>
 				Browse what's compounded <ArrowRight className="w-3.5 h-3.5" />
 			</Link>

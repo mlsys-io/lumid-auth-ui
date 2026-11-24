@@ -77,11 +77,11 @@ export default function ClaudePoolManage() {
 	};
 
 	if (loadErr) {
-		return <p className="text-sm text-rose-600">Could not load pool management: {loadErr}</p>;
+		return <p className="text-sm text-brick-600">Could not load pool management: {loadErr}</p>;
 	}
 	if (!roster) {
 		return (
-			<p className="flex items-center gap-2 text-sm text-slate-400">
+			<p className="flex items-center gap-2 text-sm text-ink-600">
 				<Loader2 className="w-4 h-4 animate-spin" /> Loading…
 			</p>
 		);
@@ -90,7 +90,7 @@ export default function ClaudePoolManage() {
 	// state worth explaining at length to someone who will never see it change.
 	if (roster.pools.length === 0) {
 		return (
-			<p className="text-sm text-slate-500">
+			<p className="text-sm text-ink-600">
 				You don't manage a Claude pool. If you should, ask a super-admin to grant it.
 			</p>
 		);
@@ -99,34 +99,34 @@ export default function ClaudePoolManage() {
 	return (
 		<div className="space-y-6">
 			<header>
-				<h1 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
-					<ShieldCheck className="w-4 h-4 text-indigo-600" /> Claude pool management
+				<h1 className="flex items-center gap-2 text-title font-semibold text-ink-800">
+					<ShieldCheck className="w-4 h-4 text-plum-600" /> Claude pool management
 				</h1>
-				<p className="mt-1 text-xs text-slate-500">
+				<p className="mt-1 text-xs text-ink-600">
 					You manage {roster.pools.map((p) => p.name).join(', ')}. These controls reach this
 					pool's accounts and members only.
 				</p>
 			</header>
 
 			<section>
-				<h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Accounts</h2>
-				<div className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
+				<h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-600">Accounts</h2>
+				<div className="divide-y divide-ink-100 rounded-lg border border-ink-200 bg-card">
 					{roster.accounts.length === 0 ? (
-						<p className="p-3 text-xs text-slate-400">This pool has no accounts.</p>
+						<p className="p-3 text-xs text-ink-600">This pool has no accounts.</p>
 					) : roster.accounts.map((a) => {
 						const paused = !!a.draining_since;
 						return (
 							<div key={a.email} className="flex items-center gap-3 px-3 py-2">
-								<span className="w-48 shrink-0 truncate text-xs font-medium text-slate-800">{a.email}</span>
-								{a.label && <span className="shrink-0 text-[10px] text-slate-400">{a.label}</span>}
+								<span className="w-48 shrink-0 truncate text-xs font-medium text-ink-800">{a.email}</span>
+								{a.label && <span className="shrink-0 text-nano text-ink-600">{a.label}</span>}
 								{a.revoked && (
-									<span className="shrink-0 rounded-full bg-rose-50 border border-rose-200 px-1.5 py-0.5 text-[10px] text-rose-700"
+									<span className="shrink-0 rounded-full bg-brick-50 border border-brick-200 px-1.5 py-0.5 text-nano text-brick-700"
 										title="Token family revoked — only an operator re-add restores it">
 										quarantined
 									</span>
 								)}
 								{paused && (
-									<span className="shrink-0 rounded-full bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[10px] text-amber-700"
+									<span className="shrink-0 rounded-full bg-ember-50 border border-ember-200 px-1.5 py-0.5 text-nano text-ember-700"
 										title={a.drain_reason || 'Paused — takes no new sessions'}>
 										paused
 									</span>
@@ -134,7 +134,7 @@ export default function ClaudePoolManage() {
 								<button
 									onClick={() => void drain(a.email, !paused)}
 									disabled={busy === a.email}
-									className="ml-auto flex shrink-0 items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+									className="ml-auto flex shrink-0 items-center gap-1 rounded-md border border-ink-200 px-2 py-1 text-micro text-ink-600 hover:bg-ink-50 disabled:opacity-50"
 								>
 									{busy === a.email
 										? <Loader2 className="w-3 h-3 animate-spin" />
@@ -142,7 +142,7 @@ export default function ClaudePoolManage() {
 									{paused ? 'resume' : 'pause'}
 								</button>
 								{msg[a.email] && (
-									<span className="shrink-0 max-w-64 truncate text-[10px] text-amber-600" title={msg[a.email]}>
+									<span className="shrink-0 max-w-64 truncate text-nano text-ember-600" title={msg[a.email]}>
 										{msg[a.email]}
 									</span>
 								)}
@@ -153,17 +153,17 @@ export default function ClaudePoolManage() {
 			</section>
 
 			<section>
-				<h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Members</h2>
-				<div className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
+				<h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-600">Members</h2>
+				<div className="divide-y divide-ink-100 rounded-lg border border-ink-200 bg-card">
 					{roster.members.length === 0 ? (
-						<p className="p-3 text-xs text-slate-400">This pool has no members.</p>
+						<p className="p-3 text-xs text-ink-600">This pool has no members.</p>
 					) : roster.members.map((m) => (
 						<div key={m.user_sub + m.pool_id} className="flex items-center gap-3 px-3 py-2">
-							<span className="w-64 shrink-0 truncate text-xs text-slate-800">{m.email}</span>
+							<span className="w-64 shrink-0 truncate text-xs text-ink-800">{m.email}</span>
 							<button
 								onClick={() => void reset(m.user_sub, m.email)}
 								disabled={busy === m.user_sub}
-								className="ml-auto flex shrink-0 items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+								className="ml-auto flex shrink-0 items-center gap-1 rounded-md border border-ink-200 px-2 py-1 text-micro text-ink-600 hover:bg-ink-50 disabled:opacity-50"
 							>
 								{busy === m.user_sub
 									? <Loader2 className="w-3 h-3 animate-spin" />
@@ -171,7 +171,7 @@ export default function ClaudePoolManage() {
 								reset usage clock
 							</button>
 							{msg[m.user_sub] && (
-								<span className="shrink-0 max-w-64 truncate text-[10px] text-slate-500" title={msg[m.user_sub]}>
+								<span className="shrink-0 max-w-64 truncate text-nano text-ink-600" title={msg[m.user_sub]}>
 									{msg[m.user_sub]}
 								</span>
 							)}

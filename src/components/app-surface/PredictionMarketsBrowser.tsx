@@ -48,10 +48,10 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
 		<button
 			onClick={onClick}
 			className={cn(
-				'px-2.5 py-1 text-[12px] rounded-full border transition-colors whitespace-nowrap',
+				'px-2.5 py-1 text-caption rounded-full border transition-colors whitespace-nowrap',
 				active
 					? 'border-gold-300 bg-gold-50 text-gold-900'
-					: 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900',
+					: 'border-ink-200 bg-card text-ink-600 hover:bg-ink-50 hover:text-ink-900',
 			)}
 		>
 			{children}
@@ -118,14 +118,14 @@ export default function PredictionMarketsBrowser() {
 		<div className="h-full flex flex-col min-h-0 gap-3">
 			{/* Venue + search + status */}
 			<div className="flex flex-wrap items-center gap-2">
-				<div className="inline-flex rounded-lg border border-slate-200 overflow-hidden">
+				<div className="inline-flex rounded-lg border border-ink-200 overflow-hidden">
 					{(['polymarket', 'kalshi'] as Venue[]).map((v) => (
 						<button
 							key={v}
 							onClick={() => setVenue(v)}
 							className={cn(
-								'px-3 py-1.5 text-[12.5px] font-medium',
-								venue === v ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-50',
+								'px-3 py-1.5 text-meta font-medium',
+								venue === v ? 'bg-ink-900 text-white' : 'bg-card text-ink-600 hover:bg-ink-50',
 							)}
 						>
 							{v === 'polymarket' ? 'Polymarket' : 'Kalshi'}
@@ -140,12 +140,12 @@ export default function PredictionMarketsBrowser() {
 					}}
 				>
 					<div className="relative flex-1">
-						<Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+						<Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-600" />
 						<input
 							value={draft}
 							onChange={(e) => setDraft(e.target.value)}
 							placeholder={venue === 'polymarket' ? 'Search events…' : 'Search series (title or ticker)…'}
-							className="w-full pl-8 pr-2 py-1.5 text-[12.5px] rounded-lg border border-slate-200 focus:outline-none focus:border-gold-300"
+							className="w-full pl-8 pr-2 py-1.5 text-meta rounded-lg border border-ink-200 focus:outline-none focus:border-gold-300"
 						/>
 					</div>
 				</form>
@@ -153,7 +153,7 @@ export default function PredictionMarketsBrowser() {
 					<select
 						value={status}
 						onChange={(e) => setStatus(e.target.value as Status)}
-						className="px-2 py-1.5 text-[12.5px] rounded-lg border border-slate-200 bg-white"
+						className="px-2 py-1.5 text-meta rounded-lg border border-ink-200 bg-card"
 					>
 						<option value="open">Open</option>
 						<option value="closed">Closed</option>
@@ -175,20 +175,20 @@ export default function PredictionMarketsBrowser() {
 			</div>
 
 			{err && (
-				<div className="flex items-start gap-2 text-[12.5px] text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+				<div className="flex items-start gap-2 text-meta text-brick-700 bg-brick-50 border border-brick-200 rounded-lg px-3 py-2">
 					<AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
 					<span className="break-all">{err}</span>
 				</div>
 			)}
 
-			<div className="flex-1 min-h-0 overflow-auto rounded-lg border border-slate-200 bg-white">
+			<div className="flex-1 min-h-0 overflow-auto rounded-lg border border-ink-200 bg-card">
 				{venue === 'polymarket' ? (
 					<PolymarketList rows={events} labelOf={labelOf} />
 				) : (
 					<KalshiSeriesList rows={series} />
 				)}
 				{!busy && !err && shown === 0 && (
-					<div className="px-4 py-8 text-center text-[12.5px] text-slate-500">
+					<div className="px-4 py-8 text-center text-meta text-ink-600">
 						No {venue === 'polymarket' ? 'events' : 'series'}
 						{category ? ` in ${labelOf(category)}` : ''}
 						{q ? ` matching “${q}”` : ''}.
@@ -196,12 +196,12 @@ export default function PredictionMarketsBrowser() {
 				)}
 				<div className="flex justify-center py-3">
 					{busy ? (
-						<Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+						<Loader2 className="w-4 h-4 animate-spin text-ink-600" />
 					) : (
 						more && (
 							<button
 								onClick={() => load(shown)}
-								className="px-3 py-1.5 text-[12.5px] rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
+								className="px-3 py-1.5 text-meta rounded-lg border border-ink-200 text-ink-600 hover:bg-ink-50"
 							>
 								Load more
 							</button>
@@ -216,8 +216,8 @@ export default function PredictionMarketsBrowser() {
 function PolymarketList({ rows, labelOf }: { rows: PmEventRow[]; labelOf: (slug: string) => string }) {
 	if (!rows.length) return null;
 	return (
-		<table className="w-full text-[12.5px]">
-			<thead className="sticky top-0 bg-slate-50 text-slate-500 text-left">
+		<table className="w-full text-meta">
+			<thead className="sticky top-0 bg-ink-50 text-ink-600 text-left">
 				<tr>
 					<th className="px-3 py-2 font-medium">Event</th>
 					<th className="px-3 py-2 font-medium">Categories</th>
@@ -229,29 +229,29 @@ function PolymarketList({ rows, labelOf }: { rows: PmEventRow[]; labelOf: (slug:
 				{/* Index in the key: an event can carry one row per source (the
 				    Predexon snapshot + the Gamma ingest), so event_id repeats. */}
 				{rows.map((e, i) => (
-					<tr key={`${e.event_id}:${i}`} className="border-t border-slate-100 hover:bg-slate-50/60">
+					<tr key={`${e.event_id}:${i}`} className="border-t border-ink-100 hover:bg-ink-50/60">
 						<td className="px-3 py-2">
 							<a
 								href={`https://polymarket.com/event/${encodeURIComponent(e.slug)}`}
 								target="_blank"
 								rel="noreferrer"
-								className="inline-flex items-center gap-1 text-slate-800 hover:underline"
+								className="inline-flex items-center gap-1 text-ink-800 hover:underline"
 							>
 								{e.title}
-								<ExternalLink className="w-3 h-3 text-slate-400" />
+								<ExternalLink className="w-3 h-3 text-ink-600" />
 							</a>
 						</td>
 						<td className="px-3 py-2">
 							<div className="flex flex-wrap gap-1">
 								{(e.categories ?? []).map((c) => (
-									<span key={c} className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[11px]">
+									<span key={c} className="px-1.5 py-0.5 rounded bg-ink-100 text-ink-600 text-micro">
 										{labelOf(c)}
 									</span>
 								))}
 							</div>
 						</td>
 						<td className="px-3 py-2 text-right tabular-nums">{fmtUsd(e.total_volume)}</td>
-						<td className="px-3 py-2 tabular-nums text-slate-500">{fmtDate(e.end_date)}</td>
+						<td className="px-3 py-2 tabular-nums text-ink-600">{fmtDate(e.end_date)}</td>
 					</tr>
 				))}
 			</tbody>
@@ -263,22 +263,22 @@ function KalshiSeriesList({ rows }: { rows: PmKalshiSeriesRow[] }) {
 	const [open, setOpen] = useState<string | null>(null);
 	if (!rows.length) return null;
 	return (
-		<div className="divide-y divide-slate-100">
+		<div className="divide-y divide-ink-100">
 			{rows.map((s) => (
 				<div key={s.ticker}>
 					<button
 						onClick={() => setOpen(open === s.ticker ? null : s.ticker)}
-						className="w-full flex items-center gap-2 px-3 py-2 text-left text-[12.5px] hover:bg-slate-50/60"
+						className="w-full flex items-center gap-2 px-3 py-2 text-left text-meta hover:bg-ink-50/60"
 					>
 						{open === s.ticker ? (
-							<ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+							<ChevronDown className="w-3.5 h-3.5 text-ink-600" />
 						) : (
-							<ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+							<ChevronRight className="w-3.5 h-3.5 text-ink-600" />
 						)}
-						<span className="font-mono text-[11.5px] text-slate-500 w-40 shrink-0 truncate">{s.ticker}</span>
-						<span className="flex-1 text-slate-800 truncate">{s.title}</span>
-						<span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[11px]">{s.category ?? '—'}</span>
-						{s.frequency && <span className="text-[11px] text-slate-400 w-16 text-right">{s.frequency}</span>}
+						<span className="font-mono text-caption text-ink-600 w-40 shrink-0 truncate">{s.ticker}</span>
+						<span className="flex-1 text-ink-800 truncate">{s.title}</span>
+						<span className="px-1.5 py-0.5 rounded bg-ink-100 text-ink-600 text-micro">{s.category ?? '—'}</span>
+						{s.frequency && <span className="text-micro text-ink-600 w-16 text-right">{s.frequency}</span>}
 					</button>
 					{open === s.ticker && <KalshiSeriesMarkets ticker={s.ticker} />}
 				</div>
@@ -296,13 +296,13 @@ function KalshiSeriesMarkets({ ticker }: { ticker: string }) {
 			.then(setRows)
 			.catch((e) => setErr(errText(e)));
 	}, [ticker]);
-	if (err) return <div className="px-9 py-2 text-[12px] text-red-700">{err}</div>;
-	if (!rows) return <div className="px-9 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" /></div>;
-	if (!rows.length) return <div className="px-9 py-2 text-[12px] text-slate-500">No open markets in this series.</div>;
+	if (err) return <div className="px-9 py-2 text-caption text-brick-700">{err}</div>;
+	if (!rows) return <div className="px-9 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin text-ink-600" /></div>;
+	if (!rows.length) return <div className="px-9 py-2 text-caption text-ink-600">No open markets in this series.</div>;
 	return (
 		<div className="px-9 pb-2">
-			<table className="w-full text-[12px]">
-				<thead className="text-slate-400 text-left">
+			<table className="w-full text-caption">
+				<thead className="text-ink-600 text-left">
 					<tr>
 						<th className="py-1 font-medium">Market</th>
 						<th className="py-1 font-medium text-right">Last</th>
@@ -311,21 +311,21 @@ function KalshiSeriesMarkets({ ticker }: { ticker: string }) {
 				</thead>
 				<tbody>
 					{rows.map((m) => (
-						<tr key={m.ticker} className="border-t border-slate-100">
+						<tr key={m.ticker} className="border-t border-ink-100">
 							<td className="py-1 pr-2">
 								<a
 									href={`https://kalshi.com/markets/${encodeURIComponent(ticker.toLowerCase())}`}
 									target="_blank"
 									rel="noreferrer"
-									className="text-slate-700 hover:underline"
+									className="text-ink-700 hover:underline"
 								>
 									{m.title}
 									{m.yes_sub_title ? ` — ${m.yes_sub_title}` : ''}
 								</a>
-								<div className="font-mono text-[10.5px] text-slate-400">{m.ticker}</div>
+								<div className="font-mono text-micro text-ink-600">{m.ticker}</div>
 							</td>
 							<td className="py-1 text-right tabular-nums">{m.last_price != null ? `${m.last_price}¢` : '—'}</td>
-							<td className="py-1 pl-2 tabular-nums text-slate-500">{fmtDate(m.close_time)}</td>
+							<td className="py-1 pl-2 tabular-nums text-ink-600">{fmtDate(m.close_time)}</td>
 						</tr>
 					))}
 				</tbody>

@@ -55,17 +55,17 @@ function Card({ title, rows, more }: { title: string; rows: React.ReactNode[]; m
 	if (rows.length === 0) return null;
 	return (
 		<div className="max-w-md rounded-xl border border-border bg-card shadow-sm overflow-hidden text-left">
-			<div className="px-3 pt-2 pb-1 text-[10.5px] tracking-[0.08em] font-medium text-ink-600 uppercase">{title}</div>
+			<div className="px-3 pt-2 pb-1 text-micro tracking-[0.08em] font-medium text-ink-600 uppercase">{title}</div>
 			<div className="divide-y divide-border/70">{rows}</div>
 			{more && more > 0 ? (
-				<div className="px-3 py-1.5 text-[11px] text-muted-foreground">+{more} more</div>
+				<div className="px-3 py-1.5 text-micro text-muted-foreground">+{more} more</div>
 			) : null}
 		</div>
 	);
 }
 
 function Row({ to, children }: { to?: string; children: React.ReactNode }) {
-	const cls = 'group/row flex items-center gap-2 px-3 py-1.5 text-[12.5px] text-foreground transition-colors';
+	const cls = 'group/row flex items-center gap-2 px-3 py-1.5 text-meta text-foreground transition-colors';
 	if (!to) return <div className={cls}>{children}</div>;
 	return (
 		<Link to={to} className={`${cls} hover:bg-muted`}>
@@ -79,7 +79,7 @@ type Renderer = (result: Record<string, any>) => React.ReactNode | null;
 
 function workflowResultCard(kind: 'halo' | 'run', r: Record<string, any>): React.ReactNode {
 	if (r?.error) {
-		return <Card title="Workflow" rows={[<Row key="e"><span className="text-rose-600 text-[12px]">{String(r.error).slice(0, 140)}</span></Row>]} />;
+		return <Card title="Workflow" rows={[<Row key="e"><span className="text-brick-600 text-caption">{String(r.error).slice(0, 140)}</span></Row>]} />;
 	}
 	const rows: React.ReactNode[] = [];
 	if (kind === 'halo') {
@@ -88,16 +88,16 @@ function workflowResultCard(kind: 'halo' | 'run', r: Record<string, any>): React
 			? Object.values(r.runtime_graph_node_counts as Record<string, number>).reduce((a, b) => a + (b || 0), 0) : undefined;
 		const nodes = r.merged_runtime_node_count ?? counts;
 		const optMs = typeof r.optimization_seconds === 'number' ? Math.round(r.optimization_seconds * 1000) : undefined;
-		rows.push(<Row key="s"><span className="text-[12.5px]">Optimized · {workers} worker{workers === 1 ? '' : 's'}{nodes != null ? ` · ${nodes} node${nodes === 1 ? '' : 's'}` : ''}{optMs != null ? ` · ${optMs} ms` : ''}</span></Row>);
+		rows.push(<Row key="s"><span className="text-meta">Optimized · {workers} worker{workers === 1 ? '' : 's'}{nodes != null ? ` · ${nodes} node${nodes === 1 ? '' : 's'}` : ''}{optMs != null ? ` · ${optMs} ms` : ''}</span></Row>);
 	} else {
 		const st = String(r.status || '').toLowerCase() || 'submitted';
-		rows.push(<Row key="s"><span className="text-[12.5px]">Run {st}{r.workflow_id ? ` · ${String(r.workflow_id).slice(0, 14)}…` : ''}</span></Row>);
+		rows.push(<Row key="s"><span className="text-meta">Run {st}{r.workflow_id ? ` · ${String(r.workflow_id).slice(0, 14)}…` : ''}</span></Row>);
 	}
 	rows.push(
 		<Row key="o">
 			<button
 				onClick={() => window.dispatchEvent(new CustomEvent('studio:workflow-panel-toggle'))}
-				className="inline-flex items-center gap-1 text-[12px] text-gold-700 hover:underline"
+				className="inline-flex items-center gap-1 text-caption text-gold-700 hover:underline"
 			>
 				<WorkflowIcon className="w-3 h-3" /> Open full graph
 			</button>
@@ -141,7 +141,7 @@ function fmtEta(sec: any): string {
 // status). Rendered inline so a job is watched inside the conversation.
 function lumilakeJobCard(r: Record<string, any>): React.ReactNode {
 	if (r?.error) {
-		return <Card title="Lumilake job" rows={[<Row key="e"><span className="text-rose-600 text-[12px]">{String(r.error).slice(0, 160)}</span></Row>]} />;
+		return <Card title="Lumilake job" rows={[<Row key="e"><span className="text-brick-600 text-caption">{String(r.error).slice(0, 160)}</span></Row>]} />;
 	}
 	const status = String(r.status || '').toLowerCase();
 	const jid = r.job_id ? String(r.job_id) : '';
@@ -149,63 +149,63 @@ function lumilakeJobCard(r: Record<string, any>): React.ReactNode {
 	const rows: React.ReactNode[] = [
 		<Row key="s">
 			<Dot tone={jobTone(status)} />
-			<span className="text-[12.5px] capitalize">{status || 'submitted'}</span>
+			<span className="text-meta capitalize">{status || 'submitted'}</span>
 			{p != null ? <ProgressBar value={p} /> : null}
-			{p != null ? <span className="text-[11.5px] text-muted-foreground">{Math.round(p <= 1 ? p * 100 : p)}%</span> : null}
-			<span className="ml-auto text-[11px] text-muted-foreground">{fmtEta(r.eta_seconds)}</span>
+			{p != null ? <span className="text-caption text-muted-foreground">{Math.round(p <= 1 ? p * 100 : p)}%</span> : null}
+			<span className="ml-auto text-micro text-muted-foreground">{fmtEta(r.eta_seconds)}</span>
 		</Row>,
 	];
 	const b = r.batches as Record<string, any> | undefined;
 	if (b && (b.total != null)) {
-		rows.push(<Row key="b"><span className="text-[11.5px] text-muted-foreground">batches: {b.completed ?? 0}/{b.total} done{b.running ? ` · ${b.running} running` : ''}{b.failed ? ` · ${b.failed} failed` : ''}</span></Row>);
+		rows.push(<Row key="b"><span className="text-caption text-muted-foreground">batches: {b.completed ?? 0}/{b.total} done{b.running ? ` · ${b.running} running` : ''}{b.failed ? ` · ${b.failed} failed` : ''}</span></Row>);
 	}
 	// Terminal run_lumilake_job carries outputs — summarize inline.
 	if (r.outputs != null) {
 		const txt = typeof r.outputs === 'string' ? r.outputs : JSON.stringify(r.outputs);
-		rows.push(<Row key="o"><span className="text-[12px] text-ink-800 line-clamp-2 break-words">{txt.slice(0, 200)}</span></Row>);
+		rows.push(<Row key="o"><span className="text-caption text-ink-800 line-clamp-2 break-words">{txt.slice(0, 200)}</span></Row>);
 	}
-	if (jid) rows.push(<Row key="id"><span className="font-mono text-[10.5px] text-muted-foreground">{jid.slice(0, 22)}</span></Row>);
+	if (jid) rows.push(<Row key="id"><span className="font-mono text-micro text-muted-foreground">{jid.slice(0, 22)}</span></Row>);
 	return <Card title="Lumilake job" rows={rows} />;
 }
 
 // Lumilake job result → outputs card (grouped text).
 function lumilakeResultCard(r: Record<string, any>): React.ReactNode {
-	if (r?.error) return <Card title="Lumilake result" rows={[<Row key="e"><span className="text-rose-600 text-[12px]">{String(r.error).slice(0, 160)}</span></Row>]} />;
-	if (r.status === 'not_ready') return <Card title="Lumilake result" rows={[<Row key="n"><span className="text-[12px] text-muted-foreground">Not ready — job still running</span></Row>]} />;
+	if (r?.error) return <Card title="Lumilake result" rows={[<Row key="e"><span className="text-brick-600 text-caption">{String(r.error).slice(0, 160)}</span></Row>]} />;
+	if (r.status === 'not_ready') return <Card title="Lumilake result" rows={[<Row key="n"><span className="text-caption text-muted-foreground">Not ready — job still running</span></Row>]} />;
 	const out = r.outputs;
 	const txt = out == null ? '(no output)' : (typeof out === 'string' ? out : JSON.stringify(out, null, 0));
-	return <Card title="Lumilake result" rows={[<Row key="o"><span className="text-[12px] text-ink-900 whitespace-pre-wrap break-words line-clamp-6">{txt.slice(0, 500)}</span></Row>]} />;
+	return <Card title="Lumilake result" rows={[<Row key="o"><span className="text-caption text-ink-900 whitespace-pre-wrap break-words line-clamp-6">{txt.slice(0, 500)}</span></Row>]} />;
 }
 
 // Lumilake job trace → critical-path / provenance card (best-effort).
 function jobTraceCard(r: Record<string, any>): React.ReactNode {
-	if (r?.error) return <Card title="Job trace" rows={[<Row key="e"><span className="text-rose-600 text-[12px]">{String(r.error).slice(0, 160)}</span></Row>]} />;
+	if (r?.error) return <Card title="Job trace" rows={[<Row key="e"><span className="text-brick-600 text-caption">{String(r.error).slice(0, 160)}</span></Row>]} />;
 	const rows: React.ReactNode[] = [];
-	if (r.note) rows.push(<Row key="n"><span className="text-[12px] text-muted-foreground">{String(r.note)}</span></Row>);
+	if (r.note) rows.push(<Row key="n"><span className="text-caption text-muted-foreground">{String(r.note)}</span></Row>);
 	const tr = r.trace as Record<string, any> | undefined;
 	if (tr && typeof tr === 'object') {
 		const cp = tr.critical_path || tr.criticalPath;
 		const e2e = tr.e2e_seconds ?? tr.total_seconds ?? tr.e2e;
-		if (e2e != null) rows.push(<Row key="e2e"><span className="text-[12.5px]">E2E {typeof e2e === 'number' ? `${e2e.toFixed(1)}s` : String(e2e)}</span></Row>);
+		if (e2e != null) rows.push(<Row key="e2e"><span className="text-meta">E2E {typeof e2e === 'number' ? `${e2e.toFixed(1)}s` : String(e2e)}</span></Row>);
 		if (Array.isArray(cp) && cp.length) {
-			rows.push(<Row key="cp"><span className="text-[11.5px] text-muted-foreground truncate">critical path: {cp.map((n: any) => (typeof n === 'string' ? n : (n?.node || n?.name || ''))).filter(Boolean).slice(0, 6).join(' → ')}</span></Row>);
+			rows.push(<Row key="cp"><span className="text-caption text-muted-foreground truncate">critical path: {cp.map((n: any) => (typeof n === 'string' ? n : (n?.node || n?.name || ''))).filter(Boolean).slice(0, 6).join(' → ')}</span></Row>);
 		}
 	}
-	if (r.trace_id) rows.push(<Row key="tid"><span className="font-mono text-[10.5px] text-muted-foreground">{String(r.trace_id).slice(0, 22)}</span></Row>);
-	if (rows.length === 0) rows.push(<Row key="empty"><span className="text-[12px] text-muted-foreground">No trace recorded yet</span></Row>);
+	if (r.trace_id) rows.push(<Row key="tid"><span className="font-mono text-micro text-muted-foreground">{String(r.trace_id).slice(0, 22)}</span></Row>);
+	if (rows.length === 0) rows.push(<Row key="empty"><span className="text-caption text-muted-foreground">No trace recorded yet</span></Row>);
 	return <Card title="Job trace" rows={rows} />;
 }
 
 // FlowMesh workflow log tail → compact log lines card.
 function workflowLogsCard(r: Record<string, any>): React.ReactNode {
-	if (r?.error) return <Card title="Workflow logs" rows={[<Row key="e"><span className="text-rose-600 text-[12px]">{String(r.error).slice(0, 160)}</span></Row>]} />;
+	if (r?.error) return <Card title="Workflow logs" rows={[<Row key="e"><span className="text-brick-600 text-caption">{String(r.error).slice(0, 160)}</span></Row>]} />;
 	const lines: any[] = Array.isArray(r.lines) ? r.lines : [];
-	if (lines.length === 0) return <Card title="Workflow logs" rows={[<Row key="n"><span className="text-[12px] text-muted-foreground">No log lines yet</span></Row>]} />;
+	if (lines.length === 0) return <Card title="Workflow logs" rows={[<Row key="n"><span className="text-caption text-muted-foreground">No log lines yet</span></Row>]} />;
 	const shown = lines.slice(-8);
-	const tone = (lvl: string) => lvl === 'ERROR' ? 'text-rose-600' : lvl === 'WARNING' ? 'text-amber-600' : 'text-ink-800';
+	const tone = (lvl: string) => lvl === 'ERROR' ? 'text-brick-600' : lvl === 'WARNING' ? 'text-ember-600' : 'text-ink-800';
 	const rows = shown.map((l, i) => (
 		<Row key={`l${i}`}>
-			<span className={`font-mono text-[11px] truncate ${tone(String(l.level || '').toUpperCase())}`}>
+			<span className={`font-mono text-micro truncate ${tone(String(l.level || '').toUpperCase())}`}>
 				<span className="text-ink-600">{String(l.level || '').slice(0, 4)}</span> {String(l.message ?? '').slice(0, 160)}
 			</span>
 		</Row>
@@ -215,11 +215,11 @@ function workflowLogsCard(r: Record<string, any>): React.ReactNode {
 
 // Cancel confirmation (FM workflow or LL job).
 function cancelCard(kind: 'workflow' | 'job', r: Record<string, any>): React.ReactNode {
-	if (r?.error) return <Card title="Cancel" rows={[<Row key="e"><span className="text-rose-600 text-[12px]">{String(r.error).slice(0, 160)}</span></Row>]} />;
+	if (r?.error) return <Card title="Cancel" rows={[<Row key="e"><span className="text-brick-600 text-caption">{String(r.error).slice(0, 160)}</span></Row>]} />;
 	const id = String(r.workflow_id || r.job_id || '');
 	const st = String(r.status || 'cancelled');
 	return <Card title={kind === 'job' ? 'Job cancelled' : 'Workflow cancelled'} rows={[
-		<Row key="s"><Dot tone={jobTone(st)} /><span className="text-[12.5px] capitalize">{st}</span><span className="ml-auto font-mono text-[10.5px] text-muted-foreground">{id.slice(0, 18)}</span></Row>,
+		<Row key="s"><Dot tone={jobTone(st)} /><span className="text-meta capitalize">{st}</span><span className="ml-auto font-mono text-micro text-muted-foreground">{id.slice(0, 18)}</span></Row>,
 	]} />;
 }
 
@@ -230,14 +230,14 @@ function workersCard(r: Record<string, any>): React.ReactNode {
 	const workers: any[] = Array.isArray(r?.workers) ? r.workers : [];
 	if (workers.length === 0) {
 		const msg = r?.error ? String(r.error).slice(0, 140) : 'No workers registered';
-		return <Card title="FlowMesh workers" rows={[<Row key="e"><span className={`text-[12px] ${r?.error ? 'text-rose-600' : 'text-muted-foreground'}`}>{msg}</span></Row>]} />;
+		return <Card title="FlowMesh workers" rows={[<Row key="e"><span className={`text-caption ${r?.error ? 'text-brick-600' : 'text-muted-foreground'}`}>{msg}</span></Row>]} />;
 	}
 	const norm = (s: any) => String(s || '').toLowerCase();
 	const idle = workers.filter((w) => norm(w.status) === 'idle').length;
 	const busy = workers.filter((w) => ['busy', 'running'].includes(norm(w.status))).length;
 	const rows: React.ReactNode[] = [
 		<Row key="sum">
-			<span className="text-[12.5px]">{workers.length} worker{workers.length === 1 ? '' : 's'}{idle ? ` · ${idle} idle` : ''}{busy ? ` · ${busy} busy` : ''}</span>
+			<span className="text-meta">{workers.length} worker{workers.length === 1 ? '' : 's'}{idle ? ` · ${idle} idle` : ''}{busy ? ` · ${busy} busy` : ''}</span>
 		</Row>,
 	];
 	const shown = workers.slice(0, 6);
@@ -247,9 +247,9 @@ function workersCard(r: Record<string, any>): React.ReactNode {
 		rows.push(
 			<Row key={`w${i}`}>
 				<Dot tone={jobTone(w.status)} />
-				<span className="font-mono text-[12px] truncate">{String(w.alias || w.id || `worker ${i}`)}</span>
-				{node ? <span className="text-[11.5px] text-muted-foreground truncate">{node}{cluster ? ` · ${cluster}` : ''}</span> : null}
-				<span className="ml-auto text-[11px] text-muted-foreground shrink-0">{String(w.status || '').toUpperCase()}</span>
+				<span className="font-mono text-caption truncate">{String(w.alias || w.id || `worker ${i}`)}</span>
+				{node ? <span className="text-caption text-muted-foreground truncate">{node}{cluster ? ` · ${cluster}` : ''}</span> : null}
+				<span className="ml-auto text-micro text-muted-foreground shrink-0">{String(w.status || '').toUpperCase()}</span>
 			</Row>,
 		);
 	});
@@ -279,7 +279,7 @@ const RENDERERS: Record<string, Renderer> = {
 				rows={shown.map((a) => (
 					<Row key={a.name} to={appLink(a.name)}>
 						<span className="flex-1 min-w-0 truncate font-medium">{appTitle(a.name)}</span>
-						<span className="text-[10.5px] text-muted-foreground shrink-0">{a.tenant ? 'yours' : 'shared'}</span>
+						<span className="text-micro text-muted-foreground shrink-0">{a.tenant ? 'yours' : 'shared'}</span>
 					</Row>
 				))}
 			/>
@@ -304,7 +304,7 @@ const RENDERERS: Record<string, Renderer> = {
 								<span className="font-medium">{appTitle(L.app)}</span>
 								<span className="text-muted-foreground"> · {loopLabel(undefined, L.loop)}</span>
 							</span>
-							<span className={`text-[10.5px] shrink-0 ${L.status === 'failing' ? 'text-rose-700 font-medium' : 'text-muted-foreground'}`}>
+							<span className={`text-micro shrink-0 ${L.status === 'failing' ? 'text-brick-700 font-medium' : 'text-muted-foreground'}`}>
 								{L.status === 'failing' && L.consecutive_failures
 									? `${L.consecutive_failures}× failing`
 									: L.status}{L.last_run_ts ? ` · ${rel(L.last_run_ts)}` : ''}
@@ -338,7 +338,7 @@ const RENDERERS: Record<string, Renderer> = {
 								<span className="font-medium">{loopLabel(w.name, loop || w.slug)}</span>
 								{w.app && <span className="text-muted-foreground"> · {appTitle(w.app)}</span>}
 							</span>
-							<span className="text-[10.5px] text-muted-foreground shrink-0">
+							<span className="text-micro text-muted-foreground shrink-0">
 								{w.trigger || ''}{w.last_run_ts ? ` · ${rel(w.last_run_ts)}` : ''}
 							</span>
 						</Row>
@@ -372,7 +372,7 @@ const RENDERERS: Record<string, Renderer> = {
 								<span className="font-medium">{loopLabel(run.name, loop || run.workflow_slug || run.run_id)}</span>
 								{run.app && <span className="text-muted-foreground"> · {appTitle(run.app)}</span>}
 							</span>
-							<span className={`text-[10.5px] shrink-0 ${run.state === 'failed' ? 'text-rose-700 font-medium' : 'text-muted-foreground'}`}>
+							<span className={`text-micro shrink-0 ${run.state === 'failed' ? 'text-brick-700 font-medium' : 'text-muted-foreground'}`}>
 								{run.state}{run.started_iso ? ` · ${relIso(run.started_iso)}` : ''}
 							</span>
 						</Row>
@@ -400,7 +400,7 @@ const RENDERERS: Record<string, Renderer> = {
 							<span className="font-medium">{appTitle(app)}</span>
 							<span className="text-muted-foreground"> · {loopLabel(undefined, loop)}</span>
 						</span>
-						<span className={`text-[10.5px] shrink-0 ${failed > 0 ? 'text-rose-700 font-medium' : 'text-muted-foreground'}`}>
+						<span className={`text-micro shrink-0 ${failed > 0 ? 'text-brick-700 font-medium' : 'text-muted-foreground'}`}>
 							{steps.length} step{steps.length === 1 ? '' : 's'}{failed > 0 ? ` · ${failed} failed` : ''}{ts ? ` · ${ts}` : ''}
 						</span>
 					</Row>,
@@ -420,11 +420,11 @@ function actionOutcomeCard(label: string, r: Record<string, any>): React.ReactNo
 		: app ? `/studio/a/${encodeURIComponent(app)}?full=1` : undefined;
 	return (
 		<div className="max-w-md rounded-xl border border-border bg-card shadow-sm overflow-hidden text-left">
-			<div className="flex items-center gap-2 px-3 py-2 text-[12.5px]">
+			<div className="flex items-center gap-2 px-3 py-2 text-meta">
 				<CheckCircle2 className="w-3.5 h-3.5 text-gold-600 shrink-0" />
 				<span className="flex-1 min-w-0 truncate text-foreground">Done · <span className="font-medium">{label}</span></span>
 				{to && (
-					<Link to={to} onClick={(e) => e.stopPropagation()} className="shrink-0 inline-flex items-center gap-0.5 text-[11px] text-muted-foreground hover:text-foreground">
+					<Link to={to} onClick={(e) => e.stopPropagation()} className="shrink-0 inline-flex items-center gap-0.5 text-micro text-muted-foreground hover:text-foreground">
 						open <ArrowUpRight className="w-3 h-3" />
 					</Link>
 				)}
@@ -450,7 +450,7 @@ function appReadCard(r: Record<string, any>): React.ReactNode {
 						<Row key={String(rt.task_id || rt.id)} to={rt.task_id ? `/studio/a/lumid-gpu-rentals/${encodeURIComponent(String(rt.task_id))}` : undefined}>
 							<Dot tone={tone} />
 							<span className="flex-1 min-w-0 truncate font-medium">{String(rt.name || rt.task_id)}</span>
-							<span className="text-[10.5px] text-muted-foreground shrink-0">{rt.gpu ? `${rt.gpu}×GPU · ` : ''}{st}</span>
+							<span className="text-micro text-muted-foreground shrink-0">{rt.gpu ? `${rt.gpu}×GPU · ` : ''}{st}</span>
 						</Row>
 					);
 				})} />
@@ -464,13 +464,13 @@ function appReadCard(r: Record<string, any>): React.ReactNode {
 				rows={shown.map((f, i) => (
 					<Row key={i}>
 						<span className="flex-1 min-w-0 truncate">{String(f.substr || f.gpu || f.name || '')}</span>
-						<span className="text-[10.5px] text-muted-foreground shrink-0">{f.sell != null ? `$${f.sell}/hr` : ''}</span>
+						<span className="text-micro text-muted-foreground shrink-0">{f.sell != null ? `$${f.sell}/hr` : ''}</span>
 					</Row>
 				))} />
 		);
 	}
 	const count = typeof data.count === 'number' ? data.count : undefined;
-	return <Card title={src} rows={[<Row key="s"><span className="text-muted-foreground text-[12px]">{count != null ? `${count} item${count === 1 ? '' : 's'}` : 'loaded'}</span></Row>]} />;
+	return <Card title={src} rows={[<Row key="s"><span className="text-muted-foreground text-caption">{count != null ? `${count} item${count === 1 ? '' : 's'}` : 'loaded'}</span></Row>]} />;
 }
 
 /** Inline entity card for a completed, successful tool call — or null. */

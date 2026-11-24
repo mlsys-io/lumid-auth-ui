@@ -32,11 +32,11 @@ type Memory = {
 
 const KIND_COLORS: Record<string, string> = {
 	principle:    'bg-gold-50 text-gold-700 border-gold-200',
-	pattern:      'bg-indigo-50 text-indigo-700 border-indigo-200',
-	fact:         'bg-slate-50 text-slate-700 border-slate-200',
+	pattern:      'bg-plum-50 text-plum-700 border-plum-200',
+	fact:         'bg-ink-50 text-ink-700 border-ink-200',
 	correction:   'bg-gold-50 text-gold-700 border-gold-200',
-	anti_pattern: 'bg-rose-50 text-rose-700 border-rose-200',
-	draft:        'bg-blue-50 text-blue-700 border-blue-200',
+	anti_pattern: 'bg-brick-50 text-brick-700 border-brick-200',
+	draft:        'bg-lagoon-50 text-lagoon-700 border-lagoon-200',
 };
 
 function AgentList() {
@@ -48,8 +48,8 @@ function AgentList() {
 			.catch((e: any) => setError(e?.message || 'Failed to load agents'));
 	}, []);
 
-	if (error) return <div className="text-rose-700 text-sm">{error}</div>;
-	if (agents === null) return <div className="text-sm text-slate-500 italic">Loading…</div>;
+	if (error) return <div className="text-brick-700 text-sm">{error}</div>;
+	if (agents === null) return <div className="text-sm text-ink-600 italic">Loading…</div>;
 
 	if (agents.length === 0) {
 		return (
@@ -58,15 +58,15 @@ function AgentList() {
 					<Brain className="w-7 h-7" />
 				</div>
 				<div>
-					<h2 className="text-xl font-medium">Your AI hasn&apos;t learned anything yet</h2>
-					<p className="mt-2 text-sm text-slate-600 leading-relaxed">
+					<h2 className="text-h3 font-medium">Your AI hasn&apos;t learned anything yet</h2>
+					<p className="mt-2 text-sm text-ink-600 leading-relaxed">
 						Knowledge accumulates as your AI runs. Once you&apos;ve installed an app
 						and it&apos;s done a few cycles, principles and patterns will show up here.
 					</p>
 				</div>
 				<Link
 					to="/studio/skills"
-					className="inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg bg-gold-500 text-white hover:bg-gold-600 transition-colors"
+					className="inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg bg-gold-700 text-white hover:bg-gold-800 transition-colors"
 				>
 					<Sparkles className="w-4 h-4" /> Set up your AI
 				</Link>
@@ -89,18 +89,18 @@ function AgentList() {
 					<li key={a.id}>
 						<Link
 							to={`/studio/knowledge/${encodeURIComponent(a.id)}`}
-							className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-3 hover:bg-slate-50 transition-colors"
+							className="flex items-center justify-between rounded-lg border border-ink-200 bg-card px-3 py-3 hover:bg-ink-50 transition-colors"
 						>
 							<div className="min-w-0">
 								<div className="font-mono text-sm truncate">{a.id}</div>
-								<div className="text-xs text-slate-500 mt-0.5">
+								<div className="text-xs text-ink-600 mt-0.5">
 									{a.memory_count.toLocaleString()} memor{a.memory_count === 1 ? 'y' : 'ies'}
 									{a.last_memory_ts && (
 										<> · last {new Date(a.last_memory_ts).toLocaleDateString()}</>
 									)}
 								</div>
 							</div>
-							<ChevronRight className="w-4 h-4 text-slate-400" />
+							<ChevronRight className="w-4 h-4 text-ink-600" />
 						</Link>
 					</li>
 				))}
@@ -141,7 +141,7 @@ function AgentDetail({ agentId, embedded, onBack }: { agentId: string; embedded?
 				onClick={() => setKindFilter('')}
 				className={[
 					'px-3 py-1 rounded-full text-xs transition-colors',
-					!kindFilter ? 'bg-gray-900 text-white' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50',
+					!kindFilter ? 'bg-ink-900 text-white' : 'bg-card border border-ink-200 text-ink-700 hover:bg-ink-50',
 				].join(' ')}
 			>All</button>
 			{kinds.map((k) => (
@@ -150,7 +150,7 @@ function AgentDetail({ agentId, embedded, onBack }: { agentId: string; embedded?
 					onClick={() => setKindFilter(k!)}
 					className={[
 						'px-3 py-1 rounded-full text-xs transition-colors',
-						kindFilter === k ? 'bg-gray-900 text-white' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50',
+						kindFilter === k ? 'bg-ink-900 text-white' : 'bg-card border border-ink-200 text-ink-700 hover:bg-ink-50',
 					].join(' ')}
 				>{k}</button>
 			))}
@@ -162,19 +162,19 @@ function AgentDetail({ agentId, embedded, onBack }: { agentId: string; embedded?
 			{(memories ?? []).map((m, i) => (
 				<li
 					key={m.id || `${m.created_at}-${i}`}
-					className="rounded-lg border border-slate-200 bg-white p-3"
+					className="rounded-lg border border-ink-200 bg-card p-3"
 				>
 					<div className="flex items-start gap-3">
 						{m.kind && (
-							<span className={['px-2 py-0.5 rounded-full text-[10px] tracking-wide border flex-shrink-0', KIND_COLORS[m.kind] || 'bg-slate-50 text-slate-600 border-slate-200'].join(' ')}>
+							<span className={['px-2 py-0.5 rounded-full text-nano tracking-wide border flex-shrink-0', KIND_COLORS[m.kind] || 'bg-ink-50 text-ink-600 border-ink-200'].join(' ')}>
 								{m.kind}
 							</span>
 						)}
 						<div className="min-w-0 flex-1">
-							<div className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">
+							<div className="text-sm text-ink-800 whitespace-pre-wrap leading-relaxed">
 								{m.content || '(no content)'}
 							</div>
-							<div className="text-[11px] text-slate-500 mt-1.5 flex items-center gap-2 flex-wrap">
+							<div className="text-micro text-ink-600 mt-1.5 flex items-center gap-2 flex-wrap">
 								{m.created_at && <span>{new Date(m.created_at).toLocaleString()}</span>}
 								{m.source && <span>· {m.source}</span>}
 								{m.confidence != null && <span>· confidence {m.confidence.toFixed(2)}</span>}
@@ -185,33 +185,33 @@ function AgentDetail({ agentId, embedded, onBack }: { agentId: string; embedded?
 				</li>
 			))}
 			{memories !== null && memories.length === 0 && (
-				<li className="text-sm text-slate-500 italic">No memories matching this filter.</li>
+				<li className="text-sm text-ink-600 italic">No memories matching this filter.</li>
 			)}
 		</ul>
 	);
 
 	const stateMsg = error
-		? <div className="text-rose-700 text-sm">{error}</div>
+		? <div className="text-brick-700 text-sm">{error}</div>
 		: memories === null
-			? <div className="text-sm text-slate-500 italic">Loading memories…</div>
+			? <div className="text-sm text-ink-600 italic">Loading memories…</div>
 			: null;
 
 	// Embedded — rendered IN the workflow panel's right canvas (like the prompt
 	// editor). A compact card with header + scroll; the host owns Back (toggle).
 	if (embedded) {
 		return (
-			<div className="h-full flex flex-col rounded-xl border border-slate-200 bg-white overflow-hidden animate-in fade-in duration-200">
-				<div className="flex items-center gap-2 px-3 py-2 border-b border-slate-100 flex-shrink-0">
+			<div className="h-full flex flex-col rounded-xl border border-ink-200 bg-card overflow-hidden animate-in fade-in duration-200">
+				<div className="flex items-center gap-2 px-3 py-2 border-b border-ink-100 flex-shrink-0">
 					{onBack && (
-						<button onClick={onBack} title="Back to run tree" className="inline-flex items-center gap-1 text-[12px] text-slate-500 hover:text-slate-900 transition-colors flex-shrink-0">
+						<button onClick={onBack} title="Back to run tree" className="inline-flex items-center gap-1 text-caption text-ink-600 hover:text-ink-900 transition-colors flex-shrink-0">
 							<ArrowLeft className="w-3.5 h-3.5" /> Run tree
 						</button>
 					)}
-					{onBack && <span className="text-slate-300">·</span>}
-					<Brain className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-					<span className="font-mono text-[13px] font-medium text-slate-800 truncate" title={agentId}>{agentId}</span>
-					{memories && <span className="text-[11px] text-slate-400">· {memories.length} memories</span>}
-					<Link to={`/studio/knowledge/${encodeURIComponent(agentId)}`} className="ml-auto text-[11px] text-slate-400 hover:text-slate-700 transition-colors">Open full →</Link>
+					{onBack && <span className="text-ink-600">·</span>}
+					<Brain className="w-3.5 h-3.5 text-ink-600 flex-shrink-0" />
+					<span className="font-mono text-meta font-medium text-ink-800 truncate" title={agentId}>{agentId}</span>
+					{memories && <span className="text-micro text-ink-600">· {memories.length} memories</span>}
+					<Link to={`/studio/knowledge/${encodeURIComponent(agentId)}`} className="ml-auto text-micro text-ink-600 hover:text-ink-700 transition-colors">Open full →</Link>
 				</div>
 				<div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
 					{stateMsg}
@@ -225,12 +225,12 @@ function AgentDetail({ agentId, embedded, onBack }: { agentId: string; embedded?
 	if (stateMsg) return stateMsg;
 	return (
 		<div className="space-y-4">
-			<Link to="/studio/knowledge" className="inline-flex items-center text-sm text-slate-600 hover:text-slate-900 gap-1">
+			<Link to="/studio/knowledge" className="inline-flex items-center text-sm text-ink-600 hover:text-ink-900 gap-1">
 				← Knowledge
 			</Link>
 			<header>
-				<h1 className="font-mono text-lg font-medium">{agentId}</h1>
-				<p className="text-sm text-slate-500 mt-1">{(memories ?? []).length} memory record(s)</p>
+				<h1 className="font-mono text-title font-medium">{agentId}</h1>
+				<p className="text-sm text-ink-600 mt-1">{(memories ?? []).length} memory record(s)</p>
 			</header>
 			{filters}
 			{list}

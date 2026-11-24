@@ -138,14 +138,14 @@ export default function SkillsNewPage() {
 							<ArrowLeft className="inline w-3 h-3 mr-0.5" /> Inbox
 						</Link>
 					</div>
-					<h1 className="text-2xl font-bold flex items-center gap-2">
-						<Sparkles className="w-5 h-5 text-violet-500" />
+					<h1 className="text-h2 font-bold flex items-center gap-2">
+						<Sparkles className="w-5 h-5 text-plum-600" />
 						New skill draft
 					</h1>
 					<p className="text-sm text-muted-foreground mt-1">
 						Fill the form, then run the generated command in your terminal — the
 						LumidOS CLI writes the draft under{' '}
-						<code className="px-1 py-0.5 bg-slate-100 rounded text-[12px]">
+						<code className="px-1 py-0.5 bg-ink-100 rounded text-caption">
 							~/.xp/apps/{app || '&lt;app&gt;'}/.drafts/
 						</code>
 						. The AI auto-loop and the cycle pick up drafts there. Same disk-bridge pattern as Personal Access Tokens.
@@ -153,7 +153,7 @@ export default function SkillsNewPage() {
 				</div>
 			</div>
 
-			<div className="space-y-4 bg-white border border-slate-200 rounded-xl p-5">
+			<div className="space-y-4 bg-card border border-ink-200 rounded-xl p-5">
 				<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 					<div>
 						<Label htmlFor="app">Agent</Label>
@@ -163,7 +163,7 @@ export default function SkillsNewPage() {
 							onChange={(e) => setApp(e.target.value.toLowerCase())}
 							placeholder="mbb-ai"
 						/>
-						<p className="text-[11px] text-muted-foreground mt-1">
+						<p className="text-micro text-muted-foreground mt-1">
 							The xp.io app slug installed at <code>~/.xp/apps/&lt;app&gt;/</code>.
 						</p>
 					</div>
@@ -181,7 +181,7 @@ export default function SkillsNewPage() {
 								))}
 							</SelectContent>
 						</Select>
-						<p className="text-[11px] text-muted-foreground mt-1">
+						<p className="text-micro text-muted-foreground mt-1">
 							Which persona reads this skill — picks the memory_agent it
 							ingests under.
 						</p>
@@ -196,7 +196,7 @@ export default function SkillsNewPage() {
 						onChange={(e) => setSkillId(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_'))}
 						placeholder="revenue_brainstorm"
 					/>
-					<p className="text-[11px] text-muted-foreground mt-1">
+					<p className="text-micro text-muted-foreground mt-1">
 						Snake-case. The CLI rejects spaces / hyphens / unicode.
 					</p>
 				</div>
@@ -215,20 +215,20 @@ export default function SkillsNewPage() {
 							))}
 						</SelectContent>
 					</Select>
-					<p className="text-[11px] text-muted-foreground mt-1">
+					<p className="text-micro text-muted-foreground mt-1">
 						{KIND_OPTIONS.find((o) => o.value === kind)?.hint}
 					</p>
 				</div>
 
 				<div>
 					<Label>Triggers</Label>
-					<div className="flex flex-wrap items-center gap-1.5 p-2 border border-slate-200 rounded-md bg-white">
+					<div className="flex flex-wrap items-center gap-1.5 p-2 border border-ink-200 rounded-md bg-card">
 						{triggers.map((t, i) => (
 							<Badge key={i} variant="secondary" className="gap-1">
 								{t}
 								<button
 									type="button"
-									className="hover:text-red-500"
+									className="hover:text-brick-600"
 									onClick={() => removeToken(i, triggers, setTriggers)}
 								>
 									<X className="w-3 h-3" />
@@ -248,7 +248,7 @@ export default function SkillsNewPage() {
 							placeholder={triggers.length ? '' : 'add trigger keywords (Enter / comma to commit)'}
 						/>
 					</div>
-					<p className="text-[11px] text-muted-foreground mt-1">
+					<p className="text-micro text-muted-foreground mt-1">
 						Lowercased substrings of the question text. Example:{' '}
 						<code>revenue streams</code>, <code>monetize</code>,{' '}
 						<code>adjacent products</code>.
@@ -257,13 +257,13 @@ export default function SkillsNewPage() {
 
 				<div>
 					<Label>Target workflows</Label>
-					<div className="flex flex-wrap items-center gap-1.5 p-2 border border-slate-200 rounded-md bg-white">
+					<div className="flex flex-wrap items-center gap-1.5 p-2 border border-ink-200 rounded-md bg-card">
 						{targetLoops.map((t, i) => (
 							<Badge key={i} variant="secondary" className="gap-1">
 								{t}
 								<button
 									type="button"
-									className="hover:text-red-500"
+									className="hover:text-brick-600"
 									onClick={() => removeToken(i, targetLoops, setTargetLoops)}
 								>
 									<X className="w-3 h-3" />
@@ -290,7 +290,7 @@ export default function SkillsNewPage() {
 						<Label htmlFor="body">Prompt body (markdown)</Label>
 						<Textarea
 							id="body"
-							className="font-mono text-[12px] min-h-[260px]"
+							className="font-mono text-caption min-h-[260px]"
 							value={promptBody}
 							onChange={(e) => setPromptBody(e.target.value)}
 							placeholder={
@@ -310,14 +310,14 @@ export default function SkillsNewPage() {
 						onChange={(e) => setNotes(e.target.value)}
 						placeholder="from validator gap GAP_007 / Case_007 Q3 router miss"
 					/>
-					<p className="text-[11px] text-muted-foreground mt-1">
+					<p className="text-micro text-muted-foreground mt-1">
 						Free-text — typically the gap id or insights-candidate id that
 						triggered this draft. Audit-trail material.
 					</p>
 				</div>
 
 				{blocking.length > 0 && (
-					<div className="flex gap-2 p-3 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-900">
+					<div className="flex gap-2 p-3 bg-ember-50 border border-ember-200 rounded-md text-sm text-ember-900">
 						<AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
 						<ul className="space-y-0.5">
 							{blocking.map((e) => (
@@ -354,22 +354,22 @@ export default function SkillsNewPage() {
 						)}
 					</Button>
 				</div>
-				<pre className="p-4 bg-slate-900 text-slate-100 rounded-md text-[12px] leading-5 overflow-x-auto whitespace-pre">
+				<pre className="p-4 bg-ink-900 text-ink-100 rounded-md text-caption leading-5 overflow-x-auto whitespace-pre">
 					{blocking.length > 0
 						? '# Fix the validation issues above to generate the command.'
 						: command}
 				</pre>
-				<p className="text-[11px] text-muted-foreground">
+				<p className="text-micro text-muted-foreground">
 					The CLI writes the draft to{' '}
-					<code className="px-1 py-0.5 bg-slate-100 rounded">
+					<code className="px-1 py-0.5 bg-ink-100 rounded">
 						~/.xp/apps/{app || '&lt;app&gt;'}/.drafts/&lt;draft_id&gt;/
 					</code>
 					. Then run{' '}
-					<code className="px-1 py-0.5 bg-slate-100 rounded">
+					<code className="px-1 py-0.5 bg-ink-100 rounded">
 						lumid skill_validate --app {app} --draft-id &lt;id&gt;
 					</code>{' '}
 					to lint, and{' '}
-					<code className="px-1 py-0.5 bg-slate-100 rounded">
+					<code className="px-1 py-0.5 bg-ink-100 rounded">
 						lumid skill_apply --app {app} --draft-id &lt;id&gt;
 					</code>{' '}
 					to land it in the working tree.

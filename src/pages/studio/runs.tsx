@@ -107,7 +107,7 @@ export default function StudioRuns() {
 		return () => stop();
 	}, []);
 
-	if (err) return <div className="text-rose-700 text-sm">{err}</div>;
+	if (err) return <div className="text-brick-700 text-sm">{err}</div>;
 
 	// ── Default: the claude-style index. Each run row opens the grounded
 	//    chat (askRun); the old per-run inspector / app cycle panel stays a
@@ -181,7 +181,7 @@ export default function StudioRuns() {
 				toolbar={toolbar}
 				empty="No runs in the selected window."
 				footer={(runs?.length || 0) > INDEX_CAP
-					? <div className="text-[12px] text-muted-foreground text-center">Showing {INDEX_CAP} of {runs?.length}. Open <button className="underline" onClick={() => setView("grid")}>Timeline</button> for all.</div>
+					? <div className="text-caption text-muted-foreground text-center">Showing {INDEX_CAP} of {runs?.length}. Open <button className="underline" onClick={() => setView("grid")}>Timeline</button> for all.</div>
 					: undefined}
 			/>
 		);
@@ -203,7 +203,7 @@ export default function StudioRuns() {
 				<ViewTab active={view === "gantt"}    onClick={() => setView("gantt")}    label="Gantt" />
 				<ViewTab active={view === "calendar"} onClick={() => setView("calendar")} label="Calendar" />
 
-				<div className="ml-3 flex items-center gap-1 text-xs text-slate-500">
+				<div className="ml-3 flex items-center gap-1 text-xs text-ink-600">
 					<Filter className="w-3 h-3" />
 					<select
 						value={stateFilter}
@@ -228,13 +228,13 @@ export default function StudioRuns() {
 					</select>
 				</div>
 
-				<div className="ml-auto text-xs text-slate-500">
+				<div className="ml-auto text-xs text-ink-600">
 					{runs?.length ?? 0} runs
 				</div>
 			</div>
 
 			{runs === null ? (
-				<div className="text-sm text-slate-500 italic py-4">Loading…</div>
+				<div className="text-sm text-ink-600 italic py-4">Loading…</div>
 			) : view === "list" ? (
 				<RunsList runs={runs} onClick={(id) => navigate(runHref(id))} />
 			) : view === "grid" ? (
@@ -255,8 +255,8 @@ function ViewTab({ active, onClick, label }: { active: boolean; onClick: () => v
 			className={[
 				"px-3 py-1 rounded-full text-xs transition-colors",
 				active
-					? "bg-gray-900 text-white"
-					: "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50",
+					? "bg-ink-900 text-white"
+					: "bg-card border border-ink-200 text-ink-700 hover:bg-ink-50",
 			].join(" ")}
 		>
 			{label}
@@ -267,21 +267,21 @@ function ViewTab({ active, onClick, label }: { active: boolean; onClick: () => v
 function RunsList({ runs, onClick }: { runs: MeRunRow[]; onClick: (runId: string) => void }) {
 	if (runs.length === 0) {
 		return (
-			<div className="rounded-xl border border-dashed border-slate-200 bg-white p-6 text-center text-sm text-slate-500">
+			<div className="rounded-xl border border-dashed border-ink-200 bg-card p-6 text-center text-sm text-ink-600">
 				No runs in the selected window.
 			</div>
 		);
 	}
 	return (
-		<div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+		<div className="rounded-xl border border-ink-200 bg-card overflow-hidden shadow-sm">
 			<table className="min-w-full text-sm">
-				<thead className="bg-slate-50/60 border-b border-slate-200">
+				<thead className="bg-ink-50/60 border-b border-ink-200">
 					<tr>
-						<th className="text-left px-4 py-2.5 font-medium text-slate-700">Workflow</th>
-						<th className="text-left px-3 py-2.5 font-medium text-slate-700">State</th>
-						<th className="text-left px-3 py-2.5 font-medium text-slate-700">Started</th>
-						<th className="text-left px-3 py-2.5 font-medium text-slate-700">Duration</th>
-						<th className="text-left px-3 py-2.5 font-medium text-slate-700">Detail</th>
+						<th className="text-left px-4 py-2.5 font-medium text-ink-700">Workflow</th>
+						<th className="text-left px-3 py-2.5 font-medium text-ink-700">State</th>
+						<th className="text-left px-3 py-2.5 font-medium text-ink-700">Started</th>
+						<th className="text-left px-3 py-2.5 font-medium text-ink-700">Duration</th>
+						<th className="text-left px-3 py-2.5 font-medium text-ink-700">Detail</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -289,19 +289,19 @@ function RunsList({ runs, onClick }: { runs: MeRunRow[]; onClick: (runId: string
 						<tr
 							key={r.run_id}
 							onClick={() => onClick(r.run_id)}
-							className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50/40 transition-colors cursor-pointer"
+							className="border-b border-ink-100 last:border-b-0 hover:bg-ink-50/40 transition-colors cursor-pointer"
 						>
-							<td className="px-4 py-2 font-medium text-slate-800">{r.workflow_slug}</td>
+							<td className="px-4 py-2 font-medium text-ink-800">{r.workflow_slug}</td>
 							<td className="px-3 py-2"><StateChip state={r.state} /></td>
-							<td className="px-3 py-2 text-xs text-slate-600 font-mono">
+							<td className="px-3 py-2 text-xs text-ink-600 font-mono">
 								{new Date(r.started_at * 1000).toLocaleString(undefined, {
 									month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
 								})}
 							</td>
-							<td className="px-3 py-2 text-xs text-slate-600">
+							<td className="px-3 py-2 text-xs text-ink-600">
 								{r.duration_s ? `${r.duration_s.toFixed(1)}s` : "—"}
 							</td>
-							<td className="px-3 py-2 text-xs text-slate-600 truncate max-w-md">
+							<td className="px-3 py-2 text-xs text-ink-600 truncate max-w-md">
 								{r.reason || "—"}
 							</td>
 						</tr>
@@ -368,7 +368,7 @@ function StateChip({ state }: { state: string }) {
 	const st = runStatus(state);
 	const t = TONES[RUN_STATUS_TONE[st.status]];
 	return (
-		<span title={runStatusTitle(st)} className={["text-[10px] px-2 py-0.5 rounded-full border font-medium", t.bg, t.text, t.border].join(" ")}>
+		<span title={runStatusTitle(st)} className={["text-nano px-2 py-0.5 rounded-full border font-medium", t.bg, t.text, t.border].join(" ")}>
 			{RUN_STATUS_LABEL[st.status].toLowerCase()}
 		</span>
 	);

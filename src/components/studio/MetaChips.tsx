@@ -27,7 +27,7 @@ export interface Chip {
 export function MetaChips({ chips, className }: { chips: Chip[]; className?: string }) {
 	if (chips.length === 0) return null;
 	return (
-		<div className={cn("flex items-center gap-1.5 flex-wrap text-[10px]", className)}>
+		<div className={cn("flex items-center gap-1.5 flex-wrap text-nano", className)}>
 			{chips.map((c, i) => (
 				<span key={i} title={c.title} className={cn(
 					"px-1.5 py-0.5 rounded border",

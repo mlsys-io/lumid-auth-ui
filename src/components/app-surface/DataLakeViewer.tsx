@@ -37,18 +37,18 @@ function FreshnessPill({ f }: { f?: InstanceCatalog["freshness"] }) {
       </span>
     ) : null;
   return (
-    <span className="inline-flex gap-1 text-[10px] font-medium">
-      {cell(f.green, "bg-emerald-100 text-emerald-700", "fresh")}
-      {cell(f.amber, "bg-amber-100 text-amber-700", "stale")}
-      {cell(f.red, "bg-red-100 text-red-700", "overdue")}
-      {cell(f.gray, "bg-slate-100 text-slate-500", "unknown")}
+    <span className="inline-flex gap-1 text-nano font-medium">
+      {cell(f.green, "bg-gold-100 text-gold-700", "fresh")}
+      {cell(f.amber, "bg-ember-100 text-ember-700", "stale")}
+      {cell(f.red, "bg-brick-100 text-brick-700", "overdue")}
+      {cell(f.gray, "bg-ink-100 text-ink-600", "unknown")}
     </span>
   );
 }
 
 function GenericTable({ rows }: { rows: Record<string, unknown>[] }) {
   if (!rows.length) {
-    return <div className="text-[12px] text-slate-400 p-4">No rows.</div>;
+    return <div className="text-caption text-ink-600 p-4">No rows.</div>;
   }
   const cols = Array.from(
     rows.slice(0, 100).reduce((s: Set<string>, r) => {
@@ -59,12 +59,12 @@ function GenericTable({ rows }: { rows: Record<string, unknown>[] }) {
   const cell = (v: unknown) =>
     v == null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
   return (
-    <div className="overflow-auto max-h-[520px] border border-slate-200 rounded">
-      <table className="w-full text-[11px]">
-        <thead className="bg-slate-100 sticky top-0">
+    <div className="overflow-auto max-h-[520px] border border-ink-200 rounded">
+      <table className="w-full text-micro">
+        <thead className="bg-ink-100 sticky top-0">
           <tr>
             {cols.map((c) => (
-              <th key={c} className="text-left px-2 py-1 font-medium text-slate-600 whitespace-nowrap">
+              <th key={c} className="text-left px-2 py-1 font-medium text-ink-600 whitespace-nowrap">
                 {c}
               </th>
             ))}
@@ -72,7 +72,7 @@ function GenericTable({ rows }: { rows: Record<string, unknown>[] }) {
         </thead>
         <tbody>
           {rows.slice(0, 500).map((r, i) => (
-            <tr key={i} className="odd:bg-white even:bg-slate-50">
+            <tr key={i} className="odd:bg-card even:bg-ink-50">
               {cols.map((c) => (
                 <td
                   key={c}
@@ -86,7 +86,7 @@ function GenericTable({ rows }: { rows: Record<string, unknown>[] }) {
           ))}
         </tbody>
       </table>
-      <div className="text-[10px] text-slate-400 px-2 py-1">
+      <div className="text-nano text-ink-600 px-2 py-1">
         {rows.length} row(s){rows.length > 500 ? " (showing 500)" : ""}
       </div>
     </div>
@@ -184,28 +184,28 @@ function TableDetail({ sel }: { sel: Selection }) {
   return (
     <div className="flex-1 flex flex-col min-w-0">
       <div className="mb-2">
-        <div className="font-mono text-[13px] text-slate-800">
-          <span className="text-slate-400">{sel.inst.label} ·</span> {sel.schema}.
+        <div className="font-mono text-meta text-ink-800">
+          <span className="text-ink-600">{sel.inst.label} ·</span> {sel.schema}.
           <span className="font-semibold">{t.table}</span>
         </div>
-        <div className="text-[11px] text-slate-500 flex gap-3 mt-0.5">
+        <div className="text-micro text-ink-600 flex gap-3 mt-0.5">
           <span>{fmtRows(t.est_rows)} rows</span>
           <span>{fmtBytes(t.size_bytes)}</span>
-          {t.is_hypertable && <span className="text-violet-600">hypertable</span>}
+          {t.is_hypertable && <span className="text-plum-600">hypertable</span>}
           {t.comment && <span className="italic truncate max-w-[360px]" title={t.comment}>{t.comment}</span>}
         </div>
       </div>
 
-      <div className="flex gap-1 border-b border-slate-200 mb-2">
+      <div className="flex gap-1 border-b border-ink-200 mb-2">
         {(["sample", "columns", "profile"] as Tab[]).map((x) => (
           <button
             key={x}
             onClick={() => setTab(x)}
             className={[
-              "text-[12px] px-3 py-1 -mb-px border-b-2 capitalize",
+              "text-caption px-3 py-1 -mb-px border-b-2 capitalize",
               tab === x
-                ? "border-violet-600 text-violet-700 font-medium"
-                : "border-transparent text-slate-500 hover:text-slate-700",
+                ? "border-plum-600 text-plum-700 font-medium"
+                : "border-transparent text-ink-600 hover:text-ink-700",
             ].join(" ")}
           >
             {x}
@@ -213,16 +213,16 @@ function TableDetail({ sel }: { sel: Selection }) {
         ))}
       </div>
 
-      {err && <div className="text-[11px] text-red-600 mb-2">error: {err}</div>}
+      {err && <div className="text-micro text-brick-600 mb-2">error: {err}</div>}
 
       {tab === "sample" && (
         <>
-          <div className="flex items-center gap-2 mb-2 text-[11px] text-slate-500">
+          <div className="flex items-center gap-2 mb-2 text-micro text-ink-600">
             <span>rows</span>
             <select
               value={limit}
               onChange={(e) => setLimit(Number(e.target.value))}
-              className="border border-slate-300 rounded px-1 py-0.5 text-[11px]"
+              className="border border-ink-300 rounded px-1 py-0.5 text-micro"
             >
               {[25, 100, 250, 500, 1000].map((n) => (
                 <option key={n} value={n}>{n}</option>
@@ -231,19 +231,19 @@ function TableDetail({ sel }: { sel: Selection }) {
             <button
               onClick={reSample}
               disabled={busy}
-              className="px-2 py-0.5 rounded bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
+              className="px-2 py-0.5 rounded bg-plum-600 text-white hover:bg-plum-700 disabled:opacity-50"
             >
               {busy ? "Sampling…" : "Sample"}
             </button>
             {curSample && (
-              <span className="text-slate-400">
+              <span className="text-ink-600">
                 {curSample.meta.rowcount} rows · {fmtBytes(curSample.meta.size_bytes)} materialized
                 {" "}(only this capped blob crossed)
               </span>
             )}
           </div>
           {busy && !curSample ? (
-            <div className="text-[12px] text-slate-400 p-4">Materializing capped sample…</div>
+            <div className="text-caption text-ink-600 p-4">Materializing capped sample…</div>
           ) : curSample ? (
             <GenericTable rows={curSample.rows} />
           ) : null}
@@ -252,49 +252,49 @@ function TableDetail({ sel }: { sel: Selection }) {
 
       {tab === "columns" && (
         busy && !curCols ? (
-          <div className="text-[12px] text-slate-400 p-4">Loading columns…</div>
+          <div className="text-caption text-ink-600 p-4">Loading columns…</div>
         ) : curCols ? (
-          <div className="overflow-auto max-h-[520px] border border-slate-200 rounded">
-            <table className="w-full text-[11px]">
-              <thead className="bg-slate-100 sticky top-0">
+          <div className="overflow-auto max-h-[520px] border border-ink-200 rounded">
+            <table className="w-full text-micro">
+              <thead className="bg-ink-100 sticky top-0">
                 <tr>
-                  <th className="text-left px-2 py-1 font-medium text-slate-600">column</th>
-                  <th className="text-left px-2 py-1 font-medium text-slate-600">type</th>
-                  <th className="text-left px-2 py-1 font-medium text-slate-600">nullable</th>
-                  <th className="text-left px-2 py-1 font-medium text-slate-600">required</th>
+                  <th className="text-left px-2 py-1 font-medium text-ink-600">column</th>
+                  <th className="text-left px-2 py-1 font-medium text-ink-600">type</th>
+                  <th className="text-left px-2 py-1 font-medium text-ink-600">nullable</th>
+                  <th className="text-left px-2 py-1 font-medium text-ink-600">required</th>
                 </tr>
               </thead>
               <tbody>
                 {Object.entries(colProps).map(([name, spec]) => (
-                  <tr key={name} className="odd:bg-white even:bg-slate-50">
+                  <tr key={name} className="odd:bg-card even:bg-ink-50">
                     <td className="px-2 py-1 font-mono">{name}</td>
-                    <td className="px-2 py-1 text-slate-600">
+                    <td className="px-2 py-1 text-ink-600">
                       {Array.isArray(spec.type) ? spec.type.join(" | ") : String(spec.type ?? "—")}
                     </td>
-                    <td className="px-2 py-1 text-slate-500">{spec.nullable ? "yes" : "no"}</td>
-                    <td className="px-2 py-1 text-slate-500">{required.has(name) ? "yes" : ""}</td>
+                    <td className="px-2 py-1 text-ink-600">{spec.nullable ? "yes" : "no"}</td>
+                    <td className="px-2 py-1 text-ink-600">{required.has(name) ? "yes" : ""}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <div className="text-[10px] text-slate-400 px-2 py-1">
+            <div className="text-nano text-ink-600 px-2 py-1">
               {Object.keys(colProps).length} column(s) · zero rows read
             </div>
           </div>
         ) : (
-          <div className="text-[12px] text-slate-400 p-4">No column schema.</div>
+          <div className="text-caption text-ink-600 p-4">No column schema.</div>
         )
       )}
 
       {tab === "profile" && (
         busy && !curProfile ? (
-          <div className="text-[12px] text-slate-400 p-4">Loading profile…</div>
+          <div className="text-caption text-ink-600 p-4">Loading profile…</div>
         ) : curProfile ? (
-          <pre className="text-[11px] bg-slate-50 border border-slate-200 rounded p-2 overflow-auto max-h-[520px]">
+          <pre className="text-micro bg-ink-50 border border-ink-200 rounded p-2 overflow-auto max-h-[520px]">
             {JSON.stringify(curProfile, null, 2)}
           </pre>
         ) : (
-          <div className="text-[12px] text-slate-400 p-4">No profile.</div>
+          <div className="text-caption text-ink-600 p-4">No profile.</div>
         )
       )}
     </div>
@@ -351,15 +351,15 @@ function SchemaNode({
     <div>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="w-full text-left px-2 py-1 text-[12px] hover:bg-violet-50 flex items-center gap-1"
+        className="w-full text-left px-2 py-1 text-caption hover:bg-plum-50 flex items-center gap-1"
       >
-        <span className="text-slate-400 w-3">{open ? "▾" : "▸"}</span>
-        <span className="font-medium text-slate-700">{schema}</span>
+        <span className="text-ink-600 w-3">{open ? "▾" : "▸"}</span>
+        <span className="font-medium text-ink-700">{schema}</span>
       </button>
       {open && (
-        <div className="ml-4 border-l border-slate-100">
-          {busy && <div className="px-2 py-1 text-[11px] text-slate-400">loading…</div>}
-          {err && <div className="px-2 py-1 text-[11px] text-red-600">{err}</div>}
+        <div className="ml-4 border-l border-ink-100">
+          {busy && <div className="px-2 py-1 text-micro text-ink-600">loading…</div>}
+          {err && <div className="px-2 py-1 text-micro text-brick-600">{err}</div>}
           {shown?.map((t) => {
             const k = `${inst.id}/${schema}/${t.table}`;
             return (
@@ -367,20 +367,20 @@ function SchemaNode({
                 key={t.table}
                 onClick={() => onSelect({ inst, schema, table: t })}
                 className={[
-                  "w-full text-left px-2 py-0.5 text-[11px] font-mono truncate flex justify-between gap-2",
+                  "w-full text-left px-2 py-0.5 text-micro font-mono truncate flex justify-between gap-2",
                   selectedKey === k
-                    ? "bg-violet-100 text-violet-800"
-                    : "text-slate-600 hover:bg-violet-50",
+                    ? "bg-plum-100 text-plum-800"
+                    : "text-ink-600 hover:bg-plum-50",
                 ].join(" ")}
                 title={`${t.table} · ${fmtRows(t.est_rows)} rows · ${fmtBytes(t.size_bytes)}`}
               >
                 <span className="truncate">{t.table}</span>
-                <span className="text-slate-400 flex-shrink-0">{fmtRows(t.est_rows)}</span>
+                <span className="text-ink-600 flex-shrink-0">{fmtRows(t.est_rows)}</span>
               </button>
             );
           })}
           {shown && shown.length === 0 && (
-            <div className="px-2 py-1 text-[11px] text-slate-400">no match</div>
+            <div className="px-2 py-1 text-micro text-ink-600">no match</div>
           )}
         </div>
       )}
@@ -443,8 +443,8 @@ export default function DataLakeViewer({ config }: { config?: Record<string, unk
       {/* Header */}
       <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
         <div>
-          <div className="text-[15px] font-semibold text-slate-800">{title}</div>
-          <div className="text-[11px] text-slate-500">
+          <div className="text-read font-semibold text-ink-800">{title}</div>
+          <div className="text-micro text-ink-600">
             {loading
               ? "loading catalog…"
               : `${totals.instances}/${LAKE_INSTANCES.length} instances · ${totals.schemas} schemas · ${totals.tables} tables · read-only`}
@@ -452,12 +452,12 @@ export default function DataLakeViewer({ config }: { config?: Record<string, unk
         </div>
         <div className="flex flex-wrap gap-3">
           {cat.map((c) => (
-            <div key={c.instance.id} className="flex items-center gap-1.5 text-[11px]">
-              <span className={c.error ? "text-red-500" : "text-slate-600 font-medium"}>
+            <div key={c.instance.id} className="flex items-center gap-1.5 text-micro">
+              <span className={c.error ? "text-brick-600" : "text-ink-600 font-medium"}>
                 {c.instance.label}
               </span>
               {c.error ? (
-                <span className="text-red-400" title={c.error}>offline</span>
+                <span className="text-brick-600" title={c.error}>offline</span>
               ) : (
                 <FreshnessPill f={c.freshness} />
               )}
@@ -468,27 +468,27 @@ export default function DataLakeViewer({ config }: { config?: Record<string, unk
 
       <div className="flex gap-4 flex-1 min-h-0">
         {/* Left: tree */}
-        <div className="w-[340px] flex-shrink-0 flex flex-col border border-slate-200 rounded">
-          <div className="p-2 border-b border-slate-200">
+        <div className="w-[340px] flex-shrink-0 flex flex-col border border-ink-200 rounded">
+          <div className="p-2 border-b border-ink-200">
             <input
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               placeholder="filter tables across all instances…"
-              className="w-full text-[12px] px-2 py-1 border border-slate-300 rounded"
+              className="w-full text-caption px-2 py-1 border border-ink-300 rounded"
             />
           </div>
           <div className="overflow-auto flex-1">
-            {loading && <div className="p-3 text-[12px] text-slate-400">loading…</div>}
+            {loading && <div className="p-3 text-caption text-ink-600">loading…</div>}
             {cat.map((c) => (
-              <div key={c.instance.id} className="border-b border-slate-100">
+              <div key={c.instance.id} className="border-b border-ink-100">
                 <button
                   onClick={() => setOpenInst((o) => ({ ...o, [c.instance.id]: !o[c.instance.id] }))}
-                  className="w-full text-left px-2 py-1.5 text-[12px] font-semibold text-slate-800 bg-slate-50 hover:bg-slate-100 flex items-center gap-1"
+                  className="w-full text-left px-2 py-1.5 text-caption font-semibold text-ink-800 bg-ink-50 hover:bg-ink-100 flex items-center gap-1"
                   title={c.instance.blurb}
                 >
-                  <span className="text-slate-400 w-3">{openInst[c.instance.id] ? "▾" : "▸"}</span>
+                  <span className="text-ink-600 w-3">{openInst[c.instance.id] ? "▾" : "▸"}</span>
                   {c.instance.label}
-                  <span className="ml-auto text-[10px] font-normal text-slate-400">
+                  <span className="ml-auto text-nano font-normal text-ink-600">
                     {c.loading ? "…" : c.error ? "offline" : `${c.schemas.length} schemas`}
                   </span>
                 </button>
@@ -501,11 +501,11 @@ export default function DataLakeViewer({ config }: { config?: Record<string, unk
                     table level one step down already did this correctly; only
                     this level was missing it. */}
                 {openInst[c.instance.id] && (
-                  <div className="ml-3 border-l border-slate-200">
+                  <div className="ml-3 border-l border-ink-200">
                     {c.loading ? (
-                      <div className="px-2 py-1 text-[11px] text-slate-400">loading…</div>
+                      <div className="px-2 py-1 text-micro text-ink-600">loading…</div>
                     ) : c.error ? (
-                      <div className="px-2 py-1 text-[11px] text-red-500" title={c.error}>
+                      <div className="px-2 py-1 text-micro text-brick-600" title={c.error}>
                         {c.error.slice(0, 80)}
                       </div>
                     ) : (
@@ -531,13 +531,13 @@ export default function DataLakeViewer({ config }: { config?: Record<string, unk
         </div>
 
         {/* Right: detail */}
-        <div className="flex-1 flex flex-col min-w-0 border border-slate-200 rounded p-3">
+        <div className="flex-1 flex flex-col min-w-0 border border-ink-200 rounded p-3">
           {sel ? (
             <TableDetail sel={sel} />
           ) : (
-            <div className="text-[12px] text-slate-400 p-4 space-y-2">
+            <div className="text-caption text-ink-600 p-4 space-y-2">
               <div>Pick a table on the left to inspect its columns, profile, and a capped sample.</div>
-              <div className="text-slate-300">
+              <div className="text-ink-600">
                 Data never moves — the viewer only reads catalog metadata and a small
                 materialized sample. Bulk export is a later phase.
               </div>

@@ -101,16 +101,16 @@ export default function Profile() {
 	return (
 		<>
 			<header className="mb-6">
-				<h1 className="text-2xl font-semibold">Profile</h1>
+				<h1 className="text-h2 font-semibold">Profile</h1>
 				<p className="text-sm text-muted-foreground mt-1">
 					Your display name and avatar across every Lumid app — plus a password change.
 				</p>
 			</header>
 			<section className="grid gap-6 md:grid-cols-2">
-					<Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm">
+					<Card className="border-0 shadow-md bg-card/80 backdrop-blur-sm">
 						<CardHeader>
-							<CardTitle className="flex items-center gap-2 text-base">
-								<UserIcon className="w-4 h-4 text-indigo-600" />
+							<CardTitle className="flex items-center gap-2 text-read">
+								<UserIcon className="w-4 h-4 text-plum-600" />
 								Profile
 							</CardTitle>
 							<CardDescription>
@@ -121,7 +121,7 @@ export default function Profile() {
 							<div className="flex items-center gap-4">
 								<Avatar className="w-16 h-16">
 									<AvatarImage src={avatar || user.avatar || undefined} />
-									<AvatarFallback className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white">
+									<AvatarFallback className="bg-gradient-to-br from-plum-500 to-plum-600 text-white">
 										{initial}
 									</AvatarFallback>
 								</Avatar>
@@ -195,10 +195,10 @@ export default function Profile() {
 						</CardContent>
 					</Card>
 
-					<Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm">
+					<Card className="border-0 shadow-md bg-card/80 backdrop-blur-sm">
 						<CardHeader>
-							<CardTitle className="flex items-center gap-2 text-base">
-								<Lock className="w-4 h-4 text-indigo-600" />
+							<CardTitle className="flex items-center gap-2 text-read">
+								<Lock className="w-4 h-4 text-plum-600" />
 								Password
 							</CardTitle>
 							<CardDescription>

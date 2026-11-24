@@ -12,12 +12,12 @@ import { Link } from "react-router-dom";
 import { isLumidDirective, LumidDirective, SurfaceParams } from "./directives";
 
 const components: Components = {
-  h1: ({ children }) => <h1 className="text-2xl font-semibold mt-5 first:mt-0 mb-2.5 text-slate-900">{children}</h1>,
-  h2: ({ children }) => <h2 className="text-lg font-semibold mt-4 first:mt-0 mb-2 text-slate-900">{children}</h2>,
-  h3: ({ children }) => <h3 className="text-[15px] font-semibold mt-3 first:mt-0 mb-1.5 text-slate-800">{children}</h3>,
-  p: ({ children }) => <p className="leading-relaxed mb-3 text-[14px] text-slate-700">{children}</p>,
-  ul: ({ children }) => <ul className="list-disc pl-5 my-3 space-y-1 text-[14px] text-slate-700">{children}</ul>,
-  ol: ({ children }) => <ol className="list-decimal pl-5 my-3 space-y-1 text-[14px] text-slate-700">{children}</ol>,
+  h1: ({ children }) => <h1 className="text-h2 font-semibold mt-5 first:mt-0 mb-2.5 text-ink-900">{children}</h1>,
+  h2: ({ children }) => <h2 className="text-title font-semibold mt-4 first:mt-0 mb-2 text-ink-900">{children}</h2>,
+  h3: ({ children }) => <h3 className="text-read font-semibold mt-3 first:mt-0 mb-1.5 text-ink-800">{children}</h3>,
+  p: ({ children }) => <p className="leading-relaxed mb-3 text-body text-ink-700">{children}</p>,
+  ul: ({ children }) => <ul className="list-disc pl-5 my-3 space-y-1 text-body text-ink-700">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal pl-5 my-3 space-y-1 text-body text-ink-700">{children}</ol>,
   li: ({ children }) => <li className="leading-relaxed">{children}</li>,
   a: ({ href, children }) => {
     const cls = "text-gold-700 underline decoration-gold-300 hover:decoration-gold-600 underline-offset-2";
@@ -27,16 +27,16 @@ const components: Components = {
     return <a href={href} target={href?.startsWith("http") ? "_blank" : undefined} rel="noopener noreferrer" className={cls}>{children}</a>;
   },
   blockquote: ({ children }) => (
-    <blockquote className="my-3 pl-3 border-l-2 border-gold-300 text-slate-600 text-[13px] italic">{children}</blockquote>
+    <blockquote className="my-3 pl-3 border-l-2 border-gold-300 text-ink-600 text-meta italic">{children}</blockquote>
   ),
-  hr: () => <hr className="my-5 border-slate-200" />,
+  hr: () => <hr className="my-5 border-ink-200" />,
   table: ({ children }) => (
-    <div className="my-3 overflow-x-auto rounded-lg border border-slate-200"><table className="min-w-full text-[13px] border-collapse">{children}</table></div>
+    <div className="my-3 overflow-x-auto rounded-lg border border-ink-200"><table className="min-w-full text-meta border-collapse">{children}</table></div>
   ),
-  thead: ({ children }) => <thead className="bg-slate-50 border-b border-slate-200">{children}</thead>,
-  tr: ({ children }) => <tr className="border-b border-slate-100 last:border-b-0">{children}</tr>,
-  th: ({ children }) => <th className="px-3 py-2 text-left font-semibold text-slate-700">{children}</th>,
-  td: ({ children }) => <td className="px-3 py-2 text-slate-700 align-top">{children}</td>,
+  thead: ({ children }) => <thead className="bg-ink-50 border-b border-ink-200">{children}</thead>,
+  tr: ({ children }) => <tr className="border-b border-ink-100 last:border-b-0">{children}</tr>,
+  th: ({ children }) => <th className="px-3 py-2 text-left font-semibold text-ink-700">{children}</th>,
+  td: ({ children }) => <td className="px-3 py-2 text-ink-700 align-top">{children}</td>,
   pre: ({ children }) => <>{children}</>, // `code` override owns block rendering
   code: ({ className, children, ...rest }) => {
     const text = String(children ?? "");
@@ -46,12 +46,12 @@ const components: Components = {
     const isBlock = /\n/.test(text) || (className && className.startsWith("language-"));
     if (isBlock) {
       return (
-        <pre className="my-3 px-3 py-2.5 rounded-lg bg-slate-900 text-slate-100 text-[12px] leading-relaxed overflow-x-auto">
+        <pre className="my-3 px-3 py-2.5 rounded-lg bg-ink-900 text-ink-100 text-caption leading-relaxed overflow-x-auto">
           <code className={className} {...rest}>{children}</code>
         </pre>
       );
     }
-    return <code className="px-1.5 py-0.5 rounded text-[12px] font-mono bg-slate-100 text-slate-800 border border-slate-200/60">{children}</code>;
+    return <code className="px-1.5 py-0.5 rounded text-caption font-mono bg-ink-100 text-ink-800 border border-ink-200/60">{children}</code>;
   },
 };
 

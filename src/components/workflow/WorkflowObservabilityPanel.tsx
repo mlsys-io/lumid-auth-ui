@@ -81,17 +81,17 @@ export interface LoopHealth {
 // is the TENANT cycles truth: without any tenant run, operator-scoped
 // wf.last_run_* must not paint a state ("Healthy · ran 2d ago" lie).
 function health(wf: MeWorkflowRow, hasRuns: boolean): { label: string; cls: string; dot: string } {
-	if (wf.enabled === false) return { label: "Paused", cls: "text-slate-500 bg-slate-50 border-slate-200", dot: "bg-slate-300" };
-	if (!hasRuns) return { label: "Not run yet", cls: "text-slate-500 bg-slate-50 border-slate-200", dot: "bg-slate-300" };
+	if (wf.enabled === false) return { label: "Paused", cls: "text-ink-600 bg-ink-50 border-ink-200", dot: "bg-ink-300" };
+	if (!hasRuns) return { label: "Not run yet", cls: "text-ink-600 bg-ink-50 border-ink-200", dot: "bg-ink-300" };
 	// Failing = last run failed (fresh journal truth). consecutive_failures
 	// (scheduler-state) can lag a recovered run, so it must not drive red —
 	// keep counts and dots/health on the same single predicate.
 	if (wf.last_run_ok === false)
-		return { label: "Needs attention", cls: "text-rose-700 bg-rose-50 border-rose-200", dot: "bg-rose-500" };
+		return { label: "Needs attention", cls: "text-brick-700 bg-brick-50 border-brick-200", dot: "bg-brick-500" };
 	if (wf.last_run_recovered)
 		return { label: "Recovered", cls: "text-gold-700 bg-gold-50 border-gold-200", dot: "bg-gold-500" };
 	if (wf.last_run_ok === true) return { label: "Healthy", cls: "text-gold-700 bg-gold-50 border-gold-200", dot: "bg-gold-500" };
-	return { label: "Idle", cls: "text-slate-500 bg-slate-50 border-slate-200", dot: "bg-slate-300" };
+	return { label: "Idle", cls: "text-ink-600 bg-ink-50 border-ink-200", dot: "bg-ink-300" };
 }
 
 // "ran 5m ago" from the newest tenant cycle DIR id (the single source of
@@ -184,10 +184,10 @@ function VersionDots({ app, loop, currentId, onPick, outcomes }: {
 		return verN(a) - verN(b);
 	});
 	const dotCls = (n: TrajectoryNode) => {
-		if (n.kind === "baseline") return "bg-slate-400";
-		if (!n.scored || n.score == null) return "bg-slate-300";
+		if (n.kind === "baseline") return "bg-ink-400";
+		if (!n.scored || n.score == null) return "bg-ink-300";
 		const d = baseline != null ? (hib ? n.score - baseline : baseline - n.score) : 0;
-		return d > 1e-6 ? "bg-gold-400" : d < -1e-6 ? "bg-rose-500" : "bg-slate-400";
+		return d > 1e-6 ? "bg-gold-400" : d < -1e-6 ? "bg-brick-500" : "bg-ink-400";
 	};
 	// An unscored run says "not scored", never "—": a dash next to a version
 	// reads as a broken metric binding, which is the exact confusion this
@@ -229,12 +229,12 @@ function VersionDots({ app, loop, currentId, onPick, outcomes }: {
 					<Fragment key={n.id}>
 						{hidden > 0 && i === headCount && (
 							<button type="button" onClick={() => setExpanded(true)}
-								className="text-[11px] leading-none text-slate-600 hover:text-slate-700 px-1.5 py-1.5 min-h-[24px] inline-flex items-center tabular-nums cursor-pointer"
+								className="text-micro leading-none text-ink-600 hover:text-ink-700 px-1.5 py-1.5 min-h-[24px] inline-flex items-center tabular-nums cursor-pointer"
 								title={`show ${hidden} earlier run${hidden === 1 ? "" : "s"}`}>+{hidden}</button>
 						)}
 						<button type="button" title={label(n)}
 							onClick={() => onPick?.({ cycleTs: n.cycle_ts, runTs: n.run_ts, label: n.agent_version || n.label, agentVersion: n.agent_version, dataVersion: n.data_version, metric: traj?.metric, score: n.score })}
-							className={cn("w-2 h-2 rounded-full transition-transform hover:scale-125 relative before:absolute before:-inset-2 before:content-['']", dotCls(n), sel && "ring-2 ring-sky-300 ring-offset-1")} />
+							className={cn("w-2 h-2 rounded-full transition-transform hover:scale-125 relative before:absolute before:-inset-2 before:content-['']", dotCls(n), sel && "ring-2 ring-lagoon-300 ring-offset-1")} />
 					</Fragment>
 				);
 			})}
@@ -741,19 +741,19 @@ export default function WorkflowObservabilityPanel({
 				<button type="button"
 					onClick={() => window.dispatchEvent(new CustomEvent("studio:open-session", { detail: { app, loop, ts: "latest" } }))}
 					title="Open the running session conversation"
-					className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-medium transition hover:brightness-95", h.cls, justRan && "value-pop")}>
+					className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-micro font-medium transition hover:brightness-95", h.cls, justRan && "value-pop")}>
 					<span className={cn("w-1.5 h-1.5 rounded-full running-glow", h.dot)} />
 					Running… <span className="font-normal opacity-70 underline decoration-dotted">show logs</span>
 				</button>
 			) : (
-				<span className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-medium", h.cls, justRan && "value-pop")}>
+				<span className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-micro font-medium", h.cls, justRan && "value-pop")}>
 					<span className={cn("w-1.5 h-1.5 rounded-full", h.dot)} />
 					{h.label}
 					{lastRan && <span className="font-normal opacity-70">· {lastRan.replace(/^ran /, "")}</span>}
 				</span>
 			)}
 			{!running && stepErrs > 0 && wf.last_run_ok !== false && (
-				<span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-amber-200 bg-amber-50 text-amber-700 text-[11px] font-medium" title="The last run completed but some steps errored">
+				<span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-ember-200 bg-ember-50 text-ember-700 text-micro font-medium" title="The last run completed but some steps errored">
 					<AlertCircle className="w-3 h-3" />{stepErrs} step error{stepErrs === 1 ? "" : "s"}
 				</span>
 			)}
@@ -804,11 +804,11 @@ export default function WorkflowObservabilityPanel({
 		) : logFocus ? (
 			<TrajectoryLogView app={app} loop={loop} ts={version?.runTs || version?.cycleTs || anchorTs || undefined} onBack={backToTree} backLabel="Back" />
 		) : promptFocus ? (
-			<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-4"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading prompt…</div>}>
+			<Suspense fallback={<div className="flex items-center gap-2 text-xs text-ink-600 p-4"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading prompt…</div>}>
 				<EmbeddedPromptEditor app={app} name={promptFocus.name} onBack={backToTree} onChangedSource={onChanged} />
 			</Suspense>
 		) : memoryFocus ? (
-			<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-4"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading memories…</div>}>
+			<Suspense fallback={<div className="flex items-center gap-2 text-xs text-ink-600 p-4"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading memories…</div>}>
 				<EmbeddedAgentBank agentId={memoryFocus.agentId} onBack={backToTree} />
 			</Suspense>
 		) : caseDataFocus ? (
@@ -830,39 +830,39 @@ export default function WorkflowObservabilityPanel({
 						<VersionDots app={app} loop={loop} currentId={version?.runTs || version?.cycleTs || overlayTs || undefined}
 							onPick={(v) => { pinVersion(v); const ts = v.cycleTs || v.runTs; if (ts) navigate(runPath(app, loop, ts)); }}
 							outcomes={runOutcomes} />
-						<span className="w-px h-5 bg-slate-200 mx-0.5" aria-hidden />
+						<span className="w-px h-5 bg-ink-200 mx-0.5" aria-hidden />
 						{onShare && assetTab !== "data" && (
 							<>
 								<button onClick={() => onShare("pull")} disabled={!!shareBusy}
 									title="Pull agent updates — merge the latest upstream version (your local edits are preserved)"
 									aria-label="Pull agent updates"
-									className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:border-slate-300 disabled:opacity-40 transition-colors">
+									className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-ink-200 bg-card text-ink-600 hover:text-ink-800 hover:border-ink-300 disabled:opacity-40 transition-colors">
 									{shareBusy === "pull" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <DownloadCloud className="w-3.5 h-3.5" />}
 								</button>
 								<button onClick={() => onShare("publish")} disabled={!!shareBusy}
 									title="Publish the agent — push your local changes to your xp.io repo (version auto-bumps)"
 									aria-label="Publish agent changes"
-									className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:border-slate-300 disabled:opacity-40 transition-colors">
+									className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-ink-200 bg-card text-ink-600 hover:text-ink-800 hover:border-ink-300 disabled:opacity-40 transition-colors">
 									{shareBusy === "publish" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
 								</button>
 							</>
 						)}
 						{running ? (
 							<button onClick={stopRun} disabled={busy === "run"}
-								className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-rose-500 text-white hover:bg-rose-600 active:scale-95 disabled:opacity-50 transition-all shadow-sm">
+								className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-brick-500 text-white hover:bg-brick-600 active:scale-95 disabled:opacity-50 transition-all shadow-sm">
 								{busy === "run" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Square className="w-3.5 h-3.5" />}
 								Stop
 							</button>
 						) : (
 							<button onClick={() => setBranchFor({ label: "next run" })} disabled={!!busy}
 								title="Plan the next run — branch · change · criteria · fan-out · case scope · schedule"
-								className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-gold-500 text-white hover:bg-gold-600 active:scale-95 disabled:opacity-50 transition-all shadow-sm shadow-gold-100">
+								className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-gold-700 text-white hover:bg-gold-800 active:scale-95 disabled:opacity-50 transition-all shadow-sm shadow-gold-100">
 								{busy === "run" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
 								Plan next run
 							</button>
 						)}
 						<button onClick={toggle} disabled={!!busy} title={enabled ? "Pause this workflow's schedule" : "Resume this workflow's schedule"}
-							className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+							className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border border-ink-200 bg-card text-ink-600 hover:bg-ink-50 disabled:opacity-50">
 							{busy === "toggle" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : enabled ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
 							{enabled ? "Pause" : "Resume"}
 						</button>
@@ -876,31 +876,31 @@ export default function WorkflowObservabilityPanel({
 			<div ref={headerRef} className="space-y-1.5">
 				<div className="flex items-center gap-2 flex-wrap min-w-0">
 					<nav aria-label="Breadcrumb" className="min-w-0">
-						<ol className="flex items-center gap-1 text-[12px] text-slate-500 flex-wrap">
-							<li><Link to={`/studio/apps/${encodeURIComponent(app)}`} className="hover:text-slate-900 hover:underline">{appLabel}</Link></li>
+						<ol className="flex items-center gap-1 text-caption text-ink-600 flex-wrap">
+							<li><Link to={`/studio/apps/${encodeURIComponent(app)}`} className="hover:text-ink-900 hover:underline">{appLabel}</Link></li>
 							<li aria-hidden><ChevronRight className="w-3 h-3" /></li>
 							<li>
 								<Link to={workflowPath(app, loop)} aria-current={runIdParam ? undefined : "page"}
-									className={cn("hover:underline", runIdParam ? "hover:text-slate-900" : "text-slate-900 font-medium")}>{wfLabel}</Link>
+									className={cn("hover:underline", runIdParam ? "hover:text-ink-900" : "text-ink-900 font-medium")}>{wfLabel}</Link>
 							</li>
 							{runIdParam && (
 								<>
 									<li aria-hidden><ChevronRight className="w-3 h-3" /></li>
-									<li><Link to={runPath(app, loop, runIdParam)} aria-current="page" className="text-slate-900 font-medium hover:underline">Run {runLocalTime(runIdParam)}</Link></li>
+									<li><Link to={runPath(app, loop, runIdParam)} aria-current="page" className="text-ink-900 font-medium hover:underline">Run {runLocalTime(runIdParam)}</Link></li>
 								</>
 							)}
 						</ol>
 					</nav>
 					{statusChip}
 				</div>
-				<div role="tablist" aria-label="Workflow views" className="flex items-center gap-1 border-b border-slate-200">
+				<div role="tablist" aria-label="Workflow views" className="flex items-center gap-1 border-b border-ink-200">
 					{TABS.map((t) => {
 						const active = qTab === t.key;
 						return (
 							<Link key={t.key} to={tabHref(t.key)} role="tab" aria-selected={active}
-								className={cn("px-2.5 py-1.5 text-[12px] -mb-px border-b-2 transition-colors",
-									active ? "border-gold-500 text-slate-900 font-medium" : "border-transparent text-slate-500 hover:text-slate-800")}>
-								{t.label}{t.key === "runs" && cycleList ? <span className="ml-1 text-[10px] text-slate-400 tabular-nums">{cycleList.length}</span> : null}
+								className={cn("px-2.5 py-1.5 text-caption -mb-px border-b-2 transition-colors",
+									active ? "border-gold-500 text-ink-900 font-medium" : "border-transparent text-ink-600 hover:text-ink-800")}>
+								{t.label}{t.key === "runs" && cycleList ? <span className="ml-1 text-nano text-ink-600 tabular-nums">{cycleList.length}</span> : null}
 							</Link>
 						);
 					})}
@@ -958,7 +958,7 @@ export default function WorkflowObservabilityPanel({
 					    owns them. Without one, promotion is offered here — that is where
 					    "did this change help?" is asked. */}
 					<section className="space-y-1.5">
-						<div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">
+						<div className="text-micro uppercase tracking-wide font-semibold text-ink-600">
 							{loopExp ? "Metric & experiments" : "Measurement"}
 						</div>
 						<Suspense fallback={null}>
@@ -981,17 +981,17 @@ export default function WorkflowObservabilityPanel({
 			    than the Runs table. ── */}
 			{qTab === "lineage" && (
 				traj === null ? (
-					<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading the run tree…</div>
+					<div className="flex items-center gap-2 text-xs text-ink-600 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading the run tree…</div>
 				) : !branches && compareSel.length !== 2 && !logFocus && !metricsFocus ? (
-					<div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-6 text-[12px] text-slate-600">
+					<div className="rounded-xl border border-dashed border-ink-200 bg-ink-50/60 px-4 py-6 text-caption text-ink-600">
 						This workflow&apos;s runs form a straight line — see <Link to={tabHref("runs")} className="text-gold-700 hover:underline">Runs</Link>.
 					</div>
 				) : (
-					<div ref={fillRef} style={{ height: fillH }} className="rounded-xl border border-slate-200 bg-white overflow-hidden relative min-w-0">
+					<div ref={fillRef} style={{ height: fillH }} className="rounded-xl border border-ink-200 bg-card overflow-hidden relative min-w-0">
 						{compareSel.length === 1 && (
-							<div className="absolute bottom-2 left-2 z-20 inline-flex items-center gap-2 text-[11px] rounded-full px-2.5 py-1 border bg-sky-50 border-sky-200 text-sky-700 shadow-sm">
+							<div className="absolute bottom-2 left-2 z-20 inline-flex items-center gap-2 text-micro rounded-full px-2.5 py-1 border bg-lagoon-50 border-lagoon-200 text-lagoon-700 shadow-sm">
 								1 run selected — pick another run’s ⋯ → “Compare with…”
-								<button onClick={() => setCompareSel([])} className="text-sky-500 hover:text-sky-800 underline">clear</button>
+								<button onClick={() => setCompareSel([])} className="text-lagoon-600 hover:text-lagoon-800 underline">clear</button>
 							</div>
 						)}
 						{canvas(
@@ -1011,10 +1011,10 @@ export default function WorkflowObservabilityPanel({
 			{qTab === "data" && (
 				<div ref={fillRef} style={{ height: fillH }} className="flex flex-col lg:flex-row gap-3 items-stretch min-w-0 w-full">
 					<div className="w-full lg:w-[34%] lg:min-w-[240px] lg:max-w-[400px] flex-shrink-0 flex flex-col min-h-0 max-h-[55vh] lg:max-h-none lg:h-full">
-						<div className="flex-1 min-h-0 rounded-xl border border-slate-200 bg-slate-50/40 flex flex-col overflow-hidden">
+						<div className="flex-1 min-h-0 rounded-xl border border-ink-200 bg-ink-50/40 flex flex-col overflow-hidden">
 							{/* Data and Agents are SEPARATE xpio repos (a dataset repo and an
 							    agent repo), each independently versioned. */}
-							<div className="flex items-stretch flex-shrink-0 border-b border-slate-100 bg-white">
+							<div className="flex items-stretch flex-shrink-0 border-b border-ink-100 bg-card">
 								<AssetTab active={assetTab === "data"} onClick={() => setAssetTab("data")} icon={Database} label="Data" />
 								<AssetTab active={assetTab === "agents"} onClick={() => setAssetTab("agents")} icon={Brain} label="Agents" />
 							</div>
@@ -1030,7 +1030,7 @@ export default function WorkflowObservabilityPanel({
 							</div>
 							<div className="flex-1 min-h-0 overflow-y-auto p-2">
 								{assetTab === "data" ? (
-									<Suspense fallback={<div className="flex items-center gap-2 text-xs text-slate-400 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading data…</div>}>
+									<Suspense fallback={<div className="flex items-center gap-2 text-xs text-ink-600 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading data…</div>}>
 										<CasebookPanel app={app} loop={loop} atTs={version?.runTs || version?.cycleTs}
 											onSelectCase={(c) => openCaseData(c)} selectedCaseId={caseFocus?.id || caseDataFocus?.id}
 											onViewData={(c) => openCaseData(c)}
@@ -1045,22 +1045,22 @@ export default function WorkflowObservabilityPanel({
 										<Foldable title="Prompts" defaultOpen>
 											<PromptsTuneCard app={app} onOpenPrompt={openPrompt} selectedPrompt={promptFocus?.name} />
 										</Foldable>
-										<Link to={`/studio/a/${encodeURIComponent(app)}/config`} className="block text-[11px] text-gold-700 hover:underline">Open app config (xpcloud.yaml) →</Link>
+										<Link to={`/studio/a/${encodeURIComponent(app)}/config`} className="block text-micro text-gold-700 hover:underline">Open app config (xpcloud.yaml) →</Link>
 									</div>
 								)}
 							</div>
 						</div>
 					</div>
-					<div className="flex-1 min-w-0 min-h-0 rounded-xl border border-slate-200 bg-white overflow-hidden relative">
+					<div className="flex-1 min-w-0 min-h-0 rounded-xl border border-ink-200 bg-card overflow-hidden relative">
 						{!logFocus && !promptFocus && !memoryFocus && !caseDataFocus && !metricsFocus && (
 							<button onClick={() => openMetrics()} title={`${L.metrics.text} — ${L.metrics.tip}`}
-								className="absolute top-2 right-2 z-20 inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] text-slate-600 bg-white border-slate-200 hover:border-gold-200 hover:text-gold-700 transition-colors shadow-sm">
+								className="absolute top-2 right-2 z-20 inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-micro text-ink-600 bg-card border-ink-200 hover:border-gold-200 hover:text-gold-700 transition-colors shadow-sm">
 								<BarChart3 className="w-3.5 h-3.5" /> {L.metrics.text}
 							</button>
 						)}
 						<div className="h-full min-h-0">
 							{canvas(
-								<div className="h-full flex items-center justify-center text-[12px] text-slate-500 px-6 text-center">
+								<div className="h-full flex items-center justify-center text-caption text-ink-600 px-6 text-center">
 									Pick a case, a memory bank or a prompt on the left to open it here.
 								</div>,
 							)}
@@ -1129,7 +1129,7 @@ function Foldable({ title, defaultOpen, children }: { title: string; defaultOpen
 	return (
 		<div>
 			<button type="button" onClick={() => setOpen((o) => !o)}
-				className="w-full flex items-center gap-1 text-[11px] uppercase tracking-wide text-slate-600 font-semibold py-1 hover:text-slate-600 transition-colors">
+				className="w-full flex items-center gap-1 text-micro uppercase tracking-wide text-ink-600 font-semibold py-1 hover:text-ink-600 transition-colors">
 				<ChevronDown className={cn("w-3 h-3 transition-transform", !open && "-rotate-90")} /> {title}
 			</button>
 			{open && <div>{children}</div>}
@@ -1146,10 +1146,10 @@ function AssetTab({ active, onClick, icon: Icon, label }: {
 	return (
 		<button type="button" onClick={onClick}
 			className={cn(
-				"flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-[12px] font-medium border-b-2 -mb-px transition-colors",
-				active ? "border-gold-500 text-slate-900 bg-gold-50/40" : "border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50",
+				"flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-caption font-medium border-b-2 -mb-px transition-colors",
+				active ? "border-gold-500 text-ink-900 bg-gold-50/40" : "border-transparent text-ink-600 hover:text-ink-800 hover:bg-ink-50",
 			)}>
-			<Icon className={cn("w-3.5 h-3.5", active ? "text-gold-500" : "text-slate-400")} /> {label}
+			<Icon className={cn("w-3.5 h-3.5", active ? "text-gold-500" : "text-ink-600")} /> {label}
 		</button>
 	);
 }
@@ -1162,20 +1162,20 @@ function AssetVersionRow({ label, name, href, version, title, asOf }: {
 	label: string; name: string; href?: string; version?: string; title?: string; asOf?: string;
 }) {
 	return (
-		<div title={title} className="flex items-center gap-2 flex-wrap rounded-xl border border-slate-200 bg-white px-3 py-2">
-			<GitBranch className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-			<span className="text-[12px] text-slate-600">{label}</span>
+		<div title={title} className="flex items-center gap-2 flex-wrap rounded-xl border border-ink-200 bg-card px-3 py-2">
+			<GitBranch className="w-3.5 h-3.5 text-ink-600 flex-shrink-0" />
+			<span className="text-caption text-ink-600">{label}</span>
 			{href ? (
-				<a href={href} target="_blank" rel="noreferrer" className="text-[12px] font-mono font-semibold text-gold-700 hover:underline truncate max-w-[12rem]" title={name}>{name}</a>
+				<a href={href} target="_blank" rel="noreferrer" className="text-caption font-mono font-semibold text-gold-700 hover:underline truncate max-w-[12rem]" title={name}>{name}</a>
 			) : (
-				<span className="text-[12px] font-mono font-semibold text-slate-800 truncate max-w-[12rem]" title={name}>{name}</span>
+				<span className="text-caption font-mono font-semibold text-ink-800 truncate max-w-[12rem]" title={name}>{name}</span>
 			)}
 			{version ? (
-				<span className="text-[11px] uppercase tracking-wide rounded-full px-1.5 py-0.5 border text-slate-600 bg-white border-slate-200 font-mono">{version}</span>
+				<span className="text-micro uppercase tracking-wide rounded-full px-1.5 py-0.5 border text-ink-600 bg-card border-ink-200 font-mono">{version}</span>
 			) : (
-				<span className="text-[11px] uppercase tracking-wide rounded-full px-1.5 py-0.5 border text-slate-600 bg-slate-50 border-slate-200">versioned</span>
+				<span className="text-micro uppercase tracking-wide rounded-full px-1.5 py-0.5 border text-ink-600 bg-ink-50 border-ink-200">versioned</span>
 			)}
-			{asOf && <span className="ml-auto text-[11px] text-slate-600 truncate" title={`as of ${asOf}`}>as of {asOf}</span>}
+			{asOf && <span className="ml-auto text-micro text-ink-600 truncate" title={`as of ${asOf}`}>as of {asOf}</span>}
 		</div>
 	);
 }
@@ -1204,13 +1204,13 @@ function DatasetVersionBar({ datasets, fallbackRefs, scopeTo }: { datasets?: MeD
 	if (list.length === 0) {
 		const refs = (fallbackRefs || []).filter(Boolean);
 		if (refs.length === 0) {
-			return <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-600">No mounted dataset repo — this workflow reads live / external data.</div>;
+			return <div className="rounded-xl border border-ink-200 bg-card px-3 py-2 text-micro text-ink-600">No mounted dataset repo — this workflow reads live / external data.</div>;
 		}
 		return (
-			<div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
-				<div className="flex items-center gap-1.5 text-[12px] text-slate-600"><Database className="w-3.5 h-3.5 text-slate-400" /> Data sources</div>
+			<div className="rounded-xl border border-ink-200 bg-card px-3 py-2">
+				<div className="flex items-center gap-1.5 text-caption text-ink-600"><Database className="w-3.5 h-3.5 text-ink-600" /> Data sources</div>
 				<div className="flex flex-wrap gap-1.5 mt-1.5">
-					{refs.map((d) => (<span key={d} className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 font-mono truncate max-w-[12rem]" title={d}>{d}</span>))}
+					{refs.map((d) => (<span key={d} className="text-micro text-ink-600 bg-ink-50 border border-ink-200 rounded px-1.5 py-0.5 font-mono truncate max-w-[12rem]" title={d}>{d}</span>))}
 				</div>
 			</div>
 		);
@@ -1240,25 +1240,25 @@ function AgentsRailContent({ agents, onOpenAgent, selectedAgent, hideHeader }: {
 	// Suppress the internal "Memory banks" label when a Foldable already titles it.
 	hideHeader?: boolean;
 }) {
-	if (!agents.length) return <div className="text-[11px] text-slate-600 italic py-1">No memories configured.</div>;
+	if (!agents.length) return <div className="text-micro text-ink-600 italic py-1">No memories configured.</div>;
 	return (
 		<div className="space-y-1 pt-1">
-			{!hideHeader && <div className="text-[11px] uppercase tracking-wide text-slate-600 font-semibold mb-1">Memory banks</div>}
+			{!hideHeader && <div className="text-micro uppercase tracking-wide text-ink-600 font-semibold mb-1">Memory banks</div>}
 			{agents.map((a) => {
 				// No per-row "versioned" pill — the top bar owns versioning for the
 				// whole bundle; per-row badges are reserved for provenance.
-				const inner = <><Brain className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" /> <span className="truncate">{a}</span></>;
+				const inner = <><Brain className="w-3.5 h-3.5 text-ink-600 flex-shrink-0" /> <span className="truncate">{a}</span></>;
 				return onOpenAgent ? (
 					<button key={a} type="button" onClick={() => onOpenAgent(a)}
 						title={selectedAgent === a ? "Click to close" : `Browse the "${a}" memory bank`}
-						className={cn("w-full flex items-center gap-1.5 text-[12px] text-left rounded px-1 -mx-1 transition-colors",
-							selectedAgent === a ? "text-gold-800 bg-gold-50" : "text-slate-600 hover:text-gold-700 hover:bg-gold-50/40")}>
+						className={cn("w-full flex items-center gap-1.5 text-caption text-left rounded px-1 -mx-1 transition-colors",
+							selectedAgent === a ? "text-gold-800 bg-gold-50" : "text-ink-600 hover:text-gold-700 hover:bg-gold-50/40")}>
 						{inner}
 					</button>
 				) : (
 					<Link key={a} to={`/studio/knowledge/${encodeURIComponent(a)}`}
 						title={`Browse the "${a}" memory bank`}
-						className="flex items-center gap-1.5 text-[12px] text-slate-600 hover:text-gold-700 transition-colors">
+						className="flex items-center gap-1.5 text-caption text-ink-600 hover:text-gold-700 transition-colors">
 						{inner}
 					</Link>
 				);
@@ -1314,15 +1314,15 @@ function PromptsTuneCard({ app, onOpenPrompt, selectedPrompt }: {
 	const isLocal = (s?: string) => (s || "").startsWith("local");
 	const groupRow = (title: string, Icon: typeof FileText, items: { name: string; source?: string }[]) => (
 		<div className="min-w-0">
-			<div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600 mb-1">
-				<Icon className="w-3.5 h-3.5 text-gold-600" /> {title} <span className="text-slate-300 font-normal normal-case">· {items.length}</span>
+			<div className="flex items-center gap-1.5 text-micro font-semibold uppercase tracking-wide text-ink-600 mb-1">
+				<Icon className="w-3.5 h-3.5 text-gold-600" /> {title} <span className="text-ink-600 font-normal normal-case">· {items.length}</span>
 			</div>
 			<div className="space-y-0.5">
 				{items.map((p) => {
 					const label = pretty(p.name);
 					const badge = (
-						<span className={cn("ml-auto flex-shrink-0 text-[9px] uppercase tracking-wide rounded-full px-1.5 py-0.5 border",
-							isLocal(p.source) ? "text-gold-700 bg-gold-50 border-gold-200" : "text-slate-400 bg-slate-50 border-slate-200")}
+						<span className={cn("ml-auto flex-shrink-0 text-nano uppercase tracking-wide rounded-full px-1.5 py-0.5 border",
+							isLocal(p.source) ? "text-gold-700 bg-gold-50 border-gold-200" : "text-ink-600 bg-ink-50 border-ink-200")}
 							title={isLocal(p.source) ? "local override — editable in your bundle" : "shared (read-only) — editing creates a local override"}>
 							{isLocal(p.source) ? "local" : "shared"}
 						</span>
@@ -1331,20 +1331,20 @@ function PromptsTuneCard({ app, onOpenPrompt, selectedPrompt }: {
 					return onOpenPrompt ? (
 						<button key={p.name} type="button" onClick={() => onOpenPrompt(p.name, label)}
 							title={selectedPrompt === p.name ? "Click to close" : "Open prompt"}
-							className={cn("w-full flex items-center gap-1.5 text-[12px] text-left rounded px-1 -mx-1 transition-colors",
-								selectedPrompt === p.name ? "text-gold-800 bg-gold-50" : "text-slate-600 hover:text-gold-700 hover:bg-gold-50/40")}>
+							className={cn("w-full flex items-center gap-1.5 text-caption text-left rounded px-1 -mx-1 transition-colors",
+								selectedPrompt === p.name ? "text-gold-800 bg-gold-50" : "text-ink-600 hover:text-gold-700 hover:bg-gold-50/40")}>
 							<span className="truncate">{label}</span>
 							{badge}
 						</button>
 					) : (
 						<Link key={p.name} to={`/studio/a/${encodeURIComponent(app)}/prompts?p=${encodeURIComponent(p.name)}`}
-							className="flex items-center gap-1.5 text-[12px] text-slate-600 hover:text-gold-700 transition-colors group">
+							className="flex items-center gap-1.5 text-caption text-ink-600 hover:text-gold-700 transition-colors group">
 							<span className="truncate">{label}</span>
 							{badge}
 						</Link>
 					);
 				})}
-				{items.length === 0 && <div className="text-[11px] text-slate-600 italic">none</div>}
+				{items.length === 0 && <div className="text-micro text-ink-600 italic">none</div>}
 			</div>
 		</div>
 	);
@@ -1358,17 +1358,17 @@ function PromptsTuneCard({ app, onOpenPrompt, selectedPrompt }: {
 	return (
 		<div className="pt-1">
 			{err ? (
-				<div className="text-[12px] text-rose-500">Couldn't load prompts: {err}</div>
+				<div className="text-caption text-brick-600">Couldn't load prompts: {err}</div>
 			) : prompts === null ? (
-				<div className="flex items-center gap-2 text-xs text-slate-400"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading prompts…</div>
+				<div className="flex items-center gap-2 text-xs text-ink-600"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading prompts…</div>
 			) : prompts.length === 0 ? (
-				<div className="text-[12px] text-slate-400 italic">This app declares no editable prompts.</div>
+				<div className="text-caption text-ink-600 italic">This app declares no editable prompts.</div>
 			) : (
 				<div className="space-y-3">
 					{groupRow("Analyst", Brain, analyst)}
 					{groupRow("Judge", Scale, judge)}
 					{other.length > 0 && groupRow("Other", FileText, other)}
-					<Link to={`/studio/a/${encodeURIComponent(app)}/prompts`} className="block text-[11px] text-gold-700 hover:underline">Open full prompt editor →</Link>
+					<Link to={`/studio/a/${encodeURIComponent(app)}/prompts`} className="block text-micro text-gold-700 hover:underline">Open full prompt editor →</Link>
 				</div>
 			)}
 		</div>
@@ -1409,7 +1409,7 @@ function GoalHeader({ goal, app, loop, onSaved }: { goal?: { primary: string; tr
 
 	const editor = (
 		<PopoverContent align="end" className="w-80 space-y-2">
-			<div className="text-[11px] uppercase tracking-wide text-gold-700/70 font-semibold">Goal</div>
+			<div className="text-micro uppercase tracking-wide text-gold-700/70 font-semibold">Goal</div>
 			<textarea
 				value={draft}
 				onChange={(e) => setDraft(e.target.value)}
@@ -1421,16 +1421,16 @@ function GoalHeader({ goal, app, loop, onSaved }: { goal?: { primary: string; tr
 					if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); save(); }
 					if (e.key === "Escape") { e.preventDefault(); setOpen(false); }
 				}}
-				className="w-full text-[13px] text-slate-800 leading-snug rounded-lg border border-gold-200 bg-white px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-gold-300 resize-none"
+				className="w-full text-meta text-ink-800 leading-snug rounded-lg border border-gold-200 bg-card px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-gold-300 resize-none"
 			/>
 			<div className="flex items-center gap-2">
 				<button type="button" onClick={save} disabled={saving}
-					className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-gold-500 text-white hover:bg-gold-600 disabled:opacity-50">
+					className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-gold-700 text-white hover:bg-gold-800 disabled:opacity-50">
 					{saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />} Save
 				</button>
 				<button type="button" onClick={() => setOpen(false)} disabled={saving}
-					className="px-2.5 py-1 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50">Cancel</button>
-				<span className="text-[11px] text-slate-600 hidden sm:inline">⌘↵ to save</span>
+					className="px-2.5 py-1 text-xs rounded-lg border border-ink-200 bg-card hover:bg-ink-50 disabled:opacity-50">Cancel</button>
+				<span className="text-micro text-ink-600 hidden sm:inline">⌘↵ to save</span>
 			</div>
 		</PopoverContent>
 	);
@@ -1439,11 +1439,11 @@ function GoalHeader({ goal, app, loop, onSaved }: { goal?: { primary: string; tr
 		<Popover open={open} onOpenChange={setOpen}>
 			<div className="rounded-xl border border-gold-200/70 bg-gradient-to-br from-gold-50/80 to-white px-3 py-2.5 flex items-center gap-2 flex-wrap">
 				<Target className="w-4 h-4 text-gold-600 flex-shrink-0" />
-				<span className="text-[11px] uppercase tracking-wide text-gold-700/70 font-semibold flex-shrink-0" title={(goal?.tracked || []).join(" · ")}>Goal</span>
+				<span className="text-micro uppercase tracking-wide text-gold-700/70 font-semibold flex-shrink-0" title={(goal?.tracked || []).join(" · ")}>Goal</span>
 				{shown ? (
 					<>
 						<PopoverTrigger asChild>
-							<button type="button" title="Edit goal" className="text-[13px] text-slate-800 font-medium leading-snug text-left hover:text-gold-800 transition-colors">{humanizeGoal(shown)}</button>
+							<button type="button" title="Edit goal" className="text-meta text-ink-800 font-medium leading-snug text-left hover:text-gold-800 transition-colors">{humanizeGoal(shown)}</button>
 						</PopoverTrigger>
 						<PopoverTrigger asChild>
 							<button type="button" title="Edit goal" className="text-gold-700/50 hover:text-gold-700 transition-colors flex-shrink-0">
@@ -1453,7 +1453,7 @@ function GoalHeader({ goal, app, loop, onSaved }: { goal?: { primary: string; tr
 					</>
 				) : (
 					<PopoverTrigger asChild>
-						<button type="button" className="text-[12.5px] text-gold-700/80 hover:text-gold-700 font-medium transition-colors flex-shrink-0 min-h-[24px] inline-flex items-center">+ Set a goal</button>
+						<button type="button" className="text-meta text-gold-700/80 hover:text-gold-700 font-medium transition-colors flex-shrink-0 min-h-[24px] inline-flex items-center">+ Set a goal</button>
 					</PopoverTrigger>
 				)}
 			</div>
@@ -1510,11 +1510,11 @@ function OutputsTier({ files, ts, hasRuns }:
 	return (
 		<section className="space-y-1.5">
 			<div className="flex items-baseline gap-2">
-				<div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">Outputs</div>
-				{ts && <span className="text-[10px] text-slate-400" title="the run this output came from">from run {ts}</span>}
+				<div className="text-micro uppercase tracking-wide font-semibold text-ink-600">Outputs</div>
+				{ts && <span className="text-nano text-ink-600" title="the run this output came from">from run {ts}</span>}
 			</div>
 			{empty ? (
-				<div className="text-[11px] text-slate-500 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2">
+				<div className="text-micro text-ink-600 rounded-lg border border-ink-200 bg-ink-50/60 px-3 py-2">
 					{hasRuns
 						? "This loop's last run recorded no result artifact. Open a run to see its per-stage output."
 						: "No runs yet — run the workflow and its output appears here."}
@@ -1536,13 +1536,13 @@ function KVCard({ title, obj }: { title: string; obj: unknown }) {
 		.slice(0, 10);
 	if (!entries.length) return null;
 	return (
-		<div className="rounded-lg bg-white border border-slate-200/70 p-2">
-			<div className="text-[11px] uppercase tracking-wide text-slate-600 font-semibold mb-1">{title}</div>
+		<div className="rounded-lg bg-card border border-ink-200/70 p-2">
+			<div className="text-micro uppercase tracking-wide text-ink-600 font-semibold mb-1">{title}</div>
 			<div className="space-y-0.5">
 				{entries.map(([k, v]) => (
-					<div key={k} className="flex gap-2 text-[11px]">
-						<span className="text-slate-400 flex-shrink-0">{k.replace(/_/g, " ")}</span>
-						<span className="text-slate-700 font-mono truncate ml-auto text-right" title={typeof v === "object" ? JSON.stringify(v) : String(v)}>{fmtVal(v)}</span>
+					<div key={k} className="flex gap-2 text-micro">
+						<span className="text-ink-600 flex-shrink-0">{k.replace(/_/g, " ")}</span>
+						<span className="text-ink-700 font-mono truncate ml-auto text-right" title={typeof v === "object" ? JSON.stringify(v) : String(v)}>{fmtVal(v)}</span>
 					</div>
 				))}
 			</div>
@@ -1551,14 +1551,14 @@ function KVCard({ title, obj }: { title: string; obj: unknown }) {
 }
 
 function StageNote({ tone, children }: { tone: "ok" | "hold"; children: React.ReactNode }) {
-	return <div className={cn("text-[11px] leading-snug", tone === "ok" ? "text-gold-700" : "text-gold-700")}>{children}</div>;
+	return <div className={cn("text-micro leading-snug", tone === "ok" ? "text-gold-700" : "text-gold-700")}>{children}</div>;
 }
 
 function StageProse({ label, text }: { label: string; text: string }) {
 	return (
 		<div>
-			<div className="text-[11px] uppercase tracking-wide text-slate-600 font-semibold mb-0.5">{label}</div>
-			<div className="text-[11px] text-slate-700 leading-snug whitespace-pre-wrap">{text.slice(0, 600)}</div>
+			<div className="text-micro uppercase tracking-wide text-ink-600 font-semibold mb-0.5">{label}</div>
+			<div className="text-micro text-ink-700 leading-snug whitespace-pre-wrap">{text.slice(0, 600)}</div>
 		</div>
 	);
 }
@@ -1578,7 +1578,7 @@ function StageBody({ stage, detail }: { stage: LoopStageKey; detail: MeCycleDeta
 			if (files.observations) blocks.push(<KVCard key="o" title="What it sensed" obj={files.observations} />);
 			if (s.observe_gate) blocks.push(<StageNote key="g" tone={s.observe_gate.passed ? "ok" : "hold"}>{s.observe_gate.passed ? "Proceeded" : "Held"} — {s.observe_gate.reason || "evaluated the latest signals"}</StageNote>);
 			if (Array.isArray(s.observe_keys) && s.observe_keys.length)
-				blocks.push(<div key="k" className="flex flex-wrap gap-1">{s.observe_keys.slice(0, 12).map((it: unknown, i: number) => <span key={i} className="text-[11px] text-slate-600 bg-white border border-slate-200 rounded-full px-1.5 py-0.5">{String(it)}</span>)}</div>);
+				blocks.push(<div key="k" className="flex flex-wrap gap-1">{s.observe_keys.slice(0, 12).map((it: unknown, i: number) => <span key={i} className="text-micro text-ink-600 bg-card border border-ink-200 rounded-full px-1.5 py-0.5">{String(it)}</span>)}</div>);
 			break;
 		case "hypothesize": {
 			if (files.proposal) {
@@ -1608,12 +1608,12 @@ function StageBody({ stage, detail }: { stage: LoopStageKey; detail: MeCycleDeta
 			break;
 		case "learn": {
 			const offers: any[] = Array.isArray(s.offers) ? s.offers : [];
-			if (offers.length) blocks.push(<div key="of" className="space-y-0.5">{offers.slice(0, 4).map((o, i) => <div key={i} className="text-[11px] text-slate-700 flex gap-1"><span className="text-indigo-400">•</span><span title={o.detail}>{o.title}</span></div>)}</div>);
+			if (offers.length) blocks.push(<div key="of" className="space-y-0.5">{offers.slice(0, 4).map((o, i) => <div key={i} className="text-micro text-ink-700 flex gap-1"><span className="text-plum-600">•</span><span title={o.detail}>{o.title}</span></div>)}</div>);
 			const pushed = s.auto_publish?.memories ? Object.values(s.auto_publish.memories as Record<string, { pushed?: number }>).reduce((n, v) => n + (v?.pushed || 0), 0) : 0;
 			if (pushed > 0) blocks.push(<StageNote key="mp" tone="ok">Compounded {pushed} new memor{pushed === 1 ? "y" : "ies"} into your knowledge graph.</StageNote>);
 			if (files.improvement?.mutations_proposed) blocks.push(<StageNote key="imp" tone="ok">Proposed a self-improvement{Array.isArray(files.improvement.mutates) ? ` to its ${files.improvement.mutates.join(", ")} logic` : ""} — queued as a PR.</StageNote>);
 			if (!offers.length && !pushed && !files.improvement?.mutations_proposed)
-				blocks.push(<div key="lk" className="text-[11px] text-slate-600">Nothing new to bank this run. It compounds into your <Link to="/studio/knowledge" className="text-gold-700 hover:underline">knowledge</Link> as it learns.</div>);
+				blocks.push(<div key="lk" className="text-micro text-ink-600">Nothing new to bank this run. It compounds into your <Link to="/studio/knowledge" className="text-gold-700 hover:underline">knowledge</Link> as it learns.</div>);
 			break;
 		}
 	}
@@ -1621,9 +1621,9 @@ function StageBody({ stage, detail }: { stage: LoopStageKey; detail: MeCycleDeta
 	if (steps.length) blocks.push(
 		<ul key="steps" className="space-y-1 pt-0.5">
 			{steps.map((st) => (
-				<li key={st.step_id} className="text-[11px] flex items-start gap-1.5">
-					<span className={cn("mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0", st.ok === false ? "bg-rose-500" : "bg-gold-400")} />
-					<span className="text-slate-600"><span className="font-medium text-slate-700">{st.skill || st.step_id}</span>{st.output_summary ? ` — ${st.output_summary}` : ""}{st.error ? ` · ${st.error.split("\n")[0]}` : ""}</span>
+				<li key={st.step_id} className="text-micro flex items-start gap-1.5">
+					<span className={cn("mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0", st.ok === false ? "bg-brick-500" : "bg-gold-400")} />
+					<span className="text-ink-600"><span className="font-medium text-ink-700">{st.skill || st.step_id}</span>{st.output_summary ? ` — ${st.output_summary}` : ""}{st.error ? ` · ${st.error.split("\n")[0]}` : ""}</span>
 				</li>
 			))}
 		</ul>,
@@ -1634,8 +1634,8 @@ function StageBody({ stage, detail }: { stage: LoopStageKey; detail: MeCycleDeta
 		// is the run's answer, the other is ours. identity says which in
 		// `unavailable` (me_cycle_read_intent.go) — render it, not the former.
 		if (detail.unavailable && !(detail.steps || []).length)
-			return <div className="text-[11px] text-amber-700" role="status" title={detail.unavailable}>{detail.unavailable}</div>;
-		return <div className="text-[11px] text-slate-600 italic">{STAGE_INFO[stage].role} — nothing recorded for this stage in this run.</div>;
+			return <div className="text-micro text-ember-700" role="status" title={detail.unavailable}>{detail.unavailable}</div>;
+		return <div className="text-micro text-ink-600 italic">{STAGE_INFO[stage].role} — nothing recorded for this stage in this run.</div>;
 	}
 	return <div className="space-y-2">{blocks}</div>;
 }
@@ -1658,23 +1658,23 @@ function RunFlow({ steps, active, onPick }: {
 					const stg = (st.stage || "") as LoopStageKey;
 					const isActive = stg === active;
 					const tone = st.ok === false
-						? "border-rose-300 bg-rose-50 text-rose-700"
-						: "border-gold-200 bg-white text-slate-700";
+						? "border-brick-300 bg-brick-50 text-brick-700"
+						: "border-gold-200 bg-card text-ink-700";
 					return (
 						<div key={`${st.step_id || st.skill || i}`} className="flex items-center">
-							{i > 0 && <span className={cn("h-px w-5 flex-shrink-0", st.ok === false ? "bg-rose-200" : "bg-slate-200")} />}
+							{i > 0 && <span className={cn("h-px w-5 flex-shrink-0", st.ok === false ? "bg-brick-200" : "bg-ink-200")} />}
 							<button
 								type="button"
 								onClick={() => stg && onPick?.(stg)}
 								title={`${st.skill || st.step_id}${typeof st.duration_s === "number" ? ` · ${Math.round(st.duration_s)}s` : ""}${st.ok === false ? " · failed" : ""}`}
 								className={cn(
-									"flex-shrink-0 rounded-lg border px-2 py-1 text-[11px] leading-tight max-w-[110px] truncate transition-colors",
+									"flex-shrink-0 rounded-lg border px-2 py-1 text-micro leading-tight max-w-[110px] truncate transition-colors",
 									tone,
 									isActive && "ring-2 ring-gold-400/60",
 									!stg && "cursor-default",
 								)}
 							>
-								<span className={cn("inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle", st.ok === false ? "bg-rose-500" : "bg-gold-400")} />
+								<span className={cn("inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle", st.ok === false ? "bg-brick-500" : "bg-gold-400")} />
 								{st.skill || st.step_id || `step ${i + 1}`}
 							</button>
 						</div>
@@ -1745,20 +1745,20 @@ function StageDetail({
 		<div className="rounded-xl border border-gold-200/70 bg-gold-50/30 p-3 animate-in fade-in slide-in-from-top-1 duration-300">
 			<div className="flex items-center justify-between gap-2">
 				<div className="min-w-0">
-					<div className="text-[13px] font-medium text-gold-900">{info.label}</div>
-					<div className="text-[11px] text-slate-600">{info.role}</div>
+					<div className="text-meta font-medium text-gold-900">{info.label}</div>
+					<div className="text-micro text-ink-600">{info.role}</div>
 				</div>
 				<div className="flex items-center gap-1.5 flex-shrink-0">
 					{total > 0 && (
 						<div className="flex items-center gap-1">
 							<button type="button" disabled={idx >= total - 1} onClick={() => setIdx((i) => Math.min(total - 1, i + 1))}
 								className="p-0.5 rounded disabled:opacity-30 enabled:hover:bg-gold-100 text-gold-700" title="older run"><ChevronLeft className="w-3.5 h-3.5" /></button>
-							<span className="text-[11px] text-slate-600 tabular-nums whitespace-nowrap" title={ts}>{cycleDate(ts)} · {idx + 1}/{total}</span>
+							<span className="text-micro text-ink-600 tabular-nums whitespace-nowrap" title={ts}>{cycleDate(ts)} · {idx + 1}/{total}</span>
 							<button type="button" disabled={idx <= 0} onClick={() => setIdx((i) => Math.max(0, i - 1))}
 								className="p-0.5 rounded disabled:opacity-30 enabled:hover:bg-gold-100 text-gold-700" title="newer run"><ChevronRight className="w-3.5 h-3.5" /></button>
 						</div>
 					)}
-					<button onClick={onClose} className="text-[11px] text-slate-600 hover:text-slate-700 ml-1">close</button>
+					<button onClick={onClose} className="text-micro text-ink-600 hover:text-ink-700 ml-1">close</button>
 				</div>
 			</div>
 
@@ -1773,10 +1773,10 @@ function StageDetail({
 					{(Object.keys(STAGE_INFO) as LoopStageKey[]).map((k) => (
 						<button key={k} type="button" onClick={() => onStageChange?.(k)}
 							className={cn(
-								"px-2 py-0.5 rounded-full text-[11px] border transition-colors",
+								"px-2 py-0.5 rounded-full text-micro border transition-colors",
 								k === stage
-									? "bg-gold-600 text-white border-gold-600"
-									: "bg-white text-slate-500 border-slate-200 hover:border-gold-300 hover:text-gold-700",
+									? "bg-gold-700 text-white border-gold-600"
+									: "bg-card text-ink-600 border-ink-200 hover:border-gold-300 hover:text-gold-700",
 							)}>
 							{STAGE_INFO[k].label}
 						</button>
@@ -1786,9 +1786,9 @@ function StageDetail({
 
 			<div className="mt-2 min-h-[36px]">
 				{loading && !detail ? (
-					<div className="flex items-center gap-2 text-[11px] text-slate-600 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" />reading the run…</div>
+					<div className="flex items-center gap-2 text-micro text-ink-600 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" />reading the run…</div>
 				) : !detail ? (
-					<div className="text-xs text-slate-400 italic py-1">No run recorded yet for this workflow.</div>
+					<div className="text-xs text-ink-600 italic py-1">No run recorded yet for this workflow.</div>
 				) : (
 					<StageBody stage={stage} detail={detail} />
 				)}
@@ -1799,9 +1799,9 @@ function StageDetail({
 					value={q}
 					onChange={(e) => setQ(e.target.value)}
 					placeholder={`Ask the AI about the ${info.label.toLowerCase()} stage…`}
-					className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-gold-400/40"
+					className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-ink-200 bg-card focus:outline-none focus:ring-2 focus:ring-gold-400/40"
 				/>
-				<button type="submit" className="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-gold-500 text-white hover:bg-gold-600">Ask</button>
+				<button type="submit" className="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-gold-700 text-white hover:bg-gold-800">Ask</button>
 			</form>
 		</div>
 	);
@@ -1818,8 +1818,8 @@ function Section({
 	return (
 		<section className="animate-in fade-in slide-in-from-top-1 duration-300" style={{ animationDelay: `${delay}ms`, animationFillMode: "both" }}>
 			<div className="flex items-center gap-1.5 mb-2">
-				<Icon className="w-3.5 h-3.5 text-slate-400" />
-				<h4 className="text-[11px] font-semibold tracking-[0.08em] uppercase text-slate-600">{title}</h4>
+				<Icon className="w-3.5 h-3.5 text-ink-600" />
+				<h4 className="text-micro font-semibold tracking-[0.08em] uppercase text-ink-600">{title}</h4>
 			</div>
 			{children}
 		</section>

@@ -71,6 +71,7 @@ import {
 import { interpolateTemplate, mergeSelection } from "./await-run";
 import { type AwaitCfg, startTrackedRun } from "./await-driver";
 import { AwaitPanels } from "./AwaitPanels";
+import { ink, gold, brick, lagoon, plum, chart } from "@/styles/palette";
 
 // ── URL-param injection ─────────────────────────────────────────────────────
 //
@@ -480,24 +481,24 @@ function useSource(spec?: string, pollSec = 0) {
 function Shell({ title, children, pickKind, pickId }: { title?: string; children: React.ReactNode; pickKind?: string; pickId?: string }) {
   return (
     <div
-      className="my-3 rounded-lg border border-slate-200 bg-white overflow-hidden"
+      className="my-3 rounded-lg border border-ink-200 bg-card overflow-hidden"
       data-pick-kind={pickKind}
       data-pick-id={pickId}
     >
       {title ? (
-        <div className="px-3 py-1.5 border-b border-slate-100 text-[12px] font-medium text-slate-500">{title}</div>
+        <div className="px-3 py-1.5 border-b border-ink-100 text-caption font-medium text-ink-600">{title}</div>
       ) : null}
       <div className="p-3">{children}</div>
     </div>
   );
 }
-const Loading = () => <div className="text-[12px] text-slate-400 py-2">Loading…</div>;
+const Loading = () => <div className="text-caption text-ink-600 py-2">Loading…</div>;
 const ErrLine = ({ msg }: { msg: string }) => (
-  <div className="text-[12px] text-rose-600 py-2">⚠ {msg}</div>
+  <div className="text-caption text-brick-600 py-2">⚠ {msg}</div>
 );
 // Quiet hint for a param surface opened without its route context.
 const PendingLine = ({ token }: { token: string }) => (
-  <div className="text-[12px] text-slate-400 italic py-2">
+  <div className="text-caption text-ink-600 italic py-2">
     Waiting for a {token} — open this page from its parent list (e.g. a row in the lobby).
   </div>
 );
@@ -555,11 +556,11 @@ function LumidStat({ body }: { body: Body }) {
   }
   return (
     <div
-      className="inline-flex flex-col rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 min-w-[120px]"
+      className="inline-flex flex-col rounded-lg border border-ink-200 bg-ink-50 px-4 py-3 min-w-[120px]"
       title={unavailable ? `Unavailable: ${unavailable}` : undefined}
     >
-      <span className="text-2xl font-semibold text-slate-900 tabular-nums">{display}</span>
-      <span className="text-[11px] uppercase tracking-wide text-slate-500 mt-0.5">{String(body.label ?? "")}</span>
+      <span className="text-h2 font-semibold text-ink-900 tabular-nums">{display}</span>
+      <span className="text-micro uppercase tracking-wide text-ink-600 mt-0.5">{String(body.label ?? "")}</span>
     </div>
   );
 }
@@ -580,13 +581,13 @@ type ColDef = {
 
 const STATUS_COLORS: Record<string, string> = {
   Ongoing:   "bg-gold-100 text-gold-800 border-gold-200",
-  Upcoming:  "bg-blue-100 text-blue-800 border-blue-200",
-  Completed: "bg-gray-100 text-gray-800 border-gray-200",
+  Upcoming:  "bg-lagoon-100 text-lagoon-800 border-lagoon-200",
+  Completed: "bg-ink-100 text-ink-800 border-ink-200",
 };
 
 function StatusBadge({ value }: { value: string }) {
-  const cls = STATUS_COLORS[value] ?? "bg-slate-100 text-slate-700 border-slate-200";
-  return <span className={cn("inline-flex px-1.5 py-0.5 rounded text-[11px] font-medium border", cls)}>{value}</span>;
+  const cls = STATUS_COLORS[value] ?? "bg-ink-100 text-ink-700 border-ink-200";
+  return <span className={cn("inline-flex px-1.5 py-0.5 rounded text-micro font-medium border", cls)}>{value}</span>;
 }
 
 /** Text for a table that rendered no rows AFTER filtering.
@@ -618,7 +619,7 @@ function formatCell(value: unknown, type?: string): React.ReactNode {
   if (type === "pct") {
     if (!isFinite(n)) return "—";
     const pct = formatPercentage(n);
-    const cls = n >= 0 ? "text-gold-600" : "text-red-600";
+    const cls = n >= 0 ? "text-gold-600" : "text-brick-600";
     return <span className={cls}>{pct}</span>;
   }
   if (type === "badge") return <StatusBadge value={String(value)} />;
@@ -973,15 +974,15 @@ function ActionButton({ a, row: rowProp, onDone, size = "sm", scope = "", select
   // made a row of them fiddly on a trackpad.
   // xs buttons live in the table's actions cell, which now wraps BETWEEN
   // buttons; nowrap keeps "Poll result" from also breaking inside one.
-  const pad = size === "xs" ? "px-2 py-1 text-[11px] min-h-[24px] whitespace-nowrap" : "px-2.5 py-1 text-[12px] min-h-[24px]";
+  const pad = size === "xs" ? "px-2 py-1 text-micro min-h-[24px] whitespace-nowrap" : "px-2.5 py-1 text-caption min-h-[24px]";
   const tone = danger
-    ? "border-rose-200 text-rose-600 hover:bg-rose-50"
-    : "border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-800";
+    ? "border-brick-200 text-brick-600 hover:bg-brick-50"
+    : "border-ink-200 text-ink-600 hover:bg-ink-100 hover:text-ink-800";
   return (
     <>
       <button onClick={run} disabled={busy || selShort}
         title={selShort ? `Check ${needSel} row${needSel === 1 ? "" : "s"} in the table first` : undefined}
-        className={cn("inline-flex items-center rounded-md border bg-white transition-colors disabled:opacity-50", pad, tone)}>
+        className={cn("inline-flex items-center rounded-md border bg-card transition-colors disabled:opacity-50", pad, tone)}>
         {busy ? "…" : selRows ? `${a.label} (${selRows.length}/${needSel})` : a.label}
       </button>
       {a.fields?.length ? (
@@ -1110,7 +1111,7 @@ function ActionFieldsDialog({ a, row, open, onCancel, onSubmit }: {
             const req = f.required !== false;
             return (
             <div key={f.key} className="space-y-1">
-              <label htmlFor={inputId} className="text-[12px] font-medium text-slate-700">{f.label ?? f.key}</label>
+              <label htmlFor={inputId} className="text-caption font-medium text-ink-700">{f.label ?? f.key}</label>
               {f.type === "textarea" ? (
                 <textarea
                   id={inputId}
@@ -1122,7 +1123,7 @@ function ActionFieldsDialog({ a, row, open, onCancel, onSubmit }: {
                   rows={12}
                   spellCheck={false}
                   onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
-                  className="w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[12px] font-mono leading-relaxed whitespace-pre-wrap break-words resize-y min-h-[120px] disabled:opacity-60"
+                  className="w-full rounded-md border border-ink-200 px-2.5 py-1.5 text-caption font-mono leading-relaxed whitespace-pre-wrap break-words resize-y min-h-[120px] disabled:opacity-60"
                 />
               ) : f.type === "text" ? (
                 <>
@@ -1135,7 +1136,7 @@ function ActionFieldsDialog({ a, row, open, onCancel, onSubmit }: {
                     placeholder={f.placeholder}
                     list={f.suggestions?.length ? `${idPrefix}-${f.key}` : undefined}
                     onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
-                    className="w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[12px]"
+                    className="w-full rounded-md border border-ink-200 px-2.5 py-1.5 text-caption"
                   />
                   {f.suggestions?.length ? (
                     <datalist id={`${idPrefix}-${f.key}`}>
@@ -1148,7 +1149,7 @@ function ActionFieldsDialog({ a, row, open, onCancel, onSubmit }: {
                   value={values[f.key] ?? ""}
                   onValueChange={(v) => setValues((cur) => ({ ...cur, [f.key]: v }))}
                 >
-                  <SelectTrigger id={inputId} aria-required={req} aria-describedby={helpId} className="w-full text-[12px]">
+                  <SelectTrigger id={inputId} aria-required={req} aria-describedby={helpId} className="w-full text-caption">
                     <SelectValue placeholder={f.placeholder ?? "Select…"} />
                   </SelectTrigger>
                   <SelectContent>
@@ -1158,8 +1159,8 @@ function ActionFieldsDialog({ a, row, open, onCancel, onSubmit }: {
                   </SelectContent>
                 </Select>
               )}
-              {f.help && <p id={helpId} className="text-[11px] text-slate-400">{f.help}</p>}
-              {fieldNote[f.key] && <p className="text-[11px] text-amber-700" role="status">{fieldNote[f.key]}</p>}
+              {f.help && <p id={helpId} className="text-micro text-ink-600">{f.help}</p>}
+              {fieldNote[f.key] && <p className="text-micro text-ember-700" role="status">{fieldNote[f.key]}</p>}
             </div>
             );
           })}
@@ -1167,14 +1168,14 @@ function ActionFieldsDialog({ a, row, open, onCancel, onSubmit }: {
         <AlertDialogFooter>
           <button
             onClick={onCancel}
-            className="inline-flex items-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-[12px] text-slate-600 hover:bg-slate-50"
+            className="inline-flex items-center rounded-md border border-ink-200 bg-card px-3 py-1.5 text-caption text-ink-600 hover:bg-ink-50"
           >
             Cancel
           </button>
           <button
             onClick={() => onSubmit(values)}
             disabled={missing || stillLoading}
-            className="inline-flex items-center rounded-md border border-gold-300 bg-gold-500 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-gold-600 disabled:opacity-50"
+            className="inline-flex items-center rounded-md border border-gold-300 bg-gold-700 px-3 py-1.5 text-caption font-medium text-white hover:bg-gold-800 disabled:opacity-50"
           >
             Submit
           </button>
@@ -1314,7 +1315,7 @@ function LumidTable({ body }: { body: Body }) {
     <button
       type="button"
       onClick={() => setShowHidden((v) => !v)}
-      className="text-[11px] text-slate-400 hover:text-slate-600 underline decoration-dotted underline-offset-2 shrink-0"
+      className="text-micro text-ink-600 hover:text-ink-600 underline decoration-dotted underline-offset-2 shrink-0"
       title="Test and demo rows (fixtures, backtest records) are hidden by default — click to show them"
     >
       {showHidden
@@ -1330,10 +1331,10 @@ function LumidTable({ body }: { body: Body }) {
         onChange={(e) => setQuery(e.target.value)}
         placeholder={String(body.search_placeholder ?? "Filter…")}
         aria-label={String(body.search_placeholder ?? "Filter rows")}
-        className="w-full sm:w-72 px-2.5 py-1 text-[12px] rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400"
+        className="w-full sm:w-72 px-2.5 py-1 text-caption rounded-md border border-ink-200 bg-card focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400"
       />
       {query.trim() !== "" && (
-        <span className="text-[11px] text-slate-400 tabular-nums shrink-0">
+        <span className="text-micro text-ink-600 tabular-nums shrink-0">
           {filteredRows.length} of {rowArr.length}
         </span>
       )}
@@ -1378,11 +1379,11 @@ function LumidTable({ body }: { body: Body }) {
       typeof body.empty === "string" && body.empty.trim() ? body.empty.trim() : null;
     const unavailable = unavailableReason(data, body);
     const empty = unavailable ? (
-      <div className="text-[12px] text-amber-700" role="status" title={unavailable}>
+      <div className="text-caption text-ember-700" role="status" title={unavailable}>
         Couldn&apos;t load this right now, so this may not be empty. Try again in a moment.
       </div>
     ) : (
-      <div className="text-[12px] text-slate-600">{authored ?? "No rows."}</div>
+      <div className="text-caption text-ink-600">{authored ?? "No rows."}</div>
     );
     if (!tableActions.length) return <>{empty}{panels}</>;
     return (
@@ -1437,7 +1438,7 @@ function LumidTable({ body }: { body: Body }) {
         {tableActions.length > 0 && actionBar}
         {searchBox}
         {sortedRows.length === 0 && (
-          <div className="text-[12px] text-slate-400">{filteredEmptyText(query, body, showHidden ? 0 : hiddenRows.length)}</div>
+          <div className="text-caption text-ink-600">{filteredEmptyText(query, body, showHidden ? 0 : hiddenRows.length)}</div>
         )}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {sortedRows.slice(0, 60).map((row, i) => {
@@ -1445,23 +1446,23 @@ function LumidTable({ body }: { body: Body }) {
             const title = String(row[titleCol.key] ?? "");
             return (
               <div key={i} onClick={href ? () => goHref(href) : undefined}
-                className={"rounded-lg border border-slate-200 bg-white p-3 hover:border-slate-300 hover:shadow-sm transition-all" + (href ? " cursor-pointer" : "")}>
+                className={"rounded-lg border border-ink-200 bg-card p-3 hover:border-ink-300 hover:shadow-sm transition-all" + (href ? " cursor-pointer" : "")}>
                 <div className="flex items-start justify-between gap-2 mb-2">
-                  <div className="font-medium text-[13px] text-slate-900 leading-snug">
+                  <div className="font-medium text-meta text-ink-900 leading-snug">
                     {href ? renderHrefCell(href, title) : title}
                   </div>
                   {badgeCol && <StatusBadge value={String(row[badgeCol.key] ?? "")} />}
                 </div>
                 <div className="space-y-1">
                   {statCols.map((c) => (
-                    <div key={c.key} className="flex justify-between text-[12px]">
-                      <span className="text-slate-500">{c.label ?? c.key}</span>
-                      <span className="font-medium text-slate-700">{formatCell(resolveCell(row, c), c.type)}</span>
+                    <div key={c.key} className="flex justify-between text-caption">
+                      <span className="text-ink-600">{c.label ?? c.key}</span>
+                      <span className="font-medium text-ink-700">{formatCell(resolveCell(row, c), c.type)}</span>
                     </div>
                   ))}
                 </div>
                 {rowActions.length > 0 && (
-                  <div className="flex gap-1.5 mt-2 pt-2 border-t border-slate-100">
+                  <div className="flex gap-1.5 mt-2 pt-2 border-t border-ink-100">
                     {rowActions.map((a, ai) => <ActionButton key={ai} a={a} row={row} onDone={refetch} size="xs" scope={scope} />)}
                   </div>
                 )}
@@ -1483,7 +1484,7 @@ function LumidTable({ body }: { body: Body }) {
         <div className="flex items-center gap-2">
           {tableActions.length > 0 && actionBar}
           {pollSec > 0 && (
-            <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-gold-600">
+            <span className="ml-auto inline-flex items-center gap-1 text-nano text-gold-700">
               <span className="w-1.5 h-1.5 rounded-full bg-gold-500 animate-pulse" /> Live
             </span>
           )}
@@ -1491,14 +1492,14 @@ function LumidTable({ body }: { body: Body }) {
       )}
       {searchBox}
       {sortedRows.length === 0 ? (
-        <div className="text-[12px] text-slate-400">{filteredEmptyText(query, body, showHidden ? 0 : hiddenRows.length)}</div>
+        <div className="text-caption text-ink-600">{filteredEmptyText(query, body, showHidden ? 0 : hiddenRows.length)}</div>
       ) : (
-      <div className="overflow-x-auto rounded-lg border border-slate-200">
-        <table className="min-w-full text-[12px] border-collapse">
-          <thead className="bg-slate-50 border-b border-slate-200">
+      <div className="overflow-x-auto rounded-lg border border-ink-200">
+        <table className="min-w-full text-caption border-collapse">
+          <thead className="bg-ink-50 border-b border-ink-200">
             <tr>
               {selectOn && (
-                <th className="w-8 px-2 py-1.5 text-left font-normal text-[10px] text-slate-400 whitespace-nowrap" title={`Check up to ${selectMax}`}>
+                <th className="w-8 px-2 py-1.5 text-left font-normal text-nano text-ink-600 whitespace-nowrap" title={`Check up to ${selectMax}`}>
                   {selected.length}/{selectMax}
                 </th>
               )}
@@ -1507,10 +1508,10 @@ function LumidTable({ body }: { body: Body }) {
                 return (
                   <th key={c.key}
                     onClick={sortable ? () => toggleSort(c.key) : undefined}
-                    className={cn("px-2.5 py-1.5 text-left font-semibold text-slate-700 whitespace-nowrap", sortable && "cursor-pointer select-none hover:text-slate-900")}>
+                    className={cn("px-2.5 py-1.5 text-left font-semibold text-ink-700 whitespace-nowrap", sortable && "cursor-pointer select-none hover:text-ink-900")}>
                     <span className="inline-flex items-center gap-1">
                       {c.label ?? c.key}
-                      {sortable && <span className={cn("text-[10px]", sort?.key === c.key ? "text-gold-600" : "text-slate-400")}>{sortIcon(c.key)}</span>}
+                      {sortable && <span className={cn("text-nano", sort?.key === c.key ? "text-gold-600" : "text-ink-600")}>{sortIcon(c.key)}</span>}
                     </span>
                   </th>
                 );
@@ -1518,13 +1519,13 @@ function LumidTable({ body }: { body: Body }) {
               {/* Pinned to the right edge: a wide table (the strategy detail's
                   registration table at 1500px) scrolled its actions off-screen,
                   so the only controls on the row were the ones you could not see. */}
-              {rowActions.length > 0 && <th className="sticky right-0 z-[1] bg-slate-50 px-2.5 py-1.5 text-right font-semibold text-slate-700 shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.15)]">Actions</th>}
+              {rowActions.length > 0 && <th className="sticky right-0 z-[1] bg-ink-50 px-2.5 py-1.5 text-right font-semibold text-ink-700 shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.15)]">Actions</th>}
             </tr>
           </thead>
           <tbody>
             {sortedRows.slice(0, 200).map((row, i) => {
               const href = rowHref ? rowHref(row) : "";
-              const trCls = "group border-b border-slate-100 last:border-b-0" + (href ? " hover:bg-slate-50 cursor-pointer" : "");
+              const trCls = "group border-b border-ink-100 last:border-b-0" + (href ? " hover:bg-ink-50 cursor-pointer" : "");
               return (
                 <tr key={i} className={trCls} onClick={href ? () => goHref(href) : undefined}>
                   {selectOn && (() => {
@@ -1557,7 +1558,7 @@ function LumidTable({ body }: { body: Body }) {
                     // is a sentence (a not-presentable backtest's reason). Hover
                     // shows the untruncated text.
                     const full = cellValue === null || cellValue === undefined || typeof cellValue === "object" ? undefined : String(cellValue);
-                    return <td key={c.key} title={full} className="px-2.5 py-1.5 text-slate-700 align-top max-w-[260px] truncate">{cell}</td>;
+                    return <td key={c.key} title={full} className="px-2.5 py-1.5 text-ink-700 align-top max-w-[260px] truncate">{cell}</td>;
                   })}
                   {rowActions.length > 0 && (
                     // The buttons WRAP rather than forcing one line. Five of them
@@ -1566,7 +1567,7 @@ function LumidTable({ body }: { body: Body }) {
                     // top of the last data columns — "Compiled" read "Compi" and
                     // "Updated" vanished at 1500px. Wrapping only kicks in when the
                     // row would otherwise overflow; a narrow table keeps one line.
-                    <td className={cn("sticky right-0 z-[1] bg-white px-2.5 py-1.5 text-right align-top shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.15)]", href && "group-hover:bg-slate-50")}>
+                    <td className={cn("sticky right-0 z-[1] bg-card px-2.5 py-1.5 text-right align-top shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.15)]", href && "group-hover:bg-ink-50")}>
                       <span className="inline-flex flex-wrap gap-1.5 justify-end" onClick={(e) => e.stopPropagation()}>
                         {rowActions.map((a, ai) => <ActionButton key={ai} a={a} row={row} onDone={refetch} size="xs" scope={scope} />)}
                       </span>
@@ -1612,7 +1613,7 @@ function LumidChart({ body }: { body: Body }) {
   if (!Array.isArray(rawRows) || rawRows.length === 0) {
     const authored =
       typeof body.empty === "string" && body.empty.trim() ? body.empty.trim() : null;
-    return <div className="text-[12px] text-slate-400">{authored ?? "No data."}</div>;
+    return <div className="text-caption text-ink-600">{authored ?? "No data."}</div>;
   }
   // Support both legacy (x/y) and new (x_key/y_key) names.
   const xKey = (body.x_key as string) ?? (body.x as string) ?? "x";
@@ -1620,7 +1621,8 @@ function LumidChart({ body }: { body: Body }) {
   const seriesKey = body.series_key as string | undefined;
   const kind = (body.kind as string) ?? (body.type as string) ?? "line";
   const height = Number(body.height) || 240;
-  const palette = ["#96773A", "#6366f1", "#B08F45", "#ef4444", "#0ea5e9"];
+  // Lumen categorical series. The old list had gold twice (two series, one colour).
+  const palette = chart;
 
   let chartData: object[];
   let ys: string[];
@@ -1646,13 +1648,13 @@ function LumidChart({ body }: { body: Body }) {
     <ResponsiveContainer width="100%" height={height}>
       {kind === "bar" ? (
         <BarChart data={chartData}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
+          <CartesianGrid strokeDasharray="3 3" stroke={ink["100"]} />
           <XAxis dataKey={xKey} tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip />
           {ys.map((k, i) => <Bar key={k} dataKey={k} fill={palette[i % palette.length]} />)}
         </BarChart>
       ) : (
         <LineChart data={chartData}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
+          <CartesianGrid strokeDasharray="3 3" stroke={ink["100"]} />
           <XAxis dataKey={xKey} tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip />
           {ys.map((k, i) => <Line key={k} type="monotone" dataKey={k} stroke={palette[i % palette.length]} dot={false} />)}
         </LineChart>
@@ -1667,15 +1669,15 @@ function LumidList({ body }: { body: Body }) {
   if (loading) return <Loading />;
   if (error) return <ErrLine msg={error} />;
   const items = getPath(data, body.path as string | undefined);
-  if (!Array.isArray(items) || items.length === 0) return <div className="text-[12px] text-slate-400">Empty.</div>;
+  if (!Array.isArray(items) || items.length === 0) return <div className="text-caption text-ink-600">Empty.</div>;
   const tk = (body.title_key as string) ?? "title";
   const sk = body.subtitle_key as string | undefined;
   return (
     <ul className="space-y-2">
       {(items as Record<string, unknown>[]).slice(0, 100).map((it, i) => (
-        <li key={i} className="rounded-lg border border-slate-200 px-3 py-2">
-          <div className="text-[13px] font-medium text-slate-800">{String(it[tk] ?? "")}</div>
-          {sk ? <div className="text-[12px] text-slate-500">{String(it[sk] ?? "")}</div> : null}
+        <li key={i} className="rounded-lg border border-ink-200 px-3 py-2">
+          <div className="text-meta font-medium text-ink-800">{String(it[tk] ?? "")}</div>
+          {sk ? <div className="text-caption text-ink-600">{String(it[sk] ?? "")}</div> : null}
         </li>
       ))}
     </ul>
@@ -1711,7 +1713,7 @@ function LumidCode({ body }: { body: Body }) {
     const why = v != null && typeof v === "object"
       ? " (the field is not text, so it is not shown)"
       : !path ? " (this block needs a `path:`)" : "";
-    return <div className="text-[12px] text-slate-500">{emptyText}{why}</div>;
+    return <div className="text-caption text-ink-600">{emptyText}{why}</div>;
   }
   const lang = typeof body.language === "string" ? body.language : "";
   const copy = async () => {
@@ -1724,19 +1726,19 @@ function LumidCode({ body }: { body: Body }) {
     }
   };
   return (
-    <div className="relative rounded-md border border-slate-200 bg-slate-50">
-      <div className="flex items-center justify-between px-2.5 py-1 border-b border-slate-200 text-[11px] text-slate-500">
+    <div className="relative rounded-md border border-ink-200 bg-ink-50">
+      <div className="flex items-center justify-between px-2.5 py-1 border-b border-ink-200 text-micro text-ink-600">
         <span className="font-mono">{lang}</span>
         <button
           type="button"
           onClick={copy}
           aria-label="Copy to clipboard"
-          className="inline-flex items-center rounded border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-600 hover:bg-slate-100 min-h-[24px]"
+          className="inline-flex items-center rounded border border-ink-200 bg-card px-2 py-0.5 text-micro text-ink-600 hover:bg-ink-100 min-h-[24px]"
         >
           {copied ? "Copied" : "Copy"}
         </button>
       </div>
-      <pre className="m-0 max-h-[480px] overflow-auto p-3 text-[12px] leading-relaxed font-mono text-slate-800 whitespace-pre-wrap break-words">
+      <pre className="m-0 max-h-[480px] overflow-auto p-3 text-caption leading-relaxed font-mono text-ink-800 whitespace-pre-wrap break-words">
         <code>{text}</code>
       </pre>
     </div>
@@ -1776,7 +1778,7 @@ function LumidAction({ body }: { body: Body }) {
     <button
       onClick={onClick}
       disabled={busy}
-      className="inline-flex items-center gap-1.5 rounded-lg bg-gold-600 px-3 py-1.5 text-[13px] font-medium text-white hover:bg-gold-700 disabled:opacity-50"
+      className="inline-flex items-center gap-1.5 rounded-lg bg-gold-700 px-3 py-1.5 text-meta font-medium text-white hover:bg-gold-800 disabled:opacity-50"
     >
       {busy ? "Working…" : label}
     </button>
@@ -1851,7 +1853,7 @@ function LumidTabs({ body }: { body: Body }) {
   const cur = tabs[Math.min(active, tabs.length - 1)];
   return (
     <div>
-      <div className="flex items-center gap-0.5 border-b border-slate-200 mb-3 -mx-3 px-3">
+      <div className="flex items-center gap-0.5 border-b border-ink-200 mb-3 -mx-3 px-3">
         {tabs.map((t, i) => (
           <button
             key={i}
@@ -1859,8 +1861,8 @@ function LumidTabs({ body }: { body: Body }) {
             className={[
               "px-3 py-1.5 text-sm border-b-2 -mb-px transition-colors whitespace-nowrap",
               active === i
-                ? "border-slate-800 text-slate-900 font-medium"
-                : "border-transparent text-slate-500 hover:text-slate-700",
+                ? "border-ink-800 text-ink-900 font-medium"
+                : "border-transparent text-ink-600 hover:text-ink-700",
             ].join(" ")}
           >
             {t.label}
@@ -1905,11 +1907,11 @@ function LumidSearchTable({ body }: { body: Body }) {
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onKey}
           placeholder={String(body.placeholder ?? "Search…")}
-          className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400"
+          className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-ink-200 bg-card focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400"
         />
         <button
           onClick={() => setCommitted(query)}
-          className="px-3 py-1.5 text-sm rounded-lg bg-slate-900 text-white hover:bg-slate-700 transition-colors"
+          className="px-3 py-1.5 text-sm rounded-lg bg-ink-900 text-white hover:bg-ink-700 transition-colors"
         >
           Search
         </button>
@@ -1994,13 +1996,13 @@ function FormFieldInput({ f, vals, setVals }: {
       : null;
   return (
     <div className={cn("flex flex-col gap-1", isWide && "sm:col-span-full")}>
-      <label htmlFor={fid} className="text-[12px] font-medium text-slate-700">{f.label ?? f.key}</label>
+      <label htmlFor={fid} className="text-caption font-medium text-ink-700">{f.label ?? f.key}</label>
       {f.type === "select" && (selectOptions || f.options_source) ? (
         <select
           id={fid}
           value={String(vals[f.key] ?? "")}
           onChange={(e) => setVals((v) => ({ ...v, [f.key]: e.target.value }))}
-          className="rounded-md border border-slate-200 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400"
+          className="rounded-md border border-ink-200 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400"
         >
           {(selectOptions ?? []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
@@ -2014,7 +2016,7 @@ function FormFieldInput({ f, vals, setVals }: {
           required={f.required}
           rows={8}
           onChange={(e) => setVals((v) => ({ ...v, [f.key]: e.target.value }))}
-          className="rounded-md border border-slate-200 px-2.5 py-1.5 text-sm font-mono resize-y min-h-[60px] focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400"
+          className="rounded-md border border-ink-200 px-2.5 py-1.5 text-sm font-mono resize-y min-h-[60px] focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400"
         />
       ) : (
         <input
@@ -2024,7 +2026,7 @@ function FormFieldInput({ f, vals, setVals }: {
           placeholder={f.placeholder}
           required={f.required}
           onChange={(e) => setVals((v) => ({ ...v, [f.key]: e.target.value }))}
-          className="rounded-md border border-slate-200 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400"
+          className="rounded-md border border-ink-200 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400"
         />
       )}
     </div>
@@ -2169,18 +2171,18 @@ function LumidForm({ body }: { body: Body }) {
   };
 
   return (
-    <form onSubmit={submit} className="my-3 rounded-lg border border-slate-200 bg-white p-4 space-y-4">
+    <form onSubmit={submit} className="my-3 rounded-lg border border-ink-200 bg-card p-4 space-y-4">
       {groups.map((g, gi) => (
         <div key={gi} className="space-y-2">
-          {g.name && <div className="text-[12px] font-semibold text-slate-800 border-b border-slate-100 pb-1">{g.name}</div>}
+          {g.name && <div className="text-caption font-semibold text-ink-800 border-b border-ink-100 pb-1">{g.name}</div>}
           <div className={cn("grid gap-3", gridCls)}>
             {g.fields.map((f) => <FormFieldInput key={f.key} f={f} vals={vals} setVals={setVals} />)}
           </div>
         </div>
       ))}
       {advanced.length > 0 && (
-        <details className="rounded-lg border border-slate-100 bg-slate-50/40 px-3 py-2">
-          <summary className="text-[12px] font-medium text-slate-500 cursor-pointer select-none hover:text-slate-800 transition-colors">
+        <details className="rounded-lg border border-ink-100 bg-ink-50/40 px-3 py-2">
+          <summary className="text-caption font-medium text-ink-600 cursor-pointer select-none hover:text-ink-800 transition-colors">
             Advanced
           </summary>
           <div className={cn("grid gap-3 pt-3", gridCls)}>
@@ -2197,7 +2199,7 @@ function LumidForm({ body }: { body: Body }) {
           {busy ? "Submitting…" : submitLabel}
         </button>
         {result && (
-          <span className={cn("text-[12px]", result.ok ? "text-gold-600" : "text-rose-600")}>{result.msg}</span>
+          <span className={cn("text-caption", result.ok ? "text-gold-600" : "text-brick-600")}>{result.msg}</span>
         )}
       </div>
     </form>
@@ -2219,16 +2221,16 @@ function CostEstimate({ cfg, vals }: { cfg: Record<string, unknown>; vals: Recor
   const perHr = gpu * gpuRate + cpu * cpuRate;
   const forRun = perHr * (ttlMin / 60);
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 text-[12px] text-slate-600 space-y-1">
-      <div className="font-medium text-slate-700">Cost estimate</div>
-      <div className="text-[11px] text-slate-400 leading-snug">
+    <div className="rounded-lg border border-ink-200 bg-ink-50/60 p-3 text-caption text-ink-600 space-y-1">
+      <div className="font-medium text-ink-700">Cost estimate</div>
+      <div className="text-micro text-ink-600 leading-snug">
         Flat-rate estimate before a worker is assigned. Actual cost is measured per-second against the worker's published rate; any difference settles into the ledger at teardown.
       </div>
       <div className="flex flex-wrap gap-x-4 gap-y-0.5 pt-1">
         <span>Rate (GPU): <span className="tabular-nums">${gpuRate.toFixed(2)}/hr each</span></span>
         <span>Rate (CPU): <span className="tabular-nums">${cpuRate.toFixed(2)}/hr each</span></span>
       </div>
-      <div className="font-medium text-slate-800 tabular-nums">
+      <div className="font-medium text-ink-800 tabular-nums">
         This rental: ${perHr.toFixed(2)}/hr · ~${forRun.toFixed(2)} for {ttlMin} min
       </div>
     </div>
@@ -2330,13 +2332,13 @@ function LumidComputeWorkflow({ body }: { body: Body }) {
 
   // An empty state, not an error box: most apps declare no compute DAG, and a
   // missing graph is ordinary rather than broken.
-  if (err) return <div className="text-[11px] text-muted-foreground py-2">{err}</div>;
-  if (!yaml || !Canvas || !parse) return <div className="text-[11px] text-muted-foreground py-2">Loading graph…</div>;
+  if (err) return <div className="text-micro text-muted-foreground py-2">{err}</div>;
+  if (!yaml || !Canvas || !parse) return <div className="text-micro text-muted-foreground py-2">Loading graph…</div>;
   let graph: any;
   try {
     graph = parse(yaml);
   } catch (e) {
-    return <div className="text-[11px] text-muted-foreground py-2">graph unreadable: {String((e as Error)?.message || e)}</div>;
+    return <div className="text-micro text-muted-foreground py-2">graph unreadable: {String((e as Error)?.message || e)}</div>;
   }
   return (
     <div className="my-2 rounded border border-border overflow-hidden" style={{ height: 320 }}>
@@ -2424,9 +2426,9 @@ function LumidAsk({ body }: { body: Body }) {
               },
             }))
           }
-          className="group px-3 py-1.5 rounded-full border border-gold-200/70 bg-white hover:bg-gold-50 text-gold-800 hover:border-gold-300 transition-all active:scale-[0.98]"
+          className="group px-3 py-1.5 rounded-full border border-gold-200/70 bg-card hover:bg-gold-50 text-gold-800 hover:border-gold-300 transition-all active:scale-[0.98]"
         >
-          <span className="opacity-60 group-hover:opacity-100 transition-opacity mr-0.5">›</span>
+          <span aria-hidden className="mr-0.5 text-ink-500 transition-colors group-hover:text-current">›</span>
           {p}
         </button>
       ))}
@@ -2474,7 +2476,7 @@ export function LumidDirective({ className, raw }: { className?: string; raw: st
     // Graceful fallback — show the raw directive labelled.
     return (
       <Shell title={`lumid:${type} (unsupported)`}>
-        <pre className="text-[11px] text-slate-500 whitespace-pre-wrap">{raw}</pre>
+        <pre className="text-micro text-ink-600 whitespace-pre-wrap">{raw}</pre>
       </Shell>
     );
   }

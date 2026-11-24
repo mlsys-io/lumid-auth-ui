@@ -218,10 +218,10 @@ export default function ConnectPowerAutomatePage() {
 	return (
 		<div className="max-w-2xl mx-auto p-6 space-y-6">
 			<div>
-				<div className="text-xs font-medium text-indigo-500 uppercase tracking-widest">
+				<div className="text-xs font-medium text-plum-600 uppercase tracking-widest">
 					Outlook · Power Automate Bridge
 				</div>
-				<h1 className="text-3xl font-bold mt-1">Connect Outlook</h1>
+				<h1 className="text-h1 font-bold mt-1">Connect Outlook</h1>
 				<p className="text-sm text-muted-foreground mt-2">
 					Workaround for orgs that block direct Microsoft Graph OAuth.
 					Build two Power Automate flows — one that forwards new email to
@@ -245,8 +245,8 @@ export default function ConnectPowerAutomatePage() {
 				{status === null ? (
 					<div className="text-sm text-muted-foreground italic">Loading…</div>
 				) : status.configured ? (
-					<div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm space-y-1">
-						<div className="font-medium text-emerald-700">✓ Webhook configured</div>
+					<div className="rounded-md border border-gold-500/30 bg-gold-500/10 px-4 py-3 text-sm space-y-1">
+						<div className="font-medium text-gold-700">✓ Webhook configured</div>
 						<div className="text-xs text-muted-foreground">
 							Issued {fmtAbs(status.issued_at)}
 							{status.last_used_at
@@ -255,25 +255,25 @@ export default function ConnectPowerAutomatePage() {
 						</div>
 					</div>
 				) : (
-					<div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+					<div className="rounded-md border border-ink-200 bg-ink-50 px-4 py-3 text-sm text-ink-700">
 						No webhook yet — mint one to begin.
 					</div>
 				)}
 
 				{freshUrl && (
-					<div className="rounded-md border border-amber-300 bg-amber-50 p-4 space-y-2">
-						<div className="text-xs font-semibold uppercase tracking-wide text-amber-800">
+					<div className="rounded-md border border-ember-300 bg-ember-50 p-4 space-y-2">
+						<div className="text-xs font-semibold uppercase tracking-wide text-ember-800">
 							Save this URL — it won't be shown again
 						</div>
 						<div className="flex gap-2 items-center">
-							<code className="flex-1 text-[11px] font-mono break-all bg-white border border-amber-200 rounded px-2 py-1.5">
+							<code className="flex-1 text-micro font-mono break-all bg-card border border-ember-200 rounded px-2 py-1.5">
 								{freshUrl}
 							</code>
 							<Button size="sm" variant="outline" onClick={copyUrl}>
 								{copied ? '✓ Copied' : 'Copy'}
 							</Button>
 						</div>
-						<div className="text-xs text-amber-800">
+						<div className="text-xs text-ember-800">
 							Paste into your Power Automate flow's <strong>HTTP</strong> action URI field.
 						</div>
 					</div>
@@ -293,7 +293,7 @@ export default function ConnectPowerAutomatePage() {
 					)}
 				</div>
 
-				<p className="text-[11px] text-muted-foreground leading-relaxed">
+				<p className="text-micro text-muted-foreground leading-relaxed">
 					The .zip download <strong>rotates the webhook</strong> and bakes the new
 					URL straight into a ready-to-import flow. At make.powerautomate.com →
 					My flows → Import → upload, you confirm the Outlook connection and
@@ -307,7 +307,7 @@ export default function ConnectPowerAutomatePage() {
 				<div>
 					<h2 className="font-semibold">Power Automate setup</h2>
 					<p className="text-sm text-muted-foreground mt-1">
-						In <a className="text-emerald-700 hover:underline" href="https://make.powerautomate.com" target="_blank" rel="noreferrer">make.powerautomate.com</a>:
+						In <a className="text-gold-700 hover:underline" href="https://make.powerautomate.com" target="_blank" rel="noreferrer">make.powerautomate.com</a>:
 					</p>
 				</div>
 
@@ -332,10 +332,10 @@ export default function ConnectPowerAutomatePage() {
 				</ol>
 
 				<details className="text-xs">
-					<summary className="cursor-pointer text-emerald-700 hover:underline font-medium">
+					<summary className="cursor-pointer text-gold-700 hover:underline font-medium">
 						Show body template (copy + paste)
 					</summary>
-					<pre className="mt-2 bg-slate-900 text-slate-100 rounded p-3 overflow-x-auto leading-relaxed">{
+					<pre className="mt-2 bg-ink-900 text-ink-100 rounded p-3 overflow-x-auto leading-relaxed">{
 `{
   "id":          "@{triggerOutputs()?['body/id']}",
   "from":        "@{triggerOutputs()?['body/from']}",
@@ -371,10 +371,10 @@ export default function ConnectPowerAutomatePage() {
 					<li>
 						<strong>Request body schema</strong> — paste this so the next step can reference fields:
 						<details className="mt-1.5 text-xs">
-							<summary className="cursor-pointer text-emerald-700 hover:underline font-medium">
+							<summary className="cursor-pointer text-gold-700 hover:underline font-medium">
 								Show schema
 							</summary>
-							<pre className="mt-2 bg-slate-900 text-slate-100 rounded p-3 overflow-x-auto leading-relaxed">{
+							<pre className="mt-2 bg-ink-900 text-ink-100 rounded p-3 overflow-x-auto leading-relaxed">{
 `{
   "type": "object",
   "properties": {
@@ -403,10 +403,10 @@ export default function ConnectPowerAutomatePage() {
 				</ol>
 
 				{/* The save input. Same UX as the mint button above. */}
-				<div className="rounded-md border border-slate-200 bg-slate-50 p-4 space-y-3">
+				<div className="rounded-md border border-ink-200 bg-ink-50 p-4 space-y-3">
 					{sendUrlSet?.is_set ? (
-						<div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm space-y-1">
-							<div className="font-medium text-emerald-700">✓ Send URL saved</div>
+						<div className="rounded-md border border-gold-500/30 bg-gold-500/10 px-3 py-2 text-sm space-y-1">
+							<div className="font-medium text-gold-700">✓ Send URL saved</div>
 							{sendUrlSet.updated_at && (
 								<div className="text-xs text-muted-foreground">
 									Last updated {fmtAbs(sendUrlSet.updated_at)} · the URL is encrypted at rest and never shown back to the browser.
@@ -425,7 +425,7 @@ export default function ConnectPowerAutomatePage() {
 							value={sendUrlInput}
 							onChange={(e) => setSendUrlInput(e.target.value)}
 							placeholder="https://prod-XX.region.logic.azure.com:443/workflows/…/triggers/manual/paths/invoke?…"
-							className="flex-1 text-xs font-mono px-3 py-2 rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-400"
+							className="flex-1 text-xs font-mono px-3 py-2 rounded-md border border-ink-200 bg-card focus:outline-none focus:ring-2 focus:ring-gold-400/40 focus:border-gold-400"
 							autoComplete="off"
 							spellCheck={false}
 						/>
@@ -439,7 +439,7 @@ export default function ConnectPowerAutomatePage() {
 						)}
 					</div>
 
-					<p className="text-[11px] text-muted-foreground leading-relaxed">
+					<p className="text-micro text-muted-foreground leading-relaxed">
 						Paste the full <em>HTTP POST URL</em> shown after saving your Power Automate flow — it
 						includes a SAS token after <code>?sv=</code>. Stored encrypted as the per-app secret
 						<code className="mx-1">POWER_AUTOMATE_SEND_URL</code> for the <code>lumid-outlook-pa</code> app.
@@ -448,11 +448,11 @@ export default function ConnectPowerAutomatePage() {
 
 				{/* Live end-to-end test. Calls /me/apps/lumid-outlook-pa/test-send
 				    which fetches the stored URL server-side and POSTs through it. */}
-				<div className="rounded-md border border-slate-200 bg-white p-4 space-y-3">
+				<div className="rounded-md border border-ink-200 bg-card p-4 space-y-3">
 					<div className="flex items-center justify-between gap-3">
 						<div className="min-w-0">
 							<div className="text-sm font-medium">Send a test email</div>
-							<div className="text-[11px] text-muted-foreground mt-0.5">
+							<div className="text-micro text-muted-foreground mt-0.5">
 								Posts a real message through your flow — to your own account by default. Check your
 								Outlook inbox + Sent folder.
 							</div>
@@ -466,8 +466,8 @@ export default function ConnectPowerAutomatePage() {
 						<div className={[
 							'rounded-md border px-3 py-2 text-xs space-y-1',
 							testResult.ok
-								? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-900'
-								: 'border-rose-500/30 bg-rose-500/10 text-rose-900',
+								? 'border-gold-500/30 bg-gold-500/10 text-gold-900'
+								: 'border-brick-500/30 bg-brick-500/10 text-brick-900',
 						].join(' ')}>
 							<div className="font-medium">
 								{testResult.ok
@@ -476,12 +476,12 @@ export default function ConnectPowerAutomatePage() {
 								{testResult.sent_to && <span className="ml-1 opacity-80">→ {testResult.sent_to}</span>}
 							</div>
 							{testResult.preview && (
-								<pre className="font-mono text-[10px] bg-white/60 border border-current/10 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all max-h-32">
+								<pre className="font-mono text-nano bg-card/60 border border-current/10 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all max-h-32">
 									{testResult.preview}
 								</pre>
 							)}
 							{testResult.ok && (
-								<div className="text-[11px] opacity-80">
+								<div className="text-micro opacity-80">
 									Power Automate accepted the message; delivery is async. If nothing arrives in
 									~30 sec, check the flow's run history in <code>make.powerautomate.com</code> for
 									the actual error.

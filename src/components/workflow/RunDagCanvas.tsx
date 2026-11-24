@@ -22,7 +22,7 @@ export function RunDagCanvas({ steps, onStepClick }: Props) {
 
 	if (steps.length === 0) {
 		return (
-			<div className="flex h-[280px] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white text-sm text-slate-500">
+			<div className="flex h-[280px] items-center justify-center rounded-xl border border-dashed border-ink-200 bg-card text-sm text-ink-600">
 				No step log captured for this run.
 			</div>
 		);

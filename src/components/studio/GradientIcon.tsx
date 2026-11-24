@@ -10,11 +10,11 @@ import { cn } from "@/lib/utils";
 // per-app variety without clashing candy tones (no hot pink / fuchsia / amber).
 const PALETTE = [
 	"from-gold-500 to-gold-600",
-	"from-gold-500 to-cyan-600",
-	"from-sky-500 to-blue-600",
-	"from-cyan-500 to-sky-600",
-	"from-indigo-500 to-blue-600",
-	"from-violet-500 to-indigo-600",
+	"from-gold-500 to-lagoon-600",
+	"from-lagoon-500 to-lagoon-600",
+	"from-lagoon-500 to-lagoon-600",
+	"from-plum-500 to-lagoon-600",
+	"from-plum-500 to-plum-600",
 ];
 
 export function gradientTint(name: string): string {
@@ -36,7 +36,7 @@ export function GradientIcon({
 	size?: "sm" | "md" | "lg";
 	className?: string;
 }) {
-	const dims = size === "lg" ? "w-12 h-12 text-base" : size === "sm" ? "w-8 h-8 text-[11px]" : "w-10 h-10 text-sm";
+	const dims = size === "lg" ? "w-12 h-12 text-read" : size === "sm" ? "w-8 h-8 text-micro" : "w-10 h-10 text-sm";
 	const glyph = size === "lg" ? "w-5 h-5" : size === "sm" ? "w-4 h-4" : "w-[18px] h-[18px]";
 	return (
 		<div className={cn(

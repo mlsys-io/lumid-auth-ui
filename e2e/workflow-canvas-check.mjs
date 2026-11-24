@@ -70,7 +70,8 @@ try {
 	ok("the rail is tinted, not grey-on-grey", rail.bg !== "rgba(0, 0, 0, 0)", `bg=${rail.bg}`);
 
 	const border = await nodes.first().evaluate((el) => getComputedStyle(el).borderColor);
-	ok("the node border stays neutral so type keeps its own channel", /226, 232, 240/.test(border), border);
+	// Lumen (src/styles/palette.json): ink-200 border, card #FFFEFB, lagoon-500 running.
+	ok("the node border stays neutral so type keeps its own channel", /231, 223, 208/.test(border), border);
 
 	// Stock React Flow controls must be gone — that grey column is the tell.
 	ok("stock <Controls> is replaced", await editor.locator(".react-flow__controls").count() === 0);
@@ -81,18 +82,18 @@ try {
 	const runNodes = runCanvas.locator(".react-flow__node-wf > div");
 	const shadows = await runNodes.evaluateAll((els) => els.map((e) => getComputedStyle(e).boxShadow));
 	ok("a succeeded node gets the brand GOLD ring", shadows.some((s) => /176, 143, 69/.test(s)), shadows[1]?.slice(0, 90));
-	ok("a running node gets the sky ring", shadows.some((s) => /14, 165, 233/.test(s)), shadows.join(" | ").slice(0, 160));
+	ok("a running node gets the lagoon ring", shadows.some((s) => /59, 127, 141/.test(s)), shadows.join(" | ").slice(0, 160));
 	// Regression guard: an invalid entry anywhere in a comma-separated
 	// box-shadow list invalidates the WHOLE declaration, which is how a running
 	// node silently lost its ring and its base shadow at once.
 	ok("no node has a dropped box-shadow declaration", shadows.every((s) => s !== "none"), shadows.join(" | ").slice(0, 160));
 	const runBgs = await runNodes.evaluateAll((els) => els.map((e) => getComputedStyle(e).backgroundColor));
-	ok("status never repaints the card background", runBgs.every((b) => /255, 255, 255/.test(b)), runBgs.join(","));
+	ok("status never repaints the card background", runBgs.every((b) => /255, 254, 251/.test(b)), runBgs.join(","));
 
 	// The executed path is traced in gold: only edges whose BOTH ends succeeded.
 	const strokes = await runCanvas.locator(".react-flow__edge-path").evaluateAll((els) => els.map((e) => getComputedStyle(e).stroke));
 	ok("the executed path is traced in gold", strokes.some((s) => /197, 167, 94/.test(s)), strokes.join(" | "));
-	ok("the edge into the RUNNING node is sky, not gold", strokes.some((s) => /14, 165, 233/.test(s)), strokes.join(" | "));
+	ok("the edge into the RUNNING node is lagoon, not gold", strokes.some((s) => /59, 127, 141/.test(s)), strokes.join(" | "));
 
 	// --- 4. xpio: bands, dashed declared edges, error text --------------------
 	const xpio = page.getByTestId("xpio");

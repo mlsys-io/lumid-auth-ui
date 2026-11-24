@@ -113,8 +113,8 @@ export default function AppWorkflowYaml() {
 	return (
 		<div className="max-w-6xl">
 			<header className="mb-5">
-				<h1 className="text-2xl font-semibold text-slate-900">New workflow</h1>
-				<p className="mt-1 text-sm text-slate-600">
+				<h1 className="text-h2 font-semibold text-ink-900">New workflow</h1>
+				<p className="mt-1 text-sm text-ink-600">
 					Lay the workflow out on the canvas, or switch to YAML and write
 					it directly — they are the same document. Saved workflows can be
 					submitted to Runmesh or Lumilake.
@@ -182,7 +182,7 @@ export default function AppWorkflowYaml() {
 							</div>
 						</div>
 						{design ? (
-							<div className="h-[560px] overflow-hidden rounded-md border border-slate-200">
+							<div className="h-[560px] overflow-hidden rounded-md border border-ink-200">
 								<WorkflowEditor value={body || LUMILAKE_PLACEHOLDER} onChange={setBody} />
 							</div>
 						) : (
@@ -196,7 +196,7 @@ export default function AppWorkflowYaml() {
 							/>
 						)}
 					</div>
-					{err && <div className="text-xs text-red-600">{err}</div>}
+					{err && <div className="text-xs text-brick-600">{err}</div>}
 					<div className="flex items-center gap-2">
 						<Button onClick={onSave} disabled={busy}>
 							{busy ? (

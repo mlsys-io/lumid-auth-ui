@@ -14,16 +14,16 @@ interface Props {
 
 const STATE_BG: Record<string, string> = {
 	succeeded: "bg-gold-400",
-	failed:    "bg-rose-500",
+	failed:    "bg-brick-500",
 	running:   "bg-gold-400 animate-pulse",
-	skipped:   "bg-slate-300",
-	canceled:  "bg-slate-400",
+	skipped:   "bg-ink-300",
+	canceled:  "bg-ink-400",
 };
 
 export function AirflowGantt({ runs, onClick }: Props) {
 	if (runs.length === 0) {
 		return (
-			<div className="rounded-xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500">
+			<div className="rounded-xl border border-dashed border-ink-200 bg-card px-4 py-6 text-center text-sm text-ink-600">
 				No runs in the current window.
 			</div>
 		);
@@ -45,14 +45,14 @@ export function AirflowGantt({ runs, onClick }: Props) {
 	const ticks = Array.from({ length: 5 }, (_, i) => windowMin + (windowSpan * i) / 4);
 
 	return (
-		<div className="rounded-xl border border-slate-200 bg-white p-4 overflow-x-auto">
+		<div className="rounded-xl border border-ink-200 bg-card p-4 overflow-x-auto">
 			<div className="relative" style={{ minWidth: 480 }}>
 				{/* Axis */}
-				<div className="flex items-center gap-px mb-1 ml-48 border-b border-slate-200 pb-1">
+				<div className="flex items-center gap-px mb-1 ml-48 border-b border-ink-200 pb-1">
 					{ticks.map((t, i) => (
 						<div
 							key={i}
-							className="flex-1 text-[10px] text-slate-400 font-mono"
+							className="flex-1 text-nano text-ink-600 font-mono"
 							style={{ textAlign: i === 0 ? "left" : i === ticks.length - 1 ? "right" : "center" }}
 						>
 							{new Date(t * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
@@ -67,16 +67,16 @@ export function AirflowGantt({ runs, onClick }: Props) {
 					const widthPct = (dur / windowSpan) * 100;
 					return (
 						<div key={r.run_id} className="flex items-center gap-2 mb-1 group">
-							<div className="w-48 text-xs text-slate-700 truncate pr-2" title={r.workflow_slug}>
+							<div className="w-48 text-xs text-ink-700 truncate pr-2" title={r.workflow_slug}>
 								{r.workflow_slug}
 							</div>
-							<div className="flex-1 relative h-5 bg-slate-50 rounded-sm">
+							<div className="flex-1 relative h-5 bg-ink-50 rounded-sm">
 								<button
 									onClick={() => onClick?.(r.run_id)}
 									title={`${r.workflow_slug} · ${r.started_iso} · ${r.state}${r.duration_s ? ` · ${r.duration_s.toFixed(1)}s` : ""}`}
 									className={[
-										"absolute h-full rounded-sm hover:ring-2 hover:ring-slate-900/20 transition-all",
-										STATE_BG[r.state] || "bg-slate-300",
+										"absolute h-full rounded-sm hover:ring-2 hover:ring-ink-900/20 transition-all",
+										STATE_BG[r.state] || "bg-ink-300",
 										onClick ? "cursor-pointer" : "cursor-default",
 									].join(" ")}
 									style={{

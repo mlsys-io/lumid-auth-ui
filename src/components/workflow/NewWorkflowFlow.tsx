@@ -179,14 +179,14 @@ export function NewWorkflowFlow({ open, onClose }: Props) {
 
 	return (
 		<div className="fixed inset-0 z-40 flex items-center justify-center p-4">
-			<div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => !busy && onClose()} />
-			<div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
-				<header className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200">
+			<div className="absolute inset-0 bg-ink-900/40 backdrop-blur-sm" onClick={() => !busy && onClose()} />
+			<div className="relative bg-card rounded-2xl shadow-2xl border border-ink-200 w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+				<header className="flex items-center justify-between px-5 py-3.5 border-b border-ink-200">
 					<div>
-						<h2 className="font-semibold text-slate-900">New workflow</h2>
-						<p className="text-xs text-slate-500">State the goal, point at your data, and we assemble the workflow.</p>
+						<h2 className="font-semibold text-ink-900">New workflow</h2>
+						<p className="text-xs text-ink-600">State the goal, point at your data, and we assemble the workflow.</p>
 					</div>
-					<button onClick={() => !busy && onClose()} className="p-1.5 text-slate-400 hover:text-slate-700 rounded">
+					<button onClick={() => !busy && onClose()} className="p-1.5 text-ink-600 hover:text-ink-700 rounded">
 						<X className="w-4 h-4" />
 					</button>
 				</header>
@@ -218,11 +218,11 @@ export function NewWorkflowFlow({ open, onClose }: Props) {
 
 				{/* Footer nav — Create step manages its own primary button */}
 				{step !== "create" && (
-					<footer className="flex items-center justify-between px-5 py-3 border-t border-slate-200 bg-slate-50/50">
+					<footer className="flex items-center justify-between px-5 py-3 border-t border-ink-200 bg-ink-50/50">
 						<button
 							onClick={() => setStep(STEPS[Math.max(0, idx - 1)].key)}
 							disabled={idx === 0 || busy}
-							className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+							className="inline-flex items-center gap-1.5 text-xs text-ink-600 hover:text-ink-800 disabled:opacity-40 disabled:cursor-not-allowed"
 						>
 							<ArrowLeft className="w-3.5 h-3.5" />Back
 						</button>
@@ -245,19 +245,19 @@ export function NewWorkflowFlow({ open, onClose }: Props) {
 // ── Step rail ─────────────────────────────────────────────────────────────
 function StepRail({ idx }: { idx: number }) {
 	return (
-		<div className="px-5 py-2.5 flex items-center gap-1 border-b border-slate-100 bg-slate-50/40">
+		<div className="px-5 py-2.5 flex items-center gap-1 border-b border-ink-100 bg-ink-50/40">
 			{STEPS.map((s, i) => {
 				const Icon = s.icon;
 				const state = i < idx ? "done" : i === idx ? "active" : "todo";
 				return (
 					<div key={s.key} className="flex items-center gap-1 flex-1 last:flex-none">
 						<div className={cn(
-							"flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-medium transition-colors",
-							state === "done" ? "text-gold-700" : state === "active" ? "text-gold-700 bg-gold-100" : "text-slate-400",
+							"flex items-center gap-1.5 px-2 py-1 rounded-lg text-micro font-medium transition-colors",
+							state === "done" ? "text-gold-700" : state === "active" ? "text-gold-700 bg-gold-100" : "text-ink-600",
 						)}>
 							<span className={cn(
-								"w-4 h-4 rounded-full flex items-center justify-center text-[9px]",
-								state === "todo" ? "bg-slate-200 text-slate-500" : "bg-gold-500 text-white",
+								"w-4 h-4 rounded-full flex items-center justify-center text-nano",
+								state === "todo" ? "bg-ink-200 text-ink-600" : "bg-gold-700 text-white",
 							)}>
 								{state === "done" ? <Check className="w-2.5 h-2.5" /> : i + 1}
 							</span>
@@ -265,7 +265,7 @@ function StepRail({ idx }: { idx: number }) {
 							<Icon className="w-3 h-3 sm:hidden" />
 						</div>
 						{i < STEPS.length - 1 && (
-							<div className={cn("flex-1 h-px mx-0.5", i < idx ? "bg-gold-300" : "bg-slate-200")} />
+							<div className={cn("flex-1 h-px mx-0.5", i < idx ? "bg-gold-300" : "bg-ink-200")} />
 						)}
 					</div>
 				);
@@ -315,36 +315,36 @@ function GoalStep({ name, setName, objective, setObjective, metrics, setMetrics 
 	return (
 		<div className="space-y-5">
 			<div>
-				<label className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Name <span className="text-slate-300 normal-case tracking-normal">· optional</span></label>
+				<label className="text-nano uppercase tracking-wide text-ink-600 font-semibold">Name <span className="text-ink-600 normal-case tracking-normal">· optional</span></label>
 				<input
 					value={name} onChange={(e) => setName(e.target.value)}
 					placeholder="e.g. Daily AI news brief"
-					className="mt-1 w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-4 focus:ring-gold-400/15 focus:border-gold-400"
+					className="mt-1 w-full px-3.5 py-2.5 text-sm rounded-xl border border-ink-200 bg-card focus:outline-none focus:ring-4 focus:ring-gold-400/15 focus:border-gold-400"
 				/>
 			</div>
 			<div>
-				<label className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Objective</label>
-				<p className="text-[11px] text-slate-400 mt-0.5">In plain English — what should this workflow accomplish?</p>
+				<label className="text-nano uppercase tracking-wide text-ink-600 font-semibold">Objective</label>
+				<p className="text-micro text-ink-600 mt-0.5">In plain English — what should this workflow accomplish?</p>
 				<textarea
 					value={objective} onChange={(e) => setObjective(e.target.value)} rows={3}
 					placeholder="e.g. Every morning, scan the day's AI industry news, summarize the 5 that matter, and learn which sources I keep."
-					className="mt-1.5 w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-4 focus:ring-gold-400/15 focus:border-gold-400 resize-y"
+					className="mt-1.5 w-full px-3.5 py-2.5 text-sm rounded-xl border border-ink-200 bg-card focus:outline-none focus:ring-4 focus:ring-gold-400/15 focus:border-gold-400 resize-y"
 				/>
 			</div>
 			<div>
-				<label className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Metrics to optimize <span className="text-slate-300 normal-case tracking-normal">· optional</span></label>
-				<p className="text-[11px] text-slate-400 mt-0.5">What gets better each run? Add one per row.</p>
+				<label className="text-nano uppercase tracking-wide text-ink-600 font-semibold">Metrics to optimize <span className="text-ink-600 normal-case tracking-normal">· optional</span></label>
+				<p className="text-micro text-ink-600 mt-0.5">What gets better each run? Add one per row.</p>
 				<div className="mt-1.5 space-y-1.5">
 					{metrics.map((m, i) => (
 						<div key={i} className="flex items-center gap-2">
 							<input
 								value={m} onChange={(e) => setMetric(i, e.target.value)}
 								placeholder={i === 0 ? "e.g. relevance score" : "add another metric"}
-								className="flex-1 px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-4 focus:ring-gold-400/15 focus:border-gold-400"
+								className="flex-1 px-3 py-2 text-sm rounded-lg border border-ink-200 bg-card focus:outline-none focus:ring-4 focus:ring-gold-400/15 focus:border-gold-400"
 							/>
 							<button
 								onClick={() => removeMetric(i)}
-								className="p-1.5 text-slate-300 hover:text-rose-500 rounded"
+								className="p-1.5 text-ink-600 hover:text-brick-600 rounded"
 								title="Remove metric"
 							>
 								<Trash2 className="w-3.5 h-3.5" />
@@ -398,8 +398,8 @@ function DataStep({ casebook, setCasebook, dataNote, setDataNote }: {
 
 	return (
 		<div className="space-y-4">
-			<p className="text-[12px] text-slate-500">
-				A <span className="font-medium text-slate-700">casebook</span> is the data your workflow learns from. Point at an existing one, or start empty and bring data later.
+			<p className="text-caption text-ink-600">
+				A <span className="font-medium text-ink-700">casebook</span> is the data your workflow learns from. Point at an existing one, or start empty and bring data later.
 			</p>
 
 			{/* Start empty / external */}
@@ -407,16 +407,16 @@ function DataStep({ casebook, setCasebook, dataNote, setDataNote }: {
 				onClick={() => setCasebook({ mode: "empty" })}
 				className={cn(
 					"w-full text-left rounded-xl border p-3.5 transition-all",
-					isEmpty ? "border-gold-300 bg-gold-50/60 ring-2 ring-gold-200" : "border-slate-200 bg-white hover:border-gold-200",
+					isEmpty ? "border-gold-300 bg-gold-50/60 ring-2 ring-gold-200" : "border-ink-200 bg-card hover:border-gold-200",
 				)}
 			>
 				<div className="flex items-center gap-3">
-					<div className={cn("w-9 h-9 rounded-lg flex items-center justify-center", isEmpty ? "bg-gold-100 text-gold-700" : "bg-slate-100 text-slate-400")}>
+					<div className={cn("w-9 h-9 rounded-lg flex items-center justify-center", isEmpty ? "bg-gold-100 text-gold-700" : "bg-ink-100 text-ink-600")}>
 						<Database className="w-4.5 h-4.5" />
 					</div>
 					<div className="min-w-0">
-						<div className="text-sm font-medium text-slate-900">Start empty / external data</div>
-						<div className="text-[11px] text-slate-500">The workflow will gather or fetch its own data each run.</div>
+						<div className="text-sm font-medium text-ink-900">Start empty / external data</div>
+						<div className="text-micro text-ink-600">The workflow will gather or fetch its own data each run.</div>
 					</div>
 					{isEmpty && <Check className="w-4 h-4 text-gold-600 ml-auto flex-shrink-0" />}
 				</div>
@@ -424,28 +424,28 @@ function DataStep({ casebook, setCasebook, dataNote, setDataNote }: {
 
 			{/* Existing casebooks, grouped by the user's apps */}
 			<div>
-				<div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1.5">Existing casebooks</div>
+				<div className="text-nano uppercase tracking-wide text-ink-600 font-semibold mb-1.5">Existing casebooks</div>
 				{apps === null ? (
-					<div className="text-[12px] text-slate-400 flex items-center gap-1.5 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" />Loading your agents…</div>
+					<div className="text-caption text-ink-600 flex items-center gap-1.5 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" />Loading your agents…</div>
 				) : apps.length === 0 ? (
-					<div className="text-[12px] text-slate-400 py-2">No agents yet — start empty above.</div>
+					<div className="text-caption text-ink-600 py-2">No agents yet — start empty above.</div>
 				) : (
 					<div className="space-y-1.5">
 						{apps.map((a) => {
 							const groups = groupsByApp[a.name];
 							const open = expanded === a.name;
 							return (
-								<div key={a.name} className="rounded-xl border border-slate-200 overflow-hidden bg-white">
-									<button onClick={() => openApp(a.name)} className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-slate-50">
-										<Package className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-										<span className="text-[13px] text-slate-700 font-medium flex-1 truncate">{a.name}</span>
-										{loadingApp === a.name && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-300" />}
-										<ArrowRight className={cn("w-3.5 h-3.5 text-slate-300 transition-transform", open && "rotate-90")} />
+								<div key={a.name} className="rounded-xl border border-ink-200 overflow-hidden bg-card">
+									<button onClick={() => openApp(a.name)} className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-ink-50">
+										<Package className="w-3.5 h-3.5 text-ink-600 flex-shrink-0" />
+										<span className="text-meta text-ink-700 font-medium flex-1 truncate">{a.name}</span>
+										{loadingApp === a.name && <Loader2 className="w-3.5 h-3.5 animate-spin text-ink-600" />}
+										<ArrowRight className={cn("w-3.5 h-3.5 text-ink-600 transition-transform", open && "rotate-90")} />
 									</button>
 									{open && groups && (
-										<div className="border-t border-slate-100 px-3 py-2 space-y-1">
+										<div className="border-t border-ink-100 px-3 py-2 space-y-1">
 											{groups.length === 0 ? (
-												<div className="text-[11px] text-slate-400">No casebooks on this app.</div>
+												<div className="text-micro text-ink-600">No casebooks on this app.</div>
 											) : groups.map((g) => {
 												const picked = casebook.mode === "dataset" && casebook.app === a.name && casebook.group === g.group;
 												return (
@@ -454,12 +454,12 @@ function DataStep({ casebook, setCasebook, dataNote, setDataNote }: {
 														onClick={() => setCasebook({ mode: "dataset", app: a.name, group: g.group, label: g.label })}
 														className={cn(
 															"w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left transition-colors",
-															picked ? "bg-gold-50 ring-1 ring-gold-200" : "hover:bg-slate-50",
+															picked ? "bg-gold-50 ring-1 ring-gold-200" : "hover:bg-ink-50",
 														)}
 													>
 														<Database className="w-3 h-3 text-gold-500 flex-shrink-0" />
-														<span className="text-[12px] text-slate-700 flex-1 truncate">{g.label}</span>
-														<span className="text-[10px] text-slate-400">{g.files.length} file{g.files.length === 1 ? "" : "s"}</span>
+														<span className="text-caption text-ink-700 flex-1 truncate">{g.label}</span>
+														<span className="text-nano text-ink-600">{g.files.length} file{g.files.length === 1 ? "" : "s"}</span>
 														{picked && <Check className="w-3.5 h-3.5 text-gold-600 flex-shrink-0" />}
 													</button>
 												);
@@ -475,11 +475,11 @@ function DataStep({ casebook, setCasebook, dataNote, setDataNote }: {
 
 			{/* Optional note */}
 			<div>
-				<label className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Note <span className="text-slate-300 normal-case tracking-normal">· optional</span></label>
+				<label className="text-nano uppercase tracking-wide text-ink-600 font-semibold">Note <span className="text-ink-600 normal-case tracking-normal">· optional</span></label>
 				<input
 					value={dataNote} onChange={(e) => setDataNote(e.target.value)}
 					placeholder="Anything about the data the assembler should know"
-					className="mt-1 w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-4 focus:ring-gold-400/15 focus:border-gold-400"
+					className="mt-1 w-full px-3.5 py-2.5 text-sm rounded-xl border border-ink-200 bg-card focus:outline-none focus:ring-4 focus:ring-gold-400/15 focus:border-gold-400"
 				/>
 			</div>
 		</div>
@@ -493,15 +493,15 @@ function PipelineStep({ composing, draft, onCompose }: {
 	if (composing && !draft) {
 		return (
 			<div className="py-12 text-center space-y-2">
-				<div className="inline-flex items-center gap-2 text-sm text-slate-600"><Loader2 className="w-4 h-4 animate-spin text-gold-500" />Assembling your workflow…</div>
-				<div className="text-[11px] text-slate-400">Searching the xp.io skill catalog and matching skills to your goal.</div>
+				<div className="inline-flex items-center gap-2 text-sm text-ink-600"><Loader2 className="w-4 h-4 animate-spin text-gold-500" />Assembling your workflow…</div>
+				<div className="text-micro text-ink-600">Searching the xp.io skill catalog and matching skills to your goal.</div>
 			</div>
 		);
 	}
 	if (!draft) {
 		return (
 			<div className="py-12 text-center space-y-3">
-				<div className="text-[13px] text-slate-500">No workflow yet.</div>
+				<div className="text-meta text-ink-600">No workflow yet.</div>
 				<button onClick={onCompose} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-gradient-to-br from-gold-500 to-gold-600 text-white hover:from-gold-400 hover:to-gold-500 active:scale-95 transition-all shadow-sm shadow-gold-200">
 					<Sparkles className="w-3.5 h-3.5" />Assemble workflow
 				</button>
@@ -513,7 +513,7 @@ function PipelineStep({ composing, draft, onCompose }: {
 	// draft slug so a recompose replays the build.
 	return (
 		<div className="space-y-3">
-			<p className="text-[12px] text-slate-500">
+			<p className="text-caption text-ink-600">
 				Auto-composed from your goal — no YAML. Each skill is resolved live from the xp.io knowledge graph.
 			</p>
 			<AssemblyCard key={draft.slug} draft={{ ...draft, schedule: undefined }} />
@@ -578,8 +578,8 @@ function CreateStep({ draft, schedule, setSchedule, creating, created, onCreate 
 		return (
 			<div className="py-12 text-center space-y-3">
 				<div className="inline-flex w-14 h-14 rounded-2xl bg-gold-100 text-gold-600 items-center justify-center animate-in zoom-in duration-300"><Check className="w-7 h-7" /></div>
-				<div className="text-sm font-medium text-slate-900">{draft.slug.replace(/-draft$/, "")} is live — starting its first run.</div>
-				<div className="text-xs text-slate-500">Taking you to its dashboard…</div>
+				<div className="text-sm font-medium text-ink-900">{draft.slug.replace(/-draft$/, "")} is live — starting its first run.</div>
+				<div className="text-xs text-ink-600">Taking you to its dashboard…</div>
 			</div>
 		);
 	}
@@ -590,18 +590,18 @@ function CreateStep({ draft, schedule, setSchedule, creating, created, onCreate 
 		<div className="space-y-4">
 			{draft.goal?.primary && (
 				<div className="rounded-xl border border-gold-200/70 bg-gradient-to-br from-gold-50/80 to-white px-3 py-2">
-					<div className="text-[10px] uppercase tracking-wide text-gold-700/70 font-semibold">Goal</div>
-					<div className="text-[12.5px] text-slate-800 font-medium">{draft.goal.primary}</div>
+					<div className="text-nano uppercase tracking-wide text-gold-700/70 font-semibold">Goal</div>
+					<div className="text-meta text-ink-800 font-medium">{draft.goal.primary}</div>
 					{draft.goal.tracked && draft.goal.tracked.length > 0 && (
-						<div className="text-[10px] text-slate-400 mt-0.5">tracks {draft.goal.tracked.join(" · ")}</div>
+						<div className="text-nano text-ink-600 mt-0.5">tracks {draft.goal.tracked.join(" · ")}</div>
 					)}
 				</div>
 			)}
 
 			{/* Validation preview */}
 			<div>
-				<div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1.5 flex items-center gap-1"><ShieldCheck className="w-3 h-3" />Validation</div>
-				<div className="rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
+				<div className="text-nano uppercase tracking-wide text-ink-600 font-semibold mb-1.5 flex items-center gap-1"><ShieldCheck className="w-3 h-3" />Validation</div>
+				<div className="rounded-xl border border-ink-200 divide-y divide-ink-100 overflow-hidden">
 					{lint.map((r, i) => (
 						<LintRow key={i} row={r} />
 					))}
@@ -610,14 +610,14 @@ function CreateStep({ draft, schedule, setSchedule, creating, created, onCreate 
 
 			{/* Schedule */}
 			<div>
-				<div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1.5 flex items-center gap-1"><Clock className="w-3 h-3" />Schedule</div>
+				<div className="text-nano uppercase tracking-wide text-ink-600 font-semibold mb-1.5 flex items-center gap-1"><Clock className="w-3 h-3" />Schedule</div>
 				<div className="flex flex-wrap gap-1.5">
 					{SCHEDULES.map((s) => (
 						<button
 							key={s.cron} onClick={() => setSchedule(s.cron)}
 							className={cn(
-								"text-[11px] rounded-full px-2.5 py-1 border transition-colors",
-								schedule === s.cron ? "bg-gold-500 text-white border-gold-500" : "bg-white text-slate-600 border-slate-200 hover:border-gold-300",
+								"text-micro rounded-full px-2.5 py-1 border transition-colors",
+								schedule === s.cron ? "bg-gold-700 text-white border-gold-500" : "bg-card text-ink-600 border-ink-200 hover:border-gold-300",
 							)}
 						>
 							{s.label}
@@ -644,16 +644,16 @@ function LintRow({ row }: { row: { check: string; detail: string; status: "pass"
 		? { Icon: Check, c: "text-gold-600", bg: "bg-gold-50" }
 		: row.status === "warn"
 			? { Icon: AlertTriangle, c: "text-gold-600", bg: "bg-gold-50" }
-			: { Icon: X, c: "text-rose-600", bg: "bg-rose-50" };
+			: { Icon: X, c: "text-brick-600", bg: "bg-brick-50" };
 	const Icon = tone.Icon;
 	return (
-		<div className="flex items-start gap-2.5 px-3 py-2 bg-white">
+		<div className="flex items-start gap-2.5 px-3 py-2 bg-card">
 			<span className={cn("mt-0.5 w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0", tone.bg, tone.c)}>
 				<Icon className="w-2.5 h-2.5" />
 			</span>
 			<div className="min-w-0 flex-1">
-				<div className="text-[12px] font-medium text-slate-800">{row.check}</div>
-				<div className="text-[11px] text-slate-500 leading-snug">{row.detail}</div>
+				<div className="text-caption font-medium text-ink-800">{row.check}</div>
+				<div className="text-micro text-ink-600 leading-snug">{row.detail}</div>
 			</div>
 		</div>
 	);

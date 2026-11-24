@@ -88,13 +88,13 @@ function isLive(r: ComputeShell): boolean {
 function StatePill({ r }: { r: ComputeShell }) {
 	const s = r.state;
 	const tone =
-		s === "Running" || s === "RUNNING" || s === "DISPATCHED" ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-		: s === "Queued" || s === "QUEUED" || s === "Pending" || s === "PENDING" ? "bg-amber-50 text-amber-700 border-amber-200"
-		: s === "Failed" || s === "FAILED" ? "bg-rose-50 text-rose-700 border-rose-200"
+		s === "Running" || s === "RUNNING" || s === "DISPATCHED" ? "bg-gold-50 text-gold-700 border-gold-200"
+		: s === "Queued" || s === "QUEUED" || s === "Pending" || s === "PENDING" ? "bg-ember-50 text-ember-700 border-ember-200"
+		: s === "Failed" || s === "FAILED" ? "bg-brick-50 text-brick-700 border-brick-200"
 		// Terminating is its own state, not a failure: the user asked for this and
 		// it takes ~30s. Muted rather than red so it does not read as an error.
-		: s === "Terminating" ? "bg-slate-100 text-slate-500 border-slate-200"
-		: "bg-slate-50 text-slate-600 border-slate-200";
+		: s === "Terminating" ? "bg-ink-100 text-ink-600 border-ink-200"
+		: "bg-ink-50 text-ink-600 border-ink-200";
 	return (
 		<span className={`rounded border px-1.5 py-0.5 text-xs ${tone}`} title={r.detail ?? undefined}>
 			{s}
@@ -105,23 +105,23 @@ function StatePill({ r }: { r: ComputeShell }) {
 function FailureNote({ s }: { s: Sandbox }) {
 	const failed = s.phase === "Failed";
 	return (
-		<div className={`mt-1 max-w-sm text-xs ${failed ? "text-rose-700" : "text-amber-700"}`}>
+		<div className={`mt-1 max-w-sm text-xs ${failed ? "text-brick-700" : "text-ember-700"}`}>
 			<div>
 				<span className="font-medium">{s.reason}</span>
 				{s.hint ? ` - ${s.hint}` : ""}
 			</div>
 			{(s.message || s.events?.length) && (
-				<details className="mt-0.5 text-slate-600">
+				<details className="mt-0.5 text-ink-600">
 					<summary className="cursor-pointer select-none">technical details</summary>
-					{s.message && <pre className="mt-1 whitespace-pre-wrap break-words font-mono text-[11px]">{s.message}</pre>}
+					{s.message && <pre className="mt-1 whitespace-pre-wrap break-words font-mono text-micro">{s.message}</pre>}
 					{s.container && (
-						<div className="mt-1 font-mono text-[11px]">
+						<div className="mt-1 font-mono text-micro">
 							container {s.container.container}: {s.container.state} {s.container.reason}
 							{s.container.exit_code != null ? ` (exit ${s.container.exit_code})` : ""}
 						</div>
 					)}
 					{s.events?.map((e, i) => (
-						<div key={i} className="mt-1 font-mono text-[11px]">
+						<div key={i} className="mt-1 font-mono text-micro">
 							{e.at.slice(11, 19)}Z {e.reason}{e.count > 1 ? ` x${e.count}` : ""}: {e.message}
 						</div>
 					))}
@@ -656,9 +656,9 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 			<SiteStrip sites={siteStatus} />
 
 			{idlePolicy ? (
-				<p className="mb-3 text-xs text-slate-500">
+				<p className="mb-3 text-xs text-ink-600">
 					{idlePolicy.text}{" "}
-					<span className="text-slate-400">
+					<span className="text-ink-600">
 						An open shell session, a tmux or screen session (even detached), GPU
 						activity or CPU activity all count as in use — and a box we cannot
 						read is never reclaimed.
@@ -666,41 +666,41 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 				</p>
 			) : null}
 
-			<div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+			<div className="mb-4 rounded-lg border border-ink-200 bg-ink-50 p-3">
 				{/* Toolbar. SSH keys and Datasets deliberately stay OUT of the create
 				    dialog: you need a key BEFORE creating anything, and a user with no
 				    key is exactly who must not have that control hidden behind a
 				    button labelled "New sandbox". */}
 				<div className="flex flex-wrap items-center gap-2">
 					<button onClick={() => setCreateOpen(true)}
-						className="rounded-md border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100">
+						className="rounded-md border border-plum-300 bg-plum-50 px-3 py-1.5 text-sm font-medium text-plum-700 hover:bg-plum-100">
 						New sandbox
 					</button>
 					<button onClick={() => setDsOpen((v) => !v)}
 						title={`Publish, add to or remove file datasets on ${target} — mounted read-only at /datasets in every sandbox there`}
-						className="ml-auto rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">
+						className="ml-auto rounded-md border border-ink-300 bg-card px-3 py-1.5 text-sm text-ink-700 hover:bg-ink-50">
 						{siteDatasets.length ? `Datasets · ${siteDatasets.length}` : "Datasets"}
 					</button>
 					<button onClick={() => setKeysOpen((v) => !v)}
 						title="Add or remove the SSH keys that let you into your sandboxes"
 						className={`rounded-md border px-3 py-1.5 text-sm ${
 							keys && keys.length === 0
-								? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
-								: "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+								? "border-ember-300 bg-ember-50 text-ember-800 hover:bg-ember-100"
+								: "border-ink-300 bg-card text-ink-700 hover:bg-ink-50"
 						}`}>
 						{keys === null ? "SSH keys" : keys.length === 0 ? "No SSH keys — add one" : `SSH keys · ${keys.length}`}
 					</button>
 				</div>
 
 				{createOpen && (
-				<div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-4 sm:p-8"
+				<div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink-900/40 p-4 sm:p-8"
 					onClick={() => setCreateOpen(false)}>
-				<div className="w-full max-w-2xl rounded-lg border border-slate-200 bg-white p-4 shadow-xl"
+				<div className="w-full max-w-2xl rounded-lg border border-ink-200 bg-card p-4 shadow-xl"
 					onClick={(e) => e.stopPropagation()}>
 				<div className="mb-3 flex items-center justify-between">
-					<h3 className="text-sm font-medium text-slate-800">New sandbox on {target}</h3>
+					<h3 className="text-sm font-medium text-ink-800">New sandbox on {target}</h3>
 					<button onClick={() => setCreateOpen(false)}
-						className="text-slate-400 hover:text-slate-700" aria-label="Close">✕</button>
+						className="text-ink-600 hover:text-ink-700" aria-label="Close">✕</button>
 				</div>
 				<div className="flex flex-wrap items-end gap-3">
 					{/* Shown whenever the caller has more than one site to choose from --
@@ -715,43 +715,43 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 					    NUS, which is deliberately admin-only (USER_GPU_QUOTA=0), and
 					    offering a site the caller cannot use is worse than hiding it. */}
 					{sites.length > 1 && (
-						<label className="text-xs text-slate-600">
+						<label className="text-xs text-ink-600">
 							Site
 							<select value={target} onChange={(e) => setTarget(e.target.value)}
-								className="mt-1 block rounded-md border border-slate-300 px-2 py-1 text-sm">
+								className="mt-1 block rounded-md border border-ink-300 px-2 py-1 text-sm">
 								{sites.map((s) => <option key={s} value={s}>{s}</option>)}
 							</select>
 						</label>
 					)}
-					<label className="text-xs text-slate-600">
+					<label className="text-xs text-ink-600">
 						Name
 						<input value={name} onChange={(e) => setName(e.target.value)}
-							className="mt-1 block w-32 rounded-md border border-slate-300 px-2 py-1 text-sm" />
+							className="mt-1 block w-32 rounded-md border border-ink-300 px-2 py-1 text-sm" />
 					</label>
 					{/* USERNAME. Offered only before the first box at a site that allows choosing, and
 					    fixed once set — the server refuses a second choice, so the field disappears
 					    rather than inviting one. Blank keeps the name the site derived. */}
 					{ident?.can_choose && (
-						<label className="text-xs text-slate-600">
-							Username <span className="text-slate-400">(once)</span>
+						<label className="text-xs text-ink-600">
+							Username <span className="text-ink-600">(once)</span>
 							<input value={wantUser} onChange={(e) => setWantUser(e.target.value)}
 								placeholder={ident.user}
-								className="mt-1 block w-36 rounded-md border border-slate-300 px-2 py-1 text-sm font-mono" />
+								className="mt-1 block w-36 rounded-md border border-ink-300 px-2 py-1 text-sm font-mono" />
 						</label>
 					)}
 					{ident && !ident.can_choose && (
-						<span className="self-center text-xs text-slate-500">
-							you are <code className="rounded bg-slate-50 px-1">{ident.user}</code> on {target}
+						<span className="self-center text-xs text-ink-600">
+							you are <code className="rounded bg-ink-50 px-1">{ident.user}</code> on {target}
 						</span>
 					)}
 					{/* WHICH /home. Only for a host login linked to this account: those homes are
 					    real directories on s0/h0, different per host, and the box runs on that host
 					    as the login's own uid. */}
 					{ident && ident.host_homes.length > 0 && (
-						<label className="text-xs text-slate-600">
+						<label className="text-xs text-ink-600">
 							Home
 							<select value={homeChoice} onChange={(e) => setHomeChoice(e.target.value)}
-								className="mt-1 block rounded-md border border-slate-300 px-2 py-1 text-sm">
+								className="mt-1 block rounded-md border border-ink-300 px-2 py-1 text-sm">
 								<option value="">your /home on {ident.host_homes[0]}</option>
 								{ident.host_homes.slice(1).map((h) => (
 									<option key={h} value={h}>your /home on {h}</option>
@@ -760,20 +760,20 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 							</select>
 						</label>
 					)}
-					<label className="text-xs text-slate-600">
-						GPUs{gpuLabel ? <span className="ml-1 text-slate-400">{gpuLabel}</span> : null}
+					<label className="text-xs text-ink-600">
+						GPUs{gpuLabel ? <span className="ml-1 text-ink-600">{gpuLabel}</span> : null}
 						<select value={gpu} onChange={(e) => setGpu(Number(e.target.value))}
-							className="mt-1 block rounded-md border border-slate-300 px-2 py-1 text-sm">
+							className="mt-1 block rounded-md border border-ink-300 px-2 py-1 text-sm">
 							{gpuOptions.map((n) => (
 								<option key={n} value={n}>{n === 0 ? "none" : n}</option>
 							))}
 						</select>
 					</label>
 					{gpu === 0 && cpuOptions.length > 0 && (
-						<label className="text-xs text-slate-600">
+						<label className="text-xs text-ink-600">
 							CPU cores
 							<select value={cpu} onChange={(e) => setCpu(Number(e.target.value))}
-								className="mt-1 block rounded-md border border-slate-300 px-2 py-1 text-sm">
+								className="mt-1 block rounded-md border border-ink-300 px-2 py-1 text-sm">
 								{cpuOptions.map((n) => (
 									<option key={n} value={n}>
 										{n} {n === 1 ? "core" : "cores"} · {Math.min(n * 4, cpuInfo?.max_memory_gi ?? n * 4)} GiB
@@ -793,10 +793,10 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 					    the server resolves it against that same tier, so this can never widen
 					    access. */}
 					{gpu > 0 && gpuProducts.length > 1 && (
-						<label className="text-xs text-slate-600">
+						<label className="text-xs text-ink-600">
 							GPU model
 							<select value={gpuProduct} onChange={(e) => setGpuProduct(e.target.value)}
-								className="mt-1 block max-w-[17rem] rounded-md border border-slate-300 px-2 py-1 text-sm">
+								className="mt-1 block max-w-[17rem] rounded-md border border-ink-300 px-2 py-1 text-sm">
 								<option value="">any — whichever is free</option>
 								{gpuProducts.map((p) => (
 									<option key={p.product} value={p.product}
@@ -813,10 +813,10 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 							</select>
 						</label>
 					)}
-					<label className="text-xs text-slate-600">
+					<label className="text-xs text-ink-600">
 						Image
 						<select value={image} onChange={(e) => setImage(e.target.value)}
-							className="mt-1 block max-w-[17rem] rounded-md border border-slate-300 px-2 py-1 text-sm">
+							className="mt-1 block max-w-[17rem] rounded-md border border-ink-300 px-2 py-1 text-sm">
 							{/* Name the default rather than showing a blank: "site default" alone
 							    tells the user nothing about what they are about to boot. */}
 							<option value="">
@@ -831,24 +831,24 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 						</select>
 					</label>
 					{image === CUSTOM_IMAGE && (
-						<label className="text-xs text-slate-600">
+						<label className="text-xs text-ink-600">
 							Image ref
 							<input value={customImage} onChange={(e) => setCustomImage(e.target.value)}
 								placeholder="harbor.lum.id/sandbox/name:tag"
-								className="mt-1 block w-72 rounded-md border border-slate-300 px-2 py-1 text-sm font-mono" />
+								className="mt-1 block w-72 rounded-md border border-ink-300 px-2 py-1 text-sm font-mono" />
 							{/* THE TWO THINGS THAT MAKE A CUSTOM REF FAIL, said before it does.
 							    Both surface as ImagePullBackOff minutes later, where neither
 							    cause is visible: a private Harbor project cannot be pulled at
 							    all (sandbox pods carry no pull secret and node trust pulls
 							    anonymously), and a wrong-arch image is a valid manifest that
 							    fails at exec. */}
-							<span className="mt-1 block max-w-xs font-normal leading-snug text-slate-400">
-								Ours is <code className="rounded bg-slate-50 px-1">harbor.lum.id/&lt;project&gt;/&lt;name&gt;:&lt;tag&gt;</code>{" "}
+							<span className="mt-1 block max-w-xs font-normal leading-snug text-ink-600">
+								Ours is <code className="rounded bg-ink-50 px-1">harbor.lum.id/&lt;project&gt;/&lt;name&gt;:&lt;tag&gt;</code>{" "}
 								— the same ref at every site. The project must be{" "}
 								<strong>public</strong> to be pullable here, and the image{" "}
 								<strong>linux/amd64</strong>.{" "}
 								<a href="/studio/docs/flowmesh-ssh"
-									className="text-indigo-600 hover:underline">How to build and push →</a>
+									className="text-plum-600 hover:underline">How to build and push →</a>
 							</span>
 						</label>
 					)}
@@ -863,32 +863,32 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 					    keyboard-accessible and closable by the browser, with no open/close
 					    state to keep in sync. */}
 					{siteSources.length > 0 && (
-						<details className="text-xs text-slate-600">
-							<summary className="cursor-pointer select-none rounded-md border border-slate-300 bg-white px-2 py-1.5 marker:content-['']">
+						<details className="text-xs text-ink-600">
+							<summary className="cursor-pointer select-none rounded-md border border-ink-300 bg-card px-2 py-1.5 marker:content-['']">
 								Data
-								<span className="ml-1 text-slate-400">
+								<span className="ml-1 text-ink-600">
 									{sources.length === 0
 										? "— none attached"
 										: `— ${siteSources.filter((d) => sources.includes(d.id))
 												.map((d) => d.label ?? d.id).join(", ")}`}
 								</span>
-								<span className="ml-1 text-slate-300">▾</span>
+								<span className="ml-1 text-ink-600">▾</span>
 							</summary>
-							<div className="mt-1 space-y-1 rounded-md border border-slate-200 bg-white p-2">
-								<p className="text-[11px] text-slate-400">
+							<div className="mt-1 space-y-1 rounded-md border border-ink-200 bg-card p-2">
+								<p className="text-micro text-ink-600">
 									Attaches a live store — nothing is copied or mounted. Pick any number.
 								</p>
 								{siteSources.map((d) => (
 									<label key={d.id}
-										className="flex cursor-pointer items-start gap-2 rounded px-1 py-0.5 hover:bg-slate-50">
+										className="flex cursor-pointer items-start gap-2 rounded px-1 py-0.5 hover:bg-ink-50">
 										<input type="checkbox" className="mt-0.5" checked={sources.includes(d.id)}
 											onChange={(e) => setSources((v) =>
 												e.target.checked ? [...v, d.id] : v.filter((x) => x !== d.id))} />
 										<span className="min-w-0">
-											<span className="font-medium text-slate-700">{d.label ?? d.id}</span>
-											{d.note && <span className="text-slate-500"> {d.note}</span>}
+											<span className="font-medium text-ink-700">{d.label ?? d.id}</span>
+											{d.note && <span className="text-ink-600"> {d.note}</span>}
 											{d.auth && (
-												<span className="block text-[11px] text-slate-400">{d.auth}</span>
+												<span className="block text-micro text-ink-600">{d.auth}</span>
 											)}
 										</span>
 									</label>
@@ -903,10 +903,10 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 					    because each port costs a capped LB frontend, so a full pool has to
 					    be visible here rather than discovered at the refusal. */}
 					{pool.enabled && (
-						<fieldset className="text-xs text-slate-600">
+						<fieldset className="text-xs text-ink-600">
 							<legend className="mb-1">
 								Public ports{" "}
-								<span className={pool.free === 0 ? "text-amber-600" : "text-slate-400"}>
+								<span className={pool.free === 0 ? "text-ember-600" : "text-ink-600"}>
 									— {pool.free ?? 0} of {pool.pool_size ?? 0} free at this site
 								</span>
 							</legend>
@@ -918,9 +918,9 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 										})}
 										placeholder={i === 0 ? "22" : "8888"}
 										disabled={(pool.free ?? 0) === 0}
-										className="w-24 rounded-md border border-slate-300 px-2 py-1 text-sm font-mono disabled:bg-slate-50" />
+										className="w-24 rounded-md border border-ink-300 px-2 py-1 text-sm font-mono disabled:bg-ink-50" />
 								))}
-								<span className="text-slate-400">
+								<span className="text-ink-600">
 									{(pool.free ?? 0) === 0
 										? "pool full — delete a sandbox holding ports to free one"
 										: `reachable as ${pool.host ?? "lum.id"}:<assigned>`}
@@ -932,25 +932,25 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 					    mounted read-only in every sandbox here. Rendering them as a
 					    checkbox would imply an opt-in that does not exist. */}
 					{siteDatasets.length > 0 && (
-						<div className="text-xs text-slate-600">
+						<div className="text-xs text-ink-600">
 							<div className="mb-1">
-								Datasets <span className="text-slate-400">at /datasets</span>
+								Datasets <span className="text-ink-600">at /datasets</span>
 							</div>
 							<div className="flex flex-wrap items-center gap-2">
 								{siteDatasets.map((d) => (
 									<span key={d.name}
 										title={`${d.note ?? d.name} — ${d.files ?? 0} file(s), ${fmtBytes(d.bytes)}`}
-										className="rounded-md border border-slate-200 bg-white px-2 py-1">
-										{d.name} <span className="text-slate-400">{fmtBytes(d.bytes)}</span>
+										className="rounded-md border border-ink-200 bg-card px-2 py-1">
+										{d.name} <span className="text-ink-600">{fmtBytes(d.bytes)}</span>
 									</span>
 								))}
 							</div>
 						</div>
 					)}
-					<label className="text-xs text-slate-600">
+					<label className="text-xs text-ink-600">
 						Expires after
 						<select value={ttl} onChange={(e) => setTtl(Number(e.target.value))}
-							className="mt-1 block rounded-md border border-slate-300 px-2 py-1 text-sm">
+							className="mt-1 block rounded-md border border-ink-300 px-2 py-1 text-sm">
 							{/* 24h is the ceiling, and sandbox-control enforces the same number
 							    (MAX_TTL_HOURS). Offering 3d here while the server refused it would
 							    be the GPU-selector bug again in a different field. */}
@@ -959,7 +959,7 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 						</select>
 					</label>
 					<button onClick={onCreate} disabled={busy || !name}
-						className="rounded-md border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50">
+						className="rounded-md border border-plum-300 bg-plum-50 px-3 py-1.5 text-sm font-medium text-plum-700 hover:bg-plum-100 disabled:opacity-50">
 						{busy ? "creating…" : "Create sandbox"}
 					</button>
 				</div>
@@ -967,19 +967,19 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 				    already has an account on this site's hosts. Proof, not a form: the code has to
 				    appear in that login's own home, which only its owner (or root) can arrange. */}
 				{ident?.can_claim && (
-					<details className="mt-3 text-xs text-slate-600">
-						<summary className="cursor-pointer select-none text-indigo-600">
+					<details className="mt-3 text-xs text-ink-600">
+						<summary className="cursor-pointer select-none text-plum-600">
 							Already have a login on {ident.hosts.join(" / ")}? Use it instead
 						</summary>
-						<div className="mt-2 space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
+						<div className="mt-2 space-y-2 rounded-md border border-ink-200 bg-ink-50 p-3">
 							<div className="flex flex-wrap items-end gap-2">
 								<label>
 									Login
 									<input value={claimName} onChange={(e) => setClaimName(e.target.value)}
-										className="mt-1 block w-36 rounded-md border border-slate-300 px-2 py-1 text-sm font-mono" />
+										className="mt-1 block w-36 rounded-md border border-ink-300 px-2 py-1 text-sm font-mono" />
 								</label>
 								<button onClick={() => void onStartClaim()} disabled={claimBusy || !claimName.trim()}
-									className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-100 disabled:opacity-50">
+									className="rounded-md border border-ink-300 bg-card px-3 py-1.5 text-sm hover:bg-ink-100 disabled:opacity-50">
 									Get code
 								</button>
 							</div>
@@ -988,12 +988,12 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 									<div>
 										Log in to {claim.hosts.join(" or ")} as <code>{claim.name}</code> and run:
 									</div>
-									<pre className="overflow-x-auto rounded bg-white p-2 font-mono text-[11px] text-slate-800">{claim.command}</pre>
+									<pre className="overflow-x-auto rounded bg-card p-2 font-mono text-micro text-ink-800">{claim.command}</pre>
 									<button onClick={() => void onVerifyClaim()} disabled={claimBusy}
-										className="rounded-md border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50">
+										className="rounded-md border border-plum-300 bg-plum-50 px-3 py-1.5 text-sm font-medium text-plum-700 hover:bg-plum-100 disabled:opacity-50">
 										{claimBusy ? "checking…" : "Verify"}
 									</button>
-									<div className="text-slate-400">
+									<div className="text-ink-600">
 										Then your sandboxes here use your real /home on that host, and run as {claim.name}.
 										Delete <code>~/.lumid-claim</code> afterwards.
 									</div>
@@ -1007,42 +1007,42 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 				)}
 
 				{dsOpen && (
-					<div className="mt-3 rounded-md border border-slate-200 bg-white p-3">
-						<div className="mb-2 text-xs text-slate-500">
+					<div className="mt-3 rounded-md border border-ink-200 bg-card p-3">
+						<div className="mb-2 text-xs text-ink-600">
 							Files for every sandbox on <strong>{target}</strong>, mounted read-only at{" "}
-							<code className="rounded bg-slate-50 px-1">/datasets</code>. Publishing happens here
+							<code className="rounded bg-ink-50 px-1">/datasets</code>. Publishing happens here
 							because that mount stays read-only inside the sandboxes — so one careless{" "}
-							<code className="rounded bg-slate-50 px-1">rm</code> cannot take out a corpus
+							<code className="rounded bg-ink-50 px-1">rm</code> cannot take out a corpus
 							everyone else is using. Per site, not replicated.
 						</div>
 						{siteDatasets.length > 0 ? (
-							<ul className="mb-3 divide-y divide-slate-100">
+							<ul className="mb-3 divide-y divide-ink-100">
 								{siteDatasets.map((d) => (
 									<li key={d.name} className="flex items-center gap-2 py-1 text-xs">
-										<span className="font-medium text-slate-800">{d.name}</span>
-										<span className="text-slate-400">
+										<span className="font-medium text-ink-800">{d.name}</span>
+										<span className="text-ink-600">
 											{d.files ?? 0} file(s) · {fmtBytes(d.bytes)}
 										</span>
-										{d.note && <span className="truncate text-slate-500">{d.note}</span>}
+										{d.note && <span className="truncate text-ink-600">{d.note}</span>}
 										{/* Ownership is WHY a row has buttons or not, so it is shown
 										    rather than left to be inferred from their absence. */}
-										<span className="ml-auto shrink-0 text-slate-400">
+										<span className="ml-auto shrink-0 text-ink-600">
 											{d.owner ?? "operator"}
 										</span>
 										{d.can_edit ? (
 											<>
 												<button disabled={dsBusy}
 													onClick={() => { setDsUploadTo(d.name); dsFileRef.current?.click(); }}
-													className="shrink-0 text-indigo-600 hover:text-indigo-800 disabled:opacity-50">
+													className="shrink-0 text-plum-600 hover:text-plum-800 disabled:opacity-50">
 													add files
 												</button>
 												<button disabled={dsBusy} onClick={() => void onDeleteDataset(d)}
-													className="shrink-0 text-slate-400 hover:text-red-600 disabled:opacity-50">
+													className="shrink-0 text-ink-600 hover:text-brick-600 disabled:opacity-50">
 													delete
 												</button>
 											</>
 										) : (
-											<span className="shrink-0 text-slate-300" title="Published by an operator — ask an operator to change it">
+											<span className="shrink-0 text-ink-600" title="Published by an operator — ask an operator to change it">
 												read-only
 											</span>
 										)}
@@ -1050,8 +1050,8 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 								))}
 							</ul>
 						) : (
-							<p className="mb-3 text-xs text-slate-500">
-								Nothing published on {target} yet. <code className="rounded bg-slate-50 px-1">ls /datasets</code>{" "}
+							<p className="mb-3 text-xs text-ink-600">
+								Nothing published on {target} yet. <code className="rounded bg-ink-50 px-1">ls /datasets</code>{" "}
 								in a sandbox there shows the same thing.
 							</p>
 						)}
@@ -1060,109 +1060,109 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 							onChange={(e) => void onUploadDatasetFiles(e.target.files)} />
 						{datasetsWritableForSite(target) ? (
 							<div className="flex flex-wrap items-end gap-2">
-								<label className="text-xs text-slate-600">
+								<label className="text-xs text-ink-600">
 									New dataset
 									<input value={dsName}
 										onChange={(e) => setDsName(e.target.value.toLowerCase())}
 										placeholder="my-corpus"
-										className="mt-1 block w-44 rounded-md border border-slate-300 px-2 py-1 font-mono text-xs" />
+										className="mt-1 block w-44 rounded-md border border-ink-300 px-2 py-1 font-mono text-xs" />
 								</label>
-								<label className="text-xs text-slate-600">
-									Description <span className="text-slate-400">(optional)</span>
+								<label className="text-xs text-ink-600">
+									Description <span className="text-ink-600">(optional)</span>
 									<input value={dsNote} onChange={(e) => setDsNote(e.target.value)}
 										placeholder="what this holds"
-										className="mt-1 block w-64 max-w-full rounded-md border border-slate-300 px-2 py-1 text-sm" />
+										className="mt-1 block w-64 max-w-full rounded-md border border-ink-300 px-2 py-1 text-sm" />
 								</label>
 								<button onClick={() => void onCreateDataset()} disabled={dsBusy || !dsName.trim()}
-									className="rounded-md border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50">
+									className="rounded-md border border-plum-300 bg-plum-50 px-3 py-1.5 text-sm font-medium text-plum-700 hover:bg-plum-100 disabled:opacity-50">
 									{dsBusy ? "working…" : "Publish"}
 								</button>
 							</div>
 						) : (
-							<p className="text-xs text-slate-500">
+							<p className="text-xs text-ink-600">
 								<strong>{target}</strong> has no writable dataset tier — the list above is
 								read-only here. Datasets are per-site, so publish on a site that has one.
 							</p>
 						)}
-						<p className="mt-2 text-xs text-slate-500">
+						<p className="mt-2 text-xs text-ink-600">
 							Lowercase name: letters, digits, dot, dash, underscore.
 							{dsLimits && (
 								<> Limits: {dsLimits.max_file_mb} MB per file, {dsLimits.max_size_gb} GB per
 								dataset, {dsLimits.max_per_user} datasets each.</>
 							)}{" "}
-							For a bulk corpus, <code className="rounded bg-slate-50 px-1">scp</code> to the NAS
+							For a bulk corpus, <code className="rounded bg-ink-50 px-1">scp</code> to the NAS
 							instead — this path goes through one pod.
 						</p>
 					</div>
 				)}
 
 				{keysOpen && (
-					<div className="mt-3 rounded-md border border-slate-200 bg-white p-3">
+					<div className="mt-3 rounded-md border border-ink-200 bg-card p-3">
 						{keys?.length ? (
 							<ul className="mb-3 space-y-1">
 								{keys.map((k) => (
 									<li key={k.id} className="flex items-center gap-2 text-xs">
-										<span className="font-medium text-slate-800">{k.title}</span>
-										<span className="font-mono text-slate-500">{k.fingerprint}</span>
+										<span className="font-medium text-ink-800">{k.title}</span>
+										<span className="font-mono text-ink-600">{k.fingerprint}</span>
 										<button onClick={() => void onDeleteKey(k)}
-											className="ml-auto text-slate-400 hover:text-red-600">remove</button>
+											className="ml-auto text-ink-600 hover:text-brick-600">remove</button>
 									</li>
 								))}
 							</ul>
 						) : (
-							<p className="mb-3 text-xs text-amber-700">
+							<p className="mb-3 text-xs text-ember-700">
 								You have no SSH keys, so every connection will be refused with
-								<code className="mx-1 rounded bg-amber-50 px-1">Permission denied (publickey)</code>
+								<code className="mx-1 rounded bg-ember-50 px-1">Permission denied (publickey)</code>
 								even when the sandbox is running.
 							</p>
 						)}
 						<div className="flex flex-wrap items-end gap-2">
-							<label className="text-xs text-slate-600">
+							<label className="text-xs text-ink-600">
 								Public key
 								<input value={newKey} onChange={(e) => setNewKey(e.target.value)}
 									placeholder="ssh-ed25519 AAAAC3... you@laptop"
-									className="mt-1 block w-[26rem] max-w-full rounded-md border border-slate-300 px-2 py-1 font-mono text-xs" />
+									className="mt-1 block w-[26rem] max-w-full rounded-md border border-ink-300 px-2 py-1 font-mono text-xs" />
 							</label>
-							<label className="text-xs text-slate-600">
-								Label <span className="text-slate-400">(optional)</span>
+							<label className="text-xs text-ink-600">
+								Label <span className="text-ink-600">(optional)</span>
 								<input value={newKeyTitle} onChange={(e) => setNewKeyTitle(e.target.value)}
 									placeholder="laptop"
-									className="mt-1 block w-28 rounded-md border border-slate-300 px-2 py-1 text-sm" />
+									className="mt-1 block w-28 rounded-md border border-ink-300 px-2 py-1 text-sm" />
 							</label>
 							<button onClick={() => void onAddKey()} disabled={keyBusy || !newKey.trim()}
-								className="rounded-md border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50">
+								className="rounded-md border border-plum-300 bg-plum-50 px-3 py-1.5 text-sm font-medium text-plum-700 hover:bg-plum-100 disabled:opacity-50">
 								{keyBusy ? "adding…" : "Add key"}
 							</button>
 						</div>
-						<p className="mt-2 text-xs text-slate-500">
-							Get it with <code className="rounded bg-slate-50 px-1">cat ~/.ssh/id_ed25519.pub</code>.
+						<p className="mt-2 text-xs text-ink-600">
+							Get it with <code className="rounded bg-ink-50 px-1">cat ~/.ssh/id_ed25519.pub</code>.
 							Adding a key also syncs it to <strong>{target}</strong>, so it works immediately.
 						</p>
 					</div>
 				)}
-				<p className="mt-2 text-xs text-slate-500">
+				<p className="mt-2 text-xs text-ink-600">
 					{connectHint ? (
 						<>
-							Connect with <code className="rounded bg-white px-1">{connectHint}</code> — your key
+							Connect with <code className="rounded bg-card px-1">{connectHint}</code> — your key
 							decides which sandbox you land in.{" "}
 						</>
 					) : (
 						<>
 							<strong>{target}</strong> has no SSH gateway yet — sandboxes there are reachable with{" "}
-							<code className="rounded bg-white px-1">kubectl exec</code> only.{" "}
+							<code className="rounded bg-card px-1">kubectl exec</code> only.{" "}
 						</>
 					)}
-					Files under <code className="rounded bg-white px-1">/home</code> survive deleting a
+					Files under <code className="rounded bg-card px-1">/home</code> survive deleting a
 					sandbox (per site).{" "}
-					<a className="text-indigo-600 hover:underline" href="/studio/docs/sandboxes">Sandbox guide</a>
+					<a className="text-plum-600 hover:underline" href="/studio/docs/sandboxes">Sandbox guide</a>
 					{" · "}
-					<a className="text-indigo-600 hover:underline" href="/studio/docs/flowmesh-ssh">Build &amp; push your own image</a>
+					<a className="text-plum-600 hover:underline" href="/studio/docs/flowmesh-ssh">Build &amp; push your own image</a>
 				</p>
 			</div>
 
-			<div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+			<div className="overflow-x-auto rounded-lg border border-ink-200 bg-card">
 				<table className="w-full text-sm">
-					<thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+					<thead className="bg-ink-50 text-left text-xs uppercase text-ink-600">
 						<tr>
 							<th className="px-3 py-2">Site</th>
 							<th className="px-3 py-2">Shell</th>
@@ -1173,13 +1173,13 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 							<th className="px-3 py-2"></th>
 						</tr>
 					</thead>
-					<tbody className="divide-y divide-slate-100">
+					<tbody className="divide-y divide-ink-100">
 						{rows.map((r) => (
-							<tr key={r.key} className={`hover:bg-slate-50 ${isLive(r) ? "" : "opacity-60"}`}>
+							<tr key={r.key} className={`hover:bg-ink-50 ${isLive(r) ? "" : "opacity-60"}`}>
 								<td className="px-3 py-2"><SiteBadge site={r.site} /></td>
 								<td className="px-3 py-2">
-									<div className="font-medium text-slate-900">{r.name}</div>
-									<div className="font-mono text-xs text-slate-500">
+									<div className="font-medium text-ink-900">{r.name}</div>
+									<div className="font-mono text-xs text-ink-600">
 										{r.kind === "sandbox" ? r.sandbox?.pod : "flowmesh ssh task"}
 										{r.gpu ? ` · ${r.gpu} GPU` : ""}
 										{r.node ? ` · ${r.node}` : ""}
@@ -1190,7 +1190,7 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 									{/* A queued sandbox says what it is waiting for. Leaving it as a
 									    bare "Pending" with no reason is the thing this avoids. */}
 									{(r.state === "Queued" || r.state === "Pending") && r.detail && (
-										<div className="mt-0.5 max-w-xs text-xs text-amber-700">{r.detail}</div>
+										<div className="mt-0.5 max-w-xs text-xs text-ember-700">{r.detail}</div>
 									)}
 									{/* A sandbox that is not working says WHY. Without this a Failed
 									    one was a red pill and nothing else (reported 2026-10-12). The
@@ -1198,28 +1198,28 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 									    long. */}
 									{r.kind === "sandbox" && r.sandbox?.reason && <FailureNote s={r.sandbox} />}
 								</td>
-								<td className="px-3 py-2 font-mono text-xs text-slate-700">
+								<td className="px-3 py-2 font-mono text-xs text-ink-700">
 									{r.connect ?? "—"}
 									{/* The assigned port is the ONLY way to reach a published
 									    service, and it is chosen by the server from a shared
 									    pool — so it has to be readable here, not just at create
 									    time in a response the user has already dismissed. */}
 									{r.ports?.map((p) => (
-										<span key={p.node_port} className="mt-0.5 block text-slate-500"
+										<span key={p.node_port} className="mt-0.5 block text-ink-600"
 											title={`container port ${p.container_port} published publicly`}>
 											{p.connect ?? `:${p.node_port}`}
-											<span className="text-slate-400"> → {p.container_port}</span>
+											<span className="text-ink-600"> → {p.container_port}</span>
 										</span>
 									))}
 								</td>
-								<td className="px-3 py-2 text-xs text-slate-600">{r.owner ?? "you"}</td>
-								<td className="px-3 py-2 text-xs text-slate-600">
+								<td className="px-3 py-2 text-xs text-ink-600">{r.owner ?? "you"}</td>
+								<td className="px-3 py-2 text-xs text-ink-600">
 									{expiresIn(r.expiresAt)}
 									{(() => {
 										const idle = idleLabel(r);
 										return idle ? (
 											<div
-												className={`mt-0.5 cursor-help text-[11px] ${idle.warn ? "text-amber-600" : "text-slate-400"}`}
+												className={`mt-0.5 cursor-help text-micro ${idle.warn ? "text-ember-600" : "text-ink-600"}`}
 												title={idle.hint}>
 												{idle.text}
 											</div>
@@ -1234,14 +1234,14 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 										<button onClick={() => onDelete(r)}
 											disabled={r.state === "Terminating"}
 											title={r.state === "Terminating" ? "shutting down — this takes about 30s" : undefined}
-											className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 enabled:hover:bg-rose-50 enabled:hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40">
+											className="rounded-md border border-ink-200 px-2 py-1 text-xs text-ink-600 enabled:hover:bg-brick-50 enabled:hover:text-brick-700 disabled:cursor-not-allowed disabled:opacity-40">
 											{r.state === "Terminating" ? "Deleting…" : "Delete"}
 										</button>
 									) : (
 										/* A vast shell is a FlowMesh TASK. Cancelling it is a job action
 										   and lives on Jobs; offering a Delete here that did something
 										   subtly different would be worse than offering none. */
-										<a className="text-xs text-indigo-600 hover:underline" href="/studio/compute/jobs">
+										<a className="text-xs text-plum-600 hover:underline" href="/studio/compute/jobs">
 											manage in Jobs
 										</a>
 									)}
@@ -1250,7 +1250,7 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 						))}
 						{!rows.length && !boxes.loading && (
 							<tr>
-								<td colSpan={7} className="px-3 py-8 text-center text-sm text-slate-500">
+								<td colSpan={7} className="px-3 py-8 text-center text-sm text-ink-600">
 									No sandboxes yet — create one above.
 								</td>
 							</tr>
@@ -1262,19 +1262,19 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 			{isAdmin && (
 				<div className="mt-6">
 					<div className="mb-2 flex items-baseline justify-between">
-						<h3 className="text-sm font-semibold text-slate-800">
-							All sandboxes <span className="font-normal text-slate-500">— every user, every site (admin+)</span>
+						<h3 className="text-sm font-semibold text-ink-800">
+							All sandboxes <span className="font-normal text-ink-600">— every user, every site (admin+)</span>
 						</h3>
-						<span className="text-xs text-slate-500">
+						<span className="text-xs text-ink-600">
 							{(everyone.data?.items ?? []).length} running or queued
 							{(everyone.data?.sites ?? []).filter((x) => !x.ok).map((x) => (
-								<span key={x.site} className="ml-2 text-amber-700" title={x.error ?? undefined}>{x.site}: unreadable</span>
+								<span key={x.site} className="ml-2 text-ember-700" title={x.error ?? undefined}>{x.site}: unreadable</span>
 							))}
 						</span>
 					</div>
-					<div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+					<div className="overflow-x-auto rounded-lg border border-ink-200 bg-card">
 						<table className="w-full text-sm">
-							<thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+							<thead className="bg-ink-50 text-left text-xs uppercase text-ink-600">
 								<tr>
 									<th className="px-3 py-2">Site</th>
 									<th className="px-3 py-2">Rented by</th>
@@ -1284,30 +1284,30 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 									<th className="px-3 py-2">Expires in</th>
 								</tr>
 							</thead>
-							<tbody className="divide-y divide-slate-100">
+							<tbody className="divide-y divide-ink-100">
 								{(everyone.data?.items ?? []).map((b) => (
-									<tr key={`${b.site}/${b.namespace}/${b.pod}`} className="hover:bg-slate-50">
+									<tr key={`${b.site}/${b.namespace}/${b.pod}`} className="hover:bg-ink-50">
 										<td className="px-3 py-2"><SiteBadge site={b.site ?? ""} /></td>
 										<td className="px-3 py-2">
-											<div className="text-slate-900">{b.email ?? <span className="text-slate-400">unknown</span>}</div>
-											<div className="font-mono text-xs text-slate-500">{b.user}</div>
+											<div className="text-ink-900">{b.email ?? <span className="text-ink-600">unknown</span>}</div>
+											<div className="font-mono text-xs text-ink-600">{b.user}</div>
 										</td>
 										<td className="px-3 py-2">
-											<div className="font-medium text-slate-900">{b.name}</div>
-											<div className="font-mono text-xs text-slate-500">{b.node ?? "unscheduled"}</div>
+											<div className="font-medium text-ink-900">{b.name}</div>
+											<div className="font-mono text-xs text-ink-600">{b.node ?? "unscheduled"}</div>
 										</td>
-										<td className="px-3 py-2 text-xs text-slate-700">{b.phase}</td>
-										<td className="px-3 py-2 text-xs text-slate-700">
+										<td className="px-3 py-2 text-xs text-ink-700">{b.phase}</td>
+										<td className="px-3 py-2 text-xs text-ink-700">
 											{b.cpu ?? "?"} CPU · {b.memory ?? "?"}{b.gpu ? ` · ${b.gpu} GPU` : ""}
 										</td>
-										<td className="px-3 py-2 text-xs text-slate-600">
+										<td className="px-3 py-2 text-xs text-ink-600">
 											{expiresIn(b.expires_at ? Number(b.expires_at) * 1000 : null)}
 										</td>
 									</tr>
 								))}
 								{!(everyone.data?.items ?? []).length && !everyone.loading && (
 									<tr>
-										<td colSpan={6} className="px-3 py-6 text-center text-sm text-slate-500">
+										<td colSpan={6} className="px-3 py-6 text-center text-sm text-ink-600">
 											No sandboxes on any site right now.
 										</td>
 									</tr>

@@ -55,7 +55,7 @@ function CompiledBadge({ hash }: { hash: string | null }) {
 		<span
 			className={cn(
 				"inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
-				ok ? "bg-gold-50 text-gold-700" : "bg-amber-50 text-amber-700",
+				ok ? "bg-gold-50 text-gold-700" : "bg-ember-50 text-ember-700",
 			)}
 			title={ok ? `program_hash ${hash}` : "No program_hash — the DSL never compiled. Check strategy.ack on your outbox for the compiler diagnostic."}
 		>
@@ -67,9 +67,9 @@ function CompiledBadge({ hash }: { hash: string | null }) {
 
 function Stat({ label, value, tone }: { label: string; value: string | number; tone?: string }) {
 	return (
-		<div className="rounded-lg border border-slate-200 px-3 py-2">
-			<div className="text-xs text-slate-500">{label}</div>
-			<div className={cn("text-lg font-semibold tabular-nums", tone || "text-slate-900")}>{value}</div>
+		<div className="rounded-lg border border-ink-200 px-3 py-2">
+			<div className="text-xs text-ink-600">{label}</div>
+			<div className={cn("text-title font-semibold tabular-nums", tone || "text-ink-900")}>{value}</div>
 		</div>
 	);
 }
@@ -91,21 +91,21 @@ function StrategyDetail({ s, onBack }: { s: LqtStrategy; onBack: () => void }) {
 
 	return (
 		<div className="space-y-4">
-			<button onClick={onBack} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900">
+			<button onClick={onBack} className="inline-flex items-center gap-1 text-sm text-ink-600 hover:text-ink-900">
 				<ChevronLeft className="w-4 h-4" /> All strategies
 			</button>
 
 			<div className="flex flex-wrap items-center gap-2">
-				<h2 className="text-lg font-semibold text-slate-900">{s.name}</h2>
-				<span className="text-xs text-slate-500">v{s.version}</span>
+				<h2 className="text-title font-semibold text-ink-900">{s.name}</h2>
+				<span className="text-xs text-ink-600">v{s.version}</span>
 				<CompiledBadge hash={s.program_hash} />
 			</div>
-			<div className="text-xs text-slate-500 font-mono break-all">
+			<div className="text-xs text-ink-600 font-mono break-all">
 				{s.strategy_id} · registered {rel(s.registered_at)} · updated {rel(s.updated_at)}
 			</div>
 
 			{!s.program_hash && (
-				<div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+				<div className="rounded-lg border border-ember-200 bg-ember-50 px-3 py-2 text-sm text-ember-900">
 					<AlertTriangle className="w-4 h-4 inline mr-1" />
 					This strategy has no <code>program_hash</code>, so it never compiled and cannot run.
 					Compilation is asynchronous — a <code>200</code> on submit means <em>queued</em>, not
@@ -115,13 +115,13 @@ function StrategyDetail({ s, onBack }: { s: LqtStrategy; onBack: () => void }) {
 			)}
 
 			{err && (
-				<div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">{err}</div>
+				<div className="rounded-lg border border-brick-200 bg-brick-50 px-3 py-2 text-sm text-brick-900">{err}</div>
 			)}
 
-			{cycles === null && !err && <div className="h-24 rounded-xl bg-slate-100 animate-pulse" />}
+			{cycles === null && !err && <div className="h-24 rounded-xl bg-ink-100 animate-pulse" />}
 
 			{cycles !== null && cycles.length === 0 && (
-				<div className="rounded-lg border border-slate-200 px-4 py-6 text-center text-sm text-slate-500">
+				<div className="rounded-lg border border-ink-200 px-4 py-6 text-center text-sm text-ink-600">
 					No runtime cycles yet.
 					{s.program_hash
 						? " The strategy is registered and compiled, but no field box has run a cycle for it yet."
@@ -134,7 +134,7 @@ function StrategyDetail({ s, onBack }: { s: LqtStrategy; onBack: () => void }) {
 					<div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
 						<Stat label="Proposed" value={sum.proposed} />
 						<Stat label="Submitted" value={sum.submitted} tone={sum.submitted ? "text-gold-700" : undefined} />
-						<Stat label="Rejected" value={sum.rejected} tone={sum.rejected ? "text-rose-700" : undefined} />
+						<Stat label="Rejected" value={sum.rejected} tone={sum.rejected ? "text-brick-700" : undefined} />
 						<Stat label="Suppressed" value={sum.suppressed} />
 					</div>
 
@@ -142,7 +142,7 @@ function StrategyDetail({ s, onBack }: { s: LqtStrategy; onBack: () => void }) {
 					    the common failure, and it is indistinguishable from idle without
 					    the reason distribution. */}
 					{sum.proposed > 0 && sum.submitted === 0 && (
-						<div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+						<div className="rounded-lg border border-ember-200 bg-ember-50 px-3 py-2 text-sm text-ember-900">
 							<Ban className="w-4 h-4 inline mr-1" />
 							This strategy proposed {sum.proposed} order{sum.proposed === 1 ? "" : "s"} and
 							submitted none — it is being gated, not idle.
@@ -151,12 +151,12 @@ function StrategyDetail({ s, onBack }: { s: LqtStrategy; onBack: () => void }) {
 
 					{sum.topReasons.length > 0 && (
 						<div>
-							<div className="text-sm font-medium text-slate-900 mb-1.5">Why orders were rejected</div>
+							<div className="text-sm font-medium text-ink-900 mb-1.5">Why orders were rejected</div>
 							<div className="flex flex-wrap gap-1.5">
 								{sum.topReasons.map(([reason, n]) => (
-									<span key={reason} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700">
+									<span key={reason} className="inline-flex items-center gap-1 rounded-full bg-ink-100 px-2 py-0.5 text-xs text-ink-700">
 										<span className="font-mono">{reason}</span>
-										<span className="tabular-nums text-slate-500">{n}</span>
+										<span className="tabular-nums text-ink-600">{n}</span>
 									</span>
 								))}
 							</div>
@@ -164,12 +164,12 @@ function StrategyDetail({ s, onBack }: { s: LqtStrategy; onBack: () => void }) {
 					)}
 
 					<div>
-						<div className="text-sm font-medium text-slate-900 mb-1.5">
-							Recent cycles <span className="text-xs font-normal text-slate-500">({cycles.length})</span>
+						<div className="text-sm font-medium text-ink-900 mb-1.5">
+							Recent cycles <span className="text-xs font-normal text-ink-600">({cycles.length})</span>
 						</div>
-						<div className="overflow-x-auto rounded-lg border border-slate-200">
+						<div className="overflow-x-auto rounded-lg border border-ink-200">
 							<table className="w-full text-sm">
-								<thead className="bg-slate-50 text-xs text-slate-500">
+								<thead className="bg-ink-50 text-xs text-ink-600">
 									<tr>
 										{["When", "Box", "Seq", "Prop", "Sub", "Rej", "Supp", "Decide"].map((h) => (
 											<th key={h} className="px-3 py-2 text-left font-medium whitespace-nowrap">{h}</th>
@@ -178,22 +178,22 @@ function StrategyDetail({ s, onBack }: { s: LqtStrategy; onBack: () => void }) {
 								</thead>
 								<tbody>
 									{cycles.slice(0, 100).map((c) => (
-										<tr key={c.cycle_id} className="border-t border-slate-100">
-											<td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{rel(c.ts)}</td>
-											<td className="px-3 py-1.5 whitespace-nowrap font-mono text-xs text-slate-500">{c.box_id}</td>
-											<td className="px-3 py-1.5 tabular-nums text-slate-500">{c.loop_seq}</td>
+										<tr key={c.cycle_id} className="border-t border-ink-100">
+											<td className="px-3 py-1.5 whitespace-nowrap text-ink-600">{rel(c.ts)}</td>
+											<td className="px-3 py-1.5 whitespace-nowrap font-mono text-xs text-ink-600">{c.box_id}</td>
+											<td className="px-3 py-1.5 tabular-nums text-ink-600">{c.loop_seq}</td>
 											<td className="px-3 py-1.5 tabular-nums">{c.n_proposed}</td>
 											<td className="px-3 py-1.5 tabular-nums">{c.n_submitted}</td>
 											<td className="px-3 py-1.5 tabular-nums">{c.n_rejected}</td>
 											<td className="px-3 py-1.5 tabular-nums">{c.suppressed}</td>
-											<td className="px-3 py-1.5 whitespace-nowrap text-slate-500">{ms(c.decision_latency_ns)}</td>
+											<td className="px-3 py-1.5 whitespace-nowrap text-ink-600">{ms(c.decision_latency_ns)}</td>
 										</tr>
 									))}
 								</tbody>
 							</table>
 						</div>
 						{cycles.length > 100 && (
-							<div className="text-xs text-slate-500 mt-1">
+							<div className="text-xs text-ink-600 mt-1">
 								Showing the 100 most recent of {cycles.length} fetched.
 							</div>
 						)}
@@ -227,8 +227,8 @@ export default function StudioStrategies({ embedded = false }: { embedded?: bool
 
 	if (rows === null && !err) {
 		return wrap(<>
-			<div className="h-8 w-48 rounded bg-slate-100 animate-pulse" />
-			<div className="h-64 rounded-xl bg-slate-100 animate-pulse" />
+			<div className="h-8 w-48 rounded bg-ink-100 animate-pulse" />
+			<div className="h-64 rounded-xl bg-ink-100 animate-pulse" />
 		</>);
 	}
 
@@ -237,24 +237,24 @@ export default function StudioStrategies({ embedded = false }: { embedded?: bool
 	return wrap(<>
 		<div className="flex items-center justify-between gap-3">
 			<div className="min-w-0">
-				<h1 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+				<h1 className="text-title font-semibold text-ink-900 flex items-center gap-2">
 					<FlaskConical className="w-4 h-4 text-gold-500" /> Strategies
 				</h1>
-				<p className="text-sm text-slate-500 mt-0.5">
+				<p className="text-sm text-ink-600 mt-0.5">
 					LQT strategies registered under your account. Read-only —{" "}
 					<Link to="/docs/lqt-strategies" className="underline">how to write and submit one →</Link>
 				</p>
 			</div>
 			<button
 				onClick={() => { load(); toast.success("Strategies refreshed"); }}
-				className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+				className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-2.5 py-1.5 text-sm text-ink-600 hover:bg-ink-50"
 			>
 				<RefreshCw className="w-3.5 h-3.5" /> Refresh
 			</button>
 		</div>
 
 		{err && (
-			<div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
+			<div className="rounded-lg border border-brick-200 bg-brick-50 px-3 py-2 text-sm text-brick-900">
 				<AlertTriangle className="w-4 h-4 inline mr-1" />
 				{authErr
 					? "Could not authenticate to LQT. If you are signed in, the `lqt` session-bearer audience may not be deployed yet."
@@ -263,9 +263,9 @@ export default function StudioStrategies({ embedded = false }: { embedded?: bool
 		)}
 
 		{rows !== null && rows.length === 0 && !err && (
-			<div className="rounded-lg border border-slate-200 px-4 py-10 text-center">
-				<div className="text-sm text-slate-900 font-medium">No strategies yet</div>
-				<p className="text-sm text-slate-500 mt-1 max-w-md mx-auto">
+			<div className="rounded-lg border border-ink-200 px-4 py-10 text-center">
+				<div className="text-sm text-ink-900 font-medium">No strategies yet</div>
+				<p className="text-sm text-ink-600 mt-1 max-w-md mx-auto">
 					Strategies are written in the LQT DSL and submitted with a PAT carrying the{" "}
 					<code>lqt:strategy</code> scope. They run paper against live prediction markets —
 					no real orders.
@@ -277,9 +277,9 @@ export default function StudioStrategies({ embedded = false }: { embedded?: bool
 		)}
 
 		{rows !== null && rows.length > 0 && (
-			<div className="overflow-x-auto rounded-lg border border-slate-200">
+			<div className="overflow-x-auto rounded-lg border border-ink-200">
 				<table className="w-full text-sm">
-					<thead className="bg-slate-50 text-xs text-slate-500">
+					<thead className="bg-ink-50 text-xs text-ink-600">
 						<tr>
 							{["Name", "Version", "Kind", "Status", "Registered", "Updated", ""].map((h) => (
 								<th key={h} className="px-3 py-2 text-left font-medium whitespace-nowrap">{h}</th>
@@ -291,15 +291,15 @@ export default function StudioStrategies({ embedded = false }: { embedded?: bool
 							<tr
 								key={s.strategy_id}
 								onClick={() => setSel(s)}
-								className="border-t border-slate-100 cursor-pointer hover:bg-slate-50"
+								className="border-t border-ink-100 cursor-pointer hover:bg-ink-50"
 							>
-								<td className="px-3 py-2 font-medium text-slate-900">{s.name}</td>
-								<td className="px-3 py-2 text-slate-600 whitespace-nowrap">v{s.version}</td>
-								<td className="px-3 py-2 text-slate-500 whitespace-nowrap">{s.kind}</td>
+								<td className="px-3 py-2 font-medium text-ink-900">{s.name}</td>
+								<td className="px-3 py-2 text-ink-600 whitespace-nowrap">v{s.version}</td>
+								<td className="px-3 py-2 text-ink-600 whitespace-nowrap">{s.kind}</td>
 								<td className="px-3 py-2"><CompiledBadge hash={s.program_hash} /></td>
-								<td className="px-3 py-2 text-slate-500 whitespace-nowrap">{rel(s.registered_at)}</td>
-								<td className="px-3 py-2 text-slate-500 whitespace-nowrap">{rel(s.updated_at)}</td>
-								<td className="px-3 py-2 text-slate-400"><ChevronRight className="w-4 h-4" /></td>
+								<td className="px-3 py-2 text-ink-600 whitespace-nowrap">{rel(s.registered_at)}</td>
+								<td className="px-3 py-2 text-ink-600 whitespace-nowrap">{rel(s.updated_at)}</td>
+								<td className="px-3 py-2 text-ink-600"><ChevronRight className="w-4 h-4" /></td>
 							</tr>
 						))}
 					</tbody>

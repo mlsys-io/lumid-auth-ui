@@ -15,24 +15,25 @@
 // `vendor-vega` entry in vite.config.ts.
 
 import { useEffect, useRef, useState } from 'react';
+import { ink, gold, brick, lagoon, plum, chart } from "@/styles/palette";
 
 // Match the recharts palette in ArtifactView so the two chart kinds look like
 // one design system rather than two libraries bolted together.
-const CHART_COLORS = ['#2f6feb', '#e8912d', '#2fa36b', '#a05de8', '#e0518a', '#12a3b4'];
+const CHART_COLORS = [...chart];
 
 const VEGA_CONFIG = {
 	background: 'transparent',
 	font: 'inherit',
 	axis: {
-		labelColor: '#475569', titleColor: '#334155',
+		labelColor: ink['600'], titleColor: ink['800'],
 		labelFontSize: 11, titleFontSize: 11, titleFontWeight: 500 as const,
-		gridColor: '#e5e7eb', domainColor: '#cbd5e1', tickColor: '#cbd5e1',
+		gridColor: ink['200'], domainColor: ink['300'], tickColor: ink['300'],
 	},
 	legend: {
-		labelColor: '#475569', titleColor: '#334155',
+		labelColor: ink['600'], titleColor: ink['800'],
 		labelFontSize: 11, titleFontSize: 11, titleFontWeight: 500 as const,
 	},
-	title: { color: '#1e293b', fontSize: 12.5, fontWeight: 600 as const, anchor: 'start' as const },
+	title: { color: ink['900'], fontSize: 12.5, fontWeight: 600 as const, anchor: 'start' as const },
 	view: { stroke: 'transparent' },
 	range: { category: CHART_COLORS },
 	line: { strokeWidth: 2 },
@@ -103,7 +104,7 @@ export default function VegaArtifact({ spec }: { spec: string }) {
 
 	if (error) {
 		return (
-			<div className="text-rose-600 text-[11.5px] whitespace-pre-wrap break-words">
+			<div className="text-brick-600 text-caption whitespace-pre-wrap break-words">
 				{error}
 			</div>
 		);

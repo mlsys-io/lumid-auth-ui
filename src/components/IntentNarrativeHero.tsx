@@ -29,22 +29,22 @@ export function IntentNarrativeHero({
 	if (!hasNarr && !hasMov) return null;
 
 	return (
-		<section className="rounded-xl border border-slate-200/70 bg-gradient-to-br from-gold-50/30 via-white to-white px-5 py-4">
-			<div className="text-[11px] tracking-[0.06em] text-slate-400 mb-3">This week your AI</div>
+		<section className="rounded-xl border border-ink-200/70 bg-gradient-to-br from-gold-50/30 via-white to-white px-5 py-4">
+			<div className="text-micro tracking-[0.06em] text-ink-600 mb-3">This week your AI</div>
 
 			{hasNarr && (
 				<ul className="space-y-1.5 mb-3">
 					{narrative!.map((b, i) => {
 						const meta = AXIS_META[b.axis];
-						// Pull the dot color out of the tone string ("text-violet-700 bg-violet-50 …")
+						// Pull the dot color out of the tone string ("text-plum-700 bg-plum-50 …")
 						// — first className token controls the dot.
-						const dotColor = meta?.tone.split(' ').find((c) => c.startsWith('text-')) || 'text-slate-500';
+						const dotColor = meta?.tone.split(' ').find((c) => c.startsWith('text-')) || 'text-ink-600';
 						return (
-							<li key={i} className="flex items-start gap-2.5 text-[13px] leading-snug text-slate-800">
+							<li key={i} className="flex items-start gap-2.5 text-meta leading-snug text-ink-800">
 								<span className={`mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotColor.replace('text-', 'bg-')}`} />
 								<span className="flex-1 min-w-0">
 									{meta && (
-										<span className={`inline-block w-[68px] text-[11px] uppercase tracking-wide ${dotColor} font-medium`}>
+										<span className={`inline-block w-[68px] text-micro uppercase tracking-wide ${dotColor} font-medium`}>
 											{meta.label}
 										</span>
 									)}

@@ -115,7 +115,7 @@ export default function AdminOverview() {
 			    QuantArena / Lumid Market admin (otherwise reachable only by URL
 			    after the shell merge). */}
 			<section>
-				<h2 className="text-xs font-semibold uppercase tracking-wide text-indigo-700 mb-3 flex items-center gap-1.5">
+				<h2 className="text-xs font-semibold uppercase tracking-wide text-plum-700 mb-3 flex items-center gap-1.5">
 					<ShieldCheck className="w-3 h-3" />
 					Admin areas
 				</h2>
@@ -129,7 +129,7 @@ export default function AdminOverview() {
 			</section>
 
 			<section>
-				<h2 className="text-xs font-semibold uppercase tracking-wide text-indigo-700 mb-3 flex items-center gap-1.5">
+				<h2 className="text-xs font-semibold uppercase tracking-wide text-plum-700 mb-3 flex items-center gap-1.5">
 					<Activity className="w-3 h-3" />
 					Headline metrics
 				</h2>
@@ -169,16 +169,16 @@ function AreaLink({
 	return (
 		<Link
 			to={to}
-			className="group flex items-center gap-3 rounded-lg border bg-card px-4 py-3 hover:border-indigo-300 hover:shadow-sm transition-colors"
+			className="group flex items-center gap-3 rounded-lg border bg-card px-4 py-3 hover:border-plum-300 hover:shadow-sm transition-colors"
 		>
-			<div className="w-9 h-9 shrink-0 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+			<div className="w-9 h-9 shrink-0 rounded-lg bg-plum-50 text-plum-600 flex items-center justify-center">
 				<Icon className="w-[18px] h-[18px]" />
 			</div>
 			<div className="min-w-0 flex-1">
 				<div className="text-sm font-medium truncate">{label}</div>
 				<div className="text-xs text-muted-foreground truncate">{hint}</div>
 			</div>
-			<ChevronRight className="w-4 h-4 shrink-0 text-ink-600 group-hover:text-indigo-500" />
+			<ChevronRight className="w-4 h-4 shrink-0 text-ink-600 group-hover:text-plum-600" />
 		</Link>
 	);
 }
@@ -204,24 +204,24 @@ function StatTile({
 }) {
 	const toneCls =
 		tone === 'good'
-			? 'border-l-green-500'
+			? 'border-l-gold-500'
 			: tone === 'warn'
-				? 'border-l-amber-500'
+				? 'border-l-ember-500'
 				: tone === 'bad'
-					? 'border-l-red-500'
-					: 'border-l-indigo-500';
+					? 'border-l-brick-500'
+					: 'border-l-plum-500';
 	return (
 		<Link
 			to={to}
-			className={`group block rounded-lg border border-slate-200 border-l-[3px] ${toneCls} bg-white p-3 hover:shadow-sm hover:border-indigo-300 transition-all`}
+			className={`group block rounded-lg border border-ink-200 border-l-[3px] ${toneCls} bg-card p-3 hover:shadow-sm hover:border-plum-300 transition-all`}
 		>
 			<div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
 				<Icon className="w-3.5 h-3.5" />
 				{label}
 			</div>
-			<div className="text-2xl font-semibold leading-tight">{primary}</div>
+			<div className="text-h2 font-semibold leading-tight">{primary}</div>
 			{primaryHint && (
-				<div className="text-[10px] text-muted-foreground mt-0.5">{primaryHint}</div>
+				<div className="text-nano text-muted-foreground mt-0.5">{primaryHint}</div>
 			)}
 			<div className="text-xs text-muted-foreground mt-1.5 line-clamp-2">{secondary}</div>
 		</Link>
@@ -321,7 +321,7 @@ function WorkerStat({ data }: { data: Worker[] | null }) {
 			primary={
 				<>
 					{live}
-					<span className="text-base text-muted-foreground"> / {data.length}</span>
+					<span className="text-read text-muted-foreground"> / {data.length}</span>
 				</>
 			}
 			primaryHint={`${idle} idle · ${busy} busy${gpu ? ` · ${gpu} GPU` : ''}`}
@@ -427,8 +427,8 @@ function ClusterBreakdown({
 			empty={!loading && rows.length === 0 ? 'No clusters yet.' : undefined}
 		>
 			<table className="w-full text-xs">
-				<thead className="text-[10px] uppercase text-muted-foreground">
-					<tr className="border-b border-slate-100">
+				<thead className="text-nano uppercase text-muted-foreground">
+					<tr className="border-b border-ink-100">
 						<th className="text-left font-medium py-1.5 px-2">Name</th>
 						<th className="text-left font-medium py-1.5 px-2">Status</th>
 						<th className="text-right font-medium py-1.5 px-2">Nodes</th>
@@ -438,16 +438,16 @@ function ClusterBreakdown({
 				</thead>
 				<tbody>
 					{rows.map((r) => (
-						<tr key={r.cluster.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50">
+						<tr key={r.cluster.id} className="border-b border-ink-50 last:border-0 hover:bg-ink-50/50">
 							<td className="py-1.5 px-2">
 								<Link
 									to={`/studio/admin/clusters/${r.cluster.id}`}
-									className="font-medium hover:text-indigo-600"
+									className="font-medium hover:text-plum-600"
 								>
 									{r.cluster.name}
 								</Link>
 								{r.cluster.region && (
-									<span className="text-[10px] text-muted-foreground ml-1.5">{r.cluster.region}</span>
+									<span className="text-nano text-muted-foreground ml-1.5">{r.cluster.region}</span>
 								)}
 							</td>
 							<td className="py-1.5 px-2">
@@ -461,7 +461,7 @@ function ClusterBreakdown({
 								{r.live}
 								<span className="text-muted-foreground">/{r.workers.length}</span>
 								{r.lost > 0 && (
-									<span className="ml-1 text-red-600 text-[10px]">+{r.lost} lost</span>
+									<span className="ml-1 text-brick-600 text-nano">+{r.lost} lost</span>
 								)}
 							</td>
 							<td className="py-1.5 px-2 text-right tabular-nums">{r.gpus}</td>
@@ -476,13 +476,13 @@ function ClusterBreakdown({
 function StatusPill({ status }: { status: string }) {
 	const cls =
 		status === 'active'
-			? 'bg-green-100 text-green-700 border-green-200'
+			? 'bg-gold-100 text-gold-700 border-gold-200'
 			: status === 'pending'
-				? 'bg-amber-100 text-amber-700 border-amber-200'
-				: 'bg-slate-100 text-slate-600 border-slate-200';
+				? 'bg-ember-100 text-ember-700 border-ember-200'
+				: 'bg-ink-100 text-ink-600 border-ink-200';
 	return (
 		<span
-			className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] border ${cls}`}
+			className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-nano border ${cls}`}
 		>
 			{status}
 		</span>
@@ -533,8 +533,8 @@ function GpuInventory({
 			empty={!loading && workers !== null && workers.length === 0 ? 'No workers enrolled.' : undefined}
 		>
 			<table className="w-full text-xs">
-				<thead className="text-[10px] uppercase text-muted-foreground">
-					<tr className="border-b border-slate-100">
+				<thead className="text-nano uppercase text-muted-foreground">
+					<tr className="border-b border-ink-100">
 						<th className="text-left font-medium py-1.5 px-2">Pool</th>
 						<th className="text-right font-medium py-1.5 px-2">Live</th>
 						<th className="text-right font-medium py-1.5 px-2">Total</th>
@@ -542,7 +542,7 @@ function GpuInventory({
 				</thead>
 				<tbody>
 					{cpuLive.total > 0 && (
-						<tr className="border-b border-slate-50 hover:bg-slate-50/50">
+						<tr className="border-b border-ink-50 hover:bg-ink-50/50">
 							<td className="py-1.5 px-2">CPU</td>
 							<td className="py-1.5 px-2 text-right tabular-nums">{cpuLive.live}</td>
 							<td className="py-1.5 px-2 text-right tabular-nums text-muted-foreground">
@@ -551,7 +551,7 @@ function GpuInventory({
 						</tr>
 					)}
 					{rows.map(([k, v]) => (
-						<tr key={k} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50">
+						<tr key={k} className="border-b border-ink-50 last:border-0 hover:bg-ink-50/50">
 							<td className="py-1.5 px-2 capitalize">{k}</td>
 							<td className="py-1.5 px-2 text-right tabular-nums">{v.live}</td>
 							<td className="py-1.5 px-2 text-right tabular-nums text-muted-foreground">
@@ -588,13 +588,13 @@ function RecentActivity({
 			rightAction={
 				<Link
 					to="/studio/admin/audit"
-					className="text-[10px] text-muted-foreground hover:text-indigo-600"
+					className="text-nano text-muted-foreground hover:text-plum-600"
 				>
 					View all →
 				</Link>
 			}
 		>
-			<ul className="divide-y divide-slate-100">
+			<ul className="divide-y divide-ink-100">
 				{entries?.map((e) => (
 					<ActivityRow key={e.id} entry={e} />
 				))}
@@ -606,29 +606,29 @@ function RecentActivity({
 function ActivityRow({ entry }: { entry: AuditEntry }) {
 	const ok = !entry.status || (entry.status >= 200 && entry.status < 400);
 	const dotCls = ok
-		? 'bg-green-400'
+		? 'bg-gold-400'
 		: entry.status && entry.status >= 500
-			? 'bg-red-500'
-			: 'bg-amber-500';
+			? 'bg-brick-500'
+			: 'bg-ember-500';
 	const ago = relativeTime(entry.created_at);
 	return (
-		<li className="px-3 py-2 text-xs flex items-center gap-2.5 hover:bg-slate-50/60">
+		<li className="px-3 py-2 text-xs flex items-center gap-2.5 hover:bg-ink-50/60">
 			<span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotCls}`} />
-			<span className="font-mono text-[10px] text-muted-foreground w-12 shrink-0">
+			<span className="font-mono text-nano text-muted-foreground w-12 shrink-0">
 				{entry.method || '—'}
 			</span>
-			<span className="font-mono text-[11px] truncate flex-1">
+			<span className="font-mono text-micro truncate flex-1">
 				{entry.path || entry.event}
 			</span>
 			{entry.status != null && (
 				<span
-					className={`text-[10px] font-mono shrink-0 ${ok ? 'text-slate-500' : 'text-red-600'}`}
+					className={`text-nano font-mono shrink-0 ${ok ? 'text-ink-600' : 'text-brick-600'}`}
 				>
 					{entry.status}
 				</span>
 			)}
 			<span
-				className="text-[10px] text-muted-foreground w-10 text-right shrink-0"
+				className="text-nano text-muted-foreground w-10 text-right shrink-0"
 				title={entry.created_at}
 			>
 				{ago}
@@ -657,10 +657,10 @@ function Panel({
 	rightAction?: React.ReactNode;
 }) {
 	return (
-		<div className="rounded-lg border border-slate-200 bg-white">
-			<div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between">
-				<div className="text-xs font-medium text-slate-700 flex items-center gap-1.5">
-					<Icon className="w-3 h-3 text-indigo-500" />
+		<div className="rounded-lg border border-ink-200 bg-card">
+			<div className="px-3 py-2 border-b border-ink-100 flex items-center justify-between">
+				<div className="text-xs font-medium text-ink-700 flex items-center gap-1.5">
+					<Icon className="w-3 h-3 text-plum-600" />
 					{title}
 				</div>
 				{rightAction}

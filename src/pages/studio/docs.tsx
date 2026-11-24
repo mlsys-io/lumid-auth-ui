@@ -371,48 +371,48 @@ function DocIndex() {
 	return (
 		<div className="max-w-3xl mx-auto px-6 py-8">
 			<header className="mb-6">
-				<h1 className="text-lg font-medium flex items-center gap-2">
+				<h1 className="text-title font-medium flex items-center gap-2">
 					<BookOpen className="w-4 h-4 text-gold-600" />
 					Documentation
 				</h1>
-				<p className="text-xs text-slate-400 mt-1">
+				<p className="text-xs text-ink-600 mt-1">
 					Guides, contracts, and runbooks for the Lumid platform.
 				</p>
 			</header>
 			{GROUPS.filter((g) => visible.some((d) => d.group === g)).map((g) => (
 				<section key={g} className="mb-6">
-					<h2 className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-2">{g}</h2>
+					<h2 className="text-micro font-medium text-muted-foreground uppercase tracking-wide mb-2">{g}</h2>
 					<div className="grid gap-2 sm:grid-cols-2">
 						{visible.filter((d) => d.group === g).map((d) => (
 							<Link
 								key={d.slug}
 								to={`/studio/docs/${d.slug}`}
-								className="group rounded-lg border border-slate-200 bg-white p-3.5 hover:border-gold-300 hover:shadow-sm transition"
+								className="group rounded-lg border border-ink-200 bg-card p-3.5 hover:border-gold-300 hover:shadow-sm transition"
 							>
 								<div className="flex items-center gap-2 mb-1">
 									<d.icon className="w-4 h-4 text-ink-600 group-hover:text-gold-600 transition-colors" />
-									<span className="text-sm font-medium text-slate-800">{d.title}</span>
+									<span className="text-sm font-medium text-ink-800">{d.title}</span>
 								</div>
-								<p className="text-xs text-slate-500 leading-relaxed">{d.description}</p>
+								<p className="text-xs text-ink-600 leading-relaxed">{d.description}</p>
 							</Link>
 						))}
 					</div>
 				</section>
 			))}
 			<section className="mb-6">
-				<h2 className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-2">Resources</h2>
+				<h2 className="text-micro font-medium text-muted-foreground uppercase tracking-wide mb-2">Resources</h2>
 				<div className="grid gap-2 sm:grid-cols-2">
 					{RESOURCES.map((r) => (
 						<a
 							key={r.href}
 							href={r.href}
-							className="group rounded-lg border border-slate-200 bg-white p-3.5 hover:border-gold-300 hover:shadow-sm transition"
+							className="group rounded-lg border border-ink-200 bg-card p-3.5 hover:border-gold-300 hover:shadow-sm transition"
 						>
 							<div className="flex items-center gap-2 mb-1">
 								<r.icon className="w-4 h-4 text-ink-600 group-hover:text-gold-600 transition-colors" />
-								<span className="text-sm font-medium text-slate-800">{r.label}</span>
+								<span className="text-sm font-medium text-ink-800">{r.label}</span>
 							</div>
-							<p className="text-xs text-slate-500 leading-relaxed">{r.description}</p>
+							<p className="text-xs text-ink-600 leading-relaxed">{r.description}</p>
 						</a>
 					))}
 				</div>
@@ -437,7 +437,7 @@ function DocReader({ doc }: { doc: DocEntry }) {
 	return (
 		<div className="max-w-4xl mx-auto px-6 py-6">
 			<div className="text-xs text-muted-foreground mb-4 flex items-center justify-between gap-3">
-				<Link to="/studio/docs" className="inline-flex items-center gap-1 text-slate-500 hover:text-gold-700">
+				<Link to="/studio/docs" className="inline-flex items-center gap-1 text-ink-600 hover:text-gold-700">
 					<ArrowLeft className="w-3.5 h-3.5" /> All docs
 				</Link>
 				<span className="flex items-center gap-3">
@@ -452,12 +452,12 @@ function DocReader({ doc }: { doc: DocEntry }) {
 				</span>
 			</div>
 			{error ? (
-				<div className="rounded border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+				<div className="rounded border border-ember-300 bg-ember-50 p-4 text-sm text-ember-900">
 					<div className="font-medium mb-1">Doc unavailable</div>
 					<div className="text-xs">This documentation is temporarily unavailable ({error}). Please try again in a moment.</div>
 				</div>
 			) : !markdown ? (
-				<div className="text-sm text-slate-500 italic flex items-center gap-2">
+				<div className="text-sm text-ink-600 italic flex items-center gap-2">
 					<Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…
 				</div>
 			) : (
@@ -471,7 +471,7 @@ function DocReader({ doc }: { doc: DocEntry }) {
 							margin: 1.25rem auto;
 							max-width: min(560px, 100%);
 							height: auto;
-							border: 1px solid #d0d7de;
+							border: 1px solid var(--border);
 							border-radius: 6px;
 						}
 					`}</style>
@@ -498,7 +498,7 @@ export default function StudioDocs() {
 	if (slug === 'how') {
 		return (
 			<div className="max-w-4xl mx-auto px-6 py-6">
-				<Link to="/studio/docs" className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-gold-700 mb-4">
+				<Link to="/studio/docs" className="inline-flex items-center gap-1 text-xs text-ink-600 hover:text-gold-700 mb-4">
 					<ArrowLeft className="w-3.5 h-3.5" /> All docs
 				</Link>
 				<StudioHow />
@@ -508,7 +508,7 @@ export default function StudioDocs() {
 	const doc = slug ? DOCS.find((d) => d.slug === slug) : undefined;
 	if (slug && !doc) {
 		return (
-			<div className="max-w-3xl mx-auto px-6 py-8 text-sm text-slate-500">
+			<div className="max-w-3xl mx-auto px-6 py-8 text-sm text-ink-600">
 				Unknown doc "{slug}". <Link to="/studio/docs" className="text-gold-700 hover:underline">Back to all docs</Link>.
 			</div>
 		);

@@ -91,9 +91,9 @@ export interface CycleSummary {
 
 const OUTCOME_META: Record<Outcome, { label: string; icon: typeof CheckCircle2; cls: string }> = {
 	ran:             { label: 'Ran',             icon: CheckCircle2, cls: 'border-gold-200 bg-gold-50 text-gold-800' },
-	no_change:       { label: 'No change',       icon: MinusCircle,  cls: 'border-slate-200 bg-slate-50 text-slate-600' },
+	no_change:       { label: 'No change',       icon: MinusCircle,  cls: 'border-ink-200 bg-ink-50 text-ink-600' },
 	awaiting_review: { label: 'Awaiting review', icon: Clock,        cls: 'border-gold-200 bg-gold-50 text-gold-800' },
-	no_setup:        { label: 'Not set up',      icon: AlertCircle,  cls: 'border-rose-200 bg-rose-50 text-rose-800' },
+	no_setup:        { label: 'Not set up',      icon: AlertCircle,  cls: 'border-brick-200 bg-brick-50 text-brick-800' },
 };
 
 export default function CycleInspector() {
@@ -111,8 +111,8 @@ export default function CycleInspector() {
 
 	useEffect(() => { load(); }, [load]);
 
-	if (error) return <div className="text-rose-700 text-sm">{error}</div>;
-	if (!data) return <div className="text-sm text-slate-500 italic">Loading run…</div>;
+	if (error) return <div className="text-brick-700 text-sm">{error}</div>;
+	if (!data) return <div className="text-sm text-ink-600 italic">Loading run…</div>;
 
 	const summary = data.summary || {};
 	const outcome = summary.outcome;
@@ -132,35 +132,35 @@ export default function CycleInspector() {
 		const open = expanded[s.step_id];
 		const Icon = s.ok ? CheckCircle2 : AlertCircle;
 		return (
-			<li key={s.step_id} className="rounded-lg border border-slate-200/80 bg-white overflow-hidden">
+			<li key={s.step_id} className="rounded-lg border border-ink-200/80 bg-card overflow-hidden">
 				<button
 					onClick={() => setExpanded((m) => ({ ...m, [s.step_id]: !m[s.step_id] }))}
-					className="w-full text-left px-3 py-2 flex items-start gap-2 hover:bg-slate-50"
+					className="w-full text-left px-3 py-2 flex items-start gap-2 hover:bg-ink-50"
 				>
-					<Icon className={s.ok ? 'w-4 h-4 mt-0.5 text-gold-600 flex-shrink-0' : 'w-4 h-4 mt-0.5 text-rose-600 flex-shrink-0'} />
+					<Icon className={s.ok ? 'w-4 h-4 mt-0.5 text-gold-600 flex-shrink-0' : 'w-4 h-4 mt-0.5 text-brick-600 flex-shrink-0'} />
 					<div className="min-w-0 flex-1">
 						<div className="flex items-center gap-2">
-							<span className="text-sm font-medium text-slate-800">{s.skill || s.step_id}</span>
-							{s.duration_s != null && <span className="text-[10px] text-slate-400 tabular-nums">{s.duration_s.toFixed(1)}s</span>}
+							<span className="text-sm font-medium text-ink-800">{s.skill || s.step_id}</span>
+							{s.duration_s != null && <span className="text-nano text-ink-600 tabular-nums">{s.duration_s.toFixed(1)}s</span>}
 						</div>
-						{s.output_summary && <div className={open ? "text-xs text-slate-600 mt-0.5" : "text-xs text-slate-600 mt-0.5 line-clamp-2"}>{s.output_summary}</div>}
+						{s.output_summary && <div className={open ? "text-xs text-ink-600 mt-0.5" : "text-xs text-ink-600 mt-0.5 line-clamp-2"}>{s.output_summary}</div>}
 					</div>
-					{(open ? <ChevronDown className="w-3.5 h-3.5 text-slate-300 flex-shrink-0 mt-1" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-300 flex-shrink-0 mt-1" />)}
+					{(open ? <ChevronDown className="w-3.5 h-3.5 text-ink-600 flex-shrink-0 mt-1" /> : <ChevronRight className="w-3.5 h-3.5 text-ink-600 flex-shrink-0 mt-1" />)}
 				</button>
 				{open && (
 					<div className="px-3 pb-3 pl-9 space-y-3">
 						{s.error && (
-							<div className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded p-2 whitespace-pre-wrap font-mono">{s.error}</div>
+							<div className="text-xs text-brick-700 bg-brick-50 border border-brick-200 rounded p-2 whitespace-pre-wrap font-mono">{s.error}</div>
 						)}
 						{s.prompt_preview && (
 							<div>
-								<div className="text-[10px] tracking-wide text-slate-400 mb-1">Prompt {s.prompt_sha && <span className="font-mono">· {s.prompt_sha.slice(0, 12)}</span>}</div>
-								<pre className="text-xs text-slate-700 whitespace-pre-wrap font-mono leading-relaxed bg-slate-50 rounded p-2 border border-slate-200">{s.prompt_preview}</pre>
+								<div className="text-nano tracking-wide text-ink-600 mb-1">Prompt {s.prompt_sha && <span className="font-mono">· {s.prompt_sha.slice(0, 12)}</span>}</div>
+								<pre className="text-xs text-ink-700 whitespace-pre-wrap font-mono leading-relaxed bg-ink-50 rounded p-2 border border-ink-200">{s.prompt_preview}</pre>
 							</div>
 						)}
 						<div>
-							<div className="text-[10px] tracking-wide text-slate-400 mb-1">Output</div>
-							<pre className="text-xs text-slate-700 whitespace-pre-wrap font-mono leading-relaxed bg-slate-50 rounded p-2 border border-slate-200 max-h-80 overflow-auto">{JSON.stringify(s.output, null, 2)}</pre>
+							<div className="text-nano tracking-wide text-ink-600 mb-1">Output</div>
+							<pre className="text-xs text-ink-700 whitespace-pre-wrap font-mono leading-relaxed bg-ink-50 rounded p-2 border border-ink-200 max-h-80 overflow-auto">{JSON.stringify(s.output, null, 2)}</pre>
 						</div>
 					</div>
 				)}
@@ -172,15 +172,15 @@ export default function CycleInspector() {
 		<div className="space-y-4 max-w-3xl">
 			<Link
 				to={app && loop ? `/studio/apps/${encodeURIComponent(app)}?selected=${encodeURIComponent(loop)}` : "/studio/apps"}
-				className="inline-flex items-center text-sm text-slate-500 hover:text-slate-900 gap-1"
+				className="inline-flex items-center text-sm text-ink-600 hover:text-ink-900 gap-1"
 			>
 				<ChevronLeft className="w-4 h-4" /> Back to workflow
 			</Link>
 
 			<header className="flex items-start justify-between gap-3">
 				<div>
-					<h1 className="text-lg font-semibold text-slate-900">{humanizeLoopName(loop)}</h1>
-					<div className="text-xs text-slate-500 mt-0.5">{app} · {prettyTs(ts)}</div>
+					<h1 className="text-title font-semibold text-ink-900">{humanizeLoopName(loop)}</h1>
+					<div className="text-xs text-ink-600 mt-0.5">{app} · {prettyTs(ts)}</div>
 				</div>
 				{outcome && <OutcomePill outcome={outcome} />}
 			</header>
@@ -198,10 +198,10 @@ export default function CycleInspector() {
 					if (steps.length === 0 && !showGate && !showReview && !showOffers) return null;
 					const Icon = stage.Icon;
 					return (
-						<section key={stage.key} className="rounded-xl border border-slate-200 bg-white/60 p-3">
+						<section key={stage.key} className="rounded-xl border border-ink-200 bg-card/60 p-3">
 							<div className="flex items-center gap-2 mb-2">
 								<div className="w-6 h-6 rounded-lg bg-gold-50 text-gold-600 flex items-center justify-center"><Icon className="w-3.5 h-3.5" /></div>
-								<h3 className="text-[13px] font-semibold text-slate-800">{stage.label}</h3>
+								<h3 className="text-meta font-semibold text-ink-800">{stage.label}</h3>
 							</div>
 							{showGate && <div className="mb-2"><ObserveGatePanel gate={gate!} /></div>}
 							{steps.length > 0 && <ul className="space-y-1.5">{steps.map(renderStep)}</ul>}
@@ -215,21 +215,21 @@ export default function CycleInspector() {
 
 				{/* Any steps without a declared stage. */}
 				{(byStage["other"]?.length ?? 0) > 0 && (
-					<section className="rounded-xl border border-slate-200 bg-white/60 p-3">
-						<h3 className="text-[13px] font-semibold text-slate-800 mb-2">Other steps</h3>
+					<section className="rounded-xl border border-ink-200 bg-card/60 p-3">
+						<h3 className="text-meta font-semibold text-ink-800 mb-2">Other steps</h3>
 						<ul className="space-y-1.5">{byStage["other"].map(renderStep)}</ul>
 					</section>
 				)}
 
 				{data.steps.length === 0 && !gate && reviewQueue.length === 0 && offers.length === 0 && (
-					<div className="text-sm text-slate-500 italic">No artifacts recorded for this run.</div>
+					<div className="text-sm text-ink-600 italic">No artifacts recorded for this run.</div>
 				)}
 			</div>
 
 			{/* Raw summary — for the curious, collapsed. */}
-			<details className="rounded-lg border border-slate-200 bg-white p-3 group">
-				<summary className="text-[11px] font-medium tracking-wide text-slate-400 cursor-pointer select-none">Raw summary</summary>
-				<pre className="text-xs text-slate-700 whitespace-pre-wrap font-mono leading-relaxed mt-2 max-h-96 overflow-auto">{JSON.stringify(summary, null, 2)}</pre>
+			<details className="rounded-lg border border-ink-200 bg-card p-3 group">
+				<summary className="text-micro font-medium tracking-wide text-ink-600 cursor-pointer select-none">Raw summary</summary>
+				<pre className="text-xs text-ink-700 whitespace-pre-wrap font-mono leading-relaxed mt-2 max-h-96 overflow-auto">{JSON.stringify(summary, null, 2)}</pre>
 			</details>
 		</div>
 	);
@@ -252,7 +252,7 @@ export function OutcomePill({ outcome }: { outcome: Outcome }) {
 
 export function ObserveGatePanel({ gate }: { gate: ObserveGate }) {
 	const cls = !gate.evaluated
-		? 'border-slate-200 bg-slate-50 text-slate-600'
+		? 'border-ink-200 bg-ink-50 text-ink-600'
 		: gate.passed
 			? 'border-gold-200 bg-gold-50 text-gold-800'
 			: 'border-gold-200 bg-gold-50 text-gold-800';
@@ -261,7 +261,7 @@ export function ObserveGatePanel({ gate }: { gate: ObserveGate }) {
 			<div className="flex items-center gap-2 text-xs font-medium">
 				<Eye className="w-4 h-4" />
 				Observe gate
-				<span className="ml-1 text-[10px] uppercase tracking-wide opacity-80">
+				<span className="ml-1 text-nano uppercase tracking-wide opacity-80">
 					{!gate.evaluated ? 'not evaluated' : gate.passed ? 'passed — proceeding' : 'held — did not proceed'}
 				</span>
 			</div>
@@ -282,7 +282,7 @@ export function ReviewQueue({
 			<div className="flex items-center gap-2 mb-2">
 				<Clock className="w-4 h-4 text-gold-700" />
 				<h2 className="text-sm font-medium text-gold-900">Awaiting your approval</h2>
-				<span className="text-[11px] text-gold-700">{items.length} held</span>
+				<span className="text-micro text-gold-700">{items.length} held</span>
 			</div>
 			<ul className="space-y-2">
 				{items.map((it) => (
@@ -360,19 +360,19 @@ function ReviewRow({
 	};
 
 	return (
-		<li className="rounded-lg border border-gold-200/70 bg-white p-3">
+		<li className="rounded-lg border border-gold-200/70 bg-card p-3">
 			<div className="flex items-start justify-between gap-3">
 				<div className="min-w-0 flex-1">
 					<div className="flex items-center gap-2 flex-wrap">
-						<span className="font-mono text-sm font-medium text-slate-900">{item.step_id}</span>
-						{item.skill_id && <span className="text-xs text-slate-500">{item.skill_id}</span>}
-						<span className="text-[10px] uppercase tracking-wide rounded-full px-1.5 py-px border border-slate-200 bg-slate-50 text-slate-500">
+						<span className="font-mono text-sm font-medium text-ink-900">{item.step_id}</span>
+						{item.skill_id && <span className="text-xs text-ink-600">{item.skill_id}</span>}
+						<span className="text-nano uppercase tracking-wide rounded-full px-1.5 py-px border border-ink-200 bg-ink-50 text-ink-600">
 							{item.kind}
 						</span>
-						{item.stage && <span className="text-[10px] tracking-wide text-slate-400">{item.stage}</span>}
+						{item.stage && <span className="text-nano tracking-wide text-ink-600">{item.stage}</span>}
 					</div>
 					{item.planned_kwargs && Object.keys(item.planned_kwargs).length > 0 && mode !== 'edit' && (
-						<pre className="text-[11px] text-slate-600 font-mono mt-1.5 bg-slate-50 rounded p-2 border border-slate-100 max-h-32 overflow-auto whitespace-pre-wrap">
+						<pre className="text-micro text-ink-600 font-mono mt-1.5 bg-ink-50 rounded p-2 border border-ink-100 max-h-32 overflow-auto whitespace-pre-wrap">
 							{JSON.stringify(item.planned_kwargs, null, 2)}
 						</pre>
 					)}
@@ -394,14 +394,14 @@ function ReviewRow({
 						<button
 							onClick={() => setMode(mode === 'edit' ? null : 'edit')}
 							disabled={!!busy}
-							className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"
+							className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded border border-ink-200 bg-card hover:bg-ink-50 disabled:opacity-50"
 						>
 							<Pencil className="w-3 h-3" /> Edit
 						</button>
 						<button
 							onClick={() => setMode(mode === 'revamp' ? null : 'revamp')}
 							disabled={!!busy}
-							className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"
+							className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded border border-ink-200 bg-card hover:bg-ink-50 disabled:opacity-50"
 							title="Adjust the next run with a free-text instruction"
 						>
 							Revamp
@@ -412,22 +412,22 @@ function ReviewRow({
 
 			{mode === 'edit' && !done && (
 				<div className="mt-2 space-y-2">
-					<div className="text-[10px] tracking-wide text-slate-400">Edit the inputs, then approve with edits.</div>
+					<div className="text-nano tracking-wide text-ink-600">Edit the inputs, then approve with edits.</div>
 					<textarea
 						value={editText}
 						onChange={(e) => setEditText(e.target.value)}
-						className="w-full text-xs border border-slate-300 rounded p-2 font-mono"
+						className="w-full text-xs border border-ink-300 rounded p-2 font-mono"
 						rows={6}
 					/>
 					<div className="flex justify-end gap-2">
 						<button
 							onClick={() => setMode(null)}
-							className="px-3 py-1 text-xs rounded border border-slate-200 bg-white hover:bg-slate-50"
+							className="px-3 py-1 text-xs rounded border border-ink-200 bg-card hover:bg-ink-50"
 						>Cancel</button>
 						<button
 							onClick={approveEdit}
 							disabled={!!busy}
-							className="px-3 py-1 text-xs rounded-lg bg-gold-500 text-white hover:bg-gold-600 disabled:opacity-50 transition-colors"
+							className="px-3 py-1 text-xs rounded-lg bg-gold-700 text-white hover:bg-gold-800 disabled:opacity-50 transition-colors"
 						>
 							{busy === 'edit' ? 'Saving…' : 'Approve with edits'}
 						</button>
@@ -437,23 +437,23 @@ function ReviewRow({
 
 			{mode === 'revamp' && !done && (
 				<div className="mt-2 space-y-2">
-					<div className="text-[10px] tracking-wide text-slate-400">Tell your AI how to adjust the next run of this step.</div>
+					<div className="text-nano tracking-wide text-ink-600">Tell your AI how to adjust the next run of this step.</div>
 					<textarea
 						value={instr}
 						onChange={(e) => setInstr(e.target.value)}
 						placeholder="e.g. tighten the latency budget to 150ms and skip the heavy reranker."
-						className="w-full text-sm border border-slate-300 rounded p-2 font-sans"
+						className="w-full text-sm border border-ink-300 rounded p-2 font-sans"
 						rows={3}
 					/>
 					<div className="flex justify-end gap-2">
 						<button
 							onClick={() => setMode(null)}
-							className="px-3 py-1 text-xs rounded border border-slate-200 bg-white hover:bg-slate-50"
+							className="px-3 py-1 text-xs rounded border border-ink-200 bg-card hover:bg-ink-50"
 						>Cancel</button>
 						<button
 							onClick={sendRevamp}
 							disabled={!!busy}
-							className="px-3 py-1 text-xs rounded-lg bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-50 transition-colors"
+							className="px-3 py-1 text-xs rounded-lg bg-plum-500 text-white hover:bg-plum-600 disabled:opacity-50 transition-colors"
 						>
 							{busy === 'revamp' ? 'Sending…' : 'Send instruction'}
 						</button>
@@ -469,8 +469,8 @@ function ReviewRow({
 const OFFER_KIND_META: Record<CompoundOffer['kind'], { label: string; icon: typeof Lightbulb; tone: string; iconTone: string }> = {
 	knowledge: { label: 'extra knowledge', icon: Lightbulb, tone: 'border-gold-200 bg-gold-50/40',    iconTone: 'bg-gold-100 text-gold-700' },
 	skill:     { label: 'a skill',         icon: Wand2,     tone: 'border-gold-200 bg-gold-50/40', iconTone: 'bg-gold-100 text-gold-700' },
-	workflow:  { label: 'a workflow',      icon: Workflow,  tone: 'border-indigo-200 bg-indigo-50/40',   iconTone: 'bg-indigo-100 text-indigo-700' },
-	experiment:{ label: 'an experiment verdict', icon: FlaskConical, tone: 'border-violet-200 bg-violet-50/40', iconTone: 'bg-violet-100 text-violet-700' },
+	workflow:  { label: 'a workflow',      icon: Workflow,  tone: 'border-plum-200 bg-plum-50/40',   iconTone: 'bg-plum-100 text-plum-700' },
+	experiment:{ label: 'an experiment verdict', icon: FlaskConical, tone: 'border-plum-200 bg-plum-50/40', iconTone: 'bg-plum-100 text-plum-700' },
 };
 
 export function OffersPanel({ offers, app, loop, ts }: {
@@ -492,11 +492,11 @@ export function OffersPanel({ offers, app, loop, ts }: {
 		} catch { /* leave actionable */ }
 	};
 	return (
-		<section className="rounded-lg border border-indigo-200 bg-indigo-50/30 p-3">
+		<section className="rounded-lg border border-plum-200 bg-plum-50/30 p-3">
 			<div className="flex items-center gap-2 mb-2">
-				<Lightbulb className="w-4 h-4 text-indigo-700" />
-				<h2 className="text-sm font-medium text-indigo-900">Compound offers</h2>
-				<span className="text-[11px] text-indigo-700">recalled at this spot</span>
+				<Lightbulb className="w-4 h-4 text-plum-700" />
+				<h2 className="text-sm font-medium text-plum-900">Compound offers</h2>
+				<span className="text-micro text-plum-700">recalled at this spot</span>
 			</div>
 			<ul className="space-y-2">
 				{offers.map((o, i) => {
@@ -509,20 +509,20 @@ export function OffersPanel({ offers, app, loop, ts }: {
 							</div>
 							<div className="flex-1 min-w-0">
 								<div className="flex items-center gap-1.5 flex-wrap">
-									<span className="text-[13px] font-medium text-slate-900 leading-tight">{o.title}</span>
-									<span className="text-[9px] uppercase tracking-wide rounded-full px-1.5 py-px border border-indigo-100 bg-indigo-50 text-indigo-700">
+									<span className="text-meta font-medium text-ink-900 leading-tight">{o.title}</span>
+									<span className="text-nano uppercase tracking-wide rounded-full px-1.5 py-px border border-plum-100 bg-plum-50 text-plum-700">
 										offer · {meta.label}
 									</span>
 								</div>
 								{o.trigger && (
-									<div className="text-[10px] text-slate-500 mt-0.5">
+									<div className="text-nano text-ink-600 mt-0.5">
 										from {o.trigger.kind} <span className="font-mono">{o.trigger.key}</span>
 										{o.trigger.count > 1 && <> · seen ×{o.trigger.count}</>}
 									</div>
 								)}
-								{o.detail && <div className="text-[11px] text-slate-600 mt-0.5 leading-snug">{o.detail}</div>}
+								{o.detail && <div className="text-micro text-ink-600 mt-0.5 leading-snug">{o.detail}</div>}
 								{o.action?.schedule && (
-									<div className="text-[10px] text-indigo-700 mt-1 inline-flex items-center gap-1">
+									<div className="text-nano text-plum-700 mt-1 inline-flex items-center gap-1">
 										<ChevronRight className="w-3 h-3" />
 										{o.action.type} <span className="font-mono">· {o.action.schedule}</span>
 									</div>
@@ -530,17 +530,17 @@ export function OffersPanel({ offers, app, loop, ts }: {
 								{app && loop && ts && (
 									<div className="mt-1.5 flex items-center gap-1.5">
 										{acted[o.id || String(i)] ? (
-											<span className="text-[10px] font-medium text-slate-500">
+											<span className="text-nano font-medium text-ink-600">
 												{acted[o.id || String(i)] === "adopted" ? "✓ adopted — feeds the next run's feedback rules" : "dismissed"}
 											</span>
 										) : (
 											<>
 												<button onClick={() => act(o, i, "adopt_offer")}
-													className="px-2 py-0.5 text-[10px] font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors">
+													className="px-2 py-0.5 text-nano font-medium rounded-lg bg-plum-600 text-white hover:bg-plum-700 transition-colors">
 													Adopt
 												</button>
 												<button onClick={() => act(o, i, "dismiss_offer")}
-													className="px-2 py-0.5 text-[10px] font-medium rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors">
+													className="px-2 py-0.5 text-nano font-medium rounded-lg border border-ink-200 text-ink-600 hover:bg-ink-50 transition-colors">
 													Dismiss
 												</button>
 											</>

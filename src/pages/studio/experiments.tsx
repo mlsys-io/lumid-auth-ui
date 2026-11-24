@@ -64,7 +64,7 @@ export default function StudioExperiments() {
 					key={f}
 					onClick={() => setFilter(f)}
 					className={cn(
-						"px-2.5 py-1 text-[11px] rounded-full border transition-colors",
+						"px-2.5 py-1 text-micro rounded-full border transition-colors",
 						filter === f
 							? "border-foreground/25 bg-muted text-foreground"
 							: "border-border bg-card text-muted-foreground hover:bg-muted",

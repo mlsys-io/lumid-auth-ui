@@ -61,10 +61,10 @@ const OUTCOME_META: Record<
   NonNullable<CycleRow["outcome"]>,
   { label: string; icon: typeof CheckCircle2; cls: string }
 > = {
-  ran:             { label: "Ran",                  icon: CheckCircle2, cls: "text-emerald-700" },
-  no_change:       { label: "Skipped — no change",  icon: MinusCircle,  cls: "text-slate-500" },
-  awaiting_review: { label: "Awaiting your review", icon: Clock,        cls: "text-amber-700" },
-  no_setup:        { label: "Nothing to act on",    icon: MinusCircle,  cls: "text-slate-500" },
+  ran:             { label: "Ran",                  icon: CheckCircle2, cls: "text-gold-700" },
+  no_change:       { label: "Skipped — no change",  icon: MinusCircle,  cls: "text-ink-600" },
+  awaiting_review: { label: "Awaiting your review", icon: Clock,        cls: "text-ember-700" },
+  no_setup:        { label: "Nothing to act on",    icon: MinusCircle,  cls: "text-ink-600" },
 };
 
 function cycleOutcome(c: CycleRow): { label: string; icon: typeof CheckCircle2; cls: string } {
@@ -72,7 +72,7 @@ function cycleOutcome(c: CycleRow): { label: string; icon: typeof CheckCircle2; 
   // Derive an honest outcome from legacy fields when summary.outcome
   // is absent (old cycles).
   if (c.skipped) return OUTCOME_META.no_change;
-  if (!c.ok) return { label: "Failed", icon: AlertCircle, cls: "text-rose-700" };
+  if (!c.ok) return { label: "Failed", icon: AlertCircle, cls: "text-brick-700" };
   return OUTCOME_META.ran;
 }
 
@@ -95,7 +95,7 @@ function CyclesSection() {
   if (rows.length === 0) {
     return (
       <SectionFrame title="Recent runs">
-        <div className="text-sm text-slate-500 italic">
+        <div className="text-sm text-ink-600 italic">
           No workflows yet — start one above and its runs will queue up here.
         </div>
       </SectionFrame>
@@ -115,13 +115,13 @@ function CyclesSection() {
       <div className="space-y-4">
         {[...byApp.entries()].map(([app, wfs]) => (
           <div key={app}>
-            <div className="text-[11px] tracking-[0.06em] text-slate-400 mb-1.5">{app}</div>
+            <div className="text-micro tracking-[0.06em] text-ink-600 mb-1.5">{app}</div>
             <ul className="space-y-1.5">
               {wfs.map((w) => {
                 const dot =
-                  w.last_run_ok === true ? "bg-emerald-500"
-                  : w.last_run_ok === false ? "bg-rose-500"
-                  : "bg-slate-300";
+                  w.last_run_ok === true ? "bg-gold-500"
+                  : w.last_run_ok === false ? "bg-brick-500"
+                  : "bg-ink-300";
                 const dotTitle =
                   w.last_run_ok === true ? "last run succeeded"
                   : w.last_run_ok === false ? "last run failed"
@@ -130,14 +130,14 @@ function CyclesSection() {
                   <li key={w.slug}>
                     <Link
                       to={`/studio/workflows/${encodeURIComponent(w.slug)}`}
-                      className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5 hover:bg-slate-50 transition-colors"
+                      className="flex items-center gap-3 rounded-lg border border-ink-200 bg-card px-3 py-2.5 hover:bg-ink-50 transition-colors"
                     >
                       <span className={cn("w-2 h-2 rounded-full shrink-0", dot)} title={dotTitle} />
                       <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium text-slate-800 truncate">
+                        <div className="text-sm font-medium text-ink-800 truncate">
                           {w.name || humanizeLoop(w.slug)}
                         </div>
-                        <div className="text-xs text-slate-500 mt-0.5">
+                        <div className="text-xs text-ink-600 mt-0.5">
                           {w.last_run_ts ? `ran ${formatRelative(w.last_run_ts * 1000)}` : "no runs yet"}
                         </div>
                       </div>
@@ -213,7 +213,7 @@ function DraftsSection({ onChange }: { onChange: () => void }) {
   if (drafts.length === 0) {
     return (
       <SectionFrame title="Drafts & decisions">
-        <div className="text-sm text-slate-500 italic">No drafts pending — your AI will queue them here when it composes replies for you.</div>
+        <div className="text-sm text-ink-600 italic">No drafts pending — your AI will queue them here when it composes replies for you.</div>
       </SectionFrame>
     );
   }
@@ -222,11 +222,11 @@ function DraftsSection({ onChange }: { onChange: () => void }) {
     <SectionFrame title="Drafts & decisions">
       <ul className="space-y-3">
         {drafts.map((d) => (
-          <li key={d.id} className="rounded-lg border border-slate-200 bg-white p-3">
+          <li key={d.id} className="rounded-lg border border-ink-200 bg-card p-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
-                <div className="text-xs text-slate-500">
-                  To <span className="font-medium text-slate-700">{d.to || "—"}</span>
+                <div className="text-xs text-ink-600">
+                  To <span className="font-medium text-ink-700">{d.to || "—"}</span>
                 </div>
                 <div className="font-medium text-sm mt-0.5">{d.subject || "(no subject)"}</div>
               </div>
@@ -234,7 +234,7 @@ function DraftsSection({ onChange }: { onChange: () => void }) {
                 <button
                   onClick={() => act(d.id, "send")}
                   disabled={!!busy[d.id]}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded border border-gold-200 bg-gold-50 text-gold-800 hover:bg-gold-100 disabled:opacity-50"
                 >
                   {busy[d.id] ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
                   Send
@@ -242,14 +242,14 @@ function DraftsSection({ onChange }: { onChange: () => void }) {
                 <button
                   onClick={() => startEdit(d)}
                   disabled={!!busy[d.id]}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded border border-ink-200 bg-card hover:bg-ink-50 disabled:opacity-50"
                 >
                   Edit
                 </button>
                 <button
                   onClick={() => act(d.id, "dismiss")}
                   disabled={!!busy[d.id]}
-                  className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"
+                  className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-ink-200 bg-card hover:bg-ink-50 disabled:opacity-50"
                   title="Dismiss"
                 >
                   <X className="w-3 h-3" />
@@ -261,23 +261,23 @@ function DraftsSection({ onChange }: { onChange: () => void }) {
                 <textarea
                   value={editText}
                   onChange={(e) => setEditText(e.target.value)}
-                  className="w-full text-sm border border-slate-300 rounded p-2 font-sans"
+                  className="w-full text-sm border border-ink-300 rounded p-2 font-sans"
                   rows={5}
                 />
                 <div className="flex justify-end gap-2">
                   <button
                     onClick={() => setEditingId(null)}
-                    className="px-3 py-1 text-xs rounded border border-slate-200 bg-white hover:bg-slate-50"
+                    className="px-3 py-1 text-xs rounded border border-ink-200 bg-card hover:bg-ink-50"
                   >Cancel</button>
                   <button
                     onClick={() => saveEdit(d.id)}
                     disabled={!!busy[d.id]}
-                    className="px-3 py-1 text-xs rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+                    className="px-3 py-1 text-xs rounded-lg bg-gold-700 text-white hover:bg-gold-800 disabled:opacity-50 transition-colors"
                   >Save</button>
                 </div>
               </div>
             ) : (
-              <div className="mt-2 text-sm text-slate-700 whitespace-pre-wrap line-clamp-4">
+              <div className="mt-2 text-sm text-ink-700 whitespace-pre-wrap line-clamp-4">
                 {d.body || ""}
               </div>
             )}
@@ -355,8 +355,8 @@ function LoopsSection() {
   if (rows.length === 0) {
     return (
       <SectionFrame title="What it does">
-        <div className="text-sm text-slate-500 italic">
-          No loops yet. <Link to="/studio/library" className="text-emerald-700 hover:underline">Browse the marketplace</Link> to add some.
+        <div className="text-sm text-ink-600 italic">
+          No loops yet. <Link to="/studio/library" className="text-gold-700 hover:underline">Browse the marketplace</Link> to add some.
         </div>
       </SectionFrame>
     );
@@ -365,7 +365,7 @@ function LoopsSection() {
   return (
     <SectionFrame title="What it does">
       {error && (
-        <div className="mb-3 text-sm rounded border border-rose-200 bg-rose-50 text-rose-800 px-3 py-2 flex items-center gap-2">
+        <div className="mb-3 text-sm rounded border border-brick-200 bg-brick-50 text-brick-800 px-3 py-2 flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0" /> {error}
         </div>
       )}
@@ -374,13 +374,13 @@ function LoopsSection() {
           const b = busy.get(k(r));
           const failing = (r.consecutive_failures ?? 0) > 0;
           return (
-            <li key={k(r)} className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 flex items-center justify-between gap-3">
+            <li key={k(r)} className="rounded-lg border border-ink-200 bg-card px-3 py-2.5 flex items-center justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <div className="font-medium text-sm">{humanizeLoop(r.loop)}</div>
-                <div className="text-xs text-slate-500 mt-0.5">
+                <div className="text-xs text-ink-600 mt-0.5">
                   {formatRelative(r.last_run_ts) === "—" ? "Hasn't run yet" : `Last ran ${formatRelative(r.last_run_ts)}`}
                   {failing && (
-                    <span className="ml-2 text-rose-700">
+                    <span className="ml-2 text-brick-700">
                       · {r.consecutive_failures} consecutive failure{r.consecutive_failures === 1 ? "" : "s"}
                     </span>
                   )}
@@ -390,7 +390,7 @@ function LoopsSection() {
                 <button
                   onClick={() => runNow(r)}
                   disabled={!!b}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 active:scale-95 disabled:opacity-50 transition-all shadow-sm shadow-emerald-100"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg bg-gold-700 text-white hover:bg-gold-800 active:scale-95 disabled:opacity-50 transition-all shadow-sm shadow-gold-100"
                 >
                   {b === "running" ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
                   Run now
@@ -398,7 +398,7 @@ function LoopsSection() {
                 <button
                   onClick={() => toggle(r)}
                   disabled={!!b}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded border border-ink-200 bg-card hover:bg-ink-50 disabled:opacity-50"
                   title={r.enabled ? "Pause this loop" : "Resume this loop"}
                 >
                   {b === "starting" || b === "stopping" ? (
@@ -424,7 +424,7 @@ function LoopsSection() {
 export function SectionFrame({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
-      <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2.5">
+      <h2 className="text-sm font-semibold text-ink-600 uppercase tracking-wide mb-2.5">
         {title}
       </h2>
       {children}
@@ -436,7 +436,7 @@ export function Skeleton({ lines = 3 }: { lines?: number }) {
   return (
     <div className="space-y-2" aria-hidden="true">
       {Array.from({ length: lines }, (_, i) => (
-        <div key={i} className="h-10 rounded bg-slate-100 animate-pulse" />
+        <div key={i} className="h-10 rounded bg-ink-100 animate-pulse" />
       ))}
     </div>
   );
@@ -472,8 +472,8 @@ export default function AppLoops() {
     <div className="space-y-6">
       {/* Page identity in StudioShell top-bar — no local H1. */}
       {justInstalled && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-3 text-sm text-emerald-900 flex items-center gap-3">
-          <Sparkles className="w-4 h-4 shrink-0 text-emerald-600" />
+        <div className="rounded-xl border border-gold-200 bg-gold-50/60 px-4 py-3 text-sm text-gold-900 flex items-center gap-3">
+          <Sparkles className="w-4 h-4 shrink-0 text-gold-700" />
           <div className="flex-1">Your AI is set up. The next cycle will fire on schedule — or use Run now to try it immediately.</div>
         </div>
       )}

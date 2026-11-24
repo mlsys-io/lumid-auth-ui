@@ -172,7 +172,7 @@ export default function AppCard({
 	const running = workflows.filter((w) => w.running).length;
 	const lastActivity = workflows.reduce((m, w) => Math.max(m, w.last_run_ts || 0), 0);
 
-	const cls = "group relative block w-full text-left rounded-xl border border-slate-200/80 bg-white overflow-hidden hover:shadow-md hover:shadow-slate-200/60 hover:border-slate-300 transition-all hover:-translate-y-0.5 animate-in fade-in slide-in-from-bottom-2 duration-500";
+	const cls = "group relative block w-full text-left rounded-xl border border-ink-200/80 bg-card overflow-hidden hover:shadow-md hover:shadow-ink-200/60 hover:border-ink-300 transition-all hover:-translate-y-0.5 animate-in fade-in slide-in-from-bottom-2 duration-500";
 	const style = { animationDelay: `${index * 70}ms`, animationFillMode: "both" as const };
 
 	return (
@@ -186,28 +186,28 @@ export default function AppCard({
 					</div>
 					<div className="min-w-0 flex-1">
 					<div className="flex items-center gap-2">
-						<h3 className="text-[14px] font-medium text-slate-900 truncate">{label}</h3>
+						<h3 className="text-body font-medium text-ink-900 truncate">{label}</h3>
 						{/* ONE status signal: running > failing > quiet health ratio.
 						    (The rail, heartbeat dot, wf-count, and mono slug all said the
 						    same thing four ways — scrubbed 2026-06-12.) */}
-						<span className="ml-auto flex items-center text-[11px] flex-shrink-0">
+						<span className="ml-auto flex items-center text-micro flex-shrink-0">
 							{running > 0 ? (
-								<span className="inline-flex items-center gap-1 text-sky-700" title="a run is in progress">
-									<span className="w-1.5 h-1.5 rounded-full bg-sky-500 running-pulse" />running
+								<span className="inline-flex items-center gap-1 text-lagoon-700" title="a run is in progress">
+									<span className="w-1.5 h-1.5 rounded-full bg-lagoon-500 running-pulse" />running
 								</span>
 							) : failing > 0 ? (
-								<span className="inline-flex items-center gap-0.5 text-rose-700"><AlertTriangle className="w-3 h-3" />{failing} failing</span>
+								<span className="inline-flex items-center gap-0.5 text-brick-700"><AlertTriangle className="w-3 h-3" />{failing} failing</span>
 							) : total > 0 ? (
-								<span className="text-slate-400">{healthy}/{total} healthy</span>
+								<span className="text-ink-600">{healthy}/{total} healthy</span>
 							) : null}
 						</span>
 					</div>
-					<div className="text-[12px] text-slate-400 mt-0.5 truncate">{whenLast(lastActivity)}</div>
+					<div className="text-caption text-ink-600 mt-0.5 truncate">{whenLast(lastActivity)}</div>
 					</div>
-					<ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-gold-600 transition-colors flex-shrink-0" />
+					<ArrowRight className="w-4 h-4 text-ink-600 group-hover:text-gold-600 transition-colors flex-shrink-0" />
 					<span
 						role="button" tabIndex={0} onClick={remove}
-						className="shrink-0 p-1.5 rounded-md text-slate-300 hover:text-rose-600 hover:bg-rose-50 opacity-0 group-hover:opacity-100 transition-opacity"
+						className="shrink-0 p-1.5 rounded-md text-ink-600 hover:text-brick-600 hover:bg-brick-50 opacity-0 group-hover:opacity-100 transition-opacity"
 						aria-label={`Remove ${label}`} aria-disabled={removing}
 					>
 						<Trash2 className="w-3.5 h-3.5" />
@@ -217,7 +217,7 @@ export default function AppCard({
 
 			{/* each workflow row → label opens the app; the sparkline's dots are
 			    individually clickable (hover previews / click pins the cycle). */}
-			<div className="px-4 pb-3 space-y-0.5 border-t border-slate-100 pt-2">
+			<div className="px-4 pb-3 space-y-0.5 border-t border-ink-100 pt-2">
 				{[...workflows].sort((a, b) => Number(!!b.run_spark) - Number(!!a.run_spark)).slice(0, 2).map((w) => (
 					<div
 						key={w.slug}
@@ -226,7 +226,7 @@ export default function AppCard({
 						<button
 							type="button"
 							onClick={() => open(loopOf(w))}
-							className="text-[11px] text-slate-600 truncate flex-1 text-left"
+							className="text-micro text-ink-600 truncate flex-1 text-left"
 							title={`Open ${loopLabel(w.name, w.slug)}`}
 						>
 							{loopLabel(w.name, w.slug)}
@@ -234,7 +234,7 @@ export default function AppCard({
 						{w.run_spark ? <RunSparkline spec={w.run_spark} runs={w.runs_recent} app={w.app} loop={loopOf(w)} /> : null}
 					</div>
 				))}
-				{total > 2 && <div className="text-[10px] text-slate-400 pt-0.5 pl-1.5">+{total - 2} more</div>}
+				{total > 2 && <div className="text-nano text-ink-600 pt-0.5 pl-1.5">+{total - 2} more</div>}
 				{/* How the app's key metrics are trending over iterations — curves +
 				    insight (to the right). Tries the app's loops; null if none move. */}
 				{(() => {

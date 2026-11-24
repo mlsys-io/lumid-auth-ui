@@ -98,7 +98,7 @@ export default function SqlConsole() {
 				}}
 				spellCheck={false}
 				rows={5}
-				className="w-full font-mono text-[12.5px] leading-relaxed rounded-lg border border-slate-200 bg-white p-3 focus:outline-none focus:ring-2 focus:ring-gold-300"
+				className="w-full font-mono text-meta leading-relaxed rounded-lg border border-ink-200 bg-card p-3 focus:outline-none focus:ring-2 focus:ring-gold-300"
 				placeholder="SELECT …"
 			/>
 
@@ -106,41 +106,41 @@ export default function SqlConsole() {
 				<button
 					onClick={run}
 					disabled={busy || !sql.trim()}
-					className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12.5px] font-medium rounded-lg border border-gold-300 bg-gold-50 text-gold-900 hover:bg-gold-100 disabled:opacity-50 disabled:cursor-not-allowed"
+					className="inline-flex items-center gap-1.5 px-3 py-1.5 text-meta font-medium rounded-lg border border-gold-300 bg-gold-50 text-gold-900 hover:bg-gold-100 disabled:opacity-50 disabled:cursor-not-allowed"
 				>
 					{busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
 					{busy ? 'Running…' : 'Run'}
 				</button>
-				<span className="text-xs text-slate-500">⌘/Ctrl + Enter</span>
+				<span className="text-xs text-ink-600">⌘/Ctrl + Enter</span>
 				{ms !== null && rows && (
-					<span className="text-xs text-slate-500">
+					<span className="text-xs text-ink-600">
 						{rows.length} row{rows.length === 1 ? '' : 's'} · {ms} ms
 					</span>
 				)}
 			</div>
 
 			{err && (
-				<div className="flex items-start gap-2 rounded-lg border border-amber-500/50 bg-amber-500/5 p-3 text-xs">
-					<AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+				<div className="flex items-start gap-2 rounded-lg border border-ember-500/50 bg-ember-500/5 p-3 text-xs">
+					<AlertTriangle className="w-3.5 h-3.5 text-ember-600 shrink-0 mt-0.5" />
 					{/* Verbatim, and monospace, because it is usually a Postgres error
 					    with a caret pointing at the offending token. */}
-					<pre className="whitespace-pre-wrap font-mono text-amber-900">{err}</pre>
+					<pre className="whitespace-pre-wrap font-mono text-ember-900">{err}</pre>
 				</div>
 			)}
 
 			{rows && !err && (
-				<div className="flex-1 min-h-0 overflow-auto rounded-lg border border-slate-200">
+				<div className="flex-1 min-h-0 overflow-auto rounded-lg border border-ink-200">
 					{rows.length === 0 ? (
-						<div className="p-4 text-xs text-slate-500 inline-flex items-center gap-2">
+						<div className="p-4 text-xs text-ink-600 inline-flex items-center gap-2">
 							<Table2 className="w-3.5 h-3.5" />
 							No rows. The query ran — this is an empty result, not a failure.
 						</div>
 					) : (
-						<table className="w-full text-[12px] border-collapse">
-							<thead className="sticky top-0 bg-slate-50">
+						<table className="w-full text-caption border-collapse">
+							<thead className="sticky top-0 bg-ink-50">
 								<tr>
 									{cols.map((c) => (
-										<th key={c} className="text-left font-medium text-slate-600 px-2 py-1.5 border-b border-slate-200 whitespace-nowrap">
+										<th key={c} className="text-left font-medium text-ink-600 px-2 py-1.5 border-b border-ink-200 whitespace-nowrap">
 											{c}
 										</th>
 									))}
@@ -148,15 +148,15 @@ export default function SqlConsole() {
 							</thead>
 							<tbody className="font-mono">
 								{rows.map((r, i) => (
-									<tr key={i} className="even:bg-slate-50/50">
+									<tr key={i} className="even:bg-ink-50/50">
 										{cols.map((c) => {
 											const v = r[c];
 											return (
-												<td key={c} className="px-2 py-1 border-b border-slate-100 whitespace-nowrap tabular-nums">
+												<td key={c} className="px-2 py-1 border-b border-ink-100 whitespace-nowrap tabular-nums">
 													{/* null is a real value and must not render as blank —
 													    an empty cell reads as "no data", which is different. */}
 													{v === null || v === undefined ? (
-														<span className="text-slate-400 italic">null</span>
+														<span className="text-ink-600 italic">null</span>
 													) : typeof v === 'object' ? (
 														JSON.stringify(v)
 													) : (

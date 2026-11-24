@@ -34,7 +34,7 @@ export default function LoopOrbit({
 	const period = 2.0;
 	const delayFor = (i: number) => `${(i * period) / LOOP_STAGES.length}s`;
 	const nodeCls =
-		mode === "paused" ? "bg-slate-100 text-slate-400"
+		mode === "paused" ? "bg-ink-100 text-ink-600"
 		: mode === "running" ? "bg-gold-100 text-gold-700"
 		: "bg-gold-50 text-gold-600"; // idle = armed, static
 	const clickable = !!onStageClick;
@@ -43,8 +43,8 @@ export default function LoopOrbit({
 		<div className={cn(
 			"rounded-xl border p-3 transition-colors",
 			mode === "running" ? "border-gold-200 bg-gold-50/50"
-			: mode === "paused" ? "border-slate-200 bg-slate-50/60"
-			: "border-slate-200 bg-white",
+			: mode === "paused" ? "border-ink-200 bg-ink-50/60"
+			: "border-ink-200 bg-card",
 		)}>
 			<div className="flex items-center">
 				{LOOP_STAGES.map((s, i) => {
@@ -77,7 +77,7 @@ export default function LoopOrbit({
 								</button>
 							) : node}
 							{i < LOOP_STAGES.length - 1 && (
-								<div className="flex-1 h-0.5 bg-slate-200 relative overflow-hidden mx-1">
+								<div className="flex-1 h-0.5 bg-ink-200 relative overflow-hidden mx-1">
 									{animated && (
 										<span
 											className="absolute inset-y-0 left-0 w-1/2 bg-gradient-to-r from-transparent via-gold-400 to-transparent loop-sweep"
@@ -90,7 +90,7 @@ export default function LoopOrbit({
 					);
 				})}
 				<RotateCw
-					className={cn("w-3.5 h-3.5 ml-1 flex-shrink-0", mode === "paused" ? "text-slate-300" : "text-gold-500", animated && "loop-spin")}
+					className={cn("w-3.5 h-3.5 ml-1 flex-shrink-0", mode === "paused" ? "text-ink-600" : "text-gold-500", animated && "loop-spin")}
 					style={animated ? { animationDuration: `${period * 2}s` } : undefined}
 				/>
 			</div>
@@ -98,8 +98,8 @@ export default function LoopOrbit({
 			<div className="flex items-start mt-1.5">
 				{LOOP_STAGES.map((s, i) => (
 					<Fragment key={s.key}>
-						<span className={cn("w-9 text-center text-[9px] leading-tight tracking-tight transition-colors",
-							selected === s.key ? "text-gold-700 font-medium" : mode === "paused" ? "text-slate-400" : "text-slate-600")}>
+						<span className={cn("w-9 text-center text-nano leading-tight tracking-tight transition-colors",
+							selected === s.key ? "text-gold-700 font-medium" : mode === "paused" ? "text-ink-600" : "text-ink-600")}>
 							{s.label}
 						</span>
 						{i < LOOP_STAGES.length - 1 && <span className="flex-1 mx-1" />}
@@ -108,7 +108,7 @@ export default function LoopOrbit({
 				<span className="w-3.5 ml-1" />
 			</div>
 
-			{caption && <div className="text-center text-[11px] text-slate-500 mt-2">{caption}</div>}
+			{caption && <div className="text-center text-micro text-ink-600 mt-2">{caption}</div>}
 		</div>
 	);
 }

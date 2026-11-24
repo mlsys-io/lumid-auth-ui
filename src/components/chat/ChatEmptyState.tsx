@@ -33,10 +33,10 @@ export function ChatHero() {
 			{/* Golden spiral brand mark. */}
 			<img src="/auth/spiral.png" alt="Lumid" className="mx-auto mb-3 h-11 w-auto select-none" draggable={false} />
 
-			<h1 className="font-display text-[26px] font-medium tracking-tight text-foreground">
+			<h1 className="font-display text-h2 font-medium tracking-tight text-foreground">
 				Good {tod}{name ? `, ${name}` : ''}
 			</h1>
-			<p className="mt-1.5 text-[13px] text-muted-foreground">
+			<p className="mt-1.5 text-meta text-muted-foreground">
 				I can see this page — ask anything in plain English.
 			</p>
 		</div>
@@ -103,7 +103,7 @@ function samplesFor(ctx: ViewingContext): Array<{ label: string; prompt: string;
 }
 
 const PILL =
-	'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-card text-[12px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors';
+	'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-card text-caption text-muted-foreground hover:bg-muted hover:text-foreground transition-colors';
 
 export default function ChatEmptyState() {
 	const location = useLocation();

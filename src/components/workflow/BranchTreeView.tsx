@@ -209,21 +209,21 @@ export default function BranchTreeView({
 						<div className="px-2.5 py-1.5 text-left" style={{ width: NODE_W }}>
 							<div className="flex items-center gap-1.5">
 								<span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: tone }} />
-								<span className="text-[12px] truncate flex-1 font-medium text-slate-800">
+								<span className="text-caption truncate flex-1 font-medium text-ink-800">
 									{n.branchLabel || cycleDate(n.ts) || n.ts}
 								</span>
-								{isSel && <span className="text-[9px] font-semibold text-sky-600 flex-shrink-0">compare</span>}
+								{isSel && <span className="text-nano font-semibold text-lagoon-600 flex-shrink-0">compare</span>}
 							</div>
-							{n.branchLabel && <div className="text-[10px] text-slate-400 truncate mt-0.5">{cycleDate(n.ts)}</div>}
+							{n.branchLabel && <div className="text-nano text-ink-600 truncate mt-0.5">{cycleDate(n.ts)}</div>}
 							<div className="flex items-center gap-1.5 mt-0.5">
 								{n.running ? (
-									<span className="text-[10px] uppercase tracking-wide text-sky-500">running</span>
+									<span className="text-nano uppercase tracking-wide text-lagoon-600">running</span>
 								) : typeof n.metricValue === "number" ? (
-									<span className="text-[11px] tabular-nums text-slate-600" title={n.metricName}>
+									<span className="text-micro tabular-nums text-ink-600" title={n.metricName}>
 										{n.metricName ? `${n.metricName.replace(/_/g, " ")}: ` : ""}{fmtScore(n.metricValue)}
 									</span>
 								) : (
-									<span className="text-[10px] uppercase tracking-wide text-slate-400">{n.ok === false ? "failed" : "no score"}</span>
+									<span className="text-nano uppercase tracking-wide text-ink-600">{n.ok === false ? "failed" : "no score"}</span>
 								)}
 							</div>
 						</div>
@@ -285,26 +285,26 @@ export default function BranchTreeView({
 	}, []);
 
 	return (
-		<div className="relative h-full rounded-xl border border-slate-200 bg-white overflow-hidden flex flex-col">
-			<div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-100 flex-shrink-0">
-				<button onClick={onBack} className="flex-shrink-0 inline-flex items-center gap-1 text-[12px] text-slate-500 hover:text-slate-900 px-2 py-1 -ml-1 rounded-lg hover:bg-slate-100 transition-colors"><ArrowLeft className="w-3.5 h-3.5" /> Trajectory</button>
+		<div className="relative h-full rounded-xl border border-ink-200 bg-card overflow-hidden flex flex-col">
+			<div className="flex items-center gap-2 px-3 py-2.5 border-b border-ink-100 flex-shrink-0">
+				<button onClick={onBack} className="flex-shrink-0 inline-flex items-center gap-1 text-caption text-ink-600 hover:text-ink-900 px-2 py-1 -ml-1 rounded-lg hover:bg-ink-100 transition-colors"><ArrowLeft className="w-3.5 h-3.5" /> Trajectory</button>
 				<div className="flex items-center gap-1.5 min-w-0">
 					<GitBranch className="w-3.5 h-3.5 text-gold-500 flex-shrink-0" />
-					<span className="text-sm font-medium text-slate-900">History</span>
-					<span className="text-[11px] text-slate-400 truncate">· {hasRealLineage ? "runs by parent → child" : "runs over time (no branches yet)"}</span>
+					<span className="text-sm font-medium text-ink-900">History</span>
+					<span className="text-micro text-ink-600 truncate">· {hasRealLineage ? "runs by parent → child" : "runs over time (no branches yet)"}</span>
 				</div>
 				{selectedForCompare.length > 0 && (
-					<span className="ml-auto text-[10px] text-sky-600 flex-shrink-0">{selectedForCompare.length}/2 selected to compare</span>
+					<span className="ml-auto text-nano text-lagoon-600 flex-shrink-0">{selectedForCompare.length}/2 selected to compare</span>
 				)}
-				<span className="ml-auto text-[10px] text-slate-300 normal-case tracking-normal flex-shrink-0">right-click a run for actions</span>
+				<span className="ml-auto text-nano text-ink-600 normal-case tracking-normal flex-shrink-0">right-click a run for actions</span>
 			</div>
 			<div className="flex-1 min-h-0 relative">
 				{rows === null ? (
-					<div className="h-full flex items-center justify-center text-xs text-slate-400"><Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading history…</div>
+					<div className="h-full flex items-center justify-center text-xs text-ink-600"><Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading history…</div>
 				) : lineage.length === 0 ? (
-					<div className="h-full flex flex-col items-center justify-center gap-2 text-center text-slate-400 p-6">
-						<GitCommitVertical className="w-6 h-6 text-slate-300" />
-						<div className="text-sm text-slate-500">No runs yet.</div>
+					<div className="h-full flex flex-col items-center justify-center gap-2 text-center text-ink-600 p-6">
+						<GitCommitVertical className="w-6 h-6 text-ink-600" />
+						<div className="text-sm text-ink-600">No runs yet.</div>
 						<div className="text-xs max-w-xs">Each run becomes a node here. When a run forks from another, they branch into a tree.</div>
 					</div>
 				) : (
@@ -382,26 +382,26 @@ export function RunCompareView({ app, loop, tsA, tsB, onBack }: {
 	const num = (v: number) => (v >= -1 && v <= 1 ? `${Math.round(v * 100)}%` : Number.isInteger(v) ? String(v) : String(+v.toFixed(3)));
 
 	return (
-		<div className="h-full flex flex-col rounded-xl border border-slate-200 bg-white overflow-hidden animate-in fade-in duration-200">
-			<div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-100">
-				<button onClick={onBack} className="flex-shrink-0 inline-flex items-center gap-1 text-[12px] text-slate-500 hover:text-slate-900 px-2 py-1 -ml-1 rounded-lg hover:bg-slate-100 transition-colors"><ArrowLeft className="w-3.5 h-3.5" /> History</button>
+		<div className="h-full flex flex-col rounded-xl border border-ink-200 bg-card overflow-hidden animate-in fade-in duration-200">
+			<div className="flex items-center gap-2 px-3 py-2.5 border-b border-ink-100">
+				<button onClick={onBack} className="flex-shrink-0 inline-flex items-center gap-1 text-caption text-ink-600 hover:text-ink-900 px-2 py-1 -ml-1 rounded-lg hover:bg-ink-100 transition-colors"><ArrowLeft className="w-3.5 h-3.5" /> History</button>
 				<div className="flex items-center gap-1.5 min-w-0">
-					<GitBranch className="w-3.5 h-3.5 text-sky-500 flex-shrink-0" />
-					<span className="text-sm font-medium text-slate-900">Compare runs</span>
+					<GitBranch className="w-3.5 h-3.5 text-lagoon-600 flex-shrink-0" />
+					<span className="text-sm font-medium text-ink-900">Compare runs</span>
 				</div>
 			</div>
 			<div className="flex-1 min-h-0 overflow-y-auto p-3">
 				{loading ? (
-					<div className="h-full flex items-center justify-center text-xs text-slate-400"><Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading both runs…</div>
+					<div className="h-full flex items-center justify-center text-xs text-ink-600"><Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading both runs…</div>
 				) : keys.length === 0 ? (
-					<div className="h-full flex flex-col items-center justify-center gap-2 text-center text-slate-400">
-						<div className="text-sm text-slate-500">No numeric metrics recorded on either run.</div>
+					<div className="h-full flex flex-col items-center justify-center gap-2 text-center text-ink-600">
+						<div className="text-sm text-ink-600">No numeric metrics recorded on either run.</div>
 						<div className="text-xs max-w-xs">These runs didn't log comparable metrics — open each run's steps to inspect them.</div>
 					</div>
 				) : (
-					<table className="w-full text-[12px]">
+					<table className="w-full text-caption">
 						<thead>
-							<tr className="text-[10px] uppercase tracking-wide text-slate-400">
+							<tr className="text-nano uppercase tracking-wide text-ink-600">
 								<th className="text-left font-semibold py-1.5">metric</th>
 								<th className="text-right font-semibold py-1.5 px-2 truncate" title={tsA}>{cycleDate(tsA)}</th>
 								<th className="text-right font-semibold py-1.5 px-2 truncate" title={tsB}>{cycleDate(tsB)}</th>
@@ -416,11 +416,11 @@ export function RunCompareView({ app, loop, tsA, tsB, onBack }: {
 								const changed = has && Math.abs(delta) > 1e-9;
 								const good = changed && (betterDown(k) ? delta < 0 : delta > 0);
 								return (
-									<tr key={k} className={cn("border-t border-slate-100", changed && "bg-slate-50/40")}>
-										<td className="py-1.5 text-slate-600">{k.replace(/_/g, " ")}{changed && <span className="ml-1 text-[9px] uppercase tracking-wide text-slate-300">changed</span>}</td>
-										<td className="py-1.5 px-2 text-right tabular-nums text-slate-700">{typeof va === "number" ? num(va) : "—"}</td>
-										<td className="py-1.5 px-2 text-right tabular-nums text-slate-700">{typeof vb === "number" ? num(vb) : "—"}</td>
-										<td className={cn("py-1.5 text-right tabular-nums font-medium", !changed ? "text-slate-300" : good ? "text-gold-600" : "text-rose-500")}>
+									<tr key={k} className={cn("border-t border-ink-100", changed && "bg-ink-50/40")}>
+										<td className="py-1.5 text-ink-600">{k.replace(/_/g, " ")}{changed && <span className="ml-1 text-nano uppercase tracking-wide text-ink-600">changed</span>}</td>
+										<td className="py-1.5 px-2 text-right tabular-nums text-ink-700">{typeof va === "number" ? num(va) : "—"}</td>
+										<td className="py-1.5 px-2 text-right tabular-nums text-ink-700">{typeof vb === "number" ? num(vb) : "—"}</td>
+										<td className={cn("py-1.5 text-right tabular-nums font-medium", !changed ? "text-ink-600" : good ? "text-gold-600" : "text-brick-600")}>
 											{has ? (changed ? `${delta > 0 ? "+" : ""}${num(delta)}` : "·") : "—"}
 										</td>
 									</tr>

@@ -112,10 +112,10 @@ export default function TableArtifact({ spec }: { spec: string }) {
 	}, [rows, columns, filter, sortKey, sortDir]);
 
 	if (parsed.error) {
-		return <div className="text-rose-600 text-[11.5px]">{parsed.error}</div>;
+		return <div className="text-brick-600 text-caption">{parsed.error}</div>;
 	}
 	if (!rows.length || !columns.length) {
-		return <div className="text-slate-500 text-[11.5px]">No rows.</div>;
+		return <div className="text-ink-600 text-caption">No rows.</div>;
 	}
 
 	const toggleSort = (c: string) => {
@@ -128,40 +128,40 @@ export default function TableArtifact({ spec }: { spec: string }) {
 		<div className="w-full">
 			<div className="flex items-center gap-2 mb-1.5">
 				<div className="relative flex-1 min-w-0">
-					<Search className="w-3 h-3 text-slate-400 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+					<Search className="w-3 h-3 text-ink-600 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
 					<input
 						value={filter}
 						onChange={(e) => setFilter(e.target.value)}
 						placeholder="Filter rows…"
 						aria-label="Filter rows"
-						className="w-full pl-6 pr-2 py-1 text-[11.5px] border border-slate-200 rounded-md
-						           bg-white focus:outline-none focus:ring-1 focus:ring-sky-400"
+						className="w-full pl-6 pr-2 py-1 text-caption border border-ink-200 rounded-md
+						           bg-card focus:outline-none focus:ring-1 focus:ring-lagoon-400"
 					/>
 				</div>
-				<span className="text-[11px] text-slate-500 tabular-nums flex-shrink-0">
+				<span className="text-micro text-ink-600 tabular-nums flex-shrink-0">
 					{view.length.toLocaleString('en-US')}
 					{view.length !== rows.length && ` of ${rows.length.toLocaleString('en-US')}`} rows
 				</span>
 			</div>
 
-			<div className="border border-slate-200 rounded-lg overflow-auto" style={{ maxHeight: '60vh' }}>
-				<table className="w-full text-[11.5px] border-collapse">
+			<div className="border border-ink-200 rounded-lg overflow-auto" style={{ maxHeight: '60vh' }}>
+				<table className="w-full text-caption border-collapse">
 					<thead className="sticky top-0 z-10">
-						<tr className="bg-slate-50">
+						<tr className="bg-ink-50">
 							{columns.map((c) => (
 								<th
 									key={c}
 									onClick={() => toggleSort(c)}
 									title={`Sort by ${c}`}
-									className={`px-2 py-1.5 font-semibold text-slate-600 whitespace-nowrap cursor-pointer
-									            select-none border-b border-slate-200 hover:bg-slate-100
+									className={`px-2 py-1.5 font-semibold text-ink-600 whitespace-nowrap cursor-pointer
+									            select-none border-b border-ink-200 hover:bg-ink-100
 									            ${numericCols.has(c) ? 'text-right' : 'text-left'}`}
 								>
 									<span className="inline-flex items-center gap-1">
 										{c}
 										{sortKey === c && (sortDir === 'asc'
-											? <ChevronUp className="w-3 h-3 text-sky-600" />
-											: <ChevronDown className="w-3 h-3 text-sky-600" />)}
+											? <ChevronUp className="w-3 h-3 text-lagoon-600" />
+											: <ChevronDown className="w-3 h-3 text-lagoon-600" />)}
 									</span>
 								</th>
 							))}
@@ -169,12 +169,12 @@ export default function TableArtifact({ spec }: { spec: string }) {
 					</thead>
 					<tbody>
 						{view.map((r, i) => (
-							<tr key={i} className="odd:bg-white even:bg-slate-50/50 hover:bg-sky-50/60">
+							<tr key={i} className="odd:bg-card even:bg-ink-50/50 hover:bg-lagoon-50/60">
 								{columns.map((c) => (
 									<td
 										key={c}
 										title={cellText(r?.[c])}
-										className={`px-2 py-1 border-b border-slate-100 text-slate-700 max-w-[22rem] truncate
+										className={`px-2 py-1 border-b border-ink-100 text-ink-700 max-w-[22rem] truncate
 										            ${numericCols.has(c) ? 'text-right tabular-nums' : 'text-left'}`}
 									>
 										{cellDisplay(r?.[c])}

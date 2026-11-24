@@ -31,9 +31,9 @@ import { cn } from "@/lib/utils";
 const HEALTH: Record<PortfolioHealth, { dot: string; text: string; label: string }> = {
 	healthy:         { dot: "bg-gold-500",  text: "text-gold-700",  label: "Healthy" },
 	recovered:       { dot: "bg-gold-400",  text: "text-gold-600",  label: "Recovered" },
-	needs_attention: { dot: "bg-rose-500",  text: "text-rose-700",  label: "Needs attention" },
-	paused:          { dot: "bg-slate-300", text: "text-slate-500", label: "Paused" },
-	never:           { dot: "bg-slate-300", text: "text-slate-500", label: "Never run" },
+	needs_attention: { dot: "bg-brick-500",  text: "text-brick-700",  label: "Needs attention" },
+	paused:          { dot: "bg-ink-300", text: "text-ink-600", label: "Paused" },
+	never:           { dot: "bg-ink-300", text: "text-ink-600", label: "Never run" },
 };
 
 // Relative time from epoch-seconds ("5m ago"); "" when 0. Same idiom as
@@ -120,8 +120,8 @@ export default function StudioPortfolio({ embedded = false }: { embedded?: boole
 	if (data === null && !err) {
 		return (
 			<div className={cn("w-full space-y-4", !embedded && "max-w-5xl mx-auto px-1 py-2")}>
-				<div className="h-20 rounded-xl bg-slate-100 animate-pulse" />
-				<div className="h-64 rounded-xl bg-slate-100 animate-pulse" />
+				<div className="h-20 rounded-xl bg-ink-100 animate-pulse" />
+				<div className="h-64 rounded-xl bg-ink-100 animate-pulse" />
 			</div>
 		);
 	}
@@ -131,29 +131,29 @@ export default function StudioPortfolio({ embedded = false }: { embedded?: boole
 			<div className="flex items-center justify-between gap-3">
 				<div className="min-w-0">
 					{embedded ? (
-						<div className="flex items-center gap-1.5 text-sm font-semibold text-slate-900"><Boxes className="w-4 h-4 text-gold-500" /> My apps &amp; runs</div>
+						<div className="flex items-center gap-1.5 text-sm font-semibold text-ink-900"><Boxes className="w-4 h-4 text-gold-500" /> My apps &amp; runs</div>
 					) : (
 						<>
-							<Link to="/studio/apps" className="inline-flex items-center text-sm text-slate-500 hover:text-slate-900 gap-1">
+							<Link to="/studio/apps" className="inline-flex items-center text-sm text-ink-600 hover:text-ink-900 gap-1">
 								<ChevronLeft className="w-4 h-4" /> My Agents
 							</Link>
-							<h1 className="text-lg font-semibold text-slate-900 mt-1">My apps &amp; runs</h1>
+							<h1 className="text-title font-semibold text-ink-900 mt-1">My apps &amp; runs</h1>
 						</>
 					)}
-					<p className="text-[12px] text-slate-400">
+					<p className="text-caption text-ink-600">
 						How your workflows are doing across the board — health, cost, and learning over the last 30 days.
 					</p>
 				</div>
 				<button
 					type="button" onClick={refresh}
-					className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[12px] font-medium text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-colors"
+					className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-card px-2.5 py-1.5 text-caption font-medium text-ink-600 hover:text-ink-800 hover:bg-ink-50 transition-colors"
 				>
 					<RefreshCw className="w-3.5 h-3.5" /> Refresh
 				</button>
 			</div>
 
 			{err && (
-				<div className="rounded-xl border border-rose-200 bg-rose-50/50 px-4 py-3 text-[12px] text-rose-700 flex items-center gap-2">
+				<div className="rounded-xl border border-brick-200 bg-brick-50/50 px-4 py-3 text-caption text-brick-700 flex items-center gap-2">
 					<AlertTriangle className="w-4 h-4 shrink-0" /> Couldn't load the fleet: {err}
 				</div>
 			)}
@@ -163,30 +163,30 @@ export default function StudioPortfolio({ embedded = false }: { embedded?: boole
 				<div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
 					<TotalCard icon={Boxes}    value={totals.workflows}        label="workflows" />
 					<TotalCard icon={Activity} value={totals.healthy}          label="healthy" tone="text-gold-600" />
-					<TotalCard icon={AlertTriangle} value={totals.needs_attention} label="need attention" tone={totals.needs_attention > 0 ? "text-rose-600" : "text-slate-400"} />
+					<TotalCard icon={AlertTriangle} value={totals.needs_attention} label="need attention" tone={totals.needs_attention > 0 ? "text-brick-600" : "text-ink-600"} />
 					<TotalCard icon={DollarSign} value={totals.cost_usd_30d}   label="30d cost" money />
 					<TotalCard icon={Cpu}      value={totals.total_tokens_30d} label="30d tokens" compact />
-					<TotalCard icon={Brain}    value={totals.learned_30d}      label="learned" tone="text-indigo-600" />
+					<TotalCard icon={Brain}    value={totals.learned_30d}      label="learned" tone="text-plum-600" />
 				</div>
 			)}
 
 			{/* Per-workflow rollup table */}
 			{sorted.length === 0 ? (
-				<div className="rounded-xl border border-slate-200 bg-white px-5 py-10 text-center">
-					<Boxes className="w-7 h-7 text-slate-300 mx-auto mb-2" />
-					<div className="text-[13px] font-medium text-slate-700">No workflows yet</div>
-					<p className="text-[12px] text-slate-400 mt-1">
+				<div className="rounded-xl border border-ink-200 bg-card px-5 py-10 text-center">
+					<Boxes className="w-7 h-7 text-ink-600 mx-auto mb-2" />
+					<div className="text-meta font-medium text-ink-700">No workflows yet</div>
+					<p className="text-caption text-ink-600 mt-1">
 						Set up an agent and its workflows will roll up here.
 					</p>
-					<Link to="/studio/apps" className="inline-block mt-3 text-[12px] font-medium text-gold-700 hover:underline">
+					<Link to="/studio/apps" className="inline-block mt-3 text-caption font-medium text-gold-700 hover:underline">
 						Go to My Agents →
 					</Link>
 				</div>
 			) : (
-				<div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+				<div className="rounded-xl border border-ink-200 bg-card overflow-hidden">
 					<table className="w-full text-left">
 						<thead>
-							<tr className="text-[11px] uppercase tracking-[0.06em] text-slate-400 border-b border-slate-100">
+							<tr className="text-micro uppercase tracking-[0.06em] text-ink-600 border-b border-ink-100">
 								<th className="px-3 py-2.5 font-medium">
 									<SortBtn label="Workflow" active={sortKey === "name"} desc={sortDesc} onClick={() => setSort("name")} />
 								</th>
@@ -214,7 +214,7 @@ export default function StudioPortfolio({ embedded = false }: { embedded?: boole
 			)}
 
 			{capped && (
-				<p className="text-[11px] text-slate-400">
+				<p className="text-micro text-ink-600">
 					Some very high-frequency workflows scan only their {data?.cycle_scan_cap ?? 30} most-recent
 					runs, so their 30-day windows may slightly undercount.
 				</p>
@@ -224,7 +224,7 @@ export default function StudioPortfolio({ embedded = false }: { embedded?: boole
 }
 
 function TotalCard({
-	icon: Icon, value, label, tone = "text-slate-400", money, compact,
+	icon: Icon, value, label, tone = "text-ink-600", money, compact,
 }: {
 	icon: React.ComponentType<{ className?: string }>;
 	value: number; label: string; tone?: string; money?: boolean; compact?: boolean;
@@ -233,12 +233,12 @@ function TotalCard({
 	const shown = useCountUp(value);
 	const display = money ? fmtUSD(value) : compact ? fmtCompact(value) : `${Math.round(shown)}`;
 	return (
-		<div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-			<div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+		<div className="rounded-xl border border-ink-200 bg-card px-3 py-2.5">
+			<div className="flex items-center gap-1.5 text-micro text-ink-600">
 				<Icon className={cn("w-3.5 h-3.5", tone)} />
 				<span className="truncate">{label}</span>
 			</div>
-			<div className="text-[18px] font-semibold text-slate-900 tabular-nums mt-0.5">{display}</div>
+			<div className="text-title font-semibold text-ink-900 tabular-nums mt-0.5">{display}</div>
 		</div>
 	);
 }
@@ -252,9 +252,9 @@ function SortBtn({
 		<button
 			type="button" onClick={onClick}
 			className={cn(
-				"inline-flex items-center gap-1 hover:text-slate-700 transition-colors",
+				"inline-flex items-center gap-1 hover:text-ink-700 transition-colors",
 				right && "flex-row-reverse",
-				active && "text-slate-700",
+				active && "text-ink-700",
 			)}
 		>
 			{label}
@@ -268,15 +268,15 @@ function WorkflowRow({ w, maxLearned }: { w: PortfolioWorkflow; maxLearned: numb
 	const href = `/studio/apps/${encodeURIComponent(w.app)}?selected=${encodeURIComponent(w.loop)}`;
 	const pct = Math.round((w.learned_30d / maxLearned) * 100);
 	return (
-		<tr className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 transition-colors">
+		<tr className="border-b border-ink-50 last:border-0 hover:bg-ink-50/60 transition-colors">
 			<td className="px-3 py-2.5">
 				<Link to={href} className="group flex items-start gap-2.5 min-w-0">
 					<span className={cn("w-2 h-2 rounded-full mt-1.5 shrink-0", h.dot)} title={h.label} />
 					<span className="min-w-0">
-						<span className="block text-[13px] font-medium text-slate-800 group-hover:text-gold-700 truncate transition-colors">
+						<span className="block text-meta font-medium text-ink-800 group-hover:text-gold-700 truncate transition-colors">
 							{loopLabel(undefined, w.loop)}
 						</span>
-						<span className="block text-[11px] text-slate-400 truncate">
+						<span className="block text-micro text-ink-600 truncate">
 							{appTitle(w.app)}
 							{w.label ? ` · ${w.label}` : ""}
 						</span>
@@ -284,14 +284,14 @@ function WorkflowRow({ w, maxLearned }: { w: PortfolioWorkflow; maxLearned: numb
 				</Link>
 			</td>
 			<td className="px-3 py-2.5 hidden sm:table-cell">
-				<span className={cn("text-[12px]", w.health === "needs_attention" ? "text-rose-600" : "text-slate-500")}>
+				<span className={cn("text-caption", w.health === "needs_attention" ? "text-brick-600" : "text-ink-600")}>
 					{relSec(w.last_run_ts) || "—"}
 				</span>
 			</td>
-			<td className="px-3 py-2.5 text-right tabular-nums text-[12px] text-slate-600">
+			<td className="px-3 py-2.5 text-right tabular-nums text-caption text-ink-600">
 				{w.runs_30d || "—"}
 			</td>
-			<td className="px-3 py-2.5 text-right tabular-nums text-[12px] text-slate-600">
+			<td className="px-3 py-2.5 text-right tabular-nums text-caption text-ink-600">
 				{w.cost_usd_30d ? fmtUSD(w.cost_usd_30d) : "—"}
 			</td>
 			<td className="px-3 py-2.5">
@@ -308,12 +308,12 @@ function LearningBar({ value, pct }: { value: number; pct: number }) {
 	return (
 		<div className="flex items-center gap-2">
 			<svg width="80" height="8" viewBox="0 0 80 8" className="shrink-0" aria-hidden>
-				<rect x="0" y="0" width="80" height="8" rx="4" className="fill-indigo-50" />
+				<rect x="0" y="0" width="80" height="8" rx="4" className="fill-plum-50" />
 				{value > 0 && (
-					<rect x="0" y="0" width={Math.max(4, (pct / 100) * 80)} height="8" rx="4" className="fill-indigo-400" />
+					<rect x="0" y="0" width={Math.max(4, (pct / 100) * 80)} height="8" rx="4" className="fill-plum-400" />
 				)}
 			</svg>
-			<span className="text-[11px] tabular-nums text-slate-500 w-14">
+			<span className="text-micro tabular-nums text-ink-600 w-14">
 				{value ? `${value} learned` : "—"}
 			</span>
 		</div>

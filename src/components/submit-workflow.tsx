@@ -39,13 +39,13 @@ type Target = 'runmesh';
 export function workflowState(publishStatus?: string): { label: string; cls: string; hint: string } {
 	switch (publishStatus) {
 		case '1':
-			return { label: 'Published', cls: 'bg-green-50 text-green-700 border-green-200', hint: 'listed in the workflow marketplace' };
+			return { label: 'Published', cls: 'bg-gold-50 text-gold-700 border-gold-200', hint: 'listed in the workflow marketplace' };
 		case '0':
-			return { label: 'In review', cls: 'bg-yellow-50 text-yellow-700 border-yellow-200', hint: 'submitted for marketplace review; still runnable by you' };
+			return { label: 'In review', cls: 'bg-ember-50 text-ember-700 border-ember-200', hint: 'submitted for marketplace review; still runnable by you' };
 		case '2':
-			return { label: 'Rejected', cls: 'bg-red-50 text-red-700 border-red-200', hint: 'marketplace review rejected it; still runnable by you' };
+			return { label: 'Rejected', cls: 'bg-brick-50 text-brick-700 border-brick-200', hint: 'marketplace review rejected it; still runnable by you' };
 		default:
-			return { label: 'Draft', cls: 'bg-blue-50 text-blue-700 border-blue-200', hint: 'private to you; runnable here, not listed in the marketplace' };
+			return { label: 'Draft', cls: 'bg-lagoon-50 text-lagoon-700 border-lagoon-200', hint: 'private to you; runnable here, not listed in the marketplace' };
 	}
 }
 
@@ -174,32 +174,32 @@ export function SubmitWorkflow({ target, title, onSuccessPath }: Props) {
 			{/* Workflow picker */}
 			<div>
 				{justSaved && (
-					<div className="mb-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+					<div className="mb-3 rounded-md border border-gold-200 bg-gold-50 px-3 py-2 text-sm text-gold-800">
 						Saved{wantId ? <> as workflow <b>#{wantId}</b></> : null} — a private <b>Draft</b>.
 						It is selected below: set inputs and submit to run it.
 					</div>
 				)}
-				<div className="mb-3 text-sm text-slate-600">
+				<div className="mb-3 text-sm text-ink-600">
 					Your saved workflows. Saving never publishes: a new workflow is a
 					private <b>Draft</b> you can run from here; it reaches the marketplace
 					only after review. These are Runmesh workflows — an app's own loops
 					(e.g. Quant Research) are listed in that app's Manage tab instead.{' '}
 					<a
 						href="/studio/workflows/new"
-						className="text-indigo-600 hover:underline"
+						className="text-plum-600 hover:underline"
 					>
 						New workflow
 					</a>
 				</div>
 				{workflows === null ? (
-					<div className="py-10 text-center text-sm text-slate-400">loading…</div>
+					<div className="py-10 text-center text-sm text-ink-600">loading…</div>
 				) : loadErr ? (
 					<Card>
 						<CardContent className="py-8 text-center">
-							<div className="text-sm text-red-600 mb-3">
+							<div className="text-sm text-brick-600 mb-3">
 								Couldn't load workflows: {loadErr}
 							</div>
-							<div className="text-xs text-slate-500">
+							<div className="text-xs text-ink-600">
 								Reload the page or check the browser console for details.
 								If this persists, the bearer to runmesh.ai may not have
 								refreshed — try signing out and back in.
@@ -208,11 +208,11 @@ export function SubmitWorkflow({ target, title, onSuccessPath }: Props) {
 					</Card>
 				) : workflows.length === 0 ? (
 					<Card>
-						<CardContent className="py-8 text-center text-sm text-slate-500">
+						<CardContent className="py-8 text-center text-sm text-ink-600">
 							No workflows yet.{' '}
 							<a
 								href="/studio/workflows/new"
-								className="text-indigo-600 hover:underline"
+								className="text-plum-600 hover:underline"
 							>
 								Build one
 							</a>{' '}
@@ -231,24 +231,24 @@ export function SubmitWorkflow({ target, title, onSuccessPath }: Props) {
 									onClick={() => setSelected(w)}
 									className={`text-left rounded-lg border p-3 transition-colors ${
 										isActive
-											? 'border-indigo-500 bg-indigo-50'
-											: 'border-slate-200 bg-white hover:border-slate-300'
+											? 'border-plum-500 bg-plum-50'
+											: 'border-ink-200 bg-card hover:border-ink-300'
 									}`}
 								>
-									<div className="text-sm font-medium text-slate-900 truncate flex items-center gap-1.5">
-										{isActive && <Check className="w-3.5 h-3.5 text-indigo-600" />}
+									<div className="text-sm font-medium text-ink-900 truncate flex items-center gap-1.5">
+										{isActive && <Check className="w-3.5 h-3.5 text-plum-600" />}
 										{w.workflowName || w.name || `#${id}`}
 									</div>
 									{w.description && (
-										<div className="mt-1 text-xs text-slate-600 line-clamp-2">
+										<div className="mt-1 text-xs text-ink-600 line-clamp-2">
 											{w.description}
 										</div>
 									)}
-									<div className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-400">
+									<div className="mt-1 flex items-center gap-1.5 text-micro text-ink-600">
 										{(() => {
 											const st = workflowState(w.publishStatus);
 											return (
-												<span title={st.hint} className={`inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-medium ${st.cls}`}>
+												<span title={st.hint} className={`inline-flex items-center px-1.5 py-0.5 rounded border text-nano font-medium ${st.cls}`}>
 													{st.label}
 												</span>
 											);
@@ -307,7 +307,7 @@ export function SubmitWorkflow({ target, title, onSuccessPath }: Props) {
 							</SelectContent>
 						</Select>
 					</div>
-					{err && <div className="text-xs text-red-600">{err}</div>}
+					{err && <div className="text-xs text-brick-600">{err}</div>}
 					<Button
 						onClick={onSubmit}
 						disabled={busy || !selected}

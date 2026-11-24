@@ -62,16 +62,16 @@ function hiddenForUsers(name: string): boolean {
 const KIND_META: Record<string, { glyph: string; border: string; bg: string; text: string; label: string }> = {
 	agent:      { glyph: "⁂", border: "border-l-gold-400",    bg: "bg-gold-50",    text: "text-gold-700",    label: "Agent" },   // the actor (was `app`)
 	app:        { glyph: "⁂", border: "border-l-gold-400",    bg: "bg-gold-50",    text: "text-gold-700",    label: "Agent" },   // legacy alias → Agent
-	skill:      { glyph: "⌘", border: "border-l-violet-400",  bg: "bg-violet-50",  text: "text-violet-700",  label: "Skill" },
+	skill:      { glyph: "⌘", border: "border-l-plum-400",  bg: "bg-plum-50",  text: "text-plum-700",  label: "Skill" },
 	dataset:    { glyph: "◫", border: "border-l-gold-400",   bg: "bg-gold-50",   text: "text-gold-700",   label: "Dataset" },
-	memory:     { glyph: "❋", border: "border-l-pink-400",    bg: "bg-pink-50",    text: "text-pink-700",    label: "Memory" },  // knowledge (was old `agent` kind)
-	workflow:   { glyph: "▷", border: "border-l-blue-400",    bg: "bg-blue-50",    text: "text-blue-700",    label: "Workflow" },
+	memory:     { glyph: "❋", border: "border-l-plum-400",    bg: "bg-plum-50",    text: "text-plum-700",    label: "Memory" },  // knowledge (was old `agent` kind)
+	workflow:   { glyph: "▷", border: "border-l-lagoon-400",    bg: "bg-lagoon-50",    text: "text-lagoon-700",    label: "Workflow" },
 	experiment: { glyph: "⬡", border: "border-l-gold-400", bg: "bg-gold-50", text: "text-gold-700", label: "Experiment" },
 	autoresearch:{ glyph: "⬡", border: "border-l-gold-400", bg: "bg-gold-50", text: "text-gold-700", label: "Experiment" },
-	strategy:   { glyph: "◈", border: "border-l-blue-400",    bg: "bg-blue-50",    text: "text-blue-700",    label: "Strategy" },
+	strategy:   { glyph: "◈", border: "border-l-lagoon-400",    bg: "bg-lagoon-50",    text: "text-lagoon-700",    label: "Strategy" },
 };
 const kindMeta = (k?: string) =>
-	KIND_META[k ?? ""] ?? { glyph: "·", border: "border-l-slate-300", bg: "bg-slate-50", text: "text-slate-600", label: k ?? "other" };
+	KIND_META[k ?? ""] ?? { glyph: "·", border: "border-l-ink-300", bg: "bg-ink-50", text: "text-ink-600", label: k ?? "other" };
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -286,7 +286,7 @@ export default function MarketplaceBrowse() {
 	const openInstalled = (appName: string) => isPublic ? requireLogin() : navigate(`/studio/a/${encodeURIComponent(appName)}`);
 
 	if (err) return (
-		<div className="rounded-xl border border-rose-200 bg-rose-50/40 p-6 text-sm text-rose-800">
+		<div className="rounded-xl border border-brick-200 bg-brick-50/40 p-6 text-sm text-brick-800">
 			Couldn&apos;t load the catalog: {err}
 		</div>
 	);
@@ -331,13 +331,13 @@ export default function MarketplaceBrowse() {
 							className={[
 								"inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors",
 								tab === t.id
-									? "bg-slate-900 text-white font-medium"
-									: "text-slate-500 hover:text-slate-800 hover:bg-slate-100",
+									? "bg-ink-900 text-white font-medium"
+									: "text-ink-600 hover:text-ink-800 hover:bg-ink-100",
 							].join(" ")}
 						>
 							{t.label}
 							{t.count !== null && (
-								<span className={["text-[10px] font-mono tabular-nums", tab === t.id ? "text-white/60" : "text-slate-400"].join(" ")}>
+								<span className={["text-nano font-mono tabular-nums", tab === t.id ? "text-white/60" : "text-ink-600"].join(" ")}>
 									{t.count}
 								</span>
 							)}
@@ -346,13 +346,13 @@ export default function MarketplaceBrowse() {
 				</nav>
 
 				<div className="flex-1 relative min-w-[180px]">
-					<Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+					<Search className="w-3.5 h-3.5 text-ink-600 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
 					<input
 						type="search"
 						value={query}
 						onChange={(e) => { setQuery(e.target.value); setActiveTag(null); }}
 						placeholder={`Search ${tab}…`}
-						className="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400 transition-all placeholder:text-slate-400"
+						className="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-ink-200 bg-card focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400 transition-all placeholder:text-ink-500"
 					/>
 				</div>
 
@@ -364,11 +364,11 @@ export default function MarketplaceBrowse() {
 			{/* Tag chips */}
 			{topTags.length > 0 && !query && (
 				<div className="flex items-center gap-1.5 flex-wrap">
-					<Tag className="w-3 h-3 text-slate-400 flex-shrink-0" />
+					<Tag className="w-3 h-3 text-ink-600 flex-shrink-0" />
 					{activeTag && (
 						<button
 							onClick={() => setActiveTag(null)}
-							className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-slate-900 text-white"
+							className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-micro bg-ink-900 text-white"
 						>
 							{activeTag} <X className="w-2.5 h-2.5" />
 						</button>
@@ -377,7 +377,7 @@ export default function MarketplaceBrowse() {
 						<button
 							key={t}
 							onClick={() => setActiveTag(t)}
-							className="px-2 py-0.5 rounded-full text-[11px] border border-slate-200 text-slate-600 hover:border-gold-400 hover:text-gold-700 transition-colors"
+							className="px-2 py-0.5 rounded-full text-micro border border-ink-200 text-ink-600 hover:border-gold-400 hover:text-gold-700 transition-colors"
 						>
 							{t}
 						</button>
@@ -455,13 +455,13 @@ function SortDropdown({ value, onChange }: { value: SortKey; onChange: (v: SortK
 			<select
 				value={value}
 				onChange={(e) => onChange(e.target.value as SortKey)}
-				className="appearance-none pl-3 pr-7 py-1.5 text-sm rounded-lg border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400 cursor-pointer"
+				className="appearance-none pl-3 pr-7 py-1.5 text-sm rounded-lg border border-ink-200 bg-card text-ink-700 focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400 cursor-pointer"
 			>
 				{(Object.keys(labels) as SortKey[]).map((k) => (
 					<option key={k} value={k}>{labels[k]}</option>
 				))}
 			</select>
-			<ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+			<ChevronDown className="w-3.5 h-3.5 text-ink-600 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
 		</div>
 	);
 }
@@ -507,13 +507,13 @@ function RepoGrid({
 	if (repos === null) return (
 		<div className="relative">
 			<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-				{[0,1,2,3,4,5].map((i) => <div key={i} className="h-28 rounded-lg bg-slate-100 animate-pulse" />)}
+				{[0,1,2,3,4,5].map((i) => <div key={i} className="h-28 rounded-lg bg-ink-100 animate-pulse" />)}
 			</div>
 			<SpiralOverlay />
 		</div>
 	);
 	if (filtered.length === 0) return (
-		<div className="rounded-lg border border-dashed border-slate-200 p-10 text-center text-sm text-slate-500">
+		<div className="rounded-lg border border-dashed border-ink-200 p-10 text-center text-sm text-ink-600">
 			{query || activeTag ? "No matches. Try a different query or clear the filter." : "No items available."}
 		</div>
 	);
@@ -579,11 +579,11 @@ function RepoCardView({
 	return (
 		<article
 			className={cn(
-				"group rounded-xl border bg-white p-4 flex flex-col shadow-sm transition-all duration-200",
+				"group rounded-xl border bg-card p-4 flex flex-col shadow-sm transition-all duration-200",
 				STAGGER_CLASS,
 				ctaState === "installed"
 					? "border-gold-200 bg-gold-50/30"
-					: "border-slate-200 hover:border-gold-300 hover:shadow-md hover:-translate-y-0.5",
+					: "border-ink-200 hover:border-gold-300 hover:shadow-md hover:-translate-y-0.5",
 			)}
 			style={staggerDelay(index)}
 		>
@@ -592,11 +592,11 @@ function RepoCardView({
 				<GradientIcon name={repo.name} />
 				<div className="min-w-0 flex-1">
 					<h3 className="font-medium text-sm truncate" title={repo.name}>{title}</h3>
-					<p className="text-[11px] text-slate-500 mt-0.5 truncate">
+					<p className="text-micro text-ink-600 mt-0.5 truncate">
 						{repo.name}
 						{repo.fork_of && (
 							<span
-								className="ml-1.5 px-1.5 py-px rounded-full border border-slate-200 bg-slate-50 text-[10px] text-slate-400"
+								className="ml-1.5 px-1.5 py-px rounded-full border border-ink-200 bg-ink-50 text-nano text-ink-600"
 								title="a customized copy of another app"
 							>
 								customized
@@ -606,7 +606,7 @@ function RepoCardView({
 				</div>
 				<button
 					type="button" onClick={onSelect}
-					className="p-1 -mr-1 rounded text-[11px] text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+					className="p-1 -mr-1 rounded text-micro text-ink-600 hover:bg-ink-100 hover:text-ink-700 transition-colors"
 					title="Details + customize"
 				>
 					Details →
@@ -614,7 +614,7 @@ function RepoCardView({
 			</div>
 
 			{/* Summary */}
-			<p className="text-xs text-slate-600 mt-3 flex-1 line-clamp-3 leading-relaxed">
+			<p className="text-xs text-ink-600 mt-3 flex-1 line-clamp-3 leading-relaxed">
 				{repo.summary || "No description provided."}
 			</p>
 
@@ -623,13 +623,13 @@ function RepoCardView({
 
 			{/* Helper line — what the primary action does for THIS kind */}
 			{ctaState === "idle" && helper && (
-				<p className="mt-3 text-[10.5px] text-slate-500 leading-snug">
+				<p className="mt-3 text-micro text-ink-600 leading-snug">
 					<Sparkles className="inline w-2.5 h-2.5 mr-0.5 text-gold-500" />
 					{helper}
 				</p>
 			)}
 			{updated && ctaState === "idle" && (
-				<p className="mt-1 text-[10.5px] text-slate-400">updated {updated}</p>
+				<p className="mt-1 text-micro text-ink-600">updated {updated}</p>
 			)}
 
 			{/* Full-width primary CTA — verb depends on the kind */}
@@ -643,7 +643,7 @@ function RepoCardView({
 				{act === "add-skill" && (
 					<button
 						onClick={() => onAction({ type: "add-skill", slug, label: title, version: repo.version })}
-						className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px] font-medium bg-violet-600 text-white hover:bg-violet-700 active:scale-[0.98] transition-all"
+						className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-meta font-medium bg-plum-600 text-white hover:bg-plum-700 active:scale-[0.98] transition-all"
 					>
 						<Puzzle className="w-3.5 h-3.5" /> Add to app…
 					</button>
@@ -651,7 +651,7 @@ function RepoCardView({
 				{act === "subscribe" && (
 					<button
 						onClick={() => onAction({ type: "subscribe", slug, label: title })}
-						className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px] font-medium bg-pink-600 text-white hover:bg-pink-700 active:scale-[0.98] transition-all"
+						className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-meta font-medium bg-plum-600 text-white hover:bg-plum-700 active:scale-[0.98] transition-all"
 					>
 						<BookOpen className="w-3.5 h-3.5" /> Subscribe
 					</button>
@@ -659,7 +659,7 @@ function RepoCardView({
 				{act === "view" && (
 					<button
 						onClick={onSelect}
-						className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px] font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all"
+						className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-meta font-medium border border-ink-200 text-ink-600 hover:bg-ink-50 transition-all"
 					>
 						{repo.kind === "dataset" ? <Database className="w-3.5 h-3.5" /> : <LineChart className="w-3.5 h-3.5" />} How to use
 					</button>
@@ -672,17 +672,17 @@ function RepoCardView({
 // ── Skills grid ────────────────────────────────────────────────────
 
 const SKILL_CATEGORIES: Record<string, { bg: string; text: string }> = {
-	email:     { bg: "bg-rose-50",    text: "text-rose-700" },
+	email:     { bg: "bg-brick-50",    text: "text-brick-700" },
 	calendar:  { bg: "bg-gold-50",   text: "text-gold-700" },
-	web:       { bg: "bg-sky-50",     text: "text-sky-700" },
-	code:      { bg: "bg-violet-50",  text: "text-violet-700" },
+	web:       { bg: "bg-lagoon-50",     text: "text-lagoon-700" },
+	code:      { bg: "bg-plum-50",  text: "text-plum-700" },
 	research:  { bg: "bg-gold-50", text: "text-gold-700" },
-	messaging: { bg: "bg-indigo-50",  text: "text-indigo-700" },
-	data:      { bg: "bg-cyan-50",    text: "text-cyan-700" },
-	sql:       { bg: "bg-orange-50",  text: "text-orange-700" },
-	llm:       { bg: "bg-purple-50",  text: "text-purple-700" },
+	messaging: { bg: "bg-plum-50",  text: "text-plum-700" },
+	data:      { bg: "bg-lagoon-50",    text: "text-lagoon-700" },
+	sql:       { bg: "bg-ember-50",  text: "text-ember-700" },
+	llm:       { bg: "bg-plum-50",  text: "text-plum-700" },
 };
-const skillCat = (c: string) => SKILL_CATEGORIES[c] ?? { bg: "bg-slate-50", text: "text-slate-600" };
+const skillCat = (c: string) => SKILL_CATEGORIES[c] ?? { bg: "bg-ink-50", text: "text-ink-600" };
 
 function SkillsGrid({
 	skills, query, activeTag, onAction,
@@ -707,13 +707,13 @@ function SkillsGrid({
 	if (skills === null) return (
 		<div className="relative">
 			<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-				{[0,1,2,3].map((i) => <div key={i} className="h-24 rounded-lg bg-slate-100 animate-pulse" />)}
+				{[0,1,2,3].map((i) => <div key={i} className="h-24 rounded-lg bg-ink-100 animate-pulse" />)}
 			</div>
 			<SpiralOverlay />
 		</div>
 	);
 	if (filtered.length === 0) return (
-		<div className="rounded-lg border border-dashed border-slate-200 p-10 text-center text-sm text-slate-500">
+		<div className="rounded-lg border border-dashed border-ink-200 p-10 text-center text-sm text-ink-600">
 			No skills match.
 		</div>
 	);
@@ -726,29 +726,29 @@ function SkillsGrid({
 					<article
 						key={c.name}
 						onClick={c.source_url ? () => window.open(c.source_url, "_blank", "noopener") : undefined}
-						className={`rounded-lg border border-l-4 border-violet-300 border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm transition-all overflow-hidden flex flex-col ${c.source_url ? "cursor-pointer" : ""}`}
+						className={`rounded-lg border border-l-4 border-plum-300 border-ink-200 bg-card hover:border-ink-300 hover:shadow-sm transition-all overflow-hidden flex flex-col ${c.source_url ? "cursor-pointer" : ""}`}
 					>
 						<div className="p-3.5 flex-1 flex flex-col">
 							<div className="flex items-start gap-2.5">
-								<div className={`w-8 h-8 rounded-md ${cat.bg} ${cat.text} flex items-center justify-center flex-shrink-0 text-base`}>
+								<div className={`w-8 h-8 rounded-md ${cat.bg} ${cat.text} flex items-center justify-center flex-shrink-0 text-read`}>
 									⌘
 								</div>
 								<div className="flex-1 min-w-0">
-									<h3 className="font-medium text-slate-900 text-[13.5px] leading-tight truncate">{c.display_name}</h3>
-									<p className="text-[11px] text-slate-400 mt-0.5 font-mono">{c.category}</p>
+									<h3 className="font-medium text-ink-900 text-meta leading-tight truncate">{c.display_name}</h3>
+									<p className="text-micro text-ink-600 mt-0.5 font-mono">{c.category}</p>
 								</div>
 							</div>
-							<p className="text-[12.5px] text-slate-600 mt-2 leading-relaxed line-clamp-2">{c.summary}</p>
+							<p className="text-meta text-ink-600 mt-2 leading-relaxed line-clamp-2">{c.summary}</p>
 							<div className="mt-auto pt-2.5 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
 								{c.source_url
-									? <a href={c.source_url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-slate-400 hover:text-slate-700 inline-flex items-center gap-0.5 transition-colors" onClick={(e) => e.stopPropagation()}>source <ExternalLink className="w-2.5 h-2.5" /></a>
+									? <a href={c.source_url} target="_blank" rel="noopener noreferrer" className="text-micro text-ink-600 hover:text-ink-700 inline-flex items-center gap-0.5 transition-colors" onClick={(e) => e.stopPropagation()}>source <ExternalLink className="w-2.5 h-2.5" /></a>
 									: <span />
 								}
 								{/* Community skills are xp.io repos under the `community`
 								    owner alias — same import-into-an-app flow as repo skills. */}
 								<button
 									onClick={() => onAction({ type: "add-skill", slug: `community/${c.name}`, label: c.display_name })}
-									className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded-md bg-violet-600 text-white hover:bg-violet-700 active:scale-95 transition-all flex-shrink-0"
+									className="inline-flex items-center gap-1 px-2 py-0.5 text-micro rounded-md bg-plum-600 text-white hover:bg-plum-700 active:scale-95 transition-all flex-shrink-0"
 								>
 									<Puzzle className="w-3 h-3" /> Add to app…
 								</button>
@@ -883,39 +883,39 @@ function AppDetailDrawer({
 			onClick={(e) => { if (e.target === backdropRef.current) onClose(); }}
 			className="fixed inset-0 z-50 flex items-start justify-end bg-black/15 backdrop-blur-[2px]"
 		>
-			<div className="relative h-full w-full max-w-md bg-white shadow-2xl flex flex-col">
+			<div className="relative h-full w-full max-w-md bg-card shadow-2xl flex flex-col">
 				{/* Kind accent bar */}
 				<div className={`h-0.5 w-full ${km.bg} opacity-60`} />
 
 				{/* Header */}
-				<div className="flex items-start gap-3 p-5 border-b border-slate-100">
-					<div className={`w-11 h-11 rounded-lg ${km.bg} ${km.text} flex items-center justify-center flex-shrink-0 text-xl`}>
+				<div className="flex items-start gap-3 p-5 border-b border-ink-100">
+					<div className={`w-11 h-11 rounded-lg ${km.bg} ${km.text} flex items-center justify-center flex-shrink-0 text-h3`}>
 						{km.glyph}
 					</div>
 					<div className="flex-1 min-w-0">
-						<h2 className="font-semibold text-slate-900 text-[15px] leading-tight">{title}</h2>
-						<p className="text-[11px] text-slate-300 mt-0.5 font-mono">
+						<h2 className="font-semibold text-ink-900 text-read leading-tight">{title}</h2>
+						<p className="text-micro text-ink-600 mt-0.5 font-mono">
 							{app.name}{app.version ? ` · v${app.version}` : ""}
 							{app.visibility === "private" ? " · private" : ""}
 							{app.fork_of ? " · customized copy" : ""}
 						</p>
 					</div>
-					<button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+					<button onClick={onClose} className="p-1.5 rounded-lg text-ink-600 hover:text-ink-700 hover:bg-ink-100 transition-colors">
 						<X className="w-4 h-4" />
 					</button>
 				</div>
 
 				{/* Body */}
 				<div className="flex-1 overflow-y-auto p-5 space-y-4">
-					{app.summary && <p className="text-[13px] text-slate-600 leading-relaxed">{app.summary}</p>}
+					{app.summary && <p className="text-meta text-ink-600 leading-relaxed">{app.summary}</p>}
 
-					<Link to={repoHref} onClick={onClose} className="inline-flex items-center gap-1 text-[12px] text-gold-700 hover:underline">
+					<Link to={repoHref} onClick={onClose} className="inline-flex items-center gap-1 text-caption text-gold-700 hover:underline">
 						Browse files &amp; pull requests →
 					</Link>
 
 
 					{/* Metrics */}
-					<div className="flex items-center gap-3 text-[11px] text-slate-400">
+					<div className="flex items-center gap-3 text-micro text-ink-600">
 						{updated && <span>{updated}</span>}
 						{(app.stars ?? 0) > 0 && <span className="inline-flex items-center gap-0.5"><Star className="w-3 h-3 text-gold-400" /> {app.stars}</span>}
 						{(app.downloads ?? 0) > 0 && <span className="inline-flex items-center gap-0.5"><Download className="w-3 h-3" /> {app.downloads}</span>}
@@ -926,44 +926,44 @@ function AppDetailDrawer({
 					{app.tags && app.tags.length > 0 && (
 						<div className="flex items-center gap-1.5 flex-wrap">
 							{app.tags.map((t) => (
-								<span key={t} className="px-1.5 py-0.5 rounded-full text-[11px] border border-slate-200 text-slate-600">{t}</span>
+								<span key={t} className="px-1.5 py-0.5 rounded-full text-micro border border-ink-200 text-ink-600">{t}</span>
 							))}
 						</div>
 					)}
 
 					{/* Hierarchy — what this app is built FROM (kinds are not flat) */}
 					{hasHierarchy && (
-						<div className="rounded-lg border border-slate-200 p-3.5 space-y-2">
-							<div className="text-[12px] font-medium text-slate-700">What&apos;s inside</div>
+						<div className="rounded-lg border border-ink-200 p-3.5 space-y-2">
+							<div className="text-caption font-medium text-ink-700">What&apos;s inside</div>
 							{app.fork_of && (
-								<div className="flex items-center gap-1.5 text-[12px] text-slate-600">
-									<GitFork className="w-3 h-3 text-slate-400 flex-shrink-0" />
+								<div className="flex items-center gap-1.5 text-caption text-ink-600">
+									<GitFork className="w-3 h-3 text-ink-600 flex-shrink-0" />
 									Customized copy of {friendlyName(app.fork_of)}
 								</div>
 							)}
 							{skillImports.length > 0 && (
 								<div className="space-y-1">
-									<div className="text-[11px] text-slate-400 flex items-center gap-1">
+									<div className="text-micro text-ink-600 flex items-center gap-1">
 										<Puzzle className="w-3 h-3" /> Uses {skillImports.length} skill{skillImports.length === 1 ? "" : "s"}:
 									</div>
 									{skillImports.map((e, i) => (
-										<div key={i} className="font-mono text-[10.5px] text-violet-700 pl-4 truncate">{friendlyName(importRepoOf(e))}</div>
+										<div key={i} className="font-mono text-micro text-plum-700 pl-4 truncate">{friendlyName(importRepoOf(e))}</div>
 									))}
 								</div>
 							)}
 							{memoryAgents.length > 0 && (
-								<div className="text-[11px] text-slate-500 flex items-center gap-1">
-									<BookOpen className="w-3 h-3 text-slate-400" />
+								<div className="text-micro text-ink-600 flex items-center gap-1">
+									<BookOpen className="w-3 h-3 text-ink-600" />
 									Learns into its own knowledge ({memoryAgents.length} agent{memoryAgents.length === 1 ? "" : "s"})
 								</div>
 							)}
 							{datasetDecls.length > 0 && (
 								<div className="space-y-1">
-									<div className="text-[11px] text-slate-400 flex items-center gap-1">
+									<div className="text-micro text-ink-600 flex items-center gap-1">
 										<Database className="w-3 h-3" /> Mounts {datasetDecls.length} dataset{datasetDecls.length === 1 ? "" : "s"}:
 									</div>
 									{datasetDecls.map((d, i) => (
-										<div key={i} className="font-mono text-[10.5px] text-gold-700 pl-4 truncate">{friendlyName(d.repo || d.id || "")}</div>
+										<div key={i} className="font-mono text-micro text-gold-700 pl-4 truncate">{friendlyName(d.repo || d.id || "")}</div>
 									))}
 								</div>
 							)}
@@ -972,15 +972,15 @@ function AppDetailDrawer({
 
 					{/* For skills: who uses it (hierarchy, bottom-up) */}
 					{app.kind === "skill" && (
-						<div className="rounded-lg border border-slate-200 p-3.5 space-y-1.5">
-							<div className="text-[12px] font-medium text-slate-700">Agents using this skill</div>
+						<div className="rounded-lg border border-ink-200 p-3.5 space-y-1.5">
+							<div className="text-caption font-medium text-ink-700">Agents using this skill</div>
 							{consumers === null ? (
-								<div className="text-[11px] text-slate-400"><Loader2 className="w-3 h-3 animate-spin inline mr-1" />checking…</div>
+								<div className="text-micro text-ink-600"><Loader2 className="w-3 h-3 animate-spin inline mr-1" />checking…</div>
 							) : consumers.length === 0 ? (
-								<div className="text-[11px] text-slate-400">No public apps use this skill yet.</div>
+								<div className="text-micro text-ink-600">No public apps use this skill yet.</div>
 							) : (
 								consumers.slice(0, 8).map((cns, i) => (
-									<div key={i} className="font-mono text-[11px] text-gold-700 truncate">{cns.name.replace(/^[^/]+\//, "")}</div>
+									<div key={i} className="font-mono text-micro text-gold-700 truncate">{cns.name.replace(/^[^/]+\//, "")}</div>
 								))
 							)}
 						</div>
@@ -989,60 +989,60 @@ function AppDetailDrawer({
 					{/* Per-kind "how to use" — for the kinds that aren't one-click */}
 					{app.kind === "dataset" && (
 						<div className="rounded-lg border border-gold-200 bg-gold-50/50 p-3.5 space-y-1.5">
-							<div className="text-[12px] font-medium text-gold-800">How to use this dataset</div>
-							<p className="text-[11.5px] text-gold-700 leading-relaxed">An app&apos;s owner adds this to the app&apos;s configuration:</p>
-							<pre className="text-[10.5px] bg-white border border-gold-200 rounded p-2 overflow-x-auto text-slate-700">{`datasets:
+							<div className="text-caption font-medium text-gold-800">How to use this dataset</div>
+							<p className="text-caption text-gold-700 leading-relaxed">An app&apos;s owner adds this to the app&apos;s configuration:</p>
+							<pre className="text-micro bg-card border border-gold-200 rounded p-2 overflow-x-auto text-ink-700">{`datasets:
   - {id: ${app.name.replace(/[^a-z0-9_]/gi, "_")}, repo: "${slug}",
      version: "${app.version || "1.0.0"}", mount_at: data/seed}`}</pre>
 						</div>
 					)}
 					{app.kind === "strategy" && (
-						<div className="rounded-lg border border-blue-200 bg-blue-50/50 p-3.5 space-y-1.5">
-							<div className="text-[12px] font-medium text-blue-800">How to use this strategy</div>
-							<p className="text-[11.5px] text-blue-700 leading-relaxed">
+						<div className="rounded-lg border border-lagoon-200 bg-lagoon-50/50 p-3.5 space-y-1.5">
+							<div className="text-caption font-medium text-lagoon-800">How to use this strategy</div>
+							<p className="text-caption text-lagoon-700 leading-relaxed">
 								This is a trading strategy. It runs on Lumid Market (forward-testing competitions), not as an installed app.{" "}
 								<Link to="/studio/a/lumid-market/competition/lobby" onClick={onClose} className="underline">Open Lumid Market →</Link>
 							</p>
 						</div>
 					)}
 					{app.kind === "workflow" && (
-						<div className="rounded-lg border border-blue-200 bg-blue-50/50 p-3.5 space-y-1.5">
-							<div className="text-[12px] font-medium text-blue-800">How to use this workflow</div>
-							<p className="text-[11.5px] text-blue-700 leading-relaxed">This is a recipe that runs inside an app — it isn&apos;t installed on its own. Browse the repo for the spec to adapt into an app you own.</p>
+						<div className="rounded-lg border border-lagoon-200 bg-lagoon-50/50 p-3.5 space-y-1.5">
+							<div className="text-caption font-medium text-lagoon-800">How to use this workflow</div>
+							<p className="text-caption text-lagoon-700 leading-relaxed">This is a recipe that runs inside an app — it isn&apos;t installed on its own. Browse the repo for the spec to adapt into an app you own.</p>
 						</div>
 					)}
 
 					{/* Sidebar config — only meaningful for installable apps */}
 					{act === "install" && !isInstalled && (
-					<div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3.5 space-y-2.5">
-						<div className="flex items-center gap-1.5 text-[12px] font-medium text-slate-700">
-							<PanelLeft className="w-3.5 h-3.5 text-slate-400" /> Sidebar
+					<div className="rounded-lg border border-ink-200 bg-ink-50/60 p-3.5 space-y-2.5">
+						<div className="flex items-center gap-1.5 text-caption font-medium text-ink-700">
+							<PanelLeft className="w-3.5 h-3.5 text-ink-600" /> Sidebar
 						</div>
 						<label className="flex items-center justify-between cursor-pointer">
-							<span className="text-[12px] text-slate-600">Show in sidebar</span>
+							<span className="text-caption text-ink-600">Show in sidebar</span>
 							<button
 								type="button"
 								role="switch"
 								aria-checked={sidebar.show}
 								onClick={() => setSidebar((s) => ({ ...s, show: !s.show }))}
-								className={`relative inline-flex h-4.5 w-8 flex-shrink-0 rounded-full border-2 border-transparent transition-colors ${sidebar.show ? "bg-gold-500" : "bg-slate-200"}`}
+								className={`relative inline-flex h-4.5 w-8 flex-shrink-0 rounded-full border-2 border-transparent transition-colors ${sidebar.show ? "bg-gold-500" : "bg-ink-200"}`}
 							>
-								<span className={`pointer-events-none inline-block h-3.5 w-3.5 mt-px transform rounded-full bg-white shadow transition-transform ${sidebar.show ? "translate-x-3.5" : "translate-x-0"}`} />
+								<span className={`pointer-events-none inline-block h-3.5 w-3.5 mt-px transform rounded-full bg-card shadow transition-transform ${sidebar.show ? "translate-x-3.5" : "translate-x-0"}`} />
 							</button>
 						</label>
 						{sidebar.show && (
 							<>
 								<label className="block">
-									<span className="text-[11px] text-slate-500 block mb-1">Label</span>
-									<input type="text" value={sidebar.label} onChange={(e) => setSidebar((s) => ({ ...s, label: e.target.value }))} className="w-full px-2 py-1 text-[12px] rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-gold-400/20" />
+									<span className="text-micro text-ink-600 block mb-1">Label</span>
+									<input type="text" value={sidebar.label} onChange={(e) => setSidebar((s) => ({ ...s, label: e.target.value }))} className="w-full px-2 py-1 text-caption rounded-md border border-ink-200 bg-card focus:outline-none focus:ring-2 focus:ring-gold-400/20" />
 								</label>
 								<label className="block">
-									<span className="text-[11px] text-slate-500 block mb-1">Section</span>
-									<input type="text" value={sidebar.section} onChange={(e) => setSidebar((s) => ({ ...s, section: e.target.value }))} className="w-full px-2 py-1 text-[12px] rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-gold-400/20" placeholder="e.g. Trading, Research" />
+									<span className="text-micro text-ink-600 block mb-1">Section</span>
+									<input type="text" value={sidebar.section} onChange={(e) => setSidebar((s) => ({ ...s, section: e.target.value }))} className="w-full px-2 py-1 text-caption rounded-md border border-ink-200 bg-card focus:outline-none focus:ring-2 focus:ring-gold-400/20" placeholder="e.g. Trading, Research" />
 								</label>
 							</>
 						)}
-						<div className={`text-[11px] px-2 py-1 rounded-md ${sidebar.show ? "bg-gold-50 text-gold-700" : "bg-slate-100 text-slate-500"}`}>
+						<div className={`text-micro px-2 py-1 rounded-md ${sidebar.show ? "bg-gold-50 text-gold-700" : "bg-ink-100 text-ink-600"}`}>
 							{sidebar.show
 								? <><Eye className="w-3 h-3 inline mr-1" />{sidebar.section} → {sidebar.label}</>
 								: <><EyeOff className="w-3 h-3 inline mr-1" />Not in sidebar</>
@@ -1053,52 +1053,52 @@ function AppDetailDrawer({
 
 					{/* Preview */}
 					{preview.state !== "unavailable" && (
-						<details open className="rounded-lg border border-slate-200 overflow-hidden">
-							<summary className="px-3.5 py-2 cursor-pointer text-[12px] font-medium text-slate-600 flex items-center gap-1.5 bg-slate-50 border-b border-slate-100 list-none select-none">
+						<details open className="rounded-lg border border-ink-200 overflow-hidden">
+							<summary className="px-3.5 py-2 cursor-pointer text-caption font-medium text-ink-600 flex items-center gap-1.5 bg-ink-50 border-b border-ink-100 list-none select-none">
 								<Eye className="w-3.5 h-3.5" /> UI Preview
-								{preview.state === "loading" && <Loader2 className="w-3 h-3 animate-spin text-slate-400 ml-auto" />}
+								{preview.state === "loading" && <Loader2 className="w-3 h-3 animate-spin text-ink-600 ml-auto" />}
 							</summary>
-							<div className="p-3.5 max-h-52 overflow-y-auto text-[12px] text-slate-500">
+							<div className="p-3.5 max-h-52 overflow-y-auto text-caption text-ink-600">
 								{preview.state === "loading" && "Loading preview…"}
 								{preview.state === "idle" && ""}
 								{"markdown" in preview && preview.markdown && (
-									<pre className="whitespace-pre-wrap font-mono text-[11px] text-slate-500 leading-relaxed">{preview.markdown.slice(0, 800)}{preview.markdown.length > 800 ? "\n…" : ""}</pre>
+									<pre className="whitespace-pre-wrap font-mono text-micro text-ink-600 leading-relaxed">{preview.markdown.slice(0, 800)}{preview.markdown.length > 800 ? "\n…" : ""}</pre>
 								)}
 							</div>
 						</details>
 					)}
 
 					{isFailed && status.state === "failed" && (
-						<div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-700">{status.error}</div>
+						<div className="rounded-lg border border-brick-200 bg-brick-50 px-3 py-2 text-caption text-brick-700">{status.error}</div>
 					)}
 				</div>
 
 				{/* Action footer — the verb depends on the kind */}
-				<div className="p-4 border-t border-slate-100 bg-white">
+				<div className="p-4 border-t border-ink-100 bg-card">
 					{act === "install" && (isInstalled ? (
 						<button onClick={() => { onOpen(app.name); onClose(); }} className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-gold-50 text-gold-700 border border-gold-200 hover:bg-gold-100 text-sm font-medium transition-all">
 							<Check className="w-4 h-4" /> Open {title} <ArrowRight className="w-4 h-4" />
 						</button>
 					) : (
 						<>
-							<button onClick={() => onInstall(sidebar)} disabled={isInstalling} className={`w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${isInstalling ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-slate-900 text-white hover:bg-slate-700 active:scale-[0.98]"}`}>
+							<button onClick={() => onInstall(sidebar)} disabled={isInstalling} className={`w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${isInstalling ? "bg-ink-100 text-ink-600 cursor-not-allowed" : "bg-ink-900 text-white hover:bg-ink-700 active:scale-[0.98]"}`}>
 								{isInstalling ? <><Loader2 className="w-4 h-4 animate-spin" /> Installing…</> : <><Plus className="w-4 h-4" /> Install {title}</>}
 							</button>
-							<p className="mt-2 text-center text-[11px] text-slate-400">Appears in My Agents — first run starts automatically.</p>
+							<p className="mt-2 text-center text-micro text-ink-600">Appears in My Agents — first run starts automatically.</p>
 						</>
 					))}
 					{act === "add-skill" && (
-						<button onClick={() => onAction({ type: "add-skill", slug, label: title, version: app.version })} className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-violet-600 text-white hover:bg-violet-700 active:scale-[0.98] transition-all">
+						<button onClick={() => onAction({ type: "add-skill", slug, label: title, version: app.version })} className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-plum-600 text-white hover:bg-plum-700 active:scale-[0.98] transition-all">
 							<Puzzle className="w-4 h-4" /> Add {title} to an app…
 						</button>
 					)}
 					{act === "subscribe" && (
-						<button onClick={() => onAction({ type: "subscribe", slug, label: title })} className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-pink-600 text-white hover:bg-pink-700 active:scale-[0.98] transition-all">
+						<button onClick={() => onAction({ type: "subscribe", slug, label: title })} className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-plum-600 text-white hover:bg-plum-700 active:scale-[0.98] transition-all">
 							<BookOpen className="w-4 h-4" /> Subscribe to {title}
 						</button>
 					)}
 					{act === "view" && (
-						<button onClick={onClose} className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all">
+						<button onClick={onClose} className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-ink-200 text-ink-600 hover:bg-ink-50 transition-all">
 							Close
 						</button>
 					)}
@@ -1127,7 +1127,7 @@ function RefinementsView({ query }: { query: string }) {
 	}, [items, query]);
 
 	if (filtered.length === 0) return (
-		<div className="rounded-lg border border-dashed border-slate-200 p-10 text-center text-sm text-slate-500">
+		<div className="rounded-lg border border-dashed border-ink-200 p-10 text-center text-sm text-ink-600">
 			{query ? <>No refinements match <strong>&ldquo;{query}&rdquo;</strong>.</> : <>No refinements yet.</>}
 		</div>
 	);
@@ -1138,15 +1138,15 @@ function RefinementsView({ query }: { query: string }) {
 	return (
 		<ul className="space-y-2">
 			{filtered.map((r) => (
-				<li key={r.id} className={`rounded-lg border bg-white px-4 py-3 flex items-center gap-3 transition-all ${isFresh(r) ? "border-gold-300 bg-gold-50/60" : "border-slate-200"}`}>
-					<GitFork className="w-4 h-4 text-slate-400 flex-shrink-0" />
+				<li key={r.id} className={`rounded-lg border bg-card px-4 py-3 flex items-center gap-3 transition-all ${isFresh(r) ? "border-gold-300 bg-gold-50/60" : "border-ink-200"}`}>
+					<GitFork className="w-4 h-4 text-ink-600 flex-shrink-0" />
 					<div className="flex-1 min-w-0">
-						<div className="font-medium text-slate-900 text-sm truncate">{r.name}</div>
-						<div className="text-[11px] text-slate-400 mt-0.5">{r.version} · {r.refinedAt} · {r.source}</div>
+						<div className="font-medium text-ink-900 text-sm truncate">{r.name}</div>
+						<div className="text-micro text-ink-600 mt-0.5">{r.version} · {r.refinedAt} · {r.source}</div>
 					</div>
 					{r.status === "published"
-						? <span className="text-[11px] px-2 py-0.5 rounded bg-gold-50 text-gold-700 border border-gold-200 flex-shrink-0"><Check className="w-3 h-3 inline" /> Published</span>
-						: <span className="text-[11px] text-slate-400 flex-shrink-0">Local only</span>
+						? <span className="text-micro px-2 py-0.5 rounded bg-gold-50 text-gold-700 border border-gold-200 flex-shrink-0"><Check className="w-3 h-3 inline" /> Published</span>
+						: <span className="text-micro text-ink-600 flex-shrink-0">Local only</span>
 					}
 				</li>
 			))}

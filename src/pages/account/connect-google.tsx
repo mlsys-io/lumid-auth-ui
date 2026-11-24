@@ -84,10 +84,10 @@ export default function ConnectGooglePage() {
 	return (
 		<div className="max-w-2xl mx-auto p-6 space-y-6">
 			<div>
-				<div className="text-xs font-medium text-indigo-500 uppercase tracking-widest">
+				<div className="text-xs font-medium text-plum-600 uppercase tracking-widest">
 					Personal Agent · OAuth Grants
 				</div>
-				<h1 className="text-3xl font-bold mt-1">Connect Gmail + Calendar</h1>
+				<h1 className="text-h1 font-bold mt-1">Connect Gmail + Calendar</h1>
 				<p className="text-sm text-muted-foreground mt-2">
 					Lets the <code>personal-agent</code> xpio app draft email replies in your voice and propose
 					calendar slots from your work-hours preferences. The grant is stored encrypted on lum.id;
@@ -152,6 +152,6 @@ function statusToBanner(status: string | null, detail: string) {
 	return map[status] || null;
 }
 
-const bannerOk = 'rounded-md border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm';
-const bannerInfo = 'rounded-md border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm';
-const bannerError = 'rounded-md border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm';
+const bannerOk = 'rounded-md border border-gold-500/30 bg-gold-500/10 px-4 py-3 text-sm';
+const bannerInfo = 'rounded-md border border-lagoon-500/30 bg-lagoon-500/10 px-4 py-3 text-sm';
+const bannerError = 'rounded-md border border-brick-500/30 bg-brick-500/10 px-4 py-3 text-sm';

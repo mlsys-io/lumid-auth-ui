@@ -19,6 +19,7 @@ import { IntentNarrativeHero } from '@/components/IntentNarrativeHero';
 import { IntentFeedbackRow } from '@/components/IntentFeedbackRow';
 import { setStudioSelection } from '@/components/StudioContext';
 import PageHints from '@/components/PageHints';
+import { ink, gold, brick, lagoon, plum, chart } from "@/styles/palette";
 
 export default function StudioIntentDetail() {
 	const { intentId = '' } = useParams<{ intentId: string }>();
@@ -46,7 +47,7 @@ export default function StudioIntentDetail() {
 	if (!intent || !intent.detail) {
 		return (
 			<div className="max-w-3xl mx-auto py-12 text-center">
-				<div className="text-sm text-slate-500 mb-3">No detail panel for this app.</div>
+				<div className="text-sm text-ink-600 mb-3">No detail panel for this app.</div>
 				<Link to="/studio/intents" className="text-sm text-gold-700 hover:underline">← Back to Apps</Link>
 			</div>
 		);
@@ -66,11 +67,11 @@ export default function StudioIntentDetail() {
 		<div className="max-w-4xl mx-auto px-1 py-2 space-y-5">
 			<header className="flex items-end justify-between gap-3">
 				<div>
-					<div className="text-[11px] text-slate-400 mb-1">{intent.persona}</div>
-					<h1 className="text-lg font-medium text-slate-900 leading-tight">{intent.title}</h1>
+					<div className="text-micro text-ink-600 mb-1">{intent.persona}</div>
+					<h1 className="text-title font-medium text-ink-900 leading-tight">{intent.title}</h1>
 				</div>
 				{intent.detail.period && (
-					<div className="text-[11px] text-slate-400 flex-shrink-0">{intent.detail.period}</div>
+					<div className="text-micro text-ink-600 flex-shrink-0">{intent.detail.period}</div>
 				)}
 			</header>
 
@@ -94,7 +95,7 @@ export default function StudioIntentDetail() {
 			<AuditTimeline intentId={intent.id} narrative={intent.detail.narrative} />
 
 			<div>
-				<Link to="/studio/intents" className="inline-flex items-center gap-1 text-[12px] text-slate-500 hover:text-slate-800">
+				<Link to="/studio/intents" className="inline-flex items-center gap-1 text-caption text-ink-600 hover:text-ink-800">
 					<ChevronRight className="w-3 h-3 rotate-180" /> Back to Apps
 				</Link>
 			</div>
@@ -150,31 +151,31 @@ function AuditTimeline({
 
 	const count = rows?.length ?? (narrative?.length ?? 0);
 	return (
-		<section className="rounded-xl border border-slate-200/70 bg-white">
+		<section className="rounded-xl border border-ink-200/70 bg-card">
 			<button
 				onClick={() => setOpen((v) => !v)}
-				className="w-full px-4 py-2.5 flex items-center justify-between gap-2 text-left hover:bg-slate-50/50 transition-colors rounded-xl"
+				className="w-full px-4 py-2.5 flex items-center justify-between gap-2 text-left hover:bg-ink-50/50 transition-colors rounded-xl"
 			>
-				<span className="text-[11px] tracking-[0.06em] text-slate-400">
+				<span className="text-micro tracking-[0.06em] text-ink-600">
 					Show all changes this week
-					{count > 0 && <span className="ml-2 text-slate-500">· {count}</span>}
+					{count > 0 && <span className="ml-2 text-ink-600">· {count}</span>}
 				</span>
-				<ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+				<ChevronDown className={`w-3.5 h-3.5 text-ink-600 transition-transform ${open ? 'rotate-180' : ''}`} />
 			</button>
 			{open && rows && rows.length > 0 && (
-				<ol className="px-4 pb-3 pt-1 space-y-1.5 border-t border-slate-100">
+				<ol className="px-4 pb-3 pt-1 space-y-1.5 border-t border-ink-100">
 					{rows.map((r, i) => {
 						const meta = AXIS_META[r.axis];
-						const tone = meta?.tone || 'text-slate-600 bg-slate-50 border-slate-200';
+						const tone = meta?.tone || 'text-ink-600 bg-ink-50 border-ink-200';
 						return (
-							<li key={i} className="flex items-start gap-3 text-[12px] text-slate-700">
-								<span className="text-[10px] text-slate-400 w-[88px] flex-shrink-0 tabular-nums pt-1">
+							<li key={i} className="flex items-start gap-3 text-caption text-ink-700">
+								<span className="text-nano text-ink-600 w-[88px] flex-shrink-0 tabular-nums pt-1">
 									{fmtTs(r.ts)}
 								</span>
-								<span className={`inline-flex items-center px-1.5 py-0.5 rounded-md border text-[10px] font-medium ${tone} flex-shrink-0`}>
+								<span className={`inline-flex items-center px-1.5 py-0.5 rounded-md border text-nano font-medium ${tone} flex-shrink-0`}>
 									{meta?.label || r.axis}
 								</span>
-								<span className="text-[10px] text-slate-400 uppercase tracking-wide pt-1 w-[52px] flex-shrink-0">
+								<span className="text-nano text-ink-600 uppercase tracking-wide pt-1 w-[52px] flex-shrink-0">
 									{r.verb}
 								</span>
 								<span className="flex-1 min-w-0 pt-0.5">{r.label}</span>
@@ -184,7 +185,7 @@ function AuditTimeline({
 				</ol>
 			)}
 			{open && rows && rows.length === 0 && (
-				<div className="px-4 pb-3 pt-1 text-[12px] text-slate-400 border-t border-slate-100">
+				<div className="px-4 pb-3 pt-1 text-caption text-ink-600 border-t border-ink-100">
 					No changes recorded yet — the ledger is empty for this window.
 				</div>
 			)}
@@ -209,16 +210,16 @@ function StatsRow({ stats }: { stats: IntentStat[] }) {
 			{stats.map((s) => (
 				<div
 					key={s.label}
-					className="rounded-lg border border-slate-200/70 bg-[#f7f7f5] px-3.5 py-2.5"
+					className="rounded-lg border border-ink-200/70 bg-ink-50 px-3.5 py-2.5"
 					data-pick-kind="metric"
 					data-pick-id={`metric:${s.label}`}
 					data-pick-label={`${s.label}: ${s.value}`}
 					data-pick-affordances="explain,query_my_knowledge,intent_audit"
 				>
-					<div className="text-[10px] text-slate-500">{s.label}</div>
-					<div className="mt-0.5 text-[18px] font-medium text-slate-900 leading-none">{s.value}</div>
+					<div className="text-nano text-ink-600">{s.label}</div>
+					<div className="mt-0.5 text-title font-medium text-ink-900 leading-none">{s.value}</div>
 					{s.delta && (
-						<div className={`mt-1 text-[10px] ${s.deltaTone === 'neutral' ? 'text-slate-500' : 'text-gold-700'}`}>
+						<div className={`mt-1 text-nano ${s.deltaTone === 'neutral' ? 'text-ink-600' : 'text-gold-700'}`}>
 							{s.delta}
 						</div>
 					)}
@@ -246,10 +247,10 @@ function IntentBodyView({ body, intentId }: { body: IntentBody; intentId: string
 function AutoresearchBodyView({ body, intentId: _intentId }: { body: AutoresearchBody; intentId: string }) {
 	return (
 		<>
-			<section className="rounded-xl border border-slate-200/70 bg-white px-4 py-3.5">
+			<section className="rounded-xl border border-ink-200/70 bg-card px-4 py-3.5">
 				<div className="flex items-center justify-between gap-3 mb-2">
-					<div className="text-[11px] tracking-[0.06em] text-slate-400">Accuracy vs latency · Pareto frontier</div>
-					<div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+					<div className="text-micro tracking-[0.06em] text-ink-600">Accuracy vs latency · Pareto frontier</div>
+					<div className="flex items-center gap-1.5 text-micro text-ink-600">
 						<span className="w-1.5 h-1.5 rounded-full bg-gold-500 inline-block" />
 						<span>{body.direction}</span>
 					</div>
@@ -258,11 +259,11 @@ function AutoresearchBodyView({ body, intentId: _intentId }: { body: Autoresearc
 			</section>
 
 			<section>
-				<div className="text-[11px] tracking-[0.06em] text-slate-400 mb-2">This run's variants</div>
-				<div className="rounded-lg border border-slate-200/70 overflow-hidden">
-					<table className="w-full text-[12px]">
-						<thead className="bg-[#f7f7f5]">
-							<tr className="text-left text-slate-400 text-[11px]">
+				<div className="text-micro tracking-[0.06em] text-ink-600 mb-2">This run's variants</div>
+				<div className="rounded-lg border border-ink-200/70 overflow-hidden">
+					<table className="w-full text-caption">
+						<thead className="bg-ink-50">
+							<tr className="text-left text-ink-600 text-micro">
 								<th className="px-3.5 py-2 font-normal">Variant</th>
 								<th className="px-3.5 py-2 font-normal">Config</th>
 								<th className="px-3.5 py-2 font-normal text-right">Accuracy</th>
@@ -273,16 +274,16 @@ function AutoresearchBodyView({ body, intentId: _intentId }: { body: Autoresearc
 						</thead>
 						<tbody>
 							{body.variants.map((v, i) => (
-								<tr key={v.id} className={i < body.variants.length - 1 ? 'border-b border-slate-200/70' : ''}>
-									<td className="px-3.5 py-2 font-mono text-slate-900">{v.id}</td>
-									<td className="px-3.5 py-2 text-slate-500">{v.config}</td>
-									<td className="px-3.5 py-2 text-right text-slate-900">{v.accuracy.toFixed(1)}%</td>
-									<td className={`px-3.5 py-2 text-right ${v.status === 'over' ? 'text-gold-700' : v.status === 'frontier' ? 'text-gold-700' : 'text-slate-900'}`}>{v.latency}ms</td>
-									<td className="px-3.5 py-2 text-right text-slate-900">${v.cost.toFixed(2)}</td>
-									<td className={`px-3.5 py-2 text-right text-[11px] ${
+								<tr key={v.id} className={i < body.variants.length - 1 ? 'border-b border-ink-200/70' : ''}>
+									<td className="px-3.5 py-2 font-mono text-ink-900">{v.id}</td>
+									<td className="px-3.5 py-2 text-ink-600">{v.config}</td>
+									<td className="px-3.5 py-2 text-right text-ink-900">{v.accuracy.toFixed(1)}%</td>
+									<td className={`px-3.5 py-2 text-right ${v.status === 'over' ? 'text-gold-700' : v.status === 'frontier' ? 'text-gold-700' : 'text-ink-900'}`}>{v.latency}ms</td>
+									<td className="px-3.5 py-2 text-right text-ink-900">${v.cost.toFixed(2)}</td>
+									<td className={`px-3.5 py-2 text-right text-micro ${
 										v.status === 'frontier' ? 'text-gold-700' :
 										v.status === 'over'     ? 'text-gold-700'   :
-										                          'text-slate-500'
+										                          'text-ink-600'
 									}`}>
 										{v.status === 'frontier' ? 'on frontier' : v.status === 'over' ? 'over budget' : 'dominated'}
 									</td>
@@ -300,23 +301,23 @@ function ParetoChart({ chart }: { chart: AutoresearchBody['chart'] }) {
 	const frontierPath = chart.frontier.map((p) => `${p.cx},${p.cy}`).join(' ');
 	return (
 		<svg viewBox="0 0 600 240" width="100%" className="block">
-			<g stroke="#e7e5e0" strokeWidth="0.5">
+			<g stroke={ink["200"]} strokeWidth="0.5">
 				<line x1="50" y1="20"  x2="580" y2="20"  />
 				<line x1="50" y1="65"  x2="580" y2="65"  />
 				<line x1="50" y1="110" x2="580" y2="110" />
 				<line x1="50" y1="155" x2="580" y2="155" />
 				<line x1="50" y1="200" x2="580" y2="200" />
 			</g>
-			<line x1="50" y1="20"  x2="50"  y2="200" stroke="#a1a1aa" strokeWidth="0.5" />
-			<line x1="50" y1="200" x2="580" y2="200" stroke="#a1a1aa" strokeWidth="0.5" />
-			<g fontSize="9" fill="#71717a">
+			<line x1="50" y1="20"  x2="50"  y2="200" stroke={ink["400"]} strokeWidth="0.5" />
+			<line x1="50" y1="200" x2="580" y2="200" stroke={ink["400"]} strokeWidth="0.5" />
+			<g fontSize="9" fill={ink["600"]}>
 				<text x="44" y="23"  textAnchor="end">94%</text>
 				<text x="44" y="68"  textAnchor="end">90%</text>
 				<text x="44" y="113" textAnchor="end">86%</text>
 				<text x="44" y="158" textAnchor="end">82%</text>
 				<text x="44" y="203" textAnchor="end">78%</text>
 			</g>
-			<g fontSize="9" fill="#71717a">
+			<g fontSize="9" fill={ink["600"]}>
 				<text x="50"  y="215" textAnchor="middle">0</text>
 				<text x="156" y="215" textAnchor="middle">100ms</text>
 				<text x="262" y="215" textAnchor="middle">200ms</text>
@@ -324,20 +325,20 @@ function ParetoChart({ chart }: { chart: AutoresearchBody['chart'] }) {
 				<text x="474" y="215" textAnchor="middle">400ms</text>
 				<text x="568" y="215" textAnchor="middle">500ms</text>
 			</g>
-			<line x1="262" y1="20" x2="262" y2="200" stroke="#B08F45" strokeWidth="1" strokeDasharray="3 3" />
-			<text x="266" y="30" fontSize="9" fill="#B08F45">200ms budget</text>
-			<polyline points={frontierPath} fill="none" stroke="#B08F45" strokeWidth="1.5" opacity="0.6" />
+			<line x1="262" y1="20" x2="262" y2="200" stroke={gold["500"]} strokeWidth="1" strokeDasharray="3 3" />
+			<text x="266" y="30" fontSize="9" fill={gold["500"]}>200ms budget</text>
+			<polyline points={frontierPath} fill="none" stroke={gold["500"]} strokeWidth="1.5" opacity="0.6" />
 			{chart.frontier.map((p, i) => (
-				<circle key={`f${i}`} cx={p.cx} cy={p.cy} r="5" fill="#B08F45" opacity="0.85" />
+				<circle key={`f${i}`} cx={p.cx} cy={p.cy} r="5" fill={gold["500"]} opacity="0.85" />
 			))}
 			{chart.underBudget.map((p, i) => (
-				<circle key={`u${i}`} cx={p.cx} cy={p.cy} r="4" fill="#a1a1aa" opacity="0.6" />
+				<circle key={`u${i}`} cx={p.cx} cy={p.cy} r="4" fill={ink["400"]} opacity="0.6" />
 			))}
 			{chart.overBudget.map((p, i) => (
-				<circle key={`o${i}`} cx={p.cx} cy={p.cy} r="4" fill="#a1a1aa" opacity="0.5" />
+				<circle key={`o${i}`} cx={p.cx} cy={p.cy} r="4" fill={ink["400"]} opacity="0.5" />
 			))}
-			<text x="320" y="232" fontSize="10" fill="#71717a" textAnchor="middle">Latency (p95)</text>
-			<text x="15"  y="115" fontSize="10" fill="#71717a" textAnchor="middle" transform="rotate(-90 15 115)">Accuracy</text>
+			<text x="320" y="232" fontSize="10" fill={ink["600"]} textAnchor="middle">Latency (p95)</text>
+			<text x="15"  y="115" fontSize="10" fill={ink["600"]} textAnchor="middle" transform="rotate(-90 15 115)">Accuracy</text>
 		</svg>
 	);
 }
@@ -348,18 +349,18 @@ function JudgmentBodyView({ body, intentId }: { body: JudgmentBody; intentId: st
 	return (
 		<>
 			<section>
-				<div className="text-[11px] tracking-[0.06em] text-slate-400 mb-2">Recent activity</div>
+				<div className="text-micro tracking-[0.06em] text-ink-600 mb-2">Recent activity</div>
 				<ol className="space-y-1.5">
 					{body.activity.map((a, i) => {
 						const Icon = a.tone === 'good' ? CheckCircle2 : Info;
 						const tone =
 							a.tone === 'good' ? 'text-gold-600' :
 							a.tone === 'warn' ? 'text-gold-600'   :
-							                    'text-slate-400';
+							                    'text-ink-600';
 						return (
 							<li
 								key={i}
-								className="rounded-lg border border-slate-200/70 bg-white px-4 py-2.5 flex items-start gap-3 group"
+								className="rounded-lg border border-ink-200/70 bg-card px-4 py-2.5 flex items-start gap-3 group"
 								data-pick-kind="output"
 								data-pick-id={`${intentId}:activity:${i}`}
 								data-pick-label={a.text}
@@ -367,10 +368,10 @@ function JudgmentBodyView({ body, intentId }: { body: JudgmentBody; intentId: st
 							>
 								<Icon className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${tone}`} />
 								<div className="flex-1 min-w-0">
-									<div className="text-sm text-slate-900">{a.text}</div>
-									{a.detail && <div className="text-[11px] text-slate-400 mt-0.5">{a.detail}</div>}
+									<div className="text-sm text-ink-900">{a.text}</div>
+									{a.detail && <div className="text-micro text-ink-600 mt-0.5">{a.detail}</div>}
 								</div>
-								<span className="text-[11px] text-slate-400 flex-shrink-0 pt-0.5">{a.when}</span>
+								<span className="text-micro text-ink-600 flex-shrink-0 pt-0.5">{a.when}</span>
 								{/* Per-output feedback row — POSTs to /me/feedback
 								    on click. Hover-only on desktop so the
 								    activity timeline stays scannable; always
@@ -390,13 +391,13 @@ function JudgmentBodyView({ body, intentId }: { body: JudgmentBody; intentId: st
 
 			{body.appliedPrinciples && body.appliedPrinciples.length > 0 && (
 				<section>
-					<div className="text-[11px] tracking-[0.06em] text-slate-400 mb-2">Voice principles applied today</div>
+					<div className="text-micro tracking-[0.06em] text-ink-600 mb-2">Voice principles applied today</div>
 					<ul className="space-y-1.5">
 						{body.appliedPrinciples.map((p) => (
-							<li key={p.text} className="rounded-lg border border-slate-200/70 bg-white px-4 py-2.5 flex items-start gap-3">
-								<Quote className="w-3.5 h-3.5 text-slate-400 mt-0.5 flex-shrink-0" />
-								<div className="flex-1 min-w-0 text-sm text-slate-800 leading-snug">{p.text}</div>
-								<span className="text-[11px] text-gold-700 flex-shrink-0">applied {p.count}×</span>
+							<li key={p.text} className="rounded-lg border border-ink-200/70 bg-card px-4 py-2.5 flex items-start gap-3">
+								<Quote className="w-3.5 h-3.5 text-ink-600 mt-0.5 flex-shrink-0" />
+								<div className="flex-1 min-w-0 text-sm text-ink-800 leading-snug">{p.text}</div>
+								<span className="text-micro text-gold-700 flex-shrink-0">applied {p.count}×</span>
 							</li>
 						))}
 					</ul>

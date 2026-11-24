@@ -261,7 +261,7 @@ function NavItemView({ to, label, icon: Icon, end, badge, title }: NavItem) {
 					<span className="min-w-0 truncate">{label}</span>
 					{badge != null && badge > 0 && (
 						<span
-							className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-gold-100 text-gold-700 text-[11px] font-semibold tabular-nums"
+							className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-gold-100 text-gold-700 text-micro font-semibold tabular-nums"
 							title={`${badge} awaiting you`}
 						>
 							{badge}
@@ -310,7 +310,7 @@ function RunsNavRow({ item }: { item: NavItem }) {
 			{failed && (
 				<Link
 					to={failed.href}
-					className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center h-[18px] px-1.5 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-[11px] font-medium tabular-nums hover:bg-rose-100"
+					className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center h-[18px] px-1.5 rounded-full bg-brick-50 border border-brick-200 text-brick-700 text-micro font-medium tabular-nums hover:bg-brick-100"
 					title="Open the most recent failed run"
 					aria-label={`${failed.n} failed in the last 24 hours — open the latest failed run`}
 				>
@@ -324,7 +324,7 @@ function RunsNavRow({ item }: { item: NavItem }) {
 // Uppercase section divider for app-contributed nav groups.
 function SectionLabel({ children }: { children: React.ReactNode }) {
 	return (
-		<div className="mt-4 mb-1 px-3 text-[11px] font-medium text-muted-foreground">
+		<div className="mt-4 mb-1 px-3 text-micro font-medium text-muted-foreground">
 			{children}
 		</div>
 	);
@@ -407,7 +407,7 @@ function RecentRow({ item, navigate, appIcon }: {
 			>
 				<Icon className="w-4 h-4 flex-shrink-0 text-ink-600" />
 				<span className="flex-1 min-w-0 truncate">{middleTruncate(item.title || 'Untitled chat')}</span>
-				<span className="flex-shrink-0 text-[11px] text-ink-600 tabular-nums">
+				<span className="flex-shrink-0 text-micro text-ink-600 tabular-nums">
 					{compactAge(item.updatedAt)}
 				</span>
 			</button>
@@ -415,7 +415,7 @@ function RecentRow({ item, navigate, appIcon }: {
 				onClick={del}
 				title="Delete conversation"
 				aria-label="Delete conversation"
-				className="absolute right-1 p-1 rounded-md opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition-all"
+				className="absolute right-1 p-1 rounded-md opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-brick-600 hover:bg-brick-50 transition-all"
 			>
 				<Trash2 className="w-3 h-3" />
 			</button>
@@ -466,7 +466,7 @@ function RecentSection({ items, loaded, navigate, iconForApp }: {
 					{items.length > shown.length && (
 						<button
 							onClick={() => setShowAll(true)}
-							className="w-full px-3 py-1.5 text-left text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+							className="w-full px-3 py-1.5 text-left text-micro text-muted-foreground hover:text-foreground transition-colors"
 						>
 							Show {items.length - shown.length} more
 						</button>
@@ -535,9 +535,9 @@ function AppFolder({
 					<Icon className="w-4 h-4 flex-shrink-0 text-ink-600" />
 					<span className="flex-1 min-w-0 truncate">{item.label}</span>
 					{installing && <Loader2 className="w-3 h-3 flex-shrink-0 animate-spin text-muted-foreground" />}
-					{failed && <AlertCircle className="w-3 h-3 flex-shrink-0 text-rose-500" />}
+					{failed && <AlertCircle className="w-3 h-3 flex-shrink-0 text-brick-600" />}
 					{badge != null && badge > 0 && (
-						<span className="flex-shrink-0 text-[11px] px-1.5 py-0.5 rounded-full bg-foreground/10 text-ink-800">{badge}</span>
+						<span className="flex-shrink-0 text-micro px-1.5 py-0.5 rounded-full bg-foreground/10 text-ink-800">{badge}</span>
 					)}
 				</button>
 				<button
@@ -836,7 +836,7 @@ export function StudioShell() {
 			>
 				<div className="flex items-center justify-between pr-1.5">
 					<button onClick={newChat} title="New chat" className="px-4 py-4 flex items-baseline text-left flex-1 min-w-0">
-						<span className="font-display text-[18px] font-semibold tracking-tight text-foreground truncate">Lumid Studio</span>
+						<span className="font-display text-title font-semibold tracking-tight text-foreground truncate">Lumid Studio</span>
 					</button>
 					<button
 						onClick={hideSidebar}
@@ -940,15 +940,15 @@ export function StudioShell() {
 							{(user?.email?.[0] || '?').toUpperCase()}
 						</div>
 						<div className="flex-1 min-w-0 text-left">
-							<div className="text-[12px] font-medium truncate text-foreground">
+							<div className="text-caption font-medium truncate text-foreground">
 								{user?.username || user?.email?.split('@')[0] || 'there'}
 							</div>
 							{isAdmin ? (
-								<div className="text-[11px] text-muted-foreground truncate">
+								<div className="text-micro text-muted-foreground truncate">
 									{user?.role === 'super_admin' ? 'super admin' : 'admin'}
 								</div>
 							) : (
-								<div className="text-[11px] text-muted-foreground truncate">{user?.email}</div>
+								<div className="text-micro text-muted-foreground truncate">{user?.email}</div>
 							)}
 						</div>
 						<ChevronDown className={[
@@ -1031,7 +1031,7 @@ export function StudioShell() {
 							</Link>
 							<button
 								onClick={onLogout}
-								className="w-full flex items-center gap-2 px-3 py-2 text-sm text-rose-700 hover:bg-rose-50 border-t border-border/60 mt-1 pt-2">
+								className="w-full flex items-center gap-2 px-3 py-2 text-sm text-brick-700 hover:bg-brick-50 border-t border-border/60 mt-1 pt-2">
 								<LogOut className="w-3.5 h-3.5" />
 								Sign out
 							</button>

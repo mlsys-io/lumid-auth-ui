@@ -305,7 +305,7 @@ export function StudioPicker() {
 	const ringClass =
 		hover?.mode === 'annotated'
 			? 'rounded-lg border-2 border-gold-400 bg-gold-200/15 shadow-[0_0_0_4px_rgba(16,185,129,0.15)]'
-			: 'rounded-md border-2 border-dashed border-sky-400/80 bg-sky-200/10';
+			: 'rounded-md border-2 border-dashed border-lagoon-400/80 bg-lagoon-200/10';
 
 	return (
 		<>
@@ -336,11 +336,11 @@ export function StudioPicker() {
 			{/* Floating instruction pill — color-coded by mode. */}
 			<div
 				data-studio-picker-chrome="1"
-				className="fixed top-4 left-1/2 -translate-x-1/2 z-[1002] px-3 py-1.5 rounded-full bg-slate-900/90 backdrop-blur-sm text-white text-[12px] font-medium shadow-lg pointer-events-none flex items-center gap-2 max-w-[80vw]"
+				className="fixed top-4 left-1/2 -translate-x-1/2 z-[1002] px-3 py-1.5 rounded-full bg-ink-900/90 backdrop-blur-sm text-white text-caption font-medium shadow-lg pointer-events-none flex items-center gap-2 max-w-[80vw]"
 			>
 				<span
 					className={`w-1.5 h-1.5 rounded-full animate-pulse ${
-						hover?.mode === 'freeform' ? 'bg-sky-400' : 'bg-gold-400'
+						hover?.mode === 'freeform' ? 'bg-lagoon-400' : 'bg-gold-400'
 					}`}
 				/>
 				<span className="truncate">{hint}</span>
