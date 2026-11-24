@@ -49,6 +49,8 @@
 
 import { createContext, useContext, useId, useCallback, useMemo, Suspense, useEffect, useState, type ReactNode } from "react";
 import { askOrStash } from "@/components/chat/askBus";
+import * as PopoverPrimitive from "@radix-ui/react-popover";
+import { MoreHorizontal } from "lucide-react";
 import { parse as parseYaml } from "yaml";
 import { Link, useNavigate, useParams as useRouteParams } from "react-router-dom";
 import { recordInteraction } from "@/api/interactions";
@@ -480,15 +482,18 @@ function useSource(spec?: string, pollSec = 0) {
 
 function Shell({ title, children, pickKind, pickId }: { title?: string; children: React.ReactNode; pickKind?: string; pickId?: string }) {
   return (
+    // Lumen simplify: no card around every block. Tables, code and charts
+    // carry their own frame, so the wrapper drew a box around a box (the
+    // strategies table sat inside a bordered "Overview" card inside the page).
     <div
-      className="my-3 rounded-lg border border-ink-200 bg-card overflow-hidden"
+      className="my-4 min-w-0"
       data-pick-kind={pickKind}
       data-pick-id={pickId}
     >
       {title ? (
-        <div className="px-3 py-1.5 border-b border-ink-100 text-caption font-medium text-ink-600">{title}</div>
+        <div className="mb-2 text-meta font-medium text-ink-700">{title}</div>
       ) : null}
-      <div className="p-3">{children}</div>
+      {children}
     </div>
   );
 }
@@ -555,12 +560,14 @@ function LumidStat({ body }: { body: Body }) {
     if (typeof body.suffix === "string") display = display + body.suffix;
   }
   return (
+    // A figure, not a tile: number over a plain label. Three framed tiles in a
+    // framed card read as a dashboard; this reads as a line of facts.
     <div
-      className="inline-flex flex-col rounded-lg border border-ink-200 bg-ink-50 px-4 py-3 min-w-[120px]"
+      className="inline-flex flex-col min-w-[96px]"
       title={unavailable ? `Unavailable: ${unavailable}` : undefined}
     >
-      <span className="text-h2 font-semibold text-ink-900 tabular-nums">{display}</span>
-      <span className="text-micro uppercase tracking-wide text-ink-600 mt-0.5">{String(body.label ?? "")}</span>
+      <span className="font-display text-h2 font-medium text-ink-900 tabular-nums leading-none">{display}</span>
+      <span className="mt-1.5 text-meta text-ink-600">{String(body.label ?? "")}</span>
     </div>
   );
 }
@@ -806,8 +813,51 @@ export async function reportDispatchFailure(jobID: string, label: string): Promi
   }
 }
 
-function ActionButton({ a, row: rowProp, onDone, size = "sm", scope = "", selection, minSelected = 0 }: {
+// RowActions — one visible action per row, the rest behind ⋯.
+//
+// quant-research's strategies table carried five buttons per row (Backtest,
+// Check pending results, Disable, Discuss…). They wrapped onto three lines, so
+// four strategies filled the screen and every row read as a toolbar. The first
+// action — the surface author's lead — stays a button; the others open a menu.
+// Two or fewer show as before.
+//
+// The menu content is force-mounted and only HIDDEN when closed: an action with
+// `fields` opens its dialog from inside ActionButton, and unmounting the menu on
+// click would unmount that dialog with it.
+function RowActions({ actions, row, onDone, scope }: {
+  actions: ActionDef[]; row: Record<string, unknown>; onDone?: () => void; scope?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  if (actions.length <= 2) {
+    return <>{actions.map((a, ai) => <ActionButton key={ai} a={a} row={row} onDone={onDone} size="xs" scope={scope} />)}</>;
+  }
+  const [lead, ...rest] = actions;
+  return (
+    <>
+      <ActionButton a={lead} row={row} onDone={onDone} size="xs" scope={scope} />
+      <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
+        <PopoverPrimitive.Trigger asChild>
+          <button type="button" aria-label="More actions" title="More actions" onClick={(e) => e.stopPropagation()}
+            className="inline-flex min-h-[24px] items-center rounded-md border border-ink-200 bg-card px-1.5 text-ink-600 transition-colors hover:bg-ink-100 hover:text-ink-900 data-[state=open]:bg-ink-100">
+            <MoreHorizontal className="h-3.5 w-3.5" />
+          </button>
+        </PopoverPrimitive.Trigger>
+        <PopoverPrimitive.Portal forceMount>
+          <PopoverPrimitive.Content forceMount align="end" sideOffset={4}
+            onClick={(e) => { e.stopPropagation(); if ((e.target as HTMLElement).closest("button")) setOpen(false); }}
+            className="z-[120] min-w-[180px] rounded-lg border border-border bg-popover p-1 shadow-e2 outline-none data-[state=closed]:hidden data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95">
+            {rest.map((a, ai) => <ActionButton key={ai} a={a} row={row} onDone={onDone} size="xs" scope={scope} menuItem />)}
+          </PopoverPrimitive.Content>
+        </PopoverPrimitive.Portal>
+      </PopoverPrimitive.Root>
+    </>
+  );
+}
+
+function ActionButton({ a, row: rowProp, onDone, size = "sm", scope = "", selection, minSelected = 0, menuItem = false }: {
   a: ActionDef; row?: Record<string, unknown>; onDone?: () => void; size?: "sm" | "xs";
+  // Render as a row in RowActions' overflow menu instead of a bordered button.
+  menuItem?: boolean;
   // The widget this button belongs to — where an `await` verdict renders.
   scope?: string;
   // The table's checked rows, for a `uses_selection` action.
@@ -976,13 +1026,17 @@ function ActionButton({ a, row: rowProp, onDone, size = "sm", scope = "", select
   // buttons; nowrap keeps "Poll result" from also breaking inside one.
   const pad = size === "xs" ? "px-2 py-1 text-micro min-h-[24px] whitespace-nowrap" : "px-2.5 py-1 text-caption min-h-[24px]";
   const tone = danger
-    ? "border-brick-200 text-brick-600 hover:bg-brick-50"
-    : "border-ink-200 text-ink-600 hover:bg-ink-100 hover:text-ink-800";
+    ? "border-brick-200 text-brick-700 hover:bg-brick-50"
+    : "border-ink-200 text-ink-700 hover:bg-ink-100 hover:text-ink-900";
+  const cls = menuItem
+    ? cn("flex w-full items-center rounded-md px-2.5 py-1.5 text-left text-meta transition-colors disabled:opacity-50",
+        danger ? "text-brick-700 hover:bg-brick-50" : "text-ink-800 hover:bg-ink-100")
+    : cn("inline-flex items-center rounded-md border bg-card transition-colors disabled:opacity-50", pad, tone);
   return (
     <>
       <button onClick={run} disabled={busy || selShort}
         title={selShort ? `Check ${needSel} row${needSel === 1 ? "" : "s"} in the table first` : undefined}
-        className={cn("inline-flex items-center rounded-md border bg-card transition-colors disabled:opacity-50", pad, tone)}>
+        className={cls}>
         {busy ? "…" : selRows ? `${a.label} (${selRows.length}/${needSel})` : a.label}
       </button>
       {a.fields?.length ? (
@@ -1463,7 +1517,7 @@ function LumidTable({ body }: { body: Body }) {
                 </div>
                 {rowActions.length > 0 && (
                   <div className="flex gap-1.5 mt-2 pt-2 border-t border-ink-100">
-                    {rowActions.map((a, ai) => <ActionButton key={ai} a={a} row={row} onDone={refetch} size="xs" scope={scope} />)}
+                    <RowActions actions={rowActions} row={row} onDone={refetch} scope={scope} />
                   </div>
                 )}
               </div>
@@ -1480,14 +1534,10 @@ function LumidTable({ body }: { body: Body }) {
     !sort || sort.key !== key ? "↕" : sort.dir === "desc" ? "↓" : "↑";
   return (
     <div className="space-y-2">
-      {(tableActions.length > 0 || pollSec > 0) && (
+      {tableActions.length > 0 && (
         <div className="flex items-center gap-2">
           {tableActions.length > 0 && actionBar}
-          {pollSec > 0 && (
-            <span className="ml-auto inline-flex items-center gap-1 text-nano text-gold-700">
-              <span className="w-1.5 h-1.5 rounded-full bg-gold-500 animate-pulse" /> Live
-            </span>
-          )}
+          {/* No "Live" badge: refreshing quietly is the expected default. */}
         </div>
       )}
       {searchBox}
@@ -1499,8 +1549,8 @@ function LumidTable({ body }: { body: Body }) {
           <thead className="bg-ink-50 border-b border-ink-200">
             <tr>
               {selectOn && (
-                <th className="w-8 px-2 py-1.5 text-left font-normal text-nano text-ink-600 whitespace-nowrap" title={`Check up to ${selectMax}`}>
-                  {selected.length}/{selectMax}
+                <th className="w-8 px-2 py-1.5" title={`Check up to ${selectMax} to compare`}>
+                  <span className="sr-only">Select</span>
                 </th>
               )}
               {columns.map((c) => {
@@ -1568,8 +1618,8 @@ function LumidTable({ body }: { body: Body }) {
                     // "Updated" vanished at 1500px. Wrapping only kicks in when the
                     // row would otherwise overflow; a narrow table keeps one line.
                     <td className={cn("sticky right-0 z-[1] bg-card px-2.5 py-1.5 text-right align-top shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.15)]", href && "group-hover:bg-ink-50")}>
-                      <span className="inline-flex flex-wrap gap-1.5 justify-end" onClick={(e) => e.stopPropagation()}>
-                        {rowActions.map((a, ai) => <ActionButton key={ai} a={a} row={row} onDone={refetch} size="xs" scope={scope} />)}
+                      <span className="inline-flex flex-nowrap gap-1.5 justify-end" onClick={(e) => e.stopPropagation()}>
+                        <RowActions actions={rowActions} row={row} onDone={refetch} scope={scope} />
                       </span>
                     </td>
                   )}
@@ -1591,7 +1641,10 @@ function ActionBar({ actions, onDone, scope, selection, minSelected }: {
   selection?: Record<string, unknown>[]; minSelected?: number;
 }) {
   const role = useContext(AuthContext)?.user?.role ?? "user";
-  const visible = actions.filter((a) => roleAllows(role, a.gate));
+  // A selection action ("Compare") appears once a row is checked — a disabled
+  // "Compare (0/2)" sat above every strategies table explaining a checkbox
+  // column nobody had touched yet.
+  const visible = actions.filter((a) => roleAllows(role, a.gate) && (!a.uses_selection || (selection?.length ?? 0) > 0));
   if (!visible.length) return null;
   return (
     <div className="flex flex-wrap gap-1.5">
