@@ -10,7 +10,6 @@ import { useEffect, useState } from 'react';
 import { Brain, ChevronRight, Sparkles, ArrowLeft } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import apiClient from '@/api/client';
-import PageHints from '@/components/PageHints';
 import { setStudioSelection } from '@/components/StudioContext';
 
 type Agent = {
@@ -79,11 +78,6 @@ function AgentList() {
 			{/* Page identity in StudioShell top-bar (or absent when this
 			    component is embedded in Marketplace's Knowledge tab —
 			    that surface owns its own header). */}
-			<PageHints prompts={[
-				'what did you learn about me this week?',
-				'what do you know about my work style?',
-				'forget that I mentioned the Acme project',
-			]} />
 			<ul className="space-y-2">
 				{agents.map((a) => (
 					<li key={a.id}>

@@ -543,7 +543,7 @@ export default function DataLakeViewer({ config }: { config?: Record<string, unk
               className="pt-12"
               art={<PickATable />}
               title="Pick a table to inspect"
-              body="Choose one on the left for its columns, profile and a capped sample. Data never moves — the viewer reads catalog metadata and a small materialized sample."
+              body="Its columns and a sample appear here."
             />
           )}
         </div>

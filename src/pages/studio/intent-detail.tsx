@@ -18,7 +18,6 @@ import {
 import { IntentNarrativeHero } from '@/components/IntentNarrativeHero';
 import { IntentFeedbackRow } from '@/components/IntentFeedbackRow';
 import { setStudioSelection } from '@/components/StudioContext';
-import PageHints from '@/components/PageHints';
 import { ink, gold, brick, lagoon, plum, chart } from "@/styles/palette";
 
 export default function StudioIntentDetail() {
@@ -53,16 +52,6 @@ export default function StudioIntentDetail() {
 		);
 	}
 
-	// Per-intent prompt suggestions. The chat agent's selection
-	// already carries this intent so "this week" / "Voice score" /
-	// "rerun" disambiguate cleanly.
-	const promptHints = [
-		'what changed about this app this week?',
-		'why is the Standard going up?',
-		'run it again now',
-		'pause this for the weekend',
-	];
-
 	return (
 		<div className="max-w-4xl mx-auto px-1 py-2 space-y-5">
 			<header className="flex items-end justify-between gap-3">
@@ -75,7 +64,6 @@ export default function StudioIntentDetail() {
 				)}
 			</header>
 
-			<PageHints prompts={promptHints} />
 
 
 			{/* "This week your AI…" hero — narrative bullets + the six-

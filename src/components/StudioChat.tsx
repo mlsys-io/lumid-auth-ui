@@ -25,9 +25,8 @@ import {
 	type ViewingContext,
 } from './StudioContext';
 import { appTitle, prefetchAppLabels } from './workflow/AppCard';
-import { me, type MeWorkflowRow } from '@/api/me';
+import { me } from '@/api/me';
 import { toast } from 'sonner';
-import { summarizeAppState, chipsForApp, openerLine } from './chat/appOpener';
 import { ChatMarkdown } from './ChatMarkdown';
 import { ArtifactView, ArtifactKindIcon, artifactDownload, type ArtifactKind } from './ArtifactView';
 import { ArtifactIconButton } from './ArtifactIconButton';
@@ -361,6 +360,16 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 		return m ? decodeURIComponent(m[1]) : '';
 	})();
 	const chatScope = docked ? `app:${groundApp || routeApp || 'none'}` : 'home';
+	// The empty composer says where you are, in place of the canned openers.
+	const composerPlaceholder = (() => {
+		const scope = docked ? (groundApp || routeApp) : '';
+		if (!scope) return 'Ask anything…';
+		if (scope === COMPUTE_KEY) return 'Ask about the fleet…';
+		if (scope === DATA_KEY) return 'Ask about your data…';
+		if (scope === LIBRARY_KEY) return 'Ask about the Library…';
+		if (scope === APPS_KEY) return 'Ask about your apps…';
+		return `Ask ${appTitle(scope)}…`;
+	})();
 	// The strategy this thread is about, when it was opened from a strategy
 	// row's "Discuss". Mirrors how `app` grounds a thread, one level finer.
 	// Sticky on purpose: later turns in the same thread stay about the same
@@ -1720,84 +1729,20 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 		// Talk to THIS app's agents by default — drop any manual agent/persona
 		// so the app context (sent with every turn) drives retrieval/routing.
 		setAgentId(''); setPersonaId('');
-		// Library context — no workflows; a marketplace/skills/experiments opener.
-		if (app === APPS_KEY) {
+		// Lumen simplify (2026-11-24): no canned opener on the four first-party
+		// surfaces. Each used to post a paragraph "from the assistant" plus 3-4
+		// suggestion chips — the same starter pattern removed from the home chat
+		// in #63, and the Data one explained the page's own tabs. The composer's
+		// placeholder (composerPlaceholder) now carries the context instead.
+		if (app === APPS_KEY || app === COMPUTE_KEY || app === LIBRARY_KEY || app === DATA_KEY) {
 			setStudioSelection(null);
-			setMessages((prev) => [...prev, {
-				role: 'assistant',
-				content: "Your **apps and agents**. Ask me what you have, what it has been doing, or what to run next.",
-				chips: [
-					{ label: 'what do I have?', prompt: 'List my installed apps and agents, and say in one line each what they are for and when they last did anything.' },
-					{ label: 'what ran recently?', prompt: 'What have my apps done in the last day or so? Call out anything that failed or produced nothing, and what you would look at first.' },
-					{ label: 'anything stuck?', prompt: 'Is any of my apps or scheduled work failing, stalled, or producing no output? Tell me which, and the most likely reason.' },
-				],
-			}]);
-			return;
-		}
-		if (app === COMPUTE_KEY) {
-			setStudioSelection(null);
-			setMessages((prev) => [...prev, {
-				role: 'assistant',
-				content: "The **compute fleet** — sites, nodes, workers, jobs and rented GPUs. Ask me what it is doing.",
-				chips: [
-					{ label: "what's running?", prompt: 'What is the compute fleet doing right now — which sites and workers are live, and what work is on them?' },
-					{ label: 'anything unhealthy?', prompt: 'Is anything in the fleet unhealthy, stale or idle that should not be? Judge liveness on heartbeat age rather than on a row existing, since a destroyed machine leaves its registry row behind.' },
-					{ label: 'what am I spending?', prompt: 'What is rented right now and what is it costing? Note that FlowMesh reports a default cost of 1.0 per worker when nobody set a real price, so do not report that as money.' },
-				],
-			}]);
-			return;
-		}
-		if (app === LIBRARY_KEY) {
-			setStudioSelection(null);
-			setMessages((prev) => [...prev, {
-				role: 'assistant',
-				content: "Your **Library** — the marketplace, your skills, and experiments. What are you after?",
-				chips: [
-					{ label: 'find an app to install', prompt: 'What apps in the marketplace fit how I work? Recommend a few and say why.' },
-					{ label: 'which skills need updating?', prompt: 'Do any of my installed skills have newer versions or are flagged broken?' },
-					{ label: 'recent experiment results', prompt: 'Summarize my recent experiments — is there a winning variant worth adopting?' },
-				],
-			}]);
-			return;
-		}
-		// Data context — /studio/data. Ported verbatim from the retired
-		// lumid-data-lake bundle's ui.opener, which this page absorbed. The
-		// default opener below is operator-shaped ("N workflows, last run 1h
-		// ago") and meaningless here: there are no loops behind this surface, so
-		// without this branch the Data chat would open by reporting telemetry
-		// that does not exist.
-		//
-		// Every prompt names app="findata" EXPLICITLY rather than relying on the
-		// working-context data-app picker: an unset picker would otherwise send
-		// the query to the default instance. sdk/ops/data.py::_candidate_bases
-		// tries {base}/findata first and falls back to the root, so this is
-		// correct against the single-instance findata backend either way.
-		if (app === DATA_KEY) {
-			setStudioSelection(null);
-			setMessages((prev) => [...prev, {
-				role: 'assistant',
-				content: "This is the **Lumid data mesh**. Browse it in the **Catalog** tab, run a declared endpoint in **Explorer**, query it directly in **Query** — or just ask me here. I can query **findata** and chart what comes back.",
-				chips: [
-					{ label: "what's in findata?", prompt: 'Call data_catalog with app="findata" and summarize what\'s actually in there — the schemas, roughly how big each one is, and the two or three tables in each that I\'d realistically start from. Group it by what kind of question each schema answers, not just as a list of names.' },
-					{ label: 'fundamentals for a symbol', prompt: 'Using data_query with app="findata", pull the latest fundamentals and key metrics for AAPL, then tell me what stands out — margins, growth, leverage. Call data_catalog first if you need to confirm the right table or endpoint. Show the numbers you used in a small table.' },
-					{ label: 'prediction-market snapshot', prompt: 'Using data_query with app="findata", query the prediction_markets schema for the most active markets right now and summarize what they\'re currently pricing. Check the catalog first for the right table and columns, and say how fresh the data is.' },
-					// interval="1d" is spelled out because it is the ONLY value that
-					// returns bars: the endpoint's default is 1min (0 rows for NVDA),
-					// and "1day", "daily" and "1D" all come back empty. Measured
-					// against the live endpoint 2026-08-17 — 1d gave 245 bars. Leaving
-					// the model to guess produced an empty chart, which reads as a
-					// broken surface on the very first click.
-					{ label: 'chart a symbol', prompt: 'Using data_query with app="findata", call the /ohlc/NVDA endpoint with interval="1d", keep the last ~6 months of bars, and plot the close as a line chart with save_artifact so it lands in my artifact panel. Note anything unusual in the move.' },
-				],
-			}]);
 			return;
 		}
 		void Promise.all([
 			prefetchAppLabels(),
-			me.listWorkflows('scheduled').then((r) => r.workflows || []).catch(() => [] as MeWorkflowRow[]),
 			// The app's own opener, when it declares one.
 			me.listApps().then((r) => (r.apps || []).find((a) => a.name === app)?.ui?.opener).catch(() => undefined),
-		]).then(([, rows, opener]) => {
+		]).then(([, opener]) => {
 			setStudioSelection({ kind: 'app', id: app, label: appTitle(app), affordances: ['app_action', 'app_read', 'run_loop_now', 'list_loops'] });
 			// An app-DECLARED opener wins. The default below is operator-shaped
 			// ("N workflows, last run 1h ago" + "run a workflow"), which is right
@@ -1818,16 +1763,13 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 					// the model off reasoning about whether those contradicted,
 					// then it announced it would fetch the cases and stopped
 					// without calling anything.
-					chips: (opener.chips || []).slice(0, 4).map((c) => ({
-						label: c.label,
-						prompt: c.prompt,
-						context: { app, ...(c.mode ? { mode: c.mode } : {}) },
-					})),
+					// Line only — the declared chips duplicated the app's own start
+					// controls in the middle panel (mode cards, Start buttons).
 				}]);
 				return;
 			}
-			const st = summarizeAppState(app, rows);
-			setMessages((prev) => [...prev, { role: 'assistant', content: openerLine(app, st), chips: chipsForApp(app, rows) }]);
+			// No default opener: it was workflow telemetry ("N workflows, last run
+			// 1h ago") plus chips, which the workspace's middle panel already shows.
 		});
 	}, []);
 	// Clear the in-memory session (keeps currentAppRef binding).
@@ -3084,7 +3026,7 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 									? 'Drop to attach'
 									: streaming
 										? 'Type next message — sends when current turn finishes'
-										: 'Ask anything…'
+										: composerPlaceholder
 							}
 							rows={1}
 							className={[

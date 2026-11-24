@@ -34,6 +34,16 @@
 import axios, { AxiosError, AxiosInstance } from "axios";
 import { getFlowmeshBearer } from "./flowmesh";
 
+// A site that is not routed (nightly) answers with the SPA's index.html and a
+// 200, so `r.data` is a string, not rows — and `.map` threw a raw TypeError
+// that the per-site banner printed verbatim. Anything but an array is "no rows";
+// the call already reports the site as down through its own error path.
+function rows<T>(data: T[] | null | undefined): T[] {
+	if (Array.isArray(data)) return data;
+	if (data == null) return [];
+	throw new Error("unexpected response from this site");
+}
+
 const FM_BASE = "/fm";
 
 /** Per-site outcome of one fan-out. `ok:false` means the site did not answer. */
@@ -319,7 +329,7 @@ export async function listWorkflows(sites?: string[]): Promise<FmFanout<FmWorkfl
 			const t0 = Date.now();
 			try {
 				const r = await fm.get<FmWorkflow[]>(`/${site}/api/v1/workflows`);
-				const items = (r.data ?? []).map((w) => ({ ...w, site }));
+				const items = rows(r.data).map((w) => ({ ...w, site }));
 				return {
 					status: { site, ok: true, count: items.length, ms: Date.now() - t0 },
 					items,
@@ -376,12 +386,12 @@ export async function listWorkflows(sites?: string[]): Promise<FmFanout<FmWorkfl
  */
 export async function listNodesForSite(site: string): Promise<FmNode[]> {
 	const r = await fm.get<FmNode[]>(`/${site}/api/v1/nodes`);
-	return (r.data ?? []).map((n) => ({ ...n, site }));
+	return rows(r.data).map((n) => ({ ...n, site }));
 }
 
 export async function listWorkersForSite(site: string): Promise<FmWorker[]> {
 	const r = await fm.get<FmWorker[]>(`/${site}/api/v1/workers`);
-	return (r.data ?? []).map((w) => ({ ...w, site }));
+	return rows(r.data).map((w) => ({ ...w, site }));
 }
 
 /** Shape a per-site read like a fan-out so the same components render both. */
@@ -427,7 +437,7 @@ export type FmTaskFilter = { workflow_id?: string; task_type?: string; status?: 
  */
 export async function listTasksForSite(site: string, filter: FmTaskFilter): Promise<FmTask[]> {
 	const r = await fm.get<FmTask[]>(`/${site}/api/v1/tasks`, { params: filter });
-	return (r.data ?? []).map((t) => ({ ...t, site }));
+	return rows(r.data).map((t) => ({ ...t, site }));
 }
 
 /**
