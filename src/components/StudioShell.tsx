@@ -35,7 +35,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
 import { me } from '@/api/me';
-import { runRowHref } from '@/lib/run-routes';
+import { useShellActivity } from '@/components/activity/useShellActivity';
+import { StatusDot } from '@/components/ui/status-badge';
 import { useAppNav, iconFor, type AppNavItem } from './useAppNav';
 import type { LucideIcon } from 'lucide-react';
 import { StrandMark } from '@/components/illustrations/StrandMark';
@@ -183,7 +184,7 @@ const TOP_NAV: NavItem[] = [
 	// link into it — but a reader measured on 2026-09-28 could not find it at
 	// all, and it is the one page that lists every run across every workflow.
 	// Its rows open the run page (/studio/apps/:app/w/:loop/r/:runId).
-	{ to: '/studio/runs', label: 'Runs', icon: History, title: 'every run of every workflow — open one to see its steps' },
+	{ to: '/studio/runs', label: 'Activity', icon: History, title: "what's running, what's broken, and how each workflow is doing" },
 	// Inbox in the rail (2026-11-24) with the pending-drafts count — this is the
 	// ONE place that says "something needs you". It replaces the top strip's
 	// rotating "NOW · N drafts need your review" ticker on every page.
@@ -300,48 +301,25 @@ function NavItemView({ to, label, icon: Icon, end, badge, title }: NavItem) {
 	);
 }
 
-// The Runs row, plus a "N failed" pill when runs failed in the last 24h. The
-// pill is its OWN link — to the newest failed run's page, where its error is —
-// and sits beside the row rather than inside it (a link inside a link is not
-// valid markup and reads as one control to assistive tech). A reader measured
-// 2026-09-28 had no path at all from /studio to a failed run's error: the
-// failure ticker lives in the top strip, which the chat home does not show.
-const RUNS_FAILED_KEY = 'studio_runs_failed_pill_v1';
+// The Activity row, plus a "N failing" pill: workflows whose latest run
+// failed (not failed RUNS — "34 failed" used to mean one workflow failing 30
+// times). The pill is its OWN link, to Activity, whose "Needs fixing" section
+// leads with exactly those workflows — and sits beside the row rather than
+// inside it (a link inside a link is invalid markup and reads as one control).
 function RunsNavRow({ item }: { item: NavItem }) {
-	// Last answer is remembered per browser: /me/runs can take seconds, and a
-	// pill that pops in late reads as the rail rearranging itself.
-	const [failed, setFailed] = useState<{ n: number; href: string } | null>(() => {
-		try { return JSON.parse(localStorage.getItem(RUNS_FAILED_KEY) || 'null'); } catch { return null; }
-	});
-	useEffect(() => {
-		let live = true;
-		const load = () => {
-			const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-			me.listRuns({ state: 'failed', since, limit: 50 })
-				.then((r) => {
-					if (!live) return;
-					const runs = [...(r.runs || [])].sort((a, b) => (b.started_at || 0) - (a.started_at || 0));
-					const next = runs.length ? { n: runs.length, href: runRowHref(runs[0].run_id) } : null;
-					setFailed(next);
-					try { localStorage.setItem(RUNS_FAILED_KEY, JSON.stringify(next)); } catch { /* private mode */ }
-				})
-				.catch(() => { /* no pill on a failed read — the row still works */ });
-		};
-		load();
-		const id = window.setInterval(() => { if (document.visibilityState !== 'hidden') load(); }, 120_000);
-		return () => { live = false; window.clearInterval(id); };
-	}, []);
+	const act = useShellActivity();
+	const n = act?.failing ?? 0;
 	return (
 		<div className="relative">
 			<NavItemView {...item} />
-			{failed && (
+			{n > 0 && (
 				<Link
-					to={failed.href}
+					to="/studio/runs"
 					className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center h-[18px] px-1.5 rounded-full bg-brick-50 border border-brick-200 text-brick-700 text-micro font-medium tabular-nums hover:bg-brick-100"
-					title="Open the most recent failed run"
-					aria-label={`${failed.n} failed in the last 24 hours — open the latest failed run`}
+					title="Workflows whose latest run failed — see Needs fixing"
+					aria-label={`${n} workflow${n === 1 ? '' : 's'} failing — open Activity`}
 				>
-					{failed.n} failed
+					{n} failing
 				</Link>
 			)}
 		</div>
@@ -568,6 +546,8 @@ function AppFolder({
 	// Seed with the slug so an app that declares no icon still gets its own.
 	const installing = item.status === 'installing';
 	const failed = item.status === 'failed';
+	// A breathing dot while one of this app's workflows is running.
+	const running = !!useShellActivity()?.runningApps.includes(item.app);
 
 	// A new conversation in an app starts from the docked chat's own "New
 	// conversation" button; the hover-only ⊕ that used to sit here was a third
@@ -589,6 +569,7 @@ function AppFolder({
 					{/* Same glyph as the app's Library card and its Recent threads. */}
 					<StrandAvatar slug={item.app} size={18} />
 					<span className="flex-1 min-w-0 truncate">{item.label}</span>
+					{running && !installing && <StatusDot tone="running" pulse title="A workflow is running now" />}
 					{installing && <Loader2 className="w-3 h-3 flex-shrink-0 animate-spin text-muted-foreground" />}
 					{failed && <AlertCircle className="w-3 h-3 flex-shrink-0 text-brick-600" />}
 					{badge != null && badge > 0 && (

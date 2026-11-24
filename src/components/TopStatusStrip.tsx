@@ -86,8 +86,8 @@ const PAGE_META: Array<{
 		pattern: /^\/studio\/runs/,
 		ownHeader: true,
 		icon: ActivityIcon,
-		title: "Runs",
-		subtitle: "Every run of every workflow — open one to see its steps.",
+		title: "Activity",
+		subtitle: "What's running, what's broken, and how each workflow is doing.",
 		iconTone: "text-gold-600",
 	},
 	{
@@ -187,7 +187,7 @@ function deriveCrumbs(pathname: string): Array<{ label: string; to: string }> {
 	// identity, so the top bar shows no "My Apps / <app>" crumb (was printed
 	// twice). /apps/all (the grid) keeps no crumb either.
 	const m2 = pathname.match(/^\/studio\/runs\/([^/]+)/);
-	if (m2) return [{ label: "Runs", to: "/studio/runs" }];
+	if (m2) return [{ label: "Activity", to: "/studio/runs" }];
 	// Cycle inspector is reached from an app's workflow panel.
 	const m3 = pathname.match(/^\/studio\/(?:intents|today)\/cycle\/([^/]+)\/([^/]+)\/[^/]+/);
 	if (m3) return [{ label: "My Agents", to: "/studio/apps" }, { label: appTitle(decodeURIComponent(m3[1])), to: workflowPath(decodeURIComponent(m3[1]), decodeURIComponent(m3[2])) }];

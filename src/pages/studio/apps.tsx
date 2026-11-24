@@ -54,6 +54,7 @@ import LoopOrbit, { type LoopMode, type LoopStageKey } from "@/components/workfl
 // (AppsHome) doesn't statically pull the DAG canvas (@xyflow → vendor-flow) +
 // charts (recharts → vendor-charts) that only the per-app overview renders.
 // They load on demand when an overview actually mounts them.
+const AppActivityBand = lazy(() => import("@/components/activity/AppActivityBand"));
 const WorkflowObservabilityPanel = lazy(() => import("@/components/workflow/WorkflowObservabilityPanel"));
 const WorkflowList = lazy(() => import("@/components/workflow/WorkflowList"));
 // Markdown renderer (named export) for the per-app Overview story copy.
@@ -1216,6 +1217,10 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 							// without curated copy fall back to the workflow list so the
 							// overview is never blank. ──
 							<div className="space-y-6 animate-in fade-in duration-200">
+								{/* Running now / Needs fixing for THIS app — empty when healthy. */}
+								{!nestedInSurface && (
+									<Suspense fallback={null}><AppActivityBand app={app} /></Suspense>
+								)}
 								{(identity?.hasSurface || !!urlSurface) && !nestedInSurface ? (
 									// The app DECLARED a page — that wins. Previously the surface
 									// rendered only for apps with zero workflows, so any app that
@@ -1292,7 +1297,7 @@ function WorkflowNotFound({ app, loop, runId }: { app: string; loop: string; run
 			<div className="flex gap-3 text-meta">
 				<Link to={`/studio/apps/${encodeURIComponent(app)}`} className="text-ink-700 underline hover:text-ink-900">All workflows</Link>
 				<Link to={`/studio/a/${encodeURIComponent(app)}/manage`} className="text-ink-700 underline hover:text-ink-900">Manage agent</Link>
-				<Link to="/studio/runs" className="text-ink-700 underline hover:text-ink-900">Runs</Link>
+				<Link to="/studio/runs" className="text-ink-700 underline hover:text-ink-900">Activity</Link>
 			</div>
 		</div>
 	);
