@@ -388,7 +388,7 @@ function DocIndex() {
 	// Lumen: the shared PageHeader (serif title) over eyebrowed groups of
 	// lifting cards — the icon-and-sans heading sat centred and a size below
 	// every other page title.
-	const card = 'lumen-lift group flex flex-col rounded-[12px] border border-border bg-card p-4 shadow-e1 transition-[border-color,box-shadow,transform] duration-180 hover:border-gold-300 hover:shadow-e2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40';
+	const card = 'group flex flex-col rounded-[12px] border border-border bg-card p-4 shadow-e1 transition-[border-color,box-shadow] duration-180 hover:border-gold-300 hover:shadow-e2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40';
 	return (
 		<div className="max-w-[1120px]">
 			<PageHeader

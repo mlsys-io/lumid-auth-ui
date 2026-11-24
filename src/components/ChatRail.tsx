@@ -199,7 +199,7 @@ export default function ChatRail({
 
 			{/* Chat toggle, portaled into the top strip's right cluster. */}
 			{chatTarget && createPortal(
-				<button onClick={toggleChat} title={chatVisible ? "Hide chat" : "Show chat"}
+				<button onClick={toggleChat} title={chatVisible ? "Hide chat" : "Show chat"} aria-label={chatVisible ? "Hide chat" : "Show chat"}
 					className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
 					{chatVisible ? <PanelRightClose className="w-4 h-4" /> : <MessageSquare className="w-4 h-4" />}
 				</button>,

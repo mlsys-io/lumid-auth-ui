@@ -318,6 +318,16 @@ export default function MarketplaceBrowse() {
 		// kept below for when refinements get a real store.
 	];
 
+	// Controls appear only when there's something to filter: a kind tab only
+	// once that kind has entries (the active one always stays), search + tags
+	// once the list is long enough to need them, sort once there's an order.
+	const activeCount = tabs.find((t) => t.id === tab)?.count ?? 0;
+	const shownTabs = tabs.filter((t) => t.id === tab || (t.count ?? 0) > 0);
+	const showKinds = shownTabs.length > 1;
+	const showSearch = activeCount > 6 || query !== "";
+	const showSort = activeCount > 3 && tab !== "refinements";
+	const showTags = activeCount > 6 && topTags.length > 1;
+
 	// AFTER every hook (this used to return before the topTags useMemo, so a
 	// failed load changed the hook count and React threw instead of rendering
 	// the error).
@@ -327,35 +337,39 @@ export default function MarketplaceBrowse() {
 
 	return (
 		<div className="space-y-3">
-			{/* Tab + search row */}
+			{/* Tab + search row — absent entirely when there's nothing to filter */}
+			{(showKinds || showSearch || showSort) && (
 			<div className="flex items-center gap-3 flex-wrap">
 				{/* Lumen Segmented: the kind is a FILTER on one catalog, so it reads
 				    as one control with a sliding thumb, not a row of ink pills. */}
-				<Segmented
-					aria-label="Kind"
-					value={tab}
-					onChange={(v) => { setTab(v); setQuery(""); setActiveTag(null); }}
-					options={tabs.map((t) => ({ value: t.id, label: t.label, count: t.count ?? undefined }))}
-				/>
+				{showKinds && (
+					<Segmented
+						aria-label="Kind"
+						value={tab}
+						onChange={(v) => { setTab(v); setQuery(""); setActiveTag(null); }}
+						options={shownTabs.map((t) => ({ value: t.id, label: t.label, count: t.count ?? undefined }))}
+					/>
+				)}
 
+				{showSearch ? (
 				<div className="flex-1 relative min-w-[180px]">
 					<Search className="w-3.5 h-3.5 text-ink-600 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
 					<input
 						type="search"
 						value={query}
 						onChange={(e) => { setQuery(e.target.value); setActiveTag(null); }}
-						placeholder={`Search ${tab}…`}
+						placeholder={`Search ${(tabs.find((t) => t.id === tab)?.label ?? "").toLowerCase()}…`}
 						className="w-full h-9 pl-8 pr-3 text-body rounded-lg border border-border bg-card shadow-e1 outline-none focus:border-ring/70 focus:ring-4 focus:ring-ring/15 transition-[border-color,box-shadow] duration-120 placeholder:text-ink-500"
 					/>
 				</div>
+				) : <div className="flex-1" />}
 
-				{tab !== "refinements" && (
-					<SortDropdown value={sort} onChange={setSort} />
-				)}
+				{showSort && <SortDropdown value={sort} onChange={setSort} />}
 			</div>
+			)}
 
 			{/* Tag chips */}
-			{topTags.length > 0 && !query && (
+			{showTags && !query && (
 				// ONE row that scrolls sideways, its right edge feathered — a
 				// wrapping cloud of chips was a third band of controls.
 				<div

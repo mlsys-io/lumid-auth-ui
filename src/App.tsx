@@ -978,13 +978,9 @@ export default function App() {
                 land in a follow-up PR; both still work at their
                 original URLs and are just hidden from the sidebar. */}
             <Route path="runs"                         element={<StudioRuns />} />
-            {/* Fleet had TWO addresses for one view. apps.tsx imports this very
-                component and renders <StudioPortfolio embedded /> as its "Fleet
-                rollup", and the sidebar already documents Fleet as "merged into
-                Manage apps — no separate entry" — but the standalone route stayed
-                mounted, so the merge was only half done and the same table lived at
-                two URLs. Nothing in the nav linked here; the redirect finishes it.
-                The component itself is KEPT and still does the work, embedded. */}
+            {/* /studio/portfolio was a second address for the fleet table; the
+                table is gone (apps/all lists each app once, with its 30-day
+                cost) and only FleetTotals remains, embedded there. */}
             <Route path="portfolio"                    element={<Navigate to="/studio/apps/all" replace />} />
             <Route path="strategies"                   element={<StudioStrategies />} />
             <Route path="runs/:run_id"                 element={<StudioRunDetail />} />
