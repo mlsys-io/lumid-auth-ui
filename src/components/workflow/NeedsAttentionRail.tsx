@@ -21,7 +21,7 @@ import { appTitle } from "@/components/workflow/AppCard";
 const MAX_ROWS = 4;
 
 function ask(prompt: string, context?: Partial<ViewingContext>) {
-	window.dispatchEvent(new CustomEvent("studio:ask", { detail: { prompt, autosend: true, context } }));
+	window.dispatchEvent(new CustomEvent("studio:ask", { detail: { prompt, context } }));
 }
 
 export default function NeedsAttentionRail({ loops }: { loops: LoopHealth[] }) {

@@ -27,7 +27,7 @@ export default function FailureCard({
 	const fireAsk = (ask: string) => {
 		const context: Partial<ViewingContext> = app ? { app, loop } : {};
 		window.dispatchEvent(new CustomEvent("studio:ask", {
-			detail: { prompt: ask, autosend: true, context },
+			detail: { prompt: ask, context },
 		}));
 	};
 

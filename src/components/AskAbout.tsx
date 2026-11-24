@@ -8,15 +8,13 @@ import type { ViewingContext } from "@/components/StudioContext";
 import { cn } from "@/lib/utils";
 
 export default function AskAbout({
-	prompt, context, label = "Ask about this", autosend = true, className,
+	prompt, context, label = "Ask about this", className,
 }: {
 	/** The chat prompt to dispatch. */
 	prompt: string;
 	/** Structured grounding (app/loop/cycle/selection) for this turn. */
 	context?: Partial<ViewingContext>;
 	label?: string;
-	/** false = prefill the input instead of sending. */
-	autosend?: boolean;
 	className?: string;
 }) {
 	return (
@@ -25,7 +23,7 @@ export default function AskAbout({
 			onClick={(e) => {
 				e.stopPropagation();
 				window.dispatchEvent(new CustomEvent("studio:ask", {
-					detail: { prompt, autosend, context },
+					detail: { prompt, context },
 				}));
 			}}
 			className={cn(

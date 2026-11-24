@@ -17,7 +17,7 @@ import { appTitle } from '@/components/workflow/AppCard';
 import { loopLabel } from '@/lib/workflow-names';
 
 const fire = (prompt: string, context?: Partial<ViewingContext>) =>
-	window.dispatchEvent(new CustomEvent('studio:ask', { detail: { prompt, autosend: true, context } }));
+	window.dispatchEvent(new CustomEvent('studio:ask', { detail: { prompt, context } }));
 
 // The mark draws itself once per browser session; after that it is simply
 // there. Drawing on every visit to the home chat was motion with nothing to say.

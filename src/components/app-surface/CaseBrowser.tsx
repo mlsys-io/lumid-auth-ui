@@ -119,7 +119,6 @@ function startChat(prompt: string, app: string, mode: ModeId, caseId: string) {
     new CustomEvent("studio:ask", {
       detail: {
         prompt,
-        autosend: true,
         context: { app, mode, ...(caseId ? { case_id: caseId } : {}) },
       },
     }),

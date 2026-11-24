@@ -23,7 +23,9 @@ try{
   assert(!!composer, 'chat composer rendered');
   await page.evaluate(()=>window.dispatchEvent(new CustomEvent('studio:ask',{detail:{
     prompt:'Call your lumid list_workers tool right now and show the result. Do nothing else.',
-    autosend:true, model:'claude-code-sonnet'}})));
+    model:'claude-code-sonnet'}})));
+  // An ask pre-fills the composer (and carries its model); the user sends.
+  await page.getByRole('button',{name:'Send message'}).click({timeout:10000});
   console.log('  turn dispatched; waiting for the worker card…');
   const card=await page.waitForSelector('text=FlowMesh workers',{timeout:150000}).catch(()=>null);
   assert(!!card, 'DOM: "FlowMesh workers" entity card rendered inline');

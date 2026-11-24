@@ -80,14 +80,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // and StudioChat.
       try {
         sessionStorage.removeItem("lumid:chat:v1");
-        // StudioChat sidebar — conversation + the per-conversation
-        // identifiers that bind it to a user (transcript, active chat id,
-        // grounding agent, persona). UI prefs (model/mode/think/width/
-        // collapse) are not conversation content, so they can persist.
-        sessionStorage.removeItem("studio_chat_transcript_v1");
-        localStorage.removeItem("studio_chat_active_id_v1");
-        localStorage.removeItem("studio_chat_agent_v1");
-        localStorage.removeItem("studio_chat_persona_v1");
+        // StudioChat — every conversation and everything that resumes one.
+        // Transcripts are stored PER SCOPE (`studio_chat_transcript_v1:home`,
+        // `…:app:<slug>`); removing the bare key cleared none of them. The
+        // user_sub guard in loadTranscript kept them from RENDERING for the
+        // next person, but the text stayed in this tab's storage.
+        for (const k of Object.keys(sessionStorage)) {
+          if (k.startsWith("studio_chat_transcript_v1")) sessionStorage.removeItem(k);
+        }
+        for (const k of ["studio:pending-ask", "studio_open_chat_v1", "studio_open_app_v1", "studio_new_chat_v1"]) {
+          sessionStorage.removeItem(k);
+        }
+        // The active thread and the per-app resume map point at this user's
+        // threads. Also the retired agent/persona/workspace picks, which were
+        // still sent with every turn until 2026-11. UI prefs (model, mode,
+        // width, collapse) are not conversation content and stay.
+        for (const k of [
+          "studio_chat_active_id_v1", "studio_app_chat_v1",
+          "studio_chat_agent_v1", "studio_chat_persona_v1",
+          "studio_chat_ws_repo_v1", "studio_chat_ws_cluster_v1", "studio_chat_ws_data_v1",
+        ]) {
+          localStorage.removeItem(k);
+        }
       } catch { /* private mode / quota */ }
     }
   };

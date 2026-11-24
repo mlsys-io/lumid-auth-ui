@@ -23,6 +23,7 @@
 // inline at each site, which is part of why a dropped one went unnoticed.
 export type AskDetail = {
 	prompt: string;
+	/** Ignored since 2026-11: every ask pre-fills and the user sends. */
 	autosend?: boolean;
 	context?: {
 		page?: string;

@@ -7,21 +7,17 @@
 // EventSource can't POST). Conversation history persists in
 // sessionStorage so navigating between Studio pages keeps context.
 
-import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, memo, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { markChatMounted, drainAsk } from "@/components/chat/askBus";
 import { createPortal } from 'react-dom';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
 import { CONNECT_ROUTE } from './studio/starters';
-import { Check, ThumbsDown, ChevronRight, MessageSquarePlus, Send, Trash2, Loader2, Bot, User, Square, Globe, Telescope, Brain, ChevronDown, Paperclip, X, FileText, FileJson, Image as ImageIcon, Plus, Copy, RotateCcw, Mic, Volume2, Code2, Boxes, Download, ArrowLeft, Crosshair, Lock, Cpu, Maximize2, Minimize2, AlertTriangle , GraduationCap, ClipboardList } from 'lucide-react';
+import { Check, ThumbsDown, ChevronRight, MessageSquarePlus, Send, Trash2, Loader2, Bot, User, Square, Globe, Telescope, Brain, ChevronDown, Paperclip, X, FileText, Image as ImageIcon, Plus, Copy, RotateCcw, Mic, Volume2, Code2, Boxes, Lock, Cpu, Maximize2, Minimize2, AlertTriangle , GraduationCap, ClipboardList } from 'lucide-react';
 import {
 	buildViewingContext,
-	subscribeStudioPickedTarget,
-	setStudioPickedTarget,
-	getStudioPickedTarget,
 	setStudioSelection,
-	type StudioPickedTarget,
 	type ViewingContext,
 } from './StudioContext';
 import { appTitle, prefetchAppLabels } from './workflow/AppCard';
@@ -186,7 +182,7 @@ const DOCUMENT_EXTS = ['.pdf', '.docx', '.xlsx', '.pptx', '.rtf', '.odt', '.ods'
 // visiting an app and then clicking "New chat" showed that app's conversation
 // and its grounded opener at /studio — contradicting "New chat = no default
 // app, parallel to apps". Home and each app now keep their own slot.
-import { LIBRARY_KEY, DATA_KEY, APPS_KEY, COMPUTE_KEY, threadHome } from '@/lib/chat-scopes';
+import { LIBRARY_KEY, DATA_KEY, APPS_KEY, COMPUTE_KEY } from '@/lib/chat-scopes';
 export { LIBRARY_KEY, DATA_KEY, APPS_KEY, COMPUTE_KEY };
 const STORAGE_KEY_BASE = 'studio_chat_transcript_v1';
 const transcriptKey = (scope: string) => `${STORAGE_KEY_BASE}:${scope}`;
@@ -297,13 +293,6 @@ const SLASH_COMMANDS: { label: string; template?: string; arms?: 'plan' }[] = [
 ];
 
 const MODE_KEY = 'studio_chat_mode_v1';
-const THINK_KEY = 'studio_chat_think_v1';
-const AGENT_KEY = 'studio_chat_agent_v1';
-const PERSONA_KEY = 'studio_chat_persona_v1';
-// Working context (like picking a git repo): which xpio repo / FM cluster / lumid-data app.
-const WS_REPO_KEY = 'studio_chat_ws_repo_v1';
-const WS_CLUSTER_KEY = 'studio_chat_ws_cluster_v1';
-const WS_DATA_KEY = 'studio_chat_ws_data_v1';
 
 // app_tools: does this model get the app's tool catalog (casebook, scoring,
 // review)? The claude-code path is handed no tools, so inside an app it
@@ -336,6 +325,9 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 	// to tag the persisted transcript so it can't leak across accounts.
 	const { user } = useAuth();
 	const userSub = user?.id ?? null;
+	// Engineer details (model chip, session strip, turn telemetry, token
+	// counts) are for admins only (2026-11).
+	const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
 	// Default collapsed to a thin handle so the workspace (Intents,
 	// Knowledge, …) is the focus; the user opens chat on demand. State
 	// persists across reloads in localStorage (COLLAPSE_KEY). A
@@ -383,6 +375,9 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 	const groundedAppRef = useRef<string>('');
 	const [messages, setMessages] = useState<Message[]>(() => loadTranscript(userSub, chatScope));
 	const [input, setInput] = useState('');
+	// The context/model of the last `studio:ask`, held until the user sends
+	// the pre-filled prompt (or starts over).
+	const pendingAskRef = useRef<{ context?: Partial<ViewingContext>; model?: string } | null>(null);
 	const [slashSuggestions, setSlashSuggestions] = useState<typeof SLASH_COMMANDS>([]);
 	const [slashIdx, setSlashIdx] = useState(0);
 	// Queued messages — sends typed while a turn is streaming get
@@ -501,6 +496,14 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 			return localStorage.getItem(MODEL_KEY) || '';
 		} catch { return ''; }
 	});
+	// The model chip is admin-only, so a regular user must not stay pinned to
+	// a model they chose back when the chip was visible to them.
+	useEffect(() => {
+		if (user && !isAdmin && model) {
+			setModel('');
+			try { localStorage.removeItem(MODEL_KEY); } catch { /* ignore */ }
+		}
+	}, [user, isAdmin, model]);
 	// Search / Deep Research toggles. Mutually exclusive; '' = let the
 	// agent decide based on the question. Sticky across turns + reloads
 	// so the user doesn't have to re-arm for follow-up questions.
@@ -510,14 +513,6 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 			return (v === 'search' || v === 'deep_research') ? v : '';
 		} catch { return ''; }
 	});
-	// Independent Think toggle — combines with mode. When on, Claude
-	// (and any Anthropic-shape provider) gets extended thinking enabled.
-	// kv.run/MiniMax thinks by default; this flag is a no-op there but
-	// keeps the chip visible so the user knows reasoning is on display.
-	const [think, setThink] = useState<boolean>(() => {
-		try { return localStorage.getItem(THINK_KEY) === '1'; }
-		catch { return false; }
-	});
 	// "Ask the app" — route this turn through the grounded app's analyst instead
 	// of answering generically. ON by default in an app workspace: you opened the
 	// app to talk to IT, and the model does not make that choice on its own
@@ -526,7 +521,7 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 	const [askApp, setAskApp] = useState<boolean>(true);
 	// Plan mode arms exactly ONE turn and then disarms itself.
 	//
-	// Not persisted, unlike think/mode above, and that is the whole design: the
+	// Not persisted, unlike mode above, and that is the whole design: the
 	// way out of a plan is a turn that is NOT a plan, so a sticky toggle would
 	// leave "Approve & implement" dispatching another read-only turn and the
 	// user unable to tell why nothing ever happens.
@@ -558,48 +553,27 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 		interviewModeRef.current = interviewMode;
 		try { localStorage.setItem(modeKey, interviewMode); } catch { /* ignore */ }
 	}, [interviewMode, modeKey]);
+	// Does the grounded app declare interview modes? (Its opener chips carry a
+	// `mode`.) Gates the Interview-mode section of the + menu.
+	const [appHasModes, setAppHasModes] = useState(false);
+	useEffect(() => {
+		const app = docked ? (groundApp || routeApp) : '';
+		if (!app) { setAppHasModes(false); return; }
+		let off = false;
+		me.listApps()
+			.then((r) => {
+				if (off) return;
+				const chips = (r.apps || []).find((a) => a.name === app)?.ui?.opener?.chips || [];
+				setAppHasModes(chips.some((c) => !!c.mode));
+			})
+			.catch(() => { if (!off) setAppHasModes(false); });
+		return () => { off = true; };
+	}, [docked, groundApp, routeApp]);
 	// dispatchTurn's body is built inside a callback that must not re-create on
 	// every toggle, so read the flag through a ref (same pattern as
 	// dispatchTurnRef).
 	const askAppRef = useRef(askApp);
 	useEffect(() => { askAppRef.current = askApp; }, [askApp]);
-	// Optional xpio agent to chat with (empty = default behavior:
-	// chat grounded in the user's me-prefs). When set, the system
-	// prompt swaps for the agent's bank context.
-	type AgentRow = {
-		id: string;
-		scope: 'tenant' | 'shared';
-		row_count: number;
-		last_memory_ts: number;
-		// Role enrichment from xpcloud.yaml — present when the agent is
-		// declared as a role in an installed xpio app.
-		app?: string;
-		role?: string;
-		description?: string;
-		default_model?: string;
-	};
-	const [agents, setAgents] = useState<AgentRow[]>([]);
-	const [agentId, setAgentId] = useState<string>(() => {
-		try { return localStorage.getItem(AGENT_KEY) || ''; }
-		catch { return ''; }
-	});
-	// Custom personas — user-defined system prompts. Mutually
-	// exclusive with agentId; picking one clears the other.
-	type PersonaRow = { id: string; name: string; icon?: string; allowed_tools?: string[]; preferred_model?: string; prompt_len: number; updated_at: string };
-	const [personas, setPersonas] = useState<PersonaRow[]>([]);
-	const [personaId, setPersonaId] = useState<string>(() => {
-		try { return localStorage.getItem(PERSONA_KEY) || ''; }
-		catch { return ''; }
-	});
-	// ── Working context (xpio repo / FM cluster / lumid-data app) ──
-	type WsOption = { id: string; label: string };
-	const [wsRepos, setWsRepos] = useState<WsOption[]>([]);
-	const [wsClusters, setWsClusters] = useState<WsOption[]>([]);
-	const [wsDataApps, setWsDataApps] = useState<WsOption[]>([]);
-	const lsGet = (k: string) => { try { return localStorage.getItem(k) || ''; } catch { return ''; } };
-	const [wsRepo, setWsRepo] = useState<string>(() => lsGet(WS_REPO_KEY));
-	const [wsCluster, setWsCluster] = useState<string>(() => lsGet(WS_CLUSTER_KEY));
-	const [wsDataApp, setWsDataApp] = useState<string>(() => lsGet(WS_DATA_KEY));
 	// Active chat thread id. null = unsaved thread; gets a server-minted
 	// id after the first auto-save. Persists across reloads so refreshing
 	// the page keeps you in the same thread.
@@ -627,24 +601,12 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 	// interrupt instead of just aborting the fetch (which SIGKILLed the process
 	// and threw away partial work).
 	const turnIdRef = useRef<string | null>(null);
-	const navigate = useNavigate();
 	// App the active session is grounded on (Studio workspace slug). Drives
 	// per-app session switching + tags saves so the picker can group/route by app.
 	const currentAppRef = useRef<string | null>(null);
 	// Last app whose opener was emitted into THIS session — dedupes the
 	// stash+event double-fire and prevents re-opening on same-app re-entry.
 	const openedAppRef = useRef<string | null>(null);
-	// Recent threads for the history dropdown — populated lazily when
-	// the user opens the menu; refreshed after every save.
-	type HistoryRow = { id: string; title: string; updated_at: string; msg_count: number; app?: string };
-	const [history, setHistory] = useState<HistoryRow[]>([]);
-	const [historyOpen, setHistoryOpen] = useState(false);
-
-	// Token / $ meter — updated from the `usage` SSE event after each
-	// turn. budget is the daily cap (50K tokens by default); used is
-	// the rolling 24h consumed. costUsd is a coarse estimate computed
-	// client-side from per-model pricing (server doesn't compute it).
-	const [usage, setUsage] = useState<{ used: number; limit: number } | null>(null);
 
 	// right away instead of waiting for its 2-min poll.
 	// Per-turn telemetry (cost/duration/steps/cache) from the Claude Code
@@ -665,11 +627,6 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 	// picker when the agent overrode the user's selection.
 	const [lastRoute, setLastRoute] = useState<{ modelUsed: string; autoRouted: boolean } | null>(null);
 
-	// `pickedTarget` mirrors the held selection so the chip above the input
-	// shows what the user has pinned (still surfaced by other pages via the
-	// StudioContext subscription; the composer's own picker button was removed).
-	const [pickedTarget, setPickedTargetState] = useState<StudioPickedTarget | null>(() => getStudioPickedTarget());
-	useEffect(() => subscribeStudioPickedTarget(setPickedTargetState), []);
 
 	// Staged attachments for the next send. Cleared after dispatch.
 	const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -792,13 +749,6 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 		} catch { /* ignore */ }
 	}, [mode]);
 
-	// Persist think toggle.
-	useEffect(() => {
-		try {
-			if (think) localStorage.setItem(THINK_KEY, '1');
-			else localStorage.removeItem(THINK_KEY);
-		} catch { /* ignore */ }
-	}, [think]);
 
 	// Persist active chat id.
 	useEffect(() => {
@@ -807,96 +757,6 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 			else localStorage.removeItem(CHAT_ID_KEY);
 		} catch { /* ignore */ }
 	}, [chatId]);
-
-	// Persist agent picker.
-	useEffect(() => {
-		try {
-			if (agentId) localStorage.setItem(AGENT_KEY, agentId);
-			else localStorage.removeItem(AGENT_KEY);
-		} catch { /* ignore */ }
-	}, [agentId]);
-
-	// Persist persona picker.
-	useEffect(() => {
-		try {
-			if (personaId) localStorage.setItem(PERSONA_KEY, personaId);
-			else localStorage.removeItem(PERSONA_KEY);
-		} catch { /* ignore */ }
-	}, [personaId]);
-
-	// Load installed xpio agents once. Sorted server-side
-	// (newest-memory first); we just consume the array.
-	useEffect(() => {
-		(async () => {
-			try {
-				const r = await fetch('/api/v1/me/agents', { credentials: 'include' });
-				if (!r.ok) return;
-				const j = await r.json();
-				const list: AgentRow[] = j?.data?.agents || [];
-				setAgents(list);
-			} catch { /* ignore */ }
-		})();
-	}, []);
-
-	// Load user personas once. Re-fetched if the user edits them
-	// elsewhere (future UI). Same shape as agents lookup.
-	useEffect(() => {
-		(async () => {
-			try {
-				const r = await fetch('/api/v1/me/personas', { credentials: 'include' });
-				if (!r.ok) return;
-				const j = await r.json();
-				const list: PersonaRow[] = j?.data?.personas || [];
-				setPersonas(list);
-			} catch { /* ignore */ }
-		})();
-	}, []);
-
-	// Persist the 3 working-context selectors.
-	useEffect(() => { try { wsRepo ? localStorage.setItem(WS_REPO_KEY, wsRepo) : localStorage.removeItem(WS_REPO_KEY); } catch { /* ignore */ } }, [wsRepo]);
-	useEffect(() => { try { wsCluster ? localStorage.setItem(WS_CLUSTER_KEY, wsCluster) : localStorage.removeItem(WS_CLUSTER_KEY); } catch { /* ignore */ } }, [wsCluster]);
-	useEffect(() => { try { wsDataApp ? localStorage.setItem(WS_DATA_KEY, wsDataApp) : localStorage.removeItem(WS_DATA_KEY); } catch { /* ignore */ } }, [wsDataApp]);
-
-	// Load working-context options once (repos = knowledge banks; clusters = FM
-	// fleet; data apps = lumid-data). Each source already exists; all best-effort.
-	useEffect(() => {
-		(async () => {
-			// xpio repos — the user's accessible knowledge banks (kind=memory).
-			try {
-				const r = await fetch('/api/v1/repos?kind=memory&mine=1', { credentials: 'include' });
-				if (r.ok) {
-					const j = await r.json();
-					const repos = j?.repos || j?.data?.repos || [];
-					setWsRepos(repos.map((x: any) => ({ id: x.name, label: x.display_name || x.name })));
-				}
-			} catch { /* ignore */ }
-			// FM clusters — slim selectable list (default row added in the picker).
-			try {
-				const { listSelectableClusters } = await import('../api/cluster');
-				const cs = await listSelectableClusters();
-				setWsClusters(cs.map((c) => ({ id: c.id, label: c.name + (c.region ? ` · ${c.region}` : '') })));
-			} catch { /* ignore */ }
-			// lumid-data apps — the /dataapp-proxy federation allowlist.
-			try {
-				const r = await fetch('/dataapp-proxy/_sources', { credentials: 'include' });
-				if (r.ok) {
-					const j = await r.json();
-					setWsDataApps((j?.sources || []).map((s: any) => ({ id: s.id, label: s.label || s.id })));
-				}
-			} catch { /* ignore */ }
-		})();
-	}, []);
-
-	// Mutually-exclusive guards — picking one clears the other so
-	// the chat doesn't get a confused mix.
-	const selectAgent = useCallback((id: string) => {
-		setAgentId(id);
-		if (id) setPersonaId('');
-	}, []);
-	const selectPersona = useCallback((id: string) => {
-		setPersonaId(id);
-		if (id) setAgentId('');
-	}, []);
 
 	// Auto-save after each turn settles. Triggers when streaming
 	// transitions false and there's at least one assistant turn with
@@ -1011,17 +871,6 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 		};
 	}, [messages, streaming, chatId, model, mode]);
 
-	// Lazy-load history when the dropdown opens.
-	const loadHistory = useCallback(async () => {
-		try {
-			const r = await fetch('/api/v1/me/chats', { credentials: 'include' });
-			if (!r.ok) return;
-			const j = await r.json();
-			const rows: HistoryRow[] = j?.data?.chats || [];
-			setHistory(rows);
-		} catch { /* ignore */ }
-	}, []);
-
 	// Load one thread into the chat — replaces current messages +
 	// chatId. Active session is overwritten; the previous thread is
 	// already saved on disk, so the user can navigate back to it.
@@ -1054,13 +903,13 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 			openedAppRef.current = app; // an app's loaded thread shouldn't re-fire its opener
 			if (app) writeAppChat(app, rec.id);
 			lastSavedSigRef.current = '';
-			setHistoryOpen(false);
 			return app;
 		} catch { return false; }
 	}, []);
 
 	const newChat = useCallback(() => {
 		if (streaming) return;
+		pendingAskRef.current = null;
 		setMessages([]);
 		setChatId(null);
 		claudeSessionRef.current = null; setClaudeSession(null);
@@ -1075,22 +924,7 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 		groundedStrategyRef.current = '';
 		groundedAppRef.current = '';
 		try { sessionStorage.removeItem(transcriptKey(chatScope)); } catch { /* ignore */ }
-		setHistoryOpen(false);
 	}, [streaming]);
-
-	const deleteThread = useCallback(async (id: string) => {
-		if (!confirm('Delete this conversation?')) return;
-		try {
-			await fetch('/api/v1/me/chats/' + encodeURIComponent(id), {
-				method: 'DELETE',
-				credentials: 'include',
-			});
-			forgetChatId(id);          // never resume a deleted thread on re-entry
-			if (id === chatId) newChat();
-			loadHistory();
-			window.dispatchEvent(new CustomEvent('studio:recent-invalidate'));
-		} catch { /* ignore */ }
-	}, [chatId, newChat, loadHistory]);
 
 	// Recent-row clicks arrive two ways, because the sidebar lives in a
 	// different component tree:
@@ -1298,25 +1132,8 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 	// Count of active per-turn toggles — surfaced as a small badge on
 	// the [+] tools button so the user knows something is on without
 	// opening the popover.
-	const activeToolCount = (mode ? 1 : 0) + (think ? 1 : 0);
+	const activeToolCount = mode ? 1 : 0;
 
-	// Click-outside to close the history dropdown.
-	useEffect(() => {
-		if (!historyOpen) return;
-		const onClick = () => setHistoryOpen(false);
-		const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setHistoryOpen(false); };
-		// One tick delay so the click that OPENED the menu doesn't
-		// close it immediately.
-		const t = window.setTimeout(() => {
-			document.addEventListener('click', onClick);
-			document.addEventListener('keydown', onKey);
-		}, 0);
-		return () => {
-			window.clearTimeout(t);
-			document.removeEventListener('click', onClick);
-			document.removeEventListener('keydown', onKey);
-		};
-	}, [historyOpen]);
 
 	// Click-outside + Escape to close the tools popover.
 	useEffect(() => {
@@ -1390,7 +1207,7 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 
 	// Phase S6d — listen for prompt suggestions from workspaces.
 	// Any page can dispatch `window.dispatchEvent(new CustomEvent('studio:ask',
-	// {detail: {prompt: '…', autosend: true, context: {...}}}))` to pre-fill
+	// {detail: {prompt: '…', context: {...}}}))` to pre-fill
 	// or fire the chat. `context` (optional, Partial<ViewingContext>) lets
 	// the dispatching surface override the derived page context — e.g. an
 	// "ask about this step" button passes the exact cycle + step.
@@ -1415,12 +1232,11 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 			const askApp = ce.detail?.context?.app;
 			if (askApp) groundedAppRef.current = String(askApp);
 			setCollapsed(false);
-			if (ce.detail?.autosend) {
-				setInput('');
-				void dispatchTurnRef.current?.(p, [], undefined, ce.detail?.context, ce.detail?.model);
-			} else {
-				setInput(p);
-			}
+			// One behaviour for every ask (2026-11): it pre-fills the composer
+			// and the user presses send. `autosend` is ignored. The ask's
+			// context and model ride along to that send (see `send`).
+			pendingAskRef.current = { context: ce.detail?.context, model: ce.detail?.model };
+			setInput(p);
 		};
 		window.addEventListener('studio:ask', onAsk as EventListener);
 		// Register as a live listener, and drain anything a page parked because
@@ -1490,7 +1306,7 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 		// return is fine for the composer (the text stays in the box, so the
 		// user can see nothing happened) but not for a programmatic caller
 		// like "Correct this", which has already collected the user's words in
-		// a prompt() and would otherwise drop them with no trace.
+		// its inline field and would otherwise drop them with no trace.
 		if (!text || streaming || inFlightRef.current) return false;
 		inFlightRef.current = true;
 		const base = baseMessages ?? messages;
@@ -1617,11 +1433,6 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 							// and a missing tool degrades an answer silently rather than
 							// erroring, so a default-on version of this flag would be an
 							// invisible regression for every other caller.
-							...(think ? { think: true } : {}),
-							...(personaId ? { persona_id: personaId } : agentId ? { agent_id: agentId } : {}),
-							...(wsRepo ? { xpio_repo: wsRepo } : {}),
-							...(wsCluster ? { cluster_id: wsCluster } : {}),
-							...(wsDataApp ? { data_app: wsDataApp } : {}),
 							...(claudeSessionRef.current ? { claude_session_id: claudeSessionRef.current } : {}),
 							// "Ask the app" — the user has said this turn is a domain
 							// question for THIS app, so don't leave it to tool selection.
@@ -1650,7 +1461,6 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 					await readChatStream(r, setMessages, {
 						onClaudeSession: (id) => { claudeSessionRef.current = id; setClaudeSession(id); },
 						onRoute: (modelUsed, autoRouted) => setLastRoute({ modelUsed, autoRouted }),
-						onUsage: (used, limit) => setUsage({ used, limit }),
 						onTurnStats: setTurnStats,
 						onTurnId: (id) => { turnIdRef.current = id; },
 						onCapabilities: setClaudeCaps,
@@ -1705,7 +1515,7 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 			setMessages((prev) => withLastAssistant(prev, failPendingTools));
 		}
 		return true;
-	}, [messages, streaming, location.pathname, location.search, model, mode, think, agentId, personaId]);
+	}, [messages, streaming, location.pathname, location.search, model, mode]);
 
 	// Latest-send-path ref for the studio:ask listener (registered once).
 	const dispatchTurnRef = useRef<typeof dispatchTurn | null>(null);
@@ -1725,9 +1535,6 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 	// current — usually just-cleared — transcript). Marks the app as opened.
 	const emitAppOpener = useCallback((app: string) => {
 		openedAppRef.current = app;
-		// Talk to THIS app's agents by default — drop any manual agent/persona
-		// so the app context (sent with every turn) drives retrieval/routing.
-		setAgentId(''); setPersonaId('');
 		// Lumen simplify (2026-11-24): no canned opener on the four first-party
 		// surfaces. Each used to post a paragraph "from the assistant" plus 3-4
 		// suggestion chips — the same starter pattern removed from the home chat
@@ -1852,41 +1659,11 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 		if (docked && groundApp) openAppInChat({ app: groundApp });
 	}, [docked, groundApp, openAppInChat]);
 
-	// "New chat" — starts a fresh session. In an app context it stays bound to
-	// the app (a NEW session for that app) and re-emits the opener; on the home
-	// it's a plain empty chat. (Distinct from loadThread / resuming.)
-	const newAppSession = useCallback(() => {
-		if (inFlightRef.current) return;
-		const app = currentAppRef.current;
-		clearSession();
-		setHistoryOpen(false);
-		if (app) {
-			writeAppChat(app, null); // don't auto-resume the old one
-			openedAppRef.current = null;
-			emitAppOpener(app);
-		}
-	}, [clearSession, emitAppOpener]);
 
-	// Pick a thread from the session picker. Loads it and, if it belongs to a
-	// DIFFERENT app than the workspace currently shows, switches the middle
-	// panel to that app too (the session and the workspace stay in lockstep).
-	const pickThread = useCallback((h: HistoryRow) => {
-		setHistoryOpen(false);
-		// Set the app binding synchronously so the studio:open-app fired by the
-		// upcoming navigation early-returns instead of resuming the app default.
-		currentAppRef.current = h.app || null;
-		openedAppRef.current = h.app || null;
-		void loadThread(h.id);
-		// A virtual scope (Research Fleet, Data Warehouse, Library, Apps) is a
-		// page, not an app: threadHome() maps it, or this opened a dead
-		// /studio/apps/lumid-compute workspace.
-		if (h.app) navigate(threadHome(h.app));
-	}, [loadThread, navigate]);
-
-	// The chat mounts only at /studio now — asks fired elsewhere are
-	// stashed by the shell (studio_pending_ask_v1) before navigating
-	// here; the New-chat row stashes studio_new_chat_v1. Consume both
-	// on mount; also honor live studio:new-chat events while mounted.
+	// Asks fired where no chat is mounted are parked on the ask bus
+	// (chat/askBus.ts) and drained by the studio:ask effect above. The
+	// New-chat row stashes studio_new_chat_v1: consume it on mount, and
+	// honor live studio:new-chat events while mounted.
 	useEffect(() => {
 		try {
 			if (sessionStorage.getItem('studio_new_chat_v1')) {
@@ -1900,36 +1677,6 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 				// otherwise re-ground this fresh chat with the app's opener — drop it.
 				sessionStorage.removeItem(transcriptKey(chatScope));
 				sessionStorage.removeItem('studio_open_app_v1');
-			}
-			const raw = sessionStorage.getItem('studio_pending_ask_v1');
-			if (raw) {
-				sessionStorage.removeItem('studio_pending_ask_v1');
-				const detail = JSON.parse(raw);
-				if (detail?.prompt) {
-					// Latch the grounding BEFORE dispatching — the same latch the
-					// live `studio:ask` listener does.
-					//
-					// It has to happen on BOTH paths. `context` is a per-TURN
-					// override and never reaches the persisted row, so a thread
-					// started this way was stored with `app` only. This path is the
-					// one an app surface actually takes: StudioChat is mounted at
-					// /studio and /studio/apps/:app, but an app SURFACE lives at
-					// /studio/a/:app/… where it is NOT mounted — so the shell
-					// stashes and navigates here, the in-place listener never runs,
-					// and the latch was silently skipped. Net effect: no chat has
-					// ever been saved with a strategy_id (0 rows, whole table), and
-					// lqt-mailbox's "Sessions" table — which fails closed on
-					// strategy_id — read empty for every strategy.
-					const sel = detail?.context?.selection;
-					if (sel && sel.kind === 'strategy' && sel.id) {
-						groundedStrategyRef.current = String(sel.id);
-					}
-					if (detail?.context?.app) groundedAppRef.current = String(detail.context.app);
-					setTimeout(() => {
-						if (detail.autosend) void dispatchTurnRef.current?.(String(detail.prompt), [], undefined, detail.context);
-						else setInput(String(detail.prompt));
-					}, 50);
-				}
 			}
 			// Open-app intent (stashed by the workspace when you enter an app):
 			// ground the docked app chat with the opener. The HOME chat (!docked)
@@ -1988,7 +1735,7 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 
 	// Re-run a turn — drops the clicked assistant message + the user
 	// message before it, then dispatches the original user text again
-	// with the current model/mode/think settings (which may have
+	// with the current model/mode settings (which may have
 	// changed since the first run, the point of regen).
 	const regenerate = useCallback((assistantIdx: number) => {
 		if (streaming || assistantIdx < 1) return;
@@ -2142,11 +1889,13 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 		}
 		const staged = attachments;
 		const plan = planNext;
+		const asked = pendingAskRef.current;
+		pendingAskRef.current = null;
 		setPlanNext(false);
 		setInput('');
 		setAttachments([]);
 		setAttachError('');
-		void dispatchTurn(text, staged, undefined, undefined, undefined, undefined, plan);
+		void dispatchTurn(text, staged, undefined, asked?.context, asked?.model, undefined, plan);
 	}, [input, streaming, attachments, dispatchTurn, planNext]);
 
 	// Queue processor — after each streaming turn settles, dispatch the head.
@@ -2243,10 +1992,9 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 		if (id) {
 			forgetChatId(id);
 			try { await fetch('/api/v1/me/chats/' + encodeURIComponent(id), { method: 'DELETE', credentials: 'include' }); } catch { /* best-effort */ }
-			loadHistory();
 		}
 		if (app) emitAppOpener(app);
-	}, [streaming, chatId, loadHistory, emitAppOpener]);
+	}, [streaming, chatId, emitAppOpener]);
 
 	// Chat action icons render INTO the shell top bar (one aligned row with the
 	// status pills) via this slot — so the chat column has no second header bar.
@@ -2255,22 +2003,6 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 
 	// Group saved conversations by app for the picker — current app first, other
 	// apps alphabetically, app-less ("General") last.
-	const historyGroups = (() => {
-		const byApp = new Map<string, HistoryRow[]>();
-		for (const h of history) {
-			const k = h.app || '';
-			const arr = byApp.get(k);
-			if (arr) arr.push(h); else byApp.set(k, [h]);
-		}
-		const cur = currentAppRef.current || '';
-		const keys = [...byApp.keys()].sort((a, b) => {
-			if (a === b) return 0;
-			if (a === cur) return -1; if (b === cur) return 1;
-			if (a === '') return 1; if (b === '') return -1;
-			return appTitle(a).localeCompare(appTitle(b));
-		});
-		return keys.map((k) => ({ app: k, label: k ? appTitle(k) : 'General', rows: byApp.get(k)! }));
-	})();
 
 	// Chat chrome (context · artifacts · session picker · clear). Rendered into
 	// the top strip on the home (!docked) and inline at the top of the docked
@@ -2501,7 +2233,7 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 					// hero + spiral icon; the app opener already grounds the convo.
 					!docked ? (
 						<div className="max-w-[640px] mx-auto w-full">
-							<EmptyHint />
+							<ChatHero />
 						</div>
 					) : null
 				) : (
@@ -2519,7 +2251,7 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 							    externals (kimi/glm), which are recorded +
 							    cost-metered. false only for the lumid-llm-backed
 							    entries (qwen). */}
-							{model.startsWith('claude-code') && m.role === 'assistant' && i === lastAssistantIdx && (
+							{isAdmin && model.startsWith('claude-code') && m.role === 'assistant' && i === lastAssistantIdx && (
 								<div className="pl-[38px]">
 									<SessionStrip
 										session={claudeSession}
@@ -2539,9 +2271,8 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 							// belong to. Forces give_feedback rather than trusting the model
 							// to route it, the same reason "Ask the app" forces app_answer.
 							onCorrect={m.role === 'assistant' && !streaming && docked && (workspaceApp() || currentAppRef.current)
-								? async () => {
-									const what = window.prompt('What was wrong with this answer?');
-									if (!what) return;
+								? async (what: string) => {
+									if (!what.trim()) return;
 									// Carry the app EXPLICITLY. The forced-tool path grounds on
 									// context.app and returns nothing without it, so a correction
 									// sent context-less produced an empty turn and no draft — the
@@ -2595,7 +2326,7 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 						{/* Turn telemetry from the Claude Code `result` event —
 						    cost, wall/API duration, time-to-first-token, steps and
 						    the cache hit split. Attached to the finished reply. */}
-						{turnStats && !streaming && messages[messages.length - 1]?.role === 'assistant' && (
+						{isAdmin && turnStats && !streaming && messages[messages.length - 1]?.role === 'assistant' && (
 							<div className="pl-[38px]"><TurnStatsFooter s={turnStats} /></div>
 						)}
 					</div>
@@ -2646,43 +2377,6 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 					</div>
 				)}
 
-				{/* Picked target chip — shown when the user has used the
-				    Crosshair to pin a UI element. The chat preamble
-				    folds this in at send-time (see buildSelectionPreamble).
-				    Click X to clear; clicking the chip's label re-arms
-				    the picker so the user can swap targets. */}
-				{pickedTarget && (
-					<div className="mb-2 px-0.5">
-						{(() => {
-							// Free-form picks (no declared affordances on the
-							// element) get a sky chip to signal "text snapshot
-							// only". Annotated picks keep the emerald chip.
-							const isFreeform = !pickedTarget.affordances || pickedTarget.affordances.length === 0;
-							const chipCls = isFreeform
-								? 'inline-flex items-center gap-1.5 text-micro bg-lagoon-50 border border-lagoon-200 rounded-full pl-2 pr-1 py-0.5'
-								: 'inline-flex items-center gap-1.5 text-micro bg-gold-50 border border-gold-200 rounded-full pl-2 pr-1 py-0.5';
-							const iconCls   = isFreeform ? 'w-3 h-3 text-lagoon-600 flex-shrink-0'      : 'w-3 h-3 text-gold-600 flex-shrink-0';
-							const kindCls   = isFreeform ? 'text-lagoon-700 font-medium'                : 'text-gold-700 font-medium';
-							const labelCls  = isFreeform ? 'text-lagoon-800 max-w-[260px] truncate'     : 'text-gold-800 max-w-[260px] truncate';
-							const closeCls  = isFreeform ? 'text-lagoon-700/70 hover:text-brick-600 transition-colors flex-shrink-0' : 'text-gold-700/70 hover:text-brick-600 transition-colors flex-shrink-0';
-							return (
-								<div className={chipCls}>
-									<Crosshair className={iconCls} />
-									<span className={kindCls}>{pickedTarget.kind}</span>
-									<span className={labelCls}>{pickedTarget.label}</span>
-									<button
-										type="button"
-										onClick={() => setStudioPickedTarget(null)}
-										className={closeCls}
-										title="Clear pinned target"
-									>
-										<X className="w-3 h-3" />
-									</button>
-								</div>
-							);
-						})()}
-					</div>
-				)}
 
 				{/* Staged attachments. Stays above the input row so the file
 				    chips never crowd the typing space. Hidden when empty. */}
@@ -2828,10 +2522,12 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 											<span className="font-medium flex-1 text-left">Ask the app</span>
 											{askApp && <span className="w-1.5 h-1.5 rounded-full bg-gold-500" />}
 										</button>
-										{/* Interview mode — who sits in which seat. Switching mid-case
-										    inverts the roles halfway through a conversation, which
-										    reads as the assistant losing the plot, so a switch starts
-										    a fresh thread. */}
+										{/* Interview mode — who sits in which seat. Only for apps
+										    that declare modes (their opener chips carry a `mode`);
+										    elsewhere the setting changed nothing. A switch applies
+										    from the next turn; it no longer silently opens a new
+										    thread (New conversation is one click away). */}
+										{appHasModes && <>
 										<div className="h-px bg-muted my-1 mx-2" />
 										<div className="px-2.5 pt-1 pb-0.5 text-nano uppercase tracking-wide text-ink-600">
 											Interview mode
@@ -2844,14 +2540,7 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 											<button
 												key={m.id}
 												type="button"
-												onClick={() => {
-													if (m.id === interviewMode) return;
-													setInterviewMode(m.id);
-													// A fresh thread: the seats just swapped.
-													window.dispatchEvent(new CustomEvent('studio:new-app-chat', {
-														detail: { app: groundApp || undefined },
-													}));
-												}}
+												onClick={() => setInterviewMode(m.id)}
 												title={m.hint}
 												className={[
 													'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-meta transition-colors',
@@ -2863,6 +2552,7 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 												{interviewMode === m.id && <span className="w-1.5 h-1.5 rounded-full bg-lagoon-500" />}
 											</button>
 										))}
+										</>}
 									</>
 								)}
 								{/* Plan first — only on the lane where it is REAL. On the chat
@@ -2887,21 +2577,6 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 										</button>
 									</>
 								)}
-								<div className="h-px bg-muted my-1 mx-2" />
-								<button
-									type="button"
-									onClick={() => setThink((v) => !v)}
-									className={[
-										'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-meta transition-colors',
-										think
-											? 'bg-gold-50 text-gold-700'
-											: 'text-foreground hover:bg-muted/60',
-									].join(' ')}
-								>
-									<Brain className={['w-3.5 h-3.5', think ? 'text-gold-600' : 'text-muted-foreground'].join(' ')} />
-									<span className="font-medium flex-1 text-left">Show thinking</span>
-									{think && <span className="w-1.5 h-1.5 rounded-full bg-gold-500" />}
-								</button>
 								{/* Agent + Persona pickers moved to the header — they're
 								    persistent context (sticky across turns), not per-turn
 								    tool-forcing toggles. See the chip row beside the model
@@ -3119,13 +2794,15 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 						    intentionally KEPT and still sent with the turn, so defaults
 						    are unchanged and a settings surface can expose them again
 						    without rebuilding the mechanism. */}
-						<ModelChip
-							streaming={streaming}
-							models={models}
-							model={model}
-							setModel={setModel}
-							groundApp={groundApp}
-						/>
+						{isAdmin && (
+							<ModelChip
+								streaming={streaming}
+								models={models}
+								model={model}
+								setModel={setModel}
+								groundApp={groundApp}
+							/>
+						)}
 					</div>
 					<button
 						type="submit"
@@ -3221,7 +2898,8 @@ const MessageBubble = memo(function MessageBubble({
 	docked?: boolean;
 	onCopy?: () => void;
 	onRegenerate?: () => void;
-	onCorrect?: () => void;
+	/** Record a correction; MessageBubble collects the text inline. */
+	onCorrect?: (what: string) => void;
 	onSpeak?: () => void;
 	isSpeaking?: boolean;
 	onToolApprove?: (approvalId: string, approved: boolean, always?: boolean, tool?: string) => void;
@@ -3229,6 +2907,18 @@ const MessageBubble = memo(function MessageBubble({
 }) {
 	const isUser = m.role === 'user';
 	const [copied, setCopied] = useState(false);
+	// "Correct this" — an inline field under the answer (was window.prompt,
+	// which blocks the page and can't be styled or kept open while you read).
+	const [correcting, setCorrecting] = useState(false);
+	const [correction, setCorrection] = useState('');
+	const correctId = useId();
+	const submitCorrection = () => {
+		const what = correction.trim();
+		if (!what || !onCorrect) return;
+		onCorrect(what);
+		setCorrection('');
+		setCorrecting(false);
+	};
 	// App openers (the only messages carrying `chips`) are canned text, not a
 	// model answer — Copy / Mark wrong / Read aloud on them read as feedback
 	// on something nobody generated.
@@ -3313,7 +3003,7 @@ const MessageBubble = memo(function MessageBubble({
 			<div className="mt-2 flex flex-wrap gap-1.5">
 				{chips.map((c) => (
 					<button key={c.label}
-						onClick={() => window.dispatchEvent(new CustomEvent('studio:ask', { detail: { prompt: c.prompt, autosend: true, context: c.context } }))}
+						onClick={() => window.dispatchEvent(new CustomEvent('studio:ask', { detail: { prompt: c.prompt, context: c.context } }))}
 						className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-card text-caption text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
 						{c.label}
 					</button>
@@ -3457,7 +3147,9 @@ const MessageBubble = memo(function MessageBubble({
 						{onCorrect && (
 							<button
 								type="button"
-								onClick={onCorrect}
+								onClick={() => setCorrecting((v) => !v)}
+								aria-expanded={correcting}
+								aria-label="Correct this answer"
 								title="Mark this answer wrong and record a correction for review"
 								className="p-1 min-h-[24px] min-w-[24px] inline-flex items-center justify-center rounded text-micro text-muted-foreground hover:text-brick-600 hover:bg-brick-50"
 							>
@@ -3490,6 +3182,39 @@ const MessageBubble = memo(function MessageBubble({
 							</button>
 						)}
 					</div>
+				)}
+				{onCorrect && correcting && (
+					<form
+						className="mt-2 flex flex-col gap-2 rounded-lg border border-border bg-card p-2.5 shadow-e1"
+						onSubmit={(e) => { e.preventDefault(); submitCorrection(); }}
+					>
+						<label className="text-caption font-medium text-ink-700" htmlFor={correctId}>
+							What was wrong with this answer?
+						</label>
+						<textarea
+							id={correctId}
+							autoFocus
+							rows={2}
+							value={correction}
+							onChange={(e) => setCorrection(e.target.value)}
+							onKeyDown={(e) => {
+								if (e.key === 'Escape') { setCorrecting(false); return; }
+								if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitCorrection(); }
+							}}
+							className="w-full resize-y rounded-md border border-border bg-background px-2.5 py-1.5 text-body text-ink-900 outline-none focus:border-ring/70 focus:ring-2 focus:ring-ring/20 placeholder:text-ink-500"
+							placeholder="e.g. it never sized the market before splitting costs"
+						/>
+						<div className="flex justify-end gap-2">
+							<button type="button" onClick={() => setCorrecting(false)}
+								className="h-7 px-2.5 rounded-md text-caption text-ink-700 hover:bg-ink-100">
+								Cancel
+							</button>
+							<button type="submit" disabled={!correction.trim()}
+								className="h-7 px-2.5 rounded-md bg-primary text-primary-foreground text-caption font-medium hover:bg-ink-800 disabled:opacity-50">
+								Record correction
+							</button>
+						</div>
+					</form>
 				)}
 			</div>
 		</Appear>
@@ -3568,6 +3293,10 @@ function ThinkingBlock({ thinking, done, elapsedMs, tokens }: { thinking: string
 	const [open, setOpen] = useState(false);
 	const touched = useRef(false);
 	const wasStreaming = useRef(!done);
+	// Token counts are an engineer detail: admins see them, everyone else
+	// sees "Thought for 11s".
+	const role = useAuth().user?.role;
+	const showTokens = role === 'admin' || role === 'super_admin';
 	useEffect(() => {
 		if (!done && thinking && !touched.current) setOpen(true);
 		if (wasStreaming.current && done && !touched.current) setOpen(false);
@@ -3605,10 +3334,10 @@ function ThinkingBlock({ thinking, done, elapsedMs, tokens }: { thinking: string
 	// "Thought (0 tokens)" pill.
 	if (done && !thinking && !tokenCount) return null;
 	const label = done
-		? (tokenCount
+		? (tokenCount && showTokens
 			? (secs ? `Thought for ${secs}s (${fmt(tokenCount)} tokens)` : `Thought (${fmt(tokenCount)} tokens)`)
 			: (secs ? `Thought for ${secs}s` : 'Thought'))
-		: liveCount > 0
+		: liveCount > 0 && showTokens
 			? `Thinking… ${fmt(liveCount)} tokens`
 			: 'Thinking…';
 	// Current Claude models return reasoning ENCRYPTED — only a signature and
@@ -3788,37 +3517,6 @@ function connectHintFor(text: string): ('google' | 'microsoft') | null {
 	return null;
 }
 
-// EmptyHint — the greeting block above the composer (claude home).
-// The digest + prompt pills render separately BELOW the composer —
-// see the ChatEmptyState block after the footer.
-function EmptyHint() {
-	return <ChatHero />;
-}
-
-
-// formatTokens — compact display: 12345 → "12.3K", 1234567 → "1.2M".
-function formatTokens(n: number): string {
-	if (n < 1000) return String(n);
-	if (n < 1_000_000) return (n / 1000).toFixed(n < 10_000 ? 1 : 0) + 'K';
-	return (n / 1_000_000).toFixed(1) + 'M';
-}
-
-// estimateCost — coarse $ estimate for the daily-budget tooltip.
-// Per-1K-token rates approximated from current public pricing. The
-// budget meter on the server tracks input+output tokens combined,
-// so we use a blended midpoint per model. kv.run/MiniMax runs on
-// owned hardware → marginal cost ≈ 0.
-function estimateCost(tokens: number, modelId: string): number {
-	const blendedPerK = (() => {
-		switch (modelId) {
-			case 'claude-haiku':   return 0.0025; // input $1/M + output $5/M, midpoint
-			case 'kvrun-minimax':  return 0.0;     // owned GPUs — sunk cost
-			default:               return 0.001;   // conservative fallback
-		}
-	})();
-	return (tokens / 1000) * blendedPerK;
-}
-
 // modelShortLabel — pulls a 7-char label from a model id for the
 // "auto: <model>" pill. Avoids the full display name overflowing.
 function modelShortLabel(id: string): string {
@@ -3926,338 +3624,6 @@ function ModelChip({
 							this app’s data or score answers.
 						</p>
 					)}
-				</div>
-			)}
-		</div>
-	);
-}
-
-// WorkspaceChip — the session working context (like picking a git repo): which
-// xpio repo the knowledge tools default to, which FlowMesh cluster compute runs
-// on (sandbox is the mandatory runtime; cluster is optional — default = in-cluster),
-// and which lumid-data app data tools query. Sent as xpio_repo/cluster_id/data_app.
-function WorkspaceChip({
-	repos, clusters, dataApps, repo, setRepo, cluster, setCluster, dataApp, setDataApp,
-}: {
-	repos: { id: string; label: string }[];
-	clusters: { id: string; label: string }[];
-	dataApps: { id: string; label: string }[];
-	repo: string; setRepo: (v: string) => void;
-	cluster: string; setCluster: (v: string) => void;
-	dataApp: string; setDataApp: (v: string) => void;
-}) {
-	const [open, setOpen] = useState(false);
-	const ref = useClickOutside(open, () => setOpen(false));
-	const active = [repo, cluster, dataApp].filter(Boolean).length;
-	const sel = 'w-full text-caption rounded-lg border border-border bg-card px-2 py-1 text-foreground focus:outline-none focus:border-ink-300';
-	const hdr = 'text-nano font-semibold uppercase tracking-wide text-muted-foreground mb-1';
-	return (
-		<div ref={ref} className="relative">
-			<button
-				type="button"
-				onClick={() => setOpen((v) => !v)}
-				className={[
-					'inline-flex items-center gap-1 pl-1.5 pr-1 py-0.5 min-h-[24px] rounded-full border text-micro transition-colors',
-					open || active
-						? 'bg-muted border-ink-300 text-foreground'
-						: 'bg-card border-border text-ink-800 hover:text-foreground hover:border-ink-300',
-				].join(' ')}
-				title="Working context — xpio repo, FlowMesh cluster, lumid-data app"
-			>
-				<Boxes className="w-3 h-3 flex-shrink-0 opacity-70" />
-				<span className="truncate max-w-[110px]">{active ? `Context · ${active}` : 'Context'}</span>
-				<ChevronDown className="w-2.5 h-2.5 flex-shrink-0 opacity-60" />
-			</button>
-			{open && (
-				<div className="absolute bottom-full right-0 mb-1 z-50 w-[264px] p-2.5 rounded-xl border border-border bg-card shadow-lg shadow-foreground/5 space-y-2.5">
-					<div>
-						<div className={hdr}>xpio repo</div>
-						<select className={sel} value={repo} onChange={(e) => setRepo(e.target.value)}>
-							<option value="">All my knowledge (default)</option>
-							{repos.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-						</select>
-					</div>
-					<div>
-						<div className={hdr}>FlowMesh cluster</div>
-						<select className={sel} value={cluster} onChange={(e) => setCluster(e.target.value)}>
-							<option value="">Scheduler + sandbox (in-cluster)</option>
-							{clusters.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-						</select>
-					</div>
-					<div>
-						<div className={hdr}>lumid-data app</div>
-						<select className={sel} value={dataApp} onChange={(e) => setDataApp(e.target.value)}>
-							<option value="">Default data instance</option>
-							{dataApps.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-						</select>
-					</div>
-				</div>
-			)}
-		</div>
-	);
-}
-
-// ContextIconButton — combined agent + persona picker. Both are
-// mutually-exclusive context overrides (`resolvePromptAndTools` in
-// the server gives persona priority when both are set), so it makes
-// sense to surface them under one button. The popover stacks both
-// sections; picking one auto-clears the other via the selectAgent
-// + selectPersona callbacks that the parent threads in.
-//
-// Active state: violet bg/dot when agent is active, fuchsia when
-// persona is, neutral when neither.
-function ContextIconButton({
-	streaming,
-	agents, agentId, selectAgent,
-	personas, personaId, selectPersona,
-}: {
-	streaming: boolean;
-	agents: Array<{ id: string; scope: 'tenant' | 'shared'; row_count: number; last_memory_ts: number; app?: string; role?: string; description?: string; default_model?: string }>;
-	agentId: string;
-	selectAgent: (id: string) => void;
-	personas: Array<{ id: string; name: string; icon?: string; allowed_tools?: string[]; preferred_model?: string; prompt_len: number; updated_at: string }>;
-	personaId: string;
-	selectPersona: (id: string) => void;
-}) {
-	const [open, setOpen] = useState(false);
-	const ref = useClickOutside(open, () => setOpen(false));
-	const currentAgent   = agents.find((a) => a.id === agentId);
-	const currentPersona = personas.find((p) => p.id === personaId);
-	if (agents.length === 0 && personas.length === 0) return null;
-
-	const agentGroups = (() => {
-		const declared = agents.filter((a) => a.role && a.row_count > 0);
-		const byApp: Record<string, typeof agents> = {};
-		declared.forEach((a) => { const k = a.app || '(other)'; (byApp[k] = byApp[k] || []).push(a); });
-		const bare = agents.filter((a) => !a.role && a.row_count > 0);
-		const out: { label: string; rows: typeof agents }[] = [];
-		Object.keys(byApp).sort().forEach((app) => out.push({ label: app, rows: byApp[app] }));
-		if (bare.length > 0) out.push({ label: 'other banks', rows: bare });
-		return out;
-	})();
-
-	const activeKind: 'agent' | 'persona' | null =
-		agentId   ? 'agent'   :
-		personaId ? 'persona' : null;
-	const activeColors = (() => {
-		switch (activeKind) {
-			case 'agent':   return 'text-plum-700  bg-plum-50  hover:bg-plum-100';
-			case 'persona': return 'text-plum-700 bg-plum-50 hover:bg-plum-100';
-			default:        return open
-				? 'text-foreground bg-muted'
-				: 'text-muted-foreground hover:text-foreground hover:bg-muted';
-		}
-	})();
-	const activeDot = (() => {
-		switch (activeKind) {
-			case 'agent':   return 'bg-plum-500';
-			case 'persona': return 'bg-plum-500';
-			default:        return null;
-		}
-	})();
-	const titleText = currentAgent
-		? `Talk to ${currentAgent.role || currentAgent.id} (click to change or clear)`
-		: currentPersona
-			? `Persona: ${currentPersona.name} (click to change or clear)`
-			: 'Talk to an agent or apply a persona';
-
-	return (
-		<div ref={ref} className="relative">
-			<button
-				type="button"
-				onClick={() => setOpen((v) => !v)}
-				disabled={streaming}
-				title={titleText}
-				className={[
-					'relative p-1.5 rounded-md transition-colors',
-					activeColors,
-					streaming ? 'opacity-50 cursor-not-allowed' : '',
-				].join(' ')}
-			>
-				<User className="w-3.5 h-3.5" />
-				{activeDot && (
-					<span className={['absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full ring-2 ring-white', activeDot].join(' ')} />
-				)}
-			</button>
-			{open && (
-				<div className="absolute top-full right-0 mt-1 z-50 w-[320px] max-h-[30rem] overflow-y-auto rounded-xl border border-border bg-popover shadow-xl shadow-foreground/10">
-
-					{/* ── Active strip ── shows current selection +
-					    one-click clear. Always visible (rendered as
-					    neutral when nothing's active). */}
-					<div className={[
-						'flex items-center gap-2 px-3 py-2 border-b',
-						activeKind === 'agent'   ? 'bg-plum-50/70  border-plum-100'  :
-						activeKind === 'persona' ? 'bg-plum-50/70 border-plum-100' :
-						                           'bg-muted/60      border-border/60',
-					].join(' ')}>
-						<div className={[
-							'w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0',
-							activeKind === 'agent'   ? 'bg-plum-100  text-plum-700'  :
-							activeKind === 'persona' ? 'bg-plum-100 text-plum-700' :
-							                           'bg-popover border border-border text-muted-foreground',
-						].join(' ')}>
-							{currentPersona?.icon
-								? <span className="text-body leading-none">{currentPersona.icon}</span>
-								: <User className="w-3.5 h-3.5" />}
-						</div>
-						<div className="flex-1 min-w-0">
-							<div className={[
-								'text-caption font-semibold truncate',
-								activeKind === 'agent'   ? 'text-plum-900'  :
-								activeKind === 'persona' ? 'text-plum-900' :
-								                           'text-foreground',
-							].join(' ')}>
-								{currentAgent
-									? (currentAgent.role || currentAgent.id)
-									: currentPersona
-										? currentPersona.name
-										: 'Default — chat as you'}
-							</div>
-							<div className="text-micro text-muted-foreground truncate">
-								{currentAgent
-									? `agent · ${currentAgent.app || 'standalone'} · ${currentAgent.row_count} memories`
-									: currentPersona
-										? `persona · ${currentPersona.allowed_tools && currentPersona.allowed_tools.length > 0 ? `${currentPersona.allowed_tools.length} tool${currentPersona.allowed_tools.length===1?'':'s'}` : 'all tools'}`
-										: 'me-prefs as context'}
-							</div>
-						</div>
-						{(agentId || personaId) && (
-							<button
-								type="button"
-								onClick={() => { selectAgent(''); selectPersona(''); setOpen(false); }}
-								title="Clear context — back to default"
-								className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-popover/80 transition-colors"
-							>
-								<X className="w-3.5 h-3.5" />
-							</button>
-						)}
-					</div>
-
-					<div className="p-1">
-
-						{/* ── Agents section ── */}
-						{agents.length > 0 && (
-							<>
-								<div className="flex items-center gap-1.5 px-2.5 pt-2 pb-1">
-									<span className="w-0.5 h-3 rounded-full bg-plum-500" />
-									<span className="text-nano uppercase tracking-[0.08em] font-semibold text-plum-700">Talk to agent</span>
-									<span className="text-nano text-muted-foreground">grounds chat in agent's bank</span>
-								</div>
-								{agentGroups.map((g) => (
-									<div key={g.label} className="mb-1">
-										<div className="px-2.5 pt-1 pb-0.5 text-nano uppercase tracking-wider text-muted-foreground">
-											{g.label}
-										</div>
-										{g.rows.map((a) => {
-											const selected = a.id === agentId;
-											const initial = (a.role || a.id).slice(0, 1).toUpperCase();
-											return (
-												<button
-													key={a.id}
-													type="button"
-													onClick={() => { selectAgent(a.id); setOpen(false); }}
-													className={[
-														'w-full text-left flex items-start gap-2 px-2 py-1.5 rounded-lg transition-colors',
-														selected ? 'bg-plum-50' : 'hover:bg-muted/60',
-													].join(' ')}
-												>
-													<span className={[
-														'w-6 h-6 rounded-full flex items-center justify-center text-nano font-bold flex-shrink-0 mt-0.5',
-														selected
-															? 'bg-plum-200 text-plum-800'
-															: 'bg-muted text-muted-foreground',
-													].join(' ')}>{initial}</span>
-													<div className="flex-1 min-w-0">
-														<div className="flex items-center gap-1.5">
-															<span className={[
-																'text-caption font-medium truncate',
-																selected ? 'text-plum-900' : 'text-foreground',
-															].join(' ')}>
-																{a.role || a.id}
-															</span>
-															<span className={[
-																'ml-auto text-nano font-mono px-1.5 py-px rounded-full flex-shrink-0',
-																selected
-																	? 'bg-plum-100 text-plum-700'
-																	: 'bg-muted text-muted-foreground',
-															].join(' ')}>{a.row_count}</span>
-														</div>
-														{a.description && (
-															<div className="text-micro text-muted-foreground leading-snug line-clamp-2 mt-0.5">
-																{a.description}
-															</div>
-														)}
-													</div>
-												</button>
-											);
-										})}
-									</div>
-								))}
-							</>
-						)}
-
-						{/* ── Personas section ── */}
-						{personas.length > 0 && (
-							<>
-								{agents.length > 0 && <div className="h-px bg-muted my-1 mx-2" />}
-								<div className="flex items-center gap-1.5 px-2.5 pt-2 pb-1">
-									<span className="w-0.5 h-3 rounded-full bg-plum-500" />
-									<span className="text-nano uppercase tracking-[0.08em] font-semibold text-plum-700">Persona</span>
-									<span className="text-nano text-muted-foreground">custom prompt + tool subset</span>
-								</div>
-								{personas.map((p) => {
-									const selected = p.id === personaId;
-									const restricted = p.allowed_tools && p.allowed_tools.length > 0;
-									return (
-										<button
-											key={p.id}
-											type="button"
-											onClick={() => { selectPersona(p.id); setOpen(false); }}
-											className={[
-												'w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors',
-												selected ? 'bg-plum-50' : 'hover:bg-muted/60',
-											].join(' ')}
-										>
-											<span className={[
-												'w-6 h-6 rounded-full flex items-center justify-center text-body leading-none flex-shrink-0',
-												selected
-													? 'bg-plum-200'
-													: 'bg-muted',
-											].join(' ')}>{p.icon || '🎭'}</span>
-											<span className={[
-												'text-caption font-medium flex-1 truncate',
-												selected ? 'text-plum-900' : 'text-foreground',
-											].join(' ')}>{p.name}</span>
-											{restricted && (
-												<span
-													className={[
-														'text-nano px-1.5 py-px rounded-full flex-shrink-0',
-														selected
-															? 'bg-plum-100 text-plum-700'
-															: 'bg-muted text-muted-foreground',
-													].join(' ')}
-													title={`Restricted to ${p.allowed_tools!.length} tool${p.allowed_tools!.length===1?'':'s'}`}
-												>{p.allowed_tools!.length}t</span>
-											)}
-										</button>
-									);
-								})}
-							</>
-						)}
-
-						{/* Footer hint when only one section is populated */}
-						{(agents.length === 0 || personas.length === 0) && (
-							<div className="px-2.5 py-2 mt-1 border-t border-border/60 text-micro text-muted-foreground leading-snug">
-								{agents.length === 0 && personas.length > 0 && (
-									<>No xpio agents installed yet — try <span className="font-mono">app_install</span> a knowledge app.</>
-								)}
-								{personas.length === 0 && agents.length > 0 && (
-									<>No personas yet — create one via <span className="font-mono">POST /me/personas</span>.</>
-								)}
-							</div>
-						)}
-					</div>
 				</div>
 			)}
 		</div>

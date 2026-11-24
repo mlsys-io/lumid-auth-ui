@@ -175,7 +175,6 @@ export default function CycleCard({
 		window.dispatchEvent(new CustomEvent("studio:ask", {
 			detail: {
 				prompt: `Walk me through the ${loopLabel(loop, `${app}:${loop}`)} run on ${when} — what it did, what it learned, and anything that went wrong.`,
-				autosend: true,
 				// Structured grounding: the agent calls cycle_detail with
 				// these instead of parsing them back out of the prose.
 				context: { app, loop, cycle: { app, loop, ts } },

@@ -8,12 +8,11 @@
 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { User, Key, Lock, Shield, ArrowRight, MessageSquare, Database, PlugZap } from 'lucide-react';
+import { User, Key, Lock, Shield, ArrowRight, Database, PlugZap } from 'lucide-react';
 import { PageHeader } from '@/components/ui/page-header';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/hooks/useAuth';
 import apiClient from '@/api/client';
-import { useLandingPref } from '@/lib/landing-pref';
 
 type Section = {
 	id: string;
@@ -28,9 +27,9 @@ const SECTIONS: Section[] = [
 	{ id: 'oauth',     icon: PlugZap,   title: 'Connected services', description: 'Google, Slack, GitHub, and other OAuth grants.' },
 	{ id: 'secrets',   icon: Lock,   title: 'Agent secrets',    description: 'API keys your installed agents need (per agent, per key).' },
 	{ id: 'privacy',   icon: Shield, title: 'Privacy & sharing', description: 'What your AI keeps private and what it may publish.' },
-	{ id: 'chat',      icon: MessageSquare, title: 'Chat & navigation', description: 'How opening something from a list behaves.' },
 	// APPENDED, not inserted: the entries above are addressed positionally
-	// (SECTIONS[5] is Chat & navigation), so inserting shifts every card below.
+	// (SECTIONS[n]), so inserting shifts every card below. ("Chat & navigation",
+	// the ask-vs-type choice, was removed 2026-11: every ask now pre-fills.)
 	{ id: 'warehouse', icon: Database, title: 'Warehouse access', description: 'A Postgres login for the FinData warehouse, for your own SQL client.' },
 ];
 
@@ -53,52 +52,8 @@ export default function StudioSettings() {
 				<SecretsSection />
 				<WarehouseSection />
 				<PrivacySection />
-				<ChatNavSection />
 			</div>
 		</div>
-	);
-}
-
-// ChatNavSection — the configurable landing behavior. Every Studio index
-// (Apps, Library, Jobs) terminates in the chat; this picks whether opening a
-// row asks the AI right away or just lands you in the chat ready to type.
-function ChatNavSection() {
-	const [pref, setPref] = useLandingPref();
-	const options: Array<{ v: 'ask' | 'type'; title: string; desc: string }> = [
-		{ v: 'type', title: 'Just open the chat (default)', desc: 'Lands in the chat with the question pre-filled — you hit send when ready.' },
-		{ v: 'ask',  title: 'Ask the AI right away',        desc: 'Opening something fires the question immediately, so the answer streams in.' },
-	];
-	return (
-		<SectionCard {...SECTIONS[5]}>
-			<div className="space-y-2" role="radiogroup" aria-labelledby="landing-pref-label">
-				<div className="mb-1 text-meta text-ink-600" id="landing-pref-label">When I open something from a list:</div>
-				{options.map((o) => (
-					<button
-						key={o.v}
-						type="button"
-						role="radio"
-						aria-checked={pref === o.v}
-						onClick={() => setPref(o.v)}
-						className={[
-							'lumen-press w-full text-left flex items-start gap-3 rounded-[8px] border px-3 py-2.5 transition-colors duration-180 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
-							pref === o.v ? 'border-gold-300 bg-gold-50/60' : 'border-ink-200 hover:border-ink-300 hover:bg-ink-50',
-						].join(' ')}
-					>
-						<span className={[
-							'mt-0.5 w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center',
-							'transition-colors duration-180',
-							pref === o.v ? 'border-gold-600' : 'border-ink-400',
-						].join(' ')}>
-							{pref === o.v && <span className="w-2 h-2 rounded-full bg-gold-600 animate-in zoom-in-50 fade-in duration-180" />}
-						</span>
-						<span className="min-w-0">
-							<span className="block text-body font-medium text-ink-900">{o.title}</span>
-							<span className="block text-meta text-ink-600 mt-0.5">{o.desc}</span>
-						</span>
-					</button>
-				))}
-			</div>
-		</SectionCard>
 	);
 }
 
@@ -183,7 +138,7 @@ function WarehouseSection() {
 	const canMint = st?.entitled === true && !!st?.role;
 
 	return (
-		<SectionCard {...SECTIONS[6]}>
+		<SectionCard {...SECTIONS[5]}>
 			<div className="text-body text-ink-800">
 				{err ? (
 					<span className="text-ink-600">Could not load warehouse status.</span>
