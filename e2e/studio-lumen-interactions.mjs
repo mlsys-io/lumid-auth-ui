@@ -315,6 +315,12 @@ await section('research map', async () => {
 	assert(dimmed > 0, `clicking a card dims what is off its path (${dimmed} dimmed)`);
 	assert(await map.locator('.research-edge-flow').count() > 0, 'the selected path flows');
 	assert(await map.getByText(/^Measures:|^Done when:/).count() > 0 || await map.getByText(/Not started yet|Can't|Winning|leads|Collecting/).count() > 0, 'the selected experiment is explained below the map');
+	const fig = map.locator('figure');
+	await fig.waitFor({ timeout: 20000 }).catch(() => {});
+	if (await fig.count()) {
+		const ft = await fig.innerText();
+		assert(/How it evolved/.test(ft) && /average so far/.test(ft), 'the experiment shows how it evolved, and says what the lines are');
+	} else note('selected experiment has no results over time — evolution chart not exercised');
 	const appr = map.locator('section[aria-label="For your approval"]');
 	await appr.waitFor({ timeout: 8000 }).catch(() => {});
 	if (await appr.count()) {

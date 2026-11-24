@@ -23,7 +23,8 @@ import dagre from "@dagrejs/dagre";
 import { ArrowRight, ChevronLeft, ChevronRight, FlaskConical, Loader2, MessagesSquare, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import apiClient from "@/api/client";
-import { me, MeApiError, type MeExperiment } from "@/api/me";
+import { me, MeApiError, type MeExperiment, type MeExperimentDetail } from "@/api/me";
+import EvolutionChart, { type EvoSeries } from "@/components/research/EvolutionChart";
 import {
 	buildResearchTree, criteriaInWords, experimentStatus, humanId, mapSummary, pathTo, versionsOf,
 	type MapNode, type Proposal, type Tone, type VersionInfo,
@@ -320,8 +321,41 @@ function MapCanvas({ app, exps, proposals, selected, onSelect, grow }: {
 
 // ── what's selected, in words ─────────────────────────────────────────────
 
+// The experiment's results over time (detail endpoint; identity v0.5.474
+// serves cloud apps from the run store). Cached per experiment.
+const seriesCache = new Map<string, MeExperimentDetail["series"]>();
+function useSeries(app: string, id: string) {
+	const key = `${app}:${id}`;
+	const [s, setS] = useState<MeExperimentDetail["series"] | null>(() => seriesCache.get(key) ?? null);
+	useEffect(() => {
+		let live = true;
+		setS(seriesCache.get(key) ?? null);
+		me.experiment(app, id)
+			.then((d) => { const v = d.series || []; seriesCache.set(key, v); if (live) setS(v); })
+			.catch(() => { if (live) setS((cur) => cur ?? []); });
+		return () => { live = false; };
+	}, [app, id, key]);
+	return s;
+}
+
 function ExperimentDetail({ app, e }: { app: string; e: MeExperiment }) {
 	const st = experimentStatus(e);
+	const series = useSeries(app, e.id);
+	const versions = versionsOf(e);
+	// Lines in DECLARED version order, so colours follow the version. A series
+	// the server only GUESSED a version for (arm_inferred: runs that named none,
+	// filed under "current") is left off: on kol_alpha it averaged 13M ticks
+	// against the experiment's own 122k for that version.
+	const isInferred = (x: { arm_inferred?: boolean }) => !!x.arm_inferred;
+	const unlabelledRuns = (series || []).filter((x) => isInferred(x as { arm_inferred?: boolean })).reduce((a, x) => a + x.points.length, 0);
+	const evo: EvoSeries[] = (series || []).filter((x) => !isInferred(x as { arm_inferred?: boolean }))
+		.map((s) => ({ s, i: versions.findIndex((v) => v.id === s.variant_id) }))
+		.sort((a, b) => (a.i < 0 ? 99 : a.i) - (b.i < 0 ? 99 : b.i))
+		.map(({ s }) => ({
+			id: s.variant_id,
+			label: versions.find((v) => v.id === s.variant_id)?.label ?? humanId(s.variant_id),
+			points: s.points,
+		}));
 	const metric = e.metric?.name || e.metric_name;
 	const m = metric ? humanMetric(metric) : null;
 	const loop = e.dispatch?.loop || e.loops?.[0];
@@ -339,8 +373,14 @@ function ExperimentDetail({ app, e }: { app: string; e: MeExperiment }) {
 				{m && <div><dt className="inline text-ink-600">Measures: </dt><dd className="inline text-ink-800">{m.label}{m.unit ? ` (${m.unit})` : ""} — {e.higher_is_better === false || e.metric?.higher_is_better === false ? "lower" : "higher"} is better</dd></div>}
 				{done && <div><dt className="inline text-ink-600">Done when: </dt><dd className="inline text-ink-800">{done}</dd></div>}
 			</dl>
+			{series === null ? (
+				<div className="h-24 lumen-skeleton rounded-lg" role="status" aria-label="Loading how it evolved" />
+			) : evo.some((x) => x.points.length > 1) && metric ? (
+				<EvolutionChart series={evo} metricKey={metric} unit={m?.unit ?? ""} higherIsBetter={!(e.higher_is_better === false || e.metric?.higher_is_better === false)}
+					comparable={e.comparable !== false} unlabelledRuns={unlabelledRuns} />
+			) : null}
 			<ul className="space-y-1">
-				{versionsOf(e).map((v) => (
+				{versions.map((v) => (
 					<li key={v.id} className="flex items-center gap-2 text-caption">
 						<span className="font-medium text-ink-900 min-w-0 truncate">{v.label}</span>
 						<span className={cn("px-1.5 rounded-full border text-nano font-medium flex-shrink-0", TAG_CLS[v.tag])}>{v.tag}</span>
