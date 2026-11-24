@@ -1,70 +1,45 @@
-// /studio/runs — the unified runs surface (W1). Titled "Runs" (it said "Jobs"
-// while the breadcrumb said "Activity" — one page, three names).
+// /studio/runs — "Activity": what's running, what's broken, and how each
+// workflow is doing, grouped by app (components/activity/ActivityView). It was
+// a flat list of workflow names with the app as a grey subtitle — runs read as
+// detached from the apps that own them (2026-11-24).
 //
-// A row opens THE RUN (its page, /studio/apps/:app/w/:loop/r/:runId, for a
-// scheduled cycle; /studio/runs/:run_id for anything else). Asking the chat
-// about it is the secondary button. ?state=, ?view= and ?days= are in the URL.
+// ?days= (default 7) and ?app= (one app) are URL state. The four power views
+// (List / Grid / Gantt / Calendar) stay behind "Timeline"; ?view=, ?state=.
 //
-// Views via top toggle:
-//   Index     — the list (default).
-//   List      — Prefect-style table.
-//   Grid      — cross-workflow Airflow grid.
-//   Gantt     — per-run time bars (good for "stuck" detection).
-//   Calendar  — heatmap of day × hour.
-//
-// SSE stream (/me/runs/stream) pushes state transitions live; the
-// page subscribes on mount and updates the rows in place.
+// One feed for every view: /me/runs for the window, kept live by the
+// /me/runs/stream SSE (useRunsFeed).
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Filter, RefreshCw, ChevronLeft, BarChart3 } from "lucide-react";
-import { me, streamRuns, MeApiError, type MeRunRow } from "@/api/me";
+import { ChevronLeft, BarChart3, X } from "lucide-react";
+import type { MeRunRow } from "@/api/me";
 import AirflowGrid, { type GridCell, type GridState } from "@/components/AirflowGrid";
 import AirflowGantt from "@/components/AirflowGantt";
 import AirflowCalendar from "@/components/AirflowCalendar";
-import IndexList, { type IndexRow } from "@/components/studio/IndexList";
-import { askRun } from "@/lib/grounded-asks";
 import { appTitle } from "@/components/workflow/AppCard";
-import { loopLabel } from "@/lib/workflow-names";
 import { TONES } from "@/lib/tones";
 import { runStatus, runStatusTitle, RUN_STATUS_LABEL, RUN_STATUS_TONE } from "@/lib/runStatus";
 import { runRowHref } from "@/lib/run-routes";
-import { useStudioRefetch } from "@/hooks/useStudioRefetch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { EmptyRuns } from "@/components/illustrations/scenes";
 import { Segmented } from "@/components/ui/segmented";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
+import { ActivityView } from "@/components/activity/ActivityView";
+import { useRunsFeed, useOncePerSession } from "@/components/activity/hooks";
 
-// "index" is the default claude-style list (→ chat); the other four are the
-// power "Timeline" views kept as an escape hatch behind the toggle.
 type View = "index" | "list" | "grid" | "gantt" | "calendar";
-
-function loopOfRun(r: MeRunRow): string | undefined {
-	if (r.app && r.workflow_slug?.startsWith(r.app + ":")) return r.workflow_slug.slice(r.app.length + 1);
-	const i = r.workflow_slug?.indexOf(":") ?? -1;
-	return i >= 0 ? r.workflow_slug.slice(i + 1) : r.workflow_slug;
-}
-
-function relSec(tsSec?: number): string {
-	if (!tsSec) return "";
-	const diff = Date.now() / 1000 - tsSec;
-	if (diff < 60) return "just now";
-	if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-	if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-	return `${Math.floor(diff / 86400)}d ago`;
-}
 
 // Where a run row opens — the run page (lib/run-routes.ts).
 const runHref = runRowHref;
 
 const VIEWS: View[] = ["index", "list", "grid", "gantt", "calendar"];
+const DEFAULT_DAYS = 7;
 
 export default function StudioRuns() {
 	const navigate = useNavigate();
-	// View, state filter and window are URL state (?view=&state=&days=), so a
-	// filtered list is a link and survives a reload. ?state=failed is also what
-	// the attention rail's "+N more" links to.
 	const [params, setParams] = useSearchParams();
 	const setParam = (k: string, v: string | null) => {
 		const sp = new URLSearchParams(params);
@@ -75,134 +50,81 @@ export default function StudioRuns() {
 	const setView = (v: View) => setParam("view", v === "index" ? null : v);
 	const stateFilter = params.get("state") || "";
 	const setStateFilter = (v: string) => setParam("state", v || null);
-	const windowDays = Math.max(1, Math.min(30, parseInt(params.get("days") || "1", 10) || 1));
-	const setWindowDays = (n: number) => setParam("days", n === 1 ? null : String(n));
-	const [runs, setRuns] = useState<MeRunRow[] | null>(null);
-	const [err, setErr] = useState<string | null>(null);
+	const windowDays = Math.max(1, Math.min(30, parseInt(params.get("days") || String(DEFAULT_DAYS), 10) || DEFAULT_DAYS));
+	const setWindowDays = (n: number) => setParam("days", n === DEFAULT_DAYS ? null : String(n));
+	const appFilter = params.get("app") || "";
 
-	const load = async () => {
-		try {
-			const since = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000).toISOString();
-			const r = await me.listRuns({ state: stateFilter || undefined, since, limit: 500 });
-			setRuns(r.runs);
-		} catch (e) {
-			setErr(e instanceof MeApiError ? e.message : String(e));
-		}
-	};
-	useEffect(() => { load(); }, [stateFilter, windowDays]);
-	// Chat→page bus: a run fired from chat shows up before the SSE/poll tick.
-	useStudioRefetch(["runs", "cycles"], load);
+	const { runs, err, asOf, reload, truncated } = useRunsFeed(windowDays);
+	const entrance = useOncePerSession("activity");
 
-	// SSE — live state transitions. Update the local rows array in
-	// place so the user sees workflows light up in real time.
-	useEffect(() => {
-		const stop = streamRuns(
-			(evt) => {
-				setRuns((prev) => {
-					if (!prev) return [evt.run];
-					const idx = prev.findIndex((r) => r.run_id === evt.run.run_id);
-					if (idx === -1) return [evt.run, ...prev].slice(0, 500);
-					const next = [...prev];
-					next[idx] = evt.run;
-					return next;
-				});
-			},
-			(e) => console.warn("runs stream error:", e),
-		);
-		return () => stop();
-	}, []);
+	const windowControl = (
+		<Segmented
+			size="sm"
+			aria-label="Time window"
+			value={String(windowDays)}
+			onChange={(v) => setWindowDays(Number(v))}
+			options={[
+				{ value: "1", label: "24h" },
+				{ value: "7", label: "7d" },
+				{ value: "14", label: "14d" },
+				{ value: "30", label: "30d" },
+			]}
+		/>
+	);
 
-	if (err) return <div className="text-brick-700 text-sm">{err}</div>;
-
-	// ── Default: the claude-style index. Each run row opens the grounded
-	//    chat (askRun); the old per-run inspector / app cycle panel stays a
-	//    click away via "details →" (runHref). The Timeline button reveals
-	//    the cross-run power views (grid / gantt / calendar / table). ──
 	if (view === "index") {
-		const INDEX_CAP = 50;
-		const shown = (runs || []).slice(0, INDEX_CAP);
-		const rows: IndexRow[] = shown.map((r) => {
-			const loop = loopOfRun(r);
-			const st = runStatus(r.state);
-			return {
-				id: r.run_id,
-				title: loopLabel(r.name, loop || r.workflow_slug),
-				tone: RUN_STATUS_TONE[st.status],
-				statusLabel: RUN_STATUS_LABEL[st.status].toLowerCase() + (st.recovered ? " · recovered" : ""),
-				statusTitle: runStatusTitle(st),
-				meta: [r.app ? appTitle(r.app) : "", relSec(r.started_at), r.duration_s ? `${r.duration_s.toFixed(1)}s` : ""]
-					.filter(Boolean).join(" · "),
-				ask: askRun({ run_id: r.run_id, app: r.app, loop, name: r.name, workflow_slug: r.workflow_slug }),
-				// The row opens the RUN; asking about it is the secondary button.
-				navTo: runHref(r.run_id),
-				askVisible: true,
-			} as IndexRow;
-		});
-		// Lumen: the filters are Segmented controls (they NARROW one list);
-		// Refresh + Timeline are quiet buttons on the right.
-		const toolbar = (
-			<div className="flex flex-wrap items-center gap-2">
-				<Segmented
-					size="sm"
-					aria-label="Run state"
-					value={stateFilter || "all"}
-					onChange={(v) => setStateFilter(v === "all" ? "" : v)}
-					options={[
-						{ value: "all", label: "All" },
-						{ value: "succeeded", label: "Succeeded" },
-						{ value: "failed", label: "Failed" },
-						{ value: "running", label: "Running" },
-						{ value: "skipped", label: "Skipped" },
-					]}
-				/>
-				<Segmented
-					size="sm"
-					aria-label="Time window"
-					value={String(windowDays)}
-					onChange={(v) => setWindowDays(Number(v))}
-					options={[
-						{ value: "1", label: "24h" },
-						{ value: "7", label: "7d" },
-						{ value: "14", label: "14d" },
-						{ value: "30", label: "30d" },
-					]}
-				/>
-				<span className="ml-auto inline-flex items-center gap-1.5">
-					<Button variant="ghost" size="sm" onClick={load} title="Refresh">
-						<RefreshCw className="w-3.5 h-3.5" /> Refresh
-					</Button>
-					<Button variant="secondary" size="sm" onClick={() => setView("grid")} title="Cross-run timeline views (grid / gantt / calendar)">
-						<BarChart3 className="w-3.5 h-3.5" /> Timeline
-					</Button>
-				</span>
-			</div>
-		);
 		return (
-			<IndexList
-				title="Runs"
-				rows={rows}
-				search={rows.length > 6}
-				searchPlaceholder="Search runs…"
-				toolbar={toolbar}
-				loading={runs === null && !err}
-				error={runs === null && err ? new Error(err) : undefined}
-				onRetry={load}
-				emptyArt={<EmptyRuns />}
-				emptyTitle="No runs in this window"
-				empty="Runs appear here as your workflows execute. Widen the window, or start one from an app."
-				footer={(runs?.length || 0) > INDEX_CAP
-					? <div className="text-caption text-muted-foreground text-center">Showing {INDEX_CAP} of {runs?.length}. Open <button className="underline" onClick={() => setView("grid")}>Timeline</button> for all.</div>
-					: undefined}
-			/>
+			<div className="max-w-[980px] mx-auto w-full">
+				<PageHeader
+					className="pt-2"
+					title="Activity"
+					subtitle="What's running, what's broken, and how each workflow is doing."
+					actions={
+						<>
+							{windowControl}
+							<Button variant="secondary" size="sm" onClick={() => setView("grid")} title="Every run on a timeline (grid, Gantt, calendar, table)">
+								<BarChart3 className="w-3.5 h-3.5" /> Timeline
+							</Button>
+						</>
+					}
+				/>
+				{appFilter && (
+					<div className="mb-4 -mt-1">
+						<button
+							onClick={() => setParam("app", null)}
+							className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full border border-ink-200 bg-card text-meta text-ink-800 hover:bg-ink-50"
+							title="Show every app"
+						>
+							Only {appTitle(appFilter)} <X className="w-3 h-3" aria-label="clear" />
+						</button>
+					</div>
+				)}
+				{runs === null && !err ? (
+					<div className="space-y-3" role="status" aria-label="Loading activity">
+						{[0, 1, 2].map((i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
+					</div>
+				) : runs === null ? (
+					<ErrorState error={new Error(err || "")} onRetry={reload} />
+				) : runs.filter((r) => !appFilter || r.app === appFilter).length === 0 ? (
+					<EmptyState
+						art={<EmptyRuns />}
+						title="Nothing ran in this window"
+						body="Runs appear here as your workflows execute. Widen the window, or start one from an app."
+					/>
+				) : (
+					<ActivityView runs={runs} app={appFilter || undefined} days={windowDays} entrance={entrance} asOf={asOf} truncated={truncated} />
+				)}
+			</div>
 		);
 	}
 
-	// ── Timeline (escape hatch): the original 4 power views. ──
+	// ── Timeline (power views) ──
+	const shown = (runs || []).filter((r) => (!stateFilter || r.state === stateFilter) && (!appFilter || r.app === appFilter));
 	return (
 		<div className="max-w-[980px] mx-auto w-full space-y-4 px-1 py-2">
 			<div className="flex items-center gap-2 flex-wrap">
 				<Button variant="ghost" size="sm" onClick={() => setView("index")}>
-					<ChevronLeft className="w-3.5 h-3.5" /> Back to list
+					<ChevronLeft className="w-3.5 h-3.5" /> Back to Activity
 				</Button>
 				<Segmented
 					size="sm"
@@ -228,21 +150,9 @@ export default function StudioRuns() {
 						{ value: "running", label: "Running" },
 					]}
 				/>
-				<Segmented
-					size="sm"
-					aria-label="Time window"
-					value={String(windowDays)}
-					onChange={(v) => setWindowDays(Number(v))}
-					options={[
-						{ value: "1", label: "24h" },
-						{ value: "7", label: "7d" },
-						{ value: "14", label: "14d" },
-						{ value: "30", label: "30d" },
-					]}
-				/>
-
+				{windowControl}
 				<div className="ml-auto text-caption tabular-nums text-ink-600">
-					{runs?.length ?? 0} runs
+					{shown.length} runs
 				</div>
 			</div>
 
@@ -251,31 +161,15 @@ export default function StudioRuns() {
 					{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-10 rounded-lg" />)}
 				</div>
 			) : view === "list" ? (
-				<RunsList runs={runs} onClick={(id) => navigate(runHref(id))} />
+				<RunsList runs={shown} onClick={(id) => navigate(runHref(id))} />
 			) : view === "grid" ? (
-				<RunsCrossGrid runs={runs} onCellClick={(id) => navigate(runHref(id))} />
+				<RunsCrossGrid runs={shown} onCellClick={(id) => navigate(runHref(id))} />
 			) : view === "gantt" ? (
-				<AirflowGantt runs={runs} onClick={(id) => navigate(runHref(id))} />
+				<AirflowGantt runs={shown} onClick={(id) => navigate(runHref(id))} />
 			) : (
-				<AirflowCalendar runs={runs} days={windowDays > 1 ? windowDays : 14} />
+				<AirflowCalendar runs={shown} days={windowDays > 1 ? windowDays : 14} />
 			)}
 		</div>
-	);
-}
-
-function ViewTab({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
-	return (
-		<button
-			onClick={onClick}
-			className={[
-				"px-3 py-1 rounded-full text-xs transition-colors",
-				active
-					? "bg-ink-900 text-white"
-					: "bg-card border border-ink-200 text-ink-700 hover:bg-ink-50",
-			].join(" ")}
-		>
-			{label}
-		</button>
 	);
 }
 

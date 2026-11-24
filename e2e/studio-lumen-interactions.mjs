@@ -11,7 +11,8 @@
 //   focus     keyboard focus draws the warm ring, not the browser's blue
 //   motion    prefers-reduced-motion: rise/lift stop, loaders become a fade
 //   error     a 500 renders ErrorState; Retry recovers without a reload
-//   filters   Segmented radios on Runs switch state (aria-checked)
+//   activity  /studio/runs: 7-day default, Needs fixing in words, Open run
+//   filters   Segmented radios on the Timeline view switch state (aria-checked)
 //   docs      index card -> reader (skeleton -> article) -> back
 //   sessions  /claude-sessions search narrows and clears
 //   chat      send a turn: user bubble, StrandMark thinks, an answer lands
@@ -60,8 +61,8 @@ await section('nav indicator', async () => {
 		}
 		return { off, y };
 	};
-	const r1 = await settle('Runs');
-	assert(r1.off <= 3, `indicator centred on the active row (Runs), off by ${r1.off.toFixed(1)}px`);
+	const r1 = await settle('Activity');
+	assert(r1.off <= 3, `indicator centred on the active row (Activity), off by ${r1.off.toFixed(1)}px`);
 	await row('Marketplace').click();
 	await page.waitForURL(/\/studio\/library/, { timeout: 15000 });
 	// The URL flips before React commits the lazy route; the rail (and the bar)
@@ -139,9 +140,11 @@ await section('narrow drawer (390px)', async () => {
 await section('keyboard focus ring', async () => {
 	const page = await desk.ctx.newPage();
 	await page.goto(`${BASE}/studio/settings`, { waitUntil: 'domcontentloaded' });
-	await page.getByRole('radio').first().waitFor({ timeout: 20000 });
-	// Focus the first landing-pref radio by keyboard (Tab from the one before it).
-	await page.getByRole('radio').first().focus();
+	// The landing-pref radios went in #221; any control in the page will do.
+	const first = page.locator('main :is(a[href], button, input, select, textarea)').first();
+	await first.waitFor({ timeout: 20000 });
+	// Focus it by keyboard (Tab from the element before it).
+	await first.focus();
 	await page.keyboard.press('Shift+Tab');
 	await page.keyboard.press('Tab');
 	const st = await page.evaluate(() => {
@@ -216,9 +219,32 @@ await section('Inbox: unexpected response', async () => {
 });
 
 // ── Segmented filters ────────────────────────────────────────────────────
-await section('Runs segmented filters', async () => {
+// ── Activity: runs grouped by app, broken workflows first, in words ────────
+await section('Activity', async () => {
 	const page = await desk.ctx.newPage();
 	await page.goto(`${BASE}/studio/runs`, { waitUntil: 'domcontentloaded' });
+	await page.getByRole('heading', { name: 'Activity' }).first().waitFor({ timeout: 20000 });
+	// /me/runs takes ~6 s; wait for the feed (or its empty / error state).
+	await page.locator('section[aria-label="All workflows"]')
+		.or(page.getByText('Nothing ran in this window'))
+		.or(page.locator('[role="alert"]')).first().waitFor({ timeout: 40000 });
+	const win = page.getByRole('radiogroup', { name: 'Time window' });
+	assert(await win.getByRole('radio', { name: '7d' }).getAttribute('aria-checked') === 'true', '7 days is the default window');
+	const fix = page.locator('section[aria-label="Needs fixing"]').first();
+	if (await fix.count()) {
+		assert(await fix.getByRole('link', { name: /Open run/ }).count() > 0, 'each Needs fixing row offers Open run');
+		const body = await fix.innerText();
+		assert(!/_unavailable|Traceback|\{"/.test(body), 'Needs fixing speaks in words, not raw reasons');
+	} else note('nothing failing in this window — Needs fixing not exercised');
+	const status = await page.locator('main').innerText();
+	assert(/updated \d{1,2}:\d{2}/.test(status), 'status line says when the feed was updated');
+	await page.close();
+});
+
+await section('Runs segmented filters', async () => {
+	const page = await desk.ctx.newPage();
+	// The run-state filter lives in the Timeline view since Activity (11-24).
+	await page.goto(`${BASE}/studio/runs?view=list`, { waitUntil: 'domcontentloaded' });
 	const group = page.getByRole('radiogroup', { name: 'Run state' });
 	await group.waitFor({ timeout: 20000 });
 	const failed = group.getByRole('radio', { name: /^Failed/ });
