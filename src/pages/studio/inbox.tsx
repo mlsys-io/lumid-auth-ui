@@ -25,7 +25,6 @@ import {
 import { toast } from 'sonner';
 import { me, MeApiError } from '@/api/me';
 import apiClient from '@/api/client';
-import PageHints from '@/components/PageHints';
 import { setStudioSelection } from '@/components/StudioContext';
 import { useStudioRefetch } from '@/hooks/useStudioRefetch';
 import { IntentFeedbackRow } from '@/components/IntentFeedbackRow';
@@ -323,11 +322,6 @@ function InboxFeedBody({
 }) {
 	return (
 		<div className="space-y-4">
-			<PageHints prompts={[
-				'show my pending drafts',
-				"send any obvious replies",
-				'what should I act on first?',
-			]} />
 
 			<nav className="flex items-center gap-1.5 flex-wrap">
 				{FILTERS.map((f) => {

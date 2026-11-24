@@ -115,7 +115,7 @@ export function SiteStrip({ sites }: { sites: FmSiteStatus[] }) {
 				<p className="mt-2 text-xs text-brick-700">
 					{down.length === 1 ? "Site" : "Sites"}{" "}
 					<strong>{down.map((d) => d.site).join(", ")}</strong> did not answer — rows below
-					are incomplete, not empty. {down[0].error && <em>({down[0].error})</em>}
+					are incomplete, not empty.
 				</p>
 			)}
 		</div>
