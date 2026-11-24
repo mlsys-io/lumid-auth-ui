@@ -31,6 +31,8 @@ import { useStudioRefetch } from '@/hooks/useStudioRefetch';
 import { IntentFeedbackRow } from '@/components/IntentFeedbackRow';
 import { AXIS_META } from '@/lib/demo-intents';
 import { EmptyInbox } from "@/components/illustrations/scenes";
+import { PageHeader } from '@/components/ui/page-header';
+import { Button } from '@/components/ui/button';
 
 type Filter = 'all' | 'drafts' | 'activity' | 'audit' | 'notices';
 
@@ -277,22 +279,23 @@ export default function StudioInbox() {
 		<div className="space-y-4">
 			{/* Inbox = a pure feed. The "Your AI" tab was retired — the
 			    Knowledge surface has its own nav entry at /studio/knowledge. */}
-			<div className="flex items-center justify-end gap-2">
-				<span className="hidden md:inline text-micro text-ink-600" title={`Last refreshed at ${new Date(lastRefresh).toLocaleTimeString()}`}>
-					{refreshing ? "Updating…" : `Updated ${secondsAgo(lastRefresh)}`}
-				</span>
-				<button
-					onClick={load}
-					disabled={refreshing}
-					className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded border border-ink-200 hover:bg-ink-50 text-ink-700 disabled:opacity-50 transition-colors"
-				>
-					<RefreshCw className={[
-						"w-3 h-3 transition-transform",
-						refreshing ? "animate-spin text-gold-600" : "",
-					].join(" ")} />
-					Refresh
-				</button>
-			</div>
+			{/* Lumen: a real page title (this route had none — the strip had no
+			    entry for /studio/drafts), with freshness + Refresh as actions. */}
+			<PageHeader
+				className="pt-2 pb-1"
+				title="Drafts"
+				subtitle="Replies and summaries your workflows drafted for you — send, edit or dismiss."
+				actions={
+					<>
+						<span className="hidden md:inline text-caption text-ink-600" title={`Last refreshed at ${new Date(lastRefresh).toLocaleTimeString()}`}>
+							{refreshing ? "Updating…" : `Updated ${secondsAgo(lastRefresh)}`}
+						</span>
+						<Button variant="secondary" size="sm" onClick={load} disabled={refreshing}>
+							<RefreshCw className={refreshing ? "w-3.5 h-3.5 animate-spin" : "w-3.5 h-3.5"} /> Refresh
+						</Button>
+					</>
+				}
+			/>
 
 			<InboxFeedBody
 				items={items}

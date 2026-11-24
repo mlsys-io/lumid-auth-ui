@@ -79,6 +79,7 @@ const PAGE_META: Array<{
 	},
 	{
 		pattern: /^\/studio\/inbox/,
+		ownHeader: true,
 		icon: InboxIcon,
 		title: "Inbox",
 		subtitle: "Drafts, runs, notices, and the audit trail — in one feed.",
@@ -93,6 +94,7 @@ const PAGE_META: Array<{
 	},
 	{
 		pattern: /^\/studio\/runs/,
+		ownHeader: true,
 		icon: ActivityIcon,
 		title: "Runs",
 		subtitle: "Every run of every workflow — open one to see its steps.",
@@ -131,6 +133,7 @@ const PAGE_META: Array<{
 	},
 	{
 		pattern: /^\/studio\/knowledge/,
+		ownHeader: true,
 		icon: Brain,
 		title: "Knowledge",
 		subtitle: "What's been encoded — yours, audited, portable.",
