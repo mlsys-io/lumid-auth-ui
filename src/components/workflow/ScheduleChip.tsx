@@ -51,7 +51,7 @@ export default function ScheduleChip({ app, loop, trigger, enabled, onChanged }:
 		? "Runs only when you start it."
 		: !enabled
 			? `Paused — it won't run on its own. When resumed it runs ${words.toLowerCase()}.`
-			: `Runs ${words.charAt(0).toLowerCase()}${words.slice(1)}.${next ? ` Next run at ${clock(next)}.` : ""}`;
+			: `Runs ${words.charAt(0).toLowerCase()}${words.slice(1)}.${next ? ` Next run at ${clock(next)} (your time).` : ""}`;
 
 	const toggle = async () => {
 		setBusy("toggle");

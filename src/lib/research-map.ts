@@ -56,8 +56,8 @@ export function experimentStatus(e: MeExperiment): { tone: Tone; text: string } 
 		return { tone: "idle", text: "Not started yet" };
 	}
 	if (e.comparable === false) {
-		const k = e.instruments && e.instruments > 1 ? ` ${e.instruments} different ways` : " differently";
-		return { tone: "attention", text: `Can't compare yet — the versions were measured${k}` };
+		const k = e.instruments && e.instruments > 1 ? `${e.instruments} different setups` : "different setups";
+		return { tone: "attention", text: `Can't compare yet — the versions ran under ${k}` };
 	}
 	if (e.best_variant && e.criteria_met) return { tone: "ok", text: `Winning: ${humanId(e.best_variant)}` };
 	if (e.best_variant && e.not_separable_from?.length) return { tone: "running", text: `${humanId(e.best_variant)} leads, but can't be told apart yet` };
@@ -132,7 +132,8 @@ export function criteriaInWords(expr?: string): string {
 	for (const p of parts) {
 		const d = p.match(/^delta(_pp)?\s*(>=?|<=?)\s*(-?[\d.]+)$/);
 		if (!d) continue;
-		const pts = d[1] ? " points" : "";
+		// delta_pp is in PERCENTAGE points — "10 points" left a reader asking "of what?".
+		const pts = d[1] ? " percentage points" : "";
 		const v = Number(d[3]);
 		if (d[2].startsWith(">")) out.push(v === 0 ? (d[2] === ">=" ? "the best is at least as good as the current one" : "the best beats the current one") : `the best is ahead by more than ${v}${pts}`);
 		else out.push(`the gap is under ${v}${pts}`);
@@ -192,4 +193,14 @@ export function mapSummary(exps: MeExperiment[], proposals: Proposal[]): string 
 	const parts = [`${exps.length} experiment${exps.length === 1 ? "" : "s"}`, `${versions} version${versions === 1 ? "" : "s"} tried`];
 	if (sug) parts.push(`${sug} suggested`);
 	return parts.join(" · ");
+}
+
+/** When versions can't be compared: what differed between them and what to
+ *  do about it, in words — "measured 18 different ways" alone told a reader
+ *  nothing they could act on (first-glance test, 2026-11-25). */
+export function comparabilityNote(e: MeExperiment): string | null {
+	if (e.comparable !== false) return null;
+	const dims = (e.compare_within || []).map((d) => humanId(d).toLowerCase());
+	const what = dims.length ? `They differ in ${dims.join(" and ")}` : "They ran under different setups";
+	return `${what}, so a gap between them may come from the setup rather than the version. To compare them, run every version under the same setup.`;
 }

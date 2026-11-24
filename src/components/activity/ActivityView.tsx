@@ -11,7 +11,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { AlertTriangle, ArrowRight } from "lucide-react";
 import type { MeRunRow } from "@/api/me";
 import {
-	groupActivity, fmtDuration, fmtTypical, fmtSince, fmtAgo, progressOf, isOverdue,
+	groupActivity, fmtDuration, fmtTypical, fmtSince, fmtAgo, progressOf, isOverdue, failingSentence,
 	type RunningItem, type WorkflowActivity, type AppActivity,
 } from "@/lib/activity";
 import { runRowHref, workflowPath } from "@/lib/run-routes";
@@ -105,9 +105,7 @@ export function RunningCard({ item, now, showApp }: { item: RunningItem; now: nu
 
 export function NeedsFixingRow({ wf, showApp, span }: { wf: WorkflowActivity; showApp: boolean; span: string }) {
 	const f = wf.failing!;
-	const streak = f.coversWindow
-		? `Every run ${span} failed (${f.count})`
-		: `Failing since ${fmtSince(f.sinceSec)} · ${f.count} run${f.count === 1 ? "" : "s"} in a row`;
+	const streak = failingSentence(f, span);
 	return (
 		<div className="flex items-start gap-3 rounded-xl border border-brick-200 bg-brick-50/50 px-3.5 py-3 animate-lumen-rise">
 			<AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0 text-brick-600" aria-hidden />

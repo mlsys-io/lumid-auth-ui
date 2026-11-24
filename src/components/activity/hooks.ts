@@ -9,6 +9,10 @@ import { useStudioRefetch } from "@/hooks/useStudioRefetch";
 export const RUNS_CAP = 500;
 
 const cacheKey = (days: number, state = "") => `studio_runs_feed_v1:${days}${state ? `:${state}` : ""}`;
+/** The Activity feed this session already loaded, if any (no request). */
+export function readRunsCache(days: number, state = ""): { runs: MeRunRow[]; asOf: number } | null {
+	return readCache(days, state);
+}
 function readCache(days: number, state = ""): { runs: MeRunRow[]; asOf: number } | null {
 	try { return JSON.parse(sessionStorage.getItem(cacheKey(days, state)) || "null"); } catch { return null; }
 }

@@ -19,7 +19,7 @@ export interface EvoSeries { id: string; label: string; points: Array<{ ts: stri
 
 interface Line { id: string; label: string; ci: number; pts: Array<{ t: number; avg: number; n: number }> }
 
-const W = 640, H = 220, PAD_R = 108, PAD_T = 12, PAD_B = 26;
+const W = 640, H_DEFAULT = 220, PAD_R = 108, PAD_T = 12, PAD_B = 26;
 
 /** Raw results → running averages; or, when the server already sent running
  *  means (series_kind "running_mean", the scheduler's own state.history),
@@ -43,7 +43,7 @@ function niceTicks(lo: number, hi: number, n = 4): number[] {
 
 const day = (t: number) => new Date(t).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 
-export default function EvolutionChart({ series, metricKey, unit, higherIsBetter = true, comparable = true, unlabelledRuns = 0, alreadyMeans = false }: {
+type ChartProps = {
 	series: EvoSeries[]; metricKey: string; unit: string; higherIsBetter?: boolean;
 	/** The points are already each version's average so far (series_kind "running_mean"). */
 	alreadyMeans?: boolean;
@@ -51,10 +51,46 @@ export default function EvolutionChart({ series, metricKey, unit, higherIsBetter
 	comparable?: boolean;
 	/** Results whose run named no version — left off the chart, and said so. */
 	unlabelledRuns?: number;
+};
+
+/** Versions measured differently get ONE SMALL CHART EACH, on its own scale:
+ *  two lines on one axis invite the comparison the caption then forbids
+ *  (first-glance test, 2026-11-25). Comparable versions share one chart. */
+export default function EvolutionChart(props: ChartProps) {
+	const drawn = props.series.filter((s) => s.points.length > 0);
+	if (props.comparable === false && drawn.length > 1) {
+		// One time axis for all of them, so the small charts line up vertically.
+		const ts = drawn.flatMap((s) => s.points.map((p) => Date.parse(p.ts))).filter((t) => isFinite(t));
+		const xRange: [number, number] = [Math.min(...ts), Math.max(...ts)];
+		return (
+			<div className="space-y-2">
+				<div className="flex items-baseline gap-2 flex-wrap">
+					<span className="text-caption font-medium text-ink-800">How each version evolved</span>
+					<span className="text-micro text-ink-600">measured differently, so each has its own scale · {props.higherIsBetter === false ? "lower" : "higher"} is better</span>
+				</div>
+				{drawn.map((s, i) => (
+					<OneChart key={s.id} {...props} series={[s]} colorIndex={i} heading={s.label} height={130} unlabelledRuns={0} xRange={xRange} />
+				))}
+				{props.unlabelledRuns ? <div className="text-nano text-ink-600">{props.unlabelledRuns.toLocaleString()} result{props.unlabelledRuns === 1 ? "" : "s"} from runs that didn&apos;t say which version they ran aren&apos;t drawn.</div> : null}
+			</div>
+		);
+	}
+	return <OneChart {...props} />;
+}
+
+function OneChart({ series, metricKey, unit, higherIsBetter = true, comparable = true, unlabelledRuns = 0, alreadyMeans = false, heading, height, colorIndex, xRange }: ChartProps & {
+	/** A shared time axis (small multiples). */
+	xRange?: [number, number];
+	/** A small-multiple's own title (replaces the caption and legend). */
+	heading?: string;
+	height?: number;
+	/** Keep a version's colour when it is drawn alone. */
+	colorIndex?: number;
 }) {
+	const H = height ?? H_DEFAULT;
 	const lines: Line[] = useMemo(() => series
-		.map((s, i) => ({ id: s.id, label: s.label, ci: i % 8, pts: runningAverages(s.points, alreadyMeans) }))
-		.filter((l) => l.pts.length > 0), [series, alreadyMeans]);
+		.map((s, i) => ({ id: s.id, label: s.label, ci: (colorIndex ?? i) % 8, pts: runningAverages(s.points, alreadyMeans) }))
+		.filter((l) => l.pts.length > 0), [series, alreadyMeans, colorIndex]);
 	const [hoverT, setHoverT] = useState<number | null>(null);
 	const clipId = `evo-clip-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
 	const svgRef = useRef<SVGSVGElement>(null);
@@ -64,12 +100,12 @@ export default function EvolutionChart({ series, metricKey, unit, higherIsBetter
 		// Skip each line's first few points for the y-range: an average of one
 		// or two results swings wildly and would set the scale for everything.
 		const vs = lines.flatMap((l) => l.pts.slice(Math.min(3, l.pts.length - 1)).map((p) => p.avg));
-		const t0 = Math.min(...ts), t1 = Math.max(...ts);
+		const t0 = xRange ? xRange[0] : Math.min(...ts), t1 = xRange ? xRange[1] : Math.max(...ts);
 		let v0 = Math.min(...vs), v1 = Math.max(...vs);
 		const pad = (v1 - v0) * 0.12 || Math.abs(v1) * 0.1 || 1;
 		v0 -= pad; v1 += pad;
 		return { t0, t1: t1 === t0 ? t0 + 1 : t1, v0, v1 };
-	}, [lines]);
+	}, [lines, xRange]);
 	if (lines.length === 0) return null;
 
 	const fmt = (v: number) => fmtMetricValue(v, unit, metricKey);
@@ -101,10 +137,17 @@ export default function EvolutionChart({ series, metricKey, unit, higherIsBetter
 
 	return (
 		<figure className="space-y-1.5">
-			<figcaption className="flex items-baseline gap-2 flex-wrap">
-				<span className="text-caption font-medium text-ink-800">How it evolved</span>
-				<span className="text-micro text-ink-600">each line is a version&apos;s average so far · {higherIsBetter ? "higher" : "lower"} is better</span>
-			</figcaption>
+			{heading ? (
+				<figcaption className="flex items-center gap-1.5 text-micro text-ink-700">
+					<span className={cn("w-3 h-0.5 rounded-full", FILL[lines[0]?.ci ?? 0])} />{heading}
+					<span className="text-ink-600">· average so far</span>
+				</figcaption>
+			) : (
+				<figcaption className="flex items-baseline gap-2 flex-wrap">
+					<span className="text-caption font-medium text-ink-800">How it evolved</span>
+					<span className="text-micro text-ink-600">each line is a version&apos;s average so far · {higherIsBetter ? "higher" : "lower"} is better</span>
+				</figcaption>
+			)}
 			{lines.length >= 2 && (
 				<ul className="flex items-center gap-3 flex-wrap text-micro text-ink-700" aria-label="Versions">
 					{lines.map((l) => (

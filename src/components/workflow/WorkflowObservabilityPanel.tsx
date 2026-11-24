@@ -43,8 +43,8 @@ import RunContextMenu, { type RunMenuActions, type RunMenuTarget } from "@/compo
 import NextRunComposer from "@/components/workflow/NextRunComposer";
 import ScheduleChip, { type WfActionDetail } from "@/components/workflow/ScheduleChip";
 import { reportDispatchFailure } from "@/components/app-surface/directives";
-import { workflowStatusLine, dirIdToSec, fmtDuration, fmtTypical, isOverdue } from "@/lib/activity";
-import { useNowSec } from "@/components/activity/hooks";
+import { workflowStatusLine, dirIdToSec, fmtDuration, fmtTypical, isOverdue, groupActivity, failingSentence, fmtSince } from "@/lib/activity";
+import { useNowSec, readRunsCache, RUNS_CAP } from "@/components/activity/hooks";
 import { WorkingDots } from "@/components/activity/ActivityView";
 import { StatusDot } from "@/components/ui/status-badge";
 import { L, VIEW_LABELS } from "@/components/workflow/labels";
@@ -611,7 +611,22 @@ export default function WorkflowObservabilityPanel({
 		return ds.length >= 2 ? ds[Math.floor(ds.length / 2)] : undefined;
 	}, [cycleList]);
 	// "Is it working?" in one sentence — replaces the "Needs attention" chip.
-	const statusLine = cycleList ? workflowStatusLine(cycleList) : null;
+	const ownLine = cycleList ? workflowStatusLine(cycleList) : null;
+	// Activity reads further back (/me/runs, 7 days) than this page's newest 50
+	// runs. When this session already has that feed, a failing streak is said
+	// in Activity's own words — "90 failed" there and "the last 50" here read
+	// as two different facts (first-glance test, 2026-11-25).
+	const statusLine = useMemo(() => {
+		if (!ownLine || ownLine.tone !== "failing") return ownLine;
+		const feed = readRunsCache(7);
+		if (!feed?.runs?.length) return ownLine;
+		const wfAct = groupActivity(feed.runs, { app }).apps[0]?.workflows.find((w) => w.loop === loop);
+		if (!wfAct?.failing) return ownLine;
+		const capped = feed.runs.length >= RUNS_CAP;
+		const oldest = Math.min(...feed.runs.map((r) => r.started_at || Infinity));
+		const span = capped && isFinite(oldest) ? `since ${fmtSince(oldest)}` : "in the last 7 days";
+		return { ...ownLine, text: failingSentence(wfAct.failing, span) };
+	}, [ownLine?.text, ownLine?.tone, app, loop]); // eslint-disable-line react-hooks/exhaustive-deps
 	// Tell the chat's floating session box which workflow is selected + whether
 	// it's running, so an open box re-binds to its live run or closes (never
 	// shows a stale workflow's run). Re-fires when `running` flips.

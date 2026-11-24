@@ -22,7 +22,8 @@ import AskAbout from "@/components/AskAbout";
 import RunAnswerCard from "@/components/workflow/RunAnswerCard";
 import RunTimeline from "@/components/workflow/RunTimeline";
 import { timelineWorthShowing } from "@/lib/run-timeline";
-import { stepFailed, stepLabel, stepLine, humanMetric } from "@/lib/run-answer";
+import { stepFailed, stepLabel, stepLine, humanMetric, runAnswer } from "@/lib/run-answer";
+import { triageFailure } from "@/lib/failure-triage";
 import StepInspectorPanel from "@/components/workflow/StepInspectorPanel";
 import TrajectoryLogView from "@/components/workflow/TrajectoryLogView";
 import RunChildren from "@/components/workflow/RunChildren";
@@ -312,6 +313,8 @@ export function RunDetail({
 		? runStatus("running")
 		: cycleStatus({ ok: detail?.ok ?? listRow?.ok, running: false });
 	const failed = info.status === "failed";
+	const answer = runAnswer(detail, { ok: listRow?.ok, running: listRow?.running });
+	const chatCtaInCard = answer.tone === "failed" && !!triageFailure(answer.raw || answer.sentence, app, loop).cta?.ask;
 	const steps = detail?.steps || [];
 	const duration = listRow?.duration_s ?? (typeof detail?.summary?.duration_s === "number" ? detail.summary.duration_s as number : undefined);
 	// Which step is open. The URL wins (?step=<id>, or ?step=none after a
@@ -337,7 +340,9 @@ export function RunDetail({
 					{listRow?.branch_label && (
 						<span className="text-micro font-mono text-ink-600 bg-ink-50 border border-ink-200 rounded px-1.5" title="the version this run tried">version {listRow.branch_label}</span>
 					)}
-					<span className="ml-auto text-nano font-mono text-ink-600" title="run id (cycle dir)">{runId}</span>
+					{/* The raw id is in UTC and read as a second, different time beside the
+					    local one (first-glance test) — an operator detail. */}
+					{isAdminRole && <span className="ml-auto text-nano font-mono text-ink-600" title="run id (UTC)">{runId}</span>}
 				</div>
 				{/* ACTIONS — visible, not hidden in a node menu. State-changing
 				    Promote / Discard stay behind RunContextMenu's two-step confirm. */}
@@ -347,14 +352,16 @@ export function RunDetail({
 						title="Plan a new run starting from this one (nothing starts until you confirm)">
 						<RefreshCw className="w-3 h-3" /> Re-run…
 					</button>
-					<AskAbout
+					{/* A failed run's answer card already offers "Diagnose in chat"; two
+					    chat buttons for one question read as two different actions. */}
+					{!chatCtaInCard && <AskAbout
 						label="Ask about this run"
 						prompt={failed
 							? `Why did the ${loop} run of ${runLocalTime(runId)} fail, and how do I fix it?`
 							: `Explain what the ${loop} run of ${runLocalTime(runId)} did and what it found.`}
 						context={{ app, loop, cycle: { app, loop, ts: runId } }}
 						className="py-1"
-					/>
+					/>}
 					<button type="button"
 						onClick={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); menu(r.left, r.bottom + 4); }}
 						className="ml-auto inline-flex items-center px-1.5 py-1 text-micro rounded-lg border border-ink-200 bg-card text-ink-600 hover:bg-ink-50"
@@ -420,7 +427,7 @@ export function RunDetail({
 											<span className="text-caption font-medium text-ink-900 flex-shrink-0" title={id}>{stepLabel(st)}</span>
 											<RunStatusChip info={sInfo} className="flex-shrink-0" />
 											{st.duration_s != null && <span className="text-micro text-ink-600 tabular-nums flex-shrink-0">{fmtDur(st.duration_s)}</span>}
-											<span className={cn("text-micro truncate min-w-0", stepFailed(st) ? "text-brick-700" : "text-ink-600")}>{line}</span>
+											<span className={cn("text-micro line-clamp-2 min-w-0 text-left", stepFailed(st) ? "text-brick-700" : "text-ink-600")} title={line}>{line}</span>
 										</button>
 										{open && (
 											<div className="px-2 pb-2 space-y-1.5">

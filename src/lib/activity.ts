@@ -302,12 +302,13 @@ export function isOverdue(elapsedS: number, typicalS?: number): boolean {
 	return elapsedS > typicalS * 1.5 && elapsedS - typicalS > 30;
 }
 
-/** "since 22 Nov" / "since 13:05" (today). */
+/** "22 Nov" / "13:05 today" — the date a streak began. */
 export function fmtSince(sec: number, now = Date.now()): string {
 	const d = new Date(sec * 1000);
 	const today = new Date(now);
 	if (d.toDateString() === today.toDateString()) {
-		return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+		// "since 10:56" alone read as a time with no day (first-glance test).
+		return `${d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })} today`;
 	}
 	return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
@@ -347,13 +348,13 @@ export function workflowStatusLine(
 	const lastSec = dirIdToSec(last.ts);
 	if (last.ok) {
 		const dur = fmtDuration(last.duration_s);
-		return { tone: "ok", text: `Last run succeeded${lastSec ? ` ${fmtAgo(lastSec, now)}` : ""}${dur ? ` · took ${dur}` : ""}` };
+		return { tone: "ok", text: `Latest run succeeded${lastSec ? ` ${fmtAgo(lastSec, now)}` : ""}${dur ? ` · took ${dur}` : ""}` };
 	}
 	let n = 0;
 	while (n < done.length && done[n].ok === false) n++;
 	const oldest = dirIdToSec(done[n - 1].ts);
 	const since = oldest ? fmtSince(oldest, now * 1000) : "";
-	if (n === 1) return { tone: "failing", text: `Last run failed${lastSec ? ` ${fmtAgo(lastSec, now)}` : ""}`, runId: last.ts };
+	if (n === 1) return { tone: "failing", text: `Latest run failed${lastSec ? ` ${fmtAgo(lastSec, now)}` : ""}`, runId: last.ts };
 	// The streak reaches the end of what was LOADED (the page asks for the
 	// newest 50): its true start is unknown, so no "since" date — Activity
 	// (which reads further back) would otherwise disagree with this page.
@@ -384,4 +385,13 @@ export function nextFireSec(cron: string | undefined, now = Date.now() / 1000): 
 		return (Math.floor(now / step) + 1) * step;
 	}
 	return null;
+}
+
+/** One sentence for a failing streak — used by Activity AND the workflow page,
+ *  so the two can never disagree about the same workflow. `span` is "since
+ *  18 Nov" / "in the last 7 days" for a streak that covers the whole window. */
+export function failingSentence(f: FailingStreak, span: string): string {
+	return f.coversWindow
+		? `Every run ${span} failed (${f.count})`
+		: `Failing since ${fmtSince(f.sinceSec)} · ${f.count} run${f.count === 1 ? "" : "s"} in a row`;
 }

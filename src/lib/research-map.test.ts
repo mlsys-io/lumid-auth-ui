@@ -1,7 +1,7 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
 // Fixtures are trimmed copies of real lum.id experiments (2026-11-24).
 import type { MeExperiment } from "@/api/me";
-import { humanId, experimentStatus, versionsOf, criteriaInWords, buildResearchTree, pathTo, mapSummary, type Proposal } from "./research-map";
+import { humanId, experimentStatus, versionsOf, criteriaInWords, buildResearchTree, pathTo, mapSummary, comparabilityNote, type Proposal } from "./research-map";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -24,7 +24,7 @@ const fresh = { id: "analyst_local_gpu", kind: "arms", status: "active", hypothe
 	arms: [{ id: "a" }, { id: "b" }], variants: {} } as unknown as MeExperiment;
 
 check("ids read as words", () => { eq(humanId("kol_alpha"), "KOL alpha"); eq(humanId("musk_llm_scored"), "Musk LLM scored"); });
-check("status: not comparable, in words", () => eq(experimentStatus(kol), { tone: "attention", text: "Can't compare yet — the versions were measured 18 different ways" }));
+check("status: not comparable, in words", () => eq(experimentStatus(kol), { tone: "attention", text: "Can't compare yet — the versions ran under 18 different setups" }));
 check("status: confirmed winner", () => eq(experimentStatus(won), { tone: "ok", text: "Winning: Plain style" }));
 check("status: never ran / starved / unfed", () => {
 	eq(experimentStatus(fresh).text, "Not started yet");
@@ -46,7 +46,7 @@ check("not comparable: nobody is 'leading'", () => {
 	if (v.some((x) => x.tag === "leading" || x.tag === "winning")) throw new Error(JSON.stringify(v.map((x) => x.tag)));
 });
 check("done-when in words", () => {
-	eq(criteriaInWords("best_n >= 20 and baseline_n >= 20 and delta_pp > 10"), "The best and the current version each have 20+ results, and the best is ahead by more than 10 points");
+	eq(criteriaInWords("best_n >= 20 and baseline_n >= 20 and delta_pp > 10"), "The best and the current version each have 20+ results, and the best is ahead by more than 10 percentage points");
 	eq(criteriaInWords("best_n >= 10 and baseline_n >= 10 and delta > 0"), "The best and the current version each have 10+ results, and the best beats the current one");
 	eq(criteriaInWords("custom_thing(x) > 3"), "custom_thing(x) > 3");
 	eq(criteriaInWords(""), "");
@@ -63,6 +63,10 @@ check("path: root to a version, and an experiment lights its versions", () => {
 	const t = buildResearchTree("qr", [kol], []);
 	eq([...pathTo(t.nodes, "ver:kol_alpha:musk_v1")].sort(), ["app:qr", "exp:kol_alpha", "ver:kol_alpha:musk_v1"]);
 	eq(pathTo(t.nodes, "exp:kol_alpha").size, 5);
+});
+check("comparability note says what differed and what to do", () => {
+	eq(comparabilityNote({ ...kol, compare_within: ["harness_version"] } as MeExperiment), "They differ in harness version, so a gap between them may come from the setup rather than the version. To compare them, run every version under the same setup.");
+	eq(comparabilityNote(won), null);
 });
 check("summary line", () => eq(mapSummary([kol, won], props), "2 experiments · 5 versions tried · 1 suggested"));
 
