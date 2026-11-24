@@ -12,6 +12,7 @@ import {
 } from "@/api/repos";
 import { LumidMarkdown } from "@/components/app-surface/LumidMarkdown";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function StudioRepo() {
 	const { owner = "", name = "" } = useParams();
@@ -30,7 +31,13 @@ export default function StudioRepo() {
 	}, [owner, name]);
 
 	if (notFound) return <div className="max-w-3xl mx-auto px-4 py-16 text-center text-body text-muted-foreground">Repo <span className="font-mono">{owner}/{name}</span> not found (or private).</div>;
-	if (!repo) return <div className="max-w-3xl mx-auto px-4 py-16 text-center text-meta text-muted-foreground">Loading…</div>;
+	if (!repo) return (
+		<div className="max-w-[920px] mx-auto px-4 py-8 space-y-4" role="status" aria-label="Loading repository">
+			<Skeleton className="h-8 w-64 rounded-lg" />
+			<Skeleton className="h-4 w-96 rounded-full" />
+			<Skeleton className="h-72 rounded-xl" />
+		</div>
+	);
 
 	return (
 		<div className="max-w-[920px] mx-auto w-full px-4 py-6">
@@ -117,7 +124,7 @@ function FilesTab({ owner, name, refName }: { owner: string; name: string; refNa
 					: <pre className="border border-border rounded-lg p-3 bg-muted/40 overflow-x-auto text-caption font-mono leading-relaxed whitespace-pre">{blob.content}</pre>
 			) : (
 				<div className="border border-border rounded-lg divide-y divide-border/60">
-					{entries === null && <div className="px-3 py-6 text-center text-caption text-muted-foreground">Loading…</div>}
+					{entries === null && <div className="space-y-1.5 p-3" role="status" aria-label="Loading files">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-5 rounded-md" />)}</div>}
 					{entries?.length === 0 && <div className="px-3 py-6 text-center text-caption text-muted-foreground">Empty.</div>}
 					{sorted.map((e) => (
 						<button key={e.name} onClick={() => e.type === "tree" ? setPath(path ? `${path}/${e.name}` : e.name) : openFile(e.name)}
@@ -147,7 +154,7 @@ function PullsTab({ owner, name }: { owner: string; name: string }) {
 
 	const tone = (s: PR["state"]) => s === "merged" ? "text-plum-700" : s === "closed" ? "text-ink-600" : "text-gold-700";
 
-	if (pulls === null) return <div className="px-3 py-6 text-center text-caption text-muted-foreground">Loading…</div>;
+	if (pulls === null) return <div className="space-y-2 p-3" role="status" aria-label="Loading pull requests">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-12 rounded-lg" />)}</div>;
 	if (pulls.length === 0) return <div className="px-3 py-6 text-center text-caption text-muted-foreground">No pull requests.</div>;
 	return (
 		<div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-3">

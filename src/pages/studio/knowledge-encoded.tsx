@@ -8,6 +8,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Brain, ArrowRight } from 'lucide-react';
 import apiClient from '@/api/client';
+import { Gem, Sparkles } from 'lucide-react';
+import { StatTile } from '@/components/ui/stat-tile';
+import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
+import { ErrorState } from '@/components/ui/error-state';
+import { EmptyKnowledge, ErrorFrayed } from '@/components/illustrations/scenes';
 
 type Agent = { id: string; memory_count: number; last_memory_ts?: string; bank_path?: string };
 type Memory = {
@@ -54,6 +60,8 @@ export default function StudioKnowledgeEncoded() {
 	const [recent, setRecent] = useState<Memory[]>([]);
 	const [corpus, setCorpus] = useState<Memory[]>([]);
 	const [error, setError] = useState<string | null>(null);
+	// Bumped by Retry: re-runs the load without a page reload.
+	const [attempt, setAttempt] = useState(0);
 
 	useEffect(() => {
 		apiClient.get('/api/v1/me/knowledge/agents')
@@ -79,7 +87,7 @@ export default function StudioKnowledgeEncoded() {
 				setRecent(all.slice(0, 12));
 			})
 			.catch((e: any) => setError(e?.message || 'Failed to load knowledge'));
-	}, []);
+	}, [attempt]);
 
 	// Distribution by kind + a simple frequency word cloud over the sample.
 	const kindDist = useMemo(() => {
@@ -104,8 +112,31 @@ export default function StudioKnowledgeEncoded() {
 		return Object.entries(freq).filter(([, n]) => n > 1).sort((a, b) => b[1] - a[1]).slice(0, 30);
 	}, [corpus]);
 
-	if (error) return <div className="max-w-4xl mx-auto px-1 py-2 text-sm text-brick-600">{error}</div>;
-	if (agents === null) return <div className="max-w-4xl mx-auto px-1 py-2 text-sm text-ink-600 italic">Loading…</div>;
+	if (error) {
+		return (
+			<div className="max-w-4xl mx-auto px-1 py-2">
+				<ErrorState
+					error={new Error(error)}
+					what="your knowledge"
+					art={<ErrorFrayed />}
+					onRetry={() => { setError(null); setAgents(null); setAttempt((n) => n + 1); }}
+				/>
+			</div>
+		);
+	}
+	if (agents === null) {
+		// Skeleton in the page's own shape: three tiles, then the list.
+		return (
+			<div className="max-w-4xl mx-auto px-1 py-2 space-y-6" role="status" aria-label="Loading knowledge">
+				<div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+					{[0, 1, 2].map((i) => <Skeleton key={i} className="h-[92px] rounded-xl" />)}
+				</div>
+				<div className="space-y-2">
+					{[0, 1, 2].map((i) => <Skeleton key={i} className="h-16 rounded-lg" />)}
+				</div>
+			</div>
+		);
+	}
 
 	const totalMemories = agents.reduce((n, a) => n + (a.memory_count || 0), 0);
 	const distilled = recent.filter((m) => ['principle', 'recipe', 'pattern'].includes((m.kind || '').toLowerCase())).length;
@@ -114,9 +145,10 @@ export default function StudioKnowledgeEncoded() {
 		<div className="max-w-4xl mx-auto px-1 py-2 space-y-6">
 			{/* Metrics — real */}
 			<div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-				<Tile label="Memories" value={String(totalMemories)} ctx={`across ${agents.length} agents`} />
-				<Tile label="Knowledge agents" value={String(agents.length)} ctx="with accumulated memory" neutral />
-				<Tile label="Distilled (recent)" value={String(distilled)} ctx="principles + patterns" />
+				{/* Lumen StatTile: the numbers count up as they arrive. */}
+				<StatTile label="Memories" value={totalMemories} hint={`across ${agents.length} agents`} icon={Sparkles} />
+				<StatTile label="Knowledge agents" value={agents.length} hint="with accumulated memory" icon={Brain} />
+				<StatTile label="Distilled (recent)" value={distilled} hint="principles + patterns" icon={Gem} />
 			</div>
 
 			{/* Distribution by kind + a themes word cloud (over a sample) */}
@@ -157,11 +189,13 @@ export default function StudioKnowledgeEncoded() {
 
 			{/* Recently learned — real */}
 			<section>
-				<div className="text-micro tracking-[0.06em] text-ink-600 mb-2">Recently learned — captured from real runs</div>
+				<div className="eyebrow mb-2">Recently learned — captured from real runs</div>
 				{recent.length === 0 ? (
-					<div className="text-sm text-ink-600 italic">
-						Nothing learned yet — memories land here as your workflows run.
-					</div>
+					<EmptyState
+						art={<EmptyKnowledge />}
+						title="Nothing learned yet"
+						body="Memories land here as your workflows run — each one a pattern, a principle or a fix your agents can reuse."
+					/>
 				) : (
 					<ul className="space-y-2">
 						{recent.map((m, i) => (

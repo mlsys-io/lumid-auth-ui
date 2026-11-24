@@ -24,6 +24,10 @@ import {
 	type InboxMessage,
 	type StepRecap,
 } from "../../api/inbox";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/ui/error-state";
+import { EmptyState as LumenEmpty } from "@/components/ui/empty-state";
+import { EmptyInbox, ErrorFrayed } from "@/components/illustrations/scenes";
 
 /**
  * /account/inbox — real two-way message store between autoresearch
@@ -174,22 +178,26 @@ export default function InboxPage() {
 				</label>
 			</div>
 
-			{loading && messages.length === 0 && (
-				<div className="text-center py-12 text-muted-foreground">Loading…</div>
+			{loading && messages.length === 0 && !error && (
+				// Skeleton cards in the feed's own shape.
+				<div className="space-y-3" role="status" aria-label="Loading inbox">
+					{[0, 1, 2].map((i) => <Skeleton key={i} className="h-[88px] rounded-xl" />)}
+				</div>
 			)}
 
 			{error && (
-				<div className="rounded border border-brick-300 bg-brick-50 p-4 mb-4 text-sm text-brick-900">
-					<div className="flex items-center gap-2 font-semibold mb-1">
-						<ShieldAlert className="w-4 h-4" /> Could not load inbox
-					</div>
-					<div className="text-xs">{error}</div>
-					<div className="text-xs mt-2">
-						If you don&apos;t have any apps with{" "}
-						<code className="bg-brick-100 px-1 rounded">inbox_publish.enabled: true</code>{" "}
-						in their xpcloud.yaml yet, the inbox will be empty until a run posts here.
-					</div>
-				</div>
+				// Lumen ErrorState: says what didn't load, offers Retry, keeps the
+				// raw message behind "Details", and only claims the session ended
+				// if the app's own session check also fails (this panel talks to
+				// xpcloud through /inbox-api, which can refuse on its own).
+				<ErrorState
+					className="mb-4"
+					error={new Error(error)}
+					what="your inbox"
+					art={<ErrorFrayed />}
+					onRetry={refresh}
+					hint={<>Apps post here once their <code className="rounded bg-ink-100 px-1 text-caption">inbox_publish.enabled: true</code> is set and a run completes.</>}
+				/>
 			)}
 
 			{/* Needs you — attention-needed messages (questions/flags/drafts),
@@ -236,19 +244,13 @@ export default function InboxPage() {
 
 function EmptyState() {
 	return (
-		<div className="rounded-xl border border-ink-200 bg-card p-8 text-center">
-			<InboxIcon className="w-10 h-10 text-ink-600 mx-auto mb-3" />
-			<p className="font-semibold text-ink-700 mb-1">No messages yet</p>
-			<p className="text-sm text-muted-foreground mb-4">
-				Configure <code className="bg-ink-100 px-1 rounded text-xs">inbox_publish:</code> in your app&apos;s xpcloud.yaml. Each run will post a message here.
-			</p>
-			<Link
-				to="/studio/apps"
-				className="text-sm text-plum-600 hover:underline"
-			>
-				Or hand-author a skill →
-			</Link>
-		</div>
+		<LumenEmpty
+			art={<EmptyInbox />}
+			title="All caught up"
+			body={<>Nothing is waiting for you. Apps post here once <code className="rounded bg-ink-100 px-1 text-caption">inbox_publish:</code> is set in their xpcloud.yaml — each run leaves a message.</>}
+			actionLabel="Open your apps"
+			to="/studio/apps"
+		/>
 	);
 }
 

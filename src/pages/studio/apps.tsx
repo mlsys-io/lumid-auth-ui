@@ -537,7 +537,7 @@ function AppsHome() {
 	if (byApp === null) {
 		return (
 			<div className="relative space-y-6">
-				<div className="h-20 rounded-xl bg-ink-100 animate-pulse" />
+				<div className="h-20 rounded-xl lumen-skeleton" />
 				<Skeleton lines={3} />
 				<SpiralOverlay />
 			</div>

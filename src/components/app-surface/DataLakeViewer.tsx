@@ -25,6 +25,8 @@ import {
   type JsonSchema,
   type SampleResult,
 } from "@/api/dataLake";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PickATable } from "@/components/illustrations/scenes";
 
 // ── Small shared bits ────────────────────────────────────────────────────────
 
@@ -535,13 +537,14 @@ export default function DataLakeViewer({ config }: { config?: Record<string, unk
           {sel ? (
             <TableDetail sel={sel} />
           ) : (
-            <div className="text-caption text-ink-600 p-4 space-y-2">
-              <div>Pick a table on the left to inspect its columns, profile, and a capped sample.</div>
-              <div className="text-ink-600">
-                Data never moves — the viewer only reads catalog metadata and a small
-                materialized sample. Bulk export is a later phase.
-              </div>
-            </div>
+            <EmptyState
+              framed={false}
+              size="sm"
+              className="pt-12"
+              art={<PickATable />}
+              title="Pick a table to inspect"
+              body="Choose one on the left for its columns, profile and a capped sample. Data never moves — the viewer reads catalog metadata and a small materialized sample."
+            />
           )}
         </div>
       </div>

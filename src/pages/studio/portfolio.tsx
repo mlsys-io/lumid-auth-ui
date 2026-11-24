@@ -120,8 +120,8 @@ export default function StudioPortfolio({ embedded = false }: { embedded?: boole
 	if (data === null && !err) {
 		return (
 			<div className={cn("w-full space-y-4", !embedded && "max-w-5xl mx-auto px-1 py-2")}>
-				<div className="h-20 rounded-xl bg-ink-100 animate-pulse" />
-				<div className="h-64 rounded-xl bg-ink-100 animate-pulse" />
+				<div className="h-20 rounded-xl lumen-skeleton" />
+				<div className="h-64 rounded-xl lumen-skeleton" />
 			</div>
 		);
 	}

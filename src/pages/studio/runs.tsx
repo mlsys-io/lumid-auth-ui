@@ -30,6 +30,9 @@ import { TONES } from "@/lib/tones";
 import { runStatus, runStatusTitle, RUN_STATUS_LABEL, RUN_STATUS_TONE } from "@/lib/runStatus";
 import { runRowHref } from "@/lib/run-routes";
 import { useStudioRefetch } from "@/hooks/useStudioRefetch";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
+import { EmptyRuns } from "@/components/illustrations/scenes";
 
 // "index" is the default claude-style list (→ chat); the other four are the
 // power "Timeline" views kept as an escape hatch behind the toggle.
@@ -179,7 +182,12 @@ export default function StudioRuns() {
 				search={rows.length > 6}
 				searchPlaceholder="Search runs…"
 				toolbar={toolbar}
-				empty="No runs in the selected window."
+				loading={runs === null && !err}
+				error={runs === null && err ? new Error(err) : undefined}
+				onRetry={load}
+				emptyArt={<EmptyRuns />}
+				emptyTitle="No runs in this window"
+				empty="Runs appear here as your workflows execute. Widen the window, or start one from an app."
 				footer={(runs?.length || 0) > INDEX_CAP
 					? <div className="text-caption text-muted-foreground text-center">Showing {INDEX_CAP} of {runs?.length}. Open <button className="underline" onClick={() => setView("grid")}>Timeline</button> for all.</div>
 					: undefined}
@@ -234,7 +242,9 @@ export default function StudioRuns() {
 			</div>
 
 			{runs === null ? (
-				<div className="text-sm text-ink-600 italic py-4">Loading…</div>
+				<div className="space-y-2" role="status" aria-label="Loading runs">
+					{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-10 rounded-lg" />)}
+				</div>
 			) : view === "list" ? (
 				<RunsList runs={runs} onClick={(id) => navigate(runHref(id))} />
 			) : view === "grid" ? (
@@ -267,9 +277,11 @@ function ViewTab({ active, onClick, label }: { active: boolean; onClick: () => v
 function RunsList({ runs, onClick }: { runs: MeRunRow[]; onClick: (runId: string) => void }) {
 	if (runs.length === 0) {
 		return (
-			<div className="rounded-xl border border-dashed border-ink-200 bg-card p-6 text-center text-sm text-ink-600">
-				No runs in the selected window.
-			</div>
+			<EmptyState
+				art={<EmptyRuns />}
+				title="No runs in this window"
+				body="Runs appear here as your workflows execute. Widen the window, or start one from an app."
+			/>
 		);
 	}
 	return (

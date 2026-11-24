@@ -67,7 +67,7 @@ export default function DatasetExplorer({ app }: { app: string }) {
 			.catch(() => setLoadingFile(false));
 	};
 
-	if (groups === null) return <div className="h-16 rounded-lg bg-ink-100 animate-pulse" />;
+	if (groups === null) return <div className="h-16 rounded-lg lumen-skeleton" />;
 	if (groups.length === 0) return (
 		<div className="text-xs text-ink-600 leading-relaxed">
 			No static casebook is bundled with this workflow — it reads <span className="font-medium text-ink-700">live / external data</span> (e.g. market feeds, your mailbox, a warehouse). Its goal metrics are scored on each run's outputs; open the <span className="font-medium text-ink-700">Runs</span> tab to inspect what each run saw.

@@ -18,6 +18,7 @@ import { me, MeApiError, type MeRunDetail } from "@/api/me";
 import { setStudioSelection } from "@/components/StudioContext";
 import AskAbout from "@/components/AskAbout";
 import RunDagCanvas from "@/components/workflow/RunDagCanvas";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface StepLogEntry {
 	id?: string;
@@ -63,7 +64,13 @@ export default function StudioRunDetail() {
 	}, [detail?.app, detail?.loop, run_id]);
 
 	if (err) return <div className="space-y-4"><BackLink detail={null} /><div className="text-brick-700 text-sm">{err}</div></div>;
-	if (!detail) return <div className="space-y-4"><BackLink detail={null} /><div className="text-sm text-ink-600 italic">Loading…</div></div>;
+	if (!detail) return (
+		<div className="space-y-4" role="status" aria-label="Loading run">
+			<BackLink detail={null} />
+			<Skeleton className="h-28 rounded-xl" />
+			<Skeleton className="h-64 rounded-xl" />
+		</div>
+	);
 
 	const steps = normalizeSteps(detail.steps);
 	const summary = detail.summary as Record<string, any> | null;

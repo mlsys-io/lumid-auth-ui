@@ -20,6 +20,7 @@ import IndexList, { type IndexRow } from "@/components/studio/IndexList";
 import { askSkill } from "@/lib/grounded-asks";
 import { type ToneKey } from "@/lib/tones";
 import { loopLabel } from "@/lib/workflow-names";
+import { WelcomeApps } from "@/components/illustrations/scenes";
 
 function healthTone(h?: MeSkillRow["health"]): ToneKey {
 	if (!h) return "idle";
@@ -91,6 +92,9 @@ export default function StudioSkills() {
 			search={(installedRows.length + discoverRows.length) > 6}
 			searchPlaceholder="Search skills…"
 			sectionOrder={["Installed", "Discover"]}
+			loading={rows === null || cards === null}
+			emptyArt={<WelcomeApps />}
+			emptyTitle="No skills yet"
 			empty="Skills arrive with apps — each app's skill_imports pull shared capabilities your workflows call."
 		/>
 	);
@@ -169,7 +173,7 @@ function SkillDetail({ row }: { row: MeSkillRow }) {
 
 			<PageSection title="Readme">
 				{readme === null ? (
-					<div className="h-24 rounded-xl bg-ink-100 animate-pulse" />
+					<div className="h-24 rounded-xl lumen-skeleton" />
 				) : readme === "" ? (
 					<div className="text-caption text-ink-600 italic">No readme available.</div>
 				) : (

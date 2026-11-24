@@ -30,6 +30,7 @@ import { setStudioSelection } from '@/components/StudioContext';
 import { useStudioRefetch } from '@/hooks/useStudioRefetch';
 import { IntentFeedbackRow } from '@/components/IntentFeedbackRow';
 import { AXIS_META } from '@/lib/demo-intents';
+import { EmptyInbox } from "@/components/illustrations/scenes";
 
 type Filter = 'all' | 'drafts' | 'activity' | 'audit' | 'notices';
 
@@ -404,26 +405,26 @@ function InboxZeroState() {
 		}));
 	};
 	return (
-		<div className="rounded-2xl border border-gold-100 bg-gradient-to-br from-gold-50/40 to-white py-10 px-6 text-center">
-			<div className="w-14 h-14 mx-auto rounded-2xl bg-gold-100/60 flex items-center justify-center mb-4 shadow-inner shadow-gold-50">
-				<CheckCircle2 className="w-7 h-7 text-gold-600" />
-			</div>
-			<div className="text-read font-medium text-ink-900">Inbox zero.</div>
-			<p className="text-sm text-ink-600 mt-1.5 max-w-md mx-auto leading-relaxed">
+		<div className="animate-lumen-rise rounded-2xl border border-border bg-card py-10 px-6 text-center shadow-e1">
+			{/* Lumen: the strands settling into a tray — a calm picture of
+			    "everything is in", not a checkmark badge. */}
+			<div className="mx-auto mb-4 w-40 text-ink-300"><EmptyInbox /></div>
+			<div className="text-title font-medium text-ink-900">Inbox zero.</div>
+			<p className="text-body text-ink-600 mt-1.5 max-w-md mx-auto text-pretty">
 				When your workflows produce something for you — a draft, a
 				summary, a heads-up — it lands here for review.
 			</p>
 			<div className="flex items-center justify-center gap-2 mt-5">
 				<button
 					onClick={openComposer}
-					className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-gold-700 text-white hover:bg-gold-800 transition-colors shadow-sm shadow-gold-100"
+					className="lumen-press inline-flex items-center gap-1.5 px-3 h-8 text-meta font-medium rounded-md bg-primary text-primary-foreground hover:bg-ink-800 transition-colors shadow-e1"
 				>
 					<Plus className="w-3.5 h-3.5" />
 					New workflow
 				</button>
 				<button
 					onClick={askAgent}
-					className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-ink-200 text-ink-700 hover:bg-ink-50 transition-colors"
+					className="lumen-press inline-flex items-center gap-1.5 px-3 h-8 text-meta font-medium rounded-md border border-border bg-card text-ink-800 hover:border-ink-300 hover:bg-ink-50 transition-colors shadow-e1"
 				>
 					<Sparkles className="w-3.5 h-3.5 text-gold-600" />
 					Ask for ideas
