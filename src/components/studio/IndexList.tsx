@@ -154,6 +154,9 @@ export interface IndexListProps {
 	/** Rows are still loading — render skeleton rows, NOT the empty copy
 	 *  (Skills/Studies/Runs used to say "nothing here" while fetching). */
 	loading?: boolean;
+	/** Hide the serif title row (the page above already names it, e.g. a
+	 *  Library tab). The search box moves to the toolbar line. */
+	showTitle?: boolean;
 	/** A failed load: render ErrorState with Retry instead of an empty list. */
 	error?: unknown;
 	onRetry?: () => void;
@@ -163,7 +166,7 @@ export interface IndexListProps {
 
 export default function IndexList({
 	title, rows, search, searchPlaceholder, toolbar, footer, empty, sectionOrder,
-	emptyTitle, emptyArt, loading, error, onRetry,
+	emptyTitle, emptyArt, loading, error, onRetry, showTitle = true,
 }: IndexListProps) {
 	const [q, setQ] = useState('');
 
@@ -195,9 +198,9 @@ export default function IndexList({
 	}, [filtered, sectionOrder]);
 
 	return (
-		<div className="max-w-[760px] mx-auto w-full px-1 py-2">
-			<div className="flex items-center gap-3 mb-4 px-2">
-				<h1 className="font-display text-h2 font-medium tracking-tight text-foreground flex-1">{title}</h1>
+		<div className={showTitle ? "max-w-[760px] mx-auto w-full px-1 py-2" : "max-w-[760px] w-full"}>
+			<div className={showTitle ? "flex items-center gap-3 mb-4 px-2" : "flex items-center justify-end gap-3 mb-3 px-2 empty:hidden"}>
+				{showTitle && <h1 className="font-display text-h2 font-medium tracking-tight text-foreground flex-1">{title}</h1>}
 				{search && (
 					<div className="relative w-48">
 						<Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-500" />

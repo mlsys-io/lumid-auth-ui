@@ -87,6 +87,7 @@ export default function StudioSkills() {
 
 	return (
 		<IndexList
+			showTitle={false}
 			title="Skills"
 			rows={[...installedRows, ...discoverRows]}
 			search={(installedRows.length + discoverRows.length) > 6}

@@ -179,8 +179,8 @@ export default function ChatRail({
 							// Wider than it looks: a 1px target is unhittable.
 							className={cn(
 								"absolute left-0 top-0 h-full w-[3px] -ml-[1px] z-10 cursor-col-resize",
-								"hover:bg-foreground/20 transition-colors",
-								resizing && "bg-foreground/30",
+								"hover:bg-ink-200 transition-colors",
+								resizing && "bg-ink-300",
 							)}
 						/>
 					)}

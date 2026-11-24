@@ -1,30 +1,22 @@
-// GradientIcon — hash-tinted gradient avatar (deterministic per name).
-// Lifted from the pre-migration app-revamp marketplace card so install +
-// prompt surfaces share one visual language. Six-palette rotation keyed by
-// a stable hash of the name, so the same app always gets the same tint with
-// no server-side color config.
+// GradientIcon — the per-app avatar on install + prompt surfaces.
+//
+// Lumen (2026-11): the name is kept so callers don't churn, but the six
+// hash-picked COOL gradients (lagoon, plum, "gold→lagoon"…) with two white
+// initials are gone — they were most of the "why is the Library blue?" drift.
+// It now renders the app's StrandAvatar: the same deterministic strand glyph
+// the app wears in the sidebar, its Recent threads and its workspace header.
+// With an explicit `icon`, it draws that glyph on a warm ink tile instead.
 
+import { StrandAvatar } from "@/components/illustrations/StrandAvatar";
 import { cn } from "@/lib/utils";
 
-// Cohesive cool/jewel palette anchored on the emerald brand — deterministic
-// per-app variety without clashing candy tones (no hot pink / fuchsia / amber).
-const PALETTE = [
-	"from-gold-500 to-gold-600",
-	"from-gold-500 to-lagoon-600",
-	"from-lagoon-500 to-lagoon-600",
-	"from-lagoon-500 to-lagoon-600",
-	"from-plum-500 to-lagoon-600",
-	"from-plum-500 to-plum-600",
-];
+const PX = { sm: 32, md: 40, lg: 48 } as const;
 
-export function gradientTint(name: string): string {
-	let hash = 0;
-	for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0;
-	return PALETTE[Math.abs(hash) % PALETTE.length];
+/** @deprecated kept for API compatibility; Lumen avatars are not gradients. */
+export function gradientTint(_name: string): string {
+	return "from-ink-100 to-ink-100";
 }
 
-// label defaults to the first two chars of the name (uppercased). Pass an
-// `icon` to render a lucide glyph instead of initials.
 export function GradientIcon({
 	name,
 	icon: Icon,
@@ -36,14 +28,14 @@ export function GradientIcon({
 	size?: "sm" | "md" | "lg";
 	className?: string;
 }) {
-	const dims = size === "lg" ? "w-12 h-12 text-read" : size === "sm" ? "w-8 h-8 text-micro" : "w-10 h-10 text-sm";
+	if (!Icon) return <StrandAvatar slug={name} size={PX[size]} className={className} title={name} />;
 	const glyph = size === "lg" ? "w-5 h-5" : size === "sm" ? "w-4 h-4" : "w-[18px] h-[18px]";
 	return (
-		<div className={cn(
-			"shrink-0 rounded-lg bg-gradient-to-br grid place-items-center text-white font-semibold shadow-inner",
-			dims, gradientTint(name), className,
-		)}>
-			{Icon ? <Icon className={glyph} /> : name.slice(0, 2).toUpperCase()}
+		<div
+			className={cn("shrink-0 rounded-lg grid place-items-center bg-ink-100 text-ink-700 ring-1 ring-inset ring-ink-200", className)}
+			style={{ width: PX[size], height: PX[size] }}
+		>
+			<Icon className={glyph} />
 		</div>
 	);
 }

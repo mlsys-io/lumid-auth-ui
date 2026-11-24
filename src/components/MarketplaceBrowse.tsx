@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { bearerHeader } from "@/api/session-bearer";
 import { SpiralOverlay } from "@/components/BrandLoader";
+import { Segmented } from "@/components/ui/segmented";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
@@ -328,27 +329,14 @@ export default function MarketplaceBrowse() {
 		<div className="space-y-3">
 			{/* Tab + search row */}
 			<div className="flex items-center gap-3 flex-wrap">
-				<nav className="flex items-center gap-0.5">
-					{tabs.map((t) => (
-						<button
-							key={t.id}
-							onClick={() => { setTab(t.id); setQuery(""); setActiveTag(null); }}
-							className={[
-								"inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors",
-								tab === t.id
-									? "bg-ink-900 text-white font-medium"
-									: "text-ink-600 hover:text-ink-800 hover:bg-ink-100",
-							].join(" ")}
-						>
-							{t.label}
-							{t.count !== null && (
-								<span className={["text-nano font-mono tabular-nums", tab === t.id ? "text-white/60" : "text-ink-600"].join(" ")}>
-									{t.count}
-								</span>
-							)}
-						</button>
-					))}
-				</nav>
+				{/* Lumen Segmented: the kind is a FILTER on one catalog, so it reads
+				    as one control with a sliding thumb, not a row of ink pills. */}
+				<Segmented
+					aria-label="Kind"
+					value={tab}
+					onChange={(v) => { setTab(v); setQuery(""); setActiveTag(null); }}
+					options={tabs.map((t) => ({ value: t.id, label: t.label, count: t.count ?? undefined }))}
+				/>
 
 				<div className="flex-1 relative min-w-[180px]">
 					<Search className="w-3.5 h-3.5 text-ink-600 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -357,7 +345,7 @@ export default function MarketplaceBrowse() {
 						value={query}
 						onChange={(e) => { setQuery(e.target.value); setActiveTag(null); }}
 						placeholder={`Search ${tab}…`}
-						className="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-ink-200 bg-card focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400 transition-all placeholder:text-ink-500"
+						className="w-full h-9 pl-8 pr-3 text-body rounded-lg border border-border bg-card shadow-e1 outline-none focus:border-ring/70 focus:ring-4 focus:ring-ring/15 transition-[border-color,box-shadow] duration-120 placeholder:text-ink-500"
 					/>
 				</div>
 
@@ -368,12 +356,17 @@ export default function MarketplaceBrowse() {
 
 			{/* Tag chips */}
 			{topTags.length > 0 && !query && (
-				<div className="flex items-center gap-1.5 flex-wrap">
-					<Tag className="w-3 h-3 text-ink-600 flex-shrink-0" />
+				// ONE row that scrolls sideways, its right edge feathered — a
+				// wrapping cloud of chips was a third band of controls.
+				<div
+					className="scrollbar-hide flex items-center gap-1.5 overflow-x-auto pr-8"
+					style={{ maskImage: 'linear-gradient(to right, black calc(100% - 48px), transparent)', WebkitMaskImage: 'linear-gradient(to right, black calc(100% - 48px), transparent)' }}
+				>
+					<Tag className="w-3 h-3 text-ink-500 flex-shrink-0" />
 					{activeTag && (
 						<button
 							onClick={() => setActiveTag(null)}
-							className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-micro bg-ink-900 text-white"
+							className="inline-flex shrink-0 items-center gap-1 h-6 px-2.5 rounded-full text-micro font-medium bg-ink-900 text-white"
 						>
 							{activeTag} <X className="w-2.5 h-2.5" />
 						</button>
@@ -382,7 +375,7 @@ export default function MarketplaceBrowse() {
 						<button
 							key={t}
 							onClick={() => setActiveTag(t)}
-							className="px-2 py-0.5 rounded-full text-micro border border-ink-200 text-ink-600 hover:border-gold-400 hover:text-gold-700 transition-colors"
+							className="shrink-0 h-6 px-2.5 rounded-full text-micro border border-border bg-card text-ink-700 hover:border-ink-300 hover:text-ink-900 transition-colors duration-120"
 						>
 							{t}
 						</button>
@@ -584,11 +577,11 @@ function RepoCardView({
 	return (
 		<article
 			className={cn(
-				"group rounded-xl border bg-card p-4 flex flex-col shadow-sm transition-all duration-200",
+				"group rounded-xl border bg-card p-4 flex flex-col shadow-e1 lumen-lift",
 				STAGGER_CLASS,
 				ctaState === "installed"
-					? "border-gold-200 bg-gold-50/30"
-					: "border-ink-200 hover:border-gold-300 hover:shadow-md hover:-translate-y-0.5",
+					? "border-gold-200 bg-gold-50/40"
+					: "border-border hover:border-ink-300",
 			)}
 			style={staggerDelay(index)}
 		>
@@ -596,7 +589,7 @@ function RepoCardView({
 			<div className="flex items-start gap-3">
 				<GradientIcon name={repo.name} />
 				<div className="min-w-0 flex-1">
-					<h3 className="font-medium text-sm truncate" title={repo.name}>{title}</h3>
+					<h3 className="font-semibold text-body text-ink-900 truncate" title={repo.name}>{title}</h3>
 					<p className="text-micro text-ink-600 mt-0.5 truncate">
 						{repo.name}
 						{repo.fork_of && (
@@ -619,7 +612,7 @@ function RepoCardView({
 			</div>
 
 			{/* Summary */}
-			<p className="text-xs text-ink-600 mt-3 flex-1 line-clamp-3 leading-relaxed">
+			<p className="text-meta text-ink-700 mt-3 flex-1 line-clamp-3">
 				{repo.summary || "No description provided."}
 			</p>
 
@@ -884,7 +877,7 @@ function AppDetailDrawer({
 		<div
 			ref={backdropRef}
 			onClick={(e) => { if (e.target === backdropRef.current) onClose(); }}
-			className="fixed inset-0 z-50 flex items-start justify-end bg-black/15 backdrop-blur-[2px]"
+			className="fixed inset-0 z-50 flex items-start justify-end bg-ink-950/15 backdrop-blur-[2px]"
 		>
 			<div className="relative h-full w-full max-w-md bg-card shadow-2xl flex flex-col">
 				{/* Kind accent bar */}

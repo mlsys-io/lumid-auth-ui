@@ -1222,7 +1222,7 @@ function AddAccountModal({
 	};
 
 	return (
-		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+		<div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/30">
 			<div className="w-full max-w-md rounded-xl border border-ink-200 bg-card shadow-lg p-5 mx-4">
 				<div className="flex items-center justify-between mb-4">
 					<h2 className="font-semibold text-ink-800 flex items-center gap-2">
@@ -1439,7 +1439,7 @@ function CreatePoolModal({ onClose, onCreated }: { onClose: () => void; onCreate
 	};
 
 	return (
-		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+		<div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/30">
 			<div className="w-full max-w-sm rounded-xl border border-ink-200 bg-card shadow-lg p-5 mx-4">
 				<div className="flex items-center justify-between mb-4">
 					<h2 className="font-semibold text-ink-800">New pool</h2>
@@ -1594,7 +1594,7 @@ function PoolMembersModal({ pool, onClose, isSuper }: { pool: ClaudePool; onClos
 	};
 
 	return (
-		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+		<div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/30">
 			<div className="w-full max-w-md rounded-xl border border-ink-200 bg-card shadow-lg p-5 mx-4">
 				<div className="flex items-center justify-between mb-4">
 					<h2 className="font-semibold text-ink-800">{pool.name} — members</h2>

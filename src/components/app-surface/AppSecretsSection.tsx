@@ -65,7 +65,7 @@ function ClaudeConnectModal({
 	};
 
 	return (
-		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+		<div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/40 p-4" onClick={onClose}>
 			<div className="w-full max-w-lg rounded-xl bg-card p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
 				<div className="flex items-center gap-2 mb-3">
 					<Sparkles className="w-4 h-4 text-gold-500" />

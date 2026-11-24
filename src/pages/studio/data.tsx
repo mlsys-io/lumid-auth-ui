@@ -66,25 +66,29 @@ export default function StudioData() {
 		<div className="flex flex-1 min-h-0 h-full">
 			{/* LEFT — tabs + the surface they select. */}
 			<div className="flex-1 min-w-0 flex flex-col min-h-0 border-r border-border px-6 py-6">
-				<div className="flex items-center gap-1.5 mb-4">
+				{/* Lumen: underline tabs, the same as the Library — these switch
+				    VIEWS, so they read as navigation, not as a row of buttons. */}
+				<div role="tablist" aria-label="Data views" className="flex items-center gap-6 mb-5 border-b border-border">
 					{TABS.map(({ id, label, icon: Icon }) => (
 						<button
 							key={id}
+							role="tab"
+							aria-selected={tab === id}
 							onClick={() => open(id)}
 							className={cn(
-								"inline-flex items-center gap-1.5 px-3 py-1.5 text-meta font-medium rounded-lg border transition-colors",
+								"relative -mb-px inline-flex items-center gap-1.5 border-b-2 pb-2.5 text-body font-medium transition-colors duration-180",
 								tab === id
-									? "border-gold-300 bg-gold-50 text-gold-900"
-									: "border-ink-200 bg-card text-ink-600 hover:bg-ink-50 hover:text-ink-800",
+									? "border-gold-500 text-ink-900"
+									: "border-transparent text-ink-600 hover:text-ink-900 hover:border-ink-300",
 							)}
 						>
-							<Icon className="w-3.5 h-3.5" />
+							<Icon className="w-4 h-4" />
 							{label}
 						</button>
 					))}
 				</div>
 				<div className="flex-1 min-h-0">
-					<Suspense fallback={<div className="text-sm text-muted-foreground px-1 py-2">Loading…</div>}>
+					<Suspense fallback={<div className="lumen-skeleton h-64 rounded-xl" role="status" aria-label="Loading" />}>
 						{/* All stay MOUNTED across tab switches (hidden, not unmounted) so
 						    each keeps its loaded catalog + the session cache stays warm. */}
 						<div className={tab === "catalog" ? "h-full" : "hidden"}>

@@ -67,7 +67,7 @@ export default function StudioExperiments() {
 					className={cn(
 						"px-2.5 py-1 text-micro rounded-full border transition-colors",
 						filter === f
-							? "border-foreground/25 bg-muted text-foreground"
+							? "border-ink-300 bg-muted text-foreground"
 							: "border-border bg-card text-muted-foreground hover:bg-muted",
 					)}
 				>
@@ -79,6 +79,7 @@ export default function StudioExperiments() {
 
 	return (
 		<IndexList
+			showTitle={false}
 			title="Studies"
 			rows={indexRows}
 			search={indexRows.length > 6}

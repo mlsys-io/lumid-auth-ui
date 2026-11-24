@@ -69,7 +69,7 @@ export function Segmented<T extends string>({
 					>
 						{o.label}
 						{o.count != null && (
-							<span className={cn("tabular-nums", on ? "text-ink-600" : "text-ink-500")}>{o.count}</span>
+							<span className={cn("tabular-nums font-normal", on ? "text-ink-700" : "text-ink-600")}>{o.count}</span>
 						)}
 					</button>
 				);

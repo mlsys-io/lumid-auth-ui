@@ -20,7 +20,7 @@ export function StateAwareCTA({
 	doneLabel?: string;
 	className?: string;
 }) {
-	const base = "w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg transition";
+	const base = "lumen-press w-full inline-flex items-center justify-center gap-1.5 px-3 h-9 text-meta font-medium rounded-lg transition-colors duration-120";
 	switch (state) {
 		case "installed":
 			return (
@@ -42,7 +42,11 @@ export function StateAwareCTA({
 			);
 		default:
 			return (
-				<button onClick={onAction} className={cn(base, "bg-gradient-to-br from-gold-500 to-gold-600 text-white shadow-sm shadow-gold-100 hover:shadow-md hover:from-gold-600 hover:to-gold-700", className)}>
+				// Lumen: a QUIET paper button. On a grid this CTA repeats on every
+				// card, and nine heavy gold gradients were the loudest thing on the
+				// page. The bronze outline is saved for the state that matters:
+				// "Added · Open".
+				<button onClick={onAction} className={cn(base, "border border-border bg-card text-ink-900 shadow-e1 hover:border-ink-300 hover:bg-ink-50", className)}>
 					<Plus className="w-3.5 h-3.5" /> {idleLabel}
 				</button>
 			);

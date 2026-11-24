@@ -126,6 +126,28 @@ function goldText(line) {
 	return { out, n };
 }
 
+// Translucent BLACK / foreground fills and borders (bg-foreground/[0.05],
+// bg-black/[0.04], border-foreground/25 …) were inert before P1's token-opacity
+// fix for the token ones; alive, they lay a cool grey film over warm paper.
+// Map them to warm ink steps; true scrims (black/15+ backgrounds) become a
+// warm ink-950 scrim at the same strength.
+function alphaFill(line) {
+	let n = 0;
+	const step = (pct) => (pct <= 6 ? "ink-100/60" : pct <= 12 ? "ink-100" : pct <= 22 ? "ink-200" : "ink-300");
+	const pctOf = (raw) => (raw.startsWith("[") ? Math.round(parseFloat(raw.slice(1, -1)) * 100) : Number(raw));
+	let out = line.replace(/(?<![\w-])((?:[a-z0-9-]+:)*)bg-(foreground|primary)\/(\[[0-9.]+\]|[0-9]+)(?![\w-])/g, (m, v, t, raw) => {
+		if (t === "primary" && /^hover:$/.test(v)) return (n++, `${v}bg-ink-800`);
+		return (n++, `${v}bg-${step(pctOf(raw))}`);
+	});
+	out = out.replace(/(?<![\w-])((?:[a-z0-9-]+:)*)bg-black\/(\[[0-9.]+\]|[0-9]+)(?![\w-])/g, (m, v, raw) => {
+		const p = pctOf(raw);
+		return (n++, p >= 15 ? `${v}bg-ink-950/${p}` : `${v}bg-${step(p)}`);
+	});
+	out = out.replace(/(?<![\w-])((?:[a-z0-9-]+:)*)border-foreground\/(\[[0-9.]+\]|[0-9]+)(?![\w-])/g, (m, v, raw) => (n++, `${v}border-${pctOf(raw) >= 30 ? "ink-400" : "ink-300"}`));
+	out = out.replace(/(?<![\w-])((?:[a-z0-9-]+:)*)ring-black\/(\d+)(?![\w-])/g, (m, v, a) => (n++, `${v}ring-ink-900/${a}`));
+	return { out, n };
+}
+
 export function transform(src, { alphaOnly = false } = {}) {
 	let changed = 0;
 	const out = src.split("\n").map((line) => {
@@ -133,7 +155,9 @@ export function transform(src, { alphaOnly = false } = {}) {
 		const a = alphaText(line);
 		changed += a.n;
 		if (alphaOnly) return a.out;
-		const g = goldText(a.out);
+		const f = alphaFill(a.out);
+		changed += f.n;
+		const g = goldText(f.out);
 		changed += g.n;
 		let l = g.out.replace(CLASS, (_m, variants, util, fam, step, alpha) => {
 			changed++;

@@ -10,48 +10,40 @@
 // The Library is browsing, not conversation — its docked chat was removed
 // on 2026-08-10. The chat lives on /studio and inside app workspaces; here
 // it only competed with the content for width.
+//
+// Lumen (2026-11): the page owns its title (PageHeader, serif) and the three
+// sections are underline tabs under it — the top strip no longer repeats
+// "Library" (TopStatusStrip ownHeader), and the bordered pill row is gone.
 
-import { NavLink, Outlet } from "react-router-dom";
-import { Store, Puzzle, FlaskConical } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Outlet, useLocation } from "react-router-dom";
+import { PageHeader } from "@/components/ui/page-header";
+import { PageContainer } from "@/components/ui/page-container";
 
 const TABS = [
-	{ to: "/studio/library/marketplace", label: "Marketplace", icon: Store },
-	{ to: "/studio/library/skills", label: "Skills", icon: Puzzle },
-	{ to: "/studio/library/experiments", label: "Studies", icon: FlaskConical },
+	{ to: "/studio/library/marketplace", label: "Marketplace" },
+	{ to: "/studio/library/skills", label: "Skills" },
+	{ to: "/studio/library/experiments", label: "Studies" },
 ];
 
+const SUBTITLE: Record<string, string> = {
+	marketplace: "Apps, workflows, memory and datasets others have published — add one in a click.",
+	skills: "The capabilities your agents import — health, versions, who uses what.",
+	experiments: "Hypotheses your agents are testing, across every agent.",
+};
+
 export default function StudioLibraryTabs() {
+	const { pathname } = useLocation();
+	const section = pathname.split("/")[3] || "marketplace";
 	return (
 		<div className="flex flex-1 min-h-0 h-full">
-			{/* Tabbed library content — full width now the chat panel is gone. */}
-			<div className="flex-1 min-w-0 flex flex-col">
-				<div className="flex-1 min-h-0 overflow-y-auto px-6 py-6">
-					<div className="space-y-4 max-w-5xl">
-						<div className="flex items-center gap-1.5">
-							{TABS.map(({ to, label, icon: Icon }) => (
-								<NavLink
-									key={to}
-									to={to}
-									className={({ isActive }) =>
-										cn(
-											"inline-flex items-center gap-1.5 px-3 py-1.5 text-meta font-medium rounded-lg border transition-colors",
-											isActive
-												? "border-gold-300 bg-gold-50 text-gold-900"
-												: "border-ink-200 bg-card text-ink-600 hover:bg-ink-50 hover:text-ink-800",
-										)
-									}
-								>
-									<Icon className="w-3.5 h-3.5" />
-									{label}
-								</NavLink>
-							))}
-						</div>
+			<div className="flex-1 min-w-0 overflow-y-auto">
+				<PageContainer>
+					<PageHeader title="Library" subtitle={SUBTITLE[section] ?? SUBTITLE.marketplace} tabs={TABS} />
+					<div className="pt-6">
 						<Outlet />
 					</div>
-				</div>
+				</PageContainer>
 			</div>
-
 		</div>
 	);
 }
