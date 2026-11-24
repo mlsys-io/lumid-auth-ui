@@ -31,7 +31,7 @@ import {
 	Trash2,
 	Loader2,
 	AlertCircle,
-	ShieldCheck, Receipt, History,} from 'lucide-react';
+	ShieldCheck, Receipt, History, LayoutGrid,} from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
@@ -40,6 +40,7 @@ import { runRowHref } from '@/lib/run-routes';
 import { useAppNav, iconFor, type AppNavItem } from './useAppNav';
 import type { LucideIcon } from 'lucide-react';
 import { StrandMark } from '@/components/illustrations/StrandMark';
+import { threadHome, isVirtualScope, scopeLabel, LIBRARY_KEY, DATA_KEY, COMPUTE_KEY, APPS_KEY } from '@/lib/chat-scopes';
 import { StrandAvatar } from '@/components/illustrations/StrandAvatar';
 import { fetchClaudePoolManage } from '../api/claude-pool-manage';
 import { useRecentChats, RECENT_CHATS_INVALIDATE, type RecentChatItem } from './useRecentChats';
@@ -386,6 +387,13 @@ function middleTruncate(s: string, max = 30): string {
 	return `${s.slice(0, head)}…${s.slice(s.length - (max - 1 - head))}`;
 }
 
+const SCOPE_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
+	[LIBRARY_KEY]: Store,
+	[DATA_KEY]: Database,
+	[COMPUTE_KEY]: Boxes,
+	[APPS_KEY]: LayoutGrid,
+};
+
 function RecentRow({ item, navigate }: {
 	item: RecentChatItem;
 	navigate: (to: string) => void;
@@ -396,7 +404,9 @@ function RecentRow({ item, navigate }: {
 	// and its app read as a pair; app-less threads get a quiet chat glyph.
 	const Icon = item.kind === 'agent' ? Bot : MessageSquare;
 	const open = () => {
-		const target = item.app ? `/studio/apps/${encodeURIComponent(item.app)}` : '/studio';
+		// threadHome: a Research Fleet / Data Warehouse / Library thread opens
+		// on that page, not as an app called "lumid-compute".
+		const target = threadHome(item.app);
 		if (window.location.pathname === target) {
 			// Already there: navigate() would be a no-op and the chat would
 			// never remount, so hand it the thread directly instead.
@@ -431,12 +441,16 @@ function RecentRow({ item, navigate }: {
 		<div className="group relative flex items-center">
 			<button
 				onClick={open}
-				title={`${item.title || 'Untitled chat'} · ${formatRelative(item.updatedAt)}`}
+				title={`${item.title || 'Untitled chat'}${item.app && scopeLabel(item.app) ? ` · ${scopeLabel(item.app)}` : ''} · ${formatRelative(item.updatedAt)}`}
 				className="flex-1 min-w-0 flex items-center gap-2.5 pl-3 pr-2 py-[7px] rounded-lg text-body text-ink-700 hover:bg-ink-100/60 hover:text-ink-900 transition-colors duration-120 text-left"
 			>
-				{item.app
-					? <StrandAvatar slug={item.app} size={16} />
-					: <Icon className="w-4 h-4 flex-shrink-0 text-ink-500" />}
+				{item.app && isVirtualScope(item.app)
+					// A page's thread wears that page's rail icon, not a generated
+					// app glyph for an "app" that does not exist.
+					? (() => { const P = SCOPE_ICON[item.app] ?? MessageSquare; return <P className="w-4 h-4 flex-shrink-0 text-ink-500" />; })()
+					: item.app
+						? <StrandAvatar slug={item.app} size={16} />
+						: <Icon className="w-4 h-4 flex-shrink-0 text-ink-500" />}
 				<span className="flex-1 min-w-0 truncate">{middleTruncate(item.title || 'Untitled chat')}</span>
 				{/* The age and the delete control SHARE one slot: the age hides
 				    while the row is hovered/focused and the trash takes its

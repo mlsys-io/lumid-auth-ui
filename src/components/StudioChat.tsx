@@ -188,12 +188,14 @@ const DOCUMENT_EXTS = ['.pdf', '.docx', '.xlsx', '.pptx', '.rtf', '.odt', '.ods'
 // visiting an app and then clicking "New chat" showed that app's conversation
 // and its grounded opener at /studio — contradicting "New chat = no default
 // app, parallel to apps". Home and each app now keep their own slot.
+import { LIBRARY_KEY, DATA_KEY, APPS_KEY, COMPUTE_KEY, threadHome } from '@/lib/chat-scopes';
+export { LIBRARY_KEY, DATA_KEY, APPS_KEY, COMPUTE_KEY };
 const STORAGE_KEY_BASE = 'studio_chat_transcript_v1';
 const transcriptKey = (scope: string) => `${STORAGE_KEY_BASE}:${scope}`;
 // Reserved chat-context key for the Library, so it gets the SAME per-context
 // resume + grounded-opener behavior as an app (its own thread, resumed on
 // re-entry) rather than a one-off fresh chat. Not a real installed app.
-export const LIBRARY_KEY = 'lumid-library';
+// LIBRARY_KEY = 'lumid-library' — defined in src/lib/chat-scopes.ts (re-exported below).
 // Same reservation for /studio/data. That page absorbed the Data Lake Explorer
 // marketplace app (lumid-data-lake), which was a strict subset of it apart from
 // its docked chat — so the chat came with it, and needs a scope key. There is no
@@ -201,7 +203,7 @@ export const LIBRARY_KEY = 'lumid-library';
 // verbatim from the retired bundle's ui.opener) and the data_catalog /
 // data_query / save_artifact tools it drives are platform tools, not app tools,
 // so nothing here depends on a bundle being installed.
-export const DATA_KEY = 'lumid-data-mesh';
+// DATA_KEY = 'lumid-data-mesh' — defined in src/lib/chat-scopes.ts (re-exported below).
 // Same reservation for the Apps SPINE (/studio/apps with no app selected) and for
 // /studio/compute. Both are first-party surfaces with a docked chat and no app in
 // the URL, so without a key they would save every thread untagged — unresumable
@@ -215,8 +217,8 @@ export const DATA_KEY = 'lumid-data-mesh';
 // equivalent has been verified for fleet or app queries, and a chip that names a
 // tool it cannot drive produces an empty answer on the very first click — the
 // worst possible first impression of a new surface.
-export const APPS_KEY = 'lumid-apps';
-export const COMPUTE_KEY = 'lumid-compute';
+// APPS_KEY = 'lumid-apps' — defined in src/lib/chat-scopes.ts (re-exported below).
+// COMPUTE_KEY = 'lumid-compute' — defined in src/lib/chat-scopes.ts (re-exported below).
 
 // Persisted transcript shape: { user_sub: string, messages: Message[] }.
 // Tagging with user_sub closes the "same browser tab, different user"
@@ -1934,7 +1936,10 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 		currentAppRef.current = h.app || null;
 		openedAppRef.current = h.app || null;
 		void loadThread(h.id);
-		if (h.app) navigate(`/studio/apps/${encodeURIComponent(h.app)}`);
+		// A virtual scope (Research Fleet, Data Warehouse, Library, Apps) is a
+		// page, not an app: threadHome() maps it, or this opened a dead
+		// /studio/apps/lumid-compute workspace.
+		if (h.app) navigate(threadHome(h.app));
 	}, [loadThread, navigate]);
 
 	// The chat mounts only at /studio now — asks fired elsewhere are

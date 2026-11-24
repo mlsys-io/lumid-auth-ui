@@ -64,7 +64,14 @@ export default function ChatRail({
 	// override — never writes the persisted pref). On narrow it starts hidden;
 	// the toggle opens it for the session (it then takes over, full width).
 	const isNarrow = useIsNarrow(1024);
-	const [narrowChatOpen, setNarrowChatOpen] = useState(false);
+	// Arriving with a thread to open (a Recent row stashes studio_open_chat_v1
+	// and navigates here): the chat must be visible or the stash waits unseen
+	// behind a closed rail. Read once, on mount; StudioChat consumes the stash.
+	const [arrivingWithThread] = useState(() => {
+		try { return !!sessionStorage.getItem("studio_open_chat_v1"); } catch { return false; }
+	});
+	useEffect(() => { if (arrivingWithThread) setChatOpen(true); }, [arrivingWithThread]);
+	const [narrowChatOpen, setNarrowChatOpen] = useState(arrivingWithThread);
 	useEffect(() => { if (!isNarrow) setNarrowChatOpen(false); }, [isNarrow]);
 	const chatVisible = enabled && (isNarrow ? narrowChatOpen : chatOpen);
 	const toggleChat = () => { if (isNarrow) setNarrowChatOpen((v) => !v); else setChatOpen((v) => !v); };
