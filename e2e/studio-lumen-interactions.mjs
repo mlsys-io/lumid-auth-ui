@@ -15,6 +15,7 @@
 //   wf header schedule chip in words · Run now · ⋯ grouped This workflow / This app
 //   run page  the answer leads (Succeeded in… / Failed after… + reason), no raw codes
 //   research  app map: experiments → versions; click dims the rest and flows the path
+//   motion    reduced motion: nothing runs but the loaders' fade; Go ahead via a fixture
 //   filters   Segmented radios on the Timeline view switch state (aria-checked)
 //   docs      index card -> reader (skeleton -> article) -> back
 //   sessions  /claude-sessions search narrows and clears
@@ -360,6 +361,43 @@ await section('inbox suggestions', async () => {
 	await map.waitFor({ timeout: 40000 });
 	await page.waitForTimeout(1200);
 	assert(await map.locator('.react-flow__node-suggested .ring-2').count() === 1, 'the map opens on that suggestion');
+	await page.close();
+});
+
+// ── reduced motion: nothing keeps moving except the loaders' slow fade ──────
+await section('reduced motion (Activity + Research map)', async () => {
+	const rm = await authContext(b, BASE, { viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+	const page = await rm.ctx.newPage();
+	for (const path of ['/studio/runs', `/studio/apps/${process.env.MAP_APP || 'quant-research'}`]) {
+		await page.goto(`${BASE}${path}`, { waitUntil: 'domcontentloaded' });
+		await page.waitForTimeout(6000);
+		const moving = await page.evaluate(() => document.getAnimations()
+			.filter((a) => a.playState === 'running')
+			.map((a) => (a.animationName || a.transitionProperty || a.constructor.name))
+			.filter((n) => n !== 'lumen-fade'));
+		assert(moving.length === 0, `${path}: no running animations under reduced motion (${moving.slice(0, 4).join(', ') || 'none'})`);
+	}
+	await rm.ctx.close();
+});
+
+// ── Go ahead, against a fixture (the experiments POST never leaves the page) ─
+await section('approval: Go ahead (fixture)', async () => {
+	const page = await desk.ctx.newPage();
+	let posted = null;
+	await page.route('**/api/v1/me/apps/*/experiments', async (route) => {
+		if (route.request().method() !== 'POST') return route.continue();
+		posted = JSON.parse(route.request().postData() || '{}');
+		await route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ ret_code: 0, message: 'ok', data: { intent_id: 'fixture', app: 'x', experiment: posted.id, status: 'pending' } }) });
+	});
+	await page.goto(`${BASE}/studio/apps/${process.env.MAP_APP || 'quant-research'}`, { waitUntil: 'domcontentloaded' });
+	const card = page.locator('section[aria-label="For your approval"]').first();
+	try { await card.waitFor({ timeout: 40000 }); } catch { note('no suggestion to approve on this app — Go ahead not exercised'); await page.close(); return; }
+	const go = card.getByRole('button', { name: 'Go ahead' });
+	if (await go.isDisabled()) { note('first suggestion lacks a workflow/metric — Go ahead disabled by design'); await page.close(); return; }
+	await go.click();
+	await page.waitForTimeout(800);
+	assert(posted && posted.id && posted.loop && posted.metric, `Go ahead posts the suggestion as an experiment (${posted ? posted.id : 'nothing posted'})`);
+	assert(await page.getByText(/^Started “/).count() > 0, 'and says it started, in words');
 	await page.close();
 });
 
