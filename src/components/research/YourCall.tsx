@@ -57,7 +57,7 @@ export default function YourCall({ app, e, compact = false }: { app: string; e: 
 					{leader ? (right ? `${labelOf(leader)} is leading — so far your call holds.` : `${labelOf(leader)} is leading, not your pick. What did the results show that you didn't expect?`) : "No version is leading yet — your call will be checked when one is."}
 				</div>
 				<div className="flex items-center gap-2">
-					<Button size="sm" variant="ghost" onClick={() => ask(call)}><MessagesSquare className="w-3.5 h-3.5" /> Discuss it</Button>
+					<Button size="sm" variant="ghost" onClick={() => ask(call)}><MessagesSquare className="w-3.5 h-3.5" /> Ask about it</Button>
 					<button type="button" className="text-micro text-ink-600 hover:text-ink-900 hover:underline" onClick={() => { writeCall(app, e.id, null); setCall(null); }}>Change my call</button>
 				</div>
 			</div>

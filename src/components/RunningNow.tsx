@@ -11,10 +11,11 @@
 //   └────────────────────┘ └──────────────────┘
 //   ┌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┐ ┌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┐   ← dashed boxes = free slots
 //   └╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┘ └╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┘     (the first says what starts next)
-//   ⌄ Done                             [12]
-//   ┌ ▪ Backtest                       3m ago ┐  (one box per run; failed says so)
+// Only what is running or waiting — finished runs live in Activity (the user:
+// "no need to show 'done' in the right top panel", 2026-11-25).
 //
-// Global: every app's runs (the current app's first), plus lum.id/data jobs.
+// Global: every app's runs (the current app's first), lum.id/data jobs, and
+// Research Fleet jobs (GET /me/fleet/jobs) still queued or running.
 // Sources: runs feed + SSE (useRunsFeed), data jobs (15 s poll), the app's
 // queue on app pages (GET /me/apps/:app/queue), machines (GET /me/compute).
 // A source that isn't there is left out, never faked.
@@ -29,17 +30,16 @@ import { estimateSteps, type StepEstimate } from "@/lib/run-timeline";
 import { runRowHref } from "@/lib/run-routes";
 import { useCollapse } from "@/hooks/useCollapse";
 import { useNowSec, useRunsFeed } from "@/components/activity/hooks";
-import { fmtAgo, fmtDuration, fmtTypical, groupActivity, isOverdue, loopOfRun, progressOf, type RunningItem } from "@/lib/activity";
+import { fmtDuration, fmtTypical, groupActivity, isOverdue, progressOf, type RunningItem } from "@/lib/activity";
 import { capacityRows, machinesLine, queueItems, versionLabel, type ComputeCapacity, type QueueRow } from "@/lib/compute";
-import { runPath } from "@/lib/run-routes";
 import { loopLabel } from "@/lib/workflow-names";
 import { TONES } from "@/lib/tones";
 import { cn } from "@/lib/utils";
 import { dataJobs } from "@/api/dataJobs";
 import { jobElapsedS, jobStatusLabel, type Job } from "@/lib/data-jobs";
+import { fleet, type FleetJob } from "@/api/fleet";
 
 const FEED_DAYS = 1;
-const SHOW_DONE = 5;
 const JOBS_POLL_MS = 15_000;
 const ACTIVE_JOB = new Set(["planned", "submitted", "running"]);
 
@@ -67,6 +67,40 @@ function useActiveJobs(enabled: boolean): Job[] {
 		};
 	}, [enabled]);
 	return jobs;
+}
+
+function useActiveFleetJobs(enabled: boolean): FleetJob[] {
+	const [jobs, setJobs] = useState<FleetJob[]>([]);
+	useEffect(() => {
+		if (!enabled) return;
+		let live = true;
+		const load = async () => {
+			if (document.visibilityState === "hidden") return;
+			try {
+				const r = await fleet.list({ limit: 30 });
+				if (live) setJobs((r.jobs ?? []).filter((j) => !j.terminal && (j.status === "queued" || j.status === "running")));
+			} catch { if (live) setJobs([]); }
+		};
+		load();
+		const id = window.setInterval(load, JOBS_POLL_MS);
+		return () => { live = false; window.clearInterval(id); };
+	}, [enabled]);
+	return jobs;
+}
+
+function FleetTile({ job, now }: { job: FleetJob; now: number }) {
+	const started = job.created_at ? Date.parse(job.created_at) / 1000 : now;
+	const elapsed = Math.max(0, now - started);
+	const running = job.status === "running";
+	const site = job.site ? job.site.charAt(0).toUpperCase() + job.site.slice(1) : "";
+	return (
+		<Tile to="/studio/research-fleet" startedAt={started} now={now} live={running}
+			label={`Research Fleet job ${job.name || job.id}: ${job.status}${site ? ` at ${site}` : ""}, ${fmtDuration(elapsed)}`}
+			title={<>{job.name || job.labels?.experiment || job.id.slice(0, 12)}<span className="font-normal text-ink-600"> · fleet job</span></>}
+			action={running ? <><span className="lumen-shine">Running{site ? ` at ${site}` : ""}</span><WorkingDots /></> : <span>Waiting{site ? ` at ${site}` : ""}</span>}
+			cells={<ProgressCells p={null} elapsed={elapsed} late={false} />}
+		/>
+	);
 }
 
 function JobTile({ job, now }: { job: Job; now: number }) {
@@ -212,17 +246,17 @@ export default function RunningNow({ app, runs = true, jobs = true }: { app?: st
 		return app ? [...all.filter((it) => it.run.app === app), ...all.filter((it) => it.run.app !== app)] : all;
 	}, [runs, feed.runs, app]);
 	const activeJobs = useActiveJobs(jobs);
+	const fleetJobs = useActiveFleetJobs(jobs);
 	const queue = usePoll(() => me.appQueue(app!), 10_000, `q:${app}`, !!app);
 	const cap = usePoll(() => me.computeSummary(), 30_000, "compute");
-	const total = running.length + activeJobs.length;
+	const total = running.length + activeJobs.length + fleetJobs.length;
 	const now = useNowSec(total > 0);
 	const allHref = "/studio/runs";
 	const [runCollapsed, toggleRun] = useCollapse("studio-rail:running", false);
-	const [doneCollapsed, toggleDone] = useCollapse("studio-rail:done", false);
 
 	// Nothing loaded yet: render nothing, so the rail doesn't flash a state the
 	// first answer immediately contradicts.
-	if (runs && feed.runs === null && activeJobs.length === 0) return null;
+	if (runs && feed.runs === null && activeJobs.length === 0 && fleetJobs.length === 0) return null;
 
 	// Novix's grid: one box per running job, free slots as dashed boxes — a
 	// row of two while one or nothing runs, two rows of two once more do; more
@@ -232,12 +266,11 @@ export default function RunningNow({ app, runs = true, jobs = true }: { app?: st
 	const fit = overflow ? room - 1 : room;
 	const shownRuns = running.slice(0, fit);
 	const shownJobs = activeJobs.slice(0, Math.max(0, fit - shownRuns.length));
-	const more = total - shownRuns.length - shownJobs.length;
-	const freeSlots = Math.max(0, room - shownRuns.length - shownJobs.length - (overflow ? 1 : 0));
+	const shownFleet = fleetJobs.slice(0, Math.max(0, fit - shownRuns.length - shownJobs.length));
+	const shown = shownRuns.length + shownJobs.length + shownFleet.length;
+	const more = total - shown;
+	const freeSlots = Math.max(0, room - shown - (overflow ? 1 : 0));
 	const next = queue ? queueItems(queue.rows as QueueRow[]).waiting : [];
-	const finished = (feed.runs || []).filter((r) => r.state === "succeeded" || r.state === "failed")
-		.sort((a, b) => (b.started_at || 0) - (a.started_at || 0));
-	const done = finished.slice(0, SHOW_DONE);
 	const machines = cap ? capacityRows(cap.capacity as ComputeCapacity[]) : [];
 	const mLine = machinesLine(machines);
 	const slotText = next[0]
@@ -252,6 +285,7 @@ export default function RunningNow({ app, runs = true, jobs = true }: { app?: st
 				<div className="grid grid-cols-2 gap-2">
 					{shownRuns.map((it) => <RunTile key={it.run.run_id} item={it} now={now} showApp={!app || it.run.app !== app} />)}
 					{shownJobs.map((j) => <JobTile key={j.job_id} job={j} now={now} />)}
+					{shownFleet.map((j) => <FleetTile key={j.id} job={j} now={now} />)}
 					{overflow && (
 						<Link to={allHref} className="flex h-[118px] flex-col items-center justify-center gap-1 rounded-lg border border-ink-200 bg-muted/40 text-caption text-ink-700 transition-colors hover:bg-muted">
 							<span className="font-mono text-title tabular-nums text-ink-900">+{more}</span>
@@ -266,41 +300,6 @@ export default function RunningNow({ app, runs = true, jobs = true }: { app?: st
 						</div>
 					))}
 				</div>
-			)}
-			{finished.length > 0 && (
-				<>
-					<div className="pt-1">
-						<Heading label="Done" count={finished.length} collapsed={doneCollapsed} onToggle={toggleDone} title="Finished in the last day" />
-					</div>
-					{!doneCollapsed && (
-						<ul className="space-y-1.5">
-							{done.map((r) => {
-								const ok = r.state === "succeeded";
-								const loop = loopOfRun(r);
-								const other = !app || r.app !== app;
-								return (
-									<li key={r.run_id}>
-										<Link to={runPath(r.app || "", loop, r.run_id)}
-											title={`${ok ? "Succeeded" : "Failed"}${r.duration_s ? ` · took ${fmtDuration(r.duration_s)}` : ""}`}
-											className="flex h-9 min-w-0 items-center gap-2 rounded-lg border border-ink-200 bg-card px-2.5 text-caption transition-colors hover:border-ink-300 hover:bg-muted/40">
-											<span className={cn("h-1.5 w-1.5 flex-shrink-0 rounded-[1px]", ok ? "bg-gold-400" : "bg-brick-500")} aria-hidden />
-											<span className="min-w-0 truncate text-ink-800">
-												{loopLabel("", loop)}{other && <span className="text-ink-600"> · {appTitle(r.app || "")}</span>}
-											</span>
-											{!ok && <span className="flex-shrink-0 text-micro text-brick-700">failed</span>}
-											<span className="ml-auto flex-shrink-0 font-mono text-nano tabular-nums text-ink-600">{fmtAgo(r.started_at)}</span>
-										</Link>
-									</li>
-								);
-							})}
-						</ul>
-					)}
-					{!doneCollapsed && finished.length > done.length && (
-						<Link to={allHref} className="flex items-center justify-end gap-1 px-1 text-micro text-ink-600 hover:text-ink-900">
-							All activity <ArrowRight className="h-3 w-3" />
-						</Link>
-					)}
-				</>
 			)}
 		</section>
 	);

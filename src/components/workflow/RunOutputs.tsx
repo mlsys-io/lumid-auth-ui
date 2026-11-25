@@ -11,6 +11,7 @@ import { Download, FileJson, FileText } from "lucide-react";
 import type { MeCycleDetail } from "@/api/me";
 import { runFiles, runOutputs, type RunFile } from "@/lib/run-answer";
 import RunChildren from "@/components/workflow/RunChildren";
+import JsonView from "@/components/JsonView";
 import WarehouseActivity from "@/components/workflow/WarehouseActivity";
 import { runActivityAcrossLakes } from "@/api/dataLake";
 import { cn } from "@/lib/utils";
@@ -45,9 +46,12 @@ function FileCard({ f, prefix }: { f: RunFile; prefix: string }) {
 					<Download className="w-3.5 h-3.5" />
 				</button>
 			</div>
-			{open && (
+			{open && (f.type === "json" && f.content.length <= 400_000 ? (
+				// JSON reads as fields and tables (Raw is one click away), not a code dump.
+				<JsonView text={f.content} className="mx-2.5 mb-2 max-h-96 overflow-auto rounded-md border border-ink-100 bg-ink-50/40 p-2" />
+			) : (
 				<pre className="mx-2.5 mb-2 max-h-64 overflow-auto rounded-md bg-ink-50 border border-ink-100 p-2 text-nano font-mono text-ink-800 whitespace-pre-wrap break-words">{f.content.length > 20_000 ? `${f.content.slice(0, 20_000)}\n…` : f.content}</pre>
-			)}
+			))}
 		</li>
 	);
 }

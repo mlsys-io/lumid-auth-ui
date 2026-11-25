@@ -1,12 +1,19 @@
 // AppWorkflowList — the open app's workflows, listed in the sidebar under the
 // app (not behind a dropdown): status dot, name, how often it runs; the one
 // you're on is lit. Ends with "New workflow": describe it in chat (the chat
-// drafts it for approval), or the form (icon on the right).
+// drafts it for approval), or the form (icon on the right). Each row has a ⋯
+// on hover/focus: Run now · Open · Delete workflow… — deleting used to live
+// only behind the workflow page's ⋯ or Manage app, and people couldn't find it.
 
 import { useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
-import { ClipboardList, Plus } from "lucide-react";
-import { me, type MeWorkflowRow } from "@/api/me";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { ArrowRight, ClipboardList, MoreHorizontal, Play, Plus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { me, MeApiError, type MeWorkflowRow } from "@/api/me";
+import { appTitle } from "@/components/workflow/AppCard";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useStudioRefetch } from "@/hooks/useStudioRefetch";
+import { deleteWorkflow } from "@/lib/delete-workflow";
 import { workflowPath } from "@/lib/run-routes";
 import { describeSchedule } from "@/lib/schedule";
 import { TONES, workflowTone } from "@/lib/tones";
@@ -33,12 +40,16 @@ function loopOf(w: MeWorkflowRow): string {
 
 export default function AppWorkflowList({ app }: { app: string }) {
 	const location = useLocation();
+	const navigate = useNavigate();
 	const [rows, setRows] = useState<MeWorkflowRow[] | null>(null);
+	const [tick, setTick] = useState(0);
 	useEffect(() => {
 		let live = true;
 		allWorkflows().then((all) => { if (live) setRows(all.filter((w) => w.app === app)); }).catch(() => { if (live) setRows([]); });
 		return () => { live = false; };
-	}, [app, location.pathname]);
+	}, [app, location.pathname, tick]);
+	// A workflow added or deleted anywhere (here, the page's ⋯, Manage app, the chat).
+	useStudioRefetch(["workflows", "loops", "apps"], () => { cache = null; setTick((t) => t + 1); });
 	if (!rows) return null;
 	const prefix = `/studio/apps/${encodeURIComponent(app)}/w/`;
 	const current = location.pathname.startsWith(prefix) ? decodeURIComponent(location.pathname.slice(prefix.length).split("/")[0]) : null;
@@ -52,15 +63,46 @@ export default function AppWorkflowList({ app }: { app: string }) {
 				const loop = loopOf(w);
 				const on = loop === current;
 				const tone = workflowTone(w);
+				const label = loopLabel(w.name, loop);
+				const runNow = async () => {
+					try {
+						await me.launchRun(app, loop, {});
+						toast.success(`Started "${label}" — it shows under Running in a moment.`);
+					} catch (e) {
+						toast.error(`Couldn't start "${label}": ${e instanceof MeApiError ? e.message : String(e)}`);
+					}
+				};
+				const del = async () => {
+					if (!(await deleteWorkflow(app, appTitle(app), loop, label))) return;
+					if (on) navigate(`/studio/apps/${encodeURIComponent(app)}`, { replace: true });
+				};
 				return (
-					<Link key={w.slug} to={workflowPath(app, loop)} aria-current={on ? "page" : undefined}
-						title={`${loopLabel(w.name, loop)} — ${describeSchedule(w.trigger)}${w.enabled === false ? " · paused" : ""}`}
-						className={cn("flex items-center gap-2 rounded-md px-2 py-1 text-caption transition-colors min-w-0",
-							on ? "bg-ink-100/80 text-ink-900 font-medium" : "text-ink-700 hover:bg-ink-100/60 hover:text-ink-900")}>
-						<span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", TONES[tone].dot, tone === "running" && "animate-lumen-breathe")} />
-						<span className="truncate min-w-0 flex-1">{loopLabel(w.name, loop)}</span>
-						{w.enabled === false && <span className="text-micro text-ink-500 flex-shrink-0">paused</span>}
-					</Link>
+					<div key={w.slug} className="group/wf relative">
+						<Link to={workflowPath(app, loop)} aria-current={on ? "page" : undefined}
+							title={`${label} — ${describeSchedule(w.trigger)}${w.enabled === false ? " · paused" : ""}`}
+							className={cn("flex items-center gap-2 rounded-md py-1 pl-2 pr-7 text-caption transition-colors min-w-0",
+								on ? "bg-ink-100/80 text-ink-900 font-medium" : "text-ink-700 hover:bg-ink-100/60 hover:text-ink-900")}>
+							<span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", TONES[tone].dot, tone === "running" && "animate-lumen-breathe")} />
+							<span className="truncate min-w-0 flex-1">{label}</span>
+							{w.enabled === false && <span className="text-micro text-ink-500 flex-shrink-0">paused</span>}
+						</Link>
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<button type="button" aria-label={`${label}: more`}
+									className="absolute right-0.5 top-1/2 -translate-y-1/2 inline-flex h-5 w-5 items-center justify-center rounded text-ink-500 opacity-0 transition-opacity hover:bg-ink-200/60 hover:text-ink-900 focus-visible:opacity-100 group-hover/wf:opacity-100 data-[state=open]:opacity-100">
+									<MoreHorizontal className="h-3.5 w-3.5" />
+								</button>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="start" className="w-48">
+								<DropdownMenuItem onSelect={runNow}><Play className="w-3.5 h-3.5" /> Run now</DropdownMenuItem>
+								<DropdownMenuItem asChild><Link to={workflowPath(app, loop)}><ArrowRight className="w-3.5 h-3.5" /> Open</Link></DropdownMenuItem>
+								<DropdownMenuSeparator />
+								<DropdownMenuItem onSelect={del} className="text-brick-600 focus:text-brick-700 focus:bg-brick-50">
+									<Trash2 className="w-3.5 h-3.5" /> Delete workflow…
+								</DropdownMenuItem>
+							</DropdownMenuContent>
+						</DropdownMenu>
+					</div>
 				);
 			})}
 			<div className="flex items-center gap-0.5">
