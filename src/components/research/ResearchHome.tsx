@@ -15,6 +15,7 @@
 import { lazy, Suspense, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { appPages, pageHref } from "@/lib/app-pages";
+import { useRailTopVisible } from "@/lib/rail-top";
 
 const ResearchMap = lazy(() => import("@/components/research/ResearchMap"));
 const ComputePanel = lazy(() => import("@/components/compute/ComputePanel"));
@@ -31,6 +32,9 @@ export default function ResearchHome({ app, pages }: { app: string; pages?: Arra
 		ro.observe(el);
 		return () => ro.disconnect();
 	}, []);
+	// The chat rail shows the global Running panel beside this page; then the
+	// home doesn't repeat it (one running panel, not two) and the map gets the room.
+	const railHasIt = useRailTopVisible();
 	const side = w >= SIDE_BY_SIDE_PX;
 	const tabs = appPages(pages);
 	return (
@@ -49,7 +53,9 @@ export default function ResearchHome({ app, pages }: { app: string; pages?: Arra
 					))}
 				</nav>
 			)}
-			{side ? (
+			{railHasIt ? (
+				<Suspense fallback={null}><ResearchMap app={app} /></Suspense>
+			) : side ? (
 				<Suspense fallback={null}>
 					<ResearchMap app={app} aside={<Suspense fallback={null}><ComputePanel app={app} className="max-h-full overflow-y-auto" /></Suspense>} />
 				</Suspense>

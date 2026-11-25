@@ -353,7 +353,12 @@ await section('research map', async () => {
 	const dimmed = await map.locator('.space3d [data-dim]').count();
 	assert(dimmed > 0, `clicking a card dims what is off its path (${dimmed} dimmed)`);
 	assert(await map.locator('.space3d-edge-flow').count() > 0, 'the selected path flows');
-	assert(await page.locator('section[aria-label="Compute"]').count() === 1, 'the Compute panel sits with the map');
+	// One running panel: the global one in the chat rail, else the app's own.
+	const railPanel = await page.locator('section[aria-label="Running now"]').count();
+	assert(railPanel === 1 || await page.locator('section[aria-label="Compute"]').count() === 1, `a running panel is beside the map (${railPanel ? 'global, in the rail' : 'the app\'s own'})`);
+	if (railPanel) assert(await page.locator('[data-slot="next"]').count() >= 1, 'the running panel shows the next free slot');
+	// The app's workflows are listed in the sidebar, not in a dropdown.
+	assert(await page.locator(`nav[aria-label="${APP} workflows"] a`).count() > 0, 'the open app lists its workflows in the sidebar');
 	// Dots, not cards: off the selected path a node is a labelled dot.
 	assert(await map.locator('.space3d-label').count() > 0, 'nodes off the path are labelled dots');
 	assert(await map.getByText(/^Measures:|^Done when:/).count() > 0 || await map.getByText(/Not started yet|Can't|Winning|leads|Collecting/).count() > 0, 'the selected experiment is explained below the map');

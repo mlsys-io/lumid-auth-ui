@@ -31,7 +31,7 @@ import {
 	Loader2,
 	AlertCircle,
 	ShieldCheck, Receipt, History, LayoutGrid,} from 'lucide-react';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
 import { me } from '@/api/me';
@@ -66,6 +66,8 @@ import { httpUser } from '../runmesh/utils/axios';
 // running, failing). Fills the gap left by removing the redundant
 // "Ask anything" search input.
 import TopStatusStrip from './TopStatusStrip';
+// The open app's workflows, under it in the sidebar (lazy: only when inside an app).
+const AppWorkflowList = lazy(() => import("@/components/AppWorkflowList"));
 
 interface NavItem {
 	to: string;
@@ -542,7 +544,10 @@ function AppFolder({
 }) {
 	const location = useLocation();
 	const to = `/studio/apps/${encodeURIComponent(item.app)}`;
-	const active = location.pathname === to;
+	// On the app or any of its pages (a workflow, a run): lit, and its
+	// workflows listed underneath.
+	const inside = location.pathname === to || location.pathname.startsWith(`${to}/`);
+	const active = location.pathname === to && !location.search.includes("surface=");
 	// Seed with the slug so an app that declares no icon still gets its own.
 	const installing = item.status === 'installing';
 	const failed = item.status === 'failed';
@@ -577,6 +582,7 @@ function AppFolder({
 					)}
 				</button>
 			</div>
+			{inside && <Suspense fallback={null}><AppWorkflowList app={item.app} /></Suspense>}
 		</div>
 	);
 }
@@ -935,8 +941,11 @@ export function StudioShell() {
 
 				{/* Installed apps are PINNED to the bottom, outside the scrolling
 				    nav. Inside it, a long Recent list pushed them off-screen and
-				    reaching an app meant scrolling past every conversation. */}
-				<div className="px-2">
+				    reaching an app meant scrolling past every conversation.
+				    Capped and scrolling itself: the open app lists its workflows
+				    (13 for quant-research), which must not push the account menu
+				    off the bottom. */}
+				<div className="px-2 max-h-[52vh] overflow-y-auto overscroll-contain flex-shrink-0">
 					{appNav.length > 0 && (
 						<div>
 							{/* Rule + "Your Apps" heading. Both live INSIDE the

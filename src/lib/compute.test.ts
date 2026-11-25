@@ -1,5 +1,5 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
-import { capacityLine, capacityRows, queueItems, shortKind } from "./compute";
+import { capacityLine, capacityRows, machinesLine, queueItems, shortKind } from "./compute";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -44,6 +44,16 @@ check("queue: waiting in drain order with their place; running with progress", (
 	]);
 	eq(q.waiting.map((w) => [w.key, w.line]), [["c", "next in line · 3 runs to go"], ["a", "#2 in line"], ["e", "waiting · retrying after an error"]]);
 	eq(q.running.map((r) => [r.key, r.version, r.line]), [["b", "c32", "1 done, 2 runs to go"]]);
+});
+
+check("machines in one line", () => {
+	const rows = capacityRows([
+		{ site: "home", kind: "NVIDIA RTX PRO 4000 Blackwell SFF Edition", total: 5, busy: 3, idle: 2 },
+		{ site: "office", kind: "NVIDIA GeForce RTX 5080", total: 3, busy: 0, idle: 3 },
+		{ site: "nus", kind: "CPU", total: 12, busy: 1, idle: 11 },
+	]);
+	eq(machinesLine(rows), "GPUs 3 of 8 busy · CPUs 1 of 12 busy");
+	eq(machinesLine([]), "");
 });
 
 export function run(): number {

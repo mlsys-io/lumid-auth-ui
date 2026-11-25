@@ -1267,9 +1267,17 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 						if (embedded && nestedInSurface) return null;
 						return embedded && appSlotTarget
 							? <>
-								{crumbTarget && rows.length >= 1 && createPortal(
-									<WorkflowSelect crumb rows={rows} selected={effSelected} onSelect={select}
-										onNew={() => navigate(`/studio/a/${encodeURIComponent(app)}/manage?new=1`)} onAsk={askNewWorkflow} />, crumbTarget)}
+								{/* Where you are, as plain text — no menu. The app's workflows are
+								    listed in the sidebar under the app (AppWorkflowList). */}
+								{crumbTarget && (() => {
+									const cur = rows.find((r) => r.loop === effSelected);
+									return cur ? createPortal(
+										<span className="inline-flex items-center gap-1.5 px-1.5 min-w-0 text-meta font-medium text-ink-800">
+											<span aria-hidden className="hidden sm:inline text-ink-300 text-body mr-0.5">/</span>
+											<span className={wfDot(cur.wf)} />
+											<span className="truncate hidden sm:inline">{loopLabel(cur.wf.name, cur.loop)}</span>
+										</span>, crumbTarget) : null;
+								})()}
 								{createPortal(<div className="flex items-center gap-2 min-w-0">{cluster}</div>, appSlotTarget)}
 							</>
 							: <div className="flex items-center gap-2 flex-wrap">{cluster}</div>;

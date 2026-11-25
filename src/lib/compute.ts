@@ -44,6 +44,15 @@ export function capacityLine(r: CapacityRow): string {
 	return `${r.busy} of ${r.total} in use`;
 }
 
+/** All machines in one line: "GPUs 3 of 14 busy · CPUs 0 of 22 busy" — the
+ *  breakdown by kind goes in the tooltip (capacityRows). */
+export function machinesLine(rows: CapacityRow[]): string {
+	const sum = (gpu: boolean) => rows.filter((r) => r.gpu === gpu).reduce((a, r) => ({ busy: a.busy + r.busy, total: a.total + r.total }), { busy: 0, total: 0 });
+	const g = sum(true), c = sum(false);
+	const part = (word: string, x: { busy: number; total: number }) => (x.total ? `${word} ${x.busy} of ${x.total} busy` : "");
+	return [part("GPUs", g), part("CPUs", c)].filter(Boolean).join(" · ");
+}
+
 const humanize = (s: string) => s.replace(/[_-]+/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 
 export interface QueueItem { key: string; loop: string; version: string | null; state: "waiting" | "running" | "done" | "failed" | "cancelled"; line: string; position: number | null }
