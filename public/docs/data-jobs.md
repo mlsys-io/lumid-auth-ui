@@ -54,7 +54,7 @@ ops:
     data_spec:
       type: lumid          # at NUS, this is the NUS data hub
       mode: sql
-      template: "SELECT primary_category, count(*) AS papers FROM arxiv.papers WHERE first_version_date >= '2026-01-01' GROUP BY 1 ORDER BY 2 DESC LIMIT 10"
+      template: "SELECT primary_category, count(*) AS papers FROM arxiv.papers WHERE first_version_date >= '2026-01-01' GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 10"
       output_format: jsonl
 ```
 
@@ -106,6 +106,11 @@ ops:
 ```
 
 Paste it into the workflow editor and press **Run**. At home it finishes in seconds.
+
+**Every SQL retrieval needs a top-level `ORDER BY`** (Lumilake 0.1.11 and later), so a run reads
+the same rows every time. End it with a unique column so ties keep their order. A query that
+returns one row per input can say `rows: one` instead; a query you read whole can say `rows: table`.
+Without one of these, Run refuses the graph and names the step.
 
 ### A FlowMesh graph: data comes in, the task doesn't go out
 
@@ -171,6 +176,7 @@ Said plainly, so you don't go looking:
 | What you see | What it means | What to do |
 |---|---|---|
 | *relation "…" does not exist* | The table name doesn't match the catalog | Copy `schema.table` from the catalog |
+| *needs a top-level ORDER BY* | A SQL retrieval has no fixed row order | Add `ORDER BY` (ending in a unique column), or `rows: one` / `rows: table` |
 | *cannot tell the workflow format* | The file is neither a Lumilake graph (`ops:`) nor a FlowMesh one (`apiVersion`/`spec`) | Check the top of the file |
 | *compute service returned 401* | The site didn't accept your sign-in | Sign in again; if it persists, report it |
 | A FlowMesh task fails to fetch a URL | Tasks have no network | Pass the data in from an earlier step or as files |
