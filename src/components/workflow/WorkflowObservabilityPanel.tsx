@@ -41,6 +41,7 @@ import TrajectoryLogView from "@/components/workflow/TrajectoryLogView";
 import { RunCompareView } from "@/components/workflow/BranchTreeView";
 import RunContextMenu, { type RunMenuActions, type RunMenuTarget } from "@/components/workflow/RunContextMenu";
 import NextRunComposer from "@/components/workflow/NextRunComposer";
+import RunHistoryGrid from "@/components/workflow/RunHistoryGrid";
 import ScheduleChip, { type WfActionDetail } from "@/components/workflow/ScheduleChip";
 import { reportDispatchFailure } from "@/components/app-surface/directives";
 import { workflowStatusLine, dirIdToSec, fmtDuration, fmtTypical, isOverdue, groupActivity, failingSentence, fmtSince } from "@/lib/activity";
@@ -242,6 +243,7 @@ export default function WorkflowObservabilityPanel({
 		if (canon) navigate(runPath(app, loop, canon, Object.fromEntries(search.entries())), { replace: true });
 	}, [routeRunId, app, loop, search, navigate]);
 	const qTab = (search.get("tab") || "runs") as WorkflowTab;
+	const runsAsList = search.get("runs") === "list";
 	const qStep = search.get("step");
 	const qPane: RunPane = search.get("pane") === "log" ? "log" : "output";
 	const qCompare = search.get("compare") ? toCycleId(search.get("compare")) : null;
@@ -763,6 +765,27 @@ export default function WorkflowObservabilityPanel({
 		) : base
 	);
 
+	// The selected run — shared by the grid layout and the list layout.
+	const runDetailEl = (
+		<RunDetail app={app} loop={loop} runId={overlayTs} detail={canvasFor === overlayTs ? canvasCycle : null}
+			loading={detailLoading} listRow={selectedRow} cycles={cycleList ?? []}
+			step={qStep} pane={qPane} compare={qCompare}
+			onQuery={(p) => {
+				// On the workflow page the run is implicit; any run-scoped
+				// state makes it explicit, so the URL names the run it is about.
+				if (!runIdParam && overlayTs) {
+					const sp = new URLSearchParams(search);
+					for (const [k, v] of Object.entries(p)) { if (v == null || v === "") sp.delete(k); else sp.set(k, v); }
+					navigate(runPath(app, loop, overlayTs, Object.fromEntries(sp.entries())));
+				} else patchQuery(p);
+			}}
+			onRerun={() => overlayTs && setBranchFor({ ts: overlayTs, label: `run ${runLocalTime(overlayTs)}` })}
+			menu={(x, y) => window.setTimeout(() => setRunMenu({ x, y }), 0)}
+			renderStages={(ts) => (
+				<StageDetail app={app} loop={loop} stage={stageKey} initialTs={ts} onStageChange={setStageKey} q={stageQ} setQ={setStageQ} onClose={() => setStageKey("observe")} />
+			)}
+		/>
+	);
 	return (
 		<ErrorBoundary resetKey={`${app}:${loop}`}>
 		<div className="space-y-3 animate-in fade-in duration-300">
@@ -830,7 +853,19 @@ export default function WorkflowObservabilityPanel({
 
 			{/* ── RUNS (default) — master–detail: the runs table left, the selected
 			    run's step timeline right, both above the fold at 1440×900. ── */}
-			{qTab === "runs" && (
+			{/* RUNS — the history grid on top and the run below at full width
+			    (answer · steps · what it produced), Novix's job page in Lumid's
+			    terms. The filterable list is ?runs=list. */}
+			{qTab === "runs" && !runsAsList && (
+				<div className="space-y-3 min-w-0">
+					<RunHistoryGrid app={app} loop={loop} cycles={cycleList ?? []} selectedId={overlayTs} onList={() => patchQuery({ runs: "list" })} />
+					{runDetailEl}
+				</div>
+			)}
+			{qTab === "runs" && runsAsList && (
+				<button type="button" onClick={() => patchQuery({ runs: null })} className="text-micro text-ink-700 hover:text-ink-900 underline decoration-dotted">Show runs as a grid</button>
+			)}
+			{qTab === "runs" && runsAsList && (
 				<div ref={fillRef} className="flex flex-wrap-reverse gap-3 items-end min-w-0">
 					{/* wrap-REVERSE: side by side when both fit; when they cannot (a 1280px
 				    screen with the chat rail open leaves ~576px), the RUN goes on top and
@@ -847,24 +882,7 @@ export default function WorkflowObservabilityPanel({
 					    takes the rest: with both at flex-basis 350px the run's step output
 					    sat in ~350px beside the chat rail. Below 700px they stack. */}
 					<div className="flex-[1_1_380px] min-w-0">
-						<RunDetail app={app} loop={loop} runId={overlayTs} detail={canvasFor === overlayTs ? canvasCycle : null}
-							loading={detailLoading} listRow={selectedRow} cycles={cycleList ?? []}
-							step={qStep} pane={qPane} compare={qCompare}
-							onQuery={(p) => {
-								// On the workflow page the run is implicit; any run-scoped
-								// state makes it explicit, so the URL names the run it is about.
-								if (!runIdParam && overlayTs) {
-									const sp = new URLSearchParams(search);
-									for (const [k, v] of Object.entries(p)) { if (v == null || v === "") sp.delete(k); else sp.set(k, v); }
-									navigate(runPath(app, loop, overlayTs, Object.fromEntries(sp.entries())));
-								} else patchQuery(p);
-							}}
-							onRerun={() => overlayTs && setBranchFor({ ts: overlayTs, label: `run ${runLocalTime(overlayTs)}` })}
-							menu={(x, y) => window.setTimeout(() => setRunMenu({ x, y }), 0)}
-							renderStages={(ts) => (
-								<StageDetail app={app} loop={loop} stage={stageKey} initialTs={ts} onStageChange={setStageKey} q={stageQ} setQ={setStageQ} onClose={() => setStageKey("observe")} />
-							)}
-						/>
+						{runDetailEl}
 					</div>
 				</div>
 			)}

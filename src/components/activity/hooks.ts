@@ -48,8 +48,11 @@ export function useRunsFeed(days: number, state = "") {
 			let r = await me.listRuns({ since, limit: RUNS_CAP, ...(state ? { state } : {}) });
 			if (mine !== reqId.current) return;
 			const rows = [...(r.runs || [])];
-			// The first page shows at once; older pages are appended behind it.
+			// The first page shows at once — with its time — and older pages are
+			// appended behind it.
 			setRuns(rows.slice());
+			setErr(null);
+			setAsOf(Date.now());
 			let more = !!r.has_more && !!r.next_cursor;
 			while (more && rows.length < FEED_MAX) {
 				r = await me.listRuns({ since, limit: RUNS_CAP, cursor: r.next_cursor, ...(state ? { state } : {}) });

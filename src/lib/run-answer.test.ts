@@ -1,7 +1,7 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
 // Fixtures are trimmed copies of real lum.id cycles (2026-11-24).
 import type { MeCycleDetail } from "@/api/me";
-import { humanMetric, fmtMetricValue, primaryMetricKey, runMetrics, stepFailed, stepLabel, stepLine, runAnswer, vsUsual } from "./run-answer";
+import { humanMetric, fmtMetricValue, primaryMetricKey, runMetrics, stepFailed, stepLabel, stepLine, runAnswer, vsUsual, runOutputs } from "./run-answer";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -89,6 +89,17 @@ check("a step-only error is the raw text triage sees", () => {
 });
 check("summary.step_errors is a reason too", () =>
 	eq(runAnswer({ ok: false, steps: [], summary: { step_errors: [{ step: "x", error: "HTTP Error 503: Service Unavailable" }] } } as unknown as MeCycleDetail).sentence, "Service unavailable (HTTP 503)"));
+check("outputs: the command's sentence and short results, not noise or shown metrics", () => {
+	const d = { ok: true, steps: [{ step_id: "engine_command", ok: true, output: { module: "kol_poll", out: { ok: true,
+		result_summary: "Real on all three axes: traded 9,200 lots and made 35,140,000 ticks (+3,820 per lot) on KXHIGHDEN-26SEP28-T73.",
+		symbol: "KXHIGHDEN-26SEP28-T73", replay_verdict: "real", settlement: "resolved", presentable_as_performance: true,
+		claim_id: "a44e5d46-c85a-40b8-a69f-5dc6358cd70f", backtests_resolved: 3 } } }],
+		summary: { metrics: { backtests_resolved: 3 } }, memories_learned: [{ title: "Tape-covered symbols resolve real" }] } as unknown as MeCycleDetail;
+	const o = runOutputs(d);
+	if (!o.text?.startsWith("Real on all three axes")) throw new Error(String(o.text));
+	eq(o.fields.map((f) => f.label), ["Symbol", "Replay verdict", "Settlement", "Presentable as performance"]);
+	eq(o.memories, ["Tape-covered symbols resolve real"]);
+});
 check("vs usual", () => {
 	eq(vsUsual(22.4, [20, 20, 20]), { text: "+12% vs usual", better: true });
 	eq(vsUsual(700, [800, 800, 800], false), { text: "-12% vs usual", better: true });

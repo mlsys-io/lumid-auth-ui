@@ -208,3 +208,47 @@ export function vsUsual(value: number, others: number[], higherIsBetter = true):
 	if (pct === 0) return { text: "same as usual", better: true };
 	return { text: `${pct > 0 ? "+" : ""}${pct}% vs usual`, better: higherIsBetter ? pct > 0 : pct < 0 };
 }
+
+// ── what the run produced (the outputs column) ────────────────────────────
+
+export interface RunOutputs {
+	/** A long human sentence the command wrote (result_summary / summary / thesis). */
+	text: string | null;
+	/** Short named results the command returned, in words — not the metrics the
+	 *  answer card already shows, not bookkeeping. */
+	fields: Array<{ label: string; value: string }>;
+	memories: string[];
+}
+
+const OUTPUT_NOISE = /^(ok|error|outcome|metrics|expanded_args|undeclared_args|module|started_at|ended_at|duration_s|steps|flags|results|performance|claim_id|strategy_id|request_id|program_hash|cycle_ts|config_hash)$/;
+
+export function runOutputs(d: MeCycleDetail | null): RunOutputs {
+	const out: RunOutputs = { text: null, fields: [], memories: [] };
+	if (!d) return out;
+	const shown = new Set(runMetrics(d, 99).map((m) => m.key));
+	const step = (d.steps || []).find((s) => s.output && typeof s.output === "object");
+	const inner = ((step?.output as Record<string, unknown> | undefined)?.out ?? step?.output) as Record<string, unknown> | undefined;
+	const s = (d.summary || {}) as Record<string, unknown>;
+	const srcs = [inner, (s.command_engine as Record<string, unknown> | undefined), (s.metrics as Record<string, unknown> | undefined)];
+	for (const src of srcs) {
+		if (!src || typeof src !== "object") continue;
+		for (const [k, v] of Object.entries(src)) {
+			if (OUTPUT_NOISE.test(k) || shown.has(k)) continue;
+			if (typeof v === "string") {
+				const t = v.trim();
+				if (!t) continue;
+				if (t.length > 60 && /\s/.test(t)) { if (!out.text && /summary|thesis|note|result/.test(k)) out.text = t; continue; }
+				if (out.fields.some((f) => f.label === humanMetric(k).label)) continue;
+				if (/^[0-9a-f-]{20,}$/i.test(t)) continue; // ids
+				out.fields.push({ label: humanMetric(k).label, value: t.replace(/_/g, " ") });
+			} else if (typeof v === "boolean") {
+				if (out.fields.some((f) => f.label === humanMetric(k).label)) continue;
+				out.fields.push({ label: humanMetric(k).label, value: v ? "yes" : "no" });
+			}
+			if (out.fields.length >= 8) break;
+		}
+	}
+	const mem = (d as { memories_learned?: unknown }).memories_learned;
+	if (Array.isArray(mem)) out.memories = mem.map((m) => (typeof m === "string" ? m : String((m as { title?: string; text?: string })?.title ?? (m as { text?: string })?.text ?? ""))).filter(Boolean).slice(0, 5);
+	return out;
+}

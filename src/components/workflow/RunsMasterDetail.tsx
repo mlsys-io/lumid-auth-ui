@@ -13,7 +13,7 @@
 // Pure presentation: the host (WorkflowObservabilityPanel) owns the data calls
 // (cycle list, cycle detail, trajectory) and the URL.
 
-import { useContext, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AuthContext } from "@/hooks/useAuth";
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Loader2, MoreHorizontal, RefreshCw, ScrollText, FileJson, Layers } from "lucide-react";
@@ -26,7 +26,7 @@ import { stepFailed, stepLabel, stepLine, humanMetric, runAnswer } from "@/lib/r
 import { triageFailure } from "@/lib/failure-triage";
 import StepInspectorPanel from "@/components/workflow/StepInspectorPanel";
 import TrajectoryLogView from "@/components/workflow/TrajectoryLogView";
-import RunChildren from "@/components/workflow/RunChildren";
+import RunOutputs from "@/components/workflow/RunOutputs";
 import { RunCompareView } from "@/components/workflow/BranchTreeView";
 import { cycleStatus, runStatus, runStatusTitle, RUN_STATUS_LABEL, RUN_STATUS_TONE, RUN_STATUSES, type RunStatus, type RunStatusInfo } from "@/lib/runStatus";
 import { runPath, type RunPane } from "@/lib/run-routes";
@@ -302,10 +302,21 @@ export function RunDetail({
 	const authRole = useContext(AuthContext)?.user?.role;
 	const isAdminRole = authRole === 'admin' || authRole === 'super_admin';
 	const [showStages, setShowStages] = useState(false);
+	// Two columns (run | what it produced) only when the card itself is wide;
+	// the chat rail and sidebar decide that, not the window.
+	const rootRef = useRef<HTMLDivElement>(null);
+	const [wide, setWide] = useState(false);
+	useEffect(() => {
+		const el = rootRef.current;
+		if (!el) return;
+		const ro = new ResizeObserver(([e]) => setWide(e.contentRect.width >= 760));
+		ro.observe(el);
+		return () => ro.disconnect();
+	}, []);
 	if (!runId) {
 		return (
 			<div className="rounded-xl border border-ink-200 bg-card p-4 text-caption text-ink-600">
-				{cycles.length === 0 ? "This workflow has no runs yet." : "Pick a run on the left."}
+				{cycles.length === 0 ? "This workflow has no runs yet." : "Pick a run to see what it did."}
 			</div>
 		);
 	}
@@ -329,7 +340,8 @@ export function RunDetail({
 	const openStep = step === "none" ? null : (step ?? defaultStep);
 
 	return (
-		<div className="rounded-xl border border-ink-200 bg-card flex flex-col min-w-0">
+		<div ref={rootRef} className={cn("rounded-xl border border-ink-200 bg-card min-w-0", wide ? "grid grid-cols-[minmax(0,1fr)_17rem]" : "flex flex-col")}>
+		<div className="flex flex-col min-w-0">
 			{/* HEADER — outcome · time · duration · arm. */}
 			<div className="px-3 pt-3 pb-2 border-b border-ink-100 space-y-2">
 				<div className="flex items-center gap-2 flex-wrap">
@@ -460,9 +472,7 @@ export function RunDetail({
 							})}
 						</ol>
 					)}
-					{/* The fleet jobs this run launched → their FlowMesh workflows.
-					    Renders nothing when the run recorded none. */}
-					<RunChildren jobs={detail?.compute_jobs} />
+					{/* The fleet jobs this run launched now live in the outputs column. */}
 					{/* The five-stage view (observe → learn) of the same run — what
 					    the run SENSED / PROPOSED / LEARNED, for runs whose substance
 					    lives in the cycle summary rather than in step outputs. */}
@@ -473,6 +483,11 @@ export function RunDetail({
 					{showStages && renderStages && <div className="mt-1.5">{renderStages(runId)}</div>}
 				</div>
 			)}
+		</div>
+		{/* What it produced — beside the run when there is room, under it when not. */}
+		<div className={cn("p-3", wide ? "border-l border-ink-100" : "border-t border-ink-100")}>
+			<RunOutputs detail={detail} onFullOutput={steps[0] ? () => onQuery({ step: stepIdOf(steps[0], 0), pane: "output" }) : undefined} />
+		</div>
 		</div>
 	);
 }
