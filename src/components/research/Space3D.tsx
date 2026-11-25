@@ -57,6 +57,8 @@ export interface Space3DProps {
 	insetBottom?: number;
 	/** Pixels covered on the right (the detail panel): framing keeps clear of it. */
 	insetRight?: number;
+	/** A plain edge's stroke class (e.g. the colour of the workflow behind a branch). */
+	edgeClass?: (e: MapEdge) => string | undefined;
 }
 
 const HINT_KEY = "space3d_hint_seen_v1";
@@ -79,7 +81,7 @@ const boxAbove = (box: { top: number; bottom: number; margin: number }, H: numbe
 // A gentle spring: overshoots ~6% and settles (selection flies in, lands).
 const easeOutBack = (t: number) => { const c1 = 1.2, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
 
-export default function Space3D({ nodes, edges, renderCard, renderDot, describe, selected, onSelect, lit, grow, order, height, evidence, insetBottom = 0, insetRight = 0 }: Space3DProps) {
+export default function Space3D({ nodes, edges, renderCard, renderDot, describe, selected, onSelect, lit, grow, order, height, evidence, insetBottom = 0, insetRight = 0, edgeClass }: Space3DProps) {
 	const insetRef = useRef(insetBottom);
 	insetRef.current = insetBottom;
 	const rightRef = useRef(insetRight);
@@ -98,9 +100,12 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 	const labelEls = useRef(new Map<string, SVGTextElement>());
 	// Each dot's label element and its unscaled size (text never changes).
 	const dotLabels = useRef(new Map<string, { el: HTMLElement; w: number; h: number }>());
-	// Which side each dot's label sits on, and since when that side is blocked.
-	const labelSide = useRef(new Map<string, { left: boolean; since: number }>());
+	// Whether each dot's label is showing, and since when it has wanted the
+	// other state (labels change only after ~0.45 s, so they don't blink).
+	const labelState = useRef(new Map<string, { shown: boolean; since: number }>());
 	const pos = useMemo(() => layoutSpace(nodes), [nodes]);
+	// A fixed order for label priority among equals (see declutter).
+	const nodeIndex = useMemo(() => new Map(nodes.map((n, i) => [n.id, i])), [nodes]);
 	// Particles: fixed offsets per node (seeded by its id, so they don't jump
 	// between renders), log-scaled to the node's result count, at most 28.
 	const particles = useMemo(() => {
@@ -447,7 +452,12 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 			const items = nodes
 				.map((n) => ({ n, p: proj.get(n.id), el: cardEls.current.get(n.id) }))
 				.filter((x) => x.p?.visible && x.el)
-				.sort((a, b) => rank(a.n) - rank(b.n) || a.p!.depth - b.p!.depth);
+				// Same rank: a label already showing goes first (it keeps its place),
+				// then a fixed order. Sorting by depth made neighbours swap which one
+				// showed as the space turned — labels blinked (user, 2026-11-25).
+				.sort((a, b) => rank(a.n) - rank(b.n)
+					|| Number(!labelState.current.get(a.n.id)?.shown) - Number(!labelState.current.get(b.n.id)?.shown)
+					|| (nodeIndex.get(a.n.id) ?? 0) - (nodeIndex.get(b.n.id) ?? 0));
 			for (const { n, p, el } of items) {
 				const size = Number(/scale\(([\d.]+)\)/.exec(el!.style.transform)?.[1] ?? 1);
 				if (el!.dataset.full !== undefined) {
@@ -468,28 +478,28 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				const inPlay = lit?.has(n.id) || hovered === n.id || (n.parent && (hovered === n.parent || selected === n.parent));
 				const quiet = n.kind === "version" && !inPlay && depthCue(p!.scale, cam0.zoom).near < 0.35;
 				const off = !!lit && !lit.has(n.id);
-				// Right of the dot first; if that collides, the left; else hidden.
+				// Always RIGHT of the dot — a label never changes side (moving to the
+				// other side when blocked read as constant flipping). Blocked, it
+				// fades; it appears or disappears only once that has held ~0.45 s.
 				const hh = (lab.h * size) / 2 + 1, ww = lab.w * size + 2;
-				const right: [number, number, number, number] = [p!.x + 12 * size - 2, p!.y - hh, p!.x + 12 * size + ww, p!.y + hh];
-				const left: [number, number, number, number] = [p!.x - 12 * size - ww, p!.y - hh, p!.x - 12 * size + 2, p!.y + hh];
-				// A label keeps its side. Blocked, it fades out where it is; it moves
-				// to the other side only after being blocked ~0.9 s with that side
-				// clear. Re-picking each frame made labels flip back and forth as
-				// the space turned (user, 2026-11-25).
-				const mem = labelSide.current.get(n.id) ?? { left: false, since: 0 };
-				labelSide.current.set(n.id, mem);
-				const mine = mem.left ? left : right, other = mem.left ? right : left;
-				let at: typeof right | null = null;
-				if (!(quiet || off)) {
-					if (!hit(mine)) { at = mine; mem.since = 0; }
-					else {
-						if (!mem.since) mem.since = t;
-						if (t - mem.since > 900 && !hit(other)) { at = other; mem.left = !mem.left; mem.since = 0; }
-					}
+				const box: [number, number, number, number] = [p!.x + 12 * size - 2, p!.y - hh, p!.x + 12 * size + ww, p!.y + hh];
+				// Collide on the label's core, not its padding and halo: a slight
+				// overlap is fine, hiding for it made labels blink.
+				const core: [number, number, number, number] = [box[0] + ww * 0.08, box[1] + hh * 0.35, box[2] - ww * 0.08, box[3] - hh * 0.35];
+				const mem = labelState.current.get(n.id) ?? { shown: false, since: 0 };
+				labelState.current.set(n.id, mem);
+				const want = !(quiet || off) && !hit(core);
+				if (off) { mem.shown = false; mem.since = 0; } // dimmed by a selection: at once
+				else if (want === mem.shown) mem.since = 0;
+				else {
+					if (!mem.since) mem.since = t;
+					// Slower to hide (0.7 s) than to show (0.5 s): a brief crossing
+					// leaves the label alone.
+					if (t - mem.since > (want ? 500 : 700)) { mem.shown = want; mem.since = 0; }
 				}
-				if (at) placed.push(at);
-				lab.el.style.opacity = at ? "" : "0";
-				lab.el.classList.toggle("space3d-label-left", mem.left);
+				if (mem.shown) placed.push(core);
+				lab.el.style.opacity = mem.shown ? "" : "0";
+				lab.el.classList.remove("space3d-label-left");
 			}
 		};
 		kick.current = () => { if (!st.raf) st.raf = requestAnimationFrame(frame); };
@@ -497,7 +507,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		document.addEventListener("visibilitychange", onVis);
 		kick.current();
 		return () => { cancelAnimationFrame(st.raf); st.raf = 0; document.removeEventListener("visibilitychange", onVis); };
-	}, [pos, nodes, edges, lit, grow, reduced, order, selected, hovered, particles, phase, floor, dust]);
+	}, [pos, nodes, nodeIndex, edges, lit, grow, reduced, order, selected, hovered, particles, phase, floor, dust]);
 
 	// ── input ──────────────────────────────────────────────────────────────
 	const touch = () => { s.current.lastInput = performance.now(); s.current.tween = null; kick.current(); };
@@ -625,7 +635,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 							)}
 							<path
 								ref={(el) => { if (el) edgeEls.current.set(e.id, el); else edgeEls.current.delete(e.id); }}
-								className={cn(onPath ? "stroke-plum-600 space3d-edge-flow" : e.dashed ? "stroke-ink-400 space3d-edge-dashed" : "stroke-plum-300")}
+								className={cn(onPath ? "stroke-plum-600 space3d-edge-flow" : e.dashed ? "stroke-ink-400 space3d-edge-dashed" : (edgeClass?.(e) ?? "stroke-plum-300"))}
 								fill="none"
 								strokeWidth={onPath ? 1.75 : 1}
 								strokeLinecap="round"

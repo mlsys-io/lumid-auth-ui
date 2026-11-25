@@ -7,7 +7,8 @@
 
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, ChevronLeft, ChevronRight, Loader2, Sparkles, X } from "lucide-react";
+import { AlarmClock, Check, ChevronDown, ChevronLeft, ChevronRight, Loader2, MessagesSquare, Sparkles } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { me, MeApiError } from "@/api/me";
 import { criteriaInWords, humanId, proposalCheck, type Proposal } from "@/lib/research-map";
@@ -17,8 +18,24 @@ import { StrandAvatar } from "@/components/illustrations/StrandAvatar";
 import { cn } from "@/lib/utils";
 
 const NOT_NOW = (app: string) => `research_not_now_v1:${app}`;
+// Snoozed suggestions come back on their own: {id: until (ms)} in this browser.
+const SNOOZE = (app: string) => `research_snooze_v1:${app}`;
+function readSnoozed(app: string): Record<string, number> {
+	try { return JSON.parse(localStorage.getItem(SNOOZE(app)) || "{}"); } catch { return {}; }
+}
+export function snooze(app: string, id: string, ms: number): void {
+	try {
+		const now = Date.now();
+		const keep = Object.fromEntries(Object.entries(readSnoozed(app)).filter(([, until]) => until > now));
+		localStorage.setItem(SNOOZE(app), JSON.stringify({ ...keep, [id]: now + ms }));
+	} catch { /* private mode: falls back to this visit only */ }
+}
+/** Hidden suggestions: put off for this visit, or snoozed and not yet due. */
 export function readNotNow(app: string): string[] {
-	try { return JSON.parse(sessionStorage.getItem(NOT_NOW(app)) || "[]"); } catch { return []; }
+	let off: string[] = [];
+	try { off = JSON.parse(sessionStorage.getItem(NOT_NOW(app)) || "[]"); } catch { /* none */ }
+	const now = Date.now();
+	return [...new Set([...off, ...Object.entries(readSnoozed(app)).filter(([, until]) => until > now).map(([id]) => id)])];
 }
 
 export function writeNotNow(app: string, ids: string[]): void {
@@ -57,6 +74,15 @@ export default function ApprovalCard({ app, list, index, onIndex, onDone, showAp
 			});
 		} finally { setBusy(false); }
 	};
+	// Discuss and research before deciding: the chat reads the app's recent
+	// results and related experiments, then lays out the case — it starts nothing.
+	const helpDecide = () => window.dispatchEvent(new CustomEvent("studio:ask", { detail: {
+		prompt: `Help me decide on the suggested experiment "${humanId(p.id)}" in ${appTitle(app)}. `
+			+ `First look at the app's recent results and its related experiments. Then tell me: what it would test and why now; `
+			+ `the evidence for and against; what it costs (${p.est_runs ? `about ${p.est_runs} runs` : "not estimated"}${loop ? ` of ${loopLabel("", loop)}` : ""}); `
+			+ `what we'd learn whether it works or not; and your recommendation — go ahead, snooze, or not now. Don't start anything.`,
+		context: { app },
+	} }));
 	return (
 		<section aria-label="For your approval" className="overflow-hidden rounded-xl border border-ink-200 bg-card shadow-e3 animate-lumen-rise">
 			{folded ? (
@@ -110,11 +136,25 @@ export default function ApprovalCard({ app, list, index, onIndex, onDone, showAp
 				</dl>
 				{missing && <div className="text-micro text-ember-700">This suggestion doesn&apos;t say {missing} — ask in chat to set it up.</div>}
 			</div>
-			{/* Novix's two answers: equal halves, tinted, across the foot of the card. */}
-			<div className="grid grid-cols-2 gap-2 border-t border-ink-100 bg-muted/30 px-3 py-2.5">
-				<button type="button" onClick={() => onDone(p.id)} disabled={busy}
-					className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-ink-200 bg-card text-meta font-medium text-brick-700 transition-colors hover:border-brick-200 hover:bg-brick-50 disabled:opacity-50">
-					<X className="h-3.5 w-3.5" aria-hidden /> Not now
+			{/* Three answers across the foot: put it off (snooze), think it through
+			    (the chat looks at the evidence with you), or start it. */}
+			<div className="grid grid-cols-3 gap-2 border-t border-ink-100 bg-muted/30 px-3 py-2.5">
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<button type="button" disabled={busy}
+							className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-ink-200 bg-card text-meta font-medium text-ink-700 transition-colors hover:border-ink-300 hover:bg-muted/60 disabled:opacity-50">
+							<AlarmClock className="h-3.5 w-3.5" aria-hidden /> Snooze <ChevronDown className="h-3 w-3 text-ink-500" aria-hidden />
+						</button>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="start" className="w-48">
+						<DropdownMenuItem onSelect={() => onDone(p.id)}>Not now <span className="ml-auto text-micro text-ink-600">this visit</span></DropdownMenuItem>
+						<DropdownMenuItem onSelect={() => { snooze(app, p.id, 24 * 3600_000); onDone(p.id); toast(`Snoozed "${humanId(p.id)}" until tomorrow.`); }}>Until tomorrow</DropdownMenuItem>
+						<DropdownMenuItem onSelect={() => { snooze(app, p.id, 7 * 24 * 3600_000); onDone(p.id); toast(`Snoozed "${humanId(p.id)}" for a week.`); }}>For a week</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
+				<button type="button" onClick={helpDecide} title="The chat looks at the evidence with you: what it would test, for and against, cost, and what you'd learn"
+					className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-plum-200 bg-plum-50 text-meta font-medium text-plum-800 transition-colors hover:bg-plum-100">
+					<MessagesSquare className="h-3.5 w-3.5" aria-hidden /> Help me decide
 				</button>
 				<button type="button" onClick={goAhead} disabled={busy || !!missing}
 					className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-gold-300 bg-gold-50 text-meta font-medium text-gold-800 transition-colors hover:bg-gold-100 disabled:opacity-50">
