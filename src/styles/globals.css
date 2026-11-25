@@ -994,7 +994,14 @@ html[data-surface="studio"] ::selection {
 	padding: 0.125rem 0.5rem; text-shadow: none; box-shadow: 0 1px 3px color-mix(in srgb, theme('colors.ink.900') 12%, transparent);
 	opacity: 1 !important;
 }
-.space3d-label-left { left: auto; right: 100%; margin-left: 0; margin-right: 0.25rem; align-items: flex-end; text-align: right; }
+/* First-ring nodes carry a small overview panel instead of a bare label. */
+.space3d-panel {
+	background: rgb(var(--card-rgb) / 0.92); border: 1px solid theme('colors.ink.200'); border-radius: 0.5rem;
+	padding: 0.25rem 0.5rem 0.3rem; text-shadow: none;
+	box-shadow: 0 1px 3px color-mix(in srgb, theme('colors.ink.900') 10%, transparent);
+}
+.space3d button[aria-pressed="true"] .space3d-panel { border-color: theme('colors.plum.400'); }
+.space3d-label-left { left: auto !important; right: 100%; margin-left: 0; margin-right: 0.25rem; align-items: flex-end; text-align: right; }
 @media (prefers-reduced-motion: reduce) { .space3d-label { transition: none; } }
 
 /* The research map's root radiates while its app works (Novix's root rings). */

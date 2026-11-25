@@ -178,9 +178,11 @@ const VERSION_DOT: Record<string, string> = {
 	trying: "bg-plum-400", "can't tell apart": "bg-plum-300", "not run yet": "bg-card border border-dashed border-plum-400",
 };
 
-function Dot({ size, className, label, labelClass, sub, subClass, rings, orb = true }: { size: number; className: string; label: string; labelClass: string; sub?: string; subClass?: string; rings?: boolean | "live";
+function Dot({ size, className, label, labelClass, sub, subClass, rings, orb = true, panel }: { size: number; className: string; label: string; labelClass: string; sub?: string; subClass?: string; rings?: boolean | "live";
 	/** Shade it as a small lit sphere (off for hollow dots). */
-	orb?: boolean }) {
+	orb?: boolean;
+	/** A small overview panel in place of the bare label (first-level nodes). */
+	panel?: React.ReactNode }) {
 	return (
 		<span className="relative flex items-center justify-center" style={{ width: Math.max(18, size + 8), height: Math.max(18, size + 8) }}>
 			{rings && (
@@ -196,10 +198,14 @@ function Dot({ size, className, label, labelClass, sub, subClass, rings, orb = t
 				</>
 			)}
 			<span className={cn("rounded-full ring-[3px] ring-plum-200/60", orb && "space3d-orb", className)} style={{ width: size, height: size }} />
-			<span className="absolute left-full ml-1 flex flex-col leading-tight space3d-label">
-				<span className={cn("whitespace-nowrap max-w-[13rem] truncate", labelClass)}>{label}</span>
-				{sub && <span className={cn("whitespace-nowrap max-w-[13rem] truncate text-nano", subClass ?? "text-ink-600")}>{sub}</span>}
-			</span>
+			{panel ? (
+				<span className="absolute left-full ml-1.5 flex flex-col leading-tight space3d-label space3d-panel">{panel}</span>
+			) : (
+				<span className="absolute left-full ml-1 flex flex-col leading-tight space3d-label">
+					<span className={cn("whitespace-nowrap max-w-[13rem] truncate", labelClass)}>{label}</span>
+					{sub && <span className={cn("whitespace-nowrap max-w-[13rem] truncate text-nano", subClass ?? "text-ink-600")}>{sub}</span>}
+				</span>
+			)}
 		</span>
 	);
 }
@@ -284,8 +290,26 @@ function MapCanvas({ app, exps, proposals, selected, onSelect, grow, insetBottom
 		if (n.kind === "experiment") {
 			const e = expById.get(n.ref);
 			const st = e ? shortStatus(e) : null;
-			return <Dot size={10} className={st?.tone === "failing" ? "bg-brick-500" : "bg-plum-500"} label={e ? humanId(e.id) : n.ref} labelClass="text-caption font-medium text-ink-900"
-				sub={st?.text} subClass={st?.tone === "ok" ? "text-gold-700" : st?.tone === "failing" ? "text-brick-700" : "text-ink-600"} />;
+			const vs = e ? versionsOf(e) : [];
+			const results = vs.reduce((a, v) => a + (v.n || 0), 0);
+			// The first ring carries a small overview panel: name, where it stands,
+			// and one square per version shaded by its state — the map reads as an
+			// overview without a click (user, 2026-11-25).
+			const panel = (
+				<>
+					<span className="max-w-[12rem] truncate whitespace-nowrap text-caption font-medium text-ink-900">{e ? humanId(e.id) : n.ref}</span>
+					{st && <span className={cn("max-w-[12rem] truncate whitespace-nowrap text-nano", st.tone === "ok" ? "text-gold-700" : st.tone === "failing" ? "text-brick-700" : "text-ink-600")}>{st.text}</span>}
+					{vs.length > 0 && (
+						<span className="mt-1 flex items-center gap-1.5 whitespace-nowrap">
+							<span className="flex gap-[2px]" aria-hidden>
+								{vs.slice(0, 8).map((v) => <span key={v.id} title={`${v.label}: ${v.tag}`} className={cn("h-1.5 w-1.5 rounded-[1px]", VERSION_DOT[v.tag] ?? "bg-ink-400")} />)}
+							</span>
+							<span className="font-mono text-nano tabular-nums text-ink-600">{vs.length} version{vs.length === 1 ? "" : "s"} · {results.toLocaleString()} result{results === 1 ? "" : "s"}</span>
+						</span>
+					)}
+				</>
+			);
+			return <Dot size={10} className={st?.tone === "failing" ? "bg-brick-500" : "bg-plum-500"} label={e ? humanId(e.id) : n.ref} labelClass="text-caption font-medium text-ink-900" panel={panel} />;
 		}
 		if (n.kind === "version") {
 			const v = versionOf(n.id);
