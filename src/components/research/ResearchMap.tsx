@@ -672,9 +672,9 @@ export default function ResearchMap({ app }: { app: string }) {
 		return null;
 	}, [workflows, exps]);
 
-	const onSelect = useCallback((id: string | null) => {
+	const onSelect = useCallback((id: string | null, shiftClick?: boolean) => {
 		// Picking B: the click names the other side instead of moving the panel.
-		if (id && selected && id !== selected && (picking || shift.current) && sideOf(id) && sideOf(selected)) {
+		if (id && selected && id !== selected && (picking || shiftClick || shift.current) && sideOf(id) && sideOf(selected)) {
 			setCompareB(id);
 			setPicking(false);
 			setView("compare");
