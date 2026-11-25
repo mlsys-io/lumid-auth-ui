@@ -1,7 +1,8 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
 // Fixtures are trimmed copies of real lum.id experiments (2026-11-24).
 import type { MeExperiment } from "@/api/me";
-import { humanId, experimentStatus, versionsOf, criteriaInWords, buildResearchTree, pathTo, mapSummary, comparabilityNote, suggestionParent, experimentLoop, versionsToRun, type Proposal } from "./research-map";
+import { appPages, pageHref } from "./app-pages";
+import { humanId, experimentStatus, versionsOf, criteriaInWords, buildResearchTree, pathTo, mapSummary, comparabilityNote, suggestionParent, experimentLoop, versionsToRun, proposalCheck, type Proposal } from "./research-map";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -106,6 +107,20 @@ check("summary line counts only versions that actually ran", () => {
 	eq(mapSummary([kol, won], props), "2 experiments · 5 versions tried · 1 suggested");
 	eq(mapSummary([fresh], []), "1 experiment · 2 versions, none tried yet");
 	eq(mapSummary([kol, fresh], []), "2 experiments · 3 of 5 versions tried");
+});
+
+check("proposal check in words", () => {
+	eq(proposalCheck({ id: "a", verdict: "will_collect" } as Proposal)?.tone, "ok");
+	eq(proposalCheck({ id: "a", verdict: "will_be_invisible", verdict_reason: "no metric named real_tape" } as Proposal)?.text, "It would run but record nothing: no metric named real_tape");
+	eq(proposalCheck({ id: "a", verdict: "unchecked", verdict_reason: "sandboxed turn" } as Proposal)?.text, "Not checked yet whether it would record results.");
+	eq(proposalCheck({ id: "a" } as Proposal), null);
+});
+
+check("app pages always lead with the home", () => {
+	eq(appPages([{ surface: "strategies", label: "Strategies" }, { surface: "data", label: "Data" }]).map((t) => t.label), ["Overview", "Strategies", "Data"]);
+	eq(appPages([{ surface: "home", label: "Work" }, { surface: "workflows" }]).map((t) => t.label), ["Work", "workflows"]);
+	eq(pageHref("quant-research", appPages([])[0], true), "/studio/apps/quant-research");
+	eq(pageHref("q", { surface: "data", label: "Data", home: false }, true), "/studio/apps/q?surface=data");
 });
 
 export function run(): number {

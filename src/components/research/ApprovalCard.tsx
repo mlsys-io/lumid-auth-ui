@@ -10,7 +10,7 @@ import { Link } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { me, MeApiError } from "@/api/me";
-import { criteriaInWords, humanId, type Proposal } from "@/lib/research-map";
+import { criteriaInWords, humanId, proposalCheck, type Proposal } from "@/lib/research-map";
 import { loopLabel } from "@/lib/workflow-names";
 import { appTitle } from "@/components/workflow/AppCard";
 import { StrandAvatar } from "@/components/illustrations/StrandAvatar";
@@ -38,6 +38,7 @@ export default function ApprovalCard({ app, list, index, onIndex, onDone, showAp
 	const loop = p.dispatch_loop || p.dispatch?.loop;
 	const metric = p.metric || (p.metric_name ? { name: p.metric_name } : undefined);
 	const done = criteriaInWords(p.success_criteria);
+	const check = proposalCheck(p);
 	const missing = !loop ? "which workflow runs it" : !metric ? "what it measures" : "";
 	const goAhead = async () => {
 		if (!loop || !metric) return;
@@ -82,6 +83,12 @@ export default function ApprovalCard({ app, list, index, onIndex, onDone, showAp
 					)}
 					<div><dt className="inline font-medium text-ink-700">Cost: </dt><dd className="inline text-ink-800">{p.est_runs ? `about ${p.est_runs} runs` : "not estimated"}{loop ? ` of ${loopLabel("", loop)}` : ""}</dd></div>
 					{done && <div><dt className="inline font-medium text-ink-700">Done when: </dt><dd className="inline text-ink-800">{done}</dd></div>}
+					{check && (
+						<div title={check.why}>
+							<dt className="inline font-medium text-ink-700">Will it record results? </dt>
+							<dd className={cn("inline", check.tone === "ok" ? "text-gold-700" : check.tone === "failing" ? "text-brick-700" : "text-ink-600")}>{check.text}</dd>
+						</div>
+					)}
 				</dl>
 				{missing && <div className="text-micro text-ember-700">This suggestion doesn&apos;t say {missing} — ask in chat to set it up.</div>}
 				<div className="flex items-center gap-2 pt-1">

@@ -983,6 +983,8 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 	// "no page yet" when the surface genuinely is not there, so trusting the
 	// URL costs nothing when the inference was right to be false.
 	const urlSurface = (params.get("surface") || "").trim();
+	// "home" is the app's home page (the map), the same as no surface at all.
+	const atHome = !urlSurface || urlSurface === "home";
 	const overviewMode = selected ? selected === OVERVIEW_SEL : (!!identity?.hasSurface || !!urlSurface);
 	const validSelected = selected && rows?.some((r) => r.loop === selected) ? selected : null;
 	const validInitial = initialLoop && rows?.some((r) => r.loop === initialLoop) ? initialLoop : null;
@@ -1263,13 +1265,13 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 							<div className="space-y-6 animate-in fade-in duration-200">
 								{/* Needs fixing for THIS app — empty when healthy. Running runs
 								    live in the Compute panel beside the map. */}
-								{!nestedInSurface && !urlSurface && (
+								{!nestedInSurface && atHome && (
 									<Suspense fallback={null}><AppActivityBand app={app} failingOnly /></Suspense>
 								)}
 								{/* The app's own pages, then what it is exploring (3D map) with
 								    the compute its runs wait for. A named page (?surface=) shows
 								    just that page. */}
-								{!nestedInSurface && !urlSurface && (
+								{!nestedInSurface && atHome && (
 									<Suspense fallback={null}><ResearchHome app={app} pages={identity?.nav} /></Suspense>
 								)}
 								{(identity?.hasSurface || !!urlSurface) && !nestedInSurface ? (
@@ -1290,7 +1292,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 									// same left edge as the map and Compute above it.
 									<div className="-mx-6 -my-5">
 										<Suspense fallback={<div className="px-5 py-8"><Skeleton lines={4} /></div>}>
-											<AppSurface app={app} embedded={embedded} inlineChrome hideNav={!urlSurface && (identity?.nav?.length ?? 0) > 1} surface={params.get("surface") || undefined} />
+											<AppSurface app={app} embedded={embedded} inlineChrome hideNav={atHome && (identity?.nav?.length ?? 0) > 1} surface={params.get("surface") || undefined} />
 										</Suspense>
 									</div>
 								) : APP_OVERVIEW_MD[app] ? (
