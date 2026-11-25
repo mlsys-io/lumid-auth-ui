@@ -26,8 +26,16 @@
 // LUMID_PAT as a bearer header, which the Studio pages honour.
 
 import { chromium } from 'playwright';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { launchBrowser } from './_browser.mjs';
+
+// "r,g,b" for every lagoon/plum step in the palette — the cool tokens allowed.
+const COOL_ALLOW = (() => {
+	const pal = JSON.parse(readFileSync(new URL('../src/styles/palette.json', import.meta.url), 'utf8'));
+	const fams = ['lagoon', 'plum'].map((k) => pal[k] || pal.colors?.[k]).filter(Boolean);
+	const rgb = (h) => { const n = parseInt(h.replace('#', ''), 16); return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`; };
+	return fams.flatMap((f) => Object.values(f).filter((v) => typeof v === 'string' && v.startsWith('#')).map(rgb));
+})();
 
 const arg = (k, d) => {
 	const i = process.argv.indexOf(k);
@@ -181,6 +189,11 @@ const headers = !cookie && process.env.LUMID_PAT ? { Authorization: `Bearer ${pr
 const host = new URL(BASE).hostname;
 const mk = async (viewport, anon) => {
 	const ctx = await browser.newContext({ viewport, deviceScaleFactor: 1, extraHTTPHeaders: anon ? {} : headers });
+	// The audit allowlists the palette's cool families (lagoon = running,
+	// plum = knowledge). Nothing used to set this, so ALLOW was empty and every
+	// lagoon token counted as off-palette the moment one rendered on an audited
+	// page (Compute panel's busy slots, 2026-11-25).
+	await ctx.addInitScript((list) => { window.__LUMEN_ALLOW__ = list; }, COOL_ALLOW);
 	if (cookie && !anon) await ctx.addCookies([{ name: 'lm_session', value: cookie, domain: `.${host.replace(/^nightly\./, '')}`, path: '/', httpOnly: true, secure: true }]);
 	// READ-ONLY by construction: the page may not write anything. Opening a
 	// thread re-saves it (retitle + timestamp bump) and polls can POST; abort
