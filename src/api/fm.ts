@@ -485,6 +485,16 @@ export async function getResult<T = unknown>(site: string, taskId: string): Prom
 }
 
 /**
+ * One result file as an object URL, fetched with the caller's FlowMesh bearer
+ * (results are per-user; a bare <img src> would carry no token and get 401).
+ * `path` comes from lib/run-images.ts imageFilePath(). Revoke it when done.
+ */
+export async function resultFileObjectUrl(path: string): Promise<string> {
+	const r = await fm.get<Blob>(path, { responseType: "blob", timeout: 60_000 });
+	return URL.createObjectURL(r.data);
+}
+
+/**
  * Download URL for a task's artifact bundle.
  *
  * `include` is a REPEATED query param, not the comma list docs/API.md shows — a
