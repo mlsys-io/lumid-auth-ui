@@ -128,9 +128,14 @@ thumb: **if it's a table, query it; if it's a directory, mount it.**
 
 ## 3. See what it produced
 
-- **Research Fleet → Jobs → Your runs** lists every run you started: status, the result, and for a
-  failed run, the step that failed and its error. The workflow editor shows the same run while it
-  goes.
+- **Research Fleet → Jobs → Your runs** lists every run you started: status, the result (Lumilake
+  results as tables), and for a failed run, the step that failed. The workflow editor shows the same
+  run while it goes.
+- **Result → Files** lists every file the run produced (generated pictures, result files, Lumilake
+  artifacts), with a thumbnail for pictures, **Open** and **Download**. Only you can open your runs'
+  files.
+- **Each run writes to its own folder.** Lumilake runs started from Research Fleet store their outputs
+  under `fleet-jobs/<you>/<date-time-id>/`, so a new run never overwrites an earlier one.
 - **A scheduled workflow's run page** has **Warehouse tables**: what that run wrote and read, each
   one a link into the catalog.
 - **The catalog's "Who uses it"** shows which workflows keep a table up to date, and which depend on it.
@@ -153,9 +158,30 @@ curl -s "https://lum.id/api/v1/me/fleet/jobs/<id>?view=result"  -H "Authorizatio
 
 Add `"dry_run": true` to check a graph without running it.
 
-**Sandbox jobs that name their data.** lum.id/data can also start a sandbox for you, given the
-tables it may read (`lumid-data://schema.table`). It runs the sandbox next to the data and hands it
-a key that opens only those tables. The API reference is at
+### Jobs that may read only what they name
+
+Through **lum.id/data jobs**, a run declares the tables it reads, and gets a key that opens **only
+those tables**, as you. Reading anything else is refused, and the bytes each declared table actually
+gave are recorded on the job. This works for **Lumilake** graphs and sandboxes:
+
+```bash
+curl -s https://lum.id/data/jobs/v1/jobs \
+  -H "Authorization: Bearer $LUMID_PAT" -H "Content-Type: application/json" \
+  -H "Idempotency-Key: treasury-1" \
+  -d "$(jq -n --rawfile wf treasury-curve.yaml '{spec: {
+        app: "my-analysis", runtime: "lumilake", name: "treasury",
+        sources: [{ref: "lumid-data://macro.treasury_rates"}],
+        payload: {workflow_format: "yaml", data: [{workflow: $wf, inputs: {Run: ["1"]}}]}}}')"
+
+curl -s https://lum.id/data/jobs/v1/jobs/<job_id> -H "Authorization: Bearer $LUMID_PAT"   # status, sources, bytes read
+```
+
+A table is named by its store: `lumid-data://schema.table` (home) or `nus://schema.table` (NUS, e.g.
+`nus://arxiv.papers`). You don't pick a site: the plan runs the job next to its data. Use
+`POST /data/jobs/v1/plan` with the same body to see where it would run, and why, without running it.
+
+The two data hubs (home and NUS) keep each other's catalogs and job records in sync, so either one
+knows what the other holds. The data itself never moves. The API reference is at
 [lum.id/data/openapi.json](https://lum.id/data/openapi.json) (`/jobs/v1/…`).
 
 ## 5. Not there yet
@@ -166,8 +192,10 @@ Said plainly, so you don't go looking:
 |---|---|
 | **UK Biobank at NUS** | Visible only to approved researchers (an access list), and readable only by their own queries. Not available to Lumilake runs yet. |
 | **FlowMesh graphs at NUS** | Admin-only today. Lumilake graphs at NUS work for everyone (example above). |
-| **Reads by a Lumilake graph** | Lumilake reads with its own key, so under "Who uses it" they count as *another person reading*, not as you. |
-| **Files a run wrote** | Shown in the run's result, but not browsable in the Data Warehouse. |
+| **Reads by a Lumilake graph started from Research Fleet** | Lumilake reads with its own key, so under "Who uses it" they count as *another person reading*. Started through lum.id/data jobs (above), they read as you. |
+| **Image generation with Lumilake** | Fails today (the scheduler puts it on a CPU machine); a fix is waiting to be merged. Generate images with a FlowMesh graph meanwhile. |
+| **Lumilake jobs on NUS data** (`nus://…`) | Not yet: the plan has no Lumilake at NUS for jobs. Sandbox jobs on NUS data work. |
+| **Your runs** | Shows your latest 100 runs. |
 | **FlowMesh tasks reading the warehouse** | Not possible from inside a task (no network). Pass data in, as above. |
 | **LQT data in a run** | Not yet. |
 
@@ -181,3 +209,5 @@ Said plainly, so you don't go looking:
 | *compute service returned 401* | The site didn't accept your sign-in | Sign in again; if it persists, report it |
 | A FlowMesh task fails to fetch a URL | Tasks have no network | Pass the data in from an earlier step or as files |
 | A run at office is slow on a big read | It reads the home hub over the internet | Run at Home |
+| *source_not_in_job_scope*, or a 403 at planning | A lum.id/data job read a table it didn't declare | Add it to `sources` and run a new job |
+| *no_feasible_site* | No site can run that runtime next to that data | Read `alternatives` in the plan; try another runtime |

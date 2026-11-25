@@ -239,7 +239,7 @@ const DOCS: DocEntry[] = [
 		// the run produced. The Catalog's "How jobs use data" link lands here.
 		slug: 'data-jobs',
 		title: 'Use your data in workflows and jobs',
-		description: 'Find a table and where it lives, read it from a Lumilake or FlowMesh run at home or office, and see what the run produced. Plus what does not work yet.',
+		description: 'Find a table and where it lives, ask about it in plain words, read it from a Lumilake or FlowMesh run, see and download what the run produced, and run jobs that may read only the tables they name.',
 		md: 'data-jobs.md',
 		group: 'Guides',
 		icon: Database,
