@@ -89,6 +89,9 @@ async function openApp() {
 	await page.waitForTimeout(2500);
 }
 async function openWorkflow(label) {
+	// Creating a workflow already selects it; a second click would deselect it.
+	const open = map().getByRole('dialog', { name: new RegExp(`^(Workflow|Variant): ${label}`, 'i') });
+	if (await open.count()) return;
 	await domClick(nodeButton('workflow', label));
 	await panel().waitFor({ timeout: 10000 });
 	await page.waitForTimeout(800);
@@ -108,7 +111,11 @@ async function chat(prompt, { timeout = 240000 } = {}) {
 	// button then reads "Queue message" (and "Stop generating" shows). A turn
 	// is over only when neither shows and the text has been still for 20 s —
 	// multi-step tool turns pause for several seconds between steps.
-	const busyNow = async () => (await page.getByRole('button', { name: 'Stop generating' }).count()) + (await page.getByRole('button', { name: 'Queue message' }).count());
+	// "Thinking…" (still thinking) vs "Thought for 4s" (done): the send button
+	// does not change while the model thinks, so read the words too.
+	const busyNow = async () => (await page.getByRole('button', { name: 'Stop generating' }).count())
+		+ (await page.getByRole('button', { name: 'Queue message' }).count())
+		+ (/Thinking…|Thinking\.\.\./.test(((await scope.innerText().catch(() => '')) || '').slice(-600)) ? 1 : 0);
 	await page.waitForFunction(() => !!document.querySelector('button[aria-label="Queue message"], button[aria-label="Stop generating"]'), null, { timeout: 30000 }).catch(() => {});
 	let last = '', quietSince = Date.now();
 	while (Date.now() - started < timeout) {
