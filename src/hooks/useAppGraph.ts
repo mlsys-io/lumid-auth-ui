@@ -28,7 +28,9 @@ export function useAppGraph(app: string) {
 	const [graph, setGraph] = useState<AppGraph | null>(() => cache.get(app) ?? null);
 	const [error, setError] = useState<string | null>(null);
 	const live = useRef(true);
-	useEffect(() => () => { live.current = false; }, []);
+	// Set on every mount: StrictMode mounts, unmounts and remounts, and a
+	// cleanup-only flag would stay false and drop every result.
+	useEffect(() => { live.current = true; return () => { live.current = false; }; }, []);
 
 	const load = useCallback(async () => {
 		const [cfg, wf] = await Promise.allSettled([me.appConfig(app), me.listWorkflows("scheduled")]);

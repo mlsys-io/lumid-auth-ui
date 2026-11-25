@@ -11,9 +11,9 @@
 // Lumid's clarity: readable cards with a status in words, no modes, no
 // counters. Wording lives in lib/research-map.ts. Phones get a list.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowRight, FlaskConical, MessagesSquare, Sparkles, Workflow, X } from "lucide-react";
+import { ArrowRight, FlaskConical, MessagesSquare, Sparkles, X } from "lucide-react";
 import apiClient from "@/api/client";
 import { me, type MeExperiment, type MeExperimentDetail } from "@/api/me";
 import EvolutionChart, { type EvoSeries } from "@/components/research/EvolutionChart";
@@ -25,8 +25,14 @@ import { useWorkflowColors } from "@/hooks/useWorkflowColors";
 import Space3D from "@/components/research/Space3D";
 import RunVersions from "@/components/research/RunVersions";
 import YourCall from "@/components/research/YourCall";
+import WorkflowPanel, { NodePanel, CompareView, wfLabel, type CompareSide, type PanelView } from "@/components/research/WorkflowPanel";
+import TrySetups from "@/components/research/TrySetups";
+import { useAppGraph } from "@/hooks/useAppGraph";
+import type { SpecNode, SpecWorkflow } from "@/lib/app-spec";
+import type { MeWorkflowRow } from "@/api/me";
+import { fmtAgo } from "@/lib/activity";
 import {
-	buildResearchTree, comparabilityNote, criteriaInWords, experimentLoop, experimentStatus, humanId, mapSummary, pathTo, versionsOf,
+	buildResearchTree, comparabilityNote, criteriaInWords, experimentLoop, experimentStatus, humanId, mapSummary, pathTo, versionsOf, OTHER_NODE,
 	type MapEdge, type MapNode, type Proposal, type Tone, type VersionInfo,
 	shortStatus,
 } from "@/lib/research-map";
@@ -109,6 +115,7 @@ const cardBase = (selected: boolean) => cn(
 );
 
 function AppCard3D({ app, running, count, selected }: { app: string; running: boolean; count: number; selected: boolean }) {
+	// `count` is the app's workflows: the graph's first layer (2026-11-25).
 	return (
 		<div className={cn(cardBase(selected), "border-ink-300 px-3 py-2")} style={{ width: 210 }}>
 			{/* Glow rings while any of the app's workflows is running. */}
@@ -117,7 +124,7 @@ function AppCard3D({ app, running, count, selected }: { app: string; running: bo
 				<StrandAvatar slug={app} size={28} />
 				<div className="min-w-0">
 					<div className="text-meta font-semibold text-ink-900 truncate">{appTitle(app)}</div>
-					<div className={cn("text-micro", running ? "text-lagoon-700" : "text-ink-600")}>{running ? "Running now" : `${count} experiment${count === 1 ? "" : "s"}`}</div>
+					<div className={cn("text-micro", running ? "text-lagoon-700" : "text-ink-600")}>{running ? "Running now" : `${count} workflow${count === 1 ? "" : "s"}`}</div>
 				</div>
 			</div>
 		</div>
@@ -179,7 +186,9 @@ const VERSION_DOT: Record<string, string> = {
 	trying: "bg-plum-400", "can't tell apart": "bg-plum-300", "not run yet": "bg-card border border-dashed border-plum-400",
 };
 
-function Dot({ size, className, label, labelClass, sub, subClass, rings, orb = true, panel, ringClass, panelClass }: { size: number; className: string; label: string; labelClass: string; sub?: string; subClass?: string; rings?: boolean | "live";
+function Dot({ size, className, label, labelClass, sub, subClass, rings, orb = true, panel, ringClass, panelClass, mark }: { size: number; className: string; label: string; labelClass: string; sub?: string; subClass?: string; rings?: boolean | "live";
+	/** A/B, when this node is a side of the panel's comparison. */
+	mark?: "A" | "B";
 	/** Shade it as a small lit sphere (off for hollow dots). */
 	orb?: boolean;
 	/** A small overview panel in place of the bare label (first-level nodes). */
@@ -201,6 +210,7 @@ function Dot({ size, className, label, labelClass, sub, subClass, rings, orb = t
 				</>
 			)}
 			<span className={cn("rounded-full ring-[3px] ring-plum-200/60", ringClass, orb && "space3d-orb", className)} style={{ width: size, height: size }} />
+			{mark && <span aria-label={`Compared as ${mark}`} className={cn("absolute -left-2 -top-2 z-10 rounded px-1 text-nano font-semibold leading-tight text-white", mark === "A" ? "bg-ink-800" : "bg-plum-700")}>{mark}</span>}
 			{panel ? (
 				<span className={cn("absolute left-full ml-1.5 flex flex-col leading-tight space3d-label space3d-panel", panelClass)}>{panel}</span>
 			) : (
@@ -225,36 +235,51 @@ function useViewportHeight(): number {
 	return h;
 }
 
-function MapCanvas({ app, exps, proposals, selected, onSelect, grow, insetBottom = 0, insetRight = 0 }: {
+/** A workflow's state in words, from its row (no extra request per dot). */
+function rowStatus(row?: MeWorkflowRow): { text: string; tone: "ok" | "failing" | "running" | "idle" } {
+	if (!row) return { text: "Hasn't run yet", tone: "idle" };
+	if (row.running) return { text: "Running now", tone: "running" };
+	if (!row.last_run_ts) return { text: "Hasn't run yet", tone: "idle" };
+	const ago = fmtAgo(row.last_run_ts);
+	return row.last_run_ok === false ? { text: `Last run failed ${ago}`, tone: "failing" } : { text: `Last run succeeded ${ago}`, tone: "ok" };
+}
+
+function MapCanvas({ app, exps, proposals, workflows, groups, rows, marks, selected, onSelect, grow, insetBottom = 0, insetRight = 0 }: {
 	app: string; exps: MeExperiment[]; proposals: Proposal[];
+	/** The app's workflows (from its spec) and the child nodes a user made. */
+	workflows: SpecWorkflow[]; groups: SpecNode[];
+	rows: Map<string, MeWorkflowRow>;
+	/** Graph ids marked A / B (the panel's comparison). */
+	marks: Map<string, "A" | "B">;
 	selected: string | null; onSelect: (id: string | null) => void; grow: boolean;
 	/** Pixels the docked approval card covers at the foot of the space. */
 	insetBottom?: number;
-	/** Pixels the experiment panel covers at the right. */
+	/** Pixels the panel covers at the right. */
 	insetRight?: number;
 }) {
 	const running = useShellActivity()?.runningApps.includes(app) ?? false;
-	// No workflow nodes: they repeated the sidebar's list and hung a dashed
-	// "feeds" edge on every experiment ("does 'feeds' mean anything?" — user,
-	// 2026-11-25). The experiment panel names its workflow (Open <workflow>).
-	const tree = useMemo(() => buildResearchTree(app, exps, proposals), [app, exps, proposals]);
-	const navigate = useNavigate();
+	// The graph (2026-11-25): app → workflows → experiments (setups) /
+	// variants / child nodes. Helpers fold into the workflow they serve.
+	const tree = useMemo(() => buildResearchTree(app, exps, proposals, workflows, groups), [app, exps, proposals, workflows, groups]);
 	const lit = useMemo(() => (selected ? pathTo(tree.nodes, selected) : null), [tree, selected]);
 	const expById = useMemo(() => new Map(exps.map((e) => [e.id, e])), [exps]);
 	const propById = useMemo(() => new Map(proposals.map((p) => [p.id, p])), [proposals]);
+	const wfById = useMemo(() => new Map(workflows.map((w) => [w.id, w])), [workflows]);
+	const groupById = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups]);
+	const mainCount = workflows.filter((w) => !w.helper).length;
 	const versionOf = useCallback((id: string) => {
 		const [, a, b] = id.split(":");
 		const e = expById.get(a);
 		return e ? versionsOf(e).find((v) => v.id === b) : undefined;
 	}, [expById]);
-	// Growth order: the app, then experiments in the order they arrived, each
-	// followed by its versions — the space fills the way the research did.
+	// Growth order: the app, then workflows, each followed by what's under it.
 	const order = useMemo(() => {
 		const o = new Map<string, number>();
 		tree.nodes.forEach((n, i) => o.set(n.id, n.depth === 0 ? 0 : i));
 		return o;
 	}, [tree]);
-	const feedsOf = useCallback((loop: string) => tree.edges.filter((e) => e.source === `wf:${loop}`).length, [tree]);
+	const childCount = useCallback((id: string) => tree.nodes.filter((n) => n.parent === id).length, [tree]);
+	const nodeTitle = (ref: string) => (ref === OTHER_NODE ? "Other workflows" : groupById.get(ref)?.title ?? humanId(ref));
 	// Evidence around each version: one particle per result (log-scaled in Space3D).
 	const evidence = useCallback((n: MapNode) => {
 		if (n.kind !== "version") return null;
@@ -263,77 +288,92 @@ function MapCanvas({ app, exps, proposals, selected, onSelect, grow, insetBottom
 		return { count: v.n, className: VERSION_FILL[v.tag] ?? "fill-ink-500" };
 	}, [versionOf]);
 	const describe = useCallback((n: MapNode): string => {
-		if (n.kind === "app") return `${appTitle(app)}: ${exps.length} experiments${running ? ", running now" : ""}`;
+		if (n.kind === "app") return `${appTitle(app)}: ${mainCount} workflow${mainCount === 1 ? "" : "s"}${running ? ", running now" : ""}`;
+		if (n.kind === "workflow") { const w = wfById.get(n.ref); return `${w ? wfLabel(w) : n.ref}${w?.parent ? " (variant)" : ""}: ${rowStatus(rows.get(n.ref)).text}`; }
+		if (n.kind === "node") return `${nodeTitle(n.ref)}: holds ${childCount(n.id)}`;
 		if (n.kind === "experiment") { const e = expById.get(n.ref); return e ? `${humanId(e.id)}: ${experimentStatus(e).text}` : n.ref; }
 		if (n.kind === "version") { const v = versionOf(n.id); return v ? `${v.label}: ${v.tag}${v.tag !== "not run yet" ? `, ${v.line}` : ""}` : n.ref; }
-		if (n.kind === "workflow") { const k = feedsOf(n.ref); return `Workflow ${loopLabel("", n.ref)}: feeds ${k} experiment${k === 1 ? "" : "s"} — open it`; }
 		return `Suggested: ${humanId(n.ref)}`;
-	}, [app, exps.length, running, expById, versionOf, feedsOf]);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [app, mainCount, running, expById, versionOf, wfById, rows, childCount, groupById]);
 	const renderCard = useCallback((n: MapNode, st: { selected: boolean }) => {
-		if (n.kind === "app") return <AppCard3D app={app} running={running} count={exps.length} selected={st.selected} />;
+		if (n.kind === "app") return <AppCard3D app={app} running={running} count={mainCount} selected={st.selected} />;
 		if (n.kind === "experiment") { const e = expById.get(n.ref); return e ? <ExperimentCard3D e={e} selected={st.selected} /> : null; }
 		if (n.kind === "version") { const v = versionOf(n.id); return v ? <VersionCard3D v={v} selected={st.selected} /> : null; }
-		if (n.kind === "workflow") {
-			const k = feedsOf(n.ref);
+		if (n.kind === "workflow" || n.kind === "node") {
+			const w = wfById.get(n.ref);
 			return (
-				<div className={cn("rounded-lg border bg-card px-2.5 py-1.5 shadow-e1 min-w-[9rem]", st.selected ? "border-lagoon-400" : "border-ink-200")}>
-					<div className="flex items-center gap-1.5 text-caption font-medium text-ink-900"><Workflow className="w-3.5 h-3.5 text-lagoon-600" aria-hidden />{loopLabel("", n.ref)}</div>
-					<div className="text-micro text-ink-600">feeds {k} experiment{k === 1 ? "" : "s"} · open it</div>
+				<div className={cn("min-w-[9rem] rounded-lg border bg-card px-2.5 py-1.5 shadow-e1", st.selected ? "border-plum-400" : "border-ink-200")}>
+					<div className="text-caption font-medium text-ink-900">{n.kind === "node" ? nodeTitle(n.ref) : w ? wfLabel(w) : n.ref}</div>
+					<div className="text-micro text-ink-600">{n.kind === "node" ? `holds ${childCount(n.id)}` : rowStatus(rows.get(n.ref)).text}</div>
 				</div>
 			);
 		}
 		const p = propById.get(n.ref);
 		return p ? <SuggestedCard3D p={p} selected={st.selected} /> : null;
-	}, [app, running, exps.length, expById, propById, versionOf, feedsOf]);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [app, running, mainCount, expById, propById, versionOf, wfById, rows, childCount, groupById]);
 	// Each workflow's colour (sidebar bar = map branch = running box).
 	const colorOf = useWorkflowColors();
+	const loopOfNode = useCallback((id: string): string | null => {
+		if (id.startsWith("wf:")) return id.slice(3);
+		if (id.startsWith("exp:")) { const x = expById.get(id.slice(4)); return x ? experimentLoop(x) : null; }
+		return null;
+	}, [expById]);
 	const edgeClass = useCallback((e: MapEdge) => {
-		if (!e.target.startsWith("exp:")) return undefined;
-		const x = expById.get(e.target.slice(4));
-		return x ? colorOf(app, experimentLoop(x))?.stroke : undefined;
-	}, [app, expById, colorOf]);
+		const loop = loopOfNode(e.target);
+		return loop ? colorOf(app, loop)?.stroke : undefined;
+	}, [app, loopOfNode, colorOf]);
 	const renderDot = useCallback((n: MapNode) => {
+		const mark = marks.get(n.id);
 		if (n.kind === "app") return <Dot size={14} rings={running ? "live" : true} className="bg-plum-600" label={appTitle(app)} labelClass="text-meta font-semibold text-ink-900"
-			sub={`${exps.length} experiment${exps.length === 1 ? "" : "s"}${running ? " · running now" : ""}`} />;
+			sub={`${mainCount} workflow${mainCount === 1 ? "" : "s"}${running ? " · running now" : ""}`} mark={mark} />;
+		if (n.kind === "workflow") {
+			const w = wfById.get(n.ref);
+			const st = rowStatus(rows.get(n.ref));
+			const under = tree.nodes.filter((x) => x.parent === n.id);
+			const ne = under.filter((x) => x.kind === "experiment").length;
+			const nv = under.filter((x) => x.kind === "workflow" || x.kind === "node").length;
+			const fb = w?.feedback.map((f) => humanId(f.step)).join(" → ");
+			// Every workflow carries a small overview panel: name, how it's doing,
+			// how it is measured, and what's under it — the graph reads as an
+			// overview without a click.
+			const panel = (
+				<>
+					<span className="max-w-[12rem] truncate whitespace-nowrap text-caption font-medium text-ink-900">{w ? wfLabel(w) : n.ref}</span>
+					<span className={cn("max-w-[12rem] truncate whitespace-nowrap text-nano", st.tone === "running" ? "text-lagoon-700" : st.tone === "failing" ? "text-brick-700" : st.tone === "ok" ? "text-gold-700" : "text-ink-600")}>{st.text}</span>
+					{(fb || ne || nv) ? (
+						<span className="mt-0.5 max-w-[12rem] truncate whitespace-nowrap font-mono text-nano text-ink-600">
+							{[fb, ne ? `${ne} experiment${ne === 1 ? "" : "s"}` : "", nv ? `${nv} variant${nv === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ")}
+						</span>
+					) : null}
+				</>
+			);
+			const sw = colorOf(app, n.ref);
+			return <Dot size={w?.parent ? 10 : 12} className={st.tone === "failing" ? "bg-brick-500" : st.tone === "running" ? "bg-lagoon-500" : "bg-plum-500"} label={w ? wfLabel(w) : n.ref} labelClass="text-caption font-medium text-ink-900" panel={panel}
+				ringClass={sw?.ring} panelClass={sw ? cn("border-l-[3px]", sw.border) : undefined} mark={mark} />;
+		}
+		if (n.kind === "node") {
+			const k = childCount(n.id);
+			return <Dot size={10} orb={false} className="border-2 border-dashed border-plum-500 bg-card" label={nodeTitle(n.ref)} labelClass="text-caption font-medium text-plum-800"
+				sub={n.ref === OTHER_NODE ? "housekeeping" : `node · holds ${k}`} subClass="text-plum-700" mark={mark} />;
+		}
 		if (n.kind === "experiment") {
 			const e = expById.get(n.ref);
 			const st = e ? shortStatus(e) : null;
 			const vs = e ? versionsOf(e) : [];
-			const results = vs.reduce((a, v) => a + (v.n || 0), 0);
-			// The first ring carries a small overview panel: name, where it stands,
-			// and one square per version shaded by its state — the map reads as an
-			// overview without a click (user, 2026-11-25).
-			const panel = (
-				<>
-					<span className="max-w-[12rem] truncate whitespace-nowrap text-caption font-medium text-ink-900">{e ? humanId(e.id) : n.ref}</span>
-					{st && <span className={cn("max-w-[12rem] truncate whitespace-nowrap text-nano", st.tone === "ok" ? "text-gold-700" : st.tone === "failing" ? "text-brick-700" : "text-ink-600")}>{st.text}</span>}
-					{vs.length > 0 && (
-						<span className="mt-1 flex items-center gap-1.5 whitespace-nowrap">
-							<span className="flex gap-[2px]" aria-hidden>
-								{vs.slice(0, 8).map((v) => <span key={v.id} title={`${v.label}: ${v.tag}`} className={cn("h-1.5 w-1.5 rounded-[1px]", VERSION_DOT[v.tag] ?? "bg-ink-400")} />)}
-							</span>
-							<span className="font-mono text-nano tabular-nums text-ink-600">{vs.length} version{vs.length === 1 ? "" : "s"} · {results.toLocaleString()} result{results === 1 ? "" : "s"}</span>
-						</span>
-					)}
-				</>
-			);
-			const sw = e ? colorOf(app, experimentLoop(e)) : null;
-			return <Dot size={10} className={st?.tone === "failing" ? "bg-brick-500" : "bg-plum-500"} label={e ? humanId(e.id) : n.ref} labelClass="text-caption font-medium text-ink-900" panel={panel}
-				ringClass={sw?.ring} panelClass={sw ? cn("border-l-[3px]", sw.border) : undefined} />;
+			return <Dot size={8} className={st?.tone === "failing" ? "bg-brick-500" : "bg-plum-400"} label={e ? humanId(e.id) : n.ref} labelClass="text-micro font-medium text-ink-800"
+				sub={st ? `${st.text} · ${vs.length} setup${vs.length === 1 ? "" : "s"}` : undefined} mark={mark} />;
 		}
 		if (n.kind === "version") {
 			const v = versionOf(n.id);
 			// The version's state in a word when it has one worth saying.
 			const tag = v && (v.tag === "winning" || v.tag === "leading" || v.tag === "can't tell apart") ? v.tag : undefined;
-			return <Dot size={7} className={VERSION_DOT[v?.tag ?? "current"] ?? "bg-ink-500"} label={v?.label ?? n.ref} labelClass="text-micro text-ink-700" sub={tag} />;
+			return <Dot size={6} className={VERSION_DOT[v?.tag ?? "current"] ?? "bg-ink-500"} label={v?.label ?? n.ref} labelClass="text-micro text-ink-700" sub={tag} mark={mark} />;
 		}
-		if (n.kind === "workflow") {
-			const k = feedsOf(n.ref);
-			return <Dot size={7} className="bg-lagoon-500 !rounded-[2px] !ring-lagoon-100" label={loopLabel("", n.ref)} labelClass="text-micro font-medium text-ink-800"
-				sub="workflow" subClass="text-lagoon-700" />;
-		}
-		return <Dot size={8} orb={false} className="bg-card border border-dashed border-gold-500" label={`Suggested: ${humanId(n.ref)}`} labelClass="text-micro text-gold-700" />;
-	}, [app, running, expById, versionOf, exps.length, feedsOf, colorOf]);
+		return <Dot size={8} orb={false} className="bg-card border border-dashed border-gold-500" label={`Suggested: ${humanId(n.ref)}`} labelClass="text-micro text-gold-700" mark={mark} />;
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [app, running, mainCount, expById, versionOf, wfById, rows, tree, colorOf, childCount, marks, groupById]);
 	// One stage size for every app, set by the screen alone — never by what's
 	// in it, whether suggestions wait, or a panel is open (two apps side by
 	// side read as two sizes otherwise; user 2026-11-25). The approval card
@@ -342,11 +382,10 @@ function MapCanvas({ app, exps, proposals, selected, onSelect, grow, insetBottom
 	const height = Math.round(Math.max(520, Math.min(680, vh - 300)));
 	return (
 		<Space3D nodes={tree.nodes} edges={tree.edges} renderCard={renderCard} renderDot={renderDot} describe={describe} edgeClass={edgeClass}
-			// Experiments already show an overview panel: hovering lights it up.
-			hoverCard={(n) => !(n.kind === "experiment" && n.depth === 1)}
+			// Workflows carry an overview panel: hovering lights it up, no card swap.
+			hoverCard={(n) => n.kind !== "workflow"}
 			selected={selected} lit={lit} grow={grow} order={order} height={height} evidence={evidence} insetBottom={insetBottom} insetRight={insetRight}
-			// A workflow node opens that workflow; everything else selects in place.
-			onSelect={(id) => (id?.startsWith("wf:") ? navigate(workflowPath(app, id.slice(3))) : onSelect(id))} />
+			onSelect={onSelect} />
 	);
 }
 
@@ -387,8 +426,10 @@ function Wrap({ panel, children }: { panel: boolean; children: React.ReactNode }
 	);
 }
 
-function ExperimentDetail({ app, e, panel = false, onClose, style }: {
+function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare }: {
 	app: string; e: MeExperiment;
+	/** Set when a setup (version) is selected: pick another to compare it with. */
+	onCompare?: () => void;
 	/** Shown over the map (a panel at its right edge) rather than under it. */
 	panel?: boolean; onClose?: () => void; style?: React.CSSProperties;
 }) {
@@ -506,7 +547,10 @@ function ExperimentDetail({ app, e, panel = false, onClose, style }: {
 	);
 	const links = (
 		<>
-			{loop && (
+			{onCompare && (
+				<Button size="sm" variant="ghost" onClick={onCompare}>Compare with…</Button>
+			)}
+			{loop && !onCompare && (
 				<Button asChild size="sm" variant={panel ? "ghost" : "secondary"}>
 					<Link to={workflowPath(app, loop, { tab: "experiments" })}>Open {loopLabel("", loop)} <ArrowRight className="w-3.5 h-3.5" /></Link>
 				</Button>
@@ -580,14 +624,30 @@ const PANEL_PX = 352, PANEL_PX_2XL = 416;
 
 export default function ResearchMap({ app }: { app: string }) {
 	const { data } = useResearchData(app);
+	const { graph, save } = useAppGraph(app);
 	const wide = useWide();
 	const panelPx = useMedia("(min-width: 1536px)") ? PANEL_PX_2XL : PANEL_PX;
 	const live = useShellActivity()?.runningApps.includes(app) ?? false;
 	const grow = useOncePerSession(`research-map:${app}`);
 	const [selected, setSelected] = useState<string | null>(null);
+	const [view, setView] = useState<PanelView>("overview");
+	// A/B: A is what the panel shows; B is picked on the graph (⇧-click, or
+	// "Compare with…" then a click).
+	const [compareB, setCompareB] = useState<string | null>(null);
+	const [picking, setPicking] = useState(false);
+	const shift = useRef(false);
+	const [variantFor, setVariantFor] = useState<SpecWorkflow | "new" | null>(null);
+	const [setupsFor, setSetupsFor] = useState<SpecWorkflow | null>(null);
 	const [notNow, setNotNow] = useState<string[]>(() => readNotNow(app));
 	const [pIndex, setPIndex] = useState(0);
-	useEffect(() => { setSelected(null); setNotNow(readNotNow(app)); setPIndex(0); }, [app]);
+	useEffect(() => { setSelected(null); setCompareB(null); setPicking(false); setNotNow(readNotNow(app)); setPIndex(0); }, [app]);
+	useEffect(() => {
+		const down = (e: KeyboardEvent) => { if (e.key === "Shift") shift.current = true; };
+		const up = (e: KeyboardEvent) => { if (e.key === "Shift") shift.current = false; };
+		window.addEventListener("keydown", down);
+		window.addEventListener("keyup", up);
+		return () => { window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); };
+	}, []);
 	// `?suggestion=<id>` (the Inbox's "See it on the map"): open on that
 	// suggestion — highlighted on the map, its approval card showing.
 	const [params] = useSearchParams();
@@ -597,14 +657,45 @@ export default function ResearchMap({ app }: { app: string }) {
 		if (data.proposals.some((p) => p.id === wanted)) setSelected(`sug:${wanted}`);
 	}, [wanted, data]);
 
-	if (!data) return null;
-	const { exps, proposals } = data;
+	const workflows = graph?.spec.workflows ?? [];
+	const groups = graph?.spec.nodes ?? [];
+	const rows = graph?.rows ?? EMPTY_ROWS;
+	const exps = data?.exps ?? [];
+	const proposals = data?.proposals ?? [];
 	const pending = proposals.filter((p) => !exps.some((e) => e.id === p.id) && !notNow.includes(p.id));
-	if (exps.length === 0 && pending.length === 0) return null;
+
+	const sideOf = useCallback((id: string | null): CompareSide | null => {
+		if (!id) return null;
+		const [kind, a, b] = id.split(":");
+		if (kind === "wf") { const w = workflows.find((x) => x.id === a); return w ? { kind: "workflow", id: a, label: wfLabel(w) } : null; }
+		if (kind === "ver") { const e = exps.find((x) => x.id === a); const v = e ? versionsOf(e).find((x) => x.id === b) : undefined; return e && v ? { kind: "version", id: b, label: `${v.label} (${humanId(e.id)})`, exp: e } : null; }
+		return null;
+	}, [workflows, exps]);
+
+	const onSelect = useCallback((id: string | null) => {
+		// Picking B: the click names the other side instead of moving the panel.
+		if (id && selected && id !== selected && (picking || shift.current) && sideOf(id) && sideOf(selected)) {
+			setCompareB(id);
+			setPicking(false);
+			setView("compare");
+			return;
+		}
+		setPicking(false);
+		if (id !== selected) { setCompareB(null); setView("overview"); }
+		setSelected(id);
+	}, [selected, picking, sideOf]);
+
+	if (!data && !graph) return null;
+	if (workflows.length === 0 && exps.length === 0 && pending.length === 0) return null;
 
 	const selKind = selected?.split(":")[0];
+	const selWf = selKind === "wf" ? workflows.find((w) => `wf:${w.id}` === selected) : undefined;
+	const selNode = selKind === "node" ? (selected === `node:${OTHER_NODE}` ? { id: OTHER_NODE as "__other", title: "Other workflows", parent: "" } : groups.find((g) => `node:${g.id}` === selected)) : undefined;
 	const selExp = selKind === "exp" ? exps.find((e) => `exp:${e.id}` === selected)
 		: selKind === "ver" ? exps.find((e) => e.id === selected!.split(":")[1]) : undefined;
+	const selVersionSide = selKind === "ver" ? sideOf(selected) : null;
+	const marks = new Map<string, "A" | "B">();
+	if (compareB && selected) { marks.set(selected, "A"); marks.set(compareB, "B"); }
 	// Paging the approval card re-targets the highlight on the map.
 	const showProposal = (i: number) => { setPIndex(i); const p = pending[i]; if (p) setSelected(`sug:${p.id}`); };
 	const dismiss = (id: string) => {
@@ -614,19 +705,51 @@ export default function ResearchMap({ app }: { app: string }) {
 		setPIndex((i) => Math.max(0, Math.min(i, pending.length - 2)));
 		setSelected(null);
 	};
-	// Clicking an experiment (or one of its versions) opens its detail OVER the
+	const close = () => { setSelected(null); setCompareB(null); setPicking(false); };
+	const editable = !!graph?.editable;
+	// Clicking a workflow, node, experiment or version opens its panel OVER the
 	// map, at the right edge; the camera frames the path in the space left.
-	const panelOpen = wide && !!selExp;
+	const panelOpen = wide && !!(selWf || selNode || selExp);
+	const panelStyle = { bottom: 12 };
+	const panel = !wide ? null : selWf && graph ? (
+		<WorkflowPanel key={selWf.id} app={app} wf={selWf} spec={graph.spec} row={rows.get(selWf.id)} exps={exps}
+			view={view} onView={setView} compareWith={sideOf(compareB)} onPickCompare={() => setPicking(true)}
+			onMakeVariant={() => setVariantFor(selWf)} onTrySetups={() => setSetupsFor(selWf)} onSelect={(id) => onSelect(id)}
+			save={save} editable={editable} onClose={close} style={panelStyle} />
+	) : selNode && graph ? (
+		<NodePanel key={selNode.id} app={app} node={selNode} spec={graph.spec} save={save} editable={editable} onSelect={(id) => onSelect(id)} onClose={close} style={panelStyle} />
+	) : selExp && compareB && selVersionSide ? (
+		// A version compared with another: the same Compare view, in the experiment's place.
+		<div role="dialog" aria-label="Compare" style={panelStyle}
+			className="absolute right-3 top-12 z-[6100] flex w-[22rem] max-w-[48%] flex-col overflow-hidden rounded-xl border border-ink-200 bg-card shadow-e3 map-panel-in 2xl:w-[26rem]">
+			<div className="flex items-center gap-2 border-b border-ink-100 px-3.5 py-2.5">
+				<span className="eyebrow text-plum-700">Compare</span>
+				<button type="button" onClick={close} aria-label="Close" className="ml-auto inline-flex h-6 w-6 items-center justify-center rounded-md text-ink-600 hover:bg-ink-100"><X className="h-3.5 w-3.5" /></button>
+			</div>
+			<div className="min-h-0 flex-1 overflow-y-auto px-3.5 py-3">
+				<CompareView app={app} a={selVersionSide} b={sideOf(compareB)} spec={graph?.spec} onPick={() => setPicking(true)} />
+			</div>
+		</div>
+	) : selExp ? (
+		<ExperimentDetail key={selExp.id} app={app} e={selExp} panel onClose={close} style={panelStyle}
+			onCompare={selVersionSide ? () => setPicking(true) : undefined} />
+	) : null;
 	const mapWithPanel = (
 		<div className="relative min-w-0">
-			<MapCanvas app={app} exps={exps} proposals={pending} selected={selected} onSelect={setSelected} grow={grow}
+			<MapCanvas app={app} exps={exps} proposals={pending} workflows={workflows} groups={groups} rows={rows} marks={marks}
+				selected={selected} onSelect={onSelect} grow={grow}
 				insetBottom={pending.length ? DOCK_PX : 0} insetRight={panelOpen ? panelPx + 12 : 0} />
-			{/* The panel runs the map's full height; the folded approval card sits beside it. */}
-			{panelOpen && <ExperimentDetail key={selExp!.id} app={app} e={selExp!} panel onClose={() => setSelected(null)} style={{ bottom: 12 }} />}
+			{picking && (
+				<div role="status" className="absolute left-1/2 top-3 z-[6200] -translate-x-1/2 rounded-full border border-plum-200 bg-card px-3 py-1 text-caption text-plum-800 shadow-e2">
+					Click what to compare with — a workflow, a variant or a setup ·{" "}
+					<button type="button" className="underline" onClick={() => setPicking(false)}>cancel</button>
+				</div>
+			)}
+			{panel}
 		</div>
 	);
 	const selProposalIdx = selKind === "sug" ? pending.findIndex((p) => `sug:${p.id}` === selected) : -1;
-	const updated = new Date(data.asOf).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
+	const updated = new Date(data?.asOf ?? Date.now()).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
 
 	return (
 		<section aria-label="Research" className={cn("space-y-2", grow && "lumen-hero-in")}>
@@ -635,8 +758,11 @@ export default function ResearchMap({ app }: { app: string }) {
 				<Sparkles className="h-3.5 w-3.5 text-plum-500" aria-hidden />
 				<h2 className="whitespace-nowrap text-meta font-medium text-ink-800">Research space</h2>
 				{live && <span className="inline-flex items-center gap-1 rounded-md bg-plum-50 px-1.5 py-px text-nano font-medium text-plum-700"><span className="h-1.5 w-1.5 rounded-full bg-plum-500 animate-lumen-breathe" aria-hidden />Live</span>}
-				<span className="hidden min-w-0 truncate text-micro text-ink-600 xl:inline">what it is exploring, and what to try next</span>
-				<span className="ml-auto min-w-0 truncate whitespace-nowrap font-mono text-nano uppercase tracking-wider text-ink-600">{mapSummary(exps, pending)}</span>
+				<button type="button" onClick={() => window.dispatchEvent(new CustomEvent("studio:ask", { detail: { prompt: `What should I run next in ${appTitle(app)}? Look at each workflow's recent runs, their feedback metrics and the experiments first; cite run ids. Propose the next runs (setups or variants) for my approval — start nothing.`, context: { app } } }))}
+					className="hidden items-center gap-1 rounded-md px-1.5 py-0.5 text-micro text-ink-700 hover:bg-ink-100 hover:text-ink-900 lg:inline-flex">
+					<MessagesSquare className="h-3 w-3" />What should I run next?
+				</button>
+				<span className="ml-auto min-w-0 truncate whitespace-nowrap font-mono text-nano uppercase tracking-wider text-ink-600">{mapSummary(exps, pending, workflows)}</span>
 				<span className="hidden whitespace-nowrap font-mono text-nano text-ink-600 md:inline" title="When this was read">· {updated}</span>
 			</div>
 			{wide ? mapWithPanel : (
@@ -647,11 +773,25 @@ export default function ResearchMap({ app }: { app: string }) {
 				<div className={cn("relative z-10", wide && "!-mt-14 mx-5")} style={panelOpen ? { marginRight: panelPx + 24 } : undefined}>
 					<ApprovalCard app={app} list={pending} index={selProposalIdx >= 0 ? selProposalIdx : Math.min(pIndex, pending.length - 1)}
 						onIndex={showProposal} onDone={dismiss}
-						// An open experiment panel has the reader's attention: the card folds to its title.
+						// An open panel has the reader's attention: the card folds to its title.
 						folded={panelOpen} onUnfold={() => setSelected(null)} />
 				</div>
 			)}
 			{selExp && !wide && <ExperimentDetail app={app} e={selExp} />}
+			{setupsFor && graph && (
+				<TrySetups app={app} wf={setupsFor} spec={graph.spec} onClose={() => setSetupsFor(null)}
+					onCreated={(id) => { setSetupsFor(null); setSelected(`exp:${id}`); }} />
+			)}
+			{variantFor && graph && <VariantSlot app={app} parent={variantFor === "new" ? undefined : variantFor} spec={graph.spec} save={save}
+				onClose={() => setVariantFor(null)} onCreated={(ids) => { setVariantFor(null); if (ids[0]) setSelected(`wf:${ids[0]}`); }} />}
 		</section>
 	);
+}
+
+const EMPTY_ROWS = new Map<string, MeWorkflowRow>();
+
+// The Make a variant sheet loads with its editors only when opened.
+const VariantSheet = lazy(() => import("@/components/research/VariantSheet"));
+function VariantSlot(props: { app: string; parent?: SpecWorkflow; spec: import("@/lib/app-spec").AppSpec; save: ReturnType<typeof useAppGraph>["save"]; onClose: () => void; onCreated: (ids: string[]) => void }) {
+	return <Suspense fallback={null}><VariantSheet {...props} /></Suspense>;
 }
