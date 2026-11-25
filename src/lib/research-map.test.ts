@@ -123,6 +123,17 @@ check("app pages always lead with the home", () => {
 	eq(pageHref("q", { surface: "data", label: "Data", home: false }, true), "/studio/apps/q?surface=data");
 });
 
+check("workflows feed experiments (opt-in)", () => {
+	const exps = [{ id: "kol_alpha", dispatch: { loop: "kol_strategy" }, loops: ["kol_strategy", "kol_poll"] }, { id: "bt", dispatch: { loop: "backtest" } }] as unknown as MeExperiment[];
+	const plain = buildResearchTree("q", exps, []);
+	eq(plain.nodes.some((n) => n.kind === "workflow"), false);
+	const t = buildResearchTree("q", exps, [], { workflows: true });
+	// "bt" names a dispatch loop that isn't attached: nothing feeds it (the
+	// "Can't start" case), so no "feeds" link is drawn for it.
+	eq(t.nodes.filter((n) => n.kind === "workflow").map((n) => n.ref).sort(), ["kol_poll", "kol_strategy"]);
+	eq(t.edges.filter((e) => e.label === "feeds").length, 2);
+});
+
 export function run(): number {
 	let failed = 0;
 	for (const c of checks) {

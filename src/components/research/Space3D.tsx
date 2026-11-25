@@ -43,13 +43,20 @@ export interface Space3DProps {
 	/** Order cards appear in (index per id) when growing. */
 	order?: Map<string, number>;
 	height: number;
+	/** Evidence around a node: one faint particle per result (log-scaled,
+	 *  capped), coloured like the node's state — how much a version has been
+	 *  measured, seen at a glance. */
+	evidence?: (n: MapNode) => { count: number; className: string } | null;
 }
 
 // Framing for the whole space: dots are small, so the margin only has to
 // leave room for a label to the right of the outermost dot.
 const HOME_BOX = { top: 40, bottom: 0.95, margin: 80 };
 
-export default function Space3D({ nodes, edges, renderCard, renderDot, describe, selected, onSelect, lit, grow, order, height }: Space3DProps) {
+// A gentle spring: overshoots ~6% and settles (selection flies in, lands).
+const easeOutBack = (t: number) => { const c1 = 1.2, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
+
+export default function Space3D({ nodes, edges, renderCard, renderDot, describe, selected, onSelect, lit, grow, order, height, evidence }: Space3DProps) {
 	// The node under the pointer (or keyboard focus) opens into its full card.
 	const [hovered, setHovered] = useState<string | null>(null);
 	const boxRef = useRef<HTMLDivElement>(null);
@@ -59,13 +66,41 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 	// Each dot's label element and its unscaled size (text never changes).
 	const dotLabels = useRef(new Map<string, { el: HTMLElement; w: number; h: number }>());
 	const pos = useMemo(() => layoutSpace(nodes), [nodes]);
+	// Particles: fixed offsets per node (seeded by its id, so they don't jump
+	// between renders), log-scaled to the node's result count, at most 28.
+	const particles = useMemo(() => {
+		const out: Array<{ node: string; dx: number; dy: number; dz: number; className: string }> = [];
+		if (!evidence) return out;
+		for (const n of nodes) {
+			const ev = evidence(n);
+			if (!ev || ev.count <= 0) continue;
+			const k = Math.min(28, Math.round(4 * Math.log2(ev.count + 1)));
+			let h = 2166136261;
+			for (let i = 0; i < n.id.length; i++) h = Math.imul(h ^ n.id.charCodeAt(i), 16777619);
+			const rnd = () => { h = Math.imul(h ^ (h >>> 15), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); return ((h ^= h >>> 16) >>> 0) / 4294967296; };
+			for (let j = 0; j < k; j++) {
+				const r = 16 + rnd() * 30, th = rnd() * 2 * Math.PI, ph = Math.acos(2 * rnd() - 1);
+				out.push({ node: n.id, dx: r * Math.sin(ph) * Math.cos(th), dy: r * Math.cos(ph) * 0.7, dz: r * Math.sin(ph) * Math.sin(th), className: ev.className });
+			}
+		}
+		return out;
+	}, [nodes, evidence]);
+	const particleEls = useRef<Array<SVGCircleElement | null>>([]);
+	// Each node drifts a little on its own phase (the space breathes).
+	const phase = useMemo(() => {
+		const m = new Map<string, number>();
+		nodes.forEach((n, i) => m.set(n.id, (i * 2.399963) % (2 * Math.PI)));
+		return m;
+	}, [nodes]);
+	const hoveredRef = useRef<string | null>(null);
+	hoveredRef.current = hovered;
 	const reduced = useMemo(prefersReducedMotion, []);
 
 	// Mutable scene state, read by the frame loop.
 	const s = useRef({
 		W: 0, H: 0,
 		cam: { ...HOME } as Camera,
-		tween: null as null | { from: Camera; to: Camera; t0: number; dur: number },
+		tween: null as null | { from: Camera; to: Camera; t0: number; dur: number; spring?: boolean },
 		lastInput: 0, hover: false, rampT: 0, lastT: 0,
 		drag: null as null | { x: number; y: number; yaw: number; pitch: number; moved: boolean },
 		bornAt: 0, raf: 0, framed: false,
@@ -100,7 +135,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		const to = lit
 			? frameCamera(pts, facing, st.W, st.H, { top: 56, bottom: 0.9, margin: 110 })
 			: frameCamera(turnHull(pts), { ...st.cam, pitch: HOME.pitch }, st.W, st.H, HOME_BOX);
-		if (reduced) st.cam = to; else st.tween = { from: { ...st.cam }, to, t0: performance.now(), dur: 700 };
+		if (reduced) st.cam = to; else st.tween = { from: { ...st.cam }, to, t0: performance.now(), dur: 820, spring: !!lit };
 		st.lastInput = performance.now();
 		kick.current();
 	}, [lit, pos, reduced, selected]);
@@ -117,22 +152,33 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 			let moving = false;
 			if (st.tween) {
 				const k = Math.min(1, (t - st.tween.t0) / st.tween.dur);
-				st.cam = mixCamera(st.tween.from, st.tween.to, easeInOutCubic(k));
+				st.cam = mixCamera(st.tween.from, st.tween.to, st.tween.spring ? easeOutBack(k) : easeInOutCubic(k));
 				if (k >= 1) st.tween = null; else moving = true;
 			}
-			const wantTurn = !reduced && !st.drag && !st.tween && !st.hover && !lit && t - st.lastInput > AUTO_ROTATE_IDLE_MS;
+			// Keeps turning with the pointer over the space; only a node under the
+			// pointer (you're reading it) or a drag holds it still.
+			const wantTurn = !reduced && !st.drag && !st.tween && !hoveredRef.current && !lit && t - st.lastInput > AUTO_ROTATE_IDLE_MS;
 			st.rampT = Math.max(0, Math.min(1, st.rampT + (wantTurn ? 1 : -1) * (dt / 400)));
 			if (st.rampT > 0) { st.cam = { ...st.cam, yaw: st.cam.yaw + AUTO_ROTATE_RAD_PER_MS * dt * easeInOutCubic(st.rampT) }; moving = true; }
 			if (wantTurn && st.rampT < 1) moving = true;
 			const growing = grow && !reduced && t - st.bornAt < 2600;
 			draw(t);
-			if ((moving || growing || wantTurn) && !document.hidden) st.raf = requestAnimationFrame(frame);
+			// The drift keeps the loop alive whenever motion is allowed.
+			if ((moving || growing || wantTurn || !reduced) && !document.hidden) st.raf = requestAnimationFrame(frame);
 		};
 		const draw = (t: number) => {
 			const { W, H, cam } = st;
 			if (!W) return;
 			const proj = new Map<string, ReturnType<typeof project>>();
-			for (const [id, p] of pos) proj.set(id, project(p, cam, W, H));
+			const world = new Map<string, { x: number; y: number; z: number }>();
+			for (const [id, p] of pos) {
+				// Drift: a few units on each axis, 7–9 s periods, never for the app.
+				const ph = phase.get(id) ?? 0;
+				const a = reduced || p.x === 0 && p.z === 0 ? 0 : 5;
+				const q = { x: p.x + a * Math.sin(t / 4300 + ph), y: p.y + a * Math.sin(t / 3700 + ph * 1.7), z: p.z + a * Math.cos(t / 4700 + ph) };
+				world.set(id, q);
+				proj.set(id, project(q, cam, W, H));
+			}
 			for (const n of nodes) {
 				const el = cardEls.current.get(n.id);
 				const p = proj.get(n.id);
@@ -167,6 +213,18 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				const lb = labelEls.current.get(e.id);
 				if (lb) { lb.setAttribute("x", ((a.x + b.x) / 2).toFixed(1)); lb.setAttribute("y", ((a.y + b.y) / 2 - 6).toFixed(1)); }
 			}
+			particles.forEach((pt, i) => {
+				const c = particleEls.current[i];
+				const w = world.get(pt.node);
+				if (!c || !w) return;
+				const q = project({ x: w.x + pt.dx, y: w.y + pt.dy, z: w.z + pt.dz }, cam, W, H);
+				const cue = depthCue(q.scale, cam.zoom);
+				const dimP = !!lit && !lit.has(pt.node);
+				const bornP = grow && !reduced ? Math.max(0, Math.min(1, (t - st.bornAt - (order?.get(pt.node) ?? 0) * 70 - 300) / 500)) : 1;
+				c.setAttribute("cx", q.x.toFixed(1)); c.setAttribute("cy", q.y.toFixed(1));
+				c.setAttribute("r", Math.max(0.8, 1.9 * q.scale / (FOCAL / DISTANCE)).toFixed(2));
+				c.style.opacity = String((q.visible ? (dimP ? 0.04 : 0.25 + 0.5 * cue.near) * bornP : 0).toFixed(3));
+			});
 		};
 		// Labels that would collide are hidden, most important first: what's
 		// selected or under the pointer, the app, experiments, suggestions, then
@@ -215,7 +273,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		document.addEventListener("visibilitychange", onVis);
 		kick.current();
 		return () => { cancelAnimationFrame(st.raf); st.raf = 0; document.removeEventListener("visibilitychange", onVis); };
-	}, [pos, nodes, edges, lit, grow, reduced, order, selected, hovered]);
+	}, [pos, nodes, edges, lit, grow, reduced, order, selected, hovered, particles, phase]);
 
 	// ── input ──────────────────────────────────────────────────────────────
 	const touch = () => { s.current.lastInput = performance.now(); s.current.tween = null; kick.current(); };
@@ -317,6 +375,9 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 						</g>
 					);
 				})}
+				{particles.map((pt, i) => (
+					<circle key={`${pt.node}:${i}`} ref={(el) => { particleEls.current[i] = el; }} className={pt.className} style={{ opacity: 0 }} />
+				))}
 			</svg>
 			{nodes.map((n) => {
 				const sel = selected === n.id;

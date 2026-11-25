@@ -72,6 +72,11 @@ export function layoutSpace(nodes: MapNode[]): Map<string, Vec3> {
 	const kids = new Map<string, MapNode[]>();
 	for (const n of nodes) if (n.parent) kids.set(n.parent, [...(kids.get(n.parent) ?? []), n]);
 	const roots = nodes.filter((n) => !n.parent);
+	// Workflows sit on their own small ring ABOVE the app (they produce the
+	// evidence); the experiment ring is laid out without them.
+	const isWf = (n: MapNode) => n.kind === "workflow";
+	for (const [k, ch] of kids) kids.set(k, ch.filter((c) => !isWf(c)));
+	const wfs = nodes.filter(isWf);
 	const ring1 = roots.flatMap((r) => kids.get(r.id) ?? []).length;
 	const R1 = firstRing(ring1);
 	const radius = (d: number) => (d <= 0 ? 0 : R1 + (d - 1) * STEP);
@@ -95,6 +100,8 @@ export function layoutSpace(nodes: MapNode[]): Map<string, Vec3> {
 		});
 	};
 	roots.forEach((r, i) => place(r, (i / Math.max(1, roots.length)) * 2 * Math.PI, 0));
+	const rw = Math.max(150, R1 * 0.62);
+	wfs.forEach((w, i) => { pos.set(w.id, at((i / wfs.length) * 2 * Math.PI + Math.PI / wfs.length, rw, -170)); });
 	return pos;
 }
 
@@ -168,7 +175,8 @@ export function mixCamera(a: Camera, b: Camera, t: number): Camera {
 	};
 }
 
-/** One turn every ~86 s, after 1.5 s without interaction (Novix's pace). */
-export const AUTO_ROTATE_RAD_PER_MS = (2 * Math.PI) / 86_000;
+/** One turn a minute, after 1.5 s without interaction — slow enough to read,
+ *  fast enough to see it is alive (Novix's 86 s read as standing still). */
+export const AUTO_ROTATE_RAD_PER_MS = (2 * Math.PI) / 60_000;
 export const AUTO_ROTATE_IDLE_MS = 1500;
 export const PITCH_LIMIT = 1.1;
