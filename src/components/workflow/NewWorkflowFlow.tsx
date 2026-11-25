@@ -27,11 +27,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
 	X, Loader2, Check, Sparkles, Target, Database, Plus, Trash2,
-	ArrowRight, ArrowLeft, ShieldCheck, AlertTriangle, Clock, Play, Package,
+	ArrowRight, ArrowLeft, ShieldCheck, AlertTriangle, Clock, Play,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { me, MeApiError, type MeAppCard, type MeDatasetGroup } from "@/api/me";
+import { me, MeApiError } from "@/api/me";
+import { DatasetPicker, type DatasetRef } from "@/components/data/DatasetPicker";
 import AssemblyCard, { type ComposedDraft } from "@/components/workflow/AssemblyCard";
 import { validateWorkflow, type ValidateCheck } from "@/api/validate";
 
@@ -361,117 +362,23 @@ function GoalStep({ name, setName, objective, setObjective, metrics, setMetrics 
 }
 
 // ── Step 2 · Data (casebook) ─────────────────────────────────────────────────
+// The picker itself is shared with the "Make a variant" sheet (components/data).
 function DataStep({ casebook, setCasebook, dataNote, setDataNote }: {
 	casebook: Casebook; setCasebook: (c: Casebook) => void;
 	dataNote: string; setDataNote: (s: string) => void;
 }) {
-	const [apps, setApps] = useState<MeAppCard[] | null>(null);
-	// app slug → its dataset groups (lazy, per-app)
-	const [groupsByApp, setGroupsByApp] = useState<Record<string, MeDatasetGroup[]>>({});
-	const [loadingApp, setLoadingApp] = useState<string | null>(null);
-	const [expanded, setExpanded] = useState<string | null>(null);
-
-	useEffect(() => {
-		let live = true;
-		me.listApps()
-			.then((r) => { if (live) setApps((r.apps || []).filter((a) => a.status !== "failed")); })
-			.catch(() => { if (live) setApps([]); });
-		return () => { live = false; };
-	}, []);
-
-	const openApp = async (appName: string) => {
-		if (expanded === appName) { setExpanded(null); return; }
-		setExpanded(appName);
-		if (groupsByApp[appName]) return;
-		setLoadingApp(appName);
-		try {
-			const r = await me.appDatasets(appName);
-			setGroupsByApp((prev) => ({ ...prev, [appName]: r.datasets || [] }));
-		} catch {
-			setGroupsByApp((prev) => ({ ...prev, [appName]: [] }));
-		} finally {
-			setLoadingApp(null);
-		}
+	const value: DatasetRef[] = casebook.mode === "dataset" ? [{ app: casebook.app, group: casebook.group, label: casebook.label }] : [];
+	const onChange = (next: DatasetRef[]) => {
+		const r = next[0];
+		setCasebook(r?.app ? { mode: "dataset", app: r.app, group: r.group, label: r.label } : { mode: "empty" });
 	};
-
-	const isEmpty = casebook.mode === "empty";
-
 	return (
 		<div className="space-y-4">
 			<p className="text-caption text-ink-600">
 				A <span className="font-medium text-ink-700">casebook</span> is the data your workflow learns from. Point at an existing one, or start empty and bring data later.
 			</p>
 
-			{/* Start empty / external */}
-			<button
-				onClick={() => setCasebook({ mode: "empty" })}
-				className={cn(
-					"w-full text-left rounded-xl border p-3.5 transition-all",
-					isEmpty ? "border-gold-300 bg-gold-50/60 ring-2 ring-gold-200" : "border-ink-200 bg-card hover:border-gold-200",
-				)}
-			>
-				<div className="flex items-center gap-3">
-					<div className={cn("w-9 h-9 rounded-lg flex items-center justify-center", isEmpty ? "bg-gold-100 text-gold-700" : "bg-ink-100 text-ink-600")}>
-						<Database className="w-4.5 h-4.5" />
-					</div>
-					<div className="min-w-0">
-						<div className="text-sm font-medium text-ink-900">Start empty / external data</div>
-						<div className="text-micro text-ink-600">The workflow will gather or fetch its own data each run.</div>
-					</div>
-					{isEmpty && <Check className="w-4 h-4 text-gold-600 ml-auto flex-shrink-0" />}
-				</div>
-			</button>
-
-			{/* Existing casebooks, grouped by the user's apps */}
-			<div>
-				<div className="text-nano uppercase tracking-wide text-ink-600 font-semibold mb-1.5">Existing casebooks</div>
-				{apps === null ? (
-					<div className="text-caption text-ink-600 flex items-center gap-1.5 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" />Loading your agents…</div>
-				) : apps.length === 0 ? (
-					<div className="text-caption text-ink-600 py-2">No agents yet — start empty above.</div>
-				) : (
-					<div className="space-y-1.5">
-						{apps.map((a) => {
-							const groups = groupsByApp[a.name];
-							const open = expanded === a.name;
-							return (
-								<div key={a.name} className="rounded-xl border border-ink-200 overflow-hidden bg-card">
-									<button onClick={() => openApp(a.name)} className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-ink-50">
-										<Package className="w-3.5 h-3.5 text-ink-600 flex-shrink-0" />
-										<span className="text-meta text-ink-700 font-medium flex-1 truncate">{a.name}</span>
-										{loadingApp === a.name && <Loader2 className="w-3.5 h-3.5 animate-spin text-ink-600" />}
-										<ArrowRight className={cn("w-3.5 h-3.5 text-ink-600 transition-transform", open && "rotate-90")} />
-									</button>
-									{open && groups && (
-										<div className="border-t border-ink-100 px-3 py-2 space-y-1">
-											{groups.length === 0 ? (
-												<div className="text-micro text-ink-600">No casebooks on this app.</div>
-											) : groups.map((g) => {
-												const picked = casebook.mode === "dataset" && casebook.app === a.name && casebook.group === g.group;
-												return (
-													<button
-														key={g.group}
-														onClick={() => setCasebook({ mode: "dataset", app: a.name, group: g.group, label: g.label })}
-														className={cn(
-															"w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left transition-colors",
-															picked ? "bg-gold-50 ring-1 ring-gold-200" : "hover:bg-ink-50",
-														)}
-													>
-														<Database className="w-3 h-3 text-gold-500 flex-shrink-0" />
-														<span className="text-caption text-ink-700 flex-1 truncate">{g.label}</span>
-														<span className="text-nano text-ink-600">{g.files.length} file{g.files.length === 1 ? "" : "s"}</span>
-														{picked && <Check className="w-3.5 h-3.5 text-gold-600 flex-shrink-0" />}
-													</button>
-												);
-											})}
-										</div>
-									)}
-								</div>
-							);
-						})}
-					</div>
-				)}
-			</div>
+			<DatasetPicker value={value} onChange={onChange} />
 
 			{/* Optional note */}
 			<div>
