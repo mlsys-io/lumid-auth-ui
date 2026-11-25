@@ -913,8 +913,12 @@ html[data-surface="studio"] ::selection {
 	.react-flow__edge-path.research-edge-flow { animation: none; }
 }
 
+/* Best-score chart: result dots fade in in time order (BestScoreChart). */
+@keyframes evo-dot-in { from { opacity: 0; } }
+.evo-dot-in { animation: evo-dot-in 400ms ease-out both; }
 /* Evolution chart lines draw in once (EvolutionChart; paths carry pathLength=100). */
 .evo-line-draw { stroke-dasharray: 100; stroke-dashoffset: 100; animation: strand-draw 900ms cubic-bezier(0.22, 1, 0.36, 1) forwards; }
 @media (prefers-reduced-motion: reduce) {
 	.evo-line-draw { animation: none; stroke-dasharray: none; stroke-dashoffset: 0; }
+	.evo-dot-in { animation: none; }
 }
