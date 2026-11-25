@@ -109,10 +109,10 @@ export default function AutoQuantPage() {
 						</>
 					)}
 					<Link
-						to="/studio/inbox?app=auto-quant"
+						to="/studio/runs?app=auto-quant"
 						className="text-xs text-indigo-600 hover:underline"
 					>
-						Inbox →
+						Activity →
 					</Link>
 					<Button
 						variant="ghost"

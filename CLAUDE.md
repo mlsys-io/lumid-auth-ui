@@ -230,8 +230,12 @@ on. (Simulator vs real GPU, backtest vs forward test are app details, not UI str
 
 ### Where runs live
 
-- `/studio/runs` = **Activity**: Running now · Needs fixing (one row per broken *workflow*, not
-  per failed run) · All workflows grouped by app. `?app=` filters; `?view=list|grid|gantt|calendar`
+- `/studio/runs` = **Activity**, which **is also the Inbox** (merged 2026-11-25; `/studio/inbox`,
+  `/studio/drafts` redirect to `#needs`/`#updates`/`#audit`): **Needs you** (suggestions, questions,
+  drafts — `NeedsYou` in `pages/account/inbox.tsx`) · Running now · Needs fixing (one row per broken
+  *workflow*, not per failed run) · All workflows grouped by app · What your apps said
+  (`AppUpdates`; admins also get the audit). One sidebar row: the gold count is `useNeedsCount`
+  (the page publishes its exact count via `studio:needs`), the brick pill is failing workflows. `?app=` filters; `?view=list|grid|gantt|calendar`
   is the Timeline; `?state=` opens the list. Feed: `useRunsFeed` (`/me/runs`, ~0.15 s since
   identity v0.5.477; 500-row pages read with the keyset `next_cursor` up to `FEED_MAX`;
   stale-while-revalidate from sessionStorage; `truncated` said in words) + the

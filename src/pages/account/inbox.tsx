@@ -2,7 +2,6 @@ import ApprovalCard from "@/components/research/ApprovalCard";
 import { useSuggestions } from "@/components/research/useSuggestions";
 import type { Proposal } from "@/lib/research-map";
 import { useContext, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
@@ -16,7 +15,6 @@ import {
 	CheckCircle2,
 	XCircle,
 	MessageSquare,
-	RefreshCw,
 } from "lucide-react";
 import {
 	listInboxMessages,
@@ -27,55 +25,36 @@ import {
 	type StepRecap,
 } from "../../api/inbox";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PageHeader } from "@/components/ui/page-header";
-import { Segmented } from "@/components/ui/segmented";
+import { publishNeedsCount } from "@/hooks/useNeedsCount";
 import { AuthContext } from "@/hooks/useAuth";
-import { appTitle } from "@/components/workflow/AppCard";
 import { useWorkflowFeed, FeedCard, feedItemMs, type FeedItem } from "@/pages/studio/inbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-// Radix Select forbids an empty-string item value; this stands in for "all".
-const ALL_APPS = "__all__";
-import { ErrorState } from "@/components/ui/error-state";
-import { EmptyState as LumenEmpty } from "@/components/ui/empty-state";
-import { EmptyInbox, ErrorFrayed } from "@/components/illustrations/scenes";
 
 /**
- * /studio/inbox — the one Inbox.
+ * The inbox pieces of Activity (/studio/runs). Inbox and Activity were two
+ * sidebar rows and two pages; they are one page since 2026-11-25 ("activity and
+ * inbox pages can be combined"), read top to bottom: Needs you → what's running
+ * and broken (ActivityView) → What your apps said. /studio/inbox redirects.
  *
  * Two sources, one list:
  *   - agent messages: xpcloud's two-way store (GET /inbox-api/inbox/messages,
  *     the lm_session cookie forwarded as a Bearer by nginx). Questions, flags
  *     and drafts to approve can be answered inline; the loop picks the reply
- *     up on its next run (_pull_inbox_replies). Cycle summaries are activity.
+ *     up on its next run (_pull_inbox_replies). Cycle summaries are updates.
  *   - the workflow feed (pages/studio/inbox.tsx): pending email drafts,
  *     platform notices, today's cycle outcomes, the external-API audit.
- *
- * This used to be two pages — Inbox here and "Drafts" at /studio/drafts, each
- * with its own filters. One filter row now: Needs you · Activity (· Audit for
- * admins), plus an agent picker once more than one agent posts.
  */
-type View = "needs" | "activity" | "audit";
+type Bucket = "needs" | "updates" | "audit";
 
 const ATTENTION_KINDS = "question,flag,draft_pending";
-
-// Legacy ?filter= values from the old Drafts page, and ?view=.
-function viewFromParams(sp: URLSearchParams): View | null {
-	const v = sp.get("view") || sp.get("filter");
-	if (v === "needs" || v === "drafts" || v === "notices") return "needs";
-	if (v === "activity") return "activity";
-	if (v === "audit") return "audit";
-	return null;
-}
 
 type Row =
 	| { key: string; ms: number; app: string; msg: InboxMessage }
 	| { key: string; ms: number; app: string; feed: FeedItem };
 
-export default function InboxPage() {
-	const [searchParams] = useSearchParams();
-	const [picked, setPicked] = useState<View | null>(() => viewFromParams(searchParams));
-	const [appFilter, setAppFilter] = useState("");
+export type Inbox = ReturnType<typeof useInbox>;
+
+/** Both sources, polled, sorted into Needs you / updates / audit. */
+export function useInbox() {
 	const [messages, setMessages] = useState<InboxMessage[]>([]);
 	// Attention kinds are fetched SEPARATELY so a question or draft surfaces
 	// even when the recent-100 feed is all cycle digests.
@@ -86,17 +65,17 @@ export default function InboxPage() {
 	// What apps suggest trying next — the same approval cards as each app's
 	// Research map, so a suggestion can be answered from here.
 	const sugg = useSuggestions();
-	const nSugg = (sugg.items ?? []).reduce((a, x) => a + x.list.length, 0);
 	const role = useContext(AuthContext)?.user?.role;
 	const isAdmin = role === "admin" || role === "super_admin";
 
+	const fetchBoth = () => Promise.all([
+		listInboxMessages({ limit: 100 }),
+		listInboxMessages({ kind: ATTENTION_KINDS, limit: 50 }),
+	]);
 	const refresh = async () => {
 		feed.load();
 		try {
-			const [resp, att] = await Promise.all([
-				listInboxMessages({ limit: 100 }),
-				listInboxMessages({ kind: ATTENTION_KINDS, limit: 50 }),
-			]);
+			const [resp, att] = await fetchBoth();
 			setMessages(resp.messages);
 			setAttention(att.messages);
 			setError(null);
@@ -116,10 +95,7 @@ export default function InboxPage() {
 		const tick = async () => {
 			let ok = true;
 			try {
-				const [resp, att] = await Promise.all([
-					listInboxMessages({ limit: 100 }),
-					listInboxMessages({ kind: ATTENTION_KINDS, limit: 50 }),
-				]);
+				const [resp, att] = await fetchBoth();
 				if (cancelled) return;
 				setMessages(resp.messages);
 				setAttention(att.messages);
@@ -148,17 +124,16 @@ export default function InboxPage() {
 			setMessages((prev) => prev.map(seen));
 			setAttention((prev) => prev.map(seen));
 		} catch (e) {
-			toast.error(`Mark seen failed: ${String(e)}`);
+			toast.error(`Couldn't mark it seen: ${String(e)}`);
 		}
 	};
 
-	// Sort both sources into the three views.
 	const rows = useMemo(() => {
-		const out: Record<View, Row[]> = { needs: [], activity: [], audit: [] };
+		const out: Record<Bucket, Row[]> = { needs: [], updates: [], audit: [] };
 		const attIds = new Set(attention.map((m) => m.id));
 		const msgRow = (m: InboxMessage): Row => ({ key: `m:${m.id}`, ms: m.posted_at * 1000, app: m.app, msg: m });
 		for (const m of attention) out.needs.push(msgRow(m));
-		for (const m of messages) if (!attIds.has(m.id) && !ATTENTION_KINDS.includes(m.kind)) out.activity.push(msgRow(m));
+		for (const m of messages) if (!attIds.has(m.id) && !ATTENTION_KINDS.includes(m.kind)) out.updates.push(msgRow(m));
 		// A cycle outcome from the feed repeats an app's own cycle summary, so
 		// the feed's cycles count only for agents that don't post messages.
 		const posting = new Set(messages.map((m) => m.app));
@@ -166,107 +141,104 @@ export default function InboxPage() {
 			const app = f.kind === "draft" || f.kind === "cycle" ? f.app : "";
 			const row: Row = { key: `f:${f.id}`, ms: feedItemMs(f), app, feed: f };
 			if (f.kind === "draft") out.needs.push(row);
-			else if (f.kind === "notice") (f.noticeKind === "brief" ? out.activity : out.needs).push(row);
-			else if (f.kind === "cycle") { if (!posting.has(f.app)) out.activity.push(row); }
+			else if (f.kind === "notice") (f.noticeKind === "brief" ? out.updates : out.needs).push(row);
+			else if (f.kind === "cycle") { if (!posting.has(f.app)) out.updates.push(row); }
 			else if (f.kind === "audit" && isAdmin) out.audit.push(row);
 		}
 		for (const v of Object.values(out)) v.sort((x, y) => y.ms - x.ms);
 		return out;
 	}, [messages, attention, feed.items, isAdmin]);
 
-	const view: View = picked ?? (rows.needs.length + nSugg > 0 ? "needs" : "activity");
-	const apps = useMemo(
-		() => Array.from(new Set(rows[view].map((r) => r.app).filter(Boolean))).sort(),
-		[rows, view],
-	);
-	const shown = appFilter ? rows[view].filter((r) => r.app === appFilter) : rows[view];
 	const firstLoad = loading && feed.items === null;
-	const nothingAtAll = !firstLoad && rows.needs.length + rows.activity.length + rows.audit.length + nSugg === 0;
+	// Tell the sidebar the exact count, so its number beside Activity matches.
+	const nNeeds = rows.needs.length + (sugg.items ?? []).reduce((a, x) => a + x.list.length, 0);
+	useEffect(() => { if (!firstLoad && sugg.items !== null) publishNeedsCount(nNeeds); }, [nNeeds, firstLoad, sugg.items]);
+	return { rows, sugg, feed, error, firstLoad, refresh, onSeen, isAdmin };
+}
 
-	const views = [
-		{ value: "needs" as const, label: "Needs you", count: rows.needs.length + nSugg || undefined },
-		{ value: "activity" as const, label: "Activity" },
-		...(isAdmin && rows.audit.length > 0 ? [{ value: "audit" as const, label: "Audit" }] : []),
-	];
-
+function RowList({ inbox, rows }: { inbox: Inbox; rows: Row[] }) {
 	return (
-		<div className="max-w-4xl mx-auto px-6 pb-12">
-			<PageHeader
-				className="pt-2"
-				title="Inbox"
-				subtitle="What your agents need from you, and what they did. Reply inline; the next run picks it up."
-				actions={
-					<Button variant="ghost" size="sm" onClick={refresh}>
-						<RefreshCw className="w-3.5 h-3.5" /> Refresh
-					</Button>
-				}
-			/>
+		<ul className="space-y-3">
+			{rows.map((r) => (
+				<li key={r.key}>
+					{"msg" in r
+						? <MessageCard message={r.msg} onSeen={() => inbox.onSeen(r.msg.id)} onAction={inbox.refresh} />
+						: <FeedCard item={r.feed} busy={inbox.feed.busy} onDraftAction={inbox.feed.onDraftAction} />}
+				</li>
+			))}
+		</ul>
+	);
+}
 
-			{firstLoad ? (
-				<div className="space-y-3" role="status" aria-label="Loading inbox">
-					{[0, 1, 2].map((i) => <Skeleton key={i} className="h-[88px] rounded-xl" />)}
-				</div>
-			) : nothingAtAll && error ? (
-				<ErrorState error={new Error(error)} what="your inbox" art={<ErrorFrayed />} onRetry={refresh} />
-			) : nothingAtAll ? (
-				<LumenEmpty
-					art={<EmptyInbox />}
-					title="All caught up"
-					body="When an agent has a question, a draft or a result for you, it lands here."
-					actionLabel="Open your agents"
-					to="/studio/apps/all"
-				/>
+function InboxSection({ label, count, children, id }: { label: string; count?: number; children: React.ReactNode; id?: string }) {
+	return (
+		<section id={id} aria-label={label} className="space-y-2 scroll-mt-4">
+			<h2 className="eyebrow flex items-center gap-2">
+				{label}
+				{!!count && <span className="tabular-nums text-ink-600 normal-case tracking-normal">{count}</span>}
+			</h2>
+			{children}
+		</section>
+	);
+}
+
+/** "Needs you": suggestions to approve, questions, flags, drafts. First on Activity. */
+export function NeedsYou({ inbox, app }: { inbox: Inbox; app?: string }) {
+	const sugg = (inbox.sugg.items ?? []).filter((x) => !app || x.app === app);
+	const nSugg = sugg.reduce((a, x) => a + x.list.length, 0);
+	const rows = inbox.rows.needs.filter((r) => !app || r.app === app);
+	return (
+		<InboxSection id="needs" label="Needs you" count={rows.length + nSugg}>
+			{inbox.firstLoad ? (
+				<div role="status" aria-label="Loading what needs you"><Skeleton className="h-[72px] rounded-xl" /></div>
+			) : rows.length + nSugg === 0 ? (
+				<p className="text-meta text-ink-600">Nothing needs you right now.</p>
 			) : (
-				<>
-					{/* The one filter row. */}
-					<div className="flex flex-wrap items-center gap-3 mb-5">
-						<Segmented aria-label="Show" value={view} onChange={(v) => { setPicked(v); setAppFilter(""); }} options={views} />
-						{apps.length > 1 && (
-							<Select value={appFilter || ALL_APPS} onValueChange={(v) => setAppFilter(v === ALL_APPS ? "" : v)}>
-								<SelectTrigger size="sm" className="w-48" aria-label="Filter by agent">
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value={ALL_APPS}>All agents</SelectItem>
-									{apps.map((a) => <SelectItem key={a} value={a}>{appTitle(a)}</SelectItem>)}
-								</SelectContent>
-							</Select>
-						)}
-					</div>
-
-					{error && (
-						<p className="mb-4 text-caption text-ink-600">
-							Agent messages didn't load, so this list may be incomplete.{" "}
-							<button type="button" onClick={refresh} className="text-gold-700 hover:underline">Try again</button>
-						</p>
-					)}
-
-					{view === "needs" && (sugg.items ?? []).filter((x) => !appFilter || x.app === appFilter).length > 0 && (
-						<section aria-label="Suggested experiments" className="space-y-3 mb-5">
-							{(sugg.items ?? []).filter((x) => !appFilter || x.app === appFilter).map((x) => (
-								<InboxSuggestion key={x.app} app={x.app} list={x.list} onDone={(id) => sugg.dismiss(x.app, id)} />
-							))}
-						</section>
-					)}
-
-					{shown.length === 0 && !(view === "needs" && nSugg > 0) ? (
-						<p className="py-10 text-center text-body text-ink-600">
-							{view === "needs" ? "Nothing needs you right now." : "Nothing here yet."}
-						</p>
-					) : (
-						<ul className="space-y-3">
-							{shown.map((r) => (
-								<li key={r.key}>
-									{"msg" in r
-										? <MessageCard message={r.msg} onSeen={() => onSeen(r.msg.id)} onAction={refresh} />
-										: <FeedCard item={r.feed} busy={feed.busy} onDraftAction={feed.onDraftAction} />}
-								</li>
-							))}
-						</ul>
-					)}
-				</>
+				<div className="space-y-3">
+					{sugg.map((x) => (
+						<InboxSuggestion key={x.app} app={x.app} list={x.list} onDone={(id) => inbox.sugg.dismiss(x.app, id)} />
+					))}
+					<RowList inbox={inbox} rows={rows} />
+				</div>
 			)}
-		</div>
+			{inbox.error && (
+				<p className="text-caption text-ink-600">
+					Agent messages didn't load, so this may be incomplete.{" "}
+					<button type="button" onClick={inbox.refresh} className="text-gold-700 hover:underline">Try again</button>
+				</p>
+			)}
+		</InboxSection>
+	);
+}
+
+const UPDATES_SHOWN = 5;
+
+/** "What your apps said": cycle summaries and briefs, newest first, five at a
+ *  time. Last on Activity — then, for admins, the audit of outside calls. */
+export function AppUpdates({ inbox, app, audit }: { inbox: Inbox; app?: string; audit?: boolean }) {
+	const [all, setAll] = useState(false);
+	const rows = inbox.rows.updates.filter((r) => !app || r.app === app);
+	const auditRows = inbox.isAdmin && audit ? inbox.rows.audit : [];
+	if (inbox.firstLoad || (rows.length === 0 && auditRows.length === 0)) return null;
+	return (
+		<>
+			{rows.length > 0 && (
+				<InboxSection id="updates" label="What your apps said">
+					<RowList inbox={inbox} rows={all ? rows : rows.slice(0, UPDATES_SHOWN)} />
+					{rows.length > UPDATES_SHOWN && (
+						<button type="button" onClick={() => setAll((v) => !v)} className="text-meta text-gold-700 hover:underline">
+							{all ? "Show fewer" : `Show all ${rows.length}`}
+						</button>
+					)}
+				</InboxSection>
+			)}
+			{auditRows.length > 0 && (
+				<details id="audit" className="group">
+					<summary className="eyebrow cursor-pointer select-none">Audit of outside calls <span className="tabular-nums text-ink-600 normal-case tracking-normal">{auditRows.length}</span></summary>
+					<div className="mt-2"><RowList inbox={inbox} rows={auditRows} /></div>
+				</details>
+			)}
+		</>
 	);
 }
 

@@ -24,7 +24,6 @@ import {
 	LogOut,
 	ChevronDown,
 	Key,
-	Inbox,
 	MessageSquare,
 	Bot,
 	Trash2,
@@ -35,6 +34,7 @@ import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRe
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
 import { me } from '@/api/me';
+import { useNeedsCount } from '@/hooks/useNeedsCount';
 import { useShellActivity } from '@/components/activity/useShellActivity';
 import { StatusDot } from '@/components/ui/status-badge';
 import { useAppNav, iconFor, type AppNavItem } from './useAppNav';
@@ -186,11 +186,9 @@ const TOP_NAV: NavItem[] = [
 	// link into it — but a reader measured on 2026-09-28 could not find it at
 	// all, and it is the one page that lists every run across every workflow.
 	// Its rows open the run page (/studio/apps/:app/w/:loop/r/:runId).
-	{ to: '/studio/runs', label: 'Activity', icon: History, title: "what's running, what's broken, and how each workflow is doing" },
-	// Inbox in the rail (2026-11-24) with the pending-drafts count — this is the
-	// ONE place that says "something needs you". It replaces the top strip's
-	// rotating "NOW · N drafts need your review" ticker on every page.
-	{ to: '/studio/inbox', label: 'Inbox', icon: Inbox, title: 'questions, drafts and results from your agents' },
+	{ to: '/studio/runs', label: 'Activity', icon: History, title: "what needs you, what's running, what's broken, and what your apps said" },
+	// NO Inbox row: the Inbox merged into Activity (2026-11-25), whose page
+	// leads with "Needs you". The Activity row carries its count (RunsNavRow).
 	// NO second row for this surface — what used to be the "Library" row IS the
 	// first row above, now labelled "Marketplace". One row, one destination.
 	// /studio/library* routes are untouched and still carry their own tab bar, so
@@ -303,26 +301,41 @@ function NavItemView({ to, label, icon: Icon, end, badge, title }: NavItem) {
 	);
 }
 
-// The Activity row, plus a "N failing" pill: workflows whose latest run
-// failed (not failed RUNS — "34 failed" used to mean one workflow failing 30
-// times). The pill is its OWN link, to Activity, whose "Needs fixing" section
-// leads with exactly those workflows — and sits beside the row rather than
-// inside it (a link inside a link is invalid markup and reads as one control).
-function RunsNavRow({ item }: { item: NavItem }) {
+// The Activity row, plus two counts at its right: what needs you (gold — the
+// Inbox's count; the Inbox merged into Activity 2026-11-25) and "N failing"
+// (workflows whose latest run failed, not failed RUNS — "34 failed" used to
+// mean one workflow failing 30 times). Each is its OWN link to its part of the
+// page, beside the row rather than inside it (a link inside a link is invalid
+// markup and reads as one control).
+function RunsNavRow({ item, needs }: { item: NavItem; needs: number }) {
 	const act = useShellActivity();
 	const n = act?.failing ?? 0;
 	return (
 		<div className="relative">
 			<NavItemView {...item} />
-			{n > 0 && (
-				<Link
-					to="/studio/runs"
-					className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center h-[18px] px-1.5 rounded-full bg-brick-50 border border-brick-200 text-brick-700 text-micro font-medium tabular-nums hover:bg-brick-100"
-					title="Workflows whose latest run failed — see Needs fixing"
-					aria-label={`${n} workflow${n === 1 ? '' : 's'} failing — open Activity`}
-				>
-					{n} failing
-				</Link>
+			{(needs > 0 || n > 0) && (
+				<div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+					{needs > 0 && (
+						<Link
+							to="/studio/runs#needs"
+							className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-gold-100 text-gold-700 text-micro font-semibold tabular-nums hover:bg-gold-200"
+							title={`${needs} waiting for you — see Needs you`}
+							aria-label={`${needs} waiting for you — open Activity`}
+						>
+							{needs}
+						</Link>
+					)}
+					{n > 0 && (
+						<Link
+							to="/studio/runs"
+							className="inline-flex items-center h-[18px] px-1.5 rounded-full bg-brick-50 border border-brick-200 text-brick-700 text-micro font-medium tabular-nums hover:bg-brick-100"
+							title="Workflows whose latest run failed — see Needs fixing"
+							aria-label={`${n} workflow${n === 1 ? '' : 's'} failing — open Activity`}
+						>
+							{n} failing
+						</Link>
+					)}
+				</div>
 			)}
 		</div>
 	);
@@ -788,6 +801,8 @@ export function StudioShell() {
 	}, [tickDrafts]);
 	// Chat→page bus: badge updates the moment chat sends/dismisses a draft.
 	useStudioRefetch(["drafts"], tickDrafts);
+	// Beside Activity: everything its "Needs you" lists, not just drafts.
+	const needsCount = useNeedsCount(draftCount);
 
 	useEffect(() => {
 		const onClick = (e: MouseEvent) => {
@@ -920,8 +935,8 @@ export function StudioShell() {
 					{TOP_NAV
 						.filter((item) => !item.adminOnly || isAdmin)
 						.map((item) => item.to === '/studio/runs'
-							? <RunsNavRow key={item.to} item={item} />
-							: <NavItemView key={item.to} {...item} badge={item.to === '/studio/inbox' ? draftCount : item.badge} />)}
+							? <RunsNavRow key={item.to} item={item} needs={needsCount} />
+							: <NavItemView key={item.to} {...item} />)}
 					{/* NO Artifacts row here. Artifacts belong to a conversation, so
 					    the trigger lives with the conversation — the icon group at the
 					    top-right of the chatbox (StudioChat's `chromeEl`). In the rail
@@ -1028,12 +1043,6 @@ export function StudioShell() {
 								className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-body text-ink-800 hover:bg-ink-100/70 hover:text-ink-900 transition-colors duration-120">
 								<Boxes className="w-4 h-4 text-ink-500" />
 								My apps &amp; runs
-							</Link>
-							<Link to="/studio/inbox"
-								onClick={() => setMenuOpen(false)}
-								className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-body text-ink-800 hover:bg-ink-100/70 hover:text-ink-900 transition-colors duration-120">
-								<Inbox className="w-4 h-4 text-ink-500" />
-								Inbox
 							</Link>
 							<Link to="/studio/settings"
 								onClick={() => setMenuOpen(false)}

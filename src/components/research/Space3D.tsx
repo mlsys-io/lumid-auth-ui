@@ -331,7 +331,8 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				// Fade in at the floor and out near the top, so motes never pop.
 				const edge = Math.min(1, (fy - y) / 80, (y + fy + 120) / 80);
 				c.setAttribute("cx", q.x.toFixed(1)); c.setAttribute("cy", q.y.toFixed(1));
-				c.setAttribute("r", Math.max(0.5, m.size * (q.scale / base) * (0.7 + 0.8 * near) * uiScale(W, H)).toFixed(2));
+				// Motes are specks, not dots ("particles too big", user 2026-11-25): ≤1.4px radius.
+				c.setAttribute("r", Math.min(1.4, Math.max(0.4, 0.6 * m.size * (q.scale / base) * (0.7 + 0.6 * near) * uiScale(W, H))).toFixed(2));
 				c.style.opacity = (q.visible ? (0.12 + 0.4 * near) * Math.max(0, edge) * (lit ? 0.5 : 1) : 0).toFixed(3);
 			});
 		};
@@ -441,7 +442,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				const dimP = !!lit && !lit.has(pt.node);
 				const bornP = grow && !reduced ? Math.max(0, Math.min(1, (t - st.bornAt - (order?.get(pt.node) ?? 0) * 70 - 300) / 500)) : 1;
 				c.setAttribute("cx", q.x.toFixed(1)); c.setAttribute("cy", q.y.toFixed(1));
-				c.setAttribute("r", Math.max(0.7, 1.5 * ui * q.scale / (FOCAL / DISTANCE)).toFixed(2));
+				c.setAttribute("r", Math.min(1.6, Math.max(0.5, 0.9 * ui * q.scale / (FOCAL / DISTANCE))).toFixed(2));
 				c.style.opacity = String((q.visible ? (dimP ? 0.03 : 0.16 + 0.38 * cue.near) * bornP : 0).toFixed(3));
 			});
 		};
