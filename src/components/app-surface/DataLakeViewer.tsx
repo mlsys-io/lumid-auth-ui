@@ -25,8 +25,13 @@ import {
   type TableEntry,
   type JsonSchema,
   type SampleResult,
+  type TableActivity,
+  type AppUse,
 } from "@/api/dataLake";
 import { EmptyState } from "@/components/ui/empty-state";
+import {
+  appUseLabel, appUseLine, emptyActivityLine, othersLine, parseTableLink,
+} from "@/lib/data-activity";
 import { useAuth } from "@/hooks/useAuth";
 import { PickATable } from "@/components/illustrations/scenes";
 
@@ -34,6 +39,55 @@ import { PickATable } from "@/components/illustrations/scenes";
 // top-level Data tab beside Catalog/Query/Jobs, which made one dataset look
 // like a feature of the whole warehouse).
 const PredictionMarketsBrowser = lazy(() => import("@/components/app-surface/PredictionMarketsBrowser"));
+
+/** Who writes and reads a table — the workflows that keep it up to date, and
+ *  the ones that depend on it. Hidden for an instance that doesn't record
+ *  activity (it answers with an error); honest about when recording began. */
+function WhoUsesIt({ sel }: { sel: Selection }) {
+  const key = `${sel.inst.id}/${sel.schema}/${sel.table.table}`;
+  const [state, setState] = useState<{ key: string; act: TableActivity | null } | null>(null);
+  useEffect(() => {
+    let live = true;
+    lake
+      .tableActivity(sel.inst.basePath, sel.schema, sel.table.table)
+      .then((act) => live && setState({ key, act: act && typeof act === "object" ? act : null }))
+      .catch(() => live && setState({ key, act: null }));
+    return () => {
+      live = false;
+    };
+  }, [key, sel.inst.basePath, sel.schema, sel.table.table]);
+  if (!state || state.key !== key || !state.act) return null;
+  const wrote = Array.isArray(state.act.wrote) ? state.act.wrote : [];
+  const read = Array.isArray(state.act.read) ? state.act.read : [];
+  const others = othersLine(state.act.others);
+  const block = (title: string, rows: AppUse[], verb: "wrote" | "read") =>
+    rows.length > 0 && (
+      <div>
+        <div className="text-ink-600">{title}</div>
+        <ul className="mt-0.5 space-y-0.5">
+          {rows.slice(0, 5).map((a) => (
+            <li key={`${a.app}/${a.loop}`} className="flex flex-wrap gap-x-2">
+              <span className="font-medium text-ink-800">{appUseLabel(a)}</span>
+              <span className="text-ink-600">{appUseLine(a, verb)}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  return (
+    <div className="mt-2 rounded border border-ink-200 px-2.5 py-2 text-micro text-ink-700 space-y-1.5">
+      {wrote.length === 0 && read.length === 0 ? (
+        <div className="text-ink-600">{emptyActivityLine("table")}</div>
+      ) : (
+        <>
+          {block("Written by", wrote, "wrote")}
+          {block("Read by", read, "read")}
+        </>
+      )}
+      {others && <div className="text-ink-600">{others}</div>}
+    </div>
+  );
+}
 
 /** Where a table lives — the first question a person inspecting a catalog
  *  has — plus the other way in, where there is one (FinData: SQL). */
@@ -223,6 +277,7 @@ function TableDetail({ sel }: { sel: Selection }) {
           {t.comment && <span className="italic truncate max-w-[360px]" title={t.comment}>{t.comment}</span>}
         </div>
         <WhereItLives sel={sel} />
+        <WhoUsesIt sel={sel} />
       </div>
 
       <div className="flex gap-1 border-b border-ink-200 mb-2">
@@ -440,6 +495,27 @@ export default function DataLakeViewer({ config }: { config?: Record<string, unk
   const [openInst, setOpenInst] = useState<Record<string, boolean>>(
     () => Object.fromEntries(LAKE_INSTANCES.map((i, idx) => [i.id, idx === 0 || (i.id === "findata" && params.get("view") === "markets")])),
   );
+
+  // Deep link from a run or a workflow: ?inst=<id>&table=<schema.table> opens
+  // that instance and selects the table once its schema's tables load.
+  useEffect(() => {
+    const link = parseTableLink(params);
+    if (!link) return;
+    const inst = LAKE_INSTANCES.find((i) => i.id === link.inst);
+    if (!inst) return;
+    let live = true;
+    setOpenInst((o) => ({ ...o, [inst.id]: true }));
+    loadTables(inst, link.schema)
+      .then((tables) => {
+        const t = tables.find((x) => x.table === link.table);
+        if (live && t) setSel({ inst, schema: link.schema, table: t });
+      })
+      .catch(() => { /* the instance or schema isn't there: leave the tree as is */ });
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.get("inst"), params.get("table")]);
 
   useEffect(() => {
     let live = true;
