@@ -60,7 +60,7 @@ ops:
 
 The result (in **Your runs**) starts `cs.CV 21,331 · cs.LG 20,977 · cs.CL 12,286 · cs.AI 11,730`.
 
-UK Biobank data at NUS is **not** in the catalog: it's restricted to approved researchers. See [§5](#5-not-there-yet).
+**UK Biobank** (`ukb`) is also at NUS, but **restricted to approved researchers**: it appears under NUS Data, and can be queried, only for people on its access list. Everyone else sees no `ukb` at all. To get access, ask its owner.
 
 ## 2. Set up a run that reads it
 
@@ -105,7 +105,7 @@ ops:
       output_format: jsonl
 ```
 
-Paste it into the workflow editor and press **Run**. At home it finishes in seconds.
+Paste it into the workflow editor and press **Run**. Or skip the SQL: **Data Warehouse → Ask** writes and runs the query from a question in plain words, and shows you the SQL it used. At home it finishes in seconds.
 
 **Every SQL retrieval needs a top-level `ORDER BY`** (Lumilake 0.1.11 and later), so a run reads
 the same rows every time. End it with a unique column so ties keep their order. A query that
@@ -164,7 +164,7 @@ Said plainly, so you don't go looking:
 
 | What | Today |
 |---|---|
-| **UK Biobank at NUS** | Not in the catalog. It's restricted to approved researchers; access goes through its owner. |
+| **UK Biobank at NUS** | Visible only to approved researchers (an access list), and readable only by their own queries. Not available to Lumilake runs yet. |
 | **FlowMesh graphs at NUS** | Admin-only today. Lumilake graphs at NUS work for everyone (example above). |
 | **Reads by a Lumilake graph** | Lumilake reads with its own key, so under "Who uses it" they count as *another person reading*, not as you. |
 | **Files a run wrote** | Shown in the run's result, but not browsable in the Data Warehouse. |
