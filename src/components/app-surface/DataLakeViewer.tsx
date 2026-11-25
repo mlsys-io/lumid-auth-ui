@@ -9,9 +9,12 @@
 // Data never moves: only catalog metadata and a CAPPED sample (via /retrieve → a
 // small materialized blob) ever cross the wire. Bulk export is a deferred phase.
 
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
 import {
   LAKE_INSTANCES,
+  jobRefFor,
   fetchInstanceCatalog,
   peekInstanceCatalog,
   peekTables,
@@ -28,6 +31,60 @@ import {
 import { EmptyState } from "@/components/ui/empty-state";
 import { useAuth } from "@/hooks/useAuth";
 import { PickATable } from "@/components/illustrations/scenes";
+
+// FinData's own browsing view, shown inside the catalog under FinData (it was a
+// top-level Data tab beside Catalog/Query/Jobs, which made one dataset look
+// like a feature of the whole warehouse).
+const PredictionMarketsBrowser = lazy(() => import("@/components/app-surface/PredictionMarketsBrowser"));
+
+/** Where a table lives and how to use it — the two questions a person browsing
+ *  a catalog actually has. */
+function WhereAndUse({ sel }: { sel: Selection }) {
+  const ref = jobRefFor(sel.inst, sel.schema, sel.table.table);
+  const copy = () => {
+    if (!ref) return;
+    navigator.clipboard?.writeText(ref).then(
+      () => toast.success("Copied"),
+      () => toast.message(ref),
+    );
+  };
+  return (
+    <div className="mt-2 rounded border border-ink-200 bg-ink-50 px-2.5 py-2 text-micro text-ink-700 space-y-1">
+      <div>
+        <span className="text-ink-600">Where it lives: </span>
+        {sel.inst.where}
+      </div>
+      {ref ? (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-ink-600">Use in a job:</span>
+          <code className="font-mono text-ink-800 bg-white border border-ink-200 rounded px-1.5 py-0.5">{ref}</code>
+          <button onClick={copy} className="text-plum-700 hover:underline">Copy</button>
+          <Link
+            to={`/studio/data-warehouse?tab=jobs&source=${encodeURIComponent(ref)}`}
+            className="text-plum-700 hover:underline"
+          >
+            Start a job with it →
+          </Link>
+          <Link to="/studio/docs/data-jobs" className="text-ink-600 hover:underline">How jobs use data</Link>
+        </div>
+      ) : (
+        <div>
+          <span className="text-ink-600">Jobs: </span>
+          jobs can’t read {sel.inst.label} yet.
+          {sel.inst.otherAccess && (
+            <>
+              {" "}
+              <Link to={sel.inst.otherAccess.to} className="text-plum-700 hover:underline">
+                {sel.inst.otherAccess.label}
+              </Link>
+              .
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── Small shared bits ────────────────────────────────────────────────────────
 
@@ -197,6 +254,7 @@ function TableDetail({ sel }: { sel: Selection }) {
           {t.is_hypertable && <span className="text-plum-600">hypertable</span>}
           {t.comment && <span className="italic truncate max-w-[360px]" title={t.comment}>{t.comment}</span>}
         </div>
+        <WhereAndUse sel={sel} />
       </div>
 
       <div className="flex gap-1 border-b border-ink-200 mb-2">
@@ -402,9 +460,17 @@ export default function DataLakeViewer({ config }: { config?: Record<string, unk
   const isAdmin = role === "admin" || role === "super_admin";
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
-  const [sel, setSel] = useState<Selection | null>(null);
+  const [sel, setSelState] = useState<Selection | null>(null);
+  // A dataset's own view (today: FinData's prediction markets) instead of a
+  // table. `?view=markets` deep-links it (the old `?tab=markets` redirects here).
+  const [params] = useSearchParams();
+  const [view, setView] = useState<"markets" | null>(() => (params.get("view") === "markets" ? "markets" : null));
+  const setSel = (s: Selection) => {
+    setView(null);
+    setSelState(s);
+  };
   const [openInst, setOpenInst] = useState<Record<string, boolean>>(
-    () => Object.fromEntries(LAKE_INSTANCES.map((i, idx) => [i.id, idx === 0])),
+    () => Object.fromEntries(LAKE_INSTANCES.map((i, idx) => [i.id, idx === 0 || (i.id === "findata" && params.get("view") === "markets")])),
   );
 
   useEffect(() => {
@@ -509,6 +575,21 @@ export default function DataLakeViewer({ config }: { config?: Record<string, unk
                     this level was missing it. */}
                 {openInst[c.instance.id] && (
                   <div className="ml-3 border-l border-ink-200">
+                    {c.instance.id === "findata" && (
+                      <button
+                        onClick={() => {
+                          setSelState(null);
+                          setView("markets");
+                        }}
+                        className={[
+                          "w-full text-left px-2 py-1 text-caption hover:bg-ink-50",
+                          view === "markets" ? "text-plum-700 font-medium bg-plum-50" : "text-ink-700",
+                        ].join(" ")}
+                        title="Polymarket and Kalshi, browsed by category"
+                      >
+                        Prediction markets <span className="text-nano text-ink-600">· browse</span>
+                      </button>
+                    )}
                     {c.loading ? (
                       <div className="px-2 py-1 text-micro text-ink-600">loading…</div>
                     ) : c.error ? (
@@ -539,7 +620,13 @@ export default function DataLakeViewer({ config }: { config?: Record<string, unk
 
         {/* Right: detail */}
         <div className="flex-1 flex flex-col min-w-0 border border-ink-200 rounded p-3">
-          {sel ? (
+          {view === "markets" ? (
+            <div className="flex-1 min-h-0 overflow-auto">
+              <Suspense fallback={<div className="lumen-skeleton h-64 rounded-xl" role="status" aria-label="Loading" />}>
+                <PredictionMarketsBrowser />
+              </Suspense>
+            </div>
+          ) : sel ? (
             <TableDetail sel={sel} />
           ) : (
             <EmptyState

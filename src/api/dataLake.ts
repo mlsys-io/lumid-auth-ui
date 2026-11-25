@@ -28,6 +28,20 @@ export interface LakeInstance {
   // send() concatenates base+path, so fetch() handles either shape.
   basePath: string;
   blurb?: string;
+  /** Where the data physically lives, in plain words, for the person browsing. */
+  where: string;
+  /** The ref scheme a lum.id/data job names this instance's tables with —
+   *  set ONLY where jobs can actually read it today (the hub answers
+   *  `estate_not_served` for the others). */
+  jobScheme?: string;
+  /** Where to go instead when jobs can't read it. */
+  otherAccess?: { label: string; to: string };
+}
+
+/** The exact name to paste into a job for one table, or null when jobs can't
+ *  read this instance yet. */
+export function jobRefFor(inst: LakeInstance, schema: string, table: string): string | null {
+  return inst.jobScheme ? `${inst.jobScheme}://${schema}.${table}` : null;
 }
 
 export const LAKE_INSTANCES: LakeInstance[] = [
@@ -36,12 +50,16 @@ export const LAKE_INSTANCES: LakeInstance[] = [
     label: "FinData",
     basePath: "/findata",
     blurb: "Market warehouse — fundamentals, estimates, prediction markets, news, KOL archive.",
+    where: "On-prem at the home site: the FinData warehouse on the data NAS.",
+    otherAccess: { label: "Query it with SQL", to: "/studio/docs/findata-sql" },
   },
   {
     id: "lumid-data",
     label: "Lumid Data",
     basePath: "/data",
     blurb: "Reference, macro, events, estimates, regulatory, fundamentals, provenance.",
+    where: "On-prem at the home site: the Lumid Data hub on the data NAS. A job that runs at home reads it over the local network.",
+    jobScheme: "lumid-data",
   },
   {
     id: "lqt-data",
@@ -50,6 +68,7 @@ export const LAKE_INSTANCES: LakeInstance[] = [
     // its own domain (LQT umbrella; CORS-open, bearer-authed).
     basePath: "https://lumid.trade",
     blurb: "LQT planes — audit ledger, mailbox command plane, observability, xpio.",
+    where: "On-prem at the home site, served from the cloud at lumid.trade.",
   },
 ];
 

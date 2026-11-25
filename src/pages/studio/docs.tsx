@@ -234,6 +234,18 @@ const DOCS: DocEntry[] = [
 		companion: { to: '/studio/research-fleet/sandboxes', label: 'Rent a sandbox' },
 	},
 	{
+		// The data side of a job: what a job can read, where that data lives,
+		// and why you name data instead of picking a hub. The Catalog's
+		// "How jobs use data" link lands here.
+		slug: 'data-jobs',
+		title: 'Use your data in jobs',
+		description: 'What a job can read today and where it lives, why you name the data instead of picking a hub, the plan, and what your job finds in its environment.',
+		md: 'data-jobs.md',
+		group: 'Guides',
+		icon: Database,
+		companion: { to: '/studio/data-warehouse?tab=jobs', label: 'Open Jobs' },
+	},
+	{
 		slug: 'findata-sql',
 		title: 'FinData SQL access',
 		description: 'Query the FinData warehouse with real SQL — mint your own credential, psql/DBeaver/DuckDB, verify-full TLS, read-only guardrails, schema orientation.',

@@ -1,6 +1,6 @@
 // Which session-bearer audience each data-lake instance gets. Run by
 // scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
-import { audienceFor } from "./dataLake";
+import { audienceFor, instanceById, jobRefFor } from "./dataLake";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -14,6 +14,11 @@ check("a lum.id/data sub-path too", () => eq(audienceFor("/data/jobs/v1"), "lumi
 check("findata keeps the default bearer", () => eq(audienceFor("/findata"), undefined));
 check("data apps keep the default bearer", () => eq(audienceFor("/dataapp-proxy"), undefined));
 check("lumid.trade keeps the default bearer", () => eq(audienceFor("https://lumid.trade"), undefined));
+check("a Lumid Data table has a job name", () => eq(jobRefFor(instanceById("lumid-data")!, "ukb_demo", "phenotype"), "lumid-data://ukb_demo.phenotype"));
+check("FinData has none until jobs can read it", () => eq(jobRefFor(instanceById("findata")!, "market", "ohlc_1d"), null));
+check("every instance says where it lives", () => {
+	for (const id of ["findata", "lumid-data", "lqt-data"]) if (!instanceById(id)?.where) throw new Error(`${id} has no 'where'`);
+});
 
 export function run(): number {
 	let failed = 0;

@@ -2,7 +2,9 @@
 // install. One quiet "Data" destination with four tabs:
 //   • Catalog  — the federated data-lake viewer (schemas/tables/samples/
 //                lineage/freshness across findata, lumid-data, lqt-data).
-//   • Prediction markets — Polymarket + Kalshi browsed by category.
+//   (FinData's Polymarket + Kalshi browser lives INSIDE the Catalog, under
+//    FinData — `?view=markets`. It was a tab here, which made one dataset read
+//    as a feature of the whole warehouse; `?tab=markets` still redirects.)
 //   • Explorer — the generic data-app endpoint browser (point at any
 //                allowlisted data-app, run its declared endpoints).
 //   • Query    — ad-hoc SELECT through the same path chat's data_query uses.
@@ -27,7 +29,7 @@
 
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Database, PlayCircle, TableProperties, Terminal, TrendingUp } from "lucide-react";
+import { Database, PlayCircle, TableProperties, Terminal } from "lucide-react";
 import ChatRail from "@/components/ChatRail";
 import { DATA_KEY } from "@/components/StudioChat";
 import { cn } from "@/lib/utils";
@@ -35,16 +37,12 @@ import { cn } from "@/lib/utils";
 const DataLakeViewer = lazy(() => import("@/components/app-surface/DataLakeViewer"));
 const DataAppBrowser = lazy(() => import("@/components/app-surface/DataAppBrowser"));
 const SqlConsole = lazy(() => import("@/components/app-surface/SqlConsole"));
-const PredictionMarketsBrowser = lazy(() => import("@/components/app-surface/PredictionMarketsBrowser"));
 const DataJobs = lazy(() => import("@/components/app-surface/DataJobs"));
 
-type Tab = "catalog" | "markets" | "explorer" | "query" | "jobs";
-const TAB_IDS: Tab[] = ["catalog", "markets", "explorer", "query", "jobs"];
+type Tab = "catalog" | "explorer" | "query" | "jobs";
+const TAB_IDS: Tab[] = ["catalog", "explorer", "query", "jobs"];
 const TABS: { id: Tab; label: string; icon: typeof Database }[] = [
 	{ id: "catalog", label: "Catalog", icon: Database },
-	// Polymarket + Kalshi by category — a dataset view, so it sits with Catalog
-	// rather than with the raw routes.
-	{ id: "markets", label: "Prediction markets", icon: TrendingUp },
 	// Query runs ad-hoc SELECT through the same path chat's data_query uses.
 	// After Catalog on purpose: Catalog is how you find out what to query.
 	{ id: "query", label: "Query", icon: Terminal },
@@ -68,6 +66,21 @@ export default function StudioData() {
 	const fromUrl = params.get("tab") as Tab | null;
 	const tab: Tab = fromUrl && TAB_IDS.includes(fromUrl) ? fromUrl : "catalog";
 	const jobId = tab === "jobs" ? params.get("job") : null;
+	const source = tab === "jobs" ? params.get("source") : null;
+	// Old links to the Prediction markets tab land on its new home in the Catalog.
+	const rawTab = params.get("tab");
+	useEffect(() => {
+		if (rawTab !== "markets") return;
+		const sp = new URLSearchParams(params);
+		sp.delete("tab");
+		sp.set("view", "markets");
+		setParams(sp, { replace: true });
+	}, [rawTab, params, setParams]);
+	const clearSource = () => {
+		const sp = new URLSearchParams(params);
+		sp.delete("source");
+		setParams(sp, { replace: true });
+	};
 	// Mount a tab's component only once first opened, then keep it mounted
 	// (hidden) so switching back is instant and its state/cache survive.
 	const [seen, setSeen] = useState<Set<Tab>>(() => new Set<Tab>([tab]));
@@ -123,9 +136,6 @@ export default function StudioData() {
 						<div className={tab === "catalog" ? "h-full" : "hidden"}>
 							{seen.has("catalog") && <DataLakeViewer config={{ title: "Data Warehouse" }} />}
 						</div>
-						<div className={tab === "markets" ? "h-full" : "hidden"}>
-							{seen.has("markets") && <PredictionMarketsBrowser />}
-						</div>
 						<div className={tab === "explorer" ? "h-full" : "hidden"}>
 							{seen.has("explorer") && <DataAppBrowser config={{ data_app: "findata", data_app_label: "FinData" }} />}
 						</div>
@@ -133,7 +143,7 @@ export default function StudioData() {
 							{seen.has("query") && <SqlConsole />}
 						</div>
 						<div className={tab === "jobs" ? "h-full" : "hidden"}>
-							{seen.has("jobs") && <DataJobs jobId={jobId} onJobChange={setJob} />}
+							{seen.has("jobs") && <DataJobs jobId={jobId} onJobChange={setJob} initialSource={source} onSourceUsed={clearSource} />}
 						</div>
 					</Suspense>
 				</div>

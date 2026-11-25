@@ -782,7 +782,13 @@ function SourcesPanel({ onUse, myId }: { onUse: (ref: string) => void; myId: str
 
 // ── the tab ─────────────────────────────────────────────────────────────────
 
-export default function DataJobs({ jobId, onJobChange }: { jobId: string | null; onJobChange: (id: string | null) => void }) {
+export default function DataJobs({ jobId, onJobChange, initialSource, onSourceUsed }: {
+	jobId: string | null;
+	onJobChange: (id: string | null) => void;
+	/** A source ref to add to the new-job spec on arrival (the Catalog's "Start a job with it"). */
+	initialSource?: string | null;
+	onSourceUsed?: () => void;
+}) {
 	const { user } = useAuth();
 	const myId = user?.id != null ? String(user.id) : "";
 	const [text, setTextState] = useState(readDraft);
@@ -807,6 +813,16 @@ export default function DataJobs({ jobId, onJobChange }: { jobId: string | null;
 	const copyId = () => {
 		navigator.clipboard?.writeText(myId).then(() => toast.success("User ID copied"), () => toast.error("Couldn't copy"));
 	};
+
+	// Arriving from the Catalog with ?source=: put that table in the spec once.
+	const usedSource = useRef<string | null>(null);
+	useEffect(() => {
+		if (!initialSource || usedSource.current === initialSource) return;
+		usedSource.current = initialSource;
+		addSource(initialSource);
+		onSourceUsed?.();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [initialSource]);
 
 	return (
 		<div className="h-full overflow-y-auto pr-1 pb-8">
