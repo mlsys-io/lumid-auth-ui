@@ -56,7 +56,7 @@ import LoopOrbit, { type LoopMode, type LoopStageKey } from "@/components/workfl
 // charts (recharts → vendor-charts) that only the per-app overview renders.
 // They load on demand when an overview actually mounts them.
 const AppActivityBand = lazy(() => import("@/components/activity/AppActivityBand"));
-const ResearchMap = lazy(() => import("@/components/research/ResearchMap"));
+const ResearchHome = lazy(() => import("@/components/research/ResearchHome"));
 const WorkflowObservabilityPanel = lazy(() => import("@/components/workflow/WorkflowObservabilityPanel"));
 const WorkflowList = lazy(() => import("@/components/workflow/WorkflowList"));
 // Markdown renderer (named export) for the per-app Overview story copy.
@@ -841,6 +841,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 					version: ident?.version || wfVersion, kind: ident?.kind, published: ident?.published, status: ident?.status,
 					label: uiCfg?.sidebar?.label, icon: uiCfg?.sidebar?.icon,
 					hasSurface: !!(uiCfg?.surface || (uiCfg?.surfaces && Object.keys(uiCfg.surfaces).length > 0)),
+					nav: uiCfg?.nav,
 				};
 				identCache.set(app, id); setIdentity(id);
 			}
@@ -1250,14 +1251,16 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 							// without curated copy fall back to the workflow list so the
 							// overview is never blank. ──
 							<div className="space-y-6 animate-in fade-in duration-200">
-								{/* Running now / Needs fixing for THIS app — empty when healthy. */}
-								{!nestedInSurface && (
-									<Suspense fallback={null}><AppActivityBand app={app} /></Suspense>
+								{/* Needs fixing for THIS app — empty when healthy. Running runs
+								    live in the Compute panel beside the map. */}
+								{!nestedInSurface && !urlSurface && (
+									<Suspense fallback={null}><AppActivityBand app={app} failingOnly /></Suspense>
 								)}
-								{/* What the app is exploring, as a tree: experiments → versions,
-								    suggestions to approve. Renders nothing for an app with neither. */}
-								{!nestedInSurface && (
-									<Suspense fallback={null}><ResearchMap app={app} /></Suspense>
+								{/* The app's own pages, then what it is exploring (3D map) with
+								    the compute its runs wait for. A named page (?surface=) shows
+								    just that page. */}
+								{!nestedInSurface && !urlSurface && (
+									<Suspense fallback={null}><ResearchHome app={app} pages={identity?.nav} /></Suspense>
 								)}
 								{(identity?.hasSurface || !!urlSurface) && !nestedInSurface ? (
 									// The app DECLARED a page — that wins. Previously the surface

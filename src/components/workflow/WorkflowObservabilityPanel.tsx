@@ -421,10 +421,10 @@ export default function WorkflowObservabilityPanel({
 			// Steady state: latest cycle hasn't changed and nothing forced a
 			// refresh → skip the large detail payload (keep the current summary).
 			if (!firstSeen && !force) return;
-			const r = await apiClient.get(
-				`/api/v1/me/cycles/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/${encodeURIComponent(ts)}`,
-			);
-			const detail = (r.data?.data ?? null) as MeCycleDetail | null;
+			// Through me.cycleDetail so the run page's own read of the same run
+			// shares this request (each costs ~4 s on a cloud install).
+			const detail = (await me.cycleDetail(app, loop, ts).catch(() => null)) as MeCycleDetail | null;
+			if (!detail) return;
 			const sum = (detail?.summary ?? {}) as CycleSummary;
 			setSummary(sum);
 			setCycleFiles((detail?.files ?? {}) as Record<string, unknown>);

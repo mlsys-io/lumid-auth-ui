@@ -15,7 +15,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, ArrowRight, CheckCircle2, ChevronRight, CircleDashed, MessagesSquare } from "lucide-react";
 import type { MeCycleDetail, MeCycleListItem } from "@/api/me";
-import { runAnswer, runMetrics, primaryMetricKey, vsUsual, fmtMetricValue } from "@/lib/run-answer";
+import { runAnswer, runMetrics, primaryMetricKey, vsUsual, fmtMetricValue, runLimits, measuredOn } from "@/lib/run-answer";
 import MetricReveal from "@/components/workflow/MetricReveal";
 import { triageFailure } from "@/lib/failure-triage";
 import { cn } from "@/lib/utils";
@@ -37,6 +37,8 @@ export default function RunAnswerCard({ app, loop, runId, detail, listRow, cycle
 }) {
 	const [showRaw, setShowRaw] = useState(false);
 	const a = runAnswer(detail, { ok: listRow?.ok, running: listRow?.running, durationS });
+	const limits = a.tone === "running" ? [] : runLimits(detail);
+	const where = measuredOn(detail);
 	const metrics = a.tone === "ok" ? runMetrics(detail, 6) : a.tone === "failed" ? runMetrics(detail, 6).filter((m) => m.value !== 0) : [];
 	const primary = primaryMetricKey(detail);
 	const hib = ((detail?.summary as Record<string, unknown> | undefined)?.assets_used as { metric?: { higher_is_better?: boolean } } | undefined)?.metric?.higher_is_better !== false;
@@ -95,6 +97,26 @@ export default function RunAnswerCard({ app, loop, runId, detail, listRow, cycle
 					</button>
 				))}
 			</div>
+
+			{/* What it was held to comes before the numbers: the limits, met or missed. */}
+			{limits.length > 0 && (
+				<div>
+					<div className="eyebrow text-ink-600 mb-1">Limits</div>
+					<ul className="space-y-0.5">
+						{limits.map((l) => (
+							<li key={l.label} className="flex items-center gap-2 text-caption">
+								<span className="font-medium text-ink-900">{l.label}</span>
+								<span className="text-ink-600">{l.rule}</span>
+								<span className="ml-auto tabular-nums text-ink-800">{l.observed}</span>
+								<span className={cn("w-14 text-right text-micro font-medium", l.met === true ? "text-gold-700" : l.met === false ? "text-brick-700" : "text-ink-600")}>
+									{l.met === true ? "met" : l.met === false ? "missed" : "—"}
+								</span>
+							</li>
+						))}
+					</ul>
+				</div>
+			)}
+			{where && <div className="text-caption text-ink-700"><span className="text-ink-600">Measured on: </span>{where}</div>}
 
 			{metrics.length > 0 && (
 				<dl className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-1.5">

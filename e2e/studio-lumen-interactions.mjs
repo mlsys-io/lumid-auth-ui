@@ -316,18 +316,19 @@ await section('research map', async () => {
 	await page.goto(`${BASE}/studio/apps/${APP}`, { waitUntil: 'domcontentloaded' });
 	const map = page.locator('section[aria-label="Research"]');
 	try { await map.waitFor({ timeout: 40000 }); } catch { note(`no Research map on ${APP} — set MAP_APP`); await page.close(); return; }
-	const exps = map.locator('.react-flow__node-experiment');
+	const exps = map.locator('.space3d [data-kind="experiment"] button');
 	await exps.first().waitFor({ timeout: 15000 });
 	const n = await exps.count();
-	assert(n > 0 && await map.locator('.react-flow__node-version').count() > 0, `tree shows experiments (${n}) and their versions`);
+	assert(n > 0 && await map.locator('.space3d [data-kind="version"]').count() > 0, `3D map shows experiments (${n}) and their versions`);
 	// Only OUR status line — the question above it is the app's own words.
-	const status = (await exps.first().innerText()).split('\n').slice(-1)[0];
+	const status = ((await exps.first().getAttribute('aria-label')) || '').split(': ').slice(1).join(': ');
 	assert(!/comparable|instrument|\barms?\b|n_results/.test(status), `experiment status speaks in words ("${status}")`);
-	await exps.nth(Math.min(1, n - 1)).click();
-	await page.waitForTimeout(700);
-	const dimmed = await map.locator('.react-flow__node .opacity-40').count();
+	await exps.nth(Math.min(1, n - 1)).click({ force: true }); // the space turns; don't wait for it to hold still
+	await page.waitForTimeout(900);
+	const dimmed = await map.locator('.space3d [data-dim]').count();
 	assert(dimmed > 0, `clicking a card dims what is off its path (${dimmed} dimmed)`);
-	assert(await map.locator('.research-edge-flow').count() > 0, 'the selected path flows');
+	assert(await map.locator('.space3d-edge-flow').count() > 0, 'the selected path flows');
+	assert(await page.locator('section[aria-label="Compute"]').count() === 1, 'the Compute panel sits with the map');
 	assert(await map.getByText(/^Measures:|^Done when:/).count() > 0 || await map.getByText(/Not started yet|Can't|Winning|leads|Collecting/).count() > 0, 'the selected experiment is explained below the map');
 	const fig = map.locator('figure');
 	await fig.first().waitFor({ timeout: 20000 }).catch(() => {});
@@ -360,7 +361,7 @@ await section('inbox suggestions', async () => {
 	const map = page.locator('section[aria-label="Research"]');
 	await map.waitFor({ timeout: 40000 });
 	await page.waitForTimeout(1200);
-	assert(await map.locator('.react-flow__node-suggested .ring-2').count() === 1, 'the map opens on that suggestion');
+	assert(await map.locator('.space3d [data-kind="suggested"] button[aria-pressed="true"]').count() === 1, 'the map opens on that suggestion');
 	await page.close();
 });
 

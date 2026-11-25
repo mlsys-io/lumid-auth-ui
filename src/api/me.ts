@@ -97,6 +97,8 @@ function fetchAndCache<T>(method: string, path: string, body: unknown, cacheable
   return p;
 }
 
+const cycleDetailShared = new Map<string, { p: Promise<MeCycleDetail>; at: number }>();
+
 function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   if (method === "GET" && body === undefined) {
     const cacheable = ttlCacheable(path);
@@ -198,6 +200,7 @@ export interface MeAppUi {
   opener?: MeAppUiOpener;              // overrides the chat's first turn
   surface?: MeAppUiSurface;            // default ("home") surface
   surfaces?: Record<string, string>;  // optional named markdowns: name → bundle-relative .md
+  nav?: { surface: string; label?: string }[];  // xpcloud ui.nav: the app's own pages, in order
 }
 
 export interface MeAppCard {
@@ -946,11 +949,19 @@ export const me = {
   // `run_ts` in that form); the endpoint only resolves the dir-id, so it is
   // normalised HERE rather than at each of the ~8 call sites — one of which
   // (TrajectoryGraph "Open pipeline") forgot and 404'd.
-  cycleDetail: (app: string, loop: string, ts: string) =>
-    call<MeCycleDetail>(
-      "GET",
-      `/cycles/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/${encodeURIComponent(toCycleId(ts))}`,
-    ),
+  // Shared in flight and for 5 s: the run page's answer card and its outputs
+  // both read the same run, and each read costs ~4 s on a cloud install (the
+  // scheduler reads the cycle dir) — two parallel calls doubled the wait.
+  cycleDetail: (app: string, loop: string, ts: string) => {
+    const path = `/cycles/${encodeURIComponent(app)}/${encodeURIComponent(loop)}/${encodeURIComponent(toCycleId(ts))}`;
+    const hit = cycleDetailShared.get(path);
+    if (hit && Date.now() - hit.at < 5_000) return hit.p;
+    const p = call<MeCycleDetail>("GET", path);
+    cycleDetailShared.set(path, { p, at: Date.now() });
+    p.catch(() => cycleDetailShared.delete(path));
+    if (cycleDetailShared.size > 50) cycleDetailShared.delete(cycleDetailShared.keys().next().value as string);
+    return p;
+  },
 
   // ── Latest output (DB-backed) ───────────────────────────────────
   // cycleDetail above, like cycle-log / /me/runs / /me/cycles, reads the cycle
@@ -1021,6 +1032,15 @@ export const me = {
   // `definitions`: studies whose definition is still on its way to the
   // scheduler, or that it refused (with its reason). Without them a refused
   // study looked exactly like a slow one.
+  // GET /me/compute — the fleet as COUNTS ONLY (site, kind, total, busy, idle),
+  // read server-side for every signed-in user (identity v0.5.481+). 503 when
+  // capacity is unavailable; the Compute panel then leaves it out.
+  computeSummary: () =>
+    call<{ capacity: import("@/lib/compute").ComputeCapacity[]; sites: Array<{ site: string; ok: boolean }>; as_of: string }>("GET", "/compute"),
+  // GET /me/apps/:app/queue — this app's queued/running/recent run requests,
+  // read from the scheduler's queue (identity v0.5.481 + scheduler v0.4.111).
+  appQueue: (app: string) =>
+    call<{ app: string; count: number; rows: import("@/lib/compute").QueueRow[]; progress: Record<string, unknown> }>("GET", `/apps/${encodeURIComponent(app)}/queue`),
   experiments: (app: string) =>
     call<{ experiments: MeExperiment[]; count: number; definitions?: MeStudyDefinition[] }>(
       "GET", `/apps/${encodeURIComponent(app)}/experiments`),

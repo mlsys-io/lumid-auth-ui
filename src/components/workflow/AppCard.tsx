@@ -28,6 +28,8 @@ export interface AppIdentity {
 	// app's configured UI (/studio/a/<app>) instead of the raw loop overview.
 	label?: string;
 	icon?: string;
+	/** The app's own pages, from its ui.nav — named at the top of its home. */
+	nav?: Array<{ surface: string; label?: string }>;
 	hasSurface?: boolean;
 }
 

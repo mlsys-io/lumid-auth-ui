@@ -220,7 +220,7 @@ export interface RunOutputs {
 	memories: string[];
 }
 
-const OUTPUT_NOISE = /^(ok|error|outcome|metrics|expanded_args|undeclared_args|module|started_at|ended_at|duration_s|steps|flags|results|performance|claim_id|strategy_id|request_id|program_hash|cycle_ts|config_hash)$/;
+const OUTPUT_NOISE = /^(ok|error|outcome|metrics|expanded_args|undeclared_args|module|started_at|ended_at|duration_s|steps|flags|results|performance|claim_id|strategy_id|request_id|program_hash|cycle_ts|config_hash|measured_on|constraints|constraint_rows|workload_rows|summary)$/;
 
 export function runOutputs(d: MeCycleDetail | null): RunOutputs {
 	const out: RunOutputs = { text: null, fields: [], memories: [] };
@@ -238,9 +238,10 @@ export function runOutputs(d: MeCycleDetail | null): RunOutputs {
 				const t = v.trim();
 				if (!t) continue;
 				if (t.length > 60 && /\s/.test(t)) { if (!out.text && /summary|thesis|note|result/.test(k)) out.text = t; continue; }
-				if (out.fields.some((f) => f.label === humanMetric(k).label)) continue;
-				if (/^[0-9a-f-]{20,}$/i.test(t)) continue; // ids
-				out.fields.push({ label: humanMetric(k).label, value: t.replace(/_/g, " ") });
+				const label = humanMetric(k.replace(/_text$/, "")).label;
+				if (out.fields.some((f) => f.label === label)) continue;
+				if (/^[0-9a-f-]{20,}$/i.test(t) || /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-/i.test(t)) continue; // ids, and values that embed one
+				out.fields.push({ label, value: t.replace(/_/g, " ") });
 			} else if (typeof v === "boolean") {
 				if (out.fields.some((f) => f.label === humanMetric(k).label)) continue;
 				out.fields.push({ label: humanMetric(k).label, value: v ? "yes" : "no" });
@@ -251,4 +252,52 @@ export function runOutputs(d: MeCycleDetail | null): RunOutputs {
 	const mem = (d as { memories_learned?: unknown }).memories_learned;
 	if (Array.isArray(mem)) out.memories = mem.map((m) => (typeof m === "string" ? m : String((m as { title?: string; text?: string })?.title ?? (m as { text?: string })?.text ?? ""))).filter(Boolean).slice(0, 5);
 	return out;
+}
+
+/** The run's own output object (the step's `out`), where apps put their facts. */
+function runOut(d: MeCycleDetail | null): Record<string, unknown> | undefined {
+	const step = (d?.steps || []).find((st) => st.output && typeof st.output === "object");
+	const o = step?.output as Record<string, unknown> | undefined;
+	return (o?.out && typeof o.out === "object" ? o.out : o) as Record<string, unknown> | undefined;
+}
+
+export interface RunLimit { label: string; rule: string; observed: string; met: boolean | null }
+
+/**
+ * The limits a run was held to, in words — what it was aiming for comes BEFORE
+ * how it did. Reads the generic `constraints` convention
+ * [{metric, op, value, observed, met}] from the run's output; an app that
+ * reports none shows none (no "meets every constraint" without naming them).
+ */
+/** A field from the run's output, wherever the run put it: the step's `out`,
+ *  its `out.metrics`, or the summary's metrics (where cloud runs keep them). */
+function runField(d: MeCycleDetail | null, key: string): unknown {
+	const out = runOut(d);
+	const sm = ((d?.summary || {}) as Record<string, unknown>).metrics as Record<string, unknown> | undefined;
+	for (const src of [out, out?.metrics as Record<string, unknown> | undefined, sm]) {
+		if (src && typeof src === "object" && key in src) return (src as Record<string, unknown>)[key];
+	}
+	return undefined;
+}
+
+export function runLimits(d: MeCycleDetail | null): RunLimit[] {
+	const raw = runField(d, "constraints");
+	if (!Array.isArray(raw)) return [];
+	const out: RunLimit[] = [];
+	for (const c of raw as Array<Record<string, unknown>>) {
+		const key = typeof c.metric === "string" ? c.metric : "";
+		if (!key) continue;
+		const m = humanMetric(key);
+		const op = typeof c.op === "string" ? c.op.replace("<=", "≤").replace(">=", "≥") : "";
+		const fmt = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? fmtMetricValue(v, m.unit, key) : "—");
+		const rule = typeof c.value === "number" ? `${op} ${fmt(c.value)}`.trim() : "no limit set";
+		out.push({ label: m.label, rule, observed: fmt(c.observed), met: typeof c.met === "boolean" ? c.met : null });
+	}
+	return out;
+}
+
+/** Where the result was measured, when the app says (`measured_on` in the run's output). */
+export function measuredOn(d: MeCycleDetail | null): string | null {
+	const v = runField(d, "measured_on");
+	return typeof v === "string" && v.trim() ? v.trim() : null;
 }

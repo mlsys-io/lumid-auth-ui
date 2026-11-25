@@ -1,7 +1,7 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
 // Fixtures are trimmed copies of real lum.id cycles (2026-11-24).
 import type { MeCycleDetail } from "@/api/me";
-import { humanMetric, fmtMetricValue, primaryMetricKey, runMetrics, stepFailed, stepLabel, stepLine, runAnswer, vsUsual, runOutputs } from "./run-answer";
+import { humanMetric, fmtMetricValue, primaryMetricKey, runMetrics, stepFailed, stepLabel, stepLine, runAnswer, vsUsual, runOutputs, runLimits, measuredOn } from "./run-answer";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -35,6 +35,28 @@ const simulate = {
 	},
 } as unknown as MeCycleDetail;
 
+// A trimmed real simulate run's output shape (mlsys-research, 2026-11-25).
+const limited = { ok: true, summary: {}, steps: [{ id: "simulate", output: { ok: true, out: {
+	constraints: [
+		{ metric: "ttft_ms_p99", op: "<=", value: 2000, observed: 1830.4, met: true },
+		{ metric: "completion_rate", op: ">=", value: 0.99, observed: 0.97, met: false },
+		{ metric: "tpot_ms_p99", op: "<=", observed: 41 },
+	],
+	holdouts_text: "1 of 2 met",
+	fleet_job: "office:fm:wfl-1b318383-cd9c-4f7d-8d77-b6a3c59a1821",
+	measured_on: "Simulator (RTX 5080 profile v1.21)",
+} } }] } as unknown as MeCycleDetail;
+check("limits: what the run was held to, in words, met or missed", () => {
+	const L = runLimits(limited);
+	eq(L.map((l) => [l.label, l.rule, l.met]), [["TTFT p99", "≤ 2,000 ms", true], ["Completion rate", "≥ 99%", false], ["TPOT p99", "no limit set", null]]);
+	eq(runLimits(null), []);
+});
+check("measured on, and outputs drop embedded ids and _text suffixes", () => {
+	eq(measuredOn(limited), "Simulator (RTX 5080 profile v1.21)");
+	const f = runOutputs(limited).fields;
+	if (f.some((x) => /wfl-|1b318383/.test(x.value))) throw new Error("fleet job id leaked: " + JSON.stringify(f));
+	eq(f.find((x) => x.label === "Holdouts")?.value, "1 of 2 met");
+});
 check("metric names: units and acronyms", () => {
 	eq(humanMetric("goodput_tok_s"), { label: "Goodput", unit: "tok/s" });
 	eq(humanMetric("ttft_ms_p99"), { label: "TTFT p99", unit: "ms" });
