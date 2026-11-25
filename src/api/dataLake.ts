@@ -11,7 +11,7 @@
 // listings, and freshness. Bulk movement is only ever *instructed* (a future
 // phase) — never a default pull.
 
-import { bearerHeader } from "@/api/session-bearer";
+import { bearerHeader, type Audience } from "@/api/session-bearer";
 
 // ── Instance registry ────────────────────────────────────────────────────────
 // Static for v1. Graduate to a same-origin registry.json (ConfigMap) so ops can
@@ -61,8 +61,14 @@ export function instanceById(id: string): LakeInstance | undefined {
 
 const enc = encodeURIComponent;
 
+/** The bearer audience each instance verifies. Only lum.id/data has its own;
+ *  the others keep the default (runmesh) bearer they have always accepted. */
+export function audienceFor(basePath: string): Audience | undefined {
+  return basePath === "/data" || basePath.startsWith("/data/") ? "lumid-data" : undefined;
+}
+
 async function send(basePath: string, path: string, init?: RequestInit): Promise<Response> {
-  const auth = await bearerHeader();
+  const auth = await bearerHeader(audienceFor(basePath));
   const r = await fetch(`${basePath}${path}`, {
     credentials: "same-origin",
     ...init,

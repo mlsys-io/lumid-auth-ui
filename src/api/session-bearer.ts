@@ -14,7 +14,10 @@
 // handing one audience's token to another service is a 401, not a fallback.
 // One shared cache slot would do exactly that the moment two surfaces are open
 // in the same tab.
-type Audience = "runmesh" | "flowmesh" | "lqt";
+// "lumid-data" — lum.id/data (`/data/*`). lum.id binds JWTs to their audience
+// since v0.5.480 and lum.id/data names itself `lumid-data` when it introspects,
+// so the runmesh bearer that used to work there stops being accepted.
+export type Audience = "runmesh" | "flowmesh" | "lqt" | "lumid-data";
 const DEFAULT_AUD: Audience = "runmesh";
 
 const cached: Partial<Record<Audience, { token: string; exp: number }>> = {};
