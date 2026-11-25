@@ -27,6 +27,8 @@ export interface ManagedAccount {
 	label?: string;
 	draining_since?: string;
 	drain_reason?: string;
+	pause_enforced_at?: string;
+	drain_overridden_at?: string;
 	revoked?: boolean;
 }
 
@@ -55,11 +57,12 @@ export async function manageDrainAccount(
 	email: string,
 	draining: boolean,
 	reason?: string,
-): Promise<void> {
-	await apiClient.post(
+): Promise<{ warning?: string; enforced_at?: string }> {
+	const r = await apiClient.post<DataResponse<{ warning?: string; enforced_at?: string }>>(
 		`/api/v1/me/claude-pool/accounts/${encodeURIComponent(email)}/drain`,
 		{ draining, reason: reason ?? '' },
 	);
+	return r.data?.data ?? {};
 }
 
 // Reset one member's usage clock. A target is REQUIRED — unlike the admin

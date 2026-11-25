@@ -336,6 +336,12 @@ export interface ClaudeQuotaAccount {
 	// ones. Rendering it as "down" would be as wrong as rendering it healthy.
 	draining_since?: string;
 	drain_reason?: string;
+	// When live sessions stop being served on the paused account and move
+	// (draining_since + identity's pin grace).
+	pause_enforced_at?: string;
+	// The last time identity's availability backstop served this paused
+	// account anyway, because nothing else in its pool was free.
+	drain_overridden_at?: string;
 	revoked?: boolean;
 	revoke_reason?: string;
 	// Label: set when this account belongs to a field box (e.g. "dublin") —
@@ -827,12 +833,21 @@ export async function adminSetClaudePoolPrimary(id: string, userSub: string): Pr
  * Users drift off as they go idle; that drift is the transfer. The server
  * refuses (409) to pause the last un-paused account.
  */
+export interface ClaudeDrainResult {
+	// Set when the pause was accepted, but exactly one usable account is left
+	// in the pool. The pause then holds only while that account has room.
+	warning?: string;
+	enforced_at?: string;
+}
+
 export async function adminSetClaudeAccountDrain(
 	email: string,
 	draining: boolean,
 	reason?: string,
-): Promise<void> {
-	await apiClient.post('/api/v1/admin/claude-account/drain', { email, draining, reason });
+): Promise<ClaudeDrainResult> {
+	const r = await apiClient.post<DataResponse<ClaudeDrainResult>>(
+		'/api/v1/admin/claude-account/drain', { email, draining, reason });
+	return r.data?.data ?? {};
 }
 
 export async function adminResetClaudePoolWindow(

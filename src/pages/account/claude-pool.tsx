@@ -11,7 +11,8 @@
 // request for another pool's account gets a 404, not a hidden button.
 
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, PauseCircle, PlayCircle, RotateCcw, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Loader2, PauseCircle, PlayCircle, RotateCcw, ShieldCheck } from 'lucide-react';
+import { pauseState, pauseLabel, pauseExplain, pauseConfirmText } from '@/lib/claude-pause';
 import {
 	fetchClaudePoolManage,
 	manageDrainAccount,
@@ -41,16 +42,14 @@ export default function ClaudePoolManage() {
 	useEffect(() => { void load(); }, [load]);
 
 	const drain = async (email: string, next: boolean) => {
-		if (next && !window.confirm(
-			`Pause ${email}?\n\n` +
-			'It stops taking NEW sessions. Conversations already on it keep running, so this is a ' +
-			'graceful drain rather than a cut-off.',
-		)) return;
+		if (next && !window.confirm(pauseConfirmText(email))) return;
 		setBusy(email);
 		setMsg((m) => ({ ...m, [email]: '' }));
 		try {
-			await manageDrainAccount(email, next);
+			const res = await manageDrainAccount(email, next);
 			await load();
+			// Accepted, but only one usable account is left in the pool.
+			if (next && res.warning) setMsg((m) => ({ ...m, [email]: res.warning! }));
 		} catch (e: any) {
 			setMsg((m) => ({ ...m, [email]: errText(e) }));
 		} finally {
@@ -115,6 +114,7 @@ export default function ClaudePoolManage() {
 						<p className="p-3 text-xs text-ink-600">This pool has no accounts.</p>
 					) : roster.accounts.map((a) => {
 						const paused = !!a.draining_since;
+						const pause = pauseState(a);
 						return (
 							<div key={a.email} className="flex items-center gap-3 px-3 py-2">
 								<span className="w-48 shrink-0 truncate text-xs font-medium text-ink-800">{a.email}</span>
@@ -126,9 +126,13 @@ export default function ClaudePoolManage() {
 									</span>
 								)}
 								{paused && (
-									<span className="shrink-0 rounded-full bg-ember-50 border border-ember-200 px-1.5 py-0.5 text-nano text-ember-700"
-										title={a.drain_reason || 'Paused — takes no new sessions'}>
-										paused
+									<span
+										className={pause.kind === 'overridden'
+											? 'shrink-0 flex items-center gap-1 rounded-full bg-brick-50 border border-brick-200 px-1.5 py-0.5 text-nano text-brick-700'
+											: 'shrink-0 rounded-full bg-ember-50 border border-ember-200 px-1.5 py-0.5 text-nano text-ember-700'}
+										title={(a.drain_reason ? `${a.drain_reason}\n\n` : '') + pauseExplain(pause)}>
+										{pause.kind === 'overridden' && <AlertTriangle className="w-3 h-3" aria-hidden />}
+										{pauseLabel(pause)}
 									</span>
 								)}
 								<button

@@ -34,6 +34,7 @@ import { run as runResearchMapChecks, caseCount as researchMapCaseCount } from "
 import { run as runModelLabelChecks, caseCount as modelLabelCaseCount } from "@/lib/model-label.test";
 import { run as runSpaceChecks, caseCount as spaceCaseCount } from "@/lib/space3d.test";
 import { run as runComputeChecks, caseCount as computeCaseCount } from "@/lib/compute.test";
+import { run as runPauseChecks, caseCount as pauseCaseCount } from "@/lib/claude-pause.test";
 import { run as runTimelineChecks, caseCount as timelineCaseCount } from "@/lib/run-timeline.test";
 import { run as runEvolutionChecks, caseCount as evolutionCaseCount } from "@/lib/evolution.test";
 import { run as runRunAnswerChecks, caseCount as runAnswerCaseCount } from "@/lib/run-answer.test";
@@ -365,7 +366,7 @@ check("isEmptyLoop is true only when nothing is declared", () => {
 export function run(): number {
 	// The document round-trip suite runs in the same process — it is the
 	// invariant everything else is built on, so it must never be skippable.
-	let failed = runDocChecks() + runEditChecks() + runFmChecks() + runXpioChecks() + runImportChecks() + runCycleIdChecks() + runAwaitChecks() + runRunStatusChecks() + runRouteChecks() + runFleetProvChecks() + runChunkChecks() + runSandboxChecks() + runDataLakeChecks() + runReturnToChecks() + runActivityChecks() + runRunAnswerChecks() + runResearchMapChecks() + runTimelineChecks() + runEvolutionChecks() + runModelLabelChecks() + runSpaceChecks() + runComputeChecks();
+	let failed = runDocChecks() + runEditChecks() + runFmChecks() + runXpioChecks() + runImportChecks() + runCycleIdChecks() + runAwaitChecks() + runRunStatusChecks() + runRouteChecks() + runFleetProvChecks() + runChunkChecks() + runSandboxChecks() + runDataLakeChecks() + runReturnToChecks() + runActivityChecks() + runRunAnswerChecks() + runResearchMapChecks() + runTimelineChecks() + runEvolutionChecks() + runModelLabelChecks() + runSpaceChecks() + runComputeChecks() + runPauseChecks();
 	for (const c of checks) {
 		try {
 			c.run();
@@ -390,10 +391,10 @@ if (typeof describe === "function" && typeof it === "function") {
 	const proc = (globalThis as { process?: { exitCode?: number } }).process;
 	if (failed > 0) {
 		// eslint-disable-next-line no-console
-		console.error(`${failed} of ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount + cycleIdCaseCount + awaitCaseCount + runStatusCaseCount + routeCaseCount + fleetProvCaseCount + chunkCaseCount + sandboxCaseCount + dataLakeCaseCount + returnToCaseCount + activityCaseCount + runAnswerCaseCount + researchMapCaseCount + timelineCaseCount + evolutionCaseCount + modelLabelCaseCount + spaceCaseCount + computeCaseCount} case(s) failed`);
+		console.error(`${failed} of ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount + cycleIdCaseCount + awaitCaseCount + runStatusCaseCount + routeCaseCount + fleetProvCaseCount + chunkCaseCount + sandboxCaseCount + dataLakeCaseCount + returnToCaseCount + activityCaseCount + runAnswerCaseCount + researchMapCaseCount + timelineCaseCount + evolutionCaseCount + modelLabelCaseCount + spaceCaseCount + computeCaseCount + pauseCaseCount} case(s) failed`);
 		if (proc) proc.exitCode = 1;
 	} else {
 		// eslint-disable-next-line no-console
-		console.log(`workflow core: all ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount + cycleIdCaseCount + awaitCaseCount + runStatusCaseCount + routeCaseCount + fleetProvCaseCount + chunkCaseCount + sandboxCaseCount + dataLakeCaseCount + returnToCaseCount + activityCaseCount + runAnswerCaseCount + researchMapCaseCount + timelineCaseCount + evolutionCaseCount + modelLabelCaseCount + spaceCaseCount + computeCaseCount} cases passed`);
+		console.log(`workflow core: all ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount + cycleIdCaseCount + awaitCaseCount + runStatusCaseCount + routeCaseCount + fleetProvCaseCount + chunkCaseCount + sandboxCaseCount + dataLakeCaseCount + returnToCaseCount + activityCaseCount + runAnswerCaseCount + researchMapCaseCount + timelineCaseCount + evolutionCaseCount + modelLabelCaseCount + spaceCaseCount + computeCaseCount + pauseCaseCount} cases passed`);
 	}
 }
