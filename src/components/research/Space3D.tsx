@@ -163,17 +163,17 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				const onPath = !!lit && lit.has(e.source) && lit.has(e.target);
 				const born = grow && !reduced ? Math.max(0, Math.min(1, (t - st.bornAt - (order?.get(e.target) ?? 0) * 70 + 120) / 380)) : 1;
 				const cue = depthCue(Math.min(a.scale, b.scale), cam.zoom);
-				ln.style.opacity = String(((lit ? (onPath ? 1 : 0.05) : 0.18 + 0.5 * cue.near) * born).toFixed(3));
+				ln.style.opacity = String(((lit ? (onPath ? 1 : 0.05) : 0.3 + 0.5 * cue.near) * born).toFixed(3));
 				const lb = labelEls.current.get(e.id);
 				if (lb) { lb.setAttribute("x", ((a.x + b.x) / 2).toFixed(1)); lb.setAttribute("y", ((a.y + b.y) / 2 - 6).toFixed(1)); }
 			}
 		};
 		// Labels that would collide are hidden, most important first: what's
 		// selected or under the pointer, the app, experiments, suggestions, then
-		// versions — and a version is labelled only while its experiment is
-		// hovered or on the selected path (the rest is texture, not text).
+		// versions last.
 		const rank = (n: MapNode) => (n.id === selected ? 0 : n.id === hovered ? 1 : lit?.has(n.id) ? 2 : n.depth === 0 ? 3 : n.kind === "experiment" ? 4 : n.kind === "suggested" ? 5 : 6);
 		const declutter = (proj: Map<string, ReturnType<typeof project>>) => {
+			const cam0 = st.cam;
 			const placed: Array<[number, number, number, number]> = [];
 			const hit = (b: [number, number, number, number]) => placed.some((q) => b[0] < q[2] && b[2] > q[0] && b[1] < q[3] && b[3] > q[1]);
 			const items = nodes
@@ -195,12 +195,19 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 					lab = { el: le, w: le.offsetWidth, h: le.offsetHeight };
 					dotLabels.current.set(n.id, lab);
 				}
-				const quiet = n.depth >= 2 && n.kind === "version" && !(lit?.has(n.id) || hovered === n.id || (n.parent && (hovered === n.parent || selected === n.parent)));
+				// Versions are labelled too, but the ones at the back of the space
+				// drop their label (depth of field) unless their experiment is in play.
+				const inPlay = lit?.has(n.id) || hovered === n.id || (n.parent && (hovered === n.parent || selected === n.parent));
+				const quiet = n.kind === "version" && !inPlay && depthCue(p!.scale, cam0.zoom).near < 0.35;
 				const off = !!lit && !lit.has(n.id);
-				const x0 = p!.x + 12 * size, b: [number, number, number, number] = [x0 - 2, p!.y - (lab.h * size) / 2 - 1, x0 + lab.w * size + 2, p!.y + (lab.h * size) / 2 + 1];
-				const show = !quiet && !off && !hit(b);
-				if (show) placed.push(b);
-				lab.el.style.opacity = show ? "" : "0";
+				// Right of the dot first; if that collides, the left; else hidden.
+				const hh = (lab.h * size) / 2 + 1, ww = lab.w * size + 2;
+				const right: [number, number, number, number] = [p!.x + 12 * size - 2, p!.y - hh, p!.x + 12 * size + ww, p!.y + hh];
+				const left: [number, number, number, number] = [p!.x - 12 * size - ww, p!.y - hh, p!.x - 12 * size + 2, p!.y + hh];
+				const at = quiet || off ? null : !hit(right) ? right : !hit(left) ? left : null;
+				if (at) placed.push(at);
+				lab.el.style.opacity = at ? "" : "0";
+				lab.el.classList.toggle("space3d-label-left", at === left);
 			}
 		};
 		kick.current = () => { if (!st.raf) st.raf = requestAnimationFrame(frame); };

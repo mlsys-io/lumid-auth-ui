@@ -170,7 +170,7 @@ const VERSION_DOT: Record<string, string> = {
 	trying: "bg-lagoon-500", "can't tell apart": "bg-ember-500", "not run yet": "bg-card border border-dashed border-ink-400",
 };
 
-function Dot({ size, className, label, labelClass, rings }: { size: number; className: string; label: string; labelClass: string; rings?: boolean }) {
+function Dot({ size, className, label, labelClass, sub, subClass, rings }: { size: number; className: string; label: string; labelClass: string; sub?: string; subClass?: string; rings?: boolean }) {
 	return (
 		<span className="relative flex items-center justify-center" style={{ width: Math.max(18, size + 8), height: Math.max(18, size + 8) }}>
 			{rings && (
@@ -180,7 +180,10 @@ function Dot({ size, className, label, labelClass, rings }: { size: number; clas
 				</>
 			)}
 			<span className={cn("rounded-full shadow-e1", className)} style={{ width: size, height: size }} />
-			<span className={cn("absolute left-full ml-1 whitespace-nowrap max-w-[13rem] truncate space3d-label", labelClass)}>{label}</span>
+			<span className="absolute left-full ml-1 flex flex-col leading-tight space3d-label">
+				<span className={cn("whitespace-nowrap max-w-[13rem] truncate", labelClass)}>{label}</span>
+				{sub && <span className={cn("whitespace-nowrap max-w-[13rem] truncate text-nano", subClass ?? "text-ink-600")}>{sub}</span>}
+			</span>
 		</span>
 	);
 }
@@ -232,15 +235,19 @@ function MapCanvas({ app, exps, proposals, selected, onSelect, grow }: {
 		return p ? <SuggestedCard3D p={p} selected={st.selected} /> : null;
 	}, [app, running, exps.length, expById, propById, versionOf]);
 	const renderDot = useCallback((n: MapNode) => {
-		if (n.kind === "app") return <Dot size={14} rings className={running ? "bg-lagoon-500" : "bg-gold-600"} label={appTitle(app)} labelClass="text-meta font-semibold text-ink-900" />;
+		if (n.kind === "app") return <Dot size={14} rings className={running ? "bg-lagoon-500" : "bg-gold-600"} label={appTitle(app)} labelClass="text-meta font-semibold text-ink-900"
+			sub={`${exps.length} experiment${exps.length === 1 ? "" : "s"}${running ? " · running now" : ""}`} />;
 		if (n.kind === "experiment") {
 			const e = expById.get(n.ref);
-			const tone = e ? experimentStatus(e).tone : "idle";
-			return <Dot size={10} className={TONES[tone].dot} label={e ? humanId(e.id) : n.ref} labelClass="text-caption font-medium text-ink-800" />;
+			const st = e ? experimentStatus(e) : null;
+			return <Dot size={10} className={TONES[st?.tone ?? "idle"].dot} label={e ? humanId(e.id) : n.ref} labelClass="text-caption font-medium text-ink-800"
+				sub={st?.text} subClass={st?.tone === "ok" ? "text-gold-700" : st?.tone === "failing" ? "text-brick-700" : "text-ink-600"} />;
 		}
 		if (n.kind === "version") {
 			const v = versionOf(n.id);
-			return <Dot size={7} className={VERSION_DOT[v?.tag ?? "current"] ?? "bg-ink-500"} label={v?.label ?? n.ref} labelClass="text-micro text-ink-700" />;
+			// The version's state in a word when it has one worth saying.
+			const tag = v && v.tag !== "current" && v.tag !== "not run yet" ? v.tag : undefined;
+			return <Dot size={7} className={VERSION_DOT[v?.tag ?? "current"] ?? "bg-ink-500"} label={v?.label ?? n.ref} labelClass="text-micro text-ink-700" sub={tag} />;
 		}
 		return <Dot size={8} className="bg-card border border-dashed border-gold-500" label={`Suggested: ${humanId(n.ref)}`} labelClass="text-micro text-gold-700" />;
 	}, [app, running, expById, versionOf]);

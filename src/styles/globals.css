@@ -973,4 +973,5 @@ html[data-surface="studio"] ::selection {
 /* Dot labels in the 3D space: a halo of the page colour keeps a name legible
    where it crosses an edge, without boxing it (Novix's bare labels). */
 .space3d-label { text-shadow: 0 0 3px rgb(var(--background-rgb)), 0 0 6px rgb(var(--background-rgb)); transition: opacity 160ms ease-out; }
+.space3d-label-left { left: auto; right: 100%; margin-left: 0; margin-right: 0.25rem; align-items: flex-end; text-align: right; }
 @media (prefers-reduced-motion: reduce) { .space3d-label { transition: none; } }

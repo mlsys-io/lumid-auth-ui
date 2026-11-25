@@ -313,6 +313,10 @@ export default function TopStatusStrip() {
 			    controls are portaled by different components; sharing one container
 			    stacked their children on top of each other, so a click landed on
 			    whichever happened to be above. Separate nodes lay out side by side. */}
+			{/* Right after the app's name: which of its workflows you're in, as a
+			    breadcrumb ("MLSys Research / ● Simulate ⌄"). It names the place, so
+			    it sits with the name — not with the run controls on the right. */}
+			<div id="topstrip-crumb-slot" className="flex items-center min-w-0 -ml-1.5" />
 			<div id="topstrip-app-slot" className="flex items-center gap-2 min-w-0 flex-1" />
 			<div id="topstrip-wf-slot" className="flex items-center gap-2 min-w-0 overflow-hidden" />
 
