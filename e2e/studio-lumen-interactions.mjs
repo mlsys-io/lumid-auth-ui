@@ -306,7 +306,32 @@ await section('run page answer', async () => {
 		await page.waitForTimeout(300);
 		assert(await tl.locator('li.bg-gold-50').count() === 1, 'clicking a cell highlights its step in the timeline');
 	} else note('this run reported no step timeline (events) — timeline not exercised');
+	// What it produced: files as cards, each one click to save.
+	const files = page.locator('ul[aria-label="Files"] li');
+	await files.first().waitFor({ timeout: 20000 }).catch(() => {});
+	if (await files.count()) {
+		assert(await files.first().locator('button[aria-label^="Download "]').count() === 1, `produced files are cards with a download (${await files.count()})`);
+		const dl = page.waitForEvent('download', { timeout: 5000 }).catch(() => null);
+		await files.first().locator('button[aria-label^="Download "]').click();
+		const d = await dl;
+		assert(!!d && /\.(json|md|txt)$/.test(d.suggestedFilename()), `download saves a file (${d?.suggestedFilename()})`);
+	} else note('this run produced no files — file cards not exercised');
 	await page.close();
+});
+
+// ── Run page: three panes when wide (Novix's job page) ────────────────────
+await section('run page three panes', async () => {
+	const wide = await authContext(b, BASE, { viewport: { width: 2200, height: 1000 } });
+	const page = await wide.ctx.newPage();
+	const WF = process.env.WF_PATH || '/studio/apps/quant-research/w/backtest';
+	await page.goto(`${BASE}${WF}`, { waitUntil: 'domcontentloaded' });
+	const grid = page.locator('[data-cols]');
+	try { await grid.waitFor({ timeout: 40000 }); } catch { note(`no run page at ${WF}`); await page.close(); await wide.ctx.close(); return; }
+	await page.waitForTimeout(800);
+	const w = await grid.evaluate((el) => Math.round(el.getBoundingClientRect().width));
+	if (w < 1100) note(`run card is ${w}px here (chat rail open?) — three panes need 1100`);
+	else assert(await grid.getAttribute('data-cols') === '3', `a wide run page has three columns: answer | how it ran | what it produced (${w}px)`);
+	await page.close(); await wide.ctx.close();
 });
 
 // ── Research map: experiments as a tree, click lights the path ────────────
@@ -329,6 +354,8 @@ await section('research map', async () => {
 	assert(dimmed > 0, `clicking a card dims what is off its path (${dimmed} dimmed)`);
 	assert(await map.locator('.space3d-edge-flow').count() > 0, 'the selected path flows');
 	assert(await page.locator('section[aria-label="Compute"]').count() === 1, 'the Compute panel sits with the map');
+	// Dots, not cards: off the selected path a node is a labelled dot.
+	assert(await map.locator('.space3d-label').count() > 0, 'nodes off the path are labelled dots');
 	assert(await map.getByText(/^Measures:|^Done when:/).count() > 0 || await map.getByText(/Not started yet|Can't|Winning|leads|Collecting/).count() > 0, 'the selected experiment is explained below the map');
 	const fig = map.locator('figure');
 	await fig.first().waitFor({ timeout: 20000 }).catch(() => {});

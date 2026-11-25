@@ -28,8 +28,10 @@ const prefersReducedMotion = () => typeof window !== "undefined" && !!window.mat
 export interface Space3DProps {
 	nodes: MapNode[];
 	edges: MapEdge[];
-	/** The card for one node; Space3D positions it. */
+	/** The card for one node; Space3D positions it. Shown for the selected path and the hovered node. */
 	renderCard: (n: MapNode, state: { selected: boolean; dim: boolean }) => ReactNode;
+	/** The compact form everywhere else: a dot with its name (Novix draws its space as dots). */
+	renderDot?: (n: MapNode) => ReactNode;
 	/** Words for screen readers and the hover title: "KOL alpha — can't compare yet". */
 	describe: (n: MapNode) => string;
 	selected: string | null;
@@ -43,7 +45,9 @@ export interface Space3DProps {
 	height: number;
 }
 
-export default function Space3D({ nodes, edges, renderCard, describe, selected, onSelect, lit, grow, order, height }: Space3DProps) {
+export default function Space3D({ nodes, edges, renderCard, renderDot, describe, selected, onSelect, lit, grow, order, height }: Space3DProps) {
+	// The node under the pointer (or keyboard focus) opens into its full card.
+	const [hovered, setHovered] = useState<string | null>(null);
 	const boxRef = useRef<HTMLDivElement>(null);
 	const cardEls = useRef(new Map<string, HTMLElement>());
 	const edgeEls = useRef(new Map<string, SVGLineElement>());
@@ -96,7 +100,8 @@ export default function Space3D({ nodes, edges, renderCard, describe, selected, 
 	// The frame loop.
 	useEffect(() => {
 		const st = s.current;
-		st.bornAt = performance.now();
+		// Once per mount: re-running this effect (hover, selection) must not replay the growth.
+		if (!st.bornAt) st.bornAt = performance.now();
 		const frame = (t: number) => {
 			st.raf = 0;
 			const dt = Math.min(50, t - (st.lastT || t));
@@ -127,11 +132,14 @@ export default function Space3D({ nodes, edges, renderCard, describe, selected, 
 				const cue = depthCue(p.scale, cam.zoom);
 				const dim = !!lit && !lit.has(n.id);
 				const born = grow && !reduced ? Math.max(0, Math.min(1, (t - st.bornAt - (order?.get(n.id) ?? 0) * 70) / 380)) : 1;
-				const size = Math.max(0.5, Math.min(1, (p.scale / (FOCAL / DISTANCE)) * 0.9)) * (dim ? 0.94 : 1);
+				// The selected card comes forward larger (Novix grows the picked label);
+				// everything off its path all but disappears.
+				const pick = n.id === selected ? 1.15 : 1;
+				const size = Math.max(0.5, Math.min(1, (p.scale / (FOCAL / DISTANCE)) * 0.9)) * (dim ? 0.92 : 1) * pick;
 				el.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px) translate(-50%, -50%) scale(${(size * (0.9 + 0.1 * born)).toFixed(3)})`;
-				el.style.opacity = String(((dim ? 0.14 : lit ? Math.max(0.9, cue.alpha) : cue.alpha) * born).toFixed(3));
-				el.style.zIndex = String(lit?.has(n.id) ? 5000 : Math.round(3000 - p.depth));
-				el.style.filter = dim ? "blur(2px)" : cue.near < 0.25 ? "blur(0.6px)" : "none";
+				el.style.opacity = String(((dim ? 0.07 : lit ? Math.max(0.9, cue.alpha) : cue.alpha) * born).toFixed(3));
+				el.style.zIndex = String(n.id === selected ? 6000 : lit?.has(n.id) ? 5000 : el.dataset.full !== undefined ? 5500 : Math.round(3000 - p.depth));
+				el.style.filter = dim ? "blur(2.5px)" : cue.near < 0.2 ? "blur(0.5px)" : "none";
 				el.style.visibility = p.visible ? "visible" : "hidden";
 			}
 			for (const e of edges) {
@@ -143,7 +151,7 @@ export default function Space3D({ nodes, edges, renderCard, describe, selected, 
 				const onPath = !!lit && lit.has(e.source) && lit.has(e.target);
 				const born = grow && !reduced ? Math.max(0, Math.min(1, (t - st.bornAt - (order?.get(e.target) ?? 0) * 70 + 120) / 380)) : 1;
 				const cue = depthCue(Math.min(a.scale, b.scale), cam.zoom);
-				ln.style.opacity = String(((lit ? (onPath ? 1 : 0.12) : 0.25 + 0.55 * cue.near) * born).toFixed(3));
+				ln.style.opacity = String(((lit ? (onPath ? 1 : 0.05) : 0.18 + 0.5 * cue.near) * born).toFixed(3));
 				const lb = labelEls.current.get(e.id);
 				if (lb) { lb.setAttribute("x", ((a.x + b.x) / 2).toFixed(1)); lb.setAttribute("y", ((a.y + b.y) / 2 - 6).toFixed(1)); }
 			}
@@ -153,7 +161,7 @@ export default function Space3D({ nodes, edges, renderCard, describe, selected, 
 		document.addEventListener("visibilitychange", onVis);
 		kick.current();
 		return () => { cancelAnimationFrame(st.raf); st.raf = 0; document.removeEventListener("visibilitychange", onVis); };
-	}, [pos, nodes, edges, lit, grow, reduced, order]);
+	}, [pos, nodes, edges, lit, grow, reduced, order, selected, hovered]);
 
 	// ── input ──────────────────────────────────────────────────────────────
 	const touch = () => { s.current.lastInput = performance.now(); s.current.tween = null; kick.current(); };
@@ -259,24 +267,33 @@ export default function Space3D({ nodes, edges, renderCard, describe, selected, 
 			{nodes.map((n) => {
 				const sel = selected === n.id;
 				const dim = !!lit && !lit.has(n.id);
+				const full = !renderDot || !!lit?.has(n.id) || hovered === n.id;
 				return (
 					<div
 						key={n.id}
 						ref={(el) => { if (el) cardEls.current.set(n.id, el); else cardEls.current.delete(n.id); }}
 						data-kind={n.kind}
 						data-dim={dim ? "" : undefined}
+						data-full={full ? "" : undefined}
 						className="absolute left-0 top-0 will-change-transform"
 						style={{ opacity: 0 }}
+						onPointerEnter={() => setHovered(n.id)}
+						onPointerLeave={() => setHovered((h) => (h === n.id ? null : h))}
 					>
 						<button
 							type="button"
 							aria-pressed={sel}
 							aria-label={describe(n)}
-							title={describe(n)}
+							onFocus={() => setHovered(n.id)}
+							onBlur={() => setHovered((h) => (h === n.id ? null : h))}
 							onClick={(e) => { e.stopPropagation(); if (suppressClick.current) return; onSelect(sel ? null : n.id); }}
 							className="block text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400 rounded-xl"
 						>
-							{renderCard(n, { selected: sel, dim })}
+							{/* Both stay in the DOM and only their visibility flips: swapping the
+							    element under the pointer between press and release (hover opens the
+							    card) swallowed the click — on touch, every tap. */}
+							{renderDot && <span className={full ? "hidden" : "block"}>{renderDot(n)}</span>}
+							<span className={full ? "block" : "hidden"}>{renderCard(n, { selected: sel, dim })}</span>
 						</button>
 					</div>
 				);

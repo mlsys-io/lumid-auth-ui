@@ -254,6 +254,47 @@ export function runOutputs(d: MeCycleDetail | null): RunOutputs {
 	return out;
 }
 
+/** A file the run produced, ready to save. Lumid runs rarely write files the
+ *  API can reach, so these come from what the run DID record:
+ *   1. sidecar `files` the cycle dir held (observations, proposal, …);
+ *   2. whole documents inlined as a string field (`design_text` = the design
+ *      JSON an mlsys run evaluated) — a multi-line value is a file, not a field;
+ *   3. every number and fact the run returned, as one results.json.
+ *  Content is already in hand, so saving needs no request. */
+export interface RunFile { name: string; label: string; type: "json" | "md" | "txt"; content: string; bytes: number }
+
+function asDoc(name: string, label: string, v: unknown): RunFile | null {
+	let content: string; let type: RunFile["type"];
+	if (typeof v === "string") {
+		const t = v.trim();
+		if (!t) return null;
+		if (/^[[{]/.test(t)) {
+			try { content = JSON.stringify(JSON.parse(t), null, 2); type = "json"; } catch { content = t; type = "txt"; }
+		} else { content = t; type = /^#{1,3} |\n#{1,3} /.test(t) ? "md" : "txt"; }
+	} else if (v && typeof v === "object") { content = JSON.stringify(v, null, 2); type = "json"; } else return null;
+	const base = name.replace(/[^\w.-]+/g, "_").replace(/_text$/, "");
+	return { name: `${base}.${type}`, label, type, content, bytes: new TextEncoder().encode(content).length };
+}
+
+export function runFiles(d: MeCycleDetail | null): RunFile[] {
+	if (!d) return [];
+	const files: RunFile[] = [];
+	const seen = new Set<string>();
+	const push = (f: RunFile | null) => { if (f && !seen.has(f.name)) { seen.add(f.name); files.push(f); } };
+	for (const [k, v] of Object.entries(d.files || {})) push(asDoc(k, humanMetric(k).label, v));
+	const out = runOut(d);
+	const sm = ((d.summary || {}) as Record<string, unknown>).metrics as Record<string, unknown> | undefined;
+	for (const src of [out, out?.metrics as Record<string, unknown> | undefined, sm]) {
+		if (!src || typeof src !== "object") continue;
+		for (const [k, v] of Object.entries(src)) {
+			if (typeof v !== "string" || !v.includes("\n") || v.length < 120) continue;
+			push(asDoc(k, humanMetric(k.replace(/_text$/, "")).label, v));
+		}
+	}
+	if (out && Object.keys(out).length) push({ ...asDoc("results", "Everything this run returned", out)! });
+	return files;
+}
+
 /** The run's own output object (the step's `out`), where apps put their facts. */
 function runOut(d: MeCycleDetail | null): Record<string, unknown> | undefined {
 	const step = (d?.steps || []).find((st) => st.output && typeof st.output === "object");
