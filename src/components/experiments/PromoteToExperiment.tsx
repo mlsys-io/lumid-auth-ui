@@ -97,7 +97,7 @@ export default function PromoteToExperiment(
 						className="w-full rounded-md border border-ink-300 px-2 py-1 text-caption" />
 				</label>
 				<label className="text-micro text-ink-600 space-y-1">
-					<span>Metric — must be a key this loop emits</span>
+					<span>Metric — must be a number this workflow reports</span>
 					<input value={metric} onChange={(e) => setMetric(e.target.value)}
 						placeholder="avg_question_score"
 						className="w-full rounded-md border border-ink-300 px-2 py-1 text-caption" />

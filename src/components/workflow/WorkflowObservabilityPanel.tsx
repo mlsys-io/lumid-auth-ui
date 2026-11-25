@@ -880,7 +880,7 @@ export default function WorkflowObservabilityPanel({
 					    "did this change help?" is asked. */}
 					<section className="space-y-1.5">
 						<div className="text-micro uppercase tracking-wide font-semibold text-ink-600">
-							{loopExp ? "Metric & experiments" : "Measurement"}
+							{loopExp ? "Experiment" : "Measurement"}
 						</div>
 						<Suspense fallback={null}>
 							{loopExp
@@ -1437,7 +1437,7 @@ function OutputsTier({ files, ts, hasRuns }:
 			{empty ? (
 				<div className="text-micro text-ink-600 rounded-lg border border-ink-200 bg-ink-50/60 px-3 py-2">
 					{hasRuns
-						? "This loop's last run recorded no result artifact. Open a run to see its per-stage output."
+						? "This workflow's last run saved no result file. Open a run to see what each step did."
 						: "No runs yet — run the workflow and its output appears here."}
 				</div>
 			) : (
