@@ -104,14 +104,18 @@ async function chat(prompt, { timeout = 240000 } = {}) {
 	await box.fill(prompt);
 	await page.getByRole('button', { name: 'Send message' }).last().click();
 	const started = Date.now();
-	await page.getByRole('button', { name: 'Stop generating' }).first().waitFor({ timeout: 30000 }).catch(() => {});
-	let last = '', stable = 0;
+	// Busy while the chat streams OR runs tools between messages: the send
+	// button then reads "Queue message" (and "Stop generating" shows). A turn
+	// is over only when neither shows and the text has been still for 20 s —
+	// multi-step tool turns pause for several seconds between steps.
+	const busyNow = async () => (await page.getByRole('button', { name: 'Stop generating' }).count()) + (await page.getByRole('button', { name: 'Queue message' }).count());
+	await page.waitForFunction(() => !!document.querySelector('button[aria-label="Queue message"], button[aria-label="Stop generating"]'), null, { timeout: 30000 }).catch(() => {});
+	let last = '', quietSince = Date.now();
 	while (Date.now() - started < timeout) {
 		await page.waitForTimeout(2000);
-		const busy = await page.getByRole('button', { name: 'Stop generating' }).count();
 		const t = await scope.innerText().catch(() => '');
-		if (!busy && t === last) { if (++stable >= 2) break; } else stable = 0;
-		last = t;
+		if (t !== last || (await busyNow())) { quietSince = Date.now(); last = t; continue; }
+		if (Date.now() - quietSince >= 20000) break;
 	}
 	// What appeared after the prompt (the reply, tool notes included).
 	// Anchor on the END of the prompt (the bubble may wrap or trim its start).
@@ -189,10 +193,13 @@ await step('3 tune: setups through the UI', async () => {
 	// The experiment exists once the scheduler applies it (a queued write).
 	const run = page.getByRole('button', { name: /Run the \d+ untried/ });
 	if (!(await run.waitFor({ timeout: 60000 }).then(() => true).catch(() => false))) {
+		// Its OWN experiment (TrySetups names it <workflow>_<input>_…), never
+		// whichever experiment happens to be last on the graph.
 		await openApp();
-		const exp = map().locator('.space3d [data-kind="experiment"] button').last();
-		await domClick(exp);
-		await run.waitFor({ timeout: 120000 });
+		const mine = map().locator(`.space3d [data-kind="experiment"] button[aria-label*="tuned ${RUN}" i]`).first();
+		await mine.waitFor({ timeout: 180000 });
+		await domClick(mine);
+		await run.waitFor({ timeout: 60000 });
 	}
 	const before = runRequests.length;
 	await press(run);
