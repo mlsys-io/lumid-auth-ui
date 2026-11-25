@@ -20,6 +20,8 @@ import {
 } from "../../lib/fleet-result";
 import { runImages } from "../../lib/run-images";
 import ResultImages from "./result-images";
+import RunFiles from "./run-files";
+import { runFiles } from "../../lib/run-files";
 
 const LIST_LIMIT = 100;
 
@@ -241,6 +243,8 @@ function RunResult({ opened }: { opened: Opened }) {
 						)}
 						{/* Pictures first: a run that made images should show them, not their paths. */}
 						<ResultImages images={images} context={picturesContext(outputs)} />
+						{/* Every file the run produced, openable and downloadable (owner-only, via identity). */}
+						<RunFiles fleetId={opened.id} files={runFiles(opened.id, outputs)} />
 						{view.tables.map((t, i) => <ResultTableView key={`t${i}`} table={t} />)}
 						{view.texts.map((t, i) => (
 							<div key={`x${i}`}>
