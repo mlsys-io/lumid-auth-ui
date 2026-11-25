@@ -74,7 +74,7 @@ export default function StudioWorkspace() {
 
 			{/* RIGHT — grounded chat (side panel, collapsible; auto-hidden on narrow,
 			    where it takes over full width when opened). */}
-			<ChatRail groundApp={app || APPS_KEY} top={app ? <RunningNow app={app} /> : undefined} />
+			<ChatRail groundApp={app || APPS_KEY} top={<RunningNow app={app || undefined} />} />
 		</div>
 	);
 }

@@ -9,6 +9,7 @@
 // the panel itself plus the panel toggle, portaled into the top strip's right
 // cluster (`topstrip-ws-right`) so the surface keeps a single header row.
 
+import { setRailTopVisible } from "@/lib/rail-top";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { PanelRightClose, MessageSquare } from "lucide-react";
@@ -78,6 +79,8 @@ export default function ChatRail({
 	const [narrowChatOpen, setNarrowChatOpen] = useState(arrivingWithThread);
 	useEffect(() => { if (!isNarrow) setNarrowChatOpen(false); }, [isNarrow]);
 	const chatVisible = enabled && (isNarrow ? narrowChatOpen : chatOpen);
+	// Tell the page whether the rail's top panel is on screen (see lib/rail-top).
+	useEffect(() => { setRailTopVisible(chatVisible && !!top); return () => setRailTopVisible(false); }, [chatVisible, top]);
 	const toggleChat = () => { if (isNarrow) setNarrowChatOpen((v) => !v); else setChatOpen((v) => !v); };
 
 	// Events addressed to the docked chat — "New chat in <app>" and a Recent
