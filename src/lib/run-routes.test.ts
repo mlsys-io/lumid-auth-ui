@@ -33,6 +33,10 @@ check("non-scheduled run id → null, and opens the standalone page", () => {
 	eq(parseScheduledRunId("visual:abc"), null);
 	eq(runRowHref("visual:abc"), "/studio/runs/visual%3Aabc");
 });
+check("a lum.id/data job row opens Data Warehouse → Jobs on that job", () => {
+	eq(runRowHref("job:0b9e-11"), "/studio/data-warehouse?tab=jobs&job=0b9e-11");
+	eq(runRowHref("job:"), "/studio/runs/job%3A", "an empty job id is not a job");
+});
 check("scheduled run row opens the run page", () =>
 	eq(runRowHref("scheduled:qr:backtest:20260928T075005Z"), "/studio/apps/qr/w/backtest/r/20260928T075005Z"));
 check("legacy ?selected= → workflow page", () => eq(legacyAppQueryTarget("qr", "?selected=backtest"), "/studio/apps/qr/w/backtest"));

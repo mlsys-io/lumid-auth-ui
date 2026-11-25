@@ -11,6 +11,7 @@
 // run-routes.test.ts.
 
 import { toCycleId } from "@/lib/cycle-id";
+import { jobHref } from "@/lib/data-jobs";
 
 const enc = encodeURIComponent;
 
@@ -47,9 +48,11 @@ export function parseScheduledRunId(runId: string): { app: string; loop: string;
 	return { app, loop, runId: toCycleId(ts) };
 }
 
-/** Where a /me/runs row opens: the run page for a scheduled cycle, the
- *  standalone run page for anything else (visual / n8n runs). */
+/** Where a /me/runs row opens: the run page for a scheduled cycle, the job in
+ *  Data Warehouse → Jobs for a lum.id/data job ("job:<id>"), the standalone run
+ *  page for anything else (visual / n8n runs). */
 export function runRowHref(runId: string): string {
+	if (String(runId || "").startsWith("job:") && runId.length > 4) return jobHref(runId.slice(4));
 	const s = parseScheduledRunId(runId);
 	return s ? runPath(s.app, s.loop, s.runId) : `/studio/runs/${enc(runId)}`;
 }

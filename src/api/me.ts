@@ -1589,16 +1589,20 @@ export interface MeWorkflowDetail {
 export interface MeRunRow {
   run_id: string;
   workflow_slug: string;
-  kind: "scheduled" | "visual";
+  // "job" = a lum.id/data entrance job (run_id "job:<id>"); identity adds them
+  // best-effort and reports the outcome in `sources.jobs`.
+  kind: "scheduled" | "visual" | "job";
   name: string;
   app?: string;
-  state: "succeeded" | "failed" | "running" | "skipped" | "canceled";
+  state: "succeeded" | "failed" | "running" | "skipped" | "canceled" | "queued";
   started_at: number;
   started_iso?: string;
   duration_s?: number;
   reason?: string;
   cost_cents?: number;
   cycle_dir?: string;
+  /** Where the row opens in Studio, when run_id alone doesn't say (jobs). */
+  link?: string;
 }
 
 export interface MeRunDetail {
