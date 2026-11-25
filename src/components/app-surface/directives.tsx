@@ -63,6 +63,7 @@ import { me, ME_BASE } from "@/api/me";
 import apiClient from "@/api/client";
 import { cn, formatCurrency, formatPercentage } from "@/lib/utils";
 import { bearerHeader } from "@/api/session-bearer";
+import { audienceForDataApp } from "@/api/dataLake";
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
   AlertDialogDescription, AlertDialogFooter,
@@ -276,7 +277,9 @@ export async function resolveSource(spec: string, force = false): Promise<unknow
     // Same passthrough + bearer as findata://; lets one explorer point at
     // any allowlisted data-app by setting the base-id in the source.
     const path = spec.slice(DATAAPP_PREFIX.length).replace(/^\/+/, "");
-    const auth = await bearerHeader();
+    // The bearer's audience must be the service behind the proxy: lum.id/data
+    // checks for "lumid-data" since identity v0.5.480 (others keep the default).
+    const auth = await bearerHeader(audienceForDataApp(path.split("/")[0]));
     const r = await fetch(`/dataapp-proxy/${path}`, { credentials: "same-origin", headers: auth });
     if (r.status === 404) { data = null; }   // no record for this key — empty, not an error
     else if (!r.ok) throw new Error(`dataapp ${r.status}`);
