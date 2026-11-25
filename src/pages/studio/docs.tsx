@@ -234,19 +234,16 @@ const DOCS: DocEntry[] = [
 		companion: { to: '/studio/research-fleet/sandboxes', label: 'Rent a sandbox' },
 	},
 	{
-		// The data side of a job: what a job can read, where that data lives,
-		// and why you name data instead of picking a hub. The Catalog's
-		// "How jobs use data" link lands here.
+		// Data at the three moments people meet it: finding it (catalog), setting
+		// up a run that reads it (Research Fleet, Home or Office), and seeing what
+		// the run produced. The Catalog's "How jobs use data" link lands here.
 		slug: 'data-jobs',
-		title: 'Use your data in jobs',
-		description: 'What a job can read today and where it lives, why you name the data instead of picking a hub, the plan, and what your job finds in its environment.',
+		title: 'Use your data in workflows and jobs',
+		description: 'Find a table and where it lives, read it from a Lumilake or FlowMesh run at home or office, and see what the run produced. Plus what does not work yet.',
 		md: 'data-jobs.md',
 		group: 'Guides',
 		icon: Database,
 		companion: { to: '/studio/data-warehouse', label: 'Open the catalog' },
-		// Off the index: written around job specs, which aren't how people meet
-		// data (workflow setup, results, inspection). Route kept for links.
-		hidden: true,
 	},
 	{
 		slug: 'findata-sql',

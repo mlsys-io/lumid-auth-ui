@@ -11,6 +11,9 @@ function eq(actual: unknown, expected: unknown, what = "") {
 
 check("lum.id/data gets its own audience", () => eq(audienceFor("/data"), "lumid-data"));
 check("a lum.id/data sub-path too", () => eq(audienceFor("/data/jobs/v1"), "lumid-data"));
+check("the NUS hub gets the lumid-data audience", () => eq(audienceFor("/data-nus"), "lumid-data"));
+check("a NUS hub sub-path too", () => eq(audienceFor("/data-nus/catalog/schemas"), "lumid-data"));
+check("a look-alike prefix does not", () => eq(audienceFor("/data-nusx"), undefined));
 check("findata keeps the default bearer", () => eq(audienceFor("/findata"), undefined));
 check("data apps keep the default bearer", () => eq(audienceFor("/dataapp-proxy"), undefined));
 check("lumid.trade keeps the default bearer", () => eq(audienceFor("https://lumid.trade"), undefined));

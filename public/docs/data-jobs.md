@@ -1,137 +1,183 @@
-# Use your data in jobs
+# Use your data in workflows and jobs
 
-A **job** runs your code on Lumid's compute (a sandbox, FlowMesh or Lumilake) and names the data it
-reads. You never copy data to the job and you never pick a machine: lum.id/data checks you may read
-each source, works out **where the job should run so it sits next to the data**, and gives the job
-a short-lived key that opens **only** the data it declared.
+You meet data at three moments: when you **look for it**, when you **set up a run** that reads it,
+and when you **look at what the run produced**. This page walks through each one with a real
+example, and says plainly what doesn't work yet.
 
-## What a job can read today
+Everything here was run end to end on 25 Nov 2026 as an ordinary (non-admin) account.
 
-| Data | Where it lives | How a job names it | Jobs? |
-|---|---|---|---|
-| **Lumid Data** tables | On-prem at the home site, on the Lumid Data hub (data NAS) | `lumid-data://schema.table` | Yes |
-| **Your sources**, and sources shared with you | Wherever the data is | `src://<id>` or `src://me/<name>` | Yes, if you own it or it's shared with you |
-| **Uploaded files** | The home hub | `data://home/blobs/<sha256>` or `data://home/<prefix>/` | Yes |
-| **Models** | Hugging Face, cached on the workers | `hf://org/model` | Yes |
-| **Public APIs** | The internet | `ext://host` | Yes (each call is logged) |
-| **FinData** | On-prem at the home site (FinData warehouse) | — | **Not yet.** Use [FinData SQL access](/studio/docs/findata-sql) |
-| **LQT** data | On-prem at the home site, served via lumid.trade | — | **Not yet** |
-| **NUS research data** (UKB, …) | NUS storage | — | **Not yet**, the NUS hub is coming |
+## 1. Find the data
 
-Every table in **Studio → Data Warehouse → Catalog** shows *where it lives* and, if a job can read it,
-the exact name to use, with a **Copy** button and **Start a job with it →**.
+Open **Studio → Data Warehouse → Catalog**. Pick a table and you get:
 
-## Do I choose a hub or a site?
+- **What's in it**: columns, a row estimate, a preview.
+- **Where it lives**, in one line, e.g. *"On-prem at the home site: the Lumid Data hub on the data NAS."*
+- **Who uses it**: the workflows that write it and the ones that read it, with how many rows and
+  when. Recording started on 25 Nov, so older use isn't shown.
 
-**No.** You name the data; the plan chooses where the job runs: next to the data, because moving
-compute is cheap and moving data is not. A job that reads `lumid-data://…` runs at the home site and
-reads over the local network.
+The catalog lists four stores today:
 
-If a job reads data that lives in **two different places**, the plan still runs it next to most of
-the data and reads the rest across sites. A small cross-site read is fine. A large one (over
-**256 MiB**) is refused, with the reason and the size, rather than quietly copied. Split the job, or
-read less (filter by time, sample) and try again.
+| Store | Where it lives | How a run reads it |
+|---|---|---|
+| **Lumid Data** | Home site, on the data NAS | By table name, e.g. `macro.treasury_rates` (below) |
+| **FinData** | Home site, on the data NAS | Its own SQL access. See [FinData SQL access](/studio/docs/findata-sql) |
+| **NUS Data** | NUS, on the NUS data hub (storage server) | By table name, e.g. `arxiv.papers`, from a run at NUS |
+| **LQT data** | Home site, served from lumid.trade | Read-only browsing; runs can't read it yet |
 
-What you *can* choose is the **runtime**: `sandbox`, `flowmesh`, `lumilake`, or `auto`.
+### Example: the arXiv corpus at NUS
 
-> **Runtimes today:** sandbox jobs run at the **home** and **office** sites. FlowMesh and Lumilake
-> jobs plan normally, but **Run** reports that the runtime isn't updated for job-scoped data yet.
-> That's the safe refusal: the job is never run with broader access than it declared.
+**NUS Data → `arxiv`** is the whole arXiv corpus, open to every signed-in user:
 
-## In Studio, step by step
+| Table | What a row is |
+|---|---|
+| `arxiv.papers` | One paper: title, authors, abstract, categories, licence, first and latest version dates (3.15 million) |
+| `arxiv.paper_text` | The full text extracted from that paper's LaTeX source (2.86 million) |
+| `arxiv.files` | One file in one version of a paper (source, LaTeX, PDF, PS): path, size, sha256 (54.6 million) |
 
-1. **Data Warehouse → Catalog**, pick a table, click **Start a job with it →**. The Jobs tab opens with
-   that table already in the job.
-2. Fill in the rest. A minimal sandbox job:
+The PDFs, PostScript and LaTeX bytes themselves (about 8.7 TB) stay as files at NUS; `arxiv.files`
+tells you what exists.
 
-   ```yaml
-   app: my-analysis          # a label, so you can find your jobs later
-   runtime: sandbox
-   name: phenotype-check
-   sources:
-     - ref: lumid-data://ukb_demo.phenotype
-   payload:                  # what the runtime should start
-     name: phenotype-check
-     cpu: 1
-     memory_gi: 1
-     ttl_hours: 1
-   ```
+The data lives at NUS, so run next to it: choose **Run at → NUS**. This Lumilake graph counts this
+year's papers by category. It ran in 14 seconds as an ordinary account:
 
-3. **Check where it runs**: the plan card shows the site, how each source is reached (local network,
-   tailnet, public), the bytes, and *why* this site won over the others.
-4. **Run**. The job appears under *Your jobs* with its events: submitted, running, then finished, failed
-   or cancelled.
-5. **Cancel** any time. The job's key stops working at once, and the sandbox is removed within a few
-   minutes.
+```yaml
+name: arxiv-by-category
+inputs:
+  Run: ["1"]
+outputs:
+  - name: counts
+    ref: "Counts"
+ops:
+  - id: Counts
+    op: DataRetrievalOp
+    inputs: [Run]
+    data_spec:
+      type: lumid          # at NUS, this is the NUS data hub
+      mode: sql
+      template: "SELECT primary_category, count(*) AS papers FROM arxiv.papers WHERE first_version_date >= '2026-01-01' GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 10"
+      output_format: jsonl
+```
 
-## From code
+The result (in **Your runs**) starts `cs.CV 21,331 · cs.LG 20,977 · cs.CL 12,286 · cs.AI 11,730`.
 
-Use your lum.id **personal access token** ([create one](/studio/account/tokens)):
+UK Biobank data at NUS is **not** in the catalog: it's restricted to approved researchers. See [§5](#5-not-there-yet).
+
+## 2. Set up a run that reads it
+
+Runs go to **Research Fleet**. Start one either way:
+
+- **Workflow editor → Run**, which validates the graph first and then follows the run until it ends; or
+- **Research Fleet → Jobs**, which lists every run you started from anywhere.
+
+### Pick where it runs: next to the data
+
+The Run button has a **Run at** choice. Each site has its own machines, and `type: lumid` reads
+the data hub **of the site the run goes to**:
+
+- **Home**: next to Lumid Data. Tables are read over the local network.
+- **Office**: reads Lumid Data through `lum.id/data`, over the internet. That's fine for normal
+  reads; pick Home when a run reads a lot.
+- **NUS**: next to NUS Data (the arXiv corpus). Lumilake graphs only, for now.
+
+You don't change anything in the graph to switch sites. The address of the data comes from the
+site, not from your file.
+
+### A Lumilake graph: name the table in SQL
+
+A Lumilake compute graph reads warehouse data with a `DataRetrievalOp`. You write the SQL; the
+table name is exactly what the catalog shows (`schema.table`):
+
+```yaml
+name: treasury-curve
+inputs:
+  Run: ["1"]
+outputs:
+  - name: rates
+    ref: "Rates"
+ops:
+  - id: Rates
+    op: DataRetrievalOp
+    inputs: [Run]
+    data_spec:
+      type: lumid          # the Lumid Data hub at the site the run goes to
+      mode: sql
+      template: "SELECT * FROM macro.treasury_rates ORDER BY 1 DESC LIMIT 5"
+      output_format: jsonl
+```
+
+Paste it into the workflow editor and press **Run**. At home it finishes in seconds.
+
+**Every SQL retrieval needs a top-level `ORDER BY`** (Lumilake 0.1.11 and later), so a run reads
+the same rows every time. End it with a unique column so ties keep their order. A query that
+returns one row per input can say `rows: one` instead; a query you read whole can say `rows: table`.
+Without one of these, Run refuses the graph and names the step.
+
+### A FlowMesh graph: data comes in, the task doesn't go out
+
+A FlowMesh `python` task runs in a sealed container with **no network**: it can't call
+`lum.id/data`, or anything else. Give it data instead:
+
+- **from an earlier step**: a Lumilake retrieval, or any upstream stage, passes its output in; or
+- **as files** you uploaded to Lumid Data, listed under `blobs:` and mounted read-only.
+
+### A sandbox: query it, or read files
+
+In a [sandbox](/studio/docs/sandboxes), tick **Lumid Data** (or FinData) when you create it to
+get a query endpoint. File datasets need nothing: they're under `/datasets`, read-only. Rule of
+thumb: **if it's a table, query it; if it's a directory, mount it.**
+
+## 3. See what it produced
+
+- **Research Fleet → Jobs → Your runs** lists every run you started: status, the result, and for a
+  failed run, the step that failed and its error. The workflow editor shows the same run while it
+  goes.
+- **A scheduled workflow's run page** has **Warehouse tables**: what that run wrote and read, each
+  one a link into the catalog.
+- **The catalog's "Who uses it"** shows which workflows keep a table up to date, and which depend on it.
+
+## 4. From code
+
+The same runs, without Studio, using your lum.id
+[personal access token](/studio/account/tokens):
 
 ```bash
-# 1. Dry run: where would it run, and how is each source reached?
-curl -s https://lum.id/data/jobs/v1/plan \
+# Run the graph above at home (site: "office" for the office machines)
+curl -s https://lum.id/api/v1/me/fleet/jobs \
   -H "Authorization: Bearer $LUMID_PAT" -H "Content-Type: application/json" \
-  -d '{"spec": {"app": "my-analysis", "runtime": "sandbox",
-                "sources": [{"ref": "lumid-data://ukb_demo.phenotype"}],
-                "payload": {"name": "phenotype-check", "cpu": 1, "memory_gi": 1, "ttl_hours": 1}}}'
+  -d "$(jq -n --rawfile wf treasury-curve.yaml '{site: "home", name: "treasury-curve", workflow: $wf}')"
 
-# 2. Run it (the Idempotency-Key makes a retry safe: it never starts twice)
-curl -s https://lum.id/data/jobs/v1/jobs \
-  -H "Authorization: Bearer $LUMID_PAT" -H "Content-Type: application/json" \
-  -H "Idempotency-Key: phenotype-check-1" \
-  -d '{"spec": { ...same spec... }}'
-
-# 3. Follow it, and cancel it
-curl -s https://lum.id/data/jobs/v1/jobs/<job_id>/events -H "Authorization: Bearer $LUMID_PAT"
-curl -s -X POST https://lum.id/data/jobs/v1/jobs/<job_id>/cancel -H "Authorization: Bearer $LUMID_PAT"
+# Follow it, then read the result (the id looks like home:ll:req-…)
+curl -s "https://lum.id/api/v1/me/fleet/jobs/<id>"              -H "Authorization: Bearer $LUMID_PAT"
+curl -s "https://lum.id/api/v1/me/fleet/jobs/<id>?view=result"  -H "Authorization: Bearer $LUMID_PAT"
 ```
 
-The full reference is at [lum.id/data/openapi.json](https://lum.id/data/openapi.json).
+Add `"dry_run": true` to check a graph without running it.
 
-**From an agent**: the same verbs are MCP tools on `https://lum.id/data/mcp`: `jobs_sources`,
-`jobs_plan`, `jobs_submit`, `jobs_status`, `jobs_events` and `jobs_cancel`.
+**Sandbox jobs that name their data.** lum.id/data can also start a sandbox for you, given the
+tables it may read (`lumid-data://schema.table`). It runs the sandbox next to the data and hands it
+a key that opens only those tables. The API reference is at
+[lum.id/data/openapi.json](https://lum.id/data/openapi.json) (`/jobs/v1/…`).
 
-## Inside your job
+## 5. Not there yet
 
-The job finds these in its environment:
+Said plainly, so you don't go looking:
 
-| Variable | What it is |
+| What | Today |
 |---|---|
-| `LUMID_DATA_URL` | Where to read, already set to the route the plan chose (e.g. the local network at home) |
-| `LUMID_DATA_TOKEN` | The job's key. Opens **only** the sources you declared, and dies when the job ends |
-| `LUMID_JOB_ID` | This job |
-| `LUMID_SRC_<NAME>_URL` | One per declared source, when a source has its own route |
-
-```python
-import os, requests
-r = requests.post(os.environ["LUMID_DATA_URL"] + "/retrieve",
-                  headers={"Authorization": "Bearer " + os.environ["LUMID_DATA_TOKEN"]},
-                  json={"sql": "select * from ukb_demo.phenotype limit 100"}, timeout=60)
-r.raise_for_status()
-```
-
-Reading a table you did **not** declare is refused (`source_not_in_job_scope`). Add it to `sources`
-and run a new job.
-
-## Sharing data with someone
-
-1. **Jobs → Sources → Add source**: give it a name and the ref (`lumid-data://…`, `data://home/…`).
-   It's private until you share it.
-2. **Share** it with a person's lum.id user ID (they can copy theirs from the Sources panel), read or
-   write.
-3. They see it under **Shared with me** and use it as `src://<id>`.
-4. **Withdraw** a share any time: their running jobs lose access within seconds.
+| **UK Biobank at NUS** | Not in the catalog. It's restricted to approved researchers; access goes through its owner. |
+| **FlowMesh graphs at NUS** | Admin-only today. Lumilake graphs at NUS work for everyone (example above). |
+| **Reads by a Lumilake graph** | Lumilake reads with its own key, so under "Who uses it" they count as *another person reading*, not as you. |
+| **Files a run wrote** | Shown in the run's result, but not browsable in the Data Warehouse. |
+| **FlowMesh tasks reading the warehouse** | Not possible from inside a task (no network). Pass data in, as above. |
+| **LQT data in a run** | Not yet. |
 
 ## When something goes wrong
 
 | What you see | What it means | What to do |
 |---|---|---|
-| `estate_not_served` | That data isn't available to jobs yet (FinData, LQT, NUS) | Use the alternative in the table at the top |
-| `source_not_entitled` | You don't own the source and it isn't shared with you | Ask the owner to share it |
-| `source_not_found` | No source by that name or ID | Check the spelling, or **Shared with me** |
-| `source_too_large_remote` | The job would copy too much data across sites | Read less, or split the job by site |
-| `route_unavailable` | There's no working network path from a site that could run it | Try later, or a different runtime |
-| `quota_exceeded` | You have too many jobs running or queued | Wait for some to finish, or cancel some |
-| *"does not support job-scoped data"* | That runtime isn't updated for jobs yet | Use `runtime: sandbox` for now |
-| `source_not_in_job_scope` (inside the job) | The job read something it didn't declare | Add it to `sources` |
+| *relation "…" does not exist* | The table name doesn't match the catalog | Copy `schema.table` from the catalog |
+| *returns rows in no defined order without a top-level ORDER BY* | A SQL retrieval has no fixed row order | Add `ORDER BY` (ending in a unique column), or `rows: one` / `rows: table` |
+| *cannot tell the workflow format* | The file is neither a Lumilake graph (`ops:`) nor a FlowMesh one (`apiVersion`/`spec`) | Check the top of the file |
+| *compute service returned 401* | The site didn't accept your sign-in | Sign in again; if it persists, report it |
+| A FlowMesh task fails to fetch a URL | Tasks have no network | Pass the data in from an earlier step or as files |
+| A run at office is slow on a big read | It reads the home hub over the internet | Run at Home |
