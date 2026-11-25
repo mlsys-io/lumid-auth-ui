@@ -329,6 +329,13 @@ export function jobRunStatus(status: string): RunStatus {
 }
 
 /** Plain words for a job's status. */
+/** Seconds a job has been going: since it started, or since it was created
+ *  when it hasn't started yet. 0 when neither time parses. */
+export function jobElapsedS(j: Pick<Job, "started_at" | "created_at">, nowSec: number): number {
+	const t = Date.parse(j.started_at || j.created_at || "");
+	return Number.isFinite(t) ? Math.max(0, nowSec - t / 1000) : 0;
+}
+
 export function jobStatusLabel(status: string): string {
 	switch (status.toLowerCase()) {
 		case "planned": return "Waiting to start";

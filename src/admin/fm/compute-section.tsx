@@ -15,6 +15,7 @@
 // scroll inside the rail instead of growing the page.
 
 import ChatRail from "../../components/ChatRail";
+import RunningNow from "../../components/RunningNow";
 import { COMPUTE_KEY } from "../../components/StudioChat";
 import AdminSectionLayout from "../../pages/app/admin-section-layout";
 
@@ -33,7 +34,7 @@ export default function ComputeSection(props: Props) {
 			<div className="min-w-0 flex-1 overflow-y-auto px-6 py-6">
 				<AdminSectionLayout {...props} />
 			</div>
-			<ChatRail groundApp={COMPUTE_KEY} openKey={COMPUTE_CHAT_OPEN_KEY} />
+			<ChatRail groundApp={COMPUTE_KEY} openKey={COMPUTE_CHAT_OPEN_KEY} top={<RunningNow />} />
 		</div>
 	);
 }

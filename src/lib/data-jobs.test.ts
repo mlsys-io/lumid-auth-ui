@@ -1,6 +1,7 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts (the repo
 // has no standalone test runner; see that script's header).
 import {
+	jobElapsedS,
 	normalizeSources, normalizePlan, normalizeJobs, normalizeJob, normalizeEvents, groupByHub, jobRunStatus,
 	jobStatusLabel, isTerminal, routeChip, specFromYaml, specToYaml, addSourceToYaml, validateSpec, parseApiError,
 	jobsErrorWords, jobsSourceNotice, jobHref, STARTER_SPEC,
@@ -15,6 +16,14 @@ function eq(actual: unknown, expected: unknown, what = "") {
 }
 
 // ── null-safety: every list may arrive as null / missing / wrong type ──
+check("elapsed: from started_at, else created_at, never negative", () => {
+	const now = Date.parse("2026-11-25T06:00:00Z") / 1000;
+	eq(jobElapsedS({ started_at: "2026-11-25T05:58:00Z", created_at: "2026-11-25T05:50:00Z" }, now), 120);
+	eq(jobElapsedS({ started_at: "", created_at: "2026-11-25T05:59:00Z" }, now), 60);
+	eq(jobElapsedS({ started_at: "2026-11-25T06:05:00Z", created_at: "" }, now), 0);
+	eq(jobElapsedS({ started_at: "", created_at: "" }, now), 0);
+});
+
 check("sources: null lists normalise to []", () => {
 	eq(normalizeSources({ sources: null, hubs: null }), { sources: [], hubs: [] });
 	eq(normalizeSources(null), { sources: [], hubs: [] });

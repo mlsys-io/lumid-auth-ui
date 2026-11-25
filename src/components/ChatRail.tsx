@@ -9,7 +9,7 @@
 // the panel itself plus the panel toggle, portaled into the top strip's right
 // cluster (`topstrip-ws-right`) so the surface keeps a single header row.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { PanelRightClose, MessageSquare } from "lucide-react";
 import { StudioChat } from "@/components/StudioChat";
@@ -42,6 +42,7 @@ export default function ChatRail({
 	groundApp,
 	enabled = true,
 	openKey = WS_CHAT_OPEN_KEY,
+	top,
 }: {
 	/** App slug (or virtual scope key) the conversation is grounded on. */
 	groundApp: string;
@@ -54,6 +55,9 @@ export default function ChatRail({
 	 * deliberately shared — one drag sets the rail width everywhere.
 	 */
 	openKey?: string;
+	/** Rendered above the chat, in the same column — e.g. <RunningNow />, so
+	 *  live work stays beside the conversation about it. */
+	top?: ReactNode;
 }) {
 	const [chatOpen, setChatOpen] = useState<boolean>(() => {
 		try { return localStorage.getItem(openKey) !== "0"; } catch { return true; }
@@ -192,6 +196,7 @@ export default function ChatRail({
 						/>
 					)}
 					<div className="flex-1 min-h-0 flex flex-col px-3 py-3">
+						{top}
 						<StudioChat docked groundApp={groundApp} />
 					</div>
 				</div>
