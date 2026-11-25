@@ -35,6 +35,8 @@ export function useRunsFeed(days: number, state = "") {
 	// The window held more runs than the feed read (FEED_MAX). Before
 	// v0.5.477 there was no cursor, so a full first page meant "capped".
 	const [truncated, setTruncated] = useState<boolean>(() => (readCache(days, state)?.runs.length ?? 0) >= RUNS_CAP);
+	// identity's per-source outcome for lum.id/data jobs (`sources.jobs`).
+	const [jobsSource, setJobsSource] = useState<string | null>(null);
 
 	// /me/runs takes ~6 s, so switching the window mid-load leaves two requests
 	// in flight; only the newest may land, or 30 days of runs show under "24h".
@@ -48,6 +50,7 @@ export function useRunsFeed(days: number, state = "") {
 			let r = await me.listRuns({ since, limit: RUNS_CAP, ...(state ? { state } : {}) });
 			if (mine !== reqId.current) return;
 			const rows = [...(r.runs || [])];
+			setJobsSource(r.sources?.jobs ?? null);
 			// The first page shows at once — with its time — and older pages are
 			// appended behind it.
 			setRuns(rows.slice());
@@ -112,7 +115,7 @@ export function useRunsFeed(days: number, state = "") {
 		return () => stop();
 	}, []);
 
-	return { runs, err, asOf, reload: load, truncated };
+	return { runs, err, asOf, reload: load, truncated, jobsSource };
 }
 
 /** Seconds since epoch, re-rendered every `ms` while the tab is visible. Off

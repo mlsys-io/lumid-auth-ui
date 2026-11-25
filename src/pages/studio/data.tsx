@@ -6,6 +6,9 @@
 //   • Explorer — the generic data-app endpoint browser (point at any
 //                allowlisted data-app, run its declared endpoints).
 //   • Query    — ad-hoc SELECT through the same path chat's data_query uses.
+//   • Jobs     — the lum.id/data jobs entrance: sources (mine / shared /
+//                public), a spec → plan → Run flow, and your jobs with their
+//                events. `?tab=jobs&job=<id>` opens one (the Runs list links here).
 // …plus a docked chat rail, grounded on DATA_KEY.
 //
 // Both were previously separate marketplace cards (lumid-data-lake +
@@ -22,8 +25,9 @@
 // branch. A rail beside the tabs, NOT a fourth tab, so the catalog you're
 // asking about stays on screen while you ask.
 
-import { lazy, Suspense, useState } from "react";
-import { Database, TableProperties, Terminal, TrendingUp } from "lucide-react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { Database, PlayCircle, TableProperties, Terminal, TrendingUp } from "lucide-react";
 import ChatRail from "@/components/ChatRail";
 import { DATA_KEY } from "@/components/StudioChat";
 import { cn } from "@/lib/utils";
@@ -32,8 +36,10 @@ const DataLakeViewer = lazy(() => import("@/components/app-surface/DataLakeViewe
 const DataAppBrowser = lazy(() => import("@/components/app-surface/DataAppBrowser"));
 const SqlConsole = lazy(() => import("@/components/app-surface/SqlConsole"));
 const PredictionMarketsBrowser = lazy(() => import("@/components/app-surface/PredictionMarketsBrowser"));
+const DataJobs = lazy(() => import("@/components/app-surface/DataJobs"));
 
-type Tab = "catalog" | "markets" | "explorer" | "query";
+type Tab = "catalog" | "markets" | "explorer" | "query" | "jobs";
+const TAB_IDS: Tab[] = ["catalog", "markets", "explorer", "query", "jobs"];
 const TABS: { id: Tab; label: string; icon: typeof Database }[] = [
 	{ id: "catalog", label: "Catalog", icon: Database },
 	// Polymarket + Kalshi by category — a dataset view, so it sits with Catalog
@@ -42,6 +48,8 @@ const TABS: { id: Tab; label: string; icon: typeof Database }[] = [
 	// Query runs ad-hoc SELECT through the same path chat's data_query uses.
 	// After Catalog on purpose: Catalog is how you find out what to query.
 	{ id: "query", label: "Query", icon: Terminal },
+	// Run work where the data is: sources, plan, Run, and your jobs.
+	{ id: "jobs", label: "Jobs", icon: PlayCircle },
 	// The raw data-app endpoint browser. Last and labelled as such: it lists
 	// HTTP routes, not datasets, and read as a second catalog when it sat
 	// second.
@@ -54,21 +62,42 @@ const TABS: { id: Tab; label: string; icon: typeof Database }[] = [
 const CHAT_OPEN_KEY = "studio_data_chat_open";
 
 export default function StudioData() {
-	const [tab, setTab] = useState<Tab>("catalog");
+	// `?tab=` and `?job=` are URL state so a run row can link straight to one
+	// job. Catalog stays the default and leaves the URL clean.
+	const [params, setParams] = useSearchParams();
+	const fromUrl = params.get("tab") as Tab | null;
+	const tab: Tab = fromUrl && TAB_IDS.includes(fromUrl) ? fromUrl : "catalog";
+	const jobId = tab === "jobs" ? params.get("job") : null;
 	// Mount a tab's component only once first opened, then keep it mounted
 	// (hidden) so switching back is instant and its state/cache survive.
-	const [seen, setSeen] = useState<Set<Tab>>(() => new Set<Tab>(["catalog"]));
+	const [seen, setSeen] = useState<Set<Tab>>(() => new Set<Tab>([tab]));
 	const open = (id: Tab) => {
-		setTab(id);
+		const sp = new URLSearchParams(params);
+		if (id === "catalog") sp.delete("tab"); else sp.set("tab", id);
+		if (id !== "jobs") sp.delete("job");
+		setParams(sp, { replace: true });
 		setSeen((s) => (s.has(id) ? s : new Set(s).add(id)));
 	};
+	const setJob = (id: string | null) => {
+		const sp = new URLSearchParams(params);
+		sp.set("tab", "jobs");
+		if (id) sp.set("job", id); else sp.delete("job");
+		setParams(sp, { replace: !id });
+	};
+	// A tab opened by URL (back/forward, a link) mounts too, and on a narrow
+	// screen its label scrolls into view (the strip scrolls sideways).
+	const tablist = useRef<HTMLDivElement>(null);
+	useEffect(() => {
+		setSeen((s) => (s.has(tab) ? s : new Set(s).add(tab)));
+		tablist.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
+	}, [tab]);
 	return (
 		<div className="flex flex-1 min-h-0 h-full">
 			{/* LEFT — tabs + the surface they select. */}
-			<div className="flex-1 min-w-0 flex flex-col min-h-0 border-r border-border px-6 py-6">
+			<div className="flex-1 min-w-0 flex flex-col min-h-0 border-r border-border px-4 py-5 sm:px-6 sm:py-6">
 				{/* Lumen: underline tabs, the same as the Library — these switch
 				    VIEWS, so they read as navigation, not as a row of buttons. */}
-				<div role="tablist" aria-label="Data views" className="flex items-center gap-6 mb-5 border-b border-border">
+				<div ref={tablist} role="tablist" aria-label="Data views" className="flex items-center gap-6 mb-5 border-b border-border overflow-x-auto">
 					{TABS.map(({ id, label, icon: Icon }) => (
 						<button
 							key={id}
@@ -76,7 +105,7 @@ export default function StudioData() {
 							aria-selected={tab === id}
 							onClick={() => open(id)}
 							className={cn(
-								"relative -mb-px inline-flex items-center gap-1.5 border-b-2 pb-2.5 text-body font-medium transition-colors duration-180",
+								"relative -mb-px inline-flex shrink-0 items-center gap-1.5 border-b-2 pb-2.5 text-body font-medium transition-colors duration-180",
 								tab === id
 									? "border-gold-500 text-ink-900"
 									: "border-transparent text-ink-600 hover:text-ink-900 hover:border-ink-300",
@@ -102,6 +131,9 @@ export default function StudioData() {
 						</div>
 						<div className={tab === "query" ? "h-full" : "hidden"}>
 							{seen.has("query") && <SqlConsole />}
+						</div>
+						<div className={tab === "jobs" ? "h-full" : "hidden"}>
+							{seen.has("jobs") && <DataJobs jobId={jobId} onJobChange={setJob} />}
 						</div>
 					</Suspense>
 				</div>

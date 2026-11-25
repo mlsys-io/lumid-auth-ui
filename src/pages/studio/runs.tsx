@@ -20,6 +20,7 @@ import { appTitle } from "@/components/workflow/AppCard";
 import { TONES } from "@/lib/tones";
 import { runStatus, runStatusTitle, RUN_STATUS_LABEL, RUN_STATUS_TONE } from "@/lib/runStatus";
 import { runRowHref } from "@/lib/run-routes";
+import { jobsSourceNotice } from "@/lib/data-jobs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
@@ -56,7 +57,7 @@ export default function StudioRuns() {
 	const setWindowDays = (n: number) => setParam("days", n === DEFAULT_DAYS ? null : String(n));
 	const appFilter = params.get("app") || "";
 
-	const { runs, err, asOf, reload, truncated } = useRunsFeed(windowDays, view === "index" ? "" : stateFilter);
+	const { runs, err, asOf, reload, truncated, jobsSource } = useRunsFeed(windowDays, view === "index" ? "" : stateFilter);
 	const entrance = useOncePerSession("activity");
 
 	const windowControl = (
@@ -100,6 +101,9 @@ export default function StudioRuns() {
 							Only {appTitle(appFilter)} <X className="w-3 h-3" aria-label="clear" />
 						</button>
 					</div>
+				)}
+				{jobsSourceNotice(jobsSource) && (
+					<p role="status" className="mb-4 -mt-1 text-meta text-ink-600">{jobsSourceNotice(jobsSource)}</p>
 				)}
 				{runs === null && !err ? (
 					<div className="space-y-3" role="status" aria-label="Loading activity">
