@@ -21,12 +21,13 @@ import BestScoreChart from "@/components/research/BestScoreChart";
 import VersionChain from "@/components/research/VersionChain";
 import { buildEvolution } from "@/lib/evolution";
 import ApprovalCard, { readNotNow, writeNotNow } from "@/components/research/ApprovalCard";
+import { useWorkflowColors } from "@/hooks/useWorkflowColors";
 import Space3D from "@/components/research/Space3D";
 import RunVersions from "@/components/research/RunVersions";
 import YourCall from "@/components/research/YourCall";
 import {
-	buildResearchTree, comparabilityNote, criteriaInWords, experimentStatus, humanId, mapSummary, pathTo, versionsOf,
-	type MapNode, type Proposal, type Tone, type VersionInfo,
+	buildResearchTree, comparabilityNote, criteriaInWords, experimentLoop, experimentStatus, humanId, mapSummary, pathTo, versionsOf,
+	type MapEdge, type MapNode, type Proposal, type Tone, type VersionInfo,
 	shortStatus,
 } from "@/lib/research-map";
 import { humanMetric, fmtMetricValue } from "@/lib/run-answer";
@@ -178,11 +179,13 @@ const VERSION_DOT: Record<string, string> = {
 	trying: "bg-plum-400", "can't tell apart": "bg-plum-300", "not run yet": "bg-card border border-dashed border-plum-400",
 };
 
-function Dot({ size, className, label, labelClass, sub, subClass, rings, orb = true, panel }: { size: number; className: string; label: string; labelClass: string; sub?: string; subClass?: string; rings?: boolean | "live";
+function Dot({ size, className, label, labelClass, sub, subClass, rings, orb = true, panel, ringClass, panelClass }: { size: number; className: string; label: string; labelClass: string; sub?: string; subClass?: string; rings?: boolean | "live";
 	/** Shade it as a small lit sphere (off for hollow dots). */
 	orb?: boolean;
 	/** A small overview panel in place of the bare label (first-level nodes). */
-	panel?: React.ReactNode }) {
+	panel?: React.ReactNode;
+	/** Ring colour (the workflow behind an experiment); default plum. */
+	ringClass?: string; panelClass?: string }) {
 	return (
 		<span className="relative flex items-center justify-center" style={{ width: Math.max(18, size + 8), height: Math.max(18, size + 8) }}>
 			{rings && (
@@ -197,9 +200,9 @@ function Dot({ size, className, label, labelClass, sub, subClass, rings, orb = t
 					</>}
 				</>
 			)}
-			<span className={cn("rounded-full ring-[3px] ring-plum-200/60", orb && "space3d-orb", className)} style={{ width: size, height: size }} />
+			<span className={cn("rounded-full ring-[3px] ring-plum-200/60", ringClass, orb && "space3d-orb", className)} style={{ width: size, height: size }} />
 			{panel ? (
-				<span className="absolute left-full ml-1.5 flex flex-col leading-tight space3d-label space3d-panel">{panel}</span>
+				<span className={cn("absolute left-full ml-1.5 flex flex-col leading-tight space3d-label space3d-panel", panelClass)}>{panel}</span>
 			) : (
 				<span className="absolute left-full ml-1 flex flex-col leading-tight space3d-label">
 					<span className={cn("whitespace-nowrap max-w-[13rem] truncate", labelClass)}>{label}</span>
@@ -284,6 +287,13 @@ function MapCanvas({ app, exps, proposals, selected, onSelect, grow, insetBottom
 		const p = propById.get(n.ref);
 		return p ? <SuggestedCard3D p={p} selected={st.selected} /> : null;
 	}, [app, running, exps.length, expById, propById, versionOf, feedsOf]);
+	// Each workflow's colour (sidebar bar = map branch = running box).
+	const colorOf = useWorkflowColors();
+	const edgeClass = useCallback((e: MapEdge) => {
+		if (!e.target.startsWith("exp:")) return undefined;
+		const x = expById.get(e.target.slice(4));
+		return x ? colorOf(app, experimentLoop(x))?.stroke : undefined;
+	}, [app, expById, colorOf]);
 	const renderDot = useCallback((n: MapNode) => {
 		if (n.kind === "app") return <Dot size={14} rings={running ? "live" : true} className="bg-plum-600" label={appTitle(app)} labelClass="text-meta font-semibold text-ink-900"
 			sub={`${exps.length} experiment${exps.length === 1 ? "" : "s"}${running ? " · running now" : ""}`} />;
@@ -309,7 +319,9 @@ function MapCanvas({ app, exps, proposals, selected, onSelect, grow, insetBottom
 					)}
 				</>
 			);
-			return <Dot size={10} className={st?.tone === "failing" ? "bg-brick-500" : "bg-plum-500"} label={e ? humanId(e.id) : n.ref} labelClass="text-caption font-medium text-ink-900" panel={panel} />;
+			const sw = e ? colorOf(app, experimentLoop(e)) : null;
+			return <Dot size={10} className={st?.tone === "failing" ? "bg-brick-500" : "bg-plum-500"} label={e ? humanId(e.id) : n.ref} labelClass="text-caption font-medium text-ink-900" panel={panel}
+				ringClass={sw?.ring} panelClass={sw ? cn("border-l-[3px]", sw.border) : undefined} />;
 		}
 		if (n.kind === "version") {
 			const v = versionOf(n.id);
@@ -323,7 +335,7 @@ function MapCanvas({ app, exps, proposals, selected, onSelect, grow, insetBottom
 				sub="workflow" subClass="text-lagoon-700" />;
 		}
 		return <Dot size={8} orb={false} className="bg-card border border-dashed border-gold-500" label={`Suggested: ${humanId(n.ref)}`} labelClass="text-micro text-gold-700" />;
-	}, [app, running, expById, versionOf, exps.length, feedsOf]);
+	}, [app, running, expById, versionOf, exps.length, feedsOf, colorOf]);
 	// The space fits the screen: what's above it (header, the app's pages,
 	// compute) and the approval card under it stay on the first screen.
 	const vh = useViewportHeight();
@@ -331,7 +343,7 @@ function MapCanvas({ app, exps, proposals, selected, onSelect, grow, insetBottom
 	const fit = Math.round(Math.max(320, Math.min(600, vh - (proposals.length ? 470 : 400), 240 + tree.nodes.length * 16)));
 	const height = tall ? Math.max(fit, 600) : fit;
 	return (
-		<Space3D nodes={tree.nodes} edges={tree.edges} renderCard={renderCard} renderDot={renderDot} describe={describe}
+		<Space3D nodes={tree.nodes} edges={tree.edges} renderCard={renderCard} renderDot={renderDot} describe={describe} edgeClass={edgeClass}
 			selected={selected} lit={lit} grow={grow} order={order} height={height} evidence={evidence} insetBottom={insetBottom} insetRight={insetRight}
 			// A workflow node opens that workflow; everything else selects in place.
 			onSelect={(id) => (id?.startsWith("wf:") ? navigate(workflowPath(app, id.slice(3))) : onSelect(id))} />

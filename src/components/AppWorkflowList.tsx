@@ -14,6 +14,7 @@ import { appTitle } from "@/components/workflow/AppCard";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useStudioRefetch } from "@/hooks/useStudioRefetch";
 import { deleteWorkflow } from "@/lib/delete-workflow";
+import { useWorkflowColors } from "@/hooks/useWorkflowColors";
 import { workflowPath } from "@/lib/run-routes";
 import { describeSchedule } from "@/lib/schedule";
 import { TONES, workflowTone } from "@/lib/tones";
@@ -41,6 +42,7 @@ function loopOf(w: MeWorkflowRow): string {
 export default function AppWorkflowList({ app }: { app: string }) {
 	const location = useLocation();
 	const navigate = useNavigate();
+	const colorOf = useWorkflowColors();
 	const [rows, setRows] = useState<MeWorkflowRow[] | null>(null);
 	const [tick, setTick] = useState(0);
 	useEffect(() => {
@@ -78,6 +80,8 @@ export default function AppWorkflowList({ app }: { app: string }) {
 				};
 				return (
 					<div key={w.slug} className="group/wf relative">
+						{/* The workflow's colour — the same on the map's branches and running boxes. */}
+						{colorOf(app, loop) && <span aria-hidden className={cn("absolute -left-[9px] top-1.5 bottom-1.5 w-[3px] rounded-full", colorOf(app, loop)!.bar)} />}
 						<Link to={workflowPath(app, loop)} aria-current={on ? "page" : undefined}
 							title={`${label} — ${describeSchedule(w.trigger)}${w.enabled === false ? " · paused" : ""}`}
 							className={cn("flex items-center gap-2 rounded-md py-1 pl-2 pr-7 text-caption transition-colors min-w-0",

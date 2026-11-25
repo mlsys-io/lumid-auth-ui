@@ -38,6 +38,7 @@ import { cn } from "@/lib/utils";
 import { dataJobs } from "@/api/dataJobs";
 import { jobElapsedS, jobStatusLabel, type Job } from "@/lib/data-jobs";
 import { fleet, type FleetJob } from "@/api/fleet";
+import { useWorkflowColors } from "@/hooks/useWorkflowColors";
 
 const FEED_DAYS = 1;
 const JOBS_POLL_MS = 15_000;
@@ -136,14 +137,17 @@ function minsAgo(sec: number, now: number): string {
 	return m < 1 ? "just now" : m < 60 ? `${m} min ago` : `${Math.floor(m / 60)} h ${m % 60} min ago`;
 }
 
-function Tile({ to, label, startedAt, now, live, title, action, cells, late }: {
+function Tile({ to, label, startedAt, now, live, title, action, cells, late, bar }: {
 	to: string; label: string; startedAt: number; now: number; live: boolean;
 	title: React.ReactNode; action: React.ReactNode; cells: React.ReactNode; late?: boolean;
+	/** The workflow's colour (as on its sidebar row and map branch). */
+	bar?: string;
 }) {
 	return (
 		<Link to={to} aria-label={label} data-tile="run"
-			className={cn("group flex h-[118px] min-w-0 flex-col rounded-lg border bg-card px-2.5 pb-2 pt-1.5 shadow-e1 animate-lumen-rise transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:shadow-e2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+			className={cn("group relative flex h-[118px] min-w-0 flex-col overflow-hidden rounded-lg border bg-card px-2.5 pb-2 pt-1.5 shadow-e1 animate-lumen-rise transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:shadow-e2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
 				late ? "border-ember-200" : "border-ink-200 hover:border-lagoon-300")}>
+			{bar && <span aria-hidden className={cn("absolute inset-y-0 left-0 w-[3px]", bar)} />}
 			<div className="flex items-center gap-1.5 font-mono text-nano tabular-nums text-ink-600">
 				<span className={cn("h-1.5 w-1.5 flex-shrink-0 rounded-full", late ? "bg-ember-500" : "bg-lagoon-500", live && "animate-lumen-breathe")} aria-hidden />
 				<span className="text-ink-800">{hhmm(startedAt)}</span>
@@ -188,6 +192,7 @@ function StepCells({ est }: { est: StepEstimate }) {
 
 function RunTile({ item, now, showApp }: { item: RunningItem; now: number; showApp: boolean }) {
 	const { run, wf } = item;
+	const colorOf = useWorkflowColors();
 	const startedAt = run.started_at || now;
 	const elapsed = Math.max(0, now - startedAt);
 	const p = progressOf(elapsed, wf.typicalS);
@@ -197,7 +202,7 @@ function RunTile({ item, now, showApp }: { item: RunningItem; now: number; showA
 	const wfName = loopLabel(wf.name, wf.loop);
 	const doing = est?.now && !est.beyond ? est.now.name : "Running";
 	return (
-		<Tile to={runRowHref(run.run_id)} startedAt={startedAt} now={now} live late={late}
+		<Tile to={runRowHref(run.run_id)} startedAt={startedAt} now={now} live late={late} bar={colorOf(wf.app, wf.loop)?.bar}
 			label={`${showApp ? appTitle(wf.app) + ", " : ""}${wfName} — running for ${fmtDuration(elapsed)}`}
 			title={<>{wfName}{showApp && <span className="font-normal text-ink-600"> · {appTitle(wf.app)}</span>}</>}
 			action={late

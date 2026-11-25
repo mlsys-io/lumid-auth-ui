@@ -1314,7 +1314,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 									// same left edge as the map and Compute above it.
 									<div className="-mx-6 -my-5">
 										<Suspense fallback={<div className="px-5 py-8"><Skeleton lines={4} /></div>}>
-											<AppSurface app={app} embedded={embedded} inlineChrome hideNav={atHome && (identity?.nav?.length ?? 0) > 1} surface={params.get("surface") || undefined} />
+											<AppSurface app={app} embedded={embedded} inlineChrome hideNav={atHome && (identity?.nav?.length ?? 0) >= 1} surface={params.get("surface") || undefined} />
 										</Suspense>
 									</div>
 								) : APP_OVERVIEW_MD[app] ? (

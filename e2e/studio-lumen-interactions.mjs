@@ -381,7 +381,7 @@ await section('research map', async () => {
 	await appr.waitFor({ timeout: 8000 }).catch(() => {});
 	if (await appr.count()) {
 		const t = await appr.innerText();
-		assert(/Try:/.test(t) && /Cost:/.test(t) && /Go ahead/.test(t) && /Not now/.test(t), 'approval card: Try / Cost / Go ahead / Not now');
+		assert(/Try:/.test(t) && /Cost:/.test(t) && /Go ahead/.test(t) && /Snooze/.test(t) && /Help me decide/.test(t), 'approval card: Try / Cost / Snooze / Help me decide / Go ahead');
 	} else note('no suggestions on this app — approval card not exercised');
 	await page.close();
 });
