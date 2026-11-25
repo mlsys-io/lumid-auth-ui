@@ -9,6 +9,7 @@
 // Data never moves: only catalog metadata and a CAPPED sample (via /retrieve → a
 // small materialized blob) ever cross the wire. Bulk export is a deferred phase.
 
+import { sampleColumns } from "@/lib/table-columns";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
@@ -132,12 +133,8 @@ function GenericTable({ rows }: { rows: Record<string, unknown>[] }) {
   if (!rows.length) {
     return <div className="text-caption text-ink-600 p-4">No rows.</div>;
   }
-  const cols = Array.from(
-    rows.slice(0, 100).reduce((s: Set<string>, r) => {
-      if (r && typeof r === "object") Object.keys(r).forEach((k) => s.add(k));
-      return s;
-    }, new Set<string>()),
-  ).slice(0, 20);
+  // Every column, lead ones first (lib/table-columns.ts) — never a silent cap.
+  const cols = sampleColumns(rows);
   const cell = (v: unknown) =>
     v == null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
   return (

@@ -123,6 +123,23 @@ async function send(basePath: string, path: string, init?: RequestInit): Promise
   return r;
 }
 
+/** Ask one store's data agent a question; the raw SSE body (lib/ask-data parses it). */
+export async function askAgentRaw(basePath: string, question: string): Promise<string> {
+  const r = await send(basePath, "/agent/v1", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messages: [{ role: "user", content: question }], max_iterations: 8 }),
+  });
+  return r.text();
+}
+
+/** The rows an answer materialized (`result.materialized_uri`, owner-only), as text. */
+export async function fetchAnswerRows(basePath: string, uri: string): Promise<string> {
+  if (!uri.startsWith("/blobs/")) throw new Error("unexpected result location");
+  const r = await send(basePath, uri);
+  return r.text();
+}
+
 async function call<T>(basePath: string, path: string, init?: RequestInit): Promise<T> {
   const r = await send(basePath, path, init);
   const ct = r.headers.get("content-type") ?? "";

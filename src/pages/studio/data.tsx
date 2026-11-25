@@ -28,7 +28,7 @@
 
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Database, TableProperties, Terminal } from "lucide-react";
+import { Database, Sparkles, TableProperties } from "lucide-react";
 import ChatRail from "@/components/ChatRail";
 import RunningNow from "@/components/RunningNow";
 import { DATA_KEY } from "@/components/StudioChat";
@@ -36,7 +36,7 @@ import { cn } from "@/lib/utils";
 
 const DataLakeViewer = lazy(() => import("@/components/app-surface/DataLakeViewer"));
 const DataAppBrowser = lazy(() => import("@/components/app-surface/DataAppBrowser"));
-const SqlConsole = lazy(() => import("@/components/app-surface/SqlConsole"));
+const AskData = lazy(() => import("@/components/app-surface/AskData"));
 const DataJobs = lazy(() => import("@/components/app-surface/DataJobs"));
 
 type Tab = "catalog" | "explorer" | "query" | "jobs";
@@ -45,7 +45,9 @@ const TABS: { id: Tab; label: string; icon: typeof Database }[] = [
 	{ id: "catalog", label: "Catalog", icon: Database },
 	// Query runs ad-hoc SELECT through the same path chat's data_query uses.
 	// After Catalog on purpose: Catalog is how you find out what to query.
-	{ id: "query", label: "Query", icon: Terminal },
+	// "Ask" since 2026-11-25: a question in plain words, answered by the chosen
+	// store's data agent (AskData). The SQL console is folded inside it.
+	{ id: "query", label: "Ask", icon: Sparkles },
 	// No Jobs tab: people meet data when they set up a workflow, harvest its
 	// results, or inspect what's there — not by writing job specs. `?tab=jobs`
 	// still renders (old links), it just isn't advertised.
@@ -141,7 +143,7 @@ export default function StudioData() {
 							{seen.has("explorer") && <DataAppBrowser config={{ data_app: "findata", data_app_label: "FinData" }} />}
 						</div>
 						<div className={tab === "query" ? "h-full" : "hidden"}>
-							{seen.has("query") && <SqlConsole />}
+							{seen.has("query") && <AskData />}
 						</div>
 						<div className={tab === "jobs" ? "h-full" : "hidden"}>
 							{seen.has("jobs") && <DataJobs jobId={jobId} onJobChange={setJob} initialSource={source} onSourceUsed={clearSource} />}
