@@ -180,12 +180,22 @@ function Dot({ size, className, label, labelClass, rings }: { size: number; clas
 				</>
 			)}
 			<span className={cn("rounded-full shadow-e1", className)} style={{ width: size, height: size }} />
-			<span className={cn("absolute left-full ml-1 whitespace-nowrap space3d-label", labelClass)}>{label}</span>
+			<span className={cn("absolute left-full ml-1 whitespace-nowrap max-w-[13rem] truncate space3d-label", labelClass)}>{label}</span>
 		</span>
 	);
 }
 
 // ── the map ───────────────────────────────────────────────────────────────
+
+function useViewportHeight(): number {
+	const [h, setH] = useState(() => (typeof window === "undefined" ? 900 : window.innerHeight));
+	useEffect(() => {
+		const on = () => setH(window.innerHeight);
+		window.addEventListener("resize", on);
+		return () => window.removeEventListener("resize", on);
+	}, []);
+	return h;
+}
 
 function MapCanvas({ app, exps, proposals, selected, onSelect, grow }: {
 	app: string; exps: MeExperiment[]; proposals: Proposal[];
@@ -234,7 +244,11 @@ function MapCanvas({ app, exps, proposals, selected, onSelect, grow }: {
 		}
 		return <Dot size={8} className="bg-card border border-dashed border-gold-500" label={`Suggested: ${humanId(n.ref)}`} labelClass="text-micro text-gold-700" />;
 	}, [app, running, expById, versionOf]);
-	const height = Math.max(420, Math.min(620, 300 + tree.nodes.length * 9));
+	// The space fits the screen: what's above it (header, the app's pages,
+	// compute) and the approval card under it stay on the first screen.
+	const vh = useViewportHeight();
+	// …and to what's in it: a two-experiment space doesn't need a tall stage.
+	const height = Math.round(Math.max(320, Math.min(600, vh - (proposals.length ? 520 : 400), 240 + tree.nodes.length * 16)));
 	return (
 		<Space3D nodes={tree.nodes} edges={tree.edges} renderCard={renderCard} renderDot={renderDot} describe={describe}
 			selected={selected} onSelect={onSelect} lit={lit} grow={grow} order={order} height={height} />

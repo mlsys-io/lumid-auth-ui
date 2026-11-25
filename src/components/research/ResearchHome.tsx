@@ -47,7 +47,7 @@ export default function ResearchHome({ app, pages }: { app: string; pages?: Arra
 			)}
 			{side ? (
 				<Suspense fallback={null}>
-					<ResearchMap app={app} aside={<Suspense fallback={null}><ComputePanel app={app} className="h-full overflow-y-auto" /></Suspense>} />
+					<ResearchMap app={app} aside={<Suspense fallback={null}><ComputePanel app={app} className="max-h-full overflow-y-auto" /></Suspense>} />
 				</Suspense>
 			) : (
 				<div className="space-y-3">

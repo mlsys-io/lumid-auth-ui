@@ -18,7 +18,10 @@ const GOLDEN = Math.PI * (3 - Math.sqrt(5));
 /** Perspective: focal length and camera distance, in layout units. */
 export const FOCAL = 900;
 export const DISTANCE = 1300;
-export const HOME: Camera = { yaw: 0.35, pitch: -0.26, zoom: 1, focusX: 0, focusY: 0 };
+// Looked at from a little higher than eye level (−0.45 rad ≈ 26°): the ring
+// of experiments opens into a disc instead of a flat band, so the space uses
+// the box's height, not only its width.
+export const HOME: Camera = { yaw: 0.35, pitch: -0.45, zoom: 1, focusX: 0, focusY: 0 };
 
 const v = (x: number, y: number, z: number): Vec3 => ({ x, y, z });
 const norm = (a: Vec3): Vec3 => { const l = Math.hypot(a.x, a.y, a.z) || 1; return v(a.x / l, a.y / l, a.z / l); };
@@ -139,6 +142,17 @@ export function frameCamera(points: Vec3[], cam: Camera, W: number, H: number, b
 	const zoom = Math.max(0.55, Math.min(1.6, Math.min(availW / spanW, availH / spanH)));
 	const cx = (minX + maxX) / 2 - W / 2, cyy = (minY + maxY) / 2 - H / 2;
 	return { ...cam, zoom, focusX: W / 2 - (W / 2 + cx * zoom), focusY: (box.top + bottom) / 2 - (H / 2 + cyy * zoom) };
+}
+
+/** The points as they sit at every eighth of a turn — frame these and the
+ *  idle rotation never carries a node out of the box (or leaves it half empty). */
+export function turnHull(points: Vec3[]): Vec3[] {
+	const out: Vec3[] = [];
+	for (let k = 0; k < 8; k++) {
+		const a = (k / 8) * 2 * Math.PI, c = Math.cos(a), sn = Math.sin(a);
+		for (const p of points) out.push({ x: p.x * c + p.z * sn, y: p.y, z: -p.x * sn + p.z * c });
+	}
+	return out;
 }
 
 export const easeInOutCubic = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);

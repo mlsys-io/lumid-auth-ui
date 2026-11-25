@@ -18,7 +18,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode }
 import { Minus, Plus, RotateCcw } from "lucide-react";
 import type { MapEdge, MapNode } from "@/lib/research-map";
 import {
-	AUTO_ROTATE_IDLE_MS, AUTO_ROTATE_RAD_PER_MS, DISTANCE, FOCAL, HOME, PITCH_LIMIT, depthCue, easeInOutCubic, frameCamera, layoutSpace, mixCamera, project,
+	AUTO_ROTATE_IDLE_MS, AUTO_ROTATE_RAD_PER_MS, DISTANCE, FOCAL, HOME, PITCH_LIMIT, depthCue, easeInOutCubic, frameCamera, layoutSpace, mixCamera, project, turnHull,
 	type Camera,
 } from "@/lib/space3d";
 import { cn } from "@/lib/utils";
@@ -45,6 +45,10 @@ export interface Space3DProps {
 	height: number;
 }
 
+// Framing for the whole space: dots are small, so the margin only has to
+// leave room for a label to the right of the outermost dot.
+const HOME_BOX = { top: 40, bottom: 0.95, margin: 80 };
+
 export default function Space3D({ nodes, edges, renderCard, renderDot, describe, selected, onSelect, lit, grow, order, height }: Space3DProps) {
 	// The node under the pointer (or keyboard focus) opens into its full card.
 	const [hovered, setHovered] = useState<string | null>(null);
@@ -52,6 +56,8 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 	const cardEls = useRef(new Map<string, HTMLElement>());
 	const edgeEls = useRef(new Map<string, SVGLineElement>());
 	const labelEls = useRef(new Map<string, SVGTextElement>());
+	// Each dot's label element and its unscaled size (text never changes).
+	const dotLabels = useRef(new Map<string, { el: HTMLElement; w: number; h: number }>());
 	const pos = useMemo(() => layoutSpace(nodes), [nodes]);
 	const reduced = useMemo(prefersReducedMotion, []);
 
@@ -73,7 +79,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		if (!el) return;
 		const ro = new ResizeObserver(([e]) => {
 			s.current.W = e.contentRect.width; s.current.H = e.contentRect.height;
-			if (!s.current.framed && s.current.W) { s.current.cam = frameCamera([...pos.values()], HOME, s.current.W, s.current.H, { top: 44, bottom: 0.93, margin: 130 }); s.current.framed = true; }
+			if (!s.current.framed && s.current.W) { s.current.cam = frameCamera(turnHull([...pos.values()]), HOME, s.current.W, s.current.H, HOME_BOX); s.current.framed = true; }
 			kick.current();
 		});
 		ro.observe(el);
@@ -91,7 +97,9 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		// its column of cards reads front-on — then frame the path.
 		const sel = selected ? pos.get(selected) : undefined;
 		const facing = sel && Math.hypot(sel.x, sel.z) > 1 ? { ...st.cam, yaw: Math.atan2(sel.z, sel.x) - 0.45, pitch: -0.18 } : { ...st.cam, pitch: HOME.pitch };
-		const to = frameCamera(pts, lit ? facing : { ...st.cam, pitch: HOME.pitch }, st.W, st.H, lit ? { top: 56, bottom: 0.9, margin: 110 } : { top: 44, bottom: 0.93, margin: 130 });
+		const to = lit
+			? frameCamera(pts, facing, st.W, st.H, { top: 56, bottom: 0.9, margin: 110 })
+			: frameCamera(turnHull(pts), { ...st.cam, pitch: HOME.pitch }, st.W, st.H, HOME_BOX);
 		if (reduced) st.cam = to; else st.tween = { from: { ...st.cam }, to, t0: performance.now(), dur: 700 };
 		st.lastInput = performance.now();
 		kick.current();
@@ -135,13 +143,17 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				// The selected card comes forward larger (Novix grows the picked label);
 				// everything off its path all but disappears.
 				const pick = n.id === selected ? 1.15 : 1;
-				const size = Math.max(0.5, Math.min(1, (p.scale / (FOCAL / DISTANCE)) * 0.9)) * (dim ? 0.92 : 1) * pick;
+				// A dot and its label stay readable however far the camera pulls back;
+				// open cards keep the full depth range.
+				const floor = el.dataset.full !== undefined ? 0.5 : 0.82;
+				const size = Math.max(floor, Math.min(1, (p.scale / (FOCAL / DISTANCE)) * 0.9)) * (dim ? 0.92 : 1) * pick;
 				el.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px) translate(-50%, -50%) scale(${(size * (0.9 + 0.1 * born)).toFixed(3)})`;
 				el.style.opacity = String(((dim ? 0.07 : lit ? Math.max(0.9, cue.alpha) : cue.alpha) * born).toFixed(3));
 				el.style.zIndex = String(n.id === selected ? 6000 : lit?.has(n.id) ? 5000 : el.dataset.full !== undefined ? 5500 : Math.round(3000 - p.depth));
 				el.style.filter = dim ? "blur(2.5px)" : cue.near < 0.2 ? "blur(0.5px)" : "none";
 				el.style.visibility = p.visible ? "visible" : "hidden";
 			}
+			declutter(proj);
 			for (const e of edges) {
 				const ln = edgeEls.current.get(e.id);
 				const a = proj.get(e.source), b = proj.get(e.target);
@@ -154,6 +166,41 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				ln.style.opacity = String(((lit ? (onPath ? 1 : 0.05) : 0.18 + 0.5 * cue.near) * born).toFixed(3));
 				const lb = labelEls.current.get(e.id);
 				if (lb) { lb.setAttribute("x", ((a.x + b.x) / 2).toFixed(1)); lb.setAttribute("y", ((a.y + b.y) / 2 - 6).toFixed(1)); }
+			}
+		};
+		// Labels that would collide are hidden, most important first: what's
+		// selected or under the pointer, the app, experiments, suggestions, then
+		// versions — and a version is labelled only while its experiment is
+		// hovered or on the selected path (the rest is texture, not text).
+		const rank = (n: MapNode) => (n.id === selected ? 0 : n.id === hovered ? 1 : lit?.has(n.id) ? 2 : n.depth === 0 ? 3 : n.kind === "experiment" ? 4 : n.kind === "suggested" ? 5 : 6);
+		const declutter = (proj: Map<string, ReturnType<typeof project>>) => {
+			const placed: Array<[number, number, number, number]> = [];
+			const hit = (b: [number, number, number, number]) => placed.some((q) => b[0] < q[2] && b[2] > q[0] && b[1] < q[3] && b[3] > q[1]);
+			const items = nodes
+				.map((n) => ({ n, p: proj.get(n.id), el: cardEls.current.get(n.id) }))
+				.filter((x) => x.p?.visible && x.el)
+				.sort((a, b) => rank(a.n) - rank(b.n) || a.p!.depth - b.p!.depth);
+			for (const { n, p, el } of items) {
+				const size = Number(/scale\(([\d.]+)\)/.exec(el!.style.transform)?.[1] ?? 1);
+				if (el!.dataset.full !== undefined) {
+					// An open card claims its own box; labels under it give way.
+					const w = el!.offsetWidth * size, h = el!.offsetHeight * size;
+					placed.push([p!.x - w / 2, p!.y - h / 2, p!.x + w / 2, p!.y + h / 2]);
+					continue;
+				}
+				let lab = dotLabels.current.get(n.id);
+				if (!lab || !lab.w) {
+					const le = el!.querySelector<HTMLElement>(".space3d-label");
+					if (!le) continue;
+					lab = { el: le, w: le.offsetWidth, h: le.offsetHeight };
+					dotLabels.current.set(n.id, lab);
+				}
+				const quiet = n.depth >= 2 && n.kind === "version" && !(lit?.has(n.id) || hovered === n.id || (n.parent && (hovered === n.parent || selected === n.parent)));
+				const off = !!lit && !lit.has(n.id);
+				const x0 = p!.x + 12 * size, b: [number, number, number, number] = [x0 - 2, p!.y - (lab.h * size) / 2 - 1, x0 + lab.w * size + 2, p!.y + (lab.h * size) / 2 + 1];
+				const show = !quiet && !off && !hit(b);
+				if (show) placed.push(b);
+				lab.el.style.opacity = show ? "" : "0";
 			}
 		};
 		kick.current = () => { if (!st.raf) st.raf = requestAnimationFrame(frame); };
@@ -173,7 +220,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 	const zoomBy = (f: number) => { const c = s.current.cam; s.current.cam = { ...c, zoom: Math.max(0.45, Math.min(2.2, c.zoom * f)) }; touch(); };
 	const reset = () => {
 		const st = s.current;
-		const to = frameCamera([...pos.values()], HOME, st.W, st.H, { top: 44, bottom: 0.93, margin: 130 });
+		const to = frameCamera(turnHull([...pos.values()]), HOME, st.W, st.H, HOME_BOX);
 		if (reduced) st.cam = to; else st.tween = { from: { ...st.cam }, to, t0: performance.now(), dur: 600 };
 		st.lastInput = performance.now();
 		onSelect(null);
