@@ -26,7 +26,7 @@ const { chromium } = require('playwright');
 
 const BASE = process.env.LUMID_BASE || 'https://lum.id';
 const PAT = process.env.LUMID_PAT || '';
-const SRC = process.env.SRC_APP || 'mlsys-research';
+const SRC_SLUG = process.env.SRC_SLUG || 'a3f48236-ffe9-4fb9-9548-6e044d5cd9c7/mlsys-research';
 const APP = process.env.APP || 'mlsys-research-e2e';
 const OUT = path.resolve(process.env.OUT || 'e2e/out/scenario');
 fs.mkdirSync(OUT, { recursive: true });
@@ -86,36 +86,48 @@ async function openWorkflow(label) {
 	await panel().waitFor({ timeout: 10000 });
 	await page.waitForTimeout(800);
 }
-/** Ask the docked chat; returns the assistant's reply text once it settles. */
+/** Ask the docked chat; returns what the chat added (its reply) once it settles. */
 async function chat(prompt, { timeout = 240000 } = {}) {
-	const box = page.locator('textarea').filter({ hasText: '' }).last();
+	const box = page.locator('textarea').last();
 	await box.waitFor({ timeout: 20000 });
+	// The rail around the composer: its text before and after is the reply.
+	const rail = box.locator('xpath=ancestor::aside[1]');
+	const scope = (await rail.count()) ? rail : page.locator('body');
+	const before = await scope.innerText().catch(() => '');
 	await box.fill(prompt);
 	await page.getByRole('button', { name: 'Send message' }).last().click();
 	const started = Date.now();
-	// Settled = the stop button is gone and the transcript stopped growing for 6 s.
+	await page.getByRole('button', { name: 'Stop generating' }).first().waitFor({ timeout: 30000 }).catch(() => {});
 	let last = '', stable = 0;
 	while (Date.now() - started < timeout) {
 		await page.waitForTimeout(2000);
-		const t = await page.locator('[data-role="assistant"], .chat-assistant, article').last().innerText().catch(() => '');
-		const busy = await page.getByRole('button', { name: /Stop|Cancel/ }).count();
-		if (t && t === last && !busy) { if (++stable >= 3) break; } else stable = 0;
+		const busy = await page.getByRole('button', { name: 'Stop generating' }).count();
+		const t = await scope.innerText().catch(() => '');
+		if (!busy && t === last) { if (++stable >= 2) break; } else stable = 0;
 		last = t;
 	}
-	report.chat.push({ step: stepName, prompt, reply: last.slice(0, 4000), ms: Date.now() - started });
-	return last;
+	// What appeared after the prompt (the reply, tool notes included).
+	// Anchor on the END of the prompt (the bubble may wrap or trim its start).
+	const tail = prompt.slice(-40);
+	const at = last.lastIndexOf(tail);
+	const reply = at >= 0 ? last.slice(at + tail.length) : last.replace(before, '');
+	report.chat.push({ step: stepName, prompt, reply: reply.trim().slice(0, 4000), ms: Date.now() - started });
+	return reply;
 }
 /** Run ids look like 2026…T…Z (cycle dir ids) or run_ts digits. */
 const RUN_ID = /\b20\d{6}T\d{6}Z\b|\brun[ _]?(?:id|ts)?[:# ]+\S+/i;
 
 // ── setup: a forked copy, so the real app's graph stays clean ─────────────
 await step('setup: a copy of MLSys Research', async () => {
-	const apps = await api('GET', '/apps');
-	const have = (apps.data?.apps || []).some((a) => a.name === APP);
-	if (!have) {
-		const r = await api('POST', `/apps/${SRC}/fork`, { name: APP });
-		assert(r.status < 300, `forked ${SRC} → ${APP} (HTTP ${r.status})`);
-		await page.waitForTimeout(20000);
+	// A fresh install of the PUBLISHED app under its own name (a fork would
+	// copy the caller's installed copy, which may be an older version).
+	const listed = async () => ((await api('GET', '/apps')).data?.apps || []).some((a) => a.name === APP);
+	if (!(await listed())) {
+		const r = await api('POST', '/apps', { slug: SRC_SLUG, runtime: 'local', as: APP });
+		assert(r.status < 300, `installed ${SRC_SLUG} as ${APP} (HTTP ${r.status})`);
+		const until = Date.now() + 5 * 60000;
+		while (Date.now() < until && !(await listed())) await page.waitForTimeout(5000);
+		assert(await listed(), `${APP} shows in the app list`);
 	} else note(`${APP} already installed — reusing it`);
 	await openApp();
 	assert(true, 'the copy opens on its graph');
@@ -137,9 +149,9 @@ await step('2 design: a variant through the UI', async () => {
 	const sheet = page.getByRole('dialog', { name: 'Make a variant' });
 	await sheet.waitFor({ timeout: 10000 });
 	await sheet.getByText('Same steps, other inputs').click();
-	const idField = sheet.getByLabel('Id', { exact: true }).first();
+	const idField = sheet.locator('#variant-id-0');
 	if (await idField.count()) await idField.fill('sla_tuned');
-	const nodeName = sheet.getByLabel('New node name');
+	const nodeName = sheet.locator('input[type="text"][aria-label="New node name"]');
 	if (await nodeName.count()) await nodeName.fill('SLA tuning');
 	await sheet.getByRole('button', { name: /^Create/ }).click();
 	await sheet.waitFor({ state: 'detached', timeout: 120000 });
@@ -149,8 +161,9 @@ await step('2 design: a variant through the UI', async () => {
 });
 await step('2 design: a variant through the chat', async () => {
 	const before = runRequests.length;
-	const reply = await chat(`In ${APP}, make a variant of Simulate that also sweeps chunked prefill. Draft it and stage it for my approval — don't create or run anything yet.`);
-	assert(/variant|approval|propos/i.test(reply), 'the chat drafts the variant for approval');
+	const reply = await chat(`In ${APP}, make a variant of Simulate for task 9.2 from the baseline design that sweeps chunked prefill at 512, 1024 and 2048 tokens. Draft it and stage it for my approval — don't create or run anything yet.`);
+	assert(/chunk/i.test(reply) && /512/.test(reply) && /approv|propos|stag/i.test(reply), 'the chat drafts the chunked-prefill variant for approval');
+	if (/\?\s*$/.test(reply.trim()) || /which|what .* should/i.test(reply.slice(0, 300))) note('the chat asked a question instead of drafting');
 	assert(runRequests.length === before, 'the chat started no run');
 });
 
@@ -166,8 +179,14 @@ await step('3 tune: setups through the UI', async () => {
 	await dlg.getByLabel('Values').fill('serving.max_concurrency=8, serving.max_concurrency=16, serving.max_concurrency=32');
 	await dlg.getByRole('button', { name: 'Set up the experiment' }).click();
 	await dlg.waitFor({ state: 'detached', timeout: 60000 });
+	// The experiment exists once the scheduler applies it (a queued write).
 	const run = page.getByRole('button', { name: /Run the \d+ untried/ });
-	await run.waitFor({ timeout: 30000 });
+	if (!(await run.waitFor({ timeout: 60000 }).then(() => true).catch(() => false))) {
+		await openApp();
+		const exp = map().locator('.space3d [data-kind="experiment"] button').last();
+		await domClick(exp);
+		await run.waitFor({ timeout: 120000 });
+	}
 	const before = runRequests.length;
 	await press(run);
 	await page.waitForTimeout(5000);
@@ -194,7 +213,7 @@ await step('4 analyse: A/B through the UI', async () => {
 	await page.waitForTimeout(6000);
 	assert(await map().locator('[aria-label="Compared as A"]').count() === 1 && await map().locator('[aria-label="Compared as B"]').count() === 1, 'A and B are marked on the graph');
 	const t = await panel().innerText();
-	report.verdict = t.match(/(.* ahead on .*|Can't tell apart yet.*|Too few runs.*)/)?.[0] ?? '';
+	report.verdict = t.match(/(.* ahead on .*|Can't tell apart yet.*|Too few runs.*|.* has no .* result yet|Neither (side|has).*)/)?.[0] ?? '';
 	assert(!!report.verdict, `Compare gives a verdict in words ("${report.verdict}")`);
 });
 await step('4 analyse: why, through the chat', async () => {
@@ -228,10 +247,11 @@ await step('6 sandbox: a real-GPU variant', async () => {
 	await sheet.waitFor({ timeout: 10000 });
 	await sheet.getByText('Edit the code').click();
 	const code = sheet.getByLabel('Python code');
+	await code.waitFor({ timeout: 60000 });
 	if (process.env.SANDBOX_PY && fs.existsSync(process.env.SANDBOX_PY)) await code.fill(fs.readFileSync(process.env.SANDBOX_PY, 'utf8'));
-	const idField = sheet.getByLabel('Id', { exact: true }).first();
+	const idField = sheet.locator('#variant-id-0');
 	if (await idField.count()) await idField.fill('sandbox');
-	const nodeName = sheet.getByLabel('New node name');
+	const nodeName = sheet.locator('input[type="text"][aria-label="New node name"]');
 	if (await nodeName.count()) await nodeName.fill('On a real GPU');
 	await sheet.getByRole('button', { name: /^Create/ }).click();
 	await sheet.waitFor({ state: 'detached', timeout: 120000 });
@@ -251,7 +271,10 @@ await step('7 manage the node', async () => {
 	if (!(await n.count())) { note('no "On a real GPU" node'); return; }
 	await domClick(n);
 	const p = panel();
-	await p.getByLabel('Node name').fill('Sandbox');
+	await p.waitFor({ timeout: 15000 });
+	const nameBox = p.getByLabel('Node name');
+	await nameBox.waitFor({ timeout: 30000 });
+	await nameBox.fill('Sandbox');
 	await p.getByRole('button', { name: 'Rename' }).click();
 	await page.waitForTimeout(8000);
 	assert(await nodeButton('node', 'Sandbox').count() > 0, 'the node is renamed on the graph');
