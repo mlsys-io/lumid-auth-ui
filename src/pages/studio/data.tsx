@@ -31,6 +31,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Database, PlayCircle, TableProperties, Terminal } from "lucide-react";
 import ChatRail from "@/components/ChatRail";
+import RunningNow from "@/components/RunningNow";
 import { DATA_KEY } from "@/components/StudioChat";
 import { cn } from "@/lib/utils";
 
@@ -151,7 +152,7 @@ export default function StudioData() {
 
 			{/* RIGHT — grounded chat (collapsible; auto-hidden on narrow, where it
 			    takes over full width when opened). Same rail as the app workspace. */}
-			<ChatRail groundApp={DATA_KEY} openKey={CHAT_OPEN_KEY} />
+			<ChatRail groundApp={DATA_KEY} openKey={CHAT_OPEN_KEY} top={<RunningNow runs={false} />} />
 		</div>
 	);
 }
