@@ -12,6 +12,7 @@
 // shared apps ("Healthy · ran 2d ago" next to an empty runs list) — when
 // the cycles list is empty this card says "Not run yet", full stop.
 
+import { appActivityAcrossLakes } from "@/api/dataLake";
 import { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -53,6 +54,7 @@ import type { MeExperiment } from "@/api/me";
 // Datasets the workflow works on — heavy (table/preview), so lazy-load it and
 // only mount when the Data tab is opened.
 const DatasetExplorer = lazy(() => import("@/components/workflow/DatasetExplorer"));
+const WarehouseActivity = lazy(() => import("@/components/workflow/WarehouseActivity"));
 const CasebookPanel = lazy(() => import("@/components/workflow/CasebookPanel"));
 const ExperimentsPanel = lazy(() => import("@/components/experiments/ExperimentsPanel"));
 const PromoteToExperiment = lazy(() => import("@/components/experiments/PromoteToExperiment"));
@@ -969,6 +971,7 @@ export default function WorkflowObservabilityPanel({
 							</div>
 							<div className="flex-1 min-h-0 overflow-y-auto p-2">
 								{assetTab === "data" ? (
+									<>
 									<Suspense fallback={<div className="flex items-center gap-2 text-xs text-ink-600 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading data…</div>}>
 										<CasebookPanel app={app} loop={loop} atTs={version?.runTs || version?.cycleTs}
 											onSelectCase={(c) => openCaseData(c)} selectedCaseId={caseFocus?.id || caseDataFocus?.id}
@@ -976,6 +979,14 @@ export default function WorkflowObservabilityPanel({
 											onContextMenuCase={(c, e) => { e.preventDefault(); setCaseMenu({ x: e.clientX, y: e.clientY, target: { kind: "case", caseId: c.id, label: c.label } }); }}
 											showMetrics={false} />
 									</Suspense>
+									{/* The warehouse tables this workflow reads and writes (recorded by
+									    the data services since 25 Nov), each opening in the catalog. */}
+									<div className="mt-3 pt-2 border-t border-ink-100">
+										<Foldable title="Warehouse tables" defaultOpen>
+											<Suspense fallback={null}><WarehouseActivity what="workflow" loadKey={`${app}:${loop}`} load={() => appActivityAcrossLakes(app, loop)} /></Suspense>
+										</Foldable>
+									</div>
+									</>
 								) : (
 									<div className="space-y-3 pt-1">
 										<Foldable title="Memory banks" defaultOpen>

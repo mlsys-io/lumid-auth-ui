@@ -11,6 +11,8 @@ import { Download, FileJson, FileText } from "lucide-react";
 import type { MeCycleDetail } from "@/api/me";
 import { runFiles, runOutputs, type RunFile } from "@/lib/run-answer";
 import RunChildren from "@/components/workflow/RunChildren";
+import WarehouseActivity from "@/components/workflow/WarehouseActivity";
+import { runActivityAcrossLakes } from "@/api/dataLake";
 import { cn } from "@/lib/utils";
 
 const MIME: Record<RunFile["type"], string> = { json: "application/json", md: "text/markdown", txt: "text/plain" };
@@ -50,7 +52,14 @@ function FileCard({ f, prefix }: { f: RunFile; prefix: string }) {
 	);
 }
 
-export default function RunOutputs({ detail, onFullOutput }: { detail: MeCycleDetail | null; onFullOutput?: () => void }) {
+/** The run store's full id ("scheduled:<app>:<loop>:<ts>"), which the data
+ *  services record activity under (LUMID_RUN_ID). */
+export function fullRunId(app: string, loop: string, ts: string, trigger?: string): string {
+	const kind = trigger && /manual|chat|hand|now/i.test(trigger) ? "manual" : "scheduled";
+	return `${kind}:${app}:${loop}:${ts}`;
+}
+
+export default function RunOutputs({ detail, onFullOutput, runRef }: { detail: MeCycleDetail | null; onFullOutput?: () => void; runRef?: { app: string; loop: string; ts: string; trigger?: string } }) {
 	const o = runOutputs(detail);
 	const files = runFiles(detail);
 	const jobs = detail?.compute_jobs ?? [];
@@ -90,6 +99,11 @@ export default function RunOutputs({ detail, onFullOutput }: { detail: MeCycleDe
 					)}
 					<RunChildren jobs={jobs} />
 				</>
+			)}
+			{/* Warehouse tables it wrote (and, folded, read) — each opens in the catalog. */}
+			{runRef && (
+				<WarehouseActivity what="run" loadKey={`${runRef.app}:${runRef.loop}:${runRef.ts}`}
+					load={() => runActivityAcrossLakes(fullRunId(runRef.app, runRef.loop, runRef.ts, runRef.trigger))} />
 			)}
 			{detail && onFullOutput && (
 				<button type="button" onClick={onFullOutput} className="text-micro text-ink-700 hover:text-ink-900 underline decoration-dotted">Full output</button>

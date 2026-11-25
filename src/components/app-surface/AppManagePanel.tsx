@@ -12,7 +12,7 @@
 // the marketplace's "Add to app…") rather than a bare yaml edit.
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { parseDocument, YAMLSeq } from "yaml";
 import { toast } from "sonner";
 import {
@@ -79,6 +79,14 @@ export default function AppManagePanel() {
 	const [saving, setSaving] = useState(false);
 	const [pickerOpen, setPickerOpen] = useState(false);
 	const [wfFormOpen, setWfFormOpen] = useState(false);
+	// ?new=1 — arrived from the workflow picker's "Fill in a form": open the
+	// New workflow form straight away (once), instead of a second click here.
+	const [params, setParams] = useSearchParams();
+	useEffect(() => {
+		if (params.get("new") !== "1") return;
+		setWfFormOpen(true);
+		const sp = new URLSearchParams(params); sp.delete("new"); setParams(sp, { replace: true });
+	}, [params, setParams]);
 
 	const reload = useCallback(() => {
 		me.appConfig(app)
@@ -603,7 +611,7 @@ function NewWorkflowDialog({
 						<CalendarClock className="w-4 h-4 text-gold-600" /> New workflow
 					</DialogTitle>
 					<DialogDescription className="text-meta">
-						A scheduled sequence of skill steps. It lands in this app&apos;s <code className="text-micro">xpcloud.yaml</code> and the scheduler picks it up automatically.
+						A job this app runs on a schedule: a few steps, in order. It&apos;s saved to the app&apos;s settings and starts on its own at the next scheduled time. Not sure what to put? Close this and describe it in the chat instead.
 					</DialogDescription>
 				</DialogHeader>
 				<div className="space-y-3">
@@ -636,7 +644,7 @@ function NewWorkflowDialog({
 						)}
 					</label>
 					<label className="block">
-						<span className="text-caption text-ink-600 block mb-1">Skill steps <span className="text-ink-600">(comma-separated, run in order)</span></span>
+						<span className="text-caption text-ink-600 block mb-1">Steps <span className="text-ink-600">— the skills it runs, in order, separated by commas</span></span>
 						<input
 							value={skillsText} onChange={(e) => setSkillsText(e.target.value)}
 							placeholder="observe/fetch, analyze/summarize"
