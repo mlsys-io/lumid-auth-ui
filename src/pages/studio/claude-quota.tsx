@@ -51,6 +51,7 @@ import {
 	type ClaudePoolMember,
 } from '@/api/super-admin';
 import { ink, gold, brick, lagoon, plum, chart } from "@/styles/palette";
+import { pauseState, pauseLabel, pauseExplain, pauseConfirmText } from '@/lib/claude-pause';
 
 const USER_USAGE_REFRESH_MS = 2 * 60 * 1000; // 2 min auto-refresh for per-user section
 
@@ -260,9 +261,13 @@ function AccountRow({
 	const [deleting,   setDeleting]   = useState(false);
 	const [pausing,    setPausing]    = useState(false);
 	const [pauseErr,   setPauseErr]   = useState('');
+	// The server's single-sibling warning: the pause was accepted, but it holds
+	// only while the one remaining account has room.
+	const [pauseWarn,  setPauseWarn]  = useState('');
 	const [movingPool, setMovingPool] = useState(false);
 	const [poolErr,    setPoolErr]    = useState('');
 	const paused = !!acc.draining_since;
+	const pause = pauseState(acc);
 
 	async function handlePoolChange(newPoolId: string) {
 		if (newPoolId === (acc.pool_id || 'default')) return;
@@ -284,15 +289,19 @@ function AccountRow({
 	async function togglePause() {
 		// Spell out the semantics: "pause" reads as "kill", and an operator who
 		// thinks this disconnects people will never use it — or will use it and
-		// panic. The one thing they need to know is that nobody is cut off.
+		// panic. Nobody is refused. Live conversations move after a short grace
+		// (the old text promised they never move, which stopped being true once
+		// the grace was bounded).
 		const msg = paused
 			? `Resume ${acc.email}? It starts taking new sessions again on the next placement tick.`
-			: `Pause ${acc.email}?\n\nIt stops taking NEW sessions immediately. Conversations already on it finish normally — nobody is disconnected and no session is moved between subscriptions.\n\nUsers drift off as they go idle; that drift is the transfer.`;
+			: pauseConfirmText(acc.email);
 		if (!window.confirm(msg)) return;
 		setPausing(true);
 		setPauseErr('');
+		setPauseWarn('');
 		try {
-			await adminSetClaudeAccountDrain(acc.email, !paused, paused ? '' : 'paused from /code');
+			const res = await adminSetClaudeAccountDrain(acc.email, !paused, paused ? '' : 'paused from /code');
+			if (!paused && res.warning) setPauseWarn(res.warning);
 			onChanged();
 		} catch (e) {
 			// Surfaced inline, like ResetWindowButtons: an operator who believes
@@ -358,16 +367,23 @@ function AccountRow({
 			    still serving the people on it — it is winding down on purpose. */}
 			{paused && (
 				<span
-					className="shrink-0 rounded-full bg-ember-50 border border-ember-200 px-1.5 py-0.5 text-nano font-medium text-ember-700"
+					className={pause.kind === 'overridden'
+						? 'shrink-0 flex items-center gap-1 rounded-full bg-brick-50 border border-brick-200 px-1.5 py-0.5 text-nano font-medium text-brick-700'
+						: 'shrink-0 rounded-full bg-ember-50 border border-ember-200 px-1.5 py-0.5 text-nano font-medium text-ember-700'}
 					title={
 						`PAUSED by an operator${acc.drain_reason ? ` — ${acc.drain_reason}` : ''}\n` +
 						`since ${acc.draining_since}\n\n` +
-						`Takes no new sessions. Conversations already on it are still being served and ` +
-						`finish normally; users move off as they go idle. Unlike a bench this never ` +
-						`expires — it clears only when someone resumes it.`
+						pauseExplain(pause) +
+						`\n\nUnlike a bench this never expires — it clears only when someone resumes it.`
 					}
 				>
-					paused
+					{pause.kind === 'overridden' && <AlertTriangle className="w-3 h-3" aria-hidden />}
+					{pauseLabel(pause)}
+				</span>
+			)}
+			{pauseWarn && (
+				<span className="shrink-0 max-w-72 truncate text-nano text-ember-700" title={pauseWarn}>
+					{pauseWarn}
 				</span>
 			)}
 
