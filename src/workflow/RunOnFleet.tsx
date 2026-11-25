@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Play, Square } from "lucide-react";
 import { fleet, type FleetJob, type FleetStatus } from "@/api/fleet";
+import { DEFAULT_RUN_SITE, RUN_SITES, isRunSite, runSiteNote, type RunSite } from "@/lib/run-site";
 
 const POLL_MS = 4000;
 
@@ -25,6 +26,9 @@ export default function RunOnFleet({
 	yaml, format, disabled, className,
 }: { yaml: string; format: "flowmesh" | "lumilake"; disabled?: boolean; className: string }) {
 	const [phase, setPhase] = useState<"idle" | "validating" | "starting">("idle");
+	// Where it runs. Each site has its own FlowMesh and Lumilake; the Lumid Data
+	// hub is at home, so this is "next to the data, or not" (lib/run-site.ts).
+	const [site, setSite] = useState<RunSite>(DEFAULT_RUN_SITE);
 	const [job, setJob] = useState<FleetJob | null>(null);
 	const [problem, setProblem] = useState<string | null>(null);
 	// Why the run failed: the failing step and its error, so a user's own
@@ -56,9 +60,9 @@ export default function RunOnFleet({
 		setJob(null);
 		try {
 			setPhase("validating");
-			await fleet.validate({ workflow: yaml, format });
+			await fleet.validate({ workflow: yaml, format, site });
 			setPhase("starting");
-			const started = await fleet.run({ workflow: yaml, format });
+			const started = await fleet.run({ workflow: yaml, format, site });
 			setJob(started);
 			if (!started.terminal) follow(started.id);
 		} catch (e) {
@@ -81,6 +85,17 @@ export default function RunOnFleet({
 	const live = job && !job.terminal;
 	return (
 		<div className="flex items-center gap-1.5">
+			<label className="flex items-center gap-1 text-nano text-ink-600">
+				Run at
+				<select
+					value={site}
+					disabled={busy || !!live}
+					onChange={(e) => isRunSite(e.target.value) && setSite(e.target.value)}
+					className="text-micro bg-card border border-ink-200 rounded-md px-1 py-0.5 text-ink-700"
+				>
+					{RUN_SITES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+				</select>
+			</label>
 			<button
 				type="button"
 				className={className}
@@ -109,6 +124,9 @@ export default function RunOnFleet({
 				<span className="max-w-[28rem] truncate font-mono text-nano text-brick-600" title={failure}>
 					{failure}
 				</span>
+			)}
+			{!job && !problem && (
+				<span className="max-w-[22rem] truncate text-nano text-ink-600">{runSiteNote(site)}</span>
 			)}
 			{problem && (
 				<span className="max-w-[28rem] truncate text-nano text-brick-600" title={problem}>
