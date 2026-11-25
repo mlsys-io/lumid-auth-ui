@@ -33,6 +33,7 @@ import { run as runRunSiteChecks, caseCount as runSiteCaseCount } from "@/lib/ru
 import { run as runRunImagesChecks, caseCount as runImagesCaseCount } from "@/lib/run-images.test";
 import { run as runFleetResultChecks, caseCount as fleetResultCaseCount } from "@/lib/fleet-result.test";
 import { run as runAskDataChecks, caseCount as askDataCaseCount } from "@/lib/ask-data.test";
+import { run as runRunFilesChecks, caseCount as runFilesCaseCount } from "@/lib/run-files.test";
 import { run as runTableColumnsChecks, caseCount as tableColumnsCaseCount } from "@/lib/table-columns.test";
 import { run as runReturnToChecks, caseCount as returnToCaseCount } from "@/lib/return-to.test";
 import { run as runActivityChecks, caseCount as activityCaseCount } from "@/lib/activity.test";
@@ -373,7 +374,7 @@ check("isEmptyLoop is true only when nothing is declared", () => {
 export function run(): number {
 	// The document round-trip suite runs in the same process — it is the
 	// invariant everything else is built on, so it must never be skippable.
-	let failed = runDocChecks() + runEditChecks() + runFmChecks() + runXpioChecks() + runImportChecks() + runCycleIdChecks() + runAwaitChecks() + runRunStatusChecks() + runRouteChecks() + runFleetProvChecks() + runChunkChecks() + runSandboxChecks() + runDataLakeChecks() + runDataActivityChecks() + runRunSiteChecks() + runRunImagesChecks() + runFleetResultChecks() + runAskDataChecks() + runTableColumnsChecks() + runDataJobsChecks() + runReturnToChecks() + runActivityChecks() + runRunAnswerChecks() + runResearchMapChecks() + runTimelineChecks() + runEvolutionChecks() + runModelLabelChecks() + runSpaceChecks() + runComputeChecks() + runPauseChecks();
+	let failed = runDocChecks() + runEditChecks() + runFmChecks() + runXpioChecks() + runImportChecks() + runCycleIdChecks() + runAwaitChecks() + runRunStatusChecks() + runRouteChecks() + runFleetProvChecks() + runChunkChecks() + runSandboxChecks() + runDataLakeChecks() + runDataActivityChecks() + runRunSiteChecks() + runRunImagesChecks() + runFleetResultChecks() + runAskDataChecks() + runRunFilesChecks() + runTableColumnsChecks() + runDataJobsChecks() + runReturnToChecks() + runActivityChecks() + runRunAnswerChecks() + runResearchMapChecks() + runTimelineChecks() + runEvolutionChecks() + runModelLabelChecks() + runSpaceChecks() + runComputeChecks() + runPauseChecks();
 	for (const c of checks) {
 		try {
 			c.run();
@@ -398,10 +399,10 @@ if (typeof describe === "function" && typeof it === "function") {
 	const proc = (globalThis as { process?: { exitCode?: number } }).process;
 	if (failed > 0) {
 		// eslint-disable-next-line no-console
-		console.error(`${failed} of ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount + cycleIdCaseCount + awaitCaseCount + runStatusCaseCount + routeCaseCount + fleetProvCaseCount + chunkCaseCount + sandboxCaseCount + dataLakeCaseCount + dataActivityCaseCount + runSiteCaseCount + runImagesCaseCount + fleetResultCaseCount + askDataCaseCount + tableColumnsCaseCount + dataJobsCaseCount + returnToCaseCount + activityCaseCount + runAnswerCaseCount + researchMapCaseCount + timelineCaseCount + evolutionCaseCount + modelLabelCaseCount + spaceCaseCount + computeCaseCount + pauseCaseCount} case(s) failed`);
+		console.error(`${failed} of ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount + cycleIdCaseCount + awaitCaseCount + runStatusCaseCount + routeCaseCount + fleetProvCaseCount + chunkCaseCount + sandboxCaseCount + dataLakeCaseCount + dataActivityCaseCount + runSiteCaseCount + runImagesCaseCount + fleetResultCaseCount + askDataCaseCount + runFilesCaseCount + tableColumnsCaseCount + dataJobsCaseCount + returnToCaseCount + activityCaseCount + runAnswerCaseCount + researchMapCaseCount + timelineCaseCount + evolutionCaseCount + modelLabelCaseCount + spaceCaseCount + computeCaseCount + pauseCaseCount} case(s) failed`);
 		if (proc) proc.exitCode = 1;
 	} else {
 		// eslint-disable-next-line no-console
-		console.log(`workflow core: all ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount + cycleIdCaseCount + awaitCaseCount + runStatusCaseCount + routeCaseCount + fleetProvCaseCount + chunkCaseCount + sandboxCaseCount + dataLakeCaseCount + dataActivityCaseCount + runSiteCaseCount + runImagesCaseCount + fleetResultCaseCount + askDataCaseCount + tableColumnsCaseCount + dataJobsCaseCount + returnToCaseCount + activityCaseCount + runAnswerCaseCount + researchMapCaseCount + timelineCaseCount + evolutionCaseCount + modelLabelCaseCount + spaceCaseCount + computeCaseCount + pauseCaseCount} cases passed`);
+		console.log(`workflow core: all ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount + cycleIdCaseCount + awaitCaseCount + runStatusCaseCount + routeCaseCount + fleetProvCaseCount + chunkCaseCount + sandboxCaseCount + dataLakeCaseCount + dataActivityCaseCount + runSiteCaseCount + runImagesCaseCount + fleetResultCaseCount + askDataCaseCount + runFilesCaseCount + tableColumnsCaseCount + dataJobsCaseCount + returnToCaseCount + activityCaseCount + runAnswerCaseCount + researchMapCaseCount + timelineCaseCount + evolutionCaseCount + modelLabelCaseCount + spaceCaseCount + computeCaseCount + pauseCaseCount} cases passed`);
 	}
 }
