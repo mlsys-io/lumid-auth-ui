@@ -31,6 +31,8 @@ export interface MetricName { label: string; unit: string }
 /** "goodput_tok_s" → Goodput · tok/s; "ttft_ms_p99" → TTFT p99 · ms;
  *  "backtests_resolved" → Backtests resolved. */
 export function humanMetric(key: string): MetricName {
+	// Lumid says "version", never "arm" or "variant" (the glossary).
+	if (/^(arm|arm_id|variant|variant_id)$/i.test(key.trim())) return { label: "Version", unit: "" };
 	let k = key.trim().replace(/\./g, "_");
 	let pct = "";
 	const p = k.match(/_(p\d{2,3})$/);

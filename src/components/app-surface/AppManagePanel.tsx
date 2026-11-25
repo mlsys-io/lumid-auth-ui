@@ -21,6 +21,9 @@ import {
 } from "lucide-react";
 import { me, MeApiError, waitForIntent } from "@/api/me";
 import { runNowOutcome, workflowPath } from "@/lib/run-routes";
+import { deleteWorkflow } from "@/lib/delete-workflow";
+import { appTitle } from "@/components/workflow/AppCard";
+import { loopLabel } from "@/lib/workflow-names";
 import { bearerHeader } from "@/api/session-bearer";
 import AppSecretsSection, { type ConfigField } from "./AppSecretsSection";
 import {
@@ -197,14 +200,7 @@ export default function AppManagePanel() {
 		}, model ? `"${loopName}" model → ${model}.` : `"${loopName}" → default model.`);
 
 	const removeWorkflow = async (name: string) => {
-		if (!window.confirm(`Remove workflow "${name}"? Its run history stays on disk.`)) return;
-		try {
-			await me.deleteLoop(app, name);
-			toast.success(`Removed ${name}.`);
-			reload();
-		} catch (e) {
-			toast.error(String((e as Error)?.message ?? e));
-		}
+		if (await deleteWorkflow(app, appTitle(app), name, loopLabel("", name))) reload();
 	};
 
 	const [runningLoop, setRunningLoop] = useState<string | null>(null);
@@ -357,7 +353,7 @@ export default function AppManagePanel() {
 								<button
 									onClick={() => removeWorkflow(l.name || "")}
 									disabled={!l.name || readOnly}
-									title="Remove workflow"
+									title="Delete workflow…"
 									className="p-1.5 rounded-lg text-ink-600 hover:text-brick-600 hover:bg-brick-50 disabled:opacity-40 transition-colors"
 								>
 									<Trash2 className="w-4 h-4" />

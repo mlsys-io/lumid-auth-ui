@@ -67,8 +67,8 @@ export function experimentStatus(e: MeExperiment): { tone: Tone; text: string } 
 			: { tone: "idle", text: "Done — no clear winner" };
 	}
 	if (!e.n_results) {
-		if (e.unfed) return { tone: "attention", text: "Can't start — no workflow feeds it" };
-		if (e.starved) return { tone: "failing", text: "Stuck — the workflow that feeds it is failing" };
+		if (e.unfed) return { tone: "attention", text: "Can't start — no workflow runs it" };
+		if (e.starved) return { tone: "failing", text: "Stuck — the workflow that runs it is failing" };
 		// The workflow ran, but never AS one of these versions (runs started by
 		// hand) — so the honest next step is to run the versions, not to debug.
 		if (e.unrecorded && (e.arms?.length ?? 0) > 0 && !Object.keys(e.variants || {}).length) return { tone: "idle", text: "None of its versions has run yet" };

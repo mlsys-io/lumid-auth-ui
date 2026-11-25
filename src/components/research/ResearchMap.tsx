@@ -227,7 +227,10 @@ function MapCanvas({ app, exps, proposals, selected, onSelect, grow, insetBottom
 	tall?: boolean;
 }) {
 	const running = useShellActivity()?.runningApps.includes(app) ?? false;
-	const tree = useMemo(() => buildResearchTree(app, exps, proposals, { workflows: true }), [app, exps, proposals]);
+	// No workflow nodes: they repeated the sidebar's list and hung a dashed
+	// "feeds" edge on every experiment ("does 'feeds' mean anything?" — user,
+	// 2026-11-25). The experiment panel names its workflow (Open <workflow>).
+	const tree = useMemo(() => buildResearchTree(app, exps, proposals), [app, exps, proposals]);
 	const navigate = useNavigate();
 	const lit = useMemo(() => (selected ? pathTo(tree.nodes, selected) : null), [tree, selected]);
 	const expById = useMemo(() => new Map(exps.map((e) => [e.id, e])), [exps]);
@@ -276,19 +279,19 @@ function MapCanvas({ app, exps, proposals, selected, onSelect, grow, insetBottom
 		return p ? <SuggestedCard3D p={p} selected={st.selected} /> : null;
 	}, [app, running, exps.length, expById, propById, versionOf, feedsOf]);
 	const renderDot = useCallback((n: MapNode) => {
-		if (n.kind === "app") return <Dot size={12} rings={running ? "live" : true} className="bg-plum-600" label={appTitle(app)} labelClass="text-meta font-semibold text-ink-900"
+		if (n.kind === "app") return <Dot size={14} rings={running ? "live" : true} className="bg-plum-600" label={appTitle(app)} labelClass="text-meta font-semibold text-ink-900"
 			sub={`${exps.length} experiment${exps.length === 1 ? "" : "s"}${running ? " · running now" : ""}`} />;
 		if (n.kind === "experiment") {
 			const e = expById.get(n.ref);
 			const st = e ? shortStatus(e) : null;
-			return <Dot size={9} className={st?.tone === "failing" ? "bg-brick-500" : "bg-plum-500"} label={e ? humanId(e.id) : n.ref} labelClass="text-caption font-medium text-ink-900"
+			return <Dot size={10} className={st?.tone === "failing" ? "bg-brick-500" : "bg-plum-500"} label={e ? humanId(e.id) : n.ref} labelClass="text-caption font-medium text-ink-900"
 				sub={st?.text} subClass={st?.tone === "ok" ? "text-gold-700" : st?.tone === "failing" ? "text-brick-700" : "text-ink-600"} />;
 		}
 		if (n.kind === "version") {
 			const v = versionOf(n.id);
 			// The version's state in a word when it has one worth saying.
 			const tag = v && (v.tag === "winning" || v.tag === "leading" || v.tag === "can't tell apart") ? v.tag : undefined;
-			return <Dot size={6} className={VERSION_DOT[v?.tag ?? "current"] ?? "bg-ink-500"} label={v?.label ?? n.ref} labelClass="text-micro text-ink-700" sub={tag} />;
+			return <Dot size={7} className={VERSION_DOT[v?.tag ?? "current"] ?? "bg-ink-500"} label={v?.label ?? n.ref} labelClass="text-micro text-ink-700" sub={tag} />;
 		}
 		if (n.kind === "workflow") {
 			const k = feedsOf(n.ref);

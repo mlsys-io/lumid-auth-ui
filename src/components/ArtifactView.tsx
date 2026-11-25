@@ -17,6 +17,7 @@
 // The three rich kinds are code-split (React.lazy): the vega runtime alone is
 // ~3.7 MB unpacked, so a markdown artifact must never pay for it.
 
+import JsonView from '@/components/JsonView';
 import { lazy, Suspense } from 'react';
 import {
 	ResponsiveContainer, LineChart, BarChart, AreaChart,
@@ -64,11 +65,7 @@ export function ArtifactView({ kind, content, title, language }: {
 				</pre>
 			);
 		case 'json':
-			return (
-				<pre className="bg-ink-50 border border-ink-200 rounded-lg p-2 text-caption overflow-x-auto">
-					<code>{prettyJson(content)}</code>
-				</pre>
-			);
+			return <JsonView text={content} className="rounded-lg border border-ink-200 bg-ink-50/40 p-2 max-h-[32rem] overflow-auto" />;
 		case 'image':
 			return (
 				<a href={content} target="_blank" rel="noreferrer">
@@ -202,11 +199,6 @@ function ChartArtifact({ spec }: { spec: string }) {
 			</ResponsiveContainer>
 		</div>
 	);
-}
-
-function prettyJson(s: string): string {
-	try { return JSON.stringify(JSON.parse(s), null, 2); }
-	catch { return s; }
 }
 
 // TradingViewArtifact — renders a TradingView official embed URL as a sandboxed

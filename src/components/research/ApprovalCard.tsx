@@ -53,7 +53,7 @@ export default function ApprovalCard({ app, list, index, onIndex, onDone, showAp
 			onDone(p.id);
 		} catch (e) {
 			toast.error(`Couldn't start it: ${e instanceof MeApiError ? e.message : String(e)}`, {
-				action: { label: "Ask in chat", onClick: () => window.dispatchEvent(new CustomEvent("studio:ask", { detail: { prompt: `Start the suggested experiment ${p.id} for me — it failed from the map.`, context: { app } } })) },
+				action: { label: "Ask about it", onClick: () => window.dispatchEvent(new CustomEvent("studio:ask", { detail: { prompt: `Start the suggested experiment ${p.id} for me — it failed from the map.`, context: { app } } })) },
 			});
 		} finally { setBusy(false); }
 	};

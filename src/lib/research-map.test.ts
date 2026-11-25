@@ -29,8 +29,8 @@ check("status: not comparable, in words", () => eq(experimentStatus(kol), { tone
 check("status: confirmed winner", () => eq(experimentStatus(won), { tone: "ok", text: "Winning: Plain style" }));
 check("status: never ran / starved / unfed", () => {
 	eq(experimentStatus(fresh).text, "Not started yet");
-	eq(experimentStatus({ ...fresh, starved: true } as MeExperiment).text, "Stuck — the workflow that feeds it is failing");
-	eq(experimentStatus({ ...fresh, unfed: true } as MeExperiment).text, "Can't start — no workflow feeds it");
+	eq(experimentStatus({ ...fresh, starved: true } as MeExperiment).text, "Stuck — the workflow that runs it is failing");
+	eq(experimentStatus({ ...fresh, unfed: true } as MeExperiment).text, "Can't start — no workflow runs it");
 });
 check("versions: tags and lines", () => {
 	const v = versionsOf(kol);

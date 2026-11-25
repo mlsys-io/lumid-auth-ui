@@ -60,6 +60,10 @@ export interface Space3DProps {
 }
 
 const HINT_KEY = "space3d_hint_seen_v1";
+/** How big dots, labels and lines draw for a box this size: 1 at 900×560,
+ *  growing with the box's area (square root) between 0.9 and 1.35 — a fixed
+ *  pixel size read tiny on a big screen and crowded on a small one. */
+const uiScale = (W: number, H: number) => Math.max(0.9, Math.min(1.35, Math.sqrt((W * H) / (900 * 560))));
 /** Arcs per floor ring (each fades with its own depth) and spokes on the floor. */
 const RING_SEGMENTS = 36;
 const SPOKES = 24;
@@ -94,6 +98,8 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 	const labelEls = useRef(new Map<string, SVGTextElement>());
 	// Each dot's label element and its unscaled size (text never changes).
 	const dotLabels = useRef(new Map<string, { el: HTMLElement; w: number; h: number }>());
+	// Which side each dot's label sits on, and since when that side is blocked.
+	const labelSide = useRef(new Map<string, { left: boolean; since: number }>());
 	const pos = useMemo(() => layoutSpace(nodes), [nodes]);
 	// Particles: fixed offsets per node (seeded by its id, so they don't jump
 	// between renders), log-scaled to the node's result count, at most 28.
@@ -156,12 +162,40 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		if (!el) return;
 		const ro = new ResizeObserver(([e]) => {
 			s.current.W = e.contentRect.width; s.current.H = e.contentRect.height;
-			if (!s.current.framed && s.current.W) { s.current.cam = frameCamera(hullPts, HOME, s.current.W, s.current.H, boxAbove(HOME_BOX, s.current.H, insetRef.current, rightRef.current)); s.current.framed = true; }
+			// Every size change re-frames (not only the first): enlarging or
+			// shrinking the window left the space at the old zoom, off-centre and
+			// at the wrong ratio (user, 2026-11-25). Instant — no fly on resize.
+			if (s.current.W) {
+				s.current.cam = aim.current(s.current.framed ? s.current.cam : HOME, s.current.W, s.current.H);
+				s.current.tween = null;
+				s.current.framed = true;
+			}
 			kick.current();
 		});
 		ro.observe(el);
 		return () => ro.disconnect();
 	}, [pos, hullPts]);
+
+	// Where the camera should be for what is selected (or the whole space) at
+	// size W×H — used by the fly-to and by every resize. Rebuilt each render, so
+	// it always sees the current selection.
+	const aim = useRef<(cam: Camera, W: number, H: number) => Camera>(() => HOME);
+	aim.current = (cam, W, H) => {
+		// Beside the panel the camera follows the END of the path — the picked
+		// node and what hangs off it; the app may sit off the left edge, its edge
+		// leading in (Novix's camera follows the path the same way).
+		const side = rightRef.current > 0;
+		const sideIds = lit && side ? [...lit].filter((id) => nodes.find((n) => n.id === id)?.depth !== 0) : null;
+		const pts = (sideIds?.length ? sideIds : lit ? [...lit] : []).map((id) => pos.get(id)).filter(Boolean) as NonNullable<ReturnType<typeof pos.get>>[];
+		// Turn so the selected branch faces the viewer, a little to the right —
+		// its column reads front-on — then frame the path.
+		const sel = selected ? pos.get(selected) : undefined;
+		const facing = sel && Math.hypot(sel.x, sel.z) > 1 ? { ...cam, yaw: Math.atan2(sel.z, sel.x) - 0.45, pitch: -0.18 } : { ...cam, pitch: HOME.pitch };
+		return lit && pts.length
+			// Beside the panel: room for the labels right of the outermost dots.
+			? frameCamera(pts, facing, W, H, boxAbove({ top: 56, bottom: 0.9, margin: side ? 70 : 110 }, H, insetRef.current, side ? rightRef.current + 110 : 0))
+			: frameCamera(hullPts, { ...cam, pitch: HOME.pitch }, W, H, boxAbove(HOME_BOX, H, insetRef.current, rightRef.current));
+	};
 
 	// Fly to the selected path, or back to the whole space.
 	const first = useRef(true);
@@ -171,21 +205,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		if (boxRef.current) { st.W = boxRef.current.clientWidth; st.H = boxRef.current.clientHeight; }
 		if (!st.W) return;
 		if (first.current) { first.current = false; return; }
-		// Beside the panel the camera follows the END of the path — the picked
-		// node and what hangs off it; the app may sit off the left edge, its edge
-		// leading in (Novix's camera follows the path the same way).
-		const side = rightRef.current > 0;
-		const sideIds = lit && side ? [...lit].filter((id) => nodes.find((n) => n.id === id)?.depth !== 0) : null;
-		const pts = (sideIds?.length ? sideIds : lit ? [...lit] : [...pos.keys()]).map((id) => pos.get(id)).filter(Boolean) as NonNullable<ReturnType<typeof pos.get>>[];
-		// Turn so the selected branch faces the viewer, a little to the right —
-		// its column reads front-on — then frame the path.
-		const sel = selected ? pos.get(selected) : undefined;
-		const facing = sel && Math.hypot(sel.x, sel.z) > 1 ? { ...st.cam, yaw: Math.atan2(sel.z, sel.x) - 0.45, pitch: -0.18 } : { ...st.cam, pitch: HOME.pitch };
-		const to = lit
-			// Beside the panel, keep room for the labels right of the outermost dots.
-			// Beside the panel: room for the labels right of the outermost dots.
-			? frameCamera(pts, facing, st.W, st.H, boxAbove({ top: 56, bottom: 0.9, margin: side ? 70 : 110 }, st.H, insetRef.current, side ? rightRef.current + 110 : 0))
-			: frameCamera(hullPts, { ...st.cam, pitch: HOME.pitch }, st.W, st.H, boxAbove(HOME_BOX, st.H, insetRef.current, rightRef.current));
+		const to = aim.current(st.cam, st.W, st.H);
 		if (reduced) st.cam = to; else st.tween = { from: { ...st.cam }, to, t0: performance.now(), dur: 820, spring: !!lit };
 		st.lastInput = performance.now();
 		kick.current();
@@ -278,7 +298,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				const born = grow && !reduced ? Math.max(0, Math.min(1, (t - st.bornAt - (order?.get(n.id) ?? 0) * 70) / 380)) : 1;
 				const sh = shadowEls.current.get(n.id);
 				if (sh) {
-					const R = (n.depth === 0 ? 22 : n.kind === "version" ? 8 : 13) * (f.scale / base);
+					const R = (n.depth === 0 ? 22 : n.kind === "version" ? 8 : 13) * (f.scale / base) * uiScale(W, H);
 					// Higher above the floor → a wider, fainter shadow.
 					const lift = Math.max(0, Math.min(1, (fy - w.y) / 420));
 					sh.setAttribute("cx", fx.toFixed(1)); sh.setAttribute("cy", fyS.toFixed(1));
@@ -302,12 +322,13 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				// Fade in at the floor and out near the top, so motes never pop.
 				const edge = Math.min(1, (fy - y) / 80, (y + fy + 120) / 80);
 				c.setAttribute("cx", q.x.toFixed(1)); c.setAttribute("cy", q.y.toFixed(1));
-				c.setAttribute("r", Math.max(0.5, m.size * (q.scale / base) * (0.7 + 0.8 * near)).toFixed(2));
+				c.setAttribute("r", Math.max(0.5, m.size * (q.scale / base) * (0.7 + 0.8 * near) * uiScale(W, H)).toFixed(2));
 				c.style.opacity = (q.visible ? (0.12 + 0.4 * near) * Math.max(0, edge) * (lit ? 0.5 : 1) : 0).toFixed(3);
 			});
 		};
 		const draw = (t: number) => {
 			const { W, H, cam } = st;
+			const ui = uiScale(W, H);
 			if (!W) return;
 			const proj = new Map<string, ReturnType<typeof project>>();
 			const world = new Map<string, { x: number; y: number; z: number }>();
@@ -362,14 +383,14 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				// A dot and its label stay readable however far the camera pulls back;
 				// open cards keep the full depth range.
 				const floor = el.dataset.full !== undefined ? 0.5 : 0.82;
-				const size = Math.max(floor, Math.min(1, (p.scale / (FOCAL / DISTANCE)) * 0.9)) * (dim ? 0.92 : 1) * pick;
+				const size = Math.max(floor, Math.min(1, (p.scale / (FOCAL / DISTANCE)) * 0.9)) * (dim ? 0.92 : 1) * pick * ui;
 				el.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px) translate(-50%, -50%) scale(${(size * (0.9 + 0.1 * born)).toFixed(3)})`;
 				el.style.opacity = String(((dim ? 0.07 : lit ? Math.max(0.9, cue.alpha) : cue.alpha) * born).toFixed(3));
 				el.style.zIndex = String(n.id === selected ? 6000 : lit?.has(n.id) ? 5000 : el.dataset.full !== undefined ? 5500 : Math.round(3000 - p.depth));
 				el.style.filter = dim ? "blur(2.5px)" : cue.near < 0.2 ? "blur(0.5px)" : "none";
 				el.style.visibility = p.visible ? "visible" : "hidden";
 			}
-			declutter(proj);
+			declutter(proj, t);
 			for (const e of edges) {
 				const ln = edgeEls.current.get(e.id);
 				const a = proj.get(e.source), b = proj.get(e.target);
@@ -389,7 +410,8 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				const cue = depthCue(Math.min(a.scale, b.scale), cam.zoom);
 				ln.style.opacity = String(((lit ? (onPath ? 1 : 0.05) : 0.35 + 0.55 * cue.near) * born).toFixed(3));
 				// Hairlines at the back, a little heavier in front.
-				if (!onPath) ln.style.strokeWidth = (0.6 + 0.8 * cue.near).toFixed(2);
+				// Hairlines at the back, heavier in front; all scaled with the box.
+				ln.style.strokeWidth = ((onPath ? 2 : 0.75 + 0.95 * cue.near) * ui).toFixed(2);
 				const halo = haloEls.current.get(e.id);
 				if (halo) { halo.setAttribute("d", d); halo.style.opacity = String((0.55 * born).toFixed(3)); }
 				const lb = labelEls.current.get(e.id);
@@ -408,7 +430,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				const dimP = !!lit && !lit.has(pt.node);
 				const bornP = grow && !reduced ? Math.max(0, Math.min(1, (t - st.bornAt - (order?.get(pt.node) ?? 0) * 70 - 300) / 500)) : 1;
 				c.setAttribute("cx", q.x.toFixed(1)); c.setAttribute("cy", q.y.toFixed(1));
-				c.setAttribute("r", Math.max(0.7, 1.4 * q.scale / (FOCAL / DISTANCE)).toFixed(2));
+				c.setAttribute("r", Math.max(0.7, 1.5 * ui * q.scale / (FOCAL / DISTANCE)).toFixed(2));
 				c.style.opacity = String((q.visible ? (dimP ? 0.03 : 0.16 + 0.38 * cue.near) * bornP : 0).toFixed(3));
 			});
 		};
@@ -416,7 +438,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		// selected or under the pointer, the app, experiments, suggestions, then
 		// versions last.
 		const rank = (n: MapNode) => (n.id === selected ? 0 : n.id === hovered ? 1 : lit?.has(n.id) ? 2 : n.depth === 0 ? 3 : n.kind === "experiment" ? 4 : n.kind === "suggested" ? 5 : 6);
-		const declutter = (proj: Map<string, ReturnType<typeof project>>) => {
+		const declutter = (proj: Map<string, ReturnType<typeof project>>, t: number) => {
 			const cam0 = st.cam;
 			const placed: Array<[number, number, number, number]> = [];
 			const hit = (b: [number, number, number, number]) => placed.some((q) => b[0] < q[2] && b[2] > q[0] && b[1] < q[3] && b[3] > q[1]);
@@ -448,10 +470,24 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				const hh = (lab.h * size) / 2 + 1, ww = lab.w * size + 2;
 				const right: [number, number, number, number] = [p!.x + 12 * size - 2, p!.y - hh, p!.x + 12 * size + ww, p!.y + hh];
 				const left: [number, number, number, number] = [p!.x - 12 * size - ww, p!.y - hh, p!.x - 12 * size + 2, p!.y + hh];
-				const at = quiet || off ? null : !hit(right) ? right : !hit(left) ? left : null;
+				// A label keeps its side. Blocked, it fades out where it is; it moves
+				// to the other side only after being blocked ~0.9 s with that side
+				// clear. Re-picking each frame made labels flip back and forth as
+				// the space turned (user, 2026-11-25).
+				const mem = labelSide.current.get(n.id) ?? { left: false, since: 0 };
+				labelSide.current.set(n.id, mem);
+				const mine = mem.left ? left : right, other = mem.left ? right : left;
+				let at: typeof right | null = null;
+				if (!(quiet || off)) {
+					if (!hit(mine)) { at = mine; mem.since = 0; }
+					else {
+						if (!mem.since) mem.since = t;
+						if (t - mem.since > 900 && !hit(other)) { at = other; mem.left = !mem.left; mem.since = 0; }
+					}
+				}
 				if (at) placed.push(at);
 				lab.el.style.opacity = at ? "" : "0";
-				lab.el.classList.toggle("space3d-label-left", at === left);
+				lab.el.classList.toggle("space3d-label-left", mem.left);
 			}
 		};
 		kick.current = () => { if (!st.raf) st.raf = requestAnimationFrame(frame); };

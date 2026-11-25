@@ -38,6 +38,7 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 import { TONES, workflowTone } from "@/lib/tones";
 import { describeSchedule } from "@/lib/schedule";
 import { Skeleton, humanizeLoop, loopLabel } from "@/pages/app-revamp/loops";
+import { deleteWorkflow } from "@/lib/delete-workflow";
 import { QuickStarters } from "@/components/studio/QuickStarters";
 import NewWorkflowFlow from "@/components/workflow/NewWorkflowFlow";
 import { FleetTotals, costByApp, fmtUSD } from "@/pages/studio/portfolio";
@@ -960,18 +961,12 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 	const [deletingLoop, setDeletingLoop] = useState<string | null>(null);
 	const delLoop = async (loop: string, label: string) => {
 		if (deletingLoop) return;
-		if (!window.confirm(
-			`Delete workflow "${label}" from ${appTitle(app)}?\n\n` +
-			`Removes it and its run history. This cannot be undone.`)) return;
 		setDeletingLoop(loop);
 		try {
-			await me.deleteLoop(app, loop);
-			toast.success(`Removed workflow "${label}"`);
+			if (!(await deleteWorkflow(app, appTitle(app), loop, label))) return;
 			rowsCache.delete(app);
 			if (selected === loop) navigate(`/studio/apps/${encodeURIComponent(app)}`, { replace: true });
 			await load();
-		} catch (e) {
-			toast.error(`Delete failed: ${e instanceof Error ? e.message : String(e)}`);
 		} finally {
 			setDeletingLoop(null);
 		}
