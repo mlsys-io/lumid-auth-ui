@@ -176,7 +176,7 @@ Said plainly, so you don't go looking:
 | What you see | What it means | What to do |
 |---|---|---|
 | *relation "…" does not exist* | The table name doesn't match the catalog | Copy `schema.table` from the catalog |
-| *needs a top-level ORDER BY* | A SQL retrieval has no fixed row order | Add `ORDER BY` (ending in a unique column), or `rows: one` / `rows: table` |
+| *returns rows in no defined order without a top-level ORDER BY* | A SQL retrieval has no fixed row order | Add `ORDER BY` (ending in a unique column), or `rows: one` / `rows: table` |
 | *cannot tell the workflow format* | The file is neither a Lumilake graph (`ops:`) nor a FlowMesh one (`apiVersion`/`spec`) | Check the top of the file |
 | *compute service returned 401* | The site didn't accept your sign-in | Sign in again; if it persists, report it |
 | A FlowMesh task fails to fetch a URL | Tasks have no network | Pass the data in from an earlier step or as files |
