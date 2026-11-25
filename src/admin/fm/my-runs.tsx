@@ -7,6 +7,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { failedSteps, fleet, type FleetJob, type FleetJobResult, type FleetStatus } from "../../api/fleet";
+import { runImages } from "../../lib/run-images";
+import ResultImages from "./result-images";
 
 const TONE: Record<FleetStatus, string> = {
 	queued: "bg-ink-100 text-ink-600",
@@ -141,6 +143,8 @@ export default function MyRuns() {
 									{Object.entries(open.result.metrics).map(([k, v]) => `${k} = ${v}`).join(", ")}
 								</p>
 							)}
+							{/* Pictures first: a run that made images should show them, not their paths. */}
+							<ResultImages images={runImages(open.id, open.result.outputs)} />
 							<pre className="max-h-72 overflow-auto rounded bg-card p-2 text-micro">
 								{JSON.stringify(open.result.outputs, null, 2)}
 							</pre>
