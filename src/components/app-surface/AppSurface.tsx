@@ -514,6 +514,11 @@ function AppSurfaceImpl({
     );
   }
 
+  // An app whose home IS the research graph (identity answers home: "graph")
+  // has no page body here — the graph above is its home. Say nothing.
+  if ((state.data as { home?: string } | undefined)?.home === "graph") {
+    return <div className="flex flex-col">{actionBar(false)}</div>;
+  }
   return (
     <div className="flex flex-col">
       {actionBar(false)}
