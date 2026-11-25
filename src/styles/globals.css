@@ -996,11 +996,16 @@ html[data-surface="studio"] ::selection {
 }
 /* First-ring nodes carry a small overview panel instead of a bare label. */
 .space3d-panel {
+	transition: border-color 120ms ease-out, box-shadow 120ms ease-out, opacity 160ms ease-out;
 	background: rgb(var(--card-rgb) / 0.92); border: 1px solid theme('colors.ink.200'); border-radius: 0.5rem;
 	padding: 0.25rem 0.5rem 0.3rem; text-shadow: none;
 	box-shadow: 0 1px 3px color-mix(in srgb, theme('colors.ink.900') 10%, transparent);
 }
 .space3d button[aria-pressed="true"] .space3d-panel { border-color: theme('colors.plum.400'); }
+/* Hovering a node lights its panel (no card swap, nothing moves). */
+.space3d [data-kind]:hover .space3d-panel { border-color: theme('colors.plum.400'); box-shadow: 0 2px 8px color-mix(in srgb, theme('colors.ink.900') 14%, transparent); }
+.space3d [data-kind]:hover .space3d-label:not(.space3d-panel) > span:first-child { text-decoration: underline; text-decoration-color: theme('colors.plum.300'); text-underline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .space3d-panel { transition: none; } }
 .space3d-label-left { left: auto !important; right: 100%; margin-left: 0; margin-right: 0.25rem; align-items: flex-end; text-align: right; }
 @media (prefers-reduced-motion: reduce) { .space3d-label { transition: none; } }
 

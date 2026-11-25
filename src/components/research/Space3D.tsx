@@ -59,6 +59,8 @@ export interface Space3DProps {
 	insetRight?: number;
 	/** A plain edge's stroke class (e.g. the colour of the workflow behind a branch). */
 	edgeClass?: (e: MapEdge) => string | undefined;
+	/** Whether hovering this node opens its full card (default yes). */
+	hoverCard?: (n: MapNode) => boolean;
 }
 
 const HINT_KEY = "space3d_hint_seen_v1";
@@ -81,7 +83,7 @@ const boxAbove = (box: { top: number; bottom: number; margin: number }, H: numbe
 // A gentle spring: overshoots ~6% and settles (selection flies in, lands).
 const easeOutBack = (t: number) => { const c1 = 1.2, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
 
-export default function Space3D({ nodes, edges, renderCard, renderDot, describe, selected, onSelect, lit, grow, order, height, evidence, insetBottom = 0, insetRight = 0, edgeClass }: Space3DProps) {
+export default function Space3D({ nodes, edges, renderCard, renderDot, describe, selected, onSelect, lit, grow, order, height, evidence, insetBottom = 0, insetRight = 0, edgeClass, hoverCard }: Space3DProps) {
 	const insetRef = useRef(insetBottom);
 	insetRef.current = insetBottom;
 	const rightRef = useRef(insetRight);
@@ -232,9 +234,11 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				st.cam = mixCamera(st.tween.from, st.tween.to, st.tween.spring ? easeOutBack(k) : easeInOutCubic(k));
 				if (k >= 1) st.tween = null; else moving = true;
 			}
-			// Keeps turning with the pointer over the space; only a node under the
-			// pointer (you're reading it) or a drag holds it still.
-			const wantTurn = !reduced && !st.drag && !st.tween && !hoveredRef.current && !lit && t - st.lastInput > AUTO_ROTATE_IDLE_MS;
+			// Holds still while the pointer is over the space (it eases to a stop and
+			// picks up again 1.5 s after the pointer leaves): turning under the
+			// pointer slid every dot and label away from what you aimed at, so
+			// hovers landed on the wrong node or on nothing (user, 2026-11-25).
+			const wantTurn = !reduced && !st.drag && !st.tween && !st.hover && !hoveredRef.current && !lit && t - st.lastInput > AUTO_ROTATE_IDLE_MS;
 			st.rampT = Math.max(0, Math.min(1, st.rampT + (wantTurn ? 1 : -1) * (dt / 400)));
 			if (st.rampT > 0) { st.cam = { ...st.cam, yaw: st.cam.yaw + AUTO_ROTATE_RAD_PER_MS * dt * easeInOutCubic(st.rampT) }; moving = true; }
 			if (wantTurn && st.rampT < 1) moving = true;
@@ -499,6 +503,9 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				}
 				if (mem.shown) placed.push(core);
 				lab.el.style.opacity = mem.shown ? "" : "0";
+				// A shown label or panel is part of its node (hover/click); a hidden
+				// one must not catch the pointer meant for what lies under it.
+				lab.el.style.pointerEvents = mem.shown && !off ? "auto" : "none";
 				lab.el.classList.remove("space3d-label-left");
 			}
 		};
@@ -659,7 +666,10 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				// the rest, and a column of cards on a short path piled up.
 				// With the detail panel open (insetRight) even the selected node stays a
 				// dot, its label a bordered pill (Novix's picked label).
-				const full = !renderDot || hovered === n.id || (n.id === selected && !insetRight);
+				// Hover opens a node's card only where the dot has nothing more to
+				// show; a node with an overview panel stays put and lights up instead
+				// (swapping the panel for a card moved what was under the pointer).
+				const full = !renderDot || (hovered === n.id && (hoverCard?.(n) ?? true)) || (n.id === selected && !insetRight);
 				return (
 					<div
 						key={n.id}
