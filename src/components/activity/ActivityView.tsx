@@ -7,14 +7,16 @@
 // is computed from /me/runs rows (lib/activity.ts) — on the cloud deployment
 // that is the only per-run source.
 
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AlertTriangle, ArrowRight } from "lucide-react";
-import type { MeRunRow } from "@/api/me";
+import { me, type MeRunRow, type MeRunStepEvent } from "@/api/me";
+import { estimateSteps, type StepEstimate } from "@/lib/run-timeline";
 import {
 	groupActivity, fmtDuration, fmtTypical, fmtSince, fmtAgo, progressOf, isOverdue, failingSentence,
 	type RunningItem, type WorkflowActivity, type AppActivity,
 } from "@/lib/activity";
-import { runRowHref, workflowPath } from "@/lib/run-routes";
+import { runRowHref, workflowPath, parseScheduledRunId } from "@/lib/run-routes";
 import { appTitle } from "@/components/workflow/AppCard";
 import { loopLabel } from "@/lib/workflow-names";
 import { RunSparkline } from "@/components/RunSparkline";
@@ -55,6 +57,38 @@ function Section({ label, count, children, className, style }: {
 
 // ── Running now ────────────────────────────────────────────────────────────
 
+// The steps the workflow's LAST run took — the template a running card
+// estimates its progress against. One fetch per workflow per session.
+const lastStepsCache = new Map<string, MeRunStepEvent[] | null>();
+function useLastRunSteps(wf: WorkflowActivity): MeRunStepEvent[] | null {
+	const ts = wf.latestFinished ? parseScheduledRunId(wf.latestFinished.run_id)?.runId : undefined;
+	const key = `${wf.app}:${wf.loop}:${ts ?? ""}`;
+	const [ev, setEv] = useState<MeRunStepEvent[] | null>(() => lastStepsCache.get(key) ?? null);
+	useEffect(() => {
+		if (!ts || !wf.app || !wf.loop || lastStepsCache.has(key)) return;
+		let live = true;
+		me.cycleDetail(wf.app, wf.loop, ts)
+			.then((d) => { const e = (d as { events?: MeRunStepEvent[] }).events ?? null; lastStepsCache.set(key, e); if (live) setEv(e); })
+			.catch(() => { lastStepsCache.set(key, null); });
+		return () => { live = false; };
+	}, [key, ts, wf.app, wf.loop]);
+	return ev;
+}
+
+/** Novix's mini step grid on a running card, from the last run's steps: done
+ *  solid, the estimated current step pulsing, the rest waiting. */
+function MiniSteps({ est }: { est: StepEstimate }) {
+	return (
+		<div className="mt-2 flex flex-wrap gap-[3px]" aria-hidden>
+			{est.steps.map((st, i) => (
+				<span key={i} title={`${st.stage ? st.stage + " · " : ""}${st.name}`}
+					className={cn("w-2.5 h-2.5 rounded-[2px]",
+						st.state === "done" ? "bg-gold-300" : st.state === "now" ? "bg-lagoon-400 animate-lumen-breathe" : "bg-ink-100 border border-ink-200")} />
+			))}
+		</div>
+	);
+}
+
 export function RunningCard({ item, now, showApp }: { item: RunningItem; now: number; showApp: boolean }) {
 	const { run, wf } = item;
 	const elapsed = Math.max(0, now - (run.started_at || now));
@@ -62,6 +96,8 @@ export function RunningCard({ item, now, showApp }: { item: RunningItem; now: nu
 	const p = progressOf(elapsed, typical);
 	const late = isOverdue(elapsed, typical);
 	const started = new Date((run.started_at || 0) * 1000).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+	const tpl = useLastRunSteps(wf);
+	const est = tpl ? estimateSteps(tpl, elapsed, wf.loop) : null;
 	return (
 		<Link
 			to={runRowHref(run.run_id)}
@@ -85,11 +121,15 @@ export function RunningCard({ item, now, showApp }: { item: RunningItem; now: nu
 					<span className="text-ember-700">Taking longer than usual{typical ? ` (usually ${fmtTypical(typical)})` : ""}</span>
 				) : (
 					<span className="text-ink-600">
-						<span className="lumen-shine font-medium">Running</span><WorkingDots />
+						{/* The current action as a sentence — estimated from the last run's
+						    steps, because runs report steps only when they finish. */}
+						<span className="lumen-shine font-medium">{est?.now && !est.beyond ? est.now.name : "Running"}</span><WorkingDots />
 						{typical ? <> · usually {fmtTypical(typical)}</> : <> · first timed run</>}
 					</span>
 				)}
 			</div>
+			{est && <MiniSteps est={est} />}
+			{est && <div className="mt-1 text-nano text-ink-600">steps estimated from the last run</div>}
 			{/* How far through its usual time — a fill, never a spinner. */}
 			<div className="mt-2 h-1 rounded-full bg-ink-100 overflow-hidden" aria-hidden>
 				<div
@@ -98,6 +138,45 @@ export function RunningCard({ item, now, showApp }: { item: RunningItem; now: nu
 				/>
 			</div>
 		</Link>
+	);
+}
+
+// A run that just finished keeps its card for a moment — its outcome in words —
+// then folds away; its workflow's strip below gains the new cell.
+const FOLD_MS = 2400;
+function useFinishing(act: { running: RunningItem[] }, runs: MeRunRow[]): RunningItem[] {
+	const prev = useRef<Map<string, RunningItem>>(new Map());
+	const [finishing, setFinishing] = useState<RunningItem[]>([]);
+	useEffect(() => {
+		const nowIds = new Set(act.running.map((r) => r.run.run_id));
+		const gone: RunningItem[] = [];
+		for (const [id, it] of prev.current) {
+			if (nowIds.has(id)) continue;
+			const fin = runs.find((r) => r.run_id === id);
+			if (fin && fin.state !== "running") gone.push({ run: fin, wf: it.wf });
+		}
+		prev.current = new Map(act.running.map((r) => [r.run.run_id, r]));
+		if (!gone.length) return;
+		setFinishing((cur) => [...cur, ...gone]);
+		// No cleanup on purpose: `act.running` is a new array every render, so
+		// this effect re-runs often, and clearing here would cancel the fold.
+		window.setTimeout(() => setFinishing((cur) => cur.filter((c) => !gone.some((g) => g.run.run_id === c.run.run_id))), FOLD_MS);
+	}, [act.running, runs]);
+	return finishing;
+}
+
+function FinishedCard({ run, wf, showApp }: { run: MeRunRow; wf: WorkflowActivity; showApp: boolean }) {
+	const ok = run.state === "succeeded";
+	return (
+		<div className={cn("rounded-xl border p-3 activity-fold", ok ? "border-gold-200 bg-gold-50/60" : "border-brick-200 bg-brick-50/60")} role="status">
+			<div className="text-micro text-ink-600 font-mono tabular-nums">{fmtDuration(run.duration_s)}</div>
+			<div className="mt-1 text-body font-medium text-ink-900 truncate">
+				{showApp && <span className="text-ink-600 font-normal">{appName(wf.app)} · </span>}{title(wf)}
+			</div>
+			<div className={cn("mt-1 text-meta font-medium", ok ? "text-gold-700" : "text-brick-700")}>
+				{ok ? "Finished — succeeded" : `Finished — ${run.state === "failed" ? "failed" : run.state}`}
+			</div>
+		</div>
 	);
 }
 
@@ -214,6 +293,7 @@ export function ActivityView({ runs, app, days, entrance = false, compact = fals
 	asOf?: number;
 }) {
 	const act = groupActivity(runs, { app });
+	const finishing = useFinishing(act, runs);
 	const now = useNowSec(act.running.length > 0) ;
 	const nowSec = act.running.length ? now : Date.now() / 1000;
 	const showApp = !app;
@@ -230,10 +310,11 @@ export function ActivityView({ runs, app, days, entrance = false, compact = fals
 
 	return (
 		<div className="space-y-6">
-			{act.running.length > 0 && (
+			{(act.running.length > 0 || finishing.length > 0) && (
 				<Section label="Running now" count={act.running.length} className={enter} style={stagger(0)}>
 					<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
 						{act.running.map((it) => <RunningCard key={it.run.run_id} item={it} now={nowSec} showApp={showApp} />)}
+						{finishing.map((f) => <FinishedCard key={f.run.run_id} run={f.run} wf={f.wf} showApp={showApp} />)}
 					</div>
 				</Section>
 			)}

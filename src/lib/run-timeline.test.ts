@@ -1,6 +1,6 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
 import type { MeRunStepEvent } from "@/api/me";
-import { buildTimeline, fmtOffset, stepName, timelineWorthShowing } from "./run-timeline";
+import { buildTimeline, fmtOffset, stepName, timelineWorthShowing, estimateSteps } from "./run-timeline";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -37,6 +37,15 @@ check("running: only the open last step pulses", () => {
 	const t = buildTimeline([ev("a", "act", 0, 1), ev("b", "analyze", 1, null)], { running: true });
 	eq(t.rows.map((r) => r.running), [false, true]);
 	eq(t.failure, null);
+});
+check("estimate: where a running run probably is, from the last run's steps", () => {
+	const tpl = [ev("read", "observe", 0, 10), ev("draft", "hypothesize", 10, 70, true, "", "llm"), ev("judge", "act", 70, 100)];
+	const e = estimateSteps(tpl, 30)!;
+	eq(e.steps.map((s) => s.state), ["done", "now", "next"]);
+	eq(e.now, { name: "Draft", stage: "Hypothesize" });
+	const over = estimateSteps(tpl, 500)!;
+	eq(over.beyond, true); eq(over.now?.name, "Judge");
+	eq(estimateSteps([ev("engine_command", null, 0, 60)], 10), null);
 });
 check("worth showing", () => {
 	eq(timelineWorthShowing([ev("engine_command", null, 0, 60, false)]), false);
