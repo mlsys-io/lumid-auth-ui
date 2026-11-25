@@ -302,17 +302,23 @@ export function RunDetail({
 	const authRole = useContext(AuthContext)?.user?.role;
 	const isAdminRole = authRole === 'admin' || authRole === 'super_admin';
 	const [showStages, setShowStages] = useState(false);
-	// Two columns (run | what it produced) only when the card itself is wide;
-	// the chat rail and sidebar decide that, not the window.
+	// Columns by the card's own width (the chat rail and sidebar decide that,
+	// not the window): Novix's job page when there's room —
+	//   ≥1100  the answer | how it ran (steps, timeline) | what it produced
+	//   ≥760   the run (answer over steps)               | what it produced
+	//   else   one column
 	const rootRef = useRef<HTMLDivElement>(null);
-	const [wide, setWide] = useState(false);
+	const [cols, setCols] = useState<1 | 2 | 3>(1);
 	useEffect(() => {
 		const el = rootRef.current;
 		if (!el) return;
-		const ro = new ResizeObserver(([e]) => setWide(e.contentRect.width >= 760));
+		const ro = new ResizeObserver(([e]) => { const w = e.contentRect.width; setCols(w >= 1100 ? 3 : w >= 760 ? 2 : 1); });
 		ro.observe(el);
 		return () => ro.disconnect();
-	}, []);
+	// The card (and its ref) only exists once a run is picked; re-attach then.
+	}, [!!runId]);
+	const wide = cols > 1;
+	const three = cols === 3;
 	if (!runId) {
 		return (
 			<div className="rounded-xl border border-ink-200 bg-card p-4 text-caption text-ink-600">
@@ -334,16 +340,21 @@ export function RunDetail({
 	// The answer card now says what the run did / why it failed, so a lone
 	// step no longer auto-opens its raw JSON; a FAILED step among several
 	// still opens, since which one broke is the next question.
+	// At three columns the answer has its own column, so a lone step opens in
+	// the middle one — otherwise "how it ran" would be a single collapsed row.
 	const defaultStep = steps.length > 1
 		? (() => { const i = steps.findIndex((x) => stepFailed(x)); return i >= 0 ? stepIdOf(steps[i], i) : null; })()
-		: null;
+		: three && steps.length === 1 ? stepIdOf(steps[0], 0) : null;
 	const openStep = step === "none" ? null : (step ?? defaultStep);
 
 	return (
-		<div ref={rootRef} className={cn("rounded-xl border border-ink-200 bg-card min-w-0", wide ? "grid grid-cols-[minmax(0,1fr)_17rem]" : "flex flex-col")}>
-		<div className="flex flex-col min-w-0">
+		<div ref={rootRef} data-cols={cols} className={cn("rounded-xl border border-ink-200 bg-card min-w-0",
+			three ? "grid grid-cols-[minmax(0,24rem)_minmax(0,1fr)_17rem]" : wide ? "grid grid-cols-[minmax(0,1fr)_17rem]" : "flex flex-col")}>
+		{/* At three columns this wrapper steps aside (display: contents) so the
+		    answer and the process become columns of their own. */}
+		<div className={three ? "contents" : "flex flex-col min-w-0"}>
 			{/* HEADER — outcome · time · duration · arm. */}
-			<div className="px-3 pt-3 pb-2 border-b border-ink-100 space-y-2">
+			<div className={cn("px-3 pt-3 pb-2 space-y-2 min-w-0", three ? "border-r border-ink-100 pb-3" : "border-b border-ink-100")}>
 				<div className="flex items-center gap-2 flex-wrap">
 					<RunStatusChip info={info} />
 					<h2 className="text-body font-semibold text-ink-900">Run · {runLocalTime(runId)}</h2>
@@ -390,15 +401,15 @@ export function RunDetail({
 
 			{/* BODY — compare, the run log, or the step timeline. */}
 			{compare ? (
-				<div className="p-2 h-[560px]">
+				<div className="p-2 h-[560px] min-w-0">
 					<RunCompareView app={app} loop={loop} tsA={runId} tsB={compare} onBack={() => onQuery({ compare: null })} />
 				</div>
 			) : pane === "log" && !openStep ? (
-				<div className="p-2 h-[520px]">
+				<div className="p-2 h-[520px] min-w-0">
 					<TrajectoryLogView app={app} loop={loop} ts={runId} onBack={() => onQuery({ pane: null })} backLabel="Steps" />
 				</div>
 			) : (
-				<div className="p-2">
+				<div className="p-2 min-w-0">
 					{/* The runner's own step timeline (events), when it reported one
 					    worth more than the single command step listed below. */}
 					{timelineWorthShowing(detail?.events) && (

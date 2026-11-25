@@ -1,7 +1,7 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
 // Fixtures are trimmed copies of real lum.id cycles (2026-11-24).
 import type { MeCycleDetail } from "@/api/me";
-import { humanMetric, fmtMetricValue, primaryMetricKey, runMetrics, stepFailed, stepLabel, stepLine, runAnswer, vsUsual, runOutputs, runLimits, measuredOn } from "./run-answer";
+import { humanMetric, fmtMetricValue, primaryMetricKey, runMetrics, stepFailed, stepLabel, stepLine, runAnswer, vsUsual, runOutputs, runLimits, measuredOn, runFiles } from "./run-answer";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -126,6 +126,16 @@ check("vs usual", () => {
 	eq(vsUsual(22.4, [20, 20, 20]), { text: "+12% vs usual", better: true });
 	eq(vsUsual(700, [800, 800, 800], false), { text: "-12% vs usual", better: true });
 	eq(vsUsual(1, [1, 2]), null);
+});
+check("files: inlined documents and sidecars become files; results.json always", () => {
+	const design = '{\n "schema": "mlab.v1",\n "id": "baseline",\n "infra": "rtx5080_x1",\n "rationale": "Explicit Qwen3/BF16 baseline on one card, nothing tuned yet."\n}';
+	const d = { ok: true, files: { proposal: { try: "C16" } }, steps: [{ step_id: "engine_command", ok: true, output: { module: "simulate", out: { ok: true,
+		metrics: { design_text: design, gpu: "rtx_5080", holdouts_text: "2 of 2 met" } } } }], summary: {} } as unknown as MeCycleDetail;
+	const f = runFiles(d);
+	eq(f.map((x) => x.name), ["proposal.json", "design.json", "results.json"]);
+	eq(f[1].label, "Design");
+	if (!f[1].content.includes('"schema": "mlab.v1"')) throw new Error("design not pretty JSON");
+	eq(runFiles({ ok: true, steps: [], summary: {} } as unknown as MeCycleDetail), []);
 });
 
 export function run(): number {

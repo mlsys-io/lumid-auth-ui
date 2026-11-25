@@ -159,6 +159,32 @@ function SuggestedCard3D({ p, selected }: { p: Proposal; selected: boolean }) {
 	);
 }
 
+// ── dots: the space at rest ───────────────────────────────────────────────
+// Novix draws its exploration space as glowing dots with their names; only
+// the picked path becomes cards. Lumid keeps a status in the dot's colour and
+// the words one hover/click away (the card). The dot sits ON the node's point
+// so edges meet it; the name hangs to its right, outside the box.
+
+const VERSION_DOT: Record<string, string> = {
+	winning: "bg-gold-600", leading: "bg-gold-400", current: "bg-ink-500",
+	trying: "bg-lagoon-500", "can't tell apart": "bg-ember-500", "not run yet": "bg-card border border-dashed border-ink-400",
+};
+
+function Dot({ size, className, label, labelClass, rings }: { size: number; className: string; label: string; labelClass: string; rings?: boolean }) {
+	return (
+		<span className="relative flex items-center justify-center" style={{ width: Math.max(18, size + 8), height: Math.max(18, size + 8) }}>
+			{rings && (
+				<>
+					<span aria-hidden className="absolute rounded-full border border-gold-300 animate-lumen-breathe" style={{ width: size + 18, height: size + 18 }} />
+					<span aria-hidden className="absolute rounded-full border border-gold-200" style={{ width: size + 34, height: size + 34 }} />
+				</>
+			)}
+			<span className={cn("rounded-full shadow-e1", className)} style={{ width: size, height: size }} />
+			<span className={cn("absolute left-full ml-1 whitespace-nowrap space3d-label", labelClass)}>{label}</span>
+		</span>
+	);
+}
+
 // ── the map ───────────────────────────────────────────────────────────────
 
 function MapCanvas({ app, exps, proposals, selected, onSelect, grow }: {
@@ -195,9 +221,22 @@ function MapCanvas({ app, exps, proposals, selected, onSelect, grow }: {
 		const p = propById.get(n.ref);
 		return p ? <SuggestedCard3D p={p} selected={st.selected} /> : null;
 	}, [app, running, exps.length, expById, propById, versionOf]);
+	const renderDot = useCallback((n: MapNode) => {
+		if (n.kind === "app") return <Dot size={14} rings className={running ? "bg-lagoon-500" : "bg-gold-600"} label={appTitle(app)} labelClass="text-meta font-semibold text-ink-900" />;
+		if (n.kind === "experiment") {
+			const e = expById.get(n.ref);
+			const tone = e ? experimentStatus(e).tone : "idle";
+			return <Dot size={10} className={TONES[tone].dot} label={e ? humanId(e.id) : n.ref} labelClass="text-caption font-medium text-ink-800" />;
+		}
+		if (n.kind === "version") {
+			const v = versionOf(n.id);
+			return <Dot size={7} className={VERSION_DOT[v?.tag ?? "current"] ?? "bg-ink-500"} label={v?.label ?? n.ref} labelClass="text-micro text-ink-700" />;
+		}
+		return <Dot size={8} className="bg-card border border-dashed border-gold-500" label={`Suggested: ${humanId(n.ref)}`} labelClass="text-micro text-gold-700" />;
+	}, [app, running, expById, versionOf]);
 	const height = Math.max(420, Math.min(620, 300 + tree.nodes.length * 9));
 	return (
-		<Space3D nodes={tree.nodes} edges={tree.edges} renderCard={renderCard} describe={describe}
+		<Space3D nodes={tree.nodes} edges={tree.edges} renderCard={renderCard} renderDot={renderDot} describe={describe}
 			selected={selected} onSelect={onSelect} lit={lit} grow={grow} order={order} height={height} />
 	);
 }

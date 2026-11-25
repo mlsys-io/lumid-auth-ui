@@ -192,6 +192,21 @@ on. (Simulator vs real GPU, backtest vs forward test are app details, not UI str
   "Aiming for" line and a target line on the best-score chart.
 - The app's own pages (`ui.nav`) are named at the top of its home ("This app's pages: …").
 
+### Round 6 (2026-11-25): Novix's density
+
+- **Dots, not cards, in the 3D space**: `Space3D` takes `renderDot`; a node is a labelled dot
+  (`.space3d-label`) unless it is on the selected path or hovered. Both renderings stay mounted and
+  toggle visibility — swapping elements under the pointer swallowed clicks (touch taps).
+- **Selection is loud**: the selected card is 1.15×, off-path nodes 7% opacity + blur.
+- **Compute = slots**: Running cards, then ONE dashed slot ("Starts next: …" / "Free — runs start
+  here"), the rest of the line, Done as bordered rows, Machines last and small. Hook `[data-slot=next]`.
+- **Run page, three panes at ≥1100px card width** (`[data-cols]`): the answer | how it ran (a lone
+  step opens here) | what it produced. ≥760 two, else one.
+- **Produced files** (`runFiles`): sidecar `files`, multi-line string fields (an mlsys run's
+  `design_text` → `design.json`) and `results.json` (the whole step `out`) as cards — content is
+  already in the cycle detail, so Download is a Blob, no request. No app writes files the API can
+  reach yet; an app that wants a deliverable shown should return it inline (`<name>_text`).
+
 ### Where runs live
 
 - `/studio/runs` = **Activity**: Running now · Needs fixing (one row per broken *workflow*, not
