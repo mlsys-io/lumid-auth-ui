@@ -188,7 +188,7 @@ export function criteriaInWords(expr?: string): string {
 
 // ── the tree ─────────────────────────────────────────────────────────────
 
-export type MapNodeKind = "app" | "experiment" | "version" | "suggested";
+export type MapNodeKind = "app" | "experiment" | "version" | "suggested" | "workflow";
 export interface MapNode { id: string; kind: MapNodeKind; depth: number; ref: string; parent?: string }
 export interface MapEdge { id: string; source: string; target: string; dashed?: boolean; label?: string }
 
@@ -209,7 +209,7 @@ export function suggestionParent(p: Proposal, exps: MeExperiment[]): string | nu
 	return best;
 }
 
-export function buildResearchTree(app: string, exps: MeExperiment[], proposals: Proposal[]): { nodes: MapNode[]; edges: MapEdge[] } {
+export function buildResearchTree(app: string, exps: MeExperiment[], proposals: Proposal[], opts: { workflows?: boolean } = {}): { nodes: MapNode[]; edges: MapEdge[] } {
 	const root = `app:${app}`;
 	const nodes: MapNode[] = [{ id: root, kind: "app", depth: 0, ref: app }];
 	const edges: MapEdge[] = [];
@@ -253,6 +253,20 @@ export function buildResearchTree(app: string, exps: MeExperiment[], proposals: 
 		const pid = par ? `exp:${par}` : root;
 		nodes.push({ id: sid, kind: "suggested", depth: par ? depthOf(par) + 1 : 1, ref: p.id, parent: pid });
 		edges.push({ id: `${pid}->${sid}`, source: pid, target: sid, dashed: true, label: par ? "suggested next" : "suggested" });
+	}
+	// The workflows that produce the evidence: one node per workflow an
+	// experiment runs through, above the app, linked to what it "feeds".
+	if (opts.workflows) {
+		const feeds = new Map<string, string[]>();
+		for (const e of exps) {
+			for (const l of new Set([experimentLoop(e), ...(e.loops || [])].filter(Boolean) as string[])) feeds.set(l, [...(feeds.get(l) ?? []), e.id]);
+		}
+		for (const [loop, ids] of feeds) {
+			const wid = `wf:${loop}`;
+			nodes.push({ id: wid, kind: "workflow", depth: 1, ref: loop, parent: root });
+			edges.push({ id: `${root}->${wid}`, source: root, target: wid });
+			for (const id of ids) edges.push({ id: `${wid}=>exp:${id}`, source: wid, target: `exp:${id}`, dashed: true, label: "feeds" });
+		}
 	}
 	return { nodes, edges };
 }

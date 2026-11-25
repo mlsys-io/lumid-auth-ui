@@ -12,8 +12,8 @@
 // counters. Wording lives in lib/research-map.ts. Phones get a list.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import { ArrowRight, FlaskConical, MessagesSquare, Sparkles } from "lucide-react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { ArrowRight, FlaskConical, MessagesSquare, Sparkles, Workflow } from "lucide-react";
 import apiClient from "@/api/client";
 import { me, type MeExperiment, type MeExperimentDetail } from "@/api/me";
 import EvolutionChart, { type EvoSeries } from "@/components/research/EvolutionChart";
@@ -165,6 +165,10 @@ function SuggestedCard3D({ p, selected }: { p: Proposal; selected: boolean }) {
 // the words one hover/click away (the card). The dot sits ON the node's point
 // so edges meet it; the name hangs to its right, outside the box.
 
+// The same states as VERSION_DOT, for SVG particles.
+const VERSION_FILL: Record<string, string> = {
+	winning: "fill-gold-600", leading: "fill-gold-400", current: "fill-ink-500", trying: "fill-lagoon-500", "can't tell apart": "fill-ember-500",
+};
 const VERSION_DOT: Record<string, string> = {
 	winning: "bg-gold-600", leading: "bg-gold-400", current: "bg-ink-500",
 	trying: "bg-lagoon-500", "can't tell apart": "bg-ember-500", "not run yet": "bg-card border border-dashed border-ink-400",
@@ -205,7 +209,8 @@ function MapCanvas({ app, exps, proposals, selected, onSelect, grow }: {
 	selected: string | null; onSelect: (id: string | null) => void; grow: boolean;
 }) {
 	const running = useShellActivity()?.runningApps.includes(app) ?? false;
-	const tree = useMemo(() => buildResearchTree(app, exps, proposals), [app, exps, proposals]);
+	const tree = useMemo(() => buildResearchTree(app, exps, proposals, { workflows: true }), [app, exps, proposals]);
+	const navigate = useNavigate();
 	const lit = useMemo(() => (selected ? pathTo(tree.nodes, selected) : null), [tree, selected]);
 	const expById = useMemo(() => new Map(exps.map((e) => [e.id, e])), [exps]);
 	const propById = useMemo(() => new Map(proposals.map((p) => [p.id, p])), [proposals]);
@@ -221,19 +226,37 @@ function MapCanvas({ app, exps, proposals, selected, onSelect, grow }: {
 		tree.nodes.forEach((n, i) => o.set(n.id, n.depth === 0 ? 0 : i));
 		return o;
 	}, [tree]);
+	const feedsOf = useCallback((loop: string) => tree.edges.filter((e) => e.source === `wf:${loop}`).length, [tree]);
+	// Evidence around each version: one particle per result (log-scaled in Space3D).
+	const evidence = useCallback((n: MapNode) => {
+		if (n.kind !== "version") return null;
+		const v = versionOf(n.id);
+		if (!v || !v.n) return null;
+		return { count: v.n, className: VERSION_FILL[v.tag] ?? "fill-ink-500" };
+	}, [versionOf]);
 	const describe = useCallback((n: MapNode): string => {
 		if (n.kind === "app") return `${appTitle(app)}: ${exps.length} experiments${running ? ", running now" : ""}`;
 		if (n.kind === "experiment") { const e = expById.get(n.ref); return e ? `${humanId(e.id)}: ${experimentStatus(e).text}` : n.ref; }
 		if (n.kind === "version") { const v = versionOf(n.id); return v ? `${v.label}: ${v.tag}${v.tag !== "not run yet" ? `, ${v.line}` : ""}` : n.ref; }
+		if (n.kind === "workflow") { const k = feedsOf(n.ref); return `Workflow ${loopLabel("", n.ref)}: feeds ${k} experiment${k === 1 ? "" : "s"} — open it`; }
 		return `Suggested: ${humanId(n.ref)}`;
-	}, [app, exps.length, running, expById, versionOf]);
+	}, [app, exps.length, running, expById, versionOf, feedsOf]);
 	const renderCard = useCallback((n: MapNode, st: { selected: boolean }) => {
 		if (n.kind === "app") return <AppCard3D app={app} running={running} count={exps.length} selected={st.selected} />;
 		if (n.kind === "experiment") { const e = expById.get(n.ref); return e ? <ExperimentCard3D e={e} selected={st.selected} /> : null; }
 		if (n.kind === "version") { const v = versionOf(n.id); return v ? <VersionCard3D v={v} selected={st.selected} /> : null; }
+		if (n.kind === "workflow") {
+			const k = feedsOf(n.ref);
+			return (
+				<div className={cn("rounded-lg border bg-card px-2.5 py-1.5 shadow-e1 min-w-[9rem]", st.selected ? "border-lagoon-400" : "border-ink-200")}>
+					<div className="flex items-center gap-1.5 text-caption font-medium text-ink-900"><Workflow className="w-3.5 h-3.5 text-lagoon-600" aria-hidden />{loopLabel("", n.ref)}</div>
+					<div className="text-micro text-ink-600">feeds {k} experiment{k === 1 ? "" : "s"} · open it</div>
+				</div>
+			);
+		}
 		const p = propById.get(n.ref);
 		return p ? <SuggestedCard3D p={p} selected={st.selected} /> : null;
-	}, [app, running, exps.length, expById, propById, versionOf]);
+	}, [app, running, exps.length, expById, propById, versionOf, feedsOf]);
 	const renderDot = useCallback((n: MapNode) => {
 		if (n.kind === "app") return <Dot size={14} rings className={running ? "bg-lagoon-500" : "bg-gold-600"} label={appTitle(app)} labelClass="text-meta font-semibold text-ink-900"
 			sub={`${exps.length} experiment${exps.length === 1 ? "" : "s"}${running ? " · running now" : ""}`} />;
@@ -249,8 +272,13 @@ function MapCanvas({ app, exps, proposals, selected, onSelect, grow }: {
 			const tag = v && v.tag !== "current" && v.tag !== "not run yet" ? v.tag : undefined;
 			return <Dot size={7} className={VERSION_DOT[v?.tag ?? "current"] ?? "bg-ink-500"} label={v?.label ?? n.ref} labelClass="text-micro text-ink-700" sub={tag} />;
 		}
+		if (n.kind === "workflow") {
+			const k = feedsOf(n.ref);
+			return <Dot size={9} className="bg-lagoon-500 rounded-sm" label={loopLabel("", n.ref)} labelClass="text-micro font-medium text-lagoon-800"
+				sub={`workflow · feeds ${k}`} subClass="text-lagoon-700" />;
+		}
 		return <Dot size={8} className="bg-card border border-dashed border-gold-500" label={`Suggested: ${humanId(n.ref)}`} labelClass="text-micro text-gold-700" />;
-	}, [app, running, expById, versionOf]);
+	}, [app, running, expById, versionOf, exps.length, feedsOf]);
 	// The space fits the screen: what's above it (header, the app's pages,
 	// compute) and the approval card under it stay on the first screen.
 	const vh = useViewportHeight();
@@ -258,7 +286,9 @@ function MapCanvas({ app, exps, proposals, selected, onSelect, grow }: {
 	const height = Math.round(Math.max(320, Math.min(600, vh - (proposals.length ? 520 : 400), 240 + tree.nodes.length * 16)));
 	return (
 		<Space3D nodes={tree.nodes} edges={tree.edges} renderCard={renderCard} renderDot={renderDot} describe={describe}
-			selected={selected} onSelect={onSelect} lit={lit} grow={grow} order={order} height={height} />
+			selected={selected} lit={lit} grow={grow} order={order} height={height} evidence={evidence}
+			// A workflow node opens that workflow; everything else selects in place.
+			onSelect={(id) => (id?.startsWith("wf:") ? navigate(workflowPath(app, id.slice(3))) : onSelect(id))} />
 	);
 }
 
