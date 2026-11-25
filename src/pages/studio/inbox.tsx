@@ -1,4 +1,4 @@
-// Workflow feed pieces for the one Inbox (/studio/inbox, pages/account/inbox.tsx).
+// Workflow feed pieces for Activity's Needs you / What your apps said (pages/account/inbox.tsx).
 //
 // This was its own page, "Drafts" (/studio/drafts), with a five-chip filter
 // row — an inbox beside the Inbox. The two merged in 2026-11; /studio/drafts

@@ -1,5 +1,6 @@
-// /studio/runs — "Activity": what's running, what's broken, and how each
-// workflow is doing, grouped by app (components/activity/ActivityView). It was
+// /studio/runs — "Activity": what needs you (the Inbox, merged in 2026-11-25),
+// what's running, what's broken, how each workflow is doing grouped by app
+// (components/activity/ActivityView), and what your apps said. It was
 // a flat list of workflow names with the app as a grey subtitle — runs read as
 // detached from the apps that own them (2026-11-24).
 //
@@ -9,8 +10,8 @@
 // One feed for every view: /me/runs for the window, kept live by the
 // /me/runs/stream SSE (useRunsFeed).
 
-import { useMemo } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useEffect, useMemo } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { ChevronLeft, BarChart3, X } from "lucide-react";
 import type { MeRunRow } from "@/api/me";
 import AirflowGrid, { type GridCell, type GridState } from "@/components/AirflowGrid";
@@ -30,6 +31,7 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { ActivityView } from "@/components/activity/ActivityView";
 import { useRunsFeed, useOncePerSession } from "@/components/activity/hooks";
+import { useInbox, NeedsYou, AppUpdates } from "@/pages/account/inbox";
 
 type View = "index" | "list" | "grid" | "gantt" | "calendar";
 
@@ -59,6 +61,16 @@ export default function StudioRuns() {
 
 	const { runs, err, asOf, reload, truncated, jobsSource } = useRunsFeed(windowDays, view === "index" ? "" : stateFilter);
 	const entrance = useOncePerSession("activity");
+	const inbox = useInbox();
+	// Old Inbox links land on their part of the page (#needs / #updates / #audit).
+	const { hash } = useLocation();
+	const inboxReady = !inbox.firstLoad;
+	useEffect(() => {
+		if (!hash || !inboxReady) return;
+		const el = document.getElementById(hash.slice(1));
+		if (el instanceof HTMLDetailsElement) el.open = true;
+		el?.scrollIntoView({ block: "start" });
+	}, [hash, inboxReady]);
 
 	const windowControl = (
 		<Segmented
@@ -81,7 +93,7 @@ export default function StudioRuns() {
 				<PageHeader
 					className="pt-2"
 					title="Activity"
-					subtitle="What's running, what's broken, and how each workflow is doing."
+					subtitle="What needs you, what's running, what's broken, and what your apps said."
 					actions={
 						<>
 							{windowControl}
@@ -105,6 +117,8 @@ export default function StudioRuns() {
 				{jobsSourceNotice(jobsSource) && (
 					<p role="status" className="mb-4 -mt-1 text-meta text-ink-600">{jobsSourceNotice(jobsSource)}</p>
 				)}
+				<div className="space-y-8">
+				<NeedsYou inbox={inbox} app={appFilter || undefined} />
 				{runs === null && !err ? (
 					<div className="space-y-3" role="status" aria-label="Loading activity">
 						{[0, 1, 2].map((i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
@@ -120,6 +134,8 @@ export default function StudioRuns() {
 				) : (
 					<ActivityView runs={runs} app={appFilter || undefined} days={windowDays} entrance={entrance} asOf={asOf} truncated={truncated} />
 				)}
+				<AppUpdates inbox={inbox} app={appFilter || undefined} audit />
+				</div>
 			</div>
 		);
 	}

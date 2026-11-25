@@ -121,7 +121,6 @@ const FindataSQL = lazy(() => import("./pages/account/findata-sql"));
 const ConnectGoogle = lazy(() => import("./pages/account/connect-google"));
 const ConnectPowerAutomate = lazy(() => import("./pages/account/connect-power-automate"));
 const ConnectMicrosoft = lazy(() => import("./pages/account/connect-microsoft"));
-const Inbox = lazy(() => import("./pages/account/inbox"));
 const SkillsNew = lazy(() => import("./pages/account/skills/new"));
 const MemoryNew = lazy(() => import("./pages/account/memory/new"));
 // The unrouted /pages/account/connect.tsx ("Install LumidOS" — the
@@ -815,10 +814,11 @@ export default function App() {
                 `workflows/market` outranks `workflows/:slug`. */}
             <Route path="workflows/market"             element={<AppWorkflows />} />
 
-            <Route path="inbox"                        element={<Inbox />} />
-            {/* Drafts merged into the one Inbox (2026-11). */}
-            <Route path="drafts"                       element={<Navigate to="/studio/inbox?view=needs" replace />} />
-            <Route path="account/inbox"                element={<Inbox />} />
+            {/* Inbox merged into Activity (2026-11-25): Needs you leads that
+                page. Drafts had merged into the Inbox before (2026-11). */}
+            <Route path="inbox"                        element={<InboxToActivity />} />
+            <Route path="drafts"                       element={<InboxToActivity />} />
+            <Route path="account/inbox"                element={<InboxToActivity />} />
             {/* lumid-market competition section — now PURE config surfaces.
                 Each route mounts AppSurface with an explicit named surface
                 (declared in the bundle's xpcloud.yaml ui.surfaces); the page
@@ -1247,3 +1247,12 @@ export default function App() {
   );
 }
 
+// /studio/inbox → Activity. ?app= carries over; ?view=audit|activity land on
+// that part of the page, anything else on Needs you (the top).
+function InboxToActivity() {
+  const [sp] = useSearchParams();
+  const app = sp.get("app");
+  const v = sp.get("view") || sp.get("filter");
+  const hash = v === "audit" ? "#audit" : v === "activity" ? "#updates" : "#needs";
+  return <Navigate to={`/studio/runs${app ? `?app=${encodeURIComponent(app)}` : ""}${hash}`} replace />;
+}

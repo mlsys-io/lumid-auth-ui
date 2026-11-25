@@ -219,6 +219,10 @@ await section('Inbox: unexpected response', async () => {
 	const ok = await alert.first().waitFor({ timeout: 20000 }).then(() => true).catch(() => false);
 	const crashed = await page.getByText('This page hit a snag').count();
 	assert(ok && crashed === 0, `HTML-200 from /inbox-api says so (ErrorState or notice), not the crash boundary (crash=${crashed})`);
+	// The Inbox is part of Activity now: one page, one sidebar row.
+	assert(/\/studio\/runs/.test(page.url()), `/studio/inbox opens Activity (${page.url()})`);
+	assert(await page.locator('section[aria-label="Needs you"]').count() === 1, 'Activity leads with Needs you');
+	assert(await page.locator('nav a[data-nav-item][href="/studio/inbox"]').count() === 0, 'no separate Inbox row in the sidebar');
 	await page.close();
 });
 

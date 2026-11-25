@@ -134,8 +134,8 @@ export default function SkillsNewPage() {
 			<div className="flex items-start justify-between">
 				<div>
 					<div className="text-xs text-muted-foreground mb-1">
-						<Link to="/studio/inbox" className="hover:underline">
-							<ArrowLeft className="inline w-3 h-3 mr-0.5" /> Inbox
+						<Link to="/studio/runs" className="hover:underline">
+							<ArrowLeft className="inline w-3 h-3 mr-0.5" /> Activity
 						</Link>
 					</div>
 					<h1 className="text-h2 font-bold flex items-center gap-2">
