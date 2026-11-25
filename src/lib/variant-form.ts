@@ -244,5 +244,7 @@ export function saveErrorWords(e: unknown): string {
 	if (status === 403) return "Only the app's owner can change it (and only admins can save code).";
 	if (status === 413) return "The files are too big to save.";
 	if (status && status >= 500) return `The server couldn't save it (HTTP ${status}) — try again.`;
+	// The browser's own words for a request that got no answer at all.
+	if (/failed to fetch|networkerror|load failed|network request failed/i.test(msg)) return "Couldn't reach lum.id, so nothing was saved — try again in a moment.";
 	return msg || "Couldn't save the spec.";
 }

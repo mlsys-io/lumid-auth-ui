@@ -137,6 +137,10 @@ check("save errors in words", () => {
 	eq(saveErrorWords(new Error("There is already a workflow called \"a\"")), "There is already a workflow called \"a\"");
 });
 
+check("a request that got no answer is said in words", () => {
+	eq(saveErrorWords(new TypeError("Failed to fetch")), "Couldn't reach lum.id, so nothing was saved — try again in a moment.");
+});
+
 export function run(): number {
 	let failed = 0;
 	for (const c of checks) {
