@@ -177,7 +177,9 @@ const VERSION_DOT: Record<string, string> = {
 	trying: "bg-plum-400", "can't tell apart": "bg-plum-300", "not run yet": "bg-card border border-dashed border-plum-400",
 };
 
-function Dot({ size, className, label, labelClass, sub, subClass, rings }: { size: number; className: string; label: string; labelClass: string; sub?: string; subClass?: string; rings?: boolean | "live" }) {
+function Dot({ size, className, label, labelClass, sub, subClass, rings, orb = true }: { size: number; className: string; label: string; labelClass: string; sub?: string; subClass?: string; rings?: boolean | "live";
+	/** Shade it as a small lit sphere (off for hollow dots). */
+	orb?: boolean }) {
 	return (
 		<span className="relative flex items-center justify-center" style={{ width: Math.max(18, size + 8), height: Math.max(18, size + 8) }}>
 			{rings && (
@@ -192,7 +194,7 @@ function Dot({ size, className, label, labelClass, sub, subClass, rings }: { siz
 					</>}
 				</>
 			)}
-			<span className={cn("rounded-full ring-[3px] ring-plum-200/60", className)} style={{ width: size, height: size }} />
+			<span className={cn("rounded-full ring-[3px] ring-plum-200/60", orb && "space3d-orb", className)} style={{ width: size, height: size }} />
 			<span className="absolute left-full ml-1 flex flex-col leading-tight space3d-label">
 				<span className={cn("whitespace-nowrap max-w-[13rem] truncate", labelClass)}>{label}</span>
 				{sub && <span className={cn("whitespace-nowrap max-w-[13rem] truncate text-nano", subClass ?? "text-ink-600")}>{sub}</span>}
@@ -292,7 +294,7 @@ function MapCanvas({ app, exps, proposals, selected, onSelect, grow, insetBottom
 			return <Dot size={7} className="bg-lagoon-500 !rounded-[2px] !ring-lagoon-100" label={loopLabel("", n.ref)} labelClass="text-micro font-medium text-ink-800"
 				sub="workflow" subClass="text-lagoon-700" />;
 		}
-		return <Dot size={8} className="bg-card border border-dashed border-gold-500" label={`Suggested: ${humanId(n.ref)}`} labelClass="text-micro text-gold-700" />;
+		return <Dot size={8} orb={false} className="bg-card border border-dashed border-gold-500" label={`Suggested: ${humanId(n.ref)}`} labelClass="text-micro text-gold-700" />;
 	}, [app, running, expById, versionOf, exps.length, feedsOf]);
 	// The space fits the screen: what's above it (header, the app's pages,
 	// compute) and the approval card under it stay on the first screen.

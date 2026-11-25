@@ -1,5 +1,5 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
-import { coneDirections, layoutSpace, project, depthCue, frameCamera, mixCamera, firstRing, HOME, STEP } from "./space3d";
+import { coneDirections, layoutSpace, project, depthCue, frameCamera, mixCamera, firstRing, sceneFloor, dustField, hash01, HOME, STEP } from "./space3d";
 import type { MapNode } from "./research-map";
 
 type Check = { name: string; run: () => void };
@@ -31,12 +31,34 @@ check("layout: app at the origin, experiments on a ring, versions further out, n
 	const pos = layoutSpace(tree);
 	const flat = (id: string) => { const p = pos.get(id)!; return Math.hypot(p.x, p.z); };
 	ok(near(flat("app:a"), 0) && near(pos.get("app:a")!.y, 0), "app at origin");
-	for (const e of ["e1", "e2", "e3"]) ok(near(flat(`exp:${e}`), firstRing(3), 1e-6), `${e} on the ring`);
-	for (const v of ["v1", "v2", "v3", "v4"]) ok(near(flat(`ver:e1:${v}`), firstRing(3) + STEP, 1e-6), `${v} one step out`);
+	// On the ring, give or take its organic nudge (±8% radius).
+	const R1 = firstRing(3);
+	for (const e of ["e1", "e2", "e3"]) ok(flat(`exp:${e}`) > R1 * 0.91 && flat(`exp:${e}`) < R1 * 1.09, `${e} on the ring`);
+	for (const v of ["v1", "v2", "v3", "v4"]) ok(flat(`ver:e1:${v}`) > R1 * 0.91 + STEP - 20 && flat(`ver:e1:${v}`) < R1 * 1.09 + STEP + 20, `${v} one step out`);
 	const pts = [...pos.values()];
 	for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) {
 		ok(Math.hypot(pts[i].x - pts[j].x, pts[i].y - pts[j].y, pts[i].z - pts[j].z) > 55, "cards apart");
 	}
+});
+
+check("the layout is organic but stable: same ids, same places; experiments at different heights", () => {
+	const a = layoutSpace(tree), b = layoutSpace(tree);
+	for (const [id, p] of a) { const q = b.get(id)!; ok(p.x === q.x && p.y === q.y && p.z === q.z, `${id} stable`); }
+	const ys = ["e1", "e2", "e3"].map((e) => a.get(`exp:${e}`)!.y);
+	ok(new Set(ys.map((y) => y.toFixed(3))).size === 3, "experiments are not all on one plane");
+	ok(ys.every((y) => Math.abs(y) <= 55), "but stay near the app's height");
+});
+
+check("the floor sits under every node, with a ring under each orbit", () => {
+	const pos = layoutSpace(tree);
+	const f = sceneFloor(pos);
+	ok([...pos.values()].every((p) => p.y < f.y - 60), "floor below all");
+	ok(f.rings.length === 4, `inner + 2 orbits + rim (${f.rings.map((r) => r.toFixed(0)).join(",")})`);
+	ok(Math.abs(f.rings[1] - firstRing(3)) < firstRing(3) * 0.1, "first orbit at the experiment ring");
+	ok(f.rings.every((r, i) => i === 0 || r > f.rings[i - 1]), "rings grow outward");
+	const d = dustField(40, 500, -200, 200);
+	ok(d.length === 40 && d.every((m) => Math.hypot(m.x, m.z) <= 500 && m.y >= -200 && m.y <= 200), "dust inside its cylinder");
+	ok(hash01("x", 1) !== hash01("x", 2) && hash01("x", 1) === hash01("x", 1), "hash streams differ, and are stable");
 });
 
 check("versions sit near their own experiment, not another's", () => {

@@ -54,7 +54,7 @@ export function coneDirections(axis: Vec3, count: number, half: number): Vec3[] 
 }
 
 /** Vertical gap between stacked sibling cards, and the step outward per depth. */
-export const ROW = 64;
+export const ROW = 68;
 export const STEP = 200;
 /** Radius of the first ring: wide enough that neighbouring branches don't touch. */
 export function firstRing(n: number): number { return Math.max(200, n * 48); }
@@ -66,6 +66,17 @@ export function firstRing(n: number): number { return Math.max(200, n * 48); }
  * column further out along the same bearing (deeper levels further still).
  * Turning the space brings each branch to the front in turn.
  */
+/** A stable number in [0, 1) for an id (FNV-1a, then a mixer); `salt` picks
+ *  an independent stream, so x/y/z jitter aren't correlated. */
+export function hash01(id: string, salt = 0): number {
+	let h = 2166136261 ^ Math.imul(salt + 1, 0x9e3779b1);
+	for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619);
+	h = Math.imul(h ^ (h >>> 15), 2246822507);
+	h = Math.imul(h ^ (h >>> 13), 3266489909);
+	return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+const jit = (id: string, salt: number) => hash01(id, salt) - 0.5;
+
 export function layoutSpace(nodes: MapNode[]): Map<string, Vec3> {
 	const pos = new Map<string, Vec3>();
 	const bearing = new Map<string, number>();
@@ -81,28 +92,71 @@ export function layoutSpace(nodes: MapNode[]): Map<string, Vec3> {
 	const R1 = firstRing(ring1);
 	const radius = (d: number) => (d <= 0 ? 0 : R1 + (d - 1) * STEP);
 	const at = (theta: number, r: number, y: number) => v(r * Math.cos(theta), y, r * Math.sin(theta));
-	const place = (n: MapNode, theta: number, y: number) => {
-		pos.set(n.id, at(theta, radius(n.depth), y));
+	// `rf`: this branch's own radius factor (a little in or out), kept by its children.
+	const place = (n: MapNode, theta: number, y: number, rf = 1, dr = 0) => {
+		pos.set(n.id, at(theta, radius(n.depth) * rf + dr, y));
 		bearing.set(n.id, theta);
 		const ch = kids.get(n.id) ?? [];
 		if (!ch.length) return;
 		if (n.depth === 0) {
-			// The first ring: even bearings; a large ring alternates up/down a little
-			// so cards on neighbouring bearings don't share a line.
-			ch.forEach((c, i) => place(c, (i / ch.length) * 2 * Math.PI, ch.length > 6 ? (i % 2 ? -36 : 36) : 0));
+			// The first ring: even bearings, each nudged off its slot, a little in or
+			// out and up or down (seeded by the id, so it never jumps between
+			// renders) — an organic cloud with real height, not a turntable.
+			const gap = (2 * Math.PI) / ch.length;
+			ch.forEach((c, i) => place(c, i * gap + jit(c.id, 1) * gap * 0.4, jit(c.id, 3) * 110, 1 + jit(c.id, 2) * 0.16));
 			return;
 		}
-		// Deeper: a column centred on the parent's height, nudged a hair around the
-		// bearing so the column reads as a fan rather than a wall.
+		// Deeper: a column centred on the parent's height, nudged around the
+		// bearing and in or out so it reads as a loose fan rather than a wall.
 		ch.forEach((c, j) => {
 			const k = j - (ch.length - 1) / 2;
-			place(c, theta + k * 0.025, y + k * ROW);
+			place(c, theta + k * 0.025 + jit(c.id, 4) * 0.05, y + k * ROW + jit(c.id, 5) * 10, rf, jit(c.id, 6) * 36);
 		});
 	};
 	roots.forEach((r, i) => place(r, (i / Math.max(1, roots.length)) * 2 * Math.PI, 0));
 	const rw = Math.max(150, R1 * 0.62);
 	wfs.forEach((w, i) => { pos.set(w.id, at((i / wfs.length) * 2 * Math.PI + Math.PI / wfs.length, rw, -170)); });
 	return pos;
+}
+
+/**
+ * The stage under a laid-out space: a floor below the lowest node, the floor's
+ * rings (one under each depth's orbit, plus an inner and an outer rim), and
+ * the radius the floor fades out at.
+ */
+export function sceneFloor(pos: Map<string, Vec3>): { y: number; rings: number[]; rim: number } {
+	let maxY = 0, maxR = 0;
+	const radii: number[] = [];
+	for (const p of pos.values()) {
+		maxY = Math.max(maxY, p.y);
+		const r = Math.hypot(p.x, p.z);
+		maxR = Math.max(maxR, r);
+		if (r > 1) radii.push(r);
+	}
+	// Orbits: cluster the nodes' radii (a ring's jitter is ±8%, a step is 200).
+	radii.sort((a, b) => a - b);
+	const orbits: number[] = [];
+	let group: number[] = [];
+	for (const r of radii) {
+		if (group.length && r - group[0] > STEP * 0.55) { orbits.push(group.reduce((a, b) => a + b, 0) / group.length); group = []; }
+		group.push(r);
+	}
+	if (group.length) orbits.push(group.reduce((a, b) => a + b, 0) / group.length);
+	const rim = Math.max(260, maxR + 90);
+	const inner = orbits.length ? orbits[0] * 0.45 : rim * 0.3;
+	return { y: maxY + 110, rings: [inner, ...orbits, rim], rim };
+}
+
+/** Motes of dust in a cylinder around the space (seeded): they turn with it,
+ *  so near motes sweep past far ones — parallax even with nothing selected. */
+export function dustField(count: number, radius: number, top: number, bottom: number, seed = "dust"): Array<Vec3 & { size: number; speed: number }> {
+	const out: Array<Vec3 & { size: number; speed: number }> = [];
+	for (let i = 0; i < count; i++) {
+		const id = `${seed}:${i}`;
+		const r = radius * Math.sqrt(hash01(id, 1)), a = hash01(id, 2) * 2 * Math.PI;
+		out.push({ x: r * Math.cos(a), z: r * Math.sin(a), y: top + (bottom - top) * hash01(id, 3), size: 0.6 + hash01(id, 4), speed: 0.4 + hash01(id, 5) });
+	}
+	return out;
 }
 
 /** Rotate by the camera (yaw about Y, then pitch about X) and project. */

@@ -964,6 +964,20 @@ html[data-surface="studio"] ::selection {
 	mask-image: radial-gradient(ellipse 55% 55% at 50% 50%, black 30%, transparent 75%);
 	opacity: 0.35;
 }
+/* The floor under the space: a pool of light that fades to nothing at its rim,
+   and soft shadows under each node (gradients, so no blur filter per frame). */
+.space3d-floor-core { stop-color: theme('colors.plum.100'); stop-opacity: 0.9; }
+.space3d-floor-mid { stop-color: theme('colors.ink.200'); stop-opacity: 0.45; }
+.space3d-floor-edge { stop-color: theme('colors.ink.100'); stop-opacity: 0; }
+.space3d-shadow-core { stop-color: theme('colors.ink.900'); stop-opacity: 0.32; }
+.space3d-shadow-edge { stop-color: theme('colors.ink.900'); stop-opacity: 0; }
+/* Nodes read as small lit spheres: a highlight up-left, a shade down-right. */
+.space3d-orb {
+	background-image:
+		radial-gradient(circle at 33% 28%, rgb(var(--card-rgb) / 0.8) 0%, rgb(var(--card-rgb) / 0) 46%),
+		radial-gradient(circle at 50% 50%, transparent 52%, color-mix(in srgb, theme('colors.ink.900') 30%, transparent) 100%);
+	box-shadow: 0 1px 2px color-mix(in srgb, theme('colors.ink.900') 22%, transparent);
+}
 .space3d-edge-dashed { stroke-dasharray: 4 4; }
 /* The selected path's edges flow from the app outwards. */
 .space3d-edge-flow { stroke-dasharray: 4 3; animation: research-flow 1.2s linear infinite; }
