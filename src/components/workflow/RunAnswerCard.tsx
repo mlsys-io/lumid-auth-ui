@@ -15,7 +15,8 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, ArrowRight, CheckCircle2, ChevronRight, CircleDashed, MessagesSquare } from "lucide-react";
 import type { MeCycleDetail, MeCycleListItem } from "@/api/me";
-import { runAnswer, runMetrics, primaryMetricKey, vsUsual } from "@/lib/run-answer";
+import { runAnswer, runMetrics, primaryMetricKey, vsUsual, fmtMetricValue } from "@/lib/run-answer";
+import MetricReveal from "@/components/workflow/MetricReveal";
 import { triageFailure } from "@/lib/failure-triage";
 import { cn } from "@/lib/utils";
 import { WorkingDots } from "@/components/activity/ActivityView";
@@ -45,6 +46,19 @@ export default function RunAnswerCard({ app, loop, runId, detail, listRow, cycle
 		if (!p) return null;
 		const others = cycles.filter((c) => c.ts !== runId && c.ok).map((c) => keyMetricOf(c, primary)).filter((v): v is number => v != null);
 		return vsUsual(p.value, others, hib);
+	})();
+	const reveal = (() => {
+		if (!primary || !usual || a.tone !== "ok") return null;
+		const p = metrics.find((m) => m.key === primary);
+		if (!p) return null;
+		const values = [...cycles].reverse()
+			.map((c) => ({ ts: c.ts, v: c.ts === runId ? p.value : (c.ok ? keyMetricOf(c, primary) : undefined) }))
+			.filter((x): x is { ts: string; v: number } => x.v != null)
+			.slice(-24);
+		const sorted = values.filter((x) => x.ts !== runId).map((x) => x.v).sort((a2, b2) => a2 - b2);
+		if (sorted.length < 3) return null;
+		return { values, currentTs: runId, usual: sorted[Math.floor(sorted.length / 2)], delta: usual.text, better: usual.better,
+			format: (v: number) => fmtMetricValue(v, p.unit, p.key) };
 	})();
 	const t = a.tone === "failed" ? triageFailure(a.raw || a.sentence, app, loop) : null;
 	// The generic triage ("Run failed — hasn't recovered yet") repeats the
@@ -99,6 +113,8 @@ export default function RunAnswerCard({ app, loop, runId, detail, listRow, cycle
 					})}
 				</dl>
 			)}
+			{/* The key number against the last runs: draws in, then the delta pops. */}
+			{reveal && <MetricReveal {...reveal} />}
 
 			{a.raw && (
 				<div>

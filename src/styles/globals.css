@@ -941,3 +941,10 @@ html[data-surface="studio"] ::selection {
 @media (prefers-reduced-motion: reduce) {
 	.research-map .react-flow__node { transition: none; }
 }
+
+/* The run page's "+12% vs usual" pops after its line has drawn (MetricReveal). */
+@keyframes value-pop-late { 0%, 55% { opacity: 0; transform: scale(0.8); } 75% { opacity: 1; transform: scale(1.12); } 100% { opacity: 1; transform: none; } }
+.value-pop-late { display: inline-block; animation: value-pop-late 1.2s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+	.value-pop-late { animation: none; }
+}
