@@ -23,7 +23,11 @@ type Report = {
 // instantly while revalidating in the background.
 const mindCache = new Map<string, Report>();
 
-export default function WorkflowInsights({ slug }: { slug: string }) {
+export default function WorkflowInsights({ slug, knownRuns }: { slug: string;
+	/** Runs the caller can see. When the insights source claims none while the
+	 *  caller shows some (it reads a different store for tenant apps), say
+	 *  nothing rather than "No runs yet" under "Latest run succeeded". */
+	knownRuns?: number }) {
 	const [state, setState] = useState<Report | "loading" | "error">(() => mindCache.get(slug) ?? "loading");
 
 	useEffect(() => {
@@ -44,6 +48,7 @@ export default function WorkflowInsights({ slug }: { slug: string }) {
 	const hasRuns = (tm?.run_count ?? 0) > 0;
 	// Nothing to say yet — say nothing (the panel shows its own empty state).
 	if (!hasRuns && state.deltas.length === 0) return null;
+	if (!hasRuns && (knownRuns ?? 0) > 0) return null;
 
 	// Breakdown that EXPLAINS the headline %: a low rate usually means many
 	// no-op cycles (loop ran fine, nothing to do), NOT failures.
