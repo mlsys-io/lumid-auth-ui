@@ -182,9 +182,22 @@ function FinishedCard({ run, wf, showApp }: { run: MeRunRow; wf: WorkflowActivit
 
 // ── Needs fixing ───────────────────────────────────────────────────────────
 
-export function NeedsFixingRow({ wf, showApp, span }: { wf: WorkflowActivity; showApp: boolean; span: string }) {
+export function NeedsFixingRow({ wf, showApp, span, dense = false }: { wf: WorkflowActivity; showApp: boolean; span: string; dense?: boolean }) {
 	const f = wf.failing!;
 	const streak = failingSentence(f, span);
+	if (dense) {
+		// One line, for the top of an app's home: the app's own page stays the
+		// first thing you see; the whole story is one click (and the tooltip) away.
+		return (
+			<Link to={runRowHref(f.latestRunId)} title={`${streak} — ${f.rawReason || f.cause}`}
+				className="flex items-center gap-2 rounded-lg border border-brick-200 bg-brick-50/50 px-2.5 py-1.5 text-caption hover:bg-brick-50 transition-colors min-w-0">
+				<AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 text-brick-600" aria-hidden />
+				<span className="font-medium text-ink-900 flex-shrink-0">{title(wf)}</span>
+				<span className="text-ink-700 truncate min-w-0">{streak} · <span className="text-brick-700">{f.cause}</span></span>
+				<span className="ml-auto flex-shrink-0 inline-flex items-center gap-0.5 text-micro text-ink-700">Open run <ArrowRight className="w-3 h-3" /></span>
+			</Link>
+		);
+	}
 	return (
 		<div className="flex items-start gap-3 rounded-xl border border-brick-200 bg-brick-50/50 px-3.5 py-3 animate-lumen-rise">
 			<AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0 text-brick-600" aria-hidden />
