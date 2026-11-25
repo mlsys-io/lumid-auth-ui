@@ -62,8 +62,14 @@ export function experimentStatus(e: MeExperiment): { tone: Tone; text: string } 
 	if (e.best_variant && e.criteria_met) return { tone: "ok", text: `Winning: ${humanId(e.best_variant)}` };
 	if (e.best_variant && e.not_separable_from?.length) return { tone: "running", text: `${humanId(e.best_variant)} leads, but can't be told apart yet` };
 	if (e.best_variant) return { tone: "running", text: `${humanId(e.best_variant)} leads — not confirmed yet` };
-	const need = (e.min_samples || 0) * Math.max(1, (e.arms?.length || Object.keys(e.variants || {}).length || 1));
-	return { tone: "running", text: need ? `Collecting results: ${e.n_results} of ${need}` : `Collecting results: ${e.n_results} so far` };
+	// Every version has the results it needs, yet nothing leads: the averages
+	// are too close for the rule to call. (Was "Collecting results: 209 of 24".)
+	const vs = Object.values(e.variants || {});
+	const declared = Math.max(1, e.arms?.length || vs.length || 1);
+	const min = e.min_samples || 0;
+	if (min && vs.length >= declared && vs.every((v) => v.n >= min)) return { tone: "idle", text: "Enough results — too close to call so far" };
+	const need = min * declared;
+	return { tone: "running", text: need ? `Collecting results: ${Math.min(e.n_results, need)} of ${need}` : `Collecting results: ${e.n_results} so far` };
 }
 
 // ── a version (arm), in words ───────────────────────────────────────────

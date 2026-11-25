@@ -68,6 +68,11 @@ check("comparability note says what differed and what to do", () => {
 	eq(comparabilityNote({ ...kol, compare_within: ["harness_version"] } as MeExperiment), "They differ in harness version, so a gap between them may come from the setup rather than the version. To compare them, run every version under the same setup.");
 	eq(comparabilityNote(won), null);
 });
+check("status: enough results but no leader is 'too close to call'", () => {
+	const doc = { id: "readability_lift", kind: "arms", status: "active", hypothesis: "h", n_results: 209, criteria_met: false, comparable: true,
+		min_samples: 12, arms: [{ id: "current" }, { id: "rewritten" }], variants: { current: { n: 108, mean: 3.13 }, rewritten: { n: 101, mean: 3.13 } } } as unknown as MeExperiment;
+	eq(experimentStatus(doc).text, "Enough results — too close to call so far");
+});
 check("summary line", () => eq(mapSummary([kol, won], props), "2 experiments · 5 versions tried · 1 suggested"));
 
 export function run(): number {

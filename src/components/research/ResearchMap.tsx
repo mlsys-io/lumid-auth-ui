@@ -24,12 +24,15 @@ import { ArrowRight, FlaskConical, MessagesSquare, Sparkles } from "lucide-react
 import apiClient from "@/api/client";
 import { me, type MeExperiment, type MeExperimentDetail } from "@/api/me";
 import EvolutionChart, { type EvoSeries } from "@/components/research/EvolutionChart";
+import BestScoreChart from "@/components/research/BestScoreChart";
+import VersionChain from "@/components/research/VersionChain";
+import { buildEvolution } from "@/lib/evolution";
 import ApprovalCard, { readNotNow, writeNotNow } from "@/components/research/ApprovalCard";
 import {
 	buildResearchTree, comparabilityNote, criteriaInWords, experimentStatus, humanId, mapSummary, pathTo, versionsOf,
 	type MapNode, type Proposal, type Tone, type VersionInfo,
 } from "@/lib/research-map";
-import { humanMetric } from "@/lib/run-answer";
+import { humanMetric, fmtMetricValue } from "@/lib/run-answer";
 import { workflowPath } from "@/lib/run-routes";
 import { loopLabel } from "@/lib/workflow-names";
 import { appTitle } from "@/components/workflow/AppCard";
@@ -366,6 +369,18 @@ function ExperimentDetail({ app, e }: { app: string; e: MeExperiment }) {
 		}));
 	const metric = e.metric?.name || e.metric_name;
 	const m = metric ? humanMetric(metric) : null;
+	const hib = !(e.higher_is_better === false || e.metric?.higher_is_better === false);
+	const labelOf = (arm: string) => versions.find((v) => v.id === arm)?.label ?? humanId(arm);
+	const colorOf = (arm: string) => Math.max(0, versions.findIndex((v) => v.id === arm));
+	const evolution = useMemo(() => buildEvolution(
+		evo.map((x) => ({ id: x.id, points: x.points })),
+		{
+			runningMean: !!seriesData?.runningMean, minSamples: e.min_samples, higherIsBetter: hib,
+			declaredArms: versions.map((v) => v.id),
+			decided: !!e.criteria_met && e.comparable !== false, winner: e.best_variant,
+		},
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	), [series, seriesData?.runningMean, e.id, e.min_samples, hib, e.criteria_met, e.best_variant, e.comparable]);
 	const loop = e.dispatch?.loop || e.loops?.[0];
 	const done = criteriaInWords(e.success_criteria);
 	const q = (e as { description?: string }).description;
@@ -384,19 +399,30 @@ function ExperimentDetail({ app, e }: { app: string; e: MeExperiment }) {
 			</dl>
 			{series === null ? (
 				<div className="h-24 lumen-skeleton rounded-lg" role="status" aria-label="Loading how it evolved" />
+			) : evolution && metric && e.comparable !== false ? (
+				// Comparable versions: Novix's best-so-far story on one axis.
+				<BestScoreChart evo={evolution} labelOf={labelOf} colorOf={colorOf} metricKey={metric} unit={m?.unit ?? ""}
+					higherIsBetter={hib} minSamples={Math.max(1, e.min_samples || 1)} />
 			) : evo.some((x) => x.points.length > 1) && metric ? (
-				<EvolutionChart series={evo} metricKey={metric} unit={m?.unit ?? ""} higherIsBetter={!(e.higher_is_better === false || e.metric?.higher_is_better === false)}
-					comparable={e.comparable !== false} unlabelledRuns={unlabelledRuns} alreadyMeans={!!seriesData?.runningMean} />
+				// Measured differently: one small chart per version, never ranked.
+				<EvolutionChart series={evo} metricKey={metric} unit={m?.unit ?? ""} higherIsBetter={hib}
+					comparable={false} unlabelledRuns={unlabelledRuns} alreadyMeans={!!seriesData?.runningMean} />
 			) : null}
-			<ul className="space-y-1">
-				{versions.map((v) => (
-					<li key={v.id} className="flex items-center gap-2 text-caption">
-						<span className="font-medium text-ink-900 min-w-0 truncate">{v.label}</span>
-						<span className={cn("px-1.5 rounded-full border text-nano font-medium flex-shrink-0", TAG_CLS[v.tag])}>{v.tag}</span>
-						<span className="ml-auto text-ink-600 tabular-nums truncate">{v.line}</span>
-					</li>
-				))}
-			</ul>
+			{/* The versions in the order they were tried, each with its state —
+			    from the results over time when there are any, else the totals. */}
+			{evolution ? (
+				<VersionChain chain={evolution.chain} labelOf={labelOf} valueOf={(v) => fmtMetricValue(v, m?.unit ?? "", metric || "")} />
+			) : (
+				<ul className="space-y-1">
+					{versions.map((v) => (
+						<li key={v.id} className="flex items-center gap-2 text-caption">
+							<span className="font-medium text-ink-900 min-w-0 truncate">{v.label}</span>
+							<span className={cn("px-1.5 rounded-full border text-nano font-medium flex-shrink-0", TAG_CLS[v.tag])}>{v.tag}</span>
+							<span className="ml-auto text-ink-600 tabular-nums truncate">{v.line}</span>
+						</li>
+					))}
+				</ul>
+			)}
 			<div className="flex items-center gap-2 flex-wrap pt-0.5">
 				{loop && (
 					<Button asChild size="sm" variant="secondary">
