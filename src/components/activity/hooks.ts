@@ -56,7 +56,10 @@ export function useRunsFeed(days: number, state = "") {
 				if (mine !== reqId.current) return;
 				const page = r.runs || [];
 				if (page.length === 0) break;
-				rows.push(...page);
+				// Keyset pages should not overlap; if a row ever shows up twice
+				// (a run that moved while we paged), keep the first sighting.
+				const seen = new Set(rows.map((x) => x.run_id));
+				rows.push(...page.filter((x) => !seen.has(x.run_id)));
 				setRuns(rows.slice());
 				more = !!r.has_more && !!r.next_cursor;
 			}

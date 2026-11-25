@@ -79,3 +79,35 @@ export function timelineWorthShowing(events?: MeRunStepEvent[] | null): boolean 
 	if (!events?.length) return false;
 	return events.length > 1 || !!events[0].stage;
 }
+
+/** Where a running run probably is, estimated from the steps the workflow's
+ *  LAST run took: each step's share of that run's time, laid against how long
+ *  this run has been going. Runs do not report steps until they finish, so
+ *  this is an estimate and is always labelled as one. */
+export interface StepEstimate {
+	steps: Array<{ name: string; stage: string; state: "done" | "now" | "next" }>;
+	now: { name: string; stage: string } | null;
+	/** Past the last run's total time: every step shown done, still running. */
+	beyond: boolean;
+}
+
+export function estimateSteps(template: MeRunStepEvent[], elapsedS: number, app = ""): StepEstimate | null {
+	if (template.length < 2) return null;
+	const durs = template.map((e) => (e.started_at != null && e.ended_at != null ? Math.max(0, e.ended_at - e.started_at) : 0));
+	const total = durs.reduce((a, b) => a + b, 0);
+	if (total <= 0) return null;
+	let acc = 0, nowIdx = -1;
+	for (let i = 0; i < durs.length; i++) {
+		if (elapsedS < acc + durs[i]) { nowIdx = i; break; }
+		acc += durs[i];
+	}
+	const beyond = nowIdx === -1;
+	const label = (e: MeRunStepEvent) => (e.stage ? e.stage.charAt(0).toUpperCase() + e.stage.slice(1) : "");
+	const steps = template.map((e, i) => ({
+		name: stepName(e.step_id, app),
+		stage: label(e),
+		state: (beyond || i < nowIdx ? "done" : i === nowIdx ? "now" : "next") as "done" | "now" | "next",
+	}));
+	const cur = beyond ? template[template.length - 1] : template[nowIdx];
+	return { steps, now: { name: stepName(cur.step_id, app), stage: label(cur) }, beyond };
+}
