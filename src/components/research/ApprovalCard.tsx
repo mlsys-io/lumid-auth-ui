@@ -25,10 +25,12 @@ export function writeNotNow(app: string, ids: string[]): void {
 	try { sessionStorage.setItem(NOT_NOW(app), JSON.stringify(ids)); } catch { /* private mode */ }
 }
 
-export default function ApprovalCard({ app, list, index, onIndex, onDone, showApp = false }: {
+export default function ApprovalCard({ app, list, index, onIndex, onDone, showApp = false, folded = false, onUnfold }: {
 	app: string; list: Proposal[]; index: number; onIndex: (i: number) => void; onDone: (id: string) => void;
 	/** Name the app and link to its map — for places outside the app (the Inbox). */
 	showApp?: boolean;
+	/** Only the header row (something else has the reader's attention). */
+	folded?: boolean; onUnfold?: () => void;
 }) {
 	const [busy, setBusy] = useState(false);
 	const [full, setFull] = useState(false);
@@ -73,6 +75,12 @@ export default function ApprovalCard({ app, list, index, onIndex, onDone, showAp
 					</span>
 				)}
 			</div>
+			{folded ? (
+				<button type="button" onClick={onUnfold} className="flex w-full items-center gap-2 px-4 py-2 text-left text-meta hover:bg-muted/40">
+					<span className="min-w-0 truncate font-medium text-ink-900">{humanId(p.id)}</span>
+					<span className="ml-auto flex-shrink-0 text-micro text-ink-600">Show</span>
+				</button>
+			) : <>
 			<div key={p.id} className="space-y-2 px-4 pb-3 pt-3 animate-lumen-rise">
 				<div className="text-title font-semibold text-ink-900">{humanId(p.id)}</div>
 				<dl className="grid gap-1.5 text-meta leading-relaxed">
@@ -87,7 +95,8 @@ export default function ApprovalCard({ app, list, index, onIndex, onDone, showAp
 					)}
 					<div><dt className="inline font-semibold text-plum-700">Cost: </dt><dd className="inline text-ink-800">{p.est_runs ? `about ${p.est_runs} runs` : "not estimated"}{loop ? ` of ${loopLabel("", loop)}` : ""}</dd></div>
 					{done && <div><dt className="inline font-semibold text-plum-700">Done when: </dt><dd className="inline text-ink-800">{done}</dd></div>}
-					{check && (
+					{/* Said only when there is something to say: "not checked yet" is noise here. */}
+					{check && check.tone !== "idle" && (
 						<div title={check.why}>
 							<dt className="inline font-semibold text-plum-700">Will it record results? </dt>
 							<dd className={cn("inline", check.tone === "ok" ? "text-gold-700" : check.tone === "failing" ? "text-brick-700" : "text-ink-600")}>{check.text}</dd>
@@ -107,6 +116,7 @@ export default function ApprovalCard({ app, list, index, onIndex, onDone, showAp
 					{busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" aria-hidden />} Go ahead
 				</button>
 			</div>
+			</>}
 		</section>
 	);
 }

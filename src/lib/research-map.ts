@@ -92,6 +92,15 @@ export function experimentStatus(e: MeExperiment): { tone: Tone; text: string } 
 	return { tone: "running", text: need ? `Collecting results: ${Math.min(e.n_results, need)} of ${need}` : `Collecting results: ${e.n_results} so far` };
 }
 
+/** The same status in a few words, for a label on the map (the full
+ *  sentence is in the card and the panel): "Can't compare yet", "musk leads". */
+export function shortStatus(e: MeExperiment): { tone: Tone; text: string } {
+	const st = experimentStatus(e);
+	const done = /^Done — (.+) won$/.exec(st.text);
+	if (done) return { ...st, text: `${done[1]} won` };
+	return { ...st, text: st.text.split(" — ")[0].split(", but")[0] };
+}
+
 /** The workflow an experiment's runs come from: its declared dispatch loop
  *  when that loop is attached, else the first attached loop. */
 export function experimentLoop(e: MeExperiment): string {

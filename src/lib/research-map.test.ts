@@ -2,7 +2,7 @@
 // Fixtures are trimmed copies of real lum.id experiments (2026-11-24).
 import type { MeExperiment } from "@/api/me";
 import { appPages, pageHref } from "./app-pages";
-import { humanId, experimentStatus, versionsOf, criteriaInWords, buildResearchTree, pathTo, mapSummary, comparabilityNote, suggestionParent, experimentLoop, versionsToRun, proposalCheck, type Proposal } from "./research-map";
+import { humanId, experimentStatus, versionsOf, criteriaInWords, buildResearchTree, pathTo, mapSummary, comparabilityNote, suggestionParent, experimentLoop, versionsToRun, proposalCheck, shortStatus, type Proposal } from "./research-map";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -145,4 +145,11 @@ export function run(): number {
 	}
 	return failed;
 }
+check("shortStatus keeps the first clause", () => {
+	const e = { id: "kol_alpha", n_results: 10, comparable: false, instruments: 18 } as unknown as MeExperiment;
+	eq(shortStatus(e).text, "Can't compare yet");
+	const won = { id: "x", status: "concluded", best_variant: "musk_v1", criteria_met: true, n_results: 5 } as unknown as MeExperiment;
+	eq(shortStatus(won).text, `${humanId("musk_v1")} won`);
+});
+
 export const caseCount = checks.length;

@@ -11,6 +11,7 @@
 import { useId, useMemo, useRef, useState } from "react";
 import { fmtMetricValue } from "@/lib/run-answer";
 import { cn } from "@/lib/utils";
+import { useMeasuredWidth } from "@/hooks/useMeasuredWidth";
 
 const STROKE = ["stroke-chart-1", "stroke-chart-2", "stroke-chart-3", "stroke-chart-4", "stroke-chart-5", "stroke-chart-6", "stroke-chart-7", "stroke-chart-8"];
 const TEXT = ["text-chart-1", "text-chart-2", "text-chart-3", "text-chart-4", "text-chart-5", "text-chart-6", "text-chart-7", "text-chart-8"];
@@ -39,7 +40,7 @@ export interface EvoSeries { id: string; label: string; points: Array<{ ts: stri
 
 interface Line { id: string; label: string; ci: number; pts: Array<{ t: number; avg: number; n: number }> }
 
-const W = 640, H_DEFAULT = 220, PAD_R = 108, PAD_T = 12, PAD_B = 26;
+const W0 = 640, H_DEFAULT = 220, PAD_R = 108, PAD_T = 12, PAD_B = 26;
 
 /** Raw results → running averages; or, when the server already sent running
  *  means (series_kind "running_mean", the scheduler's own state.history),
@@ -86,11 +87,9 @@ export default function EvolutionChart(props: ChartProps) {
 			<div className="space-y-2">
 				<div className="flex items-baseline gap-2 flex-wrap">
 					<span className="text-caption font-medium text-ink-800">How each version evolved</span>
-					<span className="text-micro text-ink-600">measured differently, so each has its own scale · {props.higherIsBetter === false ? "lower" : "higher"} is better</span>
+					<span className="text-micro text-ink-600">each line is a version&apos;s average so far, on its own scale (measured differently) · {props.higherIsBetter === false ? "lower" : "higher"} is better</span>
 				</div>
-				{drawn.map((s, i) => (
-					<OneChart key={s.id} {...props} series={[s]} colorIndex={i} heading={s.label} height={130} unlabelledRuns={0} xRange={xRange} />
-				))}
+				<SparkRows {...props} series={drawn} xRange={xRange} />
 				{props.unlabelledRuns ? <div className="text-nano text-ink-600">{props.unlabelledRuns.toLocaleString()} result{props.unlabelledRuns === 1 ? "" : "s"} from runs that didn&apos;t say which version they ran aren&apos;t drawn.</div> : null}
 			</div>
 		);
@@ -108,6 +107,8 @@ function OneChart({ series, metricKey, unit, higherIsBetter = true, comparable =
 	colorIndex?: number;
 }) {
 	const H = height ?? H_DEFAULT;
+	const wrapRef = useRef<HTMLDivElement>(null);
+	const W = useMeasuredWidth(wrapRef, W0);
 	const lines: Line[] = useMemo(() => series
 		.map((s, i) => ({ id: s.id, label: s.label, ci: (colorIndex ?? i) % 8, pts: runningAverages(s.points, alreadyMeans) }))
 		.filter((l) => l.pts.length > 0), [series, alreadyMeans, colorIndex]);
@@ -175,8 +176,8 @@ function OneChart({ series, metricKey, unit, higherIsBetter = true, comparable =
 					))}
 				</ul>
 			)}
-			<div className="relative">
-				<svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img"
+			<div ref={wrapRef} className="relative">
+				<svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="block max-w-full" role="img"
 					aria-label={`Average ${metricKey} per version over time`}
 					onMouseMove={onMove} onMouseLeave={() => setHoverT(null)}>
 					{yTicks.map((v) => (
@@ -244,5 +245,54 @@ function OneChart({ series, metricKey, unit, higherIsBetter = true, comparable =
 				<div className="text-nano text-ink-600">{unlabelledRuns > 0 ? `${unlabelledRuns.toLocaleString()} result${unlabelledRuns === 1 ? "" : "s"} from runs that didn't say which version they ran aren't drawn.` : "Runs that named no version are counted as the current one."}</div>
 			)}
 		</figure>
+	);
+}
+
+/** Versions measured differently, one compact row each on its own scale:
+ *  name, where it stands now, and its average so far as a smooth line drawn at
+ *  real pixels. The rows share one time axis (labelled once, under the last). */
+function SparkRows({ series, metricKey, unit, alreadyMeans = false, xRange }: ChartProps & { xRange: [number, number] }) {
+	const wrapRef = useRef<HTMLDivElement>(null);
+	const W = useMeasuredWidth(wrapRef, 360);
+	const RH = 46, PL = 2, PR = 8;
+	const fmt = (v: number) => fmtMetricValue(v, unit, metricKey);
+	const rows = useMemo(() => series.map((s, i) => ({ id: s.id, label: s.label, ci: i % 8, pts: runningAverages(s.points, alreadyMeans) })).filter((l) => l.pts.length > 0), [series, alreadyMeans]);
+	const span = Math.max(1, xRange[1] - xRange[0]);
+	const x = (t: number) => PL + ((t - xRange[0]) / span) * (W - PL - PR);
+	return (
+		<div ref={wrapRef} className="space-y-2.5">
+			{rows.map((l) => {
+				const vs = l.pts.slice(Math.min(3, l.pts.length - 1)).map((p) => p.avg);
+				const lo = Math.min(...vs), hi = Math.max(...vs), pad = (hi - lo) * 0.15 || Math.abs(hi) * 0.1 || 1;
+				const v0 = lo - pad, v1 = hi + pad;
+				const y = (v: number) => 4 + (1 - (Math.max(v0, Math.min(v1, v)) - v0) / (v1 - v0)) * (RH - 8);
+				const xy = l.pts.map((p) => [x(p.t), y(p.avg)] as [number, number]);
+				const d = smoothPath(xy);
+				const last = l.pts[l.pts.length - 1];
+				const area = xy.length > 1 ? `${d}L${xy[xy.length - 1][0].toFixed(1)},${RH}L${xy[0][0].toFixed(1)},${RH}Z` : "";
+				const gid = `spark-${l.id.replace(/[^a-zA-Z0-9_-]/g, "")}`;
+				return (
+					<figure key={l.id} className="space-y-0.5">
+						<figcaption className="flex items-baseline gap-2 text-micro">
+							<span className={cn("h-0.5 w-3 flex-shrink-0 self-center rounded-full", FILL[l.ci])} aria-hidden />
+							<span className="min-w-0 truncate font-medium text-ink-800">{l.label}</span>
+							<span className="ml-auto whitespace-nowrap font-mono tabular-nums text-ink-900">{fmt(last.avg)}</span>
+							<span className="whitespace-nowrap text-nano text-ink-600">avg of {last.n.toLocaleString()}</span>
+						</figcaption>
+						<svg width={W} height={RH} viewBox={`0 0 ${W} ${RH}`} className={cn("block max-w-full", TEXT[l.ci])} role="img"
+							aria-label={`${l.label}: average ${metricKey} over time, now ${fmt(last.avg)}; between ${fmt(lo)} and ${fmt(hi)}`}>
+							<defs><linearGradient id={gid} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="currentColor" stopOpacity={0.14} /><stop offset="100%" stopColor="currentColor" stopOpacity={0} /></linearGradient></defs>
+							<line x1={PL} x2={W - PR} y1={RH - 0.5} y2={RH - 0.5} className="stroke-ink-100" />
+							{area && <path d={area} fill={`url(#${gid})`} className="evo-area-in" />}
+							<path d={d} fill="none" pathLength={100} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" stroke="currentColor" className="evo-line-draw" />
+							<circle cx={xy[xy.length - 1][0]} cy={xy[xy.length - 1][1]} r={2.5} fill="currentColor" stroke="rgb(var(--card-rgb))" strokeWidth={1.25} className="evo-area-in" />
+							<text x={PL + 2} y={10} className="fill-ink-600 text-nano tabular-nums">{fmt(hi)}</text>
+							<text x={PL + 2} y={RH - 4} className="fill-ink-600 text-nano tabular-nums">{fmt(lo)}</text>
+						</svg>
+					</figure>
+				);
+			})}
+			<div className="flex justify-between text-nano text-ink-600"><span>{day(xRange[0])}</span><span>{day(xRange[1])}</span></div>
+		</div>
 	);
 }

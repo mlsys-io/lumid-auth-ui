@@ -137,18 +137,20 @@ export function depthCue(scaleNow: number, zoom: number): { near: number; alpha:
  * The camera that frames `points` inside the box [margin, W-margin] ×
  * [top, bottom] at the current yaw/pitch — used to follow a selected path.
  */
-export function frameCamera(points: Vec3[], cam: Camera, W: number, H: number, box = { top: 56, bottom: 0.92, margin: 70 }): Camera {
+export function frameCamera(points: Vec3[], cam: Camera, W: number, H: number, box: { top: number; bottom: number; margin: number; right?: number } = { top: 56, bottom: 0.92, margin: 70 }): Camera {
 	if (!points.length || !W || !H) return cam;
 	const base = { ...cam, zoom: 1, focusX: 0, focusY: 0 };
 	const ps = points.map((p) => project(p, base, W, H));
 	const xs = ps.map((p) => p.x), ys = ps.map((p) => p.y);
 	const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
 	const bottom = box.bottom <= 1 ? H * box.bottom : box.bottom;
-	const availW = W - 2 * box.margin, availH = bottom - box.top;
+	// `right`: pixels covered on the right (a panel over the space) — frame in what's left.
+	const right = box.right ?? 0;
+	const availW = W - 2 * box.margin - right, availH = bottom - box.top;
 	const spanW = Math.max(1, maxX - minX), spanH = Math.max(1, maxY - minY);
 	const zoom = Math.max(0.55, Math.min(1.6, Math.min(availW / spanW, availH / spanH)));
 	const cx = (minX + maxX) / 2 - W / 2, cyy = (minY + maxY) / 2 - H / 2;
-	return { ...cam, zoom, focusX: W / 2 - (W / 2 + cx * zoom), focusY: (box.top + bottom) / 2 - (H / 2 + cyy * zoom) };
+	return { ...cam, zoom, focusX: (W - right) / 2 - (W / 2 + cx * zoom), focusY: (box.top + bottom) / 2 - (H / 2 + cyy * zoom) };
 }
 
 /** The points as they sit at every eighth of a turn — frame these and the

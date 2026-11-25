@@ -354,6 +354,8 @@ await section('research map', async () => {
 	assert(dimmed > 0, `clicking a card dims what is off its path (${dimmed} dimmed)`);
 	assert(await map.locator('.space3d-edge-flow').count() > 0, 'the selected path flows');
 	// One running panel: the global one in the chat rail, else the app's own.
+	// The rail stays empty until the feed's first answer — give it time.
+	await page.locator('section[aria-label="Running now"], section[aria-label="Compute"]').first().waitFor({ timeout: 20000 }).catch(() => {});
 	const railPanel = await page.locator('section[aria-label="Running now"]').count();
 	assert(railPanel === 1 || await page.locator('section[aria-label="Compute"]').count() === 1, `a running panel is beside the map (${railPanel ? 'global, in the rail' : 'the app\'s own'})`);
 	if (railPanel) assert(await page.locator('[data-slot="next"]').count() >= 1, 'the running panel shows the next free slot');
@@ -361,6 +363,9 @@ await section('research map', async () => {
 	assert(await page.locator(`nav[aria-label="${APP} workflows"] a`).count() > 0, 'the open app lists its workflows in the sidebar');
 	// Dots, not cards: off the selected path a node is a labelled dot.
 	assert(await map.locator('.space3d-label').count() > 0, 'nodes off the path are labelled dots');
+	// A wide map opens the clicked experiment as a panel over the map.
+	const panel = map.locator('[role="dialog"]');
+	if (await panel.count()) assert(/Experiment/i.test(await panel.innerText()), 'clicking an experiment opens its panel over the map');
 	assert(await map.getByText(/^Measures:|^Done when:/).count() > 0 || await map.getByText(/Not started yet|Can't|Winning|leads|Collecting/).count() > 0, 'the selected experiment is explained below the map');
 	const fig = map.locator('figure');
 	await fig.first().waitFor({ timeout: 20000 }).catch(() => {});
@@ -370,6 +375,8 @@ await section('research map', async () => {
 		const ft = await map.innerText();
 		assert(/How (it|each version) evolved/.test(ft) && /average so far/.test(ft), `the experiment shows how it evolved, and says what the lines are (${await fig.count()} chart(s))`);
 	} else note('selected experiment has no results over time — evolution chart not exercised');
+	// The approval card folds while the panel is open; Esc closes the panel.
+	if (await panel.count()) { await page.keyboard.press('Escape'); await page.waitForTimeout(300); assert(await panel.count() === 0, 'Esc closes the experiment panel'); }
 	const appr = map.locator('section[aria-label="For your approval"]');
 	await appr.waitFor({ timeout: 8000 }).catch(() => {});
 	if (await appr.count()) {

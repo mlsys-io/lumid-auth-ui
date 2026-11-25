@@ -14,9 +14,10 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { Evolution } from "@/lib/evolution";
 import { fmtMetricValue } from "@/lib/run-answer";
 import { cn } from "@/lib/utils";
+import { useMeasuredWidth } from "@/hooks/useMeasuredWidth";
 
 const FILL = ["fill-chart-1", "fill-chart-2", "fill-chart-3", "fill-chart-4", "fill-chart-5", "fill-chart-6", "fill-chart-7", "fill-chart-8"];
-const W = 640, H = 240, PAD_R = 44, PAD_T = 14, PAD_B = 26;
+const W0 = 640, H = 220, PAD_R = 40, PAD_T = 14, PAD_B = 26;
 const day = (t: number) => new Date(t).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 
 /** A number that rolls to its new value (600 ms) and flashes gold when it
@@ -56,6 +57,8 @@ export default function BestScoreChart({ evo, labelOf, colorOf, metricKey, unit,
 	const fmt = (v: number) => fmtMetricValue(v, unit, metricKey);
 	const clipId = `bs-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
 	const svgRef = useRef<SVGSVGElement>(null);
+	const wrapRef = useRef<HTMLDivElement>(null);
+	const W = useMeasuredWidth(wrapRef, W0);
 	const [hoverT, setHoverT] = useState<number | null>(null);
 
 	// "now": stretch the axis to today when the last result is recent, so the
@@ -123,8 +126,8 @@ export default function BestScoreChart({ evo, labelOf, colorOf, metricKey, unit,
 					</div>
 				</div>
 			</div>
-			<div className="relative">
-				<svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img"
+			<div ref={wrapRef} className="relative">
+				<svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="block max-w-full" role="img"
 					aria-label={`Best ${metricKey} so far over time, ${evo.hero ? `now ${fmt(evo.hero.value)} by ${labelOf(evo.hero.arm)}` : "no version counted yet"}`}
 					onMouseMove={onMove} onMouseLeave={() => setHoverT(null)}>
 					<clipPath id={clipId}><rect x={PAD_L} y={PAD_T - 4} width={W - PAD_L - PAD_R + 4} height={H - PAD_T - PAD_B + 8} /></clipPath>

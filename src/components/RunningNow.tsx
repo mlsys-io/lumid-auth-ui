@@ -37,7 +37,7 @@ import { dataJobs } from "@/api/dataJobs";
 import { jobElapsedS, jobStatusLabel, type Job } from "@/lib/data-jobs";
 
 const FEED_DAYS = 1;
-const SHOW_DONE = 4;
+const SHOW_DONE = 5;
 const JOBS_POLL_MS = 15_000;
 const ACTIVE_JOB = new Set(["planned", "submitted", "running"]);
 
@@ -101,14 +101,14 @@ function Tile({ to, label, startedAt, now, live, title, action, cells, late }: {
 }) {
 	return (
 		<Link to={to} aria-label={label} data-tile="run"
-			className={cn("group flex h-[112px] min-w-0 flex-col rounded-lg border bg-card px-2.5 pb-2 pt-2 shadow-e1 animate-lumen-rise transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:shadow-e2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+			className={cn("group flex h-[92px] min-w-0 flex-col rounded-lg border bg-card px-2.5 pb-2 pt-1.5 shadow-e1 animate-lumen-rise transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:shadow-e2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
 				late ? "border-ember-200" : "border-ink-200 hover:border-lagoon-300")}>
 			<div className="flex items-center gap-1.5 font-mono text-nano tabular-nums text-ink-600">
 				<span className={cn("h-1.5 w-1.5 flex-shrink-0 rounded-full", late ? "bg-ember-500" : "bg-lagoon-500", live && "animate-lumen-breathe")} aria-hidden />
 				<span className="text-ink-800">{hhmm(startedAt)}</span>
 				<span className="ml-auto truncate">{minsAgo(startedAt, now)}</span>
 			</div>
-			<div className="mt-1 line-clamp-2 text-caption font-medium leading-snug text-ink-900">{title}</div>
+			<div className="mt-0.5 line-clamp-2 text-caption font-medium leading-snug text-ink-900">{title}</div>
 			<div className="mt-0.5 truncate text-micro italic text-ink-600">{action}</div>
 			<div className="mt-auto">{cells}</div>
 		</Link>
@@ -218,60 +218,55 @@ export default function RunningNow({ app, runs = true, jobs = true }: { app?: st
 	// first answer immediately contradicts.
 	if (runs && feed.runs === null && activeJobs.length === 0) return null;
 
-	// Novix's 2×2: up to four tiles; one row when at most one thing is going.
-	const items = total;
-	const room = items <= 1 ? 2 : 4;
-	const overflow = items > room;
+	// Tiles only for what is running (≤4; more → a "+N" tile). An odd count
+	// fills its last cell with the free slot; otherwise the slot is one slim line.
+	const room = 4;
+	const overflow = total > room;
 	const fit = overflow ? room - 1 : room;
 	const shownRuns = running.slice(0, fit);
 	const shownJobs = activeJobs.slice(0, Math.max(0, fit - shownRuns.length));
 	const more = total - shownRuns.length - shownJobs.length;
-	const fillers = Math.max(0, room - shownRuns.length - shownJobs.length - (overflow ? 1 : 0));
+	const cells = shownRuns.length + shownJobs.length + (overflow ? 1 : 0);
+	const slotInGrid = cells % 2 === 1;
 	const next = queue ? queueItems(queue.rows as QueueRow[]).waiting : [];
 	const finished = (feed.runs || []).filter((r) => r.state === "succeeded" || r.state === "failed")
 		.sort((a, b) => (b.started_at || 0) - (a.started_at || 0));
 	const done = finished.slice(0, SHOW_DONE);
 	const machines = cap ? capacityRows(cap.capacity as ComputeCapacity[]) : [];
 	const mLine = machinesLine(machines);
+	const slotText = next[0]
+		? <><span className="text-ink-600">Starts next{next.length > 1 ? ` (+${next.length - 1})` : ""}: </span><span className="font-medium text-ink-800">{loopLabel("", next[0].loop)}{next[0].version ? ` · ${versionLabel(next[0].version)}` : ""}</span></>
+		: <span className="text-ink-600">{total ? "Nothing waiting — the next run starts here." : "Nothing running — runs start here."}</span>;
 
 	return (
 		<section aria-label="Running now" className="mb-3 space-y-1.5">
 			<Heading label="Running" count={total} collapsed={runCollapsed} onToggle={toggleRun}
 				title={mLine ? `Machines: ${mLine}` : undefined} />
-			{!runCollapsed && (
+			{!runCollapsed && cells > 0 && (
 				<div className="grid grid-cols-2 gap-2">
 					{shownRuns.map((it) => <RunTile key={it.run.run_id} item={it} now={now} showApp={!app || it.run.app !== app} />)}
 					{shownJobs.map((j) => <JobTile key={j.job_id} job={j} now={now} />)}
 					{overflow && (
-						<Link to={allHref} className="flex h-[112px] flex-col items-center justify-center gap-1 rounded-lg border border-ink-200 bg-muted/40 text-caption text-ink-700 transition-colors hover:bg-muted">
+						<Link to={allHref} className="flex h-[92px] flex-col items-center justify-center gap-1 rounded-lg border border-ink-200 bg-muted/40 text-caption text-ink-700 transition-colors hover:bg-muted">
 							<span className="font-mono text-title tabular-nums text-ink-900">+{more}</span>
 							<span className="inline-flex items-center gap-1">more running <ArrowRight className="h-3 w-3" /></span>
 						</Link>
 					)}
-					{Array.from({ length: fillers }, (_, i) => i === 0 ? (
-						// The free slot: what takes the next machine, or that one is free.
-						<div key="next" data-slot="next" className="flex h-[112px] flex-col justify-end rounded-lg border border-dashed border-ink-200 p-2.5">
-							{next[0] ? (
-								<>
-									<span className="text-nano text-ink-600">Starts next{next.length > 1 ? ` · +${next.length - 1}` : ""}</span>
-									<span className="truncate text-micro font-medium text-ink-800">{loopLabel("", next[0].loop)}{next[0].version ? ` · ${versionLabel(next[0].version)}` : ""}</span>
-								</>
-							) : (
-								<span className="text-nano text-ink-600">{total ? "Free" : "Free — runs start here."}</span>
-							)}
-						</div>
-					) : (
-						<div key={`f${i}`} aria-hidden className="h-[112px] rounded-lg border border-dashed border-ink-200" />
-					))}
+					{slotInGrid && (
+						<div data-slot="next" className="flex h-[92px] flex-col justify-end rounded-lg border border-dashed border-ink-200 p-2.5 text-micro leading-snug">{slotText}</div>
+					)}
 				</div>
+			)}
+			{!runCollapsed && !slotInGrid && (
+				<div data-slot="next" className="truncate rounded-lg border border-dashed border-ink-200 px-2.5 py-1.5 text-micro">{slotText}</div>
 			)}
 			{finished.length > 0 && (
 				<>
-					<div className="pt-1.5">
+					<div className="pt-1">
 						<Heading label="Done" count={finished.length} collapsed={doneCollapsed} onToggle={toggleDone} title="Finished in the last day" />
 					</div>
 					{!doneCollapsed && (
-						<ul className="space-y-1.5">
+						<ul className="divide-y divide-ink-100 overflow-hidden rounded-lg border border-ink-200 bg-card">
 							{done.map((r) => {
 								const ok = r.state === "succeeded";
 								const loop = loopOfRun(r);
@@ -279,14 +274,14 @@ export default function RunningNow({ app, runs = true, jobs = true }: { app?: st
 								return (
 									<li key={r.run_id}>
 										<Link to={runPath(r.app || "", loop, r.run_id)}
-											title={`${ok ? "Succeeded" : "Failed"} · ${fmtAgo(r.started_at)}${r.duration_s ? ` · took ${fmtDuration(r.duration_s)}` : ""}`}
-											className="group flex h-9 min-w-0 items-center gap-2.5 rounded-md border border-ink-200 bg-card px-3 text-caption transition-colors hover:border-ink-300 hover:bg-muted/40">
+											title={`${ok ? "Succeeded" : "Failed"}${r.duration_s ? ` · took ${fmtDuration(r.duration_s)}` : ""}`}
+											className="flex h-8 min-w-0 items-center gap-2 px-2.5 text-caption transition-colors hover:bg-muted/50">
 											<span className={cn("h-1.5 w-1.5 flex-shrink-0 rounded-[1px]", ok ? "bg-gold-400" : "bg-brick-500")} aria-hidden />
 											<span className="min-w-0 truncate text-ink-800">
 												{loopLabel("", loop)}{other && <span className="text-ink-600"> · {appName(r.app)}</span>}
 											</span>
 											{!ok && <span className="flex-shrink-0 text-micro text-brick-700">failed</span>}
-											<span className="ml-auto flex-shrink-0 font-mono text-nano text-ink-600 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">{fmtAgo(r.started_at)}</span>
+											<span className="ml-auto flex-shrink-0 font-mono text-nano tabular-nums text-ink-600">{fmtAgo(r.started_at)}</span>
 										</Link>
 									</li>
 								);
