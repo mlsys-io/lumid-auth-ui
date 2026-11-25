@@ -212,9 +212,11 @@ function useViewportHeight(): number {
 	return h;
 }
 
-function MapCanvas({ app, exps, proposals, selected, onSelect, grow }: {
+function MapCanvas({ app, exps, proposals, selected, onSelect, grow, insetBottom = 0 }: {
 	app: string; exps: MeExperiment[]; proposals: Proposal[];
 	selected: string | null; onSelect: (id: string | null) => void; grow: boolean;
+	/** Pixels the docked approval card covers at the foot of the space. */
+	insetBottom?: number;
 }) {
 	const running = useShellActivity()?.runningApps.includes(app) ?? false;
 	const tree = useMemo(() => buildResearchTree(app, exps, proposals, { workflows: true }), [app, exps, proposals]);
@@ -294,7 +296,7 @@ function MapCanvas({ app, exps, proposals, selected, onSelect, grow }: {
 	const height = Math.round(Math.max(320, Math.min(600, vh - (proposals.length ? 470 : 400), 240 + tree.nodes.length * 16)));
 	return (
 		<Space3D nodes={tree.nodes} edges={tree.edges} renderCard={renderCard} renderDot={renderDot} describe={describe}
-			selected={selected} lit={lit} grow={grow} order={order} height={height} evidence={evidence}
+			selected={selected} lit={lit} grow={grow} order={order} height={height} evidence={evidence} insetBottom={insetBottom}
 			// A workflow node opens that workflow; everything else selects in place.
 			onSelect={(id) => (id?.startsWith("wf:") ? navigate(workflowPath(app, id.slice(3))) : onSelect(id))} />
 	);
@@ -440,6 +442,9 @@ function ResearchList({ app, exps, onPick }: { app: string; exps: MeExperiment[]
 	);
 }
 
+// How far the approval card reaches up over the map (matches `!-mt-14`).
+const DOCK_PX = 56;
+
 export default function ResearchMap({ app, aside }: { app: string; aside?: React.ReactNode }) {
 	const { data } = useResearchData(app);
 	const wide = useWide();
@@ -493,11 +498,11 @@ export default function ResearchMap({ app, aside }: { app: string; aside?: React
 				aside ? (
 					// The map and Compute share one row: same top, same height.
 					<div className="grid grid-cols-[minmax(0,1fr)_19rem] gap-4 items-stretch">
-						<MapCanvas app={app} exps={exps} proposals={pending} selected={selected} onSelect={setSelected} grow={grow} />
+						<MapCanvas app={app} exps={exps} proposals={pending} selected={selected} onSelect={setSelected} grow={grow} insetBottom={pending.length ? DOCK_PX : 0} />
 						<div className="min-h-0 relative"><div className="absolute inset-0">{aside}</div></div>
 					</div>
 				) : (
-					<MapCanvas app={app} exps={exps} proposals={pending} selected={selected} onSelect={setSelected} grow={grow} />
+					<MapCanvas app={app} exps={exps} proposals={pending} selected={selected} onSelect={setSelected} grow={grow} insetBottom={pending.length ? DOCK_PX : 0} />
 				)
 			) : (
 				<ResearchList app={app} exps={exps} onPick={setSelected} />

@@ -47,16 +47,23 @@ export interface Space3DProps {
 	 *  capped), coloured like the node's state — how much a version has been
 	 *  measured, seen at a glance. */
 	evidence?: (n: MapNode) => { count: number; className: string } | null;
+	/** Pixels at the foot covered by something docked over the space (the
+	 *  approval card): the camera frames the space above it. */
+	insetBottom?: number;
 }
 
 // Framing for the whole space: dots are small, so the margin only has to
 // leave room for a label to the right of the outermost dot.
 const HOME_BOX = { top: 40, bottom: 0.95, margin: 80 };
+const boxAbove = (box: { top: number; bottom: number; margin: number }, H: number, inset: number) =>
+	inset > 0 ? { ...box, bottom: Math.min(H * (box.bottom <= 1 ? box.bottom : box.bottom / H), H - inset - 20) } : box;
 
 // A gentle spring: overshoots ~6% and settles (selection flies in, lands).
 const easeOutBack = (t: number) => { const c1 = 1.2, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
 
-export default function Space3D({ nodes, edges, renderCard, renderDot, describe, selected, onSelect, lit, grow, order, height, evidence }: Space3DProps) {
+export default function Space3D({ nodes, edges, renderCard, renderDot, describe, selected, onSelect, lit, grow, order, height, evidence, insetBottom = 0 }: Space3DProps) {
+	const insetRef = useRef(insetBottom);
+	insetRef.current = insetBottom;
 	// The node under the pointer (or keyboard focus) opens into its full card.
 	const [hovered, setHovered] = useState<string | null>(null);
 	const boxRef = useRef<HTMLDivElement>(null);
@@ -119,7 +126,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		if (!el) return;
 		const ro = new ResizeObserver(([e]) => {
 			s.current.W = e.contentRect.width; s.current.H = e.contentRect.height;
-			if (!s.current.framed && s.current.W) { s.current.cam = frameCamera(turnHull([...pos.values()]), HOME, s.current.W, s.current.H, HOME_BOX); s.current.framed = true; }
+			if (!s.current.framed && s.current.W) { s.current.cam = frameCamera(turnHull([...pos.values()]), HOME, s.current.W, s.current.H, boxAbove(HOME_BOX, s.current.H, insetRef.current)); s.current.framed = true; }
 			kick.current();
 		});
 		ro.observe(el);
@@ -138,8 +145,8 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		const sel = selected ? pos.get(selected) : undefined;
 		const facing = sel && Math.hypot(sel.x, sel.z) > 1 ? { ...st.cam, yaw: Math.atan2(sel.z, sel.x) - 0.45, pitch: -0.18 } : { ...st.cam, pitch: HOME.pitch };
 		const to = lit
-			? frameCamera(pts, facing, st.W, st.H, { top: 56, bottom: 0.9, margin: 110 })
-			: frameCamera(turnHull(pts), { ...st.cam, pitch: HOME.pitch }, st.W, st.H, HOME_BOX);
+			? frameCamera(pts, facing, st.W, st.H, boxAbove({ top: 56, bottom: 0.9, margin: 110 }, st.H, insetRef.current))
+			: frameCamera(turnHull(pts), { ...st.cam, pitch: HOME.pitch }, st.W, st.H, boxAbove(HOME_BOX, st.H, insetRef.current));
 		if (reduced) st.cam = to; else st.tween = { from: { ...st.cam }, to, t0: performance.now(), dur: 820, spring: !!lit };
 		st.lastInput = performance.now();
 		kick.current();
@@ -336,7 +343,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 	const zoomBy = (f: number) => { const c = s.current.cam; s.current.cam = { ...c, zoom: Math.max(0.45, Math.min(2.2, c.zoom * f)) }; touch(); };
 	const reset = () => {
 		const st = s.current;
-		const to = frameCamera(turnHull([...pos.values()]), HOME, st.W, st.H, HOME_BOX);
+		const to = frameCamera(turnHull([...pos.values()]), HOME, st.W, st.H, boxAbove(HOME_BOX, st.H, insetRef.current));
 		if (reduced) st.cam = to; else st.tween = { from: { ...st.cam }, to, t0: performance.now(), dur: 600 };
 		st.lastInput = performance.now();
 		onSelect(null);
