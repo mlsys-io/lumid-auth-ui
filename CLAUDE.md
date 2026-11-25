@@ -228,6 +228,43 @@ on. (Simulator vs real GPU, backtest vs forward test are app details, not UI str
 - Evolution lines are monotone cubics (`smoothPath`, never overshoot a value) with a wash under a
   lone line; version chips are plum, winning inverted.
 
+### Round 8 (2026-11-25): one shape for research apps — the graph is the app
+
+MLSys Research, Quant Research, MBB Consultant (and every new app) share one model, one vocabulary
+and one page set. **This supersedes the round 5–7 notes above where they disagree.**
+
+- **The model** (`buildResearchTree` in `lib/research-map.ts`): the app → its **workflows** (first
+  ring) → under each workflow, its **experiments** (runs of that workflow with different setups →
+  **versions**) and its **variants** (workflows made from it — a changed DAG, code, data or compute;
+  `parent` in the spec) grouped in **nodes** people name and move things into (`nodes:` + `node`).
+  Housekeeping workflows (`helper: true`) fold into the workflow they serve; parentless ones gather in
+  "Other workflows". A workflow carries **feedback** steps (simulator → sandbox, backtest → forward
+  test, judge panel) and the metrics each reports. The centre says "N workflows", never experiments.
+- **The spec is the source** (`lib/app-spec.ts`, `hooks/useAppGraph.ts`): structure comes from the
+  app's `.xpcloud.yaml` (`GET /me/apps/:app/config`), status from workflow rows. Every graph edit is a
+  comment-preserving spec edit saved with `base_sha` (`me.updateAppConfig`, with definition `files`
+  — `workflows/*.yaml`, `notes/*.md`, `commands/*.py` (admins) — in one batch). The scheme itself
+  (workflows/steps/inputs/feedback/parent/node/helper, experiments/versions, pages) is documented in
+  `public/docs/xpio_autoresearch_canonical.md` → "The simple scheme".
+- **One tab, everything in the panel**: app tabs are **Graph** + the app's own pages (`pages`). The
+  panel (`WorkflowPanel.tsx`) is the workflow's whole surface: **Overview** (status, feedback vs
+  target, insights, what it's made of) · **Runs** (live first; a row expands to its answer) ·
+  **Compare** (A/B: ⇧-click or "Compare with…" marks A and B on the graph; verdict in words from
+  `lib/compare.ts` — "can't tell apart yet" inside the noise) · **Feedback** (editable). Nodes get
+  `NodePanel` (rename, Move here…, move out, remove — members move up, nothing is deleted).
+- **Verbs**: Run · Try setups (`TrySetups.tsx`: one setup per value) · Make a variant
+  (`VariantSheet.tsx`: how it changes — describe in chat / edit the DAG / edit the code / same steps —
+  then data, compute, feedback, name + node) · Compare · Ask about it. Suggestions: Go ahead · Snooze ·
+  Help me decide.
+- **Manual dispatch, for this stage**: nothing new runs on its own. New workflows are `run: manual`;
+  the panel has no schedule controls; Go ahead creates, a separate press runs. e2e asserts no run
+  request fires on create.
+- **Chat is the control plane**: every panel and the graph header pre-fill the chat with the
+  selection as context ("How is it doing, and what should it try next?", "Why is A ahead?", "What
+  should I run next?"); the chat cites run ids, invents no numbers, and proposes for approval.
+- Tests: `app-spec.test`, `compare.test`, `variant-form.test`, research-map tree cases; e2e "workflow
+  graph" section; the acceptance story is `e2e/scenario-mlsys-serving.mjs` (writes, on a forked app).
+
 ### Where runs live
 
 - `/studio/runs` = **Activity**, which **is also the Inbox** (merged 2026-11-25; `/studio/inbox`,
