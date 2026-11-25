@@ -29,6 +29,10 @@ const PAT = process.env.LUMID_PAT || '';
 const SRC_SLUG = process.env.SRC_SLUG || 'a3f48236-ffe9-4fb9-9548-6e044d5cd9c7/mlsys-research';
 const APP = process.env.APP || 'mlsys-research-e2e';
 const OUT = path.resolve(process.env.OUT || 'e2e/out/scenario');
+// A suffix per run, so the scenario can run again on the same app.
+const RUN = process.env.RUN_ID || Date.now().toString(36).slice(-4);
+const TUNED = `sla_tuned_${RUN}`, SANDBOX = `sandbox_${RUN}`;
+const label = (id) => id.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
 fs.mkdirSync(OUT, { recursive: true });
 if (!PAT) { console.error('LUMID_PAT is required'); process.exit(2); }
 
@@ -74,12 +78,15 @@ const domClick = (loc, shift = false) => loc.evaluate((el, s) => el.dispatchEven
 const panel = () => map().getByRole('dialog').first();
 async function openApp() {
 	await page.goto(`${BASE}/studio/apps/${APP}`, { waitUntil: 'domcontentloaded' });
-	const ov = page.getByRole('button', { name: /^(Graph|Overview)$/ });
-	if (!(await map().locator('.space3d [data-kind="workflow"]').first().waitFor({ timeout: 30000 }).then(() => true).catch(() => false))) {
-		await ov.first().click().catch(() => {});
-		await map().locator('.space3d [data-kind="workflow"]').first().waitFor({ timeout: 60000 });
+	const wfNodes = map().locator('.space3d [data-kind="workflow"]');
+	if (!(await wfNodes.first().waitFor({ timeout: 30000 }).then(() => true).catch(() => false))) {
+		// The app opened on a remembered workflow: its tab row's "Graph" leads home.
+		const graphTab = page.locator('nav[aria-label="This app\'s pages"] a').first();
+		if (await graphTab.count()) await graphTab.click().catch(() => {});
+		else await page.getByRole('button', { name: /^(Graph|Overview)$/ }).first().click().catch(() => {});
+		await wfNodes.first().waitFor({ timeout: 60000 });
 	}
-	await page.waitForTimeout(2000);
+	await page.waitForTimeout(2500);
 }
 async function openWorkflow(label) {
 	await domClick(nodeButton('workflow', label));
@@ -150,13 +157,13 @@ await step('2 design: a variant through the UI', async () => {
 	await sheet.waitFor({ timeout: 10000 });
 	await sheet.getByText('Same steps, other inputs').click();
 	const idField = sheet.locator('#variant-id-0');
-	if (await idField.count()) await idField.fill('sla_tuned');
+	if (await idField.count()) await idField.fill(TUNED);
 	const nodeName = sheet.locator('input[type="text"][aria-label="New node name"]');
-	if (await nodeName.count()) await nodeName.fill('SLA tuning');
+	if (await nodeName.count()) await nodeName.fill(`SLA tuning ${RUN}`);
 	await sheet.getByRole('button', { name: /^Create/ }).click();
 	await sheet.waitFor({ state: 'detached', timeout: 120000 });
 	await page.waitForTimeout(3000);
-	assert(await node('workflow', 'Sla tuned').count() + await node('workflow', 'SLA tuned').count() > 0, 'the variant appears under Simulate');
+	assert(await node('workflow', label(TUNED)).count() > 0, 'the variant appears under Simulate');
 	assert(runRequests.length === before, 'creating it started no run');
 });
 await step('2 design: a variant through the chat', async () => {
@@ -170,7 +177,7 @@ await step('2 design: a variant through the chat', async () => {
 // ── 3. tune with the simulator ────────────────────────────────────────────
 await step('3 tune: setups through the UI', async () => {
 	await openApp();
-	await openWorkflow('Sla tuned').catch(() => openWorkflow('SLA tuned'));
+	await openWorkflow(label(TUNED));
 	await panel().getByRole('button', { name: 'Try setups' }).click();
 	const dlg = page.getByRole('dialog', { name: 'Try setups' });
 	await dlg.waitFor({ timeout: 8000 });
@@ -196,7 +203,7 @@ await step('3 tune: setups through the UI', async () => {
 	assert(done, 'the setups finish and report back');
 });
 await step('3 tune: a run through the chat', async () => {
-	const reply = await chat(`Run the c16 setup of sla_tuned again in ${APP} with seed 7, then tell me its goodput and TTFT p99.`, { timeout: 600000 });
+	const reply = await chat(`Run ${TUNED} in ${APP} once with overrides serving.max_concurrency=16 and seed 7, then tell me its goodput and TTFT p99, citing the run id.`, { timeout: 600000 });
 	assert(/goodput/i.test(reply) && /ttft|first (word|token)/i.test(reply), 'the chat runs it and reports the metrics');
 	assert(RUN_ID.test(reply), 'the chat names the run it started');
 });
@@ -217,14 +224,14 @@ await step('4 analyse: A/B through the UI', async () => {
 	assert(!!report.verdict, `Compare gives a verdict in words ("${report.verdict}")`);
 });
 await step('4 analyse: why, through the chat', async () => {
-	const reply = await chat(`In ${APP}, why is max_concurrency 32 worse than 16 on sla_tuned? Cite the run ids and the metrics; invent no numbers.`);
+	const reply = await chat(`In ${APP}, compare the runs of ${TUNED} at max_concurrency 32 and 16: why is one worse? Read the runs first, cite the run ids and the metrics; invent no numbers.`);
 	assert(RUN_ID.test(reply), 'the answer cites run ids');
 	assert(/ttft|first (word|token)|queue/i.test(reply), 'the answer names TTFT / queueing');
 });
 
 // ── 5. decide and dispatch the next runs ──────────────────────────────────
 await step('5 decide: next runs through the chat, dispatched by a press', async () => {
-	const reply = await chat(`What should I run next on sla_tuned in ${APP}? Propose it for my approval; start nothing.`);
+	const reply = await chat(`What should I run next on ${TUNED} in ${APP}? Stage it as a proposal for my approval; start nothing.`);
 	assert(/propos|suggest|approval/i.test(reply), 'the chat proposes the next runs');
 	await openApp();
 	const appr = map().locator('section[aria-label="For your approval"]');
@@ -241,7 +248,7 @@ await step('5 decide: next runs through the chat, dispatched by a press', async 
 // ── 6. fine-tune in the sandbox ───────────────────────────────────────────
 await step('6 sandbox: a real-GPU variant', async () => {
 	await openApp();
-	await openWorkflow('Sla tuned').catch(() => openWorkflow('SLA tuned'));
+	await openWorkflow(label(TUNED));
 	await panel().getByRole('button', { name: /Make a variant/ }).click();
 	const sheet = page.getByRole('dialog', { name: 'Make a variant' });
 	await sheet.waitFor({ timeout: 10000 });
@@ -250,13 +257,13 @@ await step('6 sandbox: a real-GPU variant', async () => {
 	await code.waitFor({ timeout: 60000 });
 	if (process.env.SANDBOX_PY && fs.existsSync(process.env.SANDBOX_PY)) await code.fill(fs.readFileSync(process.env.SANDBOX_PY, 'utf8'));
 	const idField = sheet.locator('#variant-id-0');
-	if (await idField.count()) await idField.fill('sandbox');
+	if (await idField.count()) await idField.fill(SANDBOX);
 	const nodeName = sheet.locator('input[type="text"][aria-label="New node name"]');
-	if (await nodeName.count()) await nodeName.fill('On a real GPU');
+	if (await nodeName.count()) await nodeName.fill(`On a real GPU ${RUN}`);
 	await sheet.getByRole('button', { name: /^Create/ }).click();
 	await sheet.waitFor({ state: 'detached', timeout: 120000 });
 	await page.waitForTimeout(3000);
-	await openWorkflow('Sandbox');
+	await openWorkflow(label(SANDBOX));
 	await press(panel().getByRole('button', { name: /^Run/ }));
 	const settled = await page.waitForFunction(() => /not measured|measured on|Succeeded|Failed/i.test(document.querySelector('[role="dialog"]')?.textContent || ''), null, { timeout: 50 * 60000 }).then(() => true).catch(() => false);
 	const t = await panel().innerText();
@@ -267,17 +274,17 @@ await step('6 sandbox: a real-GPU variant', async () => {
 // ── 7. manage the node ────────────────────────────────────────────────────
 await step('7 manage the node', async () => {
 	await openApp();
-	const n = nodeButton('node', 'On a real GPU');
-	if (!(await n.count())) { note('no "On a real GPU" node'); return; }
+	const n = nodeButton('node', `On a real GPU ${RUN}`);
+	if (!(await n.count())) { note('no "On a real GPU" node from this run'); return; }
 	await domClick(n);
 	const p = panel();
 	await p.waitFor({ timeout: 15000 });
 	const nameBox = p.getByLabel('Node name');
 	await nameBox.waitFor({ timeout: 30000 });
-	await nameBox.fill('Sandbox');
+	await nameBox.fill(`Sandbox ${RUN}`);
 	await p.getByRole('button', { name: 'Rename' }).click();
 	await page.waitForTimeout(8000);
-	assert(await nodeButton('node', 'Sandbox').count() > 0, 'the node is renamed on the graph');
+	assert(await nodeButton('node', `Sandbox ${RUN}`).count() > 0, 'the node is renamed on the graph');
 });
 
 report.ms = Date.now() - t0;

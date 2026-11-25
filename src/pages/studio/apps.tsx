@@ -1001,7 +1001,11 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 	const urlSurface = (params.get("surface") || "").trim();
 	// "home" is the app's home page (the map), the same as no surface at all.
 	const atHome = !urlSurface || urlSurface === "home";
-	const overviewMode = selected ? selected === OVERVIEW_SEL : (!!identity?.hasSurface || !!urlSurface);
+	// The research graph is EVERY app's home (round 8, 2026-11-26): a bare app
+	// address opens it; a workflow opens only when the address names one
+	// (/w/:loop, or ?selected=<loop>). Defaulting to the freshest workflow made
+	// the "Graph" tab lead back into the workflow it was leaving.
+	const overviewMode = selected ? selected === OVERVIEW_SEL : !routeLoop;
 	const validSelected = selected && rows?.some((r) => r.loop === selected) ? selected : null;
 	const validInitial = initialLoop && rows?.some((r) => r.loop === initialLoop) ? initialLoop : null;
 	// A /w/:loop address that names no workflow of this app is NOT a request

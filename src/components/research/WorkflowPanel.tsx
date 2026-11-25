@@ -310,7 +310,7 @@ function OverviewView({ app, wf, spec, row, cycles, variants, helpers, exps, onS
 					))}
 				</section>
 			)}
-			{row && <WorkflowInsights slug={row.slug} />}
+			{row && <WorkflowInsights slug={row.slug} knownRuns={cycles?.length ?? 0} />}
 			<section aria-label="What it's made of" className="space-y-1">
 				<h3 className="eyebrow">What it&apos;s made of</h3>
 				<dl className="grid grid-cols-[6rem_1fr] gap-x-2 gap-y-1 text-caption">
