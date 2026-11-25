@@ -15,15 +15,52 @@ Open **Studio → Data Warehouse → Catalog**. Pick a table and you get:
 - **Who uses it**: the workflows that write it and the ones that read it, with how many rows and
   when. Recording started on 25 Nov, so older use isn't shown.
 
-The catalog lists three stores today:
+The catalog lists four stores today:
 
 | Store | Where it lives | How a run reads it |
 |---|---|---|
 | **Lumid Data** | Home site, on the data NAS | By table name, e.g. `macro.treasury_rates` (below) |
 | **FinData** | Home site, on the data NAS | Its own SQL access. See [FinData SQL access](/studio/docs/findata-sql) |
+| **NUS Data** | NUS, on the NUS data hub (storage server) | By table name, e.g. `arxiv.papers`, from a run at NUS |
 | **LQT data** | Home site, served from lumid.trade | Read-only browsing; runs can't read it yet |
 
-Data at **NUS** (the arXiv corpus, UK Biobank) isn't in the catalog yet. See [§5](#5-not-there-yet).
+### Example: the arXiv corpus at NUS
+
+**NUS Data → `arxiv`** is the whole arXiv corpus, open to every signed-in user:
+
+| Table | What a row is |
+|---|---|
+| `arxiv.papers` | One paper: title, authors, abstract, categories, licence, first and latest version dates (3.15 million) |
+| `arxiv.paper_text` | The full text extracted from that paper's LaTeX source (2.86 million) |
+| `arxiv.files` | One file in one version of a paper (source, LaTeX, PDF, PS): path, size, sha256 (54.6 million) |
+
+The PDFs, PostScript and LaTeX bytes themselves (about 8.7 TB) stay as files at NUS; `arxiv.files`
+tells you what exists.
+
+The data lives at NUS, so run next to it: choose **Run at → NUS**. This Lumilake graph counts this
+year's papers by category. It ran in 14 seconds as an ordinary account:
+
+```yaml
+name: arxiv-by-category
+inputs:
+  Run: ["1"]
+outputs:
+  - name: counts
+    ref: "Counts"
+ops:
+  - id: Counts
+    op: DataRetrievalOp
+    inputs: [Run]
+    data_spec:
+      type: lumid          # at NUS, this is the NUS data hub
+      mode: sql
+      template: "SELECT primary_category, count(*) AS papers FROM arxiv.papers WHERE first_version_date >= '2026-01-01' GROUP BY 1 ORDER BY 2 DESC LIMIT 10"
+      output_format: jsonl
+```
+
+The result (in **Your runs**) starts `cs.CV 21,331 · cs.LG 20,977 · cs.CL 12,286 · cs.AI 11,730`.
+
+UK Biobank data at NUS is **not** in the catalog: it's restricted to approved researchers. See [§5](#5-not-there-yet).
 
 ## 2. Set up a run that reads it
 
@@ -32,14 +69,15 @@ Runs go to **Research Fleet**. Start one either way:
 - **Workflow editor → Run**, which validates the graph first and then follows the run until it ends; or
 - **Research Fleet → Jobs**, which lists every run you started from anywhere.
 
-### Pick where it runs: Home or Office
+### Pick where it runs: next to the data
 
-The Run button has a **Run at** choice. Each site has its own machines, and the Lumid Data hub
-is at **home**:
+The Run button has a **Run at** choice. Each site has its own machines, and `type: lumid` reads
+the data hub **of the site the run goes to**:
 
-- **Home**: next to the data. Tables are read over the local network.
-- **Office**: reads the same tables through `lum.id/data`, over the internet. That's fine for normal
+- **Home**: next to Lumid Data. Tables are read over the local network.
+- **Office**: reads Lumid Data through `lum.id/data`, over the internet. That's fine for normal
   reads; pick Home when a run reads a lot.
+- **NUS**: next to NUS Data (the arXiv corpus). Lumilake graphs only, for now.
 
 You don't change anything in the graph to switch sites. The address of the data comes from the
 site, not from your file.
@@ -121,7 +159,8 @@ Said plainly, so you don't go looking:
 
 | What | Today |
 |---|---|
-| **NUS data** (arXiv corpus, UK Biobank) | Not in the catalog. The arXiv corpus is being loaded into the NUS data hub so it can be browsed and queried like any other table. |
+| **UK Biobank at NUS** | Not in the catalog. It's restricted to approved researchers; access goes through its owner. |
+| **FlowMesh graphs at NUS** | Admin-only today. Lumilake graphs at NUS work for everyone (example above). |
 | **Reads by a Lumilake graph** | Lumilake reads with its own key, so under "Who uses it" they count as *another person reading*, not as you. |
 | **Files a run wrote** | Shown in the run's result, but not browsable in the Data Warehouse. |
 | **FlowMesh tasks reading the warehouse** | Not possible from inside a task (no network). Pass data in, as above. |

@@ -62,6 +62,17 @@ export const LAKE_INSTANCES: LakeInstance[] = [
     jobScheme: "lumid-data",
   },
   {
+    // The NUS data hub (lumid-data instance `platform` on the NUS cluster), served
+    // same-origin at lum.id/data-nus/ through the NUS waypoint. Added 2026-11-25
+    // with the public arXiv corpus. Not a job source yet (no jobScheme): the
+    // lum.id/data jobs entrance serves only the home hub.
+    id: "nus-data",
+    label: "NUS Data",
+    basePath: "/data-nus",
+    blurb: "Research corpora at NUS: the arXiv corpus (papers, full text, every file).",
+    where: "At NUS, on the NUS data hub (the storage server). Runs at NUS read it locally; from home or office it is read over the internet.",
+  },
+  {
     id: "lqt-data",
     label: "LQT Data",
     // Migrated 2026-07-12 off the legacy same-origin lum.id/lqt-data path onto
@@ -80,10 +91,12 @@ export function instanceById(id: string): LakeInstance | undefined {
 
 const enc = encodeURIComponent;
 
-/** The bearer audience each instance verifies. Only lum.id/data has its own;
+/** The bearer audience each instance verifies. Only the lumid-data hubs have their own;
  *  the others keep the default (runmesh) bearer they have always accepted. */
 export function audienceFor(basePath: string): Audience | undefined {
-  return basePath === "/data" || basePath.startsWith("/data/") ? "lumid-data" : undefined;
+  // Both lumid-data hubs verify the lumid-data audience: home (/data) and NUS (/data-nus).
+  const hub = (p: string) => basePath === p || basePath.startsWith(`${p}/`);
+  return hub("/data") || hub("/data-nus") ? "lumid-data" : undefined;
 }
 
 /** Bearer audience for a data app reached through /dataapp-proxy/<id>. */
