@@ -12,6 +12,7 @@
 // me.listWorkflows(); per-cycle observability from me.cycleDetail (inside
 // the panel).
 
+import AppPageTabs from "@/components/AppPageTabs";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -59,6 +60,7 @@ import LoopOrbit, { type LoopMode, type LoopStageKey } from "@/components/workfl
 const AppActivityBand = lazy(() => import("@/components/activity/AppActivityBand"));
 const ResearchHome = lazy(() => import("@/components/research/ResearchHome"));
 const WorkflowObservabilityPanel = lazy(() => import("@/components/workflow/WorkflowObservabilityPanel"));
+const WorkflowPage = lazy(() => import("@/components/research/WorkflowPage"));
 const WorkflowList = lazy(() => import("@/components/workflow/WorkflowList"));
 // Markdown renderer (named export) for the per-app Overview story copy.
 const LumidMarkdown = lazy(() => import("@/components/app-surface/LumidMarkdown").then((m) => ({ default: m.LumidMarkdown })));
@@ -1099,7 +1101,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 				) : (
 				<div className="-mx-5 -my-5">
 					<Suspense fallback={<div className="px-5 py-8"><Skeleton lines={4} /></div>}>
-						<AppSurface app={app} embedded={embedded} surface={params.get("surface") || undefined} />
+						<AppSurface app={app} embedded={embedded} pages={identity?.nav} surface={params.get("surface") || undefined} />
 					</Suspense>
 				</div>
 				)
@@ -1125,12 +1127,12 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 									<button
 										type="button"
 										onClick={selectOverview}
-										title="App overview — every workflow at a glance"
+										title="The app's research graph — every workflow at a glance"
 										className={cn(
 											"px-2.5 py-1 rounded-lg text-caption flex-shrink-0 transition-colors",
 											overviewMode ? "bg-ink-800 text-white" : "text-ink-600 hover:text-ink-800 hover:bg-ink-100",
 										)}
-									>Overview</button>
+									>Graph</button>
 								)}
 								{rows.length >= 1 && !(embedded && crumbTarget) && (
 									<WorkflowSelect rows={rows} selected={effSelected} onSelect={select}
@@ -1314,7 +1316,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 									// same left edge as the map and Compute above it.
 									<div className="-mx-6 -my-5">
 										<Suspense fallback={<div className="px-5 py-8"><Skeleton lines={4} /></div>}>
-											<AppSurface app={app} embedded={embedded} inlineChrome hideNav={atHome && (identity?.nav?.length ?? 0) >= 1} surface={params.get("surface") || undefined} />
+											<AppSurface app={app} embedded={embedded} inlineChrome hideNav={atHome && (identity?.nav?.length ?? 0) >= 1} pages={identity?.nav} surface={params.get("surface") || undefined} />
 										</Suspense>
 									</div>
 								) : APP_OVERVIEW_MD[app] ? (
@@ -1330,10 +1332,17 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 							</div>
 						) : (
 							<div id="wf-detail" className="min-w-0">
+								{/* The app's tab row above every workflow too: Graph leads back. */}
+								{embedded && !nestedInSurface && <AppPageTabs app={app} nav={identity?.nav} current={null} embedded className="-ml-2.5 mb-3" />}
 								{missingLoop && (
 									<WorkflowNotFound app={app} loop={missingLoop} runId={routeRunId ?? null} />
 								)}
-								{selectedRow && (
+								{/* A workflow's page is the graph's panel, full width; a run's own
+								    page keeps the detailed run view. */}
+								{selectedRow && !(routeLoop && effSelected === routeLoop && routeRunId) && (
+									<Suspense fallback={<Skeleton lines={4} />}><WorkflowPage app={app} loop={selectedRow.loop} /></Suspense>
+								)}
+								{selectedRow && routeLoop && effSelected === routeLoop && routeRunId && (
 									<WorkflowObservabilityPanel
 										app={app} loop={selectedRow.loop} wf={selectedRow.wf} loopHealth={selectedRow.lh}
 										identity={identity}

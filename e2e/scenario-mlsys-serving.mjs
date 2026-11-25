@@ -74,7 +74,7 @@ const domClick = (loc, shift = false) => loc.evaluate((el, s) => el.dispatchEven
 const panel = () => map().getByRole('dialog').first();
 async function openApp() {
 	await page.goto(`${BASE}/studio/apps/${APP}`, { waitUntil: 'domcontentloaded' });
-	const ov = page.getByRole('button', { name: 'Overview', exact: true });
+	const ov = page.getByRole('button', { name: /^(Graph|Overview)$/ });
 	if (!(await map().locator('.space3d [data-kind="workflow"]').first().waitFor({ timeout: 30000 }).then(() => true).catch(() => false))) {
 		await ov.first().click().catch(() => {});
 		await map().locator('.space3d [data-kind="workflow"]').first().waitFor({ timeout: 60000 });

@@ -139,7 +139,7 @@ check("proposal check in words", () => {
 });
 
 check("app pages always lead with the home", () => {
-	eq(appPages([{ surface: "strategies", label: "Strategies" }, { surface: "data", label: "Data" }]).map((t) => t.label), ["Overview", "Strategies", "Data"]);
+	eq(appPages([{ surface: "strategies", label: "Strategies" }, { surface: "data", label: "Data" }]).map((t) => t.label), ["Graph", "Strategies", "Data"]);
 	eq(appPages([{ surface: "home", label: "Work" }, { surface: "workflows" }]).map((t) => t.label), ["Work", "workflows"]);
 	eq(pageHref("quant-research", appPages([])[0], true), "/studio/apps/quant-research");
 	eq(pageHref("q", { surface: "data", label: "Data", home: false }, true), "/studio/apps/q?surface=data");

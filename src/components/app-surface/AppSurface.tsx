@@ -8,7 +8,7 @@
 // The chrome row (nav tabs + "⋯" actions menu) is always rendered so any app
 // can be edited/managed directly from Studio, including apps with no surface yet.
 
-import { appPages, pageHref } from "@/lib/app-pages";
+import AppPageTabs from "@/components/AppPageTabs";
 import { useCallback, useEffect, useRef, useState, Suspense, type ComponentProps } from "react";
 import { recordInteraction } from "@/api/interactions";
 import { useAuth } from "@/hooks/useAuth";
@@ -66,10 +66,13 @@ function AppSurfaceImpl({
   embedded,
   inlineChrome,
   hideNav,
+  pages,
 }: {
   // hideNav — the app home already names these pages at its top (ResearchHome);
   // a second tab bar under the map repeated the same links.
   hideNav?: boolean;
+  /** The installed app's nav — the same tab row the home and workflows show. */
+  pages?: { surface: string; label?: string }[];
   // When mounted on an explicit route (e.g. the lumid-market competition
   // surfaces), the app + named surface come in as props and the URL's own
   // params (competitionId, strategyId) are forwarded to the markdown for
@@ -206,33 +209,11 @@ function AppSurfaceImpl({
   // surfaces are pickable from any of them (not just home-page links). Only the
   // app's declared, param-free surfaces appear here.
   const surfaceTabs = (nav?: { surface: string; label?: string }[]) => {
-    if (hideNav || !nav || nav.length === 0) return null;
-    const current = surface || "home";
-    // Always led by the app's home (the research map), so any page leads back.
-    // Embedded in the workspace: switch WITHIN the middle panel (?surface=) so
-    // the left nav + right chat stay mounted; standalone: /studio/a/:app/:surface.
-    return (
-      <div className="flex flex-wrap gap-1 min-w-0 flex-shrink-0">
-        {appPages(nav).map((t) => {
-          const active = t.home ? current === "home" : t.surface === current;
-          return (
-            <Link
-              key={t.surface}
-              to={pageHref(app, t, !!embedded)}
-              aria-current={active ? "page" : undefined}
-              className={[
-                "px-2.5 py-1 rounded-lg text-caption transition-colors",
-                active
-                  ? "bg-ink-800 text-white"
-                  : "text-ink-600 hover:text-ink-900 hover:bg-ink-100",
-              ].join(" ")}
-            >
-              {t.label}
-            </Link>
-          );
-        })}
-      </div>
-    );
+    // One source for the tab row on every page of the app: the installed
+    // app's nav (`pages`, from the workspace), else this surface's own copy.
+    const n = pages && pages.length ? pages : nav;
+    if (hideNav || !n || n.length === 0) return null;
+    return <AppPageTabs app={app} nav={n} current={surface || "home"} embedded={!!embedded} className="min-w-0 flex-shrink-0" />;
   };
 
   // Slim chrome row: nav tabs left (when the app declares `ui.nav`), a single

@@ -97,24 +97,31 @@ function useLatestMetrics(app: string, loop: string, cycles: MeCycleListItem[] |
 
 // ── shell ─────────────────────────────────────────────────────────────────
 
-function PanelShell({ kicker, title, sub, onClose, children, foot, label, style }: {
+function PanelShell({ kicker, title, sub, onClose, children, foot, label, style, page = false }: {
 	kicker: string; title: string; sub?: React.ReactNode; onClose: () => void; children: React.ReactNode; foot?: React.ReactNode; label: string; style?: React.CSSProperties;
+	/** The workflow's own page: the same panel, full width, in the flow. */
+	page?: boolean;
 }) {
 	useEffect(() => {
+		if (page) return;
 		const onKey = (ev: KeyboardEvent) => { if (ev.key === "Escape") onClose(); };
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
-	}, [onClose]);
+	}, [onClose, page]);
 	return (
-		<div role="dialog" aria-label={label} style={style}
-			className="absolute right-3 top-12 z-[6100] flex w-[22rem] max-w-[48%] flex-col overflow-hidden rounded-xl border border-ink-200 bg-card shadow-e3 map-panel-in 2xl:w-[26rem]">
+		<div role={page ? "region" : "dialog"} aria-label={label} style={style}
+			className={page
+				? "flex w-full flex-col overflow-hidden rounded-xl border border-ink-200 bg-card shadow-e1"
+				: "absolute right-3 top-12 z-[6100] flex w-[22rem] max-w-[48%] flex-col overflow-hidden rounded-xl border border-ink-200 bg-card shadow-e3 map-panel-in 2xl:w-[26rem]"}>
 			<div className="space-y-1 border-b border-ink-100 px-3.5 pb-2.5 pt-3">
 				<div className="flex items-center gap-2">
 					<span className="eyebrow text-plum-700">{kicker}</span>
-					<button type="button" onClick={onClose} aria-label="Close" title="Close (Esc)"
-						className="ml-auto -mr-1 inline-flex h-6 w-6 items-center justify-center rounded-md text-ink-600 hover:bg-ink-100 hover:text-ink-900">
-						<X className="h-3.5 w-3.5" />
-					</button>
+					{!page && (
+						<button type="button" onClick={onClose} aria-label="Close" title="Close (Esc)"
+							className="ml-auto -mr-1 inline-flex h-6 w-6 items-center justify-center rounded-md text-ink-600 hover:bg-ink-100 hover:text-ink-900">
+							<X className="h-3.5 w-3.5" />
+						</button>
+					)}
 				</div>
 				<div className="text-title font-semibold leading-snug text-ink-900">{title}</div>
 				{sub}
@@ -127,7 +134,7 @@ function PanelShell({ kicker, title, sub, onClose, children, foot, label, style 
 
 // ── workflow panel ────────────────────────────────────────────────────────
 
-export default function WorkflowPanel({ app, wf, spec, row, exps, view, onView, compareWith, onPickCompare, onMakeVariant, onTrySetups, onSelect, save, editable, onClose, style }: {
+export default function WorkflowPanel({ app, wf, spec, row, exps, view, onView, compareWith, onPickCompare, onMakeVariant, onTrySetups, onSelect, save, editable, onClose, style, page = false }: {
 	app: string;
 	wf: SpecWorkflow;
 	spec: AppSpec;
@@ -146,6 +153,8 @@ export default function WorkflowPanel({ app, wf, spec, row, exps, view, onView, 
 	editable: boolean;
 	onClose: () => void;
 	style?: React.CSSProperties;
+	/** Rendered as the workflow's own page (full width) rather than over the graph. */
+	page?: boolean;
 }) {
 	const { cycles, reload } = useCycles(app, wf.id);
 	const status = useMemo(() => workflowStatusLine((cycles || []).map((c) => ({ ts: c.ts, ok: c.ok, running: c.running, duration_s: c.duration_s }))), [cycles]);
@@ -181,7 +190,7 @@ export default function WorkflowPanel({ app, wf, spec, row, exps, view, onView, 
 		</div>
 	);
 	return (
-		<PanelShell kicker={wf.parent ? "Variant" : "Workflow"} title={wfLabel(wf)} sub={sub} onClose={onClose} label={`Workflow: ${wfLabel(wf)}`} style={style}
+		<PanelShell kicker={wf.parent ? "Variant" : "Workflow"} title={wfLabel(wf)} sub={sub} onClose={onClose} label={`Workflow: ${wfLabel(wf)}`} style={style} page={page}
 			foot={<>
 				<Button size="sm" variant="accent" onClick={runNow} disabled={busy || running} aria-label={`Run ${wfLabel(wf)}`}>
 					<Play className="h-3.5 w-3.5" />{running ? "Running…" : "Run"}
@@ -190,6 +199,7 @@ export default function WorkflowPanel({ app, wf, spec, row, exps, view, onView, 
 				<Button size="sm" variant="secondary" onClick={onMakeVariant} disabled={!editable} title={editable ? "A workflow made from this one" : "Install your own copy to change it"}>
 					<GitBranch className="h-3.5 w-3.5" />Make a variant
 				</Button>
+				<MoreMenu app={app} wf={wf} row={row} editable={editable} />
 				<button type="button" onClick={() => ask(`How is ${wfLabel(wf)} in ${appTitle(app)} doing, and what should it try next? Look at its recent runs and their metrics first; cite run ids. Suggest the next runs, but start nothing.`, { app, workflow: wf.id })}
 					className="ml-auto inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-caption text-ink-700 hover:bg-ink-100 hover:text-ink-900">
 					<MessagesSquare className="h-3.5 w-3.5" />Ask about it
@@ -199,13 +209,47 @@ export default function WorkflowPanel({ app, wf, spec, row, exps, view, onView, 
 				<Segmented size="sm" aria-label="Panel view" value={view} onChange={(v) => onView(v as PanelView)}
 					options={[{ value: "overview", label: "Overview" }, { value: "runs", label: "Runs" }, { value: "compare", label: "Compare" }, { value: "feedback", label: "Feedback" }]} />
 			</div>
-			<div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3.5 py-3">
+			<div className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain px-3.5 py-3", page && "md:px-5 md:py-4")}>
 				{view === "overview" && <OverviewView app={app} wf={wf} spec={spec} row={row} cycles={cycles} variants={variants} helpers={helpers} exps={ownExps} onSelect={onSelect} />}
 				{view === "runs" && <RunsView app={app} wf={wf} cycles={cycles} />}
 				{view === "compare" && <CompareView app={app} a={{ kind: "workflow", id: wf.id, label: wfLabel(wf) }} b={compareWith} wf={wf} spec={spec} onPick={onPickCompare} />}
 				{view === "feedback" && <FeedbackView app={app} wf={wf} cycles={cycles} save={save} editable={editable} />}
 			</div>
 		</PanelShell>
+	);
+}
+
+// ── ⋯ : Pause / Resume (only where a schedule exists) and Delete ──────────
+
+function MoreMenu({ app, wf, row, editable }: { app: string; wf: SpecWorkflow; row?: MeWorkflowRow; editable: boolean }) {
+	const [open, setOpen] = useState(false);
+	const scheduled = wf.run !== "manual";
+	const paused = row?.enabled === false;
+	const toggle = async () => {
+		setOpen(false);
+		try {
+			await me.patchLoop(app, wf.id, { enabled: paused });
+			window.dispatchEvent(new CustomEvent("studio:data", { detail: { scopes: ["workflows", "loops"] } }));
+			toast.success(paused ? `${wfLabel(wf)} runs on its schedule again` : `${wfLabel(wf)} paused — it runs only when you press Run`);
+		} catch (e) { toast.error("Couldn't change it", { description: String((e as Error).message || e) }); }
+	};
+	const del = async () => {
+		setOpen(false);
+		const { deleteWorkflow } = await import("@/lib/delete-workflow");
+		await deleteWorkflow(app, appTitle(app), wf.id, wfLabel(wf));
+	};
+	if (!editable) return null;
+	return (
+		<div className="relative">
+			<button type="button" aria-label="More" aria-expanded={open} onClick={() => setOpen((v) => !v)}
+				className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-600 hover:bg-ink-100 hover:text-ink-900">⋯</button>
+			{open && (
+				<div role="menu" className="absolute bottom-full left-0 z-10 mb-1 w-48 rounded-lg border border-ink-200 bg-popover p-1 shadow-e2">
+					{scheduled && <button type="button" role="menuitem" onClick={toggle} className="block w-full rounded-md px-2 py-1.5 text-left text-caption text-ink-800 hover:bg-ink-100">{paused ? "Resume its schedule" : "Pause its schedule"}</button>}
+					<button type="button" role="menuitem" onClick={del} className="block w-full rounded-md px-2 py-1.5 text-left text-caption text-brick-700 hover:bg-brick-50">Delete workflow…</button>
+				</div>
+			)}
+		</div>
 	);
 }
 
