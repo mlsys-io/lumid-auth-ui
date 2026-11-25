@@ -1,7 +1,7 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
 // Fixtures are trimmed copies of real lum.id experiments (2026-11-24).
 import type { MeExperiment } from "@/api/me";
-import { humanId, experimentStatus, versionsOf, criteriaInWords, buildResearchTree, pathTo, mapSummary, comparabilityNote, type Proposal } from "./research-map";
+import { humanId, experimentStatus, versionsOf, criteriaInWords, buildResearchTree, pathTo, mapSummary, comparabilityNote, suggestionParent, type Proposal } from "./research-map";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -72,6 +72,24 @@ check("status: enough results but no leader is 'too close to call'", () => {
 	const doc = { id: "readability_lift", kind: "arms", status: "active", hypothesis: "h", n_results: 209, criteria_met: false, comparable: true,
 		min_samples: 12, arms: [{ id: "current" }, { id: "rewritten" }], variants: { current: { n: 108, mean: 3.13 }, rewritten: { n: 101, mean: 3.13 } } } as unknown as MeExperiment;
 	eq(experimentStatus(doc).text, "Enough results — too close to call so far");
+});
+check("a suggestion hangs off the experiment it extends (2 of loop/dataset/metric)", () => {
+	const e1 = { ...kol, id: "kol_alpha", dispatch: { loop: "kol_strategy" }, loops: ["kol_strategy"], dataset_id: "musk_tweets_v1" } as unknown as MeExperiment;
+	const e2 = { ...won, id: "backtest_evidence", dispatch: { loop: "backtest" }, dataset_id: "tape_covered_v1", metric: { name: "real_tape" } } as unknown as MeExperiment;
+	eq(suggestionParent({ id: "s1", dispatch_loop: "backtest", dataset_id: "tape_covered_v1" }, [e1, e2]), "backtest_evidence");
+	eq(suggestionParent({ id: "s2", dispatch_loop: "backtest" }, [e1, e2]), null);
+	const t = buildResearchTree("qr", [e1, e2], [{ id: "s1", dispatch_loop: "backtest", dataset_id: "tape_covered_v1" }]);
+	const sug = t.nodes.find((n) => n.id === "sug:s1")!;
+	eq([sug.parent, sug.depth], ["exp:backtest_evidence", 2]);
+	eq(t.edges.find((e) => e.target === "sug:s1")?.label, "suggested next");
+});
+check("forked_from draws experiment → experiment, deeper", () => {
+	const child = { ...won, id: "readability_v2", forked_from: "readability_lift" } as unknown as MeExperiment;
+	const t = buildResearchTree("doc", [child, won], []);
+	const n = t.nodes.find((x) => x.id === "exp:readability_v2")!;
+	eq([n.parent, n.depth], ["exp:readability_lift", 2]);
+	eq(t.edges.find((e) => e.target === "exp:readability_v2")?.label, "forked from");
+	eq(t.nodes.find((x) => x.id === "ver:readability_v2:plain_style")?.depth, 3);
 });
 check("summary line", () => eq(mapSummary([kol, won], props), "2 experiments · 5 versions tried · 1 suggested"));
 

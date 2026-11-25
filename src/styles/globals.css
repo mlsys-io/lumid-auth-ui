@@ -932,3 +932,12 @@ html[data-surface="studio"] ::selection {
 @media (prefers-reduced-motion: reduce) {
 	.activity-fold { animation: none; }
 }
+
+/* Research map: when the tree changes (a card added, a suggestion accepted),
+   cards spring to their new places instead of jumping (ResearchMap). Only
+   node transforms — the viewport's pan/zoom lives on another element. */
+.research-map .react-flow__node { transition: transform 650ms cubic-bezier(0.34, 1.4, 0.64, 1); }
+.research-edge-label { fill: theme('colors.ink.600'); paint-order: stroke; stroke: theme('colors.ink.50'); stroke-width: 3px; }
+@media (prefers-reduced-motion: reduce) {
+	.research-map .react-flow__node { transition: none; }
+}

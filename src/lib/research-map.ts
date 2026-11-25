@@ -156,27 +156,67 @@ export type MapNodeKind = "app" | "experiment" | "version" | "suggested";
 export interface MapNode { id: string; kind: MapNodeKind; depth: number; ref: string; parent?: string }
 export interface MapEdge { id: string; source: string; target: string; dashed?: boolean; label?: string }
 
+/** The experiment a suggestion extends: the one that runs through the same
+ *  workflow and dataset (and metric). Two of the three must match, or it
+ *  hangs off the app — a guessed parent would draw a false derivation. */
+export function suggestionParent(p: Proposal, exps: MeExperiment[]): string | null {
+	const loop = p.dispatch_loop || p.dispatch?.loop;
+	const metric = p.metric?.name || p.metric_name;
+	let best: string | null = null, bestScore = 1;
+	for (const e of exps) {
+		const eLoops = [e.dispatch?.loop, ...(e.loops || [])].filter(Boolean);
+		const score = (loop && eLoops.includes(loop) ? 1 : 0)
+			+ (p.dataset_id && p.dataset_id === e.dataset_id ? 1 : 0)
+			+ (metric && metric === (e.metric?.name || e.metric_name) ? 1 : 0);
+		if (score > bestScore) { best = e.id; bestScore = score; }
+	}
+	return best;
+}
+
 export function buildResearchTree(app: string, exps: MeExperiment[], proposals: Proposal[]): { nodes: MapNode[]; edges: MapEdge[] } {
 	const root = `app:${app}`;
 	const nodes: MapNode[] = [{ id: root, kind: "app", depth: 0, ref: app }];
 	const edges: MapEdge[] = [];
-	const known = new Set(exps.map((e) => e.id));
-	for (const e of exps) {
+	const byId = new Map(exps.map((e) => [e.id, e]));
+	// Experiments derive from experiments when the app declares it
+	// (forked_from); a cycle or an unknown parent falls back to the app.
+	const parentOf = (e: MeExperiment): string | null => {
+		const f = (e as { forked_from?: string }).forked_from;
+		return f && f !== e.id && byId.has(f) ? f : null;
+	};
+	const depthCache = new Map<string, number>();
+	const depthOf = (id: string, seen = new Set<string>()): number => {
+		if (depthCache.has(id)) return depthCache.get(id)!;
+		if (seen.has(id)) return 1;
+		seen.add(id);
+		const par = parentOf(byId.get(id)!);
+		const d = par ? depthOf(par, seen) + 1 : 1;
+		depthCache.set(id, d);
+		return d;
+	};
+	const ordered = [...exps].sort((a, b) => depthOf(a.id) - depthOf(b.id));
+	for (const e of ordered) {
 		const eid = `exp:${e.id}`;
-		nodes.push({ id: eid, kind: "experiment", depth: 1, ref: e.id, parent: root });
-		edges.push({ id: `${root}->${eid}`, source: root, target: eid });
+		const par = parentOf(e);
+		const pid = par ? `exp:${par}` : root;
+		const depth = depthOf(e.id);
+		nodes.push({ id: eid, kind: "experiment", depth, ref: e.id, parent: pid });
+		edges.push({ id: `${pid}->${eid}`, source: pid, target: eid, label: par ? "forked from" : undefined });
 		for (const v of versionsOf(e)) {
 			const vid = `ver:${e.id}:${v.id}`;
-			nodes.push({ id: vid, kind: "version", depth: 2, ref: v.id, parent: eid });
+			nodes.push({ id: vid, kind: "version", depth: depth + 1, ref: v.id, parent: eid });
 			edges.push({ id: `${eid}->${vid}`, source: eid, target: vid });
 		}
 	}
 	// A proposal whose experiment now exists has been accepted — it is on the
-	// map as an experiment, not as a suggestion.
-	for (const p of proposals.filter((p) => !known.has(p.id))) {
-		const pid = `sug:${p.id}`;
-		nodes.push({ id: pid, kind: "suggested", depth: 1, ref: p.id, parent: root });
-		edges.push({ id: `${root}->${pid}`, source: root, target: pid, dashed: true, label: "suggested" });
+	// map as an experiment, not as a suggestion. The rest hang off the
+	// experiment they extend ("suggested next"), else off the app.
+	for (const p of proposals.filter((p) => !byId.has(p.id))) {
+		const sid = `sug:${p.id}`;
+		const par = suggestionParent(p, exps);
+		const pid = par ? `exp:${par}` : root;
+		nodes.push({ id: sid, kind: "suggested", depth: par ? depthOf(par) + 1 : 1, ref: p.id, parent: pid });
+		edges.push({ id: `${pid}->${sid}`, source: pid, target: sid, dashed: true, label: par ? "suggested next" : "suggested" });
 	}
 	return { nodes, edges };
 }
