@@ -12,13 +12,18 @@
 //   - picking a card flies the camera to frame its path from the app (700 ms)
 //     and dims everything else; the path's edges flow;
 //   - on first view per session the cards appear in creation order.
-// Reduced motion: no turning, no fly-to (the camera jumps), no flow, no growth.
+// The stage (so it reads as a space, not dots and lines): a floor under the
+// nodes with a ring under each orbit and spokes that fade into fog, a soft
+// shadow on the floor under every node, a stem from each experiment down to
+// its shadow (height you can see), and motes of dust that turn with the space.
+// Reduced motion: no turning, no fly-to (the camera jumps), no flow, no growth,
+// no drifting dust.
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Minus, Plus, RotateCcw } from "lucide-react";
 import type { MapEdge, MapNode } from "@/lib/research-map";
 import {
-	AUTO_ROTATE_IDLE_MS, AUTO_ROTATE_RAD_PER_MS, DISTANCE, FOCAL, HOME, PITCH_LIMIT, depthCue, easeInOutCubic, frameCamera, layoutSpace, mixCamera, project, turnHull,
+	AUTO_ROTATE_IDLE_MS, AUTO_ROTATE_RAD_PER_MS, DISTANCE, FOCAL, HOME, PITCH_LIMIT, depthCue, dustField, easeInOutCubic, frameCamera, layoutSpace, mixCamera, project, sceneFloor, turnHull,
 	type Camera,
 } from "@/lib/space3d";
 import { cn } from "@/lib/utils";
@@ -55,6 +60,9 @@ export interface Space3DProps {
 }
 
 const HINT_KEY = "space3d_hint_seen_v1";
+/** Arcs per floor ring (each fades with its own depth) and spokes on the floor. */
+const RING_SEGMENTS = 36;
+const SPOKES = 24;
 
 // Framing for the whole space: dots are small, so the margin only has to
 // leave room for a label to the right of the outermost dot.
@@ -107,6 +115,19 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		return out;
 	}, [nodes, evidence]);
 	const particleEls = useRef<Array<SVGCircleElement | null>>([]);
+	// The stage: floor, its rings and spokes, shadows, stems, dust.
+	const floor = useMemo(() => sceneFloor(pos), [pos]);
+	const dust = useMemo(() => dustField(Math.min(90, Math.round(floor.rim / 9)), floor.rim * 1.15, -floor.y - 120, floor.y), [floor]);
+	// What the whole-space view frames: every node AND its shadow, so the
+	// floor reads under the space instead of falling off the bottom.
+	const hullPts = useMemo(() => turnHull([...pos.values()].flatMap((p) => [p, { ...p, y: floor.y }])), [pos, floor]);
+	const floorEl = useRef<SVGPathElement>(null);
+	const ringEls = useRef<Array<SVGPathElement | null>>([]);
+	const spokeEls = useRef<Array<SVGPathElement | null>>([]);
+	const shadowEls = useRef(new Map<string, SVGEllipseElement>());
+	const stemEls = useRef(new Map<string, SVGPathElement>());
+	const dustEls = useRef<Array<SVGCircleElement | null>>([]);
+	const uid = useId().replace(/:/g, "");
 	// Each node drifts a little on its own phase (the space breathes).
 	const phase = useMemo(() => {
 		const m = new Map<string, number>();
@@ -135,12 +156,12 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		if (!el) return;
 		const ro = new ResizeObserver(([e]) => {
 			s.current.W = e.contentRect.width; s.current.H = e.contentRect.height;
-			if (!s.current.framed && s.current.W) { s.current.cam = frameCamera(turnHull([...pos.values()]), HOME, s.current.W, s.current.H, boxAbove(HOME_BOX, s.current.H, insetRef.current, rightRef.current)); s.current.framed = true; }
+			if (!s.current.framed && s.current.W) { s.current.cam = frameCamera(hullPts, HOME, s.current.W, s.current.H, boxAbove(HOME_BOX, s.current.H, insetRef.current, rightRef.current)); s.current.framed = true; }
 			kick.current();
 		});
 		ro.observe(el);
 		return () => ro.disconnect();
-	}, [pos]);
+	}, [pos, hullPts]);
 
 	// Fly to the selected path, or back to the whole space.
 	const first = useRef(true);
@@ -157,11 +178,11 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		const facing = sel && Math.hypot(sel.x, sel.z) > 1 ? { ...st.cam, yaw: Math.atan2(sel.z, sel.x) - 0.45, pitch: -0.18 } : { ...st.cam, pitch: HOME.pitch };
 		const to = lit
 			? frameCamera(pts, facing, st.W, st.H, boxAbove({ top: 56, bottom: 0.9, margin: 110 }, st.H, insetRef.current, rightRef.current))
-			: frameCamera(turnHull(pts), { ...st.cam, pitch: HOME.pitch }, st.W, st.H, boxAbove(HOME_BOX, st.H, insetRef.current, rightRef.current));
+			: frameCamera(hullPts, { ...st.cam, pitch: HOME.pitch }, st.W, st.H, boxAbove(HOME_BOX, st.H, insetRef.current, rightRef.current));
 		if (reduced) st.cam = to; else st.tween = { from: { ...st.cam }, to, t0: performance.now(), dur: 820, spring: !!lit };
 		st.lastInput = performance.now();
 		kick.current();
-	}, [lit, pos, reduced, selected, insetRight, height]);
+	}, [lit, pos, reduced, selected, insetRight, height, hullPts]);
 
 	// The frame loop.
 	useEffect(() => {
@@ -189,6 +210,94 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 			draw(t);
 			// The drift keeps the loop alive whenever motion is allowed.
 			if ((moving || growing || wantTurn || !reduced) && !document.hidden) st.raf = requestAnimationFrame(frame);
+		};
+		// The floor and what stands on it. Everything here is drawn in world space
+		// and fades with distance (fog), so it turns with the space and gives the
+		// eye a ground to read depth against.
+		const SEG = RING_SEGMENTS;
+		const drawStage = (t: number, world: Map<string, { x: number; y: number; z: number }>, proj: Map<string, ReturnType<typeof project>>) => {
+			const { W, H, cam } = st;
+			const fy = floor.y;
+			const at = (r: number, a: number) => project({ x: r * Math.cos(a), y: fy, z: r * Math.sin(a) }, cam, W, H);
+			const fog = (sc: number) => depthCue(sc, cam.zoom).near;
+			// The plane: a disc out to the rim, filled with a soft pool of light.
+			if (floorEl.current) {
+				let d = "";
+				for (let i = 0; i <= 48; i++) { const q = at(floor.rim, (i / 48) * 2 * Math.PI); d += `${i ? "L" : "M"}${q.x.toFixed(1)},${q.y.toFixed(1)}`; }
+				floorEl.current.setAttribute("d", d + "Z");
+			}
+			// Rings: SEG arcs each, so the far side fades into the fog; the outer
+			// rim is fainter still (the floor dissolves rather than ends).
+			floor.rings.forEach((r, ri) => {
+				const rim = ri === floor.rings.length - 1;
+				for (let k = 0; k < SEG; k++) {
+					const el = ringEls.current[ri * SEG + k];
+					if (!el) continue;
+					let d = "", sc = 0;
+					for (let j = 0; j <= 3; j++) {
+						const q = at(r, ((k + j / 3) / SEG) * 2 * Math.PI);
+						d += `${j ? "L" : "M"}${q.x.toFixed(1)},${q.y.toFixed(1)}`;
+						if (j === 1) sc = q.scale;
+					}
+					el.setAttribute("d", d);
+					el.style.opacity = ((0.1 + 0.5 * fog(sc)) * (rim ? 0.45 : 1)).toFixed(3);
+				}
+			});
+			// Spokes from the inner ring to the rim, three pieces each (fog again).
+			const r0 = floor.rings[0];
+			for (let k = 0; k < SPOKES; k++) {
+				const a = (k / SPOKES) * 2 * Math.PI;
+				for (let j = 0; j < 3; j++) {
+					const el = spokeEls.current[k * 3 + j];
+					if (!el) continue;
+					const ra = r0 + (floor.rim - r0) * (j / 3), rb = r0 + (floor.rim - r0) * ((j + 1) / 3);
+					const p = at(ra, a), q = at(rb, a);
+					el.setAttribute("d", `M${p.x.toFixed(1)},${p.y.toFixed(1)}L${q.x.toFixed(1)},${q.y.toFixed(1)}`);
+					el.style.opacity = ((0.08 + 0.32 * fog((p.scale + q.scale) / 2)) * (1 - j * 0.28)).toFixed(3);
+				}
+			}
+			// Shadows and stems. They follow each node's spring (the node lags
+			// its target while the space moves; its shadow lags with it).
+			const base = FOCAL / DISTANCE;
+			const squash = Math.max(0.14, Math.abs(Math.sin(cam.pitch)));
+			for (const n of nodes) {
+				const w = world.get(n.id), now = proj.get(n.id);
+				if (!w || !now) continue;
+				const f = project({ x: w.x, y: fy, z: w.z }, cam, W, H);
+				const tgt = project(w, cam, W, H);
+				const ox = now.x - tgt.x, oy = now.y - tgt.y;
+				const fx = f.x + ox * 0.5, fyS = f.y + oy * 0.5;
+				const dim = !!lit && !lit.has(n.id);
+				const born = grow && !reduced ? Math.max(0, Math.min(1, (t - st.bornAt - (order?.get(n.id) ?? 0) * 70) / 380)) : 1;
+				const sh = shadowEls.current.get(n.id);
+				if (sh) {
+					const R = (n.depth === 0 ? 22 : n.kind === "version" ? 8 : 13) * (f.scale / base);
+					// Higher above the floor → a wider, fainter shadow.
+					const lift = Math.max(0, Math.min(1, (fy - w.y) / 420));
+					sh.setAttribute("cx", fx.toFixed(1)); sh.setAttribute("cy", fyS.toFixed(1));
+					sh.setAttribute("rx", (R * (1 + 0.5 * lift)).toFixed(1)); sh.setAttribute("ry", (R * (1 + 0.5 * lift) * squash).toFixed(1));
+					sh.style.opacity = (f.visible ? (dim ? 0.08 : 0.35 + 0.45 * fog(f.scale)) * (1 - 0.45 * lift) * born : 0).toFixed(3);
+				}
+				const stem = stemEls.current.get(n.id);
+				if (stem) {
+					stem.setAttribute("d", `M${now.x.toFixed(1)},${now.y.toFixed(1)}L${fx.toFixed(1)},${fyS.toFixed(1)}`);
+					stem.style.opacity = (f.visible && now.visible ? (dim ? 0.04 : lit?.has(n.id) ? 0.7 : 0.18 + 0.4 * fog(now.scale)) * born : 0).toFixed(3);
+				}
+			}
+			// Dust: rises slowly and wraps; near motes larger and brighter.
+			const span = fy - (-fy - 120);
+			dust.forEach((m, i) => {
+				const c = dustEls.current[i];
+				if (!c) return;
+				const y = reduced ? m.y : fy - ((((fy - m.y) + t * 0.006 * m.speed) % span) + span) % span;
+				const q = project({ x: m.x, y, z: m.z }, cam, W, H);
+				const near = fog(q.scale);
+				// Fade in at the floor and out near the top, so motes never pop.
+				const edge = Math.min(1, (fy - y) / 80, (y + fy + 120) / 80);
+				c.setAttribute("cx", q.x.toFixed(1)); c.setAttribute("cy", q.y.toFixed(1));
+				c.setAttribute("r", Math.max(0.5, m.size * (q.scale / base) * (0.7 + 0.8 * near)).toFixed(2));
+				c.style.opacity = (q.visible ? (0.12 + 0.4 * near) * Math.max(0, edge) * (lit ? 0.5 : 1) : 0).toFixed(3);
+			});
 		};
 		const draw = (t: number) => {
 			const { W, H, cam } = st;
@@ -232,6 +341,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				}
 				proj.set(n.id, { ...p, x: sp.x, y: sp.y });
 			}
+			drawStage(t, world, proj);
 			for (const n of nodes) {
 				const el = cardEls.current.get(n.id);
 				const p = proj.get(n.id);
@@ -342,7 +452,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		document.addEventListener("visibilitychange", onVis);
 		kick.current();
 		return () => { cancelAnimationFrame(st.raf); st.raf = 0; document.removeEventListener("visibilitychange", onVis); };
-	}, [pos, nodes, edges, lit, grow, reduced, order, selected, hovered, particles, phase]);
+	}, [pos, nodes, edges, lit, grow, reduced, order, selected, hovered, particles, phase, floor, dust]);
 
 	// ── input ──────────────────────────────────────────────────────────────
 	const touch = () => { s.current.lastInput = performance.now(); s.current.tween = null; kick.current(); };
@@ -354,7 +464,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 	const zoomBy = (f: number) => { const c = s.current.cam; s.current.cam = { ...c, zoom: Math.max(0.45, Math.min(2.2, c.zoom * f)) }; touch(); };
 	const reset = () => {
 		const st = s.current;
-		const to = frameCamera(turnHull([...pos.values()]), HOME, st.W, st.H, boxAbove(HOME_BOX, st.H, insetRef.current, rightRef.current));
+		const to = frameCamera(hullPts, HOME, st.W, st.H, boxAbove(HOME_BOX, st.H, insetRef.current, rightRef.current));
 		if (reduced) st.cam = to; else st.tween = { from: { ...st.cam }, to, t0: performance.now(), dur: 600 };
 		st.lastInput = performance.now();
 		onSelect(null);
@@ -428,6 +538,38 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 			style={{ height }}
 		>
 			<svg className="absolute inset-0 w-full h-full pointer-events-none" aria-hidden>
+				<defs>
+					<radialGradient id={`${uid}-floor`}>
+						<stop offset="0%" className="space3d-floor-core" />
+						<stop offset="55%" className="space3d-floor-mid" />
+						<stop offset="100%" className="space3d-floor-edge" />
+					</radialGradient>
+					<radialGradient id={`${uid}-shadow`}>
+						<stop offset="0%" className="space3d-shadow-core" />
+						<stop offset="100%" className="space3d-shadow-edge" />
+					</radialGradient>
+				</defs>
+				<path ref={floorEl} fill={`url(#${uid}-floor)`} />
+				{floor.rings.map((_, ri) => Array.from({ length: RING_SEGMENTS }, (_, k) => (
+					<path key={`r${ri}:${k}`} ref={(el) => { ringEls.current[ri * RING_SEGMENTS + k] = el; }} fill="none"
+						className={ri === 1 ? "stroke-plum-300" : "stroke-ink-300"} strokeWidth={ri === 1 ? 1.1 : 0.8} style={{ opacity: 0 }} />
+				)))}
+				{Array.from({ length: SPOKES * 3 }, (_, i) => (
+					<path key={`s${i}`} ref={(el) => { spokeEls.current[i] = el; }} className="stroke-ink-300" strokeWidth={0.6} style={{ opacity: 0 }} />
+				))}
+				{nodes.map((n) => (
+					<ellipse key={`sh:${n.id}`} ref={(el) => { if (el) shadowEls.current.set(n.id, el); else shadowEls.current.delete(n.id); }}
+						fill={`url(#${uid}-shadow)`} style={{ opacity: 0 }} />
+				))}
+				{/* Stems only for the app and its experiments: the ring you read height
+				    on. Workflows and suggestion columns would bundle into dashed poles. */}
+				{nodes.filter((n) => n.depth === 0 || n.kind === "experiment").map((n) => (
+					<path key={`st:${n.id}`} ref={(el) => { if (el) stemEls.current.set(n.id, el); else stemEls.current.delete(n.id); }}
+						className="stroke-plum-300" strokeWidth={0.9} strokeDasharray="2 3" fill="none" style={{ opacity: 0 }} />
+				))}
+				{dust.map((_, i) => (
+					<circle key={`d${i}`} ref={(el) => { dustEls.current[i] = el; }} className="fill-plum-300" style={{ opacity: 0 }} />
+				))}
 				{edges.map((e) => {
 					const onPath = !!lit && lit.has(e.source) && lit.has(e.target);
 					return (
