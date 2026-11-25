@@ -353,11 +353,12 @@ await section('research map', async () => {
 	const dimmed = await map.locator('.space3d [data-dim]').count();
 	assert(dimmed > 0, `clicking a card dims what is off its path (${dimmed} dimmed)`);
 	assert(await map.locator('.space3d-edge-flow').count() > 0, 'the selected path flows');
-	// One running panel: the global one in the chat rail, else the app's own.
+	// One running panel, in the chat rail only: the app home never adds its own
+	// Compute panel beside the map (not wanted when the rail is hidden).
 	// The rail stays empty until the feed's first answer — give it time.
-	await page.locator('section[aria-label="Running now"], section[aria-label="Compute"]').first().waitFor({ timeout: 20000 }).catch(() => {});
+	await page.locator('section[aria-label="Running now"]').first().waitFor({ timeout: 20000 }).catch(() => {});
 	const railPanel = await page.locator('section[aria-label="Running now"]').count();
-	assert(railPanel === 1 || await page.locator('section[aria-label="Compute"]').count() === 1, `a running panel is beside the map (${railPanel ? 'global, in the rail' : 'the app\'s own'})`);
+	assert(await page.locator('section[aria-label="Compute"]').count() === 0, 'the app home has no Compute panel of its own');
 	if (railPanel) assert(await page.locator('[data-slot="next"]').count() >= 1, 'the running panel shows the next free slot');
 	// The app's workflows are listed in the sidebar, not in a dropdown.
 	assert(await page.locator(`nav[aria-label="${APP} workflows"] a`).count() > 0, 'the open app lists its workflows in the sidebar');

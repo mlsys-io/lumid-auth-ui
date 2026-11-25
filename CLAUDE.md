@@ -142,7 +142,7 @@ simplicity — label it.
 | Workflow header | When does it run? Run it now. (⋯ = "This workflow" / "This app") | `ScheduleChip.tsx`, `WorkflowObservabilityPanel.tsx` |
 | Run page | Did it work? If not, where and why? | `RunAnswerCard.tsx` + `lib/run-answer.ts`, `RunTimeline.tsx` + `lib/run-timeline.ts` |
 | Research map (app home) | What is it exploring, what came from what, what's next? | `components/research/` (`Space3D.tsx`, geometry in `lib/space3d.ts`), `lib/research-map.ts` |
-| Compute (app home, beside the map) | Where are my runs, and how busy are the machines? | `components/compute/ComputePanel.tsx`, `lib/compute.ts` |
+| Compute (retired from the app home 2026-11-25; component unmounted) | Where are my runs, and how busy are the machines? | `components/compute/ComputePanel.tsx`, `lib/compute.ts` |
 | Experiment detail / evolution chart | Which version wins? Can I trust it yet? Is it improving? | `ResearchMap.tsx` `ExperimentDetail`, `EvolutionChart.tsx` |
 
 - **Two things to manage:** a **workflow** is a job that repeats — you *operate* it (header).
@@ -180,9 +180,11 @@ on. (Simulator vs real GPU, backtest vs forward test are app details, not UI str
   transforms (React never re-renders per frame; the loop stops when idle/hidden). Reduced motion:
   no turning, no fly-to, no flow. Test hooks: `[data-kind]`, `[data-dim]`, `aria-pressed`.
 - **Compute panel**: machines from `GET /me/compute` (identity, counts only), the app's queue from
-  `GET /me/apps/:app/queue` (scheduler `queue_read`), running/finished from the runs feed. Beside
-  the map when the column is ≥980px, else a one-line strip above it. A source that isn't there is
-  left out, never faked.
+  `GET /me/apps/:app/queue` (scheduler `queue_read`), running/finished from the runs feed. **Not on the
+  app home** (2026-11-25: unwanted beside the map when the chat rail is hidden — running work lives
+  in the rail's Running panel only). A source that isn't there is left out, never faked.
+- **The research map is one size for every app**: its height comes from the viewport alone
+  (clamp 520–680), never from node count, waiting suggestions or an open panel.
 - **Experiments start from the UI**: "Run the N untried versions" (`RunVersions`) queues one run per
   version with `experiment_id`; **Your call** (`YourCall`) asks for a prediction + reason first and
   sends it to the chat for critique, then shows it against the leader.
