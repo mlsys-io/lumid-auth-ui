@@ -391,6 +391,70 @@ await section('research map', async () => {
 	await page.close();
 });
 
+// ── The workflow graph: workflows first, the panel, A/B, Make a variant ───
+await section('workflow graph', async () => {
+	const page = await desk.ctx.newPage();
+	const APP = process.env.GRAPH_APP || 'mlsys-research';
+	// Capture (never send) spec writes and run requests: e2e writes nothing.
+	const writes = [];
+	await page.route('**/api/v1/me/**', (r) => {
+		const m = r.request().method();
+		if (m === 'GET' || m === 'HEAD' || m === 'OPTIONS') return r.continue();
+		writes.push({ m, url: r.request().url(), body: r.request().postData() || '' });
+		return r.abort();
+	});
+	await page.goto(`${BASE}/studio/apps/${APP}`, { waitUntil: 'domcontentloaded' });
+	const map = page.locator('section[aria-label="Research"]');
+	const wfs = map.locator('.space3d [data-kind="workflow"]');
+	if (!(await wfs.first().waitFor({ timeout: 60000 }).then(() => true).catch(() => false))) { note(`no workflow nodes on ${APP}`); await page.close(); return; }
+	const root = (await map.locator('.space3d [data-kind="app"] button').first().getAttribute('aria-label')) || '';
+	assert(/\d+ workflows?/.test(root) && !/experiments/.test(root), `the centre counts workflows ("${root}")`);
+	assert(/workflow/i.test(await map.locator('.font-mono').first().innerText()), 'the summary line counts workflows');
+	await page.waitForTimeout(1500);
+	await wfs.first().click({ force: true });
+	const panel = map.getByRole('dialog').first();
+	await panel.waitFor({ timeout: 8000 });
+	assert(/^Workflow:|^Variant/.test((await panel.getAttribute('aria-label')) || ''), 'clicking a workflow opens its panel (no navigation)');
+	const views = await panel.getByRole('radio').allInnerTexts();
+	assert(JSON.stringify(views) === JSON.stringify(['Overview', 'Runs', 'Compare', 'Feedback']), `the panel has Overview · Runs · Compare · Feedback (${views.join(', ')})`);
+	for (const b of ['Run', 'Try setups', 'Make a variant']) assert(await panel.getByRole('button', { name: new RegExp(`^${b}`) }).count() > 0, `the panel offers ${b}`);
+	assert(!/Every hour|cron|Pause schedule/i.test(await panel.innerText()), 'the panel has no schedule controls (manual dispatch)');
+	await panel.getByText('Runs', { exact: true }).click();
+	await page.waitForTimeout(3000);
+	const runRows = panel.locator('ul[aria-label^="Runs of"] > li');
+	if (await runRows.count()) {
+		await runRows.first().locator('button').first().click();
+		await page.waitForTimeout(4000);
+		assert(await panel.getByText(/Open the full log/).count() > 0, 'a run row opens its answer in place, with the full log a click away');
+	} else note('no runs listed for this workflow');
+	// A/B: ⇧-click a second workflow.
+	if (await wfs.count() > 1) {
+		// A DOM click with ⇧ held (the panel may cover the dot on screen).
+		await wfs.nth(1).locator('button').first().evaluate((el) => el.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true })));
+		await page.waitForTimeout(1500);
+		assert(await map.locator('[aria-label="Compared as A"]').count() === 1 && await map.locator('[aria-label="Compared as B"]').count() === 1, '⇧-click marks A and B on the graph');
+		assert(/A\s|B\s/.test(await panel.innerText()) && await panel.getByRole('radio', { name: 'Compare', checked: true }).count() === 1, 'the panel switches to Compare');
+		await page.waitForTimeout(4000);
+		const t = await panel.innerText();
+		assert(/ahead on|Can't tell apart yet|Too few runs|no .* result yet|Neither side/.test(t), 'Compare gives a verdict in words');
+	}
+	// Make a variant: five steps; Create posts the spec with run: manual and starts nothing.
+	await panel.getByText('Overview', { exact: true }).click();
+	await panel.getByRole('button', { name: /Make a variant/ }).click();
+	const sheet = page.getByRole('dialog', { name: 'Make a variant' });
+	await sheet.waitFor({ timeout: 8000 });
+	const steps = await sheet.locator('section[aria-label]').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')));
+	assert(['How it changes', 'Data', 'Compute', 'Feedback and metrics', 'Name and node'].every((x) => steps.includes(x)), `the sheet settles how · data · compute · feedback · name (${steps.join(', ')})`);
+	const before = writes.length;
+	await sheet.getByRole('button', { name: /^Create/ }).click();
+	await page.waitForTimeout(3000);
+	const put = writes.slice(before).find((w) => w.m === 'PUT' && /\/config$/.test(w.url));
+	assert(!!put && /run: manual/.test(JSON.parse(put.body || '{}').yaml || ''), 'Create saves the variant into the spec with run: manual');
+	assert(!writes.some((w) => /\/run(\?|$)|mode=queue|enqueue/.test(w.url)), 'creating a variant starts no run');
+	await page.keyboard.press('Escape');
+	await page.close();
+});
+
 // ── Inbox: app suggestions are answerable where people look ───────────────
 await section('inbox suggestions', async () => {
 	const page = await desk.ctx.newPage();

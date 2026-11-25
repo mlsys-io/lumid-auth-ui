@@ -409,10 +409,16 @@ export const me = {
     call<{ app: string; yaml: string; bytes: number; sha?: string }>("GET", `/apps/${encodeURIComponent(app)}/config`),
   // Write xpcloud.yaml — server validates YAML; 409 (ret_code 1409) when the
   // file changed since the read that produced baseSha.
-  updateAppConfig: (app: string, yaml: string, baseSha?: string) =>
+  // `files` land WITH the spec, all or nothing (identity v0.5.487+): a new
+  // workflow's DAG (workflows/<n>.yaml), agent notes (notes/<n>.md) or Python
+  // step (commands/<n>.py, admins only).
+  updateAppConfig: (app: string, yaml: string, baseSha?: string, files?: Array<{ path: string; content: string; base_sha?: string }>) =>
     ownerWriteApplied(
-      call<{ ok: boolean; bytes: number; sha?: string } & QueuedWrite>("PUT", `/apps/${encodeURIComponent(app)}/config`, { yaml, base_sha: baseSha }),
+      call<{ ok: boolean; bytes: number; sha?: string } & QueuedWrite>("PUT", `/apps/${encodeURIComponent(app)}/config`, { yaml, base_sha: baseSha, ...(files?.length ? { files } : {}) }),
     ),
+  // One workflow definition file (workflows/*.yaml, notes/*.md, commands/*.py).
+  appFile: (app: string, path: string) =>
+    call<{ path: string; content: string; sha: string; source: string; editable: boolean }>("GET", `/apps/${encodeURIComponent(app)}/files?path=${encodeURIComponent(path)}`),
   // Publish the app bundle to its xp.io repo — commits the current prompts/
   // config/UI edits and auto-bumps semver (app_push). Versions the "tuning".
   publishApp: (app: string, body?: { commit_message?: string; summary?: string }) =>

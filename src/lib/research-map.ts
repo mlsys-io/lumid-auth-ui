@@ -231,7 +231,7 @@ export function criteriaInWords(expr?: string): string {
 
 // ── the tree ─────────────────────────────────────────────────────────────
 
-export type MapNodeKind = "app" | "experiment" | "version" | "suggested" | "workflow";
+export type MapNodeKind = "app" | "experiment" | "version" | "suggested" | "workflow" | "node";
 export interface MapNode { id: string; kind: MapNodeKind; depth: number; ref: string; parent?: string }
 export interface MapEdge { id: string; source: string; target: string; dashed?: boolean; label?: string }
 
@@ -252,64 +252,86 @@ export function suggestionParent(p: Proposal, exps: MeExperiment[]): string | nu
 	return best;
 }
 
-export function buildResearchTree(app: string, exps: MeExperiment[], proposals: Proposal[], opts: { workflows?: boolean } = {}): { nodes: MapNode[]; edges: MapEdge[] } {
+/** The workflows the graph draws, with what it needs from each. */
+export interface GraphWorkflow { id: string; parent?: string; node?: string; helper?: boolean }
+export interface GraphNode { id: string; title: string; parent: string }
+
+/** The id of the group node that holds parentless housekeeping workflows. */
+export const OTHER_NODE = "__other";
+
+/**
+ * The research graph (2026-11-25): the app → its WORKFLOWS (first ring) →
+ * under each workflow its EXPERIMENTS (runs of that workflow with different
+ * setups → versions), its VARIANTS (workflows with `parent` = it) and the child
+ * NODES a user made (named groups; members are moved in with `node`). Nodes and
+ * variants nest. Housekeeping workflows (`helper`) are not drawn: they fold
+ * into the workflow they serve (its panel lists them); parentless ones gather
+ * in one "Other workflows" node. Suggestions hang off the workflow they would
+ * run. A cycle or an unknown parent falls back to the app — never a false link.
+ */
+export function buildResearchTree(
+	app: string,
+	exps: MeExperiment[],
+	proposals: Proposal[],
+	workflows: GraphWorkflow[] = [],
+	groups: GraphNode[] = [],
+): { nodes: MapNode[]; edges: MapEdge[] } {
 	const root = `app:${app}`;
-	const nodes: MapNode[] = [{ id: root, kind: "app", depth: 0, ref: app }];
-	const edges: MapEdge[] = [];
-	const byId = new Map(exps.map((e) => [e.id, e]));
-	// Experiments derive from experiments when the app declares it
-	// (forked_from); a cycle or an unknown parent falls back to the app.
-	const parentOf = (e: MeExperiment): string | null => {
-		const f = (e as { forked_from?: string }).forked_from;
-		return f && f !== e.id && byId.has(f) ? f : null;
+	const wfIds = new Set(workflows.map((w) => w.id));
+	const groupIds = new Set(groups.map((g) => g.id));
+	const drawn = workflows.filter((w) => !w.helper);
+	const otherHelpers = workflows.filter((w) => w.helper && !(w.parent && wfIds.has(w.parent)));
+	// Where each thing hangs, before depth is known.
+	const parentOf = new Map<string, string>();
+	const kindOf = new Map<string, MapNodeKind>();
+	const refOf = new Map<string, string>();
+	const order: string[] = [];
+	const put = (id: string, kind: MapNodeKind, ref: string, parent: string) => { kindOf.set(id, kind); refOf.set(id, ref); parentOf.set(id, parent); order.push(id); };
+	const placeOf = (node?: string, parent?: string): string => {
+		if (node && groupIds.has(node)) return `node:${node}`;
+		if (parent && wfIds.has(parent)) return `wf:${parent}`;
+		return root;
 	};
-	const depthCache = new Map<string, number>();
+	for (const g of groups) put(`node:${g.id}`, "node", g.id, groupIds.has(g.parent) ? `node:${g.parent}` : wfIds.has(g.parent) ? `wf:${g.parent}` : root);
+	if (otherHelpers.length) put(`node:${OTHER_NODE}`, "node", OTHER_NODE, root);
+	for (const w of drawn) put(`wf:${w.id}`, "workflow", w.id, placeOf(w.node, w.parent));
+	// A parent that is a folded helper isn't drawn: hang its children on the
+	// helper's own parent instead.
+	for (const [id, par] of parentOf) if (par.startsWith("wf:") && !kindOf.has(par)) {
+		const h = workflows.find((w) => `wf:${w.id}` === par);
+		parentOf.set(id, h?.parent && kindOf.has(`wf:${h.parent}`) ? `wf:${h.parent}` : root);
+	}
+	const byExp = new Map(exps.map((e) => [e.id, e]));
+	for (const e of exps) {
+		const loop = experimentLoop(e);
+		put(`exp:${e.id}`, "experiment", e.id, loop && kindOf.get(`wf:${loop}`) === "workflow" ? `wf:${loop}` : root);
+		for (const v of versionsOf(e)) put(`ver:${e.id}:${v.id}`, "version", v.id, `exp:${e.id}`);
+	}
+	for (const p of proposals.filter((p) => !byExp.has(p.id))) {
+		const loop = p.dispatch_loop || p.dispatch?.loop;
+		put(`sug:${p.id}`, "suggested", p.id, loop && kindOf.get(`wf:${loop}`) === "workflow" ? `wf:${loop}` : root);
+	}
+	// Depth from the root; anything caught in a cycle is re-hung on the app.
+	const depth = new Map<string, number>([[root, 0]]);
 	const depthOf = (id: string, seen = new Set<string>()): number => {
-		if (depthCache.has(id)) return depthCache.get(id)!;
-		if (seen.has(id)) return 1;
+		const known = depth.get(id);
+		if (known != null) return known;
+		const par = parentOf.get(id);
+		if (!par || seen.has(id) || (!depth.has(par) && !parentOf.has(par))) { parentOf.set(id, root); depth.set(id, 1); return 1; }
 		seen.add(id);
-		const par = parentOf(byId.get(id)!);
-		const d = par ? depthOf(par, seen) + 1 : 1;
-		depthCache.set(id, d);
+		const d = depthOf(par, seen) + 1;
+		depth.set(id, d);
 		return d;
 	};
-	const ordered = [...exps].sort((a, b) => depthOf(a.id) - depthOf(b.id));
-	for (const e of ordered) {
-		const eid = `exp:${e.id}`;
-		const par = parentOf(e);
-		const pid = par ? `exp:${par}` : root;
-		const depth = depthOf(e.id);
-		nodes.push({ id: eid, kind: "experiment", depth, ref: e.id, parent: pid });
-		edges.push({ id: `${pid}->${eid}`, source: pid, target: eid, label: par ? "forked from" : undefined });
-		for (const v of versionsOf(e)) {
-			const vid = `ver:${e.id}:${v.id}`;
-			nodes.push({ id: vid, kind: "version", depth: depth + 1, ref: v.id, parent: eid });
-			edges.push({ id: `${eid}->${vid}`, source: eid, target: vid });
-		}
-	}
-	// A proposal whose experiment now exists has been accepted — it is on the
-	// map as an experiment, not as a suggestion. The rest hang off the
-	// experiment they extend ("suggested next"), else off the app.
-	for (const p of proposals.filter((p) => !byId.has(p.id))) {
-		const sid = `sug:${p.id}`;
-		const par = suggestionParent(p, exps);
-		const pid = par ? `exp:${par}` : root;
-		nodes.push({ id: sid, kind: "suggested", depth: par ? depthOf(par) + 1 : 1, ref: p.id, parent: pid });
-		edges.push({ id: `${pid}->${sid}`, source: pid, target: sid, dashed: true, label: par ? "suggested next" : "suggested" });
-	}
-	// The workflows that produce the evidence: one node per workflow an
-	// experiment runs through, above the app, linked to what it "feeds".
-	if (opts.workflows) {
-		const feeds = new Map<string, string[]>();
-		for (const e of exps) {
-			for (const l of new Set([experimentLoop(e), ...(e.loops || [])].filter(Boolean) as string[])) feeds.set(l, [...(feeds.get(l) ?? []), e.id]);
-		}
-		for (const [loop, ids] of feeds) {
-			const wid = `wf:${loop}`;
-			nodes.push({ id: wid, kind: "workflow", depth: 1, ref: loop, parent: root });
-			edges.push({ id: `${root}->${wid}`, source: root, target: wid });
-			for (const id of ids) edges.push({ id: `${wid}=>exp:${id}`, source: wid, target: `exp:${id}`, dashed: true, label: "feeds" });
-		}
+	const nodes: MapNode[] = [{ id: root, kind: "app", depth: 0, ref: app }];
+	const edges: MapEdge[] = [];
+	const ids = [...order].sort((a, b) => depthOf(a) - depthOf(b));
+	for (const id of ids) {
+		const kind = kindOf.get(id)!;
+		const par = parentOf.get(id)!;
+		nodes.push({ id, kind, depth: depthOf(id), ref: refOf.get(id)!, parent: par });
+		const label = kind === "workflow" && par.startsWith("wf:") ? "variant" : kind === "suggested" ? "suggested" : undefined;
+		edges.push({ id: `${par}->${id}`, source: par, target: id, dashed: kind === "suggested", label });
 	}
 	return { nodes, edges };
 }
@@ -326,7 +348,18 @@ export function pathTo(nodes: MapNode[], id: string): Set<string> {
 }
 
 /** The map's status line, in words. */
-export function mapSummary(exps: MeExperiment[], proposals: Proposal[]): string {
+export function mapSummary(exps: MeExperiment[], proposals: Proposal[], workflows: GraphWorkflow[] = []): string {
+	if (workflows.length) {
+		const main = workflows.filter((w) => !w.helper);
+		const variants = main.filter((w) => w.parent).length;
+		const sug = proposals.filter((p) => !exps.some((e) => e.id === p.id)).length;
+		const n = (k: number, one: string) => `${k} ${one}${k === 1 ? "" : "s"}`;
+		const parts = [n(main.length - variants, "workflow")];
+		if (variants) parts.push(n(variants, "variant"));
+		parts.push(n(exps.length, "experiment"));
+		if (sug) parts.push(`${sug} suggested`);
+		return parts.join(" · ");
+	}
 	const all = exps.flatMap((e) => versionsOf(e));
 	const versions = all.length;
 	const tried = all.filter((v) => v.tag !== "not run yet").length;

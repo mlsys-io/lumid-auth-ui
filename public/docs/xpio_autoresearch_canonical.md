@@ -106,6 +106,91 @@ Both patterns get the same post-run hooks: `_run_auto_publish()` (privacy contra
 
 The five-stage decomposition is logical, not enforced by the runner. Pattern A apps map each step to one stage explicitly. Pattern B apps may collapse stages into a single command (mbb-ai's `cycle.py` does observe → analyze in one pass per question).
 
+## The simple scheme (research apps, 2026-11-25)
+
+Every research app — MLSys Research, Quant Research, MBB Consultant, and every new app from the
+`autoresearch` template — is written in ONE short scheme. The runtime and lum.id read it through one
+normalizer (LumidOS `sdk/apps/spec_v2.py`, lumid-identity `spec_v2.go`) that turns it into the older
+keys documented below, so **old keys keep working** and a file may mix both (old keys win where both
+are set).
+
+```yaml
+name: mlsys-research
+title: MLSys Research
+summary: Design LLM serving and test it.
+version: 0.4.0
+icon: cpu
+
+data:                                   # what workflows run over
+  - {id: protocol_v1, source: "repo:mlsys-io/hello-mlsys-agent", version: v1}   # or "path:<dir>"
+compute: {site: office}                 # where runs go unless a workflow says otherwise
+
+workflows:                              # the graph's first layer
+  - id: simulate
+    title: Simulate
+    about: Simulate one serving design.          # one line, shown on the graph
+    notes: notes/simulate.md                     # how the chat should call it (was a long description)
+    run: manual                                  # or a cron; new workflows are always manual
+    steps: {python: simulate}                    # commands/simulate.py — or {dag: workflows/<n>.yaml}
+    inputs: {task: "9.2", base: baseline}        # become --task/--base (default = the value)
+    data: [protocol_v1]
+    feedback:                                    # the steps that measure a run, cheapest first
+      - step: simulator
+        metrics: [{name: goodput_tok_s, better: higher, target: 900}]
+  - id: sandbox
+    parent: simulate                             # a VARIANT: a workflow made from another
+    node: real_gpu                               # the child node it sits in on the graph
+    steps: {python: sandbox}
+    compute: {site: home, gpu: 24Gi}
+    feedback:
+      - {step: simulator, metrics: [{name: goodput_tok_s, better: higher}]}
+      - {step: sandbox,   metrics: [{name: ttft_ms_p99, better: lower}]}
+  - id: coach
+    helper: true                                 # housekeeping: folds into its parent on the graph
+    steps: {python: coach}
+
+nodes:                                  # named groups on the graph (people make and rename them in Studio)
+  - {id: real_gpu, title: On a real GPU, parent: simulate}
+
+experiments:                            # runs of ONE workflow with different setups
+  - id: sla_concurrency
+    workflow: simulate
+    question: How far can concurrency go before TTFT p99 breaks 2 s?
+    metric: {name: goodput_tok_s, better: higher}
+    data: protocol_v1
+    baseline: c32
+    done_when: best_n >= 1 and delta > 0
+    versions:                                    # one setup each; inputs override the workflow's
+      - {id: c32, inputs: {task: "9.2"}}
+      - {id: c16, inputs: {task: "9.2", overrides: "serving.max_concurrency=16"}}
+
+pages:                                  # the app's own pages, after Studio's Graph tab
+  - {id: designs, title: Designs, file: ui/designs.yaml}
+  - {id: design, file: ui/design.yaml, hidden: true}   # reachable by link, not in the tab row
+```
+
+| New key | Reads as |
+|---|---|
+| `title` | `display_name` |
+| `data[].source: repo:X` / `path:X` | `datasets[].repo` / `.local_path` |
+| `workflows[].id` | `loops[].name` |
+| `run: manual` / cron | `schedule: '@trigger'` / cron |
+| `steps.python: m` + `inputs` | `engine: {type: command, module: m, args: ["--k={{ args.k \| default('v') }}"]}` |
+| `steps.dag: workflows/n.yaml` | `engine: {type: lumilake, workflow: n}` (+ `compute` → `site`, `hardware.gpu_memory`) |
+| `about` + `notes` file | `description` |
+| `helper: true` | `role: helper` |
+| first `feedback` metric | `metrics.primary` |
+| `experiments[].workflow` | `dispatch.loop` (+ `loop`) |
+| `question` / `done_when` / `data` | `description` / `success_criteria` / `dataset_id` |
+| `metric.better: lower` | `metric.higher_is_better: false` |
+| `baseline: c32` | `baseline: {arm: c32}` |
+| `versions[]` (`inputs` flattened) | `arms[]` |
+| `pages[]` | `ui.surfaces` + `ui.nav` (non-hidden) + `ui.sidebar` |
+
+Studio edits this file for you: **Make a variant** appends a workflow (with its DAG, notes or Python
+file, saved together); moving a workflow into a node sets its `node`; the Feedback view edits
+`feedback`. Python steps can only be added by admins. A user's own workflows survive **Get updates**.
+
 ## Required `xpcloud.yaml` schema
 
 Every kind=app bundle MUST have an `xpcloud.yaml` at the bundle root. `app_runner.load_manifest()` reads this file as the runtime source of truth (`app_runner.py:78-85`). `manifest.json` mirrors metadata for static indexing but is NOT read at runtime.

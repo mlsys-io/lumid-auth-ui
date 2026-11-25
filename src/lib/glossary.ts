@@ -26,8 +26,14 @@ export const NOUNS = {
 	item: "one record of a dataset",
 	// run (round 3, 2026-11-24 — "Novix's look, Lumid's clarity")
 	experiment: "a question an app is answering by comparing versions on one metric",
-	version: "one setup an experiment tries (the engine calls it an arm or variant)",
+	version: "one setup an experiment tries (the engine calls it an arm)",
 	run: "one execution of a workflow",
+	// The research graph (2026-11-25): a workflow made from another workflow
+	// by changing its steps, code, data or compute is a VARIANT (a child node
+	// on the graph); a setup an experiment tries is still a VERSION.
+	variant: "a workflow made from another workflow (its child on the graph)",
+	feedback: "a step that measures a run in the world: backtest, forward test, simulator, sandbox, judge panel",
+	node: "a named group on the graph that workflows can be moved into",
 	// compute
 	"compute graph": "a FlowMesh or Lumilake DAG built on the canvas; may contain Python steps",
 	job: "a compute graph run on Research Fleet",
@@ -42,10 +48,10 @@ export const RETIRED_TERMS: Record<string, string> = {
 	loops: "workflows",
 	pipeline: "workflow",
 	pipelines: "workflows",
-	// An arm/variant is one VERSION an experiment tries; the experiment is the
+	// An arm is one VERSION an experiment tries; the experiment is the
 	// question (it used to be called a "study", which nobody could explain).
-	variant: "version",
-	variants: "versions",
+	// "variant" left this list on 2026-11-25: it now names a workflow made
+	// from a workflow (the graph's child node), not an experiment's version.
 	attempt: "version",
 	attempts: "versions",
 	arm: "version",

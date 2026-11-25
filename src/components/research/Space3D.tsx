@@ -40,7 +40,8 @@ export interface Space3DProps {
 	/** Words for screen readers and the hover title: "KOL alpha — can't compare yet". */
 	describe: (n: MapNode) => string;
 	selected: string | null;
-	onSelect: (id: string | null) => void;
+	/** `shift`: the click held ⇧ (the graph's "compare with" gesture). */
+	onSelect: (id: string | null, shift?: boolean) => void;
 	/** Ids on the selected path (lit); null when nothing is selected. */
 	lit: Set<string> | null;
 	/** First view this session: cards appear in creation order. */
@@ -689,7 +690,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 							aria-label={describe(n)}
 							onFocus={() => setHovered(n.id)}
 							onBlur={() => setHovered((h) => (h === n.id ? null : h))}
-							onClick={(e) => { e.stopPropagation(); if (suppressClick.current) return; onSelect(sel ? null : n.id); }}
+							onClick={(e) => { e.stopPropagation(); if (suppressClick.current) return; onSelect(sel && !e.shiftKey ? null : n.id, e.shiftKey); }}
 							className="block text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-plum-400 rounded-xl"
 						>
 							{/* Both stay in the DOM and only their visibility flips: swapping the
