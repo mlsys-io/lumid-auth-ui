@@ -14,6 +14,7 @@
 
 import { lazy, Suspense, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { appPages, pageHref } from "@/lib/app-pages";
 
 const ResearchMap = lazy(() => import("@/components/research/ResearchMap"));
 const ComputePanel = lazy(() => import("@/components/compute/ComputePanel"));
@@ -31,16 +32,19 @@ export default function ResearchHome({ app, pages }: { app: string; pages?: Arra
 		return () => ro.disconnect();
 	}, []);
 	const side = w >= SIDE_BY_SIDE_PX;
-	const named = (pages || []).filter((p) => p.surface);
+	const tabs = appPages(pages);
 	return (
 		<div ref={ref} className="space-y-3">
-			{named.length > 1 && (
+			{tabs.length > 1 && (
 				// Same pills as the app's own tab bar (AppSurface), which the home hides.
+				// The first is this page, lit, so every other page can lead back here.
 				<nav aria-label="This app's pages" className="flex flex-wrap gap-1 -ml-2.5">
-					{named.map((p) => (
-						<Link key={p.surface} to={`/studio/apps/${encodeURIComponent(app)}?surface=${encodeURIComponent(p.surface)}`}
-							className="px-2.5 py-1 rounded-lg text-caption text-ink-700 hover:text-ink-900 hover:bg-ink-100 transition-colors">
-							{p.label || p.surface}
+					{tabs.map((t) => (
+						<Link key={t.surface} to={pageHref(app, t, true)} aria-current={t.home ? "page" : undefined}
+							className={t.home
+								? "px-2.5 py-1 rounded-lg text-caption bg-ink-800 text-white"
+								: "px-2.5 py-1 rounded-lg text-caption text-ink-700 hover:text-ink-900 hover:bg-ink-100 transition-colors"}>
+							{t.label}
 						</Link>
 					))}
 				</nav>

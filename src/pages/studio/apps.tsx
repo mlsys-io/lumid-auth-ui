@@ -645,7 +645,7 @@ const wfSub = (wf: MeWorkflowRow) =>
 // shows the active workflow (status dot + name + count); the popover lists all
 // workflows to switch. Replaces the left-rail master list so the panel shows
 // only the selected workflow's content.
-function WorkflowSelect({ rows, selected, onSelect, onNew }: { rows: Row[]; selected: string | null; onSelect: (loop: string) => void; onNew?: () => void }) {
+function WorkflowSelect({ rows, selected, onSelect, onNew, crumb = false }: { rows: Row[]; selected: string | null; onSelect: (loop: string) => void; onNew?: () => void; crumb?: boolean }) {
 	const [open, setOpen] = useState(false);
 	// `selected` is null in app-overview mode — show a neutral "Pick a workflow"
 	// label then (not a stale workflow name), since the Overview tab is active.
@@ -653,8 +653,12 @@ function WorkflowSelect({ rows, selected, onSelect, onNew }: { rows: Row[]; sele
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger asChild>
-				<button aria-label={cur ? `Workflow: ${loopLabel(cur.wf.name, cur.loop)} — switch` : "Pick a workflow"}
-					className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-ink-200 bg-card hover:bg-ink-50 transition-colors max-w-full min-w-0 flex-shrink-0 sm:flex-shrink">
+				<button aria-label={cur ? `Workflow: ${loopLabel(cur.wf.name, cur.loop)} — switch` : `This app's ${rows.length} workflow${rows.length === 1 ? "" : "s"} — pick one`}
+					className={crumb
+						// Breadcrumb: "/ ● Simulate ⌄" beside the app name — text, not a box.
+						? "inline-flex items-center gap-1.5 px-1.5 py-1 rounded-md hover:bg-ink-100 transition-colors max-w-full min-w-0"
+						: "inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-ink-200 bg-card hover:bg-ink-50 transition-colors max-w-full min-w-0 flex-shrink-0 sm:flex-shrink"}>
+					{crumb && <span aria-hidden className="hidden sm:inline text-ink-300 text-body -ml-0.5 mr-0.5">/</span>}
 					{cur ? (
 						<>
 							<span className={wfDot(cur.wf)} />
@@ -662,9 +666,9 @@ function WorkflowSelect({ rows, selected, onSelect, onNew }: { rows: Row[]; sele
 							<span className="text-meta font-medium text-ink-800 truncate hidden sm:inline">{loopLabel(cur.wf.name, cur.loop)}</span>
 						</>
 					) : (
-						<span className="text-meta font-medium text-ink-600 truncate">Pick a workflow</span>
+						<span className="text-meta font-medium text-ink-600 truncate">{crumb ? `${rows.length} workflow${rows.length === 1 ? "" : "s"}` : "Pick a workflow"}</span>
 					)}
-					<ChevronDown className="w-4 h-4 text-ink-600 flex-shrink-0" />
+					<ChevronDown className={cn("text-ink-600 flex-shrink-0", crumb ? "w-3.5 h-3.5" : "w-4 h-4")} />
 				</button>
 			</PopoverTrigger>
 			<PopoverContent align="start" className="w-80 p-1 max-h-[60vh] overflow-y-auto">
@@ -791,6 +795,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 	// pills. The depth guard stops it rendering the surface; it must also stop it
 	// claiming the strip.
 	const appSlotTarget = usePortalTarget("topstrip-wf-slot", !!embedded && !nestedInSurface);
+	const crumbTarget = usePortalTarget("topstrip-crumb-slot", !!embedded && !nestedInSurface);
 	const [params] = useSearchParams();
 	const location = useLocation();
 	// A workflow and a run are addresses now (/studio/apps/:app/w/:loop[/r/:runId],
@@ -978,6 +983,8 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 	// "no page yet" when the surface genuinely is not there, so trusting the
 	// URL costs nothing when the inference was right to be false.
 	const urlSurface = (params.get("surface") || "").trim();
+	// "home" is the app's home page (the map), the same as no surface at all.
+	const atHome = !urlSurface || urlSurface === "home";
 	const overviewMode = selected ? selected === OVERVIEW_SEL : (!!identity?.hasSurface || !!urlSurface);
 	const validSelected = selected && rows?.some((r) => r.loop === selected) ? selected : null;
 	const validInitial = initialLoop && rows?.some((r) => r.loop === initialLoop) ? initialLoop : null;
@@ -1111,7 +1118,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 										)}
 									>Overview</button>
 								)}
-								{rows.length >= 1 && (
+								{rows.length >= 1 && !(embedded && crumbTarget) && (
 									<WorkflowSelect rows={rows} selected={effSelected} onSelect={select}
 										onNew={() => navigate(`/studio/a/${encodeURIComponent(app)}/manage`)} />
 								)}
@@ -1240,7 +1247,12 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 						// chrome; the nested panel just lists.
 						if (embedded && nestedInSurface) return null;
 						return embedded && appSlotTarget
-							? createPortal(<div className="flex items-center gap-2 min-w-0">{cluster}</div>, appSlotTarget)
+							? <>
+								{crumbTarget && rows.length >= 1 && createPortal(
+									<WorkflowSelect crumb rows={rows} selected={effSelected} onSelect={select}
+										onNew={() => navigate(`/studio/a/${encodeURIComponent(app)}/manage`)} />, crumbTarget)}
+								{createPortal(<div className="flex items-center gap-2 min-w-0">{cluster}</div>, appSlotTarget)}
+							</>
 							: <div className="flex items-center gap-2 flex-wrap">{cluster}</div>;
 					})()}
 					<Suspense fallback={<Skeleton lines={3} />}>
@@ -1253,13 +1265,13 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 							<div className="space-y-6 animate-in fade-in duration-200">
 								{/* Needs fixing for THIS app — empty when healthy. Running runs
 								    live in the Compute panel beside the map. */}
-								{!nestedInSurface && !urlSurface && (
+								{!nestedInSurface && atHome && (
 									<Suspense fallback={null}><AppActivityBand app={app} failingOnly /></Suspense>
 								)}
 								{/* The app's own pages, then what it is exploring (3D map) with
 								    the compute its runs wait for. A named page (?surface=) shows
 								    just that page. */}
-								{!nestedInSurface && !urlSurface && (
+								{!nestedInSurface && atHome && (
 									<Suspense fallback={null}><ResearchHome app={app} pages={identity?.nav} /></Suspense>
 								)}
 								{(identity?.hasSurface || !!urlSurface) && !nestedInSurface ? (
@@ -1280,7 +1292,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 									// same left edge as the map and Compute above it.
 									<div className="-mx-6 -my-5">
 										<Suspense fallback={<div className="px-5 py-8"><Skeleton lines={4} /></div>}>
-											<AppSurface app={app} embedded={embedded} inlineChrome hideNav={!urlSurface && (identity?.nav?.length ?? 0) > 1} surface={params.get("surface") || undefined} />
+											<AppSurface app={app} embedded={embedded} inlineChrome hideNav={atHome && (identity?.nav?.length ?? 0) > 1} surface={params.get("surface") || undefined} />
 										</Suspense>
 									</div>
 								) : APP_OVERVIEW_MD[app] ? (

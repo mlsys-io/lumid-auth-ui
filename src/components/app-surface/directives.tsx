@@ -243,11 +243,14 @@ export async function resolveSource(spec: string, force = false): Promise<unknow
         if (k !== "app" && k !== "tool" && v) extra.append(k, v);
       });
       const dq = extra.toString();
-      const auth = await bearerHeader();
+      // lum.id's own API: the session cookie is the credential. A session-bearer
+      // is minted for ANOTHER service (aud=runmesh), and since identity v0.5.480
+      // binds JWTs to their audience it answers that with 401 even though the
+      // cookie rode along — every app-data table read "app-data 401".
       const r = await fetch(
         `/api/v1/me/apps/${encodeURIComponent(dApp)}/data?tool=${encodeURIComponent(dTool)}` +
           (dq ? `&${dq}` : ""),
-        { credentials: "include", headers: auth },
+        { credentials: "include" },
       );
       if (!r.ok) throw new Error(`app-data ${r.status}`);
       const j = await r.json();
@@ -2193,10 +2196,10 @@ function LumidForm({ body }: { body: Body }) {
                             duration_ms: Math.round(performance.now() - startedAt) });
         if (redirectTo) setTimeout(() => navigate(redirectTo), 600);
       } else {
-        const auth = await bearerHeader();
+        // Cookie only, like app-data above: a runmesh-audience bearer is a 401 here.
         const r = await fetch(`${ME_BASE}/api/v1/me/form-action`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", ...auth },
+          headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify({ action, values: vals }),
         });

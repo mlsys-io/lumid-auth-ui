@@ -8,6 +8,7 @@
 // The chrome row (nav tabs + "⋯" actions menu) is always rendered so any app
 // can be edited/managed directly from Studio, including apps with no surface yet.
 
+import { appPages, pageHref } from "@/lib/app-pages";
 import { useCallback, useEffect, useRef, useState, Suspense, type ComponentProps } from "react";
 import { recordInteraction } from "@/api/interactions";
 import { useAuth } from "@/hooks/useAuth";
@@ -207,20 +208,18 @@ function AppSurfaceImpl({
   const surfaceTabs = (nav?: { surface: string; label?: string }[]) => {
     if (hideNav || !nav || nav.length === 0) return null;
     const current = surface || "home";
+    // Always led by the app's home (the research map), so any page leads back.
+    // Embedded in the workspace: switch WITHIN the middle panel (?surface=) so
+    // the left nav + right chat stay mounted; standalone: /studio/a/:app/:surface.
     return (
       <div className="flex flex-wrap gap-1 min-w-0 flex-shrink-0">
-        {nav.map((n) => {
-          const active = n.surface === current;
-          // Embedded in the workspace → switch surfaces WITHIN the middle panel
-          // (?surface=) so the left nav + right chat stay mounted. Standalone →
-          // the dedicated /studio/a/:app/:surface route.
-          const to = embedded
-            ? `/studio/apps/${encodeURIComponent(app)}?surface=${encodeURIComponent(n.surface)}`
-            : `/studio/a/${encodeURIComponent(app)}/${encodeURIComponent(n.surface)}`;
+        {appPages(nav).map((t) => {
+          const active = t.home ? current === "home" : t.surface === current;
           return (
             <Link
-              key={n.surface}
-              to={to}
+              key={t.surface}
+              to={pageHref(app, t, !!embedded)}
+              aria-current={active ? "page" : undefined}
               className={[
                 "px-2.5 py-1 rounded-lg text-caption transition-colors",
                 active
@@ -228,7 +227,7 @@ function AppSurfaceImpl({
                   : "text-ink-600 hover:text-ink-900 hover:bg-ink-100",
               ].join(" ")}
             >
-              {n.label || n.surface}
+              {t.label}
             </Link>
           );
         })}

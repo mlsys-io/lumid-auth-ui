@@ -34,6 +34,23 @@ export interface Proposal {
 	baseline?: unknown;
 	arms?: Array<Record<string, unknown>>;
 	compare_within?: string[];
+	/** The planners' pre-flight check: would it actually record results?
+	 *  will_collect | will_be_invisible | unchecked (with the reason). */
+	verdict?: string;
+	verdict_reason?: string;
+	/** Which planner proposed it (advocate / adversary / economist). */
+	seat?: string;
+}
+
+/** The pre-flight check, in words: would this suggestion record results if
+ *  run? (quant-research's planners check the metric, criteria and instrument
+ *  against the app's own commands before suggesting.) null = no check made. */
+export function proposalCheck(p: Proposal): { tone: Tone; text: string; why?: string } | null {
+	const v = (p.verdict || "").toLowerCase();
+	if (!v) return null;
+	if (v === "will_collect") return { tone: "ok", text: "Checked — nothing would stop it recording results." };
+	if (v === "will_be_invisible") return { tone: "failing", text: `It would run but record nothing${p.verdict_reason ? `: ${p.verdict_reason}` : "."}`, why: p.verdict_reason };
+	return { tone: "idle", text: "Not checked yet whether it would record results.", why: p.verdict_reason };
 }
 
 // ── an experiment, in words ─────────────────────────────────────────────
