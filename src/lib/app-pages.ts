@@ -9,7 +9,7 @@ export interface PageTab { surface: string; label: string; home: boolean }
 export function appPages(nav?: Array<{ surface: string; label?: string }>): PageTab[] {
 	const named = (nav || []).filter((n) => n.surface);
 	const tabs = named.map((n) => ({ surface: n.surface, label: n.label || n.surface, home: n.surface === "home" }));
-	return tabs.some((t) => t.home) ? tabs : [{ surface: "home", label: "Overview", home: true }, ...tabs];
+	return tabs.some((t) => t.home) ? tabs : [{ surface: "home", label: "Graph", home: true }, ...tabs];
 }
 
 /** Where a tab goes: the home is the app's bare address (no ?surface=). */

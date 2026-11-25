@@ -455,6 +455,32 @@ await section('workflow graph', async () => {
 	await page.close();
 });
 
+// ── One tab row per app: the same on the home, every page, every workflow ─
+await section('app tabs are consistent', async () => {
+	const page = await desk.ctx.newPage();
+	const APP = process.env.TABS_APP || 'quant-research';
+	const row = () => page.locator('nav[aria-label="This app\'s pages"] a').evaluateAll((els) => els.map((e) => (e.getAttribute('aria-current') ? '*' : '') + e.textContent.trim()));
+	await page.goto(`${BASE}/studio/apps/${APP}`, { waitUntil: 'domcontentloaded' });
+	await page.locator('nav[aria-label="This app\'s pages"]').first().waitFor({ timeout: 45000 });
+	const home = await row();
+	assert(home[0] === '*Graph', `the home tab is Graph and lit (${home.join(' | ')})`);
+	const names = home.map((x) => x.replace('*', ''));
+	for (const name of names.slice(1)) {
+		await page.locator('nav[aria-label="This app\'s pages"] a', { hasText: name }).first().click();
+		await page.waitForTimeout(2500);
+		const r = await row();
+		assert(JSON.stringify(r.map((x) => x.replace('*', ''))) === JSON.stringify(names) && r.includes(`*${name}`), `on ${name} the same tabs show, ${name} lit (${r.join(' | ')})`);
+	}
+	const wf = page.locator(`nav[aria-label="${APP} workflows"] a`).first();
+	if (await wf.count()) {
+		await wf.click();
+		await page.waitForTimeout(4000);
+		const r = await row();
+		assert(JSON.stringify(r) === JSON.stringify(names), `above a workflow the same tabs show, none lit (${r.join(' | ')})`);
+	}
+	await page.close();
+});
+
 // ── Inbox: app suggestions are answerable where people look ───────────────
 await section('inbox suggestions', async () => {
 	const page = await desk.ctx.newPage();
