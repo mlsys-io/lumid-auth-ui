@@ -225,15 +225,13 @@ function useViewportHeight(): number {
 	return h;
 }
 
-function MapCanvas({ app, exps, proposals, selected, onSelect, grow, insetBottom = 0, insetRight = 0, tall = false }: {
+function MapCanvas({ app, exps, proposals, selected, onSelect, grow, insetBottom = 0, insetRight = 0 }: {
 	app: string; exps: MeExperiment[]; proposals: Proposal[];
 	selected: string | null; onSelect: (id: string | null) => void; grow: boolean;
 	/** Pixels the docked approval card covers at the foot of the space. */
 	insetBottom?: number;
 	/** Pixels the experiment panel covers at the right. */
 	insetRight?: number;
-	/** Room for the experiment panel: at least 600px tall. */
-	tall?: boolean;
 }) {
 	const running = useShellActivity()?.runningApps.includes(app) ?? false;
 	// No workflow nodes: they repeated the sidebar's list and hung a dashed
@@ -336,12 +334,12 @@ function MapCanvas({ app, exps, proposals, selected, onSelect, grow, insetBottom
 		}
 		return <Dot size={8} orb={false} className="bg-card border border-dashed border-gold-500" label={`Suggested: ${humanId(n.ref)}`} labelClass="text-micro text-gold-700" />;
 	}, [app, running, expById, versionOf, exps.length, feedsOf, colorOf]);
-	// The space fits the screen: what's above it (header, the app's pages,
-	// compute) and the approval card under it stay on the first screen.
+	// One stage size for every app, set by the screen alone — never by what's
+	// in it, whether suggestions wait, or a panel is open (two apps side by
+	// side read as two sizes otherwise; user 2026-11-25). The approval card
+	// docks over its foot, so it doesn't need room taken off.
 	const vh = useViewportHeight();
-	// …and to what's in it: a two-experiment space doesn't need a tall stage.
-	const fit = Math.round(Math.max(320, Math.min(600, vh - (proposals.length ? 470 : 400), 240 + tree.nodes.length * 16)));
-	const height = tall ? Math.max(fit, 600) : fit;
+	const height = Math.round(Math.max(520, Math.min(680, vh - 300)));
 	return (
 		<Space3D nodes={tree.nodes} edges={tree.edges} renderCard={renderCard} renderDot={renderDot} describe={describe} edgeClass={edgeClass}
 			// Experiments already show an overview panel: hovering lights it up.
@@ -580,7 +578,7 @@ const DOCK_PX = 56;
 // The experiment panel over the map: w-[22rem], 2xl:w-[26rem].
 const PANEL_PX = 352, PANEL_PX_2XL = 416;
 
-export default function ResearchMap({ app, aside }: { app: string; aside?: React.ReactNode }) {
+export default function ResearchMap({ app }: { app: string }) {
 	const { data } = useResearchData(app);
 	const wide = useWide();
 	const panelPx = useMedia("(min-width: 1536px)") ? PANEL_PX_2XL : PANEL_PX;
@@ -599,11 +597,10 @@ export default function ResearchMap({ app, aside }: { app: string; aside?: React
 		if (data.proposals.some((p) => p.id === wanted)) setSelected(`sug:${wanted}`);
 	}, [wanted, data]);
 
-	if (!data) return aside ? <>{aside}</> : null;
+	if (!data) return null;
 	const { exps, proposals } = data;
 	const pending = proposals.filter((p) => !exps.some((e) => e.id === p.id) && !notNow.includes(p.id));
-	// Nothing to explore: the aside (Compute) still has something to say.
-	if (exps.length === 0 && pending.length === 0) return aside ? <>{aside}</> : null;
+	if (exps.length === 0 && pending.length === 0) return null;
 
 	const selKind = selected?.split(":")[0];
 	const selExp = selKind === "exp" ? exps.find((e) => `exp:${e.id}` === selected)
@@ -623,7 +620,7 @@ export default function ResearchMap({ app, aside }: { app: string; aside?: React
 	const mapWithPanel = (
 		<div className="relative min-w-0">
 			<MapCanvas app={app} exps={exps} proposals={pending} selected={selected} onSelect={setSelected} grow={grow}
-				insetBottom={pending.length ? DOCK_PX : 0} insetRight={panelOpen ? panelPx + 12 : 0} tall={panelOpen} />
+				insetBottom={pending.length ? DOCK_PX : 0} insetRight={panelOpen ? panelPx + 12 : 0} />
 			{/* The panel runs the map's full height; the folded approval card sits beside it. */}
 			{panelOpen && <ExperimentDetail key={selExp!.id} app={app} e={selExp!} panel onClose={() => setSelected(null)} style={{ bottom: 12 }} />}
 		</div>
@@ -642,15 +639,7 @@ export default function ResearchMap({ app, aside }: { app: string; aside?: React
 				<span className="ml-auto min-w-0 truncate whitespace-nowrap font-mono text-nano uppercase tracking-wider text-ink-600">{mapSummary(exps, pending)}</span>
 				<span className="hidden whitespace-nowrap font-mono text-nano text-ink-600 md:inline" title="When this was read">· {updated}</span>
 			</div>
-			{wide ? (
-				aside ? (
-					// The map and Compute share one row: same top, same height.
-					<div className="grid grid-cols-[minmax(0,1fr)_19rem] gap-4 items-stretch">
-						{mapWithPanel}
-						<div className="min-h-0 relative"><div className="absolute inset-0">{aside}</div></div>
-					</div>
-				) : mapWithPanel
-			) : (
+			{wide ? mapWithPanel : (
 				<ResearchList app={app} exps={exps} onPick={setSelected} />
 			)}
 			{pending.length > 0 && (
