@@ -115,20 +115,23 @@ async function chat(prompt, { timeout = 240000 } = {}) {
 	// does not change while the model thinks, so read the words too.
 	const busyNow = async () => (await page.getByRole('button', { name: 'Stop generating' }).count())
 		+ (await page.getByRole('button', { name: 'Queue message' }).count())
-		+ (/Thinking…|Thinking\.\.\./.test(((await scope.innerText().catch(() => '')) || '').slice(-600)) ? 1 : 0);
+		// "Working…" is the status line while a turn boots (sandbox spawn,
+		// API latency) or sits between tool steps — no text streams then.
+		+ (/Thinking…|Thinking\.\.\.|Working…|Working\.\.\./.test(((await scope.innerText().catch(() => '')) || '').slice(-600)) ? 1 : 0);
+	const tail = prompt.slice(-40);
+	const replyOf = (t) => { const at = t.lastIndexOf(tail); return at >= 0 ? t.slice(at + tail.length) : t.replace(before, ''); };
 	await page.waitForFunction(() => !!document.querySelector('button[aria-label="Queue message"], button[aria-label="Stop generating"]'), null, { timeout: 30000 }).catch(() => {});
 	let last = '', quietSince = Date.now();
 	while (Date.now() - started < timeout) {
 		await page.waitForTimeout(2000);
 		const t = await scope.innerText().catch(() => '');
 		if (t !== last || (await busyNow())) { quietSince = Date.now(); last = t; continue; }
-		if (Date.now() - quietSince >= 20000) break;
+		// Never settle on an empty reply: a slow first token is not an answer.
+		if (Date.now() - quietSince >= 20000 && replyOf(t).trim()) break;
 	}
 	// What appeared after the prompt (the reply, tool notes included).
 	// Anchor on the END of the prompt (the bubble may wrap or trim its start).
-	const tail = prompt.slice(-40);
-	const at = last.lastIndexOf(tail);
-	const reply = at >= 0 ? last.slice(at + tail.length) : last.replace(before, '');
+	const reply = replyOf(last);
 	report.chat.push({ step: stepName, prompt, reply: reply.trim().slice(0, 4000), ms: Date.now() - started });
 	return reply;
 }
@@ -279,8 +282,17 @@ await step('6 sandbox: a real-GPU variant', async () => {
 	await page.waitForTimeout(3000);
 	await openWorkflow(label(SANDBOX));
 	await press(panel().getByRole('button', { name: /^Run/ }));
-	const settled = await page.waitForFunction(() => /not measured|measured on|Succeeded|Failed/i.test(document.querySelector('[role="dialog"]')?.textContent || ''), null, { timeout: 50 * 60000 }).then(() => true).catch(() => false);
-	const t = await panel().innerText();
+	// Read THE panel (not the first dialog in the document — that may be any
+	// other dialog), and reopen it each minute so its status line is fresh.
+	const SETTLED = /not measured|measured on|Last run (succeeded|failed)|Succeeded|Failed/i;
+	let settled = false, t = '';
+	for (const until = Date.now() + 50 * 60000; Date.now() < until;) {
+		t = await panel().innerText().catch(() => '');
+		if (SETTLED.test(t)) { settled = true; break; }
+		await page.waitForTimeout(60000);
+		await openApp();
+		await openWorkflow(label(SANDBOX));
+	}
 	assert(settled, 'the sandbox run settles');
 	assert(/not measured|measured on/i.test(t) || /Succeeded/.test(t), 'it reports real numbers, or says "not measured" in words');
 });
