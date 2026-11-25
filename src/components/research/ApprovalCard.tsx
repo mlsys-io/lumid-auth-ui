@@ -7,14 +7,13 @@
 
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronLeft, ChevronRight, Loader2, Sparkles } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Loader2, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { me, MeApiError } from "@/api/me";
 import { criteriaInWords, humanId, proposalCheck, type Proposal } from "@/lib/research-map";
 import { loopLabel } from "@/lib/workflow-names";
 import { appTitle } from "@/components/workflow/AppCard";
 import { StrandAvatar } from "@/components/illustrations/StrandAvatar";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const NOT_NOW = (app: string) => `research_not_now_v1:${app}`;
@@ -57,50 +56,56 @@ export default function ApprovalCard({ app, list, index, onIndex, onDone, showAp
 		} finally { setBusy(false); }
 	};
 	return (
-		<section aria-label="For your approval" className="rounded-xl border border-gold-200 bg-card shadow-e2 animate-lumen-rise">
-			<div className="flex items-center gap-2 px-3 pt-2.5">
+		<section aria-label="For your approval" className="overflow-hidden rounded-xl border border-ink-200 bg-card shadow-e3 animate-lumen-rise">
+			<div className="flex items-center gap-2 border-b border-ink-100 px-4 py-2.5">
 				{showApp ? <StrandAvatar slug={app} size={18} /> : <Sparkles className="w-3.5 h-3.5 text-gold-600" aria-hidden />}
 				<span className="eyebrow text-gold-700">{showApp ? `${appTitle(app)} suggests` : "For your approval"}</span>
+				<span className="eyebrow text-ink-600">· suggested</span>
+				{showApp && (
+					<Link to={`/studio/apps/${encodeURIComponent(app)}?suggestion=${encodeURIComponent(p.id)}`}
+						className="ml-auto text-micro text-ink-600 hover:text-ink-900 hover:underline">See it on the map</Link>
+				)}
 				{list.length > 1 && (
-					<span className="ml-auto inline-flex items-center gap-1 text-micro text-ink-600 tabular-nums">
+					<span className={cn("inline-flex items-center gap-1.5 font-mono text-micro text-ink-600 tabular-nums", !showApp && "ml-auto")}>
 						<button type="button" aria-label="Previous suggestion" disabled={index === 0} onClick={() => onIndex(index - 1)} className="p-0.5 rounded hover:bg-ink-100 disabled:opacity-30"><ChevronLeft className="w-3.5 h-3.5" /></button>
 						{index + 1} / {list.length}
 						<button type="button" aria-label="Next suggestion" disabled={index >= list.length - 1} onClick={() => onIndex(index + 1)} className="p-0.5 rounded hover:bg-ink-100 disabled:opacity-30"><ChevronRight className="w-3.5 h-3.5" /></button>
 					</span>
 				)}
 			</div>
-			<div className="px-3 pb-3 pt-1 space-y-1.5">
-				<div className="text-body font-semibold text-ink-900">{humanId(p.id)}</div>
-				<dl className="grid gap-1 text-caption">
+			<div key={p.id} className="space-y-2 px-4 pb-3 pt-3 animate-lumen-rise">
+				<div className="text-title font-semibold text-ink-900">{humanId(p.id)}</div>
+				<dl className="grid gap-1.5 text-meta leading-relaxed">
 					{p.hypothesis && (
 						<div>
-							<dt className="inline font-medium text-ink-700">Try: </dt>
+							<dt className="inline font-semibold text-plum-700">Try: </dt>
 							<dd className={cn("inline text-ink-800", !full && "line-clamp-3")}>{p.hypothesis}</dd>
 							{p.hypothesis.length > 220 && (
 								<button type="button" onClick={() => setFull((v) => !v)} className="block text-micro text-ink-600 hover:text-ink-900 underline decoration-dotted">{full ? "Less" : "Read all"}</button>
 							)}
 						</div>
 					)}
-					<div><dt className="inline font-medium text-ink-700">Cost: </dt><dd className="inline text-ink-800">{p.est_runs ? `about ${p.est_runs} runs` : "not estimated"}{loop ? ` of ${loopLabel("", loop)}` : ""}</dd></div>
-					{done && <div><dt className="inline font-medium text-ink-700">Done when: </dt><dd className="inline text-ink-800">{done}</dd></div>}
+					<div><dt className="inline font-semibold text-plum-700">Cost: </dt><dd className="inline text-ink-800">{p.est_runs ? `about ${p.est_runs} runs` : "not estimated"}{loop ? ` of ${loopLabel("", loop)}` : ""}</dd></div>
+					{done && <div><dt className="inline font-semibold text-plum-700">Done when: </dt><dd className="inline text-ink-800">{done}</dd></div>}
 					{check && (
 						<div title={check.why}>
-							<dt className="inline font-medium text-ink-700">Will it record results? </dt>
+							<dt className="inline font-semibold text-plum-700">Will it record results? </dt>
 							<dd className={cn("inline", check.tone === "ok" ? "text-gold-700" : check.tone === "failing" ? "text-brick-700" : "text-ink-600")}>{check.text}</dd>
 						</div>
 					)}
 				</dl>
 				{missing && <div className="text-micro text-ember-700">This suggestion doesn&apos;t say {missing} — ask in chat to set it up.</div>}
-				<div className="flex items-center gap-2 pt-1">
-					<Button size="sm" variant="secondary" onClick={() => onDone(p.id)} disabled={busy}>Not now</Button>
-					<Button size="sm" variant="accent" onClick={goAhead} disabled={busy || !!missing}>
-						{busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />} Go ahead
-					</Button>
-					{showApp && (
-						<Link to={`/studio/apps/${encodeURIComponent(app)}?suggestion=${encodeURIComponent(p.id)}`}
-							className="ml-auto text-micro text-ink-600 hover:text-ink-900 hover:underline">See it on the map</Link>
-					)}
-				</div>
+			</div>
+			{/* Novix's two answers: equal halves, tinted, across the foot of the card. */}
+			<div className="grid grid-cols-2 gap-2 border-t border-ink-100 bg-muted/30 px-3 py-2.5">
+				<button type="button" onClick={() => onDone(p.id)} disabled={busy}
+					className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-ink-200 bg-card text-meta font-medium text-brick-700 transition-colors hover:border-brick-200 hover:bg-brick-50 disabled:opacity-50">
+					<X className="h-3.5 w-3.5" aria-hidden /> Not now
+				</button>
+				<button type="button" onClick={goAhead} disabled={busy || !!missing}
+					className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-gold-300 bg-gold-50 text-meta font-medium text-gold-800 transition-colors hover:bg-gold-100 disabled:opacity-50">
+					{busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" aria-hidden />} Go ahead
+				</button>
 			</div>
 		</section>
 	);

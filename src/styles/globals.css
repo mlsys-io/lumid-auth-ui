@@ -953,7 +953,7 @@ html[data-surface="studio"] ::selection {
    at the edges, the way Novix's exploration space reads as depth. */
 .space3d {
 	background:
-		radial-gradient(ellipse 60% 55% at 50% 48%, rgb(var(--card-rgb)) 0%, rgb(var(--card-rgb) / 0) 70%),
+		radial-gradient(ellipse 72% 68% at 50% 46%, rgb(var(--card-rgb)) 0%, rgb(var(--card-rgb)) 38%, rgb(var(--card-rgb) / 0) 78%),
 		radial-gradient(ellipse at 50% 50%, theme('colors.ink.50') 0%, theme('colors.ink.100') 100%);
 }
 .space3d::before {
@@ -962,7 +962,7 @@ html[data-surface="studio"] ::selection {
 	background-size: 26px 26px; background-position: center;
 	-webkit-mask-image: radial-gradient(ellipse 55% 55% at 50% 50%, black 30%, transparent 75%);
 	mask-image: radial-gradient(ellipse 55% 55% at 50% 50%, black 30%, transparent 75%);
-	opacity: 0.7;
+	opacity: 0.35;
 }
 .space3d-edge-dashed { stroke-dasharray: 4 4; }
 /* The selected path's edges flow from the app outwards. */
@@ -977,3 +977,12 @@ html[data-surface="studio"] ::selection {
 .space3d-label { text-shadow: 0 0 3px rgb(var(--background-rgb)), 0 0 6px rgb(var(--background-rgb)); transition: opacity 160ms ease-out; pointer-events: none; }
 .space3d-label-left { left: auto; right: 100%; margin-left: 0; margin-right: 0.25rem; align-items: flex-end; text-align: right; }
 @media (prefers-reduced-motion: reduce) { .space3d-label { transition: none; } }
+
+/* The research map's root radiates while its app works (Novix's root rings). */
+@keyframes space3d-ping { 0% { transform: scale(1); opacity: 0.7; } 100% { transform: scale(2.6); opacity: 0; } }
+.space3d-ping { animation: space3d-ping 2.2s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+@media (prefers-reduced-motion: reduce) { .space3d-ping { animation: none; opacity: 0; } }
+/* The wash under an evolution line and its end dot arrive after the line has drawn. */
+@keyframes evo-area-in { 0%, 60% { opacity: 0; } 100% { opacity: 1; } }
+.evo-area-in { animation: evo-area-in 1.2s ease-out both; }
+@media (prefers-reduced-motion: reduce) { .evo-area-in { animation: none; } }

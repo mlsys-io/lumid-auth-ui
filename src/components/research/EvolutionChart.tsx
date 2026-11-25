@@ -13,6 +13,26 @@ import { fmtMetricValue } from "@/lib/run-answer";
 import { cn } from "@/lib/utils";
 
 const STROKE = ["stroke-chart-1", "stroke-chart-2", "stroke-chart-3", "stroke-chart-4", "stroke-chart-5", "stroke-chart-6", "stroke-chart-7", "stroke-chart-8"];
+const TEXT = ["text-chart-1", "text-chart-2", "text-chart-3", "text-chart-4", "text-chart-5", "text-chart-6", "text-chart-7", "text-chart-8"];
+
+/** A smooth line through the points that never overshoots them (monotone
+ *  cubic, Fritsch–Carlson): curves like Novix's, honest about every value. */
+export function smoothPath(pts: Array<[number, number]>): string {
+	const n = pts.length;
+	if (n === 0) return "";
+	if (n < 3) return pts.map(([px, py], i) => `${i ? "L" : "M"}${px.toFixed(1)},${py.toFixed(1)}`).join("");
+	const dx: number[] = [], m: number[] = [];
+	for (let i = 0; i < n - 1; i++) { dx.push(pts[i + 1][0] - pts[i][0] || 1e-6); m.push((pts[i + 1][1] - pts[i][1]) / dx[i]); }
+	const t: number[] = [m[0]];
+	for (let i = 1; i < n - 1; i++) t.push(m[i - 1] * m[i] <= 0 ? 0 : (3 * (dx[i - 1] + dx[i])) / ((2 * dx[i] + dx[i - 1]) / m[i - 1] + (dx[i] + 2 * dx[i - 1]) / m[i]));
+	t.push(m[n - 2]);
+	let d = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+	for (let i = 0; i < n - 1; i++) {
+		const h = dx[i] / 3;
+		d += `C${(pts[i][0] + h).toFixed(1)},${(pts[i][1] + t[i] * h).toFixed(1)} ${(pts[i + 1][0] - h).toFixed(1)},${(pts[i + 1][1] - t[i + 1] * h).toFixed(1)} ${pts[i + 1][0].toFixed(1)},${pts[i + 1][1].toFixed(1)}`;
+	}
+	return d;
+}
 const FILL = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5", "bg-chart-6", "bg-chart-7", "bg-chart-8"];
 
 export interface EvoSeries { id: string; label: string; points: Array<{ ts: string; v: number; n?: number }>; inferred?: boolean }
@@ -172,14 +192,28 @@ function OneChart({ series, metricKey, unit, higherIsBetter = true, comparable =
 					    axis was fitted to: clip them to the plot, not over the tick labels. */}
 					<clipPath id={clipId}><rect x={PAD.l} y={PAD.t - 2} width={W - PAD.l - PAD.r + 2} height={H - PAD.t - PAD.b + 4} /></clipPath>
 					{lines.map((l) => {
-						const d = l.pts.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)},${y(p.avg).toFixed(1)}`).join("");
+						const xy = l.pts.map((p) => [x(p.t), y(p.avg)] as [number, number]);
+						const d = smoothPath(xy);
 						const end = l.pts[l.pts.length - 1];
+						const base = H - PAD.b;
+						const area = xy.length > 1 ? `${d}L${xy[xy.length - 1][0].toFixed(1)},${base}L${xy[0][0].toFixed(1)},${base}Z` : "";
+						const gid = `${clipId}-g${l.ci}`;
 						return (
-							<g key={l.id}>
-								<path d={d} fill="none" pathLength={100} clipPath={`url(#${clipId})`} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" className={cn(STROKE[l.ci], "evo-line-draw")} />
+							<g key={l.id} className={TEXT[l.ci]}>
+								{/* A faint wash under a lone line (Novix's soft curves); none when lines overlap. */}
+								{lines.length === 1 && area && (
+									<>
+										<defs><linearGradient id={gid} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="currentColor" stopOpacity={0.16} /><stop offset="100%" stopColor="currentColor" stopOpacity={0} /></linearGradient></defs>
+										<path d={area} fill={`url(#${gid})`} clipPath={`url(#${clipId})`} className="evo-area-in" />
+									</>
+								)}
+								<path d={d} fill="none" pathLength={100} clipPath={`url(#${clipId})`} strokeWidth={1.75} strokeLinejoin="round" strokeLinecap="round" className={cn(STROKE[l.ci], "evo-line-draw")} />
+								{/* The latest value: a dot with a halo. */}
+								<circle cx={xy[xy.length - 1][0]} cy={xy[xy.length - 1][1]} r={6} fill="currentColor" opacity={0.15} className="evo-area-in" />
+								<circle cx={xy[xy.length - 1][0]} cy={xy[xy.length - 1][1]} r={3} fill="currentColor" stroke="rgb(var(--card-rgb))" strokeWidth={1.5} className="evo-area-in" />
 								{/* Direct label at the line's end (≤4 versions; the legend covers more). */}
 								{lines.length <= 4 && (
-									<text x={x(end.t) + 6} y={endY.get(l.id)} dy="0.32em" className="fill-ink-700 text-nano">{l.label.length > 16 ? `${l.label.slice(0, 15)}…` : l.label}</text>
+									<text x={x(end.t) + 10} y={endY.get(l.id)} dy="0.32em" className="fill-ink-700 text-nano">{l.label.length > 16 ? `${l.label.slice(0, 15)}…` : l.label}</text>
 								)}
 							</g>
 						);

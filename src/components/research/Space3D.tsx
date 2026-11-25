@@ -61,7 +61,12 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 	const [hovered, setHovered] = useState<string | null>(null);
 	const boxRef = useRef<HTMLDivElement>(null);
 	const cardEls = useRef(new Map<string, HTMLElement>());
-	const edgeEls = useRef(new Map<string, SVGLineElement>());
+	const edgeEls = useRef(new Map<string, SVGPathElement>());
+	const haloEls = useRef(new Map<string, SVGPathElement>());
+	// Every node rides a damped spring toward where the camera puts it: the
+	// space lags a touch behind a drag, overshoots and settles; a new node
+	// springs out of its parent; a hovered node's neighbours lean toward it.
+	const springs = useRef(new Map<string, { x: number; y: number; vx: number; vy: number }>());
 	const labelEls = useRef(new Map<string, SVGTextElement>());
 	// Each dot's label element and its unscaled size (text never changes).
 	const dotLabels = useRef(new Map<string, { el: HTMLElement; w: number; h: number }>());
@@ -101,7 +106,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		W: 0, H: 0,
 		cam: { ...HOME } as Camera,
 		tween: null as null | { from: Camera; to: Camera; t0: number; dur: number; spring?: boolean },
-		lastInput: 0, hover: false, rampT: 0, lastT: 0,
+		lastInput: 0, hover: false, rampT: 0, lastT: 0, dt: 16,
 		drag: null as null | { x: number; y: number; yaw: number; pitch: number; moved: boolean },
 		bornAt: 0, raf: 0, framed: false,
 	});
@@ -149,6 +154,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 			st.raf = 0;
 			const dt = Math.min(50, t - (st.lastT || t));
 			st.lastT = t;
+			st.dt = dt || 16;
 			let moving = false;
 			if (st.tween) {
 				const k = Math.min(1, (t - st.tween.t0) / st.tween.dur);
@@ -179,6 +185,35 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				world.set(id, q);
 				proj.set(id, project(q, cam, W, H));
 			}
+			// Springs (screen space). Stiffer near the app, looser further out.
+			const sec = Math.min(0.033, st.dt / 1000);
+			const hov = hoveredRef.current;
+			const hp = hov ? proj.get(hov) : undefined;
+			const nb = new Set<string>();
+			if (hov) for (const e of edges) { if (e.source === hov) nb.add(e.target); else if (e.target === hov) nb.add(e.source); }
+			for (const n of nodes) {
+				const p = proj.get(n.id);
+				if (!p) continue;
+				let tx = p.x, ty = p.y;
+				// Neighbours of the hovered node lean 7px toward it.
+				if (hp && nb.has(n.id)) { const dx = hp.x - p.x, dy = hp.y - p.y, d = Math.hypot(dx, dy) || 1; tx += (dx / d) * 7; ty += (dy / d) * 7; }
+				let sp = springs.current.get(n.id);
+				if (!sp) {
+					// Born at its parent's spot (or its own when there is none / no motion).
+					const from = !reduced && n.parent ? springs.current.get(n.parent) ?? proj.get(n.parent) : undefined;
+					sp = { x: from ? from.x : tx, y: from ? from.y : ty, vx: 0, vy: 0 };
+					springs.current.set(n.id, sp);
+				}
+				if (reduced) { sp.x = tx; sp.y = ty; sp.vx = sp.vy = 0; }
+				else {
+					const k = n.depth <= 0 ? 260 : n.depth === 1 ? 190 : 130;
+					const c = 2 * 0.62 * Math.sqrt(k);
+					sp.vx += (k * (tx - sp.x) - c * sp.vx) * sec;
+					sp.vy += (k * (ty - sp.y) - c * sp.vy) * sec;
+					sp.x += sp.vx * sec; sp.y += sp.vy * sec;
+				}
+				proj.set(n.id, { ...p, x: sp.x, y: sp.y });
+			}
 			for (const n of nodes) {
 				const el = cardEls.current.get(n.id);
 				const p = proj.get(n.id);
@@ -204,26 +239,42 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				const ln = edgeEls.current.get(e.id);
 				const a = proj.get(e.source), b = proj.get(e.target);
 				if (!ln || !a || !b) continue;
-				ln.setAttribute("x1", a.x.toFixed(1)); ln.setAttribute("y1", a.y.toFixed(1));
-				ln.setAttribute("x2", b.x.toFixed(1)); ln.setAttribute("y2", b.y.toFixed(1));
+				// A gentle curve, every edge sweeping the same way (the space reads
+				// as one turning system), bent further by the child's spring velocity
+				// so lines flex while the space moves and straighten as it settles.
+				const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
+				const bend = Math.min(46, len * 0.16);
+				const v = springs.current.get(e.target);
+				const mx = (a.x + b.x) / 2 - (dy / len) * bend - (v ? v.vx * 0.035 : 0);
+				const my = (a.y + b.y) / 2 + (dx / len) * bend - (v ? v.vy * 0.035 : 0);
+				const d = `M${a.x.toFixed(1)},${a.y.toFixed(1)} Q${mx.toFixed(1)},${my.toFixed(1)} ${b.x.toFixed(1)},${b.y.toFixed(1)}`;
+				ln.setAttribute("d", d);
 				const onPath = !!lit && lit.has(e.source) && lit.has(e.target);
 				const born = grow && !reduced ? Math.max(0, Math.min(1, (t - st.bornAt - (order?.get(e.target) ?? 0) * 70 + 120) / 380)) : 1;
 				const cue = depthCue(Math.min(a.scale, b.scale), cam.zoom);
-				ln.style.opacity = String(((lit ? (onPath ? 1 : 0.05) : 0.3 + 0.5 * cue.near) * born).toFixed(3));
+				ln.style.opacity = String(((lit ? (onPath ? 1 : 0.05) : 0.35 + 0.55 * cue.near) * born).toFixed(3));
+				// Hairlines at the back, a little heavier in front.
+				if (!onPath) ln.style.strokeWidth = (0.6 + 0.8 * cue.near).toFixed(2);
+				const halo = haloEls.current.get(e.id);
+				if (halo) { halo.setAttribute("d", d); halo.style.opacity = String((0.55 * born).toFixed(3)); }
 				const lb = labelEls.current.get(e.id);
-				if (lb) { lb.setAttribute("x", ((a.x + b.x) / 2).toFixed(1)); lb.setAttribute("y", ((a.y + b.y) / 2 - 6).toFixed(1)); }
+				// The curve's midpoint (t = ½ of a quadratic) carries the label.
+				if (lb) { lb.setAttribute("x", ((a.x + b.x) / 4 + mx / 2).toFixed(1)); lb.setAttribute("y", ((a.y + b.y) / 4 + my / 2 - 6).toFixed(1)); }
 			}
 			particles.forEach((pt, i) => {
 				const c = particleEls.current[i];
 				const w = world.get(pt.node);
 				if (!c || !w) return;
-				const q = project({ x: w.x + pt.dx, y: w.y + pt.dy, z: w.z + pt.dz }, cam, W, H);
+				const q0 = project({ x: w.x + pt.dx, y: w.y + pt.dy, z: w.z + pt.dz }, cam, W, H);
+				// Ride the node's spring: offset by how far the node lags its target.
+				const tgt = project(w, cam, W, H), now = proj.get(pt.node);
+				const q = now ? { ...q0, x: q0.x + (now.x - tgt.x), y: q0.y + (now.y - tgt.y) } : q0;
 				const cue = depthCue(q.scale, cam.zoom);
 				const dimP = !!lit && !lit.has(pt.node);
 				const bornP = grow && !reduced ? Math.max(0, Math.min(1, (t - st.bornAt - (order?.get(pt.node) ?? 0) * 70 - 300) / 500)) : 1;
 				c.setAttribute("cx", q.x.toFixed(1)); c.setAttribute("cy", q.y.toFixed(1));
-				c.setAttribute("r", Math.max(0.8, 1.9 * q.scale / (FOCAL / DISTANCE)).toFixed(2));
-				c.style.opacity = String((q.visible ? (dimP ? 0.04 : 0.25 + 0.5 * cue.near) * bornP : 0).toFixed(3));
+				c.setAttribute("r", Math.max(0.7, 1.4 * q.scale / (FOCAL / DISTANCE)).toFixed(2));
+				c.style.opacity = String((q.visible ? (dimP ? 0.03 : 0.16 + 0.38 * cue.near) * bornP : 0).toFixed(3));
 			});
 		};
 		// Labels that would collide are hidden, most important first: what's
@@ -362,10 +413,15 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 					const onPath = !!lit && lit.has(e.source) && lit.has(e.target);
 					return (
 						<g key={e.id}>
-							<line
+							{onPath && (
+								<path ref={(el) => { if (el) haloEls.current.set(e.id, el); else haloEls.current.delete(e.id); }}
+									className="stroke-plum-200" fill="none" strokeWidth={6} strokeLinecap="round" />
+							)}
+							<path
 								ref={(el) => { if (el) edgeEls.current.set(e.id, el); else edgeEls.current.delete(e.id); }}
-								className={cn(onPath ? "stroke-gold-500 space3d-edge-flow" : "stroke-ink-400", e.dashed && !onPath && "space3d-edge-dashed")}
-								strokeWidth={onPath ? 2 : 1}
+								className={cn(onPath ? "stroke-plum-600 space3d-edge-flow" : e.dashed ? "stroke-ink-400 space3d-edge-dashed" : "stroke-plum-300")}
+								fill="none"
+								strokeWidth={onPath ? 1.75 : 1}
 								strokeLinecap="round"
 							/>
 							{onPath && e.label && (
@@ -402,7 +458,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 							onFocus={() => setHovered(n.id)}
 							onBlur={() => setHovered((h) => (h === n.id ? null : h))}
 							onClick={(e) => { e.stopPropagation(); if (suppressClick.current) return; onSelect(sel ? null : n.id); }}
-							className="block text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400 rounded-xl"
+							className="block text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-plum-400 rounded-xl"
 						>
 							{/* Both stay in the DOM and only their visibility flips: swapping the
 							    element under the pointer between press and release (hover opens the
@@ -418,7 +474,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				<CtlButton label="Zoom out" onClick={() => zoomBy(1 / 1.2)}><Minus className="w-3.5 h-3.5" /></CtlButton>
 				<CtlButton label="Show everything" onClick={reset}><RotateCcw className="w-3.5 h-3.5" /></CtlButton>
 			</div>
-			<div className="absolute left-3 bottom-2 z-[6000] text-nano text-ink-600 pointer-events-none">
+			<div className="absolute left-3 top-2.5 z-[6000] text-nano text-ink-600 pointer-events-none">
 				Drag to turn · ⌘/ctrl + scroll to zoom · click a card to follow its path
 			</div>
 		</div>

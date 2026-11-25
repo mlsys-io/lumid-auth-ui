@@ -207,6 +207,25 @@ on. (Simulator vs real GPU, backtest vs forward test are app details, not UI str
   already in the cycle detail, so Download is a Blob, no request. No app writes files the API can
   reach yet; an app that wants a deliverable shown should return it inline (`<name>_text`).
 
+### Round 7 (2026-11-25): Novix's panel, springs, one hue
+
+- **Running panel = Novix tiles** (`RunningNow`): "⌄ Running [n]" / "⌄ Done [n]" collapsible headers
+  (`useCollapse`, keys `studio-rail:*`), a 2-column grid of 112px tiles (mono start time + "N min
+  ago", two-line title, italic shining action, a 24-cell strip: steps from the last run, else share
+  of the usual time, else one cell per minute), dashed free slots to fill one row (≤1 item) or 2×2
+  (the first says what starts next — `[data-slot=next]`), Done as quiet bordered rows with a square
+  bullet ("failed" said in words). Machines moved to the Running header's tooltip.
+- **The research space is one hue (plum)**, stepped by certainty; failing experiments brick. The app
+  root has still rings and radiates (`.space3d-ping`) only while its app runs.
+- **Springs, not tweens, place nodes** (`Space3D`): each node is a damped spring (k 260/190/130 by
+  depth, ζ 0.62) toward its projected point — born at its parent (the tree springs out), lags a
+  drag and settles, hovered node's neighbours lean 7px toward it. Edges are quadratic curves that
+  all sweep one way and flex with the child's spring velocity; width/opacity by depth; the
+  selected path is plum, dashed, flowing, over a soft halo. Reduced motion: springs snap.
+- **Approval card docks over the foot of the map** (Novix), tinted equal-half answers.
+- Evolution lines are monotone cubics (`smoothPath`, never overshoot a value) with a wash under a
+  lone line; version chips are plum, winning inverted.
+
 ### Where runs live
 
 - `/studio/runs` = **Activity**: Running now · Needs fixing (one row per broken *workflow*, not
