@@ -497,7 +497,7 @@ export function RunDetail({
 		</div>
 		{/* What it produced — beside the run when there is room, under it when not. */}
 		<div className={cn("p-3", wide ? "border-l border-ink-100" : "border-t border-ink-100")}>
-			<RunOutputs detail={detail} onFullOutput={steps[0] ? () => onQuery({ step: stepIdOf(steps[0], 0), pane: "output" }) : undefined} />
+			<RunOutputs detail={detail} runRef={{ app, loop, ts: runId, trigger: listRow?.trigger }} onFullOutput={steps[0] ? () => onQuery({ step: stepIdOf(steps[0], 0), pane: "output" }) : undefined} />
 		</div>
 		</div>
 	);

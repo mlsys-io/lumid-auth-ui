@@ -16,7 +16,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { legacyAppQueryTarget, routeLoopMissing, workflowPath } from "@/lib/run-routes";
-import { ChevronRight, ChevronDown, Check, ArrowRight, Boxes, Sparkles, AlertTriangle, Trash2, Loader2, RotateCcw, X, Plus, MoreHorizontal, SlidersHorizontal, Settings, Pencil, Cpu, Cloud, Workflow, Clock, Database, DownloadCloud, UploadCloud, BarChart3, GitBranch, FlaskConical } from "lucide-react";
+import { ChevronRight, ChevronDown, Check, ArrowRight, Boxes, Sparkles, AlertTriangle, Trash2, Loader2, RotateCcw, X, Plus, MoreHorizontal, SlidersHorizontal, Settings, Pencil, Cpu, Cloud, Workflow, Clock, Database, DownloadCloud, UploadCloud, BarChart3, GitBranch, FlaskConical, MessagesSquare } from "lucide-react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -645,7 +645,7 @@ const wfSub = (wf: MeWorkflowRow) =>
 // shows the active workflow (status dot + name + count); the popover lists all
 // workflows to switch. Replaces the left-rail master list so the panel shows
 // only the selected workflow's content.
-function WorkflowSelect({ rows, selected, onSelect, onNew, crumb = false }: { rows: Row[]; selected: string | null; onSelect: (loop: string) => void; onNew?: () => void; crumb?: boolean }) {
+function WorkflowSelect({ rows, selected, onSelect, onNew, onAsk, crumb = false }: { rows: Row[]; selected: string | null; onSelect: (loop: string) => void; onNew?: () => void; onAsk?: () => void; crumb?: boolean }) {
 	const [open, setOpen] = useState(false);
 	// `selected` is null in app-overview mode — show a neutral "Pick a workflow"
 	// label then (not a stale workflow name), since the Overview tab is active.
@@ -690,13 +690,26 @@ function WorkflowSelect({ rows, selected, onSelect, onNew, crumb = false }: { ro
 					);
 				})}
 				{onNew && (
-					<>
-						<div className="my-1 border-t border-ink-100" />
+					// Pinned to the popover's bottom: with 13 workflows it was below the fold.
+					<div className="sticky -bottom-1 -mx-1 -mb-1 px-1 pb-1 mt-1 bg-popover border-t border-ink-100">
+						<div className="eyebrow px-2.5 pt-1.5 pb-0.5">New workflow</div>
+						{/* Two ways in: say what it should do (the chat drafts it for you to
+						    approve), or fill in the form (name · schedule · steps). */}
+						{onAsk && (
+							<button type="button" onClick={() => { setOpen(false); onAsk(); }}
+								className="w-full flex items-start gap-2 px-2.5 py-2 rounded-lg text-left hover:bg-muted transition-colors">
+								<MessagesSquare className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-gold-700" />
+								<span className="min-w-0"><span className="block text-meta font-medium text-ink-800">Describe it in chat</span>
+									<span className="block text-micro text-ink-600">Say what it should do and how often; the chat drafts it for you to approve.</span></span>
+							</button>
+						)}
 						<button type="button" onClick={() => { setOpen(false); onNew(); }}
-							className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left text-meta font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-							<Plus className="w-3.5 h-3.5 flex-shrink-0" /> New workflow
+							className="w-full flex items-start gap-2 px-2.5 py-2 rounded-lg text-left hover:bg-muted transition-colors">
+							<Plus className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-ink-600" />
+							<span className="min-w-0"><span className="block text-meta font-medium text-ink-800">Fill in a form</span>
+								<span className="block text-micro text-ink-600">Name, schedule and the steps it runs.</span></span>
 						</button>
-					</>
+					</div>
 				)}
 			</PopoverContent>
 		</Popover>
@@ -796,6 +809,12 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 	// claiming the strip.
 	const appSlotTarget = usePortalTarget("topstrip-wf-slot", !!embedded && !nestedInSurface);
 	const crumbTarget = usePortalTarget("topstrip-crumb-slot", !!embedded && !nestedInSurface);
+	// "Describe it in chat": prefill the chat (the person presses send); the
+	// chat asks what it should do and how often, then drafts it for approval.
+	const askNewWorkflow = () => window.dispatchEvent(new CustomEvent("studio:ask", { detail: {
+		prompt: `I'd like to add a new workflow to this app. Ask me what it should do and how often it should run, then draft it for me to approve before anything is saved.`,
+		context: { app },
+	} }));
 	const [params] = useSearchParams();
 	const location = useLocation();
 	// A workflow and a run are addresses now (/studio/apps/:app/w/:loop[/r/:runId],
@@ -1120,7 +1139,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 								)}
 								{rows.length >= 1 && !(embedded && crumbTarget) && (
 									<WorkflowSelect rows={rows} selected={effSelected} onSelect={select}
-										onNew={() => navigate(`/studio/a/${encodeURIComponent(app)}/manage`)} />
+										onNew={() => navigate(`/studio/a/${encodeURIComponent(app)}/manage?new=1`)} onAsk={askNewWorkflow} />
 								)}
 								{/* Slot: the open workflow panel hoists its run controls (status ·
 								    version dots · pull/publish · plan-next · pause) onto this line. */}
@@ -1250,7 +1269,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 							? <>
 								{crumbTarget && rows.length >= 1 && createPortal(
 									<WorkflowSelect crumb rows={rows} selected={effSelected} onSelect={select}
-										onNew={() => navigate(`/studio/a/${encodeURIComponent(app)}/manage`)} />, crumbTarget)}
+										onNew={() => navigate(`/studio/a/${encodeURIComponent(app)}/manage?new=1`)} onAsk={askNewWorkflow} />, crumbTarget)}
 								{createPortal(<div className="flex items-center gap-2 min-w-0">{cluster}</div>, appSlotTarget)}
 							</>
 							: <div className="flex items-center gap-2 flex-wrap">{cluster}</div>;
