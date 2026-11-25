@@ -205,13 +205,13 @@ const nodeTypes = { app: AppNode, experiment: ExperimentNode, version: VersionNo
 
 // ── edges: draw in on first view, flow along the selected path ─────────────
 
-interface EdgeData extends Record<string, unknown> { dashed?: boolean; onPath: boolean; dim: boolean; grow: boolean; delay: number }
+interface EdgeData extends Record<string, unknown> { dashed?: boolean; onPath: boolean; dim: boolean; grow: boolean; delay: number; label?: string }
 function ResearchEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data }: EdgeProps<Edge<EdgeData>>) {
-	const [path] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
+	const [path, lx, ly] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
 	const d = data!;
 	// Our own <path> (not BaseEdge) so it can carry pathLength=100: the draw-in
 	// is one dash rule for every edge, whatever its real length.
-	return (
+	const line = (
 		<path
 			id={id}
 			d={path}
@@ -225,6 +225,17 @@ function ResearchEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, 
 			style={{ animationDelay: d.grow && !d.onPath ? `${d.delay}ms` : undefined }}
 		/>
 	);
+	// Edges that carry a relation say which ("suggested next", "forked from").
+	// "forked from" always (it is the derivation); "suggested next" only on the
+	// selected path — the card already says SUGGESTED, and three labels at one
+	// fork piled up.
+	const showLabel = d.label === "forked from" || (d.label === "suggested next" && d.onPath);
+	return showLabel ? (
+		<g>
+			{line}
+			<text x={lx} y={ly} dy="-0.4em" textAnchor="middle" className={cn("research-edge-label text-nano", d.dim && "opacity-25")}>{d.label}</text>
+		</g>
+	) : line;
 }
 const edgeTypes = { research: ResearchEdge };
 
@@ -293,7 +304,7 @@ function MapCanvas({ app, exps, proposals, selected, onSelect, grow }: {
 	});
 	const edges: Edge<EdgeData>[] = tree.edges.map((e) => ({
 		id: e.id, source: e.source, target: e.target, type: "research",
-		data: { dashed: e.dashed, onPath: !!lit && lit.has(e.source) && lit.has(e.target), dim: !!lit && !(lit.has(e.source) && lit.has(e.target)), grow, delay: delayOf(e.target) - 120 },
+		data: { dashed: e.dashed, label: e.label, onPath: !!lit && lit.has(e.source) && lit.has(e.target), dim: !!lit && !(lit.has(e.source) && lit.has(e.target)), grow, delay: delayOf(e.target) - 120 },
 	}));
 
 	// Camera: frame the selected path (600ms), or everything when cleared.
@@ -308,7 +319,7 @@ function MapCanvas({ app, exps, proposals, selected, onSelect, grow }: {
 	const zoom = boxW ? Math.min(1, (boxW - 24) / width) : 0.9;
 	const h = Math.max(220, Math.min(900, height * zoom + 32));
 	return (
-		<div ref={boxRef} style={{ height: h }} className="rounded-xl border border-ink-200 bg-ink-50/40 overflow-hidden">
+		<div ref={boxRef} style={{ height: h }} className="research-map rounded-xl border border-ink-200 bg-ink-50/40 overflow-hidden">
 			<ReactFlow
 				nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
 				onNodeClick={(_, n) => onSelect(n.id === selected ? null : n.id)}
