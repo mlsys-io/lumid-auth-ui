@@ -1276,9 +1276,11 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 									// wrapped to one per line and stacked under "New workflow". Inline
 									// they get the panel's full width. The tabs are still the ONLY tab
 									// bar; the strip's duplicate Overview pill is gone either way.
-									<div className="-mx-5 -my-5">
+									// -mx-6: the surface pads itself by 24px, so its content starts on the
+									// same left edge as the map and Compute above it.
+									<div className="-mx-6 -my-5">
 										<Suspense fallback={<div className="px-5 py-8"><Skeleton lines={4} /></div>}>
-											<AppSurface app={app} embedded={embedded} inlineChrome surface={params.get("surface") || undefined} />
+											<AppSurface app={app} embedded={embedded} inlineChrome hideNav={!urlSurface && (identity?.nav?.length ?? 0) > 1} surface={params.get("surface") || undefined} />
 										</Suspense>
 									</div>
 								) : APP_OVERVIEW_MD[app] ? (

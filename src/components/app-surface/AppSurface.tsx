@@ -64,7 +64,11 @@ function AppSurfaceImpl({
   surface: surfaceProp,
   embedded,
   inlineChrome,
+  hideNav,
 }: {
+  // hideNav — the app home already names these pages at its top (ResearchHome);
+  // a second tab bar under the map repeated the same links.
+  hideNav?: boolean;
   // When mounted on an explicit route (e.g. the lumid-market competition
   // surfaces), the app + named surface come in as props and the URL's own
   // params (competitionId, strategyId) are forwarded to the markdown for
@@ -201,7 +205,7 @@ function AppSurfaceImpl({
   // surfaces are pickable from any of them (not just home-page links). Only the
   // app's declared, param-free surfaces appear here.
   const surfaceTabs = (nav?: { surface: string; label?: string }[]) => {
-    if (!nav || nav.length === 0) return null;
+    if (hideNav || !nav || nav.length === 0) return null;
     const current = surface || "home";
     return (
       <div className="flex flex-wrap gap-1 min-w-0 flex-shrink-0">
