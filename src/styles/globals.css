@@ -986,3 +986,7 @@ html[data-surface="studio"] ::selection {
 @keyframes evo-area-in { 0%, 60% { opacity: 0; } 100% { opacity: 1; } }
 .evo-area-in { animation: evo-area-in 1.2s ease-out both; }
 @media (prefers-reduced-motion: reduce) { .evo-area-in { animation: none; } }
+/* The experiment panel slides in over the research map's right edge. */
+@keyframes map-panel-in { from { opacity: 0; transform: translateX(14px) scale(0.985); } to { opacity: 1; transform: none; } }
+.map-panel-in { animation: map-panel-in 240ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+@media (prefers-reduced-motion: reduce) { .map-panel-in { animation: none; } }

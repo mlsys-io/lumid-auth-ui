@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowRight, FlaskConical, MessagesSquare, Sparkles, Workflow } from "lucide-react";
+import { ArrowRight, FlaskConical, MessagesSquare, Sparkles, Workflow, X } from "lucide-react";
 import apiClient from "@/api/client";
 import { me, type MeExperiment, type MeExperimentDetail } from "@/api/me";
 import EvolutionChart, { type EvoSeries } from "@/components/research/EvolutionChart";
@@ -27,6 +27,7 @@ import YourCall from "@/components/research/YourCall";
 import {
 	buildResearchTree, comparabilityNote, criteriaInWords, experimentStatus, humanId, mapSummary, pathTo, versionsOf,
 	type MapNode, type Proposal, type Tone, type VersionInfo,
+	shortStatus,
 } from "@/lib/research-map";
 import { humanMetric, fmtMetricValue } from "@/lib/run-answer";
 import { workflowPath } from "@/lib/run-routes";
@@ -212,11 +213,15 @@ function useViewportHeight(): number {
 	return h;
 }
 
-function MapCanvas({ app, exps, proposals, selected, onSelect, grow, insetBottom = 0 }: {
+function MapCanvas({ app, exps, proposals, selected, onSelect, grow, insetBottom = 0, insetRight = 0, tall = false }: {
 	app: string; exps: MeExperiment[]; proposals: Proposal[];
 	selected: string | null; onSelect: (id: string | null) => void; grow: boolean;
 	/** Pixels the docked approval card covers at the foot of the space. */
 	insetBottom?: number;
+	/** Pixels the experiment panel covers at the right. */
+	insetRight?: number;
+	/** Room for the experiment panel: at least 560px tall. */
+	tall?: boolean;
 }) {
 	const running = useShellActivity()?.runningApps.includes(app) ?? false;
 	const tree = useMemo(() => buildResearchTree(app, exps, proposals, { workflows: true }), [app, exps, proposals]);
@@ -272,7 +277,7 @@ function MapCanvas({ app, exps, proposals, selected, onSelect, grow, insetBottom
 			sub={`${exps.length} experiment${exps.length === 1 ? "" : "s"}${running ? " · running now" : ""}`} />;
 		if (n.kind === "experiment") {
 			const e = expById.get(n.ref);
-			const st = e ? experimentStatus(e) : null;
+			const st = e ? shortStatus(e) : null;
 			return <Dot size={9} className={st?.tone === "failing" ? "bg-brick-500" : "bg-plum-500"} label={e ? humanId(e.id) : n.ref} labelClass="text-caption font-medium text-ink-900"
 				sub={st?.text} subClass={st?.tone === "ok" ? "text-gold-700" : st?.tone === "failing" ? "text-brick-700" : "text-ink-600"} />;
 		}
@@ -285,7 +290,7 @@ function MapCanvas({ app, exps, proposals, selected, onSelect, grow, insetBottom
 		if (n.kind === "workflow") {
 			const k = feedsOf(n.ref);
 			return <Dot size={7} className="bg-lagoon-500 !rounded-[2px] !ring-lagoon-100" label={loopLabel("", n.ref)} labelClass="text-micro font-medium text-ink-800"
-				sub={`workflow · feeds ${k}`} subClass="text-lagoon-700" />;
+				sub="workflow" subClass="text-lagoon-700" />;
 		}
 		return <Dot size={8} className="bg-card border border-dashed border-gold-500" label={`Suggested: ${humanId(n.ref)}`} labelClass="text-micro text-gold-700" />;
 	}, [app, running, expById, versionOf, exps.length, feedsOf]);
@@ -293,10 +298,11 @@ function MapCanvas({ app, exps, proposals, selected, onSelect, grow, insetBottom
 	// compute) and the approval card under it stay on the first screen.
 	const vh = useViewportHeight();
 	// …and to what's in it: a two-experiment space doesn't need a tall stage.
-	const height = Math.round(Math.max(320, Math.min(600, vh - (proposals.length ? 470 : 400), 240 + tree.nodes.length * 16)));
+	const fit = Math.round(Math.max(320, Math.min(600, vh - (proposals.length ? 470 : 400), 240 + tree.nodes.length * 16)));
+	const height = tall ? Math.max(fit, 560) : fit;
 	return (
 		<Space3D nodes={tree.nodes} edges={tree.edges} renderCard={renderCard} renderDot={renderDot} describe={describe}
-			selected={selected} lit={lit} grow={grow} order={order} height={height} evidence={evidence} insetBottom={insetBottom}
+			selected={selected} lit={lit} grow={grow} order={order} height={height} evidence={evidence} insetBottom={insetBottom} insetRight={insetRight}
 			// A workflow node opens that workflow; everything else selects in place.
 			onSelect={(id) => (id?.startsWith("wf:") ? navigate(workflowPath(app, id.slice(3))) : onSelect(id))} />
 	);
@@ -326,7 +332,24 @@ function useSeries(app: string, id: string) {
 	return s;
 }
 
-function ExperimentDetail({ app, e }: { app: string; e: MeExperiment }) {
+/** In the map panel, what the experiment tests folds away under one line. */
+function Wrap({ panel, children }: { panel: boolean; children: React.ReactNode }) {
+	if (!panel) return <>{children}</>;
+	return (
+		<details className="group rounded-lg bg-muted/40 px-2.5 py-1.5">
+			<summary className="cursor-pointer list-none text-micro font-medium text-ink-700 hover:text-ink-900">
+				<span className="inline-block transition-transform group-open:rotate-90">›</span> What it tests, and when it&apos;s done
+			</summary>
+			<div className="pt-1.5">{children}</div>
+		</details>
+	);
+}
+
+function ExperimentDetail({ app, e, panel = false, onClose, style }: {
+	app: string; e: MeExperiment;
+	/** Shown over the map (a panel at its right edge) rather than under it. */
+	panel?: boolean; onClose?: () => void; style?: React.CSSProperties;
+}) {
 	const st = experimentStatus(e);
 	const seriesData = useSeries(app, e.id);
 	const series = seriesData?.series ?? null;
@@ -359,6 +382,13 @@ function ExperimentDetail({ app, e }: { app: string; e: MeExperiment }) {
 		},
 	// eslint-disable-next-line react-hooks/exhaustive-deps
 	), [series, seriesData?.runningMean, e.id, e.min_samples, hib, e.criteria_met, e.best_variant, e.comparable]);
+	// Esc closes the panel wherever focus is (the map keeps focus after a click).
+	useEffect(() => {
+		if (!panel) return;
+		const onKey = (ev: KeyboardEvent) => { if (ev.key === "Escape") onClose?.(); };
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, [panel, onClose]);
 	const loop = e.dispatch?.loop || e.loops?.[0];
 	const done = criteriaInWords(e.success_criteria);
 	// What the research is aiming for, when the experiment declares it.
@@ -366,19 +396,35 @@ function ExperimentDetail({ app, e }: { app: string; e: MeExperiment }) {
 	const target = typeof rawTarget === "number" && Number.isFinite(rawTarget) ? rawTarget : null;
 	const q = (e as { description?: string }).description;
 	return (
-		<div className="rounded-xl border border-ink-200 bg-card p-3 space-y-2.5 animate-lumen-rise">
+		<div
+			role={panel ? "dialog" : undefined} aria-label={panel ? `Experiment: ${humanId(e.id)}` : undefined}
+			style={style}
+			className={panel
+				? "absolute right-3 top-12 z-[6100] w-[22rem] max-w-[48%] overflow-y-auto overscroll-contain rounded-xl border border-ink-200 bg-card/95 p-3.5 space-y-3 shadow-e3 backdrop-blur-sm map-panel-in"
+				: "rounded-xl border border-ink-200 bg-card p-3 space-y-2.5 animate-lumen-rise"}>
 			<div>
-				<div className="text-body font-semibold text-ink-900">{humanId(e.id)}</div>
-				{q && <div className="text-meta text-ink-700">{q}</div>}
+				{panel && (
+					<div className="mb-1 flex items-center gap-2">
+						<span className="eyebrow text-plum-700">Experiment</span>
+						<button type="button" onClick={onClose} aria-label="Close" title="Close (Esc)"
+							className="ml-auto -mr-1 inline-flex h-6 w-6 items-center justify-center rounded-md text-ink-600 hover:bg-ink-100 hover:text-ink-900">
+							<X className="h-3.5 w-3.5" />
+						</button>
+					</div>
+				)}
+				<div className={cn("font-semibold text-ink-900", panel ? "text-title leading-snug" : "text-body")}>{humanId(e.id)}</div>
+				{q && <div className={cn("text-ink-700", panel ? "text-caption mt-0.5" : "text-meta")}>{q}</div>}
 			</div>
 			<div className={cn("flex items-center gap-1.5 text-meta font-medium", TONE_TEXT[st.tone])}><span className={dot(st.tone)} />{st.text}</div>
 			{comparabilityNote(e) && <div className="text-caption text-ink-700">{comparabilityNote(e)}</div>}
+			<Wrap panel={panel}>
 			<dl className="grid gap-1 text-caption">
 				{e.hypothesis && e.hypothesis !== q && <div><dt className="inline text-ink-600">Expecting: </dt><dd className="inline text-ink-800">{e.hypothesis}</dd></div>}
 				{m && <div><dt className="inline text-ink-600">Measures: </dt><dd className="inline text-ink-800">{m.label}{m.unit ? ` (${m.unit})` : ""} — {e.higher_is_better === false || e.metric?.higher_is_better === false ? "lower" : "higher"} is better</dd></div>}
 				{target != null && <div><dt className="inline text-ink-600">Aiming for: </dt><dd className="inline text-ink-800">{fmtMetricValue(target, m?.unit ?? "", metric || "")}{m ? ` ${m.label.toLowerCase()}` : ""}</dd></div>}
 				{done && <div><dt className="inline text-ink-600">Done when: </dt><dd className="inline text-ink-800">{done}</dd></div>}
 			</dl>
+			</Wrap>
 			{series === null ? (
 				<div className="h-24 lumen-skeleton rounded-lg" role="status" aria-label="Loading how it evolved" />
 			) : evolution && metric && e.comparable !== false ? (
@@ -444,6 +490,8 @@ function ResearchList({ app, exps, onPick }: { app: string; exps: MeExperiment[]
 
 // How far the approval card reaches up over the map (matches `!-mt-14`).
 const DOCK_PX = 56;
+// The experiment panel over the map (w-[22rem]).
+const PANEL_PX = 352;
 
 export default function ResearchMap({ app, aside }: { app: string; aside?: React.ReactNode }) {
 	const { data } = useResearchData(app);
@@ -481,8 +529,21 @@ export default function ResearchMap({ app, aside }: { app: string; aside?: React
 		setPIndex((i) => Math.max(0, Math.min(i, pending.length - 2)));
 		setSelected(null);
 	};
+	// Clicking an experiment (or one of its versions) opens its detail OVER the
+	// map, at the right edge; the camera frames the path in the space left.
+	const panelOpen = wide && !!selExp;
+	const mapWithPanel = (
+		<div className="relative min-w-0">
+			<MapCanvas app={app} exps={exps} proposals={pending} selected={selected} onSelect={setSelected} grow={grow}
+				insetBottom={pending.length ? DOCK_PX : 0} insetRight={panelOpen ? PANEL_PX + 12 : 0} tall={panelOpen} />
+			{panelOpen && (
+				<ExperimentDetail key={selExp!.id} app={app} e={selExp!} panel onClose={() => setSelected(null)}
+					style={{ bottom: pending.length ? DOCK_PX + 12 : 12 }} />
+			)}
+		</div>
+	);
 	const selProposalIdx = selKind === "sug" ? pending.findIndex((p) => `sug:${p.id}` === selected) : -1;
-	const updated = new Date(data.asOf).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+	const updated = new Date(data.asOf).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
 
 	return (
 		<section aria-label="Research" className={cn("space-y-2", grow && "lumen-hero-in")}>
@@ -493,17 +554,16 @@ export default function ResearchMap({ app, aside }: { app: string; aside?: React
 				{live && <span className="inline-flex items-center gap-1 rounded-md bg-plum-50 px-1.5 py-px text-nano font-medium text-plum-700"><span className="h-1.5 w-1.5 rounded-full bg-plum-500 animate-lumen-breathe" aria-hidden />Live</span>}
 				<span className="hidden min-w-0 truncate text-micro text-ink-600 xl:inline">what it is exploring, and what to try next</span>
 				<span className="ml-auto min-w-0 truncate whitespace-nowrap font-mono text-nano uppercase tracking-wider text-ink-600">{mapSummary(exps, pending)}</span>
+				<span className="hidden whitespace-nowrap font-mono text-nano text-ink-600 md:inline" title="When this was read">· {updated}</span>
 			</div>
 			{wide ? (
 				aside ? (
 					// The map and Compute share one row: same top, same height.
 					<div className="grid grid-cols-[minmax(0,1fr)_19rem] gap-4 items-stretch">
-						<MapCanvas app={app} exps={exps} proposals={pending} selected={selected} onSelect={setSelected} grow={grow} insetBottom={pending.length ? DOCK_PX : 0} />
+						{mapWithPanel}
 						<div className="min-h-0 relative"><div className="absolute inset-0">{aside}</div></div>
 					</div>
-				) : (
-					<MapCanvas app={app} exps={exps} proposals={pending} selected={selected} onSelect={setSelected} grow={grow} insetBottom={pending.length ? DOCK_PX : 0} />
-				)
+				) : mapWithPanel
 			) : (
 				<ResearchList app={app} exps={exps} onPick={setSelected} />
 			)}
@@ -511,11 +571,12 @@ export default function ResearchMap({ app, aside }: { app: string; aside?: React
 				// Docked over the foot of the space, the way Novix's approval card sits.
 				<div className={cn("relative z-10", wide && "!-mt-14 mx-5")}>
 					<ApprovalCard app={app} list={pending} index={selProposalIdx >= 0 ? selProposalIdx : Math.min(pIndex, pending.length - 1)}
-						onIndex={showProposal} onDone={dismiss} />
+						onIndex={showProposal} onDone={dismiss}
+						// An open experiment panel has the reader's attention: the card folds to its title.
+						folded={panelOpen} onUnfold={() => setSelected(null)} />
 				</div>
 			)}
-			{selExp && <ExperimentDetail app={app} e={selExp} />}
-			<div className="font-mono text-nano text-ink-600">[{updated}] {mapSummary(exps, pending)} · research tree</div>
+			{selExp && !wide && <ExperimentDetail app={app} e={selExp} />}
 		</section>
 	);
 }
