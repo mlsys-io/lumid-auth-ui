@@ -117,6 +117,40 @@ export function versionsToRun(e: MeExperiment): { ids: string[]; untried: boolea
 	return untried.length ? { ids: untried, untried: true } : { ids: declared, untried: false };
 }
 
+/** One batch of runs the Run button queued, read back from the app's queue:
+ *  each run's state, and the batch in words. Rows are matched by the intent
+ *  ids the enqueue returned (a queue row's req_id is "<intent>:<n>"). */
+export type BatchRunState = "waiting" | "running" | "done" | "failed";
+export interface BatchProgress {
+	runs: Array<{ label: string; state: BatchRunState }>;
+	waiting: number; running: number; done: number; failed: number;
+	finished: boolean; lastError: string | null; text: string;
+}
+export function batchProgress(rows: Array<{ req_id: string; state: string; branch_label?: string | null; last_error?: string | null }>, intents: string[], labels: string[]): BatchProgress {
+	const runs = intents.map((id, i) => {
+		const row = rows.find((r) => r.req_id === id || r.req_id.startsWith(`${id}:`));
+		const st = (row?.state || "").toLowerCase();
+		const state: BatchRunState = /^(done|succeeded|success|completed)$/.test(st) ? "done"
+			: /^(failed|error|cancelled|canceled|dead)$/.test(st) ? "failed"
+			: /^(running|claimed|dispatched|started|in_progress)$/.test(st) ? "running" : "waiting";
+		return { label: labels[i] ?? row?.branch_label ?? id, state, err: row?.last_error || null };
+	});
+	const n = (s: BatchRunState) => runs.filter((r) => r.state === s).length;
+	const waiting = n("waiting"), running = n("running"), done = n("done"), failed = n("failed");
+	const total = runs.length;
+	const finished = total > 0 && waiting + running === 0;
+	const lastError = runs.find((r) => r.state === "failed" && r.err)?.err ?? null;
+	const runsWord = (k: number) => `${k} run${k === 1 ? "" : "s"}`;
+	const text = finished
+		? failed === 0 ? `All ${runsWord(total)} finished — results added.`
+			: done === 0 ? `${failed === 1 ? "The run" : `All ${runsWord(failed)}`} failed${lastError ? `: ${lastError}` : "."}`
+			: `${done} finished, ${failed} failed${lastError ? `: ${lastError}` : "."}`
+		: running > 0 ? `Running ${running} of ${total}${waiting ? ` · ${waiting} waiting` : ""}${done ? ` · ${done} done` : ""}`
+		: done > 0 ? `${done} of ${total} done · ${waiting} waiting for a free machine`
+		: `${runsWord(total)} queued — waiting for a free machine`;
+	return { runs: runs.map(({ label, state }) => ({ label, state })), waiting, running, done, failed, finished, lastError, text };
+}
+
 // ── a version (arm), in words ───────────────────────────────────────────
 
 export interface VersionInfo {

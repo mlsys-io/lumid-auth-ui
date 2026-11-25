@@ -72,6 +72,8 @@ type ChartProps = {
 	comparable?: boolean;
 	/** Results whose run named no version — left off the chart, and said so. */
 	unlabelledRuns?: number;
+	/** Each version's state, shown beside its name in the small charts ("trying"). */
+	tagOf?: (id: string) => { text: string; className: string } | null;
 };
 
 /** Versions measured differently get ONE SMALL CHART EACH, on its own scale:
@@ -251,43 +253,47 @@ function OneChart({ series, metricKey, unit, higherIsBetter = true, comparable =
 /** Versions measured differently, one compact row each on its own scale:
  *  name, where it stands now, and its average so far as a smooth line drawn at
  *  real pixels. The rows share one time axis (labelled once, under the last). */
-function SparkRows({ series, metricKey, unit, alreadyMeans = false, xRange }: ChartProps & { xRange: [number, number] }) {
+function SparkRows({ series, metricKey, unit, alreadyMeans = false, xRange, tagOf }: ChartProps & { xRange: [number, number] }) {
 	const wrapRef = useRef<HTMLDivElement>(null);
 	const W = useMeasuredWidth(wrapRef, 360);
-	const RH = 46, PL = 2, PR = 8;
+	// The high and low labels get their own bands above and below the line, so
+	// the line never runs through them.
+	const RH = 56, BAND = 12, PL = 2, PR = 8;
 	const fmt = (v: number) => fmtMetricValue(v, unit, metricKey);
 	const rows = useMemo(() => series.map((s, i) => ({ id: s.id, label: s.label, ci: i % 8, pts: runningAverages(s.points, alreadyMeans) })).filter((l) => l.pts.length > 0), [series, alreadyMeans]);
 	const span = Math.max(1, xRange[1] - xRange[0]);
 	const x = (t: number) => PL + ((t - xRange[0]) / span) * (W - PL - PR);
 	return (
-		<div ref={wrapRef} className="space-y-2.5">
+		<div ref={wrapRef} className="space-y-3">
 			{rows.map((l) => {
 				const vs = l.pts.slice(Math.min(3, l.pts.length - 1)).map((p) => p.avg);
-				const lo = Math.min(...vs), hi = Math.max(...vs), pad = (hi - lo) * 0.15 || Math.abs(hi) * 0.1 || 1;
-				const v0 = lo - pad, v1 = hi + pad;
-				const y = (v: number) => 4 + (1 - (Math.max(v0, Math.min(v1, v)) - v0) / (v1 - v0)) * (RH - 8);
+				const lo = Math.min(...vs), hi = Math.max(...vs);
+				const v0 = lo, v1 = hi > lo ? hi : lo + (Math.abs(lo) * 0.1 || 1);
+				const y = (v: number) => BAND + (1 - (Math.max(v0, Math.min(v1, v)) - v0) / (v1 - v0)) * (RH - 2 * BAND);
 				const xy = l.pts.map((p) => [x(p.t), y(p.avg)] as [number, number]);
 				const d = smoothPath(xy);
 				const last = l.pts[l.pts.length - 1];
-				const area = xy.length > 1 ? `${d}L${xy[xy.length - 1][0].toFixed(1)},${RH}L${xy[0][0].toFixed(1)},${RH}Z` : "";
+				const floor = RH - BAND + 2;
+				const area = xy.length > 1 ? `${d}L${xy[xy.length - 1][0].toFixed(1)},${floor}L${xy[0][0].toFixed(1)},${floor}Z` : "";
 				const gid = `spark-${l.id.replace(/[^a-zA-Z0-9_-]/g, "")}`;
+				const tag = tagOf?.(l.id);
 				return (
 					<figure key={l.id} className="space-y-0.5">
-						<figcaption className="flex items-baseline gap-2 text-micro">
-							<span className={cn("h-0.5 w-3 flex-shrink-0 self-center rounded-full", FILL[l.ci])} aria-hidden />
+						<figcaption className="flex items-center gap-1.5 text-micro">
+							<span className={cn("h-0.5 w-3 flex-shrink-0 rounded-full", FILL[l.ci])} aria-hidden />
 							<span className="min-w-0 truncate font-medium text-ink-800">{l.label}</span>
+							{tag && <span className={cn("flex-shrink-0 rounded-full border px-1.5 text-nano font-medium", tag.className)}>{tag.text}</span>}
 							<span className="ml-auto whitespace-nowrap font-mono tabular-nums text-ink-900">{fmt(last.avg)}</span>
-							<span className="whitespace-nowrap text-nano text-ink-600">avg of {last.n.toLocaleString()}</span>
 						</figcaption>
 						<svg width={W} height={RH} viewBox={`0 0 ${W} ${RH}`} className={cn("block max-w-full", TEXT[l.ci])} role="img"
 							aria-label={`${l.label}: average ${metricKey} over time, now ${fmt(last.avg)}; between ${fmt(lo)} and ${fmt(hi)}`}>
 							<defs><linearGradient id={gid} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="currentColor" stopOpacity={0.14} /><stop offset="100%" stopColor="currentColor" stopOpacity={0} /></linearGradient></defs>
-							<line x1={PL} x2={W - PR} y1={RH - 0.5} y2={RH - 0.5} className="stroke-ink-100" />
 							{area && <path d={area} fill={`url(#${gid})`} className="evo-area-in" />}
 							<path d={d} fill="none" pathLength={100} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" stroke="currentColor" className="evo-line-draw" />
 							<circle cx={xy[xy.length - 1][0]} cy={xy[xy.length - 1][1]} r={2.5} fill="currentColor" stroke="rgb(var(--card-rgb))" strokeWidth={1.25} className="evo-area-in" />
-							<text x={PL + 2} y={10} className="fill-ink-600 text-nano tabular-nums">{fmt(hi)}</text>
-							<text x={PL + 2} y={RH - 4} className="fill-ink-600 text-nano tabular-nums">{fmt(lo)}</text>
+							<text x={PL} y={BAND - 3} className="fill-ink-600 text-nano tabular-nums">high {fmt(hi)}</text>
+							<text x={PL} y={RH - 1} className="fill-ink-600 text-nano tabular-nums">low {fmt(lo)}</text>
+							<text x={W - PR} y={RH - 1} textAnchor="end" className="fill-ink-600 text-nano tabular-nums">avg of {last.n.toLocaleString()}</text>
 						</svg>
 					</figure>
 				);

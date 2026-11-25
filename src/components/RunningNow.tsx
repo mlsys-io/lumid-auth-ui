@@ -6,11 +6,13 @@
 //   ┌ 21:09   17 min ago ┐ ┌ 21:12  3 min ago ┐
 //   │ Backtest · Quant…  │ │ lumid-data job   │   ← tiles, 2 per row
 //   │ backtesting…       │ │ Running…         │
-//   │ ▮▮▮▮▮▯▯▯▯▯▯▯       │ │ ▮▮▯▯▯▯▯▯▯▯▯▯     │
-//   └╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┘ └╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┘   ← dashed = free slots;
-//                                                  the first says what starts next
+//   │ ■■■■■□□□□□□□□□     │ │ ■■□□□□□□□□□□□□   │   ← two rows of squares:
+//   │ ■■■■□□□□□□□□□□     │ │ □□□□□□□□□□□□□□   │     progress, one per step
+//   └────────────────────┘ └──────────────────┘
+//   ┌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┐ ┌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┐   ← dashed boxes = free slots
+//   └╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┘ └╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┘     (the first says what starts next)
 //   ⌄ Done                             [12]
-//   ▪ Backtest                                   (bordered rows; failed says so)
+//   ┌ ▪ Backtest                       3m ago ┐  (one box per run; failed says so)
 //
 // Global: every app's runs (the current app's first), plus lum.id/data jobs.
 // Sources: runs feed + SSE (useRunsFeed), data jobs (15 s poll), the app's
@@ -88,7 +90,12 @@ function JobTile({ job, now }: { job: Job; now: number }) {
 // Novix's running tile: start time + how long ago, a two-line title, the
 // current action in italics (shining while live), and a strip of cells.
 
-const CELLS = 24;
+// Novix's progress: two rows of small squares, one per step (or per share of
+// the usual time), done ones in mixed shades so it reads as work, not a bar.
+const CELLS = 28;
+const DONE_SHADE = ["bg-lagoon-300", "bg-lagoon-200", "bg-lagoon-400", "bg-lagoon-200", "bg-lagoon-300", "bg-lagoon-400", "bg-lagoon-200"];
+const shade = (i: number) => DONE_SHADE[(i * 3 + (i >> 2)) % DONE_SHADE.length];
+const CELL_GRID = "grid grid-cols-[repeat(14,minmax(0,1fr))] gap-[2px]";
 const hhmm = (sec: number) => new Date(sec * 1000).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
 function minsAgo(sec: number, now: number): string {
 	const m = Math.max(0, Math.round((now - sec) / 60));
@@ -101,14 +108,14 @@ function Tile({ to, label, startedAt, now, live, title, action, cells, late }: {
 }) {
 	return (
 		<Link to={to} aria-label={label} data-tile="run"
-			className={cn("group flex h-[92px] min-w-0 flex-col rounded-lg border bg-card px-2.5 pb-2 pt-1.5 shadow-e1 animate-lumen-rise transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:shadow-e2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+			className={cn("group flex h-[118px] min-w-0 flex-col rounded-lg border bg-card px-2.5 pb-2 pt-1.5 shadow-e1 animate-lumen-rise transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:shadow-e2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
 				late ? "border-ember-200" : "border-ink-200 hover:border-lagoon-300")}>
 			<div className="flex items-center gap-1.5 font-mono text-nano tabular-nums text-ink-600">
 				<span className={cn("h-1.5 w-1.5 flex-shrink-0 rounded-full", late ? "bg-ember-500" : "bg-lagoon-500", live && "animate-lumen-breathe")} aria-hidden />
 				<span className="text-ink-800">{hhmm(startedAt)}</span>
 				<span className="ml-auto truncate">{minsAgo(startedAt, now)}</span>
 			</div>
-			<div className="mt-0.5 line-clamp-2 text-caption font-medium leading-snug text-ink-900">{title}</div>
+			<div className="mt-1 line-clamp-2 text-caption font-medium leading-snug text-ink-900">{title}</div>
 			<div className="mt-0.5 truncate text-micro italic text-ink-600">{action}</div>
 			<div className="mt-auto">{cells}</div>
 		</Link>
@@ -121,10 +128,10 @@ function ProgressCells({ p, elapsed, late }: { p: number | null; elapsed: number
 	const done = p != null ? Math.min(CELLS - 1, Math.floor(p * CELLS)) : Math.min(CELLS - 1, Math.floor(elapsed / 60));
 	const tip = p != null ? `About ${Math.round(Math.min(1, p) * 100)}% of its usual time` : "One cell per minute so far";
 	return (
-		<div className="grid grid-cols-12 gap-[2px]" title={tip} aria-hidden>
+		<div className={CELL_GRID} title={tip} aria-hidden>
 			{Array.from({ length: CELLS }, (_, i) => (
-				<span key={i} className={cn("h-[5px] rounded-[1px]",
-					i < done ? (late ? "bg-ember-200" : i % 3 === 1 ? "bg-lagoon-200" : "bg-lagoon-300")
+				<span key={i} className={cn("aspect-square rounded-[2px]",
+					i < done ? (late ? "bg-ember-200" : shade(i))
 						: i === done ? (late ? "bg-ember-500 animate-lumen-breathe" : "bg-lagoon-500 animate-lumen-breathe")
 							: "bg-ink-100")} />
 			))}
@@ -136,10 +143,10 @@ function ProgressCells({ p, elapsed, late }: { p: number | null; elapsed: number
 function StepCells({ est }: { est: StepEstimate }) {
 	const steps = est.steps.slice(0, CELLS);
 	return (
-		<div className="grid grid-cols-12 gap-[2px]" aria-hidden>
+		<div className={CELL_GRID} aria-hidden>
 			{steps.map((st, i) => (
 				<span key={i} title={`${st.stage ? st.stage + " · " : ""}${st.name}`}
-					className={cn("h-[5px] rounded-[1px]", st.state === "done" ? "bg-lagoon-300" : st.state === "now" ? "bg-lagoon-500 animate-lumen-breathe" : "bg-ink-100")} />
+					className={cn("aspect-square rounded-[2px]", st.state === "done" ? shade(i) : st.state === "now" ? "bg-lagoon-500 animate-lumen-breathe" : "bg-ink-100")} />
 			))}
 		</div>
 	);
@@ -195,7 +202,6 @@ function usePoll<T>(fn: () => Promise<T>, everyMs: number, key: string, enabled 
 	return data;
 }
 
-const appName = (a?: string) => (a || "").replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
 export default function RunningNow({ app, runs = true, jobs = true }: { app?: string; runs?: boolean; jobs?: boolean }) {
 	const feed = useRunsFeed(FEED_DAYS);
@@ -218,16 +224,16 @@ export default function RunningNow({ app, runs = true, jobs = true }: { app?: st
 	// first answer immediately contradicts.
 	if (runs && feed.runs === null && activeJobs.length === 0) return null;
 
-	// Tiles only for what is running (≤4; more → a "+N" tile). An odd count
-	// fills its last cell with the free slot; otherwise the slot is one slim line.
-	const room = 4;
+	// Novix's grid: one box per running job, free slots as dashed boxes — a
+	// row of two while one or nothing runs, two rows of two once more do; more
+	// than fit → a "+N" box.
+	const room = total <= 1 ? 2 : 4;
 	const overflow = total > room;
 	const fit = overflow ? room - 1 : room;
 	const shownRuns = running.slice(0, fit);
 	const shownJobs = activeJobs.slice(0, Math.max(0, fit - shownRuns.length));
 	const more = total - shownRuns.length - shownJobs.length;
-	const cells = shownRuns.length + shownJobs.length + (overflow ? 1 : 0);
-	const slotInGrid = cells % 2 === 1;
+	const freeSlots = Math.max(0, room - shownRuns.length - shownJobs.length - (overflow ? 1 : 0));
 	const next = queue ? queueItems(queue.rows as QueueRow[]).waiting : [];
 	const finished = (feed.runs || []).filter((r) => r.state === "succeeded" || r.state === "failed")
 		.sort((a, b) => (b.started_at || 0) - (a.started_at || 0));
@@ -242,23 +248,24 @@ export default function RunningNow({ app, runs = true, jobs = true }: { app?: st
 		<section aria-label="Running now" className="mb-3 space-y-1.5">
 			<Heading label="Running" count={total} collapsed={runCollapsed} onToggle={toggleRun}
 				title={mLine ? `Machines: ${mLine}` : undefined} />
-			{!runCollapsed && cells > 0 && (
+			{!runCollapsed && (
 				<div className="grid grid-cols-2 gap-2">
 					{shownRuns.map((it) => <RunTile key={it.run.run_id} item={it} now={now} showApp={!app || it.run.app !== app} />)}
 					{shownJobs.map((j) => <JobTile key={j.job_id} job={j} now={now} />)}
 					{overflow && (
-						<Link to={allHref} className="flex h-[92px] flex-col items-center justify-center gap-1 rounded-lg border border-ink-200 bg-muted/40 text-caption text-ink-700 transition-colors hover:bg-muted">
+						<Link to={allHref} className="flex h-[118px] flex-col items-center justify-center gap-1 rounded-lg border border-ink-200 bg-muted/40 text-caption text-ink-700 transition-colors hover:bg-muted">
 							<span className="font-mono text-title tabular-nums text-ink-900">+{more}</span>
 							<span className="inline-flex items-center gap-1">more running <ArrowRight className="h-3 w-3" /></span>
 						</Link>
 					)}
-					{slotInGrid && (
-						<div data-slot="next" className="flex h-[92px] flex-col justify-end rounded-lg border border-dashed border-ink-200 p-2.5 text-micro leading-snug">{slotText}</div>
-					)}
+					{Array.from({ length: freeSlots }, (_, i) => (
+						// The first free slot says what starts next (or that runs start here).
+						<div key={`free${i}`} data-slot={i === 0 ? "next" : "free"}
+							className="flex h-[118px] flex-col justify-end rounded-lg border border-dashed border-ink-200 p-2.5 text-micro leading-snug">
+							{i === 0 ? slotText : null}
+						</div>
+					))}
 				</div>
-			)}
-			{!runCollapsed && !slotInGrid && (
-				<div data-slot="next" className="truncate rounded-lg border border-dashed border-ink-200 px-2.5 py-1.5 text-micro">{slotText}</div>
 			)}
 			{finished.length > 0 && (
 				<>
@@ -266,7 +273,7 @@ export default function RunningNow({ app, runs = true, jobs = true }: { app?: st
 						<Heading label="Done" count={finished.length} collapsed={doneCollapsed} onToggle={toggleDone} title="Finished in the last day" />
 					</div>
 					{!doneCollapsed && (
-						<ul className="divide-y divide-ink-100 overflow-hidden rounded-lg border border-ink-200 bg-card">
+						<ul className="space-y-1.5">
 							{done.map((r) => {
 								const ok = r.state === "succeeded";
 								const loop = loopOfRun(r);
@@ -275,10 +282,10 @@ export default function RunningNow({ app, runs = true, jobs = true }: { app?: st
 									<li key={r.run_id}>
 										<Link to={runPath(r.app || "", loop, r.run_id)}
 											title={`${ok ? "Succeeded" : "Failed"}${r.duration_s ? ` · took ${fmtDuration(r.duration_s)}` : ""}`}
-											className="flex h-8 min-w-0 items-center gap-2 px-2.5 text-caption transition-colors hover:bg-muted/50">
+											className="flex h-9 min-w-0 items-center gap-2 rounded-lg border border-ink-200 bg-card px-2.5 text-caption transition-colors hover:border-ink-300 hover:bg-muted/40">
 											<span className={cn("h-1.5 w-1.5 flex-shrink-0 rounded-[1px]", ok ? "bg-gold-400" : "bg-brick-500")} aria-hidden />
 											<span className="min-w-0 truncate text-ink-800">
-												{loopLabel("", loop)}{other && <span className="text-ink-600"> · {appName(r.app)}</span>}
+												{loopLabel("", loop)}{other && <span className="text-ink-600"> · {appTitle(r.app || "")}</span>}
 											</span>
 											{!ok && <span className="flex-shrink-0 text-micro text-brick-700">failed</span>}
 											<span className="ml-auto flex-shrink-0 font-mono text-nano tabular-nums text-ink-600">{fmtAgo(r.started_at)}</span>

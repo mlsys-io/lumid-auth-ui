@@ -2,7 +2,7 @@
 // Fixtures are trimmed copies of real lum.id experiments (2026-11-24).
 import type { MeExperiment } from "@/api/me";
 import { appPages, pageHref } from "./app-pages";
-import { humanId, experimentStatus, versionsOf, criteriaInWords, buildResearchTree, pathTo, mapSummary, comparabilityNote, suggestionParent, experimentLoop, versionsToRun, proposalCheck, shortStatus, type Proposal } from "./research-map";
+import { humanId, experimentStatus, versionsOf, criteriaInWords, buildResearchTree, pathTo, mapSummary, comparabilityNote, suggestionParent, experimentLoop, versionsToRun, proposalCheck, shortStatus, batchProgress, type Proposal } from "./research-map";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -145,6 +145,22 @@ export function run(): number {
 	}
 	return failed;
 }
+check("batchProgress reads a queued batch back in words", () => {
+	const rows = [
+		{ req_id: "a:0", state: "done", branch_label: "llm_1_7b" },
+		{ req_id: "b:0", state: "running", branch_label: "llm_0_6b" },
+	];
+	const p = batchProgress(rows, ["a", "b", "c"], ["1.7B", "0.6B", "4B"]);
+	eq(p.runs.map((r) => r.state).join(","), "done,running,waiting");
+	eq(p.text, "Running 1 of 3 · 1 waiting · 1 done");
+	eq(p.finished, false);
+	const q = batchProgress([{ req_id: "a:0", state: "done" }, { req_id: "b:0", state: "failed", last_error: "no GPU" }], ["a", "b"], ["x", "y"]);
+	eq(q.finished, true);
+	eq(q.text, "1 finished, 1 failed: no GPU");
+	eq(batchProgress([], ["a"], ["x"]).text, "1 run queued — waiting for a free machine");
+	eq(batchProgress([{ req_id: "a:0", state: "done" }], ["a"], ["x"]).text, "All 1 run finished — results added.");
+});
+
 check("shortStatus keeps the first clause", () => {
 	const e = { id: "kol_alpha", n_results: 10, comparable: false, instruments: 18 } as unknown as MeExperiment;
 	eq(shortStatus(e).text, "Can't compare yet");
