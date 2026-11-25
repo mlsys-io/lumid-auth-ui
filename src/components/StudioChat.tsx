@@ -7,6 +7,7 @@
 // EventSource can't POST). Conversation history persists in
 // sessionStorage so navigating between Studio pages keeps context.
 
+import { modelShortLabel } from "@/lib/model-label";
 import { Fragment, memo, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { markChatMounted, drainAsk } from "@/components/chat/askBus";
 import { createPortal } from 'react-dom';
@@ -3517,19 +3518,6 @@ function connectHintFor(text: string): ('google' | 'microsoft') | null {
 	return null;
 }
 
-// modelShortLabel — pulls a 7-char label from a model id for the
-// "auto: <model>" pill. Avoids the full display name overflowing.
-function modelShortLabel(id: string): string {
-	if (id === 'claude-code-opus') return 'Opus';
-	if (id === 'claude-code-sonnet') return 'Sonnet';
-	// id is historical (see me_agent.go) — it now serves DeepSeek-V4.1-Flash on
-	// the in-house fleet, not Gemma-4 (and not Qwen3.8, which it served in between).
-	if (id === 'kvrun-gemma4') return 'DeepSeek';
-	if (id === 'kvrun-minimax') return 'MiniMax';
-	if (id === 'claude-haiku') return 'Haiku';
-	return id.length > 10 ? id.slice(0, 10) + '…' : id;
-}
-
 // ─── Header context chips + icon buttons ──────────────────────────
 //
 //   ModelChip          → inline pill next to "Just ask" in the title.
@@ -3583,7 +3571,7 @@ function ModelChip({
 				title="Choose the AI model"
 			>
 				<Cpu className="w-3 h-3 flex-shrink-0 opacity-70" />
-				<span className="truncate max-w-[120px]">{current ? modelShortLabel(current.id) : (model || 'Model')}</span>
+				<span className="truncate max-w-[160px]">{current ? modelShortLabel(current) : (model || 'Model')}</span>
 				{groundApp && !modelHasAppTools(current) && (
 					<AlertTriangle className="w-3 h-3 flex-shrink-0 text-ember-600" />
 				)}
