@@ -344,6 +344,8 @@ function MapCanvas({ app, exps, proposals, selected, onSelect, grow, insetBottom
 	const height = tall ? Math.max(fit, 600) : fit;
 	return (
 		<Space3D nodes={tree.nodes} edges={tree.edges} renderCard={renderCard} renderDot={renderDot} describe={describe} edgeClass={edgeClass}
+			// Experiments already show an overview panel: hovering lights it up.
+			hoverCard={(n) => !(n.kind === "experiment" && n.depth === 1)}
 			selected={selected} lit={lit} grow={grow} order={order} height={height} evidence={evidence} insetBottom={insetBottom} insetRight={insetRight}
 			// A workflow node opens that workflow; everything else selects in place.
 			onSelect={(id) => (id?.startsWith("wf:") ? navigate(workflowPath(app, id.slice(3))) : onSelect(id))} />
