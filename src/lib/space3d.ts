@@ -83,11 +83,8 @@ export function layoutSpace(nodes: MapNode[]): Map<string, Vec3> {
 	const kids = new Map<string, MapNode[]>();
 	for (const n of nodes) if (n.parent) kids.set(n.parent, [...(kids.get(n.parent) ?? []), n]);
 	const roots = nodes.filter((n) => !n.parent);
-	// Workflows sit on their own small ring ABOVE the app (they produce the
-	// evidence); the experiment ring is laid out without them.
-	const isWf = (n: MapNode) => n.kind === "workflow";
-	for (const [k, ch] of kids) kids.set(k, ch.filter((c) => !isWf(c)));
-	const wfs = nodes.filter(isWf);
+	// Workflows are the first ring (2026-11-25): they ARE the tree's first
+	// layer now, with experiments, variants and child nodes under each.
 	const ring1 = roots.flatMap((r) => kids.get(r.id) ?? []).length;
 	const R1 = firstRing(ring1);
 	const radius = (d: number) => (d <= 0 ? 0 : R1 + (d - 1) * STEP);
@@ -108,14 +105,15 @@ export function layoutSpace(nodes: MapNode[]): Map<string, Vec3> {
 		}
 		// Deeper: a column centred on the parent's height, nudged around the
 		// bearing and in or out so it reads as a loose fan rather than a wall.
+		// A workflow's children (experiments, variants, nodes) fan wider: they
+		// are whole branches, not leaves.
+		const spread = n.depth === 1 ? Math.min(0.14, 0.9 / ch.length) : 0.025;
 		ch.forEach((c, j) => {
 			const k = j - (ch.length - 1) / 2;
-			place(c, theta + k * 0.025 + jit(c.id, 4) * 0.05, y + k * ROW + jit(c.id, 5) * 10, rf, jit(c.id, 6) * 36);
+			place(c, theta + k * spread + jit(c.id, 4) * 0.05, y + k * ROW * (n.depth === 1 ? 0.7 : 1) + jit(c.id, 5) * 10, rf, jit(c.id, 6) * 36);
 		});
 	};
 	roots.forEach((r, i) => place(r, (i / Math.max(1, roots.length)) * 2 * Math.PI, 0));
-	const rw = Math.max(150, R1 * 0.62);
-	wfs.forEach((w, i) => { pos.set(w.id, at((i / wfs.length) * 2 * Math.PI + Math.PI / wfs.length, rw, -170)); });
 	return pos;
 }
 

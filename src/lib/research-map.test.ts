@@ -53,17 +53,50 @@ check("done-when in words", () => {
 	eq(criteriaInWords(""), "");
 });
 const props: Proposal[] = [{ id: "symbol_over_signal", hypothesis: "h", est_runs: 40 }, { id: "kol_alpha", hypothesis: "dup" }];
-check("tree: app → experiments → versions, suggestions dashed, accepted ones not repeated", () => {
-	const t = buildResearchTree("quant-research", [kol, won], props);
-	eq(t.nodes.filter((n) => n.kind === "experiment").length, 2);
-	eq(t.nodes.filter((n) => n.kind === "version").length, 5);
-	eq(t.nodes.filter((n) => n.kind === "suggested").map((n) => n.ref), ["symbol_over_signal"]);
+// The quant app as it reads (trimmed): 4 research workflows, helpers that fold.
+const qrWfs = [
+	{ id: "backtest" }, { id: "backtest_poll", parent: "backtest", helper: true },
+	{ id: "kol_strategy" }, { id: "kol_poll", parent: "kol_strategy", helper: true },
+	{ id: "harvest_outbox", helper: true }, { id: "analyze", helper: true },
+	{ id: "short_window", parent: "backtest", node: "windows" }, { id: "long_window", parent: "backtest", node: "windows" },
+	{ id: "short_window_2", parent: "short_window" },
+];
+const qrNodes = [{ id: "windows", title: "Window sweeps", parent: "backtest" }];
+const kolOnLoop = { ...kol, dispatch: { loop: "kol_strategy" }, loops: ["kol_strategy", "kol_poll"] } as unknown as MeExperiment;
+check("tree: app → workflows → experiments → versions; suggestions on their workflow", () => {
+	const t = buildResearchTree("quant-research", [kolOnLoop, won], [{ id: "symbol_over_signal", hypothesis: "h", dispatch_loop: "kol_strategy" }, { id: "kol_alpha", hypothesis: "dup" }], qrWfs, qrNodes);
+	eq(t.nodes.filter((n) => n.kind === "workflow" && n.depth === 1).map((n) => n.ref), ["backtest", "kol_strategy"]);
+	eq(t.nodes.find((n) => n.id === "exp:kol_alpha")?.parent, "wf:kol_strategy");
+	eq(t.nodes.find((n) => n.id === "exp:kol_alpha")?.depth, 2);
+	eq(t.nodes.find((n) => n.id === "ver:kol_alpha:musk_v1")?.depth, 3);
+	eq(t.nodes.find((n) => n.id === "exp:readability_lift")?.parent, "app:quant-research"); // its workflow isn't drawn
+	eq(t.nodes.filter((n) => n.kind === "suggested").map((n) => [n.ref, n.parent]), [["symbol_over_signal", "wf:kol_strategy"]]);
 	eq(t.edges.find((e) => e.target === "sug:symbol_over_signal")?.dashed, true);
 });
+check("tree: helpers fold; parentless helpers gather in Other workflows", () => {
+	const t = buildResearchTree("q", [], [], qrWfs, qrNodes);
+	eq(t.nodes.some((n) => n.ref === "backtest_poll" || n.ref === "kol_poll"), false);
+	eq(t.nodes.find((n) => n.id === "node:__other")?.depth, 1);
+	eq(t.nodes.some((n) => n.ref === "harvest_outbox"), false);
+});
+check("tree: a node holds the variants moved into it; variants nest; edges say 'variant'", () => {
+	const t = buildResearchTree("q", [], [], qrWfs, qrNodes);
+	const at = (id: string) => { const n = t.nodes.find((x) => x.id === id)!; return [n.parent, n.depth]; };
+	eq(at("node:windows"), ["wf:backtest", 2]);
+	eq(at("wf:short_window"), ["node:windows", 3]);
+	eq(at("wf:long_window"), ["node:windows", 3]);
+	eq(at("wf:short_window_2"), ["wf:short_window", 4]);
+	eq(t.edges.find((e) => e.target === "wf:short_window_2")?.label, "variant");
+});
+check("tree: cycles and unknown parents fall back to the app", () => {
+	const t = buildResearchTree("q", [], [], [{ id: "a" }, { id: "b", parent: "ghost" }], [{ id: "n1", title: "N1", parent: "n2" }, { id: "n2", title: "N2", parent: "n1" }]);
+	eq(t.nodes.find((n) => n.id === "wf:b")?.parent, "app:q");
+	for (const id of ["node:n1", "node:n2"]) if (!(t.nodes.find((n) => n.id === id)!.depth >= 1)) throw new Error(id);
+});
 check("path: root to a version, and an experiment lights its versions", () => {
-	const t = buildResearchTree("qr", [kol], []);
-	eq([...pathTo(t.nodes, "ver:kol_alpha:musk_v1")].sort(), ["app:qr", "exp:kol_alpha", "ver:kol_alpha:musk_v1"]);
-	eq(pathTo(t.nodes, "exp:kol_alpha").size, 5);
+	const t = buildResearchTree("qr", [kolOnLoop], [], [{ id: "kol_strategy" }]);
+	eq([...pathTo(t.nodes, "ver:kol_alpha:musk_v1")].sort(), ["app:qr", "exp:kol_alpha", "ver:kol_alpha:musk_v1", "wf:kol_strategy"]);
+	eq(pathTo(t.nodes, "exp:kol_alpha").size, 6); // app, workflow, experiment, 3 versions
 });
 check("comparability note says what differed and what to do", () => {
 	eq(comparabilityNote({ ...kol, compare_within: ["harness_version"] } as MeExperiment), "They differ in harness version, so a gap between them may come from the setup rather than the version. To compare them, run every version under the same setup.");
@@ -74,23 +107,11 @@ check("status: enough results but no leader is 'too close to call'", () => {
 		min_samples: 12, arms: [{ id: "current" }, { id: "rewritten" }], variants: { current: { n: 108, mean: 3.13 }, rewritten: { n: 101, mean: 3.13 } } } as unknown as MeExperiment;
 	eq(experimentStatus(doc).text, "Enough results — too close to call so far");
 });
-check("a suggestion hangs off the experiment it extends (2 of loop/dataset/metric)", () => {
+check("a suggestion's closest experiment (2 of loop/dataset/metric)", () => {
 	const e1 = { ...kol, id: "kol_alpha", dispatch: { loop: "kol_strategy" }, loops: ["kol_strategy"], dataset_id: "musk_tweets_v1" } as unknown as MeExperiment;
 	const e2 = { ...won, id: "backtest_evidence", dispatch: { loop: "backtest" }, dataset_id: "tape_covered_v1", metric: { name: "real_tape" } } as unknown as MeExperiment;
 	eq(suggestionParent({ id: "s1", dispatch_loop: "backtest", dataset_id: "tape_covered_v1" }, [e1, e2]), "backtest_evidence");
 	eq(suggestionParent({ id: "s2", dispatch_loop: "backtest" }, [e1, e2]), null);
-	const t = buildResearchTree("qr", [e1, e2], [{ id: "s1", dispatch_loop: "backtest", dataset_id: "tape_covered_v1" }]);
-	const sug = t.nodes.find((n) => n.id === "sug:s1")!;
-	eq([sug.parent, sug.depth], ["exp:backtest_evidence", 2]);
-	eq(t.edges.find((e) => e.target === "sug:s1")?.label, "suggested next");
-});
-check("forked_from draws experiment → experiment, deeper", () => {
-	const child = { ...won, id: "readability_v2", forked_from: "readability_lift" } as unknown as MeExperiment;
-	const t = buildResearchTree("doc", [child, won], []);
-	const n = t.nodes.find((x) => x.id === "exp:readability_v2")!;
-	eq([n.parent, n.depth], ["exp:readability_lift", 2]);
-	eq(t.edges.find((e) => e.target === "exp:readability_v2")?.label, "forked from");
-	eq(t.nodes.find((x) => x.id === "ver:readability_v2:plain_style")?.depth, 3);
 });
 check("runs started by hand, no version run: say so, not 'records no results'", () => {
 	eq(experimentStatus({ ...fresh, unrecorded: true } as MeExperiment).text, "None of its versions has run yet");
@@ -107,6 +128,7 @@ check("summary line counts only versions that actually ran", () => {
 	eq(mapSummary([kol, won], props), "2 experiments · 5 versions tried · 1 suggested");
 	eq(mapSummary([fresh], []), "1 experiment · 2 versions, none tried yet");
 	eq(mapSummary([kol, fresh], []), "2 experiments · 3 of 5 versions tried");
+	eq(mapSummary([kolOnLoop], [], qrWfs), "2 workflows · 3 variants · 1 experiment");
 });
 
 check("proposal check in words", () => {
@@ -121,17 +143,6 @@ check("app pages always lead with the home", () => {
 	eq(appPages([{ surface: "home", label: "Work" }, { surface: "workflows" }]).map((t) => t.label), ["Work", "workflows"]);
 	eq(pageHref("quant-research", appPages([])[0], true), "/studio/apps/quant-research");
 	eq(pageHref("q", { surface: "data", label: "Data", home: false }, true), "/studio/apps/q?surface=data");
-});
-
-check("workflows feed experiments (opt-in)", () => {
-	const exps = [{ id: "kol_alpha", dispatch: { loop: "kol_strategy" }, loops: ["kol_strategy", "kol_poll"] }, { id: "bt", dispatch: { loop: "backtest" } }] as unknown as MeExperiment[];
-	const plain = buildResearchTree("q", exps, []);
-	eq(plain.nodes.some((n) => n.kind === "workflow"), false);
-	const t = buildResearchTree("q", exps, [], { workflows: true });
-	// "bt" names a dispatch loop that isn't attached: nothing feeds it (the
-	// "Can't start" case), so no "feeds" link is drawn for it.
-	eq(t.nodes.filter((n) => n.kind === "workflow").map((n) => n.ref).sort(), ["kol_poll", "kol_strategy"]);
-	eq(t.edges.filter((e) => e.label === "feeds").length, 2);
 });
 
 export function run(): number {
