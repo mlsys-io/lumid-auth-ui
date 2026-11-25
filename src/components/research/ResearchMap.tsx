@@ -74,17 +74,18 @@ function useResearchData(app: string) {
 	return { data, reload: load };
 }
 
-function useWide(): boolean {
-	const q = "(min-width: 640px)";
-	const [wide, setWide] = useState(() => typeof window === "undefined" || window.matchMedia(q).matches);
+function useMedia(q: string): boolean {
+	const [on, setOn] = useState(() => typeof window === "undefined" || window.matchMedia(q).matches);
 	useEffect(() => {
 		const m = window.matchMedia(q);
-		const h = () => setWide(m.matches);
+		const h = () => setOn(m.matches);
+		h();
 		m.addEventListener("change", h);
 		return () => m.removeEventListener("change", h);
-	}, []);
-	return wide;
+	}, [q]);
+	return on;
 }
+const useWide = () => useMedia("(min-width: 640px)");
 
 // ── nodes ─────────────────────────────────────────────────────────────────
 
@@ -222,7 +223,7 @@ function MapCanvas({ app, exps, proposals, selected, onSelect, grow, insetBottom
 	insetBottom?: number;
 	/** Pixels the experiment panel covers at the right. */
 	insetRight?: number;
-	/** Room for the experiment panel: at least 560px tall. */
+	/** Room for the experiment panel: at least 600px tall. */
 	tall?: boolean;
 }) {
 	const running = useShellActivity()?.runningApps.includes(app) ?? false;
@@ -301,7 +302,7 @@ function MapCanvas({ app, exps, proposals, selected, onSelect, grow, insetBottom
 	const vh = useViewportHeight();
 	// …and to what's in it: a two-experiment space doesn't need a tall stage.
 	const fit = Math.round(Math.max(320, Math.min(600, vh - (proposals.length ? 470 : 400), 240 + tree.nodes.length * 16)));
-	const height = tall ? Math.max(fit, 560) : fit;
+	const height = tall ? Math.max(fit, 600) : fit;
 	return (
 		<Space3D nodes={tree.nodes} edges={tree.edges} renderCard={renderCard} renderDot={renderDot} describe={describe}
 			selected={selected} lit={lit} grow={grow} order={order} height={height} evidence={evidence} insetBottom={insetBottom} insetRight={insetRight}
@@ -362,7 +363,13 @@ function ExperimentDetail({ app, e, panel = false, onClose, style }: {
 	// against the experiment's own 122k for that version.
 	const isInferred = (x: { arm_inferred?: boolean }) => !!x.arm_inferred;
 	const unlabelledRuns = (series || []).filter((x) => isInferred(x as { arm_inferred?: boolean })).reduce((a, x) => a + x.points.length, 0);
-	const evo: EvoSeries[] = (series || []).filter((x) => !isInferred(x as { arm_inferred?: boolean }))
+	// Only this experiment's own declared versions: the server's series read
+	// has filled in runs of OTHER experiments on the same workflow (MLSys
+	// "SLA concurrency" drew sla_model_size's llm_1_7b as its best so far
+	// while saying none of its versions had run, 2026-11-25).
+	const declared = new Set(versions.map((v) => v.id));
+	const own = (x: { variant_id: string }) => declared.size === 0 || declared.has(x.variant_id);
+	const evo: EvoSeries[] = (series || []).filter((x) => !isInferred(x as { arm_inferred?: boolean }) && own(x))
 		.map((s) => ({ s, i: versions.findIndex((v) => v.id === s.variant_id) }))
 		.sort((a, b) => (a.i < 0 ? 99 : a.i) - (b.i < 0 ? 99 : b.i))
 		.map(({ s }) => ({
@@ -397,75 +404,112 @@ function ExperimentDetail({ app, e, panel = false, onClose, style }: {
 	const rawTarget = (e.metric as { target?: unknown } | undefined)?.target;
 	const target = typeof rawTarget === "number" && Number.isFinite(rawTarget) ? rawTarget : null;
 	const q = (e as { description?: string }).description;
-	return (
-		<div
-			role={panel ? "dialog" : undefined} aria-label={panel ? `Experiment: ${humanId(e.id)}` : undefined}
-			style={style}
-			className={panel
-				? "absolute right-3 top-12 z-[6100] w-[22rem] max-w-[48%] overflow-y-auto overscroll-contain rounded-xl border border-ink-200 bg-card/95 p-3.5 space-y-3 shadow-e3 backdrop-blur-sm map-panel-in"
-				: "rounded-xl border border-ink-200 bg-card p-3 space-y-2.5 animate-lumen-rise"}>
+	const spark = !(evolution && metric && e.comparable !== false) && evo.some((x) => x.points.length > 1) && !!metric;
+	const tagOf = (id: string) => { const v = versions.find((x) => x.id === id); return v ? { text: v.tag, className: TAG_CLS[v.tag] ?? TAG_CLS.current } : null; };
+	const note = comparabilityNote(e);
+
+	const head = (
+		<>
+			{panel && (
+				<div className="flex items-center gap-2">
+					<span className="eyebrow text-plum-700">Experiment</span>
+					<button type="button" onClick={onClose} aria-label="Close" title="Close (Esc)"
+						className="ml-auto -mr-1 inline-flex h-6 w-6 items-center justify-center rounded-md text-ink-600 hover:bg-ink-100 hover:text-ink-900">
+						<X className="h-3.5 w-3.5" />
+					</button>
+				</div>
+			)}
 			<div>
-				{panel && (
-					<div className="mb-1 flex items-center gap-2">
-						<span className="eyebrow text-plum-700">Experiment</span>
-						<button type="button" onClick={onClose} aria-label="Close" title="Close (Esc)"
-							className="ml-auto -mr-1 inline-flex h-6 w-6 items-center justify-center rounded-md text-ink-600 hover:bg-ink-100 hover:text-ink-900">
-							<X className="h-3.5 w-3.5" />
-						</button>
-					</div>
-				)}
 				<div className={cn("font-semibold text-ink-900", panel ? "text-title leading-snug" : "text-body")}>{humanId(e.id)}</div>
-				{q && <div className={cn("text-ink-700", panel ? "text-caption mt-0.5" : "text-meta")}>{q}</div>}
+				{q && <div title={q} className={cn("text-ink-700", panel ? "mt-0.5 line-clamp-2 text-caption" : "text-meta")}>{q}</div>}
 			</div>
-			<div className={cn("flex items-center gap-1.5 text-meta font-medium", TONE_TEXT[st.tone])}><span className={dot(st.tone)} />{st.text}</div>
-			{comparabilityNote(e) && <div className="text-caption text-ink-700">{comparabilityNote(e)}</div>}
-			<Wrap panel={panel}>
+			<div className={cn("flex items-start gap-1.5 font-medium leading-snug", panel ? "text-caption" : "text-meta", TONE_TEXT[st.tone])}>
+				<span className={cn(dot(st.tone), "mt-[0.4em] flex-shrink-0")} />{st.text}
+			</div>
+		</>
+	);
+	const chart = series === null ? (
+		<div className="h-24 lumen-skeleton rounded-lg" role="status" aria-label="Loading how it evolved" />
+	) : evolution && metric && e.comparable !== false ? (
+		// Comparable versions: Novix's best-so-far story on one axis.
+		<BestScoreChart evo={evolution} labelOf={labelOf} colorOf={colorOf} metricKey={metric} unit={m?.unit ?? ""}
+			higherIsBetter={hib} minSamples={Math.max(1, e.min_samples || 1)} target={target} />
+	) : spark ? (
+		// Measured differently: one small chart per version, never ranked. Each
+		// row names its version and state, so no separate version list follows.
+		<EvolutionChart series={evo} metricKey={metric!} unit={m?.unit ?? ""} higherIsBetter={hib} tagOf={tagOf}
+			comparable={false} unlabelledRuns={unlabelledRuns} alreadyMeans={!!seriesData?.runningMean} />
+	) : null;
+	// The versions in the order they were tried, each with its state — unless
+	// the spark rows above already name each one.
+	const chain = spark ? null : evolution ? (
+		<VersionChain chain={evolution.chain} labelOf={labelOf} valueOf={(v) => fmtMetricValue(v, m?.unit ?? "", metric || "")} />
+	) : (
+		<ul className="space-y-1">
+			{versions.map((v) => (
+				<li key={v.id} className="flex items-center gap-2 text-caption">
+					<span className="font-medium text-ink-900 min-w-0 truncate">{v.label}</span>
+					<span className={cn("px-1.5 rounded-full border text-nano font-medium flex-shrink-0", TAG_CLS[v.tag])}>{v.tag}</span>
+					<span className="ml-auto text-ink-600 tabular-nums truncate">{v.line}</span>
+				</li>
+			))}
+		</ul>
+	);
+	const about = (
+		<Wrap panel={panel}>
 			<dl className="grid gap-1 text-caption">
 				{e.hypothesis && e.hypothesis !== q && <div><dt className="inline text-ink-600">Expecting: </dt><dd className="inline text-ink-800">{e.hypothesis}</dd></div>}
-				{m && <div><dt className="inline text-ink-600">Measures: </dt><dd className="inline text-ink-800">{m.label}{m.unit ? ` (${m.unit})` : ""} — {e.higher_is_better === false || e.metric?.higher_is_better === false ? "lower" : "higher"} is better</dd></div>}
+				{m && <div><dt className="inline text-ink-600">Measures: </dt><dd className="inline text-ink-800">{m.label}{m.unit ? ` (${m.unit})` : ""} — {hib ? "higher" : "lower"} is better</dd></div>}
 				{target != null && <div><dt className="inline text-ink-600">Aiming for: </dt><dd className="inline text-ink-800">{fmtMetricValue(target, m?.unit ?? "", metric || "")}{m ? ` ${m.label.toLowerCase()}` : ""}</dd></div>}
 				{done && <div><dt className="inline text-ink-600">Done when: </dt><dd className="inline text-ink-800">{done}</dd></div>}
 			</dl>
-			</Wrap>
-			{series === null ? (
-				<div className="h-24 lumen-skeleton rounded-lg" role="status" aria-label="Loading how it evolved" />
-			) : evolution && metric && e.comparable !== false ? (
-				// Comparable versions: Novix's best-so-far story on one axis.
-				<BestScoreChart evo={evolution} labelOf={labelOf} colorOf={colorOf} metricKey={metric} unit={m?.unit ?? ""}
-					higherIsBetter={hib} minSamples={Math.max(1, e.min_samples || 1)} target={target} />
-			) : evo.some((x) => x.points.length > 1) && metric ? (
-				// Measured differently: one small chart per version, never ranked.
-				<EvolutionChart series={evo} metricKey={metric} unit={m?.unit ?? ""} higherIsBetter={hib}
-					comparable={false} unlabelledRuns={unlabelledRuns} alreadyMeans={!!seriesData?.runningMean} />
-			) : null}
-			{/* The versions in the order they were tried, each with its state —
-			    from the results over time when there are any, else the totals. */}
-			{evolution ? (
-				<VersionChain chain={evolution.chain} labelOf={labelOf} valueOf={(v) => fmtMetricValue(v, m?.unit ?? "", metric || "")} />
-			) : (
-				<ul className="space-y-1">
-					{versions.map((v) => (
-						<li key={v.id} className="flex items-center gap-2 text-caption">
-							<span className="font-medium text-ink-900 min-w-0 truncate">{v.label}</span>
-							<span className={cn("px-1.5 rounded-full border text-nano font-medium flex-shrink-0", TAG_CLS[v.tag])}>{v.tag}</span>
-							<span className="ml-auto text-ink-600 tabular-nums truncate">{v.line}</span>
-						</li>
-					))}
-				</ul>
+		</Wrap>
+	);
+	const links = (
+		<>
+			{loop && (
+				<Button asChild size="sm" variant={panel ? "ghost" : "secondary"}>
+					<Link to={workflowPath(app, loop, { tab: "experiments" })}>Open {loopLabel("", loop)} <ArrowRight className="w-3.5 h-3.5" /></Link>
+				</Button>
 			)}
+			<Button size="sm" variant="ghost"
+				onClick={() => window.dispatchEvent(new CustomEvent("studio:ask", { detail: { prompt: `Where does the ${humanId(e.id)} experiment stand, and what should I do next?`, context: { app, loop } } }))}>
+				<MessagesSquare className="w-3.5 h-3.5" /> Ask about it
+			</Button>
+		</>
+	);
+
+	if (panel) {
+		// A side sheet: who/what/status pinned on top, the evidence scrolls, the
+		// next step pinned at the foot — it never scrolls out of reach.
+		return (
+			<div role="dialog" aria-label={`Experiment: ${humanId(e.id)}`} style={style}
+				className="absolute right-3 top-12 z-[6100] flex w-[22rem] max-w-[48%] flex-col overflow-hidden rounded-xl border border-ink-200 bg-card shadow-e3 map-panel-in 2xl:w-[26rem]">
+				<div className="space-y-1.5 border-b border-ink-100 px-3.5 pb-2.5 pt-3">{head}</div>
+				<div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-3.5 py-3">
+					{note && <p className="rounded-lg bg-muted/50 px-2.5 py-2 text-micro leading-relaxed text-ink-700">{note}</p>}
+					{chart}
+					{chain}
+					<YourCall app={app} e={e} compact />
+					{about}
+				</div>
+				<div className="flex flex-wrap items-center gap-1.5 border-t border-ink-100 bg-muted/30 px-3 py-2">
+					<RunVersions app={app} e={e} />
+					<div className="ml-auto flex items-center gap-0.5">{links}</div>
+				</div>
+			</div>
+		);
+	}
+	return (
+		<div className="rounded-xl border border-ink-200 bg-card p-3 space-y-2.5 animate-lumen-rise">
+			{head}
+			{note && <div className="text-caption text-ink-700">{note}</div>}
+			{about}
+			{chart}
+			{chain}
 			<YourCall app={app} e={e} />
 			<RunVersions app={app} e={e} />
-			<div className="flex items-center gap-2 flex-wrap pt-0.5">
-				{loop && (
-					<Button asChild size="sm" variant="secondary">
-						<Link to={workflowPath(app, loop, { tab: "experiments" })}>Open {loopLabel("", loop)} <ArrowRight className="w-3.5 h-3.5" /></Link>
-					</Button>
-				)}
-				<Button size="sm" variant="ghost"
-					onClick={() => window.dispatchEvent(new CustomEvent("studio:ask", { detail: { prompt: `Where does the ${humanId(e.id)} experiment stand, and what should I do next?`, context: { app, loop } } }))}>
-					<MessagesSquare className="w-3.5 h-3.5" /> Ask about it
-				</Button>
-			</div>
+			<div className="flex items-center gap-2 flex-wrap pt-0.5">{links}</div>
 		</div>
 	);
 }
@@ -492,12 +536,13 @@ function ResearchList({ app, exps, onPick }: { app: string; exps: MeExperiment[]
 
 // How far the approval card reaches up over the map (matches `!-mt-14`).
 const DOCK_PX = 56;
-// The experiment panel over the map (w-[22rem]).
-const PANEL_PX = 352;
+// The experiment panel over the map: w-[22rem], 2xl:w-[26rem].
+const PANEL_PX = 352, PANEL_PX_2XL = 416;
 
 export default function ResearchMap({ app, aside }: { app: string; aside?: React.ReactNode }) {
 	const { data } = useResearchData(app);
 	const wide = useWide();
+	const panelPx = useMedia("(min-width: 1536px)") ? PANEL_PX_2XL : PANEL_PX;
 	const live = useShellActivity()?.runningApps.includes(app) ?? false;
 	const grow = useOncePerSession(`research-map:${app}`);
 	const [selected, setSelected] = useState<string | null>(null);
@@ -537,11 +582,9 @@ export default function ResearchMap({ app, aside }: { app: string; aside?: React
 	const mapWithPanel = (
 		<div className="relative min-w-0">
 			<MapCanvas app={app} exps={exps} proposals={pending} selected={selected} onSelect={setSelected} grow={grow}
-				insetBottom={pending.length ? DOCK_PX : 0} insetRight={panelOpen ? PANEL_PX + 12 : 0} tall={panelOpen} />
-			{panelOpen && (
-				<ExperimentDetail key={selExp!.id} app={app} e={selExp!} panel onClose={() => setSelected(null)}
-					style={{ bottom: pending.length ? DOCK_PX + 12 : 12 }} />
-			)}
+				insetBottom={pending.length ? DOCK_PX : 0} insetRight={panelOpen ? panelPx + 12 : 0} tall={panelOpen} />
+			{/* The panel runs the map's full height; the folded approval card sits beside it. */}
+			{panelOpen && <ExperimentDetail key={selExp!.id} app={app} e={selExp!} panel onClose={() => setSelected(null)} style={{ bottom: 12 }} />}
 		</div>
 	);
 	const selProposalIdx = selKind === "sug" ? pending.findIndex((p) => `sug:${p.id}` === selected) : -1;
@@ -571,7 +614,7 @@ export default function ResearchMap({ app, aside }: { app: string; aside?: React
 			)}
 			{pending.length > 0 && (
 				// Docked over the foot of the space, the way Novix's approval card sits.
-				<div className={cn("relative z-10", wide && "!-mt-14 mx-5")}>
+				<div className={cn("relative z-10", wide && "!-mt-14 mx-5")} style={panelOpen ? { marginRight: panelPx + 24 } : undefined}>
 					<ApprovalCard app={app} list={pending} index={selProposalIdx >= 0 ? selProposalIdx : Math.min(pIndex, pending.length - 1)}
 						onIndex={showProposal} onDone={dismiss}
 						// An open experiment panel has the reader's attention: the card folds to its title.

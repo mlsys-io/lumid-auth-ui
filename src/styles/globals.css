@@ -989,6 +989,11 @@ html[data-surface="studio"] ::selection {
 /* Labels never take the pointer: a label (shown or faded) lying over another
    node's dot stole its hover and swallowed the click. The dot is the target. */
 .space3d-label { text-shadow: 0 0 3px rgb(var(--background-rgb)), 0 0 6px rgb(var(--background-rgb)); transition: opacity 160ms ease-out; pointer-events: none; }
+.space3d button[aria-pressed="true"] .space3d-label {
+	background: rgb(var(--card-rgb)); border: 1px solid theme('colors.plum.400'); border-radius: 0.5rem;
+	padding: 0.125rem 0.5rem; text-shadow: none; box-shadow: 0 1px 3px color-mix(in srgb, theme('colors.ink.900') 12%, transparent);
+	opacity: 1 !important;
+}
 .space3d-label-left { left: auto; right: 100%; margin-left: 0; margin-right: 0.25rem; align-items: flex-end; text-align: right; }
 @media (prefers-reduced-motion: reduce) { .space3d-label { transition: none; } }
 

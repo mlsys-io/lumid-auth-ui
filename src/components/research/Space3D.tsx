@@ -171,18 +171,25 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		if (boxRef.current) { st.W = boxRef.current.clientWidth; st.H = boxRef.current.clientHeight; }
 		if (!st.W) return;
 		if (first.current) { first.current = false; return; }
-		const pts = (lit ? [...lit] : [...pos.keys()]).map((id) => pos.get(id)).filter(Boolean) as NonNullable<ReturnType<typeof pos.get>>[];
+		// Beside the panel the camera follows the END of the path — the picked
+		// node and what hangs off it; the app may sit off the left edge, its edge
+		// leading in (Novix's camera follows the path the same way).
+		const side = rightRef.current > 0;
+		const sideIds = lit && side ? [...lit].filter((id) => nodes.find((n) => n.id === id)?.depth !== 0) : null;
+		const pts = (sideIds?.length ? sideIds : lit ? [...lit] : [...pos.keys()]).map((id) => pos.get(id)).filter(Boolean) as NonNullable<ReturnType<typeof pos.get>>[];
 		// Turn so the selected branch faces the viewer, a little to the right —
-		// its column of cards reads front-on — then frame the path.
+		// its column reads front-on — then frame the path.
 		const sel = selected ? pos.get(selected) : undefined;
 		const facing = sel && Math.hypot(sel.x, sel.z) > 1 ? { ...st.cam, yaw: Math.atan2(sel.z, sel.x) - 0.45, pitch: -0.18 } : { ...st.cam, pitch: HOME.pitch };
 		const to = lit
-			? frameCamera(pts, facing, st.W, st.H, boxAbove({ top: 56, bottom: 0.9, margin: 110 }, st.H, insetRef.current, rightRef.current))
+			// Beside the panel, keep room for the labels right of the outermost dots.
+			// Beside the panel: room for the labels right of the outermost dots.
+			? frameCamera(pts, facing, st.W, st.H, boxAbove({ top: 56, bottom: 0.9, margin: side ? 70 : 110 }, st.H, insetRef.current, side ? rightRef.current + 110 : 0))
 			: frameCamera(hullPts, { ...st.cam, pitch: HOME.pitch }, st.W, st.H, boxAbove(HOME_BOX, st.H, insetRef.current, rightRef.current));
 		if (reduced) st.cam = to; else st.tween = { from: { ...st.cam }, to, t0: performance.now(), dur: 820, spring: !!lit };
 		st.lastInput = performance.now();
 		kick.current();
-	}, [lit, pos, reduced, selected, insetRight, height, hullPts]);
+	}, [lit, pos, reduced, selected, insetRight, height, hullPts, nodes]);
 
 	// The frame loop.
 	useEffect(() => {
@@ -599,7 +606,12 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 			{nodes.map((n) => {
 				const sel = selected === n.id;
 				const dim = !!lit && !lit.has(n.id);
-				const full = !renderDot || !!lit?.has(n.id) || hovered === n.id;
+				// Only the selected node (and the one under the pointer) opens into a
+				// card: the rest of its path stays as lit dots — the detail panel says
+				// the rest, and a column of cards on a short path piled up.
+				// With the detail panel open (insetRight) even the selected node stays a
+				// dot, its label a bordered pill (Novix's picked label).
+				const full = !renderDot || hovered === n.id || (n.id === selected && !insetRight);
 				return (
 					<div
 						key={n.id}

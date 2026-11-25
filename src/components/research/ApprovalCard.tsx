@@ -59,6 +59,17 @@ export default function ApprovalCard({ app, list, index, onIndex, onDone, showAp
 	};
 	return (
 		<section aria-label="For your approval" className="overflow-hidden rounded-xl border border-ink-200 bg-card shadow-e3 animate-lumen-rise">
+			{folded ? (
+				// Folded: one row — what it is, which one, and the way back.
+				<div className="flex items-center gap-2 px-3 py-2">
+					<Sparkles className="h-3.5 w-3.5 flex-shrink-0 text-gold-600" aria-hidden />
+					<span className="eyebrow flex-shrink-0 text-gold-700">Suggested</span>
+					<button type="button" onClick={onUnfold} title="Show this suggestion"
+						className="min-w-0 truncate text-left text-meta font-medium text-ink-900 hover:underline">{humanId(p.id)}</button>
+					{list.length > 1 && <span className="flex-shrink-0 font-mono text-micro tabular-nums text-ink-600">{index + 1}/{list.length}</span>}
+					<button type="button" onClick={onUnfold} className="ml-auto flex-shrink-0 text-micro text-ink-600 hover:text-ink-900">Show</button>
+				</div>
+			) : <>
 			<div className="flex items-center gap-2 border-b border-ink-100 px-4 py-2.5">
 				{showApp ? <StrandAvatar slug={app} size={18} /> : <Sparkles className="w-3.5 h-3.5 text-gold-600" aria-hidden />}
 				<span className="eyebrow text-gold-700">{showApp ? `${appTitle(app)} suggests` : "For your approval"}</span>
@@ -75,12 +86,6 @@ export default function ApprovalCard({ app, list, index, onIndex, onDone, showAp
 					</span>
 				)}
 			</div>
-			{folded ? (
-				<button type="button" onClick={onUnfold} className="flex w-full items-center gap-2 px-4 py-2 text-left text-meta hover:bg-muted/40">
-					<span className="min-w-0 truncate font-medium text-ink-900">{humanId(p.id)}</span>
-					<span className="ml-auto flex-shrink-0 text-micro text-ink-600">Show</span>
-				</button>
-			) : <>
 			<div key={p.id} className="space-y-2 px-4 pb-3 pt-3 animate-lumen-rise">
 				<div className="text-title font-semibold text-ink-900">{humanId(p.id)}</div>
 				<dl className="grid gap-1.5 text-meta leading-relaxed">

@@ -10,15 +10,57 @@
 // shown in Compute (ComputePanel). An app whose runs need a subject this
 // button cannot know (dispatch.ask) hands the request to the chat instead.
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Play } from "lucide-react";
 import { me, waitForIntent, type MeExperiment } from "@/api/me";
 import { askOrStash } from "@/components/chat/askBus";
 import { Button } from "@/components/ui/button";
-import { experimentLoop, humanId, versionsToRun } from "@/lib/research-map";
+import { batchProgress, experimentLoop, humanId, versionsToRun, type BatchProgress } from "@/lib/research-map";
+import type { QueueRow } from "@/lib/compute";
+import { cn } from "@/lib/utils";
 import { loopLabel } from "@/lib/workflow-names";
 
-type Sent = { n: number; loop: string } | { chat: true };
+type Sent = { n: number; loop: string; intents: string[]; labels: string[] } | { chat: true };
+
+// Read the batch back from the app's queue until every run has finished —
+// the button used to say "Queued" once and go quiet while runs started,
+// finished in ~20 s and added results nobody saw arrive.
+function useBatch(app: string, sent: Sent | null, onFinished: () => void): BatchProgress | null {
+	const [prog, setProg] = useState<BatchProgress | null>(null);
+	const finished = useRef(onFinished);
+	finished.current = onFinished;
+	useEffect(() => {
+		if (!sent || !("intents" in sent)) { setProg(null); return; }
+		let stop = false, timer = 0;
+		const t0 = Date.now();
+		setProg(batchProgress([], sent.intents, sent.labels));
+		const tick = async () => {
+			try {
+				const q = await me.appQueue(app);
+				if (stop) return;
+				const p = batchProgress((q.rows || []) as QueueRow[], sent.intents, sent.labels);
+				setProg(p);
+				if (p.finished) {
+					// The results are in: the chart and the map re-read them now.
+					window.dispatchEvent(new CustomEvent("studio:data", { detail: { scopes: ["experiments", "runs"] } }));
+					finished.current();
+					return;
+				}
+			} catch { /* keep polling; one failed read isn't the answer */ }
+			if (!stop && Date.now() - t0 < 30 * 60_000) timer = window.setTimeout(tick, 2500);
+		};
+		timer = window.setTimeout(tick, 1200);
+		return () => { stop = true; window.clearTimeout(timer); };
+	}, [app, sent]);
+	return prog;
+}
+
+const DOT: Record<string, string> = {
+	waiting: "border border-ink-300 bg-transparent",
+	running: "bg-plum-500 animate-lumen-breathe",
+	done: "bg-gold-500",
+	failed: "bg-brick-500",
+};
 
 export default function RunVersions({ app, e, onQueued }: { app: string; e: MeExperiment; onQueued?: () => void }) {
 	const [busy, setBusy] = useState(false);
@@ -26,6 +68,8 @@ export default function RunVersions({ app, e, onQueued }: { app: string; e: MeEx
 	const [err, setErr] = useState<string | null>(null);
 	const loop = experimentLoop(e);
 	const { ids, untried } = versionsToRun(e);
+	const [over, setOver] = useState(false);
+	const prog = useBatch(app, sent, () => setOver(true));
 	if (!loop || !ids.length || e.status && /concluded|done|archived|closed/i.test(e.status)) return null;
 	const label = untried
 		? ids.length === 1 ? `Run the untried version (${humanId(ids[0])})` : `Run the ${ids.length} untried versions`
@@ -33,6 +77,7 @@ export default function RunVersions({ app, e, onQueued }: { app: string; e: MeEx
 
 	const go = async () => {
 		setErr(null);
+		setOver(false);
 		if (e.dispatch?.ask) {
 			askOrStash({
 				prompt: `Run ${untried ? "the untried versions" : "each version once more"} of the "${humanId(e.id)}" experiment (${ids.join(", ")}) `
@@ -56,7 +101,7 @@ export default function RunVersions({ app, e, onQueued }: { app: string; e: MeEx
 				});
 				intents.push(r.intent_id);
 			}
-			setSent({ n: ids.length, loop });
+			setSent({ n: ids.length, loop, intents, labels: ids.map(humanId) });
 			onQueued?.();
 			// Report what the scheduler did, not what we asked for.
 			Promise.all(intents.map((i) => waitForIntent(i, { timeoutMs: 90_000 }).catch(() => null)))
@@ -71,18 +116,25 @@ export default function RunVersions({ app, e, onQueued }: { app: string; e: MeEx
 		}
 	};
 
+	const running = !!sent && "intents" in sent && !over;
 	return (
-		<div className="space-y-1">
-			<Button size="sm" variant="accent" onClick={go} disabled={busy || !!sent}>
-				<Play className="w-3.5 h-3.5" /> {busy ? "Queuing…" : label}
-			</Button>
-			{sent && "n" in sent && (
-				<p className="text-caption text-ink-700" role="status">
-					Queued {sent.n} run{sent.n === 1 ? "" : "s"} of {loopLabel("", sent.loop)}. They start as compute frees up — follow them under Compute.
-				</p>
+		<div className="min-w-0 space-y-1">
+			<div className="flex items-center gap-2">
+				<Button size="sm" variant="accent" onClick={go} disabled={busy || running || (!!sent && "chat" in sent)}>
+					<Play className="w-3.5 h-3.5" /> {busy ? "Queuing…" : running ? "Running…" : over ? "Run again" : label}
+				</Button>
+				{/* One dot per queued run: hollow waiting, breathing running, gold done, brick failed. */}
+				{prog && (
+					<span className="flex items-center gap-1" aria-hidden>
+						{prog.runs.map((r, i) => <span key={i} title={`${r.label}: ${r.state}`} className={cn("h-2 w-2 rounded-full", DOT[r.state])} />)}
+					</span>
+				)}
+			</div>
+			{prog && (
+				<p className={cn("text-micro", prog.finished && prog.failed ? "text-brick-700" : prog.finished ? "text-gold-700" : "text-ink-700")} role="status">{prog.text}</p>
 			)}
 			{sent && "chat" in sent && <p className="text-caption text-ink-700" role="status">Handed to the chat — it needs a detail only you can give.</p>}
-			{err && <p className="text-caption text-brick-700" role="alert">Couldn't queue every run: {err}</p>}
+			{err && <p className="text-caption text-brick-700" role="alert">Couldn&apos;t queue every run: {err}</p>}
 		</div>
 	);
 }

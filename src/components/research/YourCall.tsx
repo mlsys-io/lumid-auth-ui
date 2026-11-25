@@ -26,12 +26,15 @@ function writeCall(app: string, id: string, c: Call | null) {
 	try { if (c) localStorage.setItem(keyOf(app, id), JSON.stringify(c)); else localStorage.removeItem(keyOf(app, id)); } catch { /* private mode */ }
 }
 
-export default function YourCall({ app, e }: { app: string; e: MeExperiment }) {
+export default function YourCall({ app, e, compact = false }: { app: string; e: MeExperiment;
+	/** Start as one line that opens into the form (a narrow side panel). */
+	compact?: boolean }) {
 	const versions = useMemo(() => versionsOf(e), [e]);
 	const [call, setCall] = useState<Call | null>(() => readCall(app, e.id));
 	const [pick, setPick] = useState<string>("");
 	const [why, setWhy] = useState("");
-	useEffect(() => { setCall(readCall(app, e.id)); setPick(""); setWhy(""); }, [app, e.id]);
+	const [open, setOpen] = useState(!compact);
+	useEffect(() => { setCall(readCall(app, e.id)); setPick(""); setWhy(""); setOpen(!compact); }, [app, e.id, compact]);
 	if (versions.length < 2 || (e.status && /concluded|done|archived|closed/i.test(e.status))) return null;
 
 	const leader = e.comparable !== false ? e.best_variant : undefined;
@@ -58,6 +61,16 @@ export default function YourCall({ app, e }: { app: string; e: MeExperiment }) {
 					<button type="button" className="text-micro text-ink-600 hover:text-ink-900 hover:underline" onClick={() => { writeCall(app, e.id, null); setCall(null); }}>Change my call</button>
 				</div>
 			</div>
+		);
+	}
+	if (!open) {
+		return (
+			<button type="button" onClick={() => setOpen(true)}
+				className="flex w-full items-center gap-1.5 rounded-lg border border-dashed border-ink-300 px-2.5 py-1.5 text-left text-caption text-ink-800 transition-colors hover:border-ink-400 hover:bg-muted/40">
+				<Target className="h-3.5 w-3.5 flex-shrink-0 text-ink-500" aria-hidden />
+				<span className="min-w-0 flex-1">Your call: which version will win?</span>
+				<span className="flex-shrink-0 text-micro text-ink-600">Make a call</span>
+			</button>
 		);
 	}
 	return (
