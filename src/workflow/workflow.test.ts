@@ -28,6 +28,7 @@ import { run as runChunkChecks, caseCount as chunkCaseCount } from "@/lib/lazy-w
 import { run as runFleetProvChecks, caseCount as fleetProvCaseCount } from "@/lib/fleet-provenance.test";
 import { run as runSandboxChecks, caseCount as sandboxCaseCount } from "@/api/sandboxes.test";
 import { run as runDataLakeChecks, caseCount as dataLakeCaseCount } from "@/api/dataLake.test";
+import { run as runDataActivityChecks, caseCount as dataActivityCaseCount } from "@/lib/data-activity.test";
 import { run as runReturnToChecks, caseCount as returnToCaseCount } from "@/lib/return-to.test";
 import { run as runActivityChecks, caseCount as activityCaseCount } from "@/lib/activity.test";
 import { run as runResearchMapChecks, caseCount as researchMapCaseCount } from "@/lib/research-map.test";
@@ -367,7 +368,7 @@ check("isEmptyLoop is true only when nothing is declared", () => {
 export function run(): number {
 	// The document round-trip suite runs in the same process — it is the
 	// invariant everything else is built on, so it must never be skippable.
-	let failed = runDocChecks() + runEditChecks() + runFmChecks() + runXpioChecks() + runImportChecks() + runCycleIdChecks() + runAwaitChecks() + runRunStatusChecks() + runRouteChecks() + runFleetProvChecks() + runChunkChecks() + runSandboxChecks() + runDataLakeChecks() + runDataJobsChecks() + runReturnToChecks() + runActivityChecks() + runRunAnswerChecks() + runResearchMapChecks() + runTimelineChecks() + runEvolutionChecks() + runModelLabelChecks() + runSpaceChecks() + runComputeChecks() + runPauseChecks();
+	let failed = runDocChecks() + runEditChecks() + runFmChecks() + runXpioChecks() + runImportChecks() + runCycleIdChecks() + runAwaitChecks() + runRunStatusChecks() + runRouteChecks() + runFleetProvChecks() + runChunkChecks() + runSandboxChecks() + runDataLakeChecks() + runDataActivityChecks() + runDataJobsChecks() + runReturnToChecks() + runActivityChecks() + runRunAnswerChecks() + runResearchMapChecks() + runTimelineChecks() + runEvolutionChecks() + runModelLabelChecks() + runSpaceChecks() + runComputeChecks() + runPauseChecks();
 	for (const c of checks) {
 		try {
 			c.run();
@@ -392,10 +393,10 @@ if (typeof describe === "function" && typeof it === "function") {
 	const proc = (globalThis as { process?: { exitCode?: number } }).process;
 	if (failed > 0) {
 		// eslint-disable-next-line no-console
-		console.error(`${failed} of ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount + cycleIdCaseCount + awaitCaseCount + runStatusCaseCount + routeCaseCount + fleetProvCaseCount + chunkCaseCount + sandboxCaseCount + dataLakeCaseCount + dataJobsCaseCount + returnToCaseCount + activityCaseCount + runAnswerCaseCount + researchMapCaseCount + timelineCaseCount + evolutionCaseCount + modelLabelCaseCount + spaceCaseCount + computeCaseCount + pauseCaseCount} case(s) failed`);
+		console.error(`${failed} of ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount + cycleIdCaseCount + awaitCaseCount + runStatusCaseCount + routeCaseCount + fleetProvCaseCount + chunkCaseCount + sandboxCaseCount + dataLakeCaseCount + dataActivityCaseCount + dataJobsCaseCount + returnToCaseCount + activityCaseCount + runAnswerCaseCount + researchMapCaseCount + timelineCaseCount + evolutionCaseCount + modelLabelCaseCount + spaceCaseCount + computeCaseCount + pauseCaseCount} case(s) failed`);
 		if (proc) proc.exitCode = 1;
 	} else {
 		// eslint-disable-next-line no-console
-		console.log(`workflow core: all ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount + cycleIdCaseCount + awaitCaseCount + runStatusCaseCount + routeCaseCount + fleetProvCaseCount + chunkCaseCount + sandboxCaseCount + dataLakeCaseCount + dataJobsCaseCount + returnToCaseCount + activityCaseCount + runAnswerCaseCount + researchMapCaseCount + timelineCaseCount + evolutionCaseCount + modelLabelCaseCount + spaceCaseCount + computeCaseCount + pauseCaseCount} cases passed`);
+		console.log(`workflow core: all ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount + cycleIdCaseCount + awaitCaseCount + runStatusCaseCount + routeCaseCount + fleetProvCaseCount + chunkCaseCount + sandboxCaseCount + dataLakeCaseCount + dataActivityCaseCount + dataJobsCaseCount + returnToCaseCount + activityCaseCount + runAnswerCaseCount + researchMapCaseCount + timelineCaseCount + evolutionCaseCount + modelLabelCaseCount + spaceCaseCount + computeCaseCount + pauseCaseCount} cases passed`);
 	}
 }

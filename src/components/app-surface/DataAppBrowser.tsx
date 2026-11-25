@@ -13,6 +13,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { bearerHeader } from "@/api/session-bearer";
+import { audienceForDataApp } from "@/api/dataLake";
 
 // A 4xx body is often structured: `{detail: [{loc, msg}]}` (validation) or
 // `{detail: {...}}`. Interpolating it printed "422 [object Object]"; render the
@@ -167,7 +168,7 @@ export default function DataAppBrowser({ config }: { config?: Record<string, unk
     (async () => {
       setLoadErr(""); setEndpoints([]);
       try {
-        const auth = await bearerHeader();
+        const auth = await bearerHeader(audienceForDataApp(dataApp));
         const r = await fetch(`${proxyBase(dataApp)}/openapi.json`, { credentials: "same-origin", headers: auth });
         if (!r.ok) throw new Error(`openapi ${r.status}`);
         const doc = await r.json();
@@ -205,7 +206,7 @@ export default function DataAppBrowser({ config }: { config?: Record<string, unk
     }
     setRunning(true); setRunErr(""); setResult(null); setResultText(null);
     try {
-      const auth = await bearerHeader();
+      const auth = await bearerHeader(audienceForDataApp(dataApp));
       const r = await fetch(`${proxyBase(dataApp)}/${buildPath(selected, vals).replace(/^\/+/, "")}`, { credentials: "same-origin", headers: auth });
       const raw = await r.text();
       let body: any = null;

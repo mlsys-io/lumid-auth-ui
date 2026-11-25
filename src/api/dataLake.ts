@@ -86,6 +86,11 @@ export function audienceFor(basePath: string): Audience | undefined {
   return basePath === "/data" || basePath.startsWith("/data/") ? "lumid-data" : undefined;
 }
 
+/** Bearer audience for a data app reached through /dataapp-proxy/<id>. */
+export function audienceForDataApp(id: string): Audience | undefined {
+  return id === "lumid-data" ? "lumid-data" : undefined;
+}
+
 async function send(basePath: string, path: string, init?: RequestInit): Promise<Response> {
   const auth = await bearerHeader(audienceFor(basePath));
   const r = await fetch(`${basePath}${path}`, {
@@ -191,6 +196,14 @@ export const lake = {
     call<JsonSchema>(b, `/catalog/tables/${enc(schema)}/${enc(table)}/schema.json`),
 
   freshness: (b: string) => call<Freshness>(b, "/freshness"),
+
+  // Table activity (who read/wrote what, from which app, workflow and run).
+  tableActivity: (b: string, schema: string, table: string, days = 30) =>
+    call<TableActivity>(b, `/catalog/tables/${enc(schema)}/${enc(table)}/activity?days=${days}`),
+  runActivity: (b: string, runId: string) =>
+    call<RunActivity>(b, `/activity/runs/${enc(runId)}`),
+  appActivity: (b: string, app: string, loop = "", days = 30) =>
+    call<RunActivity>(b, `/activity/apps/${enc(app)}?loop=${enc(loop)}&days=${days}`),
 
   lineageRuns: (b: string, limit = 50) =>
     call<Record<string, unknown>>(b, `/catalog/lineage/runs?limit=${limit}`),
@@ -400,4 +413,70 @@ export function fmtRows(n: number | null | undefined): string {
   if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
   if (n >= 1e3) return (n / 1e3).toFixed(1) + "K";
   return String(n);
+}
+
+
+// ── Table activity ───────────────────────────────────────────────────────────
+// Recorded by each data service since 2026-11-25 for runs whose runner sends
+// the X-Lumid-App / -Loop / -Run headers. Older activity does not exist.
+
+export interface TableUse {
+  schema: string;
+  table: string;
+  rows: number;
+  requests: number;
+  last_at: string;
+}
+export interface RunActivity {
+  wrote: TableUse[];
+  read: TableUse[];
+}
+export interface AppUse {
+  app: string;
+  loop: string;
+  rows: number;
+  requests: number;
+  last_at: string;
+}
+export interface TableActivity {
+  wrote: AppUse[];
+  read: AppUse[];
+  /** Other people's activity, as counts (absent for admins, who see names). */
+  others?: { writers: number; readers: number };
+}
+
+/** One instance's slice of a run's (or app's) activity. */
+export interface InstanceActivity extends RunActivity {
+  instance: LakeInstance;
+}
+
+function asList<T>(v: unknown): T[] {
+  return Array.isArray(v) ? (v as T[]) : [];
+}
+
+async function acrossLakes(get: (inst: LakeInstance) => Promise<RunActivity>): Promise<InstanceActivity[]> {
+  const out = await Promise.all(
+    LAKE_INSTANCES.map(async (instance) => {
+      try {
+        const r = await get(instance);
+        return { instance, wrote: asList<TableUse>(r?.wrote), read: asList<TableUse>(r?.read) };
+      } catch {
+        // An instance that doesn't serve activity yet (or is down) is left
+        // out, never shown as "wrote nothing".
+        return null;
+      }
+    }),
+  );
+  return out.filter((x): x is InstanceActivity => x !== null && (x.wrote.length > 0 || x.read.length > 0));
+}
+
+/** What one run read and wrote, across every data instance. `runId` is the
+ *  run store's full run_id (e.g. "scheduled:quant-research:backtest:2026…Z"). */
+export function runActivityAcrossLakes(runId: string): Promise<InstanceActivity[]> {
+  return acrossLakes((i) => lake.runActivity(i.basePath, runId));
+}
+
+/** What an app — or one of its workflows — reads and writes, across instances. */
+export function appActivityAcrossLakes(app: string, loop = "", days = 30): Promise<InstanceActivity[]> {
+  return acrossLakes((i) => lake.appActivity(i.basePath, app, loop, days));
 }
